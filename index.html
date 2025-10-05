@@ -1,101 +1,91 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>사이클 아카데미 - 실시간 심박계 연동</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>사이클 아카데미 - 심박계 연동</title>
 
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #222;
       margin: 0;
-      padding: 0;
-      overflow-x: hidden;
+      font-family: "Noto Sans KR", sans-serif;
+      background: linear-gradient(135deg, #6B73FF 0%, #000DFF 100%);
+      color: #fff;
+      text-align: center;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
 
-    .app-container { width: 100vw; min-height: 100vh; }
-
-    .header { text-align: center; padding: 30px; color: white; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    p { margin-top: 0; margin-bottom: 1.5rem; }
     .card {
       background: white;
-      border-radius: 14px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-      padding: 20px;
-      margin: 20px;
-      text-align: center;
+      color: #222;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      padding: 30px;
+      width: 90%;
+      max-width: 400px;
     }
-
-    .btn {
-      background: #2e74e8;
-      color: #fff;
+    button {
+      background-color: #0055ff;
+      color: white;
       border: none;
-      padding: 12px 18px;
       border-radius: 8px;
+      padding: 12px 18px;
+      margin: 10px;
       font-size: 16px;
       cursor: pointer;
     }
-
-    .btn:hover { background: #1a5ab8; }
-
-    @media (orientation: portrait) {
-      body { padding: 10px; }
-      .card { margin: 10px; padding: 15px; }
-    }
+    button:hover { background-color: #003ecb; }
+    #heartRateValue { font-weight: bold; font-size: 1.5rem; color: #e10000; }
   </style>
 </head>
+
 <body>
-  <div class="app-container">
-    <div class="header">
-      <h1>🚴‍♂️ 사이클 아카데미</h1>
-      <p>BLE 심박계 실시간 연동 + Google Sheets 저장</p>
-    </div>
+  <div class="card">
+    <h1>🚴‍♂️ 사이클 아카데미</h1>
+    <p>BLE 심박계 실시간 연동 + Google Sheets 저장</p>
 
-    <div class="card">
-      <h3>❤️ 심박수: <span id="heartRateValue">--</span> BPM</h3>
-      <button class="btn" onclick="connectHeartRate()">심박계 연결</button>
-    </div>
-
-    <div class="card">
-      <h3>📡 Google Sheet 저장</h3>
-      <button class="btn" onclick="saveToSheet()">현재 데이터 전송</button>
-      <p id="saveStatus"></p>
-    </div>
+    <p>❤️ 현재 심박수: <span id="heartRateValue">--</span> BPM</p>
+    <button onclick="connectHeartRate()">심박계 연결</button>
+    <button onclick="saveToSheet()">Google Sheet 저장</button>
+    <p id="saveStatus"></p>
   </div>
 
   <script>
-    // Google Apps Script Web App URL
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw3S9rMcLkOYQXGLH0uZx8IKR5Aap-i453Nt1jwgPJ5moV65vq6MaynozfZHmJV81He/exec"; // 실제 배포 URL로 교체
+    // ✅ Apps Script Web App API 주소 (이미 올바르게 설정됨)
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw3S9rMcLkOYQXGLH0uZx8IKR5Aap-i453Nt1jwgPJ5moV65vq6MaynozfZHmJV81He/exec";
 
-    let heartRateDevice = null;
-    let heartRateCharacteristic = null;
     let currentBPM = null;
+    let characteristic = null;
 
     // =====================================
-    // BLE 심박계 연결
+    // BLE 연결 (심박계)
     // =====================================
     async function connectHeartRate() {
       try {
         const device = await navigator.bluetooth.requestDevice({
           filters: [{ services: ['heart_rate'] }]
         });
-
-        heartRateDevice = device;
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService('heart_rate');
-        const characteristic = await service.getCharacteristic('heart_rate_measurement');
-
-        characteristic.addEventListener('characteristicvaluechanged', handleHeartRateMeasurement);
+        characteristic = await service.getCharacteristic('heart_rate_measurement');
+        characteristic.addEventListener('characteristicvaluechanged', handleHeartRate);
         await characteristic.startNotifications();
-
-        alert(`✅ ${device.name} 연결 완료!`);
+        alert(`✅ ${device.name} 연결 성공!`);
       } catch (error) {
-        alert("❌ 심박계 연결 실패: " + error.message);
+        alert("❌ BLE 연결 실패: " + error.message);
       }
     }
 
-    function handleHeartRateMeasurement(event) {
+    // =====================================
+    // 심박수 실시간 표시
+    // =====================================
+    function handleHeartRate(event) {
       const value = event.target.value;
       const flags = value.getUint8(0);
       const rate16Bits = flags & 0x1;
@@ -109,11 +99,11 @@
     // =====================================
     async function saveToSheet() {
       if (!currentBPM) {
-        document.getElementById('saveStatus').textContent = "심박 데이터가 없습니다.";
+        document.getElementById('saveStatus').textContent = "⚠️ 아직 심박 데이터가 없습니다.";
         return;
       }
 
-      const data = {
+      const payload = {
         user_id: "U1001",
         bpm: currentBPM,
         timestamp: new Date().toISOString()
@@ -123,21 +113,150 @@
         const response = await fetch(GAS_API_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data)
+          body: JSON.stringify(payload)
         });
 
         const result = await response.json();
         if (result.success) {
-          document.getElementById('saveStatus').textContent = "✅ Google Sheet 저장 완료!";
+          document.getElementById('saveStatus').textContent = "✅ Google Sheets 저장 성공!";
         } else {
           document.getElementById('saveStatus').textContent = "⚠️ 저장 실패: " + result.error;
         }
-      } catch (err) {
-        document.getElementById('saveStatus').textContent = "에러: " + err.message;
+      } catch (error) {
+        document.getElementById('saveStatus').textContent = "❌ 네트워크 오류: " + error.message;
       }
     }
   </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>사이클 아카데미 - 심박계 연동</title>
 
+  <style>
+    body {
+      margin: 0;
+      font-family: "Noto Sans KR", sans-serif;
+      background: linear-gradient(135deg, #6B73FF 0%, #000DFF 100%);
+      color: #fff;
+      text-align: center;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
 
+    h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+    p { margin-top: 0; margin-bottom: 1.5rem; }
+    .card {
+      background: white;
+      color: #222;
+      border-radius: 16px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      padding: 30px;
+      width: 90%;
+      max-width: 400px;
+    }
+    button {
+      background-color: #0055ff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 18px;
+      margin: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover { background-color: #003ecb; }
+    #heartRateValue { font-weight: bold; font-size: 1.5rem; color: #e10000; }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h1>🚴‍♂️ 사이클 아카데미</h1>
+    <p>BLE 심박계 실시간 연동 + Google Sheets 저장</p>
+
+    <p>❤️ 현재 심박수: <span id="heartRateValue">--</span> BPM</p>
+    <button onclick="connectHeartRate()">심박계 연결</button>
+    <button onclick="saveToSheet()">Google Sheet 저장</button>
+    <p id="saveStatus"></p>
+  </div>
+
+  <script>
+    // ✅ Apps Script Web App API 주소 (이미 올바르게 설정됨)
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbw3S9rMcLkOYQXGLH0uZx8IKR5Aap-i453Nt1jwgPJ5moV65vq6MaynozfZHmJV81He/exec";
+
+    let currentBPM = null;
+    let characteristic = null;
+
+    // =====================================
+    // BLE 연결 (심박계)
+    // =====================================
+    async function connectHeartRate() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['heart_rate'] }]
+        });
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('heart_rate');
+        characteristic = await service.getCharacteristic('heart_rate_measurement');
+        characteristic.addEventListener('characteristicvaluechanged', handleHeartRate);
+        await characteristic.startNotifications();
+        alert(`✅ ${device.name} 연결 성공!`);
+      } catch (error) {
+        alert("❌ BLE 연결 실패: " + error.message);
+      }
+    }
+
+    // =====================================
+    // 심박수 실시간 표시
+    // =====================================
+    function handleHeartRate(event) {
+      const value = event.target.value;
+      const flags = value.getUint8(0);
+      const rate16Bits = flags & 0x1;
+      const bpm = rate16Bits ? value.getUint16(1, true) : value.getUint8(1);
+      currentBPM = bpm;
+      document.getElementById('heartRateValue').textContent = bpm;
+    }
+
+    // =====================================
+    // Google Sheets 저장
+    // =====================================
+    async function saveToSheet() {
+      if (!currentBPM) {
+        document.getElementById('saveStatus').textContent = "⚠️ 아직 심박 데이터가 없습니다.";
+        return;
+      }
+
+      const payload = {
+        user_id: "U1001",
+        bpm: currentBPM,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        const response = await fetch(GAS_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          document.getElementById('saveStatus').textContent = "✅ Google Sheets 저장 성공!";
+        } else {
+          document.getElementById('saveStatus').textContent = "⚠️ 저장 실패: " + result.error;
+        }
+      } catch (error) {
+        document.getElementById('saveStatus').textContent = "❌ 네트워크 오류: " + error.message;
+      }
+    }
+  </script>
+</body>
+</html>
