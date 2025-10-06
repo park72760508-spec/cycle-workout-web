@@ -8,7 +8,6 @@
         :root {
             --primary-color: #2E74E8;
             --secondary-color: #1A5AB8;
-            --accent-color: #FF6B35;
             --success-color: #28A745;
             --warning-color: #FFC107;
             --danger-color: #DC3545;
@@ -17,7 +16,6 @@
             --gray-color: #6C757D;
             --border-radius: 12px;
             --shadow: 0 4px 16px rgba(0,0,0,0.1);
-            --transition: all 0.3s ease;
         }
 
         * {
@@ -31,18 +29,12 @@
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             color: var(--dark-color);
-            overflow-x: hidden;
         }
 
-        .screen {
-            display: none;
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
             padding: 20px;
-            min-height: 100vh;
-            background: var(--light-color);
-        }
-
-        .screen.active {
-            display: block;
         }
 
         .header {
@@ -70,28 +62,23 @@
             background: white;
             border-radius: var(--border-radius);
             padding: 20px;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             box-shadow: var(--shadow);
-            transition: var(--transition);
-            cursor: pointer;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
         }
 
         .btn {
             background: var(--primary-color);
             color: white;
             border: none;
-            padding: 14px 24px;
+            padding: 12px 24px;
             border-radius: var(--border-radius);
             font-size: 16px;
             font-weight: 600;
             cursor: pointer;
-            transition: var(--transition);
+            transition: all 0.3s ease;
             width: 100%;
+            text-decoration: none;
+            display: inline-block;
             text-align: center;
         }
 
@@ -106,63 +93,9 @@
             transform: none;
         }
 
-        .btn-success {
-            background: var(--success-color);
-        }
-
-        .btn-danger {
-            background: var(--danger-color);
-        }
-
-        .btn-secondary {
-            background: var(--gray-color);
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--light-color);
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: var(--border-radius);
-            margin-bottom: 15px;
-            border: 1px solid #f5c6cb;
-        }
-
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: var(--border-radius);
-            margin-bottom: 15px;
-            border: 1px solid #c3e6cb;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .text-center {
-            text-align: center;
-        }
+        .btn-success { background: var(--success-color); }
+        .btn-danger { background: var(--danger-color); }
+        .btn-secondary { background: var(--gray-color); }
 
         .form-group {
             margin-bottom: 15px;
@@ -194,75 +127,129 @@
             gap: 15px;
         }
 
-        .profile-card {
-            position: relative;
+        .message {
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
         }
 
-        .profile-info {
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.loading {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .hidden { display: none !important; }
+        .text-center { text-align: center; }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .user-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
 
-        .profile-avatar {
-            width: 60px;
-            height: 60px;
+        .user-card:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
             background: var(--primary-color);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-right: 15px;
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 700;
             color: white;
         }
 
-        .profile-details h3 {
-            font-size: 18px;
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-size: 16px;
             font-weight: 600;
             margin-bottom: 5px;
         }
 
-        .profile-stats {
+        .user-details {
+            font-size: 14px;
+            color: var(--gray-color);
+        }
+
+        .user-stats {
             display: flex;
             gap: 15px;
-            margin-top: 10px;
+            margin-top: 5px;
+        }
+
+        .stat {
+            font-size: 12px;
         }
 
         .stat-value {
-            font-size: 16px;
             font-weight: 600;
             color: var(--primary-color);
         }
 
-        .stat-label {
-            font-size: 12px;
-            color: var(--gray-color);
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
         }
 
-        #configSection {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: var(--border-radius);
-            margin-bottom: 20px;
-            border: 1px solid #dee2e6;
-        }
-
-        #configSection h3 {
-            margin-bottom: 10px;
-            color: var(--dark-color);
-        }
-
-        #webAppUrl {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ced4da;
-            border-radius: 4px;
+        .url-input {
             font-family: monospace;
             font-size: 12px;
+            background: #f8f9fa;
         }
 
-        .url-help {
+        .help-text {
             font-size: 12px;
             color: var(--gray-color);
             margin-top: 5px;
@@ -270,50 +257,54 @@
     </style>
 </head>
 <body>
-    <!-- 설정 섹션 -->
-    <div id="configSection">
-        <h3>⚙️ API 설정</h3>
-        <div class="form-group">
-            <label for="webAppUrl">Google Apps Script Web App URL:</label>
-            <input type="url" id="webAppUrl" placeholder="https://script.google.com/macros/s/AKfycbxpETVE4Hgr-Pgca6xC0CY6wJlCbNG329HJCCfh9MJ141BMAEpnTu1gsk0_gBUEd0b6/exec"/>
-            <div class="url-help">
-                Google Apps Script에서 "새 배포" → "웹 앱" → "실행 주체: 나" → "액세스 권한: 모든 사용자" 후 URL 복사  > 제발
-            </div>
-        </div>
-        <button class="btn" onclick="testConnection()">연결 테스트</button>
-        <div id="connectionResult" class="hidden"></div>
-    </div>
-
-    <!-- 프로필 선택 화면 -->
-    <div id="profileScreen" class="screen active">
+    <div class="container">
         <div class="header">
-            <h1>👤 프로필 선택</h1>
-            <p class="subtitle">훈련할 사용자를 선택하세요</p>
+            <h1>🚴‍♂️ 사이클 아카데미</h1>
+            <p class="subtitle">워크아웃 관리 시스템 (GitHub Pages + Google Apps Script)</p>
         </div>
 
-        <div id="profileList">
-            <!-- 사용자 프로필들이 여기에 표시됩니다 -->
-        </div>
-
-        <div class="card" onclick="showAddUserForm()">
-            <div class="text-center">
-                <div style="font-size: 48px; margin-bottom: 10px;">➕</div>
-                <h3>새 사용자 추가</h3>
-                <p style="color: var(--gray-color); margin-top: 5px;">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
+        <!-- API 설정 -->
+        <div class="card">
+            <h3>⚙️ Google Apps Script API 설정</h3>
+            <div class="form-group">
+                <label>Web App URL:</label>
+                <input type="url" id="webAppUrl" class="url-input" 
+                       placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+                       value="https://script.google.com/macros/s/AKfycbxM8Vp4riU_sUYEzF3m6PlWY2iKhuqMw-F57OzpNPxshZR-xdcToJBJECPzLPnfdb9I/exec">
+                <div class="help-text">Google Apps Script 웹 앱 배포 URL을 입력하세요</div>
             </div>
+            <button class="btn" onclick="testConnection()">연결 테스트</button>
+            <div id="connectionResult"></div>
         </div>
 
-        <div id="addUserForm" class="card hidden">
-            <h3 style="margin-bottom: 20px;">새 사용자 등록</h3>
-            <div id="userFormMessage"></div>
+        <!-- 사용자 목록 -->
+        <div class="card">
+            <h3>👥 등록된 사용자</h3>
+            <div id="usersList">
+                <div class="message info">
+                    연결 테스트 후 사용자 목록이 표시됩니다.
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="loadUsers()" style="margin-top: 15px;">
+                사용자 목록 새로고침
+            </button>
+        </div>
+
+        <!-- 새 사용자 추가 -->
+        <div class="card">
+            <h3>➕ 새 사용자 추가</h3>
+            <div id="addUserMessage"></div>
+            
             <div class="form-group">
                 <label>이름 *</label>
-                <input type="text" id="userName" placeholder="이름을 입력하세요" required>
+                <input type="text" id="userName" placeholder="홍길동" required>
             </div>
+            
             <div class="form-group">
                 <label>연락처 *</label>
                 <input type="tel" id="userContact" placeholder="010-1234-5678" required>
             </div>
+            
             <div class="form-row">
                 <div class="form-group">
                     <label>FTP (W) *</label>
@@ -324,232 +315,181 @@
                     <input type="number" id="userWeight" placeholder="70" min="40" max="150" required>
                 </div>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-success" onclick="saveNewUser()" id="saveUserBtn">저장</button>
-                <button class="btn btn-secondary" onclick="cancelAddUser()">취소</button>
+            
+            <button class="btn btn-success" onclick="addUser()" id="addUserBtn">
+                사용자 추가
+            </button>
+        </div>
+
+        <!-- 관리 도구 -->
+        <div class="card">
+            <h3>⚙️ 관리 도구</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <button class="btn btn-secondary" onclick="initializeDatabase()">
+                    데이터베이스 초기화
+                </button>
+                <a class="btn btn-secondary" onclick="openDirectAPI()">
+                    직접 API 호출
+                </a>
+            </div>
+        </div>
+
+        <!-- 사용법 안내 -->
+        <div class="card">
+            <h3>📖 사용법 안내</h3>
+            <div class="message info">
+                <strong>CORS 제한으로 인해 직접 API 호출 방식을 사용합니다:</strong><br>
+                1. 연결 테스트를 먼저 실행하세요<br>
+                2. 사용자 추가 시 새 창이 열리며 결과를 확인할 수 있습니다<br>
+                3. 작업 완료 후 "사용자 목록 새로고침"을 클릭하세요
             </div>
         </div>
     </div>
 
     <script>
         // ==========================================
-        // 전역 변수 및 설정
+        // 전역 변수
         // ==========================================
-        let WEB_APP_URL = '';
-        let currentUser = null;
+        let API_BASE_URL = '';
 
         // ==========================================
-        // API 통신 함수들
+        // URL 기반 API 호출 함수들
         // ==========================================
-
-        /**
-         * Google Apps Script Web App으로 API 요청
-         */
-        async function callAPI(action, data = {}) {
-            const url = document.getElementById('webAppUrl').value.trim();
-            
-            if (!url) {
-                throw new Error('Web App URL을 입력해주세요.');
-            }
-
-            console.log(`API 호출: ${action}`, data);
-
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        action: action,
-                        data: data
-                    }),
-                    mode: 'cors'
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const result = await response.json();
-                console.log(`API 응답: ${action}`, result);
-                
-                return result;
-            } catch (error) {
-                console.error(`API 오류 (${action}):`, error);
-                throw error;
-            }
-        }
 
         /**
          * 연결 테스트
          */
-        async function testConnection() {
+        function testConnection() {
+            const url = document.getElementById('webAppUrl').value.trim();
             const resultDiv = document.getElementById('connectionResult');
-            resultDiv.className = 'loading';
-            resultDiv.innerHTML = '<div class="spinner"></div><p>연결 테스트 중...</p>';
-            resultDiv.classList.remove('hidden');
-
-            try {
-                const result = await callAPI('testConnection');
-                
-                if (result.success) {
-                    resultDiv.className = 'success';
-                    resultDiv.innerHTML = `
-                        <strong>✅ 연결 성공!</strong><br>
-                        ${result.message || ''}
-                        ${result.data ? `<br><small>시트: ${result.data.sheets ? result.data.sheets.join(', ') : 'N/A'}</small>` : ''}
-                    `;
-                    WEB_APP_URL = document.getElementById('webAppUrl').value.trim();
-                    loadUsers(); // 연결 성공 시 사용자 목록 로드
-                } else {
-                    throw new Error(result.error || '알 수 없는 오류');
-                }
-            } catch (error) {
-                resultDiv.className = 'error';
-                resultDiv.innerHTML = `
-                    <strong>❌ 연결 실패</strong><br>
-                    ${error.message}
-                `;
+            
+            if (!url) {
+                showMessage(resultDiv, 'error', 'URL을 입력해주세요.');
+                return;
             }
-        }
 
-        // ==========================================
-        // 사용자 관리 함수들
-        // ==========================================
+            showMessage(resultDiv, 'loading', '연결 테스트 중...');
+
+            // 새 창에서 테스트
+            const testUrl = `${url}?action=testConnection`;
+            const testWindow = window.open(testUrl, '_blank', 'width=600,height=400');
+            
+            // URL 저장
+            API_BASE_URL = url;
+            localStorage.setItem('webAppUrl', url);
+
+            setTimeout(() => {
+                showMessage(resultDiv, 'success', '연결 테스트가 새 창에서 실행되었습니다. JSON 응답이 보이면 연결이 정상입니다.');
+                if (testWindow && !testWindow.closed) {
+                    loadUsers();
+                }
+            }, 2000);
+        }
 
         /**
          * 사용자 목록 로드
          */
-        async function loadUsers() {
-            const profileList = document.getElementById('profileList');
+        function loadUsers() {
+            const url = document.getElementById('webAppUrl').value.trim();
+            const container = document.getElementById('usersList');
             
-            try {
-                const result = await callAPI('getUsers');
-                
-                if (result.success) {
-                    displayUsers(result.data || []);
-                } else {
-                    throw new Error(result.error || '사용자 조회 실패');
-                }
-            } catch (error) {
-                console.error('사용자 로드 실패:', error);
-                profileList.innerHTML = `
-                    <div class="error">
-                        <strong>사용자 목록 로드 실패</strong><br>
-                        ${error.message}
-                    </div>
-                `;
+            if (!url) {
+                showMessage(container, 'error', '먼저 API URL을 설정하고 연결 테스트를 해주세요.');
+                return;
             }
+
+            showMessage(container, 'loading', '사용자 목록을 로드하는 중...');
+
+            // 새 창에서 데이터 로드
+            const loadUrl = `${url}?action=getUsers`;
+            const loadWindow = window.open(loadUrl, '_blank', 'width=800,height=600');
+            
+            setTimeout(() => {
+                showMessage(container, 'info', `
+                    사용자 목록이 새 창에서 열렸습니다.<br>
+                    <small>JSON 데이터를 확인하고 이 창을 닫으세요.</small><br>
+                    <button class="btn" onclick="loadDummyUsers()" style="margin-top: 10px; width: auto; padding: 8px 16px;">
+                        샘플 데이터 표시
+                    </button>
+                `);
+            }, 1000);
         }
 
         /**
-         * 사용자 목록 화면에 표시
+         * 샘플 사용자 데이터 표시
+         */
+        function loadDummyUsers() {
+            const sampleUsers = [
+                { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56, register_date: new Date() },
+                { user_id: 'U2', name: '김철수', contact: '010-9876-5432', ftp: 280, weight: 70, register_date: new Date() }
+            ];
+            displayUsers(sampleUsers);
+        }
+
+        /**
+         * 사용자 목록 표시
          */
         function displayUsers(users) {
-            const profileList = document.getElementById('profileList');
-            profileList.innerHTML = '';
-
-            if (users.length === 0) {
-                profileList.innerHTML = `
-                    <div class="card text-center">
-                        <p style="color: var(--gray-color);">등록된 사용자가 없습니다.<br>새 사용자를 추가해주세요.</p>
+            const container = document.getElementById('usersList');
+            
+            if (!users || users.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center" style="color: var(--gray-color); padding: 20px;">
+                        등록된 사용자가 없습니다.
                     </div>
                 `;
                 return;
             }
 
-            users.forEach(user => {
-                const profileCard = document.createElement('div');
-                profileCard.className = 'card profile-card';
-                profileCard.onclick = () => selectUser(user);
-
+            container.innerHTML = users.map(user => {
                 const initials = user.name ? user.name.substring(0, 2) : '??';
                 const powerToWeight = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(1) : '0.0';
+                const registerDate = user.register_date ? new Date(user.register_date).toLocaleDateString() : '날짜 없음';
 
-                profileCard.innerHTML = `
-                    <div class="profile-info">
-                        <div class="profile-avatar">${initials}</div>
-                        <div class="profile-details">
-                            <h3>${user.name || '이름 없음'}</h3>
-                            <div class="profile-stats">
-                                <div>
-                                    <div class="stat-value">${user.ftp || 0}W</div>
-                                    <div class="stat-label">FTP</div>
-                                </div>
-                                <div>
-                                    <div class="stat-value">${user.weight || 0}kg</div>
-                                    <div class="stat-label">몸무게</div>
-                                </div>
-                                <div>
-                                    <div class="stat-value">${powerToWeight}</div>
-                                    <div class="stat-label">W/kg</div>
-                                </div>
+                return `
+                    <div class="user-card" onclick="selectUser('${user.user_id}', '${user.name}')">
+                        <div class="user-avatar">${initials}</div>
+                        <div class="user-info">
+                            <div class="user-name">${user.name || '이름 없음'}</div>
+                            <div class="user-details">${user.contact} | 등록: ${registerDate}</div>
+                            <div class="user-stats">
+                                <div class="stat">FTP: <span class="stat-value">${user.ftp || 0}W</span></div>
+                                <div class="stat">몸무게: <span class="stat-value">${user.weight || 0}kg</span></div>
+                                <div class="stat">W/kg: <span class="stat-value">${powerToWeight}</span></div>
                             </div>
                         </div>
                     </div>
                 `;
-
-                profileList.appendChild(profileCard);
-            });
+            }).join('');
         }
 
         /**
          * 사용자 선택
          */
-        function selectUser(user) {
-            currentUser = user;
-            alert(`${user.name}님, 환영합니다!`);
-            // 여기서 다음 화면으로 이동하는 로직 추가
+        function selectUser(userId, userName) {
+            alert(`${userName}님이 선택되었습니다!\n사용자 ID: ${userId}`);
         }
 
         /**
-         * 새 사용자 추가 폼 표시
+         * 새 사용자 추가
          */
-        function showAddUserForm() {
-            if (!WEB_APP_URL) {
-                alert('먼저 Web App URL을 설정하고 연결 테스트를 해주세요.');
+        function addUser() {
+            const url = document.getElementById('webAppUrl').value.trim();
+            const messageDiv = document.getElementById('addUserMessage');
+            const addBtn = document.getElementById('addUserBtn');
+            
+            if (!url) {
+                showMessage(messageDiv, 'error', '먼저 API URL을 설정해주세요.');
                 return;
             }
-            
-            document.getElementById('addUserForm').classList.remove('hidden');
-            clearUserForm();
-        }
 
-        /**
-         * 새 사용자 추가 폼 취소
-         */
-        function cancelAddUser() {
-            document.getElementById('addUserForm').classList.add('hidden');
-            clearUserForm();
-        }
-
-        /**
-         * 사용자 폼 초기화
-         */
-        function clearUserForm() {
-            document.getElementById('userName').value = '';
-            document.getElementById('userContact').value = '';
-            document.getElementById('userFTP').value = '';
-            document.getElementById('userWeight').value = '';
-            document.getElementById('userFormMessage').innerHTML = '';
-            document.getElementById('saveUserBtn').disabled = false;
-        }
-
-        /**
-         * 새 사용자 저장
-         */
-        async function saveNewUser() {
-            const messageDiv = document.getElementById('userFormMessage');
-            const saveBtn = document.getElementById('saveUserBtn');
-            
             // 입력값 가져오기
             const name = document.getElementById('userName').value.trim();
             const contact = document.getElementById('userContact').value.trim();
             const ftp = document.getElementById('userFTP').value.trim();
             const weight = document.getElementById('userWeight').value.trim();
 
-            // 클라이언트 측 유효성 검사
+            // 유효성 검사
             if (!name || !contact || !ftp || !weight) {
                 showMessage(messageDiv, 'error', '모든 필드를 입력해주세요.');
                 return;
@@ -568,54 +508,113 @@
                 return;
             }
 
-            // 저장 시작
-            saveBtn.disabled = true;
+            // API 호출 URL 생성
+            const params = new URLSearchParams({
+                action: 'addUser',
+                name: name,
+                contact: contact,
+                ftp: ftpNum,
+                weight: weightNum
+            });
+
+            const addUrl = `${url}?${params.toString()}`;
+            
             showMessage(messageDiv, 'loading', '사용자 추가 중...');
+            addBtn.disabled = true;
 
-            try {
-                const result = await callAPI('addUser', {
-                    name: name,
-                    contact: contact,
-                    ftp: ftpNum,
-                    weight: weightNum
-                });
+            // 새 창에서 API 호출
+            const addWindow = window.open(addUrl, '_blank', 'width=600,height=400');
+            
+            setTimeout(() => {
+                addBtn.disabled = false;
+                showMessage(messageDiv, 'success', '사용자 추가 요청이 전송되었습니다! 새 창에서 결과를 확인하세요.');
+                
+                // 폼 초기화
+                document.getElementById('userName').value = '';
+                document.getElementById('userContact').value = '';
+                document.getElementById('userFTP').value = '';
+                document.getElementById('userWeight').value = '';
+                
+                // 3초 후 결과 확인 안내
+                setTimeout(() => {
+                    showMessage(messageDiv, 'info', '작업이 완료되었다면 "사용자 목록 새로고침" 버튼을 클릭하세요.');
+                }, 3000);
+            }, 2000);
+        }
 
-                if (result.success) {
-                    showMessage(messageDiv, 'success', result.message || '사용자가 성공적으로 추가되었습니다!');
-                    setTimeout(() => {
-                        cancelAddUser();
-                        loadUsers(); // 사용자 목록 새로고침
-                    }, 1500);
-                } else {
-                    showMessage(messageDiv, 'error', result.error || '사용자 추가에 실패했습니다.');
-                    saveBtn.disabled = false;
-                }
-            } catch (error) {
-                console.error('사용자 추가 오류:', error);
-                showMessage(messageDiv, 'error', `오류: ${error.message}`);
-                saveBtn.disabled = false;
+        /**
+         * 데이터베이스 초기화
+         */
+        function initializeDatabase() {
+            const url = document.getElementById('webAppUrl').value.trim();
+            
+            if (!url) {
+                alert('먼저 API URL을 설정해주세요.');
+                return;
             }
+
+            if (confirm('데이터베이스를 초기화하시겠습니까?\n필요한 시트들이 생성됩니다.')) {
+                const initUrl = `${url}?action=initializeSpreadsheet`;
+                window.open(initUrl, '_blank', 'width=600,height=400');
+            }
+        }
+
+        /**
+         * 직접 API 호출 창 열기
+         */
+        function openDirectAPI() {
+            const url = document.getElementById('webAppUrl').value.trim();
+            
+            if (!url) {
+                alert('먼저 API URL을 설정해주세요.');
+                return;
+            }
+
+            const helpWindow = window.open('', '_blank', 'width=800,height=600');
+            helpWindow.document.write(`
+                <html>
+                <head><title>API 직접 호출 도구</title></head>
+                <body style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>Google Apps Script API 직접 호출</h2>
+                    <h3>사용 가능한 API:</h3>
+                    <ul>
+                        <li><a href="${url}?action=testConnection" target="_blank">연결 테스트</a></li>
+                        <li><a href="${url}?action=getUsers" target="_blank">사용자 목록 조회</a></li>
+                        <li><a href="${url}?action=initializeSpreadsheet" target="_blank">데이터베이스 초기화</a></li>
+                    </ul>
+                    <h3>사용자 추가 예시:</h3>
+                    <p><a href="${url}?action=addUser&name=테스트&contact=010-0000-0000&ftp=250&weight=70" target="_blank">
+                        테스트 사용자 추가
+                    </a></p>
+                    <p><small>실제 사용시 name, contact, ftp, weight 값을 원하는 값으로 변경하세요.</small></p>
+                </body>
+                </html>
+            `);
         }
 
         /**
          * 메시지 표시 헬퍼 함수
          */
         function showMessage(element, type, message) {
-            element.className = type;
+            element.className = `message ${type}`;
             
+            let icon = '';
             switch (type) {
                 case 'loading':
-                    element.innerHTML = '<div class="spinner" style="width: 20px; height: 20px; margin: 0 auto 10px;"></div>' + message;
+                    icon = '<span class="spinner"></span>';
                     break;
                 case 'success':
-                    element.innerHTML = '✅ ' + message;
+                    icon = '✅ ';
                     break;
                 case 'error':
-                    element.innerHTML = '❌ ' + message;
+                    icon = '❌ ';
                     break;
-                default:
-                    element.innerHTML = message;
+                case 'info':
+                    icon = 'ℹ️ ';
+                    break;
             }
+            
+            element.innerHTML = icon + message;
         }
 
         // ==========================================
@@ -623,15 +622,15 @@
         // ==========================================
 
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('사이클 아카데미 워크아웃 앱 로드됨');
+            console.log('사이클 아카데미 앱 로드됨 (GitHub Pages + URL 기반 API)');
             
-            // 저장된 URL이 있으면 불러오기
+            // 저장된 URL 복원
             const savedUrl = localStorage.getItem('webAppUrl');
             if (savedUrl) {
                 document.getElementById('webAppUrl').value = savedUrl;
             }
 
-            // URL 입력시 자동 저장
+            // URL 변경시 자동 저장
             document.getElementById('webAppUrl').addEventListener('change', function() {
                 localStorage.setItem('webAppUrl', this.value);
             });
