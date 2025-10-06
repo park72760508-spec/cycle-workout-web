@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사이클 아카데미 - 관리자</title>
+    <style>
+        :root {
+            --primary-color: #2E74E8;
+            --secondary-color: #1A5AB8;
+            --accent-color: #FF6B35;
+            --success-color: #28A745;
+            --warning-color: #FFC107;
+            --danger-color: #DC3545;
+            --dark-color: #343A40;
+            --light-color: #F8F9FA;
+            --gray-color: #6C757D;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--light-color);
+            color: var(--dark-color);
+            line-height: 1.6;
+        }
+
+        .admin-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* 사이드바 */
+        .sidebar {
+            width: 250px;
+            background: var(--dark-color);
+            color: white;
+            padding: 20px 0;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #495057;
+            margin-bottom: 20px;
+        }
+
+        .sidebar-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 5px;
+        }
+
+        .sidebar-menu a {
+            display: block;
+            padding: 12px 20px;
+            color: #adb5bd;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* 메인 컨텐츠 */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .page-header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--dark-color);
+        }
+
+        .btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: var(--secondary-color);
+            transform: translateY(-1px);
+        }
+
+        .btn-success { background: var(--success-color); }
+        .btn-warning { background: var(--warning-color); }
+        .btn-danger { background: var(--danger-color); }
+        .btn-secondary { background: var(--gray-color); }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* 카드 */
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .card-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* 테이블 */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .table th {
+            background: var(--light-color);
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* 폼 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ced4da;
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.25);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 20px;
+        }
+
+        /* 워크아웃 에디터 */
+        .workout-editor {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .segments-list {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .segment-item {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: var(--border-radius);
+            padding: 15px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .segment-item.editing {
+            border-color: var(--primary-color);
+            background: white;
+        }
+
+        .segment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .segment-type {
+            background: var(--primary-color);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .segment-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        .segment-details {
+            font-size: 14px;
+            color: var(--gray-color);
+        }
+
+        .segment-form {
+            display: none;
+        }
+
+        .segment-form.active {
+            display: block;
+        }
+
+        /* 워크아웃 미리보기 */
+        .workout-preview {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            position: sticky;
+            top: 20px;
+        }
+
+        .power-graph {
+            height: 200px;
+            background: #f8f9fa;
+            border-radius: var(--border-radius);
+            margin: 15px 0;
+            display: flex;
+            align-items: end;
+            padding: 10px;
+            gap: 2px;
+        }
+
+        .power-bar {
+            flex: 1;
+            background: var(--primary-color);
+            border-radius: 2px 2px 0 0;
+            min-height: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .workout-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: var(--light-color);
+            border-radius: var(--border-radius);
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--gray-color);
+            text-transform: uppercase;
+        }
+
+        /* 통계 대시보드 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            text-align: center;
+        }
+
+        .stat-card.success {
+            background: linear-gradient(135deg, var(--success-color), #20a83a);
+        }
+
+        .stat-card.warning {
+            background: linear-gradient(135deg, var(--warning-color), #e0a800);
+        }
+
+        .stat-card.danger {
+            background: linear-gradient(135deg, var(--danger-color), #c82333);
+        }
+
+        .stat-card h3 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        /* 로그인 화면 */
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        /* 상태 표시 */
+        .status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.completed {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .status.started {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .admin-container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                width: 100%;
+                order: 2;
+            }
+
+            .main-content {
+                order: 1;
+                padding: 20px;
+            }
+
+            .workout-editor {
+                grid-template-columns: 1fr;
+            }
+
+            .form-row,
+            .form-row-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .mt-20 {
+            margin-top: 20px;
+        }
+
+        .mb-20 {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 로그인 화면 -->
+    <div id="loginScreen" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <h1>🚴‍♂️ 사이클 아카데미</h1>
+                <p style="color: var(--gray-color);">관리자 로그인</p>
+            </div>
+            <form onsubmit="login(event)">
+                <div class="form-group">
+                    <label>관리자 비밀번호</label>
+                    <input type="password" id="adminPassword" placeholder="비밀번호를 입력하세요" required>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">로그인</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 관리자 메인 화면 -->
+    <div id="adminScreen" class="admin-container hidden">
+        <!-- 사이드바 -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>🚴‍♂️ 관리자</h2>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="#" onclick="showPage('dashboard')" class="active">📊 대시보드</a></li>
+                <li><a href="#" onclick="showPage('workouts')">📋 워크아웃 관리</a></li>
+                <li><a href="#" onclick="showPage('users')">👥 사용자 관리</a></li>
+                <li><a href="#" onclick="showPage('sessions')">📈 훈련 기록</a></li>
+                <li><a href="#" onclick="showPage('devices')">📱 기기 관리</a></li>
+                <li><a href="#" onclick="logout()">🚪 로그아웃</a></li>
+            </ul>
+        </nav>
+
+        <!-- 메인 컨텐츠 -->
+        <main class="main-content">
+            <!-- 대시보드 -->
+            <div id="dashboardPage" class="page">
+                <div class="page-header">
+                    <h1>대시보드</h1>
+                    <select onchange="updateStats(this.value)">
+                        <option value="week">최근 1주일</option>
+                        <option value="month" selected>최근 1개월</option>
+                        <option value="year">최근 1년</option>
+                    </select>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3 id="totalSessions">0</h3>
+                        <p>완료된 훈련</p>
+                    </div>
+                    <div class="stat-card success">
+                        <h3 id="totalUsers">0</h3>
+                        <p>활성 사용자</p>
+                    </div>
+                    <div class="stat-card warning">
+                        <h3 id="avgAchievement">0%</h3>
+                        <p>평균 달성률</p>
+                    </div>
+                    <div class="stat-card danger">
+                        <h3 id="completionRate">0%</h3>
+                        <p>완주율</p>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>인기 워크아웃</h3>
+                        </div>
+                        <div id="popularWorkouts">
+                            <!-- 동적으로 생성 -->
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>사용자 순위</h3>
+                        </div>
+                        <div id="userRankings">
+                            <!-- 동적으로 생성 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 워크아웃 관리 -->
+            <div id="workoutsPage" class="page hidden">
+                <div class="page-header">
+                    <h1>워크아웃 관리</h1>
+                    <button class="btn btn-success" onclick="createNewWorkout()">새 워크아웃 만들기</button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>워크아웃 이름</th>
+                                <th>총 시간</th>
+                                <th>평균 강도</th>
+                                <th>세그먼트 수</th>
+                                <th>액션</th>
+                            </tr>
+                        </thead>
+                        <tbody id="workoutsList">
+                            <!-- 동적으로 생성 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 워크아웃 에디터 -->
+            <div id="workoutEditor" class="page hidden">
+                <div class="page-header">
+                    <h1 id="editorTitle">새 워크아웃 만들기</h1>
+                    <div>
+                        <button class="btn btn-success" onclick="saveWorkout()">저장</button>
+                        <button class="btn btn-secondary" onclick="cancelEdit()">취소</button>
+                    </div>
+                </div>
+
+                <div class="card mb-20">
+                    <h3>기본 정보</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>워크아웃 이름</label>
+                            <input type="text" id="workoutName" placeholder="예: SST_MCT(14)">
+                        </div>
+                        <div class="form-group">
+                            <label>카테고리</label>
+                            <select id="workoutCategory">
+                                <option value="recovery">회복</option>
+                                <option value="endurance">지구력</option>
+                                <option value="tempo">템포</option>
+                                <option value="threshold">임계점</option>
+                                <option value="vo2max">VO2Max</option>
+                                <option value="anaerobic">무산소</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="workout-editor">
+                    <div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>세그먼트 구성</h3>
+                                <button class="btn btn-sm btn-success" onclick="addSegment()">세그먼트 추가</button>
+                            </div>
+                            <div class="segments-list" id="segmentsList">
+                                <!-- 동적으로 생성 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="workout-preview">
+                            <h3>미리보기</h3>
+                            <div class="power-graph" id="powerGraph">
+                                <!-- 파워 그래프 -->
+                            </div>
+                            <div class="workout-stats">
+                                <div class="stat-item">
+                                    <div class="stat-value" id="previewDuration">0분</div>
+                                    <div class="stat-label">총 시간</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="previewIntensity">0%</div>
+                                    <div class="stat-label">평균 강도</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="previewTSS">0</div>
+                                    <div class="stat-label">예상 TSS</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-value" id="previewSegments">0개</div>
+                                    <div class="stat-label">세그먼트</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 사용자 관리 -->
+            <div id="usersPage" class="page hidden">
+                <div class="page-header">
+                    <h1>사용자 관리</h1>
+                    <button class="btn btn-success" onclick="addNewUser()">새 사용자 추가</button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>이름</th>
+                                <th>연락처</th>
+                                <th>FTP</th>
+                                <th>몸무게</th>
+                                <th>등록일</th>
+                                <th>상태</th>
+                                <th>액션</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersList">
+                            <!-- 동적으로 생성 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 훈련 기록 -->
+            <div id="sessionsPage" class="page hidden">
+                <div class="page-header">
+                    <h1>훈련 기록</h1>
+                    <div>
+                        <input type="date" id="sessionDateFrom" style="margin-right: 10px;">
+                        <input type="date" id="sessionDateTo" style="margin-right: 10px;">
+                        <button class="btn btn-secondary" onclick="filterSessions()">필터</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>사용자</th>
+                                <th>워크아웃</th>
+                                <th>시작 시간</th>
+                                <th>완료 시간</th>
+                                <th>달성률</th>
+                                <th>평균 파워</th>
+                                <th>평균 심박</th>
+                                <th>상태</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionsList">
+                            <!-- 동적으로 생성 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 기기 관리 -->
+            <div id="devicesPage" class="page hidden">
+                <div class="page-header">
+                    <h1>기기 관리</h1>
+                    <button class="btn btn-success" onclick="addNewDevice()">새 기기 등록</button>
+                </div>
+
+                <div class="card">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>기기명</th>
+                                <th>타입</th>
+                                <th>연결 방식</th>
+                                <th>마지막 사용</th>
+                                <th>액션</th>
+                            </tr>
+                        </thead>
+                        <tbody id="devicesList">
+                            <!-- 동적으로 생성 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ==========================================
+        // 전역 변수
+        // ==========================================
+        let currentWorkout = {
+            workout_id: null,
+            workout_name: '',
+            segments: []
+        };
+        let editingSegmentIndex = -1;
+        let isLoggedIn = false;
+
+        // ==========================================
+        // 인증 및 초기화
+        // ==========================================
+        function login(event) {
+            event.preventDefault();
+            const password = document.getElementById('adminPassword').value;
+            
+            google.script.run
+                .withSuccessHandler(function(result) {
+                    if (result) {
+                        isLoggedIn = true;
+                        document.getElementById('loginScreen').classList.add('hidden');
+                        document.getElementById('adminScreen').classList.remove('hidden');
+                        initializeDashboard();
+                    } else {
+                        alert('비밀번호가 올바르지 않습니다.');
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    alert('로그인 중 오류가 발생했습니다.');
+                })
+                .checkAdminAuth(password);
+        }
+
+        function logout() {
+            if (confirm('로그아웃 하시겠습니까?')) {
+                isLoggedIn = false;
+                document.getElementById('loginScreen').classList.remove('hidden');
+                document.getElementById('adminScreen').classList.add('hidden');
+                document.getElementById('adminPassword').value = '';
+            }
+        }
+
+        function initializeDashboard() {
+            showPage('dashboard');
+            updateStats('month');
+        }
+
+        // ==========================================
+        // 페이지 네비게이션
+        // ==========================================
+        function showPage(pageId) {
+            // 모든 페이지 숨기기
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.add('hidden');
+            });
+
+            // 사이드바 메뉴 활성화 상태 변경
+            document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // 선택된 페이지 표시
+            document.getElementById(pageId + 'Page').classList.remove('hidden');
+
+            // 페이지별 데이터 로드
+            switch(pageId) {
+                case 'dashboard':
+                    updateStats('month');
+                    break;
+                case 'workouts':
+                    loadWorkouts();
+                    break;
+                case 'users':
+                    loadUsers();
+                    break;
+                case 'sessions':
+                    loadSessions();
+                    break;
+                case 'devices':
+                    loadDevices();
+                    break;
+            }
+        }
+
+        // ==========================================
+        // 대시보드
+        // ==========================================
+        function updateStats(period) {
+            google.script.run
+                .withSuccessHandler(function(stats) {
+                    document.getElementById('totalSessions').textContent = stats.total_sessions;
+                    document.getElementById('totalUsers').textContent = stats.total_users;
+                    document.getElementById('avgAchievement').textContent = stats.avg_achievement + '%';
+                    document.getElementById('completionRate').textContent = stats.completion_rate + '%';
+                    
+                    displayPopularWorkouts(stats.popular_workouts);
+                    displayUserRankings(stats.user_rankings);
+                })
+                .withFailureHandler(function(error) {
+                    console.error('통계 로드 실패:', error);
+                })
+                .generateStatistics(period);
+        }
+
+        function displayPopularWorkouts(workouts) {
+            const container = document.getElementById('popularWorkouts');
+            container.innerHTML = workouts.map((workout, index) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee;">
+                    <span>${index + 1}. ${workout.workout_id}</span>
+                    <span style="font-weight: 600;">${workout.count}회</span>
+                </div>
+            `).join('');
+        }
+
+        function displayUserRankings(users) {
+            const container = document.getElementById('userRankings');
+            container.innerHTML = users.map((user, index) => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee;">
+                    <div>
+                        <span>${index + 1}. ${user.user_name}</span>
+                        <small style="color: var(--gray-color); margin-left: 10px;">${user.session_count}회 완주</small>
+                    </div>
+                    <span style="font-weight: 600; color: var(--primary-color);">${user.avg_achievement}%</span>
+                </div>
+            `).join('');
+        }
+
+        // ==========================================
+        // 워크아웃 관리
+        // ==========================================
+        function loadWorkouts() {
+            google.script.run
+                .withSuccessHandler(function(workouts) {
+                    displayWorkouts(workouts);
+                })
+                .withFailureHandler(function(error) {
+                    console.error('워크아웃 로드 실패:', error);
+                })
+                .getWorkouts();
+        }
+
+        function displayWorkouts(workouts) {
+            const tbody = document.getElementById('workoutsList');
+            tbody.innerHTML = workouts.map(workout => `
+                <tr>
+                    <td>${workout.workout_name}</td>
+                    <td>${Math.floor(workout.total_duration / 60)}분</td>
+                    <td>${workout.avg_intensity}% FTP</td>
+                    <td>${workout.segments.length}개</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="editWorkout('${workout.workout_id}')">편집</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteWorkout('${workout.workout_id}')">삭제</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function createNewWorkout() {
+            currentWorkout = {
+                workout_id: null,
+                workout_name: '',
+                segments: []
+            };
+            document.getElementById('editorTitle').textContent = '새 워크아웃 만들기';
+            document.getElementById('workoutName').value = '';
+            document.getElementById('workoutCategory').value = 'endurance';
+            document.getElementById('segmentsList').innerHTML = '';
+            updateWorkoutPreview();
+            showPage('workoutEditor');
+        }
+
+        function editWorkout(workoutId) {
+            google.script.run
+                .withSuccessHandler(function(workout) {
+                    if (workout) {
+                        currentWorkout = workout;
+                        document.getElementById('editorTitle').textContent = '워크아웃 편집';
+                        document.getElementById('workoutName').value = workout.workout_name;
+                        displaySegments();
+                        updateWorkoutPreview();
+                        showPage('workoutEditor');
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    console.error('워크아웃 로드 실패:', error);
+                })
+                .getWorkoutDetail(workoutId);
+        }
+
+        function deleteWorkout(workoutId) {
+            if (confirm('이 워크아웃을 삭제하시겠습니까?')) {
+                google.script.run
+                    .withSuccessHandler(function(result) {
+                        if (result.success) {
+                            alert('워크아웃이 삭제되었습니다.');
+                            loadWorkouts();
+                        } else {
+                            alert('삭제 실패: ' + result.error);
+                        }
+                    })
+                    .withFailureHandler(function(error) {
+                        alert('삭제 중 오류 발생');
+                    })
+                    .deleteWorkout(workoutId);
+            }
+        }
+
+        function saveWorkout() {
+            const workoutName = document.getElementById('workoutName').value.trim();
+            
+            if (!workoutName) {
+                alert('워크아웃 이름을 입력해주세요.');
+                return;
+            }
+
+            if (currentWorkout.segments.length === 0) {
+                alert('최소 1개의 세그먼트를 추가해주세요.');
+                return;
+            }
+
+            const workoutData = {
+                workout_name: workoutName,
+                segments: currentWorkout.segments
+            };
+
+            const saveFunction = currentWorkout.workout_id ? 'updateWorkout' : 'createWorkout';
+            const params = currentWorkout.workout_id ? [currentWorkout.workout_id, workoutData] : [workoutData];
+
+            google.script.run
+                .withSuccessHandler(function(result) {
+                    if (result.success) {
+                        alert('워크아웃이 저장되었습니다.');
+                        showPage('workouts');
+                        loadWorkouts();
+                    } else {
+                        alert('저장 실패: ' + result.error);
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    alert('저장 중 오류 발생');
+                })[saveFunction](...params);
+        }
+
+        function cancelEdit() {
+            if (confirm('편집을 취소하시겠습니까? 변경사항이 저장되지 않습니다.')) {
+                showPage('workouts');
+            }
+        }
+
+        // ==========================================
+        // 세그먼트 관리
+        // ==========================================
+        function addSegment() {
+            const newSegment = {
+                segment_order: currentWorkout.segments.length + 1,
+                segment_type: '웜업',
+                description: '새 세그먼트',
+                target_rpm: 80,
+                ftp_percent: 60,
+                duration_sec: 300,
+                repeat_count: 1
+            };
+
+            currentWorkout.segments.push(newSegment);
+            displaySegments();
+            updateWorkoutPreview();
+            editSegment(currentWorkout.segments.length - 1);
+        }
+
+        function displaySegments() {
+            const container = document.getElementById('segmentsList');
+            container.innerHTML = currentWorkout.segments.map((segment, index) => `
+                <div class="segment-item" id="segment-${index}">
+                    <div class="segment-header">
+                        <div>
+                            <span class="segment-type">${segment.segment_type}</span>
+                            <span style="margin-left: 10px; font-weight: 600;">${segment.description}</span>
+                        </div>
+                        <div class="segment-controls">
+                            <button class="btn btn-sm" onclick="editSegment(${index})">편집</button>
+                            <button class="btn btn-sm btn-danger" onclick="removeSegment(${index})">삭제</button>
+                        </div>
+                    </div>
+                    <div class="segment-details">
+                        FTP ${segment.ftp_percent}% | ${segment.target_rpm}RPM | ${Math.floor(segment.duration_sec / 60)}분 ${segment.duration_sec % 60}초
+                        ${segment.repeat_count > 1 ? ` | ${segment.repeat_count}회 반복` : ''}
+                    </div>
+                    
+                    <div class="segment-form" id="form-${index}">
+                        <div class="form-row-3" style="margin-top: 15px;">
+                            <div class="form-group">
+                                <label>타입</label>
+                                <select onchange="updateSegment(${index}, 'segment_type', this.value)">
+                                    <option value="웜업" ${segment.segment_type === '웜업' ? 'selected' : ''}>웜업</option>
+                                    <option value="메인" ${segment.segment_type === '메인' ? 'selected' : ''}>메인</option>
+                                    <option value="인터벌" ${segment.segment_type === '인터벌' ? 'selected' : ''}>인터벌</option>
+                                    <option value="휴식" ${segment.segment_type === '휴식' ? 'selected' : ''}>휴식</option>
+                                    <option value="쿨다운" ${segment.segment_type === '쿨다운' ? 'selected' : ''}>쿨다운</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>FTP %</label>
+                                <input type="number" value="${segment.ftp_percent}" min="30" max="200" 
+                                       onchange="updateSegment(${index}, 'ftp_percent', parseInt(this.value))">
+                            </div>
+                            <div class="form-group">
+                                <label>목표 RPM</label>
+                                <input type="number" value="${segment.target_rpm}" min="60" max="120"
+                                       onchange="updateSegment(${index}, 'target_rpm', parseInt(this.value))">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>설명</label>
+                                <input type="text" value="${segment.description}" placeholder="세그먼트 설명"
+                                       onchange="updateSegment(${index}, 'description', this.value)">
+                            </div>
+                            <div class="form-group">
+                                <label>지속시간 (초)</label>
+                                <input type="number" value="${segment.duration_sec}" min="10" max="7200"
+                                       onchange="updateSegment(${index}, 'duration_sec', parseInt(this.value))">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>반복 횟수</label>
+                            <input type="number" value="${segment.repeat_count}" min="1" max="20"
+                                   onchange="updateSegment(${index}, 'repeat_count', parseInt(this.value))">
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button class="btn btn-sm btn-success" onclick="finishEditSegment(${index})">완료</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function editSegment(index) {
+            // 기존 편집 모드 종료
+            if (editingSegmentIndex >= 0) {
+                finishEditSegment(editingSegmentIndex);
+            }
+
+            editingSegmentIndex = index;
+            document.getElementById(`segment-${index}`).classList.add('editing');
+            document.getElementById(`form-${index}`).classList.add('active');
+        }
+
+        function finishEditSegment(index) {
+            editingSegmentIndex = -1;
+            document.getElementById(`segment-${index}`).classList.remove('editing');
+            document.getElementById(`form-${index}`).classList.remove('active');
+            displaySegments();
+            updateWorkoutPreview();
+        }
+
+        function updateSegment(index, field, value) {
+            currentWorkout.segments[index][field] = value;
+            updateWorkoutPreview();
+        }
+
+        function removeSegment(index) {
+            if (confirm('이 세그먼트를 삭제하시겠습니까?')) {
+                currentWorkout.segments.splice(index, 1);
+                // 세그먼트 순서 재정렬
+                currentWorkout.segments.forEach((segment, i) => {
+                    segment.segment_order = i + 1;
+                });
+                displaySegments();
+                updateWorkoutPreview();
+            }
+        }
+
+        function updateWorkoutPreview() {
+            const segments = currentWorkout.segments;
+            
+            // 총 시간 계산
+            const totalDuration = segments.reduce((sum, seg) => sum + (seg.duration_sec * seg.repeat_count), 0);
+            document.getElementById('previewDuration').textContent = Math.floor(totalDuration / 60) + '분';
+
+            // 평균 강도 계산
+            const totalPower = segments.reduce((sum, seg) => sum + (seg.ftp_percent * seg.duration_sec * seg.repeat_count), 0);
+            const avgIntensity = totalDuration > 0 ? Math.round(totalPower / totalDuration) : 0;
+            document.getElementById('previewIntensity').textContent = avgIntensity + '%';
+
+            // TSS 계산 (간단 버전)
+            const tss = Math.round((totalDuration / 3600) * Math.pow(avgIntensity / 100, 2) * 100);
+            document.getElementById('previewTSS').textContent = tss;
+
+            // 세그먼트 수
+            document.getElementById('previewSegments').textContent = segments.length + '개';
+
+            // 파워 그래프 그리기
+            drawPowerGraph(segments);
+        }
+
+        function drawPowerGraph(segments) {
+            const container = document.getElementById('powerGraph');
+            container.innerHTML = '';
+
+            if (segments.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: var(--gray-color); margin: auto;">세그먼트를 추가해주세요</div>';
+                return;
+            }
+
+            segments.forEach(segment => {
+                for (let i = 0; i < segment.repeat_count; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'power-bar';
+                    
+                    const height = Math.min(100, (segment.ftp_percent / 150) * 100);
+                    bar.style.height = height + '%';
+                    bar.style.backgroundColor = getPowerZoneColor(segment.ftp_percent);
+                    bar.style.flex = segment.duration_sec;
+                    bar.title = `${segment.description} - FTP ${segment.ftp_percent}%`;
+                    
+                    container.appendChild(bar);
+                }
+            });
+        }
+
+        function getPowerZoneColor(ftpPercent) {
+            if (ftpPercent <= 55) return '#4A90E2';
+            if (ftpPercent <= 75) return '#7ED321';
+            if (ftpPercent <= 90) return '#F5A623';
+            if (ftpPercent <= 105) return '#F56500';
+            if (ftpPercent <= 120) return '#D0021B';
+            if (ftpPercent <= 150) return '#9013FE';
+            return '#BD10E0';
+        }
+
+        // ==========================================
+        // 사용자 관리
+        // ==========================================
+        function loadUsers() {
+            google.script.run
+                .withSuccessHandler(function(users) {
+                    displayUsers(users);
+                })
+                .withFailureHandler(function(error) {
+                    console.error('사용자 로드 실패:', error);
+                })
+                .getUsers();
+        }
+
+        function displayUsers(users) {
+            const tbody = document.getElementById('usersList');
+            tbody.innerHTML = users.map(user => `
+                <tr>
+                    <td>${user.name}</td>
+                    <td>${user.contact}</td>
+                    <td>${user.ftp}W</td>
+                    <td>${user.weight}kg</td>
+                    <td>${new Date(user.register_date).toLocaleDateString()}</td>
+                    <td><span class="status ${user.status}">${user.status === 'active' ? '활성' : '비활성'}</span></td>
+                    <td>
+                        <button class="btn btn-sm" onclick="editUser('${user.user_id}')">편집</button>
+                        ${user.status === 'active' ? 
+                            `<button class="btn btn-sm btn-danger" onclick="deactivateUser('${user.user_id}')">비활성화</button>` :
+                            `<button class="btn btn-sm btn-success" onclick="activateUser('${user.user_id}')">활성화</button>`
+                        }
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ==========================================
+        // 훈련 기록 관리
+        // ==========================================
+        function loadSessions() {
+            google.script.run
+                .withSuccessHandler(function(sessions) {
+                    displaySessions(sessions);
+                })
+                .withFailureHandler(function(error) {
+                    console.error('훈련 기록 로드 실패:', error);
+                })
+                .getAllTrainingSessions();
+        }
+
+        function displaySessions(sessions) {
+            const tbody = document.getElementById('sessionsList');
+            tbody.innerHTML = sessions.map(session => `
+                <tr>
+                    <td>${session.user_id}</td>
+                    <td>${session.workout_id}</td>
+                    <td>${new Date(session.start_time).toLocaleString()}</td>
+                    <td>${session.end_time ? new Date(session.end_time).toLocaleString() : '-'}</td>
+                    <td>${session.overall_achievement}%</td>
+                    <td>${session.avg_power}W</td>
+                    <td>${session.avg_hr} BPM</td>
+                    <td><span class="status ${session.status}">${session.status === 'completed' ? '완료' : '진행중'}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        // ==========================================
+        // 기기 관리
+        // ==========================================
+        function loadDevices() {
+            google.script.run
+                .withSuccessHandler(function(devices) {
+                    displayDevices(devices);
+                })
+                .withFailureHandler(function(error) {
+                    console.error('기기 로드 실패:', error);
+                })
+                .getDevices();
+        }
+
+        function displayDevices(devices) {
+            const tbody = document.getElementById('devicesList');
+            tbody.innerHTML = devices.map(device => `
+                <tr>
+                    <td>${device.device_name}</td>
+                    <td>${device.device_type}</td>
+                    <td>${device.connection_type}</td>
+                    <td>${device.last_used ? new Date(device.last_used).toLocaleDateString() : '-'}</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="editDevice('${device.device_id}')">편집</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDevice('${device.device_id}')">삭제</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // 개발 모드에서는 자동 로그인
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                console.log('개발 모드: 자동 로그인');
+                // 실제 환경에서는 이 부분을 제거하세요
+            }
+        });
+    </script>
+</body>
+</html>
