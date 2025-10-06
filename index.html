@@ -972,7 +972,7 @@
         function proceedToProfile() {
             if (!connectedDevices.trainer) {
                 alert('훈련을 위해서는 스마트 트레이너가 필요합니다.');
-                //return;  <--- 수정예정
+                //return;  <--- 수정예정 //////////////////////////////////////////////////
             }
             showScreen('profileScreen');
         }
@@ -1205,22 +1205,22 @@
             });
         }
 
-        function showCountdown(seconds, callback) {
-            const overlay = document.getElementById('countdownOverlay');
-            const number = document.getElementById('countdownNumber');
+        /function showCountdown(seconds, callback) {
+            /const overlay = document.getElementById('countdownOverlay');
+            /const number = document.getElementById('countdownNumber');
             
-            overlay.classList.remove('hidden');
-            number.textContent = seconds;
+            /overlay.classList.remove('hidden');
+            /number.textContent = seconds;
 
-            if (seconds > 0) {
-                setTimeout(() => {
-                    showCountdown(seconds - 1, callback);
-                }, 1000);
-            } else {
-                overlay.classList.add('hidden');
-                callback();
-            }
-        }
+            /if (seconds > 0) {
+                /setTimeout(() => {
+                    /showCountdown(seconds - 1, callback);
+                /}, 1000);
+            /} else {
+                /overlay.classList.add('hidden');
+                /callback();
+            /}
+        /}
 
 ////////////////////////////////////////////////////////
 
