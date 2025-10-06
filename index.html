@@ -270,7 +270,7 @@
                 <label>Web App URL:</label>
                 <input type="url" id="webAppUrl" class="url-input" 
                        placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-                       value="https://script.google.com/macros/s/AKfycbxdCcVOsKTUGEhL3xN4LmdzqMA2e3U9mMGmbLKh8S7re24H9Xv_ROwyT4V2jf7bH8h3/exec">
+                       value="https://script.google.com/macros/s/AKfycbxM8Vp4riU_sUYEzF3m6PlWY2iKhuqMw-F57OzpNPxshZR-xdcToJBJECPzLPnfdb9I/exec">
                 <div class="help-text">Google Apps Script 웹 앱 배포 URL을 입력하세요</div>
             </div>
             <button class="btn" onclick="testConnection()">연결 테스트</button>
@@ -405,14 +405,75 @@
             const loadWindow = window.open(loadUrl, '_blank', 'width=800,height=600');
             
             setTimeout(() => {
-                showMessage(container, 'info', `
-                    사용자 목록이 새 창에서 열렸습니다.<br>
-                    <small>JSON 데이터를 확인하고 이 창을 닫으세요.</small><br>
-                    <button class="btn" onclick="loadDummyUsers()" style="margin-top: 10px; width: auto; padding: 8px 16px;">
-                        샘플 데이터 표시
-                    </button>
-                `);
+                container.innerHTML = `
+                    <div class="message info">
+                        <strong>사용자 데이터 가져오기</strong><br>
+                        1. 새 창에서 JSON 데이터를 전체 선택(Ctrl+A) 후 복사(Ctrl+C)<br>
+                        2. 아래 텍스트 박스에 붙여넣기(Ctrl+V)<br>
+                        3. "데이터 적용" 버튼 클릭
+                    </div>
+                    <textarea id="jsonInput" placeholder="여기에 JSON 데이터를 붙여넣으세요..." 
+                              style="width: 100%; height: 150px; margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; font-size: 12px;"></textarea>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-success" onclick="parseAndDisplayUsers()" style="width: auto; padding: 8px 16px;">
+                            데이터 적용
+                        </button>
+                        <button class="btn btn-secondary" onclick="loadDummyUsers()" style="width: auto; padding: 8px 16px;">
+                            샘플 데이터 표시
+                        </button>
+                    </div>
+                `;
             }, 1000);
+        }
+
+        /**
+         * JSON 데이터 파싱 및 표시
+         */
+        function parseAndDisplayUsers() {
+            const jsonInput = document.getElementById('jsonInput');
+            const container = document.getElementById('usersList');
+            
+            try {
+                const jsonText = jsonInput.value.trim();
+                if (!jsonText) {
+                    showMessage(container, 'error', 'JSON 데이터를 입력해주세요.');
+                    return;
+                }
+
+                // JSON 파싱 시도
+                let data;
+                try {
+                    data = JSON.parse(jsonText);
+                } catch (e) {
+                    // 단순 배열 형태로 재시도
+                    if (jsonText.startsWith('[')) {
+                        data = { success: true, data: JSON.parse(jsonText) };
+                    } else {
+                        throw e;
+                    }
+                }
+
+                // 데이터 구조 확인
+                let users = [];
+                if (data.success && data.data) {
+                    users = data.data;
+                } else if (Array.isArray(data)) {
+                    users = data;
+                } else if (data.success && Array.isArray(data)) {
+                    users = data;
+                } else {
+                    throw new Error('올바른 사용자 데이터 형식이 아닙니다.');
+                }
+
+                // 사용자 목록 표시
+                displayUsers(users);
+                
+                showMessage(container, 'success', `${users.length}명의 사용자 데이터를 성공적으로 로드했습니다.`);
+                
+            } catch (error) {
+                console.error('JSON 파싱 오류:', error);
+                showMessage(container, 'error', `데이터 파싱 오류: ${error.message}`);
+            }
         }
 
         /**
