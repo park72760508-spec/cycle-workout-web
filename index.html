@@ -95,9 +95,15 @@
             text-align: center;
         }
 
-        .btn:hover {
+        .btn:hover:not(:disabled) {
             background: var(--secondary-color);
             transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            background: var(--gray-color);
+            cursor: not-allowed;
+            transform: none;
         }
 
         .btn-success {
@@ -132,50 +138,62 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* 연결 화면 */
-        .device-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: relative;
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+            border: 1px solid #f5c6cb;
         }
 
-        .device-card.connected {
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            border: 2px solid var(--success-color);
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+            border: 1px solid #c3e6cb;
         }
 
-        .device-info {
-            display: flex;
-            align-items: center;
-            flex: 1;
+        .hidden {
+            display: none !important;
         }
 
-        .device-icon {
-            width: 48px;
-            height: 48px;
-            background: var(--primary-color);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            font-size: 24px;
-            color: white;
+        .text-center {
+            text-align: center;
         }
 
-        .device-details h3 {
-            font-size: 16px;
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
             font-weight: 600;
-            margin-bottom: 4px;
         }
 
-        .device-details p {
-            font-size: 14px;
-            color: var(--gray-color);
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
         }
 
-        /* 프로필 화면 */
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.2);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
         .profile-card {
             position: relative;
         }
@@ -222,328 +240,52 @@
             color: var(--gray-color);
         }
 
-        /* 워크아웃 화면 */
-        .workout-card {
-            position: relative;
+        #configSection {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
         }
 
-        .workout-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
+        #configSection h3 {
             margin-bottom: 10px;
-        }
-
-        .workout-title {
-            font-size: 18px;
-            font-weight: 600;
             color: var(--dark-color);
         }
 
-        .workout-duration {
-            background: var(--primary-color);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        /* 훈련 화면 */
-        #trainingScreen {
-            background: #000;
-            color: white;
-            padding: 10px;
-        }
-
-        .training-header {
-            background: rgba(255,255,255,0.1);
-            border-radius: var(--border-radius);
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        .current-segment {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .segment-details {
-            display: flex;
-            justify-content: space-around;
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: 1fr 2fr 1fr;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .metric-card {
-            background: rgba(255,255,255,0.1);
-            border-radius: var(--border-radius);
-            padding: 15px;
-            text-align: center;
-        }
-
-        .metric-value {
-            font-size: 32px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .metric-label {
-            font-size: 12px;
-            opacity: 0.7;
-            text-transform: uppercase;
-        }
-
-        .power-display {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.05);
-            border-radius: var(--border-radius);
-            padding: 20px;
-        }
-
-        .current-power {
-            font-size: 64px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .power-progress {
+        #webAppUrl {
             width: 100%;
-            height: 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            margin: 20px 0;
-            overflow: hidden;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
         }
 
-        .power-progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #7ED321, #F56500);
-            border-radius: 10px;
-            transition: width 0.3s ease;
-        }
-
-        .timeline-progress {
-            width: 100%;
-            height: 30px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 15px;
-            margin-bottom: 10px;
-            overflow: hidden;
-        }
-
-        .timeline-segments {
-            display: flex;
-            height: 100%;
-        }
-
-        .timeline-segment {
-            border-right: 1px solid rgba(255,255,255,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .timeline-segment.completed {
-            background: var(--success-color);
-        }
-
-        .timeline-segment.current {
-            background: var(--warning-color);
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .training-controls {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .control-btn {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: none;
-            background: var(--primary-color);
-            color: white;
-            font-size: 18px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .control-btn:hover {
-            transform: scale(1.1);
-        }
-
-        .control-btn.pause {
-            background: var(--warning-color);
-        }
-
-        .control-btn.stop {
-            background: var(--danger-color);
-        }
-
-        /* 결과 화면 */
-        .achievement-circle {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            background: conic-gradient(var(--success-color) 0deg, var(--success-color) 312deg, var(--light-color) 312deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            position: relative;
-        }
-
-        .achievement-circle::before {
-            content: '';
-            width: 120px;
-            height: 120px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-        }
-
-        .achievement-text {
-            font-size: 36px;
-            font-weight: 700;
-            color: var(--success-color);
-            z-index: 1;
-        }
-
-        .result-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .result-stat {
-            background: white;
-            padding: 20px;
-            border-radius: var(--border-radius);
-            text-align: center;
-            box-shadow: var(--shadow);
-        }
-
-        .result-stat-value {
-            font-size: 24px;
-            font-weight: 600;
-            color: var(--primary-color);
-            margin-bottom: 5px;
-        }
-
-        .result-stat-label {
-            font-size: 14px;
+        .url-help {
+            font-size: 12px;
             color: var(--gray-color);
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        @media (max-width: 768px) {
-            .metrics-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .power-display {
-                order: 1;
-            }
-            
-            .timeline-progress {
-                order: 3;
-            }
+            margin-top: 5px;
         }
     </style>
 </head>
 <body>
-    <!-- 연결 화면 -->
-    <div id="connectionScreen" class="screen active">
-        <div class="header">
-            <h1>🚴‍♂️ 사이클 아카데미</h1>
-            <p class="subtitle">스마트 트레이너와 심박계를 연결하세요</p>
-        </div>
-
-        <div class="card">
-            <h3 style="margin-bottom: 15px;">📡ᛒ 블루투스 기기 연결</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                <button class="btn" onclick="connectTrainer()">스마트 트레이너</button>
-                <button class="btn btn-secondary" onclick="connectHeartRate()">심박계</button>
+    <!-- 설정 섹션 -->
+    <div id="configSection">
+        <h3>⚙️ API 설정</h3>
+        <div class="form-group">
+            <label for="webAppUrl">Google Apps Script Web App URL:</label>
+            <input type="url" id="webAppUrl" placeholder="https://script.google.com/macros/s/AKfycbxHNBtgGGm0xxb5CmkgZN2jTLoTj0gLm0yDCZGLJRSa83GrN8t3MaM3gvBlia_S9MUC/exec" />
+            <div class="url-help">
+                Google Apps Script에서 "새 배포" → "웹 앱" → "실행 주체: 나" → "액세스 권한: 모든 사용자" 후 URL 복사
             </div>
         </div>
-
-        <div id="deviceList">
-            <!-- 연결된 기기들이 여기에 표시됩니다 -->
-        </div>
-
-        <div id="connectionStatus" class="hidden">
-            <div class="card text-center">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>기기에 연결 중...</p>
-                </div>
-            </div>
-        </div>
-
-        <div id="connectedDevicesSummary" class="card hidden">
-            <h3 style="margin-bottom: 15px;">✅ 연결된 기기</h3>
-            <div id="connectedDevicesList"></div>
-            <button class="btn btn-success" onclick="proceedToProfile()" style="margin-top: 15px;">다음 단계로</button>
-        </div>
+        <button class="btn" onclick="testConnection()">연결 테스트</button>
+        <div id="connectionResult" class="hidden"></div>
     </div>
 
     <!-- 프로필 선택 화면 -->
-    <div id="profileScreen" class="screen">
+    <div id="profileScreen" class="screen active">
         <div class="header">
             <h1>👤 프로필 선택</h1>
             <p class="subtitle">훈련할 사용자를 선택하세요</p>
@@ -563,400 +305,180 @@
 
         <div id="addUserForm" class="card hidden">
             <h3 style="margin-bottom: 20px;">새 사용자 등록</h3>
+            <div id="userFormMessage"></div>
             <div class="form-group">
-                <label>이름</label>
-                <input type="text" id="userName" placeholder="이름을 입력하세요">
+                <label>이름 *</label>
+                <input type="text" id="userName" placeholder="이름을 입력하세요" required>
             </div>
             <div class="form-group">
-                <label>연락처</label>
-                <input type="tel" id="userContact" placeholder="010-1234-5678">
+                <label>연락처 *</label>
+                <input type="tel" id="userContact" placeholder="010-1234-5678" required>
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>FTP (W)</label>
-                    <input type="number" id="userFTP" placeholder="250" min="100" max="500">
+                    <label>FTP (W) *</label>
+                    <input type="number" id="userFTP" placeholder="250" min="100" max="500" required>
                 </div>
                 <div class="form-group">
-                    <label>몸무게 (kg)</label>
-                    <input type="number" id="userWeight" placeholder="70" min="40" max="150">
+                    <label>몸무게 (kg) *</label>
+                    <input type="number" id="userWeight" placeholder="70" min="40" max="150" required>
                 </div>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-success" onclick="saveNewUser()">저장</button>
+                <button class="btn btn-success" onclick="saveNewUser()" id="saveUserBtn">저장</button>
                 <button class="btn btn-secondary" onclick="cancelAddUser()">취소</button>
             </div>
         </div>
     </div>
 
-    <!-- 워크아웃 선택 화면 -->
-    <div id="workoutScreen" class="screen">
-        <div class="header">
-            <h1>📋 워크아웃 선택</h1>
-            <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
-        </div>
-
-        <div id="workoutList">
-            <!-- 워크아웃 목록이 여기에 표시됩니다 -->
-        </div>
-    </div>
-
-    <!-- 훈련 화면 -->
-    <div id="trainingScreen" class="screen">
-        <div class="training-header">
-            <div class="current-segment" id="currentSegmentName">웜업 - 80RPM FTP 60%</div>
-            <div class="segment-details">
-                <span id="segmentTime">02:30 / 03:00</span>
-                <span id="segmentProgress">단계 2/17</span>
-                <span id="nextSegment">다음: 인터벌 FTP 140%</span>
-            </div>
-        </div>
-
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-value" id="cadenceValue">89</div>
-                <div class="metric-label">RPM</div>
-            </div>
-
-            <div class="power-display">
-                <div class="current-power" id="currentPowerValue">185</div>
-                <div style="opacity: 0.7;">WATTS</div>
-                <div class="power-progress">
-                    <div class="power-progress-bar" id="powerProgressBar"></div>
-                </div>
-                <div style="text-align: center; margin-top: 10px;">
-                    <div style="font-size: 18px; margin-bottom: 5px;">목표: <span id="targetPowerValue">194</span>W</div>
-                    <div style="font-size: 14px; opacity: 0.7;">FTP <span id="targetFtpPercent">80</span>%</div>
-                </div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-value" id="heartRateValue">145</div>
-                <div class="metric-label">BPM</div>
-            </div>
-        </div>
-
-        <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
-            <div class="timeline-progress">
-                <div class="timeline-segments" id="timelineSegments">
-                    <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
-                </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
-                <span>경과: <span id="elapsedTime">12:34</span> / <span id="totalTime">65:20</span></span>
-                <span>달성도: <span id="achievementValue">87</span>%</span>
-                <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
-            </div>
-        </div>
-
-        <div class="training-controls">
-            <button class="control-btn pause" onclick="togglePause()" title="일시정지">
-                <span id="pauseIcon">⏸️</span>
-            </button>
-            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
-            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
-        </div>
-    </div>
-
-    <!-- 결과 화면 -->
-    <div id="resultScreen" class="screen">
-        <div class="header">
-            <h1>🎉 훈련 완료!</h1>
-            <p class="subtitle">수고하셨습니다</p>
-        </div>
-
-        <div class="text-center" style="margin-bottom: 30px;">
-            <div class="achievement-circle">
-                <div class="achievement-text" id="finalAchievement">89%</div>
-            </div>
-            <h2 id="workoutCompletedName">SST_MCT(14) - 92분 완주</h2>
-        </div>
-
-        <div class="result-stats">
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultAvgPower">184</div>
-                <div class="result-stat-label">평균 파워 (W)</div>
-            </div>
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultMaxPower">285</div>
-                <div class="result-stat-label">최대 파워 (W)</div>
-            </div>
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultAvgHR">152</div>
-                <div class="result-stat-label">평균 심박 (BPM)</div>
-            </div>
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultCalories">892</div>
-                <div class="result-stat-label">칼로리 (kcal)</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3 style="margin-bottom: 15px;">🤖 AI 성과 분석</h3>
-            <div id="aiAnalysis" style="line-height: 1.6; color: var(--gray-color);">
-                분석 중...
-            </div>
-        </div>
-
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button class="btn btn-success" onclick="saveResult()">저장하기</button>
-            <button class="btn btn-secondary" onclick="shareResult()">공유하기</button>
-        </div>
-
-        <button class="btn" onclick="goHome()" style="margin-top: 10px;">새 훈련 시작</button>
-    </div>
-
     <script>
         // ==========================================
-        // 전역 변수 및 상태 관리
+        // 전역 변수 및 설정
         // ==========================================
-        let currentScreen = 'connectionScreen';
-        let connectedDevices = {
-            trainer: null,
-            heartRate: null
-        };
-
+        let WEB_APP_URL = '';
         let currentUser = null;
-        let currentWorkout = null;
-        let trainingSession = {
-            sessionId: null,
-            isRunning: false,
-            isPaused: false,
-            startTime: null,
-            currentSegment: 0,
-            segments: [],
-            segmentStartTime: null,
-            data: {
-                power: [],
-                cadence: [],
-                heartRate: [],
-                time: []
+
+        // ==========================================
+        // API 통신 함수들
+        // ==========================================
+
+        /**
+         * Google Apps Script Web App으로 API 요청
+         */
+        async function callAPI(action, data = {}) {
+            const url = document.getElementById('webAppUrl').value.trim();
+            
+            if (!url) {
+                throw new Error('Web App URL을 입력해주세요.');
             }
-        };
 
-        let liveData = {
-            power: 0,
-            cadence: 0,
-            heartRate: 0,
-            targetPower: 0
-        };
+            console.log(`API 호출: ${action}`, data);
 
-        // ==========================================
-        // 화면 전환 함수들
-        // ==========================================
-        function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-            });
-            document.getElementById(screenId).classList.add('active');
-            currentScreen = screenId;
-
-            if (screenId === 'profileScreen') {
-                loadUsers();
-            } else if (screenId === 'workoutScreen') {
-                loadWorkouts();
-            } else if (screenId === 'trainingScreen') {
-                initializeTraining();
-            }
-        }
-
-        // ==========================================
-        // BLE 연결 함수들 (인텍스_심박.docx 방식 적용)
-        // ==========================================
-        async function connectTrainer() {
             try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['fitness_machine'] }],
-                    optionalServices: ['device_information']
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: action,
+                        data: data
+                    }),
+                    mode: 'cors'
                 });
 
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('fitness_machine');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                console.log(`API 응답: ${action}`, result);
                 
-                // Indoor Bike Data 특성 구독
-                const indoorBikeChar = await service.getCharacteristic('indoor_bike_data');
-                await indoorBikeChar.startNotifications();
-                indoorBikeChar.addEventListener('characteristicvaluechanged', handleTrainerData);
-
-                connectedDevices.trainer = {
-                    name: device.name || 'Smart Trainer',
-                    device: device,
-                    server: server,
-                    characteristic: indoorBikeChar
-                };
-
-                updateDevicesList();
-                alert(`✅ ${device.name} 연결 성공!`);
+                return result;
             } catch (error) {
-                alert("❌ 트레이너 연결 실패: " + error.message);
+                console.error(`API 오류 (${action}):`, error);
+                throw error;
             }
         }
 
-        async function connectHeartRate() {
+        /**
+         * 연결 테스트
+         */
+        async function testConnection() {
+            const resultDiv = document.getElementById('connectionResult');
+            resultDiv.className = 'loading';
+            resultDiv.innerHTML = '<div class="spinner"></div><p>연결 테스트 중...</p>';
+            resultDiv.classList.remove('hidden');
+
             try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['heart_rate'] }]
-                });
-
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('heart_rate');
-                const characteristic = await service.getCharacteristic('heart_rate_measurement');
-
-                characteristic.addEventListener('characteristicvaluechanged', handleHeartRateData);
-                await characteristic.startNotifications();
-
-                connectedDevices.heartRate = {
-                    name: device.name || 'Heart Rate Monitor',
-                    device: device,
-                    server: server,
-                    characteristic: characteristic
-                };
-
-                updateDevicesList();
-                alert(`✅ ${device.name} 연결 성공!`);
+                const result = await callAPI('testConnection');
+                
+                if (result.success) {
+                    resultDiv.className = 'success';
+                    resultDiv.innerHTML = `
+                        <strong>✅ 연결 성공!</strong><br>
+                        ${result.message || ''}
+                        ${result.data ? `<br><small>시트: ${result.data.sheets ? result.data.sheets.join(', ') : 'N/A'}</small>` : ''}
+                    `;
+                    WEB_APP_URL = document.getElementById('webAppUrl').value.trim();
+                    loadUsers(); // 연결 성공 시 사용자 목록 로드
+                } else {
+                    throw new Error(result.error || '알 수 없는 오류');
+                }
             } catch (error) {
-                alert("❌ 심박계 연결 실패: " + error.message);
-            }
-        }
-
-        function handleTrainerData(event) {
-            const data = event.target.value;
-            const flags = data.getUint16(0, true);
-            let offset = 2;
-
-            // 케이던스 (Bit 2)
-            if (flags & 0x04) {
-                const cadence = data.getUint16(offset, true) * 0.5;
-                liveData.cadence = cadence;
-                offset += 2;
-            }
-
-            // 파워 (Bit 6)
-            if (flags & 0x40) {
-                const power = data.getInt16(offset, true);
-                liveData.power = power;
-                offset += 2;
-            }
-
-            if (trainingSession.isRunning && !trainingSession.isPaused) {
-                updateTrainingDisplay();
-                recordDataPoint();
-            }
-        }
-
-        function handleHeartRateData(event) {
-            const value = event.target.value;
-            const flags = value.getUint8(0);
-            const rate16Bits = flags & 0x1;
-            const bpm = rate16Bits ? value.getUint16(1, true) : value.getUint8(1);
-
-            liveData.heartRate = bpm;
-
-            if (trainingSession.isRunning && !trainingSession.isPaused) {
-                updateTrainingDisplay();
-            }
-        }
-
-        function updateDevicesList() {
-            const deviceList = document.getElementById('deviceList');
-            const summary = document.getElementById('connectedDevicesSummary');
-            const summaryList = document.getElementById('connectedDevicesList');
-
-            let connectedCount = 0;
-            let html = '';
-
-            if (connectedDevices.trainer) {
-                connectedCount++;
-                html += `
-                    <div class="card device-card connected">
-                        <div class="device-info">
-                            <div class="device-icon">🚴‍♂️</div>
-                            <div class="device-details">
-                                <h3>${connectedDevices.trainer.name}</h3>
-                                <p>Smart Trainer</p>
-                            </div>
-                        </div>
-                        <div style="color: var(--success-color); font-weight: 600;">연결됨</div>
-                    </div>
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `
+                    <strong>❌ 연결 실패</strong><br>
+                    ${error.message}
                 `;
             }
-
-            if (connectedDevices.heartRate) {
-                connectedCount++;
-                html += `
-                    <div class="card device-card connected">
-                        <div class="device-info">
-                            <div class="device-icon" style="background: var(--danger-color);">❤️</div>
-                            <div class="device-details">
-                                <h3>${connectedDevices.heartRate.name}</h3>
-                                <p>Heart Rate Monitor</p>
-                            </div>
-                        </div>
-                        <div style="color: var(--success-color); font-weight: 600;">연결됨</div>
-                    </div>
-                `;
-            }
-
-            deviceList.innerHTML = html;
-
-            if (connectedCount > 0) {
-                summaryList.innerHTML = html;
-                summary.classList.remove('hidden');
-            } else {
-                summary.classList.add('hidden');
-            }
-        }
-
-        function proceedToProfile() {
-            if (!connectedDevices.trainer) {
-                alert('훈련을 위해서는 스마트 트레이너가 필요합니다!');
-                // return; <--박지성
-            }
-            alert('다음 처리가 필요합니다.');
-            showScreen('profileScreen');
         }
 
         // ==========================================
         // 사용자 관리 함수들
         // ==========================================
+
+        /**
+         * 사용자 목록 로드
+         */
         async function loadUsers() {
+            const profileList = document.getElementById('profileList');
+            
             try {
-                const users = await google.script.run.getUsers();
-                displayUsers(users);
+                const result = await callAPI('getUsers');
+                
+                if (result.success) {
+                    displayUsers(result.data || []);
+                } else {
+                    throw new Error(result.error || '사용자 조회 실패');
+                }
             } catch (error) {
                 console.error('사용자 로드 실패:', error);
-                // 더미 데이터로 대체
-                const dummyUsers = [
-                    { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
-                    { user_id: 'U2', name: '김철수', contact: '010-9876-5432', ftp: 280, weight: 70 }
-                ];
-                displayUsers(dummyUsers);
+                profileList.innerHTML = `
+                    <div class="error">
+                        <strong>사용자 목록 로드 실패</strong><br>
+                        ${error.message}
+                    </div>
+                `;
             }
         }
 
+        /**
+         * 사용자 목록 화면에 표시
+         */
         function displayUsers(users) {
             const profileList = document.getElementById('profileList');
             profileList.innerHTML = '';
+
+            if (users.length === 0) {
+                profileList.innerHTML = `
+                    <div class="card text-center">
+                        <p style="color: var(--gray-color);">등록된 사용자가 없습니다.<br>새 사용자를 추가해주세요.</p>
+                    </div>
+                `;
+                return;
+            }
 
             users.forEach(user => {
                 const profileCard = document.createElement('div');
                 profileCard.className = 'card profile-card';
                 profileCard.onclick = () => selectUser(user);
 
-                const initials = user.name.substring(0, 2);
-                const powerToWeight = (user.ftp / user.weight).toFixed(1);
+                const initials = user.name ? user.name.substring(0, 2) : '??';
+                const powerToWeight = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(1) : '0.0';
 
                 profileCard.innerHTML = `
                     <div class="profile-info">
                         <div class="profile-avatar">${initials}</div>
                         <div class="profile-details">
-                            <h3>${user.name}</h3>
+                            <h3>${user.name || '이름 없음'}</h3>
                             <div class="profile-stats">
                                 <div>
-                                    <div class="stat-value">${user.ftp}W</div>
+                                    <div class="stat-value">${user.ftp || 0}W</div>
                                     <div class="stat-label">FTP</div>
                                 </div>
                                 <div>
-                                    <div class="stat-value">${user.weight}kg</div>
+                                    <div class="stat-value">${user.weight || 0}kg</div>
                                     <div class="stat-label">몸무게</div>
                                 </div>
                                 <div>
@@ -972,1747 +494,147 @@
             });
         }
 
+        /**
+         * 사용자 선택
+         */
         function selectUser(user) {
             currentUser = user;
             alert(`${user.name}님, 환영합니다!`);
-            showScreen('workoutScreen');
+            // 여기서 다음 화면으로 이동하는 로직 추가
         }
 
+        /**
+         * 새 사용자 추가 폼 표시
+         */
         function showAddUserForm() {
+            if (!WEB_APP_URL) {
+                alert('먼저 Web App URL을 설정하고 연결 테스트를 해주세요.');
+                return;
+            }
+            
             document.getElementById('addUserForm').classList.remove('hidden');
+            clearUserForm();
         }
 
+        /**
+         * 새 사용자 추가 폼 취소
+         */
         function cancelAddUser() {
             document.getElementById('addUserForm').classList.add('hidden');
+            clearUserForm();
+        }
+
+        /**
+         * 사용자 폼 초기화
+         */
+        function clearUserForm() {
             document.getElementById('userName').value = '';
             document.getElementById('userContact').value = '';
             document.getElementById('userFTP').value = '';
             document.getElementById('userWeight').value = '';
+            document.getElementById('userFormMessage').innerHTML = '';
+            document.getElementById('saveUserBtn').disabled = false;
         }
 
+        /**
+         * 새 사용자 저장
+         */
         async function saveNewUser() {
+            const messageDiv = document.getElementById('userFormMessage');
+            const saveBtn = document.getElementById('saveUserBtn');
+            
+            // 입력값 가져오기
             const name = document.getElementById('userName').value.trim();
             const contact = document.getElementById('userContact').value.trim();
-            const ftp = parseInt(document.getElementById('userFTP').value);
-            const weight = parseInt(document.getElementById('userWeight').value);
+            const ftp = document.getElementById('userFTP').value.trim();
+            const weight = document.getElementById('userWeight').value.trim();
 
+            // 클라이언트 측 유효성 검사
             if (!name || !contact || !ftp || !weight) {
-                alert('모든 필드를 입력해주세요.');
+                showMessage(messageDiv, 'error', '모든 필드를 입력해주세요.');
                 return;
             }
 
-            if (ftp < 100 || ftp > 500) {
-                alert('FTP는 100W에서 500W 사이의 값을 입력해주세요.');
+            const ftpNum = parseInt(ftp);
+            const weightNum = parseInt(weight);
+
+            if (isNaN(ftpNum) || ftpNum < 100 || ftpNum > 500) {
+                showMessage(messageDiv, 'error', 'FTP는 100W에서 500W 사이의 값을 입력해주세요.');
                 return;
             }
 
-            if (weight < 40 || weight > 150) {
-                alert('몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
+            if (isNaN(weightNum) || weightNum < 40 || weightNum > 150) {
+                showMessage(messageDiv, 'error', '몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
                 return;
             }
+
+            // 저장 시작
+            saveBtn.disabled = true;
+            showMessage(messageDiv, 'loading', '사용자 추가 중...');
 
             try {
-                const result = await google.script.run.addUser({
-                    name, contact, ftp, weight
+                const result = await callAPI('addUser', {
+                    name: name,
+                    contact: contact,
+                    ftp: ftpNum,
+                    weight: weightNum
                 });
 
                 if (result.success) {
-                    alert('새 사용자가 추가되었습니다!');
-                    cancelAddUser();
-                    loadUsers();
+                    showMessage(messageDiv, 'success', result.message || '사용자가 성공적으로 추가되었습니다!');
+                    setTimeout(() => {
+                        cancelAddUser();
+                        loadUsers(); // 사용자 목록 새로고침
+                    }, 1500);
                 } else {
-                    alert('사용자 추가 실패: ' + result.error);
+                    showMessage(messageDiv, 'error', result.error || '사용자 추가에 실패했습니다.');
+                    saveBtn.disabled = false;
                 }
             } catch (error) {
                 console.error('사용자 추가 오류:', error);
-                alert('사용자 추가 중 오류가 발생했습니다.');
+                showMessage(messageDiv, 'error', `오류: ${error.message}`);
+                saveBtn.disabled = false;
             }
         }
 
-        // ==========================================
-        // 워크아웃 관리 함수들
-        // ==========================================
-        async function loadWorkouts() {
-            try {
-                const workouts = await google.script.run.getWorkouts();
-                displayWorkouts(workouts);
-            } catch (error) {
-                console.error('워크아웃 로드 실패:', error);
-                // 더미 데이터로 대체
-                const dummyWorkouts = [
-                    {
-                        workout_id: 'SST_MCT14',
-                        workout_name: 'SST_MCT(14)',
-                        total_duration: 5520, // 92분
-                        avg_intensity: 78,
-                        segments: [
-                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 300, target_rpm: 80 },
-                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 1200, target_rpm: 90 }
-                        ]
-                    }
-                ];
-                displayWorkouts(dummyWorkouts);
-            }
-        }
-
-        function displayWorkouts(workouts) {
-            const workoutList = document.getElementById('workoutList');
-            workoutList.innerHTML = '';
-
-            workouts.forEach(workout => {
-                const workoutCard = document.createElement('div');
-                workoutCard.className = 'card workout-card';
-                workoutCard.onclick = () => selectWorkout(workout);
-
-                const duration = Math.floor(workout.total_duration / 60);
-                const tss = calculateWorkoutTSS(workout);
-
-                workoutCard.innerHTML = `
-                    <div class="workout-header">
-                        <div class="workout-title">${workout.workout_name}</div>
-                        <div class="workout-duration">${duration}분</div>
-                    </div>
-                    <div style="margin: 15px 0;">
-                        <div style="font-size: 14px; color: var(--gray-color);">
-                            평균: ${workout.avg_intensity}% FTP | TSS: ${tss}
-                        </div>
-                    </div>
-                `;
-
-                workoutList.appendChild(workoutCard);
-            });
-        }
-
-        function calculateWorkoutTSS(workout) {
-            let totalTSS = 0;
-            workout.segments.forEach(segment => {
-                const intensityFactor = segment.ftp_percent / 100;
-                const durationHours = segment.duration_sec / 3600;
-                totalTSS += durationHours * intensityFactor * intensityFactor * 100;
-            });
-            return Math.round(totalTSS);
-        }
-
-        function selectWorkout(workout) {
-            currentWorkout = workout;
-            showScreen('trainingScreen');
-        }
-
-        // ==========================================
-        // 훈련 실행 함수들
-        // ==========================================
-        function initializeTraining() {
-            if (!currentWorkout || !currentUser) return;
-
-            trainingSession = {
-                sessionId: 'S' + Date.now(),
-                isRunning: false,
-                isPaused: false,
-                startTime: null,
-                currentSegment: 0,
-                segments: currentWorkout.segments,
-                segmentStartTime: null,
-                data: {
-                    power: [],
-                    cadence: [],
-                    heartRate: [],
-                    time: []
-                }
-            };
-
-            updateTrainingDisplay();
-            createTimeline();
-            updateSegmentDisplay();
-
-            // 3초 카운트다운 후 시작
-            let countdown = 3;
-            const countdownInterval = setInterval(() => {
-                if (countdown > 0) {
-                    document.getElementById('currentSegmentName').textContent = `시작까지 ${countdown}초...`;
-                    countdown--;
-                } else {
-                    clearInterval(countdownInterval);
-                    startTraining();
-                }
-            }, 1000);
-        }
-
-        function startTraining() {
-            trainingSession.isRunning = true;
-            trainingSession.startTime = Date.now();
-            trainingSession.segmentStartTime = Date.now();
-
-            // 서버에 세션 시작 알림
-            try {
-                google.script.run.startTrainingSessionAPI({
-                    user_id: currentUser.user_id,
-                    workout_id: currentWorkout.workout_id
-                });
-            } catch (error) {
-                console.error('세션 시작 실패:', error);
-            }
-
-            updateTrainingTimer();
-            updateTargetPower();
-
-            // 시뮬레이션 데이터 생성 (실제 기기가 연결되지 않은 경우)
-            if (!connectedDevices.trainer) {
-                startDataSimulation();
-            }
-        }
-
-        function startDataSimulation() {
-            setInterval(() => {
-                if (!trainingSession.isRunning || trainingSession.isPaused) return;
-
-                const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-                if (!currentSeg) return;
-
-                const targetPower = Math.round(currentUser.ftp * (currentSeg.ftp_percent / 100));
-                const variation = (Math.random() - 0.5) * 30;
-                
-                liveData.power = Math.max(0, targetPower + variation);
-                liveData.cadence = currentSeg.target_rpm + (Math.random() - 0.5) * 10;
-                liveData.heartRate = 140 + (Math.random() - 0.5) * 20;
-                liveData.targetPower = targetPower;
-
-                updateTrainingDisplay();
-                recordDataPoint();
-            }, 1000);
-        }
-
-        function updateTargetPower() {
-            if (!trainingSession.isRunning || trainingSession.isPaused) return;
-
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (currentSeg && currentUser) {
-                const targetPower = Math.round(currentUser.ftp * (currentSeg.ftp_percent / 100));
-                liveData.targetPower = targetPower;
-            }
-        }
-
-        function updateTrainingDisplay() {
-            document.getElementById('currentPowerValue').textContent = Math.round(liveData.power);
-            document.getElementById('cadenceValue').textContent = Math.round(liveData.cadence);
-            document.getElementById('heartRateValue').textContent = Math.round(liveData.heartRate);
-            document.getElementById('targetPowerValue').textContent = liveData.targetPower;
-
-            const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
-            document.getElementById('targetFtpPercent').textContent = ftpPercent;
-
-            const achievement = liveData.targetPower > 0 ?
-                Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100)) : 0;
-            document.getElementById('achievementValue').textContent = achievement;
-
-            const progressPercent = Math.min(100, (liveData.power / liveData.targetPower) * 100);
-            document.getElementById('powerProgressBar').style.width = progressPercent + '%';
-
-            if (trainingSession.data.power.length > 0) {
-                const avgPower = trainingSession.data.power.reduce((a, b) => a + b, 0) / trainingSession.data.power.length;
-                document.getElementById('avgPowerValue').textContent = Math.round(avgPower);
-            }
-        }
-
-        function updateTrainingTimer() {
-            const timerInterval = setInterval(() => {
-                if (!trainingSession.isRunning) {
-                    clearInterval(timerInterval);
-                    return;
-                }
-
-                if (trainingSession.isPaused) return;
-
-                const elapsed = Date.now() - trainingSession.startTime;
-                const segmentElapsed = Date.now() - trainingSession.segmentStartTime;
-
-                const elapsedMinutes = Math.floor(elapsed / 60000);
-                const elapsedSeconds = Math.floor((elapsed % 60000) / 1000);
-                document.getElementById('elapsedTime').textContent =
-                    `${elapsedMinutes.toString().padStart(2, '0')}:${elapsedSeconds.toString().padStart(2, '0')}`;
-
-                const totalMinutes = Math.floor(currentWorkout.total_duration / 60);
-                const totalSecondsRemaining = currentWorkout.total_duration % 60;
-                document.getElementById('totalTime').textContent =
-                    `${totalMinutes.toString().padStart(2, '0')}:${totalSecondsRemaining.toString().padStart(2, '0')}`;
-
-                checkSegmentProgress(segmentElapsed);
-                updateSegmentTimer(segmentElapsed);
-            }, 1000);
-        }
-
-        function updateSegmentTimer(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-
-            const segmentRemaining = Math.max(0, currentSeg.duration_sec * 1000 - segmentElapsed);
-            const remainingMinutes = Math.floor(segmentRemaining / 60000);
-            const remainingSeconds = Math.floor((segmentRemaining % 60000) / 1000);
-
-            const segmentTotalMinutes = Math.floor(currentSeg.duration_sec / 60);
-            const segmentTotalSeconds = currentSeg.duration_sec % 60;
-
-            document.getElementById('segmentTime').textContent =
-                `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')} / ${segmentTotalMinutes.toString().padStart(2, '0')}:${segmentTotalSeconds.toString().padStart(2, '0')}`;
-        }
-
-        function checkSegmentProgress(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-
-            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
-                completeCurrentSegment();
-                nextSegment();
-            }
-        }
-
-        function completeCurrentSegment() {
-            updateTimelineSegment(trainingSession.currentSegment, 'completed');
-        }
-
-        function nextSegment() {
-            trainingSession.currentSegment++;
-            if (trainingSession.currentSegment >= trainingSession.segments.length) {
-                completeTraining();
-                return;
-            }
-
-            trainingSession.segmentStartTime = Date.now();
-            updateSegmentDisplay();
-            updateTargetPower();
-            updateTimelineSegment(trainingSession.currentSegment, 'current');
-        }
-
-        function updateSegmentDisplay() {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-
-            document.getElementById('currentSegmentName').textContent =
-                `${currentSeg.description} (${currentSeg.segment_type})`;
-
-            document.getElementById('segmentProgress').textContent =
-                `단계 ${trainingSession.currentSegment + 1}/${trainingSession.segments.length}`;
-
-            const nextSeg = trainingSession.segments[trainingSession.currentSegment + 1];
-            if (nextSeg) {
-                document.getElementById('nextSegment').textContent = `다음: ${nextSeg.description}`;
-            } else {
-                document.getElementById('nextSegment').textContent = '다음: 훈련 완료';
-            }
-        }
-
-        function createTimeline() {
-            const timeline = document.getElementById('timelineSegments');
-            timeline.innerHTML = '';
-
-            trainingSession.segments.forEach((segment, index) => {
-                const segmentDiv = document.createElement('div');
-                segmentDiv.className = 'timeline-segment';
-                segmentDiv.style.flex = segment.duration_sec;
-                segmentDiv.id = `timeline-segment-${index}`;
-
-                if (index === 0) segmentDiv.classList.add('current');
-
-                timeline.appendChild(segmentDiv);
-            });
-        }
-
-        function updateTimelineSegment(segmentIndex, status) {
-            const segment = document.getElementById(`timeline-segment-${segmentIndex}`);
-            if (!segment) return;
-
-            segment.className = `timeline-segment ${status}`;
-        }
-
-        function recordDataPoint() {
-            trainingSession.data.power.push(liveData.power);
-            trainingSession.data.cadence.push(liveData.cadence);
-            trainingSession.data.heartRate.push(liveData.heartRate);
-            trainingSession.data.time.push(Date.now());
-        }
-
-        function togglePause() {
-            trainingSession.isPaused = !trainingSession.isPaused;
-            const pauseIcon = document.getElementById('pauseIcon');
-            pauseIcon.textContent = trainingSession.isPaused ? '▶️' : '⏸️';
-        }
-
-        function skipSegment() {
-            if (confirm('현재 구간을 건너뛰시겠습니까?')) {
-                completeCurrentSegment();
-                nextSegment();
-            }
-        }
-
-        function stopTraining() {
-            if (confirm('정말 훈련을 중단하시겠습니까?')) {
-                trainingSession.isRunning = false;
-                completeTraining();
-            }
-        }
-
-        function completeTraining() {
-            trainingSession.isRunning = false;
-
-            const avgPower = calculateAverage(trainingSession.data.power);
-            const maxPower = Math.max(...trainingSession.data.power);
-            const avgHR = calculateAverage(trainingSession.data.heartRate);
-            const achievement = calculateOverallAchievement();
-
-            const durationHours = (Date.now() - trainingSession.startTime) / 3600000;
-            const calories = Math.round(avgPower * durationHours * 3.6);
-
-            document.getElementById('finalAchievement').textContent = achievement + '%';
-            document.getElementById('workoutCompletedName').textContent =
-                `${currentWorkout.workout_name} - ${Math.floor(durationHours * 60)}분 완주`;
-            document.getElementById('resultAvgPower').textContent = Math.round(avgPower);
-            document.getElementById('resultMaxPower').textContent = Math.round(maxPower);
-            document.getElementById('resultAvgHR').textContent = Math.round(avgHR);
-            document.getElementById('resultCalories').textContent = calories;
-
-            // AI 분석 요청
-            requestAIAnalysis();
-
-            showScreen('resultScreen');
-        }
-
-        function calculateAverage(array) {
-            return array.length > 0 ? array.reduce((a, b) => a + b, 0) / array.length : 0;
-        }
-
-        function calculateOverallAchievement() {
-            const totalTargetPowerTime = trainingSession.segments.reduce((sum, seg) => {
-                const targetPower = currentUser.ftp * (seg.ftp_percent / 100);
-                return sum + (targetPower * seg.duration_sec);
-            }, 0);
-
-            const totalActualPowerTime = trainingSession.data.power.reduce((sum, power) => sum + power, 0);
-
-            if (totalTargetPowerTime === 0) return 100;
-            return Math.min(100, Math.round((totalActualPowerTime / totalTargetPowerTime) * 100));
-        }
-
-        function requestAIAnalysis() {
-            document.getElementById('aiAnalysis').textContent = '분석 중...';
-
-            try {
-                google.script.run
-                    .withSuccessHandler(function(response) {
-                        if (response.success) {
-                            document.getElementById('aiAnalysis').textContent = response.analysis;
-                        } else {
-                            document.getElementById('aiAnalysis').textContent = 'AI 분석을 수행할 수 없습니다.';
-                        }
-                    })
-                    .withFailureHandler(function(error) {
-                        console.error('AI 분석 실패:', error);
-                        document.getElementById('aiAnalysis').textContent = 'AI 분석 중 오류가 발생했습니다.';
-                    })
-                    .analyzeTrainingPerformance(trainingSession.sessionId);
-            } catch (error) {
-                console.error('AI 분석 요청 실패:', error);
-                document.getElementById('aiAnalysis').textContent = 'AI 분석을 수행할 수 없습니다.';
-            }
-        }
-
-        function saveResult() {
-            alert('훈련 결과가 저장되었습니다!');
-        }
-
-        function shareResult() {
-            const achievement = document.getElementById('finalAchievement').textContent;
-            const workoutName = document.getElementById('workoutCompletedName').textContent;
-            const avgPower = document.getElementById('resultAvgPower').textContent;
-            const avgHR = document.getElementById('resultAvgHR').textContent;
-
-            const shareText = `🚴‍♂️ 사이클 아카데미 훈련 완료!
-
-${workoutName}
-달성률: ${achievement}
-평균 파워: ${avgPower}W
-평균 심박: ${avgHR}bpm
-
-🎯 당신도 도전해보세요!
-${window.location.href}`;
-
-            if (navigator.share) {
-                navigator.share({
-                    title: '사이클 아카데미 - 훈련 완료!',
-                    text: shareText,
-                    url: window.location.href
-                });
-            } else {
-                navigator.clipboard.writeText(shareText).then(() => {
-                    alert('결과가 클립보드에 복사되었습니다!');
-                });
-            }
-        }
-
-        function goHome() {
-            currentUser = null;
-            currentWorkout = null;
-            trainingSession = {
-                sessionId: null,
-                isRunning: false,
-                isPaused: false,
-                startTime: null,
-                currentSegment: 0,
-                segments: [],
-                data: { power: [], cadence: [], heartRate: [], time: [] }
-            };
-            liveData = { power: 0, cadence: 0, heartRate: 0, targetPower: 0 };
-
-            showScreen('connectionScreen');
-        }
-
-        // 페이지 로드 시 브라우저 지원 확인
-        document.addEventListener('DOMContentLoaded', function() {
-            if (!navigator.bluetooth) {
-                alert('이 브라우저는 Web Bluetooth를 지원하지 않습니다.\nChrome, Edge, Opera 브라우저를 사용해주세요.');
-            }
-
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert('블루투스 연결을 위해서는 HTTPS 환경이 필요합니다.');
-            }
-        });
-    </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>사이클 아카데미 - 워크아웃 앱</title>
-    <style>
-        :root {
-            --primary-color: #2E74E8;
-            --secondary-color: #1A5AB8;
-            --accent-color: #FF6B35;
-            --success-color: #28A745;
-            --warning-color: #FFC107;
-            --danger-color: #DC3545;
-            --dark-color: #343A40;
-            --light-color: #F8F9FA;
-            --gray-color: #6C757D;
-            --border-radius: 12px;
-            --shadow: 0 4px 16px rgba(0,0,0,0.1);
-            --transition: all 0.3s ease;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: var(--dark-color);
-            overflow-x: hidden;
-        }
-
-        .screen {
-            display: none;
-            padding: 20px;
-            min-height: 100vh;
-            background: var(--light-color);
-        }
-
-        .screen.active {
-            display: block;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-            background: white;
-            padding: 20px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-        }
-
-        .header h1 {
-            color: var(--primary-color);
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 5px;
-        }
-
-        .header .subtitle {
-            color: var(--gray-color);
-            font-size: 14px;
-        }
-
-        .card {
-            background: white;
-            border-radius: var(--border-radius);
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: var(--shadow);
-            transition: var(--transition);
-            cursor: pointer;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-
-        .btn {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 14px 24px;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            width: 100%;
-            text-align: center;
-        }
-
-        .btn:hover {
-            background: var(--secondary-color);
-            transform: translateY(-1px);
-        }
-
-        .btn-success {
-            background: var(--success-color);
-        }
-
-        .btn-danger {
-            background: var(--danger-color);
-        }
-
-        .btn-secondary {
-            background: var(--gray-color);
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--light-color);
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* 연결 화면 */
-        .device-card {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: relative;
-        }
-
-        .device-card.connected {
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-            border: 2px solid var(--success-color);
-        }
-
-        .device-info {
-            display: flex;
-            align-items: center;
-            flex: 1;
-        }
-
-        .device-icon {
-            width: 48px;
-            height: 48px;
-            background: var(--primary-color);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            font-size: 24px;
-            color: white;
-        }
-
-        .device-details h3 {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .device-details p {
-            font-size: 14px;
-            color: var(--gray-color);
-        }
-
-        /* 프로필 화면 */
-        .profile-card {
-            position: relative;
-        }
-
-        .profile-info {
-            display: flex;
-            align-items: center;
-        }
-
-        .profile-avatar {
-            width: 60px;
-            height: 60px;
-            background: var(--primary-color);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 15px;
-            font-size: 24px;
-            font-weight: 700;
-            color: white;
-        }
-
-        .profile-details h3 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .profile-stats {
-            display: flex;
-            gap: 15px;
-            margin-top: 10px;
-        }
-
-        .stat-value {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--primary-color);
-        }
-
-        .stat-label {
-            font-size: 12px;
-            color: var(--gray-color);
-        }
-
-        /* 워크아웃 화면 */
-        .workout-card {
-            position: relative;
-        }
-
-        .workout-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: start;
-            margin-bottom: 10px;
-        }
-
-        .workout-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--dark-color);
-        }
-
-        .workout-duration {
-            background: var(--primary-color);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        /* 훈련 화면 */
-        #trainingScreen {
-            background: #000;
-            color: white;
-            padding: 10px;
-        }
-
-        .training-header {
-            background: rgba(255,255,255,0.1);
-            border-radius: var(--border-radius);
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 15px;
-        }
-
-        .current-segment {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .segment-details {
-            display: flex;
-            justify-content: space-around;
-            font-size: 14px;
-            opacity: 0.8;
-        }
-
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: 1fr 2fr 1fr;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .metric-card {
-            background: rgba(255,255,255,0.1);
-            border-radius: var(--border-radius);
-            padding: 15px;
-            text-align: center;
-        }
-
-        .metric-value {
-            font-size: 32px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-
-        .metric-label {
-            font-size: 12px;
-            opacity: 0.7;
-            text-transform: uppercase;
-        }
-
-        .power-display {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.05);
-            border-radius: var(--border-radius);
-            padding: 20px;
-        }
-
-        .current-power {
-            font-size: 64px;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-
-        .power-progress {
-            width: 100%;
-            height: 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            margin: 20px 0;
-            overflow: hidden;
-        }
-
-        .power-progress-bar {
-            height: 100%;
-            background: linear-gradient(90deg, #7ED321, #F56500);
-            border-radius: 10px;
-            transition: width 0.3s ease;
-        }
-
-        .timeline-progress {
-            width: 100%;
-            height: 30px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 15px;
-            margin-bottom: 10px;
-            overflow: hidden;
-        }
-
-        .timeline-segments {
-            display: flex;
-            height: 100%;
-        }
-
-        .timeline-segment {
-            border-right: 1px solid rgba(255,255,255,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 600;
-        }
-
-        .timeline-segment.completed {
-            background: var(--success-color);
-        }
-
-        .timeline-segment.current {
-            background: var(--warning-color);
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-
-        .training-controls {
-            display: flex;
-            gap: 10px;
-            justify-content: center;
-            margin-top: 20px;
-        }
-
-        .control-btn {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: none;
-            background: var(--primary-color);
-            color: white;
-            font-size: 18px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        .control-btn:hover {
-            transform: scale(1.1);
-        }
-
-        .control-btn.pause {
-            background: var(--warning-color);
-        }
-
-        .control-btn.stop {
-            background: var(--danger-color);
-        }
-
-        /* 결과 화면 */
-        .achievement-circle {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            background: conic-gradient(var(--success-color) 0deg, var(--success-color) 312deg, var(--light-color) 312deg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            position: relative;
-        }
-
-        .achievement-circle::before {
-            content: '';
-            width: 120px;
-            height: 120px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-        }
-
-        .achievement-text {
-            font-size: 36px;
-            font-weight: 700;
-            color: var(--success-color);
-            z-index: 1;
-        }
-
-        .result-stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 30px;
-        }
-
-        .result-stat {
-            background: white;
-            padding: 20px;
-            border-radius: var(--border-radius);
-            text-align: center;
-            box-shadow: var(--shadow);
-        }
-
-        .result-stat-value {
-            font-size: 24px;
-            font-weight: 600;
-            color: var(--primary-color);
-            margin-bottom: 5px;
-        }
-
-        .result-stat-label {
-            font-size: 14px;
-            color: var(--gray-color);
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-        }
-
-        @media (max-width: 768px) {
-            .metrics-grid {
-                grid-template-columns: 1fr;
-            }
+        /**
+         * 메시지 표시 헬퍼 함수
+         */
+        function showMessage(element, type, message) {
+            element.className = type;
             
-            .power-display {
-                order: 1;
-            }
-            
-            .timeline-progress {
-                order: 3;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- 연결 화면 -->
-    <div id="connectionScreen" class="screen active">
-        <div class="header">
-            <h1>🚴‍♂️ 사이클 아카데미</h1>
-            <p class="subtitle">스마트 트레이너와 심박계를 연결하세요</p>
-        </div>
-
-        <div class="card">
-            <h3 style="margin-bottom: 15px;">📡 블루투스 기기 연결</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                <button class="btn" onclick="connectTrainer()">스마트 트레이너</button>
-                <button class="btn btn-secondary" onclick="connectHeartRate()">심박계</button>
-            </div>
-        </div>
-
-        <div id="deviceList">
-            <!-- 연결된 기기들이 여기에 표시됩니다 -->
-        </div>
-
-        <div id="connectionStatus" class="hidden">
-            <div class="card text-center">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>기기에 연결 중...</p>
-                </div>
-            </div>
-        </div>
-
-        <div id="connectedDevicesSummary" class="card hidden">
-            <h3 style="margin-bottom: 15px;">✅ 연결된 기기</h3>
-            <div id="connectedDevicesList"></div>
-            <button class="btn btn-success" onclick="proceedToProfile()" style="margin-top: 15px;">다음 단계로</button>
-        </div>
-    </div>
-
-    <!-- 프로필 선택 화면 -->
-    <div id="profileScreen" class="screen">
-        <div class="header">
-            <h1>👤 프로필 선택</h1>
-            <p class="subtitle">훈련할 사용자를 선택하세요</p>
-        </div>
-
-        <div id="profileList">
-            <!-- 사용자 프로필들이 여기에 표시됩니다 -->
-        </div>
-
-        <div class="card" onclick="showAddUserForm()">
-            <div class="text-center">
-                <div style="font-size: 48px; margin-bottom: 10px;">➕</div>
-                <h3>새 사용자 추가</h3>
-                <p style="color: var(--gray-color); margin-top: 5px;">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
-            </div>
-        </div>
-
-        <div id="addUserForm" class="card hidden">
-            <h3 style="margin-bottom: 20px;">새 사용자 등록</h3>
-            <div class="form-group">
-                <label>이름</label>
-                <input type="text" id="userName" placeholder="이름을 입력하세요">
-            </div>
-            <div class="form-group">
-                <label>연락처</label>
-                <input type="tel" id="userContact" placeholder="010-1234-5678">
-            </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>40분 FTP (W)</label>
-                    <input type="number" id="userFTP" placeholder="250" min="100" max="500">
-                </div>
-                <div class="form-group">
-                    <label>몸무게 (kg)</label>
-                    <input type="number" id="userWeight" placeholder="70" min="40" max="150">
-                </div>
-            </div>
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-success" onclick="saveNewUser()">저장</button>
-                <button class="btn btn-secondary" onclick="cancelAddUser()">취소</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 워크아웃 선택 화면 -->
-    <div id="workoutScreen" class="screen">
-        <div class="header">
-            <h1>📋 워크아웃 선택</h1>
-            <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
-        </div>
-
-        <div id="workoutList">
-            <!-- 워크아웃 목록이 여기에 표시됩니다 -->
-        </div>
-    </div>
-
-    <!-- 훈련 화면 -->
-    <div id="trainingScreen" class="screen">
-        <div class="training-header">
-            <div class="current-segment" id="currentSegmentName">웜업 - 80RPM FTP 60%</div>
-            <div class="segment-details">
-                <span id="segmentTime">02:30 / 03:00</span>
-                <span id="segmentProgress">단계 2/17</span>
-                <span id="nextSegment">다음: 인터벌 FTP 140%</span>
-            </div>
-        </div>
-
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-value" id="cadenceValue">89</div>
-                <div class="metric-label">RPM</div>
-            </div>
-
-            <div class="power-display">
-                <div class="current-power" id="currentPowerValue">185</div>
-                <div style="opacity: 0.7;">WATTS</div>
-                <div class="power-progress">
-                    <div class="power-progress-bar" id="powerProgressBar"></div>
-                </div>
-                <div style="text-align: center; margin-top: 10px;">
-                    <div style="font-size: 18px; margin-bottom: 5px;">목표: <span id="targetPowerValue">194</span>W</div>
-                    <div style="font-size: 14px; opacity: 0.7;">FTP <span id="targetFtpPercent">80</span>%</div>
-                </div>
-            </div>
-
-            <div class="metric-card">
-                <div class="metric-value" id="heartRateValue">145</div>
-                <div class="metric-label">BPM</div>
-            </div>
-        </div>
-
-        <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
-            <div class="timeline-progress">
-                <div class="timeline-segments" id="timelineSegments">
-                    <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
-                </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
-                <span>경과: <span id="elapsedTime">12:34</span> / <span id="totalTime">65:20</span></span>
-                <span>달성도: <span id="achievementValue">87</span>%</span>
-                <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
-            </div>
-        </div>
-
-        <div class="training-controls">
-            <button class="control-btn pause" onclick="togglePause()" title="일시정지">
-                <span id="pauseIcon">⏸️</span>
-            </button>
-            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
-            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
-        </div>
-    </div>
-
-    <!-- 결과 화면 -->
-    <div id="resultScreen" class="screen">
-        <div class="header">
-            <h1>🎉 훈련 완료!</h1>
-            <p class="subtitle">수고하셨습니다</p>
-        </div>
-
-        <div class="text-center" style="margin-bottom: 30px;">
-            <div class="achievement-circle">
-                <div class="achievement-text" id="finalAchievement">89%</div>
-            </div>
-            <h2 id="workoutCompletedName">SST_MCT(14) - 92분 완주</h2>
-        </div>
-
-        <div class="result-stats">
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultAvgPower">184</div>
-                <div class="result-stat-label">평균 파워 (W)</div>
-            </div>
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultMaxPower">285</div>
-                <div class="result-stat-label">최대 파워 (W)</div>
-            </div>
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultAvgHR">152</div>
-                <div class="result-stat-label">평균 심박 (BPM)</div>
-            </div>
-            <div class="result-stat">
-                <div class="result-stat-value" id="resultCalories">892</div>
-                <div class="result-stat-label">칼로리 (kcal)</div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h3 style="margin-bottom: 15px;">🤖 AI 성과 분석</h3>
-            <div id="aiAnalysis" style="line-height: 1.6; color: var(--gray-color);">
-                분석 중...
-            </div>
-        </div>
-
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button class="btn btn-success" onclick="saveResult()">저장하기</button>
-            <button class="btn btn-secondary" onclick="shareResult()">공유하기</button>
-        </div>
-
-        <button class="btn" onclick="goHome()" style="margin-top: 10px;">새 훈련 시작</button>
-    </div>
-
-    <script>
-        // ==========================================
-        // 전역 변수 및 상태 관리
-        // ==========================================
-        let currentScreen = 'connectionScreen';
-        let connectedDevices = {
-            trainer: null,
-            heartRate: null
-        };
-
-        let currentUser = null;
-        let currentWorkout = null;
-        let trainingSession = {
-            sessionId: null,
-            isRunning: false,
-            isPaused: false,
-            startTime: null,
-            currentSegment: 0,
-            segments: [],
-            segmentStartTime: null,
-            data: {
-                power: [],
-                cadence: [],
-                heartRate: [],
-                time: []
-            }
-        };
-
-        let liveData = {
-            power: 0,
-            cadence: 0,
-            heartRate: 0,
-            targetPower: 0
-        };
-
-        // ==========================================
-        // 화면 전환 함수들
-        // ==========================================
-        function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(screen => {
-                screen.classList.remove('active');
-            });
-            document.getElementById(screenId).classList.add('active');
-            currentScreen = screenId;
-
-            if (screenId === 'profileScreen') {
-                loadUsers();
-            } else if (screenId === 'workoutScreen') {
-                loadWorkouts();
-            } else if (screenId === 'trainingScreen') {
-                initializeTraining();
+            switch (type) {
+                case 'loading':
+                    element.innerHTML = '<div class="spinner" style="width: 20px; height: 20px; margin: 0 auto 10px;"></div>' + message;
+                    break;
+                case 'success':
+                    element.innerHTML = '✅ ' + message;
+                    break;
+                case 'error':
+                    element.innerHTML = '❌ ' + message;
+                    break;
+                default:
+                    element.innerHTML = message;
             }
         }
 
         // ==========================================
-        // BLE 연결 함수들 (인텍스_심박.docx 방식 적용)
+        // 초기화
         // ==========================================
-        async function connectTrainer() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['fitness_machine'] }],
-                    optionalServices: ['device_information']
-                });
 
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('fitness_machine');
-                
-                // Indoor Bike Data 특성 구독
-                const indoorBikeChar = await service.getCharacteristic('indoor_bike_data');
-                await indoorBikeChar.startNotifications();
-                indoorBikeChar.addEventListener('characteristicvaluechanged', handleTrainerData);
-
-                connectedDevices.trainer = {
-                    name: device.name || 'Smart Trainer',
-                    device: device,
-                    server: server,
-                    characteristic: indoorBikeChar
-                };
-
-                updateDevicesList();
-                alert(`✅ ${device.name} 연결 성공!`);
-            } catch (error) {
-                alert("❌ 트레이너 연결 실패: " + error.message);
-            }
-        }
-
-        async function connectHeartRate() {
-            try {
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['heart_rate'] }]
-                });
-
-                const server = await device.gatt.connect();
-                const service = await server.getPrimaryService('heart_rate');
-                const characteristic = await service.getCharacteristic('heart_rate_measurement');
-
-                characteristic.addEventListener('characteristicvaluechanged', handleHeartRateData);
-                await characteristic.startNotifications();
-
-                connectedDevices.heartRate = {
-                    name: device.name || 'Heart Rate Monitor',
-                    device: device,
-                    server: server,
-                    characteristic: characteristic
-                };
-
-                updateDevicesList();
-                alert(`✅ ${device.name} 연결 성공!`);
-            } catch (error) {
-                alert("❌ 심박계 연결 실패: " + error.message);
-            }
-        }
-
-        function handleTrainerData(event) {
-            const data = event.target.value;
-            const flags = data.getUint16(0, true);
-            let offset = 2;
-
-            // 케이던스 (Bit 2)
-            if (flags & 0x04) {
-                const cadence = data.getUint16(offset, true) * 0.5;
-                liveData.cadence = cadence;
-                offset += 2;
-            }
-
-            // 파워 (Bit 6)
-            if (flags & 0x40) {
-                const power = data.getInt16(offset, true);
-                liveData.power = power;
-                offset += 2;
-            }
-
-            if (trainingSession.isRunning && !trainingSession.isPaused) {
-                updateTrainingDisplay();
-                recordDataPoint();
-            }
-        }
-
-        function handleHeartRateData(event) {
-            const value = event.target.value;
-            const flags = value.getUint8(0);
-            const rate16Bits = flags & 0x1;
-            const bpm = rate16Bits ? value.getUint16(1, true) : value.getUint8(1);
-
-            liveData.heartRate = bpm;
-
-            if (trainingSession.isRunning && !trainingSession.isPaused) {
-                updateTrainingDisplay();
-            }
-        }
-
-        function updateDevicesList() {
-            const deviceList = document.getElementById('deviceList');
-            const summary = document.getElementById('connectedDevicesSummary');
-            const summaryList = document.getElementById('connectedDevicesList');
-
-            let connectedCount = 0;
-            let html = '';
-
-            if (connectedDevices.trainer) {
-                connectedCount++;
-                html += `
-                    <div class="card device-card connected">
-                        <div class="device-info">
-                            <div class="device-icon">🚴‍♂️</div>
-                            <div class="device-details">
-                                <h3>${connectedDevices.trainer.name}</h3>
-                                <p>Smart Trainer</p>
-                            </div>
-                        </div>
-                        <div style="color: var(--success-color); font-weight: 600;">연결됨</div>
-                    </div>
-                `;
-            }
-
-            if (connectedDevices.heartRate) {
-                connectedCount++;
-                html += `
-                    <div class="card device-card connected">
-                        <div class="device-info">
-                            <div class="device-icon" style="background: var(--danger-color);">❤️</div>
-                            <div class="device-details">
-                                <h3>${connectedDevices.heartRate.name}</h3>
-                                <p>Heart Rate Monitor</p>
-                            </div>
-                        </div>
-                        <div style="color: var(--success-color); font-weight: 600;">연결됨</div>
-                    </div>
-                `;
-            }
-
-            deviceList.innerHTML = html;
-
-            if (connectedCount > 0) {
-                summaryList.innerHTML = html;
-                summary.classList.remove('hidden');
-            } else {
-                summary.classList.add('hidden');
-            }
-        }
-
-        function proceedToProfile() {
-            if (!connectedDevices.trainer) {
-                alert('훈련을 위해서는 스마트 트레이너가 필요합니다.');
-                return;
-            }
-            showScreen('profileScreen');
-        }
-
-        // ==========================================
-        // 사용자 관리 함수들
-        // ==========================================
-        async function loadUsers() {
-            try {
-                const users = await google.script.run.getUsers();
-                displayUsers(users);
-            } catch (error) {
-                console.error('사용자 로드 실패:', error);
-                // 더미 데이터로 대체
-                const dummyUsers = [
-                    { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
-                    { user_id: 'U2', name: '김철수', contact: '010-9876-5432', ftp: 280, weight: 70 }
-                ];
-                displayUsers(dummyUsers);
-            }
-        }
-
-        function displayUsers(users) {
-            const profileList = document.getElementById('profileList');
-            profileList.innerHTML = '';
-
-            users.forEach(user => {
-                const profileCard = document.createElement('div');
-                profileCard.className = 'card profile-card';
-                profileCard.onclick = () => selectUser(user);
-
-                const initials = user.name.substring(0, 2);
-                const powerToWeight = (user.ftp / user.weight).toFixed(1);
-
-                profileCard.innerHTML = `
-                    <div class="profile-info">
-                        <div class="profile-avatar">${initials}</div>
-                        <div class="profile-details">
-                            <h3>${user.name}</h3>
-                            <div class="profile-stats">
-                                <div>
-                                    <div class="stat-value">${user.ftp}W</div>
-                                    <div class="stat-label">FTP</div>
-                                </div>
-                                <div>
-                                    <div class="stat-value">${user.weight}kg</div>
-                                    <div class="stat-label">몸무게</div>
-                                </div>
-                                <div>
-                                    <div class="stat-value">${powerToWeight}</div>
-                                    <div class="stat-label">W/kg</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                profileList.appendChild(profileCard);
-            });
-        }
-
-        function selectUser(user) {
-            currentUser = user;
-            alert(`${user.name}님, 환영합니다!`);
-            showScreen('workoutScreen');
-        }
-
-        function showAddUserForm() {
-            document.getElementById('addUserForm').classList.remove('hidden');
-        }
-
-        function cancelAddUser() {
-            document.getElementById('addUserForm').classList.add('hidden');
-            document.getElementById('userName').value = '';
-            document.getElementById('userContact').value = '';
-            document.getElementById('userFTP').value = '';
-            document.getElementById('userWeight').value = '';
-        }
-
-// ==========================================
-// 올바른 Google Apps Script 호출 방식
-// ==========================================
-
-async function saveNewUser() {
-    const name = document.getElementById('userName').value.trim();
-    const contact = document.getElementById('userContact').value.trim();
-    const ftp = parseInt(document.getElementById('userFTP').value);
-    const weight = parseInt(document.getElementById('userWeight').value);
-
-    // 유효성 검사
-    if (!name || !contact || !ftp || !weight) {
-        alert('모든 필드를 입력해주세요.');
-        return;
-    }
-
-    if (ftp < 100 || ftp > 500) {
-        alert('FTP는 100W에서 500W 사이의 값을 입력해주세요.');
-        return;
-    }
-
-    if (weight < 40 || weight > 150) {
-        alert('몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
-        return;
-    }
-
-    // ✅ 올바른 방식 - 콜백 기반
-    google.script.run
-        .withSuccessHandler(function(result) {
-            if (result.success) {
-                alert('새 사용자가 추가되었습니다!');
-                cancelAddUser();
-                loadUsers();
-            } else {
-                alert('사용자 추가 실패: ' + result.error);
-            }
-        })
-        .withFailureHandler(function(error) {
-            console.error('사용자 추가 오류:', error);
-            alert('사용자 추가 중 오류가 발생했습니다.');
-        })
-        .addUser({
-            name: name,
-            contact: contact,
-            ftp: ftp,
-            weight: weight
-        });
-}
-
-// ==========================================
-// Promise 래퍼 함수 (선택사항)
-// ==========================================
-
-function callGoogleScript(functionName, ...args) {
-    return new Promise((resolve, reject) => {
-        google.script.run
-            .withSuccessHandler(resolve)
-            .withFailureHandler(reject)
-            [functionName](...args);
-    });
-}
-
-// 사용 예시:
-async function saveNewUserWithPromise() {
-    const name = document.getElementById('userName').value.trim();
-    const contact = document.getElementById('userContact').value.trim();
-    const ftp = parseInt(document.getElementById('userFTP').value);
-    const weight = parseInt(document.getElementById('userWeight').value);
-
-    // 유효성 검사는 동일...
-
-    try {
-        const result = await callGoogleScript('addUser', {
-            name, contact, ftp, weight
-        });
-        
-        if (result.success) {
-            alert('새 사용자가 추가되었습니다!');
-            cancelAddUser();
-            loadUsers();
-        } else {
-            alert('사용자 추가 실패: ' + result.error);
-        }
-    } catch (error) {
-        console.error('사용자 추가 오류:', error);
-        alert('사용자 추가 중 오류가 발생했습니다.');
-    }
-}
-
-// ==========================================
-// 모든 Google Apps Script 호출을 수정
-// ==========================================
-
-// 사용자 목록 로드
-async function loadUsers() {
-    google.script.run
-        .withSuccessHandler(function(users) {
-            displayUsers(users);
-        })
-        .withFailureHandler(function(error) {
-            console.error('사용자 로드 실패:', error);
-            // 더미 데이터로 대체
-            const dummyUsers = [
-                { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
-                { user_id: 'U2', name: '김철수', contact: '010-9876-5432', ftp: 280, weight: 70 }
-            ];
-            displayUsers(dummyUsers);
-        })
-        .getUsers();
-}
-
-// 워크아웃 목록 로드
-async function loadWorkouts() {
-    google.script.run
-        .withSuccessHandler(function(workouts) {
-            displayWorkouts(workouts);
-        })
-        .withFailureHandler(function(error) {
-            console.error('워크아웃 로드 실패:', error);
-            // 더미 데이터로 대체
-            const dummyWorkouts = [
-                {
-                    workout_id: 'SST_MCT14',
-                    workout_name: 'SST_MCT(14)',
-                    total_duration: 5520,
-                    avg_intensity: 78,
-                    segments: [
-                        { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 300, target_rpm: 80 }
-                    ]
-                }
-            ];
-            displayWorkouts(dummyWorkouts);
-        })
-        .getWorkouts();
-}
-
-// 훈련 세션 시작
-function startTraining() {
-    trainingSession.isRunning = true;
-    trainingSession.startTime = Date.now();
-    trainingSession.segmentStartTime = Date.now();
-
-    // 서버에 세션 시작 알림
-    google.script.run
-        .withSuccessHandler(function(result) {
-            if (result.success) {
-                trainingSession.sessionId = result.session_id;
-                console.log('세션 시작됨:', result.session_id);
-            }
-        })
-        .withFailureHandler(function(error) {
-            console.error('세션 시작 실패:', error);
-        })
-        .startTrainingSessionAPI({
-            user_id: currentUser.user_id,
-            workout_id: currentWorkout.workout_id
-        });
-
-    updateTrainingTimer();
-    updateTargetPower();
-
-    // 시뮬레이션 데이터 생성 (실제 기기가 연결되지 않은 경우)
-    if (!connectedDevices.trainer) {
-        startDataSimulation();
-    }
-}
-
-// AI 분석 요청
-function requestAIAnalysis() {
-    document.getElementById('aiAnalysis').textContent = '분석 중...';
-
-    google.script.run
-        .withSuccessHandler(function(response) {
-            if (response.success) {
-                document.getElementById('aiAnalysis').textContent = response.analysis;
-            } else {
-                document.getElementById('aiAnalysis').textContent = 'AI 분석을 수행할 수 없습니다.';
-            }
-        })
-        .withFailureHandler(function(error) {
-            console.error('AI 분석 실패:', error);
-            document.getElementById('aiAnalysis').textContent = 'AI 분석 중 오류가 발생했습니다.';
-        })
-        .analyzeTrainingPerformance(trainingSession.sessionId);
-}
-
-        function saveResult() {
-            alert('훈련 결과가 저장되었습니다!');
-        }
-
-        function shareResult() {
-            const achievement = document.getElementById('finalAchievement').textContent;
-            const workoutName = document.getElementById('workoutCompletedName').textContent;
-            const avgPower = document.getElementById('resultAvgPower').textContent;
-            const avgHR = document.getElementById('resultAvgHR').textContent;
-
-            const shareText = `🚴‍♂️ 사이클 아카데미 훈련 완료!
-
-${workoutName}
-달성률: ${achievement}
-평균 파워: ${avgPower}W
-평균 심박: ${avgHR}bpm
-
-🎯 당신도 도전해보세요!
-${window.location.href}`;
-
-            if (navigator.share) {
-                navigator.share({
-                    title: '사이클 아카데미 - 훈련 완료!',
-                    text: shareText,
-                    url: window.location.href
-                });
-            } else {
-                navigator.clipboard.writeText(shareText).then(() => {
-                    alert('결과가 클립보드에 복사되었습니다!');
-                });
-            }
-        }
-
-        function goHome() {
-            currentUser = null;
-            currentWorkout = null;
-            trainingSession = {
-                sessionId: null,
-                isRunning: false,
-                isPaused: false,
-                startTime: null,
-                currentSegment: 0,
-                segments: [],
-                data: { power: [], cadence: [], heartRate: [], time: [] }
-            };
-            liveData = { power: 0, cadence: 0, heartRate: 0, targetPower: 0 };
-
-            showScreen('connectionScreen');
-        }
-
-        // 페이지 로드 시 브라우저 지원 확인
         document.addEventListener('DOMContentLoaded', function() {
-            if (!navigator.bluetooth) {
-                alert('이 브라우저는 Web Bluetooth를 지원하지 않습니다.\nChrome, Edge, Opera 브라우저를 사용해주세요.');
+            console.log('사이클 아카데미 워크아웃 앱 로드됨');
+            
+            // 저장된 URL이 있으면 불러오기
+            const savedUrl = localStorage.getItem('webAppUrl');
+            if (savedUrl) {
+                document.getElementById('webAppUrl').value = savedUrl;
             }
 
-            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                alert('블루투스 연결을 위해서는 HTTPS 환경이 필요합니다.');
-            }
+            // URL 입력시 자동 저장
+            document.getElementById('webAppUrl').addEventListener('change', function() {
+                localStorage.setItem('webAppUrl', this.value);
+            });
         });
     </script>
 </body>
