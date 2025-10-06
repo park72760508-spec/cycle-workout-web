@@ -515,7 +515,7 @@
         </div>
 
         <div class="card">
-            <h3 style="margin-bottom: 15px;">📡 블루투스 기기 연결</h3>
+            <h3 style="margin-bottom: 15px;">📡ᛒ 블루투스 기기 연결</h3>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                 <button class="btn" onclick="connectTrainer()">스마트 트레이너</button>
                 <button class="btn btn-secondary" onclick="connectHeartRate()">심박계</button>
@@ -2052,7 +2052,7 @@ ${window.location.href}`;
             </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label>FTP (W)</label>
+                    <label>40분 FTP (W)</label>
                     <input type="number" id="userFTP" placeholder="250" min="100" max="500">
                 </div>
                 <div class="form-group">
@@ -2468,429 +2468,191 @@ ${window.location.href}`;
             document.getElementById('userWeight').value = '';
         }
 
-        async function saveNewUser() {
-            const name = document.getElementById('userName').value.trim();
-            const contact = document.getElementById('userContact').value.trim();
-            const ftp = parseInt(document.getElementById('userFTP').value);
-            const weight = parseInt(document.getElementById('userWeight').value);
+// ==========================================
+// 올바른 Google Apps Script 호출 방식
+// ==========================================
 
-            if (!name || !contact || !ftp || !weight) {
-                alert('모든 필드를 입력해주세요.');
-                return;
-            }
+async function saveNewUser() {
+    const name = document.getElementById('userName').value.trim();
+    const contact = document.getElementById('userContact').value.trim();
+    const ftp = parseInt(document.getElementById('userFTP').value);
+    const weight = parseInt(document.getElementById('userWeight').value);
 
-            if (ftp < 100 || ftp > 500) {
-                alert('FTP는 100W에서 500W 사이의 값을 입력해주세요.');
-                return;
-            }
+    // 유효성 검사
+    if (!name || !contact || !ftp || !weight) {
+        alert('모든 필드를 입력해주세요.');
+        return;
+    }
 
-            if (weight < 40 || weight > 150) {
-                alert('몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
-                return;
-            }
+    if (ftp < 100 || ftp > 500) {
+        alert('FTP는 100W에서 500W 사이의 값을 입력해주세요.');
+        return;
+    }
 
-            try {
-                const result = await google.script.run.addUser({
-                    name, contact, ftp, weight
-                });
+    if (weight < 40 || weight > 150) {
+        alert('몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
+        return;
+    }
 
-                if (result.success) {
-                    alert('새 사용자가 추가되었습니다!');
-                    cancelAddUser();
-                    loadUsers();
-                } else {
-                    alert('사용자 추가 실패: ' + result.error);
-                }
-            } catch (error) {
-                console.error('사용자 추가 오류:', error);
-                alert('사용자 추가 중 오류가 발생했습니다.');
-            }
-        }
-
-        // ==========================================
-        // 워크아웃 관리 함수들
-        // ==========================================
-        async function loadWorkouts() {
-            try {
-                const workouts = await google.script.run.getWorkouts();
-                displayWorkouts(workouts);
-            } catch (error) {
-                console.error('워크아웃 로드 실패:', error);
-                // 더미 데이터로 대체
-                const dummyWorkouts = [
-                    {
-                        workout_id: 'SST_MCT14',
-                        workout_name: 'SST_MCT(14)',
-                        total_duration: 5520, // 92분
-                        avg_intensity: 78,
-                        segments: [
-                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 300, target_rpm: 80 },
-                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 1200, target_rpm: 90 }
-                        ]
-                    }
-                ];
-                displayWorkouts(dummyWorkouts);
-            }
-        }
-
-        function displayWorkouts(workouts) {
-            const workoutList = document.getElementById('workoutList');
-            workoutList.innerHTML = '';
-
-            workouts.forEach(workout => {
-                const workoutCard = document.createElement('div');
-                workoutCard.className = 'card workout-card';
-                workoutCard.onclick = () => selectWorkout(workout);
-
-                const duration = Math.floor(workout.total_duration / 60);
-                const tss = calculateWorkoutTSS(workout);
-
-                workoutCard.innerHTML = `
-                    <div class="workout-header">
-                        <div class="workout-title">${workout.workout_name}</div>
-                        <div class="workout-duration">${duration}분</div>
-                    </div>
-                    <div style="margin: 15px 0;">
-                        <div style="font-size: 14px; color: var(--gray-color);">
-                            평균: ${workout.avg_intensity}% FTP | TSS: ${tss}
-                        </div>
-                    </div>
-                `;
-
-                workoutList.appendChild(workoutCard);
-            });
-        }
-
-        function calculateWorkoutTSS(workout) {
-            let totalTSS = 0;
-            workout.segments.forEach(segment => {
-                const intensityFactor = segment.ftp_percent / 100;
-                const durationHours = segment.duration_sec / 3600;
-                totalTSS += durationHours * intensityFactor * intensityFactor * 100;
-            });
-            return Math.round(totalTSS);
-        }
-
-        function selectWorkout(workout) {
-            currentWorkout = workout;
-            showScreen('trainingScreen');
-        }
-
-        // ==========================================
-        // 훈련 실행 함수들
-        // ==========================================
-        function initializeTraining() {
-            if (!currentWorkout || !currentUser) return;
-
-            trainingSession = {
-                sessionId: 'S' + Date.now(),
-                isRunning: false,
-                isPaused: false,
-                startTime: null,
-                currentSegment: 0,
-                segments: currentWorkout.segments,
-                segmentStartTime: null,
-                data: {
-                    power: [],
-                    cadence: [],
-                    heartRate: [],
-                    time: []
-                }
-            };
-
-            updateTrainingDisplay();
-            createTimeline();
-            updateSegmentDisplay();
-
-            // 3초 카운트다운 후 시작
-            let countdown = 3;
-            const countdownInterval = setInterval(() => {
-                if (countdown > 0) {
-                    document.getElementById('currentSegmentName').textContent = `시작까지 ${countdown}초...`;
-                    countdown--;
-                } else {
-                    clearInterval(countdownInterval);
-                    startTraining();
-                }
-            }, 1000);
-        }
-
-        function startTraining() {
-            trainingSession.isRunning = true;
-            trainingSession.startTime = Date.now();
-            trainingSession.segmentStartTime = Date.now();
-
-            // 서버에 세션 시작 알림
-            try {
-                google.script.run.startTrainingSessionAPI({
-                    user_id: currentUser.user_id,
-                    workout_id: currentWorkout.workout_id
-                });
-            } catch (error) {
-                console.error('세션 시작 실패:', error);
-            }
-
-            updateTrainingTimer();
-            updateTargetPower();
-
-            // 시뮬레이션 데이터 생성 (실제 기기가 연결되지 않은 경우)
-            if (!connectedDevices.trainer) {
-                startDataSimulation();
-            }
-        }
-
-        function startDataSimulation() {
-            setInterval(() => {
-                if (!trainingSession.isRunning || trainingSession.isPaused) return;
-
-                const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-                if (!currentSeg) return;
-
-                const targetPower = Math.round(currentUser.ftp * (currentSeg.ftp_percent / 100));
-                const variation = (Math.random() - 0.5) * 30;
-                
-                liveData.power = Math.max(0, targetPower + variation);
-                liveData.cadence = currentSeg.target_rpm + (Math.random() - 0.5) * 10;
-                liveData.heartRate = 140 + (Math.random() - 0.5) * 20;
-                liveData.targetPower = targetPower;
-
-                updateTrainingDisplay();
-                recordDataPoint();
-            }, 1000);
-        }
-
-        function updateTargetPower() {
-            if (!trainingSession.isRunning || trainingSession.isPaused) return;
-
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (currentSeg && currentUser) {
-                const targetPower = Math.round(currentUser.ftp * (currentSeg.ftp_percent / 100));
-                liveData.targetPower = targetPower;
-            }
-        }
-
-        function updateTrainingDisplay() {
-            document.getElementById('currentPowerValue').textContent = Math.round(liveData.power);
-            document.getElementById('cadenceValue').textContent = Math.round(liveData.cadence);
-            document.getElementById('heartRateValue').textContent = Math.round(liveData.heartRate);
-            document.getElementById('targetPowerValue').textContent = liveData.targetPower;
-
-            const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
-            document.getElementById('targetFtpPercent').textContent = ftpPercent;
-
-            const achievement = liveData.targetPower > 0 ?
-                Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100)) : 0;
-            document.getElementById('achievementValue').textContent = achievement;
-
-            const progressPercent = Math.min(100, (liveData.power / liveData.targetPower) * 100);
-            document.getElementById('powerProgressBar').style.width = progressPercent + '%';
-
-            if (trainingSession.data.power.length > 0) {
-                const avgPower = trainingSession.data.power.reduce((a, b) => a + b, 0) / trainingSession.data.power.length;
-                document.getElementById('avgPowerValue').textContent = Math.round(avgPower);
-            }
-        }
-
-        function updateTrainingTimer() {
-            const timerInterval = setInterval(() => {
-                if (!trainingSession.isRunning) {
-                    clearInterval(timerInterval);
-                    return;
-                }
-
-                if (trainingSession.isPaused) return;
-
-                const elapsed = Date.now() - trainingSession.startTime;
-                const segmentElapsed = Date.now() - trainingSession.segmentStartTime;
-
-                const elapsedMinutes = Math.floor(elapsed / 60000);
-                const elapsedSeconds = Math.floor((elapsed % 60000) / 1000);
-                document.getElementById('elapsedTime').textContent =
-                    `${elapsedMinutes.toString().padStart(2, '0')}:${elapsedSeconds.toString().padStart(2, '0')}`;
-
-                const totalMinutes = Math.floor(currentWorkout.total_duration / 60);
-                const totalSecondsRemaining = currentWorkout.total_duration % 60;
-                document.getElementById('totalTime').textContent =
-                    `${totalMinutes.toString().padStart(2, '0')}:${totalSecondsRemaining.toString().padStart(2, '0')}`;
-
-                checkSegmentProgress(segmentElapsed);
-                updateSegmentTimer(segmentElapsed);
-            }, 1000);
-        }
-
-        function updateSegmentTimer(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-
-            const segmentRemaining = Math.max(0, currentSeg.duration_sec * 1000 - segmentElapsed);
-            const remainingMinutes = Math.floor(segmentRemaining / 60000);
-            const remainingSeconds = Math.floor((segmentRemaining % 60000) / 1000);
-
-            const segmentTotalMinutes = Math.floor(currentSeg.duration_sec / 60);
-            const segmentTotalSeconds = currentSeg.duration_sec % 60;
-
-            document.getElementById('segmentTime').textContent =
-                `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')} / ${segmentTotalMinutes.toString().padStart(2, '0')}:${segmentTotalSeconds.toString().padStart(2, '0')}`;
-        }
-
-        function checkSegmentProgress(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-
-            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
-                completeCurrentSegment();
-                nextSegment();
-            }
-        }
-
-        function completeCurrentSegment() {
-            updateTimelineSegment(trainingSession.currentSegment, 'completed');
-        }
-
-        function nextSegment() {
-            trainingSession.currentSegment++;
-            if (trainingSession.currentSegment >= trainingSession.segments.length) {
-                completeTraining();
-                return;
-            }
-
-            trainingSession.segmentStartTime = Date.now();
-            updateSegmentDisplay();
-            updateTargetPower();
-            updateTimelineSegment(trainingSession.currentSegment, 'current');
-        }
-
-        function updateSegmentDisplay() {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-
-            document.getElementById('currentSegmentName').textContent =
-                `${currentSeg.description} (${currentSeg.segment_type})`;
-
-            document.getElementById('segmentProgress').textContent =
-                `단계 ${trainingSession.currentSegment + 1}/${trainingSession.segments.length}`;
-
-            const nextSeg = trainingSession.segments[trainingSession.currentSegment + 1];
-            if (nextSeg) {
-                document.getElementById('nextSegment').textContent = `다음: ${nextSeg.description}`;
+    // ✅ 올바른 방식 - 콜백 기반
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result.success) {
+                alert('새 사용자가 추가되었습니다!');
+                cancelAddUser();
+                loadUsers();
             } else {
-                document.getElementById('nextSegment').textContent = '다음: 훈련 완료';
+                alert('사용자 추가 실패: ' + result.error);
             }
+        })
+        .withFailureHandler(function(error) {
+            console.error('사용자 추가 오류:', error);
+            alert('사용자 추가 중 오류가 발생했습니다.');
+        })
+        .addUser({
+            name: name,
+            contact: contact,
+            ftp: ftp,
+            weight: weight
+        });
+}
+
+// ==========================================
+// Promise 래퍼 함수 (선택사항)
+// ==========================================
+
+function callGoogleScript(functionName, ...args) {
+    return new Promise((resolve, reject) => {
+        google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            [functionName](...args);
+    });
+}
+
+// 사용 예시:
+async function saveNewUserWithPromise() {
+    const name = document.getElementById('userName').value.trim();
+    const contact = document.getElementById('userContact').value.trim();
+    const ftp = parseInt(document.getElementById('userFTP').value);
+    const weight = parseInt(document.getElementById('userWeight').value);
+
+    // 유효성 검사는 동일...
+
+    try {
+        const result = await callGoogleScript('addUser', {
+            name, contact, ftp, weight
+        });
+        
+        if (result.success) {
+            alert('새 사용자가 추가되었습니다!');
+            cancelAddUser();
+            loadUsers();
+        } else {
+            alert('사용자 추가 실패: ' + result.error);
         }
+    } catch (error) {
+        console.error('사용자 추가 오류:', error);
+        alert('사용자 추가 중 오류가 발생했습니다.');
+    }
+}
 
-        function createTimeline() {
-            const timeline = document.getElementById('timelineSegments');
-            timeline.innerHTML = '';
+// ==========================================
+// 모든 Google Apps Script 호출을 수정
+// ==========================================
 
-            trainingSession.segments.forEach((segment, index) => {
-                const segmentDiv = document.createElement('div');
-                segmentDiv.className = 'timeline-segment';
-                segmentDiv.style.flex = segment.duration_sec;
-                segmentDiv.id = `timeline-segment-${index}`;
+// 사용자 목록 로드
+async function loadUsers() {
+    google.script.run
+        .withSuccessHandler(function(users) {
+            displayUsers(users);
+        })
+        .withFailureHandler(function(error) {
+            console.error('사용자 로드 실패:', error);
+            // 더미 데이터로 대체
+            const dummyUsers = [
+                { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
+                { user_id: 'U2', name: '김철수', contact: '010-9876-5432', ftp: 280, weight: 70 }
+            ];
+            displayUsers(dummyUsers);
+        })
+        .getUsers();
+}
 
-                if (index === 0) segmentDiv.classList.add('current');
+// 워크아웃 목록 로드
+async function loadWorkouts() {
+    google.script.run
+        .withSuccessHandler(function(workouts) {
+            displayWorkouts(workouts);
+        })
+        .withFailureHandler(function(error) {
+            console.error('워크아웃 로드 실패:', error);
+            // 더미 데이터로 대체
+            const dummyWorkouts = [
+                {
+                    workout_id: 'SST_MCT14',
+                    workout_name: 'SST_MCT(14)',
+                    total_duration: 5520,
+                    avg_intensity: 78,
+                    segments: [
+                        { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 300, target_rpm: 80 }
+                    ]
+                }
+            ];
+            displayWorkouts(dummyWorkouts);
+        })
+        .getWorkouts();
+}
 
-                timeline.appendChild(segmentDiv);
-            });
-        }
+// 훈련 세션 시작
+function startTraining() {
+    trainingSession.isRunning = true;
+    trainingSession.startTime = Date.now();
+    trainingSession.segmentStartTime = Date.now();
 
-        function updateTimelineSegment(segmentIndex, status) {
-            const segment = document.getElementById(`timeline-segment-${segmentIndex}`);
-            if (!segment) return;
-
-            segment.className = `timeline-segment ${status}`;
-        }
-
-        function recordDataPoint() {
-            trainingSession.data.power.push(liveData.power);
-            trainingSession.data.cadence.push(liveData.cadence);
-            trainingSession.data.heartRate.push(liveData.heartRate);
-            trainingSession.data.time.push(Date.now());
-        }
-
-        function togglePause() {
-            trainingSession.isPaused = !trainingSession.isPaused;
-            const pauseIcon = document.getElementById('pauseIcon');
-            pauseIcon.textContent = trainingSession.isPaused ? '▶️' : '⏸️';
-        }
-
-        function skipSegment() {
-            if (confirm('현재 구간을 건너뛰시겠습니까?')) {
-                completeCurrentSegment();
-                nextSegment();
+    // 서버에 세션 시작 알림
+    google.script.run
+        .withSuccessHandler(function(result) {
+            if (result.success) {
+                trainingSession.sessionId = result.session_id;
+                console.log('세션 시작됨:', result.session_id);
             }
-        }
+        })
+        .withFailureHandler(function(error) {
+            console.error('세션 시작 실패:', error);
+        })
+        .startTrainingSessionAPI({
+            user_id: currentUser.user_id,
+            workout_id: currentWorkout.workout_id
+        });
 
-        function stopTraining() {
-            if (confirm('정말 훈련을 중단하시겠습니까?')) {
-                trainingSession.isRunning = false;
-                completeTraining();
-            }
-        }
+    updateTrainingTimer();
+    updateTargetPower();
 
-        function completeTraining() {
-            trainingSession.isRunning = false;
+    // 시뮬레이션 데이터 생성 (실제 기기가 연결되지 않은 경우)
+    if (!connectedDevices.trainer) {
+        startDataSimulation();
+    }
+}
 
-            const avgPower = calculateAverage(trainingSession.data.power);
-            const maxPower = Math.max(...trainingSession.data.power);
-            const avgHR = calculateAverage(trainingSession.data.heartRate);
-            const achievement = calculateOverallAchievement();
+// AI 분석 요청
+function requestAIAnalysis() {
+    document.getElementById('aiAnalysis').textContent = '분석 중...';
 
-            const durationHours = (Date.now() - trainingSession.startTime) / 3600000;
-            const calories = Math.round(avgPower * durationHours * 3.6);
-
-            document.getElementById('finalAchievement').textContent = achievement + '%';
-            document.getElementById('workoutCompletedName').textContent =
-                `${currentWorkout.workout_name} - ${Math.floor(durationHours * 60)}분 완주`;
-            document.getElementById('resultAvgPower').textContent = Math.round(avgPower);
-            document.getElementById('resultMaxPower').textContent = Math.round(maxPower);
-            document.getElementById('resultAvgHR').textContent = Math.round(avgHR);
-            document.getElementById('resultCalories').textContent = calories;
-
-            // AI 분석 요청
-            requestAIAnalysis();
-
-            showScreen('resultScreen');
-        }
-
-        function calculateAverage(array) {
-            return array.length > 0 ? array.reduce((a, b) => a + b, 0) / array.length : 0;
-        }
-
-        function calculateOverallAchievement() {
-            const totalTargetPowerTime = trainingSession.segments.reduce((sum, seg) => {
-                const targetPower = currentUser.ftp * (seg.ftp_percent / 100);
-                return sum + (targetPower * seg.duration_sec);
-            }, 0);
-
-            const totalActualPowerTime = trainingSession.data.power.reduce((sum, power) => sum + power, 0);
-
-            if (totalTargetPowerTime === 0) return 100;
-            return Math.min(100, Math.round((totalActualPowerTime / totalTargetPowerTime) * 100));
-        }
-
-        function requestAIAnalysis() {
-            document.getElementById('aiAnalysis').textContent = '분석 중...';
-
-            try {
-                google.script.run
-                    .withSuccessHandler(function(response) {
-                        if (response.success) {
-                            document.getElementById('aiAnalysis').textContent = response.analysis;
-                        } else {
-                            document.getElementById('aiAnalysis').textContent = 'AI 분석을 수행할 수 없습니다.';
-                        }
-                    })
-                    .withFailureHandler(function(error) {
-                        console.error('AI 분석 실패:', error);
-                        document.getElementById('aiAnalysis').textContent = 'AI 분석 중 오류가 발생했습니다.';
-                    })
-                    .analyzeTrainingPerformance(trainingSession.sessionId);
-            } catch (error) {
-                console.error('AI 분석 요청 실패:', error);
+    google.script.run
+        .withSuccessHandler(function(response) {
+            if (response.success) {
+                document.getElementById('aiAnalysis').textContent = response.analysis;
+            } else {
                 document.getElementById('aiAnalysis').textContent = 'AI 분석을 수행할 수 없습니다.';
             }
-        }
+        })
+        .withFailureHandler(function(error) {
+            console.error('AI 분석 실패:', error);
+            document.getElementById('aiAnalysis').textContent = 'AI 분석 중 오류가 발생했습니다.';
+        })
+        .analyzeTrainingPerformance(trainingSession.sessionId);
+}
 
         function saveResult() {
             alert('훈련 결과가 저장되었습니다!');
