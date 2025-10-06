@@ -1205,54 +1205,30 @@
             });
         }
 
-        /function showCountdown(seconds, callback) {
-            /const overlay = document.getElementById('countdownOverlay');
-            /const number = document.getElementById('countdownNumber');
-            
-            /overlay.classList.remove('hidden');
-            /number.textContent = seconds;
-
-            /if (seconds > 0) {
-                /setTimeout(() => {
-                    /showCountdown(seconds - 1, callback);
-                /}, 1000);
-            /} else {
-                /overlay.classList.add('hidden');
-                /callback();
-            /}
-        /}
-
-////////////////////////////////////////////////////////
-
-function showCountdown(seconds, callback) {
+        function showCountdown(seconds, callback) {
             const overlay = document.getElementById('countdownOverlay');
             const number = document.getElementById('countdownNumber');
             
             overlay.classList.remove('hidden');
             number.textContent = seconds;
-            
+
             // 카운트다운 숫자에 펄스 애니메이션 추가
-            number.classList.add('countdown-number');
+            //number.classList.add('countdown-number');
             
             if (seconds > 0) {
-                // 카운트다운 중 부저음 재생
-                if (seconds <= 3) {
-                    playFinalCountdownBeep(); // 마지막 3초는 더 긴급한 소리
-                } else {
-                    playCountdownBeep(); // 일반 카운트다운 소리
-                }
-                
                 setTimeout(() => {
+                     playCountdownBeep();
                     showCountdown(seconds - 1, callback);
                 }, 1000);
             } else {
-                // 시작할 때 다른 소리
-                playStartBeep();
                 overlay.classList.add('hidden');
-                number.classList.remove('countdown-number');
                 callback();
             }
         }
+
+////////////////////////////////////////////////////////
+
+
 
 
 ///////////////////////////////////////////////////////
