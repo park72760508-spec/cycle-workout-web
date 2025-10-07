@@ -1380,10 +1380,14 @@
             });
         }
 
-        function showCountdown(seconds, callback, message = "훈련 시작 준비!") {
-            if (countdownActive) return; // 중복 방지
+        function showCountdown(seconds, callback, message = "훈련 시작 준비!", isInitialCall = true) {
+            // 중복 방지는 최초 호출 시에만 체크
+            if (isInitialCall && countdownActive) return;
             
-            countdownActive = true;
+            if (isInitialCall) {
+                countdownActive = true;
+            }
+            
             const overlay = document.getElementById('countdownOverlay');
             const number = document.getElementById('countdownNumber');
 
@@ -1413,7 +1417,7 @@
                 setTimeout(() => {
                     number.textContent = seconds - 1;
                     if (seconds > 1) playBeep();
-                    showCountdown(seconds - 1, callback, message);
+                    showCountdown(seconds - 1, callback, message, false); // 재귀 호출 시 false
                 }, 1000);
             } else {
                 messageEl.style.opacity = "0";
