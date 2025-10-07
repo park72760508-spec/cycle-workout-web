@@ -1145,11 +1145,11 @@
                         total_duration: 5520, // 92분
                         avg_intensity: 78,
                         segments: [
-                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 300, target_rpm: 80 },
-                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 1200, target_rpm: 90 },
-                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 180, target_rpm: 75 },
-                            { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 1200, target_rpm: 90 },
-                            { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 300, target_rpm: 70 }
+                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 30, target_rpm: 80 },
+                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 120, target_rpm: 90 },
+                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 18, target_rpm: 75 },
+                            { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 120, target_rpm: 90 },
+                            { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 30, target_rpm: 70 }
                         ]
                     }
                 ];
@@ -1230,31 +1230,49 @@
             });
         }
 
+
+////////////////////////////////////////////////////////
+
         function showCountdown(seconds, callback) {
             const overlay = document.getElementById('countdownOverlay');
             const number = document.getElementById('countdownNumber');
-            
+        
             overlay.classList.remove('hidden');
             number.textContent = seconds;
-
-            // 카운트다운 숫자에 펄스 애니메이션 추가
-            //number.classList.add('countdown-number');
-            
+        
+            // 🔊 첫 beep 실행
+            playBeep();
+        
             if (seconds > 0) {
                 setTimeout(() => {
-                    //playCountdownBeep();
+                    playBeep(); // 🔊 매 초마다 beep
                     showCountdown(seconds - 1, callback);
                 }, 1000);
             } else {
                 overlay.classList.add('hidden');
                 callback();
             }
+        }        
+/////////////////////////////////////////////////////////////////////////
+        function playBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+        
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+        
+                osc.type = "sine";       // 소리 파형
+                osc.frequency.value = 800; // 음 높이 (Hz)
+                gain.gain.setValueAtTime(0.2, ctx.currentTime); // 음량
+        
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15); // 0.15초 beep
+            } catch (err) {
+                console.error("Beep sound error:", err);
+            }
         }
-
-////////////////////////////////////////////////////////
-
-
-
 
 ///////////////////////////////////////////////////////
         
@@ -1420,18 +1438,25 @@ function checkSegmentProgress(segmentElapsed) {
             updateTimelineSegment(trainingSession.currentSegment, 'completed');
         }
 
+
+
         function nextSegment() {
             trainingSession.currentSegment++;
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
                 return;
             }
-
-            trainingSession.segmentStartTime = Date.now();
-            updateSegmentDisplay();
-            updateTargetPower();
-            updateTimelineSegment(trainingSession.currentSegment, 'current');
+        
+            // 🔹 현재 구간 바로 시작하지 않고 카운트다운 후 시작
+            showCountdown(5, () => {
+                trainingSession.segmentStartTime = Date.now();
+                updateSegmentDisplay();
+                updateTargetPower();
+                updateTimelineSegment(trainingSession.currentSegment, 'current');
+            });
         }
+
+        
 
         function updateSegmentDisplay() {
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
