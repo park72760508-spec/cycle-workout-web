@@ -693,9 +693,9 @@
             <div class="timeline-progress">
                 <div class="timeline-segments" id="timelineSegments">
                     <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
-                    /<div class="timeline-segment"><div class="progress-fill"></div><span>1</span></div>
-                    /<div class="timeline-segment"><div class="progress-fill"></div><span>2</span></div>
-                    /<div class="timeline-segment"><div class="progress-fill"></div><span>3</span></div>                    
+                    //<div class="timeline-segment"><div class="progress-fill"></div><span>1</span></div>
+                    //<div class="timeline-segment"><div class="progress-fill"></div><span>2</span></div>
+                    //<div class="timeline-segment"><div class="progress-fill"></div><span>3</span></div>                    
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
@@ -1232,7 +1232,7 @@
             createTimeline();
             updateSegmentDisplay();
 
-            // 3초 카운트다운 후 시작
+            // 5초 카운트다운 후 시작
             showCountdown(5, () => {
                 startTraining();
             });
@@ -1250,7 +1250,7 @@
             
             if (seconds > 0) {
                 setTimeout(() => {
-                     //playCountdownBeep();
+                    //playCountdownBeep();
                     showCountdown(seconds - 1, callback);
                 }, 1000);
             } else {
@@ -1308,7 +1308,7 @@
                 const variation = (Math.random() - 0.5) * 30;
                 liveData.power = Math.max(0, targetPower + variation);
                 liveData.cadence = currentSeg.target_rpm + (Math.random() - 0.5) * 10;
-                liveData.heartRate = 140 + (Math.random() - 0.5) * 20;
+                //liveData.heartRate = 140 + (Math.random() - 0.5) * 20;
                 liveData.targetPower = targetPower;
 
                 updateTrainingDisplay();
