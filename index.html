@@ -681,7 +681,9 @@
                     <div class="power-progress-bar" id="powerProgressBar"></div>
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
-                    <div style="font-size: 24px; margin-bottom: 5px;">목표: <span id="targetPowerValue">194</span>W</div>
+                    <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
+                        목표: <span id="avgSegmentPowerValue">0</span> / <span id="targetPowerValue">194</span>W
+                    </div>
                     <div style="font-size: 14px; opacity: 0.7;">FTP <span id="targetFtpPercent">80</span>%</div>
                 </div>
             </div>
@@ -1372,25 +1374,61 @@
         }
 
         function updateTrainingDisplay() {
+            // 실시간 표시값
             document.getElementById('currentPowerValue').textContent = Math.round(liveData.power);
             document.getElementById('cadenceValue').textContent = Math.round(liveData.cadence);
             document.getElementById('heartRateValue').textContent = Math.round(liveData.heartRate);
             document.getElementById('targetPowerValue').textContent = liveData.targetPower;
-
+        
             const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
             document.getElementById('targetFtpPercent').textContent = ftpPercent;
-
+        
+            // 달성률 표시
             const achievement = liveData.targetPower > 0 ?
                 Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100)) : 0;
             document.getElementById('achievementValue').textContent = achievement;
-
+        
+            // 진행바 갱신
             const progressPercent = Math.min(100, (liveData.power / liveData.targetPower) * 100);
             document.getElementById('powerProgressBar').style.width = progressPercent + '%';
-
+        
+            // 전체 평균 파워
+            let avgPower = 0;
             if (trainingSession.data.power.length > 0) {
-                const avgPower = trainingSession.data.power.reduce((a, b) => a + b, 0) / trainingSession.data.power.length;
+                avgPower = trainingSession.data.power.reduce((a, b) => a + b, 0) / trainingSession.data.power.length;
                 document.getElementById('avgPowerValue').textContent = Math.round(avgPower);
             }
+        
+            // ✅ 현재 세그먼트별 평균 파워 계산
+            const segStart = trainingSession.segmentStartTime;
+            const segEnd = Date.now();
+            const segmentPowerData = trainingSession.data.power.filter((_, i) => {
+                const t = trainingSession.data.time[i];
+                return t >= segStart && t <= segEnd;
+            });
+        
+            let avgSegPower = 0;
+            if (segmentPowerData.length > 0) {
+                avgSegPower = segmentPowerData.reduce((a, b) => a + b, 0) / segmentPowerData.length;
+            }
+        
+            // ✅ “목표: 평균/목표” 라벨 갱신
+            const avgSegPowerEl = document.getElementById('avgSegmentPowerValue');
+            if (avgSegPowerEl) {
+                avgSegPowerEl.textContent = Math.round(avgSegPower);
+            }
+
+            if (avgSegPowerEl) {
+                avgSegPowerEl.textContent = Math.round(avgSegPower);
+                if (avgSegPower < liveData.targetPower * 0.9) {
+                    avgSegPowerEl.style.color = "#F56500"; // 주황색 (낮음)
+                } else if (avgSegPower > liveData.targetPower * 1.1) {
+                    avgSegPowerEl.style.color = "#7ED321"; // 연두색 (높음)
+                } else {
+                    avgSegPowerEl.style.color = "white"; // 정상 범위
+                }
+            }
+            
         }
 
         function updateTrainingTimer() {
@@ -1437,7 +1475,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         function checkSegmentProgress(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
+            const segIndex = trainingSession.currentSegment;
+            const currentSeg = trainingSession.segments[segIndex];
             if (!currentSeg) return;
         
             const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
@@ -1447,31 +1486,33 @@
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
                 if (!fill) return;
-                if (idx < trainingSession.currentSegment) fill.style.width = "100%";
-                else if (idx === trainingSession.currentSegment) fill.style.width = `${Math.min(progressPercent, 100)}%`;
+                if (idx < segIndex) fill.style.width = "100%";
+                else if (idx === segIndex) fill.style.width = `${Math.min(progressPercent, 100)}%`;
                 else fill.style.width = "0%";
             });
         
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
         
-            // ✅ 세그먼트 종료 5초 전 카운트다운 (모든 세그먼트 대상)
-            if (remainingTime <= 5000 && !currentSeg.countdownStarted) {
-                currentSeg.countdownStarted = true;
+            // ✅ 중복 방지: 카운트다운 중이면 아무 동작하지 않음
+            if (trainingSession.isCountingDown) return;
+        
+            // ✅ 세그먼트 종료 5초 전 1회만 카운트다운 실행
+            if (remainingTime <= 5000 && !currentSeg._countdownStarted) {
+                currentSeg._countdownStarted = true;
                 trainingSession.isCountingDown = true;
         
                 showCountdown(5, () => {
+                    // 카운트다운 종료 후 세그먼트 완료
                     trainingSession.isCountingDown = false;
                     completeCurrentSegment();
                     nextSegment();
-                });
+                }, "다음 세그먼트 준비!");
+        
                 return;
             }
         
-            // ✅ 카운트다운 중에는 세그먼트 종료 막기
-            if (trainingSession.isCountingDown) return;
-        
-            // ✅ 일반 종료 처리 (카운트다운이 이미 끝난 뒤)
-            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
+            // ✅ 일반 종료 처리 (카운트다운이 끝났을 경우)
+            if (remainingTime <= 0) {
                 completeCurrentSegment();
                 nextSegment();
             }
@@ -1529,12 +1570,15 @@
 
         function nextSegment() {
             trainingSession.currentSegment++;
+        
+            // 🔹 모든 세그먼트 카운트다운 상태 초기화
+            trainingSession.segments.forEach(seg => seg._countdownStarted = false);
+        
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
                 return;
             }
         
-            // ✅ 세그먼트 시작 전 카운트다운 (5초)
             trainingSession.isCountingDown = true;
             showCountdown(5, () => {
                 trainingSession.isCountingDown = false;
