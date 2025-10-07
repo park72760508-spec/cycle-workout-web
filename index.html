@@ -1154,12 +1154,12 @@
                     {
                         workout_id: 'SST_MCT14',
                         workout_name: 'SST_MCT(14)',
-                        total_duration: 5520, // 92분
+                        total_duration: 320, // 92분
                         avg_intensity: 78,
                         segments: [
                             { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 30, target_rpm: 80 },
                             { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 120, target_rpm: 90 },
-                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 18, target_rpm: 75 },
+                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 20, target_rpm: 75 },
                             { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 120, target_rpm: 90 },
                             { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 30, target_rpm: 70 }
                         ]
@@ -1413,33 +1413,44 @@
         }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-function checkSegmentProgress(segmentElapsed) {
-    const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-    if (!currentSeg) return;
-
-    const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
-
-    // 🔹 진행률 시각적으로 반영
-    const segments = document.querySelectorAll(".timeline-segment");
-    segments.forEach((seg, idx) => {
-        const fill = seg.querySelector(".progress-fill");
-        if (!fill) return; // fill이 없으면 패스
-
-        if (idx < trainingSession.currentSegment) {
-            fill.style.width = "100%";
-        } else if (idx === trainingSession.currentSegment) {
-            fill.style.width = `${Math.min(progressPercent, 100)}%`;
-        } else {
-            fill.style.width = "0%";
+        function checkSegmentProgress(segmentElapsed) {
+            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
+            if (!currentSeg) return;
+        
+            const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
+            const segments = document.querySelectorAll(".timeline-segment");
+            segments.forEach((seg, idx) => {
+                const fill = seg.querySelector(".progress-fill");
+                if (!fill) return;
+        
+                if (idx < trainingSession.currentSegment) {
+                    fill.style.width = "100%";
+                } else if (idx === trainingSession.currentSegment) {
+                    fill.style.width = `${Math.min(progressPercent, 100)}%`;
+                } else {
+                    fill.style.width = "0%";
+                }
+            });
+        
+            // ✅ 종료 3초 전 카운트다운 (두 번째 세그먼트부터)
+            const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
+            const isFirstSegment = trainingSession.currentSegment === 0;
+        
+            if (!isFirstSegment && remainingTime <= 5000 && !currentSeg.countdownStarted) {
+                currentSeg.countdownStarted = true; // 중복 방지
+                showCountdown(Math.ceil(remainingTime / 1000), () => {
+                    completeCurrentSegment();
+                    nextSegment();
+                });
+                return; // 카운트다운 동안 중복 처리 방지
+            }
+        
+            // ✅ 첫 번째 세그먼트는 기존 방식 (끝나면 다음으로)
+            if (isFirstSegment && segmentElapsed >= currentSeg.duration_sec * 1000) {
+                completeCurrentSegment();
+                nextSegment();
+            }
         }
-    });
-
-    // 🔹 세그먼트 완료 처리
-    if (segmentElapsed >= currentSeg.duration_sec * 1000) {
-        completeCurrentSegment();
-        nextSegment();
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1491,7 +1502,6 @@ function checkSegmentProgress(segmentElapsed) {
         }
 
 
-
         function nextSegment() {
             trainingSession.currentSegment++;
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
@@ -1499,13 +1509,11 @@ function checkSegmentProgress(segmentElapsed) {
                 return;
             }
         
-            // 🔹 현재 구간 바로 시작하지 않고 카운트다운 후 시작
-            showCountdown(5, () => {
-                trainingSession.segmentStartTime = Date.now();
-                updateSegmentDisplay();
-                updateTargetPower();
-                updateTimelineSegment(trainingSession.currentSegment, 'current');
-            });
+            // ✅ 세그먼트 시작 처리
+            trainingSession.segmentStartTime = Date.now();
+            updateSegmentDisplay();
+            updateTargetPower();
+            updateTimelineSegment(trainingSession.currentSegment, 'current');
         }
 
         
