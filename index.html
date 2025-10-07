@@ -890,6 +890,7 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
+        let wakeLock = null;  // 화면 절전 방지 핸들러
         let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함)
         let audioCtx = null; // 오디오 컨텍스트 (비프음 정책 대응)
         let countdownActive = false;  // 카운트다운 중복 방지
@@ -923,6 +924,9 @@
             targetPower: 0
         };
 
+
+
+        
         // 화면 전환 함수들
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(screen => {
@@ -1363,6 +1367,10 @@
             initializeTraining();
         }
 
+
+
+
+        
         function backToWorkoutSelection() {
             showScreen('workoutScreen');
         }
@@ -1402,7 +1410,7 @@
         }
 
         /////////////////////////////// 
-        function showCountdown(seconds, callback, message = "훈련 시작 준비!", isInitialCall = true) {
+        function showCountdown(seconds, callback, message = " 준비!", isInitialCall = true) {
             if (isInitialCall && countdownActive) return; // 중복 방지
             if (isInitialCall) countdownActive = true;
         
@@ -1519,6 +1527,19 @@
             updateTrainingTimer();
             updateTargetPower();
 
+            async function startTraining() {
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log("✅ 화면 절전 모드 방지 활성화됨");
+                    }
+                } catch (err) {
+                    console.error("화면 깨움 요청 실패:", err);
+                }
+            
+                // 기존 startTraining 내용 아래 이어서...
+
+            
             // 서버에 세션 시작 알림
             try {
                 fetch(GAS_WEB_APP_URL, {
@@ -1889,6 +1910,17 @@
             requestAIAnalysis();
 
             showScreen('resultScreen');
+
+            if (wakeLock) {
+                try {
+                    await wakeLock.release();
+                    wakeLock = null;
+                    console.log("🔒 화면 절전 모드 해제됨");
+                } catch (err) {
+                    console.error("wakeLock 해제 실패:", err);
+                }
+            }
+            
         }
 
         function calculateAverage(array) {
@@ -1998,6 +2030,22 @@ ${window.location.href}`;
             }
 
             console.log('사이클 아카데미 훈련 앱 로드 완료');
+
+
+        // 화면 잠금 해제 검출            
+        document.addEventListener("visibilitychange", async () => {
+            if (wakeLock !== null && document.visibilityState === "visible") {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log("🔁 화면 절전 방지 재요청됨");
+                } catch (err) {
+                    console.error("화면 깨움 재요청 실패:", err);
+                }
+            }
+        });
+
+
+            
         });
     </script>
 </body>
