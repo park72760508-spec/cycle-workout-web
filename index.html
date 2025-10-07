@@ -1397,7 +1397,7 @@
             if (!currentSeg) return;
         
             // 🔹 진행률 계산 (%)
-            const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
+            const progressPercent_seg = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
         
             // 🔹 진행률 시각적으로 반영
             const segments = document.querySelectorAll(".timeline-segment");
@@ -1409,7 +1409,7 @@
                     fill.style.width = "100%";
                 } else if (idx === trainingSession.currentSegment) {
                     // 현재 세그먼트는 실시간 진행률
-                    fill.style.width = `${Math.min(progressPercent, 100)}%`;
+                    fill.style.width = `${Math.min(progressPercent_seg , 100)}%`;
                 } else {
                     // 이후 세그먼트는 0%
                     fill.style.width = "0%";
