@@ -367,7 +367,19 @@
             width: 0%;
             transition: width 0.3s ease;
             z-index: 1;
+        
+            /* ✅ 둥근 모서리 제거 (기본 사각형) */
+            border-radius: 0;
+        }
+        
+        /* 첫 번째 세그먼트만 왼쪽 둥글게 */
+        .timeline-segment:first-child .progress-fill {
             border-radius: 15px 0 0 15px;
+        }
+        
+        /* 마지막 세그먼트만 오른쪽 둥글게 */
+        .timeline-segment:last-child .progress-fill {
+            border-radius: 0 15px 15px 0;
         }
         
         .timeline-segment span {
@@ -1435,7 +1447,47 @@ function checkSegmentProgress(segmentElapsed) {
 
 
         function completeCurrentSegment() {
-            updateTimelineSegment(trainingSession.currentSegment, 'completed');
+            const segIndex = trainingSession.currentSegment;
+            const currentSeg = trainingSession.segments[segIndex];
+            if (!currentSeg) return;
+        
+            // ✅ 세그먼트 시작~끝 시간 계산
+            const segmentStartTime = trainingSession.segmentStartTime;
+            const segmentEndTime = Date.now();
+        
+            // ✅ 전체 파워 데이터 중에서 이 세그먼트 시간대에 해당하는 데이터만 필터링
+            const powerData = trainingSession.data.power;
+            const timeData = trainingSession.data.time;
+        
+            const segmentPowerData = powerData.filter((_, i) => {
+                const t = timeData[i];
+                return t >= segmentStartTime && t <= segmentEndTime;
+            });
+        
+            // ✅ 세그먼트 전체 평균 파워 계산
+            const avgPower = segmentPowerData.length > 0
+                ? segmentPowerData.reduce((a, b) => a + b, 0) / segmentPowerData.length
+                : 0;
+        
+            // ✅ 목표 파워 계산
+            const targetPower = currentUser.ftp * (currentSeg.ftp_percent / 100);
+        
+            // ✅ 달성률 계산
+            const achievement = targetPower > 0 ? (avgPower / targetPower) * 100 : 0;
+        
+            // ✅ 색상 선택
+            const color = achievement >= 100 ? "#7ED321" : "#F56500"; // 연두 or 주황
+        
+            // ✅ 해당 세그먼트의 progress-fill 색상 적용
+            const segment = document.getElementById(`timeline-segment-${segIndex}`);
+            const fill = segment ? segment.querySelector(".progress-fill") : null;
+            if (fill) {
+                fill.style.width = "100%";
+                fill.style.background = color;
+            }
+        
+            // 상태 표시 갱신
+            updateTimelineSegment(segIndex, 'completed');
         }
 
 
