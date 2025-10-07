@@ -797,7 +797,7 @@
                     <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
                 </div>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 18px; opacity: 0.7;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
                 <span>경과: <span id="elapsedTime">12:34</span> / <span id="totalTime">65:20</span></span>
                 <span>달성도: <span id="achievementValue">87</span>%</span>
                 <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
@@ -871,8 +871,6 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
-        let beepActive = false;
-        let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함) 플래그
         let countdownActive = false;  // 카운트다운 중복 방지
         let segmentCountdownStarted = false; // 세그먼트별 카운트다운 시작 플래그
         let currentScreen = 'connectionScreen';
@@ -1256,11 +1254,11 @@
                         total_duration: 5520, // 92분 → 초 단위로 수정
                         avg_intensity: 78,
                         segments: [
-                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 30, target_rpm: 80 },
-                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 60, target_rpm: 90 },
-                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 30, target_rpm: 75 },
-                            { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 60, target_rpm: 90 },
-                            { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 10, target_rpm: 70 }
+                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 180, target_rpm: 80 },
+                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 840, target_rpm: 90 },
+                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 300, target_rpm: 75 },
+                            { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 840, target_rpm: 90 },
+                            { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 300, target_rpm: 70 }
                         ]
                     }
                 ];
@@ -1342,10 +1340,6 @@
         function startWorkoutTraining() {
             showScreen('trainingScreen');
             initializeTraining();
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                audioCtx.resume(); // 🔹 명시적 resume()
-            }            
         }
 
         function backToWorkoutSelection() {
@@ -1422,7 +1416,7 @@
             if (seconds > 0) {
                 setTimeout(() => {
                     number.textContent = seconds - 1;
-                    if (seconds >= 1) playBeep();
+                    if (seconds > 1) playBeep();
                     showCountdown(seconds - 1, callback, message, false); // 재귀 호출 시 false
                 }, 1000);
             } else {
@@ -1435,27 +1429,25 @@
             }
         }
 
-        
-///////////////////////////////////////////////////////////////////////////
-        let audioCtx = null;
         function playBeep() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                audioCtx.resume();
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.type = "sine";
+                osc.frequency.value = 800;
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch (err) {
+                console.error("Beep sound error:", err);
             }
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.type = "square";
-            osc.frequency.value = 950;
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.12);
         }
-////////////////////////////////////////////////////////////////////////////        
-
-
 
         function startTraining() {
             trainingSession.isRunning = true;
@@ -1616,10 +1608,10 @@
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
             if (!currentSeg) return;
-        
+
             const progressPercent = Math.min(100, (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100);
             const segments = document.querySelectorAll(".timeline-segment");
-        
+
             // 진행률 표시
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
@@ -1632,37 +1624,31 @@
                     fill.style.width = "0%";
                 }
             });
-        
+
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
-        
-            // ✅ 세그먼트 변경 중(카운트다운 중)일 때는 아무것도 하지 않음
-            if (isSegmentChanging) return;
-        
-            // ✅ 세그먼트 종료 5초 전 카운트다운 (한 번만 실행)
+
+            // 세그먼트 종료 5초 전 카운트다운 (한 번만 실행)
             if (!segmentCountdownStarted && remainingTime <= 5000 && remainingTime > 4000) {
                 segmentCountdownStarted = true;
-                isSegmentChanging = true; // 🔹 카운트다운 중 루프 일시 정지
-        
+                
                 if (segIndex < trainingSession.segments.length - 1) {
                     // 다음 세그먼트가 있는 경우
                     showCountdown(5, () => {
                         completeCurrentSegment();
                         nextSegment();
-                        isSegmentChanging = false; // 🔹 카운트다운 종료 후 다시 루프 허용
                     }, "다음 세그먼트 준비!");
                 } else {
                     // 마지막 세그먼트인 경우
                     showCountdown(5, () => {
                         completeCurrentSegment();
                         completeTraining();
-                        isSegmentChanging = false;
                     }, "훈련 완료!");
                 }
                 return;
             }
-        
-            // ✅ 카운트다운 없이 세그먼트 완료 (이미 카운트다운 중이면 무시)
-            if (remainingTime <= 0 && !isSegmentChanging) {
+
+            // 세그먼트 완료 (카운트다운 없이 끝난 경우)
+            if (remainingTime <= 0) {
                 completeCurrentSegment();
                 if (segIndex < trainingSession.segments.length - 1) {
                     nextSegment();
@@ -1671,7 +1657,7 @@
                 }
             }
         }
-///////////////////////////////////////////
+
         function completeCurrentSegment() {
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
@@ -1709,8 +1695,7 @@
         function nextSegment() {
             trainingSession.currentSegment++;
             segmentCountdownStarted = false; // 다음 세그먼트를 위한 플래그 초기화
-            isSegmentChanging = false; // 다음 세그먼트 진입 시 플래그 해제
-            
+
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
                 return;
