@@ -871,6 +871,7 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
+        let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함) 플래그
         let countdownActive = false;  // 카운트다운 중복 방지
         let segmentCountdownStarted = false; // 세그먼트별 카운트다운 시작 플래그
         let currentScreen = 'connectionScreen';
@@ -1608,10 +1609,10 @@
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
             if (!currentSeg) return;
-
+        
             const progressPercent = Math.min(100, (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100);
             const segments = document.querySelectorAll(".timeline-segment");
-
+        
             // 진행률 표시
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
@@ -1624,31 +1625,37 @@
                     fill.style.width = "0%";
                 }
             });
-
+        
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
-
-            // 세그먼트 종료 5초 전 카운트다운 (한 번만 실행)
+        
+            // ✅ 세그먼트 변경 중(카운트다운 중)일 때는 아무것도 하지 않음
+            if (isSegmentChanging) return;
+        
+            // ✅ 세그먼트 종료 5초 전 카운트다운 (한 번만 실행)
             if (!segmentCountdownStarted && remainingTime <= 5000 && remainingTime > 4000) {
                 segmentCountdownStarted = true;
-                
+                isSegmentChanging = true; // 🔹 카운트다운 중 루프 일시 정지
+        
                 if (segIndex < trainingSession.segments.length - 1) {
                     // 다음 세그먼트가 있는 경우
                     showCountdown(5, () => {
                         completeCurrentSegment();
                         nextSegment();
+                        isSegmentChanging = false; // 🔹 카운트다운 종료 후 다시 루프 허용
                     }, "다음 세그먼트 준비!");
                 } else {
                     // 마지막 세그먼트인 경우
                     showCountdown(5, () => {
                         completeCurrentSegment();
                         completeTraining();
+                        isSegmentChanging = false;
                     }, "훈련 완료!");
                 }
                 return;
             }
-
-            // 세그먼트 완료 (카운트다운 없이 끝난 경우)
-            if (remainingTime <= 0) {
+        
+            // ✅ 카운트다운 없이 세그먼트 완료 (이미 카운트다운 중이면 무시)
+            if (remainingTime <= 0 && !isSegmentChanging) {
                 completeCurrentSegment();
                 if (segIndex < trainingSession.segments.length - 1) {
                     nextSegment();
@@ -1657,7 +1664,7 @@
                 }
             }
         }
-
+///////////////////////////////////////////
         function completeCurrentSegment() {
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
@@ -1695,7 +1702,8 @@
         function nextSegment() {
             trainingSession.currentSegment++;
             segmentCountdownStarted = false; // 다음 세그먼트를 위한 플래그 초기화
-
+            isSegmentChanging = false; // 다음 세그먼트 진입 시 플래그 해제
+            
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
                 return;
