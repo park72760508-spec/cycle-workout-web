@@ -1790,16 +1790,26 @@
         }
 
         function createTimeline() {
-            const timeline = document.querySelector(".timeline-segments");
-            timeline.innerHTML = "";
+            const timeline = document.getElementById('timelineSegments');
+            timeline.innerHTML = '';
         
-            trainingSession.segments.forEach((seg, idx) => {
-                const segmentEl = document.createElement("div");
-                segmentEl.classList.add("timeline-segment");
-                segmentEl.id = `timeline-segment-${idx}`;
-                segmentEl.style.width = `${100 / trainingSession.segments.length}%`;
+            // ✅ 전체 세그먼트 시간 합계 구하기
+            const totalDuration = trainingSession.segments.reduce(
+                (sum, seg) => sum + seg.duration_sec,
+                0
+            );
         
-                // ✅ 세그먼트 시간 표기 (초 → 분:초 변환)
+            trainingSession.segments.forEach((seg, index) => {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = 'timeline-segment';
+                segmentDiv.id = `timeline-segment-${index}`;
+        
+                // ✅ 시간 비율에 따른 폭 계산
+                const widthPercent = (seg.duration_sec / totalDuration) * 100;
+                segmentDiv.style.flex = 'unset';
+                segmentDiv.style.width = `${widthPercent}%`;
+        
+                // 시간 표시 (분:초)
                 const minutes = Math.floor(seg.duration_sec / 60);
                 const seconds = seg.duration_sec % 60;
                 const timeLabel =
@@ -1807,16 +1817,17 @@
                         ? `${minutes}:${seconds.toString().padStart(2, "0")}`
                         : `${seconds}s`;
         
-                segmentEl.innerHTML = `
+                segmentDiv.innerHTML = `
                     <div class="progress-fill"></div>
                     <div class="segment-label">
-                        ${idx + 1}<br><span class="segment-time">${timeLabel}</span>
+                        ${index + 1}<br><span class="segment-time">${timeLabel}</span>
                     </div>
                 `;
         
-                timeline.appendChild(segmentEl);
+                timeline.appendChild(segmentDiv);
             });
         }
+
 
 
         function updateTimelineSegment(segmentIndex, status) {
@@ -2393,17 +2404,21 @@ ${window.location.href}`;
         }
         
         .timeline-segment {
-            flex: 1;
-            border-right: 1px solid rgba(255,255,255,0.2);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
-            font-weight: 600;
             color: #fff;
+            font-size: 18px;
+            font-weight: 600;
             position: relative;
-            overflow: hidden;
+            border-right: 1px solid rgba(255,255,255,0.2);
         }
+        .timeline-segment .segment-time {
+            font-size: 15px;
+            opacity: 0.8;
+        }
+
         
         .timeline-segment .progress-fill {
             position: absolute;
