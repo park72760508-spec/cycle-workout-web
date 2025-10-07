@@ -1493,30 +1493,27 @@
         
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
         
-            // ✅ 중복 방지: 카운트다운 중이면 아무 동작하지 않음
-            if (trainingSession.isCountingDown) return;
+            // ✅ 전역 플래그로 중복 차단
+            if (isCountdownActive) return;
         
-            // ✅ 세그먼트 종료 5초 전 1회만 카운트다운 실행
-            if (remainingTime <= 5000 && !currentSeg._countdownStarted) {
-                currentSeg._countdownStarted = true;
-                trainingSession.isCountingDown = true;
-        
+            // ✅ 세그먼트 종료 5초 전 딱 1회 카운트다운
+            if (remainingTime <= 5000 && remainingTime > 0) {
+                isCountdownActive = true;  // 전역 플래그 on
                 showCountdown(5, () => {
-                    // 카운트다운 종료 후 세그먼트 완료
-                    trainingSession.isCountingDown = false;
+                    isCountdownActive = false; // 다음 세그먼트 준비 시 해제
                     completeCurrentSegment();
                     nextSegment();
                 }, "다음 세그먼트 준비!");
-        
                 return;
             }
         
-            // ✅ 일반 종료 처리 (카운트다운이 끝났을 경우)
-            if (remainingTime <= 0) {
+            // ✅ 일반 종료 처리 (카운트다운 없이 끝난 경우)
+            if (remainingTime <= 0 && !isCountdownActive) {
                 completeCurrentSegment();
                 nextSegment();
             }
         }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1573,6 +1570,7 @@
         
             // 🔹 모든 세그먼트 카운트다운 상태 초기화
             trainingSession.segments.forEach(seg => seg._countdownStarted = false);
+            isCountdownActive = false; // ✅ 전역 플래그 초기화
         
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
@@ -1588,6 +1586,7 @@
                 updateTimelineSegment(trainingSession.currentSegment, 'current');
             }, "다음 세그먼트 준비!");
         }
+
 
         
 
