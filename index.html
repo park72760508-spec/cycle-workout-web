@@ -871,6 +871,8 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
+        let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함)
+        let audioCtx = null; // 오디오 컨텍스트 (비프음 정책 대응)
         let countdownActive = false;  // 카운트다운 중복 방지
         let segmentCountdownStarted = false; // 세그먼트별 카운트다운 시작 플래그
         let currentScreen = 'connectionScreen';
@@ -1380,17 +1382,20 @@
             });
         }
 
+        /////////////////////////////// 
         function showCountdown(seconds, callback, message = "훈련 시작 준비!", isInitialCall = true) {
-            // 중복 방지는 최초 호출 시에만 체크
-            if (isInitialCall && countdownActive) return;
-            
-            if (isInitialCall) {
-                countdownActive = true;
+            if (isInitialCall && countdownActive) return; // 중복 방지
+            if (isInitialCall) countdownActive = true;
+        
+            // ✅ 브라우저 오디오 정책 대응
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx.resume();
             }
-            
+        
             const overlay = document.getElementById('countdownOverlay');
             const number = document.getElementById('countdownNumber');
-
+        
             let messageEl = document.getElementById("countdownMessage");
             if (!messageEl) {
                 messageEl = document.createElement("div");
@@ -1405,19 +1410,19 @@
                 messageEl.style.transition = "opacity 0.5s ease-in-out";
                 overlay.appendChild(messageEl);
             }
-
+        
             messageEl.textContent = message;
             messageEl.style.opacity = "1";
-
             overlay.classList.remove('hidden');
             number.textContent = seconds;
-            playBeep();
-
+        
+            playBeep(); // 시작 시 1회
+        
             if (seconds > 0) {
                 setTimeout(() => {
                     number.textContent = seconds - 1;
                     if (seconds > 1) playBeep();
-                    showCountdown(seconds - 1, callback, message, false); // 재귀 호출 시 false
+                    showCountdown(seconds - 1, callback, message, false);
                 }, 1000);
             } else {
                 messageEl.style.opacity = "0";
@@ -1425,30 +1430,67 @@
                     overlay.classList.add('hidden');
                     countdownActive = false;
                     callback();
-                }, 500);
+                }, 300);
             }
         }
 
+
+        //function playBeep() {
+            //try {
+                //const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                //const osc = ctx.createOscillator();
+                //const gain = ctx.createGain();
+
+                //osc.connect(gain);
+                //gain.connect(ctx.destination);
+
+                //osc.type = "sine";
+                //osc.frequency.value = 800;
+                //gain.gain.setValueAtTime(0.2, ctx.currentTime);
+
+                //osc.start();
+                //osc.stop(ctx.currentTime + 0.15);
+            //} catch (err) {
+                //console.error("Beep sound error:", err);
+            //}
+        //}
+
+        let beepActive = false;
+        
         function playBeep() {
+            if (beepActive) return;
+            beepActive = true;
+        
             try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
-
+        
                 osc.connect(gain);
                 gain.connect(ctx.destination);
-
-                osc.type = "sine";
-                osc.frequency.value = 800;
-                gain.gain.setValueAtTime(0.2, ctx.currentTime);
-
+        
+                osc.type = "square";
+                osc.frequency.value = 950;
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        
                 osc.start();
                 osc.stop(ctx.currentTime + 0.15);
+        
+                osc.onended = () => {
+                    beepActive = false;
+                };
             } catch (err) {
+                beepActive = false;
                 console.error("Beep sound error:", err);
             }
         }
+       
+/////////////////////////////////////////////////////////////////////////////////
 
+
+
+
+        
         function startTraining() {
             trainingSession.isRunning = true;
             trainingSession.startTime = Date.now();
@@ -1608,47 +1650,46 @@
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
             if (!currentSeg) return;
-
+        
+            // ✅ 카운트다운 중에는 세그먼트 진행 중지
+            if (isSegmentChanging) return;
+        
             const progressPercent = Math.min(100, (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100);
             const segments = document.querySelectorAll(".timeline-segment");
-
-            // 진행률 표시
+        
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
                 if (!fill) return;
-                if (idx < segIndex) {
-                    fill.style.width = "100%";
-                } else if (idx === segIndex) {
-                    fill.style.width = `${progressPercent}%`;
-                } else {
-                    fill.style.width = "0%";
-                }
+                if (idx < segIndex) fill.style.width = "100%";
+                else if (idx === segIndex) fill.style.width = `${progressPercent}%`;
+                else fill.style.width = "0%";
             });
-
+        
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
-
-            // 세그먼트 종료 5초 전 카운트다운 (한 번만 실행)
+        
+            // ✅ 종료 5초 전 카운트다운 (한 번만 실행)
             if (!segmentCountdownStarted && remainingTime <= 5000 && remainingTime > 4000) {
                 segmentCountdownStarted = true;
-                
+                isSegmentChanging = true; // 카운트다운 중 루프 일시 정지
+        
                 if (segIndex < trainingSession.segments.length - 1) {
-                    // 다음 세그먼트가 있는 경우
                     showCountdown(5, () => {
                         completeCurrentSegment();
                         nextSegment();
+                        isSegmentChanging = false;
                     }, "다음 세그먼트 준비!");
                 } else {
-                    // 마지막 세그먼트인 경우
                     showCountdown(5, () => {
                         completeCurrentSegment();
                         completeTraining();
+                        isSegmentChanging = false;
                     }, "훈련 완료!");
                 }
                 return;
             }
-
-            // 세그먼트 완료 (카운트다운 없이 끝난 경우)
-            if (remainingTime <= 0) {
+        
+            // ✅ 카운트다운이 끝난 뒤, 남은 시간이 완전히 0이 되면 정상 종료
+            if (remainingTime <= 0 && !isSegmentChanging) {
                 completeCurrentSegment();
                 if (segIndex < trainingSession.segments.length - 1) {
                     nextSegment();
@@ -1657,6 +1698,7 @@
                 }
             }
         }
+
 
         function completeCurrentSegment() {
             const segIndex = trainingSession.currentSegment;
@@ -1692,21 +1734,26 @@
             console.log(`세그먼트 ${segIndex + 1} 완료: 평균 파워 ${Math.round(avgPower)}W, 달성률 ${Math.round(achievement)}%`);
         }
 
+
+////////////////////////////////////////////////////////////////////////////////
         function nextSegment() {
             trainingSession.currentSegment++;
-            segmentCountdownStarted = false; // 다음 세그먼트를 위한 플래그 초기화
-
+            segmentCountdownStarted = false;
+            isSegmentChanging = false;
+        
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
                 return;
             }
-
+        
             trainingSession.segmentStartTime = Date.now();
             updateSegmentDisplay();
             updateTargetPower();
             updateTimelineSegment(trainingSession.currentSegment, 'current');
         }
 
+
+        
         function updateSegmentDisplay() {
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
             if (!currentSeg) return;
