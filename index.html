@@ -1342,6 +1342,10 @@
         function startWorkoutTraining() {
             showScreen('trainingScreen');
             initializeTraining();
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx.resume(); // 🔹 명시적 resume()
+            }            
         }
 
         function backToWorkoutSelection() {
@@ -1431,35 +1435,26 @@
             }
         }
 
+        
+///////////////////////////////////////////////////////////////////////////
+        let audioCtx = null;
         function playBeep() {
-            if (beepActive) return;   // ✅ 이미 재생 중이면 무시
-            beepActive = true;
-        
-            try {
-                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                const osc = ctx.createOscillator();
-                const gain = ctx.createGain();
-        
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-        
-                osc.type = "square";           // 좀 더 또렷한 톤
-                osc.frequency.value = 950;     // 950Hz 부근 (카운트다운용)
-                gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        
-                osc.start();
-                osc.stop(ctx.currentTime + 0.12);
-        
-                // ✅ 재생 끝나면 플래그 해제
-                osc.onended = () => {
-                    beepActive = false;
-                    ctx.close(); // 오디오 리소스 해제
-                };
-            } catch (err) {
-                console.error("Beep sound error:", err);
-                beepActive = false;
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx.resume();
             }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = "square";
+            osc.frequency.value = 950;
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.12);
         }
+////////////////////////////////////////////////////////////////////////////        
+
 
 
         function startTraining() {
