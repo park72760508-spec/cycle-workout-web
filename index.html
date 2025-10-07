@@ -327,6 +327,8 @@
             transition: width 0.3s ease;
         }
 
+
+///////////////////////////////////////////////
         .timeline-progress {
             width: 100%;
             height: 30px;
@@ -334,22 +336,49 @@
             border-radius: 15px;
             margin-bottom: 10px;
             overflow: hidden;
+            box-shadow: var(--shadow);
         }
-
+        
         .timeline-segments {
             display: flex;
             height: 100%;
         }
-
+        
         .timeline-segment {
+            flex: 1;
             border-right: 1px solid rgba(255,255,255,0.2);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 10px;
             font-weight: 600;
+            color: #fff;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 🔹 진행률 표시용 내부 바 */
+        .timeline-segment .progress-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+            z-index: 1;
+            border-radius: 15px 0 0 15px;
+        }
+        
+        .timeline-segment span {
+            position: relative;
+            z-index: 2;
         }
 
+
+
+////////////////////////////////////////////
+        
         .timeline-segment.completed {
             background: var(--success-color);
         }
@@ -659,10 +688,14 @@
             </div>
         </div>
 
+        
         <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
             <div class="timeline-progress">
                 <div class="timeline-segments" id="timelineSegments">
                     <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
+                    <div class="timeline-segment"><div class="progress-fill"></div><span>1</span></div>
+                    <div class="timeline-segment"><div class="progress-fill"></div><span>2</span></div>
+                    <div class="timeline-segment"><div class="progress-fill"></div><span>3</span></div>                    
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
@@ -1357,15 +1390,40 @@
                 `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')} / ${segmentTotalMinutes.toString().padStart(2, '0')}:${segmentTotalSeconds.toString().padStart(2, '0')}`;
         }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////
         function checkSegmentProgress(segmentElapsed) {
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
             if (!currentSeg) return;
-
+        
+            // 🔹 진행률 계산 (%)
+            const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
+        
+            // 🔹 진행률 시각적으로 반영
+            const segments = document.querySelectorAll(".timeline-segment");
+            segments.forEach((seg, idx) => {
+                const fill = seg.querySelector(".progress-fill");
+        
+                if (idx < trainingSession.currentSegment) {
+                    // 이전 세그먼트는 100%
+                    fill.style.width = "100%";
+                } else if (idx === trainingSession.currentSegment) {
+                    // 현재 세그먼트는 실시간 진행률
+                    fill.style.width = `${Math.min(progressPercent, 100)}%`;
+                } else {
+                    // 이후 세그먼트는 0%
+                    fill.style.width = "0%";
+                }
+            });
+        
+            // 🔹 완료 처리
             if (segmentElapsed >= currentSeg.duration_sec * 1000) {
                 completeCurrentSegment();
                 nextSegment();
             }
         }
+/////////////////////////////////////////////////////////////////////////////////////////////////////        
+
 
         function completeCurrentSegment() {
             updateTimelineSegment(trainingSession.currentSegment, 'completed');
