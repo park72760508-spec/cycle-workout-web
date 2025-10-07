@@ -692,10 +692,10 @@
         <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
             <div class="timeline-progress">
                 <div class="timeline-segments" id="timelineSegments">
-                    <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
-                    //<div class="timeline-segment"><div class="progress-fill"></div><span>1</span></div>
-                    //<div class="timeline-segment"><div class="progress-fill"></div><span>2</span></div>
-                    //<div class="timeline-segment"><div class="progress-fill"></div><span>3</span></div>                    
+                    //<!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
+                    <div class="timeline-segment"><div class="progress-fill"></div><span>1</span></div>
+                    <div class="timeline-segment"><div class="progress-fill"></div><span>2</span></div>
+                    <div class="timeline-segment"><div class="progress-fill"></div><span>3</span></div>                    
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
@@ -1389,7 +1389,17 @@
             document.getElementById('segmentTime').textContent =
                 `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')} / ${segmentTotalMinutes.toString().padStart(2, '0')}:${segmentTotalSeconds.toString().padStart(2, '0')}`;
         }
+////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+        function checkSegmentProgress(segmentElapsed) {
+            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
+            if (!currentSeg) return;
+
+            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
+                completeCurrentSegment();
+                nextSegment();
+            }
+        }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
         function checkSegmentProgress(segmentElapsed) {
