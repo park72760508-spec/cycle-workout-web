@@ -778,6 +778,7 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
+        let isCountdownActive = false;  // 카운트 중복처리 제외
         let currentScreen = 'connectionScreen';
         let connectedDevices = {
             trainer: null,
