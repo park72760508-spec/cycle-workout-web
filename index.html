@@ -1245,26 +1245,49 @@
 
 ////////////////////////////////////////////////////////
 
-        function showCountdown(seconds, callback) {
+        function showCountdown(seconds, callback, message = "다음 세그먼트 준비!") {
             const overlay = document.getElementById('countdownOverlay');
             const number = document.getElementById('countdownNumber');
         
+            // 🔹 메시지 표시용 임시 div 생성
+            let messageEl = document.getElementById("countdownMessage");
+            if (!messageEl) {
+                messageEl = document.createElement("div");
+                messageEl.id = "countdownMessage";
+                messageEl.style.position = "absolute";
+                messageEl.style.top = "20%";
+                messageEl.style.width = "100%";
+                messageEl.style.textAlign = "center";
+                messageEl.style.color = "white";
+                messageEl.style.fontSize = "36px";
+                messageEl.style.opacity = "0";
+                messageEl.style.transition = "opacity 0.5s ease-in-out";
+                overlay.appendChild(messageEl);
+            }
+        
+            // 🔹 메시지 표시 (fade-in)
+            messageEl.textContent = message;
+            messageEl.style.opacity = "1";
+        
             overlay.classList.remove('hidden');
             number.textContent = seconds;
-        
-            // 🔊 첫 beep 실행
             playBeep();
         
             if (seconds > 0) {
                 setTimeout(() => {
-                    playBeep(); // 🔊 매 초마다 beep
-                    showCountdown(seconds - 1, callback);
+                    number.textContent = seconds - 1;
+                    playBeep();
+                    showCountdown(seconds - 1, callback, message);
                 }, 1000);
             } else {
-                overlay.classList.add('hidden');
-                callback();
+                // 🔹 메시지 fade-out
+                messageEl.style.opacity = "0";
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                    callback();
+                }, 500);
             }
-        }        
+        }     
 /////////////////////////////////////////////////////////////////////////
         function playBeep() {
             try {
@@ -1420,7 +1443,7 @@
             const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
             const segments = document.querySelectorAll(".timeline-segment");
         
-            // 진행률 표시
+            // 🔹 진행률 표시
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
                 if (!fill) return;
@@ -1430,16 +1453,13 @@
             });
         
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
-            const isFirstSegment = trainingSession.currentSegment === 0;
         
-            // ✅ 3초 전 카운트다운 (첫 세그먼트 제외)
-            if (!isFirstSegment && remainingTime <= 3000 && !currentSeg.countdownStarted) {
-                currentSeg.countdownStarted = true; // 중복 방지 플래그
-        
-                // 카운트다운 동안 세그먼트 전환 금지
+            // ✅ 세그먼트 종료 5초 전 카운트다운 (모든 세그먼트 대상)
+            if (remainingTime <= 5000 && !currentSeg.countdownStarted) {
+                currentSeg.countdownStarted = true;
                 trainingSession.isCountingDown = true;
         
-                showCountdown(Math.ceil(remainingTime / 1000), () => {
+                showCountdown(5, () => {
                     trainingSession.isCountingDown = false;
                     completeCurrentSegment();
                     nextSegment();
@@ -1447,17 +1467,11 @@
                 return;
             }
         
-            // ✅ 첫 세그먼트는 기존처럼 바로 완료
-            if (isFirstSegment && segmentElapsed >= currentSeg.duration_sec * 1000) {
-                completeCurrentSegment();
-                nextSegment();
-            }
-        
-            // ✅ 카운트다운 중일 때는 세그먼트 자동 전환 방지
+            // ✅ 카운트다운 중에는 세그먼트 종료 막기
             if (trainingSession.isCountingDown) return;
         
-            // ✅ 일반적인 종료 처리 (카운트다운이 없는 경우)
-            if (!isFirstSegment && segmentElapsed >= currentSeg.duration_sec * 1000) {
+            // ✅ 일반 종료 처리 (카운트다운이 이미 끝난 뒤)
+            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
                 completeCurrentSegment();
                 nextSegment();
             }
@@ -1520,11 +1534,15 @@
                 return;
             }
         
-            // ✅ 세그먼트 시작 처리
-            trainingSession.segmentStartTime = Date.now();
-            updateSegmentDisplay();
-            updateTargetPower();
-            updateTimelineSegment(trainingSession.currentSegment, 'current');
+            // ✅ 세그먼트 시작 전 카운트다운 (5초)
+            trainingSession.isCountingDown = true;
+            showCountdown(5, () => {
+                trainingSession.isCountingDown = false;
+                trainingSession.segmentStartTime = Date.now();
+                updateSegmentDisplay();
+                updateTargetPower();
+                updateTimelineSegment(trainingSession.currentSegment, 'current');
+            }, "다음 세그먼트 준비!");
         }
 
         
