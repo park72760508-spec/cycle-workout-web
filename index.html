@@ -364,7 +364,7 @@
         }
 
         .current-power {
-            font-size: 64px;
+            font-size: 80px;
             font-weight: 700;
             margin-bottom: 10px;
         }
@@ -806,10 +806,10 @@
 
         <div class="training-controls">
             <button class="control-btn pause" onclick="togglePause()" title="일시정지">
-                <span id="pauseIcon">⏸️</span>
+                <span id="pauseIcon">⏸</span>
             </button>
-            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
-            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
+            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭</button>
+            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹</button>
         </div>
     </div>
 
@@ -2745,7 +2745,7 @@ ${window.location.href}`;
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
                     <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
-                        목표: <span id="avgSegmentPowerValue">0</span> / <span id="targetPowerValue">194</span>W
+                        랩파워(W): <span id="avgSegmentPowerValue">0</span> / <span id="targetPowerValue">194</span>
                     </div>
                     <div style="font-size: 14px; opacity: 0.7;">FTP <span id="targetFtpPercent">80</span>%</div>
                 </div>
