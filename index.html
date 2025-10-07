@@ -1419,34 +1419,45 @@
         
             const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
             const segments = document.querySelectorAll(".timeline-segment");
+        
+            // 진행률 표시
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
                 if (!fill) return;
-        
-                if (idx < trainingSession.currentSegment) {
-                    fill.style.width = "100%";
-                } else if (idx === trainingSession.currentSegment) {
-                    fill.style.width = `${Math.min(progressPercent, 100)}%`;
-                } else {
-                    fill.style.width = "0%";
-                }
+                if (idx < trainingSession.currentSegment) fill.style.width = "100%";
+                else if (idx === trainingSession.currentSegment) fill.style.width = `${Math.min(progressPercent, 100)}%`;
+                else fill.style.width = "0%";
             });
         
-            // ✅ 종료 3초 전 카운트다운 (두 번째 세그먼트부터)
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
             const isFirstSegment = trainingSession.currentSegment === 0;
         
-            if (!isFirstSegment && remainingTime <= 5000 && !currentSeg.countdownStarted) {
-                currentSeg.countdownStarted = true; // 중복 방지
+            // ✅ 3초 전 카운트다운 (첫 세그먼트 제외)
+            if (!isFirstSegment && remainingTime <= 3000 && !currentSeg.countdownStarted) {
+                currentSeg.countdownStarted = true; // 중복 방지 플래그
+        
+                // 카운트다운 동안 세그먼트 전환 금지
+                trainingSession.isCountingDown = true;
+        
                 showCountdown(Math.ceil(remainingTime / 1000), () => {
+                    trainingSession.isCountingDown = false;
                     completeCurrentSegment();
                     nextSegment();
                 });
-                return; // 카운트다운 동안 중복 처리 방지
+                return;
             }
         
-            // ✅ 첫 번째 세그먼트는 기존 방식 (끝나면 다음으로)
+            // ✅ 첫 세그먼트는 기존처럼 바로 완료
             if (isFirstSegment && segmentElapsed >= currentSeg.duration_sec * 1000) {
+                completeCurrentSegment();
+                nextSegment();
+            }
+        
+            // ✅ 카운트다운 중일 때는 세그먼트 자동 전환 방지
+            if (trainingSession.isCountingDown) return;
+        
+            // ✅ 일반적인 종료 처리 (카운트다운이 없는 경우)
+            if (!isFirstSegment && segmentElapsed >= currentSeg.duration_sec * 1000) {
                 completeCurrentSegment();
                 nextSegment();
             }
