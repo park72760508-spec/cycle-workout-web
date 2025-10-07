@@ -1383,47 +1383,36 @@
         }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        function checkSegmentProgress(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
+function checkSegmentProgress(segmentElapsed) {
+    const currentSeg = trainingSession.segments[trainingSession.currentSegment];
+    if (!currentSeg) return;
 
-            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
-                completeCurrentSegment();
-                nextSegment();
-            }
+    const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
+
+    // 🔹 진행률 시각적으로 반영
+    const segments = document.querySelectorAll(".timeline-segment");
+    segments.forEach((seg, idx) => {
+        const fill = seg.querySelector(".progress-fill");
+        if (!fill) return; // fill이 없으면 패스
+
+        if (idx < trainingSession.currentSegment) {
+            fill.style.width = "100%";
+        } else if (idx === trainingSession.currentSegment) {
+            fill.style.width = `${Math.min(progressPercent, 100)}%`;
+        } else {
+            fill.style.width = "0%";
         }
+    });
+
+    // 🔹 세그먼트 완료 처리
+    if (segmentElapsed >= currentSeg.duration_sec * 1000) {
+        completeCurrentSegment();
+        nextSegment();
+    }
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
-        function checkSegmentProgress(segmentElapsed) {
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
-        
-            // 🔹 진행률 계산 (%)
-            const progressPercent_seg = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
-        
-            // 🔹 진행률 시각적으로 반영
-            const segments = document.querySelectorAll(".timeline-segment");
-            segments.forEach((seg, idx) => {
-                const fill = seg.querySelector(".progress-fill");
-        
-                if (idx < trainingSession.currentSegment) {
-                    // 이전 세그먼트는 100%
-                    fill.style.width = "100%";
-                } else if (idx === trainingSession.currentSegment) {
-                    // 현재 세그먼트는 실시간 진행률
-                    fill.style.width = `${Math.min(progressPercent_seg , 100)}%`;
-                } else {
-                    // 이후 세그먼트는 0%
-                    fill.style.width = "0%";
-                }
-            });
-        
-            // 🔹 완료 처리
-            if (segmentElapsed >= currentSeg.duration_sec * 1000) {
-                completeCurrentSegment();
-                nextSegment();
-            }
-        }
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////        
 
 
@@ -1465,13 +1454,23 @@
         function createTimeline() {
             const timeline = document.getElementById('timelineSegments');
             timeline.innerHTML = '';
-
+        
             trainingSession.segments.forEach((segment, index) => {
                 const segmentDiv = document.createElement('div');
                 segmentDiv.className = 'timeline-segment';
                 segmentDiv.style.flex = segment.duration_sec;
                 segmentDiv.id = `timeline-segment-${index}`;
-                if (index === 0) segmentDiv.classList.add('current');
+        
+                // ✅ 진행바 내부 채움 요소 추가
+                const fillDiv = document.createElement('div');
+                fillDiv.className = 'progress-fill';
+                segmentDiv.appendChild(fillDiv);
+        
+                // ✅ 중앙 텍스트(세그먼트 번호)
+                const label = document.createElement('span');
+                label.textContent = index + 1;
+                segmentDiv.appendChild(label);
+        
                 timeline.appendChild(segmentDiv);
             });
         }
