@@ -399,30 +399,32 @@
             display: flex;
             height: 100%;
         }
+
         
-.timeline-segment {
-    border-right: 1px solid rgba(255,255,255,0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
-    flex-direction: column; /* ✅ 세로 배치 (번호 위, 시간 아래) */
-    color: #fff;
-    position: relative;
-}
-
-.timeline-segment .segment-label {
-    z-index: 2;
-    text-align: center;
-    line-height: 1.1;
-}
-
-.timeline-segment .segment-time {
-    font-size: 9px;
-    font-weight: 400;
-    color: rgba(255,255,255,0.8);
-}
+        // 세그멘트바 형식        
+        .timeline-segment {
+            border-right: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 600;
+            flex-direction: column; /* ✅ 세로 배치 (번호 위, 시간 아래) */
+            color: #fff;
+            position: relative;
+        }
+        
+        .timeline-segment .segment-label {
+            z-index: 2;
+            text-align: center;
+            line-height: 1.1;
+        }
+        
+        .timeline-segment .segment-time {
+            font-size: 12px;
+            font-weight: 400;
+            color: rgba(255,255,255,0.8);
+        }
         
         .timeline-segment .progress-fill {
             position: absolute;
@@ -812,9 +814,9 @@
                     <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
                 </div>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
-                <span>경과: <span id="elapsedTime">12:34</span> / <span id="totalTime">65:20</span></span>
+            <div style="display: flex; justify-content: space-between; font-size: 18px; opacity: 0.7;">
                 <span>달성도: <span id="achievementValue">87</span>%</span>
+                <span>경과: <span id="elapsedTime">12:34</span> / <span id="totalTime">65:20</span></span>
                 <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
             </div>
         </div>
