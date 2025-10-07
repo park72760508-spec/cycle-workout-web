@@ -400,18 +400,29 @@
             height: 100%;
         }
         
-        .timeline-segment {
-            flex: 1;
-            border-right: 1px solid rgba(255,255,255,0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: 600;
-            color: #fff;
-            position: relative;
-            overflow: hidden;
-        }
+.timeline-segment {
+    border-right: 1px solid rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    flex-direction: column; /* ✅ 세로 배치 (번호 위, 시간 아래) */
+    color: #fff;
+    position: relative;
+}
+
+.timeline-segment .segment-label {
+    z-index: 2;
+    text-align: center;
+    line-height: 1.1;
+}
+
+.timeline-segment .segment-time {
+    font-size: 9px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.8);
+}
         
         .timeline-segment .progress-fill {
             position: absolute;
@@ -1777,26 +1788,34 @@
         }
 
         function createTimeline() {
-            const timeline = document.getElementById('timelineSegments');
-            timeline.innerHTML = '';
-
-            trainingSession.segments.forEach((segment, index) => {
-                const segmentDiv = document.createElement('div');
-                segmentDiv.className = 'timeline-segment';
-                segmentDiv.style.flex = segment.duration_sec;
-                segmentDiv.id = `timeline-segment-${index}`;
-
-                const fillDiv = document.createElement('div');
-                fillDiv.className = 'progress-fill';
-                segmentDiv.appendChild(fillDiv);
-
-                const label = document.createElement('span');
-                label.textContent = index + 1;
-                segmentDiv.appendChild(label);
-
-                timeline.appendChild(segmentDiv);
+            const timeline = document.querySelector(".timeline-segments");
+            timeline.innerHTML = "";
+        
+            trainingSession.segments.forEach((seg, idx) => {
+                const segmentEl = document.createElement("div");
+                segmentEl.classList.add("timeline-segment");
+                segmentEl.id = `timeline-segment-${idx}`;
+                segmentEl.style.width = `${100 / trainingSession.segments.length}%`;
+        
+                // ✅ 세그먼트 시간 표기 (초 → 분:초 변환)
+                const minutes = Math.floor(seg.duration_sec / 60);
+                const seconds = seg.duration_sec % 60;
+                const timeLabel =
+                    seg.duration_sec >= 60
+                        ? `${minutes}:${seconds.toString().padStart(2, "0")}`
+                        : `${seconds}s`;
+        
+                segmentEl.innerHTML = `
+                    <div class="progress-fill"></div>
+                    <div class="segment-label">
+                        ${idx + 1}<br><span class="segment-time">${timeLabel}</span>
+                    </div>
+                `;
+        
+                timeline.appendChild(segmentEl);
             });
         }
+
 
         function updateTimelineSegment(segmentIndex, status) {
             const segment = document.getElementById(`timeline-segment-${segmentIndex}`);
