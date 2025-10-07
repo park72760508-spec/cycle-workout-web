@@ -871,6 +871,7 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
+        let beepActive = false;
         let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함) 플래그
         let countdownActive = false;  // 카운트다운 중복 방지
         let segmentCountdownStarted = false; // 세그먼트별 카운트다운 시작 플래그
@@ -1431,24 +1432,35 @@
         }
 
         function playBeep() {
+            if (beepActive) return;   // ✅ 이미 재생 중이면 무시
+            beepActive = true;
+        
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
-
+        
                 osc.connect(gain);
                 gain.connect(ctx.destination);
-
-                osc.type = "sine";
-                osc.frequency.value = 800;
-                gain.gain.setValueAtTime(0.2, ctx.currentTime);
-
+        
+                osc.type = "square";           // 좀 더 또렷한 톤
+                osc.frequency.value = 950;     // 950Hz 부근 (카운트다운용)
+                gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        
                 osc.start();
-                osc.stop(ctx.currentTime + 0.15);
+                osc.stop(ctx.currentTime + 0.12);
+        
+                // ✅ 재생 끝나면 플래그 해제
+                osc.onended = () => {
+                    beepActive = false;
+                    ctx.close(); // 오디오 리소스 해제
+                };
             } catch (err) {
                 console.error("Beep sound error:", err);
+                beepActive = false;
             }
         }
+
 
         function startTraining() {
             trainingSession.isRunning = true;
