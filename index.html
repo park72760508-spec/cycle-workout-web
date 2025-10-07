@@ -736,6 +736,14 @@
             <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
             <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
         </div>
+
+   ///////////////////  훈련 시작 버튼 ////////////////////////////////////////////     
+        <div style="text-align:center; margin-top:15px;">
+            <button class="btn btn-success" id="startTrainingButton" onclick="startTrainingButtonClicked()">🏁 훈련 시작</button>
+        </div>
+
+
+        
     </div>
 
     <!-- 결과 화면 -->
@@ -927,6 +935,27 @@
             }
         }
 
+//////////////////////////////////////////////////////
+
+        function prepareTrainingScreen() {
+            // 초기화
+            document.getElementById('startTrainingButton').classList.remove('hidden');
+            trainingSession.isRunning = false;
+            updateTrainingDisplay();
+            createTimeline();
+            updateSegmentDisplay();
+        }
+
+        
+        function startTrainingButtonClicked() {
+            document.getElementById('startTrainingButton').classList.add('hidden');
+            showCountdown(5, () => {
+                startTraining();
+            }, "훈련 시작 준비!");
+        }
+
+
+        
         function handleTrainerData(event) {
             const data = event.target.value;
             
@@ -1230,8 +1259,12 @@
 
         function selectWorkout(workout) {
             currentWorkout = workout;
+            // 기존: showScreen('trainingScreen');
+            // 수정 ↓
             showScreen('trainingScreen');
+            prepareTrainingScreen();
         }
+
 
         // 훈련 실행 함수들
         function initializeTraining() {
@@ -1501,7 +1534,6 @@
             const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
             const segments = document.querySelectorAll(".timeline-segment");
         
-            // 🔹 진행률 표시
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
                 if (!fill) return;
@@ -1512,26 +1544,28 @@
         
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
         
-            // ✅ 전역 플래그로 중복 차단
-            if (isCountdownActive) return;
+            // ✅ 이미 카운트다운이 진행 중이거나 해당 세그먼트에서 시작된 경우 return
+            if (isCountdownActive || currentSeg._countdownStarted) return;
         
-            // ✅ 세그먼트 종료 5초 전 딱 1회 카운트다운
+            // ✅ 세그먼트 종료 5초 전 딱 1회만 실행
             if (remainingTime <= 5000 && remainingTime > 0) {
-                isCountdownActive = true;  // 전역 플래그 on
+                isCountdownActive = true;
+                currentSeg._countdownStarted = true; // 세그먼트 단위 플래그
                 showCountdown(5, () => {
-                    isCountdownActive = false; // 다음 세그먼트 준비 시 해제
+                    isCountdownActive = false;
                     completeCurrentSegment();
                     nextSegment();
                 }, "다음 세그먼트 준비!");
                 return;
             }
         
-            // ✅ 일반 종료 처리 (카운트다운 없이 끝난 경우)
+            // ✅ 일반 종료 처리
             if (remainingTime <= 0 && !isCountdownActive) {
                 completeCurrentSegment();
                 nextSegment();
             }
         }
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1587,9 +1621,9 @@
         function nextSegment() {
             trainingSession.currentSegment++;
         
-            // 🔹 모든 세그먼트 카운트다운 상태 초기화
+            // 모든 세그먼트 카운트다운 상태 초기화
             trainingSession.segments.forEach(seg => seg._countdownStarted = false);
-            isCountdownActive = false; // ✅ 전역 플래그 초기화
+            isCountdownActive = false;
         
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
@@ -1605,6 +1639,7 @@
                 updateTimelineSegment(trainingSession.currentSegment, 'current');
             }, "다음 세그먼트 준비!");
         }
+
 
 
         
