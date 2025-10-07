@@ -1418,7 +1418,7 @@
             if (seconds > 0) {
                 setTimeout(() => {
                     number.textContent = seconds - 1;
-                    if (seconds > 1) playBeep();
+                    if (seconds >= 1) playBeep();
                     showCountdown(seconds - 1, callback, message, false); // 재귀 호출 시 false
                 }, 1000);
             } else {
