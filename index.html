@@ -241,6 +241,64 @@
             font-weight: 600;
         }
 
+        /* 훈련 준비 화면 */
+        .training-ready {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .workout-preview {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+        }
+
+        .workout-preview h2 {
+            color: var(--primary-color);
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+
+        .segment-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .segment-item {
+            background: var(--light-color);
+            padding: 10px 15px;
+            border-radius: 8px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .segment-item.warmup { border-left: 4px solid #28A745; }
+        .segment-item.interval { border-left: 4px solid #DC3545; }
+        .segment-item.rest { border-left: 4px solid #FFC107; }
+        .segment-item.cooldown { border-left: 4px solid #6C757D; }
+
+        .segment-item h4 {
+            font-size: 12px;
+            margin-bottom: 5px;
+            color: var(--gray-color);
+        }
+
+        .segment-item .ftp-percent {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .segment-item .duration {
+            font-size: 12px;
+            color: var(--gray-color);
+        }
+
         /* 훈련 화면 */
         #trainingScreen {
             background: #000;
@@ -327,8 +385,6 @@
             transition: width 0.3s ease;
         }
 
-
-///////////////////////////////////////////////
         .timeline-progress {
             width: 100%;
             height: 30px;
@@ -357,7 +413,6 @@
             overflow: hidden;
         }
         
-        /* 🔹 진행률 표시용 내부 바 */
         .timeline-segment .progress-fill {
             position: absolute;
             left: 0;
@@ -367,17 +422,13 @@
             width: 0%;
             transition: width 0.3s ease;
             z-index: 1;
-        
-            /* ✅ 둥근 모서리 제거 (기본 사각형) */
             border-radius: 0;
         }
         
-        /* 첫 번째 세그먼트만 왼쪽 둥글게 */
         .timeline-segment:first-child .progress-fill {
             border-radius: 15px 0 0 15px;
         }
         
-        /* 마지막 세그먼트만 오른쪽 둥글게 */
         .timeline-segment:last-child .progress-fill {
             border-radius: 0 15px 15px 0;
         }
@@ -387,12 +438,6 @@
             z-index: 2;
         }
 
-
-
-////////////////////////////////////////////
-        
-
-/////////////////////////////////////////////////////////////////////////////        
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.7; }
@@ -544,8 +589,6 @@
             100% { transform: scale(1); opacity: 1; }
         }
 
-////////////////////////////////////////////////////////////////        
-        /* 🔹 fade-in / fade-out 효과 추가 */
         .fade-in {
             animation: fadeIn 0.5s ease-in forwards;
         }
@@ -560,7 +603,6 @@
             0% { opacity: 1; }
             100% { opacity: 0; }
         }
-//////////////////////////////////////////////////////////////////////////////
         
         @media (max-width: 768px) {
             .metrics-grid {
@@ -675,6 +717,43 @@
         </div>
     </div>
 
+    <!-- 훈련 준비 화면 -->
+    <div id="trainingReadyScreen" class="screen">
+        <div class="header">
+            <h1>🎯 훈련 준비</h1>
+            <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
+        </div>
+
+        <div class="workout-preview">
+            <h2 id="previewWorkoutName">SST_MCT(14)</h2>
+            <div style="display: flex; justify-content: space-around; margin: 20px 0; font-size: 18px;">
+                <div><strong id="previewDuration">92분</strong><br><span style="color: var(--gray-color);">총 시간</span></div>
+                <div><strong id="previewIntensity">78%</strong><br><span style="color: var(--gray-color);">평균 강도</span></div>
+                <div><strong id="previewTSS">82</strong><br><span style="color: var(--gray-color);">예상 TSS</span></div>
+            </div>
+
+            <div class="segment-preview" id="segmentPreview">
+                <!-- 세그먼트 미리보기가 여기에 표시됩니다 -->
+            </div>
+        </div>
+
+        <div class="training-ready">
+            <div style="margin-bottom: 30px;">
+                <h3 style="margin-bottom: 15px;">훈련 준비 완료</h3>
+                <p style="color: var(--gray-color);">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
+            </div>
+            
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button class="btn btn-success" onclick="startWorkoutTraining()" style="min-width: 150px;">
+                    🚀 훈련 시작
+                </button>
+                <button class="btn btn-secondary" onclick="backToWorkoutSelection()" style="min-width: 150px;">
+                    ← 워크아웃 변경
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- 훈련 화면 -->
     <div id="trainingScreen" class="screen">
         <div class="training-header">
@@ -712,14 +791,10 @@
             </div>
         </div>
 
-        
         <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
             <div class="timeline-progress">
                 <div class="timeline-segments" id="timelineSegments">
-                    //<!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
-                    <div class="timeline-segment"><div class="progress-fill"></div><span>1</span></div>
-                    <div class="timeline-segment"><div class="progress-fill"></div><span>2</span></div>
-                    <div class="timeline-segment"><div class="progress-fill"></div><span>3</span></div>                    
+                    <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
@@ -736,14 +811,6 @@
             <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
             <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
         </div>
-
-   ///////////////////  훈련 시작 버튼 ////////////////////////////////////////////     
-        <div style="text-align:center; margin-top:15px;">
-            <button class="btn btn-success" id="startTrainingButton" onclick="startTrainingButtonClicked()">🏁 훈련 시작</button>
-        </div>
-
-
-        
     </div>
 
     <!-- 결과 화면 -->
@@ -804,7 +871,8 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
-        let isCountdownActive = false;  // 카운트 중복처리 제외
+        let countdownActive = false;  // 카운트다운 중복 방지
+        let segmentCountdownStarted = false; // 세그먼트별 카운트다운 시작 플래그
         let currentScreen = 'connectionScreen';
         let connectedDevices = {
             trainer: null,
@@ -846,8 +914,8 @@
                 loadUsers();
             } else if (screenId === 'workoutScreen') {
                 loadWorkouts();
-            } else if (screenId === 'trainingScreen') {
-                initializeTraining();
+            } else if (screenId === 'trainingReadyScreen') {
+                showWorkoutPreview();
             }
         }
 
@@ -935,27 +1003,6 @@
             }
         }
 
-//////////////////////////////////////////////////////
-
-        function prepareTrainingScreen() {
-            // 초기화
-            document.getElementById('startTrainingButton').classList.remove('hidden');
-            trainingSession.isRunning = false;
-            updateTrainingDisplay();
-            createTimeline();
-            updateSegmentDisplay();
-        }
-
-        
-        function startTrainingButtonClicked() {
-            document.getElementById('startTrainingButton').classList.add('hidden');
-            showCountdown(5, () => {
-                startTraining();
-            }, "훈련 시작 준비!");
-        }
-
-
-        
         function handleTrainerData(event) {
             const data = event.target.value;
             
@@ -1059,7 +1106,7 @@
         function proceedToProfile() {
             if (!connectedDevices.trainer) {
                 alert('훈련을 위해서는 스마트 트레이너가 필요합니다.');
-                //return;  <--- 수정예정 //////////////////////////////////////////////////
+                //return;  // 수정예정
             }
             showScreen('profileScreen');
         }
@@ -1204,14 +1251,14 @@
                     {
                         workout_id: 'SST_MCT14',
                         workout_name: 'SST_MCT(14)',
-                        total_duration: 320, // 92분
+                        total_duration: 5520, // 92분 → 초 단위로 수정
                         avg_intensity: 78,
                         segments: [
-                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 30, target_rpm: 80 },
-                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 120, target_rpm: 90 },
-                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 20, target_rpm: 75 },
-                            { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 120, target_rpm: 90 },
-                            { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 30, target_rpm: 70 }
+                            { segment_order: 1, segment_type: '웜업', description: '80RPM FTP 60%', ftp_percent: 60, duration_sec: 180, target_rpm: 80 },
+                            { segment_order: 2, segment_type: '인터벌', description: 'FTP 88%', ftp_percent: 88, duration_sec: 840, target_rpm: 90 },
+                            { segment_order: 3, segment_type: '휴식', description: 'FTP 50%', ftp_percent: 50, duration_sec: 300, target_rpm: 75 },
+                            { segment_order: 4, segment_type: '인터벌', description: 'FTP 92%', ftp_percent: 92, duration_sec: 840, target_rpm: 90 },
+                            { segment_order: 5, segment_type: '쿨다운', description: 'FTP 45%', ftp_percent: 45, duration_sec: 300, target_rpm: 70 }
                         ]
                     }
                 ];
@@ -1259,16 +1306,53 @@
 
         function selectWorkout(workout) {
             currentWorkout = workout;
-            // 기존: showScreen('trainingScreen');
-            // 수정 ↓
-            showScreen('trainingScreen');
-            prepareTrainingScreen();
+            showScreen('trainingReadyScreen');
         }
 
+        // 워크아웃 미리보기 화면
+        function showWorkoutPreview() {
+            if (!currentWorkout || !currentUser) return;
 
-        // 훈련 실행 함수들
+            document.getElementById('previewWorkoutName').textContent = currentWorkout.workout_name;
+            document.getElementById('previewDuration').textContent = Math.floor(currentWorkout.total_duration / 60) + '분';
+            document.getElementById('previewIntensity').textContent = currentWorkout.avg_intensity + '%';
+            document.getElementById('previewTSS').textContent = calculateWorkoutTSS(currentWorkout);
+
+            const segmentPreview = document.getElementById('segmentPreview');
+            segmentPreview.innerHTML = '';
+
+            currentWorkout.segments.forEach((segment, index) => {
+                const segmentDiv = document.createElement('div');
+                segmentDiv.className = `segment-item ${segment.segment_type.toLowerCase()}`;
+                
+                const duration = Math.floor(segment.duration_sec / 60);
+                
+                segmentDiv.innerHTML = `
+                    <h4>${segment.segment_type}</h4>
+                    <div class="ftp-percent">${segment.ftp_percent}%</div>
+                    <div class="duration">${duration}분</div>
+                `;
+
+                segmentPreview.appendChild(segmentDiv);
+            });
+        }
+
+        function startWorkoutTraining() {
+            showScreen('trainingScreen');
+            initializeTraining();
+        }
+
+        function backToWorkoutSelection() {
+            showScreen('workoutScreen');
+        }
+
+        // 훈련 실행 함수들 - 수정된 부분
         function initializeTraining() {
             if (!currentWorkout || !currentUser) return;
+
+            // 상태 초기화
+            countdownActive = false;
+            segmentCountdownStarted = false;
 
             trainingSession = {
                 sessionId: 'S' + Date.now(),
@@ -1296,14 +1380,13 @@
             });
         }
 
-
-////////////////////////////////////////////////////////
-
-        function showCountdown(seconds, callback, message = "다음 세그먼트 준비!") {
+        function showCountdown(seconds, callback, message = "훈련 시작 준비!") {
+            if (countdownActive) return; // 중복 방지
+            
+            countdownActive = true;
             const overlay = document.getElementById('countdownOverlay');
             const number = document.getElementById('countdownNumber');
-        
-            // 🔹 메시지 표시용 임시 div 생성
+
             let messageEl = document.getElementById("countdownMessage");
             if (!messageEl) {
                 messageEl = document.createElement("div");
@@ -1318,57 +1401,55 @@
                 messageEl.style.transition = "opacity 0.5s ease-in-out";
                 overlay.appendChild(messageEl);
             }
-        
-            // 🔹 메시지 표시 (fade-in)
+
             messageEl.textContent = message;
             messageEl.style.opacity = "1";
-        
+
             overlay.classList.remove('hidden');
             number.textContent = seconds;
             playBeep();
-        
+
             if (seconds > 0) {
                 setTimeout(() => {
                     number.textContent = seconds - 1;
-                    playBeep();
+                    if (seconds > 1) playBeep();
                     showCountdown(seconds - 1, callback, message);
                 }, 1000);
             } else {
-                // 🔹 메시지 fade-out
                 messageEl.style.opacity = "0";
                 setTimeout(() => {
                     overlay.classList.add('hidden');
+                    countdownActive = false;
                     callback();
                 }, 500);
             }
-        }     
-/////////////////////////////////////////////////////////////////////////
+        }
+
         function playBeep() {
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
-        
+
                 osc.connect(gain);
                 gain.connect(ctx.destination);
-        
-                osc.type = "sine";       // 소리 파형
-                osc.frequency.value = 800; // 음 높이 (Hz)
-                gain.gain.setValueAtTime(0.2, ctx.currentTime); // 음량
-        
+
+                osc.type = "sine";
+                osc.frequency.value = 800;
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+
                 osc.start();
-                osc.stop(ctx.currentTime + 0.15); // 0.15초 beep
+                osc.stop(ctx.currentTime + 0.15);
             } catch (err) {
                 console.error("Beep sound error:", err);
             }
         }
 
-///////////////////////////////////////////////////////
-        
         function startTraining() {
             trainingSession.isRunning = true;
             trainingSession.startTime = Date.now();
             trainingSession.segmentStartTime = Date.now();
+            segmentCountdownStarted = false; // 초기화
 
             updateTrainingTimer();
             updateTargetPower();
@@ -1407,7 +1488,6 @@
                 const variation = (Math.random() - 0.5) * 30;
                 liveData.power = Math.max(0, targetPower + variation);
                 liveData.cadence = currentSeg.target_rpm + (Math.random() - 0.5) * 10;
-                //liveData.heartRate = 140 + (Math.random() - 0.5) * 20;
                 liveData.targetPower = targetPower;
 
                 updateTrainingDisplay();
@@ -1431,45 +1511,40 @@
             document.getElementById('cadenceValue').textContent = Math.round(liveData.cadence);
             document.getElementById('heartRateValue').textContent = Math.round(liveData.heartRate);
             document.getElementById('targetPowerValue').textContent = liveData.targetPower;
-        
+
             const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
             document.getElementById('targetFtpPercent').textContent = ftpPercent;
-        
+
             // 달성률 표시
             const achievement = liveData.targetPower > 0 ?
                 Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100)) : 0;
             document.getElementById('achievementValue').textContent = achievement;
-        
+
             // 진행바 갱신
             const progressPercent = Math.min(100, (liveData.power / liveData.targetPower) * 100);
             document.getElementById('powerProgressBar').style.width = progressPercent + '%';
-        
+
             // 전체 평균 파워
             let avgPower = 0;
             if (trainingSession.data.power.length > 0) {
                 avgPower = trainingSession.data.power.reduce((a, b) => a + b, 0) / trainingSession.data.power.length;
                 document.getElementById('avgPowerValue').textContent = Math.round(avgPower);
             }
-        
-            // ✅ 현재 세그먼트별 평균 파워 계산
+
+            // 현재 세그먼트별 평균 파워 계산
             const segStart = trainingSession.segmentStartTime;
             const segEnd = Date.now();
             const segmentPowerData = trainingSession.data.power.filter((_, i) => {
                 const t = trainingSession.data.time[i];
                 return t >= segStart && t <= segEnd;
             });
-        
+
             let avgSegPower = 0;
             if (segmentPowerData.length > 0) {
                 avgSegPower = segmentPowerData.reduce((a, b) => a + b, 0) / segmentPowerData.length;
             }
-        
-            // ✅ “목표: 평균/목표” 라벨 갱신
-            const avgSegPowerEl = document.getElementById('avgSegmentPowerValue');
-            if (avgSegPowerEl) {
-                avgSegPowerEl.textContent = Math.round(avgSegPower);
-            }
 
+            const avgSegPowerEl = document.getElementById('avgSegmentPowerValue');
             if (avgSegPowerEl) {
                 avgSegPowerEl.textContent = Math.round(avgSegPower);
                 if (avgSegPower < liveData.targetPower * 0.9) {
@@ -1480,7 +1555,6 @@
                     avgSegPowerEl.style.color = "white"; // 정상 범위
                 }
             }
-            
         }
 
         function updateTrainingTimer() {
@@ -1524,125 +1598,110 @@
             document.getElementById('segmentTime').textContent =
                 `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')} / ${segmentTotalMinutes.toString().padStart(2, '0')}:${segmentTotalSeconds.toString().padStart(2, '0')}`;
         }
-////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+        // 수정된 세그먼트 진행 체크 함수
         function checkSegmentProgress(segmentElapsed) {
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
             if (!currentSeg) return;
-        
-            const progressPercent = (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100;
+
+            const progressPercent = Math.min(100, (segmentElapsed / (currentSeg.duration_sec * 1000)) * 100);
             const segments = document.querySelectorAll(".timeline-segment");
-        
+
+            // 진행률 표시
             segments.forEach((seg, idx) => {
                 const fill = seg.querySelector(".progress-fill");
                 if (!fill) return;
-                if (idx < segIndex) fill.style.width = "100%";
-                else if (idx === segIndex) fill.style.width = `${Math.min(progressPercent, 100)}%`;
-                else fill.style.width = "0%";
+                if (idx < segIndex) {
+                    fill.style.width = "100%";
+                } else if (idx === segIndex) {
+                    fill.style.width = `${progressPercent}%`;
+                } else {
+                    fill.style.width = "0%";
+                }
             });
-        
+
             const remainingTime = currentSeg.duration_sec * 1000 - segmentElapsed;
-        
-            // ✅ 이미 카운트다운이 진행 중이거나 해당 세그먼트에서 시작된 경우 return
-            if (isCountdownActive || currentSeg._countdownStarted) return;
-        
-            // ✅ 세그먼트 종료 5초 전 딱 1회만 실행
-            if (remainingTime <= 5000 && remainingTime > 0) {
-                isCountdownActive = true;
-                currentSeg._countdownStarted = true; // 세그먼트 단위 플래그
-                showCountdown(5, () => {
-                    isCountdownActive = false;
-                    completeCurrentSegment();
-                    nextSegment();
-                }, "다음 세그먼트 준비!");
+
+            // 세그먼트 종료 5초 전 카운트다운 (한 번만 실행)
+            if (!segmentCountdownStarted && remainingTime <= 5000 && remainingTime > 4000) {
+                segmentCountdownStarted = true;
+                
+                if (segIndex < trainingSession.segments.length - 1) {
+                    // 다음 세그먼트가 있는 경우
+                    showCountdown(5, () => {
+                        completeCurrentSegment();
+                        nextSegment();
+                    }, "다음 세그먼트 준비!");
+                } else {
+                    // 마지막 세그먼트인 경우
+                    showCountdown(5, () => {
+                        completeCurrentSegment();
+                        completeTraining();
+                    }, "훈련 완료!");
+                }
                 return;
             }
-        
-            // ✅ 일반 종료 처리
-            if (remainingTime <= 0 && !isCountdownActive) {
+
+            // 세그먼트 완료 (카운트다운 없이 끝난 경우)
+            if (remainingTime <= 0) {
                 completeCurrentSegment();
-                nextSegment();
+                if (segIndex < trainingSession.segments.length - 1) {
+                    nextSegment();
+                } else {
+                    completeTraining();
+                }
             }
         }
-
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////////////////////////////        
-
 
         function completeCurrentSegment() {
             const segIndex = trainingSession.currentSegment;
             const currentSeg = trainingSession.segments[segIndex];
             if (!currentSeg) return;
-        
-            // ✅ 세그먼트 시작~끝 시간 계산
+
             const segmentStartTime = trainingSession.segmentStartTime;
             const segmentEndTime = Date.now();
-        
-            // ✅ 전체 파워 데이터 중에서 이 세그먼트 시간대에 해당하는 데이터만 필터링
+
             const powerData = trainingSession.data.power;
             const timeData = trainingSession.data.time;
-        
+
             const segmentPowerData = powerData.filter((_, i) => {
                 const t = timeData[i];
                 return t >= segmentStartTime && t <= segmentEndTime;
             });
-        
-            // ✅ 세그먼트 전체 평균 파워 계산
+
             const avgPower = segmentPowerData.length > 0
                 ? segmentPowerData.reduce((a, b) => a + b, 0) / segmentPowerData.length
                 : 0;
-        
-            // ✅ 목표 파워 계산
+
             const targetPower = currentUser.ftp * (currentSeg.ftp_percent / 100);
-        
-            // ✅ 달성률 계산
             const achievement = targetPower > 0 ? (avgPower / targetPower) * 100 : 0;
-        
-            // ✅ 색상 선택
-            const color = achievement >= 100 ? "#7ED321" : "#F56500"; // 연두 or 주황
-        
-            // ✅ 해당 세그먼트의 progress-fill 색상 적용
+            const color = achievement >= 100 ? "#7ED321" : "#F56500";
+
             const segment = document.getElementById(`timeline-segment-${segIndex}`);
             const fill = segment ? segment.querySelector(".progress-fill") : null;
             if (fill) {
                 fill.style.width = "100%";
                 fill.style.background = color;
             }
-        
-            // 상태 표시 갱신
-            updateTimelineSegment(segIndex, 'completed');
-        }
 
+            console.log(`세그먼트 ${segIndex + 1} 완료: 평균 파워 ${Math.round(avgPower)}W, 달성률 ${Math.round(achievement)}%`);
+        }
 
         function nextSegment() {
             trainingSession.currentSegment++;
-        
-            // 모든 세그먼트 카운트다운 상태 초기화
-            trainingSession.segments.forEach(seg => seg._countdownStarted = false);
-            isCountdownActive = false;
-        
+            segmentCountdownStarted = false; // 다음 세그먼트를 위한 플래그 초기화
+
             if (trainingSession.currentSegment >= trainingSession.segments.length) {
                 completeTraining();
                 return;
             }
-        
-            trainingSession.isCountingDown = true;
-            showCountdown(5, () => {
-                trainingSession.isCountingDown = false;
-                trainingSession.segmentStartTime = Date.now();
-                updateSegmentDisplay();
-                updateTargetPower();
-                updateTimelineSegment(trainingSession.currentSegment, 'current');
-            }, "다음 세그먼트 준비!");
+
+            trainingSession.segmentStartTime = Date.now();
+            updateSegmentDisplay();
+            updateTargetPower();
+            updateTimelineSegment(trainingSession.currentSegment, 'current');
         }
-
-
-
-        
 
         function updateSegmentDisplay() {
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
@@ -1665,23 +1724,21 @@
         function createTimeline() {
             const timeline = document.getElementById('timelineSegments');
             timeline.innerHTML = '';
-        
+
             trainingSession.segments.forEach((segment, index) => {
                 const segmentDiv = document.createElement('div');
                 segmentDiv.className = 'timeline-segment';
                 segmentDiv.style.flex = segment.duration_sec;
                 segmentDiv.id = `timeline-segment-${index}`;
-        
-                // ✅ 진행바 내부 채움 요소 추가
+
                 const fillDiv = document.createElement('div');
                 fillDiv.className = 'progress-fill';
                 segmentDiv.appendChild(fillDiv);
-        
-                // ✅ 중앙 텍스트(세그먼트 번호)
+
                 const label = document.createElement('span');
                 label.textContent = index + 1;
                 segmentDiv.appendChild(label);
-        
+
                 timeline.appendChild(segmentDiv);
             });
         }
@@ -1826,6 +1883,8 @@ ${window.location.href}`;
         function goHome() {
             currentUser = null;
             currentWorkout = null;
+            countdownActive = false;
+            segmentCountdownStarted = false;
             trainingSession = {
                 sessionId: null,
                 isRunning: false,
