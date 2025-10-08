@@ -462,7 +462,11 @@
 
         .power-progress-bar {
             height: 100%;
+             /* background: linear-gradient(90deg, #F56500, #7ED321);
+            /* 그라디언트는 '불투명' 색상 유지 (중복 감쇠 방지) */
             background: linear-gradient(90deg, #F56500, #7ED321);
+            opacity: 0.4;
+            
             border-radius: 10px;
             transition: width 0.3s ease;
         }
@@ -722,6 +726,16 @@
             color: #fff;
             transition: color 0.3s ease, transform 0.2s ease;
         }
+
+        .segment-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            color: #fff;
+            gap: 10px;
+        }
+
         
         /* 🔸 10초 이하 시 깜빡임 + 확대 효과 */
         @keyframes blinkRed {
@@ -751,14 +765,6 @@
             color: #FFD700; /* 노란색으로 진행률 강조 */
         }
         
-        .segment-details {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 16px;
-            color: #fff;
-            gap: 10px;
-        }
 
         #tssValue {
             color: #00E6A8;
@@ -913,7 +919,7 @@
                     경과: <span id="elapsedTime">00:00</span>
                     (<span id="elapsedPercent">0</span>%)
                 </span>
-                <span id="segmentTime">02:30 / 03:00</span>
+                <span id="segmentTime">00:00</span>
                 <span id="nextSegment">다음: 인터벌 FTP 140%</span>
             </div>
         </div>
@@ -1308,7 +1314,7 @@
                 // 더미 데이터로 대체
                 const dummyUsers = [
                     { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
-                    { user_id: 'U2', name: '박선호', contact: '010-9876-5432', ftp: 280, weight: 70 }
+                    { user_id: 'U2', name: '박선호', contact: '010-9876-5432', ftp: 200, weight: 70 }
                 ];
                 displayUsers(dummyUsers);
             }
@@ -1908,27 +1914,29 @@
 
 
         // 세그먼트 시간 카운다운        
-        function updateSegmentTimer(segmentElapsed) {
-            if (isSegmentChanging) return; // 카운트다운 중 타이머 중단
-            const currentSeg = trainingSession.segments[trainingSession.currentSegment];
-            if (!currentSeg) return;
+        function updateSegmentTimer(/* segmentElapsed */) {
+          const seg = trainingSession.segments[trainingSession.currentSegment];
+          if (!seg) return;
         
-            const segmentRemaining = Math.max(0, currentSeg.duration_sec * 1000 - segmentElapsed);
-            const remainingMinutes = Math.floor(segmentRemaining / 60000);
-            const remainingSeconds = Math.floor((segmentRemaining % 60000) / 1000);
+          // 세그먼트 종료 시각(절대시각) 기준으로 남은 시간을 계산
+          const endAt = trainingSession.segmentStartTime + seg.duration_sec * 1000;
+          const segmentRemaining = Math.max(0, endAt - Date.now());
         
-            const segmentTimeEl = document.getElementById('segmentTime');
+          const remainingMinutes = Math.floor(segmentRemaining / 60000);
+          const remainingSeconds = Math.floor((segmentRemaining % 60000) / 1000);
         
-            // ✅ 카운트다운만 표시
-            segmentTimeEl.textContent = `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+          const segmentTimeEl = document.getElementById('segmentTime');
+          segmentTimeEl.textContent =
+            `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
         
-            // ✅ 10초 이하일 때 빨간색 & 깜빡임
-            if (remainingSeconds <= 10 && segmentRemaining > 0) {
-                segmentTimeEl.classList.add("countdown-alert");
-            } else {
-                segmentTimeEl.classList.remove("countdown-alert");
-            }
+          // 10초 이하 시 깜빡임 유지
+          if (segmentRemaining > 0 && segmentRemaining <= 10000) {
+            segmentTimeEl.classList.add('countdown-alert');
+          } else {
+            segmentTimeEl.classList.remove('countdown-alert');
+          }
         }
+
 
 
         // 수정된 세그먼트 진행 체크 함수
