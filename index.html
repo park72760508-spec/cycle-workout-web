@@ -401,16 +401,20 @@
         }
         
         .timeline-segment {
-            flex: 1;
-            border-right: 1px solid rgba(255,255,255,0.2);
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 10px;
-            font-weight: 600;
             color: #fff;
+            font-size: 11px;
+            font-weight: 600;
             position: relative;
-            overflow: hidden;
+            border-right: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .timeline-segment .segment-time {
+            font-size: 13px;
+            opacity: 0.8;
         }
         
         .timeline-segment .progress-fill {
@@ -1383,12 +1387,11 @@
         }
 
         /////////////////////////////// 
-        // ✅ 카운트다운 함수 (마지막 1초 시 더 높은 Beep)
         function showCountdown(seconds, callback, message = "훈련 시작 준비!", isInitialCall = true) {
             if (isInitialCall && countdownActive) return; // 중복 방지
             if (isInitialCall) countdownActive = true;
         
-            // 오디오 초기화
+            // ✅ 브라우저 오디오 정책 대응
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 audioCtx.resume();
@@ -1417,13 +1420,12 @@
             overlay.classList.remove('hidden');
             number.textContent = seconds;
         
-            // ✅ 마지막 초엔 더 높은 beep
-            playBeep(seconds === 1);
+            playBeep(); // 시작 시 1회
         
             if (seconds > 0) {
                 setTimeout(() => {
                     number.textContent = seconds - 1;
-                    playBeep(seconds - 1 === 1); // 남은 초가 1일 때 높은 음
+                    if (seconds > 1) playBeep();
                     showCountdown(seconds - 1, callback, message, false);
                 }, 1000);
             } else {
@@ -1437,24 +1439,34 @@
         }
 
 
+        //function playBeep() {
+            //try {
+                //const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                //const osc = ctx.createOscillator();
+                //const gain = ctx.createGain();
 
+                //osc.connect(gain);
+                //gain.connect(ctx.destination);
 
-        let audioCtx = null;
+                //osc.type = "sine";
+                //osc.frequency.value = 800;
+                //gain.gain.setValueAtTime(0.2, ctx.currentTime);
+
+                //osc.start();
+                //osc.stop(ctx.currentTime + 0.15);
+            //} catch (err) {
+                //console.error("Beep sound error:", err);
+            //}
+        //}
+
         let beepActive = false;
         
-        // ✅ 카운트다운용 Beep (마지막 초는 더 높은 톤)
-        function playBeep(isFinal = false) {
+        function playBeep() {
             if (beepActive) return;
             beepActive = true;
         
             try {
-                // 오디오 컨텍스트 생성 및 유지
-                if (!audioCtx) {
-                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    audioCtx.resume();
-                }
-        
-                const ctx = audioCtx;
+                const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
         
@@ -1462,11 +1474,9 @@
                 gain.connect(ctx.destination);
         
                 osc.type = "square";
-        
-                // ✅ 마지막 초에는 더 높은 음
-                osc.frequency.value = isFinal ? 1200 : 950;
-        
+                osc.frequency.value = 950;
                 gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        
                 osc.start();
                 osc.stop(ctx.currentTime + 0.15);
         
@@ -1474,14 +1484,11 @@
                     beepActive = false;
                 };
             } catch (err) {
-                console.error("Beep sound error:", err);
                 beepActive = false;
+                console.error("Beep sound error:", err);
             }
         }
-
-
-
-        
+       
 /////////////////////////////////////////////////////////////////////////////////
 
 
@@ -1772,24 +1779,42 @@
         function createTimeline() {
             const timeline = document.getElementById('timelineSegments');
             timeline.innerHTML = '';
-
-            trainingSession.segments.forEach((segment, index) => {
+        
+            // ✅ 전체 세그먼트 시간 합계 구하기
+            const totalDuration = trainingSession.segments.reduce(
+                (sum, seg) => sum + seg.duration_sec,
+                0
+            );
+        
+            trainingSession.segments.forEach((seg, index) => {
                 const segmentDiv = document.createElement('div');
                 segmentDiv.className = 'timeline-segment';
-                segmentDiv.style.flex = segment.duration_sec;
                 segmentDiv.id = `timeline-segment-${index}`;
-
-                const fillDiv = document.createElement('div');
-                fillDiv.className = 'progress-fill';
-                segmentDiv.appendChild(fillDiv);
-
-                const label = document.createElement('span');
-                label.textContent = index + 1;
-                segmentDiv.appendChild(label);
-
+        
+                // ✅ 시간 비율에 따른 폭 계산
+                const widthPercent = (seg.duration_sec / totalDuration) * 100;
+                segmentDiv.style.flex = 'unset';
+                segmentDiv.style.width = `${widthPercent}%`;
+        
+                // 시간 표시 (분:초)
+                const minutes = Math.floor(seg.duration_sec / 60);
+                const seconds = seg.duration_sec % 60;
+                const timeLabel =
+                    seg.duration_sec >= 60
+                        ? `${minutes}:${seconds.toString().padStart(2, "0")}`
+                        : `${seconds}s`;
+        
+                segmentDiv.innerHTML = `
+                    <div class="progress-fill"></div>
+                    <div class="segment-label">
+                        ${index + 1}<br><span class="segment-time">${timeLabel}</span>
+                    </div>
+                `;
+        
                 timeline.appendChild(segmentDiv);
             });
         }
+
 
         function updateTimelineSegment(segmentIndex, status) {
             const segment = document.getElementById(`timeline-segment-${segmentIndex}`);
