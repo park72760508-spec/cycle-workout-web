@@ -1754,6 +1754,36 @@
                     avgSegPowerEl.style.color = "white"; // 정상 범위
                 }
             }
+
+            // 칼로리, TSS 계산            
+            function updateCaloriesAndTSS() {
+                if (!trainingSession.isRunning || !currentUser) return;
+            
+                const heartRate = trainingSession.data.heartRate.slice(-1)[0] || 0;
+                const power = trainingSession.data.power.slice(-1)[0] || 0;
+                const weight = currentUser.weight || 70;
+            
+                // ✅ 경과 시간(초)
+                const elapsedSec = (Date.now() - trainingSession.startTime) / 1000;
+                const elapsedHr = elapsedSec / 3600;
+            
+                // 🔹 1. 실시간 칼로리 계산 (간단화된 HR 기반 추정식)
+                const kcalPerMin = (0.6309 * heartRate + 0.1988 * weight + 0.2017 * 30 - 55.0969) / 4.184;
+                const totalKcal = Math.max(0, kcalPerMin * (elapsedSec / 60) * 0.5);
+                document.getElementById("calorieValue").textContent = totalKcal.toFixed(0);
+            
+                // 🔹 2. TSS 계산 (Normalized Power 기반 근사)
+                // TSS = ( (sec × NP × IF) / (FTP × 3600) ) × 100
+                const ftp = currentUser.ftp || 200;
+                const avgPower = trainingSession.data.power.length
+                    ? trainingSession.data.power.reduce((a, b) => a + b, 0) / trainingSession.data.power.length
+                    : 0;
+                const intensityFactor = avgPower / ftp;
+                const tss = (elapsedSec * avgPower * intensityFactor) / (ftp * 3600) * 100;
+                document.getElementById("tssValue").textContent = tss.toFixed(1);
+}
+
+            
         }
 
         function updateTrainingTimer() {
@@ -1780,7 +1810,10 @@
 
                 checkSegmentProgress(segmentElapsed);
                 updateSegmentTimer(segmentElapsed);
-            }, 1000);
+                // ✅ 추가
+                updateCaloriesAndTSS(); // 칼로리/TSS 실시간 갱신
+                
+            }, 1000); 
         }
 
         function updateSegmentTimer(segmentElapsed) {
