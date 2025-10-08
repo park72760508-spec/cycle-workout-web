@@ -347,6 +347,59 @@
             text-align: center;
         }
 
+            /* 세그먼트 평균 파워 중앙 정렬용 */
+            .metric-card.avg-segment-power {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;   /* 수직 가운데 정렬 */
+                align-items: center;       /* 수평 가운데 정렬 */
+                height: 160px;             /* 필요시 높이 조절 */
+                text-align: center;
+            }
+            
+            .metric-card.avg-segment-power .metric-value {
+                font-size: 36px;
+                font-weight: 700;
+                color: #FFD700;  /* 골드톤 강조 */
+                margin-bottom: 8px;
+            }
+            
+            .metric-card.avg-segment-power .metric-label {
+                font-size: 14px;
+                opacity: 0.8;
+                color: #fff;
+            }
+
+        
+
+        /* 심박 + 케이던스 수직 정렬용 */
+        .metric-card.dual-metric {
+            display: flex;
+            flex-direction: column;  /* 위아래 배치 */
+            justify-content: space-between;
+            align-items: center;
+            height: 160px; /* 카드 높이 조정 (필요시 변경) */
+            padding: 20px 10px;
+        }
+        
+        .metric-card.dual-metric .metric-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .metric-card.dual-metric .metric-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .metric-card.dual-metric .metric-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        
         .metric-value {
             font-size: 32px;
             font-weight: 600;
@@ -785,10 +838,11 @@
         </div>
 
         <div class="metrics-grid">
-            <div class="metric-card">
-                <div class="metric-value" id="cadenceValue">89</div>
-                <div class="metric-label">RPM</div>
+            <div class="metric-card avg-segment-power">
+                <div class="metric-value" id="avgSegmentPowerValue">178</div>
+                <div class="metric-label">평균 파워 (W)</div>
             </div>
+
 
             <div class="power-display">
                 <div class="current-power" id="currentPowerValue">185</div>
@@ -812,10 +866,17 @@
                 </div>
             </div>
 
-            <div class="metric-card">
-                <div class="metric-value" id="heartRateValue">145</div>
-                <div class="metric-label">BPM</div>
+            <div class="metric-card dual-metric">
+                <div class="metric-item">
+                    <div class="metric-value" id="heartRateValue">145</div>
+                    <div class="metric-label">BPM</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="cadenceValue">89</div>
+                    <div class="metric-label">RPM</div>
+                </div>
             </div>
+
         </div>
 
         <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
