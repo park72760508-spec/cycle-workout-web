@@ -773,6 +773,13 @@
             gap: 10px;
         }
 
+        #tssValue {
+            color: #00E6A8;
+            font-weight: 700;
+            transition: color 0.3s ease;
+        }
+
+
         
     </style>
 </head>
@@ -928,6 +935,9 @@
             <div class="metric-card avg-segment-power">
                 <div class="metric-value" id="avgSegmentPowerValue">178</div>
                 <div class="metric-label">랩 파워 (W)</div>
+                <!-- 🔹 누적 TSS 표시 추가 -->
+                <div class="metric-value" id="tssValue" style="margin-top:10px; font-size:24px;">0</div>
+                <div class="metric-label">TSS</div>
             </div>
 
 
@@ -1831,7 +1841,8 @@
                 } else {
                     avgSegPowerEl.style.color = "white"; // 정상 범위
                 }
-            }
+            }     
+        }
 
             // 칼로리, TSS 계산            
             function updateCaloriesAndTSS() {
@@ -1859,11 +1870,11 @@
                 const intensityFactor = avgPower / ftp;
                 const tss = (elapsedSec * avgPower * intensityFactor) / (ftp * 3600) * 100;
                 document.getElementById("tssValue").textContent = tss.toFixed(1);
-}
+            }
 
-            
-        }
 
+
+        
         function updateTrainingTimer() {
             const timerInterval = setInterval(() => {
                 if (!trainingSession.isRunning) {
@@ -1890,8 +1901,8 @@
                 
                 const totalMinutes = Math.floor(currentWorkout.total_duration / 60);
                 const totalSecondsRemaining = currentWorkout.total_duration % 60;
-                document.getElementById('totalTime').textContent =
-                    `${totalMinutes.toString().padStart(2, '0')}:${totalSecondsRemaining.toString().padStart(2, '0')}`;
+                //document.getElementById('totalTime').textContent =
+                    //`${totalMinutes.toString().padStart(2, '0')}:${totalSecondsRemaining.toString().padStart(2, '0')}`;
 
                 checkSegmentProgress(segmentElapsed);
                 updateSegmentTimer(segmentElapsed);
