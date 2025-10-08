@@ -375,12 +375,35 @@
         /* 심박 + 케이던스 수직 정렬용 */
         .metric-card.dual-metric {
             display: flex;
-            flex-direction: column;  /* 위아래 배치 */
-            justify-content: space-between;
+            flex-direction: column;
+            justify-content: space-evenly;  /* 세 값이 위아래로 균등 배치 */
             align-items: center;
-            height: 160px; /* 카드 높이 조정 (필요시 변경) */
-            padding: 20px 10px;
+            height: 100%;
+            background: rgba(255,255,255,0.1);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            text-align: center;
         }
+        
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .metric-item .metric-value {
+            font-size: 30px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: white;
+        }
+        
+        .metric-item .metric-label {
+            font-size: 12px;
+            opacity: 0.7;
+            text-transform: uppercase;
+        }
+
         
         .metric-card.dual-metric .metric-item {
             display: flex;
@@ -840,7 +863,7 @@
         <div class="metrics-grid">
             <div class="metric-card avg-segment-power">
                 <div class="metric-value" id="avgSegmentPowerValue">178</div>
-                <div class="metric-label">평균 파워 (W)</div>
+                <div class="metric-label">랩 파워 (W)</div>
             </div>
 
 
@@ -876,7 +899,11 @@
                     <div class="metric-label">RPM</div>
                 </div>
             </div>
-
+            <!-- 🔹 칼로리 소모 표시 -->
+            <div class="metric-item">
+                <div class="metric-value" id="calorieValue">58</div>
+                <div class="metric-label">kcal</div>
+            </div>
         </div>
 
         <div style="background: rgba(255,255,255,0.1); border-radius: var(--border-radius); padding: 15px;">
@@ -1245,6 +1272,18 @@
             }
         }
 
+            // 실시간 칼로리 계산 예시 (단순 HR 기반 공식)
+            function updateCalories() {
+                const heartRate = trainingSession.data.heartRate.slice(-1)[0] || 0;
+                const weight = currentUser ? currentUser.weight : 70;
+                const durationMin = (Date.now() - trainingSession.startTime) / 60000;
+            
+                // 🔸 간단한 남녀 공통 추정식 (심박수 기반)
+                const kcal = 0.6309 * heartRate + 0.1988 * weight + 0.2017 * 30 - 55.0969;
+                const totalKcal = Math.max(0, (kcal / 4.184) * durationMin * 0.5);
+            
+                document.getElementById("calorieValue").textContent = totalKcal.toFixed(0);
+            }
 
         
         function displayUsers(users) {
