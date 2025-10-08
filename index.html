@@ -721,6 +721,12 @@
             font-weight: 700;
             color: #fff;
             transition: color 0.3s ease, transform 0.2s ease;
+            flex: 1;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            
         }
         
         /* 🔸 10초 이하 시 깜빡임 + 확대 효과 */
@@ -732,23 +738,7 @@
         .countdown-alert {
             animation: blinkRed 0.8s ease-in-out infinite;
         }
-        /* 🔹 세그먼트 남은 시간 스타일 */
-        #segmentTime {
-            font-size: 28px;             /* ✅ 글자 크기 업 */
-            font-weight: 700;
-            color: #fff;
-            transition: color 0.3s ease, transform 0.2s ease;
-        }
-        
-        /* 🔸 10초 이하 시 깜빡임 + 확대 효과 */
-        @keyframes blinkRed {
-            0%, 100% { color: #FF3333; transform: scale(1); }
-            50% { color: #FF9999; transform: scale(1.15); }
-        }
-        
-        .countdown-alert {
-            animation: blinkRed 0.8s ease-in-out infinite;
-        }
+
 
 
         /* 🔹 경과 시간 표기 */        
@@ -1919,23 +1909,30 @@
         }
 
 
-
-        // 세그먼트 시간 카운다운        
+        // 세그먼트 시간 카운다운(카운트시 멈춤 개선)            
         function updateSegmentTimer(segmentElapsed) {
-            if (isSegmentChanging) return; // 카운트다운 중 타이머 중단
+            // 🔸 카운트다운 중이라도 시간은 계속 표시되게 허용
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
             if (!currentSeg) return;
         
-            const segmentRemaining = Math.max(0, currentSeg.duration_sec * 1000 - segmentElapsed);
+            const now = Date.now();
+            let baseTime = trainingSession.segmentStartTime;
+            let elapsed = now - baseTime;
+        
+            // 🔸 카운트다운 중일 경우 5초 미리 빼기 (화면 상 자연스러움)
+            if (isSegmentChanging && segmentCountdownStarted) {
+                elapsed -= 5000;
+            }
+        
+            const segmentRemaining = Math.max(0, currentSeg.duration_sec * 1000 - elapsed);
             const remainingMinutes = Math.floor(segmentRemaining / 60000);
             const remainingSeconds = Math.floor((segmentRemaining % 60000) / 1000);
         
             const segmentTimeEl = document.getElementById('segmentTime');
+            segmentTimeEl.textContent =
+                `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
         
-            // ✅ 카운트다운만 표시
-            segmentTimeEl.textContent = `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
-        
-            // ✅ 10초 이하일 때 빨간색 & 깜빡임
+            // 🔸 10초 이하 시 깜빡임 효과
             if (remainingSeconds <= 10 && segmentRemaining > 0) {
                 segmentTimeEl.classList.add("countdown-alert");
             } else {
