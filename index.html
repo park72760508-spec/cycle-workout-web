@@ -306,6 +306,12 @@
             padding: 10px;
         }
 
+        #userInfo {
+            color: #00E6A8;
+            font-weight: 500;
+            font-size: 15px;
+        }
+        
         .training-header {
             background: rgba(255,255,255,0.1);
             border-radius: var(--border-radius);
@@ -767,7 +773,10 @@
     <!-- 훈련 화면 -->
     <div id="trainingScreen" class="screen">
         <div class="training-header">
-            <div class="current-segment" id="currentSegmentName">웜업 - 80RPM FTP 60%</div>
+             <!--<div class="current-segment" id="currentSegmentName">웜업 - 80RPM FTP 60%</div>-->
+            <div id="userInfo" style="font-size: 14px; color: #ccc; margin-top: 4px;">
+                <!-- 사용자 정보가 여기 표시됩니다 -->
+            </div>
             <div class="segment-details">
                 <span id="segmentTime">02:30 / 03:00</span>
                 <span id="segmentProgress">단계 2/17</span>
@@ -1788,6 +1797,17 @@
             } else {
                 document.getElementById('nextSegment').textContent = '다음: 훈련 완료';
             }
+
+            // ✅ 사용자 정보 표시 업데이트
+            if (currentUser) {
+                const userInfoEl = document.getElementById('userInfo');
+                if (userInfoEl) {
+                    const wkg = (currentUser.ftp / currentUser.weight).toFixed(1);
+                    userInfoEl.innerHTML = `👤 ${currentUser.name} / ${currentUser.ftp}W / ${wkg}W/kg`;
+                }
+            }
+
+            
         }
 
         function createTimeline() {
