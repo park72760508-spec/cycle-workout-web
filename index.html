@@ -351,10 +351,9 @@
             .metric-card.avg-segment-power {
                 display: flex;
                 flex-direction: column;
-                justify-content: center;   /* 수직 가운데 정렬 */
-                align-items: center;       /* 수평 가운데 정렬 */
-                height: 160px;             /* 필요시 높이 조절 */
-                text-align: center;
+                justify-content: space-evenly;
+                align-items: center;
+                height: 160px;
             }
             
             .metric-card.avg-segment-power .metric-value {
@@ -932,14 +931,17 @@
         </div>
 
         <div class="metrics-grid">
+
             <div class="metric-card avg-segment-power">
-                <div class="metric-value" id="avgSegmentPowerValue">178</div>
-                <div class="metric-label">랩 파워 (W)</div>
-                <!-- 🔹 누적 TSS 표시 추가 -->
-                <div class="metric-value" id="tssValue" style="margin-top:10px; font-size:24px;">0</div>
-                <div class="metric-label">TSS</div>
+                <div style="display:flex; flex-direction:column; align-items:center;">
+                    <div class="metric-value" id="avgSegmentPowerValue">178</div>
+                    <div class="metric-label">랩 파워 (W)</div>
+                    <div class="metric-value" id="tssValue" style="margin-top:6px; font-size:22px;">0</div>
+                    <div class="metric-label">TSS</div>
+                </div>
             </div>
 
+            
 
             <div class="power-display">
                 <div class="current-power" id="currentPowerValue">185</div>
@@ -1818,6 +1820,11 @@
                 document.getElementById('avgPowerValue').textContent = Math.round(avgPower);
             }
 
+
+                // 현재 세그먼트별 평균 파워 계산
+                updateCaloriesAndTSS(); // ← 여기에 추가
+
+            
             // 현재 세그먼트별 평균 파워 계산
             const segStart = trainingSession.segmentStartTime;
             const segEnd = Date.now();
@@ -1847,7 +1854,8 @@
             // 칼로리, TSS 계산            
             function updateCaloriesAndTSS() {
                 if (!trainingSession.isRunning || !currentUser) return;
-            
+                if (trainingSession.data.power.length < 5) return; // 최소 5초 이상 후부터 계산
+                
                 const heartRate = trainingSession.data.heartRate.slice(-1)[0] || 0;
                 const power = trainingSession.data.power.slice(-1)[0] || 0;
                 const weight = currentUser.weight || 70;
