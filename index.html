@@ -351,9 +351,10 @@
             .metric-card.avg-segment-power {
                 display: flex;
                 flex-direction: column;
-                justify-content: space-evenly;
+                justify-content: center;
                 align-items: center;
-                height: 160px;
+                height: 100%; /* ✅ power-display와 동일 높이로 자동 조정 */
+                box-sizing: border-box;
             }
             
             .metric-card.avg-segment-power .metric-value {
@@ -1820,11 +1821,7 @@
                 document.getElementById('avgPowerValue').textContent = Math.round(avgPower);
             }
 
-
-                // 현재 세그먼트별 평균 파워 계산
-                updateCaloriesAndTSS(); // ← 여기에 추가
-
-            
+          
             // 현재 세그먼트별 평균 파워 계산
             const segStart = trainingSession.segmentStartTime;
             const segEnd = Date.now();
@@ -1853,6 +1850,7 @@
 
             // 칼로리, TSS 계산            
             function updateCaloriesAndTSS() {
+                if (!trainingSession.startTime) return;
                 if (!trainingSession.isRunning || !currentUser) return;
                 if (trainingSession.data.power.length < 5) return; // 최소 5초 이상 후부터 계산
                 
@@ -1924,6 +1922,7 @@
 
         // 세그먼트 시간 카운다운        
         function updateSegmentTimer(segmentElapsed) {
+            if (isSegmentChanging) return; // 카운트다운 중 타이머 중단
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
             if (!currentSeg) return;
         
@@ -2061,26 +2060,12 @@
             document.getElementById('currentSegmentName').textContent =
                 `${currentSeg.description} (${currentSeg.segment_type})`;
 
-            document.getElementById('segmentProgress').textContent =
-                `단계 ${trainingSession.currentSegment + 1}/${trainingSession.segments.length}`;
-
             const nextSeg = trainingSession.segments[trainingSession.currentSegment + 1];
             if (nextSeg) {
                 document.getElementById('nextSegment').textContent = `다음: ${nextSeg.description}`;
             } else {
                 document.getElementById('nextSegment').textContent = '다음: 훈련 완료';
             }
-
-            // ✅ 사용자 정보 표시 업데이트
-            if (currentUser) {
-                const userInfoEl = document.getElementById('userInfo');
-                if (userInfoEl) {
-                    const wkg = (currentUser.ftp / currentUser.weight).toFixed(1);
-                    userInfoEl.innerHTML = `👤 ${currentUser.name} / ${currentUser.ftp}W / ${wkg}W/kg`;
-                }
-            }
-
-            
         }
 
         function createTimeline() {
