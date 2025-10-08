@@ -1251,27 +1251,7 @@
         }
 
 
-        // ✅ 사용자 정보 + W/kg에 따른 배경색 표시
-        if (currentUser) {
-            const userInfoEl = document.getElementById('userInfo');
-            const headerEl = document.getElementById('trainingHeader');
-            if (userInfoEl && headerEl) {
-                const wkg = (currentUser.ftp / currentUser.weight).toFixed(1);
-                userInfoEl.innerHTML = `👤 ${currentUser.name} / ${currentUser.ftp}W / ${wkg}W/kg`;
-        
-                // 등급별 배경색 지정
-                let bgColor = "";
-                if (wkg >= 4) bgColor = "#FF0000";      // 빨강
-                else if (wkg >= 3.5) bgColor = "#FF7F00"; // 오렌지
-                else if (wkg >= 3.0) bgColor = "#0055FF"; // 남색
-                else if (wkg >= 2.2) bgColor = "#7ED321"; // 연두
-                else bgColor = "#FFD700";                // 노랑
-        
-                // 부드러운 전환 효과와 함께 색상 적용
-                headerEl.style.transition = "background-color 0.8s ease";
-                headerEl.style.backgroundColor = bgColor;
-            }
-        }
+
 
             // 실시간 칼로리 계산 예시 (단순 HR 기반 공식)
             function updateCalories() {
@@ -1330,6 +1310,33 @@
             currentUser = user;
             alert(`${user.name}님, 환영합니다!`);
             showScreen('workoutScreen');
+
+            function showUserInfo() {
+                if (!currentUser) return;
+            
+                const wkg = (currentUser.ftp / currentUser.weight).toFixed(1);
+                const userInfoEl = document.getElementById("userInfo");
+            
+                // 색상 분기
+                let bgColor;
+                if (wkg >= 4) bgColor = "#ff3333";         // 빨강
+                else if (wkg >= 3.5) bgColor = "#ff6600";  // 오렌지
+                else if (wkg >= 3) bgColor = "#1a5ab8";    // 남색
+                else if (wkg >= 2.2) bgColor = "#7ED321";  // 연두
+                else bgColor = "#FFD700";                  // 노랑
+            
+                // HTML 표시
+                userInfoEl.innerHTML = `
+                    <strong>${currentUser.name}</strong> |
+                    FTP: ${currentUser.ftp}W |
+                    ${wkg} W/kg
+                `;
+                userInfoEl.style.background = bgColor;
+                userInfoEl.style.padding = "6px 10px";
+                userInfoEl.style.borderRadius = "8px";
+                userInfoEl.style.color = "#fff";
+            }
+            
         }
 
         function showAddUserForm() {
