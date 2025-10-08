@@ -2812,7 +2812,6 @@ ${window.location.href}`;
     </div>
 
     <!-- 훈련 화면 -->
-    <!-- 훈련 화면 -->
     <div id="trainingScreen" class="screen">
         <div class="training-header">
             <div class="current-segment" id="currentSegmentName">웜업 - 80RPM FTP 60%</div>
@@ -2825,10 +2824,8 @@ ${window.location.href}`;
 
         <div class="metrics-grid">
             <div class="metric-card">
-                <div class="metric-value" id="segmentTime">02:30</div>
-                <div class="metric-label">랩타임</div>
-                <div class="metric-value" id="avgSegmentPowerValue">0</div>
-                <div class="metric-label">랩파워(W)</div>
+                <div class="metric-value" id="cadenceValue">89</div>
+                <div class="metric-label">RPM</div>
             </div>
 
             <div class="power-display">
@@ -2839,18 +2836,15 @@ ${window.location.href}`;
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
                     <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
-                        목표 :  <span id="targetPowerValue">194</span>W
+                        랩파워(W): <span id="avgSegmentPowerValue">0</span> / <span id="targetPowerValue">194</span>
                     </div>
-                    <!-- ✅ 세그먼트명 표시 위치 -->
-                    <div id="currentSegmentName" style="margin-top: 14px; font-size: 18px; font-weight: 600; color: #FFD700;"> 웜업 - 80RPM FTP 60%</div>
+                    <div style="font-size: 14px; opacity: 0.7;">FTP <span id="targetFtpPercent">80</span>%</div>
                 </div>
             </div>
 
             <div class="metric-card">
                 <div class="metric-value" id="heartRateValue">145</div>
                 <div class="metric-label">BPM</div>
-                <div class="metric-value" id="cadenceValue">89</div>
-                <div class="metric-label">RPM</div>  
             </div>
         </div>
 
@@ -2860,19 +2854,19 @@ ${window.location.href}`;
                     <!-- 타임라인 세그먼트들이 여기에 표시됩니다 -->
                 </div>
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 18px; opacity: 0.7;">
-                <span>달성도: <span id="achievementValue">87</span>%</span>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
                 <span>경과: <span id="elapsedTime">12:34</span> / <span id="totalTime">65:20</span></span>
+                <span>달성도: <span id="achievementValue">87</span>%</span>
                 <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
             </div>
         </div>
 
         <div class="training-controls">
             <button class="control-btn pause" onclick="togglePause()" title="일시정지">
-                <span id="pauseIcon">⏸</span>
+                <span id="pauseIcon">⏸️</span>
             </button>
-            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭</button>
-            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹</button>
+            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
+            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
         </div>
     </div>
 
