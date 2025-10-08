@@ -401,22 +401,17 @@
         }
         
         .timeline-segment {
+            flex: 1;
+            border-right: 1px solid rgba(255,255,255,0.2);
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #fff;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
+            color: #fff;
             position: relative;
-            border-right: 1px solid rgba(255,255,255,0.2);
+            overflow: hidden;
         }
-        
-        .timeline-segment .segment-time {
-            font-size: 9px;
-            opacity: 0.8;
-        }
-
         
         .timeline-segment .progress-fill {
             position: absolute;
@@ -776,28 +771,19 @@
                 <div class="metric-label">RPM</div>
             </div>
 
-        <div class="power-display">
-            <div class="current-power" id="currentPowerValue">185</div>
-            <div style="opacity: 0.7;">WATTS</div>
-            <div class="power-progress">
-                <div class="power-progress-bar" id="powerProgressBar"></div>
-            </div>
-            <div style="text-align: center; margin-top: 10px;">
-                <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
-                    목표 :  <span id="targetPowerValue">194</span>W
+            <div class="power-display">
+                <div class="current-power" id="currentPowerValue">185</div>
+                <div style="opacity: 0.7;">WATTS</div>
+                <div class="power-progress">
+                    <div class="power-progress-bar" id="powerProgressBar"></div>
                 </div>
-                <div style="font-size: 14px; opacity: 0.7;">
-                    FTP <span id="targetFtpPercent">80</span>%
-                </div>
-        
-                <!-- ✅ 세그먼트명 표시 위치 -->
-                <div id="currentSegmentName" 
-                     style="margin-top: 8px; font-size: 18px; font-weight: 600; color: #FFD700;">
-                     웜업 - 80RPM FTP 60%
+                <div style="text-align: center; margin-top: 10px;">
+                    <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
+                        목표: <span id="avgSegmentPowerValue">0</span> / <span id="targetPowerValue">194</span>W
+                    </div>
+                    <div style="font-size: 14px; opacity: 0.7;">FTP <span id="targetFtpPercent">80</span>%</div>
                 </div>
             </div>
-        </div>
-
 
             <div class="metric-card">
                 <div class="metric-value" id="heartRateValue">145</div>
@@ -885,7 +871,6 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
-        let wakeLock = null;  // 화면 절전 방지 핸들러
         let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함)
         let audioCtx = null; // 오디오 컨텍스트 (비프음 정책 대응)
         let countdownActive = false;  // 카운트다운 중복 방지
@@ -919,21 +904,6 @@
             targetPower: 0
         };
 
-        // 훈련모드에서 화면꺼짐 방지(일부 브라우저(특히 모바일 Chrome)는 탭 전환 시 wakeLock이 풀리기 때문에) 
-            document.addEventListener("visibilitychange", async () => {
-                if (wakeLock !== null && document.visibilityState === "visible") {
-                    try {
-                        wakeLock = await navigator.wakeLock.request('screen');
-                        console.log("🔁 화면 절전 방지 재요청됨");
-                    } catch (err) {
-                        console.error("화면 깨움 재요청 실패:", err);
-                    }
-                }
-            });
-
-
-
-        
         // 화면 전환 함수들
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(screen => {
@@ -1522,19 +1492,6 @@
 
         
         function startTraining() {
-            async function startTraining() {
-                try {
-                    if ('wakeLock' in navigator) {
-                        wakeLock = await navigator.wakeLock.request('screen');
-                        console.log("✅ 화면 절전 모드 방지 활성화됨");
-                    }
-                } catch (err) {
-                    console.error("화면 깨움 요청 실패:", err);
-                }
-            
-                // 기존 startTraining 내용 아래 이어서...
-
-            
             trainingSession.isRunning = true;
             trainingSession.startTime = Date.now();
             trainingSession.segmentStartTime = Date.now();
@@ -1818,42 +1775,24 @@
         function createTimeline() {
             const timeline = document.getElementById('timelineSegments');
             timeline.innerHTML = '';
-        
-            // ✅ 전체 세그먼트 시간 합계 구하기
-            const totalDuration = trainingSession.segments.reduce(
-                (sum, seg) => sum + seg.duration_sec,
-                0
-            );
-        
-            trainingSession.segments.forEach((seg, index) => {
+
+            trainingSession.segments.forEach((segment, index) => {
                 const segmentDiv = document.createElement('div');
                 segmentDiv.className = 'timeline-segment';
+                segmentDiv.style.flex = segment.duration_sec;
                 segmentDiv.id = `timeline-segment-${index}`;
-        
-                // ✅ 시간 비율에 따른 폭 계산
-                const widthPercent = (seg.duration_sec / totalDuration) * 100;
-                segmentDiv.style.flex = 'unset';
-                segmentDiv.style.width = `${widthPercent}%`;
-        
-                // 시간 표시 (분:초)
-                const minutes = Math.floor(seg.duration_sec / 60);
-                const seconds = seg.duration_sec % 60;
-                const timeLabel =
-                    seg.duration_sec >= 60
-                        ? `${minutes}:${seconds.toString().padStart(2, "0")}`
-                        : `${seconds}s`;
-        
-                segmentDiv.innerHTML = `
-                    <div class="progress-fill"></div>
-                    <div class="segment-label">
-                        ${index + 1}<br><span class="segment-time">${timeLabel}</span>
-                    </div>
-                `;
-        
+
+                const fillDiv = document.createElement('div');
+                fillDiv.className = 'progress-fill';
+                segmentDiv.appendChild(fillDiv);
+
+                const label = document.createElement('span');
+                label.textContent = index + 1;
+                segmentDiv.appendChild(label);
+
                 timeline.appendChild(segmentDiv);
             });
         }
-
 
         function updateTimelineSegment(segmentIndex, status) {
             const segment = document.getElementById(`timeline-segment-${segmentIndex}`);
@@ -1912,18 +1851,6 @@
             requestAIAnalysis();
 
             showScreen('resultScreen');
-
-            if (wakeLock) {
-                try {
-                    await wakeLock.release();
-                    wakeLock = null;
-                    console.log("🔒 화면 절전 모드 해제됨");
-                } catch (err) {
-                    console.error("wakeLock 해제 실패:", err);
-                }
-            }
-
-            
         }
 
         function calculateAverage(array) {
