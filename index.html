@@ -1161,6 +1161,31 @@
             }
         }
 
+
+        // ✅ 사용자 정보 + W/kg에 따른 배경색 표시
+        if (currentUser) {
+            const userInfoEl = document.getElementById('userInfo');
+            const headerEl = document.getElementById('trainingHeader');
+            if (userInfoEl && headerEl) {
+                const wkg = (currentUser.ftp / currentUser.weight).toFixed(1);
+                userInfoEl.innerHTML = `👤 ${currentUser.name} / ${currentUser.ftp}W / ${wkg}W/kg`;
+        
+                // 등급별 배경색 지정
+                let bgColor = "";
+                if (wkg >= 4) bgColor = "#FF0000";      // 빨강
+                else if (wkg >= 3.5) bgColor = "#FF7F00"; // 오렌지
+                else if (wkg >= 3.0) bgColor = "#0055FF"; // 남색
+                else if (wkg >= 2.2) bgColor = "#7ED321"; // 연두
+                else bgColor = "#FFD700";                // 노랑
+        
+                // 부드러운 전환 효과와 함께 색상 적용
+                headerEl.style.transition = "background-color 0.8s ease";
+                headerEl.style.backgroundColor = bgColor;
+            }
+        }
+
+
+        
         function displayUsers(users) {
             const profileList = document.getElementById('profileList');
             profileList.innerHTML = '';
