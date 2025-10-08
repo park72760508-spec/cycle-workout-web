@@ -999,10 +999,10 @@
 
         <div class="training-controls">
             <button class="control-btn pause" onclick="togglePause()" title="일시정지">
-                <span id="pauseIcon">⏸️</span>
+                <span id="pauseIcon">⏸</span>
             </button>
-            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭️</button>
-            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹️</button>
+            <button class="control-btn" onclick="skipSegment()" title="구간 건너뛰기">⏭</button>
+            <button class="control-btn stop" onclick="stopTraining()" title="훈련 종료">⏹</button>
         </div>
     </div>
 
@@ -2124,7 +2124,7 @@
         function togglePause() {
             trainingSession.isPaused = !trainingSession.isPaused;
             const pauseIcon = document.getElementById('pauseIcon');
-            pauseIcon.textContent = trainingSession.isPaused ? '▶️' : '⏸️';
+            pauseIcon.textContent = trainingSession.isPaused ? '⏵' : '⏸';
         }
 
         function skipSegment() {
