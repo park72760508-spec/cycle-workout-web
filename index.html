@@ -713,6 +713,67 @@
                 font-size: 48px;
             }
         }
+
+
+        /* 🔹 세그먼트 남은 시간 스타일 */
+        #segmentTime {
+            font-size: 28px;             /* ✅ 글자 크기 업 */
+            font-weight: 700;
+            color: #fff;
+            transition: color 0.3s ease, transform 0.2s ease;
+        }
+        
+        /* 🔸 10초 이하 시 깜빡임 + 확대 효과 */
+        @keyframes blinkRed {
+            0%, 100% { color: #FF3333; transform: scale(1); }
+            50% { color: #FF9999; transform: scale(1.15); }
+        }
+        
+        .countdown-alert {
+            animation: blinkRed 0.8s ease-in-out infinite;
+        }
+        /* 🔹 세그먼트 남은 시간 스타일 */
+        #segmentTime {
+            font-size: 28px;             /* ✅ 글자 크기 업 */
+            font-weight: 700;
+            color: #fff;
+            transition: color 0.3s ease, transform 0.2s ease;
+        }
+        
+        /* 🔸 10초 이하 시 깜빡임 + 확대 효과 */
+        @keyframes blinkRed {
+            0%, 100% { color: #FF3333; transform: scale(1); }
+            50% { color: #FF9999; transform: scale(1.15); }
+        }
+        
+        .countdown-alert {
+            animation: blinkRed 0.8s ease-in-out infinite;
+        }
+
+
+        /* 🔹 경과 시간 표기 */        
+        #elapsedTime {
+            font-weight: 700;
+            font-size: 22px;
+            color: #00E6A8; /* 민트색 */
+        }
+        
+        #elapsedPercent {
+            font-weight: 600;
+            font-size: 18px;
+            color: #FFD700; /* 노란색으로 진행률 강조 */
+        }
+        
+        .segment-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 16px;
+            color: #fff;
+            gap: 10px;
+        }
+
+        
     </style>
 </head>
 <body>
@@ -854,8 +915,11 @@
                 <!-- 사용자 정보가 여기 표시됩니다 -->
             </div>
             <div class="segment-details">
+                <span>
+                    경과: <span id="elapsedTime">00:00</span>
+                    (<span id="elapsedPercent">0</span>%)
+                </span>
                 <span id="segmentTime">02:30 / 03:00</span>
-                <span id="segmentProgress">단계 2/17</span>
                 <span id="nextSegment">다음: 인터벌 FTP 140%</span>
             </div>
         </div>
@@ -1306,11 +1370,7 @@
             });
         }
 
-        function selectUser(user) {
-            currentUser = user;
-            alert(`${user.name}님, 환영합니다!`);
-            showScreen('workoutScreen');
-
+        // 사용자 W/kg 색상 등급 표시
             function showUserInfo() {
                 if (!currentUser) return;
             
@@ -1336,7 +1396,14 @@
                 userInfoEl.style.borderRadius = "8px";
                 userInfoEl.style.color = "#fff";
             }
-            
+
+
+        
+        function selectUser(user) {
+            currentUser = user;
+            alert(`${user.name}님, 환영합니다!`);
+            showScreen('workoutScreen');
+ 
         }
 
         function showAddUserForm() {
@@ -1510,6 +1577,10 @@
 
         // 훈련 실행 함수들 - 수정된 부분
         function initializeTraining() {
+
+            if (!currentWorkout || !currentUser) return;
+            showUserInfo(); // ✅ 사용자 정보 표시/ 등급표시
+            
             if (!currentWorkout || !currentUser) return;
 
             // 상태 초기화
@@ -1809,7 +1880,14 @@
                 const elapsedSeconds = Math.floor((elapsed % 60000) / 1000);
                 document.getElementById('elapsedTime').textContent =
                     `${elapsedMinutes.toString().padStart(2, '0')}:${elapsedSeconds.toString().padStart(2, '0')}`;
+                    // ✅ 전체 진행률 계산 (훈련 총 시간 대비)
+                    if (currentWorkout && currentWorkout.total_duration) {
+                        const totalMs = currentWorkout.total_duration * 1000;
+                        const percent = Math.min(100, ((elapsed / totalMs) * 100).toFixed(0));
+                        document.getElementById('elapsedPercent').textContent = percent;
+                    }
 
+                
                 const totalMinutes = Math.floor(currentWorkout.total_duration / 60);
                 const totalSecondsRemaining = currentWorkout.total_duration % 60;
                 document.getElementById('totalTime').textContent =
@@ -1823,20 +1901,30 @@
             }, 1000); 
         }
 
+
+
+        // 세그먼트 시간 카운다운        
         function updateSegmentTimer(segmentElapsed) {
             const currentSeg = trainingSession.segments[trainingSession.currentSegment];
             if (!currentSeg) return;
-
+        
             const segmentRemaining = Math.max(0, currentSeg.duration_sec * 1000 - segmentElapsed);
             const remainingMinutes = Math.floor(segmentRemaining / 60000);
             const remainingSeconds = Math.floor((segmentRemaining % 60000) / 1000);
-
-            const segmentTotalMinutes = Math.floor(currentSeg.duration_sec / 60);
-            const segmentTotalSeconds = currentSeg.duration_sec % 60;
-
-            document.getElementById('segmentTime').textContent =
-                `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')} / ${segmentTotalMinutes.toString().padStart(2, '0')}:${segmentTotalSeconds.toString().padStart(2, '0')}`;
+        
+            const segmentTimeEl = document.getElementById('segmentTime');
+        
+            // ✅ 카운트다운만 표시
+            segmentTimeEl.textContent = `${remainingMinutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+        
+            // ✅ 10초 이하일 때 빨간색 & 깜빡임
+            if (remainingSeconds <= 10 && segmentRemaining > 0) {
+                segmentTimeEl.classList.add("countdown-alert");
+            } else {
+                segmentTimeEl.classList.remove("countdown-alert");
+            }
         }
+
 
         // 수정된 세그먼트 진행 체크 함수
         function checkSegmentProgress(segmentElapsed) {
