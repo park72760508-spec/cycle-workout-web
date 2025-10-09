@@ -734,10 +734,24 @@
 
             .current-power {
                 font-size: 96px;
+                line-height: 0.9;   /* 0.85~1 사이에서 취향대로 조절 */
+                margin-bottom: 0;
             }
         }
 
+            /* 바로 다음 줄의 "WATTS"를 위로 살짝 끌어올림 */
+            #currentPowerValue + div {
+              margin-top: -6px;   /* -4 ~ -10px 범위에서 화면 보면서 조절 */
+              line-height: 1;
+              /* 필요하면 더 미세 조정:
+              position: relative;
+              top: -2px;
+              */
+            }
 
+
+
+        
         /* 🔹 세그먼트 남은 시간 스타일 */
         #segmentTime {
             font-size: 70px;             /* ✅ 글자 크기 업 */
@@ -971,14 +985,12 @@
     <!-- 훈련 화면 -->
     <div id="trainingScreen" class="screen">
         <div class="training-header">
-             <!--<div class="current-segment" id="currentSegmentName">웜업 - 80RPM FTP 60%</div>-->
             <div id="userInfo" style="font-size: 14px; color: #ccc; margin-top: 4px;">
                 <!-- 사용자 정보가 여기 표시됩니다 -->
             </div>
             <div class="segment-details">
                 <span>
-                    경과: <span id="elapsedTime">00:00</span>
-                    (<span id="elapsedPercent">0</span>%)
+                    경과 시간: <span id="elapsedTime">00:00</span>
                 </span>
                 <span id="segmentTime">00:00</span>
                 <span id="nextSegment">다음: 인터벌 FTP 140%</span>
@@ -1050,7 +1062,7 @@
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; font-size: 12px; opacity: 0.7;">
-                <span>경과: </span> 
+                <span>진행률: <span id="elapsedPercent">0</span>%</span> 
                 <!-- <span>달성도: <span id="achievementValue">87</span>%</span>-->
                 <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
             </div>
