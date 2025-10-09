@@ -1023,9 +1023,6 @@
                     </div>                    
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
-                    //<div id="powerComparison" style="font-size: 48px; font-weight: 700; margin-bottom: 5px;">
-                        //목표 :  <span id="targetPowerValue">194</span>W
-                    //</div>
                     <div id="powerComparison" class="metric-value" style="font-size:48px; font-weight:700; margin-bottom:5px;">
                       목표 : <span id="targetPowerValue">194</span>W
                     </div>
@@ -2207,7 +2204,23 @@
           }
         }
 
+        // ① 유틸
+        function getSegmentDurationMs(seg){
+          if(!seg) return 0;
+          const parentMs = (Number(seg.duration_sec)||0)*1000;
+          const childMs = (seg.steps||seg.segments||seg.intervals||seg.children||[])
+            .reduce((a,s)=>a+((Number(s.duration_sec)||0)*1000),0);
+          return childMs>0 ? childMs : parentMs;
+        }
+        
+        // ② 진행률 계산 교체
+        const segDurationMs = getSegmentDurationMs(currentSeg);
+        const progressPercent = segDurationMs>0
+          ? Math.min(100, (segmentElapsed/segDurationMs)*100)
+          : 0;
+        
 
+        
 
         // 수정된 세그먼트 진행 체크 함수
         function checkSegmentProgress(segmentElapsed) {
