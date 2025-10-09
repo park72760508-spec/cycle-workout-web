@@ -329,7 +329,7 @@
         .segment-details {
             display: flex;
             justify-content: space-around;
-            font-size: 30px;
+            font-size: 16px;
             opacity: 0.8;
         }
 
@@ -833,6 +833,7 @@
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          font-size: 18px; 
         }
                 
         /* 세그먼트 진행률: 칼로리 표시와 동일 컬러(화이트), 굵게/크게 */
@@ -1433,12 +1434,6 @@
             alert('❌ 파워미터 연결 실패: ' + err.message);
           }
         }
-
-
-        navigator.bluetooth.requestDevice({
-          filters: [{ services: ['cycling_power'] }],
-          optionalServices: ['device_information']
-        });
 
 
         function handleTrainerData(event) {
@@ -2104,7 +2099,8 @@
                 liveData.targetPower = targetPower;
             }
             
-            updateTargetPower(); // 타겟 파워 숫자/화면 갱신
+            const targetEl = document.getElementById('targetPowerValue');
+            if (targetEl) targetEl.textContent = Math.round(liveData.targetPower);
             colorizeLapPower();  // ✅ 새 목표 기준으로 재색칠
             
         }
@@ -2177,7 +2173,7 @@
                 }
             }
 
-            document.getElementById('avgSegmentPowerValue').textContent = Math.round(segmentAvgPower);
+            //document.getElementById('avgSegmentPowerValue').textContent = Math.round(segmentAvgPower);
             // 또는 document.getElementById('avgPowerValue').textContent = ...
             colorizeLapPower(); // ✅ 바로 호출
 
