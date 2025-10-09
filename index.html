@@ -801,7 +801,7 @@
         
 
         #tssValue {
-            color: #fff !important;
+            color: #fff;
             font-weight: 700;
             transition: color 0.3s ease;
         }
@@ -843,22 +843,8 @@
         .power-progress { height: 30px; }     /* 기본값으로 돌리려면 유지/추가 */
         .power-progress-label { line-height: 30px; }
 
-        /* 컨테이너(목표:, W)는 흰색 + 칼로리 숫자와 동일 폰트 */
-        #powerComparison {
-          font-size: 30px !important;   /* 칼로리 값과 동일 */
-          font-weight: 700 !important;
-          color: #fff !important;       /* '목표:'와 'W'는 흰색 */
-          line-height: 1.1;
-        }
-        
-        /* 숫자만 민트 */
-        #powerComparison #targetPowerValue {
-          color: #00E6A8 !important;    /* 민트 */
-          font-size: inherit !important;
-          font-weight: inherit !important;
-        }
-
-        
+        #powerComparison { color: #fff; }
+        #powerComparison #targetPowerValue { color: #00E6A8; }        
         
     </style>
 </head>
@@ -1037,9 +1023,13 @@
                     </div>                    
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
-                    <div id="powerComparison" style="font-size: 48px; font-weight: 700; margin-bottom: 5px;">
-                        목표 :  <span id="targetPowerValue">194</span>W
+                    //<div id="powerComparison" style="font-size: 48px; font-weight: 700; margin-bottom: 5px;">
+                        //목표 :  <span id="targetPowerValue">194</span>W
+                    //</div>
+                    <div id="powerComparison" class="metric-value" style="font-size:48px; font-weight:700; margin-bottom:5px;">
+                      목표 : <span id="targetPowerValue">194</span>W
                     </div>
+                    
                      <!-- 진행률 표시 (FTP% → 세그먼트 진행률) -->
                     <div id="segmentProgressText" class="segment-progress">
                       진행률 <span id="segmentProgress">0</span>%
