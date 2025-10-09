@@ -848,6 +848,23 @@
         }
 
 
+        /* powerComparison 안의 라벨(‘목표 :’, ‘W’)만 라벨 스타일 */
+        #powerComparison .metric-label {
+          font-size: 12px;
+          opacity: 0.7;
+          text-transform: uppercase;
+        }
+        
+        /* 숫자는 기존 스타일 유지(예: 민트 색 등) – 필요시 명시 */
+        #powerComparison #targetPowerValue {
+          /* 예시: 민트 유지 */
+          color: #00E6A8;
+          /* 폰트 크기/굵기는 현재 값 유지 or 원하는 값으로 */
+          /* font-size: 48px; font-weight: 700; */
+        }
+
+
+        
         
         /* (선택) 막대 높이를 기본 20px로 맞추고 줄간격도 정렬 */
         .power-progress { height: 30px; }     /* 기본값으로 돌리려면 유지/추가 */
@@ -1055,7 +1072,9 @@
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
                     <div id="powerComparison" class="metric-value">
-                      목표 : <span id="targetPowerValue">194</span>W
+                      <span class="metric-label">목표 :</span>
+                      <span id="targetPowerValue">194</span>
+                      <span class="metric-label">W</span>
                     </div>
                      <!-- 진행률 표시 (FTP% → 세그먼트 진행률) -->
                     <div id="segmentProgressText" class="segment-progress">
