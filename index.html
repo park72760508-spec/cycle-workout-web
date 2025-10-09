@@ -835,7 +835,7 @@
     <div id="connectionScreen" class="screen active">
         <div class="header">
             <h1>🚴‍♂️ 사이클 아카데미</h1>
-            <p class="subtitle">스마트 트레이너와 심박계를 연결하세요</p>
+            <p class="subtitle">와 심박계를 연결하세요</p>
         </div>
 
         <div class="card">
@@ -843,6 +843,7 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                 <button class="btn" onclick="connectTrainer()">스마트 트레이너</button>
                 <button class="btn btn-secondary" onclick="connectHeartRate()">심박계 연결</button>
+                <button class="btn" onclick="connectPowerMeter()">파워미터 연결</button>
             </div>
         </div>
 
@@ -1172,56 +1173,79 @@
 
         // BLE 연결 함수들
         async function connectTrainer() {
+          try {
+            showConnectionStatus(true);
+        
+            const device = await navigator.bluetooth.requestDevice({
+              // 기존 필터 유지(트레이너 탐색용). 파워미터는 별도 버튼/함수로도 연결 가능
+              filters: [
+                { services: ['fitness_machine'] },
+                { services: ['cycling_power'] },
+                { namePrefix: 'KICKR' },
+                { namePrefix: 'Wahoo' }
+              ],
+              optionalServices: ['device_information', 'fitness_machine', 'cycling_power']
+            });
+        
+            const server = await device.gatt.connect();
+        
+            // ★ FTMS 우선, 실패하면 CPS로 폴백
+            let service, characteristic, isFTMS = false;
             try {
-                showConnectionStatus(true);
-                
-                const device = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { services: ['fitness_machine'] },
-                        { services: ['cycling_power'] },
-                        { namePrefix: 'KICKR' },
-                        { namePrefix: 'Wahoo' }
-                    ],
-                    optionalServices: ['device_information', 'fitness_machine', 'cycling_power']
-                });
-
-                const server = await device.gatt.connect();
-                
-                // Fitness Machine Service 시도
-                let service, characteristic;
-                try {
-                    service = await server.getPrimaryService('fitness_machine');
-                    characteristic = await service.getCharacteristic('indoor_bike_data');
-                } catch (e) {
-                    // Cycling Power Service 대안
-                    try {
-                        service = await server.getPrimaryService('cycling_power');
-                        characteristic = await service.getCharacteristic('cycling_power_measurement');
-                    } catch (e2) {
-                        throw new Error('지원되는 서비스를 찾을 수 없습니다.');
-                    }
-                }
-
-                await characteristic.startNotifications();
-                characteristic.addEventListener('characteristicvaluechanged', handleTrainerData);
-
-                connectedDevices.trainer = {
-                    name: device.name || 'Smart Trainer',
-                    device: device,
-                    server: server,
-                    characteristic: characteristic
-                };
-
-                updateDevicesList();
-                showConnectionStatus(false);
-                alert(`✅ ${device.name} 연결 성공!`);
-            } catch (error) {
-                showConnectionStatus(false);
-                console.error('트레이너 연결 오류:', error);
-                alert("❌ 트레이너 연결 실패: " + error.message);
+              service = await server.getPrimaryService('fitness_machine');
+              characteristic = await service.getCharacteristic('indoor_bike_data');
+              isFTMS = true;
+            } catch (e) {
+              // ★ FTMS 실패 → CPS 시도
+              service = await server.getPrimaryService('cycling_power');
+              characteristic = await service.getCharacteristic('cycling_power_measurement');
+              isFTMS = false;
             }
+        
+            await characteristic.startNotifications();
+        
+            if (isFTMS) {
+              // ✅ 트레이너 경로: FTMS 파서 + trainer 슬롯
+              characteristic.addEventListener('characteristicvaluechanged', handleTrainerData);
+              connectedDevices.trainer = {
+                name: device.name || 'Smart Trainer',
+                device, server, characteristic
+              };
+            } else {
+              // ✅ 파워미터 경로: CPS 파서 + powerMeter 슬롯
+              characteristic.addEventListener('characteristicvaluechanged', handlePowerMeterData);
+              connectedDevices.powerMeter = {
+                name: device.name || 'Power Meter',
+                device, server, characteristic
+              };
+              usePowerMeterPreferred = true; // 외부 파워/케이던스 우선
+            }
+        
+            // (선택 권장) 연결 해제 시 슬롯 정리
+            device.addEventListener('gattserverdisconnected', () => {
+              try {
+                if (isFTMS && connectedDevices.trainer?.device === device) {
+                  connectedDevices.trainer = null;
+                }
+                if (!isFTMS && connectedDevices.powerMeter?.device === device) {
+                  connectedDevices.powerMeter = null;
+                }
+                updateDevicesList();
+              } catch (e) { console.warn(e); }
+            });
+        
+            updateDevicesList();
+            showConnectionStatus(false);
+            alert(`✅ ${device.name || (isFTMS ? 'Smart Trainer' : 'Power Meter')} 연결 성공!`);
+          } catch (error) {
+            showConnectionStatus(false);
+            console.error('트레이너/파워미터 연결 오류:', error);
+            alert("❌ 연결 실패: " + error.message);
+          }
         }
 
+
+        // 심박계 연결함수
         async function connectHeartRate() {
             try {
                 showConnectionStatus(true);
@@ -1442,6 +1466,7 @@
                 </div>
               `;
             }
+
             
             if (connectedDevices.heartRate) {
                 connectedCount++;
@@ -1470,9 +1495,10 @@
         }
 
         function proceedToProfile() {
-            if (!connectedDevices.trainer) {
-                alert('훈련을 위해서는 스마트 트레이너가 필요합니다.');
-                //return;  // 수정예정
+            //if (!connectedDevices.trainer) {
+            if (!connectedDevices.trainer && !connectedDevices.powerMeter) {
+                alert('훈련을 위해서는 스마트 트레이너 또는 파워메터가 필요합니다.');
+                //return;  // 수정예정====> 실전배포 시 삭제 필요!!!!
             }
             showScreen('profileScreen');
         }
@@ -1933,7 +1959,7 @@
             }
 
             // 시뮬레이션 데이터 생성 (실제 기기가 연결되지 않은 경우)
-            if (!connectedDevices.trainer) {
+            if (!connectedDevices.trainer && !connectedDevices.powerMeter) {
                 startDataSimulation();
             }
         }
