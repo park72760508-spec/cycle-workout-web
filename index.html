@@ -830,6 +830,10 @@
         
     </style>
 </head>
+
+
+
+    
 <body>
     <!-- 연결 화면 -->
     <div id="connectionScreen" class="screen active">
@@ -1154,6 +1158,78 @@
             targetPower: 0
         };
 
+        // 상단(전역) 어딘가에 한 번만 선언
+        const CPS_FLAG = {
+          PEDAL_POWER_BALANCE_PRESENT: 1 << 0,   // +1 byte
+          PEDAL_POWER_BALANCE_REF:     1 << 1,   // (길이 없음)
+          ACC_TORQUE_PRESENT:          1 << 2,   // +2 bytes
+          ACC_TORQUE_SOURCE:           1 << 3,   // (길이 없음)
+          WHEEL_REV_DATA_PRESENT:      1 << 4,   // +6 bytes (u32 revs + u16 time1/1024s)
+          CRANK_REV_DATA_PRESENT:      1 << 5,   // +4 bytes (u16 revs + u16 time1/1024s)
+          // 이후 Extreme/Angle/Energy 등은 필요 시 확장
+        };
+        
+        let powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
+        let powerMeterCadenceLastTs = 0;
+        const POWER_METER_CADENCE_TTL = 3000; // ms
+        
+        function handlePowerMeterData(event) {
+          const dv = event.target.value;
+          let off = 0;
+        
+          const flags = dv.getUint16(off, true); off += 2;
+          const instPower = dv.getInt16(off, true); off += 2;
+        
+          // 파워: 외부 우선이면 파워미터 값 사용
+          if (usePowerMeterPreferred) {
+            liveData.power = instPower;
+          }
+        
+          // (1) Pedal Power Balance (있으면 1바이트 스킵)
+          if (flags & CPS_FLAG.PEDAL_POWER_BALANCE_PRESENT) off += 1;
+        
+          // (2) Accumulated Torque (있으면 2바이트 스킵)
+          if (flags & CPS_FLAG.ACC_TORQUE_PRESENT) off += 2;
+        
+          // (3) Wheel Revolution Data (있으면 6바이트 스킵)
+          if (flags & CPS_FLAG.WHEEL_REV_DATA_PRESENT) {
+            // 필요하면 여기서 휠 데이터 읽을 수 있음:
+            // const wheelRevs = dv.getUint32(off, true);
+            // const wheelTime = dv.getUint16(off + 4, true);
+            off += 6;
+          }
+        
+          // (4) Crank Revolution Data → 여기서 케이던스 계산
+          if (flags & CPS_FLAG.CRANK_REV_DATA_PRESENT) {
+            const crankRevs = dv.getUint16(off, true); off += 2;
+            const lastCrankTime = dv.getUint16(off, true); off += 2; // 1/1024초 단위
+        
+            if (powerMeterState.lastCrankEventTime != null) {
+              let dRevs = crankRevs - powerMeterState.lastCrankRevs; if (dRevs < 0) dRevs += 65536;
+              let dTime = lastCrankTime - powerMeterState.lastCrankEventTime; if (dTime < 0) dTime += 65536;
+        
+              const seconds = dTime / 1024;
+              if (seconds > 0) {
+                const cadence = (dRevs / seconds) * 60; // RPM
+                if (usePowerMeterPreferred) {
+                  liveData.cadence = cadence;
+                  powerMeterCadenceLastTs = Date.now();
+                }
+              }
+            }
+            powerMeterState.lastCrankRevs = crankRevs;
+            powerMeterState.lastCrankEventTime = lastCrankTime;
+          }
+        
+          if (trainingSession.isRunning && !trainingSession.isPaused) {
+            updateTrainingDisplay();
+            recordDataPoint();
+          }
+        }
+
+
+
+        
         // 화면 전환 함수들
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(screen => {
@@ -1283,68 +1359,72 @@
           try {
             showConnectionStatus(true);
         
-            // 일부 장치는 광고에 서비스 UUID를 안 실으므로 acceptAllDevices 권장
+            // ⚠️ filters는 'OR' 매칭입니다. 광고에 서비스가 없을 수 있어 브랜드 prefix도 병행.
+            const filters = [
+              { services: [0x1818] },                 // Cycling Power Service 광고하는 기기
+              { namePrefix: 'SHIMANO' },              // 시마노
+              { namePrefix: 'R9100' }, { namePrefix: 'R9200' },
+              { namePrefix: 'FC-R' }, { namePrefix: 'FC-R8' }, // 시마노 크랭크형 명칭들
+              { namePrefix: '4iiii' }, { namePrefix: 'STAGES' },
+              { namePrefix: 'FAVERO' }, { namePrefix: 'ASSIOMA' },
+              { namePrefix: 'GARMIN' }, { namePrefix: 'VECTOR' },
+              { namePrefix: 'QUARQ' }, { namePrefix: 'SRAM' },
+              { namePrefix: 'SIGEYI' }, { namePrefix: 'MAGENE' },
+              { namePrefix: 'XCADEY' }
+            ];
+        
             const device = await navigator.bluetooth.requestDevice({
-              acceptAllDevices: true,
-              optionalServices: [0x1818, 'cycling_power', 'device_information'] // CPS
+              filters,
+              optionalServices: [0x1818, 0x180A] // CPS, Device Information
             });
         
             const server = await device.gatt.connect();
-        
-            let service;
-            try {
-              service = await server.getPrimaryService(0x1818);
-            } catch {
-              service = await server.getPrimaryService('cycling_power');
-            }
-            const ch = await service.getCharacteristic(0x2A63 /* cycling_power_measurement */);
+            const svc = await server.getPrimaryService(0x1818);
+            const ch  = await svc.getCharacteristic(0x2A63);
         
             await ch.startNotifications();
             ch.addEventListener('characteristicvaluechanged', handlePowerMeterData);
         
             connectedDevices.powerMeter = { name: device.name || 'Power Meter', device, server, characteristic: ch };
-            usePowerMeterPreferred = true; // 연결되면 외부 파워 우선
+            usePowerMeterPreferred = true;
         
-            updateDevicesList(); // 연결 리스트에 표시 (아래 D 참고)
+            // 연결 해제 처리
+            device.addEventListener('gattserverdisconnected', () => {
+              if (connectedDevices.powerMeter?.device === device) connectedDevices.powerMeter = null;
+              updateDevicesList();
+            });
+        
+            updateDevicesList();
             showConnectionStatus(false);
-            alert(`✅ ${device.name} 파워미터 연결 성공!`);
+            alert(`✅ ${device.name || 'Power Meter'} 연결 성공`);
           } catch (err) {
             showConnectionStatus(false);
-            console.error('파워미터 연결 오류:', err);
             alert('❌ 파워미터 연결 실패: ' + err.message);
           }
         }
 
 
-        
+
+
         function handleTrainerData(event) {
-          const data = event.target.value;
+          const dv = event.target.value;
+          const flags = dv.getUint16(0, true);
+          let off = 2;
         
-          // FTMS Indoor Bike Data
-          if (data.byteLength >= 4) {
-            const flags = data.getUint16(0, true);
-            let offset = 2;
-        
-            // 케이던스 (Bit 2)
-            if (flags & 0x04) {
-              const ftmsCadence = data.getUint16(offset, true) * 0.5; // RPM
-              offset += 2;
-        
-              // ✅ 파워미터 캐이던스가 최근(3초 내)이면 FTMS 값으로 덮어쓰지 않음
-              const pmFresh = (Date.now() - powerMeterCadenceLastTs) < POWER_METER_CADENCE_TTL;
-              if (!(usePowerMeterPreferred && connectedDevices.powerMeter && pmFresh)) {
-                liveData.cadence = ftmsCadence;
-              }
+          // FTMS cadence (bit2) 있을 때
+          if (flags & 0x0004) {
+            const ftmsCad = dv.getUint16(off, true) * 0.5; off += 2;
+            const pmFresh = (Date.now() - powerMeterCadenceLastTs) < POWER_METER_CADENCE_TTL;
+            if (!(usePowerMeterPreferred && connectedDevices.powerMeter && pmFresh)) {
+              liveData.cadence = ftmsCad; // 파워미터 신호 신선하면 덮어쓰지 않음
             }
+          }
         
-            // 파워 (Bit 6)
-            if (flags & 0x40) {
-              const ftmsPower = data.getInt16(offset, true);
-        
-              // ✅ 파워도 외부 우선이면 덮어쓰지 않음 (이전 단계에서 적용했던 동일 로직)
-              if (!(usePowerMeterPreferred && connectedDevices.powerMeter)) {
-                liveData.power = ftmsPower;
-              }
+          // FTMS power(bit6)도 기존 가드 유지
+          if (flags & 0x0040) {
+            const ftmsPower = dv.getInt16(off, true);
+            if (!(usePowerMeterPreferred && connectedDevices.powerMeter)) {
+              liveData.power = ftmsPower;
             }
           }
         
@@ -1353,7 +1433,8 @@
             recordDataPoint();
           }
         }
- 
+
+        
         function handleHeartRateData(event) {
             const value = event.target.value;
             const flags = value.getUint8(0);
