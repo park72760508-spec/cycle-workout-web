@@ -437,6 +437,30 @@
             text-transform: uppercase;
         }
 
+        /* 목표 파워 라인: 칼로리 숫자(metric-value) 톤과 동일화 */
+        #powerComparison{
+          font-size:48px; 
+          font-weight:700;
+          color:#fff;                 /* '목표:'와 'W' */
+          font-variant-numeric: tabular-nums;
+          font-feature-settings: 'tnum' 1, 'lnum' 1;
+        }
+        #powerComparison #targetPowerValue{
+          color:#00E6A8;              /* 숫자만 민트 */
+        }
+        /* 목표 파워 라인: 칼로리 숫자(metric-value) 톤과 동일화 */
+        #powerComparison{
+          font-size:48px; 
+          font-weight:700;
+          color:#fff;                 /* '목표:'와 'W' */
+          font-variant-numeric: tabular-nums;
+          font-feature-settings: 'tnum' 1, 'lnum' 1;
+        }
+        #powerComparison #targetPowerValue{
+          color:#00E6A8;              /* 숫자만 민트 */
+        }
+
+        
         .power-display {
             display: flex;
             flex-direction: column;
@@ -479,16 +503,6 @@
 
         /* 랩파워 달성도 표기 */
         .power-progress { position: relative; }
-        
-        .power-progress-label {
-          position: absolute; inset: 0;
-          display: flex; align-items: center; justify-content: center;
-          pointer-events: none;
-          font-weight: 700; color: #fff; font-size: 18px;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.35);
-        }
-
-
         
 
         .timeline-progress {
@@ -761,24 +775,11 @@
             transition: color 0.3s ease, transform 0.2s ease;
         }
 
-        .segment-details {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 16px;
-            color: #fff;
-            gap: 10px;
-        }
-
         
         /* 🔸 10초 이하 시 깜빡임 + 확대 효과 */
         @keyframes blinkRed {
             0%, 100% { color: #FF3333; transform: scale(1); }
             50% { color: #FF9999; transform: scale(1.15); }
-        }
-        
-        .countdown-alert {
-            animation: blinkRed 0.8s ease-in-out infinite;
         }
         
         .countdown-alert {
@@ -806,11 +807,10 @@
             transition: color 0.3s ease;
         }
 
-
         /* 3개 영역을 동일 너비로 */
         .segment-details > span {
           flex: 1 1 0;
-        }
+        }        
         
         /* 왼쪽/가운데/오른쪽 정렬 */
         .segment-details > span:nth-child(1) { text-align: left; }
@@ -1023,10 +1023,9 @@
                     </div>                    
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
-                    <div id="powerComparison" class="metric-value" style="font-size:48px; font-weight:700; margin-bottom:5px;">
+                    <div id="powerComparison" class="metric-value">
                       목표 : <span id="targetPowerValue">194</span>W
                     </div>
-                    
                      <!-- 진행률 표시 (FTP% → 세그먼트 진행률) -->
                     <div id="segmentProgressText" class="segment-progress">
                       진행률 <span id="segmentProgress">0</span>%
@@ -2138,6 +2137,19 @@
                 document.getElementById("tssValue").textContent = tss.toFixed(1);
             }
 
+        <script>
+        // 총 계획시간(ms) 계산: 세그먼트 합계를 우선, 메타(total_duration)와 차이가 크면 합계 사용
+        function getPlanTotalDurationMs() {
+          if (!currentWorkout) return 0;
+          const sumSec = (currentWorkout.segments || [])
+            .reduce((acc, s) => acc + (Number(s.duration_sec) || 0), 0);
+          const metaSec = Number(currentWorkout.total_duration) || 0;
+          if (sumSec > 0 && (metaSec === 0 || Math.abs(sumSec - metaSec) > 1)) {
+            return sumSec * 1000;           // 세그먼트 합 우선
+          }
+          return (metaSec || sumSec) * 1000;
+        }
+        </script>
 
 
         
@@ -2158,17 +2170,17 @@
                 document.getElementById('elapsedTime').textContent =
                     `${elapsedMinutes.toString().padStart(2, '0')}:${elapsedSeconds.toString().padStart(2, '0')}`;
                     // ✅ 전체 진행률 계산 (훈련 총 시간 대비)
-                    if (currentWorkout && currentWorkout.total_duration) {
-                        const totalMs = currentWorkout.total_duration * 1000;
-                        const percent = Math.min(100, ((elapsed / totalMs) * 100).toFixed(0));
-                        document.getElementById('elapsedPercent').textContent = percent;
+                    const totalMs = getPlanTotalDurationMs();
+                    if (totalMs > 0) {
+                      const percent = Math.min(100, Math.floor((elapsed / totalMs) * 100));
+                      const ep = document.getElementById('elapsedPercent');
+                      if (ep) ep.textContent = percent;
                     }
-
-                
-                const totalMinutes = Math.floor(currentWorkout.total_duration / 60);
-                const totalSecondsRemaining = currentWorkout.total_duration % 60;
-                //document.getElementById('totalTime').textContent =
-                    //`${totalMinutes.toString().padStart(2, '0')}:${totalSecondsRemaining.toString().padStart(2, '0')}`;
+                    
+                    // 총 시간 표기도 합계 기준으로 맞추고 싶다면
+                    const totalSec = Math.round(totalMs / 1000);
+                    const totalMinutes = Math.floor(totalSec / 60);
+                    const totalSecondsRemaining = totalSec % 60;
 
                 checkSegmentProgress(segmentElapsed);
                 updateSegmentTimer(segmentElapsed);
