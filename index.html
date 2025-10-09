@@ -1374,18 +1374,24 @@
             let device;
             // 1차: 파워미터로 의심되는 것만 노출
             try {
-              device = await navigator.bluetooth.requestDevice({
-                filters: [
-                  { services: [0x1818] }, // cycling_power
-                  { namePrefix: '4iiii' },
-                  { namePrefix: 'Stages' },
-                  { namePrefix: 'Favero' },
-                  { namePrefix: 'Garmin' },
-                  { namePrefix: 'SRM' },
-                  { namePrefix: 'Shimano' }
-                ],
-                optionalServices: [0x1818, 'device_information']
-              });
+              //device = await navigator.bluetooth.requestDevice({
+                //filters: [
+                  //{ services: [0x1818] }, // cycling_power
+                  //{ namePrefix: '4iiii' },
+                  //{ namePrefix: 'Stages' },
+                  //{ namePrefix: 'Favero' },
+                  //{ namePrefix: 'Garmin' },
+                  //{ namePrefix: 'SRM' },
+                  //{ namePrefix: 'Shimano' }
+                //],
+                //optionalServices: [0x1818, 'device_information']
+              //});
+
+                device = await navigator.bluetooth.requestDevice({
+                  filters: [{ services: ['cycling_power'] }],
+                  optionalServices: ['device_information']   // 필요하면 'cycling_power'도 추가 가능
+                });
+                
             } catch {
               // 2차: 일부 기기는 광고에 서비스를 안 실음 → 폴백
               device = await navigator.bluetooth.requestDevice({
@@ -1393,7 +1399,8 @@
                 optionalServices: [0x1818, 'cycling_power', 'device_information']
               });
             }
-        
+
+              
             const server = await device.gatt.connect();
             let service;
             try { service = await server.getPrimaryService(0x1818); }
@@ -1417,7 +1424,10 @@
         }
 
 
-
+        navigator.bluetooth.requestDevice({
+          filters: [{ services: ['cycling_power'] }],
+          optionalServices: ['device_information']
+        });
 
 
         function handleTrainerData(event) {
@@ -2137,7 +2147,7 @@
                 document.getElementById("tssValue").textContent = tss.toFixed(1);
             }
 
-        <script>
+
         // 총 계획시간(ms) 계산: 세그먼트 합계를 우선, 메타(total_duration)와 차이가 크면 합계 사용
         function getPlanTotalDurationMs() {
           if (!currentWorkout) return 0;
@@ -2149,7 +2159,7 @@
           }
           return (metaSec || sumSec) * 1000;
         }
-        </script>
+
 
 
         
