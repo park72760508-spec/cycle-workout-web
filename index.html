@@ -601,56 +601,57 @@
         .lap-power--yellow { color: #FFD700 !important; } /* <90%  */
         .lap-power--white  { color: #FFFFFF !important; } /* 90~95% */
 
+        
+        
 
-        /* 줄 자체를 폭 제한 + 가운데 배치 */
+        /* ===== SEGMENT DETAILS (Consolidated) 경과 시간 ===== */
         .training-header .segment-details {
           display: flex;
-          justify-content: space-between !important; /* 각 칸 동일폭으로 배치 */
           align-items: center;
+          justify-content: space-between;   /* 3칸 균등 배치 */
           gap: 20px;
         
           width: 100%;
-          max-width: 720px;          /* 원하는 최대 폭(예: 600~900px로 조절 가능) */
-          margin: 0 auto;            /* 컨테이너를 화면 중앙에 */
+          max-width: 720px;                 /* 줄 전체를 가운데 고정 */
+          margin: 0 auto;
         }
         
-        /* 각 칸 동일폭 유지 */
+        /* 각 칸 동일폭 + 레이아웃 안정화 */
         .training-header .segment-details > span {
-          flex: 1 1 0 !important;    /* 기존 flex:1 규칙을 보장 */
-          min-width: 0;               /* 길어질 때 레이아웃 깨짐 방지 */
-          text-align: center;         /* 기본 중앙(필요하면 아래 Nth로 좌/우 조절) */
+          flex: 1 1 0;
+          min-width: 0;
+          text-align: center;               /* 기본 중앙 */
         }
         
-        /* (선택) 좌/중/우 정렬을 유지하고 싶으면 켜기 */
-
-        .training-header .segment-details > span:nth-child(1){ text-align: left; }
-        .training-header .segment-details > span:nth-child(2){ text-align: center; }
-        .training-header .segment-details > span:nth-child(3){ text-align: right; }
-
-        /* 2줄 세로 배치 */
+        /* 좌/중/우 정렬 */
+        .training-header .segment-details > span:nth-child(1) { text-align: left; }
+        .training-header .segment-details > span:nth-child(2) { text-align: center; }
+        .training-header .segment-details > span:nth-child(3) { text-align: right; }
+        
+        /* 왼쪽 ‘경과 시간’ 2줄 스택 */
         .segment-details .elapsed-block {
           display: flex;
           flex-direction: column;
-          align-items: flex-start;     /* 중앙으로 보이게 하려면 center 로 변경 */
+          align-items: flex-start;          /* 내부 텍스트는 좌측 정렬 */
           line-height: 1.05;
         }
         
-        /* 1줄째: 경과 시간 값(민트, 40px) */
+        /* 1줄째: 경과 시간 값(민트, 크게) */
         .segment-details .elapsed-block #elapsedTime {
           font-size: 40px;
           font-weight: 700;
           color: #00E6A8;
+          line-height: 1;
         }
         
-        /* 2줄째: 라벨을 metric-label 톤으로 */
+        /* 2줄째: 라벨( metric-label 톤 ) */
         .segment-details .elapsed-block .metric-label {
           font-size: 12px;
           opacity: 0.7;
-          text-transform: uppercase;   /* 한글은 그대로, 영문만 대문자 처리 */
+          text-transform: uppercase;        /* 한글 영향 없음, 영문만 대문자 */
           margin-top: 2px;
         }
-        
-
+        /* ===== /SEGMENT DETAILS ===== */
 
 
 
