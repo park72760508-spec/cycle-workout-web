@@ -1257,7 +1257,7 @@
     <script>
         // Google Apps Script 웹 앱 URL (실제 배포된 URL로 교체 필요)
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
-        
+       
         // 전역 변수 및 상태 관리
         let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함)
         let audioCtx = null; // 오디오 컨텍스트 (비프음 정책 대응)
@@ -1361,6 +1361,38 @@
         }
 
 
+          // ✅ 사용자 추가 모듈(1010_오전)       
+        async function gasFetch(action, payload = {}) {
+          const res = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, ...payload })
+          });
+        
+          const contentType = res.headers.get('content-type') || '';
+          const raw = await res.text(); // 먼저 텍스트로 확보해두고…
+        
+          // 상태 체크
+          if (!res.ok) {
+            throw new Error(`HTTP ${res.status} ${res.statusText} / body: ${raw.slice(0, 300)}`);
+          }
+        
+          // JSON 파싱 시도
+          let data;
+          try {
+            data = contentType.includes('application/json') ? JSON.parse(raw) : JSON.parse(raw);
+          } catch (e) {
+            throw new Error(`Invalid JSON from GAS / body: ${raw.slice(0, 300)}`);
+          }
+        
+          if (data && data.success === false) {
+            throw new Error(data.error || 'GAS returned success=false');
+          }
+          return data;
+        }
+
+
+        
 
 
         
@@ -1675,26 +1707,21 @@
             showScreen('profileScreen');
         }
 
-        // 사용자 관리 함수들
-        async function loadUsers() {
-            try {
-                const response = await fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'getUsers' })
-                });
-                const users = await response.json();
+        // 사용자 관리 함수들((1010추가)
+            async function loadUsers() {
+              try {
+                const users = await gasFetch('getUsers');
                 displayUsers(users);
-            } catch (error) {
-                console.error('사용자 로드 실패:', error);
-                // 더미 데이터로 대체
-                const dummyUsers = [
-                    { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
-                    { user_id: 'U2', name: '박선호', contact: '010-9876-5432', ftp: 200, weight: 70 }
-                ];
-                displayUsers(dummyUsers);
+              } catch (error) {
+                console.error('[getUsers] 실패:', error);
+                // 더미로라도 계속 진행
+                displayUsers([
+                  { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 },
+                  { user_id: 'U2', name: '박선호', contact: '010-9876-5432', ftp: 200, weight: 70 }
+                ]);
+              }
             }
-        }
+
 
 
 
@@ -1841,51 +1868,35 @@
             document.getElementById('userFTP').value = '';
             document.getElementById('userWeight').value = '';
         }
-
+        
+        // 유저 저장모듈 (1010오전)
         async function saveNewUser() {
-            const name = document.getElementById('userName').value.trim();
-            const contact = document.getElementById('userContact').value.trim();
-            const ftp = parseInt(document.getElementById('userFTP').value);
-            const weight = parseInt(document.getElementById('userWeight').value);
-
-            if (!name || !contact || !ftp || !weight) {
-                alert('모든 필드를 입력해주세요.');
-                return;
+          const name = document.getElementById('userName').value.trim();
+          const contact = document.getElementById('userContact').value.trim();
+          const ftp = parseInt(document.getElementById('userFTP').value);
+          const weight = parseInt(document.getElementById('userWeight').value);
+        
+          if (!name || !contact || !ftp || !weight) return alert('모든 필드를 입력해주세요.');
+          if (ftp < 100 || ftp > 500) return alert('FTP는 100W에서 500W 사이의 값을 입력해주세요.');
+          if (weight < 40 || weight > 150) return alert('몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
+        
+          try {
+            const result = await gasFetch('addUser', { userData: { name, contact, ftp, weight } });
+            // 기대 응답: {success:true, user_id:'U123', ...}
+            if (result?.success) {
+              alert('새 사용자가 추가되었습니다!');
+              cancelAddUser();
+              loadUsers();
+            } else {
+              alert('사용자 추가 실패: ' + (result?.error || '알 수 없는 오류'));
             }
-
-            if (ftp < 100 || ftp > 500) {
-                alert('FTP는 100W에서 500W 사이의 값을 입력해주세요.');
-                return;
-            }
-
-            if (weight < 40 || weight > 150) {
-                alert('몸무게는 40kg에서 150kg 사이의 값을 입력해주세요.');
-                return;
-            }
-
-            try {
-                const response = await fetch(GAS_WEB_APP_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        action: 'addUser',
-                        userData: { name, contact, ftp, weight }
-                    })
-                });
-                const result = await response.json();
-
-                if (result.success) {
-                    alert('새 사용자가 추가되었습니다!');
-                    cancelAddUser();
-                    loadUsers();
-                } else {
-                    alert('사용자 추가 실패: ' + result.error);
-                }
-            } catch (error) {
-                console.error('사용자 추가 오류:', error);
-                alert('사용자 추가 중 오류가 발생했습니다.');
-            }
+          } catch (error) {
+            console.error('[addUser] 요청 실패:', error);
+            alert('사용자 추가 중 오류가 발생했습니다.\n(상세는 콘솔 참고)');
+          }
         }
+
+
 
         // 워크아웃 관리 함수들
         async function loadWorkouts() {
@@ -2642,6 +2653,48 @@
             showScreen('resultScreen');
         }
 
+
+        // 서버(GAS) 체크리스트 & 예시 코드(1010오전)
+        function doPost(e) {
+          try {
+            const data = JSON.parse(e.postData.contents || '{}');
+            const action = data.action;
+        
+            if (action === 'addUser') {
+              const user = data.userData; // {name, contact, ftp, weight}
+              // TODO: 시트에 저장하고 user_id 생성
+              // 예: const id = Utilities.getUuid();
+              return _json({ success: true, user_id: 'U' + Date.now() });
+            }
+        
+            if (action === 'getUsers') {
+              // TODO: 시트에서 읽어 배열로 반환
+              return _json([
+                { user_id: 'U1', name: '박지성', contact: '010-1234-5678', ftp: 242, weight: 56 }
+              ]);
+            }
+        
+            // …필요 시 getWorkouts 등 추가…
+        
+            return _json({ success: false, error: 'Unknown action' });
+          } catch (err) {
+            return _json({ success: false, error: String(err) });
+          }
+        }
+        
+        function _json(obj) {
+          return ContentService
+            .createTextOutput(JSON.stringify(obj))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+
+
+
+
+
+
+
+        
         function calculateAverage(array) {
             return array.length > 0 ? array.reduce((a, b) => a + b, 0) / array.length : 0;
         }
