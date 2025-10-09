@@ -627,7 +627,28 @@
         .training-header .segment-details > span:nth-child(2){ text-align: center; }
         .training-header .segment-details > span:nth-child(3){ text-align: right; }
 
-
+        /* 2줄 세로 배치 */
+        .segment-details .elapsed-block {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;     /* 중앙으로 보이게 하려면 center 로 변경 */
+          line-height: 1.05;
+        }
+        
+        /* 1줄째: 경과 시간 값(민트, 40px) */
+        .segment-details .elapsed-block #elapsedTime {
+          font-size: 40px;
+          font-weight: 700;
+          color: #00E6A8;
+        }
+        
+        /* 2줄째: 라벨을 metric-label 톤으로 */
+        .segment-details .elapsed-block .metric-label {
+          font-size: 12px;
+          opacity: 0.7;
+          text-transform: uppercase;   /* 한글은 그대로, 영문만 대문자 처리 */
+          margin-top: 2px;
+        }
         
 
 
@@ -1089,8 +1110,9 @@
                 <!-- 사용자 정보가 여기 표시됩니다 -->
             </div>
             <div class="segment-details">
-                <span>
-                    경과 시간: <span id="elapsedTime">00:00</span>
+                <span class="elapsed-block">
+                  <span id="elapsedTime">00:00</span>
+                  <span class="metric-label">경과 시간</span>
                 </span>
                 <span id="segmentTime">00:00</span>
                 <span id="nextSegment">다음: 인터벌 FTP 140%</span>
