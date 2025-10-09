@@ -824,7 +824,20 @@
           text-overflow: ellipsis;
           font-size: 18px; 
         }
-                
+
+        /* 세 칸 레이아웃은 유지(가운데/오른쪽은 중앙 정렬) */
+        .segment-details { align-items: center; }
+        
+        /* 왼쪽 ‘경과 시간’ 블록만 위쪽으로 */
+        .segment-details > span:nth-child(1) {
+          align-self: flex-start;     /* ⬅️ 위 정렬 */
+        }
+        
+        /* (선택) 큰 숫자 줄간 살짝 조이기 */
+        #elapsedTime { line-height: 1; }
+
+
+        
         /* 세그먼트 진행률: 칼로리 표시와 동일 컬러(화이트), 굵게/크게 */
         .segment-progress {
           font-size: 20px;     /* 필요하면 20~24px로 키워도 OK */
@@ -846,6 +859,13 @@
 
         #powerComparison { color: #fff; }
         #powerComparison #targetPowerValue { color: #00E6A8; }        
+        #powerComparison {
+          font-family: 'Inter', 'Pretendard', 'Noto Sans KR',
+                       system-ui, -apple-system, 'Segoe UI', Roboto,
+                       'Helvetica Neue', Arial, 'Apple SD Gothic Neo',
+                       'Noto Sans', 'Malgun Gothic', sans-serif !important;
+
+
         
     </style>
 </head>
