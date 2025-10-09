@@ -604,6 +604,17 @@
             background: var(--danger-color);
         }
 
+        /* 랩파워 상태 색 */
+        .lap-power--mint   { color: #00E6A8 !important; } /* ≥95% */
+        .lap-power--yellow { color: #FFD700 !important; } /* <90%  */
+        .lap-power--white  { color: #FFFFFF !important; } /* 90~95% */
+
+
+
+
+
+
+        
         /* 결과 화면 */
         .achievement-circle {
             width: 150px;
@@ -1664,6 +1675,48 @@
             }
 
 
+        // 랩파워 달성율별 색 등급 표시        
+        function colorizeLapPower() {
+          // 1) 목표 파워(숫자) 가져오기
+          let target = 0;
+        
+          // 우선순위: 실시간 타겟 → 화면의 targetPowerValue
+          if (typeof liveData !== 'undefined' && Number(liveData.targetPower) > 0) {
+            target = Number(liveData.targetPower);
+          } else {
+            const tEl = document.getElementById('targetPowerValue');
+            if (tEl) target = Number(tEl.textContent.replace(/[^\d.-]/g, '')) || 0;
+          }
+          if (!target) return; // 목표가 없으면 색상 판단 불가
+        
+          // 2) 랩파워로 간주할 요소들(필요한 것만 남겨도 됨)
+          const lapIds = [
+            'avgSegmentPowerValue', // 세그먼트 평균 파워 카드(있다면)
+            'avgPowerValue'         // 하단 요약의 평균 파워(있다면)
+            // 'currentPowerValue',  // 원한다면 현재 파워도 포함 가능
+          ];
+        
+          lapIds.forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+        
+            const val = Number(String(el.textContent).replace(/[^\d.-]/g, '')) || 0;
+            if (val <= 0) return;
+        
+            const pct = (val / target) * 100;
+        
+            // 기존 상태 클래스 제거
+            el.classList.remove('lap-power--mint', 'lap-power--yellow', 'lap-power--white');
+        
+            // 기준 적용: ≥95 민트, <90 황색, 나머지 흰색
+            if (pct >= 95) el.classList.add('lap-power--mint');
+            else if (pct < 90) el.classList.add('lap-power--yellow');
+            else el.classList.add('lap-power--white');
+          });
+        }
+
+
+        
         
         function selectUser(user) {
             currentUser = user;
@@ -1931,7 +1984,11 @@
             }
         }
 
-
+       // 랩파워 색깔 표시를 위한 화면 로딩시 보정
+        window.addEventListener('load', () => {
+          colorizeLapPower();
+        });
+        
         //function playBeep() {
             //try {
                 //const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2046,6 +2103,10 @@
                 const targetPower = Math.round(currentUser.ftp * (currentSeg.ftp_percent / 100));
                 liveData.targetPower = targetPower;
             }
+            
+            updateTargetPower(); // 타겟 파워 숫자/화면 갱신
+            colorizeLapPower();  // ✅ 새 목표 기준으로 재색칠
+            
         }
 
         function updateTrainingDisplay() {
@@ -2114,7 +2175,13 @@
                 } else {
                     avgSegPowerEl.style.color = "white"; // 정상 범위
                 }
-            }     
+            }
+
+            document.getElementById('avgSegmentPowerValue').textContent = Math.round(segmentAvgPower);
+            // 또는 document.getElementById('avgPowerValue').textContent = ...
+            colorizeLapPower(); // ✅ 바로 호출
+
+            
         }
 
             // 칼로리, TSS 계산            
