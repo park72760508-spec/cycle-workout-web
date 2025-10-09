@@ -790,7 +790,12 @@
           text-overflow: ellipsis;
         }
                 
-
+        /* 세그먼트 진행률: 칼로리 표시와 동일 컬러(화이트), 굵게/크게 */
+        .segment-progress {
+          font-size: 20px;     /* 필요하면 20~24px로 키워도 OK */
+          font-weight: 800;
+          color: #fff;         /* calorieValue와 동일 톤(화이트) */
+        }
         
     </style>
 </head>
@@ -965,9 +970,10 @@
                     <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
                         목표 :  <span id="targetPowerValue">194</span>W
                     </div>
-                    <div style="font-size: 14px; opacity: 0.7;">
-                        FTP <span id="targetFtpPercent">80</span>%
-                    </div>
+                     <!-- 진행률 표시 (FTP% → 세그먼트 진행률) -->
+                    <div id="segmentProgressText" class="segment-progress">
+                      진행률 <span id="segmentProgress">0</span>%
+                    </div>                   
             
                     <!-- ✅ 세그먼트명 표시 위치 -->
                     <div id="currentSegmentName" 
@@ -1813,9 +1819,21 @@
             document.getElementById('heartRateValue').textContent = Math.round(liveData.heartRate);
             document.getElementById('targetPowerValue').textContent = liveData.targetPower;
 
-            const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
-            document.getElementById('targetFtpPercent').textContent = ftpPercent;
+            //const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
+            //document.getElementById('targetFtpPercent').textContent = ftpPercent;
 
+            // (교체 후) 세그먼트 진행률 % 표시
+            (function updateSegmentProgressInline() {
+              const seg = trainingSession.segments[trainingSession.currentSegment];
+              let segPct = 0;
+              if (seg && trainingSession.segmentStartTime) {
+                const segElapsed = Date.now() - trainingSession.segmentStartTime;
+                segPct = Math.min(100, Math.floor((segElapsed / (seg.duration_sec * 1000)) * 100));
+              }
+              const el = document.getElementById('segmentProgress');
+              if (el) el.textContent = segPct;
+            })();
+            
             // 달성률 표시
             const achievement = liveData.targetPower > 0 ?
                 Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100)) : 0;
@@ -2009,6 +2027,10 @@
                     completeTraining();
                 }
             }
+
+            // ✅ progressPercent 계산 직후에 추가 세그멘트 진행율
+            const segProgEl = document.getElementById('segmentProgress');
+            if (segProgEl) segProgEl.textContent = Math.floor(progressPercent);            
         }
 
 
@@ -2059,6 +2081,9 @@
             }
         
             trainingSession.segmentStartTime = Date.now();
+            const sp = document.getElementById('segmentProgress');
+            if (sp) sp.textContent = 0;  
+            
             updateSegmentDisplay();
             updateTargetPower();
             updateTimelineSegment(trainingSession.currentSegment, 'current');
