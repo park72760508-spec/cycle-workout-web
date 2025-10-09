@@ -448,17 +448,6 @@
         #powerComparison #targetPowerValue{
           color:#00E6A8;              /* 숫자만 민트 */
         }
-        /* 목표 파워 라인: 칼로리 숫자(metric-value) 톤과 동일화 */
-        #powerComparison{
-          font-size:48px; 
-          font-weight:700;
-          color:#fff;                 /* '목표:'와 'W' */
-          font-variant-numeric: tabular-nums;
-          font-feature-settings: 'tnum' 1, 'lnum' 1;
-        }
-        #powerComparison #targetPowerValue{
-          color:#00E6A8;              /* 숫자만 민트 */
-        }
 
         
         .power-display {
@@ -2112,8 +2101,12 @@
             document.getElementById('heartRateValue').textContent = Math.round(liveData.heartRate);
             document.getElementById('targetPowerValue').textContent = liveData.targetPower;
 
-            //const ftpPercent = currentUser ? Math.round((liveData.targetPower / currentUser.ftp) * 100) : 0;
-            //document.getElementById('targetFtpPercent').textContent = ftpPercent;
+            // 달성률 먼저 계산/표시
+            const achievement = liveData.targetPower > 0
+              ? Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100))
+              : 0;
+            const achBar = document.getElementById('achievementValueBar');
+            if (achBar) achBar.textContent = achievement;
 
             // (교체 후) 세그먼트 진행률 % 표시
             (function updateSegmentProgressInline() {
@@ -2127,13 +2120,6 @@
               if (el) el.textContent = segPct;
             })();
             
-            // 달성률 표시
-            const achievement = liveData.targetPower > 0 ?
-                Math.min(100, Math.round((liveData.power / liveData.targetPower) * 100)) : 0;
-            //document.getElementById('achievementValue').textContent = achievement;
-            // 막대 내부 오버레이만 갱신
-            const achBar = document.getElementById('achievementValueBar');
-            if (achBar) achBar.textContent = achievement;
             
 
             // 진행바 갱신
@@ -2173,8 +2159,6 @@
                 }
             }
 
-            //document.getElementById('avgSegmentPowerValue').textContent = Math.round(segmentAvgPower);
-            // 또는 document.getElementById('avgPowerValue').textContent = ...
             colorizeLapPower(); // ✅ 바로 호출
 
             
