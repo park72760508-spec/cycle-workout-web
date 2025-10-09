@@ -1121,10 +1121,14 @@
         let countdownActive = false;  // 카운트다운 중복 방지
         let segmentCountdownStarted = false; // 세그먼트별 카운트다운 시작 플래그
         let currentScreen = 'connectionScreen';
-        let connectedDevices = {
-            trainer: null,
-            heartRate: null
-        };
+
+        let connectedDevices = { trainer: null, heartRate: null, powerMeter: null }; // 이미 있으면 유지
+        let usePowerMeterPreferred = true; // 외부 파워/캐이던스 우선 사용
+        let powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
+        let powerMeterCadenceLastTs = 0; // 파워미터 캐이던스 최신 타임스탬프(ms)
+        const POWER_METER_CADENCE_TTL = 3000; // 3초 내 갱신일 때만 PM 캐이던스 우선
+
+        
         let currentUser = null;
         let currentWorkout = null;
         let trainingSession = {
@@ -1250,34 +1254,82 @@
             }
         }
 
-        function handleTrainerData(event) {
-            const data = event.target.value;
-            
-            // Fitness Machine Service - Indoor Bike Data
-            if (data.byteLength >= 4) {
-                const flags = data.getUint16(0, true);
-                let offset = 2;
-
-                // 케이던스 (Bit 2)
-                if (flags & 0x04) {
-                    const cadence = data.getUint16(offset, true) * 0.5;
-                    liveData.cadence = cadence;
-                    offset += 2;
-                }
-
-                // 파워 (Bit 6)
-                if (flags & 0x40) {
-                    const power = data.getInt16(offset, true);
-                    liveData.power = power;
-                }
+        // 파워메터 연결 함수들
+        async function connectPowerMeter() {
+          try {
+            showConnectionStatus(true);
+        
+            // 일부 장치는 광고에 서비스 UUID를 안 실으므로 acceptAllDevices 권장
+            const device = await navigator.bluetooth.requestDevice({
+              acceptAllDevices: true,
+              optionalServices: [0x1818, 'cycling_power', 'device_information'] // CPS
+            });
+        
+            const server = await device.gatt.connect();
+        
+            let service;
+            try {
+              service = await server.getPrimaryService(0x1818);
+            } catch {
+              service = await server.getPrimaryService('cycling_power');
             }
-
-            if (trainingSession.isRunning && !trainingSession.isPaused) {
-                updateTrainingDisplay();
-                recordDataPoint();
-            }
+            const ch = await service.getCharacteristic(0x2A63 /* cycling_power_measurement */);
+        
+            await ch.startNotifications();
+            ch.addEventListener('characteristicvaluechanged', handlePowerMeterData);
+        
+            connectedDevices.powerMeter = { name: device.name || 'Power Meter', device, server, characteristic: ch };
+            usePowerMeterPreferred = true; // 연결되면 외부 파워 우선
+        
+            updateDevicesList(); // 연결 리스트에 표시 (아래 D 참고)
+            showConnectionStatus(false);
+            alert(`✅ ${device.name} 파워미터 연결 성공!`);
+          } catch (err) {
+            showConnectionStatus(false);
+            console.error('파워미터 연결 오류:', err);
+            alert('❌ 파워미터 연결 실패: ' + err.message);
+          }
         }
 
+
+        
+        function handleTrainerData(event) {
+          const data = event.target.value;
+        
+          // FTMS Indoor Bike Data
+          if (data.byteLength >= 4) {
+            const flags = data.getUint16(0, true);
+            let offset = 2;
+        
+            // 케이던스 (Bit 2)
+            if (flags & 0x04) {
+              const ftmsCadence = data.getUint16(offset, true) * 0.5; // RPM
+              offset += 2;
+        
+              // ✅ 파워미터 캐이던스가 최근(3초 내)이면 FTMS 값으로 덮어쓰지 않음
+              const pmFresh = (Date.now() - powerMeterCadenceLastTs) < POWER_METER_CADENCE_TTL;
+              if (!(usePowerMeterPreferred && connectedDevices.powerMeter && pmFresh)) {
+                liveData.cadence = ftmsCadence;
+              }
+            }
+        
+            // 파워 (Bit 6)
+            if (flags & 0x40) {
+              const ftmsPower = data.getInt16(offset, true);
+        
+              // ✅ 파워도 외부 우선이면 덮어쓰지 않음 (이전 단계에서 적용했던 동일 로직)
+              if (!(usePowerMeterPreferred && connectedDevices.powerMeter)) {
+                liveData.power = ftmsPower;
+              }
+            }
+          }
+        
+          if (trainingSession.isRunning && !trainingSession.isPaused) {
+            updateTrainingDisplay();
+            recordDataPoint();
+          }
+        }
+ 
         function handleHeartRateData(event) {
             const value = event.target.value;
             const flags = value.getUint8(0);
@@ -1291,6 +1343,57 @@
             }
         }
 
+
+        function handlePowerMeterData(event) {
+          const dv = event.target.value;
+          let offset = 0;
+        
+          // Flags (uint16 LE)
+          const flags = dv.getUint16(offset, true); offset += 2;
+        
+          // Instantaneous Power (sint16)
+          const instPower = dv.getInt16(offset, true); offset += 2;
+        
+          // 파워미터를 파워/캐이던스 모두의 우선 소스로 사용
+          if (usePowerMeterPreferred) {
+            liveData.power = instPower;
+          }
+        
+          // Crank Revolution Data (bit 4) → 케이던스 계산
+          if (flags & (1 << 4)) {
+            const crankRevs = dv.getUint16(offset, true); offset += 2;
+            const lastCrankTime = dv.getUint16(offset, true); offset += 2; // 단위: 1/1024 s
+        
+            if (powerMeterState.lastCrankEventTime != null) {
+              // 16bit 롤오버 보정
+              let dRevs = crankRevs - powerMeterState.lastCrankRevs;
+              if (dRevs < 0) dRevs += 65536;
+              let dTime = lastCrankTime - powerMeterState.lastCrankEventTime;
+              if (dTime < 0) dTime += 65536;
+        
+              const seconds = dTime / 1024;
+              if (seconds > 0) {
+                const cadence = (dRevs / seconds) * 60; // RPM
+                if (usePowerMeterPreferred) {
+                  liveData.cadence = cadence;
+                  powerMeterCadenceLastTs = Date.now(); // ⬅️ 최신 시각 저장
+                }
+              }
+            }
+        
+            powerMeterState.lastCrankRevs = crankRevs;
+            powerMeterState.lastCrankEventTime = lastCrankTime;
+          }
+        
+          if (trainingSession.isRunning && !trainingSession.isPaused) {
+            updateTrainingDisplay();  // 화면 숫자 갱신: #cadenceValue, #currentPowerValue 등
+            recordDataPoint();        // 기록 저장
+          }
+        }
+
+
+
+        
         function showConnectionStatus(show) {
             const status = document.getElementById('connectionStatus');
             if (show) {
@@ -1324,6 +1427,22 @@
                 `;
             }
 
+            if (connectedDevices.powerMeter) {
+              connectedCount++;
+              html += `
+                <div class="card device-card connected">
+                  <div class="device-info">
+                    <div class="device-icon">⚡</div>
+                    <div class="device-details">
+                      <h3>${connectedDevices.powerMeter.name}</h3>
+                      <p>Crank Power Meter (BLE)</p>
+                    </div>
+                  </div>
+                  <div style="color: var(--success-color); font-weight: 600;">연결됨</div>
+                </div>
+              `;
+            }
+            
             if (connectedDevices.heartRate) {
                 connectedCount++;
                 html += `
