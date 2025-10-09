@@ -465,7 +465,7 @@
              /* background: linear-gradient(90deg, #F56500, #7ED321);
             /* 그라디언트는 '불투명' 색상 유지 (중복 감쇠 방지) */
             background: linear-gradient(90deg, #FFFFFF66, #7ED321);
-            opacity: 0.4;
+            opacity: 0.8;
             
             border-radius: 10px;
             transition: width 0.3s ease;
@@ -772,6 +772,24 @@
             transition: color 0.3s ease;
         }
 
+
+        /* 3개 영역을 동일 너비로 */
+        .segment-details > span {
+          flex: 1 1 0;
+        }
+        
+        /* 왼쪽/가운데/오른쪽 정렬 */
+        .segment-details > span:nth-child(1) { text-align: left; }
+        .segment-details > span:nth-child(2) { text-align: center; }
+        .segment-details > span:nth-child(3) { text-align: right; }
+        
+        /* 길어질 수 있는 '다음 세그먼트'는 말줄임 처리(선택) */
+        #nextSegment {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+                
 
         
     </style>
