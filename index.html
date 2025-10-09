@@ -893,7 +893,29 @@
           font-weight: 400;
           color: rgba(255, 255, 255, 0.7);
           line-height: 30px;       /* 막대 높이와 맞춤(선택) */
-        
+
+            /* 세그먼트 정보 3개(경과/남은/다음)를 한 줄 중앙에 배치 */
+            .segment-details {
+              display: flex;
+              justify-content: center;  /* ⬅️ 가로 중앙 정렬 */
+              align-items: center;
+              gap: 20px;                /* 항목 간 간격(원하면 조절) */
+              margin: 0 auto;           /* 부모 폭이 넓을 때 중앙 배치 보조 */
+            }
+            
+            /* 각 항목이 넓게 퍼지지 않도록(예전에 flex:1 준 게 있으면 덮어쓰기) */
+            .segment-details > span {
+              flex: 0 0 auto;
+              text-align: center;       /* 텍스트도 중앙 정렬 */
+            }
+            
+            /* (선택) 가운데 큰 시간은 중앙 정렬 유지 */
+            #segmentTime { text-align: center; }
+
+
+
+
+            
     </style>
 </head>
 
