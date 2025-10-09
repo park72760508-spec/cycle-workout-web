@@ -1260,6 +1260,7 @@
         const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
         
         // 전역 변수 및 상태 관리
+        let currentScreenId = null;
         let isSegmentChanging = false; // 세그먼트 교체 중(카운트다운 포함)
         let audioCtx = null; // 오디오 컨텍스트 (비프음 정책 대응)
         let countdownActive = false;  // 카운트다운 중복 방지
@@ -1417,6 +1418,11 @@
         
         // 화면 전환 함수들
         function showScreen(screenId) {
+              // 🔽 (추가) 훈련 화면을 떠나면 화면꺼짐 방지 해제
+              if (currentScreenId === 'trainingScreen' && id !== 'trainingScreen') {
+                disableKeepAwake();
+              }
+            
             document.querySelectorAll('.screen').forEach(screen => {
                 screen.classList.remove('active');
             });
@@ -1430,6 +1436,13 @@
             } else if (screenId === 'trainingReadyScreen') {
                 showWorkoutPreview();
             }
+
+          // 🔽 (추가) 훈련 화면으로 진입하면 화면꺼짐 방지 켜기
+          if (id === 'trainingScreen') {
+            enableKeepAwake();  // 사용자 클릭 경로에서 호출되므로 iOS도 OK(NoSleep 폴백)
+          }
+        
+          currentScreenId = id; // 마지막에 현재 화면 기록            
         }
 
         // BLE 연결 함수들
