@@ -358,7 +358,7 @@
             }
             
             .metric-card.avg-segment-power .metric-value {
-                font-size: 36px;
+                font-size: 48px;
                 font-weight: 700;
                 color: #FFD700;  /* 골드톤 강조 */
                 margin-bottom: 8px;
@@ -392,7 +392,7 @@
         }
         
         .metric-item .metric-value {
-            font-size: 30px;
+            font-size: 48px;
             font-weight: 700;
             margin-bottom: 4px;
             color: white;
@@ -412,7 +412,7 @@
         }
         
         .metric-card.dual-metric .metric-value {
-            font-size: 28px;
+            font-size: 48px;
             font-weight: 700;
             margin-bottom: 4px;
         }
@@ -690,7 +690,7 @@
         }
 
         .countdown-number {
-            font-size: 120px;
+            font-size: 240px;
             font-weight: 700;
             color: white;
             animation: countdownPulse 1s ease-in-out;
@@ -731,14 +731,14 @@
             }
 
             .current-power {
-                font-size: 48px;
+                font-size: 96px;
             }
         }
 
 
         /* 🔹 세그먼트 남은 시간 스타일 */
         #segmentTime {
-            font-size: 44px;             /* ✅ 글자 크기 업 */
+            font-size: 70px;             /* ✅ 글자 크기 업 */
             font-weight: 700;
             color: #fff;
             transition: color 0.3s ease, transform 0.2s ease;
@@ -772,13 +772,13 @@
         /* 🔹 경과 시간 표기 */        
         #elapsedTime {
             font-weight: 700;
-            font-size: 22px;
+            font-size: 70px;
             color: #00E6A8; /* 민트색 */
         }
         
         #elapsedPercent {
             font-weight: 600;
-            font-size: 18px;
+            font-size: 30px;
             color: #FFD700; /* 노란색으로 진행률 강조 */
         }
         
@@ -809,22 +809,22 @@
                 
         /* 세그먼트 진행률: 칼로리 표시와 동일 컬러(화이트), 굵게/크게 */
         .segment-progress {
-          font-size: 20px;     /* 필요하면 20~24px로 키워도 OK */
+          font-size: 40px;     /* 필요하면 20~24px로 키워도 OK */
           font-weight: 800;
           color: #fff;         /* calorieValue와 동일 톤(화이트) */
         }
 
         /* 달성도 오버레이를 '평균 파워'와 동일 톤으로 */
         .power-progress-label {
-          font-size: 12px;                 /* 평균 파워와 동일 크기 */
+          font-size: 14px;                 /* 평균 파워와 동일 크기 */
           font-weight: 400;                /* 굵게가 아니라 보통 두께 */
           color: rgba(255, 255, 255, 0.7); /* opacity:0.7과 같은 시각 효과 */
           text-shadow: none;               /* 가독성 보조가 필요 없으면 제거 */
         }
         
         /* (선택) 막대 높이를 기본 20px로 맞추고 줄간격도 정렬 */
-        .power-progress { height: 20px; }     /* 기본값으로 돌리려면 유지/추가 */
-        .power-progress-label { line-height: 20px; }
+        .power-progress { height: 30px; }     /* 기본값으로 돌리려면 유지/추가 */
+        .power-progress-label { line-height: 30px; }
 
 
         
@@ -989,7 +989,7 @@
                 <div style="display:flex; flex-direction:column; align-items:center;">
                     <div class="metric-value" id="avgSegmentPowerValue">178</div>
                     <div class="metric-label">랩 파워 (W)</div>
-                    <div class="metric-value" id="tssValue" style="margin-top:6px; font-size:30px;">0</div>
+                    <div class="metric-value" id="tssValue" style="margin-top:6px; font-size:48px;">0</div>
                     <div class="metric-label">TSS</div>
                 </div>
             </div>
@@ -1007,7 +1007,7 @@
                     </div>                    
                 </div>
                 <div style="text-align: center; margin-top: 10px;">
-                    <div id="powerComparison" style="font-size: 30px; font-weight: 700; margin-bottom: 5px;">
+                    <div id="powerComparison" style="font-size: 48px; font-weight: 700; margin-bottom: 5px;">
                         목표 :  <span id="targetPowerValue">194</span>W
                     </div>
                      <!-- 진행률 표시 (FTP% → 세그먼트 진행률) -->
@@ -1017,7 +1017,7 @@
             
                     <!-- ✅ 세그먼트명 표시 위치 -->
                     <div id="currentSegmentName" 
-                         style="margin-top: 8px; font-size: 18px; font-weight: 600; color: #FFD700;">
+                         style="margin-top: 8px; font-size: 30px; font-weight: 600; color: #FFD700;">
                          웜업 - 80RPM FTP 60%
                     </div>
                 </div>
