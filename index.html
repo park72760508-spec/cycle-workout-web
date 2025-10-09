@@ -1272,6 +1272,56 @@
         //let powerMeterCadenceLastTs = 0; // 파워미터 캐이던스 최신 타임스탬프(ms)
         //const POWER_METER_CADENCE_TTL = 3000; // 3초 내 갱신일 때만 PM 캐이던스 우선
 
+        // === Screen Keep-Awake ===
+        let wakeLock = null;
+        let wakeLockActive = false;
+        let noSleep = null;
+        
+        // 화면 켜짐 유지 요청
+        async function enableKeepAwake() {
+          try {
+            if ('wakeLock' in navigator) {
+              // 1) 표준 API
+              wakeLock = await navigator.wakeLock.request('screen');
+              wakeLockActive = true;
+        
+              // 브라우저가 임의로 해제했을 때 플래그 갱신
+              wakeLock.addEventListener('release', () => { wakeLockActive = false; });
+        
+              // 탭 전환 후 복귀 시 재요청
+              document.addEventListener('visibilitychange', async () => {
+                if (document.visibilityState === 'visible' && !wakeLockActive) {
+                  try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLockActive = true;
+                  } catch (e) { console.warn('WakeLock re-acquire failed:', e); }
+                }
+              }, { once: true }); // 페이지마다 1회만 핸들러 등록
+            } else if (window.NoSleep) {
+              // 2) 폴백 (iOS Safari 등)
+              if (!noSleep) noSleep = new NoSleep();
+              noSleep.enable();    // 사용자 제스처(버튼 클릭) 이후에만 동작
+              wakeLockActive = true;
+            } else {
+              console.warn('Screen Wake Lock not supported, and NoSleep not present.');
+            }
+          } catch (e) {
+            console.warn('WakeLock request failed:', e);
+          }
+        }
+        
+        // 화면 켜짐 유지 해제
+        function disableKeepAwake() {
+          try {
+            if (wakeLock) { wakeLock.release(); wakeLock = null; }
+            if (noSleep)  { noSleep.disable(); }
+            wakeLockActive = false;
+          } catch (e) {
+            console.warn('WakeLock release failed:', e);
+          }
+        }
+        // === /Screen Keep-Awake ===
+
         
         let currentUser = null;
         let currentWorkout = null;
@@ -1992,6 +2042,7 @@
         }
 
         function startWorkoutTraining() {
+            await enableKeepAwake();        // ⬅️ 추가
             showScreen('trainingScreen');
             initializeTraining();
         }
@@ -2152,6 +2203,7 @@
 
         
         function startTraining() {
+            await enableKeepAwake();        // ⬅️ 화면꺼짐 방지
             trainingSession.isRunning = true;
             trainingSession.startTime = Date.now();
             trainingSession.segmentStartTime = Date.now();
@@ -2636,7 +2688,9 @@
             document.getElementById('resultMaxPower').textContent = Math.round(maxPower);
             document.getElementById('resultAvgHR').textContent = Math.round(avgHR);
             document.getElementById('resultCalories').textContent = calories;
-
+            
+            disableKeepAwake();             // ⬅️ 추가
+            
             // AI 분석 요청
             requestAIAnalysis();
 
@@ -2752,5 +2806,10 @@ ${window.location.href}`;
             console.log('사이클 아카데미 훈련 앱 로드 완료');
         });
     </script>
+    
+    // 미지원 브라우저(iOS Safari 등)는 NoSleep.js로 폴백
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/nosleep/0.12.0/NoSleep.min.js"></script>
+
+    
 </body>
 </html>
