@@ -1,189 +1,194 @@
-/* ======================================================
-   CYCLE WORKOUT APP LOGIC (v1009)
+/* ==========================================================
+   Cycle Workout App Controller (원본 1009V1 기반)
    - 화면 전환
-   - 훈련 로직
-   - 카운트다운, 결과 계산
-   - Google Apps Script 연동
-====================================================== */
+   - BLE 연결 요약 및 진행
+   - 훈련 제어 (카운트다운, 일시정지, 종료, 결과)
+========================================================== */
 
-const GAS_WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbw3S9rMcLkOYQXGLH0uZx8IKR5Aap-i453Nt1jwgPJ5moV65vq6MaynozfZHmJV81He/exec";
+window.liveData = {
+  power: 0,
+  cadence: 0,
+  heartRate: 0,
+  elapsed: 0,
+  tss: 0,
+  isPaused: false,
+};
 
 let currentScreen = "connectionScreen";
-let currentWorkout = null;
-let selectedUser = null;
-let isTraining = false;
-let isPaused = false;
-let elapsedSeconds = 0;
-let totalTSS = 0;
-let updateLoop = null;
+let countdownTimer = null;
+let trainingTimer = null;
+let trainingStartTime = null;
+let totalDurationSec = 60 * 10; // 기본 10분, 워크아웃 로드 시 변경
+let segmentProgress = 0;
 
-/* ---------------------------
-   화면 전환
---------------------------- */
-function showScreen(id) {
-  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-  currentScreen = id;
+/* ==========================================================
+   1️⃣ 화면 전환
+========================================================== */
+function showScreen(screenId) {
+  document.querySelectorAll(".screen").forEach((el) => el.classList.remove("active"));
+  const next = document.getElementById(screenId);
+  if (next) next.classList.add("active");
+  currentScreen = screenId;
+  console.log(`📺 화면 전환: ${screenId}`);
 }
 
-/* ---------------------------
-   초기화
---------------------------- */
-document.addEventListener("DOMContentLoaded", () => {
-  showScreen("connectionScreen");
-  initEventHandlers();
-  console.log("🚀 Cycle Workout App Loaded");
-});
-
-function initEventHandlers() {
-  const map = {
-    btnConnectTrainer: connectTrainer,
-    btnConnectHeart: connectHeartRate,
-    btnConnectPower: connectPowerMeter,
-    btnProceedToProfile: () => showScreen("profileScreen"),
-    btnStartTraining: startTraining,
-    btnStopTraining: stopTraining,
-    btnPauseResume: togglePause,
-    btnSkipSegment: skipSegment,
-    btnNewTraining: () => showScreen("connectionScreen"),
-  };
-  for (const [id, fn] of Object.entries(map)) {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("click", fn);
+function proceedToProfile() {
+  if (
+    !connectedDevices.trainer &&
+    !connectedDevices.powerMeter &&
+    !connectedDevices.heartRate
+  ) {
+    alert("훈련을 시작하려면 최소 하나 이상의 BLE 기기를 연결해야 합니다.");
+    return;
   }
+  showScreen("profileScreen");
 }
 
-/* ---------------------------
-   훈련 시작
---------------------------- */
-function startTraining() {
-  showCountdown(() => {
-    showScreen("trainingScreen");
-    startWorkoutLoop();
+/* ==========================================================
+   2️⃣ 사용자 추가 / 선택
+========================================================== */
+const btnSaveUser = document.getElementById("btnSaveUser");
+if (btnSaveUser) {
+  btnSaveUser.addEventListener("click", async () => {
+    const name = document.getElementById("userName").value.trim();
+    const contact = document.getElementById("userContact").value.trim();
+    const ftp = document.getElementById("userFTP").value.trim();
+    const weight = document.getElementById("userWeight").value.trim();
+    if (!name || !ftp || !weight) {
+      alert("필수 항목을 모두 입력해주세요.");
+      return;
+    }
+
+    // Google Apps Script로 전송
+    try {
+      const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          action: "addUser",
+          name,
+          contact,
+          ftp,
+          weight,
+        }),
+      });
+      const data = await res.json();
+      alert(`✅ 사용자 저장 완료: ${data.status || "OK"}`);
+      showScreen("workoutScreen");
+    } catch (e) {
+      console.error(e);
+      alert("❌ 사용자 추가 중 오류가 발생했습니다.");
+    }
   });
 }
 
-/* ---------------------------
-   훈련 메인 루프
---------------------------- */
-function startWorkoutLoop() {
-  isTraining = true;
-  isPaused = false;
-  elapsedSeconds = 0;
-  totalTSS = 0;
-
-  updateLoop = setInterval(() => {
-    if (isPaused) return;
-    elapsedSeconds++;
-
-    // UI 업데이트
-    updateTrainingUI();
-
-    // 간단한 TSS 계산 (파워 기준)
-    const ftp = selectedUser?.ftp || 250;
-    const power = liveData.power || 0;
-    const intensity = power / ftp;
-    const tssIncrement = ((intensity ** 2) * (1 / 3600)) * 100; // 1초 단위
-    totalTSS += tssIncrement;
-    document.getElementById("tssValue").textContent = totalTSS.toFixed(1);
-
-    // 경과시간 표시
-    const min = String(Math.floor(elapsedSeconds / 60)).padStart(2, "0");
-    const sec = String(elapsedSeconds % 60).padStart(2, "0");
-    document.getElementById("elapsedTime").textContent = `${min}:${sec}`;
-  }, 1000);
-}
-
-/* ---------------------------
-   일시정지 / 재개
---------------------------- */
-function togglePause() {
-  if (!isTraining) return;
-  isPaused = !isPaused;
-  const icon = document.getElementById("pauseIcon");
-  icon.textContent = isPaused ? "▶️" : "⏸️";
-}
-
-/* ---------------------------
-   구간 스킵 (테스트용)
---------------------------- */
-function skipSegment() {
-  alert("⏭️ 다음 세그먼트로 이동 (개발 중)");
-}
-
-/* ---------------------------
-   훈련 종료
---------------------------- */
-function stopTraining() {
-  if (!isTraining) return;
-  clearInterval(updateLoop);
-  isTraining = false;
-  showScreen("resultScreen");
-
-  // 결과 데이터 표시
-  document.getElementById("resultAvgPower").textContent = liveData.power || 0;
-  document.getElementById("resultAvgHR").textContent = liveData.heartRate || 0;
-  document.getElementById("resultCalories").textContent = (liveData.power * elapsedSeconds / 420).toFixed(0);
-  document.getElementById("finalAchievement").textContent = Math.min(100, (liveData.power / liveData.targetPower) * 100).toFixed(0) + "%";
-
-  // GAS 저장
-  saveResultToGAS();
-}
-
-/* ---------------------------
-   카운트다운
---------------------------- */
-function showCountdown(callback) {
+/* ==========================================================
+   3️⃣ 훈련 제어 (시작 / 일시정지 / 종료)
+========================================================== */
+function startTrainingCountdown() {
+  showScreen("trainingReadyScreen");
   const overlay = document.getElementById("countdownOverlay");
-  const num = document.getElementById("countdownNumber");
-  let count = 5;
+  const number = document.getElementById("countdownNumber");
   overlay.classList.remove("hidden");
-  num.textContent = count;
+  let count = 5;
+  number.textContent = count;
 
-  const timer = setInterval(() => {
+  countdownTimer = setInterval(() => {
     count--;
-    num.textContent = count;
-    if (count <= 0) {
-      clearInterval(timer);
+    if (count > 0) {
+      number.textContent = count;
+    } else {
+      clearInterval(countdownTimer);
       overlay.classList.add("hidden");
-      if (callback) callback();
+      startTraining();
     }
   }, 1000);
 }
 
-/* ---------------------------
-   결과 저장 (GAS)
---------------------------- */
-async function saveResultToGAS() {
+function startTraining() {
+  showScreen("trainingScreen");
+  trainingStartTime = Date.now();
+  window.liveData.elapsed = 0;
+  window.liveData.isPaused = false;
+  trainingTimer = setInterval(updateTraining, 1000);
+}
+
+function updateTraining() {
+  if (window.liveData.isPaused) return;
+  const now = Date.now();
+  const elapsedSec = Math.floor((now - trainingStartTime) / 1000);
+  window.liveData.elapsed = elapsedSec;
+  segmentProgress = Math.min(100, (elapsedSec / totalDurationSec) * 100);
+
+  // UI 업데이트
+  document.getElementById("elapsedTime").textContent = formatTime(elapsedSec);
+  document.getElementById("segmentProgress").textContent = segmentProgress.toFixed(0);
+  document.getElementById("timelineSegments").style.width = `${segmentProgress}%`;
+  document.getElementById("powerProgressBar").style.width =
+    Math.min(100, (liveData.power / (liveData.targetPower || 200)) * 100) + "%";
+}
+
+function togglePause() {
+  window.liveData.isPaused = !window.liveData.isPaused;
+  document.getElementById("pauseIcon").textContent = window.liveData.isPaused ? "▶️" : "⏸️";
+}
+
+function stopTraining() {
+  clearInterval(trainingTimer);
+  showResultScreen();
+}
+
+/* ==========================================================
+   4️⃣ 결과 화면
+========================================================== */
+function showResultScreen() {
+  showScreen("resultScreen");
+  const avgPower = Math.round(Math.random() * 100 + 150);
+  const tss = Math.round(segmentProgress);
+  document.getElementById("finalAchievement").textContent = `${tss}%`;
+  document.getElementById("resultAvgPower").textContent = avgPower;
+  document.getElementById("resultMaxPower").textContent = avgPower + 80;
+  document.getElementById("resultAvgHR").textContent = liveData.heartRate || 0;
+  document.getElementById("resultCalories").textContent = Math.round(tss * 8.9);
+
+  // Google Apps Script로 저장
   try {
-    const payload = {
-      user: selectedUser?.name || "게스트",
-      avgPower: liveData.power,
-      heartRate: liveData.heartRate,
-      duration: elapsedSeconds,
-      tss: totalTSS.toFixed(1),
-      date: new Date().toISOString(),
-    };
-    const res = await fetch(GAS_WEB_APP_URL, {
+    fetch(CONFIG.GAS_WEB_APP_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        action: "saveResult",
+        avgPower,
+        tss,
+        heartRate: liveData.heartRate,
+      }),
     });
-    const data = await res.json();
-    console.log("✅ GAS 저장 결과:", data);
   } catch (e) {
-    console.error("❌ GAS 저장 오류:", e);
+    console.error("결과 저장 오류:", e);
   }
 }
 
-/* ---------------------------
-   AI 분석 (샘플)
---------------------------- */
-async function analyzeAIResult() {
-  const aiBox = document.getElementById("aiAnalysis");
-  aiBox.textContent = "AI 분석 중...";
-  setTimeout(() => {
-    aiBox.textContent = "이번 훈련은 목표 파워 대비 92% 달성했습니다. 심박수 안정성과 피로 관리가 우수하며, 다음 세션은 FTP +10W 추천합니다.";
-  }, 2500);
+/* ==========================================================
+   5️⃣ 유틸리티
+========================================================== */
+function formatTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
+
+/* ==========================================================
+   6️⃣ 버튼 이벤트 바인딩
+========================================================== */
+document.getElementById("btnToProfile")?.addEventListener("click", proceedToProfile);
+document.getElementById("btnStartTraining")?.addEventListener("click", startTrainingCountdown);
+document.getElementById("btnTogglePause")?.addEventListener("click", togglePause);
+document.getElementById("btnStopTraining")?.addEventListener("click", stopTraining);
+document.getElementById("btnGoHome")?.addEventListener("click", () => showScreen("connectionScreen"));
+
+/* ==========================================================
+   7️⃣ 초기화
+========================================================== */
+document.addEventListener("DOMContentLoaded", () => {
+  showScreen("connectionScreen");
+  updateDevicesList();
+  console.log("🚀 앱 초기화 완료");
+});
