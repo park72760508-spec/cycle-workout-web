@@ -1,269 +1,179 @@
-// ===== BLE 모듈 =====
-const BLE = (() => {
-  // FTMS/CPS 플래그
-  const CPS_FLAG = {
-    PEDAL_POWER_BALANCE_PRESENT: 1 << 0,
-    PEDAL_POWER_BALANCE_REF: 1 << 1,
-    ACC_TORQUE_PRESENT: 1 << 2,
-    ACC_TORQUE_SOURCE: 1 << 3,
-    WHEEL_REV_DATA_PRESENT: 1 << 4,
-    CRANK_REV_DATA_PRESENT: 1 << 5,
-  };
+/* ======================================================
+   BLE 연결 제어 (FTMS / Power Meter / Heart Rate)
+   cycle_workout_web_ble_full_v1009
+   ====================================================== */
 
-  const powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
-  let powerMeterCadenceLastTs = 0;
-  const POWER_METER_CADENCE_TTL = 3000;
+const BLEDevices = {
+  trainer: null,
+  powerMeter: null,
+  heartRate: null,
+};
 
-  function showConnectionStatus(show) {
-    const status = document.getElementById('connectionStatus');
-    status.classList.toggle('hidden', !show);
+const liveData = {
+  power: 0,
+  cadence: 0,
+  heartRate: 0,
+  resistance: 0,
+  targetPower: 150,
+};
+
+// 블루투스 지원 확인
+function checkBLESupport() {
+  if (!navigator.bluetooth) {
+    alert("⚠️ 이 브라우저는 Bluetooth를 지원하지 않습니다. Chrome 또는 Edge를 사용하세요.");
+    return false;
   }
+  return true;
+}
 
-  function updateDevicesList() {
-    const { trainer, heartRate, powerMeter } = STATE.connected;
-    const deviceList = document.getElementById('deviceList');
-    const summary = document.getElementById('connectedDevicesSummary');
-    const summaryList = document.getElementById('connectedDevicesList');
+/* -------------------------
+   FTMS (스마트 트레이너)
+-------------------------- */
+async function connectTrainer() {
+  if (!checkBLESupport()) return;
 
-    let connectedCount = 0;
-    let html = '';
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ["fitness_machine"] }],
+      optionalServices: ["device_information", "battery_service"],
+    });
+    const server = await device.gatt.connect();
 
-    if (trainer) {
-      connectedCount++;
-      html += `
-      <div class="card device-card connected">
-        <div class="device-info">
-          <div class="device-icon">🚴‍♂️</div>
-          <div class="device-details"><h3>${trainer.name}</h3><p>Smart Trainer</p></div>
-        </div>
-        <div style="color:var(--success-color);font-weight:600;">연결됨</div>
-      </div>`;
-    }
-    if (powerMeter) {
-      connectedCount++;
-      html += `
-      <div class="card device-card connected">
-        <div class="device-info">
-          <div class="device-icon">⚡</div>
-          <div class="device-details"><h3>${powerMeter.name}</h3><p>Crank Power Meter (BLE)</p></div>
-        </div>
-        <div style="color:var(--success-color);font-weight:600;">연결됨</div>
-      </div>`;
-    }
-    if (heartRate) {
-      connectedCount++;
-      html += `
-      <div class="card device-card connected">
-        <div class="device-info">
-          <div class="device-icon" style="background:var(--danger-color);">❤️</div>
-          <div class="device-details"><h3>${heartRate.name}</h3><p>Heart Rate Monitor</p></div>
-        </div>
-        <div style="color:var(--success-color);font-weight:600;">연결됨</div>
-      </div>`;
-    }
+    const service = await server.getPrimaryService("fitness_machine");
+    const control = await service.getCharacteristic("fitness_machine_control_point");
+    const status = await service.getCharacteristic("fitness_machine_status");
+    const data = await service.getCharacteristic("indoor_bike_data");
 
-    deviceList.innerHTML = html;
-    if (connectedCount > 0) {
-      summaryList.innerHTML = html;
-      summary.classList.remove('hidden');
-    } else summary.classList.add('hidden');
+    await data.startNotifications();
+    data.addEventListener("characteristicvaluechanged", handleTrainerData);
+
+    BLEDevices.trainer = { device, control, status, data };
+    alert(`✅ ${device.name} (FTMS) 연결 완료`);
+  } catch (err) {
+    console.error(err);
+    alert("❌ 스마트 트레이너 연결 중 오류가 발생했습니다.");
   }
+}
 
-  function handleTrainerData(event) {
-    const dv = event.target.value;
-    const flags = dv.getUint16(0, true);
-    let off = 2;
+function handleTrainerData(event) {
+  const v = event.target.value;
+  // 2~3byte = instantaneous power (W)
+  liveData.power = v.getUint16(2, true);
+  // 4~5byte = cadence (1/2 rpm)
+  liveData.cadence = v.getUint16(4, true) / 2;
+  updateTrainingUI();
+}
 
-    // cadence bit2
-    if (flags & 0x0004) {
-      const ftmsCad = dv.getUint16(off, true) * 0.5; off += 2;
-      const pmFresh = (Date.now() - powerMeterCadenceLastTs) < POWER_METER_CADENCE_TTL;
-      if (!(STATE.usePowerMeterPreferred && STATE.connected.powerMeter && pmFresh)) {
-        STATE.liveData.cadence = ftmsCad;
-      }
-    }
-    // power bit6
-    if (flags & 0x0040) {
-      const ftmsPower = dv.getInt16(off, true);
-      if (!(STATE.usePowerMeterPreferred && STATE.connected.powerMeter)) {
-        STATE.liveData.power = ftmsPower;
-      }
-    }
-
-    if (STATE.trainingSession.isRunning && !STATE.trainingSession.isPaused) {
-      APP.updateTrainingDisplay();
-      APP.recordDataPoint();
-    }
+async function setTargetPower(power) {
+  try {
+    if (!BLEDevices.trainer?.control) return;
+    const control = BLEDevices.trainer.control;
+    const cmd = new Uint8Array([0x05, power & 0xff, (power >> 8) & 0xff]);
+    await control.writeValue(cmd);
+    liveData.targetPower = power;
+  } catch (e) {
+    console.warn("⚠️ 파워 제어 실패:", e);
   }
+}
 
-  function handlePowerMeterData(event) {
-    const dv = event.target.value;
-    let off = 0;
+/* -------------------------
+   파워미터
+-------------------------- */
+async function connectPowerMeter() {
+  if (!checkBLESupport()) return;
 
-    const flags = dv.getUint16(off, true); off += 2;
-    const instPower = dv.getInt16(off, true); off += 2;
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ["cycling_power"] }],
+      optionalServices: ["battery_service"],
+    });
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService("cycling_power");
+    const characteristic = await service.getCharacteristic("cycling_power_measurement");
 
-    if (STATE.usePowerMeterPreferred) {
-      STATE.liveData.power = instPower;
-    }
-    if (flags & CPS_FLAG.PEDAL_POWER_BALANCE_PRESENT) off += 1;
-    if (flags & CPS_FLAG.ACC_TORQUE_PRESENT) off += 2;
-    if (flags & CPS_FLAG.WHEEL_REV_DATA_PRESENT) off += 6;
+    await characteristic.startNotifications();
+    characteristic.addEventListener("characteristicvaluechanged", (event) => {
+      const v = event.target.value;
+      liveData.power = v.getInt16(2, true);
+      updateTrainingUI();
+    });
 
-    if (flags & CPS_FLAG.CRANK_REV_DATA_PRESENT) {
-      const crankRevs = dv.getUint16(off, true); off += 2;
-      const lastCrankTime = dv.getUint16(off, true); off += 2;
-
-      if (powerMeterState.lastCrankRevs !== null) {
-        let dtTicks = lastCrankTime - powerMeterState.lastCrankEventTime;
-        if (dtTicks < 0) dtTicks += 0x10000;
-        const dRev = crankRevs - powerMeterState.lastCrankRevs;
-        if (dRev > 0 && dtTicks > 0) {
-          const dtSec = dtTicks / 1024;
-          const rpm = (dRev / dtSec) * 60;
-          if (rpm > 0 && rpm < 220) {
-            STATE.liveData.cadence = Math.round(rpm);
-            powerMeterCadenceLastTs = Date.now();
-          }
-        }
-      }
-      powerMeterState.lastCrankRevs = crankRevs;
-      powerMeterState.lastCrankEventTime = lastCrankTime;
-    }
-
-    if (STATE.trainingSession.isRunning && !STATE.trainingSession.isPaused) {
-      APP.updateTrainingDisplay();
-      APP.recordDataPoint();
-    }
+    BLEDevices.powerMeter = { device };
+    alert(`✅ ${device.name} (파워미터) 연결 완료`);
+  } catch (err) {
+    console.error(err);
+    alert("❌ 파워미터 연결 중 오류가 발생했습니다.");
   }
+}
 
-  function handleHeartRateData(event) {
-    const value = event.target.value;
-    const flags = value.getUint8(0);
-    const rate16Bits = flags & 0x1;
-    const bpm = rate16Bits ? value.getUint16(1, true) : value.getUint8(1);
-    STATE.liveData.heartRate = bpm;
-    if (STATE.trainingSession.isRunning && !STATE.trainingSession.isPaused) {
-      APP.updateTrainingDisplay();
-    }
+/* -------------------------
+   심박계
+-------------------------- */
+async function connectHeartRate() {
+  if (!checkBLESupport()) return;
+
+  try {
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ["heart_rate"] }],
+    });
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService("heart_rate");
+    const hrm = await service.getCharacteristic("heart_rate_measurement");
+
+    await hrm.startNotifications();
+    hrm.addEventListener("characteristicvaluechanged", (event) => {
+      const val = event.target.value;
+      liveData.heartRate = val.getUint8(1);
+      updateTrainingUI();
+    });
+
+    BLEDevices.heartRate = { device };
+    alert(`❤️ ${device.name} (심박계) 연결 완료`);
+  } catch (err) {
+    console.error(err);
+    alert("❌ 심박계 연결 중 오류가 발생했습니다.");
   }
+}
 
-  async function connectTrainer() {
+/* -------------------------
+   BLE 연결 요약 표시
+-------------------------- */
+function listConnectedDevices() {
+  const summary = document.getElementById("connectedDevicesList");
+  if (!summary) return;
+  let html = "";
+  if (BLEDevices.trainer) html += `🚴 ${BLEDevices.trainer.device.name}<br>`;
+  if (BLEDevices.powerMeter) html += `⚡ ${BLEDevices.powerMeter.device.name}<br>`;
+  if (BLEDevices.heartRate) html += `❤️ ${BLEDevices.heartRate.device.name}<br>`;
+  summary.innerHTML = html || "<span class='muted'>연결된 기기가 없습니다.</span>";
+}
+
+/* -------------------------
+   BLE 연결 해제
+-------------------------- */
+function disconnectAll() {
+  for (const key in BLEDevices) {
     try {
-      showConnectionStatus(true);
-      const device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { services: ['fitness_machine'] },
-          { services: ['cycling_power'] },
-          { namePrefix: 'KICKR' },
-          { namePrefix: 'Wahoo' },
-        ],
-        optionalServices: ['device_information', 'fitness_machine', 'cycling_power'],
-      });
-      const server = await device.gatt.connect();
-
-      let service, characteristic, isFTMS = false;
-      try {
-        service = await server.getPrimaryService('fitness_machine');
-        characteristic = await service.getCharacteristic('indoor_bike_data');
-        isFTMS = true;
-      } catch {
-        service = await server.getPrimaryService('cycling_power');
-        characteristic = await service.getCharacteristic('cycling_power_measurement');
-        isFTMS = false;
-      }
-
-      await characteristic.startNotifications();
-      if (isFTMS) {
-        characteristic.addEventListener('characteristicvaluechanged', handleTrainerData);
-        STATE.connected.trainer = { name: device.name || 'Smart Trainer', device, server, characteristic };
-      } else {
-        characteristic.addEventListener('characteristicvaluechanged', handlePowerMeterData);
-        STATE.connected.powerMeter = { name: device.name || 'Power Meter', device, server, characteristic };
-        STATE.usePowerMeterPreferred = true;
-      }
-
-      device.addEventListener('gattserverdisconnected', () => {
-        try {
-          if (isFTMS && STATE.connected.trainer?.device === device) STATE.connected.trainer = null;
-          if (!isFTMS && STATE.connected.powerMeter?.device === device) STATE.connected.powerMeter = null;
-          updateDevicesList();
-        } catch {}
-      });
-
-      updateDevicesList();
-      showConnectionStatus(false);
-      alert(`✅ ${device.name || (isFTMS ? 'Smart Trainer' : 'Power Meter')} 연결 성공!`);
-    } catch (error) {
-      showConnectionStatus(false);
-      console.error('트레이너/파워미터 연결 오류:', error);
-      alert('❌ 연결 실패: ' + error.message);
+      BLEDevices[key]?.device?.gatt?.disconnect();
+    } catch (e) {
+      console.warn("연결 해제 실패:", e);
     }
   }
+  alert("🔌 모든 기기 연결이 해제되었습니다.");
+}
 
-  async function connectPowerMeter() {
-    try {
-      showConnectionStatus(true);
-      let device;
-      try {
-        device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: ['cycling_power'] }],
-          optionalServices: ['device_information'],
-        });
-      } catch {
-        device = await navigator.bluetooth.requestDevice({
-          acceptAllDevices: true,
-          optionalServices: [0x1818, 'cycling_power', 'device_information'],
-        });
-      }
-
-      const server = await device.gatt.connect();
-      let service;
-      try { service = await server.getPrimaryService(0x1818); }
-      catch { service = await server.getPrimaryService('cycling_power'); }
-
-      const ch = await service.getCharacteristic(0x2A63);
-      await ch.startNotifications();
-      ch.addEventListener('characteristicvaluechanged', handlePowerMeterData);
-
-      STATE.connected.powerMeter = { name: device.name || 'Power Meter', device, server, characteristic: ch };
-      STATE.usePowerMeterPreferred = true;
-
-      updateDevicesList();
-      showConnectionStatus(false);
-      alert(`✅ ${device.name} 파워미터 연결 성공!`);
-    } catch (err) {
-      showConnectionStatus(false);
-      console.error('파워미터 연결 오류:', err);
-      alert('❌ 파워미터 연결 실패: ' + err.message);
-    }
+/* -------------------------
+   실시간 데이터 업데이트
+-------------------------- */
+function updateTrainingUI() {
+  if (document.getElementById("trainingScreen").classList.contains("active")) {
+    document.getElementById("currentPowerValue").textContent = liveData.power;
+    document.getElementById("cadenceValue").textContent = liveData.cadence.toFixed(0);
+    document.getElementById("heartRateValue").textContent = liveData.heartRate;
+    const ratio = liveData.targetPower
+      ? Math.min(100, (liveData.power / liveData.targetPower) * 100)
+      : 0;
+    document.getElementById("powerProgressBar").style.width = ratio + "%";
+    document.getElementById("achievementValueBar").textContent = ratio.toFixed(0);
   }
-
-  async function connectHeartRate() {
-    try {
-      showConnectionStatus(true);
-      const device = await navigator.bluetooth.requestDevice({ filters: [{ services: ['heart_rate'] }] });
-      const server = await device.gatt.connect();
-      const service = await server.getPrimaryService('heart_rate');
-      const characteristic = await service.getCharacteristic('heart_rate_measurement');
-      characteristic.addEventListener('characteristicvaluechanged', handleHeartRateData);
-      await characteristic.startNotifications();
-
-      STATE.connected.heartRate = { name: device.name || 'Heart Rate Monitor', device, server, characteristic };
-      updateDevicesList();
-      showConnectionStatus(false);
-      alert(`✅ ${device.name || 'Heart Rate'} 연결 성공!`);
-    } catch (error) {
-      showConnectionStatus(false);
-      console.error('심박계 연결 오류:', error);
-      alert('❌ 심박계 연결 실패: ' + error.message);
-    }
-  }
-
-  return {
-    connectTrainer,
-    connectPowerMeter,
-    connectHeartRate,
-    updateDevicesList,
-  };
-})();
+}
