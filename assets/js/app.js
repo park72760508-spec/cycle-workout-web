@@ -198,14 +198,20 @@ document.addEventListener("DOMContentLoaded", () => {
   showScreen("connectionScreen");
 
   // ✅ 버튼 클릭 이벤트 추가
-  document.getElementById("btnConnectHR")?.addEventListener("click", () => {
-    showToast("심박계 검색 시작…");        // ✅ 클릭 즉시 피드백 
-    if (window.connectHeartRate) {
-      window.connectHeartRate();
-    } else {
-      showToast("심박계 연결 기능을 불러오지 못했습니다.");
-    }
-  });
+   const btnHR = document.getElementById("btnConnectHR");
+   btnHR?.addEventListener("click", async () => {
+     btnHR.disabled = true;
+     const original = btnHR.textContent;
+     btnHR.textContent = "검색 중…";
+     showToast("심박계 검색 시작…");
+     try {
+       await window.connectHeartRate?.();
+     } finally {
+       btnHR.disabled = false;
+       btnHR.textContent = original;
+     }
+   });
+
 
   document.getElementById("btnConnectTrainer")?.addEventListener("click", () => {
     if (window.connectTrainer) window.connectTrainer();
