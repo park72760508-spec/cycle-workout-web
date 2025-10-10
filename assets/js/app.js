@@ -199,6 +199,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ✅ 버튼 클릭 이벤트 추가
   document.getElementById("btnConnectHR")?.addEventListener("click", () => {
+    showToast("심박계 검색 시작…");        // ✅ 클릭 즉시 피드백 
     if (window.connectHeartRate) {
       window.connectHeartRate();
     } else {
