@@ -169,6 +169,14 @@ async function connectTrainer() {
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "Trainer"} 연결 성공`);
     showScreen("profileScreen"); // ✅ 연결 후 다음 단계로
+
+      // 프로필 표시
+      showScreen("profileScreen");
+      if (window.renderProfiles) {
+        window.renderProfiles();
+      }
+
+     
   } catch (err) {
     showConnectionStatus(false);
     console.error("트레이너 연결 오류:", err);
@@ -221,6 +229,13 @@ async function connectPowerMeter() {
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "Power Meter"} 연결 성공`);
     showScreen("profileScreen");
+
+   // 사용자 표시
+   showScreen("profileScreen");
+   if (window.renderProfiles) {
+     window.renderProfiles();
+   }
+     
   } catch (err) {
     showConnectionStatus(false);
     console.error("파워미터 연결 오류:", err);
@@ -232,46 +247,29 @@ async function connectPowerMeter() {
 // 3) Heart Rate (HRS)
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
-  console.log("=== connectHeartRate START ===");
-  
   try {
     showConnectionStatus(true);
-    showToast("심박계를 검색하고 있습니다...");
-    
+
     let device;
     try {
-      console.log("1. Requesting device with heart_rate filter...");
+      // 기본적으로 heart_rate 서비스를 광고하는 기기 우선
       device = await navigator.bluetooth.requestDevice({
         filters: [{ services: ["heart_rate"] }],
         optionalServices: ["heart_rate", "device_information"],
       });
-      console.log("2. Device selected:", device.name);
-    } catch (err) {
-      console.log("3. First attempt failed:", err.message);
-      console.log("4. Trying acceptAllDevices...");
+    } catch {
+      // 광고에 heart_rate UUID가 없는 기기 (가민, 폴라 등) 대응
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: ["heart_rate", "device_information"],
       });
-      console.log("5. Device selected (all):", device.name);
     }
 
-    console.log("6. Connecting to GATT server...");
     const server = await device.gatt.connect();
-    console.log("7. GATT connected!");
-    
-    console.log("8. Getting heart_rate service...");
     const service = await server.getPrimaryService("heart_rate");
-    console.log("9. Service found!");
-    
-    console.log("10. Getting heart_rate_measurement characteristic...");
     const ch = await service.getCharacteristic("heart_rate_measurement");
-    console.log("11. Characteristic found!");
 
-    console.log("12. Starting notifications...");
     await ch.startNotifications();
-    console.log("13. Notifications started!");
-    
     ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
 
     connectedDevices.heartRate = { 
@@ -282,34 +280,23 @@ async function connectHeartRate() {
     };
 
     device.addEventListener("gattserverdisconnected", () => {
-      console.log("Device disconnected");
       if (connectedDevices.heartRate?.device === device) {
         connectedDevices.heartRate = null;
       }
       updateDevicesList();
     });
 
-    console.log("14. Updating devices list...");
     updateDevicesList();
-    
-    console.log("15. Hiding connection status...");
     showConnectionStatus(false);
-    
-    console.log("16. Showing success toast...");
     showToast(`✅ ${device.name || "HR"} 연결 성공`);
-    
-    console.log("17. Showing profile screen...");
     showScreen("profileScreen");
+    if (window.renderProfiles) {
+      window.renderProfiles();
+    }
     
-    console.log("=== connectHeartRate SUCCESS ===");
   } catch (err) {
-    console.error("=== connectHeartRate ERROR ===");
-    console.error("Error details:", err);
-    console.error("Error name:", err.name);
-    console.error("Error message:", err.message);
-    console.error("Error stack:", err.stack);
-    
     showConnectionStatus(false);
+    console.error("심박계 연결 오류:", err);
     showToast("❌ 심박계 연결 실패: " + err.message);
   }
 }
@@ -376,6 +363,8 @@ window.addEventListener("beforeunload", () => {
     if (connectedDevices.heartRate?.server?.connected) connectedDevices.heartRate.device.gatt.disconnect();
   } catch (e) { /* noop */ }
 });
+
+
 
 // 전역 export
 window.connectTrainer = connectTrainer;
