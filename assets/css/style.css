@@ -7,6 +7,7 @@
   --dark-bg: #1e1e1e;
   --light-bg: #2c2c2c;
   --text-color: #fff;
+  --border-radius: 12px;
 }
 
 body {
@@ -14,85 +15,74 @@ body {
   font-family: 'Noto Sans KR', sans-serif;
   background: var(--dark-bg);
   color: var(--text-color);
-  height: 100vh;
   overflow: hidden;
 }
 
 .screen {
   display: none;
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
+  padding: 20px;
+  min-height: 100vh;
   background: var(--light-bg);
-  transition: opacity 0.4s ease;
 }
 
 .screen.active {
   display: block;
-  opacity: 1;
+}
+
+.header {
+  background: #2c2c2c;
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+  margin-bottom: 20px;
 }
 
 .card {
   background: #333;
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 16px;
-  margin: 10px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  margin-bottom: 15px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
-button {
+.btn {
   background: var(--primary-color);
   color: white;
   border: none;
-  border-radius: 12px;
+  border-radius: var(--border-radius);
   padding: 12px 20px;
   font-size: 16px;
   cursor: pointer;
-  margin: 10px 0;
+  margin: 5px;
 }
 
-button:hover {
-  background: #0c5ce0;
+.btn:hover {
+  opacity: 0.9;
 }
 
-.device-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px;
-  margin-bottom: 8px;
-  border-radius: 10px;
-  background: #222;
+.btn-success {
+  background: var(--success-color);
 }
 
-.device-card.connected {
-  border: 2px solid var(--success-color);
+.btn-secondary {
+  background: #555;
 }
 
-.profile-card, .workout-card {
-  transition: all 0.2s ease;
-  cursor: pointer;
+.btn-danger {
+  background: var(--danger-color);
 }
 
-.profile-card:hover, .workout-card:hover {
-  transform: scale(1.03);
-  box-shadow: 0 0 10px rgba(255,255,255,0.3);
-}
-
-/* 훈련화면 */
 .metric-card {
   background: #333;
   border-radius: 12px;
-  padding: 8px 0;
+  padding: 8px;
   text-align: center;
   color: #fff;
-  margin: 6px;
-  width: 120px;
-  display: inline-block;
+  margin: 5px;
 }
 
 .metric-value {
-  font-size: 32px;
+  font-size: 30px;
   font-weight: bold;
 }
 
@@ -101,65 +91,72 @@ button:hover {
   color: var(--gray-color);
 }
 
-/* 진행 바 */
-.progress-fill {
+.power-display {
+  background: #111;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.power-progress {
+  width: 100%;
   height: 10px;
-  background: var(--primary-color);
+  background: #333;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.power-progress-bar {
   width: 0%;
-  border-radius: 5px;
+  height: 10px;
+  background: var(--accent-color);
   transition: width 0.3s ease;
 }
 
-.timeline-segment {
-  position: relative;
-  background: #222;
-  flex-grow: 1;
-  height: 40px;
-  margin: 4px;
+.timeline-progress {
+  width: 100%;
+  background: #333;
   border-radius: 10px;
   overflow: hidden;
 }
 
-.timeline-segment.current .progress-fill {
-  background: var(--accent-color);
+.timeline-segments {
+  display: flex;
+  height: 12px;
 }
 
-.timeline-segment.completed .progress-fill {
-  background: var(--success-color);
+.segment-progress {
+  color: var(--accent-color);
+  margin-top: 5px;
+  text-align: center;
+  font-size: 14px;
 }
 
-#countdownOverlay {
+.countdown-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   justify-content: center;
   align-items: center;
-  flex-direction: column;
-  background: rgba(0,0,0,0.85);
   color: white;
   z-index: 999;
 }
 
-#countdownNumber {
-  font-size: 150px;
-  font-weight: bold;
+.countdown-number {
+  font-size: 120px;
   animation: pulse 1s infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.1); }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.6; }
 }
 
 .hidden {
   display: none !important;
-}
-
-.countdown-alert {
-  color: var(--accent-color);
-  animation: blink 1s infinite;
-}
-
-@keyframes blink {
-  50% { opacity: 0.3; }
 }
