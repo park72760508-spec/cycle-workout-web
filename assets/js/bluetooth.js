@@ -303,8 +303,13 @@ async function connectHeartRate() {
     
     console.log("=== connectHeartRate SUCCESS ===");
   } catch (err) {
+    console.error("=== connectHeartRate ERROR ===");
+    console.error("Error details:", err);
+    console.error("Error name:", err.name);
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    
     showConnectionStatus(false);
-    console.error("심박계 연결 오류:", err);
     showToast("❌ 심박계 연결 실패: " + err.message);
   }
 }
