@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cycle Workout WebApp v4.0</title>
+  <link rel="stylesheet" href="./assets/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1>🚴‍♀️ Cycle Workout WebApp</h1>
+    <nav>
+      <button id="btnInitDB" class="ghost">DB 보정</button>
+      <button id="btnAddSample" class="ghost">샘플 주입</button>
+    </nav>
+  </header>
+  <main id="app">
+    <section class="panel">
+      <h2>기기 연결</h2>
+      <div class="device-grid">
+        <div class="card"><h3>스마트로라 (FTMS)</h3><button id="btnConnectTrainer">연결</button><div class="status" id="trainerStatus">미연결</div></div>
+        <div class="card"><h3>파워미터 (CPS)</h3><button id="btnConnectPM">연결</button><div class="status" id="pmStatus">미연결</div></div>
+        <div class="card"><h3>심박계 (HRS)</h3><button id="btnConnectHR">연결</button><div class="status" id="hrStatus">미연결</div></div>
+      </div>
+      <h2>사용자</h2>
+      <div class="form-row"><label>이름</label><input id="userName" placeholder="홍길동" /></div>
+      <div class="form-row"><label>연락처</label><input id="userContact" placeholder="010-0000-0000" /></div>
+      <div class="form-row"><label>FTP(W)</label><input id="userFTP" type="number" placeholder="230" /></div>
+      <div class="form-row"><label>몸무게(kg)</label><input id="userWeight" type="number" placeholder="68" /></div>
+      <button id="btnAddUser" class="primary">사용자 저장</button>
+      <h2>세션</h2>
+      <div class="session-row">
+        <button id="btnStart" class="primary">세션 시작</button>
+        <button id="btnToggleLive">실시간 전송 ON/OFF</button>
+        <button id="btnComplete" class="danger">세션 완료</button>
+      </div>
+      <div class="info-row"><div>세션ID: <span id="sessionId">-</span></div><div>상태: <span id="sessionState">대기</span></div></div>
+    </section>
+    <section class="workout">
+      <div class="metrics"><div class="metric"><div class="metric-value" id="powerValue">0</div><div class="metric-label">Power (W)</div></div></div>
+      <div id="countdown" class="countdown hidden">5</div>
+      <div class="timeline" id="timeline"></div>
+      <canvas id="liveChart"></canvas>
+      <section class="ai"><h3>🤖 AI 분석</h3><pre id="aiAnalysis">(세션 완료 후 표시됩니다)</pre></section>
+    </section>
+  </main>
+  <script type="module">
+    import { setupApp } from './assets/js/app.js';
+    import { setupBLE } from './assets/js/ble.js';
+    import { setupTraining } from './assets/js/training.js';
+    import { setupUI } from './assets/js/ui.js';
+    import { setupChart } from './assets/js/chart.js';
+    const ctx={gasUrl:'https://script.google.com/macros/s/YOUR_DEPLOY_ID/exec',sessionId:null,user:{name:'',contact:'',ftp:230,weight:68},live:{power:0,cadence:0,hr:0},timers:{liveInterval:null},chart:null};
+    setupUI(ctx);setupChart(ctx);setupApp(ctx);setupBLE(ctx);setupTraining(ctx);
+  </script>
+</body>
+</html>
