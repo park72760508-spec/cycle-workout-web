@@ -400,3 +400,46 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("🚀 앱 초기화 완료");
 });
 
+
+/* ==========================================================
+   Users 시트에서 사용자 목록 불러오기
+========================================================== */
+async function loadUserList() {
+  const sel = document.getElementById("resultUserSelect");
+  if (!sel) return;
+
+  try {
+    const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "getUsers" }),
+    });
+    const data = await res.json();
+
+    if (data.users && data.users.length) {
+      data.users.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u.name;
+        opt.textContent = u.name;
+        sel.appendChild(opt);
+      });
+    }
+  } catch (err) {
+    console.error("사용자 목록 로드 실패:", err);
+  }
+}
+
+/* ==========================================================
+   사용자 선택 시 그래프 갱신
+========================================================== */
+function handleUserSelect(name) {
+  if (!name) return;
+  loadResultsStatsByUser(name);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  showScreen("connectionScreen");
+  updateDevicesList();
+  loadUserList(); // ✅ 사용자 목록 자동 로드
+  console.log("🚀 사용자 필터 기능 포함 앱 초기화 완료");
+});
+
