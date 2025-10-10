@@ -233,21 +233,29 @@ async function connectPowerMeter() {
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
   console.log("=== connectHeartRate START ===");
-  console.log("1. Function called successfully");
-  console.log("2. Navigator.bluetooth exists:", !!navigator.bluetooth);
-  
-  // alert 제거하고 콘솔로 대체
-  // alert("심박계 연결 함수 실행됨");  
-  // alert 제거하고 콘솔로 대체
-  // alert("심박계 연결 함수 실행됨");
+  console.log("1. Function called at", new Date().toISOString());
+  console.log("2. navigator.bluetooth available:", !!navigator.bluetooth);
   
   try {
-    if (!navigator.bluetooth) {
-      throw new Error("Web Bluetooth API not supported");
-    }
-    
     showConnectionStatus(true);
     showToast("심박계를 검색하고 있습니다...");
+    
+    let device;
+    try {
+      console.log("3. Requesting device with heart_rate filter...");
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ["heart_rate"] }],
+        optionalServices: ["heart_rate", "device_information"],
+      });
+    } catch (err) {
+      console.log("4. First attempt failed, trying acceptAllDevices...");
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["heart_rate", "device_information"],
+      });
+    }
+    
+    console.log("5. Device selected:", device.name);
   } catch (err) {
     showConnectionStatus(false);
     console.error("심박계 연결 오류:", err);
