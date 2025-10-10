@@ -232,45 +232,22 @@ async function connectPowerMeter() {
 // 3) Heart Rate (HRS)
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
-   console.log("connectHeartRate() called!");
-   alert("심박계 연결 함수 실행됨");   
+  console.log("=== connectHeartRate START ===");
+  console.log("1. Function called successfully");
+  console.log("2. Navigator.bluetooth exists:", !!navigator.bluetooth);
+  
+  // alert 제거하고 콘솔로 대체
+  // alert("심박계 연결 함수 실행됨");  
+  // alert 제거하고 콘솔로 대체
+  // alert("심박계 연결 함수 실행됨");
+  
   try {
-    showConnectionStatus(true);
-
-    // ✅ 여기에 교체/추가
-    let device;
-    try {
-      // 1️⃣ 기본적으로 heart_rate 서비스를 광고하는 기기 우선
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ["heart_rate"] }],
-        optionalServices: ["heart_rate", "device_information"],
-      });
-    } catch {
-      // 2️⃣ 광고에 heart_rate UUID가 없는 기기 (가민, 폴라 등) 대응
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ["heart_rate", "device_information"],
-      });
+    if (!navigator.bluetooth) {
+      throw new Error("Web Bluetooth API not supported");
     }
-
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService("heart_rate");
-    const ch = await service.getCharacteristic("heart_rate_measurement");
-
-    await ch.startNotifications(); // ✅ 이후 갱신
-    ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
-
-    connectedDevices.heartRate = { name: device.name || "Heart Rate", device, server, characteristic: ch };
-
-    device.addEventListener("gattserverdisconnected", () => {
-      if (connectedDevices.heartRate?.device === device) connectedDevices.heartRate = null;
-      updateDevicesList();
-    });
-
-    updateDevicesList();
-    showConnectionStatus(false);
-    showToast(`✅ ${device.name || "HR"} 연결 성공`);
-    showScreen("profileScreen");
+    
+    showConnectionStatus(true);
+    showToast("심박계를 검색하고 있습니다...");
   } catch (err) {
     showConnectionStatus(false);
     console.error("심박계 연결 오류:", err);
