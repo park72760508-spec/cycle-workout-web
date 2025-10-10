@@ -24,18 +24,24 @@
   <section id="connectionScreen" class="screen active">
     <header class="header">
       <h1>🚴‍♂️ 사이클 아카데미</h1>
-      <p class="subtitle">스마트로라 / 파워미터 / 심박계를 연결하세요(1032)</p>
+      <p class="subtitle">스마트로라 / 파워미터 / 심박계를 연결하세요(1047)</p>
     </header>
 
     <div class="card">
       <h3 class="card-title">📡 블루투스 기기 연결</h3>
       <div class="grid-2 gap-10 mb-15">
-        <button class="btn" id="btnConnectTrainer">스마트 트레이너</button>
-        <button class="btn btn-secondary" id="btnConnectHeart">심박계 연결</button>
-        <button class="btn" id="btnConnectPower">파워미터 연결</button>
+        <button class="btn" onclick="connectTrainer()">🚴 스마트 트레이너 연결</button>
+        <button class="btn" onclick="connectPowerMeter()">⚡ 파워미터 연결</button>
+        <button class="btn" onclick="connectHeartRate()">❤️ 심박계 연결</button>
+        <button class="btn btn-secondary" onclick="disconnectAll()">🔌 전체 해제</button>
+        <div id="connectedDevicesList"></div>
+        
       </div>
     </div>
 
+
+
+    
     <div id="deviceList"></div>
 
     <div id="connectionStatus" class="hidden">
