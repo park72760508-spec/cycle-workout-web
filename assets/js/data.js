@@ -76,12 +76,20 @@ function selectWorkout(w) {
   document.getElementById("previewDuration").textContent = w.totalMinutes + "분";
   document.getElementById("previewIntensity").textContent = w.intensity + "%";
   document.getElementById("previewTSS").textContent = w.tss;
+  
   const segDiv = document.getElementById("segmentPreview");
   segDiv.innerHTML = w.segments
-    .map(
-      (s) =>
-        `<div class="segment-bar" style="width:${s.duration / 2}px; background:${s.color}">${s.label}</div>`
-    )
+    .map((s) => `
+      <div class="segment-item ${
+        s.label.includes('웜업') ? 'warmup' : 
+        s.label.includes('휴식') ? 'rest' : 'interval'
+      }">
+        <h4>${s.label}</h4>
+        <div class="ftp-percent">${Math.round(s.target * 100)}%</div>
+        <div class="duration">${Math.floor(s.duration / 60)}분</div>
+      </div>
+    `)
     .join("");
+  
   showScreen("trainingReadyScreen");
 }
