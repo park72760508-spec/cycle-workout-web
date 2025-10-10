@@ -21,7 +21,7 @@ window.showConnectionStatus = window.showConnectionStatus || function (show) {
   el.classList.toggle("hidden", !show);
 };
 window.updateDevicesList = window.updateDevicesList || function () {
-  const deviceList = document.getElementById("deviceList");
+  const deviceList = document.getElementById("connectedDevicesList");
   const summary = document.getElementById("connectedDevicesSummary");
   const summaryList = document.getElementById("connectedDevicesList");
   if (!deviceList || !summary || !summaryList) return;
