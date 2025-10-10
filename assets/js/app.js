@@ -5,6 +5,14 @@
    - 훈련 제어 (카운트다운, 일시정지, 종료, 결과)
 ========================================================== */
 
+/* ==========================================================
+   CONFIG – Google Apps Script Web App URL 설정
+========================================================== */
+const CONFIG = {
+  GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec"
+};
+
+
 window.liveData = {
   power: 0,
   cadence: 0,
