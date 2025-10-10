@@ -197,7 +197,7 @@ document.getElementById("btnGoHome")?.addEventListener("click", () => showScreen
 ========================================================== */
 document.addEventListener("DOMContentLoaded", () => {
   showScreen("connectionScreen");
-  updateDevicesList();
+  //updateDevicesList();
   console.log("🚀 앱 초기화 완료");
 });
 
@@ -395,7 +395,7 @@ function drawResultsChart(results) {
 ========================================================== */
 document.addEventListener("DOMContentLoaded", () => {
   showScreen("connectionScreen");
-  updateDevicesList();
+  //updateDevicesList();
   loadWorkouts(); // ✅ 워크아웃 자동 불러오기 추가
   console.log("🚀 앱 초기화 완료");
 });
@@ -527,7 +527,7 @@ async function loadResultsStatsByUserAndDate(name, startDate, endDate) {
 
 document.addEventListener("DOMContentLoaded", () => {
   showScreen("connectionScreen");
-  updateDevicesList();
+  //updateDevicesList();
   loadUserList(); // ✅ 사용자 목록 자동 로드
   console.log("🚀 사용자 필터 기능 포함 앱 초기화 완료");
 });
