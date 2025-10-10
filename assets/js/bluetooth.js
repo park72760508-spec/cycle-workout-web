@@ -200,3 +200,13 @@ function disconnectAll() {
   updateDevicesList();
   alert("🔌 모든 블루투스 기기 연결 해제됨");
 }
+
+/* ==========================================================
+   버튼 바인딩
+========================================================== */
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("btnConnectTrainer")?.addEventListener("click", connectTrainer);
+  document.getElementById("btnConnectHR")?.addEventListener("click", connectHeartRate);
+  document.getElementById("btnConnectPM")?.addEventListener("click", connectPowerMeter);
+});
+
