@@ -3,11 +3,12 @@
    원본(1009V1) 기반 + 목록 필터 강화
 ========================================================== */
 
-const connectedDevices = {
+window.connectedDevices = window.connectedDevices || {
   trainer: null,
   powerMeter: null,
-  heartRate: null,
+  heartRate: null
 };
+
 
 /* ---------- UI 헬퍼 ---------- */
 function showConnectionStatus(show) {
