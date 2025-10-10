@@ -1,362 +1,279 @@
-/* ======================================
-   CYCLE WORKOUT WEBAPP STYLE (v1009)
-   원본(1009V1) CSS 완전 반영 + GitHub Pages 최적화
-====================================== */
+/* ==========================================================
+   Cycle Workout App UI Style (원본 1009V1 기반)
+========================================================== */
 
-:root {
-  --bg-dark: #1a1a1a;
-  --bg-light: #2a2a2a;
-  --bg-card: #2d2d2d;
-  --text-color: #fff;
-  --gray: #aaa;
-  --accent: #1e90ff;
-  --accent2: #ff9800;
-  --success: #4caf50;
-  --danger: #f44336;
-  --radius: 12px;
-}
-
+/* -------- RESET -------- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  background: var(--bg-dark);
-  color: var(--text-color);
-  font-family: 'Noto Sans KR', 'Segoe UI', sans-serif;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  user-select: none;
+  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  background: #f6f8fa;
+  color: #222;
+  overflow-x: hidden;
 }
+h1,h2,h3,h4 { font-weight: 600; }
+.hidden { display: none !important; }
 
-/* 화면 섹션 공통 */
+/* -------- LAYOUT -------- */
 .screen {
   display: none;
-  height: 100vh;
-  overflow-y: auto;
-  background: var(--bg-light);
-  padding: 10px;
+  min-height: 100vh;
+  padding: 20px;
+  transition: opacity 0.3s ease;
 }
-
-.screen.active {
-  display: block;
-}
-
-/* 헤더 */
+.screen.active { display: block; }
 .header {
   text-align: center;
-  padding: 15px 0;
-  border-bottom: 1px solid #333;
+  margin-bottom: 20px;
 }
+.header h1 { font-size: 1.8em; margin-bottom: 5px; }
+.subtitle { font-size: 0.9em; color: #666; }
 
-.header h1 {
-  margin: 0;
-  font-size: 22px;
-  color: var(--accent);
-}
-
-.subtitle {
-  font-size: 14px;
-  color: var(--gray);
-}
-
-/* 카드 */
 .card {
-  background: var(--bg-card);
-  border-radius: var(--radius);
-  padding: 15px;
-  margin: 15px;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 16px;
 }
+.text-center { text-align: center; }
+.muted { color: #777; font-size: 0.9em; }
+.mb-10 { margin-bottom: 10px; }
+.mb-15 { margin-bottom: 15px; }
+.mb-20 { margin-bottom: 20px; }
+.mb-30 { margin-bottom: 30px; }
+.mt-5 { margin-top: 5px; }
+.mt-10 { margin-top: 10px; }
+.mt-20 { margin-top: 20px; }
 
-.card:hover {
-  transform: scale(1.01);
-  transition: 0.2s ease;
+/* -------- GRID -------- */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
 }
+.gap-10 { gap: 10px; }
+.center { text-align: center; }
 
-.card-title {
-  color: var(--accent2);
-  margin-bottom: 8px;
-}
-
-/* 버튼 */
-button,
+/* -------- BUTTONS -------- */
 .btn {
-  background: var(--accent);
-  color: white;
+  background: #2e74e8;
+  color: #fff;
   border: none;
-  border-radius: var(--radius);
-  padding: 10px 18px;
-  font-size: 16px;
+  border-radius: 8px;
+  padding: 10px 14px;
   cursor: pointer;
-  margin: 5px;
-  transition: 0.2s ease;
+  transition: background 0.2s;
 }
-
-button:hover,
-.btn:hover {
-  background: #0e73dd;
-  transform: translateY(-1px);
-}
-
+.btn:hover { background: #2562c8; }
 .btn-secondary {
-  background: #666;
+  background: #6c757d;
 }
-
 .btn-success {
-  background: var(--success);
+  background: #28a745;
 }
-
-.btn-danger {
-  background: var(--danger);
+.btn-row {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
 }
+.control-btn {
+  border: none;
+  background: #fff;
+  font-size: 22px;
+  border-radius: 50%;
+  width: 55px;
+  height: 55px;
+  margin: 0 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.control-btn.stop { color: #d33; }
+.control-btn.pause { color: #f0a500; }
 
-/* 입력폼 */
-input {
-  padding: 8px;
-  border-radius: var(--radius);
-  border: 1px solid #444;
-  background: #1b1b1b;
-  color: white;
+/* -------- FORMS -------- */
+.form-group { margin-bottom: 12px; }
+.form-group label {
+  display: block;
+  font-size: 0.9em;
+  margin-bottom: 4px;
+  color: #555;
+}
+.form-group input {
   width: 100%;
-  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
 }
-
-input:focus {
-  outline: none;
-  border: 1px solid var(--accent);
-}
-
-/* ==========================
-   TRAINING SCREEN 스타일
-========================== */
-
-.training-header {
+.form-row {
   display: flex;
   justify-content: space-between;
+  gap: 10px;
+}
+
+/* -------- DEVICE LIST -------- */
+.connected-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+}
+.connected-summary {
+  padding: 6px 8px;
+  font-size: 0.95em;
+}
+.big-plus {
+  font-size: 2em;
+  color: #2e74e8;
+}
+
+/* -------- TRAINING METRICS -------- */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  gap: 10px;
+  margin-top: 15px;
+}
+.metric-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.1);
   padding: 10px;
-  align-items: center;
-  background: #1a1a1a;
-  border-bottom: 1px solid #333;
 }
-
-.segment-details {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  color: var(--gray);
-  font-size: 14px;
-}
-
-.elapsed-block {
+.col-center {
   display: flex;
   flex-direction: column;
-  text-align: center;
+  align-items: center;
 }
-
-.segment-time,
-.next-segment {
-  font-weight: bold;
-  color: var(--accent2);
-}
-
-/* 메트릭 카드 */
-.metrics-grid {
-  display: flex;
-  justify-content: space-around;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.metric-card {
-  background: #2e2e2e;
-  border-radius: var(--radius);
-  padding: 10px;
-  text-align: center;
-  width: 140px;
-  margin: 8px;
-}
-
 .metric-value {
-  font-size: 28px;
-  font-weight: bold;
+  font-size: 26px;
+  font-weight: 600;
 }
-
-.metric-value.big {
-  font-size: 34px;
-  color: var(--accent2);
-}
-
 .metric-label {
-  font-size: 13px;
-  color: var(--gray);
+  font-size: 0.9em;
+  color: #777;
 }
-
-/* 파워 디스플레이 */
-.power-display {
-  background: #111;
-  border-radius: var(--radius);
-  padding: 20px;
+.unit-dim {
+  font-size: 0.8em;
+  color: #999;
   text-align: center;
-  margin: 15px;
 }
-
+.power-display {
+  background: #fefefe;
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
 .current-power {
-  font-size: 72px;
-  font-weight: bold;
-  color: var(--accent);
+  font-size: 52px;
+  font-weight: 700;
+  color: #2e74e8;
 }
-
 .power-progress {
   position: relative;
-  background: #333;
-  height: 14px;
-  border-radius: 10px;
-  margin-top: 10px;
-  overflow: hidden;
+  height: 8px;
+  background: #eee;
+  border-radius: 4px;
+  margin: 10px 0;
 }
-
 .power-progress-bar {
-  width: 0%;
+  position: absolute;
+  top: 0;
+  left: 0;
   height: 100%;
-  background: var(--accent2);
-  transition: width 0.3s ease;
+  width: 0%;
+  background: #2e74e8;
+  border-radius: 4px;
+  transition: width 0.4s ease;
 }
-
 .power-progress-label {
-  font-size: 13px;
-  color: var(--gray);
-  margin-top: 6px;
+  font-size: 0.85em;
+  color: #555;
 }
 
-/* 타임라인 */
-.timeline {
-  margin: 15px;
-  background: #222;
-  border-radius: var(--radius);
+/* -------- TRAINING TIMELINE -------- */
+.timeline-wrap {
+  margin-top: 20px;
+  background: #fff;
+  border-radius: 8px;
   padding: 10px;
 }
-
 .timeline-progress {
-  height: 12px;
-  background: #333;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.timeline-segments {
-  display: flex;
-}
-
-.timeline-segment {
-  flex-grow: 1;
-  background: #555;
-  height: 100%;
-  margin: 0 2px;
+  height: 8px;
+  background: #eee;
   border-radius: 4px;
+  position: relative;
 }
-
-.timeline-segment.completed {
-  background: var(--success);
+.timeline-segments {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: #2e74e8;
+  border-radius: 4px;
+  transition: width 0.3s ease;
 }
-
-.timeline-segment.current {
-  background: var(--accent2);
-}
-
-.timeline-bottom {
-  display: flex;
-  justify-content: space-between;
-  color: var(--gray);
-  font-size: 13px;
+.timeline-legend {
+  text-align: right;
+  font-size: 0.85em;
+  color: #555;
   margin-top: 5px;
 }
 
-/* 훈련 제어 버튼 */
-.training-controls {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  margin: 20px;
-}
-
-.control-btn {
-  background: #333;
-  border: none;
-  border-radius: 50%;
-  width: 64px;
-  height: 64px;
-  font-size: 26px;
-  color: white;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-.control-btn:hover {
-  background: #444;
-  transform: scale(1.05);
-}
-
-.control-btn.stop {
-  background: var(--danger);
-}
-
-.control-btn.pause {
-  background: var(--accent2);
-}
-
-/* 카운트다운 오버레이 */
+/* -------- TRAINING READY / COUNTDOWN -------- */
 .countdown-overlay {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
   display: flex;
-  justify-content: center;
   align-items: center;
-  background: rgba(0, 0, 0, 0.9);
-  z-index: 1000;
-  flex-direction: column;
+  justify-content: center;
+  z-index: 999;
 }
-
 .countdown-number {
-  font-size: 160px;
+  font-size: 120px;
   font-weight: bold;
-  animation: pulse 1s infinite;
+  color: #fff;
+  text-shadow: 0 0 10px #000;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.7; transform: scale(1.1); }
+/* -------- RESULT SCREEN -------- */
+.achievement-circle {
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2e74e8, #00c6ff);
+  margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.2);
 }
-
-/* 결과 화면 */
+.achievement-text {
+  font-size: 2.2em;
+  font-weight: 700;
+}
 .result-stats {
   display: flex;
   justify-content: space-around;
   flex-wrap: wrap;
-  margin: 10px 0;
+  margin: 15px 0;
 }
-
 .result-stat {
   text-align: center;
+  width: 45%;
+  margin-bottom: 15px;
 }
-
 .result-stat-value {
-  font-size: 32px;
-  color: var(--accent);
+  font-size: 28px;
+  font-weight: 600;
+  color: #2e74e8;
 }
-
 .result-stat-label {
-  color: var(--gray);
-  font-size: 13px;
+  font-size: 0.9em;
+  color: #777;
 }
 
-/* AI 분석 카드 */
-.ai-analysis {
-  background: #2a2a2a;
-  padding: 10px;
-  border-radius: var(--radius);
-  font-size: 15px;
-  line-height: 1.4em;
-}
-
-/* 숨김 공통 */
-.hidden {
-  display: none !important;
+/* -------- RESPONSIVE -------- */
+@media (max-width: 768px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .result-stats { flex-direction: column; align-items: center; }
+  .result-stat { width: 100%; }
 }
