@@ -277,3 +277,99 @@ h1,h2,h3,h4 { font-weight: 600; }
   .result-stats { flex-direction: column; align-items: center; }
   .result-stat { width: 100%; }
 }
+
+/* -------- WORKOUT PREVIEW (훈련준비 화면) -------- */
+.workout-preview {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.workout-preview h2 {
+  text-align: center;
+  color: #2e74e8;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.preview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.preview-stats > div {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.preview-stats strong {
+  font-size: 28px;
+  color: #2e74e8;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.segment-preview {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.segment-item {
+  padding: 10px 15px;
+  border-radius: 8px;
+  min-width: 120px;
+  text-align: center;
+  color: #fff;
+}
+
+.segment-item.warmup {
+  background: #4caf50;
+}
+
+.segment-item.interval {
+  background: #2196f3;
+}
+
+.segment-item.rest {
+  background: #9e9e9e;
+}
+
+.segment-item h4 {
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.ftp-percent {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 5px 0;
+}
+
+.duration {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.training-ready {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  text-align: center;
+}
+
+.btn-row.center {
+  justify-content: center;
+  margin-top: 20px;
+}
