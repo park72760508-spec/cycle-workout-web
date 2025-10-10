@@ -40,7 +40,7 @@
   <div id="connectionScreen" class="screen active">
     <div class="header">
       <h1>🚴‍♂️ 사이클 아카데미</h1>
-      <p class="subtitle">와 심박계를 연결하세요(0724)</p>
+      <p class="subtitle">와 심박계를 연결하세요(0730)</p>
     </div>
 
     <div class="card">
@@ -322,11 +322,12 @@
 
   <!-- 비차단 메시지용 토스트 -->
   <div id="toast" class="toast hidden"></div>
-  
-  <!-- 스크립트 로딩 순서 매우 중요: data.js → bluetooth.js → app.js -->
-  <script src="data.js" defer></script>
-  <script src="bluetooth.js" defer></script>
-  <script src="app.js" defer></script>
+
+<!-- 예: assets/js/ 폴더에 있다면 -->
+<script src="assets/js/data.js" defer></script>
+<script src="assets/js/bluetooth.js" defer></script>
+<script src="assets/js/app.js" defer></script>
+
 
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 
