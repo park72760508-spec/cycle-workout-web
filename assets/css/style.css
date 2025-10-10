@@ -1,170 +1,362 @@
-/* ====== CSS: 원본(1009V1) 전체 이관 ====== */
+/* ======================================
+   CYCLE WORKOUT WEBAPP STYLE (v1009)
+   원본(1009V1) CSS 완전 반영 + GitHub Pages 최적화
+====================================== */
+
 :root {
-  --primary-color:#2E74E8;--secondary-color:#1A5AB8;--accent-color:#FF6B35;
-  --success-color:#28A745;--warning-color:#FFC107;--danger-color:#DC3545;
-  --dark-color:#343A40;--light-color:#F8F9FA;--gray-color:#6C757D;
-  --border-radius:12px;--shadow:0 4px 16px rgba(0,0,0,0.1);--transition:all .3s ease
+  --bg-dark: #1a1a1a;
+  --bg-light: #2a2a2a;
+  --bg-card: #2d2d2d;
+  --text-color: #fff;
+  --gray: #aaa;
+  --accent: #1e90ff;
+  --accent2: #ff9800;
+  --success: #4caf50;
+  --danger: #f44336;
+  --radius: 12px;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
-  min-height:100vh;color:var(--dark-color);overflow-x:hidden
+
+body {
+  background: var(--bg-dark);
+  color: var(--text-color);
+  font-family: 'Noto Sans KR', 'Segoe UI', sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  user-select: none;
 }
-.screen{display:none;padding:20px;min-height:100vh;background:var(--light-color)}
-.screen.active{display:block}
-.header{text-align:center;margin-bottom:30px;background:#fff;padding:20px;border-radius:var(--border-radius);box-shadow:var(--shadow)}
-.header h1{color:var(--primary-color);font-size:24px;font-weight:700;margin-bottom:5px}
-.header .subtitle{color:var(--gray-color);font-size:14px}
-.card{background:#fff;border-radius:var(--border-radius);padding:20px;margin-bottom:15px;box-shadow:var(--shadow);transition:var(--transition);cursor:pointer}
-.card:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,.15)}
-.btn{background:var(--primary-color);color:#fff;border:none;padding:14px 24px;border-radius:var(--border-radius);font-size:16px;font-weight:600;cursor:pointer;transition:var(--transition);width:100%;text-align:center}
-.btn:hover{background:var(--secondary-color);transform:translateY(-1px)}
-.btn-success{background:var(--success-color)}
-.btn-danger{background:var(--danger-color)}
-.btn-secondary{background:var(--gray-color)}
-.loading{text-align:center;padding:40px}
-.spinner{width:40px;height:40px;border:4px solid var(--light-color);border-top:4px solid var(--primary-color);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 15px}
-@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-/* 연결 화면 */
-.device-card{display:flex;align-items:center;justify-content:space-between;position:relative}
-.device-card.connected{background:linear-gradient(135deg,#d4edda 0%,#c3e6cb 100%);border:2px solid var(--success-color)}
-.device-info{display:flex;align-items:center;flex:1}
-.device-icon{width:48px;height:48px;background:var(--primary-color);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:15px;font-size:24px;color:#fff}
-.device-details h3{font-size:16px;font-weight:600;margin-bottom:4px}
-.device-details p{font-size:14px;color:var(--gray-color)}
-/* 프로필 화면 */
-.profile-card{position:relative}
-.profile-info{display:flex;align-items:center}
-.profile-avatar{width:60px;height:60px;background:var(--primary-color);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-right:15px;font-size:24px;font-weight:700;color:#fff}
-.profile-details h3{font-size:18px;font-weight:600;margin-bottom:5px}
-.profile-stats{display:flex;gap:15px;margin-top:10px}
-.stat-value{font-size:16px;font-weight:600;color:var(--primary-color)}
-.stat-label{font-size:12px;color:var(--gray-color)}
-/* 워크아웃 화면 */
-.workout-card{position:relative}
-.workout-header{display:flex;justify-content:space-between;align-items:start;margin-bottom:10px}
-.workout-title{font-size:18px;font-weight:600;color:var(--dark-color)}
-.workout-duration{background:var(--primary-color);color:#fff;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:600}
-/* 훈련 준비 화면 */
-.training-ready{text-align:center;padding:40px 20px}
-.workout-preview{background:#fff;border-radius:var(--border-radius);padding:30px;margin-bottom:30px;box-shadow:var(--shadow)}
-.workout-preview h2{color:var(--primary-color);font-size:24px;margin-bottom:15px}
-.segment-preview{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:20px 0}
-.segment-item{background:var(--light-color);padding:10px 15px;border-radius:8px;text-align:center;min-width:120px}
-.segment-item.warmup{border-left:4px solid #28A745}
-.segment-item.interval{border-left:4px solid #DC3545}
-.segment-item.rest{border-left:4px solid #FFC107}
-.segment-item.cooldown{border-left:4px solid #6C757D}
-.segment-item h4{font-size:12px;margin-bottom:5px;color:var(--gray-color)}
-.segment-item .ftp-percent{font-size:18px;font-weight:600;color:var(--primary-color)}
-.segment-item .duration{font-size:12px;color:var(--gray-color)}
-/* 훈련 화면 */
-#trainingScreen{background:#000;color:#fff;padding:10px}
-#userInfo{color:#00E6A8;font-weight:500;font-size:15px}
-.training-header{background:rgba(255,255,255,.1);border-radius:var(--border-radius);padding:15px;text-align:center;margin-bottom:15px}
-.current-segment{font-size:18px;font-weight:600;margin-bottom:5px}
-.segment-details{display:flex;justify-content:space-around;font-size:16px;opacity:.8}
-.metrics-grid{display:grid;grid-template-columns:1fr 2fr 1fr;gap:15px;margin-bottom:15px}
-.metric-card{background:rgba(255,255,255,.1);border-radius:var(--border-radius);padding:15px;text-align:center}
-/* 세그 평균 파워 카드 */
-.metric-card.avg-segment-power{display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;box-sizing:border-box}
-.metric-card.avg-segment-power .metric-value{font-size:65px;font-weight:700;color:#FFD700;margin-bottom:8px}
-.metric-card.avg-segment-power .metric-label{font-size:14px;opacity:.8;color:#fff}
-/* 심박/케이던스 패널 */
-.metric-card.dual-metric{display:flex;flex-direction:column;justify-content:space-evenly;align-items:center;height:100%;background:rgba(255,255,255,.1);border-radius:var(--border-radius);padding:15px;text-align:center}
-.metric-item{display:flex;flex-direction:column;align-items:center}
-.metric-item .metric-value{font-size:48px;font-weight:700;margin-bottom:4px;color:#fff}
-.metric-item .metric-label{font-size:12px;opacity:.7}
-.metric-card.dual-metric .metric-value{font-size:48px;font-weight:700;margin-bottom:4px}
-.metric-card.dual-metric .metric-label{font-size:12px;opacity:.8}
-.metric-value{font-size:32px;font-weight:600;margin-bottom:5px}
-.metric-label{font-size:12px;opacity:.7}
-/* 목표 파워 라인 */
-#powerComparison{font-size:48px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1,'lnum' 1}
-#powerComparison #targetPowerValue{color:#00E6A8}
-.power-display{display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,.05);border-radius:var(--border-radius);padding:20px}
-.current-power{font-size:96px;font-weight:700;margin-bottom:10px}
-.power-progress{width:100%;height:30px;background:rgba(255,255,255,.1);border-radius:10px;margin:20px 0;overflow:hidden;position:relative}
-.power-progress-bar{height:100%;background:linear-gradient(90deg,#FFFFFF66 0%,#FFFFFF66 70%,#00E6A8 100%);opacity:.8;border-radius:10px;transition:width .3s ease;position:relative;z-index:0}
-.power-progress-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:1;pointer-events:none;font-size:14px;font-weight:400;color:rgba(255,255,255,.7);line-height:30px}
+
+/* 화면 섹션 공통 */
+.screen {
+  display: none;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg-light);
+  padding: 10px;
+}
+
+.screen.active {
+  display: block;
+}
+
+/* 헤더 */
+.header {
+  text-align: center;
+  padding: 15px 0;
+  border-bottom: 1px solid #333;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--gray);
+}
+
+/* 카드 */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 15px;
+  margin: 15px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+
+.card:hover {
+  transform: scale(1.01);
+  transition: 0.2s ease;
+}
+
+.card-title {
+  color: var(--accent2);
+  margin-bottom: 8px;
+}
+
+/* 버튼 */
+button,
+.btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  font-size: 16px;
+  cursor: pointer;
+  margin: 5px;
+  transition: 0.2s ease;
+}
+
+button:hover,
+.btn:hover {
+  background: #0e73dd;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #666;
+}
+
+.btn-success {
+  background: var(--success);
+}
+
+.btn-danger {
+  background: var(--danger);
+}
+
+/* 입력폼 */
+input {
+  padding: 8px;
+  border-radius: var(--radius);
+  border: 1px solid #444;
+  background: #1b1b1b;
+  color: white;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input:focus {
+  outline: none;
+  border: 1px solid var(--accent);
+}
+
+/* ==========================
+   TRAINING SCREEN 스타일
+========================== */
+
+.training-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  align-items: center;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
+}
+
+.segment-details {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: var(--gray);
+  font-size: 14px;
+}
+
+.elapsed-block {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.segment-time,
+.next-segment {
+  font-weight: bold;
+  color: var(--accent2);
+}
+
+/* 메트릭 카드 */
+.metrics-grid {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.metric-card {
+  background: #2e2e2e;
+  border-radius: var(--radius);
+  padding: 10px;
+  text-align: center;
+  width: 140px;
+  margin: 8px;
+}
+
+.metric-value {
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.metric-value.big {
+  font-size: 34px;
+  color: var(--accent2);
+}
+
+.metric-label {
+  font-size: 13px;
+  color: var(--gray);
+}
+
+/* 파워 디스플레이 */
+.power-display {
+  background: #111;
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  margin: 15px;
+}
+
+.current-power {
+  font-size: 72px;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+.power-progress {
+  position: relative;
+  background: #333;
+  height: 14px;
+  border-radius: 10px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.power-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: var(--accent2);
+  transition: width 0.3s ease;
+}
+
+.power-progress-label {
+  font-size: 13px;
+  color: var(--gray);
+  margin-top: 6px;
+}
+
 /* 타임라인 */
-.timeline-progress{width:100%;height:30px;background:rgba(255,255,255,.1);border-radius:15px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
-.timeline-segments{display:flex;height:100%}
-.timeline-segment{display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;position:relative;border-right:1px solid rgba(255,255,255,.2)}
-.timeline-segment .segment-label{z-index:2;text-align:center;line-height:1.1}
-.timeline-segment .segment-time{font-size:13px;opacity:.8}
-.timeline-segment .progress-fill{position:absolute;left:0;top:0;height:100%;background:var(--primary-color);width:0;transition:width .3s ease;z-index:1;border-radius:0}
-.timeline-segment:first-child .progress-fill{border-radius:15px 0 0 15px}
-.timeline-segment:last-child .progress-fill{border-radius:0 15px 15px 0}
-.timeline-segment span{position:relative;z-index:2}
-/* 컨트롤 */
-.training-controls{display:flex;gap:10px;justify-content:center;margin-top:20px}
-.control-btn{width:50px;height:50px;border-radius:50%;border:none;background:var(--primary-color);color:#fff;font-size:18px;cursor:pointer;transition:var(--transition)}
-.control-btn:hover{transform:scale(1.1)}
-.control-btn.pause{background:var(--warning-color)}
-.control-btn.stop{background:var(--danger-color)}
-/* 랩 파워 색상 */
-.lap-power--mint{color:#00E6A8!important}
-.lap-power--yellow{color:#FFD700!important}
-.lap-power--white{color:#FFFFFF!important}
-/* 헤더 3분할 정렬 + 폭 제한 */
-.training-header .segment-details{display:flex;justify-content:space-between!important;align-items:center;gap:20px;width:100%;max-width:720px;margin:0 auto}
-.training-header .segment-details>span{flex:1 1 0!important;min-width:0;text-align:center}
-.training-header .segment-details>span:nth-child(1){text-align:left}
-.training-header .segment-details>span:nth-child(2){text-align:center}
-.training-header .segment-details>span:nth-child(3){text-align:right}
-.segment-details .elapsed-block{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}
-.segment-details .elapsed-block #elapsedTime{font-size:40px;font-weight:700;color:#00E6A8}
-.segment-details .elapsed-block .metric-label{font-size:12px;opacity:.7;text-transform:uppercase;margin-top:2px}
-/* 결과 화면 */
-.achievement-circle{width:150px;height:150px;border-radius:50%;background:conic-gradient(var(--success-color) 0deg,var(--success-color) 312deg,var(--light-color) 312deg);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;position:relative}
-.achievement-circle::before{content:'';width:120px;height:120px;background:#fff;border-radius:50%;position:absolute}
-.achievement-text{font-size:36px;font-weight:700;color:var(--success-color);z-index:1}
-.result-stats{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:30px}
-.result-stat{background:#fff;padding:20px;border-radius:var(--border-radius);text-align:center;box-shadow:var(--shadow)}
-.result-stat-value{font-size:24px;font-weight:600;color:var(--primary-color);margin-bottom:5px}
-.result-stat-label{font-size:14px;color:var(--gray-color)}
-.hidden{display:none!important}
-.text-center{text-align:center}
-.form-group{margin-bottom:15px}
-.form-group label{display:block;margin-bottom:5px;font-weight:600}
-.form-group input{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:16px}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-/* 카운트다운 */
-.countdown-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:1000}
-.countdown-number{font-size:240px;font-weight:700;color:#fff;animation:countdownPulse 1s ease-in-out}
-@keyframes countdownPulse{0%{transform:scale(.8);opacity:0}50%{transform:scale(1.2);opacity:1}100%{transform:scale(1);opacity:1}}
-.fade-in{animation:fadeIn .5s ease-in forwards}
-.fade-out{animation:fadeOut .5s ease-out forwards}
-@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
-@keyframes fadeOut{0%{opacity:1}100%{opacity:0}}
-@media (max-width:768px){
-  .metrics-grid{grid-template-columns:1fr}
-  .power-display{order:1}
-  .timeline-progress{order:3}
-  .current-power{font-size:96px;line-height:.9;margin-bottom:0}
+.timeline {
+  margin: 15px;
+  background: #222;
+  border-radius: var(--radius);
+  padding: 10px;
 }
-/* current power 다음 줄 미세조정 */
-#currentPowerValue+div{margin-top:-6px;line-height:1}
-/* 세그먼트 남은 시간/깜빡임 */
-#segmentTime{font-size:70px;font-weight:700;color:#fff;transition:color .3s ease,transform .2s ease}
-@keyframes blinkRed{0%,100%{color:#FF3333;transform:scale(1)}50%{color:#FF9999;transform:scale(1.15)}}
-.countdown-alert{animation:blinkRed .8s ease-in-out infinite}
-/* 경과/진행률 */
-#elapsedTime{font-weight:700;font-size:40px;color:#00E6A8}
-#elapsedPercent{font-weight:600;font-size:30px;color:#FFD700}
-#tssValue{color:#fff;font-weight:700;transition:color .3s ease}
-.segment-details>span{flex:1 1 0}
-.segment-details>span:nth-child(1){text-align:left}
-.segment-details>span:nth-child(2){text-align:center}
-.segment-details>span:nth-child(3){text-align:right}
-#nextSegment{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:18px}
-.segment-details{align-items:center}
-.segment-details>span:nth-child(1){align-self:flex-start}
-#elapsedTime{line-height:1}
-.segment-progress{font-size:20px;font-weight:800;color:#fff}
-#powerComparison .metric-label{font-size:12px;opacity:.7;text-transform:uppercase}
-#powerComparison{color:#fff}
-#powerComparison #targetPowerValue{color:#00E6A8}
-#powerComparison{font-family:'Inter','Pretendard','Noto Sans KR',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Apple SD Gothic Neo','Noto Sans','Malgun Gothic',sans-serif!important}
+
+.timeline-progress {
+  height: 12px;
+  background: #333;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.timeline-segments {
+  display: flex;
+}
+
+.timeline-segment {
+  flex-grow: 1;
+  background: #555;
+  height: 100%;
+  margin: 0 2px;
+  border-radius: 4px;
+}
+
+.timeline-segment.completed {
+  background: var(--success);
+}
+
+.timeline-segment.current {
+  background: var(--accent2);
+}
+
+.timeline-bottom {
+  display: flex;
+  justify-content: space-between;
+  color: var(--gray);
+  font-size: 13px;
+  margin-top: 5px;
+}
+
+/* 훈련 제어 버튼 */
+.training-controls {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin: 20px;
+}
+
+.control-btn {
+  background: #333;
+  border: none;
+  border-radius: 50%;
+  width: 64px;
+  height: 64px;
+  font-size: 26px;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.control-btn:hover {
+  background: #444;
+  transform: scale(1.05);
+}
+
+.control-btn.stop {
+  background: var(--danger);
+}
+
+.control-btn.pause {
+  background: var(--accent2);
+}
+
+/* 카운트다운 오버레이 */
+.countdown-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 1000;
+  flex-direction: column;
+}
+
+.countdown-number {
+  font-size: 160px;
+  font-weight: bold;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* 결과 화면 */
+.result-stats {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.result-stat {
+  text-align: center;
+}
+
+.result-stat-value {
+  font-size: 32px;
+  color: var(--accent);
+}
+
+.result-stat-label {
+  color: var(--gray);
+  font-size: 13px;
+}
+
+/* AI 분석 카드 */
+.ai-analysis {
+  background: #2a2a2a;
+  padding: 10px;
+  border-radius: var(--radius);
+  font-size: 15px;
+  line-height: 1.4em;
+}
+
+/* 숨김 공통 */
+.hidden {
+  display: none !important;
+}
