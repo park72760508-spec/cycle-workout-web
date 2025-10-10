@@ -233,8 +233,6 @@ async function connectPowerMeter() {
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
   console.log("=== connectHeartRate START ===");
-  console.log("1. Function called at", new Date().toISOString());
-  console.log("2. navigator.bluetooth available:", !!navigator.bluetooth);
   
   try {
     showConnectionStatus(true);
@@ -242,20 +240,68 @@ async function connectHeartRate() {
     
     let device;
     try {
-      console.log("3. Requesting device with heart_rate filter...");
+      console.log("1. Requesting device with heart_rate filter...");
       device = await navigator.bluetooth.requestDevice({
         filters: [{ services: ["heart_rate"] }],
         optionalServices: ["heart_rate", "device_information"],
       });
+      console.log("2. Device selected:", device.name);
     } catch (err) {
-      console.log("4. First attempt failed, trying acceptAllDevices...");
+      console.log("3. First attempt failed:", err.message);
+      console.log("4. Trying acceptAllDevices...");
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: ["heart_rate", "device_information"],
       });
+      console.log("5. Device selected (all):", device.name);
     }
+
+    console.log("6. Connecting to GATT server...");
+    const server = await device.gatt.connect();
+    console.log("7. GATT connected!");
     
-    console.log("5. Device selected:", device.name);
+    console.log("8. Getting heart_rate service...");
+    const service = await server.getPrimaryService("heart_rate");
+    console.log("9. Service found!");
+    
+    console.log("10. Getting heart_rate_measurement characteristic...");
+    const ch = await service.getCharacteristic("heart_rate_measurement");
+    console.log("11. Characteristic found!");
+
+    console.log("12. Starting notifications...");
+    await ch.startNotifications();
+    console.log("13. Notifications started!");
+    
+    ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
+
+    connectedDevices.heartRate = { 
+      name: device.name || "Heart Rate", 
+      device, 
+      server, 
+      characteristic: ch 
+    };
+
+    device.addEventListener("gattserverdisconnected", () => {
+      console.log("Device disconnected");
+      if (connectedDevices.heartRate?.device === device) {
+        connectedDevices.heartRate = null;
+      }
+      updateDevicesList();
+    });
+
+    console.log("14. Updating devices list...");
+    updateDevicesList();
+    
+    console.log("15. Hiding connection status...");
+    showConnectionStatus(false);
+    
+    console.log("16. Showing success toast...");
+    showToast(`✅ ${device.name || "HR"} 연결 성공`);
+    
+    console.log("17. Showing profile screen...");
+    showScreen("profileScreen");
+    
+    console.log("=== connectHeartRate SUCCESS ===");
   } catch (err) {
     showConnectionStatus(false);
     console.error("심박계 연결 오류:", err);
