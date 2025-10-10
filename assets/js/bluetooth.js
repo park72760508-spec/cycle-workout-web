@@ -156,7 +156,13 @@ async function connectHeartRate() {
     ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
 
     connectedDevices.heartRate = { name: device.name || "Heart Rate Monitor", device, server, characteristic: ch };
-    updateDevicesList();
+    /*updateDevicesList();*/
+     const device = await connectDevice('heart_rate');
+     if (device) {
+       updateDevicesList();
+       showScreen('profileScreen'); // ✅ 연결 완료 후 다음 단계 이동
+     }
+     
     showConnectionStatus(false);
     alert(`✅ ${device.name} 연결 성공!`);
   } catch (err) {
