@@ -27,6 +27,12 @@ function updateDevicesList() {
       list.appendChild(div);
     }
   });
+   // 연결된 기기 카드가 존재하면 요약 카드 보이기
+   const summary = document.getElementById("connectedDevicesSummary");
+   if (summary) {
+     summary.classList.toggle("hidden", list.childElementCount === 0);
+   }
+
 }
 
 /* ==========================================================
