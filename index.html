@@ -12,6 +12,15 @@
   <meta http-equiv="origin-trial" content="">
   <meta name="theme-color" content="#2E74E8" />
 
+  <style>
+    .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+      background:#333;color:#fff;padding:10px 16px;border-radius:8px;
+      opacity:0;transition:opacity .35s;z-index:9999}
+    .toast.show{opacity:.92}
+    .hidden{display:none}
+  </style>
+
+  
   <!-- 외부 스타일 (Step 2에서 제공할 파일) -->
   <link rel="stylesheet" href="assets/css/style.css" />
 
