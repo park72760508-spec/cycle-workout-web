@@ -256,6 +256,76 @@ function selectWorkout(index) {
 }
 
 /* ==========================================================
+   사용자별 훈련 결과 통계 불러오기
+========================================================== */
+async function loadResultsStatsByUser(userName) {
+  const container = document.getElementById("resultChart");
+  if (!container) return;
+
+  container.innerHTML = `<div class='muted'>${userName}님의 결과 데이터를 불러오는 중...</div>`;
+
+  try {
+    const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "getResultsDataByUser",
+        name: userName,
+      }),
+    });
+    const data = await res.json();
+
+    if (!data.results || !data.results.length) {
+      container.innerHTML = `<div class='muted'>${userName}님의 기록이 없습니다.</div>`;
+      return;
+    }
+
+    google.charts.load("current", { packages: ["corechart"] });
+    google.charts.setOnLoadCallback(() => drawResultsChart(data.results, userName));
+  } catch (err) {
+    console.error("결과 로드 오류:", err);
+    container.innerHTML = "<div class='muted'>불러오기 실패</div>";
+  }
+}
+
+function drawResultsChart(results, userName) {
+  const container = document.getElementById("resultChart");
+  if (!container) return;
+
+  const dataTable = new google.visualization.DataTable();
+  dataTable.addColumn("string", "날짜");
+  dataTable.addColumn("number", "평균 파워");
+  dataTable.addColumn("number", "TSS");
+  dataTable.addColumn("number", "심박수");
+
+  results.forEach(r => {
+    const dateStr = new Date(r[0]).toLocaleDateString("ko-KR", {
+      month: "2-digit",
+      day: "2-digit",
+    });
+    dataTable.addRow([dateStr, Number(r[2]), Number(r[3]), Number(r[4])]);
+  });
+
+  const options = {
+    title: `${userName}님의 훈련 통계`,
+    curveType: "function",
+    legend: { position: "bottom" },
+    height: 360,
+    series: {
+      0: { color: "#2e74e8" },
+      1: { color: "#f39c12" },
+      2: { color: "#e74c3c" },
+    },
+  };
+
+  const chart = new google.visualization.LineChart(container);
+  chart.draw(dataTable, options);
+}
+
+
+
+
+
+/* ==========================================================
    Results 통계 시각화 (Google Charts)
 ========================================================== */
 async function loadResultsStats() {
