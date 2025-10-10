@@ -209,6 +209,8 @@ async function connectPowerMeter() {
 // 3) Heart Rate (HRS)
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
+   console.log("connectHeartRate() called!");
+   alert("심박계 연결 함수 실행됨");   
   try {
     showConnectionStatus(true);
 
