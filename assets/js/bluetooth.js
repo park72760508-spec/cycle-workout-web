@@ -15,11 +15,34 @@ window.connectedDevices = window.connectedDevices || {
 };
 
 // UI 헬퍼들 (index.html/app.js에 이미 있으면 중복 선언하지 마세요)
-window.showConnectionStatus = window.showConnectionStatus || function (show) {
-  const el = document.getElementById("connectionStatus");
-  if (!el) return;
-  el.classList.toggle("hidden", !show);
-};
+// bluetooth.js의 상단 UI 헬퍼 부분을 다음과 같이 수정
+// UI 헬퍼들 - window 객체 확인 후 할당
+if (!window.showConnectionStatus) {
+  window.showConnectionStatus = function (show) {
+    const el = document.getElementById("connectionStatus");
+    if (!el) return;
+    el.classList.toggle("hidden", !show);
+  };
+}
+
+if (!window.showToast) {
+  window.showToast = function (msg) {
+    const t = document.getElementById("toast");
+    if (!t) return alert(msg);
+    t.classList.remove("hidden");
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 2400);
+  };
+}
+
+if (!window.showScreen) {
+  window.showScreen = function (id) {
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    const el = document.getElementById(id);
+    if (el) el.classList.add("active");
+  };
+}
 window.updateDevicesList = window.updateDevicesList || function () {
   const deviceList = document.getElementById("connectedDevicesList");
   const summary = document.getElementById("connectedDevicesSummary");
