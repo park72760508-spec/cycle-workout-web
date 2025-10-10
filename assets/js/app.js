@@ -451,6 +451,46 @@ function applyDateFilter() {
 }
 
 /* ==========================================================
+   CSV 내보내기 기능
+========================================================== */
+async function exportResults() {
+  const name = document.getElementById("resultUserSelect")?.value;
+  const start = document.getElementById("startDate")?.value;
+  const end = document.getElementById("endDate")?.value;
+
+  if (!name) {
+    alert("먼저 사용자를 선택하세요.");
+    return;
+  }
+
+  try {
+    const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "exportResultsByUserAndDate",
+        name,
+        startDate: start,
+        endDate: end,
+      }),
+    });
+    const data = await res.json();
+
+    if (data.status === "success" && data.fileUrl) {
+      alert("✅ 내보내기 완료! Google Drive에서 파일을 열 수 있습니다.");
+      window.open(data.fileUrl, "_blank");
+    } else {
+      alert("❌ 내보내기 실패: " + (data.message || "Unknown error"));
+    }
+  } catch (err) {
+    console.error("Export error:", err);
+    alert("❌ 내보내기 중 오류가 발생했습니다.");
+  }
+}
+
+
+
+
+/* ==========================================================
    기간별 데이터 로드
 ========================================================== */
 async function loadResultsStatsByUserAndDate(name, startDate, endDate) {
