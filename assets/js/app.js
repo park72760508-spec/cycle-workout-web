@@ -165,3 +165,54 @@ function formatTime(sec) {
 function goHome() {
   showScreen("connectionScreen");
 }
+
+// ===========================================
+// BLE 실시간 데이터 UI 업데이트 + ERG 제어
+// ===========================================
+
+// 훈련 화면의 파워/심박/케이던스 값 실시간 반영
+function updateTrainingDisplay() {
+  const { power, cadence, heartRate, targetPower } = liveData;
+  document.getElementById("currentPowerValue").textContent = power;
+  document.getElementById("cadenceValue").textContent = cadence;
+  document.getElementById("heartRateValue").textContent = heartRate;
+  document.getElementById("targetPowerValue").textContent = targetPower;
+  document.getElementById("achievementValueBar").textContent = Math.round(
+    (power / (targetPower || 1)) * 100
+  );
+  const bar = document.getElementById("powerProgressBar");
+  if (bar) bar.style.width = `${Math.min(100, (power / (targetPower || 1)) * 100)}%`;
+}
+
+// 목표 파워값 변경 시 FTMS로 전송
+function updateERGTarget() {
+  if (connectedDevices.trainer) {
+    const target = workoutData[currentSegment]?.targetPower || 150;
+    setTargetPower(target);
+  }
+}
+
+// 훈련 루프 내부에서 1초마다 업데이트
+function trainingTick() {
+  if (!isTraining || isPaused) return;
+  elapsedTime++;
+  document.getElementById("elapsedTime").textContent = formatTime(elapsedTime);
+
+  // 실시간 BLE 데이터 반영
+  updateTrainingDisplay();
+
+  // 구간 타이머 관리
+  if (elapsedTime % 5 === 0) updateERGTarget();
+
+  // 자동 구간 전환 (예시)
+  if (elapsedTime > workoutData[currentSegment]?.durationSec) {
+    if (currentSegment < totalSegments - 1) {
+      currentSegment++;
+      updateERGTarget();
+      document.getElementById("currentSegmentName").textContent =
+        workoutData[currentSegment].name;
+    } else {
+      stopTraining();
+    }
+  }
+}
