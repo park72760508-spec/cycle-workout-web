@@ -2,34 +2,41 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, user-scalable=no"
+  />
   <title>사이클 아카데미 - 워크아웃 앱</title>
 
-  <!-- 메타(HTTPS BLE 권장 안내용) -->
-  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
-  <meta name="theme-color" content="#2E74E8" />
-
-  <!-- CSS 분리본 -->
+  <!-- 깔끔 분리된 CSS -->
   <link rel="stylesheet" href="assets/css/style.css" />
+
+  <!-- PWA/모바일 최적화(선택) -->
+  <meta name="theme-color" content="#2E74E8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+
+  <!-- GitHub Pages에서 HTTPS 필요 안내용 (JS에서 실제 체크) -->
+  <noscript>이 앱은 자바스크립트가 필요합니다.</noscript>
 </head>
 <body>
-  <!-- ===== 연결 화면 ===== -->
-  <div id="connectionScreen" class="screen active">
-    <div class="header">
+  <!-- 연결 화면 -->
+  <section id="connectionScreen" class="screen active">
+    <header class="header">
       <h1>🚴‍♂️ 사이클 아카데미</h1>
-      <p class="subtitle">와 심박계를 연결하세요</p>
-    </div>
+      <p class="subtitle">스마트로라 / 파워미터 / 심박계를 연결하세요</p>
+    </header>
 
     <div class="card">
-      <h3 style="margin-bottom: 15px;">📡 블루투스 기기 연결</h3>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-        <button class="btn" onclick="BLE.connectTrainer()">스마트 트레이너</button>
-        <button class="btn btn-secondary" onclick="BLE.connectHeartRate()">심박계 연결</button>
-        <button class="btn" onclick="BLE.connectPowerMeter()">파워미터 연결</button>
+      <h3 class="card-title">📡 블루투스 기기 연결</h3>
+      <div class="grid-2 gap-10 mb-15">
+        <button class="btn" id="btnConnectTrainer">스마트 트레이너</button>
+        <button class="btn btn-secondary" id="btnConnectHeart">심박계 연결</button>
+        <button class="btn" id="btnConnectPower">파워미터 연결</button>
       </div>
     </div>
 
-    <div id="deviceList"><!-- 연결된 기기 표시 --></div>
+    <div id="deviceList"></div>
 
     <div id="connectionStatus" class="hidden">
       <div class="card text-center">
@@ -41,136 +48,169 @@
     </div>
 
     <div id="connectedDevicesSummary" class="card hidden">
-      <h3 style="margin-bottom: 15px;">✅ 연결된 기기</h3>
+      <h3 class="mb-15">✅ 연결된 기기</h3>
       <div id="connectedDevicesList"></div>
-      <button class="btn btn-success" onclick="APP.proceedToProfile()" style="margin-top: 15px;">다음 단계로</button>
+      <button class="btn btn-success mt-15" id="btnProceedToProfile">다음 단계로</button>
     </div>
-  </div>
+  </section>
 
-  <!-- ===== 프로필 화면 ===== -->
-  <div id="profileScreen" class="screen">
-    <div class="header">
+  <!-- 프로필 선택 화면 -->
+  <section id="profileScreen" class="screen">
+    <header class="header">
       <h1>👤 프로필 선택</h1>
       <p class="subtitle">훈련할 사용자를 선택하세요</p>
-    </div>
+    </header>
 
     <div id="profileList"></div>
 
-    <div class="card" onclick="APP.showAddUserForm()">
+    <div class="card pointer" id="cardShowAddUser">
       <div class="text-center">
-        <div style="font-size: 48px; margin-bottom: 10px;">➕</div>
+        <div class="big-plus">➕</div>
         <h3>새 사용자 추가</h3>
-        <p style="color: var(--gray-color); margin-top: 5px;">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
+        <p class="muted mt-5">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
       </div>
     </div>
 
     <div id="addUserForm" class="card hidden">
-      <h3 style="margin-bottom: 20px;">새 사용자 등록</h3>
+      <h3 class="mb-20">새 사용자 등록</h3>
+
       <div class="form-group">
-        <label>이름</label>
-        <input type="text" id="userName" placeholder="이름을 입력하세요">
+        <label for="userName">이름</label>
+        <input type="text" id="userName" placeholder="이름을 입력하세요" />
       </div>
+
       <div class="form-group">
-        <label>연락처</label>
-        <input type="tel" id="userContact" placeholder="010-1234-5678">
+        <label for="userContact">연락처</label>
+        <input type="tel" id="userContact" placeholder="010-1234-5678" />
       </div>
+
       <div class="form-row">
         <div class="form-group">
-          <label>FTP (W)</label>
-          <input type="number" id="userFTP" placeholder="250" min="100" max="500">
+          <label for="userFTP">FTP (W)</label>
+          <input type="number" id="userFTP" placeholder="250" min="100" max="500" />
         </div>
         <div class="form-group">
-          <label>몸무게 (kg)</label>
-          <input type="number" id="userWeight" placeholder="70" min="40" max="150">
+          <label for="userWeight">몸무게 (kg)</label>
+          <input type="number" id="userWeight" placeholder="70" min="40" max="150" />
         </div>
       </div>
-      <div style="display: flex; gap: 10px; margin-top: 10px;">
-        <button class="btn btn-success" onclick="APP.saveNewUser()">저장</button>
-        <button class="btn btn-secondary" onclick="APP.cancelAddUser()">취소</button>
+
+      <div class="row gap-10 mt-10">
+        <button class="btn btn-success" id="btnSaveNewUser">저장</button>
+        <button class="btn btn-secondary" id="btnCancelAddUser">취소</button>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- ===== 워크아웃 선택 화면 ===== -->
-  <div id="workoutScreen" class="screen">
-    <div class="header">
+  <!-- 워크아웃 선택 화면 -->
+  <section id="workoutScreen" class="screen">
+    <header class="header">
       <h1>📋 워크아웃 선택</h1>
       <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
-    </div>
-    <div id="workoutList"></div>
-  </div>
+    </header>
 
-  <!-- ===== 훈련 준비 화면 ===== -->
-  <div id="trainingReadyScreen" class="screen">
-    <div class="header">
+    <div id="workoutList"></div>
+  </section>
+
+  <!-- 훈련 준비 화면 -->
+  <section id="trainingReadyScreen" class="screen">
+    <header class="header">
       <h1>🎯 훈련 준비</h1>
       <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
-    </div>
+    </header>
 
-    <div class="workout-preview">
+    <div class="workout-preview card">
       <h2 id="previewWorkoutName">SST_MCT(14)</h2>
-      <div style="display:flex;justify-content:space-around;margin:20px 0;font-size:18px;">
-        <div><strong id="previewDuration">92분</strong><br><span style="color:var(--gray-color);">총 시간</span></div>
-        <div><strong id="previewIntensity">78%</strong><br><span style="color:var(--gray-color);">평균 강도</span></div>
-        <div><strong id="previewTSS">82</strong><br><span style="color:var(--gray-color);">예상 TSS</span></div>
+      <div class="preview-summary">
+        <div>
+          <strong id="previewDuration">92분</strong>
+          <br /><span class="muted">총 시간</span>
+        </div>
+        <div>
+          <strong id="previewIntensity">78%</strong>
+          <br /><span class="muted">평균 강도</span>
+        </div>
+        <div>
+          <strong id="previewTSS">82</strong>
+          <br /><span class="muted">예상 TSS</span>
+        </div>
       </div>
+
       <div class="segment-preview" id="segmentPreview"></div>
     </div>
 
-    <div class="training-ready">
-      <div style="margin-bottom: 30px;">
-        <h3 style="margin-bottom: 15px;">훈련 준비 완료</h3>
-        <p style="color: var(--gray-color);">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
+    <div class="training-ready text-center">
+      <div class="mb-30">
+        <h3 class="mb-15">훈련 준비 완료</h3>
+        <p class="muted">
+          시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.
+        </p>
       </div>
-      <div style="display:flex;gap:15px;justify-content:center;">
-        <button class="btn btn-success" onclick="APP.startWorkoutTraining()" style="min-width:150px">🚀 훈련 시작</button>
-        <button class="btn btn-secondary" onclick="APP.backToWorkoutSelection()" style="min-width:150px">← 워크아웃 변경</button>
+
+      <div class="row gap-15 center">
+        <button class="btn btn-success min-150" id="btnStartTraining">🚀 훈련 시작</button>
+        <button class="btn btn-secondary min-150" id="btnBackWorkouts">← 워크아웃 변경</button>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- ===== 훈련 화면 ===== -->
-  <div id="trainingScreen" class="screen">
+  <!-- 훈련 화면 -->
+  <section id="trainingScreen" class="screen">
     <div class="training-header">
-      <div id="userInfo" style="font-size:14px;color:#ccc;margin-top:4px;"></div>
+      <div id="userInfo" class="user-badge">
+        <!-- 사용자 정보 -->
+      </div>
       <div class="segment-details">
         <span class="elapsed-block">
           <span id="elapsedTime">00:00</span>
           <span class="metric-label">경과 시간</span>
         </span>
-        <span id="segmentTime">00:00</span>
-        <span id="nextSegment">다음: 인터벌 FTP 140%</span>
+        <span id="segmentTime" class="segment-time">00:00</span>
+        <span id="nextSegment" class="next-segment">다음: 인터벌 FTP 140%</span>
       </div>
     </div>
 
     <div class="metrics-grid">
+      <!-- 좌측 카드: 랩 파워 + TSS -->
       <div class="metric-card avg-segment-power">
-        <div style="display:flex;flex-direction:column;align-items:center;">
+        <div class="col-center">
           <div class="metric-value" id="avgSegmentPowerValue">178</div>
           <div class="metric-label">랩 파워 (W)</div>
-          <div class="metric-value" id="tssValue" style="margin-top:6px;font-size:48px;">0</div>
+          <div class="metric-value big" id="tssValue">0</div>
           <div class="metric-label">TSS</div>
         </div>
       </div>
 
+      <!-- 중앙: 현재 파워 + 바 + 타겟 + 세그먼트명 -->
       <div class="power-display">
         <div class="current-power" id="currentPowerValue">185</div>
-        <div style="opacity:.7;">WATTS</div>
+        <div class="muted">WATTS</div>
+
         <div class="power-progress">
           <div class="power-progress-bar" id="powerProgressBar"></div>
-          <div class="power-progress-label">달성도: <span id="achievementValueBar">0</span>%</div>
+          <div class="power-progress-label">
+            달성도: <span id="achievementValueBar">0</span>%
+          </div>
         </div>
-        <div style="text-align:center;margin-top:10px;">
+
+        <div class="text-center mt-10">
           <div id="powerComparison" class="metric-value">
             <span class="metric-label">목표 :</span>
             <span id="targetPowerValue">194</span>
             <span class="metric-label">W</span>
           </div>
-          <div id="segmentProgressText" class="segment-progress">진행률 <span id="segmentProgress">0</span>%</div>
-          <div id="currentSegmentName" style="margin-top:8px;font-size:20px;font-weight:600;color:#FFD700;">웜업 - 80RPM FTP 60%</div>
+
+          <div id="segmentProgressText" class="segment-progress">
+            진행률 <span id="segmentProgress">0</span>%
+          </div>
+
+          <div id="currentSegmentName" class="current-segment-name">
+            웜업 - 80RPM FTP 60%
+          </div>
         </div>
       </div>
 
+      <!-- 우측: 심박/케이던스/칼로리 -->
       <div class="metric-card dual-metric">
         <div class="metric-item">
           <div class="metric-value" id="heartRateValue">145</div>
@@ -187,63 +227,80 @@
       </div>
     </div>
 
-    <div style="background:rgba(255,255,255,0.1);border-radius:var(--border-radius);padding:15px;">
+    <div class="timeline cardish">
       <div class="timeline-progress">
         <div class="timeline-segments" id="timelineSegments"></div>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;opacity:.7;">
+      <div class="timeline-bottom muted">
         <span>진행률: <span id="elapsedPercent">0</span>%</span>
         <span>평균 파워: <span id="avgPowerValue">178</span>W</span>
       </div>
     </div>
 
     <div class="training-controls">
-      <button class="control-btn pause" onclick="APP.togglePause()" title="일시정지"><span id="pauseIcon">⏸️</span></button>
-      <button class="control-btn" onclick="APP.skipSegment()" title="구간 건너뛰기">⏭️</button>
-      <button class="control-btn stop" onclick="APP.stopTraining()" title="훈련 종료">⏹️</button>
+      <button class="control-btn pause" id="btnPauseResume" title="일시정지/재개">
+        <span id="pauseIcon">⏸️</span>
+      </button>
+      <button class="control-btn" id="btnSkipSegment" title="구간 건너뛰기">⏭️</button>
+      <button class="control-btn stop" id="btnStopTraining" title="훈련 종료">⏹️</button>
     </div>
-  </div>
+  </section>
 
-  <!-- ===== 결과 화면 ===== -->
-  <div id="resultScreen" class="screen">
-    <div class="header">
+  <!-- 결과 화면 -->
+  <section id="resultScreen" class="screen">
+    <header class="header">
       <h1>🎉 훈련 완료!</h1>
       <p class="subtitle">수고하셨습니다</p>
-    </div>
+    </header>
 
-    <div class="text-center" style="margin-bottom: 30px;">
-      <div class="achievement-circle"><div class="achievement-text" id="finalAchievement">89%</div></div>
+    <div class="text-center mb-30">
+      <div class="achievement-circle">
+        <div class="achievement-text" id="finalAchievement">89%</div>
+      </div>
       <h2 id="workoutCompletedName">SST_MCT(14) - 92분 완주</h2>
     </div>
 
     <div class="result-stats">
-      <div class="result-stat"><div class="result-stat-value" id="resultAvgPower">184</div><div class="result-stat-label">평균 파워 (W)</div></div>
-      <div class="result-stat"><div class="result-stat-value" id="resultMaxPower">285</div><div class="result-stat-label">최대 파워 (W)</div></div>
-      <div class="result-stat"><div class="result-stat-value" id="resultAvgHR">152</div><div class="result-stat-label">평균 심박 (BPM)</div></div>
-      <div class="result-stat"><div class="result-stat-value" id="resultCalories">892</div><div class="result-stat-label">칼로리 (kcal)</div></div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultAvgPower">184</div>
+        <div class="result-stat-label">평균 파워 (W)</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultMaxPower">285</div>
+        <div class="result-stat-label">최대 파워 (W)</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultAvgHR">152</div>
+        <div class="result-stat-label">평균 심박 (BPM)</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultCalories">892</div>
+        <div class="result-stat-label">칼로리 (kcal)</div>
+      </div>
     </div>
 
     <div class="card">
-      <h3 style="margin-bottom:15px;">🤖 AI 성과 분석</h3>
-      <div id="aiAnalysis" style="line-height:1.6;color:var(--gray-color);">분석 중...</div>
+      <h3 class="mb-15">🤖 AI 성과 분석</h3>
+      <div id="aiAnalysis" class="ai-analysis">분석 중...</div>
     </div>
 
-    <div style="display:flex;gap:10px;margin-top:20px;">
-      <button class="btn btn-success" onclick="APP.saveResult()">저장하기</button>
-      <button class="btn btn-secondary" onclick="APP.shareResult()">공유하기</button>
+    <div class="row gap-10 mt-20">
+      <button class="btn btn-success" id="btnSaveResult">저장하기</button>
+      <button class="btn btn-secondary" id="btnShareResult">공유하기</button>
     </div>
 
-    <button class="btn" onclick="APP.goHome()" style="margin-top:10px;">새 훈련 시작</button>
-  </div>
+    <button class="btn mt-10" id="btnNewTraining">새 훈련 시작</button>
+  </section>
 
   <!-- 카운트다운 오버레이 -->
-  <div id="countdownOverlay" class="countdown-overlay hidden">
+  <div id="countdownOverlay" class="countdown-overlay hidden" aria-hidden="true">
     <div class="countdown-number" id="countdownNumber">5</div>
+    <!-- 메시지는 JS가 동적으로 추가 -->
   </div>
 
-  <!-- JS 분리본 -->
-  <script src="assets/js/data.js"></script>
-  <script src="assets/js/bluetooth.js"></script>
-  <script src="assets/js/app.js"></script>
+  <!-- JS 분리 로드: 데이터 → BLE → 앱 로직 (의존 순서) -->
+  <script defer src="assets/js/data.js"></script>
+  <script defer src="assets/js/bluetooth.js"></script>
+  <script defer src="assets/js/app.js"></script>
 </body>
 </html>
