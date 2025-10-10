@@ -170,12 +170,6 @@ async function connectTrainer() {
     showToast(`✅ ${device.name || "Trainer"} 연결 성공`);
     showScreen("profileScreen"); // ✅ 연결 후 다음 단계로
 
-      // 프로필 표시
-      showScreen("profileScreen");
-      if (window.renderProfiles) {
-        window.renderProfiles();
-      }
-
      
   } catch (err) {
     showConnectionStatus(false);
@@ -230,11 +224,6 @@ async function connectPowerMeter() {
     showToast(`✅ ${device.name || "Power Meter"} 연결 성공`);
     showScreen("profileScreen");
 
-   // 사용자 표시
-   showScreen("profileScreen");
-   if (window.renderProfiles) {
-     window.renderProfiles();
-   }
      
   } catch (err) {
     showConnectionStatus(false);
@@ -289,10 +278,6 @@ async function connectHeartRate() {
     updateDevicesList();
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "HR"} 연결 성공`);
-    showScreen("profileScreen");
-    if (window.renderProfiles) {
-      window.renderProfiles();
-    }
     
   } catch (err) {
     showConnectionStatus(false);
