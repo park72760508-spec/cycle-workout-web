@@ -1,131 +1,259 @@
-/* ========= Cycle Workout Frontend Full Style (v3.2 compatible) ========= */
+/* =========================
+   CYCLE WORKOUT WEBAPP STYLE
+   Version: 1009V1 external CSS
+========================= */
 
 :root {
-  --primary: #1976d2;
-  --primary-dark: #125aa0;
-  --accent: #ff9800;
+  --bg-dark: #1a1a1a;
+  --bg-light: #2a2a2a;
+  --text: #fff;
+  --gray: #aaa;
+  --accent: #1e90ff;
+  --accent2: #ff9800;
   --success: #4caf50;
-  --bg-light: #fafafa;
-  --bg-card: #fff;
-  --border-radius: 12px;
-  --shadow: 0 2px 6px rgba(0,0,0,0.1);
-  --font: 'Segoe UI', 'Noto Sans KR', sans-serif;
+  --danger: #f44336;
+  --radius: 12px;
 }
 
 body {
-  font-family: var(--font);
+  background: var(--bg-dark);
+  color: var(--text);
+  font-family: 'Noto Sans KR', 'Roboto', sans-serif;
   margin: 0;
+  overflow: hidden;
+  user-select: none;
+}
+
+.screen {
+  display: none;
+  width: 100%;
+  height: 100vh;
+  overflow-y: auto;
   background: var(--bg-light);
-  color: #333;
-  line-height: 1.5;
-  padding: 20px;
+  padding: 10px 0;
 }
 
-h2, h3 {
-  color: #222;
-  margin-bottom: 10px;
+.screen.active {
+  display: block;
 }
 
-.section {
-  background: var(--bg-card);
-  border-radius: var(--border-radius);
-  padding: 18px 20px;
-  margin-bottom: 24px;
-  box-shadow: var(--shadow);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* ======================
+   HEADER / SECTION TITLE
+====================== */
+.header {
+  text-align: center;
+  padding: 15px;
+  font-size: 22px;
+  font-weight: bold;
+  color: var(--accent);
+  background: #111;
+  border-bottom: 1px solid #333;
 }
 
-.section:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+/* ======================
+   DEVICE CONNECTION
+====================== */
+.device-card {
+  background: #222;
+  border-radius: var(--radius);
+  margin: 8px 15px;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-label {
-  display: inline-block;
-  width: 110px;
-  font-weight: 600;
-  color: #444;
+.device-card.connected {
+  border: 2px solid var(--success);
+  background: #1f2b1f;
 }
 
-input {
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  margin-bottom: 10px;
-  width: 200px;
-  transition: border-color 0.2s ease;
-}
-
-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(25,118,210,0.2);
-}
-
-button {
-  padding: 8px 16px;
+.device-card button {
+  background: var(--accent);
+  color: #fff;
   border: none;
-  border-radius: 8px;
-  background: var(--primary);
-  color: white;
+  padding: 8px 12px;
+  border-radius: var(--radius);
   cursor: pointer;
-  font-weight: 600;
-  margin-right: 8px;
-  margin-top: 6px;
-  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+/* ======================
+   PROFILE & WORKOUT CARDS
+====================== */
+.card {
+  background: #2e2e2e;
+  border-radius: var(--radius);
+  padding: 15px;
+  margin: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  transition: transform 0.15s ease;
+}
+
+.card:hover {
+  transform: scale(1.02);
+}
+
+.profile-card, .workout-card {
+  cursor: pointer;
+}
+
+/* ======================
+   TRAINING SCREEN
+====================== */
+.training-metrics {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.metric-card {
+  background: #333;
+  border-radius: var(--radius);
+  padding: 10px;
+  text-align: center;
+  margin: 6px;
+  width: 120px;
+}
+
+.metric-value {
+  font-size: 32px;
+  font-weight: bold;
+}
+
+.metric-label {
+  font-size: 14px;
+  color: var(--gray);
+}
+
+.power-display {
+  margin-top: 15px;
+  background: #111;
+  padding: 20px;
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.progress-fill {
+  height: 12px;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 8px;
+  transition: width 0.3s linear;
+}
+
+.timeline {
+  display: flex;
+  width: 100%;
+  margin: 10px 0;
+}
+
+.timeline-segment {
+  flex-grow: 1;
+  height: 14px;
+  margin: 0 3px;
+  background: #333;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.timeline-segment.current .progress-fill {
+  background: var(--accent2);
+}
+
+.timeline-segment.completed .progress-fill {
+  background: var(--success);
+}
+
+/* ======================
+   BUTTONS
+====================== */
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  font-size: 16px;
+  cursor: pointer;
+  margin: 6px;
+  transition: all 0.15s ease;
 }
 
 button:hover {
-  background: var(--primary-dark);
+  background: #0f78e8;
   transform: translateY(-1px);
 }
 
 button:disabled {
-  background: #aaa;
+  background: #555;
   cursor: not-allowed;
 }
 
-pre {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 8px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  border: 1px solid #eee;
-}
-
-canvas {
+/* ======================
+   POPUPS / ALERTS
+====================== */
+.popup {
+  position: fixed;
+  top: 0; left: 0;
   width: 100%;
-  max-width: 720px;
-  height: 320px;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.popup-content {
+  background: #222;
+  padding: 25px;
+  border-radius: var(--radius);
+  text-align: center;
+  color: white;
+  width: 80%;
+  max-width: 400px;
+}
+
+/* ======================
+   COUNTDOWN
+====================== */
+#countdownOverlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0,0,0,0.9);
+  color: white;
+  z-index: 1000;
+}
+
+#countdownNumber {
+  font-size: 140px;
+  font-weight: bold;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+/* ======================
+   FOOTER / INFO TEXT
+====================== */
+.footer {
+  text-align: center;
+  font-size: 14px;
+  color: var(--gray);
   margin-top: 15px;
-  background: #fff;
-  border-radius: 10px;
-  box-shadow: var(--shadow);
-  padding: 5px;
 }
 
-/* 헤더 */
-h2 {
-  font-size: 24px;
-  background: linear-gradient(90deg, var(--primary), var(--accent));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-/* 반응형 */
-@media (max-width: 768px) {
-  body {
-    padding: 10px;
-  }
-  label {
-    width: 100%;
-    margin-top: 8px;
-  }
-  input {
-    width: 100%;
-  }
-  canvas {
-    height: 260px;
-  }
+/* ======================
+   HIDDEN
+====================== */
+.hidden {
+  display: none !important;
 }
