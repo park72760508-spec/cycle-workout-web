@@ -79,10 +79,12 @@ window.updateDevicesList = window.updateDevicesList || function () {
 function showToast(msg) {
   const t = document.getElementById("toast");
   if (!t) return alert(msg);
+  t.classList.remove("hidden");         // ✅ 중요: 숨김 해제
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2400);
 }
+
 
 // 화면 전환 (app.js에 이미 있으면 중복 선언 금지)
 window.showScreen = window.showScreen || function (id) {
