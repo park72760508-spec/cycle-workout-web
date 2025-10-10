@@ -256,6 +256,71 @@ function selectWorkout(index) {
 }
 
 /* ==========================================================
+   Results 통계 시각화 (Google Charts)
+========================================================== */
+async function loadResultsStats() {
+  const container = document.getElementById("resultChart");
+  if (!container) return;
+
+  container.innerHTML = "<div class='muted'>결과 데이터를 불러오는 중...</div>";
+
+  try {
+    const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "getResultsData" }),
+    });
+    const data = await res.json();
+
+    if (!data.results || !data.results.length) {
+      container.innerHTML = "<div class='muted'>아직 결과 데이터가 없습니다.</div>";
+      return;
+    }
+
+    // Google Charts 로드
+    google.charts.load("current", { packages: ["corechart"] });
+    google.charts.setOnLoadCallback(() => drawResultsChart(data.results));
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = "<div class='muted'>결과 데이터를 불러오지 못했습니다.</div>";
+  }
+}
+
+function drawResultsChart(results) {
+  const container = document.getElementById("resultChart");
+  if (!container) return;
+
+  const dataTable = new google.visualization.DataTable();
+  dataTable.addColumn("string", "날짜");
+  dataTable.addColumn("number", "평균 파워");
+  dataTable.addColumn("number", "TSS");
+  dataTable.addColumn("number", "심박수");
+
+  results.forEach(r => {
+    const date = new Date(r[0]);
+    const dateStr = Utilities ? Utilities.formatDate(date, "Asia/Seoul", "MM/dd") : date.toLocaleDateString();
+    dataTable.addRow([dateStr, Number(r[2]), Number(r[3]), Number(r[4])]);
+  });
+
+  const options = {
+    title: "훈련 통계 (최근 세션)",
+    curveType: "function",
+    legend: { position: "bottom" },
+    height: 350,
+    series: {
+      0: { color: "#2e74e8" },
+      1: { color: "#f39c12" },
+      2: { color: "#e74c3c" },
+    },
+    backgroundColor: "#fff",
+  };
+
+  const chart = new google.visualization.LineChart(container);
+  chart.draw(dataTable, options);
+}
+
+
+
+/* ==========================================================
    DOM 로드 후 Workouts 자동 로드
 ========================================================== */
 document.addEventListener("DOMContentLoaded", () => {
