@@ -183,3 +183,32 @@ document.addEventListener("click", (e) => {
 // export
 window.showScreen = showScreen;
 window.showConnectionStatus = showConnectionStatus;
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (!navigator.bluetooth) {
+    showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+  }
+  if (location.protocol !== "https:" && location.hostname !== "localhost") {
+    showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
+  }
+  // 첫 화면
+  showScreen("connectionScreen");
+
+  // ✅ 버튼 클릭 이벤트 추가
+  document.getElementById("btnConnectHR")?.addEventListener("click", () => {
+    if (window.connectHeartRate) {
+      window.connectHeartRate();
+    } else {
+      showToast("심박계 연결 기능을 불러오지 못했습니다.");
+    }
+  });
+
+  document.getElementById("btnConnectTrainer")?.addEventListener("click", () => {
+    if (window.connectTrainer) window.connectTrainer();
+  });
+
+  document.getElementById("btnConnectPM")?.addEventListener("click", () => {
+    if (window.connectPowerMeter) window.connectPowerMeter();
+  });
+});
+
