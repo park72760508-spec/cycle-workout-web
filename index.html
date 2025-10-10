@@ -311,10 +311,13 @@
     <div class="countdown-number" id="countdownNumber">5</div>
   </div>
 
-  <!-- 외부 스크립트 (Step 3~4에서 제공할 파일) -->
-  <script src="assets/js/data.js"></script>
-  <script src="assets/js/bluetooth.js"></script>
-  <script src="assets/js/app.js"></script>
+  <!-- 비차단 메시지용 토스트 -->
+  <div id="toast" class="toast hidden"></div>
+  
+  <!-- 스크립트 로딩 순서 매우 중요: data.js → bluetooth.js → app.js -->
+  <script src="data.js" defer></script>
+  <script src="bluetooth.js" defer></script>
+  <script src="app.js" defer></script>
 
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 
