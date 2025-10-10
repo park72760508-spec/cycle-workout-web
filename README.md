@@ -1,2 +1,1 @@
-# cycle-workout-web
-BLE
+# Cycle Workout WebApp v4.0
