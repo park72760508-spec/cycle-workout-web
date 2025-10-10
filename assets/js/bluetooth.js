@@ -210,9 +210,21 @@ async function connectHeartRate() {
   try {
     showConnectionStatus(true);
 
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: ["heart_rate"] }],
-    });
+    // ✅ 여기에 교체/추가
+    let device;
+    try {
+      // 1️⃣ 기본적으로 heart_rate 서비스를 광고하는 기기 우선
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ["heart_rate"] }],
+        optionalServices: ["heart_rate", "device_information"],
+      });
+    } catch {
+      // 2️⃣ 광고에 heart_rate UUID가 없는 기기 (가민, 폴라 등) 대응
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["heart_rate", "device_information"],
+      });
+    }
 
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService("heart_rate");
