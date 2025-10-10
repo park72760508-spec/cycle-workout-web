@@ -436,6 +436,55 @@ function handleUserSelect(name) {
   loadResultsStatsByUser(name);
 }
 
+/* ==========================================================
+   기간 필터 적용 (사용자 + 날짜)
+========================================================== */
+function applyDateFilter() {
+  const name = document.getElementById("resultUserSelect")?.value;
+  const start = document.getElementById("startDate")?.value;
+  const end = document.getElementById("endDate")?.value;
+  if (!name) {
+    alert("먼저 사용자를 선택하세요.");
+    return;
+  }
+  loadResultsStatsByUserAndDate(name, start, end);
+}
+
+/* ==========================================================
+   기간별 데이터 로드
+========================================================== */
+async function loadResultsStatsByUserAndDate(name, startDate, endDate) {
+  const container = document.getElementById("resultChart");
+  if (!container) return;
+  container.innerHTML = "<div class='muted'>데이터를 불러오는 중...</div>";
+
+  try {
+    const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "getResultsDataByUserAndDate",
+        name,
+        startDate,
+        endDate,
+      }),
+    });
+    const data = await res.json();
+
+    if (!data.results || !data.results.length) {
+      container.innerHTML = "<div class='muted'>해당 기간의 기록이 없습니다.</div>";
+      return;
+    }
+
+    google.charts.load("current", { packages: ["corechart"] });
+    google.charts.setOnLoadCallback(() => drawResultsChart(data.results, `${name} (${startDate || "시작"}~${endDate || "현재"})`));
+  } catch (err) {
+    console.error("기간별 로드 오류:", err);
+    container.innerHTML = "<div class='muted'>불러오기 실패</div>";
+  }
+}
+
+
+
 document.addEventListener("DOMContentLoaded", () => {
   showScreen("connectionScreen");
   updateDevicesList();
