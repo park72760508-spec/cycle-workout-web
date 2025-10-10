@@ -200,3 +200,68 @@ document.addEventListener("DOMContentLoaded", () => {
   updateDevicesList();
   console.log("🚀 앱 초기화 완료");
 });
+
+/* ==========================================================
+   Workouts 목록 로드 및 선택 UI
+========================================================== */
+async function loadWorkouts() {
+  const container = document.getElementById("workoutList");
+  if (!container) return;
+
+  container.innerHTML = "<div class='muted'>불러오는 중...</div>";
+
+  try {
+    const res = await fetch(CONFIG.GAS_WEB_APP_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "getWorkouts" }),
+    });
+    const data = await res.json();
+
+    if (!data.workouts || !data.workouts.length) {
+      container.innerHTML = "<div class='muted'>등록된 훈련 프로그램이 없습니다.</div>";
+      return;
+    }
+
+    container.innerHTML = "";
+    data.workouts.forEach((w, idx) => {
+      const card = document.createElement("div");
+      card.className = "card workout-card";
+      card.innerHTML = `
+        <h3>${w.title}</h3>
+        <p><strong>⏱ ${w.duration}분</strong> | 🎯 ${w.targetPower}W</p>
+        <p class="muted">${w.description}</p>
+        <button class="btn btn-success mt-10" onclick="selectWorkout(${idx})">선택</button>
+      `;
+      container.appendChild(card);
+    });
+
+    window.workoutData = data.workouts;
+    console.log("✅ Workouts 불러오기 완료:", data.workouts.length);
+  } catch (err) {
+    console.error("❌ Workouts 로드 오류:", err);
+    container.innerHTML = "<div class='muted'>로드 실패. 나중에 다시 시도해주세요.</div>";
+  }
+}
+
+function selectWorkout(index) {
+  if (!window.workoutData) return;
+  const selected = window.workoutData[index];
+  if (!selected) return;
+
+  alert(`🎯 선택된 훈련: ${selected.title}\n목표 파워: ${selected.targetPower}W\n총 ${selected.duration}분`);
+  // 훈련 세션에 값 반영
+  liveData.targetPower = selected.targetPower;
+  totalDurationSec = selected.duration * 60;
+  showScreen("trainingReadyScreen");
+}
+
+/* ==========================================================
+   DOM 로드 후 Workouts 자동 로드
+========================================================== */
+document.addEventListener("DOMContentLoaded", () => {
+  showScreen("connectionScreen");
+  updateDevicesList();
+  loadWorkouts(); // ✅ 워크아웃 자동 불러오기 추가
+  console.log("🚀 앱 초기화 완료");
+});
+
