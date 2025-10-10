@@ -523,12 +523,3 @@ async function loadResultsStatsByUserAndDate(name, startDate, endDate) {
   }
 }
 
-
-
-document.addEventListener("DOMContentLoaded", () => {
-  showScreen("connectionScreen");
-  //updateDevicesList();
-  loadUserList(); // ✅ 사용자 목록 자동 로드
-  console.log("🚀 사용자 필터 기능 포함 앱 초기화 완료");
-});
-
