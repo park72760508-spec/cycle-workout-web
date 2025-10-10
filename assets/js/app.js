@@ -29,18 +29,6 @@ function showToast(msg) {
 }
 
 
-// 초기화
-document.addEventListener("DOMContentLoaded", () => {
-  if (!navigator.bluetooth) {
-    showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
-  }
-  if (location.protocol !== "https:" && location.hostname !== "localhost") {
-    showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
-  }
-  // 첫 화면
-  showScreen("connectionScreen");
-});
-
 // 실시간 표시 (필요 필드만 예시)
 window.updateTrainingDisplay = function () {
   const p = document.getElementById("currentPowerValue");
@@ -187,38 +175,80 @@ document.addEventListener("click", (e) => {
 window.showScreen = showScreen;
 window.showConnectionStatus = showConnectionStatus;
 
+// app.js의 첫 번째 DOMContentLoaded (61번째 줄 근처) 삭제하고
+// 맨 아래 있는 것만 유지하되 다음과 같이 수정:
+
 document.addEventListener("DOMContentLoaded", () => {
+  console.log("DOM loaded, initializing app...");
+  
+  // 브라우저 체크
   if (!navigator.bluetooth) {
     showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
   }
   if (location.protocol !== "https:" && location.hostname !== "localhost") {
     showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
   }
-  // 첫 화면
+  
   showScreen("connectionScreen");
 
-  // ✅ 버튼 클릭 이벤트 추가
-   const btnHR = document.getElementById("btnConnectHR");
-   btnHR?.addEventListener("click", async () => {
-     btnHR.disabled = true;
-     const original = btnHR.textContent;
-     btnHR.textContent = "검색 중…";
-     showToast("심박계 검색 시작…");
-     try {
-       await window.connectHeartRate?.();
-     } finally {
-       btnHR.disabled = false;
-       btnHR.textContent = original;
-     }
-   });
+  // 심박계 버튼 - ID 확인 후 연결
+  const btnHR = document.getElementById("btnConnectHR");
+  console.log("Heart rate button found:", !!btnHR);
+  
+  if (btnHR) {
+    btnHR.addEventListener("click", async () => {
+      console.log("HR button clicked");
+      btnHR.disabled = true;
+      const original = btnHR.textContent;
+      btnHR.textContent = "검색 중…";
+      
+      try {
+        if (window.connectHeartRate) {
+          await window.connectHeartRate();
+        } else {
+          console.error("connectHeartRate function not found!");
+          showToast("심박계 연결 함수를 찾을 수 없습니다.");
+        }
+      } catch (err) {
+        console.error("HR connection error:", err);
+      } finally {
+        btnHR.disabled = false;
+        btnHR.textContent = original;
+      }
+    });
+  }
 
+  // 트레이너 버튼
+  const btnTrainer = document.getElementById("btnConnectTrainer");
+  if (btnTrainer) {
+    btnTrainer.addEventListener("click", () => {
+      console.log("Trainer button clicked");
+      if (window.connectTrainer) {
+        window.connectTrainer();
+      }
+    });
+  }
 
-  document.getElementById("btnConnectTrainer")?.addEventListener("click", () => {
-    if (window.connectTrainer) window.connectTrainer();
-  });
+  // 파워미터 버튼  
+  const btnPM = document.getElementById("btnConnectPM");
+  if (btnPM) {
+    btnPM.addEventListener("click", () => {
+      console.log("PM button clicked");
+      if (window.connectPowerMeter) {
+        window.connectPowerMeter();
+      }
+    });
+  }
 
-  document.getElementById("btnConnectPM")?.addEventListener("click", () => {
-    if (window.connectPowerMeter) window.connectPowerMeter();
-  });
+  // 프로필 화면 이동 버튼
+  const btnToProfile = document.getElementById("btnToProfile");
+  if (btnToProfile) {
+    btnToProfile.addEventListener("click", () => {
+      showScreen("profileScreen");
+      if (window.renderProfiles) {
+        window.renderProfiles();
+      }
+    });
+  }
 });
 
