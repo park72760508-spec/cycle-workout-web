@@ -40,9 +40,10 @@ function updateDevicesList() {
    1️⃣ Smart Trainer (FTMS/CPS)
 ========================================================== */
 async function connectTrainer() {
-  try {
-    showConnectionStatus(true);
+  showConnectionStatus(true);
 
+  try {
+    // 1. BLE 디바이스 검색
     const device = await navigator.bluetooth.requestDevice({
       filters: [
         { services: ["fitness_machine"] },
@@ -51,12 +52,18 @@ async function connectTrainer() {
         { namePrefix: "Wahoo" },
         { namePrefix: "Tacx" },
       ],
-      optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+      optionalServices: [
+        "fitness_machine",
+        "cycling_power",
+        "device_information",
+        "battery_service",
+      ],
     });
 
+    // 2. GATT 서버 연결
     const server = await device.gatt.connect();
 
-    // FTMS 우선, 실패 시 CPS 폴백
+    // 3. 서비스 및 특성 찾기 (FTMS → CPS 순)
     let service, characteristic, isFTMS = false;
     try {
       service = await server.getPrimaryService("fitness_machine");
@@ -67,31 +74,46 @@ async function connectTrainer() {
       characteristic = await service.getCharacteristic("cycling_power_measurement");
     }
 
+    // 4. 알림 수신 시작
     await characteristic.startNotifications();
 
+    // 5. 이벤트 바인딩 및 연결정보 저장
     if (isFTMS) {
       characteristic.addEventListener("characteristicvaluechanged", handleTrainerData);
-      connectedDevices.trainer = { name: device.name || "Smart Trainer", device, server, characteristic };
+      window.connectedDevices.trainer = {
+        name: device.name || "Smart Trainer",
+        device,
+        server,
+        characteristic,
+      };
     } else {
       characteristic.addEventListener("characteristicvaluechanged", handlePowerMeterData);
-      connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic };
+      window.connectedDevices.powerMeter = {
+        name: device.name || "Power Meter",
+        device,
+        server,
+        characteristic,
+      };
     }
 
+    // 6. 연결 끊김 감지
     device.addEventListener("gattserverdisconnected", () => {
       if (connectedDevices.trainer?.device === device) connectedDevices.trainer = null;
       if (connectedDevices.powerMeter?.device === device) connectedDevices.powerMeter = null;
       updateDevicesList();
     });
 
+    // 7. UI 업데이트
     updateDevicesList();
     showConnectionStatus(false);
     alert(`✅ ${device.name || "Trainer"} 연결 성공!`);
   } catch (err) {
+    console.error("❌ 트레이너 연결 오류:", err);
+    alert("트레이너 연결 실패: " + err.message);
     showConnectionStatus(false);
-    console.error("트레이너 연결 오류:", err);
-    alert("❌ 트레이너 연결 실패: " + err.message);
   }
 }
+
 
 /* ==========================================================
    2️⃣ Power Meter (Cycling Power Service)
