@@ -168,31 +168,36 @@ async function connectPowerMeter() {
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
+
     const device = await navigator.bluetooth.requestDevice({
       filters: [{ services: ["heart_rate"] }],
+      optionalServices: ["device_information"],
     });
+
     const server = await device.gatt.connect();
     const service = await server.getPrimaryService("heart_rate");
     const ch = await service.getCharacteristic("heart_rate_measurement");
+
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
 
-    connectedDevices.heartRate = { name: device.name || "Heart Rate Monitor", device, server, characteristic: ch };
-    /*updateDevicesList();*/
-     const device = await connectDevice('heart_rate');
-     if (device) {
-       updateDevicesList();
-       showScreen('profileScreen'); // ✅ 연결 완료 후 다음 단계 이동
-     }
-     
+    connectedDevices.heartRate = {
+      name: device.name || "Heart Rate Monitor",
+      device,
+      server,
+      characteristic: ch
+    };
+
+    updateDevicesList(); // ✅ 위치 조정
     showConnectionStatus(false);
-    alert(`✅ ${device.name} 연결 성공!`);
+    alert(`✅ ${device.name || "심박계"} 연결 성공!`);
   } catch (err) {
     showConnectionStatus(false);
     console.error("심박계 연결 오류:", err);
     alert("❌ 심박계 연결 실패: " + err.message);
   }
 }
+
 
 /* ==========================================================
    데이터 파서
