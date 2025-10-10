@@ -18,13 +18,16 @@ function showConnectionStatus(show) {
   if (!el) return;
   el.classList.toggle("hidden", !show);
 }
+
 function showToast(msg) {
   const t = document.getElementById("toast");
   if (!t) return alert(msg);
+  t.classList.remove("hidden");         // ✅ 중요: 숨김 해제
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2400);
 }
+
 
 // 초기화
 document.addEventListener("DOMContentLoaded", () => {
