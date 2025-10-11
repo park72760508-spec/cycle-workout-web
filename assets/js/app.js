@@ -29,38 +29,6 @@ function secToMinStr(sec){
 // 타임라인 생성/업데이트 함수 추가
 // ──────────────────────────────
 
-// 1초 루프 내부 (세그먼트 시간/전환 처리 후 or 전)
-{
-  const ftp = (window.currentUser?.ftp) || 200;
-  const p = Math.max(0, Number(window.liveData?.power) || 0);
-
-  // 누적 시간/일
-  trainingMetrics.elapsedSec += 1;
-  trainingMetrics.joules += p; // 1초당 p[J] 추가 (1W = 1J/s)
-
-  // 30초 롤링 평균(간이 IIR): ra30 += (p - ra30)/30
-  trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
-
-  // NP 근사: (ra30^4)의 평균의 1/4제곱
-  trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
-  trainingMetrics.count += 1;
-  const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
-
-  // TSS: (경과시간[h]) * (IF^2) * 100,  where IF = NP / FTP
-  const IF = ftp > 0 ? (NP / ftp) : 0;
-  const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-
-  // kcal(대략): kJ ≈ kcal 가정  → kJ = (J/1000) = (watts·sec / 1000)
-  const kcal = trainingMetrics.joules / 1000;
-
-  // DOM 업데이트
-  const tssEl = document.getElementById("tssValue");
-  const kcalEl = document.getElementById("kcalValue");
-  if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
-  if (kcalEl) kcalEl.textContent = Math.round(kcal);
-}
-
-
 
 
 
@@ -326,7 +294,7 @@ function applySegmentTarget(i) {
 
 // -------------------------------------------------
 // 시작/루프에 연결 (딱 두 줄
-// 
+// 중요 루프 
 // ------------------------------------------------
 function startSegmentLoop() {
   const w = window.currentWorkout;
@@ -407,7 +375,7 @@ function buildSegmentBar(){
 }
 
    
-  // 루프 시작(1Hz)
+  // 루프 시작(1Hz)/ 1초 인터벌
   clearInterval(trainingState.timerId);
   trainingState.timerId = setInterval(() => {
     if (trainingState.paused) return;
@@ -417,6 +385,15 @@ function buildSegmentBar(){
 
     const i = trainingState.segIndex;
     const seg = w.segments[i];
+
+   // setInterval(…, 1000) 내부
+   if (!trainingState.paused) {
+     // ... TSS/kcal 계산 ...
+     const tssEl = document.getElementById("tssValue");
+     const kcalEl = document.getElementById("kcalValue");
+     if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
+     if (kcalEl) kcalEl.textContent = Math.round(kcal);
+   }
 
     // 세그먼트 종료 → 다음 세그먼트
     if (seg && trainingState.segElapsedSec >= Math.floor(seg.duration)) {
@@ -598,89 +575,47 @@ Object.assign(trainingMetrics, {
 
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
+// app.js (또는 app (3).js)에서 기존 startWorkoutTraining() 전체 교체
 function startWorkoutTraining() {
-  // 0) 캐시 복구 시도
+  // (A) 워크아웃 보장: 캐시 복구 포함
   if (!window.currentWorkout) {
-    const cached = localStorage.getItem("currentWorkout");
-    if (cached) {
-      window.currentWorkout = JSON.parse(cached);
-    }
+    try {
+      const cached = localStorage.getItem("currentWorkout");
+      if (cached) window.currentWorkout = JSON.parse(cached);
+    } catch (_) {}
   }
-  // 0-2) 여전히 없으면 목록으로
   if (!window.currentWorkout) {
-    showToast("워크아웃을 먼저 선택하세요");
-    showScreen("workoutScreen");
-    return;
+    showToast && showToast("워크아웃을 먼저 선택하세요");
+    return showScreen && showScreen("workoutScreen");
   }
 
-setPaused(false);             // 시작은 항상 재생 상태로
-trainingState.elapsedSec = 0;
-trainingState.segElapsedSec = 0;
-// trainingMetrics도 리셋…
+  // (B) 상태 초기화 (일시정지 해제 + 타이머 변수 초기화)
+  if (typeof setPaused === "function") setPaused(false);
+  if (window.trainingState) {
+    trainingState.elapsedSec = 0;
+    trainingState.segElapsedSec = 0;
+    trainingState.segIndex = 0;
+  }
 
-   buildSegmentBar();
-   
-  // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
-   // 1) 첫 세그먼트 기준으로 targetPower 설정
-   const w = window.currentWorkout;
-   const ftp = (window.currentUser?.ftp) || 200;
-   const first = w.segments?.[0];
-   
-   if (first) {
-     // 샘플 JSON: target(0~1), duration(초)
-     // 혹은 다른 형식: ftp_percent(0~100)
-     if (typeof first.target === "number") {
-       window.liveData.targetPower = Math.round(ftp * first.target);
-     } else if (typeof first.ftp_percent === "number") {
-       window.liveData.targetPower = Math.round(ftp * (first.ftp_percent / 100));
-     }
-   }
+  // (C) 세그먼트 타임라인 생성(있을 때만)
+  if (typeof buildSegmentBar === "function") buildSegmentBar();
 
-   // ▼ 사용자 정보!)
-   renderUserInfo();
+  // (D) 첫 세그먼트 타겟/이름 적용 + 시간 UI 1회 갱신(있을 때만)
+  if (typeof applySegmentTarget === "function") applySegmentTarget(0);
+  if (typeof updateTimeUI === "function") updateTimeUI();
 
-   
-  // 2) 화면 전환
-  showScreen("trainingScreen");
+  // (E) 화면 전환
+  if (typeof showScreen === "function") showScreen("trainingScreen");
 
-  // 3) 한 번 즉시 그려주기 (0 → 값 깜빡임 방지)
-  if (window.updateTrainingDisplay) window.updateTrainingDisplay();
+  // (F) 첫 프레임 즉시 렌더(깜빡임 방지)
+  if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
 
-   // --- [추가] 훈련 상태 초기화 & 세그먼트 바 구축 & 루프 시작 ---
-   setPaused && setPaused(false);       // 일시정지 상태 해제(있다면)
-   trainingState.elapsedSec = 0;
-   trainingState.segElapsedSec = 0;
-   
-   // 세그먼트 타임라인 렌더(있다면)
-   if (typeof buildSegmentBar === "function") {
-     buildSegmentBar();
-   }
-   
-   // 첫 세그먼트 타겟 적용 & 시간 UI 초기 업데이트
-   applySegmentTarget && applySegmentTarget(0);
-   updateTimeUI && updateTimeUI();
-   
-   // 1Hz 루프 시작
-   if (typeof startSegmentLoop === "function") {
-     startSegmentLoop();
-   }
-   
-   // ✅ 루프 시작 (훈련화면)
-   startSegmentLoop();   
+  // (G) 1Hz 루프 시작 (세그먼트/시간 진행)
+  if (typeof startSegmentLoop === "function") startSegmentLoop();
 
-   
-  // 4) (옵션) 모의 파워 데이터 타이머
-  // if (window.__mock) clearInterval(window.__mock);
-  // window.__mock = setInterval(() => {
-  //   window.liveData.power = Math.max(
-  //     0,
-  //     (window.liveData.power || 0) + (Math.random()*20 - 10)
-  //   );
-  //   window.updateTrainingDisplay && window.updateTrainingDisplay();
-  // }, 1000);
-
-  showToast("훈련을 시작합니다");
+  showToast && showToast("훈련을 시작합니다");
 }
+
 
 
 function backToWorkoutSelection() {
@@ -826,16 +761,6 @@ function updateDevicesList() {
 }
 
 
-
-   
-  // 훈련 시작 버튼
-
-const btnStartTraining = document.getElementById("btnStartTraining");
-if (btnStartTraining) {
-  btnStartTraining.addEventListener("click", () => startWithCountdown(5));
-}
-
-   
   
   // 워크아웃 변경 버튼
   const btnBackToWorkouts = document.getElementById("btnBackToWorkouts");
