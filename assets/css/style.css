@@ -533,6 +533,47 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 15px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
+
+/* ─────────────────────────────────────────────
+   시간/세그먼트 전용 블럭 (segment-details1)
+   - 3등분 균등 배치
+   - 좌/중/우 정렬
+   - 기존과 구분되는 '1' 접미사 사용
+───────────────────────────────────────────── */
+#trainingScreen .segment-details1 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr; /* 균등 3분할 */
+  gap: 8px;
+  align-items: center;
+  background: #181a22;        /* 훈련 헤더와 톤 맞춤 */
+  color: #f3f3f3;
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin: 10px 0 16px;        /* 상단/하단 여백 */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+}
+
+/* 좌/중/우 정렬 */
+#trainingScreen .seg-left1   { text-align: left; }
+#trainingScreen .seg-center1 { text-align: center; }
+#trainingScreen .seg-right1  { text-align: right; }
+
+/* 경과 텍스트 강조 */
+#trainingScreen .elapsed-wrap1 {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* 반응형: 모바일에선 살짝 줄이기 */
+@media (max-width: 768px) {
+  #trainingScreen .segment-details1 {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+}
+
+
+
 #trainingScreen .segment-details {
   display: flex;
   gap: 15px;
