@@ -310,6 +310,7 @@ function startSegmentLoop() {
         // 훈련 종료
         clearInterval(trainingState.timerId);
         trainingState.timerId = null;
+         setPaused(false); // 다음 시작 대비
         showToast("훈련이 완료되었습니다!");
         showScreen("resultScreen");
         return;
@@ -495,6 +496,12 @@ function startWorkoutTraining() {
     return;
   }
 
+setPaused(false);             // 시작은 항상 재생 상태로
+trainingState.elapsedSec = 0;
+trainingState.segElapsedSec = 0;
+// trainingMetrics도 리셋…
+
+   
   // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
    // 1) 첫 세그먼트 기준으로 targetPower 설정
    const w = window.currentWorkout;
@@ -705,6 +712,40 @@ function updateDevicesList() {
      const icon = document.getElementById("pauseIcon");
      if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
    });
+
+
+   // 일시정지/재개   
+function setPaused(isPaused) {
+  trainingState.paused = !!isPaused;
+
+  // 버튼 라벨/아이콘 업데이트
+  const btn = document.getElementById("btnTogglePause");
+  const icon = document.getElementById("pauseIcon");
+  if (btn)  btn.textContent = trainingState.paused ? " ▶️ 재개" : " ⏸️ 일시정지";
+  if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
+
+  // (선택) 토스트/상태 표시
+  if (typeof showToast === "function") {
+    showToast(trainingState.paused ? "일시정지됨" : "재개됨");
+  }
+}
+
+function togglePause() {
+  setPaused(!trainingState.paused);
+}
+
+// DOMContentLoaded 안에 추가:
+document.addEventListener("DOMContentLoaded", () => {
+  const btnPause = document.getElementById("btnTogglePause");
+  if (btnPause) {
+    btnPause.addEventListener("click", togglePause);
+  }
+});
+
+
+
+
+
 
    
   // 훈련 시작 버튼 tSS/kcal 갱신 블록도 가드
