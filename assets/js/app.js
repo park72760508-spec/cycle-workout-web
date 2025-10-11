@@ -662,10 +662,19 @@ document.addEventListener("DOMContentLoaded", () => {
    });
    
    // ✅ 연결 요약 → 프로필 화면
+   // 프로필 화면 이동 + 사용자 목록 로드(가드 포함)
    document.getElementById("btnToProfile")?.addEventListener("click", () => {
-     showScreen("profileScreen");
-     loadUsers();
+     if (typeof showScreen === "function") showScreen("profileScreen");
+   
+     if (typeof loadUsers === "function") {
+       loadUsers();
+     } else if (typeof renderUserList === "function") {
+       renderUserList();
+     } else {
+       console.warn("사용자 목록 렌더러(loadUsers)가 없습니다.");
+     }
    });
+
 
    
   
