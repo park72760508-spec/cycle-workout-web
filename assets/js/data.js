@@ -93,3 +93,75 @@ function selectWorkout(w) {
   
   showScreen("trainingReadyScreen");
 }
+
+
+
+/* -----------------------------
+   새사용자 추가
+------------------------------ */
+// 새 사용자 추가 카드 클릭 이벤트
+document.addEventListener("DOMContentLoaded", () => {
+  // 새 사용자 추가 카드
+  const cardAddUser = document.getElementById("cardAddUser");
+  const addUserForm = document.getElementById("addUserForm");
+  
+  if (cardAddUser) {
+    cardAddUser.addEventListener("click", () => {
+      cardAddUser.classList.add("hidden");
+      addUserForm.classList.remove("hidden");
+    });
+  }
+  
+  // 취소 버튼
+  const btnCancelAddUser = document.getElementById("btnCancelAddUser");
+  if (btnCancelAddUser) {
+    btnCancelAddUser.addEventListener("click", () => {
+      addUserForm.classList.add("hidden");
+      cardAddUser.classList.remove("hidden");
+      // 폼 초기화
+      document.getElementById("userName").value = "";
+      document.getElementById("userContact").value = "";
+      document.getElementById("userFTP").value = "";
+      document.getElementById("userWeight").value = "";
+    });
+  }
+  
+  // 저장 버튼
+  const btnSaveUser = document.getElementById("btnSaveUser");
+  if (btnSaveUser) {
+    btnSaveUser.addEventListener("click", () => {
+      const name = document.getElementById("userName").value;
+      const contact = document.getElementById("userContact").value;
+      const ftp = parseInt(document.getElementById("userFTP").value);
+      const weight = parseInt(document.getElementById("userWeight").value);
+      
+      if (name && contact && ftp && weight) {
+        // 새 사용자 추가
+        const newUser = {
+          id: userProfiles.length + 1,
+          name: name,
+          contact: contact,
+          ftp: ftp,
+          weight: weight
+        };
+        
+        userProfiles.push(newUser);
+        
+        // 화면 갱신
+        renderProfiles();
+        
+        // 폼 숨기고 초기화
+        addUserForm.classList.add("hidden");
+        cardAddUser.classList.remove("hidden");
+        document.getElementById("userName").value = "";
+        document.getElementById("userContact").value = "";
+        document.getElementById("userFTP").value = "";
+        document.getElementById("userWeight").value = "";
+        
+        showToast(`✅ ${name}님이 추가되었습니다`);
+      } else {
+        showToast("❌ 모든 필드를 입력해주세요");
+      }
+    });
+  }
+});
