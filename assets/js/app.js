@@ -121,13 +121,7 @@ function startWithCountdown(sec = 5) {
 
 
 // 워크아웃 관련 함수들
-// 선택 시 저장 (selectWorkout 안)
-function selectWorkout(w) {
-  window.currentWorkout = w;
-  localStorage.setItem("currentWorkout", JSON.stringify(w)); // ✅ 저장
-  showScreen("trainingReadyScreen");
-  renderPreview();
-}
+
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
 function startWorkoutTraining() {
