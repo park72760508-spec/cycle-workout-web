@@ -317,53 +317,46 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* -------- 훈련준비 화면 SEGMENT PREVIEW 수정 -------- */
 /* -------- SEGMENT BLOCKS 동일 크기 -------- */
+/* -------- WORKOUT PREVIEW 컨테이너 가운데 정렬 -------- */
+.workout-preview {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  text-align: center;  /* 전체 중앙 정렬 추가 */
+}
+
+/* 세그먼트 프리뷰 가운데 정렬 */
 .segment-preview {
   display: flex;
   gap: 10px;
-  margin: 20px auto;
+  margin: 20px auto;  /* auto 마진으로 가운데 정렬 */
   padding: 15px;
   background: #f8f9fa;
   border-radius: 8px;
   overflow-x: auto;
-  align-items: stretch;  /* 모든 아이템 높이 동일하게 */
-  justify-content: center;
-}
-
-.segment-item {
-  padding: 15px;
-  border-radius: 8px;
-  width: 140px;      /* 고정 너비 */
-  height: 120px;     /* 고정 높이 */
-  text-align: center;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;    /* 크기 축소 방지 */
+  justify-content: center;  /* 컨텐츠 가운데 정렬 */
+  max-width: 100%;
 }
 
-.segment-item h4 {
-  font-size: 14px;
-  margin: 0 0 8px 0;
-  font-weight: 500;
-  white-space: nowrap;     /* 한 줄로 표시 */
-  overflow: hidden;        /* 넘치는 텍스트 숨김 */
-  text-overflow: ellipsis; /* ... 표시 */
-  width: 100%;
+/* 세그먼트가 많을 때 스크롤 처리 */
+@media (max-width: 768px) {
+  .segment-preview {
+    justify-content: flex-start;  /* 모바일에서는 좌측 정렬 */
+    overflow-x: scroll;
+  }
 }
 
-.segment-item .ftp-percent {
-  font-size: 28px;
-  font-weight: 700;
-  margin: 5px 0;
-  line-height: 1;
-}
-
-.segment-item .duration {
-  font-size: 13px;
-  opacity: 0.9;
-  margin-top: 8px;
+/* preview-stats도 가운데 정렬 보정 */
+.preview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin: 0 auto 20px auto;  /* 가운데 정렬 */
+  max-width: 500px;  /* 최대 너비 제한 */
+  text-align: center;
 }
 
 /* 모바일 반응형 */
