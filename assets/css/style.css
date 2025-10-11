@@ -526,7 +526,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingScreen .training-header {
   /*display: flex;*/
   /*align-items: center;*/
-  /*justify-content: flex-start;*/  /* 왼쪽 정렬 */
+  justify-content: flex-start;  /* 왼쪽 정렬 */
 
   display: grid;                         /* 이 컨테이너를 CSS Grid 레이아웃 컨테이너로 설정 */
   /*grid-template-columns: 1fr 1fr 1fr;*/    /* 균등 3분할 */
