@@ -168,8 +168,7 @@ async function connectTrainer() {
     updateDevicesList();
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "Trainer"} 연결 성공`);
-    showScreen("profileScreen"); // ✅ 연결 후 다음 단계로
-
+   
      
   } catch (err) {
     showConnectionStatus(false);
@@ -222,7 +221,7 @@ async function connectPowerMeter() {
     updateDevicesList();
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "Power Meter"} 연결 성공`);
-    showScreen("profileScreen");
+    
 
      
   } catch (err) {
