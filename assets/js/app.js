@@ -6,12 +6,58 @@ window.liveData = window.liveData || { power: 0, cadence: 0, heartRate: 0, targe
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
 
+
+// ── 훈련 지표 상태 (TSS / kcal / NP 근사) ─────────────────
+const trainingMetrics = {
+  elapsedSec: 0,      // 전체 경과(초)
+  joules: 0,          // 누적 일(줄). 1초마다 W(=J/s)를 더해줌
+  ra30: 0,            // 30초 롤링 평균 파워(근사: 1차 IIR)
+  np4sum: 0,          // (ra30^4)의 누적합
+  count: 0            // 표본 개수(초 단위)
+};
+
+
 // ──────────────────────────────
 // 타임라인 생성/업데이트 함수 추가
 // ──────────────────────────────
 function secToMinStr(sec){
   const m = Math.floor(sec/60);
   return `${m}분`;
+}
+
+// ──────────────────────────────
+// 타임라인 생성/업데이트 함수 추가
+// ──────────────────────────────
+
+// 1초 루프 내부 (세그먼트 시간/전환 처리 후 or 전)
+{
+  const ftp = (window.currentUser?.ftp) || 200;
+  const p = Math.max(0, Number(window.liveData?.power) || 0);
+
+  // 누적 시간/일
+  trainingMetrics.elapsedSec += 1;
+  trainingMetrics.joules += p; // 1초당 p[J] 추가 (1W = 1J/s)
+
+  // 30초 롤링 평균(간이 IIR): ra30 += (p - ra30)/30
+  trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
+
+  // NP 근사: (ra30^4)의 평균의 1/4제곱
+  trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
+  trainingMetrics.count += 1;
+  const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+
+  // TSS: (경과시간[h]) * (IF^2) * 100,  where IF = NP / FTP
+  const IF = ftp > 0 ? (NP / ftp) : 0;
+  const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+
+  // kcal(대략): kJ ≈ kcal 가정  → kJ = (J/1000) = (watts·sec / 1000)
+  const kcal = trainingMetrics.joules / 1000;
+
+  // DOM 업데이트
+  const tssEl = document.getElementById("tssValue");
+  const kcalEl = document.getElementById("kcalValue");
+  if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
+  if (kcalEl) kcalEl.textContent = Math.round(kcal);
 }
 
 
@@ -423,6 +469,14 @@ function startWithCountdown(sec = 5) {
 }
 
 
+// 훈련 시작 전에 지표 리셋
+Object.assign(trainingMetrics, {
+  elapsedSec: 0,
+  joules: 0,
+  ra30: 0,
+  np4sum: 0,
+  count: 0
+});
 
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
