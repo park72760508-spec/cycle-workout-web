@@ -200,6 +200,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
    
+   
    // ✅ 훈련 준비 → 워크아웃 변경
    document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
      backToWorkoutSelection();
@@ -285,10 +286,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // 훈련 시작 버튼
-  const btnStartTraining = document.getElementById("btnStartTraining");
-  if (btnStartTraining) {
-    btnStartTraining.addEventListener("click", startWorkoutTraining);
-  }
+  //const btnStartTraining = document.getElementById("btnStartTraining");
+  //if (btnStartTraining) {
+    //btnStartTraining.addEventListener("click", startWorkoutTraining);
+  //}
   
   // 워크아웃 변경 버튼
   const btnBackToWorkouts = document.getElementById("btnBackToWorkouts");
