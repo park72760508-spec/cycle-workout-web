@@ -651,3 +651,59 @@ h1,h2,h3,h4 { font-weight: 600; }
     align-items: flex-start;
   }
 }
+
+/* =========================
+   훈련화면 실시간 반응형 (Zwift-style)
+========================= */
+
+/* 파워값 색상 단계 */
+#trainingScreen .power-low {
+  color: #00b7ff; /* 낮은 파워: 푸른빛 */
+  text-shadow: 0 0 10px rgba(0,183,255,0.6);
+}
+#trainingScreen .power-mid {
+  color: #3cff4e; /* 중간: 초록 */
+  text-shadow: 0 0 10px rgba(60,255,78,0.6);
+}
+#trainingScreen .power-high {
+  color: #ffb400; /* 높은 파워: 주황 */
+  text-shadow: 0 0 10px rgba(255,180,0,0.6);
+}
+#trainingScreen .power-max {
+  color: #ff4c4c; /* 최대 파워: 빨강 */
+  text-shadow: 0 0 15px rgba(255,76,76,0.8);
+}
+
+/* 심박값 단계 */
+#trainingScreen .hr-zone1 { color: #4dc8ff; }
+#trainingScreen .hr-zone2 { color: #00ff9d; }
+#trainingScreen .hr-zone3 { color: #ffee00; }
+#trainingScreen .hr-zone4 { color: #ff9000; }
+#trainingScreen .hr-zone5 { color: #ff4c4c; }
+
+/* 파워 바 부드러운 애니메이션 */
+#trainingScreen .power-progress-bar {
+  transition: width 0.4s ease, background 0.4s ease;
+}
+
+/* 타임라인 바 애니메이션 */
+@keyframes timelinePulse {
+  0% { background-color: #007aff; }
+  50% { background-color: #00c3ff; }
+  100% { background-color: #007aff; }
+}
+#trainingScreen .timeline-segments div {
+  animation: timelinePulse 2s infinite;
+}
+
+/* 전체 화면 진동감 표현 */
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 10px rgba(0,170,255,0.3); }
+  50% { box-shadow: 0 0 30px rgba(0,170,255,0.7); }
+  100% { box-shadow: 0 0 10px rgba(0,170,255,0.3); }
+}
+#trainingScreen .power-display.active {
+  animation: pulseGlow 1.5s infinite;
+}
+
+
