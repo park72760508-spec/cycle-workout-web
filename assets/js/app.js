@@ -290,6 +290,67 @@ function startSegmentLoop() {
   applySegmentTarget(0);
   updateTimeUI();
 
+
+// ── 세그먼트 바 상태 ─────────────────────────
+const segBar = {
+  totalSec: 0,     // 전체 운동 시간(초)
+  ends: [],        // 각 세그먼트의 누적 종료시각(초)
+  sumPower: [],    // 세그먼트별 평균 파워 계산용 합
+  samples: [],     // 세그먼트별 표본 수(초)
+};
+
+// 초 → "m분" 짧은 표기
+function secToMinShort(sec){ return `${Math.floor((sec||0)/60)}분`; }
+
+// 세그먼트 배열에서 duration(초) 추출
+function segDurationSec(seg){
+  return (typeof seg.duration === "number" ? seg.duration
+        : typeof seg.duration_sec === "number" ? seg.duration_sec : 0) | 0;
+}
+
+// 목표 파워(W) 얻기
+function segTargetW(seg, ftp){
+  if (typeof seg.target === "number") return Math.round(ftp * seg.target);
+  if (typeof seg.ftp_percent === "number") return Math.round(ftp * (seg.ftp_percent/100));
+  return 0;
+}
+
+
+// 세그먼트 바 만드는 함수를 추가:
+function buildSegmentBar(){
+  const cont = document.getElementById("timelineSegments");
+  const w = window.currentWorkout;
+  if (!cont || !w) return;
+
+  const segs = w.segments || [];
+  const total = segs.reduce((s, seg)=> s + segDurationSec(seg), 0) || 1;
+
+  segBar.totalSec = total;
+  segBar.ends = [];
+  segBar.sumPower = Array(segs.length).fill(0);
+  segBar.samples  = Array(segs.length).fill(0);
+
+  let acc = 0;
+  cont.innerHTML = segs.map((seg, i) => {
+    const dur = segDurationSec(seg);
+    acc += dur; segBar.ends[i] = acc;
+    const widthPct = (dur / total) * 100;
+    const label = seg.segment_type || seg.label || `세그 ${i+1}`;
+    return `
+      <div class="timeline-segment" data-index="${i}" style="width:${widthPct}%">
+        <div class="progress-fill" id="segFill-${i}"></div>
+        <span class="segment-label">${label}</span>
+        <span class="segment-time">${secToMinShort(dur)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+
+
+
+
+   
   // 루프 시작(1Hz)
   clearInterval(trainingState.timerId);
   trainingState.timerId = setInterval(() => {
