@@ -372,6 +372,11 @@ window.updateTrainingDisplay = function () {
   if (powerDisplay) {
     if (currentPower > 0) powerDisplay.classList.add("active");
     else powerDisplay.classList.remove("active");
+
+    // 훈련화면에 케이던스 표시
+   const c = document.getElementById("cadenceValue");
+   if (c && typeof liveData.cadence === "number") c.textContent = Math.round(liveData.cadence);
+  
   }
 };
 
