@@ -675,7 +675,46 @@ document.addEventListener("DOMContentLoaded", () => {
      }
    });
 
+   
+   //loadUsers()가 userProfiles도 인식하게(방어)
+   function loadUsers() {
+     const box = document.getElementById("userList");
+     if (!box) return;
+   
+     // ✅ 어떤 이름이든 데이터가 있으면 잡아쓴다
+     const list =
+       (Array.isArray(window.users) && window.users.length ? window.users :
+        Array.isArray(window.userProfiles) && window.userProfiles.length ? window.userProfiles :
+        []);
+   
+     if (list.length === 0) {
+       box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
+       return;
+     }
+   
+     box.innerHTML = list.map(u => `
+       <div class="user-card" data-id="${u.id}">
+         <div class="user-name">👤 ${u.name}</div>
+         <div class="user-meta">FTP ${u.ftp}W</div>
+         <button class="btn btn-primary" data-action="select">선택</button>
+       </div>
+     `).join("");
+   
+     box.onclick = (e) => {
+       const btn = e.target.closest('[data-action="select"]');
+       if (!btn) return;
+       const card = btn.closest(".user-card");
+       const id = card?.getAttribute("data-id");
+       const user = list.find(x => String(x.id) === String(id));
+       if (user && typeof window.selectProfile === "function") {
+         window.selectProfile(user);
+       }
+     };
+   }
 
+
+
+   
    
   
   // 블루투스 연결 버튼들
