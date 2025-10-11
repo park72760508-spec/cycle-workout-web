@@ -124,34 +124,66 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* iOS 안내/아이콘 */
+/* iOS 안내 카드 – 라이트 톤 */
 #connectionScreen .ios-info {
-  background: #181a22;
-  border: 1px solid rgba(255,255,255,0.08);
+  background: #ffffff;                       /* 화이트 카드 */
+  border: 1px solid #e5e7eb;                 /* gray-200 */
   border-radius: 12px;
-  padding: 12px;
-  margin: 8px 0 14px;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  padding: 14px 16px;
+  margin: 10px 0 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.06);    /* 부드러운 그림자 */
+  color: #4b5563;                             /* gray-700 기본 텍스트 */
 }
+
+/* 라벨 배지(아이콘 줄)도 라이트 톤 */
 #connectionScreen .ios-indicator {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #2e74e8;
-  color: #fff;
+  background: #f3f4f6;                       /* gray-100 */
+  color: #374151;                             /* gray-700 */
   font-weight: 700;
   font-size: 12px;
   margin-bottom: 8px;
+  border: 1px solid #e5e7eb;
 }
-#connectionScreen .ios-text { margin: 6px 0 10px; color: #cfd3dc; }
-#connectionScreen .ios-actions .btn { padding: 8px 12px; }
+
+#connectionScreen .ios-text {
+  margin: 6px 0 10px;
+  color: #6b7280;                             /* gray-500 안내 텍스트 */
+}
+
+/* 연두색 계열 버튼 */
+#connectionScreen .btn-ios-continue {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 14px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: #22c55e;                        /* green-500 */
+  color: #ffffff;
+  cursor: pointer;
+  transition: transform .05s ease, filter .15s ease, box-shadow .15s ease;
+  box-shadow: 0 2px 8px rgba(34,197,94,.25);
+}
+#connectionScreen .btn-ios-continue:hover {
+  filter: brightness(1.03);
+}
+#connectionScreen .btn-ios-continue:active {
+  transform: translateY(1px);
+}
+
+/* iPhone 아이콘(SVG)이 배경에 묻히지 않도록 */
+#connectionScreen .ios-indicator svg {
+  color: #111827;                             /* gray-900 */
+}
+
+/* 비활성 상태(그대로 유지) */
+.is-disabled { opacity: .5; pointer-events: none; }
 .hidden { display: none !important; }
 
-/* iOS 모드에서 비활성화될 연결 버튼 외형(선택) */
-.is-disabled {
-  opacity: 0.5; pointer-events: none;
-}
 
 
 
