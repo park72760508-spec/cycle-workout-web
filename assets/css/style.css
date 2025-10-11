@@ -524,10 +524,22 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 상단 헤더: 사용자만 보이게 */
 #trainingScreen .training-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;  /* 왼쪽 정렬 */
+  /*display: flex;*/
+  /*align-items: center;*/
+  /*justify-content: flex-start;*/  /* 왼쪽 정렬 */
+
+  display: grid;                         /* 이 컨테이너를 CSS Grid 레이아웃 컨테이너로 설정 */
+  /*grid-template-columns: 1fr 1fr 1fr;*/    /* 균등 3분할 */
+  gap: 8px;                              /* 컬럼(및 행) 사이에 8픽셀 간격 */
+  align-items: center;                   /* 각 그리드 셀의 콘텐츠를 수직 중앙 정렬 */
+  background: #181a22;                   /* 배경색 */
+  /*color: #f3f3f3;*/                        /* 폰트색 */
+  padding: 8px 12px;                     /* 상하 여백 8px, 좌우 여백 12px */
+  border-radius: 10px;                   /* 모서리를 10픽셀만큼 둥글게 */
+  margin: 10px 0 16px;                   /* 위쪽 여백 10px, 아래쪽 여백 16px, 좌우는 0 */
+  box-shadow: 0 2px 6px rgba(0,0,0,.35); /* 아래쪽으로 펼쳐지는 약간의 그림자 효과 */   
 }
+
 
 /* 사용자 아이콘(사람모양) – userInfo 앞 */
 #trainingScreen #userInfo::before {
@@ -537,16 +549,16 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 3분할 바 */
 #trainingScreen .segment-details1 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;   /* 균등 3분할 */
-  gap: 8px;
-  align-items: center;
-  background: #181a22;
-  color: #f3f3f3;
-  padding: 8px 12px;
-  border-radius: 10px;
-  margin: 10px 0 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.35);
+  display: grid;                         /* 이 컨테이너를 CSS Grid 레이아웃 컨테이너로 설정 */
+  grid-template-columns: 1fr 1fr 1fr;    /* 균등 3분할 */
+  gap: 8px;                              /* 컬럼(및 행) 사이에 8픽셀 간격 */
+  align-items: center;                   /* 각 그리드 셀의 콘텐츠를 수직 중앙 정렬 */
+  background: #181a22;                   /* 배경색 */
+  color: #f3f3f3;                        /* 폰트색 */
+  padding: 8px 12px;                     /* 상하 여백 8px, 좌우 여백 12px */
+  border-radius: 10px;                   /* 모서리를 10픽셀만큼 둥글게 */
+  margin: 10px 0 16px;                   /* 위쪽 여백 10px, 아래쪽 여백 16px, 좌우는 0 */
+  box-shadow: 0 2px 6px rgba(0,0,0,.35); /* 아래쪽으로 펼쳐지는 약간의 그림자 효과 */
 }
 
 /* ⚠️ 텍스트가 안 보이던 증상 해결 핵심 */
