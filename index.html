@@ -52,6 +52,29 @@
       </div>
     </div>
 
+    <!-- iOS 전용 안내/아이콘 (기본 숨김) -->
+    <div id="iosInfo" class="ios-info hidden">
+      <div class="ios-indicator" id="iosIndicator" title="iOS Safari는 Web Bluetooth 미지원 · 기기 없이 워크아웃 실행">
+        <!-- 간단한 iPhone SVG 아이콘 -->
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="7" y="2" width="10" height="20" rx="2.5" fill="currentColor" opacity="0.9"/>
+          <rect x="9" y="4" width="6" height="1.5" rx="0.75" fill="#0f111a"/>
+          <rect x="10" y="20" width="4" height="1.5" rx="0.75" fill="#0f111a"/>
+        </svg>
+        <span>iPhone 모드</span>
+      </div>
+    
+      <p class="ios-text">
+        iOS Safari에서는 블루투스 연결이 지원되지 않습니다.<br>
+        기기 연결 없이 워크아웃을 실행할 수 있어요.
+      </p>
+    
+      <div class="ios-actions">
+        <button id="btnIosContinue" class="btn btn-primary">기기 없이 계속</button>
+      </div>
+    </div>
+
+   
     <div id="connectedDevicesList"><!-- 연결된 기기 카드들 --></div>
 
     <div id="connectionStatus" class="hidden">
