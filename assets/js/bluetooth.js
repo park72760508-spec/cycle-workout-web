@@ -285,6 +285,166 @@ async function connectHeartRate() {
   }
 }
 
+
+// ──────────────────────────────────────────────────────────
+// 파워미터 알림 파서 보강 (크랭크 데이터 → RPM 계산)
+// ──────────────────────────────────────────────────────────
+// 파일 상단(모듈 스코프)에 이전 값 저장용 상태 추가
+let __pmPrev = { revs: null, time1024: null }; // 누적 크랭크회전수, 마지막 이벤트 시각(1/1024s)
+
+// 파워미터 측정 알림
+function handlePowerMeterData(e) {
+  const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
+  let offset = 0;
+
+  // Flags (uint16, LE)
+  const flags = dv.getUint16(offset, true); offset += 2;
+
+  // Instantaneous Power (int16, LE)
+  const instPower = dv.getInt16(offset, true); offset += 2;
+  if (!isNaN(instPower)) {
+    window.liveData.power = instPower;
+  }
+
+  // 변수 길이 필드들 스킵 로직 (필요한 것만 읽음)
+  // bit0: Pedal Power Balance Present (1 byte)
+  if (flags & 0x0001) offset += 1;
+  // bit1: Pedal Power Balance Reference Present (skip 0)
+  // bit2: Accumulated Torque Present (2 bytes)
+  if (flags & 0x0004) offset += 2;
+  // bit3: Accumulated Torque Source Present (skip 0)
+
+  // bit4: Wheel Revolution Data Present (Cycling Power spec에서는 'Wheel'이 아닌 'Crank'가 bit4입니다. 구현체마다 오해가 있어 별칭 유지)
+  // 실제로는 "Crank Revolution Data Present"
+  if (flags & 0x0010) {
+    // Cumulative Crank Revolutions (uint16), Last Crank Event Time (uint16, 1/1024s)
+    const cumCrankRevs = dv.getUint16(offset, true); offset += 2;
+    const lastCrankEvtTime = dv.getUint16(offset, true); offset += 2;
+
+    // 이전 표본이 있으면 delta로 RPM 계산
+    if (__pmPrev.revs !== null && __pmPrev.time1024 !== null) {
+      // uint16 롤오버 처리
+      let dRevs = (cumCrankRevs - __pmPrev.revs);
+      if (dRevs < 0) dRevs += 0x10000;
+
+      let dTime1024 = (lastCrankEvtTime - __pmPrev.time1024);
+      if (dTime1024 < 0) dTime1024 += 0x10000;
+
+      // dTime (초)
+      const dTime = dTime1024 / 1024;
+      if (dTime > 0 && dTime < 5) { // 말도 안 되게 큰 간격은 버림
+        const rpm = (dRevs / dTime) * 60;
+        window.liveData.cadence = Math.round(rpm);
+      }
+    }
+    __pmPrev.revs = cumCrankRevs;
+    __pmPrev.time1024 = lastCrankEvtTime;
+  }
+
+  // UI 갱신
+  if (typeof window.updateTrainingDisplay === "function") {
+    window.updateTrainingDisplay();
+  }
+}
+
+// ──────────────────────────────────────────────────────────
+// 스마트 트레이너(FTMS)에서 케이던스 파싱
+// ──────────────────────────────────────────────────────────
+
+function handleTrainerData(e) {
+  const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
+  let off = 0;
+
+  const flags = dv.getUint16(off, true); off += 2;
+
+  // flags 비트에 따라 필드가 존재할 수 있음:
+  // 0: More Data
+  // 1: Average Speed Present
+  // 2: Instantaneous Cadence Present
+  // 3: Average Cadence Present
+  // 4: Total Distance Present
+  // 5: Resistance Level Present
+  // 6: Instantaneous Power Present
+  // 7: Average Power Present
+  // 등등 (기기별 차이)
+
+  // Instantaneous Speed (uint16, 0.01 m/s) 존재 시 스킵
+  if (flags & 0x0001) { off += 2; }
+  // Average Speed (uint16) 존재 시 스킵
+  if (flags & 0x0002) { off += 2; }
+
+  // Instantaneous Cadence (uint16, 0.5 rpm) — ★ 여기서 케이던스
+  if (flags & 0x0004) {
+    const cadHalf = dv.getUint16(off, true); off += 2;
+    const rpm = cadHalf / 2;
+    window.liveData.cadence = Math.round(rpm);
+  }
+
+  // Average Cadence 존재 시 스킵
+  if (flags & 0x0008) { off += 2; }
+
+  // Total Distance (uint24) 존재 시 스킵
+  if (flags & 0x0010) { off += 3; }
+
+  // Resistance Level (int16) 존재 시 스킵
+  if (flags & 0x0020) { off += 2; }
+
+  // Instantaneous Power (int16) — ★ 파워
+  if (flags & 0x0040) {
+    const p = dv.getInt16(off, true); off += 2;
+    window.liveData.power = p;
+  }
+
+  // Average Power 등 다른 필드들은 필요한 만큼 스킵/파싱 추가…
+
+  if (typeof window.updateTrainingDisplay === "function") {
+    window.updateTrainingDisplay();
+  }
+}
+
+
+// ──────────────────────────────────────────────────────────
+// (권장) 파워미터가 Crank 데이터 안 주는 경우 대비 → CSC 서비스도 구독
+// ──────────────────────────────────────────────────────────
+// 파워미터 connect 이후(또는 별도 버튼) CSC도 시도
+async function trySubscribeCSC(server) {
+  try {
+    const cscSvc = await server.getPrimaryService(0x1816);
+    const cscMeas = await cscSvc.getCharacteristic(0x2A5B);
+    await cscMeas.startNotifications();
+    cscMeas.addEventListener("characteristicvaluechanged", (evt) => {
+      const dv = evt.target.value;
+      let o = 0;
+      const flags = dv.getUint8(o); o += 1;
+      // flags bit1: Crank Revolution Data Present
+      if (flags & 0x02) {
+        const cumRevs = dv.getUint16(o, true); o += 2;
+        const evtTime = dv.getUint16(o, true); o += 2;
+
+        // 이전 표본과 RPM 계산 (1과 동일 로직)
+        if (__pmPrev.revs !== null && __pmPrev.time1024 !== null) {
+          let dRevs = cumRevs - __pmPrev.revs; if (dRevs < 0) dRevs += 0x10000;
+          let dT = evtTime - __pmPrev.time1024; if (dT < 0) dT += 0x10000;
+          const sec = dT / 1024;
+          if (sec > 0 && sec < 5) {
+            const rpm = (dRevs / sec) * 60;
+            window.liveData.cadence = Math.round(rpm);
+          }
+        }
+        __pmPrev.revs = cumRevs;
+        __pmPrev.time1024 = evtTime;
+
+        window.updateTrainingDisplay && window.updateTrainingDisplay();
+      }
+    });
+  } catch (_) {
+    // CSC가 없으면 조용히 패스
+  }
+}
+
+
+
+
 // ──────────────────────────────────────────────────────────
 // BLE 데이터 파서 (기존 함수명/로직 유지해도 OK)
 // ──────────────────────────────────────────────────────────
