@@ -7,6 +7,21 @@ window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
 
 // ──────────────────────────────
+// 타임라인 생성/업데이트 함수 추가
+// ──────────────────────────────
+function secToMinStr(sec){
+  const m = Math.floor(sec/60);
+  return `${m}분`;
+}
+function secToMinStr(sec){
+  const m = Math.floor(sec/60);
+  return `${m}분`;
+}
+
+
+
+
+// ──────────────────────────────
 // Beep 사운드 (Web Audio)
 // ──────────────────────────────
 let __beepCtx = null;
@@ -55,7 +70,80 @@ function formatMMSS(sec) {
   return `${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`;
 }
 
-// 훈련 상태
+// 훈련 상태 => 타임라인 생성 (initializeTraining 내부에서 호출)
+function createTimeline(){
+  const cont = document.getElementById("timelineSegments");
+  if (!cont || !currentWorkout) return;
+
+  const segs = currentWorkout.segments || [];
+  const total = segs.reduce((s, seg)=> s + (seg.duration_sec||0), 0) || 1;
+
+  // 누적 종료시각(초)도 계산해두면 편함
+  trainingSession._segEnds = [];
+  let acc = 0;
+
+  cont.innerHTML = segs.map((seg, i)=>{
+    const dur = seg.duration_sec || 0;
+    acc += dur; trainingSession._segEnds[i] = acc;
+    const w = (dur / total) * 100;
+    const label = seg.segment_type || "세그먼트";
+    return `
+      <div class="timeline-segment" data-index="${i}" style="width:${w}%">
+        <div class="progress-fill" id="segFill-${i}"></div>
+        <span class="segment-label">${label}</span>
+        <span class="segment-time">${secToMinStr(dur)}</span>
+      </div>`;
+  }).join("");
+}
+
+// 훈련 상태 => 세그먼트별 달성도”를 시간 기준 달성도(=진행률)로 표현
+function updateTimelineByTime(){
+  if (!trainingSession.startTime || !currentWorkout) return;
+
+  const nowSec = Math.floor((Date.now() - trainingSession.startTime) / 1000);
+  const segs = currentWorkout.segments || [];
+  let startAt = 0;
+
+  for (let i=0;i<segs.length;i++){
+    const dur = segs[i].duration_sec || 0;
+    const endAt = startAt + dur;
+    const fill = document.getElementById(`segFill-${i}`);
+    if (!fill){ startAt = endAt; continue; }
+
+    let pct = 0;
+    if (nowSec >= endAt) pct = 100;                   // 지난 세그먼트
+    else if (nowSec <= startAt) pct = 0;              // 아직 시작 전
+    else pct = Math.min(100, Math.round((nowSec - startAt) / dur * 100)); // 현재 세그먼트 진행
+
+    fill.style.width = pct + "%";
+    startAt = endAt;
+  }
+}
+
+// 훈련 상태 => 현재 세그먼트 전환 시 색/타이틀 업데이트
+function onSegmentChanged(newIndex){
+  const seg = currentWorkout.segments[newIndex];
+  if (!seg) return;
+  const ftp = currentUser?.ftp || 200;
+  liveData.targetPower = Math.round(ftp * (seg.ftp_percent/100));
+  const nameEl = document.getElementById("currentSegmentName");
+  if (nameEl) nameEl.textContent = `${seg.segment_type || "세그먼트"} - FTP ${seg.ftp_percent}%`;
+  updateTrainingDisplay();
+
+
+// 훈련 상태 => 시간 달성도
+function colorFillByPower(i, avg, target){
+  const el = document.getElementById(`segFill-${i}`);
+  if (!el) return;
+  const ratio = target>0 ? (avg/target) : 0;
+  // 90% 미만 주황, 110% 초과 빨강, 그 외 파랑 등 자유롭게
+  if (ratio < 0.9) el.style.background = "#F56500";
+  else if (ratio > 1.1) el.style.background = "#DC3545";
+  else el.style.background = "#2E74E8";
+}
+   
+
+// 훈련 상태---------------------------------------OLD---------------------------------------------------
 const trainingState = {
   timerId: null,
   paused: false,
