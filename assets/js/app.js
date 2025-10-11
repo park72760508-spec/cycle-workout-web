@@ -189,10 +189,12 @@ document.addEventListener("DOMContentLoaded", () => {
   showScreen("connectionScreen");
 
    // ✅ 훈련 준비 → 훈련 시작
-   document.getElementById("btnStartTraining")?.addEventListener("click", () => {
-     // 카운트다운이 필요 없으면 바로 시작
-     startWorkoutTraining(); // 아래에서 정의됨(기존 전역 함수)
-   });
+   const btnStartTraining = document.getElementById("btnStartTraining");
+   if (btnStartTraining) {
+     btnStartTraining.addEventListener("click", () => startWithCountdown(5));
+   }
+
+
    
    // ✅ 훈련 준비 → 워크아웃 변경
    document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
