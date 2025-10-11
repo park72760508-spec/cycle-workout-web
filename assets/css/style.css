@@ -522,55 +522,64 @@ h1,h2,h3,h4 { font-weight: 600; }
   font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
 }
 
-/* 헤더 */
+//* 상단 헤더: 사용자만 보이게 */
 #trainingScreen .training-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: #181a22;
-  padding: 10px 15px;
-  border-radius: 12px;
-  margin-bottom: 15px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  justify-content: flex-start;  /* 왼쪽 정렬 */
 }
 
-/* ─────────────────────────────────────────────
-   시간/세그먼트 전용 블럭 (segment-details1)
-   - 3등분 균등 배치
-   - 좌/중/우 정렬
-   - 기존과 구분되는 '1' 접미사 사용
-───────────────────────────────────────────── */
+/* 사용자 아이콘(사람모양) – userInfo 앞 */
+#trainingScreen #userInfo::before {
+  content: "👤";
+  margin-right: 8px;
+}
+
+/* 3분할 바 */
 #trainingScreen .segment-details1 {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr; /* 균등 3분할 */
+  grid-template-columns: 1fr 1fr 1fr;   /* 균등 3분할 */
   gap: 8px;
   align-items: center;
-  background: #181a22;        /* 훈련 헤더와 톤 맞춤 */
+  background: #181a22;
   color: #f3f3f3;
   padding: 8px 12px;
   border-radius: 10px;
-  margin: 10px 0 16px;        /* 상단/하단 여백 */
-  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  margin: 10px 0 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.35);
 }
 
-/* 좌/중/우 정렬 */
+/* ⚠️ 텍스트가 안 보이던 증상 해결 핵심 */
+#trainingScreen .segment-details1 > div {
+  min-width: 0;                     /* grid 아이템 폭 수축 허용 */
+}
+#trainingScreen .segment-details1 > div > span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;                  /* 길면 말줄임 */
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #trainingScreen .seg-left1   { text-align: left; }
 #trainingScreen .seg-center1 { text-align: center; }
 #trainingScreen .seg-right1  { text-align: right; }
 
-/* 경과 텍스트 강조 */
-#trainingScreen .elapsed-wrap1 {
-  font-weight: 600;
-  color: #ffffff;
+/* 아이콘: ⏱(경과), ⏭(다음) – 텍스트 앞에 붙이기 */
+#trainingScreen .elapsed-wrap1::before {
+  content: "⏱";
+  margin-right: 6px;
+}
+#trainingScreen #nextSegment::before {
+  content: "⏭";
+  margin-right: 6px;
 }
 
-/* 반응형: 모바일에선 살짝 줄이기 */
+/* (선택) 모바일에서 폰트 조금 줄이기 */
 @media (max-width: 768px) {
-  #trainingScreen .segment-details1 {
-    font-size: 14px;
-    padding: 8px 10px;
-  }
+  #trainingScreen .segment-details1 { font-size: 14px; }
 }
+
 
 
 
