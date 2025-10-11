@@ -133,7 +133,7 @@ window.updateTrainingDisplay = function () {
 
 
 // 5초 카운트다운 후 자동 시작
-function (sec = 5) {
+function startWithCountdown(sec = 5) {
   const overlay = document.getElementById("countdownOverlay");
   const num = document.getElementById("countdownNumber");
   if (!overlay || !num) {
