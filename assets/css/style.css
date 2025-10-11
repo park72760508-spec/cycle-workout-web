@@ -311,6 +311,154 @@ h1,h2,h3,h4 { font-weight: 600; }
   .result-stat { width: 100%; }
 }
 
+
+/* ─────────────────────────────────────────────
+   Profile Screen 전용 스타일
+───────────────────────────────────────────── */
+#profileScreen {
+  --card-bg: #181a22;
+  --card-border: rgba(255,255,255,0.08);
+  --text: #f3f3f3;
+  --muted: #a0a0a0;
+  --accent: #2e74e8;
+}
+
+#profileScreen .header {
+  margin-bottom: 14px;
+}
+#profileScreen .header h1 {
+  margin: 0 0 6px;
+}
+#profileScreen .header .subtitle {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* 사용자 카드 리스트: 반응형 2~4열 */
+#profileScreen #userList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+  margin-bottom: 16px;
+  min-width: 0; /* grid 항목 줄바꿈 문제 방지 */
+}
+
+/* 사용자 카드 */
+#profileScreen .user-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  min-width: 0;
+}
+#profileScreen .user-card .user-name {
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#profileScreen .user-card .user-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+#profileScreen .user-card .btn {
+  margin-top: 8px;
+}
+
+/* “새 사용자 추가” 카드 */
+#profileScreen #cardAddUser {
+  background: transparent;
+  border: 1px dashed var(--card-border);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+  transition: border-color .2s ease, transform .1s ease;
+}
+#profileScreen #cardAddUser:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+#profileScreen .big-plus {
+  font-size: 28px;
+}
+
+/* 폼 카드 */
+#profileScreen #addUserForm.card {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+/* 버튼(프로필 화면 전용 폴백) */
+#profileScreen .btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 12px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  user-select: none;
+}
+#profileScreen .btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+#profileScreen .btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--card-border);
+}
+#profileScreen .btn-success {
+  background: #22c55e;
+  color: #fff;
+  border-color: transparent;
+}
+#profileScreen .btn:hover { filter: brightness(1.05); }
+
+/* 유틸 */
+#profileScreen .muted { color: var(--muted); }
+#profileScreen .text-center { text-align: center; }
+#profileScreen .mb-10 { margin-bottom: 10px; }
+#profileScreen .mb-20 { margin-bottom: 20px; }
+#profileScreen .mt-5 { margin-top: 5px; }
+#profileScreen .btn-row { display: flex; gap: 10px; }
+#profileScreen .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+#profileScreen .form-group { display: flex; flex-direction: column; gap: 6px; }
+#profileScreen input[type="text"],
+#profileScreen input[type="tel"],
+#profileScreen input[type="number"] {
+  background: #0f111a;
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+}
+#profileScreen input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(46,116,232,.25);
+}
+
+/* 모바일 튜닝 */
+@media (max-width: 560px) {
+  #profileScreen #userList { grid-template-columns: 1fr; }
+  #profileScreen .form-row { grid-template-columns: 1fr; }
+}
+
+
+
+
+
 /* -------- WORKOUT PREVIEW (훈련준비 화면) -------- */
 .workout-preview {
   background: #fff;
