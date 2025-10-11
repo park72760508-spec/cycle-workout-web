@@ -230,11 +230,22 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 999;
 }
 .countdown-number {
-  font-size: 120px;
+  font-size: 220px;
   font-weight: bold;
   color: #fff;
   text-shadow: 0 0 10px #000;
 }
+
+@keyframes pop {
+  0% { transform: scale(0.9); opacity: .8; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1.0); opacity: 1; }
+}
+.countdown-number{
+  animation: pop 250ms ease;  /* 숫자 갱신 때마다 살짝 튀는 효과 */
+}
+
+
 
 /* -------- RESULT SCREEN -------- */
 .achievement-circle {
