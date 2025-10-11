@@ -316,74 +316,65 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* -------- 훈련준비 화면 SEGMENT PREVIEW 수정 -------- */
+/* -------- SEGMENT BLOCKS 동일 크기 -------- */
 .segment-preview {
   display: flex;
   gap: 10px;
-  margin-top: 20px;
+  margin: 20px auto;
   padding: 15px;
   background: #f8f9fa;
   border-radius: 8px;
   overflow-x: auto;
-  align-items: center;  /* 수직 중앙 정렬 추가 */
+  align-items: stretch;  /* 모든 아이템 높이 동일하게 */
+  justify-content: center;
 }
 
 .segment-item {
-  padding: 15px 20px;
+  padding: 15px;
   border-radius: 8px;
-  min-width: 120px;
+  width: 140px;      /* 고정 너비 */
+  height: 120px;     /* 고정 높이 */
   text-align: center;
   color: #fff;
   display: flex;
   flex-direction: column;
-  align-items: center;     /* 중앙 정렬 */
-  justify-content: center;  /* 수직 중앙 정렬 */
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;    /* 크기 축소 방지 */
 }
 
 .segment-item h4 {
   font-size: 14px;
-  margin: 0 0 10px 0;  /* 마진 조정 */
+  margin: 0 0 8px 0;
   font-weight: 500;
+  white-space: nowrap;     /* 한 줄로 표시 */
+  overflow: hidden;        /* 넘치는 텍스트 숨김 */
+  text-overflow: ellipsis; /* ... 표시 */
+  width: 100%;
 }
 
 .segment-item .ftp-percent {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   margin: 5px 0;
-  line-height: 1;  /* 줄 높이 조정 */
+  line-height: 1;
 }
 
 .segment-item .duration {
   font-size: 13px;
   opacity: 0.9;
-  margin-top: 5px;
+  margin-top: 8px;
 }
 
-/* 세그먼트 타입별 색상 */
-.segment-item.warmup {
-  background: #4caf50;
-}
-
-.segment-item.interval {
-  background: #2196f3;
-}
-
-.segment-item.rest {
-  background: #9e9e9e;
-}
-
-/* 반응형 처리 */
+/* 모바일 반응형 */
 @media (max-width: 768px) {
-  .segment-preview {
-    padding: 10px;
-  }
-  
   .segment-item {
-    min-width: 100px;
-    padding: 12px 15px;
+    width: 120px;    /* 모바일에서는 약간 작게 */
+    height: 100px;
   }
   
   .segment-item .ftp-percent {
-    font-size: 22px;
+    font-size: 24px;
   }
 }
 .training-ready {
