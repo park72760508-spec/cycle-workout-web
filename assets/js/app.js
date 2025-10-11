@@ -957,14 +957,17 @@ function renderUserInfo() {
   const box = document.getElementById("userInfo");
   const u = window.currentUser;
   if (!box) return;
-  if (!u) { box.textContent = "👤 사용자 미선택"; return; }
 
-  const wkg = (typeof u.ftp === "number" && typeof u.weight === "number" && u.weight > 0)
-    ? (u.ftp / u.weight).toFixed(2)
-    : "-";
+  if (!u) { box.textContent = "사용자 미선택"; return; }
 
-  box.innerHTML = `👤 <strong>${u.name}</strong> · FTP <strong>${u.ftp}</strong>W · ${wkg} W/kg`;
+  const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
+  const ftp = Number(u.ftp);
+  const wt  = Number(u.weight);
+  const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
+
+  box.innerHTML = `👤 <strong>${cleanName}</strong> · FTP <strong>${ftp || "-"}</strong>W · ${wkg} W/kg`;
 }
+
 
 
 
