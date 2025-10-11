@@ -40,7 +40,7 @@
   <div id="connectionScreen" class="screen active">
     <div class="header">
       <h1>🚴‍♂️ 사이클 아카데미</h1>
-      <p class="subtitle">와 심박계를 연결하세요(0730)</p>
+      <p class="subtitle">와 심박계를 연결하세요(0242)</p>
     </div>
 
     <div class="card">
@@ -163,6 +163,44 @@
   <!-- =========================
        5) 훈련 화면
   ========================== -->
+<div id="trainingScreen" class="screen">
+  <div class="training-header">
+    <div id="userInfo"><!-- 사용자 정보 --></div>
+
+    <!-- 👇 기존 .segment-details는 더 이상 사용하지 않으므로 제거(또는 주석 처리) -->
+    <!--
+    <div class="segment-details">
+      <span class="elapsed-wrap">
+        경과: <span id="elapsedTime">00:00</span>
+        (<span id="elapsedPercent">0</span>%)
+      </span>
+      <span id="segmentTime">00:00</span>
+      <span id="nextSegment">다음: 인터벌 FTP 140%</span>
+    </div>
+    -->
+  </div>
+
+  <!-- ✅ 새로 추가: 시간/세그먼트 전용 3분할 블럭 (.segment-details1) -->
+  <div class="segment-details1">
+    <div class="seg-left1">
+      <span class="elapsed-wrap1">
+        경과: <span id="elapsedTime">00:00</span>
+        (<span id="elapsedPercent">0</span>%)
+      </span>
+    </div>
+    <div class="seg-center1">
+      <span id="segmentTime">00:00</span>
+    </div>
+    <div class="seg-right1">
+      <span id="nextSegment">다음: 인터벌 FTP 140%</span>
+    </div>
+  </div>
+
+  <!-- ... 이하 기존 훈련 화면 구성 계속 ... -->
+</div>
+
+
+
   <div id="trainingScreen" class="screen">
     <div class="training-header">
       <div id="userInfo"><!-- 사용자 정보 --></div>
@@ -176,6 +214,7 @@
       </div>
     </div>
 
+    
     <div class="metrics-grid">
       <!-- 좌측: 세그먼트 평균 파워 + TSS -->
       <div class="metric-card avg-segment-power">
