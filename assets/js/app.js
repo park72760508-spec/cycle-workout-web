@@ -147,6 +147,10 @@ function startWorkoutTraining() {
     window.liveData.targetPower = Math.round(ftp * (first.ftp_percent / 100));
   }
 
+   // ▼ 사용자 정보!)
+   renderUserInfo();
+
+   
   // 2) 화면 전환
   showScreen("trainingScreen");
 
@@ -298,3 +302,30 @@ document.addEventListener("DOMContentLoaded", () => {
 // Export
 window.startWorkoutTraining = startWorkoutTraining;
 window.backToWorkoutSelection = backToWorkoutSelection;
+
+// 훈련 화면 상단에 사용자 정보가 즉시 표시
+function renderUserInfo() {
+  // 캐시 복구(새로고침 대비)
+  if (!window.currentUser) {
+    try {
+      const cached = localStorage.getItem("currentUser");
+      if (cached) window.currentUser = JSON.parse(cached);
+    } catch (e) {}
+  }
+  const u = window.currentUser;
+  const box = document.getElementById("userInfo");
+  if (!box) return;
+
+  if (!u) {
+    box.innerHTML = `<span class="muted">사용자 미선택</span>`;
+    return;
+  }
+  const wkg = (u.weight && u.ftp) ? (u.ftp / u.weight).toFixed(2) : "-";
+  box.innerHTML = `
+    <strong>${u.name}</strong>
+    <span class="muted">· FTP ${u.ftp}W · ${u.weight}kg · ${wkg} W/kg</span>
+  `;
+}
+window.renderUserInfo = renderUserInfo; // 전역에서 재사용 가능
+
+
