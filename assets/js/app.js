@@ -489,6 +489,10 @@ function backToWorkoutSelection() {
 }
 
 
+
+
+
+   
 // -------------------------------------
 // 단일 DOMContentLoaded 이벤트/ 시작, 버튼 클릭
 // ------------------------------------
@@ -601,7 +605,30 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-  
+
+  // 다파워소스 우선순위도 같이 표기
+function updateDevicesList() {
+  const box = document.getElementById("connectedDevicesList");
+  if (!box) return;
+
+  const pm = connectedDevices?.powerMeter;
+  const tr = connectedDevices?.smartTrainer;
+  const hr = connectedDevices?.heartRate;
+
+  const active = getActivePowerSource();
+  const pmBadge = pm ? (active==="powermeter" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
+  const trBadge = tr ? (active==="trainer" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
+
+  box.innerHTML = `
+    ${pm ? `<div class="dev">⚡ 파워미터: ${pm.name}${pmBadge}</div>` : ""}
+    ${tr ? `<div class="dev">🚲 스마트 트레이너: ${tr.name}${trBadge}</div>` : ""}
+    ${hr ? `<div class="dev">❤️ 심박계: ${hr.name}</div>` : ""}
+  `;
+}
+
+
+
+   
   // 훈련 시작 버튼
   //const btnStartTraining = document.getElementById("btnStartTraining");
   //if (btnStartTraining) {
