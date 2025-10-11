@@ -186,6 +186,63 @@ function colorFillByPower(i, avg, target){
 }
    
 
+// 달성도 색상: 목표 대비 평균 파워 비율(ratio)
+function colorByAchievement(ratio){
+  if (!isFinite(ratio) || ratio <= 0) return "#3b82f6"; // 기본 파랑
+  if (ratio < 0.9)  return "#f59e0b"; // 부족(주황)
+  if (ratio > 1.1)  return "#ef4444"; // 과도(빨강)
+  return "#22c55e";                   // 적정(초록)
+}
+
+// 메인 업데이트 함수(1초마다 호출):
+function updateSegmentBarTick(){
+  const w = window.currentWorkout;
+  const ftp = (window.currentUser?.ftp) || 200;
+  if (!w) return;
+
+  // 총 경과/현재 세그먼트/세그 경과는 기존 trainingState를 그대로 사용
+  const elapsed = (window.trainingState?.elapsedSec) || 0;
+  const segIndex = (window.trainingState?.segIndex) || 0;
+  const segElapsed = (window.trainingState?.segElapsedSec) || 0;
+
+  // 1) 각 세그먼트 채우기 폭(시간 기반)
+  let startAt = 0;
+  for (let i=0; i<w.segments.length; i++){
+    const seg = w.segments[i];
+    const dur = segDurationSec(seg);
+    const endAt = startAt + dur;
+    const fill = document.getElementById(`segFill-${i}`);
+    if (fill){
+      let pct = 0;
+      if (elapsed >= endAt) pct = 100;                     // 완료
+      else if (elapsed <= startAt) pct = 0;                // 아직 시작 전
+      else pct = Math.min(100, Math.round((elapsed - startAt) / dur * 100)); // 진행 중
+      fill.style.width = pct + "%";
+    }
+    startAt = endAt;
+  }
+
+  // 2) 달성도 색상(세그 평균 파워 / 목표 파워)
+  // - 표본: liveData.power를 1초당 하나씩 누적
+  const p = Math.max(0, Number(window.liveData?.power) || 0);
+  if (w.segments[segIndex]) {
+    segBar.sumPower[segIndex] += p;
+    segBar.samples[segIndex]  += 1;
+  }
+
+  // 현재/완료 세그먼트의 평균과 목표 비교해서 색 지정
+  for (let i=0; i<w.segments.length; i++){
+    const seg = w.segments[i];
+    const targetW = segTargetW(seg, ftp);
+    const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
+    const ratio = targetW > 0 ? (avgW / targetW) : 0;
+    const fill = document.getElementById(`segFill-${i}`);
+    if (fill) fill.style.background = colorByAchievement(ratio);
+  }
+}
+
+
+
 // 훈련 상태---------------------------------------OLD---------------------------------------------------
 const trainingState = {
   timerId: null,
@@ -267,7 +324,10 @@ function applySegmentTarget(i) {
 }
 
 
-// 훈련화면 ==> 메인 루프 시작/정지
+// -------------------------------------------------
+// 시작/루프에 연결 (딱 두 줄
+// 
+// ------------------------------------------------
 function startSegmentLoop() {
   const w = window.currentWorkout;
   if (!w) return;
@@ -346,16 +406,12 @@ function buildSegmentBar(){
   }).join("");
 }
 
-
-
-
-
    
   // 루프 시작(1Hz)
   clearInterval(trainingState.timerId);
   trainingState.timerId = setInterval(() => {
     if (trainingState.paused) return;
-
+   updateSegmentBarTick();
     trainingState.elapsedSec += 1;
     trainingState.segElapsedSec += 1;
 
@@ -562,6 +618,7 @@ trainingState.elapsedSec = 0;
 trainingState.segElapsedSec = 0;
 // trainingMetrics도 리셋…
 
+   buildSegmentBar();
    
   // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
    // 1) 첫 세그먼트 기준으로 targetPower 설정
