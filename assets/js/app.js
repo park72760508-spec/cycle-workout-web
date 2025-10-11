@@ -5,7 +5,7 @@
 window.liveData = window.liveData || { power: 0, cadence: 0, heartRate: 0, targetPower: 0 };
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
-
+window.loadUsers = loadUsers
 
 // ── 훈련 지표 상태 (TSS / kcal / NP 근사) ─────────────────
 const trainingMetrics = {
