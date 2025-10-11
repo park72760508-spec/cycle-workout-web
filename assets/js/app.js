@@ -193,12 +193,21 @@ function startWorkoutTraining() {
   }
 
   // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
-  const w = window.currentWorkout;
-  const ftp = (window.currentUser?.ftp) || 200; // 사용자 FTP가 없으면 임시 200W
-  const first = w.segments?.[0];
-  if (first?.ftp_percent) {
-    window.liveData.targetPower = Math.round(ftp * (first.ftp_percent / 100));
-  }
+   // 1) 첫 세그먼트 기준으로 targetPower 설정
+   const w = window.currentWorkout;
+   const ftp = (window.currentUser?.ftp) || 200;
+   const first = w.segments?.[0];
+   
+   if (first) {
+     // 샘플 JSON: target(0~1), duration(초)
+     // 혹은 다른 형식: ftp_percent(0~100)
+     if (typeof first.target === "number") {
+       window.liveData.targetPower = Math.round(ftp * first.target);
+     } else if (typeof first.ftp_percent === "number") {
+       window.liveData.targetPower = Math.round(ftp * (first.ftp_percent / 100));
+     }
+   }
+
 
    // ▼ 사용자 정보!)
    renderUserInfo();
