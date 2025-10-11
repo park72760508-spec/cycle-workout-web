@@ -121,13 +121,29 @@ function startWithCountdown(sec = 5) {
 
 
 // 워크아웃 관련 함수들
+// 선택 시 저장 (selectWorkout 안)
+function selectWorkout(w) {
+  window.currentWorkout = w;
+  localStorage.setItem("currentWorkout", JSON.stringify(w)); // ✅ 저장
+  showScreen("trainingReadyScreen");
+  renderPreview();
+}
+
+// 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
 function startWorkoutTraining() {
-  // 선택된 워크아웃이 없으면 방어
+  if (!window.currentWorkout) {
+    const cached = localStorage.getItem("currentWorkout");
+    if (cached) {
+      window.currentWorkout = JSON.parse(cached);            // ✅ 복구
+    }
+  }
   if (!window.currentWorkout) {
     showToast("워크아웃을 먼저 선택하세요");
     showScreen("workoutScreen");
     return;
   }
+  ...
+}
 
   // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
   const w = window.currentWorkout;
