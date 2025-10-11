@@ -609,7 +609,7 @@ function updateDevicesList() {
   if (!box) return;
 
   const pm = connectedDevices?.powerMeter;
-  const tr = connectedDevices?.smartTrainer;
+  const tr = connectedDevices?.trainer;
   const hr = connectedDevices?.heartRate;
 
   const active = getActivePowerSource();
