@@ -123,6 +123,38 @@ h1,h2,h3,h4 { font-weight: 600; }
   color: #2e74e8;
 }
 
+/* iOS 안내/아이콘 */
+#connectionScreen .ios-info {
+  background: #181a22;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 8px 0 14px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25);
+}
+#connectionScreen .ios-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #2e74e8;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+#connectionScreen .ios-text { margin: 6px 0 10px; color: #cfd3dc; }
+#connectionScreen .ios-actions .btn { padding: 8px 12px; }
+.hidden { display: none !important; }
+
+/* iOS 모드에서 비활성화될 연결 버튼 외형(선택) */
+.is-disabled {
+  opacity: 0.5; pointer-events: none;
+}
+
+
+
 /* -------- TRAINING METRICS -------- */
 .metrics-grid {
   display: grid;
