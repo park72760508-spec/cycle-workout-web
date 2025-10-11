@@ -467,35 +467,23 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 
-/* =========================
-   공통 설정
-========================= */
-body {
-  font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
-  margin: 0;
-  padding: 0;
-  background: #0f111a;
-  color: #f3f3f3;
-}
-.screen {
-  display: none;
-  padding: 20px;
-}
-.screen.active {
-  display: block;
-}
-h1, h2, h3 {
-  margin: 0 0 10px;
-  color: #f5f5f5;
-}
-.muted {
-  color: #a0a0a0;
-}
 
 /* =========================
-   워크아웃(훈련) 화면
+   워크아웃(훈련) 화면 전용 스타일
+   (#trainingScreen 내부에만 적용)
 ========================= */
-.training-header {
+
+/* 전체 컨테이너 */
+#trainingScreen {
+  background: #0f111a;
+  color: #f3f3f3;
+  padding: 20px;
+  min-height: 100vh;
+  font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
+}
+
+/* 헤더 */
+#trainingScreen .training-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -505,20 +493,20 @@ h1, h2, h3 {
   margin-bottom: 15px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
-.segment-details {
+#trainingScreen .segment-details {
   display: flex;
   gap: 15px;
   align-items: center;
   font-size: 14px;
   color: #d0d0d0;
 }
-.elapsed-wrap {
+#trainingScreen .elapsed-wrap {
   font-weight: 600;
   color: #fff;
 }
 
 /* 메트릭 카드 3분할 */
-.metrics-grid {
+#trainingScreen .metrics-grid {
   display: grid;
   grid-template-columns: 1fr 1.2fr 1fr;
   gap: 15px;
@@ -526,40 +514,40 @@ h1, h2, h3 {
 }
 
 /* 좌측 평균 파워 + TSS */
-.metric-card {
+#trainingScreen .metric-card {
   background: #1b1e2b;
   padding: 15px;
   border-radius: 15px;
   box-shadow: inset 0 0 12px rgba(255,255,255,0.05);
   text-align: center;
 }
-.metric-card .metric-value {
+#trainingScreen .metric-card .metric-value {
   font-size: 26px;
   font-weight: 700;
 }
-.metric-card .metric-label {
+#trainingScreen .metric-card .metric-label {
   font-size: 13px;
   color: #aaa;
 }
 
 /* 중앙: 파워 디스플레이 */
-.power-display {
+#trainingScreen .power-display {
   background: linear-gradient(180deg, #22283b, #1a1d2a);
   border-radius: 20px;
   text-align: center;
   padding: 20px;
   box-shadow: 0 3px 10px rgba(0,0,0,0.5);
 }
-.current-power {
+#trainingScreen .current-power {
   font-size: 64px;
   font-weight: 800;
   color: #00d9ff;
 }
-.unit-dim {
+#trainingScreen .unit-dim {
   font-size: 14px;
   color: #aaa;
 }
-.power-progress {
+#trainingScreen .power-progress {
   height: 8px;
   background: #2a2a2a;
   border-radius: 8px;
@@ -567,28 +555,28 @@ h1, h2, h3 {
   overflow: hidden;
   position: relative;
 }
-.power-progress-bar {
+#trainingScreen .power-progress-bar {
   height: 8px;
   width: 0%;
   background: linear-gradient(90deg, #00c6ff, #0072ff);
   transition: width 0.5s ease;
 }
-.power-progress-label {
+#trainingScreen .power-progress-label {
   font-size: 13px;
   color: #bbb;
   margin-top: 6px;
 }
 
 /* 우측 심박/케이던스/칼로리 */
-.dual-metric .metric-item {
+#trainingScreen .dual-metric .metric-item {
   margin-bottom: 10px;
 }
-.dual-metric .metric-value {
+#trainingScreen .dual-metric .metric-value {
   font-size: 30px;
   font-weight: bold;
   color: #ff3c6a;
 }
-.dual-metric .metric-label {
+#trainingScreen .dual-metric .metric-label {
   font-size: 13px;
   color: #ccc;
 }
@@ -596,23 +584,23 @@ h1, h2, h3 {
 /* =========================
    타임라인 / 진행률
 ========================= */
-.timeline-wrap {
+#trainingScreen .timeline-wrap {
   background: #151720;
   border-radius: 12px;
   padding: 10px 15px;
 }
-.timeline-progress {
+#trainingScreen .timeline-progress {
   height: 10px;
   background: #2c2f3d;
   border-radius: 6px;
   overflow: hidden;
   margin-bottom: 6px;
 }
-.timeline-segments div {
+#trainingScreen .timeline-segments div {
   height: 10px;
   background: #00aaff;
 }
-.timeline-legend {
+#trainingScreen .timeline-legend {
   font-size: 13px;
   color: #aaa;
 }
@@ -620,13 +608,13 @@ h1, h2, h3 {
 /* =========================
    컨트롤 버튼
 ========================= */
-.training-controls {
+#trainingScreen .training-controls {
   display: flex;
   justify-content: center;
   gap: 25px;
   margin-top: 20px;
 }
-.control-btn {
+#trainingScreen .control-btn {
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -637,14 +625,14 @@ h1, h2, h3 {
   cursor: pointer;
   transition: transform 0.2s, background 0.2s;
 }
-.control-btn:hover {
+#trainingScreen .control-btn:hover {
   background: #39405b;
   transform: scale(1.1);
 }
-.control-btn.stop {
+#trainingScreen .control-btn.stop {
   background: #ff4c4c;
 }
-.control-btn.pause {
+#trainingScreen .control-btn.pause {
   background: #ffaa00;
 }
 
@@ -652,16 +640,14 @@ h1, h2, h3 {
    반응형
 ========================= */
 @media (max-width: 768px) {
-  .metrics-grid {
+  #trainingScreen .metrics-grid {
     grid-template-columns: 1fr;
   }
-  .current-power {
+  #trainingScreen .current-power {
     font-size: 48px;
   }
-  .training-header {
+  #trainingScreen .training-header {
     flex-direction: column;
     align-items: flex-start;
   }
 }
-
-
