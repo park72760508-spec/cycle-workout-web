@@ -918,28 +918,25 @@ window.startWorkoutTraining = startWorkoutTraining;
 window.backToWorkoutSelection = backToWorkoutSelection;
 
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
+// 사용자 정보 렌더
 function renderUserInfo() {
-  // 캐시 복구(새로고침 대비)
-  if (!window.currentUser) {
-    try {
-      const cached = localStorage.getItem("currentUser");
-      if (cached) window.currentUser = JSON.parse(cached);
-    } catch (e) {}
-  }
-  const u = window.currentUser;
   const box = document.getElementById("userInfo");
+  const u = window.currentUser;
   if (!box) return;
-
   if (!u) {
-    box.innerHTML = `<span class="muted">사용자 미선택</span>`;
+    box.textContent = "👤 사용자 미선택";
     return;
   }
-  const wkg = (u.weight && u.ftp) ? (u.ftp / u.weight).toFixed(2) : "-";
-  box.innerHTML = `
-    <strong>${u.name}</strong>
-    <span class="muted">· FTP ${u.ftp}W · ${wkg} W/kg</span>
-  `;
+  // 몸무게 제외 표기
+  box.innerHTML = `👤 <strong>${u.name}</strong> · FTP <strong>${u.ftp}</strong>W`;
 }
-window.renderUserInfo = renderUserInfo; // 전역에서 재사용 가능
 
+//window.renderUserInfo = renderUserInfo; // 전역에서 재사용 가능
+
+// 프로필 선택 직후(훈련 준비/훈련 화면에서 보이게)
+if (typeof renderUserInfo === "function") renderUserInfo();
+
+// startWorkoutTraining() 안, 화면 전환 직후
+showScreen("trainingScreen");
+renderUserInfo && renderUserInfo();
 
