@@ -45,7 +45,7 @@ function selectProfile(user) {
   showScreen("workoutScreen");
   renderWorkouts();
 }
-
+window.selectProfile = selectProfile;
 
 /* -----------------------------
    워크아웃 로드
