@@ -142,7 +142,6 @@ function startWorkoutTraining() {
     showScreen("workoutScreen");
     return;
   }
-  ...
 }
 
   // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
