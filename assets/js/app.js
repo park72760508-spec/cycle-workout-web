@@ -9,11 +9,20 @@ window.currentWorkout = window.currentWorkout || null;
 // 중복 선언 방지
 if (!window.showScreen) {
   window.showScreen = function(id) {
-    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    // 1) 모든 화면 숨김
+    document.querySelectorAll(".screen").forEach(s => {
+      s.style.display = "none";
+      s.classList.remove("active");
+    });
+    // 2) 대상 화면만 표시
     const el = document.getElementById(id);
-    if (el) el.classList.add("active");
+    if (el) {
+      el.style.display = "block";
+      el.classList.add("active");
+    }
   };
 }
+
 
 if (!window.showConnectionStatus) {
   window.showConnectionStatus = function(show) {
