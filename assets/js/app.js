@@ -682,43 +682,49 @@ document.addEventListener("DOMContentLoaded", () => {
      const box = document.getElementById("userList");
      if (!box) return;
    
-     // ✅ 어떤 이름이든 데이터가 있으면 잡아쓴다
+     // 전역 데이터: window.users → window.userProfiles 순으로 폴백
      const list =
        (Array.isArray(window.users) && window.users.length ? window.users :
         Array.isArray(window.userProfiles) && window.userProfiles.length ? window.userProfiles :
         []);
    
-     if (list.length === 0) {
+     if (!Array.isArray(list) || list.length === 0) {
        box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
+       box.onclick = null; // 이전 위임 핸들러 제거
        return;
      }
    
-        // ⬇⬇ 여기를 당신이 보낸 코드로 붙여넣기(= 교체) ⬇⬇
-        box.innerHTML = list.map(u => `
-          <div class="user-card" data-id="${u.id}">
-            <div class="user-name">👤 ${u.name}</div>
-            <div class="user-meta">FTP ${u.ftp}W</div>
-            <button class="btn btn-primary" data-action="select">선택</button>
-          </div>
-        `).join("");
-        // ⬆⬆ 여기까지 ⬆⬆
+     // 카드 렌더 (이름, FTP, W/kg 포함)
+     box.innerHTML = list.map((u) => {
+       const name = (u?.name ?? "").toString();
+       const ftp  = Number(u?.ftp);
+       const wt   = Number(u?.weight);
+       const wkg  = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0)
+         ? (ftp / wt).toFixed(2)
+         : "-";
    
+       return `
+         <div class="user-card" data-id="${u.id}">
+           <div class="user-name">👤 ${name}</div>
+           <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
+           <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
+         </div>
+       `;
+     }).join("");
+   
+     // 선택 버튼 위임(매번 새로 바인딩되도록 on*로 설정)
      box.onclick = (e) => {
        const btn = e.target.closest('[data-action="select"]');
        if (!btn) return;
        const card = btn.closest(".user-card");
        const id = card?.getAttribute("data-id");
-       const user = list.find(x => String(x.id) === String(id));
+       const user = list.find((x) => String(x.id) === String(id));
        if (user && typeof window.selectProfile === "function") {
          window.selectProfile(user);
        }
      };
    }
-
-
-
-   
-   
+  
   
   // 블루투스 연결 버튼들
   const btnHR = document.getElementById("btnConnectHR");
@@ -920,18 +926,20 @@ window.startWorkoutTraining = startWorkoutTraining;
 window.backToWorkoutSelection = backToWorkoutSelection;
 
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
-// 사용자 정보 렌더
+// 사용자 정보 렌더(훈련자 화면 사용자 정보)
 function renderUserInfo() {
   const box = document.getElementById("userInfo");
   const u = window.currentUser;
   if (!box) return;
-  if (!u) {
-    box.textContent = "👤 사용자 미선택";
-    return;
-  }
-  // 몸무게 제외 표기
-  box.innerHTML = `👤 <strong>${u.name}</strong> · FTP <strong>${u.ftp}</strong>W`;
+  if (!u) { box.textContent = "👤 사용자 미선택"; return; }
+
+  const wkg = (typeof u.ftp === "number" && typeof u.weight === "number" && u.weight > 0)
+    ? (u.ftp / u.weight).toFixed(2)
+    : "-";
+
+  box.innerHTML = `👤 <strong>${u.name}</strong> · FTP <strong>${u.ftp}</strong>W · ${wkg} W/kg`;
 }
+
 
 //window.renderUserInfo = renderUserInfo; // 전역에서 재사용 가능
 
