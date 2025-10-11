@@ -6,6 +6,46 @@ window.liveData = window.liveData || { power: 0, cadence: 0, heartRate: 0, targe
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
 
+// ──────────────────────────────
+// Beep 사운드 (Web Audio)
+// ──────────────────────────────
+let __beepCtx = null;
+
+async function ensureBeepContext() {
+  try {
+    __beepCtx = __beepCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (__beepCtx.state === "suspended") await __beepCtx.resume();
+  } catch (e) {
+    // 브라우저에서 차단되면 무음으로 진행
+  }
+}
+
+async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine") {
+  try {
+    await ensureBeepContext();
+    if (!__beepCtx) return;
+    const osc = __beepCtx.createOscillator();
+    const gain = __beepCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.value = volume;
+
+    osc.connect(gain);
+    gain.connect(__beepCtx.destination);
+
+    const now = __beepCtx.currentTime;
+    // 짧게 울리고 서서히 감쇄
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+
+    osc.start(now);
+    osc.stop(now + durationMs / 1000);
+  } catch (_) { /* 무시 */ }
+}
+
+
+
+
 // 중복 선언 방지
 if (!window.showScreen) {
   window.showScreen = function(id) {
@@ -93,7 +133,7 @@ window.updateTrainingDisplay = function () {
 
 
 // 5초 카운트다운 후 자동 시작
-function startWithCountdown(sec = 5) {
+function (sec = 5) {
   const overlay = document.getElementById("countdownOverlay");
   const num = document.getElementById("countdownNumber");
   if (!overlay || !num) {
@@ -118,9 +158,46 @@ function startWithCountdown(sec = 5) {
 }
 
 
+// (카운트다운 + Beep + 자동 시작)
+
+function startWithCountdown(sec = 5) {
+  const overlay = document.getElementById("countdownOverlay");
+  const num = document.getElementById("countdownNumber");
+  if (!overlay || !num) return startWorkoutTraining(); // 없으면 바로 시작
+
+  // 오버레이 확실히 표시
+  overlay.classList.remove("hidden");
+  overlay.style.display = "flex";
+
+  let remain = sec;
+  num.textContent = remain;
+
+  // 첫 숫자 노출과 동시에 짧은 Beep
+  playBeep(880, 120, 0.25);
+
+  const timer = setInterval(async () => {
+    remain -= 1;
+
+    if (remain <= 0) {
+      clearInterval(timer);
+
+      // 마지막은 길고 높은 Beep
+      await playBeep(1200, 500, 0.3, "square");
+
+      // 오버레이 닫고 실제 시작
+      overlay.classList.add("hidden");
+      overlay.style.display = "none";
+      startWorkoutTraining();
+      return;
+    }
+
+    // 매초 짧은 Beep
+    num.textContent = remain;
+    playBeep(880, 120, 0.25);
+  }, 1000);
+}
 
 
-// 워크아웃 관련 함수들
 
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
@@ -288,7 +365,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 훈련 시작 버튼
   //const btnStartTraining = document.getElementById("btnStartTraining");
   //if (btnStartTraining) {
-    //btnStartTraining.addEventListener("click", startWorkoutTraining);
+    //btnStartTraining.addEventListener("click", );
   //}
   
   // 워크아웃 변경 버튼
