@@ -13,10 +13,7 @@ function secToMinStr(sec){
   const m = Math.floor(sec/60);
   return `${m}분`;
 }
-function secToMinStr(sec){
-  const m = Math.floor(sec/60);
-  return `${m}분`;
-}
+
 
 
 
@@ -129,7 +126,7 @@ function onSegmentChanged(newIndex){
   const nameEl = document.getElementById("currentSegmentName");
   if (nameEl) nameEl.textContent = `${seg.segment_type || "세그먼트"} - FTP ${seg.ftp_percent}%`;
   updateTrainingDisplay();
-
+} // ✅ 누락됐던 닫는 중괄호 추가
 
 // 훈련 상태 => 시간 달성도
 function colorFillByPower(i, avg, target){
