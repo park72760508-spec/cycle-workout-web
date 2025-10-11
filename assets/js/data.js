@@ -12,6 +12,10 @@ let userProfiles = [
 let selectedUser = null;
 let currentWorkout = null;
 
+window.userProfiles = userProfiles;  // 전역으로 노출
+window.users = userProfiles;         // loadUsers()에서 쓰는 별칭
+
+
 /* -----------------------------
    프로필 화면 렌더링
 ------------------------------ */
