@@ -182,7 +182,7 @@ function startWithCountdown(sec = 5) {
       clearInterval(timer);
 
       // 마지막은 길고 높은 Beep
-      await playBeep(1200, 500, 0.3, "square");
+      await playBeep(1500, 700, 0.35, "square");
 
       // 오버레이 닫고 실제 시작
       overlay.classList.add("hidden");
