@@ -386,7 +386,7 @@ function renderUserInfo() {
   const wkg = (u.weight && u.ftp) ? (u.ftp / u.weight).toFixed(2) : "-";
   box.innerHTML = `
     <strong>${u.name}</strong>
-    <span class="muted">· FTP ${u.ftp}W · ${u.weight}kg · ${wkg} W/kg</span>
+    <span class="muted">· FTP ${u.ftp}W · ${wkg} W/kg</span>
   `;
 }
 window.renderUserInfo = renderUserInfo; // 전역에서 재사용 가능
