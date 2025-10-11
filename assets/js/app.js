@@ -636,7 +636,6 @@ trainingState.segElapsedSec = 0;
      }
    }
 
-
    // ▼ 사용자 정보!)
    renderUserInfo();
 
@@ -647,6 +646,25 @@ trainingState.segElapsedSec = 0;
   // 3) 한 번 즉시 그려주기 (0 → 값 깜빡임 방지)
   if (window.updateTrainingDisplay) window.updateTrainingDisplay();
 
+   // --- [추가] 훈련 상태 초기화 & 세그먼트 바 구축 & 루프 시작 ---
+   setPaused && setPaused(false);       // 일시정지 상태 해제(있다면)
+   trainingState.elapsedSec = 0;
+   trainingState.segElapsedSec = 0;
+   
+   // 세그먼트 타임라인 렌더(있다면)
+   if (typeof buildSegmentBar === "function") {
+     buildSegmentBar();
+   }
+   
+   // 첫 세그먼트 타겟 적용 & 시간 UI 초기 업데이트
+   applySegmentTarget && applySegmentTarget(0);
+   updateTimeUI && updateTimeUI();
+   
+   // 1Hz 루프 시작
+   if (typeof startSegmentLoop === "function") {
+     startSegmentLoop();
+   }
+   
    // ✅ 루프 시작 (훈련화면)
    startSegmentLoop();   
 
@@ -811,10 +829,13 @@ function updateDevicesList() {
 
    
   // 훈련 시작 버튼
-  //const btnStartTraining = document.getElementById("btnStartTraining");
-  //if (btnStartTraining) {
-    //btnStartTraining.addEventListener("click", );
-  //}
+
+const btnStartTraining = document.getElementById("btnStartTraining");
+if (btnStartTraining) {
+  btnStartTraining.addEventListener("click", () => startWithCountdown(5));
+}
+
+   
   
   // 워크아웃 변경 버튼
   const btnBackToWorkouts = document.getElementById("btnBackToWorkouts");
