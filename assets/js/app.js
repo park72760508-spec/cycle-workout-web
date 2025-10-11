@@ -44,6 +44,165 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
 }
 
 
+// ──────────────────────────────
+// 훈련화면 시간 및 훈련 상태/유틸 + 훈련 상태 전역 (파일 상단 유틸 근처)
+// ──────────────────────────────
+// 시간 포맷: 75 -> "01:15"
+function formatMMSS(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`;
+}
+
+// 훈련 상태
+const trainingState = {
+  timerId: null,
+  paused: false,
+  elapsedSec: 0,           // 총 경과(초)
+  segIndex: 0,             // 현재 세그먼트 인덱스
+  segElapsedSec: 0,        // 현재 세그먼트 내 경과(초)
+  segEnds: [],             // 누적 종료시각 배열(초)
+  totalSec: 0              // 총 훈련 시간(초)
+};
+
+// 훈련 상태 => 시간/세그먼트 UI 갱신 함수
+function updateTimeUI() {
+  const w = window.currentWorkout;
+  if (!w) return;
+
+  const elElapsed = document.getElementById("elapsedTime");
+  const elElapsedPct = document.getElementById("elapsedPercent");
+  const elSegTime = document.getElementById("segmentTime");
+  const elNext = document.getElementById("nextSegment");
+  const elSegPct = document.getElementById("segmentProgress");
+  const barTimeline = document.getElementById("timelineSegments");
+
+  // 총 진행률
+  const elapsed = trainingState.elapsedSec;
+  const total = trainingState.totalSec || 1;
+  const totalPct = Math.min(100, Math.round((elapsed / total) * 100));
+  if (elElapsed) elElapsed.textContent = formatMMSS(elapsed);
+  if (elElapsedPct) elElapsedPct.textContent = totalPct;
+
+  // 현재 세그먼트
+  const i = trainingState.segIndex;
+  const seg = w.segments[i];
+  const segRemain = seg ? Math.max(0, Math.floor(seg.duration - trainingState.segElapsedSec)) : 0;
+  if (elSegTime) elSegTime.textContent = formatMMSS(segRemain);
+
+  // 다음 세그먼트 안내
+  const next = w.segments[i + 1];
+  if (elNext) {
+    if (next) {
+      const pct = typeof next.target === "number" ? Math.round(next.target * 100)
+                : (typeof next.ftp_percent === "number" ? Math.round(next.ftp_percent) : 0);
+      elNext.textContent = `다음: ${next.label || "세그먼트"} FTP ${pct}%`;
+    } else {
+      elNext.textContent = `다음: (마지막)`;
+    }
+  }
+
+  // 현재 세그먼트 진행률
+  if (elSegPct && seg) {
+    const sp = Math.min(100, Math.round((trainingState.segElapsedSec / seg.duration) * 100));
+    elSegPct.textContent = sp;
+  }
+
+  // 타임라인 바
+  if (barTimeline) {
+    barTimeline.style.width = `${totalPct}%`;
+  }
+}
+
+// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
+function applySegmentTarget(i) {
+  const w = window.currentWorkout;
+  const ftp = (window.currentUser?.ftp) || 200;
+  const seg = w?.segments?.[i];
+  if (!seg) return;
+
+  if (typeof seg.target === "number") {
+    window.liveData.targetPower = Math.round(ftp * seg.target);
+  } else if (typeof seg.ftp_percent === "number") {
+    window.liveData.targetPower = Math.round(ftp * (seg.ftp_percent / 100));
+  }
+
+  const segName = document.getElementById("currentSegmentName");
+  if (segName) segName.textContent = seg.label || `세그먼트 ${i + 1}`;
+
+  // 첫 프레임 즉시 반영
+  window.updateTrainingDisplay && window.updateTrainingDisplay();
+}
+
+
+// 훈련화면 ==> 메인 루프 시작/정지
+function startSegmentLoop() {
+  const w = window.currentWorkout;
+  if (!w) return;
+
+  // 누적 종료시각 배열 계산
+  trainingState.segEnds = [];
+  let acc = 0;
+  for (const s of w.segments) {
+    acc += Math.max(0, Math.floor(s.duration || s.duration_sec || 0));
+    trainingState.segEnds.push(acc);
+  }
+  trainingState.totalSec = acc;
+
+  // 초기 상태
+  trainingState.elapsedSec = 0;
+  trainingState.segIndex = 0;
+  trainingState.segElapsedSec = 0;
+  trainingState.paused = false;
+
+  applySegmentTarget(0);
+  updateTimeUI();
+
+  // 루프 시작(1Hz)
+  clearInterval(trainingState.timerId);
+  trainingState.timerId = setInterval(() => {
+    if (trainingState.paused) return;
+
+    trainingState.elapsedSec += 1;
+    trainingState.segElapsedSec += 1;
+
+    const i = trainingState.segIndex;
+    const seg = w.segments[i];
+
+    // 세그먼트 종료 → 다음 세그먼트
+    if (seg && trainingState.segElapsedSec >= Math.floor(seg.duration)) {
+      trainingState.segIndex += 1;
+      trainingState.segElapsedSec = 0;
+
+      if (trainingState.segIndex >= w.segments.length) {
+        // 훈련 종료
+        clearInterval(trainingState.timerId);
+        trainingState.timerId = null;
+        showToast("훈련이 완료되었습니다!");
+        showScreen("resultScreen");
+        return;
+      } else {
+        applySegmentTarget(trainingState.segIndex);
+      }
+    }
+
+    // 화면 갱신
+    updateTimeUI();
+    window.updateTrainingDisplay && window.updateTrainingDisplay();
+  }, 1000);
+}
+
+function stopSegmentLoop() {
+  clearInterval(trainingState.timerId);
+  trainingState.timerId = null;
+}
+
+// ──────────────────────────────
+// 훈련화면  끝 지점
+// ──────────────────────────────
+
+
 
 
 // 중복 선언 방지
@@ -219,6 +378,10 @@ function startWorkoutTraining() {
   // 3) 한 번 즉시 그려주기 (0 → 값 깜빡임 방지)
   if (window.updateTrainingDisplay) window.updateTrainingDisplay();
 
+   // ✅ 루프 시작 (훈련화면)
+   startSegmentLoop();   
+
+   
   // 4) (옵션) 모의 파워 데이터 타이머
   // if (window.__mock) clearInterval(window.__mock);
   // window.__mock = setInterval(() => {
@@ -237,7 +400,11 @@ function backToWorkoutSelection() {
   showScreen("workoutScreen");
 }
 
-// 단일 DOMContentLoaded 이벤트
+
+// -------------------------------------
+// 단일 DOMContentLoaded 이벤트/ 시작, 버튼 클릭
+// ------------------------------------
+
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
   
@@ -360,7 +527,38 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   console.log("App initialization complete!");
+
+   // 일시정지/재개
+   document.getElementById("btnTogglePause")?.addEventListener("click", () => {
+     trainingState.paused = !trainingState.paused;
+     const icon = document.getElementById("pauseIcon");
+     if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
+   });
+   
+   // 구간 건너뛰기
+   document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
+     const w = window.currentWorkout;
+     if (!w) return;
+     trainingState.segIndex = Math.min(w.segments.length - 1, trainingState.segIndex + 1);
+     trainingState.segElapsedSec = 0;
+     applySegmentTarget(trainingState.segIndex);
+     updateTimeUI();
+   });
+   
+   // 훈련 종료
+   document.getElementById("btnStopTraining")?.addEventListener("click", () => {
+     stopSegmentLoop();
+     showScreen("resultScreen");
+   });
+
+   
 });
+// -------------------------------------
+// 단일 DOMContentLoaded 이벤트/ 종료, 버튼 클릭
+// ------------------------------------
+
+
+
 
 // Export
 window.startWorkoutTraining = startWorkoutTraining;
