@@ -92,6 +92,34 @@ window.updateTrainingDisplay = function () {
 };
 
 
+// 5초 카운트다운 후 자동 시작
+function startWithCountdown(sec = 5) {
+  const overlay = document.getElementById("countdownOverlay");
+  const num = document.getElementById("countdownNumber");
+  if (!overlay || !num) {
+    // 엘리먼트가 없으면 바로 시작
+    return startWorkoutTraining();
+  }
+
+  overlay.classList.remove("hidden");
+  let remain = sec;
+  num.textContent = remain;
+
+  const timer = setInterval(() => {
+    remain -= 1;
+    if (remain <= 0) {
+      clearInterval(timer);
+      overlay.classList.add("hidden");
+      startWorkoutTraining();
+    } else {
+      num.textContent = remain;
+    }
+  }, 1000);
+}
+
+
+
+
 // 워크아웃 관련 함수들
 function startWorkoutTraining() {
   // 선택된 워크아웃이 없으면 방어
