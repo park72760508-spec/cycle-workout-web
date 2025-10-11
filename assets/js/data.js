@@ -105,6 +105,47 @@ function selectWorkout(w) {
 }
 
 
+// 예시 users 데이터가 window.users에 있다고 가정
+// window.users = [{ id: 1, name: "홍길동", ftp: 230, weight: 70 }, ...];
+/* -----------------------------
+   사용자 파일관리
+------------------------------ */
+function loadUsers() {
+  const box = document.getElementById("userList");
+  if (!box) return;
+
+  const list = Array.isArray(window.users) ? window.users : [];
+  if (list.length === 0) {
+    box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
+    return;
+  }
+
+  box.innerHTML = list.map(u => `
+    <div class="user-card" data-id="${u.id}">
+      <div class="user-name">👤 ${u.name}</div>
+      <div class="user-meta">FTP ${u.ftp}W</div>
+      <button class="btn btn-primary" data-action="select">선택</button>
+    </div>
+  `).join("");
+
+  // 선택 이벤트(한 번만 바인딩)
+  box.addEventListener("click", (e) => {
+    const btn = e.target.closest('[data-action="select"]');
+    if (!btn) return;
+    const card = btn.closest(".user-card");
+    const id = card?.getAttribute("data-id");
+    const user = window.users.find(x => String(x.id) === String(id));
+    if (user && typeof window.selectProfile === "function") {
+      window.selectProfile(user);
+    }
+  }, { once: true });
+}
+
+// 전역 노출
+window.loadUsers = loadUsers;
+
+
+
 
 
 /* -----------------------------
