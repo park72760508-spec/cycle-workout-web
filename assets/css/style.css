@@ -542,7 +542,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   padding: 20px;
   min-height: 100vh;
   font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
-}*
+}
 
 /* 상단 헤더: 사용자만 보이게 */
 #trainingScreen .training-header {
