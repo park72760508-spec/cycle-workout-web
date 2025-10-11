@@ -634,7 +634,35 @@ function backToWorkoutSelection() {
 
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
-  
+
+  // ✅ 아이폰용 처리 프로세스
+  function isIOS() {
+    const ua = navigator.userAgent || "";
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function enableIOSMode() {
+    const info = document.getElementById("iosInfo");
+    if (info) info.classList.remove("hidden");
+
+    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add("is-disabled");
+        el.setAttribute("aria-disabled","true");
+        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+      }
+    });
+
+    const btn = document.getElementById("btnIosContinue");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        if (typeof showScreen === "function") showScreen("profileScreen");
+        if (typeof loadUsers === "function") loadUsers();
+      });
+    }
+  }
+
+   
   // 브라우저 지원 확인
   if (!navigator.bluetooth) {
     showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
@@ -653,9 +681,7 @@ document.addEventListener("DOMContentLoaded", () => {
    if (btnStartTraining) {
      btnStartTraining.addEventListener("click", () => startWithCountdown(5));
    }
-
-
-   
+ 
    
    // ✅ 훈련 준비 → 워크아웃 변경
    document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
@@ -892,10 +918,6 @@ if (!trainingState.paused) {
   if (kcalEl) kcalEl.textContent = Math.round(kcal);
 }
 
-   
-
-
-   
    // 구간 건너뛰기
    document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
      const w = window.currentWorkout;
@@ -912,6 +934,8 @@ if (!trainingState.paused) {
      showScreen("resultScreen");
    });
 
+   
+   if (isIOS()) enableIOSMode();
    
 });
 // -------------------------------------
