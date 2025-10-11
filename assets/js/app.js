@@ -85,7 +85,35 @@ window.updateTrainingDisplay = function () {
 
 // 워크아웃 관련 함수들
 function startWorkoutTraining() {
+  // 선택된 워크아웃이 없으면 방어
+  if (!window.currentWorkout) {
+    showToast("워크아웃을 먼저 선택하세요");
+    showScreen("workoutScreen");
+    return;
+  }
+
+  // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
+  const w = window.currentWorkout;
+  const ftp = (window.currentUser?.ftp) || 200; // 사용자 FTP가 없으면 임시 200W
+  const first = w.segments?.[0];
+  if (first?.ftp_percent) {
+    window.liveData.targetPower = Math.round(ftp * (first.ftp_percent / 100));
+  }
+
+  // 2) 화면 전환
   showScreen("trainingScreen");
+
+  // 3) 한 번 즉시 그려주기 (0 → 값 깜빡임 방지)
+  if (window.updateTrainingDisplay) window.updateTrainingDisplay();
+
+  // 4) 필요하면 여기에서 카운트다운/타이머 시작 로직 연결
+  //    예: setInterval로 모의 파워 값 변화(테스트용)
+  // window.__mock && clearInterval(window.__mock);
+  // window.__mock = setInterval(() => {
+  //   window.liveData.power = Math.max(0, (window.liveData.power || 0) + (Math.random()*20-10));
+  //   window.updateTrainingDisplay && window.updateTrainingDisplay();
+  // }, 1000);
+
   showToast("훈련을 시작합니다");
 }
 
@@ -109,6 +137,25 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   showScreen("connectionScreen");
+
+   // ✅ 훈련 준비 → 훈련 시작
+   document.getElementById("btnStartTraining")?.addEventListener("click", () => {
+     // 카운트다운이 필요 없으면 바로 시작
+     startWorkoutTraining(); // 아래에서 정의됨(기존 전역 함수)
+   });
+   
+   // ✅ 훈련 준비 → 워크아웃 변경
+   document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
+     backToWorkoutSelection();
+   });
+   
+   // ✅ 연결 요약 → 프로필 화면
+   document.getElementById("btnToProfile")?.addEventListener("click", () => {
+     showScreen("profileScreen");
+     loadUsers();
+   });
+
+   
   
   // 블루투스 연결 버튼들
   const btnHR = document.getElementById("btnConnectHR");
