@@ -705,6 +705,34 @@ function updateDevicesList() {
      const icon = document.getElementById("pauseIcon");
      if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
    });
+
+   
+  // 훈련 시작 버튼 tSS/kcal 갱신 블록도 가드
+   
+if (!trainingState.paused) {
+  const ftp = (window.currentUser?.ftp) || 200;
+  const p = Math.max(0, Number(window.liveData?.power) || 0);
+
+  trainingMetrics.elapsedSec += 1;
+  trainingMetrics.joules += p;                    // 1초당 J 누적
+  trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
+  trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
+  trainingMetrics.count += 1;
+
+  const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+  const IF = ftp ? (NP / ftp) : 0;
+  const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+  const kcal = trainingMetrics.joules / 1000;
+
+  const tssEl = document.getElementById("tssValue");
+  const kcalEl = document.getElementById("kcalValue");
+  if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
+  if (kcalEl) kcalEl.textContent = Math.round(kcal);
+}
+
+   
+
+
    
    // 구간 건너뛰기
    document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
