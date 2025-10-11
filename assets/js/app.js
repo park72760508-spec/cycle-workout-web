@@ -37,20 +37,51 @@ if (!window.showToast) {
 // 실시간 표시
 window.updateTrainingDisplay = function () {
   const p = document.getElementById("currentPowerValue");
-  const c = document.getElementById("cadenceValue");
   const h = document.getElementById("heartRateValue");
-  const t = document.getElementById("targetPowerValue");
-  if (p) p.textContent = Math.round(liveData.power || 0);
-  if (c) c.textContent = Math.round(liveData.cadence || 0);
-  if (h) h.textContent = Math.round(liveData.heartRate || 0);
-  if (t) t.textContent = Math.round(liveData.targetPower || 0);
-
   const bar = document.getElementById("powerProgressBar");
+  const t = document.getElementById("targetPowerValue");
+
+  const currentPower = liveData.power || 0;
+  const target = liveData.targetPower || 200; // 기준값
+  const hr = liveData.heartRate || 0;
+
+  if (p) {
+    p.textContent = Math.round(currentPower);
+    p.classList.remove("power-low","power-mid","power-high","power-max");
+    const ratio = currentPower / target;
+    if (ratio < 0.8) p.classList.add("power-low");
+    else if (ratio < 1.0) p.classList.add("power-mid");
+    else if (ratio < 1.2) p.classList.add("power-high");
+    else p.classList.add("power-max");
+  }
+
   if (bar) {
-    const pct = liveData.targetPower > 0 ? Math.max(0, Math.min(100, (liveData.power / liveData.targetPower) * 100)) : 0;
+    const pct = target > 0 ? Math.min(100, (currentPower / target) * 100) : 0;
     bar.style.width = pct + "%";
+    if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
+    else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+    else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+    else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+  }
+
+  if (h) {
+    h.textContent = Math.round(hr);
+    h.classList.remove("hr-zone1","hr-zone2","hr-zone3","hr-zone4","hr-zone5");
+    if (hr < 100) h.classList.add("hr-zone1");
+    else if (hr < 120) h.classList.add("hr-zone2");
+    else if (hr < 140) h.classList.add("hr-zone3");
+    else if (hr < 160) h.classList.add("hr-zone4");
+    else h.classList.add("hr-zone5");
+  }
+
+  // 중앙 디스플레이에 펄스 애니메이션 추가
+  const powerDisplay = document.querySelector("#trainingScreen .power-display");
+  if (powerDisplay) {
+    if (currentPower > 0) powerDisplay.classList.add("active");
+    else powerDisplay.classList.remove("active");
   }
 };
+
 
 // 워크아웃 관련 함수들
 function startWorkoutTraining() {
