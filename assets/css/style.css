@@ -318,57 +318,105 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* -------- 훈련준비 화면 SEGMENT PREVIEW 수정 -------- */
 /* -------- SEGMENT BLOCKS 동일 크기 -------- */
 /* -------- WORKOUT PREVIEW 컨테이너 가운데 정렬 -------- */
-.workout-preview {
-  background: #fff;
-  border-radius: 12px;
+/* =========================
+   훈련 준비 화면 (trainingReadyScreen)
+========================= */
+
+#trainingReadyScreen {
+  background: #0f111a;
+  color: #f3f3f3;
   padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-  text-align: center;  /* 전체 중앙 정렬 추가 */
+  min-height: 100vh;
+  font-family: 'Pretendard', 'Noto Sans KR', sans-serif;
 }
 
-/* 세그먼트 프리뷰 가운데 정렬 */
-.segment-preview {
+#trainingReadyScreen .workout-preview {
+  background: #181a22;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+  margin-bottom: 25px;
+}
+
+#trainingReadyScreen .workout-preview h2 {
+  text-align: center;
+  margin-bottom: 15px;
+  color: #00d9ff;
+}
+
+#trainingReadyScreen .preview-stats {
   display: flex;
-  gap: 10px;
-  margin: 20px auto;  /* auto 마진으로 가운데 정렬 */
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  overflow-x: auto;
-  align-items: center;
-  justify-content: center;  /* 컨텐츠 가운데 정렬 */
-  max-width: 100%;
-}
-
-/* 세그먼트가 많을 때 스크롤 처리 */
-@media (max-width: 768px) {
-  .segment-preview {
-    justify-content: flex-start;  /* 모바일에서는 좌측 정렬 */
-    overflow-x: scroll;
-  }
-}
-
-/* preview-stats도 가운데 정렬 보정 */
-.preview-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 15px;
-  margin: 0 auto 20px auto;  /* 가운데 정렬 */
-  max-width: 500px;  /* 최대 너비 제한 */
+  justify-content: space-around;
+  margin-bottom: 15px;
   text-align: center;
 }
+#trainingReadyScreen .preview-stats strong {
+  font-size: 20px;
+  color: #fff;
+}
+#trainingReadyScreen .preview-stats .muted {
+  color: #aaa;
+  font-size: 13px;
+}
 
-/* 모바일 반응형 */
-@media (max-width: 768px) {
-  .segment-item {
-    width: 120px;    /* 모바일에서는 약간 작게 */
-    height: 100px;
-  }
-  
-  .segment-item .ftp-percent {
-    font-size: 24px;
-  }
+/* 세그먼트 블록 컨테이너 */
+#segmentPreview {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 4px;
+  scroll-behavior: smooth;
+}
+
+/* 세그먼트 아이템 기본 */
+#segmentPreview .segment-item {
+  flex: 0 0 80px;
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+#segmentPreview .segment-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+/* 세그먼트 타입별 색상 */
+#segmentPreview .warmup {
+  background: linear-gradient(180deg, #3ca0ff, #2b6eff);
+}
+#segmentPreview .interval {
+  background: linear-gradient(180deg, #ffb400, #ff7c00);
+}
+#segmentPreview .rest {
+  background: linear-gradient(180deg, #7a7a7a, #525252);
+}
+
+/* FTP%와 시간 표시 */
+#segmentPreview .ftp-percent {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+#segmentPreview .duration {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+/* 미세한 스크롤바 꾸미기 */
+#segmentPreview::-webkit-scrollbar {
+  height: 6px;
+}
+#segmentPreview::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 3px;
+}
+#segmentPreview::-webkit-scrollbar-track {
+  background: #1b1b1b;
 }
 .training-ready {
   background: #fff;
