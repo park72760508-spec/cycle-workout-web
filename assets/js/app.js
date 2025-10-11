@@ -131,18 +131,19 @@ function selectWorkout(w) {
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
 function startWorkoutTraining() {
+  // 0) 캐시 복구 시도
   if (!window.currentWorkout) {
     const cached = localStorage.getItem("currentWorkout");
     if (cached) {
-      window.currentWorkout = JSON.parse(cached);            // ✅ 복구
+      window.currentWorkout = JSON.parse(cached);
     }
   }
+  // 0-2) 여전히 없으면 목록으로
   if (!window.currentWorkout) {
     showToast("워크아웃을 먼저 선택하세요");
     showScreen("workoutScreen");
     return;
   }
-}
 
   // 1) 첫 세그먼트 기준으로 targetPower 설정 (FTP % → W)
   const w = window.currentWorkout;
@@ -158,16 +159,19 @@ function startWorkoutTraining() {
   // 3) 한 번 즉시 그려주기 (0 → 값 깜빡임 방지)
   if (window.updateTrainingDisplay) window.updateTrainingDisplay();
 
-  // 4) 필요하면 여기에서 카운트다운/타이머 시작 로직 연결
-  //    예: setInterval로 모의 파워 값 변화(테스트용)
-  // window.__mock && clearInterval(window.__mock);
+  // 4) (옵션) 모의 파워 데이터 타이머
+  // if (window.__mock) clearInterval(window.__mock);
   // window.__mock = setInterval(() => {
-  //   window.liveData.power = Math.max(0, (window.liveData.power || 0) + (Math.random()*20-10));
+  //   window.liveData.power = Math.max(
+  //     0,
+  //     (window.liveData.power || 0) + (Math.random()*20 - 10)
+  //   );
   //   window.updateTrainingDisplay && window.updateTrainingDisplay();
   // }, 1000);
 
   showToast("훈련을 시작합니다");
 }
+
 
 function backToWorkoutSelection() {
   showScreen("workoutScreen");
