@@ -5,7 +5,7 @@
 window.liveData = window.liveData || { power: 0, cadence: 0, heartRate: 0, targetPower: 0 };
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
-window.loadUsers = loadUsers
+
 
 // ── 훈련 지표 상태 (TSS / kcal / NP 근사) ─────────────────
 const trainingMetrics = {
@@ -29,8 +29,6 @@ function secToMinStr(sec){
 // 사용자 목록
 // ──────────────────────────────
 
-showScreen("profileScreen");
-loadUsers();  // 또는 typeof 체크 후 호출
 
 
 // ──────────────────────────────
@@ -608,6 +606,9 @@ function startWorkoutTraining() {
   // (E) 화면 전환
   if (typeof showScreen === "function") showScreen("trainingScreen");
 
+   // ✅ 사용자 정보 출력
+   if (typeof renderUserInfo === "function") renderUserInfo();   
+
   // (F) 첫 프레임 즉시 렌더(깜빡임 방지)
   if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
 
@@ -897,26 +898,27 @@ document.addEventListener("DOMContentLoaded", () => {
    
   // 훈련 시작 버튼 tSS/kcal 갱신 블록도 가드
    
-if (!trainingState.paused) {
-  const ftp = (window.currentUser?.ftp) || 200;
-  const p = Math.max(0, Number(window.liveData?.power) || 0);
+   if (!trainingState.paused) {
+     const ftp = (window.currentUser?.ftp) || 200;
+     const p   = Math.max(0, Number(window.liveData?.power) || 0);
+   
+     trainingMetrics.elapsedSec += 1;
+     trainingMetrics.joules     += p;                     // 1초당 J 누적
+     trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30;
+     trainingMetrics.np4sum     += Math.pow(trainingMetrics.ra30, 4);
+     trainingMetrics.count      += 1;
+   
+     const NP  = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+     const IF  = ftp ? (NP / ftp) : 0;
+     const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+     const kcal= trainingMetrics.joules / 1000;
+   
+     const tssEl  = document.getElementById("tssValue");
+     const kcalEl = document.getElementById("kcalValue");
+     if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
+     if (kcalEl) kcalEl.textContent = Math.round(kcal);
+   }
 
-  trainingMetrics.elapsedSec += 1;
-  trainingMetrics.joules += p;                    // 1초당 J 누적
-  trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
-  trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
-  trainingMetrics.count += 1;
-
-  const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
-  const IF = ftp ? (NP / ftp) : 0;
-  const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-  const kcal = trainingMetrics.joules / 1000;
-
-  const tssEl = document.getElementById("tssValue");
-  const kcalEl = document.getElementById("kcalValue");
-  if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
-  if (kcalEl) kcalEl.textContent = Math.round(kcal);
-}
 
    // 구간 건너뛰기
    document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
@@ -965,12 +967,5 @@ function renderUserInfo() {
 }
 
 
-//window.renderUserInfo = renderUserInfo; // 전역에서 재사용 가능
 
-// 프로필 선택 직후(훈련 준비/훈련 화면에서 보이게)
-if (typeof renderUserInfo === "function") renderUserInfo();
-
-// startWorkoutTraining() 안, 화면 전환 직후
-showScreen("trainingScreen");
-renderUserInfo && renderUserInfo();
 
