@@ -693,13 +693,15 @@ document.addEventListener("DOMContentLoaded", () => {
        return;
      }
    
-     box.innerHTML = list.map(u => `
-       <div class="user-card" data-id="${u.id}">
-         <div class="user-name">👤 ${u.name}</div>
-         <div class="user-meta">FTP ${u.ftp}W</div>
-         <button class="btn btn-primary" data-action="select">선택</button>
-       </div>
-     `).join("");
+        // ⬇⬇ 여기를 당신이 보낸 코드로 붙여넣기(= 교체) ⬇⬇
+        box.innerHTML = list.map(u => `
+          <div class="user-card" data-id="${u.id}">
+            <div class="user-name">👤 ${u.name}</div>
+            <div class="user-meta">FTP ${u.ftp}W</div>
+            <button class="btn btn-primary" data-action="select">선택</button>
+          </div>
+        `).join("");
+        // ⬆⬆ 여기까지 ⬆⬆
    
      box.onclick = (e) => {
        const btn = e.target.closest('[data-action="select"]');
