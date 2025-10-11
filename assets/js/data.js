@@ -34,11 +34,14 @@ function renderProfiles() {
    프로필 선택
 ------------------------------ */
 function selectProfile(user) {
-  selectedUser = user;
-  alert(`✅ ${user.name}님 프로필 선택됨`);
+  // ▼ 추가: 전역 사용자로 공유 + 캐시
+  window.currentUser = user;
+  try { localStorage.setItem("currentUser", JSON.stringify(user)); } catch(e) {}
+
   showScreen("workoutScreen");
   renderWorkouts();
 }
+
 
 /* -----------------------------
    워크아웃 로드
