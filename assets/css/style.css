@@ -196,6 +196,8 @@ h1,h2,h3,h4 { font-weight: 600; }
   padding: 10px;
 }
 
+.hidden { display: none !important; }
+
 
 /* -------- TTIMELINE -------- */
 
