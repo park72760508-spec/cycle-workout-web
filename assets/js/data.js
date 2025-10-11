@@ -4,8 +4,8 @@
    ====================================================== */
 
 let userProfiles = [
-  { id: 1, name: "박지성", contact: "010-1234-5678", ftp: 250, weight: 72 },
-  { id: 2, name: "이순신", contact: "010-9876-5432", ftp: 220, weight: 68 },
+  { id: 1, name: "박지성", contact: "010-1234-5678", ftp: 242, weight: 56 },
+  { id: 2, name: "박선호", contact: "010-9876-5432", ftp: 260, weight: 85 },
 ];
 
 // 선택된 사용자 / 워크아웃
@@ -73,19 +73,26 @@ async function renderWorkouts() {
 /* -----------------------------
    워크아웃 선택
 ------------------------------ */
+/* -----------------------------
+   워크아웃 선택
+------------------------------ */
 function selectWorkout(w) {
-  currentWorkout = w;
+  // ✅ 전역/캐시에 저장: app.js가 window.currentWorkout을 읽습니다.
+  window.currentWorkout = w;
+  try { localStorage.setItem("currentWorkout", JSON.stringify(w)); } catch(e) {}
+
+  // 프리뷰 채우기
   document.getElementById("previewWorkoutName").textContent = w.name;
   document.getElementById("previewDuration").textContent = w.totalMinutes + "분";
   document.getElementById("previewIntensity").textContent = w.intensity + "%";
   document.getElementById("previewTSS").textContent = w.tss;
-  
+
   const segDiv = document.getElementById("segmentPreview");
   segDiv.innerHTML = w.segments
     .map((s) => `
       <div class="segment-item ${
-        s.label.includes('웜업') ? 'warmup' : 
-        s.label.includes('휴식') ? 'rest' : 'interval'
+        s.label.includes('웜업') ? 'warmup' :
+        s.label.includes('휴식') ? 'rest'   : 'interval'
       }">
         <h4>${s.label}</h4>
         <div class="ftp-percent">${Math.round(s.target * 100)}%</div>
@@ -93,9 +100,10 @@ function selectWorkout(w) {
       </div>
     `)
     .join("");
-  
+
   showScreen("trainingReadyScreen");
 }
+
 
 
 
