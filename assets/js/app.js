@@ -265,6 +265,31 @@ function updateSegmentBarTick(){
   }
 
   // 2) 평균 파워 누적(1초당 표본 1개)
+ {
+    const elapsedAll = Number(window.trainingState?.elapsedSec) || 0;
+    let startAt2 = 0;
+    for (let i = 0; i < w.segments.length; i++) {
+      const seg = w.segments[i];
+      const dur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
+      const endAt2 = startAt2 + dur;
+
+      const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+      if (el) {
+        el.classList.remove("is-complete","is-current","is-upcoming");
+        if (elapsedAll >= endAt2) {
+          el.classList.add("is-complete");
+        } else if (elapsedAll >= startAt2 && elapsedAll < endAt2) {
+          el.classList.add("is-current");
+        } else {
+          el.classList.add("is-upcoming");
+        }
+      }
+      startAt2 = endAt2;
+    }
+  }
+  // === 여기까지 추가 ===
+
+  // 3) 평균 파워 누적(1초당 표본 1개)
   {
     const p = Math.max(0, Number(window.liveData?.power) || 0);
     if (w.segments[segIndex]) {
