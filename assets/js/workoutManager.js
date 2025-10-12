@@ -116,6 +116,9 @@ function openBuilderForCreate(){
   window.showScreen('workoutBuilderScreen');
 }
 
+window.openBuilderForCreate = openBuilderForCreate; // ← 이 줄 추가 (선택)
+
+
 function openBuilderForEdit(item){
   __builderEditingId = item.id;
   document.getElementById('wbTitle').value = item.title || '';
