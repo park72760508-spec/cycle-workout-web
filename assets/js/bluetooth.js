@@ -17,6 +17,13 @@ window.connectedDevices = window.connectedDevices || {
 // UI 헬퍼들 (index.html/app.js에 이미 있으면 중복 선언하지 마세요)
 // bluetooth.js의 상단 UI 헬퍼 부분을 다음과 같이 수정
 // UI 헬퍼들 - window 객체 확인 후 할당
+
+// ── CPS (Cycling Power Service) UUIDs ─────────────────
+const CYCLING_POWER_SERVICE = 0x1818;
+const CYCLING_POWER_MEASUREMENT = 0x2A63; // cadence는 이 측정값의 crank rev 데이터로 계산
+
+
+
 if (!window.showConnectionStatus) {
   window.showConnectionStatus = function (show) {
     const el = document.getElementById("connectionStatus");
@@ -210,7 +217,8 @@ async function connectPowerMeter() {
 
     await ch.startNotifications(); // ✅ 이후 갱신
     ch.addEventListener("characteristicvaluechanged", handlePowerMeterData);
-
+     
+    trySubscribeCSC(server);
     connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic: ch };
 
     device.addEventListener("gattserverdisconnected", () => {
@@ -316,7 +324,7 @@ function handlePowerMeterData(e) {
 
   // bit4: Wheel Revolution Data Present (Cycling Power spec에서는 'Wheel'이 아닌 'Crank'가 bit4입니다. 구현체마다 오해가 있어 별칭 유지)
   // 실제로는 "Crank Revolution Data Present"
-  if (flags & 0x0010) {
+  if (flags & 0x0020) {
     // Cumulative Crank Revolutions (uint16), Last Crank Event Time (uint16, 1/1024s)
     const cumCrankRevs = dv.getUint16(offset, true); offset += 2;
     const lastCrankEvtTime = dv.getUint16(offset, true); offset += 2;
@@ -448,45 +456,7 @@ async function trySubscribeCSC(server) {
 // ──────────────────────────────────────────────────────────
 // BLE 데이터 파서 (기존 함수명/로직 유지해도 OK)
 // ──────────────────────────────────────────────────────────
-window.handleTrainerData = window.handleTrainerData || function (event) {
-  // FTMS indoor_bike_data 해석 (필요 최소만 유지)
-  const dv = event.target.value;
-  const flags = dv.getUint16(0, true);
-  let off = 2;
 
-  // cadence (bit2)
-  if (flags & 0x0004) {
-    const cadence = dv.getUint16(off, true) * 0.5; off += 2;
-    window.liveData = window.liveData || {};
-    window.liveData.cadence = Math.round(cadence);
-  }
-  // power (bit6)
-  if (flags & 0x0040) {
-    const power = dv.getInt16(off, true); // signed
-    window.liveData = window.liveData || {};
-    window.liveData.power = Math.round(power);
-  }
-  if (window.updateTrainingDisplay) window.updateTrainingDisplay();
-};
-
-window.handlePowerMeterData = window.handlePowerMeterData || function (event) {
-  const dv = event.target.value;
-  let off = 0;
-  const flags = dv.getUint16(off, true); off += 2;
-  const instPower = dv.getInt16(off, true); off += 2;
-
-  window.liveData = window.liveData || {};
-  window.liveData.power = Math.round(instPower);
-
-  // crank rev (bit5) → cadence 추정
-  if (flags & (1 << 5)) {
-    const crankRevs = dv.getUint16(off, true); off += 2;
-    const lastCrankTime = dv.getUint16(off, true); off += 2; // 1/1024s
-    // 간단화: 최신 두 포인트 간 속도로 RPM 추정 (상태 저장 필요 시 app.js로 이동)
-  }
-
-  if (window.updateTrainingDisplay) window.updateTrainingDisplay();
-};
 
 window.handleHeartRateData = window.handleHeartRateData || function (event) {
   const dv = event.target.value;
