@@ -53,7 +53,7 @@ if (!window.showScreen) {
 window.updateDevicesList = window.updateDevicesList || function () {
   const deviceList = document.getElementById("connectedDevicesList");
   const summary = document.getElementById("connectedDevicesSummary");
-  const summaryList = document.getElementById("connectedDevicesList");
+  const summaryList = document.getElementById("connectedDevicesList"); // const summaryList = document.getElementById("connectedDevicesSummaryList");로 구분 권장
   if (!deviceList || !summary || !summaryList) return;
 
   let html = "";
@@ -104,16 +104,6 @@ window.updateDevicesList = window.updateDevicesList || function () {
     summary.classList.add("hidden");
   }
 };
-
-// 비차단 토스트
-function showToast(msg) {
-  const t = document.getElementById("toast");
-  if (!t) return alert(msg);
-  t.classList.remove("hidden");         // ✅ 중요: 숨김 해제
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2400);
-}
 
 
 // 화면 전환 (app.js에 이미 있으면 중복 선언 금지)
