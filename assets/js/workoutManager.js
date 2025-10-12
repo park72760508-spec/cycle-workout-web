@@ -270,6 +270,31 @@ function segRowHTML(s={}, idx){
 })();
 
 
+// ==== Builder 화면: 저장/취소 위임 바인딩(중복 방지) ====
+(function bindBuilderActionsDelegation(){
+  if (window.__wbDelegationBound) return;
+  window.__wbDelegationBound = true;
+
+  const root = document.getElementById('workoutBuilderScreen');
+  if (!root) return;
+
+  root.addEventListener('click', (e) => {
+    const saveBtn   = e.target.closest('#btnSaveWorkout');
+    const cancelBtn = e.target.closest('#btnCancelBuilder');
+
+    if (saveBtn) {
+      try { if (typeof saveCurrentWorkout === 'function') saveCurrentWorkout(); }
+      catch (err) { console.error(err); alert('저장 중 오류가 발생했습니다. 콘솔을 확인하세요.'); }
+    }
+    if (cancelBtn) {
+      try { if (typeof cancelBuilder === 'function') cancelBuilder(); }
+      catch (err) { console.error(err); showScreen && showScreen('workoutScreen'); }
+    }
+  }, false);
+})();
+
+
+
 
 
 // === 새 워크아웃 버튼 → 작성 화면으로 전환 (확실한 바인딩) ===
