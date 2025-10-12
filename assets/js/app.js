@@ -240,6 +240,7 @@ function buildSegmentBar(){
 
 // 메인 업데이트 함수(1초마다 호출):
 // 메인 업데이트 함수(1초마다 호출):
+// 메인 업데이트 함수(1초마다 호출): (교체본)
 function updateSegmentBarTick(){
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
@@ -253,7 +254,7 @@ function updateSegmentBarTick(){
   let startAt = 0;
   for (let i=0; i<w.segments.length; i++){
     const seg = w.segments[i];
-    const dur = Math.max(1, segDurationSec(seg));
+    const dur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
     const endAt = startAt + dur;
     const fill = document.getElementById(`segFill-${i}`);
     if (fill){
@@ -263,7 +264,7 @@ function updateSegmentBarTick(){
     startAt = endAt;
   }
 
-  // 2) 평균 파워 누적(1초당 표본 1개) + 현재 세그먼트 평균 표시
+  // 2) 평균 파워 누적(1초당 표본 1개)
   {
     const p = Math.max(0, Number(window.liveData?.power) || 0);
     if (w.segments[segIndex]) {
@@ -271,10 +272,9 @@ function updateSegmentBarTick(){
       segBar.samples[segIndex]  = (segBar.samples[segIndex]  || 0) + 1;
     }
 
+    // ✅ 현재 세그 평균 파워 표시
     const curSamples = segBar.samples[segIndex] || 0;
     const curAvg = curSamples > 0 ? Math.round(segBar.sumPower[segIndex] / curSamples) : 0;
-
-    // ✅ 여기서 화면에 '랩 파워(세그 평균)' 표시
     const elAvg = document.getElementById("avgSegmentPowerValue");
     if (elAvg) elAvg.textContent = String(curAvg);
   }
@@ -293,6 +293,7 @@ function updateSegmentBarTick(){
 
 
 
+
 // 훈련 상태---------------------------------------OLD---------------------------------------------------
 const trainingState = {
   timerId: null,
@@ -306,6 +307,7 @@ const trainingState = {
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수 (교체본)
+// 훈련 상태 => 시간/세그먼트 UI 갱신 함수 (교체본)
 function updateTimeUI() {
   const w = window.currentWorkout;
   if (!w) return;
@@ -314,12 +316,11 @@ function updateTimeUI() {
   const elElapsedPct = document.getElementById("elapsedPercent");
   const elSegTime    = document.getElementById("segmentTime");
   const elNext       = document.getElementById("nextSegment");
-  const elSegPct     = document.getElementById("segmentProgress");
-  // const barTimeline  = document.getElementById("timelineSegments"); // ← 컨테이너이므로 폭 조절 금지
+  const elSegPct     = document.getElementById("segmentProgress"); // ✅ 진행률 표시 엘리먼트
 
   // 총 진행률 (오프바이원/NaN 방지)
-  const elapsed = Math.max(0, Number(trainingState.elapsedSec) || 0);
-  const total   = Math.max(1, Number(trainingState.totalSec)  || 1);
+  const elapsed  = Math.max(0, Number(trainingState.elapsedSec) || 0);
+  const total    = Math.max(1, Number(trainingState.totalSec)  || 1);
   const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
 
   if (elElapsed)    elElapsed.textContent = formatMMSS(elapsed);
@@ -329,14 +330,14 @@ function updateTimeUI() {
   const i   = Math.max(0, Number(trainingState.segIndex) || 0);
   const seg = w.segments?.[i];
 
-  // 세그먼트 남은 시간(0으로 클램프)
+  // 세그 남은 시간(0으로 클램프)
   if (elSegTime) {
     const segDur = Math.max(0, Number(seg?.duration ?? seg?.duration_sec) || 0);
     const segRemain = Math.max(0, segDur - (Number(trainingState.segElapsedSec) || 0));
     elSegTime.textContent = formatMMSS(segRemain);
   }
 
-  // 다음 세그먼트 안내
+  // 다음 세그 안내
   if (elNext) {
     const next = w.segments?.[i + 1];
     if (next) {
@@ -349,48 +350,57 @@ function updateTimeUI() {
     }
   }
 
-  // 현재 세그먼트 진행률(0~100 클램프)
+  // ✅ 세그 진행률(0~100 클램프)
   if (elSegPct && seg) {
-    const segDur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
-    const segElapsed = Math.max(0, Number(trainingState.segElapsedSec) || 0);
+    const segDur    = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
+    const segElapsed= Math.max(0, Number(trainingState.segElapsedSec) || 0);
     const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
-    elSegPct.textContent = sp;
+    elSegPct.textContent = String(sp);
   }
 
-  // ❌ 컨테이너 폭을 건드리면 안 됩니다.
+  // ❌ #timelineSegments 는 컨테이너라 폭을 건드리면 안 됩니다 (삭제)
+  // const barTimeline = document.getElementById("timelineSegments");
   // if (barTimeline) barTimeline.style.width = `${totalPct}%`;
 }
 
 
+
 // 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
 // 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
+// ⬇ 기존 함수가 있다면 통째로 교체
+// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신 (교체본)
 function applySegmentTarget(i) {
-  const w = window.currentWorkout;
-  const ftp = (window.currentUser?.ftp) || 200;
+  const w   = window.currentWorkout;
+  const ftp = Number(window.currentUser?.ftp) || 200;
   const seg = w?.segments?.[i];
   if (!seg) return;
 
+  // 목표 파워 계산 (target: 0~1 비율, ftp_percent: %)
+  let targetW = 0;
   if (typeof seg.target === "number") {
-    window.liveData.targetPower = Math.round(ftp * seg.target);
+    targetW = Math.round(ftp * seg.target);
   } else if (typeof seg.ftp_percent === "number") {
-    window.liveData.targetPower = Math.round(ftp * (seg.ftp_percent / 100));
-  } else {
-    window.liveData.targetPower = 0;
+    targetW = Math.round(ftp * (seg.ftp_percent / 100));
   }
+  window.liveData = window.liveData || {};
+  window.liveData.targetPower = targetW;
 
-  const segName = document.getElementById("currentSegmentName");
-  if (segName) segName.textContent = seg.label || `세그먼트 ${i + 1}`;
-
-  // ✅ (선택 권장) 새 구간 진입 시 평균 파워 표시는 일단 '–' 로 리셋
+  // ✅ DOM 즉시 반영
+  const tEl   = document.getElementById("targetPowerValue");
+  const nameEl= document.getElementById("currentSegmentName");
+  const progEl= document.getElementById("segmentProgress");
   const avgEl = document.getElementById("avgSegmentPowerValue");
-  if (avgEl) avgEl.textContent = "–";
 
-  // ✅ (선택 권장) 목표 파워 텍스트도 보정
-  const tEl = document.getElementById("targetPowerValue");
-  if (tEl) tEl.textContent = String(window.liveData.targetPower || 0);
+  if (tEl)    tEl.textContent    = String(targetW || 0);
+  if (nameEl) nameEl.textContent = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
+  if (progEl) progEl.textContent = "0";
+  if (avgEl)  avgEl.textContent  = "–";
 
+  // 첫 프레임 즉시 반영
   window.updateTrainingDisplay && window.updateTrainingDisplay();
 }
+
+
 
 
 
@@ -401,51 +411,52 @@ function applySegmentTarget(i) {
 // -------------------------------------------------
 // 시작/루프 (통째로 교체하세요)
 // -------------------------------------------------
+// -------------------------------------------------
+// 시작/루프 (교체본)
+// -------------------------------------------------
 function startSegmentLoop() {
   const w = window.currentWorkout;
   if (!w) return;
 
-  // 1) 누적 종료시각/총시간 계산
+  // 누적 종료시각 배열 계산
   trainingState.segEnds = [];
   let acc = 0;
-  for (const s of (w.segments || [])) {
-    const d = Math.max(0, Math.floor(s.duration ?? s.duration_sec ?? 0));
-    acc += d;
+  for (const s of w.segments) {
+    acc += Math.max(0, Math.floor(s.duration ?? s.duration_sec ?? 0));
     trainingState.segEnds.push(acc);
   }
   trainingState.totalSec = acc;
 
-  // 2) 초기 상태
+  // 초기 상태
   trainingState.elapsedSec = 0;
   trainingState.segIndex = 0;
   trainingState.segElapsedSec = 0;
   trainingState.paused = false;
 
-  // 3) 첫 타겟/UI
-  if (typeof applySegmentTarget === "function") applySegmentTarget(0);
-  if (typeof updateTimeUI === "function") updateTimeUI();
+  applySegmentTarget(0);
+  updateTimeUI();
 
-  // 4) 루프 시작(1Hz)
+  // 루프 시작(1Hz)
   clearInterval(trainingState.timerId);
   trainingState.timerId = setInterval(() => {
     if (trainingState.paused) return;
 
-    // (A) 시간 진행
+    // 1) 시간 진행
     trainingState.elapsedSec += 1;
     trainingState.segElapsedSec += 1;
 
     const i   = trainingState.segIndex;
-    const seg = (w.segments || [])[i];
+    const seg = w.segments[i];
     const segDur = Math.max(0, Math.floor(seg?.duration ?? seg?.duration_sec ?? 0));
 
-    // (B) TSS / kcal 누적 및 표시
+    // 2) TSS / kcal 누적 및 표시
     {
       const ftp = Number(window.currentUser?.ftp) || 200;
       const p   = Math.max(0, Number(window.liveData?.power) || 0);
 
-      trainingMetrics.elapsedSec += 1;                    // 총 경과(초)
-      trainingMetrics.joules     += p;                    // 1초당 J 누적
-      trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30; // 30초 IIR
+      trainingMetrics.elapsedSec += 1;
+      trainingMetrics.joules     += p;
+      trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30;
       trainingMetrics.np4sum     += Math.pow(trainingMetrics.ra30, 4);
       trainingMetrics.count      += 1;
 
@@ -460,34 +471,32 @@ function startSegmentLoop() {
       if (kcalEl) kcalEl.textContent = Math.round(kcal);
     }
 
-    // (C) UI 먼저 갱신 (마지막 0초 프레임도 확실히 그림)
+    // 3) ✅ UI 먼저 갱신 (마지막 0초 프레임 보장)
     if (typeof updateTimeUI === "function") updateTimeUI();
     if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
     if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
 
-    // (D) 전체 종료 판단(UI 갱신 후 clear)
+    // 4) 전체 종료 판단(UI 갱신 후 clear)
     if (trainingState.totalSec && trainingState.elapsedSec >= trainingState.totalSec) {
-      // 마지막 프레임 확정 후 정지
       if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
       clearInterval(trainingState.timerId);
       trainingState.timerId = null;
 
-      if (typeof setPaused === "function") setPaused(false); // 다음 시작 대비
+      if (typeof setPaused === "function") setPaused(false);
       if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
       if (typeof showScreen === "function") showScreen("resultScreen");
       return;
     }
 
-    // (E) 세그먼트 경계 통과 → 다음 세그먼트로
+    // 5) 세그먼트 경계 통과 → 다음 세그먼트
     if (seg && segDur > 0 && trainingState.segElapsedSec >= segDur) {
       trainingState.segIndex += 1;
       trainingState.segElapsedSec = 0;
 
-      if (trainingState.segIndex < (w.segments || []).length) {
-        if (typeof applySegmentTarget === "function") applySegmentTarget(trainingState.segIndex);
+      if (trainingState.segIndex < w.segments.length) {
+        applySegmentTarget(trainingState.segIndex);
       }
     }
-
   }, 1000);
 }
 
@@ -570,6 +579,8 @@ window.updateTrainingDisplay = function () {
     else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
     else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
   }
+
+   if (t) t.textContent = String(Math.round(target));
 
   if (h) {
     h.textContent = Math.round(hr);
