@@ -999,7 +999,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* =============== Timeline XL =============== */
 .timeline-progress.timeline--xl {
-  height: 56px;                 /* ✅ 크게! 글자 보이게 */
+  height: 80px;                 /* ✅ 크게! 글자 보이게 */
   border-radius: 14px;
   background: #0f172a;          /* 아주 짙은 남색(바닥톤) */
   box-shadow: 0 8px 24px rgba(0,0,0,.25);
@@ -1010,7 +1010,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   position: relative;
   display: flex; align-items: center; justify-content: center;
   padding: 0 6px;
-  font-size: 13px; font-weight: 700; color: #e5e7eb; /* 라벨 */
+  font-size: 8px; font-weight: 700; color: #e5e7eb; /* 라벨 */
   border-right: 1px solid rgba(255,255,255,0.12);
   background: rgba(255,255,255,0.04);               /* 세그먼트 바닥 */
 }
@@ -1056,12 +1056,12 @@ h1,h2,h3,h4 { font-weight: 600; }
 .timeline-segment .segment-time  { font-size: 12px; opacity: .9; }
 
 /* 타입별 기본톤 + 진행색 변수 */
-.timeline-segment[data-type="warmup"]   { --seg-color:#22c55e; background: rgba(34,197,94,.08); }
-.timeline-segment[data-type="interval"] { --seg-color:#ef4444; background: rgba(239,68,68,.08); }
-.timeline-segment[data-type="rest"]     { --seg-color:#f59e0b; background: rgba(245,158,11,.10); }
-.timeline-segment[data-type="cooldown"] { --seg-color:#94a3b8; background: rgba(148,163,184,.10); }
-.timeline-segment[data-type="tempo"]    { --seg-color:#3b82f6; background: rgba(59,130,246,.08); }
-.timeline-segment[data-type="sweetspot"]{ --seg-color:#8b5cf6; background: rgba(139,92,246,.10); }
+.timeline-segment[data-type="웜업"]   { --seg-color:#22c55e; background: rgba(34,197,94,.08); }
+.timeline-segment[data-type="인터벌"] { --seg-color:#ef4444; background: rgba(239,68,68,.08); }
+.timeline-segment[data-type="휴식"]     { --seg-color:#f59e0b; background: rgba(245,158,11,.10); }
+.timeline-segment[data-type="쿨다운"] { --seg-color:#94a3b8; background: rgba(148,163,184,.10); }
+.timeline-segment[data-type="템포"]    { --seg-color:#3b82f6; background: rgba(59,130,246,.08); }
+.timeline-segment[data-type="스윗스팟"]{ --seg-color:#8b5cf6; background: rgba(139,92,246,.10); }
 
 /* 진행중(fill) 색은 변수로, 완료/현재/대기 상태 클래스 */
 .timeline-segment .progress-fill { background: var(--seg-color, #3b82f6); }
@@ -1083,13 +1083,13 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 현재 파워 숫자 가독성 업 */
 #trainingScreen .current-power {
-  font-size: 68px;             /* 기존 64px → 68px */
+  font-size: 80px;             /* 기존 64px → 68px */
   line-height: 1.0;
 }
 
 /* 달성도 바(배경) – 높이/라운드/여백 업 */
 #trainingScreen .power-progress {
-  height: 16px;                /* ✅ 8px → 16px */
+  height: 30px;                /* ✅ 8px → 16px */
   background: #202331;         /* 어두운 남청톤으로 대비 ↑ */
   border-radius: 10px;         /* 8px → 10px */
   margin: 16px 0 10px;         /* 위 여백 약간 확대 */
