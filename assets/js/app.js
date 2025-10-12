@@ -161,6 +161,67 @@ function colorByAchievement(ratio){
   return "#22c55e";                   // 적정(초록)
 }
 
+
+// ── 세그먼트 바 상태(전역) ─────────────────────────
+const segBar = {
+  totalSec: 0,     // 전체 운동 시간(초)
+  ends: [],        // 각 세그먼트의 누적 종료시각(초)
+  sumPower: [],    // 세그먼트별 평균 파워 계산용 합
+  samples: [],     // 세그먼트별 표본 수(초)
+};
+
+// 초 → "m분" 짧은 표기
+function secToMinShort(sec){ return `${Math.floor((sec||0)/60)}분`; }
+
+// 세그먼트 duration(초) 추출
+function segDurationSec(seg){
+  return (typeof seg.duration === "number" ? seg.duration
+        : typeof seg.duration_sec === "number" ? seg.duration_sec : 0) | 0;
+}
+
+// 목표 파워(W)
+function segTargetW(seg, ftp){
+  if (typeof seg.target === "number") return Math.round(ftp * seg.target);
+  if (typeof seg.ftp_percent === "number") return Math.round(ftp * (seg.ftp_percent/100));
+  return 0;
+}
+
+// 세그먼트 바 생성
+function buildSegmentBar(){
+  const cont = document.getElementById("timelineSegments");
+  const w = window.currentWorkout;
+  if (!cont || !w) return;
+
+  const segs = w.segments || [];
+  const total = segs.reduce((s, seg)=> s + segDurationSec(seg), 0) || 1;
+
+  segBar.totalSec = total;
+  segBar.ends = [];
+  segBar.sumPower = Array(segs.length).fill(0);
+  segBar.samples  = Array(segs.length).fill(0);
+
+  let acc = 0;
+  cont.innerHTML = segs.map((seg, i) => {
+    const dur = segDurationSec(seg);
+    acc += dur; segBar.ends[i] = acc;
+    const widthPct = (dur / total) * 100;
+    const label = seg.segment_type || seg.label || `세그 ${i+1}`;
+    return `
+      <div class="timeline-segment" data-index="${i}" style="width:${widthPct}%">
+        <div class="progress-fill" id="segFill-${i}"></div>
+        <span class="segment-label">${label}</span>
+        <span class="segment-time">${secToMinShort(dur)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+
+
+
+
+
+
 // 메인 업데이트 함수(1초마다 호출):
 function updateSegmentBarTick(){
   const w = window.currentWorkout;
@@ -316,83 +377,41 @@ function startSegmentLoop() {
 
   applySegmentTarget(0);
   updateTimeUI();
-
-
-// ── 세그먼트 바 상태 ─────────────────────────
-const segBar = {
-  totalSec: 0,     // 전체 운동 시간(초)
-  ends: [],        // 각 세그먼트의 누적 종료시각(초)
-  sumPower: [],    // 세그먼트별 평균 파워 계산용 합
-  samples: [],     // 세그먼트별 표본 수(초)
-};
-
-// 초 → "m분" 짧은 표기
-function secToMinShort(sec){ return `${Math.floor((sec||0)/60)}분`; }
-
-// 세그먼트 배열에서 duration(초) 추출
-function segDurationSec(seg){
-  return (typeof seg.duration === "number" ? seg.duration
-        : typeof seg.duration_sec === "number" ? seg.duration_sec : 0) | 0;
-}
-
-// 목표 파워(W) 얻기
-function segTargetW(seg, ftp){
-  if (typeof seg.target === "number") return Math.round(ftp * seg.target);
-  if (typeof seg.ftp_percent === "number") return Math.round(ftp * (seg.ftp_percent/100));
-  return 0;
-}
-
-
-// 세그먼트 바 만드는 함수를 추가:
-function buildSegmentBar(){
-  const cont = document.getElementById("timelineSegments");
-  const w = window.currentWorkout;
-  if (!cont || !w) return;
-
-  const segs = w.segments || [];
-  const total = segs.reduce((s, seg)=> s + segDurationSec(seg), 0) || 1;
-
-  segBar.totalSec = total;
-  segBar.ends = [];
-  segBar.sumPower = Array(segs.length).fill(0);
-  segBar.samples  = Array(segs.length).fill(0);
-
-  let acc = 0;
-  cont.innerHTML = segs.map((seg, i) => {
-    const dur = segDurationSec(seg);
-    acc += dur; segBar.ends[i] = acc;
-    const widthPct = (dur / total) * 100;
-    const label = seg.segment_type || seg.label || `세그 ${i+1}`;
-    return `
-      <div class="timeline-segment" data-index="${i}" style="width:${widthPct}%">
-        <div class="progress-fill" id="segFill-${i}"></div>
-        <span class="segment-label">${label}</span>
-        <span class="segment-time">${secToMinShort(dur)}</span>
-      </div>
-    `;
-  }).join("");
-}
-
    
-  // 루프 시작(1Hz)/ 1초 인터벌
-  clearInterval(trainingState.timerId);
-  trainingState.timerId = setInterval(() => {
-    if (trainingState.paused) return;
-   updateSegmentBarTick();
-    trainingState.elapsedSec += 1;
-    trainingState.segElapsedSec += 1;
+// 루프 시작(1Hz)/ 1초 인터벌
+clearInterval(trainingState.timerId);
+trainingState.timerId = setInterval(() => {
+  if (trainingState.paused) return;
 
-    const i = trainingState.segIndex;
-    const seg = w.segments[i];
+  // 1) 시간 진행
+  trainingState.elapsedSec += 1;
+  trainingState.segElapsedSec += 1;
 
-   // setInterval(…, 1000) 내부
-   if (!trainingState.paused) {
-     // ... TSS/kcal 계산 ...
-     const tssEl = document.getElementById("tssValue");
-     const kcalEl = document.getElementById("kcalValue");
-     if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
-     if (kcalEl) kcalEl.textContent = Math.round(kcal);
-   }
+  const i = trainingState.segIndex;
+  const seg = w.segments[i];
+
+  // 2) TSS / kcal 계산 및 표시
+  {
+    const ftp = Number(window.currentUser?.ftp) || 200;
+    const p   = Math.max(0, Number(window.liveData?.power) || 0);
+
+    // 누적 지표(전역 trainingMetrics 사용)
+    trainingMetrics.elapsedSec += 1;                 // 총 경과(초)
+    trainingMetrics.joules     += p;                 // 1초당 J 누적 (1W=1J/s)
+    trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30; // 30초 IIR 근사
+    trainingMetrics.np4sum     += Math.pow(trainingMetrics.ra30, 4);
+    trainingMetrics.count      += 1;
+
+    const NP   = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+    const IF   = ftp ? (NP / ftp) : 0;
+    const TSS  = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+    const kcal = trainingMetrics.joules / 1000;
+
+    const tssEl  = document.getElementById("tssValue");
+    const kcalEl = document.getElementById("kcalValue");
+    if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
+    if (kcalEl) kcalEl.textContent = Math.round(kcal);
+  }
 
     // 세그먼트 종료 → 다음 세그먼트
     if (seg && trainingState.segElapsedSec >= Math.floor(seg.duration)) {
@@ -413,9 +432,10 @@ function buildSegmentBar(){
     }
 
     // 화면 갱신
-    updateTimeUI();
-    window.updateTrainingDisplay && window.updateTrainingDisplay();
-  }, 1000);
+  if (typeof updateTimeUI === "function") updateTimeUI();
+  if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
+  if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
+}, 1000);
 }
 
 function stopSegmentLoop() {
@@ -576,6 +596,12 @@ Object.assign(trainingMetrics, {
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
 // app.js (또는 app (3).js)에서 기존 startWorkoutTraining() 전체 교체
 function startWorkoutTraining() {
+   
+   //훈련 시작 직전(예: startWorkoutTraining()에서) 리셋:
+   Object.assign(trainingMetrics, {
+     elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
+   });
+   
   // (A) 워크아웃 보장: 캐시 복구 포함
   if (!window.currentWorkout) {
     try {
