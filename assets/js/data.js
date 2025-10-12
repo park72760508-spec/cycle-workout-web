@@ -19,20 +19,22 @@ window.users = userProfiles;         // loadUsers()에서 쓰는 별칭
 /* -----------------------------
    프로필 화면 렌더링
 ------------------------------ */
-function renderProfiles() {
-  const list = document.getElementById("profileList");
-  list.innerHTML = "";
-  userProfiles.forEach((u) => {
-    const div = document.createElement("div");
-    div.className = "card profile-card pointer";
-    div.innerHTML = `
-      <h3>${u.name}</h3>
-      <p class="muted">FTP: ${u.ftp}W · ${u.weight}kg</p>
-    `;
-    div.onclick = () => selectProfile(u);
-    list.appendChild(div);
-  });
-}
+ function renderProfiles(users, rootEl) {
+   // 1) rootEl을 우선 사용, 없으면 기본 컨테이너 탐색
+   const container =
+     rootEl ||
+     document.getElementById('profilesContainer') ||
+     document.querySelector('[data-profiles]');
+
+   if (!container) {
+     console.warn('[renderProfiles] profiles container not found; skip render');
+     return; // 안전 가드
+   }
+
+   container.innerHTML = (users || [])
+     .map(u => /* ... 기존 카드 템플릿 ... */)
+     .join('');
+ }
 
 /* -----------------------------
    프로필 선택
