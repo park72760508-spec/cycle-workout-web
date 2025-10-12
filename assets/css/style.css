@@ -228,7 +228,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   background:#1b1e2b; padding:15px; border-radius:15px; box-shadow:inset 0 0 12px rgba(255,255,255,0.05);
   text-align:center;
 }
-#trainingScreen .metric-card .metric-value{ font-size:26px; font-weight:700; }
+#trainingScreen .metric-card .metric-value{ font-size:40px; font-weight:700; }
 #trainingScreen .metric-card .metric-label{ font-size:13px; color:#aaa; }
 
 /* 중앙 파워 디스플레이 */
