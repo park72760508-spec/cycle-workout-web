@@ -104,6 +104,22 @@ h1,h2,h3,h4 { font-weight: 600; }
 #connectionScreen .btn-ios-continue:hover{ filter:brightness(1.03); }
 #connectionScreen .btn-ios-continue:active{ transform:translateY(1px); }
 
+
+/* === iOS에서 BLE 선택 비활성화 스타일 === */
+.ios-disabled {
+  pointer-events: none !important;
+  opacity: 0.45;
+  filter: grayscale(45%);
+}
+.ios-disabled .btn,
+.ios-disabled button,
+button[aria-disabled="true"] {
+  pointer-events: none !important;
+  cursor: not-allowed !important;
+  opacity: 0.55;
+}
+
+
 /* 연결된 기기 카드 */
 .device-card{
   display:flex; justify-content:space-between; align-items:center;
