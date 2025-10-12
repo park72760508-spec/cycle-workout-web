@@ -19,22 +19,67 @@ window.users = userProfiles;         // loadUsers()에서 쓰는 별칭
 /* -----------------------------
    프로필 화면 렌더링
 ------------------------------ */
- function renderProfiles(users, rootEl) {
-   // 1) rootEl을 우선 사용, 없으면 기본 컨테이너 탐색
-   const container =
-     rootEl ||
-     document.getElementById('profilesContainer') ||
-     document.querySelector('[data-profiles]');
+/* ===== 안전한 프로필 렌더러: data.js에 붙여넣기 ===== */
+(function () {
+  // 프로필 목록을 그릴 컨테이너 후보 셀렉터 (필요시 추가)
+  const PROFILE_CONTAINER_SELECTORS = ['#profilesContainer', '[data-profiles]'];
 
-   if (!container) {
-     console.warn('[renderProfiles] profiles container not found; skip render');
-     return; // 안전 가드
-   }
+  function findProfilesRoot(explicitRoot) {
+    if (explicitRoot instanceof Element) return explicitRoot;
+    for (const sel of PROFILE_CONTAINER_SELECTORS) {
+      const el = document.querySelector(sel);
+      if (el) return el;
+    }
+    return null;
+  }
 
-   container.innerHTML = (users || [])
-     .map(u => /* ... 기존 카드 템플릿 ... */)
-     .join('');
- }
+  // 카드 템플릿(원래 쓰던 형태로 바꿔도 됨)
+  function profileCard(u) {
+    const name = u?.name ?? '이름없음';
+    const id = u?.id ?? '';
+    return `
+      <div class="user-card" data-id="${id}">
+        <div class="user-main">
+          <div class="user-name">${name}</div>
+          <div class="user-id">ID: ${id}</div>
+        </div>
+        <div class="user-actions">
+          <button type="button" data-action="select">선택</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // ✅ 안전 가드 적용된 렌더 함수
+  function renderProfiles(users = [], rootEl) {
+    const container = findProfilesRoot(rootEl);
+    if (!container) {
+      console.warn('[renderProfiles] profiles container not found. Skip render.');
+      return; // 화면이 프로필 뷰가 아닐 때는 조용히 스킵
+    }
+
+    container.innerHTML = (users || []).map(profileCard).join('');
+
+    // 선택 버튼(위임) 핸들러: app.js와 중복되지 않게 1회만 바인딩
+    if (!container.__profilesBound) {
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action="select"]');
+        if (!btn) return;
+        const card = btn.closest('.user-card');
+        const id = card?.getAttribute('data-id');
+        if (!id) return;
+        if (typeof window.selectProfile === 'function') {
+          window.selectProfile(id);
+        }
+      });
+      container.__profilesBound = true;
+    }
+  }
+
+  // 전역 노출(기존 코드 호환)
+  window.renderProfiles = renderProfiles;
+})();
+
 
 /* -----------------------------
    프로필 선택
