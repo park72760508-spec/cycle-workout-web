@@ -997,3 +997,54 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 
+/* =============== Timeline XL =============== */
+.timeline-progress.timeline--xl {
+  height: 56px;                 /* ✅ 크게! 글자 보이게 */
+  border-radius: 14px;
+  background: #0f172a;          /* 아주 짙은 남색(바닥톤) */
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+}
+.timeline-segments { height: 100%; }
+
+.timeline-segment {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 6px;
+  font-size: 13px; font-weight: 700; color: #e5e7eb; /* 라벨 */
+  border-right: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);               /* 세그먼트 바닥 */
+}
+.timeline-segment:last-child { border-right: none; }
+.timeline-segment .segment-label { z-index: 2; line-height: 1.15; text-align: center; }
+.timeline-segment .segment-time  { z-index: 2; font-size: 12px; opacity: .9; }
+
+.timeline-segment .progress-fill{
+  position:absolute; inset:0 auto 0 0; height:100%; width:0%;
+  background: var(--seg-color, #3b82f6);            /* 타입별 강색 */
+  transition: width .25s ease, filter .2s ease;
+  z-index:1;
+}
+.timeline-segment:first-child .progress-fill{ border-radius:14px 0 0 14px; }
+.timeline-segment:last-child  .progress-fill{ border-radius:0 14px 14px 0; }
+
+/* 타입별 기본 색(미진행 상태의 '약한 배경' + 진행 컬러 변수) */
+.timeline-segment[data-type="warmup"]   { --seg-color:#22c55e; background: rgba(34,197,94,.10); }
+.timeline-segment[data-type="interval"] { --seg-color:#ef4444; background: rgba(239,68,68,.10); }
+.timeline-segment[data-type="rest"]     { --seg-color:#f59e0b; background: rgba(245,158,11,.10); }
+.timeline-segment[data-type="cooldown"] { --seg-color:#94a3b8; background: rgba(148,163,184,.12); }
+.timeline-segment[data-type="tempo"]    { --seg-color:#3b82f6; background: rgba(59,130,246,.10); }
+.timeline-segment[data-type="sweetspot"]{ --seg-color:#8b5cf6; background: rgba(139,92,246,.10); }
+
+/* 상태: 완료/현재/대기 */
+.timeline-segment.is-complete .progress-fill { width:100%!important; filter: saturate(.7) brightness(.95); }
+.timeline-segment.is-current  { outline: 2px solid rgba(255,255,255,.25); outline-offset: -2px; }
+.timeline-segment.is-current  .segment-label,
+.timeline-segment.is-current  .segment-time  { color:#fff; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+.timeline-segment.is-upcoming .progress-fill { width:0%!important; filter: grayscale(.4) opacity(.6); }
+
+/* 현재 세그먼트 강조 효과(살짝 튀어나오게) */
+.timeline-segment.is-current::after{
+  content:""; position:absolute; inset:auto 10% -4px 10%;
+  height:4px; border-radius:4px; background: var(--seg-color, #3b82f6);
+  filter: blur(6px) opacity(.7);
+}
