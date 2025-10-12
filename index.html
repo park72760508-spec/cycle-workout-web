@@ -140,14 +140,62 @@
   <!-- =========================
        3) 워크아웃 선택 화면
   ========================== -->
+<!-- 3) 워크아웃 선택 화면 -->
   <div id="workoutScreen" class="screen">
     <div class="header">
       <h1>📋 워크아웃 선택</h1>
       <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
     </div>
+  
+    <div class="card" style="display:flex; gap:8px; align-items:center;">
+      <input id="qWorkout" type="search" placeholder="제목/작성자 검색" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:8px;">
+      <button class="btn" id="btnSearchWorkout">검색</button>
+      <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
+    </div>
+  
     <div id="workoutList" class="workout-list"></div>
   </div>
 
+  <!-- =========================
+       3) 워크아웃 작성/수정
+  ========================== -->
+<!-- 새 화면: 워크아웃 작성/수정 -->
+<div id="workoutBuilderScreen" class="screen">
+  <div class="header">
+    <h1>✍️ 워크아웃 작성</h1>
+    <p class="subtitle">세그먼트를 추가/수정하고 저장하세요</p>
+  </div>
+
+  <div class="card">
+    <div class="form-group">
+      <label>제목</label>
+      <input type="text" id="wbTitle" placeholder="예: VO2max 5x3min" />
+    </div>
+    <div class="form-group">
+      <label>설명</label>
+      <input type="text" id="wbDesc" placeholder="간단 설명" />
+    </div>
+    <div class="form-group">
+      <label>작성자</label>
+      <input type="text" id="wbAuthor" placeholder="coach" />
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="mb-10">세그먼트</h3>
+    <div id="wbSegments"></div>
+    <button class="btn mt-10" id="btnAddSegment">+ 세그먼트 추가</button>
+  </div>
+
+  <div class="btn-row mt-20">
+    <button class="btn btn-success" id="btnSaveWorkout">저장</button>
+    <button class="btn btn-secondary" id="btnCancelBuilder">취소</button>
+  </div>
+</div>
+
+
+
+  
   <!-- =========================
        4) 훈련 준비 화면
   ========================== -->
