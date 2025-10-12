@@ -1,1 +1,557 @@
 
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>사이클 앱코치</title>
+
+  <!-- GitHub Pages / HTTPS / BLE 권장 헤더 -->
+  <meta http-equiv="origin-trial" content="">
+  <meta name="theme-color" content="#2E74E8" />
+
+  <style>
+    .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
+      background:#333;color:#fff;padding:10px 16px;border-radius:8px;
+      opacity:0;transition:opacity .35s;z-index:9999}
+    .toast.show{opacity:.92}
+    .hidden{display:none}
+    .loading-spinner{text-align:center;padding:20px;color:#666;}
+    .error{color:#dc3545;padding:10px;background:#f8d7da;border-radius:4px;margin:10px 0;}
+    
+    /* 사용자 카드 개선 */
+    .user-card {
+      position: relative;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      background: #fff;
+      transition: all 0.2s ease;
+    }
+    .user-card:hover {
+      border-color: #2e74e8;
+      box-shadow: 0 4px 12px rgba(46, 116, 232, 0.1);
+    }
+    .user-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .user-name {
+      font-weight: 600;
+      font-size: 16px;
+      color: #111827;
+    }
+    .user-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-edit, .btn-delete {
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .btn-edit:hover { background: #e0f2fe; }
+    .btn-delete:hover { background: #ffebee; }
+    
+    .user-details {
+      margin-bottom: 12px;
+    }
+    .user-stats {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 4px;
+    }
+    .stat {
+      font-size: 14px;
+      color: #374151;
+      background: #f3f4f6;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    .user-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    /* 결과 분석 개선 */
+    .result-analysis {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .analysis-section {
+      margin-bottom: 16px;
+    }
+    .analysis-title {
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #2e74e8;
+    }
+    .power-curve {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin: 12px 0;
+    }
+    .power-curve-item {
+      text-align: center;
+      background: #fff;
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    .power-curve-value {
+      font-weight: 600;
+      font-size: 18px;
+      color: #2e74e8;
+    }
+    .power-curve-label {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    /* 훈련 기록 테이블 */
+    .training-history {
+      margin-top: 20px;
+    }
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .history-table th, .history-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .history-table th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #374151;
+    }
+    .history-table tr:hover {
+      background: #f8f9fa;
+    }
+  </style>
+
+  <!-- 외부 스타일 -->
+  <link rel="stylesheet" href="assets/css/style.css" />
+
+  <!-- 앱 전역설정 -->
+  <script>
+    window.CONFIG = {
+      GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec"
+    };
+  </script>
+</head>
+
+<body>
+  <!-- 1) 연결 화면 -->
+  <div id="connectionScreen" class="screen active">
+    <div class="header">
+      <h1>🚴‍♂️ 사이클 앱코치</h1>
+      <p class="subtitle">스마트 트레이너와 심박계를 연결하세요</p>
+    </div>
+
+    <div class="card">
+      <h3 class="mb-15">📡 블루투스 기기 연결</h3>
+      <div class="grid-2 gap-10 mb-15">
+        <button class="btn" id="btnConnectTrainer">스마트 트레이너</button>
+        <button class="btn btn-secondary" id="btnConnectHR">심박계 연결</button>
+        <button class="btn" id="btnConnectPM">파워미터 연결</button>
+      </div>
+    </div>
+
+    <!-- iOS 전용 안내 -->
+    <div id="iosInfo" class="ios-info hidden">
+      <div class="ios-indicator" title="iOS Safari는 Web Bluetooth 미지원">
+        <svg width="16" height="16" viewBox="0 0 24 24">
+          <rect x="7" y="2" width="10" height="20" rx="2.5" fill="currentColor" opacity="0.9"/>
+          <rect x="9" y="4" width="6" height="1.5" rx="0.75" fill="#0f111a"/>
+          <rect x="10" y="20" width="4" height="1.5" rx="0.75" fill="#0f111a"/>
+        </svg>
+        <span>iPhone 모드</span>
+      </div>
+      <p class="ios-text">
+        iOS Safari에서는 블루투스 연결이 지원되지 않습니다.<br>
+        기기 연결 없이 워크아웃을 실행할 수 있어요.
+      </p>
+      <div class="ios-actions">
+        <button id="btnIosContinue" class="btn btn-ios-continue">기기 없이 계속</button>
+      </div>
+    </div>
+
+    <div id="connectedDevicesList"></div>
+    <div id="connectionStatus" class="hidden">
+      <div class="card text-center">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>기기에 연결 중...</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="connectedDevicesSummary" class="card hidden">
+      <h3 class="mb-15">✅ 연결된 기기</h3>
+      <button class="btn btn-success" id="btnToProfile" style="margin-top:15px">
+        다음 단계로
+      </button>
+    </div>
+  </div>
+
+  <!-- 2) 프로필 선택 화면 -->
+  <div id="profileScreen" class="screen">
+    <div class="header">
+      <h1>👤 프로필 선택</h1>
+      <p class="subtitle">훈련할 사용자를 선택하세요</p>
+    </div>
+    
+    <div class="card mb-15">
+      <button class="btn btn-success" onclick="loadUsers()" style="width: 100%;">
+        📥 사용자 목록 새로고침
+      </button>
+    </div>
+    
+    <div id="userList">
+      <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
+    </div>
+    
+    <div class="card" id="cardAddUser">
+      <div class="text-center">
+        <div class="big-plus mb-10">➕</div>
+        <h3>새 사용자 추가</h3>
+        <p class="muted mt-5">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
+      </div>
+    </div>
+
+    <div id="addUserForm" class="card hidden">
+      <h3 class="mb-20">새 사용자 등록</h3>
+      <div class="form-group">
+        <label>이름 *</label>
+        <input type="text" id="userName" placeholder="이름을 입력하세요" required />
+      </div>
+      <div class="form-group">
+        <label>연락처</label>
+        <input type="tel" id="userContact" placeholder="010-1234-5678" />
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>FTP (W) *</label>
+          <input type="number" id="userFTP" placeholder="250" min="50" max="600" required />
+        </div>
+        <div class="form-group">
+          <label>몸무게 (kg) *</label>
+          <input type="number" id="userWeight" placeholder="70" min="30" max="200" step="0.1" required />
+        </div>
+      </div>
+      <div class="btn-row mt-10">
+        <button class="btn btn-success" id="btnSaveUser">저장</button>
+        <button class="btn btn-secondary" id="btnCancelAddUser">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3) 워크아웃 선택 화면 -->
+  <div id="workoutScreen" class="screen">
+    <div class="header">
+      <h1>📋 워크아웃 선택</h1>
+      <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
+    </div>
+  
+    <div class="card" style="display:flex; gap:8px; align-items:center;">
+      <input id="qWorkout" type="search" placeholder="제목/작성자 검색" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:8px;">
+      <button class="btn" id="btnSearchWorkout">검색</button>
+      <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
+    </div>
+  
+    <div id="workoutList" class="workout-list">
+      <div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 4) 워크아웃 작성/수정 화면 -->
+  <div id="workoutBuilderScreen" class="screen">
+    <div class="header">
+      <h1>✏️ 워크아웃 작성</h1>
+      <p class="subtitle">세그먼트를 추가/수정하고 저장하세요</p>
+    </div>
+
+    <div class="card">
+      <div class="form-group">
+        <label>제목 *</label>
+        <input type="text" id="wbTitle" placeholder="예: VO2max 5x3min" required />
+      </div>
+      <div class="form-group">
+        <label>설명</label>
+        <input type="text" id="wbDesc" placeholder="간단 설명" />
+      </div>
+      <div class="form-group">
+        <label>작성자</label>
+        <input type="text" id="wbAuthor" placeholder="coach" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="mb-10">세그먼트</h3>
+      <div id="wbSegments"></div>
+      <button class="btn mt-10" id="btnAddSegment">+ 세그먼트 추가</button>
+    </div>
+
+    <div class="builder-actions">
+      <div class="btn-row">
+        <button class="btn btn-success" id="btnSaveWorkout">💾 저장</button>
+        <button class="btn btn-secondary" id="btnCancelBuilder">❌ 취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5) 훈련 준비 화면 -->
+  <div id="trainingReadyScreen" class="screen">
+    <div class="header">
+      <h1>🎯 훈련 준비</h1>
+      <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
+    </div>
+
+    <div class="workout-preview">
+      <h2 id="previewWorkoutName">워크아웃</h2>
+      <div class="preview-stats">
+        <div><strong id="previewDuration">0분</strong><br /><span class="muted">총 시간</span></div>
+        <div><strong id="previewIntensity">0%</strong><br /><span class="muted">평균 강도</span></div>
+        <div><strong id="previewTSS">0</strong><br /><span class="muted">예상 TSS</span></div>
+      </div>
+      <div class="segment-preview" id="segmentPreview"></div>
+    </div>
+
+    <div class="training-ready">
+      <div class="mb-30">
+        <h3 class="mb-15">훈련 준비 완료</h3>
+        <p class="muted">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
+      </div>
+      <div class="btn-row center">
+        <button class="btn btn-success" id="btnStartTraining">🚀 훈련 시작</button>
+        <button class="btn btn-secondary" id="btnBackToWorkouts">← 워크아웃 변경</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6) 훈련 화면 -->
+  <div id="trainingScreen" class="screen">
+    <div class="training-header">
+      <div id="userInfo"></div>
+    </div>
+
+    <div class="segment-details1">
+      <div class="seg-left1">
+        <span class="elapsed-wrap1">
+          경과: <span id="elapsedTime">00:00</span>
+          (<span id="elapsedPercent">0</span>%)
+        </span>
+      </div>
+      <div class="seg-center1">
+        <span id="segmentTime">00:00</span>
+      </div>
+      <div class="seg-right1">
+        <span id="nextSegment">다음: 인터벌 FTP 140%</span>
+      </div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card avg-segment-power">
+        <div class="col-center">
+          <div class="metric-value" id="avgSegmentPowerValue">-</div>
+          <div class="metric-label">랩 파워 (W)</div>
+          <div class="metric-value" id="tssValue">-</div>
+          <div class="metric-label">TSS</div>
+        </div>
+      </div>
+
+      <div class="power-display">
+        <div class="current-power" id="currentPowerValue">-</div>
+        <div class="unit-dim">WATTS</div>
+        <div class="power-progress">
+          <div class="power-progress-bar" id="powerProgressBar"></div>
+          <div class="power-progress-label">달성도: <span id="achievementValueBar">0</span>%</div>
+        </div>
+        <div class="center mt-10">
+          <div id="powerComparison" class="target-line">목표: <span id="targetPowerValue">-</span>W</div>
+          <div id="segmentProgressText" class="segment-progress">진행률 <span id="segmentProgress">0</span>%</div>
+          <div id="currentSegmentName" class="segment-name">웜업 - 80RPM FTP 60%</div>
+        </div>
+      </div>
+
+      <div class="metric-card dual-metric">
+        <div class="metric-item">
+          <div class="metric-value" id="heartRateValue">-</div>
+          <div class="metric-label">BPM</div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-value" id="cadenceValue">-</div>
+          <div class="metric-label">RPM</div>
+        </div>
+        <div class="metric-item">
+          <div class="metric-value" id="kcalValue">-</div> 
+          <div class="metric-label">kcal</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-wrap">
+      <div class="timeline-progress timeline--xl" id="timelineProgress">
+        <div class="timeline-segments" id="timelineSegments"></div>
+      </div>
+      <div class="timeline-legend">
+        <span>평균 파워: <span id="avgPowerValue">-</span>W</span>
+      </div>
+    </div>
+
+    <div class="training-controls">
+      <button class="control-btn pause" id="btnTogglePause" title="일시정지"><span id="pauseIcon">⏸️</span></button>
+      <button class="control-btn" id="btnSkipSegment" title="구간 건너뛰기">⏭️</button>
+      <button class="control-btn stop" id="btnStopTraining" title="훈련 종료">⏹️</button>
+    </div>
+  </div>
+
+  <!-- 7) 결과 화면 -->
+  <div id="resultScreen" class="screen">
+    <div class="header">
+      <h1>🎉 훈련 완료!</h1>
+      <p class="subtitle">수고하셨습니다</p>
+    </div>
+
+    <div class="text-center mb-30">
+      <div class="achievement-circle">
+        <div class="achievement-text" id="finalAchievement">0%</div>
+      </div>
+      <h2 id="workoutCompletedName">훈련 완주</h2>
+    </div>
+
+    <!-- 기본 결과 통계 -->
+    <div class="result-stats">
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultAvgPower">-</div>
+        <div class="result-stat-label">평균 파워 (W)</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultMaxPower">-</div>
+        <div class="result-stat-label">최대 파워 (W)</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultAvgHR">-</div>
+        <div class="result-stat-label">평균 심박 (BPM)</div>
+      </div>
+      <div class="result-stat">
+        <div class="result-stat-value" id="resultCalories">-</div>
+        <div class="result-stat-label">칼로리 (kcal)</div>
+      </div>
+    </div>
+
+    <!-- AI 분석 -->
+    <div class="card">
+      <h3 class="mb-15">🤖 AI 성과 분석</h3>
+      <div id="aiAnalysis" class="muted lh-16">분석 중...</div>
+    </div>
+
+    <!-- 파워 커브 분석 -->
+    <div class="result-analysis">
+      <div class="analysis-section">
+        <div class="analysis-title">📊 파워 커브 (개인 기록)</div>
+        <div class="power-curve" id="powerCurveDisplay">
+          <div class="power-curve-item">
+            <div class="power-curve-value" id="power5s">-</div>
+            <div class="power-curve-label">5초</div>
+          </div>
+          <div class="power-curve-item">
+            <div class="power-curve-value" id="power30s">-</div>
+            <div class="power-curve-label">30초</div>
+          </div>
+          <div class="power-curve-item">
+            <div class="power-curve-value" id="power1m">-</div>
+            <div class="power-curve-label">1분</div>
+          </div>
+          <div class="power-curve-item">
+            <div class="power-curve-value" id="power5m">-</div>
+            <div class="power-curve-label">5분</div>
+          </div>
+          <div class="power-curve-item">
+            <div class="power-curve-value" id="power20m">-</div>
+            <div class="power-curve-label">20분</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 훈련 기록 관리 -->
+    <div class="card">
+      <h3 class="mb-15">📈 훈련 기록 관리</h3>
+      
+      <div class="form-group mb-10">
+        <label for="resultUserSelect">사용자 선택</label>
+        <select id="resultUserSelect" class="form-control" onchange="handleUserSelect(this.value)">
+          <option value="">-- 사용자 선택 --</option>
+        </select>
+      </div>
+      
+      <div class="form-row mb-15">
+        <div class="form-group">
+          <label>시작일</label>
+          <input type="date" id="startDate" />
+        </div>
+        <div class="form-group">
+          <label>종료일</label>
+          <input type="date" id="endDate" />
+        </div>
+        <div class="form-group">
+          <button class="btn" onclick="applyDateFilter()">필터 적용</button>
+        </div>
+      </div>
+
+      <div class="training-history" id="trainingHistory">
+        <!-- 훈련 기록 테이블이 여기에 표시됩니다 -->
+      </div>
+    </div>
+
+    <!-- 액션 버튼들 -->
+    <div class="btn-row mt-20">
+      <button class="btn btn-success" id="btnSaveResult" onclick="saveTrainingResult()">💾 결과 저장</button>
+      <button class="btn btn-secondary" id="btnShareResult">📤 공유하기</button>
+    </div>
+
+    <div class="btn-row mt-10">
+      <button class="btn" onclick="exportResults()">📤 결과 내보내기 (CSV)</button>
+      <button class="btn" id="btnGoHome" onclick="showScreen('profileScreen')">🏠 홈으로</button>
+    </div>
+  </div>
+
+  <!-- 카운트다운 오버레이 -->
+  <div id="countdownOverlay" class="countdown-overlay hidden">
+    <div class="countdown-number" id="countdownNumber">5</div>
+  </div>
+
+  <!-- 토스트 메시지 -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- JavaScript 파일들 -->
+  <script src="assets/js/data.js" defer></script>
+  <script src="assets/js/bluetooth.js" defer></script>
+  <script src="assets/js/userManager.js" defer></script>
+  <script src="assets/js/trainingResults.js" defer></script>
+  <script src="assets/js/workoutManager.js" defer></script>
+  <script src="assets/js/app.js" defer></script>
+
+  <!-- Google Charts for data visualization -->
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+</body>
+</html>
