@@ -1072,3 +1072,46 @@ h1,h2,h3,h4 { font-weight: 600; }
 .timeline-segment.is-current .segment-time  { color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.45); }
 .timeline-segment.is-upcoming .progress-fill { width:0%!important; filter: grayscale(.3) opacity(.7); }
 
+
+/* === PATCH 3: 파워 달성도 바 사이즈/가독성 업 (붙여넣기용, 파일 맨 아래) === */
+
+/* 중앙 파워 카드 약간 키움 */
+#trainingScreen .power-display {
+  padding: 20px;               /* 기존 20px 유지/강화 */
+  border-radius: 20px;
+}
+
+/* 현재 파워 숫자 가독성 업 */
+#trainingScreen .current-power {
+  font-size: 68px;             /* 기존 64px → 68px */
+  line-height: 1.0;
+}
+
+/* 달성도 바(배경) – 높이/라운드/여백 업 */
+#trainingScreen .power-progress {
+  height: 16px;                /* ✅ 8px → 16px */
+  background: #202331;         /* 어두운 남청톤으로 대비 ↑ */
+  border-radius: 10px;         /* 8px → 10px */
+  margin: 16px 0 10px;         /* 위 여백 약간 확대 */
+  overflow: hidden;
+  position: relative;
+}
+
+/* 달성도 바(채움) – 동일 라운드, 애니메이션 유지/개선 */
+#trainingScreen .power-progress-bar {
+  height: 100%;
+  width: 0%;
+  border-radius: 10px;         /* 배경과 동일 라운드 */
+  transition: width .35s ease, background .25s ease;
+  /* 그라데이션 색상은 JS에서 구간별로 이미 지정 중 (updateTrainingDisplay) */
+}
+
+/* 라벨 – 살짝 키우고 대비 ↑ */
+#trainingScreen .power-progress-label {
+  margin-top: 8px;             /* 6px → 8px */
+  font-size: 0.95em;           /* 13px 근사 → 가독성 업 */
+  color: #cfd3da;              /* 더 밝은 회색 */
+  display: flex;
+  justify-content: space-between; /* '목표: XXXW · 진행률 XX%' 같이 좌우 배치해도 예쁨 */
+}
+
