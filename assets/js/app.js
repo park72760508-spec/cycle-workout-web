@@ -831,17 +831,7 @@ document.addEventListener("DOMContentLoaded", () => {
    
    // ✅ 연결 요약 → 프로필 화면
    // 프로필 화면 이동 + 사용자 목록 로드(가드 포함)
-   document.getElementById("btnToProfile")?.addEventListener("click", () => {
-     if (typeof showScreen === "function") showScreen("profileScreen");
-   
-     if (typeof loadUsers === "function") {
-       loadUsers();
-     } else if (typeof renderUserList === "function") {
-       renderUserList();
-     } else {
-       console.warn("사용자 목록 렌더러(loadUsers)가 없습니다.");
-     }
-   });
+
 
    
    //loadUsers()가 userProfiles도 인식하게(방어)
@@ -954,15 +944,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // 다음 단계 버튼
-  const btnToProfile = document.getElementById("btnToProfile");
-  if (btnToProfile) {
-    btnToProfile.addEventListener("click", () => {
-      showScreen("profileScreen");
-      if (window.renderProfiles) {
-        window.renderProfiles();
-      }
-    });
-  }
+
 
   // 다파워소스 우선순위도 같이 표기
 function updateDevicesList() {
@@ -1083,6 +1065,51 @@ document.addEventListener("DOMContentLoaded", () => {
 // -------------------------------------
 // 단일 DOMContentLoaded 이벤트/ 종료, 버튼 클릭
 // ------------------------------------
+
+/* ===== 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전) ===== */
+(() => {
+  const btn = document.getElementById("btnToProfile");
+  if (!btn) return;
+
+  btn.addEventListener("click", () => {
+    // 1) 화면 전환
+    if (typeof window.showScreen === "function") {
+      window.showScreen("profileScreen");
+    }
+
+    // 2) 사용자 목록 렌더
+    if (typeof window.loadUsers === "function") {
+      // userManager.js의 전역 loadUsers가 있으면 이걸로 불러오기(권장)
+      window.loadUsers();
+      return;
+    }
+
+    // 대체 렌더러 1: renderUserList가 있다면 사용
+    if (typeof window.renderUserList === "function") {
+      window.renderUserList();
+      return;
+    }
+
+    // 대체 렌더러 2: renderProfiles만 있을 때 컨테이너를 명시적으로 찾아 전달
+    if (typeof window.renderProfiles === "function") {
+      const root =
+        document.getElementById("profilesContainer") ||
+        document.querySelector("[data-profiles]");
+      if (root) {
+        // users 데이터를 내부에서 읽는 구현이라면 첫 인자는 생략 가능
+        window.renderProfiles(undefined, root);
+        return;
+      }
+    }
+
+    console.warn(
+      "[btnToProfile] 프로필 렌더러(loadUsers/renderUserList/renderProfiles)가 없습니다."
+    );
+  });
+})();
+
+
+
 
 
 
