@@ -262,6 +262,9 @@ function updateSegmentBarTick(){
       else if (elapsed <= startAt) pct = 0;                // 아직 시작 전
       else pct = Math.min(100, Math.round((elapsed - startAt) / dur * 100)); // 진행 중
       fill.style.width = pct + "%";
+      const ratio = Math.min(1, Math.max(0, elapsed / total));
+      fill.style.width = (ratio * 100) + "%";
+       
     }
     startAt = endAt;
   }
@@ -321,53 +324,62 @@ const trainingState = {
 };
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
+// 훈련 상태 => 시간/세그먼트 UI 갱신 함수 (교체본)
 function updateTimeUI() {
   const w = window.currentWorkout;
   if (!w) return;
 
-  const elElapsed = document.getElementById("elapsedTime");
+  const elElapsed    = document.getElementById("elapsedTime");
   const elElapsedPct = document.getElementById("elapsedPercent");
-  const elSegTime = document.getElementById("segmentTime");
-  const elNext = document.getElementById("nextSegment");
-  const elSegPct = document.getElementById("segmentProgress");
-  const barTimeline = document.getElementById("timelineSegments");
+  const elSegTime    = document.getElementById("segmentTime");
+  const elNext       = document.getElementById("nextSegment");
+  const elSegPct     = document.getElementById("segmentProgress");
+  // const barTimeline  = document.getElementById("timelineSegments"); // ← 컨테이너이므로 폭 조절 금지
 
-  // 총 진행률
-  const elapsed = trainingState.elapsedSec;
-  const total = trainingState.totalSec || 1;
-  const totalPct = Math.min(100, Math.round((elapsed / total) * 100));
-  if (elElapsed) elElapsed.textContent = formatMMSS(elapsed);
+  // 총 진행률 (오프바이원/NaN 방지)
+  const elapsed = Math.max(0, Number(trainingState.elapsedSec) || 0);
+  const total   = Math.max(1, Number(trainingState.totalSec)  || 1);
+  const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
+
+  if (elElapsed)    elElapsed.textContent = formatMMSS(elapsed);
   if (elElapsedPct) elElapsedPct.textContent = totalPct;
 
   // 현재 세그먼트
-  const i = trainingState.segIndex;
-  const seg = w.segments[i];
-  const segRemain = seg ? Math.max(0, Math.floor(seg.duration - trainingState.segElapsedSec)) : 0;
-  if (elSegTime) elSegTime.textContent = formatMMSS(segRemain);
+  const i   = Math.max(0, Number(trainingState.segIndex) || 0);
+  const seg = w.segments?.[i];
+
+  // 세그먼트 남은 시간(0으로 클램프)
+  if (elSegTime) {
+    const segDur = Math.max(0, Number(seg?.duration ?? seg?.duration_sec) || 0);
+    const segRemain = Math.max(0, segDur - (Number(trainingState.segElapsedSec) || 0));
+    elSegTime.textContent = formatMMSS(segRemain);
+  }
 
   // 다음 세그먼트 안내
-  const next = w.segments[i + 1];
   if (elNext) {
+    const next = w.segments?.[i + 1];
     if (next) {
-      const pct = typeof next.target === "number" ? Math.round(next.target * 100)
-                : (typeof next.ftp_percent === "number" ? Math.round(next.ftp_percent) : 0);
-      elNext.textContent = `다음: ${next.label || "세그먼트"} FTP ${pct}%`;
+      const pct = (typeof next.target === "number")
+        ? Math.round(next.target * 100)
+        : (typeof next.ftp_percent === "number" ? Math.round(next.ftp_percent) : 0);
+      elNext.textContent = `다음: ${next.label || next.segment_type || "세그먼트"} FTP ${pct}%`;
     } else {
       elNext.textContent = `다음: (마지막)`;
     }
   }
 
-  // 현재 세그먼트 진행률
+  // 현재 세그먼트 진행률(0~100 클램프)
   if (elSegPct && seg) {
-    const sp = Math.min(100, Math.round((trainingState.segElapsedSec / seg.duration) * 100));
+    const segDur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
+    const segElapsed = Math.max(0, Number(trainingState.segElapsedSec) || 0);
+    const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
     elSegPct.textContent = sp;
   }
 
-  // 타임라인 바
-  if (barTimeline) {
-    barTimeline.style.width = `${totalPct}%`;
-  }
+  // ❌ 컨테이너 폭을 건드리면 안 됩니다.
+  // if (barTimeline) barTimeline.style.width = `${totalPct}%`;
 }
+
 
 // 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
 function applySegmentTarget(i) {
@@ -394,87 +406,99 @@ function applySegmentTarget(i) {
 // 시작/루프에 연결 (딱 두 줄
 // 중요 루프 
 // ------------------------------------------------
+// -------------------------------------------------
+// 시작/루프 (통째로 교체하세요)
+// -------------------------------------------------
 function startSegmentLoop() {
   const w = window.currentWorkout;
   if (!w) return;
 
-  // 누적 종료시각 배열 계산
+  // 1) 누적 종료시각/총시간 계산
   trainingState.segEnds = [];
   let acc = 0;
-  for (const s of w.segments) {
-    acc += Math.max(0, Math.floor(s.duration || s.duration_sec || 0));
+  for (const s of (w.segments || [])) {
+    const d = Math.max(0, Math.floor(s.duration ?? s.duration_sec ?? 0));
+    acc += d;
     trainingState.segEnds.push(acc);
   }
   trainingState.totalSec = acc;
 
-  // 초기 상태
+  // 2) 초기 상태
   trainingState.elapsedSec = 0;
   trainingState.segIndex = 0;
   trainingState.segElapsedSec = 0;
   trainingState.paused = false;
 
-  applySegmentTarget(0);
-  updateTimeUI();
-   
-// 루프 시작(1Hz)/ 1초 인터벌
-clearInterval(trainingState.timerId);
-trainingState.timerId = setInterval(() => {
-  if (trainingState.paused) return;
+  // 3) 첫 타겟/UI
+  if (typeof applySegmentTarget === "function") applySegmentTarget(0);
+  if (typeof updateTimeUI === "function") updateTimeUI();
 
-  // 1) 시간 진행
-  trainingState.elapsedSec += 1;
-  trainingState.segElapsedSec += 1;
+  // 4) 루프 시작(1Hz)
+  clearInterval(trainingState.timerId);
+  trainingState.timerId = setInterval(() => {
+    if (trainingState.paused) return;
 
-  const i = trainingState.segIndex;
-  const seg = w.segments[i];
+    // (A) 시간 진행
+    trainingState.elapsedSec += 1;
+    trainingState.segElapsedSec += 1;
 
-  // 2) TSS / kcal 계산 및 표시
-  {
-    const ftp = Number(window.currentUser?.ftp) || 200;
-    const p   = Math.max(0, Number(window.liveData?.power) || 0);
+    const i   = trainingState.segIndex;
+    const seg = (w.segments || [])[i];
+    const segDur = Math.max(0, Math.floor(seg?.duration ?? seg?.duration_sec ?? 0));
 
-    // 누적 지표(전역 trainingMetrics 사용)
-    trainingMetrics.elapsedSec += 1;                 // 총 경과(초)
-    trainingMetrics.joules     += p;                 // 1초당 J 누적 (1W=1J/s)
-    trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30; // 30초 IIR 근사
-    trainingMetrics.np4sum     += Math.pow(trainingMetrics.ra30, 4);
-    trainingMetrics.count      += 1;
+    // (B) TSS / kcal 누적 및 표시
+    {
+      const ftp = Number(window.currentUser?.ftp) || 200;
+      const p   = Math.max(0, Number(window.liveData?.power) || 0);
 
-    const NP   = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
-    const IF   = ftp ? (NP / ftp) : 0;
-    const TSS  = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-    const kcal = trainingMetrics.joules / 1000;
+      trainingMetrics.elapsedSec += 1;                    // 총 경과(초)
+      trainingMetrics.joules     += p;                    // 1초당 J 누적
+      trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30; // 30초 IIR
+      trainingMetrics.np4sum     += Math.pow(trainingMetrics.ra30, 4);
+      trainingMetrics.count      += 1;
 
-    const tssEl  = document.getElementById("tssValue");
-    const kcalEl = document.getElementById("kcalValue");
-    if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
-    if (kcalEl) kcalEl.textContent = Math.round(kcal);
-  }
+      const NP   = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+      const IF   = ftp ? (NP / ftp) : 0;
+      const TSS  = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+      const kcal = trainingMetrics.joules / 1000;
 
-    // 세그먼트 종료 → 다음 세그먼트
-    if (seg && trainingState.segElapsedSec >= Math.floor(seg.duration)) {
+      const tssEl  = document.getElementById("tssValue");
+      const kcalEl = document.getElementById("kcalValue");
+      if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
+      if (kcalEl) kcalEl.textContent = Math.round(kcal);
+    }
+
+    // (C) UI 먼저 갱신 (마지막 0초 프레임도 확실히 그림)
+    if (typeof updateTimeUI === "function") updateTimeUI();
+    if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
+    if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
+
+    // (D) 전체 종료 판단(UI 갱신 후 clear)
+    if (trainingState.totalSec && trainingState.elapsedSec >= trainingState.totalSec) {
+      // 마지막 프레임 확정 후 정지
+      if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
+      clearInterval(trainingState.timerId);
+      trainingState.timerId = null;
+
+      if (typeof setPaused === "function") setPaused(false); // 다음 시작 대비
+      if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
+      if (typeof showScreen === "function") showScreen("resultScreen");
+      return;
+    }
+
+    // (E) 세그먼트 경계 통과 → 다음 세그먼트로
+    if (seg && segDur > 0 && trainingState.segElapsedSec >= segDur) {
       trainingState.segIndex += 1;
       trainingState.segElapsedSec = 0;
 
-      if (trainingState.segIndex >= w.segments.length) {
-        // 훈련 종료
-        clearInterval(trainingState.timerId);
-        trainingState.timerId = null;
-         setPaused(false); // 다음 시작 대비
-        showToast("훈련이 완료되었습니다!");
-        showScreen("resultScreen");
-        return;
-      } else {
-        applySegmentTarget(trainingState.segIndex);
+      if (trainingState.segIndex < (w.segments || []).length) {
+        if (typeof applySegmentTarget === "function") applySegmentTarget(trainingState.segIndex);
       }
     }
 
-    // 화면 갱신
-  if (typeof updateTimeUI === "function") updateTimeUI();
-  if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
-  if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
-}, 1000);
+  }, 1000);
 }
+
 
 function stopSegmentLoop() {
   clearInterval(trainingState.timerId);
