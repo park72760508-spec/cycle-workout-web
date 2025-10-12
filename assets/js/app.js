@@ -583,15 +583,6 @@ function startWithCountdown(sec = 5) {
 }
 
 
-// 훈련 시작 전에 지표 리셋
-Object.assign(trainingMetrics, {
-  elapsedSec: 0,
-  joules: 0,
-  ra30: 0,
-  np4sum: 0,
-  count: 0
-});
-
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
 // app.js (또는 app (3).js)에서 기존 startWorkoutTraining() 전체 교체
@@ -621,7 +612,15 @@ function startWorkoutTraining() {
     trainingState.segElapsedSec = 0;
     trainingState.segIndex = 0;
   }
-
+   // 카운트다운 직후 훈련 시작 때마다 TSS/kcal 계산용 누적 상태
+   Object.assign(trainingMetrics, {
+     elapsedSec: 0,
+     joules: 0,
+     ra30: 0,
+     np4sum: 0,
+     count: 0
+   });
+   
   // (C) 세그먼트 타임라인 생성(있을 때만)
   if (typeof buildSegmentBar === "function") buildSegmentBar();
 
