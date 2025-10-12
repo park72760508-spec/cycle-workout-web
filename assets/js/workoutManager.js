@@ -39,7 +39,11 @@ const RAMP_TYPES = [
 // API 호출 함수들
 async function apiRequest(method, action, data = {}) {
   try {
-    let url = `${GAS_URL}?action=${action}`;
+    //let url = `${GAS_URL}?action=${action}`;
+   const base = window.GAS_URL;
+   if (!base) { throw new Error('GAS_URL is not set'); }
+   let url = `${base}?action=${action}`;
+     
     let options = {
       method: method,
       headers: {
