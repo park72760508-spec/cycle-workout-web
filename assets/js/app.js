@@ -715,6 +715,27 @@ function backToWorkoutSelection() {
 }
 
 
+// 훈련 화면 상단에 사용자 정보가 즉시 표시
+// 사용자 정보 렌더(훈련자 화면 사용자 정보)
+
+function renderUserInfo() {
+  const box = document.getElementById("userInfo");
+  const u = window.currentUser;
+  if (!box) return;
+
+  if (!u) { box.textContent = "사용자 미선택"; return; }
+
+  const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
+  const ftp = Number(u.ftp);
+  const wt  = Number(u.weight);
+  const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
+
+  // ⬇️ 여기만 교체 (아이콘/태그 제거, 텍스트만)
+  box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
+
+}
+
+
 
 
 
@@ -1041,22 +1062,7 @@ document.addEventListener("DOMContentLoaded", () => {
 window.startWorkoutTraining = startWorkoutTraining;
 window.backToWorkoutSelection = backToWorkoutSelection;
 
-// 훈련 화면 상단에 사용자 정보가 즉시 표시
-// 사용자 정보 렌더(훈련자 화면 사용자 정보)
-function renderUserInfo() {
-  const box = document.getElementById("userInfo");
-  const u = window.currentUser;
-  if (!box) return;
 
-  if (!u) { box.textContent = "사용자 미선택"; return; }
-
-  const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
-  const ftp = Number(u.ftp);
-  const wt  = Number(u.weight);
-  const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
-
-  box.innerHTML = `👤 <strong>${cleanName}</strong> · FTP <strong>${ftp || "-"}</strong>W · ${wkg} W/kg`;
-}
 
 
 
