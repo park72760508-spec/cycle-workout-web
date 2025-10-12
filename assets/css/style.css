@@ -250,13 +250,13 @@ h1,h2,h3,h4 { font-weight: 600; }
   transition: width .35s ease, background .25s ease;
 }
 #trainingScreen .power-progress-label{
-  margin-top:8px; font-size:.95em; color:#cfd3da;
+  margin-top:8px; font-size:.13px; color:#cfd3da;
   display:flex; justify-content:space-between;
 }
 
 /* 우측 심박/케이던스/칼로리 */
 #trainingScreen .dual-metric .metric-item{ margin-bottom:10px; }
-#trainingScreen .dual-metric .metric-value{ font-size:30px; font-weight:bold; color:#ff3c6a; }
+#trainingScreen .dual-metric .metric-value{ font-size:40px; font-weight:bold; color:#ff3c6a; }
 #trainingScreen .dual-metric .metric-label{ font-size:13px; color:#ccc; }
 
 /* 타임라인(세그먼트 바) — XL 높이 + 타입/상태 클래스 */
@@ -264,7 +264,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   background:#151720; border-radius:12px; padding:10px 15px; margin-top: 10px;
 }
 .timeline-progress.timeline--xl{
-  height:80px; border-radius:14px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,.25);
+  height:40px; border-radius:14px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,.25);
 }
 .timeline-segments{ display:flex; height:100%; }
 .timeline-segment{
