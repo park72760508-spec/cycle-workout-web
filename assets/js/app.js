@@ -877,7 +877,7 @@ document.addEventListener("DOMContentLoaded", () => {
        const id = card?.getAttribute("data-id");
        const user = list.find((x) => String(x.id) === String(id));
        if (user && typeof window.selectProfile === "function") {
-         window.selectProfile(user); // ← 여기!
+         window.selectProfile(user.id); // ← 여기!
        }
      };
    }
