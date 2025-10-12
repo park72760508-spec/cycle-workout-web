@@ -239,45 +239,47 @@ function buildSegmentBar(){
 
 
 // 메인 업데이트 함수(1초마다 호출):
+// 메인 업데이트 함수(1초마다 호출):
 function updateSegmentBarTick(){
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
   if (!w) return;
 
-  // 총 경과/현재 세그먼트/세그 경과는 기존 trainingState를 그대로 사용
-  const elapsed = (window.trainingState?.elapsedSec) || 0;
-  const segIndex = (window.trainingState?.segIndex) || 0;
+  const elapsed    = (window.trainingState?.elapsedSec)    || 0;
+  const segIndex   = (window.trainingState?.segIndex)      || 0;
   const segElapsed = (window.trainingState?.segElapsedSec) || 0;
 
-  // 1) 각 세그먼트 채우기 폭(시간 기반)
+  // 1) 각 세그먼트 채우기 폭(시간 기반, 0~100 클램프)
   let startAt = 0;
   for (let i=0; i<w.segments.length; i++){
     const seg = w.segments[i];
-    const dur = segDurationSec(seg);
+    const dur = Math.max(1, segDurationSec(seg));
     const endAt = startAt + dur;
     const fill = document.getElementById(`segFill-${i}`);
     if (fill){
-      let pct = 0;
-      if (elapsed >= endAt) pct = 100;                     // 완료
-      else if (elapsed <= startAt) pct = 0;                // 아직 시작 전
-      else pct = Math.min(100, Math.round((elapsed - startAt) / dur * 100)); // 진행 중
-      fill.style.width = pct + "%";
-      const ratio = Math.min(1, Math.max(0, elapsed / total));
+      const ratio = Math.min(1, Math.max(0, (elapsed - startAt) / dur));
       fill.style.width = (ratio * 100) + "%";
-       
     }
     startAt = endAt;
   }
 
-  // 2) 달성도 색상(세그 평균 파워 / 목표 파워)
-  // - 표본: liveData.power를 1초당 하나씩 누적
-  const p = Math.max(0, Number(window.liveData?.power) || 0);
-  if (w.segments[segIndex]) {
-    segBar.sumPower[segIndex] += p;
-    segBar.samples[segIndex]  += 1;
+  // 2) 평균 파워 누적(1초당 표본 1개) + 현재 세그먼트 평균 표시
+  {
+    const p = Math.max(0, Number(window.liveData?.power) || 0);
+    if (w.segments[segIndex]) {
+      segBar.sumPower[segIndex] = (segBar.sumPower[segIndex] || 0) + p;
+      segBar.samples[segIndex]  = (segBar.samples[segIndex]  || 0) + 1;
+    }
+
+    const curSamples = segBar.samples[segIndex] || 0;
+    const curAvg = curSamples > 0 ? Math.round(segBar.sumPower[segIndex] / curSamples) : 0;
+
+    // ✅ 여기서 화면에 '랩 파워(세그 평균)' 표시
+    const elAvg = document.getElementById("avgSegmentPowerValue");
+    if (elAvg) elAvg.textContent = String(curAvg);
   }
 
-  // 현재/완료 세그먼트의 평균과 목표 비교해서 색 지정
+  // 3) 달성도 색상(세그 평균 vs 목표)
   for (let i=0; i<w.segments.length; i++){
     const seg = w.segments[i];
     const targetW = segTargetW(seg, ftp);
@@ -286,29 +288,8 @@ function updateSegmentBarTick(){
     const fill = document.getElementById(`segFill-${i}`);
     if (fill) fill.style.background = colorByAchievement(ratio);
   }
-
-// 3) 상태 클래스(완료/현재/대기)
-{
-  const elapsed = (window.trainingState?.elapsedSec) || 0;
-  let startAt = 0;
-  for (let i=0; i<w.segments.length; i++){
-    const seg = w.segments[i];
-    const dur = segDurationSec(seg);
-    const endAt = startAt + dur;
-    const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
-    if (el){
-      el.classList.remove("is-complete","is-current","is-upcoming");
-      if (elapsed >= endAt) el.classList.add("is-complete");
-      else if (elapsed < endAt && elapsed >= startAt) el.classList.add("is-current");
-      else el.classList.add("is-upcoming");
-    }
-    startAt = endAt;
-  }
 }
 
-
-   
-}
 
 
 
@@ -382,6 +363,7 @@ function updateTimeUI() {
 
 
 // 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
+// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
 function applySegmentTarget(i) {
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
@@ -392,14 +374,24 @@ function applySegmentTarget(i) {
     window.liveData.targetPower = Math.round(ftp * seg.target);
   } else if (typeof seg.ftp_percent === "number") {
     window.liveData.targetPower = Math.round(ftp * (seg.ftp_percent / 100));
+  } else {
+    window.liveData.targetPower = 0;
   }
 
   const segName = document.getElementById("currentSegmentName");
   if (segName) segName.textContent = seg.label || `세그먼트 ${i + 1}`;
 
-  // 첫 프레임 즉시 반영
+  // ✅ (선택 권장) 새 구간 진입 시 평균 파워 표시는 일단 '–' 로 리셋
+  const avgEl = document.getElementById("avgSegmentPowerValue");
+  if (avgEl) avgEl.textContent = "–";
+
+  // ✅ (선택 권장) 목표 파워 텍스트도 보정
+  const tEl = document.getElementById("targetPowerValue");
+  if (tEl) tEl.textContent = String(window.liveData.targetPower || 0);
+
   window.updateTrainingDisplay && window.updateTrainingDisplay();
 }
+
 
 
 // -------------------------------------------------
