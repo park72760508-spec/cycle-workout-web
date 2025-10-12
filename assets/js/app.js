@@ -552,6 +552,10 @@ if (!window.showScreen) {
       el.style.display = "block";
       el.classList.add("active");
     }
+   if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+     loadWorkouts();
+   }
+     
   };
 }
 
