@@ -5,7 +5,7 @@
 
 // 실제 GAS URL 사용 (현재 코드에서 가져옴)
 //const GAS_URL = 'https://script.google.com/macros/s/AKfycbwp6v4zwoRi0qQekKQZr4bCs8s2wUolHtLNKgq_uX8pIHck1XllibKgzCZ64w6Z7Wrw/exec';
-const GAS_URL = window.GAS_URL;
+//const GAS_URL = window.GAS_URL;
 
 // 표준 세그먼트 타입 정의 (스키마 문서와 동일)
 const SEGMENT_TYPES = {
