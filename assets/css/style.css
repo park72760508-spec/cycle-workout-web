@@ -267,7 +267,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* -------- TTIMELINE -------- */
 
 .timeline-progress{
-  width:100%; height:30px;
+  width:100%; height:50px;
   background: rgba(255,255,255,0.08);
   border-radius: 15px; overflow:hidden;
   box-shadow: 0 4px 16px rgba(0,0,0,0.15);
