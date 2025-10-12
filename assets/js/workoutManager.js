@@ -76,11 +76,7 @@ window.displayWorkouts = function(ws){
 }
 
 // 검색 버튼 바인딩
-document.getElementById('btnSearchWorkout')?.addEventListener('click', async ()=>{
-  const q = document.getElementById('qWorkout').value.trim();
-  const res = await apiGet('searchWorkouts', { q });
-  if (res.success) displayWorkouts(res.items || []);
-});
+
 
 // “새 워크아웃” 버튼 → 빌더 화면 오픈
 document.getElementById('btnOpenBuilder')?.addEventListener('click', ()=>{
@@ -188,19 +184,11 @@ function segRowHTML(s={}, idx){
 }
 
 // 세그먼트 행 추가
-document.getElementById('btnAddSegment')?.addEventListener('click', ()=>{
-  const box = document.getElementById('wbSegments');
-  const idx = box.querySelectorAll('.card[data-row]').length;
-  box.insertAdjacentHTML('beforeend', segRowHTML({}, idx));
-});
+
+
 
 // 행 삭제
-document.getElementById('wbSegments')?.addEventListener('click', (e)=>{
-  const btn = e.target.closest('button[data-action="remove"]');
-  if (!btn) return;
-  const row = btn.closest('.card[data-row]');
-  row?.remove();
-});
+
 
 // 저장
 // === 저장/취소 버튼: 안전 바인딩(IIFE) ===
@@ -300,6 +288,65 @@ document.getElementById('wbSegments')?.addEventListener('click', (e)=>{
         }
       });
       btn.__boundOpenBuilder = true;
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
+  } else {
+    onReady();
+  }
+})();
+
+
+
+// === 검색/세그먼트 추가/행 삭제 : 안전 바인딩(IIFE) ===
+(function bindWorkoutListAndSegments(){
+  const onReady = () => {
+    // 1) 검색
+    const btnSearch = document.getElementById('btnSearchWorkout');
+    const qInput    = document.getElementById('qWorkout');
+    if (btnSearch && !btnSearch.__bound) {
+      btnSearch.addEventListener('click', async () => {
+        try {
+          const q = (qInput?.value || '').trim();
+          const res = await apiGet('searchWorkouts', { q });
+          if (res?.success) {
+            (window.displayWorkouts || displayWorkouts)(res.items || []);
+          } else {
+            alert('검색 오류: ' + (res?.error || '응답 없음'));
+          }
+        } catch (err) {
+          console.error(err);
+          alert('네트워크 오류: ' + err);
+        }
+      });
+      btnSearch.__bound = true;
+    }
+
+    // 2) 세그먼트 추가
+    const btnAdd = document.getElementById('btnAddSegment');
+    if (btnAdd && !btnAdd.__bound) {
+      btnAdd.addEventListener('click', () => {
+        const box = document.getElementById('wbSegments');
+        if (!box) return;
+        const idx = box.querySelectorAll('.card[data-row]').length;
+        // segRowHTML이 정의되어 있으므로 그대로 사용
+        box.insertAdjacentHTML('beforeend', segRowHTML({}, idx));
+      });
+      btnAdd.__bound = true;
+    }
+
+    // 3) 세그먼트 영역 위임: 행 삭제
+    const segBox = document.getElementById('wbSegments');
+    if (segBox && !segBox.__delegated) {
+      segBox.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="remove"]');
+        if (!btn) return;
+        const row = btn.closest('.card[data-row]');
+        row?.remove();
+      });
+      segBox.__delegated = true;
     }
   };
 
