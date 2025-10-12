@@ -21,13 +21,13 @@ async function apiPost(action, body={}) {
 /* ==========================================================
    목록 로드/검색/선택(교체)
 ========================================================== */
-export async function loadWorkouts(){
+window.loadWorkouts = async function(){
   const res = await apiGet('listWorkouts');
   if (!res.success) { console.error(res.error); return; }
   displayWorkouts(res.items || []);
 }
 
-export function displayWorkouts(ws){
+window.displayWorkouts = function(ws){
   const list = document.getElementById('workoutList');
   list.innerHTML = '';
   ws.forEach(w=>{
