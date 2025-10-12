@@ -203,46 +203,82 @@ document.getElementById('wbSegments')?.addEventListener('click', (e)=>{
 });
 
 // 저장
-document.getElementById('btnSaveWorkout')?.addEventListener('click', async ()=>{
-  const title = document.getElementById('wbTitle').value.trim();
-  const description = document.getElementById('wbDesc').value.trim();
-  const author = document.getElementById('wbAuthor').value.trim();
+// === 저장/취소 버튼: 안전 바인딩(IIFE) ===
+(function bindBuilderSaveCancel(){
+  const onReady = () => {
+    // 저장
+    const btnSave = document.getElementById('btnSaveWorkout');
+    if (btnSave && !btnSave.__bound) {
+      btnSave.addEventListener('click', async () => {
+        // 콘솔 로그로 동작여부 확인(필요시)
+        // console.log('[builder] save clicked');
 
-  const segments = [...document.querySelectorAll('#wbSegments .card[data-row]')].map((row, i)=>{
-    const get = k => row.querySelector(`[data-k="${k}"]`)?.value;
-    return {
-      label: get('label') || `세그먼트 ${i+1}`,
-      segment_type: get('segment_type') || 'interval',
-      duration_sec: Number(get('duration_sec'))||60,
-      target_type: get('target_type') || 'ftp_percent',
-      target_value: Number(get('target_value'))||60,
-      ramp: get('ramp') || 'none',
-      ramp_to_value: get('ramp_to_value') ? Number(get('ramp_to_value')) : null
-    };
-  });
+        const title = document.getElementById('wbTitle').value.trim();
+        const description = document.getElementById('wbDesc').value.trim();
+        const author = document.getElementById('wbAuthor').value.trim();
 
-  const payload = { title, description, author, segments };
+        const segments = [...document.querySelectorAll('#wbSegments .card[data-row]')].map((row, i)=>{
+          const get = k => row.querySelector(`[data-k="${k}"]`)?.value;
+          return {
+            label: get('label') || `세그먼트 ${i+1}`,
+            segment_type: get('segment_type') || 'interval',
+            duration_sec: Number(get('duration_sec'))||60,
+            target_type: get('target_type') || 'ftp_percent',
+            target_value: Number(get('target_value'))||60,
+            ramp: get('ramp') || 'none',
+            ramp_to_value: get('ramp_to_value') ? Number(get('ramp_to_value')) : null
+          };
+        });
 
-  let res;
-  if (__builderEditingId) {
-    res = await apiPost('updateworkout', { id: __builderEditingId, ...payload });
+        const payload = { title, description, author, segments };
+
+        try {
+          let res;
+          if (window.__builderEditingId) {
+            res = await apiPost('updateworkout', { id: window.__builderEditingId, ...payload });
+          } else {
+            res = await apiPost('createworkout', payload);
+          }
+
+          if (res && res.success) {
+            alert('저장되었습니다');
+            if (typeof window.showScreen === 'function') window.showScreen('workoutScreen');
+            if (typeof loadWorkouts === 'function') loadWorkouts();
+          } else {
+            alert('오류: ' + (res?.error || '응답 없음'));
+          }
+        } catch (err) {
+          console.error(err);
+          alert('네트워크/서버 오류: ' + err);
+        }
+      });
+      btnSave.__bound = true;
+    }
+
+    // 취소
+    const btnCancel = document.getElementById('btnCancelBuilder');
+    if (btnCancel && !btnCancel.__bound) {
+      btnCancel.addEventListener('click', () => {
+        if (typeof window.showScreen === 'function') {
+          window.showScreen('workoutScreen');
+        } else {
+          // 임시 fallback
+          document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+          document.getElementById('workoutScreen')?.classList.add('active');
+        }
+      });
+      btnCancel.__bound = true;
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
   } else {
-    res = await apiPost('createworkout', payload);
+    onReady();
   }
+})();
 
-  if (res.success){
-    alert('저장되었습니다');
-    window.showScreen('workoutScreen');
-    loadWorkouts();
-  } else {
-    alert('오류: ' + (res.error||''));
-  }
-});
 
-// 취소 → 목록
-document.getElementById('btnCancelBuilder')?.addEventListener('click', ()=>{
-  window.showScreen('workoutScreen');
-});
 
 
 // === 새 워크아웃 버튼 → 작성 화면으로 전환 (확실한 바인딩) ===
