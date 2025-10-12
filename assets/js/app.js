@@ -6,6 +6,17 @@ window.liveData = window.liveData || { power: 0, cadence: 0, heartRate: 0, targe
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
 
+function normalizeType(seg){
+  const t = (seg.segment_type || seg.label || "").toString().toLowerCase();
+  if (t.includes("warm")) return "warmup";
+  if (t.includes("cool")) return "cooldown";
+  if (t.includes("rest") || t.includes("recover")) return "rest";
+  if (t.includes("sweet")) return "sweetspot";
+  if (t.includes("tempo")) return "tempo";
+  return "interval"; // 기본값
+}
+
+
 
 // ── 훈련 지표 상태 (TSS / kcal / NP 근사) ─────────────────
 const trainingMetrics = {
@@ -205,16 +216,21 @@ function buildSegmentBar(){
     const dur = segDurationSec(seg);
     acc += dur; segBar.ends[i] = acc;
     const widthPct = (dur / total) * 100;
-    const label = seg.segment_type || seg.label || `세그 ${i+1}`;
+    const type = normalizeType(seg);
+    const label = seg.label || seg.segment_type || `세그 ${i+1}`;
+    const timeStr = secToMinShort(dur);
+    // data-type과 width, 접근성 라벨 포함
     return `
-      <div class="timeline-segment" data-index="${i}" style="width:${widthPct}%">
+      <div class="timeline-segment" data-index="${i}" data-type="${type}" style="width:${widthPct}%"
+           aria-label="${label} · ${timeStr}">
         <div class="progress-fill" id="segFill-${i}"></div>
         <span class="segment-label">${label}</span>
-        <span class="segment-time">${secToMinShort(dur)}</span>
+        <span class="segment-time">${timeStr}</span>
       </div>
     `;
   }).join("");
 }
+
 
 
 
@@ -267,6 +283,28 @@ function updateSegmentBarTick(){
     const fill = document.getElementById(`segFill-${i}`);
     if (fill) fill.style.background = colorByAchievement(ratio);
   }
+
+// 3) 상태 클래스(완료/현재/대기)
+{
+  const elapsed = (window.trainingState?.elapsedSec) || 0;
+  let startAt = 0;
+  for (let i=0; i<w.segments.length; i++){
+    const seg = w.segments[i];
+    const dur = segDurationSec(seg);
+    const endAt = startAt + dur;
+    const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+    if (el){
+      el.classList.remove("is-complete","is-current","is-upcoming");
+      if (elapsed >= endAt) el.classList.add("is-complete");
+      else if (elapsed < endAt && elapsed >= startAt) el.classList.add("is-current");
+      else el.classList.add("is-upcoming");
+    }
+    startAt = endAt;
+  }
+}
+
+
+   
 }
 
 
