@@ -4,7 +4,8 @@
    - 프로필 관리 및 FTP 업데이트
 ========================================================== */
 
-const GAS_URL = (window.CONFIG && window.CONFIG.GAS_WEB_APP_URL) || '';
+/*const GAS_URL = (window.CONFIG && window.CONFIG.GAS_WEB_APP_URL) || '';*/
+const GAS_URL = window.GAS_URL;
 
 // 사용자 API 함수들
 async function apiGetUsers() {
