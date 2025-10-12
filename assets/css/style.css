@@ -177,6 +177,21 @@ button[aria-disabled="true"] {
 /* (필요 시 확장) */
 .workout-list { display: grid; gap: 12px; }
 
+/* ==== Workout Builder: 하단 액션 바 고정 & 덮임 방지 ==== */
+.builder-actions {
+  position: sticky;         /* 스크롤해도 하단에 붙음 */
+  bottom: 0;
+  background: #fff;         /* 버튼 아래 내용과 분리 */
+  padding: 12px 0 16px;
+  z-index: 50;              /* 타 카드/오버레이보다 위 */
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
+}
+.builder-actions .btn-row { justify-content: center; gap: 12px; }
+
+/* 혹시 상위에 .is-disabled가 붙어 클릭이 막히는 것을 방지(국소 예외) */
+.builder-actions, 
+.builder-actions * { pointer-events: auto; }
+
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
 .workout-preview{
   background:#fff; border-radius:12px; padding:20px; margin-bottom:20px;
@@ -370,3 +385,8 @@ button[aria-disabled="true"] {
   #trainingScreen .current-power { font-size: 48px; }
   #trainingScreen .segment-details1 { font-size: 14px; }
 }
+
+
+
+
+
