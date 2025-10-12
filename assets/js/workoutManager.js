@@ -245,5 +245,33 @@ document.getElementById('btnCancelBuilder')?.addEventListener('click', ()=>{
 });
 
 
+// === 새 워크아웃 버튼 → 작성 화면으로 전환 (확실한 바인딩) ===
+(function bindOpenBuilderOnce(){
+  const onReady = () => {
+    const btn = document.getElementById('btnOpenBuilder');
+    if (!btn) return; // 아직 DOM에 없으면 다음 프레임 재시도 구조로도 확장 가능
+
+    // 중복 바인딩 방지
+    if (!btn.__boundOpenBuilder) {
+      btn.addEventListener('click', () => {
+        if (typeof window.showScreen === 'function') {
+          window.showScreen('workoutBuilderScreen');
+        } else {
+          console.warn('showScreen() not found. Check app.js global export.');
+          // 임시 fallback: 클래스 토글
+          document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+          document.getElementById('workoutBuilderScreen')?.classList.add('active');
+        }
+      });
+      btn.__boundOpenBuilder = true;
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
+  } else {
+    onReady();
+  }
+})();
 
 
