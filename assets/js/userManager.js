@@ -12,7 +12,6 @@ function jsonpRequest(url, params = {}) {
     const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
     const script = document.createElement('script');
     
-    // 전역 콜백 함수 등록
     window[callbackName] = function(data) {
       console.log('JSONP response received:', data);
       delete window[callbackName];
@@ -20,7 +19,6 @@ function jsonpRequest(url, params = {}) {
       resolve(data);
     };
     
-    // 에러 처리
     script.onerror = function() {
       console.error('JSONP script loading failed');
       delete window[callbackName];
@@ -30,18 +28,17 @@ function jsonpRequest(url, params = {}) {
       reject(new Error('JSONP request failed'));
     };
     
-    // URL 파라미터 구성 - 한글 필드는 Base64 인코딩
+    // URL 파라미터 구성 - 한글은 유니코드 이스케이프로 변환
     const urlParams = new URLSearchParams();
     Object.keys(params).forEach(key => {
-      let value = params[key];
+      let value = params[key].toString();
       
-      // 한글이 포함된 필드는 Base64 인코딩
+      // 한글이 포함된 필드는 유니코드 이스케이프로 변환
       if (key === 'name' || key === 'contact') {
-        // 한글이 있는지 확인
-        if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(value)) {
-          value = btoa(unescape(encodeURIComponent(value))); // Base64 인코딩
-          urlParams.set(key + '_encoded', 'true'); // 인코딩 플래그
-        }
+        // 한글을 \uXXXX 형태로 변환
+        value = value.replace(/[\u0080-\uFFFF]/g, function(match) {
+          return '\\u' + ('0000' + match.charCodeAt(0).toString(16)).substr(-4);
+        });
       }
       
       urlParams.set(key, value);
@@ -54,7 +51,6 @@ function jsonpRequest(url, params = {}) {
     script.src = finalUrl;
     document.body.appendChild(script);
     
-    // 타임아웃 처리 (10초)
     setTimeout(() => {
       if (window[callbackName]) {
         console.warn('JSONP request timeout');
