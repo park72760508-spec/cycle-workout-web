@@ -14,7 +14,7 @@ function jsonpRequest(url, params = {}) {
     
     // 전역 콜백 함수 등록
     window[callbackName] = function(data) {
-      console.log('JSONP response received:', data); // 로그 추가
+      console.log('JSONP response received:', data);
       delete window[callbackName];
       document.body.removeChild(script);
       resolve(data);
@@ -22,7 +22,7 @@ function jsonpRequest(url, params = {}) {
     
     // 에러 처리
     script.onerror = function() {
-      console.error('JSONP script loading failed'); // 로그 추가
+      console.error('JSONP script loading failed');
       delete window[callbackName];
       if (document.body.contains(script)) {
         document.body.removeChild(script);
@@ -30,15 +30,26 @@ function jsonpRequest(url, params = {}) {
       reject(new Error('JSONP request failed'));
     };
     
-    // URL 파라미터 구성
+    // URL 파라미터 구성 - 한글 필드는 Base64 인코딩
     const urlParams = new URLSearchParams();
     Object.keys(params).forEach(key => {
-      urlParams.set(key, encodeURIComponent(params[key])); // URL 인코딩 추가
+      let value = params[key];
+      
+      // 한글이 포함된 필드는 Base64 인코딩
+      if (key === 'name' || key === 'contact') {
+        // 한글이 있는지 확인
+        if (/[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(value)) {
+          value = btoa(unescape(encodeURIComponent(value))); // Base64 인코딩
+          urlParams.set(key + '_encoded', 'true'); // 인코딩 플래그
+        }
+      }
+      
+      urlParams.set(key, value);
     });
     urlParams.set('callback', callbackName);
     
     const finalUrl = `${url}?${urlParams.toString()}`;
-    console.log('JSONP request URL:', finalUrl); // 실제 요청 URL 로그
+    console.log('JSONP request URL:', finalUrl);
     
     script.src = finalUrl;
     document.body.appendChild(script);
