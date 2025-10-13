@@ -58,14 +58,15 @@ async function apiGetUser(id) {
 }
 
 async function apiCreateUser(userData) {
-  // POST 데이터는 GET 파라미터로 변환 (제한적이지만 작은 데이터에는 적합)
+  console.log('apiCreateUser called with:', userData);
   const params = {
     action: 'createUser',
-    name: userData.name,
+    name: userData.name || '',
     contact: userData.contact || '',
-    ftp: userData.ftp,
-    weight: userData.weight
+    ftp: (userData.ftp || 0).toString(),
+    weight: (userData.weight || 0).toString()
   };
+  console.log('Sending params:', params);
   return jsonpRequest(GAS_URL, params);
 }
 
