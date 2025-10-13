@@ -1,49 +1,91 @@
 /* ==========================================================
    사용자 관리 모듈 (userManager.js)
-   - Google Sheets API와 연동한 사용자 CRUD
+   - Google Sheets API와 연동한 사용자 CRUD (JSONP 방식)
    - 프로필 관리 및 FTP 업데이트
 ========================================================== */
 
-/*const GAS_URL = (window.CONFIG && window.CONFIG.GAS_WEB_APP_URL) || '';*/
 const GAS_URL = window.GAS_URL;
 
-// 사용자 API 함수들
+// JSONP 방식 API 호출 헬퍼 함수
+function jsonpRequest(url, params = {}) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+    const script = document.createElement('script');
+    
+    // 전역 콜백 함수 등록
+    window[callbackName] = function(data) {
+      delete window[callbackName];
+      document.body.removeChild(script);
+      resolve(data);
+    };
+    
+    // 에러 처리
+    script.onerror = function() {
+      delete window[callbackName];
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+      reject(new Error('JSONP request failed'));
+    };
+    
+    // URL 파라미터 구성
+    const urlParams = new URLSearchParams(params);
+    urlParams.set('callback', callbackName);
+    
+    script.src = `${url}?${urlParams.toString()}`;
+    document.body.appendChild(script);
+    
+    // 타임아웃 처리 (10초)
+    setTimeout(() => {
+      if (window[callbackName]) {
+        delete window[callbackName];
+        if (document.body.contains(script)) {
+          document.body.removeChild(script);
+        }
+        reject(new Error('JSONP request timeout'));
+      }
+    }, 10000);
+  });
+}
+
+// 사용자 API 함수들 (JSONP 방식)
 async function apiGetUsers() {
-  const response = await fetch(`${GAS_URL}?action=listUsers`);
-  return response.json();
+  return jsonpRequest(GAS_URL, { action: 'listUsers' });
 }
 
 async function apiGetUser(id) {
-  const response = await fetch(`${GAS_URL}?action=getUser&id=${id}`);
-  return response.json();
+  return jsonpRequest(GAS_URL, { action: 'getUser', id: id });
 }
 
 async function apiCreateUser(userData) {
-  const response = await fetch(`${GAS_URL}?action=createUser`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(userData)
-  });
-  return response.json();
+  // POST 데이터는 GET 파라미터로 변환 (제한적이지만 작은 데이터에는 적합)
+  const params = {
+    action: 'createUser',
+    name: userData.name,
+    contact: userData.contact || '',
+    ftp: userData.ftp,
+    weight: userData.weight
+  };
+  return jsonpRequest(GAS_URL, params);
 }
 
 async function apiUpdateUser(id, userData) {
-  const response = await fetch(`${GAS_URL}?action=updateUser`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, ...userData })
-  });
-  return response.json();
+  const params = {
+    action: 'updateUser',
+    id: id,
+    name: userData.name,
+    contact: userData.contact || '',
+    ftp: userData.ftp,
+    weight: userData.weight
+  };
+  return jsonpRequest(GAS_URL, params);
 }
 
 async function apiDeleteUser(id) {
-  const response = await fetch(`${GAS_URL}?action=deleteUser`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id })
-  });
-  return response.json();
+  return jsonpRequest(GAS_URL, { action: 'deleteUser', id: id });
 }
+
+
 
 /**
  * 사용자 목록 로드 및 렌더링
