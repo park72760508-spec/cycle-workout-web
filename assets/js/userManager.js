@@ -14,6 +14,7 @@ function jsonpRequest(url, params = {}) {
     
     // 전역 콜백 함수 등록
     window[callbackName] = function(data) {
+      console.log('JSONP response received:', data); // 로그 추가
       delete window[callbackName];
       document.body.removeChild(script);
       resolve(data);
@@ -21,6 +22,7 @@ function jsonpRequest(url, params = {}) {
     
     // 에러 처리
     script.onerror = function() {
+      console.error('JSONP script loading failed'); // 로그 추가
       delete window[callbackName];
       if (document.body.contains(script)) {
         document.body.removeChild(script);
@@ -29,15 +31,22 @@ function jsonpRequest(url, params = {}) {
     };
     
     // URL 파라미터 구성
-    const urlParams = new URLSearchParams(params);
+    const urlParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      urlParams.set(key, encodeURIComponent(params[key])); // URL 인코딩 추가
+    });
     urlParams.set('callback', callbackName);
     
-    script.src = `${url}?${urlParams.toString()}`;
+    const finalUrl = `${url}?${urlParams.toString()}`;
+    console.log('JSONP request URL:', finalUrl); // 실제 요청 URL 로그
+    
+    script.src = finalUrl;
     document.body.appendChild(script);
     
     // 타임아웃 처리 (10초)
     setTimeout(() => {
       if (window[callbackName]) {
+        console.warn('JSONP request timeout');
         delete window[callbackName];
         if (document.body.contains(script)) {
           document.body.removeChild(script);
