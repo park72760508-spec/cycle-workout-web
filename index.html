@@ -291,12 +291,13 @@
   </div>
 
   <!-- 4) 워크아웃 작성/수정 화면 -->
+  <!-- 워크아웃 작성/수정 화면에서 이 ID들이 있어야 합니다 -->
   <div id="workoutBuilderScreen" class="screen">
     <div class="header">
       <h1>✏️ 워크아웃 작성</h1>
       <p class="subtitle">세그먼트를 추가/수정하고 저장하세요</p>
     </div>
-
+  
     <div class="card">
       <div class="form-group">
         <label>제목 *</label>
@@ -306,22 +307,30 @@
         <label>설명</label>
         <input type="text" id="wbDesc" placeholder="간단 설명" />
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>작성자</label>
+          <input type="text" id="wbAuthor" placeholder="coach" />
+        </div>
+        <div class="form-group">
+          <label>상태 *</label>
+          <select id="wbStatus" required>
+            <option value="보이기">보이기 (공개)</option>
+            <option value="숨기기">숨기기 (비공개)</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group">
-        <label>작성자</label>
-        <input type="text" id="wbAuthor" placeholder="coach" />
+        <label>게시 날짜</label>
+        <input type="date" id="wbPublishDate" />
+        <small class="form-help">비워두면 상시 노출됩니다.</small>
       </div>
     </div>
-
-    <div class="card">
-      <h3 class="mb-10">세그먼트</h3>
-      <div id="wbSegments"></div>
-      <button class="btn mt-10" id="btnAddSegment">+ 세그먼트 추가</button>
-    </div>
-
+  
     <div class="builder-actions">
       <div class="btn-row">
         <button class="btn btn-success" id="btnSaveWorkout">💾 저장</button>
-        <button class="btn btn-secondary" id="btnCancelBuilder">❌ 취소</button>
+        <button class="btn btn-secondary" id="btnCancelBuilder">✖ 취소</button>
       </div>
     </div>
   </div>
