@@ -191,7 +191,7 @@ function showAddWorkoutForm(clearForm = true) {
 }
 
 /**
- * 새 워크아웃 저장 - 수정 모드일 때 실행 방지
+ * 새 워크아웃 저장 - 수정 모드일 때 실행 방지 (null 체크 추가)
  */
 async function saveWorkout() {
   // 수정 모드일 때는 실행하지 않음
@@ -200,11 +200,24 @@ async function saveWorkout() {
     return;
   }
 
-  const title = document.getElementById('wbTitle').value.trim();
-  const description = document.getElementById('wbDesc').value.trim();
-  const author = document.getElementById('wbAuthor').value.trim();
-  const status = document.getElementById('wbStatus').value || '보이기';
-  const publishDate = document.getElementById('wbPublishDate').value || null;
+  // 요소들 가져오기 및 null 체크
+  const titleEl = document.getElementById('wbTitle');
+  const descEl = document.getElementById('wbDesc');
+  const authorEl = document.getElementById('wbAuthor');
+  const statusEl = document.getElementById('wbStatus');
+  const publishDateEl = document.getElementById('wbPublishDate');
+
+  if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
+    console.error('워크아웃 폼 요소를 찾을 수 없습니다.');
+    showToast('폼 요소를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+    return;
+  }
+
+  const title = titleEl.value.trim();
+  const description = descEl.value.trim();
+  const author = authorEl.value.trim();
+  const status = statusEl.value || '보이기';
+  const publishDate = publishDateEl.value || null;
 
   // 유효성 검사
   if (!title) {
@@ -233,7 +246,7 @@ async function saveWorkout() {
 }
 
 /**
- * 워크아웃 수정
+ * 워크아웃 수정 (null 체크 추가)
  */
 async function editWorkout(workoutId) {
   try {
@@ -254,12 +267,25 @@ async function editWorkout(workoutId) {
     // 폼 표시 (초기화하지 않음)
     showAddWorkoutForm(false);
     
+    // 요소들 가져오기 및 null 체크
+    const titleEl = document.getElementById('wbTitle');
+    const descEl = document.getElementById('wbDesc');
+    const authorEl = document.getElementById('wbAuthor');
+    const statusEl = document.getElementById('wbStatus');
+    const publishDateEl = document.getElementById('wbPublishDate');
+    
+    if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
+      console.error('워크아웃 폼 요소를 찾을 수 없습니다.');
+      showToast('폼 요소를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+      return;
+    }
+    
     // 수정 폼에 기존 데이터 채우기
-    document.getElementById('wbTitle').value = workout.title || '';
-    document.getElementById('wbDesc').value = workout.description || '';
-    document.getElementById('wbAuthor').value = workout.author || '';
-    document.getElementById('wbStatus').value = workout.status || '보이기';
-    document.getElementById('wbPublishDate').value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
+    titleEl.value = workout.title || '';
+    descEl.value = workout.description || '';
+    authorEl.value = workout.author || '';
+    statusEl.value = workout.status || '보이기';
+    publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
     
     // 저장 버튼을 업데이트 버튼으로 완전히 교체
     const saveBtn = document.getElementById('btnSaveWorkout');
@@ -283,7 +309,7 @@ async function editWorkout(workoutId) {
 }
 
 /**
- * 실제 워크아웃 업데이트 실행 함수
+ * 실제 워크아웃 업데이트 실행 함수 (null 체크 추가)
  */
 async function performWorkoutUpdate() {
   if (!isWorkoutEditMode || !currentEditWorkoutId) {
@@ -291,11 +317,24 @@ async function performWorkoutUpdate() {
     return;
   }
 
-  const title = document.getElementById('wbTitle').value.trim();
-  const description = document.getElementById('wbDesc').value.trim();
-  const author = document.getElementById('wbAuthor').value.trim();
-  const status = document.getElementById('wbStatus').value || '보이기';
-  const publishDate = document.getElementById('wbPublishDate').value || null;
+  // 요소들 가져오기 및 null 체크
+  const titleEl = document.getElementById('wbTitle');
+  const descEl = document.getElementById('wbDesc');
+  const authorEl = document.getElementById('wbAuthor');
+  const statusEl = document.getElementById('wbStatus');
+  const publishDateEl = document.getElementById('wbPublishDate');
+
+  if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
+    console.error('워크아웃 폼 요소를 찾을 수 없습니다.');
+    showToast('폼 요소를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+    return;
+  }
+
+  const title = titleEl.value.trim();
+  const description = descEl.value.trim();
+  const author = authorEl.value.trim();
+  const status = statusEl.value || '보이기';
+  const publishDate = publishDateEl.value || null;
 
   // 유효성 검사
   if (!title) {
@@ -322,6 +361,10 @@ async function performWorkoutUpdate() {
     showToast('워크아웃 수정 중 오류가 발생했습니다.');
   }
 }
+
+
+
+
 
 /**
  * 워크아웃 삭제
