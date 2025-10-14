@@ -6,6 +6,10 @@
 
 const GAS_URL = window.GAS_URL;
 
+// 전역 변수로 현재 모드 추적
+let isEditMode = false;
+let currentEditUserId = null;
+
 // JSONP 방식 API 호출 헬퍼 함수
 // JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선
 function jsonpRequest(url, params = {}) {
@@ -228,9 +232,15 @@ function hideAddUserForm() {
 }
 
 /**
- * 새 사용자 저장
+ * 새 사용자 저장 - 수정 모드일 때 실행 방지
  */
 async function saveUser() {
+  // 수정 모드일 때는 실행하지 않음
+  if (isEditMode) {
+    console.log('Edit mode active - saveUser blocked');
+    return;
+  }
+
   const name = document.getElementById('userName').value.trim();
   const contact = document.getElementById('userContact').value.trim();
   const ftp = parseInt(document.getElementById('userFTP').value);
@@ -289,8 +299,10 @@ function showAddUserForm(clearForm = true) {
   }
 }
 
+
+
 /**
- * 사용자 수정 - 순서 변경으로 문제 해결
+ * 사용자 수정
  */
 async function editUser(userId) {
   try {
@@ -303,20 +315,28 @@ async function editUser(userId) {
 
     const user = result.item;
     
-    // 먼저 폼 표시 (초기화하지 않음)
-    showAddUserForm(false); // false를 전달하여 초기화 방지
+    // 수정 모드 활성화
+    isEditMode = true;
+    currentEditUserId = userId;
+    console.log('Edit mode activated for user:', userId);
     
-    // 그 다음 수정 폼에 기존 데이터 채우기
+    // 폼 표시 (초기화하지 않음)
+    showAddUserForm(false);
+    
+    // 수정 폼에 기존 데이터 채우기
     document.getElementById('userName').value = user.name || '';
     document.getElementById('userContact').value = user.contact || '';
     document.getElementById('userFTP').value = user.ftp || '';
     document.getElementById('userWeight').value = user.weight || '';
     
-    // 저장 버튼을 업데이트 모드로 변경
+    // 저장 버튼을 업데이트 버튼으로 완전히 교체
     const saveBtn = document.getElementById('btnSaveUser');
     if (saveBtn) {
       saveBtn.textContent = '수정';
-      saveBtn.onclick = () => updateUser(userId);
+      // 기존 이벤트 리스너 제거하고 새로 바인딩
+      saveBtn.removeEventListener('click', saveUser);
+      saveBtn.onclick = null;
+      saveBtn.onclick = () => performUpdate();
     }
     
     // 폼 제목도 변경
@@ -332,7 +352,7 @@ async function editUser(userId) {
 }
 
 /**
- * 사용자 추가 폼 숨기기 - 원상 복구 기능 추가
+ * 사용자 추가 폼 숨기기 - 모드 리셋 포함
  */
 function hideAddUserForm() {
   const cardAddUser = document.getElementById('cardAddUser');
@@ -345,7 +365,8 @@ function hideAddUserForm() {
   const saveBtn = document.getElementById('btnSaveUser');
   if (saveBtn) {
     saveBtn.textContent = '저장';
-    saveBtn.onclick = saveUser;
+    saveBtn.onclick = null;
+    saveBtn.onclick = saveUser; // 다시 saveUser로 바인딩
   }
   
   // 폼 제목도 원상 복구
@@ -353,7 +374,13 @@ function hideAddUserForm() {
   if (formTitle) {
     formTitle.textContent = '새 사용자 등록';
   }
+  
+  // 모드 리셋
+  isEditMode = false;
+  currentEditUserId = null;
 }
+
+
 
 /**
  * 사용자 정보 업데이트
@@ -394,6 +421,60 @@ async function updateUser(userId) {
     showToast('사용자 수정 중 오류가 발생했습니다.');
   }
 }
+
+
+/**
+ * 실제 업데이트 실행 함수
+ */
+async function performUpdate() {
+  if (!isEditMode || !currentEditUserId) {
+    console.error('Invalid edit mode state');
+    return;
+  }
+
+  const name = document.getElementById('userName').value.trim();
+  const contact = document.getElementById('userContact').value.trim();
+  const ftp = parseInt(document.getElementById('userFTP').value);
+  const weight = parseFloat(document.getElementById('userWeight').value);
+
+  // 유효성 검사
+  if (!name || !ftp || !weight) {
+    showToast('모든 필수 필드를 입력해주세요.');
+    return;
+  }
+
+  try {
+    const userData = { name, contact, ftp, weight };
+    console.log('Updating user:', currentEditUserId, 'with data:', userData);
+    
+    const result = await apiUpdateUser(currentEditUserId, userData);
+    
+    if (result.success) {
+      showToast('사용자 정보가 수정되었습니다.');
+      resetFormMode(); // 모드 리셋 및 폼 숨기기
+      loadUsers(); // 목록 새로고침
+    } else {
+      showToast('사용자 수정 실패: ' + result.error);
+    }
+    
+  } catch (error) {
+    console.error('사용자 업데이트 실패:', error);
+    showToast('사용자 수정 중 오류가 발생했습니다.');
+  }
+}
+
+/**
+ * 폼 모드 리셋
+ */
+function resetFormMode() {
+  isEditMode = false;
+  currentEditUserId = null;
+  hideAddUserForm();
+  console.log('Form mode reset to add mode');
+}
+
+
+
 
 /**
  * 사용자 삭제
