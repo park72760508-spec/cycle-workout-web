@@ -7,6 +7,7 @@
 const GAS_URL = window.GAS_URL;
 
 // JSONP 방식 API 호출 헬퍼 함수
+// JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
     const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
@@ -28,20 +29,13 @@ function jsonpRequest(url, params = {}) {
       reject(new Error('JSONP request failed'));
     };
     
-    // URL 파라미터 구성 - 한글은 유니코드 이스케이프로 변환
+    // URL 파라미터 구성 - encodeURIComponent 사용으로 개선
     const urlParams = new URLSearchParams();
     Object.keys(params).forEach(key => {
       let value = params[key].toString();
       
-      // 한글이 포함된 필드는 유니코드 이스케이프로 변환
-      if (key === 'name' || key === 'contact') {
-        // 한글을 \uXXXX 형태로 변환
-        value = value.replace(/[\u0080-\uFFFF]/g, function(match) {
-          return '\\u' + ('0000' + match.charCodeAt(0).toString(16)).substr(-4);
-        });
-      }
-      
-      urlParams.set(key, value);
+      // 기존의 수동 유니코드 이스케이프 제거하고 자동 인코딩 사용
+      urlParams.set(key, value); // URLSearchParams가 자동으로 encodeURIComponent 적용
     });
     urlParams.set('callback', callbackName);
     
@@ -63,6 +57,7 @@ function jsonpRequest(url, params = {}) {
     }, 10000);
   });
 }
+
 
 // 사용자 API 함수들 (JSONP 방식)
 async function apiGetUsers() {
