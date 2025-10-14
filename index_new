@@ -281,7 +281,7 @@
     </div>
   </div>
 
-  <!-- 4) 워크아웃 작성/수정 화면 -->
+<!-- 4) 워크아웃 작성/수정 화면 -->
   <div id="workoutBuilderScreen" class="screen">
     <div class="header">
       <h1>✏️ 워크아웃 작성</h1>
@@ -297,9 +297,23 @@
         <label>설명</label>
         <input type="text" id="wbDesc" placeholder="간단 설명" />
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>작성자</label>
+          <input type="text" id="wbAuthor" placeholder="coach" />
+        </div>
+        <div class="form-group">
+          <label>상태 *</label>
+          <select id="wbStatus" required>
+            <option value="보이기">보이기 (공개)</option>
+            <option value="숨기기">숨기기 (비공개)</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group">
-        <label>작성자</label>
-        <input type="text" id="wbAuthor" placeholder="coach" />
+        <label>게시 날짜</label>
+        <input type="date" id="wbPublishDate" />
+        <small class="form-help">비워두면 상시 노출됩니다. 날짜를 지정하면 해당 날짜부터 공개됩니다.</small>
       </div>
     </div>
 
@@ -312,7 +326,7 @@
     <div class="builder-actions">
       <div class="btn-row">
         <button class="btn btn-success" id="btnSaveWorkout">💾 저장</button>
-        <button class="btn btn-secondary" id="btnCancelBuilder">❌ 취소</button>
+        <button class="btn btn-secondary" id="btnCancelBuilder">✖ 취소</button>
       </div>
     </div>
   </div>
@@ -542,12 +556,12 @@
   <!-- 토스트 메시지 -->
   <div id="toast" class="toast hidden"></div>
 
-  <!-- JavaScript 파일들 -->
+<!-- JavaScript 파일들 -->
   <script src="assets/js/data.js" defer></script>
   <script src="assets/js/bluetooth.js" defer></script>
   <script src="assets/js/userManager.js" defer></script>
-  <script src="assets/js/trainingResults.js" defer></script>
-  <script src="assets/js/workoutManager.js" defer></script>
+  <script src="assets/js/workoutManager.js" defer></script> <!-- 👈 이 줄 추가 -->
+  <script src="assets/js/resultManager.js" defer></script>
   <script src="assets/js/app.js" defer></script>
 
   <!-- Google Charts for data visualization -->
