@@ -271,7 +271,26 @@ async function saveUser() {
 }
 
 /**
- * 사용자 수정
+ * 새 사용자 추가 폼 표시 - 초기화 옵션 추가
+ */
+function showAddUserForm(clearForm = true) {
+  const cardAddUser = document.getElementById('cardAddUser');
+  const addUserForm = document.getElementById('addUserForm');
+  
+  if (cardAddUser) cardAddUser.classList.add('hidden');
+  if (addUserForm) addUserForm.classList.remove('hidden');
+  
+  // clearForm이 true일 때만 폼 초기화 (기본값은 true로 기존 동작 유지)
+  if (clearForm) {
+    document.getElementById('userName').value = '';
+    document.getElementById('userContact').value = '';
+    document.getElementById('userFTP').value = '';
+    document.getElementById('userWeight').value = '';
+  }
+}
+
+/**
+ * 사용자 수정 - 순서 변경으로 문제 해결
  */
 async function editUser(userId) {
   try {
@@ -284,14 +303,14 @@ async function editUser(userId) {
 
     const user = result.item;
     
-    // 수정 폼에 기존 데이터 채우기
-    document.getElementById('userName').value = user.name;
-    document.getElementById('userContact').value = user.contact || '';
-    document.getElementById('userFTP').value = user.ftp;
-    document.getElementById('userWeight').value = user.weight;
+    // 먼저 폼 표시 (초기화하지 않음)
+    showAddUserForm(false); // false를 전달하여 초기화 방지
     
-    // 폼 표시
-    showAddUserForm();
+    // 그 다음 수정 폼에 기존 데이터 채우기
+    document.getElementById('userName').value = user.name || '';
+    document.getElementById('userContact').value = user.contact || '';
+    document.getElementById('userFTP').value = user.ftp || '';
+    document.getElementById('userWeight').value = user.weight || '';
     
     // 저장 버튼을 업데이트 모드로 변경
     const saveBtn = document.getElementById('btnSaveUser');
@@ -300,9 +319,39 @@ async function editUser(userId) {
       saveBtn.onclick = () => updateUser(userId);
     }
     
+    // 폼 제목도 변경
+    const formTitle = document.querySelector('#addUserForm h3');
+    if (formTitle) {
+      formTitle.textContent = '사용자 정보 수정';
+    }
+    
   } catch (error) {
     console.error('사용자 수정 실패:', error);
     showToast('사용자 정보 로드 중 오류가 발생했습니다.');
+  }
+}
+
+/**
+ * 사용자 추가 폼 숨기기 - 원상 복구 기능 추가
+ */
+function hideAddUserForm() {
+  const cardAddUser = document.getElementById('cardAddUser');
+  const addUserForm = document.getElementById('addUserForm');
+  
+  if (addUserForm) addUserForm.classList.add('hidden');
+  if (cardAddUser) cardAddUser.classList.remove('hidden');
+  
+  // 저장 버튼을 다시 생성 모드로 되돌리기
+  const saveBtn = document.getElementById('btnSaveUser');
+  if (saveBtn) {
+    saveBtn.textContent = '저장';
+    saveBtn.onclick = saveUser;
+  }
+  
+  // 폼 제목도 원상 복구
+  const formTitle = document.querySelector('#addUserForm h3');
+  if (formTitle) {
+    formTitle.textContent = '새 사용자 등록';
   }
 }
 
