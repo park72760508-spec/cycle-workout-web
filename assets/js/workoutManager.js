@@ -4,7 +4,7 @@
    - 상태(보이기/숨기기) 및 게시날짜 필터링 지원
 ========================================================== */
 
-const GAS_URL = window.GAS_URL;
+// GAS_URL 선언 제거 - window.GAS_URL 직접 사용
 
 // 전역 변수로 현재 모드 추적
 let isWorkoutEditMode = false;
@@ -12,15 +12,15 @@ let currentEditWorkoutId = null;
 
 // 워크아웃 API 함수들 (JSONP 방식)
 async function apiGetWorkouts() {
-  return jsonpRequest(GAS_URL, { action: 'listWorkouts' });
+  return jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
 }
 
 async function apiGetAllWorkouts() {
-  return jsonpRequest(GAS_URL, { action: 'listAllWorkouts' });
+  return jsonpRequest(window.GAS_URL, { action: 'listAllWorkouts' });
 }
 
 async function apiGetWorkout(id) {
-  return jsonpRequest(GAS_URL, { action: 'getWorkout', id: id });
+  return jsonpRequest(window.GAS_URL, { action: 'getWorkout', id: id });
 }
 
 async function apiCreateWorkout(workoutData) {
@@ -34,7 +34,7 @@ async function apiCreateWorkout(workoutData) {
     publish_date: workoutData.publish_date || ''
   };
   console.log('Sending params:', params);
-  return jsonpRequest(GAS_URL, params);
+  return jsonpRequest(window.GAS_URL, params);
 }
 
 async function apiUpdateWorkout(id, workoutData) {
@@ -47,11 +47,11 @@ async function apiUpdateWorkout(id, workoutData) {
     status: workoutData.status || '보이기',
     publish_date: workoutData.publish_date || ''
   };
-  return jsonpRequest(GAS_URL, params);
+  return jsonpRequest(window.GAS_URL, params);
 }
 
 async function apiDeleteWorkout(id) {
-  return jsonpRequest(GAS_URL, { action: 'deleteWorkout', id: id });
+  return jsonpRequest(window.GAS_URL, { action: 'deleteWorkout', id: id });
 }
 
 /**
