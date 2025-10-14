@@ -554,6 +554,302 @@ button[aria-disabled="true"] {
   cursor: pointer;
 }
 
+/* ========================================
+   세그먼트 관리 스타일
+======================================== */
 
+/* 세그먼트 헤더 */
+.segment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.segment-summary {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.segment-summary strong {
+  color: #2e74e8;
+}
+
+/* 세그먼트 목록 */
+.segments-list {
+  min-height: 120px;
+  border: 2px dashed #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.segments-empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 20px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.segments-empty p {
+  margin: 4px 0;
+}
+
+.segments-empty .muted {
+  font-size: 14px;
+}
+
+/* 개별 세그먼트 카드 */
+.segment-card {
+  background: #f8f9fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.segment-card:hover {
+  border-color: #2e74e8;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(46, 116, 232, 0.1);
+}
+
+.segment-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg);
+}
+
+/* 세그먼트 정보 */
+.segment-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.segment-type-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.segment-type-badge.warmup { background: #fef3c7; color: #92400e; }
+.segment-type-badge.interval { background: #fecaca; color: #991b1b; }
+.segment-type-badge.rest { background: #dbeafe; color: #1d4ed8; }
+.segment-type-badge.sweetspot { background: #f3e8ff; color: #7c3aed; }
+.segment-type-badge.tempo { background: #d1fae5; color: #065f46; }
+.segment-type-badge.threshold { background: #fed7aa; color: #c2410c; }
+.segment-type-badge.vo2max { background: #fce7f3; color: #be185d; }
+.segment-type-badge.cooldown { background: #e0f2fe; color: #0c4a6e; }
+
+.segment-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.segment-label {
+  font-weight: 600;
+  color: #111827;
+}
+
+.segment-meta {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.segment-intensity {
+  font-weight: 600;
+  color: #2e74e8;
+}
+
+/* 세그먼트 액션 */
+.segment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segment-drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  padding: 4px;
+}
+
+.segment-drag-handle:active {
+  cursor: grabbing;
+}
+
+.segment-edit-btn, .segment-delete-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.segment-edit-btn:hover { background: #e0f2fe; }
+.segment-delete-btn:hover { background: #fee2e2; }
+
+/* 세그먼트 추가 버튼들 */
+.segment-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quick-add-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn-icon {
+  margin-right: 4px;
+}
+
+/* 세그먼트 편집 모달 */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: 4px;
+}
+
+.modal-close:hover {
+  color: #374151;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* 세그먼트 모달 전용 폼 스타일 */
+.duration-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duration-input input {
+  width: 60px;
+}
+
+.intensity-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.intensity-input input {
+  width: 80px;
+}
+
+.input-suffix {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.ramp-settings {
+  margin-top: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.ramp-settings.hidden {
+  display: none;
+}
+
+/* 드래그 앤 드롭 스타일 */
+.segments-list.drag-over {
+  border-color: #2e74e8;
+  background: #eff6ff;
+}
+
+.drop-zone {
+  height: 4px;
+  background: #2e74e8;
+  border-radius: 2px;
+  margin: 4px 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.drop-zone.active {
+  opacity: 1;
+}
 
 
