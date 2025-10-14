@@ -168,11 +168,25 @@ function showAddWorkoutForm(clearForm = true) {
   
   // clearForm이 true일 때만 폼 초기화
   if (clearForm) {
-    document.getElementById('wbTitle').value = '';
-    document.getElementById('wbDesc').value = '';
-    document.getElementById('wbAuthor').value = '';
-    document.getElementById('wbStatus').value = '보이기';
-    document.getElementById('wbPublishDate').value = '';
+    // 각 요소가 존재하는지 확인 후 값 설정
+    const titleEl = document.getElementById('wbTitle');
+    const descEl = document.getElementById('wbDesc');
+    const authorEl = document.getElementById('wbAuthor');
+    const statusEl = document.getElementById('wbStatus');
+    const publishDateEl = document.getElementById('wbPublishDate');
+    
+    if (titleEl) titleEl.value = '';
+    if (descEl) descEl.value = '';
+    if (authorEl) authorEl.value = '';
+    if (statusEl) statusEl.value = '보이기';
+    if (publishDateEl) publishDateEl.value = '';
+    
+    // 디버깅: 찾지 못한 요소 확인
+    if (!titleEl) console.error('Element with ID "wbTitle" not found');
+    if (!descEl) console.error('Element with ID "wbDesc" not found');
+    if (!authorEl) console.error('Element with ID "wbAuthor" not found');
+    if (!statusEl) console.error('Element with ID "wbStatus" not found');
+    if (!publishDateEl) console.error('Element with ID "wbPublishDate" not found');
   }
 }
 
