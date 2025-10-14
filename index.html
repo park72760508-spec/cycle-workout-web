@@ -326,7 +326,114 @@
         <small class="form-help">비워두면 상시 노출됩니다.</small>
       </div>
     </div>
+
+<!-- 워크아웃 작성 화면의 세그먼트 섹션 -->
+<div class="card">
+  <div class="segment-header">
+    <h3 class="mb-10">세그먼트</h3>
+    <div class="segment-summary" id="segmentSummary">
+      <span class="total-duration">총 시간: <strong id="totalDuration">0분</strong></span>
+      <span class="segment-count">세그먼트: <strong id="segmentCount">0개</strong></span>
+    </div>
+  </div>
   
+  <!-- 세그먼트 목록 -->
+  <div id="wbSegments" class="segments-list">
+    <div class="segments-empty" id="segmentsEmpty">
+      <div class="empty-icon">📝</div>
+      <p>아직 세그먼트가 없습니다</p>
+      <p class="muted">아래 버튼을 클릭하여 첫 번째 세그먼트를 추가하세요</p>
+    </div>
+  </div>
+  
+  <!-- 세그먼트 추가 버튼 -->
+  <div class="segment-actions">
+    <button class="btn btn-primary" id="btnAddSegment">
+      <span class="btn-icon">➕</span>
+      세그먼트 추가
+    </button>
+    <div class="quick-add-buttons">
+      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('warmup')">워밍업</button>
+      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('interval')">인터벌</button>
+      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('rest')">휴식</button>
+      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('cooldown')">쿨다운</button>
+    </div>
+  </div>
+</div>
+
+<!-- 세그먼트 편집 모달 -->
+<div id="segmentModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="segmentModalTitle">세그먼트 편집</h3>
+      <button class="modal-close" onclick="closeSegmentModal()">✖</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>세그먼트 이름 *</label>
+          <input type="text" id="segmentLabel" placeholder="예: 워밍업, 메인셋" required />
+        </div>
+        <div class="form-group">
+          <label>타입 *</label>
+          <select id="segmentType" required>
+            <option value="warmup">워밍업</option>
+            <option value="interval">인터벌</option>
+            <option value="rest">휴식</option>
+            <option value="sweetspot">스위트스팟</option>
+            <option value="tempo">템포</option>
+            <option value="threshold">임계점</option>
+            <option value="vo2max">VO2 Max</option>
+            <option value="cooldown">쿨다운</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label>지속 시간 *</label>
+          <div class="duration-input">
+            <input type="number" id="segmentMinutes" min="0" max="180" value="5" />
+            <span class="input-suffix">분</span>
+            <input type="number" id="segmentSeconds" min="0" max="59" value="0" />
+            <span class="input-suffix">초</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>목표 강도 *</label>
+          <div class="intensity-input">
+            <input type="number" id="segmentIntensity" min="30" max="200" value="100" />
+            <span class="input-suffix">% FTP</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="segmentRamp" />
+          점진적 강도 변화 (Ramp)
+        </label>
+        <div class="ramp-settings hidden" id="rampSettings">
+          <div class="form-group">
+            <label>종료 강도</label>
+            <div class="intensity-input">
+              <input type="number" id="rampEndIntensity" min="30" max="200" value="120" />
+              <span class="input-suffix">% FTP</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn btn-success" onclick="saveSegment()">저장</button>
+      <button class="btn btn-secondary" onclick="closeSegmentModal()">취소</button>
+      <button class="btn btn-danger" id="btnDeleteSegment" onclick="deleteCurrentSegment()" style="display:none;">삭제</button>
+    </div>
+  </div>
+</div>
+    
     <div class="builder-actions">
       <div class="btn-row">
         <button class="btn btn-success" id="btnSaveWorkout">💾 저장</button>
