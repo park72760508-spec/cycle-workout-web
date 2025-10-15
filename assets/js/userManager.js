@@ -104,64 +104,120 @@ async function apiDeleteUser(id) {
 
 
 /**
- * 사용자 목록 로드 및 렌더링
+ * 사용자 목록 로드 및 렌더링 (개선된 버전)
  */
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) return;
 
   try {
-    // 로딩 상태 표시
-    userList.innerHTML = '<div class="loading-spinner">사용자 목록을 불러오는 중...</div>';
+    // 로딩 상태 표시 (점 애니메이션 포함)
+    userList.innerHTML = `
+      <div class="loading-container">
+        <div class="dots-loader">
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
+        <div style="color: #666; font-size: 14px;">사용자 목록을 불러오는 중...</div>
+      </div>
+    `;
     
     const result = await apiGetUsers();
     
     if (!result.success) {
-      userList.innerHTML = `<div class="error">오류: ${result.error}</div>`;
+      // 오류 상태 표시
+      userList.innerHTML = `
+        <div class="error-state">
+          <div class="error-state-icon">⚠️</div>
+          <div class="error-state-title">사용자 목록을 불러올 수 없습니다</div>
+          <div class="error-state-description">오류: ${result.error}</div>
+          <button class="retry-button" onclick="loadUsers()">다시 시도</button>
+        </div>
+      `;
       return;
     }
 
     const users = result.items || [];
     
     if (users.length === 0) {
-      userList.innerHTML = '<div class="muted">등록된 사용자가 없습니다.</div>';
+      // 빈 상태 표시
+      userList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">👤</div>
+          <div class="empty-state-title">등록된 사용자가 없습니다</div>
+          <div class="empty-state-description">
+            첫 번째 사용자를 등록하여 훈련을 시작해보세요.<br>
+            FTP와 체중 정보를 입력하면 맞춤형 훈련 강도를 제공받을 수 있습니다.
+          </div>
+          <div class="empty-state-action">
+            <button class="btn btn-primary" onclick="showAddUserForm(true)">
+              ➕ 첫 번째 사용자 등록
+            </button>
+          </div>
+        </div>
+      `;
       return;
     }
 
     // 사용자 카드 렌더링
-    userList.innerHTML = users.map(user => `
-      <div class="user-card" data-user-id="${user.id}">
-        <div class="user-header">
-          <div class="user-name">👤 ${user.name}</div>
-          <div class="user-actions">
-            <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
-            <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+    userList.innerHTML = users.map(user => {
+      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+      
+      return `
+        <div class="user-card" data-user-id="${user.id}">
+          <div class="user-header">
+            <div class="user-name">👤 ${user.name}</div>
+            <div class="user-actions">
+              <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
+              <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+            </div>
           </div>
+          <div class="user-details">
+            <div class="user-stats">
+              <span class="stat">FTP: ${user.ftp || '-'}W</span>
+              <span class="stat">체중: ${user.weight || '-'}kg</span>
+              <span class="stat">W/kg: ${wkg}</span>
+            </div>
+            <div class="user-meta">
+              <span class="contact">${user.contact || ''}</span>
+              <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="selectUser(${user.id})">선택</button>
         </div>
-        <div class="user-details">
-          <div class="user-stats">
-            <span class="stat">FTP: ${user.ftp}W</span>
-            <span class="stat">체중: ${user.weight}kg</span>
-            <span class="stat">W/kg: ${(user.ftp / user.weight).toFixed(2)}</span>
-          </div>
-          <div class="user-meta">
-            <span class="contact">${user.contact || ''}</span>
-            <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="selectUser(${user.id})">선택</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
 
     // 전역에 사용자 목록 저장
     window.users = users;
     window.userProfiles = users;
     
+    // 성공 메시지 (선택적)
+    if (typeof showToast === 'function') {
+      showToast(`${users.length}명의 사용자를 불러왔습니다.`);
+    }
+    
   } catch (error) {
     console.error('사용자 목록 로드 실패:', error);
-    userList.innerHTML = '<div class="error">사용자 목록을 불러올 수 없습니다.</div>';
+    
+    // 네트워크 오류 상태 표시
+    userList.innerHTML = `
+      <div class="error-state">
+        <div class="error-state-icon">🌐</div>
+        <div class="error-state-title">연결 오류</div>
+        <div class="error-state-description">
+          서버와 연결할 수 없습니다.<br>
+          인터넷 연결을 확인하고 다시 시도해주세요.
+        </div>
+        <button class="retry-button" onclick="loadUsers()">다시 시도</button>
+      </div>
+    `;
   }
 }
+
+
+
 
 /**
  * 사용자 선택
