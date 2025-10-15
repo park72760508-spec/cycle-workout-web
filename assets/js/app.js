@@ -811,29 +811,37 @@ document.addEventListener("DOMContentLoaded", () => {
     const ua = navigator.userAgent || "";
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
-  function enableIOSMode() {
-    const info = document.getElementById("iosInfo");
-    if (info) info.classList.remove("hidden");
 
-    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.classList.add("is-disabled");
-        el.setAttribute("aria-disabled","true");
-        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
-      }
-    });
+   function enableIOSMode() {
+     const info = document.getElementById("iosInfo");
+     if (info) info.classList.remove("hidden");
+   
+     ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+       const el = document.getElementById(id);
+       if (el) {
+         el.classList.add("is-disabled");
+         el.setAttribute("aria-disabled","true");
+         el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+       }
+     });
+   
+     // null 체크 강화
+     const btn = document.getElementById("btnIosContinue");
+     if (btn) {
+       btn.addEventListener("click", () => {
+         console.log("iOS continue button clicked");
+         if (typeof showScreen === "function") {
+           showScreen("profileScreen");
+         } else {
+           console.error("showScreen function not available");
+         }
+       });
+     } else {
+       console.warn("btnIosContinue element not found in DOM");
+     }
+   }
 
-     
-   const btn = document.getElementById("btnIosContinue");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        if (typeof showScreen === "function") {
-          showScreen("profileScreen");
-          // showScreen 내부에서 자동으로 loadUsers가 호출되므로 여기서는 제거
-        }
-      });
-    }
+   
 
    
   // 브라우저 지원 확인
@@ -1097,6 +1105,12 @@ document.addEventListener("DOMContentLoaded", () => {
 // -------------------------------------
 // 단일 DOMContentLoaded 이벤트/ 종료, 버튼 클릭
 // ------------------------------------
+
+
+
+
+
+
 
 /* ===== 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전) ===== */
 (() => {
