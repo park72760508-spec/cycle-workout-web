@@ -158,39 +158,85 @@ function selectWorkout(w) {
 
 // 예시 users 데이터가 window.users에 있다고 가정
 // window.users = [{ id: 1, name: "홍길동", ftp: 230, weight: 70 }, ...];
-/* -----------------------------
-   사용자 파일관리
------------------------------- */
+
+/**
+ * data.js의 개선된 loadUsers 함수
+ */
 function loadUsers() {
   const box = document.getElementById("userList");
   if (!box) return;
 
-  const list = Array.isArray(window.users) ? window.users : [];
-  if (list.length === 0) {
-    box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
-    return;
-  }
-
-  box.innerHTML = list.map(u => `
-    <div class="user-card" data-id="${u.id}">
-      <div class="user-name">👤 ${u.name}</div>
-      <div class="user-meta">FTP ${u.ftp}W</div>
-      <button class="btn btn-primary" data-action="select">선택</button>
+  // 로딩 상태 표시 (스켈레톤 로딩)
+  box.innerHTML = `
+    <div class="loading-container">
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
+      <div class="skeleton skeleton-card"></div>
     </div>
-  `).join("");
+  `;
 
-  // 선택 이벤트(한 번만 바인딩)
-  box.addEventListener("click", (e) => {
-    const btn = e.target.closest('[data-action="select"]');
-    if (!btn) return;
-    const card = btn.closest(".user-card");
-    const id = card?.getAttribute("data-id");
-    const user = window.users.find(x => String(x.id) === String(id));
-    if (user && typeof window.selectProfile === "function") {
-      window.selectProfile(user);
+  // 시뮬레이션된 로딩 딜레이 (실제 API 호출의 경우 제거)
+  setTimeout(() => {
+    const list = Array.isArray(window.users) ? window.users : [];
+    
+    if (list.length === 0) {
+      // 빈 상태 표시
+      box.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">👥</div>
+          <div class="empty-state-title">등록된 사용자가 없습니다</div>
+          <div class="empty-state-description">
+            로컬 데이터에 사용자 정보가 없습니다.<br>
+            새로운 사용자를 추가하거나 서버에서 데이터를 불러와보세요.
+          </div>
+          <div class="empty-state-action">
+            <button class="btn btn-primary" onclick="showAddUserForm ? showAddUserForm(true) : alert('사용자 추가 기능을 사용할 수 없습니다.')">
+              ➕ 사용자 추가
+            </button>
+          </div>
+        </div>
+      `;
+      return;
     }
-  }, { once: true });
+
+    // 사용자 카드 렌더링
+    box.innerHTML = list.map(u => {
+      const name = u?.name ?? "이름없음";
+      const ftp = Number(u?.ftp);
+      const wt = Number(u?.weight);
+      const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
+
+      return `
+        <div class="user-card" data-id="${u.id}">
+          <div class="user-name">👤 ${name}</div>
+          <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
+          <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
+        </div>
+      `;
+    }).join("");
+
+    // 선택 버튼 위임(매번 새로 바인딩되도록 onclick로 설정)
+    box.onclick = (e) => {
+      const btn = e.target.closest('[data-action="select"]');
+      if (!btn) return;
+      const card = btn.closest(".user-card");
+      const id = card?.getAttribute("data-id");
+      const user = list.find((x) => String(x.id) === String(id));
+      if (user && typeof window.selectProfile === "function") {
+        window.selectProfile(user.id);
+      }
+    };
+
+    // 성공 메시지
+    if (typeof showToast === 'function') {
+      showToast(`${list.length}명의 사용자 정보를 로드했습니다.`);
+    }
+  }, 800); // 로딩 시뮬레이션 (실제 환경에서는 제거)
 }
+
+
+
+
 
 // 전역 노출
 window.loadUsers = loadUsers;
