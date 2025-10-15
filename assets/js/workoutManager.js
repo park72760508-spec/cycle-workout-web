@@ -55,27 +55,55 @@ async function apiDeleteWorkout(id) {
 }
 
 /**
- * 워크아웃 목록 로드 및 렌더링
+ * 워크아웃 목록 로드 및 렌더링 (개선된 버전)
  */
 async function loadWorkouts() {
   const workoutList = document.getElementById('workoutList');
   if (!workoutList) return;
 
   try {
-    // 로딩 상태 표시
-    workoutList.innerHTML = '<div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>';
+    // 로딩 상태 표시 (스피너 포함)
+    workoutList.innerHTML = `
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <div style="color: #666; font-size: 14px;">워크아웃 목록을 불러오는 중...</div>
+      </div>
+    `;
     
     const result = await apiGetWorkouts();
     
     if (!result.success) {
-      workoutList.innerHTML = `<div class="error">오류: ${result.error}</div>`;
+      // 오류 상태 표시
+      workoutList.innerHTML = `
+        <div class="error-state">
+          <div class="error-state-icon">⚠️</div>
+          <div class="error-state-title">워크아웃 목록을 불러올 수 없습니다</div>
+          <div class="error-state-description">오류: ${result.error}</div>
+          <button class="retry-button" onclick="loadWorkouts()">다시 시도</button>
+        </div>
+      `;
       return;
     }
 
     const workouts = result.items || [];
     
     if (workouts.length === 0) {
-      workoutList.innerHTML = '<div class="muted">등록된 워크아웃이 없습니다.</div>';
+      // 빈 상태 표시
+      workoutList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-title">등록된 워크아웃이 없습니다</div>
+          <div class="empty-state-description">
+            새로운 워크아웃을 만들어 훈련을 시작해보세요.<br>
+            다양한 세그먼트를 조합하여 나만의 훈련 프로그램을 구성할 수 있습니다.
+          </div>
+          <div class="empty-state-action">
+            <button class="btn btn-primary" onclick="showAddWorkoutForm(true)">
+              ➕ 첫 번째 워크아웃 만들기
+            </button>
+          </div>
+        </div>
+      `;
       return;
     }
 
@@ -112,11 +140,31 @@ async function loadWorkouts() {
     // 전역에 워크아웃 목록 저장
     window.workouts = workouts;
     
+    // 성공 메시지 (선택적)
+    if (typeof showToast === 'function') {
+      showToast(`${workouts.length}개의 워크아웃을 불러왔습니다.`);
+    }
+    
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
-    workoutList.innerHTML = '<div class="error">워크아웃 목록을 불러올 수 없습니다.</div>';
+    
+    // 네트워크 오류 상태 표시
+    workoutList.innerHTML = `
+      <div class="error-state">
+        <div class="error-state-icon">🌐</div>
+        <div class="error-state-title">연결 오류</div>
+        <div class="error-state-description">
+          인터넷 연결을 확인하고 다시 시도해주세요.<br>
+          문제가 지속되면 관리자에게 문의하세요.
+        </div>
+        <button class="retry-button" onclick="loadWorkouts()">다시 시도</button>
+      </div>
+    `;
   }
 }
+
+
+
 
 /**
  * 워크아웃 선택
