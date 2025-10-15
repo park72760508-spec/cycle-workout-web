@@ -841,6 +841,71 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeSegmentManager();
 });
 
+/* 반복 모달 스타일 */
+.repeat-segments-container {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.repeat-segments-list {
+  margin: 15px 0;
+  min-height: 100px;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 15px;
+  background: #fff;
+}
+
+.repeat-segment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  margin: 8px 0;
+  background: #e9ecef;
+  border-radius: 6px;
+  border-left: 4px solid #2e74e8;
+}
+
+.repeat-segment-info {
+  flex: 1;
+}
+
+.repeat-segment-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.repeat-segment-details {
+  font-size: 12px;
+  color: #666;
+}
+
+.repeat-segment-remove {
+  background: none;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.repeat-segment-remove:hover {
+  background: #ffebee;
+}
+
+.repeat-segments-empty {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 20px;
+}
+
+
+
+
 // 전역 함수 내보내기
 window.addQuickSegment = addQuickSegment;
 window.showEditSegmentModal = showEditSegmentModal;
