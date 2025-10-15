@@ -552,39 +552,11 @@ if (!window.showScreen) {
       el.style.display = "block";
       el.classList.add("active");
     }
-    
-    // 워크아웃 화면 전환 시 목록 로드
-    if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
-      loadWorkouts();
-    }
-   
-    // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 ★
-    if (id === 'profileScreen') {
-      console.log('Loading real users for profile screen...');
-      // 잠시 대기 후 실제 사용자 목록 로드
-      setTimeout(() => {
-        if (typeof window.loadUsers === 'function') {
-          window.loadUsers();
-        } else {
-          console.error('loadUsers function not available');
-        }
-      }, 100);
-    }
+   if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+     loadWorkouts();
+   }
+     
   };
-}
-    
-    // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
-    if (id === 'profileScreen') {
-      console.log('Loading real users for profile screen...');
-      // 잠시 대기 후 실제 사용자 목록 로드
-      setTimeout(() => {
-        if (typeof window.loadUsers === 'function') {
-          window.loadUsers();
-        } else {
-          console.error('loadUsers function not available');
-        }
-      }, 100);
-    }
 }
 
 
@@ -809,46 +781,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const ua = navigator.userAgent || "";
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
+  function enableIOSMode() {
+    const info = document.getElementById("iosInfo");
+    if (info) info.classList.remove("hidden");
 
-   function enableIOSMode() {
-     console.log("Enabling iOS mode...");
-     
-     const info = document.getElementById("iosInfo");
-     if (info) {
-       info.classList.remove("hidden");
-       console.log("iOS info panel shown");
-     } else {
-       console.error("iosInfo element not found");
-     }
-   
-     ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-       const el = document.getElementById(id);
-       if (el) {
-         el.classList.add("ios-disabled"); // is-disabled 대신 ios-disabled 사용
-         el.setAttribute("aria-disabled","true");
-         el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
-         console.log(`Disabled button: ${id}`);
-       }
-     });
-   
-     // btnIosContinue 버튼 처리
-     const btn = document.getElementById("btnIosContinue");
-     if (btn) {
-       console.log("iOS continue button found, adding event listener");
-       btn.addEventListener("click", () => {
-         console.log("iOS continue button clicked");
-         if (typeof showScreen === "function") {
-           showScreen("profileScreen");
-         } else {
-           console.error("showScreen function not available");
-         }
-       });
-     } else {
-       console.error("btnIosContinue element not found in DOM");
-     }
-   }
+    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add("is-disabled");
+        el.setAttribute("aria-disabled","true");
+        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+      }
+    });
 
-   
+    const btn = document.getElementById("btnIosContinue");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        if (typeof showScreen === "function") showScreen("profileScreen");
+        if (typeof loadUsers === "function") loadUsers();
+      });
+    }
+  }
 
    
   // 브라우저 지원 확인
@@ -863,18 +816,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   showScreen("connectionScreen");
-
-  // ★ 이 부분을 추가 ★
-  // DOM 로드 완료 후 잠시 대기하여 모든 요소가 준비되도록 함
-   showScreen("connectionScreen");
-   
-   // ★ iOS 모드를 즉시 확인하고 활성화 ★
-   if (isIOS()) {
-     console.log("iOS detected, enabling iOS mode");
-     enableIOSMode();
-   }
-
-   
 
    // ✅ 훈련 준비 → 훈련 시작
    const btnStartTraining = document.getElementById("btnStartTraining");
@@ -1063,6 +1004,18 @@ function togglePause() {
   setPaused(!trainingState.paused);
 }
 
+// DOMContentLoaded 안에 추가:
+document.addEventListener("DOMContentLoaded", () => {
+  const btnPause = document.getElementById("btnTogglePause");
+  if (btnPause) {
+    btnPause.addEventListener("click", togglePause);
+  }
+});
+
+
+
+
+
 
    
   // 훈련 시작 버튼 tSS/kcal 갱신 블록도 가드
@@ -1106,18 +1059,12 @@ function togglePause() {
    });
 
    
-   //if (isIOS()) enableIOSMode();
+   if (isIOS()) enableIOSMode();
    
 });
 // -------------------------------------
 // 단일 DOMContentLoaded 이벤트/ 종료, 버튼 클릭
 // ------------------------------------
-
-
-
-
-
-
 
 /* ===== 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전) ===== */
 (() => {
