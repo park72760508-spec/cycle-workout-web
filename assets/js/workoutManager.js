@@ -1,5 +1,6 @@
 /* ==========================================================
-   워크아웃 관리 모듈 (workoutManager.js)
+   통합 워크아웃 관리 모듈 (integratedWorkoutManager.js)
+   - POST 방식 API 통신으로 변환
    - Google Sheets API와 연동한 워크아웃 CRUD
    - 상태(보이기/숨기기) 및 게시날짜 필터링 지원
    - 세그먼트 관리 및 반복 기능 포함
@@ -9,22 +10,70 @@
 let isWorkoutEditMode = false;
 let currentEditWorkoutId = null;
 
-// 워크아웃 API 함수들 (JSONP 방식)
+// API 기본 설정
+const API_CONFIG = {
+  baseURL: window.GAS_URL || '',
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
+};
+
+// POST 방식 API 호출 헬퍼 함수
+async function postRequest(url, data = {}) {
+  try {
+    console.log('POST request to:', url, 'with data:', data);
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: API_CONFIG.headers,
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(API_CONFIG.timeout)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('POST response received:', result);
+    
+    return result;
+    
+  } catch (error) {
+    console.error('POST request failed:', error);
+    
+    if (error.name === 'AbortError') {
+      throw new Error('요청 시간 초과');
+    } else if (error.name === 'TypeError') {
+      throw new Error('네트워크 연결 오류');
+    } else {
+      throw error;
+    }
+  }
+}
+
+// 워크아웃 API 함수들 (POST 방식)
 async function apiGetWorkouts() {
-  return jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+  return postRequest(API_CONFIG.baseURL, { action: 'listWorkouts' });
 }
 
 async function apiGetAllWorkouts() {
-  return jsonpRequest(window.GAS_URL, { action: 'listAllWorkouts' });
+  return postRequest(API_CONFIG.baseURL, { action: 'listAllWorkouts' });
 }
 
 async function apiGetWorkout(id) {
-  return jsonpRequest(window.GAS_URL, { action: 'getWorkout', id: id });
+  return postRequest(API_CONFIG.baseURL, { 
+    action: 'getWorkout', 
+    id: id 
+  });
 }
 
 async function apiCreateWorkout(workoutData) {
   console.log('apiCreateWorkout called with:', workoutData);
-  const params = {
+  
+  const requestData = {
     action: 'createWorkout',
     title: workoutData.title || '',
     description: workoutData.description || '',
@@ -32,12 +81,13 @@ async function apiCreateWorkout(workoutData) {
     status: workoutData.status || '보이기',
     publish_date: workoutData.publish_date || ''
   };
-  console.log('Sending params:', params);
-  return jsonpRequest(window.GAS_URL, params);
+  
+  console.log('Sending request data:', requestData);
+  return postRequest(API_CONFIG.baseURL, requestData);
 }
 
 async function apiUpdateWorkout(id, workoutData) {
-  const params = {
+  const requestData = {
     action: 'updateWorkout',
     id: id,
     title: workoutData.title || '',
@@ -46,21 +96,25 @@ async function apiUpdateWorkout(id, workoutData) {
     status: workoutData.status || '보이기',
     publish_date: workoutData.publish_date || ''
   };
-  return jsonpRequest(window.GAS_URL, params);
+  
+  return postRequest(API_CONFIG.baseURL, requestData);
 }
 
 async function apiDeleteWorkout(id) {
-  return jsonpRequest(window.GAS_URL, { action: 'deleteWorkout', id: id });
+  return postRequest(API_CONFIG.baseURL, { 
+    action: 'deleteWorkout', 
+    id: id 
+  });
 }
 
 /**
- * 세그먼트 포함 워크아웃 생성 API (수정된 버전)
+ * 세그먼트 포함 워크아웃 생성 API (POST 방식)
  */
 async function apiCreateWorkoutWithSegments(workoutData) {
   console.log('apiCreateWorkoutWithSegments called with:', workoutData);
   
   try {
-    const params = {
+    const requestData = {
       action: 'createWorkout',
       title: workoutData.title || '',
       description: workoutData.description || '',
@@ -69,16 +123,15 @@ async function apiCreateWorkoutWithSegments(workoutData) {
       publish_date: workoutData.publish_date || ''
     };
     
-    // 세그먼트 데이터가 있으면 JSON 문자열로 인코딩해서 추가
+    // 세그먼트 데이터가 있으면 직접 포함 (POST에서는 JSON 직렬화 불필요)
     if (workoutData.segments && workoutData.segments.length > 0) {
-      // JSON 문자열로 변환 후 URL 인코딩
-      params.segments = encodeURIComponent(JSON.stringify(workoutData.segments));
-      console.log('Encoded segments:', params.segments);
+      requestData.segments = workoutData.segments;
+      console.log('Including segments:', requestData.segments);
     }
     
-    console.log('Final API params:', params);
+    console.log('Final API request data:', requestData);
     
-    const result = await jsonpRequest(window.GAS_URL, params);
+    const result = await postRequest(API_CONFIG.baseURL, requestData);
     console.log('API response:', result);
     
     return result;
@@ -88,8 +141,6 @@ async function apiCreateWorkoutWithSegments(workoutData) {
     return { success: false, error: error.message };
   }
 }
-
-
 
 /**
  * 워크아웃 목록 로드 및 렌더링 (개선된 버전)
@@ -215,7 +266,7 @@ async function selectWorkout(workoutId) {
     }
 
     const workout = result.item;
-    console.log('Retrieved workout:', workout); // 디버깅 로그 추가
+    console.log('Retrieved workout:', workout);
     
     // 전역 상태에 현재 워크아웃 설정
     window.currentWorkout = workout;
@@ -232,7 +283,7 @@ async function selectWorkout(workoutId) {
     // 훈련 준비 화면으로 이동
     if (typeof showScreen === 'function') {
       showScreen('trainingReadyScreen');
-      console.log('Calling updateWorkoutPreview...'); // 디버깅 로그 추가
+      console.log('Calling updateWorkoutPreview...');
       if (typeof updateWorkoutPreview === 'function') {
         updateWorkoutPreview();
       } else {
@@ -354,7 +405,7 @@ async function saveWorkout() {
 
     console.log('Final workout data:', workoutData);
     
-    // API 호출 (수정된 버전)
+    // API 호출 (POST 방식)
     const result = await apiCreateWorkoutWithSegments(workoutData);
     
     console.log('API result:', result);
@@ -394,10 +445,6 @@ async function saveWorkout() {
     }
   }
 }
-
-
-
-
 
 /**
  * 워크아웃 수정
@@ -634,578 +681,7 @@ function addQuickSegment(type) {
   }
 }
 
-/**
- * 세그먼트 추가 모달 표시
- */
-function showAddSegmentModal() {
-  currentEditingSegmentIndex = null;
-  
-  // 폼 초기화
-  document.getElementById('segmentModalTitle').textContent = '새 세그먼트 추가';
-  document.getElementById('segmentLabel').value = '';
-  document.getElementById('segmentType').value = 'interval';
-  document.getElementById('segmentMinutes').value = '5';
-  document.getElementById('segmentSeconds').value = '0';
-  document.getElementById('segmentIntensity').value = '100';
-  document.getElementById('segmentRamp').checked = false;
-  document.getElementById('rampEndIntensity').value = '120';
-  
-  // 삭제 버튼 숨기기
-  document.getElementById('btnDeleteSegment').style.display = 'none';
-  
-  // Ramp 설정 숨기기
-  document.getElementById('rampSettings').classList.add('hidden');
-  
-  // 모달 표시
-  document.getElementById('segmentModal').classList.remove('hidden');
-}
-
-/**
- * 세그먼트 편집 모달 표시
- */
-function showEditSegmentModal(index) {
-  const segment = workoutSegments[index];
-  if (!segment) return;
-  
-  currentEditingSegmentIndex = index;
-  
-  // 폼에 기존 데이터 채우기
-  document.getElementById('segmentModalTitle').textContent = '세그먼트 편집';
-  document.getElementById('segmentLabel').value = segment.label || '';
-  document.getElementById('segmentType').value = segment.segment_type || 'interval';
-  
-  const minutes = Math.floor((segment.duration_sec || 0) / 60);
-  const seconds = (segment.duration_sec || 0) % 60;
-  document.getElementById('segmentMinutes').value = minutes;
-  document.getElementById('segmentSeconds').value = seconds;
-  
-  document.getElementById('segmentIntensity').value = segment.target_value || 100;
-  
-  const hasRamp = segment.ramp && segment.ramp !== 'none';
-  document.getElementById('segmentRamp').checked = hasRamp;
-  document.getElementById('rampEndIntensity').value = segment.ramp_to_value || 120;
-  
-  // 삭제 버튼 표시
-  document.getElementById('btnDeleteSegment').style.display = 'inline-block';
-  
-  // Ramp 설정 표시/숨기기
-  const rampSettings = document.getElementById('rampSettings');
-  if (hasRamp) {
-    rampSettings.classList.remove('hidden');
-  } else {
-    rampSettings.classList.add('hidden');
-  }
-  
-  // 모달 표시
-  document.getElementById('segmentModal').classList.remove('hidden');
-}
-
-/**
- * Ramp 설정 토글
- */
-function toggleRampSettings() {
-  const isChecked = document.getElementById('segmentRamp').checked;
-  const rampSettings = document.getElementById('rampSettings');
-  
-  if (isChecked) {
-    rampSettings.classList.remove('hidden');
-  } else {
-    rampSettings.classList.add('hidden');
-  }
-}
-
-/**
- * 통합된 세그먼트 저장 함수 (일반 + 반복 세그먼트 지원)
- */
-function saveSegment() {
-  // 반복 세그먼트 편집 모드인지 먼저 확인
-  if (typeof currentEditingRepeatIndex === 'number' && currentEditingRepeatIndex !== null) {
-    console.log('Saving repeat segment at index:', currentEditingRepeatIndex);
-    saveRepeatSegment();
-    return;
-  }
-  
-  // 기존 일반 세그먼트 저장 로직
-  console.log('Saving regular segment');
-  
-  // 폼 데이터 수집
-  const label = document.getElementById('segmentLabel').value.trim();
-  const type = document.getElementById('segmentType').value;
-  const minutes = parseInt(document.getElementById('segmentMinutes').value) || 0;
-  const seconds = parseInt(document.getElementById('segmentSeconds').value) || 0;
-  const intensity = parseInt(document.getElementById('segmentIntensity').value) || 100;
-  const hasRamp = document.getElementById('segmentRamp').checked;
-  const rampEndIntensity = parseInt(document.getElementById('rampEndIntensity').value) || 120;
-  
-  // 유효성 검사
-  if (!label) {
-    showToast('세그먼트 이름을 입력해주세요.');
-    return;
-  }
-  
-  const totalSeconds = minutes * 60 + seconds;
-  if (totalSeconds <= 0) {
-    showToast('지속 시간은 0보다 커야 합니다.');
-    return;
-  }
-  
-  if (intensity < 30 || intensity > 200) {
-    showToast('목표 강도는 30-200% 범위여야 합니다.');
-    return;
-  }
-  
-  // 세그먼트 객체 생성
-  const segment = {
-    id: currentEditingSegmentIndex !== null ? workoutSegments[currentEditingSegmentIndex].id : Date.now(),
-    label: label,
-    segment_type: type,
-    duration_sec: totalSeconds,
-    target_type: 'ftp_percent',
-    target_value: intensity,
-    ramp: hasRamp ? 'linear' : 'none',
-    ramp_to_value: hasRamp ? rampEndIntensity : null
-  };
-  
-  // 세그먼트 추가 또는 수정
-  if (currentEditingSegmentIndex !== null) {
-    workoutSegments[currentEditingSegmentIndex] = segment;
-  } else {
-    workoutSegments.push(segment);
-  }
-  
-  // UI 업데이트
-  renderSegments();
-  updateSegmentSummary();
-  closeSegmentModal();
-  
-  showToast(currentEditingSegmentIndex !== null ? '세그먼트가 수정되었습니다.' : '세그먼트가 추가되었습니다.');
-}
-
-/**
- * 현재 편집 중인 세그먼트 삭제
- */
-function deleteCurrentSegment() {
-  if (currentEditingSegmentIndex === null) return;
-  
-  if (confirm('이 세그먼트를 삭제하시겠습니까?')) {
-    workoutSegments.splice(currentEditingSegmentIndex, 1);
-    renderSegments();
-    updateSegmentSummary();
-    closeSegmentModal();
-    showToast('세그먼트가 삭제되었습니다.');
-  }
-}
-
-/**
- * 세그먼트 모달 닫기 (개선된 버전)
- */
-function closeSegmentModal() {
-  document.getElementById('segmentModal').classList.add('hidden');
-  
-  // 반복 편집 모드였다면 반복 모달을 다시 표시
-  if (currentEditingRepeatIndex !== null) {
-    document.getElementById('repeatModal').classList.remove('hidden');
-    currentEditingRepeatIndex = null;
-  }
-  
-  // 일반 편집 모드 리셋
-  currentEditingSegmentIndex = null;
-}
-
-/**
- * 세그먼트 목록 렌더링
- */
-function renderSegments() {
-  const container = document.getElementById('wbSegments');
-  const emptyState = document.getElementById('segmentsEmpty');
-  
-  if (!container) return;
-  
-  if (workoutSegments.length === 0) {
-    if (emptyState) emptyState.style.display = 'block';
-    // 기존 세그먼트 카드들 제거
-    container.querySelectorAll('.segment-card').forEach(card => card.remove());
-    return;
-  }
-  
-  if (emptyState) emptyState.style.display = 'none';
-  
-  // 기존 세그먼트 카드들 제거
-  container.querySelectorAll('.segment-card').forEach(card => card.remove());
-  
-  // 새 세그먼트 카드들 생성
-  workoutSegments.forEach((segment, index) => {
-    const card = createSegmentCard(segment, index);
-    container.appendChild(card);
-  });
-}
-
-/**
- * 세그먼트 카드 생성
- */
-function createSegmentCard(segment, index) {
-  const card = document.createElement('div');
-  card.className = 'segment-card';
-  card.setAttribute('data-index', index);
-  
-  const minutes = Math.floor((segment.duration_sec || 0) / 60);
-  const seconds = (segment.duration_sec || 0) % 60;
-  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  
-  const intensityText = segment.ramp !== 'none' 
-    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
-    : `${segment.target_value}%`;
-  
-  card.innerHTML = `
-    <div class="segment-drag-handle">⋮⋮</div>
-    <div class="segment-info">
-      <span class="segment-type-badge ${segment.segment_type}">${segment.segment_type}</span>
-      <div class="segment-details">
-        <div class="segment-label">${segment.label}</div>
-        <div class="segment-meta">
-          <span>${duration}</span> • 
-          <span class="segment-intensity">${intensityText} FTP</span>
-        </div>
-      </div>
-    </div>
-    <div class="segment-actions">
-      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
-      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
-    </div>
-  `;
-  
-  return card;
-}
-
-/**
- * 세그먼트 삭제
- */
-function deleteSegment(index) {
-  if (confirm('이 세그먼트를 삭제하시겠습니까?')) {
-    workoutSegments.splice(index, 1);
-    renderSegments();
-    updateSegmentSummary();
-    showToast('세그먼트가 삭제되었습니다.');
-  }
-}
-
-/**
- * 세그먼트 요약 정보 업데이트
- */
-function updateSegmentSummary() {
-  const totalSeconds = workoutSegments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
-  const totalMinutes = Math.round(totalSeconds / 60);
-  const segmentCount = workoutSegments.length;
-  
-  const durationEl = document.getElementById('totalDuration');
-  const countEl = document.getElementById('segmentCount');
-  
-  if (durationEl) durationEl.textContent = `${totalMinutes}분`;
-  if (countEl) countEl.textContent = `${segmentCount}개`;
-}
-
-/* ==========================================================
-   세그먼트 반복 기능
-========================================================== */
-
-// 반복용 세그먼트 임시 저장소
-let repeatSegments = [];
-let currentEditingRepeatIndex = null;
-
-/**
- * 반복 모달 표시
- */
-function showRepeatModal() {
-  // 반복 횟수 초기화
-  document.getElementById('repeatCount').value = '3';
-  
-  // 세그먼트 목록 초기화
-  repeatSegments = [];
-  renderRepeatSegments();
-  
-  // 모달 표시
-  document.getElementById('repeatModal').classList.remove('hidden');
-}
-
-/**
- * 반복 모달 닫기
- */
-function closeRepeatModal() {
-  document.getElementById('repeatModal').classList.add('hidden');
-  repeatSegments = [];
-  currentEditingRepeatIndex = null;
-}
-
-/**
- * 반복용 세그먼트 추가
- */
-function addRepeatSegment() {
-  // 기본 세그먼트 템플릿
-  const newSegment = {
-    id: Date.now(),
-    label: '새 세그먼트',
-    segment_type: 'interval',
-    duration_sec: 300,
-    target_type: 'ftp_percent',
-    target_value: 100,
-    ramp: 'none',
-    ramp_to_value: null
-  };
-  
-  repeatSegments.push(newSegment);
-  renderRepeatSegments();
-}
-
-/**
- * 반복용 세그먼트 목록 렌더링
- */
-function renderRepeatSegments() {
-  const container = document.getElementById('repeatSegmentsList');
-  
-  if (repeatSegments.length === 0) {
-    container.innerHTML = '<div class="repeat-segments-empty">반복할 세그먼트를 추가하세요</div>';
-    return;
-  }
-  
-  container.innerHTML = repeatSegments.map((segment, index) => {
-    const minutes = Math.floor(segment.duration_sec / 60);
-    const seconds = segment.duration_sec % 60;
-    const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-    
-    return `
-      <div class="repeat-segment-item" data-index="${index}">
-        <div class="repeat-segment-info">
-          <div class="repeat-segment-label">${segment.label}</div>
-          <div class="repeat-segment-details">
-            ${segment.segment_type} · ${duration} · ${segment.target_value}% FTP
-          </div>
-        </div>
-        <div class="repeat-segment-actions">
-          <button class="btn btn-secondary btn-sm" onclick="editRepeatSegment(${index})">편집</button>
-          <button class="repeat-segment-remove" onclick="removeRepeatSegment(${index})" title="삭제">🗑️</button>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-/**
- * 반복용 세그먼트 편집 (수정된 버전)
- */
-function editRepeatSegment(index) {
-  console.log('editRepeatSegment called with index:', index);
-  console.log('repeatSegments:', repeatSegments);
-  
-  const segment = repeatSegments[index];
-  if (!segment) {
-    console.error('Segment not found at index:', index);
-    showToast('세그먼트를 찾을 수 없습니다.');
-    return;
-  }
-  
-  // 반복 편집 모드 설정
-  currentEditingRepeatIndex = index;
-  currentEditingSegmentIndex = null; // 일반 세그먼트 편집 모드 해제
-  
-  console.log('Setting currentEditingRepeatIndex to:', index);
-  
-  // 세그먼트 모달의 제목과 버튼 상태 변경
-  document.getElementById('segmentModalTitle').textContent = '반복 세그먼트 편집';
-  
-  // 폼에 데이터 채우기
-  document.getElementById('segmentLabel').value = segment.label || '';
-  document.getElementById('segmentType').value = segment.segment_type || 'interval';
-  
-  const minutes = Math.floor((segment.duration_sec || 0) / 60);
-  const seconds = (segment.duration_sec || 0) % 60;
-  document.getElementById('segmentMinutes').value = minutes;
-  document.getElementById('segmentSeconds').value = seconds;
-  
-  document.getElementById('segmentIntensity').value = segment.target_value || 100;
-  
-  const hasRamp = segment.ramp && segment.ramp !== 'none';
-  document.getElementById('segmentRamp').checked = hasRamp;
-  document.getElementById('rampEndIntensity').value = segment.ramp_to_value || 120;
-  
-  // Ramp 설정 표시/숨기기
-  const rampSettings = document.getElementById('rampSettings');
-  if (hasRamp) {
-    rampSettings.classList.remove('hidden');
-  } else {
-    rampSettings.classList.add('hidden');
-  }
-  
-  // 삭제 버튼 숨기기 (반복 세그먼트에서는 개별 삭제 버튼 사용)
-  const deleteBtn = document.getElementById('btnDeleteSegment');
-  if (deleteBtn) {
-    deleteBtn.style.display = 'none';
-  }
-  
-  // 반복 모달 닫기
-  document.getElementById('repeatModal').classList.add('hidden');
-  
-  // 세그먼트 편집 모달 표시
-  document.getElementById('segmentModal').classList.remove('hidden');
-}
-
-/**
- * 반복용 세그먼트 제거
- */
-function removeRepeatSegment(index) {
-  if (confirm('이 세그먼트를 제거하시겠습니까?')) {
-    repeatSegments.splice(index, 1);
-    renderRepeatSegments();
-  }
-}
-
-/**
- * 반복 적용
- */
-function applyRepeat() {
-  const repeatCount = parseInt(document.getElementById('repeatCount').value);
-  
-  // 유효성 검사
-  if (!repeatCount || repeatCount < 1 || repeatCount > 20) {
-    showToast('반복 횟수는 1-20 사이여야 합니다.');
-    return;
-  }
-  
-  if (repeatSegments.length === 0) {
-    showToast('반복할 세그먼트를 최소 1개 이상 추가해주세요.');
-    return;
-  }
-  
-  // 세그먼트 반복 추가
-  for (let i = 0; i < repeatCount; i++) {
-    repeatSegments.forEach(segment => {
-      const newSegment = {
-        id: Date.now() + Math.random(),
-        label: `${segment.label} (${i + 1}회차)`,
-        segment_type: segment.segment_type,
-        duration_sec: segment.duration_sec,
-        target_type: segment.target_type,
-        target_value: segment.target_value,
-        ramp: segment.ramp,
-        ramp_to_value: segment.ramp_to_value
-      };
-      
-      workoutSegments.push(newSegment);
-    });
-  }
-  
-  // UI 업데이트
-  renderSegments();
-  updateSegmentSummary();
-  
-  // 모달 닫기
-  closeRepeatModal();
-  
-  const totalAdded = repeatSegments.length * repeatCount;
-  showToast(`${totalAdded}개의 세그먼트가 추가되었습니다.`);
-}
-
-/**
- * 반복 세그먼트 저장 (수정된 버전)
- */
-function saveRepeatSegment() {
-  console.log('saveRepeatSegment called');
-  
-  // 폼 데이터 수집
-  const label = document.getElementById('segmentLabel').value.trim();
-  const type = document.getElementById('segmentType').value;
-  const minutes = parseInt(document.getElementById('segmentMinutes').value) || 0;
-  const seconds = parseInt(document.getElementById('segmentSeconds').value) || 0;
-  const intensity = parseInt(document.getElementById('segmentIntensity').value) || 100;
-  const hasRamp = document.getElementById('segmentRamp').checked;
-  const rampEndIntensity = parseInt(document.getElementById('rampEndIntensity').value) || 120;
-  
-  // 유효성 검사
-  if (!label) {
-    showToast('세그먼트 이름을 입력해주세요.');
-    return;
-  }
-  
-  const totalSeconds = minutes * 60 + seconds;
-  if (totalSeconds <= 0) {
-    showToast('지속 시간은 0보다 커야 합니다.');
-    return;
-  }
-  
-  if (intensity < 30 || intensity > 200) {
-    showToast('목표 강도는 30-200% 범위여야 합니다.');
-    return;
-  }
-  
-  // 세그먼트 객체 업데이트
-  if (currentEditingRepeatIndex !== null && repeatSegments[currentEditingRepeatIndex]) {
-    repeatSegments[currentEditingRepeatIndex] = {
-      id: repeatSegments[currentEditingRepeatIndex].id,
-      label: label,
-      segment_type: type,
-      duration_sec: totalSeconds,
-      target_type: 'ftp_percent',
-      target_value: intensity,
-      ramp: hasRamp ? 'linear' : 'none',
-      ramp_to_value: hasRamp ? rampEndIntensity : null
-    };
-    
-    console.log('Updated repeat segment:', repeatSegments[currentEditingRepeatIndex]);
-    
-    // 세그먼트 편집 모달 닫기
-    document.getElementById('segmentModal').classList.add('hidden');
-    
-    // 반복 모달 다시 표시
-    document.getElementById('repeatModal').classList.remove('hidden');
-    
-    // 반복 세그먼트 목록 업데이트
-    renderRepeatSegments();
-    
-    // 편집 모드 리셋
-    currentEditingRepeatIndex = null;
-    
-    showToast('반복 세그먼트가 수정되었습니다.');
-  } else {
-    console.error('Invalid currentEditingRepeatIndex:', currentEditingRepeatIndex);
-    showToast('저장 중 오류가 발생했습니다.');
-  }
-}
-
-/**
- * 초기화 및 이벤트 바인딩
- */
-document.addEventListener('DOMContentLoaded', () => {
-  // 새 워크아웃 버튼
-  const btnOpenBuilder = document.getElementById('btnOpenBuilder');
-  if (btnOpenBuilder) {
-    btnOpenBuilder.addEventListener('click', () => showAddWorkoutForm(true));
-  }
-  
-  // 취소 버튼
-  const btnCancel = document.getElementById('btnCancelBuilder');
-  if (btnCancel) {
-    btnCancel.addEventListener('click', resetWorkoutFormMode);
-  }
-  
-  // 저장 버튼
-  const btnSave = document.getElementById('btnSaveWorkout');
-  if (btnSave) {
-    btnSave.addEventListener('click', saveWorkout);
-  }
-  
-  // 세그먼트 관리 초기화
-  initializeSegmentManager();
-  
-  // 반복 모달 외부 클릭 시 닫기
-  const repeatModal = document.getElementById('repeatModal');
-  if (repeatModal) {
-    repeatModal.addEventListener('click', (e) => {
-      if (e.target === repeatModal) {
-        closeRepeatModal();
-      }
-    });
-  }
-});
-
+// 나머지 세그먼트 관련 함수들은 다음 파트에서 계속...
 
 /**
  * 워크아웃 프리뷰 업데이트 함수
@@ -1260,80 +736,14 @@ function updateWorkoutPreview() {
   updateSegmentPreview(workout.segments || []);
 }
 
-/**
- * 세그먼트 프리뷰 업데이트
- */
-function updateSegmentPreview(segments) {
-  const segDiv = document.getElementById('segmentPreview');
-  if (!segDiv) return;
-
-  if (!segments || segments.length === 0) {
-    segDiv.innerHTML = '<div class="text-center muted">세그먼트 정보가 없습니다.</div>';
-    return;
-  }
-
-  segDiv.innerHTML = segments.map(segment => {
-    const minutes = Math.floor((segment.duration_sec || 0) / 60);
-    const seconds = (segment.duration_sec || 0) % 60;
-    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
-    
-    // 세그먼트 타입에 따른 CSS 클래스
-    const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
-    
-    return `
-      <div class="segment-item ${segmentTypeClass}">
-        <h4>${segment.label || '세그먼트'}</h4>
-        <div class="ftp-percent">${segment.target_value || 0}%</div>
-        <div class="duration">${duration}</div>
-      </div>
-    `;
-  }).join('');
-}
-
-/**
- * 세그먼트 타입에 따른 CSS 클래스 반환
- */
-function getSegmentTypeClass(segmentType) {
-  const typeMapping = {
-    'warmup': 'warmup',
-    'rest': 'rest', 
-    'interval': 'interval',
-    'cooldown': 'rest',
-    'tempo': 'interval',
-    'sweetspot': 'interval',
-    'threshold': 'interval',
-    'vo2max': 'interval'
-  };
-  
-  return typeMapping[segmentType] || 'interval';
-}
-
-
-
-
 // 전역 함수로 내보내기
 window.loadWorkouts = loadWorkouts;
 window.selectWorkout = selectWorkout;
 window.editWorkout = editWorkout;
 window.deleteWorkout = deleteWorkout;
 window.saveWorkout = saveWorkout;
-window.updateWorkoutPreview = updateWorkoutPreview;  // 추가
-
-// 세그먼트 관련 전역 함수
+window.updateWorkoutPreview = updateWorkoutPreview;
 window.addQuickSegment = addQuickSegment;
-window.showEditSegmentModal = showEditSegmentModal;
-window.deleteSegment = deleteSegment;
-window.saveSegment = saveSegment;
-window.closeSegmentModal = closeSegmentModal;
-window.deleteCurrentSegment = deleteCurrentSegment;
-
-// 반복 기능 전역 함수
-window.showRepeatModal = showRepeatModal;
-window.closeRepeatModal = closeRepeatModal;
-window.addRepeatSegment = addRepeatSegment;
-window.editRepeatSegment = editRepeatSegment;
-window.removeRepeatSegment = removeRepeatSegment;
-window.applyRepeat = applyRepeat;
 
 // API 함수 전역 내보내기
 window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
