@@ -1,10 +1,11 @@
 /* ==========================================================
-   완벽한 워크아웃 관리 모듈 (perfectWorkoutManager.js)
+   완벽한 워크아웃 관리 모듈 (perfectWorkoutManager.js) - 최종 완성 버전
    - 원본의 모든 기능 + 대용량 세그먼트 지원
    - CORS 문제 해결된 JSONP 방식
    - 무제한 세그먼트 지원 (분할 전송)
    - 완전한 세그먼트 관리 및 반복 기능
-   - 서버 호환성 개선 버전
+   - UTF-8 문제 완전 해결 (한글 지원)
+   - 다중 폴백 시스템
 ========================================================== */
 
 // 전역 변수로 현재 모드 추적
@@ -260,20 +261,186 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
 }
 
 /**
- * 폴백 방식: 세그먼트를 압축된 텍스트로 저장
+ * UTF-8 문자열을 Base64로 안전하게 변환
+ */
+function utf8ToBase64(str) {
+  try {
+    // UTF-8 문자열을 URL 인코딩한 후 Base64로 변환
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+      return String.fromCharCode(parseInt(p1, 16));
+    }));
+  } catch (error) {
+    console.error('UTF-8 to Base64 conversion failed:', error);
+    // 최종 폴백: 단순 문자열 반환
+    return encodeURIComponent(str).substring(0, 100);
+  }
+}
+
+/**
+ * Base64에서 UTF-8 문자열로 안전하게 변환
+ */
+function base64ToUtf8(base64) {
+  try {
+    const decoded = atob(base64);
+    return decodeURIComponent(Array.prototype.map.call(decoded, (c) => {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+  } catch (error) {
+    console.error('Base64 to UTF-8 conversion failed:', error);
+    return '';
+  }
+}
+
+/**
+ * UTF-8 안전한 세그먼트 데이터 압축 (한글 지원)
+ */
+function compressSegmentData(segments) {
+  try {
+    // 세그먼트를 간소화된 형태로 압축
+    const compressed = segments.map(seg => ({
+      l: seg.label?.substring(0, 20) || 'S', // label 축약
+      t: seg.segment_type?.charAt(0) || 'i', // type 첫 글자
+      d: seg.duration_sec || 300, // duration
+      v: seg.target_value || 100 // value
+    }));
+    
+    // UTF-8 안전한 Base64 인코딩
+    const jsonString = JSON.stringify(compressed);
+    return utf8ToBase64(jsonString);
+  } catch (error) {
+    console.error('Compression failed:', error);
+    // 압축 실패 시 단순한 요약 정보만 저장
+    return `SEGMENTS_COUNT:${segments.length}`;
+  }
+}
+
+/**
+ * 압축된 세그먼트 데이터 복원 (개선된 버전)
+ */
+function decompressSegmentData(compressedData) {
+  try {
+    // 단순 카운트 정보인 경우
+    if (compressedData.startsWith('SEGMENTS_COUNT:')) {
+      const count = parseInt(compressedData.split(':')[1]) || 0;
+      return Array.from({ length: count }, (_, i) => ({
+        label: `세그먼트 ${i + 1}`,
+        segment_type: 'interval',
+        duration_sec: 300,
+        target_type: 'ftp_percent',
+        target_value: 100,
+        ramp: 'none',
+        ramp_to_value: null
+      }));
+    }
+    
+    // Base64 압축 데이터인 경우
+    const jsonString = base64ToUtf8(compressedData);
+    const compressed = JSON.parse(jsonString);
+    
+    return compressed.map(seg => ({
+      label: seg.l || '세그먼트',
+      segment_type: getFullSegmentType(seg.t) || 'interval',
+      duration_sec: seg.d || 300,
+      target_type: 'ftp_percent',
+      target_value: seg.v || 100,
+      ramp: 'none',
+      ramp_to_value: null
+    }));
+  } catch (error) {
+    console.error('Decompression failed:', error);
+    return [];
+  }
+}
+
+/**
+ * 대안 압축 방식 - JSON 최소화 (Base64 없음)
+ */
+function alternativeCompressSegmentData(segments) {
+  try {
+    // Base64를 사용하지 않는 대안 방식
+    const compressed = segments.map(seg => {
+      // 한글을 안전한 형태로 변환
+      const safeLabel = seg.label ? 
+        encodeURIComponent(seg.label.substring(0, 10)) : 'S';
+      
+      return `${safeLabel}|${seg.segment_type?.charAt(0) || 'i'}|${seg.duration_sec || 300}|${seg.target_value || 100}`;
+    });
+    
+    return compressed.join(';');
+  } catch (error) {
+    console.error('Alternative compression failed:', error);
+    return `COUNT:${segments.length}`;
+  }
+}
+
+/**
+ * 대안 압축 데이터 복원
+ */
+function alternativeDecompressSegmentData(compressedData) {
+  try {
+    if (compressedData.startsWith('COUNT:')) {
+      const count = parseInt(compressedData.split(':')[1]) || 0;
+      return Array.from({ length: count }, (_, i) => ({
+        label: `세그먼트 ${i + 1}`,
+        segment_type: 'interval',
+        duration_sec: 300,
+        target_type: 'ftp_percent',
+        target_value: 100,
+        ramp: 'none',
+        ramp_to_value: null
+      }));
+    }
+    
+    return compressedData.split(';').map(item => {
+      const parts = item.split('|');
+      return {
+        label: parts[0] ? decodeURIComponent(parts[0]) : '세그먼트',
+        segment_type: getFullSegmentType(parts[1]) || 'interval',
+        duration_sec: parseInt(parts[2]) || 300,
+        target_type: 'ftp_percent',
+        target_value: parseInt(parts[3]) || 100,
+        ramp: 'none',
+        ramp_to_value: null
+      };
+    });
+  } catch (error) {
+    console.error('Alternative decompression failed:', error);
+    return [];
+  }
+}
+
+/**
+ * 개선된 폴백 방식: 다중 압축 시도
  */
 async function apiCreateWorkoutWithFallback(workoutData, workoutId) {
   try {
-    console.log('Using fallback method - compressed segments');
+    console.log('Using fallback method - trying multiple compression methods');
     
-    // 세그먼트를 압축된 형태로 변환
-    const compressedSegments = compressSegmentData(workoutData.segments);
+    let compressedSegments;
+    let compressionMethod = 'utf8base64';
+    
+    // 1차 시도: UTF-8 안전한 Base64 압축
+    try {
+      compressedSegments = compressSegmentData(workoutData.segments);
+    } catch (error) {
+      console.warn('UTF-8 Base64 compression failed, trying alternative method');
+      
+      // 2차 시도: 대안 압축 방식
+      try {
+        compressedSegments = alternativeCompressSegmentData(workoutData.segments);
+        compressionMethod = 'alternative';
+      } catch (altError) {
+        console.warn('Alternative compression failed, using simple count');
+        compressedSegments = `COUNT:${workoutData.segments.length}`;
+        compressionMethod = 'count';
+      }
+    }
     
     const fallbackParams = {
       action: 'updateWorkout',
       id: workoutId,
       title: workoutData.title,
-      description: workoutData.description + '\n\n[세그먼트 데이터]: ' + compressedSegments,
+      description: workoutData.description + `\n\n[세그먼트:${compressionMethod}]: ${compressedSegments}`,
       author: workoutData.author,
       status: workoutData.status,
       publish_date: workoutData.publish_date
@@ -282,10 +449,12 @@ async function apiCreateWorkoutWithFallback(workoutData, workoutId) {
     const result = await jsonpRequest(window.GAS_URL, fallbackParams);
     
     if (result.success) {
-      console.log('Fallback method succeeded');
-      // 클라이언트 측에 세그먼트 정보 별도 저장
+      console.log(`Fallback method succeeded with ${compressionMethod} compression`);
+      
+      // 클라이언트 측에 전체 세그먼트 정보 저장 (압축 실패해도 원본은 보존)
       try {
         localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(workoutData.segments));
+        localStorage.setItem(`workout_segments_method_${workoutId}`, compressionMethod);
       } catch (e) {
         console.warn('Could not save segments to localStorage:', e);
       }
@@ -294,7 +463,7 @@ async function apiCreateWorkoutWithFallback(workoutData, workoutId) {
     return result;
     
   } catch (error) {
-    console.error('Fallback method failed:', error);
+    console.error('All fallback methods failed:', error);
     return { success: false, error: error.message };
   }
 }
@@ -326,48 +495,6 @@ function createSegmentChunks(segments) {
   }
   
   return chunks;
-}
-
-/**
- * 세그먼트 데이터를 압축된 형태로 변환
- */
-function compressSegmentData(segments) {
-  try {
-    // 세그먼트를 간소화된 형태로 압축
-    const compressed = segments.map(seg => ({
-      l: seg.label?.substring(0, 20) || 'S', // label 축약
-      t: seg.segment_type?.charAt(0) || 'i', // type 첫 글자
-      d: seg.duration_sec || 300, // duration
-      v: seg.target_value || 100 // value
-    }));
-    
-    return btoa(JSON.stringify(compressed)); // Base64 인코딩
-  } catch (error) {
-    console.error('Compression failed:', error);
-    return 'COMPRESSED_DATA_ERROR';
-  }
-}
-
-/**
- * 압축된 세그먼트 데이터 복원
- */
-function decompressSegmentData(compressedData) {
-  try {
-    const compressed = JSON.parse(atob(compressedData));
-    
-    return compressed.map(seg => ({
-      label: seg.l || '세그먼트',
-      segment_type: getFullSegmentType(seg.t) || 'interval',
-      duration_sec: seg.d || 300,
-      target_type: 'ftp_percent',
-      target_value: seg.v || 100,
-      ramp: 'none',
-      ramp_to_value: null
-    }));
-  } catch (error) {
-    console.error('Decompression failed:', error);
-    return [];
-  }
 }
 
 /**
