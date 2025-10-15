@@ -782,14 +782,40 @@ function getSegmentTypeClass(segmentType) {
   return typeMapping[segmentType] || 'interval';
 }
 
-// 전역 함수로 내보내기
+// 전역 함수로 내보내기 (완전한 목록)
 window.loadWorkouts = loadWorkouts;
 window.selectWorkout = selectWorkout;
+window.editWorkout = editWorkout;
+window.deleteWorkout = deleteWorkout;
 window.saveWorkout = saveWorkout;
 window.updateWorkoutPreview = updateWorkoutPreview;
+window.showAddWorkoutForm = showAddWorkoutForm;
+window.resetWorkoutFormMode = resetWorkoutFormMode;
+window.performWorkoutUpdate = performWorkoutUpdate;
+
+// 세그먼트 관련 전역 함수
 window.addQuickSegment = addQuickSegment;
+window.showAddSegmentModal = showAddSegmentModal;
+window.showEditSegmentModal = showEditSegmentModal;
+window.deleteSegment = deleteSegment;
+window.saveSegment = saveSegment;
+window.closeSegmentModal = closeSegmentModal;
+window.deleteCurrentSegment = deleteCurrentSegment;
+window.toggleRampSettings = toggleRampSettings;
+window.renderSegments = renderSegments;
 window.updateSegmentSummary = updateSegmentSummary;
 window.checkSegmentCount = checkSegmentCount;
 
 // API 함수 전역 내보내기
 window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
+window.apiGetWorkouts = apiGetWorkouts;
+window.apiGetWorkout = apiGetWorkout;
+window.apiCreateWorkout = apiCreateWorkout;
+window.apiUpdateWorkout = apiUpdateWorkout;
+window.apiDeleteWorkout = apiDeleteWorkout;
+
+// 디버깅용 전역 변수
+window.workoutSegments = workoutSegments;
+window.isWorkoutEditMode = isWorkoutEditMode;
+
+console.log('모든 워크아웃 관리 함수가 전역으로 내보내짐');
