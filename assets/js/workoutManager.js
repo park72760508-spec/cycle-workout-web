@@ -54,14 +54,14 @@ async function apiDeleteWorkout(id) {
 }
 
 /**
- * 세그먼트 포함 워크아웃 생성 API
+ * 세그먼트 포함 워크아웃 생성 API (수정된 버전)
  */
 async function apiCreateWorkoutWithSegments(workoutData) {
   console.log('apiCreateWorkoutWithSegments called with:', workoutData);
   
   try {
-    // 기본 워크아웃 정보만 먼저 생성
-    const basicWorkoutData = {
+    const params = {
+      action: 'createWorkout',
       title: workoutData.title || '',
       description: workoutData.description || '',
       author: workoutData.author || '',
@@ -69,17 +69,11 @@ async function apiCreateWorkoutWithSegments(workoutData) {
       publish_date: workoutData.publish_date || ''
     };
     
-    console.log('Creating basic workout:', basicWorkoutData);
-    
-    const params = {
-      action: 'createWorkout',
-      ...basicWorkoutData
-    };
-    
-    // 세그먼트 데이터가 있으면 JSON 문자열로 포함
+    // 세그먼트 데이터가 있으면 JSON 문자열로 인코딩해서 추가
     if (workoutData.segments && workoutData.segments.length > 0) {
-      params.segments = JSON.stringify(workoutData.segments);
-      console.log('Including segments:', params.segments);
+      // JSON 문자열로 변환 후 URL 인코딩
+      params.segments = encodeURIComponent(JSON.stringify(workoutData.segments));
+      console.log('Encoded segments:', params.segments);
     }
     
     console.log('Final API params:', params);
