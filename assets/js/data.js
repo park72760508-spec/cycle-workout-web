@@ -127,7 +127,8 @@ async function renderWorkouts() {
 /* -----------------------------
    워크아웃 선택
 ------------------------------ */
-function selectWorkout(w) {
+// 기존 selectWorkout을 selectSampleWorkout으로 변경
+function selectSampleWorkout(w) {
   // ✅ 전역/캐시에 저장: app.js가 window.currentWorkout을 읽습니다.
   window.currentWorkout = w;
   try { localStorage.setItem("currentWorkout", JSON.stringify(w)); } catch(e) {}
@@ -154,6 +155,9 @@ function selectWorkout(w) {
 
   showScreen("trainingReadyScreen");
 }
+
+// 전역 노출도 변경
+window.selectSampleWorkout = selectSampleWorkout;
 
 
 // 예시 users 데이터가 window.users에 있다고 가정
