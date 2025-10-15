@@ -205,14 +205,17 @@ async function loadWorkouts() {
  */
 async function selectWorkout(workoutId) {
   try {
+    console.log('Selecting workout with ID:', workoutId);
     const result = await apiGetWorkout(workoutId);
     
     if (!result.success) {
+      console.error('Failed to get workout:', result.error);
       showToast('워크아웃 정보를 불러올 수 없습니다.');
       return;
     }
 
     const workout = result.item;
+    console.log('Retrieved workout:', workout); // 디버깅 로그 추가
     
     // 전역 상태에 현재 워크아웃 설정
     window.currentWorkout = workout;
@@ -229,8 +232,11 @@ async function selectWorkout(workoutId) {
     // 훈련 준비 화면으로 이동
     if (typeof showScreen === 'function') {
       showScreen('trainingReadyScreen');
+      console.log('Calling updateWorkoutPreview...'); // 디버깅 로그 추가
       if (typeof updateWorkoutPreview === 'function') {
         updateWorkoutPreview();
+      } else {
+        console.error('updateWorkoutPreview function not found');
       }
     }
     
