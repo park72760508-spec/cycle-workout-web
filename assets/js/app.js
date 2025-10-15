@@ -811,21 +811,30 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
    function enableIOSMode() {
+     console.log("Enabling iOS mode...");
+     
      const info = document.getElementById("iosInfo");
-     if (info) info.classList.remove("hidden");
+     if (info) {
+       info.classList.remove("hidden");
+       console.log("iOS info panel shown");
+     } else {
+       console.error("iosInfo element not found");
+     }
    
      ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
        const el = document.getElementById(id);
        if (el) {
-         el.classList.add("is-disabled");
+         el.classList.add("ios-disabled"); // is-disabled 대신 ios-disabled 사용
          el.setAttribute("aria-disabled","true");
          el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+         console.log(`Disabled button: ${id}`);
        }
      });
    
-     // null 체크 강화
+     // btnIosContinue 버튼 처리
      const btn = document.getElementById("btnIosContinue");
      if (btn) {
+       console.log("iOS continue button found, adding event listener");
        btn.addEventListener("click", () => {
          console.log("iOS continue button clicked");
          if (typeof showScreen === "function") {
@@ -835,7 +844,7 @@ document.addEventListener("DOMContentLoaded", () => {
          }
        });
      } else {
-       console.warn("btnIosContinue element not found in DOM");
+       console.error("btnIosContinue element not found in DOM");
      }
    }
 
@@ -857,12 +866,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ★ 이 부분을 추가 ★
   // DOM 로드 완료 후 잠시 대기하여 모든 요소가 준비되도록 함
-  setTimeout(() => {
-    if (isIOS()) {
-      console.log("iOS detected, enabling iOS mode");
-      enableIOSMode();
-    }
-  }, 100);
+   showScreen("connectionScreen");
+   
+   // ★ iOS 모드를 즉시 확인하고 활성화 ★
+   if (isIOS()) {
+     console.log("iOS detected, enabling iOS mode");
+     enableIOSMode();
+   }
 
    
 
