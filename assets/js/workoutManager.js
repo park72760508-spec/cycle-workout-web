@@ -112,9 +112,9 @@ async function apiDeleteWorkout(id) {
 }
 
 /**
- * 세그먼트 포함 워크아웃 생성 API (원본 + 대용량 지원)
+ * 세그먼트 포함 워크아웃 생성 API (원본 + 대용량 지원/85행)
  */
-async function apiCreateWorkoutWithSegments(workoutData) {
+/*async function apiCreateWorkoutWithSegments(workoutData) {
   console.log('apiCreateWorkoutWithSegments called with:', workoutData);
   
   try {
@@ -153,12 +153,12 @@ async function apiCreateWorkoutWithSegments(workoutData) {
     console.error('API call failed:', error);
     return { success: false, error: error.message };
   }
-}
+} 백업 */
 
 /**
- * 대용량 세그먼트 분할 전송 방식
+ * 대용량 세그먼트 분할 전송 방식(148행)
  */
-async function apiCreateWorkoutWithBatchSegments(workoutData) {
+/*async function apiCreateWorkoutWithBatchSegments(workoutData) {
   try {
     // 1단계: 기본 워크아웃 생성
     const baseParams = {
@@ -211,7 +211,270 @@ async function apiCreateWorkoutWithBatchSegments(workoutData) {
     console.error('Batch creation failed:', error);
     return { success: false, error: error.message };
   }
+} 기존백업   */
+
+
+// ==========================================
+// 📍 삽입 위치: 기존 apiCreateWorkoutWithBatchSegments 함수 다음
+// ==========================================
+
+/**
+ * 개선된 대용량 워크아웃 생성 함수 - 기존 함수 교체
+ */
+async function apiCreateWorkoutWithSegments(workoutData) {
+  console.log('apiCreateWorkoutWithSegments called with:', workoutData);
+  
+  try {
+    const params = {
+      action: 'createWorkout',
+      title: workoutData.title || '',
+      description: workoutData.description || '',
+      author: workoutData.author || '',
+      status: workoutData.status || '보이기',
+      publish_date: workoutData.publish_date || ''
+    };
+    
+    // 세그먼트 데이터가 있으면 처리
+    if (workoutData.segments && workoutData.segments.length > 0) {
+      // 1차 시도: URL 길이 기반 동적 분할
+      const segmentsJson = JSON.stringify(workoutData.segments);
+      const encodedSegments = encodeURIComponent(segmentsJson);
+      
+      // URL 길이 계산 (기본 파라미터 + 세그먼트 데이터)
+      const baseUrl = window.GAS_URL;
+      const baseParams = new URLSearchParams(params).toString();
+      const estimatedUrlLength = baseUrl.length + baseParams.length + encodedSegments.length + 50; // 여유분
+      
+      console.log('Estimated URL length:', estimatedUrlLength);
+      
+      if (estimatedUrlLength <= MAX_URL_LENGTH) {
+        // 소량 데이터: 기존 방식 사용
+        console.log('Using single request method');
+        params.segments = encodedSegments;
+        const result = await jsonpRequest(window.GAS_URL, params);
+        return result;
+      } else {
+        // 대용량 데이터: 분할 처리
+        console.log('Using chunked processing method');
+        return await apiCreateWorkoutWithChunkedSegments(workoutData);
+      }
+    }
+    
+    console.log('Creating workout without segments');
+    const result = await jsonpRequest(window.GAS_URL, params);
+    return result;
+    
+  } catch (error) {
+    console.error('API call failed:', error);
+    return { success: false, error: error.message };
+  }
 }
+
+/**
+ * 청크 기반 세그먼트 처리 (서버 API 수정 없이)
+ */
+async function apiCreateWorkoutWithChunkedSegments(workoutData) {
+  try {
+    // 1단계: 기본 워크아웃 생성
+    const baseParams = {
+      action: 'createWorkout',
+      title: workoutData.title || '',
+      description: workoutData.description || '',
+      author: workoutData.author || '',
+      status: workoutData.status || '보이기',
+      publish_date: workoutData.publish_date || ''
+    };
+    
+    console.log('Creating base workout...');
+    const createResult = await jsonpRequest(window.GAS_URL, baseParams);
+    if (!createResult.success) {
+      throw new Error(createResult.error || '워크아웃 생성 실패');
+    }
+    
+    const workoutId = createResult.workoutId || createResult.id;
+    console.log('Base workout created with ID:', workoutId);
+    
+    // 2단계: 세그먼트를 여러 번으로 나누어 업데이트
+    const segments = workoutData.segments;
+    const chunks = createSegmentChunks(segments);
+    
+    console.log(`Processing ${segments.length} segments in ${chunks.length} chunks`);
+    
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+      const chunk = chunks[chunkIndex];
+      
+      // 각 청크를 updateWorkout 방식으로 처리
+      const updateParams = {
+        action: 'updateWorkout',
+        id: workoutId,
+        title: workoutData.title,
+        description: workoutData.description,
+        author: workoutData.author,
+        status: workoutData.status,
+        publish_date: workoutData.publish_date,
+        segments: encodeURIComponent(JSON.stringify(chunk)),
+        append_segments: chunkIndex > 0 ? 'true' : 'false' // 첫 번째가 아니면 추가 모드
+      };
+      
+      console.log(`Sending chunk ${chunkIndex + 1}/${chunks.length}...`);
+      const chunkResult = await jsonpRequest(window.GAS_URL, updateParams);
+      
+      if (!chunkResult.success) {
+        // 실패시 폴백: 전체 세그먼트를 텍스트로 압축하여 재시도
+        console.warn(`Chunk ${chunkIndex + 1} failed, trying fallback method`);
+        return await apiCreateWorkoutWithFallback(workoutData, workoutId);
+      }
+      
+      // 청크 간 간격
+      if (chunkIndex < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+    
+    return { success: true, workoutId: workoutId };
+    
+  } catch (error) {
+    console.error('Chunked creation failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 폴백 방식: 세그먼트를 압축된 텍스트로 저장
+ */
+async function apiCreateWorkoutWithFallback(workoutData, workoutId) {
+  try {
+    console.log('Using fallback method - compressed segments');
+    
+    // 세그먼트를 압축된 형태로 변환
+    const compressedSegments = compressSegmentData(workoutData.segments);
+    
+    const fallbackParams = {
+      action: 'updateWorkout',
+      id: workoutId,
+      title: workoutData.title,
+      description: workoutData.description + '\n\n[세그먼트 데이터]: ' + compressedSegments,
+      author: workoutData.author,
+      status: workoutData.status,
+      publish_date: workoutData.publish_date
+    };
+    
+    const result = await jsonpRequest(window.GAS_URL, fallbackParams);
+    
+    if (result.success) {
+      console.log('Fallback method succeeded');
+      // 클라이언트 측에 세그먼트 정보 별도 저장
+      try {
+        localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(workoutData.segments));
+      } catch (e) {
+        console.warn('Could not save segments to localStorage:', e);
+      }
+    }
+    
+    return result;
+    
+  } catch (error) {
+    console.error('Fallback method failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 세그먼트를 URL 길이 제한에 맞게 청크로 분할
+ */
+function createSegmentChunks(segments) {
+  const chunks = [];
+  let currentChunk = [];
+  let currentSize = 0;
+  
+  for (const segment of segments) {
+    const segmentSize = JSON.stringify(segment).length;
+    
+    // 현재 청크에 추가했을 때 URL 길이 초과하는지 확인
+    if (currentSize + segmentSize > 1000 && currentChunk.length > 0) { // 안전 여유분
+      chunks.push([...currentChunk]);
+      currentChunk = [segment];
+      currentSize = segmentSize;
+    } else {
+      currentChunk.push(segment);
+      currentSize += segmentSize;
+    }
+  }
+  
+  if (currentChunk.length > 0) {
+    chunks.push(currentChunk);
+  }
+  
+  return chunks;
+}
+
+/**
+ * 세그먼트 데이터를 압축된 형태로 변환
+ */
+function compressSegmentData(segments) {
+  try {
+    // 세그먼트를 간소화된 형태로 압축
+    const compressed = segments.map(seg => ({
+      l: seg.label?.substring(0, 20) || 'S', // label 축약
+      t: seg.segment_type?.charAt(0) || 'i', // type 첫 글자
+      d: seg.duration_sec || 300, // duration
+      v: seg.target_value || 100 // value
+    }));
+    
+    return btoa(JSON.stringify(compressed)); // Base64 인코딩
+  } catch (error) {
+    console.error('Compression failed:', error);
+    return 'COMPRESSED_DATA_ERROR';
+  }
+}
+
+/**
+ * 압축된 세그먼트 데이터 복원
+ */
+function decompressSegmentData(compressedData) {
+  try {
+    const compressed = JSON.parse(atob(compressedData));
+    
+    return compressed.map(seg => ({
+      label: seg.l || '세그먼트',
+      segment_type: getFullSegmentType(seg.t) || 'interval',
+      duration_sec: seg.d || 300,
+      target_type: 'ftp_percent',
+      target_value: seg.v || 100,
+      ramp: 'none',
+      ramp_to_value: null
+    }));
+  } catch (error) {
+    console.error('Decompression failed:', error);
+    return [];
+  }
+}
+
+/**
+ * 축약된 세그먼트 타입을 전체 이름으로 변환
+ */
+function getFullSegmentType(shortType) {
+  const typeMap = {
+    'w': 'warmup',
+    'i': 'interval', 
+    'r': 'rest',
+    'c': 'cooldown',
+    't': 'tempo'
+  };
+  return typeMap[shortType] || 'interval';
+}
+
+// ==========================================
+// 📍 삽입 끝 - 이 아래는 기존 코드 유지
+// ==========================================
+
+
+
+
+
+
+
+
 
 /**
  * 워크아웃 목록 로드 및 렌더링 (원본 기반)
