@@ -553,25 +553,25 @@ if (!window.showScreen) {
       el.classList.add("active");
     }
     
-    // ★ 이 부분을 수정/추가 ★
-if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
-     loadWorkouts();
-   }
+    // 워크아웃 화면 전환 시 목록 로드
+    if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+      loadWorkouts();
+    }
    
-   // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
-   if (id === 'profileScreen') {
-     console.log('Loading real users for profile screen...');
-     // 잠시 대기 후 실제 사용자 목록 로드
-     setTimeout(() => {
-       if (typeof window.loadUsers === 'function') {
-         window.loadUsers();
-       } else {
-         console.error('loadUsers function not available');
-       }
-     }, 100);
-   }
-     
+    // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 ★
+    if (id === 'profileScreen') {
+      console.log('Loading real users for profile screen...');
+      // 잠시 대기 후 실제 사용자 목록 로드
+      setTimeout(() => {
+        if (typeof window.loadUsers === 'function') {
+          window.loadUsers();
+        } else {
+          console.error('loadUsers function not available');
+        }
+      }, 100);
+    }
   };
+}
     
     // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
     if (id === 'profileScreen') {
@@ -585,8 +585,6 @@ if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
         }
       }, 100);
     }
-     
-  };
 }
 
 
@@ -857,6 +855,17 @@ document.addEventListener("DOMContentLoaded", () => {
   
   showScreen("connectionScreen");
 
+  // ★ 이 부분을 추가 ★
+  // DOM 로드 완료 후 잠시 대기하여 모든 요소가 준비되도록 함
+  setTimeout(() => {
+    if (isIOS()) {
+      console.log("iOS detected, enabling iOS mode");
+      enableIOSMode();
+    }
+  }, 100);
+
+   
+
    // ✅ 훈련 준비 → 훈련 시작
    const btnStartTraining = document.getElementById("btnStartTraining");
    if (btnStartTraining) {
@@ -1044,18 +1053,6 @@ function togglePause() {
   setPaused(!trainingState.paused);
 }
 
-// DOMContentLoaded 안에 추가:
-document.addEventListener("DOMContentLoaded", () => {
-  const btnPause = document.getElementById("btnTogglePause");
-  if (btnPause) {
-    btnPause.addEventListener("click", togglePause);
-  }
-});
-
-
-
-
-
 
    
   // 훈련 시작 버튼 tSS/kcal 갱신 블록도 가드
@@ -1099,7 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
    });
 
    
-   if (isIOS()) enableIOSMode();
+   //if (isIOS()) enableIOSMode();
    
 });
 // -------------------------------------
