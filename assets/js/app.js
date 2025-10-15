@@ -16,35 +16,22 @@ function normalizeType(seg){
   return "interval"; // 기본값
 }
 
-
-
-// ── 훈련 지표 상태 (TSS / kcal / NP 근사) ─────────────────
+// 훈련 지표 상태 (TSS / kcal / NP 근사)
 const trainingMetrics = {
   elapsedSec: 0,      // 전체 경과(초)
   joules: 0,          // 누적 일(줄). 1초마다 W(=J/s)를 더해줌
   ra30: 0,            // 30초 롤링 평균 파워(근사: 1차 IIR)
-  np4sum: 0,          // (ra30^4)의 누적합
+  np4sum: 0,          // (ra30^4)의 누적 합
   count: 0            // 표본 개수(초 단위)
 };
 
-
-// ──────────────────────────────
 // 타임라인 생성/업데이트 함수 추가
-// ──────────────────────────────
 function secToMinStr(sec){
   const m = Math.floor(sec/60);
   return `${m}분`;
 }
 
-// ──────────────────────────────
-// 사용자 목록
-// ──────────────────────────────
-
-
-
-// ──────────────────────────────
 // Beep 사운드 (Web Audio)
-// ──────────────────────────────
 let __beepCtx = null;
 
 async function ensureBeepContext() {
@@ -79,10 +66,6 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
   } catch (_) { /* 무시 */ }
 }
 
-
-// ──────────────────────────────
-// 훈련화면 시간 및 훈련 상태/유틸 + 훈련 상태 전역 (파일 상단 유틸 근처)
-// ──────────────────────────────
 // 시간 포맷: 75 -> "01:15"
 function formatMMSS(sec) {
   const s = Math.max(0, Math.floor(sec));
@@ -117,7 +100,7 @@ function createTimeline(){
   }).join("");
 }
 
-// 훈련 상태 => 세그먼트별 달성도”를 시간 기준 달성도(=진행률)로 표현
+// 훈련 상태 => 세그먼트별 달성도를 시간 기준 달성도(=진행률)로 표현
 function updateTimelineByTime(){
   if (!trainingSession.startTime || !currentWorkout) return;
 
@@ -150,7 +133,7 @@ function onSegmentChanged(newIndex){
   const nameEl = document.getElementById("currentSegmentName");
   if (nameEl) nameEl.textContent = `${seg.segment_type || "세그먼트"} - FTP ${seg.ftp_percent}%`;
   updateTrainingDisplay();
-} // ✅ 누락됐던 닫는 중괄호 추가
+}
 
 // 훈련 상태 => 시간 달성도
 function colorFillByPower(i, avg, target){
@@ -162,7 +145,6 @@ function colorFillByPower(i, avg, target){
   else if (ratio > 1.1) el.style.background = "#DC3545";
   else el.style.background = "#2E74E8";
 }
-   
 
 // 달성도 색상: 목표 대비 평균 파워 비율(ratio)
 function colorByAchievement(ratio){
@@ -172,8 +154,7 @@ function colorByAchievement(ratio){
   return "#22c55e";                   // 적정(초록)
 }
 
-
-// ── 세그먼트 바 상태(전역) ─────────────────────────
+// 세그먼트 바 상태(전역)
 const segBar = {
   totalSec: 0,     // 전체 운동 시간(초)
   ends: [],        // 각 세그먼트의 누적 종료시각(초)
@@ -231,16 +212,7 @@ function buildSegmentBar(){
   }).join("");
 }
 
-
-
-
-
-
-
-
 // 메인 업데이트 함수(1초마다 호출):
-// 메인 업데이트 함수(1초마다 호출):
-// 메인 업데이트 함수(1초마다 호출): (교체본)
 function updateSegmentBarTick(){
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
@@ -264,8 +236,8 @@ function updateSegmentBarTick(){
     startAt = endAt;
   }
 
-  // 2) 평균 파워 누적(1초당 표본 1개)
- {
+  // 2) 세그먼트 상태 클래스 업데이트
+  {
     const elapsedAll = Number(window.trainingState?.elapsedSec) || 0;
     let startAt2 = 0;
     for (let i = 0; i < w.segments.length; i++) {
@@ -287,9 +259,8 @@ function updateSegmentBarTick(){
       startAt2 = endAt2;
     }
   }
-  // === 여기까지 추가 ===
 
-  // 3) 평균 파워 누적(1초당 표본 1개)
+  // 3) 평균 파워 누적 (1초당 표본 1개)
   {
     const p = Math.max(0, Number(window.liveData?.power) || 0);
     if (w.segments[segIndex]) {
@@ -297,14 +268,14 @@ function updateSegmentBarTick(){
       segBar.samples[segIndex]  = (segBar.samples[segIndex]  || 0) + 1;
     }
 
-    // ✅ 현재 세그 평균 파워 표시
+    // 현재 세그 평균 파워 표시
     const curSamples = segBar.samples[segIndex] || 0;
     const curAvg = curSamples > 0 ? Math.round(segBar.sumPower[segIndex] / curSamples) : 0;
     const elAvg = document.getElementById("avgSegmentPowerValue");
     if (elAvg) elAvg.textContent = String(curAvg);
   }
 
-  // 3) 달성도 색상(세그 평균 vs 목표)
+  // 4) 달성도 색상(세그 평균 vs 목표)
   for (let i=0; i<w.segments.length; i++){
     const seg = w.segments[i];
     const targetW = segTargetW(seg, ftp);
@@ -315,11 +286,7 @@ function updateSegmentBarTick(){
   }
 }
 
-
-
-
-
-// 훈련 상태---------------------------------------OLD---------------------------------------------------
+// 훈련 상태
 const trainingState = {
   timerId: null,
   paused: false,
@@ -331,8 +298,6 @@ const trainingState = {
 };
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
-// 훈련 상태 => 시간/세그먼트 UI 갱신 함수 (교체본)
-// 훈련 상태 => 시간/세그먼트 UI 갱신 함수 (교체본)
 function updateTimeUI() {
   const w = window.currentWorkout;
   if (!w) return;
@@ -341,9 +306,9 @@ function updateTimeUI() {
   const elElapsedPct = document.getElementById("elapsedPercent");
   const elSegTime    = document.getElementById("segmentTime");
   const elNext       = document.getElementById("nextSegment");
-  const elSegPct     = document.getElementById("segmentProgress"); // ✅ 진행률 표시 엘리먼트
+  const elSegPct     = document.getElementById("segmentProgress"); // 진행률 표시 엘리먼트
 
-  // 총 진행률 (오프바이원/NaN 방지)
+  // 총 진행률 (오버플로우/NaN 방지)
   const elapsed  = Math.max(0, Number(trainingState.elapsedSec) || 0);
   const total    = Math.max(1, Number(trainingState.totalSec)  || 1);
   const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
@@ -375,25 +340,16 @@ function updateTimeUI() {
     }
   }
 
-  // ✅ 세그 진행률(0~100 클램프)
+  // 세그 진행률 (0~100 클램프)
   if (elSegPct && seg) {
     const segDur    = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
     const segElapsed= Math.max(0, Number(trainingState.segElapsedSec) || 0);
     const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
     elSegPct.textContent = String(sp);
   }
-
-  // ❌ #timelineSegments 는 컨테이너라 폭을 건드리면 안 됩니다 (삭제)
-  // const barTimeline = document.getElementById("timelineSegments");
-  // if (barTimeline) barTimeline.style.width = `${totalPct}%`;
 }
 
-
-
 // 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
-// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
-// ⬇ 기존 함수가 있다면 통째로 교체
-// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신 (교체본)
 function applySegmentTarget(i) {
   const w   = window.currentWorkout;
   const ftp = Number(window.currentUser?.ftp) || 200;
@@ -410,7 +366,7 @@ function applySegmentTarget(i) {
   window.liveData = window.liveData || {};
   window.liveData.targetPower = targetW;
 
-  // ✅ DOM 즉시 반영
+  // DOM 즉시 반영
   const tEl   = document.getElementById("targetPowerValue");
   const nameEl= document.getElementById("currentSegmentName");
   const progEl= document.getElementById("segmentProgress");
@@ -419,26 +375,13 @@ function applySegmentTarget(i) {
   if (tEl)    tEl.textContent    = String(targetW || 0);
   if (nameEl) nameEl.textContent = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
   if (progEl) progEl.textContent = "0";
-  if (avgEl)  avgEl.textContent  = "–";
+  if (avgEl)  avgEl.textContent  = "—";
 
   // 첫 프레임 즉시 반영
   window.updateTrainingDisplay && window.updateTrainingDisplay();
 }
 
-
-
-
-
-// -------------------------------------------------
-// 시작/루프에 연결 (딱 두 줄
-// 중요 루프 
-// ------------------------------------------------
-// -------------------------------------------------
-// 시작/루프 (통째로 교체하세요)
-// -------------------------------------------------
-// -------------------------------------------------
-// 시작/루프 (교체본)
-// -------------------------------------------------
+// 시작/루프
 function startSegmentLoop() {
   const w = window.currentWorkout;
   if (!w) return;
@@ -496,7 +439,7 @@ function startSegmentLoop() {
       if (kcalEl) kcalEl.textContent = Math.round(kcal);
     }
 
-    // 3) ✅ UI 먼저 갱신 (마지막 0초 프레임 보장)
+    // 3) UI 먼저 갱신 (마지막 0초 프레임 보장)
     if (typeof updateTimeUI === "function") updateTimeUI();
     if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
     if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
@@ -525,18 +468,10 @@ function startSegmentLoop() {
   }, 1000);
 }
 
-
 function stopSegmentLoop() {
   clearInterval(trainingState.timerId);
   trainingState.timerId = null;
 }
-
-// ──────────────────────────────
-// 훈련화면  끝 지점
-// ──────────────────────────────
-
-
-
 
 // 중복 선언 방지
 if (!window.showScreen) {
@@ -553,30 +488,12 @@ if (!window.showScreen) {
       el.classList.add("active");
     }
     
-    // ★ 이 부분을 수정/추가 ★
-if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
-     loadWorkouts();
-   }
-   
-   // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
-   if (id === 'profileScreen') {
-     console.log('Loading real users for profile screen...');
-     // 잠시 대기 후 실제 사용자 목록 로드
-     setTimeout(() => {
-       if (typeof window.loadUsers === 'function') {
-         window.loadUsers();
-       } else {
-         console.error('loadUsers function not available');
-       }
-     }, 100);
-   }
-     
-  };
+    if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+      loadWorkouts();
+    }
     
-    // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
     if (id === 'profileScreen') {
       console.log('Loading real users for profile screen...');
-      // 잠시 대기 후 실제 사용자 목록 로드
       setTimeout(() => {
         if (typeof window.loadUsers === 'function') {
           window.loadUsers();
@@ -585,8 +502,8 @@ if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
         }
       }, 100);
     }
+  };
 }
-
 
 if (!window.showConnectionStatus) {
   window.showConnectionStatus = function(show) {
@@ -637,7 +554,7 @@ window.updateTrainingDisplay = function () {
     else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
   }
 
-   if (t) t.textContent = String(Math.round(target));
+  if (t) t.textContent = String(Math.round(target));
 
   if (h) {
     h.textContent = Math.round(hr);
@@ -656,17 +573,12 @@ window.updateTrainingDisplay = function () {
     else powerDisplay.classList.remove("active");
 
     // 훈련화면에 케이던스 표시
-   const c = document.getElementById("cadenceValue");
-   if (c && typeof liveData.cadence === "number") c.textContent = Math.round(liveData.cadence);
-  
+    const c = document.getElementById("cadenceValue");
+    if (c && typeof liveData.cadence === "number") c.textContent = Math.round(liveData.cadence);
   }
 };
 
-
-
-
 // (카운트다운 + Beep + 자동 시작)
-
 function startWithCountdown(sec = 5) {
   const overlay = document.getElementById("countdownOverlay");
   const num = document.getElementById("countdownNumber");
@@ -704,17 +616,13 @@ function startWithCountdown(sec = 5) {
   }, 1000);
 }
 
-
-
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
-// app.js (또는 app (3).js)에서 기존 startWorkoutTraining() 전체 교체
 function startWorkoutTraining() {
-   
-   //훈련 시작 직전(예: startWorkoutTraining()에서) 리셋:
-   Object.assign(trainingMetrics, {
-     elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
-   });
-   
+  // 훈련 시작 직전(예: startWorkoutTraining()에서) 리셋:
+  Object.assign(trainingMetrics, {
+    elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
+  });
+  
   // (A) 워크아웃 보장: 캐시 복구 포함
   if (!window.currentWorkout) {
     try {
@@ -734,27 +642,27 @@ function startWorkoutTraining() {
     trainingState.segElapsedSec = 0;
     trainingState.segIndex = 0;
   }
-   // 카운트다운 직후 훈련 시작 때마다 TSS/kcal 계산용 누적 상태
-   Object.assign(trainingMetrics, {
-     elapsedSec: 0,
-     joules: 0,
-     ra30: 0,
-     np4sum: 0,
-     count: 0
-   });
-   
+  // 카운트다운 직후 훈련 시작 때마다 TSS/kcal 계산용 누적 상태
+  Object.assign(trainingMetrics, {
+    elapsedSec: 0,
+    joules: 0,
+    ra30: 0,
+    np4sum: 0,
+    count: 0
+  });
+  
   // (C) 세그먼트 타임라인 생성(있을 때만)
   if (typeof buildSegmentBar === "function") buildSegmentBar();
 
-  // (D) 첫 세그먼트 타겟/이름 적용 + 시간 UI 1회 갱신(있을 때만)
+  // (D) 첫 세그먼트 타겟/이름 적용 + 시간 UI 1회 갱신 (있을 때만)
   if (typeof applySegmentTarget === "function") applySegmentTarget(0);
   if (typeof updateTimeUI === "function") updateTimeUI();
 
   // (E) 화면 전환
   if (typeof showScreen === "function") showScreen("trainingScreen");
 
-   // ✅ 사용자 정보 출력
-   if (typeof renderUserInfo === "function") renderUserInfo();   
+  // 사용자 정보 출력
+  if (typeof renderUserInfo === "function") renderUserInfo();   
 
   // (F) 첫 프레임 즉시 렌더(깜빡임 방지)
   if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
@@ -765,16 +673,11 @@ function startWorkoutTraining() {
   showToast && showToast("훈련을 시작합니다");
 }
 
-
-
 function backToWorkoutSelection() {
   showScreen("workoutScreen");
 }
 
-
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
-// 사용자 정보 렌더(훈련자 화면 사용자 정보)
-
 function renderUserInfo() {
   const box = document.getElementById("userInfo");
   const u = window.currentUser;
@@ -787,61 +690,68 @@ function renderUserInfo() {
   const wt  = Number(u.weight);
   const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
 
-  // ⬇️ 여기만 교체 (아이콘/태그 제거, 텍스트만)
   box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
-
 }
 
+// 일시정지/재개 함수
+function setPaused(isPaused) {
+  trainingState.paused = !!isPaused;
 
+  // 버튼 라벨/아이콘 업데이트
+  const btn = document.getElementById("btnTogglePause");
+  const icon = document.getElementById("pauseIcon");
+  if (btn)  btn.textContent = trainingState.paused ? " ▶️ 재개" : " ⏸️ 일시정지";
+  if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
 
+  // (선택) 토스트/상태 표시
+  if (typeof showToast === "function") {
+    showToast(trainingState.paused ? "일시정지됨" : "재개됨");
+  }
+}
 
+function togglePause() {
+  setPaused(!trainingState.paused);
+}
 
-   
-// -------------------------------------
-// 단일 DOMContentLoaded 이벤트/ 시작, 버튼 클릭
-// ------------------------------------
-
+// DOMContentLoaded 이벤트
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
 
-  // ✅ 아이폰용 처리 프로세스
+  // iOS용 처리 프로세스
   function isIOS() {
     const ua = navigator.userAgent || "";
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
 
-   function enableIOSMode() {
-     const info = document.getElementById("iosInfo");
-     if (info) info.classList.remove("hidden");
-   
-     ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-       const el = document.getElementById(id);
-       if (el) {
-         el.classList.add("is-disabled");
-         el.setAttribute("aria-disabled","true");
-         el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
-       }
-     });
-   
-     // null 체크 강화
-     const btn = document.getElementById("btnIosContinue");
-     if (btn) {
-       btn.addEventListener("click", () => {
-         console.log("iOS continue button clicked");
-         if (typeof showScreen === "function") {
-           showScreen("profileScreen");
-         } else {
-           console.error("showScreen function not available");
-         }
-       });
-     } else {
-       console.warn("btnIosContinue element not found in DOM");
-     }
-   }
+  function enableIOSMode() {
+    const info = document.getElementById("iosInfo");
+    if (info) info.classList.remove("hidden");
 
-   
+    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.classList.add("is-disabled");
+        el.setAttribute("aria-disabled","true");
+        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+      }
+    });
 
-   
+    // null 체크 강화
+    const btn = document.getElementById("btnIosContinue");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        console.log("iOS continue button clicked");
+        if (typeof showScreen === "function") {
+          showScreen("profileScreen");
+        } else {
+          console.error("showScreen function not available");
+        }
+      });
+    } else {
+      console.warn("btnIosContinue element not found in DOM");
+    }
+  }
+
   // 브라우저 지원 확인
   if (!navigator.bluetooth) {
     showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
@@ -855,72 +765,65 @@ document.addEventListener("DOMContentLoaded", () => {
   
   showScreen("connectionScreen");
 
-   // ✅ 훈련 준비 → 훈련 시작
-   const btnStartTraining = document.getElementById("btnStartTraining");
-   if (btnStartTraining) {
-     btnStartTraining.addEventListener("click", () => startWithCountdown(5));
-   }
- 
-   
-   // ✅ 훈련 준비 → 워크아웃 변경
-   document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
-     backToWorkoutSelection();
-   });
-   
-   // ✅ 연결 요약 → 프로필 화면
-   // 프로필 화면 이동 + 사용자 목록 로드(가드 포함)
+  // 훈련 준비 → 훈련 시작
+  const btnStartTraining = document.getElementById("btnStartTraining");
+  if (btnStartTraining) {
+    btnStartTraining.addEventListener("click", () => startWithCountdown(5));
+  }
 
+  // 훈련 준비 → 워크아웃 변경
+  document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
+    backToWorkoutSelection();
+  });
 
-   
-   //loadUsers()가 userProfiles도 인식하게(방어)
-   function loadUsers() {
-     const box = document.getElementById("userList");
-     if (!box) return;
-   
-     // 전역 데이터: window.users → window.userProfiles 순으로 폴백
-     const list =
-       (Array.isArray(window.users) && window.users.length ? window.users :
-        Array.isArray(window.userProfiles) && window.userProfiles.length ? window.userProfiles :
-        []);
-   
-     if (!Array.isArray(list) || list.length === 0) {
-       box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
-       box.onclick = null; // 이전 위임 핸들러 제거
-       return;
-     }
-   
-     // 카드 렌더 (이름, FTP, W/kg 포함)
-     box.innerHTML = list.map((u) => {
-       const name = (u?.name ?? "").toString();
-       const ftp  = Number(u?.ftp);
-       const wt   = Number(u?.weight);
-       const wkg  = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0)
-         ? (ftp / wt).toFixed(2)
-         : "-";
-   
-       return `
-         <div class="user-card" data-id="${u.id}">
-           <div class="user-name">👤 ${name}</div>
-           <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
-           <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
-         </div>
-       `;
-     }).join("");
-   
-     // 선택 버튼 위임(매번 새로 바인딩되도록 on*로 설정)
-     box.onclick = (e) => {
-       const btn = e.target.closest('[data-action="select"]');
-       if (!btn) return;
-       const card = btn.closest(".user-card");
-       const id = card?.getAttribute("data-id");
-       const user = list.find((x) => String(x.id) === String(id));
-       if (user && typeof window.selectProfile === "function") {
-         window.selectProfile(user.id); // ← 여기!
-       }
-     };
-   }
-  
-  
+  // loadUsers()가 userProfiles도 인식하게(방어)
+  function loadUsers() {
+    const box = document.getElementById("userList");
+    if (!box) return;
+
+    // 전역 데이터: window.users → window.userProfiles 순으로 폴백
+    const list =
+      (Array.isArray(window.users) && window.users.length ? window.users :
+       Array.isArray(window.userProfiles) && window.userProfiles.length ? window.userProfiles :
+       []);
+
+    if (!Array.isArray(list) || list.length === 0) {
+      box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
+      box.onclick = null; // 이전 위임 핸들러 제거
+      return;
+    }
+
+    // 카드 렌더 (이름, FTP, W/kg 포함)
+    box.innerHTML = list.map((u) => {
+      const name = (u?.name ?? "").toString();
+      const ftp  = Number(u?.ftp);
+      const wt   = Number(u?.weight);
+      const wkg  = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0)
+        ? (ftp / wt).toFixed(2)
+        : "-";
+
+      return `
+        <div class="user-card" data-id="${u.id}">
+          <div class="user-name">👤 ${name}</div>
+          <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
+          <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
+        </div>
+      `;
+    }).join("");
+
+    // 선택 버튼 위임(매번 새로 바인딩되도록 on*로 설정)
+    box.onclick = (e) => {
+      const btn = e.target.closest('[data-action="select"]');
+      if (!btn) return;
+      const card = btn.closest(".user-card");
+      const id = card?.getAttribute("data-id");
+      const user = list.find((x) => String(x.id) === String(id));
+      if (user && typeof window.selectProfile === "function") {
+        window.selectProfile(user.id);
+      }
+    };
+  }
+
   // 블루투스 연결 버튼들
   const btnHR = document.getElementById("btnConnectHR");
   const btnTrainer = document.getElementById("btnConnectTrainer");
@@ -980,137 +883,61 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-  
-  // 다음 단계 버튼
-
 
   // 다파워소스 우선순위도 같이 표기
-function updateDevicesList() {
-  const box = document.getElementById("connectedDevicesList");
-  if (!box) return;
+  function updateDevicesList() {
+    const box = document.getElementById("connectedDevicesList");
+    if (!box) return;
 
-  const pm = connectedDevices?.powerMeter;
-  const tr = connectedDevices?.trainer;
-  const hr = connectedDevices?.heartRate;
+    const pm = connectedDevices?.powerMeter;
+    const tr = connectedDevices?.trainer;
+    const hr = connectedDevices?.heartRate;
 
-  const active = getActivePowerSource();
-  const pmBadge = pm ? (active==="powermeter" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
-  const trBadge = tr ? (active==="trainer" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
+    const active = getActivePowerSource();
+    const pmBadge = pm ? (active==="powermeter" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
+    const trBadge = tr ? (active==="trainer" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
 
-  box.innerHTML = `
-    ${pm ? `<div class="dev">⚡ 파워미터: ${pm.name}${pmBadge}</div>` : ""}
-    ${tr ? `<div class="dev">🚲 스마트 트레이너: ${tr.name}${trBadge}</div>` : ""}
-    ${hr ? `<div class="dev">❤️ 심박계: ${hr.name}</div>` : ""}
-  `;
-}
+    box.innerHTML = `
+      ${pm ? `<div class="dev">⚡ 파워미터: ${pm.name}${pmBadge}</div>` : ""}
+      ${tr ? `<div class="dev">🚲 스마트 트레이너: ${tr.name}${trBadge}</div>` : ""}
+      ${hr ? `<div class="dev">❤️ 심박계: ${hr.name}</div>` : ""}
+    `;
+  }
 
-
-  
   // 워크아웃 변경 버튼
   const btnBackToWorkouts = document.getElementById("btnBackToWorkouts");
   if (btnBackToWorkouts) {
     btnBackToWorkouts.addEventListener("click", backToWorkoutSelection);
   }
-  
-  console.log("App initialization complete!");
 
-   // 일시정지/재개
-   document.getElementById("btnTogglePause")?.addEventListener("click", () => {
-     trainingState.paused = !trainingState.paused;
-     const icon = document.getElementById("pauseIcon");
-     if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
-   });
-
-
-   // 일시정지/재개   
-function setPaused(isPaused) {
-  trainingState.paused = !!isPaused;
-
-  // 버튼 라벨/아이콘 업데이트
-  const btn = document.getElementById("btnTogglePause");
-  const icon = document.getElementById("pauseIcon");
-  if (btn)  btn.textContent = trainingState.paused ? " ▶️ 재개" : " ⏸️ 일시정지";
-  if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
-
-  // (선택) 토스트/상태 표시
-  if (typeof showToast === "function") {
-    showToast(trainingState.paused ? "일시정지됨" : "재개됨");
-  }
-}
-
-function togglePause() {
-  setPaused(!trainingState.paused);
-}
-
-// DOMContentLoaded 안에 추가:
-document.addEventListener("DOMContentLoaded", () => {
+  // 일시정지/재개
   const btnPause = document.getElementById("btnTogglePause");
   if (btnPause) {
     btnPause.addEventListener("click", togglePause);
   }
+
+  // 구간 건너뛰기
+  document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
+    const w = window.currentWorkout;
+    if (!w) return;
+    trainingState.segIndex = Math.min(w.segments.length - 1, trainingState.segIndex + 1);
+    trainingState.segElapsedSec = 0;
+    applySegmentTarget(trainingState.segIndex);
+    updateTimeUI();
+  });
+
+  // 훈련 종료
+  document.getElementById("btnStopTraining")?.addEventListener("click", () => {
+    stopSegmentLoop();
+    showScreen("resultScreen");
+  });
+
+  console.log("App initialization complete!");
+
+  if (isIOS()) enableIOSMode();
 });
 
-
-
-
-
-
-   
-  // 훈련 시작 버튼 tSS/kcal 갱신 블록도 가드
-   
-   if (!trainingState.paused) {
-     const ftp = (window.currentUser?.ftp) || 200;
-     const p   = Math.max(0, Number(window.liveData?.power) || 0);
-   
-     trainingMetrics.elapsedSec += 1;
-     trainingMetrics.joules     += p;                     // 1초당 J 누적
-     trainingMetrics.ra30       += (p - trainingMetrics.ra30) / 30;
-     trainingMetrics.np4sum     += Math.pow(trainingMetrics.ra30, 4);
-     trainingMetrics.count      += 1;
-   
-     const NP  = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
-     const IF  = ftp ? (NP / ftp) : 0;
-     const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-     const kcal= trainingMetrics.joules / 1000;
-   
-     const tssEl  = document.getElementById("tssValue");
-     const kcalEl = document.getElementById("kcalValue");
-     if (tssEl)  tssEl.textContent  = TSS.toFixed(1);
-     if (kcalEl) kcalEl.textContent = Math.round(kcal);
-   }
-
-
-   // 구간 건너뛰기
-   document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
-     const w = window.currentWorkout;
-     if (!w) return;
-     trainingState.segIndex = Math.min(w.segments.length - 1, trainingState.segIndex + 1);
-     trainingState.segElapsedSec = 0;
-     applySegmentTarget(trainingState.segIndex);
-     updateTimeUI();
-   });
-   
-   // 훈련 종료
-   document.getElementById("btnStopTraining")?.addEventListener("click", () => {
-     stopSegmentLoop();
-     showScreen("resultScreen");
-   });
-
-   
-   if (isIOS()) enableIOSMode();
-   
-});
-// -------------------------------------
-// 단일 DOMContentLoaded 이벤트/ 종료, 버튼 클릭
-// ------------------------------------
-
-
-
-
-
-
-
-/* ===== 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전) ===== */
+// 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
 (() => {
   const btn = document.getElementById("btnToProfile");
   if (!btn) return;
@@ -1152,19 +979,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 })();
 
-
-
-
-
-
-
 // Export
 window.startWorkoutTraining = startWorkoutTraining;
 window.backToWorkoutSelection = backToWorkoutSelection;
-
-
-
-
-
-
-
