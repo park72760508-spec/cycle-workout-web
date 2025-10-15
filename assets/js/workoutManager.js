@@ -1200,12 +1200,118 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+
+/**
+ * 워크아웃 프리뷰 업데이트 함수
+ */
+function updateWorkoutPreview() {
+  const workout = window.currentWorkout;
+  if (!workout) {
+    console.warn('currentWorkout이 설정되지 않았습니다.');
+    return;
+  }
+
+  console.log('Updating workout preview with:', workout);
+
+  // 기본 정보 업데이트
+  const nameEl = document.getElementById('previewWorkoutName');
+  const durationEl = document.getElementById('previewDuration');
+  const intensityEl = document.getElementById('previewIntensity');
+  const tssEl = document.getElementById('previewTSS');
+
+  if (nameEl) nameEl.textContent = workout.title || '워크아웃';
+  
+  // 총 시간 계산 (초 -> 분)
+  const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+  if (durationEl) durationEl.textContent = `${totalMinutes}분`;
+
+  // 평균 강도 계산
+  let avgIntensity = 0;
+  let totalDuration = 0;
+  
+  if (workout.segments && workout.segments.length > 0) {
+    let weightedSum = 0;
+    
+    workout.segments.forEach(segment => {
+      const duration = segment.duration_sec || 0;
+      const intensity = segment.target_value || 0;
+      weightedSum += (duration * intensity);
+      totalDuration += duration;
+    });
+    
+    if (totalDuration > 0) {
+      avgIntensity = Math.round(weightedSum / totalDuration);
+    }
+  }
+  
+  if (intensityEl) intensityEl.textContent = `${avgIntensity}%`;
+
+  // TSS 계산 (간단한 추정)
+  const estimatedTSS = Math.round((totalMinutes * avgIntensity * avgIntensity) / 10000);
+  if (tssEl) tssEl.textContent = estimatedTSS;
+
+  // 세그먼트 프리뷰 업데이트
+  updateSegmentPreview(workout.segments || []);
+}
+
+/**
+ * 세그먼트 프리뷰 업데이트
+ */
+function updateSegmentPreview(segments) {
+  const segDiv = document.getElementById('segmentPreview');
+  if (!segDiv) return;
+
+  if (!segments || segments.length === 0) {
+    segDiv.innerHTML = '<div class="text-center muted">세그먼트 정보가 없습니다.</div>';
+    return;
+  }
+
+  segDiv.innerHTML = segments.map(segment => {
+    const minutes = Math.floor((segment.duration_sec || 0) / 60);
+    const seconds = (segment.duration_sec || 0) % 60;
+    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+    
+    // 세그먼트 타입에 따른 CSS 클래스
+    const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
+    
+    return `
+      <div class="segment-item ${segmentTypeClass}">
+        <h4>${segment.label || '세그먼트'}</h4>
+        <div class="ftp-percent">${segment.target_value || 0}%</div>
+        <div class="duration">${duration}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * 세그먼트 타입에 따른 CSS 클래스 반환
+ */
+function getSegmentTypeClass(segmentType) {
+  const typeMapping = {
+    'warmup': 'warmup',
+    'rest': 'rest', 
+    'interval': 'interval',
+    'cooldown': 'rest',
+    'tempo': 'interval',
+    'sweetspot': 'interval',
+    'threshold': 'interval',
+    'vo2max': 'interval'
+  };
+  
+  return typeMapping[segmentType] || 'interval';
+}
+
+
+
+
 // 전역 함수로 내보내기
 window.loadWorkouts = loadWorkouts;
 window.selectWorkout = selectWorkout;
 window.editWorkout = editWorkout;
 window.deleteWorkout = deleteWorkout;
 window.saveWorkout = saveWorkout;
+window.updateWorkoutPreview = updateWorkoutPreview;  // 추가
 
 // 세그먼트 관련 전역 함수
 window.addQuickSegment = addQuickSegment;
