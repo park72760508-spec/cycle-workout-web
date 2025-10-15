@@ -20,39 +20,58 @@ const USER_API_CONFIG = {
 };
 
 /**
- * POST 방식 API 호출 헬퍼 함수 - 한글 처리 개선
+ * 개선된 JSONP 방식 API 호출 헬퍼 함수 - CORS 문제 해결
  */
-async function postUserRequest(url, data = {}) {
-  try {
-    console.log('POST user request to:', url, 'with data:', data);
+function jsonpUserRequest(url, params = {}) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'jsonp_user_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
+    const script = document.createElement('script');
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: USER_API_CONFIG.headers,
-      body: JSON.stringify(data),
-      signal: AbortSignal.timeout(USER_API_CONFIG.timeout)
+    console.log('JSONP user request to:', url, 'with params:', params);
+    
+    window[callbackName] = function(data) {
+      console.log('JSONP user response received:', data);
+      delete window[callbackName];
+      document.body.removeChild(script);
+      resolve(data);
+    };
+    
+    script.onerror = function() {
+      console.error('JSONP user script loading failed');
+      delete window[callbackName];
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+      reject(new Error('네트워크 연결 오류'));
+    };
+    
+    // URL 파라미터 구성 - 한글 처리 개선
+    const urlParams = new URLSearchParams();
+    Object.keys(params).forEach(key => {
+      if (params[key] !== null && params[key] !== undefined) {
+        urlParams.set(key, params[key].toString());
+      }
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('POST user response received:', result);
+    urlParams.set('callback', callbackName);
     
-    return result;
+    const finalUrl = `${url}?${urlParams.toString()}`;
+    console.log('Final JSONP user URL:', finalUrl);
     
-  } catch (error) {
-    console.error('POST user request failed:', error);
+    script.src = finalUrl;
+    document.body.appendChild(script);
     
-    if (error.name === 'AbortError') {
-      throw new Error('요청 시간 초과');
-    } else if (error.name === 'TypeError') {
-      throw new Error('네트워크 연결 오류');
-    } else {
-      throw error;
-    }
-  }
+    // 타임아웃 처리
+    setTimeout(() => {
+      if (window[callbackName]) {
+        console.warn('JSONP user request timeout');
+        delete window[callbackName];
+        if (document.body.contains(script)) {
+          document.body.removeChild(script);
+        }
+        reject(new Error('요청 시간 초과'));
+      }
+    }, USER_API_CONFIG.timeout);
+  });
 }
 
 // 사용자 API 함수들 (POST 방식)
