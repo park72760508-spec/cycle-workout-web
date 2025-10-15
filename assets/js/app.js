@@ -552,9 +552,39 @@ if (!window.showScreen) {
       el.style.display = "block";
       el.classList.add("active");
     }
-   if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+    
+    // ★ 이 부분을 수정/추가 ★
+if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
      loadWorkouts();
    }
+   
+   // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
+   if (id === 'profileScreen') {
+     console.log('Loading real users for profile screen...');
+     // 잠시 대기 후 실제 사용자 목록 로드
+     setTimeout(() => {
+       if (typeof window.loadUsers === 'function') {
+         window.loadUsers();
+       } else {
+         console.error('loadUsers function not available');
+       }
+     }, 100);
+   }
+     
+  };
+    
+    // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
+    if (id === 'profileScreen') {
+      console.log('Loading real users for profile screen...');
+      // 잠시 대기 후 실제 사용자 목록 로드
+      setTimeout(() => {
+        if (typeof window.loadUsers === 'function') {
+          window.loadUsers();
+        } else {
+          console.error('loadUsers function not available');
+        }
+      }, 100);
+    }
      
   };
 }
@@ -781,27 +811,37 @@ document.addEventListener("DOMContentLoaded", () => {
     const ua = navigator.userAgent || "";
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
-  function enableIOSMode() {
-    const info = document.getElementById("iosInfo");
-    if (info) info.classList.remove("hidden");
 
-    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.classList.add("is-disabled");
-        el.setAttribute("aria-disabled","true");
-        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
-      }
-    });
+   function enableIOSMode() {
+     const info = document.getElementById("iosInfo");
+     if (info) info.classList.remove("hidden");
+   
+     ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+       const el = document.getElementById(id);
+       if (el) {
+         el.classList.add("is-disabled");
+         el.setAttribute("aria-disabled","true");
+         el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+       }
+     });
+   
+     // null 체크 강화
+     const btn = document.getElementById("btnIosContinue");
+     if (btn) {
+       btn.addEventListener("click", () => {
+         console.log("iOS continue button clicked");
+         if (typeof showScreen === "function") {
+           showScreen("profileScreen");
+         } else {
+           console.error("showScreen function not available");
+         }
+       });
+     } else {
+       console.warn("btnIosContinue element not found in DOM");
+     }
+   }
 
-    const btn = document.getElementById("btnIosContinue");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        if (typeof showScreen === "function") showScreen("profileScreen");
-        if (typeof loadUsers === "function") loadUsers();
-      });
-    }
-  }
+   
 
    
   // 브라우저 지원 확인
@@ -1065,6 +1105,12 @@ document.addEventListener("DOMContentLoaded", () => {
 // -------------------------------------
 // 단일 DOMContentLoaded 이벤트/ 종료, 버튼 클릭
 // ------------------------------------
+
+
+
+
+
+
 
 /* ===== 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전) ===== */
 (() => {
