@@ -105,7 +105,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 #connectionScreen .btn-ios-continue:active{ transform:translateY(1px); }
 
 
-/* === iOS에서 BLE 선택 비활성화 스타일 === */
+/* iOS에서 BLE 선택 비활성화 스타일 */
 .ios-disabled {
   pointer-events: none !important;
   opacity: 0.45;
