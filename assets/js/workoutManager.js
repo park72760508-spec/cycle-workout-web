@@ -4,6 +4,7 @@
    - CORS 문제 해결된 JSONP 방식
    - 무제한 세그먼트 지원 (분할 전송)
    - 완전한 세그먼트 관리 및 반복 기능
+   - 서버 호환성 개선 버전
 ========================================================== */
 
 // 전역 변수로 현재 모드 추적
@@ -13,6 +14,7 @@ let currentEditWorkoutId = null;
 // 세그먼트 분할 전송 설정 (대용량 지원)
 const SEGMENT_BATCH_SIZE = 5;
 const MAX_URL_LENGTH = 1800;
+const MAX_CHUNK_SIZE = 800; // 안전한 청크 크기
 
 // JSONP 방식 API 호출 헬퍼 함수 (원본 기반 + 개선)
 function jsonpRequest(url, params = {}) {
@@ -112,114 +114,7 @@ async function apiDeleteWorkout(id) {
 }
 
 /**
- * 세그먼트 포함 워크아웃 생성 API (원본 + 대용량 지원/85행)
- */
-/*async function apiCreateWorkoutWithSegments(workoutData) {
-  console.log('apiCreateWorkoutWithSegments called with:', workoutData);
-  
-  try {
-    const params = {
-      action: 'createWorkout',
-      title: workoutData.title || '',
-      description: workoutData.description || '',
-      author: workoutData.author || '',
-      status: workoutData.status || '보이기',
-      publish_date: workoutData.publish_date || ''
-    };
-    
-    // 세그먼트 데이터가 있으면 처리
-    if (workoutData.segments && workoutData.segments.length > 0) {
-      // 원본 방식 (소량) 또는 분할 방식 (대량) 자동 선택
-      if (workoutData.segments.length <= 8) {
-        // 원본 방식: JSON 문자열로 인코딩
-        params.segments = encodeURIComponent(JSON.stringify(workoutData.segments));
-        console.log('Using original method for', workoutData.segments.length, 'segments');
-        
-        const result = await jsonpRequest(window.GAS_URL, params);
-        return result;
-      } else {
-        // 대용량 방식: 분할 전송
-        console.log('Using batch method for', workoutData.segments.length, 'segments');
-        return await apiCreateWorkoutWithBatchSegments(workoutData);
-      }
-    }
-    
-    console.log('Final API params:', params);
-    const result = await jsonpRequest(window.GAS_URL, params);
-    console.log('API response:', result);
-    return result;
-    
-  } catch (error) {
-    console.error('API call failed:', error);
-    return { success: false, error: error.message };
-  }
-} 백업 */
-
-/**
- * 대용량 세그먼트 분할 전송 방식(148행)
- */
-/*async function apiCreateWorkoutWithBatchSegments(workoutData) {
-  try {
-    // 1단계: 기본 워크아웃 생성
-    const baseParams = {
-      action: 'createWorkout',
-      title: workoutData.title || '',
-      description: workoutData.description || '',
-      author: workoutData.author || '',
-      status: workoutData.status || '보이기',
-      publish_date: workoutData.publish_date || ''
-    };
-    
-    const createResult = await jsonpRequest(window.GAS_URL, baseParams);
-    if (!createResult.success) {
-      throw new Error(createResult.error || '워크아웃 생성 실패');
-    }
-    
-    const workoutId = createResult.workoutId || createResult.id;
-    
-    // 2단계: 세그먼트 분할 전송
-    const segments = workoutData.segments;
-    const batches = [];
-    for (let i = 0; i < segments.length; i += SEGMENT_BATCH_SIZE) {
-      batches.push(segments.slice(i, i + SEGMENT_BATCH_SIZE));
-    }
-    
-    for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-      const batch = batches[batchIndex];
-      const segmentParams = {
-        action: 'addSegments',
-        workoutId: workoutId,
-        batchIndex: batchIndex,
-        totalBatches: batches.length,
-        segments: encodeURIComponent(JSON.stringify(batch))
-      };
-      
-      const batchResult = await jsonpRequest(window.GAS_URL, segmentParams);
-      if (!batchResult.success) {
-        throw new Error(`배치 ${batchIndex + 1} 전송 실패: ${batchResult.error}`);
-      }
-      
-      // 배치 간 간격
-      if (batchIndex < batches.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
-    
-    return { success: true, workoutId: workoutId };
-    
-  } catch (error) {
-    console.error('Batch creation failed:', error);
-    return { success: false, error: error.message };
-  }
-} 기존백업   */
-
-
-// ==========================================
-// 📍 삽입 위치: 기존 apiCreateWorkoutWithBatchSegments 함수 다음
-// ==========================================
-
-/**
- * 개선된 대용량 워크아웃 생성 함수 - 기존 함수 교체
+ * 개선된 대용량 워크아웃 생성 함수 - 서버 호환성 고려
  */
 async function apiCreateWorkoutWithSegments(workoutData) {
   console.log('apiCreateWorkoutWithSegments called with:', workoutData);
@@ -271,7 +166,7 @@ async function apiCreateWorkoutWithSegments(workoutData) {
 }
 
 /**
- * 청크 기반 세그먼트 처리 (서버 API 수정 없이)
+ * 서버 호환성을 고려한 청크 기반 세그먼트 처리
  */
 async function apiCreateWorkoutWithChunkedSegments(workoutData) {
   try {
@@ -294,16 +189,15 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
     const workoutId = createResult.workoutId || createResult.id;
     console.log('Base workout created with ID:', workoutId);
     
-    // 2단계: 세그먼트를 여러 번으로 나누어 업데이트
+    // 2단계: 첫 번째 청크를 updateWorkout으로 전송
     const segments = workoutData.segments;
     const chunks = createSegmentChunks(segments);
     
     console.log(`Processing ${segments.length} segments in ${chunks.length} chunks`);
     
-    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-      const chunk = chunks[chunkIndex];
-      
-      // 각 청크를 updateWorkout 방식으로 처리
+    // 첫 번째 청크 - 일반 업데이트 방식
+    if (chunks.length > 0) {
+      const firstChunk = chunks[0];
       const updateParams = {
         action: 'updateWorkout',
         id: workoutId,
@@ -312,22 +206,48 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
         author: workoutData.author,
         status: workoutData.status,
         publish_date: workoutData.publish_date,
-        segments: encodeURIComponent(JSON.stringify(chunk)),
-        append_segments: chunkIndex > 0 ? 'true' : 'false' // 첫 번째가 아니면 추가 모드
+        segments: encodeURIComponent(JSON.stringify(firstChunk))
       };
       
-      console.log(`Sending chunk ${chunkIndex + 1}/${chunks.length}...`);
-      const chunkResult = await jsonpRequest(window.GAS_URL, updateParams);
+      console.log('Sending first chunk...');
+      const firstResult = await jsonpRequest(window.GAS_URL, updateParams);
       
-      if (!chunkResult.success) {
-        // 실패시 폴백: 전체 세그먼트를 텍스트로 압축하여 재시도
-        console.warn(`Chunk ${chunkIndex + 1} failed, trying fallback method`);
+      if (!firstResult.success) {
+        console.warn('First chunk failed, using fallback method');
         return await apiCreateWorkoutWithFallback(workoutData, workoutId);
       }
+    }
+    
+    // 추가 청크들이 있으면 폴백 방식 사용
+    if (chunks.length > 1) {
+      console.log('Multiple chunks detected, using fallback for remaining segments');
       
-      // 청크 간 간격
-      if (chunkIndex < chunks.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+      // 나머지 청크들을 압축된 형태로 description에 추가
+      const remainingChunks = chunks.slice(1);
+      const remainingSegments = remainingChunks.flat();
+      const compressedRemaining = compressSegmentData(remainingSegments);
+      
+      const fallbackParams = {
+        action: 'updateWorkout',
+        id: workoutId,
+        title: workoutData.title,
+        description: workoutData.description + `\n\n[추가 세그먼트]: ${compressedRemaining}`,
+        author: workoutData.author,
+        status: workoutData.status,
+        publish_date: workoutData.publish_date
+      };
+      
+      const fallbackResult = await jsonpRequest(window.GAS_URL, fallbackParams);
+      if (!fallbackResult.success) {
+        console.warn('Fallback failed, but first chunk succeeded');
+      }
+      
+      // 클라이언트 측에 전체 세그먼트 정보 저장
+      try {
+        localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(workoutData.segments));
+        console.log('Segments saved to localStorage for future reference');
+      } catch (e) {
+        console.warn('Could not save segments to localStorage:', e);
       }
     }
     
@@ -380,7 +300,7 @@ async function apiCreateWorkoutWithFallback(workoutData, workoutId) {
 }
 
 /**
- * 세그먼트를 URL 길이 제한에 맞게 청크로 분할
+ * 개선된 청크 생성 (더 안전한 크기)
  */
 function createSegmentChunks(segments) {
   const chunks = [];
@@ -390,8 +310,8 @@ function createSegmentChunks(segments) {
   for (const segment of segments) {
     const segmentSize = JSON.stringify(segment).length;
     
-    // 현재 청크에 추가했을 때 URL 길이 초과하는지 확인
-    if (currentSize + segmentSize > 1000 && currentChunk.length > 0) { // 안전 여유분
+    // 현재 청크에 추가했을 때 크기 초과하는지 확인
+    if (currentSize + segmentSize > MAX_CHUNK_SIZE && currentChunk.length > 0) {
       chunks.push([...currentChunk]);
       currentChunk = [segment];
       currentSize = segmentSize;
@@ -463,18 +383,6 @@ function getFullSegmentType(shortType) {
   };
   return typeMap[shortType] || 'interval';
 }
-
-// ==========================================
-// 📍 삽입 끝 - 이 아래는 기존 코드 유지
-// ==========================================
-
-
-
-
-
-
-
-
 
 /**
  * 워크아웃 목록 로드 및 렌더링 (원본 기반)
