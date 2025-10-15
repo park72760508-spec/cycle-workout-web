@@ -54,6 +54,50 @@ async function apiDeleteWorkout(id) {
 }
 
 /**
+ * 세그먼트 포함 워크아웃 생성 API
+ */
+async function apiCreateWorkoutWithSegments(workoutData) {
+  console.log('apiCreateWorkoutWithSegments called with:', workoutData);
+  
+  try {
+    // 기본 워크아웃 정보만 먼저 생성
+    const basicWorkoutData = {
+      title: workoutData.title || '',
+      description: workoutData.description || '',
+      author: workoutData.author || '',
+      status: workoutData.status || '보이기',
+      publish_date: workoutData.publish_date || ''
+    };
+    
+    console.log('Creating basic workout:', basicWorkoutData);
+    
+    const params = {
+      action: 'createWorkout',
+      ...basicWorkoutData
+    };
+    
+    // 세그먼트 데이터가 있으면 JSON 문자열로 포함
+    if (workoutData.segments && workoutData.segments.length > 0) {
+      params.segments = JSON.stringify(workoutData.segments);
+      console.log('Including segments:', params.segments);
+    }
+    
+    console.log('Final API params:', params);
+    
+    const result = await jsonpRequest(window.GAS_URL, params);
+    console.log('API response:', result);
+    
+    return result;
+    
+  } catch (error) {
+    console.error('API call failed:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+
+
+/**
  * 워크아웃 목록 로드 및 렌더링 (개선된 버전)
  */
 async function loadWorkouts() {
@@ -233,7 +277,7 @@ function showAddWorkoutForm(clearForm = true) {
 }
 
 /**
- * 새 워크아웃 저장 - 수정 모드일 때 실행 방지
+ * 새 워크아웃 저장 - 애니메이션 및 개선된 오류 처리 포함
  */
 async function saveWorkout() {
   // 수정 모드일 때는 실행하지 않음
@@ -248,6 +292,7 @@ async function saveWorkout() {
   const authorEl = document.getElementById('wbAuthor');
   const statusEl = document.getElementById('wbStatus');
   const publishDateEl = document.getElementById('wbPublishDate');
+  const saveBtn = document.getElementById('btnSaveWorkout');
 
   if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
     console.error('워크아웃 폼 요소를 찾을 수 없습니다.');
@@ -264,42 +309,95 @@ async function saveWorkout() {
   // 유효성 검사
   if (!title) {
     showToast('제목을 입력해주세요.');
+    titleEl.focus();
     return;
   }
 
+  // 저장 시작 - UI 상태 변경
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.classList.add('btn-saving', 'saving-state');
+    saveBtn.innerHTML = '<span class="saving-spinner"></span>저장 중...';
+  }
+
+  // 진행 상태 토스트
+  showToast('워크아웃을 저장하는 중입니다...');
+
   try {
-    // 세그먼트 포함해서 워크아웃 데이터 구성
+    console.log('=== 워크아웃 저장 시작 ===');
+    console.log('Title:', title);
+    console.log('Segments count:', workoutSegments.length);
+    console.log('Segments data:', workoutSegments);
+
+    // 세그먼트 데이터 검증
+    const validSegments = workoutSegments.map(segment => ({
+      label: segment.label || '세그먼트',
+      segment_type: segment.segment_type || 'interval',
+      duration_sec: Number(segment.duration_sec) || 300,
+      target_type: segment.target_type || 'ftp_percent',
+      target_value: Number(segment.target_value) || 100,
+      ramp: segment.ramp || 'none',
+      ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
+    }));
+
+    console.log('Validated segments:', validSegments);
+
+    // 워크아웃 데이터 구성
     const workoutData = { 
       title, 
       description, 
       author, 
       status, 
       publish_date: publishDate,
-      segments: workoutSegments // 세그먼트 데이터 포함
+      segments: validSegments
     };
+
+    console.log('Final workout data:', workoutData);
     
-    const result = await apiCreateWorkout(workoutData);
+    // API 호출 (수정된 버전)
+    const result = await apiCreateWorkoutWithSegments(workoutData);
+    
+    console.log('API result:', result);
     
     if (result.success) {
-      showToast(`${title} 워크아웃이 추가되었습니다.`);
+      // 성공 처리
+      showToast(`${title} 워크아웃이 성공적으로 저장되었습니다!`);
+      
       // 세그먼트 초기화
       workoutSegments = [];
       renderSegments();
       updateSegmentSummary();
       
+      // 화면 전환
       if (typeof showScreen === 'function') {
         showScreen('workoutScreen');
       }
-      loadWorkouts();
+      
+      // 목록 새로고침
+      setTimeout(() => {
+        loadWorkouts();
+      }, 500);
+      
     } else {
-      showToast('워크아웃 추가 실패: ' + result.error);
+      throw new Error(result.error || '알 수 없는 오류가 발생했습니다.');
     }
     
   } catch (error) {
     console.error('워크아웃 저장 실패:', error);
-    showToast('워크아웃 저장 중 오류가 발생했습니다.');
+    showToast('워크아웃 저장 중 오류가 발생했습니다: ' + error.message);
+  } finally {
+    // 저장 완료 - UI 상태 복원
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.classList.remove('btn-saving', 'saving-state');
+      saveBtn.innerHTML = '💾 저장';
+    }
   }
 }
+
+
+
+
 
 /**
  * 워크아웃 수정
@@ -1130,3 +1228,6 @@ window.addRepeatSegment = addRepeatSegment;
 window.editRepeatSegment = editRepeatSegment;
 window.removeRepeatSegment = removeRepeatSegment;
 window.applyRepeat = applyRepeat;
+
+// API 함수 전역 내보내기
+window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
