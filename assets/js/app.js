@@ -585,8 +585,6 @@ if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
         }
       }, 100);
     }
-     
-  };
 }
 
 
