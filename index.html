@@ -150,6 +150,72 @@
     .history-table tr:hover {
       background: #f8f9fa;
     }
+
+/* 반복 모달 스타일 */
+.repeat-segments-container {
+  margin-top: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.repeat-segments-list {
+  margin: 15px 0;
+  min-height: 100px;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 15px;
+  background: #fff;
+}
+
+.repeat-segment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px;
+  margin: 8px 0;
+  background: #e9ecef;
+  border-radius: 6px;
+  border-left: 4px solid #2e74e8;
+}
+
+.repeat-segment-info {
+  flex: 1;
+}
+
+.repeat-segment-label {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.repeat-segment-details {
+  font-size: 12px;
+  color: #666;
+}
+
+.repeat-segment-remove {
+  background: none;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.repeat-segment-remove:hover {
+  background: #ffebee;
+}
+
+.repeat-segments-empty {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 20px;
+}
+
+
+    
+    
   </style>
 
   <!-- 외부 스타일 -->
@@ -443,6 +509,43 @@
     </div>
   </div>
 
+  
+<!-- 반복 세그먼트 모달 -->
+<div id="repeatModal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>세그먼트 반복 추가</h3>
+      <button class="modal-close" onclick="closeRepeatModal()">✖</button>
+    </div>
+    
+    <div class="modal-body">
+      <div class="form-group">
+        <label>반복할 횟수 *</label>
+        <input type="number" id="repeatCount" min="1" max="20" value="3" />
+        <small class="form-help">1-20회 사이로 설정하세요</small>
+      </div>
+      
+      <div class="repeat-segments-container">
+        <h4>반복할 세그먼트들</h4>
+        <div id="repeatSegmentsList" class="repeat-segments-list">
+          <!-- 여기에 세그먼트들이 동적으로 추가됩니다 -->
+        </div>
+        
+        <button class="btn btn-primary btn-sm" onclick="addRepeatSegment()">+ 세그먼트 추가</button>
+      </div>
+    </div>
+    
+    <div class="modal-footer">
+      <button class="btn btn-success" onclick="applyRepeat()">반복 적용</button>
+      <button class="btn btn-secondary" onclick="closeRepeatModal()">취소</button>
+    </div>
+  </div>
+</div>
+
+
+
+
+  
   <!-- 5) 훈련 준비 화면 -->
   <div id="trainingReadyScreen" class="screen">
     <div class="header">
