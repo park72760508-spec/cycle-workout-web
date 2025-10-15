@@ -552,9 +552,39 @@ if (!window.showScreen) {
       el.style.display = "block";
       el.classList.add("active");
     }
-   if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+    
+    // ★ 이 부분을 수정/추가 ★
+if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
      loadWorkouts();
    }
+   
+   // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
+   if (id === 'profileScreen') {
+     console.log('Loading real users for profile screen...');
+     // 잠시 대기 후 실제 사용자 목록 로드
+     setTimeout(() => {
+       if (typeof window.loadUsers === 'function') {
+         window.loadUsers();
+       } else {
+         console.error('loadUsers function not available');
+       }
+     }, 100);
+   }
+     
+  };
+    
+    // ★ 프로필 화면 전환 시 실제 사용자 목록 로드 추가 ★
+    if (id === 'profileScreen') {
+      console.log('Loading real users for profile screen...');
+      // 잠시 대기 후 실제 사용자 목록 로드
+      setTimeout(() => {
+        if (typeof window.loadUsers === 'function') {
+          window.loadUsers();
+        } else {
+          console.error('loadUsers function not available');
+        }
+      }, 100);
+    }
      
   };
 }
@@ -794,14 +824,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    const btn = document.getElementById("btnIosContinue");
+     
+   const btn = document.getElementById("btnIosContinue");
     if (btn) {
       btn.addEventListener("click", () => {
-        if (typeof showScreen === "function") showScreen("profileScreen");
-        if (typeof loadUsers === "function") loadUsers();
+        if (typeof showScreen === "function") {
+          showScreen("profileScreen");
+          // showScreen 내부에서 자동으로 loadUsers가 호출되므로 여기서는 제거
+        }
       });
     }
-  }
 
    
   // 브라우저 지원 확인
