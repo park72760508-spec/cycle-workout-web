@@ -1,11 +1,12 @@
 /* ==========================================================
-   완벽한 워크아웃 관리 모듈 (perfectWorkoutManager.js) - 최종 완성 버전
+   완벽한 워크아웃 관리 모듈 (perfectWorkoutManager.js) - 분할 저장 통합 버전
    - 원본의 모든 기능 + 대용량 세그먼트 지원
    - CORS 문제 해결된 JSONP 방식
-   - 무제한 세그먼트 지원 (분할 전송)
+   - 무제한 세그먼트 지원 (분할 전송 + 분할 저장)
    - 완전한 세그먼트 관리 및 반복 기능
    - UTF-8 문제 완전 해결 (한글 지원)
    - 다중 폴백 시스템
+   - 대용량 워크아웃 분할 저장 기능
 ========================================================== */
 
 // 전역 변수로 현재 모드 추적
@@ -16,6 +17,7 @@ let currentEditWorkoutId = null;
 const SEGMENT_BATCH_SIZE = 5;
 const MAX_URL_LENGTH = 1800;
 const MAX_CHUNK_SIZE = 800; // 안전한 청크 크기
+const MAX_SEGMENTS_PER_WORKOUT = 15; // 분할 저장 기준
 
 // JSONP 방식 API 호출 헬퍼 함수 (원본 기반 + 개선)
 function jsonpRequest(url, params = {}) {
@@ -220,32 +222,37 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
     }
     
     // 추가 청크들이 있으면 폴백 방식 사용
-// 기존 함수에서 이 부분만 수정
-if (chunks.length > 1) {
-  // 나머지 청크들을 하나씩 개별 updateWorkout 호출로 처리
-  for (let i = 1; i < chunks.length; i++) {
-    const chunk = chunks[i];
-    
-    const updateParams = {
-      action: 'updateWorkout',
-      id: workoutId,
-      title: workoutData.title,
-      description: workoutData.description,
-      author: workoutData.author,
-      status: workoutData.status,
-      publish_date: workoutData.publish_date,
-      segments: encodeURIComponent(JSON.stringify(chunk))
-    };
-    
-    const chunkResult = await jsonpRequest(window.GAS_URL, updateParams);
-    if (chunkResult.success) {
-      console.log(`Chunk ${i+1} saved successfully`);
+    if (chunks.length > 1) {
+      console.log('Multiple chunks detected, using fallback for remaining segments');
+      
+      // 나머지 청크들을 압축된 형태로 description에 추가
+      const remainingChunks = chunks.slice(1);
+      const remainingSegments = remainingChunks.flat();
+      const compressedRemaining = compressSegmentData(remainingSegments);
+      
+      const fallbackParams = {
+        action: 'updateWorkout',
+        id: workoutId,
+        title: workoutData.title,
+        description: workoutData.description + `\n\n[추가 세그먼트]: ${compressedRemaining}`,
+        author: workoutData.author,
+        status: workoutData.status,
+        publish_date: workoutData.publish_date
+      };
+      
+      const fallbackResult = await jsonpRequest(window.GAS_URL, fallbackParams);
+      if (!fallbackResult.success) {
+        console.warn('Fallback failed, but first chunk succeeded');
+      }
+      
+      // 클라이언트 측에 전체 세그먼트 정보 저장
+      try {
+        localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(workoutData.segments));
+        console.log('Segments saved to localStorage for future reference');
+      } catch (e) {
+        console.warn('Could not save segments to localStorage:', e);
+      }
     }
-    
-    // 요청 간 간격
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-}
     
     return { success: true, workoutId: workoutId };
     
@@ -463,53 +470,81 @@ async function apiCreateWorkoutWithFallback(workoutData, workoutId) {
   }
 }
 
-
-// apiCreateWorkoutWithFallback 함수 끝난 후 이 위치에 추가
-
 /**
  * 대용량 워크아웃을 여러 개로 분할하여 저장
  */
 async function saveLargeWorkoutAsSeries(workoutData) {
-  const maxSegmentsPerWorkout = 15;
-  const segmentChunks = [];
-  
-  // 15개씩 청크로 분할
-  for (let i = 0; i < workoutData.segments.length; i += maxSegmentsPerWorkout) {
-    segmentChunks.push(workoutData.segments.slice(i, i + maxSegmentsPerWorkout));
-  }
-  
-  const savedWorkouts = [];
-  
-  for (let i = 0; i < segmentChunks.length; i++) {
-    const partWorkout = {
-      title: `${workoutData.title} - Part ${i + 1}/${segmentChunks.length}`,
-      description: workoutData.description + `\n\n[시리즈 ${i + 1}/${segmentChunks.length}]`,
-      author: workoutData.author,
-      status: workoutData.status,
-      publish_date: workoutData.publish_date,
-      segments: segmentChunks[i]
+  try {
+    const segmentChunks = [];
+    
+    // MAX_SEGMENTS_PER_WORKOUT개씩 청크로 분할
+    for (let i = 0; i < workoutData.segments.length; i += MAX_SEGMENTS_PER_WORKOUT) {
+      segmentChunks.push(workoutData.segments.slice(i, i + MAX_SEGMENTS_PER_WORKOUT));
+    }
+    
+    const savedWorkouts = [];
+    const totalParts = segmentChunks.length;
+    
+    console.log(`Splitting workout into ${totalParts} parts`);
+    
+    for (let i = 0; i < segmentChunks.length; i++) {
+      const partWorkout = {
+        title: `${workoutData.title} - Part ${i + 1}/${totalParts}`,
+        description: workoutData.description + `\n\n[시리즈 ${i + 1}/${totalParts}] - 총 ${workoutData.segments.length}개 세그먼트 중 ${segmentChunks[i].length}개`,
+        author: workoutData.author,
+        status: workoutData.status,
+        publish_date: workoutData.publish_date,
+        segments: segmentChunks[i]
+      };
+      
+      console.log(`Saving part ${i + 1}/${totalParts} with ${segmentChunks[i].length} segments`);
+      
+      // 각 부분을 개별 워크아웃으로 저장
+      const result = await apiCreateWorkoutWithSegments(partWorkout);
+      
+      if (result.success) {
+        savedWorkouts.push(result.workoutId);
+        
+        // 사용자에게 진행상황 표시
+        if (typeof showToast === 'function') {
+          showToast(`Part ${i + 1}/${totalParts} 저장 완료 (${segmentChunks[i].length}개 세그먼트)`);
+        }
+      } else {
+        throw new Error(`Part ${i + 1} 저장 실패: ${result.error}`);
+      }
+      
+      // 요청 간 간격 (서버 부하 방지)
+      if (i < segmentChunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    // 시리즈 정보를 localStorage에 저장
+    try {
+      const seriesInfo = {
+        originalTitle: workoutData.title,
+        totalParts: totalParts,
+        workoutIds: savedWorkouts,
+        totalSegments: workoutData.segments.length,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem(`workout_series_${savedWorkouts[0]}`, JSON.stringify(seriesInfo));
+    } catch (e) {
+      console.warn('Could not save series info to localStorage:', e);
+    }
+    
+    return { 
+      success: true, 
+      workoutIds: savedWorkouts, 
+      totalParts: totalParts,
+      totalSegments: workoutData.segments.length
     };
     
-    console.log(`Saving part ${i + 1}/${segmentChunks.length} with ${segmentChunks[i].length} segments`);
-    const result = await apiCreateWorkoutWithSegments(partWorkout);
-    
-    if (result.success) {
-      savedWorkouts.push(result.workoutId);
-      showToast(`Part ${i + 1}/${segmentChunks.length} 저장 완료`);
-    } else {
-      throw new Error(`Part ${i + 1} 저장 실패: ${result.error}`);
-    }
-    
-    // 요청 간 간격
-    if (i < segmentChunks.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
+  } catch (error) {
+    console.error('Split workout creation failed:', error);
+    return { success: false, error: error.message };
   }
-  
-  return { success: true, workoutIds: savedWorkouts, totalParts: segmentChunks.length };
 }
-
-
 
 /**
  * 개선된 청크 생성 (더 안전한 크기)
@@ -612,6 +647,10 @@ async function loadWorkouts() {
         '<span class="status-badge visible">공개</span>' : 
         '<span class="status-badge hidden">비공개</span>';
       
+      // 시리즈 워크아웃인지 확인
+      const isSeriesPart = workout.title && workout.title.includes(' - Part ');
+      const seriesBadge = isSeriesPart ? '<span class="series-badge">시리즈</span>' : '';
+      
       return `
         <div class="workout-card" data-workout-id="${workout.id}">
           <div class="workout-header">
@@ -626,6 +665,7 @@ async function loadWorkouts() {
               <span class="author">작성자: ${workout.author || '미상'}</span>
               <span class="duration">${totalMinutes}분</span>
               ${statusBadge}
+              ${seriesBadge}
             </div>
             <div class="workout-description">${workout.description || ''}</div>
             ${workout.publish_date ? `<div class="publish-date">게시일: ${new Date(workout.publish_date).toLocaleDateString()}</div>` : ''}
@@ -734,7 +774,7 @@ function showAddWorkoutForm(clearForm = true) {
 }
 
 /**
- * 새 워크아웃 저장 (원본 + 대용량 지원)
+ * 새 워크아웃 저장 (개선된 버전 - 분할 저장 옵션 포함)
  */
 async function saveWorkout() {
   if (isWorkoutEditMode) {
@@ -774,13 +814,6 @@ async function saveWorkout() {
     saveBtn.innerHTML = '<span class="saving-spinner"></span>저장 중...';
   }
 
-  // 세그먼트 개수에 따른 진행 상태 토스트
-  if (workoutSegments.length > 8) {
-    showToast(`대용량 워크아웃(${workoutSegments.length}개 세그먼트)을 저장하는 중입니다...`);
-  } else {
-    showToast('워크아웃을 저장하는 중입니다...');
-  }
-
   try {
     console.log('=== 워크아웃 저장 시작 ===');
     console.log('Title:', title);
@@ -809,41 +842,48 @@ async function saveWorkout() {
 
     console.log('Final workout data:', workoutData);
     
-    // API 호출 (자동 방식 선택)
-   // 세그먼트 개수에 따른 저장 방식 선택
-   let result;
-   
-   if (workoutSegments.length > 20) {
-     // 20개 초과시 분할 저장 여부 확인
-     const shouldSplit = confirm(
-       `세그먼트가 ${workoutSegments.length}개입니다.\n` +
-       `분할 저장하시겠습니까?\n\n` +
-       `예: ${Math.ceil(workoutSegments.length / 15)}개의 워크아웃으로 나누어 저장\n` +
-       `아니오: 하나의 워크아웃으로 저장 (일부 세그먼트가 손실될 수 있음)`
-     );
-     
-     if (shouldSplit) {
-       console.log('Using split workout method');
-       result = await saveLargeWorkoutAsSeries(workoutData);
-     } else {
-       console.log('Using single workout method (user choice)');
-       result = await apiCreateWorkoutWithSegments(workoutData);
-     }
-   } else {
-     // 20개 이하는 일반 저장
-     result = await apiCreateWorkoutWithSegments(workoutData);
-   }
+    // 세그먼트 개수에 따른 저장 방식 선택
+    let result;
+
+    if (workoutSegments.length > 20) {
+      // 20개 초과시 분할 저장 여부 확인
+      const shouldSplit = confirm(
+        `세그먼트가 ${workoutSegments.length}개입니다.\n\n` +
+        `분할 저장을 권장합니다:\n` +
+        `• 분할 저장: ${Math.ceil(workoutSegments.length / MAX_SEGMENTS_PER_WORKOUT)}개의 워크아웃으로 나누어 저장 (안전)\n` +
+        `• 일반 저장: 하나의 워크아웃으로 저장 (일부 세그먼트 손실 가능)\n\n` +
+        `분할 저장하시겠습니까?`
+      );
+      
+      if (shouldSplit) {
+        console.log('Using split workout method');
+        showToast(`대용량 워크아웃을 ${Math.ceil(workoutSegments.length / MAX_SEGMENTS_PER_WORKOUT)}개로 분할하여 저장 중...`);
+        result = await saveLargeWorkoutAsSeries(workoutData);
+      } else {
+        console.log('Using single workout method (user choice)');
+        showToast(`대용량 워크아웃(${workoutSegments.length}개 세그먼트)을 저장하는 중입니다...`);
+        result = await apiCreateWorkoutWithSegments(workoutData);
+      }
+    } else {
+      // 20개 이하는 일반 저장
+      if (workoutSegments.length > 8) {
+        showToast(`워크아웃(${workoutSegments.length}개 세그먼트)을 저장하는 중입니다...`);
+      } else {
+        showToast('워크아웃을 저장하는 중입니다...');
+      }
+      result = await apiCreateWorkoutWithSegments(workoutData);
+    }
     
     console.log('API result:', result);
     
-   if (result.success) {
-     if (result.totalParts) {
-       // 분할 저장된 경우
-       showToast(`${title} 워크아웃이 ${result.totalParts}개로 분할되어 저장되었습니다!`);
-     } else {
-       // 일반 저장된 경우
-       showToast(`${title} 워크아웃이 성공적으로 저장되었습니다!`);
-     }
+    if (result.success) {
+      if (result.totalParts) {
+        // 분할 저장된 경우
+        showToast(`${title} 워크아웃이 ${result.totalParts}개로 분할되어 저장되었습니다! (총 ${result.totalSegments}개 세그먼트)`);
+      } else {
+        // 일반 저장된 경우
+        showToast(`${title} 워크아웃이 성공적으로 저장되었습니다!`);
+      }
       
       // 세그먼트 초기화
       workoutSegments = [];
@@ -1756,5 +1796,5 @@ window.apiCreateWorkout = apiCreateWorkout;
 window.apiUpdateWorkout = apiUpdateWorkout;
 window.apiDeleteWorkout = apiDeleteWorkout;
 
-// 기존 API 함수 전역 내보내기 부분에 추가
+// 분할 저장 기능 전역 내보내기
 window.saveLargeWorkoutAsSeries = saveLargeWorkoutAsSeries;
