@@ -11,6 +11,46 @@ if (typeof window === 'undefined') {
   throw new Error('이 스크립트는 브라우저 환경에서만 실행할 수 있습니다.');
 }
 
+// HTML 이스케이프 함수 (XSS 방지)
+function escapeHtml(unsafe) {
+  if (unsafe === null || unsafe === undefined) {
+    return '';
+  }
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// 데이터 검증 헬퍼 함수들
+function validateWorkoutData(workout) {
+  if (!workout || typeof workout !== 'object') {
+    return false;
+  }
+  
+  // 필수 필드 검증
+  if (workout.id === null || workout.id === undefined) {
+    return false;
+  }
+  
+  return true;
+}
+
+function normalizeWorkoutData(workout) {
+  return {
+    id: workout.id,
+    title: String(workout.title || '제목 없음'),
+    description: String(workout.description || ''),
+    author: String(workout.author || '미상'),
+    status: String(workout.status || '보이기'),
+    total_seconds: Number(workout.total_seconds) || 0,
+    publish_date: workout.publish_date || null,
+    segments: Array.isArray(workout.segments) ? workout.segments : []
+  };
+}
+
 // 전역 변수로 현재 모드 추적
 let isWorkoutEditMode = false;
 let currentEditWorkoutId = null;
