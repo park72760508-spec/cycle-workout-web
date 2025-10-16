@@ -193,7 +193,7 @@ function jsonpRequest(url, params = {}) {
           cleanup();
           reject(new Error(`요청 시간 초과: ${url}`));
         }
-      }, 10000);
+      }, 30000); // 10초 → 30초로 연장
       
     } catch (error) {
       if (!isResolved) {
@@ -204,6 +204,35 @@ function jsonpRequest(url, params = {}) {
     }
   });
 }
+
+// 재시도 로직이 포함된 새로운 API 함수
+// 재시도 로직이 포함된 JSONP 요청 함수
+async function jsonpRequestWithRetry(url, params = {}, maxRetries = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`API 요청 시도 ${attempt}/${maxRetries}:`, params.action);
+      const result = await jsonpRequest(url, params);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.warn(`시도 ${attempt} 실패:`, error.message);
+      
+      if (attempt < maxRetries) {
+        // 재시도 전 대기 (점진적 지연: 2초, 4초, 6초)
+        const delay = attempt * 2000;
+        console.log(`${delay/1000}초 후 재시도...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+
+
 
 // API 함수들 (오류 처리 강화)
 async function apiGetWorkouts() {
@@ -245,7 +274,7 @@ async function apiCreateWorkout(workoutData) {
   };
   
   try {
-    return await jsonpRequest(window.GAS_URL, params);
+    return await jsonpRequestWithRetry(window.GAS_URL, params);
   } catch (error) {
     console.error('apiCreateWorkout 실패:', error);
     return { success: false, error: error.message };
@@ -356,7 +385,7 @@ async function apiCreateWorkoutWithSegments(workoutData) {
 // 청크 기반 세그먼트 처리 (개선된 버전)
 async function apiCreateWorkoutWithChunkedSegments(workoutData) {
   try {
-    // 기본 워크아웃 생성 (기존과 동일)
+    // 1단계: 세그먼트 없이 기본 워크아웃만 먼저 생성
     const baseParams = {
       action: 'createWorkout',
       title: String(workoutData.title || ''),
@@ -366,8 +395,8 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
       publish_date: String(workoutData.publish_date || '')
     };
     
-    console.log('Creating base workout...');
-    const createResult = await jsonpRequest(window.GAS_URL, baseParams);
+    console.log('Creating base workout (without segments)...');
+    const createResult = await jsonpRequestWithRetry(window.GAS_URL, baseParams);
     
     if (!createResult.success) {
       throw new Error(createResult.error || '워크아웃 생성 실패');
@@ -376,77 +405,56 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
     const workoutId = createResult.workoutId || createResult.id;
     console.log('Base workout created with ID:', workoutId);
     
-    // 세그먼트를 작은 청크로 분할
+    // 2단계: 세그먼트들을 순차적으로 추가
     const segments = workoutData.segments || [];
-    const chunks = createSegmentChunks(segments);
+    if (segments.length > 0) {
+      console.log(`Adding ${segments.length} segments sequentially...`);
+      
+      // 세그먼트를 2개씩 나누어 전송
+      for (let i = 0; i < segments.length; i += 2) {
+        const batch = segments.slice(i, i + 2);
+        const compressedBatch = batch.map(seg => ({
+          l: String(seg.label || '').substring(0, 10),
+          t: seg.segment_type || 'interval',
+          d: seg.duration_sec || 300,
+          v: seg.target_value || 100,
+          r: seg.ramp === 'linear' ? 1 : 0,
+          rv: seg.ramp === 'linear' ? seg.ramp_to_value : null
+        }));
+        
+        const segmentsJson = JSON.stringify(compressedBatch);
+        
+        try {
+          const params = {
+            action: 'addSegments',
+            workoutId: String(workoutId),
+            segments: segmentsJson
+          };
+          
+          console.log(`Sending batch ${Math.floor(i/2) + 1} with ${batch.length} segments...`);
+          const result = await jsonpRequestWithRetry(window.GAS_URL, params);
+          
+          if (result.success) {
+            console.log(`Batch ${Math.floor(i/2) + 1} sent successfully`);
+          } else {
+            console.warn(`Batch ${Math.floor(i/2) + 1} failed:`, result.error);
+          }
+          
+          // 서버 부하 방지를 위한 지연
+          if (i + 2 < segments.length) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+          
+        } catch (error) {
+          console.error(`Batch ${Math.floor(i/2) + 1} error:`, error);
+        }
+      }
+    }
     
-    console.log(`Processing ${segments.length} segments in ${chunks.length} chunks`);
-    
-    // 첫 번째 청크만 시도 (URL 길이 체크 포함)
-   // 모든 청크를 순차적으로 전송
-   if (chunks.length > 0) {
-     console.log(`Sending all ${chunks.length} chunks sequentially...`);
-     
-     for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-       const chunk = chunks[chunkIndex];
-       const segmentsJson = JSON.stringify(chunk);
-       const encodedSegments = encodeURIComponent(segmentsJson);
-       
-       try {
-         if (chunkIndex === 0) {
-           // 첫 번째 청크는 updateWorkout으로 전송
-           const updateParams = {
-             action: 'updateWorkout',
-             id: String(workoutId),
-             title: String(workoutData.title || ''),
-             description: String(workoutData.description || ''),
-             author: String(workoutData.author || ''),
-             status: String(workoutData.status || '보이기'),
-             publish_date: String(workoutData.publish_date || ''),
-             segments: encodedSegments
-           };
-           
-           console.log(`Sending chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} segments...`);
-           const result = await jsonpRequest(window.GAS_URL, updateParams);
-           
-           if (!result.success) {
-             console.warn(`Chunk ${chunkIndex + 1} failed:`, result.error);
-           } else {
-             console.log(`Chunk ${chunkIndex + 1} sent successfully`);
-           }
-         } else {
-           // 나머지 청크들은 addSegments로 전송
-           const addParams = {
-             action: 'addSegments',
-             workoutId: String(workoutId),
-             segments: encodedSegments
-           };
-           
-           console.log(`Sending chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} segments...`);
-           const result = await jsonpRequest(window.GAS_URL, addParams);
-           
-           if (!result.success) {
-             console.warn(`Chunk ${chunkIndex + 1} failed:`, result.error);
-           } else {
-             console.log(`Chunk ${chunkIndex + 1} sent successfully`);
-           }
-         }
-         
-         // 서버 부하 방지를 위한 지연 (마지막 청크 제외)
-         if (chunkIndex < chunks.length - 1) {
-           await new Promise(resolve => setTimeout(resolve, 500));
-         }
-         
-       } catch (error) {
-         console.error(`Chunk ${chunkIndex + 1} error:`, error);
-       }
-     }
-   }
-    
-    // 클라이언트 측에 전체 세그먼트 정보 저장
+    // 로컬스토리지에도 백업 저장
     try {
       localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(segments));
-      console.log('Complete segments saved to localStorage');
+      console.log('Segments also saved to localStorage');
     } catch (e) {
       console.warn('Could not save segments to localStorage:', e);
     }
