@@ -447,6 +447,58 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
   }
 }
 
+
+// 새로 추가된 URL 길이 파악하는 모듈 추가
+
+// 세그먼트 순차 전송 함수 (URL 길이 문제 해결)
+async function sendSegmentsSequentially(workoutId, segments) {
+  console.log(`Sending ${segments.length} segments sequentially...`);
+  
+  for (let i = 0; i < segments.length; i += 2) { // 2개씩 전송
+    const batch = segments.slice(i, i + 2);
+    const compressedBatch = batch.map(seg => ({
+      l: String(seg.label || '').substring(0, 8),
+      t: seg.segment_type || 'interval',
+      d: seg.duration_sec || 300,
+      v: seg.target_value || 100,
+      r: seg.ramp === 'linear' ? 1 : 0,
+      rv: seg.ramp === 'linear' ? seg.ramp_to_value : null
+    }));
+    
+    const segmentsJson = JSON.stringify(compressedBatch);
+    
+    try {
+      const params = {
+        action: 'addSegments',
+        workoutId: String(workoutId),
+        segments: segmentsJson
+      };
+      
+      const result = await jsonpRequest(window.GAS_URL, params);
+      
+      if (result.success) {
+        console.log(`Batch ${Math.floor(i/2) + 1} sent successfully`);
+      } else {
+        console.warn(`Batch ${Math.floor(i/2) + 1} failed:`, result.error);
+      }
+      
+      // 서버 부하 방지를 위한 지연
+      if (i + 2 < segments.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+    } catch (error) {
+      console.error(`Batch ${Math.floor(i/2) + 1} error:`, error);
+    }
+  }
+  
+  return { success: true };
+}
+
+
+
+
+
 // 안전한 세그먼트 청크 생성
 function createSegmentChunks(segments) {
   if (!Array.isArray(segments)) {
