@@ -76,7 +76,7 @@ let repeatSegments = [];
 let currentEditingRepeatIndex = null;
 
 // 세그먼트 분할 전송 설정 (대용량 지원)
-const SEGMENT_BATCH_SIZE = 15;
+const SEGMENT_BATCH_SIZE = 5;
 const MAX_URL_LENGTH = 1800;
 const MAX_CHUNK_SIZE = 300;
 const MAX_SEGMENTS_PER_WORKOUT = 2;
