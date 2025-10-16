@@ -383,53 +383,65 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
     console.log(`Processing ${segments.length} segments in ${chunks.length} chunks`);
     
     // 첫 번째 청크만 시도 (URL 길이 체크 포함)
-    if (chunks.length > 0 && chunks[0].length > 0) {
-      const firstChunk = chunks[0];
-      const segmentsJson = JSON.stringify(firstChunk);
-      const encodedSegments = encodeURIComponent(segmentsJson);
-      
-      // URL 길이 사전 체크
-      const baseUrl = window.GAS_URL;
-      const estimatedLength = baseUrl.length + 
-                             `action=updateWorkout&id=${workoutId}`.length + 
-                             encodedSegments.length + 200; // 여유분
-      
-      if (estimatedLength > 1500) {
-        console.warn('First chunk too large, using sequential sending');
-        
-        // 순차 전송 시도
-        await sendSegmentsSequentially(workoutId, segments);
-        
-        // 로컬스토리지에도 백업 저장
-        try {
-          localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(segments));
-          console.log('Segments sent sequentially and saved to localStorage');
-        } catch (e) {
-          console.warn('Could not save segments to localStorage:', e);
-        }
-        
-        return { success: true, workoutId: workoutId };
-      }
-      
-      // 첫 번째 청크 전송
-      const updateParams = {
-        action: 'updateWorkout',
-        id: String(workoutId),
-        title: String(workoutData.title || ''),
-        description: String(workoutData.description || ''),
-        author: String(workoutData.author || ''),
-        status: String(workoutData.status || '보이기'),
-        publish_date: String(workoutData.publish_date || ''),
-        segments: encodedSegments
-      };
-      
-      console.log('Sending first chunk with', firstChunk.length, 'segments...');
-      const firstResult = await jsonpRequest(window.GAS_URL, updateParams);
-      
-      if (!firstResult.success) {
-        console.warn('First chunk failed:', firstResult.error);
-      }
-    }
+   // 모든 청크를 순차적으로 전송
+   if (chunks.length > 0) {
+     console.log(`Sending all ${chunks.length} chunks sequentially...`);
+     
+     for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+       const chunk = chunks[chunkIndex];
+       const segmentsJson = JSON.stringify(chunk);
+       const encodedSegments = encodeURIComponent(segmentsJson);
+       
+       try {
+         if (chunkIndex === 0) {
+           // 첫 번째 청크는 updateWorkout으로 전송
+           const updateParams = {
+             action: 'updateWorkout',
+             id: String(workoutId),
+             title: String(workoutData.title || ''),
+             description: String(workoutData.description || ''),
+             author: String(workoutData.author || ''),
+             status: String(workoutData.status || '보이기'),
+             publish_date: String(workoutData.publish_date || ''),
+             segments: encodedSegments
+           };
+           
+           console.log(`Sending chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} segments...`);
+           const result = await jsonpRequest(window.GAS_URL, updateParams);
+           
+           if (!result.success) {
+             console.warn(`Chunk ${chunkIndex + 1} failed:`, result.error);
+           } else {
+             console.log(`Chunk ${chunkIndex + 1} sent successfully`);
+           }
+         } else {
+           // 나머지 청크들은 addSegments로 전송
+           const addParams = {
+             action: 'addSegments',
+             workoutId: String(workoutId),
+             segments: encodedSegments
+           };
+           
+           console.log(`Sending chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} segments...`);
+           const result = await jsonpRequest(window.GAS_URL, addParams);
+           
+           if (!result.success) {
+             console.warn(`Chunk ${chunkIndex + 1} failed:`, result.error);
+           } else {
+             console.log(`Chunk ${chunkIndex + 1} sent successfully`);
+           }
+         }
+         
+         // 서버 부하 방지를 위한 지연 (마지막 청크 제외)
+         if (chunkIndex < chunks.length - 1) {
+           await new Promise(resolve => setTimeout(resolve, 500));
+         }
+         
+       } catch (error) {
+         console.error(`Chunk ${chunkIndex + 1} error:`, error);
+       }
+     }
+   }
     
     // 클라이언트 측에 전체 세그먼트 정보 저장
     try {
