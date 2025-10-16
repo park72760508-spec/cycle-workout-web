@@ -1146,10 +1146,604 @@ function getSegmentTypeClass(segmentType) {
   return typeMapping[segmentType] || 'interval';
 }
 
+// 세그먼트 관련 전역 변수
+let workoutSegments = [];
+let currentEditingSegmentIndex = null;
+
+// 반복용 세그먼트 임시 저장소
+let repeatSegments = [];
+let currentEditingRepeatIndex = null;
+
+// 빠른 세그먼트 추가
+function addQuickSegment(type) {
+  const templates = {
+    warmup: { label: '워밍업', type: 'warmup', duration: 600, intensity: 60 },
+    interval: { label: '인터벌', type: 'interval', duration: 300, intensity: 120 },
+    rest: { label: '휴식', type: 'rest', duration: 120, intensity: 50 },
+    cooldown: { label: '쿨다운', type: 'cooldown', duration: 600, intensity: 60 }
+  };
+  
+  const template = templates[type];
+  if (template) {
+    const segment = {
+      id: Date.now(),
+      label: template.label,
+      segment_type: template.type,
+      duration_sec: template.duration,
+      target_type: 'ftp_percent',
+      target_value: template.intensity,
+      ramp: 'none',
+      ramp_to_value: null
+    };
+    
+    workoutSegments.push(segment);
+    renderSegments();
+    updateSegmentSummary();
+    
+    if (typeof window.showToast === 'function') {
+      window.showToast(`${template.label} 세그먼트가 추가되었습니다.`);
+    }
+  }
+}
+
+// 세그먼트 추가 모달 표시
+function showAddSegmentModal() {
+  currentEditingSegmentIndex = null;
+  
+  const modalTitle = safeGetElement('segmentModalTitle');
+  const segmentLabel = safeGetElement('segmentLabel');
+  const segmentType = safeGetElement('segmentType');
+  const segmentMinutes = safeGetElement('segmentMinutes');
+  const segmentSeconds = safeGetElement('segmentSeconds');
+  const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentRamp = safeGetElement('segmentRamp');
+  const rampEndIntensity = safeGetElement('rampEndIntensity');
+  const btnDeleteSegment = safeGetElement('btnDeleteSegment');
+  const rampSettings = safeGetElement('rampSettings');
+  const segmentModal = safeGetElement('segmentModal');
+  
+  if (modalTitle) modalTitle.textContent = '새 세그먼트 추가';
+  if (segmentLabel) segmentLabel.value = '';
+  if (segmentType) segmentType.value = 'interval';
+  if (segmentMinutes) segmentMinutes.value = '5';
+  if (segmentSeconds) segmentSeconds.value = '0';
+  if (segmentIntensity) segmentIntensity.value = '100';
+  if (segmentRamp) segmentRamp.checked = false;
+  if (rampEndIntensity) rampEndIntensity.value = '120';
+  
+  if (btnDeleteSegment) btnDeleteSegment.style.display = 'none';
+  if (rampSettings) rampSettings.classList.add('hidden');
+  if (segmentModal) segmentModal.classList.remove('hidden');
+}
+
+// 세그먼트 편집 모달 표시
+function showEditSegmentModal(index) {
+  const segment = workoutSegments[index];
+  if (!segment) return;
+  
+  currentEditingSegmentIndex = index;
+  
+  const modalTitle = safeGetElement('segmentModalTitle');
+  const segmentLabel = safeGetElement('segmentLabel');
+  const segmentType = safeGetElement('segmentType');
+  const segmentMinutes = safeGetElement('segmentMinutes');
+  const segmentSeconds = safeGetElement('segmentSeconds');
+  const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentRamp = safeGetElement('segmentRamp');
+  const rampEndIntensity = safeGetElement('rampEndIntensity');
+  const btnDeleteSegment = safeGetElement('btnDeleteSegment');
+  const rampSettings = safeGetElement('rampSettings');
+  const segmentModal = safeGetElement('segmentModal');
+  
+  if (modalTitle) modalTitle.textContent = '세그먼트 편집';
+  if (segmentLabel) segmentLabel.value = segment.label || '';
+  if (segmentType) segmentType.value = segment.segment_type || 'interval';
+  
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  if (segmentMinutes) segmentMinutes.value = minutes;
+  if (segmentSeconds) segmentSeconds.value = seconds;
+  
+  if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+  
+  const hasRamp = segment.ramp && segment.ramp !== 'none';
+  if (segmentRamp) segmentRamp.checked = hasRamp;
+  if (rampEndIntensity) rampEndIntensity.value = segment.ramp_to_value || 120;
+  
+  if (btnDeleteSegment) btnDeleteSegment.style.display = 'inline-block';
+  
+  if (rampSettings) {
+    if (hasRamp) {
+      rampSettings.classList.remove('hidden');
+    } else {
+      rampSettings.classList.add('hidden');
+    }
+  }
+  
+  if (segmentModal) segmentModal.classList.remove('hidden');
+}
+
+// Ramp 설정 토글
+function toggleRampSettings() {
+  const segmentRamp = safeGetElement('segmentRamp');
+  const rampSettings = safeGetElement('rampSettings');
+  
+  if (segmentRamp && rampSettings) {
+    const isChecked = segmentRamp.checked;
+    if (isChecked) {
+      rampSettings.classList.remove('hidden');
+    } else {
+      rampSettings.classList.add('hidden');
+    }
+  }
+}
+
+// 세그먼트 저장
+function saveSegment() {
+  // 반복 세그먼트 편집 모드인지 먼저 확인
+  if (typeof currentEditingRepeatIndex === 'number' && currentEditingRepeatIndex !== null) {
+    console.log('Saving repeat segment at index:', currentEditingRepeatIndex);
+    saveRepeatSegment();
+    return;
+  }
+  
+  console.log('Saving regular segment');
+  
+  const segmentLabel = safeGetElement('segmentLabel');
+  const segmentType = safeGetElement('segmentType');
+  const segmentMinutes = safeGetElement('segmentMinutes');
+  const segmentSeconds = safeGetElement('segmentSeconds');
+  const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentRamp = safeGetElement('segmentRamp');
+  const rampEndIntensity = safeGetElement('rampEndIntensity');
+  
+  if (!segmentLabel || !segmentType || !segmentMinutes || !segmentSeconds || !segmentIntensity) {
+    window.showToast('세그먼트 폼 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const label = segmentLabel.value.trim();
+  const type = segmentType.value;
+  const minutes = parseInt(segmentMinutes.value) || 0;
+  const seconds = parseInt(segmentSeconds.value) || 0;
+  const intensity = parseInt(segmentIntensity.value) || 100;
+  const hasRamp = segmentRamp ? segmentRamp.checked : false;
+  const rampEndIntensityValue = rampEndIntensity ? parseInt(rampEndIntensity.value) || 120 : 120;
+  
+  if (!label) {
+    window.showToast('세그먼트 이름을 입력해주세요.');
+    return;
+  }
+  
+  const totalSeconds = minutes * 60 + seconds;
+  if (totalSeconds <= 0) {
+    window.showToast('지속 시간은 0보다 커야 합니다.');
+    return;
+  }
+  
+  if (intensity < 30 || intensity > 200) {
+    window.showToast('목표 강도는 30-200% 범위여야 합니다.');
+    return;
+  }
+  
+  const segment = {
+    id: currentEditingSegmentIndex !== null ? workoutSegments[currentEditingSegmentIndex].id : Date.now(),
+    label: label,
+    segment_type: type,
+    duration_sec: totalSeconds,
+    target_type: 'ftp_percent',
+    target_value: intensity,
+    ramp: hasRamp ? 'linear' : 'none',
+    ramp_to_value: hasRamp ? rampEndIntensityValue : null
+  };
+  
+  if (currentEditingSegmentIndex !== null) {
+    workoutSegments[currentEditingSegmentIndex] = segment;
+  } else {
+    workoutSegments.push(segment);
+  }
+  
+  renderSegments();
+  updateSegmentSummary();
+  closeSegmentModal();
+  
+  window.showToast(currentEditingSegmentIndex !== null ? '세그먼트가 수정되었습니다.' : '세그먼트가 추가되었습니다.');
+}
+
+// 현재 편집 중인 세그먼트 삭제
+function deleteCurrentSegment() {
+  if (currentEditingSegmentIndex === null) return;
+  
+  if (confirm('이 세그먼트를 삭제하시겠습니까?')) {
+    workoutSegments.splice(currentEditingSegmentIndex, 1);
+    renderSegments();
+    updateSegmentSummary();
+    closeSegmentModal();
+    window.showToast('세그먼트가 삭제되었습니다.');
+  }
+}
+
+// 세그먼트 모달 닫기
+function closeSegmentModal() {
+  const segmentModal = safeGetElement('segmentModal');
+  if (segmentModal) {
+    segmentModal.classList.add('hidden');
+  }
+  
+  // 반복 편집 모드였다면 반복 모달을 다시 표시
+  if (currentEditingRepeatIndex !== null) {
+    const repeatModal = safeGetElement('repeatModal');
+    if (repeatModal) {
+      repeatModal.classList.remove('hidden');
+    }
+    currentEditingRepeatIndex = null;
+  }
+  
+  currentEditingSegmentIndex = null;
+}
+
+// 세그먼트 목록 렌더링
+function renderSegments() {
+  const container = safeGetElement('wbSegments');
+  const emptyState = safeGetElement('segmentsEmpty');
+  
+  if (!container) return;
+  
+  if (workoutSegments.length === 0) {
+    if (emptyState) emptyState.style.display = 'block';
+    container.querySelectorAll('.segment-card').forEach(card => card.remove());
+    return;
+  }
+  
+  if (emptyState) emptyState.style.display = 'none';
+  
+  container.querySelectorAll('.segment-card').forEach(card => card.remove());
+  
+  workoutSegments.forEach((segment, index) => {
+    const card = createSegmentCard(segment, index);
+    container.appendChild(card);
+  });
+}
+
+// 세그먼트 카드 생성
+function createSegmentCard(segment, index) {
+  const card = document.createElement('div');
+  card.className = 'segment-card';
+  card.setAttribute('data-index', index);
+  
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  const intensityText = segment.ramp !== 'none' 
+    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
+    : `${segment.target_value}%`;
+  
+  card.innerHTML = `
+    <div class="segment-drag-handle">⋮⋮</div>
+    <div class="segment-info">
+      <span class="segment-type-badge ${segment.segment_type}">${segment.segment_type}</span>
+      <div class="segment-details">
+        <div class="segment-label">${escapeHtml(segment.label)}</div>
+        <div class="segment-meta">
+          <span>${duration}</span> • 
+          <span class="segment-intensity">${intensityText} FTP</span>
+        </div>
+      </div>
+    </div>
+    <div class="segment-actions">
+      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
+      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
+    </div>
+  `;
+  
+  return card;
+}
+
+// 세그먼트 삭제
+function deleteSegment(index) {
+  if (confirm('이 세그먼트를 삭제하시겠습니까?')) {
+    workoutSegments.splice(index, 1);
+    renderSegments();
+    updateSegmentSummary();
+    window.showToast('세그먼트가 삭제되었습니다.');
+  }
+}
+
+// 세그먼트 요약 정보 업데이트
+function updateSegmentSummary() {
+  const totalSeconds = workoutSegments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+  const totalMinutes = Math.round(totalSeconds / 60);
+  const segmentCount = workoutSegments.length;
+  
+  const durationEl = safeGetElement('totalDuration');
+  const countEl = safeGetElement('segmentCount');
+  
+  if (durationEl) durationEl.textContent = `${totalMinutes}분`;
+  if (countEl) countEl.textContent = `${segmentCount}개`;
+}
+
+// 반복 모달 표시
+function showRepeatModal() {
+  const repeatCount = safeGetElement('repeatCount');
+  const repeatModal = safeGetElement('repeatModal');
+  
+  if (repeatCount) repeatCount.value = '3';
+  repeatSegments = [];
+  renderRepeatSegments();
+  if (repeatModal) repeatModal.classList.remove('hidden');
+}
+
+// 반복 모달 닫기
+function closeRepeatModal() {
+  const repeatModal = safeGetElement('repeatModal');
+  if (repeatModal) repeatModal.classList.add('hidden');
+  repeatSegments = [];
+  currentEditingRepeatIndex = null;
+}
+
+// 반복용 세그먼트 추가
+function addRepeatSegment() {
+  const newSegment = {
+    id: Date.now(),
+    label: '새 세그먼트',
+    segment_type: 'interval',
+    duration_sec: 300,
+    target_type: 'ftp_percent',
+    target_value: 100,
+    ramp: 'none',
+    ramp_to_value: null
+  };
+  
+  repeatSegments.push(newSegment);
+  renderRepeatSegments();
+}
+
+// 반복용 세그먼트 목록 렌더링
+function renderRepeatSegments() {
+  const container = safeGetElement('repeatSegmentsList');
+  if (!container) return;
+  
+  if (repeatSegments.length === 0) {
+    container.innerHTML = '<div class="repeat-segments-empty">반복할 세그먼트를 추가하세요</div>';
+    return;
+  }
+  
+  container.innerHTML = repeatSegments.map((segment, index) => {
+    const minutes = Math.floor(segment.duration_sec / 60);
+    const seconds = segment.duration_sec % 60;
+    const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    return `
+      <div class="repeat-segment-item" data-index="${index}">
+        <div class="repeat-segment-info">
+          <div class="repeat-segment-label">${escapeHtml(segment.label)}</div>
+          <div class="repeat-segment-details">
+            ${segment.segment_type} · ${duration} · ${segment.target_value}% FTP
+          </div>
+        </div>
+        <div class="repeat-segment-actions">
+          <button class="btn btn-secondary btn-sm" onclick="editRepeatSegment(${index})">편집</button>
+          <button class="repeat-segment-remove" onclick="removeRepeatSegment(${index})" title="삭제">🗑️</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 반복용 세그먼트 편집
+function editRepeatSegment(index) {
+  console.log('editRepeatSegment called with index:', index);
+  
+  const segment = repeatSegments[index];
+  if (!segment) {
+    console.error('Segment not found at index:', index);
+    window.showToast('세그먼트를 찾을 수 없습니다.');
+    return;
+  }
+  
+  currentEditingRepeatIndex = index;
+  currentEditingSegmentIndex = null;
+  
+  const modalTitle = safeGetElement('segmentModalTitle');
+  const segmentLabel = safeGetElement('segmentLabel');
+  const segmentType = safeGetElement('segmentType');
+  const segmentMinutes = safeGetElement('segmentMinutes');
+  const segmentSeconds = safeGetElement('segmentSeconds');
+  const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentRamp = safeGetElement('segmentRamp');
+  const rampEndIntensity = safeGetElement('rampEndIntensity');
+  const btnDeleteSegment = safeGetElement('btnDeleteSegment');
+  const rampSettings = safeGetElement('rampSettings');
+  const repeatModal = safeGetElement('repeatModal');
+  const segmentModal = safeGetElement('segmentModal');
+  
+  if (modalTitle) modalTitle.textContent = '반복 세그먼트 편집';
+  if (segmentLabel) segmentLabel.value = segment.label || '';
+  if (segmentType) segmentType.value = segment.segment_type || 'interval';
+  
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  if (segmentMinutes) segmentMinutes.value = minutes;
+  if (segmentSeconds) segmentSeconds.value = seconds;
+  
+  if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+  
+  const hasRamp = segment.ramp && segment.ramp !== 'none';
+  if (segmentRamp) segmentRamp.checked = hasRamp;
+  if (rampEndIntensity) rampEndIntensity.value = segment.ramp_to_value || 120;
+  
+  if (rampSettings) {
+    if (hasRamp) {
+      rampSettings.classList.remove('hidden');
+    } else {
+      rampSettings.classList.add('hidden');
+    }
+  }
+  
+  if (btnDeleteSegment) btnDeleteSegment.style.display = 'none';
+  
+  if (repeatModal) repeatModal.classList.add('hidden');
+  if (segmentModal) segmentModal.classList.remove('hidden');
+}
+
+// 반복용 세그먼트 제거
+function removeRepeatSegment(index) {
+  if (confirm('이 세그먼트를 제거하시겠습니까?')) {
+    repeatSegments.splice(index, 1);
+    renderRepeatSegments();
+  }
+}
+
+// 반복 적용
+function applyRepeat() {
+  const repeatCountEl = safeGetElement('repeatCount');
+  if (!repeatCountEl) return;
+  
+  const repeatCount = parseInt(repeatCountEl.value);
+  
+  if (!repeatCount || repeatCount < 1 || repeatCount > 20) {
+    window.showToast('반복 횟수는 1-20 사이여야 합니다.');
+    return;
+  }
+  
+  if (repeatSegments.length === 0) {
+    window.showToast('반복할 세그먼트를 최소 1개 이상 추가해주세요.');
+    return;
+  }
+  
+  for (let i = 0; i < repeatCount; i++) {
+    repeatSegments.forEach(segment => {
+      const newSegment = {
+        id: Date.now() + Math.random(),
+        label: `${segment.label} (${i + 1}회차)`,
+        segment_type: segment.segment_type,
+        duration_sec: segment.duration_sec,
+        target_type: segment.target_type,
+        target_value: segment.target_value,
+        ramp: segment.ramp,
+        ramp_to_value: segment.ramp_to_value
+      };
+      
+      workoutSegments.push(newSegment);
+    });
+  }
+  
+  renderSegments();
+  updateSegmentSummary();
+  closeRepeatModal();
+  
+  const totalAdded = repeatSegments.length * repeatCount;
+  window.showToast(`${totalAdded}개의 세그먼트가 추가되었습니다.`);
+}
+
+// 반복 세그먼트 저장
+function saveRepeatSegment() {
+  console.log('saveRepeatSegment called');
+  
+  const segmentLabel = safeGetElement('segmentLabel');
+  const segmentType = safeGetElement('segmentType');
+  const segmentMinutes = safeGetElement('segmentMinutes');
+  const segmentSeconds = safeGetElement('segmentSeconds');
+  const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentRamp = safeGetElement('segmentRamp');
+  const rampEndIntensity = safeGetElement('rampEndIntensity');
+  
+  if (!segmentLabel || !segmentType || !segmentMinutes || !segmentSeconds || !segmentIntensity) {
+    window.showToast('세그먼트 폼 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const label = segmentLabel.value.trim();
+  const type = segmentType.value;
+  const minutes = parseInt(segmentMinutes.value) || 0;
+  const seconds = parseInt(segmentSeconds.value) || 0;
+  const intensity = parseInt(segmentIntensity.value) || 100;
+  const hasRamp = segmentRamp ? segmentRamp.checked : false;
+  const rampEndIntensityValue = rampEndIntensity ? parseInt(rampEndIntensity.value) || 120 : 120;
+  
+  if (!label) {
+    window.showToast('세그먼트 이름을 입력해주세요.');
+    return;
+  }
+  
+  const totalSeconds = minutes * 60 + seconds;
+  if (totalSeconds <= 0) {
+    window.showToast('지속 시간은 0보다 커야 합니다.');
+    return;
+  }
+  
+  if (intensity < 30 || intensity > 200) {
+    window.showToast('목표 강도는 30-200% 범위여야 합니다.');
+    return;
+  }
+  
+  if (currentEditingRepeatIndex !== null && repeatSegments[currentEditingRepeatIndex]) {
+    repeatSegments[currentEditingRepeatIndex] = {
+      id: repeatSegments[currentEditingRepeatIndex].id,
+      label: label,
+      segment_type: type,
+      duration_sec: totalSeconds,
+      target_type: 'ftp_percent',
+      target_value: intensity,
+      ramp: hasRamp ? 'linear' : 'none',
+      ramp_to_value: hasRamp ? rampEndIntensityValue : null
+    };
+    
+    const segmentModal = safeGetElement('segmentModal');
+    const repeatModal = safeGetElement('repeatModal');
+    
+    if (segmentModal) segmentModal.classList.add('hidden');
+    if (repeatModal) repeatModal.classList.remove('hidden');
+    renderRepeatSegments();
+    currentEditingRepeatIndex = null;
+    
+    window.showToast('반복 세그먼트가 수정되었습니다.');
+  } else {
+    console.error('Invalid currentEditingRepeatIndex:', currentEditingRepeatIndex);
+    window.showToast('저장 중 오류가 발생했습니다.');
+  }
+}
+
+// 세그먼트 관리자 초기화
+function initializeSegmentManager() {
+  const btnAddSegment = safeGetElement('btnAddSegment');
+  if (btnAddSegment) {
+    btnAddSegment.addEventListener('click', showAddSegmentModal);
+  }
+  
+  const segmentRamp = safeGetElement('segmentRamp');
+  if (segmentRamp) {
+    segmentRamp.addEventListener('change', toggleRampSettings);
+  }
+  
+  const segmentModal = safeGetElement('segmentModal');
+  if (segmentModal) {
+    segmentModal.addEventListener('click', (e) => {
+      if (e.target === segmentModal) {
+        closeSegmentModal();
+      }
+    });
+  }
+  
+  // 반복 모달 외부 클릭 시 닫기
+  const repeatModal = safeGetElement('repeatModal');
+  if (repeatModal) {
+    repeatModal.addEventListener('click', (e) => {
+      if (e.target === repeatModal) {
+        closeRepeatModal();
+      }
+    });
+  }
+}
+
 // 초기화 및 이벤트 바인딩
 document.addEventListener('DOMContentLoaded', () => {
   // 워크아웃 매니저 초기화
   initializeWorkoutManager();
+  
+  // 세그먼트 관리 초기화
+  initializeSegmentManager();
   
   // 새 워크아웃 버튼
   const btnOpenBuilder = safeGetElement('btnOpenBuilder');
@@ -1170,7 +1764,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
-// 전역 함수로 내보내기
+// 전역 함수로 내보내기 (완전한 목록)
 window.loadWorkouts = loadWorkouts;
 window.selectWorkout = selectWorkout;
 window.editWorkout = editWorkout;
@@ -1180,6 +1774,27 @@ window.updateWorkoutPreview = updateWorkoutPreview;
 window.showAddWorkoutForm = showAddWorkoutForm;
 window.resetWorkoutFormMode = resetWorkoutFormMode;
 window.performWorkoutUpdate = performWorkoutUpdate;
+
+// 세그먼트 관련 전역 함수
+window.addQuickSegment = addQuickSegment;
+window.showAddSegmentModal = showAddSegmentModal;
+window.showEditSegmentModal = showEditSegmentModal;
+window.deleteSegment = deleteSegment;
+window.saveSegment = saveSegment;
+window.closeSegmentModal = closeSegmentModal;
+window.deleteCurrentSegment = deleteCurrentSegment;
+window.toggleRampSettings = toggleRampSettings;
+window.renderSegments = renderSegments;
+window.updateSegmentSummary = updateSegmentSummary;
+
+// 반복 기능 전역 함수
+window.showRepeatModal = showRepeatModal;
+window.closeRepeatModal = closeRepeatModal;
+window.addRepeatSegment = addRepeatSegment;
+window.editRepeatSegment = editRepeatSegment;
+window.removeRepeatSegment = removeRepeatSegment;
+window.applyRepeat = applyRepeat;
+window.saveRepeatSegment = saveRepeatSegment;
 
 // API 함수 전역 내보내기
 window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
@@ -1191,5 +1806,10 @@ window.apiDeleteWorkout = apiDeleteWorkout;
 
 // 분할 저장 기능 전역 내보내기
 window.saveLargeWorkoutAsSeries = saveLargeWorkoutAsSeries;
+
+// 유틸리티 함수들
+window.escapeHtml = escapeHtml;
+window.validateWorkoutData = validateWorkoutData;
+window.normalizeWorkoutData = normalizeWorkoutData;
 
 console.log('Perfect Workout Manager (Fixed Version) loaded successfully');
