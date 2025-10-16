@@ -627,7 +627,7 @@ async function loadWorkouts() {
             <div class="workout-description">${escapeHtml(safeDescription)}</div>
             ${workout.publish_date ? `<div class="publish-date">게시일: ${new Date(workout.publish_date).toLocaleDateString()}</div>` : ''}
           </div>
-          <button class="btn btn-primary" onclick="selectWorkout(${workout.id})">선택</button>
+          <button class="btn btn-primary" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
         </div>
       `;
     }).filter(Boolean).join('');
@@ -666,6 +666,17 @@ async function selectWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
     return;
+  }
+  
+  // 클릭된 버튼 찾기 및 즉시 로딩 상태 표시
+  const selectButton = document.getElementById(`selectWorkoutBtn-${workoutId}`);
+  let originalButtonText = '';
+  
+  if (selectButton) {
+    originalButtonText = selectButton.textContent;
+    selectButton.textContent = '워크아웃 정보 연결 중...';
+    selectButton.disabled = true;
+    selectButton.classList.add('loading');
   }
   
   try {
@@ -709,6 +720,13 @@ async function selectWorkout(workoutId) {
   } catch (error) {
     console.error('워크아웃 선택 실패:', error);
     window.showToast('워크아웃 선택 중 오류가 발생했습니다.');
+  } finally {
+    // 버튼 상태 복원 (화면 전환으로 인해 실제로는 실행되지 않을 수 있음)
+    if (selectButton && originalButtonText) {
+      selectButton.textContent = originalButtonText;
+      selectButton.disabled = false;
+      selectButton.classList.remove('loading');
+    }
   }
 }
 
