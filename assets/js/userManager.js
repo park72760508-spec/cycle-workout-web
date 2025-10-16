@@ -184,7 +184,7 @@ async function loadUsers() {
               <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
             </div>
           </div>
-          <button class="btn btn-primary" onclick="selectUser(${user.id})">선택</button>
+          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
         </div>
       `;
     }).join('');
@@ -223,9 +223,8 @@ async function loadUsers() {
  * 사용자 선택
  */
 async function selectUser(userId) {
-  // 클릭된 버튼 찾기 및 즉시 로딩 상태 표시
-  const userCard = document.querySelector(`[data-user-id="${userId}"]`);
-  const selectButton = userCard?.querySelector('button[onclick*="selectUser"]');
+  // ID로 정확한 버튼 찾기
+  const selectButton = document.getElementById(`selectBtn-${userId}`);
   let originalButtonText = '';
   
   if (selectButton) {
@@ -234,6 +233,8 @@ async function selectUser(userId) {
     selectButton.disabled = true;
     selectButton.classList.add('loading');
   }
+  
+  // ... 나머지 코드는 동일
 
   try {
     const result = await apiGetUser(userId);
