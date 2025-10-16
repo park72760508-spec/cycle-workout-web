@@ -80,7 +80,7 @@ const SEGMENT_BATCH_SIZE = 5;
 const MAX_URL_LENGTH = 1800;
 const MAX_CHUNK_SIZE = 300;
 const MAX_SEGMENTS_PER_WORKOUT = 2;
-const MAX_SEGMENTS_PER_CHUNK = 5; // 새로 추가
+const MAX_SEGMENTS_PER_CHUNK = 3; // 새로 추가
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -394,12 +394,16 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
                              `action=updateWorkout&id=${workoutId}`.length + 
                              encodedSegments.length + 200; // 여유분
       
-      if (estimatedLength > 1500) { // 안전 마진
-        console.warn('First chunk still too large, using basic storage');
-        // 클라이언트 측에만 저장
+      if (estimatedLength > 1500) {
+        console.warn('First chunk too large, using sequential sending');
+        
+        // 순차 전송 시도
+        await sendSegmentsSequentially(workoutId, segments);
+        
+        // 로컬스토리지에도 백업 저장
         try {
           localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(segments));
-          console.log('Segments saved to localStorage only');
+          console.log('Segments sent sequentially and saved to localStorage');
         } catch (e) {
           console.warn('Could not save segments to localStorage:', e);
         }
@@ -453,16 +457,15 @@ function createSegmentChunks(segments) {
   
   // 방식 1: 개수 기준 분할 (더 안전)
   for (let i = 0; i < segments.length; i += MAX_SEGMENTS_PER_CHUNK) {
-    const chunk = segments.slice(i, i + MAX_SEGMENTS_PER_CHUNK)
-      .map(seg => ({
-        label: String(seg.label || '').substring(0, 15), // 라벨 길이 제한
-        segment_type: seg.segment_type || 'interval',
-        duration_sec: seg.duration_sec || 300,
-        target_type: 'ftp_percent',
-        target_value: seg.target_value || 100,
-        ramp: seg.ramp === 'linear' ? 'linear' : 'none',
-        ramp_to_value: seg.ramp === 'linear' ? seg.ramp_to_value : null
-      }));
+      const chunk = segments.slice(i, i + MAX_SEGMENTS_PER_CHUNK)
+        .map(seg => ({
+          l: String(seg.label || '').substring(0, 10), // label -> l, 더 짧게
+          t: seg.segment_type || 'interval',            // segment_type -> t
+          d: seg.duration_sec || 300,                   // duration_sec -> d
+          v: seg.target_value || 100,                   // target_value -> v
+          r: seg.ramp === 'linear' ? 1 : 0,            // ramp를 숫자로
+          rv: seg.ramp === 'linear' ? seg.ramp_to_value : null // ramp_to_value -> rv
+        }));
     
     chunks.push(chunk);
   }
