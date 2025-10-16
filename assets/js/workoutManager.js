@@ -76,10 +76,10 @@ let repeatSegments = [];
 let currentEditingRepeatIndex = null;
 
 // 세그먼트 분할 전송 설정 (대용량 지원)
-const SEGMENT_BATCH_SIZE = 5;
+const SEGMENT_BATCH_SIZE = 15;
 const MAX_URL_LENGTH = 1800;
 const MAX_CHUNK_SIZE = 300;
-const MAX_SEGMENTS_PER_WORKOUT = 5;
+const MAX_SEGMENTS_PER_WORKOUT = 2;
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -355,7 +355,7 @@ async function apiCreateWorkoutWithSegments(workoutData) {
 // 청크 기반 세그먼트 처리 (개선된 버전)
 async function apiCreateWorkoutWithChunkedSegments(workoutData) {
   try {
-    // 1단계: 기본 워크아웃 생성
+    // 기본 워크아웃 생성 (기존과 동일)
     const baseParams = {
       action: 'createWorkout',
       title: String(workoutData.title || ''),
@@ -375,15 +375,38 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
     const workoutId = createResult.workoutId || createResult.id;
     console.log('Base workout created with ID:', workoutId);
     
-    // 2단계: 세그먼트 데이터를 청크로 분할
+    // 세그먼트를 작은 청크로 분할
     const segments = workoutData.segments || [];
     const chunks = createSegmentChunks(segments);
     
     console.log(`Processing ${segments.length} segments in ${chunks.length} chunks`);
     
-    // 첫 번째 청크만 처리 (복잡성 감소)
+    // 첫 번째 청크만 시도 (URL 길이 체크 포함)
     if (chunks.length > 0 && chunks[0].length > 0) {
       const firstChunk = chunks[0];
+      const segmentsJson = JSON.stringify(firstChunk);
+      const encodedSegments = encodeURIComponent(segmentsJson);
+      
+      // URL 길이 사전 체크
+      const baseUrl = window.GAS_URL;
+      const estimatedLength = baseUrl.length + 
+                             `action=updateWorkout&id=${workoutId}`.length + 
+                             encodedSegments.length + 200; // 여유분
+      
+      if (estimatedLength > 1500) { // 안전 마진
+        console.warn('First chunk still too large, using basic storage');
+        // 클라이언트 측에만 저장
+        try {
+          localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(segments));
+          console.log('Segments saved to localStorage only');
+        } catch (e) {
+          console.warn('Could not save segments to localStorage:', e);
+        }
+        
+        return { success: true, workoutId: workoutId };
+      }
+      
+      // 첫 번째 청크 전송
       const updateParams = {
         action: 'updateWorkout',
         id: String(workoutId),
@@ -392,7 +415,7 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
         author: String(workoutData.author || ''),
         status: String(workoutData.status || '보이기'),
         publish_date: String(workoutData.publish_date || ''),
-        segments: encodeURIComponent(JSON.stringify(firstChunk))
+        segments: encodedSegments
       };
       
       console.log('Sending first chunk with', firstChunk.length, 'segments...');
@@ -405,9 +428,8 @@ async function apiCreateWorkoutWithChunkedSegments(workoutData) {
     
     // 클라이언트 측에 전체 세그먼트 정보 저장
     try {
-      const storageKey = `workout_segments_${workoutId}`;
-      localStorage.setItem(storageKey, JSON.stringify(segments));
-      console.log('Segments saved to localStorage');
+      localStorage.setItem(`workout_segments_${workoutId}`, JSON.stringify(segments));
+      console.log('Complete segments saved to localStorage');
     } catch (e) {
       console.warn('Could not save segments to localStorage:', e);
     }
@@ -427,33 +449,28 @@ function createSegmentChunks(segments) {
   }
   
   const chunks = [];
-  let currentChunk = [];
-  let currentSize = 0;
   
-  for (const segment of segments) {
-    if (!segment || typeof segment !== 'object') {
-      continue;
-    }
+  // 방식 1: 개수 기준 분할 (더 안전)
+  for (let i = 0; i < segments.length; i += MAX_SEGMENTS_PER_CHUNK) {
+    const chunk = segments.slice(i, i + MAX_SEGMENTS_PER_CHUNK)
+      .map(seg => ({
+        label: String(seg.label || '').substring(0, 15), // 라벨 길이 제한
+        segment_type: seg.segment_type || 'interval',
+        duration_sec: seg.duration_sec || 300,
+        target_type: 'ftp_percent',
+        target_value: seg.target_value || 100,
+        ramp: seg.ramp === 'linear' ? 'linear' : 'none',
+        ramp_to_value: seg.ramp === 'linear' ? seg.ramp_to_value : null
+      }));
     
-    const segmentSize = JSON.stringify(segment).length;
-    
-    // 현재 청크에 추가했을 때 크기 초과하는지 확인
-    if (currentSize + segmentSize > MAX_CHUNK_SIZE && currentChunk.length > 0) {
-      chunks.push([...currentChunk]);
-      currentChunk = [segment];
-      currentSize = segmentSize;
-    } else {
-      currentChunk.push(segment);
-      currentSize += segmentSize;
-    }
-  }
-  
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk);
+    chunks.push(chunk);
   }
   
   return chunks;
 }
+
+
+
 
 // 대용량 워크아웃을 여러 개로 분할하여 저장
 async function saveLargeWorkoutAsSeries(workoutData) {
