@@ -223,6 +223,18 @@ async function loadUsers() {
  * 사용자 선택
  */
 async function selectUser(userId) {
+  // 클릭된 버튼 찾기 및 즉시 로딩 상태 표시
+  const userCard = document.querySelector(`[data-user-id="${userId}"]`);
+  const selectButton = userCard?.querySelector('button[onclick*="selectUser"]');
+  let originalButtonText = '';
+  
+  if (selectButton) {
+    originalButtonText = selectButton.textContent;
+    selectButton.textContent = '사용자 정보 연결 중...';
+    selectButton.disabled = true;
+    selectButton.classList.add('loading');
+  }
+
   try {
     const result = await apiGetUser(userId);
     
@@ -256,6 +268,13 @@ async function selectUser(userId) {
   } catch (error) {
     console.error('사용자 선택 실패:', error);
     showToast('사용자 선택 중 오류가 발생했습니다.');
+  } finally {
+    // 버튼 상태 복원 (화면 전환으로 인해 실제로는 실행되지 않을 수 있음)
+    if (selectButton && originalButtonText) {
+      selectButton.textContent = originalButtonText;
+      selectButton.disabled = false;
+      selectButton.classList.remove('loading');
+    }
   }
 }
 
