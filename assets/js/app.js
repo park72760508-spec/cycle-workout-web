@@ -700,7 +700,7 @@ function setPaused(isPaused) {
   // 버튼 라벨/아이콘 업데이트
   const btn = document.getElementById("btnTogglePause");
   const icon = document.getElementById("pauseIcon");
-  if (btn)  btn.textContent = trainingState.paused ? " ▶️ 재개" : " ⏸️ 일시정지";
+  if (btn)  btn.textContent = trainingState.paused ? " ▶️" : " ⏸️";
   if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
 
   // (선택) 토스트/상태 표시
