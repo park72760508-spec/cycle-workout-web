@@ -986,6 +986,7 @@ function resetWorkoutFormMode() {
 }
 
 // 워크아웃 프리뷰 업데이트
+// 기존 updateWorkoutPreview 함수 교체
 function updateWorkoutPreview() {
   const workout = window.currentWorkout;
   if (!workout) {
@@ -1028,8 +1029,13 @@ function updateWorkoutPreview() {
   const estimatedTSS = Math.round((totalMinutes * avgIntensity * avgIntensity) / 10000);
   if (tssEl) tssEl.textContent = String(estimatedTSS);
 
-  updateSegmentPreview(workout.segments || []);
+  // 그룹화된 세그먼트 프리뷰 사용
+  updateSegmentPreviewGrouped(workout.segments || []);
 }
+
+
+
+
 
 // 세그먼트 프리뷰 업데이트
 function updateSegmentPreview(segments) {
