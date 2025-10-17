@@ -381,13 +381,25 @@ function createSingleSegmentPreview(segment) {
 function createGroupedSegmentPreview(groupedItem) {
   const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
   
-  const patternInfo = pattern.map(segment => {
-    const minutes = Math.floor((segment.duration_sec || 0) / 60);
-    const seconds = (segment.duration_sec || 0) % 60;
-    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
-    
-    return `FTP ${segment.target_value}% ${duration}`;
-  }).join('<br>');
+   const patternInfo = pattern.map(segment => {
+     const totalSeconds = segment.duration_sec || 0;
+     const minutes = Math.floor(totalSeconds / 60);
+     const seconds = totalSeconds % 60;
+     
+     let duration;
+     if (totalSeconds < 60) {
+       // 60초 미만일 경우 초단위로 표시
+       duration = `${totalSeconds}s`;
+     } else if (seconds > 0) {
+       // 분과 초가 모두 있을 경우
+       duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+     } else {
+       // 정확히 분 단위일 경우
+       duration = `${minutes}분`;
+     }
+     
+     return `FTP ${segment.target_value}% ${duration}`;
+   }).join(' '); // <br> 대신 공백으로 1줄 표기
   
   const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
   
