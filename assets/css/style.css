@@ -1293,11 +1293,11 @@ button[aria-disabled="true"] {
   }
   
   #trainingReadyScreen .btn-row.center .btn {
-    min-height: 40px !important; /* 50px에서 40px로 축소 */
-    min-width: 110px !important; /* 150px에서 110px로 축소 */
+    min-height: 20px !important; /* 50px에서 40px로 축소 */
+    min-width: 50px !important; /* 150px에서 110px로 축소 */
     padding: 10px 16px !important; /* 14px 24px에서 축소 */
     font-size: 14px !important; /* 16px에서 14px로 축소 */
-    font-weight: 500 !important; /* 600에서 500으로 축소 */
+    font-weight: 200 !important; /* 600에서 500으로 축소 */
     border-radius: 8px !important; /* 10px에서 8px로 축소 */
   }
   
