@@ -1050,3 +1050,148 @@ button[aria-disabled="true"] {
   will-change: transform;
   contain: layout;
 }
+
+
+/* 훈련그룹화된 세그먼트 스타일 */
+.grouped-segment {
+  border: 2px solid #e0e0e0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  margin-bottom: 15px;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #dee2e6;
+  padding-bottom: 8px;
+}
+
+.group-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #343a40;
+}
+
+.repeat-badge {
+  background: #007bff;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.group-pattern {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #495057;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.7);
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.group-total {
+  text-align: center;
+  font-size: 18px;
+  color: #007bff;
+  font-weight: 700;
+}
+
+/* 훈련 화면용 그룹화 스타일 */
+.grouped-training-segment {
+  border-left: 5px solid #007bff;
+  background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
+  margin-bottom: 10px;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.grouped-training-segment.current-segment {
+  border-left-color: #28a745;
+  background: linear-gradient(90deg, #d4edda 0%, #f8fff9 100%);
+  box-shadow: 0 0 15px rgba(40, 167, 69, 0.3);
+}
+
+.group-label {
+  font-weight: 600;
+  font-size: 16px;
+  color: #343a40;
+}
+
+.repeat-info {
+  background: #6c757d;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.group-pattern-training {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.pattern-item {
+  background: rgba(0, 123, 255, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid rgba(0, 123, 255, 0.2);
+}
+
+.group-total-training {
+  text-align: right;
+  color: #007bff;
+  font-size: 14px;
+}
+
+.group-progress {
+  background: #28a745;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 반복 세그먼트 강조 표시 */
+.grouped-segment.interval {
+  border-color: #dc3545;
+}
+
+.grouped-segment.rest {
+  border-color: #6c757d;
+}
+
+.grouped-segment.warmup {
+  border-color: #fd7e14;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .group-pattern-training {
+    flex-direction: column;
+  }
+  
+  .group-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .repeat-badge {
+    align-self: flex-end;
+  }
+}
