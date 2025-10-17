@@ -1,11 +1,10 @@
 /* ==========================================================
-   Cycle Workout App UI Style (완전 통합 최종 버전)
-   - 정렬 기준: index.html 화면 구성 순서
-   - 로딩 애니메이션 효과 포함
-   - 시간 표기 개선 및 폰트 크기 최적화
-   - 반복 블록 제목 흰색 처리
-   - Base → 공통 유틸 → 1~6 화면 순서 → 공통 반응형
-   - 세그먼트 블럭 60% 크기 축소 및 디자인 개선 적용
+   Cycle Workout App UI Style (개선 통합본)
+   - 원형 로딩 애니메이션 추가
+   - 세그먼트 블럭 폰트 크기 최적화 (가독성 향상)
+   - 반복 블럭 제목 색상 개선 (흰색)
+   - 워크아웃 검색 기능 스타일 추가
+   - 기존 모든 기능 유지
 ========================================================== */
 
 /* ========== BASE / RESET (공통) ========== */
@@ -54,59 +53,89 @@ h1,h2,h3,h4 { font-weight: 600; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); }
 .gap-10 { gap: 10px; }
 
-/* 버튼 공통 (로딩 애니메이션 포함) */
-.btn {
-  background: #2e74e8; color: #fff;
-  border: none; border-radius: 8px;
-  padding: 10px 14px; cursor: pointer;
-  transition: background 0.2s;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.btn:hover { background: #2562c8; }
-.btn-secondary { background: #6c757d; }
-.btn-success { background: #28a745; }
-.btn-row { display: flex; justify-content: center; gap: 10px; }
-
-/* 로딩 스피너 애니메이션 */
-.btn.loading {
-  pointer-events: none;
-  opacity: 0.8;
-}
-
-.btn.loading::before {
-  content: '';
-  position: absolute;
+/* ========== 원형 로딩 애니메이션 ========== */
+.loading-spinner {
+  display: inline-block;
   width: 16px;
   height: 16px;
-  margin-right: 8px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
+  border: 2px solid rgba(255, 255, 255, 0.3);
   border-radius: 50%;
-  animation: button-spin 1s linear infinite;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 8px;
+  vertical-align: middle;
 }
 
-@keyframes button-spin {
+.loading-container .loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #2e74e8;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-/* 워크아웃 카드 선택 버튼 로딩 효과 */
-.workout-card .btn.loading {
+/* 버튼 로딩 상태 */
+.btn.loading {
+  position: relative;
   color: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
 }
 
-.workout-card .btn.loading::before {
-  border-top-color: rgba(255, 255, 255, 0.8);
+.btn.loading .loading-spinner {
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
 }
 
-/* 폼 공통 */
+/* ========== 버튼 공통 ========== */
+.btn {
+  background: #2e74e8; color: #fff;
+  border: none; border-radius: 8px;
+  padding: 10px 14px; cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+}
+.btn:hover { background: #2562c8; transform: translateY(-1px); }
+.btn:disabled { 
+  background: #94a3b8; 
+  cursor: not-allowed; 
+  transform: none;
+}
+.btn-secondary { background: #6c757d; }
+.btn-success { background: #28a745; }
+.btn-row { display: flex; justify-content: center; gap: 10px; }
+
+/* 워크아웃 선택 버튼 특별 스타일 */
+.workout-select-btn {
+  position: relative;
+  min-height: 42px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.workout-select-btn.loading {
+  background: #4a90e2;
+}
+
+/* ========== 폼 공통 ========== */
 .form-group { margin-bottom: 12px; }
 .form-group label { display: block; font-size: 0.9em; margin-bottom: 4px; color: #555; }
-.form-group input {
-  width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px;
+.form-group input, .form-group select {
+  width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: #2e74e8;
+  box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
 }
 .form-row { display: flex; justify-content: space-between; gap: 10px; }
 
@@ -198,12 +227,11 @@ button[aria-disabled="true"] {
 #profileScreen .btn{
   display:inline-flex; align-items:center; justify-content:center;
   padding:8px 12px; font-weight:700; border-radius:10px; border:1px solid transparent; cursor:pointer;
-  position: relative;
+  min-height: 36px;
 }
 #profileScreen .btn.btn-primary{ background:var(--accent-ok); color:#fff; box-shadow:0 2px 8px rgba(34,197,94,.20); }
 #profileScreen .btn.btn-primary:hover{ filter:brightness(1.03); }
 #profileScreen .btn.btn-primary:active{ transform:translateY(1px); }
-#profileScreen .btn.loading{ pointer-events: none; opacity: 0.8; }
 #profileScreen .user-card:focus-within,
 #profileScreen .user-card:has(.btn:focus){ border-color:var(--brand); box-shadow:0 0 0 3px rgba(46,116,232,.18); }
 
@@ -213,7 +241,56 @@ button[aria-disabled="true"] {
 }
 
 /* ========== 3) 워크아웃 선택 화면 (#workoutScreen) ========== */
-/* (필요 시 확장) */
+/* 워크아웃 검색 기능 스타일 */
+.workout-search-container {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.workout-search-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.workout-search-bar input {
+  flex: 1;
+  padding: 10px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.workout-search-bar input:focus {
+  border-color: #2e74e8;
+  box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
+  outline: none;
+}
+
+.workout-search-bar input::placeholder {
+  color: #9ca3af;
+}
+
+.workout-search-clear-btn {
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.2s ease;
+}
+
+.workout-search-clear-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* 워크아웃 목록 */
 .workout-list { display: grid; gap: 12px; }
 
 /* ==== Workout Builder: 하단 액션 바 고정 & 덮임 방지 ==== */
@@ -243,21 +320,21 @@ button[aria-disabled="true"] {
 .preview-stats > div{ padding:15px; background:#f8f9fa; border-radius:8px; }
 .preview-stats strong{ font-size:28px; color:#2e74e8; display:block; margin-bottom:5px; }
 
-/* ========== 세그먼트 프리뷰 (60% 크기로 축소, 폰트 크기 최적화) ========== */
+/* ========== 세그먼트 프리뷰 (폰트 크기 최적화) ========== */
 .segment-preview{
-  display:flex; gap:6px; margin-top:20px; padding:9px; background:#f8f9fa;
-  border-radius:8px; overflow-x:auto; align-items:center;
+  display:flex; gap:8px; margin-top:20px; padding:12px; background:#f8f9fa;
+  border-radius:10px; overflow-x:auto; align-items:center;
 }
 
-/* 기본 세그먼트 아이템 (60% 크기로 축소하되 폰트는 가독성 있게) */
+/* 기본 세그먼트 아이템 (폰트 크기 증가로 가독성 향상) */
 .segment-item {
   display: inline-block;
   margin: 4px;
-  padding: 10px 12px; /* 기존 8px 10px에서 약간 증가 */
-  border-radius: 6px;
+  padding: 12px 14px; /* 기존 8px 10px에서 증가 */
+  border-radius: 8px; /* 기존 6px에서 증가 */
   text-align: center;
-  min-width: 85px; /* 기존 80px에서 약간 증가 */
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  min-width: 100px; /* 기존 80px에서 증가 */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15); /* 그림자 강화 */
   background: #f8f9fa;
   border: 1px solid #e9ecef;
   color: #fff;
@@ -268,72 +345,72 @@ button[aria-disabled="true"] {
 }
 
 .segment-item h4 {
-  margin: 0 0 5px 0; /* 기존 4px에서 5px로 증가 */
-  font-size: 12px; /* 기존 11px에서 12px로 증가 */
+  margin: 0 0 6px 0; /* 기존 4px에서 증가 */
+  font-size: 13px; /* 기존 11px에서 증가 */
   font-weight: 600;
   color: inherit;
   line-height: 1.2;
 }
 
 .segment-item .ftp-percent {
-  font-size: 15px; /* 기존 13px에서 15px로 증가 */
+  font-size: 18px; /* 기존 13px에서 크게 증가 */
   font-weight: 700;
-  margin-bottom: 3px; /* 기존 2px에서 3px로 증가 */
+  margin-bottom: 4px; /* 기존 2px에서 증가 */
   line-height: 1;
 }
 
 .segment-item .duration {
-  font-size: 11px; /* 기존 10px에서 11px로 증가 */
+  font-size: 12px; /* 기존 10px에서 증가 */
   opacity: 0.9;
-  margin-top: 2px;
+  margin-top: 4px; /* 기존 2px에서 증가 */
 }
 
-/* 세그먼트 타입별 색상 (축소된 크기에 맞게) */
+/* 세그먼트 타입별 색상 (기존 유지) */
 .segment-item.warmup { background: #4caf50; }
 .segment-item.interval { background: #2196f3; }
 .segment-item.rest { background: #9e9e9e; }
 
-/* 그룹화된 세그먼트 스타일 (60% 크기, 빨간색 테두리 제거, 폰트 크기 개선) */
+/* 그룹화된 세그먼트 스타일 (폰트 크기 증가, 제목 색상 개선) */
 .grouped-segment {
-  border: 1px solid #dee2e6; /* 빨간색 테두리 제거, 회색으로 변경 */
+  border: 1px solid #dee2e6;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  margin-bottom: 8px; /* 기존 15px에서 축소 */
-  padding: 12px; /* 기존 15px에서 약간 축소하되 적당히 유지 */
-  border-radius: 8px; /* 기존 12px에서 축소 */
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08); /* 기존 대비 축소 */
+  margin-bottom: 10px; /* 기존 8px에서 증가 */
+  padding: 14px; /* 기존 10px에서 증가 */
+  border-radius: 10px; /* 기존 8px에서 증가 */
+  box-shadow: 0 3px 6px rgba(0,0,0,0.1); /* 그림자 강화 */
   display: inline-block;
-  min-width: 140px; /* 기존 대비 축소 */
-  max-width: 200px; /* 최대 너비 제한 */
+  min-width: 160px; /* 기존 140px에서 증가 */
+  max-width: 240px; /* 기존 200px에서 증가 */
   vertical-align: top;
 }
 
 .group-header {
-  margin-bottom: 8px; /* 기존 6px에서 8px로 증가 */
+  margin-bottom: 8px; /* 기존 6px에서 증가 */
   border-bottom: 1px solid #dee2e6;
-  padding-bottom: 6px; /* 기존 4px에서 6px로 증가 */
+  padding-bottom: 6px; /* 기존 4px에서 증가 */
   display: flex;
-  flex-direction: column; /* 세로 배치로 변경 */
+  flex-direction: column;
   align-items: center;
 }
 
 .group-header h4 {
-  margin: 0 0 4px 0; /* 아래 여백 유지 */
-  font-size: 13px; /* 기존 11px에서 13px로 증가 */
+  margin: 0 0 6px 0;
+  font-size: 14px; /* 기존 11px에서 크게 증가 */
   font-weight: 600;
-  color: #ffffff; /* 흰색으로 변경 */
+  color: #fff; /* 요청사항: 흰색으로 변경 */
   line-height: 1.3;
   text-align: center;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.5); /* 흰색 글자 가독성을 위한 그림자 */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3); /* 가독성을 위한 텍스트 그림자 */
 }
 
 .group-pattern {
-  font-size: 11px; /* 기존 10px에서 11px로 증가 */
-  line-height: 1.4; /* 기존 1.6에서 축소 */
+  font-size: 12px; /* 기존 10px에서 증가 */
+  line-height: 1.4;
   color: #495057;
-  margin-bottom: 6px; /* 기존 10px에서 축소 */
-  background: rgba(255,255,255,0.7);
-  padding: 8px; /* 기존 10px에서 축소 */
-  border-radius: 4px; /* 기존 6px에서 축소 */
+  margin-bottom: 8px; /* 기존 6px에서 증가 */
+  background: rgba(255,255,255,0.8);
+  padding: 8px; /* 기존 6px에서 증가 */
+  border-radius: 6px; /* 기존 4px에서 증가 */
   text-align: center;
 }
 
@@ -341,13 +418,13 @@ button[aria-disabled="true"] {
 .repeat-badge {
   background: #007bff;
   color: white;
-  padding: 2px 6px; /* 기존 4px 12px에서 축소 */
-  border-radius: 10px; /* 기존 20px에서 축소 */
-  font-size: 9px; /* 기존 12px에서 축소 */
+  padding: 3px 8px; /* 기존 2px 6px에서 증가 */
+  border-radius: 12px; /* 기존 10px에서 증가 */
+  font-size: 11px; /* 기존 9px에서 증가 */
   font-weight: 600;
-  display: block; /* 블럭으로 변경하여 아래쪽 배치 */
+  display: block;
   text-align: center;
-  margin-top: 4px; /* 위쪽 여백 추가 */
+  margin-top: 6px; /* 기존 4px에서 증가 */
   width: fit-content;
   margin-left: auto;
   margin-right: auto;
@@ -355,13 +432,13 @@ button[aria-disabled="true"] {
 
 .group-total {
   text-align: center;
-  font-size: 12px; /* 기존 18px에서 축소 */
-  color: white; /* 요청된 흰색으로 변경 */
+  font-size: 14px; /* 기존 12px에서 증가 */
+  color: white;
   font-weight: 700;
-  background: #28a745; /* 흰색 글자가 보이도록 배경 추가 */
-  padding: 3px 6px;
-  border-radius: 4px;
-  margin-top: 4px;
+  background: #28a745;
+  padding: 4px 8px; /* 기존 3px 6px에서 증가 */
+  border-radius: 6px; /* 기존 4px에서 증가 */
+  margin-top: 6px; /* 기존 4px에서 증가 */
 }
 
 .training-ready{
@@ -392,7 +469,7 @@ button[aria-disabled="true"] {
   display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 #trainingScreen .seg-left1{text-align:left;} .seg-center1{text-align:center;} .seg-right1{text-align:right;}
-#trainingScreen .elapsed-wrap1::before{ content:"⏱"; margin-right:6px; }
+#trainingScreen .elapsed-wrap1::before{ content:"ⱱ"; margin-right:6px; }
 #trainingScreen #nextSegment::before{ content:"⭐"; margin-right:6px; }
 
 /* 메트릭 그리드 */
@@ -492,37 +569,37 @@ button[aria-disabled="true"] {
 #trainingScreen .control-btn.stop{ background:#ff4c4c; }
 #trainingScreen .control-btn.pause{ background:#ffaa00; }
 
-/* 훈련 화면용 그룹화 스타일 (60% 크기) */
+/* 훈련 화면용 그룹화 스타일 (폰트 크기 증가) */
 .grouped-training-segment {
-  border-left: 3px solid #007bff; /* 기존 5px에서 축소 */
+  border-left: 3px solid #007bff;
   background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
-  margin-bottom: 6px; /* 기존 10px에서 축소 */
-  padding: 8px; /* 기존 12px에서 축소 */
-  border-radius: 5px; /* 기존 8px에서 축소 */
+  margin-bottom: 8px; /* 기존 6px에서 증가 */
+  padding: 10px; /* 기존 8px에서 증가 */
+  border-radius: 6px; /* 기존 5px에서 증가 */
 }
 
 .grouped-training-segment.current-segment {
   border-left-color: #28a745;
   background: linear-gradient(90deg, #d4edda 0%, #f8fff9 100%);
-  box-shadow: 0 0 8px rgba(40, 167, 69, 0.3); /* 기존 15px에서 축소 */
+  box-shadow: 0 0 10px rgba(40, 167, 69, 0.3); /* 기존 8px에서 증가 */
 }
 
 .group-label {
   font-weight: 600;
-  font-size: 11px; /* 기존 16px에서 축소 */
+  font-size: 13px; /* 기존 11px에서 증가 */
   color: #343a40;
 }
 
 .repeat-info {
   background: #6c757d;
   color: white;
-  padding: 1px 5px; /* 기존 2px 8px에서 축소 */
-  border-radius: 8px; /* 기존 12px에서 축소 */
-  font-size: 8px; /* 기존 11px에서 축소 */
+  padding: 2px 6px; /* 기존 1px 5px에서 증가 */
+  border-radius: 10px; /* 기존 8px에서 증가 */
+  font-size: 10px; /* 기존 8px에서 증가 */
   font-weight: 600;
   display: block;
   text-align: center;
-  margin-top: 3px;
+  margin-top: 4px; /* 기존 3px에서 증가 */
   width: fit-content;
   margin-left: auto;
   margin-right: auto;
@@ -531,54 +608,54 @@ button[aria-disabled="true"] {
 .group-pattern-training {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px; /* 기존 8px에서 축소 */
-  margin: 4px 0; /* 기존 8px에서 축소 */
+  gap: 6px; /* 기존 4px에서 증가 */
+  margin: 6px 0; /* 기존 4px에서 증가 */
   justify-content: center;
 }
 
 .pattern-item {
   background: rgba(0, 123, 255, 0.1);
-  padding: 2px 4px; /* 기존 4px 8px에서 축소 */
-  border-radius: 3px; /* 기존 4px에서 축소 */
-  font-size: 9px; /* 기존 12px에서 축소 */
+  padding: 3px 6px; /* 기존 2px 4px에서 증가 */
+  border-radius: 4px; /* 기존 3px에서 증가 */
+  font-size: 11px; /* 기존 9px에서 증가 */
   border: 1px solid rgba(0, 123, 255, 0.2);
   white-space: nowrap;
 }
 
 .group-total-training {
   text-align: center;
-  color: white; /* 요청된 흰색으로 변경 */
-  font-size: 10px; /* 기존 14px에서 축소 */
+  color: white;
+  font-size: 12px; /* 기존 10px에서 증가 */
   font-weight: 600;
-  background: #28a745; /* 흰색 글자가 보이도록 배경 추가 */
-  padding: 2px 6px;
-  border-radius: 4px;
-  margin-top: 4px;
+  background: #28a745;
+  padding: 3px 8px; /* 기존 2px 6px에서 증가 */
+  border-radius: 5px; /* 기존 4px에서 증가 */
+  margin-top: 6px; /* 기존 4px에서 증가 */
 }
 
 .group-progress {
   background: #28a745;
   color: white;
-  padding: 3px 6px; /* 기존 6px 10px에서 축소 */
-  border-radius: 4px; /* 기존 6px에서 축소 */
-  margin-top: 4px; /* 기존 8px에서 축소 */
-  font-size: 9px; /* 기존 13px에서 축소 */
+  padding: 4px 8px; /* 기존 3px 6px에서 증가 */
+  border-radius: 5px; /* 기존 4px에서 증가 */
+  margin-top: 6px; /* 기존 4px에서 증가 */
+  font-size: 11px; /* 기존 9px에서 증가 */
   font-weight: 600;
   text-align: center;
 }
 
-/* 개별 훈련 세그먼트 (60% 크기) */
+/* 개별 훈련 세그먼트 (폰트 크기 증가) */
 .training-segment {
-  padding: 6px 8px; /* 기존 8px 12px에서 축소 */
-  margin-bottom: 4px; /* 기존 6px에서 축소 */
-  border-radius: 4px; /* 기존 6px에서 축소 */
-  border-left: 2px solid #dee2e6; /* 기존 3px에서 축소 */
+  padding: 8px 10px; /* 기존 6px 8px에서 증가 */
+  margin-bottom: 6px; /* 기존 4px에서 증가 */
+  border-radius: 6px; /* 기존 4px에서 증가 */
+  border-left: 3px solid #dee2e6; /* 기존 2px에서 증가 */
 }
 
 .segment-label {
-  font-size: 11px; /* 기존 14px에서 축소 */
+  font-size: 13px; /* 기존 11px에서 증가 */
   font-weight: 600;
-  margin-bottom: 2px; /* 기존 4px에서 축소 */
+  margin-bottom: 4px; /* 기존 2px에서 증가 */
 }
 
 .segment-stats {
@@ -588,13 +665,13 @@ button[aria-disabled="true"] {
 }
 
 .ftp-value {
-  font-size: 10px; /* 기존 12px에서 축소 */
+  font-size: 12px; /* 기존 10px에서 증가 */
   font-weight: 600;
   color: #007bff;
 }
 
 .segment-stats .duration {
-  font-size: 9px; /* 기존 11px에서 축소 */
+  font-size: 11px; /* 기존 9px에서 증가 */
   color: #6c757d;
 }
 
@@ -628,63 +705,7 @@ button[aria-disabled="true"] {
   100% { transform: scale(1.0); opacity: 1; }
 }
 
-/* ========== 반응형 (공통) ========== */
-@media (max-width: 768px) {
-  #profileScreen #userList { grid-template-columns: 1fr; }
-  #trainingScreen .metrics-grid { grid-template-columns: 1fr; }
-  #trainingScreen .current-power { font-size: 48px; }
-  #trainingScreen .segment-details1 { font-size: 14px; }
-  
-  /* 세그먼트 모바일 반응형 */
-  .segment-item {
-    min-width: 70px; /* 모바일에서 더 작게 */
-    padding: 6px 8px;
-  }
-  
-  .segment-item h4 {
-    font-size: 10px;
-  }
-  
-  .segment-item .ftp-percent {
-    font-size: 11px;
-  }
-  
-  .segment-item .duration {
-    font-size: 9px;
-  }
-  
-  .grouped-segment {
-    margin-bottom: 6px;
-    padding: 8px;
-    min-width: 120px;
-    max-width: 180px;
-  }
-  
-  .group-header h4 {
-    font-size: 10px;
-  }
-  
-  .group-pattern {
-    font-size: 9px;
-    padding: 4px;
-  }
-  
-  .group-total {
-    font-size: 10px;
-  }
-  
-  .group-pattern-training {
-    flex-direction: column;
-    gap: 2px;
-  }
-  
-  .pattern-item {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-}
-
-/* 워크아웃 카드 스타일 */
+/* ========== 워크아웃 카드 스타일 ========== */
 .workout-card {
   position: relative;
   border: 1px solid #e5e7eb;
@@ -698,6 +719,7 @@ button[aria-disabled="true"] {
 .workout-card:hover {
   border-color: #2e74e8;
   box-shadow: 0 4px 12px rgba(46, 116, 232, 0.1);
+  transform: translateY(-1px);
 }
 
 .workout-header {
@@ -771,81 +793,178 @@ button[aria-disabled="true"] {
   color: #991b1b;
 }
 
-/* 워크아웃 폼 스타일 */
-.form-help {
-  font-size: 12px;
+/* 빈 상태 스타일 */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
   color: #6b7280;
-  margin-top: 4px;
-  display: block;
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-.form-group select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  background: #fff;
-  font-size: 14px;
-}
-
-.form-group select:focus {
-  outline: none;
-  border-color: #2e74e8;
-  box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
-}
-
-/* 워크아웃 목록 헤더 */
-.workout-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.empty-state-icon {
+  font-size: 48px;
   margin-bottom: 16px;
 }
 
-.workout-search-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex: 1;
-  max-width: 400px;
-}
-
-.workout-search-bar input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.workout-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* 관리자 모드 토글 */
-.admin-mode-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.admin-mode-toggle input[type="checkbox"] {
-  margin: 0;
-}
-
-.admin-mode-toggle label {
-  margin: 0;
-  font-size: 14px;
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 600;
   color: #374151;
+  margin-bottom: 8px;
+}
+
+.empty-state-description {
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.empty-state-action {
+  margin-top: 16px;
+}
+
+/* 에러 상태 스타일 */
+.error-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #ef4444;
+}
+
+.error-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.error-state-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.error-state-description {
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.retry-button {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.retry-button:hover {
+  background: #dc2626;
+}
+
+/* 로딩 컨테이너 */
+.loading-container {
+  text-align: center;
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ========== 반응형 (공통) ========== */
+@media (max-width: 768px) {
+  #profileScreen #userList { grid-template-columns: 1fr; }
+  #trainingScreen .metrics-grid { grid-template-columns: 1fr; }
+  #trainingScreen .current-power { font-size: 48px; }
+  #trainingScreen .segment-details1 { font-size: 14px; }
+  
+  /* 세그먼트 모바일 반응형 */
+  .segment-item {
+    min-width: 85px; /* 모바일에서 적절한 크기 */
+    padding: 10px 12px;
+  }
+  
+  .segment-item h4 {
+    font-size: 12px;
+  }
+  
+  .segment-item .ftp-percent {
+    font-size: 16px;
+  }
+  
+  .segment-item .duration {
+    font-size: 11px;
+  }
+  
+  .grouped-segment {
+    margin-bottom: 8px;
+    padding: 12px;
+    min-width: 140px;
+    max-width: 200px;
+  }
+  
+  .group-header h4 {
+    font-size: 13px;
+  }
+  
+  .group-pattern {
+    font-size: 11px;
+    padding: 6px;
+  }
+  
+  .group-total {
+    font-size: 13px;
+  }
+  
+  .group-pattern-training {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .pattern-item {
+    font-size: 10px;
+    padding: 2px 4px;
+  }
+  
+  /* 검색 바 모바일 대응 */
+  .workout-search-bar {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .workout-search-bar input {
+    font-size: 16px; /* iOS 줌 방지 */
+  }
+}
+
+/* 추가 모바일 최적화 */
+@media (max-width: 480px) {
+  .workout-card {
+    padding: 12px;
+  }
+  
+  .workout-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .workout-actions {
+    align-self: flex-end;
+  }
+  
+  .preview-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .segment-preview {
+    gap: 6px;
+    padding: 10px;
+  }
+  
+  .segment-item {
+    min-width: 75px;
+    padding: 8px 10px;
+  }
+  
+  .segment-item .ftp-percent {
+    font-size: 14px;
+  }
 }
