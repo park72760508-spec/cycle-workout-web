@@ -16,6 +16,31 @@ function normalizeType(seg){
   return "interval"; // 기본값
 }
 
+// 훈련 화면의 세그먼트에서 FTP 백분율 추출하는 헬퍼 함수 추가
+function getSegmentFtpPercent(seg) {
+  if (!seg) return 0;
+  
+  // 1순위: target_value (이미 퍼센트)
+  if (typeof seg.target_value === "number") {
+    return Math.round(seg.target_value);
+  }
+  
+  // 2순위: ftp_percent (이미 퍼센트)
+  if (typeof seg.ftp_percent === "number") {
+    return Math.round(seg.ftp_percent);
+  }
+  
+  // 3순위: target (0~1 비율을 퍼센트로 변환)
+  if (typeof seg.target === "number") {
+    return Math.round(seg.target * 100);
+  }
+  
+  console.warn('FTP 백분율을 찾을 수 없습니다:', seg);
+  return 100; // 기본값
+}
+
+
+
 // 훈련 지표 상태 (TSS / kcal / NP 근사)
 const trainingMetrics = {
   elapsedSec: 0,      // 전체 경과(초)
@@ -183,10 +208,9 @@ function segDurationSec(seg) {
 }
 
 // 목표 파워(W)
-function segTargetW(seg, ftp){
-  if (typeof seg.target === "number") return Math.round(ftp * seg.target);
-  if (typeof seg.ftp_percent === "number") return Math.round(ftp * (seg.ftp_percent/100));
-  return 0;
+function segTargetW(seg, ftp) {
+  const ftpPercent = getSegmentFtpPercent(seg);
+  return Math.round(ftp * (ftpPercent / 100));
 }
 
 // 세그먼트 바 생성
@@ -406,6 +430,7 @@ window.trainingState = window.trainingState || {
 };
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
+// 수정된 updateTimeUI 함수 (다음 세그먼트 부분만)
 function updateTimeUI() {
   const w = window.currentWorkout;
   if (!w) return;
@@ -414,35 +439,34 @@ function updateTimeUI() {
   const elElapsedPct = document.getElementById("elapsedPercent");
   const elSegTime    = document.getElementById("segmentTime");
   const elNext       = document.getElementById("nextSegment");
-  const elSegPct     = document.getElementById("segmentProgress"); // 진행률 표시 엘리먼트
+  const elSegPct     = document.getElementById("segmentProgress");
 
-  // 총 진행률 (오버플로우/NaN 방지)
-  const elapsed  = Math.max(0, Number(trainingState.elapsedSec) || 0);
-  const total    = Math.max(1, Number(trainingState.totalSec)  || 1);
+  // 이 진행률 (오버플로우/NaN 방지)
+  const elapsed  = Math.max(0, Number(window.trainingState.elapsedSec) || 0);
+  const total    = Math.max(1, Number(window.trainingState.totalSec)  || 1);
   const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
 
   if (elElapsed)    elElapsed.textContent = formatMMSS(elapsed);
   if (elElapsedPct) elElapsedPct.textContent = totalPct;
 
   // 현재 세그먼트
-  const i   = Math.max(0, Number(trainingState.segIndex) || 0);
+  const i   = Math.max(0, Number(window.trainingState.segIndex) || 0);
   const seg = w.segments?.[i];
 
   // 세그 남은 시간(0으로 클램프)
   if (elSegTime) {
-    const segDur = Math.max(0, Number(seg?.duration ?? seg?.duration_sec) || 0);
-    const segRemain = Math.max(0, segDur - (Number(trainingState.segElapsedSec) || 0));
+    const segDur = Math.max(0, segDurationSec(seg) || 0);
+    const segRemain = Math.max(0, segDur - (Number(window.trainingState.segElapsedSec) || 0));
     elSegTime.textContent = formatMMSS(segRemain);
   }
 
-  // 다음 세그 안내
+  // 다음 세그 안내 - 수정된 부분
   if (elNext) {
     const next = w.segments?.[i + 1];
     if (next) {
-      const pct = (typeof next.target === "number")
-        ? Math.round(next.target * 100)
-        : (typeof next.ftp_percent === "number" ? Math.round(next.ftp_percent) : 0);
-      elNext.textContent = `다음: ${next.label || next.segment_type || "세그먼트"} FTP ${pct}%`;
+      const ftpPercent = getSegmentFtpPercent(next);
+      const segmentName = next.label || next.segment_type || "세그먼트";
+      elNext.textContent = `다음: ${segmentName} FTP ${ftpPercent}%`;
     } else {
       elNext.textContent = `다음: (마지막)`;
     }
@@ -450,8 +474,8 @@ function updateTimeUI() {
 
   // 세그 진행률 (0~100 클램프)
   if (elSegPct && seg) {
-    const segDur    = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
-    const segElapsed= Math.max(0, Number(trainingState.segElapsedSec) || 0);
+    const segDur    = Math.max(1, segDurationSec(seg) || 1);
+    const segElapsed= Math.max(0, Number(window.trainingState.segElapsedSec) || 0);
     const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
     elSegPct.textContent = String(sp);
   }
@@ -464,13 +488,10 @@ function applySegmentTarget(i) {
   const seg = w?.segments?.[i];
   if (!seg) return;
 
-  // 목표 파워 계산 (target: 0~1 비율, ftp_percent: %)
-  let targetW = 0;
-  if (typeof seg.target === "number") {
-    targetW = Math.round(ftp * seg.target);
-  } else if (typeof seg.ftp_percent === "number") {
-    targetW = Math.round(ftp * (seg.ftp_percent / 100));
-  }
+  // 목표 파워 계산 - 통일된 방식 사용
+  const ftpPercent = getSegmentFtpPercent(seg);
+  const targetW = Math.round(ftp * (ftpPercent / 100));
+  
   window.liveData = window.liveData || {};
   window.liveData.targetPower = targetW;
 
@@ -481,7 +502,10 @@ function applySegmentTarget(i) {
   const avgEl = document.getElementById("avgSegmentPowerValue");
 
   if (tEl)    tEl.textContent    = String(targetW || 0);
-  if (nameEl) nameEl.textContent = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
+  if (nameEl) {
+    const segmentName = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
+    nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+  }
   if (progEl) progEl.textContent = "0";
   if (avgEl)  avgEl.textContent  = "—";
 
