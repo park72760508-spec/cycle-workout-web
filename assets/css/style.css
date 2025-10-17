@@ -251,7 +251,25 @@ button[aria-disabled="true"] {
   padding-bottom: 100px; /* 여유 공간 추가 */
 }
 
-.btn-row.center{ justify-content:center; margin-top:20px; }
+/*.btn-row.center{ justify-content:center; margin-top:20px; }*/
+
+
+.btn-row.center {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  margin: 20px auto !important;
+  width: 100% !important;
+  text-align: center !important;
+  position: relative;
+  z-index: 100;
+  background: #fff;
+  padding: 15px 0;
+  border-radius: 8px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+}
+
+
 
 /* ========== 5) 훈련 화면 (#trainingScreen) ========== */
 #trainingScreen{
@@ -1340,7 +1358,7 @@ button[aria-disabled="true"] {
   position: relative;
   z-index: 101;
   display: inline-block;
-  min-height: 44px;
+  min-height: 30px;
   min-width: 120px;
   line-height: 44px;
   text-align: center;
@@ -1356,5 +1374,57 @@ button[aria-disabled="true"] {
   .btn-row.center .btn:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(46, 116, 232, 0.3);
+  }
+}
+
+
+/* 훈련 준비 화면 버튼 전용 스타일 */
+#trainingReadyScreen .btn-row.center {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  margin: 30px auto 20px auto !important;
+  width: 100% !important;
+  max-width: 400px !important;
+  padding: 20px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
+}
+
+#trainingReadyScreen .btn-row.center .btn {
+  flex: 0 1 auto !important;
+  min-height: 50px !important;
+  min-width: 150px !important;
+  padding: 14px 24px !important;
+  border-radius: 10px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  margin: 0 !important;
+}
+
+/* 버튼 간격 조정 */
+#trainingReadyScreen .btn-row.center .btn:not(:last-child) {
+  margin-right: 12px !important;
+}
+
+/* 모바일에서 버튼 스택 */
+@media (max-width: 480px) {
+  #trainingReadyScreen .btn-row.center {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  #trainingReadyScreen .btn-row.center .btn {
+    width: 100% !important;
+    max-width: 250px !important;
+    margin: 0 !important;
+  }
+  
+  #trainingReadyScreen .btn-row.center .btn:not(:last-child) {
+    margin-right: 0 !important;
+    margin-bottom: 8px !important;
   }
 }
