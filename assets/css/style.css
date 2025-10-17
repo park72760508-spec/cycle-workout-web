@@ -380,6 +380,52 @@ button[aria-disabled="true"] {
   height:4px; border-radius:4px; background:var(--seg-color, #3b82f6); filter:blur(6px) opacity(.7);
 }
 
+/* 👇 여기에 그룹화 스타일 추가 */
+/* 그룹화된 세그먼트 스타일 */
+.timeline-group {
+  flex-direction: column;
+  justify-content: center;
+  padding: 2px 4px;
+}
+
+.timeline-group .segment-label {
+  font-size: 10px;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+
+.timeline-group .repeat-badge {
+  font-size: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 3px;
+  border-radius: 2px;
+  margin-bottom: 2px;
+}
+
+.timeline-group .segment-time {
+  font-size: 9px;
+  opacity: 0.8;
+}
+
+/* 그룹 상태별 강조 */
+.timeline-group.is-current {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: -2px;
+}
+
+.timeline-group.is-current::after {
+  content: "";
+  position: absolute;
+  inset: auto 10% -4px 10%;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--seg-color, #3b82f6);
+  filter: blur(6px) opacity(0.8);
+}
+/* 👆 그룹화 스타일 끝 */
+
+
+
 /* 컨트롤 버튼 */
 #trainingScreen .training-controls{
   display:flex; justify-content:center; gap:25px; margin-top:20px;
