@@ -335,50 +335,368 @@ button[aria-disabled="true"] {
 #trainingScreen .dual-metric .metric-value{ font-size:40px; font-weight:bold; color:#ff3c6a; }
 #trainingScreen .dual-metric .metric-label{ font-size:13px; color:#ccc; }
 
-/* 타임라인(세그먼트 바) — XL 높이 + 타입/상태 클래스 */
-#trainingScreen .timeline-wrap{
-  background:#151720; border-radius:12px; padding:10px 15px; margin-top: 10px;
-}
-.timeline-progress.timeline--xl{
-  height:40px; border-radius:14px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,.25);
-}
-.timeline-segments{ display:flex; height:100%; }
-.timeline-segment{
-  position:relative; display:flex; align-items:center; justify-content:center;
-  padding:0 6px; font-size:12px; font-weight:700; color:#e5e7eb;
-  border-right:1px solid rgba(255,255,255,0.12);
-  background:rgba(255,255,255,0.04);
-}
-.timeline-segment:last-child{ border-right:none; }
-.timeline-segment .segment-label{ z-index:2; line-height:1.15; text-align:center; }
-.timeline-segment .segment-time{ z-index:2; font-size:12px; opacity:.9; }
 
-/* 채움바 + 타입별 색상 변수 */
-.timeline-segment .progress-fill{
-  position:absolute; inset:0 auto 0 0; height:100%; width:0%;
-  background:var(--seg-color, #3b82f6); transition: width .25s ease, filter .2s ease; z-index:1;
-}
-.timeline-segment:first-child .progress-fill{ border-radius:14px 0 0 14px; }
-.timeline-segment:last-child  .progress-fill{ border-radius:0 14px 14px 0; }
 
-/* 타입별 기본 컬러(미진행 배경 + 진행 컬러 변수) */
-.timeline-segment[data-type="warmup"]   { --seg-color:#22c55e; background:rgba(34,197,94,.10); }
-.timeline-segment[data-type="interval"] { --seg-color:#ef4444; background:rgba(239,68,68,.10); }
-.timeline-segment[data-type="rest"]     { --seg-color:#f59e0b; background:rgba(245,158,11,.10); }
-.timeline-segment[data-type="cooldown"] { --seg-color:#94a3b8; background:rgba(148,163,184,.12); }
-.timeline-segment[data-type="tempo"]    { --seg-color:#3b82f6; background:rgba(59,130,246,.10); }
-.timeline-segment[data-type="sweetspot"]{ --seg-color:#8b5cf6; background:rgba(139,92,246,.10); }
 
-/* 상태 클래스 */
-.timeline-segment.is-complete .progress-fill{ width:100%!important; filter:saturate(.7) brightness(.95); }
-.timeline-segment.is-current{ outline:2px solid rgba(255,255,255,.25); outline-offset:-2px; }
-.timeline-segment.is-current .segment-label,
-.timeline-segment.is-current .segment-time{ color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.45); }
-.timeline-segment.is-upcoming .progress-fill{ width:0%!important; filter:grayscale(.4) opacity(.6); }
-.timeline-segment.is-current::after{
-  content:""; position:absolute; inset:auto 10% -4px 10%;
-  height:4px; border-radius:4px; background:var(--seg-color, #3b82f6); filter:blur(6px) opacity(.7);
+/* 타임라인(세그먼트 바) — XL 높이 + 타입/상태 클래스============>  */
+
+
+/* ========== 개선된 세그먼트 바 스타일 ========== */
+
+/* 타임라인 기본 스타일 개선 */
+.timeline-progress.timeline--xl {
+  height: 50px; /* 높이 증가 */
+  border-radius: 16px;
+  background: #f8fafc; /* 부드러운 배경색 */
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.08);
+  overflow: hidden;
 }
+
+.timeline-segments {
+  display: flex;
+  height: 100%;
+  position: relative;
+}
+
+/* 세그먼트 기본 스타일 */
+.timeline-segment {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b; /* 기본 텍스트 색상 */
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+  background: #f1f5f9; /* 부드러운 미진행 배경색 */
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.timeline-segment:last-child {
+  border-right: none;
+}
+
+/* 세그먼트 라벨 구조 */
+.segment-labels {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  position: relative;
+  gap: 1px;
+}
+
+.segment-number {
+  font-size: 10px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.segment-time {
+  font-size: 9px;
+  font-weight: 400; /* 굵지 않은 기본 폰트 */
+  color: #64748b;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+/* 반복 세그먼트 횟수 라벨 */
+.repeat-count {
+  font-size: 8px;
+  font-weight: 600;
+  color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.1);
+  padding: 1px 4px;
+  border-radius: 6px;
+  line-height: 1;
+  margin: 1px 0;
+}
+
+/* 진행바 스타일 */
+.progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  width: 0%;
+  z-index: 1;
+  transition: width 0.4s ease-out, background 0.3s ease;
+  border-radius: inherit;
+}
+
+/* 첫 번째와 마지막 세그먼트 모서리 처리 */
+.timeline-segment:first-child .progress-fill {
+  border-radius: 16px 0 0 16px;
+}
+
+.timeline-segment:last-child .progress-fill {
+  border-radius: 0 16px 16px 0;
+}
+
+/* 타입별 기본 진행 색상 (Zwift/TrainerRoad 스타일) */
+.timeline-segment[data-type="warmup"] .progress-fill {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.timeline-segment[data-type="interval"] .progress-fill {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.timeline-segment[data-type="rest"] .progress-fill {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+}
+
+.timeline-segment[data-type="cooldown"] .progress-fill {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+}
+
+.timeline-segment[data-type="tempo"] .progress-fill {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.timeline-segment[data-type="sweetspot"] .progress-fill {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+/* 상태별 스타일 */
+.timeline-segment.is-upcoming {
+  background: #f8fafc;
+  color: #94a3b8;
+}
+
+.timeline-segment.is-upcoming .segment-number,
+.timeline-segment.is-upcoming .segment-time {
+  color: #cbd5e1;
+}
+
+.timeline-segment.is-current {
+  background: #eff6ff;
+  color: #1e40af;
+  box-shadow: 
+    inset 0 0 0 2px rgba(59, 130, 246, 0.3),
+    0 0 0 1px rgba(59, 130, 246, 0.2);
+  transform: scale(1.02);
+}
+
+.timeline-segment.is-current .segment-number,
+.timeline-segment.is-current .segment-time {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.timeline-segment.is-current::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  border-radius: 2px;
+}
+
+/* 달성도 기반 색상 시스템 */
+.timeline-segment.is-complete {
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.timeline-segment.is-complete .segment-number,
+.timeline-segment.is-complete .segment-time,
+.timeline-segment.is-complete .repeat-count {
+  color: #ffffff;
+}
+
+/* 달성도별 완료 색상 */
+.timeline-segment.is-complete.achievement-low .progress-fill {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 50%, #dc2626 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.timeline-segment.is-complete.achievement-good .progress-fill {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.timeline-segment.is-complete.achievement-high .progress-fill {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+.timeline-segment.is-complete.achievement-over .progress-fill {
+  background: linear-gradient(135deg, #a855f7 0%, #9333ea 50%, #7c3aed 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+
+/* 그룹화된 세그먼트 특별 스타일 */
+.timeline-group {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.timeline-group .segment-labels {
+  gap: 2px;
+}
+
+.timeline-group .segment-number {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 9px;
+}
+
+.timeline-group .repeat-count {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* 그룹 상태별 스타일 */
+.timeline-group.is-current {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+}
+
+.timeline-group.is-current .segment-number {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+/* 그룹 달성도 색상 */
+.timeline-group.is-complete.achievement-low {
+  background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
+  border-color: #ef4444;
+}
+
+.timeline-group.is-complete.achievement-good {
+  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
+  border-color: #10b981;
+}
+
+.timeline-group.is-complete.achievement-high {
+  background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+  border-color: #f59e0b;
+}
+
+.timeline-group.is-complete.achievement-over {
+  background: linear-gradient(135deg, #e9d5ff 0%, #d8b4fe 100%);
+  border-color: #a855f7;
+}
+
+/* 진행바 애니메이션 효과 */
+.progress-fill::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255,255,255,0.3), 
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+/* 현재 진행 중인 세그먼트 펄스 효과 */
+.timeline-segment.is-current .progress-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 3px;
+  height: 100%;
+  background: rgba(255,255,255,0.8);
+  animation: pulse-edge 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-edge {
+  0%, 100% { opacity: 0.8; transform: scaleX(1); }
+  50% { opacity: 1; transform: scaleX(1.5); }
+}
+
+/* 타임라인 전체 컨테이너 */
+.timeline-wrap {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-top: 20px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+/* 타임라인 범례 개선 */
+.timeline-legend {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .timeline-progress.timeline--xl {
+    height: 45px;
+  }
+  
+  .segment-labels {
+    gap: 0;
+  }
+  
+  .segment-number {
+    font-size: 9px;
+  }
+  
+  .segment-time {
+    font-size: 8px;
+  }
+  
+  .repeat-count {
+    font-size: 7px;
+    padding: 1px 3px;
+  }
+  
+  .timeline-wrap {
+    padding: 12px 16px;
+  }
+}
+
+/* 고해상도 디스플레이 최적화 */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .progress-fill {
+    background-size: 100% 100%;
+  }
+  
+  .timeline-segment.is-current::after {
+    background: linear-gradient(90deg, 
+      transparent, 
+      #3b82f6, 
+      rgba(59, 130, 246, 0.8), 
+      #3b82f6, 
+      transparent
+    );
+  }
+}
+
+
+
+/* 타임라인(세그먼트 바) — XL 높이 + 타입/상태 클래스============>  */
+
+
 
 /* 👇 여기에 그룹화 스타일 추가 */
 /* 그룹화된 세그먼트 스타일 */
