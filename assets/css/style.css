@@ -1449,3 +1449,69 @@ button[aria-disabled="true"] {
   justify-content: center;
   flex-wrap: wrap;
 }
+
+
+/* 워크아웃 수정화면 아이폰 수정버튼 동작 불가 해결 - 간단한 iOS 수정 */
+
+/* 1단계: 모달 z-index 단순 증가 */
+.modal {
+  z-index: 99999 !important;
+}
+
+.modal-content {
+  z-index: 100000 !important;
+}
+
+/* 2단계: iOS 모달 버튼 크기와 터치 영역 증가 */
+.modal-footer .btn {
+  min-height: 50px !important;
+  min-width: 100px !important;
+  padding: 15px 25px !important;
+  font-size: 16px !important;
+  position: relative !important;
+  z-index: 100001 !important;
+  cursor: pointer !important;
+  
+  /* iOS 터치 기본 설정 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+/* 3단계: iOS Safari 전용 추가 최적화 */
+@supports (-webkit-touch-callout: none) {
+  .modal-footer .btn {
+    /* 터치 하이라이트 색상 */
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    
+    /* 하드웨어 가속 활성화 */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    
+    /* 백페이스 가시성 숨김 */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  /* 버튼 터치 시 시각적 피드백 */
+  .modal-footer .btn:active {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+    transform: scale(0.98) !important;
+  }
+}
+
+/* 4단계: 모달 배경 터치 방지 강화 */
+.modal {
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: none !important;
+}
+
+.modal-content {
+  touch-action: auto !important;
+}
+
+/* 5단계: 버튼 간격 증가 (터치 실수 방지) */
+.modal-footer {
+  gap: 15px !important;
+  padding: 25px !important;
+}
