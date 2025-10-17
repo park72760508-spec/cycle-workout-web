@@ -193,9 +193,17 @@ button[aria-disabled="true"] {
 .builder-actions * { pointer-events: auto; }
 
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
-.workout-preview{
-  background:#fff; border-radius:12px; padding:20px; margin-bottom:20px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.05);
+/* 워크아웃 프리뷰 컨테이너 개선 */
+.workout-preview {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  position: relative;
+  z-index: 1;
+  /* iOS 스크롤 개선 */
+  -webkit-overflow-scrolling: touch;
 }
 .workout-preview h2{ text-align:center; color:#2e74e8; margin-bottom:20px; font-size:24px; }
 .preview-stats{
@@ -205,9 +213,19 @@ button[aria-disabled="true"] {
 .preview-stats strong{ font-size:28px; color:#2e74e8; display:block; margin-bottom:5px; }
 
 /* 세그먼트 프리뷰 */
-.segment-preview{
-  display:flex; gap:10px; margin-top:20px; padding:15px; background:#f8f9fa;
-  border-radius:8px; overflow-x:auto; align-items:center;
+/* 세그먼트 프리뷰 영역 개선 */
+.segment-preview {
+  display: flex;
+  gap: 6px;
+  margin-top: 20px;
+  padding: 9px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow-x: auto;
+  align-items: center;
+  margin-bottom: 20px; /* 하단 여백 추가 */
+  position: relative;
+  z-index: 1; /* 낮은 z-index */
 }
 .segment-item{
   padding:15px 20px; border-radius:8px; min-width:120px; text-align:center; color:#fff;
@@ -220,10 +238,19 @@ button[aria-disabled="true"] {
 .segment-item.interval{ background:#2196f3; }
 .segment-item.rest{ background:#9e9e9e; }
 
-.training-ready{
-  background:#fff; border-radius:12px; padding:20px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.05); text-align:center;
+/* 훈련 준비 화면 전체 컨테이너 */
+.training-ready {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  text-align: center;
+  position: relative;
+  z-index: 1;
+  /* 하단 버튼을 위한 여백 확보 */
+  padding-bottom: 100px; /* 여유 공간 추가 */
 }
+
 .btn-row.center{ justify-content:center; margin-top:20px; }
 
 /* ========== 5) 훈련 화면 (#trainingScreen) ========== */
@@ -1060,6 +1087,7 @@ button[aria-disabled="true"] {
   padding: 15px;
   border-radius: 12px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  z-index: 1; /* 낮은 z-index로 설정 */
 }
 
 .group-header {
@@ -1196,5 +1224,74 @@ button[aria-disabled="true"] {
   
   .repeat-badge {
     align-self: flex-end;
+  }
+}
+
+
+
+/* 훈련 준비 화면 하단 버튼 영역 개선 */
+.btn-row.center {
+  justify-content: center;
+  margin-top: 20px;
+  position: relative;
+  z-index: 100; /* 높은 z-index로 다른 요소 위에 표시 */
+  background: #fff; /* 배경색 추가 */
+  padding: 15px 0; /* 패딩 추가 */
+  border-radius: 8px;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.1); /* 상단 그림자 */
+}
+
+/* iOS 전용 터치 개선 */
+.btn-row.center .btn {
+  position: relative;
+  z-index: 101;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  touch-action: manipulation; /* iOS 터치 최적화 */
+  min-height: 44px; /* iOS 권장 최소 터치 영역 */
+}
+
+
+/* iOS Safari 전용 개선 */
+@supports (-webkit-touch-callout: none) {
+  .btn-row.center {
+    position: sticky;
+    bottom: 20px;
+    z-index: 9999;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    margin: 20px -20px 0 -20px;
+    padding: 20px;
+  }
+  
+  .btn-row.center .btn {
+    -webkit-appearance: none;
+    border: none;
+    cursor: pointer;
+  }
+}
+
+
+/* 모바일 디바이스 최적화 */
+@media (max-width: 768px) {
+  .training-ready {
+    padding-bottom: 120px; /* 모바일에서 더 많은 하단 여백 */
+  }
+  
+  .btn-row.center {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
+    z-index: 9999;
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 12px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+  }
+  
+  .btn-row.center .btn {
+    min-height: 48px; /* 모바일에서 더 큰 터치 영역 */
+    font-size: 16px;
   }
 }
