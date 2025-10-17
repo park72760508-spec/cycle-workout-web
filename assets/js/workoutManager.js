@@ -73,10 +73,10 @@ let repeatSegments = [];
 let currentEditingRepeatIndex = null;
 
 // 세그먼트 분할 전송 설정 (개선된 버전)
-const SEGMENT_BATCH_SIZE = 2; // 2개씩 전송
+const SEGMENT_BATCH_SIZE = 3; // 2개씩 전송
 const MAX_URL_LENGTH = 1800;
 const MAX_RETRIES = 3;
-const BATCH_DELAY = 1000; // 배치 간 지연 (밀리초)
+const BATCH_DELAY = 1500; // 배치 간 지연 (밀리초)
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -179,7 +179,7 @@ function jsonpRequest(url, params = {}) {
           cleanup();
           reject(new Error(`요청 시간 초과: ${url}`));
         }
-      }, 30000);
+      }, 60000);
       
     } catch (error) {
       if (!isResolved) {
@@ -312,74 +312,122 @@ async function apiCreateWorkoutWithSegments(workoutData) {
 }
 
 // 세그먼트 배치별 추가 함수 (개선된 버전)
+// 세그먼트 배치별 추가 함수 (대용량 최적화 버전)
 async function addSegmentsBatch(workoutId, segments) {
   console.log(`배치별 세그먼트 추가 시작: 워크아웃 ID ${workoutId}, 세그먼트 ${segments.length}개`);
+  
+  // 대용량 세그먼트 감지 및 설정 동적 조정
+  const batchSize = segments.length > 50 ? 3 : 2;  // 50개 이상이면 3개씩
+  const batchDelay = segments.length > 50 ? 1500 : 1000;  // 지연시간도 조정
+  const maxRetries = 3;
+  
+  console.log(`처리 설정: 배치크기 ${batchSize}, 지연 ${batchDelay}ms`);
   
   let totalAddedCount = 0;
   let successfulBatches = 0;
   let failedBatches = 0;
   
   try {
-    // 세그먼트를 SEGMENT_BATCH_SIZE개씩 배치로 나누기
-    for (let i = 0; i < segments.length; i += SEGMENT_BATCH_SIZE) {
-      const batch = segments.slice(i, i + SEGMENT_BATCH_SIZE);
-      const batchNumber = Math.floor(i / SEGMENT_BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(segments.length / SEGMENT_BATCH_SIZE);
+    // 세그먼트를 동적 배치 크기로 나누기
+    for (let i = 0; i < segments.length; i += batchSize) {
+      const batch = segments.slice(i, i + batchSize);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(segments.length / batchSize);
       
-      console.log(`배치 ${batchNumber}/${totalBatches} 처리 중... (${batch.length}개 세그먼트)`);
+      // 예상 남은 시간 계산
+      const remainingBatches = totalBatches - batchNumber;
+      const avgTimePerBatch = 4; // 초 단위 예상 시간
+      const eta = Math.round(remainingBatches * avgTimePerBatch);
       
-      try {
-        // 압축된 세그먼트 데이터 생성 (URL 길이 최적화)
-        const compressedBatch = batch.map(seg => ({
-          l: String(seg.label || '세그먼트').substring(0, 15), // label -> l
-          t: seg.segment_type || 'interval',                    // segment_type -> t  
-          d: parseInt(seg.duration_sec) || 300,                 // duration_sec -> d
-          v: parseInt(seg.target_value) || 100,                 // target_value -> v
-          r: seg.ramp === 'linear' ? 1 : 0,                    // ramp -> r (숫자로)
-          rv: seg.ramp === 'linear' ? parseInt(seg.ramp_to_value) || null : null // ramp_to_value -> rv
-        }));
-        
-        const segmentsJson = JSON.stringify(compressedBatch);
-        
-        const params = {
-          action: 'addSegments',
-          workoutId: String(workoutId),
-          segments: segmentsJson
-        };
-        
-        // 배치 전송
-        const result = await jsonpRequestWithRetry(window.GAS_URL, params);
-        
-        if (result.success) {
-          const addedCount = result.addedCount || batch.length;
-          totalAddedCount += addedCount;
-          successfulBatches++;
-          console.log(`배치 ${batchNumber} 성공: ${addedCount}개 세그먼트 추가`);
+      console.log(`배치 ${batchNumber}/${totalBatches} 처리 중... (${batch.length}개 세그먼트, 약 ${eta}초 남음)`);
+      
+      let batchSuccess = false;
+      let lastError = null;
+      
+      // 배치별 재시도 로직
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // 압축된 세그먼트 데이터 생성 (URL 길이 최적화)
+          const compressedBatch = batch.map(seg => ({
+            l: String(seg.label || '세그먼트').substring(0, 12), // 더 짧게
+            t: seg.segment_type || 'interval',
+            d: parseInt(seg.duration_sec) || 300,
+            v: parseInt(seg.target_value) || 100,
+            r: seg.ramp === 'linear' ? 1 : 0,
+            rv: seg.ramp === 'linear' ? parseInt(seg.ramp_to_value) || null : null
+          }));
           
-          // 진행 상황 표시
-          if (typeof window.showToast === 'function') {
-            const progress = Math.round((totalAddedCount / segments.length) * 100);
-            window.showToast(`세그먼트 추가 중... ${progress}% (${totalAddedCount}/${segments.length})`);
+          const segmentsJson = JSON.stringify(compressedBatch);
+          
+          const params = {
+            action: 'addSegments',
+            workoutId: String(workoutId),
+            segments: segmentsJson
+          };
+          
+          // 배치 전송 (개별 재시도 포함)
+          const result = await jsonpRequestWithRetry(window.GAS_URL, params, 2); // 개별 재시도 2회로 제한
+          
+          if (result.success) {
+            const addedCount = result.addedCount || batch.length;
+            totalAddedCount += addedCount;
+            successfulBatches++;
+            batchSuccess = true;
+            
+            console.log(`배치 ${batchNumber} 성공 (시도 ${attempt}): ${addedCount}개 세그먼트 추가`);
+            
+            // 진행 상황 표시 (더 상세한 정보)
+            if (typeof window.showToast === 'function') {
+              const progress = Math.round((totalAddedCount / segments.length) * 100);
+              const status = eta > 60 ? `약 ${Math.round(eta/60)}분 남음` : `약 ${eta}초 남음`;
+              window.showToast(`세그먼트 추가 ${progress}% (${totalAddedCount}/${segments.length}) - ${status}`);
+            }
+            
+            break; // 성공하면 재시도 루프 종료
+            
+          } else {
+            lastError = new Error(result.error || '배치 전송 실패');
+            console.warn(`배치 ${batchNumber} 시도 ${attempt} 실패:`, result.error);
+            
+            if (attempt < maxRetries) {
+              // 재시도 전 잠시 대기 (점진적 증가)
+              await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+            }
           }
-        } else {
-          failedBatches++;
-          console.error(`배치 ${batchNumber} 실패:`, result.error);
+          
+        } catch (batchError) {
+          lastError = batchError;
+          console.error(`배치 ${batchNumber} 시도 ${attempt} 오류:`, batchError);
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          }
         }
-        
-        // 서버 부하 방지를 위한 지연 (마지막 배치 제외)
-        if (i + SEGMENT_BATCH_SIZE < segments.length) {
-          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-        }
-        
-      } catch (batchError) {
+      }
+      
+      if (!batchSuccess) {
         failedBatches++;
-        console.error(`배치 ${batchNumber} 처리 중 오류:`, batchError);
+        console.error(`배치 ${batchNumber} 모든 시도 실패:`, lastError?.message);
+      }
+      
+      // 서버 부하 방지를 위한 지연 (마지막 배치 제외)
+      if (i + batchSize < segments.length) {
+        await new Promise(resolve => setTimeout(resolve, batchDelay));
       }
     }
     
     // 결과 요약
     console.log(`배치 처리 완료: 성공 ${successfulBatches}, 실패 ${failedBatches}`);
     console.log(`총 세그먼트 추가: ${totalAddedCount}/${segments.length}`);
+    
+    // 최종 토스트 메시지
+    if (typeof window.showToast === 'function') {
+      if (failedBatches === 0) {
+        window.showToast(`모든 세그먼트 추가 완료! (${totalAddedCount}개)`);
+      } else {
+        window.showToast(`세그먼트 추가 완료: ${totalAddedCount}/${segments.length}개 (${failedBatches}개 배치 실패)`);
+      }
+    }
     
     if (totalAddedCount === 0) {
       return { 
