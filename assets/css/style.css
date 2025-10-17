@@ -1284,26 +1284,26 @@ button[aria-disabled="true"] {
 
 /* iOS Safari 전용 개선 - 더 정확한 타겟팅 */
 /* iOS 전용 - 훈련준비 화면 버튼 크기 축소 */
+/* iOS 전용 - 훈련준비 화면 버튼 크기 축소 (2/3 크기) */
 @supports (-webkit-touch-callout: none) and (not (any-hover: hover)) {
   #trainingReadyScreen .btn-row.center {
-    gap: 8px !important;
-    margin: 20px auto 15px auto !important;
-    padding: 12px !important;
-    max-width: 320px !important;
+    gap: 6px !important; /* 8px의 2/3 = 5.3 → 6px */
+    margin: 15px auto 10px auto !important; /* 비례 축소 */
+    padding: 8px !important; /* 12px의 2/3 = 8px */
+    max-width: 250px !important; /* 320px의 2/3 = 213 → 250px */
   }
   
   #trainingReadyScreen .btn-row.center .btn {
-    min-height: 20px !important; /* 50px에서 40px로 축소 */
-    min-width: 50px !important; /* 150px에서 110px로 축소 */
-    padding: 10px 16px !important; /* 14px 24px에서 축소 */
-    font-size: 14px !important; /* 16px에서 14px로 축소 */
-    font-weight: 200 !important; /* 600에서 500으로 축소 */
-    border-radius: 8px !important; /* 10px에서 8px로 축소 */
+    min-height: 27px !important; /* 40px의 2/3 = 26.7 → 27px */
+    min-width: 73px !important; /* 110px의 2/3 = 73.3 → 73px */
+    padding: 7px 11px !important; /* 10px 16px의 2/3 = 6.7px 10.7px → 7px 11px */
+    font-size: 10px !important; /* 14px의 2/3 = 9.3 → 10px (가독성 고려) */
+    font-weight: 500 !important;
+    border-radius: 5px !important; /* 8px의 2/3 = 5.3 → 5px */
   }
   
-  /* 버튼 간격도 축소 */
   #trainingReadyScreen .btn-row.center .btn:not(:last-child) {
-    margin-right: 8px !important; /* 12px에서 8px로 축소 */
+    margin-right: 5px !important; /* 8px의 2/3 = 5.3 → 5px */
   }
 }
 
