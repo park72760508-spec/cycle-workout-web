@@ -1,10 +1,8 @@
 /* ==========================================================
-   완전 통합 워크아웃 관리 모듈 (최종 통합 버전)
+   완전 통합 워크아웃 관리 모듈 (completeWorkoutManager.js) - 최종 버전
    - 세그먼트 개수 무제한 통합 저장
    - 반복 패턴 감지 및 그룹화 표시
    - 최적화된 렌더링 (대용량 세그먼트 지원)
-   - 로딩 애니메이션 효과 추가
-   - 시간 표기 방식 개선 (초 단위 시 "s" 사용)
    - 모든 버그 수정 및 성능 최적화
 ========================================================== */
 
@@ -24,44 +22,6 @@ function escapeHtml(unsafe) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-// 시간 포맷팅 함수 개선 (초 단위일 때 간결하게 표기)
-function formatDuration(totalSeconds) {
-  if (!totalSeconds || totalSeconds <= 0) return '0s';
-  
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  
-  if (minutes === 0) {
-    return `${seconds}s`; // 초만 있을 때는 "20s" 형식
-  } else if (seconds === 0) {
-    return `${minutes}분`; // 분만 있을 때는 "5분" 형식
-  } else {
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`; // 분과 초가 모두 있을 때는 "5:30" 형식
-  }
-}
-
-// 버튼에 로딩 상태 적용
-function setButtonLoading(button, isLoading, originalText = '') {
-  if (!button) return;
-  
-  if (isLoading) {
-    button.disabled = true;
-    button.classList.add('loading');
-    if (originalText) {
-      button.setAttribute('data-original-text', originalText);
-      button.textContent = '처리 중...';
-    }
-  } else {
-    button.disabled = false;
-    button.classList.remove('loading');
-    const originalTextAttr = button.getAttribute('data-original-text');
-    if (originalTextAttr) {
-      button.textContent = originalTextAttr;
-      button.removeAttribute('data-original-text');
-    }
-  }
 }
 
 // 데이터 검증 헬퍼 함수들
@@ -393,14 +353,17 @@ function createGroupedSegment(patternResult) {
 }
 
 /**
- * 개선된 개별 세그먼트 프리뷰 생성 (시간 표기 개선)
+ * 개별 세그먼트 프리뷰 생성
  */
 function createSingleSegmentPreview(segment) {
   if (!segment || typeof segment !== 'object') {
     return '';
   }
   
-  const duration = formatDuration(Number(segment.duration_sec) || 0);
+  const minutes = Math.floor((Number(segment.duration_sec) || 0) / 60);
+  const seconds = (Number(segment.duration_sec) || 0) % 60;
+  const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+  
   const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
   
   return `
@@ -413,13 +376,16 @@ function createSingleSegmentPreview(segment) {
 }
 
 /**
- * 개선된 그룹화된 세그먼트 프리뷰 생성 (시간 표기 개선)
+ * 그룹화된 세그먼트 프리뷰 생성
  */
 function createGroupedSegmentPreview(groupedItem) {
   const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
   
   const patternInfo = pattern.map(segment => {
-    const duration = formatDuration(segment.duration_sec || 0);
+    const minutes = Math.floor((segment.duration_sec || 0) / 60);
+    const seconds = (segment.duration_sec || 0) % 60;
+    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+    
     return `FTP ${segment.target_value}% ${duration}`;
   }).join('<br>');
   
@@ -509,10 +475,13 @@ function updateTrainingProgressGrouped(segments, currentSegmentIndex = 0) {
 }
 
 /**
- * 개선된 개별 훈련 세그먼트 생성 (시간 표기 개선)
+ * 개별 훈련 세그먼트 생성
  */
 function createSingleTrainingSegment(segment, isCurrent) {
-  const duration = formatDuration(segment.duration_sec || 0);
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
   const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
   const currentClass = isCurrent ? 'current-segment' : '';
   
@@ -528,13 +497,16 @@ function createSingleTrainingSegment(segment, isCurrent) {
 }
 
 /**
- * 개선된 그룹화된 훈련 세그먼트 생성 (시간 표기 개선)
+ * 그룹화된 훈련 세그먼트 생성
  */
 function createGroupedTrainingSegment(groupedItem, isCurrent, groupProgress) {
   const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
   
   const patternInfo = pattern.map(segment => {
-    const duration = formatDuration(segment.duration_sec || 0);
+    const minutes = Math.floor((segment.duration_sec || 0) / 60);
+    const seconds = (segment.duration_sec || 0) % 60;
+    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+    
     return `<div class="pattern-item">FTP ${segment.target_value}% ${duration}</div>`;
   }).join('');
   
@@ -971,7 +943,6 @@ async function loadWorkouts() {
   }
 }
 
-// 개선된 워크아웃 선택 함수 (로딩 애니메이션 포함)
 async function selectWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -983,7 +954,9 @@ async function selectWorkout(workoutId) {
   
   if (selectButton) {
     originalButtonText = selectButton.textContent;
-    setButtonLoading(selectButton, true, originalButtonText);
+    selectButton.textContent = '워크아웃 정보 연결 중...';
+    selectButton.disabled = true;
+    selectButton.classList.add('loading');
   }
   
   try {
@@ -1024,49 +997,11 @@ async function selectWorkout(workoutId) {
     window.showToast('워크아웃 선택 중 오류가 발생했습니다.');
   } finally {
     if (selectButton && originalButtonText) {
-      setButtonLoading(selectButton, false);
       selectButton.textContent = originalButtonText;
+      selectButton.disabled = false;
+      selectButton.classList.remove('loading');
     }
   }
-}
-
-// 개선된 사용자 선택 함수 (로딩 애니메이션 포함)
-function selectUser(userId, element) {
-  if (!userId) {
-    window.showToast('유효하지 않은 사용자 ID입니다.');
-    return;
-  }
-  
-  const selectButton = element?.querySelector('.btn');
-  let originalText = '';
-  
-  if (selectButton) {
-    originalText = selectButton.textContent;
-    setButtonLoading(selectButton, true, originalText);
-  }
-  
-  // 실제 사용자 선택 로직을 시뮬레이션
-  setTimeout(() => {
-    try {
-      // 사용자 선택 처리 로직
-      console.log('User selected:', userId);
-      window.showToast('사용자가 선택되었습니다.');
-      
-      // 다음 화면으로 이동
-      if (typeof window.showScreen === 'function') {
-        window.showScreen('workoutScreen');
-      }
-      
-    } catch (error) {
-      console.error('사용자 선택 오류:', error);
-      window.showToast('사용자 선택 중 오류가 발생했습니다.');
-    } finally {
-      if (selectButton && originalText) {
-        setButtonLoading(selectButton, false);
-        selectButton.textContent = originalText;
-      }
-    }
-  }, 1500); // 1.5초 시뮬레이션
 }
 
 // ==========================================================
@@ -1510,13 +1445,14 @@ function changeSegmentPage(newPage) {
   }
 }
 
-// 개선된 세그먼트 카드 생성 (시간 표기 개선)
 function createSegmentCard(segment, index) {
   const card = document.createElement('div');
   card.className = 'segment-card';
   card.setAttribute('data-index', index);
   
-  const duration = formatDuration(segment.duration_sec || 0);
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   
   const intensityText = segment.ramp !== 'none' 
     ? `${segment.target_value}% → ${segment.ramp_to_value}%`
@@ -1829,7 +1765,6 @@ function addRepeatSegment() {
   renderRepeatSegments();
 }
 
-// 개선된 반복 세그먼트 렌더링 (시간 표기 개선)
 function renderRepeatSegments() {
   const container = safeGetElement('repeatSegmentsList');
   if (!container) return;
@@ -1840,7 +1775,9 @@ function renderRepeatSegments() {
   }
   
   container.innerHTML = repeatSegments.map((segment, index) => {
-    const duration = formatDuration(segment.duration_sec || 0);
+    const minutes = Math.floor(segment.duration_sec / 60);
+    const seconds = segment.duration_sec % 60;
+    const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     
     return `
       <div class="repeat-segment-item" data-index="${index}">
@@ -2094,7 +2031,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // 워크아웃 관리
 window.loadWorkouts = loadWorkouts;
 window.selectWorkout = selectWorkout;
-window.selectUser = selectUser;
 window.editWorkout = editWorkout;
 window.deleteWorkout = deleteWorkout;
 window.saveWorkout = saveWorkout;
@@ -2129,10 +2065,6 @@ window.saveRepeatSegment = saveRepeatSegment;
 window.detectAndGroupSegments = detectAndGroupSegments;
 window.updateSegmentPreviewGrouped = updateSegmentPreviewGrouped;
 window.updateTrainingProgressGrouped = updateTrainingProgressGrouped;
-window.createSingleSegmentPreview = createSingleSegmentPreview;
-window.createGroupedSegmentPreview = createGroupedSegmentPreview;
-window.createSingleTrainingSegment = createSingleTrainingSegment;
-window.createGroupedTrainingSegment = createGroupedTrainingSegment;
 
 // API 함수
 window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
@@ -2146,9 +2078,5 @@ window.escapeHtml = escapeHtml;
 window.validateWorkoutData = validateWorkoutData;
 window.normalizeWorkoutData = normalizeWorkoutData;
 window.safeGetElement = safeGetElement;
-window.formatDuration = formatDuration;
-window.setButtonLoading = setButtonLoading;
-window.createSegmentCard = createSegmentCard;
-window.renderRepeatSegments = renderRepeatSegments;
 
-console.log('완전 통합 워크아웃 매니저 (최종 버전) 로드 완료 - 로딩 애니메이션, 시간 표기 개선, UI 최적화');
+console.log('완전 통합 워크아웃 매니저 (최종 버전) 로드 완료');
