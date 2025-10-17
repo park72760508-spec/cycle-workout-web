@@ -16,14 +16,21 @@ function normalizeType(seg){
   return "interval"; // 기본값
 }
 
-// 세그먼트 카운트다운 상태 관리
+
+
+// 세그먼트 카운트다운 상태 관리 (전역)
 let segmentCountdownActive = false;
 let segmentCountdownTimer = null;
+let countdownTriggered = []; // 세그먼트별 카운트다운 트리거 상태
 
-// 세그먼트 종료 카운트다운 함수
-// 수정된 startSegmentCountdown 함수 (타이밍 로직 개선)
+// 세그먼트 카운트다운 함수 (수정된 버전)
 async function startSegmentCountdown(remainingSeconds, nextSegment) {
-  if (segmentCountdownActive) return; // 이미 실행 중이면 무시
+  console.log(`카운트다운 요청: ${remainingSeconds}초, 현재 상태: ${segmentCountdownActive}`);
+  
+  if (segmentCountdownActive) {
+    console.log('이미 카운트다운이 실행 중입니다.');
+    return;
+  }
   
   segmentCountdownActive = true;
   
@@ -45,9 +52,10 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
     `다음: ${nextSegment.label || nextSegment.segment_type} FTP ${getSegmentFtpPercent(nextSegment)}%` : 
     '훈련 완료';
     
-  // 카운트다운 오버레이에 다음 세그먼트 정보 추가
-  if (!document.getElementById('nextSegmentInfo')) {
-    const infoDiv = document.createElement('div');
+  // 다음 세그먼트 정보 엘리먼트 생성/업데이트
+  let infoDiv = document.getElementById('nextSegmentInfo');
+  if (!infoDiv) {
+    infoDiv = document.createElement('div');
     infoDiv.id = 'nextSegmentInfo';
     infoDiv.style.cssText = `
       position: absolute;
@@ -63,16 +71,18 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
     `;
     overlay.appendChild(infoDiv);
   }
-  document.getElementById('nextSegmentInfo').textContent = nextSegmentInfo;
+  infoDiv.textContent = nextSegmentInfo;
 
   let remain = remainingSeconds;
   
   // 초기 표시 및 첫 번째 삐 소리
   num.textContent = remain;
-  playBeep(880, 120, 0.25); // 훈련 시작과 동일한 음향
+  console.log(`카운트다운 시작: ${remain}초`);
+  playBeep(880, 120, 0.25);
 
   segmentCountdownTimer = setInterval(async () => {
     remain -= 1;
+    console.log(`카운트다운: ${remain}초 남음`);
     
     if (remain > 0) {
       // 1, 2, 3, 4초일 때 - 일반 삐 소리
@@ -81,13 +91,15 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
     } else if (remain === 0) {
       // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
       num.textContent = "0";
-      await playBeep(1500, 700, 0.35, "square"); // 훈련 시작과 동일한 강조음
+      console.log('카운트다운 완료, 강조 소리 재생');
+      await playBeep(1500, 700, 0.35, "square");
       
-      // 0.5초 추가 대기 후 오버레이 닫기 (시각적 효과)
+      // 0.5초 추가 대기 후 오버레이 닫기
       setTimeout(() => {
         overlay.classList.add("hidden");
         overlay.style.display = "none";
         segmentCountdownActive = false;
+        console.log('카운트다운 오버레이 닫힘');
       }, 500);
       
       // 타이머 정리
@@ -95,7 +107,8 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
       segmentCountdownTimer = null;
       
     } else {
-      // remain < 0일 때 - 안전장치 (정상적으로는 여기 도달 안 함)
+      // remain < 0일 때 - 안전장치
+      console.log('카운트다운 안전장치 실행');
       clearInterval(segmentCountdownTimer);
       segmentCountdownTimer = null;
       overlay.classList.add("hidden");
@@ -155,6 +168,7 @@ function startWithCountdown(sec = 5) {
 
 // 카운트다운 강제 정지 함수
 function stopSegmentCountdown() {
+  console.log('카운트다운 강제 정지');
   if (segmentCountdownTimer) {
     clearInterval(segmentCountdownTimer);
     segmentCountdownTimer = null;
@@ -179,13 +193,18 @@ function skipCurrentSegment() {
     stopSegmentCountdown();
   }
   
+  // 해당 세그먼트의 카운트다운 트리거 상태도 리셋
+  if (countdownTriggered && window.trainingState.segIndex < countdownTriggered.length) {
+    countdownTriggered[window.trainingState.segIndex] = true; // 건너뛴 것으로 표시
+  }
+  
   window.trainingState.segIndex = Math.min(w.segments.length - 1, window.trainingState.segIndex + 1);
   window.trainingState.segElapsedSec = 0;
   applySegmentTarget(window.trainingState.segIndex);
   updateTimeUI();
   
   console.log(`세그먼트 건너뛰기: ${window.trainingState.segIndex + 1}번째 세그먼트로 이동`);
-  }
+}
 
 
 // 훈련 화면의 세그먼트에서 FTP 백분율 추출하는 헬퍼 함수 추가
@@ -694,7 +713,7 @@ function startSegmentLoop() {
     return;
   }
 
-  console.log('세그먼트 루프 시작, 워크아웃:', w.title, '세그먼트 수:', w.segments.length);
+  console.log('세그먼트 루프 시작', '워크아웃:', w.title, '세그먼트 수:', w.segments.length);
 
   // 누적 종료시각 배열 계산
   window.trainingState.segEnds = [];
@@ -713,6 +732,9 @@ function startSegmentLoop() {
   window.trainingState.segElapsedSec = 0;
   window.trainingState.paused = false;
 
+  // 세그먼트별 카운트다운 트리거 상태 초기화
+  countdownTriggered = Array(w.segments.length).fill(false);
+
   // 첫 번째 세그먼트 타겟 적용
   applySegmentTarget(0);
   updateTimeUI();
@@ -728,9 +750,6 @@ function startSegmentLoop() {
   if (window.trainingState.timerId) {
     clearInterval(window.trainingState.timerId);
   }
-
-  // 세그먼트별 카운트다운 트리거 상태 (중복 방지)
-  let countdownTriggered = Array(w.segments.length).fill(false);
 
   // 1초마다 실행되는 메인 루프
   window.trainingState.timerId = setInterval(() => {
@@ -753,21 +772,27 @@ function startSegmentLoop() {
     const segDur = segDurationSec(currentSeg);
     const segRemaining = segDur - window.trainingState.segElapsedSec;
     
-    console.log(`진행 상황 - 총: ${window.trainingState.elapsedSec}초, 세그먼트: ${window.trainingState.segElapsedSec}/${segDur}초, 남은시간: ${segRemaining}초, 현재 세그먼트: ${currentSegIndex + 1}/${w.segments.length}`);
+    // 디버깅 로그 (5초 주변에서만 출력)
+    if (segRemaining <= 7 && segRemaining >= 3) {
+      console.log(`세그먼트 ${currentSegIndex + 1} 종료까지: ${segRemaining}초`);
+    }
 
-    // 세그먼트 종료 5초 전 카운트다운 트리거
-    if (segRemaining === 5 && !countdownTriggered[currentSegIndex] && currentSegIndex < w.segments.length - 1) {
+    // 세그먼트 종료 5초 전 카운트다운 트리거 (개선된 조건)
+    if (segRemaining <= 5 && segRemaining > 0 && 
+        !countdownTriggered[currentSegIndex] && 
+        currentSegIndex < w.segments.length - 1) {
+      
       // 마지막 세그먼트가 아닐 때만 카운트다운 실행
       countdownTriggered[currentSegIndex] = true;
       const nextSegment = w.segments[currentSegIndex + 1];
-      console.log(`세그먼트 ${currentSegIndex + 1} 종료 5초 전 카운트다운 시작`);
-      startSegmentCountdown(5, nextSegment);
+      console.log(`세그먼트 ${currentSegIndex + 1} 종료 ${segRemaining}초 전 카운트다운 시작`);
+      startSegmentCountdown(segRemaining, nextSegment);
     }
 
     // TSS / kcal 누적 및 표시
     updateTrainingMetrics();
 
-    // UI 먼저 갱신 (마지막 0초 프레임 보장)
+    // UI 먼저 갱신
     if (typeof updateTimeUI === "function") updateTimeUI();
     if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
     if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
@@ -798,7 +823,7 @@ function startSegmentLoop() {
         console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
         applySegmentTarget(window.trainingState.segIndex);
         
-        // 세그먼트 전환 완료 후 카운트다운 정리
+        // 세그먼트 전환 완료 후 카운트다운 정리 (혹시 남아있다면)
         if (segmentCountdownActive) {
           stopSegmentCountdown();
         }
@@ -841,7 +866,7 @@ function setPaused(isPaused) {
   if (btn)  btn.textContent = window.trainingState.paused ? " ▶️" : " ⏸️";
   if (icon) icon.textContent = window.trainingState.paused ? "▶️" : "⏸️";
 
-  // (선택) 토스트/상태 표시
+  // 토스트 표시
   if (typeof showToast === "function") {
     showToast(window.trainingState.paused ? "일시정지됨" : "재개됨");
   }
@@ -952,43 +977,6 @@ window.updateTrainingDisplay = function () {
   }
 };
 
-// (카운트다운 + Beep + 자동 시작)
-function startWithCountdown(sec = 5) {
-  const overlay = document.getElementById("countdownOverlay");
-  const num = document.getElementById("countdownNumber");
-  if (!overlay || !num) return startWorkoutTraining(); // 없으면 바로 시작
-
-  // 오버레이 확실히 표시
-  overlay.classList.remove("hidden");
-  overlay.style.display = "flex";
-
-  let remain = sec;
-  num.textContent = remain;
-
-  // 첫 숫자 노출과 동시에 짧은 Beep
-  playBeep(880, 120, 0.25);
-
-  const timer = setInterval(async () => {
-    remain -= 1;
-
-    if (remain <= 0) {
-      clearInterval(timer);
-
-      // 마지막은 길고 높은 Beep
-      await playBeep(1500, 700, 0.35, "square");
-
-      // 오버레이 닫고 실제 시작
-      overlay.classList.add("hidden");
-      overlay.style.display = "none";
-      startWorkoutTraining();
-      return;
-    }
-
-    // 매초 짧은 Beep
-    num.textContent = remain;
-    playBeep(880, 120, 0.25);
-  }, 1000);
-}
 
 // 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
 function startWorkoutTraining() {
