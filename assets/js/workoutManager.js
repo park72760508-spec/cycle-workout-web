@@ -395,8 +395,9 @@ function createGroupedSegmentPreview(groupedItem) {
       duration = `${minutes}분`;
     }
     
-    return `FTP ${segment.target_value}% ${duration}`;
-  }).join(' '); // <br> 대신 공백으로 연결
+    // 줄바꿈 적용: 공백 대신 \n 사용
+    return `FTP ${segment.target_value}%\n${duration}`;
+  }).join('\n'); // 세그먼트 간에도 줄바꿈 적용
   
   const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
   
