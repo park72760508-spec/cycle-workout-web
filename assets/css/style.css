@@ -1290,12 +1290,12 @@ button[aria-disabled="true"] {
     gap: 6px !important; /* 8px의 2/3 = 5.3 → 6px */
     margin: 15px auto 10px auto !important; /* 비례 축소 */
     padding: 8px !important; /* 12px의 2/3 = 8px */
-    max-width: 250px !important; /* 320px의 2/3 = 213 → 250px */
+    max-width: 210px !important; /* 320px의 2/3 = 213 → 250px */
   }
   
   #trainingReadyScreen .btn-row.center .btn {
-    min-height: 27px !important; /* 40px의 2/3 = 26.7 → 27px */
-    min-width: 73px !important; /* 110px의 2/3 = 73.3 → 73px */
+    min-height: 20px !important; /* 40px의 2/3 = 26.7 → 27px */
+    min-width: 50px !important; /* 110px의 2/3 = 73.3 → 73px */
     padding: 7px 11px !important; /* 10px 16px의 2/3 = 6.7px 10.7px → 7px 11px */
     font-size: 10px !important; /* 14px의 2/3 = 9.3 → 10px (가독성 고려) */
     font-weight: 500 !important;
@@ -1389,7 +1389,7 @@ button[aria-disabled="true"] {
 }
 
 
-/* 훈련 준비 화면 버튼 전용 스타일 */
+/* 훈련 준비 화면 버튼 전용 스타일/훈련시작 버튼, 워크아웃 변경 버튼 블럭 */
 #trainingReadyScreen .btn-row.center {
   display: flex !important;
   justify-content: center !important;
@@ -1398,7 +1398,7 @@ button[aria-disabled="true"] {
   gap: 12px !important;
   margin: 30px auto 20px auto !important;
   width: 100% !important;
-  max-width: 400px !important;
+  max-width: 300px !important;
   padding: 20px !important;
   background: rgba(255, 255, 255, 0.95) !important;
   border-radius: 12px !important;
@@ -1407,11 +1407,11 @@ button[aria-disabled="true"] {
 
 #trainingReadyScreen .btn-row.center .btn {
   flex: 0 1 auto !important;
-  min-height: 50px !important;
-  min-width: 150px !important;
+  min-height: 30px !important;
+  min-width: 100px !important;
   padding: 14px 24px !important;
   border-radius: 10px !important;
-  font-size: 16px !important;
+  font-size: 14px !important;
   font-weight: 600 !important;
   margin: 0 !important;
 }
