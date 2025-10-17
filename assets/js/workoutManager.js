@@ -1305,26 +1305,163 @@ function closeSegmentModal() {
 }
 
 // 세그먼트 목록 렌더링
+// 최적화된 세그먼트 렌더링 함수 (교체용)
 function renderSegments() {
   const container = safeGetElement('wbSegments');
   const emptyState = safeGetElement('segmentsEmpty');
   
   if (!container) return;
   
+  // 성능 최적화: 대량 세그먼트 처리 시 가상화 적용
+  if (workoutSegments.length > 20) {
+    renderSegmentsVirtualized(container, emptyState);
+    return;
+  }
+  
+  // 기존 방식 (20개 이하)
   if (workoutSegments.length === 0) {
     if (emptyState) emptyState.style.display = 'block';
-    container.querySelectorAll('.segment-card').forEach(card => card.remove());
+    container.innerHTML = '';
     return;
   }
   
   if (emptyState) emptyState.style.display = 'none';
   
-  container.querySelectorAll('.segment-card').forEach(card => card.remove());
+  // DocumentFragment 사용으로 DOM 조작 최소화
+  const fragment = document.createDocumentFragment();
   
   workoutSegments.forEach((segment, index) => {
     const card = createSegmentCard(segment, index);
-    container.appendChild(card);
+    fragment.appendChild(card);
   });
+  
+  // 한 번에 DOM에 추가
+  container.innerHTML = '';
+  container.appendChild(fragment);
+}
+
+// 가상화된 렌더링 (20개 이상일 때)
+function renderSegmentsVirtualized(container, emptyState) {
+  if (emptyState) emptyState.style.display = 'none';
+  
+  const ITEMS_PER_PAGE = 15;
+  const currentPage = window.segmentPage || 0;
+  const totalPages = Math.ceil(workoutSegments.length / ITEMS_PER_PAGE);
+  
+  const startIndex = currentPage * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, workoutSegments.length);
+  const visibleSegments = workoutSegments.slice(startIndex, endIndex);
+  
+  // 페이지네이션 컨트롤과 요약 정보
+  container.innerHTML = `
+    <div class="segments-header">
+      <div class="segments-summary">
+        <span>총 ${workoutSegments.length}개 세그먼트</span>
+        <span>|</span>
+        <span>${startIndex + 1}-${endIndex} 표시 중</span>
+      </div>
+      <div class="segments-pagination">
+        <button 
+          class="btn btn-sm" 
+          onclick="changeSegmentPage(${currentPage - 1})"
+          ${currentPage === 0 ? 'disabled' : ''}>
+          ← 이전
+        </button>
+        <span class="page-info">${currentPage + 1} / ${totalPages}</span>
+        <button 
+          class="btn btn-sm" 
+          onclick="changeSegmentPage(${currentPage + 1})"
+          ${currentPage >= totalPages - 1 ? 'disabled' : ''}>
+          다음 →
+        </button>
+      </div>
+    </div>
+    <div class="segments-container" id="segmentsContainer"></div>
+  `;
+  
+  // 현재 페이지 세그먼트 렌더링
+  const segmentsContainer = document.getElementById('segmentsContainer');
+  const fragment = document.createDocumentFragment();
+  
+  visibleSegments.forEach((segment, localIndex) => {
+    const globalIndex = startIndex + localIndex;
+    const card = createSegmentCard(segment, globalIndex);
+    fragment.appendChild(card);
+  });
+  
+  segmentsContainer.appendChild(fragment);
+  
+  // 버튼 상태 강제 복원
+  setTimeout(() => {
+    const saveBtn = safeGetElement('btnSaveWorkout');
+    const cancelBtn = safeGetElement('btnCancelBuilder');
+    if (saveBtn) saveBtn.disabled = false;
+    if (cancelBtn) cancelBtn.disabled = false;
+  }, 100);
+}
+
+// 페이지 변경 함수
+function changeSegmentPage(newPage) {
+  const totalPages = Math.ceil(workoutSegments.length / 15);
+  if (newPage >= 0 && newPage < totalPages) {
+    window.segmentPage = newPage;
+    renderSegments();
+  }
+}
+
+// 최적화된 세그먼트 카드 생성
+function createSegmentCard(segment, index) {
+  const card = document.createElement('div');
+  card.className = 'segment-card';
+  card.setAttribute('data-index', index);
+  
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  const intensityText = segment.ramp !== 'none' 
+    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
+    : `${segment.target_value}%`;
+  
+  // 더 간단한 HTML 구조로 성능 최적화
+  card.innerHTML = `
+    <div class="segment-info">
+      <div class="segment-details">
+        <div class="segment-label" title="${escapeHtml(segment.label)}">${escapeHtml(segment.label)}</div>
+        <div class="segment-meta">
+          <span class="segment-type-badge ${segment.segment_type}">${segment.segment_type}</span>
+          <span>${duration}</span>
+          <span class="segment-intensity">${intensityText}</span>
+        </div>
+      </div>
+    </div>
+    <div class="segment-actions">
+      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
+      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
+    </div>
+  `;
+  
+  return card;
+}
+
+// 세그먼트 요약 정보 업데이트 (최적화)
+function updateSegmentSummary() {
+  // 디바운싱으로 성능 최적화
+  if (window.updateSummaryTimeout) {
+    clearTimeout(window.updateSummaryTimeout);
+  }
+  
+  window.updateSummaryTimeout = setTimeout(() => {
+    const totalSeconds = workoutSegments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+    const totalMinutes = Math.round(totalSeconds / 60);
+    const segmentCount = workoutSegments.length;
+    
+    const durationEl = safeGetElement('totalDuration');
+    const countEl = safeGetElement('segmentCount');
+    
+    if (durationEl) durationEl.textContent = `${totalMinutes}분`;
+    if (countEl) countEl.textContent = `${segmentCount}개`;
+  }, 200);
 }
 
 // 세그먼트 카드 생성
@@ -1723,5 +1860,8 @@ window.escapeHtml = escapeHtml;
 window.validateWorkoutData = validateWorkoutData;
 window.normalizeWorkoutData = normalizeWorkoutData;
 window.safeGetElement = safeGetElement;
+
+// 페이지 변경 함수를 전역으로 등록
+window.changeSegmentPage = changeSegmentPage;
 
 console.log('통합 워크아웃 매니저 (개선된 버전) 로드 완료');
