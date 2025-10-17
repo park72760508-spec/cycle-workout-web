@@ -381,25 +381,22 @@ function createSingleSegmentPreview(segment) {
 function createGroupedSegmentPreview(groupedItem) {
   const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
   
-   const patternInfo = pattern.map(segment => {
-     const totalSeconds = segment.duration_sec || 0;
-     const minutes = Math.floor(totalSeconds / 60);
-     const seconds = totalSeconds % 60;
-     
-     let duration;
-     if (totalSeconds < 60) {
-       // 60초 미만일 경우 초단위로 표시
-       duration = `${totalSeconds}s`;
-     } else if (seconds > 0) {
-       // 분과 초가 모두 있을 경우
-       duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-     } else {
-       // 정확히 분 단위일 경우
-       duration = `${minutes}분`;
-     }
-     
-      return `FTP ${segment.target_value}% ${duration}`;
-      }).join('<br>'); // 다시 줄바꿈으로 변경하여 각 세그먼트를 별도 줄에 표시
+  const patternInfo = pattern.map(segment => {
+    const totalSeconds = segment.duration_sec || 0;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    
+    let duration;
+    if (totalSeconds < 60) {
+      duration = `${totalSeconds}s`;
+    } else if (seconds > 0) {
+      duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } else {
+      duration = `${minutes}분`;
+    }
+    
+    return `FTP ${segment.target_value}% ${duration}`;
+  }).join(' '); // <br> 대신 공백으로 연결
   
   const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
   
@@ -407,10 +404,9 @@ function createGroupedSegmentPreview(groupedItem) {
     <div class="segment-item grouped-segment ${mainSegmentTypeClass}">
       <div class="group-header">
         <h4>${escapeHtml(groupLabel)}</h4>
-        <span class="repeat-badge">× ${repeatCount}회</span>
       </div>
       <div class="group-pattern">
-        ${patternInfo}
+        ${patternInfo} <span class="repeat-badge-inline">× ${repeatCount}회</span>
       </div>
       <div class="group-total">
         <strong>${totalMinutes}분</strong>
