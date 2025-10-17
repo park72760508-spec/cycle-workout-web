@@ -1090,13 +1090,14 @@ button[aria-disabled="true"] {
 }
 
 .group-pattern {
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 9px; /* 10px에서 9px로 더 축소 */
+  line-height: 1.3; /* 1.4에서 1.3으로 줄간격 축소 */
   color: #495057;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   background: rgba(255,255,255,0.7);
-  padding: 10px;
-  border-radius: 6px;
+  padding: 5px 6px; /* 상하 패딩을 5px로 축소 */
+  border-radius: 4px;
+  text-align: center;
 }
 
 .group-total {
