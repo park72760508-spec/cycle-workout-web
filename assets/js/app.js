@@ -80,7 +80,7 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
   console.log(`카운트다운 시작: ${remain}초`);
   playBeep(880, 120, 0.25);
 
-  segmentCountdownTimer = setInterval(async () => {
+  segmentCountdownTimer = setInterval(() => {
     remain -= 1;
     console.log(`카운트다운: ${remain}초 남음`);
     
@@ -88,23 +88,30 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
       // 1, 2, 3, 4초일 때 - 일반 삐 소리
       num.textContent = remain;
       playBeep(880, 120, 0.25);
+      
     } else if (remain === 0) {
       // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
       num.textContent = "0";
-      console.log('카운트다운 완료, 강조 소리 재생');
-      await playBeep(1500, 700, 0.35, "square");
+      console.log('카운트다운 0초 - 강조 소리 재생 시작');
       
-      // 0.5초 추가 대기 후 오버레이 닫기
+      // 중요: await 제거하고 바로 playBeep 호출
+      playBeep(1500, 700, 0.35, "square").then(() => {
+        console.log('강조 소리 재생 완료');
+      }).catch(err => {
+        console.error('강조 소리 재생 실패:', err);
+      });
+      
+      // 타이머 먼저 정리 (소리 재생과 분리)
+      clearInterval(segmentCountdownTimer);
+      segmentCountdownTimer = null;
+      
+      // 0.7초 후 오버레이 닫기 (소리 재생 시간 고려)
       setTimeout(() => {
         overlay.classList.add("hidden");
         overlay.style.display = "none";
         segmentCountdownActive = false;
         console.log('카운트다운 오버레이 닫힘');
-      }, 500);
-      
-      // 타이머 정리
-      clearInterval(segmentCountdownTimer);
-      segmentCountdownTimer = null;
+      }, 700);
       
     } else {
       // remain < 0일 때 - 안전장치
@@ -250,21 +257,41 @@ function secToMinStr(sec){
 // Beep 사운드 (Web Audio)
 let __beepCtx = null;
 
+// 오디오 컨텍스트 초기화 함수 개선
 async function ensureBeepContext() {
   try {
-    __beepCtx = __beepCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (__beepCtx.state === "suspended") await __beepCtx.resume();
-  } catch (e) {
-    // 브라우저에서 차단되면 무음으로 진행
+    if (!__beepCtx) {
+      __beepCtx = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('새 오디오 컨텍스트 생성됨');
+    }
+    
+    if (__beepCtx.state === "suspended") {
+      await __beepCtx.resume();
+      console.log('오디오 컨텍스트 재개됨');
+    }
+    
+    console.log(`오디오 컨텍스트 상태: ${__beepCtx.state}`);
+    
+  } catch (error) {
+    console.error('오디오 컨텍스트 초기화 실패:', error);
+    __beepCtx = null;
   }
 }
 
+// 향상된 playBeep 함수 (더 안정적인 오디오 재생)
 async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine") {
   try {
+    console.log(`Beep 재생 시도: ${freq}Hz, ${durationMs}ms, ${volume} 볼륨, ${type} 타입`);
+    
     await ensureBeepContext();
-    if (!__beepCtx) return;
+    if (!__beepCtx) {
+      console.warn('오디오 컨텍스트가 없습니다');
+      return;
+    }
+
     const osc = __beepCtx.createOscillator();
     const gain = __beepCtx.createGain();
+    
     osc.type = type;
     osc.frequency.value = freq;
     gain.gain.value = volume;
@@ -273,13 +300,25 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
     gain.connect(__beepCtx.destination);
 
     const now = __beepCtx.currentTime;
-    // 짧게 울리고 서서히 감쇄
+    
+    // 볼륨 페이드 아웃 설정
     gain.gain.setValueAtTime(volume, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
 
+    // 오실레이터 시작 및 정지
     osc.start(now);
     osc.stop(now + durationMs / 1000);
-  } catch (_) { /* 무시 */ }
+    
+    console.log(`Beep 재생 성공: ${freq}Hz`);
+    
+    // Promise로 재생 완료 시점 반환
+    return new Promise(resolve => {
+      setTimeout(resolve, durationMs);
+    });
+    
+  } catch (error) {
+    console.error('Beep 재생 실패:', error);
+  }
 }
 
 // 시간 포맷: 75 -> "01:15"
