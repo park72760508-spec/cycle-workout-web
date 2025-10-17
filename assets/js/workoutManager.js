@@ -1675,7 +1675,8 @@ function applyRepeat() {
     repeatSegments.forEach(segment => {
       const newSegment = {
         id: Date.now() + Math.random(),
-        label: `${segment.label} (${i + 1}회차)`,
+        //label: `${segment.label} (${i + 1}회차)`,
+        label: segment.label, // ← 원본 라벨 그대로 사용
         segment_type: segment.segment_type,
         duration_sec: segment.duration_sec,
         target_type: segment.target_type,
