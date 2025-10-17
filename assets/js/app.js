@@ -179,6 +179,7 @@ function segTargetW(seg, ftp){
 }
 
 // 세그먼트 바 생성
+// app.js의 buildSegmentBar 함수를 대체
 function buildSegmentBar(){
   const cont = document.getElementById("timelineSegments");
   const w = window.currentWorkout;
@@ -187,96 +188,185 @@ function buildSegmentBar(){
   const segs = w.segments || [];
   const total = segs.reduce((s, seg)=> s + segDurationSec(seg), 0) || 1;
 
+  // ✅ 그룹화된 세그먼트 생성 (workoutManager.js 함수 활용)
+  const groupedSegments = typeof window.detectAndGroupSegments === 'function' 
+    ? window.detectAndGroupSegments(segs) 
+    : segs.map((seg, i) => ({ type: 'single', segment: seg, originalIndex: i }));
+
   segBar.totalSec = total;
   segBar.ends = [];
   segBar.sumPower = Array(segs.length).fill(0);
   segBar.samples  = Array(segs.length).fill(0);
 
+  // 누적 종료시각 계산 (원본 세그먼트 기준)
   let acc = 0;
-  cont.innerHTML = segs.map((seg, i) => {
+  segs.forEach((seg, i) => {
     const dur = segDurationSec(seg);
-    acc += dur; segBar.ends[i] = acc;
-    const widthPct = (dur / total) * 100;
-    const type = normalizeType(seg);
-    const label = seg.label || seg.segment_type || `세그 ${i+1}`;
-    const timeStr = secToMinShort(dur);
-    // data-type과 width, 접근성 라벨 포함
-    return `
-      <div class="timeline-segment" data-index="${i}" data-type="${type}" style="width:${widthPct}%"
-           aria-label="${label} · ${timeStr}">
-        <div class="progress-fill" id="segFill-${i}"></div>
-        <span class="segment-label">${label}</span>
-        <span class="segment-time">${timeStr}</span>
-      </div>
-    `;
-  }).join("");
+    acc += dur; 
+    segBar.ends[i] = acc;
+  });
+
+  // 그룹화된 세그먼트를 렌더링
+  cont.innerHTML = groupedSegments.map((item, groupIndex) => {
+    if (item.type === 'single') {
+      const seg = item.segment;
+      const dur = segDurationSec(seg);
+      const widthPct = (dur / total) * 100;
+      const type = normalizeType(seg);
+      const label = seg.label || seg.segment_type || `세그 ${item.originalIndex + 1}`;
+      const timeStr = secToMinShort(dur);
+      
+      return `
+        <div class="timeline-segment" data-index="${item.originalIndex}" data-type="${type}" 
+             data-group-type="single" style="width:${widthPct}%"
+             aria-label="${label} · ${timeStr}">
+          <div class="progress-fill" id="segFill-${item.originalIndex}"></div>
+          <span class="segment-label">${label}</span>
+          <span class="segment-time">${timeStr}</span>
+        </div>
+      `;
+    } else {
+      // 그룹화된 세그먼트 (반복)
+      const { pattern, repeatCount, totalDuration } = item;
+      const widthPct = (totalDuration / total) * 100;
+      const mainType = normalizeType(pattern[0]);
+      const groupLabel = pattern[0].label || pattern[0].segment_type || '반복 세그먼트';
+      const timeStr = `${Math.round(totalDuration / 60)}분`;
+      
+      return `
+        <div class="timeline-segment timeline-group" data-group-index="${groupIndex}" 
+             data-type="${mainType}" data-group-type="grouped" style="width:${widthPct}%"
+             data-start-index="${item.startIndex}" data-end-index="${item.endIndex}"
+             aria-label="${groupLabel} × ${repeatCount}회 · ${timeStr}">
+          <div class="progress-fill" id="groupFill-${groupIndex}"></div>
+          <span class="segment-label">${groupLabel}</span>
+          <span class="repeat-badge">× ${repeatCount}</span>
+          <span class="segment-time">${timeStr}</span>
+        </div>
+      `;
+    }
+  }).filter(Boolean).join('');
 }
 
+
+
+
+
 // 메인 업데이트 함수(1초마다 호출):
+// app.js의 updateSegmentBarTick 함수를 대체
 function updateSegmentBarTick(){
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
   if (!w) return;
 
-  const elapsed    = (window.trainingState?.elapsedSec)    || 0;
-  const segIndex   = (window.trainingState?.segIndex)      || 0;
-  const segElapsed = (window.trainingState?.segElapsedSec) || 0;
+  const elapsed = (window.trainingState?.elapsedSec) || 0;
+  const segIndex = (window.trainingState?.segIndex) || 0;
 
-  // 1) 각 세그먼트 채우기 폭(시간 기반, 0~100 클램프)
+  // 1) 개별 세그먼트 진행률 업데이트 (기존 로직 유지)
   let startAt = 0;
-  for (let i=0; i<w.segments.length; i++){
+  for (let i = 0; i < w.segments.length; i++) {
     const seg = w.segments[i];
     const dur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
     const endAt = startAt + dur;
     const fill = document.getElementById(`segFill-${i}`);
-    if (fill){
+    if (fill) {
       const ratio = Math.min(1, Math.max(0, (elapsed - startAt) / dur));
       fill.style.width = (ratio * 100) + "%";
     }
     startAt = endAt;
   }
 
-  // 2) 세그먼트 상태 클래스 업데이트
-  {
-    const elapsedAll = Number(window.trainingState?.elapsedSec) || 0;
-    let startAt2 = 0;
-    for (let i = 0; i < w.segments.length; i++) {
-      const seg = w.segments[i];
-      const dur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
-      const endAt2 = startAt2 + dur;
-
-      const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
-      if (el) {
-        el.classList.remove("is-complete","is-current","is-upcoming");
-        if (elapsedAll >= endAt2) {
-          el.classList.add("is-complete");
-        } else if (elapsedAll >= startAt2 && elapsedAll < endAt2) {
-          el.classList.add("is-current");
-        } else {
-          el.classList.add("is-upcoming");
-        }
-      }
-      startAt2 = endAt2;
+  // 2) 그룹화된 세그먼트 진행률 업데이트
+  const groupedElements = document.querySelectorAll('.timeline-group');
+  groupedElements.forEach(groupEl => {
+    const startIndex = parseInt(groupEl.dataset.startIndex);
+    const endIndex = parseInt(groupEl.dataset.endIndex);
+    const groupIndex = parseInt(groupEl.dataset.groupIndex);
+    
+    // 그룹 내 전체 시간 계산
+    let groupStartTime = 0;
+    let groupTotalTime = 0;
+    
+    for (let i = 0; i < startIndex; i++) {
+      groupStartTime += segDurationSec(w.segments[i]);
     }
+    
+    for (let i = startIndex; i < endIndex; i++) {
+      groupTotalTime += segDurationSec(w.segments[i]);
+    }
+    
+    // 그룹 진행률 계산
+    const groupElapsed = Math.max(0, elapsed - groupStartTime);
+    const groupRatio = Math.min(1, Math.max(0, groupElapsed / groupTotalTime));
+    
+    const groupFill = document.getElementById(`groupFill-${groupIndex}`);
+    if (groupFill) {
+      groupFill.style.width = (groupRatio * 100) + "%";
+    }
+  });
+
+  // 3) 세그먼트 상태 클래스 업데이트 (기존 로직 유지)
+  const elapsedAll = Number(window.trainingState?.elapsedSec) || 0;
+  let startAt2 = 0;
+  for (let i = 0; i < w.segments.length; i++) {
+    const seg = w.segments[i];
+    const dur = Math.max(1, Number(seg?.duration ?? seg?.duration_sec) || 1);
+    const endAt2 = startAt2 + dur;
+
+    const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+    if (el) {
+      el.classList.remove("is-complete", "is-current", "is-upcoming");
+      if (elapsedAll >= endAt2) {
+        el.classList.add("is-complete");
+      } else if (elapsedAll >= startAt2 && elapsedAll < endAt2) {
+        el.classList.add("is-current");
+      } else {
+        el.classList.add("is-upcoming");
+      }
+    }
+    startAt2 = endAt2;
   }
 
-  // 3) 평균 파워 누적 (1초당 표본 1개)
-  {
-    const p = Math.max(0, Number(window.liveData?.power) || 0);
-    if (w.segments[segIndex]) {
-      segBar.sumPower[segIndex] = (segBar.sumPower[segIndex] || 0) + p;
-      segBar.samples[segIndex]  = (segBar.samples[segIndex]  || 0) + 1;
+  // 4) 그룹 상태 클래스 업데이트
+  groupedElements.forEach(groupEl => {
+    const startIndex = parseInt(groupEl.dataset.startIndex);
+    const endIndex = parseInt(groupEl.dataset.endIndex);
+    
+    let groupStartTime = 0;
+    let groupEndTime = 0;
+    
+    for (let i = 0; i < startIndex; i++) {
+      groupStartTime += segDurationSec(w.segments[i]);
     }
+    
+    for (let i = 0; i < endIndex; i++) {
+      groupEndTime += segDurationSec(w.segments[i]);
+    }
+    
+    groupEl.classList.remove("is-complete", "is-current", "is-upcoming");
+    if (elapsedAll >= groupEndTime) {
+      groupEl.classList.add("is-complete");
+    } else if (elapsedAll >= groupStartTime && elapsedAll < groupEndTime) {
+      groupEl.classList.add("is-current");
+    } else {
+      groupEl.classList.add("is-upcoming");
+    }
+  });
 
-    // 현재 세그 평균 파워 표시
+  // 5) 평균 파워 누적 (기존 로직 유지)
+  const p = Math.max(0, Number(window.liveData?.power) || 0);
+  if (w.segments[segIndex]) {
+    segBar.sumPower[segIndex] = (segBar.sumPower[segIndex] || 0) + p;
+    segBar.samples[segIndex] = (segBar.samples[segIndex] || 0) + 1;
+
     const curSamples = segBar.samples[segIndex] || 0;
     const curAvg = curSamples > 0 ? Math.round(segBar.sumPower[segIndex] / curSamples) : 0;
     const elAvg = document.getElementById("avgSegmentPowerValue");
     if (elAvg) elAvg.textContent = String(curAvg);
   }
 
-  // 4) 달성도 색상(세그 평균 vs 목표)
-  for (let i=0; i<w.segments.length; i++){
+  // 6) 달성도 색상 (기존 로직 유지)
+  for (let i = 0; i < w.segments.length; i++) {
     const seg = w.segments[i];
     const targetW = segTargetW(seg, ftp);
     const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
@@ -982,3 +1072,26 @@ document.addEventListener("DOMContentLoaded", () => {
 // Export
 window.startWorkoutTraining = startWorkoutTraining;
 window.backToWorkoutSelection = backToWorkoutSelection;
+
+// app.js 하단에 추가
+// 그룹화 기능 통합
+window.initializeGroupedTimeline = function() {
+  // workoutManager.js의 그룹화 함수들을 app.js에서 사용할 수 있도록 연결
+  if (typeof window.detectAndGroupSegments !== 'function') {
+    console.warn('detectAndGroupSegments function not found in workoutManager.js');
+  }
+  
+  // 타임라인 생성 시 그룹화 적용
+  if (typeof buildSegmentBar === 'function') {
+    buildSegmentBar();
+  }
+};
+
+// 훈련 시작 시 호출
+window.addEventListener('DOMContentLoaded', () => {
+  // 기존 초기화 코드 후에 추가
+  if (typeof window.initializeGroupedTimeline === 'function') {
+    window.initializeGroupedTimeline();
+  }
+});
+
