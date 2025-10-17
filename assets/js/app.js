@@ -180,6 +180,7 @@ function segTargetW(seg, ftp){
 
 // 세그먼트 바 생성
 // app.js의 buildSegmentBar 함수를 대체
+// app.js의 buildSegmentBar 함수 대체
 function buildSegmentBar(){
   const cont = document.getElementById("timelineSegments");
   const w = window.currentWorkout;
@@ -188,7 +189,7 @@ function buildSegmentBar(){
   const segs = w.segments || [];
   const total = segs.reduce((s, seg)=> s + segDurationSec(seg), 0) || 1;
 
-  // ✅ 그룹화된 세그먼트 생성 (workoutManager.js 함수 활용)
+  // 그룹화된 세그먼트 생성 (workoutManager.js 함수 활용)
   const groupedSegments = typeof window.detectAndGroupSegments === 'function' 
     ? window.detectAndGroupSegments(segs) 
     : segs.map((seg, i) => ({ type: 'single', segment: seg, originalIndex: i }));
@@ -213,35 +214,42 @@ function buildSegmentBar(){
       const dur = segDurationSec(seg);
       const widthPct = (dur / total) * 100;
       const type = normalizeType(seg);
-      const label = seg.label || seg.segment_type || `세그 ${item.originalIndex + 1}`;
-      const timeStr = secToMinShort(dur);
+      const segmentNumber = item.originalIndex + 1; // 순번
+      const timeMinutes = Math.floor(dur / 60);
+      const timeSeconds = dur % 60;
+      const timeLabel = timeSeconds > 0 ? `${timeMinutes}:${timeSeconds.toString().padStart(2, '0')}` : `${timeMinutes}분`;
       
       return `
         <div class="timeline-segment" data-index="${item.originalIndex}" data-type="${type}" 
              data-group-type="single" style="width:${widthPct}%"
-             aria-label="${label} · ${timeStr}">
+             aria-label="세그먼트 ${segmentNumber} · ${timeLabel}">
           <div class="progress-fill" id="segFill-${item.originalIndex}"></div>
-          <span class="segment-label">${label}</span>
-          <span class="segment-time">${timeStr}</span>
+          <div class="segment-labels">
+            <span class="segment-number">#${segmentNumber}</span>
+            <span class="segment-time">${timeLabel}</span>
+          </div>
         </div>
       `;
     } else {
       // 그룹화된 세그먼트 (반복)
-      const { pattern, repeatCount, totalDuration } = item;
+      const { pattern, repeatCount, totalDuration, startIndex, endIndex } = item;
       const widthPct = (totalDuration / total) * 100;
       const mainType = normalizeType(pattern[0]);
-      const groupLabel = pattern[0].label || pattern[0].segment_type || '반복 세그먼트';
-      const timeStr = `${Math.round(totalDuration / 60)}분`;
+      const timeMinutes = Math.round(totalDuration / 60);
+      const timeLabel = `${timeMinutes}분`;
+      const groupNumber = `G${groupIndex + 1}`; // 그룹 번호
       
       return `
         <div class="timeline-segment timeline-group" data-group-index="${groupIndex}" 
              data-type="${mainType}" data-group-type="grouped" style="width:${widthPct}%"
-             data-start-index="${item.startIndex}" data-end-index="${item.endIndex}"
-             aria-label="${groupLabel} × ${repeatCount}회 · ${timeStr}">
+             data-start-index="${startIndex}" data-end-index="${endIndex}"
+             aria-label="반복 그룹 ${groupNumber} × ${repeatCount}회 · ${timeLabel}">
           <div class="progress-fill" id="groupFill-${groupIndex}"></div>
-          <span class="segment-label">${groupLabel}</span>
-          <span class="repeat-badge">× ${repeatCount}</span>
-          <span class="segment-time">${timeStr}</span>
+          <div class="segment-labels">
+            <span class="segment-number">${groupNumber}</span>
+            <span class="repeat-count">×${repeatCount}</span>
+            <span class="segment-time">${timeLabel}</span>
+          </div>
         </div>
       `;
     }
@@ -254,6 +262,7 @@ function buildSegmentBar(){
 
 // 메인 업데이트 함수(1초마다 호출):
 // app.js의 updateSegmentBarTick 함수를 대체
+// app.js의 updateSegmentBarTick 함수 대체 - 달성도 기반 색상 적용
 function updateSegmentBarTick(){
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
@@ -262,7 +271,7 @@ function updateSegmentBarTick(){
   const elapsed = (window.trainingState?.elapsedSec) || 0;
   const segIndex = (window.trainingState?.segIndex) || 0;
 
-  // 1) 개별 세그먼트 진행률 업데이트 (기존 로직 유지)
+  // 1) 개별 세그먼트 진행률 업데이트
   let startAt = 0;
   for (let i = 0; i < w.segments.length; i++) {
     const seg = w.segments[i];
@@ -305,7 +314,7 @@ function updateSegmentBarTick(){
     }
   });
 
-  // 3) 세그먼트 상태 클래스 업데이트 (기존 로직 유지)
+  // 3) 세그먼트 상태 클래스 업데이트 + 달성도 기반 색상 적용
   const elapsedAll = Number(window.trainingState?.elapsedSec) || 0;
   let startAt2 = 0;
   for (let i = 0; i < w.segments.length; i++) {
@@ -316,8 +325,28 @@ function updateSegmentBarTick(){
     const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
     if (el) {
       el.classList.remove("is-complete", "is-current", "is-upcoming");
+      
       if (elapsedAll >= endAt2) {
+        // 완료된 세그먼트 - 달성도 기반 색상 적용
         el.classList.add("is-complete");
+        
+        // 달성도 계산 및 색상 적용
+        const targetW = segTargetW(seg, ftp);
+        const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
+        const achievement = targetW > 0 ? (avgW / targetW) : 0;
+        
+        // 달성도에 따른 CSS 클래스 추가
+        el.classList.remove("achievement-low", "achievement-good", "achievement-high", "achievement-over");
+        if (achievement < 0.85) {
+          el.classList.add("achievement-low");
+        } else if (achievement >= 0.85 && achievement <= 1.15) {
+          el.classList.add("achievement-good");
+        } else if (achievement > 1.15 && achievement <= 1.3) {
+          el.classList.add("achievement-high");
+        } else if (achievement > 1.3) {
+          el.classList.add("achievement-over");
+        }
+        
       } else if (elapsedAll >= startAt2 && elapsedAll < endAt2) {
         el.classList.add("is-current");
       } else {
@@ -346,6 +375,34 @@ function updateSegmentBarTick(){
     groupEl.classList.remove("is-complete", "is-current", "is-upcoming");
     if (elapsedAll >= groupEndTime) {
       groupEl.classList.add("is-complete");
+      
+      // 그룹 전체 달성도 계산 (평균)
+      let totalAchievement = 0;
+      let segmentCount = 0;
+      
+      for (let i = startIndex; i < endIndex; i++) {
+        const seg = w.segments[i];
+        const targetW = segTargetW(seg, ftp);
+        const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
+        const achievement = targetW > 0 ? (avgW / targetW) : 0;
+        totalAchievement += achievement;
+        segmentCount++;
+      }
+      
+      const avgAchievement = segmentCount > 0 ? (totalAchievement / segmentCount) : 0;
+      
+      // 그룹 달성도 클래스 적용
+      groupEl.classList.remove("achievement-low", "achievement-good", "achievement-high", "achievement-over");
+      if (avgAchievement < 0.85) {
+        groupEl.classList.add("achievement-low");
+      } else if (avgAchievement >= 0.85 && avgAchievement <= 1.15) {
+        groupEl.classList.add("achievement-good");
+      } else if (avgAchievement > 1.15 && avgAchievement <= 1.3) {
+        groupEl.classList.add("achievement-high");
+      } else if (avgAchievement > 1.3) {
+        groupEl.classList.add("achievement-over");
+      }
+      
     } else if (elapsedAll >= groupStartTime && elapsedAll < groupEndTime) {
       groupEl.classList.add("is-current");
     } else {
@@ -364,17 +421,10 @@ function updateSegmentBarTick(){
     const elAvg = document.getElementById("avgSegmentPowerValue");
     if (elAvg) elAvg.textContent = String(curAvg);
   }
-
-  // 6) 달성도 색상 (기존 로직 유지)
-  for (let i = 0; i < w.segments.length; i++) {
-    const seg = w.segments[i];
-    const targetW = segTargetW(seg, ftp);
-    const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
-    const ratio = targetW > 0 ? (avgW / targetW) : 0;
-    const fill = document.getElementById(`segFill-${i}`);
-    if (fill) fill.style.background = colorByAchievement(ratio);
-  }
 }
+
+
+
 
 // 훈련 상태
 const trainingState = {
