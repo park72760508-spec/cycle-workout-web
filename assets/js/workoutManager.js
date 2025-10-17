@@ -398,8 +398,8 @@ function createGroupedSegmentPreview(groupedItem) {
        duration = `${minutes}분`;
      }
      
-     return `FTP ${segment.target_value}% ${duration}`;
-   }).join(' '); // <br> 대신 공백으로 1줄 표기
+      return `FTP ${segment.target_value}% ${duration}`;
+      }).join('<br>'); // 다시 줄바꿈으로 변경하여 각 세그먼트를 별도 줄에 표시
   
   const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
   
