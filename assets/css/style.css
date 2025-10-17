@@ -1410,21 +1410,4 @@ button[aria-disabled="true"] {
   margin-right: 12px !important;
 }
 
-/* 모바일에서 버튼 스택 */
-@media (max-width: 480px) {
-  #trainingReadyScreen .btn-row.center {
-    flex-direction: column !important;
-    gap: 8px !important;
-  }
-  
-  #trainingReadyScreen .btn-row.center .btn {
-    width: 100% !important;
-    max-width: 250px !important;
-    margin: 0 !important;
-  }
-  
-  #trainingReadyScreen .btn-row.center .btn:not(:last-child) {
-    margin-right: 0 !important;
-    margin-bottom: 8px !important;
-  }
-}
+
