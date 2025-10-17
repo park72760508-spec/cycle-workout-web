@@ -126,7 +126,7 @@ function skipCurrentSegment() {
   updateTimeUI();
   
   console.log(`세그먼트 건너뛰기: ${window.trainingState.segIndex + 1}번째 세그먼트로 이동`);
-
+  }
 
 
 // 훈련 화면의 세그먼트에서 FTP 백분율 추출하는 헬퍼 함수 추가
