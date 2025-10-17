@@ -1395,7 +1395,7 @@ button[aria-disabled="true"] {
   justify-content: center !important;
   align-items: center !important;
   flex-wrap: wrap !important;
-  gap: 12px !important;
+  gap: 7px !important;
   margin: 30px auto 20px auto !important;
   width: 100% !important;
   max-width: 350px !important;
