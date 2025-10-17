@@ -1,9 +1,9 @@
 /* ==========================================================
-   통합 워크아웃 관리 모듈 (improvedWorkoutManager.js) - 개선된 버전
-   - 세그먼트 개수와 관계없이 하나의 워크아웃 ID로 통합 저장
-   - Workouts 시트에 1개 레코드, WorkoutSegments 시트에 배치별 저장
-   - URL 길이 제한 해결을 위한 청크 기반 전송
-   - 기존 분할 저장 방식 제거
+   완전 통합 워크아웃 관리 모듈 (completeWorkoutManager.js) - 최종 버전
+   - 세그먼트 개수 무제한 통합 저장
+   - 반복 패턴 감지 및 그룹화 표시
+   - 최적화된 렌더링 (대용량 세그먼트 지원)
+   - 모든 버그 수정 및 성능 최적화
 ========================================================== */
 
 // 안전한 초기화 체크
@@ -29,11 +29,9 @@ function validateWorkoutData(workout) {
   if (!workout || typeof workout !== 'object') {
     return false;
   }
-  
   if (workout.id === null || workout.id === undefined) {
     return false;
   }
-  
   return true;
 }
 
@@ -72,11 +70,12 @@ let currentEditingSegmentIndex = null;
 let repeatSegments = [];
 let currentEditingRepeatIndex = null;
 
-// 세그먼트 분할 전송 설정 (개선된 버전)
-const SEGMENT_BATCH_SIZE = 3; // 2개씩 전송
+// 세그먼트 분할 전송 설정 (최적화된 버전)
+const SEGMENT_BATCH_SIZE = 2;
 const MAX_URL_LENGTH = 1800;
 const MAX_RETRIES = 3;
-const BATCH_DELAY = 1500; // 배치 간 지연 (밀리초)
+const BATCH_DELAY = 1000;
+const JSONP_TIMEOUT = 60000; // 60초 타임아웃
 
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
@@ -107,7 +106,7 @@ function initializeWorkoutManager() {
   }
 }
 
-// 개선된 JSONP 요청 함수
+// 개선된 JSONP 요청 함수 (60초 타임아웃)
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
     if (!url || typeof url !== 'string') {
@@ -179,7 +178,7 @@ function jsonpRequest(url, params = {}) {
           cleanup();
           reject(new Error(`요청 시간 초과: ${url}`));
         }
-      }, 60000);
+      }, JSONP_TIMEOUT); // 60초 타임아웃
       
     } catch (error) {
       if (!isResolved) {
@@ -215,7 +214,342 @@ async function jsonpRequestWithRetry(url, params = {}, maxRetries = MAX_RETRIES)
   throw lastError;
 }
 
-// 기본 API 함수들
+// ==========================================================
+// 반복 패턴 감지 및 그룹화 시스템
+// ==========================================================
+
+/**
+ * 세그먼트 배열에서 반복 패턴을 감지하고 그룹화
+ */
+function detectAndGroupSegments(segments) {
+  if (!Array.isArray(segments) || segments.length === 0) {
+    return [];
+  }
+  
+  console.log('세그먼트 그룹화 시작:', segments.length, '개');
+  
+  const groupedSegments = [];
+  let currentIndex = 0;
+  
+  while (currentIndex < segments.length) {
+    const patternResult = findRepeatingPattern(segments, currentIndex);
+    
+    if (patternResult.found && patternResult.repeatCount >= 2) {
+      const groupedSegment = createGroupedSegment(patternResult);
+      groupedSegments.push(groupedSegment);
+      currentIndex = patternResult.endIndex;
+      
+      console.log(`반복 패턴 감지: ${patternResult.pattern.length}개 세그먼트 × ${patternResult.repeatCount}회`);
+    } else {
+      groupedSegments.push({
+        type: 'single',
+        segment: segments[currentIndex],
+        originalIndex: currentIndex
+      });
+      currentIndex++;
+    }
+  }
+  
+  console.log('그룹화 완료:', groupedSegments.length, '개 그룹');
+  return groupedSegments;
+}
+
+/**
+ * 특정 위치에서 반복 패턴 찾기
+ */
+function findRepeatingPattern(segments, startIndex) {
+  const maxPatternLength = Math.min(10, Math.floor((segments.length - startIndex) / 2));
+  
+  for (let patternLength = 1; patternLength <= maxPatternLength; patternLength++) {
+    const pattern = segments.slice(startIndex, startIndex + patternLength);
+    const repeatResult = checkPatternRepeat(segments, startIndex, pattern);
+    
+    if (repeatResult.repeatCount >= 2) {
+      return {
+        found: true,
+        pattern: pattern,
+        repeatCount: repeatResult.repeatCount,
+        startIndex: startIndex,
+        endIndex: repeatResult.endIndex,
+        totalDuration: repeatResult.totalDuration
+      };
+    }
+  }
+  
+  return { found: false };
+}
+
+/**
+ * 패턴이 몇 번 반복되는지 확인
+ */
+function checkPatternRepeat(segments, startIndex, pattern) {
+  let repeatCount = 0;
+  let currentIndex = startIndex;
+  let totalDuration = 0;
+  
+  while (currentIndex + pattern.length <= segments.length) {
+    const currentSegment = segments.slice(currentIndex, currentIndex + pattern.length);
+    
+    if (isPatternMatch(pattern, currentSegment)) {
+      repeatCount++;
+      totalDuration += pattern.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+      currentIndex += pattern.length;
+    } else {
+      break;
+    }
+  }
+  
+  return {
+    repeatCount: repeatCount,
+    endIndex: currentIndex,
+    totalDuration: totalDuration
+  };
+}
+
+/**
+ * 두 패턴이 일치하는지 확인 (라벨 제외)
+ */
+function isPatternMatch(pattern1, pattern2) {
+  if (pattern1.length !== pattern2.length) {
+    return false;
+  }
+  
+  for (let i = 0; i < pattern1.length; i++) {
+    const seg1 = pattern1[i];
+    const seg2 = pattern2[i];
+    
+    if (
+      seg1.segment_type !== seg2.segment_type ||
+      seg1.duration_sec !== seg2.duration_sec ||
+      seg1.target_value !== seg2.target_value ||
+      seg1.ramp !== seg2.ramp ||
+      seg1.ramp_to_value !== seg2.ramp_to_value
+    ) {
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+/**
+ * 그룹화된 세그먼트 객체 생성
+ */
+function createGroupedSegment(patternResult) {
+  const { pattern, repeatCount, totalDuration } = patternResult;
+  
+  const groupLabel = pattern[0].label || '반복 세그먼트';
+  
+  return {
+    type: 'group',
+    groupLabel: groupLabel,
+    pattern: pattern,
+    repeatCount: repeatCount,
+    totalDuration: totalDuration,
+    totalMinutes: Math.round(totalDuration / 60),
+    startIndex: patternResult.startIndex,
+    endIndex: patternResult.endIndex
+  };
+}
+
+/**
+ * 개별 세그먼트 프리뷰 생성
+ */
+function createSingleSegmentPreview(segment) {
+  if (!segment || typeof segment !== 'object') {
+    return '';
+  }
+  
+  const minutes = Math.floor((Number(segment.duration_sec) || 0) / 60);
+  const seconds = (Number(segment.duration_sec) || 0) % 60;
+  const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+  
+  const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
+  
+  return `
+    <div class="segment-item ${segmentTypeClass}">
+      <h4>${escapeHtml(segment.label || '세그먼트')}</h4>
+      <div class="ftp-percent">${Number(segment.target_value) || 0}%</div>
+      <div class="duration">${duration}</div>
+    </div>
+  `;
+}
+
+/**
+ * 그룹화된 세그먼트 프리뷰 생성
+ */
+function createGroupedSegmentPreview(groupedItem) {
+  const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
+  
+  const patternInfo = pattern.map(segment => {
+    const minutes = Math.floor((segment.duration_sec || 0) / 60);
+    const seconds = (segment.duration_sec || 0) % 60;
+    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+    
+    return `FTP ${segment.target_value}% ${duration}`;
+  }).join('<br>');
+  
+  const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
+  
+  return `
+    <div class="segment-item grouped-segment ${mainSegmentTypeClass}">
+      <div class="group-header">
+        <h4>${escapeHtml(groupLabel)}</h4>
+        <span class="repeat-badge">× ${repeatCount}회</span>
+      </div>
+      <div class="group-pattern">
+        ${patternInfo}
+      </div>
+      <div class="group-total">
+        <strong>${totalMinutes}분</strong>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * 개선된 세그먼트 프리뷰 업데이트 (그룹화 적용)
+ */
+function updateSegmentPreviewGrouped(segments) {
+  const segDiv = safeGetElement('segmentPreview');
+  if (!segDiv) return;
+
+  if (!segments || !Array.isArray(segments) || segments.length === 0) {
+    segDiv.innerHTML = '<div class="text-center muted">세그먼트 정보가 없습니다.</div>';
+    return;
+  }
+
+  const groupedSegments = detectAndGroupSegments(segments);
+  
+  segDiv.innerHTML = groupedSegments.map(item => {
+    if (item.type === 'single') {
+      return createSingleSegmentPreview(item.segment);
+    } else {
+      return createGroupedSegmentPreview(item);
+    }
+  }).filter(Boolean).join('');
+}
+
+/**
+ * 훈련 화면용 그룹화된 세그먼트 표시
+ */
+function updateTrainingProgressGrouped(segments, currentSegmentIndex = 0) {
+  const progressDiv = safeGetElement('trainingProgress');
+  if (!progressDiv) return;
+
+  if (!segments || segments.length === 0) {
+    progressDiv.innerHTML = '<div class="text-center muted">진행할 세그먼트가 없습니다.</div>';
+    return;
+  }
+
+  const groupedSegments = detectAndGroupSegments(segments);
+  let segmentOffset = 0;
+  
+  progressDiv.innerHTML = groupedSegments.map((item, groupIndex) => {
+    let isCurrentGroup = false;
+    let groupProgress = '';
+    
+    if (item.type === 'single') {
+      isCurrentGroup = (segmentOffset === currentSegmentIndex);
+      segmentOffset += 1;
+      
+      return createSingleTrainingSegment(item.segment, isCurrentGroup);
+    } else {
+      const groupStartIndex = segmentOffset;
+      const groupEndIndex = segmentOffset + (item.pattern.length * item.repeatCount);
+      
+      isCurrentGroup = (currentSegmentIndex >= groupStartIndex && currentSegmentIndex < groupEndIndex);
+      
+      if (isCurrentGroup) {
+        const relativeIndex = currentSegmentIndex - groupStartIndex;
+        const currentRound = Math.floor(relativeIndex / item.pattern.length) + 1;
+        const segmentInRound = relativeIndex % item.pattern.length;
+        groupProgress = `${currentRound}/${item.repeatCount}회차 - ${item.pattern[segmentInRound].label}`;
+      }
+      
+      segmentOffset += (item.pattern.length * item.repeatCount);
+      
+      return createGroupedTrainingSegment(item, isCurrentGroup, groupProgress);
+    }
+  }).filter(Boolean).join('');
+}
+
+/**
+ * 개별 훈련 세그먼트 생성
+ */
+function createSingleTrainingSegment(segment, isCurrent) {
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
+  const currentClass = isCurrent ? 'current-segment' : '';
+  
+  return `
+    <div class="training-segment ${segmentTypeClass} ${currentClass}">
+      <div class="segment-label">${escapeHtml(segment.label)}</div>
+      <div class="segment-stats">
+        <span class="ftp-value">FTP ${segment.target_value}%</span>
+        <span class="duration">${duration}</span>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * 그룹화된 훈련 세그먼트 생성
+ */
+function createGroupedTrainingSegment(groupedItem, isCurrent, groupProgress) {
+  const { groupLabel, pattern, repeatCount, totalMinutes } = groupedItem;
+  
+  const patternInfo = pattern.map(segment => {
+    const minutes = Math.floor((segment.duration_sec || 0) / 60);
+    const seconds = (segment.duration_sec || 0) % 60;
+    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
+    
+    return `<div class="pattern-item">FTP ${segment.target_value}% ${duration}</div>`;
+  }).join('');
+  
+  const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
+  const currentClass = isCurrent ? 'current-segment' : '';
+  
+  return `
+    <div class="training-segment grouped-training-segment ${mainSegmentTypeClass} ${currentClass}">
+      <div class="group-header">
+        <div class="group-label">${escapeHtml(groupLabel)}</div>
+        <div class="repeat-info">× ${repeatCount}회</div>
+      </div>
+      <div class="group-pattern-training">
+        ${patternInfo}
+      </div>
+      <div class="group-total-training">
+        <strong>총 ${totalMinutes}분</strong>
+      </div>
+      ${isCurrent && groupProgress ? `<div class="group-progress">${groupProgress}</div>` : ''}
+    </div>
+  `;
+}
+
+// 세그먼트 타입에 따른 CSS 클래스 반환
+function getSegmentTypeClass(segmentType) {
+  const typeMapping = {
+    'warmup': 'warmup',
+    'rest': 'rest', 
+    'interval': 'interval',
+    'cooldown': 'rest',
+    'tempo': 'interval',
+    'sweetspot': 'interval',
+    'threshold': 'interval',
+    'vo2max': 'interval'
+  };
+  
+  return typeMapping[segmentType] || 'interval';
+}
+
+// ==========================================================
+// API 함수들
+// ==========================================================
+
 async function apiGetWorkouts() {
   try {
     return await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
@@ -238,7 +572,9 @@ async function apiGetWorkout(id) {
   }
 }
 
-// 개선된 통합 워크아웃 생성 함수
+/**
+ * 통합 워크아웃 생성 함수 (개선된 버전)
+ */
 async function apiCreateWorkoutWithSegments(workoutData) {
   console.log('=== 통합 워크아웃 생성 시작 ===');
   console.log('워크아웃 데이터:', workoutData);
@@ -248,7 +584,7 @@ async function apiCreateWorkoutWithSegments(workoutData) {
   }
   
   try {
-    // 1단계: 워크아웃 기본 정보만으로 먼저 생성 (세그먼트 없이)
+    // 1단계: 워크아웃 기본 정보만으로 먼저 생성
     const baseParams = {
       action: 'createWorkout',
       title: String(workoutData.title || ''),
@@ -277,7 +613,6 @@ async function apiCreateWorkoutWithSegments(workoutData) {
       
       if (!addResult.success) {
         console.warn('세그먼트 추가 중 일부 실패:', addResult.error);
-        // 워크아웃은 생성되었으므로 부분 성공으로 처리
         return {
           success: true,
           workoutId: workoutId,
@@ -296,7 +631,6 @@ async function apiCreateWorkoutWithSegments(workoutData) {
       };
     }
     
-    // 세그먼트가 없는 경우
     console.log('세그먼트 없는 워크아웃 생성 완료');
     return {
       success: true,
@@ -311,14 +645,15 @@ async function apiCreateWorkoutWithSegments(workoutData) {
   }
 }
 
-// 세그먼트 배치별 추가 함수 (개선된 버전)
-// 세그먼트 배치별 추가 함수 (대용량 최적화 버전)
+/**
+ * 세그먼트 배치별 추가 함수 (대용량 최적화 버전)
+ */
 async function addSegmentsBatch(workoutId, segments) {
   console.log(`배치별 세그먼트 추가 시작: 워크아웃 ID ${workoutId}, 세그먼트 ${segments.length}개`);
   
   // 대용량 세그먼트 감지 및 설정 동적 조정
-  const batchSize = segments.length > 50 ? 3 : 2;  // 50개 이상이면 3개씩
-  const batchDelay = segments.length > 50 ? 1500 : 1000;  // 지연시간도 조정
+  const batchSize = segments.length > 50 ? 3 : 2;
+  const batchDelay = segments.length > 50 ? 1500 : 1000;
   const maxRetries = 3;
   
   console.log(`처리 설정: 배치크기 ${batchSize}, 지연 ${batchDelay}ms`);
@@ -328,15 +663,13 @@ async function addSegmentsBatch(workoutId, segments) {
   let failedBatches = 0;
   
   try {
-    // 세그먼트를 동적 배치 크기로 나누기
     for (let i = 0; i < segments.length; i += batchSize) {
       const batch = segments.slice(i, i + batchSize);
       const batchNumber = Math.floor(i / batchSize) + 1;
       const totalBatches = Math.ceil(segments.length / batchSize);
       
-      // 예상 남은 시간 계산
       const remainingBatches = totalBatches - batchNumber;
-      const avgTimePerBatch = 4; // 초 단위 예상 시간
+      const avgTimePerBatch = 4;
       const eta = Math.round(remainingBatches * avgTimePerBatch);
       
       console.log(`배치 ${batchNumber}/${totalBatches} 처리 중... (${batch.length}개 세그먼트, 약 ${eta}초 남음)`);
@@ -344,12 +677,10 @@ async function addSegmentsBatch(workoutId, segments) {
       let batchSuccess = false;
       let lastError = null;
       
-      // 배치별 재시도 로직
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          // 압축된 세그먼트 데이터 생성 (URL 길이 최적화)
           const compressedBatch = batch.map(seg => ({
-            l: String(seg.label || '세그먼트').substring(0, 12), // 더 짧게
+            l: String(seg.label || '세그먼트').substring(0, 12),
             t: seg.segment_type || 'interval',
             d: parseInt(seg.duration_sec) || 300,
             v: parseInt(seg.target_value) || 100,
@@ -365,8 +696,7 @@ async function addSegmentsBatch(workoutId, segments) {
             segments: segmentsJson
           };
           
-          // 배치 전송 (개별 재시도 포함)
-          const result = await jsonpRequestWithRetry(window.GAS_URL, params, 2); // 개별 재시도 2회로 제한
+          const result = await jsonpRequestWithRetry(window.GAS_URL, params, 2);
           
           if (result.success) {
             const addedCount = result.addedCount || batch.length;
@@ -376,21 +706,19 @@ async function addSegmentsBatch(workoutId, segments) {
             
             console.log(`배치 ${batchNumber} 성공 (시도 ${attempt}): ${addedCount}개 세그먼트 추가`);
             
-            // 진행 상황 표시 (더 상세한 정보)
             if (typeof window.showToast === 'function') {
               const progress = Math.round((totalAddedCount / segments.length) * 100);
               const status = eta > 60 ? `약 ${Math.round(eta/60)}분 남음` : `약 ${eta}초 남음`;
               window.showToast(`세그먼트 추가 ${progress}% (${totalAddedCount}/${segments.length}) - ${status}`);
             }
             
-            break; // 성공하면 재시도 루프 종료
+            break;
             
           } else {
             lastError = new Error(result.error || '배치 전송 실패');
             console.warn(`배치 ${batchNumber} 시도 ${attempt} 실패:`, result.error);
             
             if (attempt < maxRetries) {
-              // 재시도 전 잠시 대기 (점진적 증가)
               await new Promise(resolve => setTimeout(resolve, attempt * 1000));
             }
           }
@@ -410,17 +738,14 @@ async function addSegmentsBatch(workoutId, segments) {
         console.error(`배치 ${batchNumber} 모든 시도 실패:`, lastError?.message);
       }
       
-      // 서버 부하 방지를 위한 지연 (마지막 배치 제외)
       if (i + batchSize < segments.length) {
         await new Promise(resolve => setTimeout(resolve, batchDelay));
       }
     }
     
-    // 결과 요약
     console.log(`배치 처리 완료: 성공 ${successfulBatches}, 실패 ${failedBatches}`);
     console.log(`총 세그먼트 추가: ${totalAddedCount}/${segments.length}`);
     
-    // 최종 토스트 메시지
     if (typeof window.showToast === 'function') {
       if (failedBatches === 0) {
         window.showToast(`모든 세그먼트 추가 완료! (${totalAddedCount}개)`);
@@ -439,7 +764,7 @@ async function addSegmentsBatch(workoutId, segments) {
     
     if (failedBatches > 0) {
       return {
-        success: true, // 부분 성공
+        success: true,
         addedCount: totalAddedCount,
         warning: `${failedBatches}개 배치 실패. ${totalAddedCount}/${segments.length}개 세그먼트 추가됨`
       };
@@ -461,7 +786,6 @@ async function addSegmentsBatch(workoutId, segments) {
   }
 }
 
-// 기존 단순 API 함수들
 async function apiUpdateWorkout(id, workoutData) {
   if (!id || !workoutData) {
     return { success: false, error: '워크아웃 ID와 데이터가 필요합니다.' };
@@ -498,7 +822,10 @@ async function apiDeleteWorkout(id) {
   }
 }
 
-// 워크아웃 목록 로드
+// ==========================================================
+// 워크아웃 목록 및 선택 관리
+// ==========================================================
+
 async function loadWorkouts() {
   const workoutList = safeGetElement('workoutList');
   if (!workoutList) {
@@ -616,7 +943,6 @@ async function loadWorkouts() {
   }
 }
 
-// 워크아웃 선택
 async function selectWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -678,7 +1004,10 @@ async function selectWorkout(workoutId) {
   }
 }
 
-// 새 워크아웃 추가 폼 표시
+// ==========================================================
+// 워크아웃 폼 관리
+// ==========================================================
+
 function showAddWorkoutForm(clearForm = true) {
   window.showScreen('workoutBuilderScreen');
   
@@ -705,7 +1034,6 @@ function showAddWorkoutForm(clearForm = true) {
   }
 }
 
-// 개선된 워크아웃 저장 함수
 async function saveWorkout() {
   if (isWorkoutEditMode) {
     console.log('Edit mode active - saveWorkout blocked');
@@ -736,7 +1064,6 @@ async function saveWorkout() {
     return;
   }
 
-  // 저장 시작 - UI 상태 변경
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.classList.add('btn-saving', 'saving-state');
@@ -748,7 +1075,6 @@ async function saveWorkout() {
     console.log('Title:', title);
     console.log('Segments count:', workoutSegments.length);
 
-    // 세그먼트 데이터 검증 및 정규화
     const validSegments = workoutSegments.filter(segment => 
       segment && typeof segment === 'object' && segment.label
     ).map(segment => ({
@@ -761,7 +1087,6 @@ async function saveWorkout() {
       ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
     }));
 
-    // 워크아웃 데이터 구성
     const workoutData = { 
       title, 
       description, 
@@ -773,14 +1098,12 @@ async function saveWorkout() {
 
     console.log('Final workout data:', workoutData);
     
-    // 세그먼트 개수에 관계없이 통합 저장 방식 사용
     if (validSegments.length > 0) {
       window.showToast(`워크아웃(${validSegments.length}개 세그먼트)을 저장하는 중입니다...`);
     } else {
       window.showToast('워크아웃을 저장하는 중입니다...');
     }
     
-    // 통합 저장 함수 호출
     const result = await apiCreateWorkoutWithSegments(workoutData);
     
     console.log('API result:', result);
@@ -798,7 +1121,6 @@ async function saveWorkout() {
       
       window.showToast(message);
       
-      // 세그먼트 초기화
       workoutSegments = [];
       if (typeof renderSegments === 'function') {
         renderSegments();
@@ -807,10 +1129,8 @@ async function saveWorkout() {
         updateSegmentSummary();
       }
       
-      // 화면 전환
       window.showScreen('workoutScreen');
       
-      // 목록 새로고침
       setTimeout(() => {
         loadWorkouts();
       }, 500);
@@ -823,7 +1143,6 @@ async function saveWorkout() {
     console.error('워크아웃 저장 실패:', error);
     window.showToast('워크아웃 저장 중 오류가 발생했습니다: ' + error.message);
   } finally {
-    // 저장 완료 - UI 상태 복원
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.classList.remove('btn-saving', 'saving-state');
@@ -832,7 +1151,6 @@ async function saveWorkout() {
   }
 }
 
-// 워크아웃 수정
 async function editWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -888,7 +1206,6 @@ async function editWorkout(workoutId) {
   }
 }
 
-// 실제 워크아웃 업데이트 실행
 async function performWorkoutUpdate() {
   if (!isWorkoutEditMode || !currentEditWorkoutId) {
     console.error('Invalid edit mode state');
@@ -937,7 +1254,6 @@ async function performWorkoutUpdate() {
   }
 }
 
-// 워크아웃 삭제
 async function deleteWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -964,7 +1280,6 @@ async function deleteWorkout(workoutId) {
   }
 }
 
-// 워크아웃 폼 모드 리셋
 function resetWorkoutFormMode() {
   isWorkoutEditMode = false;
   currentEditWorkoutId = null;
@@ -985,8 +1300,7 @@ function resetWorkoutFormMode() {
   console.log('Workout form mode reset to add mode');
 }
 
-// 워크아웃 프리뷰 업데이트
-// 기존 updateWorkoutPreview 함수 교체
+// 워크아웃 프리뷰 업데이트 (그룹화 적용)
 function updateWorkoutPreview() {
   const workout = window.currentWorkout;
   if (!workout) {
@@ -1033,58 +1347,159 @@ function updateWorkoutPreview() {
   updateSegmentPreviewGrouped(workout.segments || []);
 }
 
+// ==========================================================
+// 최적화된 세그먼트 렌더링 (40개+ 세그먼트 대응)
+// ==========================================================
 
-
-
-
-// 세그먼트 프리뷰 업데이트
-function updateSegmentPreview(segments) {
-  const segDiv = safeGetElement('segmentPreview');
-  if (!segDiv) return;
-
-  if (!segments || !Array.isArray(segments) || segments.length === 0) {
-    segDiv.innerHTML = '<div class="text-center muted">세그먼트 정보가 없습니다.</div>';
+function renderSegments() {
+  const container = safeGetElement('wbSegments');
+  const emptyState = safeGetElement('segmentsEmpty');
+  
+  if (!container) return;
+  
+  if (workoutSegments.length > 20) {
+    renderSegmentsVirtualized(container, emptyState);
     return;
   }
-
-  segDiv.innerHTML = segments.map(segment => {
-    if (!segment || typeof segment !== 'object') {
-      return '';
-    }
-    
-    const minutes = Math.floor((Number(segment.duration_sec) || 0) / 60);
-    const seconds = (Number(segment.duration_sec) || 0) % 60;
-    const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
-    
-    const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
-    
-    return `
-      <div class="segment-item ${segmentTypeClass}">
-        <h4>${escapeHtml(segment.label || '세그먼트')}</h4>
-        <div class="ftp-percent">${Number(segment.target_value) || 0}%</div>
-        <div class="duration">${duration}</div>
-      </div>
-    `;
-  }).filter(Boolean).join('');
-}
-
-// 세그먼트 타입에 따른 CSS 클래스 반환
-function getSegmentTypeClass(segmentType) {
-  const typeMapping = {
-    'warmup': 'warmup',
-    'rest': 'rest', 
-    'interval': 'interval',
-    'cooldown': 'rest',
-    'tempo': 'interval',
-    'sweetspot': 'interval',
-    'threshold': 'interval',
-    'vo2max': 'interval'
-  };
   
-  return typeMapping[segmentType] || 'interval';
+  if (workoutSegments.length === 0) {
+    if (emptyState) emptyState.style.display = 'block';
+    container.innerHTML = '';
+    return;
+  }
+  
+  if (emptyState) emptyState.style.display = 'none';
+  
+  const fragment = document.createDocumentFragment();
+  
+  workoutSegments.forEach((segment, index) => {
+    const card = createSegmentCard(segment, index);
+    fragment.appendChild(card);
+  });
+  
+  container.innerHTML = '';
+  container.appendChild(fragment);
 }
 
-// 빠른 세그먼트 추가
+function renderSegmentsVirtualized(container, emptyState) {
+  if (emptyState) emptyState.style.display = 'none';
+  
+  const ITEMS_PER_PAGE = 15;
+  const currentPage = window.segmentPage || 0;
+  const totalPages = Math.ceil(workoutSegments.length / ITEMS_PER_PAGE);
+  
+  const startIndex = currentPage * ITEMS_PER_PAGE;
+  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, workoutSegments.length);
+  const visibleSegments = workoutSegments.slice(startIndex, endIndex);
+  
+  container.innerHTML = `
+    <div class="segments-header">
+      <div class="segments-summary">
+        <span>총 ${workoutSegments.length}개 세그먼트</span>
+        <span>|</span>
+        <span>${startIndex + 1}-${endIndex} 표시 중</span>
+      </div>
+      <div class="segments-pagination">
+        <button 
+          class="btn btn-sm" 
+          onclick="changeSegmentPage(${currentPage - 1})"
+          ${currentPage === 0 ? 'disabled' : ''}>
+          ← 이전
+        </button>
+        <span class="page-info">${currentPage + 1} / ${totalPages}</span>
+        <button 
+          class="btn btn-sm" 
+          onclick="changeSegmentPage(${currentPage + 1})"
+          ${currentPage >= totalPages - 1 ? 'disabled' : ''}>
+          다음 →
+        </button>
+      </div>
+    </div>
+    <div class="segments-container" id="segmentsContainer"></div>
+  `;
+  
+  const segmentsContainer = document.getElementById('segmentsContainer');
+  const fragment = document.createDocumentFragment();
+  
+  visibleSegments.forEach((segment, localIndex) => {
+    const globalIndex = startIndex + localIndex;
+    const card = createSegmentCard(segment, globalIndex);
+    fragment.appendChild(card);
+  });
+  
+  segmentsContainer.appendChild(fragment);
+  
+  setTimeout(() => {
+    const saveBtn = safeGetElement('btnSaveWorkout');
+    const cancelBtn = safeGetElement('btnCancelBuilder');
+    if (saveBtn) saveBtn.disabled = false;
+    if (cancelBtn) cancelBtn.disabled = false;
+  }, 100);
+}
+
+function changeSegmentPage(newPage) {
+  const totalPages = Math.ceil(workoutSegments.length / 15);
+  if (newPage >= 0 && newPage < totalPages) {
+    window.segmentPage = newPage;
+    renderSegments();
+  }
+}
+
+function createSegmentCard(segment, index) {
+  const card = document.createElement('div');
+  card.className = 'segment-card';
+  card.setAttribute('data-index', index);
+  
+  const minutes = Math.floor((segment.duration_sec || 0) / 60);
+  const seconds = (segment.duration_sec || 0) % 60;
+  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  
+  const intensityText = segment.ramp !== 'none' 
+    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
+    : `${segment.target_value}%`;
+  
+  card.innerHTML = `
+    <div class="segment-info">
+      <div class="segment-details">
+        <div class="segment-label" title="${escapeHtml(segment.label)}">${escapeHtml(segment.label)}</div>
+        <div class="segment-meta">
+          <span class="segment-type-badge ${segment.segment_type}">${segment.segment_type}</span>
+          <span>${duration}</span>
+          <span class="segment-intensity">${intensityText}</span>
+        </div>
+      </div>
+    </div>
+    <div class="segment-actions">
+      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
+      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
+    </div>
+  `;
+  
+  return card;
+}
+
+function updateSegmentSummary() {
+  if (window.updateSummaryTimeout) {
+    clearTimeout(window.updateSummaryTimeout);
+  }
+  
+  window.updateSummaryTimeout = setTimeout(() => {
+    const totalSeconds = workoutSegments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+    const totalMinutes = Math.round(totalSeconds / 60);
+    const segmentCount = workoutSegments.length;
+    
+    const durationEl = safeGetElement('totalDuration');
+    const countEl = safeGetElement('segmentCount');
+    
+    if (durationEl) durationEl.textContent = `${totalMinutes}분`;
+    if (countEl) countEl.textContent = `${segmentCount}개`;
+  }, 200);
+}
+
+// ==========================================================
+// 세그먼트 관리 함수들
+// ==========================================================
+
 function addQuickSegment(type) {
   const templates = {
     warmup: { label: '워밍업', type: 'warmup', duration: 600, intensity: 60 },
@@ -1116,7 +1531,6 @@ function addQuickSegment(type) {
   }
 }
 
-// 세그먼트 추가 모달 표시
 function showAddSegmentModal() {
   currentEditingSegmentIndex = null;
   
@@ -1146,7 +1560,6 @@ function showAddSegmentModal() {
   if (segmentModal) segmentModal.classList.remove('hidden');
 }
 
-// 세그먼트 편집 모달 표시
 function showEditSegmentModal(index) {
   const segment = workoutSegments[index];
   if (!segment) return;
@@ -1193,7 +1606,6 @@ function showEditSegmentModal(index) {
   if (segmentModal) segmentModal.classList.remove('hidden');
 }
 
-// Ramp 설정 토글
 function toggleRampSettings() {
   const segmentRamp = safeGetElement('segmentRamp');
   const rampSettings = safeGetElement('rampSettings');
@@ -1208,7 +1620,6 @@ function toggleRampSettings() {
   }
 }
 
-// 세그먼트 저장
 function saveSegment() {
   if (typeof currentEditingRepeatIndex === 'number' && currentEditingRepeatIndex !== null) {
     console.log('Saving repeat segment at index:', currentEditingRepeatIndex);
@@ -1279,7 +1690,6 @@ function saveSegment() {
   window.showToast(currentEditingSegmentIndex !== null ? '세그먼트가 수정되었습니다.' : '세그먼트가 추가되었습니다.');
 }
 
-// 현재 편집 중인 세그먼트 삭제
 function deleteCurrentSegment() {
   if (currentEditingSegmentIndex === null) return;
   
@@ -1292,7 +1702,6 @@ function deleteCurrentSegment() {
   }
 }
 
-// 세그먼트 모달 닫기
 function closeSegmentModal() {
   const segmentModal = safeGetElement('segmentModal');
   if (segmentModal) {
@@ -1310,202 +1719,6 @@ function closeSegmentModal() {
   currentEditingSegmentIndex = null;
 }
 
-// 세그먼트 목록 렌더링
-// 최적화된 세그먼트 렌더링 함수 (교체용)
-function renderSegments() {
-  const container = safeGetElement('wbSegments');
-  const emptyState = safeGetElement('segmentsEmpty');
-  
-  if (!container) return;
-  
-  // 성능 최적화: 대량 세그먼트 처리 시 가상화 적용
-  if (workoutSegments.length > 20) {
-    renderSegmentsVirtualized(container, emptyState);
-    return;
-  }
-  
-  // 기존 방식 (20개 이하)
-  if (workoutSegments.length === 0) {
-    if (emptyState) emptyState.style.display = 'block';
-    container.innerHTML = '';
-    return;
-  }
-  
-  if (emptyState) emptyState.style.display = 'none';
-  
-  // DocumentFragment 사용으로 DOM 조작 최소화
-  const fragment = document.createDocumentFragment();
-  
-  workoutSegments.forEach((segment, index) => {
-    const card = createSegmentCard(segment, index);
-    fragment.appendChild(card);
-  });
-  
-  // 한 번에 DOM에 추가
-  container.innerHTML = '';
-  container.appendChild(fragment);
-}
-
-// 가상화된 렌더링 (20개 이상일 때)
-function renderSegmentsVirtualized(container, emptyState) {
-  if (emptyState) emptyState.style.display = 'none';
-  
-  const ITEMS_PER_PAGE = 15;
-  const currentPage = window.segmentPage || 0;
-  const totalPages = Math.ceil(workoutSegments.length / ITEMS_PER_PAGE);
-  
-  const startIndex = currentPage * ITEMS_PER_PAGE;
-  const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, workoutSegments.length);
-  const visibleSegments = workoutSegments.slice(startIndex, endIndex);
-  
-  // 페이지네이션 컨트롤과 요약 정보
-  container.innerHTML = `
-    <div class="segments-header">
-      <div class="segments-summary">
-        <span>총 ${workoutSegments.length}개 세그먼트</span>
-        <span>|</span>
-        <span>${startIndex + 1}-${endIndex} 표시 중</span>
-      </div>
-      <div class="segments-pagination">
-        <button 
-          class="btn btn-sm" 
-          onclick="changeSegmentPage(${currentPage - 1})"
-          ${currentPage === 0 ? 'disabled' : ''}>
-          ← 이전
-        </button>
-        <span class="page-info">${currentPage + 1} / ${totalPages}</span>
-        <button 
-          class="btn btn-sm" 
-          onclick="changeSegmentPage(${currentPage + 1})"
-          ${currentPage >= totalPages - 1 ? 'disabled' : ''}>
-          다음 →
-        </button>
-      </div>
-    </div>
-    <div class="segments-container" id="segmentsContainer"></div>
-  `;
-  
-  // 현재 페이지 세그먼트 렌더링
-  const segmentsContainer = document.getElementById('segmentsContainer');
-  const fragment = document.createDocumentFragment();
-  
-  visibleSegments.forEach((segment, localIndex) => {
-    const globalIndex = startIndex + localIndex;
-    const card = createSegmentCard(segment, globalIndex);
-    fragment.appendChild(card);
-  });
-  
-  segmentsContainer.appendChild(fragment);
-  
-  // 버튼 상태 강제 복원
-  setTimeout(() => {
-    const saveBtn = safeGetElement('btnSaveWorkout');
-    const cancelBtn = safeGetElement('btnCancelBuilder');
-    if (saveBtn) saveBtn.disabled = false;
-    if (cancelBtn) cancelBtn.disabled = false;
-  }, 100);
-}
-
-// 페이지 변경 함수
-function changeSegmentPage(newPage) {
-  const totalPages = Math.ceil(workoutSegments.length / 15);
-  if (newPage >= 0 && newPage < totalPages) {
-    window.segmentPage = newPage;
-    renderSegments();
-  }
-}
-
-// 최적화된 세그먼트 카드 생성
-function createSegmentCard(segment, index) {
-  const card = document.createElement('div');
-  card.className = 'segment-card';
-  card.setAttribute('data-index', index);
-  
-  const minutes = Math.floor((segment.duration_sec || 0) / 60);
-  const seconds = (segment.duration_sec || 0) % 60;
-  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  
-  const intensityText = segment.ramp !== 'none' 
-    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
-    : `${segment.target_value}%`;
-  
-  // 더 간단한 HTML 구조로 성능 최적화
-  card.innerHTML = `
-    <div class="segment-info">
-      <div class="segment-details">
-        <div class="segment-label" title="${escapeHtml(segment.label)}">${escapeHtml(segment.label)}</div>
-        <div class="segment-meta">
-          <span class="segment-type-badge ${segment.segment_type}">${segment.segment_type}</span>
-          <span>${duration}</span>
-          <span class="segment-intensity">${intensityText}</span>
-        </div>
-      </div>
-    </div>
-    <div class="segment-actions">
-      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
-      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
-    </div>
-  `;
-  
-  return card;
-}
-
-// 세그먼트 요약 정보 업데이트 (최적화)
-function updateSegmentSummary() {
-  // 디바운싱으로 성능 최적화
-  if (window.updateSummaryTimeout) {
-    clearTimeout(window.updateSummaryTimeout);
-  }
-  
-  window.updateSummaryTimeout = setTimeout(() => {
-    const totalSeconds = workoutSegments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
-    const totalMinutes = Math.round(totalSeconds / 60);
-    const segmentCount = workoutSegments.length;
-    
-    const durationEl = safeGetElement('totalDuration');
-    const countEl = safeGetElement('segmentCount');
-    
-    if (durationEl) durationEl.textContent = `${totalMinutes}분`;
-    if (countEl) countEl.textContent = `${segmentCount}개`;
-  }, 200);
-}
-
-// 세그먼트 카드 생성
-function createSegmentCard(segment, index) {
-  const card = document.createElement('div');
-  card.className = 'segment-card';
-  card.setAttribute('data-index', index);
-  
-  const minutes = Math.floor((segment.duration_sec || 0) / 60);
-  const seconds = (segment.duration_sec || 0) % 60;
-  const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  
-  const intensityText = segment.ramp !== 'none' 
-    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
-    : `${segment.target_value}%`;
-  
-  card.innerHTML = `
-    <div class="segment-drag-handle">⋮⋮</div>
-    <div class="segment-info">
-      <span class="segment-type-badge ${segment.segment_type}">${segment.segment_type}</span>
-      <div class="segment-details">
-        <div class="segment-label">${escapeHtml(segment.label)}</div>
-        <div class="segment-meta">
-          <span>${duration}</span> • 
-          <span class="segment-intensity">${intensityText} FTP</span>
-        </div>
-      </div>
-    </div>
-    <div class="segment-actions">
-      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
-      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
-    </div>
-  `;
-  
-  return card;
-}
-
-// 세그먼트 삭제
 function deleteSegment(index) {
   if (confirm('이 세그먼트를 삭제하시겠습니까?')) {
     workoutSegments.splice(index, 1);
@@ -1515,20 +1728,10 @@ function deleteSegment(index) {
   }
 }
 
-// 세그먼트 요약 정보 업데이트
-function updateSegmentSummary() {
-  const totalSeconds = workoutSegments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
-  const totalMinutes = Math.round(totalSeconds / 60);
-  const segmentCount = workoutSegments.length;
-  
-  const durationEl = safeGetElement('totalDuration');
-  const countEl = safeGetElement('segmentCount');
-  
-  if (durationEl) durationEl.textContent = `${totalMinutes}분`;
-  if (countEl) countEl.textContent = `${segmentCount}개`;
-}
+// ==========================================================
+// 반복 세그먼트 관리
+// ==========================================================
 
-// 반복 모달 표시
 function showRepeatModal() {
   const repeatCount = safeGetElement('repeatCount');
   const repeatModal = safeGetElement('repeatModal');
@@ -1539,7 +1742,6 @@ function showRepeatModal() {
   if (repeatModal) repeatModal.classList.remove('hidden');
 }
 
-// 반복 모달 닫기
 function closeRepeatModal() {
   const repeatModal = safeGetElement('repeatModal');
   if (repeatModal) repeatModal.classList.add('hidden');
@@ -1547,7 +1749,6 @@ function closeRepeatModal() {
   currentEditingRepeatIndex = null;
 }
 
-// 반복용 세그먼트 추가
 function addRepeatSegment() {
   const newSegment = {
     id: Date.now(),
@@ -1564,7 +1765,6 @@ function addRepeatSegment() {
   renderRepeatSegments();
 }
 
-// 반복용 세그먼트 목록 렌더링
 function renderRepeatSegments() {
   const container = safeGetElement('repeatSegmentsList');
   if (!container) return;
@@ -1596,7 +1796,6 @@ function renderRepeatSegments() {
   }).join('');
 }
 
-// 반복용 세그먼트 편집
 function editRepeatSegment(index) {
   console.log('editRepeatSegment called with index:', index);
   
@@ -1652,7 +1851,6 @@ function editRepeatSegment(index) {
   if (segmentModal) segmentModal.classList.remove('hidden');
 }
 
-// 반복용 세그먼트 제거
 function removeRepeatSegment(index) {
   if (confirm('이 세그먼트를 제거하시겠습니까?')) {
     repeatSegments.splice(index, 1);
@@ -1660,7 +1858,6 @@ function removeRepeatSegment(index) {
   }
 }
 
-// 반복 적용
 function applyRepeat() {
   const repeatCountEl = safeGetElement('repeatCount');
   if (!repeatCountEl) return;
@@ -1681,8 +1878,7 @@ function applyRepeat() {
     repeatSegments.forEach(segment => {
       const newSegment = {
         id: Date.now() + Math.random(),
-        //label: `${segment.label} (${i + 1}회차)`,
-        label: segment.label, // ← 원본 라벨 그대로 사용
+        label: segment.label, // 회차 라벨링 제거
         segment_type: segment.segment_type,
         duration_sec: segment.duration_sec,
         target_type: segment.target_type,
@@ -1703,7 +1899,6 @@ function applyRepeat() {
   window.showToast(`${totalAdded}개의 세그먼트가 추가되었습니다.`);
 }
 
-// 반복 세그먼트 저장
 function saveRepeatSegment() {
   console.log('saveRepeatSegment called');
   
@@ -1771,7 +1966,10 @@ function saveRepeatSegment() {
   }
 }
 
+// ==========================================================
 // 세그먼트 관리자 초기화
+// ==========================================================
+
 function initializeSegmentManager() {
   const btnAddSegment = safeGetElement('btnAddSegment');
   if (btnAddSegment) {
@@ -1802,7 +2000,10 @@ function initializeSegmentManager() {
   }
 }
 
+// ==========================================================
 // 초기화 및 이벤트 바인딩
+// ==========================================================
+
 document.addEventListener('DOMContentLoaded', () => {
   initializeWorkoutManager();
   initializeSegmentManager();
@@ -1823,7 +2024,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+// ==========================================================
 // 전역 함수로 내보내기
+// ==========================================================
+
+// 워크아웃 관리
 window.loadWorkouts = loadWorkouts;
 window.selectWorkout = selectWorkout;
 window.editWorkout = editWorkout;
@@ -1834,7 +2039,7 @@ window.showAddWorkoutForm = showAddWorkoutForm;
 window.resetWorkoutFormMode = resetWorkoutFormMode;
 window.performWorkoutUpdate = performWorkoutUpdate;
 
-// 세그먼트 관련 전역 함수
+// 세그먼트 관리
 window.addQuickSegment = addQuickSegment;
 window.showAddSegmentModal = showAddSegmentModal;
 window.showEditSegmentModal = showEditSegmentModal;
@@ -1845,8 +2050,9 @@ window.deleteCurrentSegment = deleteCurrentSegment;
 window.toggleRampSettings = toggleRampSettings;
 window.renderSegments = renderSegments;
 window.updateSegmentSummary = updateSegmentSummary;
+window.changeSegmentPage = changeSegmentPage;
 
-// 반복 기능 전역 함수
+// 반복 기능
 window.showRepeatModal = showRepeatModal;
 window.closeRepeatModal = closeRepeatModal;
 window.addRepeatSegment = addRepeatSegment;
@@ -1855,20 +2061,22 @@ window.removeRepeatSegment = removeRepeatSegment;
 window.applyRepeat = applyRepeat;
 window.saveRepeatSegment = saveRepeatSegment;
 
-// API 함수 전역 내보내기
+// 그룹화 기능
+window.detectAndGroupSegments = detectAndGroupSegments;
+window.updateSegmentPreviewGrouped = updateSegmentPreviewGrouped;
+window.updateTrainingProgressGrouped = updateTrainingProgressGrouped;
+
+// API 함수
 window.apiCreateWorkoutWithSegments = apiCreateWorkoutWithSegments;
 window.apiGetWorkouts = apiGetWorkouts;
 window.apiGetWorkout = apiGetWorkout;
 window.apiUpdateWorkout = apiUpdateWorkout;
 window.apiDeleteWorkout = apiDeleteWorkout;
 
-// 유틸리티 함수들
+// 유틸리티 함수
 window.escapeHtml = escapeHtml;
 window.validateWorkoutData = validateWorkoutData;
 window.normalizeWorkoutData = normalizeWorkoutData;
 window.safeGetElement = safeGetElement;
 
-// 페이지 변경 함수를 전역으로 등록
-window.changeSegmentPage = changeSegmentPage;
-
-console.log('통합 워크아웃 매니저 (개선된 버전) 로드 완료');
+console.log('완전 통합 워크아웃 매니저 (최종 버전) 로드 완료');
