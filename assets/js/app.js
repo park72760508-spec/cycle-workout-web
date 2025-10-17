@@ -21,6 +21,7 @@ let segmentCountdownActive = false;
 let segmentCountdownTimer = null;
 
 // 세그먼트 종료 카운트다운 함수
+// 수정된 startSegmentCountdown 함수 (타이밍 로직 개선)
 async function startSegmentCountdown(remainingSeconds, nextSegment) {
   if (segmentCountdownActive) return; // 이미 실행 중이면 무시
   
@@ -39,7 +40,7 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
   overlay.classList.remove("hidden");
   overlay.style.display = "flex";
   
-  // 다음 세그먼트 정보 표시 (선택적)
+  // 다음 세그먼트 정보 표시
   const nextSegmentInfo = nextSegment ? 
     `다음: ${nextSegment.label || nextSegment.segment_type} FTP ${getSegmentFtpPercent(nextSegment)}%` : 
     '훈련 완료';
@@ -65,32 +66,90 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
   document.getElementById('nextSegmentInfo').textContent = nextSegmentInfo;
 
   let remain = remainingSeconds;
+  
+  // 초기 표시 및 첫 번째 삐 소리
   num.textContent = remain;
-
-  // 첫 번째 Beep (세그먼트 전환 예고)
-  playBeep(1000, 150, 0.3);
+  playBeep(880, 120, 0.25); // 훈련 시작과 동일한 음향
 
   segmentCountdownTimer = setInterval(async () => {
     remain -= 1;
-
-    if (remain <= 0) {
+    
+    if (remain > 0) {
+      // 1, 2, 3, 4초일 때 - 일반 삐 소리
+      num.textContent = remain;
+      playBeep(880, 120, 0.25);
+    } else if (remain === 0) {
+      // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
+      num.textContent = "0";
+      await playBeep(1500, 700, 0.35, "square"); // 훈련 시작과 동일한 강조음
+      
+      // 0.5초 추가 대기 후 오버레이 닫기 (시각적 효과)
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        overlay.style.display = "none";
+        segmentCountdownActive = false;
+      }, 500);
+      
+      // 타이머 정리
       clearInterval(segmentCountdownTimer);
       segmentCountdownTimer = null;
-
-      // 마지막은 길고 높은 Beep (세그먼트 전환)
-      await playBeep(1400, 600, 0.4, "square");
-
-      // 오버레이 닫기
+      
+    } else {
+      // remain < 0일 때 - 안전장치 (정상적으로는 여기 도달 안 함)
+      clearInterval(segmentCountdownTimer);
+      segmentCountdownTimer = null;
       overlay.classList.add("hidden");
       overlay.style.display = "none";
-      
       segmentCountdownActive = false;
-      return;
     }
+  }, 1000);
+}
 
-    // 매초 짧은 Beep
-    num.textContent = remain;
-    playBeep(1000, 150, 0.3);
+// 참고: 기존 훈련 시작 카운트다운도 동일한 방식으로 개선 (선택적)
+function startWithCountdown(sec = 5) {
+  const overlay = document.getElementById("countdownOverlay");
+  const num = document.getElementById("countdownNumber");
+  if (!overlay || !num) return startWorkoutTraining(); // 없으면 바로 시작
+
+  // 오버레이 확실히 표시
+  overlay.classList.remove("hidden");
+  overlay.style.display = "flex";
+
+  let remain = sec;
+  
+  // 초기 표시 및 첫 번째 삐 소리
+  num.textContent = remain;
+  playBeep(880, 120, 0.25);
+
+  const timer = setInterval(async () => {
+    remain -= 1;
+
+    if (remain > 0) {
+      // 1, 2, 3, 4초일 때 - 일반 삐 소리
+      num.textContent = remain;
+      playBeep(880, 120, 0.25);
+    } else if (remain === 0) {
+      // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
+      num.textContent = "0";
+      await playBeep(1500, 700, 0.35, "square");
+      
+      // 0.5초 추가 대기 후 오버레이 닫기 및 훈련 시작
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        overlay.style.display = "none";
+        startWorkoutTraining();
+      }, 500);
+      
+      // 타이머 정리
+      clearInterval(timer);
+      
+    } else {
+      // remain < 0일 때 - 안전장치
+      clearInterval(timer);
+      overlay.classList.add("hidden");
+      overlay.style.display = "none";
+      startWorkoutTraining();
+    }
   }, 1000);
 }
 
