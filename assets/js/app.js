@@ -16,6 +16,119 @@ function normalizeType(seg){
   return "interval"; // 기본값
 }
 
+// 세그먼트 카운트다운 상태 관리
+let segmentCountdownActive = false;
+let segmentCountdownTimer = null;
+
+// 세그먼트 종료 카운트다운 함수
+async function startSegmentCountdown(remainingSeconds, nextSegment) {
+  if (segmentCountdownActive) return; // 이미 실행 중이면 무시
+  
+  segmentCountdownActive = true;
+  
+  const overlay = document.getElementById("countdownOverlay");
+  const num = document.getElementById("countdownNumber");
+  
+  if (!overlay || !num) {
+    console.warn('카운트다운 오버레이를 찾을 수 없습니다.');
+    segmentCountdownActive = false;
+    return;
+  }
+
+  // 오버레이 표시
+  overlay.classList.remove("hidden");
+  overlay.style.display = "flex";
+  
+  // 다음 세그먼트 정보 표시 (선택적)
+  const nextSegmentInfo = nextSegment ? 
+    `다음: ${nextSegment.label || nextSegment.segment_type} FTP ${getSegmentFtpPercent(nextSegment)}%` : 
+    '훈련 완료';
+    
+  // 카운트다운 오버레이에 다음 세그먼트 정보 추가
+  if (!document.getElementById('nextSegmentInfo')) {
+    const infoDiv = document.createElement('div');
+    infoDiv.id = 'nextSegmentInfo';
+    infoDiv.style.cssText = `
+      position: absolute;
+      bottom: 30%;
+      left: 50%;
+      transform: translateX(-50%);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      opacity: 0.9;
+    `;
+    overlay.appendChild(infoDiv);
+  }
+  document.getElementById('nextSegmentInfo').textContent = nextSegmentInfo;
+
+  let remain = remainingSeconds;
+  num.textContent = remain;
+
+  // 첫 번째 Beep (세그먼트 전환 예고)
+  playBeep(1000, 150, 0.3);
+
+  segmentCountdownTimer = setInterval(async () => {
+    remain -= 1;
+
+    if (remain <= 0) {
+      clearInterval(segmentCountdownTimer);
+      segmentCountdownTimer = null;
+
+      // 마지막은 길고 높은 Beep (세그먼트 전환)
+      await playBeep(1400, 600, 0.4, "square");
+
+      // 오버레이 닫기
+      overlay.classList.add("hidden");
+      overlay.style.display = "none";
+      
+      segmentCountdownActive = false;
+      return;
+    }
+
+    // 매초 짧은 Beep
+    num.textContent = remain;
+    playBeep(1000, 150, 0.3);
+  }, 1000);
+}
+
+// 카운트다운 강제 정지 함수
+function stopSegmentCountdown() {
+  if (segmentCountdownTimer) {
+    clearInterval(segmentCountdownTimer);
+    segmentCountdownTimer = null;
+  }
+  
+  const overlay = document.getElementById("countdownOverlay");
+  if (overlay) {
+    overlay.classList.add("hidden");
+    overlay.style.display = "none";
+  }
+  
+  segmentCountdownActive = false;
+}
+
+// 세그먼트 건너뛰기 시에도 카운트다운 정리
+function skipCurrentSegment() {
+  const w = window.currentWorkout;
+  if (!w) return;
+  
+  // 활성 카운트다운 정지
+  if (segmentCountdownActive) {
+    stopSegmentCountdown();
+  }
+  
+  window.trainingState.segIndex = Math.min(w.segments.length - 1, window.trainingState.segIndex + 1);
+  window.trainingState.segElapsedSec = 0;
+  applySegmentTarget(window.trainingState.segIndex);
+  updateTimeUI();
+  
+  console.log(`세그먼트 건너뛰기: ${window.trainingState.segIndex + 1}번째 세그먼트로 이동`);
+
+
+
 // 훈련 화면의 세그먼트에서 FTP 백분율 추출하는 헬퍼 함수 추가
 function getSegmentFtpPercent(seg) {
   if (!seg) return 0;
@@ -514,6 +627,7 @@ function applySegmentTarget(i) {
 }
 
 // 시작/루프
+// 수정된 startSegmentLoop 함수 (카운트다운 로직 추가)
 function startSegmentLoop() {
   const w = window.currentWorkout;
   if (!w || !w.segments || w.segments.length === 0) {
@@ -556,6 +670,9 @@ function startSegmentLoop() {
     clearInterval(window.trainingState.timerId);
   }
 
+  // 세그먼트별 카운트다운 트리거 상태 (중복 방지)
+  let countdownTriggered = Array(w.segments.length).fill(false);
+
   // 1초마다 실행되는 메인 루프
   window.trainingState.timerId = setInterval(() => {
     if (window.trainingState.paused) {
@@ -575,8 +692,18 @@ function startSegmentLoop() {
     }
 
     const segDur = segDurationSec(currentSeg);
+    const segRemaining = segDur - window.trainingState.segElapsedSec;
     
-    console.log(`진행 상황 - 총: ${window.trainingState.elapsedSec}초, 세그먼트: ${window.trainingState.segElapsedSec}/${segDur}초, 현재 세그먼트: ${currentSegIndex + 1}/${w.segments.length}`);
+    console.log(`진행 상황 - 총: ${window.trainingState.elapsedSec}초, 세그먼트: ${window.trainingState.segElapsedSec}/${segDur}초, 남은시간: ${segRemaining}초, 현재 세그먼트: ${currentSegIndex + 1}/${w.segments.length}`);
+
+    // 세그먼트 종료 5초 전 카운트다운 트리거
+    if (segRemaining === 5 && !countdownTriggered[currentSegIndex] && currentSegIndex < w.segments.length - 1) {
+      // 마지막 세그먼트가 아닐 때만 카운트다운 실행
+      countdownTriggered[currentSegIndex] = true;
+      const nextSegment = w.segments[currentSegIndex + 1];
+      console.log(`세그먼트 ${currentSegIndex + 1} 종료 5초 전 카운트다운 시작`);
+      startSegmentCountdown(5, nextSegment);
+    }
 
     // TSS / kcal 누적 및 표시
     updateTrainingMetrics();
@@ -591,6 +718,9 @@ function startSegmentLoop() {
       console.log('훈련 완료!');
       clearInterval(window.trainingState.timerId);
       window.trainingState.timerId = null;
+
+      // 활성 카운트다운 정지
+      stopSegmentCountdown();
 
       if (typeof setPaused === "function") setPaused(false);
       if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
@@ -609,10 +739,11 @@ function startSegmentLoop() {
         console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
         applySegmentTarget(window.trainingState.segIndex);
         
-        // 세그먼트 전환 효과음 (선택적)
-        if (typeof playBeep === "function") {
-          playBeep(1200, 200, 0.3);
+        // 세그먼트 전환 완료 후 카운트다운 정리
+        if (segmentCountdownActive) {
+          stopSegmentCountdown();
         }
+        
       } else {
         console.log('모든 세그먼트 완료');
       }
@@ -624,11 +755,36 @@ function startSegmentLoop() {
 
 
 // 6. stopSegmentLoop 함수 수정
+// 수정된 stopSegmentLoop 함수 (카운트다운도 함께 정지)
 function stopSegmentLoop() {
   if (window.trainingState.timerId) {
     clearInterval(window.trainingState.timerId);
     window.trainingState.timerId = null;
     console.log('세그먼트 루프 정지됨');
+  }
+  
+  // 활성 카운트다운도 정지
+  stopSegmentCountdown();
+}
+
+// 일시정지 시에도 카운트다운 정지
+function setPaused(isPaused) {
+  window.trainingState.paused = !!isPaused;
+
+  // 일시정지 시 카운트다운 정지
+  if (isPaused && segmentCountdownActive) {
+    stopSegmentCountdown();
+  }
+
+  // 버튼 라벨/아이콘 업데이트
+  const btn = document.getElementById("btnTogglePause");
+  const icon = document.getElementById("pauseIcon");
+  if (btn)  btn.textContent = window.trainingState.paused ? " ▶️" : " ⏸️";
+  if (icon) icon.textContent = window.trainingState.paused ? "▶️" : "⏸️";
+
+  // (선택) 토스트/상태 표시
+  if (typeof showToast === "function") {
+    showToast(window.trainingState.paused ? "일시정지됨" : "재개됨");
   }
 }
 
@@ -1076,14 +1232,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 구간 건너뛰기
-  document.getElementById("btnSkipSegment")?.addEventListener("click", () => {
-    const w = window.currentWorkout;
-    if (!w) return;
-    trainingState.segIndex = Math.min(w.segments.length - 1, trainingState.segIndex + 1);
-    trainingState.segElapsedSec = 0;
-    applySegmentTarget(trainingState.segIndex);
-    updateTimeUI();
-  });
+// 구간 건너뛰기 - 기존 코드 교체
+document.getElementById("btnSkipSegment")?.addEventListener("click", skipCurrentSegment);
 
   // 훈련 종료
   document.getElementById("btnStopTraining")?.addEventListener("click", () => {
