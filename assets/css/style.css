@@ -1073,7 +1073,7 @@ button[aria-disabled="true"] {
 
 .group-header h4 {
   margin: 0 0 4px 0; /* 아래 여백 추가 */
-  font-size: 14px; /* 기존 16px에서 축소 */
+  font-size: 16px; /* 기존 16px에서 축소 */
   font-weight: 600;
   color: white; /* 흰색으로 변경 */
   line-height: 1.3;
