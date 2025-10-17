@@ -1160,6 +1160,7 @@ async function saveWorkout() {
   }
 }
 
+// 기존 editWorkout 함수를 이렇게 수정하세요
 async function editWorkout(workoutId) {
   if (!workoutId) {
     window.showToast('유효하지 않은 워크아웃 ID입니다.');
@@ -1180,12 +1181,15 @@ async function editWorkout(workoutId) {
       return;
     }
     
+    // 수정 모드 활성화
     isWorkoutEditMode = true;
     currentEditWorkoutId = workoutId;
     console.log('Edit mode activated for workout:', workoutId);
     
+    // 워크아웃 빌더 화면으로 이동 (폼 초기화 안함)
     showAddWorkoutForm(false);
     
+    // 기본 정보 채우기
     const titleEl = safeGetElement('wbTitle');
     const descEl = safeGetElement('wbDesc');
     const authorEl = safeGetElement('wbAuthor');
@@ -1198,9 +1202,49 @@ async function editWorkout(workoutId) {
     if (statusEl) statusEl.value = workout.status || '보이기';
     if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
     
+    // 🔥 핵심 추가: 세그먼트 데이터 로드
+    if (workout.segments && Array.isArray(workout.segments)) {
+      // 기존 세그먼트 배열 초기화 후 새 데이터로 채우기
+      workoutSegments = workout.segments.map((segment, index) => ({
+        id: segment.id || (Date.now() + index), // ID가 없으면 임시 ID 생성
+        label: segment.label || '세그먼트',
+        segment_type: segment.segment_type || 'interval',
+        duration_sec: Number(segment.duration_sec) || 300,
+        target_type: segment.target_type || 'ftp_percent',
+        target_value: Number(segment.target_value) || 100,
+        ramp: segment.ramp || 'none',
+        ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
+      }));
+      
+      console.log('Loaded segments for editing:', workoutSegments);
+      
+      // 세그먼트 목록 화면에 표시
+      if (typeof renderSegments === 'function') {
+        renderSegments();
+      }
+      
+      // 세그먼트 요약 정보 업데이트
+      if (typeof updateSegmentSummary === 'function') {
+        updateSegmentSummary();
+      }
+      
+      window.showToast(`${workoutSegments.length}개의 세그먼트가 로드되었습니다. 개별 수정이 가능합니다.`);
+    } else {
+      // 세그먼트가 없는 경우
+      workoutSegments = [];
+      if (typeof renderSegments === 'function') {
+        renderSegments();
+      }
+      if (typeof updateSegmentSummary === 'function') {
+        updateSegmentSummary();
+      }
+      console.log('No segments found in workout');
+    }
+    
+    // UI 수정 모드로 변경
     const saveBtn = safeGetElement('btnSaveWorkout');
     if (saveBtn) {
-      saveBtn.textContent = '수정';
+      saveBtn.textContent = '수정 완료';
       saveBtn.onclick = performWorkoutUpdate;
     }
     
@@ -1215,6 +1259,7 @@ async function editWorkout(workoutId) {
   }
 }
 
+// performWorkoutUpdate 세그먼트 업데이트 함수 수정
 async function performWorkoutUpdate() {
   if (!isWorkoutEditMode || !currentEditWorkoutId) {
     console.error('Invalid edit mode state');
@@ -1226,6 +1271,7 @@ async function performWorkoutUpdate() {
   const authorEl = safeGetElement('wbAuthor');
   const statusEl = safeGetElement('wbStatus');
   const publishDateEl = safeGetElement('wbPublishDate');
+  const saveBtn = safeGetElement('btnSaveWorkout');
 
   if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
     window.showToast('폼 요소를 찾을 수 없습니다.');
@@ -1243,23 +1289,94 @@ async function performWorkoutUpdate() {
     return;
   }
 
+  // 저장 중 UI 표시
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.classList.add('btn-saving', 'saving-state');
+    saveBtn.innerHTML = '<span class="saving-spinner"></span>수정 중...';
+  }
+
   try {
+    // 1단계: 기본 정보 업데이트
     const workoutData = { title, description, author, status, publish_date: publishDate };
     console.log('Updating workout:', currentEditWorkoutId, 'with data:', workoutData);
     
-    const result = await apiUpdateWorkout(currentEditWorkoutId, workoutData);
+    const basicUpdateResult = await apiUpdateWorkout(currentEditWorkoutId, workoutData);
     
-    if (result && result.success) {
-      window.showToast('워크아웃 정보가 수정되었습니다.');
-      resetWorkoutFormMode();
-      loadWorkouts();
-    } else {
-      window.showToast('워크아웃 수정 실패: ' + (result?.error || '알 수 없는 오류'));
+    if (!basicUpdateResult || !basicUpdateResult.success) {
+      throw new Error(basicUpdateResult?.error || '워크아웃 기본 정보 업데이트 실패');
     }
+
+    // 2단계: 세그먼트가 수정되었다면 새로 생성된 워크아웃으로 교체
+    if (workoutSegments && workoutSegments.length > 0) {
+      console.log(`세그먼트 ${workoutSegments.length}개와 함께 워크아웃 재생성 중...`);
+      
+      // 세그먼트 데이터 정규화
+      const validSegments = workoutSegments.filter(segment => 
+        segment && typeof segment === 'object' && segment.label
+      ).map(segment => ({
+        label: String(segment.label || '세그먼트'),
+        segment_type: String(segment.segment_type || 'interval'),
+        duration_sec: Number(segment.duration_sec) || 300,
+        target_type: String(segment.target_type || 'ftp_percent'),
+        target_value: Number(segment.target_value) || 100,
+        ramp: String(segment.ramp || 'none'),
+        ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
+      }));
+
+      // 기존 워크아웃 삭제
+      const deleteResult = await apiDeleteWorkout(currentEditWorkoutId);
+      if (!deleteResult || !deleteResult.success) {
+        console.warn('기존 워크아웃 삭제 실패, 계속 진행:', deleteResult?.error);
+      }
+
+      // 새 워크아웃 생성 (세그먼트 포함)
+      const newWorkoutData = { 
+        title, 
+        description, 
+        author, 
+        status, 
+        publish_date: publishDate,
+        segments: validSegments
+      };
+
+      const createResult = await apiCreateWorkoutWithSegments(newWorkoutData);
+      
+      if (!createResult || !createResult.success) {
+        throw new Error(createResult?.error || '세그먼트 포함 워크아웃 재생성 실패');
+      }
+
+      let message = `워크아웃이 성공적으로 수정되었습니다!`;
+      if (createResult.addedSegments !== undefined) {
+        message += ` (${createResult.addedSegments}개 세그먼트 포함)`;
+      }
+      
+      if (createResult.warning) {
+        message += `\n주의: ${createResult.warning}`;
+      }
+      
+      window.showToast(message);
+    } else {
+      // 세그먼트가 없는 경우 기본 정보만 업데이트
+      window.showToast('워크아웃 정보가 수정되었습니다.');
+    }
+    
+    // 수정 모드 해제 및 목록 새로고침
+    resetWorkoutFormMode();
+    setTimeout(() => {
+      loadWorkouts();
+    }, 500);
     
   } catch (error) {
     console.error('워크아웃 업데이트 실패:', error);
-    window.showToast('워크아웃 수정 중 오류가 발생했습니다.');
+    window.showToast('워크아웃 수정 중 오류가 발생했습니다: ' + error.message);
+  } finally {
+    // UI 복원
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.classList.remove('btn-saving', 'saving-state');
+      saveBtn.innerHTML = '수정 완료';
+    }
   }
 }
 
