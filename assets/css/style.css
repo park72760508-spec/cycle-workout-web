@@ -1258,8 +1258,8 @@ button[aria-disabled="true"] {
 }
 
 
-/* iOS Safari 전용 개선 */
-@supports (-webkit-touch-callout: none) {
+/* iOS Safari 전용 개선 - 더 정확한 타겟팅 */
+@supports (-webkit-touch-callout: none) and (not (any-hover: hover)) {
   .btn-row.center {
     position: sticky;
     bottom: 20px;
@@ -1277,6 +1277,8 @@ button[aria-disabled="true"] {
     cursor: pointer;
   }
 }
+
+
 
 
 /* 모바일 디바이스 최적화 */
@@ -1299,5 +1301,60 @@ button[aria-disabled="true"] {
   .btn-row.center .btn {
     min-height: 48px; /* 모바일에서 더 큰 터치 영역 */
     font-size: 16px;
+  }
+}
+
+/* 안드로이드/PC 전용 개선 */
+@media (any-hover: hover) {
+  .btn-row.center {
+    position: relative !important;
+    z-index: 100 !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    margin: 20px 0 !important;
+    padding: 0 !important;
+  }
+  
+  .btn-row.center .btn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    touch-action: auto !important;
+  }
+}
+
+/* PC/데스크톱 전용 최적화 */
+@media (min-width: 1024px) {
+  .btn-row.center {
+    position: static !important;
+    z-index: auto !important;
+    background: none !important;
+    backdrop-filter: none !important;
+    margin: 20px 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* 👇 여기에 3단계 코드 추가 👇 */
+/* 범용 버튼 클릭 보장 */
+.btn-row.center .btn {
+  position: relative;
+  z-index: 101;
+  display: inline-block;
+  min-height: 44px;
+  min-width: 120px;
+  line-height: 44px;
+  text-align: center;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+/* 버튼 호버 효과 (PC/마우스 환경) */
+@media (hover: hover) {
+  .btn-row.center .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(46, 116, 232, 0.3);
   }
 }
