@@ -1506,9 +1506,68 @@ function initializeLoginScreen() {
   console.log("로그인 화면 초기화 완료");
 }
 
+
+// 3. 개선된 화면 전환 함수
+function switchToNextScreen(targetScreenId) {
+  console.log(`화면 전환: ${targetScreenId}`);
+  
+  try {
+    // 1) 모든 화면 완전히 숨김 (강제)
+    document.querySelectorAll(".screen").forEach(screen => {
+      screen.style.display = "none";
+      screen.classList.remove("active");
+      screen.style.position = "static";
+      screen.style.zIndex = "auto";
+    });
+    
+    // 2) 잠시 대기 후 대상 화면만 표시 (렌더링 보장)
+    setTimeout(() => {
+      const targetScreen = document.getElementById(targetScreenId);
+      if (targetScreen) {
+        // 화면이 전체를 차지하도록 강제 설정
+        targetScreen.style.display = "block";
+        targetScreen.classList.add("active");
+        targetScreen.style.position = "relative";
+        targetScreen.style.zIndex = "1000";
+        targetScreen.style.width = "100%";
+        targetScreen.style.height = "100vh";
+        targetScreen.style.overflow = "auto";
+        
+        console.log(`성공적으로 ${targetScreenId}로 전환되었습니다.`);
+        
+        // 스크롤을 최상단으로 이동
+        window.scrollTo(0, 0);
+        targetScreen.scrollTop = 0;
+        
+        // 화면별 특별 처리
+        if (targetScreenId === 'profileScreen') {
+          console.log('프로필 화면 로딩 중...');
+          setTimeout(() => {
+            if (typeof window.loadUsers === 'function') {
+              window.loadUsers();
+            } else {
+              console.error('loadUsers 함수를 찾을 수 없습니다');
+            }
+          }, 150);
+        }
+        
+      } else {
+        console.error(`화면 요소 '${targetScreenId}'를 찾을 수 없습니다.`);
+        return;
+      }
+    }, 50);
+    
+  } catch (error) {
+    console.error('화면 전환 중 오류:', error);
+  }
+}
+
+
+
+
 // 사용자 인증 처리
 // 기존 handleAuthentication 함수를 이 코드로 교체하세요
-
+// 1. 개선된 사용자 인증 함수
 async function handleAuthentication() {
   const phoneInput = safeGetElement("phoneAuth");
   const authButton = safeGetElement("btnAuthenticate");
@@ -1519,6 +1578,7 @@ async function handleAuthentication() {
   }
 
   const phoneLastFour = phoneInput.value;
+  console.log(`인증 시도: 전화번호 뒷자리 ${phoneLastFour}`);
   
   try {
     // 로딩 상태 시작
@@ -1532,30 +1592,49 @@ async function handleAuthentication() {
       authError.classList.add("hidden");
     }
 
-    // 사용자 목록 가져오기
-    await loadUsersForAuth();
+    // 진행 상태 표시
+    showAuthStatus("loading", "사용자 정보를 확인하는 중...", "⏳");
+
+    // 사용자 목록 강제 새로고침
+    console.log('사용자 데이터 로딩 시작...');
+    await loadUsersForAuth(true); // force reload
+    
+    // 로딩 완료 후 잠시 대기 (데이터 안정화)
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     // 전화번호 뒷자리로 매칭되는 모든 사용자 찾기
     const users = window.users || window.userProfiles || [];
+    console.log(`로딩된 사용자 수: ${users.length}`);
+    console.log('사용자 목록:', users);
+    
     const matchingUsers = users.filter(user => {
       const contact = user.contact || user.phone || "";
-      const lastFour = contact.replace(/[^0-9]/g, '').slice(-4);
+      const normalized = normalizePhoneNumber(contact);
+      const lastFour = normalized.slice(-4);
+      
+      console.log(`사용자 ${user.name}: 연락처 "${contact}" → 정규화 "${normalized}" → 뒷자리 "${lastFour}"`);
+      
       return lastFour === phoneLastFour;
     });
 
-    console.log(`전화번호 뒷 4자리 "${phoneLastFour}"로 검색된 사용자 수: ${matchingUsers.length}`);
+    console.log(`전화번호 뒷자리 "${phoneLastFour}"로 검색된 사용자 수: ${matchingUsers.length}`);
+    matchingUsers.forEach(user => console.log(`매칭된 사용자:`, user));
 
     if (matchingUsers.length >= 1) {
       // 매칭되는 사용자가 1명 이상인 경우
       
       // 첫 번째 사용자를 현재 사용자로 설정
       window.currentUser = matchingUsers[0];
+      console.log('선택된 사용자:', window.currentUser);
       
       // 여러 명이 매칭되는 경우 로그에 표시
       if (matchingUsers.length > 1) {
         console.log("여러 사용자가 매칭됨:", matchingUsers.map(u => u.name));
         console.log("첫 번째 사용자를 선택:", matchingUsers[0].name);
       }
+      
+      // 성공 상태 표시
+      showAuthStatus("success", `${matchingUsers[0].name}님 인증 완료`, "✅");
       
       // 성공 피드백
       if (typeof showToast === "function") {
@@ -1564,15 +1643,17 @@ async function handleAuthentication() {
       
       // 블루투스 연결 화면으로 이동
       setTimeout(() => {
-        if (typeof showScreen === "function") {
-          showScreen("connectionScreen");
-        }
-      }, 1000);
+        hideAuthStatus();
+        switchToNextScreen("connectionScreen");
+      }, 1500);
       
     } else {
       // 매칭되는 사용자가 0명인 경우
       
       console.log("매칭되는 사용자가 없음 - 사용자 등록 화면으로 이동");
+      
+      // 리다이렉트 상태 표시
+      showAuthStatus("redirect", "미등록 번호입니다. 회원가입으로 이동합니다...", "📋");
       
       // 안내 메시지 표시
       if (typeof showToast === "function") {
@@ -1581,18 +1662,28 @@ async function handleAuthentication() {
       
       // 사용자 등록 화면으로 자동 이동
       setTimeout(() => {
-        if (typeof showScreen === "function") {
-          showScreen("profileScreen");
-        }
-      }, 1500);
+        hideAuthStatus();
+        switchToNextScreen("profileScreen");
+      }, 2000);
     }
     
   } catch (error) {
     console.error("Authentication error:", error);
     
+    hideAuthStatus();
+    
     if (authError) {
       authError.classList.remove("hidden");
       authError.textContent = "인증 중 오류가 발생했습니다. 다시 시도해주세요.";
+    }
+    
+    // 입력 필드 에러 표시
+    const inputWrapper = phoneInput.closest('.input-wrapper');
+    if (inputWrapper) {
+      inputWrapper.classList.add('error');
+      setTimeout(() => {
+        inputWrapper.classList.remove('error');
+      }, 2000);
     }
     
     // 입력 필드 포커스
@@ -1606,6 +1697,7 @@ async function handleAuthentication() {
     }
   }
 }
+
 
 // 추가: 다중 사용자 선택 함수 (필요시 사용)
 function showUserSelectionModal(matchingUsers) {
@@ -1643,32 +1735,66 @@ function prepareUserData(user) {
 
 
 // 인증용 사용자 목록 로드
-async function loadUsersForAuth() {
+// 2. 개선된 사용자 데이터 로딩 함수
+async function loadUsersForAuth(forceReload = false) {
   try {
-    // 기존 사용자 데이터가 있으면 사용
-    if ((window.users && window.users.length > 0) || 
-        (window.userProfiles && window.userProfiles.length > 0)) {
+    console.log('loadUsersForAuth 시작, forceReload:', forceReload);
+    
+    // 강제 새로고침이 아니고 기존 사용자 데이터가 있으면 사용
+    if (!forceReload && ((window.users && window.users.length > 0) || 
+        (window.userProfiles && window.userProfiles.length > 0))) {
+      console.log('기존 사용자 데이터 사용');
       return;
     }
 
     // userManager.js의 loadUsers 함수가 있으면 사용
     if (typeof window.loadUsers === "function") {
+      console.log('userManager.loadUsers 함수 호출');
       await window.loadUsers();
+      console.log('userManager.loadUsers 완료, 사용자 수:', (window.users || []).length);
       return;
     }
 
     // Google Apps Script에서 사용자 데이터 가져오기
     if (window.CONFIG && window.CONFIG.GAS_WEB_APP_URL) {
-      const response = await fetch(window.CONFIG.GAS_WEB_APP_URL + "?action=getUsers");
+      console.log('Google Apps Script에서 사용자 데이터 가져오기');
+      const url = window.CONFIG.GAS_WEB_APP_URL + "?action=getUsers&t=" + Date.now();
+      console.log('요청 URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      console.log('응답 상태:', response.status, response.statusText);
+      
       if (response.ok) {
         const data = await response.json();
-        window.users = data.users || [];
+        console.log('받은 데이터:', data);
+        
+        if (data && data.users && Array.isArray(data.users)) {
+          window.users = data.users;
+          console.log(`성공적으로 ${data.users.length}명의 사용자 데이터를 로딩했습니다.`);
+          console.log('첫 번째 사용자 예시:', data.users[0]);
+        } else {
+          console.warn('올바르지 않은 데이터 형식:', data);
+          window.users = [];
+        }
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
+    } else {
+      console.warn('Google Apps Script URL이 설정되지 않았습니다.');
+      window.users = [];
     }
     
   } catch (error) {
-    console.error("Failed to load users for authentication:", error);
+    console.error("사용자 데이터 로딩 실패:", error);
     // 사용자 목록 로드 실패시에도 계속 진행
+    window.users = window.users || [];
   }
 }
 
@@ -1928,11 +2054,14 @@ async function handleAuthentication() {
 }
 
 // 전화번호 형식 정규화 함수 (데이터 일관성 향상)
+// 4. 개선된 전화번호 정규화 함수
 function normalizePhoneNumber(phone) {
   if (!phone) return "";
   
   // 숫자만 추출
   const numbers = phone.replace(/[^0-9]/g, '');
+  
+  console.log(`전화번호 정규화: "${phone}" → "${numbers}"`);
   
   // 11자리 010 번호인 경우
   if (numbers.length === 11 && numbers.startsWith('010')) {
@@ -1978,7 +2107,36 @@ function goToRegistrationWithPhone(phoneLastFour) {
 }
 
 
+// 5. 디버깅용 함수들
+window.debugAuth = function() {
+  console.log("=== 인증 디버그 정보 ===");
+  console.log("현재 사용자:", window.currentUser);
+  console.log("로딩된 사용자 목록:", window.users || window.userProfiles);
+  console.log("전화번호 입력값:", document.getElementById("phoneAuth")?.value);
+  console.log("Google Apps Script URL:", window.CONFIG?.GAS_WEB_APP_URL);
+};
 
+window.testAuth = function(phoneLastFour = "9020") {
+  console.log(`=== 테스트 인증: ${phoneLastFour} ===`);
+  const phoneInput = document.getElementById("phoneAuth");
+  if (phoneInput) {
+    phoneInput.value = phoneLastFour;
+    handleAuthentication();
+  }
+};
+
+// 6. 사용자 등록 화면으로 이동 시 입력된 전화번호 뒷자리 전달
+function goToRegistrationWithPhone(phoneLastFour) {
+  // 전화번호 뒷자리를 세션에 저장 (등록 화면에서 활용 가능)
+  try {
+    sessionStorage.setItem('pendingPhoneLastFour', phoneLastFour);
+    console.log('등록 대기 전화번호 저장:', phoneLastFour);
+  } catch (e) {
+    console.warn('세션 스토리지 저장 실패:', e);
+  }
+  
+  switchToNextScreen("profileScreen");
+}
 
 
 
