@@ -1394,6 +1394,282 @@ function togglePause() {
   setPaused(!window.trainingState.paused);
 }
 
+// ========== 로그인 화면 JavaScript 코드 ==========
+// app.js 파일의 DOMContentLoaded 이벤트 내부에 추가하세요
+
+// 로그인 화면 초기화 (기존 showScreen("connectionScreen") 대신)
+if (typeof showScreen === "function") {
+  showScreen("loginScreen"); // 첫 화면을 로그인 화면으로 변경
+}
+
+// 전화번호 인증 기능
+function initializeLoginScreen() {
+  const phoneInput = safeGetElement("phoneAuth");
+  const authButton = safeGetElement("btnAuthenticate");
+  const registerButton = safeGetElement("btnGoRegister");
+  const authError = safeGetElement("authError");
+
+  // 전화번호 입력 유효성 검사
+  if (phoneInput) {
+    phoneInput.addEventListener("input", (e) => {
+      // 숫자만 입력 허용
+      e.target.value = e.target.value.replace(/[^0-9]/g, '');
+      
+      // 4자리 제한
+      if (e.target.value.length > 4) {
+        e.target.value = e.target.value.slice(0, 4);
+      }
+      
+      // 에러 메시지 숨기기
+      if (authError) {
+        authError.classList.add("hidden");
+      }
+      
+      // 버튼 활성화/비활성화
+      if (authButton) {
+        authButton.disabled = e.target.value.length !== 4;
+        authButton.style.opacity = e.target.value.length === 4 ? "1" : "0.6";
+      }
+    });
+
+    // Enter 키 이벤트
+    phoneInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter" && phoneInput.value.length === 4) {
+        handleAuthentication();
+      }
+    });
+  }
+
+  // 인증 버튼 클릭
+  if (authButton) {
+    authButton.addEventListener("click", handleAuthentication);
+  }
+
+  // 사용자 등록 버튼 클릭
+  if (registerButton) {
+    registerButton.addEventListener("click", () => {
+      if (typeof showScreen === "function") {
+        showScreen("profileScreen");
+      }
+    });
+  }
+}
+
+// 사용자 인증 처리
+async function handleAuthentication() {
+  const phoneInput = safeGetElement("phoneAuth");
+  const authButton = safeGetElement("btnAuthenticate");
+  const authError = safeGetElement("authError");
+  
+  if (!phoneInput || phoneInput.value.length !== 4) {
+    return;
+  }
+
+  const phoneLastFour = phoneInput.value;
+  
+  try {
+    // 로딩 상태 시작
+    if (authButton) {
+      authButton.classList.add("loading");
+      authButton.disabled = true;
+    }
+
+    // 사용자 목록 가져오기 (기존 loadUsers 함수 활용)
+    await loadUsersForAuth();
+    
+    // 전화번호 뒷자리로 사용자 찾기
+    const users = window.users || window.userProfiles || [];
+    const foundUser = users.find(user => {
+      const contact = user.contact || user.phone || "";
+      const lastFour = contact.replace(/[^0-9]/g, '').slice(-4);
+      return lastFour === phoneLastFour;
+    });
+
+    if (foundUser) {
+      // 인증 성공
+      window.currentUser = foundUser;
+      
+      // 성공 피드백
+      if (typeof showToast === "function") {
+        showToast(`${foundUser.name}님 환영합니다!`);
+      }
+      
+      // 연결 화면으로 이동
+      setTimeout(() => {
+        if (typeof showScreen === "function") {
+          showScreen("connectionScreen");
+        }
+      }, 1000);
+      
+    } else {
+      // 인증 실패
+      if (authError) {
+        authError.classList.remove("hidden");
+        authError.textContent = "등록되지 않은 번호입니다. 사용자 등록을 먼저 진행해주세요.";
+      }
+      
+      // 입력 필드 포커스 및 선택
+      phoneInput.select();
+    }
+    
+  } catch (error) {
+    console.error("Authentication error:", error);
+    
+    if (authError) {
+      authError.classList.remove("hidden");
+      authError.textContent = "인증 중 오류가 발생했습니다. 다시 시도해주세요.";
+    }
+    
+  } finally {
+    // 로딩 상태 종료
+    if (authButton) {
+      authButton.classList.remove("loading");
+      authButton.disabled = false;
+    }
+  }
+}
+
+// 인증용 사용자 목록 로드
+async function loadUsersForAuth() {
+  try {
+    // 기존 사용자 데이터가 있으면 사용
+    if ((window.users && window.users.length > 0) || 
+        (window.userProfiles && window.userProfiles.length > 0)) {
+      return;
+    }
+
+    // userManager.js의 loadUsers 함수가 있으면 사용
+    if (typeof window.loadUsers === "function") {
+      await window.loadUsers();
+      return;
+    }
+
+    // Google Apps Script에서 사용자 데이터 가져오기
+    if (window.CONFIG && window.CONFIG.GAS_WEB_APP_URL) {
+      const response = await fetch(window.CONFIG.GAS_WEB_APP_URL + "?action=getUsers");
+      if (response.ok) {
+        const data = await response.json();
+        window.users = data.users || [];
+      }
+    }
+    
+  } catch (error) {
+    console.error("Failed to load users for authentication:", error);
+    // 사용자 목록 로드 실패시에도 계속 진행
+  }
+}
+
+// 전화번호 포맷팅 함수
+function formatPhoneNumber(phone) {
+  const cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.length === 11 && cleaned.startsWith('010')) {
+    return `${cleaned.slice(0,3)}-${cleaned.slice(3,7)}-${cleaned.slice(7)}`;
+  }
+  return phone;
+}
+
+// 로그인 화면 애니메이션 효과
+function addLoginAnimations() {
+  // 컨테이너 등장 애니메이션
+  const container = document.querySelector('.login-container');
+  if (container) {
+    container.style.opacity = '0';
+    container.style.transform = 'translateY(30px)';
+    
+    setTimeout(() => {
+      container.style.transition = 'all 0.8s ease-out';
+      container.style.opacity = '1';
+      container.style.transform = 'translateY(0)';
+    }, 300);
+  }
+
+  // 순차적 요소 등장 애니메이션
+  const elements = [
+    '.app-logo',
+    '.features-preview',
+    '.login-form',
+    '.register-section',
+    '.login-footer'
+  ];
+
+  elements.forEach((selector, index) => {
+    const element = document.querySelector(selector);
+    if (element) {
+      element.style.opacity = '0';
+      element.style.transform = 'translateY(20px)';
+      
+      setTimeout(() => {
+        element.style.transition = 'all 0.6s ease-out';
+        element.style.opacity = '1';
+        element.style.transform = 'translateY(0)';
+      }, 500 + (index * 150));
+    }
+  });
+}
+
+// 사용자 등록 화면으로 이동 (기존 profileScreen 활용)
+function goToUserRegistration() {
+  if (typeof showScreen === "function") {
+    showScreen("profileScreen");
+  }
+}
+
+// iOS 모드 체크 및 처리 (기존 코드 수정)
+function checkIOSMode() {
+  const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  
+  if (isIOSDevice) {
+    // iOS에서는 블루투스 관련 메시지 표시
+    const statusItems = document.querySelectorAll('.status-item');
+    statusItems.forEach(item => {
+      if (item.textContent.includes('블루투스')) {
+        item.innerHTML = `
+          <div class="status-indicator" style="background:#f59e0b;"></div>
+          <span>iOS 제한 모드</span>
+        `;
+      }
+    });
+  }
+}
+
+// 디버그 함수 (개발용)
+window.debugLogin = function() {
+  console.log("=== Login Debug Info ===");
+  console.log("Current users:", window.users || window.userProfiles);
+  console.log("Current user:", window.currentUser);
+  console.log("Phone input value:", document.getElementById("phoneAuth")?.value);
+};
+
+// 테스트용 빠른 로그인 (개발용)
+window.quickLogin = function(userIndex = 0) {
+  const users = window.users || window.userProfiles || [];
+  if (users[userIndex]) {
+    window.currentUser = users[userIndex];
+    console.log("Quick login as:", users[userIndex].name);
+    if (typeof showScreen === "function") {
+      showScreen("connectionScreen");
+    }
+  }
+};
+
+// 로그인 화면 초기화 호출 (DOMContentLoaded 이벤트에서)
+document.addEventListener("DOMContentLoaded", () => {
+  // 기존 초기화 코드 후에 추가
+  initializeLoginScreen();
+  
+  // 애니메이션 효과 적용
+  setTimeout(() => {
+    addLoginAnimations();
+    checkIOSMode();
+  }, 100);
+});
+
+
+
+
+
+
 // DOMContentLoaded 이벤트
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
@@ -1449,7 +1725,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   if (typeof showScreen === "function") {
-    showScreen("connectionScreen");
+    //showScreen("connectionScreen");
+     showScreen("loginScreen"); // 이렇게 변경
   }
 
   // 훈련 준비 → 훈련 시작
