@@ -844,6 +844,8 @@ function applySegmentTarget(i) {
 
 // 시작/루프
 // 수정된 startSegmentLoop 함수 (카운트다운 로직 추가)
+// 세그먼트 카운트다운 함수 (수정된 버전)
+// 수정된 startSegmentLoop 함수
 function startSegmentLoop() {
   const w = window.currentWorkout;
   if (!w || !w.segments || w.segments.length === 0) {
@@ -950,28 +952,47 @@ function startSegmentLoop() {
       return;
     }
 
-    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
+    // 세그먼트 경계 통과 → 다음 세그먼트로 전환 (카운트다운 고려)
     if (window.trainingState.segElapsedSec >= segDur) {
-      console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
-      
-      window.trainingState.segIndex += 1;
-      window.trainingState.segElapsedSec = 0;
-
-      if (window.trainingState.segIndex < w.segments.length) {
-        console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
-        applySegmentTarget(window.trainingState.segIndex);
-        
-        // 세그먼트 전환 완료 후 카운트다운 정리 (혹시 남아있다면)
-        if (segmentCountdownActive) {
-          stopSegmentCountdown();
-        }
-        
-      } else {
-        console.log('모든 세그먼트 완료');
+      // 카운트다운이 활성화되어 있다면 0초 완료까지 잠시 대기
+      if (segmentCountdownActive) {
+        console.log('카운트다운 활성 중 - 0초 완료 대기');
+        // 0.8초 후에 세그먼트 전환 (카운트다운 0초 + 강조음 재생 시간 고려)
+        setTimeout(() => {
+          performSegmentTransition(currentSegIndex, w);
+        }, 800);
+        return; // 현재 루프에서는 세그먼트 전환하지 않음
       }
+      
+      // 카운트다운이 없으면 즉시 전환
+      performSegmentTransition(currentSegIndex, w);
     }
   }, 1000);
 }
+
+
+// 세그먼트 전환 처리 함수 (카운트다운 완료 후 호출)==> 0초 카운트 다운 보완
+function performSegmentTransition(currentSegIndex, workoutData) {
+  console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
+  
+  window.trainingState.segIndex += 1;
+  window.trainingState.segElapsedSec = 0;
+
+  if (window.trainingState.segIndex < workoutData.segments.length) {
+    console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
+    applySegmentTarget(window.trainingState.segIndex);
+    
+    // 세그먼트 전환 완료 후 카운트다운 정리
+    if (segmentCountdownActive) {
+      stopSegmentCountdown();
+    }
+    
+  } else {
+    console.log('모든 세그먼트 완료');
+  }
+}
+
+
 
 // 6. stopSegmentLoop 함수 수정
 // 수정된 stopSegmentLoop 함수 (카운트다운도 함께 정지)
