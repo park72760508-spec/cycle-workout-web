@@ -295,6 +295,7 @@ let __pmPrev = { revs: null, time1024: null }; // 누적 크랭크회전수, 마
 
 // 파워미터 측정 알림
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
+// ⚡ 파워미터 데이터 처리 (cadence 보강)
 function handlePowerMeterData(e) {
   const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
   let offset = 0;
@@ -312,18 +313,25 @@ function handlePowerMeterData(e) {
     const crankRevs = dv.getUint16(offset, true); offset += 2;
     const crankTime = dv.getUint16(offset, true); offset += 2;
 
+    console.log(`Crank data - Revs: ${crankRevs}, Time: ${crankTime}, PrevRevs: ${__pmPrev.revs}, PrevTime: ${__pmPrev.time1024}`);
+
     if (__pmPrev.revs !== null && crankTime !== __pmPrev.time1024) {
       const revDiff = (crankRevs - __pmPrev.revs + 65536) % 65536;
       const timeDiff = (crankTime - __pmPrev.time1024 + 65536) % 65536; // 단위: 1/1024초
 
-      if (revDiff > 0 && timeDiff > 0) {
+      if (revDiff > 0 && timeDiff > 0 && timeDiff < 5120) { // 5초 이내 변화만 유효
         const cadence = (revDiff * 60 * 1024) / timeDiff;
-        window.liveData.cadence = Math.round(cadence);
+        if (cadence >= 0 && cadence <= 300) { // 유효한 케이던스 범위
+          window.liveData.cadence = Math.round(cadence);
+          console.log(`Calculated cadence: ${Math.round(cadence)} RPM`);
+        }
       }
     }
 
     __pmPrev.revs = crankRevs;
     __pmPrev.time1024 = crankTime;
+  } else {
+    console.log('No crank revolution data in power meter packet');
   }
 
   // ✅ UI 업데이트 호출
