@@ -1030,6 +1030,60 @@ window.updateTrainingDisplay = function () {
     if (currentPower > 0) powerDisplay.classList.add("active");
     else powerDisplay.classList.remove("active");
   }
+
+  // *** 네온 효과를 위한 달성도 계산 및 클래스 적용 ***
+  const targetPower = liveData.targetPower || 200;
+  const currentPower = liveData.power || 0;
+  const segmentAvgElement = document.getElementById("avgSegmentPowerValue");
+  const segmentAvgPower = segmentAvgElement ? parseInt(segmentAvgElement.textContent) || 0 : 0;
+  
+  // 달성도 계산 (세그먼트 평균 파워 기준)
+  const achievement = targetPower > 0 ? (segmentAvgPower / targetPower) : 0;
+  
+  console.log(`Power achievement: ${(achievement * 100).toFixed(1)}% (${segmentAvgPower}W / ${targetPower}W)`);
+  
+  // 모든 패널에서 이전 달성도 클래스 제거
+  const panels = document.querySelectorAll('.enhanced-metric-panel');
+  panels.forEach(panel => {
+    panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
+  });
+  
+  // 현재 파워 값에서도 달성도 클래스 제거
+  const currentPowerEl = document.getElementById("currentPowerValue");
+  if (currentPowerEl) {
+    currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+  }
+  
+  // 달성도에 따른 클래스 적용
+  let achievementClass = '';
+  if (achievement < 0.85) {
+    achievementClass = 'achievement-low';
+  } else if (achievement >= 0.85 && achievement <= 1.15) {
+    achievementClass = 'achievement-good';
+  } else if (achievement > 1.15 && achievement <= 1.30) {
+    achievementClass = 'achievement-high';
+  } else if (achievement > 1.30) {
+    achievementClass = 'achievement-over';
+  }
+  
+  // 세그먼트 평균이 있을 때만 네온 효과 적용
+  if (segmentAvgPower > 0 && achievementClass) {
+    panels.forEach(panel => {
+      panel.classList.add('neon-active', achievementClass);
+    });
+    
+    // 현재 파워 값에도 글로우 효과 적용
+    if (currentPowerEl && (achievementClass === 'achievement-good' || 
+                          achievementClass === 'achievement-high' || 
+                          achievementClass === 'achievement-over')) {
+      currentPowerEl.classList.add(achievementClass);
+    }
+    
+    console.log(`Applied neon effect: ${achievementClass}`);
+  }
+
+
+   
 };
 
 
