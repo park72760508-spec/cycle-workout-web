@@ -311,7 +311,7 @@ async function connectHeartRate() {
 // 파워미터 측정 알림
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
 // 2. handlePowerMeterData 함수를 다음으로 완전히 교체
-/ 2. handlePowerMeterData 함수를 다음으로 완전히 교체
+// 2. handlePowerMeterData 함수를 다음으로 완전히 교체
 function handlePowerMeterData(e) {
   const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
   let offset = 0;
