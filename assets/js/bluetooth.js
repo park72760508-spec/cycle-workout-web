@@ -476,3 +476,29 @@ class BluetoothManager {
 window.bluetoothManager = new BluetoothManager();
 
 console.log('Bluetooth Manager 로드 완료');
+
+
+// 기존 코드 호환을 위한 전역 함수들
+function connectHeartRate() {
+    if (window.bluetoothManager) {
+        return window.bluetoothManager.connectHeartRate();
+    }
+}
+
+function connectPowerMeter() {
+    if (window.bluetoothManager) {
+        return window.bluetoothManager.connectPowerMeter();
+    }
+}
+
+function connectTrainer() {
+    if (window.bluetoothManager) {
+        return window.bluetoothManager.connectTrainer();
+    }
+}
+
+function disconnectAll() {
+    if (window.bluetoothManager) {
+        return window.bluetoothManager.disconnectAll();
+    }
+}
