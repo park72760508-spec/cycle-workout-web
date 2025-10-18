@@ -419,6 +419,137 @@
 </head>
 
 <body>
+  <!-- 0) 로그인 화면 -->
+<!-- 기존 connectionScreen 앞에 새로운 로그인 화면을 추가하세요 -->
+  
+  <!-- 0) 로그인/인증 화면 (새로 추가) -->
+  <div id="loginScreen" class="screen active">
+    <!-- 배경 애니메이션 -->
+    <div class="login-background">
+      <div class="bg-gradient"></div>
+      <div class="bg-particles">
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+        <div class="particle"></div>
+      </div>
+    </div>
+  
+    <!-- 메인 콘텐츠 -->
+    <div class="login-container">
+      <!-- 상단 브랜딩 영역 -->
+      <div class="login-header">
+        <div class="app-logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 100 100" class="bike-icon">
+              <circle cx="25" cy="75" r="20" stroke="currentColor" stroke-width="3" fill="none"/>
+              <circle cx="75" cy="75" r="20" stroke="currentColor" stroke-width="3" fill="none"/>
+              <path d="M25 75 L45 35 L55 35 L65 55 L75 75" stroke="currentColor" stroke-width="3" fill="none"/>
+              <path d="M45 35 L35 55" stroke="currentColor" stroke-width="3" fill="none"/>
+              <path d="M55 55 L75 55" stroke="currentColor" stroke-width="3" fill="none"/>
+            </svg>
+          </div>
+          <div class="logo-text">
+            <h1>AI 사이클 트레이닝</h1>
+            <div class="logo-subtitle">
+              <span class="ai-badge">AI POWERED</span>
+              <span class="separator">•</span>
+              <span>스마트 코칭 시스템</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 특징 설명 -->
+        <div class="features-preview">
+          <div class="feature-item">
+            <div class="feature-icon">🧠</div>
+            <span>AI 맞춤 트레이닝</span>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">📊</div>
+            <span>실시간 성능 분석</span>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">🎯</div>
+            <span>목표 달성 코칭</span>
+          </div>
+        </div>
+      </div>
+  
+      <!-- 인증 폼 영역 -->
+      <div class="login-form-container">
+        <div class="login-form">
+          <h2 class="form-title">사용자 인증</h2>
+          <p class="form-subtitle">등록된 전화번호로 빠른 로그인</p>
+          
+          <div class="auth-form">
+            <div class="phone-input-group">
+              <label for="phoneAuth">전화번호 뒷 4자리</label>
+              <div class="input-wrapper">
+                <span class="input-prefix">010-****-</span>
+                <input 
+                  type="tel" 
+                  id="phoneAuth" 
+                  placeholder="0000" 
+                  maxlength="4" 
+                  pattern="[0-9]{4}"
+                  class="phone-input"
+                />
+                <div class="input-glow"></div>
+              </div>
+            </div>
+            
+            <button class="btn-auth" id="btnAuthenticate">
+              <span class="btn-text">인증 및 연결</span>
+              <div class="btn-arrow">→</div>
+            </button>
+          </div>
+  
+          <!-- 에러 메시지 -->
+          <div id="authError" class="auth-error hidden">
+            등록되지 않은 번호입니다. 사용자 등록을 먼저 진행해주세요.
+          </div>
+        </div>
+  
+        <!-- 사용자 등록 링크 -->
+        <div class="register-section">
+          <div class="register-divider">
+            <span>또는</span>
+          </div>
+          <button class="btn-register" id="btnGoRegister">
+            <div class="register-content">
+              <div class="register-icon">👤</div>
+              <div class="register-text">
+                <span class="register-title">새 사용자 등록</span>
+                <span class="register-desc">FTP, 체중 등 기본 정보 입력</span>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+  
+      <!-- 하단 정보 -->
+      <div class="login-footer">
+        <div class="system-status">
+          <div class="status-item">
+            <div class="status-indicator online"></div>
+            <span>AI 시스템 온라인</span>
+          </div>
+          <div class="status-item">
+            <div class="status-indicator ready"></div>
+            <span>블루투스 준비</span>
+          </div>
+        </div>
+        
+        <div class="version-info">
+          <span>v2.1 | 최신 업데이트</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
   <!-- 1) 연결 화면 -->
   <div id="connectionScreen" class="screen active">
     <div class="header">
