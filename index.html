@@ -762,82 +762,117 @@
     </div>
   </div>
 
-  <!-- 6) 훈련 화면 -->
-  <div id="trainingScreen" class="screen">
-    <div class="training-header">
-      <div id="userInfo"></div>
+  <!-- 6) 훈련 화면 신규 버젼으로 업데이트 -->
+<!-- 6) 훈련 화면 - 개선된 디자인으로 교체 -->
+<div id="trainingScreen" class="screen">
+  <!-- 1. 최상단: 사용자 정보 -->
+  <div class="enhanced-training-user-info">
+    <div id="userInfo"></div>
+  </div>
+
+  <!-- 2. 두번째: 경과 시간 및 다음 세그먼트 정보 -->
+  <div class="enhanced-training-time-info">
+    <div class="enhanced-time-elapsed">
+      <span class="enhanced-time-label">경과시간</span>
+      <span class="enhanced-time-value" id="elapsedTime">00:00</span>
+      <span class="enhanced-time-percent">(<span id="elapsedPercent">0</span>%)</span>
     </div>
-
-    <div class="segment-details1">
-      <div class="seg-left1">
-        <span class="elapsed-wrap1">
-          경과: <span id="elapsedTime">00:00</span>
-          (<span id="elapsedPercent">0</span>%)
-        </span>
-      </div>
-      <div class="seg-center1">
-        <span id="segmentTime">00:00</span>
-      </div>
-      <div class="seg-right1">
-        <span id="nextSegment">다음: 인터벌 FTP 140%</span>
-      </div>
-    </div>
-
-    <div class="metrics-grid">
-      <div class="metric-card avg-segment-power">
-        <div class="col-center">
-          <div class="metric-value" id="avgSegmentPowerValue">-</div>
-          <div class="metric-label">랩 파워 (W)</div>
-          <div class="metric-value" id="tssValue">-</div>
-          <div class="metric-label">TSS</div>
-        </div>
-      </div>
-
-      <div class="power-display">
-        <div class="current-power" id="currentPowerValue">-</div>
-        <div class="unit-dim">WATTS</div>
-        <div class="power-progress">
-          <div class="power-progress-bar" id="powerProgressBar"></div>
-          <div class="power-progress-label">달성도: <span id="achievementValueBar">0</span>%</div>
-        </div>
-        <div class="center mt-10">
-          <div id="powerComparison" class="target-line">목표: <span id="targetPowerValue">-</span>W</div>
-          <div id="segmentProgressText" class="segment-progress">진행률 <span id="segmentProgress">0</span>%</div>
-          <div id="currentSegmentName" class="segment-name">웜업 - 80RPM FTP 60%</div>
-        </div>
-      </div>
-
-      <div class="metric-card dual-metric">
-        <div class="metric-item">
-          <div class="metric-value" id="heartRateValue">-</div>
-          <div class="metric-label">BPM</div>
-        </div>
-        <div class="metric-item">
-          <div class="metric-value" id="cadenceValue">-</div>
-          <div class="metric-label">RPM</div>
-        </div>
-        <div class="metric-item">
-          <div class="metric-value" id="kcalValue">-</div> 
-          <div class="metric-label">kcal</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="timeline-wrap">
-      <div class="timeline-progress timeline--xl" id="timelineProgress">
-        <div class="timeline-segments" id="timelineSegments"></div>
-      </div>
-      <div class="timeline-legend">
-        <span>평균 파워: <span id="avgPowerValue">-</span>W</span>
-      </div>
-    </div>
-
-    <div class="training-controls">
-      <button class="control-btn pause" id="btnTogglePause" title="일시정지"><span id="pauseIcon">⏸️</span></button>
-      <button class="control-btn" id="btnSkipSegment" title="구간 건너뛰기">⏭️</button>
-      <button class="control-btn stop" id="btnStopTraining" title="훈련 종료">⏹️</button>
+    <div class="enhanced-next-segment-info">
+      <span class="enhanced-next-label">다음 세그먼트</span>
+      <span class="enhanced-next-value" id="nextSegment">인터벌 FTP 140%</span>
     </div>
   </div>
+
+  <!-- 3. 메인 메트릭 영역 (3열 그리드) -->
+  <div class="enhanced-metrics-grid">
+    <!-- 왼쪽: TSS & 칼로리 -->
+    <div class="enhanced-metric-panel enhanced-left-panel">
+      <div class="enhanced-panel-header">훈련 데이터</div>
+      <div class="enhanced-metric-item">
+        <div class="enhanced-metric-label">TSS</div>
+        <div class="enhanced-metric-value" id="tssValue">0.0</div>
+      </div>
+      <div class="enhanced-metric-item">
+        <div class="enhanced-metric-label">칼로리</div>
+        <div class="enhanced-metric-value" id="kcalValue">0</div>
+        <div class="enhanced-metric-unit">kcal</div>
+      </div>
+    </div>
+
+    <!-- 중앙: 메인 파워 디스플레이 -->
+    <div class="enhanced-metric-panel enhanced-center-panel enhanced-main-power-display">
+      <!-- 카운트다운 시간 (더 크게) -->
+      <div class="enhanced-segment-countdown">
+        <span class="enhanced-countdown-label">세그먼트 남은시간</span>
+        <span class="enhanced-countdown-value" id="segmentTime">05:00</span>
+      </div>
+
+      <!-- 목표 파워와 세그먼트 평균 파워 같은 라인 -->
+      <div class="enhanced-power-targets-row">
+        <div class="enhanced-target-power-section">
+          <div class="enhanced-target-label">목표 파워</div>
+          <div class="enhanced-target-value" id="targetPowerValue">250</div>
+          <div class="enhanced-target-unit">W</div>
+        </div>
+        <div class="enhanced-segment-avg-power">
+          <span class="enhanced-avg-label">세그먼트 평균</span>
+          <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
+          <span class="enhanced-avg-unit">W</span>
+        </div>
+      </div>
+
+      <!-- 현재 파워 (가장 크게) -->
+      <div class="enhanced-current-power-section">
+        <div class="enhanced-current-power-value" id="currentPowerValue">245</div>
+        <div class="enhanced-current-power-unit">WATTS</div>
+      </div>
+
+      <!-- 달성도 프로그레스 바 -->
+      <div class="enhanced-power-progress">
+        <div class="enhanced-power-progress-bar" id="powerProgressBar"></div>
+        <div class="enhanced-progress-labels">
+          <span>달성도: <span id="achievementValueBar">98</span>%</span>
+          <span>진행: <span id="segmentProgress">60</span>%</span>
+        </div>
+      </div>
+
+      <!-- 현재 세그먼트 이름 -->
+      <div class="enhanced-current-segment-name" id="currentSegmentName">메인셋 - FTP 105%</div>
+    </div>
+
+    <!-- 오른쪽: 심박수 & 케이던스 -->
+    <div class="enhanced-metric-panel enhanced-right-panel">
+      <div class="enhanced-panel-header">생체 데이터</div>
+      <div class="enhanced-metric-item">
+        <div class="enhanced-metric-label">심박수</div>
+        <div class="enhanced-metric-value enhanced-heart-rate" id="heartRateValue">145</div>
+        <div class="enhanced-metric-unit">BPM</div>
+      </div>
+      <div class="enhanced-metric-item">
+        <div class="enhanced-metric-label">케이던스</div>
+        <div class="enhanced-metric-value enhanced-cadence" id="cadenceValue">85</div>
+        <div class="enhanced-metric-unit">RPM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 세그먼트 타임라인 (기존 유지) -->
+  <div class="timeline-wrap">
+    <div class="timeline-progress timeline--xl" id="timelineProgress">
+      <div class="timeline-segments" id="timelineSegments"></div>
+    </div>
+    <div class="timeline-legend">
+      <span>평균 파워: <span id="avgPowerValue">-</span>W</span>
+    </div>
+  </div>
+
+  <!-- 5. 컨트롤 버튼 (기존 유지) -->
+  <div class="training-controls">
+    <button class="control-btn pause" id="btnTogglePause" title="일시정지"><span id="pauseIcon">⏸️</span></button>
+    <button class="control-btn" id="btnSkipSegment" title="구간 건너뛰기">⏭️</button>
+    <button class="control-btn stop" id="btnStopTraining" title="훈련 종료">⏹️</button>
+  </div>
+</div>
 
   <!-- 7) 결과 화면 -->
   <div id="resultScreen" class="screen">
