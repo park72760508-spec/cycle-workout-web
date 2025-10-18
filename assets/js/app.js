@@ -1030,47 +1030,65 @@ function setPaused(isPaused) {
 
 // 중복 선언 방지
 if (!window.showScreen) {
-  window.showScreen = function(id) {
-    try {
-      console.log(`Switching to screen: ${id}`);
-      
-      // 1) 모든 화면 숨김
-      document.querySelectorAll(".screen").forEach(s => {
-        s.style.display = "none";
-        s.classList.remove("active");
-      });
-      
+// 기존 showScreen 함수를 이 코드로 교체하세요
+
+window.showScreen = function(id) {
+  try {
+    console.log(`Switching to screen: ${id}`);
+    
+    // 1) 모든 화면 완전히 숨김 (강제)
+    document.querySelectorAll(".screen").forEach(screen => {
+      screen.style.display = "none";
+      screen.classList.remove("active");
+    });
+    
+    // 짧은 지연 후 대상 화면만 표시 (렌더링 보장)
+    setTimeout(() => {
       // 2) 대상 화면만 표시
-      const el = safeGetElement(id);
-      if (el) {
-        el.style.display = "block";
-        el.classList.add("active");
+      const targetScreen = document.getElementById(id);
+      if (targetScreen) {
+        targetScreen.style.display = "block";
+        targetScreen.classList.add("active");
+        
+        // 화면이 전체를 차지하도록 강제 설정
+        targetScreen.style.position = "relative";
+        targetScreen.style.zIndex = "1000";
+        targetScreen.style.width = "100%";
+        targetScreen.style.height = "100vh";
+        targetScreen.style.overflow = "auto";
+        
         console.log(`Successfully switched to: ${id}`);
+        
+        // 스크롤을 최상단으로 이동
+        window.scrollTo(0, 0);
+        targetScreen.scrollTop = 0;
+        
       } else {
         console.error(`Screen element '${id}' not found`);
         return;
       }
-      
-      // 3) 화면별 특별 처리
-      if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
-        setTimeout(() => loadWorkouts(), 100);
-      }
-      
-      if (id === 'profileScreen') {
-        console.log('Loading users for profile screen...');
-        setTimeout(() => {
-          if (typeof window.loadUsers === 'function') {
-            window.loadUsers();
-          } else {
-            console.error('loadUsers function not available');
-          }
-        }, 100);
-      }
-      
-    } catch (error) {
-      console.error('Error in showScreen:', error);
+    }, 50);
+    
+    // 3) 화면별 특별 처리
+    if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+      setTimeout(() => loadWorkouts(), 150);
     }
-  };
+    
+    if (id === 'profileScreen') {
+      console.log('Loading users for profile screen...');
+      setTimeout(() => {
+        if (typeof window.loadUsers === 'function') {
+          window.loadUsers();
+        } else {
+          console.error('loadUsers function not available');
+        }
+      }, 150);
+    }
+    
+  } catch (error) {
+    console.error('Error in showScreen:', error);
+  }
+};
 }
 
 if (!window.showConnectionStatus) {
