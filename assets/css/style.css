@@ -2274,29 +2274,7 @@ button[aria-disabled="true"] {
 .enhanced-heart-rate.hr-zone5 { color: #ef4444; }
 
 /* 반응형 디자인 */
-@media (max-width: 1024px) {
-  .enhanced-metrics-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  
-  .enhanced-training-time-info {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-  
-  .enhanced-current-power-value {
-    font-size: 56px;
-  }
-  
-  .enhanced-target-value, .enhanced-avg-value {
-    font-size: 20px;
-  }
-  
-  .enhanced-countdown-value {
-    font-size: 24px;
-  }
-}
+
 
 @media (max-width: 768px) {
   #trainingScreen {
