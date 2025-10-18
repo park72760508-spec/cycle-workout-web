@@ -1,8 +1,10 @@
 // bluetooth.js - 블루투스 디바이스 관리
-class BluetoothManager {
 
     // bluetooth.js 파일 맨 위에 추가
     const usePowerMeterPreferred = true;  
+
+class BluetoothManager {
+
     
     constructor() {
         this.heartRateDevice = null;
