@@ -1753,6 +1753,8 @@ window.quickLogin = function(userIndex = 0) {
 // 상태 메시지 처리 함수들 (handleAuthentication 함수와 함께 추가)
 
 // 상태 메시지 표시 함수
+// 기존 showAuthStatus 함수를 이 코드로 교체하세요
+
 function showAuthStatus(type, message, icon = '⏳') {
   const statusEl = safeGetElement("authStatus");
   const statusIcon = statusEl?.querySelector(".status-icon");
@@ -1761,8 +1763,15 @@ function showAuthStatus(type, message, icon = '⏳') {
   if (!statusEl || !statusIcon || !statusText) return;
   
   // 상태에 따른 스타일 적용
-  statusEl.classList.remove("hidden", "success", "redirect");
-  statusEl.classList.add(type);
+  statusEl.classList.remove("hidden", "success", "redirect", "loading");
+  
+  // type이 빈 문자열이 아닐 때만 클래스 추가
+  if (type && type.trim()) {
+    statusEl.classList.add(type);
+  } else {
+    // 기본 로딩 상태
+    statusEl.classList.add("loading");
+  }
   
   // 아이콘과 텍스트 업데이트
   statusIcon.textContent = icon;
@@ -1778,6 +1787,8 @@ function hideAuthStatus() {
 }
 
 // 개선된 handleAuthentication 함수 (상태 메시지 포함)
+// handleAuthentication 함수에서 showAuthStatus 호출 부분만 수정
+
 async function handleAuthentication() {
   const phoneInput = safeGetElement("phoneAuth");
   const authButton = safeGetElement("btnAuthenticate");
@@ -1801,8 +1812,8 @@ async function handleAuthentication() {
       authError.classList.add("hidden");
     }
 
-    // 진행 상태 표시
-    showAuthStatus("", "사용자 정보를 확인하는 중...", "⏳");
+    // 진행 상태 표시 (빈 문자열 대신 "loading" 사용)
+    showAuthStatus("loading", "사용자 정보를 확인하는 중...", "⏳");
 
     // 사용자 목록 가져오기
     await loadUsersForAuth();
