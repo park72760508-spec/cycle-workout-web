@@ -1,7 +1,7 @@
 /* ==========================================================
-   Cycle Workout App UI Style (정리본)
+   Cycle Workout App UI Style (통합본)
    - 정렬 기준: index.html 화면 구성 순서
-   - 중복/구규칙은 본문 하단 "삭제 대상" 목록 참고
+   - 중복/구규칙은 본문 하단 "삭제 대상" 목록 참고 
    - Base → 공통 유틸 → 1~6 화면 순서 → 공통 반응형
 ========================================================== */
 
@@ -104,7 +104,6 @@ h1,h2,h3,h4 { font-weight: 600; }
 #connectionScreen .btn-ios-continue:hover{ filter:brightness(1.03); }
 #connectionScreen .btn-ios-continue:active{ transform:translateY(1px); }
 
-
 /* iOS에서 BLE 선택 비활성화 스타일 */
 .ios-disabled {
   pointer-events: none !important;
@@ -118,7 +117,6 @@ button[aria-disabled="true"] {
   cursor: not-allowed !important;
   opacity: 0.55;
 }
-
 
 /* 연결된 기기 카드 */
 .device-card{
@@ -174,26 +172,22 @@ button[aria-disabled="true"] {
 }
 
 /* ========== 3) 워크아웃 선택 화면 (#workoutScreen) ========== */
-/* (필요 시 확장) */
 .workout-list { display: grid; gap: 12px; }
 
 /* ==== Workout Builder: 하단 액션 바 고정 & 덮임 방지 ==== */
 .builder-actions {
-  position: sticky;         /* 스크롤해도 하단에 붙음 */
+  position: sticky;
   bottom: 0;
-  background: #fff;         /* 버튼 아래 내용과 분리 */
+  background: #fff;
   padding: 12px 0 16px;
-  z-index: 50;              /* 타 카드/오버레이보다 위 */
+  z-index: 50;
   box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
 }
 .builder-actions .btn-row { justify-content: center; gap: 12px; }
-
-/* 혹시 상위에 .is-disabled가 붙어 클릭이 막히는 것을 방지(국소 예외) */
 .builder-actions, 
 .builder-actions * { pointer-events: auto; }
 
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
-/* 워크아웃 프리뷰 컨테이너 개선 */
 .workout-preview {
   background: #fff;
   border-radius: 12px;
@@ -202,7 +196,6 @@ button[aria-disabled="true"] {
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   position: relative;
   z-index: 1;
-  /* iOS 스크롤 개선 */
   -webkit-overflow-scrolling: touch;
 }
 .workout-preview h2{ text-align:center; color:#2e74e8; margin-bottom:20px; font-size:24px; }
@@ -212,7 +205,6 @@ button[aria-disabled="true"] {
 .preview-stats > div{ padding:15px; background:#f8f9fa; border-radius:8px; }
 .preview-stats strong{ font-size:28px; color:#2e74e8; display:block; margin-bottom:5px; }
 
-/* 세그먼트 프리뷰 */
 /* 세그먼트 프리뷰 영역 개선 */
 .segment-preview {
   display: flex;
@@ -223,9 +215,9 @@ button[aria-disabled="true"] {
   border-radius: 8px;
   overflow-x: auto;
   align-items: center;
-  margin-bottom: 20px; /* 하단 여백 추가 */
+  margin-bottom: 20px;
   position: relative;
-  z-index: 1; /* 낮은 z-index */
+  z-index: 1;
 }
 .segment-item{
   padding:15px 20px; border-radius:8px; min-width:120px; text-align:center; color:#fff;
@@ -247,12 +239,8 @@ button[aria-disabled="true"] {
   text-align: center;
   position: relative;
   z-index: 1;
-  /* 하단 버튼을 위한 여백 확보 */
-  padding-bottom: 100px; /* 여유 공간 추가 */
+  padding-bottom: 100px;
 }
-
-/*.btn-row.center{ justify-content:center; margin-top:20px; }*/
-
 
 .btn-row.center {
   display: flex !important;
@@ -269,8 +257,6 @@ button[aria-disabled="true"] {
   box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
 }
 
-
-
 /* ========== 5) 훈련 화면 (#trainingScreen) ========== */
 #trainingScreen{
   background:#0f111a; color:#f3f3f3; padding:20px; min-height:100vh;
@@ -281,7 +267,6 @@ button[aria-disabled="true"] {
   flex-direction: column;
   gap: 16px;
 }
-
 
 /* 상단 사용자 정보(아이콘은 ::before로 1개만) */
 #trainingScreen .training-header{
@@ -302,7 +287,7 @@ button[aria-disabled="true"] {
 }
 #trainingScreen .seg-left1{text-align:left;} .seg-center1{text-align:center;} .seg-right1{text-align:right;}
 #trainingScreen .elapsed-wrap1::before{ content:"⏱"; margin-right:6px; }
-#trainingScreen #nextSegment::before{ content:"⏭"; margin-right:6px; }
+#trainingScreen #nextSegment::before{ content:"⭐"; margin-right:6px; }
 
 /* 메트릭 그리드 */
 #trainingScreen .metrics-grid{
@@ -321,7 +306,7 @@ button[aria-disabled="true"] {
   border-radius:20px; text-align:center; padding:20px;
   box-shadow:0 3px 10px rgba(0,0,0,0.5);
 }
-#trainingScreen .current-power{ font-size:80px; font-weight:800; color:#00d9ff; } /* 가독성 ↑ */
+#trainingScreen .current-power{ font-size:80px; font-weight:800; color:#00d9ff; }
 #trainingScreen .unit-dim{ font-size:14px; color:#aaa; }
 
 /* 파워 달성도 바(높이 크게) */
@@ -343,19 +328,11 @@ button[aria-disabled="true"] {
 #trainingScreen .dual-metric .metric-value{ font-size:40px; font-weight:bold; color:#ff3c6a; }
 #trainingScreen .dual-metric .metric-label{ font-size:13px; color:#ccc; }
 
-
-
-
-/* 타임라인(세그먼트 바) — XL 높이 + 타입/상태 클래스============>  */
-
-
 /* ========== 개선된 세그먼트 바 스타일 ========== */
-
-/* 타임라인 기본 스타일 개선 */
 .timeline-progress.timeline--xl {
-  height: 50px; /* 높이 증가 */
+  height: 50px;
   border-radius: 16px;
-  background: #f8fafc; /* 부드러운 배경색 */
+  background: #f8fafc;
   box-shadow: inset 0 2px 8px rgba(0,0,0,0.08);
   overflow: hidden;
 }
@@ -366,7 +343,6 @@ button[aria-disabled="true"] {
   position: relative;
 }
 
-/* 세그먼트 기본 스타일 */
 .timeline-segment {
   position: relative;
   display: flex;
@@ -376,9 +352,9 @@ button[aria-disabled="true"] {
   padding: 4px 6px;
   font-size: 11px;
   font-weight: 500;
-  color: #64748b; /* 기본 텍스트 색상 */
+  color: #64748b;
   border-right: 1px solid rgba(148, 163, 184, 0.2);
-  background: #f1f5f9; /* 부드러운 미진행 배경색 */
+  background: #f1f5f9;
   transition: all 0.3s ease;
   overflow: hidden;
 }
@@ -387,7 +363,6 @@ button[aria-disabled="true"] {
   border-right: none;
 }
 
-/* 세그먼트 라벨 구조 */
 .segment-labels {
   display: flex;
   flex-direction: column;
@@ -408,13 +383,12 @@ button[aria-disabled="true"] {
 
 .segment-time {
   font-size: 9px;
-  font-weight: 400; /* 굵지 않은 기본 폰트 */
+  font-weight: 400;
   color: #64748b;
   line-height: 1;
   margin-top: 1px;
 }
 
-/* 반복 세그먼트 횟수 라벨 */
 .repeat-count {
   font-size: 8px;
   font-weight: 600;
@@ -426,7 +400,6 @@ button[aria-disabled="true"] {
   margin: 1px 0;
 }
 
-/* 진행바 스타일 */
 .progress-fill {
   position: absolute;
   inset: 0 auto 0 0;
@@ -437,7 +410,6 @@ button[aria-disabled="true"] {
   border-radius: inherit;
 }
 
-/* 첫 번째와 마지막 세그먼트 모서리 처리 */
 .timeline-segment:first-child .progress-fill {
   border-radius: 16px 0 0 16px;
 }
@@ -446,7 +418,7 @@ button[aria-disabled="true"] {
   border-radius: 0 16px 16px 0;
 }
 
-/* 타입별 기본 진행 색상 (Zwift/TrainerRoad 스타일) */
+/* 타입별 기본 진행 색상 */
 .timeline-segment[data-type="warmup"] .progress-fill {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
 }
@@ -509,7 +481,6 @@ button[aria-disabled="true"] {
   border-radius: 2px;
 }
 
-/* 달성도 기반 색상 시스템 */
 .timeline-segment.is-complete {
   color: #ffffff;
   text-shadow: 0 1px 2px rgba(0,0,0,0.3);
@@ -546,6 +517,9 @@ button[aria-disabled="true"] {
 .timeline-group {
   background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
   border: 1px solid rgba(148, 163, 184, 0.2);
+  flex-direction: column;
+  justify-content: center;
+  padding: 2px 4px;
 }
 
 .timeline-group .segment-labels {
@@ -566,10 +540,30 @@ button[aria-disabled="true"] {
   font-weight: 700;
 }
 
-/* 그룹 상태별 스타일 */
+.timeline-group .segment-label {
+  font-size: 10px;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+
+.timeline-group .repeat-badge {
+  font-size: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 1px 3px;
+  border-radius: 2px;
+  margin-bottom: 2px;
+}
+
+.timeline-group .segment-time {
+  font-size: 9px;
+  opacity: 0.8;
+}
+
 .timeline-group.is-current {
   background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
   border-color: #3b82f6;
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: -2px;
 }
 
 .timeline-group.is-current .segment-number {
@@ -577,7 +571,16 @@ button[aria-disabled="true"] {
   color: #ffffff;
 }
 
-/* 그룹 달성도 색상 */
+.timeline-group.is-current::after {
+  content: "";
+  position: absolute;
+  inset: auto 10% -4px 10%;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--seg-color, #3b82f6);
+  filter: blur(6px) opacity(0.8);
+}
+
 .timeline-group.is-complete.achievement-low {
   background: linear-gradient(135deg, #fecaca 0%, #fca5a5 100%);
   border-color: #ef4444;
@@ -619,7 +622,6 @@ button[aria-disabled="true"] {
   100% { left: 100%; }
 }
 
-/* 현재 진행 중인 세그먼트 펄스 효과 */
 .timeline-segment.is-current .progress-fill::after {
   content: "";
   position: absolute;
@@ -645,7 +647,6 @@ button[aria-disabled="true"] {
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
 
-/* 타임라인 범례 개선 */
 .timeline-legend {
   margin-top: 12px;
   padding-top: 12px;
@@ -654,103 +655,6 @@ button[aria-disabled="true"] {
   font-size: 12px;
   color: #94a3b8;
 }
-
-/* 모바일 반응형 */
-@media (max-width: 768px) {
-  .timeline-progress.timeline--xl {
-    height: 45px;
-  }
-  
-  .segment-labels {
-    gap: 0;
-  }
-  
-  .segment-number {
-    font-size: 9px;
-  }
-  
-  .segment-time {
-    font-size: 8px;
-  }
-  
-  .repeat-count {
-    font-size: 7px;
-    padding: 1px 3px;
-  }
-  
-  .timeline-wrap {
-    padding: 12px 16px;
-  }
-}
-
-/* 고해상도 디스플레이 최적화 */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-  .progress-fill {
-    background-size: 100% 100%;
-  }
-  
-  .timeline-segment.is-current::after {
-    background: linear-gradient(90deg, 
-      transparent, 
-      #3b82f6, 
-      rgba(59, 130, 246, 0.8), 
-      #3b82f6, 
-      transparent
-    );
-  }
-}
-
-
-
-/* 타임라인(세그먼트 바) — XL 높이 + 타입/상태 클래스============>  */
-
-
-
-/* 👇 여기에 그룹화 스타일 추가 */
-/* 그룹화된 세그먼트 스타일 */
-.timeline-group {
-  flex-direction: column;
-  justify-content: center;
-  padding: 2px 4px;
-}
-
-.timeline-group .segment-label {
-  font-size: 10px;
-  line-height: 1.1;
-  margin-bottom: 2px;
-}
-
-.timeline-group .repeat-badge {
-  font-size: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 1px 3px;
-  border-radius: 2px;
-  margin-bottom: 2px;
-}
-
-.timeline-group .segment-time {
-  font-size: 9px;
-  opacity: 0.8;
-}
-
-/* 그룹 상태별 강조 */
-.timeline-group.is-current {
-  outline: 2px solid rgba(255, 255, 255, 0.4);
-  outline-offset: -2px;
-}
-
-.timeline-group.is-current::after {
-  content: "";
-  position: absolute;
-  inset: auto 10% -4px 10%;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--seg-color, #3b82f6);
-  filter: blur(6px) opacity(0.8);
-}
-/* 👆 그룹화 스타일 끝 */
-
-
 
 /* 컨트롤 버튼 */
 #trainingScreen .training-controls{
@@ -795,16 +699,7 @@ button[aria-disabled="true"] {
   100% { transform: scale(1.0); opacity: 1; }
 }
 
-/* ========== 반응형 (공통) ========== */
-@media (max-width: 768px) {
-  #profileScreen #userList { grid-template-columns: 1fr; }
-  #trainingScreen .metrics-grid { grid-template-columns: 1fr; }
-  #trainingScreen .current-power { font-size: 48px; }
-  #trainingScreen .segment-details1 { font-size: 14px; }
-}
-
-
-/* 워크아웃 카드 스타일 */
+/* ========== 워크아웃 관리 스타일 ========== */
 .workout-card {
   position: relative;
   border: 1px solid #e5e7eb;
@@ -873,7 +768,6 @@ button[aria-disabled="true"] {
   color: #9ca3af;
 }
 
-/* 상태 배지 스타일 */
 .status-badge {
   font-size: 12px;
   padding: 2px 8px;
@@ -891,7 +785,6 @@ button[aria-disabled="true"] {
   color: #991b1b;
 }
 
-/* 워크아웃 폼 스타일 */
 .form-help {
   font-size: 12px;
   color: #6b7280;
@@ -920,62 +813,7 @@ button[aria-disabled="true"] {
   box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
 }
 
-/* 워크아웃 목록 헤더 */
-.workout-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.workout-search-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex: 1;
-  max-width: 400px;
-}
-
-.workout-search-bar input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.workout-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* 관리자 모드 토글 */
-.admin-mode-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.admin-mode-toggle input[type="checkbox"] {
-  margin: 0;
-}
-
-.admin-mode-toggle label {
-  margin: 0;
-  font-size: 14px;
-  color: #374151;
-  cursor: pointer;
-}
-
-/* ========================================
-   세그먼트 관리 스타일
-======================================== */
-
-/* 세그먼트 헤더 */
+/* ========== 세그먼트 관리 스타일 ========== */
 .segment-header {
   display: flex;
   justify-content: space-between;
@@ -994,7 +832,6 @@ button[aria-disabled="true"] {
   color: #2e74e8;
 }
 
-/* 세그먼트 목록 */
 .segments-list {
   min-height: 120px;
   border: 2px dashed #e5e7eb;
@@ -1022,7 +859,6 @@ button[aria-disabled="true"] {
   font-size: 14px;
 }
 
-/* 개별 세그먼트 카드 */
 .segment-card {
   background: #f8f9fa;
   border: 1px solid #e5e7eb;
@@ -1047,7 +883,6 @@ button[aria-disabled="true"] {
   transform: rotate(2deg);
 }
 
-/* 세그먼트 정보 */
 .segment-info {
   flex: 1;
   display: flex;
@@ -1093,7 +928,6 @@ button[aria-disabled="true"] {
   color: #2e74e8;
 }
 
-/* 세그먼트 액션 */
 .segment-actions {
   display: flex;
   align-items: center;
@@ -1123,13 +957,6 @@ button[aria-disabled="true"] {
 .segment-edit-btn:hover { background: #e0f2fe; }
 .segment-delete-btn:hover { background: #fee2e2; }
 
-/* 세그먼트 추가 버튼들 */
-.segment-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .quick-add-buttons {
   display: flex;
   gap: 8px;
@@ -1156,7 +983,7 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 99999;
 }
 
 .modal.hidden {
@@ -1171,6 +998,7 @@ button[aria-disabled="true"] {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  z-index: 100000;
 }
 
 .modal-header {
@@ -1205,14 +1033,26 @@ button[aria-disabled="true"] {
 }
 
 .modal-footer {
-  padding: 20px 24px;
+  padding: 25px;
   border-top: 1px solid #e5e7eb;
   display: flex;
-  gap: 8px;
+  gap: 15px;
   justify-content: flex-end;
 }
 
-/* 세그먼트 모달 전용 폼 스타일 */
+.modal-footer .btn {
+  min-height: 50px;
+  min-width: 100px;
+  padding: 15px 25px;
+  font-size: 16px;
+  position: relative;
+  z-index: 100001;
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
 .duration-input {
   display: flex;
   align-items: center;
@@ -1250,49 +1090,7 @@ button[aria-disabled="true"] {
   display: none;
 }
 
-/* 드래그 앤 드롭 스타일 */
-.segments-list.drag-over {
-  border-color: #2e74e8;
-  background: #eff6ff;
-}
-
-.drop-zone {
-  height: 4px;
-  background: #2e74e8;
-  border-radius: 2px;
-  margin: 4px 0;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.drop-zone.active {
-  opacity: 1;
-}
-
-/* 상태별 배지 스타일 */
-.status-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.status-badge.visible {
-  background: #dcfce7;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-
-.status-badge.hidden {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fde68a;
-}
-
-/* 로딩 상태 개선 */
+/* ========== 로딩 및 상태 스타일 ========== */
 .loading-container {
   animation: fadeIn 0.3s ease-in;
 }
@@ -1302,7 +1100,6 @@ button[aria-disabled="true"] {
   to { opacity: 1; }
 }
 
-/* 빈 상태 개선 */
 .empty-state {
   animation: slideUp 0.5s ease-out;
 }
@@ -1318,7 +1115,6 @@ button[aria-disabled="true"] {
   }
 }
 
-/* 카드 호버 효과 개선 */
 .user-card, .workout-card {
   transition: all 0.2s ease;
 }
@@ -1328,12 +1124,10 @@ button[aria-disabled="true"] {
   box-shadow: 0 8px 25px rgba(46, 116, 232, 0.15);
 }
 
-/* 로딩 텍스트 점멸 효과 */
 .loading-text {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-/* 성공 상태 */
 .success-state {
   text-align: center;
   padding: 40px 20px;
@@ -1356,7 +1150,6 @@ button[aria-disabled="true"] {
   margin-bottom: 8px;
 }
 
-/* 저장 중 애니메이션 */
 .saving-state {
   position: relative;
   overflow: hidden;
@@ -1395,10 +1188,6 @@ button[aria-disabled="true"] {
   margin-right: 8px;
 }
 
-
-/* 사용자 화면 "선택버튼 클릭 시 진행 중 표시" */
-
-/* 로딩 상태 버튼 스타일 */
 .btn.loading {
   position: relative;
   color: transparent !important;
@@ -1424,60 +1213,20 @@ button[aria-disabled="true"] {
   100% { transform: rotate(360deg); }
 }
 
-/* 비활성화된 버튼 스타일 강화 */
 .btn:disabled {
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-
-
-/* 파일 끝에 추가 */
-
-/* 세그먼트 페이지네이션 스타일 */
-.segments-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  background: #f5f5f5;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-
-.segments-summary {
-  font-size: 14px;
-  color: #666;
-}
-
-.segments-pagination {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.page-info {
-  font-size: 14px;
-  min-width: 60px;
-  text-align: center;
-}
-
-/* 성능 최적화 */
-.segment-card {
-  will-change: transform;
-  contain: layout;
-}
-
-
-/* 훈련그룹화된 세그먼트 스타일 */
+/* ========== 그룹화된 세그먼트 스타일 ========== */
 .grouped-segment {
-  border: none; /* 테두리 완전 제거 */
+  border: none;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   margin-bottom: 15px;
   padding: 15px;
   border-radius: 12px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  z-index: 1; /* 낮은 z-index로 설정 */
+  z-index: 1;
 }
 
 .group-header {
@@ -1490,11 +1239,11 @@ button[aria-disabled="true"] {
 }
 
 .group-header h4 {
-  margin: 0 0 2px 0; /* 아래 여백 축소 */
-  font-size: 14px; /* 11px에서 9px로 더 축소 */
+  margin: 0 0 2px 0;
+  font-size: 14px;
   font-weight: 600;
   color: white;
-  line-height: 1.2; /* 줄간격 축소 */
+  line-height: 1.2;
   text-align: center;
   width: 100%;
   display: block;
@@ -1503,310 +1252,16 @@ button[aria-disabled="true"] {
 .repeat-badge {
   background: #007bff;
   color: white;
-  padding: 1px 4px; /* 더 축소 */
-  border-radius: 8px; /* 더 축소 */
-  font-size: 8px; /* 9px에서 8px로 축소 */
-  font-weight: 500; /* 600에서 500으로 축소 */
+  padding: 1px 4px;
+  border-radius: 8px;
+  font-size: 8px;
+  font-weight: 500;
   display: block;
   text-align: center;
-  margin: 2px auto 0 auto; /* 위쪽 여백 축소 */
+  margin: 2px auto 0 auto;
   width: fit-content;
 }
 
-.group-pattern {
-  font-size: 11px; /* 10px에서 9px로 더 축소 */
-  line-height: 1.3; /* 1.4에서 1.3으로 줄간격 축소 */
-  color: #495057;
-  margin-bottom: 6px;
-  background: rgba(255,255,255,0.7);
-  padding: 5px 6px; /* 상하 패딩을 5px로 축소 */
-  border-radius: 4px;
-  text-align: center;
-}
-
-
-/* 반복 프레임 시간 표시 */
-.group-total {
-  text-align: center;
-  font-size: 12px;
-  color: #ffffff !important; /* 강제로 흰색 적용 */
-  font-weight: 700;
-  /*background: #28a745;*/
-  padding: 3px 6px;
-  border-radius: 4px;
-  margin-top: 4px;
-}
-
-/* 훈련 화면용 그룹화 스타일 */
-.grouped-training-segment {
-  border-left: 5px solid #007bff;
-  background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
-  margin-bottom: 10px;
-  padding: 12px;
-  border-radius: 8px;
-}
-
-.grouped-training-segment.current-segment {
-  border-left-color: #28a745;
-  background: linear-gradient(90deg, #d4edda 0%, #f8fff9 100%);
-  box-shadow: 0 0 15px rgba(40, 167, 69, 0.3);
-}
-
-.group-label {
-  font-weight: 600;
-  font-size: 16px;
-  color: #343a40;
-}
-
-.repeat-info {
-  background: #6c757d;
-  color: white;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.group-pattern-training {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 8px 0;
-}
-
-.pattern-item {
-  background: rgba(0, 123, 255, 0.1);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  border: 1px solid rgba(0, 123, 255, 0.2);
-}
-
-.group-total-training {
-  text-align: right;
-  color: #007bff;
-  font-size: 14px;
-}
-
-.group-progress {
-  background: #28a745;
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  margin-top: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-}
-
-/* 반복 세그먼트 강조 표시 */
-.grouped-segment.interval {
-  border-color: #dc3545;
-}
-
-.grouped-segment.rest {
-  border-color: #6c757d;
-}
-
-.grouped-segment.warmup {
-  border-color: #fd7e14;
-}
-
-/* 모바일 반응형 */
-@media (max-width: 768px) {
-  .group-pattern-training {
-    flex-direction: column;
-  }
-  
-  .group-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .repeat-badge {
-    align-self: flex-end;
-  }
-}
-
-
-
-/* 훈련 준비 화면 하단 버튼 영역 개선 */
-.btn-row.center {
-  justify-content: center;
-  margin-top: 20px;
-  position: relative;
-  z-index: 100; /* 높은 z-index로 다른 요소 위에 표시 */
-  background: #fff; /* 배경색 추가 */
-  padding: 15px 0; /* 패딩 추가 */
-  border-radius: 8px;
-  box-shadow: 0 -2px 8px rgba(0,0,0,0.1); /* 상단 그림자 */
-}
-
-/* iOS 전용 터치 개선 */
-.btn-row.center .btn {
-  position: relative;
-  z-index: 101;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  touch-action: manipulation; /* iOS 터치 최적화 */
-  min-height: 44px; /* iOS 권장 최소 터치 영역 */
-}
-
-
-/* iOS Safari 전용 개선 - 더 정확한 타겟팅 */
-/* iOS 전용 - 훈련준비 화면 버튼 크기 축소 */
-/* iOS 전용 - 훈련준비 화면 버튼 크기 축소 (2/3 크기) */
-@supports (-webkit-touch-callout: none) and (not (any-hover: hover)) {
-  #trainingReadyScreen .btn-row.center {
-    gap: 6px !important; /* 8px의 2/3 = 5.3 → 6px */
-    margin: 15px auto 10px auto !important; /* 비례 축소 */
-    padding: 8px !important; /* 12px의 2/3 = 8px */
-    max-width: 210px !important; /* 320px의 2/3 = 213 → 250px */
-  }
-  
-  #trainingReadyScreen .btn-row.center .btn {
-    min-height: 20px !important; /* 40px의 2/3 = 26.7 → 27px */
-    min-width: 50px !important; /* 110px의 2/3 = 73.3 → 73px */
-    padding: 7px 11px !important; /* 10px 16px의 2/3 = 6.7px 10.7px → 7px 11px */
-    font-size: 10px !important; /* 14px의 2/3 = 9.3 → 10px (가독성 고려) */
-    font-weight: 500 !important;
-    border-radius: 5px !important; /* 8px의 2/3 = 5.3 → 5px */
-  }
-  
-  #trainingReadyScreen .btn-row.center .btn:not(:last-child) {
-    margin-right: 5px !important; /* 8px의 2/3 = 5.3 → 5px */
-  }
-}
-
-
-
-
-/* 모바일 디바이스 최적화 */
-@media (max-width: 768px) {
-  .training-ready {
-    padding-bottom: 120px; /* 모바일에서 더 많은 하단 여백 */
-  }
-  
-  .btn-row.center {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    right: 20px;
-    z-index: 9999;
-    background: rgba(255, 255, 255, 0.98);
-    border-radius: 12px;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
-  }
-  
-  .btn-row.center .btn {
-    min-height: 48px; /* 모바일에서 더 큰 터치 영역 */
-    font-size: 16px;
-  }
-}
-
-/* 안드로이드/PC 전용 개선 */
-@media (any-hover: hover) {
-  .btn-row.center {
-    position: relative !important;
-    z-index: 100 !important;
-    background: transparent !important;
-    backdrop-filter: none !important;
-    margin: 20px 0 !important;
-    padding: 0 !important;
-  }
-  
-  .btn-row.center .btn {
-    pointer-events: auto !important;
-    cursor: pointer !important;
-    touch-action: auto !important;
-  }
-}
-
-/* PC/데스크톱 전용 최적화 */
-@media (min-width: 1024px) {
-  .btn-row.center {
-    position: static !important;
-    z-index: auto !important;
-    background: none !important;
-    backdrop-filter: none !important;
-    margin: 20px 0 !important;
-    padding: 0 !important;
-  }
-}
-
-/* 👇 여기에 3단계 코드 추가 👇 */
-/* 범용 버튼 클릭 보장 */
-.btn-row.center .btn {
-  position: relative;
-  z-index: 101;
-  display: inline-block;
-  min-height: 30px;
-  min-width: 120px;
-  line-height: 44px;
-  text-align: center;
-  cursor: pointer;
-  pointer-events: auto;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  user-select: none;
-}
-
-/* 버튼 호버 효과 (PC/마우스 환경) */
-@media (hover: hover) {
-  .btn-row.center .btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(46, 116, 232, 0.3);
-  }
-}
-
-
-/* 훈련 준비 화면 버튼 전용 스타일/훈련시작 버튼, 워크아웃 변경 버튼 블럭 */
-#trainingReadyScreen .btn-row.center {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  flex-wrap: wrap !important;
-  gap: 7px !important;
-  margin: 30px auto 20px auto !important;
-  width: 100% !important;
-  max-width: 350px !important;
-  padding: 20px !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.1) !important;
-}
-
-#trainingReadyScreen .btn-row.center .btn {
-  flex: 0 1 auto !important;
-  min-height: 30px !important;
-  min-width: 100px !important;
-  padding: 14px 24px !important;
-  border-radius: 10px !important;
-  font-size: 14px !important;
-  font-weight: 600 !important;
-  margin: 0 !important;
-}
-
-/* 버튼 간격 조정 */
-#trainingReadyScreen .btn-row.center .btn:not(:last-child) {
-  margin-right: 12px !important;
-}
-
-/* 인라인 반복 횟수 배지 (X횟수)*/
-.repeat-badge-inline {
-  background: #007bff;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  margin-left: 4px;
-  display: inline;
-  vertical-align: middle;
-}
-
-/* 그룹 패턴 영역 조정(FTP값과 시간 ) */
 .group-pattern {
   font-size: 11px;
   line-height: 1.3;
@@ -1822,85 +1277,34 @@ button[aria-disabled="true"] {
   flex-wrap: wrap;
 }
 
-
-/* 워크아웃 수정화면 아이폰 수정버튼 동작 불가 해결 - 간단한 iOS 수정 */
-
-/* 1단계: 모달 z-index 단순 증가 */
-.modal {
-  z-index: 99999 !important;
+.group-total {
+  text-align: center;
+  font-size: 12px;
+  color: #ffffff !important;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 4px;
+  margin-top: 4px;
 }
 
-.modal-content {
-  z-index: 100000 !important;
+.repeat-badge-inline {
+  background: #007bff;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
+  display: inline;
+  vertical-align: middle;
 }
 
-/* 2단계: iOS 모달 버튼 크기와 터치 영역 증가 */
-.modal-footer .btn {
-  min-height: 50px !important;
-  min-width: 100px !important;
-  padding: 15px 25px !important;
-  font-size: 16px !important;
-  position: relative !important;
-  z-index: 100001 !important;
-  cursor: pointer !important;
-  
-  /* iOS 터치 기본 설정 */
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  touch-action: manipulation;
-}
-
-/* 3단계: iOS Safari 전용 추가 최적화 */
-@supports (-webkit-touch-callout: none) {
-  .modal-footer .btn {
-    /* 터치 하이라이트 색상 */
-    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
-    
-    /* 하드웨어 가속 활성화 */
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-    
-    /* 백페이스 가시성 숨김 */
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
-  
-  /* 버튼 터치 시 시각적 피드백 */
-  .modal-footer .btn:active {
-    background-color: rgba(0, 0, 0, 0.1) !important;
-    transform: scale(0.98) !important;
-  }
-}
-
-/* 4단계: 모달 배경 터치 방지 강화 */
-.modal {
-  -webkit-tap-highlight-color: transparent !important;
-  touch-action: none !important;
-}
-
-.modal-content {
-  touch-action: auto !important;
-}
-
-/* 5단계: 버튼 간격 증가 (터치 실수 방지) */
-.modal-footer {
-  gap: 15px !important;
-  padding: 25px !important;
-}
-
-
-
-
-
-/* ========== 개선된 훈련 화면 스타일 (1018_토)========== */
-
-/* 훈련 화면 기본 설정 개선 */
+/* ========== 개선된 훈련 화면 스타일 ========== */
 #trainingScreen {
   background: #0f111a;
   color: #f3f3f3;
   padding: 16px 20px;
   min-height: 100vh;
-  /* display: flex; 제거됨 */
   flex-direction: column;
   gap: 16px;
 }
@@ -2093,100 +1497,197 @@ button[aria-disabled="true"] {
   margin-bottom: 20px;
 }
 
-.enhanced-target-power-section, .enhanced-segment-avg-power {
+/* 목표 파워 블록 - 주황색 투명 색감 */
+.enhanced-target-power-section {
   flex: 1;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(251, 146, 60, 0.08); /* 주황색 투명 배경 */
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(251, 146, 60, 0.2); /* 주황색 테두리 */
   text-align: center;
   min-height: 80px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  box-shadow: 0 2px 8px rgba(251, 146, 60, 0.1); /* 주황색 그림자 */
 }
 
-.enhanced-target-label, .enhanced-avg-label {
+.enhanced-target-value {
+  color: #fb923c; /* 주황색 텍스트 */
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.enhanced-target-label {
   font-size: 11px;
-  color: #9ca3af;
+  color: rgba(251, 146, 60, 0.8); /* 주황색 라벨 */
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 4px;
   display: block;
 }
 
-.enhanced-target-value, .enhanced-avg-value {
+.enhanced-target-unit {
+  font-size: 12px;
+  color: rgba(251, 146, 60, 0.7); /* 주황색 단위 */
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+/* 세그먼트 평균 파워 - 파란색 투명 색감톤 */
+.enhanced-segment-avg-power {
+  flex: 1;
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.08); /* 파란색 투명 배경 */
+  border-radius: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.2); /* 파란색 테두리 */
+  text-align: center;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1); /* 파란색 그림자 */
+}
+
+.enhanced-avg-value {
+  color: #3b82f6; /* 파란색 텍스트 */
   font-size: 24px;
   font-weight: 700;
   line-height: 1;
 }
 
-.enhanced-target-value {
-  color: #e5e7eb;
+.enhanced-avg-label {
+  font-size: 11px;
+  color: rgba(59, 130, 246, 0.8); /* 파란색 라벨 */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: block;
 }
 
-.enhanced-avg-value {
-  color: #3b82f6;
-}
-
-.enhanced-target-unit, .enhanced-avg-unit {
+.enhanced-avg-unit {
   font-size: 12px;
-  color: #9ca3af;
+  color: rgba(59, 130, 246, 0.7); /* 파란색 단위 */
   font-weight: 500;
   margin-left: 2px;
 }
 
-/* 현재 파워 (가장 크게) */
+/* 현재 파워 섹션 - 녹색 투명 색깔 톤 */
 .enhanced-current-power-section {
   margin-bottom: 20px;
   padding: 20px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(34, 197, 94, 0.08); /* 녹색 투명 배경 */
   border-radius: 12px;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.25); /* 녹색 테두리 */
   position: relative;
   text-align: center;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15); /* 녹색 그림자 */
 }
 
 .enhanced-current-power-value {
   font-size: 72px;
   font-weight: 900;
-  color: #ffffff;
+  color: #22c55e; /* 녹색 현재 파워 텍스트 */
   line-height: 0.9;
   transition: all 0.3s ease;
+  text-shadow: 0 2px 4px rgba(34, 197, 94, 0.3); /* 녹색 텍스트 그림자 */
 }
 
 .enhanced-current-power-unit {
   font-size: 16px;
-  color: #9ca3af;
+  color: rgba(34, 197, 94, 0.8); /* 녹색 단위 텍스트 */
   font-weight: 600;
   letter-spacing: 2px;
   margin-top: 8px;
 }
 
-/* 달성도 프로그레스 바 */
+/* 프로그래스바 - 녹색 투명 색깔 톤 */
 .enhanced-power-progress {
   margin: 16px 0;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(34, 197, 94, 0.05); /* 녹색 투명 배경 */
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.15); /* 녹색 테두리 */
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.1); /* 녹색 그림자 */
 }
 
 .enhanced-power-progress-bar {
-  height: 6px;
-  background: #3b82f6;
-  border-radius: 3px;
+  height: 8px; /* 높이 약간 증가 */
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); /* 녹색 그라데이션 */
+  border-radius: 4px;
   margin-bottom: 8px;
   transition: width 0.3s ease, background-color 0.3s ease;
   width: 0%;
+  box-shadow: 0 1px 3px rgba(34, 197, 94, 0.4); /* 녹색 바 그림자 */
 }
 
 .enhanced-progress-labels {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #9ca3af;
+  color: rgba(34, 197, 94, 0.8); /* 녹색 라벨 텍스트 */
   font-weight: 500;
+}
+
+/* 프로그래스바 달성도별 색상 (녹색 톤 유지하면서 밝기 조정) */
+.enhanced-power-progress-bar.achievement-low {
+  background: linear-gradient(90deg, #dc2626 0%, #b91c1c 100%); /* 빨간색 */
+}
+
+.enhanced-power-progress-bar.achievement-good {
+  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%); /* 기본 녹색 */
+}
+
+.enhanced-power-progress-bar.achievement-high {
+  background: linear-gradient(90deg, #65a30d 0%, #4d7c0f 100%); /* 진한 녹색 */
+}
+
+.enhanced-power-progress-bar.achievement-over {
+  background: linear-gradient(90deg, #047857 0%, #065f46 100%); /* 매우 진한 녹색 */
+}
+
+/* 현재 파워 상태별 색상 변화 (녹색 톤 기반) */
+.enhanced-current-power-value.power-low {
+  color: #86efac; /* 연한 녹색 */
+  text-shadow: 0 2px 4px rgba(134, 239, 172, 0.3);
+}
+
+.enhanced-current-power-value.power-mid {
+  color: #22c55e; /* 기본 녹색 */
+  text-shadow: 0 2px 4px rgba(34, 197, 94, 0.3);
+}
+
+.enhanced-current-power-value.power-high {
+  color: #16a34a; /* 진한 녹색 */
+  text-shadow: 0 2px 4px rgba(22, 163, 74, 0.3);
+}
+
+.enhanced-current-power-value.power-max {
+  color: #15803d; /* 매우 진한 녹색 */
+  text-shadow: 0 2px 4px rgba(21, 128, 61, 0.3);
+}
+
+/* 호버 효과 추가 */
+.enhanced-target-power-section:hover {
+  background: rgba(251, 146, 60, 0.12);
+  border-color: rgba(251, 146, 60, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(251, 146, 60, 0.2);
+}
+
+.enhanced-segment-avg-power:hover {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.enhanced-current-power-section:hover {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.25);
 }
 
 /* 현재 세그먼트 이름 */
@@ -2232,40 +1733,6 @@ button[aria-disabled="true"] {
   font-weight: 500;
 }
 
-/* 파워 상태별 색상 변화 */
-.enhanced-current-power-value.power-low {
-  color: #06b6d4;
-}
-
-.enhanced-current-power-value.power-mid {
-  color: #10b981;
-}
-
-.enhanced-current-power-value.power-high {
-  color: #f59e0b;
-}
-
-.enhanced-current-power-value.power-max {
-  color: #ef4444;
-}
-
-/* 프로그레스 바 상태별 색상 */
-.enhanced-power-progress-bar.achievement-low {
-  background: #ef4444;
-}
-
-.enhanced-power-progress-bar.achievement-good {
-  background: #10b981;
-}
-
-.enhanced-power-progress-bar.achievement-high {
-  background: #f59e0b;
-}
-
-.enhanced-power-progress-bar.achievement-over {
-  background: #a855f7;
-}
-
 /* 심박수 존별 색상 (기존 스타일 유지) */
 .enhanced-heart-rate.hr-zone1 { color: #64748b; }
 .enhanced-heart-rate.hr-zone2 { color: #06b6d4; }
@@ -2273,17 +1740,89 @@ button[aria-disabled="true"] {
 .enhanced-heart-rate.hr-zone4 { color: #f59e0b; }
 .enhanced-heart-rate.hr-zone5 { color: #ef4444; }
 
-/* 반응형 디자인 */
+/* 애니메이션 효과 */
+.enhanced-metric-value {
+  transition: all 0.3s ease;
+}
 
+.enhanced-metric-panel {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
 
-@media (max-width: 768px) {
-  #trainingScreen {
-    padding: 12px 16px;
+.enhanced-metric-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ========== 반응형 디자인 (태블릿/모바일) ========== */
+
+/* 태블릿 가로 모드 (1024px 이하) - 3열 유지하되 간격 조정 */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .enhanced-metrics-grid {
+    grid-template-columns: 1fr 1.8fr 1fr; /* 중앙 패널 비율 약간 축소 */
+    gap: 16px;
+  }
+  
+  .enhanced-current-power-value {
+    font-size: 64px; /* 파워 텍스트 크기 약간 축소 */
+  }
+  
+  .enhanced-target-value, .enhanced-avg-value {
+    font-size: 22px;
+  }
+  
+  .enhanced-countdown-value {
+    font-size: 26px;
+  }
+}
+
+/* 태블릿 세로 모드 (768px 이하 1024px 이상) - 여전히 3열 유지 */
+@media (max-width: 1024px) and (min-width: 481px) {
+  .enhanced-metrics-grid {
+    grid-template-columns: 1fr 1.5fr 1fr; /* 중앙 패널 비율 더 축소 */
     gap: 12px;
   }
   
   .enhanced-metric-panel {
-    padding: 16px;
+    padding: 16px 12px; /* 패딩 축소 */
+  }
+  
+  .enhanced-current-power-value {
+    font-size: 56px;
+  }
+  
+  .enhanced-target-value, .enhanced-avg-value {
+    font-size: 20px;
+  }
+  
+  .enhanced-countdown-value {
+    font-size: 24px;
+  }
+  
+  .enhanced-left-panel .enhanced-metric-value,
+  .enhanced-right-panel .enhanced-metric-value {
+    font-size: 28px;
+  }
+}
+
+/* 시간 정보 영역도 태블릿에서 2열 유지 */
+@media (max-width: 1024px) and (min-width: 481px) {
+  .enhanced-training-time-info {
+    grid-template-columns: 1fr 1fr; /* 2열 유지 */
+    gap: 12px;
+  }
+}
+
+/* 모바일 세로 모드 (480px 이하)에서만 1열로 변경 */
+@media (max-width: 480px) {
+  .enhanced-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .enhanced-training-time-info {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
   
   .enhanced-current-power-value {
@@ -2304,16 +1843,99 @@ button[aria-disabled="true"] {
   }
 }
 
-/* 애니메이션 효과 */
-.enhanced-metric-value {
-  transition: all 0.3s ease;
+/* 매우 작은 모바일 화면 (360px 이하) */
+@media (max-width: 360px) {
+  #trainingScreen {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  
+  .enhanced-metric-panel {
+    padding: 12px 8px;
+  }
+  
+  .enhanced-current-power-value {
+    font-size: 40px;
+  }
+  
+  .enhanced-target-value, .enhanced-avg-value {
+    font-size: 16px;
+  }
+  
+  .enhanced-countdown-value {
+    font-size: 18px;
+  }
 }
 
-.enhanced-metric-panel {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* 기존 반응형 */
+@media (max-width: 768px) {
+  #profileScreen #userList { grid-template-columns: 1fr; }
+  #trainingScreen .current-power { font-size: 48px; }
+  #trainingScreen .segment-details1 { font-size: 14px; }
+  .timeline-progress.timeline--xl {
+    height: 45px;
+  }
+  
+  .segment-labels {
+    gap: 0;
+  }
+  
+  .segment-number {
+    font-size: 9px;
+  }
+  
+  .segment-time {
+    font-size: 8px;
+  }
+  
+  .repeat-count {
+    font-size: 7px;
+    padding: 1px 3px;
+  }
+  
+  .timeline-wrap {
+    padding: 12px 16px;
+  }
 }
 
-.enhanced-metric-panel:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+/* 고해상도 디스플레이 최적화 */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .progress-fill {
+    background-size: 100% 100%;
+  }
+  
+  .timeline-segment.is-current::after {
+    background: linear-gradient(90deg, 
+      transparent, 
+      #3b82f6, 
+      rgba(59, 130, 246, 0.8), 
+      #3b82f6, 
+      transparent
+    );
+  }
+}
+
+/* iOS Safari 전용 개선 */
+@supports (-webkit-touch-callout: none) {
+  .modal-footer .btn {
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .modal-footer .btn:active {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+    transform: scale(0.98) !important;
+  }
+}
+
+.modal {
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: none !important;
+}
+
+.modal-content {
+  touch-action: auto !important;
 }
