@@ -1403,11 +1403,20 @@ if (typeof showScreen === "function") {
 }
 
 // 전화번호 인증 기능
+// 기존 initializeLoginScreen 함수를 이 코드로 교체하세요
+
 function initializeLoginScreen() {
   const phoneInput = safeGetElement("phoneAuth");
   const authButton = safeGetElement("btnAuthenticate");
   const registerButton = safeGetElement("btnGoRegister");
   const authError = safeGetElement("authError");
+  const authStatus = safeGetElement("authStatus");
+
+  // 초기 버튼 상태 설정
+  if (authButton) {
+    authButton.disabled = true;
+    authButton.style.opacity = "0.6";
+  }
 
   // 전화번호 입력 유효성 검사
   if (phoneInput) {
@@ -1420,15 +1429,21 @@ function initializeLoginScreen() {
         e.target.value = e.target.value.slice(0, 4);
       }
       
-      // 에러 메시지 숨기기
+      // 에러 메시지 숨기기 (요소가 존재할 때만)
       if (authError) {
         authError.classList.add("hidden");
       }
       
+      // 상태 메시지 숨기기 (요소가 존재할 때만)
+      if (authStatus) {
+        authStatus.classList.add("hidden");
+      }
+      
       // 버튼 활성화/비활성화
       if (authButton) {
-        authButton.disabled = e.target.value.length !== 4;
-        authButton.style.opacity = e.target.value.length === 4 ? "1" : "0.6";
+        const isValid = e.target.value.length === 4;
+        authButton.disabled = !isValid;
+        authButton.style.opacity = isValid ? "1" : "0.6";
       }
     });
 
@@ -1438,21 +1453,39 @@ function initializeLoginScreen() {
         handleAuthentication();
       }
     });
+
+    // 포커스 이벤트 (입력 필드 선택 시)
+    phoneInput.addEventListener("focus", () => {
+      if (authError) {
+        authError.classList.add("hidden");
+      }
+      if (authStatus) {
+        authStatus.classList.add("hidden");
+      }
+    });
   }
 
   // 인증 버튼 클릭
   if (authButton) {
-    authButton.addEventListener("click", handleAuthentication);
+    authButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (!authButton.disabled) {
+        handleAuthentication();
+      }
+    });
   }
 
   // 사용자 등록 버튼 클릭
   if (registerButton) {
-    registerButton.addEventListener("click", () => {
+    registerButton.addEventListener("click", (e) => {
+      e.preventDefault();
       if (typeof showScreen === "function") {
         showScreen("profileScreen");
       }
     });
   }
+
+  console.log("로그인 화면 초기화 완료");
 }
 
 // 사용자 인증 처리
