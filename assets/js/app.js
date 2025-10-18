@@ -2,7 +2,13 @@
    app.js (v1.2 stable) - 수정된 버전
 ========================================================== */
 
-window.liveData = window.liveData || { power: 0, cadence: 0, heartRate: 0, targetPower: 0 };
+window.liveData = window.liveData || { 
+  power: 0, 
+  cadence: 0,  // null 대신 0으로 초기화
+  heartRate: 0, 
+  targetPower: 0 
+};
+
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
 
@@ -964,6 +970,7 @@ if (!window.showToast) {
 }
 
 // 실시간 표시
+// 실시간 표시
 window.updateTrainingDisplay = function () {
   const p = document.getElementById("currentPowerValue");
   const h = document.getElementById("heartRateValue");
@@ -1005,15 +1012,23 @@ window.updateTrainingDisplay = function () {
     else h.classList.add("hr-zone5");
   }
 
+  // *** 케이던스 표시 개선 ***
+  const cadenceElement = document.getElementById("cadenceValue");
+  if (cadenceElement) {
+    const cadence = window.liveData.cadence;
+    if (typeof cadence === "number" && cadence > 0) {
+      cadenceElement.textContent = Math.round(cadence);
+      console.log(`UI Updated - Cadence: ${Math.round(cadence)} RPM`);
+    } else {
+      cadenceElement.textContent = "--";
+    }
+  }
+
   // 중앙 디스플레이에 펄스 애니메이션 추가
   const powerDisplay = document.querySelector("#trainingScreen .power-display");
   if (powerDisplay) {
     if (currentPower > 0) powerDisplay.classList.add("active");
     else powerDisplay.classList.remove("active");
-
-    // 훈련화면에 케이던스 표시
-    const c = document.getElementById("cadenceValue");
-    if (c && typeof liveData.cadence === "number") c.textContent = Math.round(liveData.cadence);
   }
 };
 
