@@ -15,7 +15,12 @@ window.connectedDevices = window.connectedDevices || {
 };
 
 
-window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: null, targetPower: 0 };
+window.liveData = window.liveData || { 
+  power: 0, 
+  heartRate: 0, 
+  cadence: 0,  // null 대신 0으로 초기화
+  targetPower: 0 
+};
 
 // UI 헬퍼들 (index.html/app.js에 이미 있으면 중복 선언하지 마세요)
 // bluetooth.js의 상단 UI 헬퍼 부분을 다음과 같이 수정
@@ -291,7 +296,11 @@ async function connectHeartRate() {
 // 파워미터 알림 파서 보강 (크랭크 데이터 → RPM 계산)
 // ──────────────────────────────────────────────────────────
 // 파일 상단(모듈 스코프)에 이전 값 저장용 상태 추가
-let __pmPrev = { revs: null, time1024: null }; // 누적 크랭크회전수, 마지막 이벤트 시각(1/1024s)
+let __pmPrev = { 
+  revs: null, 
+  time1024: null,
+  lastUpdate: 0  // 마지막 업데이트 시간 추가
+};
 
 // 파워미터 측정 알림
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
