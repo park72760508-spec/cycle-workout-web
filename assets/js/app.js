@@ -1735,3 +1735,61 @@ window.addEventListener('unhandledrejection', function(event) {
 });
 
 console.log('App.js v1.3 loaded successfully with all fixes applied');
+
+
+
+// ====== app.js 파일 끝에 추가할 디버깅 함수들 ======
+
+// 케이던스 상태 확인 함수
+window.debugCadence = function() {
+  console.log("=== Cadence Debug Info ===");
+  console.log("liveData.cadence:", window.liveData?.cadence);
+  console.log("cadenceValue element:", document.getElementById("cadenceValue"));
+  console.log("cadenceValue current text:", document.getElementById("cadenceValue")?.textContent);
+  console.log("updateTrainingDisplay function exists:", typeof window.updateTrainingDisplay === "function");
+  
+  // 수동으로 케이던스 설정 테스트
+  if (window.liveData) {
+    window.liveData.cadence = 85;
+    const cadenceEl = document.getElementById("cadenceValue");
+    if (cadenceEl) {
+      cadenceEl.textContent = "85";
+      console.log("✅ Manual cadence test completed - set to 85 RPM");
+    }
+    
+    if (typeof window.updateTrainingDisplay === "function") {
+      window.updateTrainingDisplay();
+      console.log("✅ updateTrainingDisplay called manually");
+    }
+  }
+};
+
+// 케이던스 강제 설정 함수 (테스트용)
+window.setCadence = function(value) {
+  if (window.liveData) {
+    window.liveData.cadence = value;
+    const cadenceEl = document.getElementById("cadenceValue");
+    if (cadenceEl) {
+      cadenceEl.textContent = value.toString();
+      console.log(`✅ Cadence manually set to ${value} RPM`);
+    }
+    
+    if (typeof window.updateTrainingDisplay === "function") {
+      window.updateTrainingDisplay();
+    }
+  }
+};
+
+// 블루투스 상태 확인 함수
+window.checkBluetoothStatus = function() {
+  console.log("=== Bluetooth Status ===");
+  console.log("Connected devices:", window.connectedDevices || "Not available");
+  console.log("Live data:", window.liveData || "Not available");
+  
+  // __pmPrev 상태 확인 (bluetooth.js에서 접근 가능한 경우)
+  if (typeof __pmPrev !== 'undefined') {
+    console.log("Previous crank data:", __pmPrev);
+  }
+};
+
+
