@@ -1999,7 +1999,6 @@ function goToRegistrationWithPhone(phoneLastFour) {
 
 // 5. 디버깅용 함수들
 
-
 // 5. 디버깅용 함수들
 window.debugAuth = function() {
   console.log("=== 인증 디버그 정보 ===");
@@ -2041,3 +2040,40 @@ document.addEventListener('DOMContentLoaded', function() {
   
   console.log('앱 초기화 완료');
 });
+
+// TSS/kcal 업데이트 함수 추가
+function updateTrainingMetrics() {
+  try {
+    if (!window.liveData || !window.currentUser) return;
+    
+    const power = Number(window.liveData.power) || 0;
+    const ftp = Number(window.currentUser.ftp) || 200;
+    const weight = Number(window.currentUser.weight) || 70;
+    
+    // TSS 계산 (간단 근사)
+    trainingMetrics.elapsedSec += 1;
+    trainingMetrics.joules += power;
+    
+    // 30초 롤링 평균 (간단 근사)
+    const alpha = 2 / (30 + 1);
+    trainingMetrics.ra30 = trainingMetrics.ra30 * (1 - alpha) + power * alpha;
+    
+    // NP 4제곱 누적
+    trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
+    trainingMetrics.count += 1;
+    
+    // TSS 계산
+    const np = trainingMetrics.count > 0 ? Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25) : 0;
+    const tss = (trainingMetrics.elapsedSec * np * np) / (ftp * ftp) * 100 / 3600;
+    
+    // 칼로리 계산 (간단 근사: 1 kJ = 0.24 kcal)
+    const kcal = (trainingMetrics.joules / 1000) * 0.24;
+    
+    // UI 업데이트
+    safeSetText("tssValue", tss.toFixed(1));
+    safeSetText("kcalValue", Math.round(kcal));
+    
+  } catch (error) {
+    console.error('Error in updateTrainingMetrics:', error);
+  }
+}
