@@ -49,6 +49,48 @@
   console.log('Global variables initialized safely');
 })();
 
+
+// 🔥 새로운 검색 함수 추가 (app.js 상단에)
+function searchUsersByPhoneLastFour(searchDigits) {
+    console.log('=== 사용자 검색 함수 실행 ===');
+    console.log('검색할 뒷자리:', searchDigits);
+    
+    if (!allUsers || allUsers.length === 0) {
+        console.log('❌ 사용자 데이터가 없습니다');
+        return [];
+    }
+    
+    console.log('전체 사용자 수:', allUsers.length);
+    
+    const results = allUsers.filter(user => {
+        // 안전한 처리
+        if (!user.contact) {
+            console.log(`⚠️ ${user.name}: 전화번호 없음`);
+            return false;
+        }
+        
+        // 문자열 변환 및 정제
+        const contactStr = String(user.contact);
+        const cleanContact = contactStr.replace(/[-\s]/g, '');
+        const userLastFour = cleanContact.slice(-4);
+        
+        console.log(`검사: ${user.name} - "${user.contact}" → "${cleanContact}" → "${userLastFour}"`);
+        
+        const isMatch = userLastFour === String(searchDigits);
+        if (isMatch) {
+            console.log(`✅ 매칭됨: ${user.name}`);
+        }
+        
+        return isMatch;
+    });
+    
+    console.log('검색 결과:', results.length, '명');
+    return results;
+}
+
+
+
+
 // ========== 안전 접근 헬퍼 함수들 ==========
 function safeGetElement(id) {
   const element = document.getElementById(id);
@@ -1970,7 +2012,36 @@ async function handleAuthentication() {
       return lastFour === phoneLastFour;
     });
 
-    console.log(`전화번호 뒷 4자리 "${phoneLastFour}"로 검색된 사용자 수: ${matchingUsers.length}`);
+     
+      // 이 부분을 다음과 같이 수정:
+      console.log('=== 검색 디버깅 시작 ===');
+      console.log(`검색할 뒷 4자리: "${lastFourDigits}"`);
+      
+      // 전체 사용자 데이터 확인
+      console.log('전체 사용자 수:', allUsers.length);
+      allUsers.forEach((user, index) => {
+          const cleanContact = String(user.contact || '').replace(/[-\s]/g, '');
+          const extractedLastFour = cleanContact.slice(-4);
+          console.log(`${index}: ${user.name} - 원본: "${user.contact}" - 정제: "${cleanContact}" - 뒷4자리: "${extractedLastFour}"`);
+      });
+      
+      // 검색 로직 수정
+      const matchingUsers = allUsers.filter(user => {
+          const cleanContact = String(user.contact || '').replace(/[-\s]/g, '');
+          const userLastFour = cleanContact.slice(-4);
+          const isMatch = userLastFour === lastFourDigits;
+          
+          if (isMatch) {
+              console.log(`✅ 매칭됨: ${user.name} (${user.contact})`);
+          }
+          
+          return isMatch;
+      });
+      
+      console.log(`전화번호 뒷 4자리 "${lastFourDigits}"로 검색된 사용자 수: ${matchingUsers.length}`);
+      console.log('=== 검색 디버깅 끝 ===');
+
+     
 
     if (matchingUsers.length >= 1) {
       // 매칭되는 사용자가 1명 이상인 경우
@@ -2002,8 +2073,18 @@ async function handleAuthentication() {
       
     } else {
       // 매칭되는 사용자가 0명인 경우
+
+      // 이 부분 앞에 추가:
+      console.log('=== 매칭 실패 분석 ===');
+      console.log('입력된 뒷 4자리:', lastFourDigits);
+      console.log('입력 타입:', typeof lastFourDigits);
+      console.log('전체 사용자 목록:');
+      allUsers.forEach(user => {
+          const cleanContact = String(user.contact || '').replace(/[-\s]/g, '');
+          console.log(`- ${user.name}: ${user.contact} → ${cleanContact.slice(-4)}`);
+      });
       
-      console.log("매칭되는 사용자가 없음 - 사용자 등록 화면으로 이동");
+      console.log('매칭되는 사용자가 없음 - 사용자 등록 화면으로 이동');
       
       // 리다이렉트 상태 표시
       showAuthStatus("redirect", "미등록 번호입니다. 회원가입으로 이동합니다...", "📝");
