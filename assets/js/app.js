@@ -1438,5 +1438,31 @@ function updateTrainingMetrics() {
   if (kcalEl) kcalEl.textContent = Math.round(kcal);
 }
 
+
+
+
 // 7. 전역 상태 접근을 위한 별칭 (호환성)
 window.trainingState = window.trainingState || trainingState;
+
+
+// 케이던스 상태 확인 함수
+window.checkCadenceStatus = function() {
+  console.log("=== Cadence Status Check ===");
+  console.log("liveData.cadence:", window.liveData.cadence);
+  console.log("cadenceValue element exists:", !!document.getElementById("cadenceValue"));
+  console.log("cadenceValue current text:", document.getElementById("cadenceValue")?.textContent);
+  console.log("__pmPrev state:", window.__pmPrev || "Not accessible");
+  
+  // 테스트용 케이던스 설정
+  console.log("Testing manual cadence update...");
+  window.liveData.cadence = 90;
+  const el = document.getElementById("cadenceValue");
+  if (el) {
+    el.textContent = "90";
+    console.log("Manual update successful");
+  }
+};
+
+// 전역에서 __pmPrev 접근 가능하도록
+window.__pmPrev = window.__pmPrev || {};
+
