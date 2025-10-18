@@ -305,6 +305,7 @@ let __pmPrev = {
 // 파워미터 측정 알림
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
+// ⚡ 파워미터 데이터 처리 (cadence 보강)
 function handlePowerMeterData(e) {
   const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
   let offset = 0;
@@ -315,24 +316,44 @@ function handlePowerMeterData(e) {
     window.liveData.power = instPower;
   }
 
-  // bit4: Wheel Revolution Data Present
   // bit5: Crank Revolution Data Present
-  // 시마노 / 스테이지스 등은 대부분 bit5 (crank data) 사용
   if (flags & 0x0020) {
     const crankRevs = dv.getUint16(offset, true); offset += 2;
     const crankTime = dv.getUint16(offset, true); offset += 2;
 
     console.log(`Crank data - Revs: ${crankRevs}, Time: ${crankTime}, PrevRevs: ${__pmPrev.revs}, PrevTime: ${__pmPrev.time1024}`);
 
-    if (__pmPrev.revs !== null && crankTime !== __pmPrev.time1024) {
-      const revDiff = (crankRevs - __pmPrev.revs + 65536) % 65536;
-      const timeDiff = (crankTime - __pmPrev.time1024 + 65536) % 65536; // 단위: 1/1024초
-
-      if (revDiff > 0 && timeDiff > 0 && timeDiff < 5120) { // 5초 이내 변화만 유효
-        const cadence = (revDiff * 60 * 1024) / timeDiff;
-        if (cadence >= 0 && cadence <= 300) { // 유효한 케이던스 범위
+    if (__pmPrev.revs !== null && __pmPrev.time1024 !== null) {
+      let revDiff = crankRevs - __pmPrev.revs;
+      let timeDiff = crankTime - __pmPrev.time1024;
+      
+      // 16비트 오버플로우 처리
+      if (revDiff < 0) revDiff += 65536;
+      if (timeDiff < 0) timeDiff += 65536;
+      
+      console.log(`Differences - RevDiff: ${revDiff}, TimeDiff: ${timeDiff}`);
+      
+      // 유효한 데이터 범위 확인 (더 관대한 조건)
+      if (revDiff > 0 && timeDiff > 0 && timeDiff < 30720 && revDiff < 1000) { // 30초 이내, 1000회전 이내
+        const timeInSeconds = timeDiff / 1024;
+        const cadence = (revDiff / timeInSeconds) * 60;
+        
+        console.log(`Time in seconds: ${timeInSeconds}, Raw cadence: ${cadence}`);
+        
+        if (cadence >= 0 && cadence <= 200) { // 0-200 RPM 범위
           window.liveData.cadence = Math.round(cadence);
-          console.log(`Calculated cadence: ${Math.round(cadence)} RPM`);
+          console.log(`✅ Calculated cadence: ${Math.round(cadence)} RPM`);
+        } else {
+          console.log(`❌ Cadence out of range: ${cadence} RPM`);
+        }
+      } else {
+        console.log(`❌ Invalid data - RevDiff: ${revDiff}, TimeDiff: ${timeDiff}`);
+        // 데이터가 이상할 때는 이전 값 리셋
+        if (timeDiff > 30720) {
+          console.log(`⚠️ Large time gap detected, resetting previous values`);
+          __pmPrev.revs = crankRevs;
+          __pmPrev.time1024 = crankTime;
+          return;
         }
       }
     }
@@ -344,7 +365,9 @@ function handlePowerMeterData(e) {
   }
 
   // ✅ UI 업데이트 호출
-  if (typeof updateTrainingDisplay === "function") updateTrainingDisplay();
+  if (typeof window.updateTrainingDisplay === "function") {
+    window.updateTrainingDisplay();
+  }
 }
 
 
