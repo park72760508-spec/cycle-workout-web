@@ -3113,3 +3113,14 @@ button[aria-disabled="true"] {
     z-index: 1000;
 }
 
+/* 개발자도구 > Elements에서 사용자 인증 요소 찾아서 스타일 추가 */
+element.style {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 90% !important;
+    max-width: 400px !important;
+    text-align: center !important;
+    z-index: 1000 !important;
+}
