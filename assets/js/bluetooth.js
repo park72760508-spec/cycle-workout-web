@@ -6,6 +6,16 @@
    - 오류/종료 시 showConnectionStatus(false) 보장
    - beforeunload에서 안전 disconnect
 ========================================================== */
+// 파일 상단에 한 번만
+window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+
+const CPS_FLAG = {
+  PEDAL_POWER_BALANCE_PRESENT: 0x0001,
+  ACC_TORQUE_PRESENT:         0x0004,
+  WHEEL_REV_DATA_PRESENT:     0x0010, // wheel
+  CRANK_REV_DATA_PRESENT:     0x0020  // crank
+};
+
 
 // 전역 상태 단일화
 window.connectedDevices = window.connectedDevices || {
@@ -25,14 +35,7 @@ let __pmPrev = {
   consecutiveFailures: 0  // 연속 실패 카운트 추가
 };
 
-const CPS_FLAG = {
-  PEDAL_POWER_BALANCE_PRESENT: 1 << 0,   // +1 byte
-  PEDAL_POWER_BALANCE_REF:     1 << 1,   // (길이 없음)
-  ACC_TORQUE_PRESENT:          1 << 2,   // +2 bytes
-  ACC_TORQUE_SOURCE:           1 << 3,   // (길이 없음)
-  WHEEL_REV_DATA_PRESENT:      1 << 4,   // +6 bytes
-  CRANK_REV_DATA_PRESENT:      1 << 5,   // +4 bytes
-};
+
 
 window.liveData = window.liveData || { 
   power: 0, 
@@ -324,59 +327,47 @@ let powerMeterCadenceLastTs = 0;
 const POWER_METER_CADENCE_TTL = 3000; // ms
 
 // 3. handlePowerMeterData 함수를 다음으로 완전히 교체
+// 파워미터 상태 저장용
+//const powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
+
+// ⚡ CPS 측정 알림 파서 (Cycling Power Measurement: 0x2A63)
 function handlePowerMeterData(event) {
-  const dv = event.target.value;
+  const dv = event.target.value; // DataView
   let off = 0;
 
+  // 1) Flags, Instantaneous Power
   const flags = dv.getUint16(off, true); off += 2;
   const instPower = dv.getInt16(off, true); off += 2;
-
-  // 파워 데이터 업데이트
-  if (usePowerMeterPreferred) {
-    liveData.power = instPower;
+  if (!Number.isNaN(instPower)) {
+    window.liveData.power = instPower;
   }
 
-  // 플래그에 따른 오프셋 이동
-  if (flags & CPS_FLAG.PEDAL_POWER_BALANCE_PRESENT) off += 1;
-  if (flags & CPS_FLAG.ACC_TORQUE_PRESENT) off += 2;
-  if (flags & CPS_FLAG.WHEEL_REV_DATA_PRESENT) off += 6;
+  // 2) 옵션 필드 스킵
+  if (flags & CPS_FLAG.PEDAL_POWER_BALANCE_PRESENT) off += 1; // 1 byte
+  if (flags & CPS_FLAG.ACC_TORQUE_PRESENT)          off += 2; // 2 byte
+  if (flags & CPS_FLAG.WHEEL_REV_DATA_PRESENT)      off += 6; // uint32 + uint16
 
-  // 크랭크 회전 데이터 처리
+  // 3) Crank Revolution Data → 케이던스(RPM)
   if (flags & CPS_FLAG.CRANK_REV_DATA_PRESENT) {
     const crankRevs = dv.getUint16(off, true); off += 2;
     const lastCrankTime = dv.getUint16(off, true); off += 2; // 1/1024s
 
-    if (powerMeterState.lastCrankRevs !== null) {
-      // 16비트 타이머 롤오버 보정
-      let dtTicks = lastCrankTime - powerMeterState.lastCrankEventTime;
-      if (dtTicks < 0) dtTicks += 0x10000; // 16bit wrap
-      
-      const dRev = crankRevs - powerMeterState.lastCrankRevs;
-      
-      if (dRev > 0 && dtTicks > 0) {
-        const dtSec = dtTicks / 1024;
-        const rpm = (dRev / dtSec) * 60;
-        
-        // 현실적인 범위 체크 (0-220 RPM)
-        if (rpm > 0 && rpm < 220) {
-          liveData.cadence = Math.round(rpm);
-          powerMeterCadenceLastTs = Date.now();
-          console.log(`Cadence: ${Math.round(rpm)} RPM`);
-        }
+    if (powerMeterState.lastCrankRevs !== null && powerMeterState.lastCrankEventTime !== null) {
+      let dRevs = crankRevs - powerMeterState.lastCrankRevs;
+      if (dRevs < 0) dRevs += 0x10000; // uint16 롤오버
+
+      let dTicks = lastCrankTime - powerMeterState.lastCrankEventTime;
+      if (dTicks < 0) dTicks += 0x10000; // uint16 롤오버
+
+      if (dRevs > 0 && dTicks > 0) {
+        const dtSec = dTicks / 1024;
+        const rpm = (dRevs / dtSec) * 60;
+        if (rpm > 0 && rpm < 220) window.liveData.cadence = Math.round(rpm);
       }
     }
-    
-    // 이전 값 업데이트
     powerMeterState.lastCrankRevs = crankRevs;
     powerMeterState.lastCrankEventTime = lastCrankTime;
   }
-
-  // UI 업데이트
-  if (trainingSession.isRunning && !trainingSession.isPaused) {
-    updateTrainingDisplay();
-    recordDataPoint();
-  }
-}
 
 
 // 3. 케이던스 UI 업데이트 함수 추가
