@@ -1520,3 +1520,48 @@ window.checkCadenceStatus = function() {
 // 전역에서 __pmPrev 접근 가능하도록
 window.__pmPrev = window.__pmPrev || {};
 
+
+// 네온 효과 수동 테스트 함수
+window.testNeonEffect = function(achievementPercent) {
+  const panels = document.querySelectorAll('.enhanced-metric-panel');
+  const currentPowerEl = document.getElementById("currentPowerValue");
+  
+  // 기존 클래스 제거
+  panels.forEach(panel => {
+    panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
+  });
+  
+  if (currentPowerEl) {
+    currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+  }
+  
+  // 테스트 클래스 적용
+  let testClass = '';
+  if (achievementPercent < 85) testClass = 'achievement-low';
+  else if (achievementPercent <= 115) testClass = 'achievement-good';
+  else if (achievementPercent <= 130) testClass = 'achievement-high';
+  else testClass = 'achievement-over';
+  
+  panels.forEach(panel => {
+    panel.classList.add('neon-active', testClass);
+  });
+  
+  if (currentPowerEl) {
+    currentPowerEl.classList.add(testClass);
+  }
+  
+  console.log(`Test neon effect applied: ${testClass} (${achievementPercent}%)`);
+  
+  // 3초 후 효과 제거
+  setTimeout(() => {
+    panels.forEach(panel => {
+      panel.classList.remove('neon-active', testClass);
+    });
+    if (currentPowerEl) {
+      currentPowerEl.classList.remove(testClass);
+    }
+    console.log('Test neon effect removed');
+  }, 3000);
+};
+
+
