@@ -3087,3 +3087,29 @@ button[aria-disabled="true"] {
 }
 
 
+/* 사용자 인증 화면 중앙 정렬 */
+.auth-container,
+.user-auth,
+.login-form,
+.auth-screen {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* 또는 더 구체적으로 */
+#userAuthScreen,
+#authContainer {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+    z-index: 1000;
+}
+
