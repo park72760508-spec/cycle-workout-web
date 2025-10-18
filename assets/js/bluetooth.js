@@ -25,6 +25,15 @@ let __pmPrev = {
   consecutiveFailures: 0  // 연속 실패 카운트 추가
 };
 
+const CPS_FLAG = {
+  PEDAL_POWER_BALANCE_PRESENT: 1 << 0,   // +1 byte
+  PEDAL_POWER_BALANCE_REF:     1 << 1,   // (길이 없음)
+  ACC_TORQUE_PRESENT:          1 << 2,   // +2 bytes
+  ACC_TORQUE_SOURCE:           1 << 3,   // (길이 없음)
+  WHEEL_REV_DATA_PRESENT:      1 << 4,   // +6 bytes
+  CRANK_REV_DATA_PRESENT:      1 << 5,   // +4 bytes
+};
+
 window.liveData = window.liveData || { 
   power: 0, 
   heartRate: 0, 
@@ -309,155 +318,66 @@ async function connectHeartRate() {
 
 
 // 파워미터 측정 알림
-// ⚡ 파워미터 데이터 처리 (cadence 보강)
-// 2. handlePowerMeterData 함수를 다음으로 완전히 교체
-function handlePowerMeterData(e) {
-  const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
-  let offset = 0;
+// 2. 파워미터 상태 변수 (기존과 동일)
+let powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
+let powerMeterCadenceLastTs = 0;
+const POWER_METER_CADENCE_TTL = 3000; // ms
 
-  const flags = dv.getUint16(offset, true); offset += 2;
-  const instPower = dv.getInt16(offset, true); offset += 2;
-  
-  console.log(`Power meter flags: 0x${flags.toString(16)}, has crank data: ${!!(flags & 0x20)}`);
-  
+// 3. handlePowerMeterData 함수를 다음으로 완전히 교체
+function handlePowerMeterData(event) {
+  const dv = event.target.value;
+  let off = 0;
+
+  const flags = dv.getUint16(off, true); off += 2;
+  const instPower = dv.getInt16(off, true); off += 2;
+
   // 파워 데이터 업데이트
-  if (!isNaN(instPower)) {
-    window.liveData.power = Math.max(0, instPower);
+  if (usePowerMeterPreferred) {
+    liveData.power = instPower;
   }
 
-  // 크랭크 회전 데이터가 있는지 확인 (bit 5)
-  if (flags & 0x20) {
-    const crankRevs = dv.getUint16(offset, true); offset += 2;
-    const crankTime = dv.getUint16(offset, true); offset += 2;
-    const currentTime = Date.now();
-    
-    __pmPrev.sampleCount++;
-    console.log(`📊 Raw crank data - Revs: ${crankRevs}, Time: ${crankTime}, Power: ${instPower}W`);
+  // 플래그에 따른 오프셋 이동
+  if (flags & CPS_FLAG.PEDAL_POWER_BALANCE_PRESENT) off += 1;
+  if (flags & CPS_FLAG.ACC_TORQUE_PRESENT) off += 2;
+  if (flags & CPS_FLAG.WHEEL_REV_DATA_PRESENT) off += 6;
 
-    // 첫 번째 데이터이거나 10초 이상 경과한 경우 초기화
-    if (__pmPrev.revs === null || __pmPrev.time1024 === null || 
-        (currentTime - (__pmPrev.lastRealTime || 0)) > 10000) {
-      console.log(`🔄 Initializing shimano crank data tracking (sample #${__pmPrev.sampleCount})`);
-      __pmPrev.revs = crankRevs;
-      __pmPrev.time1024 = crankTime;
-      __pmPrev.lastRealTime = currentTime;
-      __pmPrev.validSamples = 0;
-      __pmPrev.recentCadences = [];
-      __pmPrev.consecutiveFailures = 0;
-      return;
-    }
+  // 크랭크 회전 데이터 처리
+  if (flags & CPS_FLAG.CRANK_REV_DATA_PRESENT) {
+    const crankRevs = dv.getUint16(off, true); off += 2;
+    const lastCrankTime = dv.getUint16(off, true); off += 2; // 1/1024s
 
-    // 실시간 기준으로만 케이던스 계산 (최소 2초 간격)
-    const realTimeDiff = currentTime - __pmPrev.lastRealTime;
-    
-    // 데이터 변화 확인
-    let revDiff = crankRevs - __pmPrev.revs;
-    let timeDiff = crankTime - __pmPrev.time1024;
-    
-    // 16비트 오버플로우 처리
-    if (revDiff < 0) revDiff += 65536;
-    if (timeDiff < 0) timeDiff += 65536;
-    
-    console.log(`🔍 Sample #${__pmPrev.sampleCount} - RevDiff: ${revDiff}, RealTime: ${realTimeDiff}ms`);
-    
-    // 데이터가 변화하지 않는 경우
-    if (revDiff === 0) {
-      console.log(`⚠️ No crank revolution change`);
-      // 5초 이상 변화가 없으면 정지 상태로 판단
-      if (realTimeDiff > 5000) {
-        console.log(`🛑 Setting cadence to 0 (no movement for ${realTimeDiff}ms)`);
-        window.liveData.cadence = 0;
-        updateCadenceUI(0);
-        __pmPrev.recentCadences = [];
-        __pmPrev.consecutiveFailures = 0;
+    if (powerMeterState.lastCrankRevs !== null) {
+      // 16비트 타이머 롤오버 보정
+      let dtTicks = lastCrankTime - powerMeterState.lastCrankEventTime;
+      if (dtTicks < 0) dtTicks += 0x10000; // 16bit wrap
+      
+      const dRev = crankRevs - powerMeterState.lastCrankRevs;
+      
+      if (dRev > 0 && dtTicks > 0) {
+        const dtSec = dtTicks / 1024;
+        const rpm = (dRev / dtSec) * 60;
+        
+        // 현실적인 범위 체크 (0-220 RPM)
+        if (rpm > 0 && rpm < 220) {
+          liveData.cadence = Math.round(rpm);
+          powerMeterCadenceLastTs = Date.now();
+          console.log(`Cadence: ${Math.round(rpm)} RPM`);
+        }
       }
-      return;
     }
     
-    // 시마노 전용: 최소 2초 간격으로만 케이던스 계산
-    if (revDiff > 0 && realTimeDiff >= 2000 && realTimeDiff < 10000) {
-      const realTimeInSeconds = realTimeDiff / 1000;
-      
-      // 시마노 파워미터 특성: 회전수가 1/4 단위일 가능성 고려
-      let adjustedRevDiff = revDiff;
-      
-      // 비정상적으로 높은 회전수 차이는 단위 문제일 가능성이 높음
-      if (revDiff > 50) {
-        adjustedRevDiff = revDiff / 4; // 1/4 회전 단위로 조정
-        console.log(`🔧 Shimano adjustment - Original: ${revDiff}, Adjusted: ${adjustedRevDiff}`);
-      }
-      
-      let cadence = (adjustedRevDiff / realTimeInSeconds) * 60; // RPM
-      
-      console.log(`⚙️ Shimano calculation - ${adjustedRevDiff} revs in ${realTimeInSeconds.toFixed(1)}s = ${cadence.toFixed(1)} RPM`);
-      
-      // 현실적인 케이던스 범위 (40-140 RPM)
-      if (cadence >= 40 && cadence <= 140) {
-        // 스무딩: 최근 3개 값의 평균
-        __pmPrev.recentCadences.push(cadence);
-        if (__pmPrev.recentCadences.length > 3) {
-          __pmPrev.recentCadences.shift();
-        }
-        
-        const avgCadence = __pmPrev.recentCadences.reduce((a, b) => a + b, 0) / __pmPrev.recentCadences.length;
-        const finalCadence = Math.round(avgCadence);
-        
-        window.liveData.cadence = finalCadence;
-        updateCadenceUI(finalCadence);
-        __pmPrev.validSamples++;
-        __pmPrev.consecutiveFailures = 0;
-        
-        console.log(`✅ Valid shimano cadence: ${finalCadence} RPM (avg of ${__pmPrev.recentCadences.length} samples)`);
-        
-        // 성공적으로 계산된 경우에만 이전 값 업데이트
-        __pmPrev.revs = crankRevs;
-        __pmPrev.time1024 = crankTime;
-        __pmPrev.lastRealTime = currentTime;
-        
-      } else {
-        __pmPrev.consecutiveFailures++;
-        console.log(`❌ Shimano cadence out of range: ${cadence.toFixed(1)} RPM (failures: ${__pmPrev.consecutiveFailures})`);
-        
-        // 10번 연속 실패하면 다른 조정 시도
-        if (__pmPrev.consecutiveFailures >= 10 && revDiff > 20) {
-          adjustedRevDiff = revDiff / 8; // 1/8 회전 단위로 재시도
-          cadence = (adjustedRevDiff / realTimeInSeconds) * 60;
-          console.log(`🔧 Shimano re-adjustment - /8 division: ${cadence.toFixed(1)} RPM`);
-          
-          if (cadence >= 40 && cadence <= 140) {
-            window.liveData.cadence = Math.round(cadence);
-            updateCadenceUI(Math.round(cadence));
-            console.log(`✅ Shimano re-adjusted cadence: ${Math.round(cadence)} RPM`);
-            __pmPrev.consecutiveFailures = 0;
-            __pmPrev.revs = crankRevs;
-            __pmPrev.time1024 = crankTime;
-            __pmPrev.lastRealTime = currentTime;
-          }
-        }
-        
-        // 20번 연속 실패하면 초기화
-        if (__pmPrev.consecutiveFailures >= 20) {
-          console.log(`🔄 Shimano: Resetting due to ${__pmPrev.consecutiveFailures} consecutive failures`);
-          __pmPrev.revs = crankRevs;
-          __pmPrev.time1024 = crankTime;
-          __pmPrev.lastRealTime = currentTime;
-          __pmPrev.consecutiveFailures = 0;
-          __pmPrev.recentCadences = [];
-        }
-      }
-    } else {
-      console.log(`❌ Shimano: Invalid timing - RevDiff: ${revDiff}, RealTimeDiff: ${realTimeDiff}ms (need ≥2s)`);
-    }
-    
-  } else {
-    console.log(`❌ No crank revolution data in power meter packet`);
+    // 이전 값 업데이트
+    powerMeterState.lastCrankRevs = crankRevs;
+    powerMeterState.lastCrankEventTime = lastCrankTime;
   }
 
-  // 전체 UI 업데이트 호출
-  if (typeof window.updateTrainingDisplay === "function") {
-    window.updateTrainingDisplay();
+  // UI 업데이트
+  if (trainingSession.isRunning && !trainingSession.isPaused) {
+    updateTrainingDisplay();
+    recordDataPoint();
   }
 }
+
 
 // 3. 케이던스 UI 업데이트 함수 추가
 function updateCadenceUI(cadence) {
