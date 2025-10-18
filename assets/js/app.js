@@ -977,7 +977,7 @@ window.updateTrainingDisplay = function () {
   const bar = document.getElementById("powerProgressBar");
   const t = document.getElementById("targetPowerValue");
 
-  const currentPower = liveData.power || 0;
+  // const currentPower = liveData.power || 0;  하단에 선언되어 있음
   const target = liveData.targetPower || 200; // 기준값
   const hr = liveData.heartRate || 0;
 
