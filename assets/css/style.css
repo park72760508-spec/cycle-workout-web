@@ -1879,3 +1879,449 @@ button[aria-disabled="true"] {
   gap: 15px !important;
   padding: 25px !important;
 }
+
+
+
+
+
+/* ========== 개선된 훈련 화면 스타일 (1018_토)========== */
+
+/* 훈련 화면 기본 설정 개선 */
+#trainingScreen {
+  background: #0f111a;
+  color: #f3f3f3;
+  padding: 16px 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 1. 최상단 사용자 정보 */
+.enhanced-training-user-info {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: 16px;
+  padding: 12px 20px;
+  text-align: center;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.enhanced-training-user-info #userInfo {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.enhanced-training-user-info #userInfo::before {
+  content: "👤";
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+/* 2. 경과시간 및 다음 세그먼트 정보 */
+.enhanced-training-time-info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.enhanced-time-elapsed, .enhanced-next-segment-info {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border-radius: 12px;
+  padding: 12px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.enhanced-time-elapsed {
+  text-align: left;
+}
+
+.enhanced-next-segment-info {
+  text-align: right;
+}
+
+.enhanced-time-label, .enhanced-next-label {
+  display: block;
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.enhanced-time-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #00d4aa;
+  margin-right: 8px;
+}
+
+.enhanced-time-percent {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.enhanced-next-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fbbf24;
+  margin-top: 2px;
+}
+
+/* 3. 메인 메트릭 그리드 (3열) */
+.enhanced-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+/* 공통 패널 스타일 */
+.enhanced-metric-panel {
+  background: #1a1d29;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.enhanced-metric-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #3b82f6;
+  opacity: 0.6;
+}
+
+.enhanced-panel-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+/* 왼쪽 패널 - TSS & 칼로리 */
+.enhanced-left-panel .enhanced-metric-item {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.enhanced-left-panel .enhanced-metric-item:last-child {
+  margin-bottom: 0;
+}
+
+.enhanced-left-panel .enhanced-metric-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.enhanced-left-panel .enhanced-metric-value {
+  font-size: 32px;
+  font-weight: 800;
+  color: #e5e7eb;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.enhanced-left-panel .enhanced-metric-unit {
+  font-size: 14px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* 중앙 패널 - 메인 파워 디스플레이 */
+.enhanced-main-power-display {
+  text-align: center;
+  position: relative;
+}
+
+/* 세그먼트 카운트다운 (더 크게) */
+.enhanced-segment-countdown {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 10px;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.enhanced-countdown-label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.enhanced-countdown-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #3b82f6;
+}
+
+/* 목표 파워와 세그먼트 평균 파워 같은 라인 - 동일한 크기 */
+.enhanced-power-targets-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.enhanced-target-power-section, .enhanced-segment-avg-power {
+  flex: 1;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.enhanced-target-label, .enhanced-avg-label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.enhanced-target-value, .enhanced-avg-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.enhanced-target-value {
+  color: #e5e7eb;
+}
+
+.enhanced-avg-value {
+  color: #3b82f6;
+}
+
+.enhanced-target-unit, .enhanced-avg-unit {
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+/* 현재 파워 (가장 크게) */
+.enhanced-current-power-section {
+  margin-bottom: 20px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  position: relative;
+  text-align: center;
+}
+
+.enhanced-current-power-value {
+  font-size: 72px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 0.9;
+  transition: all 0.3s ease;
+}
+
+.enhanced-current-power-unit {
+  font-size: 16px;
+  color: #9ca3af;
+  font-weight: 600;
+  letter-spacing: 2px;
+  margin-top: 8px;
+}
+
+/* 달성도 프로그레스 바 */
+.enhanced-power-progress {
+  margin: 16px 0;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.enhanced-power-progress-bar {
+  height: 6px;
+  background: #3b82f6;
+  border-radius: 3px;
+  margin-bottom: 8px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+  width: 0%;
+}
+
+.enhanced-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* 현재 세그먼트 이름 */
+.enhanced-current-segment-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e7eb;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 오른쪽 패널 - 심박수 & 케이던스 */
+.enhanced-right-panel .enhanced-metric-item {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.enhanced-right-panel .enhanced-metric-item:last-child {
+  margin-bottom: 0;
+}
+
+.enhanced-right-panel .enhanced-metric-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.enhanced-right-panel .enhanced-metric-value {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 2px;
+  color: #e5e7eb;
+}
+
+.enhanced-right-panel .enhanced-metric-unit {
+  font-size: 14px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* 파워 상태별 색상 변화 */
+.enhanced-current-power-value.power-low {
+  color: #06b6d4;
+}
+
+.enhanced-current-power-value.power-mid {
+  color: #10b981;
+}
+
+.enhanced-current-power-value.power-high {
+  color: #f59e0b;
+}
+
+.enhanced-current-power-value.power-max {
+  color: #ef4444;
+}
+
+/* 프로그레스 바 상태별 색상 */
+.enhanced-power-progress-bar.achievement-low {
+  background: #ef4444;
+}
+
+.enhanced-power-progress-bar.achievement-good {
+  background: #10b981;
+}
+
+.enhanced-power-progress-bar.achievement-high {
+  background: #f59e0b;
+}
+
+.enhanced-power-progress-bar.achievement-over {
+  background: #a855f7;
+}
+
+/* 심박수 존별 색상 (기존 스타일 유지) */
+.enhanced-heart-rate.hr-zone1 { color: #64748b; }
+.enhanced-heart-rate.hr-zone2 { color: #06b6d4; }
+.enhanced-heart-rate.hr-zone3 { color: #10b981; }
+.enhanced-heart-rate.hr-zone4 { color: #f59e0b; }
+.enhanced-heart-rate.hr-zone5 { color: #ef4444; }
+
+/* 반응형 디자인 */
+@media (max-width: 1024px) {
+  .enhanced-metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .enhanced-training-time-info {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .enhanced-current-power-value {
+    font-size: 56px;
+  }
+  
+  .enhanced-target-value, .enhanced-avg-value {
+    font-size: 20px;
+  }
+  
+  .enhanced-countdown-value {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  #trainingScreen {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+  
+  .enhanced-metric-panel {
+    padding: 16px;
+  }
+  
+  .enhanced-current-power-value {
+    font-size: 48px;
+  }
+  
+  .enhanced-target-value, .enhanced-avg-value {
+    font-size: 18px;
+  }
+  
+  .enhanced-countdown-value {
+    font-size: 20px;
+  }
+  
+  .enhanced-left-panel .enhanced-metric-value,
+  .enhanced-right-panel .enhanced-metric-value {
+    font-size: 24px;
+  }
+}
+
+/* 애니메이션 효과 */
+.enhanced-metric-value {
+  transition: all 0.3s ease;
+}
+
+.enhanced-metric-panel {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.enhanced-metric-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
