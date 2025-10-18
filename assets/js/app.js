@@ -1793,3 +1793,160 @@ window.checkBluetoothStatus = function() {
 };
 
 
+// ====== app.js 파일 끝에 추가할 고급 디버깅 함수들 ======
+
+// 케이던스 강제 테스트
+window.testCadence = function(value = 85) {
+  console.log(`=== Testing Cadence with ${value} RPM ===`);
+  
+  // liveData 확인
+  if (!window.liveData) {
+    window.liveData = {};
+    console.log("Created liveData object");
+  }
+  
+  // 케이던스 설정
+  window.liveData.cadence = value;
+  console.log(`Set liveData.cadence to ${value}`);
+  
+  // UI 요소 확인 및 업데이트
+  const cadenceEl = document.getElementById("cadenceValue");
+  if (cadenceEl) {
+    cadenceEl.textContent = value.toString();
+    console.log(`✅ Updated cadenceValue element to ${value}`);
+  } else {
+    console.log("❌ cadenceValue element not found");
+  }
+  
+  // updateTrainingDisplay 호출
+  if (typeof window.updateTrainingDisplay === "function") {
+    window.updateTrainingDisplay();
+    console.log("✅ Called updateTrainingDisplay");
+  } else {
+    console.log("❌ updateTrainingDisplay function not found");
+  }
+  
+  // 결과 확인
+  setTimeout(() => {
+    const finalEl = document.getElementById("cadenceValue");
+    console.log(`Final cadenceValue content: "${finalEl?.textContent}"`);
+  }, 100);
+};
+
+// 블루투스 상태 상세 확인
+window.debugBluetoothState = function() {
+  console.log("=== Bluetooth State Debug ===");
+  console.log("Connected devices:", window.connectedDevices);
+  console.log("Live data:", window.liveData);
+  
+  // __pmPrev 상태 확인 (전역 변수로 접근 시도)
+  try {
+    if (typeof __pmPrev !== 'undefined') {
+      console.log("__pmPrev state:", __pmPrev);
+    } else {
+      console.log("__pmPrev not accessible from global scope");
+    }
+  } catch (e) {
+    console.log("Error accessing __pmPrev:", e);
+  }
+  
+  // UI 요소들 확인
+  console.log("cadenceValue element:", document.getElementById("cadenceValue"));
+  console.log("powerValue element:", document.getElementById("powerValue"));
+  console.log("heartRateValue element:", document.getElementById("heartRateValue"));
+};
+
+// 케이던스 계산 시뮬레이션
+window.simulateCadence = function() {
+  console.log("=== Simulating Cadence Calculation ===");
+  
+  // 가상의 크랭크 데이터로 케이던스 계산 시뮬레이션
+  const revolutions = 2; // 2회전
+  const timeSeconds = 1.5; // 1.5초
+  const cadence = (revolutions / timeSeconds) * 60; // RPM 계산
+  
+  console.log(`Simulation: ${revolutions} revs in ${timeSeconds}s = ${cadence} RPM`);
+  
+  if (cadence >= 30 && cadence <= 120) {
+    window.liveData = window.liveData || {};
+    window.liveData.cadence = Math.round(cadence);
+    
+    const cadenceEl = document.getElementById("cadenceValue");
+    if (cadenceEl) {
+      cadenceEl.textContent = Math.round(cadence).toString();
+      console.log(`✅ Simulated cadence set to ${Math.round(cadence)} RPM`);
+    }
+  }
+};
+
+// 자동 케이던스 애니메이션 (테스트용)
+window.animateCadence = function(duration = 10000) {
+  console.log(`=== Starting Cadence Animation for ${duration}ms ===`);
+  
+  let startTime = Date.now();
+  let animationId;
+  
+  function updateCadence() {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > duration) {
+      console.log("Animation completed");
+      return;
+    }
+    
+    // 60-100 RPM 사이에서 sine wave 패턴으로 변화
+    const progress = elapsed / duration;
+    const cadence = 80 + 20 * Math.sin(progress * Math.PI * 4);
+    const roundedCadence = Math.round(cadence);
+    
+    window.liveData = window.liveData || {};
+    window.liveData.cadence = roundedCadence;
+    
+    const cadenceEl = document.getElementById("cadenceValue");
+    if (cadenceEl) {
+      cadenceEl.textContent = roundedCadence.toString();
+    }
+    
+    console.log(`Animated cadence: ${roundedCadence} RPM`);
+    
+    setTimeout(updateCadence, 1000); // 1초마다 업데이트
+  }
+  
+  updateCadence();
+};
+
+// 파워미터 데이터 패킷 시뮬레이션
+window.simulatePowerMeterData = function() {
+  console.log("=== Simulating Power Meter Data ===");
+  
+  // 가상의 BLE 데이터 패킷 생성
+  const flags = 0x23; // crank data present
+  const power = 75; // 75W
+  const revs = 1000; // 임의의 회전수
+  const time = 30000; // 임의의 시간
+  
+  console.log(`Simulated packet - Flags: 0x${flags.toString(16)}, Power: ${power}W, Revs: ${revs}, Time: ${time}`);
+  
+  // 실제 handlePowerMeterData 함수가 존재한다면 호출
+  if (typeof handlePowerMeterData === "function") {
+    // ArrayBuffer 생성하여 시뮬레이션
+    const buffer = new ArrayBuffer(8);
+    const view = new DataView(buffer);
+    view.setUint16(0, flags, true);
+    view.setInt16(2, power, true);
+    view.setUint16(4, revs, true);
+    view.setUint16(6, time, true);
+    
+    const mockEvent = {
+      target: {
+        value: view
+      }
+    };
+    
+    console.log("Calling handlePowerMeterData with simulated data");
+    handlePowerMeterData(mockEvent);
+  } else {
+    console.log("❌ handlePowerMeterData function not found");
+  }
+};
+
+
