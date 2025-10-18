@@ -368,7 +368,7 @@ function handlePowerMeterData(event) {
     powerMeterState.lastCrankRevs = crankRevs;
     powerMeterState.lastCrankEventTime = lastCrankTime;
   }
-
+}
 
 // 3. 케이던스 UI 업데이트 함수 추가
 function updateCadenceUI(cadence) {
