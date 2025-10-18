@@ -247,6 +247,25 @@ function startWithCountdown(sec = 5) {
   }, 1000);
 }
 
+// 파일 내 적절한 유틸 영역에 추가
+function advanceToNextSegment() {
+  const w = window.currentWorkout;
+  if (!w || !w.segments) return;
+
+  const i = window.trainingState.segIndex || 0;
+  if (i >= w.segments.length - 1) {
+    // 마지막이면 훈련 종료 처리 (기존 종료 로직 호출)
+    if (typeof stopTraining === 'function') stopTraining(true);
+    return;
+  }
+
+  window.trainingState.segIndex = i + 1;
+  window.trainingState.segElapsedSec = 0;
+  if (typeof applySegmentTarget === 'function') applySegmentTarget(window.trainingState.segIndex);
+  if (typeof updateTimeUI === 'function') updateTimeUI();
+}
+
+
 // 카운트다운 강제 정지 함수
 function stopSegmentCountdown() {
   console.log('카운트다운 강제 정지');
@@ -844,134 +863,138 @@ function applySegmentTarget(i) {
 
 // 시작/루프
 // 수정된 startSegmentLoop 함수 (카운트다운 로직 추가)
+// 세그먼트 루프 전체 교체본
+// 세그먼트 루프 전체 교체본 (v2: 경계 통과 기반 카운트다운)
 function startSegmentLoop() {
-  const w = window.currentWorkout;
-  if (!w || !w.segments || w.segments.length === 0) {
-    console.error('워크아웃 또는 세그먼트가 없습니다:', w);
+  const ts = (window.trainingState = window.trainingState || {});
+  const w  = window.currentWorkout;
+
+  if (!w || !Array.isArray(w.segments) || w.segments.length === 0) {
+    console.warn("[startSegmentLoop] No workout segments");
     return;
   }
 
-  console.log('세그먼트 루프 시작', '워크아웃:', w.title, '세그먼트 수:', w.segments.length);
-
-  // 누적 종료시각 배열 계산
-  window.trainingState.segEnds = [];
-  let acc = 0;
-  for (let i = 0; i < w.segments.length; i++) {
-    const durSec = segDurationSec(w.segments[i]);
-    acc += durSec;
-    window.trainingState.segEnds.push(acc);
-    console.log(`세그먼트 ${i + 1}: ${durSec}초, 누적: ${acc}초`);
-  }
-  window.trainingState.totalSec = acc;
-
-  // 초기 상태 설정
-  window.trainingState.elapsedSec = 0;
-  window.trainingState.segIndex = 0;
-  window.trainingState.segElapsedSec = 0;
-  window.trainingState.paused = false;
-
-  // 세그먼트별 카운트다운 트리거 상태 초기화
-  countdownTriggered = Array(w.segments.length).fill(false);
-
-  // 첫 번째 세그먼트 타겟 적용
-  applySegmentTarget(0);
-  updateTimeUI();
-  
-  // 세그먼트 바 초기화
-  if (typeof buildSegmentBar === "function") {
-    buildSegmentBar();
+  if (ts.timerId) {
+    clearInterval(ts.timerId);
+    ts.timerId = null;
   }
 
-  console.log('타이머 시작', '총 시간:', window.trainingState.totalSec, '초');
+  ts.segIndex      = Number.isInteger(ts.segIndex) ? ts.segIndex : 0;
+  ts.segElapsedSec = Number.isInteger(ts.segElapsedSec) ? ts.segElapsedSec : 0;
+  ts.elapsedSec    = Number.isInteger(ts.elapsedSec) ? ts.elapsedSec : 0;
+  ts.paused        = !!ts.paused;
 
-  // 기존 타이머 정리
-  if (window.trainingState.timerId) {
-    clearInterval(window.trainingState.timerId);
-  }
+  // 이전 틱의 남은 시간을 보관해 경계(5초) 통과를 감지
+  ts._prevRemaining = ts._prevRemaining ?? null;
 
-  // 1초마다 실행되는 메인 루프
-  window.trainingState.timerId = setInterval(() => {
-    if (window.trainingState.paused) {
-      return; // 일시정지 중이면 스킵
-    }
+  if (typeof window.applySegmentTarget === "function") window.applySegmentTarget(ts.segIndex);
+  if (typeof window.updateTimeUI === "function")       window.updateTimeUI();
 
-    // 시간 진행
-    window.trainingState.elapsedSec += 1;
-    window.trainingState.segElapsedSec += 1;
+  window.countdownTriggered = window.countdownTriggered || {};
 
-    const currentSegIndex = window.trainingState.segIndex;
-    const currentSeg = w.segments[currentSegIndex];
-    
-    if (!currentSeg) {
-      console.error('현재 세그먼트가 없습니다. 인덱스:', currentSegIndex);
-      return;
-    }
+  ts.timerId = setInterval(() => {
+    try {
+      if (ts.paused) return;
 
-    const segDur = segDurationSec(currentSeg);
-    const segRemaining = segDur - window.trainingState.segElapsedSec;
-    
-    // 디버깅 로그 (5초 주변에서만 출력)
-    if (segRemaining <= 7 && segRemaining >= 3) {
-      console.log(`세그먼트 ${currentSegIndex + 1} 종료까지: ${segRemaining}초`);
-    }
-
-    // 세그먼트 종료 5초 전 카운트다운 트리거 (개선된 조건)
-    if (segRemaining <= 5 && segRemaining > 0 && 
-        !countdownTriggered[currentSegIndex] && 
-        currentSegIndex < w.segments.length - 1) {
-      
-      // 마지막 세그먼트가 아닐 때만 카운트다운 실행
-      countdownTriggered[currentSegIndex] = true;
-      const nextSegment = w.segments[currentSegIndex + 1];
-      console.log(`세그먼트 ${currentSegIndex + 1} 종료 ${segRemaining}초 전 카운트다운 시작`);
-      startSegmentCountdown(segRemaining, nextSegment);
-    }
-
-    // TSS / kcal 누적 및 표시
-    updateTrainingMetrics();
-
-    // UI 먼저 갱신
-    if (typeof updateTimeUI === "function") updateTimeUI();
-    if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
-    if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
-
-    // 전체 종료 판단
-    if (window.trainingState.elapsedSec >= window.trainingState.totalSec) {
-      console.log('훈련 완료!');
-      clearInterval(window.trainingState.timerId);
-      window.trainingState.timerId = null;
-
-      // 활성 카운트다운 정지
-      stopSegmentCountdown();
-
-      if (typeof setPaused === "function") setPaused(false);
-      if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
-      if (typeof showScreen === "function") showScreen("resultScreen");
-      return;
-    }
-
-    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
-    if (window.trainingState.segElapsedSec >= segDur) {
-      console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
-      
-      window.trainingState.segIndex += 1;
-      window.trainingState.segElapsedSec = 0;
-
-      if (window.trainingState.segIndex < w.segments.length) {
-        console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
-        applySegmentTarget(window.trainingState.segIndex);
-        
-        // 세그먼트 전환 완료 후 카운트다운 정리 (혹시 남아있다면)
-        if (segmentCountdownActive) {
-          stopSegmentCountdown();
-        }
-        
-      } else {
-        console.log('모든 세그먼트 완료');
+      const i   = ts.segIndex | 0;
+      const seg = w.segments[i];
+      if (!seg) {
+        console.warn("[startSegmentLoop] Invalid segment at index", i);
+        return;
       }
+
+      // 시간 진행
+      ts.elapsedSec    = (ts.elapsedSec | 0) + 1;
+      ts.segElapsedSec = (ts.segElapsedSec | 0) + 1;
+
+      // 매 틱 UI/기록
+      if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
+      if (typeof window.recordDataPoint === "function")      window.recordDataPoint();
+
+      // 남은 시간
+      const segTotal     = Number(seg.durationSec) || 0;
+      const segRemaining = Math.max(0, segTotal - ts.segElapsedSec);
+      const prevRem      = ts._prevRemaining;
+
+      // ── 카운트다운 트리거 (경계 통과 방식)
+      // 이전 > 5 이고, 현재 <= 5 이면 — 지연되었어도 그 시점부터 시작
+      if (
+        i < w.segments.length - 1 &&
+        !window.countdownTriggered[i] &&
+        prevRem !== null &&
+        prevRem > 5 &&
+        segRemaining <= 5
+      ) {
+        window.countdownTriggered[i] = true;
+        const nextSeg = w.segments[i + 1];
+
+        // 지연 보정: 현재 시점 값부터 시작(최대 5, 최소 0)
+        const startFrom = Math.max(0, Math.min(5, Math.floor(segRemaining)));
+        if (typeof window.startSegmentCountdown === "function") {
+          window.startSegmentCountdown(startFrom, nextSeg);
+        }
+      }
+
+      // ── 0초 처리: 마지막 높은음(약 700ms) 재생 보장 후 전환
+      if (segRemaining === 0) {
+        const handoff = () => {
+          if (i >= w.segments.length - 1) {
+            if (typeof window.stopTraining === "function") window.stopTraining(true);
+            return;
+          }
+          ts.segIndex = i + 1;
+          ts.segElapsedSec = 0;
+
+          // 다음 세그로 넘어갈 때, 다음 세그의 카운트다운 플래그는 초기 상태
+          // (이전 세그의 countdownTriggered[i]는 그대로 두어도 무방)
+
+          if (typeof window.applySegmentTarget === "function") window.applySegmentTarget(ts.segIndex);
+          if (typeof window.updateTimeUI === "function")       window.updateTimeUI();
+
+          // 다음 세그 시작 시 prevRemaining 초기화
+          ts._prevRemaining = null;
+        };
+
+        if (window.segmentCountdownActive) {
+          setTimeout(handoff, 750); // 0초 강조음 끝까지 재생 후 전환
+        } else {
+          handoff();
+        }
+        return; // 이 틱 종료
+      }
+
+      // 다음 틱을 위해 prevRemaining 갱신
+      ts._prevRemaining = segRemaining;
+
+    } catch (err) {
+      console.error("[startSegmentLoop] tick error:", err);
     }
   }, 1000);
+
+  console.log("[startSegmentLoop] started at segment", ts.segIndex);
 }
+
+
+/* === PATCH: helper (add once anywhere, e.g., utils area) === */
+window.advanceToNextSegment = function () {
+  const w  = window.currentWorkout;
+  const ts = window.trainingState || (window.trainingState = {});
+  if (!w?.segments) return;
+
+  const i = ts.segIndex | 0;
+  if (i >= w.segments.length - 1) {
+    if (typeof window.stopTraining === "function") window.stopTraining(true);
+    return;
+  }
+  ts.segIndex = i + 1;
+  ts.segElapsedSec = 0;
+
+  if (typeof window.applySegmentTarget === "function") window.applySegmentTarget(ts.segIndex);
+  if (typeof window.updateTimeUI === "function") window.updateTimeUI();
+};
+
+
+
 
 // 6. stopSegmentLoop 함수 수정
 // 수정된 stopSegmentLoop 함수 (카운트다운도 함께 정지)
