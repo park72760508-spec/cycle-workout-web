@@ -1998,7 +1998,46 @@ function goToRegistrationWithPhone(phoneLastFour) {
 }
 
 // 5. 디버깅용 함수들
+
+
+// 5. 디버깅용 함수들
 window.debugAuth = function() {
   console.log("=== 인증 디버그 정보 ===");
   console.log("현재 사용자:", window.currentUser);
-  console.log("로딩된 사용자 목록:", window.users || window.user
+  console.log("로딩된 사용자 목록:", window.users || window.userProfiles || []);
+  console.log("전화번호 입력값:", document.getElementById("phoneAuth")?.value);
+};
+
+// 테스트용 빠른 로그인 (개발용)
+window.quickLogin = function(userIndex = 0) {
+  const users = window.users || window.userProfiles || [];
+  if (users[userIndex]) {
+    window.currentUser = users[userIndex];
+    console.log("Quick login as:", users[userIndex].name);
+    if (typeof showScreen === "function") {
+      showScreen("connectionScreen");
+    }
+  }
+};
+
+// DOM 로딩 완료 후 초기화
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('앱 초기화 시작');
+  
+  // 로그인 화면 초기화
+  if (typeof initializeLoginScreen === "function") {
+    initializeLoginScreen();
+  }
+  
+  // iOS 모드 체크
+  if (typeof checkIOSMode === "function") {
+    checkIOSMode();
+  }
+  
+  // 로그인 애니메이션 추가
+  if (typeof addLoginAnimations === "function") {
+    addLoginAnimations();
+  }
+  
+  console.log('앱 초기화 완료');
+});
