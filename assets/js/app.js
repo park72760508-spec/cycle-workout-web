@@ -1321,6 +1321,8 @@ function backToWorkoutSelection() {
 }
 
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
+// renderUserInfo 함수를 다음과 같이 수정하세요 (app.js 파일에서)
+
 function renderUserInfo() {
   try {
     const box = safeGetElement("userInfo");
@@ -1329,20 +1331,64 @@ function renderUserInfo() {
 
     if (!u) { 
       box.textContent = "사용자 미선택"; 
+      // 등급 클래스 제거
+      const parentEl = box.closest('.enhanced-training-user-info');
+      if (parentEl) {
+        parentEl.classList.remove('grade-expert', 'grade-advanced', 'grade-intermediate', 'grade-beginner', 'grade-novice');
+      }
       return; 
     }
 
     const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
     const ftp = Number(u.ftp);
     const wt  = Number(u.weight);
-    const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
+    const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt) : 0;
 
-    box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
+    // W/kg 등급 계산
+    let gradeText = "";
+    let gradeClass = "";
+    
+    if (wkg >= 4.0) {
+      gradeText = "상급";
+      gradeClass = "grade-expert";
+    } else if (wkg >= 3.5) {
+      gradeText = "중급";
+      gradeClass = "grade-advanced";
+    } else if (wkg >= 3.0) {
+      gradeText = "초중급";
+      gradeClass = "grade-intermediate";
+    } else if (wkg >= 2.2) {
+      gradeText = "초급";
+      gradeClass = "grade-beginner";
+    } else if (wkg > 0) {
+      gradeText = "입문";
+      gradeClass = "grade-novice";
+    }
+
+    // 텍스트 설정 (등급 포함)
+    const wkgDisplay = wkg > 0 ? wkg.toFixed(2) : "-";
+    const gradeDisplay = gradeText ? ` [${gradeText}]` : "";
+    
+    box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkgDisplay} W/kg${gradeDisplay}`;
+    
+    // 부모 요소에 등급 클래스 적용
+    const parentEl = box.closest('.enhanced-training-user-info');
+    if (parentEl) {
+      // 기존 등급 클래스 제거
+      parentEl.classList.remove('grade-expert', 'grade-advanced', 'grade-intermediate', 'grade-beginner', 'grade-novice');
+      // 새 등급 클래스 추가
+      if (gradeClass) {
+        parentEl.classList.add(gradeClass);
+      }
+    }
     
   } catch (error) {
     console.error('Error in renderUserInfo:', error);
   }
 }
+
+
+
 
 function togglePause() {
   setPaused(!window.trainingState.paused);
