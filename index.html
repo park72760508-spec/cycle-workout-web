@@ -478,6 +478,8 @@
       </div>
   
       <!-- 인증 폼 영역 -->
+      <!-- index.html의 로그인 폼 부분을 다음과 같이 수정하세요 -->
+      
       <div class="login-form-container">
         <div class="login-form">
           <h2 class="form-title">사용자 인증</h2>
@@ -498,6 +500,9 @@
                 />
                 <div class="input-glow"></div>
               </div>
+              <div class="input-help">
+                <span class="help-text">등록된 번호라면 자동 로그인, 미등록 시 회원가입으로 이동</span>
+              </div>
             </div>
             
             <button class="btn-auth" id="btnAuthenticate">
@@ -505,14 +510,17 @@
               <div class="btn-arrow">→</div>
             </button>
           </div>
-  
-          <!-- 에러 메시지 -->
-          <div id="authError" class="auth-error hidden">
-            등록되지 않은 번호입니다. 사용자 등록을 먼저 진행해주세요.
+      
+          <!-- 상태 메시지 영역 -->
+          <div id="authStatus" class="auth-status hidden">
+            <div class="status-content">
+              <div class="status-icon">⏳</div>
+              <div class="status-text">사용자 정보를 확인하는 중...</div>
+            </div>
           </div>
         </div>
-  
-        <!-- 사용자 등록 링크 -->
+      
+        <!-- 사용자 등록 링크 (수정된 설명) -->
         <div class="register-section">
           <div class="register-divider">
             <span>또는</span>
@@ -521,8 +529,8 @@
             <div class="register-content">
               <div class="register-icon">👤</div>
               <div class="register-text">
-                <span class="register-title">새 사용자 등록</span>
-                <span class="register-desc">FTP, 체중 등 기본 정보 입력</span>
+                <span class="register-title">직접 사용자 등록</span>
+                <span class="register-desc">전화번호, FTP, 체중 등 신규 등록</span>
               </div>
             </div>
           </button>
