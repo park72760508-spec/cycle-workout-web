@@ -1456,6 +1456,8 @@ function initializeLoginScreen() {
 }
 
 // 사용자 인증 처리
+// 기존 handleAuthentication 함수를 이 코드로 교체하세요
+
 async function handleAuthentication() {
   const phoneInput = safeGetElement("phoneAuth");
   const authButton = safeGetElement("btnAuthenticate");
@@ -1474,27 +1476,42 @@ async function handleAuthentication() {
       authButton.disabled = true;
     }
 
-    // 사용자 목록 가져오기 (기존 loadUsers 함수 활용)
+    // 에러 메시지 숨기기
+    if (authError) {
+      authError.classList.add("hidden");
+    }
+
+    // 사용자 목록 가져오기
     await loadUsersForAuth();
     
-    // 전화번호 뒷자리로 사용자 찾기
+    // 전화번호 뒷자리로 매칭되는 모든 사용자 찾기
     const users = window.users || window.userProfiles || [];
-    const foundUser = users.find(user => {
+    const matchingUsers = users.filter(user => {
       const contact = user.contact || user.phone || "";
       const lastFour = contact.replace(/[^0-9]/g, '').slice(-4);
       return lastFour === phoneLastFour;
     });
 
-    if (foundUser) {
-      // 인증 성공
-      window.currentUser = foundUser;
+    console.log(`전화번호 뒷 4자리 "${phoneLastFour}"로 검색된 사용자 수: ${matchingUsers.length}`);
+
+    if (matchingUsers.length >= 1) {
+      // 매칭되는 사용자가 1명 이상인 경우
+      
+      // 첫 번째 사용자를 현재 사용자로 설정
+      window.currentUser = matchingUsers[0];
+      
+      // 여러 명이 매칭되는 경우 로그에 표시
+      if (matchingUsers.length > 1) {
+        console.log("여러 사용자가 매칭됨:", matchingUsers.map(u => u.name));
+        console.log("첫 번째 사용자를 선택:", matchingUsers[0].name);
+      }
       
       // 성공 피드백
       if (typeof showToast === "function") {
-        showToast(`${foundUser.name}님 환영합니다!`);
+        showToast(`${matchingUsers[0].name}님 환영합니다!`);
       }
       
-      // 연결 화면으로 이동
+      // 블루투스 연결 화면으로 이동
       setTimeout(() => {
         if (typeof showScreen === "function") {
           showScreen("connectionScreen");
@@ -1502,14 +1519,21 @@ async function handleAuthentication() {
       }, 1000);
       
     } else {
-      // 인증 실패
-      if (authError) {
-        authError.classList.remove("hidden");
-        authError.textContent = "등록되지 않은 번호입니다. 사용자 등록을 먼저 진행해주세요.";
+      // 매칭되는 사용자가 0명인 경우
+      
+      console.log("매칭되는 사용자가 없음 - 사용자 등록 화면으로 이동");
+      
+      // 안내 메시지 표시
+      if (typeof showToast === "function") {
+        showToast("등록되지 않은 번호입니다. 사용자 등록을 진행합니다.");
       }
       
-      // 입력 필드 포커스 및 선택
-      phoneInput.select();
+      // 사용자 등록 화면으로 자동 이동
+      setTimeout(() => {
+        if (typeof showScreen === "function") {
+          showScreen("profileScreen");
+        }
+      }, 1500);
     }
     
   } catch (error) {
@@ -1520,6 +1544,9 @@ async function handleAuthentication() {
       authError.textContent = "인증 중 오류가 발생했습니다. 다시 시도해주세요.";
     }
     
+    // 입력 필드 포커스
+    phoneInput.select();
+    
   } finally {
     // 로딩 상태 종료
     if (authButton) {
@@ -1528,6 +1555,41 @@ async function handleAuthentication() {
     }
   }
 }
+
+// 추가: 다중 사용자 선택 함수 (필요시 사용)
+function showUserSelectionModal(matchingUsers) {
+  // 여러 사용자가 매칭될 때 선택 모달을 표시하는 함수
+  // 현재는 첫 번째 사용자를 자동 선택하지만, 
+  // 향후 사용자가 직접 선택할 수 있도록 확장 가능
+  
+  console.log("매칭된 사용자들:");
+  matchingUsers.forEach((user, index) => {
+    console.log(`${index + 1}. ${user.name} (${user.contact})`);
+  });
+  
+  // 첫 번째 사용자 반환
+  return matchingUsers[0];
+}
+
+// 추가: 인증 성공 후 사용자 정보 미리 설정
+function prepareUserData(user) {
+  // 선택된 사용자의 정보를 전역 변수에 설정
+  window.currentUser = user;
+  
+  // 로컬 스토리지에 마지막 로그인 사용자 저장 (선택사항)
+  try {
+    localStorage.setItem('lastLoginUser', JSON.stringify({
+      id: user.id,
+      name: user.name,
+      loginTime: new Date().toISOString()
+    }));
+  } catch (e) {
+    console.warn('로컬 스토리지 저장 실패:', e);
+  }
+  
+  return user;
+}
+
 
 // 인증용 사용자 목록 로드
 async function loadUsersForAuth() {
