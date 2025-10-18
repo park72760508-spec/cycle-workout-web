@@ -14,6 +14,15 @@ window.connectedDevices = window.connectedDevices || {
   heartRate: null,
 };
 
+// 파일 상단(모듈 스코프)에 이전 값 저장용 상태 추가
+let __pmPrev = { 
+  revs: null, 
+  time1024: null,
+  lastRealTime: null,
+  sampleCount: 0  // 샘플 카운트 추가
+};
+
+
 
 window.liveData = window.liveData || { 
   power: 0, 
@@ -296,13 +305,10 @@ async function connectHeartRate() {
 // 파워미터 알림 파서 보강 (크랭크 데이터 → RPM 계산)
 // ──────────────────────────────────────────────────────────
 // 파일 상단(모듈 스코프)에 이전 값 저장용 상태 추가
-let __pmPrev = { 
-  revs: null, 
-  time1024: null,
-  lastUpdate: 0  // 마지막 업데이트 시간 추가
-};
+
 
 // 파워미터 측정 알림
+// ⚡ 파워미터 데이터 처리 (cadence 보강)
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
@@ -316,55 +322,92 @@ function handlePowerMeterData(e) {
     window.liveData.power = instPower;
   }
 
-  // bit5: Crank Revolution Data Present
+  // bit5: Crank Revolution Data Present 확인
+  console.log(`Power meter flags: 0x${flags.toString(16)}, has crank data: ${!!(flags & 0x0020)}`);
+  
   if (flags & 0x0020) {
     const crankRevs = dv.getUint16(offset, true); offset += 2;
     const crankTime = dv.getUint16(offset, true); offset += 2;
+    const currentTime = Date.now();
 
-    console.log(`Crank data - Revs: ${crankRevs}, Time: ${crankTime}, PrevRevs: ${__pmPrev.revs}, PrevTime: ${__pmPrev.time1024}`);
+    console.log(`📊 Raw crank data - Revs: ${crankRevs}, Time: ${crankTime}, Power: ${instPower}W`);
 
-    if (__pmPrev.revs !== null && __pmPrev.time1024 !== null) {
-      let revDiff = crankRevs - __pmPrev.revs;
-      let timeDiff = crankTime - __pmPrev.time1024;
-      
-      // 16비트 오버플로우 처리
-      if (revDiff < 0) revDiff += 65536;
-      if (timeDiff < 0) timeDiff += 65536;
-      
-      console.log(`Differences - RevDiff: ${revDiff}, TimeDiff: ${timeDiff}`);
-      
-      // 유효한 데이터 범위 확인 (더 관대한 조건)
-      if (revDiff > 0 && timeDiff > 0 && timeDiff < 30720 && revDiff < 1000) { // 30초 이내, 1000회전 이내
-        const timeInSeconds = timeDiff / 1024;
-        const cadence = (revDiff / timeInSeconds) * 60;
-        
-        console.log(`Time in seconds: ${timeInSeconds}, Raw cadence: ${cadence}`);
-        
-        if (cadence >= 0 && cadence <= 200) { // 0-200 RPM 범위
-          window.liveData.cadence = Math.round(cadence);
-          console.log(`✅ Calculated cadence: ${Math.round(cadence)} RPM`);
-        } else {
-          console.log(`❌ Cadence out of range: ${cadence} RPM`);
-        }
-      } else {
-        console.log(`❌ Invalid data - RevDiff: ${revDiff}, TimeDiff: ${timeDiff}`);
-        // 데이터가 이상할 때는 이전 값 리셋
-        if (timeDiff > 30720) {
-          console.log(`⚠️ Large time gap detected, resetting previous values`);
-          __pmPrev.revs = crankRevs;
-          __pmPrev.time1024 = crankTime;
-          return;
-        }
-      }
+    // 첫 번째 데이터이거나 리셋이 필요한 경우
+    if (__pmPrev.revs === null || __pmPrev.time1024 === null) {
+      console.log(`🔄 First crank data, initializing...`);
+      __pmPrev.revs = crankRevs;
+      __pmPrev.time1024 = crankTime;
+      __pmPrev.lastRealTime = currentTime;
+      __pmPrev.sampleCount = 0;
+      return;
     }
 
-    __pmPrev.revs = crankRevs;
-    __pmPrev.time1024 = crankTime;
+    // 샘플 카운트 증가
+    __pmPrev.sampleCount = (__pmPrev.sampleCount || 0) + 1;
+    
+    let revDiff = crankRevs - __pmPrev.revs;
+    let timeDiff = crankTime - __pmPrev.time1024;
+    
+    // 16비트 오버플로우 처리
+    if (revDiff < 0) revDiff += 65536;
+    if (timeDiff < 0) timeDiff += 65536;
+    
+    const realTimeDiff = currentTime - __pmPrev.lastRealTime;
+    
+    console.log(`🔍 Sample #${__pmPrev.sampleCount} - RevDiff: ${revDiff}, TimeDiff: ${timeDiff}, RealTime: ${realTimeDiff}ms`);
+    
+    // 데이터가 변화하지 않는 경우의 처리
+    if (revDiff === 0 && timeDiff === 0) {
+      console.log(`⚠️ No change in crank data (same packet or no pedaling)`);
+      // 실시간으로 5초 이상 같은 데이터면 정지 상태로 판단
+      if (realTimeDiff > 5000) {
+        console.log(`🛑 Assuming stopped pedaling, setting cadence to 0`);
+        window.liveData.cadence = 0;
+        const cadenceEl = document.getElementById("cadenceValue");
+        if (cadenceEl) {
+          cadenceEl.textContent = "0";
+        }
+      }
+      return;
+    }
+    
+    // 변화가 있는 경우 케이던스 계산
+    if (revDiff > 0 && timeDiff > 0) {
+      const timeInSeconds = timeDiff / 1024;
+      let cadence = (revDiff / timeInSeconds) * 60;
+      
+      console.log(`⚙️ Calculation - ${revDiff} revs in ${timeInSeconds.toFixed(3)}s = ${cadence.toFixed(1)} RPM`);
+      
+      // 합리적인 범위 확인 (20-200 RPM)
+      if (cadence >= 20 && cadence <= 200) {
+        window.liveData.cadence = Math.round(cadence);
+        console.log(`✅ Cadence updated: ${Math.round(cadence)} RPM`);
+        
+        // 즉시 UI 업데이트
+        const cadenceEl = document.getElementById("cadenceValue");
+        if (cadenceEl) {
+          cadenceEl.textContent = Math.round(cadence);
+          console.log(`📱 UI updated directly: ${Math.round(cadence)} RPM`);
+        }
+      } else {
+        console.log(`❌ Cadence out of range: ${cadence.toFixed(1)} RPM`);
+      }
+    } else if (revDiff > 0) {
+      console.log(`⚠️ Revolution change detected but no time change - possible data issue`);
+    }
+
+    // 이전 값 업데이트 (유효한 변화가 있을 때만)
+    if (revDiff > 0 || timeDiff > 0) {
+      __pmPrev.revs = crankRevs;
+      __pmPrev.time1024 = crankTime;
+      __pmPrev.lastRealTime = currentTime;
+    }
+    
   } else {
-    console.log('No crank revolution data in power meter packet');
+    console.log('❌ No crank revolution data in power meter packet');
   }
 
-  // ✅ UI 업데이트 호출
+  // UI 업데이트 호출
   if (typeof window.updateTrainingDisplay === "function") {
     window.updateTrainingDisplay();
   }
