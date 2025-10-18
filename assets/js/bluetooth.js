@@ -1,7 +1,7 @@
 // bluetooth.js - 블루투스 디바이스 관리
 
     // bluetooth.js 파일 맨 위에 추가
-    const usePowerMeterPreferred = true;  
+const usePowerMeterPreferred = true;  
 
 class BluetoothManager {
 
