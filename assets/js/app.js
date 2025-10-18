@@ -2026,17 +2026,35 @@ async function handleAuthentication() {
       });
       
       // 검색 로직 수정
-      const matchingUsers = allUsers.filter(user => {
-          const cleanContact = String(user.contact || '').replace(/[-\s]/g, '');
-          const userLastFour = cleanContact.slice(-4);
-          const isMatch = userLastFour === lastFourDigits;
-          
-          if (isMatch) {
-              console.log(`✅ 매칭됨: ${user.name} (${user.contact})`);
-          }
-          
-          return isMatch;
-      });
+// 기존 matchingUsers 선언 부분을 이렇게 수정
+console.log('=== 검색 시작 ===');
+console.log('검색할 뒷 4자리:', lastFourDigits, '(타입:', typeof lastFourDigits, ')');
+
+// 전체 데이터 확인
+console.log('전체 사용자 수:', allUsers.length);
+allUsers.forEach((user, index) => {
+    const contactStr = String(user.contact || '');
+    const cleanContact = contactStr.replace(/[-\s]/g, '');
+    const userLastFour = cleanContact.slice(-4);
+    console.log(`${index}: ${user.name} - 원본:"${user.contact}" - 정제:"${cleanContact}" - 뒷4자리:"${userLastFour}"`);
+});
+
+// 기존 변수명 그대로 사용하되 안전한 검색 로직으로 교체
+const matchingUsers = allUsers.filter(user => {
+    const contactStr = String(user.contact || '');
+    const cleanContact = contactStr.replace(/[-\s]/g, '');
+    const userLastFour = cleanContact.slice(-4);
+    
+    const isMatch = userLastFour === String(lastFourDigits);
+    
+    if (isMatch) {
+        console.log(`✅ 매칭: ${user.name} - ${user.contact}`);
+    }
+    
+    return isMatch;
+});
+
+console.log(`전화번호 뒷 4자리 "${lastFourDigits}"로 검색된 사용자 수: ${matchingUsers.length}`);
       
       console.log(`전화번호 뒷 4자리 "${lastFourDigits}"로 검색된 사용자 수: ${matchingUsers.length}`);
       console.log('=== 검색 디버깅 끝 ===');
