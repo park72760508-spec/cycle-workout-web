@@ -141,49 +141,47 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
   console.log(`카운트다운 시작: ${remain}초`);
   playBeep(880, 120, 0.25);
 
-  segmentCountdownTimer = setInterval(() => {
-    remain -= 1;
-    console.log(`카운트다운: ${remain}초 남음`);
-    
-    if (remain > 0) {
-      // 1, 2, 3, 4초일 때 - 일반 삐 소리
-      num.textContent = remain;
-      playBeep(880, 120, 0.25);
-      
-    } else if (remain === 0) {
-      // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
-      num.textContent = "0";
-      console.log('카운트다운 0초 - 강조 소리 재생 시작');
-      
-      // 중요: await 제거하고 바로 playBeep 호출
-      playBeep(1500, 700, 0.35, "square").then(() => {
-        console.log('강조 소리 재생 완료');
-      }).catch(err => {
-        console.error('강조 소리 재생 실패:', err);
-      });
-      
-      // 타이머 먼저 정리 (소리 재생과 분리)
-      clearInterval(segmentCountdownTimer);
-      segmentCountdownTimer = null;
-      
-      // 0.7초 후 오버레이 닫기 (소리 재생 시간 고려)
-      setTimeout(() => {
-        overlay.classList.add("hidden");
-        overlay.style.display = "none";
-        segmentCountdownActive = false;
-        console.log('카운트다운 오버레이 닫힘');
-      }, 700);
-      
-    } else {
-      // remain < 0일 때 - 안전장치
-      console.log('카운트다운 안전장치 실행');
-      clearInterval(segmentCountdownTimer);
-      segmentCountdownTimer = null;
-      overlay.classList.add("hidden");
-      overlay.style.display = "none";
-      segmentCountdownActive = false;
-    }
-  }, 1000);
+   segmentCountdownTimer = setInterval(() => {
+     console.log(`카운트다운: ${remain}초 남음`);
+     
+     if (remain > 0) {
+       // 1, 2, 3, 4, 5초일 때 - 일반 삐 소리
+       num.textContent = remain;
+       playBeep(880, 120, 0.25);
+       remain -= 1;
+       
+     } else if (remain === 0) {
+       // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
+       num.textContent = "0";
+       console.log('카운트다운 0초 - 강조 소리 재생');
+       
+       playBeep(1500, 700, 0.35, "square").then(() => {
+         console.log('강조 소리 재생 완료');
+       }).catch(err => {
+         console.error('강조 소리 재생 실패:', err);
+       });
+       
+       // 타이머 정리 및 오버레이 닫기
+       clearInterval(segmentCountdownTimer);
+       segmentCountdownTimer = null;
+       
+       setTimeout(() => {
+         overlay.classList.add("hidden");
+         overlay.style.display = "none";
+         segmentCountdownActive = false;
+         console.log('카운트다운 오버레이 닫힘');
+       }, 700);
+       
+     } else {
+       // remain < 0일 때 - 안전장치
+       console.log('카운트다운 안전장치 실행');
+       clearInterval(segmentCountdownTimer);
+       segmentCountdownTimer = null;
+       overlay.classList.add("hidden");
+       overlay.style.display = "none";
+       segmentCountdownActive = false;
+     }
+   }, 1000);
 }
 
 // 참고: 기존 훈련 시작 카운트다운도 동일한 방식으로 개선 (선택적)
