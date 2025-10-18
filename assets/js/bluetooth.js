@@ -291,59 +291,42 @@ async function connectHeartRate() {
 let __pmPrev = { revs: null, time1024: null }; // 누적 크랭크회전수, 마지막 이벤트 시각(1/1024s)
 
 // 파워미터 측정 알림
+// ⚡ 파워미터 데이터 처리 (cadence 보강)
 function handlePowerMeterData(e) {
   const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
   let offset = 0;
 
-  // Flags (uint16, LE)
   const flags = dv.getUint16(offset, true); offset += 2;
-
-  // Instantaneous Power (int16, LE)
   const instPower = dv.getInt16(offset, true); offset += 2;
   if (!isNaN(instPower)) {
     window.liveData.power = instPower;
   }
 
-  // 변수 길이 필드들 스킵 로직 (필요한 것만 읽음)
-  // bit0: Pedal Power Balance Present (1 byte)
-  if (flags & 0x0001) offset += 1;
-  // bit1: Pedal Power Balance Reference Present (skip 0)
-  // bit2: Accumulated Torque Present (2 bytes)
-  if (flags & 0x0004) offset += 2;
-  // bit3: Accumulated Torque Source Present (skip 0)
-
-  // bit4: Wheel Revolution Data Present (Cycling Power spec에서는 'Wheel'이 아닌 'Crank'가 bit4입니다. 구현체마다 오해가 있어 별칭 유지)
-  // 실제로는 "Crank Revolution Data Present"
+  // bit4: Wheel Revolution Data Present
+  // bit5: Crank Revolution Data Present
+  // 시마노 / 스테이지스 등은 대부분 bit5 (crank data) 사용
   if (flags & 0x0020) {
-    // Cumulative Crank Revolutions (uint16), Last Crank Event Time (uint16, 1/1024s)
-    const cumCrankRevs = dv.getUint16(offset, true); offset += 2;
-    const lastCrankEvtTime = dv.getUint16(offset, true); offset += 2;
+    const crankRevs = dv.getUint16(offset, true); offset += 2;
+    const crankTime = dv.getUint16(offset, true); offset += 2;
 
-    // 이전 표본이 있으면 delta로 RPM 계산
-    if (__pmPrev.revs !== null && __pmPrev.time1024 !== null) {
-      // uint16 롤오버 처리
-      let dRevs = (cumCrankRevs - __pmPrev.revs);
-      if (dRevs < 0) dRevs += 0x10000;
+    if (__pmPrev.revs !== null && crankTime !== __pmPrev.time1024) {
+      const revDiff = (crankRevs - __pmPrev.revs + 65536) % 65536;
+      const timeDiff = (crankTime - __pmPrev.time1024 + 65536) % 65536; // 단위: 1/1024초
 
-      let dTime1024 = (lastCrankEvtTime - __pmPrev.time1024);
-      if (dTime1024 < 0) dTime1024 += 0x10000;
-
-      // dTime (초)
-      const dTime = dTime1024 / 1024;
-      if (dTime > 0 && dTime < 5) { // 말도 안 되게 큰 간격은 버림
-        const rpm = (dRevs / dTime) * 60;
-        window.liveData.cadence = Math.round(rpm);
+      if (revDiff > 0 && timeDiff > 0) {
+        const cadence = (revDiff * 60 * 1024) / timeDiff;
+        window.liveData.cadence = Math.round(cadence);
       }
     }
-    __pmPrev.revs = cumCrankRevs;
-    __pmPrev.time1024 = lastCrankEvtTime;
+
+    __pmPrev.revs = crankRevs;
+    __pmPrev.time1024 = crankTime;
   }
 
-  // UI 갱신
-  if (typeof window.updateTrainingDisplay === "function") {
-    window.updateTrainingDisplay();
-  }
+  // ✅ UI 업데이트 호출
+  if (typeof updateTrainingDisplay === "function") updateTrainingDisplay();
 }
+
 
 // ──────────────────────────────────────────────────────────
 // 스마트 트레이너(FTMS)에서 케이던스 파싱
