@@ -1157,27 +1157,25 @@ window.updateTrainingDisplay = function () {
   let achievementClass = '';
   if (achievement < 0.85) {
     achievementClass = 'achievement-low';
-  } else if (achievement >= 0.85 && achievement <= 1.15) {
+  } else if (achievement >= 0.85 && achievement <= 0.95) {
     achievementClass = 'achievement-good';
-  } else if (achievement > 1.15 && achievement <= 1.30) {
+  } else if (achievement > 0.95 && achievement <= 1.1) {
     achievementClass = 'achievement-high';
-  } else if (achievement > 1.30) {
+  } else if (achievement > 1.2) {
     achievementClass = 'achievement-over';
   }
   
   // 세그먼트 평균이 있을 때만 네온 효과 적용
-  if (segmentAvgPower > 0 && achievementClass) {
-    panels.forEach(panel => {
-      panel.classList.add('neon-active', achievementClass);
-    });
-    
-    // 현재 파워 값에도 글로우 효과 적용
-    if (currentPowerEl && (achievementClass === 'achievement-good' || 
-                          achievementClass === 'achievement-high' || 
-                          achievementClass === 'achievement-over')) {
-      currentPowerEl.classList.add(achievementClass);
-    }
-  }
+   // 세그먼트 평균이 있을 때 특정 패널들에만 네온 효과 적용
+   if (segmentAvgPower > 0 && achievementClass) {
+     // 현재 파워와 세그먼트 평균 파워 블록에만 네온 효과 적용
+     const powerPanels = document.querySelectorAll(
+       '.enhanced-current-power-section, .enhanced-target-power-section, .enhanced-segment-avg-power'
+     );
+     powerPanels.forEach(panel => {
+       panel.classList.add('neon-active', achievementClass);
+     });
+   }
 };
 
 // *** 시작 시 복구 시도 및 오류 처리 강화 ***
