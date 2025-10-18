@@ -275,6 +275,14 @@ button[aria-disabled="true"] {
 #trainingScreen{
   background:#0f111a; color:#f3f3f3; padding:20px; min-height:100vh;
 }
+
+#trainingScreen.active {
+  display: flex !important;
+  flex-direction: column;
+  gap: 16px;
+}
+
+
 /* 상단 사용자 정보(아이콘은 ::before로 1개만) */
 #trainingScreen .training-header{
   display:grid; gap:8px; align-items:center; background:#181a22; padding:8px 12px;
@@ -1892,7 +1900,13 @@ button[aria-disabled="true"] {
   color: #f3f3f3;
   padding: 16px 20px;
   min-height: 100vh;
-  display: flex;
+  /* display: flex; 제거됨 */
+  flex-direction: column;
+  gap: 16px;
+}
+
+#trainingScreen.active {
+  display: flex !important;
   flex-direction: column;
   gap: 16px;
 }
