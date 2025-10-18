@@ -1,5 +1,5 @@
 /* ==========================================================
-   app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
+   app.js (v1.4 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
 
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
@@ -49,20 +49,19 @@
   console.log('Global variables initialized safely');
 })();
 
-
 // 🔥 새로운 검색 함수 추가 (app.js 상단에)
 function searchUsersByPhoneLastFour(searchDigits) {
     console.log('=== 사용자 검색 함수 실행 ===');
     console.log('검색할 뒷자리:', searchDigits);
     
-    if (!allUsers || allUsers.length === 0) {
+    if (!window.users || window.users.length === 0) {
         console.log('❌ 사용자 데이터가 없습니다');
         return [];
     }
     
-    console.log('전체 사용자 수:', allUsers.length);
+    console.log('전체 사용자 수:', window.users.length);
     
-    const results = allUsers.filter(user => {
+    const results = window.users.filter(user => {
         // 안전한 처리
         if (!user.contact) {
             console.log(`⚠️ ${user.name}: 전화번호 없음`);
@@ -87,9 +86,6 @@ function searchUsersByPhoneLastFour(searchDigits) {
     console.log('검색 결과:', results.length, '명');
     return results;
 }
-
-
-
 
 // ========== 안전 접근 헬퍼 함수들 ==========
 function safeGetElement(id) {
@@ -228,7 +224,7 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
   }, 1000);
 }
 
-// 참고: 기존 훈련 시작 카운트다운도 동일한 방식으로 개선 (선택적)
+// 참고: 기존 훈련 시작 카운트다운도 동일한 방식으로 개선 (선택)
 function startWithCountdown(sec = 5) {
   const overlay = document.getElementById("countdownOverlay");
   const num = document.getElementById("countdownNumber");
@@ -1012,7 +1008,6 @@ function startSegmentLoop() {
   }, 1000);
 }
 
-
 // 세그먼트 전환 처리 함수 (카운트다운 완료 후 호출)==> 0초 카운트 다운 보완
 function performSegmentTransition(currentSegIndex, workoutData) {
   console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
@@ -1033,8 +1028,6 @@ function performSegmentTransition(currentSegIndex, workoutData) {
     console.log('모든 세그먼트 완료');
   }
 }
-
-
 
 // 6. stopSegmentLoop 함수 수정
 // 수정된 stopSegmentLoop 함수 (카운트다운도 함께 정지)
@@ -1447,9 +1440,6 @@ function renderUserInfo() {
   }
 }
 
-
-
-
 function togglePause() {
   setPaused(!window.trainingState.paused);
 }
@@ -1548,7 +1538,6 @@ function initializeLoginScreen() {
   console.log("로그인 화면 초기화 완료");
 }
 
-
 // 3. 개선된 화면 전환 함수
 function switchToNextScreen(targetScreenId) {
   console.log(`화면 전환: ${targetScreenId}`);
@@ -1604,12 +1593,9 @@ function switchToNextScreen(targetScreenId) {
   }
 }
 
-
-
-
 // 사용자 인증 처리
 // 기존 handleAuthentication 함수를 이 코드로 교체하세요
-// 1. 개선된 사용자 인증 함수
+// 1. 개선된 사용자 인증 함수 (수정된 버전 - matchingUsers 중복 선언 제거)
 async function handleAuthentication() {
   const phoneInput = safeGetElement("phoneAuth");
   const authButton = safeGetElement("btnAuthenticate");
@@ -1644,23 +1630,13 @@ async function handleAuthentication() {
     // 로딩 완료 후 잠시 대기 (데이터 안정화)
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // 전화번호 뒷자리로 매칭되는 모든 사용자 찾기
+    // 전화번호 뒷자리로 매칭되는 모든 사용자 찾기 (중복 선언 제거)
     const users = window.users || window.userProfiles || [];
     console.log(`로딩된 사용자 수: ${users.length}`);
     console.log('사용자 목록:', users);
     
-    const matchingUsers = users.filter(user => {
-      const contact = user.contact || user.phone || "";
-      const normalized = normalizePhoneNumber(contact);
-      const lastFour = normalized.slice(-4);
-      
-      console.log(`사용자 ${user.name}: 연락처 "${contact}" → 정규화 "${normalized}" → 뒷자리 "${lastFour}"`);
-      
-      return lastFour === phoneLastFour;
-    });
-
-    console.log(`전화번호 뒷자리 "${phoneLastFour}"로 검색된 사용자 수: ${matchingUsers.length}`);
-    matchingUsers.forEach(user => console.log(`매칭된 사용자:`, user));
+    // ⭐ 수정된 부분: searchUsersByPhoneLastFour 함수 사용
+    const matchingUsers = searchUsersByPhoneLastFour(phoneLastFour);
 
     if (matchingUsers.length >= 1) {
       // 매칭되는 사용자가 1명 이상인 경우
@@ -1740,7 +1716,6 @@ async function handleAuthentication() {
   }
 }
 
-
 // 추가: 다중 사용자 선택 함수 (필요시 사용)
 function showUserSelectionModal(matchingUsers) {
   // 여러 사용자가 매칭될 때 선택 모달을 표시하는 함수
@@ -1775,12 +1750,11 @@ function prepareUserData(user) {
   return user;
 }
 
-
 // 인증용 사용자 목록 로드
 // 2. 개선된 사용자 데이터 로딩 함수
 async function loadUsersForAuth(forceReload = false) {
   try {
-    console.log('loadUsersForAuth 시작, forceReload:', forceReload);
+    console.log('loadUsersForAuth 시작', 'forceReload:', forceReload);
     
     // 강제 새로고침이 아니고 기존 사용자 데이터가 있으면 사용
     if (!forceReload && ((window.users && window.users.length > 0) || 
@@ -1934,8 +1908,6 @@ window.quickLogin = function(userIndex = 0) {
   }
 };
 
-
-
 // 상태 메시지 처리 함수들 (handleAuthentication 함수와 함께 추가)
 
 // 상태 메시지 표시 함수
@@ -1969,186 +1941,6 @@ function hideAuthStatus() {
   const statusEl = safeGetElement("authStatus");
   if (statusEl) {
     statusEl.classList.add("hidden");
-  }
-}
-
-// 개선된 handleAuthentication 함수 (상태 메시지 포함)
-// handleAuthentication 함수에서 showAuthStatus 호출 부분만 수정
-
-async function handleAuthentication() {
-  const phoneInput = safeGetElement("phoneAuth");
-  const authButton = safeGetElement("btnAuthenticate");
-  const authError = safeGetElement("authError");
-  
-  if (!phoneInput || phoneInput.value.length !== 4) {
-    return;
-  }
-
-  const phoneLastFour = phoneInput.value;
-  
-  try {
-    // 로딩 상태 시작
-    if (authButton) {
-      authButton.classList.add("loading");
-      authButton.disabled = true;
-    }
-
-    // 에러 메시지 숨기기
-    if (authError) {
-      authError.classList.add("hidden");
-    }
-
-    // 진행 상태 표시 (빈 문자열 대신 "loading" 사용)
-    showAuthStatus("loading", "사용자 정보를 확인하는 중...", "⏳");
-
-    // 사용자 목록 가져오기
-    await loadUsersForAuth();
-    
-    // 전화번호 뒷자리로 매칭되는 모든 사용자 찾기
-    const users = window.users || window.userProfiles || [];
-    const matchingUsers = users.filter(user => {
-      const contact = user.contact || user.phone || "";
-      const lastFour = contact.replace(/[^0-9]/g, '').slice(-4);
-      return lastFour === phoneLastFour;
-    });
-
-     
-      // 이 부분을 다음과 같이 수정:
-      console.log('=== 검색 디버깅 시작 ===');
-      console.log(`검색할 뒷 4자리: "${lastFourDigits}"`);
-      
-      // 전체 사용자 데이터 확인
-      console.log('전체 사용자 수:', allUsers.length);
-      allUsers.forEach((user, index) => {
-          const cleanContact = String(user.contact || '').replace(/[-\s]/g, '');
-          const extractedLastFour = cleanContact.slice(-4);
-          console.log(`${index}: ${user.name} - 원본: "${user.contact}" - 정제: "${cleanContact}" - 뒷4자리: "${extractedLastFour}"`);
-      });
-      
-      // 검색 로직 수정
-// 기존 matchingUsers 선언 부분을 이렇게 수정
-console.log('=== 검색 시작 ===');
-console.log('검색할 뒷 4자리:', lastFourDigits, '(타입:', typeof lastFourDigits, ')');
-
-// 전체 데이터 확인
-console.log('전체 사용자 수:', allUsers.length);
-allUsers.forEach((user, index) => {
-    const contactStr = String(user.contact || '');
-    const cleanContact = contactStr.replace(/[-\s]/g, '');
-    const userLastFour = cleanContact.slice(-4);
-    console.log(`${index}: ${user.name} - 원본:"${user.contact}" - 정제:"${cleanContact}" - 뒷4자리:"${userLastFour}"`);
-});
-
-// 기존 변수명 그대로 사용하되 안전한 검색 로직으로 교체
-const matchingUsers = allUsers.filter(user => {
-    const contactStr = String(user.contact || '');
-    const cleanContact = contactStr.replace(/[-\s]/g, '');
-    const userLastFour = cleanContact.slice(-4);
-    
-    const isMatch = userLastFour === String(lastFourDigits);
-    
-    if (isMatch) {
-        console.log(`✅ 매칭: ${user.name} - ${user.contact}`);
-    }
-    
-    return isMatch;
-});
-
-console.log(`전화번호 뒷 4자리 "${lastFourDigits}"로 검색된 사용자 수: ${matchingUsers.length}`);
-      
-      console.log(`전화번호 뒷 4자리 "${lastFourDigits}"로 검색된 사용자 수: ${matchingUsers.length}`);
-      console.log('=== 검색 디버깅 끝 ===');
-
-     
-
-    if (matchingUsers.length >= 1) {
-      // 매칭되는 사용자가 1명 이상인 경우
-      
-      // 첫 번째 사용자를 현재 사용자로 설정
-      window.currentUser = matchingUsers[0];
-      
-      // 여러 명이 매칭되는 경우 로그에 표시
-      if (matchingUsers.length > 1) {
-        console.log("여러 사용자가 매칭됨:", matchingUsers.map(u => u.name));
-        console.log("첫 번째 사용자를 선택:", matchingUsers[0].name);
-      }
-      
-      // 성공 상태 표시
-      showAuthStatus("success", `${matchingUsers[0].name}님 인증 완료`, "✅");
-      
-      // 성공 피드백
-      if (typeof showToast === "function") {
-        showToast(`${matchingUsers[0].name}님 환영합니다!`);
-      }
-      
-      // 블루투스 연결 화면으로 이동
-      setTimeout(() => {
-        hideAuthStatus();
-        if (typeof showScreen === "function") {
-          showScreen("connectionScreen");
-        }
-      }, 1500);
-      
-    } else {
-      // 매칭되는 사용자가 0명인 경우
-
-      // 이 부분 앞에 추가:
-      console.log('=== 매칭 실패 분석 ===');
-      console.log('입력된 뒷 4자리:', lastFourDigits);
-      console.log('입력 타입:', typeof lastFourDigits);
-      console.log('전체 사용자 목록:');
-      allUsers.forEach(user => {
-          const cleanContact = String(user.contact || '').replace(/[-\s]/g, '');
-          console.log(`- ${user.name}: ${user.contact} → ${cleanContact.slice(-4)}`);
-      });
-      
-      console.log('매칭되는 사용자가 없음 - 사용자 등록 화면으로 이동');
-      
-      // 리다이렉트 상태 표시
-      showAuthStatus("redirect", "미등록 번호입니다. 회원가입으로 이동합니다...", "📝");
-      
-      // 안내 메시지 표시
-      if (typeof showToast === "function") {
-        showToast("등록되지 않은 번호입니다. 사용자 등록을 진행합니다.");
-      }
-      
-      // 사용자 등록 화면으로 자동 이동
-      setTimeout(() => {
-        hideAuthStatus();
-        if (typeof showScreen === "function") {
-          showScreen("profileScreen");
-        }
-      }, 2000);
-    }
-    
-  } catch (error) {
-    console.error("Authentication error:", error);
-    
-    hideAuthStatus();
-    
-    if (authError) {
-      authError.classList.remove("hidden");
-      authError.textContent = "인증 중 오류가 발생했습니다. 다시 시도해주세요.";
-    }
-    
-    // 입력 필드 에러 표시
-    const inputWrapper = phoneInput.closest('.input-wrapper');
-    if (inputWrapper) {
-      inputWrapper.classList.add('error');
-      setTimeout(() => {
-        inputWrapper.classList.remove('error');
-      }, 2000);
-    }
-    
-    // 입력 필드 포커스
-    phoneInput.select();
-    
-  } finally {
-    // 로딩 상태 종료
-    if (authButton) {
-      authButton.classList.remove("loading");
-      authButton.disabled = false;
-    }
   }
 }
 
@@ -2205,680 +1997,8 @@ function goToRegistrationWithPhone(phoneLastFour) {
   }
 }
 
-
 // 5. 디버깅용 함수들
 window.debugAuth = function() {
   console.log("=== 인증 디버그 정보 ===");
   console.log("현재 사용자:", window.currentUser);
-  console.log("로딩된 사용자 목록:", window.users || window.userProfiles);
-  console.log("전화번호 입력값:", document.getElementById("phoneAuth")?.value);
-  console.log("Google Apps Script URL:", window.CONFIG?.GAS_WEB_APP_URL);
-};
-
-window.testAuth = function(phoneLastFour = "9020") {
-  console.log(`=== 테스트 인증: ${phoneLastFour} ===`);
-  const phoneInput = document.getElementById("phoneAuth");
-  if (phoneInput) {
-    phoneInput.value = phoneLastFour;
-    handleAuthentication();
-  }
-};
-
-// 6. 사용자 등록 화면으로 이동 시 입력된 전화번호 뒷자리 전달
-function goToRegistrationWithPhone(phoneLastFour) {
-  // 전화번호 뒷자리를 세션에 저장 (등록 화면에서 활용 가능)
-  try {
-    sessionStorage.setItem('pendingPhoneLastFour', phoneLastFour);
-    console.log('등록 대기 전화번호 저장:', phoneLastFour);
-  } catch (e) {
-    console.warn('세션 스토리지 저장 실패:', e);
-  }
-  
-  switchToNextScreen("profileScreen");
-}
-
-
-
-
-
-// 로그인 화면 초기화 호출 (DOMContentLoaded 이벤트에서)
-document.addEventListener("DOMContentLoaded", () => {
-  // 기존 초기화 코드 후에 추가
-  initializeLoginScreen();
-  
-  // 애니메이션 효과 적용
-  setTimeout(() => {
-    addLoginAnimations();
-    checkIOSMode();
-  }, 100);
-});
-
-
-
-
-
-
-// DOMContentLoaded 이벤트
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("===== APP INIT =====");
-
-  // iOS용 처리 프로세스
-  function isIOS() {
-    const ua = navigator.userAgent || "";
-    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  }
-
-  function enableIOSMode() {
-    const info = safeGetElement("iosInfo");
-    if (info) info.classList.remove("hidden");
-
-    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-      const el = safeGetElement(id);
-      if (el) {
-        el.classList.add("is-disabled");
-        el.setAttribute("aria-disabled","true");
-        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
-      }
-    });
-
-    // null 체크 강화
-    const btn = safeGetElement("btnIosContinue");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        console.log("iOS continue button clicked");
-        if (typeof showScreen === "function") {
-          showScreen("profileScreen");
-        } else {
-          console.error("showScreen function not available");
-        }
-      });
-    } else {
-      console.warn("btnIosContinue element not found in DOM");
-    }
-  }
-
-  // 브라우저 지원 확인
-  if (!navigator.bluetooth) {
-    if (typeof showToast === "function") {
-      showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
-    }
-    console.error("Web Bluetooth not supported");
-  }
-  
-  if (location.protocol !== "https:" && location.hostname !== "localhost") {
-    if (typeof showToast === "function") {
-      showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
-    }
-    console.warn("HTTPS required for BLE");
-  }
-  
-  if (typeof showScreen === "function") {
-    //showScreen("connectionScreen");
-     showScreen("loginScreen"); // 이렇게 변경
-  }
-
-  // 훈련 준비 → 훈련 시작
-  const btnStartTraining = safeGetElement("btnStartTraining");
-  if (btnStartTraining) {
-    btnStartTraining.addEventListener("click", () => startWithCountdown(5));
-  }
-
-  // 훈련 준비 → 워크아웃 변경
-  const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
-  if (btnBackToWorkouts) {
-    btnBackToWorkouts.addEventListener("click", () => {
-      backToWorkoutSelection();
-    });
-  }
-
-  // loadUsers()가 userProfiles도 인식하게(방어)
-  function loadUsers() {
-    const box = safeGetElement("userList");
-    if (!box) return;
-
-    // 전역 데이터: window.users → window.userProfiles 순으로 폴백
-    const list =
-      (Array.isArray(window.users) && window.users.length ? window.users :
-       Array.isArray(window.userProfiles) && window.userProfiles.length ? window.userProfiles :
-       []);
-
-    if (!Array.isArray(list) || list.length === 0) {
-      box.innerHTML = `<div class="muted">등록된 사용자가 없습니다.</div>`;
-      box.onclick = null; // 이전 위임 핸들러 제거
-      return;
-    }
-
-    // 카드 렌더 (이름, FTP, W/kg 포함)
-    box.innerHTML = list.map((u) => {
-      const name = (u?.name ?? "").toString();
-      const ftp  = Number(u?.ftp);
-      const wt   = Number(u?.weight);
-      const wkg  = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0)
-        ? (ftp / wt).toFixed(2)
-        : "-";
-
-      return `
-        <div class="user-card" data-id="${u.id}">
-          <div class="user-name">👤 ${name}</div>
-          <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
-          <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
-        </div>
-      `;
-    }).join("");
-
-    // 선택 버튼 위임(매번 새로 바인딩되도록 on*로 설정)
-    box.onclick = (e) => {
-      const btn = e.target.closest('[data-action="select"]');
-      if (!btn) return;
-      const card = btn.closest(".user-card");
-      const id = card?.getAttribute("data-id");
-      const user = list.find((x) => String(x.id) === String(id));
-      if (user && typeof window.selectProfile === "function") {
-        window.selectProfile(user.id);
-      }
-    };
-  }
-
-  // 블루투스 연결 버튼들
-  const btnHR = safeGetElement("btnConnectHR");
-  const btnTrainer = safeGetElement("btnConnectTrainer");
-  const btnPM = safeGetElement("btnConnectPM");
-  
-  console.log("Button elements found:", {
-    HR: !!btnHR,
-    Trainer: !!btnTrainer,
-    PM: !!btnPM
-  });
-  
-  // 심박계 버튼
-  if (btnHR) {
-    btnHR.addEventListener("click", async (e) => {
-      e.preventDefault();
-      console.log("HR button clicked!");
-      
-      if (!window.connectHeartRate) {
-        console.error("connectHeartRate function not found!");
-        if (typeof showToast === "function") {
-          showToast("심박계 연결 함수를 찾을 수 없습니다.");
-        }
-        return;
-      }
-      
-      btnHR.disabled = true;
-      const originalText = btnHR.textContent;
-      btnHR.textContent = "검색 중...";
-      
-      try {
-        await window.connectHeartRate();
-      } catch (err) {
-        console.error("HR connection error:", err);
-      } finally {
-        btnHR.disabled = false;
-        btnHR.textContent = originalText;
-      }
-    });
-  }
-  
-  // 트레이너 버튼
-  if (btnTrainer) {
-    btnTrainer.addEventListener("click", async (e) => {
-      e.preventDefault();
-      console.log("Trainer button clicked!");
-      if (window.connectTrainer) {
-        await window.connectTrainer();
-      }
-    });
-  }
-  
-  // 파워미터 버튼
-  if (btnPM) {
-    btnPM.addEventListener("click", async (e) => {
-      e.preventDefault();
-      console.log("PM button clicked!");
-      if (window.connectPowerMeter) {
-        await window.connectPowerMeter();
-      }
-    });
-  }
-
-  // 다른 파워소스 우선순위도 같이 표기
-  function updateDevicesList() {
-    const box = safeGetElement("connectedDevicesList");
-    if (!box) return;
-
-    const pm = window.connectedDevices?.powerMeter;
-    const tr = window.connectedDevices?.trainer;
-    const hr = window.connectedDevices?.heartRate;
-
-    const active = typeof getActivePowerSource === 'function' ? getActivePowerSource() : 'none';
-    const pmBadge = pm ? (active==="powermeter" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
-    const trBadge = tr ? (active==="trainer" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
-
-    box.innerHTML = `
-      ${pm ? `<div class="dev">⚡ 파워미터: ${pm.name}${pmBadge}</div>` : ""}
-      ${tr ? `<div class="dev">🚲 스마트 트레이너: ${tr.name}${trBadge}</div>` : ""}
-      ${hr ? `<div class="dev">❤️ 심박계: ${hr.name}</div>` : ""}
-    `;
-  }
-
-  // 일시정지/재개
-  const btnPause = safeGetElement("btnTogglePause");
-  if (btnPause) {
-    btnPause.addEventListener("click", togglePause);
-  }
-
-  // 구간 건너뛰기 - 기존 코드 교체
-  const btnSkipSegment = safeGetElement("btnSkipSegment");
-  if (btnSkipSegment) {
-    btnSkipSegment.addEventListener("click", skipCurrentSegment);
-  }
-
-  // 훈련 종료
-  const btnStopTraining = safeGetElement("btnStopTraining");
-  if (btnStopTraining) {
-    btnStopTraining.addEventListener("click", () => {
-      stopSegmentLoop();
-      if (typeof showScreen === "function") {
-        showScreen("resultScreen");
-      }
-    });
-  }
-
-  console.log("App initialization complete!");
-
-  if (isIOS()) enableIOSMode();
-});
-
-// 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
-(() => {
-  const btn = safeGetElement("btnToProfile");
-  if (!btn) return;
-
-  btn.addEventListener("click", () => {
-    // 1) 화면 전환
-    if (typeof window.showScreen === "function") {
-      window.showScreen("profileScreen");
-    }
-
-    // 2) 사용자 목록 렌더
-    if (typeof window.loadUsers === "function") {
-      // userManager.js의 전역 loadUsers가 있으면 이걸로 불러오기(권장)
-      window.loadUsers();
-      return;
-    }
-
-    // 대체 렌더러 1: renderUserList가 있다면 사용
-    if (typeof window.renderUserList === "function") {
-      window.renderUserList();
-      return;
-    }
-
-    // 대체 렌더러 2: renderProfiles만 있을 때 컨테이너를 명시적으로 찾아 전달
-    if (typeof window.renderProfiles === "function") {
-      const root =
-        safeGetElement("profilesContainer") ||
-        document.querySelector("[data-profiles]");
-      if (root) {
-        // users 데이터를 내부에서 읽는 구현이라면 첫 인자는 생략 가능
-        window.renderProfiles(undefined, root);
-        return;
-      }
-    }
-
-    console.warn(
-      "[btnToProfile] 프로필 렌더러(loadUsers/renderUserList/renderProfiles)가 없습니다."
-    );
-  });
-})();
-
-// Export
-window.startWorkoutTraining = startWorkoutTraining;
-window.backToWorkoutSelection = backToWorkoutSelection;
-
-// app.js 하단에 추가
-// 그룹화 기능 통합
-window.initializeGroupedTimeline = function() {
-  // workoutManager.js의 그룹화 함수들을 app.js에서 사용할 수 있도록 연결
-  if (typeof window.detectAndGroupSegments !== 'function') {
-    console.warn('detectAndGroupSegments function not found in workoutManager.js');
-  }
-  
-  // 타임라인 생성 시 그룹화 적용
-  if (typeof buildSegmentBar === 'function') {
-    buildSegmentBar();
-  }
-};
-
-// 훈련 시작 시 호출
-window.addEventListener('DOMContentLoaded', () => {
-  // 기존 초기화 코드 후에 추가
-  if (typeof window.initializeGroupedTimeline === 'function') {
-    window.initializeGroupedTimeline();
-  }
-});
-
-// 5. TSS/칼로리 업데이트 함수 분리
-function updateTrainingMetrics() {
-  try {
-    const ftp = Number(window.currentUser?.ftp) || 200;
-    const p = Math.max(0, Number(window.liveData?.power) || 0);
-
-    trainingMetrics.elapsedSec += 1;
-    trainingMetrics.joules += p;
-    trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
-    trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
-    trainingMetrics.count += 1;
-
-    const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
-    const IF = ftp ? (NP / ftp) : 0;
-    const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-    const kcal = trainingMetrics.joules / 1000;
-
-    safeSetText("tssValue", TSS.toFixed(1));
-    safeSetText("kcalValue", Math.round(kcal));
-    
-  } catch (error) {
-    console.error('Error in updateTrainingMetrics:', error);
-  }
-}
-
-// 7. 전역 상태 접근을 위한 별칭 (호환성)
-window.trainingState = window.trainingState || trainingState;
-
-// 케이던스 상태 확인 함수
-window.checkCadenceStatus = function() {
-  console.log("=== Cadence Status Check ===");
-  console.log("liveData.cadence:", window.liveData.cadence);
-  console.log("cadenceValue element exists:", !!safeGetElement("cadenceValue"));
-  console.log("cadenceValue current text:", safeGetElement("cadenceValue")?.textContent);
-  console.log("__pmPrev state:", window.__pmPrev || "Not accessible");
-  
-  // 테스트용 케이던스 설정
-  console.log("Testing manual cadence update...");
-  window.liveData.cadence = 90;
-  const el = safeGetElement("cadenceValue");
-  if (el) {
-    el.textContent = "90";
-    console.log("Manual update successful");
-  }
-};
-
-// 전역에서 __pmPrev 접근 가능하도록
-window.__pmPrev = window.__pmPrev || {};
-
-// 네온 효과 수동 테스트 함수
-window.testNeonEffect = function(achievementPercent) {
-  const panels = document.querySelectorAll('.enhanced-metric-panel');
-  const currentPowerEl = safeGetElement("currentPowerValue");
-  
-  // 기존 클래스 제거
-  panels.forEach(panel => {
-    panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
-  });
-  
-  if (currentPowerEl) {
-    currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
-  }
-  
-  // 테스트 클래스 적용
-  let testClass = '';
-  if (achievementPercent < 85) testClass = 'achievement-low';
-  else if (achievementPercent <= 115) testClass = 'achievement-good';
-  else if (achievementPercent <= 130) testClass = 'achievement-high';
-  else testClass = 'achievement-over';
-  
-  panels.forEach(panel => {
-    panel.classList.add('neon-active', testClass);
-  });
-  
-  if (currentPowerEl) {
-    currentPowerEl.classList.add(testClass);
-  }
-  
-  console.log(`Test neon effect applied: ${testClass} (${achievementPercent}%)`);
-  
-  // 3초 후 효과 제거
-  setTimeout(() => {
-    panels.forEach(panel => {
-      panel.classList.remove('neon-active', testClass);
-    });
-    if (currentPowerEl) {
-      currentPowerEl.classList.remove(testClass);
-    }
-    console.log('Test neon effect removed');
-  }, 3000);
-};
-
-// 전역 에러 핸들러 추가
-window.addEventListener('error', function(event) {
-  console.error('Global JavaScript error:', event.error);
-  console.error('Error details:', {
-    message: event.message,
-    filename: event.filename,
-    lineno: event.lineno,
-    colno: event.colno,
-    stack: event.error?.stack
-  });
-});
-
-window.addEventListener('unhandledrejection', function(event) {
-  console.error('Unhandled promise rejection:', event.reason);
-  event.preventDefault(); // 브라우저 콘솔에 에러가 표시되는 것을 방지
-});
-
-console.log('App.js v1.3 loaded successfully with all fixes applied');
-
-
-
-// ====== app.js 파일 끝에 추가할 디버깅 함수들 ======
-
-// 케이던스 상태 확인 함수
-window.debugCadence = function() {
-  console.log("=== Cadence Debug Info ===");
-  console.log("liveData.cadence:", window.liveData?.cadence);
-  console.log("cadenceValue element:", document.getElementById("cadenceValue"));
-  console.log("cadenceValue current text:", document.getElementById("cadenceValue")?.textContent);
-  console.log("updateTrainingDisplay function exists:", typeof window.updateTrainingDisplay === "function");
-  
-  // 수동으로 케이던스 설정 테스트
-  if (window.liveData) {
-    window.liveData.cadence = 85;
-    const cadenceEl = document.getElementById("cadenceValue");
-    if (cadenceEl) {
-      cadenceEl.textContent = "85";
-      console.log("✅ Manual cadence test completed - set to 85 RPM");
-    }
-    
-    if (typeof window.updateTrainingDisplay === "function") {
-      window.updateTrainingDisplay();
-      console.log("✅ updateTrainingDisplay called manually");
-    }
-  }
-};
-
-// 케이던스 강제 설정 함수 (테스트용)
-window.setCadence = function(value) {
-  if (window.liveData) {
-    window.liveData.cadence = value;
-    const cadenceEl = document.getElementById("cadenceValue");
-    if (cadenceEl) {
-      cadenceEl.textContent = value.toString();
-      console.log(`✅ Cadence manually set to ${value} RPM`);
-    }
-    
-    if (typeof window.updateTrainingDisplay === "function") {
-      window.updateTrainingDisplay();
-    }
-  }
-};
-
-// 블루투스 상태 확인 함수
-window.checkBluetoothStatus = function() {
-  console.log("=== Bluetooth Status ===");
-  console.log("Connected devices:", window.connectedDevices || "Not available");
-  console.log("Live data:", window.liveData || "Not available");
-  
-  // __pmPrev 상태 확인 (bluetooth.js에서 접근 가능한 경우)
-  if (typeof __pmPrev !== 'undefined') {
-    console.log("Previous crank data:", __pmPrev);
-  }
-};
-
-
-// ====== app.js 파일 끝에 추가할 고급 디버깅 함수들 ======
-
-// 케이던스 강제 테스트
-window.testCadence = function(value = 85) {
-  console.log(`=== Testing Cadence with ${value} RPM ===`);
-  
-  // liveData 확인
-  if (!window.liveData) {
-    window.liveData = {};
-    console.log("Created liveData object");
-  }
-  
-  // 케이던스 설정
-  window.liveData.cadence = value;
-  console.log(`Set liveData.cadence to ${value}`);
-  
-  // UI 요소 확인 및 업데이트
-  const cadenceEl = document.getElementById("cadenceValue");
-  if (cadenceEl) {
-    cadenceEl.textContent = value.toString();
-    console.log(`✅ Updated cadenceValue element to ${value}`);
-  } else {
-    console.log("❌ cadenceValue element not found");
-  }
-  
-  // updateTrainingDisplay 호출
-  if (typeof window.updateTrainingDisplay === "function") {
-    window.updateTrainingDisplay();
-    console.log("✅ Called updateTrainingDisplay");
-  } else {
-    console.log("❌ updateTrainingDisplay function not found");
-  }
-  
-  // 결과 확인
-  setTimeout(() => {
-    const finalEl = document.getElementById("cadenceValue");
-    console.log(`Final cadenceValue content: "${finalEl?.textContent}"`);
-  }, 100);
-};
-
-// 블루투스 상태 상세 확인
-window.debugBluetoothState = function() {
-  console.log("=== Bluetooth State Debug ===");
-  console.log("Connected devices:", window.connectedDevices);
-  console.log("Live data:", window.liveData);
-  
-  // __pmPrev 상태 확인 (전역 변수로 접근 시도)
-  try {
-    if (typeof __pmPrev !== 'undefined') {
-      console.log("__pmPrev state:", __pmPrev);
-    } else {
-      console.log("__pmPrev not accessible from global scope");
-    }
-  } catch (e) {
-    console.log("Error accessing __pmPrev:", e);
-  }
-  
-  // UI 요소들 확인
-  console.log("cadenceValue element:", document.getElementById("cadenceValue"));
-  console.log("powerValue element:", document.getElementById("powerValue"));
-  console.log("heartRateValue element:", document.getElementById("heartRateValue"));
-};
-
-// 케이던스 계산 시뮬레이션
-window.simulateCadence = function() {
-  console.log("=== Simulating Cadence Calculation ===");
-  
-  // 가상의 크랭크 데이터로 케이던스 계산 시뮬레이션
-  const revolutions = 2; // 2회전
-  const timeSeconds = 1.5; // 1.5초
-  const cadence = (revolutions / timeSeconds) * 60; // RPM 계산
-  
-  console.log(`Simulation: ${revolutions} revs in ${timeSeconds}s = ${cadence} RPM`);
-  
-  if (cadence >= 30 && cadence <= 120) {
-    window.liveData = window.liveData || {};
-    window.liveData.cadence = Math.round(cadence);
-    
-    const cadenceEl = document.getElementById("cadenceValue");
-    if (cadenceEl) {
-      cadenceEl.textContent = Math.round(cadence).toString();
-      console.log(`✅ Simulated cadence set to ${Math.round(cadence)} RPM`);
-    }
-  }
-};
-
-// 자동 케이던스 애니메이션 (테스트용)
-window.animateCadence = function(duration = 10000) {
-  console.log(`=== Starting Cadence Animation for ${duration}ms ===`);
-  
-  let startTime = Date.now();
-  let animationId;
-  
-  function updateCadence() {
-    const elapsed = Date.now() - startTime;
-    if (elapsed > duration) {
-      console.log("Animation completed");
-      return;
-    }
-    
-    // 60-100 RPM 사이에서 sine wave 패턴으로 변화
-    const progress = elapsed / duration;
-    const cadence = 80 + 20 * Math.sin(progress * Math.PI * 4);
-    const roundedCadence = Math.round(cadence);
-    
-    window.liveData = window.liveData || {};
-    window.liveData.cadence = roundedCadence;
-    
-    const cadenceEl = document.getElementById("cadenceValue");
-    if (cadenceEl) {
-      cadenceEl.textContent = roundedCadence.toString();
-    }
-    
-    console.log(`Animated cadence: ${roundedCadence} RPM`);
-    
-    setTimeout(updateCadence, 1000); // 1초마다 업데이트
-  }
-  
-  updateCadence();
-};
-
-// 파워미터 데이터 패킷 시뮬레이션
-window.simulatePowerMeterData = function() {
-  console.log("=== Simulating Power Meter Data ===");
-  
-  // 가상의 BLE 데이터 패킷 생성
-  const flags = 0x23; // crank data present
-  const power = 75; // 75W
-  const revs = 1000; // 임의의 회전수
-  const time = 30000; // 임의의 시간
-  
-  console.log(`Simulated packet - Flags: 0x${flags.toString(16)}, Power: ${power}W, Revs: ${revs}, Time: ${time}`);
-  
-  // 실제 handlePowerMeterData 함수가 존재한다면 호출
-  if (typeof handlePowerMeterData === "function") {
-    // ArrayBuffer 생성하여 시뮬레이션
-    const buffer = new ArrayBuffer(8);
-    const view = new DataView(buffer);
-    view.setUint16(0, flags, true);
-    view.setInt16(2, power, true);
-    view.setUint16(4, revs, true);
-    view.setUint16(6, time, true);
-    
-    const mockEvent = {
-      target: {
-        value: view
-      }
-    };
-    
-    console.log("Calling handlePowerMeterData with simulated data");
-    handlePowerMeterData(mockEvent);
-  } else {
-    console.log("❌ handlePowerMeterData function not found");
-  }
-};
-
-
+  console.log("로딩된 사용자 목록:", window.users || window.user
