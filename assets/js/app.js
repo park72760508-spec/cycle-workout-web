@@ -1715,6 +1715,213 @@ window.quickLogin = function(userIndex = 0) {
   }
 };
 
+
+
+// 상태 메시지 처리 함수들 (handleAuthentication 함수와 함께 추가)
+
+// 상태 메시지 표시 함수
+function showAuthStatus(type, message, icon = '⏳') {
+  const statusEl = safeGetElement("authStatus");
+  const statusIcon = statusEl?.querySelector(".status-icon");
+  const statusText = statusEl?.querySelector(".status-text");
+  
+  if (!statusEl || !statusIcon || !statusText) return;
+  
+  // 상태에 따른 스타일 적용
+  statusEl.classList.remove("hidden", "success", "redirect");
+  statusEl.classList.add(type);
+  
+  // 아이콘과 텍스트 업데이트
+  statusIcon.textContent = icon;
+  statusText.textContent = message;
+}
+
+// 상태 메시지 숨기기 함수
+function hideAuthStatus() {
+  const statusEl = safeGetElement("authStatus");
+  if (statusEl) {
+    statusEl.classList.add("hidden");
+  }
+}
+
+// 개선된 handleAuthentication 함수 (상태 메시지 포함)
+async function handleAuthentication() {
+  const phoneInput = safeGetElement("phoneAuth");
+  const authButton = safeGetElement("btnAuthenticate");
+  const authError = safeGetElement("authError");
+  
+  if (!phoneInput || phoneInput.value.length !== 4) {
+    return;
+  }
+
+  const phoneLastFour = phoneInput.value;
+  
+  try {
+    // 로딩 상태 시작
+    if (authButton) {
+      authButton.classList.add("loading");
+      authButton.disabled = true;
+    }
+
+    // 에러 메시지 숨기기
+    if (authError) {
+      authError.classList.add("hidden");
+    }
+
+    // 진행 상태 표시
+    showAuthStatus("", "사용자 정보를 확인하는 중...", "⏳");
+
+    // 사용자 목록 가져오기
+    await loadUsersForAuth();
+    
+    // 전화번호 뒷자리로 매칭되는 모든 사용자 찾기
+    const users = window.users || window.userProfiles || [];
+    const matchingUsers = users.filter(user => {
+      const contact = user.contact || user.phone || "";
+      const lastFour = contact.replace(/[^0-9]/g, '').slice(-4);
+      return lastFour === phoneLastFour;
+    });
+
+    console.log(`전화번호 뒷 4자리 "${phoneLastFour}"로 검색된 사용자 수: ${matchingUsers.length}`);
+
+    if (matchingUsers.length >= 1) {
+      // 매칭되는 사용자가 1명 이상인 경우
+      
+      // 첫 번째 사용자를 현재 사용자로 설정
+      window.currentUser = matchingUsers[0];
+      
+      // 여러 명이 매칭되는 경우 로그에 표시
+      if (matchingUsers.length > 1) {
+        console.log("여러 사용자가 매칭됨:", matchingUsers.map(u => u.name));
+        console.log("첫 번째 사용자를 선택:", matchingUsers[0].name);
+      }
+      
+      // 성공 상태 표시
+      showAuthStatus("success", `${matchingUsers[0].name}님 인증 완료`, "✅");
+      
+      // 성공 피드백
+      if (typeof showToast === "function") {
+        showToast(`${matchingUsers[0].name}님 환영합니다!`);
+      }
+      
+      // 블루투스 연결 화면으로 이동
+      setTimeout(() => {
+        hideAuthStatus();
+        if (typeof showScreen === "function") {
+          showScreen("connectionScreen");
+        }
+      }, 1500);
+      
+    } else {
+      // 매칭되는 사용자가 0명인 경우
+      
+      console.log("매칭되는 사용자가 없음 - 사용자 등록 화면으로 이동");
+      
+      // 리다이렉트 상태 표시
+      showAuthStatus("redirect", "미등록 번호입니다. 회원가입으로 이동합니다...", "📝");
+      
+      // 안내 메시지 표시
+      if (typeof showToast === "function") {
+        showToast("등록되지 않은 번호입니다. 사용자 등록을 진행합니다.");
+      }
+      
+      // 사용자 등록 화면으로 자동 이동
+      setTimeout(() => {
+        hideAuthStatus();
+        if (typeof showScreen === "function") {
+          showScreen("profileScreen");
+        }
+      }, 2000);
+    }
+    
+  } catch (error) {
+    console.error("Authentication error:", error);
+    
+    hideAuthStatus();
+    
+    if (authError) {
+      authError.classList.remove("hidden");
+      authError.textContent = "인증 중 오류가 발생했습니다. 다시 시도해주세요.";
+    }
+    
+    // 입력 필드 에러 표시
+    const inputWrapper = phoneInput.closest('.input-wrapper');
+    if (inputWrapper) {
+      inputWrapper.classList.add('error');
+      setTimeout(() => {
+        inputWrapper.classList.remove('error');
+      }, 2000);
+    }
+    
+    // 입력 필드 포커스
+    phoneInput.select();
+    
+  } finally {
+    // 로딩 상태 종료
+    if (authButton) {
+      authButton.classList.remove("loading");
+      authButton.disabled = false;
+    }
+  }
+}
+
+// 전화번호 형식 정규화 함수 (데이터 일관성 향상)
+function normalizePhoneNumber(phone) {
+  if (!phone) return "";
+  
+  // 숫자만 추출
+  const numbers = phone.replace(/[^0-9]/g, '');
+  
+  // 11자리 010 번호인 경우
+  if (numbers.length === 11 && numbers.startsWith('010')) {
+    return numbers;
+  }
+  
+  // 10자리인 경우 앞에 0 추가
+  if (numbers.length === 10 && numbers.startsWith('10')) {
+    return '0' + numbers;
+  }
+  
+  return numbers;
+}
+
+// 개선된 사용자 매칭 함수
+function findMatchingUsers(phoneLastFour, users) {
+  return users.filter(user => {
+    const contact = user.contact || user.phone || "";
+    const normalized = normalizePhoneNumber(contact);
+    const lastFour = normalized.slice(-4);
+    
+    // 디버그 정보
+    if (phoneLastFour === lastFour) {
+      console.log(`매칭 성공: ${user.name} (${contact} → ${normalized} → ${lastFour})`);
+    }
+    
+    return lastFour === phoneLastFour;
+  });
+}
+
+// 사용자 등록 화면으로 이동 시 입력된 전화번호 뒷자리 전달
+function goToRegistrationWithPhone(phoneLastFour) {
+  // 전화번호 뒷자리를 세션에 저장 (등록 화면에서 활용 가능)
+  try {
+    sessionStorage.setItem('pendingPhoneLastFour', phoneLastFour);
+  } catch (e) {
+    console.warn('세션 스토리지 저장 실패:', e);
+  }
+  
+  if (typeof showScreen === "function") {
+    showScreen("profileScreen");
+  }
+}
+
+
+
+
+
+
+
+
 // 로그인 화면 초기화 호출 (DOMContentLoaded 이벤트에서)
 document.addEventListener("DOMContentLoaded", () => {
   // 기존 초기화 코드 후에 추가
