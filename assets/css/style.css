@@ -2790,3 +2790,300 @@ button[aria-disabled="true"] {
 }
 
 /* ========== END OF STYLES ========== */
+
+/* style.css에서 다음 부분을 수정하세요 */
+
+/* 화면 전환 개선 - 기존 .screen 스타일 수정 */
+.screen {
+  display: none !important; /* 기본적으로 모든 화면 숨김 */
+  position: fixed; /* absolute 대신 fixed 사용 */
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 1000;
+  background: #f6f8fa; /* 기본 배경색 */
+  transition: opacity 0.3s ease;
+  opacity: 0;
+}
+
+.screen.active {
+  display: block !important; /* 활성 화면만 표시 */
+  opacity: 1;
+  z-index: 1001; /* 활성 화면이 더 위에 오도록 */
+}
+
+/* 로그인 화면 특별 처리 */
+#loginScreen {
+  background: #0a0e1a; /* 로그인 화면 고유 배경 */
+}
+
+#loginScreen.active {
+  z-index: 1002; /* 로그인 화면이 가장 위에 오도록 */
+}
+
+/* 연결 화면 */
+#connectionScreen {
+  background: #f6f8fa;
+}
+
+/* 프로필 화면 */
+#profileScreen {
+  background: #f6f8fa;
+}
+
+/* 워크아웃 화면 */
+#workoutScreen {
+  background: #f6f8fa;
+}
+
+/* 훈련 준비 화면 */
+#trainingReadyScreen {
+  background: #f6f8fa;
+}
+
+/* 훈련 화면 */
+#trainingScreen {
+  background: #0f111a;
+  color: #f3f3f3;
+}
+
+/* 결과 화면 */
+#resultScreen {
+  background: #f6f8fa;
+}
+
+/* 워크아웃 빌더 화면 */
+#workoutBuilderScreen {
+  background: #f6f8fa;
+}
+
+/* 화면 전환 애니메이션 개선 */
+.screen-transition-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.screen-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: all 0.3s ease-out;
+}
+
+.screen-transition-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.screen-transition-exit-active {
+  opacity: 0;
+  transform: translateY(-20px);
+  transition: all 0.3s ease-out;
+}
+
+/* 모달이 화면 위에 오도록 z-index 조정 */
+.modal {
+  z-index: 99999 !important;
+}
+
+.modal-content {
+  z-index: 100000 !important;
+}
+
+/* 카운트다운 오버레이가 가장 위에 오도록 */
+.countdown-overlay {
+  z-index: 999999 !important;
+}
+
+/* 토스트 메시지가 가장 위에 오도록 */
+.toast {
+  z-index: 9999 !important;
+}
+
+/* 로그인 상태 메시지 스타일 개선 */
+.auth-status {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  transition: all 0.3s ease;
+  animation: fadeInUp 0.4s ease-out;
+}
+
+.auth-status.success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  animation: successPulse 0.6s ease-out;
+}
+
+.auth-status.redirect {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+  animation: redirectBounce 0.8s ease-out;
+}
+
+.auth-status.loading {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+/* 상태 애니메이션 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes successPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes redirectBounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-5px);
+  }
+  60% {
+    transform: translateY(-3px);
+  }
+}
+
+/* 입력 필드 에러 상태 개선 */
+.input-wrapper.error {
+  border-color: #ef4444 !important;
+  animation: inputErrorShake 0.5s ease-out;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2) !important;
+}
+
+@keyframes inputErrorShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+/* 로딩 버튼 상태 개선 */
+.btn-auth.loading {
+  pointer-events: none;
+  opacity: 0.8;
+  position: relative;
+}
+
+.btn-auth.loading .btn-text {
+  opacity: 0.5;
+}
+
+.btn-auth.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: loadingSpinner 1s linear infinite;
+}
+
+@keyframes loadingSpinner {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 디버깅용 클래스 (개발 중에만 사용) */
+.debug-screen-info {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  z-index: 999999;
+  font-family: monospace;
+}
+
+/* 반응형 화면 조정 */
+@media (max-width: 768px) {
+  .screen {
+    padding: 15px;
+  }
+  
+  .login-container {
+    margin: 10px;
+    padding: 30px 24px;
+    max-width: none;
+    width: calc(100% - 20px);
+  }
+}
+
+@media (max-width: 480px) {
+  .screen {
+    padding: 10px;
+  }
+  
+  .login-container {
+    margin: 5px;
+    padding: 25px 20px;
+    width: calc(100% - 10px);
+  }
+}
+
+/* 접근성 개선 */
+.screen:focus {
+  outline: none;
+}
+
+.screen.active:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+/* iOS Safari 호환성 */
+@supports (-webkit-touch-callout: none) {
+  .screen {
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
+}
+
+/* 고대비 모드 지원 */
+@media (prefers-contrast: high) {
+  .screen {
+    border: 2px solid;
+  }
+  
+  .auth-status {
+    border: 2px solid currentColor;
+  }
+}
+
+
