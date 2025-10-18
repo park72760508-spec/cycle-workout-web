@@ -1,14 +1,71 @@
 /* ==========================================================
-   app.js (v1.2 stable) - 수정된 버전
+   app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
 
-window.liveData = window.liveData || { 
-  power: 0, 
-  cadence: 0,  // null 대신 0으로 초기화
-  heartRate: 0, 
-  targetPower: 0 
-};
+// ========== 전역 변수 안전 초기화 (파일 최상단) ==========
+(function initializeGlobals() {
+  // liveData 객체 안전 초기화
+  if (!window.liveData) {
+    window.liveData = {
+      power: 0,
+      cadence: 0,
+      heartRate: 0,
+      targetPower: 0
+    };
+  }
 
+  // currentUser 안전 초기화
+  if (!window.currentUser) {
+    window.currentUser = null;
+  }
+
+  // currentWorkout 안전 초기화
+  if (!window.currentWorkout) {
+    window.currentWorkout = null;
+  }
+
+  // trainingState 안전 초기화
+  if (!window.trainingState) {
+    window.trainingState = {
+      timerId: null,
+      paused: false,
+      elapsedSec: 0,
+      segIndex: 0,
+      segElapsedSec: 0,
+      segEnds: [],
+      totalSec: 0
+    };
+  }
+
+  // connectedDevices 안전 초기화
+  if (!window.connectedDevices) {
+    window.connectedDevices = {
+      trainer: null,
+      powerMeter: null,
+      heartRate: null
+    };
+  }
+
+  console.log('Global variables initialized safely');
+})();
+
+// ========== 안전 접근 헬퍼 함수들 ==========
+function safeGetElement(id) {
+  const element = document.getElementById(id);
+  if (!element) {
+    console.warn(`Element with id '${id}' not found`);
+  }
+  return element;
+}
+
+function safeSetText(id, text) {
+  const element = safeGetElement(id);
+  if (element) {
+    element.textContent = text;
+  }
+}
+
+// ========== 기존 변수들 유지 ==========
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
 
@@ -21,8 +78,6 @@ function normalizeType(seg){
   if (t.includes("tempo")) return "tempo";
   return "interval"; // 기본값
 }
-
-
 
 // 세그먼트 카운트다운 상태 관리 (전역)
 let segmentCountdownActive = false;
@@ -135,7 +190,13 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
 function startWithCountdown(sec = 5) {
   const overlay = document.getElementById("countdownOverlay");
   const num = document.getElementById("countdownNumber");
-  if (!overlay || !num) return startWorkoutTraining(); // 없으면 바로 시작
+  
+  if (!overlay || !num) {
+    console.warn('Countdown elements not found, starting workout directly');
+    return startWorkoutTraining();
+  }
+
+  console.log(`Starting ${sec}s countdown...`);
 
   // 오버레이 확실히 표시
   overlay.classList.remove("hidden");
@@ -157,12 +218,18 @@ function startWithCountdown(sec = 5) {
     } else if (remain === 0) {
       // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
       num.textContent = "0";
-      await playBeep(1500, 700, 0.35, "square");
+      
+      try {
+        await playBeep(1500, 700, 0.35, "square");
+      } catch (e) {
+        console.warn('Failed to play beep:', e);
+      }
       
       // 0.5초 추가 대기 후 오버레이 닫기 및 훈련 시작
       setTimeout(() => {
         overlay.classList.add("hidden");
         overlay.style.display = "none";
+        console.log('Countdown finished, starting workout...');
         startWorkoutTraining();
       }, 500);
       
@@ -171,6 +238,7 @@ function startWithCountdown(sec = 5) {
       
     } else {
       // remain < 0일 때 - 안전장치
+      console.warn('Countdown safety mechanism triggered');
       clearInterval(timer);
       overlay.classList.add("hidden");
       overlay.style.display = "none";
@@ -198,27 +266,47 @@ function stopSegmentCountdown() {
 
 // 세그먼트 건너뛰기 시에도 카운트다운 정리
 function skipCurrentSegment() {
-  const w = window.currentWorkout;
-  if (!w) return;
-  
-  // 활성 카운트다운 정지
-  if (segmentCountdownActive) {
-    stopSegmentCountdown();
+  try {
+    const w = window.currentWorkout;
+    if (!w || !w.segments) {
+      console.warn('No workout or segments available for skipping');
+      return;
+    }
+    
+    // 활성 카운트다운 정지
+    if (segmentCountdownActive) {
+      stopSegmentCountdown();
+    }
+    
+    // 해당 세그먼트의 카운트다운 트리거 상태도 리셋
+    if (countdownTriggered && window.trainingState.segIndex < countdownTriggered.length) {
+      countdownTriggered[window.trainingState.segIndex] = true; // 건너뛴 것으로 표시
+    }
+    
+    // 다음 세그먼트로 이동
+    const newIndex = Math.min(w.segments.length - 1, (window.trainingState?.segIndex || 0) + 1);
+    if (window.trainingState) {
+      window.trainingState.segIndex = newIndex;
+      window.trainingState.segElapsedSec = 0;
+    }
+    
+    if (typeof applySegmentTarget === 'function') {
+      applySegmentTarget(newIndex);
+    }
+    if (typeof updateTimeUI === 'function') {
+      updateTimeUI();
+    }
+    
+    console.log(`세그먼트 건너뛰기: ${newIndex + 1}번째 세그먼트로 이동`);
+    
+    if (typeof showToast === 'function') {
+      showToast(`세그먼트 ${newIndex + 1}로 건너뛰기`);
+    }
+    
+  } catch (error) {
+    console.error('Error in skipCurrentSegment:', error);
   }
-  
-  // 해당 세그먼트의 카운트다운 트리거 상태도 리셋
-  if (countdownTriggered && window.trainingState.segIndex < countdownTriggered.length) {
-    countdownTriggered[window.trainingState.segIndex] = true; // 건너뛴 것으로 표시
-  }
-  
-  window.trainingState.segIndex = Math.min(w.segments.length - 1, window.trainingState.segIndex + 1);
-  window.trainingState.segElapsedSec = 0;
-  applySegmentTarget(window.trainingState.segIndex);
-  updateTimeUI();
-  
-  console.log(`세그먼트 건너뛰기: ${window.trainingState.segIndex + 1}번째 세그먼트로 이동`);
 }
-
 
 // 훈련 화면의 세그먼트에서 FTP 백분율 추출하는 헬퍼 함수 추가
 function getSegmentFtpPercent(seg) {
@@ -243,8 +331,6 @@ function getSegmentFtpPercent(seg) {
   return 100; // 기본값
 }
 
-
-
 // 훈련 지표 상태 (TSS / kcal / NP 근사)
 const trainingMetrics = {
   elapsedSec: 0,      // 전체 경과(초)
@@ -264,24 +350,29 @@ function secToMinStr(sec){
 let __beepCtx = null;
 
 // 오디오 컨텍스트 초기화 함수 개선
-// 오디오 컨텍스트 초기화 함수 개선
 async function ensureBeepContext() {
   try {
+    if (!window.AudioContext && !window.webkitAudioContext) {
+      console.warn('Web Audio API not supported');
+      return false;
+    }
+
     if (!__beepCtx) {
       __beepCtx = new (window.AudioContext || window.webkitAudioContext)();
-      console.log('새 오디오 컨텍스트 생성됨');
+      console.log('New audio context created');
     }
     
     if (__beepCtx.state === "suspended") {
       await __beepCtx.resume();
-      console.log('오디오 컨텍스트 재개됨');
+      console.log('Audio context resumed');
     }
     
-    console.log(`오디오 컨텍스트 상태: ${__beepCtx.state}`);
+    return __beepCtx.state === "running";
     
   } catch (error) {
-    console.error('오디오 컨텍스트 초기화 실패:', error);
+    console.error('Audio context initialization failed:', error);
     __beepCtx = null;
+    return false;
   }
 }
 
@@ -290,9 +381,9 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
   try {
     console.log(`Beep 재생 시도: ${freq}Hz, ${durationMs}ms, ${volume} 볼륨, ${type} 타입`);
     
-    await ensureBeepContext();
-    if (!__beepCtx) {
-      console.warn('오디오 컨텍스트가 없습니다');
+    const contextReady = await ensureBeepContext();
+    if (!contextReady) {
+      console.warn('Audio context not available for beep');
       return;
     }
 
@@ -528,10 +619,6 @@ function buildSegmentBar(){
   }).filter(Boolean).join('');
 }
 
-
-
-
-
 // 메인 업데이트 함수(1초마다 호출):
 // app.js의 updateSegmentBarTick 함수를 대체
 // app.js의 updateSegmentBarTick 함수 대체 - 달성도 기반 색상 적용
@@ -652,9 +739,6 @@ function updateSegmentBarTick(){
   }
 }
 
-
-
-
 // 2. 훈련 상태 객체 통일 (window.trainingState 사용)
 window.trainingState = window.trainingState || {
   timerId: null,
@@ -669,85 +753,93 @@ window.trainingState = window.trainingState || {
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
 // 수정된 updateTimeUI 함수 (다음 세그먼트 부분만)
 function updateTimeUI() {
-  const w = window.currentWorkout;
-  if (!w) return;
-
-  const elElapsed    = document.getElementById("elapsedTime");
-  const elElapsedPct = document.getElementById("elapsedPercent");
-  const elSegTime    = document.getElementById("segmentTime");
-  const elNext       = document.getElementById("nextSegment");
-  const elSegPct     = document.getElementById("segmentProgress");
-
-  // 이 진행률 (오버플로우/NaN 방지)
-  const elapsed  = Math.max(0, Number(window.trainingState.elapsedSec) || 0);
-  const total    = Math.max(1, Number(window.trainingState.totalSec)  || 1);
-  const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
-
-  if (elElapsed)    elElapsed.textContent = formatMMSS(elapsed);
-  if (elElapsedPct) elElapsedPct.textContent = totalPct;
-
-  // 현재 세그먼트
-  const i   = Math.max(0, Number(window.trainingState.segIndex) || 0);
-  const seg = w.segments?.[i];
-
-  // 세그 남은 시간(0으로 클램프)
-  if (elSegTime) {
-    const segDur = Math.max(0, segDurationSec(seg) || 0);
-    const segRemain = Math.max(0, segDur - (Number(window.trainingState.segElapsedSec) || 0));
-    elSegTime.textContent = formatMMSS(segRemain);
-  }
-
-  // 다음 세그 안내 - 수정된 부분
-  if (elNext) {
-    const next = w.segments?.[i + 1];
-    if (next) {
-      const ftpPercent = getSegmentFtpPercent(next);
-      const segmentName = next.label || next.segment_type || "세그먼트";
-      elNext.textContent = `다음: ${segmentName} FTP ${ftpPercent}%`;
-    } else {
-      elNext.textContent = `다음: (마지막)`;
+  try {
+    const w = window.currentWorkout;
+    if (!w) {
+      console.warn('No current workout in updateTimeUI');
+      return;
     }
-  }
 
-  // 세그 진행률 (0~100 클램프)
-  if (elSegPct && seg) {
-    const segDur    = Math.max(1, segDurationSec(seg) || 1);
-    const segElapsed= Math.max(0, Number(window.trainingState.segElapsedSec) || 0);
-    const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
-    elSegPct.textContent = String(sp);
+    const elapsed = Math.max(0, Number(window.trainingState?.elapsedSec) || 0);
+    const total = Math.max(1, Number(window.trainingState?.totalSec) || 1);
+    const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
+
+    // 안전한 요소 업데이트
+    safeSetText("elapsedTime", formatMMSS(elapsed));
+    safeSetText("elapsedPercent", totalPct);
+
+    // 현재 세그먼트
+    const i = Math.max(0, Number(window.trainingState?.segIndex) || 0);
+    const seg = w.segments?.[i];
+
+    // 세그먼트 남은 시간 (0으로 클램프)
+    if (seg) {
+      const segDur = Math.max(0, segDurationSec(seg) || 0);
+      const segRemain = Math.max(0, segDur - (Number(window.trainingState?.segElapsedSec) || 0));
+      safeSetText("segmentTime", formatMMSS(segRemain));
+    }
+
+    // 다음 세그먼트 안내 - 수정된 부분
+    const nextEl = safeGetElement("nextSegment");
+    if (nextEl) {
+      const next = w.segments?.[i + 1];
+      if (next) {
+        const ftpPercent = getSegmentFtpPercent(next);
+        const segmentName = next.label || next.segment_type || "세그먼트";
+        nextEl.textContent = `다음: ${segmentName} FTP ${ftpPercent}%`;
+      } else {
+        nextEl.textContent = `다음: (마지막)`;
+      }
+    }
+
+    // 세그먼트 진행률 (0~100 클램프)
+    if (seg) {
+      const segDur = Math.max(1, segDurationSec(seg) || 1);
+      const segElapsed = Math.max(0, Number(window.trainingState?.segElapsedSec) || 0);
+      const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
+      safeSetText("segmentProgress", String(sp));
+    }
+    
+  } catch (error) {
+    console.error('Error in updateTimeUI:', error);
   }
 }
 
-// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신
+// 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신 
 function applySegmentTarget(i) {
-  const w   = window.currentWorkout;
-  const ftp = Number(window.currentUser?.ftp) || 200;
-  const seg = w?.segments?.[i];
-  if (!seg) return;
+  try {
+    const w   = window.currentWorkout;
+    const ftp = Number(window.currentUser?.ftp) || 200;
+    const seg = w?.segments?.[i];
+    if (!seg) return;
 
-  // 목표 파워 계산 - 통일된 방식 사용
-  const ftpPercent = getSegmentFtpPercent(seg);
-  const targetW = Math.round(ftp * (ftpPercent / 100));
-  
-  window.liveData = window.liveData || {};
-  window.liveData.targetPower = targetW;
+    // 목표 파워 계산 - 통일된 방식 사용
+    const ftpPercent = getSegmentFtpPercent(seg);
+    const targetW = Math.round(ftp * (ftpPercent / 100));
+    
+    window.liveData = window.liveData || {};
+    window.liveData.targetPower = targetW;
 
-  // DOM 즉시 반영
-  const tEl   = document.getElementById("targetPowerValue");
-  const nameEl= document.getElementById("currentSegmentName");
-  const progEl= document.getElementById("segmentProgress");
-  const avgEl = document.getElementById("avgSegmentPowerValue");
+    // DOM 즉시 반영
+    safeSetText("targetPowerValue", String(targetW || 0));
+    
+    const nameEl = safeGetElement("currentSegmentName");
+    if (nameEl) {
+      const segmentName = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
+      nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+    }
+    
+    safeSetText("segmentProgress", "0");
+    safeSetText("avgSegmentPowerValue", "—");
 
-  if (tEl)    tEl.textContent    = String(targetW || 0);
-  if (nameEl) {
-    const segmentName = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
-    nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+    // 첫 프레임 즉시 반영
+    if (typeof window.updateTrainingDisplay === "function") {
+      window.updateTrainingDisplay();
+    }
+    
+  } catch (error) {
+    console.error('Error in applySegmentTarget:', error);
   }
-  if (progEl) progEl.textContent = "0";
-  if (avgEl)  avgEl.textContent  = "—";
-
-  // 첫 프레임 즉시 반영
-  window.updateTrainingDisplay && window.updateTrainingDisplay();
 }
 
 // 시작/루프
@@ -790,7 +882,7 @@ function startSegmentLoop() {
     buildSegmentBar();
   }
 
-  console.log('타이머 시작, 총 시간:', window.trainingState.totalSec, '초');
+  console.log('타이머 시작', '총 시간:', window.trainingState.totalSec, '초');
 
   // 기존 타이머 정리
   if (window.trainingState.timerId) {
@@ -881,9 +973,6 @@ function startSegmentLoop() {
   }, 1000);
 }
 
-
-
-
 // 6. stopSegmentLoop 함수 수정
 // 수정된 stopSegmentLoop 함수 (카운트다운도 함께 정지)
 function stopSegmentLoop() {
@@ -907,8 +996,8 @@ function setPaused(isPaused) {
   }
 
   // 버튼 라벨/아이콘 업데이트
-  const btn = document.getElementById("btnTogglePause");
-  const icon = document.getElementById("pauseIcon");
+  const btn = safeGetElement("btnTogglePause");
+  const icon = safeGetElement("pauseIcon");
   if (btn)  btn.textContent = window.trainingState.paused ? " ▶️" : " ⏸️";
   if (icon) icon.textContent = window.trainingState.paused ? "▶️" : "⏸️";
 
@@ -921,46 +1010,60 @@ function setPaused(isPaused) {
 // 중복 선언 방지
 if (!window.showScreen) {
   window.showScreen = function(id) {
-    // 1) 모든 화면 숨김
-    document.querySelectorAll(".screen").forEach(s => {
-      s.style.display = "none";
-      s.classList.remove("active");
-    });
-    // 2) 대상 화면만 표시
-    const el = document.getElementById(id);
-    if (el) {
-      el.style.display = "block";
-      el.classList.add("active");
-    }
-    
-    if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
-      loadWorkouts();
-    }
-    
-    if (id === 'profileScreen') {
-      console.log('Loading real users for profile screen...');
-      setTimeout(() => {
-        if (typeof window.loadUsers === 'function') {
-          window.loadUsers();
-        } else {
-          console.error('loadUsers function not available');
-        }
-      }, 100);
+    try {
+      console.log(`Switching to screen: ${id}`);
+      
+      // 1) 모든 화면 숨김
+      document.querySelectorAll(".screen").forEach(s => {
+        s.style.display = "none";
+        s.classList.remove("active");
+      });
+      
+      // 2) 대상 화면만 표시
+      const el = safeGetElement(id);
+      if (el) {
+        el.style.display = "block";
+        el.classList.add("active");
+        console.log(`Successfully switched to: ${id}`);
+      } else {
+        console.error(`Screen element '${id}' not found`);
+        return;
+      }
+      
+      // 3) 화면별 특별 처리
+      if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
+        setTimeout(() => loadWorkouts(), 100);
+      }
+      
+      if (id === 'profileScreen') {
+        console.log('Loading users for profile screen...');
+        setTimeout(() => {
+          if (typeof window.loadUsers === 'function') {
+            window.loadUsers();
+          } else {
+            console.error('loadUsers function not available');
+          }
+        }, 100);
+      }
+      
+    } catch (error) {
+      console.error('Error in showScreen:', error);
     }
   };
 }
 
 if (!window.showConnectionStatus) {
   window.showConnectionStatus = function(show) {
-    const el = document.getElementById("connectionStatus");
-    if (!el) return;
-    el.classList.toggle("hidden", !show);
+    const el = safeGetElement("connectionStatus");
+    if (el) {
+      el.classList.toggle("hidden", !show);
+    }
   };
 }
 
 if (!window.showToast) {
   window.showToast = function(msg) {
-    const t = document.getElementById("toast");
+    const t = safeGetElement("toast");
     if (!t) return alert(msg);
     t.classList.remove("hidden");
     t.textContent = msg;
@@ -969,17 +1072,17 @@ if (!window.showToast) {
   };
 }
 
-// 실시간 표시
-// 실시간 표시
+// *** 핵심 수정: updateTrainingDisplay 함수 - currentPower 변수 초기화 문제 해결 ***
 window.updateTrainingDisplay = function () {
-  const p = document.getElementById("currentPowerValue");
-  const h = document.getElementById("heartRateValue");
-  const bar = document.getElementById("powerProgressBar");
-  const t = document.getElementById("targetPowerValue");
+  // *** 중요: currentPower 변수를 맨 앞에서 정의 ***
+  const currentPower = window.liveData?.power || 0;
+  const target = window.liveData?.targetPower || 200;
+  const hr = window.liveData?.heartRate || 0;
 
-  // const currentPower = liveData.power || 0;  하단에 선언되어 있음
-  const target = liveData.targetPower || 200; // 기준값
-  const hr = liveData.heartRate || 0;
+  const p = safeGetElement("currentPowerValue");
+  const h = safeGetElement("heartRateValue");
+  const bar = safeGetElement("powerProgressBar");
+  const t = safeGetElement("targetPowerValue");
 
   if (p) {
     p.textContent = Math.round(currentPower);
@@ -1013,12 +1116,11 @@ window.updateTrainingDisplay = function () {
   }
 
   // *** 케이던스 표시 개선 ***
-  const cadenceElement = document.getElementById("cadenceValue");
+  const cadenceElement = safeGetElement("cadenceValue");
   if (cadenceElement) {
-    const cadence = window.liveData.cadence;
+    const cadence = window.liveData?.cadence;
     if (typeof cadence === "number" && cadence > 0) {
       cadenceElement.textContent = Math.round(cadence);
-      console.log(`UI Updated - Cadence: ${Math.round(cadence)} RPM`);
     } else {
       cadenceElement.textContent = "--";
     }
@@ -1032,15 +1134,12 @@ window.updateTrainingDisplay = function () {
   }
 
   // *** 네온 효과를 위한 달성도 계산 및 클래스 적용 ***
-  const targetPower = liveData.targetPower || 200;
-  const currentPower = liveData.power || 0;
-  const segmentAvgElement = document.getElementById("avgSegmentPowerValue");
+  const targetPower = window.liveData?.targetPower || 200;
+  const segmentAvgElement = safeGetElement("avgSegmentPowerValue");
   const segmentAvgPower = segmentAvgElement ? parseInt(segmentAvgElement.textContent) || 0 : 0;
   
   // 달성도 계산 (세그먼트 평균 파워 기준)
   const achievement = targetPower > 0 ? (segmentAvgPower / targetPower) : 0;
-  
-  console.log(`Power achievement: ${(achievement * 100).toFixed(1)}% (${segmentAvgPower}W / ${targetPower}W)`);
   
   // 모든 패널에서 이전 달성도 클래스 제거
   const panels = document.querySelectorAll('.enhanced-metric-panel');
@@ -1049,7 +1148,7 @@ window.updateTrainingDisplay = function () {
   });
   
   // 현재 파워 값에서도 달성도 클래스 제거
-  const currentPowerEl = document.getElementById("currentPowerValue");
+  const currentPowerEl = safeGetElement("currentPowerValue");
   if (currentPowerEl) {
     currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
   }
@@ -1078,110 +1177,154 @@ window.updateTrainingDisplay = function () {
                           achievementClass === 'achievement-over')) {
       currentPowerEl.classList.add(achievementClass);
     }
-    
-    console.log(`Applied neon effect: ${achievementClass}`);
   }
-
-
-   
 };
 
-
-// 시작 시 복구 시도 (startWorkoutTraining 맨 앞)
+// *** 시작 시 복구 시도 및 오류 처리 강화 ***
 function startWorkoutTraining() {
-  // 훈련 시작 직전(예: startWorkoutTraining()에서) 리셋:
-  Object.assign(trainingMetrics, {
-    elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
-  });
-  
-  // (A) 워크아웃 보장: 캐시 복구 포함
-  if (!window.currentWorkout) {
-    try {
-      const cached = localStorage.getItem("currentWorkout");
-      if (cached) window.currentWorkout = JSON.parse(cached);
-    } catch (_) {}
+  try {
+    console.log('Starting workout training...');
+    
+    // 훈련 시작 직전 리셋
+    Object.assign(trainingMetrics, {
+      elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
+    });
+    
+    // (A) 워크아웃 보장: 캐시 복구 포함
+    if (!window.currentWorkout) {
+      try {
+        const cached = localStorage.getItem("currentWorkout");
+        if (cached) window.currentWorkout = JSON.parse(cached);
+      } catch (e) {
+        console.warn('Failed to load cached workout:', e);
+      }
+    }
+    
+    if (!window.currentWorkout) {
+      console.error('No workout selected');
+      if (typeof showToast === "function") showToast("워크아웃을 먼저 선택하세요");
+      if (typeof showScreen === "function") showScreen("workoutScreen");
+      return;
+    }
+
+    console.log('Current workout:', window.currentWorkout.title);
+
+    // (B) 상태 초기화 (일시정지 해제 + 타이머 변수 초기화)
+    if (typeof setPaused === "function") setPaused(false);
+    if (window.trainingState) {
+      window.trainingState.elapsedSec = 0;
+      window.trainingState.segElapsedSec = 0;
+      window.trainingState.segIndex = 0;
+    }
+
+    // (C) 세그먼트 타임라인 생성 (안전 장치 추가)
+    if (typeof buildSegmentBar === "function") {
+      try {
+        buildSegmentBar();
+      } catch (e) {
+        console.warn('Failed to build segment bar:', e);
+      }
+    }
+
+    // (D) 첫 세그먼트 타겟/이름 적용 + 시간 UI 1회 갱신 (안전 장치 추가)
+    if (typeof applySegmentTarget === "function") {
+      try {
+        applySegmentTarget(0);
+      } catch (e) {
+        console.error('Failed to apply segment target:', e);
+        // 기본값으로 설정
+        window.liveData.targetPower = 200;
+      }
+    }
+    
+    if (typeof updateTimeUI === "function") {
+      try {
+        updateTimeUI();
+      } catch (e) {
+        console.warn('Failed to update time UI:', e);
+      }
+    }
+
+    // (E) 화면 전환
+    if (typeof showScreen === "function") {
+      showScreen("trainingScreen");
+      console.log('Switched to training screen');
+    }
+
+    // 사용자 정보 출력 (안전 장치 추가)
+    if (typeof renderUserInfo === "function") {
+      try {
+        renderUserInfo();
+      } catch (e) {
+        console.warn('Failed to render user info:', e);
+      }
+    }
+
+    // (F) 첫 프레임 즉시 렌더 (깜빡임 방지)
+    if (typeof window.updateTrainingDisplay === "function") {
+      try {
+        window.updateTrainingDisplay();
+      } catch (e) {
+        console.error('Failed to update training display:', e);
+      }
+    }
+
+    // (G) 1Hz 루프 시작 (세그먼트/시간 진행)
+    if (typeof startSegmentLoop === "function") {
+      try {
+        startSegmentLoop();
+        console.log('Segment loop started');
+      } catch (e) {
+        console.error('Failed to start segment loop:', e);
+      }
+    }
+
+    if (typeof showToast === "function") showToast("훈련을 시작합니다");
+    
+  } catch (error) {
+    console.error('Critical error in startWorkoutTraining:', error);
+    if (typeof showToast === "function") {
+      showToast("훈련 시작 중 오류가 발생했습니다: " + error.message);
+    }
+    // 오류 발생 시 워크아웃 선택 화면으로 돌아가기
+    if (typeof showScreen === "function") {
+      showScreen("workoutScreen");
+    }
   }
-  if (!window.currentWorkout) {
-    showToast && showToast("워크아웃을 먼저 선택하세요");
-    return showScreen && showScreen("workoutScreen");
-  }
-
-  // (B) 상태 초기화 (일시정지 해제 + 타이머 변수 초기화)
-  if (typeof setPaused === "function") setPaused(false);
-  if (window.trainingState) {
-    trainingState.elapsedSec = 0;
-    trainingState.segElapsedSec = 0;
-    trainingState.segIndex = 0;
-  }
-  // 카운트다운 직후 훈련 시작 때마다 TSS/kcal 계산용 누적 상태
-  Object.assign(trainingMetrics, {
-    elapsedSec: 0,
-    joules: 0,
-    ra30: 0,
-    np4sum: 0,
-    count: 0
-  });
-  
-  // (C) 세그먼트 타임라인 생성(있을 때만)
-  if (typeof buildSegmentBar === "function") buildSegmentBar();
-
-  // (D) 첫 세그먼트 타겟/이름 적용 + 시간 UI 1회 갱신 (있을 때만)
-  if (typeof applySegmentTarget === "function") applySegmentTarget(0);
-  if (typeof updateTimeUI === "function") updateTimeUI();
-
-  // (E) 화면 전환
-  if (typeof showScreen === "function") showScreen("trainingScreen");
-
-  // 사용자 정보 출력
-  if (typeof renderUserInfo === "function") renderUserInfo();   
-
-  // (F) 첫 프레임 즉시 렌더(깜빡임 방지)
-  if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
-
-  // (G) 1Hz 루프 시작 (세그먼트/시간 진행)
-  if (typeof startSegmentLoop === "function") startSegmentLoop();
-
-  showToast && showToast("훈련을 시작합니다");
 }
 
 function backToWorkoutSelection() {
-  showScreen("workoutScreen");
+  if (typeof showScreen === "function") {
+    showScreen("workoutScreen");
+  }
 }
 
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
 function renderUserInfo() {
-  const box = document.getElementById("userInfo");
-  const u = window.currentUser;
-  if (!box) return;
+  try {
+    const box = safeGetElement("userInfo");
+    const u = window.currentUser;
+    if (!box) return;
 
-  if (!u) { box.textContent = "사용자 미선택"; return; }
+    if (!u) { 
+      box.textContent = "사용자 미선택"; 
+      return; 
+    }
 
-  const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
-  const ftp = Number(u.ftp);
-  const wt  = Number(u.weight);
-  const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
+    const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
+    const ftp = Number(u.ftp);
+    const wt  = Number(u.weight);
+    const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
 
-  box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
-}
-
-// 일시정지/재개 함수
-function setPaused(isPaused) {
-  trainingState.paused = !!isPaused;
-
-  // 버튼 라벨/아이콘 업데이트
-  const btn = document.getElementById("btnTogglePause");
-  const icon = document.getElementById("pauseIcon");
-  if (btn)  btn.textContent = trainingState.paused ? " ▶️" : " ⏸️";
-  if (icon) icon.textContent = trainingState.paused ? "▶️" : "⏸️";
-
-  // (선택) 토스트/상태 표시
-  if (typeof showToast === "function") {
-    showToast(trainingState.paused ? "일시정지됨" : "재개됨");
+    box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
+    
+  } catch (error) {
+    console.error('Error in renderUserInfo:', error);
   }
 }
 
 function togglePause() {
-  setPaused(!trainingState.paused);
+  setPaused(!window.trainingState.paused);
 }
 
 // DOMContentLoaded 이벤트
@@ -1195,11 +1338,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function enableIOSMode() {
-    const info = document.getElementById("iosInfo");
+    const info = safeGetElement("iosInfo");
     if (info) info.classList.remove("hidden");
 
     ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-      const el = document.getElementById(id);
+      const el = safeGetElement(id);
       if (el) {
         el.classList.add("is-disabled");
         el.setAttribute("aria-disabled","true");
@@ -1208,7 +1351,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // null 체크 강화
-    const btn = document.getElementById("btnIosContinue");
+    const btn = safeGetElement("btnIosContinue");
     if (btn) {
       btn.addEventListener("click", () => {
         console.log("iOS continue button clicked");
@@ -1225,31 +1368,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 브라우저 지원 확인
   if (!navigator.bluetooth) {
-    showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+    if (typeof showToast === "function") {
+      showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+    }
     console.error("Web Bluetooth not supported");
   }
   
   if (location.protocol !== "https:" && location.hostname !== "localhost") {
-    showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
+    if (typeof showToast === "function") {
+      showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
+    }
     console.warn("HTTPS required for BLE");
   }
   
-  showScreen("connectionScreen");
+  if (typeof showScreen === "function") {
+    showScreen("connectionScreen");
+  }
 
   // 훈련 준비 → 훈련 시작
-  const btnStartTraining = document.getElementById("btnStartTraining");
+  const btnStartTraining = safeGetElement("btnStartTraining");
   if (btnStartTraining) {
     btnStartTraining.addEventListener("click", () => startWithCountdown(5));
   }
 
   // 훈련 준비 → 워크아웃 변경
-  document.getElementById("btnBackToWorkouts")?.addEventListener("click", () => {
-    backToWorkoutSelection();
-  });
+  const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
+  if (btnBackToWorkouts) {
+    btnBackToWorkouts.addEventListener("click", () => {
+      backToWorkoutSelection();
+    });
+  }
 
   // loadUsers()가 userProfiles도 인식하게(방어)
   function loadUsers() {
-    const box = document.getElementById("userList");
+    const box = safeGetElement("userList");
     if (!box) return;
 
     // 전역 데이터: window.users → window.userProfiles 순으로 폴백
@@ -1296,9 +1448,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 블루투스 연결 버튼들
-  const btnHR = document.getElementById("btnConnectHR");
-  const btnTrainer = document.getElementById("btnConnectTrainer");
-  const btnPM = document.getElementById("btnConnectPM");
+  const btnHR = safeGetElement("btnConnectHR");
+  const btnTrainer = safeGetElement("btnConnectTrainer");
+  const btnPM = safeGetElement("btnConnectPM");
   
   console.log("Button elements found:", {
     HR: !!btnHR,
@@ -1314,7 +1466,9 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (!window.connectHeartRate) {
         console.error("connectHeartRate function not found!");
-        showToast("심박계 연결 함수를 찾을 수 없습니다.");
+        if (typeof showToast === "function") {
+          showToast("심박계 연결 함수를 찾을 수 없습니다.");
+        }
         return;
       }
       
@@ -1355,16 +1509,16 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 다파워소스 우선순위도 같이 표기
+  // 다른 파워소스 우선순위도 같이 표기
   function updateDevicesList() {
-    const box = document.getElementById("connectedDevicesList");
+    const box = safeGetElement("connectedDevicesList");
     if (!box) return;
 
-    const pm = connectedDevices?.powerMeter;
-    const tr = connectedDevices?.trainer;
-    const hr = connectedDevices?.heartRate;
+    const pm = window.connectedDevices?.powerMeter;
+    const tr = window.connectedDevices?.trainer;
+    const hr = window.connectedDevices?.heartRate;
 
-    const active = getActivePowerSource();
+    const active = typeof getActivePowerSource === 'function' ? getActivePowerSource() : 'none';
     const pmBadge = pm ? (active==="powermeter" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
     const trBadge = tr ? (active==="trainer" ? " <span class='badge'>POWER SOURCE</span>" : "") : "";
 
@@ -1375,27 +1529,28 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
-  // 워크아웃 변경 버튼
-  const btnBackToWorkouts = document.getElementById("btnBackToWorkouts");
-  if (btnBackToWorkouts) {
-    btnBackToWorkouts.addEventListener("click", backToWorkoutSelection);
-  }
-
   // 일시정지/재개
-  const btnPause = document.getElementById("btnTogglePause");
+  const btnPause = safeGetElement("btnTogglePause");
   if (btnPause) {
     btnPause.addEventListener("click", togglePause);
   }
 
-  // 구간 건너뛰기
-// 구간 건너뛰기 - 기존 코드 교체
-document.getElementById("btnSkipSegment")?.addEventListener("click", skipCurrentSegment);
+  // 구간 건너뛰기 - 기존 코드 교체
+  const btnSkipSegment = safeGetElement("btnSkipSegment");
+  if (btnSkipSegment) {
+    btnSkipSegment.addEventListener("click", skipCurrentSegment);
+  }
 
   // 훈련 종료
-  document.getElementById("btnStopTraining")?.addEventListener("click", () => {
-    stopSegmentLoop();
-    showScreen("resultScreen");
-  });
+  const btnStopTraining = safeGetElement("btnStopTraining");
+  if (btnStopTraining) {
+    btnStopTraining.addEventListener("click", () => {
+      stopSegmentLoop();
+      if (typeof showScreen === "function") {
+        showScreen("resultScreen");
+      }
+    });
+  }
 
   console.log("App initialization complete!");
 
@@ -1404,7 +1559,7 @@ document.getElementById("btnSkipSegment")?.addEventListener("click", skipCurrent
 
 // 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
 (() => {
-  const btn = document.getElementById("btnToProfile");
+  const btn = safeGetElement("btnToProfile");
   if (!btn) return;
 
   btn.addEventListener("click", () => {
@@ -1429,7 +1584,7 @@ document.getElementById("btnSkipSegment")?.addEventListener("click", skipCurrent
     // 대체 렌더러 2: renderProfiles만 있을 때 컨테이너를 명시적으로 찾아 전달
     if (typeof window.renderProfiles === "function") {
       const root =
-        document.getElementById("profilesContainer") ||
+        safeGetElement("profilesContainer") ||
         document.querySelector("[data-profiles]");
       if (root) {
         // users 데이터를 내부에서 읽는 구현이라면 첫 인자는 생략 가능
@@ -1472,45 +1627,44 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // 5. TSS/칼로리 업데이트 함수 분리
 function updateTrainingMetrics() {
-  const ftp = Number(window.currentUser?.ftp) || 200;
-  const p = Math.max(0, Number(window.liveData?.power) || 0);
+  try {
+    const ftp = Number(window.currentUser?.ftp) || 200;
+    const p = Math.max(0, Number(window.liveData?.power) || 0);
 
-  trainingMetrics.elapsedSec += 1;
-  trainingMetrics.joules += p;
-  trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
-  trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
-  trainingMetrics.count += 1;
+    trainingMetrics.elapsedSec += 1;
+    trainingMetrics.joules += p;
+    trainingMetrics.ra30 += (p - trainingMetrics.ra30) / 30;
+    trainingMetrics.np4sum += Math.pow(trainingMetrics.ra30, 4);
+    trainingMetrics.count += 1;
 
-  const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
-  const IF = ftp ? (NP / ftp) : 0;
-  const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-  const kcal = trainingMetrics.joules / 1000;
+    const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
+    const IF = ftp ? (NP / ftp) : 0;
+    const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
+    const kcal = trainingMetrics.joules / 1000;
 
-  const tssEl = document.getElementById("tssValue");
-  const kcalEl = document.getElementById("kcalValue");
-  if (tssEl) tssEl.textContent = TSS.toFixed(1);
-  if (kcalEl) kcalEl.textContent = Math.round(kcal);
+    safeSetText("tssValue", TSS.toFixed(1));
+    safeSetText("kcalValue", Math.round(kcal));
+    
+  } catch (error) {
+    console.error('Error in updateTrainingMetrics:', error);
+  }
 }
-
-
-
 
 // 7. 전역 상태 접근을 위한 별칭 (호환성)
 window.trainingState = window.trainingState || trainingState;
-
 
 // 케이던스 상태 확인 함수
 window.checkCadenceStatus = function() {
   console.log("=== Cadence Status Check ===");
   console.log("liveData.cadence:", window.liveData.cadence);
-  console.log("cadenceValue element exists:", !!document.getElementById("cadenceValue"));
-  console.log("cadenceValue current text:", document.getElementById("cadenceValue")?.textContent);
+  console.log("cadenceValue element exists:", !!safeGetElement("cadenceValue"));
+  console.log("cadenceValue current text:", safeGetElement("cadenceValue")?.textContent);
   console.log("__pmPrev state:", window.__pmPrev || "Not accessible");
   
   // 테스트용 케이던스 설정
   console.log("Testing manual cadence update...");
   window.liveData.cadence = 90;
-  const el = document.getElementById("cadenceValue");
+  const el = safeGetElement("cadenceValue");
   if (el) {
     el.textContent = "90";
     console.log("Manual update successful");
@@ -1520,11 +1674,10 @@ window.checkCadenceStatus = function() {
 // 전역에서 __pmPrev 접근 가능하도록
 window.__pmPrev = window.__pmPrev || {};
 
-
 // 네온 효과 수동 테스트 함수
 window.testNeonEffect = function(achievementPercent) {
   const panels = document.querySelectorAll('.enhanced-metric-panel');
-  const currentPowerEl = document.getElementById("currentPowerValue");
+  const currentPowerEl = safeGetElement("currentPowerValue");
   
   // 기존 클래스 제거
   panels.forEach(panel => {
@@ -1564,4 +1717,21 @@ window.testNeonEffect = function(achievementPercent) {
   }, 3000);
 };
 
+// 전역 에러 핸들러 추가
+window.addEventListener('error', function(event) {
+  console.error('Global JavaScript error:', event.error);
+  console.error('Error details:', {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    stack: event.error?.stack
+  });
+});
 
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('Unhandled promise rejection:', event.reason);
+  event.preventDefault(); // 브라우저 콘솔에 에러가 표시되는 것을 방지
+});
+
+console.log('App.js v1.3 loaded successfully with all fixes applied');
