@@ -14,6 +14,9 @@ window.connectedDevices = window.connectedDevices || {
   heartRate: null,
 };
 
+
+window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: null, targetPower: 0 };
+
 // UI 헬퍼들 (index.html/app.js에 이미 있으면 중복 선언하지 마세요)
 // bluetooth.js의 상단 UI 헬퍼 부분을 다음과 같이 수정
 // UI 헬퍼들 - window 객체 확인 후 할당
