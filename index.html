@@ -420,9 +420,9 @@
 
 <body>
   <!-- 0) 로그인 화면 -->
-<!-- 기존 connectionScreen 앞에 새로운 로그인 화면을 추가하세요 -->
+  <!-- 기존 connectionScreen 앞에 이 전체 코드로 교체하세요 -->
   
-  <!-- 0) 로그인/인증 화면 (새로 추가) -->
+  <!-- 0) 로그인/인증 화면 (수정된 완전판) -->
   <div id="loginScreen" class="screen active">
     <!-- 배경 애니메이션 -->
     <div class="login-background">
@@ -478,8 +478,6 @@
       </div>
   
       <!-- 인증 폼 영역 -->
-      <!-- index.html의 로그인 폼 부분을 다음과 같이 수정하세요 -->
-      
       <div class="login-form-container">
         <div class="login-form">
           <h2 class="form-title">사용자 인증</h2>
@@ -505,13 +503,18 @@
               </div>
             </div>
             
-            <button class="btn-auth" id="btnAuthenticate">
+            <button class="btn-auth" id="btnAuthenticate" disabled>
               <span class="btn-text">인증 및 연결</span>
               <div class="btn-arrow">→</div>
             </button>
           </div>
-      
-          <!-- 상태 메시지 영역 -->
+  
+          <!-- 에러 메시지 영역 (누락되었던 부분) -->
+          <div id="authError" class="auth-error hidden">
+            등록되지 않은 번호입니다. 사용자 등록을 먼저 진행해주세요.
+          </div>
+  
+          <!-- 상태 메시지 영역 (누락되었던 부분) -->
           <div id="authStatus" class="auth-status hidden">
             <div class="status-content">
               <div class="status-icon">⏳</div>
@@ -519,8 +522,8 @@
             </div>
           </div>
         </div>
-      
-        <!-- 사용자 등록 링크 (수정된 설명) -->
+  
+        <!-- 사용자 등록 링크 -->
         <div class="register-section">
           <div class="register-divider">
             <span>또는</span>
