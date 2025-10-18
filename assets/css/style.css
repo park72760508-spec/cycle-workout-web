@@ -3132,3 +3132,35 @@ button[aria-disabled="true"] {
     color: #94a3b8;
   }
 }
+
+
+/* style.css에 추가할 loading 상태 스타일 */
+
+/* 로딩 상태 스타일 */
+.auth-status.loading {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  animation: loadingPulse 1.5s ease-in-out infinite;
+}
+
+.auth-status.loading .status-text {
+  color: #93c5fd;
+}
+
+.auth-status.loading .status-icon {
+  animation: loadingSpin 1.5s linear infinite;
+}
+
+@keyframes loadingPulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes loadingSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
