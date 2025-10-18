@@ -21,9 +21,9 @@ let __pmPrev = {
   lastRealTime: null,
   sampleCount: 0,
   validSamples: 0,
-  recentCadences: []  // 최근 케이던스 값들 저장
+  recentCadences: [],
+  consecutiveFailures: 0  // 연속 실패 카운트 추가
 };
-
 
 window.liveData = window.liveData || { 
   power: 0, 
@@ -311,7 +311,6 @@ async function connectHeartRate() {
 // 파워미터 측정 알림
 // ⚡ 파워미터 데이터 처리 (cadence 보강)
 // 2. handlePowerMeterData 함수를 다음으로 완전히 교체
-// 2. handlePowerMeterData 함수를 다음으로 완전히 교체
 function handlePowerMeterData(e) {
   const dv = e.target.value instanceof DataView ? e.target.value : new DataView(e.target.value.buffer || e.target.value);
   let offset = 0;
@@ -338,16 +337,17 @@ function handlePowerMeterData(e) {
     // 첫 번째 데이터이거나 10초 이상 경과한 경우 초기화
     if (__pmPrev.revs === null || __pmPrev.time1024 === null || 
         (currentTime - (__pmPrev.lastRealTime || 0)) > 10000) {
-      console.log(`🔄 Initializing crank data tracking (sample #${__pmPrev.sampleCount})`);
+      console.log(`🔄 Initializing shimano crank data tracking (sample #${__pmPrev.sampleCount})`);
       __pmPrev.revs = crankRevs;
       __pmPrev.time1024 = crankTime;
       __pmPrev.lastRealTime = currentTime;
       __pmPrev.validSamples = 0;
       __pmPrev.recentCadences = [];
+      __pmPrev.consecutiveFailures = 0;
       return;
     }
 
-    // 실시간 기준으로만 케이던스 계산 (BLE 타임스탬프 무시)
+    // 실시간 기준으로만 케이던스 계산 (최소 2초 간격)
     const realTimeDiff = currentTime - __pmPrev.lastRealTime;
     
     // 데이터 변화 확인
@@ -369,34 +369,45 @@ function handlePowerMeterData(e) {
         window.liveData.cadence = 0;
         updateCadenceUI(0);
         __pmPrev.recentCadences = [];
+        __pmPrev.consecutiveFailures = 0;
       }
       return;
     }
     
-    // 실시간 기준으로만 케이던스 계산
-    if (revDiff > 0 && realTimeDiff > 500 && realTimeDiff < 10000) { // 0.5초~10초 사이
+    // 시마노 전용: 최소 2초 간격으로만 케이던스 계산
+    if (revDiff > 0 && realTimeDiff >= 2000 && realTimeDiff < 10000) {
       const realTimeInSeconds = realTimeDiff / 1000;
-      let cadence = (revDiff / realTimeInSeconds) * 60; // RPM
       
-      console.log(`⚙️ Real-time calculation - ${revDiff} revs in ${realTimeInSeconds.toFixed(1)}s = ${cadence.toFixed(1)} RPM`);
+      // 시마노 파워미터 특성: 회전수가 1/4 단위일 가능성 고려
+      let adjustedRevDiff = revDiff;
       
-      // 극단적 값 필터링 (30-120 RPM 범위)
-      if (cadence >= 30 && cadence <= 120) {
-        // 최근 값들과 비교하여 급격한 변화 확인
+      // 비정상적으로 높은 회전수 차이는 단위 문제일 가능성이 높음
+      if (revDiff > 50) {
+        adjustedRevDiff = revDiff / 4; // 1/4 회전 단위로 조정
+        console.log(`🔧 Shimano adjustment - Original: ${revDiff}, Adjusted: ${adjustedRevDiff}`);
+      }
+      
+      let cadence = (adjustedRevDiff / realTimeInSeconds) * 60; // RPM
+      
+      console.log(`⚙️ Shimano calculation - ${adjustedRevDiff} revs in ${realTimeInSeconds.toFixed(1)}s = ${cadence.toFixed(1)} RPM`);
+      
+      // 현실적인 케이던스 범위 (40-140 RPM)
+      if (cadence >= 40 && cadence <= 140) {
+        // 스무딩: 최근 3개 값의 평균
         __pmPrev.recentCadences.push(cadence);
-        if (__pmPrev.recentCadences.length > 5) {
-          __pmPrev.recentCadences.shift(); // 오래된 값 제거
+        if (__pmPrev.recentCadences.length > 3) {
+          __pmPrev.recentCadences.shift();
         }
         
-        // 평균값 계산
         const avgCadence = __pmPrev.recentCadences.reduce((a, b) => a + b, 0) / __pmPrev.recentCadences.length;
         const finalCadence = Math.round(avgCadence);
         
         window.liveData.cadence = finalCadence;
         updateCadenceUI(finalCadence);
         __pmPrev.validSamples++;
+        __pmPrev.consecutiveFailures = 0;
         
-        console.log(`✅ Valid cadence: ${finalCadence} RPM (avg of ${__pmPrev.recentCadences.length} samples)`);
+        console.log(`✅ Valid shimano cadence: ${finalCadence} RPM (avg of ${__pmPrev.recentCadences.length} samples)`);
         
         // 성공적으로 계산된 경우에만 이전 값 업데이트
         __pmPrev.revs = crankRevs;
@@ -404,20 +415,38 @@ function handlePowerMeterData(e) {
         __pmPrev.lastRealTime = currentTime;
         
       } else {
-        console.log(`❌ Cadence out of realistic range: ${cadence.toFixed(1)} RPM`);
+        __pmPrev.consecutiveFailures++;
+        console.log(`❌ Shimano cadence out of range: ${cadence.toFixed(1)} RPM (failures: ${__pmPrev.consecutiveFailures})`);
         
-        // 비정상적인 값이 3번 연속 나오면 초기화
-        if (__pmPrev.validSamples === 0 && __pmPrev.sampleCount > 3) {
-          console.log(`🔄 Resetting due to consecutive invalid samples`);
+        // 10번 연속 실패하면 다른 조정 시도
+        if (__pmPrev.consecutiveFailures >= 10 && revDiff > 20) {
+          adjustedRevDiff = revDiff / 8; // 1/8 회전 단위로 재시도
+          cadence = (adjustedRevDiff / realTimeInSeconds) * 60;
+          console.log(`🔧 Shimano re-adjustment - /8 division: ${cadence.toFixed(1)} RPM`);
+          
+          if (cadence >= 40 && cadence <= 140) {
+            window.liveData.cadence = Math.round(cadence);
+            updateCadenceUI(Math.round(cadence));
+            console.log(`✅ Shimano re-adjusted cadence: ${Math.round(cadence)} RPM`);
+            __pmPrev.consecutiveFailures = 0;
+            __pmPrev.revs = crankRevs;
+            __pmPrev.time1024 = crankTime;
+            __pmPrev.lastRealTime = currentTime;
+          }
+        }
+        
+        // 20번 연속 실패하면 초기화
+        if (__pmPrev.consecutiveFailures >= 20) {
+          console.log(`🔄 Shimano: Resetting due to ${__pmPrev.consecutiveFailures} consecutive failures`);
           __pmPrev.revs = crankRevs;
           __pmPrev.time1024 = crankTime;
           __pmPrev.lastRealTime = currentTime;
-          __pmPrev.sampleCount = 0;
+          __pmPrev.consecutiveFailures = 0;
           __pmPrev.recentCadences = [];
         }
       }
     } else {
-      console.log(`❌ Invalid timing - RevDiff: ${revDiff}, RealTimeDiff: ${realTimeDiff}ms`);
+      console.log(`❌ Shimano: Invalid timing - RevDiff: ${revDiff}, RealTimeDiff: ${realTimeDiff}ms (need ≥2s)`);
     }
     
   } else {
