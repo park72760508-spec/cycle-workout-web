@@ -146,92 +146,172 @@ window.showScreen = window.showScreen || function (id) {
 // ──────────────────────────────────────────────────────────
 // 1) Smart Trainer (FTMS → CPS 폴백)
 // ──────────────────────────────────────────────────────────
-// 3) 스마트 트레이너 (예: FTMS)
-window.connectTrainer = async function connectTrainer() {
+async function connectTrainer() {
   try {
-    console.log("[BLE] Trainer: requestDevice 시작");
-    // ✨ 여기서는 절대 await 금지!
-    const devicePromise = navigator.bluetooth.requestDevice({
-      filters: [{ services: [0x1826 /* Fitness Machine */] }]
+    showConnectionStatus(true);
+
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [
+        { services: ["fitness_machine"] },
+        { services: ["cycling_power"] },
+        { namePrefix: "KICKR" },
+        { namePrefix: "Wahoo" },
+        { namePrefix: "Tacx" },
+      ],
+      optionalServices: ["fitness_machine", "cycling_power", "device_information"],
     });
 
-    // 이후 await
-    const device = await devicePromise;
     const server = await device.gatt.connect();
-    const svc = await server.getPrimaryService(0x1826);
-    // 필요시 특성 구독/쓰기 이어서…
-    window.connectedDevices = window.connectedDevices || {};
-    window.connectedDevices.trainer = { device, server };
-    console.log("[BLE] Trainer 연결 완료");
+
+    let service, characteristic, isFTMS = false;
+    try {
+      service = await server.getPrimaryService("fitness_machine");
+      characteristic = await service.getCharacteristic("indoor_bike_data");
+      isFTMS = true;
+    } catch {
+      service = await server.getPrimaryService("cycling_power");
+      characteristic = await service.getCharacteristic("cycling_power_measurement");
+    }
+
+    await characteristic.startNotifications(); // ✅ 이후에 목록 갱신
+    characteristic.addEventListener("characteristicvaluechanged",
+      isFTMS ? handleTrainerData : handlePowerMeterData
+    );
+
+    if (isFTMS) {
+      connectedDevices.trainer = { name: device.name || "Smart Trainer", device, server, characteristic };
+    } else {
+      connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic };
+    }
+
+    device.addEventListener("gattserverdisconnected", () => {
+      try {
+        if (connectedDevices.trainer?.device === device) connectedDevices.trainer = null;
+        if (connectedDevices.powerMeter?.device === device) connectedDevices.powerMeter = null;
+        updateDevicesList();
+      } catch (e) { console.warn(e); }
+    });
+
+    updateDevicesList();
+    showConnectionStatus(false);
+    showToast(`✅ ${device.name || "Trainer"} 연결 성공`);
+   
+     
   } catch (err) {
-    console.error("[BLE] Trainer 연결 오류:", err);
+    showConnectionStatus(false);
+    console.error("트레이너 연결 오류:", err);
+    showToast("❌ 트레이너 연결 실패: " + err.message);
   }
-};
+}
+
 // ──────────────────────────────────────────────────────────
 // 2) Power Meter (CPS)
 // ──────────────────────────────────────────────────────────
-window.connectPowerMeter = async function connectPowerMeter() {
+async function connectPowerMeter() {
   try {
-    console.log("[BLE] PM: requestDevice 시작");
-    // ✨ 여기서는 절대 await 금지!
-    const devicePromise = navigator.bluetooth.requestDevice({
-      filters: [{ services: [0x1818 /* Cycling Power */] }]
+    showConnectionStatus(true);
+
+    // 우선 서비스 필터, 광고 누락 기기 대응 acceptAllDevices 폴백
+    let device;
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ["cycling_power"] }],
+        optionalServices: ["device_information"],
+      });
+    } catch {
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["cycling_power", "device_information"],
+      });
+    }
+
+    const server = await device.gatt.connect();
+    const service = await (async () => {
+      try { return await server.getPrimaryService("cycling_power"); }
+      catch { return await server.getPrimaryService(0x1818); }
+    })();
+    const ch = await (async () => {
+      try { return await service.getCharacteristic("cycling_power_measurement"); }
+      catch { return await service.getCharacteristic(0x2A63); }
+    })();
+
+    await ch.startNotifications(); // ✅ 이후 갱신
+    ch.addEventListener("characteristicvaluechanged", handlePowerMeterData);
+     
+    trySubscribeCSC(server);
+    connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic: ch };
+
+    device.addEventListener("gattserverdisconnected", () => {
+      if (connectedDevices.powerMeter?.device === device) connectedDevices.powerMeter = null;
+      updateDevicesList();
     });
 
-    // 이후 await
-    const device = await devicePromise;
-    const server = await device.gatt.connect();
-    const svc = await server.getPrimaryService(0x1818); // CPS
-    const meas = await svc.getCharacteristic(0x2A63);   // Cycling Power Measurement
+    updateDevicesList();
+    showConnectionStatus(false);
+    showToast(`✅ ${device.name || "Power Meter"} 연결 성공`);
+    
 
-    await meas.startNotifications();
-    meas.addEventListener('characteristicvaluechanged', handlePowerMeterData);
-
-    window.connectedDevices = window.connectedDevices || {};
-    window.connectedDevices.powerMeter = { device, server, meas };
-    console.log("[BLE] PM 연결 완료");
+     
   } catch (err) {
-    console.error("[BLE] PM 연결 오류:", err);
+    showConnectionStatus(false);
+    console.error("파워미터 연결 오류:", err);
+    showToast("❌ 파워미터 연결 실패: " + err.message);
   }
-};
+}
 
 // ──────────────────────────────────────────────────────────
 // 3) Heart Rate (HRS)
 // ──────────────────────────────────────────────────────────
-// 1) 심박계
-window.connectHeartRate = async function connectHeartRate() {
+async function connectHeartRate() {
   try {
-    console.log("[BLE] HR: requestDevice 시작");
-    // ✨ 여기서는 절대 await 금지! (user-gesture 유지)
-    const devicePromise = navigator.bluetooth.requestDevice({
-      filters: [{ services: ['heart_rate'] }]
-    });
+    showConnectionStatus(true);
 
-    // 이후부터는 await 가능
-    const device = await devicePromise;
+    let device;
+    try {
+      // 기본적으로 heart_rate 서비스를 광고하는 기기 우선
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ["heart_rate"] }],
+        optionalServices: ["heart_rate", "device_information"],
+      });
+    } catch {
+      // 광고에 heart_rate UUID가 없는 기기 (가민, 폴라 등) 대응
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["heart_rate", "device_information"],
+      });
+    }
+
     const server = await device.gatt.connect();
-    const service = await server.getPrimaryService('heart_rate');
-    const ch = await service.getCharacteristic('heart_rate_measurement');
+    const service = await server.getPrimaryService("heart_rate");
+    const ch = await service.getCharacteristic("heart_rate_measurement");
 
     await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged', e => {
-      const dv = e.target.value;
-      const flags = dv.getUint8(0);
-      let offset = 1;
-      let hr;
-      if (flags & 0x01) { hr = dv.getUint16(offset, true); offset += 2; }
-      else { hr = dv.getUint8(offset); offset += 1; }
-      window.liveData.heartRate = hr || 0;
-      if (typeof window.updateTrainingDisplay === 'function') window.updateTrainingDisplay();
+    ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
+
+    connectedDevices.heartRate = { 
+      name: device.name || "Heart Rate", 
+      device, 
+      server, 
+      characteristic: ch 
+    };
+
+    device.addEventListener("gattserverdisconnected", () => {
+      if (connectedDevices.heartRate?.device === device) {
+        connectedDevices.heartRate = null;
+      }
+      updateDevicesList();
     });
 
-    window.connectedDevices = window.connectedDevices || {};
-    window.connectedDevices.heartRate = { device, server, ch };
-    console.log("[BLE] HR 연결 완료");
+    updateDevicesList();
+    showConnectionStatus(false);
+    showToast(`✅ ${device.name || "HR"} 연결 성공`);
+    
   } catch (err) {
-    console.error("[BLE] HR 연결 오류:", err);
+    showConnectionStatus(false);
+    console.error("심박계 연결 오류:", err);
+    showToast("❌ 심박계 연결 실패: " + err.message);
   }
-};
+}
 
 
 // ──────────────────────────────────────────────────────────
