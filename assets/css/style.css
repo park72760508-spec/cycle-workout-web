@@ -1939,3 +1939,203 @@ button[aria-disabled="true"] {
 .modal-content {
   touch-action: auto !important;
 }
+
+
+
+/* ========== 파워 달성도 네온 효과 ========== */
+
+/* 키프레임 애니메이션 정의 */
+@keyframes neonPulse {
+  0%, 100% { 
+    box-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor;
+    border-color: currentColor;
+  }
+  50% { 
+    box-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor, 0 0 40px currentColor;
+    border-color: currentColor;
+  }
+}
+
+@keyframes neonFlow {
+  0% { 
+    background-position: 0% 50%;
+  }
+  50% { 
+    background-position: 100% 50%;
+  }
+  100% { 
+    background-position: 0% 50%;
+  }
+}
+
+/* 기본 네온 스타일 */
+.enhanced-metric-panel.neon-active {
+  border: 2px solid;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.enhanced-metric-panel.neon-active::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(45deg, transparent, currentColor, transparent);
+  background-size: 400% 400%;
+  border-radius: 14px;
+  z-index: -1;
+  animation: neonFlow 3s ease-in-out infinite;
+  opacity: 0.3;
+}
+
+/* 달성도별 네온 색상 및 효과 */
+
+/* 낮은 달성도 (< 85%) - 빨간색 네온 */
+.enhanced-metric-panel.achievement-low {
+  color: #ef4444;
+  border-color: #ef4444;
+  animation: neonPulse 2s ease-in-out infinite;
+  box-shadow: 
+    0 0 10px rgba(239, 68, 68, 0.5),
+    0 0 20px rgba(239, 68, 68, 0.3),
+    0 0 30px rgba(239, 68, 68, 0.1);
+}
+
+.enhanced-metric-panel.achievement-low::before {
+  background: linear-gradient(45deg, 
+    transparent, 
+    rgba(239, 68, 68, 0.6), 
+    rgba(220, 38, 38, 0.4), 
+    transparent
+  );
+  background-size: 400% 400%;
+}
+
+/* 좋은 달성도 (85-115%) - 초록색 네온 */
+.enhanced-metric-panel.achievement-good {
+  color: #10b981;
+  border-color: #10b981;
+  animation: neonPulse 1.5s ease-in-out infinite;
+  box-shadow: 
+    0 0 15px rgba(16, 185, 129, 0.6),
+    0 0 25px rgba(16, 185, 129, 0.4),
+    0 0 35px rgba(16, 185, 129, 0.2);
+}
+
+.enhanced-metric-panel.achievement-good::before {
+  background: linear-gradient(45deg, 
+    transparent, 
+    rgba(16, 185, 129, 0.7), 
+    rgba(5, 150, 105, 0.5), 
+    transparent
+  );
+  background-size: 400% 400%;
+}
+
+/* 높은 달성도 (115-130%) - 주황색 네온 */
+.enhanced-metric-panel.achievement-high {
+  color: #f59e0b;
+  border-color: #f59e0b;
+  animation: neonPulse 1.2s ease-in-out infinite;
+  box-shadow: 
+    0 0 12px rgba(245, 158, 11, 0.6),
+    0 0 22px rgba(245, 158, 11, 0.4),
+    0 0 32px rgba(245, 158, 11, 0.2);
+}
+
+.enhanced-metric-panel.achievement-high::before {
+  background: linear-gradient(45deg, 
+    transparent, 
+    rgba(245, 158, 11, 0.7), 
+    rgba(217, 119, 6, 0.5), 
+    transparent
+  );
+  background-size: 400% 400%;
+}
+
+/* 과도한 달성도 (> 130%) - 보라색 네온 */
+.enhanced-metric-panel.achievement-over {
+  color: #a855f7;
+  border-color: #a855f7;
+  animation: neonPulse 1s ease-in-out infinite;
+  box-shadow: 
+    0 0 20px rgba(168, 85, 247, 0.7),
+    0 0 30px rgba(168, 85, 247, 0.5),
+    0 0 40px rgba(168, 85, 247, 0.3);
+}
+
+.enhanced-metric-panel.achievement-over::before {
+  background: linear-gradient(45deg, 
+    transparent, 
+    rgba(168, 85, 247, 0.8), 
+    rgba(124, 58, 237, 0.6), 
+    transparent
+  );
+  background-size: 400% 400%;
+}
+
+/* 중앙 파워 패널 특별 효과 */
+.enhanced-center-panel.achievement-good {
+  box-shadow: 
+    0 0 20px rgba(16, 185, 129, 0.4),
+    0 0 40px rgba(16, 185, 129, 0.2),
+    0 0 60px rgba(16, 185, 129, 0.1),
+    inset 0 0 20px rgba(16, 185, 129, 0.1);
+}
+
+.enhanced-center-panel.achievement-over {
+  box-shadow: 
+    0 0 25px rgba(168, 85, 247, 0.5),
+    0 0 50px rgba(168, 85, 247, 0.3),
+    0 0 75px rgba(168, 85, 247, 0.15),
+    inset 0 0 25px rgba(168, 85, 247, 0.1);
+}
+
+/* 파워 값에 따른 텍스트 글로우 효과 */
+.enhanced-current-power-value.achievement-good {
+  text-shadow: 
+    0 0 10px rgba(16, 185, 129, 0.8),
+    0 0 20px rgba(16, 185, 129, 0.4),
+    0 0 30px rgba(16, 185, 129, 0.2);
+}
+
+.enhanced-current-power-value.achievement-high {
+  text-shadow: 
+    0 0 10px rgba(245, 158, 11, 0.8),
+    0 0 20px rgba(245, 158, 11, 0.4),
+    0 0 30px rgba(245, 158, 11, 0.2);
+}
+
+.enhanced-current-power-value.achievement-over {
+  text-shadow: 
+    0 0 15px rgba(168, 85, 247, 0.9),
+    0 0 25px rgba(168, 85, 247, 0.5),
+    0 0 35px rgba(168, 85, 247, 0.3);
+}
+
+/* 모바일 최적화 - 효과 축소 */
+@media (max-width: 768px) {
+  .enhanced-metric-panel.neon-active {
+    animation-duration: 3s; /* 느리게 */
+  }
+  
+  .enhanced-metric-panel.achievement-good,
+  .enhanced-metric-panel.achievement-high,
+  .enhanced-metric-panel.achievement-over,
+  .enhanced-metric-panel.achievement-low {
+    box-shadow: 
+      0 0 8px currentColor,
+      0 0 16px rgba(0,0,0,0.1); /* 단순화 */
+  }
+}
+
+/* 성능 최적화 */
+.enhanced-metric-panel {
+  will-change: box-shadow, border-color;
+  transform: translateZ(0); /* 하드웨어 가속 */
+}
+
