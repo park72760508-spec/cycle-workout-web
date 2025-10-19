@@ -1747,8 +1747,7 @@ window.testNeonEffect = function(achievementPercent) {
    const centerPanel = document.querySelector(
      '.enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display'
    );
-   const currentPowerEl = document.getElementById('currentPowerValue');
-   
+     
    // 1) 모든 패널/파워 텍스트에서 이전 효과 제거
    document.querySelectorAll('.enhanced-metric-panel').forEach(panel => {
      panel.classList.remove(
