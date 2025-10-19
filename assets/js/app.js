@@ -1143,48 +1143,60 @@ window.updateTrainingDisplay = function () {
     else powerDisplay.classList.remove("active");
   }
 
-  // *** 네온 효과를 위한 달성도 계산 및 클래스 적용 ***
-  const targetPower = window.liveData?.targetPower || 200;
-  const segmentAvgElement = safeGetElement("avgSegmentPowerValue");
-  const segmentAvgPower = segmentAvgElement ? parseInt(segmentAvgElement.textContent) || 0 : 0;
-  
-  // 달성도 계산 (세그먼트 평균 파워 기준)
-  const achievement = targetPower > 0 ? (segmentAvgPower / targetPower) : 0;
-  
-  // 모든 패널에서 이전 달성도 클래스 제거
-  const panels = document.querySelectorAll('.enhanced-metric-panel');
-  panels.forEach(panel => {
-    panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
-  });
-  
-  // 현재 파워 값에서도 달성도 클래스 제거
-  const currentPowerEl = safeGetElement("currentPowerValue");
-  if (currentPowerEl) {
-    currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
-  }
-  
-  // 달성도에 따른 클래스 적용
-let achievementClass = '';
-if (achievement < 0.85) {
-  achievementClass = 'achievement-low';
-} else if (achievement >= 0.85 && achievement <= 1.15) {  // 범위 확장
-  achievementClass = 'achievement-good';
-} else if (achievement > 1.15 && achievement <= 1.30) {   // 범위 수정
-  achievementClass = 'achievement-high';
-} else if (achievement > 1.30) {                         // 조건 수정
-  achievementClass = 'achievement-over';
-}
-  
-  // 세그먼트 평균이 있을 때만 네온 효과 적용
-   // 세그먼트 평균이 있을 때 특정 패널들에만 네온 효과 적용
+   // *** 네온 효과를 위한 달성도 계산 및 클래스 적용 ***
+   const targetPower = window.liveData?.targetPower || 200;
+   const segmentAvgElement = safeGetElement("avgSegmentPowerValue");
+   const segmentAvgPower = segmentAvgElement ? parseInt(segmentAvgElement.textContent) || 0 : 0;
+   
+   // 달성도 계산 (세그먼트 평균 파워 기준)
+   const achievement = targetPower > 0 ? (segmentAvgPower / targetPower) : 0;
+   
+   // 모든 패널에서 이전 달성도 클래스 제거
+   const panels = document.querySelectorAll('.enhanced-metric-panel');
+   panels.forEach(panel => {
+     panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
+   });
+   
+   // 현재 파워 값에서도 달성도 클래스 제거
+   const currentPowerEl = safeGetElement("currentPowerValue");
+   if (currentPowerEl) {
+     currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+   }
+   
+   // 달성도에 따른 클래스 적용 (범위 수정)
+   let achievementClass = '';
+   if (achievement < 0.85) {
+     achievementClass = 'achievement-low';
+   } else if (achievement >= 0.85 && achievement <= 1.15) {  // 범위 확장
+     achievementClass = 'achievement-good';
+   } else if (achievement > 1.15 && achievement <= 1.30) {   // 범위 수정
+     achievementClass = 'achievement-high';
+   } else if (achievement > 1.30) {                         // 조건 수정
+     achievementClass = 'achievement-over';
+   }
+   
+   // 세그먼트 평균이 있을 때 파워 관련 패널들에만 네온 효과 적용
    if (segmentAvgPower > 0 && achievementClass) {
-     // 현재 파워와 세그먼트 평균 파워 블록에만 네온 효과 적용
-     const powerPanels = document.querySelectorAll(
-       '.enhanced-current-power-section, .enhanced-target-power-section, .enhanced-segment-avg-power'
-     );
-     powerPanels.forEach(panel => {
-       panel.classList.add('neon-active', achievementClass);
+     // 실제 존재하는 요소들을 직접 선택
+     const powerElements = [
+       document.querySelector('.enhanced-current-power-section'),      // 현재 파워 섹션
+       document.querySelector('.enhanced-target-power-section'),       // 목표 파워 섹션  
+       document.querySelector('.enhanced-segment-avg-power'),          // 세그먼트 평균 파워 섹션
+       safeGetElement("currentPowerValue")                            // 현재 파워 값 요소
+     ].filter(el => el !== null); // null인 요소 제거
+     
+     console.log(`네온 효과 적용: ${achievementClass}, 대상 요소 수: ${powerElements.length}`);
+     
+     powerElements.forEach(element => {
+       element.classList.add('neon-active', achievementClass);
      });
+     
+     // 현재 파워 값에도 글로우 효과 적용 (good 이상일 때만)
+     if (currentPowerEl && (achievementClass === 'achievement-good' || 
+                           achievementClass === 'achievement-high' || 
+                           achievementClass === 'achievement-over')) {
+       currentPowerEl.classList.add(achievementClass);
+     }
    }
 };
 
