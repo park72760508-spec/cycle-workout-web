@@ -250,19 +250,7 @@ function startWithCountdown(sec = 5) {
   }, 1000);
 }
 
-// 훈련화면의 건너뛰기에서 활용 >>> 새 세그먼트의 누적 시작 시각(초) 구하기
-function getCumulativeStartSec(index) {
-  const w = window.currentWorkout;
-  if (!w || !Array.isArray(w.segments)) return 0;
 
-  let acc = 0;
-  for (let i = 0; i < index; i++) {
-    const seg = w.segments[i];
-    const dur = segDurationSec(seg); // 이미 파일 내에 존재하는 함수 사용
-    acc += dur;
-  }
-  return acc;
-}
 
 
 // 카운트다운 강제 정지 함수
@@ -308,7 +296,9 @@ function skipCurrentSegment() {
       const n = parseFloat(avgEl.textContent);
       if (!Number.isNaN(n)) avgW_now = n;
     }
-    finalizeSegmentCompletion(cur, avgW_now);
+     
+       const cur = window.trainingState?.segIndex || 0;
+      finalizeSegmentCompletion(cur, avgW_now);
 
      
     // 다음 세그먼트로 이동
@@ -319,7 +309,10 @@ function skipCurrentSegment() {
        
       // 🔵 핵심: 전체 경과시간을 '새 세그먼트 시작 시각'으로 점프
       const jumpTo = getCumulativeStartSec(newIndex);
-      window.trainingState.elapsedSec = jumpTo;
+      // window.trainingState.elapsedSec = jumpTo;  // ❌ 이건 이제 비추천
+      window.setElapsedSecSafely?.(jumpTo);          // ✅ startMs까지 보정
+
+       
       // (참고) 그룹 타임라인을 쓰는 경우 start time을 가진 객체가 따로 있으면 그것도 갱신
       if (window.trainingSession && window.trainingSession.startTime) {
         // startTime을 과거로 재조정해서 now-startTime ≈ jumpTo 가 되도록 보정할 수도 있음
@@ -382,17 +375,33 @@ const trainingMetrics = {
   count: 0            // 표본 개수(초 단위)
 };
 
-
-// 세그먼트 누적 시작초
+// 훈련화면의 건너뛰기에서 활용 >>> 새 세그먼트의 누적 시작 시각(초) 구하기
 function getCumulativeStartSec(index) {
   const w = window.currentWorkout;
   if (!w || !Array.isArray(w.segments)) return 0;
+
   let acc = 0;
   for (let i = 0; i < index; i++) {
-    acc += segDurationSec(w.segments[i]); // 기존 함수 그대로 사용
+    const seg = w.segments[i];
+    const dur = segDurationSec(seg); // 이미 파일 내에 존재하는 함수 사용
+    acc += dur;
   }
   return acc;
 }
+
+
+// 세그먼트 누적 시작초
+// function getCumulativeStartSec(index) {
+  // const w = window.currentWorkout;
+  // if (!w || !Array.isArray(w.segments)) return 0;
+  // let acc = 0;
+  // for (let i = 0; i < index; i++) {
+    // acc += segDurationSec(w.segments[i]); // 기존 함수 그대로 사용
+  // }
+  // return acc;
+// }
+
+
 
 // 세그먼트 목표 파워(W) 계산
 function getSegmentTargetW(i) {
@@ -554,8 +563,14 @@ function createTimeline(){
   const total = segs.reduce((s, seg)=> s + (seg.duration_sec||0), 0) || 1;
 
   // 누적 종료시각(초)도 계산해두면 편함
-  trainingSession._segEnds = [];
-  let acc = 0;
+  //trainingSession._segEnds = [];
+   
+   // 누적 종료시각(초) 계산
+   const _segEnds = [];
+   let acc = 0;
+   cont.innerHTML = segs.map((seg, i) => {
+     const dur = seg.duration_sec || 0;
+     acc += dur; _segEnds[i] = acc;
 
   cont.innerHTML = segs.map((seg, i)=>{
     const dur = seg.duration_sec || 0;
@@ -1067,20 +1082,36 @@ function startSegmentLoop() {
       return; // 일시정지 중이면 스킵
     }
 
-    // 시간 진행
-    window.trainingState.elapsedSec += 1;
-    window.trainingState.segElapsedSec += 1;
+   // === 시간 진행(벽시계 기반) ===
+   const ts = window.trainingState;
+   const nowMs = Date.now();
+   // 일시정지 누적 반영: pauseAccumMs + (일시정지 중이라면 지금까지 경과)
+   const pausedMs = ts.pauseAccumMs + (ts.pausedAtMs ? (nowMs - ts.pausedAtMs) : 0);
+   // 시작시각/일시정지 보정으로 경과초를 직접 계산
+   const newElapsedSec = Math.floor((nowMs - ts.workoutStartMs - pausedMs) / 1000);
+   
+   // 같은 초에 중복 처리 방지(선택)
+   if (newElapsedSec === ts.elapsedSec) {
+     // 같은 초면 UI만 가볍게 유지하고 빠져도 OK
+     // updateSegmentBarTick?.();
+     return;
+   }
+   ts.elapsedSec = newElapsedSec;
+   
+   // 현재 세그 경과초 = 전체경과초 - 해당 세그 누적시작초
+   const cumStart = getCumulativeStartSec(ts.segIndex);
+   ts.segElapsedSec = Math.max(0, ts.elapsedSec - cumStart);
+   
+   // 이후 로직은 기존과 동일하게 진행 (currentSegIndex/segDur/segRemaining 계산 등)
+   const currentSegIndex = ts.segIndex;
+   const currentSeg = w.segments[currentSegIndex];
+   if (!currentSeg) {
+     console.error('현재 세그먼트가 없습니다. 인덱스:', currentSegIndex);
+     return;
+   }
+   const segDur = segDurationSec(currentSeg);
+   const segRemaining = segDur - ts.segElapsedSec;
 
-    const currentSegIndex = window.trainingState.segIndex;
-    const currentSeg = w.segments[currentSegIndex];
-    
-    if (!currentSeg) {
-      console.error('현재 세그먼트가 없습니다. 인덱스:', currentSegIndex);
-      return;
-    }
-
-    const segDur = segDurationSec(currentSeg);
-    const segRemaining = segDur - window.trainingState.segElapsedSec;
     
     // 디버깅 로그 (5초 주변에서만 출력)
     if (segRemaining <= 7 && segRemaining >= 3) {
@@ -1126,10 +1157,9 @@ function startSegmentLoop() {
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
    if (window.trainingState.segElapsedSec >= segDur) {
-     // 0초 벨소리(카운트다운) 진행 중이면 1초 더 기다림
-     if (segmentCountdownActive) {
-       console.log('카운트다운 진행 중 - 세그먼트 전환 1초 지연');
-       return; // 이번 루프는 스킵하고 다음 루프에서 전환
+     // (변경) 소리와 전환을 분리: 전환은 즉시, 소리는 비동기로 마무리
+     if (segmentCountdownActive && typeof stopSegmentCountdown === "function") {
+       setTimeout(() => { try { stopSegmentCountdown(); } catch(_){} }, 750);
      }
    
      // ✅ [완료처리 삽입 지점] 현재 세그먼트의 달성도 색 확정
@@ -1191,31 +1221,33 @@ function stopSegmentLoop() {
 
 // 일시정지 시에도 카운트다운 정지
 function setPaused(isPaused) {
-  window.trainingState.paused = !!isPaused;
+  const ts = window.trainingState;
+  const wantPause = !!isPaused;
+  ts.paused = wantPause;
 
-   // 일시정지 시작 ====> 시간 불일치 해소를 위한 보강
-   if (!ts.paused && wantPause) { ts.paused = true; ts.pausedAtMs = Date.now(); }
-   // 일시정지 해제
-   if (ts.paused && !wantPause) { ts.paused = false; ts.pauseAccumMs += (Date.now() - (ts.pausedAtMs || Date.now())); ts.pausedAtMs = null; }
-   
-  // 일시정지 시 카운트다운 정지
-  if (isPaused && segmentCountdownActive) {
-    stopSegmentCountdown();
+  if (wantPause) {
+    // 일시정지 시작
+    if (!ts.pausedAtMs) ts.pausedAtMs = Date.now();
+  } else {
+    // 일시정지 해제 → 누적 일시정지 시간 더해주기
+    if (ts.pausedAtMs) {
+      ts.pauseAccumMs += (Date.now() - ts.pausedAtMs);
+      ts.pausedAtMs = null;
+    }
   }
 
-  // 향상된 버튼 상태 업데이트
+  // 카운트다운 정지
+  if (wantPause && segmentCountdownActive) stopSegmentCountdown();
+
   const btn = safeGetElement("btnTogglePause");
   if (btn) {
     btn.classList.remove("pause", "play");
-    btn.classList.add(window.trainingState.paused ? "play" : "pause");
-    btn.setAttribute("aria-label", window.trainingState.paused ? "재생" : "일시정지");
+    btn.classList.add(wantPause ? "play" : "pause");
+    btn.setAttribute("aria-label", wantPause ? "재생" : "일시정지");
   }
-
-  // 토스트 표시
-  if (typeof showToast === "function") {
-    showToast(window.trainingState.paused ? "일시정지됨" : "재개됨");
-  }
+  showToast?.(wantPause ? "일시정지됨" : "재개됨");
 }
+
 
 // 중복 선언 방지
 if (!window.showScreen) {
