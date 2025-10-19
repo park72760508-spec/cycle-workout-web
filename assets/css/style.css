@@ -2302,3 +2302,45 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
+
+/* ── 완료 세그먼트 색상: 컨테이너(.timeline-segment)에 클래스 부여 ── */
+/* 기준: .timeline-segment.done-* 이 붙으면 내부 .progress-fill 색과 100% 채움 */
+.timeline-segment[class*="done-"] .progress-fill {
+  width: 100% !important;  /* 끝까지 채우기 */
+}
+
+/* 1. 115% 이상 : 민트색 */
+.timeline-segment.done-mint .progress-fill {
+  background: #10E0C1 !important; /* 민트 */
+}
+
+/* 2. 105% 이상 ~ 115% 미만 : 녹색 */
+.timeline-segment.done-green .progress-fill {
+  background: #22C55E !important; /* 녹색 */
+}
+
+/* 3. 95% 이상 ~ 105% 미만 : 연두색 */
+.timeline-segment.done-lime .progress-fill {
+  background: #A3E635 !important; /* 연두 */
+}
+
+/* 4. 85% 이상 ~ 95% 미만 : 노랑색 */
+.timeline-segment.done-yellow .progress-fill {
+  background: #FACC15 !important; /* 노랑 */
+}
+
+/* 5. 75% 이상 ~ 85% 미만 : 주황색 */
+.timeline-segment.done-orange .progress-fill {
+  background: #F59E0B !important; /* 주황 */
+}
+
+/* 6. 75% 미만 : 빨강색 */
+.timeline-segment.done-red .progress-fill {
+  background: #EF4444 !important; /* 빨강 */
+}
+
+/* 휴식/쿨다운: 회색(디폴트) */
+.timeline-segment.done-gray .progress-fill {
+  background: #9CA3AF !important; /* 회색 */
+}
+
