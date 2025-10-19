@@ -1025,6 +1025,23 @@ function startSegmentLoop() {
   window.trainingState.segElapsedSec = 0;
   window.trainingState.paused = false;
 
+  // ⬇️⬇️⬇️ 여기 "초기 상태 설정" 바로 아래에 추가 ⬇️⬇️⬇️
+  // — 벽시계 기반 타이밍 상태(추가) —
+  window.trainingState.workoutStartMs = Date.now(); // 훈련 시작 시각(ms)
+  window.trainingState.pauseAccumMs   = 0;          // 일시정지 누적(ms)
+  window.trainingState.pausedAtMs     = null;       // 일시정지 시작 시각(ms)
+
+  // 전체 경과초를 강제로 세팅할 때(예: 스킵 점프) 사용할 헬퍼
+  window.setElapsedSecSafely = function(newSec) {
+    const ts = window.trainingState;
+    ts.elapsedSec = Math.max(0, Math.floor(newSec));
+    // 다음 틱의 벽시계 계산과 일치하도록 startMs 재보정
+    ts.workoutStartMs = Date.now() - (ts.elapsedSec * 1000 + ts.pauseAccumMs);
+  };
+  // ⬆️⬆️⬆️ 여기까지 추가 ⬆️⬆️⬆️
+
+
+   
   // 세그먼트별 카운트다운 트리거 상태 초기화
   countdownTriggered = Array(w.segments.length).fill(false);
 
@@ -1176,6 +1193,11 @@ function stopSegmentLoop() {
 function setPaused(isPaused) {
   window.trainingState.paused = !!isPaused;
 
+   // 일시정지 시작 ====> 시간 불일치 해소를 위한 보강
+   if (!ts.paused && wantPause) { ts.paused = true; ts.pausedAtMs = Date.now(); }
+   // 일시정지 해제
+   if (ts.paused && !wantPause) { ts.paused = false; ts.pauseAccumMs += (Date.now() - (ts.pausedAtMs || Date.now())); ts.pausedAtMs = null; }
+   
   // 일시정지 시 카운트다운 정지
   if (isPaused && segmentCountdownActive) {
     stopSegmentCountdown();
