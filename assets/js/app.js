@@ -1137,67 +1137,33 @@ window.updateTrainingDisplay = function () {
    }
 
   // 중앙 디스플레이에 펄스 애니메이션 추가
-  const powerDisplay = document.querySelector("#trainingScreen .power-display");
-  if (powerDisplay) {
-    if (currentPower > 0) powerDisplay.classList.add("active");
-    else powerDisplay.classList.remove("active");
-  }
+   // === 중앙 패널 네온 클래스 갱신 ===
+   (function updateCenterPanelNeon(){
+     const panel = document.querySelector('#trainingScreen .power-display'); // 중앙 컨테이너
+     if (!panel) return;
+   
+     // 현재 파워/타깃
+     const cur = Number(window.liveData?.power) || 0;
+     const tgt = Number(window.liveData?.targetPower) || 0;
+   
+     // 이전 효과 제거
+     panel.classList.remove('neon-active', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+   
+     if (tgt <= 0 || cur <= 0) return; // 목표/현재 값 없으면 네온 미적용
+   
+     // 달성도 구간 선택
+     let ach = 'achievement-good';
+     const ratio = cur / tgt;
+     if (ratio < 0.9)       ach = 'achievement-low';
+     else if (ratio <= 1.15) ach = 'achievement-good';
+     else if (ratio <= 1.30) ach = 'achievement-high';
+     else                    ach = 'achievement-over';
+   
+     // 오직 중앙 컨테이너에만 부여
+     panel.classList.add('neon-active', ach);
+   })();
 
-   // *** 네온 효과를 위한 달성도 계산 및 클래스 적용 ***
-   const targetPower = window.liveData?.targetPower || 200;
-   const segmentAvgElement = safeGetElement("avgSegmentPowerValue");
-   const segmentAvgPower = segmentAvgElement ? parseInt(segmentAvgElement.textContent) || 0 : 0;
    
-   // 달성도 계산 (세그먼트 평균 파워 기준)
-   const achievement = targetPower > 0 ? (segmentAvgPower / targetPower) : 0;
-   
-   // 모든 패널에서 이전 달성도 클래스 제거
-   const panels = document.querySelectorAll('.enhanced-metric-panel');
-   panels.forEach(panel => {
-     panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
-   });
-   
-   // 현재 파워 값에서도 달성도 클래스 제거
-   const currentPowerEl = safeGetElement("currentPowerValue");
-   if (currentPowerEl) {
-     currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
-   }
-   
-   // 달성도에 따른 클래스 적용 (범위 수정)
-   let achievementClass = '';
-   if (achievement < 0.85) {
-     achievementClass = 'achievement-low';
-   } else if (achievement >= 0.85 && achievement <= 1.15) {  // 범위 확장
-     achievementClass = 'achievement-good';
-   } else if (achievement > 1.15 && achievement <= 1.30) {   // 범위 수정
-     achievementClass = 'achievement-high';
-   } else if (achievement > 1.30) {                         // 조건 수정
-     achievementClass = 'achievement-over';
-   }
-   
-   // 세그먼트 평균이 있을 때 파워 관련 패널들에만 네온 효과 적용
-   if (segmentAvgPower > 0 && achievementClass) {
-     // 실제 존재하는 요소들을 직접 선택
-     const powerElements = [
-       document.querySelector('.enhanced-current-power-section'),      // 현재 파워 섹션
-       document.querySelector('.enhanced-target-power-section'),       // 목표 파워 섹션  
-       document.querySelector('.enhanced-segment-avg-power'),          // 세그먼트 평균 파워 섹션
-       safeGetElement("currentPowerValue")                            // 현재 파워 값 요소
-     ].filter(el => el !== null); // null인 요소 제거
-     
-     console.log(`네온 효과 적용: ${achievementClass}, 대상 요소 수: ${powerElements.length}`);
-     
-     powerElements.forEach(element => {
-       element.classList.add('neon-active', achievementClass);
-     });
-     
-     // 현재 파워 값에도 글로우 효과 적용 (good 이상일 때만)
-     if (currentPowerEl && (achievementClass === 'achievement-good' || 
-                           achievementClass === 'achievement-high' || 
-                           achievementClass === 'achievement-over')) {
-       currentPowerEl.classList.add(achievementClass);
-     }
-   }
 };
 
 // *** 시작 시 복구 시도 및 오류 처리 강화 ***
