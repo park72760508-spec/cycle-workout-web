@@ -1139,7 +1139,9 @@ window.updateTrainingDisplay = function () {
   // 중앙 디스플레이에 펄스 애니메이션 추가
    // === 중앙 패널 네온 클래스 갱신 ===
    (function updateCenterPanelNeon(){
-     const panel = document.querySelector('#trainingScreen .power-display'); // 중앙 컨테이너
+           const panel = document.querySelector(
+        '.enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display'
+      );
      if (!panel) return;
    
      // 현재 파워/타깃
@@ -1345,7 +1347,15 @@ function renderUserInfo() {
     const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
 
     box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
-    
+
+   // (추가) 사용자 판넬 네온 갱신 호출
+   const _wkg = Number(wkg);
+   if (Number.isFinite(_wkg)) {
+     updateUserPanelNeonByWkg(_wkg);
+   } else {
+     updateUserPanelNeonByWkg(0); // 값 없을 때는 네온 제거만
+   }
+         
   } catch (error) {
     console.error('Error in renderUserInfo:', error);
   }
