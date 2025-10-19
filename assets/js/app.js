@@ -46,6 +46,9 @@
     };
   }
 
+window.userPanelNeonMode = 'static';  // 'static' 고정 (동적 계산 끔)
+
+   
   console.log('Global variables initialized safely');
 })();
 
@@ -1169,17 +1172,16 @@ window.updateTrainingDisplay = function () {
 
 
    // 사용자 등급 표기(상급~입문)
-   (function applyWkgNeon() {
-     const power  = Number(window.liveData?.power) || 0;                 // 현재 파워(W)
-     const weight = Number(window.userProfile?.weightKg || window.user?.weightKg) || 0; // 사용자 체중(kg)
-     if (weight > 0) {
-       const wkg = power / weight;
-       updateUserPanelNeonByWkg(wkg);
-     } else {
-       // 체중이 없으면 네온 제거(선택)
-       updateUserPanelNeonByWkg(NaN);
-     }
+   // === 사용자 패널 W/kg 네온 동적 갱신 ===
+   (function applyWkgNeon(){
+     if (window.userPanelNeonMode === 'static') return; // 🔧 정적 모드일 땐 아무것도 하지 않음
+   
+     const power  = Number(window.liveData?.power) || 0;
+     const weight = Number(window.userProfile?.weightKg || window.user?.weightKg) || 0;
+     const wkg = (weight > 0) ? (power / weight) : NaN;
+     updateUserPanelNeonByWkg(wkg);
    })();
+
 
    
    
@@ -1351,17 +1353,17 @@ function renderUserInfo() {
     box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
 
    // (추가) 사용자 판넬 네온 갱신 호출
-   const _wkg = Number(wkg);
-   if (Number.isFinite(_wkg)) {
-     updateUserPanelNeonByWkg(_wkg);
-   } else {
-     updateUserPanelNeonByWkg(0); // 값 없을 때는 네온 제거
-   }
+   const wkgNum = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt) : 0;
+   if (typeof updateUserPanelNeonByWkg === 'function') {
+     updateUserPanelNeonByWkg(wkgNum);  // ← 한 번만 켜두면 유지
          
   } catch (error) {
     console.error('Error in renderUserInfo:', error);
   }
 }
+
+
+// ---------------------------------------------
 
 function togglePause() {
   setPaused(!window.trainingState.paused);
@@ -1742,12 +1744,20 @@ window.testNeonEffect = function(achievementPercent) {
    );
      
    // 1) 모든 패널/파워 텍스트에서 이전 효과 제거
+   //document.querySelectorAll('.enhanced-metric-panel').forEach(panel => {
+     //panel.classList.remove(
+       //'neon-active',
+       //'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
+     //);
+   //});
+
+   // (예시) 패널 전체 순회 루틴 어딘가에 있다면:
    document.querySelectorAll('.enhanced-metric-panel').forEach(panel => {
-     panel.classList.remove(
-       'neon-active',
-       'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
-     );
+     if (panel.id === 'userPanel') return; // 🔧 사용자 패널은 건드리지 않음 (정적 네온 유지)
+     panel.classList.remove('neon-active','achievement-low','achievement-good','achievement-high','achievement-over');
    });
+
+   
    if (currentPowerEl) {
      currentPowerEl.classList.remove(
        'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
@@ -2022,28 +2032,25 @@ window.simulatePowerMeterData = function() {
   }
 };
 
-// W/kg → 네온 등급 클래스 결정 + 패널에 적용
+// W/kg → 네온 등급 클래스 결정 + 사용자 패널에 적용
 function updateUserPanelNeonByWkg(wkg) {
-  const panel = document.querySelector('#userPanel');  // ← 필요시 선택자 교체
+  const panel = document.querySelector('#userPanel');
   if (!panel) return;
 
-  // 기존 효과 제거
-  panel.classList.remove(
-    'neon-active',
-    'wkg-elite', 'wkg-advanced', 'wkg-intermediate', 'wkg-novice', 'wkg-beginner'
-  );
+  // 기존 제거 로직은 유지
+  panel.classList.remove('neon-active','wkg-elite','wkg-advanced','wkg-intermediate','wkg-novice','wkg-beginner');
 
-  if (!Number.isFinite(wkg) || wkg <= 0) return; // 값이 없으면 미적용
+  // 🔧 여기 변경: 값이 없으면 '그냥 아무것도 붙이지 않고' return
+  if (!Number.isFinite(wkg) || wkg <= 0) return;
 
-  // 등급 판정 (요청 기준)
   let tier;
-  if (wkg >= 4.0)      tier = 'wkg-elite';        // 상급: 빨강
-  else if (wkg >= 3.5) tier = 'wkg-advanced';     // 중급: 주황
-  else if (wkg >= 3.0) tier = 'wkg-intermediate'; // 초중급: 보라
-  else if (wkg >= 2.2) tier = 'wkg-novice';       // 초급: 초록
-  else                 tier = 'wkg-beginner';     // 입문: 노랑
+  if (wkg >= 4.0)      tier = 'wkg-elite';
+  else if (wkg >= 3.5) tier = 'wkg-advanced';
+  else if (wkg >= 3.0) tier = 'wkg-intermediate';
+  else if (wkg >= 2.2) tier = 'wkg-novice';
+  else                 tier = 'wkg-beginner';
 
-  // 패널에만 네온 적용
   panel.classList.add('neon-active', tier);
 }
+
 
