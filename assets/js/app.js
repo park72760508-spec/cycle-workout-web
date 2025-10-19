@@ -300,7 +300,17 @@ function skipCurrentSegment() {
     if (countdownTriggered && window.trainingState.segIndex < countdownTriggered.length) {
       countdownTriggered[window.trainingState.segIndex] = true; // 건너뛴 것으로 표시
     }
-    
+
+    // 🔽 현재 세그먼트를 '완료'로 처리
+    let avgW_now = 0;
+    const avgEl = document.getElementById('avgSegmentPowerValue');
+    if (avgEl) {
+      const n = parseFloat(avgEl.textContent);
+      if (!Number.isNaN(n)) avgW_now = n;
+    }
+    finalizeSegmentCompletion(cur, avgW_now);
+
+     
     // 다음 세그먼트로 이동
     const newIndex = Math.min(w.segments.length - 1, (window.trainingState?.segIndex || 0) + 1);
     if (window.trainingState) {
