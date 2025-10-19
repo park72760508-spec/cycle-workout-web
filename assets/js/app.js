@@ -150,27 +150,29 @@ async function startSegmentCountdown(remainingSeconds, nextSegment) {
        playBeep(880, 120, 0.25);
        remain -= 1;
        
-     } else if (remain === 0) {
-       // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
-       num.textContent = "0";
-       console.log('카운트다운 0초 - 강조 소리 재생');
-       
-       playBeep(1500, 700, 0.35, "square").then(() => {
-         console.log('강조 소리 재생 완료');
-       }).catch(err => {
-         console.error('강조 소리 재생 실패:', err);
-       });
-       
-       // 타이머 정리 및 오버레이 닫기
-       clearInterval(segmentCountdownTimer);
-       segmentCountdownTimer = null;
-       
-       setTimeout(() => {
-         overlay.classList.add("hidden");
-         overlay.style.display = "none";
-         segmentCountdownActive = false;
-         console.log('카운트다운 오버레이 닫힘');
-       }, 700);
+      } else if (remain === 0) {
+        // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
+        num.textContent = "0";
+        console.log('카운트다운 0초 - 강조 소리 재생');
+        
+        // 강조 소리 재생
+        playBeep(1500, 700, 0.35, "square").then(() => {
+          console.log('강조 소리 재생 완료');
+        }).catch(err => {
+          console.error('강조 소리 재생 실패:', err);
+        });
+        
+        // 타이머 즉시 정리
+        clearInterval(segmentCountdownTimer);
+        segmentCountdownTimer = null;
+        
+        // 오버레이는 벨소리 시간만큼 지연 후 닫기
+        setTimeout(() => {
+          overlay.classList.add("hidden");
+          overlay.style.display = "none";
+          segmentCountdownActive = false;
+          console.log('카운트다운 완료 - 오버레이 닫힘');
+        }, 800); // 벨소리 재생 시간(700ms) + 여유시간(100ms)
        
      } else {
        // remain < 0일 때 - 안전장치
@@ -949,11 +951,18 @@ function startSegmentLoop() {
     }
 
     // 세그먼트 경계 통과 → 다음 세그먼트로 전환
-    if (window.trainingState.segElapsedSec >= segDur) {
-      console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
-      
-      window.trainingState.segIndex += 1;
-      window.trainingState.segElapsedSec = 0;
+   // 세그먼트 경계 통과 → 다음 세그먼트로 전환
+   if (window.trainingState.segElapsedSec >= segDur) {
+     // 카운트다운이 진행 중이면 1초 더 기다림 (0초 벨소리 완료 대기)
+     if (segmentCountdownActive) {
+       console.log('카운트다운 진행 중 - 세그먼트 전환 1초 지연');
+       return; // 이번 루프는 스킵하고 다음 루프에서 전환
+     }
+     
+     console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
+     
+     window.trainingState.segIndex += 1;
+     window.trainingState.segElapsedSec = 0;
 
       if (window.trainingState.segIndex < w.segments.length) {
         console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
