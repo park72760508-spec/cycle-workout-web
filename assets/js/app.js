@@ -250,6 +250,21 @@ function startWithCountdown(sec = 5) {
   }, 1000);
 }
 
+// 훈련화면의 건너뛰기에서 활용 >>> 새 세그먼트의 누적 시작 시각(초) 구하기
+function getCumulativeStartSec(index) {
+  const w = window.currentWorkout;
+  if (!w || !Array.isArray(w.segments)) return 0;
+
+  let acc = 0;
+  for (let i = 0; i < index; i++) {
+    const seg = w.segments[i];
+    const dur = segDurationSec(seg); // 이미 파일 내에 존재하는 함수 사용
+    acc += dur;
+  }
+  return acc;
+}
+
+
 // 카운트다운 강제 정지 함수
 function stopSegmentCountdown() {
   console.log('카운트다운 강제 정지');
@@ -291,6 +306,16 @@ function skipCurrentSegment() {
     if (window.trainingState) {
       window.trainingState.segIndex = newIndex;
       window.trainingState.segElapsedSec = 0;
+       
+      // 🔵 핵심: 전체 경과시간을 '새 세그먼트 시작 시각'으로 점프
+      const jumpTo = getCumulativeStartSec(newIndex);
+      window.trainingState.elapsedSec = jumpTo;
+      // (참고) 그룹 타임라인을 쓰는 경우 start time을 가진 객체가 따로 있으면 그것도 갱신
+      if (window.trainingSession && window.trainingSession.startTime) {
+        // startTime을 과거로 재조정해서 now-startTime ≈ jumpTo 가 되도록 보정할 수도 있음
+        // 필요 없다면 생략 가능
+      }
+       
     }
     
     if (typeof applySegmentTarget === 'function') {
@@ -299,7 +324,11 @@ function skipCurrentSegment() {
     if (typeof updateTimeUI === 'function') {
       updateTimeUI();
     }
-    
+
+    // 🔵 타임라인 즉시 반영
+    if (typeof updateSegmentBarTick === 'function') updateSegmentBarTick();
+    if (typeof updateTimelineByTime === 'function') updateTimelineByTime();
+     
     console.log(`세그먼트 건너뛰기: ${newIndex + 1}번째 세그먼트로 이동`);
     
     if (typeof showToast === 'function') {
@@ -652,6 +681,12 @@ function updateSegmentBarTick(){
       
       ratio = Math.min(1, Math.max(0, ratio));
       fill.style.width = (ratio * 100) + "%";
+       
+        // 🔵 현재 세그먼트면 파랑색으로 강제
+        if (elapsed > startAt && elapsed < endAt) {
+          fill.style.background = "#2E74E8";
+        }
+       
     }
     startAt = endAt;
   }
