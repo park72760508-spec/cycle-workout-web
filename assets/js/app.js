@@ -585,6 +585,8 @@ function createTimeline(){
       </div>`;
   }).join("");
 }
+}
+
 
 // 훈련 상태 => 세그먼트별 달성도를 시간 기준 달성도(=진행률)로 표현
 // === PATCH: robust timeline updater (no hard dependency on trainingSession) ===
