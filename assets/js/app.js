@@ -1134,10 +1134,13 @@ function startSegmentLoop() {
       // 5s,4s,3s,2s,1s,0s 경계를 '넘었는지' 판정해서 정확히 한 번씩만 울림.
       // ── 카운트다운/벨: 경계(엣지) 기반 트리거 ──
       // ※ 중요: nextSeg를 먼저 같은 스코프에 선언합니다.
-      const nextSeg = (currentSegIndex < w.segments.length - 1) ? w.segments[currentSegIndex + 1] : null;
+      const nextSeg = (currentSegIndex < w.segments.length - 1)
+        ? w.segments[currentSegIndex + 1]
+        : null;
       
-      ts._countdownFired = ts._countdownFired || {};      // 세그먼트별 발화 기록
-      ts._prevRemainMs   = ts._prevRemainMs   || {};      // 세그먼트별 이전 남은 ms
+      ts._countdownFired = ts._countdownFired || {};
+      ts._prevRemainMs   = ts._prevRemainMs   || {};
+      // ... (remainMsPrev/Now 계산, EPS_0_MS 정의, maybeFire 정의, maybeFire(5..0), prevRemain 저장)
       
       const key = String(currentSegIndex);
       
@@ -1151,22 +1154,21 @@ function startSegmentLoop() {
       const EPS_0_MS = 200;
       
       // 유틸: n초 경계를 방금 '지났으면' 발화
-      function maybeFire(n) {
+      function maybeFire(n, nextSegLocal) {
         const fired = ts._countdownFired[key] || {};
         if (fired[n]) return;
       
         const boundary = n * 1000;
         const crossed = (n > 0)
           ? (remainMsPrev > boundary && remainMsNow <= boundary)
-          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS)); // 0초는 200ms 일찍
+          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS));
       
         if (!crossed) return;
       
-        // 오버레이 사용 여부: 5초 경계에서 한 번만 시작
-        if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
-          startSegmentCountdown(5, nextSeg);
+        // 5초 경계에서 오버레이 1회만 시작
+        if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSegLocal) {
+          startSegmentCountdown(5, nextSegLocal);
         } else {
-          // 오버레이가 없거나 4~0 경계는 소리만
           if (n > 0) {
             if (typeof playCountdownBeep === "function") playCountdownBeep(n);
           } else {
@@ -1176,14 +1178,15 @@ function startSegmentLoop() {
       
         ts._countdownFired[key] = { ...(ts._countdownFired[key]||{}), [n]: true };
       }
+
       
       // 5→0 모두 확인
-      maybeFire(5);
-      maybeFire(4);
-      maybeFire(3);
-      maybeFire(2);
-      maybeFire(1);
-      maybeFire(0);
+      maybeFire(5, nextSeg);
+      maybeFire(4, nextSeg);
+      maybeFire(3, nextSeg);
+      maybeFire(2, nextSeg);
+      maybeFire(1, nextSeg);
+      maybeFire(0, nextSeg);
       
       // 다음 틱 비교를 위해 저장
       ts._prevRemainMs[key] = remainMsNow;
