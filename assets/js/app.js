@@ -1125,21 +1125,55 @@ function startSegmentLoop() {
 
     
     // 디버깅 로그 (5초 주변에서만 출력)
-    if (segRemaining <= 7 && segRemaining >= 3) {
-      console.log(`세그먼트 ${currentSegIndex + 1} 종료까지: ${segRemaining}초`);
-    }
-
-    // 세그먼트 종료 5초 전 카운트다운 트리거 (개선된 조건)
-    if (segRemaining <= 5 && segRemaining > 0 && 
-        !countdownTriggered[currentSegIndex] && 
-        currentSegIndex < w.segments.length - 1) {
+     
+      // ── 카운트다운/벨: 경계(엣지) 기반 트리거 ──
+      // 벽시계 기반으로 '이전 남은 ms' → '현재 남은 ms'가
+      // 5s,4s,3s,2s,1s,0s 경계를 '넘었는지' 판정해서 정확히 한 번씩만 울림.
+      ts._countdownFired = ts._countdownFired || {};      // 세그먼트별 발화 기록
+      ts._prevRemainMs   = ts._prevRemainMs   || {};      // 세그먼트별 이전 남은 ms
       
-      // 마지막 세그먼트가 아닐 때만 카운트다운 실행
-      countdownTriggered[currentSegIndex] = true;
-      const nextSegment = w.segments[currentSegIndex + 1];
-      console.log(`세그먼트 ${currentSegIndex + 1} 종료 ${segRemaining}초 전 카운트다운 시작`);
-      startSegmentCountdown(segRemaining, nextSegment);
-    }
+      const key = String(currentSegIndex);
+      // 남은시간(ms) 계산: 세그 끝 시각(ms) - 현재 경과(ms)
+      const totalElapsedMs = (nowMs - ts.workoutStartMs) - (ts.pauseAccumMs + (ts.pausedAtMs ? (nowMs - ts.pausedAtMs) : 0));
+      const segEndMs = (getCumulativeStartSec(currentSegIndex) + segDur) * 1000;
+      const remainMsPrev = ts._prevRemainMs[key] ?? (segDur * 1000);
+      const remainMsNow  = Math.round(segEndMs - (ts.workoutStartMs + totalElapsedMs));
+      
+      // 0초는 조금 이르게(ε) 트리거해서 놓침 방지
+      const EPS_0_MS = 200;
+      
+      // 유틸: n초 경계를 방금 '지났으면' 발화
+      function maybeFire(n) {
+        const fired = ts._countdownFired[key] || {};
+        if (fired[n]) return;
+      
+        const boundary = n * 1000;
+        const crossed = (n > 0)
+          ? (remainMsPrev > boundary && remainMsNow <= boundary)
+          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS)); // 0초만 여유 적용
+      
+        if (crossed) {
+          if (n > 0) {
+            if (typeof playCountdownBeep === "function") playCountdownBeep(n);
+            // showCountdownNumber?.(n); // 5~1 숫자 UI도 표시하고 싶으면 사용
+          } else {
+            if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
+            // showCountdownNumber?.(0); // 0 숫자를 보이려면 사용
+          }
+          ts._countdownFired[key] = { ...(ts._countdownFired[key]||{}), [n]: true };
+        }
+      }
+      
+      // 5→0 모두 확인(한 틱에 여러 경계 통과되어도 누락 없이 발화)
+      maybeFire(5);
+      maybeFire(4);
+      maybeFire(3);
+      maybeFire(2);
+      maybeFire(1);
+      maybeFire(0);
+      
+      // 다음 틱 비교를 위해 저장
+      ts._prevRemainMs[key] = remainMsNow;
 
     // TSS / kcal 누적 및 표시
     updateTrainingMetrics();
