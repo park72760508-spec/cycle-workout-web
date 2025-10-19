@@ -1132,11 +1132,16 @@ function startSegmentLoop() {
       // ── 카운트다운/벨: 경계(엣지) 기반 트리거 ──
       // 벽시계 기반으로 '이전 남은 ms' → '현재 남은 ms'가
       // 5s,4s,3s,2s,1s,0s 경계를 '넘었는지' 판정해서 정확히 한 번씩만 울림.
+      // ── 카운트다운/벨: 경계(엣지) 기반 트리거 ──
+      // ※ 중요: nextSeg를 먼저 같은 스코프에 선언합니다.
+      const nextSeg = (currentSegIndex < w.segments.length - 1) ? w.segments[currentSegIndex + 1] : null;
+      
       ts._countdownFired = ts._countdownFired || {};      // 세그먼트별 발화 기록
       ts._prevRemainMs   = ts._prevRemainMs   || {};      // 세그먼트별 이전 남은 ms
       
       const key = String(currentSegIndex);
-      // 남은시간(ms) 계산: 세그 끝 시각(ms) - 현재 경과(ms)
+      
+      // 남은시간(ms) 계산
       const totalElapsedMs = (nowMs - ts.workoutStartMs) - (ts.pauseAccumMs + (ts.pausedAtMs ? (nowMs - ts.pausedAtMs) : 0));
       const segEndMs = (getCumulativeStartSec(currentSegIndex) + segDur) * 1000;
       const remainMsPrev = ts._prevRemainMs[key] ?? (segDur * 1000);
@@ -1153,29 +1158,26 @@ function startSegmentLoop() {
         const boundary = n * 1000;
         const crossed = (n > 0)
           ? (remainMsPrev > boundary && remainMsNow <= boundary)
-          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS)); // 0초만 살짝 일찍
+          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS)); // 0초는 200ms 일찍
       
-        if (crossed) {
-          // === 오버레이(숫자) 쓰고 싶다면: 5초 경계에서 한 번만 시작 ===
-          if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
-            // 오버레이가 자체적으로 5→0 초를 1Hz로 진행하며 비프도 내므로
-            // 아래의 개별 비프 호출은 생략(중복 방지)
-            startSegmentCountdown(5, nextSeg);
+        if (!crossed) return;
+      
+        // 오버레이 사용 여부: 5초 경계에서 한 번만 시작
+        if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
+          startSegmentCountdown(5, nextSeg);
+        } else {
+          // 오버레이가 없거나 4~0 경계는 소리만
+          if (n > 0) {
+            if (typeof playCountdownBeep === "function") playCountdownBeep(n);
           } else {
-            // 오버레이를 안 쓰거나 4~0 경계일 때는 기존 비프 래퍼 호출
-            if (n > 0) {
-              if (typeof playCountdownBeep === "function") playCountdownBeep(n);
-            } else {
-              if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
-            }
+            if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
           }
-      
-          ts._countdownFired[key] = { ...(ts._countdownFired[key]||{}), [n]: true };
         }
-      }
-
       
-      // 5→0 모두 확인(한 틱에 여러 경계 통과되어도 누락 없이 발화)
+        ts._countdownFired[key] = { ...(ts._countdownFired[key]||{}), [n]: true };
+      }
+      
+      // 5→0 모두 확인
       maybeFire(5);
       maybeFire(4);
       maybeFire(3);
@@ -1185,6 +1187,7 @@ function startSegmentLoop() {
       
       // 다음 틱 비교를 위해 저장
       ts._prevRemainMs[key] = remainMsNow;
+
 
     // TSS / kcal 누적 및 표시
     updateTrainingMetrics();
