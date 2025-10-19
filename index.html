@@ -867,13 +867,16 @@
   </div>
 
   <!-- 5. 컨트롤 버튼 (기존 유지) -->
+
   <div class="training-controls">
-    <button class="control-btn pause" id="btnTogglePause" title="일시정지"><span id="pauseIcon">⏸️</span></button>
-    <button class="control-btn" id="btnSkipSegment" title="구간 건너뛰기">⏭️</button>
-    <button class="control-btn stop" id="btnStopTraining" title="훈련 종료">⏹️</button>
+    <button id="btnTogglePause" class="enhanced-control-btn pause" aria-label="일시정지/재생"></button>
+    <button id="btnSkipSegment" class="enhanced-control-btn skip" aria-label="구간 건너뛰기"></button>
+    <button id="btnStopTraining" class="enhanced-control-btn stop" aria-label="훈련 종료"></button>
   </div>
+  
 </div>
 
+  
   <!-- 7) 결과 화면 -->
   <div id="resultScreen" class="screen">
     <div class="header">
