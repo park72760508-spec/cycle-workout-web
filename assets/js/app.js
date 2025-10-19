@@ -1132,64 +1132,64 @@ function startSegmentLoop() {
       // ── 카운트다운/벨: 경계(엣지) 기반 트리거 ──
       // 벽시계 기반으로 '이전 남은 ms' → '현재 남은 ms'가
       // 5s,4s,3s,2s,1s,0s 경계를 '넘었는지' 판정해서 정확히 한 번씩만 울림.
-      // ── 카운트다운/벨: 경계(엣지) 기반 트리거 ──
-      // ※ 중요: nextSeg를 먼저 같은 스코프에 선언합니다.
-      const nextSeg = (currentSegIndex < w.segments.length - 1)
-        ? w.segments[currentSegIndex + 1]
-        : null;
+      // ── [교체] 카운트다운/벨: 경계(엣지) 기반 트리거 (세그 끝나기 5초 전부터) ──
+      // 남은시간은 '초 단위 상태'만으로 계산(절대 ms 혼용 금지)
+      if (segRemaining > 0) {
+        // 다음 세그(마지막이면 null)
+        const nextSeg = (currentSegIndex < w.segments.length - 1) ? w.segments[currentSegIndex + 1] : null;
       
-      ts._countdownFired = ts._countdownFired || {};
-      ts._prevRemainMs   = ts._prevRemainMs   || {};
-      // ... (remainMsPrev/Now 계산, EPS_0_MS 정의, maybeFire 정의, maybeFire(5..0), prevRemain 저장)
+        ts._countdownFired = ts._countdownFired || {};   // 세그먼트별 발화 기록
+        ts._prevRemainMs   = ts._prevRemainMs   || {};   // 세그먼트별 이전 남은 ms
+        const key = String(currentSegIndex);
       
-      const key = String(currentSegIndex);
+        // 종료 누적초(초 단위 SSOT)와 남은 ms
+        const endAtSec      = getCumulativeStartSec(currentSegIndex) + segDur; // 세그 끝나는 '절대 초'
+        const remainMsPrev  = ts._prevRemainMs[key] ?? Math.round(segRemaining * 1000); // 바로 직전 남은 ms
+        const remainMsNow   = Math.round((endAtSec - ts.elapsedSec) * 1000);           // 현재 남은 ms (초 기반)
       
-      // 남은시간(ms) 계산
-      const totalElapsedMs = (nowMs - ts.workoutStartMs) - (ts.pauseAccumMs + (ts.pausedAtMs ? (nowMs - ts.pausedAtMs) : 0));
-      const segEndMs = (getCumulativeStartSec(currentSegIndex) + segDur) * 1000;
-      const remainMsPrev = ts._prevRemainMs[key] ?? (segDur * 1000);
-      const remainMsNow  = Math.round(segEndMs - (ts.workoutStartMs + totalElapsedMs));
+        // 0초는 살짝 일찍(200ms) 울리기
+        const EPS_0_MS = 200;
       
-      // 0초는 조금 이르게(ε) 트리거해서 놓침 방지
-      const EPS_0_MS = 200;
+        function maybeFire(n) {
+          const fired = ts._countdownFired[key] || {};
+          if (fired[n]) return;
       
-      // 유틸: n초 경계를 방금 '지났으면' 발화
-      function maybeFire(n, nextSegLocal) {
-        const fired = ts._countdownFired[key] || {};
-        if (fired[n]) return;
+          // ★ “항상 5→0이 1초 일찍 보이게” 하려면 아래 boundary를 (n+1)*1000 으로 바꾸세요.
+          //    (경과시간/세그합에는 영향 없음. 표시에만 1초 여유)
+          const boundary = n * 1000;
       
-        const boundary = n * 1000;
-        const crossed = (n > 0)
-          ? (remainMsPrev > boundary && remainMsNow <= boundary)
-          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS));
+          const crossed = (n > 0)
+            ? (remainMsPrev > boundary && remainMsNow <= boundary)               // 5..1 경계 통과
+            : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS));               // 0초는 200ms 일찍
       
-        if (!crossed) return;
+          if (!crossed) return;
       
-        // 5초 경계에서 오버레이 1회만 시작
-        if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSegLocal) {
-          startSegmentCountdown(5, nextSegLocal);
-        } else {
-          if (n > 0) {
-            if (typeof playCountdownBeep === "function") playCountdownBeep(n);
+          if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
+            // 오버레이 카운트다운(숫자)을 쓰는 경우: 5초 경계에서 1회만 시작
+            startSegmentCountdown(5, nextSeg);
           } else {
-            if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
+            // 소리만
+            if (n > 0) {
+              if (typeof playCountdownBeep === "function") playCountdownBeep(n);
+            } else {
+              if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
+            }
           }
+      
+          ts._countdownFired[key] = { ...(ts._countdownFired[key] || {}), [n]: true };
         }
       
-        ts._countdownFired[key] = { ...(ts._countdownFired[key]||{}), [n]: true };
+        // 5→0 모두 확인(틱이 건너뛰어도 놓치지 않음)
+        maybeFire(5);
+        maybeFire(4);
+        maybeFire(3);
+        maybeFire(2);
+        maybeFire(1);
+        maybeFire(0);
+      
+        // 다음 비교를 위해 현재 값 저장
+        ts._prevRemainMs[key] = remainMsNow;
       }
-
-      
-      // 5→0 모두 확인
-      maybeFire(5, nextSeg);
-      maybeFire(4, nextSeg);
-      maybeFire(3, nextSeg);
-      maybeFire(2, nextSeg);
-      maybeFire(1, nextSeg);
-      maybeFire(0, nextSeg);
-      
-      // 다음 틱 비교를 위해 저장
-      ts._prevRemainMs[key] = remainMsNow;
 
 
     // TSS / kcal 누적 및 표시
