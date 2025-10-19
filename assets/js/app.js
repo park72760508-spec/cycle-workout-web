@@ -1163,6 +1163,21 @@ window.updateTrainingDisplay = function () {
      panel.classList.add('neon-active', ach);
    })();
 
+
+   // 사용자 등급 표기(상급~입문)
+   (function applyWkgNeon() {
+     const power  = Number(window.liveData?.power) || 0;                 // 현재 파워(W)
+     const weight = Number(window.userProfile?.weightKg || window.user?.weightKg) || 0; // 사용자 체중(kg)
+     if (weight > 0) {
+       const wkg = power / weight;
+       updateUserPanelNeonByWkg(wkg);
+     } else {
+       // 체중이 없으면 네온 제거(선택)
+       updateUserPanelNeonByWkg(NaN);
+     }
+   })();
+
+   
    
 };
 
@@ -1995,4 +2010,28 @@ window.simulatePowerMeterData = function() {
   }
 };
 
+// W/kg → 네온 등급 클래스 결정 + 패널에 적용
+function updateUserPanelNeonByWkg(wkg) {
+  const panel = document.querySelector('#userPanel');  // ← 필요시 선택자 교체
+  if (!panel) return;
+
+  // 기존 효과 제거
+  panel.classList.remove(
+    'neon-active',
+    'wkg-elite', 'wkg-advanced', 'wkg-intermediate', 'wkg-novice', 'wkg-beginner'
+  );
+
+  if (!Number.isFinite(wkg) || wkg <= 0) return; // 값이 없으면 미적용
+
+  // 등급 판정 (요청 기준)
+  let tier;
+  if (wkg >= 4.0)      tier = 'wkg-elite';        // 상급: 빨강
+  else if (wkg >= 3.5) tier = 'wkg-advanced';     // 중급: 주황
+  else if (wkg >= 3.0) tier = 'wkg-intermediate'; // 초중급: 보라
+  else if (wkg >= 2.2) tier = 'wkg-novice';       // 초급: 초록
+  else                 tier = 'wkg-beginner';     // 입문: 노랑
+
+  // 패널에만 네온 적용
+  panel.classList.add('neon-active', tier);
+}
 
