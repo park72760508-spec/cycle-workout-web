@@ -372,6 +372,82 @@ const trainingMetrics = {
   count: 0            // 표본 개수(초 단위)
 };
 
+
+// 세그먼트 누적 시작초
+function getCumulativeStartSec(index) {
+  const w = window.currentWorkout;
+  if (!w || !Array.isArray(w.segments)) return 0;
+  let acc = 0;
+  for (let i = 0; i < index; i++) {
+    acc += segDurationSec(w.segments[i]); // 기존 함수 그대로 사용
+  }
+  return acc;
+}
+
+// 세그먼트 목표 파워(W) 계산
+function getSegmentTargetW(i) {
+  const w = window.currentWorkout;
+  const seg = w?.segments?.[i];
+  if (!seg) return 0;
+  const ftp = Number(window.currentUser?.ftp) || 200;
+  const ftpPercent = getSegmentFtpPercent(seg); // 기존 로직 활용
+  return Math.round(ftp * (ftpPercent / 100));
+}
+
+// 세그먼트 타입(휴식/쿨다운 여부 확인용)
+function getSegmentType(i) {
+  const w = window.currentWorkout;
+  const seg = w?.segments?.[i];
+  const t = (seg?.segment_type || seg?.type || "").toLowerCase();
+  return t; // e.g., "rest", "cooldown", "interval" 등
+}
+
+
+// 세그 평균 파워 → 달성도(%) → 색상 등급 → 타임라인에 적용
+function finalizeSegmentCompletion(i, avgW) {
+  try {
+    // 휴식/쿨다운은 회색 고정
+    const segType = getSegmentType(i);
+    const isGray = (segType.includes('rest') || segType.includes('cooldown'));
+    
+    // 타임라인 세그 컨테이너 찾기 (data-index 또는 id 둘 다 시도)
+    let segEl = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+    if (!segEl) segEl = document.getElementById(`seg-${i}`); // 프로젝트 구조에 맞춰 폴백
+    if (!segEl) return;
+
+    // 기존 done-* 클래스 제거
+    segEl.classList.remove(
+      'done-mint','done-green','done-lime','done-yellow','done-orange','done-red','done-gray'
+    );
+
+    if (isGray) {
+      segEl.classList.add('done-gray');
+      return;
+    }
+
+    // 달성도 계산
+    const targetW = getSegmentTargetW(i);
+    const avg = Number(avgW);
+    const ratioPct = (targetW > 0 && Number.isFinite(avg)) ? (avg / targetW) * 100 : 0;
+
+    // 버킷 분기
+    let cls = 'done-red'; // 기본: 75% 미만
+    if (ratioPct >= 115)       cls = 'done-mint';
+    else if (ratioPct >= 105)  cls = 'done-green';
+    else if (ratioPct >= 95)   cls = 'done-lime';
+    else if (ratioPct >= 85)   cls = 'done-yellow';
+    else if (ratioPct >= 75)   cls = 'done-orange';
+
+    segEl.classList.add(cls);
+  } catch (e) {
+    console.error('finalizeSegmentCompletion error:', e);
+  }
+}
+
+
+
+
+
 // 타임라인 생성/업데이트 함수 추가
 function secToMinStr(sec){
   const m = Math.floor(sec/60);
@@ -990,31 +1066,55 @@ function startSegmentLoop() {
 
     // 세그먼트 경계 통과 → 다음 세그먼트로 전환
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
+   // 세그먼트 경계 통과 → 다음 세그먼트로 전환
    if (window.trainingState.segElapsedSec >= segDur) {
-     // 카운트다운이 진행 중이면 1초 더 기다림 (0초 벨소리 완료 대기)
+     // 0초 벨소리(카운트다운) 진행 중이면 1초 더 기다림
      if (segmentCountdownActive) {
        console.log('카운트다운 진행 중 - 세그먼트 전환 1초 지연');
        return; // 이번 루프는 스킵하고 다음 루프에서 전환
      }
-     
+   
+     // ✅ [완료처리 삽입 지점] 현재 세그먼트의 달성도 색 확정
+     // 평균파워는 통계값이 있으면 그 값을, 없으면 화면의 평균 표시에서 가져옵니다.
+     let avgW_now = 0;
+     if (window.segmentStats && window.segmentStats[currentSegIndex] && Number.isFinite(window.segmentStats[currentSegIndex].avg)) {
+       avgW_now = window.segmentStats[currentSegIndex].avg;
+     } else {
+       const avgEl = document.getElementById('avgSegmentPowerValue');
+       if (avgEl) {
+         const n = parseFloat(avgEl.textContent);
+         if (!Number.isNaN(n)) avgW_now = n;
+       }
+     }
+     // 현재 세그먼트 완료 색상 확정(휴식/쿨다운은 내부에서 회색 처리)
+     if (typeof finalizeSegmentCompletion === 'function') {
+       finalizeSegmentCompletion(currentSegIndex, avgW_now);
+     }
+   
      console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
-     
+   
+     // 다음 세그먼트로 인덱스 전환
      window.trainingState.segIndex += 1;
      window.trainingState.segElapsedSec = 0;
+   
+     if (window.trainingState.segIndex < w.segments.length) {
+       console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
+       applySegmentTarget(window.trainingState.segIndex);
+   
+       // 남아있을 수 있는 카운트다운 정리
+       if (segmentCountdownActive) {
+         stopSegmentCountdown();
+       }
+   
+       // 진행바 즉시 반영(선택)
+       if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
+       if (typeof updateTimelineByTime === "function") updateTimelineByTime();
+   
+     } else {
+       console.log('모든 세그먼트 완료');
+     }
+   }
 
-      if (window.trainingState.segIndex < w.segments.length) {
-        console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
-        applySegmentTarget(window.trainingState.segIndex);
-        
-        // 세그먼트 전환 완료 후 카운트다운 정리 (혹시 남아있다면)
-        if (segmentCountdownActive) {
-          stopSegmentCountdown();
-        }
-        
-      } else {
-        console.log('모든 세그먼트 완료');
-      }
-    }
   }, 1000);
 }
 
