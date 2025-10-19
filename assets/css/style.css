@@ -2161,3 +2161,24 @@ button[aria-disabled="true"] {
 #trainingScreen .power-display.achievement-high { --neon-color: rgba(251,191,36,0.85); } /* 노랑 */
 #trainingScreen .power-display.achievement-over { --neon-color: rgba(168,85,247,0.85); } /* 보라 */
 
+
+/* ===== [W/kg] 사용자 판넬 네온(테두리 전용) ===== */
+#userPanel.neon-active {
+  position: relative;  /* 안전 */
+  box-shadow:
+    0 3px 10px rgba(0,0,0,0.35),                 /* 기존 그림자 느낌 유지(선택) */
+    0 0 16px var(--neon-color, rgba(255, 230, 0, .6)),
+    0 0 28px var(--neon-color, rgba(255, 230, 0, .35));
+  outline: 1px solid color-mix(in srgb, var(--neon-color, #ffe000) 70%, transparent);
+  outline-offset: -2px;
+  transition: box-shadow .25s ease, outline-color .25s ease;
+}
+
+/* 등급별 네온 색만 바꾼다(테두리 색상은 유지) */
+#userPanel.wkg-elite        { --neon-color: rgba(255, 59, 48, 0.85); }  /* 상급: 빨강, 4.0 이상 */
+#userPanel.wkg-advanced     { --neon-color: rgba(255,149,  0, 0.85); }  /* 중급: 주황, 3.5 이상 */
+#userPanel.wkg-intermediate { --neon-color: rgba(168, 85,247, 0.85); }  /* 초중급: 보라, 3.0 이상 */
+#userPanel.wkg-novice       { --neon-color: rgba( 34,197, 94, 0.85); }  /* 초급: 초록, 2.2 이상 */
+#userPanel.wkg-beginner     { --neon-color: rgba(251,191, 36, 0.85); }  /* 입문: 노랑, 2.2 미만 */
+
+
