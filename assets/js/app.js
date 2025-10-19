@@ -1123,15 +1123,18 @@ window.updateTrainingDisplay = function () {
   }
 
   // *** 케이던스 표시 개선 ***
-  const cadenceElement = safeGetElement("cadenceValue");
-  if (cadenceElement) {
-    const cadence = window.liveData?.cadence;
-    if (typeof cadence === "number" && cadence > 0) {
-      cadenceElement.textContent = Math.round(cadence);
-    } else {
-      cadenceElement.textContent = "--";
-    }
-  }
+   // *** 케이던스 표시 개선 - 0 값도 표시 ***
+   const cadenceElement = safeGetElement("cadenceValue");
+   if (cadenceElement) {
+     const cadence = window.liveData?.cadence;
+     if (typeof cadence === "number" && !isNaN(cadence)) {
+       // 숫자 값이면 0 포함해서 모두 표시
+       cadenceElement.textContent = Math.round(cadence).toString();
+     } else {
+       // 값이 없거나 유효하지 않으면 0으로 표시
+       cadenceElement.textContent = "0";
+     }
+   }
 
   // 중앙 디스플레이에 펄스 애니메이션 추가
   const powerDisplay = document.querySelector("#trainingScreen .power-display");
