@@ -1738,13 +1738,39 @@ window.testNeonEffect = function(achievementPercent) {
   // 테스트 클래스 적용
   let testClass = '';
   if (achievementPercent < 85) testClass = 'achievement-low';
-  else if (achievementPercent <= 115) testClass = 'achievement-good';
-  else if (achievementPercent <= 130) testClass = 'achievement-high';
+  else if (achievementPercent <= 110) testClass = 'achievement-good';
+  else if (achievementPercent <= 120) testClass = 'achievement-high';
   else testClass = 'achievement-over';
   
-  panels.forEach(panel => {
-    panel.classList.add('neon-active', testClass);
-  });
+   // === FIX: 중앙 패널에만 네온/달성도 클래스 적용 ===
+   const centerPanel = document.querySelector(
+     '.enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display'
+   );
+   
+   // 일단 모든 패널에서 효과 제거
+   panels.forEach(panel => {
+     panel.classList.remove('neon-active', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+   });
+   
+   // 가운데 파워 숫자 텍스트 클래스도 초기화
+   if (currentPowerEl) {
+     currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+   }
+   
+   // 중앙 패널에만 적용
+   if (centerPanel) {
+     centerPanel.classList.add('neon-active', testClass);
+   }
+   if (currentPowerEl) {
+     currentPowerEl.classList.add(testClass);
+   }
+   
+   // 3초 후 효과 제거(중앙 패널만)
+   setTimeout(() => {
+     if (centerPanel) centerPanel.classList.remove('neon-active', testClass);
+     if (currentPowerEl) currentPowerEl.classList.remove(testClass);
+   }, 3000);
+
   
   if (currentPowerEl) {
     currentPowerEl.classList.add(testClass);
