@@ -583,8 +583,8 @@ function createTimeline(){
         <span class="segment-label">${label}</span>
         <span class="segment-time">${secToMinStr(dur)}</span>
       </div>`;
-  }).join("");
-}
+     }).join("");
+   }
 }
 
 
