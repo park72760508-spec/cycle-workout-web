@@ -1307,6 +1307,27 @@ function startWorkoutTraining() {
   }
 }
 
+// 케이던스 강제 리셋
+window.resetCadence = function() {
+  console.log("케이던스 강제 리셋 실행");
+  
+  window.liveData = window.liveData || {};
+  window.liveData.cadence = 0;
+  
+  const cadenceElement = safeGetElement("cadenceValue");
+  if (cadenceElement) {
+    cadenceElement.textContent = "0";
+    console.log("케이던스 값을 0으로 리셋 완료");
+  }
+  
+  // 화면 업데이트
+  if (typeof window.updateTrainingDisplay === "function") {
+    window.updateTrainingDisplay();
+  }
+};
+
+
+
 function backToWorkoutSelection() {
   if (typeof showScreen === "function") {
     showScreen("workoutScreen");
