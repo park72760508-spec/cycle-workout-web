@@ -1334,33 +1334,41 @@ function backToWorkoutSelection() {
 }
 
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
+// 사용자 정보 렌더 + W/kg 네온(정적) 적용
 function renderUserInfo() {
   try {
-    const box = safeGetElement("userInfo");
-    const u = window.currentUser;
+    const box = document.getElementById("userInfo");
     if (!box) return;
 
-    if (!u) { 
-      box.textContent = "사용자 미선택"; 
-      return; 
+    const u = window.currentUser;
+    if (!u) {
+      box.textContent = "사용자 미선택";
+      // 사용자 패널 네온 제거(선택)
+      if (typeof updateUserPanelNeonByWkg === "function") updateUserPanelNeonByWkg(0);
+      return;
     }
 
+    // 표시값 구성
     const cleanName = String(u.name || "").replace(/^👤+/g, "").trim();
     const ftp = Number(u.ftp);
-    const wt  = Number(u.weight);
-    const wkg = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt).toFixed(2) : "-";
+    const wt  = Number(u.weight ?? u.weightKg); // 둘 중 하나 쓰는 구조면 병행 지원
+    const wkgNum = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt) : NaN;
 
-    box.textContent = `${cleanName} · FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg`;
+    const ftpDisp = Number.isFinite(ftp) ? String(ftp) : "-";
+    const wkgDisp = Number.isFinite(wkgNum) ? wkgNum.toFixed(2) : "-";
 
-   // (추가) 사용자 판넬 네온 갱신 호출
-   const wkgNum = (Number.isFinite(ftp) && Number.isFinite(wt) && wt > 0) ? (ftp / wt) : 0;
-   if (typeof updateUserPanelNeonByWkg === 'function') {
-     updateUserPanelNeonByWkg(wkgNum);  // ← 한 번만 켜두면 유지
-         
+    box.textContent = `${cleanName} · FTP ${ftpDisp}W · ${wkgDisp} W/kg`;
+
+    // ★ 사용자 판넬 네온은 "한 번만" 적용 (동적 갱신 안 함)
+    if (typeof updateUserPanelNeonByWkg === "function") {
+      updateUserPanelNeonByWkg(Number.isFinite(wkgNum) ? wkgNum : 0);
+    }
+
   } catch (error) {
     console.error('Error in renderUserInfo:', error);
   }
 }
+
 
 
 // ---------------------------------------------
