@@ -555,37 +555,46 @@ function formatMMSS(sec) {
 }
 
 // 훈련 상태 => 타임라인 생성 (initializeTraining 내부에서 호출)
-function createTimeline(){
+// 훈련 상태 => 타임라인 생성 (initializeTraining 내부에서 호출)
+function createTimeline() {
   const cont = document.getElementById("timelineSegments");
-  if (!cont || !currentWorkout) return;
+  const w = window.currentWorkout;
+  if (!cont || !w || !Array.isArray(w.segments)) return;
 
-  const segs = currentWorkout.segments || [];
-  const total = segs.reduce((s, seg)=> s + (seg.duration_sec||0), 0) || 1;
+  const segs = w.segments;
+  const total = segs.reduce((sum, seg) => sum + (seg.duration_sec || seg.duration || 0), 0) || 1;
 
-  // 누적 종료시각(초)도 계산해두면 편함
-  //trainingSession._segEnds = [];
-   
-   // 누적 종료시각(초) 계산
-   const _segEnds = [];
-   let acc = 0;
-   cont.innerHTML = segs.map((seg, i) => {
-     const dur = seg.duration_sec || 0;
-     acc += dur; _segEnds[i] = acc;
+  // 누적 종료시각(초) 계산 → window.trainingState.segEnds 에 저장
+  const segEnds = [];
+  let acc = 0;
+  for (let i = 0; i < segs.length; i++) {
+    const dur = (typeof segs[i].duration_sec === "number" ? segs[i].duration_sec
+               : typeof segs[i].duration === "number" ? segs[i].duration : 0);
+    acc += dur;
+    segEnds[i] = acc;
+  }
+  if (window.trainingState) window.trainingState.segEnds = segEnds;
 
-  cont.innerHTML = segs.map((seg, i)=>{
-    const dur = seg.duration_sec || 0;
-    acc += dur; trainingSession._segEnds[i] = acc;
-    const w = (dur / total) * 100;
-    const label = seg.segment_type || "세그먼트";
+  // 타임라인 DOM 렌더
+  cont.innerHTML = segs.map((seg, i) => {
+    const dur = (typeof seg.duration_sec === "number" ? seg.duration_sec
+               : typeof seg.duration === "number" ? seg.duration : 0);
+    const widthPct = (dur / total) * 100;
+    const label = seg.segment_type || seg.label || "세그먼트";
+    const timeMin = Math.floor(dur / 60);
+    const timeSec = dur % 60;
+    const timeLabel = timeSec > 0 ? `${timeMin}:${String(timeSec).padStart(2, "0")}` : `${timeMin}분`;
+
     return `
-      <div class="timeline-segment" data-index="${i}" style="width:${w}%">
+      <div class="timeline-segment" data-index="${i}" id="seg-${i}" style="width:${widthPct}%">
         <div class="progress-fill" id="segFill-${i}"></div>
         <span class="segment-label">${label}</span>
-        <span class="segment-time">${secToMinStr(dur)}</span>
-      </div>`;
-     }).join("");
-   }
+        <span class="segment-time">${timeLabel}</span>
+      </div>
+    `;
+  }).join("");
 }
+
 
 
 // 훈련 상태 => 세그먼트별 달성도를 시간 기준 달성도(=진행률)로 표현
