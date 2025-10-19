@@ -1168,7 +1168,7 @@ window.updateTrainingDisplay = function () {
     achievementClass = 'achievement-good';
   } else if (achievement > 0.95 && achievement <= 1.1) {
     achievementClass = 'achievement-high';
-  } else if (achievement > 1.2) {
+  } else if (achievement > 1.1) {
     achievementClass = 'achievement-over';
   }
   
