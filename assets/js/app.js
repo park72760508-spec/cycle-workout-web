@@ -1229,6 +1229,10 @@ function startSegmentLoop() {
      // 다음 세그먼트로 인덱스 전환
      window.trainingState.segIndex += 1;
      window.trainingState.segElapsedSec = 0;
+
+      // 다음 세그먼트의 카운트다운 상태 초기화
+      ts._countdownFired[String(ts.segIndex)] = {};
+      ts._prevRemainMs[String(ts.segIndex)]   = segDur * 1000; // 새 세그 초기 남은 ms      
    
      if (window.trainingState.segIndex < w.segments.length) {
        console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
