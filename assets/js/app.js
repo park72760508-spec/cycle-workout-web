@@ -1027,6 +1027,9 @@ function applySegmentTarget(i) {
 // 수정된 startSegmentLoop 함수 (카운트다운 로직 추가)
 function startSegmentLoop() {
   const w = window.currentWorkout;
+   // 오버레이 카운트다운 시작 여부(세그먼트별)
+   window.trainingState._overlayLaunched = {};
+     
   if (!w || !w.segments || w.segments.length === 0) {
     console.error('워크아웃 또는 세그먼트가 없습니다:', w);
     return;
@@ -1150,19 +1153,27 @@ function startSegmentLoop() {
         const boundary = n * 1000;
         const crossed = (n > 0)
           ? (remainMsPrev > boundary && remainMsNow <= boundary)
-          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS)); // 0초만 여유 적용
+          : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS)); // 0초만 살짝 일찍
       
         if (crossed) {
-          if (n > 0) {
-            if (typeof playCountdownBeep === "function") playCountdownBeep(n);
-            // showCountdownNumber?.(n); // 5~1 숫자 UI도 표시하고 싶으면 사용
+          // === 오버레이(숫자) 쓰고 싶다면: 5초 경계에서 한 번만 시작 ===
+          if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
+            // 오버레이가 자체적으로 5→0 초를 1Hz로 진행하며 비프도 내므로
+            // 아래의 개별 비프 호출은 생략(중복 방지)
+            startSegmentCountdown(5, nextSeg);
           } else {
-            if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
-            // showCountdownNumber?.(0); // 0 숫자를 보이려면 사용
+            // 오버레이를 안 쓰거나 4~0 경계일 때는 기존 비프 래퍼 호출
+            if (n > 0) {
+              if (typeof playCountdownBeep === "function") playCountdownBeep(n);
+            } else {
+              if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
+            }
           }
+      
           ts._countdownFired[key] = { ...(ts._countdownFired[key]||{}), [n]: true };
         }
       }
+
       
       // 5→0 모두 확인(한 틱에 여러 경계 통과되어도 누락 없이 발화)
       maybeFire(5);
