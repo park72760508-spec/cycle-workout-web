@@ -1161,16 +1161,16 @@ window.updateTrainingDisplay = function () {
   }
   
   // 달성도에 따른 클래스 적용
-  let achievementClass = '';
-  if (achievement < 0.85) {
-    achievementClass = 'achievement-low';
-  } else if (achievement >= 0.85 && achievement <= 0.95) {
-    achievementClass = 'achievement-good';
-  } else if (achievement > 0.95 && achievement <= 1.1) {
-    achievementClass = 'achievement-high';
-  } else if (achievement > 1.1) {
-    achievementClass = 'achievement-over';
-  }
+let achievementClass = '';
+if (achievement < 0.85) {
+  achievementClass = 'achievement-low';
+} else if (achievement >= 0.85 && achievement <= 1.15) {  // 범위 확장
+  achievementClass = 'achievement-good';
+} else if (achievement > 1.15 && achievement <= 1.30) {   // 범위 수정
+  achievementClass = 'achievement-high';
+} else if (achievement > 1.30) {                         // 조건 수정
+  achievementClass = 'achievement-over';
+}
   
   // 세그먼트 평균이 있을 때만 네온 효과 적용
    // 세그먼트 평균이 있을 때 특정 패널들에만 네온 효과 적용
