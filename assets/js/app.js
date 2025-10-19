@@ -1002,11 +1002,13 @@ function setPaused(isPaused) {
     stopSegmentCountdown();
   }
 
-  // 버튼 라벨/아이콘 업데이트
+  // 향상된 버튼 상태 업데이트
   const btn = safeGetElement("btnTogglePause");
-  const icon = safeGetElement("pauseIcon");
-  if (btn)  btn.textContent = window.trainingState.paused ? " ▶️" : " ⏸️";
-  if (icon) icon.textContent = window.trainingState.paused ? "▶️" : "⏸️";
+  if (btn) {
+    btn.classList.remove("pause", "play");
+    btn.classList.add(window.trainingState.paused ? "play" : "pause");
+    btn.setAttribute("aria-label", window.trainingState.paused ? "재생" : "일시정지");
+  }
 
   // 토스트 표시
   if (typeof showToast === "function") {
