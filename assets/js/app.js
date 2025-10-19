@@ -572,28 +572,59 @@ function createTimeline(){
 }
 
 // 훈련 상태 => 세그먼트별 달성도를 시간 기준 달성도(=진행률)로 표현
-function updateTimelineByTime(){
-  if (!trainingSession.startTime || !currentWorkout) return;
+// === PATCH: robust timeline updater (no hard dependency on trainingSession) ===
+function updateTimelineByTime() {
+  try {
+    const ts = window.trainingState || {};
+    const w  = window.currentWorkout;
+    if (!w || !Array.isArray(w.segments)) return;
 
-  const nowSec = Math.floor((Date.now() - trainingSession.startTime) / 1000);
-  const segs = currentWorkout.segments || [];
-  let startAt = 0;
+    // 1) 경과초 결정: trainingState.elapsedSec 우선, 없으면 trainingSession.startTime 보조
+    let elapsed = Number(ts.elapsedSec);
+    if (!Number.isFinite(elapsed)) {
+      const session = window.trainingSession;
+      if (session && session.startTime) {
+        elapsed = Math.floor((Date.now() - session.startTime) / 1000);
+      } else {
+        elapsed = 0;
+      }
+    }
 
-  for (let i=0;i<segs.length;i++){
-    const dur = segs[i].duration_sec || 0;
-    const endAt = startAt + dur;
-    const fill = document.getElementById(`segFill-${i}`);
-    if (!fill){ startAt = endAt; continue; }
+    // 2) 세그먼트 경계(누적 종료시각) 이용해 진행률 계산
+    const segEnds = ts.segEnds || [];
+    let startAt = 0;
+    for (let i = 0; i < w.segments.length; i++) {
+      const endAt = (segEnds[i] != null)
+        ? segEnds[i]
+        : startAt + (segDurationSec(w.segments[i]) || 0);
+      const dur = Math.max(1, endAt - startAt);
 
-    let pct = 0;
-    if (nowSec >= endAt) pct = 100;                   // 지난 세그먼트
-    else if (nowSec <= startAt) pct = 0;              // 아직 시작 전
-    else pct = Math.min(100, Math.round((nowSec - startAt) / dur * 100)); // 현재 세그먼트 진행
+      // 타임라인 DOM
+      const segEl  = document.querySelector(`.timeline-segment[data-index="${i}"]`)
+                   || document.getElementById(`seg-${i}`);
+      const fillEl = segEl?.querySelector('.progress-fill');
 
-    fill.style.width = pct + "%";
-    startAt = endAt;
+      if (fillEl) {
+        let ratio = 0;
+        if (elapsed >= endAt)      ratio = 1;
+        else if (elapsed > startAt) ratio = (elapsed - startAt) / dur;
+
+        ratio = Math.max(0, Math.min(1, ratio));
+        fillEl.style.width = (ratio * 100) + "%";
+
+        // 현재 세그먼트면 파랑으로 강제
+        if (elapsed > startAt && elapsed < endAt) {
+          fillEl.style.background = "#2E74E8";
+        }
+      }
+
+      startAt = endAt;
+    }
+  } catch (e) {
+    console.error("updateTimelineByTime error:", e);
   }
 }
+
 
 // 훈련 상태 => 현재 세그먼트 전환 시 색/타이틀 업데이트
 function onSegmentChanged(newIndex){
