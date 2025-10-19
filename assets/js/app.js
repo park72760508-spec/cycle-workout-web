@@ -1353,7 +1353,7 @@ function renderUserInfo() {
    if (Number.isFinite(_wkg)) {
      updateUserPanelNeonByWkg(_wkg);
    } else {
-     updateUserPanelNeonByWkg(0); // 값 없을 때는 네온 제거만
+     updateUserPanelNeonByWkg(0); // 값 없을 때는 네온 제거
    }
          
   } catch (error) {
