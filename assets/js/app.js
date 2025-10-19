@@ -1743,33 +1743,41 @@ window.testNeonEffect = function(achievementPercent) {
   else testClass = 'achievement-over';
   
    // === FIX: 중앙 패널에만 네온/달성도 클래스 적용 ===
+   // === 중앙 패널 1곳에만 네온/달성도 적용 ===
    const centerPanel = document.querySelector(
      '.enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display'
    );
+   const currentPowerEl = document.getElementById('currentPowerValue');
    
-   // 일단 모든 패널에서 효과 제거
-   panels.forEach(panel => {
-     panel.classList.remove('neon-active', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+   // 1) 모든 패널/파워 텍스트에서 이전 효과 제거
+   document.querySelectorAll('.enhanced-metric-panel').forEach(panel => {
+     panel.classList.remove(
+       'neon-active',
+       'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
+     );
    });
-   
-   // 가운데 파워 숫자 텍스트 클래스도 초기화
    if (currentPowerEl) {
-     currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+     currentPowerEl.classList.remove(
+       'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
+     );
    }
    
-   // 중앙 패널에만 적용
-   if (centerPanel) {
-     centerPanel.classList.add('neon-active', testClass);
+   // 2) 중앙 패널에만 새 효과 적용
+   if (centerPanel && achievementClass) {
+     centerPanel.classList.add('neon-active', achievementClass);
    }
-   if (currentPowerEl) {
-     currentPowerEl.classList.add(testClass);
+   if (currentPowerEl && (achievementClass === 'achievement-good' ||
+                          achievementClass === 'achievement-high' ||
+                          achievementClass === 'achievement-over')) {
+     currentPowerEl.classList.add(achievementClass);
    }
    
-   // 3초 후 효과 제거(중앙 패널만)
+   // 3) (선택) 3초 후 “중앙 패널”만 효과 제거
    setTimeout(() => {
-     if (centerPanel) centerPanel.classList.remove('neon-active', testClass);
-     if (currentPowerEl) currentPowerEl.classList.remove(testClass);
+     if (centerPanel) centerPanel.classList.remove('neon-active', achievementClass);
+     if (currentPowerEl) currentPowerEl.classList.remove(achievementClass);
    }, 3000);
+
 
   
   if (currentPowerEl) {
