@@ -1197,7 +1197,13 @@ function startWorkoutTraining() {
     Object.assign(trainingMetrics, {
       elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
     });
-    
+
+    // liveData 초기화 강화
+    if (!window.liveData) {
+      window.liveData = {};
+    }
+    window.liveData.cadence = 0;  // 케이던스 명시적 초기화
+     
     // (A) 워크아웃 보장: 캐시 복구 포함
     if (!window.currentWorkout) {
       try {
