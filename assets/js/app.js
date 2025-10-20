@@ -1105,11 +1105,11 @@ function startSegmentLoop() {
    const newElapsedSec = Math.floor((nowMs - ts.workoutStartMs - pausedMs) / 1000);
    
    // 같은 초에 중복 처리 방지(선택)
-   if (newElapsedSec === ts.elapsedSec) {
+   //if (newElapsedSec === ts.elapsedSec) {
      // 같은 초면 UI만 가볍게 유지하고 빠져도 OK
      // updateSegmentBarTick?.();
-     return;
-   }
+     //return;
+   //}
    ts.elapsedSec = newElapsedSec;
    
    // 현재 세그 경과초 = 전체경과초 - 해당 세그 누적시작초
