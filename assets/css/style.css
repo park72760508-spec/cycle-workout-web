@@ -469,6 +469,16 @@ button[aria-disabled="true"] {
   box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
 }
 
+/* 그룹 세그먼트가 대기 상태일 때, 폰트 흰색으로 강제 */
+.timeline-segment.timeline-group.is-upcoming,
+.timeline-segment.timeline-group.is-upcoming .segment-number,
+.timeline-segment.timeline-group.is-upcoming .segment-time,
+.timeline-segment.timeline-group.is-upcoming .repeat-count {
+  color: #ffffff !important;
+}
+
+
+
 .timeline-segment.is-upcoming .segment-number,
 .timeline-segment.is-upcoming .segment-time {
   /* 기존 #cbd5e1 -> 녹색 라벨 톤 */
