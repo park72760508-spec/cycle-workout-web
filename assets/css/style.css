@@ -681,6 +681,16 @@ button[aria-disabled="true"] {
   animation: shimmer 2s infinite;
 }
 
+/* 완료는 항상 가득 채움 보장 */
+.timeline-segment.is-complete .progress-fill { width: 100% !important; }
+
+/* 완료 구간에서 쉼머(흰색 하이라이트) 강도 완화 */
+.timeline-segment.is-complete .progress-fill::before {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+}
+
+
+
 @keyframes shimmer {
   0% { left: -100%; }
   100% { left: 100%; }
