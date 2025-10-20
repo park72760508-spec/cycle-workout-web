@@ -468,21 +468,24 @@ button[aria-disabled="true"] {
 }
 
 
+/* 현재 진행 세그먼트: 녹색톤 투명으로 통일 */
 .timeline-segment.is-current {
-  background: #eff6ff;
-  color: #1e40af;
-  box-shadow: 
-    inset 0 0 0 2px rgba(59, 130, 246, 0.3),
-    0 0 0 1px rgba(59, 130, 246, 0.2);
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d; /* 글자색도 녹색 계열 */
+  box-shadow:
+    inset 0 0 0 2px rgba(34, 197, 94, 0.30),
+    0 0 0 1px rgba(34, 197, 94, 0.22);
   transform: scale(1.02);
 }
 
+/* 현재 세그 번호/시간 색도 녹색 계열 */
 .timeline-segment.is-current .segment-number,
 .timeline-segment.is-current .segment-time {
-  color: #1e40af;
+  color: #15803d;
   font-weight: 600;
 }
 
+/* 하단 하이라이트 바(파랑) → 녹색 */
 .timeline-segment.is-current::after {
   content: "";
   position: absolute;
@@ -491,7 +494,7 @@ button[aria-disabled="true"] {
   transform: translateX(-50%);
   width: 60%;
   height: 3px;
-  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
   border-radius: 2px;
 }
 
@@ -536,18 +539,19 @@ button[aria-disabled="true"] {
   padding: 2px 4px;
 }*/
 
+/* 그룹 세그먼트 기본 배경을 녹색톤 투명으로 */
 .timeline-group {
   background: linear-gradient(
     135deg,
-    rgba(241, 245, 249, 0.5) 0%,   /* #f1f5f9 → 투명도 50% */
-    rgba(226, 232, 240, 0.5) 100%  /* #e2e8f0 → 투명도 50% */
+    rgba(34, 197, 94, 0.10) 0%,
+    rgba(34, 197, 94, 0.18) 100%
   );
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.25);
   flex-direction: column;
   justify-content: center;
   padding: 2px 4px;
-  
 }
+
 
 /* 그룹 세그먼트 + 아직 진행 전 상태 전용 */
 .timeline-group.is-upcoming {
