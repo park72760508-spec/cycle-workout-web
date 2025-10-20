@@ -347,6 +347,7 @@ button[aria-disabled="true"] {
   position: relative;
 }
 
+/* PATCH: 반투명 배경으로 일체감 강화 */
 .timeline-segment {
   position: relative;
   display: flex;
@@ -356,12 +357,13 @@ button[aria-disabled="true"] {
   padding: 4px 6px;
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
-  border-right: 1px solid rgba(148, 163, 184, 0.2);
-  background: #f1f5f9;
+  color: #cbd5e1;                        /* 어두운 배경 대비 */
+  border-right: 1px solid rgba(148,163,184,0.18);
+  background: rgba(255,255,255,0.08);    /* 기존 #f1f5f9 → 반투명 */
   transition: all 0.3s ease;
   overflow: hidden;
 }
+
 
 .timeline-segment:last-child {
   border-right: none;
