@@ -1150,34 +1150,34 @@ function startSegmentLoop() {
         // 0초는 살짝 일찍(200ms) 울리기
         const EPS_0_MS = 200;
       
-        function maybeFire(n) {
-          const fired = ts._countdownFired[key] || {};
-          if (fired[n]) return;
+      // === 수정된 코드(세그먼트 종료 6초 부터 카운트다운) ===
+      function maybeFire(n) {
+        const fired = ts._countdownFired[key] || {};
+        if (fired[n]) return;
       
-          // ★ “항상 5→0이 1초 일찍 보이게” 하려면 아래 boundary를 (n+1)*1000 으로 바꾸세요.
-          //    (경과시간/세그합에는 영향 없음. 표시에만 1초 여유)
-          const boundary = n * 1000;
+        // ✅ 카운트다운을 1초 앞당겨 실행: 6초전에 "5" 표시, 5초전에 "4" 표시 등
+        const boundary = (n + 1) * 1000;  // 🟢 n * 1000 → (n + 1) * 1000 으로 변경
       
-          const crossed = (n > 0)
-            ? (remainMsPrev > boundary && remainMsNow <= boundary)               // 5..1 경계 통과
-            : (remainMsPrev > 0 && remainMsNow <= (0 + EPS_0_MS));               // 0초는 200ms 일찍
+        const crossed = (n > 0)
+          ? (remainMsPrev > boundary && remainMsNow <= boundary)               // 5..1 경계 통과 (1초 앞당겨짐)
+          : (remainMsPrev > 1000 && remainMsNow <= 1000);                     // 🟢 0초는 1초 전에(1000ms) 표시
       
-          if (!crossed) return;
+        if (!crossed) return;
       
-          if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
-            // 오버레이 카운트다운(숫자)을 쓰는 경우: 5초 경계에서 1회만 시작
-            startSegmentCountdown(5, nextSeg);
+        if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
+          // 오버레이 카운트다운(숫자)을 쓰는 경우: 6초 전에 시작하여 5를 표시
+          startSegmentCountdown(5, nextSeg);
+        } else {
+          // 소리만
+          if (n > 0) {
+            if (typeof playCountdownBeep === "function") playCountdownBeep(n);
           } else {
-            // 소리만
-            if (n > 0) {
-              if (typeof playCountdownBeep === "function") playCountdownBeep(n);
-            } else {
-              if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
-            }
+            if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
           }
-      
-          ts._countdownFired[key] = { ...(ts._countdownFired[key] || {}), [n]: true };
         }
+      
+        ts._countdownFired[key] = { ...(ts._countdownFired[key] || {}), [n]: true };
+      }
       
         // 5→0 모두 확인(틱이 건너뛰어도 놓치지 않음)
         maybeFire(5);
@@ -1215,8 +1215,7 @@ function startSegmentLoop() {
       return;
     }
 
-    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
-   // 세그먼트 경계 통과 → 다음 세그먼트로 전환
+
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
    if (window.trainingState.segElapsedSec >= segDur) {
      // (변경) 소리와 전환을 분리: 전환은 즉시, 소리는 비동기로 마무리
