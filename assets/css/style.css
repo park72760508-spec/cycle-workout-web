@@ -329,19 +329,49 @@ button[aria-disabled="true"] {
 #trainingScreen .dual-metric .metric-label{ font-size:13px; color:#ccc; }
 
 /* ========== 개선된 세그먼트 바 스타일 ========== */
-.timeline-progress.timeline--xl {
+/*.timeline-progress.timeline--xl {
   height: 50px;
   border-radius: 16px;
   background: #f8fafc;
   box-shadow: inset 0 2px 8px rgba(0,0,0,0.08);
   overflow: hidden;
+} 변경전*/
+
+/* PATCH: 어두운 화면과 어울리는 글래스톤(변경 후) */
+.timeline-progress.timeline--xl {
+  height: 50px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);   /* 기존 #f8fafc → 투명 라이트톤 */
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.20);
+  backdrop-filter: blur(6px);            /* Glass */
+  -webkit-backdrop-filter: blur(6px);
+  overflow: hidden;
 }
 
-.timeline-segments {
+/*.timeline-segments {
   display: flex;
   height: 100%;
   position: relative;
+}변경전 */
+
+/* PATCH: 반투명 배경으로 일체감 강화(변경 후) */
+.timeline-segment {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #cbd5e1;                        /* 어두운 배경 대비 */
+  border-right: 1px solid rgba(148,163,184,0.18);
+  background: rgba(255,255,255,0.08);    /* 기존 #f1f5f9 → 반투명 */
+  transition: all 0.3s ease;
+  overflow: hidden;
 }
+
+
 
 .timeline-segment {
   position: relative;
@@ -354,7 +384,9 @@ button[aria-disabled="true"] {
   font-weight: 500;
   color: #64748b;
   border-right: 1px solid rgba(148, 163, 184, 0.2);
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.08); /* 은은한 라이트톤 투명 */
+  border-radius: 6px;
+  /*background: #f1f5f9;* <---변경전  */
   transition: all 0.3s ease;
   overflow: hidden;
 }
@@ -400,7 +432,8 @@ button[aria-disabled="true"] {
   margin: 1px 0;
 }
 
-.progress-fill {
+/* PATCH: 지나치게 희게 보이는 문제 해소 */
+/*.progress-fill {
   opacity: 0.4;
   position: absolute;
   inset: 0 auto 0 0;
@@ -409,7 +442,22 @@ button[aria-disabled="true"] {
   z-index: 1;
   transition: width 0.4s ease-out, background 0.3s ease;
   border-radius: inherit;
+}*/
+
+/* PATCH: 훈련화면의 세그멘트바 지나치게 희게 보이는 문제 해소 */
+.progress-fill {
+  opacity: 0.85;                         /* 0.4 → 0.85 (배경은 반투명, 채움은 선명) */
+  position: absolute;
+  inset: 0 auto 0 0;
+  height: 100%;
+  width: 0%;
+  z-index: 1;
+  transition: width 0.4s ease-out, background 0.3s ease, opacity 0.2s;
+  border-radius: inherit;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.15);
 }
+
+
 
 .timeline-segment:first-child .progress-fill {
   border-radius: 16px 0 0 16px;
@@ -455,6 +503,7 @@ button[aria-disabled="true"] {
   color: #cbd5e1;
 }
 
+/* 현재 세그먼트(진행 중)”은 푸른 톤으로 선명하게 */
 .timeline-segment.is-current {
   background: #eff6ff;
   color: #1e40af;
@@ -462,6 +511,8 @@ button[aria-disabled="true"] {
     inset 0 0 0 2px rgba(59, 130, 246, 0.3),
     0 0 0 1px rgba(59, 130, 246, 0.2);
   transform: scale(1.02);
+   .timeline-segment.is-current .progress-fill {
+     opacity: 1;  
 }
 
 .timeline-segment.is-current .segment-number,
@@ -482,16 +533,19 @@ button[aria-disabled="true"] {
   border-radius: 2px;
 }
 
+/* “완료된 세그먼트” 텍스트 톤 다운(눈부심 방지)폰트 수정 */
+/* PATCH: 완료 세그먼트 가독성 최적화 */
 .timeline-segment.is-complete {
-  color: #ffffff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.70);         /* 완전 흰색 → 살짝 낮춤 */
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
 }
 
 .timeline-segment.is-complete .segment-number,
 .timeline-segment.is-complete .segment-time,
 .timeline-segment.is-complete .repeat-count {
-  color: #ffffff;
+  color: rgba(255,255,255,0.70);         /* 라벨/번호도 동일 톤 */
 }
+
 
 /* 달성도별 완료 색상 */
 .timeline-segment.is-complete.achievement-low .progress-fill {
