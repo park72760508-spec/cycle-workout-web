@@ -87,107 +87,93 @@ let segmentCountdownActive = false;
 let segmentCountdownTimer = null;
 let countdownTriggered = []; // 세그먼트별 카운트다운 트리거 상태
 
-// 세그먼트 카운트다운 함수 (수정된 버전)
-async function startSegmentCountdown(remainingSeconds, nextSegment) {
-  console.log(`카운트다운 요청: ${remainingSeconds}초, 현재 상태: ${segmentCountdownActive}`);
-  
-  if (segmentCountdownActive) {
-    console.log('이미 카운트다운이 실행 중입니다.');
-    return;
+
+// [PATCH] Edge-Driven 카운트다운 표시 컨트롤러
+const CountdownDisplay = {
+  active: false,
+  overlay: null,
+  num: null,
+  infoDiv: null,
+  ensure(nextSegment) {
+    if (!this.overlay) this.overlay = document.getElementById("countdownOverlay");
+    if (!this.num) this.num = document.getElementById("countdownNumber");
+    if (!this.overlay || !this.num) return false;
+
+    // 다음 세그먼트 안내
+    if (!this.infoDiv) {
+      this.infoDiv = document.createElement('div');
+      this.infoDiv.id = 'nextSegmentInfo';
+      this.infoDiv.style.cssText = `
+        position:absolute; bottom:30%; left:50%; transform:translateX(-50%);
+        color:#fff; font-size:18px; font-weight:600; text-align:center;
+        text-shadow:0 2px 4px rgba(0,0,0,.5); opacity:.9;`;
+      this.overlay.appendChild(this.infoDiv);
+    }
+    const nextInfo = nextSegment
+      ? `다음: ${(nextSegment.label || nextSegment.segment_type || '세그먼트')} FTP ${getSegmentFtpPercent(nextSegment)}%`
+      : '훈련 완료';
+    this.infoDiv.textContent = nextInfo;
+
+    this.overlay.classList.remove("hidden");
+    this.overlay.style.display = "flex";
+    this.active = true;
+    return true;
+  },
+  render(n) {
+    if (!this.overlay || !this.num) return;
+    this.num.textContent = String(n);
+  },
+  finish(delayMs = 800) {
+    if (!this.overlay) return;
+    setTimeout(() => {
+      this.overlay.classList.add("hidden");
+      this.overlay.style.display = "none";
+      this.active = false;
+    }, delayMs);
+  },
+  hideImmediate() {
+    if (!this.overlay) return;
+    this.overlay.classList.add("hidden");
+    this.overlay.style.display = "none";
+    this.active = false;
   }
-  
+};
+
+
+
+
+// 세그먼트 카운트다운 함수 (수정된 버전)
+// [PATCH] 내부 타이머 없는 표시 전용 카운트다운
+function startSegmentCountdown(initialNumber, nextSegment) {
+  // initialNumber 는 보통 5 (6초 시점에서 5 표시)
+  if (segmentCountdownActive) return;
   segmentCountdownActive = true;
-  
-  const overlay = document.getElementById("countdownOverlay");
-  const num = document.getElementById("countdownNumber");
-  
-  if (!overlay || !num) {
-    console.warn('카운트다운 오버레이를 찾을 수 없습니다.');
+
+  const ok = CountdownDisplay.ensure(nextSegment);
+  if (!ok) {
     segmentCountdownActive = false;
     return;
   }
 
-  // 오버레이 표시
-  overlay.classList.remove("hidden");
-  overlay.style.display = "flex";
-  
-  // 다음 세그먼트 정보 표시
-  const nextSegmentInfo = nextSegment ? 
-    `다음: ${nextSegment.label || nextSegment.segment_type} FTP ${getSegmentFtpPercent(nextSegment)}%` : 
-    '훈련 완료';
-    
-  // 다음 세그먼트 정보 엘리먼트 생성/업데이트
-  let infoDiv = document.getElementById('nextSegmentInfo');
-  if (!infoDiv) {
-    infoDiv = document.createElement('div');
-    infoDiv.id = 'nextSegmentInfo';
-    infoDiv.style.cssText = `
-      position: absolute;
-      bottom: 30%;
-      left: 50%;
-      transform: translateX(-50%);
-      color: #fff;
-      font-size: 18px;
-      font-weight: 600;
-      text-align: center;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-      opacity: 0.9;
-    `;
-    overlay.appendChild(infoDiv);
-  }
-  infoDiv.textContent = nextSegmentInfo;
-
-  let remain = remainingSeconds;
-  
-  // 초기 표시 및 첫 번째 삐 소리
-  num.textContent = remain;
-  console.log(`카운트다운 시작: ${remain}초`);
+  // 처음 숫자와 짧은 비프
+  CountdownDisplay.render(initialNumber);
   playBeep(880, 120, 0.25);
-
-   segmentCountdownTimer = setInterval(() => {
-     console.log(`카운트다운: ${remain}초 남음`);
-     
-     if (remain > 0) {
-       // 1, 2, 3, 4, 5초일 때 - 일반 삐 소리
-       num.textContent = remain;
-       playBeep(880, 120, 0.25);
-       remain -= 1;
-       
-      } else if (remain === 0) {
-        // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
-        num.textContent = "0";
-        console.log('카운트다운 0초 - 강조 소리 재생');
-        
-        // 강조 소리 재생
-        playBeep(1500, 700, 0.35, "square").then(() => {
-          console.log('강조 소리 재생 완료');
-        }).catch(err => {
-          console.error('강조 소리 재생 실패:', err);
-        });
-        
-        // 타이머 즉시 정리
-        clearInterval(segmentCountdownTimer);
-        segmentCountdownTimer = null;
-        
-        // 오버레이는 벨소리 시간만큼 지연 후 닫기
-        setTimeout(() => {
-          overlay.classList.add("hidden");
-          overlay.style.display = "none";
-          segmentCountdownActive = false;
-          console.log('카운트다운 완료 - 오버레이 닫힘');
-        }, 800); // 벨소리 재생 시간(700ms) + 여유시간(100ms)
-       
-     } else {
-       // remain < 0일 때 - 안전장치
-       console.log('카운트다운 안전장치 실행');
-       clearInterval(segmentCountdownTimer);
-       segmentCountdownTimer = null;
-       overlay.classList.add("hidden");
-       overlay.style.display = "none";
-       segmentCountdownActive = false;
-     }
-   }, 1000);
 }
+
+// [PATCH] 카운트다운 강제 정지도 표시 컨트롤러 사용
+function stopSegmentCountdown() {
+  console.log('카운트다운 강제 정지');
+  CountdownDisplay.hideImmediate();
+  segmentCountdownActive = false;     // [PATCH] 상태 리셋
+   
+  if (segmentCountdownTimer) {
+    clearInterval(segmentCountdownTimer);
+    segmentCountdownTimer = null;
+  }
+  segmentCountdownActive = false;
+}
+
+
 
 // 참고: 기존 훈련 시작 카운트다운도 동일한 방식으로 개선 (선택적)
 function startWithCountdown(sec = 5) {
@@ -1151,33 +1137,38 @@ function startSegmentLoop() {
         const EPS_0_MS = 200;
       
       // === 수정된 코드(세그먼트 종료 6초 부터 카운트다운) ===
+      // [PATCH] Edge-Driven 카운트다운: 6초(표시 5) → 1초(표시 0)에서 끝
       function maybeFire(n) {
-        const fired = ts._countdownFired[key] || {};
-        if (fired[n]) return;
+        const firedMap = ts._countdownFired[key] || {};
+        if (firedMap[n]) return;
       
-        // ✅ 카운트다운을 1초 앞당겨 실행: 6초전에 "5" 표시, 5초전에 "4" 표시 등
-        const boundary = (n + 1) * 1000;  // 🟢 n * 1000 → (n + 1) * 1000 으로 변경
-      
-        const crossed = (n > 0)
-          ? (remainMsPrev > boundary && remainMsNow <= boundary)               // 5..1 경계 통과 (1초 앞당겨짐)
-          : (remainMsPrev > 1000 && remainMsNow <= 1000);                     // 🟢 0초는 1초 전에(1000ms) 표시
-      
+        // 경계: 6→5, 5→4, ..., 2→1 은 (n+1)*1000ms, 1→0 은 1000ms
+        const boundary = (n > 0) ? (n + 1) * 1000 : 1000;
+        const crossed = (remainMsPrev > boundary && remainMsNow <= boundary);
         if (!crossed) return;
       
-        if (n === 5 && typeof startSegmentCountdown === "function" && !segmentCountdownActive && nextSeg) {
-          // 오버레이 카운트다운(숫자)을 쓰는 경우: 6초 전에 시작하여 5를 표시
-          startSegmentCountdown(5, nextSeg);
-        } else {
-          // 소리만
-          if (n > 0) {
-            if (typeof playCountdownBeep === "function") playCountdownBeep(n);
-          } else {
-            if (typeof playSegmentEndBeep === "function") playSegmentEndBeep();
-          }
+        // 오버레이 표시 시작(6초 시점에 "5" 표시)
+        if (n === 5 && !segmentCountdownActive && nextSeg) {
+          startSegmentCountdown(5, nextSeg); // 오버레이 켜고 5 표시 + 짧은 비프
+        } else if (segmentCountdownActive) {
+          // 진행 중이면 숫자 업데이트만(내부 타이머 없음)
+          CountdownDisplay.render(n);
+          if (n > 0) playBeep(880, 120, 0.25);
         }
       
-        ts._countdownFired[key] = { ...(ts._countdownFired[key] || {}), [n]: true };
+        // 0은 "세그먼트 종료 1초 전"에 표시 + 강조음, 그리고 오버레이 닫기 예약
+        if (n === 0) {
+          // 강조음 (조금 더 강한 톤)
+          playBeep(1500, 700, 0.35, "square");
+          // 오버레이는 약간의 여유를 두고 닫기
+          CountdownDisplay.finish(800);
+          segmentCountdownActive = false;
+        }
+      
+        ts._countdownFired[key] = { ...firedMap, [n]: true };
       }
+
+
       
         // 5→0 모두 확인(틱이 건너뛰어도 놓치지 않음)
         maybeFire(5);
