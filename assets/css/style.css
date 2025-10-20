@@ -659,13 +659,17 @@ button[aria-disabled="true"] {
 }
 
 /* 타임라인 전체 컨테이너 */
+/* PATCH: 래퍼도 Glassmorphism */
 .timeline-wrap {
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  background: linear-gradient(135deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.85) 100%);
   border-radius: 16px;
   padding: 16px 20px;
   margin-top: 20px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
+
 
 .timeline-legend {
   margin-top: 12px;
