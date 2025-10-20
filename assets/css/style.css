@@ -2233,7 +2233,7 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
-/* 일시정지 아이콘 */
+/* 일시정지 아이콘
 .enhanced-control-btn.pause::before {
   content: '';
   width: 4px;
@@ -2241,7 +2241,25 @@ button[aria-disabled="true"] {
   background: #fbbf24;
   border-radius: 2px;
   box-shadow: 8px 0 0 #fbbf24;
+}*/
+
+/* 위치: style (16).css - 개선형 컨트롤 버튼 아이콘 정의 구역(의사요소) */
+.enhanced-control-btn.pause::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  /* 여기가 핵심 보정 ① */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%,-50%); /* 정확히 중앙 정렬 */
+
+  /* 여기가 아이콘 도형(두 막대) */
+  box-shadow: -5px 0 0 0 currentColor, 5px 0 0 0 currentColor;
+  border-radius: 2px;
 }
+
+
 
 .enhanced-control-btn.pause:hover {
   border-color: #fbbf24;
