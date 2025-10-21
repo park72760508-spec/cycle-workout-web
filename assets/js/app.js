@@ -77,6 +77,71 @@ function setNameProgress(ratio){
 }
 
 
+/* ================================
+   Screen Wake Lock (화면 항상 켜짐)
+   ================================ */
+const ScreenAwake = (() => {
+  let wakeLock = null;
+
+  async function acquire() {
+    if (!('wakeLock' in navigator)) {
+      console.warn('[ScreenAwake] Wake Lock API not supported in this browser.');
+      return; // iOS 일부/구형 브라우저는 미지원
+    }
+    try {
+      // 이미 있으면 재요청하지 않음
+      if (wakeLock) return;
+      wakeLock = await navigator.wakeLock.request('screen');
+      console.log('[ScreenAwake] acquired');
+
+      // 시스템이 임의로 해제했을 때 플래그 정리
+      wakeLock.addEventListener('release', () => {
+        console.log('[ScreenAwake] released by system');
+        wakeLock = null;
+      });
+    } catch (err) {
+      console.warn('[ScreenAwake] acquire failed:', err);
+      wakeLock = null;
+    }
+  }
+
+  async function release() {
+    try {
+      if (wakeLock) {
+        await wakeLock.release();
+        console.log('[ScreenAwake] released by app');
+      }
+    } catch (err) {
+      console.warn('[ScreenAwake] release failed:', err);
+    } finally {
+      wakeLock = null;
+    }
+  }
+
+  // 탭/앱이 다시 보이면(복귀) 필요 시 자동 재획득
+  async function reAcquireIfNeeded() {
+    // 훈련 중인 상태에서만 재요청 (isRunning은 아래 훅에서 관리)
+    if (document.visibilityState === 'visible' && window?.trainingState?.isRunning) {
+      await acquire();
+    }
+  }
+
+  function init() {
+    document.addEventListener('visibilitychange', reAcquireIfNeeded);
+    window.addEventListener('pageshow', reAcquireIfNeeded);
+    window.addEventListener('focus', reAcquireIfNeeded);
+
+    ScreenAwake.init();
+
+    // 백그라운드/페이지 전환 시에는 안전하게 해제 (브라우저가 자동 해제해도 무방)
+    window.addEventListener('pagehide', release);
+  }
+
+  return { acquire, release, init };
+})();
+
+
+
 
 // ========== 기존 변수들 유지 ==========
 window.currentUser = window.currentUser || null;
@@ -1366,6 +1431,19 @@ function stopSegmentLoop() {
   
   // 활성 카운트다운도 정지
   stopSegmentCountdown();
+
+     /* ⬇⬇⬇ B) 훈련 정지/종료 지점 — 여기 추가 ⬇⬇⬇ */
+     window.trainingState = window.trainingState || {};
+     window.trainingState.isRunning = false;   // 훈련 상태 off
+   
+     if (typeof ScreenAwake !== "undefined" && ScreenAwake.release) {
+       ScreenAwake.release();                  // 화면 항상 켜짐 해제(원복)
+     } else {
+       console.warn("[ScreenAwake] util not found or release missing");
+     }
+     /* ⬆⬆⬆ B) 훈련 정지/종료 지점 — 여기까지 ⬆⬆⬆ */
+
+   
    // 진행바 초기화
   setNameProgress(0);
 }
@@ -1645,6 +1723,18 @@ function startWorkoutTraining() {
       console.log('Switched to training screen');
     }
 
+      /* ⬇⬇⬇ A) 훈련 시작 지점 — 여기 추가 ⬇⬇⬇ */
+      window.trainingState = window.trainingState || {};
+      window.trainingState.isRunning = true;           // 훈련 진행 상태 on
+      
+      if (typeof ScreenAwake !== "undefined" && ScreenAwake.acquire) {
+        ScreenAwake.acquire();                         // 화면 항상 켜짐 요청
+      } else {
+        console.warn("[ScreenAwake] util not found or acquire missing");
+      }
+      /* ⬆⬆⬆ A) 훈련 시작 지점 — 여기까지 ⬆⬆⬆ */
+
+     
     // 사용자 정보 출력 (안전 장치 추가)
     if (typeof renderUserInfo === "function") {
       try {
