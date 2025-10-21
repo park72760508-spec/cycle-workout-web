@@ -847,6 +847,44 @@ function updateSegmentBarTick(){
     if (groupFill) {
       groupFill.style.width = (groupRatio * 100) + "%";
     }
+
+      // 상태/달성도 클래스 초기화
+      groupEl.classList.remove(
+        "is-complete","is-current","is-upcoming",
+        "achievement-low","achievement-good","achievement-high","achievement-over"
+      );
+      
+      // 그룹 경계
+      const groupStart = groupStartTime;
+      const groupEnd   = groupStartTime + groupTotalTime;
+      
+      // 달성도 계산: (가중평균 실제W) / (가중평균 타깃W)
+      let targetSum = 0, actualSum = 0;
+      for (let i = startIndex; i < endIndex; i++) {
+        const seg = w.segments[i];
+        const dur = segDurationSec(seg);
+        const tgt = segTargetW(seg, ftp);                          // 기존 함수 사용
+        const samples = segBar.samples[i] || 0;
+        const avgW    = samples ? (segBar.sumPower[i] / samples) : 0;
+      
+        targetSum += (tgt * dur);
+        actualSum += (avgW * dur);
+      }
+      const groupAch = targetSum > 0 ? (actualSum / targetSum) : 0;
+      
+      // 상태 + 달성도 클래스 부여
+      if (elapsed >= groupEnd) {
+        groupEl.classList.add("is-complete");
+        if (groupAch < 0.85)              groupEl.classList.add("achievement-low");
+        else if (groupAch <= 1.15)        groupEl.classList.add("achievement-good");
+        else if (groupAch <= 1.30)        groupEl.classList.add("achievement-high");
+        else                              groupEl.classList.add("achievement-over");
+      } else if (elapsed >= groupStart && elapsed < groupEnd) {
+        groupEl.classList.add("is-current");
+      } else {
+        groupEl.classList.add("is-upcoming");
+      }
+   
   });
 
   // 3) 세그먼트 상태 클래스 업데이트 + 달성도 기반 색상 적용
