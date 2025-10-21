@@ -1050,7 +1050,9 @@ function updateTimeUI() {
       const segElapsed = Math.max(0, Number(window.trainingState?.segElapsedSec) || 0);
       const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
       safeSetText("segmentProgress", String(sp));
-      safeSetText("segmentProgressLegend", String(sp)); // ← 범례에도 동일 % 표시
+      //safeSetText("segmentProgressLegend", String(sp)); // ← 범례에도 동일 % 표시
+      safeSetText("segmentProgressLegend", String(totalPct)); // ✅ 전체 %로 변경
+       
      // ⬇⬇⬇ 여기에 "이 한 줄" 추가 ⬇⬇⬇
      setNameProgress(segElapsed / segDur);
        
