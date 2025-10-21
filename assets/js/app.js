@@ -939,7 +939,35 @@ function updateSegmentBarTick(){
 
   // 4) 그룹 상태 클래스 업데이트는 기존과 동일...
   // (생략 - 기존 코드와 동일)
+   // 4) 그룹 상태 클래스 업데이트
+   document.querySelectorAll('.timeline-group').forEach(groupEl => {
+     const startIndex = parseInt(groupEl.dataset.startIndex) || 0;
+     const endIndex   = parseInt(groupEl.dataset.endIndex)   || 0;
+   
+     // 그룹의 누적 시작/총 시간 계산
+     let groupStartTime = 0;
+     for (let i = 0; i < startIndex; i++) groupStartTime += segDurationSec(w.segments[i]);
+   
+     let groupTotalTime = 0;
+     for (let i = startIndex; i < endIndex; i++) groupTotalTime += segDurationSec(w.segments[i]);
+   
+     const groupEndTime = groupStartTime + groupTotalTime;
+   
+     // 상태 클래스 초기화
+     groupEl.classList.remove('is-complete','is-current','is-upcoming');
+   
+     if (elapsed >= groupEndTime) {
+       groupEl.classList.add('is-complete');
+     } else if (elapsed >= groupStartTime && elapsed < groupEndTime) {
+       groupEl.classList.add('is-current');
+     } else {
+       groupEl.classList.add('is-upcoming'); // ⬅ 미진행(업커밍)
+     }
+   });
 
+
+
+   
   // 5) 평균 파워 누적
   const p = Math.max(0, Number(window.liveData?.power) || 0);
   if (w.segments[segIndex]) {
