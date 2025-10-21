@@ -2484,3 +2484,7 @@ button[aria-disabled="true"] {
 .timeline-group.is-upcoming{ box-shadow: inset 0 0 0 1px rgba(34,197,94,0.25) !important; }
 .timeline-group.is-current { box-shadow: inset 0 0 0 1px rgba(34,197,94,0.22) !important; }
 
+.timeline-group{
+  border: none !important;
+  background: rgba(255,255,255,0.08) !important; /* 기본은 일반 세그먼트와 동일 */
+}
