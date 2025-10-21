@@ -2504,10 +2504,10 @@ button[aria-disabled="true"] {
   content:"";
   position:absolute; inset:0;
   width: var(--name-progress, 0%);   /* ⬅ 이 값을 JS에서 0~100%로 변경 */
-  background: linear-gradient(90deg,
-              rgba(46,116,232,0.20) 0%,
-              rgba(46,116,232,0.12) 100%);
-  border-right: 1px solid rgba(46,116,232,0.35);
+   background: linear-gradient(90deg,
+               rgba(245,158,11,0.22) 0%,    /* 밝은 주황 #f59e0b / 22% 투명 */
+               rgba(245,158,11,0.14) 100%);
+   border-right: 1px solid rgba(245,158,11,0.35);
   pointer-events:none;
   z-index:0;
   transition: width 160ms linear;    /* 부드러운 진행 */
