@@ -1550,7 +1550,7 @@ button[aria-disabled="true"] {
 }
 
 .enhanced-countdown-value {
-  font-size: 32px;
+  font-size: 50px;
   font-weight: 700;
   color: #3b82f6;
 }
@@ -1579,7 +1579,7 @@ button[aria-disabled="true"] {
 
 .enhanced-target-value {
   color: #fb923c; /* 주황색 텍스트 */
-  font-size: 32px;
+  font-size: 50px;
   font-weight: 700;
   line-height: 1;
 }
@@ -1617,7 +1617,7 @@ button[aria-disabled="true"] {
 
 .enhanced-avg-value {
   color: #3b82f6; /* 파란색 텍스트 */
-  font-size: 32px;
+  font-size: 50px;
   font-weight: 700;
   line-height: 1;
 }
@@ -1833,11 +1833,11 @@ button[aria-disabled="true"] {
   }
   
   .enhanced-target-value, .enhanced-avg-value {
-    font-size: 30px;
+    font-size: 48px;
   }
   
   .enhanced-countdown-value {
-    font-size: 30px;
+    font-size: 48px;
   }
 }
 
@@ -1859,11 +1859,11 @@ button[aria-disabled="true"] {
   }
   
   .enhanced-target-value, .enhanced-avg-value {
-    font-size: 28px;
+    font-size: 46px;
   }
   
   .enhanced-countdown-value {
-    font-size: 28px;
+    font-size: 46px;
   }
   
   .enhanced-left-panel .enhanced-metric-value,
@@ -1897,11 +1897,11 @@ button[aria-disabled="true"] {
   }
   
   .enhanced-target-value, .enhanced-avg-value {
-    font-size: 26px;
+    font-size: 44px;
   }
   
   .enhanced-countdown-value {
-    font-size: 26px;
+    font-size: 44px;
   }
   
   .enhanced-left-panel .enhanced-metric-value,
@@ -1926,11 +1926,11 @@ button[aria-disabled="true"] {
   }
   
   .enhanced-target-value, .enhanced-avg-value {
-    font-size: 24px;
+    font-size: 40px;
   }
   
   .enhanced-countdown-value {
-    font-size: 24px;
+    font-size: 40px;
   }
 }
 
