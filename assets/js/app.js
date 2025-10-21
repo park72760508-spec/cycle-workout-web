@@ -68,6 +68,16 @@ function safeSetText(id, text) {
   }
 }
 
+// === 현재 세그먼트명 진행바 채움 폭을 CSS 변수로 지정 ===
+function setNameProgress(ratio){
+  const el = document.getElementById("currentSegmentName");
+  if (!el) return;
+  const pct = Math.max(0, Math.min(1, Number(ratio) || 0)) * 100;
+  el.style.setProperty("--name-progress", pct + "%");
+}
+
+
+
 // ========== 기존 변수들 유지 ==========
 window.currentUser = window.currentUser || null;
 window.currentWorkout = window.currentWorkout || null;
@@ -1040,6 +1050,10 @@ function updateTimeUI() {
       const segElapsed = Math.max(0, Number(window.trainingState?.segElapsedSec) || 0);
       const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
       safeSetText("segmentProgress", String(sp));
+
+     // ⬇⬇⬇ 여기에 "이 한 줄" 추가 ⬇⬇⬇
+     setNameProgress(segElapsed / segDur);
+       
     }
     
   } catch (error) {
@@ -1069,6 +1083,8 @@ function applySegmentTarget(i) {
     if (nameEl) {
       const segmentName = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
       nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+     // ⬇⬇⬇ 새 세그먼트 진입 시 진행바 0%로 리셋
+     setNameProgress(0);       
     }
     
     safeSetText("segmentProgress", "0");
@@ -1348,6 +1364,8 @@ function stopSegmentLoop() {
   
   // 활성 카운트다운도 정지
   stopSegmentCountdown();
+   // 진행바 초기화
+  setNameProgress(0);
 }
 
 // 일시정지 시에도 카운트다운 정지
