@@ -1443,6 +1443,7 @@ button[aria-disabled="true"] {
 .enhanced-time-percent {
   font-size: 14px;
   color: #64748b;
+  display:none;  /* ← 퍼센트 표시 숨김 */
 }
 
 .enhanced-next-value {
