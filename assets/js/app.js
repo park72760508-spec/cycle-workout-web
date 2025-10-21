@@ -88,6 +88,8 @@ let segmentCountdownTimer = null;
 let countdownTriggered = []; // 세그먼트별 카운트다운 트리거 상태
 
 
+
+
 // [PATCH] Edge-Driven 카운트다운 표시 컨트롤러
 const CountdownDisplay = {
   active: false,
@@ -139,6 +141,13 @@ const CountdownDisplay = {
   }
 };
 
+// 경과 시간 텍스트를 형식 변경
+function formatHMS(totalSeconds){
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.floor(totalSeconds % 60);
+  return [h, m, s].map(v => String(v).padStart(2,"0")).join(":");
+}
 
 
 
@@ -970,7 +979,7 @@ function updateTimeUI() {
     const totalPct = Math.min(100, Math.floor((elapsed / total) * 100));
 
     // 안전한 요소 업데이트
-    safeSetText("elapsedTime", formatMMSS(elapsed));
+    safeSetText("elapsedTime", formatHMS(elapsed));
     safeSetText("elapsedPercent", totalPct);
 
     // 현재 세그먼트
