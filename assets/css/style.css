@@ -1417,12 +1417,23 @@ button[aria-disabled="true"] {
   margin-bottom: 4px;
 }
 
-.enhanced-time-value {
+/*.enhanced-time-value {
   font-size: 24px;
   font-weight: 700;
   color: #00d4aa;
   margin-right: 8px;
+}*/
+
+/* 경과 시간 */
+.enhanced-time-value {
+  font-size: 32px;           /* 또는 clamp(28px, 3.2vw, 36px) */
+  font-weight: 700;
+  color: #00d4aa;
+  margin-right: 8px;
+  letter-spacing: .5px;       /* 선택: 가독성 */
+  line-height: 1.1;           /* 선택 */
 }
+
 
 .enhanced-time-percent {
   font-size: 14px;
