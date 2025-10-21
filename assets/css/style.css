@@ -2487,3 +2487,36 @@ button[aria-disabled="true"] {
   border: none !important;
   background: rgba(255,255,255,0.08) !important; /* 기본은 일반 세그먼트와 동일 */
 }
+
+
+
+/* [훈련화면] 현재 세그먼트 진행율 그래프 */
+/* 진행바를 담을 컨테이너 역할 */
+.enhanced-current-segment-name{
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;            /* 모서리 라운드(원하시면 조정) */
+  padding: 6px 10px;              /* 텍스트 숨김 방지용 약간의 여백 */
+}
+
+/* 파란 투명 진행 채움 (width는 CSS 변수로 제어) */
+.enhanced-current-segment-name::before{
+  content:"";
+  position:absolute; inset:0;
+  width: var(--name-progress, 0%);   /* ⬅ 이 값을 JS에서 0~100%로 변경 */
+  background: linear-gradient(90deg,
+              rgba(46,116,232,0.20) 0%,
+              rgba(46,116,232,0.12) 100%);
+  border-right: 1px solid rgba(46,116,232,0.35);
+  pointer-events:none;
+  z-index:0;
+  transition: width 160ms linear;    /* 부드러운 진행 */
+}
+
+/* 텍스트는 항상 채움 위에 보이도록 */
+.enhanced-current-segment-name,
+.enhanced-current-segment-name *{
+  position: relative;
+  z-index: 1;
+}
+
