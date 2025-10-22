@@ -2223,11 +2223,13 @@ window.testNeonEffect = function(achievementPercent) {
   
   // 기존 클래스 제거
   panels.forEach(panel => {
-    panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
+    //panel.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over', 'neon-active');
+     panel.classList.remove('neon-active', 'achievement-bad', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
   });
   
   if (currentPowerEl) {
-    currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+    //currentPowerEl.classList.remove('achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+     currentPowerEl.classList.remove('achievement-bad', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
   }
   
   // 테스트 클래스 적용
@@ -2254,13 +2256,13 @@ window.testNeonEffect = function(achievementPercent) {
    // (예시) 패널 전체 순회 루틴 어딘가에 있다면:
    document.querySelectorAll('.enhanced-metric-panel').forEach(panel => {
      if (panel.id === 'userPanel') return; // 🔧 사용자 패널은 건드리지 않음 (정적 네온 유지)
-     panel.classList.remove('neon-active','achievement-low','achievement-good','achievement-high','achievement-over');
+     panel.classList.remove('neon-active', 'achievement-bad', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
    });
 
    
    if (currentPowerEl) {
      currentPowerEl.classList.remove(
-       'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
+       'achievement-bad', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over'
      );
    }
    
