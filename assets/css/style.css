@@ -2625,3 +2625,35 @@ button[aria-disabled="true"] {
 }
 
 
+/* 진행바 위 마스코트/깃발 레이어 */
+#trainingScreen .timeline-wrap { position: relative; }
+
+#trainingScreen .timeline-progress.timeline--xl {
+  position: relative;
+  overflow: visible; /* 마스코트가 위로 튀어나와도 보이도록 */
+}
+
+#timelineMascotLayer {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: calc(100% + 6px); /* 막대 바로 위에 붙임 */
+  height: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#timelineMascotLayer img { position: absolute; display: block; }
+
+#progressMascot {
+  width: clamp(36px, 5vw, 54px);   /* 작게, 반응형 */
+  bottom: -2px;
+  transform: translateX(var(--mascot-x, 0px));
+}
+
+#goalFlag {
+  width: clamp(18px, 2.5vw, 28px);
+  bottom: -4px;
+  right: 0; /* 진행바 100% 지점 */
+}
+
+
