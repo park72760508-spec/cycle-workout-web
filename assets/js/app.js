@@ -972,45 +972,65 @@ function updateSegmentBarTick(){
   });
 
   // 3) 세그먼트 상태 클래스 업데이트 + 달성도 기반 색상 적용
-  let startAt2 = 0;
-  for (let i = 0; i < w.segments.length; i++) {
-    const seg = w.segments[i];
-    const dur = segDurationSec(seg);
-    const endAt2 = startAt2 + dur;
-
-    const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
-    if (el) {
-      el.classList.remove("is-complete", "is-current", "is-upcoming");
-      el.classList.remove("achievement-low", "achievement-good", "achievement-high", "achievement-over");
+  // 3) 세그먼트 상태 클래스 업데이트 + 달성도 기반 색상 적용
+        let startAt2 = 0;
+        for (let i = 0; i < w.segments.length; i++) {
+          const seg = w.segments[i];
+          const dur = segDurationSec(seg);
+          const endAt2 = startAt2 + dur;
       
-      if (elapsed >= endAt2) {
-        // 완료된 세그먼트 - 달성도 기반 색상 적용
-        el.classList.add("is-complete");
-        
-        // 달성도 계산 및 색상 적용
-        const targetW = segTargetW(seg, ftp);
-        const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
-        const achievement = targetW > 0 ? (avgW / targetW) : 0;
-        
-        // 달성도에 따른 CSS 클래스 추가
-        if (achievement < 0.85) {
-          el.classList.add("achievement-low");
-        } else if (achievement >= 0.85 && achievement <= 1.15) {
-          el.classList.add("achievement-good");
-        } else if (achievement > 1.15 && achievement <= 1.3) {
-          el.classList.add("achievement-high");
-        } else if (achievement > 1.3) {
-          el.classList.add("achievement-over");
+          const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+          if (el) {
+            el.classList.remove("is-complete", "is-current", "is-upcoming");
+            el.classList.remove("achievement-low", "achievement-good", "achievement-high", "achievement-over");
+            
+            if (elapsed >= endAt2) {
+              // 완료된 세그먼트 - 달성도 기반 색상 적용
+              el.classList.add("is-complete");
+              
+              // 달성도 계산 및 색상 적용
+              const targetW = segTargetW(seg, ftp);
+              const avgW = segBar.samples[i] ? (segBar.sumPower[i] / segBar.samples[i]) : 0;
+              const achievement = targetW > 0 ? (avgW / targetW) : 0;
+              
+              // 달성도에 따른 CSS 클래스 추가
+              if (achievement < 0.85) {
+                el.classList.add("achievement-low");
+              } else if (achievement >= 0.85 && achievement <= 1.15) {
+                el.classList.add("achievement-good");
+              } else if (achievement > 1.15 && achievement <= 1.3) {
+                el.classList.add("achievement-high");
+              } else if (achievement > 1.3) {
+                el.classList.add("achievement-over");
+              }
+              
+            } else if (elapsed >= startAt2 && elapsed < endAt2) {
+              el.classList.add("is-current");
+            } else {
+              el.classList.add("is-upcoming");
+            }
+          }
+          startAt2 = endAt2;
         }
-        
-      } else if (elapsed >= startAt2 && elapsed < endAt2) {
-        el.classList.add("is-current");
-      } else {
-        el.classList.add("is-upcoming");
-      }
-    }
-    startAt2 = endAt2;
-  }
+        // ⬇⬇ 이 지점 직후에 삽입 (for 루프 닫는 중괄호 다음 줄)
+      
+      /* === 3.5) 전체 진행률 계산 + 전광판 갱신 + 마스코트 이동 === */
+        try {
+          const total = (window.trainingState && window.trainingState.totalSec) ? window.trainingState.totalSec : 0;
+          const elapsedAll = (window.trainingState && window.trainingState.elapsedSec) ? window.trainingState.elapsedSec : 0;
+          const percent = total > 0 ? Math.round((elapsedAll / total) * 100) : 0;
+      
+          const legend = document.getElementById('segmentProgressLegend');
+          if (legend) legend.textContent = Math.max(0, Math.min(100, percent));
+      
+          if (typeof updateMascotProgress === 'function') {
+            updateMascotProgress(percent);  // ✅ 마스코트 이동
+          }
+        } catch (e) {
+          console.warn('updateSegmentBarTick: progress/motif update error', e);
+        }
+      /* === /3.5 === */
+
 
   // 4) 그룹 상태 클래스 업데이트는 기존과 동일...
   // (생략 - 기존 코드와 동일)
@@ -1547,26 +1567,29 @@ if (!window.showToast) {
 }
 
 //진행률에 맞춰 X 위치만 갱신
+// ✅ 마스코트 진행 반영 (0~100)
 function updateMascotProgress(percent) {
-  const layer  = document.getElementById("mascotRunway");   // 밖 활주로
-  const mascot = document.getElementById("progressMascot");
-  const bar    = document.querySelector("#trainingScreen .timeline-progress.timeline--xl");
-  if (!layer || !mascot || !bar) return;
+  try {
+    const layer = document.getElementById('timelineMascotLayer'); // ← ID 교정
+    const mascot = document.getElementById('progressMascot');
+    if (!layer || !mascot) return;
 
-  const w    = bar.clientWidth;
-  const mW   = mascot.clientWidth || 40;    // 이미지 실측 너비 (fallback 40px)
-  const half = mW / 2;
+    // 0~100 안전 클램프
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
 
-  // 0%~100% → px, 가장자리는 half만큼 여유 주기
-  const raw = Math.round((percent / 100) * w);
-  const px  = Math.max(half, Math.min(w - half, raw));
+    // 진행바(=layer) 실제 가로폭 기준으로 X 픽셀 산출
+    const trackWidth = layer.clientWidth;
+    // 마스코트가 살짝 안쪽에서 시작/끝나도록 6px 마진
+    const margin = 6;
+    const maxX = Math.max(0, trackWidth - mascot.clientWidth - margin * 2);
+    const x = margin + (maxX * (p / 100));
 
-  layer.style.setProperty("--mascot-x", px + "px");
+    // CSS 변수로 전달 (progressMascot의 transform에서 사용)
+    layer.style.setProperty('--mascot-x', `${x}px`);
+  } catch (e) {
+    console.warn('updateMascotProgress error:', e);
+  }
 }
-
-
-
-
 
 
 // *** 핵심 수정: updateTrainingDisplay 함수 - currentPower 변수 초기화 문제 해결 ***
