@@ -2656,4 +2656,26 @@ button[aria-disabled="true"] {
   right: 0; /* 진행바 100% 지점 */
 }
 
+/* === [CANONICAL] 세그먼트 간 1px 왼쪽 구분선은 항상 유지 === */
+/* 상태 클래스(.is-current, .is-upcoming, .is-complete, .timeline-group 등)가
+   border:none !important; 를 선언하더라도, 왼쪽 라인은 복구/유지한다. */
+.timeline-segment:not(:first-child) {
+  border-left: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+/* 상태 클래스에서 다른 변 방향(border-top/right/bottom)은 제거해도 OK,
+   단 '왼쪽'은 건드리지 않도록 명시 (덮어쓰기 방지) */
+.timeline-segment.is-current,
+.timeline-segment.is-upcoming,
+.timeline-segment.is-complete,
+.timeline-segment.timeline-group,
+.timeline-group,
+.timeline-group.is-current,
+.timeline-group.is-upcoming,
+.timeline-group.is-complete {
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  /* border-left 는 의도적으로 미지정 → 위 canonical 규칙이 적용됨 */
+}
 
