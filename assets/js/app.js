@@ -667,46 +667,31 @@ function createTimeline() {
 
 
 // 마스코트 진행 위치를 "세그먼트별 실제 픽셀폭" 기준으로 계산/반영
+// ✅ 단일 공식: (elapsed / totalSec) → 트랙폭로 선형 변환
 function updateMascotProgress(elapsedSec) {
   try {
-    const w = window.currentWorkout;
-    const segEnds = window.trainingState?.segEnds;   // createTimeline()에서 채움  :contentReference[oaicite:3]{index=3}
+    const ts = window.trainingState || {};
+    const total = Number(ts.totalSec) || (Array.isArray(ts.segEnds) ? ts.segEnds[ts.segEnds.length - 1] : 0) || 1;
+
     const bar = document.getElementById('timelineSegments');
-    const mascot = document.getElementById('progressMascot'); // index.html에 있는 마스코트 엘리먼트(아이디 확인)
+    const mascot = document.getElementById('progressMascot');
+    if (!bar || !mascot) return;
 
-    if (!w || !Array.isArray(w.segments) || !segEnds || !bar || !mascot) return;
+    const barWidth = bar.clientWidth;            // 스크롤/보더 제외, 실제 그려진 트랙 폭
+    const mW = mascot.offsetWidth || 0;
 
-    const total = segEnds[segEnds.length - 1] || 1;
-    const barWidth = bar.clientWidth || 0;
+    // 0~1 비율로 클램프
+    const r = Math.max(0, Math.min(1, (Number(elapsedSec) || 0) / total));
 
-    // 누적 픽셀 위치
-    let px = 0;
-    let prevEnd = 0;
+    // 마스코트의 좌측 기준 x(px): 가장자리에 걸리지 않도록 너비를 고려
+    const x = Math.round(r * Math.max(0, barWidth - mW));
 
-    for (let i = 0; i < segEnds.length; i++) {
-      const end = segEnds[i];
-      const segEl = document.querySelector(`.timeline-segment[data-index="${i}"]`);
-      const segWidth = segEl ? segEl.offsetWidth : barWidth * ((end - prevEnd) / total);
-
-      if (elapsedSec >= end) {
-        // 이 세그먼트는 전부 지나왔다 → 전체 폭만큼 더함
-        px += segWidth;
-      } else {
-        // 현재 진행 중인 세그먼트 내부 비율만큼만 더함
-        const segElapsed = Math.max(0, elapsedSec - prevEnd);
-        const segDur = Math.max(1, end - prevEnd);
-        const ratio = Math.min(1, segElapsed / segDur);
-        px += segWidth * ratio;
-        break;
-      }
-      prevEnd = end;
-    }
-
-    mascot.style.transform = `translateX(${px}px)`; // 좌측 기준으로 x 이동
+    mascot.style.transform = `translateX(${x}px)`;
   } catch (e) {
     console.warn('updateMascotProgress error:', e);
   }
 }
+
 
 
 
@@ -1077,10 +1062,7 @@ function updateSegmentBarTick(){
       
           const legend = document.getElementById('segmentProgressLegend');
           if (legend) legend.textContent = Math.max(0, Math.min(100, percent));
-      
-          if (typeof updateMascotProgress === 'function') {
-            updateMascotProgress(percent);  // ✅ 마스코트 이동
-          }
+
         } catch (e) {
           console.warn('updateSegmentBarTick: progress/motif update error', e);
         }
