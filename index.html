@@ -857,15 +857,25 @@
   </div>
 
   <!-- 4. 세그먼트 타임라인 (기존 유지) -->
+  <!-- 4. 세그먼트 타임라인 (기존 유지 + 마스코트 레이어 추가) -->
   <div class="timeline-wrap">
     <div class="timeline-progress timeline--xl" id="timelineProgress">
       <div class="timeline-segments" id="timelineSegments"></div>
+
+      <!-- 👇 여기에 추가 -->
+      <div id="timelineMascotLayer" aria-hidden="true">
+        <img id="progressMascot" src="assets/img/cyclist.gif" alt="mascot" />
+        <img id="goalFlag" src="assets/img/goal-flag.jpg" alt="goal flag" />
+      </div>
+      <!-- 👆 추가 끝 -->
     </div>
+
     <div class="timeline-legend">
       <!--<span>평균 파워: <span id="avgPowerValue">-</span>W</span>-->
       <span>진행율 : <span id="segmentProgressLegend">0</span>%</span>
     </div>
   </div>
+
 
   <!-- 5. 컨트롤 버튼 (기존 유지) -->
 
