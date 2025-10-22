@@ -1609,24 +1609,45 @@ window.updateTrainingDisplay = function () {
      if (!panel) return;
    
      // 현재 파워/타깃
-     const cur = Number(window.liveData?.power) || 0;
-     const tgt = Number(window.liveData?.targetPower) || 0;
-   
-     // 이전 효과 제거
-     panel.classList.remove('neon-active', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
-   
-     if (tgt <= 0 || cur <= 0) return; // 목표/현재 값 없으면 네온 미적용
-   
-     // 달성도 구간 선택
-     let ach = 'achievement-good';
-     const ratio = cur / tgt;
-     if (ratio < 0.9)       ach = 'achievement-low';
-     else if (ratio <= 1.15) ach = 'achievement-good';
-     else if (ratio <= 1.30) ach = 'achievement-high';
-     else                    ach = 'achievement-over';
-   
-     // 오직 중앙 컨테이너에만 부여
-     panel.classList.add('neon-active', ach);
+      // === 평균 파워 기반 네온 평가로 변경 ===
+      
+      // 1) 타깃 파워
+      const tgt = Number(window.liveData?.targetPower) || 0;
+      
+      // 2) 세그먼트 평균 파워 가져오기(우선순위: segmentStats → 화면표시 → 현재파워 폴백)
+      let avgNow = NaN;
+      const segIdx = Number(window.trainingState?.segIndex) || 0;
+      
+      if (window.segmentStats && window.segmentStats[segIdx] && Number.isFinite(window.segmentStats[segIdx].avg)) {
+        avgNow = Number(window.segmentStats[segIdx].avg);
+      }
+      if (!Number.isFinite(avgNow)) {
+        const avgEl = document.getElementById('avgSegmentPowerValue');
+        if (avgEl) {
+          const n = parseFloat(avgEl.textContent);
+          if (!Number.isNaN(n)) avgNow = n;
+        }
+      }
+      if (!Number.isFinite(avgNow)) {
+        avgNow = Number(window.liveData?.power) || 0; // 최후 폴백
+      }
+      
+      // 3) 유효성 체크
+      panel.classList.remove('neon-active', 'achievement-bad', 'achievement-low', 'achievement-good', 'achievement-high', 'achievement-over');
+      if (tgt <= 0 || avgNow <= 0) return;
+      
+      // 4) 평균 파워 vs 타깃으로 달성도 등급 산정
+      let ach;
+      const ratio = avgNow / tgt;
+      if (ratio < 0.80)       ach = 'achievement-bad';
+      else if (ratio < 0.90)  ach = 'achievement-low';
+      else if (ratio <= 1.10) ach = 'achievement-good';
+      else if (ratio <= 1.20) ach = 'achievement-high';
+      else                    ach = 'achievement-over';
+      
+      // 5) 중앙 패널에만 네온/등급 적용
+      panel.classList.add('neon-active', ach);
+
    })();
 
 
