@@ -9,517 +9,107 @@
   <meta http-equiv="origin-trial" content="">
   <meta name="theme-color" content="#2E74E8" />
 
-  <!-- 👇 이 부분을 추가하세요 1013 -->
+  <!-- 파비콘 -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
   <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
-  <!-- 👆 여기까지 추가 -->
 
-  
-  <style>
-    .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
-      background:#333;color:#fff;padding:10px 16px;border-radius:8px;
-      opacity:0;transition:opacity .35s;z-index:9999}
-    .toast.show{opacity:.92}
-    .hidden{display:none}
-    
-/* 로딩 스피너 개선된 스타일 */
-.loading-spinner {
-  text-align: center;
-  padding: 40px 20px;
-  color: #666;
-}
-
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  min-height: 200px;
-}
-
-/* 회전하는 스피너 */
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #2e74e8;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* 점 애니메이션 */
-.dots-loader {
-  display: inline-block;
-  position: relative;
-  margin-bottom: 16px;
-}
-
-.dots-loader div {
-  position: absolute;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #2e74e8;
-  animation: dots-loader 1.2s linear infinite;
-}
-
-.dots-loader div:nth-child(1) { left: 8px; animation-delay: 0s; }
-.dots-loader div:nth-child(2) { left: 20px; animation-delay: -0.4s; }
-.dots-loader div:nth-child(3) { left: 32px; animation-delay: -0.8s; }
-
-@keyframes dots-loader {
-  0%, 80%, 100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
-}
-
-/* 빈 상태 스타일 */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #6b7280;
-}
-
-.empty-state-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-state-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #374151;
-}
-
-.empty-state-description {
-  font-size: 14px;
-  line-height: 1.5;
-  margin-bottom: 20px;
-}
-
-.empty-state-action {
-  margin-top: 16px;
-}
-
-/* 펄스 애니메이션 */
-.pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-/* 로딩 스켈레톤 */
-.skeleton {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-  background-size: 200% 100%;
-  animation: loading 1.5s infinite;
-}
-
-@keyframes loading {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-.skeleton-card {
-  height: 120px;
-  border-radius: 12px;
-  margin-bottom: 12px;
-}
-
-.skeleton-line {
-  height: 16px;
-  border-radius: 4px;
-  margin-bottom: 8px;
-}
-
-.skeleton-line.short {
-  width: 60%;
-}
-
-.skeleton-line.medium {
-  width: 80%;
-}
-
-/* 오류 상태 스타일 */
-.error-state {
-  text-align: center;
-  padding: 40px 20px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 12px;
-  margin: 20px 0;
-}
-
-.error-state-icon {
-  font-size: 32px;
-  color: #dc2626;
-  margin-bottom: 12px;
-}
-
-.error-state-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #dc2626;
-  margin-bottom: 8px;
-}
-
-.error-state-description {
-  font-size: 14px;
-  color: #7f1d1d;
-  margin-bottom: 16px;
-}
-
-.retry-button {
-  background: #dc2626;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.2s;
-}
-
-.retry-button:hover {
-  background: #b91c1c;
-}
-    
-    .error{color:#dc3545;padding:10px;background:#f8d7da;border-radius:4px;margin:10px 0;}
-    
-    /* 사용자 카드 개선 */
-    .user-card {
-      position: relative;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-      background: #fff;
-      transition: all 0.2s ease;
-    }
-    .user-card:hover {
-      border-color: #2e74e8;
-      box-shadow: 0 4px 12px rgba(46, 116, 232, 0.1);
-    }
-    .user-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-    }
-    .user-name {
-      font-weight: 600;
-      font-size: 16px;
-      color: #111827;
-    }
-    .user-actions {
-      display: flex;
-      gap: 8px;
-    }
-    .btn-edit, .btn-delete {
-      background: none;
-      border: none;
-      padding: 4px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-    .btn-edit:hover { background: #e0f2fe; }
-    .btn-delete:hover { background: #ffebee; }
-    
-    .user-details {
-      margin-bottom: 12px;
-    }
-    .user-stats {
-      display: flex;
-      gap: 12px;
-      margin-bottom: 4px;
-    }
-    .stat {
-      font-size: 14px;
-      color: #374151;
-      background: #f3f4f6;
-      padding: 2px 8px;
-      border-radius: 12px;
-    }
-    .user-meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-      color: #6b7280;
-    }
-    
-    /* 결과 분석 개선 */
-    .result-analysis {
-      background: #f8f9fa;
-      border-radius: 12px;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .analysis-section {
-      margin-bottom: 16px;
-    }
-    .analysis-title {
-      font-weight: 600;
-      margin-bottom: 8px;
-      color: #2e74e8;
-    }
-    .power-curve {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 8px;
-      margin: 12px 0;
-    }
-    .power-curve-item {
-      text-align: center;
-      background: #fff;
-      padding: 8px;
-      border-radius: 8px;
-      border: 1px solid #e5e7eb;
-    }
-    .power-curve-value {
-      font-weight: 600;
-      font-size: 18px;
-      color: #2e74e8;
-    }
-    .power-curve-label {
-      font-size: 12px;
-      color: #6b7280;
-    }
-    
-    /* 훈련 기록 테이블 */
-    .training-history {
-      margin-top: 20px;
-    }
-    .history-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .history-table th, .history-table td {
-      padding: 12px;
-      text-align: left;
-      border-bottom: 1px solid #e5e7eb;
-    }
-    .history-table th {
-      background: #f8f9fa;
-      font-weight: 600;
-      color: #374151;
-    }
-    .history-table tr:hover {
-      background: #f8f9fa;
-    }
-
-/* 반복 모달 스타일 */
-.repeat-segments-container {
-  margin-top: 10px;
-  padding: 15px;
-  background: #f8f9fa;
-  border-radius: 8px;
-}
-
-.repeat-segments-list {
-  margin: 15px 0;
-  min-height: 100px;
-  border: 2px dashed #dee2e6;
-  border-radius: 8px;
-  padding: 15px;
-  background: #fff;
-}
-
-.repeat-segment-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px;
-  margin: 8px 0;
-  background: #e9ecef;
-  border-radius: 6px;
-  border-left: 4px solid #2e74e8;
-}
-
-.repeat-segment-info {
-  flex: 1;
-}
-
-.repeat-segment-label {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.repeat-segment-details {
-  font-size: 12px;
-  color: #666;
-}
-
-.repeat-segment-remove {
-  background: none;
-  border: none;
-  color: #dc3545;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.repeat-segment-remove:hover {
-  background: #ffebee;
-}
-
-.repeat-segments-empty {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: 20px;
-}
-
-
-    
-    
-  </style>
-
-  <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css" />
-
-  <!-- 앱 전역설정 -->
-  <script>
-    window.CONFIG = {
-      GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzO2JcM1KWCl5UDYL9okQWrtv5TCgSYGrPDuKyX56BMC0fy_PM3ul4CYZQ--y4xGvTw/exec"
-    };
-  // 👇 이 줄을 추가하세요 1013
-  window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
-    
-  </script>
+  <!-- CSS 파일 링크 -->
+  <link rel="stylesheet" href="style_fixed.css">
 </head>
-
 <body>
+
   <!-- 1) 연결 화면 -->
   <div id="connectionScreen" class="screen active">
     <div class="header">
-      <h1>🚴‍♂️ AI 트레이닝 웹코치</h1>
-      <p class="subtitle">스마트 트레이너와 심박계를 연결하세요</p>
+      <h1>🚴 AI 트레이닝 웹코치</h1>
+      <p class="subtitle">블루투스 기기를 연결하여 시작하세요</p>
     </div>
 
-    <div class="card">
-      <h3 class="mb-15">📡 블루투스 기기 연결</h3>
-      <div class="grid-2 gap-10 mb-15">
-        <button class="btn" id="btnConnectTrainer">스마트 트레이너</button>
-        <button class="btn btn-secondary" id="btnConnectHR">심박계 연결</button>
-        <button class="btn" id="btnConnectPM">파워미터 연결</button>
-      </div>
-    </div>
-
-    <!-- iOS 전용 안내 -->
-    <div id="iosInfo" class="ios-info hidden">
-      <div class="ios-indicator" title="iOS Safari는 Web Bluetooth 미지원">
-        <svg width="16" height="16" viewBox="0 0 24 24">
-          <rect x="7" y="2" width="10" height="20" rx="2.5" fill="currentColor" opacity="0.9"/>
-          <rect x="9" y="4" width="6" height="1.5" rx="0.75" fill="#0f111a"/>
-          <rect x="10" y="20" width="4" height="1.5" rx="0.75" fill="#0f111a"/>
+    <!-- iOS 안내 -->
+    <div class="ios-info">
+      <div class="ios-indicator">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
         </svg>
-        <span>iPhone 모드</span>
+        iOS 사용자
       </div>
-      <p class="ios-text">
-        iOS Safari에서는 블루투스 연결이 지원되지 않습니다.<br>
-        기기 연결 없이 워크아웃을 실행할 수 있어요.
-      </p>
-      <div class="ios-actions">
-        <button id="btnIosContinue" class="btn btn-ios-continue">기기 없이 계속</button>
+      <div class="ios-text">
+        iPhone/iPad에서는 브라우저 제한으로 블루투스 연결이 어려울 수 있습니다.<br>
+        안드로이드나 PC 사용을 권장합니다.
       </div>
-    </div>
-
-    <div id="connectedDevicesList"></div>
-    <div id="connectionStatus" class="hidden">
-      <div class="card text-center">
-        <div class="loading">
-          <div class="spinner"></div>
-          <p>기기에 연결 중...</p>
-        </div>
-      </div>
-    </div>
-
-    <div id="connectedDevicesSummary" class="card hidden">
-      <h3 class="mb-15">✅ 연결된 기기</h3>
-      <button class="btn btn-success" id="btnToProfile" style="margin-top:15px">
-        다음 단계로
+      <button class="btn-ios-continue" onclick="proceedWithoutBluetooth()">
+        블루투스 없이 계속하기
       </button>
+    </div>
+
+    <!-- 블루투스 연결 섹션 -->
+    <div class="card">
+      <h3>🔗 기기 연결</h3>
+      <div class="btn-row">
+        <button class="btn" onclick="connectTrainer()">🚴 트레이너 연결</button>
+        <button class="btn" onclick="connectPowerMeter()">⚡ 파워미터 연결</button>
+        <button class="btn" onclick="connectHeartRate()">❤️ 심박수 연결</button>
+      </div>
+    </div>
+
+    <!-- 연결된 기기 목록 -->
+    <div id="connectedDevicesList"></div>
+    
+    <!-- 연결 완료 또는 건너뛰기 -->
+    <div class="card">
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="showScreen('profileScreen')">다음 단계</button>
+        <button class="btn btn-secondary" onclick="proceedWithoutBluetooth()">연결 없이 진행</button>
+      </div>
     </div>
   </div>
 
   <!-- 2) 프로필 선택 화면 -->
   <div id="profileScreen" class="screen">
     <div class="header">
-      <h1>👤 프로필 선택</h1>
-      <p class="subtitle">훈련할 사용자를 선택하세요</p>
+      <h1>👤 사용자 선택</h1>
+      <p class="subtitle">훈련할 사용자를 선택하거나 새로 추가하세요</p>
     </div>
+
+    <div id="userList"></div>
     
-    <div class="card mb-15">
-      <button class="btn btn-success" onclick="loadUsers()" style="width: 100%;">
-        📥 사용자 목록 새로고침
-      </button>
-    </div>
-    
-    <div id="userList">
-      <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
-    </div>
-    
-    <div class="card" id="cardAddUser">
+    <div id="cardAddUser" class="user-card">
       <div class="text-center">
-        <div class="big-plus mb-10">➕</div>
-        <h3>새 사용자 추가</h3>
-        <p class="muted mt-5">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
+        <h3>➕ 새 사용자 추가</h3>
+        <button class="btn btn-primary" onclick="showAddUserForm()">사용자 추가</button>
       </div>
     </div>
 
+    <!-- 사용자 추가 폼 (처음에는 숨김) -->
     <div id="addUserForm" class="card hidden">
-      <h3 class="mb-20">새 사용자 등록</h3>
+      <h3>새 사용자 정보</h3>
       <div class="form-group">
-        <label>이름 *</label>
-        <input type="text" id="userName" placeholder="이름을 입력하세요" required />
-      </div>
-      <div class="form-group">
-        <label>연락처</label>
-        <input type="tel" id="userContact" placeholder="010-1234-5678" />
+        <label for="userName">이름</label>
+        <input type="text" id="userName" placeholder="이름을 입력하세요">
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>FTP (W) *</label>
-          <input type="number" id="userFTP" placeholder="250" min="50" max="600" required />
+          <label for="userAge">나이</label>
+          <input type="number" id="userAge" placeholder="30">
         </div>
         <div class="form-group">
-          <label>몸무게 (kg) *</label>
-          <input type="number" id="userWeight" placeholder="70" min="30" max="200" step="0.1" required />
+          <label for="userWeight">체중 (kg)</label>
+          <input type="number" id="userWeight" placeholder="70">
         </div>
       </div>
-      <div class="btn-row mt-10">
-        <button class="btn btn-success" id="btnSaveUser">저장</button>
-        <button class="btn btn-secondary" id="btnCancelAddUser">취소</button>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="userFTP">FTP (W)</label>
+          <input type="number" id="userFTP" placeholder="250">
+        </div>
+        <div class="form-group">
+          <label for="userMaxHR">최대심박수</label>
+          <input type="number" id="userMaxHR" placeholder="190">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="saveUser()">저장</button>
+        <button class="btn btn-secondary" onclick="cancelAddUser()">취소</button>
       </div>
     </div>
   </div>
@@ -527,212 +117,84 @@
   <!-- 3) 워크아웃 선택 화면 -->
   <div id="workoutScreen" class="screen">
     <div class="header">
-      <h1>📋 워크아웃 선택</h1>
-      <p class="subtitle">오늘의 훈련 프로그램을 선택하세요</p>
+      <h1>🏋️ 워크아웃 선택</h1>
+      <p class="subtitle">원하는 훈련을 선택하세요</p>
     </div>
-  
-  <div class="card" style="display:flex; gap:8px; align-items:center;">
-    <input id="qWorkout" type="search" placeholder="제목/작성자 검색" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:8px;">
-    <button class="btn" id="btnSearchWorkout">검색</button>
-    <!-- <button class="btn btn-secondary" onclick="loadWorkouts()" title="목록 새로고침">🔄</button> -->
-    <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
-  </div>
-  
-    <div id="workoutList" class="workout-list">
-      <div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>
+
+    <div class="workout-list" id="workoutList">
+      <!-- 워크아웃 목록이 여기에 동적으로 생성됩니다 -->
+    </div>
+
+    <div class="btn-row mt-20">
+      <button class="btn btn-secondary" onclick="showScreen('profileScreen')">← 이전</button>
+      <button class="btn" onclick="showWorkoutBuilder()">✏️ 커스텀 워크아웃</button>
     </div>
   </div>
 
-  <!-- 4) 워크아웃 작성/수정 화면 -->
-  <!-- 워크아웃 작성/수정 화면에서 이 ID들이 있어야 합니다 -->
-  <div id="workoutBuilderScreen" class="screen">
+  <!-- 4) 워크아웃 빌더 (모달 형태) -->
+  <div id="workoutBuilder" class="screen">
     <div class="header">
-      <h1>✏️ 워크아웃 작성</h1>
-      <p class="subtitle">세그먼트를 추가/수정하고 저장하세요</p>
+      <h1>✏️ 워크아웃 빌더</h1>
+      <p class="subtitle">나만의 훈련을 만들어보세요</p>
     </div>
-  
+
     <div class="card">
+      <h3>워크아웃 정보</h3>
       <div class="form-group">
-        <label>제목 *</label>
-        <input type="text" id="wbTitle" placeholder="예: VO2max 5x3min" required />
+        <label for="workoutName">워크아웃 이름</label>
+        <input type="text" id="workoutName" placeholder="나만의 훈련">
       </div>
       <div class="form-group">
-        <label>설명</label>
-        <input type="text" id="wbDesc" placeholder="간단 설명" />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>작성자</label>
-          <input type="text" id="wbAuthor" placeholder="coach" />
-        </div>
-        <div class="form-group">
-          <label>상태 *</label>
-          <select id="wbStatus" required>
-            <option value="보이기">보이기 (공개)</option>
-            <option value="숨기기">숨기기 (비공개)</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>게시 날짜</label>
-        <input type="date" id="wbPublishDate" />
-        <small class="form-help">비워두면 상시 노출됩니다.</small>
+        <label for="workoutDescription">설명</label>
+        <input type="text" id="workoutDescription" placeholder="훈련 설명을 입력하세요">
       </div>
     </div>
 
-<!-- 워크아웃 작성 화면의 세그먼트 섹션 -->
-<div class="card">
-  <div class="segment-header">
-    <h3 class="mb-10">세그먼트</h3>
-    <div class="segment-summary" id="segmentSummary">
-      <span class="total-duration">총 시간: <strong id="totalDuration">0분</strong></span>
-      <span class="segment-count">세그먼트: <strong id="segmentCount">0개</strong></span>
-    </div>
-  </div>
-  
-  <!-- 세그먼트 목록 -->
-  <div id="wbSegments" class="segments-list">
-    <div class="segments-empty" id="segmentsEmpty">
-      <div class="empty-icon">📝</div>
-      <p>아직 세그먼트가 없습니다</p>
-      <p class="muted">아래 버튼을 클릭하여 첫 번째 세그먼트를 추가하세요</p>
-    </div>
-  </div>
-  
-  <!-- 세그먼트 추가 버튼 -->
-  <div class="segment-actions">
-    <button class="btn btn-primary" id="btnAddSegment">
-      <span class="btn-icon">➕</span>
-      세그먼트 추가
-    </button>
-    <div class="quick-add-buttons">
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('warmup')">워밍업</button>
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('interval')">인터벌</button>
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('rest')">휴식</button>
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('cooldown')">쿨다운</button>
-      <button class="btn btn-secondary btn-sm" onclick="showRepeatModal()">🔄 반복</button>
-    </div>
-  </div>
-</div>
-
-<!-- 세그먼트 편집 모달 -->
-<div id="segmentModal" class="modal hidden">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3 id="segmentModalTitle">세그먼트 편집</h3>
-      <button class="modal-close" onclick="closeSegmentModal()">✖</button>
-    </div>
-    
-    <div class="modal-body">
+    <div class="card">
+      <h3>세그먼트 추가</h3>
       <div class="form-row">
         <div class="form-group">
-          <label>세그먼트 이름 *</label>
-          <input type="text" id="segmentLabel" placeholder="예: 워밍업, 메인셋" required />
-        </div>
-        <div class="form-group">
-          <label>타입 *</label>
-          <select id="segmentType" required>
-            <option value="warmup">워밍업</option>
+          <label for="segmentType">타입</label>
+          <select id="segmentType" class="form-control">
+            <option value="warmup">웜업</option>
             <option value="interval">인터벌</option>
             <option value="rest">휴식</option>
+            <option value="cooldown">쿨다운</option>
             <option value="sweetspot">스위트스팟</option>
             <option value="tempo">템포</option>
-            <option value="threshold">임계점</option>
-            <option value="vo2max">VO2 Max</option>
-            <option value="cooldown">쿨다운</option>
           </select>
         </div>
+        <div class="form-group">
+          <label for="segmentDuration">시간 (분)</label>
+          <input type="number" id="segmentDuration" placeholder="5" min="1" max="120">
+        </div>
       </div>
-      
       <div class="form-row">
         <div class="form-group">
-          <label>지속 시간 *</label>
-          <div class="duration-input">
-            <input type="number" id="segmentMinutes" min="0" max="180" value="5" />
-            <span class="input-suffix">분</span>
-            <input type="number" id="segmentSeconds" min="0" max="59" value="0" />
-            <span class="input-suffix">초</span>
-          </div>
+          <label for="segmentPower">FTP % 또는 와트</label>
+          <input type="number" id="segmentPower" placeholder="75" min="30" max="300">
         </div>
         <div class="form-group">
-          <label>목표 강도 *</label>
-          <div class="intensity-input">
-            <input type="number" id="segmentIntensity" min="30" max="200" value="100" />
-            <span class="input-suffix">% FTP</span>
-          </div>
+          <label for="segmentLabel">라벨</label>
+          <input type="text" id="segmentLabel" placeholder="메인셋">
         </div>
       </div>
-      
-      <div class="form-group">
-        <label>
-          <input type="checkbox" id="segmentRamp" />
-          점진적 강도 변화 (Ramp)
-        </label>
-        <div class="ramp-settings hidden" id="rampSettings">
-          <div class="form-group">
-            <label>종료 강도</label>
-            <div class="intensity-input">
-              <input type="number" id="rampEndIntensity" min="30" max="200" value="120" />
-              <span class="input-suffix">% FTP</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <button class="btn" onclick="addSegment()">➕ 세그먼트 추가</button>
     </div>
-    
-    <div class="modal-footer">
-      <button class="btn btn-success" onclick="saveSegment()">저장</button>
-      <button class="btn btn-secondary" onclick="closeSegmentModal()">취소</button>
-      <button class="btn btn-danger" id="btnDeleteSegment" onclick="deleteCurrentSegment()" style="display:none;">삭제</button>
+
+    <div class="card">
+      <h3>세그먼트 목록</h3>
+      <div id="segmentsList"></div>
     </div>
-  </div>
-</div>
-    
+
     <div class="builder-actions">
       <div class="btn-row">
-        <button class="btn btn-success" id="btnSaveWorkout">💾 저장</button>
-        <button class="btn btn-secondary" id="btnCancelBuilder">✖ 취소</button>
+        <button class="btn btn-success" onclick="saveCustomWorkout()">💾 워크아웃 저장</button>
+        <button class="btn btn-secondary" onclick="showScreen('workoutScreen')">← 돌아가기</button>
       </div>
     </div>
   </div>
 
-  
-<!-- 반복 세그먼트 모달 -->
-<div id="repeatModal" class="modal hidden">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>세그먼트 반복 추가</h3>
-      <button class="modal-close" onclick="closeRepeatModal()">✖</button>
-    </div>
-    
-    <div class="modal-body">
-      <div class="form-group">
-        <label>반복할 횟수 *</label>
-        <input type="number" id="repeatCount" min="1" max="20" value="3" />
-        <small class="form-help">1-20회 사이로 설정하세요</small>
-      </div>
-      
-      <div class="repeat-segments-container">
-        <h4>반복할 세그먼트들</h4>
-        <div id="repeatSegmentsList" class="repeat-segments-list">
-          <!-- 여기에 세그먼트들이 동적으로 추가됩니다 -->
-        </div>
-        
-        <button class="btn btn-primary btn-sm" onclick="addRepeatSegment()">+ 세그먼트 추가</button>
-      </div>
-    </div>
-    
-    <div class="modal-footer">
-      <button class="btn btn-success" onclick="applyRepeat()">반복 적용</button>
-      <button class="btn btn-secondary" onclick="closeRepeatModal()">취소</button>
-    </div>
-  </div>
-</div>
-
-
-
-
-  
   <!-- 5) 훈련 준비 화면 -->
   <div id="trainingReadyScreen" class="screen">
     <div class="header">
@@ -762,132 +224,125 @@
     </div>
   </div>
 
-  <!-- 6) 훈련 화면 신규 버젼으로 업데이트 -->
-<!-- 6) 훈련 화면 - 개선된 디자인으로 교체 -->
-<div id="trainingScreen" class="screen">
-  <!-- 1. 최상단: 사용자 정보 -->
-<div class="enhanced-training-user-info" id="userPanel">
-  <div id="userInfo"></div>
-</div>
-
-  <!-- 2. 두번째: 경과 시간 및 다음 세그먼트 정보 -->
-  <div class="enhanced-training-time-info">
-    <div class="enhanced-time-elapsed">
-      <span class="enhanced-time-label">경과시간</span>
-      <span class="enhanced-time-value" id="elapsedTime">00:00</span>
-      <span class="enhanced-time-percent">(<span id="elapsedPercent">0</span>%)</span>
+  <!-- 6) 훈련 화면 - 개선된 디자인 -->
+  <div id="trainingScreen" class="screen">
+    <!-- 1. 최상단: 사용자 정보 -->
+    <div class="enhanced-training-user-info" id="userPanel">
+      <div id="userInfo"></div>
     </div>
-    <div class="enhanced-next-segment-info">
-      <span class="enhanced-next-label">다음 세그먼트</span>
-      <span class="enhanced-next-value" id="nextSegment">인터벌 FTP 140%</span>
-    </div>
-  </div>
 
-  <!-- 3. 메인 메트릭 영역 (3열 그리드) -->
-  <div class="enhanced-metrics-grid">
-    <!-- 왼쪽: TSS & 칼로리 -->
-    <div class="enhanced-metric-panel enhanced-left-panel">
-      <div class="enhanced-panel-header">훈련 데이터</div>
-      <div class="enhanced-metric-item">
-        <div class="enhanced-metric-label">TSS</div>
-        <div class="enhanced-metric-value" id="tssValue">0.0</div>
+    <!-- 2. 두번째: 경과 시간 및 다음 세그먼트 정보 -->
+    <div class="enhanced-training-time-info">
+      <div class="enhanced-time-elapsed">
+        <span class="enhanced-time-label">경과시간</span>
+        <span class="enhanced-time-value" id="elapsedTime">00:00</span>
+        <span class="enhanced-time-percent">(<span id="elapsedPercent">0</span>%)</span>
       </div>
-      <div class="enhanced-metric-item">
-        <div class="enhanced-metric-label">칼로리</div>
-        <div class="enhanced-metric-value" id="kcalValue">0</div>
-        <div class="enhanced-metric-unit">kcal</div>
+      <div class="enhanced-next-segment-info">
+        <span class="enhanced-next-label">다음 세그먼트</span>
+        <span class="enhanced-next-value" id="nextSegment">인터벌 FTP 140%</span>
       </div>
     </div>
 
-    <!-- 중앙: 메인 파워 디스플레이 -->
-    <div class="enhanced-metric-panel enhanced-center-panel enhanced-main-power-display">
-      <!-- 카운트다운 시간 (더 크게) -->
-      <div class="enhanced-segment-countdown">
-        <span class="enhanced-countdown-label">세그먼트 남은시간</span>
-        <span class="enhanced-countdown-value" id="segmentTime">05:00</span>
-      </div>
-
-      <!-- 목표 파워와 세그먼트 평균 파워 같은 라인 -->
-      <div class="enhanced-power-targets-row">
-        <div class="enhanced-target-power-section">
-          <div class="enhanced-target-label">목표 파워</div>
-          <div class="enhanced-target-value" id="targetPowerValue">250</div>
-          <div class="enhanced-target-unit">W</div>
+    <!-- 3. 메인 메트릭 영역 (3열 그리드) -->
+    <div class="enhanced-metrics-grid">
+      <!-- 왼쪽: TSS & 칼로리 -->
+      <div class="enhanced-metric-panel enhanced-left-panel">
+        <div class="enhanced-panel-header">훈련 데이터</div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">TSS</div>
+          <div class="enhanced-metric-value" id="tssValue">0.0</div>
         </div>
-        <div class="enhanced-segment-avg-power">
-          <span class="enhanced-avg-label">세그먼트 평균</span>
-          <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
-          <span class="enhanced-avg-unit">W</span>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">칼로리</div>
+          <div class="enhanced-metric-value" id="kcalValue">0</div>
+          <div class="enhanced-metric-unit">kcal</div>
         </div>
       </div>
 
-      <!-- 현재 파워 (가장 크게) -->
-      <div class="enhanced-current-power-section">
-        <div class="enhanced-current-power-value" id="currentPowerValue">245</div>
-        <div class="enhanced-current-power-unit">WATTS</div>
+      <!-- 중앙: 메인 파워 디스플레이 -->
+      <div class="enhanced-metric-panel enhanced-center-panel enhanced-main-power-display">
+        <!-- 카운트다운 시간 (더 크게) -->
+        <div class="enhanced-segment-countdown">
+          <span class="enhanced-countdown-label">세그먼트 남은시간</span>
+          <span class="enhanced-countdown-value" id="segmentTime">05:00</span>
+        </div>
+
+        <!-- 목표 파워와 세그먼트 평균 파워 같은 라인 -->
+        <div class="enhanced-power-targets-row">
+          <div class="enhanced-target-power-section">
+            <div class="enhanced-target-label">목표 파워</div>
+            <div class="enhanced-target-value" id="targetPowerValue">250</div>
+            <div class="enhanced-target-unit">W</div>
+          </div>
+          <div class="enhanced-segment-avg-power">
+            <span class="enhanced-avg-label">세그먼트 평균</span>
+            <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
+            <span class="enhanced-avg-unit">W</span>
+          </div>
+        </div>
+
+        <!-- 현재 파워 (가장 크게) -->
+        <div class="enhanced-current-power-section">
+          <div class="enhanced-current-power-value" id="currentPowerValue">245</div>
+          <div class="enhanced-current-power-unit">WATTS</div>
+        </div>
+
+        <!-- 달성도 프로그레스 바 -->
+        <div class="enhanced-power-progress">
+          <div class="enhanced-power-progress-bar" id="powerProgressBar"></div>
+          <div class="enhanced-progress-labels">
+            <span>달성도: <span id="achievementValueBar">98</span>%</span>
+            <span>진행: <span id="segmentProgress">60</span>%</span>
+          </div>
+        </div>
+
+        <!-- 현재 세그먼트 이름 -->
+        <div class="enhanced-current-segment-name" id="currentSegmentName">메인셋 - FTP 105%</div>
       </div>
 
-      <!-- 달성도 프로그레스 바 -->
-      <div class="enhanced-power-progress">
-        <div class="enhanced-power-progress-bar" id="powerProgressBar"></div>
-        <div class="enhanced-progress-labels">
-          <span>달성도: <span id="achievementValueBar">98</span>%</span>
-          <span>진행: <span id="segmentProgress">60</span>%</span>
+      <!-- 오른쪽: 심박수 & 케이던스 -->
+      <div class="enhanced-metric-panel enhanced-right-panel">
+        <div class="enhanced-panel-header">생체 데이터</div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">심박수</div>
+          <div class="enhanced-metric-value enhanced-heart-rate" id="heartRateValue">145</div>
+          <div class="enhanced-metric-unit">BPM</div>
+        </div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">케이던스</div>
+          <div class="enhanced-metric-value enhanced-cadence" id="cadenceValue">-</div>
+          <div class="enhanced-metric-unit">RPM</div>
         </div>
       </div>
-
-      <!-- 현재 세그먼트 이름 -->
-      <div class="enhanced-current-segment-name" id="currentSegmentName">메인셋 - FTP 105%</div>
     </div>
 
-    <!-- 오른쪽: 심박수 & 케이던스 -->
-    <div class="enhanced-metric-panel enhanced-right-panel">
-      <div class="enhanced-panel-header">생체 데이터</div>
-      <div class="enhanced-metric-item">
-        <div class="enhanced-metric-label">심박수</div>
-        <div class="enhanced-metric-value enhanced-heart-rate" id="heartRateValue">145</div>
-        <div class="enhanced-metric-unit">BPM</div>
+    <!-- 4. 세그먼트 타임라인 + 마스코트 레이어 -->
+    <div class="timeline-wrap">
+      <div class="timeline-progress timeline--xl" id="timelineProgress">
+        <!-- ✅ 마스코트 레이어 - 진행바 위에 오버레이 -->
+        <div id="timelineMascotLayer" aria-hidden="true">
+          <img id="progressMascot" src="assets/img/cyclist.gif" alt="cyclist mascot" />
+          <img id="goalFlag" src="assets/img/goal-flag.jpg" alt="goal flag" />
+        </div>
+        
+        <!-- 세그먼트 컨테이너 -->
+        <div class="timeline-segments" id="timelineSegments"></div>
       </div>
-      <div class="enhanced-metric-item">
-        <div class="enhanced-metric-label">케이던스</div>
-        <div class="enhanced-metric-value enhanced-cadence" id="cadenceValue">-</div>
-        <div class="enhanced-metric-unit">RPM</div>
+
+      <div class="timeline-legend">
+        <span>전체 진행율: <span id="segmentProgressLegend">0</span>%</span>
       </div>
+    </div>
+
+    <!-- 5. 컨트롤 버튼 -->
+    <div class="training-controls">
+      <button id="btnSkipSegment" class="enhanced-control-btn skip" aria-label="구간 건너뛰기"></button>
+      <button id="btnTogglePause" class="enhanced-control-btn pause" aria-label="일시정지/재생"></button>
+      <button id="btnStopTraining" class="enhanced-control-btn stop" aria-label="훈련 종료"></button>
     </div>
   </div>
 
-  <!-- 4. 세그먼트 타임라인 (기존 유지) -->
-  <!-- 4. 세그먼트 타임라인 (기존 유지 + 마스코트 레이어 추가) -->
-  <div class="timeline-wrap">
-    <div class="timeline-progress timeline--xl" id="timelineProgress">
-      <div class="timeline-segments" id="timelineSegments"></div>
-
-      <!-- 👇 여기에 추가 -->
-      <div id="timelineMascotLayer" aria-hidden="true">
-        <img id="progressMascot" src="assets/img/cyclist.gif" alt="mascot" />
-        <img id="goalFlag" src="assets/img/goal-flag.jpg" alt="goal flag" />
-      </div>
-      <!-- 👆 추가 끝 -->
-    </div>
-
-    <div class="timeline-legend">
-      <!--<span>평균 파워: <span id="avgPowerValue">-</span>W</span>-->
-      <span>진행율 : <span id="segmentProgressLegend">0</span>%</span>
-    </div>
-  </div>
-
-
-  <!-- 5. 컨트롤 버튼 (기존 유지) -->
-
-  <div class="training-controls">
-    <button id="btnSkipSegment" class="enhanced-control-btn skip" aria-label="구간 건너뛰기"></button>
-    <button id="btnTogglePause" class="enhanced-control-btn pause" aria-label="일시정지/재생"></button>
-    <button id="btnStopTraining" class="enhanced-control-btn stop" aria-label="훈련 종료"></button>
-  </div>
-  
-</div>
-
-  
   <!-- 7) 결과 화면 -->
   <div id="resultScreen" class="screen">
     <div class="header">
@@ -1013,9 +468,13 @@
   <script src="assets/js/userManager.js" defer></script>
   <script src="assets/js/resultManager.js" defer></script>
   <script src="assets/js/workoutManager.js" defer></script>
-  <script src="assets/js/app.js" defer></script>
+  <script src="app_fixed.js" defer></script>
 
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
+
+  <script>
+    console.log('HTML v1.4 loaded - 마스코트 레이어 구조 최적화 완료');
+  </script>
 </body>
 </html>
