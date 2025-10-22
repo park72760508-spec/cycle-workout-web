@@ -639,20 +639,25 @@ button[aria-disabled="true"] {
 
 
 /* 진행바 애니메이션 효과 */
-.progress-fill::before {
+/* 진행 중(현재)만 쉼머/펄스 허용 — 그 외는 비활성화 */
+.timeline-segment:not(.is-current) .progress-fill::before {
   content: "";
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, 
-    transparent, 
-    rgba(255,255,255,0.3), 
-    transparent
-  );
-  animation: shimmer 2s infinite;
+  display: none !important;         /* ← 쉼머 완전 차단 */
+  opacity: 0 !important;
+  animation: none !important;
+  background: none !important;
 }
+
+/* 완료 세그먼트는 하이라이트(쉼머/펄스) 완전히 제거 */
+.timeline-segment.is-complete .progress-fill::before,
+.timeline-segment.is-complete .progress-fill::after {
+  content: "";
+  display: none !important;
+  opacity: 0 !important;
+  animation: none !important;
+  background: none !important;
+}
+
 
 /* 완료는 항상 가득 채움 보장 */
 .timeline-segment.is-complete .progress-fill { width: 100% !important; }
@@ -2436,15 +2441,6 @@ button[aria-disabled="true"] {
   border-left: 1px solid rgba(148,163,184,0.18) !important;
 }
 
-/* 2) 그룹 세그먼트: 자체 보더 제거(겹침 방지) + '미진행' 배경을 일반 세그먼트와 동일화 */
-/* ✅ 그룹(반복) 블럭도 배경/그림자 off */
-.timeline-group,
-.timeline-group.is-upcoming,
-.timeline-group.is-current {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}
 
 
 /* 그룹 완료 투명색 */
@@ -2510,5 +2506,31 @@ button[aria-disabled="true"] {
 .enhanced-current-segment-name *{
   position: relative;
   z-index: 1;
+}
+
+
+/* 진행 전/대기 상태 배경 및 박스섀도우 완전 제거 */
+.timeline-segment.is-upcoming,
+.timeline-group.is-upcoming,
+.timeline-segment.timeline-group.is-upcoming {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* 현재 진행 세그먼트도 '칸'처럼 보이지 않게 — 강조는 쉼머/펄스로만 */
+.timeline-segment.is-current,
+.timeline-group.is-current {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* 완료 세그먼트도 배경/그림자 off (채움은 progress-fill 로만 표시) */
+.timeline-segment.is-complete,
+.timeline-group.is-complete {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
 }
 
