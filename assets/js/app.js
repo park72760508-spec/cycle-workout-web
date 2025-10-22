@@ -1118,6 +1118,9 @@ function updateTimeUI() {
       //safeSetText("segmentProgressLegend", String(sp)); // ← 범례에도 동일 % 표시
       safeSetText("segmentProgressLegend", String(totalPct)); // ✅ 전체 %로 변경
        
+      updateMascotProgress(totalPct);          // ⭐ 라이더(GIF) 위치 동기화 (0~100%)
+       
+       
      // ⬇⬇⬇ 여기에 "이 한 줄" 추가 ⬇⬇⬇
      setNameProgress(segElapsed / segDur);
        
@@ -1542,6 +1545,26 @@ if (!window.showToast) {
     setTimeout(() => t.classList.remove("show"), 2400);
   };
 }
+
+//진행률에 맞춰 X 위치만 갱신
+function updateMascotProgress(percent) {
+  // percent: 0 ~ 100
+  const layer = document.getElementById("timelineMascotLayer");
+  const mascot = document.getElementById("progressMascot");
+  const bar = document.querySelector("#trainingScreen .timeline-progress.timeline--xl");
+  if (!layer || !mascot || !bar) return;
+
+  // 진행바의 내부 가로폭 기준으로 픽셀 위치 계산
+  const w = bar.clientWidth;
+  const px = Math.max(0, Math.min(w, Math.round((percent / 100) * w)));
+
+  // CSS 변수로 전달 → translateX(var(--mascot-x))
+  layer.style.setProperty("--mascot-x", px + "px");
+}
+
+
+
+
 
 // *** 핵심 수정: updateTrainingDisplay 함수 - currentPower 변수 초기화 문제 해결 ***
 window.updateTrainingDisplay = function () {
