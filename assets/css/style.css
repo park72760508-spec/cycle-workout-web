@@ -2534,3 +2534,20 @@ button[aria-disabled="true"] {
   border: none !important;
 }
 
+/* 그룹 세그먼트의 추가 보더/윤곽 제거 → 일반 세그먼트와 동일하게 */
+.timeline-group,
+.timeline-segment.timeline-group,
+.timeline-group.is-upcoming,
+.timeline-group.is-current,
+.timeline-group.is-complete {
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+
+/* 세그먼트 간 1px 구분선 규칙만 유지 (이미 있다면 그대로) */
+.timeline-segment + .timeline-segment {
+  border-left: 1px solid rgba(148,163,184,0.18);
+}
+
