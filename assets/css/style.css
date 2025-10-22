@@ -2693,3 +2693,6 @@ button[aria-disabled="true"] {
   /* border-left 는 의도적으로 미지정 → 위 canonical 규칙이 적용됨 */
 }
 
+#timelineSegments {
+  position: relative; /* 마스코트 absolute 기준 */
+}
