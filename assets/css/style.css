@@ -2654,9 +2654,14 @@ button[aria-disabled="true"] {
 #timelineMascotLayer img { position: absolute; display: block; }
 
 #progressMascot {
-  width: clamp(36px, 5vw, 54px);   /* 작게, 반응형 */
-  bottom: -2px;
-  transform: translateX(calc(var(--mascot-x, 0px) - 50%));
+  width: clamp(46px, 7.2vw, 82px);   /* 작게, 반응형 */
+  position: absolute;
+  left: 0;
+  bottom: 0;           /* 프로젝트에 맞게 0~6px 사이에서 조정 */
+  transform: translateX(0);
+  transition: transform 0.12s linear;  /* ← 120ms 선형 */
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 #goalFlag {
