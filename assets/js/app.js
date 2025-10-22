@@ -666,6 +666,49 @@ function createTimeline() {
 }
 
 
+// 마스코트 진행 위치를 "세그먼트별 실제 픽셀폭" 기준으로 계산/반영
+function updateMascotProgress(elapsedSec) {
+  try {
+    const w = window.currentWorkout;
+    const segEnds = window.trainingState?.segEnds;   // createTimeline()에서 채움  :contentReference[oaicite:3]{index=3}
+    const bar = document.getElementById('timelineSegments');
+    const mascot = document.getElementById('progressMascot'); // index.html에 있는 마스코트 엘리먼트(아이디 확인)
+
+    if (!w || !Array.isArray(w.segments) || !segEnds || !bar || !mascot) return;
+
+    const total = segEnds[segEnds.length - 1] || 1;
+    const barWidth = bar.clientWidth || 0;
+
+    // 누적 픽셀 위치
+    let px = 0;
+    let prevEnd = 0;
+
+    for (let i = 0; i < segEnds.length; i++) {
+      const end = segEnds[i];
+      const segEl = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+      const segWidth = segEl ? segEl.offsetWidth : barWidth * ((end - prevEnd) / total);
+
+      if (elapsedSec >= end) {
+        // 이 세그먼트는 전부 지나왔다 → 전체 폭만큼 더함
+        px += segWidth;
+      } else {
+        // 현재 진행 중인 세그먼트 내부 비율만큼만 더함
+        const segElapsed = Math.max(0, elapsedSec - prevEnd);
+        const segDur = Math.max(1, end - prevEnd);
+        const ratio = Math.min(1, segElapsed / segDur);
+        px += segWidth * ratio;
+        break;
+      }
+      prevEnd = end;
+    }
+
+    mascot.style.transform = `translateX(${px}px)`; // 좌측 기준으로 x 이동
+  } catch (e) {
+    console.warn('updateMascotProgress error:', e);
+  }
+}
+
+
 
 // 훈련 상태 => 세그먼트별 달성도를 시간 기준 달성도(=진행률)로 표현
 // === PATCH: robust timeline updater (no hard dependency on trainingSession) ===
@@ -716,6 +759,12 @@ function updateTimelineByTime() {
 
       startAt = endAt;
     }
+
+    // ⬇⬇ [ADD] 마스코트 동기화 (타임라인 즉시 업데이트 루틴)
+     if (typeof updateMascotProgress === 'function') {
+       updateMascotProgress(elapsed);
+     }
+     
   } catch (e) {
     console.error("updateTimelineByTime error:", e);
   }
@@ -1012,8 +1061,14 @@ function updateSegmentBarTick(){
           }
           startAt2 = endAt2;
         }
-        // ⬇⬇ 이 지점 직후에 삽입 (for 루프 닫는 중괄호 다음 줄)
-      
+
+
+        // ⬇⬇ [ADD] 마스코트 동기화 (1초 틱 루틴)
+        if (typeof updateMascotProgress === 'function') {
+          updateMascotProgress(elapsed);
+        }
+
+         // ⬇⬇ 이 지점 직후에 삽입 (for 루프 닫는 중괄호 다음 줄)  
       /* === 3.5) 전체 진행률 계산 + 전광판 갱신 + 마스코트 이동 === */
         try {
           const total = (window.trainingState && window.trainingState.totalSec) ? window.trainingState.totalSec : 0;
