@@ -2551,3 +2551,39 @@ button[aria-disabled="true"] {
   border-left: 1px solid rgba(148,163,184,0.18);
 }
 
+
+/* === CANONICAL SEPARATOR: 세그먼트 간 1px 라인을 '항상' 살린다 === */
+/* 그룹/상태 오버라이드에서 border: none !important 로 지운 것을 복구 */
+.timeline-segment:not(:first-child) {
+  border-left: 1px solid rgba(148, 163, 184, 0.18) !important;
+}
+
+/* 첫/마지막 모서리 둥글게 유지 (기존과 동일) */
+.timeline-segment:first-child .progress-fill { border-radius: 16px 0 0 16px !important; }
+.timeline-segment:last-child  .progress-fill { border-radius: 0 16px 16px 0 !important; }
+
+/* 현재/완료/대기/그룹 상태에서도 구분선을 절대 지우지 않기 위해 보강 */
+.timeline-segment.is-current,
+.timeline-segment.is-complete,
+.timeline-segment.is-upcoming,
+.timeline-segment.timeline-group,
+.timeline-group,
+.timeline-group.is-current,
+.timeline-group.is-complete,
+.timeline-group.is-upcoming {
+  /* 상하/우측 테두리는 제거해도 OK, 좌측 라인은 남긴다 */
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  /* border-left 는 건드리지 않음 */
+}
+
+/* 그룹 세그먼트의 과한 윤곽/그림자 때문에 라인이 묻히는 현상 방지 */
+.timeline-group,
+.timeline-group.is-current,
+.timeline-group.is-complete,
+.timeline-group.is-upcoming {
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
