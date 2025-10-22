@@ -415,23 +415,18 @@ button[aria-disabled="true"] {
 }
 
 .progress-fill {
-  opacity: 0.28;
+  opacity: 0.32;                           /* 0.28~0.40 권장 */
   position: absolute;
   inset: 0 auto 0 0;
   height: 100%;
   width: 0%;
   z-index: 1;
   transition: width 0.4s ease-out, background 0.3s ease;
-  border-radius: inherit;
+  border-radius: inherit;                   /* 처음/끝만 둥글게 */
 }
+.timeline-segment:first-child .progress-fill { border-radius: 16px 0 0 16px; }
+.timeline-segment:last-child  .progress-fill { border-radius: 0 16px 16px 0; }
 
-.timeline-segment:first-child .progress-fill {
-  border-radius: 16px 0 0 16px;
-}
-
-.timeline-segment:last-child .progress-fill {
-  border-radius: 0 16px 16px 0;
-}
 
 /* 타입별 기본 진행 색상 */
 .timeline-segment[data-type="warmup"] .progress-fill {
@@ -461,11 +456,8 @@ button[aria-disabled="true"] {
 /* 상태별 스타일 */
 /* 상태별 스타일 */
 .timeline-segment.is-upcoming {
-  /* 기존 #f8fafc -> 녹색톤 투명 */
-  background: rgba(34, 197, 94, 0.08);
-  color: rgba(34, 197, 94, 0.85);
-  /* 배경과 어울리는 옅은 테두리(있다면) */
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.18);
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 /* 그룹 세그먼트가 대기 상태일 때, 폰트 흰색으로 강제 */
@@ -486,14 +478,13 @@ button[aria-disabled="true"] {
 
 
 /* 현재 진행 세그먼트: 녹색톤 투명으로 통일 */
+/* ✅ 박스 느낌 제거: 배경/그림자/스케일 off (글자색만 원하면 남겨도 됨) */
+/* 옵션: 현재 세그먼트 얇은 테두리만 */
 .timeline-segment.is-current {
-  background: rgba(34, 197, 94, 0.12);
-  color: #15803d; /* 글자색도 녹색 계열 */
-  box-shadow:
-    inset 0 0 0 2px rgba(34, 197, 94, 0.30),
-    0 0 0 1px rgba(34, 197, 94, 0.22);
-  transform: scale(1.02);
+  border-top: 1px solid rgba(34,197,94,0.25) !important;
+  border-bottom: 1px solid rgba(34,197,94,0.25) !important;
 }
+
 
 /* 현재 세그 번호/시간 색도 녹색 계열 */
 .timeline-segment.is-current .segment-number,
@@ -2446,17 +2437,13 @@ button[aria-disabled="true"] {
 }
 
 /* 2) 그룹 세그먼트: 자체 보더 제거(겹침 방지) + '미진행' 배경을 일반 세그먼트와 동일화 */
-.timeline-group{
+/* ✅ 그룹(반복) 블럭도 배경/그림자 off */
+.timeline-group,
+.timeline-group.is-upcoming,
+.timeline-group.is-current {
+  background: transparent !important;
+  box-shadow: none !important;
   border: none !important;
-  background: rgba(255,255,255,0.08) !important;  /* 일반 세그 기본 톤과 동일 */
-}
-
-/* 3) 강조 상태는 보더 대신 인셋 섀도우로 표시(경계선 1줄 유지) */
-.timeline-group.is-upcoming{
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.25) !important;
-}
-.timeline-group.is-current{
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.22) !important;
 }
 
 
