@@ -355,15 +355,18 @@ button[aria-disabled="true"] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 4px 6px;
+  /* ✅ 박스 느낌 제거 */
+  padding: 0;                         /* ← 4px 6px → 0 */
+  background: transparent;            /* ← 반투명 배경 제거 */
   font-size: 11px;
   font-weight: 500;
-  color: #cbd5e1;                        /* 어두운 배경 대비 */
-  /*border-right: 1px solid rgba(148,163,184,0.18);*/
-  background: rgba(255,255,255,0.08);    /* 기존 #f1f5f9 → 반투명 */
+  color: #cbd5e1;
   transition: all 0.3s ease;
   overflow: hidden;
+  /* ✅ flex 폭 계산 시 여백으로 인해 생기는 틈 방지 */
+  min-width: 0;
 }
+
 
 /* 새로 추가: 인접 형제에게만 1px 왼쪽 경계선 */
 .timeline-segment + .timeline-segment{
@@ -412,7 +415,7 @@ button[aria-disabled="true"] {
 }
 
 .progress-fill {
-  opacity: 0.4;
+  opacity: 0.28;
   position: absolute;
   inset: 0 auto 0 0;
   height: 100%;
@@ -2223,10 +2226,11 @@ button[aria-disabled="true"] {
 }
 
 /* 값(달성도)에 따라 색만 바꾼다: JS가 achievement-*를 같이 붙임 */
-#trainingScreen .power-display.achievement-low  { --neon-color: rgba(245,158,11,0.85); } /* 주황 */
-#trainingScreen .power-display.achievement-good { --neon-color: rgba(34,197,94,0.85); }  /* 초록 */
-#trainingScreen .power-display.achievement-high { --neon-color: rgba(251,191,36,0.85); } /* 노랑 */
-#trainingScreen .power-display.achievement-over { --neon-color: rgba(168,85,247,0.85); } /* 보라 */
+#trainingScreen .power-display.achievement-bad  { --neon-color: rgba(239, 68, 68, 0.90); }  /* 빨강: #ef4444 */
+#trainingScreen .power-display.achievement-low  { --neon-color: rgba(245,158, 11, 0.85); }  /* 주황: #f59e0b */
+#trainingScreen .power-display.achievement-good { --neon-color: rgba( 34,197, 94, 0.85); }  /* 초록: #22c55e */
+#trainingScreen .power-display.achievement-high { --neon-color: rgba( 45, 212,191, 0.90); }  /* 민트: #2dd4bf */
+#trainingScreen .power-display.achievement-over { --neon-color: rgba(168, 85,247, 0.85); }  /* 보라: #a855f7 */
 
 
 /* ── 사용자 판넬 네온 (W/kg 등급) ───────────────────────── */
