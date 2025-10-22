@@ -2084,15 +2084,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 훈련 종료
-  const btnStopTraining = safeGetElement("btnStopTraining");
-  if (btnStopTraining) {
-    btnStopTraining.addEventListener("click", () => {
-      stopSegmentLoop();
-      if (typeof showScreen === "function") {
-        showScreen("resultScreen");
-      }
-    });
-  }
+   // 훈련 종료 (확인 후 종료)
+   const btnStopTraining = safeGetElement("btnStopTraining");
+   if (btnStopTraining) {
+     btnStopTraining.addEventListener("click", () => {
+       const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
+       if (!ok) return; // 취소: 아무 것도 하지 않음
+   
+       // 확인: 종료 처리
+       stopSegmentLoop(); // 타이머/카운트다운 정지 및 상태 off
+       if (typeof showScreen === "function") {
+         showScreen("resultScreen");
+       }
+     });
+   }
+
 
   console.log("App initialization complete!");
 
