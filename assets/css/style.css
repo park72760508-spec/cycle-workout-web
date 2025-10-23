@@ -440,30 +440,40 @@ button[aria-disabled="true"] {
 .timeline-segment:first-child .progress-fill { border-radius: 16px 0 0 16px; }
 .timeline-segment:last-child  .progress-fill { border-radius: 0 16px 16px 0; }
 
+:root {
+  --pf-opacity: 0.32;
+}
+
 
 /* 타입별 기본 진행 색상 */
 .timeline-segment[data-type="warmup"] .progress-fill {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  opacity: var(--pf-opacity); 
 }
 
 .timeline-segment[data-type="interval"] .progress-fill {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+   opacity: var(--pf-opacity);
 }
 
 .timeline-segment[data-type="rest"] .progress-fill {
   background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+   opacity: var(--pf-opacity);
 }
 
 .timeline-segment[data-type="cooldown"] .progress-fill {
   background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+   opacity: var(--pf-opacity);
 }
 
 .timeline-segment[data-type="tempo"] .progress-fill {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+   opacity: var(--pf-opacity);
 }
 
 .timeline-segment[data-type="sweetspot"] .progress-fill {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+   opacity: var(--pf-opacity);
 }
 
 /* 상태별 스타일 */
@@ -658,12 +668,12 @@ button[aria-disabled="true"] {
 .timeline-group.is-complete.achievement-over {
   background: transparent !important;
 
-  /* 전체 테두리를 지우지 말고, 왼쪽 라인만 유지 */
+  /* 전체 테두리를 지우지 말고, 왼쪽 라인만 유지 
   border-left: 1px solid rgba(148,163,184,0.18) !important;
   border-top: none !important;
   border-right: none !important;
   border-bottom: none !important;
-}
+}*/
 
 
 
