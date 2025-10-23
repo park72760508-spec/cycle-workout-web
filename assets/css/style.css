@@ -149,6 +149,17 @@ button[aria-disabled="true"] {
 #connectedDevicesSummary h3{ display:flex; align-items:center; gap:10px; }
 
 /* ========== 2) 프로필 선택 화면 (#profileScreen) ========== */
+
+/* 관리자용 추가 필드 가독성 향상 */
+#adminFields .form-row label { font-weight: 600; }
+#adminFields .form-row select,
+#adminFields .form-row input[type="date"] { min-height: 36px; }
+
+/* 폼 행 간격 정돈(없다면 추가) */
+.form-row { margin-bottom: 10px; }
+.form-actions { margin-top: 12px; }
+
+
 #profileScreen {
   --card-bg:#fff; --card-border:#e5e7eb;
   --text-strong:#111827; --text:#374151; --text-muted:#6b7280;
