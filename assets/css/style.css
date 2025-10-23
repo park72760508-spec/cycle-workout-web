@@ -2562,6 +2562,13 @@ button[aria-disabled="true"] {
 .timeline-segment:first-child .progress-fill { border-radius: 16px 0 0 16px !important; }
 .timeline-segment:last-child  .progress-fill { border-radius: 0 16px 16px 0 !important; }
 
+.timeline-segment:first-child {
+  border-left: 1px solid rgba(148,163,184,0.18);
+  border-radius: 16px 0 0 16px;
+}
+
+
+
 /* 현재/완료/대기/그룹 상태에서도 구분선을 절대 지우지 않기 위해 보강 */
 .timeline-segment.is-current,
 .timeline-segment.is-complete,
@@ -2654,6 +2661,20 @@ button[aria-disabled="true"] {
   width: clamp(18px, 2.5vw, 28px);
   bottom: -4px;
   right: 0; /* 진행바 100% 지점 */
+}
+
+
+
+/* === [PATCH] 그룹 세그먼트 왼쪽 실선 복원 === */
+.timeline-group {
+  border-left: 1px solid rgba(148,163,184,0.18) !important;
+}
+
+/* 상태 클래스 적용 시에도 유지 */
+.timeline-group.is-upcoming,
+.timeline-group.is-current,
+.timeline-group.is-complete {
+  border-left: 1px solid rgba(148,163,184,0.18) !important;
 }
 
 
