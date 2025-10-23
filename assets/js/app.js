@@ -849,7 +849,7 @@ function buildSegmentBar(){
       
       return `
         
-        <div class="timeline-segment timeline-group" data-group-index="${groupIndex}" style="border-left: 1px solid rgba(148,163,184,0.18);"
+        <div class="timeline-segment timeline-group" data-group-index="${groupIndex}"
              data-type="${mainType}" data-group-type="grouped" style="width:${widthPct}%"
              data-start-index="${startIndex}" data-end-index="${endIndex}"
              aria-label="반복 그룹 ${groupNumber} × ${repeatCount}회 · ${timeLabel}">
@@ -939,7 +939,6 @@ function updateSegmentBarTick(){
         "is-complete","is-current","is-upcoming",
         "achievement-low","achievement-good","achievement-high","achievement-over"
       );
-      groupEl.style.borderLeft = '1px solid rgba(148,163,184,0.18)';
      
       
       // 그룹 경계
