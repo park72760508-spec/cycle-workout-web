@@ -1548,22 +1548,19 @@ if (!window.showToast) {
 
 //진행률에 맞춰 X 위치만 갱신
 function updateMascotProgress(percent) {
-  const layer  = document.getElementById("mascotRunway");   // 밖 활주로
+  // percent: 0 ~ 100
+  const layer = document.getElementById("timelineMascotLayer");
   const mascot = document.getElementById("progressMascot");
-  const bar    = document.querySelector("#trainingScreen .timeline-progress.timeline--xl");
+  const bar = document.querySelector("#trainingScreen .timeline-progress.timeline--xl");
   if (!layer || !mascot || !bar) return;
 
-  const w    = bar.clientWidth;
-  const mW   = mascot.clientWidth || 40;    // 이미지 실측 너비 (fallback 40px)
-  const half = mW / 2;
+  // 진행바의 내부 가로폭 기준으로 픽셀 위치 계산
+  const w = bar.clientWidth;
+  const px = Math.max(0, Math.min(w, Math.round((percent / 100) * w)));
 
-  // 0%~100% → px, 가장자리는 half만큼 여유 주기
-  const raw = Math.round((percent / 100) * w);
-  const px  = Math.max(half, Math.min(w - half, raw));
-
+  // CSS 변수로 전달 → translateX(var(--mascot-x))
   layer.style.setProperty("--mascot-x", px + "px");
 }
-
 
 
 
