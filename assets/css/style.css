@@ -377,6 +377,7 @@ button[aria-disabled="true"] {
   overflow: hidden;
   /* ✅ flex 폭 계산 시 여백으로 인해 생기는 틈 방지 */
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 
@@ -572,8 +573,13 @@ button[aria-disabled="true"] {
 .timeline-group.is-upcoming{
   background: rgba(34, 197, 94, 0.08) !important;
   box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.25) !important;
-  border: none !important;
+  /* border 전체 제거 대신 ‘왼쪽 라인만’ 유지 */
+  border-left: 1px solid rgba(148,163,184,0.18) !important;
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
 }
+
 
 
 .timeline-group.is-upcoming .segment-number,
@@ -621,8 +627,13 @@ button[aria-disabled="true"] {
 .timeline-group.is-current{
   background: transparent !important;
   box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.22) !important;
-  border: none !important;
+  /* border 전체 제거 대신 ‘왼쪽 라인만’ 유지 */
+  border-left: 1px solid rgba(148,163,184,0.18) !important;
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
 }
+
 
 
 .timeline-group.is-current .segment-number {
@@ -646,8 +657,14 @@ button[aria-disabled="true"] {
 .timeline-group.is-complete.achievement-high,
 .timeline-group.is-complete.achievement-over {
   background: transparent !important;
-  border-color: transparent !important;
+
+  /* 전체 테두리를 지우지 말고, 왼쪽 라인만 유지 */
+  border-left: 1px solid rgba(148,163,184,0.18) !important;
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
 }
+
 
 
 /* 진행바 애니메이션 효과 */
@@ -2621,16 +2638,7 @@ button[aria-disabled="true"] {
   z-index: 5;                        /* 진행 채움보다 위 */
 }
 
-/* 진행률에 맞춰 수평 이동할 요소 */
-#progressMascot {
-  position: absolute;
-  transform: translateX(var(--mascot-x, 0)) translateY(0);
-  bottom: -2px;                      /* 살짝 내려서 붙여 보이게 */
-  width: clamp(38px, 6vw, 68px);     /* 화면 크기 대응, 너무 커지지 않게 */
-  image-rendering: auto;
-  /* 배경 투명 파일을 가정. 혹시 잔여 테두리 있으면 아래 한 줄로 은근히 블렌딩 가능 */
-  /* mix-blend-mode: lighten; */
-}
+
 
 /* 100% 지점 깃발(고정) — 진행바 우측 끝에 핀 고정 */
 #goalFlag {
@@ -2663,11 +2671,25 @@ button[aria-disabled="true"] {
 
 #timelineMascotLayer img { position: absolute; display: block; }
 
+/* 진행률에 맞춰 수평 이동할 요소 */
 #progressMascot {
-  width: clamp(36px, 5vw, 54px);   /* 작게, 반응형 */
+  position: absolute;
+  /*transform: translateX(var(--mascot-x, 0)) translateY(0);
+  /* [변경 후 - 마스코트 중심을 진행율 위치에 정렬]*/ 
+  left: var(--mascot-x);
+  transform: translateX(-50%) translateY(0);  
+  bottom: -2px;                      /* 살짝 내려서 붙여 보이게 */
+  width: clamp(38px, 6vw, 68px);     /* 화면 크기 대응, 너무 커지지 않게 */
+  image-rendering: auto;
+  /* 배경 투명 파일을 가정. 혹시 잔여 테두리 있으면 아래 한 줄로 은근히 블렌딩 가능 */
+  /* mix-blend-mode: lighten; */
+}
+
+/*#progressMascot {
+  width: clamp(36px, 5vw, 54px);   
   bottom: -2px;
   transform: translateX(var(--mascot-x, 0px));
-}
+}*/
 
 #goalFlag {
   width: clamp(18px, 2.5vw, 28px);
