@@ -1,3 +1,37 @@
+
+/* ============================================================
+   [TEMP ADMIN OVERRIDE] — 목록 표시 권한 강제용
+   - 로그인 화면 구축 전까지 임시로 grade=1(관리자 권한)로 고정
+   - 적용 범위: localStorage('currentUser'), window.currentUser
+   - 제거 방법: 이 블록 전체 삭제
+============================================================ */
+;(function(){
+  try {
+    var saved = null;
+    try { saved = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { saved = null; }
+    if (!saved || typeof saved !== 'object') saved = {};
+    saved.grade = '1';
+    localStorage.setItem('currentUser', JSON.stringify(saved));
+    if (typeof window !== 'undefined') {
+      window.currentUser = Object.assign({}, window.currentUser || {}, saved);
+      window.__TEMP_ADMIN_OVERRIDE__ = true;
+      console.info('[TEMP] viewer grade forced to 1 (admin). Remove this block after login screen is ready.');
+    }
+  } catch(e) {
+    if (typeof console !== 'undefined') console.warn('[TEMP] admin override failed:', e);
+  }
+})();
+
+// ▼ 현재 로그인/선택 사용자(뷰어) 등급 헬퍼
+function getViewerGrade() {
+  try {
+    const viewer = (window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (viewer && viewer.grade != null) return String(viewer.grade);
+  } catch (e) {}
+  return '2'; // 기본은 일반
+}
+
+
 /* ==========================================================
    사용자 관리 모듈 (userManager.js)
    - Google Sheets API와 연동한 사용자 CRUD (JSONP 방식)
@@ -79,11 +113,16 @@ async function apiCreateUser(userData) {
     name: userData.name || '',
     contact: userData.contact || '',
     ftp: (userData.ftp || 0).toString(),
-    weight: (userData.weight || 0).toString()
+    weight: (userData.weight || 0).toString(),
+
+    // ▼ 신규 필드 (요청 사양)
+    grade: (userData.grade ?? '2').toString(),      // 가입시 기본값 "2"
+    expiry_date: userData.expiry_date ?? ''         // 기본값 공백 저장
   };
   console.log('Sending params:', params);
   return jsonpRequest(GAS_URL, params);
 }
+
 
 async function apiUpdateUser(id, userData) {
   const params = {
@@ -161,33 +200,56 @@ async function loadUsers() {
     }
 
     // 사용자 카드 렌더링
-    userList.innerHTML = users.map(user => {
-      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
-      
-      return `
-        <div class="user-card" data-user-id="${user.id}">
-          <div class="user-header">
-            <div class="user-name">👤 ${user.name}</div>
-            <div class="user-actions">
-              <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
-              <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
-            </div>
-          </div>
-          <div class="user-details">
-            <div class="user-stats">
-              <span class="stat">FTP: ${user.ftp || '-'}W</span>
-              <span class="stat">체중: ${user.weight || '-'}kg</span>
-              <span class="stat">W/kg: ${wkg}</span>
-            </div>
-            <div class="user-meta">
-              <span class="contact">${user.contact || ''}</span>
-              <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
-            </div>
-          </div>
-          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
-        </div>
-      `;
-    }).join('');
+   // 현재 사용자(선택된 사용자) 기준 등급 파악
+   let viewer = null;
+   try {
+     viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+   } catch (e) { viewer = null; }
+   
+   // 등급: 미지정 사용자는 정책상 '2'(본인만)로 간주
+   const viewerGrade = (viewer && viewer.grade != null) ? String(viewer.grade) : '2';
+   
+   // grade=2 인 경우: 본인만 보이도록 목록 필터링
+   let visibleUsers = users;
+   if (viewerGrade === '2' && viewer && viewer.id != null) {
+     visibleUsers = users.filter(u => String(u.id) === String(viewer.id));
+   }
+   
+   // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
+   userList.innerHTML = visibleUsers.map(user => {
+     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+   
+     // 수정/삭제 권한: grade=1 전체 / grade=2 본인만
+     const canEdit = (viewerGrade === '1') ||
+                     (viewerGrade === '2' && viewer && String(user.id) === String(viewer.id));
+   
+     return `
+       <div class="user-card" data-user-id="${user.id}">
+         <div class="user-header">
+           <div class="user-name">👤 ${user.name}</div>
+           <div class="user-actions">
+             ${canEdit ? `
+               <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
+               <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+             ` : ''}
+           </div>
+         </div>
+         <div class="user-details">
+           <div class="user-stats">
+             <span class="stat">FTP: ${user.ftp || '-'}W</span>
+             <span class="stat">체중: ${user.weight || '-'}kg</span>
+             <span class="stat">W/kg: ${wkg}</span>
+           </div>
+           <div class="user-meta">
+             <span class="contact">${user.contact || ''}</span>
+             <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
+           </div>
+         </div>
+         <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
+       </div>
+     `;
+   }).join('');
+
 
     // 전역에 사용자 목록 저장
     window.users = users;
@@ -580,24 +642,32 @@ async function deleteUser(userId) {
  * 초기화 및 이벤트 바인딩
  */
 document.addEventListener('DOMContentLoaded', () => {
-  // 새 사용자 추가 카드 클릭 이벤트
   const cardAddUser = document.getElementById('cardAddUser');
   if (cardAddUser) {
     cardAddUser.addEventListener('click', showAddUserForm);
   }
   
-  // 취소 버튼
   const btnCancel = document.getElementById('btnCancelAddUser');
   if (btnCancel) {
     btnCancel.addEventListener('click', hideAddUserForm);
   }
   
-  // 저장 버튼
   const btnSave = document.getElementById('btnSaveUser');
   if (btnSave) {
     btnSave.addEventListener('click', saveUser);
   }
+
+  // ▼ 전화번호 입력: 숫자만 허용 (저장은 문자열 그대로)
+  const contactInput = document.getElementById('userContact');
+  if (contactInput) {
+    contactInput.setAttribute('inputmode', 'numeric');   // 모바일 키패드 유도
+    contactInput.setAttribute('pattern', '[0-9]*');      // 브라우저 힌트
+    contactInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D+/g, ''); // 숫자 이외 제거
+    });
+  }
 });
+
 
 // 전역 함수로 내보내기
 window.loadUsers = loadUsers;
