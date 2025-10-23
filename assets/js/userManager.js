@@ -133,8 +133,14 @@ async function apiUpdateUser(id, userData) {
     ftp: userData.ftp,
     weight: userData.weight
   };
+
+  // ▼ 관리자일 때만 들어오는 선택 필드(있을 때만 전송)
+  if (userData.grade != null)       params.grade = String(userData.grade);
+  if (userData.expiry_date != null) params.expiry_date = String(userData.expiry_date);
+
   return jsonpRequest(GAS_URL, params);
 }
+
 
 async function apiDeleteUser(id) {
   return jsonpRequest(GAS_URL, { action: 'deleteUser', id: id });
@@ -462,20 +468,50 @@ async function editUser(userId) {
     showAddUserForm(false);
     
     // 수정 폼에 기존 데이터 채우기
-    document.getElementById('userName').value = user.name || '';
-    document.getElementById('userContact').value = user.contact || '';
-    document.getElementById('userFTP').value = user.ftp || '';
-    document.getElementById('userWeight').value = user.weight || '';
-    
-    // 저장 버튼을 업데이트 버튼으로 완전히 교체
-    const saveBtn = document.getElementById('btnSaveUser');
-    if (saveBtn) {
-      saveBtn.textContent = '수정';
-      // 기존 이벤트 리스너 제거하고 새로 바인딩
-      saveBtn.removeEventListener('click', saveUser);
-      saveBtn.onclick = null;
-      saveBtn.onclick = () => performUpdate();
-    }
+   // ... user 로드 및 모드 전환 생략 ...
+   document.getElementById('userName').value = user.name || '';
+   document.getElementById('userContact').value = user.contact || '';
+   document.getElementById('userFTP').value = user.ftp || '';
+   document.getElementById('userWeight').value = user.weight || '';
+   
+   // ▼ 관리자(grade=1)일 때만 추가 필드 표시
+   const isAdmin = (typeof getViewerGrade === 'function' ? getViewerGrade() === '1' : false);
+   const form = document.getElementById('addUserForm');
+   
+   // 기존 adminFields 제거(중복 방지)
+   const prev = document.getElementById('adminFields');
+   if (prev) prev.remove();
+   
+   if (isAdmin && form) {
+     const adminWrap = document.createElement('div');
+     adminWrap.id = 'adminFields';
+     adminWrap.innerHTML = `
+       <div class="form-row">
+         <label>회원등급</label>
+         <select id="editGrade">
+           <option value="1" ${String(user.grade || '') === '1' ? 'selected' : ''}>1 (관리자)</option>
+           <option value="2" ${String(user.grade || '2') !== '1' ? 'selected' : ''}>2 (일반)</option>
+         </select>
+       </div>
+       <div class="form-row">
+         <label>만기일(expiry_date)</label>
+         <input id="editExpiryDate" type="date" value="${(user.expiry_date || '').substring(0,10)}">
+       </div>
+     `;
+     // 폼 내 버튼 영역 앞에 삽입
+     const actions = form.querySelector('.form-actions') || form.lastElementChild;
+     form.insertBefore(adminWrap, actions);
+   }
+
+// 저장 버튼 교체 유지
+const saveBtn = document.getElementById('btnSaveUser');
+if (saveBtn) {
+  saveBtn.textContent = '수정';
+  saveBtn.removeEventListener('click', saveUser);
+  saveBtn.onclick = null;
+  saveBtn.onclick = () => performUpdate();
+}
+
     
     // 폼 제목도 변경
     const formTitle = document.querySelector('#addUserForm h3');
@@ -582,10 +618,22 @@ async function performUpdate() {
   }
 
   try {
-    const userData = { name, contact, ftp, weight };
-    console.log('Updating user:', currentEditUserId, 'with data:', userData);
-    
-    const result = await apiUpdateUser(currentEditUserId, userData);
+      const userData = {
+        name,
+        contact: contact.replace(/\D+/g, ''), // 숫자만
+        ftp,
+        weight
+      };
+      
+      if (typeof getViewerGrade === 'function' && getViewerGrade() === '1') {
+        const gradeEl = document.getElementById('editGrade');
+        const expiryEl = document.getElementById('editExpiryDate');
+        if (gradeEl)  userData.grade = String(gradeEl.value || '2');
+        if (expiryEl) userData.expiry_date = String(expiryEl.value || '');
+      }
+      
+      const result = await apiUpdateUser(currentEditUserId, userData);
+
     
     if (result.success) {
       showToast('사용자 정보가 수정되었습니다.');
