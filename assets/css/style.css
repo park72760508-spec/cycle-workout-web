@@ -377,6 +377,7 @@ button[aria-disabled="true"] {
   overflow: hidden;
   /* ✅ flex 폭 계산 시 여백으로 인해 생기는 틈 방지 */
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 
