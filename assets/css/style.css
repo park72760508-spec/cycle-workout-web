@@ -2624,7 +2624,10 @@ button[aria-disabled="true"] {
 /* 진행률에 맞춰 수평 이동할 요소 */
 #progressMascot {
   position: absolute;
-  transform: translateX(var(--mascot-x, 0)) translateY(0);
+  /*transform: translateX(var(--mascot-x, 0)) translateY(0);*/
+  /* [변경 후 - 마스코트 중심을 진행율 위치에 정렬] */
+  left: var(--mascot-x);
+  transform: translateX(-50%) translateY(0);   
   bottom: -2px;                      /* 살짝 내려서 붙여 보이게 */
   width: clamp(38px, 6vw, 68px);     /* 화면 크기 대응, 너무 커지지 않게 */
   image-rendering: auto;
