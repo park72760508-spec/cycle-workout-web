@@ -1,10 +1,22 @@
 /* ==========================================================
-   Cycle Workout App UI Style (통합본)
-   - 정렬 기준: index.html 화면 구성 순서
-   - 중복/구규칙은 본문 하단 "삭제 대상" 목록 참고 
-   - Base → 공통 유틸 → 1~6 화면 순서 → 공통 반응형
+   Cycle Workout App UI Style — 재배치 정리본
+   정렬 기준: index.html 화면 구성 순서
+   섹션 순서:
+     [0] 공통 Base/Reset
+     [1] 연결 화면 (#connectionScreen)
+     [2] 프로필 선택 화면 (#profileScreen)
+     [3] 워크아웃 선택 화면 (#workoutScreen)
+     [4] 훈련 준비 화면 (#trainingReadyScreen)
+     [5] 훈련 화면 (#trainingScreen) — 기본/향상, 세그먼트바, 그룹세그먼트
+     [6] 결과 화면 (#resultScreen)
+     [7] 워크아웃/세그먼트 관리 (관리자 UI)
+     [8] 공통 오버레이/로딩/상태
+     [9] 반응형 및 플랫폼별 보정
+     [10] 네온/비주얼 강화 효과
+   유지보수 메모:
+     - 그룹세그먼트 상태 전환 시에도 왼쪽 경계선 유지 (하단 PATCH 참고)
+     - 중복/구규칙은 가능한 한 하단으로 모음
 ========================================================== */
-
 /* ========== BASE / RESET (공통) ========== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -2677,4 +2689,24 @@ button[aria-disabled="true"] {
   border-left: 1px solid rgba(148,163,184,0.18) !important;
 }
 
+
+/* ==========================================================
+   [PATCH] 그룹 세그먼트 왼쪽 세로라인 유지
+   - 상태 클래스(is-upcoming / is-current / is-complete) 토글 시에도
+     왼쪽 경계선이 사라지지 않도록 강제 유지
+========================================================== */
+.timeline-group { 
+  border-left: 1px solid rgba(148,163,184,0.18) !important; 
+}
+.timeline-group.is-upcoming,
+.timeline-group.is-current,
+.timeline-group.is-complete {
+  border-left: 1px solid rgba(148,163,184,0.18) !important;
+}
+
+/* 첫 세그먼트 좌측선 및 모서리 보정 (둥근 컨테이너 내부에서도 보이도록) */
+.timeline-segment:first-child {
+  border-left: 1px solid rgba(148,163,184,0.18);
+  border-radius: 16px 0 0 16px;
+}
 
