@@ -848,7 +848,8 @@ function buildSegmentBar(){
       const groupNumber = `G${groupIndex + 1}`; // 그룹 번호
       
       return `
-        <div class="timeline-segment timeline-group" data-group-index="${groupIndex}" 
+        //<div class="timeline-segment timeline-group" data-group-index="${groupIndex}"
+        <div class="timeline-segment timeline-group" data-group-index="${groupIndex}" style="border-left: 1px solid rgba(148,163,184,0.18);"
              data-type="${mainType}" data-group-type="grouped" style="width:${widthPct}%"
              data-start-index="${startIndex}" data-end-index="${endIndex}"
              aria-label="반복 그룹 ${groupNumber} × ${repeatCount}회 · ${timeLabel}">
@@ -933,10 +934,18 @@ function updateSegmentBarTick(){
     }
 
       // 상태/달성도 클래스 초기화
+      //groupEl.classList.remove(
+        //"is-complete","is-current","is-upcoming",
+        //"achievement-low","achievement-good","achievement-high","achievement-over"
+      //);
+
+      // [변경 후] 그룹세그먼트 왼쪽 라인 유지 보장
       groupEl.classList.remove(
         "is-complete","is-current","is-upcoming",
         "achievement-low","achievement-good","achievement-high","achievement-over"
       );
+      groupEl.style.borderLeft = '1px solid rgba(148,163,184,0.18)';
+     
       
       // 그룹 경계
       const groupStart = groupStartTime;
