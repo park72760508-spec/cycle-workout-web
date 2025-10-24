@@ -44,6 +44,22 @@ const GAS_URL = window.GAS_URL;
 let isEditMode = false;
 let currentEditUserId = null;
 
+// 전화번호 유틸: 숫자만 남기기
+function unformatPhone(input) {
+  return String(input || '').replace(/\D+/g, '');
+}
+
+// 전화번호 유틸: DB 저장용 하이픈 3-중간-4 포맷 (길이 10~11 가정)
+function formatPhoneForDB(digits) {
+  const d = unformatPhone(digits);
+  if (d.length < 7) return d;              // 너무 짧으면 그대로
+  const head = d.slice(0, 3);              // 보통 '010'
+  const tail = d.slice(-4);                // 마지막 4자리
+  const mid  = d.slice(head.length, d.length - tail.length);
+  return `${head}-${mid}-${tail}`;
+}
+
+
 // JSONP 방식 API 호출 헬퍼 함수
 // JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선
 function jsonpRequest(url, params = {}) {
@@ -386,7 +402,8 @@ async function saveUser() {
   }
 
   const name = document.getElementById('userName').value.trim();
-  const contact = document.getElementById('userContact').value.trim();
+  const contactRaw = document.getElementById('userContact').value.trim();
+  const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
 
@@ -470,7 +487,7 @@ async function editUser(userId) {
     // 수정 폼에 기존 데이터 채우기
    // ... user 로드 및 모드 전환 생략 ...
    document.getElementById('userName').value = user.name || '';
-   document.getElementById('userContact').value = user.contact || '';
+   document.getElementById('userContact').value = unformatPhone(user.contact || '');
    document.getElementById('userFTP').value = user.ftp || '';
    document.getElementById('userWeight').value = user.weight || '';
    
@@ -620,7 +637,7 @@ async function performUpdate() {
   try {
       const userData = {
         name,
-        contact: contact.replace(/\D+/g, ''), // 숫자만
+        contact: contactDB,   // ← DB에는 하이픈 포함 저장
         ftp,
         weight
       };
