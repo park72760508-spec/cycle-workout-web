@@ -2281,6 +2281,21 @@ document.addEventListener("DOMContentLoaded", () => {
       ${tr ? `<div class="dev">🚲 스마트 트레이너: ${tr.name}${trBadge}</div>` : ""}
       ${hr ? `<div class="dev">❤️ 심박계: ${hr.name}</div>` : ""}
     `;
+     // ✅ "다음 단계로" 버튼 활성/비활성 제어
+     const nextBtn = safeGetElement("btnToProfile");
+     if (nextBtn) {
+       // 규칙: 파워 소스(트레이너 또는 파워미터) 중 하나 이상 연결되면 진행 가능
+       const readyPower = !!(pm || tr);
+   
+       // (옵션) 심박계도 필수로 요구하려면 아래 주석 해제:
+       const ready = readyPower || !!hr;  // 파워소스, 심박계중 하나만 연결되면 
+   
+       //const ready = readyPower; // 기본: 파워 소스만 필수
+       nextBtn.disabled = !ready;
+       nextBtn.setAttribute('aria-disabled', String(!ready));
+       nextBtn.title = ready ? '' : '블루투스 기기를 먼저 연결하세요';
+     }
+     
   }
 
   // 일시정지/재개
