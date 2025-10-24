@@ -3600,6 +3600,89 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 });
 
+// 새 사용자 등록 후 자동 인증 처리 함수
+async function handleNewUserRegistered(userData) {
+  console.log('📝 새 사용자 등록 완료, 자동 인증 시작:', userData.name);
+  
+  try {
+    // DB 목록 강제 새로고침 (새 사용자 포함)
+    if (typeof syncUsersFromDB === 'function') {
+      await syncUsersFromDB();
+    }
+    
+    // 등록된 전화번호로 현재 인증 상태 설정
+    const normalizedPhone = normalizePhoneNumber(userData.contact);
+    currentPhoneNumber = normalizedPhone;
+    
+    // 전화번호 입력 필드에 자동 입력
+    const phoneInput = document.getElementById('phoneInput');
+    if (phoneInput) {
+      phoneInput.value = normalizedPhone.replace(/\D/g, '');
+      if (typeof formatPhoneNumber === 'function') {
+        formatPhoneNumber(phoneInput.value);
+      }
+    }
+    
+    // 1초 대기 후 자동 인증 실행
+    setTimeout(async () => {
+      if (typeof authenticatePhoneWithDB === 'function') {
+        const authResult = await authenticatePhoneWithDB(normalizedPhone);
+        
+        if (authResult.success) {
+          // 자동 인증 성공
+          isPhoneAuthenticated = true;
+          window.currentUser = authResult.user;
+          localStorage.setItem('currentUser', JSON.stringify(authResult.user));
+          
+          // UI 업데이트
+          const authStatus = document.getElementById('phoneAuthStatus');
+          const authBtn = document.getElementById('phoneAuthBtn');
+          
+          if (authStatus && authBtn) {
+            authStatus.textContent = '✅ 등록 및 인증 완료!';
+            authStatus.className = 'auth-status success';
+            authBtn.textContent = '인증 완료';
+            authBtn.disabled = true;
+          }
+          
+          if (typeof showToast === 'function') {
+            showToast(`${userData.name}님 등록 및 인증 완료! 🎉`);
+          }
+          
+          // 2초 후 기기연결화면으로 이동
+          setTimeout(() => {
+            if (typeof hideAuthScreen === 'function') {
+              hideAuthScreen();
+            }
+            
+            if (typeof window.originalShowScreen === 'function') {
+              window.originalShowScreen('connectionScreen');
+            } else if (typeof showScreen === 'function') {
+              showScreen('connectionScreen');
+            }
+          }, 2000);
+          
+        } else {
+          // 자동 인증 실패 시 수동 인증 안내
+          if (typeof showToast === 'function') {
+            showToast('등록 완료! 인증 버튼을 눌러주세요.');
+          }
+        }
+      }
+    }, 1000);
+    
+  } catch (error) {
+    console.error('❌ 자동 인증 처리 실패:', error);
+    if (typeof showToast === 'function') {
+      showToast('등록 완료! 인증 버튼을 눌러주세요.');
+    }
+  }
+}
+
+// ========== 10. 전역 함수 내보내기 ==========
+window.handleNewUserRegistered = handleNewUserRegistered;
+
+
 // ========== 10. 전역 함수 내보내기 ==========
 window.handleNewUserRegistered = handleNewUserRegistered;
 window.authenticatePhoneWithDB = authenticatePhoneWithDB;
@@ -3608,7 +3691,6 @@ window.syncUsersFromDB = syncUsersFromDB;
 
 console.log('📱 수정된 DB 연동 전화번호 인증 시스템 로드 완료!');
 console.log('🔧 VALID_PHONES 배열이 제거되고 실시간 DB 검색으로 전환되었습니다.');
-
 
 
 
