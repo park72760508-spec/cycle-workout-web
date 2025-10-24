@@ -11,8 +11,15 @@
 function getViewerGrade() {
   try {
     const viewer = (window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+    // 1) 현재 뷰어에 grade가 있으면 그걸 사용
     if (viewer && viewer.grade != null) return String(viewer.grade);
+
+    // 2) 혹시 인증 단계에서 따로 저장해둔 authUser(등급 포함)가 있으면 보강
+    const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+    if (authUser && authUser.grade != null) return String(authUser.grade);
   } catch (e) {}
+
   return '2'; // 기본은 일반
 }
 
@@ -371,16 +378,17 @@ async function loadUsers() {
       visibleUsers = users.filter(u => String(u.id) === String(mergedViewer.id));
     }
 
-    // 이름 오름차순 정렬(한글 대응)
-    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));  
+   // 이름 오름차순 정렬
+   visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
     // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
     userList.innerHTML = visibleUsers.map(user => {
       const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
 
       // 수정/삭제 권한: grade=1 전체 / grade=2 본인만
+      // 권한 계산 시에도 mergedViewer로 일치 사용
       const canEdit = (viewerGrade === '1') ||
-                      (viewerGrade === '2' && viewer && String(user.id) === String(viewer.id));
+                      (viewerGrade === '2' && mergedViewer && String(user.id) === String(mergedViewer.id));
 
       return `
         <div class="user-card" data-user-id="${user.id}">
@@ -468,7 +476,19 @@ async function selectUser(userId) {
     const user = result.item;
     
     // 전역 상태에 현재 사용자 설정
-    window.currentUser = user;
+      // 기존 뷰어(등급 등 보존용) 가져오기
+      let prevViewer = null;
+      try {
+        prevViewer = (window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      } catch (e) { prevViewer = null; }
+      
+      // API가 grade를 안 주는 경우, 이전 등급을 보존
+      if (prevViewer && prevViewer.grade != null && (user.grade == null)) {
+        user.grade = String(prevViewer.grade);
+      }
+      
+      // 전역 상태에 현재 사용자 설정
+      window.currentUser = user;
     
     // 로컬 스토리지에 저장
     try {
@@ -500,9 +520,12 @@ async function selectUser(userId) {
   }
 }
 
-/**
+
+
+
+/**------------------------------------
  * 새 사용자 추가 폼 표시
- */
+ -------------------------------------*/
 function showAddUserForm() {
   const cardAddUser = document.getElementById('cardAddUser');
   const addUserForm = document.getElementById('addUserForm');
