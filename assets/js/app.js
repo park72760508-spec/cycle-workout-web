@@ -3053,10 +3053,24 @@ window.resetAuth = function() {
 };
 
 // ✅ 교체:
+// 🔍 검색: "window.checkAuthStatus = function()"
+// ❌ 기존 함수 삭제하고 아래로 교체
+
 window.checkAuthStatus = function() {
+  console.log('=== 🔐 인증 시스템 상태 ===');
   console.log('현재 인증 상태:', isPhoneAuthenticated);
   console.log('현재 전화번호:', currentPhoneNumber);
   console.log('현재 사용자:', window.currentUser);
+  
+  // DB 관련 상태 (안전하게 체크)
+  if (typeof dbUsers !== 'undefined') {
+    console.log('DB 연결 상태: 연결됨');
+    console.log('DB 사용자 수:', dbUsers.length);
+  } else {
+    console.log('DB 연결 상태: 초기화 중');
+  }
+  console.log('===========================');
+  
   return { 
     authenticated: isPhoneAuthenticated, 
     phone: currentPhoneNumber,
@@ -3064,8 +3078,8 @@ window.checkAuthStatus = function() {
   };
 };
 
-console.log('📱 전화번호 인증 시스템 최종 버전 로드 완료!');
-console.log('테스트용 전화번호:', VALID_PHONES);
+console.log('📱 DB 연동 전화번호 인증 시스템 로드 완료!');
+console.log('🔧 실시간 DB 검색 기반 인증 시스템 활성화');
 
 
 
@@ -3089,10 +3103,6 @@ async function registerNewUserViaAPI(formData, submitBtn, originalText) {
           showToast(`${formData.name}님 등록 완료! 🎉`);
         }
         
-        // VALID_PHONES에 추가 (기존 로직 유지)
-        if (!VALID_PHONES.includes(formData.contact)) {
-          VALID_PHONES.push(formData.contact);
-        }
         
         // 폼 초기화 및 숨기기
         document.getElementById('newUserForm')?.reset();
