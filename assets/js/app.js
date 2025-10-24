@@ -116,18 +116,20 @@ function authenticatePhoneWithDB(phoneNumber) {
             });
             
             if (matchedUser) {
-                console.log('✅ 사용자 찾음:', matchedUser.name);
-                resolve({
-                    success: true,
-                    message: `${matchedUser.name}님 인증 완료!`,
-                    user: {
-                        id: matchedUser.id,
-                        name: matchedUser.name,
-                        contact: matchedUser.contact,
-                        ftp: parseInt(matchedUser.ftp) || 0,
-                        weight: parseFloat(matchedUser.weight) || 0
-                    }
-                });
+              console.log('✅ 사용자 찾음:', matchedUser.name);
+              resolve({
+                success: true,
+                message: `${matchedUser.name}님 인증 완료!`,
+                user: {
+                  id: matchedUser.id,
+                  name: matchedUser.name,
+                  contact: matchedUser.contact,
+                  ftp: parseInt(matchedUser.ftp) || 0,
+                  weight: parseFloat(matchedUser.weight) || 0,
+                  grade: String(matchedUser.grade ?? '2'),            // ★ 등급 포함
+                  expiry_date: matchedUser.expiry_date ?? ''          // (선택) 만료일도 함께 보존
+                }
+              });
             } else {
                 console.log('❌ 사용자를 찾을 수 없음');
                 resolve({
