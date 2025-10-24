@@ -88,9 +88,24 @@ h1,h2,h3,h4 { font-weight: 600; }
   border: none; background: #fff; font-size: 22px;
   border-radius: 50%; width: 55px; height: 55px; margin: 0 8px; cursor: pointer;
   box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  position: relative;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  overflow: visible;   
 }
+
 .control-btn.stop { color: #d33; }
-.control-btn.pause { color: #f0a500; }
+.control-btn.pause { 
+   color: #f0a500;
+  
+  /* 추가할 부분 */
+  z-index: 1001 !important;
+  pointer-events: auto;
+  isolation: isolate;  
+}
 
 /* ========== 인증완료 후 화면 전환 ========== */
 
