@@ -419,6 +419,57 @@
 </head>
 
 <body>
+  <!-- 0) 사용자 인증 -->
+<!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
+  <div id="authScreen" class="screen">
+    <div class="auth-main-container">
+      <div class="auth-hero-section">
+        <div class="auth-hero-icon">🔐</div>
+        <h1>사용자 인증</h1>
+        <p class="subtitle">안전한 훈련 환경을 위해 전화번호로 인증해주세요</p>
+      </div>
+      
+      <div class="auth-form-container">
+        <div class="auth-form-card">
+          <div class="auth-form-header">
+            <div class="form-icon">📱</div>
+            <h3>전화번호 입력</h3>
+            <p>11자리 전화번호를 입력하세요</p>
+          </div>
+          
+          <div class="phone-input-section">
+            <label for="phoneInput">전화번호</label>
+            <div class="phone-input-container">
+              <input type="tel" id="phoneInput" class="phone-input" 
+                     placeholder="01012345678" 
+                     maxlength="13"
+                     oninput="formatPhoneNumber(this.value)"
+                     onkeyup="handlePhoneKeyup(event)">
+            </div>
+            
+            <div class="auth-status" id="phoneAuthStatus"></div>
+            
+            <button class="btn btn-primary auth-btn" id="phoneAuthBtn" 
+                    onclick="authenticatePhone()" disabled>
+              인증하기
+            </button>
+          </div>
+          
+          <div class="auth-help-card">
+            <h4>💡 테스트용 전화번호</h4>
+            <div class="test-numbers">
+              <span class="test-number">010-1234-5678</span>
+              <span class="test-number">010-0000-0000</span>
+              <span class="test-number">010-1111-1111</span>
+            </div>
+            <p class="help-note">위 번호들 중 하나를 입력하세요</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
   <!-- 1) 연결 화면 -->
   <div id="connectionScreen" class="screen active">
     <div class="header">
