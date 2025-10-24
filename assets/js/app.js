@@ -3354,14 +3354,45 @@ async function authenticatePhone() {
         showToast(`${authResult.user.name}님 환영합니다! 🎉`);
       }
       
-      // 2초 후 프로필 화면으로 이동
+      // 1초 후 즉시 기기연결 화면으로 이동
       setTimeout(() => {
-        hideAuthScreen();
-        if (typeof window.originalShowScreen === 'function') {
-          //window.originalShowScreen('profileScreen');
-           window.originalShowScreen('connectionScreen');
+        console.log('🔄 인증 완료 - 기기연결 화면으로 이동 중...');
+        
+        // 다중 fallback으로 안전한 화면 전환
+        try {
+          hideAuthScreen();
+          
+          // 방법 1: originalShowScreen 사용
+          if (typeof window.originalShowScreen === 'function') {
+            window.originalShowScreen('connectionScreen');
+            console.log('✅ originalShowScreen으로 connectionScreen 이동');
+          }
+          // 방법 2: showScreen 사용
+          else if (typeof window.showScreen === 'function') {
+            window.showScreen('connectionScreen');
+            console.log('✅ showScreen으로 connectionScreen 이동');
+          }
+          // 방법 3: 직접 DOM 조작
+          else {
+            document.querySelectorAll('.screen').forEach(screen => {
+              screen.classList.remove('active');
+              screen.style.display = 'none';
+            });
+            
+            const connectionScreen = document.getElementById('connectionScreen');
+            if (connectionScreen) {
+              connectionScreen.classList.add('active');
+              connectionScreen.style.display = 'block';
+              console.log('✅ 직접 DOM 조작으로 connectionScreen 이동');
+            } else {
+              console.error('❌ connectionScreen 요소를 찾을 수 없습니다');
+            }
+          }
+          
+        } catch (error) {
+          console.error('❌ 화면 전환 오류:', error);
         }
-      }, 2000);
+      }, 1000); // 2초 → 1초로 단축
       
     } else {
       // ❌ 인증 실패
