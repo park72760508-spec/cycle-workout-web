@@ -2692,7 +2692,7 @@ window.formatPhoneNumber = formatPhoneNumber; // HTML에서 사용하므로 함�
 
 console.log('✅ 전화번호 관련 함수들이 전역으로 노출되었습니다');
 
-===
+
 
 // ========== 화면 제어 함수 ==========
 
