@@ -3684,7 +3684,7 @@ async function handleNewUserRegistered(userData) {
 
 // ========== 10. 전역 함수 내보내기 ==========
 window.handleNewUserRegistered = handleNewUserRegistered;
-window.authenticatePhoneWithDB = authenticatePhoneWithDB;
+//window.authenticatePhoneWithDB = authenticatePhoneWithDB;
 window.normalizePhoneNumber = normalizePhoneNumber;
 window.syncUsersFromDB = syncUsersFromDB;
 
