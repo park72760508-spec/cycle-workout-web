@@ -5,22 +5,7 @@
    - 적용 범위: localStorage('currentUser'), window.currentUser
    - 제거 방법: 이 블록 전체 삭제
 ============================================================ */
-;(function(){
-  try {
-    var saved = null;
-    try { saved = JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { saved = null; }
-    if (!saved || typeof saved !== 'object') saved = {};
-    saved.grade = '1';
-    localStorage.setItem('currentUser', JSON.stringify(saved));
-    if (typeof window !== 'undefined') {
-      window.currentUser = Object.assign({}, window.currentUser || {}, saved);
-      window.__TEMP_ADMIN_OVERRIDE__ = true;
-      console.info('[TEMP] viewer grade forced to 1 (admin). Remove this block after login screen is ready.');
-    }
-  } catch(e) {
-    if (typeof console !== 'undefined') console.warn('[TEMP] admin override failed:', e);
-  }
-})();
+
 
 // ▼ 현재 로그인/선택 사용자(뷰어) 등급 헬퍼
 function getViewerGrade() {
