@@ -92,6 +92,30 @@ h1,h2,h3,h4 { font-weight: 600; }
 .control-btn.stop { color: #d33; }
 .control-btn.pause { color: #f0a500; }
 
+/* ========== 인증완료 후 화면 전환 ========== */
+
+/* connectionScreen 특별 처리 - trainingScreen과 동일하게 */
+#connectionScreen.active {
+  display: block !important;
+  min-height: 100vh;
+  background: #f6f8fa;
+  padding: 20px;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
+}
+
+#connectionScreen .header,
+#connectionScreen .card,
+#connectionScreen .btn {
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: block !important;
+}
+
+
+
+
 /* ========== 1) 연결 화면 (#connectionScreen) ========== */
 /* iOS 안내/아이콘 카드 */
 #connectionScreen .ios-info{
