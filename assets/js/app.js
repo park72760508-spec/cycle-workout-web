@@ -3173,10 +3173,7 @@ function fallbackLocalStorageRegistration(formData) {
 4. VALID_PHONES.push() 관련 로직들
 */
 
-// ========== 2. 새로 추가할 변수들 ==========
-// 기존 변수는 유지
-let currentPhoneNumber = '';
-let isPhoneAuthenticated = false;
+
 
 // ✅ 새로 추가
 let isDBConnected = false;
