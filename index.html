@@ -572,6 +572,12 @@
     </div>
   </div>
 
+  <!-- ✅ 나가기 버튼 -->
+  <div class="exit-container bottom-center">
+    <button class="btn-exit" onclick="refreshPage()">🚪 나가기</button>
+  </div>
+
+  
   <!-- 2) 프로필 선택 화면 -->
   <div id="profileScreen" class="screen">
     <div class="header">
@@ -624,6 +630,12 @@
     </div>
   </div>
 
+<!-- ✅ 나가기 버튼 -->
+<div class="exit-container bottom-center">
+  <button class="btn-exit" onclick="refreshPage()">🚪 나가기</button>
+</div>
+
+  
   <!-- 3) 워크아웃 선택 화면 -->
   <div id="workoutScreen" class="screen">
     <div class="header">
@@ -636,6 +648,7 @@
     <button class="btn" id="btnSearchWorkout">검색</button>
     <!-- <button class="btn btn-secondary" onclick="loadWorkouts()" title="목록 새로고침">🔄</button> -->
     <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
+    <button class="btn-exit-small" onclick="refreshPage()">🚪</button><button class="btn-exit-small" onclick="refreshPage()">🚪</button>
   </div>
   
     <div id="workoutList" class="workout-list">
@@ -858,6 +871,7 @@
       <div class="btn-row center">
         <button class="btn btn-success" id="btnStartTraining">🚀 훈련 시작</button>
         <button class="btn btn-secondary" id="btnBackToWorkouts">← 워크아웃 변경</button>
+        <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
       </div>
     </div>
   </div>
