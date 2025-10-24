@@ -2775,15 +2775,12 @@ console.log('✅ 전화번호 관련 함수들이 전역으로 노출되었습�
 function hideAuthScreen() {
   const authScreen = document.getElementById('authScreen');
   if (authScreen) {
-    authScreen.style.transition = 'opacity 0.5s ease, visibility 0.5s ease';
+    // 즉시 숨기기 (애니메이션 제거)
+    authScreen.classList.remove('active');
+    authScreen.style.display = 'none';
     authScreen.style.opacity = '0';
     authScreen.style.visibility = 'hidden';
-    
-    setTimeout(() => {
-      authScreen.classList.remove('active');
-      authScreen.style.display = 'none';
-      console.log('인증 화면 완전히 숨김');
-    }, 500);
+    console.log('✅ 인증 화면 즉시 숨김');
   }
 }
 
@@ -3376,44 +3373,64 @@ async function authenticatePhone() {
       }
       
       // 1초 후 즉시 기기연결 화면으로 이동
+// 0.5초 후 단순하고 안전한 화면 전환
       setTimeout(() => {
         console.log('🔄 인증 완료 - 기기연결 화면으로 이동 중...');
         
-        // 다중 fallback으로 안전한 화면 전환
         try {
-          hideAuthScreen();
+          // 1단계: 모든 화면 완전히 숨기기
+          document.querySelectorAll('.screen').forEach(screen => {
+            screen.classList.remove('active');
+            screen.style.display = 'none';
+            screen.style.opacity = '0';
+            screen.style.visibility = 'hidden';
+          });
           
-          // 방법 1: originalShowScreen 사용
-          if (typeof window.originalShowScreen === 'function') {
-            window.originalShowScreen('connectionScreen');
-            console.log('✅ originalShowScreen으로 connectionScreen 이동');
-          }
-          // 방법 2: showScreen 사용
-          else if (typeof window.showScreen === 'function') {
-            window.showScreen('connectionScreen');
-            console.log('✅ showScreen으로 connectionScreen 이동');
-          }
-          // 방법 3: 직접 DOM 조작
-          else {
-            document.querySelectorAll('.screen').forEach(screen => {
-              screen.classList.remove('active');
-              screen.style.display = 'none';
-            });
+          // 2단계: connectionScreen 강제 표시
+          const connectionScreen = document.getElementById('connectionScreen');
+          if (connectionScreen) {
+            connectionScreen.classList.add('active');
+            connectionScreen.style.display = 'block';
+            connectionScreen.style.opacity = '1';
+            connectionScreen.style.visibility = 'visible';
+            connectionScreen.style.zIndex = '1000';
             
-            const connectionScreen = document.getElementById('connectionScreen');
-            if (connectionScreen) {
-              connectionScreen.classList.add('active');
-              connectionScreen.style.display = 'block';
-              console.log('✅ 직접 DOM 조작으로 connectionScreen 이동');
-            } else {
-              console.error('❌ connectionScreen 요소를 찾을 수 없습니다');
+            console.log('✅ connectionScreen 표시 완료');
+            
+            // connectionScreen 내용 확인
+            const hasContent = connectionScreen.innerHTML.trim().length > 0;
+            console.log('📄 connectionScreen 내용 존재:', hasContent);
+            
+            if (!hasContent) {
+              connectionScreen.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                  <h2>🔗 기기 연결</h2>
+                  <p>기기 연결 화면이 로드되었습니다.</p>
+                  <button onclick="console.log('기기 연결 테스트')">연결 테스트</button>
+                </div>`;
+            }
+            
+          } else {
+            console.error('❌ connectionScreen 요소가 없습니다');
+            
+            // 대체: 사용 가능한 화면들 찾기
+            const allScreens = document.querySelectorAll('[id*="Screen"], [id*="screen"]');
+            console.log('🔍 발견된 화면들:', Array.from(allScreens).map(s => s.id));
+            
+            // 첫 번째 사용 가능한 화면 표시
+            if (allScreens.length > 0) {
+              const firstScreen = allScreens[0];
+              firstScreen.style.display = 'block';
+              firstScreen.style.opacity = '1';
+              firstScreen.style.visibility = 'visible';
+              console.log('🔄 대체 화면 표시:', firstScreen.id);
             }
           }
           
         } catch (error) {
           console.error('❌ 화면 전환 오류:', error);
         }
-      }, 1000); // 2초 → 1초로 단축
+      }, 500); // 1초 → 0.5초로 단축
       
     } else {
       // ❌ 인증 실패
@@ -3778,17 +3795,7 @@ async function handleNewUserRegistered(userData) {
           
           // 2초 후 기기연결화면으로 이동
           setTimeout(() => {
-            if (typeof hideAuthScreen === 'function') {
-              hideAuthScreen();
-            }
-            
-            if (typeof window.originalShowScreen === 'function') {
-              window.originalShowScreen('connectionScreen');
-            } else if (typeof showScreen === 'function') {
-              showScreen('connectionScreen');
-            }
-          }, 2000);
-          
+                      
         } else {
           // 자동 인증 실패 시 수동 인증 안내
           if (typeof showToast === 'function') {
@@ -3819,4 +3826,69 @@ console.log('📱 수정된 DB 연동 전화번호 인증 시스템 로드 완�
 console.log('🔧 VALID_PHONES 배열이 제거되고 실시간 DB 검색으로 전환되었습니다.');
 
 
+
+// ========== 디버깅 및 응급 복구 함수들 ==========
+window.debugScreenState = function() {
+  console.log('🔍 현재 화면 상태 디버깅:');
+  console.log('📱 인증 상태:', window.isPhoneAuthenticated);
+  console.log('👤 현재 사용자:', window.currentUser?.name);
+  
+  const allScreens = document.querySelectorAll('.screen, [id*="Screen"], [id*="screen"]');
+  allScreens.forEach(screen => {
+    const style = window.getComputedStyle(screen);
+    console.log(`📺 ${screen.id}:`, {
+      display: style.display,
+      opacity: style.opacity,
+      visibility: style.visibility,
+      hasActive: screen.classList.contains('active'),
+      hasContent: screen.innerHTML.trim().length > 50
+    });
+  });
+};
+
+window.emergencyShowConnection = function() {
+  console.log('🚨 응급 connectionScreen 표시');
+  
+  // 모든 화면 강제 숨기기
+  document.querySelectorAll('*').forEach(el => {
+    if (el.id && (el.id.includes('Screen') || el.id.includes('screen'))) {
+      el.style.display = 'none';
+    }
+  });
+  
+  // connectionScreen 찾아서 강제 표시
+  let connectionScreen = document.getElementById('connectionScreen');
+  
+  if (!connectionScreen) {
+    // connectionScreen이 없으면 생성
+    connectionScreen = document.createElement('div');
+    connectionScreen.id = 'connectionScreen';
+    connectionScreen.className = 'screen';
+    connectionScreen.innerHTML = `
+      <div style="padding: 40px; text-align: center; font-family: Arial, sans-serif;">
+        <h1>🔗 기기 연결</h1>
+        <p style="margin: 20px 0;">기기 연결 화면입니다.</p>
+        <button onclick="console.log('연결 테스트')" style="padding: 10px 20px; font-size: 16px;">
+          연결 테스트
+        </button>
+      </div>`;
+    document.body.appendChild(connectionScreen);
+  }
+  
+  // 강제 표시
+  connectionScreen.style.display = 'block';
+  connectionScreen.style.opacity = '1';
+  connectionScreen.style.visibility = 'visible';
+  connectionScreen.style.position = 'fixed';
+  connectionScreen.style.top = '0';
+  connectionScreen.style.left = '0';
+  connectionScreen.style.width = '100%';
+  connectionScreen.style.height = '100%';
+  connectionScreen.style.zIndex = '9999';
+  connectionScreen.style.background = 'white';
+  
+  console.log('✅ 응급 connectionScreen 표시 완료');
+};
+
+console.log('🛠️ 디버깅 함수 로드 완료: debugScreenState(), emergencyShowConnection()');
 
