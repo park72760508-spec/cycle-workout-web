@@ -2789,13 +2789,34 @@ function hideAuthScreen() {
 
 // 개선된 showScreen 함수
 if (typeof window.originalShowScreen === 'undefined') {
-  window.originalShowScreen = window.showScreen || function(screenId) {
+   window.originalShowScreen = window.showScreen || function(screenId) {
+    console.log('🔄 originalShowScreen 호출:', screenId);
+    
+    // 모든 화면 완전히 숨기기
     document.querySelectorAll('.screen').forEach(screen => {
       screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
     });
+    
+    // 선택된 화면 완전히 표시
     const targetScreen = document.getElementById(screenId);
     if (targetScreen) {
       targetScreen.classList.add('active');
+      targetScreen.style.display = 'block';
+      targetScreen.style.opacity = '1';
+      targetScreen.style.visibility = 'visible';
+      targetScreen.style.zIndex = '1000';
+      
+      console.log('✅ 화면 전환 완료:', screenId);
+      
+      // 화면별 초기화
+      if (typeof initializeCurrentScreen === 'function') {
+        initializeCurrentScreen(screenId);
+      }
+    } else {
+      console.error('❌ 화면을 찾을 수 없습니다:', screenId);
     }
   };
 }
