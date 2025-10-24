@@ -3281,3 +3281,23 @@ button[aria-disabled="true"] {
   }
 }
 
+
+/* 반응형 */
+@media (max-width: 480px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .preview-items {
+    grid-template-columns: 1fr;
+  }
+  
+  .new-user-form-container {
+    padding: 20px;
+    margin-top: 20px;
+  }
+  
+  .form-actions {
+    grid-template-columns: 1fr;
+  }
+}
