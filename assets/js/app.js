@@ -77,6 +77,25 @@ function setNameProgress(ratio){
 }
 
 
+// app.js 파일 맨 위쪽 (1-50줄 사이)
+function authenticatePhoneWithDB(phoneNumber) {
+    // 전화번호 인증 로직
+    return fetch('/api/auth/phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber })
+    })
+    .then(response => response.json())
+    .catch(error => {
+        console.error('Phone authentication failed:', error);
+        return false;
+    });
+}
+
+// ... 나머지 코드
+// ... 3688줄: authenticatePhoneWithDB() 호출
+
+
 /* ================================
    Screen Wake Lock (화면 항상 켜짐)
    ================================ */
@@ -3684,7 +3703,7 @@ async function handleNewUserRegistered(userData) {
 
 // ========== 10. 전역 함수 내보내기 ==========
 window.handleNewUserRegistered = handleNewUserRegistered;
-//window.authenticatePhoneWithDB = authenticatePhoneWithDB;
+window.authenticatePhoneWithDB = authenticatePhoneWithDB;
 window.normalizePhoneNumber = normalizePhoneNumber;
 window.syncUsersFromDB = syncUsersFromDB;
 
