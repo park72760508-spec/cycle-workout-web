@@ -2812,9 +2812,10 @@ button[aria-disabled="true"] {
 
 .auth-hero-icon {
   width: 100%; /* 전화번호 입력 블럭과 같은 넓이 */
-  margin-bottom: 24px;  /* 기존 25px와 비슷하게 유지 */
+  margin-bottom: 15px;  /* 기존 25px와 비슷하게 유지 */
   display: flex;
   justify-content: center;
+  padding: 0 35px; 
 }
 
 .hero-image {
@@ -2836,6 +2837,19 @@ button[aria-disabled="true"] {
   .hero-image {
     height: 150px;
   }
+  .auth-form-card {
+    padding: 24px;              /* 기존 40px 35px → 모바일 24px로 다운 */
+  }
+  .auth-hero-icon {
+    padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
+  } 
+}
+
+
+/* 시각적으로 더 동일해 보이도록 히어로 이미지를 카드처럼 */
+.auth-hero-icon .hero-image {
+  border-radius: 12px;          /* 카드와 동일 라운드 */
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15); /* 카드와 비슷한 그림자 */
 }
 
 .auth-hero-section h1 {
@@ -3074,7 +3088,7 @@ button[aria-disabled="true"] {
   }
   
   .auth-hero-icon {
-    margin-bottom: 20px;  /* 마진도 약간 줄임 */
+    margin-bottom: 10px;  /* 마진도 약간 줄임 */
   }
   
   .auth-hero-section h1 {
