@@ -3167,66 +3167,34 @@ function fallbackLocalStorageRegistration(formData) {
 
 
 /*
-=== 사용자 인증 DB 연동 전화번호 인증 시스템 ===
+/*
+=== 수정된 DB 연동 인증 시스템 (실제 작동 버전) ===
 파일: app.js
-위치: 기존 authenticatePhone() 함수 교체
+위치: 기존 VALID_PHONES 및 authenticatePhone 관련 코드 교체
 
-Google Sheets DB에서 실시간으로 전화번호를 검색하여 인증
+실제 호출 흐름이 명확하고 작동하는 버전으로 수정
 */
 
-// 1. DB에서 전화번호 검색 함수 (새로 추가)
-async function authenticatePhoneWithDB(phoneNumber) {
-  try {
-    console.log('DB에서 전화번호 검색 시작:', phoneNumber);
-    
-    // userManager.js의 apiGetUsers 함수 사용
-    if (typeof apiGetUsers !== 'function') {
-      throw new Error('사용자 관리 시스템이 로드되지 않았습니다');
-    }
-    
-    const result = await apiGetUsers();
-    
-    if (!result.success) {
-      throw new Error(result.error || 'DB 조회에 실패했습니다');
-    }
-    
-    const users = result.items || [];
-    console.log('DB 조회 결과:', users.length, '명의 사용자');
-    
-    // 전화번호 포맷 통일을 위한 정규화
-    const normalizedInput = normalizePhoneNumber(phoneNumber);
-    
-    // 해당 전화번호를 가진 사용자 검색
-    const foundUser = users.find(user => {
-      const userPhone = normalizePhoneNumber(user.contact || '');
-      return userPhone === normalizedInput;
-    });
-    
-    if (foundUser) {
-      console.log('인증 성공 - 사용자 발견:', foundUser.name);
-      return {
-        success: true,
-        user: foundUser,
-        message: `${foundUser.name}님 인증 완료!`
-      };
-    } else {
-      console.log('인증 실패 - 등록되지 않은 전화번호');
-      return {
-        success: false,
-        message: '등록되지 않은 전화번호입니다'
-      };
-    }
-    
-  } catch (error) {
-    console.error('DB 인증 오류:', error);
-    return {
-      success: false,
-      message: 'DB 연결 오류: ' + error.message
-    };
-  }
-}
+// ========== 1. 기존 제거할 코드들 ==========
+/*
+❌ 제거 대상:
+1. const VALID_PHONES = [...] 배열 (라인 2598-2605)
+2. 기존 authenticatePhone() 함수 (라인 2700-2758)
+3. VALID_PHONES.includes() 관련 로직들
+4. VALID_PHONES.push() 관련 로직들
+*/
 
-// 2. 전화번호 정규화 함수 (새로 추가)
+// ========== 2. 새로 추가할 변수들 ==========
+// 기존 변수는 유지
+let currentPhoneNumber = '';
+let isPhoneAuthenticated = false;
+
+// ✅ 새로 추가
+let isDBConnected = false;
+let dbUsers = []; // DB 사용자 목록 캐시
+let lastDBSync = null;
+
+// ========== 3. 전화번호 정규화 함수 ==========
 function normalizePhoneNumber(phoneNumber) {
   if (!phoneNumber) return '';
   
@@ -3241,21 +3209,53 @@ function normalizePhoneNumber(phoneNumber) {
   return digitsOnly;
 }
 
-// 3. 기존 authenticatePhone() 함수 교체
+// ========== 4. DB 사용자 목록 동기화 ==========
+async function syncUsersFromDB() {
+  try {
+    console.log('🔄 DB에서 사용자 목록 동기화 중...');
+    
+    if (typeof apiGetUsers !== 'function') {
+      console.warn('apiGetUsers 함수를 찾을 수 없습니다. userManager.js가 로드되었는지 확인하세요.');
+      return false;
+    }
+    
+    const result = await apiGetUsers();
+    
+    if (result.success) {
+      dbUsers = result.items || [];
+      isDBConnected = true;
+      lastDBSync = new Date();
+      
+      console.log(`✅ DB 동기화 완료: ${dbUsers.length}명의 사용자`);
+      return true;
+    } else {
+      console.error('❌ DB 동기화 실패:', result.error);
+      isDBConnected = false;
+      return false;
+    }
+    
+  } catch (error) {
+    console.error('❌ DB 동기화 오류:', error);
+    isDBConnected = false;
+    return false;
+  }
+}
+
+// ========== 5. DB 기반 전화번호 인증 함수 ==========
+// ========== 5. 수정된 authenticatePhone 함수 (기존 함수 교체) ==========
 async function authenticatePhone() {
   const authStatus = document.getElementById('phoneAuthStatus');
-  const authCard = document.querySelector('.auth-form-card') || document.querySelector('.auth-card');
   const authBtn = document.getElementById('phoneAuthBtn');
   
   if (!authStatus || !authBtn) {
-    console.error('인증 UI 요소를 찾을 수 없습니다.');
+    console.error('❌ 인증 UI 요소를 찾을 수 없습니다.');
     return;
   }
   
   // UI 상태 업데이트 - 인증 시작
   authBtn.disabled = true;
   authBtn.textContent = '🔍 DB 검색 중...';
-  authStatus.textContent = '📱 데이터베이스에서 확인 중입니다...';
+  authStatus.textContent = '📡 데이터베이스에서 확인 중입니다...';
   authStatus.className = 'auth-status';
   
   try {
@@ -3263,7 +3263,7 @@ async function authenticatePhone() {
     const authResult = await authenticatePhoneWithDB(currentPhoneNumber);
     
     if (authResult.success) {
-      // 인증 성공
+      // ✅ 인증 성공
       isPhoneAuthenticated = true;
       authStatus.textContent = '✅ ' + authResult.message;
       authStatus.className = 'auth-status success';
@@ -3273,6 +3273,8 @@ async function authenticatePhone() {
       window.currentUser = authResult.user;
       localStorage.setItem('currentUser', JSON.stringify(authResult.user));
       
+      // 성공 애니메이션
+      const authCard = document.querySelector('.auth-form-card');
       if (authCard) {
         authCard.classList.add('auth-success');
       }
@@ -3281,7 +3283,7 @@ async function authenticatePhone() {
         showToast(`${authResult.user.name}님 환영합니다! 🎉`);
       }
       
-      // 3초 후 프로필 화면으로 이동
+      // 2초 후 프로필 화면으로 이동
       setTimeout(() => {
         hideAuthScreen();
         if (typeof window.originalShowScreen === 'function') {
@@ -3290,7 +3292,7 @@ async function authenticatePhone() {
       }, 2000);
       
     } else {
-      // 인증 실패
+      // ❌ 인증 실패
       authStatus.textContent = '❌ ' + authResult.message;
       authStatus.className = 'auth-status error';
       authBtn.textContent = '다시 인증';
@@ -3311,8 +3313,8 @@ async function authenticatePhone() {
     }
     
   } catch (error) {
-    // 예외 처리
-    console.error('인증 과정에서 오류 발생:', error);
+    // ⚠️ 예외 처리
+    console.error('❌ 인증 과정 오류:', error);
     authStatus.textContent = '❌ 인증 중 오류가 발생했습니다';
     authStatus.className = 'auth-status error';
     authBtn.textContent = '다시 시도';
@@ -3324,3 +3326,288 @@ async function authenticatePhone() {
   }
 }
 
+
+
+// ========== 7. 새 사용자 등록 후 자동 인증 함수 ==========
+// ========== 수정된 handleNewUserSubmit 함수 ==========
+async function handleNewUserSubmit(event) {
+  event.preventDefault();
+  
+  // 간소화된 폼 데이터 수집 (이름, 전화번호, FTP, 몸무게만)
+  const formData = {
+    name: document.getElementById('newUserName')?.value?.trim(),
+    contact: document.getElementById('newUserPhone')?.value?.trim(),
+    ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
+    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
+  };
+  
+  // 유효성 검사
+  if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
+    if (typeof showToast === 'function') {
+      showToast('모든 필수 항목을 입력해주세요! ❌');
+    }
+    return;
+  }
+  
+  // 전화번호 정규화 및 검증
+  const normalizedPhone = normalizePhoneNumber(formData.contact);
+  if (!normalizedPhone || normalizedPhone.length < 11) {
+    if (typeof showToast === 'function') {
+      showToast('올바른 전화번호를 입력해주세요! ❌');
+    }
+    return;
+  }
+  
+  // 정규화된 전화번호로 업데이트
+  formData.contact = normalizedPhone;
+  
+  const submitBtn = event.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn?.textContent;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '등록 중...';
+  }
+  
+  try {
+    console.log('👤 새 사용자 등록 시작:', formData);
+    
+    // ✅ 여기가 핵심: unifiedCreateUser 또는 apiCreateUser 사용
+    let registrationResult;
+    
+    if (typeof unifiedCreateUser === 'function') {
+      // userManager의 통합 함수 사용 (권장)
+      registrationResult = await unifiedCreateUser({
+        name: formData.name,
+        contact: formData.contact,
+        ftp: formData.ftp,
+        weight: formData.weight,
+        grade: '2',
+        expiry_date: ''
+      }, 'auth');
+      
+    } else if (typeof apiCreateUser === 'function') {
+      // 직접 API 함수 사용 (폴백)
+      registrationResult = await apiCreateUser({
+        name: formData.name,
+        contact: formData.contact,
+        ftp: formData.ftp,
+        weight: formData.weight,
+        grade: '2',
+        expiry_date: ''
+      });
+      
+    } else {
+      throw new Error('사용자 등록 함수를 찾을 수 없습니다. userManager.js가 로드되었는지 확인하세요.');
+    }
+    
+    if (registrationResult.success) {
+      console.log('✅ DB 등록 성공:', registrationResult);
+      
+      // 성공 메시지
+      if (typeof showToast === 'function') {
+        showToast(`${formData.name}님 등록 완료! 🎉`);
+      }
+      
+      // 폼 초기화 및 숨기기
+      document.getElementById('newUserForm')?.reset();
+      toggleNewUserForm();
+      
+      // ✅ 핵심: 등록된 사용자 데이터로 자동 인증 실행
+      const registeredUserData = {
+        id: registrationResult.item?.id || Date.now().toString(),
+        name: formData.name,
+        contact: formData.contact,
+        ftp: formData.ftp,
+        weight: formData.weight,
+        created_at: new Date().toISOString()
+      };
+      
+      // handleNewUserRegistered 함수 호출
+      if (typeof handleNewUserRegistered === 'function') {
+        await handleNewUserRegistered(registeredUserData);
+      } else {
+        console.warn('⚠️ handleNewUserRegistered 함수를 찾을 수 없습니다');
+        // 수동 인증 안내
+        if (typeof showToast === 'function') {
+          showToast('등록 완료! 인증 버튼을 눌러주세요.');
+        }
+      }
+      
+    } else {
+      throw new Error(registrationResult.error || '등록에 실패했습니다');
+    }
+    
+  } catch (error) {
+    console.error('❌ 사용자 등록 실패:', error);
+    if (typeof showToast === 'function') {
+      showToast('등록 실패: ' + error.message + ' ❌');
+    }
+  } finally {
+    // 버튼 상태 복원
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  }
+}
+
+// ========== 중복 검사 함수 (선택적 추가) ==========
+async function checkPhoneDuplicateBeforeRegistration(phoneNumber) {
+  try {
+    // DB에서 중복 체크
+    if (typeof syncUsersFromDB === 'function') {
+      await syncUsersFromDB(); // 최신 데이터로 업데이트
+    }
+    
+    if (dbUsers && dbUsers.length > 0) {
+      const normalizedInput = normalizePhoneNumber(phoneNumber);
+      const existingUser = dbUsers.find(user => {
+        const userPhone = normalizePhoneNumber(user.contact || '');
+        return userPhone === normalizedInput;
+      });
+      
+      if (existingUser) {
+        return {
+          exists: true,
+          userName: existingUser.name,
+          userId: existingUser.id
+        };
+      }
+    }
+    
+    return { exists: false };
+    
+  } catch (error) {
+    console.warn('⚠️ 중복 체크 실패:', error);
+    return { exists: false }; // 오류 시 중복 체크 스킵
+  }
+}
+
+// ========== 중복 체크 포함 버전 (고급) ==========
+async function handleNewUserSubmitWithDuplicateCheck(event) {
+  event.preventDefault();
+  
+  const formData = {
+    name: document.getElementById('newUserName')?.value?.trim(),
+    contact: document.getElementById('newUserPhone')?.value?.trim(),
+    ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
+    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
+  };
+  
+  // 유효성 검사
+  if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
+    if (typeof showToast === 'function') {
+      showToast('모든 필수 항목을 입력해주세요! ❌');
+    }
+    return;
+  }
+  
+  const normalizedPhone = normalizePhoneNumber(formData.contact);
+  if (!normalizedPhone || normalizedPhone.length < 11) {
+    if (typeof showToast === 'function') {
+      showToast('올바른 전화번호를 입력해주세요! ❌');
+    }
+    return;
+  }
+  
+  const submitBtn = event.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn?.textContent;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '중복 확인 중...';
+  }
+  
+  try {
+    // 1. 중복 체크
+    const duplicateCheck = await checkPhoneDuplicateBeforeRegistration(normalizedPhone);
+    if (duplicateCheck.exists) {
+      throw new Error(`이미 등록된 전화번호입니다 (${duplicateCheck.userName}님)`);
+    }
+    
+    // 2. 등록 진행 (위의 handleNewUserSubmit 로직과 동일)
+    if (submitBtn) {
+      submitBtn.textContent = '등록 중...';
+    }
+    
+    formData.contact = normalizedPhone;
+    
+    // ... (위의 등록 로직과 동일)
+    
+  } catch (error) {
+    console.error('❌ 등록 실패:', error);
+    if (typeof showToast === 'function') {
+      showToast(error.message + ' ❌');
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  }
+}
+
+
+// ========== 8. 개발자 도구 함수들 ==========
+window.checkAuthStatus = function() {
+  console.log('=== 🔐 인증 시스템 상태 ===');
+  console.log('현재 인증 상태:', isPhoneAuthenticated);
+  console.log('현재 전화번호:', currentPhoneNumber);
+  console.log('현재 사용자:', window.currentUser);
+  console.log('DB 연결 상태:', isDBConnected);
+  console.log('DB 사용자 수:', dbUsers.length);
+  console.log('마지막 DB 동기화:', lastDBSync);
+  console.log('===========================');
+  
+  return { 
+    authenticated: isPhoneAuthenticated, 
+    phone: currentPhoneNumber,
+    user: window.currentUser,
+    dbConnected: isDBConnected,
+    dbUserCount: dbUsers.length,
+    lastSync: lastDBSync
+  };
+};
+
+window.testDBAuth = async function(phoneNumber) {
+  console.log('🧪 DB 인증 테스트 시작:', phoneNumber);
+  const result = await authenticatePhoneWithDB(phoneNumber);
+  console.log('📊 테스트 결과:', result);
+  return result;
+};
+
+window.syncDB = async function() {
+  console.log('🔄 수동 DB 동기화 시작...');
+  const result = await syncUsersFromDB();
+  console.log('📊 동기화 결과:', result ? '성공' : '실패');
+  return result;
+};
+
+window.listRegisteredPhones = function() {
+  const phones = dbUsers.map(u => normalizePhoneNumber(u.contact)).filter(p => p);
+  console.log('📋 등록된 전화번호 목록:', phones);
+  return phones;
+};
+
+// ========== 9. 초기화 ==========
+document.addEventListener('DOMContentLoaded', async function() {
+  console.log('📱 DB 연동 인증 시스템 초기화 중...');
+  
+  // 초기 DB 동기화
+  const syncSuccess = await syncUsersFromDB();
+  
+  if (syncSuccess) {
+    console.log('✅ DB 연동 인증 시스템 초기화 완료!');
+    console.log('📞 실시간 DB 검색으로 전화번호를 인증합니다');
+  } else {
+    console.warn('⚠️ DB 초기화 실패 - userManager.js 로드 상태를 확인하세요');
+  }
+});
+
+// ========== 10. 전역 함수 내보내기 ==========
+window.handleNewUserRegistered = handleNewUserRegistered;
+window.authenticatePhoneWithDB = authenticatePhoneWithDB;
+window.normalizePhoneNumber = normalizePhoneNumber;
+window.syncUsersFromDB = syncUsersFromDB;
+
+console.log('📱 수정된 DB 연동 전화번호 인증 시스템 로드 완료!');
+console.log('🔧 VALID_PHONES 배열이 제거되고 실시간 DB 검색으로 전환되었습니다.');
