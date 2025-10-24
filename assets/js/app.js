@@ -3287,7 +3287,8 @@ async function authenticatePhone() {
       setTimeout(() => {
         hideAuthScreen();
         if (typeof window.originalShowScreen === 'function') {
-          window.originalShowScreen('profileScreen');
+          //window.originalShowScreen('profileScreen');
+           window.originalShowScreen('connectionScreen');
         }
       }, 2000);
       
