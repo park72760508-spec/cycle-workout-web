@@ -2785,6 +2785,7 @@ function hideAuthScreen() {
 }
 
 // 개선된 showScreen 함수
+// 개선된 showScreen 함수
 if (typeof window.originalShowScreen === 'undefined') {
    window.originalShowScreen = window.showScreen || function(screenId) {
     console.log('🔄 originalShowScreen 호출:', screenId);
@@ -2801,10 +2802,17 @@ if (typeof window.originalShowScreen === 'undefined') {
     const targetScreen = document.getElementById(screenId);
     if (targetScreen) {
       targetScreen.classList.add('active');
-      targetScreen.style.display = 'block';
-      targetScreen.style.opacity = '1';
-      targetScreen.style.visibility = 'visible';
-      targetScreen.style.zIndex = '1000';
+      
+      // connectionScreen 특별 처리
+      if (screenId === 'connectionScreen') {
+        targetScreen.style.cssText = 'display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 1000 !important; min-height: 100vh !important; background: #f6f8fa !important; padding: 20px !important;';
+        console.log('🔗 connectionScreen 특별 처리 적용');
+      } else {
+        targetScreen.style.display = 'block';
+        targetScreen.style.opacity = '1';
+        targetScreen.style.visibility = 'visible';
+        targetScreen.style.zIndex = '1000';
+      }
       
       console.log('✅ 화면 전환 완료:', screenId);
       
