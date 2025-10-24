@@ -2796,13 +2796,31 @@ button[aria-disabled="true"] {
 }
 
 .auth-hero-icon {
-  font-size: 5em;
-  margin-bottom: 25px;
-  background: linear-gradient(135deg, #fff, #f7fafc);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  filter: drop-shadow(0 4px 8px rgba(255, 255, 255, 0.3));
+  width: 100%; /* 전화번호 입력 블럭과 같은 넓이 */
+  margin-bottom: 24px;  /* 기존 25px와 비슷하게 유지 */
+  display: flex;
+  justify-content: center;
+}
+
+.hero-image {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease;
+}
+
+.hero-image:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
+}
+
+/* 모바일 반응형 */
+@media (max-width: 600px) {
+  .hero-image {
+    height: 150px;
+  }
 }
 
 .auth-hero-section h1 {
@@ -3035,8 +3053,12 @@ button[aria-disabled="true"] {
 
 /* 반응형 */
 @media (max-width: 480px) {
+  .hero-image {
+    height: 140px;  /* 작은 모바일에서는 더 컴팩트하게 */
+  }
+  
   .auth-hero-icon {
-    font-size: 3.5em;
+    margin-bottom: 20px;  /* 마진도 약간 줄임 */
   }
   
   .auth-hero-section h1 {
