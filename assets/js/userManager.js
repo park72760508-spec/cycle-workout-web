@@ -46,6 +46,7 @@ let currentEditUserId = null;
 
 // 전화번호 유틸: 숫자만 남기기
 // 숫자만 남기기 (입력값 → "01012345678")
+// 숫자만 남기기 (입력값 → "01012345678")
 function unformatPhone(input) {
   return String(input || '').replace(/\D+/g, '');
 }
@@ -53,24 +54,13 @@ function unformatPhone(input) {
 // DB 저장용 하이픈 포맷 (digits → "010-1234-5678")
 function formatPhoneForDB(digits) {
   const d = unformatPhone(digits);
-  if (d.length < 7) return d; // 너무 짧으면 그냥 반환
-
-  const head = d.slice(0, 3);     // 대개 '010'
-  const tail = d.slice(-4);       // 마지막 4자리
-  const mid  = d.slice(head.length, d.length - tail.length); // 가운데
-  return `${head}-${mid}-${tail}`;
-}
-
-
-// 전화번호 유틸: DB 저장용 하이픈 3-중간-4 포맷 (길이 10~11 가정)
-function formatPhoneForDB(digits) {
-  const d = unformatPhone(digits);
-  if (d.length < 7) return d;              // 너무 짧으면 그대로
-  const head = d.slice(0, 3);              // 보통 '010'
-  const tail = d.slice(-4);                // 마지막 4자리
+  if (d.length < 7) return d;
+  const head = d.slice(0, 3);
+  const tail = d.slice(-4);
   const mid  = d.slice(head.length, d.length - tail.length);
   return `${head}-${mid}-${tail}`;
 }
+
 
 
 // JSONP 방식 API 호출 헬퍼 함수
@@ -420,40 +410,28 @@ async function saveUser() {
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
 
-   
   // 유효성 검사
-  if (!name) {
-    showToast('이름을 입력해주세요.');
-    return;
-  }
-  
-  if (!ftp || ftp < 50 || ftp > 600) {
-    showToast('올바른 FTP 값을 입력해주세요. (50-600W)');
-    return;
-  }
-  
-  if (!weight || weight < 30 || weight > 200) {
-    showToast('올바른 체중을 입력해주세요. (30-200kg)');
-    return;
-  }
+  if (!name) { showToast('이름을 입력해주세요.'); return; }
+  if (!ftp || ftp < 50 || ftp > 600) { showToast('올바른 FTP 값을 입력해주세요. (50-600W)'); return; }
+  if (!weight || weight < 30 || weight > 200) { showToast('올바른 체중을 입력해주세요. (30-200kg)'); return; }
 
   try {
-    const userData = { name, contact, ftp, weight };
+    const userData = { name, contact: contactDB, ftp, weight }; // ← 여기!
     const result = await apiCreateUser(userData);
-    
+
     if (result.success) {
       showToast(`${name}님이 추가되었습니다.`);
       hideAddUserForm();
-      loadUsers(); // 목록 새로고침
+      loadUsers();
     } else {
       showToast('사용자 추가 실패: ' + result.error);
     }
-    
   } catch (error) {
     console.error('사용자 저장 실패:', error);
     showToast('사용자 저장 중 오류가 발생했습니다.');
   }
 }
+
 
 /**
  * 새 사용자 추가 폼 표시 - 초기화 옵션 추가
@@ -592,8 +570,8 @@ function hideAddUserForm() {
  */
 async function updateUser(userId) {
   const name = document.getElementById('userName').value.trim();
-   const contactRaw = document.getElementById('userContact').value.trim();
-   const contactDB  = formatPhoneForDB(contactRaw);
+  const contactRaw = document.getElementById('userContact').value.trim();
+  const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
 
@@ -604,15 +582,14 @@ async function updateUser(userId) {
   }
 
   try {
-    const userData = { name, contact, ftp, weight };
+    const userData = { name, contact: contactDB, ftp, weight }; // ← 여기!
     const result = await apiUpdateUser(userId, userData);
-    
+
     if (result.success) {
       showToast('사용자 정보가 수정되었습니다.');
       hideAddUserForm();
-      loadUsers(); // 목록 새로고침
-      
-      // 저장 버튼을 다시 생성 모드로 되돌리기
+      loadUsers();
+
       const saveBtn = document.getElementById('btnSaveUser');
       if (saveBtn) {
         saveBtn.textContent = '저장';
@@ -621,12 +598,12 @@ async function updateUser(userId) {
     } else {
       showToast('사용자 수정 실패: ' + result.error);
     }
-    
   } catch (error) {
     console.error('사용자 업데이트 실패:', error);
     showToast('사용자 수정 중 오류가 발생했습니다.');
   }
 }
+
 
 
 /**
@@ -639,7 +616,8 @@ async function performUpdate() {
   }
 
   const name = document.getElementById('userName').value.trim();
-  const contact = document.getElementById('userContact').value.trim();
+  const contactRaw = document.getElementById('userContact').value.trim();   // ← 추가
+  const contactDB  = formatPhoneForDB(contactRaw);                          // ← 추가
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
 
@@ -650,36 +628,36 @@ async function performUpdate() {
   }
 
   try {
-      const userData = {
-        name,
-        contact: contactDB,   // ← DB에는 하이픈 포함 저장
-        ftp,
-        weight
-      };
-      
-      if (typeof getViewerGrade === 'function' && getViewerGrade() === '1') {
-        const gradeEl = document.getElementById('editGrade');
-        const expiryEl = document.getElementById('editExpiryDate');
-        if (gradeEl)  userData.grade = String(gradeEl.value || '2');
-        if (expiryEl) userData.expiry_date = String(expiryEl.value || '');
-      }
-      
-      const result = await apiUpdateUser(currentEditUserId, userData);
+    const userData = {
+      name,
+      contact: contactDB, // ← contactDB 사용
+      ftp,
+      weight
+    };
 
-    
+    if (typeof getViewerGrade === 'function' && getViewerGrade() === '1') {
+      const gradeEl = document.getElementById('editGrade');
+      const expiryEl = document.getElementById('editExpiryDate');
+      if (gradeEl)  userData.grade = String(gradeEl.value || '2');
+      if (expiryEl) userData.expiry_date = String(expiryEl.value || '');
+    }
+
+    const result = await apiUpdateUser(currentEditUserId, userData);
+
     if (result.success) {
       showToast('사용자 정보가 수정되었습니다.');
-      resetFormMode(); // 모드 리셋 및 폼 숨기기
-      loadUsers(); // 목록 새로고침
+      resetFormMode();
+      loadUsers();
     } else {
       showToast('사용자 수정 실패: ' + result.error);
     }
-    
+
   } catch (error) {
     console.error('사용자 업데이트 실패:', error);
     showToast('사용자 수정 중 오류가 발생했습니다.');
   }
 }
+
 
 /**
  * 폼 모드 리셋
