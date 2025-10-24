@@ -261,6 +261,21 @@ function logout() {
 }
 
 
+// ✅ 페이지 전체 새로고침 함수
+function refreshPage() {
+  try {
+    // BLE 등 연결 장치 해제 후 완전 리로드
+    if (navigator.bluetooth && navigator.bluetooth.getDevices) {
+      navigator.bluetooth.getDevices().then(devs => {
+        devs.forEach(d => d.gatt?.disconnect?.());
+      });
+    }
+  } catch (_) {}
+  // 실제 새로고침
+  window.location.reload();
+}
+
+
 
 
 
