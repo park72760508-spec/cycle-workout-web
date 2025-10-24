@@ -2874,7 +2874,7 @@ function toggleNewUserForm() {
     }, 100);
     
     isNewUserFormVisible = true;
-    updateNewUserPreview();
+    //updateNewUserPreview(); <---15시에 제거
   }
 }
 
@@ -2924,61 +2924,30 @@ function validateNewUserPhone(phoneNumber) {
 }
 
 // AI 미리보기 업데이트
-function updateNewUserPreview() {
-  const age = parseInt(document.getElementById('newUserAge')?.value) || 25;
-  const weight = parseFloat(document.getElementById('newUserWeight')?.value) || 70;
-  const level = document.getElementById('newUserLevel')?.value || 'intermediate';
-  
-  const baseFTP = weight * 2.5;
-  const levelMultiplier = {
-    beginner: 0.8,
-    intermediate: 1.0,
-    advanced: 1.3,
-    elite: 1.6
-  };
-  
-  const predictedFTP = Math.round(baseFTP * (levelMultiplier[level] || 1.0));
-  const ageAdjustment = age > 40 ? 0.95 : age < 25 ? 1.05 : 1.0;
-  const finalFTP = Math.round(predictedFTP * ageAdjustment);
-  
-  const previewFTP = document.getElementById('previewFTP');
-  const previewFreq = document.getElementById('previewFreq');
-  
-  if (previewFTP) {
-    previewFTP.textContent = `${finalFTP}W`;
-  }
-  
-  if (previewFreq) {
-    const frequency = level === 'beginner' ? '주 2-3회' : 
-                     level === 'intermediate' ? '주 3-4회' : 
-                     level === 'advanced' ? '주 4-5회' : '주 5-6회';
-    previewFreq.textContent = frequency;
-  }
-}
+
 
 // 새 사용자 폼 제출 처리
 function handleNewUserSubmit(event) {
   event.preventDefault();
   
+  // 간소화된 폼 데이터 수집 (이름, 전화번호, FTP, 몸무게만)
   const formData = {
     name: document.getElementById('newUserName')?.value?.trim(),
-    age: parseInt(document.getElementById('newUserAge')?.value),
-    weight: parseFloat(document.getElementById('newUserWeight')?.value),
-    phone: document.getElementById('newUserPhone')?.value?.trim(),
-    level: document.getElementById('newUserLevel')?.value,
-    goal: document.getElementById('newUserGoal')?.value,
-    ftp: parseInt(document.getElementById('newUserFTP')?.value) || null
+    contact: document.getElementById('newUserPhone')?.value?.trim(),
+    ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
+    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
   };
   
-  // 유효성 검사
-  if (!formData.name || !formData.age || !formData.weight || !formData.phone) {
+  // 유효성 검사 (필수 필드만 체크)
+  if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
     if (typeof showToast === 'function') {
       showToast('모든 필수 항목을 입력해주세요! ❌');
     }
     return;
   }
   
-  if (!/^010-\d{4}-\d{4}$/.test(formData.phone)) {
+  // 전화번호 형식 검증
+  if (!/^010-\d{4}-\d{4}$/.test(formData.contact)) {
     if (typeof showToast === 'function') {
       showToast('올바른 전화번호 형식을 입력해주세요! ❌');
     }
@@ -2992,43 +2961,8 @@ function handleNewUserSubmit(event) {
     submitBtn.textContent = '등록 중...';
   }
   
-  // 등록 시뮬레이션
-  setTimeout(() => {
-    // 새 사용자를 유효한 전화번호 목록에 추가
-    if (!VALID_PHONES.includes(formData.phone)) {
-      VALID_PHONES.push(formData.phone);
-    }
-    
-    // 사용자 데이터 저장
-    const users = JSON.parse(localStorage.getItem('trainingUsers') || '[]');
-    const newUser = {
-      id: Date.now().toString(),
-      ...formData,
-      createdAt: new Date().toISOString()
-    };
-    users.push(newUser);
-    localStorage.setItem('trainingUsers', JSON.stringify(users));
-    
-    if (typeof showToast === 'function') {
-      showToast(`${formData.name}님 등록 완료! 🎉`);
-    }
-    
-    // 폼 초기화 및 숨기기
-    document.getElementById('newUserForm')?.reset();
-    toggleNewUserForm();
-    
-    // 등록된 전화번호를 인증 입력 필드에 자동 입력
-    const phoneInput = document.getElementById('phoneInput');
-    if (phoneInput) {
-      phoneInput.value = formData.phone.replace(/\D/g, '');
-      formatPhoneNumber(phoneInput.value);
-    }
-    
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = originalText;
-    }
-  }, 2000);
+  // userManager.js의 apiCreateUser 함수 사용
+  registerNewUserViaAPI(formData, submitBtn, originalText);
 }
 
 // ========== 유틸리티 함수 ==========
@@ -3056,6 +2990,7 @@ if (typeof window.showToast !== 'function') {
 // ========== 이벤트 리스너 및 초기화 ==========
 
 // 통합 초기화 함수
+// 6. 이벤트 리스너 초기화 함수 수정
 function initializeAuthenticationSystem() {
   // 새 사용자 폼 이벤트 리스너
   const newUserForm = document.getElementById('newUserForm');
@@ -3063,18 +2998,8 @@ function initializeAuthenticationSystem() {
     newUserForm.addEventListener('submit', handleNewUserSubmit);
   }
   
-  // 실시간 AI 미리보기 업데이트
-  const watchFields = ['newUserAge', 'newUserWeight', 'newUserLevel'];
-  watchFields.forEach(fieldId => {
-    const field = document.getElementById(fieldId);
-    if (field) {
-      field.addEventListener('input', updateNewUserPreview);
-      field.addEventListener('change', updateNewUserPreview);
-    }
-  });
-  
-  // 실시간 유효성 검사
-  const requiredFields = ['newUserName', 'newUserAge', 'newUserWeight', 'newUserPhone'];
+  // 실시간 유효성 검사 (간소화된 필드만)
+  const requiredFields = ['newUserName', 'newUserPhone', 'newUserFTP', 'newUserWeight'];
   requiredFields.forEach(fieldId => {
     const field = document.getElementById(fieldId);
     if (field) {
@@ -3089,14 +3014,14 @@ function initializeAuthenticationSystem() {
 // 실시간 유효성 검사
 function validateNewUserForm() {
   const name = document.getElementById('newUserName')?.value?.trim();
-  const age = document.getElementById('newUserAge')?.value;
+  const contact = document.getElementById('newUserPhone')?.value?.trim();
+  const ftp = document.getElementById('newUserFTP')?.value;
   const weight = document.getElementById('newUserWeight')?.value;
-  const phone = document.getElementById('newUserPhone')?.value?.trim();
   
   const submitBtn = document.querySelector('#newUserForm button[type="submit"]');
   if (!submitBtn) return;
   
-  const isValid = name && age && weight && phone && /^010-\d{4}-\d{4}$/.test(phone);
+  const isValid = name && contact && ftp && weight && /^010-\d{4}-\d{4}$/.test(contact);
   
   submitBtn.disabled = !isValid;
   submitBtn.style.opacity = isValid ? '1' : '0.6';
@@ -3152,3 +3077,90 @@ window.checkAuthStatus = function() {
 
 console.log('📱 전화번호 인증 시스템 최종 버전 로드 완료!');
 console.log('테스트용 전화번호:', VALID_PHONES);
+
+
+
+// 3. API를 통한 새 사용자 등록 함수 (새로 추가)
+async function registerNewUserViaAPI(formData, submitBtn, originalText) {
+  try {
+    // userManager.js의 apiCreateUser 함수 호출
+    if (typeof apiCreateUser === 'function') {
+      const result = await apiCreateUser({
+        name: formData.name,
+        contact: formData.contact,
+        ftp: formData.ftp,
+        weight: formData.weight,
+        grade: '2', // 기본 사용자 등급
+        expiry_date: '' // 빈 값
+      });
+      
+      if (result.success) {
+        // 성공 시 처리
+        if (typeof showToast === 'function') {
+          showToast(`${formData.name}님 등록 완료! 🎉`);
+        }
+        
+        // VALID_PHONES에 추가 (기존 로직 유지)
+        if (!VALID_PHONES.includes(formData.contact)) {
+          VALID_PHONES.push(formData.contact);
+        }
+        
+        // 폼 초기화 및 숨기기
+        document.getElementById('newUserForm')?.reset();
+        toggleNewUserForm();
+        
+        // 등록된 전화번호를 인증 입력 필드에 자동 입력
+        const phoneInput = document.getElementById('phoneInput');
+        if (phoneInput) {
+          phoneInput.value = formData.contact.replace(/\D/g, '');
+          formatPhoneNumber(phoneInput.value);
+        }
+        
+        // 사용자 목록 새로고침 (프로필 화면용)
+        if (typeof loadUsers === 'function') {
+          loadUsers();
+        }
+        
+      } else {
+        throw new Error(result.error || '등록에 실패했습니다');
+      }
+      
+    } else {
+      // API 함수가 없는 경우 기존 localStorage 방식 사용
+      fallbackLocalStorageRegistration(formData);
+    }
+    
+  } catch (error) {
+    console.error('사용자 등록 실패:', error);
+    if (typeof showToast === 'function') {
+      showToast('등록 중 오류가 발생했습니다: ' + error.message);
+    }
+  } finally {
+    // 버튼 상태 복원
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+  }
+}
+
+// 4. 폴백 localStorage 등록 함수 (새로 추가)
+function fallbackLocalStorageRegistration(formData) {
+  // 기존 localStorage 방식 (API 실패 시 사용)
+  const users = JSON.parse(localStorage.getItem('trainingUsers') || '[]');
+  const newUser = {
+    id: Date.now().toString(),
+    name: formData.name,
+    contact: formData.contact,
+    ftp: formData.ftp,
+    weight: formData.weight,
+    createdAt: new Date().toISOString()
+  };
+  users.push(newUser);
+  localStorage.setItem('trainingUsers', JSON.stringify(users));
+  
+  if (typeof showToast === 'function') {
+    showToast(`${formData.name}님 등록 완료! 🎉`);
+  }
+}
+
