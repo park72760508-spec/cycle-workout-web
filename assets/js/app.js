@@ -151,6 +151,57 @@ function authenticatePhoneWithDB(phoneNumber) {
 // ... 나머지 코드
 // ... 3688줄: authenticatePhoneWithDB() 호출
 
+// ===== Auth 복구 & 로그아웃 유틸 =====
+
+// 앱 초기 진입 시 한 번 호출: authUser → currentUser 안정 복원
+function checkAuthStatus() {
+  const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+  const current  = JSON.parse(localStorage.getItem('currentUser') || 'null');
+  const restored = authUser || current;
+
+  if (restored) {
+    window.currentUser = restored;
+    localStorage.setItem('currentUser', JSON.stringify(restored));
+  }
+}
+
+// 로그아웃: 저장값/전역 초기화 + 인증 화면으로 라우팅
+function logout() {
+  localStorage.removeItem('authUser');
+  localStorage.removeItem('currentUser');
+  window.currentUser = null;
+
+  // 화면 전환: 프로젝트 기준의 인증 화면으로 이동
+  // showAuthScreen()이 이미 있다면 호출, 없다면 아래 fallback 사용
+  if (typeof showAuthScreen === 'function') {
+    showAuthScreen();
+  } else {
+    // fallback: 모든 화면 숨기고 authScreen만 표시
+    hideAllScreens();
+    const authScreen = document.getElementById('authScreen');
+    if (authScreen) {
+      authScreen.classList.add('active');
+      authScreen.style.display = 'block';
+      authScreen.style.opacity = '1';
+      authScreen.style.visibility = 'visible';
+    }
+  }
+}
+
+// (공용) 모든 화면 숨기기
+function hideAllScreens() {
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.classList.remove('active');
+    screen.style.display = 'none';
+    screen.style.opacity = '0';
+    screen.style.visibility = 'hidden';
+  });
+}
+
+
+
+
+
 
 /* ================================
    Screen Wake Lock (화면 항상 켜짐)
@@ -3948,3 +3999,46 @@ window.emergencyShowConnection = function() {
 
 console.log('🛠️ 디버깅 함수 로드 완료: debugScreenState(), emergencyShowConnection()');
 
+// 앱 로드 시 인증 복구 → 라우팅
+window.addEventListener('load', () => {
+  // 1) 인증 상태 복구
+  checkAuthStatus();
+
+  // 2) 복구 결과에 따라 초기 화면 결정
+  if (window.currentUser) {
+    // (A안) 바로 프로필 선택 화면에서 사용자 리스트 보고 싶다면:
+    // hideAllScreens();
+    // const profileScreen = document.getElementById('profileScreen');
+    // if (profileScreen) {
+    //   profileScreen.classList.add('active');
+    //   profileScreen.style.display = 'block';
+    //   profileScreen.style.opacity = '1';
+    //   profileScreen.style.visibility = 'visible';
+    //   if (typeof loadUsers === 'function') loadUsers(); // grade=1 전체/이름순, 그 외 본인만
+    // }
+
+    // (B안) 지금 구조 유지: 기기 연결 화면부터
+    hideAllScreens();
+    const connectionScreen = document.getElementById('connectionScreen');
+    if (connectionScreen) {
+      connectionScreen.classList.add('active');
+      connectionScreen.style.display = 'block';
+      connectionScreen.style.opacity = '1';
+      connectionScreen.style.visibility = 'visible';
+    }
+  } else {
+    // 인증 정보 없으면 인증 화면으로
+    if (typeof showAuthScreen === 'function') {
+      showAuthScreen();
+    } else {
+      hideAllScreens();
+      const authScreen = document.getElementById('authScreen');
+      if (authScreen) {
+        authScreen.classList.add('active');
+        authScreen.style.display = 'block';
+        authScreen.style.opacity = '1';
+        authScreen.style.visibility = 'visible';
+      }
+    }
+  }
+});
