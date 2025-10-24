@@ -2815,7 +2815,7 @@ button[aria-disabled="true"] {
   margin-bottom: 15px;  /* 기존 25px와 비슷하게 유지 */
   display: flex;
   justify-content: center;
-  padding: 0 35px; 
+  /* padding: 0 35px;*/ 
 }
 
 .hero-image {
