@@ -371,7 +371,10 @@ async function loadUsers() {
    if (viewerGrade === '2' && viewer && viewer.id != null) {
      visibleUsers = users.filter(u => String(u.id) === String(viewer.id));
    }
-   
+
+      // ✅ 이름 오름차순 정렬(한글 고려)
+   visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));  
+     
    // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
    userList.innerHTML = visibleUsers.map(user => {
      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
