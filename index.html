@@ -469,75 +469,34 @@
             </div>
             
             <!-- 새 사용자 추가 폼 (숨김 상태) -->
+            <!-- 교체할 부분: 새 사용자 추가 폼 전체 -->
             <div class="new-user-form-container" id="newUserFormContainer" style="display: none;">
               <div class="new-user-form">
                 <div class="form-header">
                   <h3>✨ 새 사용자 등록</h3>
-                  <p>AI 맞춤 훈련을 위한 정보를 입력해주세요</p>
+                  <p>기본 정보를 입력해주세요</p>
                 </div>
             
                 <form id="newUserForm" class="user-registration-form">
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label for="newUserName">이름 *</label>
-                      <input type="text" id="newUserName" required placeholder="홍길동">
-                    </div>
-                    <div class="form-group">
-                      <label for="newUserAge">나이 *</label>
-                      <input type="number" id="newUserAge" required min="15" max="80" placeholder="25">
-                    </div>
+                  <div class="form-group">
+                    <label for="newUserName">이름 *</label>
+                    <input type="text" id="newUserName" required placeholder="홍길동">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="newUserPhone">전화번호 *</label>
+                    <input type="tel" id="newUserPhone" required placeholder="010-1234-5678" 
+                           oninput="formatNewUserPhone(this.value)" maxlength="13">
                   </div>
             
                   <div class="form-row">
+                    <div class="form-group">
+                      <label for="newUserFTP">FTP (W) *</label>
+                      <input type="number" id="newUserFTP" required min="50" max="600" placeholder="250">
+                    </div>
                     <div class="form-group">
                       <label for="newUserWeight">체중(kg) *</label>
                       <input type="number" id="newUserWeight" required min="40" max="150" step="0.1" placeholder="70.0">
-                    </div>
-                    <div class="form-group">
-                      <label for="newUserPhone">전화번호 *</label>
-                      <input type="tel" id="newUserPhone" required placeholder="010-1234-5678" 
-                             oninput="formatNewUserPhone(this.value)" maxlength="13">
-                    </div>
-                  </div>
-            
-                  <div class="form-group">
-                    <label for="newUserLevel">훈련 수준</label>
-                    <select id="newUserLevel">
-                      <option value="beginner">초급자 (6개월 미만)</option>
-                      <option value="intermediate" selected>중급자 (6개월-2년)</option>
-                      <option value="advanced">고급자 (2년 이상)</option>
-                      <option value="elite">엘리트 (경기 참가)</option>
-                    </select>
-                  </div>
-            
-                  <div class="form-group">
-                    <label for="newUserGoal">훈련 목표</label>
-                    <select id="newUserGoal">
-                      <option value="general">일반 체력 향상</option>
-                      <option value="endurance" selected>지구력 향상</option>
-                      <option value="power">파워 향상</option>
-                      <option value="weight">체중 감량</option>
-                      <option value="competition">경기 준비</option>
-                    </select>
-                  </div>
-            
-                  <div class="form-group">
-                    <label for="newUserFTP">FTP (선택사항)</label>
-                    <input type="number" id="newUserFTP" min="100" max="500" placeholder="250">
-                    <small class="form-hint">20분 최대 지속 가능한 파워. 모르면 비워두세요.</small>
-                  </div>
-            
-                  <div class="ai-preview-card">
-                    <h4>🤖 AI 분석 미리보기</h4>
-                    <div class="preview-items">
-                      <div class="preview-item">
-                        <span class="preview-label">예상 FTP</span>
-                        <span class="preview-value" id="previewFTP">계산 중...</span>
-                      </div>
-                      <div class="preview-item">
-                        <span class="preview-label">권장 빈도</span>
-                        <span class="preview-value" id="previewFreq">주 3-4회</span>
-                      </div>
                     </div>
                   </div>
             
