@@ -3164,3 +3164,163 @@ function fallbackLocalStorageRegistration(formData) {
   }
 }
 
+
+
+/*
+=== 사용자 인증 DB 연동 전화번호 인증 시스템 ===
+파일: app.js
+위치: 기존 authenticatePhone() 함수 교체
+
+Google Sheets DB에서 실시간으로 전화번호를 검색하여 인증
+*/
+
+// 1. DB에서 전화번호 검색 함수 (새로 추가)
+async function authenticatePhoneWithDB(phoneNumber) {
+  try {
+    console.log('DB에서 전화번호 검색 시작:', phoneNumber);
+    
+    // userManager.js의 apiGetUsers 함수 사용
+    if (typeof apiGetUsers !== 'function') {
+      throw new Error('사용자 관리 시스템이 로드되지 않았습니다');
+    }
+    
+    const result = await apiGetUsers();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'DB 조회에 실패했습니다');
+    }
+    
+    const users = result.items || [];
+    console.log('DB 조회 결과:', users.length, '명의 사용자');
+    
+    // 전화번호 포맷 통일을 위한 정규화
+    const normalizedInput = normalizePhoneNumber(phoneNumber);
+    
+    // 해당 전화번호를 가진 사용자 검색
+    const foundUser = users.find(user => {
+      const userPhone = normalizePhoneNumber(user.contact || '');
+      return userPhone === normalizedInput;
+    });
+    
+    if (foundUser) {
+      console.log('인증 성공 - 사용자 발견:', foundUser.name);
+      return {
+        success: true,
+        user: foundUser,
+        message: `${foundUser.name}님 인증 완료!`
+      };
+    } else {
+      console.log('인증 실패 - 등록되지 않은 전화번호');
+      return {
+        success: false,
+        message: '등록되지 않은 전화번호입니다'
+      };
+    }
+    
+  } catch (error) {
+    console.error('DB 인증 오류:', error);
+    return {
+      success: false,
+      message: 'DB 연결 오류: ' + error.message
+    };
+  }
+}
+
+// 2. 전화번호 정규화 함수 (새로 추가)
+function normalizePhoneNumber(phoneNumber) {
+  if (!phoneNumber) return '';
+  
+  // 숫자만 추출
+  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  
+  // 하이픈 포맷으로 통일 (010-1234-5678)
+  if (digitsOnly.length === 11 && digitsOnly.startsWith('010')) {
+    return `${digitsOnly.slice(0,3)}-${digitsOnly.slice(3,7)}-${digitsOnly.slice(7,11)}`;
+  }
+  
+  return digitsOnly;
+}
+
+// 3. 기존 authenticatePhone() 함수 교체
+async function authenticatePhone() {
+  const authStatus = document.getElementById('phoneAuthStatus');
+  const authCard = document.querySelector('.auth-form-card') || document.querySelector('.auth-card');
+  const authBtn = document.getElementById('phoneAuthBtn');
+  
+  if (!authStatus || !authBtn) {
+    console.error('인증 UI 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // UI 상태 업데이트 - 인증 시작
+  authBtn.disabled = true;
+  authBtn.textContent = '🔍 DB 검색 중...';
+  authStatus.textContent = '📱 데이터베이스에서 확인 중입니다...';
+  authStatus.className = 'auth-status';
+  
+  try {
+    // DB에서 전화번호 인증
+    const authResult = await authenticatePhoneWithDB(currentPhoneNumber);
+    
+    if (authResult.success) {
+      // 인증 성공
+      isPhoneAuthenticated = true;
+      authStatus.textContent = '✅ ' + authResult.message;
+      authStatus.className = 'auth-status success';
+      authBtn.textContent = '인증 완료';
+      
+      // 현재 사용자 정보 저장
+      window.currentUser = authResult.user;
+      localStorage.setItem('currentUser', JSON.stringify(authResult.user));
+      
+      if (authCard) {
+        authCard.classList.add('auth-success');
+      }
+      
+      if (typeof showToast === 'function') {
+        showToast(`${authResult.user.name}님 환영합니다! 🎉`);
+      }
+      
+      // 3초 후 프로필 화면으로 이동
+      setTimeout(() => {
+        hideAuthScreen();
+        if (typeof window.originalShowScreen === 'function') {
+          window.originalShowScreen('profileScreen');
+        }
+      }, 2000);
+      
+    } else {
+      // 인증 실패
+      authStatus.textContent = '❌ ' + authResult.message;
+      authStatus.className = 'auth-status error';
+      authBtn.textContent = '다시 인증';
+      authBtn.disabled = false;
+      
+      // 입력 필드 오류 스타일
+      const phoneInput = document.getElementById('phoneInput');
+      if (phoneInput) {
+        phoneInput.classList.add('error');
+        setTimeout(() => {
+          phoneInput.classList.remove('error');
+        }, 3000);
+      }
+      
+      if (typeof showToast === 'function') {
+        showToast(authResult.message + ' ❌');
+      }
+    }
+    
+  } catch (error) {
+    // 예외 처리
+    console.error('인증 과정에서 오류 발생:', error);
+    authStatus.textContent = '❌ 인증 중 오류가 발생했습니다';
+    authStatus.className = 'auth-status error';
+    authBtn.textContent = '다시 시도';
+    authBtn.disabled = false;
+    
+    if (typeof showToast === 'function') {
+      showToast('인증 중 오류가 발생했습니다. 다시 시도해주세요. ❌');
+    }
+  }
+}
+
