@@ -77,18 +77,74 @@ function setNameProgress(ratio){
 }
 
 
-// app.js 파일 맨 위쪽 (1-50줄 사이)
+// ========== DB 기반 전화번호 인증 함수 (올바른 구현) ==========
 function authenticatePhoneWithDB(phoneNumber) {
-    // 전화번호 인증 로직
-    return fetch('/api/auth/phone', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phoneNumber })
-    })
-    .then(response => response.json())
-    .catch(error => {
-        console.error('Phone authentication failed:', error);
-        return false;
+    console.log('🔍 DB 인증 시작:', phoneNumber);
+    
+    return new Promise((resolve) => {
+        try {
+            // 입력값 정규화
+            const normalizedInput = normalizePhoneNumber(phoneNumber);
+            console.log('📱 정규화된 번호:', normalizedInput);
+            
+            if (!normalizedInput || normalizedInput.length < 11) {
+                resolve({
+                    success: false,
+                    message: '올바른 전화번호를 입력해주세요',
+                    user: null
+                });
+                return;
+            }
+            
+            // DB 연결 상태 확인
+            if (!isDBConnected || !dbUsers || dbUsers.length === 0) {
+                console.warn('⚠️ DB가 연결되지 않았거나 사용자 데이터가 없습니다');
+                resolve({
+                    success: false,
+                    message: 'DB 연결이 필요합니다. 잠시 후 다시 시도해주세요.',
+                    user: null
+                });
+                return;
+            }
+            
+            // DB에서 사용자 검색
+            const matchedUser = dbUsers.find(user => {
+                const userPhone = normalizePhoneNumber(user.contact || '');
+                const matches = userPhone === normalizedInput;
+                console.log(`👤 ${user.name}: ${userPhone} === ${normalizedInput} ? ${matches}`);
+                return matches;
+            });
+            
+            if (matchedUser) {
+                console.log('✅ 사용자 찾음:', matchedUser.name);
+                resolve({
+                    success: true,
+                    message: `${matchedUser.name}님 인증 완료!`,
+                    user: {
+                        id: matchedUser.id,
+                        name: matchedUser.name,
+                        contact: matchedUser.contact,
+                        ftp: parseInt(matchedUser.ftp) || 0,
+                        weight: parseFloat(matchedUser.weight) || 0
+                    }
+                });
+            } else {
+                console.log('❌ 사용자를 찾을 수 없음');
+                resolve({
+                    success: false,
+                    message: '등록되지 않은 전화번호입니다. 회원가입을 해주세요.',
+                    user: null
+                });
+            }
+            
+        } catch (error) {
+            console.error('❌ DB 인증 오류:', error);
+            resolve({
+                success: false,
+                message: '인증 중 오류가 발생했습니다',
+                user: null
+            });
+        }
     });
 }
 
