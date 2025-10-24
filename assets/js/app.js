@@ -3076,3 +3076,293 @@ document.addEventListener('click', function(event) {
 
 console.log('🚀 인증 시스템 초기화 완료!');
 
+
+/* ========== 사용인증 >>>> 새 사용자 등록 시스템 ========== */
+
+let isNewUserFormVisible = false;
+
+// 새 사용자 폼 토글
+function toggleNewUserForm() {
+  const formContainer = document.getElementById('newUserFormContainer');
+  const button = document.querySelector('.new-user-btn');
+  
+  if (!formContainer) return;
+  
+  if (isNewUserFormVisible) {
+    // 폼 숨기기
+    formContainer.classList.add('hiding');
+    setTimeout(() => {
+      formContainer.style.display = 'none';
+      formContainer.classList.remove('hiding');
+    }, 300);
+    
+    if (button) {
+      button.textContent = '➕ 새 사용자 추가';
+    }
+    
+    isNewUserFormVisible = false;
+    console.log('새 사용자 폼 숨김');
+  } else {
+    // 폼 보이기
+    formContainer.style.display = 'block';
+    
+    if (button) {
+      button.textContent = '❌ 취소';
+    }
+    
+    // 첫 번째 입력 필드에 포커스
+    setTimeout(() => {
+      const firstInput = document.getElementById('newUserName');
+      if (firstInput) {
+        firstInput.focus();
+      }
+    }, 100);
+    
+    isNewUserFormVisible = true;
+    console.log('새 사용자 폼 표시');
+    
+    // AI 미리보기 업데이트
+    updateNewUserPreview();
+  }
+}
+
+// 새 사용자 전화번호 포맷팅
+function formatNewUserPhone(value) {
+  // 기존 formatPhoneNumber 함수와 동일한 로직
+  const numbers = value.replace(/\D/g, '');
+  const limitedNumbers = numbers.slice(0, 11);
+  
+  let formatted = '';
+  if (limitedNumbers.length > 0) {
+    if (limitedNumbers.length <= 3) {
+      formatted = limitedNumbers;
+    } else if (limitedNumbers.length <= 7) {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3);
+    } else {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3, 7) + '-' + limitedNumbers.slice(7, 11);
+    }
+  }
+  
+  const phoneInput = document.getElementById('newUserPhone');
+  if (phoneInput && phoneInput.value !== formatted) {
+    phoneInput.value = formatted;
+  }
+  
+  // 유효성 검사
+  validateNewUserPhone(formatted);
+  
+  return formatted;
+}
+
+// 새 사용자 전화번호 유효성 검사
+function validateNewUserPhone(phoneNumber) {
+  const phoneInput = document.getElementById('newUserPhone');
+  if (!phoneInput) return;
+  
+  const isValidFormat = /^010-\d{4}-\d{4}$/.test(phoneNumber);
+  
+  if (isValidFormat) {
+    phoneInput.classList.add('valid');
+    phoneInput.classList.remove('error');
+  } else {
+    phoneInput.classList.remove('valid');
+    if (phoneNumber.length > 0) {
+      phoneInput.classList.add('error');
+    } else {
+      phoneInput.classList.remove('error');
+    }
+  }
+}
+
+// AI 미리보기 업데이트
+function updateNewUserPreview() {
+  const age = parseInt(document.getElementById('newUserAge')?.value) || 25;
+  const weight = parseFloat(document.getElementById('newUserWeight')?.value) || 70;
+  const level = document.getElementById('newUserLevel')?.value || 'intermediate';
+  
+  // AI 분석 시뮬레이션
+  const baseFTP = weight * 2.5;
+  const levelMultiplier = {
+    beginner: 0.8,
+    intermediate: 1.0,
+    advanced: 1.3,
+    elite: 1.6
+  };
+  
+  const predictedFTP = Math.round(baseFTP * (levelMultiplier[level] || 1.0));
+  const ageAdjustment = age > 40 ? 0.95 : age < 25 ? 1.05 : 1.0;
+  const finalFTP = Math.round(predictedFTP * ageAdjustment);
+  
+  const previewFTP = document.getElementById('previewFTP');
+  const previewFreq = document.getElementById('previewFreq');
+  
+  if (previewFTP) {
+    previewFTP.textContent = `${finalFTP}W`;
+  }
+  
+  if (previewFreq) {
+    const frequency = level === 'beginner' ? '주 2-3회' : 
+                     level === 'intermediate' ? '주 3-4회' : 
+                     level === 'advanced' ? '주 4-5회' : '주 5-6회';
+    previewFreq.textContent = frequency;
+  }
+}
+
+// 새 사용자 폼 제출 처리
+function handleNewUserSubmit(event) {
+  event.preventDefault();
+  
+  const formData = {
+    name: document.getElementById('newUserName')?.value?.trim(),
+    age: parseInt(document.getElementById('newUserAge')?.value),
+    weight: parseFloat(document.getElementById('newUserWeight')?.value),
+    phone: document.getElementById('newUserPhone')?.value?.trim(),
+    level: document.getElementById('newUserLevel')?.value,
+    goal: document.getElementById('newUserGoal')?.value,
+    ftp: parseInt(document.getElementById('newUserFTP')?.value) || null
+  };
+  
+  // 유효성 검사
+  if (!formData.name || !formData.age || !formData.weight || !formData.phone) {
+    if (typeof showToast === 'function') {
+      showToast('모든 필수 항목을 입력해주세요! ❌');
+    }
+    return;
+  }
+  
+  if (!/^010-\d{4}-\d{4}$/.test(formData.phone)) {
+    if (typeof showToast === 'function') {
+      showToast('올바른 전화번호 형식을 입력해주세요! ❌');
+    }
+    return;
+  }
+  
+  console.log('새 사용자 등록 데이터:', formData);
+  
+  // 버튼 로딩 상태
+  const submitBtn = event.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn?.textContent;
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '등록 중...';
+  }
+  
+  // 등록 시뮬레이션
+  setTimeout(() => {
+    // 새 사용자를 유효한 전화번호 목록에 추가
+    if (!VALID_PHONES.includes(formData.phone)) {
+      VALID_PHONES.push(formData.phone);
+      console.log('새 전화번호 추가됨:', formData.phone);
+    }
+    
+    // 사용자 데이터 저장 (localStorage)
+    const users = JSON.parse(localStorage.getItem('trainingUsers') || '[]');
+    const newUser = {
+      id: Date.now().toString(),
+      ...formData,
+      createdAt: new Date().toISOString()
+    };
+    users.push(newUser);
+    localStorage.setItem('trainingUsers', JSON.stringify(users));
+    
+    console.log('새 사용자 등록 완료:', newUser);
+    
+    // 성공 처리
+    if (typeof showToast === 'function') {
+      showToast(`${formData.name}님 등록 완료! 🎉`);
+    }
+    
+    // 폼 초기화 및 숨기기
+    document.getElementById('newUserForm')?.reset();
+    toggleNewUserForm();
+    
+    // 등록된 전화번호를 인증 입력 필드에 자동 입력
+    const phoneInput = document.getElementById('phoneInput');
+    if (phoneInput) {
+      phoneInput.value = formData.phone.replace(/\D/g, '');
+      formatPhoneNumber(phoneInput.value);
+    }
+    
+    // 버튼 상태 복원
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
+    }
+    
+  }, 2000);
+}
+
+console.log('👥 새 사용자 등록 시스템 로드 완료!');
+
+
+/* ========== 새 사용자 폼 이벤트 리스너 ========== */
+
+// 폼 이벤트 리스너 초기화
+function initializeNewUserFormEvents() {
+  // 폼 제출 이벤트
+  const newUserForm = document.getElementById('newUserForm');
+  if (newUserForm) {
+    newUserForm.addEventListener('submit', handleNewUserSubmit);
+    console.log('새 사용자 폼 제출 이벤트 등록됨');
+  }
+  
+  // 실시간 AI 미리보기 업데이트
+  const watchFields = ['newUserAge', 'newUserWeight', 'newUserLevel'];
+  watchFields.forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      field.addEventListener('input', updateNewUserPreview);
+      field.addEventListener('change', updateNewUserPreview);
+    }
+  });
+  
+  console.log('새 사용자 폼 이벤트 리스너 초기화 완료');
+}
+
+// DOM이 로드된 후 이벤트 리스너 초기화
+document.addEventListener('DOMContentLoaded', function() {
+  // 기존 초기화 코드 실행 후
+  setTimeout(() => {
+    initializeNewUserFormEvents();
+  }, 500);
+});
+
+// 폼 필드 유효성 검사 (실시간)
+function validateNewUserForm() {
+  const name = document.getElementById('newUserName')?.value?.trim();
+  const age = document.getElementById('newUserAge')?.value;
+  const weight = document.getElementById('newUserWeight')?.value;
+  const phone = document.getElementById('newUserPhone')?.value?.trim();
+  
+  const submitBtn = document.querySelector('#newUserForm button[type="submit"]');
+  if (!submitBtn) return;
+  
+  const isValid = name && age && weight && phone && /^010-\d{4}-\d{4}$/.test(phone);
+  
+  submitBtn.disabled = !isValid;
+  
+  if (isValid) {
+    submitBtn.style.opacity = '1';
+    submitBtn.style.cursor = 'pointer';
+  } else {
+    submitBtn.style.opacity = '0.6';
+    submitBtn.style.cursor = 'not-allowed';
+  }
+}
+
+// 모든 필수 입력 필드에 실시간 유효성 검사 추가
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(() => {
+    const requiredFields = ['newUserName', 'newUserAge', 'newUserWeight', 'newUserPhone'];
+    requiredFields.forEach(fieldId => {
+      const field = document.getElementById(fieldId);
+      if (field) {
+        field.addEventListener('input', validateNewUserForm);
+        field.addEventListener('blur', validateNewUserForm);
+      }
+    });
+  }, 500);
+});
+
+console.log('🎯 새 사용자 폼 유효성 검사 시스템 로드 완료!');
+
