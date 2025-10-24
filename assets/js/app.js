@@ -3793,7 +3793,35 @@ async function handleNewUserRegistered(userData) {
             showToast(`${userData.name}님 등록 및 인증 완료! 🎉`);
           }
           
-          // 2초 후 기기연결화면으로 이동
+         // 0.5초 후 기기연결 화면으로 이동
+             setTimeout(() => {
+               console.log('🔄 자동 인증 완료 - 기기연결 화면으로 이동');
+               
+               // 모든 화면 숨기기
+               document.querySelectorAll('.screen').forEach(screen => {
+                 screen.classList.remove('active');
+                 screen.style.display = 'none';
+               });
+               
+               // connectionScreen 강제 표시
+               const connectionScreen = document.getElementById('connectionScreen');
+               if (connectionScreen) {
+                 connectionScreen.classList.add('active');
+                 connectionScreen.style.display = 'block';
+                 connectionScreen.style.opacity = '1';
+                 connectionScreen.style.visibility = 'visible';
+                 console.log('✅ connectionScreen 표시 완료');
+               } else {
+                 console.error('❌ connectionScreen을 찾을 수 없습니다');
+                 // 대체 화면 표시
+                 const allScreens = document.querySelectorAll('[id*="Screen"], [id*="screen"]');
+                 if (allScreens.length > 0) {
+                   const firstScreen = allScreens[0];
+                   firstScreen.style.display = 'block';
+                   console.log('🔄 대체 화면 표시:', firstScreen.id);
+                 }
+               }
+             }, 500);
                       
         } else {
           // 자동 인증 실패 시 수동 인증 안내
