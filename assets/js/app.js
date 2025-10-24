@@ -2594,15 +2594,6 @@ function updateUserPanelNeonByWkg(wkg) {
 
 /* ========== 전화번호 인증 시스템 - 최종 통합 버전 ========== */
 
-// 인증된 전화번호 목록 (테스트용)
-const VALID_PHONES = [
-  '010-1234-5678',
-  '010-0000-0000', 
-  '010-1111-1111',
-  '010-9999-9999',
-  '010-5555-5555',
-  '010-1234-1234'
-];
 
 let currentPhoneNumber = '';
 let isPhoneAuthenticated = false;
@@ -2694,69 +2685,7 @@ function handlePhoneKeyup(event) {
   }
 }
 
-// ========== 인증 처리 함수 ==========
-
-// 전화번호 인증 함수
-function authenticatePhone() {
-  const authStatus = document.getElementById('phoneAuthStatus');
-  const authCard = document.querySelector('.auth-form-card') || document.querySelector('.auth-card');
-  const authBtn = document.getElementById('phoneAuthBtn');
-  
-  if (!authStatus || !authBtn) {
-    console.error('인증 UI 요소를 찾을 수 없습니다.');
-    return;
-  }
-  
-  authBtn.disabled = true;
-  authBtn.textContent = '인증 중...';
-  authStatus.textContent = '📱 인증 중입니다...';
-  authStatus.className = 'auth-status';
-  
-  setTimeout(() => {
-    if (VALID_PHONES.includes(currentPhoneNumber)) {
-      // 인증 성공
-      isPhoneAuthenticated = true;
-      authStatus.textContent = '✅ 인증이 완료되었습니다!';
-      authStatus.className = 'auth-status success';
-      authBtn.textContent = '인증 완료';
-      
-      if (authCard) {
-        authCard.classList.add('auth-success');
-      }
-      
-      console.log('인증 성공:', currentPhoneNumber);
-      
-      // 1초 후 기기 연결 화면으로 전환
-      setTimeout(() => {
-        if (typeof showToast === 'function') {
-          showToast(`인증 완료: ${currentPhoneNumber} 🎉`);
-        }
-        
-        hideAuthScreen();
-        showScreen('connectionScreen');
-      }, 1000);
-      
-    } else {
-      // 인증 실패
-      authStatus.textContent = '❌ 등록되지 않은 전화번호입니다. 다시 확인해주세요.';
-      authStatus.className = 'auth-status error';
-      authBtn.textContent = '인증하기';
-      authBtn.disabled = false;
-      
-      const phoneInput = document.getElementById('phoneInput');
-      if (phoneInput) {
-        phoneInput.classList.add('error');
-        setTimeout(() => {
-          phoneInput.classList.remove('error');
-        }, 3000);
-      }
-      
-      if (typeof showToast === 'function') {
-        showToast('인증에 실패했습니다. 다시 시도해주세요. ❌');
-      }
-    }
-  }, 1500);
-}
+===
 
 // ========== 화면 제어 함수 ==========
 
@@ -2991,14 +2920,32 @@ if (typeof window.showToast !== 'function') {
 
 // 통합 초기화 함수
 // 6. 이벤트 리스너 초기화 함수 수정
+// 🔍 검색: "function initializeAuthenticationSystem"
+// 📍 위치: 라인 2994
+// ✅ 전체 함수를 아래로 교체:
+
 function initializeAuthenticationSystem() {
-  // 새 사용자 폼 이벤트 리스너
+  // 🔥 핵심: 전화번호 입력 이벤트 추가
+  const phoneInput = document.getElementById('phoneInput');
+  const authBtn = document.getElementById('phoneAuthBtn');
+  
+  if (phoneInput) {
+    phoneInput.addEventListener('input', function(e) {
+      formatPhoneNumber(e.target.value);
+    });
+    phoneInput.addEventListener('keyup', handlePhoneKeyup);
+  }
+  
+  if (authBtn) {
+    authBtn.addEventListener('click', authenticatePhone);
+  }
+  
+  // 기존 새 사용자 폼 이벤트는 유지
   const newUserForm = document.getElementById('newUserForm');
   if (newUserForm) {
     newUserForm.addEventListener('submit', handleNewUserSubmit);
   }
   
-  // 실시간 유효성 검사 (간소화된 필드만)
   const requiredFields = ['newUserName', 'newUserPhone', 'newUserFTP', 'newUserWeight'];
   requiredFields.forEach(fieldId => {
     const field = document.getElementById(fieldId);
@@ -3008,7 +2955,7 @@ function initializeAuthenticationSystem() {
     }
   });
   
-  console.log('인증 시스템 이벤트 리스너 초기화 완료');
+  console.log('✅ 인증 시스템 이벤트 리스너 초기화 완료');
 }
 
 // 실시간 유효성 검사
@@ -3029,16 +2976,23 @@ function validateNewUserForm() {
 }
 
 // 페이지 로드 시 초기화
+// 🔍 검색: "DOMContentLoaded"
+// 📍 위치: 라인 3032+
+// ✅ 전체 이벤트를 아래로 교체:
+
 document.addEventListener('DOMContentLoaded', function() {
   console.log('📱 인증 시스템 초기화 시작');
   
-  // 인증 화면 직접 표시
   setTimeout(() => {
+    // 모든 화면 완전히 숨기기
     document.querySelectorAll('.screen').forEach(screen => {
       screen.classList.remove('active');
       screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
     });
     
+    // authScreen만 표시
     const authScreen = document.getElementById('authScreen');
     if (authScreen) {
       authScreen.style.display = 'block';
@@ -3055,7 +3009,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }, 200);
   
-  // 이벤트 리스너 초기화
   setTimeout(() => {
     initializeAuthenticationSystem();
   }, 500);
@@ -3068,11 +3021,16 @@ window.resetAuth = function() {
   console.log('인증 상태가 리셋되었습니다.');
 };
 
+// ✅ 교체:
 window.checkAuthStatus = function() {
   console.log('현재 인증 상태:', isPhoneAuthenticated);
   console.log('현재 전화번호:', currentPhoneNumber);
-  console.log('유효한 전화번호 목록:', VALID_PHONES);
-  return { authenticated: isPhoneAuthenticated, phone: currentPhoneNumber };
+  console.log('현재 사용자:', window.currentUser);
+  return { 
+    authenticated: isPhoneAuthenticated, 
+    phone: currentPhoneNumber,
+    user: window.currentUser
+  };
 };
 
 console.log('📱 전화번호 인증 시스템 최종 버전 로드 완료!');
