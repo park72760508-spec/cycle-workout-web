@@ -101,10 +101,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 .control-btn.pause { 
    color: #f0a500;
   
-  /* 추가할 부분 */
+  /* 추가할 부분 
   z-index: 1001 !important;
   pointer-events: auto;
-  isolation: isolate;  
+  isolation: isolate; */  
 }
 
 /* ========== 인증완료 후 화면 전환 ========== */
