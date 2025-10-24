@@ -368,9 +368,7 @@ async function loadUsers() {
 
     // 임시 관리자 오버라이드가 켜져 있으면 강제로 grade=1
     const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
-    const viewerGrade = isTempAdmin
-      ? '1'
-      : (mergedViewer && mergedViewer.grade != null) ? String(mergedViewer.grade) : '2';
+    const viewerGrade = isTempAdmin ? '1' : getViewerGrade();
 
     // grade=2 명시일 때만 "본인만"으로 제한, 그 외(관리자 등)는 전체
     let visibleUsers = users;
