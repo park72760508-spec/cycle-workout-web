@@ -1529,6 +1529,8 @@ if (!window.showScreen) {
   };
 }
 
+
+
 if (!window.showConnectionStatus) {
   window.showConnectionStatus = function(show) {
     const el = safeGetElement("connectionStatus");
@@ -2587,4 +2589,490 @@ function updateUserPanelNeonByWkg(wkg) {
   panel.classList.add('neon-active', tier);
 }
 
+
+
+
+/* ========== 전화번호 인증 시스템 ========== */
+
+// 인증된 전화번호 목록 (테스트용)
+const VALID_PHONES = [
+  '010-1234-5678',
+  '010-0000-0000', 
+  '010-1111-1111',
+  '010-9999-9999',
+  '010-5555-5555',
+  '010-1234-1234'
+];
+
+let currentPhoneNumber = '';
+let isPhoneAuthenticated = false;
+
+// 전화번호 포맷팅 함수 (실시간 하이픈 삽입)
+function formatPhoneNumber(value) {
+  console.log('입력된 값:', value);
+  
+  // 숫자만 추출 (하이픈, 공백, 특수문자 모두 제거)
+  const numbers = value.replace(/\D/g, '');
+  console.log('숫자만 추출:', numbers);
+  
+  // 11자리 초과 시 자르기
+  const limitedNumbers = numbers.slice(0, 11);
+  
+  // 전화번호 형식으로 포맷팅
+  let formatted = '';
+  if (limitedNumbers.length > 0) {
+    if (limitedNumbers.length <= 3) {
+      formatted = limitedNumbers;
+    } else if (limitedNumbers.length <= 7) {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3);
+    } else {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3, 7) + '-' + limitedNumbers.slice(7, 11);
+    }
+  }
+  
+  console.log('포맷팅 결과:', formatted);
+  currentPhoneNumber = formatted;
+  
+  // 입력 필드 업데이트
+  const phoneInput = document.getElementById('phoneInput');
+  if (phoneInput && phoneInput.value !== formatted) {
+    // 커서 위치 저장
+    const cursorPos = phoneInput.selectionStart;
+    const prevLength = phoneInput.value.length;
+    
+    phoneInput.value = formatted;
+    
+    // 커서 위치 조정 (하이픈이 추가된 경우 고려)
+    const newLength = formatted.length;
+    const lengthDiff = newLength - prevLength;
+    phoneInput.setSelectionRange(cursorPos + lengthDiff, cursorPos + lengthDiff);
+  }
+  
+  // 유효성 검사
+  validatePhoneNumber(formatted);
+  
+  return formatted;
+}
+
+// 전화번호 유효성 검사
+function validatePhoneNumber(phoneNumber) {
+  const phoneInput = document.getElementById('phoneInput');
+  const authBtn = document.getElementById('phoneAuthBtn');
+  const authStatus = document.getElementById('phoneAuthStatus');
+  
+  if (!phoneInput || !authBtn) return;
+  
+  // 완전한 전화번호인지 확인 (010-XXXX-XXXX 형태)
+  const isValidFormat = /^010-\d{4}-\d{4}$/.test(phoneNumber);
+  
+  if (phoneNumber.length === 0) {
+    // 입력이 없는 경우
+    phoneInput.className = 'phone-input';
+    authBtn.disabled = true;
+    if (authStatus) authStatus.textContent = '';
+  } else if (isValidFormat) {
+    // 형식이 올바른 경우
+    phoneInput.className = 'phone-input valid';
+    authBtn.disabled = false;
+    if (authStatus) {
+      authStatus.textContent = '✓ 올바른 형식입니다';
+      authStatus.className = 'auth-status success';
+    }
+  } else {
+    // 형식이 잘못된 경우
+    phoneInput.className = 'phone-input error';
+    authBtn.disabled = true;
+    if (authStatus) {
+      const numbers = phoneNumber.replace(/\D/g, '');
+      const remaining = 11 - numbers.length;
+      authStatus.textContent = `${remaining}자리 더 입력해주세요 (010-XXXX-XXXX)`;
+      authStatus.className = 'auth-status error';
+    }
+  }
+}
+
+// 엔터키 처리
+function handlePhoneKeyup(event) {
+  if (event.key === 'Enter') {
+    const authBtn = document.getElementById('phoneAuthBtn');
+    if (authBtn && !authBtn.disabled) {
+      authenticatePhone();
+    }
+  }
+  
+  // 백스페이스 등의 키 입력 시에도 포맷팅 적용
+  if (event.key === 'Backspace' || event.key === 'Delete') {
+    setTimeout(() => {
+      formatPhoneNumber(event.target.value);
+    }, 10);
+  }
+}
+
+// 전화번호 인증 함수
+function authenticatePhone() {
+  const authStatus = document.getElementById('phoneAuthStatus');
+  const authCard = document.querySelector('.auth-card');
+  const authBtn = document.getElementById('phoneAuthBtn');
+  
+  if (!authStatus || !authBtn) return;
+  
+  // 버튼 비활성화 및 로딩 상태 표시
+  authBtn.disabled = true;
+  authBtn.textContent = '인증 중...';
+  authStatus.textContent = '📱 인증 중입니다...';
+  authStatus.className = 'auth-status';
+  
+  console.log('인증 시도:', currentPhoneNumber);
+  console.log('유효한 번호들:', VALID_PHONES);
+  
+  // 인증 시뮬레이션 (1.5초 후 결과 표시)
+  setTimeout(() => {
+    if (VALID_PHONES.includes(currentPhoneNumber)) {
+      // 인증 성공
+      isPhoneAuthenticated = true;
+      authStatus.textContent = '✅ 인증이 완료되었습니다!';
+      authStatus.className = 'auth-status success';
+      authBtn.textContent = '인증 완료';
+      
+      if (authCard) {
+        authCard.classList.add('auth-success');
+      }
+      
+      console.log('인증 성공:', currentPhoneNumber);
+      
+      // 2초 후 인증 화면 숨기기
+      setTimeout(() => {
+        hideAuthOverlay();
+        if (typeof showToast === 'function') {
+          showToast(`인증 완료: ${currentPhoneNumber} 🎉`);
+        }
+      }, 2000);
+      
+    } else {
+      // 인증 실패
+      console.log('인증 실패:', currentPhoneNumber);
+      authStatus.textContent = '❌ 등록되지 않은 전화번호입니다. 다시 확인해주세요.';
+      authStatus.className = 'auth-status error';
+      authBtn.textContent = '인증하기';
+      authBtn.disabled = false;
+      
+      // 입력 필드에 에러 클래스 추가
+      const phoneInput = document.getElementById('phoneInput');
+      if (phoneInput) {
+        phoneInput.classList.add('error');
+        
+        // 3초 후 에러 상태 제거
+        setTimeout(() => {
+          phoneInput.classList.remove('error');
+        }, 3000);
+      }
+    }
+  }, 1500);
+}
+
+// 인증 오버레이 표시
+function showAuthOverlay() {
+  const authOverlay = document.getElementById('authOverlay');
+  if (authOverlay) {
+    authOverlay.style.display = 'flex';
+    
+    // 입력 필드 초기화 및 포커스
+    const phoneInput = document.getElementById('phoneInput');
+    if (phoneInput) {
+      phoneInput.value = '';
+      setTimeout(() => {
+        phoneInput.focus();
+      }, 300);
+    }
+    
+    // 상태 초기화
+    currentPhoneNumber = '';
+    const authBtn = document.getElementById('phoneAuthBtn');
+    if (authBtn) {
+      authBtn.textContent = '인증하기';
+      authBtn.disabled = true;
+    }
+    
+    const authStatus = document.getElementById('phoneAuthStatus');
+    if (authStatus) {
+      authStatus.textContent = '';
+      authStatus.className = 'auth-status';
+    }
+    
+    validatePhoneNumber('');
+    console.log('인증 오버레이 표시됨');
+  }
+}
+
+// 인증 오버레이 숨기기
+function hideAuthOverlay() {
+  const authOverlay = document.getElementById('authOverlay');
+  if (authOverlay) {
+    authOverlay.style.display = 'none';
+    console.log('인증 오버레이 숨김');
+  }
+}
+
+// 기존 showScreen 함수 수정 (프로필 화면 진입 시 인증 확인)
+// 기존 함수가 있는지 확인하고 없으면 생성
+if (typeof window.originalShowScreen === 'undefined') {
+  window.originalShowScreen = window.showScreen || function() {};
+}
+
+window.showScreen = function(screenId) {
+  console.log('화면 전환:', screenId, '인증 상태:', isPhoneAuthenticated);
+  
+  if (screenId === 'profileScreen' && !isPhoneAuthenticated) {
+    // 먼저 화면을 표시하고
+    if (typeof window.originalShowScreen === 'function') {
+      window.originalShowScreen(screenId);
+    } else {
+      // 기본 화면 전환 로직
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+      });
+      const targetScreen = document.getElementById(screenId);
+      if (targetScreen) {
+        targetScreen.classList.add('active');
+      }
+    }
+    
+    // 그다음 인증 오버레이 표시
+    setTimeout(() => {
+      showAuthOverlay();
+    }, 200);
+  } else {
+    // 다른 화면이거나 이미 인증된 경우
+    if (typeof window.originalShowScreen === 'function') {
+      window.originalShowScreen(screenId);
+    } else {
+      // 기본 화면 전환 로직
+      document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+      });
+      const targetScreen = document.getElementById(screenId);
+      if (targetScreen) {
+        targetScreen.classList.add('active');
+      }
+    }
+  }
+};
+
+// 토스트 메시지 함수 (없는 경우에만 추가)
+if (typeof window.showToast !== 'function') {
+  window.showToast = function(message) {
+    console.log('토스트 메시지:', message);
+    
+    let toast = document.getElementById('toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast';
+      toast.className = 'toast';
+      document.body.appendChild(toast);
+    }
+    
+    toast.textContent = message;
+    toast.classList.add('show');
+    
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 3500);
+  };
+}
+
+// 인증 상태 리셋 함수 (개발/테스트용)
+window.resetAuth = function() {
+  isPhoneAuthenticated = false;
+  currentPhoneNumber = '';
+  console.log('인증 상태가 리셋되었습니다.');
+};
+
+// 인증 상태 확인 함수 (개발/테스트용)
+window.checkAuthStatus = function() {
+  console.log('현재 인증 상태:', isPhoneAuthenticated);
+  console.log('현재 전화번호:', currentPhoneNumber);
+  console.log('유효한 전화번호 목록:', VALID_PHONES);
+  return { authenticated: isPhoneAuthenticated, phone: currentPhoneNumber };
+};
+
+console.log('📱 전화번호 인증 시스템 로드 완료!');
+console.log('테스트용 전화번호:', VALID_PHONES);
+
+
+/* ========== 화면 전환 함수 재정의 ========== */
+/* ========== 화면 전환 함수 재정의 ========== */
+/* ========== 화면 전환 함수 재정의 ========== */
+
+// 기존 showScreen 함수 백업 및 새로운 함수로 교체
+if (typeof window.originalShowScreen === 'undefined') {
+  window.originalShowScreen = window.showScreen || function(screenId) {
+    // 기본 화면 전환 로직 (백업용)
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.remove('active');
+    });
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+      targetScreen.classList.add('active');
+    }
+  };
+}
+
+// 새로운 showScreen 함수 (인증 체크 포함)
+window.showScreen = function(screenId) {
+  console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
+  
+  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
+  if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
+    console.log('인증되지 않음 - 인증 화면으로 리다이렉트');
+    screenId = 'authScreen';
+  }
+  
+  // 기본 화면 전환 로직
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.classList.remove('active');
+  });
+  
+  const targetScreen = document.getElementById(screenId);
+  if (targetScreen) {
+    targetScreen.classList.add('active');
+    console.log('화면 전환 완료:', screenId);
+    
+    // 화면별 초기화 작업
+    if (typeof initializeScreen === 'function') {
+      initializeScreen(screenId);
+    }
+  } else {
+    console.error('화면을 찾을 수 없음:', screenId);
+  }
+  
+  // 인증 화면에서 입력 필드 포커스
+  if (screenId === 'authScreen') {
+    setTimeout(() => {
+      const phoneInput = document.getElementById('phoneInput');
+      if (phoneInput) {
+        phoneInput.focus();
+        console.log('전화번호 입력 필드에 포커스');
+      }
+    }, 300);
+  }
+};
+
+console.log('🔄 화면 전환 함수 업데이트 완료!');
+
+
+
+
+/* ========== 전화번호 인증 처리 함수 ========== */
+
+// 전화번호 인증 함수
+function authenticatePhone() {
+  const authStatus = document.getElementById('phoneAuthStatus');
+  const authCard = document.querySelector('.auth-form-card') || document.querySelector('.auth-card');
+  const authBtn = document.getElementById('phoneAuthBtn');
+  
+  if (!authStatus || !authBtn) {
+    console.error('인증 UI 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 버튼 비활성화 및 로딩 상태 표시
+  authBtn.disabled = true;
+  authBtn.textContent = '인증 중...';
+  authStatus.textContent = '📱 인증 중입니다...';
+  authStatus.className = 'auth-status';
+  
+  console.log('인증 시도:', currentPhoneNumber);
+  console.log('유효한 번호들:', VALID_PHONES);
+  
+  // 인증 시뮬레이션 (1.5초 후 결과 표시)
+  setTimeout(() => {
+    if (VALID_PHONES.includes(currentPhoneNumber)) {
+      // 인증 성공
+      isPhoneAuthenticated = true;
+      authStatus.textContent = '✅ 인증이 완료되었습니다!';
+      authStatus.className = 'auth-status success';
+      authBtn.textContent = '인증 완료';
+      
+      if (authCard) {
+        authCard.classList.add('auth-success');
+      }
+      
+      console.log('인증 성공:', currentPhoneNumber);
+      
+      // 성공 효과음 (선택사항)
+      if (typeof playBeep === 'function') {
+        playBeep();
+      }
+      
+      // 2초 후 연결 화면으로 이동
+      setTimeout(() => {
+        if (typeof showToast === 'function') {
+          showToast(`인증 완료: ${currentPhoneNumber} 🎉`);
+        }
+        showScreen('connectionScreen'); // 연결 화면으로 이동
+      }, 2000);
+      
+    } else {
+      // 인증 실패
+      console.log('인증 실패:', currentPhoneNumber);
+      authStatus.textContent = '❌ 등록되지 않은 전화번호입니다. 다시 확인해주세요.';
+      authStatus.className = 'auth-status error';
+      authBtn.textContent = '인증하기';
+      authBtn.disabled = false;
+      
+      // 입력 필드에 에러 클래스 추가
+      const phoneInput = document.getElementById('phoneInput');
+      if (phoneInput) {
+        phoneInput.classList.add('error');
+        
+        // 3초 후 에러 상태 제거
+        setTimeout(() => {
+          phoneInput.classList.remove('error');
+        }, 3000);
+      }
+      
+      // 실패 토스트 메시지
+      if (typeof showToast === 'function') {
+        showToast('인증에 실패했습니다. 다시 시도해주세요. ❌');
+      }
+    }
+  }, 1500);
+}
+
+console.log('🔐 전화번호 인증 처리 함수 완료!');
+
+
+/* ========== 앱 시작 시 인증 화면으로 이동 ========== */
+
+// 기존 로딩 완료 후 처리 함수 찾기 및 수정
+// DOMContentLoaded 이벤트에서 로딩 완료 후 인증 화면으로 이동하도록 설정
+
+// 페이지 로드 완료 후 인증 화면 초기 설정
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('📱 인증 시스템 초기화 시작');
+  
+  // 로딩 화면 완료 후 인증 화면으로 이동하는 함수 오버라이드
+  const originalLoadingComplete = window.startLoadingAnimation || function() {};
+  
+  // 로딩 애니메이션이 있다면 완료 후 인증 화면으로, 없다면 바로 인증 화면으로
+  setTimeout(() => {
+    console.log('로딩 완료 - 인증 화면으로 이동');
+    showScreen('authScreen');
+  }, 100);
+});
+
+// 테스트 번호 클릭 시 자동 입력 기능 (선택사항)
+document.addEventListener('click', function(event) {
+  if (event.target.classList.contains('test-number')) {
+    const phoneNumber = event.target.textContent;
+    const phoneInput = document.getElementById('phoneInput');
+    if (phoneInput) {
+      phoneInput.value = phoneNumber.replace(/\D/g, ''); // 숫자만 입력
+      formatPhoneNumber(phoneInput.value); // 포맷팅 적용
+      console.log('테스트 번호 자동 입력:', phoneNumber);
+    }
+  }
+});
+
+console.log('🚀 인증 시스템 초기화 완료!');
 
