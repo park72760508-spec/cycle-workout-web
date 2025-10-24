@@ -45,9 +45,22 @@ let isEditMode = false;
 let currentEditUserId = null;
 
 // 전화번호 유틸: 숫자만 남기기
+// 숫자만 남기기 (입력값 → "01012345678")
 function unformatPhone(input) {
   return String(input || '').replace(/\D+/g, '');
 }
+
+// DB 저장용 하이픈 포맷 (digits → "010-1234-5678")
+function formatPhoneForDB(digits) {
+  const d = unformatPhone(digits);
+  if (d.length < 7) return d; // 너무 짧으면 그냥 반환
+
+  const head = d.slice(0, 3);     // 대개 '010'
+  const tail = d.slice(-4);       // 마지막 4자리
+  const mid  = d.slice(head.length, d.length - tail.length); // 가운데
+  return `${head}-${mid}-${tail}`;
+}
+
 
 // 전화번호 유틸: DB 저장용 하이픈 3-중간-4 포맷 (길이 10~11 가정)
 function formatPhoneForDB(digits) {
@@ -407,6 +420,7 @@ async function saveUser() {
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
 
+   
   // 유효성 검사
   if (!name) {
     showToast('이름을 입력해주세요.');
@@ -578,7 +592,8 @@ function hideAddUserForm() {
  */
 async function updateUser(userId) {
   const name = document.getElementById('userName').value.trim();
-  const contact = document.getElementById('userContact').value.trim();
+   const contactRaw = document.getElementById('userContact').value.trim();
+   const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
 
