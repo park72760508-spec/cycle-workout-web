@@ -46,6 +46,41 @@
     };
   }
 
+// === 인증 폼 초기화 유틸 ===
+// 인증 화면의 전화번호 입력/버튼/상태를 모두 초기 상태로 되돌린다.
+function resetAuthForm() {
+  // 입력칸(프로젝트에 따라 id가 phoneInput 또는 loginPhone 등일 수 있어 둘 다 처리)
+  const phoneInput = document.getElementById('phoneInput') || document.getElementById('loginPhone');
+  if (phoneInput) {
+    phoneInput.value = '';
+    phoneInput.classList.remove('error', 'valid', 'invalid');
+  }
+
+  // 상태 텍스트
+  const authStatus = document.getElementById('phoneAuthStatus');
+  if (authStatus) {
+    authStatus.textContent = '';
+    authStatus.className = 'auth-status'; // 기본 클래스로 되돌림
+  }
+
+  // 인증 버튼
+  const authBtn = document.getElementById('phoneAuthBtn');
+  if (authBtn) {
+    authBtn.disabled = false;
+    authBtn.setAttribute('aria-disabled', 'false');
+    authBtn.textContent = '전화번호 인증'; // 프로젝트 UX에 맞게 초기 라벨
+  }
+
+  // 내부 상태 변수들(있다면)
+  try {
+    if (typeof window.currentPhoneNumber !== 'undefined') window.currentPhoneNumber = '';
+    if (typeof window.isPhoneAuthenticated !== 'undefined') window.isPhoneAuthenticated = false;
+  } catch (_) {}
+}
+
+
+
+   
 window.userPanelNeonMode = 'static';  // 'static' 고정 (동적 계산 끔)
 
    
@@ -194,6 +229,9 @@ function showAuthScreen() {
 
 // ★ 로그아웃: 권한/세션 완전 초기화
 function logout() {
+   // ✅ 전화번호 인증 폼 완전 초기화
+  resetAuthForm();
+   
   try {
     // 1) 등급/세션 정보 전부 제거
     localStorage.removeItem('authUser');
