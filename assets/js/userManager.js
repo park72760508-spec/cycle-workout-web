@@ -287,6 +287,9 @@ async function apiDeleteUser(id) {
 /**
  * 사용자 목록 로드 및 렌더링 (개선된 버전)
  */
+/**
+ * 사용자 목록 로드 및 렌더링 (개선된 버전)
+ */
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) return;
@@ -341,60 +344,70 @@ async function loadUsers() {
       return;
     }
 
-    // 사용자 카드 렌더링
-   // 현재 사용자(선택된 사용자) 기준 등급 파악
-   let viewer = null;
-   try {
-     viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-   } catch (e) { viewer = null; }
-   
-   // 등급: 미지정 사용자는 정책상 '2'(본인만)로 간주
-   const viewerGrade = (viewer && viewer.grade != null) ? String(viewer.grade) : '2';
-   
-   // grade=2 인 경우: 본인만 보이도록 목록 필터링
-   let visibleUsers = users;
-   if (viewerGrade === '2' && viewer && viewer.id != null) {
-     visibleUsers = users.filter(u => String(u.id) === String(viewer.id));
-   }
+    // 현재 사용자(선택된 사용자/인증 사용자) 파악
+    let viewer = null;
+    try {
+      viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (e) { viewer = null; }
 
-      // ✅ 이름 오름차순 정렬(한글 고려)
-   visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));  
-     
-   // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
-   userList.innerHTML = visibleUsers.map(user => {
-     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
-   
-     // 수정/삭제 권한: grade=1 전체 / grade=2 본인만
-     const canEdit = (viewerGrade === '1') ||
-                     (viewerGrade === '2' && viewer && String(user.id) === String(viewer.id));
-   
-     return `
-       <div class="user-card" data-user-id="${user.id}">
-         <div class="user-header">
-           <div class="user-name">👤 ${user.name}</div>
-           <div class="user-actions">
-             ${canEdit ? `
-               <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
-               <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
-             ` : ''}
-           </div>
-         </div>
-         <div class="user-details">
-           <div class="user-stats">
-             <span class="stat">FTP: ${user.ftp || '-'}W</span>
-             <span class="stat">체중: ${user.weight || '-'}kg</span>
-             <span class="stat">W/kg: ${wkg}</span>
-           </div>
-           <div class="user-meta">
-             <span class="contact">${user.contact || ''}</span>
-             <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
-           </div>
-         </div>
-         <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
-       </div>
-     `;
-   }).join('');
+    // localStorage와 window.currentUser 병합하여 등급/아이디 안정화
+    let lsViewer = null;
+    try { 
+      lsViewer = JSON.parse(localStorage.getItem('currentUser') || 'null'); 
+    } catch(e) { 
+      lsViewer = null; 
+    }
+    const mergedViewer = Object.assign({}, lsViewer || {}, viewer || {});
 
+    // 임시 관리자 오버라이드가 켜져 있으면 강제로 grade=1
+    const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+    const viewerGrade = isTempAdmin
+      ? '1'
+      : (mergedViewer && mergedViewer.grade != null) ? String(mergedViewer.grade) : '2';
+
+    // grade=2 명시일 때만 "본인만"으로 제한, 그 외(관리자 등)는 전체
+    let visibleUsers = users;
+    if (viewerGrade === '2' && mergedViewer && mergedViewer.id != null) {
+      visibleUsers = users.filter(u => String(u.id) === String(mergedViewer.id));
+    }
+
+    // 이름 오름차순 정렬(한글 대응)
+    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));  
+
+    // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
+    userList.innerHTML = visibleUsers.map(user => {
+      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+
+      // 수정/삭제 권한: grade=1 전체 / grade=2 본인만
+      const canEdit = (viewerGrade === '1') ||
+                      (viewerGrade === '2' && viewer && String(user.id) === String(viewer.id));
+
+      return `
+        <div class="user-card" data-user-id="${user.id}">
+          <div class="user-header">
+            <div class="user-name">👤 ${user.name}</div>
+            <div class="user-actions">
+              ${canEdit ? `
+                <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
+                <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+              ` : ''}
+            </div>
+          </div>
+          <div class="user-details">
+            <div class="user-stats">
+              <span class="stat">FTP: ${user.ftp || '-'}W</span>
+              <span class="stat">체중: ${user.weight || '-'}kg</span>
+              <span class="stat">W/kg: ${wkg}</span>
+            </div>
+            <div class="user-meta">
+              <span class="contact">${user.contact || ''}</span>
+              <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
+        </div>
+      `;
+    }).join('');
 
     // 전역에 사용자 목록 저장
     window.users = users;
@@ -422,6 +435,7 @@ async function loadUsers() {
     `;
   }
 }
+
 
 
 
