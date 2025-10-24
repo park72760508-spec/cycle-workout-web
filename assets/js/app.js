@@ -3365,11 +3365,23 @@ async function authenticatePhone() {
       authStatus.textContent = '✅ ' + authResult.message;
       authStatus.className = 'auth-status success';
       authBtn.textContent = '인증 완료';
-      
-      // 현재 사용자 정보 저장
-      window.currentUser = authResult.user;
-      localStorage.setItem('currentUser', JSON.stringify(authResult.user));
-      
+
+      // ============================== 중요: 인증 주체 보관 ==============================
+      // API 응답에서 사용자 객체 필드명(예: user/data/item) 프로젝트에 맞게 선택
+      const authUser = authResult.user || authResult.data || authResult.item || authResult; 
+      // grade(등급) 누락 대비: 기존 currentUser/ authUser 백업에서 보강
+      let prevViewer = null;
+      try { prevViewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) {}
+      if (prevViewer && prevViewer.grade != null && (authUser && authUser.grade == null)) {
+        authUser.grade = String(prevViewer.grade);
+      }
+
+      // 인증 주체(등급 포함)를 별도로 보관
+      localStorage.setItem('authUser', JSON.stringify(authUser));  // ← 등급 보존 백업
+      localStorage.setItem('currentUser', JSON.stringify(authUser));
+      window.currentUser = authUser;
+      // ================================================================================
+
       // 성공 애니메이션
       const authCard = document.querySelector('.auth-form-card');
       if (authCard) {
@@ -3377,13 +3389,13 @@ async function authenticatePhone() {
       }
       
       if (typeof showToast === 'function') {
-        showToast(`${authResult.user.name}님 환영합니다! 🎉`);
+        const nm = (authUser && authUser.name) ? authUser.name : '사용자';
+        showToast(`${nm}님 환영합니다! 🎉`);
       }
       
-      // 1초 후 즉시 기기연결 화면으로 이동
-// 0.5초 후 단순하고 안전한 화면 전환
+      // 0.5초 후 단순하고 안전한 화면 전환
       setTimeout(() => {
-        console.log('🔄 인증 완료 - 기기연결 화면으로 이동 중...');
+        console.log('🔄 인증 완료 - 다음 화면으로 이동 중...');
         
         try {
           // 1단계: 모든 화면 완전히 숨기기
@@ -3393,39 +3405,50 @@ async function authenticatePhone() {
             screen.style.opacity = '0';
             screen.style.visibility = 'hidden';
           });
-          
-          // 2단계: connectionScreen 강제 표시
+
+          // === [옵션 A] 프로필 선택 화면으로 이동하려면 이 블록 사용 ===
+          // const profileScreen = document.getElementById('profileScreen');
+          // if (profileScreen) {
+          //   profileScreen.classList.add('active');
+          //   profileScreen.style.display = 'block';
+          //   profileScreen.style.opacity = '1';
+          //   profileScreen.style.visibility = 'visible';
+          //   // 프로필 화면 진입 시 사용자 목록 로드 (관리자=전체, 그 외=본인만)
+          //   if (typeof loadUsers === 'function') {
+          //     loadUsers();  // ← 여기서 이름 오름차순 정렬 및 grade 필터 적용됨
+          //   }
+          // } else {
+          //   console.warn('⚠️ profileScreen 요소가 없어 connectionScreen으로 대체 진입합니다.');
+          // }
+
+          // === [옵션 B] 현재 구조 유지: connectionScreen으로 이동 ===
           const connectionScreen = document.getElementById('connectionScreen');
-          if (connectionScreen) {
-            connectionScreen.classList.add('active');
-            connectionScreen.style.display = 'block';
-            connectionScreen.style.opacity = '1';
-            connectionScreen.style.visibility = 'visible';
-            connectionScreen.style.zIndex = '1000';
-            
-            console.log('✅ connectionScreen 표시 완료');
-            
-            // connectionScreen 내용 확인
-            const hasContent = connectionScreen.innerHTML.trim().length > 0;
-            console.log('📄 connectionScreen 내용 존재:', hasContent);
-            
+          const target = connectionScreen; // 기본 타겟
+          
+          if (target) {
+            target.classList.add('active');
+            target.style.display = 'block';
+            target.style.opacity = '1';
+            target.style.visibility = 'visible';
+            target.style.zIndex = '1000';
+            console.log('✅ 다음 화면 표시 완료:', target.id);
+
+            // (디버깅 도우미) 내용 존재 확인
+            const hasContent = target.innerHTML.trim().length > 0;
+            console.log('📄', target.id, '내용 존재:', hasContent);
             if (!hasContent) {
-              connectionScreen.innerHTML = `
+              target.innerHTML = `
                 <div style="padding: 20px; text-align: center;">
                   <h2>🔗 기기 연결</h2>
                   <p>기기 연결 화면이 로드되었습니다.</p>
                   <button onclick="console.log('기기 연결 테스트')">연결 테스트</button>
                 </div>`;
             }
-            
           } else {
             console.error('❌ connectionScreen 요소가 없습니다');
-            
             // 대체: 사용 가능한 화면들 찾기
             const allScreens = document.querySelectorAll('[id*="Screen"], [id*="screen"]');
             console.log('🔍 발견된 화면들:', Array.from(allScreens).map(s => s.id));
-            
-            // 첫 번째 사용 가능한 화면 표시
             if (allScreens.length > 0) {
               const firstScreen = allScreens[0];
               firstScreen.style.display = 'block';
@@ -3438,7 +3461,7 @@ async function authenticatePhone() {
         } catch (error) {
           console.error('❌ 화면 전환 오류:', error);
         }
-      }, 500); // 1초 → 0.5초로 단축
+      }, 500);
       
     } else {
       // ❌ 인증 실패
@@ -3447,13 +3470,10 @@ async function authenticatePhone() {
       authBtn.textContent = '다시 인증';
       authBtn.disabled = false;
       
-      // 입력 필드 오류 스타일
       const phoneInput = document.getElementById('phoneInput');
       if (phoneInput) {
         phoneInput.classList.add('error');
-        setTimeout(() => {
-          phoneInput.classList.remove('error');
-        }, 3000);
+        setTimeout(() => { phoneInput.classList.remove('error'); }, 3000);
       }
       
       if (typeof showToast === 'function') {
@@ -3474,6 +3494,7 @@ async function authenticatePhone() {
     }
   }
 }
+
 
 
 
