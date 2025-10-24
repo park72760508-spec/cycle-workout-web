@@ -62,6 +62,138 @@ function formatPhoneForDB(digits) {
 }
 
 
+/*
+=== UserManager.js 연동 함수 ===
+파일: userManager.js 또는 새로운 연동 스크립트
+
+새 사용자 등록과 기존 사용자 추가 기능을 연결하는 브릿지 함수들
+*/
+
+// 1. 새 사용자 등록을 위한 헬퍼 함수 (userManager.js에 추가하거나 별도 파일)
+function createUserFromAuth(authFormData) {
+  // 인증 화면의 새 사용자 등록 데이터를 userManager 형식으로 변환
+  const userData = {
+    name: authFormData.name || '',
+    contact: formatPhoneForDB(authFormData.contact || ''), // 하이픈 포맷으로 변환
+    ftp: parseInt(authFormData.ftp) || 0,
+    weight: parseFloat(authFormData.weight) || 0,
+    grade: '2', // 기본 사용자 등급
+    expiry_date: '' // 빈 값
+  };
+  
+  console.log('Creating user from auth form:', userData);
+  return apiCreateUser(userData);
+}
+
+// 2. 전화번호 포맷 통합 함수 (기존 formatPhoneForDB 함수 활용)
+function standardizePhoneFormat(phoneNumber) {
+  // 인증 화면과 프로필 화면 간 전화번호 포맷 통일
+  return formatPhoneForDB(phoneNumber);
+}
+
+// 3. 사용자 등록 후 콜백 함수
+function onUserRegistrationSuccess(userData, source = 'auth') {
+  console.log(`User registered successfully from ${source}:`, userData);
+  
+  // 사용자 목록 새로고침
+  if (typeof loadUsers === 'function') {
+    loadUsers();
+  }
+  
+  // 인증 화면에서 등록한 경우 추가 처리
+  if (source === 'auth') {
+    // VALID_PHONES 업데이트
+    const phoneNumber = userData.contact;
+    if (phoneNumber && !VALID_PHONES.includes(phoneNumber)) {
+      VALID_PHONES.push(phoneNumber);
+    }
+    
+    // 토스트 메시지
+    if (typeof showToast === 'function') {
+      showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
+    }
+  }
+  
+  return true;
+}
+
+// 4. 사용자 등록 오류 처리 함수
+function onUserRegistrationError(error, source = 'auth') {
+  console.error(`User registration failed from ${source}:`, error);
+  
+  if (typeof showToast === 'function') {
+    const errorMessage = error.message || '등록 중 오류가 발생했습니다';
+    showToast(`등록 실패: ${errorMessage} ❌`);
+  }
+  
+  return false;
+}
+
+// 5. 통합 사용자 생성 함수 (추천)
+async function unifiedCreateUser(userData, source = 'profile') {
+  try {
+    // 데이터 검증
+    if (!userData.name || !userData.ftp || !userData.weight) {
+      throw new Error('필수 필드가 누락되었습니다');
+    }
+    
+    // 전화번호 포맷 표준화
+    if (userData.contact) {
+      userData.contact = standardizePhoneFormat(userData.contact);
+    }
+    
+    // API 호출
+    const result = await apiCreateUser(userData);
+    
+    if (result.success) {
+      // 성공 콜백
+      onUserRegistrationSuccess(userData, source);
+      return result;
+    } else {
+      throw new Error(result.error || '등록에 실패했습니다');
+    }
+    
+  } catch (error) {
+    // 오류 콜백
+    onUserRegistrationError(error, source);
+    throw error;
+  }
+}
+
+// 6. 기존 saveUser 함수와의 호환성 유지
+function saveUserFromAuth(formData) {
+  // 인증 화면에서 호출되는 사용자 저장 함수
+  return unifiedCreateUser({
+    name: formData.name,
+    contact: formData.contact,
+    ftp: formData.ftp,
+    weight: formData.weight,
+    grade: '2',
+    expiry_date: ''
+  }, 'auth');
+}
+
+// 7. 전역 함수로 내보내기 (window 객체에 추가)
+if (typeof window !== 'undefined') {
+  window.createUserFromAuth = createUserFromAuth;
+  window.unifiedCreateUser = unifiedCreateUser;
+  window.saveUserFromAuth = saveUserFromAuth;
+  window.standardizePhoneFormat = standardizePhoneFormat;
+}
+
+/*
+사용 방법:
+1. 인증 화면에서 새 사용자 등록 시:
+   - handleNewUserSubmit에서 unifiedCreateUser 호출
+   
+2. 프로필 화면에서 사용자 추가 시:
+   - 기존 saveUser 함수에서 unifiedCreateUser 호출
+   
+3. 전화번호 포맷 통일:
+   - standardizePhoneFormat 함수 사용
+*/
+
+
 
 // JSONP 방식 API 호출 헬퍼 함수
 // JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선
