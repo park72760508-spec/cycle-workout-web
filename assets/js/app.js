@@ -3794,7 +3794,6 @@ async function handleNewUserRegistered(userData) {
           }
           
           // 2초 후 기기연결화면으로 이동
-          setTimeout(() => {
                       
         } else {
           // 자동 인증 실패 시 수동 인증 안내
