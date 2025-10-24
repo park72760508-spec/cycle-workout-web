@@ -2836,7 +2836,7 @@ button[aria-disabled="true"] {
 }
 
 .phone-input-section {
-  margin-bottom: 30px;
+  margin-bottom: 20px; /* 기존 30px에서 20px로 축소 */
 }
 
 .phone-input-section label {
@@ -2850,7 +2850,7 @@ button[aria-disabled="true"] {
 
 .phone-input-container {
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 15px; /* 기존 20px에서 15px로 축소 */
 }
 
 .phone-input {
@@ -2889,10 +2889,10 @@ button[aria-disabled="true"] {
 }
 
 .auth-status {
-  margin: 18px 0;
+  margin: 12px 0; /* 기존 18px 0에서 12px 0으로 축소 */
   font-size: 15px;
   font-weight: 600;
-  min-height: 26px;
+  min-height: 20px; /* 기존 26px에서 20px로 축소 */
   transition: all 0.3s ease;
 }
 
@@ -2908,11 +2908,11 @@ button[aria-disabled="true"] {
 
 .auth-btn {
   width: 100%;
-  padding: 20px 24px;
+  padding: 16px 24px; /* 기존 20px에서 16px로 축소 */
   font-size: 18px;
   font-weight: 700;
   border-radius: 16px;
-  margin-bottom: 30px;
+  margin-bottom: 20px; /* 기존 30px에서 20px로 축소 */
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: white;
   border: none;
@@ -2952,9 +2952,10 @@ button[aria-disabled="true"] {
 
 .auth-help-card {
   background: rgba(102, 126, 234, 0.08);
-  padding: 25px;
+  padding: 20px; /* 기존 25px에서 20px로 축소 */
   border-radius: 16px;
   border: 2px solid rgba(102, 126, 234, 0.15);
+  margin-top: 15px; /* 새로 추가: 위쪽 여백 축소 */
 }
 
 .auth-help-card h4 {
@@ -3057,7 +3058,7 @@ button[aria-disabled="true"] {
 }
 
 .new-user-form-container {
-  margin-top: 25px;
+  margin-top: 15px; /* 새로 추가: 위쪽 여백 축소 */
   background: rgba(255, 255, 255, 0.98);
   border-radius: 20px;
   padding: 30px;
@@ -3205,10 +3206,10 @@ button[aria-disabled="true"] {
 }
 
 .form-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 25px;
+  margin-top: 20px; /* 기존 보다 축소 */
+  display: flex;
+  gap: 10px;
+  justify-content: center;
 }
 
 .form-actions .btn {
@@ -3273,7 +3274,7 @@ button[aria-disabled="true"] {
   
   .new-user-form-container {
     padding: 20px;
-    margin-top: 20px;
+   margin-top: 15px; /* 새로 추가: 위쪽 여백 축소 */
   }
   
   .form-actions {
@@ -3294,7 +3295,7 @@ button[aria-disabled="true"] {
   
   .new-user-form-container {
     padding: 20px;
-    margin-top: 20px;
+    margin-bottom: 15px; /* 기존 보다 축소 */
   }
   
   .form-actions {
