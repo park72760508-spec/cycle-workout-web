@@ -2932,27 +2932,51 @@ if (typeof window.showToast !== 'function') {
 // ✅ 전체 함수를 아래로 교체:
 
 function initializeAuthenticationSystem() {
-  // 🔥 핵심: 전화번호 입력 이벤트 추가
-  const phoneInput = document.getElementById('phoneInput');
-  const authBtn = document.getElementById('phoneAuthBtn');
+  console.log('🔧 인증 시스템 이벤트 리스너 초기화 시작');
   
+  // 전화번호 입력 필드 이벤트 설정
+  const phoneInput = document.getElementById('phoneInput');
   if (phoneInput) {
+    // input 이벤트 - 실시간 포맷팅
     phoneInput.addEventListener('input', function(e) {
       formatPhoneNumber(e.target.value);
     });
-    phoneInput.addEventListener('keyup', handlePhoneKeyup);
+    
+    // keyup 이벤트 - 엔터키, 백스페이스 등
+    phoneInput.addEventListener('keyup', function(e) {
+      handlePhoneKeyup(e);
+    });
+    
+    // focus 이벤트 - 입력 필드 활성화 시
+    phoneInput.addEventListener('focus', function(e) {
+      console.log('📱 전화번호 입력 필드 활성화');
+    });
+    
+    console.log('✅ 전화번호 입력 이벤트 리스너 설정 완료');
+  } else {
+    console.error('❌ phoneInput 요소를 찾을 수 없습니다');
   }
   
+  // 인증 버튼 이벤트 설정
+  const authBtn = document.getElementById('phoneAuthBtn');
   if (authBtn) {
-    authBtn.addEventListener('click', authenticatePhone);
+    authBtn.addEventListener('click', function() {
+      console.log('🔐 인증 버튼 클릭됨');
+      authenticatePhone();
+    });
+    console.log('✅ 인증 버튼 이벤트 리스너 설정 완료');
+  } else {
+    console.error('❌ phoneAuthBtn 요소를 찾을 수 없습니다');
   }
   
-  // 기존 새 사용자 폼 이벤트는 유지
+  // 새 사용자 폼 이벤트 설정
   const newUserForm = document.getElementById('newUserForm');
   if (newUserForm) {
     newUserForm.addEventListener('submit', handleNewUserSubmit);
+    console.log('✅ 새 사용자 폼 이벤트 리스너 설정 완료');
   }
   
+  // 새 사용자 필드 실시간 유효성 검사
   const requiredFields = ['newUserName', 'newUserPhone', 'newUserFTP', 'newUserWeight'];
   requiredFields.forEach(fieldId => {
     const field = document.getElementById(fieldId);
@@ -2962,7 +2986,7 @@ function initializeAuthenticationSystem() {
     }
   });
   
-  console.log('✅ 인증 시스템 이벤트 리스너 초기화 완료');
+  console.log('✅ 인증 시스템 모든 이벤트 리스너 초기화 완료');
 }
 
 // 실시간 유효성 검사
@@ -3577,3 +3601,7 @@ window.syncUsersFromDB = syncUsersFromDB;
 
 console.log('📱 수정된 DB 연동 전화번호 인증 시스템 로드 완료!');
 console.log('🔧 VALID_PHONES 배열이 제거되고 실시간 DB 검색으로 전환되었습니다.');
+
+
+
+
