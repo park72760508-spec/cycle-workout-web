@@ -230,7 +230,10 @@ function showAuthScreen() {
 // ★ 로그아웃: 권한/세션 완전 초기화
 function logout() {
    // ✅ 전화번호 인증 폼 완전 초기화
-  resetAuthForm();
+      // 전체 새로고침
+      window.location.reload();
+   
+  //resetAuthForm();
    
   try {
     // 1) 등급/세션 정보 전부 제거
