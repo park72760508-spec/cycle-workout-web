@@ -167,28 +167,6 @@ function checkAuthStatus() {
   }
 }
 
-// 로그아웃: 저장값/전역 초기화 + 인증 화면으로 라우팅
-function logout() {
-  localStorage.removeItem('authUser');
-  localStorage.removeItem('currentUser');
-  window.currentUser = null;
-
-  // 화면 전환: 프로젝트 기준의 인증 화면으로 이동
-  // showAuthScreen()이 이미 있다면 호출, 없다면 아래 fallback 사용
-  if (typeof showAuthScreen === 'function') {
-    showAuthScreen();
-  } else {
-    // fallback: 모든 화면 숨기고 authScreen만 표시
-    hideAllScreens();
-    const authScreen = document.getElementById('authScreen');
-    if (authScreen) {
-      authScreen.classList.add('active');
-      authScreen.style.display = 'block';
-      authScreen.style.opacity = '1';
-      authScreen.style.visibility = 'visible';
-    }
-  }
-}
 
 // ===== 로그아웃 & 화면 유틸 =====
 
