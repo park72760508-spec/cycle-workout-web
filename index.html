@@ -455,15 +455,105 @@
             </button>
           </div>
           
-          <div class="auth-help-card">
-            <h4>💡 테스트용 전화번호</h4>
-            <div class="test-numbers">
-              <span class="test-number">010-1234-5678</span>
-              <span class="test-number">010-0000-0000</span>
-              <span class="test-number">010-1111-1111</span>
+            <div class="auth-help-card">
+              <h4>👥 사용자 등록</h4>
+              <p class="help-note">전화번호가 등록되지 않았나요?</p>
+              <button class="btn btn-secondary new-user-btn" onclick="toggleNewUserForm()">
+                ➕ 새 사용자 추가
+              </button>
+              <div class="test-numbers" style="margin-top: 15px;">
+                <p style="font-size: 12px; color: #667eea; margin: 0;">
+                  💡 테스트: 010-1234-5678, 010-0000-0000
+                </p>
+              </div>
             </div>
-            <p class="help-note">위 번호들 중 하나를 입력하세요</p>
-          </div>
+            
+            <!-- 새 사용자 추가 폼 (숨김 상태) -->
+            <div class="new-user-form-container" id="newUserFormContainer" style="display: none;">
+              <div class="new-user-form">
+                <div class="form-header">
+                  <h3>✨ 새 사용자 등록</h3>
+                  <p>AI 맞춤 훈련을 위한 정보를 입력해주세요</p>
+                </div>
+            
+                <form id="newUserForm" class="user-registration-form">
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="newUserName">이름 *</label>
+                      <input type="text" id="newUserName" required placeholder="홍길동">
+                    </div>
+                    <div class="form-group">
+                      <label for="newUserAge">나이 *</label>
+                      <input type="number" id="newUserAge" required min="15" max="80" placeholder="25">
+                    </div>
+                  </div>
+            
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label for="newUserWeight">체중(kg) *</label>
+                      <input type="number" id="newUserWeight" required min="40" max="150" step="0.1" placeholder="70.0">
+                    </div>
+                    <div class="form-group">
+                      <label for="newUserPhone">전화번호 *</label>
+                      <input type="tel" id="newUserPhone" required placeholder="010-1234-5678" 
+                             oninput="formatNewUserPhone(this.value)" maxlength="13">
+                    </div>
+                  </div>
+            
+                  <div class="form-group">
+                    <label for="newUserLevel">훈련 수준</label>
+                    <select id="newUserLevel">
+                      <option value="beginner">초급자 (6개월 미만)</option>
+                      <option value="intermediate" selected>중급자 (6개월-2년)</option>
+                      <option value="advanced">고급자 (2년 이상)</option>
+                      <option value="elite">엘리트 (경기 참가)</option>
+                    </select>
+                  </div>
+            
+                  <div class="form-group">
+                    <label for="newUserGoal">훈련 목표</label>
+                    <select id="newUserGoal">
+                      <option value="general">일반 체력 향상</option>
+                      <option value="endurance" selected>지구력 향상</option>
+                      <option value="power">파워 향상</option>
+                      <option value="weight">체중 감량</option>
+                      <option value="competition">경기 준비</option>
+                    </select>
+                  </div>
+            
+                  <div class="form-group">
+                    <label for="newUserFTP">FTP (선택사항)</label>
+                    <input type="number" id="newUserFTP" min="100" max="500" placeholder="250">
+                    <small class="form-hint">20분 최대 지속 가능한 파워. 모르면 비워두세요.</small>
+                  </div>
+            
+                  <div class="ai-preview-card">
+                    <h4>🤖 AI 분석 미리보기</h4>
+                    <div class="preview-items">
+                      <div class="preview-item">
+                        <span class="preview-label">예상 FTP</span>
+                        <span class="preview-value" id="previewFTP">계산 중...</span>
+                      </div>
+                      <div class="preview-item">
+                        <span class="preview-label">권장 빈도</span>
+                        <span class="preview-value" id="previewFreq">주 3-4회</span>
+                      </div>
+                    </div>
+                  </div>
+            
+                  <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="toggleNewUserForm()">
+                      취소
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                      사용자 등록
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+          
         </div>
       </div>
     </div>
