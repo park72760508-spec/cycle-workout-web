@@ -2963,6 +2963,7 @@ button[aria-disabled="true"] {
   box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
   position: relative;
   overflow: hidden;
+  margin-top: 5px;
 }
 
 .auth-btn::before {
@@ -3087,7 +3088,7 @@ button[aria-disabled="true"] {
 .new-user-btn {
   width: 100%;
   padding: 12px 20px;
-  margin-top: 10px;
+  margin-top: 5px;
   background: linear-gradient(135deg, #68d391, #38b2ac);
   border: none;
   border-radius: 10px;
