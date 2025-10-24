@@ -2670,6 +2670,7 @@ function validatePhoneNumber(phoneNumber) {
 }
 
 // 엔터키 처리
+// 엔터키 처리 함수 (기존 함수 유지)
 function handlePhoneKeyup(event) {
   if (event.key === 'Enter') {
     const authBtn = document.getElementById('phoneAuthBtn');
@@ -2684,6 +2685,12 @@ function handlePhoneKeyup(event) {
     }, 10);
   }
 }
+
+// 🔥 핵심: 전역 스코프에 노출 (HTML에서 호출 가능하게 만들기)
+window.handlePhoneKeyup = handlePhoneKeyup;
+window.formatPhoneNumber = formatPhoneNumber; // HTML에서 사용하므로 함께 노출
+
+console.log('✅ 전화번호 관련 함수들이 전역으로 노출되었습니다');
 
 ===
 
