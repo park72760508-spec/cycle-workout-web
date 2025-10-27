@@ -2960,3 +2960,43 @@ button[aria-disabled="true"] {
   opacity: .40;                                     /* 살짝 더 또렷하게 (원하면 .32~.45로 조정) */
 }
 
+
+/* ===== Always-on vertical divider (top layer) ===== */
+:root{
+  --tl-divider: rgba(148,163,184,0.18); /* 테두리 색과 동일 */
+}
+
+/* 기본 경계선(호환) */
+.timeline-segment + .timeline-segment{
+  border-left: 1px solid var(--tl-divider);
+}
+
+/* 세로줄이 progress-fill 위에 항상 보이도록 */
+.timeline-segment{
+  position: relative; /* ::before 기준점 */
+}
+
+.timeline-segment + .timeline-segment::before{
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--tl-divider);
+  z-index: 4;           /* progress-fill(z-index:1)보다 높게 */
+  pointer-events: none;
+}
+
+/* (옵션) 그룹 세그먼트에도 동일 처리 */
+.timeline-group{
+  position: relative;
+}
+.timeline-group + .timeline-group::before{
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 1px;
+  background: var(--tl-divider);
+  z-index: 4;
+  pointer-events: none;
+}
+
