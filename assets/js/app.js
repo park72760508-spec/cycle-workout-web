@@ -206,7 +206,7 @@ function drawSparkline(canvas, series, opts = {}) {
   if (opts.showStats) {
     const unit = opts.unit || '';
     ctx.save();
-    ctx.font = (opts.statsFont || '30px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
+    ctx.font = (opts.statsFont || '16px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
     ctx.fillStyle = (opts.statsColor || 'rgba(255,255,255,0.85)');
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
