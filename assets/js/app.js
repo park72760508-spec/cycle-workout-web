@@ -123,56 +123,106 @@ function makeRingBuffer(maxLen = 1200) {
 }
 
 // 라인차트 그리기
+// 라인차트 그리기 (통합: 평균/최대 라벨 + 평균 가이드라인 + 누적모드)
 function drawSparkline(canvas, series, opts = {}) {
-  if (!canvas) return;
+  if (!canvas || !series || typeof series.data !== 'function') return;
+
   const ctx = canvas.getContext('2d');
+  // Retina 스케일 보정(캔버스 크기 조정은 initTrainingCharts에서 1회 수행)
   const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0,0,W,H);
+
+  ctx.clearRect(0, 0, W, H);
 
   const pad = 10;
+  const windowSec = (opts.windowSec ?? 600); // null/0 이면 전체 누적
   const d = series.data();
   if (!d.length) return;
 
-  // 최근 n초만(옵션) 보이기
   const now = Date.now();
-  const windowMs = (opts.windowSec ?? 600) * 1000; // 기본 10분
-  const vis = d.filter(p => now - p.t <= windowMs);
+  const vis = (windowSec && windowSec > 0)
+    ? d.filter(p => now - p.t <= windowSec * 1000)
+    : d.slice(); // 누적(전체)
+
   if (!vis.length) return;
 
-  const minV = Math.min(...vis.map(p => p.v));
-  const maxV = Math.max(...vis.map(p => p.v));
-  const vSpan = Math.max(1, maxV - minV);
+  // 값 스케일 계산
+  const values = vis.map(p => Number(p.v) || 0);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const sumV = values.reduce((s, v) => s + v, 0);
+  const avgV = sumV / values.length;
 
-  // x축: 시간 상대값, y축: 값
-  const tMin = vis[0].t, tMax = vis[vis.length-1].t;
+  // Sweep 시간축
+  const tMin = vis[0].t, tMax = vis[vis.length - 1].t;
   const tSpan = Math.max(1, tMax - tMin);
+  const vSpan = Math.max(1e-6, maxV - minV); // 0인 경우 방지
 
-  // 배경 그라디언트(아주 약하게)
+  // 배경 그라디언트
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, 'rgba(59,130,246,0.10)');   // 파워/심박 공통
-  g.addColorStop(1, 'rgba(59,130,246,0.00)');
+  g.addColorStop(0, (opts.bgTop   ?? 'rgba(59,130,246,0.10)'));
+  g.addColorStop(1, (opts.bgBottom?? 'rgba(59,130,246,0.00)'));
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // 라인
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = opts.stroke || 'rgba(0,215,200,0.9)'; // 민트
+  // 메인 라인
   ctx.beginPath();
   vis.forEach((p, i) => {
-    const x = pad + ((p.t - tMin) / tSpan) * (W - pad*2);
-    const y = pad + (1 - (p.v - minV) / vSpan) * (H - pad*2);
+    const x = pad + ((p.t - tMin) / tSpan) * (W - pad * 2);
+    const y = pad + (1 - ((p.v - minV) / vSpan)) * (H - pad * 2);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
+  ctx.lineWidth = opts.lineWidth ?? 2;
+  ctx.strokeStyle = opts.stroke ?? 'rgba(0,215,200,0.9)'; // 민트
   ctx.stroke();
 
-  // 영역 채움(연하게)
-  const lastY0 = pad + (1 - (vis[0].v - minV) / vSpan) * (H - pad*2);
-  ctx.lineTo(pad + (vis[vis.length-1].t - tMin)/tSpan*(W-pad*2), H - pad);
-  ctx.lineTo(pad, H - pad);
-  ctx.closePath();
-  ctx.fillStyle = opts.fill || 'rgba(0,215,200,0.15)';   // 민트 투명
-  ctx.fill();
+  // 영역 채움(선택)
+  if (opts.fill !== false) {
+    ctx.lineTo(pad + (vis[vis.length - 1].t - tMin) / tSpan * (W - pad * 2), H - pad);
+    ctx.lineTo(pad, H - pad);
+    ctx.closePath();
+    ctx.fillStyle = opts.fill ?? 'rgba(0,215,200,0.15)';
+    ctx.fill();
+  }
+
+  // 평균 가이드라인(선택)
+  if (opts.avgLine) {
+    const avgY = pad + (1 - ((avgV - minV) / vSpan)) * (H - pad * 2);
+    ctx.save();
+    if (opts.avgLineStyle === 'dashed') {
+      ctx.setLineDash([8, 6]);
+    } else {
+      ctx.setLineDash([]);
+    }
+    ctx.beginPath();
+    ctx.moveTo(pad, avgY);
+    ctx.lineTo(W - pad, avgY);
+    ctx.lineWidth = opts.avgLineWidth ?? 1.5;
+    ctx.strokeStyle = opts.avgStroke ?? 'rgba(255,255,255,0.65)';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 보조 숫자(최대/평균) 라벨 그리기(선택)
+  if (opts.showStats) {
+    const unit = opts.unit || '';
+    ctx.save();
+    ctx.font = (opts.statsFont || '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
+    ctx.fillStyle = (opts.statsColor || 'rgba(255,255,255,0.85)');
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    // AVG 좌상단
+    const avgText = (opts.labelAvg || 'AVG') + ' ' + Math.round(avgV) + (unit ? ' ' + unit : '');
+    ctx.fillText(avgText, pad + 2, pad + 2);
+
+    // MAX 우상단
+    ctx.textAlign = 'right';
+    const maxText = (opts.labelMax || 'MAX') + ' ' + Math.round(maxV) + (unit ? ' ' + unit : '');
+    ctx.fillText(maxText, W - pad - 2, pad + 2);
+    ctx.restore();
+  }
 }
+
 
 // 초기화
 if (!window._powerSeries)  window._powerSeries  = makeRingBuffer(3600); // 최대 1시간(1Hz 기준)
@@ -193,8 +243,38 @@ window.initTrainingCharts = function initTrainingCharts() {
   });
 
   // 첫 렌더
-  drawSparkline(pc, window._powerSeries, { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.15)' });
-  drawSparkline(hc,  window._hrSeries,    { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.10)' });
+   // 파워
+   drawSparkline(
+     pc,
+     window._powerSeries,
+     {
+       // ⬇ 누적 표시를 원하면 0 또는 null (10분만 보려면 600 유지)
+       windowSec: 0,
+       stroke: 'rgba(0,215,200,0.9)',
+       fill: 'rgba(0,215,200,0.15)',
+       showStats: true,
+       unit: 'W',
+       avgLine: true,
+       avgLineStyle: 'dashed', // 'solid' 로 바꿔도 됨
+       avgStroke: 'rgba(255,255,255,0.65)'
+     }
+   );
+   
+   // 심박
+   drawSparkline(
+     hc,
+     window._hrSeries,
+     {
+       windowSec: 0, // 누적
+       stroke: 'rgba(0,215,200,0.9)',
+       fill: 'rgba(0,215,200,0.10)',
+       showStats: true,
+       unit: 'bpm',
+       avgLine: true,
+       avgLineStyle: 'dashed',
+       avgStroke: 'rgba(255,255,255,0.65)'
+     }
+   );
 };
 
 // 창 크기 변경 시 리사이즈
@@ -1518,6 +1598,11 @@ function startSegmentLoop() {
   window.trainingState.segElapsedSec = 0;
   window.trainingState.paused = false;
 
+   window._powerSeries?.clear?.();
+   window._hrSeries?.clear?.();
+   // (선택) 세그먼트 통계 캐시도 초기화
+   window.segmentStats = {};
+   
   // ⬇️⬇️⬇️ 여기 "초기 상태 설정" 바로 아래에 추가 ⬇️⬇️⬇️
   // — 벽시계 기반 타이밍 상태(추가) —
   window.trainingState.workoutStartMs = Date.now(); // 훈련 시작 시각(ms)
