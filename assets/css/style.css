@@ -405,347 +405,6 @@ button[aria-disabled="true"] {
 }
 
 
-.timeline-segments {
-  display: flex;
-  height: 100%;
-  position: relative;
-}
-
-/* PATCH: 반투명 배경으로 일체감 강화 */
-.timeline-segment {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  /* ✅ 박스 느낌 제거 */
-  padding: 0;                         /* ← 4px 6px → 0 */
-  background: transparent;            /* ← 반투명 배경 제거 */
-  font-size: 11px;
-  font-weight: 500;
-  color: #cbd5e1;
-  transition: all 0.3s ease;
-  overflow: hidden;
-  /* ✅ flex 폭 계산 시 여백으로 인해 생기는 틈 방지 */
-  min-width: 0;
-  flex: 0 0 auto;
-}
-
-
-/* 새로 추가: 인접 형제에게만 1px 왼쪽 경계선 */
-.timeline-segment + .timeline-segment{
-  border-left: 1px solid rgba(148,163,184,0.18);
-}
-
-.timeline-segment:last-child {
-  border-right: none;
-}
-
-.segment-labels {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-  position: relative;
-  gap: 1px;
-}
-
-.segment-number {
-  font-size: 10px;
-  font-weight: 600;
-  color: #475569;
-  line-height: 1;
-  opacity: 0.8;
-}
-
-.segment-time {
-  font-size: 9px;
-  font-weight: 400;
-  color: #64748b;
-  line-height: 1;
-  margin-top: 1px;
-}
-
-.repeat-count {
-  font-size: 8px;
-  font-weight: 600;
-  color: #0ea5e9;
-  background: rgba(14, 165, 233, 0.1);
-  padding: 1px 4px;
-  border-radius: 6px;
-  line-height: 1;
-  margin: 1px 0;
-}
-
-.progress-fill {
-  opacity: 0.32;                           /* 0.28~0.40 권장 */
-  position: absolute;
-  inset: 0 auto 0 0;
-  height: 100%;
-  width: 0%;
-  z-index: 1;
-  transition: width 0.4s ease-out, background 0.3s ease;
-  border-radius: inherit;                   /* 처음/끝만 둥글게 */
-}
-.timeline-segment:first-child .progress-fill { border-radius: 16px 0 0 16px; }
-.timeline-segment:last-child  .progress-fill { border-radius: 0 16px 16px 0; }
-
-
-/* 타입별 기본 진행 색상 */
-.timeline-segment[data-type="warmup"] .progress-fill {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-}
-
-.timeline-segment[data-type="interval"] .progress-fill {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-}
-
-.timeline-segment[data-type="rest"] .progress-fill {
-  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-}
-
-.timeline-segment[data-type="cooldown"] .progress-fill {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-}
-
-.timeline-segment[data-type="tempo"] .progress-fill {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-}
-
-.timeline-segment[data-type="sweetspot"] .progress-fill {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-}
-
-/* 상태별 스타일 */
-/* 상태별 스타일 */
-.timeline-segment.is-upcoming {
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-/* 그룹 세그먼트가 대기 상태일 때, 폰트 흰색으로 강제 */
-.timeline-segment.timeline-group.is-upcoming,
-.timeline-segment.timeline-group.is-upcoming .segment-number,
-.timeline-segment.timeline-group.is-upcoming .segment-time,
-.timeline-segment.timeline-group.is-upcoming .repeat-count {
-  color: #ffffff !important;
-}
-
-
-
-.timeline-segment.is-upcoming .segment-number,
-.timeline-segment.is-upcoming .segment-time {
-  /* 기존 #cbd5e1 -> 녹색 라벨 톤 */
-  color: rgba(34, 197, 94, 0.75);
-}
-
-
-/* 현재 진행 세그먼트: 녹색톤 투명으로 통일 */
-/* ✅ 박스 느낌 제거: 배경/그림자/스케일 off (글자색만 원하면 남겨도 됨) */
-/* 옵션: 현재 세그먼트 얇은 테두리만 */
-.timeline-segment.is-current {
-  border-top: 1px solid rgba(34,197,94,0.25) !important;
-  border-bottom: 1px solid rgba(34,197,94,0.25) !important;
-}
-
-
-/* 현재 세그 번호/시간 색도 녹색 계열 */
-.timeline-segment.is-current .segment-number,
-.timeline-segment.is-current .segment-time {
-  color: #15803d;
-  font-weight: 600;
-}
-
-/* 하단 하이라이트 바(파랑) → 녹색 */
-.timeline-segment.is-current::after {
-  content: "";
-  position: absolute;
-  bottom: -3px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60%;
-  height: 3px;
-  background: linear-gradient(90deg, transparent, #22c55e, transparent);
-  border-radius: 2px;
-}
-
-.timeline-segment.is-complete {
-  color: #ffffff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-}
-
-.timeline-segment.is-complete .segment-number,
-.timeline-segment.is-complete .segment-time,
-.timeline-segment.is-complete .repeat-count {
-  color: #ffffff;
-}
-
-/* 달성도별 완료 색상*/ 
-.timeline-segment.is-complete.achievement-low .progress-fill {
-  background: rgba(245, 158, 11, 0.28); /* #f59e0b @28% */
-  opacity: 0.55; /* 기본 0.4보다 덜 투명(=조금 더 진하게) 보이도록 */
-}
-
-/* 2) 달성도 '완성' 계열(기존 good/high/over)은 모두 연두/초록 투명 
-.timeline-segment.is-complete.achievement-good .progress-fill,
-.timeline-segment.is-complete.achievement-high .progress-fill,
-.timeline-segment.is-complete.achievement-over .progress-fill {
-  background: rgba(34, 197, 94, 0.28); /* #22c55e @28% */
-  opacity: 0.55;
-}*/
-
-.timeline-segment.is-complete.achievement-good .progress-fill {
-  background: rgba(34, 197, 94, 0.28); /* #22c55e @28% */
-  opacity: 0.55; /* 기본 0.4보다 덜 투명(=조금 더 진하게) 보이도록 */
-}
-
-.timeline-segment.is-complete.achievement-high .progress-fill {
-  background: rgba(64, 224, 208, 0.3); /* 민트색 투명 */
-  opacity: 0.55;
-}
-
-.timeline-segment.is-complete.achievement-over .progress-fill {
-  background: rgba(64, 224, 208, 0.3); /* 민트색 투명 */
-  opacity: 0.55;
-}
-
-/* === 완료 + 휴식(rest) : 달성도와 무관하게 녹색 투명 우선 === */
-.timeline-segment.is-complete[data-type="rest"] .progress-fill {
-  background: rgba(34, 197, 94, 0.30) !important; /* #22c55e @30% */
-  opacity: 0.60 !important; /* 배경(업커밍~미시작)보다 '덜' 투명 */
-}
-
-
-
-
-
-/* 그룹 세그먼트 + 아직 진행 전 상태 전용*/ 
-.timeline-group.is-upcoming{
-  background: rgba(34, 197, 94, 0.08) !important;
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.25) !important;
-  /* border 전체 제거 대신 ‘왼쪽 라인만’ 유지 */
-  border-left: 1px solid rgba(148,163,184,0.18) !important;
-  border-top: none !important;
-  border-right: none !important;
-  border-bottom: none !important;
-}
-
-
-
-.timeline-group.is-upcoming .segment-number,
-.timeline-group.is-upcoming .segment-time {
-  color: rgba(34, 197, 94, 0.8);
-}
-
-.timeline-group .segment-labels {
-  gap: 2px;
-}
-
-.timeline-group .segment-number {
-  background: rgba(59, 130, 246, 0.1);
-  color: #2563eb;
-  padding: 2px 6px;
-  border-radius: 8px;
-  font-size: 9px;
-}
-
-.timeline-group .repeat-count {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
-  font-weight: 700;
-}
-
-.timeline-group .segment-label {
-  font-size: 10px;
-  line-height: 1.1;
-  margin-bottom: 2px;
-}
-
-.timeline-group .repeat-badge {
-  font-size: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 1px 3px;
-  border-radius: 2px;
-  margin-bottom: 2px;
-}
-
-.timeline-group .segment-time {
-  font-size: 9px;
-  opacity: 0.8;
-}
-
-.timeline-group.is-current{
-  background: transparent !important;
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.22) !important;
-  /* border 전체 제거 대신 ‘왼쪽 라인만’ 유지 */
-  border-left: 1px solid rgba(148,163,184,0.18) !important;
-  border-top: none !important;
-  border-right: none !important;
-  border-bottom: none !important;
-}
-
-
-
-.timeline-group.is-current .segment-number {
-  background: #3b82f6;
-  color: #ffffff;
-}
-
-.timeline-group.is-current::after {
-  content: "";
-  position: absolute;
-  inset: auto 10% -4px 10%;
-  height: 4px;
-  border-radius: 4px;
-  background: var(--seg-color, #3b82f6);
-  filter: blur(6px) opacity(0.8);
-}
-
-/* 그룹 완료 컨테이너 배경 제거 (채움만 쓰도록) */
-.timeline-group.is-complete.achievement-low,
-.timeline-group.is-complete.achievement-good,
-.timeline-group.is-complete.achievement-high,
-.timeline-group.is-complete.achievement-over {
-  background: transparent !important;
-
-  /* 전체 테두리를 지우지 말고, 왼쪽 라인만 유지 */
-  border-left: 1px solid rgba(148,163,184,0.18) !important;
-  border-top: none !important;
-  border-right: none !important;
-  border-bottom: none !important;
-}
-
-
-
-/* 진행바 애니메이션 효과 */
-/* 진행 중(현재)만 쉼머/펄스 허용 — 그 외는 비활성화 */
-.timeline-segment:not(.is-current) .progress-fill::before {
-  content: "";
-  display: none !important;         /* ← 쉼머 완전 차단 */
-  opacity: 0 !important;
-  animation: none !important;
-  background: none !important;
-}
-
-/* 완료 세그먼트는 하이라이트(쉼머/펄스) 완전히 제거 */
-.timeline-segment.is-complete .progress-fill::before,
-.timeline-segment.is-complete .progress-fill::after {
-  content: "";
-  display: none !important;
-  opacity: 0 !important;
-  animation: none !important;
-  background: none !important;
-}
-
-
-/* 완료는 항상 가득 채움 보장 */
-.timeline-segment.is-complete .progress-fill { width: 100% !important; }
-
-/* 완료 구간에서 쉼머(흰색 하이라이트) 강도 완화
-.timeline-segment.is-complete .progress-fill::before {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-}*/
 
 
 
@@ -754,16 +413,7 @@ button[aria-disabled="true"] {
   100% { left: 100%; }
 }
 
-.timeline-segment.is-current .progress-fill::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 3px;
-  height: 100%;
-  background: rgba(255,255,255,0.8);
-  animation: pulse-edge 1.5s ease-in-out infinite;
-}
+
 
 @keyframes pulse-edge {
   0%, 100% { opacity: 0.8; transform: scaleX(1); }
@@ -2124,22 +1774,7 @@ button[aria-disabled="true"] {
   }
 }
 
-/* 고해상도 디스플레이 최적화 */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
-  .progress-fill {
-    background-size: 100% 100%;
-  }
-  
-  .timeline-segment.is-current::after {
-    background: linear-gradient(90deg, 
-      transparent, 
-      #3b82f6, 
-      rgba(59, 130, 246, 0.8), 
-      #3b82f6, 
-      transparent
-    );
-  }
-}
+
 
 /* iOS Safari 전용 개선 */
 @supports (-webkit-touch-callout: none) {
@@ -2547,92 +2182,13 @@ button[aria-disabled="true"] {
 }
 
 
-/* ── 완료 세그먼트 색상: 컨테이너(.timeline-segment)에 클래스 부여 ── */
-/* 기준: .timeline-segment.done-* 이 붙으면 내부 .progress-fill 색과 100% 채움 */
-.timeline-segment[class*="done-"] .progress-fill {
-  width: 100% !important;  /* 끝까지 채우기 */
-}
-
-/* 1. 115% 이상 : 민트색 
-.timeline-segment.done-mint .progress-fill {
-  background: #10E0C1 !important; /* 민트 */
-}*/
-
-/* 2. 105% 이상 ~ 115% 미만 : 녹색 
-.timeline-segment.done-green .progress-fill {
-  background: #22C55E !important; /* 녹색 */
-}*/
-
-/* 3. 95% 이상 ~ 105% 미만 : 연두색 
-.timeline-segment.done-lime .progress-fill {
-  background: #A3E635 !important; /* 연두 */
-}*/
-
-/* 4. 85% 이상 ~ 95% 미만 : 노랑색 
-.timeline-segment.done-yellow .progress-fill {
-  background: #FACC15 !important; /* 노랑 */
-}*/
-
-/* 5. 75% 이상 ~ 85% 미만 : 주황색 
-.timeline-segment.done-orange .progress-fill {
-  background: #F59E0B !important; /* 주황 */
-}*/
-
-/* 6. 75% 미만 : 빨강색 
-.timeline-segment.done-red .progress-fill {
-  background: #EF4444 !important; /* 빨강 */
-}*/
-
-/* 휴식/쿨다운: 회색(디폴트) 
-.timeline-segment.done-gray .progress-fill {
-  background: #9CA3AF !important; /* 회색 */
-} */
 
 
 
-/* 훈련화면의 세그먼트간 구분 1줄 깔끔 표시*/
-
-/* 1) 모든 세그먼트: 오른쪽 선 제거, 형제 왼쪽 선만 사용 */
-.timeline-segment{
-  border-right: none !important;
-}
-.timeline-segment + .timeline-segment{
-  border-left: 1px solid rgba(148,163,184,0.18) !important;
-}
 
 
 
-/* 그룹 완료 투명색 */
-/* 그룹 완료 + 달성도별 색상 (세그먼트와 동일 톤 보장) */
-.timeline-group.is-complete.achievement-low  .progress-fill { 
-  background: rgba(245, 158, 11, 0.28) !important; opacity: 0.55 !important; /* 주황 */ 
-}
-.timeline-group.is-complete.achievement-good .progress-fill { 
-  background: rgba(34, 197, 94, 0.28) !important;  opacity: 0.55 !important; /* 연두 */ 
-}
-.timeline-group.is-complete.achievement-high .progress-fill,
-.timeline-group.is-complete.achievement-over .progress-fill { 
-  background: rgba(64, 224, 208, 0.30) !important; opacity: 0.55 !important; /* 현행 민트 */ 
-}
 
-/* 그룹 기본/업커밍 배경은 기존처럼, 완료 시엔 베이스를 비워 대비 확보 */
-.timeline-group.is-complete {
-  background: transparent !important;
-  border-color: transparent !important;
-}
-
-
-/*(겹치는 경계선 이중선 제거 – 재확인)*/
-.timeline-segment{ border-right:none !important; }
-.timeline-segment + .timeline-segment{ border-left:1px solid rgba(148,163,184,0.18) !important; }
-
-.timeline-group{ border:none !important; }
-.timeline-group.is-upcoming{ box-shadow: inset 0 0 0 1px rgba(34,197,94,0.25) !important; }
-.timeline-group.is-current { box-shadow: inset 0 0 0 1px rgba(34,197,94,0.22) !important; }
-
-.timeline-group{
-  border: none !important;
-  background: rgba(255,255,255,0.08) !important; /* 기본은 일반 세그먼트와 동일 */
 }
 
 
@@ -2668,90 +2224,10 @@ button[aria-disabled="true"] {
 }
 
 
-/* 진행 전/대기 상태 배경 및 박스섀도우 완전 제거 */
-.timeline-segment.is-upcoming,
-.timeline-group.is-upcoming,
-.timeline-segment.timeline-group.is-upcoming {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-
-/* 현재 진행 세그먼트도 '칸'처럼 보이지 않게 — 강조는 쉼머/펄스로만 */
-.timeline-segment.is-current,
-.timeline-group.is-current {
-  background: transparent !important;
-  box-shadow: none !important;
-  transform: none !important;
-}
-
-/* 완료 세그먼트도 배경/그림자 off (채움은 progress-fill 로만 표시) */
-.timeline-segment.is-complete,
-.timeline-group.is-complete {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
-}
-
-/* 그룹 세그먼트의 추가 보더/윤곽 제거 → 일반 세그먼트와 동일하게 */
-.timeline-group,
-.timeline-segment.timeline-group,
-.timeline-group.is-upcoming,
-.timeline-group.is-current,
-.timeline-group.is-complete {
-  border: none !important;
-  box-shadow: none !important;
-  background: transparent !important;
-}
-
-
-/* 세그먼트 간 1px 구분선 규칙만 유지 (이미 있다면 그대로) */
-.timeline-segment + .timeline-segment {
-  border-left: 1px solid rgba(148,163,184,0.18);
-}
-
-
-/* === CANONICAL SEPARATOR: 세그먼트 간 1px 라인을 '항상' 살린다 === */
-/* 그룹/상태 오버라이드에서 border: none !important 로 지운 것을 복구 */
-.timeline-segment:not(:first-child) {
-  border-left: 1px solid rgba(148, 163, 184, 0.18) !important;
-}
-
-/* 첫/마지막 모서리 둥글게 유지 (기존과 동일) */
-.timeline-segment:first-child .progress-fill { border-radius: 16px 0 0 16px !important; }
-.timeline-segment:last-child  .progress-fill { border-radius: 0 16px 16px 0 !important; }
-
-.timeline-segment:first-child {
-  border-left: 1px solid rgba(148,163,184,0.18);
-  border-radius: 16px 0 0 16px;
-}
 
 
 
-/* 현재/완료/대기/그룹 상태에서도 구분선을 절대 지우지 않기 위해 보강 */
-.timeline-segment.is-current,
-.timeline-segment.is-complete,
-.timeline-segment.is-upcoming,
-.timeline-segment.timeline-group,
-.timeline-group,
-.timeline-group.is-current,
-.timeline-group.is-complete,
-.timeline-group.is-upcoming {
-  /* 상하/우측 테두리는 제거해도 OK, 좌측 라인은 남긴다 */
-  border-top: none !important;
-  border-right: none !important;
-  border-bottom: none !important;
-  /* border-left 는 건드리지 않음 */
-}
 
-/* 그룹 세그먼트의 과한 윤곽/그림자 때문에 라인이 묻히는 현상 방지 */
-.timeline-group,
-.timeline-group.is-current,
-.timeline-group.is-complete,
-.timeline-group.is-upcoming {
-  box-shadow: none !important;
-  background: transparent !important;
-}
 
 /* 2-1) 타임라인 컨테이너가 오버레이 기준점이 되도록 */
 #trainingScreen .timeline-progress.timeline--xl {
@@ -2842,25 +2318,6 @@ button[aria-disabled="true"] {
 }
 
 
-/* ==========================================================
-   [PATCH] 그룹 세그먼트 왼쪽 세로라인 유지
-   - 상태 클래스(is-upcoming / is-current / is-complete) 토글 시에도
-     왼쪽 경계선이 사라지지 않도록 강제 유지
-========================================================== */
-.timeline-group { 
-  border-left: 1px solid rgba(148,163,184,0.18) !important; 
-}
-.timeline-group.is-upcoming,
-.timeline-group.is-current,
-.timeline-group.is-complete {
-  border-left: 1px solid rgba(148,163,184,0.18) !important;
-}
-
-/* 첫 세그먼트 좌측선 및 모서리 보정 (둥근 컨테이너 내부에서도 보이도록) */
-.timeline-segment:first-child {
-  border-left: 1px solid rgba(148,163,184,0.18);
-  border-radius: 16px 0 0 16px;
-}
 
 
 
@@ -3457,3 +2914,8 @@ button[aria-disabled="true"] {
     grid-template-columns: 1fr;
   }
 }
+
+
+
+
+
