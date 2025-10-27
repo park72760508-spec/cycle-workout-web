@@ -1064,10 +1064,6 @@ async function loadWorkouts() {
    }
 
 
-
-   
-   //만료일(expiry_date) 알림 (grade=2일 때만)
-    checkExpiryAndWarn();
 }
 
 
