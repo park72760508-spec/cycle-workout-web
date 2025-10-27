@@ -111,6 +111,101 @@ function setNameProgress(ratio){
   el.style.setProperty("--name-progress", pct + "%");
 }
 
+// ============ Mini Line Chart (Sparkline) ============
+// 고정 길이 링버퍼 유틸
+function makeRingBuffer(maxLen = 1200) {
+  const arr = [];
+  return {
+    push(v) { arr.push({ t: Date.now(), v: Number(v) || 0 }); if (arr.length > maxLen) arr.shift(); },
+    data() { return arr; },
+    clear() { arr.length = 0; }
+  };
+}
+
+// 라인차트 그리기
+function drawSparkline(canvas, series, opts = {}) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const pad = 10;
+  const d = series.data();
+  if (!d.length) return;
+
+  // 최근 n초만(옵션) 보이기
+  const now = Date.now();
+  const windowMs = (opts.windowSec ?? 600) * 1000; // 기본 10분
+  const vis = d.filter(p => now - p.t <= windowMs);
+  if (!vis.length) return;
+
+  const minV = Math.min(...vis.map(p => p.v));
+  const maxV = Math.max(...vis.map(p => p.v));
+  const vSpan = Math.max(1, maxV - minV);
+
+  // x축: 시간 상대값, y축: 값
+  const tMin = vis[0].t, tMax = vis[vis.length-1].t;
+  const tSpan = Math.max(1, tMax - tMin);
+
+  // 배경 그라디언트(아주 약하게)
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, 'rgba(59,130,246,0.10)');   // 파워/심박 공통
+  g.addColorStop(1, 'rgba(59,130,246,0.00)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // 라인
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = opts.stroke || 'rgba(0,215,200,0.9)'; // 민트
+  ctx.beginPath();
+  vis.forEach((p, i) => {
+    const x = pad + ((p.t - tMin) / tSpan) * (W - pad*2);
+    const y = pad + (1 - (p.v - minV) / vSpan) * (H - pad*2);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // 영역 채움(연하게)
+  const lastY0 = pad + (1 - (vis[0].v - minV) / vSpan) * (H - pad*2);
+  ctx.lineTo(pad + (vis[vis.length-1].t - tMin)/tSpan*(W-pad*2), H - pad);
+  ctx.lineTo(pad, H - pad);
+  ctx.closePath();
+  ctx.fillStyle = opts.fill || 'rgba(0,215,200,0.15)';   // 민트 투명
+  ctx.fill();
+}
+
+// 초기화
+if (!window._powerSeries)  window._powerSeries  = makeRingBuffer(3600); // 최대 1시간(1Hz 기준)
+if (!window._hrSeries)     window._hrSeries     = makeRingBuffer(3600);
+
+window.initTrainingCharts = function initTrainingCharts() {
+  // 화면 진입 시 1회 호출
+  const pc = document.getElementById('powerChart');
+  const hc = document.getElementById('hrChart');
+
+  // 레티나 보정
+  [pc, hc].forEach(cv => {
+    if (!cv) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    cv.width = Math.max(600, Math.floor(rect.width * dpr));
+    cv.height = Math.max(140, Math.floor(rect.height * dpr));
+  });
+
+  // 첫 렌더
+  drawSparkline(pc, window._powerSeries, { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.15)' });
+  drawSparkline(hc,  window._hrSeries,    { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.10)' });
+};
+
+// 창 크기 변경 시 리사이즈
+window.addEventListener('resize', () => {
+  if (document.getElementById('trainingScreen')?.classList.contains('active')) {
+    window.initTrainingCharts?.();
+  }
+});
+
+
+
 
 // ========== DB 기반 전화번호 인증 함수 (올바른 구현) ==========
 function authenticatePhoneWithDB(phoneNumber) {
@@ -1797,6 +1892,13 @@ window.updateTrainingDisplay = function () {
   const target = window.liveData?.targetPower || 200;
   const hr = window.liveData?.heartRate || 0;
 
+   // ▼▼ 추가: 실시간 데이터 누적
+   try {
+     window._powerSeries?.push(currentPower);
+     window._hrSeries?.push(hr);
+   } catch (_) {}
+
+   
   const p = safeGetElement("currentPowerValue");
   const h = safeGetElement("heartRateValue");
   const bar = safeGetElement("powerProgressBar");
@@ -1909,9 +2011,18 @@ window.updateTrainingDisplay = function () {
      updateUserPanelNeonByWkg(wkg);
    })();
 
-
-   
-   
+   // ▼▼ 추가: 차트 다시 그리기
+   try {
+     const pc = document.getElementById('powerChart');
+     const hc = document.getElementById('hrChart');
+     if (pc || hc) {
+       drawSparkline(pc, window._powerSeries, { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.15)' });
+       drawSparkline(hc, window._hrSeries,     { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.10)' });
+     }
+   } catch (e) {
+     console.warn('chart render skipped:', e);
+   }
+ 
 };
 
 // *** 시작 시 복구 시도 및 오류 처리 강화 ***
@@ -1990,6 +2101,9 @@ function startWorkoutTraining() {
       showScreen("trainingScreen");
       console.log('Switched to training screen');
     }
+
+      // ⬇ 차트 초기화 1회
+      window.initTrainingCharts?.();     
 
       /* ⬇⬇⬇ A) 훈련 시작 지점 — 여기 추가 ⬇⬇⬇ */
       window.trainingState = window.trainingState || {};
