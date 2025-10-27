@@ -379,6 +379,14 @@ async function loadUsers() {
    // 이름 오름차순 정렬
    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
+
+   // 등급 1 = 관리자(전체 버튼 허용), 기본 2
+   const viewerGrade = (typeof getViewerGrade === 'function')
+     ? getViewerGrade()
+     : (window.currentUser?.grade ?? '2');
+   const canEdit = (viewerGrade === '1');
+
+     
     // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
    userList.innerHTML = visibleUsers.map(user => {
      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
