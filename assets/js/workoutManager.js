@@ -927,8 +927,15 @@ async function loadWorkouts() {
       `;
     }).filter(Boolean).join('');
 
-    window.workouts = validWorkouts;
-    window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
+      // [권한 적용: 등급별 버튼 처리 - 이미 넣으셨다면 유지]
+      applyWorkoutPermissions?.();
+      
+      // [만료일 점검: grade=2 만료 시 알림]
+      checkExpiryAndWarn();  // ← 이 한 줄을 추가
+
+      
+      window.workouts = validWorkouts;
+      window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
     
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
@@ -950,7 +957,120 @@ async function loadWorkouts() {
       </div>
     `;
   }
+   // ▼▼ 이 줄을 추가하세요 (렌더 직후 권한 적용)
+   //applyWorkoutPermissions();
+
+   function applyWorkoutPermissions() {
+     // 등급 판정: userManager의 getViewerGrade() 사용 (없으면 기본 '2')
+     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+   
+     // 1) 새 워크아웃 버튼
+     const newBtn = document.getElementById('btnOpenBuilder'); // index.html에 존재
+     // (+ 새 워크아웃) 버튼 id 확인: id="btnOpenBuilder" :contentReference[oaicite:1]{index=1}
+     if (newBtn) {
+       if (grade === '2') {
+         newBtn.disabled = true;
+         newBtn.classList.add('is-disabled');
+         newBtn.title = '권한이 없습니다 (등급 2)';
+         newBtn.onclick = null;
+       } else {
+         newBtn.disabled = false;
+         newBtn.classList.remove('is-disabled');
+         newBtn.title = '';
+         // 기존 onclick은 index.html에 바인딩되어 있으므로 그대로 유지
+       }
+     }
+   
+     // 2) 각 워크아웃 카드의 수정/삭제 버튼
+     // loadWorkouts가 렌더하는 클래스: .btn-edit, .btn-delete :contentReference[oaicite:2]{index=2}
+     const editBtns = document.querySelectorAll('.workout-actions .btn-edit');
+     const delBtns  = document.querySelectorAll('.workout-actions .btn-delete');
+   
+     const setDisabled = (btn, disabled) => {
+       if (!btn) return;
+       if (disabled) {
+         btn.setAttribute('data-original-onclick', btn.getAttribute('onclick') || '');
+         btn.removeAttribute('onclick');
+         btn.classList.add('is-disabled');
+         btn.setAttribute('aria-disabled', 'true');
+         btn.title = '권한이 없습니다 (등급 2)';
+       } else {
+         // 복원
+         const oc = btn.getAttribute('data-original-onclick');
+         if (oc) btn.setAttribute('onclick', oc);
+         btn.classList.remove('is-disabled');
+         btn.removeAttribute('aria-disabled');
+         btn.title = '';
+       }
+     };
+   
+     const disable = (grade === '2');
+     editBtns.forEach(b => setDisabled(b, disable));
+     delBtns.forEach(b  => setDisabled(b, disable));
+   }
+
+
+   /* ===== 만료일 점검: grade=2 → D-7~D-1 사전 알림 + 만료일/만료 후 알림 ===== */
+   function checkExpiryAndWarn() {
+     // 중복 표시 방지 (한 화면 로딩당 1회)
+     if (window.__expiryWarnShown) return;
+   
+     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+     if (grade !== '2') return; // 등급 1은 알림 불필요
+   
+     // 현재 사용자 정보 (currentUser → localStorage 폴백)
+     let user = null;
+     try {
+       user = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+     } catch (e) { user = null; }
+   
+     const exp = user?.expiry_date;
+     if (!exp) return; // 만료일 미설정이면 종료
+   
+     // 날짜 파싱 (YYYY-MM-DD 권장, 실패 시 Date.parse 폴백)
+     const today = new Date(); today.setHours(0,0,0,0);
+     const expDate = new Date(exp);
+     if (isNaN(expDate.getTime())) {
+       const alt = Date.parse(String(exp));
+       if (isNaN(alt)) return;
+       expDate.setTime(alt);
+     }
+     expDate.setHours(0,0,0,0);
+   
+     // 남은 일수 계산 (exp - today)
+     const msPerDay = 24 * 60 * 60 * 1000;
+     const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
+   
+     let msg = null;
+     if (diffDays < 0) {
+       // 만료 후
+       msg = '만료일이 지났습니다. 만료일 갱신 메세지를 띄워주세요';
+     } else if (diffDays === 0) {
+       // D-day
+       msg = '오늘이 만료일입니다. 만료일 갱신 메세지를 띄워주세요';
+     } else if (diffDays <= 7) {
+       // D-7 ~ D-1 사전 알림
+       msg = `만료일까지 D-${diffDays}일 남았습니다. 만료일 갱신 메세지를 띄워주세요`;
+     }
+   
+     if (msg) {
+       window.__expiryWarnShown = true;
+       if (typeof window.showToast === 'function') {
+         window.showToast(msg);
+       } else {
+         alert(msg);
+       }
+     }
+   }
+
+
+
+   
+   //만료일(expiry_date) 알림 (grade=2일 때만)
+    checkExpiryAndWarn();
 }
+
+
 
 async function selectWorkout(workoutId) {
   if (!workoutId) {
