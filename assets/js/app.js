@@ -239,10 +239,59 @@ function getSeriesStats(series, windowSec = 0){
 
 
 
+// 세그먼트 총시간(초) 계산: 현재 워크아웃 기준, 그룹/중첩 지원
+function getPlannedTotalSecondsFromSegments(workout) {
+  const w = workout || window.currentWorkout || window.selectedWorkout || window.activeWorkout || null;
+  if (!w) return 0;
 
-// 초기화
-if (!window._powerSeries)  window._powerSeries  = makeRingBuffer(3600); // 최대 1시간(1Hz 기준)
-if (!window._hrSeries)     window._hrSeries     = makeRingBuffer(3600);
+  function sumSegments(list) {
+    if (!Array.isArray(list)) return 0;
+    let total = 0;
+    for (const seg of list) {
+      // 일반 세그먼트
+      const d =
+        Number(seg?.duration_sec) ||
+        Number(seg?.duration) ||
+        0;
+      if (d > 0) total += d;
+
+      // 그룹/반복 세그먼트 (children / segments / sets 등)
+      if (Array.isArray(seg?.children)) total += sumSegments(seg.children);
+      if (Array.isArray(seg?.segments)) total += sumSegments(seg.segments);
+      if (Array.isArray(seg?.sets))     total += sumSegments(seg.sets);
+    }
+    return total;
+  }
+
+  // 워크아웃 루트에서 세그먼트 배열 찾아 합산
+  if (Array.isArray(w?.segments)) return sumSegments(w.segments);
+  if (Array.isArray(w?.children)) return sumSegments(w.children);
+  if (Array.isArray(w?.sets))     return sumSegments(w.sets);
+  return 0;
+}
+
+
+
+
+// 그래프 초기화
+// 세그먼트 합으로 버퍼 용량을 유동 계산
+(function configureChartBuffers() {
+  const fallback = 10800; // 3h 기본 (워크아웃 정보 없을 때)
+  const plannedSec = getPlannedTotalSecondsFromSegments(window.currentWorkout);
+  const totalSec = plannedSec > 0 ? plannedSec : (Number(window.currentWorkout?.total_seconds) || fallback);
+
+  // 여유 5분(300초) + 최소 1h 보장
+  const capacity = Math.max(totalSec + 300, 3600);
+
+  if (!window._powerSeries) window._powerSeries = makeRingBuffer(capacity);
+  if (!window._hrSeries)    window._hrSeries    = makeRingBuffer(capacity);
+
+  // 디버깅 로그(선택)
+  // console.log('[Charts] capacity set =', capacity, 'seconds (planned=', plannedSec, ')');
+})();
+
+
+
 
 window.initTrainingCharts = function initTrainingCharts() {
   // 화면 진입 시 1회 호출
@@ -1616,6 +1665,7 @@ function startSegmentLoop() {
 
    window._powerSeries?.clear?.();
    window._hrSeries?.clear?.();
+   
    // (선택) 세그먼트 통계 캐시도 초기화
    window.segmentStats = {};
    
@@ -2121,7 +2171,7 @@ window.updateTrainingDisplay = function () {
         if (pc || hc) {
           // 1) 차트 렌더 (기준: 최근 10분 창 = 600초)
           drawSparkline(pc, window._powerSeries, {
-            windowSec: 600,
+            windowSec: 0,
             stroke: 'rgba(0,215,200,0.9)',
             fill:   'rgba(0,215,200,0.15)',
             showStats: true,
@@ -2132,7 +2182,7 @@ window.updateTrainingDisplay = function () {
           });
       
           drawSparkline(hc, window._hrSeries, {
-            windowSec: 600,
+            windowSec: 0,
             stroke: 'rgba(0,215,200,0.9)',
             fill:   'rgba(0,215,200,0.10)',
             showStats: true,
@@ -2144,8 +2194,8 @@ window.updateTrainingDisplay = function () {
       
           // 2) 헤더 우측 실시간 수치(AVG/MAX) 갱신
           //    ※ 동일한 시간창(600초) 기준으로 맞춰줍니다.
-          const pStats = getSeriesStats(window._powerSeries, 600);
-          const hStats = getSeriesStats(window._hrSeries,    600);
+          const pStats = getSeriesStats(window._powerSeries, 0);
+          const hStats = getSeriesStats(window._hrSeries,    0);
           const pEl = document.getElementById('powerHeaderStats');
           const hEl = document.getElementById('hrHeaderStats');
           if (pEl) pEl.textContent = `AVG ${pStats.avg} · MAX ${pStats.max}`;
@@ -2160,6 +2210,19 @@ window.updateTrainingDisplay = function () {
 
 // *** 시작 시 복구 시도 및 오류 처리 강화 ***
 function startWorkoutTraining() {
+
+   // 새 워크아웃 로드 완료 후: 버퍼 재설정 그래프 용량 설정
+   (function reconfigureBuffersForNewWorkout() {
+     const plannedSec = getPlannedTotalSecondsFromSegments(window.currentWorkout);
+     const fallback = 10800;
+     const totalSec = plannedSec > 0 ? plannedSec : (Number(window.currentWorkout?.total_seconds) || fallback);
+     const capacity = Math.max(totalSec + 300, 3600);
+   
+     // 기존 누적과 분리해서 새 세션을 시작할 때는 재생성(권장)
+     window._powerSeries = makeRingBuffer(capacity);
+     window._hrSeries    = makeRingBuffer(capacity);
+   })();
+   
   try {
     console.log('Starting workout training...');
     
