@@ -2148,8 +2148,8 @@ window.updateTrainingDisplay = function () {
           const hStats = getSeriesStats(window._hrSeries,    600);
           const pEl = document.getElementById('powerHeaderStats');
           const hEl = document.getElementById('hrHeaderStats');
-          if (pEl) pEl.textContent = `AVG ${pStats.avg}W · MAX ${pStats.max}W`;
-          if (hEl) hEl.textContent = `AVG ${hStats.avg}bpm · MAX ${hStats.max}bpm`;
+          if (pEl) pEl.textContent = `AVG ${pStats.avg} · MAX ${pStats.max}`;
+          if (hEl) hEl.textContent = `AVG ${hStats.avg} · MAX ${hStats.max}`;
         }
       } catch (e) {
         console.warn('chart render skipped:', e);
