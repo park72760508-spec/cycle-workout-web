@@ -297,42 +297,38 @@ async function apiDeleteUser(id) {
 /**
  * 사용자 목록 로드 및 렌더링 (개선된 버전)
  */
+// ===== 사용자 목록 로드 및 렌더링 (모듈 교체 버전) =====
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) return;
 
   try {
-    // 로딩 상태 표시 (점 애니메이션 포함)
+    // 1) 로딩 UI
     userList.innerHTML = `
       <div class="loading-container">
-        <div class="dots-loader">
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
-        <div style="color: #666; font-size: 14px;">사용자 목록을 불러오는 중...</div>
+        <div class="dots-loader"><div></div><div></div><div></div></div>
+        <div style="color:#666;font-size:14px;">사용자 목록을 불러오는 중...</div>
       </div>
     `;
-    
+
+    // 2) 데이터 가져오기
     const result = await apiGetUsers();
-    
-    if (!result.success) {
-      // 오류 상태 표시
+    if (!result || !result.success) {
       userList.innerHTML = `
         <div class="error-state">
           <div class="error-state-icon">⚠️</div>
           <div class="error-state-title">사용자 목록을 불러올 수 없습니다</div>
-          <div class="error-state-description">오류: ${result.error}</div>
+          <div class="error-state-description">오류: ${result?.error || 'Unknown'}</div>
           <button class="retry-button" onclick="loadUsers()">다시 시도</button>
         </div>
       `;
       return;
     }
 
-    const users = result.items || [];
-    
+    const users = Array.isArray(result.items) ? result.items : [];
+
+    // 3) 빈 상태
     if (users.length === 0) {
-      // 빈 상태 표시
       userList.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">👤</div>
@@ -342,135 +338,118 @@ async function loadUsers() {
             FTP와 체중 정보를 입력하면 맞춤형 훈련 강도를 제공받을 수 있습니다.
           </div>
           <div class="empty-state-action">
-            <button class="btn btn-primary" onclick="showAddUserForm(true)">
-              ➕ 첫 번째 사용자 등록
-            </button>
+            <button class="btn btn-primary" onclick="showAddUserForm(true)">➕ 첫 번째 사용자 등록</button>
           </div>
         </div>
       `;
       return;
     }
 
-    // 현재 사용자(선택된 사용자/인증 사용자) 파악
-    let viewer = null;
-    try {
-      viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    } catch (e) { viewer = null; }
+    // 4) 뷰어(현재 사용자) 파악 및 등급/아이디
+    let viewer = null, authUser = null;
+    try { viewer   = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(_) {}
+    try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(_) {}
 
-    // localStorage와 window.currentUser 병합하여 등급/아이디 안정화
-    let lsViewer = null;
-    try { 
-      lsViewer = JSON.parse(localStorage.getItem('currentUser') || 'null'); 
-    } catch(e) { 
-      lsViewer = null; 
-    }
-    const mergedViewer = Object.assign({}, lsViewer || {}, viewer || {});
+    const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+    const isTempAdmin  = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+    const viewerGrade  = isTempAdmin
+      ? '1'
+      : (typeof getViewerGrade === 'function'
+          ? String(getViewerGrade())
+          : String(mergedViewer?.grade ?? '2'));
+    const viewerId     = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
 
-    // 임시 관리자 오버라이드가 켜져 있으면 강제로 grade=1
-    const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
-    const viewerGrade = isTempAdmin ? '1' : getViewerGrade();
-
-    // grade=2 명시일 때만 "본인만"으로 제한, 그 외(관리자 등)는 전체
+    // 5) grade=2 는 "본인만" 보이게, grade=1 은 전체
     let visibleUsers = users;
-    if (viewerGrade === '2' && mergedViewer && mergedViewer.id != null) {
-      visibleUsers = users.filter(u => String(u.id) === String(mergedViewer.id));
+    if (viewerGrade === '2' && viewerId) {
+      visibleUsers = users.filter(u => String(u.id) === viewerId);
     }
 
-   // 이름 오름차순 정렬
-   visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
+    // 6) 이름 정렬
+    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
+    // 7) 카드 단위 편집 권한: 관리자 or 본인
+    const canEditFor = (u) => (viewerGrade === '1') || (viewerId && String(u.id) === viewerId);
 
-      // ↓↓↓ 렌더링 직전(아래 map 위) 한 번만 선언
-      const viewerGrade = (typeof getViewerGrade === 'function')
-        ? getViewerGrade()
-        : (window.currentUser?.grade ?? '2');
-      const viewerId = (window.currentUser?.id ?? null);
-      
-      // 관리자(grade=1) 또는 본인(user.id == viewerId)만 수정/삭제 허용
-      const canEditFor = (u) => (viewerGrade === '1') || (viewerId != null && String(u.id) === String(viewerId));
-      
-      // === 사용자 목록 렌더링 ===
-      userList.innerHTML = visibleUsers.map(user => {
-        const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
-   
-     // ▼ 만료일 표기값 준비
-     const expRaw = user.expiry_date;
-     let expiryText = '미설정';
-     let expiryClass = '';
-   
-     if (expRaw) {
-       const d = new Date(expRaw);
-       const today = new Date();
-       d.setHours(0,0,0,0);
-       today.setHours(0,0,0,0);
-   
-       const diffDays = Math.round((d - today) / (24*60*60*1000));
-       expiryText = d.toLocaleDateString();
-   
-       if (diffDays < 0) {
-         // 만료 지남
-         expiryClass = 'is-expired';
-       } else if (diffDays === 0) {
-         // 당일 만료
-         expiryClass = 'is-soon';
-         expiryText += ' (D-DAY)';
-       } else if (diffDays <= 7) {
-         // D-7 ~ D-1
-         expiryClass = 'is-soon';
-         expiryText += ` (D-${diffDays})`;
-       }
-     }
-   
-     const canEdit = canEditFor(user); // ← 카드 별로 평가
-   
-     return `
-       <div class="user-card" data-user-id="${user.id}">
-         <div class="user-header">
-           <div class="user-name">👤 ${user.name}</div>
-           <div class="user-actions">
-             ${canEdit ? `
-               <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
-               <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
-             ` : ''}
-           </div>
-         </div>
-         <div class="user-details"> ... </div>
-         <div class="user-meta">
-           <span class="contact">${user.contact || ''}</span>
-           <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
-         </div>
-         <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
-       </div>
-     `;
-   }).join('');
+    // 8) 렌더링
+    userList.innerHTML = visibleUsers.map(user => {
+      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
 
+      // 만료일 표시(임박/만료 배지)
+      const expRaw = user.expiry_date;
+      let expiryText = '미설정';
+      let expiryClass = '';
+      if (expRaw) {
+        const d = new Date(expRaw);
+        const today = new Date();
+        d.setHours(0,0,0,0);
+        today.setHours(0,0,0,0);
+        const diffDays = Math.round((d - today) / (24*60*60*1000));
+        expiryText = d.toLocaleDateString();
 
-    // 전역에 사용자 목록 저장
+        if (diffDays < 0) {
+          expiryClass = 'is-expired';
+        } else if (diffDays === 0) {
+          expiryClass = 'is-soon';
+          expiryText += ' (D-DAY)';
+        } else if (diffDays <= 7) {
+          expiryClass = 'is-soon';
+          expiryText += ` (D-${diffDays})`;
+        }
+      }
+
+      const canEdit = canEditFor(user);
+
+      return `
+        <div class="user-card" data-user-id="${user.id}">
+          <div class="user-header">
+            <div class="user-name">👤 ${user.name}</div>
+            <div class="user-actions">
+              ${canEdit ? `
+                <button class="btn-edit"   onclick="editUser(${user.id})"   title="수정">✏️</button>
+                <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="user-details">
+            <div class="user-stats">
+              <span class="stat">FTP: ${user.ftp || '-'}W</span>
+              <span class="stat">체중: ${user.weight || '-'}kg</span>
+              <span class="stat">W/kg: ${wkg}</span>
+            </div>
+            <div class="user-meta">
+              <span class="contact">${user.contact || ''}</span>
+              <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
+        </div>
+      `;
+    }).join('');
+
+    // 9) 전역 상태/토스트
     window.users = users;
     window.userProfiles = users;
-    
-    // 성공 메시지 (선택적)
     if (typeof showToast === 'function') {
       showToast(`${users.length}명의 사용자를 불러왔습니다.`);
     }
-    
   } catch (error) {
     console.error('사용자 목록 로드 실패:', error);
-    
-    // 네트워크 오류 상태 표시
     userList.innerHTML = `
       <div class="error-state">
         <div class="error-state-icon">🌐</div>
         <div class="error-state-title">연결 오류</div>
         <div class="error-state-description">
-          서버와 연결할 수 없습니다.<br>
-          인터넷 연결을 확인하고 다시 시도해주세요.
+          서버와 연결할 수 없습니다.<br>인터넷 연결을 확인하고 다시 시도해주세요.
         </div>
         <button class="retry-button" onclick="loadUsers()">다시 시도</button>
       </div>
     `;
   }
 }
+
 
 
 
