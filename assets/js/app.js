@@ -873,13 +873,14 @@ function createTimeline() {
     const timeSec = dur % 60;
     const timeLabel = timeSec > 0 ? `${timeMin}:${String(timeSec).padStart(2, "0")}` : `${timeMin}분`;
 
-    return `
-      <div class="timeline-segment" data-index="${i}" id="seg-${i}" style="width:${widthPct}%">
-        <div class="progress-fill" id="segFill-${i}"></div>
-        <span class="segment-label">${label}</span>
-        <span class="segment-time">${timeLabel}</span>
-      </div>
-    `;
+   const type = (typeof normalizeType === "function") ? normalizeType(seg) : (seg.segment_type || seg.label || "interval").toLowerCase();
+   return `
+     <div class="timeline-segment" data-index="${i}" id="seg-${i}" data-type="${type}" style="width:${widthPct}%">
+       <div class="progress-fill" id="segFill-${i}"></div>
+       <span class="segment-label">${label}</span>
+       <span class="segment-time">${timeLabel}</span>
+     </div>
+   `;
   }).join("");
 }
 
