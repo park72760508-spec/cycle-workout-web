@@ -229,6 +229,13 @@ button[aria-disabled="true"] {
   text-align:center; padding:18px; color:var(--text);
 }
 
+/* 만료일 표시 */
+.user-meta .expiry.is-soon   { color:#d97706; font-weight:600; } /* 임박 */
+.user-meta .expiry.is-expired{ color:#dc2626; font-weight:700; } /* 만료 */
+
+
+
+
 /* ========== 3) 워크아웃 선택 화면 (#workoutScreen) ========== */
 .workout-list { display: grid; gap: 12px; }
 
