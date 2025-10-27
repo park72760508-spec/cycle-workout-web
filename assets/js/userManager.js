@@ -380,16 +380,18 @@ async function loadUsers() {
    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
 
-   // 등급 1 = 관리자(전체 버튼 허용), 기본 2
-   const viewerGrade = (typeof getViewerGrade === 'function')
-     ? getViewerGrade()
-     : (window.currentUser?.grade ?? '2');
-   const canEdit = (viewerGrade === '1');
-
-     
-    // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
-   userList.innerHTML = visibleUsers.map(user => {
-     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+      // ↓↓↓ 렌더링 직전(아래 map 위) 한 번만 선언
+      const viewerGrade = (typeof getViewerGrade === 'function')
+        ? getViewerGrade()
+        : (window.currentUser?.grade ?? '2');
+      const viewerId = (window.currentUser?.id ?? null);
+      
+      // 관리자(grade=1) 또는 본인(user.id == viewerId)만 수정/삭제 허용
+      const canEditFor = (u) => (viewerGrade === '1') || (viewerId != null && String(u.id) === String(viewerId));
+      
+      // === 사용자 목록 렌더링 ===
+      userList.innerHTML = visibleUsers.map(user => {
+        const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
    
      // ▼ 만료일 표기값 준비
      const expRaw = user.expiry_date;
@@ -419,6 +421,8 @@ async function loadUsers() {
        }
      }
    
+     const canEdit = canEditFor(user); // ← 카드 별로 평가
+   
      return `
        <div class="user-card" data-user-id="${user.id}">
          <div class="user-header">
@@ -430,20 +434,11 @@ async function loadUsers() {
              ` : ''}
            </div>
          </div>
-   
-         <div class="user-details">
-           <div class="user-stats">
-             <span class="stat">FTP: ${user.ftp || '-'}W</span>
-             <span class="stat">체중: ${user.weight || '-'}kg</span>
-             <span class="stat">W/kg: ${wkg}</span>
-           </div>
-           <div class="user-meta">
-             <span class="contact">${user.contact || ''}</span>
-             <!-- 가입일 라인 제거 -->
-             <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
-           </div>
+         <div class="user-details"> ... </div>
+         <div class="user-meta">
+           <span class="contact">${user.contact || ''}</span>
+           <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
          </div>
-   
          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
        </div>
      `;
@@ -924,3 +919,12 @@ window.editUser = editUser;
 window.deleteUser = deleteUser;
 window.saveUser = saveUser;
 window.selectProfile = selectUser; // 기존 코드와의 호환성
+
+
+// 전역 노출 보강: app.js에서 접근 가능하도록
+window.apiGetUsers   = window.apiGetUsers   || apiGetUsers;
+window.apiGetUser    = window.apiGetUser    || apiGetUser;
+window.apiCreateUser = window.apiCreateUser || apiCreateUser;
+window.apiUpdateUser = window.apiUpdateUser || apiUpdateUser;
+window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
+
