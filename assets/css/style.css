@@ -452,6 +452,55 @@ button[aria-disabled="true"] {
   display: block;
 }
 
+/* ===== Chart card: header + bottom-aligned canvas ===== */
+.chart-card{
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 170px;                /* 필요하면 160~200px 사이로 조정 */
+  margin-top: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* 상단 제목 라벨 */
+.chart-card .chart-header{
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: .2px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* 하단 정렬 바디(캔버스 컨테이너) */
+.chart-card .chart-body{
+  flex: 1 1 auto;
+  display: flex;
+  align-items: flex-end;         /* ⬅ 하단 정렬 핵심 */
+  padding: 6px 6px 6px 6px;
+}
+
+/* 캔버스는 가로/세로 100%로 채우되, 하단에 밀착 */
+.chart-card .chart-body canvas{
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 훈련/생체 패널 내부에서만 더 촘촘하게 보이도록 약간 보조 */
+#trainingScreen .chart-card{
+  background: rgba(0,0,0,0.18);
+  border-color: rgba(255,255,255,0.06);
+}
+
+
+
+
+
 /* ========== 6) 결과 화면 (#resultScreen) ========== */
 .achievement-circle{
   width:150px; height:150px; border-radius:50%;
