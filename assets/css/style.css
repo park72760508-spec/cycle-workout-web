@@ -3032,3 +3032,50 @@ button[aria-disabled="true"] {
 .timeline-segment:last-child  .progress-fill{ border-radius:0 16px 16px 0; }
 
 
+/* 1) 컨테이너/래퍼에서 클리핑을 확실히 */
+.timeline-progress.timeline--xl{
+  border-radius:16px;            /* 라운드 유지 */
+  overflow:hidden;               /* 컨테이너 차원에서 클립 */
+}
+.timeline-segments{
+  border-radius:16px;            /* 내부 래퍼도 라운드 동일 적용 */
+  overflow:hidden;               /* 추가 클립(브라우저별 안정화) */
+}
+
+/* 2) 맨 앞/맨 뒤 세그먼트 자체에 라운드 + 클리핑 부여
+      → 각 세그먼트 박스가 자체적으로 둥근 마스크가 되어 채움바가 절대 넘치지 않음 */
+.timeline-segment:first-child{
+  border-top-left-radius:16px;
+  border-bottom-left-radius:16px;
+  overflow:hidden;               /* 자식(progress-fill) 클립 */
+}
+.timeline-segment:last-child{
+  border-top-right-radius:16px;
+  border-bottom-right-radius:16px;
+  overflow:hidden;
+}
+
+/* 3) 진행 채움바의 모서리 라운드(이미 있다면 중복 OK) */
+.timeline-segment:first-child .progress-fill{ border-radius:16px 0 0 16px; }
+.timeline-segment:last-child  .progress-fill{ border-radius:0 16px 16px 0; }
+
+/* 4) (선택) 웹킷 일부 환경에서의 서브픽셀 ‘새어 나옴’ 보정
+      → 아주 얇은 바깥쪽 bleeding을 방지 */
+@supports (-webkit-touch-callout: none) {
+  .timeline-segment:first-child .progress-fill{
+    clip-path: inset(0 0 0 0 round 16px 0 0 16px);
+  }
+  .timeline-segment:last-child .progress-fill{
+    clip-path: inset(0 0 0 0 round 0 16px 16px 0);
+  }
+}
+
+/* 5) 현재 세그먼트의 가로줄 제거(이미 적용했으면 생략 가능)
+      → 라운드 캡과 시각 충돌 방지 */
+.timeline-segment.is-current,
+.timeline-group.is-current{
+  border-top:none !important;
+  border-bottom:none !important;
+}
+
+
