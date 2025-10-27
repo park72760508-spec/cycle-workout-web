@@ -3000,3 +3000,26 @@ button[aria-disabled="true"] {
   pointer-events: none;
 }
 
+/* 둥근 라운드 캡을 가리는 상/하 테두리 제거 */
+.timeline-segment.is-current{
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* 그룹 세그먼트도 동일 처리(있다면) */
+.timeline-group.is-current{
+  border-top: none !important;
+  border-bottom: none !important;
+}
+
+/* 혹시 모를 넘침 방지: 컨테이너 라운드 + 클리핑 유지(이미 있다면 생략 가능) */
+.timeline-progress.timeline--xl{
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+/* 라운드 캡 확실히: 맨 앞/뒤 세그먼트의 fill에 둥근 모서리 적용(이미 있다면 생략 가능) */
+.timeline-segment:first-child .progress-fill{ border-radius:16px 0 0 16px; }
+.timeline-segment:last-child  .progress-fill{ border-radius:0 16px 16px 0; }
+
+
