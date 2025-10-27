@@ -467,13 +467,14 @@ button[aria-disabled="true"] {
 
 /* 상단 제목 라벨 */
 .chart-card .chart-header{
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.85);
-  letter-spacing: .2px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* 제목 좌 / 수치 우 */
+}
+.chart-card .chart-header .chart-stats{
+  font-weight: 500;
+  color: rgba(255,255,255,0.75);
+  font-size: 12px;
 }
 
 /* 하단 정렬 바디(캔버스 컨테이너) */
