@@ -380,47 +380,67 @@ async function loadUsers() {
    visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
     // 사용자 카드 렌더링 (권한에 따라 버튼 노출 제어)
-    userList.innerHTML = visibleUsers.map(user => {
-      const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+   userList.innerHTML = visibleUsers.map(user => {
+     const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
+   
+     // ▼ 만료일 표기값 준비
+     const expRaw = user.expiry_date;
+     let expiryText = '미설정';
+     let expiryClass = '';
+   
+     if (expRaw) {
+       const d = new Date(expRaw);
+       const today = new Date();
+       d.setHours(0,0,0,0);
+       today.setHours(0,0,0,0);
+   
+       const diffDays = Math.round((d - today) / (24*60*60*1000));
+       expiryText = d.toLocaleDateString();
+   
+       if (diffDays < 0) {
+         // 만료 지남
+         expiryClass = 'is-expired';
+       } else if (diffDays === 0) {
+         // 당일 만료
+         expiryClass = 'is-soon';
+         expiryText += ' (D-DAY)';
+       } else if (diffDays <= 7) {
+         // D-7 ~ D-1
+         expiryClass = 'is-soon';
+         expiryText += ` (D-${diffDays})`;
+       }
+     }
+   
+     return `
+       <div class="user-card" data-user-id="${user.id}">
+         <div class="user-header">
+           <div class="user-name">👤 ${user.name}</div>
+           <div class="user-actions">
+             ${canEdit ? `
+               <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
+               <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+             ` : ''}
+           </div>
+         </div>
+   
+         <div class="user-details">
+           <div class="user-stats">
+             <span class="stat">FTP: ${user.ftp || '-'}W</span>
+             <span class="stat">체중: ${user.weight || '-'}kg</span>
+             <span class="stat">W/kg: ${wkg}</span>
+           </div>
+           <div class="user-meta">
+             <span class="contact">${user.contact || ''}</span>
+             <!-- 가입일 라인 제거 -->
+             <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
+           </div>
+         </div>
+   
+         <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
+       </div>
+     `;
+   }).join('');
 
-      // 수정/삭제 권한: grade=1 전체 / grade=2 본인만
-      // 권한 계산 시에도 mergedViewer로 일치 사용
-      const canEdit = (viewerGrade === '1') ||
-                      (viewerGrade === '2' && mergedViewer && String(user.id) === String(mergedViewer.id));
-
-      return `
-        <div class="user-card" data-user-id="${user.id}">
-          <div class="user-header">
-            <div class="user-name">👤 ${user.name}</div>
-            <div class="user-actions">
-              ${canEdit ? `
-                <button class="btn-edit" onclick="editUser(${user.id})" title="수정">✏️</button>
-                <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
-              ` : ''}
-            </div>
-          </div>
-            <div class="user-details">
-              <div class="user-stats">
-                <span class="stat">FTP: ${user.ftp || '-'}W</span>
-                <span class="stat">체중: ${user.weight || '-'}kg</span>
-                <span class="stat">W/kg: ${wkg}</span>
-              </div>
-              <div class="user-meta">
-                <span class="contact">${user.contact || ''}</span>
-                <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
-                <span class="expiry">
-                  만료일: ${
-                    user.expiry_date
-                      ? new Date(user.expiry_date).toLocaleDateString()
-                      : '미설정'
-                  }
-                </span>
-              </div>
-            </div>
-          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
-        </div>
-      `;
-    }).join('');
 
     // 전역에 사용자 목록 저장
     window.users = users;
