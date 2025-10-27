@@ -223,6 +223,22 @@ function drawSparkline(canvas, series, opts = {}) {
   }
 }
 
+// 시리즈에서 AVG/MAX 계산 (windowSec=0 이면 누적 전체)
+function getSeriesStats(series, windowSec = 0){
+  if (!series || typeof series.data !== 'function') return {avg:0, max:0};
+  const now = Date.now();
+  const raw = series.data();
+  const vis = (windowSec && windowSec>0) ? raw.filter(p => now - p.t <= windowSec*1000) : raw;
+  if (!vis.length) return {avg:0, max:0};
+  const vals = vis.map(p => Number(p.v)||0);
+  const avg = Math.round(vals.reduce((s,v)=>s+v,0) / vals.length);
+  const max = Math.round(Math.max(...vals));
+  return {avg, max};
+}
+
+
+
+
 
 // 초기화
 if (!window._powerSeries)  window._powerSeries  = makeRingBuffer(3600); // 최대 1시간(1Hz 기준)
@@ -2097,16 +2113,48 @@ window.updateTrainingDisplay = function () {
    })();
 
    // ▼▼ 추가: 차트 다시 그리기
-   try {
-     const pc = document.getElementById('powerChart');
-     const hc = document.getElementById('hrChart');
-     if (pc || hc) {
-       drawSparkline(pc, window._powerSeries, { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.15)' });
-       drawSparkline(hc, window._hrSeries,     { windowSec: 600, stroke: 'rgba(0,215,200,0.9)', fill: 'rgba(0,215,200,0.10)' });
-     }
-   } catch (e) {
-     console.warn('chart render skipped:', e);
-   }
+      // ▼▼ 추가: 차트 다시 그리기 + 헤더(AVG/MAX) 갱신
+      try {
+        const pc = document.getElementById('powerChart');
+        const hc = document.getElementById('hrChart');
+      
+        if (pc || hc) {
+          // 1) 차트 렌더 (기준: 최근 10분 창 = 600초)
+          drawSparkline(pc, window._powerSeries, {
+            windowSec: 600,
+            stroke: 'rgba(0,215,200,0.9)',
+            fill:   'rgba(0,215,200,0.15)',
+            showStats: true,
+            unit: 'W',
+            avgLine: true,
+            avgLineStyle: 'dashed',
+            avgStroke: 'rgba(255,255,255,0.65)'
+          });
+      
+          drawSparkline(hc, window._hrSeries, {
+            windowSec: 600,
+            stroke: 'rgba(0,215,200,0.9)',
+            fill:   'rgba(0,215,200,0.10)',
+            showStats: true,
+            unit: 'bpm',
+            avgLine: true,
+            avgLineStyle: 'dashed',
+            avgStroke: 'rgba(255,255,255,0.65)'
+          });
+      
+          // 2) 헤더 우측 실시간 수치(AVG/MAX) 갱신
+          //    ※ 동일한 시간창(600초) 기준으로 맞춰줍니다.
+          const pStats = getSeriesStats(window._powerSeries, 600);
+          const hStats = getSeriesStats(window._hrSeries,    600);
+          const pEl = document.getElementById('powerHeaderStats');
+          const hEl = document.getElementById('hrHeaderStats');
+          if (pEl) pEl.textContent = `AVG ${pStats.avg}W · MAX ${pStats.max}W`;
+          if (hEl) hEl.textContent = `AVG ${hStats.avg}bpm · MAX ${hStats.max}bpm`;
+        }
+      } catch (e) {
+        console.warn('chart render skipped:', e);
+      }
+
  
 };
 
