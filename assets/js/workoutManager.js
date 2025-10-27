@@ -1582,8 +1582,30 @@ function updateWorkoutPreview() {
   
   if (intensityEl) intensityEl.textContent = `${avgIntensity}%`;
 
-  const estimatedTSS = Math.round((totalMinutes * avgIntensity * avgIntensity) / 10000);
-  if (tssEl) tssEl.textContent = String(estimatedTSS);
+   // === TSS (NP 근사 기반) ===
+   const T = totalDuration; // 총 지속시간(초)
+   let sumI4t = 0;
+   
+   (workout.segments || []).forEach(seg => {
+     const t = Number(seg.duration_sec) || 0;
+     let I1 = (Number(seg.target_value) || 0) / 100; // 시작 강도(비율)
+   
+     // 램프가 있으면 끝 강도 보정
+     if (seg.ramp && seg.ramp_to_value != null) {
+       const I2 = (Number(seg.ramp_to_value) || I1 * 100) / 100;
+       // 선형 램프 구간의 I^4 평균 근사: (I1^4 + I2^4)/2
+       const i4avg = (Math.pow(I1, 4) + Math.pow(I2, 4)) / 2;
+       sumI4t += i4avg * t;
+     } else {
+       sumI4t += Math.pow(I1, 4) * t;
+     }
+   });
+   
+   const IF = T > 0 ? Math.pow(sumI4t / T, 0.25) : 0;
+   const estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
+   
+   if (tssEl) tssEl.textContent = String(estimatedTSS);
+
 
   // 그룹화된 세그먼트 프리뷰 사용
   updateSegmentPreviewGrouped(workout.segments || []);
