@@ -128,9 +128,6 @@ h1,h2,h3,h4 { font-weight: 600; }
   display: block !important;
 }
 
-
-
-
 /* ========== 1) 연결 화면 (#connectionScreen) ========== */
 /* iOS 안내/아이콘 카드 */
 #connectionScreen .ios-info{
@@ -197,8 +194,6 @@ button[aria-disabled="true"] {
 /* 폼 행 간격 정돈(없다면 추가) */
 .form-row { margin-bottom: 10px; }
 .form-actions { margin-top: 12px; }
-
-
 
 #profileScreen {
   --card-bg:#fff; --card-border:#e5e7eb;
@@ -404,16 +399,10 @@ button[aria-disabled="true"] {
   overflow: hidden;
 }
 
-
-
-
-
 @keyframes shimmer {
   0% { left: -100%; }
   100% { left: 100%; }
 }
-
-
 
 @keyframes pulse-edge {
   0%, 100% { opacity: 0.8; transform: scaleX(1); }
@@ -1168,7 +1157,6 @@ button[aria-disabled="true"] {
   line-height: 1.1;           /* 선택 */
 }
 
-
 .enhanced-time-percent {
   font-size: 14px;
   color: #64748b;
@@ -1549,8 +1537,6 @@ button[aria-disabled="true"] {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
 }
 
-
-
 /* ===================== 나가기 버튼 공통 스타일 ===================== */
 .exit-container.bottom-center {
   text-align: center;
@@ -1588,7 +1574,6 @@ button[aria-disabled="true"] {
 }
 .btn-exit-small:hover { background:#dc2626; transform:scale(1.05); }
 
-
 /* 공통: 나가기 버튼을 아이콘+텍스트 정렬 */
 .btn-exit {
   display: inline-flex;
@@ -1622,11 +1607,6 @@ button[aria-disabled="true"] {
   width: 20px;
   height: 20px;
 }
-
-
-
-
-
 
 /* ========== 반응형 디자인 (태블릿/모바일) ========== */
 
@@ -1774,8 +1754,6 @@ button[aria-disabled="true"] {
   }
 }
 
-
-
 /* iOS Safari 전용 개선 */
 @supports (-webkit-touch-callout: none) {
   .modal-footer .btn {
@@ -1800,8 +1778,6 @@ button[aria-disabled="true"] {
 .modal-content {
   touch-action: auto !important;
 }
-
-
 
 /* ========== 파워 달성도 네온 효과 ========== */
 
@@ -2000,8 +1976,6 @@ button[aria-disabled="true"] {
   transform: translateZ(0); /* 하드웨어 가속 */
 }
 
-
-
 /* === 중앙 메인 파워 패널 네온 전용 규칙 === */
 #trainingScreen .power-display.neon-active {
   position: relative;
@@ -2021,7 +1995,6 @@ button[aria-disabled="true"] {
 #trainingScreen .power-display.achievement-good { --neon-color: rgba( 34,197, 94, 0.85); }  /* 초록: #22c55e */
 #trainingScreen .power-display.achievement-high { --neon-color: rgba( 45, 212,191, 0.90); }  /* 민트: #2dd4bf */
 #trainingScreen .power-display.achievement-over { --neon-color: rgba(168, 85,247, 0.85); }  /* 보라: #a855f7 */
-
 
 /* ── 사용자 판넬 네온 (W/kg 등급) ───────────────────────── */
 /* ========== 사용자 정보 패널 W/kg 네온 ========== */
@@ -2043,7 +2016,6 @@ button[aria-disabled="true"] {
 #trainingScreen #userPanel.neon-active.wkg-intermediate { --neon-color: rgba(168, 85,247, 0.90); } /* 초중급: 보라 */
 #trainingScreen #userPanel.neon-active.wkg-novice       { --neon-color: rgba( 34,197, 94, 0.90); } /* 초급: 초록 */
 #trainingScreen #userPanel.neon-active.wkg-beginner     { --neon-color: rgba(251,191, 36, 0.95); } /* 입문: 노랑 */
-
 
 /* 훈련 컨트롤 버튼 개선된 디자인 */
 .enhanced-control-btn {
@@ -2101,8 +2073,6 @@ button[aria-disabled="true"] {
   box-shadow: -5px 0 0 0 currentColor, 5px 0 0 0 currentColor;
   border-radius: 2px;
 }
-
-
 
 .enhanced-control-btn.pause:hover {
   border-color: #fbbf24;
@@ -2181,17 +2151,7 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-
-
-
-
-
-
-
-
 }
-
-
 
 /* [훈련화면] 현재 세그먼트 진행율 그래프 */
 /* 진행바를 담을 컨테이너 역할 */
@@ -2223,12 +2183,6 @@ button[aria-disabled="true"] {
   z-index: 1;
 }
 
-
-
-
-
-
-
 /* 2-1) 타임라인 컨테이너가 오버레이 기준점이 되도록 */
 #trainingScreen .timeline-progress.timeline--xl {
   position: relative;
@@ -2244,8 +2198,6 @@ button[aria-disabled="true"] {
   z-index: 5;                        /* 진행 채움보다 위 */
 }
 
-
-
 /* 100% 지점 깃발(고정) — 진행바 우측 끝에 핀 고정 */
 #goalFlag {
   position: absolute;
@@ -2256,7 +2208,6 @@ button[aria-disabled="true"] {
   opacity: 0.95;
   filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
 }
-
 
 /* 진행바 위 마스코트/깃발 레이어 */
 #trainingScreen .timeline-wrap { position: relative; }
@@ -2303,23 +2254,13 @@ button[aria-disabled="true"] {
   right: 0; /* 진행바 100% 지점 */
 }
 
-
-
 /* === [PATCH] 그룹 세그먼트 왼쪽 실선 복원 === */
-.timeline-group {
-  border-left: 1px solid rgba(148,163,184,0.18) !important;
-}
-
 /* 상태 클래스 적용 시에도 유지 */
 .timeline-group.is-upcoming,
 .timeline-group.is-current,
 .timeline-group.is-complete {
   border-left: 1px solid rgba(148,163,184,0.18) !important;
 }
-
-
-
-
 
 /* ==========================================================
    [PATCH] 메인 인증 화면 / 사용자 인증 로그인
@@ -2380,7 +2321,6 @@ button[aria-disabled="true"] {
     padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
   } 
 }
-
 
 /* 시각적으로 더 동일해 보이도록 히어로 이미지를 카드처럼 */
 .auth-hero-icon .hero-image {
@@ -2647,7 +2587,6 @@ button[aria-disabled="true"] {
   }
 }
 
-
 /* ========== 사용자 인증 >>>>   새 사용자 추가 폼 스타일 ========== */
 
 .new-user-btn {
@@ -2894,7 +2833,6 @@ button[aria-disabled="true"] {
   }
 }
 
-
 /* 반응형 */
 @media (max-width: 480px) {
   .form-row {
@@ -2916,6 +2854,109 @@ button[aria-disabled="true"] {
 }
 
 
+/* ===== Ocean Segment Design (drop-in) ===== */
+/* 컨테이너: 녹색톤 투명 배경 + 미묘한 그림자 */
+.timeline-progress.timeline--xl{
+  height: 50px;                    /* 기본값 50px */
+  border-radius: 16px;             /* 라운드 16px */
+  background: rgba(34,197,94,0.05);
+  border: 1px solid rgba(34,197,94,0.15);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.06), 0 4px 12px rgba(34,197,94,0.08);
+  overflow: hidden;
+}
 
+/* 세그먼트 래퍼 */
+.timeline-segments{
+  display:flex; height:100%; position:relative;
+}
 
+/* 개별 세그먼트 */
+.timeline-segment{
+  position:relative; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  padding:0; background:transparent; font-size:11px; font-weight:500; color:#cbd5e1;
+  transition:all .3s ease; overflow:hidden; min-width:0; flex:0 0 auto;
+  border-right:none !important;
+}
+.timeline-segment + .timeline-segment{
+  border-left:1px solid rgba(148,163,184,0.18);
+}
 
+/* 라벨 스택 */
+.segment-labels{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; z-index:3; position:relative; }
+.segment-number{ font-size:10px; font-weight:600; color:#475569; line-height:1; opacity:.8; }
+.segment-time{ font-size:9px; font-weight:400; color:#64748b; line-height:1; margin-top:1px; }
+.repeat-count{ font-size:8px; font-weight:600; color:#0ea5e9; background:rgba(14,165,233,.1); padding:1px 4px; border-radius:6px; line-height:1; margin:1px 0; }
+
+/* 진행 채움바 */
+.progress-fill{
+  --pf-alpha:0.28;
+  opacity:0.32; position:absolute; inset:0 auto 0 0; height:100%; width:0%;
+  z-index:1; transition:width .4s ease-out, background .3s ease; border-radius:inherit;
+}
+.timeline-segment:first-child .progress-fill{ border-radius:16px 0 0 16px; }
+.timeline-segment:last-child  .progress-fill{ border-radius:0 16px 16px 0; }
+
+/* 타입별 기본 진행 색 */
+.timeline-segment[data-type="warmup"]   .progress-fill{ background:linear-gradient(135deg,#22c55e 0%,#16a34a 100%); }
+.timeline-segment[data-type="interval"] .progress-fill{ background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%); }
+.timeline-segment[data-type="rest"]     .progress-fill{ background:linear-gradient(135deg,#06b6d4 0%,#0891b2 100%); }
+.timeline-segment[data-type="cooldown"] .progress-fill{ background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%); }
+.timeline-segment[data-type="tempo"]    .progress-fill{ background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%); }
+.timeline-segment[data-type="sweetspot"] .progress-fill{ background:linear-gradient(135deg,#3b82f6 0%,#2563eb 100%); }
+
+/* 상태별: 대기/현재/완료 */
+.timeline-segment.is-upcoming{ background:transparent !important; box-shadow:none !important; }
+.timeline-segment.is-upcoming .segment-number,
+.timeline-segment.is-upcoming .segment-time{ color:rgba(34,197,94,.75); }
+
+.timeline-segment.is-current{
+  border-top:1px solid rgba(34,197,94,.25) !important;
+  border-bottom:1px solid rgba(34,197,94,.25) !important;
+}
+.timeline-segment.is-current .segment-number,
+.timeline-segment.is-current .segment-time{ color:#15803d; font-weight:600; }
+.timeline-segment.is-current::after{
+  content:""; position:absolute; bottom:-3px; left:50%; transform:translateX(-50%);
+  width:60%; height:3px; background:linear-gradient(90deg,transparent,#22c55e,transparent); border-radius:2px;
+}
+
+/* 완료 */
+.timeline-segment.is-complete .progress-fill{ width:100% !important; }
+.timeline-segment.is-complete{ color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.3); }
+.timeline-segment.is-complete .segment-number,
+.timeline-segment.is-complete .segment-time,
+.timeline-segment.is-complete .repeat-count{ color:#fff; }
+
+/* 달성도 버킷 */
+.timeline-segment.is-complete.achievement-low  .progress-fill{ background:rgba(245,158,11,0.28); opacity:.55; }
+.timeline-segment.is-complete.achievement-good .progress-fill{ background:rgba(34,197,94,0.28);  opacity:.55; }
+.timeline-segment.is-complete.achievement-high .progress-fill,
+.timeline-segment.is-complete.achievement-over .progress-fill{ background:rgba(64,224,208,0.30); opacity:.55; }
+
+/* 그룹 세그먼트 */
+.timeline-group.is-upcoming{
+  background:rgba(34,197,94,.08) !important;
+  box-shadow:inset 0 0 0 1px rgba(34,197,94,.25) !important;
+  border-left:1px solid rgba(148,163,184,0.18) !important;
+  border-top:none !important; border-right:none !important; border-bottom:none !important;
+}
+.timeline-group.is-current{
+  background:transparent !important;
+  box-shadow:inset 0 0 0 1px rgba(34,197,94,.22) !important;
+  border-left:1px solid rgba(148,163,184,0.18) !important;
+  border-top:none !important; border-right:none !important; border-bottom:none !important;
+}
+.timeline-group.is-complete{
+  background:transparent !important; border-left:1px solid rgba(148,163,184,0.18) !important;
+  border-top:none !important; border-right:none !important; border-bottom:none !important;
+}
+.timeline-group.is-complete.achievement-low  .progress-fill{ background:rgba(245,158,11,.28) !important; opacity:.55 !important; }
+.timeline-group.is-complete.achievement-good .progress-fill{ background:rgba(34,197,94,.28) !important;  opacity:.55 !important; }
+.timeline-group.is-complete.achievement-high .progress-fill,
+.timeline-group.is-complete.achievement-over .progress-fill{ background:rgba(64,224,208,.30) !important; opacity:.55 !important; }
+
+/* 쉼머 비활성화 */
+.timeline-segment:not(.is-current) .progress-fill::before{ content:""; display:none !important; opacity:0 !important; animation:none !important; background:none !important; }
+.timeline-segment.is-complete .progress-fill::before,
+.timeline-segment.is-complete .progress-fill::after{ content:""; display:none !important; opacity:0 !important; animation:none !important; background:none !important; }
