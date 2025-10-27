@@ -3102,3 +3102,106 @@ button[aria-disabled="true"] {
 }
 
 
+/* =========================
+   중앙 파워패널 네온 브리지
+   - 세그먼트 구조 변경 후에도 동작하도록
+   - 대상: #powerPanel, .current-power, .enhanced-current-power-section
+   ========================= */
+
+/* 기본 박스(흰 테두리 유지 + 네온용 레이어 구조) */
+#trainingScreen #powerPanel,
+#trainingScreen .current-power,
+#trainingScreen .enhanced-current-power-section {
+  position: relative;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  transition: border-color .25s ease, box-shadow .25s ease, filter .25s ease;
+  overflow: visible;      /* 네온 흐림 효과 잘 보이게 */
+  isolation: isolate;     /* ::before 레이어 분리 */
+}
+
+/* 공통 네온 베이스(기존 .enhanced-metric-panel.neon-active 대체) */
+#trainingScreen #powerPanel.neon--on,
+#trainingScreen #powerPanel.neon--under,
+#trainingScreen #powerPanel.neon--over,
+#trainingScreen .current-power.neon--on,
+#trainingScreen .current-power.neon--under,
+#trainingScreen .current-power.neon--over,
+#trainingScreen .enhanced-current-power-section.neon--on,
+#trainingScreen .enhanced-current-power-section.neon--under,
+#trainingScreen .enhanced-current-power-section.neon--over {
+  /* 기존 neon-active와 동일 개념 */
+  animation: neonPulse 1.8s ease-in-out infinite;
+}
+
+/* 흐르는 하이라이트(기존 ::before 유사) */
+#trainingScreen #powerPanel.neon--on::before,
+#trainingScreen #powerPanel.neon--under::before,
+#trainingScreen #powerPanel.neon--over::before,
+#trainingScreen .current-power.neon--on::before,
+#trainingScreen .current-power.neon--under::before,
+#trainingScreen .current-power.neon--over::before,
+#trainingScreen .enhanced-current-power-section.neon--on::before,
+#trainingScreen .enhanced-current-power-section.neon--under::before,
+#trainingScreen .enhanced-current-power-section.neon--over::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  background: linear-gradient(45deg, transparent, currentColor, transparent);
+  background-size: 400% 400%;
+  animation: neonFlow 3s ease-in-out infinite;
+  opacity: .30;
+  z-index: -1;
+}
+
+/* === 상태별 색상 맵핑 ================== */
+/* 정타(±3%) → 민트 */
+#trainingScreen #powerPanel.neon--on,
+#trainingScreen .current-power.neon--on,
+#trainingScreen .enhanced-current-power-section.neon--on {
+  color: #10b981;
+  border-color: #10b981 !important;
+  box-shadow:
+    0 0 12px rgba(16,185,129,.60),
+    0 0 28px rgba(16,185,129,.35),
+    inset 0 0 8px rgba(16,185,129,.25);
+}
+
+/* 언더(목표 미달) → 블루 */
+#trainingScreen #powerPanel.neon--under,
+#trainingScreen .current-power.neon--under,
+#trainingScreen .enhanced-current-power-section.neon--under {
+  color: #3b82f6;
+  border-color: #3b82f6 !important;
+  box-shadow:
+    0 0 12px rgba(59,130,246,.60),
+    0 0 28px rgba(59,130,246,.35),
+    inset 0 0 8px rgba(59,130,246,.25);
+}
+
+/* 오버(과한 출력) → 오렌지 */
+#trainingScreen #powerPanel.neon--over,
+#trainingScreen .current-power.neon--over,
+#trainingScreen .enhanced-current-power-section.neon--over {
+  color: #f59e0b;
+  border-color: #f59e0b !important;
+  box-shadow:
+    0 0 12px rgba(245,158,11,.65),
+    0 0 28px rgba(245,158,11,.38),
+    inset 0 0 8px rgba(245,158,11,.28);
+}
+
+/* 내부에 테두리 요소가 있을 때 함께 따라가도록(선택) */
+#trainingScreen #powerPanel.neon--on .gauge-ring,
+#trainingScreen #powerPanel.neon--under .gauge-ring,
+#trainingScreen #powerPanel.neon--over .gauge-ring,
+#trainingScreen .current-power.neon--on .gauge-ring,
+#trainingScreen .current-power.neon--under .gauge-ring,
+#trainingScreen .current-power.neon--over .gauge-ring {
+  border-color: inherit !important;
+  box-shadow: inherit !important;
+}
+
+
+
