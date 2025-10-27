@@ -3254,4 +3254,109 @@ button[aria-disabled="true"] {
 }
 
 
+/* =========================================================
+   중앙 메인 파워 패널 네온 (브리지 포함)
+   - 기존 코드와의 호환을 위해 대상 선택자를 확장했습니다.
+   - JS는 중앙 패널에 neon-active + achievement-* 를 붙입니다.
+   ========================================================= */
+
+/* 0) 대상: 실제 중앙 파워 요소에 모두 대응 */
+#trainingScreen .power-display,
+#trainingScreen #powerPanel,
+#trainingScreen .current-power,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display {
+  /* 기본 틀 – 기존 흰 테두리/레이아웃은 유지 */
+  position: relative;
+  border-radius: 12px;
+  transition: box-shadow .25s ease, outline-color .25s ease, border-color .25s ease, filter .25s ease;
+  isolation: isolate; /* 네온 레이어 겹침 안정화 */
+}
+
+/* 1) 네온 on: 올려주신 디자인을 그대로 매핑 */
+#trainingScreen .power-display.neon-active,
+#trainingScreen #powerPanel.neon-active,
+#trainingScreen .current-power.neon-active,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.neon-active {
+  /* 기본 그림자 + 네온 테두리 겹치기 */
+  box-shadow:
+    0 3px 10px rgba(0,0,0,0.5),
+    0 0 14px var(--neon-color, rgba(59,130,246,0.55)),
+    0 0 28px var(--neon-color, rgba(59,130,246,0.35));
+  outline: 1px solid color-mix(in srgb, var(--neon-color, #3b82f6) 55%, transparent);
+  outline-offset: -2px;
+}
+
+/* (옵션) 흐르는 하이라이트 레이어 – 시각 강화 */
+#trainingScreen .power-display.neon-active::before,
+#trainingScreen #powerPanel.neon-active::before,
+#trainingScreen .current-power.neon-active::before,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.neon-active::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  background: linear-gradient(45deg, transparent, var(--neon-color, rgba(59,130,246,0.8)), transparent);
+  background-size: 400% 400%;
+  animation: neonFlow 3s ease-in-out infinite;
+  opacity: .28;
+  z-index: -1;
+}
+
+/* 2) 달성도별 색 매핑 (JS가 achievement-* 클래스를 같이 붙임) */
+#trainingScreen .power-display.achievement-bad,
+#trainingScreen #powerPanel.achievement-bad,
+#trainingScreen .current-power.achievement-bad,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.achievement-bad {
+  --neon-color: rgba(239, 68,  68, 0.90); /* 빨강 #ef4444 */
+}
+#trainingScreen .power-display.achievement-low,
+#trainingScreen #powerPanel.achievement-low,
+#trainingScreen .current-power.achievement-low,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.achievement-low {
+  --neon-color: rgba(245,158, 11, 0.85); /* 주황 #f59e0b */
+}
+#trainingScreen .power-display.achievement-good,
+#trainingScreen #powerPanel.achievement-good,
+#trainingScreen .current-power.achievement-good,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.achievement-good {
+  --neon-color: rgba( 34,197, 94, 0.85); /* 초록 #22c55e */
+}
+#trainingScreen .power-display.achievement-high,
+#trainingScreen #powerPanel.achievement-high,
+#trainingScreen .current-power.achievement-high,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.achievement-high {
+  --neon-color: rgba( 45,212,191, 0.90); /* 민트 #2dd4bf */
+}
+#trainingScreen .power-display.achievement-over,
+#trainingScreen #powerPanel.achievement-over,
+#trainingScreen .current-power.achievement-over,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.achievement-over {
+  --neon-color: rgba(168, 85,247, 0.85); /* 보라 #a855f7 */
+}
+
+/* (선택) 내부 링/테두리 요소도 네온 컬러를 상속받게 */
+#trainingScreen .power-display.neon-active .gauge-ring,
+#trainingScreen #powerPanel.neon-active .gauge-ring,
+#trainingScreen .current-power.neon-active .gauge-ring,
+#trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.neon-active .gauge-ring {
+  border-color: color-mix(in srgb, var(--neon-color, #3b82f6) 75%, rgba(255,255,255,0)) !important;
+  box-shadow:
+    0 0 8px  color-mix(in srgb, var(--neon-color, #3b82f6) 60%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--neon-color, #3b82f6) 35%, transparent) !important;
+}
+
+/* (안드로이드 웹뷰/사파리 일부 보정) */
+@supports (-webkit-touch-callout: none) {
+  #trainingScreen .power-display.neon-active::before,
+  #trainingScreen #powerPanel.neon-active::before,
+  #trainingScreen .current-power.neon-active::before,
+  #trainingScreen .enhanced-metric-panel.enhanced-center-panel.enhanced-main-power-display.neon-active::before {
+    filter: blur(0.3px);
+  }
+}
+
+
+
+
+
 
