@@ -399,17 +399,24 @@ async function loadUsers() {
               ` : ''}
             </div>
           </div>
-          <div class="user-details">
-            <div class="user-stats">
-              <span class="stat">FTP: ${user.ftp || '-'}W</span>
-              <span class="stat">체중: ${user.weight || '-'}kg</span>
-              <span class="stat">W/kg: ${wkg}</span>
+            <div class="user-details">
+              <div class="user-stats">
+                <span class="stat">FTP: ${user.ftp || '-'}W</span>
+                <span class="stat">체중: ${user.weight || '-'}kg</span>
+                <span class="stat">W/kg: ${wkg}</span>
+              </div>
+              <div class="user-meta">
+                <span class="contact">${user.contact || ''}</span>
+                <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
+                <span class="expiry">
+                  만료일: ${
+                    user.expiry_date
+                      ? new Date(user.expiry_date).toLocaleDateString()
+                      : '미설정'
+                  }
+                </span>
+              </div>
             </div>
-            <div class="user-meta">
-              <span class="contact">${user.contact || ''}</span>
-              <span class="created">가입: ${new Date(user.created_at).toLocaleDateString()}</span>
-            </div>
-          </div>
           <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
         </div>
       `;
