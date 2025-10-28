@@ -150,7 +150,10 @@ async function unifiedCreateUser(userData, source = 'profile') {
     }
 
     // 5) 실제 생성
-    const result = await apiCreateUser(userData);
+   const result = await unifiedCreateUser(
+     { ...userData, grade: userData.grade || '2', expiry_date: '' },
+     'profile'
+   );
 
     if (result.success) {
       onUserRegistrationSuccess(userData, source);
@@ -595,7 +598,10 @@ async function saveUser() {
 
   try {
     const userData = { name, contact: contactDB, ftp, weight }; // ← 여기!
-    const result = await apiCreateUser(userData);
+    const result = await unifiedCreateUser(
+      { ...userData, grade: userData.grade || '2', expiry_date: '' },
+      'profile'
+    );
 
     if (result.success) {
       showToast(`${name}님이 추가되었습니다.`);
