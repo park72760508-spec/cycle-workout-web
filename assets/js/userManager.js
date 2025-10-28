@@ -601,10 +601,13 @@ async function saveUser() {
 
   try {
     const userData = { name, contact: contactDB, ftp, weight }; // ← 여기!
-    const result = await unifiedCreateUser(
-      { ...userData, grade: userData.grade || '2', expiry_date: '' },
-      'profile'
-    );
+   // 5) 실제 생성 (재귀 금지: API 직접 호출)
+      const payload = {
+        ...userData,
+        grade: userData.grade || '2',
+        // expiry_date는 아래 기본값 로직(오늘 + 10일)으로 세팅됨
+      };
+      const result = await apiCreateUser(payload);
 
     if (result.success) {
       showToast(`${name}님이 추가되었습니다.`);
