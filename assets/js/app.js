@@ -500,6 +500,7 @@ async function checkPhoneDuplicateBeforeRegistration(phoneNumber) {
 
 
 // ========== 5. 새 사용자 등록 처리 (중복 검사 포함) ==========
+// ========== 5. 새 사용자 등록 처리 (중복 검사 우선) ==========
 async function handleNewUserSubmitWithDuplicateCheck(event) {
   event.preventDefault();
   
@@ -511,7 +512,48 @@ async function handleNewUserSubmitWithDuplicateCheck(event) {
     weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
   };
   
-  // 2. 기본 유효성 검사
+  const submitBtn = event.target.querySelector('button[type="submit"]');
+  const originalText = submitBtn?.textContent;
+  
+  // 2. 전화번호가 입력된 경우 우선 중복 체크
+  if (formData.contact) {
+    const normalizedPhone = normalizePhoneNumber(formData.contact);
+    
+    if (normalizedPhone && normalizedPhone.length >= 10) {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '중복 확인 중...';
+      }
+      
+      try {
+        console.log('🔍 우선 중복 검사 실행:', normalizedPhone);
+        const duplicateCheck = await checkPhoneDuplicateBeforeRegistration(normalizedPhone);
+        
+        if (duplicateCheck.exists) {
+          if (typeof showToast === 'function') {
+            showToast(`이미 등록된 사용자입니다 (${duplicateCheck.userName}님) ❌`);
+          }
+          return; // 중복이면 여기서 중단
+        }
+        
+        console.log('✅ 중복 검사 통과 - 계속 진행');
+        
+      } catch (error) {
+        console.error('❌ 중복 검사 오류:', error);
+        if (typeof showToast === 'function') {
+          showToast('중복 검사 중 오류가 발생했습니다 ❌');
+        }
+        return;
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+        }
+      }
+    }
+  }
+  
+  // 3. 기본 유효성 검사 (중복 검사 통과 후)
   if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
     if (typeof showToast === 'function') {
       showToast('모든 필수 항목을 입력해주세요! ❌');
@@ -527,25 +569,13 @@ async function handleNewUserSubmitWithDuplicateCheck(event) {
     return;
   }
   
-  const submitBtn = event.target.querySelector('button[type="submit"]');
-  const originalText = submitBtn?.textContent;
+  // 4. 등록 진행
   if (submitBtn) {
     submitBtn.disabled = true;
-    submitBtn.textContent = '중복 확인 중...';
+    submitBtn.textContent = '등록 중...';
   }
   
   try {
-    // 3. 중복 체크
-    const duplicateCheck = await checkPhoneDuplicateBeforeRegistration(normalizedPhone);
-    if (duplicateCheck.exists) {
-      throw new Error(`이미 등록된 사용자입니다 (${duplicateCheck.userName}님)`);
-    }
-    
-    // 4. 등록 진행
-    if (submitBtn) {
-      submitBtn.textContent = '등록 중...';
-    }
-    
     formData.contact = normalizedPhone;
     
     // 5. unifiedCreateUser 호출 (userManager.js)
