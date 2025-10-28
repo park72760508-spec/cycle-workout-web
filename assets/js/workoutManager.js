@@ -25,14 +25,37 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
-// 안전한 문자열 처리 (URI 인코딩용)
+// 안전한 문자열 처리 (URI 인코딩용) - 특수문자 허용 범위 확대
 function safeStringForUri(str) {
   if (!str) return '';
   return String(str)
-    .replace(/[^\w\s\-_]/g, '') // 특수문자 제거 (알파벳, 숫자, 공백, -, _ 만 허용)
+    .replace(/[<>]/g, '') // 위험한 HTML 태그만 제거
     .trim()
-    .substring(0, 20); // 길이 제한
+    .substring(0, 50); // 길이 제한 확대
 }
+
+
+// 세그먼트 타입 정규화 함수 추가
+function normalizeSegmentType(type) {
+  if (!type) return 'interval';
+  
+  const typeMap = {
+    'warmup': 'warmup',
+    'warm-up': 'warmup',
+    'warm_up': 'warmup',
+    'interval': 'interval',
+    'work': 'interval',
+    'rest': 'rest',
+    'recovery': 'rest',
+    'cooldown': 'cooldown',
+    'cool-down': 'cooldown',
+    'cool_down': 'cooldown'
+  };
+  
+  const normalized = typeMap[String(type).toLowerCase()];
+  return normalized || 'interval';
+}
+
 
 
 // 데이터 검증 헬퍼 함수들
@@ -639,11 +662,28 @@ async function apiCreateWorkoutWithSegments(workoutData) {
     console.log('워크아웃 생성 완료. ID:', workoutId);
     
     // 2단계: 세그먼트가 있으면 배치별로 추가
-    const segments = workoutData.segments || [];
-    if (segments.length > 0) {
-      console.log(`2단계: ${segments.length}개 세그먼트를 배치별로 추가 중...`);
-      
-      const addResult = await addSegmentsBatch(workoutId, segments);
+   // 2단계: 세그먼트가 있으면 배치별로 추가
+   const segments = workoutData.segments || [];
+   if (segments.length > 0) {
+     console.log(`2단계: ${segments.length}개 세그먼트를 배치별로 추가 중...`);
+     
+     // 세그먼트 데이터 정규화 및 검증
+     const normalizedSegments = segments.map((seg, index) => {
+       const normalized = {
+         label: String(seg.label || `세그먼트 ${index + 1}`).trim(),
+         segment_type: normalizeSegmentType(seg.segment_type),
+         duration_sec: Math.max(1, Number(seg.duration_sec) || 300),
+         target_type: 'ftp_percent',
+         target_value: Math.max(30, Math.min(200, Number(seg.target_value) || 100)),
+         ramp: seg.ramp === 'linear' ? 'linear' : 'none',
+         ramp_to_value: seg.ramp === 'linear' ? Number(seg.ramp_to_value) : null
+       };
+       
+       console.log(`세그먼트 ${index + 1} 정규화:`, normalized);
+       return normalized;
+     });
+     
+     const addResult = await addSegmentsBatch(workoutId, normalizedSegments);
       
       if (!addResult.success) {
         console.warn('세그먼트 추가 중 일부 실패:', addResult.error);
@@ -727,12 +767,13 @@ async function addSegmentsBatch(workoutId, segments) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const compressedBatch = batch.map(seg => ({
-              l: safeStringForUri(seg.label || 'S'), // 안전한 문자열 처리
-              t: seg.segment_type === 'rest' ? 'r' : 'i', // 더 짧은 표현
-              d: parseInt(seg.duration_sec) || 300,
-              v: parseInt(seg.target_value) || 100,
-              r: seg.ramp === 'linear' ? 1 : 0,
-              rv: seg.ramp === 'linear' ? parseInt(seg.ramp_to_value) || null : null
+              label: seg.label,                             // 전체 라벨 보존 (압축하지 않음)
+              segment_type: seg.segment_type,               // 전체 타입 보존 (압축하지 않음)
+              duration_sec: seg.duration_sec,
+              target_type: seg.target_type,
+              target_value: seg.target_value,
+              ramp: seg.ramp,
+              ramp_to_value: seg.ramp_to_value
             }));
             
             // 추가 압축: 배열 형태로 변환하여 더욱 압축
