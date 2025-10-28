@@ -4040,7 +4040,7 @@ async function handleNewUserSubmit(event) {
     }
     
     if (registrationResult.success) {
-      console.log('✅ DB 등록 성공:', registrationResult);
+      console.log('✅ 정상 등록되었습니다.:', registrationResult);
       
       // 성공 메시지
       if (typeof showToast === 'function') {
