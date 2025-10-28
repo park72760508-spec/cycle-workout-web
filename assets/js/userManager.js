@@ -84,30 +84,20 @@ function standardizePhoneFormat(phoneNumber) {
 }
 
 // 3. 사용자 등록 후 콜백 함수
-function onUserRegistrationSuccess(userData, source = 'auth') {
-  console.log(`User registered successfully from ${source}:`, userData);
-  
-  // 사용자 목록 새로고침
-  if (typeof loadUsers === 'function') {
-    loadUsers();
-  }
-  
-  // 인증 화면에서 등록한 경우 추가 처리
-  if (source === 'auth') {
-    // VALID_PHONES 업데이트
-    const phoneNumber = userData.contact;
-    if (phoneNumber && !VALID_PHONES.includes(phoneNumber)) {
-      VALID_PHONES.push(phoneNumber);
-    }
-    
-    // 토스트 메시지
-    if (typeof showToast === 'function') {
-      showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
-    }
-  }
-  
-  return true;
-}
+
+   function onUserRegistrationSuccess(userData, source = 'auth') {
+     console.log(`User registered successfully from ${source}:`, userData);
+   
+     // 목록 새로고침
+     if (typeof loadUsers === 'function') loadUsers();
+   
+     // ✅ 성공 안내 문구 통일
+     if (typeof showToast === 'function') {
+       showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
+     }
+     return true;
+   }
+
 
 // 4. 사용자 등록 오류 처리 함수
 function onUserRegistrationError(error, source = 'auth') {
@@ -124,33 +114,56 @@ function onUserRegistrationError(error, source = 'auth') {
 // 5. 통합 사용자 생성 함수 (추천)
 async function unifiedCreateUser(userData, source = 'profile') {
   try {
-    // 데이터 검증
+    // 1) 필수값 검사
     if (!userData.name || !userData.ftp || !userData.weight) {
       throw new Error('필수 필드가 누락되었습니다');
     }
-    
-    // 전화번호 포맷 표준화
+
+    // 2) 전화번호 포맷 표준화
     if (userData.contact) {
       userData.contact = standardizePhoneFormat(userData.contact);
     }
-    
-    // API 호출
+
+    // 3) 📌 전화번호 중복 검사 (전화번호를 키로)
+    //    - DB 목록 조회 후 contact(포맷 표준화) 일치 여부 확인
+    try {
+      const list = await apiGetUsers(); // JSONP listUsers
+      if (list?.success && Array.isArray(list.items)) {
+        const norm = (v) => (v || '').replace(/\D/g, ''); // 숫자만 비교
+        const target = norm(userData.contact || '');
+        const dup = list.items.find(u => norm(u.contact || '') === target);
+        if (dup) {
+          throw new Error('이미 등록된 전화번호입니다.');
+        }
+      }
+    } catch (e) {
+      // 목록 불러오기 실패는 중복검사 생략(치명 아님)
+      console.warn('중복 검사 생략(목록 조회 실패):', e);
+    }
+
+    // 4) 📌 만기일 기본값: 오늘 + 10일
+    if (!userData.expiry_date) {
+      const d = new Date();
+      d.setDate(d.getDate() + 10);
+      // GAS에서 다루기 쉬운 ISO(YYYY-MM-DD)만 전달
+      userData.expiry_date = d.toISOString().slice(0, 10);
+    }
+
+    // 5) 실제 생성
     const result = await apiCreateUser(userData);
-    
+
     if (result.success) {
-      // 성공 콜백
       onUserRegistrationSuccess(userData, source);
       return result;
     } else {
       throw new Error(result.error || '등록에 실패했습니다');
     }
-    
   } catch (error) {
-    // 오류 콜백
     onUserRegistrationError(error, source);
     throw error;
   }
 }
+
 
 // 6. 기존 saveUser 함수와의 호환성 유지
 function saveUserFromAuth(formData) {
@@ -161,6 +174,7 @@ function saveUserFromAuth(formData) {
     ftp: formData.ftp,
     weight: formData.weight,
     grade: '2',
+   // expiry_date는 비워두면 unifiedCreateUser에서 오늘+10일 자동 설정
     expiry_date: ''
   }, 'auth');
 }
