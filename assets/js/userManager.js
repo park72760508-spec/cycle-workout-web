@@ -142,25 +142,28 @@ async function unifiedCreateUser(userData, source = 'profile') {
     }
 
     // 4) 📌 만기일 기본값: 오늘 + 10일
-    if (!userData.expiry_date) {
-      const d = new Date();
-      d.setDate(d.getDate() + 10);
-      // GAS에서 다루기 쉬운 ISO(YYYY-MM-DD)만 전달
-      userData.expiry_date = d.toISOString().slice(0, 10);
-    }
+      // 4) 📌 만기일 기본값: 오늘 + 10일
+      if (!userData.expiry_date) {
+        const d = new Date();
+        d.setDate(d.getDate() + 10);
+        userData.expiry_date = d.toISOString().slice(0, 10);
+      }
+      
+      // 5) ✅ 실제 생성 호출 (재귀 금지)
+      const result = await apiCreateUser({
+        ...userData,
+        grade: userData.grade || '2' // 기본 등급 보장
+      });
+      
+      if (result?.success) {
+        // 성공 콜백 + 고정 문구
+        if (typeof showToast === 'function') showToast('정상 등록되었습니다.');
+        onUserRegistrationSuccess(userData, source);
+        return result;
+      } else {
+        throw new Error(result?.error || '등록에 실패했습니다');
+      }
 
-    // 5) 실제 생성
-   const result = await unifiedCreateUser(
-     { ...userData, grade: userData.grade || '2', expiry_date: '' },
-     'profile'
-   );
-
-    if (result.success) {
-      onUserRegistrationSuccess(userData, source);
-      return result;
-    } else {
-      throw new Error(result.error || '등록에 실패했습니다');
-    }
   } catch (error) {
     onUserRegistrationError(error, source);
     throw error;
