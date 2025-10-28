@@ -12,6 +12,7 @@ if (typeof window === 'undefined') {
 }
 
 // HTML 이스케이프 함수 (XSS 방지)
+// HTML 이스케이프 함수 (XSS 방지)
 function escapeHtml(unsafe) {
   if (unsafe === null || unsafe === undefined) {
     return '';
@@ -24,6 +25,17 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
+// 안전한 문자열 처리 (URI 인코딩용)
+function safeStringForUri(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/[^\w\s\-_]/g, '') // 특수문자 제거 (알파벳, 숫자, 공백, -, _ 만 허용)
+    .trim()
+    .substring(0, 20); // 길이 제한
+}
+
+
+// 데이터 검증 헬퍼 함수들
 // 데이터 검증 헬퍼 함수들
 function validateWorkoutData(workout) {
   if (!workout || typeof workout !== 'object') {
@@ -151,16 +163,29 @@ function jsonpRequest(url, params = {}) {
       reject(new Error('네트워크 연결 오류'));
     };
     
-    try {
-      const urlParams = new URLSearchParams();
-      Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined) {
-          urlParams.set(key, String(params[key]));
-        }
-      });
-      urlParams.set('callback', callbackName);
-      
-      const finalUrl = `${url}?${urlParams.toString()}`;
+      try {
+        // 안전한 수동 인코딩 방식 사용
+        const urlParts = [];
+        Object.keys(params).forEach(key => {
+          if (params[key] !== null && params[key] !== undefined) {
+            const value = String(params[key]);
+            // segments 데이터는 Base64로 인코딩하여 안전하게 전송
+            if (key === 'segments') {
+              try {
+                const base64Data = btoa(unescape(encodeURIComponent(value)));
+                urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(base64Data)}`);
+              } catch (e) {
+                console.warn('Base64 인코딩 실패, 일반 인코딩 사용:', e);
+                urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+              }
+            } else {
+              urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+            }
+          }
+        });
+        urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
+        
+        const finalUrl = `${url}?${urlParts.join('&')}`;
       
       if (finalUrl.length > 2000) {
         throw new Error('요청 URL이 너무 깁니다. 데이터를 줄여주세요.');
@@ -661,11 +686,24 @@ async function addSegmentsBatch(workoutId, segments) {
   console.log(`배치별 세그먼트 추가 시작: 워크아웃 ID ${workoutId}, 세그먼트 ${segments.length}개`);
   
   // 대용량 세그먼트 감지 및 설정 동적 조정
-  const batchSize = segments.length > 50 ? 3 : 2;
-  const batchDelay = segments.length > 50 ? 1500 : 1000;
-  const maxRetries = 3;
-  
-  console.log(`처리 설정: 배치크기 ${batchSize}, 지연 ${batchDelay}ms`);
+   // 세그먼트 수에 따른 보수적 배치 크기 설정
+   let batchSize, batchDelay;
+   if (segments.length > 100) {
+     batchSize = 1; // 초대용량: 1개씩
+     batchDelay = 3000;
+   } else if (segments.length > 50) {
+     batchSize = 1; // 대용량: 1개씩 (안전성 우선)
+     batchDelay = 2000;
+   } else if (segments.length > 20) {
+     batchSize = 2; // 중간: 2개씩
+     batchDelay = 1500;
+   } else {
+     batchSize = 3; // 소량: 3개씩
+     batchDelay = 1000;
+   }
+   const maxRetries = 3;
+   
+   console.log(`처리 설정: 배치크기 ${batchSize}, 지연 ${batchDelay}ms (총 ${segments.length}개 세그먼트)`);
   
   let totalAddedCount = 0;
   let successfulBatches = 0;
@@ -688,14 +726,19 @@ async function addSegmentsBatch(workoutId, segments) {
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          const compressedBatch = batch.map(seg => ({
-            l: String(seg.label || '세그먼트').substring(0, 12),
-            t: seg.segment_type || 'interval',
-            d: parseInt(seg.duration_sec) || 300,
-            v: parseInt(seg.target_value) || 100,
-            r: seg.ramp === 'linear' ? 1 : 0,
-            rv: seg.ramp === 'linear' ? parseInt(seg.ramp_to_value) || null : null
-          }));
+            const compressedBatch = batch.map(seg => ({
+              l: safeStringForUri(seg.label || 'S'), // 안전한 문자열 처리
+              t: seg.segment_type === 'rest' ? 'r' : 'i', // 더 짧은 표현
+              d: parseInt(seg.duration_sec) || 300,
+              v: parseInt(seg.target_value) || 100,
+              r: seg.ramp === 'linear' ? 1 : 0,
+              rv: seg.ramp === 'linear' ? parseInt(seg.ramp_to_value) || null : null
+            }));
+            
+            // 추가 압축: 배열 형태로 변환하여 더욱 압축
+            const ultraCompressed = compressedBatch.map(seg => [
+              seg.l, seg.t, seg.d, seg.v, seg.r, seg.rv
+            ]);
           
           const segmentsJson = JSON.stringify(compressedBatch);
           
