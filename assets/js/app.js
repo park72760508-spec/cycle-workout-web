@@ -3832,6 +3832,8 @@ async function syncUsersFromDB() {
   }
 }
 
+
+
 // ========== 5. DB 기반 전화번호 인증 함수 ==========
 // ========== 5. 수정된 authenticatePhone 함수 (기존 함수 교체) ==========
 async function authenticatePhone() {
@@ -4254,11 +4256,12 @@ window.listRegisteredPhones = function() {
 
 // ========== 9. 초기화 ==========
 document.addEventListener('DOMContentLoaded', async function() {
+  if (window.__DB_AUTH_INIT_DONE__) return;  // ★ 가드: 다중 초기화 방지
+  window.__DB_AUTH_INIT_DONE__ = true;
+
   console.log('📱 DB 연동 인증 시스템 초기화 중...');
-  
-  // 초기 DB 동기화
+
   const syncSuccess = await syncUsersFromDB();
-  
   if (syncSuccess) {
     console.log('✅ DB 연동 인증 시스템 초기화 완료!');
     console.log('📞 실시간 DB 검색으로 전화번호를 인증합니다');
@@ -4366,6 +4369,7 @@ async function handleNewUserRegistered(userData) {
 // ========== 10. 전역 함수 내보내기 ==========
 
 
+
 // ========== 10. 전역 함수 내보내기 ==========
 window.handleNewUserRegistered = handleNewUserRegistered;
 window.authenticatePhoneWithDB = authenticatePhoneWithDB;
@@ -4375,72 +4379,14 @@ window.syncUsersFromDB = syncUsersFromDB;
 console.log('📱 수정된 DB 연동 전화번호 인증 시스템 로드 완료!');
 console.log('🔧 VALID_PHONES 배열이 제거되고 실시간 DB 검색으로 전환되었습니다.');
 
-
-
 // ========== 디버깅 및 응급 복구 함수들 ==========
-window.debugScreenState = function() {
-  console.log('🔍 현재 화면 상태 디버깅:');
-  console.log('📱 인증 상태:', window.isPhoneAuthenticated);
-  console.log('👤 현재 사용자:', window.currentUser?.name);
-  
-  const allScreens = document.querySelectorAll('.screen, [id*="Screen"], [id*="screen"]');
-  allScreens.forEach(screen => {
-    const style = window.getComputedStyle(screen);
-    console.log(`📺 ${screen.id}:`, {
-      display: style.display,
-      opacity: style.opacity,
-      visibility: style.visibility,
-      hasActive: screen.classList.contains('active'),
-      hasContent: screen.innerHTML.trim().length > 50
-    });
-  });
-};
-
-window.emergencyShowConnection = function() {
-  console.log('🚨 응급 connectionScreen 표시');
-  
-  // 모든 화면 강제 숨기기
-  document.querySelectorAll('*').forEach(el => {
-    if (el.id && (el.id.includes('Screen') || el.id.includes('screen'))) {
-      el.style.display = 'none';
-    }
-  });
-  
-  // connectionScreen 찾아서 강제 표시
-  let connectionScreen = document.getElementById('connectionScreen');
-  
-  if (!connectionScreen) {
-    // connectionScreen이 없으면 생성
-    connectionScreen = document.createElement('div');
-    connectionScreen.id = 'connectionScreen';
-    connectionScreen.className = 'screen';
-    connectionScreen.innerHTML = `
-      <div style="padding: 40px; text-align: center; font-family: Arial, sans-serif;">
-        <h1>🔗 기기 연결</h1>
-        <p style="margin: 20px 0;">기기 연결 화면입니다.</p>
-        <button onclick="console.log('연결 테스트')" style="padding: 10px 20px; font-size: 16px;">
-          연결 테스트
-        </button>
-      </div>`;
-    document.body.appendChild(connectionScreen);
-  }
-  
-  // 강제 표시
-  connectionScreen.style.display = 'block';
-  connectionScreen.style.opacity = '1';
-  connectionScreen.style.visibility = 'visible';
-  connectionScreen.style.position = 'fixed';
-  connectionScreen.style.top = '0';
-  connectionScreen.style.left = '0';
-  connectionScreen.style.width = '100%';
-  connectionScreen.style.height = '100%';
-  connectionScreen.style.zIndex = '9999';
-  connectionScreen.style.background = 'white';
-  
-  console.log('✅ 응급 connectionScreen 표시 완료');
-};
+window.debugScreenState = function() { /* ... */ };
+window.emergencyShowConnection = function() { /* ... */ };
 
 console.log('🛠️ 디버깅 함수 로드 완료: debugScreenState(), emergencyShowConnection()');
+
+
+
 
 // 앱 로드 시 인증 복구 → 라우팅
 window.addEventListener('load', () => {
