@@ -88,13 +88,38 @@ window.userPanelNeonMode = 'static';  // 'static' 고정 (동적 계산 끔)
 })();
 
 // ========== 안전 접근 헬퍼 함수들 ==========
-function safeGetElement(id) {
-  const element = document.getElementById(id);
-  if (!element) {
-    console.warn(`Element with id '${id}' not found`);
+// ========== 안전 접근 헬퍼 함수들 ==========
+/**
+ * safeGetElement(id, opts?)
+ *  - opts.required: true면 없을 때 throw
+ *  - opts.quiet:    true면 없을 때 콘솔 로그/경고 안 찍음
+ *  - 2번째 인자를 boolean으로 넘기던 기존 코드도 그대로 허용(뒤로호환)
+ */
+function safeGetElement(id, opts) {
+  let required = false, quiet = false;
+
+  // 뒤로호환: safeGetElement(id, true/false) 형태 지원
+  if (typeof opts === 'boolean') {
+    required = !!opts;
+  } else if (opts && typeof opts === 'object') {
+    required = !!opts.required;
+    quiet   = !!opts.quiet;
   }
-  return element;
+
+  const el = document.getElementById(id);
+
+  if (!el) {
+    if (required) {
+      const msg = `Required element with id '${id}' not found`;
+      if (!quiet) console.error(msg);
+      throw new Error(msg);
+    } else {
+      if (!quiet) console.warn(`Element with id '${id}' not found`);
+    }
+  }
+  return el || null;
 }
+
 
 function safeSetText(id, text) {
   const element = safeGetElement(id);
