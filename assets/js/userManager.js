@@ -323,15 +323,7 @@ async function loadUsers() {
   if (!userList) return;
 
   try {
-    // 새 사용자 추가 버튼 숨기기
-    const cardAddUser = document.getElementById('cardAddUser');
-    if (cardAddUser) {
-      cardAddUser.style.display = 'none';
-      console.log('✅ 새 사용자 추가 버튼 숨김 처리됨');
-    }    
-     
-     
-     // 1) 로딩 UI
+    // 1) 로딩 UI
     userList.innerHTML = `
       <div class="loading-container">
         <div class="dots-loader"><div></div><div></div><div></div></div>
