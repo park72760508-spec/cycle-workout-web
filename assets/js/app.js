@@ -3801,36 +3801,66 @@ function normalizePhoneNumber(phoneNumber) {
 }
 
 // ========== 4. DB 사용자 목록 동기화 ==========
+// ========== 4. DB 사용자 목록 동기화 ==========
+// 동시 호출 가드 & 쿨다운(스로틀)
+let __syncInFlight = null;
+let __syncCooldownUntil = 0; // Date.now() 기준(ms)
+
 async function syncUsersFromDB() {
-  try {
-    console.log('🔄 DB에서 사용자 목록 동기화 중...');
-    
-    if (typeof apiGetUsers !== 'function') {
-      console.warn('apiGetUsers 함수를 찾을 수 없습니다. userManager.js가 로드되었는지 확인하세요.');
-      return false;
+  const now = Date.now();
+
+  // ❶ 최근 1500ms 이내 재호출이면, 진행 중인 Promise 재사용
+  if (now < __syncCooldownUntil && __syncInFlight) {
+    try {
+      return await __syncInFlight;
+    } catch (e) {
+      // 직전 호출 실패라면 새 시도 허용
     }
-    
-    const result = await apiGetUsers();
-    
-    if (result.success) {
-      dbUsers = result.items || [];
-      isDBConnected = true;
-      lastDBSync = new Date();
-      
-      console.log(`✅ DB 동기화 완료: ${dbUsers.length}명의 사용자`);
-      return true;
-    } else {
-      console.error('❌ DB 동기화 실패:', result.error);
+  }
+
+  // ❷ 이미 진행 중이면 같은 Promise 반환(중복 방지)
+  if (__syncInFlight) {
+    return __syncInFlight;
+  }
+
+  __syncInFlight = (async () => {
+    try {
+      console.log('🔄 DB에서 사용자 목록 동기화 중...');
+
+      if (typeof apiGetUsers !== 'function') {
+        console.warn('apiGetUsers 함수를 찾을 수 없습니다. userManager.js가 로드되었는지 확인하세요.');
+        return false;
+      }
+
+      const result = await apiGetUsers();
+
+      if (result && result.success && Array.isArray(result.items)) {
+        // ✅ 기존 변수/타입 유지
+        dbUsers = result.items || [];
+        isDBConnected = true;
+        lastDBSync = new Date();  // (변경전과 동일: Date 객체)
+
+        console.log(`✅ DB 동기화 완료: ${dbUsers.length}명의 사용자`);
+        return true;
+      } else {
+        console.error('❌ DB 동기화 실패:', result && result.error);
+        isDBConnected = false;
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ DB 동기화 오류:', error);
       isDBConnected = false;
       return false;
+    } finally {
+      // ❸ 완료 직후 1.5초 쿨다운 부여
+      __syncCooldownUntil = Date.now() + 1500;
+      __syncInFlight = null;
     }
-    
-  } catch (error) {
-    console.error('❌ DB 동기화 오류:', error);
-    isDBConnected = false;
-    return false;
-  }
+  })();
+
+  return __syncInFlight;
 }
+
 
 
 
