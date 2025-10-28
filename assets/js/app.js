@@ -4271,6 +4271,63 @@ document.addEventListener('DOMContentLoaded', async function() {
   } else {
     console.warn('⚠️ DB 초기화 실패 - userManager.js 로드 상태를 확인하세요');
   }
+
+  // 전화번호 입력 필드에 실시간 중복 검사 이벤트 추가
+  const phoneInput = document.getElementById('newUserContact');
+  if (phoneInput) {
+    let timeoutId;
+    
+    phoneInput.addEventListener('input', function(e) {
+      // 디바운싱: 입력 중단 후 1초 후에 중복 검사 실행
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(async () => {
+        const inputValue = e.target.value.trim();
+        const normalized = normalizePhoneNumber(inputValue);
+        
+        if (normalized && normalized.length >= 10) {
+          try {
+            const duplicateCheck = await checkPhoneDuplicateBeforeRegistration(normalized);
+            
+            // 입력 필드 스타일 변경으로 시각적 피드백
+            if (duplicateCheck.exists) {
+              e.target.style.borderColor = '#ef4444'; // 빨간색
+              e.target.style.backgroundColor = '#fef2f2'; // 연한 빨간색 배경
+              
+              // 상태 메시지 표시 (있다면)
+              const statusEl = document.getElementById('phoneStatus');
+              if (statusEl) {
+                statusEl.textContent = `⚠️ 이미 등록된 번호 (${duplicateCheck.userName}님)`;
+                statusEl.style.color = '#ef4444';
+              }
+            } else {
+              e.target.style.borderColor = '#10b981'; // 초록색
+              e.target.style.backgroundColor = '#f0fdf4'; // 연한 초록색 배경
+              
+              const statusEl = document.getElementById('phoneStatus');
+              if (statusEl) {
+                statusEl.textContent = '✅ 사용 가능한 번호';
+                statusEl.style.color = '#10b981';
+              }
+            }
+          } catch (error) {
+            console.warn('실시간 중복 검사 실패:', error);
+            // 오류 시 기본 스타일로 복원
+            e.target.style.borderColor = '';
+            e.target.style.backgroundColor = '';
+          }
+        } else {
+          // 번호가 짧으면 기본 스타일로 복원
+          e.target.style.borderColor = '';
+          e.target.style.backgroundColor = '';
+          
+          const statusEl = document.getElementById('phoneStatus');
+          if (statusEl) {
+            statusEl.textContent = '';
+          }
+        }
+      }, 1000); // 1초 디바운싱
+    });
+  }
 });
 
 // 새 사용자 등록 후 자동 인증 처리 함수
