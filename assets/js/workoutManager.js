@@ -1616,34 +1616,35 @@ function updateWorkoutPreview() {
 // ==========================================================
 
 function renderSegments() {
-  const container = safeGetElement('wbSegments');
-  const emptyState = safeGetElement('segmentsEmpty');
-  
-  if (!container) return;
-  
+  // 필수 메인 컨테이너: 없으면 즉시 에러로 잡아내고 반환
+  const container = safeGetElement('wbSegments', { required: true, quiet: false });
+
+  // 빈상태 표시용 보조 요소: 없을 수도 있으므로 조용히 조회
+  const emptyState = safeGetElement('segmentsEmpty', { quiet: true });
+
   if (workoutSegments.length > 20) {
     renderSegmentsVirtualized(container, emptyState);
     return;
   }
-  
+
   if (workoutSegments.length === 0) {
     if (emptyState) emptyState.style.display = 'block';
     container.innerHTML = '';
     return;
   }
-  
+
   if (emptyState) emptyState.style.display = 'none';
-  
+
   const fragment = document.createDocumentFragment();
-  
   workoutSegments.forEach((segment, index) => {
     const card = createSegmentCard(segment, index);
     fragment.appendChild(card);
   });
-  
+
   container.innerHTML = '';
   container.appendChild(fragment);
 }
+
 
 function renderSegmentsVirtualized(container, emptyState) {
   if (emptyState) emptyState.style.display = 'none';
