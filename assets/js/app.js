@@ -2001,17 +2001,22 @@ if (!window.showScreen) {
       if (id === 'workoutScreen' && typeof loadWorkouts === 'function') {
         setTimeout(() => loadWorkouts(), 100);
       }
-      
+
+       //프로필 선택 화면: “새 사용자 추가” 메뉴 제거(간단)
       if (id === 'profileScreen') {
-        console.log('Loading users for profile screen...');
+        console.log('Loading users for profile screen.');
         setTimeout(() => {
           if (typeof window.loadUsers === 'function') {
             window.loadUsers();
           } else {
             console.error('loadUsers function not available');
           }
+          // ✅ 프로필 화면 진입 시 “새 사용자 추가” 카드 제거(간단)
+          const addCard = document.getElementById('cardAddUser');
+          if (addCard) addCard.remove();
         }, 100);
       }
+
       
     } catch (error) {
       console.error('Error in showScreen:', error);
@@ -3460,41 +3465,53 @@ function validateNewUserPhone(phoneNumber) {
 // 새 사용자 폼 제출 처리
 function handleNewUserSubmit(event) {
   event.preventDefault();
-  
-  // 간소화된 폼 데이터 수집 (이름, 전화번호, FTP, 몸무게만)
+
   const formData = {
     name: document.getElementById('newUserName')?.value?.trim(),
     contact: document.getElementById('newUserPhone')?.value?.trim(),
     ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
     weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
   };
-  
-  // 유효성 검사 (필수 필드만 체크)
+
+  // 1) 필수값/형식
   if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
-    if (typeof showToast === 'function') {
-      showToast('모든 필수 항목을 입력해주세요! ❌');
-    }
+    showToast?.('모든 필수 항목을 입력해주세요! ❌');
     return;
   }
-  
-  // 전화번호 형식 검증
   if (!/^010-\d{4}-\d{4}$/.test(formData.contact)) {
-    if (typeof showToast === 'function') {
-      showToast('올바른 전화번호 형식을 입력해주세요! ❌');
-    }
+    showToast?.('올바른 전화번호 형식을 입력해주세요! ❌');
     return;
   }
-  
+
+  // 2) 버튼 상태
   const submitBtn = event.target.querySelector('button[type="submit"]');
   const originalText = submitBtn?.textContent;
   if (submitBtn) {
     submitBtn.disabled = true;
     submitBtn.textContent = '등록 중...';
   }
-  
-  // userManager.js의 apiCreateUser 함수 사용
-  registerNewUserViaAPI(formData, submitBtn, originalText);
+
+  // 3) 통합 생성기(중복검사 포함) 호출
+  (async () => {
+    try {
+      const res = await window.unifiedCreateUser?.(formData, 'auth');
+      if (res?.success) {
+        showToast?.('정상 등록되었습니다.');
+        // 필요 시 인증 폼 초기화 등 후속 처리
+        document.getElementById('newUserForm')?.reset();
+      }
+    } catch (err) {
+      // unifiedCreateUser에서 중복 시 에러: "이미 등록된 사용자입니다."
+      showToast?.(err?.message || '등록 실패');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText || '등록';
+      }
+    }
+  })();
 }
+
 
 // ========== 유틸리티 함수 ==========
 
