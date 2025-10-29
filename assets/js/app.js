@@ -3397,7 +3397,14 @@ function toggleNewUserForm() {
     isNewUserFormVisible = false;
   } else {
     formContainer.style.display = 'block';
-    
+
+    // BONUS: 새 사용자 등록 플로우 진입 시 기존 viewer/auth 캐시 제거
+    try {
+      localStorage.removeItem('authUser');
+      localStorage.removeItem('currentUser');
+    } catch (_) {}
+    window.currentUser = null;
+     
     if (button) {
       button.textContent = '❌ 취소';
     }
@@ -3466,6 +3473,13 @@ function validateNewUserPhone(phoneNumber) {
 function handleNewUserSubmit(event) {
   event.preventDefault();
 
+  // BONUS: stale viewer/auth 캐시 제거 (예: '박지성' 고정 노출 방지)
+  try {
+    localStorage.removeItem('authUser');
+    localStorage.removeItem('currentUser');
+  } catch (_) {}
+  window.currentUser = null;
+   
   const formData = {
     name: document.getElementById('newUserName')?.value?.trim(),
     contact: document.getElementById('newUserPhone')?.value?.trim(),
