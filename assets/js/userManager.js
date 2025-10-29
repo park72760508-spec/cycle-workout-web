@@ -84,19 +84,23 @@ function standardizePhoneFormat(phoneNumber) {
 }
 
 // 3. 사용자 등록 후 콜백 함수
-
+   
    function onUserRegistrationSuccess(userData, source = 'auth') {
      console.log(`User registered successfully from ${source}:`, userData);
    
-     // 목록 새로고침
-     if (typeof loadUsers === 'function') loadUsers();
+     // 방금 생성한 사용자를 현재 뷰어로 채택
+     adoptCreatedUserAsViewer(userData).then(ok => {
+       if (!ok) console.warn('방금 생성한 사용자를 찾지 못해 뷰어 채택에 실패');
+       // 프로필 화면에서 다시 볼 때를 대비해 목록도 새로고침
+       if (typeof loadUsers === 'function') loadUsers();
+     });
    
-     // ✅ 성공 안내 문구 통일
      if (typeof showToast === 'function') {
        showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
      }
      return true;
    }
+
 
 
 // 4. 사용자 등록 오류 처리 함수
@@ -920,6 +924,72 @@ window.editUser = editUser;
 window.deleteUser = deleteUser;
 window.saveUser = saveUser;
 window.selectProfile = selectUser; // 기존 코드와의 호환성
+
+
+/**
+ * 새로 생성된 사용자를 현재 뷰어로 채택 + 저장 + 라우팅 헬퍼
+ * - createdInput: { name, contact, ... } (등록에 사용한 원본 입력)
+ * - 동작:
+ *   1) 최신 사용자 목록 재조회
+ *   2) contact(숫자만) 우선, 실패 시 name으로 매칭
+ *   3) window.currentUser, localStorage(authUser/currentUser) 갱신
+ *   4) 기기선택 화면으로 라우팅(선호대로 조정 가능)
+ */
+async function adoptCreatedUserAsViewer(createdInput) {
+  try {
+    if (typeof apiGetUsers !== 'function') {
+      console.warn('adoptCreatedUserAsViewer: apiGetUsers가 없습니다.');
+      return false;
+    }
+
+    // 1) 최신 사용자 목록 조회
+    const listRes = await apiGetUsers();
+    const users = (listRes && listRes.items) ? listRes.items : [];
+
+    // 2) contact 숫자만 비교 (010-1234-5678 → 01012345678)
+    const onlyDigits = (createdInput?.contact || '').replace(/\D+/g, '');
+    let user = null;
+    if (onlyDigits) {
+      user = users.find(u => (u.contact || '').replace(/\D+/g, '') === onlyDigits) || null;
+    }
+    // 3) contact로 못 찾으면 name으로 폴백
+    if (!user && createdInput?.name) {
+      const targetName = String(createdInput.name);
+      user = users.find(u => String(u.name || '') === targetName) || null;
+    }
+    if (!user) {
+      console.warn('adoptCreatedUserAsViewer: 방금 생성한 사용자를 목록에서 찾지 못했습니다.', createdInput);
+      return false;
+    }
+
+    // 4) 현재 사용자/인증 사용자로 반영
+    window.currentUser = user;
+    try {
+      localStorage.setItem('authUser', JSON.stringify(user));
+      localStorage.setItem('currentUser', JSON.stringify(user));
+    } catch (e) {
+      console.warn('localStorage 저장 실패(무시 가능):', e);
+    }
+
+    // 5) 라우팅: 기기 선택 화면으로 이동 (필요 시 화면 키만 바꾸세요)
+    if (typeof showScreen === 'function') {
+      showScreen('connectionScreen'); // 기기선택 화면
+    }
+
+    // 6) 프로필 목록 대비 선반영(선택)
+    if (typeof loadUsers === 'function') {
+      // 다음 화면에서 프로필을 다시 볼 때를 대비해 미리 캐시/상태 갱신
+      loadUsers();
+    }
+
+    return true;
+  } catch (e) {
+    console.error('adoptCreatedUserAsViewer() 실패:', e);
+    return false;
+  }
+}
+
+
 
 
 // 전역 노출 보강: app.js에서 접근 가능하도록
