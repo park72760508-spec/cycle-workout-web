@@ -112,6 +112,7 @@ function onUserRegistrationError(error, source = 'auth') {
 }
 
 // 5. 통합 사용자 생성 함수 (추천)
+// 통합 사용자 생성 (중복 방지 포함)
 async function unifiedCreateUser(userData, source = 'profile') {
   try {
     // 1) 필수값 검사
@@ -120,55 +121,50 @@ async function unifiedCreateUser(userData, source = 'profile') {
     }
 
     // 2) 전화번호 포맷 표준화
-    if (userData.contact) {
-      userData.contact = standardizePhoneFormat(userData.contact);
+    const inputContact = String(userData.contact || '');
+    const normalizedContact = standardizePhoneFormat(inputContact); // "010-1234-5678"
+    const onlyDigits = unformatPhone(normalizedContact);           // "01012345678"
+    userData.contact = normalizedContact;
+
+    // 3) DB 사용자 목록 조회 → 전화번호(숫자만)로 중복 검사
+    const listRes = await apiGetUsers(); // { success, items: [...] }
+    const users = (listRes && (listRes.items || listRes.users || listRes.data)) || [];
+    const isDuplicated = users.some(u => {
+      const uDigits = unformatPhone(u?.contact || '');
+      return uDigits === onlyDigits;
+    });
+
+    if (isDuplicated) {
+      // ✅ 요구문구: "이미 등록된 사용자입니다."
+      throw new Error('✅ 이미 등록된 사용자입니다.');
     }
 
-    // 3) 📌 전화번호 중복 검사 (전화번호를 키로)
-    //    - DB 목록 조회 후 contact(포맷 표준화) 일치 여부 확인
-    try {
-      const list = await apiGetUsers(); // JSONP listUsers
-      if (list?.success && Array.isArray(list.items)) {
-        const norm = (v) => (v || '').replace(/\D/g, ''); // 숫자만 비교
-        const target = norm(userData.contact || '');
-        const dup = list.items.find(u => norm(u.contact || '') === target);
-        if (dup) {
-          throw new Error('이미 등록된 전화번호입니다.');
-        }
-      }
-    } catch (e) {
-      // 목록 불러오기 실패는 중복검사 생략(치명 아님)
-      console.warn('중복 검사 생략(목록 조회 실패):', e);
+    // 4) 만기일 기본값(오늘+10일) 자동 세팅
+    if (!userData.expiry_date) {
+      const d = new Date();
+      d.setDate(d.getDate() + 10);
+      userData.expiry_date = d.toISOString().slice(0, 10);
     }
 
-    // 4) 📌 만기일 기본값: 오늘 + 10일
-      // 4) 📌 만기일 기본값: 오늘 + 10일
-      if (!userData.expiry_date) {
-        const d = new Date();
-        d.setDate(d.getDate() + 10);
-        userData.expiry_date = d.toISOString().slice(0, 10);
-      }
-      
-      // 5) ✅ 실제 생성 호출 (재귀 금지)
-      const result = await apiCreateUser({
-        ...userData,
-        grade: userData.grade || '2' // 기본 등급 보장
-      });
-      
-      if (result?.success) {
-        // 성공 콜백 + 고정 문구
-        if (typeof showToast === 'function') showToast('정상 등록되었습니다.');
-        onUserRegistrationSuccess(userData, source);
-        return result;
-      } else {
-        throw new Error(result?.error || '등록에 실패했습니다');
-      }
+    // 5) 실제 생성 (JSONP API)
+    const result = await apiCreateUser({
+      ...userData,
+      grade: userData.grade || '2'
+    });
 
+    if (result?.success) {
+      if (typeof showToast === 'function') showToast('정상 등록되었습니다.');
+      onUserRegistrationSuccess(userData, source);
+      return result;
+    } else {
+      throw new Error(result?.error || '등록에 실패했습니다');
+    }
   } catch (error) {
     onUserRegistrationError(error, source);
     throw error;
   }
 }
+
 
 
 // 6. 기존 saveUser 함수와의 호환성 유지
