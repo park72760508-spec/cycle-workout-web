@@ -3698,62 +3698,53 @@ console.log('🔧 실시간 DB 검색 기반 인증 시스템 활성화');
 // 3. API를 통한 새 사용자 등록 함수 (새로 추가)
 async function registerNewUserViaAPI(formData, submitBtn, originalText) {
   try {
-    // userManager.js의 apiCreateUser 함수 호출
-    if (typeof apiCreateUser === 'function') {
-      const result = await apiCreateUser({
-        name: formData.name,
-        contact: formData.contact,
-        ftp: formData.ftp,
-        weight: formData.weight,
-        grade: '2', // 기본 사용자 등급
-        expiry_date: '' // 빈 값
-      });
-      
-      if (result.success) {
-        // 성공 시 처리
-        if (typeof showToast === 'function') {
-          showToast(`${formData.name}님 등록 완료! 🎉`);
-        }
-        
-        
-        // 폼 초기화 및 숨기기
-        document.getElementById('newUserForm')?.reset();
-        toggleNewUserForm();
-        
-        // 등록된 전화번호를 인증 입력 필드에 자동 입력
-        const phoneInput = document.getElementById('phoneInput');
-        if (phoneInput) {
-          phoneInput.value = formData.contact.replace(/\D/g, '');
-          formatPhoneNumber(phoneInput.value);
-        }
-        
-        // 사용자 목록 새로고침 (프로필 화면용)
-        if (typeof loadUsers === 'function') {
-          loadUsers();
-        }
-        
-      } else {
-        throw new Error(result.error || '등록에 실패했습니다');
-      }
-      
-    } else {
-      // API 함수가 없는 경우 기존 localStorage 방식 사용
-      fallbackLocalStorageRegistration(formData);
+    if (typeof apiCreateUser !== 'function') {
+      throw new Error('apiCreateUser 함수가 없습니다.');
     }
-    
-  } catch (error) {
-    console.error('사용자 등록 실패:', error);
+    const result = await apiCreateUser({
+      name: formData.name,
+      contact: formData.contact,
+      ftp: formData.ftp,
+      weight: formData.weight,
+      grade: '2',
+      expiry_date: ''
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || '등록 실패');
+    }
+
     if (typeof showToast === 'function') {
-      showToast('등록 중 오류가 발생했습니다: ' + error.message);
+      showToast(`${formData.name}님 등록 완료! 🎉`);
+    }
+
+    // 폼 초기화/숨김
+    document.getElementById('newUserForm')?.reset();
+    toggleNewUserForm?.();
+
+    // 🔑 방금 만든 사용자를 현재 뷰어로 채택(저장+라우팅)
+    if (typeof adoptCreatedUserAsViewer === 'function') {
+      await adoptCreatedUserAsViewer(formData);
+    }
+
+    // (보조) 프로필 화면 대비 목록도 새로고침
+    if (typeof loadUsers === 'function') {
+      loadUsers();
+    }
+
+  } catch (err) {
+    console.error('registerNewUserViaAPI error:', err);
+    if (typeof showToast === 'function') {
+      showToast(`등록 실패: ${err.message || err}`);
     }
   } finally {
-    // 버튼 상태 복원
-    if (submitBtn) {
+    if (submitBtn && originalText != null) {
       submitBtn.disabled = false;
       submitBtn.textContent = originalText;
     }
   }
 }
+
 
 // 4. 폴백 localStorage 등록 함수 (새로 추가)
 function fallbackLocalStorageRegistration(formData) {
