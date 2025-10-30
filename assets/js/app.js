@@ -316,6 +316,22 @@ function getPlannedTotalSecondsFromSegments(workout) {
 })();
 
 
+// === [RESULT] 세션 종료 + 저장
+async function saveTrainingResultAtEnd() {
+  try {
+    window.trainingResults?.endSession?.();
+    const extra = {
+      workoutId: window.currentWorkout?.id || '',
+      workoutName: window.currentWorkout?.name || ''
+    };
+    const r = await window.trainingResults?.saveTrainingResult?.(extra);
+    console.log('[result] saved:', r);
+  } catch (e) {
+    console.error('[result] saveTrainingResult failed:', e);
+  }
+}
+
+
 
 
 window.initTrainingCharts = function initTrainingCharts() {
@@ -1014,6 +1030,16 @@ function finalizeSegmentCompletion(i, avgW) {
   } catch (e) {
     console.error('finalizeSegmentCompletion error:', e);
   }
+
+   // 세그먼트 종료 시 결과 기록
+   try {
+     const idx = Number(window.trainingState?.segIndex) || 0;
+     const seg = (window.currentWorkout?.segments || [])[idx] || null;
+     window.trainingResults?.recordSegmentResult?.(idx, seg);
+   } catch (e) {
+     console.warn('[result] recordSegmentResult failed:', e);
+   }   
+   
 }
 
 
@@ -2255,7 +2281,17 @@ function startWorkoutTraining() {
    
   try {
     console.log('Starting workout training...');
-    
+
+    // === [RESULT] 세션 시작 (사용자/워크아웃 메타 함께)
+    try {
+      const uid = window.currentUser?.id || '';
+      const note = `workout:${window.currentWorkout?.id || ''}|name:${window.currentWorkout?.name || ''}`;
+      window.trainingResults?.startSession?.(uid, note);
+    } catch (e) {
+      console.warn('[result] startSession failed:', e);
+    }
+
+     
     // 훈련 시작 직전 리셋
     Object.assign(trainingMetrics, {
       elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0
@@ -2798,6 +2834,9 @@ function updateTrainingMetrics() {
   } catch (error) {
     console.error('Error in updateTrainingMetrics:', error);
   }
+
+   appendResultStreamSamples(new Date()); // ← 매 초 스트림 누적 (결과입력_17시)
+
 }
 
 // 7. 전역 상태 접근을 위한 별칭 (호환성)
@@ -4483,3 +4522,19 @@ window.addEventListener('load', () => {
     }
   }
 });
+
+
+// === [RESULT] 매 초 수집되는 라이브 데이터를 결과 버퍼로 전달 ===
+function appendResultStreamSamples(now = new Date()) {
+  try {
+    const ld = window.liveData || {};
+    // power, heartRate, cadence 모두 안전 반영
+    window.trainingResults?.appendStreamSample?.('power',     ld.power,     now);
+    window.trainingResults?.appendStreamSample?.('heartRate', ld.heartRate, now); // hr 별칭 지원
+    window.trainingResults?.appendStreamSample?.('cadence',   ld.cadence,   now);
+  } catch (e) {
+    console.warn('[result] appendStreamSamples failed:', e);
+  }
+}
+
+
