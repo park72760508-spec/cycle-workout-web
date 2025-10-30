@@ -342,10 +342,10 @@ window.initTrainingCharts = function initTrainingCharts() {
        windowSec: 0,
        stroke: 'rgba(0,215,200,0.9)',
        fill: 'rgba(0,215,200,0.15)',
-       showStats: true,
+       showStats: false,
        unit: 'W',
        avgLine: true,
-       avgLineStyle: 'dashed', // 'solid' 로 바꿔도 됨
+       avgLineStyle: 'solid', // 'solid' 로 바꿔도 됨
        avgStroke: 'rgba(255,255,255,0.65)'
      }
    );
@@ -358,10 +358,10 @@ window.initTrainingCharts = function initTrainingCharts() {
        windowSec: 0, // 누적
        stroke: 'rgba(0,215,200,0.9)',
        fill: 'rgba(0,215,200,0.10)',
-       showStats: true,
+       showStats: false,
        unit: 'bpm',
        avgLine: true,
-       avgLineStyle: 'dashed',
+       avgLineStyle: 'solid',
        avgStroke: 'rgba(255,255,255,0.65)'
      }
    );
