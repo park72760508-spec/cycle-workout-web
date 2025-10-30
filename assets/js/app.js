@@ -1965,6 +1965,9 @@ function stopSegmentLoop() {
      }
      /* ⬆⬆⬆ B) 훈련 정지/종료 지점 — 여기까지 ⬆⬆⬆ */
 
+
+ // ★ 자동 종료/수동 종료 공통 저장 지점
+  window.saveTrainingResultAtEnd?.();
    
    // 진행바 초기화
   setNameProgress(0);
