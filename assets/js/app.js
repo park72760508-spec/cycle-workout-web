@@ -1872,19 +1872,26 @@ function startSegmentLoop() {
     if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
 
     // 전체 종료 판단
-    if (window.trainingState.elapsedSec >= window.trainingState.totalSec) {
-      console.log('훈련 완료!');
-      clearInterval(window.trainingState.timerId);
-      window.trainingState.timerId = null;
+   // 전체 종료 판단
+   if (window.trainingState.elapsedSec >= window.trainingState.totalSec) {
+     console.log('훈련 완료!');
+     clearInterval(window.trainingState.timerId);
+     window.trainingState.timerId = null;
+   
+     // 활성 카운트다운 정지
+     stopSegmentCountdown();
+   
+     if (typeof setPaused === "function") setPaused(false);
+     if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
+   
+     // ✅ 결과 저장 → 결과 화면 초기화 → 화면 전환
+     try { await window.saveTrainingResultAtEnd?.(); } catch (e) { console.warn(e); }
+     try { await window.trainingResults?.initializeResultScreen?.(); } catch (e) { console.warn(e); }
+   
+     if (typeof showScreen === "function") showScreen("resultScreen");
+     return;
+   }
 
-      // 활성 카운트다운 정지
-      stopSegmentCountdown();
-
-      if (typeof setPaused === "function") setPaused(false);
-      if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
-      if (typeof showScreen === "function") showScreen("resultScreen");
-      return;
-    }
 
 
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
@@ -2104,8 +2111,17 @@ window.updateTrainingDisplay = function () {
 
    // ▼▼ 추가: 실시간 데이터 누적
    try {
+     // 차트용
      window._powerSeries?.push(currentPower);
      window._hrSeries?.push(hr);
+   
+     // ✅ 결과 저장용(세션 스트림)
+     window.trainingResults?.appendStreamSample?.('power', currentPower);
+     window.trainingResults?.appendStreamSample?.('hr', hr);
+     const cad = Number(window.liveData?.cadence || 0);
+     if (!Number.isNaN(cad)) {
+       window.trainingResults?.appendStreamSample?.('cadence', cad);
+     }
    } catch (_) {}
 
    
@@ -2264,8 +2280,8 @@ window.updateTrainingDisplay = function () {
         console.warn('chart render skipped:', e);
       }
 
- 
 };
+
 
 // *** 시작 시 복구 시도 및 오류 처리 강화 ***
 function startWorkoutTraining() {
@@ -2286,13 +2302,18 @@ function startWorkoutTraining() {
     console.log('Starting workout training...');
 
     // === [RESULT] 세션 시작 (사용자/워크아웃 메타 함께)
-    try {
-      const uid = window.currentUser?.id || '';
-      const note = `workout:${window.currentWorkout?.id || ''}|name:${window.currentWorkout?.name || ''}`;
-      window.trainingResults?.startSession?.(uid, note);
-    } catch (e) {
-      console.warn('[result] startSession failed:', e);
-    }
+   // === [RESULT] 세션 시작 보장 ===
+   try {
+     const userId =
+       window.currentUser?.id ||
+       (JSON.parse(localStorage.getItem('currentUser') || 'null')?.id) ||
+       null;
+     window.trainingResults?.startSession?.(userId || undefined);
+     console.log('[result] session started for user:', userId);
+   } catch (e) {
+     console.warn('[result] startSession failed:', e);
+   }
+
 
      
     // 훈련 시작 직전 리셋
@@ -2423,6 +2444,7 @@ function startWorkoutTraining() {
     }
   }
 }
+
 
 // 케이던스 강제 리셋
 window.resetCadence = function() {
@@ -2728,17 +2750,23 @@ document.addEventListener("DOMContentLoaded", () => {
    // 훈련 종료 (확인 후 종료)
    const btnStopTraining = safeGetElement("btnStopTraining");
    if (btnStopTraining) {
-     btnStopTraining.addEventListener("click", () => {
+     btnStopTraining.addEventListener("click", async () => {
        const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
-       if (!ok) return; // 취소: 아무 것도 하지 않음
+       if (!ok) return;
    
        // 확인: 종료 처리
-       stopSegmentLoop(); // 타이머/카운트다운 정지 및 상태 off
+       stopSegmentLoop();
+   
+       // ✅ 결과 저장 → 결과 화면 초기화
+       try { await window.saveTrainingResultAtEnd?.(); } catch (e) { console.warn(e); }
+       try { await window.trainingResults?.initializeResultScreen?.(); } catch (e) { console.warn(e); }
+   
        if (typeof showScreen === "function") {
          showScreen("resultScreen");
        }
      });
    }
+
 
 
   console.log("App initialization complete!");
