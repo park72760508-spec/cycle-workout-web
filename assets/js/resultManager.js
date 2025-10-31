@@ -129,7 +129,7 @@ if (typeof postJSONWithProxy !== 'function') {
   // ---------------------------
    /* ===== 저장(프록시 대응 버전) — 교체 ===== */
 async function saveTrainingResult(extra = {}) {
-     console.log('[saveTrainingResult] 시작');
+     console.log('[saveTrainingResult] 시작 - 강화된 오류 처리');
      
      if (!state.currentTrainingSession || !state.currentTrainingSession.startTime) {
        throw new Error('세션이 시작되지 않았습니다. startSession(userId) 먼저 호출하세요.');
@@ -141,45 +141,178 @@ async function saveTrainingResult(extra = {}) {
    
      const trainingResult = {
        ...state.currentTrainingSession,
-       ...extra
+       ...extra,
+       saveAttemptTime: new Date().toISOString(),
+       clientInfo: {
+         userAgent: navigator.userAgent,
+         origin: window.location.origin
+       }
      };
 
-     // 로컬 스토리지에 백업 저장
+     // 1. 로컬 스토리지에 즉시 백업 (최우선)
+     let localSaveSuccess = false;
      try {
-       const localKey = `training_result_${Date.now()}`;
+       const localKey = `training_result_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
        localStorage.setItem(localKey, JSON.stringify(trainingResult));
-       console.log('[saveTrainingResult] 로컬 백업 저장 완료:', localKey);
+       localStorage.setItem('latest_training_result', JSON.stringify(trainingResult));
+       console.log('[saveTrainingResult] ✅ 로컬 백업 저장 완료:', localKey);
+       localSaveSuccess = true;
      } catch (e) {
-       console.warn('[saveTrainingResult] 로컬 백업 저장 실패:', e);
+       console.error('[saveTrainingResult] ❌ 로컬 백업 저장 실패:', e);
      }
 
-     // GAS 저장 시도 (실패해도 계속 진행)
+     // 2. GAS 저장 시도 (여러 방법으로 시도)
+     let gasSuccess = false;
+     let gasError = null;
+
      try {
        const base = ensureBaseUrl();
-       const target = `${base}?action=saveTrainingResult`;
        
-       console.log('[saveTrainingResult] GAS 저장 시도:', target);
+       // 방법 1: 기본 POST 요청
+       await attemptGasSave(base, trainingResult, 'POST');
+       gasSuccess = true;
+       console.log('[saveTrainingResult] ✅ GAS 저장 성공 (POST)');
        
-       const res = await fetch(target, {
-         method: 'POST',
-         headers: { 'Content-Type': 'text/plain' },
-         body: JSON.stringify(trainingResult)
-       });
-   
-       if (res && res.ok) {
-         const data = await res.json().catch(() => ({}));
-         console.log('[saveTrainingResult] GAS 저장 성공');
-         return { success: true, data, source: 'gas' };
-       } else {
-         console.warn('[saveTrainingResult] GAS 응답 오류:', res?.status);
+     } catch (error1) {
+       console.warn('[saveTrainingResult] POST 방식 실패:', error1.message);
+       
+       try {
+         // 방법 2: GET 방식으로 재시도 (URL 파라미터)
+         await attemptGasSaveAsGet(ensureBaseUrl(), trainingResult);
+         gasSuccess = true;
+         console.log('[saveTrainingResult] ✅ GAS 저장 성공 (GET)');
+         
+       } catch (error2) {
+         console.warn('[saveTrainingResult] GET 방식도 실패:', error2.message);
+         gasError = error2;
+         
+         try {
+           // 방법 3: JSONP 방식으로 최종 시도
+           await attemptGasSaveAsJsonp(ensureBaseUrl(), trainingResult);
+           gasSuccess = true;
+           console.log('[saveTrainingResult] ✅ GAS 저장 성공 (JSONP)');
+           
+         } catch (error3) {
+           console.warn('[saveTrainingResult] JSONP 방식도 실패:', error3.message);
+           gasError = error3;
+         }
        }
-     } catch (err) {
-       console.warn('[saveTrainingResult] GAS 저장 실패 (CORS/네트워크):', err.message);
      }
 
-     // GAS 저장 실패 시에도 성공으로 처리 (로컬 데이터 사용)
-     console.log('[saveTrainingResult] 로컬 데이터로 계속 진행');
-     return { success: true, data: trainingResult, source: 'local' };
+     // 3. 결과 처리 및 반환
+     if (gasSuccess) {
+       console.log('[saveTrainingResult] 🎉 서버 저장 성공 + 로컬 백업 완료');
+       return { 
+         success: true, 
+         data: trainingResult, 
+         source: 'gas',
+         localBackup: localSaveSuccess
+       };
+     } else if (localSaveSuccess) {
+       console.log('[saveTrainingResult] 📱 서버 저장 실패, 로컬 데이터로 계속 진행');
+       return { 
+         success: true, 
+         data: trainingResult, 
+         source: 'local',
+         gasError: gasError?.message || 'Unknown error',
+         warning: 'CORS 오류로 서버 저장 실패, 로컬에만 저장됨'
+       };
+     } else {
+       console.error('[saveTrainingResult] ❌ 모든 저장 방식 실패');
+       throw new Error('로컬 및 서버 저장 모두 실패');
+     }
+   }
+
+   // GAS 저장 시도 헬퍼 함수들
+   async function attemptGasSave(baseUrl, data, method = 'POST') {
+     const target = `${baseUrl}?action=saveTrainingResult&t=${Date.now()}`;
+     
+     const options = {
+       method: method,
+       headers: { 
+         'Content-Type': 'text/plain',
+         'Cache-Control': 'no-cache'
+       },
+       body: JSON.stringify(data),
+       mode: 'cors',
+       credentials: 'omit'
+     };
+
+     const response = await fetch(target, options);
+     
+     if (!response.ok) {
+       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+     }
+     
+     return await response.json().catch(() => ({ success: true }));
+   }
+
+   async function attemptGasSaveAsGet(baseUrl, data) {
+     // 중요 데이터만 GET 파라미터로 전송
+     const params = new URLSearchParams({
+       action: 'saveTrainingResult',
+       userId: data.userId || '',
+       startTime: data.startTime || '',
+       endTime: data.endTime || '',
+       method: 'GET_FALLBACK',
+       t: Date.now()
+     });
+     
+     const target = `${baseUrl}?${params.toString()}`;
+     const response = await fetch(target, { 
+       method: 'GET',
+       mode: 'cors',
+       credentials: 'omit'
+     });
+     
+     if (!response.ok) {
+       throw new Error(`GET HTTP ${response.status}`);
+     }
+     
+     return await response.json().catch(() => ({ success: true }));
+   }
+
+   async function attemptGasSaveAsJsonp(baseUrl, data) {
+     return new Promise((resolve, reject) => {
+       const callbackName = `gasCallback_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+       const script = document.createElement('script');
+       
+       // 타임아웃 설정
+       const timeout = setTimeout(() => {
+         cleanup();
+         reject(new Error('JSONP timeout'));
+       }, 10000);
+       
+       const cleanup = () => {
+         clearTimeout(timeout);
+         delete window[callbackName];
+         if (script.parentNode) {
+           script.parentNode.removeChild(script);
+         }
+       };
+       
+       window[callbackName] = (result) => {
+         cleanup();
+         resolve(result);
+       };
+       
+       const params = new URLSearchParams({
+         action: 'saveTrainingResult',
+         callback: callbackName,
+         userId: data.userId || '',
+         startTime: data.startTime || '',
+         endTime: data.endTime || '',
+         method: 'JSONP_FALLBACK'
+       });
+       
+       script.src = `${baseUrl}?${params.toString()}`;
+       script.onerror = () => {
+         cleanup();
+         reject(new Error('JSONP script load failed'));
+       };
+       
+       document.head.appendChild(script);
+     });
    }
 
 
