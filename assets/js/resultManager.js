@@ -128,9 +128,9 @@ if (typeof postJSONWithProxy !== 'function') {
   // 저장 / 조회
   // ---------------------------
    /* ===== 저장(프록시 대응 버전) — 교체 ===== */
-   /* ===== 저장(프록시 없는 최종판 · CORS 프리플라이트 회피) ===== */
-   async function saveTrainingResult(extra = {}) {
-     const base = ensureBaseUrl(); // window.GAS_URL 필요
+async function saveTrainingResult(extra = {}) {
+     console.log('[saveTrainingResult] 시작');
+     
      if (!state.currentTrainingSession || !state.currentTrainingSession.startTime) {
        throw new Error('세션이 시작되지 않았습니다. startSession(userId) 먼저 호출하세요.');
      }
@@ -143,34 +143,43 @@ if (typeof postJSONWithProxy !== 'function') {
        ...state.currentTrainingSession,
        ...extra
      };
-   
-     // 👉 프록시 없이도 프리플라이트(OPTIONS) 안 뜨게 'text/plain' 사용 (Simple Request)
-     const target = `${base}?action=saveTrainingResult`;
-   
-     let res;
+
+     // 로컬 스토리지에 백업 저장
      try {
-       res = await fetch(target, {
+       const localKey = `training_result_${Date.now()}`;
+       localStorage.setItem(localKey, JSON.stringify(trainingResult));
+       console.log('[saveTrainingResult] 로컬 백업 저장 완료:', localKey);
+     } catch (e) {
+       console.warn('[saveTrainingResult] 로컬 백업 저장 실패:', e);
+     }
+
+     // GAS 저장 시도 (실패해도 계속 진행)
+     try {
+       const base = ensureBaseUrl();
+       const target = `${base}?action=saveTrainingResult`;
+       
+       console.log('[saveTrainingResult] GAS 저장 시도:', target);
+       
+       const res = await fetch(target, {
          method: 'POST',
-         headers: { 'Content-Type': 'text/plain' }, // <-- 중요: application/json 금지
+         headers: { 'Content-Type': 'text/plain' },
          body: JSON.stringify(trainingResult)
        });
+   
+       if (res && res.ok) {
+         const data = await res.json().catch(() => ({}));
+         console.log('[saveTrainingResult] GAS 저장 성공');
+         return { success: true, data, source: 'gas' };
+       } else {
+         console.warn('[saveTrainingResult] GAS 응답 오류:', res?.status);
+       }
      } catch (err) {
-       console.warn('[result] fetch error:', err);
-       throw new Error('네트워크 오류: GAS 웹앱 접근 불가(오프라인/URL오류/배포권한 문제 가능).');
+       console.warn('[saveTrainingResult] GAS 저장 실패 (CORS/네트워크):', err.message);
      }
-   
-     if (!res || !res.ok) {
-       const status = res ? res.status : 'NO_RESPONSE';
-       const text = res ? (await res.text().catch(() => '')) : '';
-       throw new Error(`saveTrainingResult 실패: ${status} ${text}`);
-     }
-   
-     // 정상 응답 파싱
-     let data = {};
-     try {
-       data = await res.json();
-     } catch (_) {}
-     return data;
+
+     // GAS 저장 실패 시에도 성공으로 처리 (로컬 데이터 사용)
+     console.log('[saveTrainingResult] 로컬 데이터로 계속 진행');
+     return { success: true, data: trainingResult, source: 'local' };
    }
 
 
@@ -265,6 +274,65 @@ if (typeof postJSONWithProxy !== 'function') {
     a.remove();
   }
 
+
+// ---------------------------
+  // 외부 접근용 API 추가
+  // ---------------------------
+  function getCurrentSessionData() {
+    return state.currentTrainingSession;
+  }
+
+  function calculateSessionStats() {
+    const session = state.currentTrainingSession;
+    if (!session || !session.powerData?.length) {
+      return {
+        avgPower: 0,
+        maxPower: 0,
+        avgHR: 0,
+        calories: 0,
+        achievement: 0,
+        totalTime: 0
+      };
+    }
+
+    const powerValues = session.powerData.map(d => d.v).filter(v => v > 0);
+    const hrValues = session.hrData?.map(d => d.v).filter(v => v > 0) || [];
+    
+    const avgPower = powerValues.length ? Math.round(avg(powerValues)) : 0;
+    const maxPower = powerValues.length ? Math.max(...powerValues) : 0;
+    const avgHR = hrValues.length ? Math.round(avg(hrValues)) : 0;
+    
+    // 칼로리 계산 (간단한 공식: 평균파워 * 시간(분) * 0.06)
+    const startTime = session.startTime ? new Date(session.startTime) : null;
+    const endTime = session.endTime ? new Date(session.endTime) : new Date();
+    const totalMinutes = startTime ? (endTime - startTime) / (1000 * 60) : 0;
+    const calories = Math.round(avgPower * totalMinutes * 0.06);
+    
+    // 달성도 계산 (세그먼트별 목표 대비 실제 파워 비율의 평균)
+    let totalAchievement = 0;
+    if (session.segmentResults?.length) {
+      const achievements = session.segmentResults.map(seg => {
+        if (seg.targetPower > 0 && seg.actualAvgPower > 0) {
+          return Math.min((seg.actualAvgPower / seg.targetPower) * 100, 150); // 최대 150%
+        }
+        return 0;
+      });
+      totalAchievement = achievements.length ? Math.round(avg(achievements)) : 0;
+    }
+
+    return {
+      avgPower,
+      maxPower,
+      avgHR,
+      calories,
+      achievement: totalAchievement,
+      totalTime: Math.round(totalMinutes)
+    };
+  }
+
+
+
+   
   // ---------------------------
   // 호환용 래퍼 (기존 코드에서 trainingResults.*로 부를 수 있게)
   // ---------------------------
@@ -282,6 +350,9 @@ if (typeof postJSONWithProxy !== 'function') {
     initializeResultScreen,
     // CSV
     exportSessionCsv,
+    // 새로 추가된 API
+    getCurrentSessionData,
+    calculateSessionStats,
 
     // 별칭(호환)
     save: saveTrainingResult,
@@ -301,19 +372,65 @@ if (typeof postJSONWithProxy !== 'function') {
 
 (function attachResultSummaryRenderer(){
   window.renderCurrentSessionSummary = function(){
-    const s = (window.trainingResults && window.trainingResults.__get?.())?.currentTrainingSession
-           || (window.trainingResults && window.trainingResults.state?.currentTrainingSession);
-    // 위 접근자가 없다면 아래 간단 요약만:
-    const box = document.getElementById('resultSummary');
-    if (!box || !s) return;
-    const segN = (s.segmentResults||[]).length;
-    box.innerHTML = `
-      <div class="result-mini">
-        <div>사용자: ${s.userId ?? '-'}</div>
-        <div>시작: ${s.startTime ?? '-'}</div>
-        <div>종료: ${s.endTime ?? '-'}</div>
-        <div>세그먼트 수: ${segN}</div>
-      </div>`;
+    console.log('[renderCurrentSessionSummary] 시작');
+    
+    try {
+      // 세션 데이터 가져오기
+      const sessionData = window.trainingResults?.getCurrentSessionData?.();
+      if (!sessionData) {
+        console.warn('[renderCurrentSessionSummary] 세션 데이터를 찾을 수 없습니다.');
+        return;
+      }
+
+      console.log('[renderCurrentSessionSummary] 세션 데이터:', sessionData);
+
+      // 통계 계산
+      const stats = window.trainingResults?.calculateSessionStats?.();
+      console.log('[renderCurrentSessionSummary] 계산된 통계:', stats);
+
+      // 결과 화면 엘리먼트들 업데이트
+      updateResultElement('finalAchievement', `${stats?.achievement || 0}%`);
+      updateResultElement('resultAvgPower', stats?.avgPower || '-');
+      updateResultElement('resultMaxPower', stats?.maxPower || '-');
+      updateResultElement('resultAvgHR', stats?.avgHR || '-');
+      updateResultElement('resultCalories', stats?.calories || '-');
+      
+      // 워크아웃 이름 표시
+      if (window.currentWorkout?.title) {
+        updateResultElement('workoutCompletedName', window.currentWorkout.title);
+      }
+
+      // resultSummary 박스가 있으면 업데이트
+      const box = document.getElementById('resultSummary');
+      if (box) {
+        const segN = (sessionData.segmentResults||[]).length;
+        box.innerHTML = `
+          <div class="result-mini">
+            <div>사용자: ${sessionData.userId ?? '-'}</div>
+            <div>시작: ${sessionData.startTime ?? '-'}</div>
+            <div>종료: ${sessionData.endTime ?? '-'}</div>
+            <div>세그먼트 수: ${segN}</div>
+            <div>평균 파워: ${stats?.avgPower || 0}W</div>
+            <div>최대 파워: ${stats?.maxPower || 0}W</div>
+            <div>달성도: ${stats?.achievement || 0}%</div>
+          </div>`;
+      }
+
+      console.log('[renderCurrentSessionSummary] 결과 화면 업데이트 완료');
+      
+    } catch (error) {
+      console.error('[renderCurrentSessionSummary] 오류:', error);
+    }
   };
+
+  function updateResultElement(id, value) {
+    const element = document.getElementById(id);
+    if (element) {
+      element.textContent = value;
+      console.log(`[renderCurrentSessionSummary] ${id} 업데이트: ${value}`);
+    } else {
+      console.warn(`[renderCurrentSessionSummary] 엘리먼트를 찾을 수 없습니다: ${id}`);
+    }
+  }
 })();
 
