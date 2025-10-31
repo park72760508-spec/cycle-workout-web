@@ -1873,6 +1873,7 @@ function startSegmentLoop() {
 
     // 전체 종료 판단
    // 전체 종료 판단
+   // 전체 종료 판단
    if (window.trainingState.elapsedSec >= window.trainingState.totalSec) {
      console.log('훈련 완료!');
      clearInterval(window.trainingState.timerId);
@@ -1884,13 +1885,18 @@ function startSegmentLoop() {
      if (typeof setPaused === "function") setPaused(false);
      if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
    
-     // ✅ 결과 저장 → 결과 화면 초기화 → 화면 전환
-     try { await window.saveTrainingResultAtEnd?.(); } catch (e) { console.warn(e); }
-     try { await window.trainingResults?.initializeResultScreen?.(); } catch (e) { console.warn(e); }
+     // ✅ await 없이 순차 실행(저장 → 초기화 → 요약 → 화면 전환)
+     Promise.resolve()
+       .then(() => window.saveTrainingResultAtEnd?.())
+       .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+       .then(() => window.trainingResults?.initializeResultScreen?.())
+       .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+       .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
+       .then(() => { if (typeof showScreen === "function") showScreen("resultScreen"); });
    
-     if (typeof showScreen === "function") showScreen("resultScreen");
      return;
    }
+
 
 
 
@@ -2750,22 +2756,28 @@ document.addEventListener("DOMContentLoaded", () => {
    // 훈련 종료 (확인 후 종료)
    const btnStopTraining = safeGetElement("btnStopTraining");
    if (btnStopTraining) {
-     btnStopTraining.addEventListener("click", async () => {
+     btnStopTraining.addEventListener("click", () => {
        const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
        if (!ok) return;
    
        // 확인: 종료 처리
        stopSegmentLoop();
    
-       // ✅ 결과 저장 → 결과 화면 초기화
-       try { await window.saveTrainingResultAtEnd?.(); } catch (e) { console.warn(e); }
-       try { await window.trainingResults?.initializeResultScreen?.(); } catch (e) { console.warn(e); }
-   
-       if (typeof showScreen === "function") {
-         showScreen("resultScreen");
-       }
+       // ✅ await 없이 순차 실행(저장 → 초기화 → 요약 → 화면 전환)
+       Promise.resolve()
+         .then(() => window.saveTrainingResultAtEnd?.())
+         .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+         .then(() => window.trainingResults?.initializeResultScreen?.())
+         .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+         .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
+         .then(() => {
+           if (typeof showScreen === "function") {
+             showScreen("resultScreen");
+           }
+         });
      });
    }
+
 
 
 
