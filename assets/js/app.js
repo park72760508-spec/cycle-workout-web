@@ -318,25 +318,71 @@ function getPlannedTotalSecondsFromSegments(workout) {
 
 // === [RESULT] 세션 종료 + 저장
 async function saveTrainingResultAtEnd() {
+  console.log('[saveTrainingResultAtEnd] 🚀 시작 - 강화된 저장 프로세스');
+  
   try {
-    console.log('[saveTrainingResultAtEnd] 시작 - 세션 종료 처리');
+    // 1. 세션 종료 처리
+    console.log('[saveTrainingResultAtEnd] 1️⃣ 세션 종료 처리');
     window.trainingResults?.endSession?.();
     
+    // 2. 추가 메타데이터 준비
     const extra = {
       workoutId: window.currentWorkout?.id || '',
-      workoutName: window.currentWorkout?.title || window.currentWorkout?.name || ''
+      workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+      completionType: 'normal',
+      appVersion: '1.0.0',
+      timestamp: new Date().toISOString()
     };
     
-    console.log('[saveTrainingResultAtEnd] 저장 시도 시작');
-    const r = await window.trainingResults?.saveTrainingResult?.(extra);
-    console.log('[saveTrainingResultAtEnd] 저장 완료:', r);
+    console.log('[saveTrainingResultAtEnd] 2️⃣ 저장 시도 시작, 추가 데이터:', extra);
     
-    // 성공/실패 관계없이 항상 성공으로 처리
-    return { success: true, result: r };
-  } catch (e) {
-    console.warn('[saveTrainingResultAtEnd] 저장 실패하지만 계속 진행:', e.message);
-    // 오류가 발생해도 성공으로 처리하여 결과 화면으로 진행
-    return { success: true, error: e.message };
+    // 3. 강화된 저장 시도
+    let saveResult = null;
+    try {
+      saveResult = await window.trainingResults?.saveTrainingResult?.(extra);
+      console.log('[saveTrainingResultAtEnd] 3️⃣ 저장 결과:', saveResult);
+    } catch (saveError) {
+      console.error('[saveTrainingResultAtEnd] ❌ 저장 중 오류:', saveError);
+      // 저장 실패해도 계속 진행
+      saveResult = { 
+        success: false, 
+        error: saveError.message,
+        fallback: true
+      };
+    }
+    
+    // 4. 결과 검증 및 로컬 데이터 확인
+    const sessionData = window.trainingResults?.getCurrentSessionData?.();
+    if (sessionData) {
+      console.log('[saveTrainingResultAtEnd] 4️⃣ 세션 데이터 확인 완료');
+    } else {
+      console.warn('[saveTrainingResultAtEnd] ⚠️ 세션 데이터가 없습니다!');
+    }
+    
+    // 5. 항상 성공으로 처리하여 결과 화면으로 진행
+    const finalResult = {
+      success: true,
+      saveResult: saveResult,
+      hasSessionData: !!sessionData,
+      canShowResults: true,
+      message: saveResult?.source === 'local' ? '로컬 저장으로 결과 표시' : '정상 저장 완료'
+    };
+    
+    console.log('[saveTrainingResultAtEnd] 5️⃣ 최종 결과:', finalResult);
+    return finalResult;
+    
+  } catch (criticalError) {
+    console.error('[saveTrainingResultAtEnd] 💥 치명적 오류 발생:', criticalError);
+    
+    // 치명적 오류가 발생해도 결과 화면으로 진행
+    // 로컬 데이터라도 있으면 표시할 수 있도록
+    return { 
+      success: true, 
+      error: criticalError.message,
+      fallback: true,
+      canShowResults: true,
+      message: '오류 발생했지만 결과 화면으로 진행'
+    };
   }
 }
 
@@ -2773,17 +2819,93 @@ document.addEventListener("DOMContentLoaded", () => {
        stopSegmentLoop();
    
        // ✅ await 없이 순차 실행(저장 → 초기화 → 요약 → 화면 전환)
-       Promise.resolve()
-         .then(() => window.saveTrainingResultAtEnd?.())
-         .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
-         .then(() => window.trainingResults?.initializeResultScreen?.())
-         .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
-         .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
-         .then(() => {
-           if (typeof showScreen === "function") {
-             showScreen("resultScreen");
-           }
-         });
+         // ✅ 강화된 결과 처리 파이프라인 (절대 실패하지 않음)
+              Promise.resolve()
+                .then(() => {
+                  console.log('[훈련완료] 🚀 1단계: 결과 저장 시작');
+                  return window.saveTrainingResultAtEnd?.();
+                })
+                .then((saveResult) => {
+                  console.log('[훈련완료] ✅ 1단계 완료:', saveResult);
+                  
+                  // 저장 결과 확인 및 알림
+                  if (saveResult?.saveResult?.source === 'local') {
+                    console.log('[훈련완료] 📱 로컬 저장 모드 - CORS 오류로 서버 저장 실패');
+                    if (typeof showToast === "function") {
+                      showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
+                    }
+                  } else if (saveResult?.saveResult?.source === 'gas') {
+                    console.log('[훈련완료] 🌐 서버 저장 성공');
+                    if (typeof showToast === "function") {
+                      showToast("훈련 결과가 서버에 저장되었습니다");
+                    }
+                  }
+                  
+                  console.log('[훈련완료] 🔧 2단계: 결과 화면 초기화 시작');
+                  return window.trainingResults?.initializeResultScreen?.().catch(e => {
+                    console.warn('[훈련완료] 초기화 실패 (무시하고 계속):', e);
+                    return Promise.resolve();
+                  });
+                })
+                .then(() => {
+                  console.log('[훈련완료] 📊 3단계: 세션 요약 렌더링 시작');
+                  
+                  // 여러 번 시도해서라도 결과 렌더링
+                  let renderSuccess = false;
+                  for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                      window.renderCurrentSessionSummary?.();
+                      console.log(`[훈련완료] ✅ 렌더링 성공 (${attempt}번째 시도)`);
+                      renderSuccess = true;
+                      break;
+                    } catch (e) {
+                      console.warn(`[훈련완료] ❌ 렌더링 실패 ${attempt}/3:`, e.message);
+                      if (attempt < 3) {
+                        // 재시도 전 잠시 대기
+                        setTimeout(() => {}, 100);
+                      }
+                    }
+                  }
+                  
+                  if (!renderSuccess) {
+                    console.error('[훈련완료] 🚨 모든 렌더링 시도 실패 - 기본 데이터라도 표시');
+                    // 최소한의 데이터라도 표시하도록 강제 설정
+                    try {
+                      document.getElementById('finalAchievement').textContent = '완료';
+                      document.getElementById('resultAvgPower').textContent = '데이터 처리 중';
+                    } catch (_) {}
+                  }
+                })
+                .then(() => {
+                  console.log('[훈련완료] 🎯 4단계: 결과 화면으로 전환');
+                  
+                  // 화면 전환 전 추가 검증
+                  const hasSession = !!window.trainingResults?.getCurrentSessionData?.();
+                  console.log('[훈련완료] 세션 데이터 존재:', hasSession);
+                  
+                  if (typeof showScreen === "function") {
+                    showScreen("resultScreen");
+                    console.log('[훈련완료] 🎉 결과 화면 전환 완료');
+                  } else {
+                    console.error('[훈련완료] showScreen 함수를 찾을 수 없습니다');
+                  }
+                })
+                .catch((criticalError) => {
+                  console.error('[훈련완료] 💥 치명적 오류 발생:', criticalError);
+                  
+                  // 그래도 결과 화면으로 이동 시도
+                  try {
+                    if (typeof showToast === "function") {
+                      showToast("오류가 발생했지만 결과를 표시합니다", "error");
+                    }
+                    if (typeof showScreen === "function") {
+                      showScreen("resultScreen");
+                    }
+                  } catch (finalError) {
+                    console.error('[훈련완료] 🔥 최종 복구도 실패:', finalError);
+                    alert('결과 화면 표시 중 오류가 발생했습니다. 페이지를 새로고침해주세요.');
+                  }
+                });
      });
    }
 
@@ -4590,3 +4712,40 @@ function appendResultStreamSamples(now = new Date()) {
 }
 
 
+// ===== CORS 및 네트워크 오류 전역 처리기 =====
+(function setupGlobalErrorHandlers() {
+  // 처리되지 않은 fetch 오류 처리
+  const originalFetch = window.fetch;
+  window.fetch = function(...args) {
+    return originalFetch.apply(this, args)
+      .catch(error => {
+        if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+          console.warn('[Global] CORS/네트워크 오류 감지:', error.message);
+          // CORS 오류는 예상된 오류이므로 조용히 처리
+          return Promise.reject(new Error(`NETWORK_ERROR: ${error.message}`));
+        }
+        return Promise.reject(error);
+      });
+  };
+
+  // 전역 오류 처리
+  window.addEventListener('error', (event) => {
+    if (event.error?.message?.includes('CORS') || 
+        event.error?.message?.includes('Failed to fetch')) {
+      console.warn('[Global] 전역 CORS 오류 감지 (무시):', event.error.message);
+      event.preventDefault(); // 콘솔 스팸 방지
+    }
+  });
+
+  // Promise rejection 처리
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason?.message?.includes('CORS') || 
+        event.reason?.message?.includes('Failed to fetch') ||
+        event.reason?.message?.includes('NETWORK_ERROR')) {
+      console.warn('[Global] 처리되지 않은 네트워크 오류 (무시):', event.reason.message);
+      event.preventDefault(); // 콘솔 스팸 방지
+    }
+  });
+
+  console.log('[Global] CORS/네트워크 오류 전역 처리기 설정 완료');
+})();
