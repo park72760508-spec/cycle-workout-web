@@ -113,33 +113,42 @@
   // ---------------------------
   // 저장 / 조회
   // ---------------------------
-  async function saveTrainingResult(extra = {}) {
-    const base = ensureBaseUrl();
-    if (!state.currentTrainingSession.startTime) {
-      throw new Error('세션이 시작되지 않았습니다. startSession(userId) 먼저 호출하세요.');
-    }
-    if (!state.currentTrainingSession.endTime) {
-      // 자동으로 종료 시간 보정
-      endSession();
-    }
+   /* ===== 저장(프록시 대응 버전) — 교체 ===== */
+   async function saveTrainingResult(extra = {}) {
+     const base = ensureBaseUrl(); // window.GAS_URL 필수
+     if (!state.currentTrainingSession || !state.currentTrainingSession.startTime) {
+       throw new Error('세션이 시작되지 않았습니다. startSession(userId) 먼저 호출하세요.');
+     }
+     if (!state.currentTrainingSession.endTime) {
+       // 자동 종료 시간 보정
+       endSession();
+     }
+   
+     const trainingResult = {
+       ...state.currentTrainingSession,
+       ...extra
+     };
+   
+     let res;
+     try {
+       // ✅ 프록시 경유(있으면) → 없으면 직통
+       res = await postJSONWithProxy(base, 'saveTrainingResult', trainingResult);
+     } catch (networkErr) {
+       // 네트워크 레벨 실패 (프리플라이트/CORS 포함)
+       console.warn('[result] fetch error:', networkErr);
+       throw new Error('saveTrainingResult 네트워크 오류(프록시/직통 실패). CORS 설정을 확인하세요.');
+     }
+   
+     if (!res || !res.ok) {
+       const status = res ? res.status : 'NO_RESPONSE';
+       const text = res ? (await res.text().catch(() => '')) : '';
+       throw new Error(`saveTrainingResult 실패: ${status} ${text}`);
+     }
+   
+     // 정상 응답 파싱
+     return res.json().catch(() => ({}));
+   }
 
-    const trainingResult = {
-      ...state.currentTrainingSession,
-      ...extra
-    };
-
-    const res = await fetch(`${base}?action=saveTrainingResult`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(trainingResult)
-    });
-
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`saveTrainingResult 실패: ${res.status} ${text}`);
-    }
-    return res.json().catch(() => ({}));
-  }
 
   async function getTrainingResults(userId, startDate, endDate) {
     const base = ensureBaseUrl();
