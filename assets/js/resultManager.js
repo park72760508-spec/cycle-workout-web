@@ -262,3 +262,24 @@
   window.trainingResults = Object.assign(window.trainingResults || {}, api);
 
 })();
+
+//결과 요약 즉시 바인딩용 최소 텍스트 출력
+
+(function attachResultSummaryRenderer(){
+  window.renderCurrentSessionSummary = function(){
+    const s = (window.trainingResults && window.trainingResults.__get?.())?.currentTrainingSession
+           || (window.trainingResults && window.trainingResults.state?.currentTrainingSession);
+    // 위 접근자가 없다면 아래 간단 요약만:
+    const box = document.getElementById('resultSummary');
+    if (!box || !s) return;
+    const segN = (s.segmentResults||[]).length;
+    box.innerHTML = `
+      <div class="result-mini">
+        <div>사용자: ${s.userId ?? '-'}</div>
+        <div>시작: ${s.startTime ?? '-'}</div>
+        <div>종료: ${s.endTime ?? '-'}</div>
+        <div>세그먼트 수: ${segN}</div>
+      </div>`;
+  };
+})();
+
