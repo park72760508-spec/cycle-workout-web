@@ -26,6 +26,20 @@
     }
   };
 
+// (옵션) 남아있는 코드가 postJSONWithProxy를 호출해도 터지지 않도록 폴백
+if (typeof postJSONWithProxy !== 'function') {
+  function postJSONWithProxy(baseUrl, action, payload) {
+    const target = `${baseUrl}?action=${encodeURIComponent(action)}`;
+    return fetch(target, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+  }
+}
+   
+
+   
   // ---------------------------
   // 유틸
   // ---------------------------
@@ -114,8 +128,9 @@
   // 저장 / 조회
   // ---------------------------
    /* ===== 저장(프록시 대응 버전) — 교체 ===== */
+   /* ===== 저장(프록시 없는 최종판 · CORS 프리플라이트 회피) ===== */
    async function saveTrainingResult(extra = {}) {
-     const base = ensureBaseUrl(); // window.GAS_URL 필수
+     const base = ensureBaseUrl(); // window.GAS_URL 필요
      if (!state.currentTrainingSession || !state.currentTrainingSession.startTime) {
        throw new Error('세션이 시작되지 않았습니다. startSession(userId) 먼저 호출하세요.');
      }
@@ -129,14 +144,19 @@
        ...extra
      };
    
+     // 👉 프록시 없이도 프리플라이트(OPTIONS) 안 뜨게 'text/plain' 사용 (Simple Request)
+     const target = `${base}?action=saveTrainingResult`;
+   
      let res;
      try {
-       // ✅ 프록시 경유(있으면) → 없으면 직통
-       res = await postJSONWithProxy(base, 'saveTrainingResult', trainingResult);
-     } catch (networkErr) {
-       // 네트워크 레벨 실패 (프리플라이트/CORS 포함)
-       console.warn('[result] fetch error:', networkErr);
-       throw new Error('saveTrainingResult 네트워크 오류(프록시/직통 실패). CORS 설정을 확인하세요.');
+       res = await fetch(target, {
+         method: 'POST',
+         headers: { 'Content-Type': 'text/plain' }, // <-- 중요: application/json 금지
+         body: JSON.stringify(trainingResult)
+       });
+     } catch (err) {
+       console.warn('[result] fetch error:', err);
+       throw new Error('네트워크 오류: GAS 웹앱 접근 불가(오프라인/URL오류/배포권한 문제 가능).');
      }
    
      if (!res || !res.ok) {
@@ -146,8 +166,13 @@
      }
    
      // 정상 응답 파싱
-     return res.json().catch(() => ({}));
+     let data = {};
+     try {
+       data = await res.json();
+     } catch (_) {}
+     return data;
    }
+
 
 
   async function getTrainingResults(userId, startDate, endDate) {
