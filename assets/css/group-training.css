@@ -1,1 +1,672 @@
 
+/* ==========================================================
+   그룹 훈련 모듈 전용 CSS 스타일 (group-training.css)
+   기존 스타일과 조화롭게 통합되도록 설계
+========================================================== */
+
+/* ===== 그룹 훈련 컨테이너 ===== */
+.group-training-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.group-room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.group-room-header h3 {
+  margin: 0;
+  color: #2e74e8;
+  font-size: 1.5rem;
+}
+
+.group-room-header p {
+  margin: 8px 0 0 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.host-badge {
+  background: #ffc107;
+  color: #212529;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 10px;
+}
+
+/* ===== 참가자 섹션 ===== */
+.group-participants-section {
+  margin-bottom: 30px;
+}
+
+.group-participants-section h4 {
+  margin-bottom: 15px;
+  color: #495057;
+  font-size: 1.2rem;
+}
+
+.participants-list {
+  display: grid;
+  gap: 10px;
+}
+
+.participant-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.participant-item:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-color: #2e74e8;
+}
+
+.participant-name {
+  font-weight: 500;
+  color: #495057;
+}
+
+.participant-status {
+  font-size: 0.85rem;
+  color: #28a745;
+  background: #d4edda;
+  padding: 4px 8px;
+  border-radius: 12px;
+}
+
+/* ===== 대기 중 액션 ===== */
+.group-waiting-actions {
+  text-align: center;
+  padding: 30px 20px;
+}
+
+.waiting-message {
+  margin-top: 20px;
+}
+
+.waiting-message p {
+  color: #6c757d;
+  font-size: 1rem;
+  margin-bottom: 15px;
+}
+
+.loading-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.loading-dots span {
+  width: 8px;
+  height: 8px;
+  background: #2e74e8;
+  border-radius: 50%;
+  animation: loadingDot 1.4s infinite ease-in-out both;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes loadingDot {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+/* ===== 그룹 훈련 버튼들 ===== */
+.group-training-buttons {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #e9ecef;
+}
+
+.group-training-buttons .button-group {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.group-training-buttons .btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-size: 1rem;
+  min-width: 140px;
+  justify-content: center;
+}
+
+.group-training-buttons .btn .icon {
+  font-size: 1.2rem;
+}
+
+/* ===== 그룹 훈련 패널 (훈련 중) ===== */
+.group-training-panel {
+  background: linear-gradient(135deg, #2e74e8 0%, #4facfe 100%);
+  color: white;
+  padding: 15px 20px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.3);
+}
+
+.group-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-icon {
+  font-size: 1.5rem;
+}
+
+.group-text {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+#groupParticipantCount {
+  background: rgba(255,255,255,0.2);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+}
+
+#adminMonitorBtn {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+#adminMonitorBtn:hover {
+  background: rgba(255,255,255,0.3);
+  border-color: rgba(255,255,255,0.5);
+}
+
+/* ===== 모달 스타일 ===== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  max-width: 600px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 25px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #2e74e8;
+  font-size: 1.4rem;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.modal-body {
+  padding: 25px;
+}
+
+/* ===== 그룹방 목록 ===== */
+.room-list {
+  display: grid;
+  gap: 15px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.room-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.room-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-color: #2e74e8;
+}
+
+.room-info h4 {
+  margin: 0 0 8px 0;
+  color: #2e74e8;
+  font-size: 1.1rem;
+}
+
+.room-info p {
+  margin: 4px 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.join-room-btn {
+  flex-shrink: 0;
+  margin-left: 20px;
+}
+
+.no-rooms {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* ===== 방 생성 폼 ===== */
+.create-room-modal {
+  max-width: 500px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #495057;
+  font-weight: 500;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #2e74e8;
+  box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+/* ===== 관리자 모니터링 ===== */
+.admin-monitoring-modal {
+  max-width: 800px;
+  max-height: 90vh;
+}
+
+.monitoring-grid {
+  display: grid;
+  gap: 15px;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.monitoring-card {
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 20px;
+  background: #f8f9fa;
+}
+
+.monitoring-card .user-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.monitoring-card .user-info h4 {
+  margin: 0;
+  color: #2e74e8;
+  font-size: 1.1rem;
+}
+
+.segment-info {
+  background: #e7f1ff;
+  color: #2e74e8;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.training-data {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.data-item {
+  text-align: center;
+  padding: 10px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.data-item .label {
+  display: block;
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.data-item .value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #2e74e8;
+}
+
+.last-update {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* ===== 그룹 결과 패널 ===== */
+.group-result-panel {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  padding: 25px;
+  border-radius: 12px;
+  margin-top: 20px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.group-result-panel h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.5rem;
+}
+
+.group-result-panel p {
+  margin: 0 0 20px 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+#backToGroupListBtn {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+#backToGroupListBtn:hover {
+  background: rgba(255,255,255,0.3);
+  border-color: rgba(255,255,255,0.5);
+}
+
+/* ===== 반응형 디자인 ===== */
+@media (max-width: 768px) {
+  .group-training-container {
+    padding: 15px;
+  }
+  
+  .group-room-header {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .group-training-buttons .button-group {
+    flex-direction: column;
+  }
+  
+  .group-training-buttons .btn {
+    min-width: 100%;
+  }
+  
+  .room-item {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .join-room-btn {
+    margin-left: 0;
+    width: 100%;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .training-data {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .modal-overlay {
+    padding: 10px;
+  }
+  
+  .modal-content {
+    max-height: 90vh;
+  }
+  
+  .group-training-panel {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .training-data {
+    grid-template-columns: 1fr;
+  }
+  
+  .group-info {
+    justify-content: center;
+  }
+  
+  .modal-header {
+    padding: 15px 20px;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+}
+
+/* ===== 상태별 컬러 ===== */
+.status-waiting {
+  color: #ffc107;
+}
+
+.status-training {
+  color: #28a745;
+}
+
+.status-finished {
+  color: #6c757d;
+}
+
+/* ===== 애니메이션 ===== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.group-training-container,
+.modal-content {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ===== 로딩 상태 ===== */
+.loading-spinner {
+  text-align: center;
+  padding: 30px;
+  color: #6c757d;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  min-height: 200px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #2e74e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ===== 접근성 개선 ===== */
+.btn:focus,
+.modal-close:focus,
+input:focus,
+select:focus {
+  outline: 2px solid #2e74e8;
+  outline-offset: 2px;
+}
+
+/* ===== 고대비 모드 지원 ===== */
+@media (prefers-contrast: high) {
+  .group-training-panel,
+  .group-result-panel {
+    background: #000;
+    color: #fff;
+    border: 2px solid #fff;
+  }
+  
+  .monitoring-card {
+    border: 2px solid #000;
+    background: #fff;
+  }
+}
+
+/* ===== 다크 모드 지원 ===== */
+@media (prefers-color-scheme: dark) {
+  .group-training-container {
+    background: #1a1a1a;
+    color: #fff;
+  }
+  
+  .group-room-header {
+    background: #2d2d2d;
+    border-color: #404040;
+  }
+  
+  .participant-item,
+  .room-item,
+  .monitoring-card {
+    background: #2d2d2d;
+    border-color: #404040;
+    color: #fff;
+  }
+  
+  .modal-content {
+    background: #2d2d2d;
+    color: #fff;
+  }
+  
+  .modal-header {
+    border-color: #404040;
+  }
+}
