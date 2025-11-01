@@ -3357,6 +3357,260 @@ button[aria-disabled="true"] {
 
 
 
+/* ===== 그룹 훈련 + 음성 기능 스타일 (기존 style.css에 추가) ===== */
 
+/* 그룹 훈련 섹션 */
+.group-training-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.group-training-section h3 {
+  margin: 0 0 15px 0;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-training-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.group-training-buttons .btn {
+  flex: 1;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.group-training-buttons .btn:hover {
+  background: rgba(255,255,255,0.3);
+  border-color: rgba(255,255,255,0.5);
+}
+
+/* 음성 컨트롤 패널 */
+.voice-control-panel {
+  background: rgba(255,255,255,0.1);
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 15px;
+  display: none;
+}
+
+.voice-control-panel.active {
+  display: block;
+}
+
+.voice-control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.voice-control-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-status-indicator {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  background: rgba(255,255,255,0.2);
+}
+
+.voice-status-indicator.broadcasting {
+  background: rgba(220, 53, 69, 0.8);
+  animation: pulse 2s infinite;
+}
+
+.voice-status-indicator.muted {
+  background: rgba(255, 193, 7, 0.8);
+  color: #212529;
+}
+
+.voice-status-indicator.listening {
+  background: rgba(40, 167, 69, 0.8);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.voice-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.voice-controls .btn {
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: white;
+}
+
+.voice-controls .btn.btn-mic-on {
+  background: #28a745;
+  border-color: #28a745;
+  animation: recording-pulse 2s infinite;
+}
+
+.voice-controls .btn.btn-mic-muted {
+  background: #ffc107;
+  color: #212529;
+  border-color: #ffc107;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+  50% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+}
+
+/* 참가자 목록 */
+.participants-list {
+  margin-top: 15px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.participant-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+}
+
+.participant-name {
+  font-weight: 500;
+}
+
+.participant-voice-status {
+  font-size: 0.8rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.2);
+}
+
+/* 훈련 중 음성 표시기 */
+.training-voice-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  z-index: 1000;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+.training-voice-indicator.active {
+  display: flex;
+}
+
+.training-voice-indicator.broadcasting {
+  background: rgba(220, 53, 69, 0.9);
+  animation: pulse 2s infinite;
+}
+
+.training-voice-indicator.listening {
+  background: rgba(40, 167, 69, 0.9);
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .group-training-buttons {
+    flex-direction: column;
+  }
+  
+  .group-training-buttons .btn {
+    min-width: 100%;
+  }
+  
+  .voice-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .voice-controls .btn {
+    justify-content: center;
+  }
+  
+  .participant-item {
+    flex-direction: column;
+    gap: 5px;
+    text-align: center;
+  }
+  
+  .training-voice-indicator {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    font-size: 0.7rem;
+    padding: 6px 10px;
+  }
+}
+
+/* 기존 스타일과의 조화를 위한 추가 스타일 */
+.group-training-section p {
+  line-height: 1.4;
+}
+
+.group-training-section .btn span {
+  font-size: 1.1rem;
+}
+
+/* 토스트 메시지 스타일 개선 (기존 스타일 보완) */
+.toast.error {
+  background: #dc3545;
+}
+
+.toast.success {
+  background: #28a745;
+}
+
+.toast.warning {
+  background: #ffc107;
+  color: #212529;
+}
 
 
