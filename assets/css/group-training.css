@@ -1,62 +1,482 @@
-
 /* ==========================================================
-   그룹 훈련 모듈 전용 CSS 스타일 (group-training.css)
-   기존 스타일과 조화롭게 통합되도록 설계
+   Group Training Module CSS - 그룹 훈련 전용 스타일
+   기존 style.css와 일관성을 유지하면서 그룹 훈련 기능만을 위한 스타일
+   
+   섹션 구성:
+   [1] 훈련 방식 선택 화면
+   [2] 그룹 훈련 모달
+   [3] 훈련실 화면
+   [4] 모니터링 오버레이
+   [5] 카운트다운 효과
+   [6] 반응형 및 애니메이션
 ========================================================== */
 
-/* ===== 그룹 훈련 컨테이너 ===== */
-.group-training-container {
-  max-width: 800px;
+/* ========== [1] 훈련 방식 선택 화면 ========== */
+
+/* 기존 training-ready 섹션 확장 */
+.training-mode-selection {
+  max-width: 1000px;
   margin: 0 auto;
   padding: 20px;
 }
 
-.group-room-header {
+.training-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  margin: 30px 0;
+}
+
+.training-mode-card {
+  background: linear-gradient(135deg, #2e74e8 0%, #2562c8 100%);
+  border-radius: 16px;
+  padding: 28px;
+  color: white;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.training-mode-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.training-mode-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 32px rgba(46, 116, 232, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.training-mode-card:hover::before {
+  opacity: 1;
+}
+
+.training-mode-card.group-training {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+}
+
+.training-mode-card.group-training:hover {
+  box-shadow: 0 16px 32px rgba(40, 167, 69, 0.3);
+}
+
+.mode-icon {
+  font-size: 52px;
+  margin-bottom: 16px;
+  display: block;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.training-mode-card h4 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: white;
+}
+
+.training-mode-card > p {
+  font-size: 15px;
+  opacity: 0.9;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.mode-features {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 28px 0;
+  text-align: left;
+}
+
+.mode-features li {
+  font-size: 14px;
+  padding: 6px 0;
+  opacity: 0.85;
+  position: relative;
+  padding-left: 20px;
+  line-height: 1.4;
+}
+
+.mode-features li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.training-mode-card .btn {
+  width: 100%;
+  margin-top: auto;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 14px 20px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.training-mode-card .btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.training-mode-card .btn .btn-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* ========== [2] 그룹 훈련 모달 ========== */
+
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 10000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  padding: 0;
+  width: 90%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  animation: modalSlideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  padding: 28px 28px 20px 28px;
+  border-bottom: 1px solid #e9ecef;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding: 20px;
-  background: #f8f9fa;
-  border-radius: 12px;
-  border: 1px solid #e9ecef;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border-radius: 20px 20px 0 0;
 }
 
-.group-room-header h3 {
+.modal-header h3 {
   margin: 0;
-  color: #2e74e8;
-  font-size: 1.5rem;
+  color: #2c3e50;
+  font-size: 22px;
+  font-weight: 700;
 }
 
-.group-room-header p {
-  margin: 8px 0 0 0;
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
   color: #6c757d;
-  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.host-badge {
-  background: #ffc107;
-  color: #212529;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  margin-left: 10px;
-}
-
-/* ===== 참가자 섹션 ===== */
-.group-participants-section {
-  margin-bottom: 30px;
-}
-
-.group-participants-section h4 {
-  margin-bottom: 15px;
+.modal-close:hover {
+  background: #f8f9fa;
   color: #495057;
-  font-size: 1.2rem;
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 28px;
+}
+
+.group-training-intro {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.group-training-intro > p {
+  color: #6c757d;
+  font-size: 16px;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.feature-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  font-size: 14px;
+  color: #495057;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.feature-item:hover {
+  background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+  transform: translateY(-1px);
+}
+
+.feature-icon {
+  font-size: 18px;
+  opacity: 0.8;
+}
+
+.group-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.group-actions .btn {
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.group-actions .btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.group-actions .btn:hover::before {
+  left: 100%;
+}
+
+.group-actions .btn .btn-icon {
+  margin-right: 10px;
+  font-size: 18px;
+}
+
+.admin-notice {
+  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+  border: 1px solid #f6e05e;
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 20px;
+  color: #856404;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.admin-notice strong {
+  color: #795548;
+}
+
+/* ========== [3] 훈련실 화면 ========== */
+
+#groupTrainingRoomScreen .header {
+  background: linear-gradient(135deg, #2e74e8 0%, #764ba2 100%);
+  color: white;
+  margin: -20px -20px 20px -20px;
+  padding: 28px 20px;
+  border-radius: 0 0 24px 24px;
+}
+
+#groupTrainingRoomScreen .header h1 {
+  color: white;
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+#groupTrainingRoomScreen .subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+}
+
+.room-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.training-status-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  padding: 28px;
+  color: white;
+  margin-bottom: 28px;
+  position: relative;
+  overflow: hidden;
+}
+
+.training-status-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(from 0deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: rotate 20s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.status-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.status-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.status-dot::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.3;
+  animation: pulse 2s infinite;
+}
+
+.status-dot.waiting {
+  background: #fbbf24;
+  color: #fbbf24;
+}
+
+.status-dot.starting {
+  background: #f59e0b;
+  color: #f59e0b;
+}
+
+.status-dot.training {
+  background: #10b981;
+  color: #10b981;
+}
+
+.status-dot.finished {
+  background: #6b7280;
+  color: #6b7280;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+.workout-info h3 {
+  margin: 0 0 6px 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.workout-info p {
+  margin: 0;
+  opacity: 0.85;
+  font-size: 14px;
+}
+
+.participants-section,
+.host-controls,
+.chat-section {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.participants-section h3,
+.host-controls h3,
+.chat-section h3 {
+  margin: 0 0 20px 0;
+  color: #2c3e50;
+  font-size: 18px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .participants-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -64,265 +484,248 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: white;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  transition: all 0.2s ease;
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border-left: 4px solid #e9ecef;
+  transition: all 0.3s ease;
+  position: relative;
 }
 
 .participant-item:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  border-color: #2e74e8;
+  background: #e9ecef;
+  transform: translateX(4px);
+}
+
+.participant-item.host {
+  border-left-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.participant-item.host:hover {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+}
+
+.participant-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .participant-name {
-  font-weight: 500;
-  color: #495057;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 15px;
+}
+
+.host-badge {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .participant-status {
-  font-size: 0.85rem;
-  color: #28a745;
-  background: #d4edda;
-  padding: 4px 8px;
-  border-radius: 12px;
-}
-
-/* ===== 대기 중 액션 ===== */
-.group-waiting-actions {
-  text-align: center;
-  padding: 30px 20px;
-}
-
-.waiting-message {
-  margin-top: 20px;
-}
-
-.waiting-message p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
   color: #6c757d;
-  font-size: 1rem;
-  margin-bottom: 15px;
+  font-weight: 500;
 }
 
-.loading-dots {
-  display: inline-flex;
-  gap: 4px;
+.participant-status .status-dot {
+  width: 10px;
+  height: 10px;
 }
 
-.loading-dots span {
-  width: 8px;
-  height: 8px;
-  background: #2e74e8;
-  border-radius: 50%;
-  animation: loadingDot 1.4s infinite ease-in-out both;
+.status-dot.online {
+  background: #10b981;
 }
 
-.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
-.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes loadingDot {
-  0%, 80%, 100% {
-    transform: scale(0);
-  }
-  40% {
-    transform: scale(1);
-  }
-}
-
-/* ===== 그룹 훈련 버튼들 ===== */
-.group-training-buttons {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 2px solid #e9ecef;
-}
-
-.group-training-buttons .button-group {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.group-training-buttons .btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  font-size: 1rem;
-  min-width: 140px;
-  justify-content: center;
-}
-
-.group-training-buttons .btn .icon {
-  font-size: 1.2rem;
-}
-
-/* ===== 그룹 훈련 패널 (훈련 중) ===== */
-.group-training-panel {
-  background: linear-gradient(135deg, #2e74e8 0%, #4facfe 100%);
-  color: white;
-  padding: 15px 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.3);
-}
-
-.group-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.group-icon {
-  font-size: 1.5rem;
-}
-
-.group-text {
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-#groupParticipantCount {
-  background: rgba(255,255,255,0.2);
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.9rem;
-}
-
-#adminMonitorBtn {
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: white;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-}
-
-#adminMonitorBtn:hover {
-  background: rgba(255,255,255,0.3);
-  border-color: rgba(255,255,255,0.5);
-}
-
-/* ===== 모달 스타일 ===== */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 20px;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-  max-width: 600px;
-  width: 100%;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 25px;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #2e74e8;
-  font-size: 1.4rem;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  color: #6c757d;
-  cursor: pointer;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-.modal-close:hover {
-  background: #f8f9fa;
-  color: #495057;
-}
-
-.modal-body {
-  padding: 25px;
-}
-
-/* ===== 그룹방 목록 ===== */
-.room-list {
+.control-buttons {
   display: grid;
-  gap: 15px;
-  max-height: 400px;
-  overflow-y: auto;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
 }
 
-.room-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+.control-buttons .btn {
+  padding: 16px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.control-buttons .btn .btn-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+.chat-messages {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
   padding: 20px;
+  max-height: 250px;
+  overflow-y: auto;
   border: 1px solid #e9ecef;
-  border-radius: 10px;
-  transition: all 0.2s ease;
 }
 
-.room-item:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  border-color: #2e74e8;
+.chat-message {
+  margin-bottom: 10px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-.room-info h4 {
-  margin: 0 0 8px 0;
-  color: #2e74e8;
-  font-size: 1.1rem;
-}
-
-.room-info p {
-  margin: 4px 0;
-  color: #6c757d;
-  font-size: 0.9rem;
-}
-
-.join-room-btn {
-  flex-shrink: 0;
-  margin-left: 20px;
-}
-
-.no-rooms {
-  text-align: center;
-  padding: 40px 20px;
+.chat-message.system {
   color: #6c757d;
   font-style: italic;
 }
 
-/* ===== 방 생성 폼 ===== */
-.create-room-modal {
-  max-width: 500px;
+.timestamp {
+  color: #adb5bd;
+  font-size: 12px;
+  margin-right: 10px;
+  font-weight: 500;
 }
+
+/* ========== [4] 모니터링 오버레이 ========== */
+
+.monitoring-overlay {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 380px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  z-index: 9999;
+  max-height: 75vh;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.monitoring-header {
+  padding: 20px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.monitoring-header h4 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.btn-close-monitoring {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-close-monitoring:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.monitoring-content {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: calc(75vh - 80px);
+}
+
+/* ========== [5] 카운트다운 효과 ========== */
+
+.countdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.95) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(10px);
+  animation: overlayFadeIn 0.5s ease;
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.countdown-content {
+  text-align: center;
+  color: white;
+  animation: countdownPulse 1s ease-in-out;
+}
+
+@keyframes countdownPulse {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.countdown-content h2 {
+  font-size: 32px;
+  margin-bottom: 32px;
+  color: white;
+  font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.countdown-number {
+  font-size: 140px;
+  font-weight: 900;
+  color: #10b981;
+  margin-bottom: 24px;
+  text-shadow: 0 0 30px rgba(16, 185, 129, 0.7);
+  transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  line-height: 1;
+  font-family: 'Arial', sans-serif;
+}
+
+.countdown-content p {
+  font-size: 18px;
+  opacity: 0.9;
+  margin: 0;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== [6] 폼 및 UI 컴포넌트 ========== */
 
 .form-group {
   margin-bottom: 20px;
@@ -330,343 +733,365 @@
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-weight: 600;
   color: #495057;
-  font-weight: 500;
+  font-size: 14px;
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: all 0.2s ease;
+  padding: 14px 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  background: white;
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
   border-color: #2e74e8;
-  box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1);
+  box-shadow: 0 0 0 4px rgba(46, 116, 232, 0.1);
+  transform: translateY(-1px);
 }
 
-.form-actions {
+.form-help {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6c757d;
+  line-height: 1.4;
+}
+
+.join-actions {
   display: flex;
-  gap: 10px;
+  gap: 16px;
   justify-content: flex-end;
-  margin-top: 30px;
-  padding-top: 20px;
-  border-top: 1px solid #e9ecef;
+  margin-top: 24px;
 }
 
-/* ===== 관리자 모니터링 ===== */
-.admin-monitoring-modal {
-  max-width: 800px;
-  max-height: 90vh;
+/* ========== [7] 빈 상태 및 에러 상태 ========== */
+
+.empty-participants,
+.empty-rooms {
+  text-align: center;
+  padding: 48px 20px;
+  color: #6c757d;
 }
 
-.monitoring-grid {
-  display: grid;
-  gap: 15px;
-  max-height: 500px;
-  overflow-y: auto;
+.empty-participants::before,
+.empty-rooms::before {
+  content: '👥';
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+  opacity: 0.5;
 }
 
-.monitoring-card {
-  border: 1px solid #e9ecef;
-  border-radius: 10px;
-  padding: 20px;
-  background: #f8f9fa;
+.rooms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.monitoring-card .user-info {
+.room-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  padding: 20px;
+  border: 2px solid #e9ecef;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  transition: all 0.3s ease;
 }
 
-.monitoring-card .user-info h4 {
-  margin: 0;
-  color: #2e74e8;
-  font-size: 1.1rem;
+.room-item:hover {
+  border-color: #2e74e8;
+  box-shadow: 0 4px 20px rgba(46, 116, 232, 0.1);
+  transform: translateY(-2px);
 }
 
-.segment-info {
-  background: #e7f1ff;
-  color: #2e74e8;
-  padding: 4px 8px;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: 500;
+.room-info h4 {
+  margin: 0 0 6px 0;
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 700;
 }
 
-.training-data {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
-  margin-bottom: 15px;
-}
-
-.data-item {
-  text-align: center;
-  padding: 10px;
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e9ecef;
-}
-
-.data-item .label {
-  display: block;
-  font-size: 0.8rem;
+.room-info p {
+  margin: 2px 0;
   color: #6c757d;
-  margin-bottom: 4px;
+  font-size: 14px;
 }
 
-.data-item .value {
-  display: block;
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #2e74e8;
+.room-actions {
+  text-align: right;
 }
 
-.last-update {
-  text-align: center;
-  font-size: 0.8rem;
-  color: #6c757d;
-  font-style: italic;
-}
+/* ========== [8] 반응형 디자인 ========== */
 
-.no-data {
-  text-align: center;
-  padding: 40px 20px;
-  color: #6c757d;
-  font-style: italic;
-}
-
-/* ===== 그룹 결과 패널 ===== */
-.group-result-panel {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-  color: white;
-  padding: 25px;
-  border-radius: 12px;
-  margin-top: 20px;
-  text-align: center;
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
-}
-
-.group-result-panel h3 {
-  margin: 0 0 10px 0;
-  font-size: 1.5rem;
-}
-
-.group-result-panel p {
-  margin: 0 0 20px 0;
-  font-size: 1.1rem;
-  opacity: 0.9;
-}
-
-#backToGroupListBtn {
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: white;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-#backToGroupListBtn:hover {
-  background: rgba(255,255,255,0.3);
-  border-color: rgba(255,255,255,0.5);
-}
-
-/* ===== 반응형 디자인 ===== */
 @media (max-width: 768px) {
-  .group-training-container {
-    padding: 15px;
+  .training-modes {
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
   
-  .group-room-header {
+  .training-mode-card {
+    padding: 24px;
+  }
+  
+  .status-info {
     flex-direction: column;
-    gap: 15px;
     text-align: center;
+    gap: 16px;
   }
   
-  .group-training-buttons .button-group {
+  .control-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .join-actions {
     flex-direction: column;
-  }
-  
-  .group-training-buttons .btn {
-    min-width: 100%;
   }
   
   .room-item {
     flex-direction: column;
-    gap: 15px;
+    align-items: stretch;
+    gap: 16px;
+  }
+  
+  .room-actions {
     text-align: center;
   }
   
-  .join-room-btn {
-    margin-left: 0;
-    width: 100%;
+  .monitoring-overlay {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: 70vh;
   }
   
-  .form-actions {
-    flex-direction: column;
-  }
-  
-  .training-data {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .modal-overlay {
-    padding: 10px;
-  }
-  
-  .modal-content {
-    max-height: 90vh;
-  }
-  
-  .group-training-panel {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
+  .feature-list {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 480px) {
-  .training-data {
-    grid-template-columns: 1fr;
+  .modal-content {
+    width: 95%;
+    margin: 10px;
+    border-radius: 16px;
   }
   
-  .group-info {
-    justify-content: center;
-  }
-  
-  .modal-header {
-    padding: 15px 20px;
-  }
-  
+  .modal-header,
   .modal-body {
     padding: 20px;
   }
-}
-
-/* ===== 상태별 컬러 ===== */
-.status-waiting {
-  color: #ffc107;
-}
-
-.status-training {
-  color: #28a745;
-}
-
-.status-finished {
-  color: #6c757d;
-}
-
-/* ===== 애니메이션 ===== */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+  
+  .training-mode-card {
+    padding: 20px;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  
+  .mode-icon {
+    font-size: 44px;
+    margin-bottom: 12px;
+  }
+  
+  .training-mode-card h4 {
+    font-size: 20px;
+  }
+  
+  .countdown-number {
+    font-size: 100px;
+  }
+  
+  .countdown-content h2 {
+    font-size: 24px;
+  }
+  
+  #groupTrainingRoomScreen .header {
+    margin: -20px -20px 16px -20px;
+    padding: 20px;
+  }
+  
+  .room-content {
+    padding: 0 16px;
+  }
+  
+  .participants-section,
+  .host-controls,
+  .chat-section {
+    padding: 20px;
+    margin-bottom: 20px;
   }
 }
 
-.group-training-container,
-.modal-content {
-  animation: fadeIn 0.3s ease-out;
+/* ========== [9] 애니메이션 및 인터랙션 강화 ========== */
+
+.training-mode-card,
+.participant-item,
+.room-item,
+.btn {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ===== 로딩 상태 ===== */
-.loading-spinner {
-  text-align: center;
-  padding: 30px;
-  color: #6c757d;
+.btn:active {
+  transform: translateY(1px);
 }
 
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  min-height: 200px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #2e74e8;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* ===== 접근성 개선 ===== */
-.btn:focus,
-.modal-close:focus,
-input:focus,
-select:focus {
+.btn:focus {
   outline: 2px solid #2e74e8;
   outline-offset: 2px;
 }
 
-/* ===== 고대비 모드 지원 ===== */
-@media (prefers-contrast: high) {
-  .group-training-panel,
-  .group-result-panel {
-    background: #000;
-    color: #fff;
-    border: 2px solid #fff;
-  }
-  
-  .monitoring-card {
-    border: 2px solid #000;
-    background: #fff;
+/* 로딩 애니메이션 */
+.loading-dots {
+  display: inline-block;
+}
+
+.loading-dots::after {
+  content: '';
+  animation: dots 1.5s infinite;
+}
+
+@keyframes dots {
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: ''; }
+}
+
+/* 성공/실패 상태 피드백 */
+.status-success {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.status-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* 접근성 개선 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
-/* ===== 다크 모드 지원 ===== */
+/* 고대비 모드 지원 */
+@media (prefers-contrast: high) {
+  .training-mode-card {
+    border: 3px solid white;
+  }
+  
+  .participant-item {
+    border: 2px solid #000;
+  }
+  
+  .btn {
+    border: 2px solid currentColor;
+  }
+}
+
+/* 다크모드 기본 지원 (선택사항) */
 @media (prefers-color-scheme: dark) {
-  .group-training-container {
-    background: #1a1a1a;
-    color: #fff;
-  }
-  
-  .group-room-header {
-    background: #2d2d2d;
-    border-color: #404040;
-  }
-  
-  .participant-item,
-  .room-item,
-  .monitoring-card {
-    background: #2d2d2d;
-    border-color: #404040;
-    color: #fff;
-  }
-  
-  .modal-content {
-    background: #2d2d2d;
-    color: #fff;
+  .modal-content,
+  .participants-section,
+  .host-controls,
+  .chat-section {
+    background: #1f2937;
+    color: #f9fafb;
+    border-color: #374151;
   }
   
   .modal-header {
-    border-color: #404040;
+    background: linear-gradient(135deg, #374151 0%, #1f2937 100%);
+    border-bottom-color: #4b5563;
   }
+  
+  .modal-header h3,
+  .participants-section h3,
+  .host-controls h3,
+  .chat-section h3 {
+    color: #f9fafb;
+  }
+  
+  .participant-item {
+    background: #374151;
+    border-left-color: #4b5563;
+  }
+  
+  .participant-item.host {
+    background: linear-gradient(135deg, #451a03 0%, #92400e 100%);
+    border-left-color: #f59e0b;
+  }
+  
+  .chat-messages {
+    background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+    border-color: #4b5563;
+  }
+  
+  .form-group input,
+  .form-group select {
+    background: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+  
+  .room-item {
+    background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+    border-color: #4b5563;
+  }
+}
+
+/* ========== [10] 성능 최적화 ========== */
+
+/* GPU 가속을 위한 will-change 속성 */
+.training-mode-card,
+.countdown-number,
+.status-dot {
+  will-change: transform;
+}
+
+/* 스크롤 성능 최적화 */
+.chat-messages,
+.monitoring-content {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 #f7fafc;
+}
+
+.chat-messages::-webkit-scrollbar,
+.monitoring-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track,
+.monitoring-content::-webkit-scrollbar-track {
+  background: #f7fafc;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb,
+.monitoring-content::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover,
+.monitoring-content::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
