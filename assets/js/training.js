@@ -233,8 +233,6 @@ async function createTrainingRoom() {
     const result = await response.json();
 
     
-    const result = await response.json();
-    
     if (result.success) {
       GROUP_TRAINING.roomId = result.roomId;
       GROUP_TRAINING.isHost = true;
