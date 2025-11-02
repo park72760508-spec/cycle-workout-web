@@ -144,6 +144,30 @@ function initializeWorkoutManager() {
 // 개선된 JSONP 요청 함수 (60초 타임아웃)
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
+    // 30초 타임아웃 추가
+    const timeoutId = setTimeout(() => {
+      if (isResolved) return;
+      isResolved = true;
+      
+      console.error('❌ JSONP 요청 타임아웃 (30초)');
+      cleanup();
+      reject(new Error('요청 시간 초과'));
+    }, 30000);
+    
+    // cleanup 함수 수정
+    function cleanup() {
+      try {
+        clearTimeout(timeoutId); // 타임아웃 클리어 추가
+        if (window[callbackName]) {
+          delete window[callbackName];
+        }
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      } catch (e) {
+        console.warn('JSONP cleanup warning:', e);
+      }
+    }
     if (!url || typeof url !== 'string' || url.trim() === '') {
       console.error('[JSONP] URL이 비었습니다. index.html의 GAS_URL 설정을 확인하세요.');
       reject(new Error('유효하지 않은 URL입니다.'));
@@ -178,14 +202,27 @@ function jsonpRequest(url, params = {}) {
       }
     }
     
-    script.onerror = function() {
-      if (isResolved) return;
-      isResolved = true;
-      
-      console.error('JSONP script loading failed');
-      cleanup();
-      reject(new Error('네트워크 연결 오류'));
-    };
+      script.onerror = function() {
+        if (isResolved) return;
+        isResolved = true;
+        
+        console.error('JSONP script loading failed for URL:', finalUrl);
+        
+        // URL 검증 추가
+        if (!url || url.trim() === '') {
+          console.error('❌ GAS_URL이 설정되지 않았습니다. index.html에서 확인하세요.');
+          cleanup();
+          reject(new Error('GAS_URL 설정 오류'));
+          return;
+        }
+        
+        // 재시도 로직 추가
+        setTimeout(() => {
+          console.log('🔄 JSONP 요청 재시도 중...');
+          cleanup();
+          reject(new Error('네트워크 연결 오류 - 재시도 필요'));
+        }, 1000);
+      };
     
       try {
         // 안전한 수동 인코딩 방식 사용
