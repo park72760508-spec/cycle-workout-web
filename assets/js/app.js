@@ -4630,22 +4630,48 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   console.log('📱 DB 연동 인증 시스템 초기화 중...');
 
-  // ✅ GAS_URL 검증 먼저 수행
-  if (!window.GAS_URL || window.GAS_URL.includes('YOUR_SCRIPT_ID')) {
+  // ✅ 필수 설정 검증 강화
+  if (!window.GAS_URL) {
     console.error('❌ GAS_URL이 설정되지 않았습니다!');
-    showToast('시스템 설정 오류: GAS_URL을 확인하세요', 'error');
+    showToast('시스템 설정 오류: GAS_URL이 필요합니다', 'error');
     showRetryButton();
     return;
   }
 
-  // userManager.js 로드 대기
+  if (window.GAS_URL.includes('YOUR_SCRIPT_ID') || window.GAS_URL.includes('XXXXXXX')) {
+    console.error('❌ GAS_URL이 실제 값으로 설정되지 않았습니다!');
+    showToast('시스템 설정 오류: Google Apps Script URL을 실제 값으로 설정하세요', 'error');
+    showRetryButton();
+    return;
+  }
+
+  console.log('✅ GAS_URL 검증 완료:', window.GAS_URL);
+
+  // ✅ 의존성 함수들 체크 강화
+  const requiredFunctions = ['apiGetUsers', 'jsonpRequest', 'showToast'];
+  let allFunctionsLoaded = false;
   let retryCount = 0;
-  const maxRetries = 20; // ✅ 재시도 횟수 증가
+  const maxRetries = 30; // 더 많은 재시도
   
-  while (typeof apiGetUsers !== 'function' && retryCount < maxRetries) {
-    console.log(`⏳ userManager.js 로드 대기 중... (${retryCount + 1}/${maxRetries})`);
-    await new Promise(resolve => setTimeout(resolve, 300)); // ✅ 대기 시간 단축
-    retryCount++;
+  while (!allFunctionsLoaded && retryCount < maxRetries) {
+    const missingFunctions = requiredFunctions.filter(funcName => typeof window[funcName] !== 'function');
+    
+    if (missingFunctions.length === 0) {
+      allFunctionsLoaded = true;
+      console.log('✅ 모든 필수 함수 로드 완료');
+    } else {
+      console.log(`⏳ 함수 로드 대기 중... (${retryCount + 1}/${maxRetries})`);
+      console.log('누락된 함수들:', missingFunctions);
+      await new Promise(resolve => setTimeout(resolve, 200)); // 더 짧은 간격
+      retryCount++;
+    }
+  }
+  
+  if (!allFunctionsLoaded) {
+    console.error('❌ 필수 함수 로드 실패');
+    showToast('스크립트 로딩 실패 - 페이지를 새로고침해주세요', 'error');
+    showRetryButton();
+    return;
   }
   
   if (typeof apiGetUsers !== 'function') {
@@ -4691,6 +4717,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     showRetryButton();
   }
 });
+
+
+
+
 
 // 재시도 버튼 표시 함수 추가
 function showRetryButton() {
