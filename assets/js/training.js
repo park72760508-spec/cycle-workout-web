@@ -41,34 +41,31 @@ const maxGroupTrainingRetries = 10;
 
 function initGroupTraining() {
   console.log('🚀 그룹 훈련 시스템 초기화');
-  
+
   // ✅ 재시도 횟수 제한
   if (groupTrainingInitRetry >= maxGroupTrainingRetries) {
     console.error('❌ 그룹 트레이닝 초기화 실패 - 최대 재시도 횟수 초과');
     return;
   }
-  
-  // ✅ 수정된 필수 의존성 확인 (실제 존재하는 함수들만 체크)
-  const requiredFunctions = [
-    'apiGetUsers',
-    'jsonpRequest', 
-    'showToast',
-    'showScreen'
-  ];
-  
-  const missingFunctions = requiredFunctions.filter(funcName => typeof window[funcName] !== 'function');
-  
+
+  // ✅ 필수 의존성 확인
+  const requiredFunctions = ['apiGetUsers','jsonpRequest','showToast','showScreen'];
+  const missingFunctions = requiredFunctions.filter(fn => typeof window[fn] !== 'function');
+
   if (missingFunctions.length > 0) {
     groupTrainingInitRetry++;
     console.warn(`⚠️ 그룹 트레이닝 초기화 지연 - 의존성 로딩 대기 (${groupTrainingInitRetry}/${maxGroupTrainingRetries})`);
     console.warn('누락된 함수들:', missingFunctions);
-    
-    // ✅ 점진적 대기 시간 증가 (최대 5초까지)
+
     const waitTime = Math.min(500 * groupTrainingInitRetry, 5000);
     setTimeout(initGroupTraining, waitTime);
     return;
   }
 
+  // ✅ 의존성 준비 완료 → 이벤트 바인딩 및 안내
+  setupGroupTrainingEvents();
+  console.log('✅ 그룹 훈련 시스템 준비 완료');
+} // ←←← ★★★ 이 닫힘 중괄호가 빠져 있었습니다 ★★★
 
 // ========== 이벤트 설정 ==========
 function setupGroupTrainingEvents() {
