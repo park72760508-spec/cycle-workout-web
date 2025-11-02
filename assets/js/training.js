@@ -35,6 +35,20 @@ const ROOM_STATUS = {
   FINISHED: 'finished'
 };
 
+
+// training.js 상단 또는 유틸 섹션
+const toast = (msg) => (typeof window.showToast === 'function' ? window.showToast(msg) : console.log('[Toast]', msg));
+const loading = (msg) => (typeof window.showLoading === 'function' ? window.showLoading(msg) : console.log('[Loading]', msg));
+const hide = () => (typeof window.hideLoading === 'function' ? window.hideLoading() : void 0);
+
+// 사용 예:
+// toast('인증을 시작합니다');
+// loading('처리 중…');
+// hide();
+
+
+
+
 // ========== 초기화 함수 ==========
 let groupTrainingInitRetry = 0;
 const maxGroupTrainingRetries = 10;
@@ -985,30 +999,44 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
-function showLoading(message = '처리 중...') {
-  // 기존 로딩 함수 사용 또는 구현
-  if (window.showLoading) {
-    window.showLoading(message);
-  } else {
-    console.log('Loading:', message);
-  }
-}
+// ===== 안전 UI 프록시 (비재귀) =====
+(function patchUiProxies(){
+  if (window.__uiProxyPatched) return;
+  window.__uiProxyPatched = true;
 
-function hideLoading() {
-  // 기존 로딩 함수 사용 또는 구현
-  if (window.hideLoading) {
-    window.hideLoading();
-  }
-}
+  // 기존 전역 레퍼런스 "사본"을 먼저 캡처
+  const _origShowLoading = typeof window.showLoading === 'function' ? window.showLoading : null;
+  const _origHideLoading  = typeof window.hideLoading  === 'function' ? window.hideLoading  : null;
+  const _origShowToast    = typeof window.showToast    === 'function' ? window.showToast    : null;
 
-function showToast(message) {
-  // 기존 토스트 함수 사용 또는 구현
-  if (window.showToast) {
-    window.showToast(message);
-  } else {
-    alert(message);
-  }
-}
+  // 전역 함수 덮어쓰기: 캡처한 "원본"으로만 호출 (자기 자신 방지)
+  window.showLoading = function(message) {
+    if (_origShowLoading && _origShowLoading !== window.showLoading) {
+      return _origShowLoading(message);
+    }
+    console.log('Loading:', message ?? '');
+  };
+
+  window.hideLoading = function() {
+    if (_origHideLoading && _origHideLoading !== window.hideLoading) {
+      return _origHideLoading();
+    }
+    // no-op
+  };
+
+  window.showToast = function(message) {
+    if (_origShowToast && _origShowToast !== window.showToast) {
+      return _origShowToast(message);
+    }
+    try {
+      // UI 토스트가 전혀 없다면 브라우저 alert로 폴백
+      alert(String(message ?? ''));
+    } catch {
+      console.error('[Toast]', message);
+    }
+  };
+})();
+
 
 // ========== 모달 닫기 함수들 (전역으로 노출) ==========
 window.closeGroupTrainingModal = closeGroupTrainingModal;
