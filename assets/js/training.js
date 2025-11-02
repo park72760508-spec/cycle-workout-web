@@ -219,13 +219,19 @@ async function createTrainingRoom() {
       ]
     };
     
-    const response = await fetch(`${window.GAS_URL}?action=createTrainingRoom`, {
-      method: 'POST',
-      body: JSON.stringify(roomData),
-      headers: {
-        'Content-Type': 'application/json'
-      }
+    // [training.js] — POST → GET 통일 (간단 버전)
+    const q = new URLSearchParams({
+      action: 'createTrainingRoom',
+      hostId: currentUser.id,
+      hostName: currentUser.name,
+      workoutId: selectedWorkout.id,
+      workoutTitle: selectedWorkout.title,
+      maxParticipants: '30',
+      status: ROOM_STATUS.WAITING
     });
+    const response = await fetch(`${window.GAS_URL}?${q.toString()}`);
+    const result = await response.json();
+
     
     const result = await response.json();
     
