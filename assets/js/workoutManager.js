@@ -144,7 +144,8 @@ function initializeWorkoutManager() {
 // 개선된 JSONP 요청 함수 (60초 타임아웃)
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
-    if (!url || typeof url !== 'string') {
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+      console.error('[JSONP] URL이 비었습니다. index.html의 GAS_URL 설정을 확인하세요.');
       reject(new Error('유효하지 않은 URL입니다.'));
       return;
     }
