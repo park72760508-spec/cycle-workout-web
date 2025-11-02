@@ -1073,3 +1073,6 @@ try {
 } catch (e) {
   console.warn('⚠️ 그룹 훈련 함수 검증 중 경고:', e);
 }
+
+// ✅ training.js 파일 완료 마크
+console.log('🎯 training.js 파일 로딩 최종 완료 - ' + new Date().toLocaleTimeString());
