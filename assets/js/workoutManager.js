@@ -206,9 +206,11 @@ function jsonpRequest(url, params = {}) {
             }
           }
         });
-        urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
-        
-        const finalUrl = `${url}?${urlParts.join('&')}`;
+         // [workoutManager (25).js] — jsonpRequest 내부 교체
+         urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
+         urlParts.push(`_ts=${Date.now()}`); // 캐시 회피
+         const finalUrl = `${url}?${urlParts.join('&')}`;
+
       
       if (finalUrl.length > 2000) {
         throw new Error('요청 URL이 너무 깁니다. 데이터를 줄여주세요.');
