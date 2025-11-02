@@ -4785,47 +4785,47 @@ function showRetryButton() {
 }
 
 // ✅ 개선된 DB 연결 재시도 함수
-async function retryDBConnection() {
-  const notice = document.getElementById('dbRetryNotice');
-  if (notice) {
-    // 버튼 상태 변경
-    const retryBtn = notice.querySelector('button');
-    if (retryBtn) {
-      retryBtn.textContent = '재시도 중...';
-      retryBtn.disabled = true;
-    }
-  }
-  
-  console.log('🔄 DB 연결 재시도 중...');
-  
-  try {
-    // 연결 테스트
-    const testResult = await apiGetUsers();
-    
-    if (testResult && testResult.success) {
-      // 성공 시 UI 정리
-      if (notice) notice.remove();
-      showToast('✅ 연결 성공! 시스템이 정상 작동합니다', 'success');
-      
-      // DB 동기화 실행
-      await syncUsersFromDB();
-    } else {
-      throw new Error(testResult?.error || '연결 테스트 실패');
-    }
-  } catch (error) {
-    console.error('❌ 재시도 실패:', error);
-    
-    if (notice) {
-      const retryBtn = notice.querySelector('button');
-      if (retryBtn) {
-        retryBtn.textContent = '다시 시도';
-        retryBtn.disabled = false;
-      }
-    }
-    
-    showToast('연결 재시도 실패 - Google Apps Script 상태를 확인하세요', 'error');
-  }
-}
+// ✅ 개선된 DB 연결 재시도 함수
+   async function retryDBConnection() {
+     const notice = document.getElementById('dbRetryNotice');
+     if (notice) {
+       const retryBtn = notice.querySelector('button');
+       if (retryBtn) {
+         retryBtn.textContent = '재시도 중...';
+         retryBtn.disabled = true;
+       }
+     }
+     
+     console.log('🔄 DB 연결 재시도 중...');
+     
+     try {
+       const testResult = await testGASConnection();
+       
+       if (testResult) {
+         if (notice) notice.remove();
+         if (typeof showToast === 'function') {
+           showToast('✅ 연결 성공! 시스템이 정상 작동합니다', 'success');
+         }
+         await syncUsersFromDB();
+       } else {
+         throw new Error('연결 테스트 실패');
+       }
+     } catch (error) {
+       console.error('❌ 재시도 실패:', error);
+       
+       if (notice) {
+         const retryBtn = notice.querySelector('button');
+         if (retryBtn) {
+           retryBtn.textContent = '다시 시도';
+           retryBtn.disabled = false;
+         }
+       }
+       
+       if (typeof showToast === 'function') {
+         showToast('연결 재시도 실패 - Google Apps Script 상태를 확인하세요', 'error');
+       }
+     }
+   }
 
 // 새 사용자 등록 후 자동 인증 처리 함수
 async function handleNewUserRegistered(userData) {
