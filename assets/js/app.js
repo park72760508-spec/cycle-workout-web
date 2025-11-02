@@ -3937,44 +3937,6 @@ function validateNewUserForm() {
 // 📍 위치: 라인 3032+
 // ✅ 전체 이벤트를 아래로 교체:
 
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('📱 인증 시스템 초기화 시작');
-  
-  setTimeout(() => {
-    // 모든 화면 완전히 숨기기
-    document.querySelectorAll('.screen').forEach(screen => {
-      screen.classList.remove('active');
-      screen.style.display = 'none';
-      screen.style.opacity = '0';
-      screen.style.visibility = 'hidden';
-    });
-    
-    // authScreen만 표시
-    const authScreen = document.getElementById('authScreen');
-    if (authScreen) {
-      authScreen.style.display = 'block';
-      authScreen.classList.add('active');
-      authScreen.style.opacity = '1';
-      authScreen.style.visibility = 'visible';
-      
-      setTimeout(() => {
-        const phoneInput = document.getElementById('phoneInput');
-        if (phoneInput) {
-          phoneInput.focus();
-        }
-      }, 500);
-    }
-  }, 200);
-  
-  setTimeout(() => {
-    initializeAuthenticationSystem();
-  }, 500);
-});
-
-
-
-
-
 
 // 개발자 도구 함수들
 window.resetAuth = function() {
@@ -5087,4 +5049,63 @@ if (typeof window !== 'undefined') {
   window.APP_LOADED = true;
   console.log('🎯 APP_LOADED 플래그 설정 완료');
 }
-   
+
+
+
+
+// ✅ 페이지 로드 시 연결 테스트 실행 (DOMContentLoaded 이후 실행)
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('📱 DOM 로딩 완료 - 연결 테스트 예약');
+  
+  // 모든 스크립트 로딩 대기 후 테스트
+  setTimeout(async () => {
+    console.log('⏰ Google Apps Script 연결 테스트 시작 (3초 지연 후)');
+    
+    try {
+      // 필수 함수들이 로드되었는지 확인
+      if (typeof testGASConnection === 'function') {
+        const isConnected = await testGASConnection();
+        
+        if (isConnected) {
+          console.log('🎉 시스템 연결 상태 양호');
+        } else {
+          console.warn('⚠️ 시스템 연결 문제 감지');
+          if (typeof showRetryButton === 'function') {
+            showRetryButton();
+          }
+        }
+      } else {
+        console.warn('⚠️ testGASConnection 함수가 정의되지 않음');
+      }
+    } catch (testError) {
+      console.error('❌ 연결 테스트 실행 오류:', testError);
+    }
+  }, 3000); // 3초 후 테스트 시작
+});
+
+// ✅ 추가 안전장치: window.onload 이벤트
+window.addEventListener('load', function() {
+  console.log('🌐 전체 페이지 로딩 완료');
+  
+  // 최종 시스템 상태 확인
+  setTimeout(() => {
+    const systemStatus = {
+      APP_LOADED: window.APP_LOADED || false,
+      GROUP_TRAINING_LOADED: window.GROUP_TRAINING_LOADED || false,
+      GAS_URL: !!window.GAS_URL,
+      jsonpRequest: typeof jsonpRequest === 'function',
+      testGASConnection: typeof testGASConnection === 'function'
+    };
+    
+    console.log('🔍 최종 시스템 상태:', systemStatus);
+    
+    const allLoaded = Object.values(systemStatus).every(status => status === true);
+    if (allLoaded) {
+      console.log('✅ 모든 시스템 모듈 정상 로딩 완료');
+    } else {
+      console.warn('⚠️ 일부 시스템 모듈 로딩 실패');
+    }
+  }, 1000);
+});
+
+console.log('🔧 app.js 연결 테스트 시스템 최종 준비 완료');   
