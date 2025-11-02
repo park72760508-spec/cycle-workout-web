@@ -1938,11 +1938,16 @@ function startSegmentLoop() {
    const currentSegIndex = ts.segIndex;
    const currentSeg = w.segments[currentSegIndex];
    if (!currentSeg) {
-     console.error('현재 세그먼트가 없습니다.');
-     // 안전 처리: 루프 정지 및 조기 반환
-     try { stopSegmentLoop?.(); } catch (e) {}
+     console.error('현재 세그먼트가 없습니다.'); // ← 따옴표/줄 닫기
+     // 안전 처리: 루프 정지 및 조기 반환으로 블록도 확실히 닫힘
+     try { 
+       if (typeof stopSegmentLoop === 'function') stopSegmentLoop();
+     } catch (e) {
+       console.warn('세그먼트 루프 정지 중 경고:', e);
+     }
      return;
    }
+
    const segDur = segDurationSec(currentSeg);
    const segRemaining = segDur - ts.segElapsedSec;
 
