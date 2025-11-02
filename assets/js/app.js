@@ -5105,53 +5105,8 @@ window.addEventListener('load', function() {
     } else {
       console.warn('⚠️ 일부 시스템 모듈 로딩 실패');
     }
-}, 1000);
+  }, 1000);
 });
 
-console.log('🔧 app.js 연결 테스트 시스템 최종 준비 완료');
-
-// ✅ app.js 파일 완료 마크
-console.log('🎯 app.js 파일 로딩 최종 완료 - ' + new Date().toLocaleTimeString());
-
-// ✅ 전역 초기화 완료 플래그
-if (typeof window !== 'undefined') {
-  window.APP_INITIALIZATION_COMPLETE = true;
-  console.log('🏁 애플리케이션 초기화 완전 완료');
-}
-
-
-
-// ✅ 파일 로딩 검증 함수
-function validateFileLoading() {
-  const requiredFiles = {
-    'app.js': window.APP_INITIALIZATION_COMPLETE || false,
-    'training.js': window.GROUP_TRAINING_LOADED || false,
-    'workoutManager.js': typeof jsonpRequest === 'function',
-    'userManager.js': typeof apiGetUsers === 'function'
-  };
-  
-  console.log('📋 파일 로딩 상태 검증:');
-  Object.entries(requiredFiles).forEach(([file, loaded]) => {
-    console.log(`  ${loaded ? '✅' : '❌'} ${file}: ${loaded ? '로딩됨' : '로딩 실패'}`);
-  });
-  
-  const allFilesLoaded = Object.values(requiredFiles).every(loaded => loaded);
-  
-  if (allFilesLoaded) {
-    console.log('🎉 모든 필수 파일 로딩 완료!');
-    return true;
-  } else {
-    console.warn('⚠️ 일부 파일 로딩 실패 - 페이지 새로고침을 권장합니다');
-    return false;
-  }
-}
-
-// ✅ 지연된 검증 실행
-setTimeout(() => {
-  validateFileLoading();
-}, 5000);
-
-// ✅ 최종 종료 로그
-console.log('='.repeat(50));
-console.log('🔚 app.js 스크립트 파일 처리 완료');
-console.log('='.repeat(50));   
+console.log('app.js 연결 테스트 시스템 준비 완료');
+console.log('app.js 로딩 완료');
