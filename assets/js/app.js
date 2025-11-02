@@ -5105,7 +5105,16 @@ window.addEventListener('load', function() {
     } else {
       console.warn('⚠️ 일부 시스템 모듈 로딩 실패');
     }
-  }, 1000);
+}, 1000);
 });
 
-console.log('🔧 app.js 연결 테스트 시스템 최종 준비 완료');   
+console.log('🔧 app.js 연결 테스트 시스템 최종 준비 완료');
+
+// ✅ app.js 파일 완료 마크
+console.log('🎯 app.js 파일 로딩 최종 완료 - ' + new Date().toLocaleTimeString());
+
+// ✅ 전역 초기화 완료 플래그
+if (typeof window !== 'undefined') {
+  window.APP_INITIALIZATION_COMPLETE = true;
+  console.log('🏁 애플리케이션 초기화 완전 완료');
+}
