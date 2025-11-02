@@ -5109,6 +5109,3 @@ window.addEventListener('load', function() {
     }
   }, 1000);
 });
-
-console.log('app.js 연결 테스트 시스템 준비 완료');
-console.log('app.js 로딩 완료');
