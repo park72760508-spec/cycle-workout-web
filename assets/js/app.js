@@ -5,33 +5,31 @@
 window.addEventListener('error', function(event) {
   console.error('🚨 전역 오류 감지:', event.error);
   
-  if (event.error && event.error.message) {
-    const message = event.error.message;
-    
-    // finalUrl 관련 오류
-    if (message.includes('finalUrl is not defined')) {
-      console.error('❌ workoutManager.js 변수 스코프 오류 감지');
-      showToast('시스템 오류 - 페이지를 새로고침해주세요', 'error');
-      return;
-    }
-    
-    // JSONP 관련 오류
-    if (message.includes('JSONP') || message.includes('네트워크 연결')) {
-      console.log('🔄 네트워크 오류 감지 - 자동 재시도 중...');
+  // 오류 상세 정보 로깅
+  const errorInfo = {
+    message: event.message || 'Unknown error',
+    filename: event.filename || 'Unknown file', 
+    lineno: event.lineno || 0,
+    colno: event.colno || 0,
+    stack: event.error ? event.error.stack : 'No stack trace'
+  };
+  
+  console.log('Error details:', errorInfo);
+  
+  // ✅ training.js 구문 오류 특별 처리
+  if (event.filename && event.filename.includes('training.js')) {
+    if (event.message && event.message.includes('Unexpected end of input')) {
+      console.error('❌ training.js 파일 구문 오류 감지');
+      console.error('💡 해결방법: training.js 파일의 마지막 부분에 누락된 괄호나 세미콜론 확인');
+      
+      // 사용자에게 알림
       setTimeout(() => {
-        if (typeof retryDBConnection === 'function') {
-          retryDBConnection();
-        }
-      }, 3000);
-    }
-    
-    // Script 로딩 오류
-    if (message.includes('userManager') || message.includes('apiGetUsers')) {
-      console.log('🔄 스크립트 로딩 오류 감지');
-      showToast('스크립트 로딩 오류 - 잠시 후 자동으로 재시도됩니다', 'warning');
+        showToast('스크립트 오류 감지 - 페이지를 새로고침해주세요', 'error');
+      }, 1000);
+      
+      return; // 이후 처리 중단
     }
   }
-});
 
 // ✅ Promise rejection 처리 강화
 window.addEventListener('unhandledrejection', function(event) {
@@ -3222,17 +3220,7 @@ window.testNeonEffect = function(achievementPercent) {
   }, 3000);
 };
 
-// 전역 에러 핸들러 추가
-window.addEventListener('error', function(event) {
-  console.error('Global JavaScript error:', event.error);
-  console.error('Error details:', {
-    message: event.message,
-    filename: event.filename,
-    lineno: event.lineno,
-    colno: event.colno,
-    stack: event.error?.stack
-  });
-});
+
 
 window.addEventListener('unhandledrejection', function(event) {
   console.error('Unhandled promise rejection:', event.reason);
