@@ -4521,19 +4521,73 @@ window.listRegisteredPhones = function() {
 
 // ========== 9. 초기화 ==========
 document.addEventListener('DOMContentLoaded', async function() {
-  if (window.__DB_AUTH_INIT_DONE__) return;  // ★ 가드: 다중 초기화 방지
+  if (window.__DB_AUTH_INIT_DONE__) return;
   window.__DB_AUTH_INIT_DONE__ = true;
 
   console.log('📱 DB 연동 인증 시스템 초기화 중...');
 
+  // userManager.js 로드 대기
+  let retryCount = 0;
+  const maxRetries = 10;
+  
+  while (typeof apiGetUsers !== 'function' && retryCount < maxRetries) {
+    console.log(`⏳ userManager.js 로드 대기 중... (${retryCount + 1}/${maxRetries})`);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    retryCount++;
+  }
+  
+  if (typeof apiGetUsers !== 'function') {
+    console.error('❌ userManager.js 로드 실패 - 수동으로 새로고침하세요');
+    showToast('시스템 로딩 실패 - 페이지를 새로고침해주세요', 'error');
+    return;
+  }
+
   const syncSuccess = await syncUsersFromDB();
   if (syncSuccess) {
     console.log('✅ DB 연동 인증 시스템 초기화 완료!');
-    console.log('📞 실시간 DB 검색으로 전화번호를 인증합니다');
   } else {
-    console.warn('⚠️ DB 초기화 실패 - userManager.js 로드 상태를 확인하세요');
+    console.warn('⚠️ DB 초기화 실패 - 네트워크 연결을 확인하세요');
+    // 재시도 버튼 표시
+    showRetryButton();
   }
 });
+
+// 재시도 버튼 표시 함수 추가
+function showRetryButton() {
+  const retryHtml = `
+    <div id="dbRetryNotice" style="
+      position: fixed; top: 20px; right: 20px; 
+      background: #ff6b6b; color: white; 
+      padding: 15px; border-radius: 8px; 
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+    ">
+      <div>DB 연결 실패</div>
+      <button onclick="retryDBConnection()" style="
+        background: white; color: #ff6b6b; 
+        border: none; padding: 5px 10px; 
+        border-radius: 4px; margin-top: 8px;
+        cursor: pointer;
+      ">다시 시도</button>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', retryHtml);
+}
+
+// DB 연결 재시도 함수 추가
+async function retryDBConnection() {
+  const notice = document.getElementById('dbRetryNotice');
+  if (notice) notice.remove();
+  
+  console.log('🔄 DB 연결 재시도 중...');
+  const syncSuccess = await syncUsersFromDB();
+  
+  if (syncSuccess) {
+    showToast('DB 연결 성공!', 'success');
+  } else {
+    showRetryButton();
+  }
+}
 
 // 새 사용자 등록 후 자동 인증 처리 함수
 async function handleNewUserRegistered(userData) {
