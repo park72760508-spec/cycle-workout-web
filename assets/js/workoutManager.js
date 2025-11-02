@@ -167,14 +167,15 @@ function jsonpRequest(url, params = {}) {
     };
     
     // ✅ 타임아웃 추가
-    const timeoutId = setTimeout(() => {
-      if (isResolved) return;
-      isResolved = true;
-      
-      console.error('❌ JSONP 요청 타임아웃 (30초):', finalUrl);
-      cleanup();
-      reject(new Error('요청 시간 초과'));
-    }, 30000);
+      // ✅ 타임아웃을 60초로 연장 (Google Apps Script는 느릴 수 있음)
+      const timeoutId = setTimeout(() => {
+        if (isResolved) return;
+        isResolved = true;
+        
+        console.error('❌ JSONP 요청 타임아웃 (60초):', finalUrl);
+        cleanup();
+        reject(new Error('요청 시간 초과 - Google Apps Script 응답 지연'));
+      }, 60000);
     
     function cleanup() {
       try {
@@ -190,23 +191,29 @@ function jsonpRequest(url, params = {}) {
       }
     }
     
-    script.onerror = function() {
-      if (isResolved) return;
-      isResolved = true;
-      
-      console.error('❌ JSONP script loading failed for URL:', finalUrl); // ✅ 이제 접근 가능
-      
-      // ✅ URL 검증 추가
-      if (!url || url.trim() === '') {
-        console.error('❌ GAS_URL이 설정되지 않았습니다.');
-        cleanup();
-        reject(new Error('GAS_URL 설정 오류'));
-        return;
-      }
-      
-      cleanup();
-      reject(new Error('네트워크 연결 오류'));
-    };
+   script.onerror = function() {
+     if (isResolved) return;
+     isResolved = true;
+     
+     console.error('❌ JSONP script loading failed for URL:', finalUrl);
+     
+     // ✅ URL 검증 추가
+     if (!url || url.trim() === '') {
+       console.error('❌ GAS_URL이 설정되지 않았습니다.');
+       cleanup();
+       reject(new Error('GAS_URL 설정 오류'));
+       return;
+     }
+     
+     // ✅ 더 구체적인 오류 메시지 제공
+     console.error('❌ Google Apps Script 연결 실패 - 다음을 확인하세요:');
+     console.error('1. Google Apps Script가 올바르게 배포되었는지');
+     console.error('2. URL이 올바른지:', url);
+     console.error('3. 인터넷 연결 상태');
+     
+     cleanup();
+     reject(new Error('Google Apps Script 연결 실패 - 배포 상태를 확인하세요'));
+   };
     
     try {
       // 안전한 수동 인코딩 방식 사용
