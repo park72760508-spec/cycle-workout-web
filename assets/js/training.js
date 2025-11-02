@@ -36,15 +36,29 @@ const ROOM_STATUS = {
 };
 
 // ========== 초기화 함수 ==========
+let groupTrainingInitRetry = 0;
+const maxGroupTrainingRetries = 10;
+
 function initGroupTraining() {
   console.log('🚀 그룹 훈련 시스템 초기화');
   
+  // ✅ 재시도 횟수 제한
+  if (groupTrainingInitRetry >= maxGroupTrainingRetries) {
+    console.error('❌ 그룹 트레이닝 초기화 실패 - 최대 재시도 횟수 초과');
+    return;
+  }
+  
   // 필수 의존성 확인
   if (typeof workoutManager === 'undefined' || typeof apiGetUsers !== 'function') {
-    console.warn('⚠️ 그룹 트레이닝 초기화 지연 - 의존성 로딩 대기');
+    groupTrainingInitRetry++;
+    console.warn(`⚠️ 그룹 트레이닝 초기화 지연 - 의존성 로딩 대기 (${groupTrainingInitRetry}/${maxGroupTrainingRetries})`);
     setTimeout(initGroupTraining, 1000);
     return;
   }
+  
+  // ✅ 초기화 성공
+  groupTrainingInitRetry = 0;
+  console.log('✅ 그룹 트레이닝 의존성 확인 완료');
   
   // 기존 기능과 충돌 방지
   if (window.trainingSession) {
@@ -57,6 +71,7 @@ function initGroupTraining() {
   // 페이지 종료 시 정리
   window.addEventListener('beforeunload', cleanupGroupTraining);
 }
+
 
 // ========== 이벤트 설정 ==========
 function setupGroupTrainingEvents() {
