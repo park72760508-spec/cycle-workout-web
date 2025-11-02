@@ -4723,39 +4723,85 @@ document.addEventListener('DOMContentLoaded', async function() {
 
 
 // 재시도 버튼 표시 함수 추가
+// ✅ 개선된 재시도 버튼 표시 함수
 function showRetryButton() {
+  // 기존 재시도 버튼 제거
+  const existingRetry = document.getElementById('dbRetryNotice');
+  if (existingRetry) existingRetry.remove();
+  
   const retryHtml = `
     <div id="dbRetryNotice" style="
       position: fixed; top: 20px; right: 20px; 
-      background: #ff6b6b; color: white; 
-      padding: 15px; border-radius: 8px; 
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 10000;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white; padding: 20px; border-radius: 12px; 
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      z-index: 10000; max-width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     ">
-      <div>DB 연결 실패</div>
-      <button onclick="retryDBConnection()" style="
-        background: white; color: #ff6b6b; 
-        border: none; padding: 5px 10px; 
-        border-radius: 4px; margin-top: 8px;
-        cursor: pointer;
-      ">다시 시도</button>
+      <div style="font-weight: 600; margin-bottom: 8px;">
+        🔧 시스템 연결 실패
+      </div>
+      <div style="font-size: 14px; opacity: 0.9; margin-bottom: 15px;">
+        Google Apps Script 연결에 실패했습니다
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button onclick="retryDBConnection()" style="
+          background: white; color: #667eea; 
+          border: none; padding: 8px 16px; 
+          border-radius: 6px; cursor: pointer;
+          font-weight: 600; flex: 1;
+        ">다시 시도</button>
+        <button onclick="document.getElementById('dbRetryNotice').remove()" style="
+          background: rgba(255,255,255,0.2); color: white;
+          border: none; padding: 8px 16px; 
+          border-radius: 6px; cursor: pointer;
+        ">닫기</button>
+      </div>
     </div>
   `;
   document.body.insertAdjacentHTML('beforeend', retryHtml);
 }
 
-// DB 연결 재시도 함수 추가
+// ✅ 개선된 DB 연결 재시도 함수
 async function retryDBConnection() {
   const notice = document.getElementById('dbRetryNotice');
-  if (notice) notice.remove();
+  if (notice) {
+    // 버튼 상태 변경
+    const retryBtn = notice.querySelector('button');
+    if (retryBtn) {
+      retryBtn.textContent = '재시도 중...';
+      retryBtn.disabled = true;
+    }
+  }
   
   console.log('🔄 DB 연결 재시도 중...');
-  const syncSuccess = await syncUsersFromDB();
   
-  if (syncSuccess) {
-    showToast('DB 연결 성공!', 'success');
-  } else {
-    showRetryButton();
+  try {
+    // 연결 테스트
+    const testResult = await apiGetUsers();
+    
+    if (testResult && testResult.success) {
+      // 성공 시 UI 정리
+      if (notice) notice.remove();
+      showToast('✅ 연결 성공! 시스템이 정상 작동합니다', 'success');
+      
+      // DB 동기화 실행
+      await syncUsersFromDB();
+    } else {
+      throw new Error(testResult?.error || '연결 테스트 실패');
+    }
+  } catch (error) {
+    console.error('❌ 재시도 실패:', error);
+    
+    if (notice) {
+      const retryBtn = notice.querySelector('button');
+      if (retryBtn) {
+        retryBtn.textContent = '다시 시도';
+        retryBtn.disabled = false;
+      }
+    }
+    
+    showToast('연결 재시도 실패 - Google Apps Script 상태를 확인하세요', 'error');
   }
 }
 
