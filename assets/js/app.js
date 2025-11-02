@@ -5078,4 +5078,13 @@ window.addEventListener('load', async function() {
 });
 
 console.log('🔧 연결 테스트 시스템 준비 완료');
+
+// ✅ 파일 끝 마크 및 안전한 종료
+console.log('✅ app.js 모든 모듈 로딩 완료');
+
+// ✅ 전역 객체 최종 확인
+if (typeof window !== 'undefined') {
+  window.APP_LOADED = true;
+  console.log('🎯 APP_LOADED 플래그 설정 완료');
+}
    
