@@ -39,6 +39,13 @@ const ROOM_STATUS = {
 function initGroupTraining() {
   console.log('🚀 그룹 훈련 시스템 초기화');
   
+  // 필수 의존성 확인
+  if (typeof workoutManager === 'undefined' || typeof apiGetUsers !== 'function') {
+    console.warn('⚠️ 그룹 트레이닝 초기화 지연 - 의존성 로딩 대기');
+    setTimeout(initGroupTraining, 1000);
+    return;
+  }
+  
   // 기존 기능과 충돌 방지
   if (window.trainingSession) {
     window.trainingSession.isGroupMode = false;
