@@ -36,7 +36,7 @@ const ROOM_STATUS = {
 };
 
 // ========== 초기화 함수 ==========
-export function initGroupTraining() {
+function initGroupTraining() {
   console.log('🚀 그룹 훈련 시스템 초기화');
   
   // 기존 기능과 충돌 방지
@@ -73,7 +73,7 @@ function setupGroupTrainingEvents() {
 }
 
 // ========== 그룹 훈련 모달 표시 ==========
-export function showGroupTrainingModal() {
+function showGroupTrainingModal() {
   const currentUser = window.currentUser;
   if (!currentUser) {
     showToast('로그인이 필요합니다');
@@ -176,7 +176,7 @@ function setupModalEvents() {
 }
 
 // ========== 모달 닫기 ==========
-export function closeGroupTrainingModal() {
+function closeGroupTrainingModal() {
   const modal = document.getElementById('groupTrainingModal');
   if (modal) {
     modal.remove();
@@ -184,7 +184,7 @@ export function closeGroupTrainingModal() {
 }
 
 // ========== 훈련실 생성 ==========
-export async function createTrainingRoom() {
+async function createTrainingRoom() {
   const currentUser = window.currentUser;
   const selectedWorkout = window.selectedWorkout;
   
@@ -251,7 +251,7 @@ export async function createTrainingRoom() {
 }
 
 // ========== 훈련실 참가 모달 ==========
-export function showJoinRoomModal() {
+function showJoinRoomModal() {
   const modalHtml = `
     <div id="joinRoomModal" class="modal">
       <div class="modal-content">
@@ -297,7 +297,7 @@ export function showJoinRoomModal() {
 }
 
 // ========== 훈련실 참가 ==========
-export async function joinTrainingRoom() {
+async function joinTrainingRoom() {
   const roomIdInput = document.getElementById('roomIdInput');
   const roomId = roomIdInput?.value?.trim();
   const currentUser = window.currentUser;
@@ -359,7 +359,7 @@ async function loadWorkoutForGroup(workoutId) {
 }
 
 // ========== 훈련실 화면 표시 ==========
-export function showTrainingRoom() {
+function showTrainingRoom() {
   // 기존 화면 숨기기
   hideAllScreens();
   
@@ -479,7 +479,7 @@ function setupRoomEvents() {
 }
 
 // ========== 그룹 훈련 시작 카운트다운 ==========
-export async function startGroupTrainingCountdown() {
+async function startGroupTrainingCountdown() {
   if (!GROUP_TRAINING.isHost) {
     showToast('훈련 시작은 관리자만 가능합니다');
     return;
@@ -589,7 +589,7 @@ function addMonitoringOverlay() {
 }
 
 // ========== 마이크 토글 ==========
-export async function toggleMicrophone() {
+async function toggleMicrophone() {
   if (!GROUP_TRAINING.isHost) {
     showToast('마이크 기능은 관리자만 사용할 수 있습니다');
     return;
@@ -742,7 +742,7 @@ function updateParticipantsList() {
 }
 
 // ========== 활성 훈련실 보기 ==========
-export async function showActiveRooms() {
+async function showActiveRooms() {
   try {
     showLoading('활성 훈련실을 조회하는 중...');
     
@@ -811,7 +811,7 @@ function displayActiveRoomsModal(rooms) {
 }
 
 // ========== 빠른 방 참가 ==========
-export async function quickJoinRoom(roomId) {
+async function quickJoinRoom(roomId) {
   const currentUser = window.currentUser;
   
   if (!currentUser) {
@@ -853,7 +853,7 @@ export async function quickJoinRoom(roomId) {
 }
 
 // ========== 훈련실 나가기 ==========
-export async function leaveTrainingRoom() {
+async function leaveTrainingRoom() {
   const currentUser = window.currentUser;
   
   if (!currentUser || !GROUP_TRAINING.roomId) {
@@ -1018,14 +1018,17 @@ if (typeof window !== 'undefined' && document.readyState === 'loading') {
 }
 
 // ========== 내보내기 ==========
-export {
-  GROUP_TRAINING,
-  ROOM_STATUS,
-  showGroupTrainingModal,
-  createTrainingRoom,
-  joinTrainingRoom,
-  leaveTrainingRoom,
-  startGroupTrainingCountdown,
-  toggleMicrophone,
-  showActiveRooms
-};
+// 2) 하단 export 블록 삭제하고 전역 노출
+window.GROUP_TRAINING = window.GROUP_TRAINING || GROUP_TRAINING;
+window.ROOM_STATUS = ROOM_STATUS;
+
+window.initGroupTraining = initGroupTraining;
+window.showGroupTrainingModal = showGroupTrainingModal;
+window.closeGroupTrainingModal = closeGroupTrainingModal;
+window.createTrainingRoom = createTrainingRoom;
+window.showJoinRoomModal = showJoinRoomModal;
+window.joinTrainingRoom = joinTrainingRoom;
+window.showTrainingRoom = showTrainingRoom;
+window.startGroupTrainingCountdown = startGroupTrainingCountdown;
+window.toggleMicrophone = toggleMicrophone;
+window.showActiveRooms = showActiveRooms;
