@@ -207,57 +207,105 @@ if (typeof window !== 'undefined') {
 
 
 
-// JSONP 방식 API 호출 헬퍼 함수
-// JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선
-function jsonpRequest(url, params = {}) {
-  return new Promise((resolve, reject) => {
-    const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
-    const script = document.createElement('script');
-    
-    window[callbackName] = function(data) {
-      console.log('JSONP response received:', data);
-      delete window[callbackName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    
-    script.onerror = function() {
-      console.error('JSONP script loading failed');
-      delete window[callbackName];
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-      reject(new Error('JSONP request failed'));
-    };
-    
-    // URL 파라미터 구성 - encodeURIComponent 사용으로 개선
-    const urlParams = new URLSearchParams();
-    Object.keys(params).forEach(key => {
-      let value = params[key].toString();
-      
-      // 기존의 수동 유니코드 이스케이프 제거하고 자동 인코딩 사용
-      urlParams.set(key, value); // URLSearchParams가 자동으로 encodeURIComponent 적용
-    });
-    urlParams.set('callback', callbackName);
-    
-    const finalUrl = `${url}?${urlParams.toString()}`;
-    console.log('JSONP request URL:', finalUrl);
-    
-    script.src = finalUrl;
-    document.body.appendChild(script);
-    
-    setTimeout(() => {
-      if (window[callbackName]) {
-        console.warn('JSONP request timeout');
-        delete window[callbackName];
-        if (document.body.contains(script)) {
-          document.body.removeChild(script);
-        }
-        reject(new Error('JSONP request timeout'));
-      }
-    }, 10000);
-  });
-}
+   // JSONP 방식 API 호출 헬퍼 함수
+   function jsonpRequest(url, params = {}) {
+     return new Promise((resolve, reject) => {
+       // ✅ URL 유효성 검사 추가
+       if (!url || typeof url !== 'string' || url.trim() === '') {
+         console.error('❌ 유효하지 않은 URL입니다:', url);
+         reject(new Error('유효하지 않은 URL'));
+         return;
+       }
+   
+       const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+       const script = document.createElement('script');
+       let isResolved = false;
+       
+       // ✅ 타임아웃 설정 (60초로 연장)
+       const timeoutId = setTimeout(() => {
+         if (!isResolved) {
+           isResolved = true;
+           cleanup();
+           console.error('❌ JSONP 요청 타임아웃 (60초):', url);
+           reject(new Error('요청 시간 초과 (60초) - Google Apps Script 응답 지연'));
+         }
+       }, 60000);
+       
+       // ✅ 안전한 cleanup 함수
+       function cleanup() {
+         try {
+           clearTimeout(timeoutId);
+           if (window[callbackName]) {
+             delete window[callbackName];
+           }
+           if (script.parentNode) {
+             script.parentNode.removeChild(script);
+           }
+         } catch (e) {
+           console.warn('JSONP cleanup warning:', e);
+         }
+       }
+       
+       // ✅ 성공 콜백 (중복 실행 방지)
+       window[callbackName] = function(data) {
+         if (isResolved) return;
+         isResolved = true;
+         
+         console.log('✅ JSONP 응답 수신:', data);
+         cleanup();
+         resolve(data);
+       };
+       
+       // ✅ 강화된 오류 처리
+       script.onerror = function() {
+         if (isResolved) return;
+         isResolved = true;
+         
+         console.error('❌ JSONP script loading failed for URL:', script.src);
+         console.error('❌ 가능한 원인:');
+         console.error('   1. Google Apps Script가 정상 배포되지 않음');
+         console.error('   2. CORS 정책 위반');
+         console.error('   3. 네트워크 연결 문제');
+         console.error('   4. URL이 잘못됨');
+         
+         cleanup();
+         reject(new Error('Google Apps Script 연결 실패 - 배포 상태를 확인하세요'));
+       };
+       
+       try {
+         // ✅ URL 파라미터 구성 안전성 강화
+         const urlParams = new URLSearchParams();
+         
+         Object.keys(params).forEach(key => {
+           if (params[key] !== null && params[key] !== undefined) {
+             let value = params[key].toString();
+             urlParams.set(key, value);
+           }
+         });
+         
+         urlParams.set('callback', callbackName);
+         urlParams.set('_t', Date.now()); // ✅ 캐시 방지
+         
+         const finalUrl = `${url}?${urlParams.toString()}`;
+         
+         // ✅ URL 길이 검증
+         if (finalUrl.length > 2000) {
+           throw new Error('요청 URL이 너무 깁니다 (2000자 초과)');
+         }
+         
+         console.log('🚀 JSONP 요청 URL:', finalUrl.substring(0, 150) + '...');
+         console.log('📊 URL 길이:', finalUrl.length, '자');
+         
+         script.src = finalUrl;
+         document.head.appendChild(script); // ✅ head에 추가로 변경
+         
+       } catch (error) {
+         console.error('❌ JSONP URL 생성 오류:', error);
+         cleanup();
+         reject(new Error(`URL 생성 실패: ${error.message}`));
+       }
+     });
+   }
 
 
 // 사용자 API 함수들 (JSONP 방식)
