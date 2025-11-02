@@ -1066,13 +1066,13 @@ if (typeof window !== 'undefined') {
 }
 
 // ✅ 모듈 안전성 검증
+// 모듈 검증
 try {
   if (typeof initGroupTraining === 'function') {
-    console.log('🔧 그룹 훈련 시스템 함수 검증 완료');
+    console.log('그룹 훈련 시스템 함수 검증 완료');
   }
 } catch (e) {
-  console.warn('⚠️ 그룹 훈련 함수 검증 중 경고:', e);
+  console.warn('그룹 훈련 함수 검증 중 경고:', e);
 }
 
-// ✅ training.js 파일 완료 마크
-console.log('🎯 training.js 파일 로딩 최종 완료 - ' + new Date().toLocaleTimeString());
+console.log('training.js 로딩 완료');
