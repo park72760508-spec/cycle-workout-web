@@ -1228,14 +1228,32 @@
   
 
 <!-- 순차 로딩으로 변경하여 의존성 문제 해결 -->
-<!-- ✅ 스크립트를 순차 로딩으로 변경 -->
+<!-- ✅ JavaScript 파일들 - 의존성 순서대로 로딩 -->
 <script src="assets/js/data.js"></script>
-<script src="assets/js/userManager.js"></script>
 <script src="assets/js/workoutManager.js"></script>
+<script src="assets/js/userManager.js"></script>
 <script src="assets/js/resultManager.js"></script>
 <script src="assets/js/bluetooth.js"></script>
 <script src="assets/js/app.js"></script>
 <script src="assets/js/training.js"></script>
+
+<!-- ✅ 스크립트 로딩 완료 확인 -->
+<script>
+window.addEventListener('load', function() {
+  console.log('🎯 모든 스크립트 로딩 완료');
+  
+  // 필수 함수들 최종 검증
+  const requiredFunctions = ['jsonpRequest', 'apiGetUsers', 'showToast', 'showScreen'];
+  const missingFunctions = requiredFunctions.filter(funcName => typeof window[funcName] !== 'function');
+  
+  if (missingFunctions.length > 0) {
+    console.error('❌ 누락된 함수들:', missingFunctions);
+    alert('스크립트 로딩 오류가 발생했습니다. 페이지를 새로고침해주세요.');
+  } else {
+    console.log('✅ 모든 필수 함수 확인 완료');
+  }
+});
+</script>
 
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
