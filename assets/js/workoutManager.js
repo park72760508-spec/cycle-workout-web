@@ -144,8 +144,7 @@ function initializeWorkoutManager() {
 // 개선된 JSONP 요청 함수 (60초 타임아웃)
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
-    if (!url || typeof url !== 'string' || url.trim() === '') {
-      console.error('[JSONP] URL이 비었습니다. index.html의 GAS_URL 설정을 확인하세요.');
+    if (!url || typeof url !== 'string') {
       reject(new Error('유효하지 않은 URL입니다.'));
       return;
     }
@@ -153,7 +152,6 @@ function jsonpRequest(url, params = {}) {
     const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
     const script = document.createElement('script');
     let isResolved = false;
-    let finalUrl = ''; // ✅ 변수를 상위 스코프로 이동
     
     console.log('JSONP request to:', url, 'with params:', params);
     
@@ -166,20 +164,8 @@ function jsonpRequest(url, params = {}) {
       resolve(data);
     };
     
-    // ✅ 타임아웃 추가
-      // ✅ 타임아웃을 60초로 연장 (Google Apps Script는 느릴 수 있음)
-      const timeoutId = setTimeout(() => {
-        if (isResolved) return;
-        isResolved = true;
-        
-        console.error('❌ JSONP 요청 타임아웃 (60초):', finalUrl);
-        cleanup();
-        reject(new Error('요청 시간 초과 - Google Apps Script 응답 지연'));
-      }, 60000);
-    
     function cleanup() {
       try {
-        clearTimeout(timeoutId); // ✅ 타임아웃 클리어
         if (window[callbackName]) {
           delete window[callbackName];
         }
@@ -191,69 +177,63 @@ function jsonpRequest(url, params = {}) {
       }
     }
     
-   script.onerror = function() {
-     if (isResolved) return;
-     isResolved = true;
-     
-     console.error('❌ JSONP script loading failed for URL:', finalUrl);
-     
-     // ✅ URL 검증 추가
-     if (!url || url.trim() === '') {
-       console.error('❌ GAS_URL이 설정되지 않았습니다.');
-       cleanup();
-       reject(new Error('GAS_URL 설정 오류'));
-       return;
-     }
-     
-     // ✅ 더 구체적인 오류 메시지 제공
-     console.error('❌ Google Apps Script 연결 실패 - 다음을 확인하세요:');
-     console.error('1. Google Apps Script가 올바르게 배포되었는지');
-     console.error('2. URL이 올바른지:', url);
-     console.error('3. 인터넷 연결 상태');
-     
-     cleanup();
-     reject(new Error('Google Apps Script 연결 실패 - 배포 상태를 확인하세요'));
-   };
+    script.onerror = function() {
+      if (isResolved) return;
+      isResolved = true;
+      
+      console.error('JSONP script loading failed');
+      cleanup();
+      reject(new Error('네트워크 연결 오류'));
+    };
     
-    try {
-      // 안전한 수동 인코딩 방식 사용
-      const urlParts = [];
-      Object.keys(params).forEach(key => {
-        if (params[key] !== null && params[key] !== undefined) {
-          const value = String(params[key]);
-          // segments 데이터는 Base64로 인코딩하여 안전하게 전송
-          if (key === 'segments') {
-            try {
-              const base64Data = btoa(unescape(encodeURIComponent(value)));
-              urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(base64Data)}`);
-            } catch (e) {
-              console.warn('Base64 인코딩 실패, 일반 인코딩 사용:', e);
+      try {
+        // 안전한 수동 인코딩 방식 사용
+        const urlParts = [];
+        Object.keys(params).forEach(key => {
+          if (params[key] !== null && params[key] !== undefined) {
+            const value = String(params[key]);
+            // segments 데이터는 Base64로 인코딩하여 안전하게 전송
+            if (key === 'segments') {
+              try {
+                const base64Data = btoa(unescape(encodeURIComponent(value)));
+                urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(base64Data)}`);
+              } catch (e) {
+                console.warn('Base64 인코딩 실패, 일반 인코딩 사용:', e);
+                urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+              }
+            } else {
               urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
             }
-          } else {
-            urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
           }
-        }
-      });
-      
-      urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
-      urlParts.push(`_ts=${Date.now()}`);
-      finalUrl = `${url}?${urlParts.join('&')}`; // ✅ 상위 스코프 변수에 할당
+        });
+        urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
+        
+        const finalUrl = `${url}?${urlParts.join('&')}`;
       
       if (finalUrl.length > 2000) {
         throw new Error('요청 URL이 너무 깁니다. 데이터를 줄여주세요.');
       }
       
-      console.log('✅ Final JSONP URL length:', finalUrl.length);
-      console.log('🚀 JSONP 요청 시작:', finalUrl.substring(0, 200) + '...');
+      console.log('Final JSONP URL length:', finalUrl.length);
       
       script.src = finalUrl;
       document.head.appendChild(script);
       
+      setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          console.warn('JSONP request timeout for URL:', url);
+          cleanup();
+          reject(new Error(`요청 시간 초과: ${url}`));
+        }
+      }, JSONP_TIMEOUT); // 60초 타임아웃
+      
     } catch (error) {
-      console.error('❌ JSONP URL 생성 오류:', error);
-      cleanup();
-      reject(new Error(`URL 생성 실패: ${error.message}`));
+      if (!isResolved) {
+        isResolved = true;
+        cleanup();
+        reject(error);
+      }
     }
   });
 }
