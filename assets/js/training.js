@@ -1055,3 +1055,6 @@ window.showTrainingRoom = showTrainingRoom;
 window.startGroupTrainingCountdown = startGroupTrainingCountdown;
 window.toggleMicrophone = toggleMicrophone;
 window.showActiveRooms = showActiveRooms;
+
+// ✅ 파일 끝 마크 추가
+console.log('✅ training.js 모듈 로딩 완료');
