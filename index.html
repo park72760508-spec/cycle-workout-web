@@ -893,57 +893,11 @@
         <h3 class="mb-15">훈련 준비 완료</h3>
         <p class="muted">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
       </div>
-
-      
-      <div class="training-mode-selection">
-        <div class="mb-30">
-          <h3 class="mb-15">훈련 방식 선택</h3>
-          <p class="muted">개인 훈련 또는 그룹 훈련을 선택하세요</p>
-        </div>
-        
-        <div class="training-modes">
-          <!-- 개인 훈련 카드 -->
-          <div class="training-mode-card individual-training">
-            <div class="mode-icon">🏃‍♂️</div>
-            <h4>개인 훈련</h4>
-            <p>혼자서 집중해서 훈련하세요</p>
-            <ul class="mode-features">
-              <li>개인 맞춤 페이스</li>
-              <li>자유로운 일시정지</li>
-              <li>개별 목표 설정</li>
-            </ul>
-            <button class="btn btn-success" id="btnStartTraining">
-              <span class="btn-icon">🚀</span>
-              개인 훈련 시작
-            </button>
-          </div>
-          
-          <!-- 그룹 훈련 카드 -->
-          <div class="training-mode-card group-training">
-            <div class="mode-icon">👥</div>
-            <h4>그룹 훈련</h4>
-            <p>다른 사람들과 함께 훈련하세요</p>
-            <ul class="mode-features">
-              <li>실시간 동기화</li>
-              <li>관리자 음성 코칭</li>
-              <li>함께하는 동기부여</li>
-            </ul>
-            <button class="btn btn-primary" id="btnGroupTraining">
-              <span class="btn-icon">🏆</span>
-              그룹 훈련 참가
-            </button>
-          </div>
-        </div>
-        
-        <!-- 기존 하단 버튼들 -->
-        <div class="btn-row center mt-30">
-          <button class="btn btn-secondary" id="btnBackToWorkouts">← 워크아웃 변경</button>
-          <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
-        </div>
+      <div class="btn-row center">
+        <button class="btn btn-secondary" id="btnBackToWorkouts">← 워크아웃 변경</button>
+        <button class="btn btn-success" id="btnStartTraining">🚀 훈련 시작</button>
+        <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
       </div>
-
-
-      
     </div>
   </div>
 
@@ -1225,35 +1179,12 @@
   <div id="toast" class="toast hidden"></div>
 
   <!-- JavaScript 파일들 -->
-  
-
-<!-- 순차 로딩으로 변경하여 의존성 문제 해결 -->
-<!-- ✅ JavaScript 파일들 - 의존성 순서대로 로딩 -->
-<script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js"></script>
-<script src="assets/js/userManager.js"></script>
-<script src="assets/js/resultManager.js"></script>
-<script src="assets/js/bluetooth.js"></script>
-<script src="assets/js/app.js"></script>
-<script src="assets/js/training.js"></script>
-
-<!-- ✅ 스크립트 로딩 완료 확인 -->
-<script>
-window.addEventListener('load', function() {
-  console.log('🎯 모든 스크립트 로딩 완료');
-  
-  // 필수 함수들 최종 검증
-  const requiredFunctions = ['jsonpRequest', 'apiGetUsers', 'showToast', 'showScreen'];
-  const missingFunctions = requiredFunctions.filter(funcName => typeof window[funcName] !== 'function');
-  
-  if (missingFunctions.length > 0) {
-    console.error('❌ 누락된 함수들:', missingFunctions);
-    alert('스크립트 로딩 오류가 발생했습니다. 페이지를 새로고침해주세요.');
-  } else {
-    console.log('✅ 모든 필수 함수 확인 완료');
-  }
-});
-</script>
+  <script src="assets/js/data.js" defer></script>
+  <script src="assets/js/bluetooth.js" defer></script>
+  <script src="assets/js/userManager.js" defer></script>
+  <script src="assets/js/resultManager.js" defer></script>
+  <script src="assets/js/workoutManager.js" defer></script>
+  <script src="assets/js/app.js" defer></script>
 
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
