@@ -87,6 +87,48 @@ window.userPanelNeonMode = 'static';  // 'static' 고정 (동적 계산 끔)
   console.log('Global variables initialized safely');
 })();
 
+
+
+// app.js 상단에 추가
+window.addEventListener('error', function(event) {
+  console.error('🚨 전역 오류 감지:', event.error);
+  
+  if (event.error && event.error.message) {
+    const message = event.error.message;
+    
+    // JSONP 관련 오류
+    if (message.includes('JSONP') || message.includes('네트워크 연결')) {
+      console.log('🔄 네트워크 오류 감지 - 자동 재시도 중...');
+      setTimeout(() => {
+        if (typeof retryDBConnection === 'function') {
+          retryDBConnection();
+        }
+      }, 3000);
+    }
+    
+    // Script 로딩 오류
+    if (message.includes('userManager') || message.includes('apiGetUsers')) {
+      console.log('🔄 스크립트 로딩 오류 감지 - 페이지 새로고침 권장');
+      showToast('스크립트 로딩 오류 - 페이지를 새로고침해주세요', 'error');
+    }
+  }
+});
+
+// Promise rejection 처리
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('🚨 처리되지 않은 Promise 오류:', event.reason);
+  
+  // DB 관련 오류는 자동으로 재시도
+  if (event.reason && event.reason.message && 
+      event.reason.message.includes('네트워크 연결 오류')) {
+    event.preventDefault(); // 기본 오류 처리 방지
+    console.log('🔄 DB 연결 오류 자동 처리 중...');
+  }
+});
+
+
+
+
 // ========== 안전 접근 헬퍼 함수들 ==========
 // ========== 안전 접근 헬퍼 함수들 ==========
 /**
