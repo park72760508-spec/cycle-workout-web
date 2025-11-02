@@ -1096,7 +1096,228 @@
   
 </div>
 
+  <!-- ========== 그룹 훈련 관련 화면들 ========== -->
   
+  <!-- 8) 훈련 방식 선택 화면 -->
+  <div id="trainingModeScreen" class="screen">
+    <div class="header">
+      <h1>🚴‍♂️ 훈련 방식 선택</h1>
+      <p class="subtitle">개인 훈련 또는 그룹 훈련을 선택하세요</p>
+    </div>
+
+    <div class="training-mode-selection">
+      <div class="training-modes">
+        <!-- 개인 훈련 카드 -->
+        <div class="training-mode-card individual-training" onclick="selectTrainingMode('individual')">
+          <span class="mode-icon">🏃‍♂️</span>
+          <h4>개인 훈련</h4>
+          <p>나만의 페이스로 집중적인 훈련을 진행합니다</p>
+          <ul class="mode-features">
+            <li>✅ 개인 맞춤 훈련</li>
+            <li>✅ 즉시 시작 가능</li>
+            <li>✅ 개인 기록 관리</li>
+          </ul>
+          <button class="mode-select-btn">개인 훈련 시작</button>
+        </div>
+
+        <!-- 그룹 훈련 카드 -->
+        <div class="training-mode-card group-training" onclick="selectTrainingMode('group')">
+          <span class="mode-icon">👥</span>
+          <h4>그룹 훈련</h4>
+          <p>함께 훈련하며 동기부여를 받아보세요</p>
+          <ul class="mode-features">
+            <li>✅ 실시간 그룹 훈련</li>
+            <li>✅ 코칭 지원</li>
+            <li>✅ 팀 모니터링</li>
+          </ul>
+          <button class="mode-select-btn">그룹 훈련 참가</button>
+        </div>
+      </div>
+
+      <div class="btn-row mt-30">
+        <button class="btn" onclick="showScreen('trainingReadyScreen')">⬅️ 뒤로 가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9) 그룹 훈련 방 관리 화면 -->
+  <div id="groupRoomScreen" class="screen">
+    <div class="header">
+      <h1>👥 그룹 훈련 방</h1>
+      <p class="subtitle">훈련방을 생성하거나 참가하세요</p>
+    </div>
+
+    <!-- 관리자/참가자 역할 선택 -->
+    <div class="role-selection card">
+      <h3>역할 선택</h3>
+      <div class="role-buttons">
+        <button id="adminRoleBtn" class="role-btn admin" onclick="selectRole('admin')">
+          🎯 <span>관리자</span>
+          <small>훈련방 생성 및 관리</small>
+        </button>
+        <button id="participantRoleBtn" class="role-btn participant" onclick="selectRole('participant')">
+          🏃‍♂️ <span>참가자</span>
+          <small>기존 훈련방 참가</small>
+        </button>
+      </div>
+    </div>
+
+    <!-- 관리자 섹션 -->
+    <div id="adminSection" class="card hidden">
+      <h3>🎯 관리자 - 훈련방 생성</h3>
+      <div class="form-group">
+        <label>방 이름</label>
+        <input type="text" id="roomNameInput" placeholder="예: 아침 FTP 훈련" maxlength="30">
+      </div>
+      <div class="form-group">
+        <label>훈련 종목</label>
+        <select id="roomWorkoutSelect">
+          <option value="">워크아웃 선택...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>최대 참가자</label>
+        <select id="maxParticipants">
+          <option value="2">2명</option>
+          <option value="4" selected>4명</option>
+          <option value="6">6명</option>
+          <option value="8">8명</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="createGroupRoom()">🚀 훈련방 생성</button>
+    </div>
+
+    <!-- 참가자 섹션 -->
+    <div id="participantSection" class="card hidden">
+      <h3>🏃‍♂️ 참가자 - 훈련방 참가</h3>
+      <div class="form-group">
+        <label>방 코드 입력</label>
+        <input type="text" id="roomCodeInput" placeholder="6자리 방 코드 입력" maxlength="6">
+        <button class="btn btn-secondary" onclick="joinGroupRoom()">참가하기</button>
+      </div>
+      
+      <div class="divider">또는</div>
+      
+      <div class="available-rooms">
+        <h4>참가 가능한 방 목록</h4>
+        <div id="availableRoomsList" class="rooms-list">
+          <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>방 목록을 불러오는 중...</p>
+          </div>
+        </div>
+        <button class="btn btn-outline" onclick="refreshRoomList()">🔄 새로고침</button>
+      </div>
+    </div>
+
+    <div class="btn-row mt-30">
+      <button class="btn" onclick="showScreen('trainingModeScreen')">⬅️ 뒤로 가기</button>
+    </div>
+  </div>
+
+  <!-- 10) 그룹 훈련 대기실 화면 -->
+  <div id="groupWaitingScreen" class="screen">
+    <div class="header">
+      <h1 id="waitingRoomTitle">📱 훈련방: 로딩중...</h1>
+      <p class="subtitle">모든 참가자가 준비될 때까지 대기해주세요</p>
+    </div>
+
+    <!-- 방 정보 -->
+    <div class="room-info card">
+      <div class="room-details">
+        <div class="room-code">
+          <span>방 코드:</span>
+          <strong id="currentRoomCode">------</strong>
+          <button class="btn-copy" onclick="copyRoomCode()">📋</button>
+        </div>
+        <div class="room-workout">
+          <span>훈련:</span>
+          <span id="currentRoomWorkout">선택된 워크아웃</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 참가자 목록 -->
+    <div class="participants-list card">
+      <h3>👥 참가자 목록 (<span id="participantCount">0</span>/<span id="maxParticipantCount">4</span>)</h3>
+      <div id="participantsList">
+        <!-- 참가자 카드들이 동적으로 추가됩니다 -->
+      </div>
+    </div>
+
+    <!-- 관리자 전용 컨트롤 -->
+    <div id="adminControls" class="admin-controls card hidden">
+      <h3>🎯 관리자 컨트롤</h3>
+      <div class="admin-buttons">
+        <button class="btn btn-primary" id="startGroupTrainingBtn" onclick="startGroupTraining()" disabled>
+          🚀 그룹 훈련 시작
+        </button>
+        <button class="btn btn-secondary" onclick="kickParticipant()">👋 참가자 내보내기</button>
+        <button class="btn btn-danger" onclick="closeGroupRoom()">🚪 방 닫기</button>
+      </div>
+    </div>
+
+    <!-- 참가자 전용 컨트롤 -->
+    <div id="participantControls" class="participant-controls">
+      <div class="ready-status">
+        <button id="readyToggleBtn" class="btn ready-btn" onclick="toggleReady()">
+          ⏳ 준비 중
+        </button>
+      </div>
+      <button class="btn btn-outline" onclick="leaveGroupRoom()">🚪 방 나가기</button>
+    </div>
+
+    <!-- 실시간 채팅 (옵션) -->
+    <div class="group-chat card">
+      <h4>💬 실시간 채팅</h4>
+      <div id="chatMessages" class="chat-messages">
+        <!-- 채팅 메시지들 -->
+      </div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="메시지 입력..." maxlength="100">
+        <button onclick="sendChatMessage()">전송</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 11) 그룹 훈련 모니터링 오버레이 -->
+  <div id="groupMonitoringOverlay" class="group-monitoring-overlay hidden">
+    <div class="monitoring-header">
+      <h2>👥 그룹 모니터링</h2>
+      <div class="monitoring-controls">
+        <button id="micToggleBtn" class="mic-btn" onclick="toggleMicrophone()">
+          🎤 마이크 켜기
+        </button>
+        <button class="btn btn-outline" onclick="closeMonitoring()">✕ 닫기</button>
+      </div>
+    </div>
+
+    <div class="participants-monitoring">
+      <div id="monitoringParticipantsList" class="monitoring-participants">
+        <!-- 참가자 모니터링 카드들이 동적으로 추가됩니다 -->
+      </div>
+    </div>
+
+    <!-- 코칭 마이크 섹션 -->
+    <div id="coachingSection" class="coaching-section hidden">
+      <div class="mic-status">
+        <div class="mic-indicator" id="micIndicator">🎤</div>
+        <span id="micStatus">마이크 준비됨</span>
+      </div>
+      <div class="coaching-controls">
+        <button class="coaching-btn" onclick="broadcastMessage('좋습니다! 계속 유지하세요!')">👍 격려</button>
+        <button class="coaching-btn" onclick="broadcastMessage('파워를 조금 더 올려보세요!')">⚡ 파워업</button>
+        <button class="coaching-btn" onclick="broadcastMessage('페이스를 조절하세요')">🎯 페이스 조절</button>
+        <button class="coaching-btn" onclick="broadcastMessage('휴식 시간입니다')">😌 휴식</button>
+      </div>
+      <div class="custom-message">
+        <input type="text" id="customCoachingInput" placeholder="직접 메시지 입력..." maxlength="50">
+        <button onclick="sendCustomCoaching()">전송</button>
+      </div>
+    </div>
+  </div>
+
+
   <!-- 7) 결과 화면 -->
   <div id="resultScreen" class="screen">
     <div class="header">
@@ -1235,6 +1456,9 @@
 <script src="assets/js/bluetooth.js"></script>
 <script src="assets/js/app.js"></script>
 <script src="assets/js/training.js"></script>
+<!-- 그룹 훈련 모듈들 -->
+<script src="groupTrainingManager.js"></script>
+<script src="groupTrainingManager_part2.js"></script>
 
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
