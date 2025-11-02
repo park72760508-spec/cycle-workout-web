@@ -1,1040 +1,963 @@
-
 /**
- * 그룹 훈련 관리 모듈 (assets/training.js)
- * 기존 개인 훈련 기능을 유지하면서 그룹 훈련 기능을 추가
+ * Group Training System - 그룹 훈련 시스템 (assets/js/training.js)
+ * 실시간 그룹 훈련, 관리자 모니터링, WebRTC 음성 통신 기능
  */
 
-// ===== 그룹 훈련 관련 전역 변수 =====
-window.groupTraining = {
-  currentRoom: null,
+// ========== 전역 변수 ==========
+window.GroupTraining = window.GroupTraining || {};
+
+// 그룹 훈련 상태 관리
+const GROUP_TRAINING = {
   isGroupMode: false,
-  participants: [],
-  roomStatus: 'waiting', // waiting, training, finished
   isHost: false,
-  pollingInterval: null,
-  lastUpdate: null
+  roomId: null,
+  sessionId: null,
+  participants: [],
+  hostData: null,
+  updateInterval: null,
+  syncInterval: 3000, // 3초마다 동기화
+  
+  // WebRTC 관련
+  localStream: null,
+  peerConnections: {},
+  audioEnabled: false,
+  
+  // 모니터링 관련
+  monitoringData: {},
+  lastUpdateTime: null
 };
 
-// ===== 그룹 훈련 메인 함수들 =====
+// 훈련실 상태
+const ROOM_STATUS = {
+  WAITING: 'waiting',
+  STARTING: 'starting', 
+  TRAINING: 'training',
+  FINISHED: 'finished'
+};
 
-/**
- * 그룹 훈련 모드 초기화
- */
+// ========== 초기화 함수 ==========
 export function initGroupTraining() {
-  console.log('그룹 훈련 모드 초기화');
+  console.log('🚀 그룹 훈련 시스템 초기화');
   
-  // 기존 개인 훈련 상태 정리
-  if (window.trainingState && window.trainingState.timerId) {
-    clearInterval(window.trainingState.timerId);
+  // 기존 기능과 충돌 방지
+  if (window.trainingSession) {
+    window.trainingSession.isGroupMode = false;
   }
   
-  // 그룹 훈련 상태 초기화
-  window.groupTraining = {
-    currentRoom: null,
-    isGroupMode: true,
-    participants: [],
-    roomStatus: 'waiting',
-    isHost: false,
-    pollingInterval: null,
-    lastUpdate: Date.now()
-  };
+  // 이벤트 리스너 설정
+  setupGroupTrainingEvents();
   
-  // UI 초기화
-  updateGroupTrainingUI();
+  // 페이지 종료 시 정리
+  window.addEventListener('beforeunload', cleanupGroupTraining);
 }
 
-/**
- * 그룹 훈련방 생성 (관리자만)
- */
-export async function createGroupRoom(roomName, workoutId, scheduledTime = null, maxParticipants = 10) {
-  try {
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    
-    if (!currentUser || currentUser.grade !== '1') {
-      throw new Error('관리자만 그룹 훈련방을 생성할 수 있습니다.');
-    }
-    
-    if (!roomName || !workoutId) {
-      throw new Error('방 이름과 워크아웃을 선택해주세요.');
-    }
-    
-    showLoadingSpinner('그룹 훈련방을 생성하는 중...');
-    
-    const params = {
-      action: 'createGroupRoom',
-      roomName: roomName,
-      hostUserId: currentUser.userId,
-      workoutId: workoutId,
-      hostGrade: currentUser.grade,
-      scheduledTime: scheduledTime,
-      maxParticipants: maxParticipants
-    };
-    
-    const result = await makeGASRequest(params);
-    
-    if (result.success) {
-      window.groupTraining.currentRoom = result.data;
-      window.groupTraining.isHost = true;
-      window.groupTraining.roomStatus = 'waiting';
-      
-      showToast('그룹 훈련방이 생성되었습니다!');
-      showGroupWaitingRoom();
-      startRoomStatusPolling();
-      
-      return result.data;
-    } else {
-      throw new Error(result.error || '방 생성에 실패했습니다.');
-    }
-    
-  } catch (error) {
-    console.error('그룹 훈련방 생성 오류:', error);
-    showToast(error.message, 'error');
-    throw error;
-  } finally {
-    hideLoadingSpinner();
+// ========== 이벤트 설정 ==========
+function setupGroupTrainingEvents() {
+  // 그룹 훈련 버튼 이벤트
+  const groupTrainingBtn = document.getElementById('btnGroupTraining');
+  if (groupTrainingBtn) {
+    groupTrainingBtn.addEventListener('click', showGroupTrainingModal);
+  }
+  
+  // 방 생성 버튼
+  const createRoomBtn = document.getElementById('btnCreateRoom');
+  if (createRoomBtn) {
+    createRoomBtn.addEventListener('click', createTrainingRoom);
+  }
+  
+  // 방 참가 버튼  
+  const joinRoomBtn = document.getElementById('btnJoinRoom');
+  if (joinRoomBtn) {
+    joinRoomBtn.addEventListener('click', showJoinRoomModal);
   }
 }
 
-/**
- * 그룹 훈련방 목록 조회
- */
-export async function getGroupRoomList() {
-  try {
-    const params = {
-      action: 'listGroupRooms'
-    };
-    
-    const result = await makeGASRequest(params);
-    
-    if (result.success) {
-      return result.data;
-    } else {
-      throw new Error(result.error || '방 목록 조회에 실패했습니다.');
-    }
-    
-  } catch (error) {
-    console.error('그룹 훈련방 목록 조회 오류:', error);
-    return [];
+// ========== 그룹 훈련 모달 표시 ==========
+export function showGroupTrainingModal() {
+  const currentUser = window.currentUser;
+  if (!currentUser) {
+    showToast('로그인이 필요합니다');
+    return;
   }
-}
-
-/**
- * 그룹 훈련방 참가
- */
-export async function joinGroupRoom(roomId) {
-  try {
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    
-    if (!currentUser) {
-      throw new Error('로그인이 필요합니다.');
-    }
-    
-    showLoadingSpinner('그룹 훈련방에 참가하는 중...');
-    
-    const params = {
-      action: 'joinGroupRoom',
-      roomId: roomId,
-      userId: currentUser.userId,
-      userName: currentUser.name || currentUser.userId
-    };
-    
-    const result = await makeGASRequest(params);
-    
-    if (result.success) {
-      // 방 정보 조회
-      const roomStatus = await getGroupRoomStatus(roomId);
-      if (roomStatus) {
-        window.groupTraining.currentRoom = roomStatus.room;
-        window.groupTraining.participants = roomStatus.participants;
-        window.groupTraining.isHost = (roomStatus.room.hostUserId === currentUser.userId);
-        window.groupTraining.roomStatus = roomStatus.room.status;
-        window.groupTraining.isGroupMode = true;
+  
+  const isAdmin = currentUser.grade === '1';
+  
+  const modalHtml = `
+    <div id="groupTrainingModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>🏆 그룹 훈련</h3>
+          <button class="modal-close" onclick="closeGroupTrainingModal()">✖</button>
+        </div>
         
-        showToast('그룹 훈련방에 참가했습니다!');
-        showGroupWaitingRoom();
-        startRoomStatusPolling();
-        
-        return result.data;
+        <div class="modal-body">
+          <div class="group-training-intro">
+            <p>여러 명이 함께 동시에 훈련할 수 있습니다!</p>
+            <div class="feature-list">
+              <div class="feature-item">
+                <span class="feature-icon">👥</span>
+                <span>최대 20명까지 동시 참여</span>
+              </div>
+              <div class="feature-item">
+                <span class="feature-icon">🎯</span>
+                <span>실시간 동기화 훈련</span>
+              </div>
+              <div class="feature-item">
+                <span class="feature-icon">🎤</span>
+                <span>관리자 음성 코칭</span>
+              </div>
+              <div class="feature-item">
+                <span class="feature-icon">📊</span>
+                <span>실시간 모니터링</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="group-actions">
+            ${isAdmin ? `
+              <button class="btn btn-success" id="btnCreateRoom">
+                <span class="btn-icon">🏠</span>
+                훈련실 만들기
+              </button>
+            ` : ''}
+            
+            <button class="btn btn-primary" id="btnJoinRoom">
+              <span class="btn-icon">🚪</span>
+              훈련실 참가하기
+            </button>
+            
+            <button class="btn btn-secondary" id="btnViewActiveRooms">
+              <span class="btn-icon">👀</span>
+              활성 훈련실 보기
+            </button>
+          </div>
+          
+          ${!isAdmin ? `
+            <div class="admin-notice">
+              <p><strong>💡 알림:</strong> 훈련실 생성은 관리자만 가능합니다</p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // 기존 모달 제거 후 새로 추가
+  removeExistingModal('groupTrainingModal');
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // 이벤트 리스너 재설정
+  setupModalEvents();
+  
+  // 모달 표시
+  const modal = document.getElementById('groupTrainingModal');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
+}
+
+// ========== 모달 이벤트 설정 ==========
+function setupModalEvents() {
+  const createBtn = document.getElementById('btnCreateRoom');
+  const joinBtn = document.getElementById('btnJoinRoom');
+  const viewBtn = document.getElementById('btnViewActiveRooms');
+  
+  if (createBtn) {
+    createBtn.addEventListener('click', createTrainingRoom);
+  }
+  
+  if (joinBtn) {
+    joinBtn.addEventListener('click', showJoinRoomModal);
+  }
+  
+  if (viewBtn) {
+    viewBtn.addEventListener('click', showActiveRooms);
+  }
+}
+
+// ========== 모달 닫기 ==========
+export function closeGroupTrainingModal() {
+  const modal = document.getElementById('groupTrainingModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+// ========== 훈련실 생성 ==========
+export async function createTrainingRoom() {
+  const currentUser = window.currentUser;
+  const selectedWorkout = window.selectedWorkout;
+  
+  if (!currentUser || currentUser.grade !== '1') {
+    showToast('훈련실 생성은 관리자만 가능합니다');
+    return;
+  }
+  
+  if (!selectedWorkout) {
+    showToast('먼저 워크아웃을 선택해주세요');
+    return;
+  }
+  
+  try {
+    showLoading('훈련실을 생성하는 중...');
+    
+    const roomData = {
+      hostId: currentUser.id,
+      hostName: currentUser.name,
+      workoutId: selectedWorkout.id,
+      workoutTitle: selectedWorkout.title,
+      maxParticipants: 20,
+      status: ROOM_STATUS.WAITING,
+      createdAt: new Date().toISOString(),
+      participants: [
+        {
+          userId: currentUser.id,
+          userName: currentUser.name,
+          isHost: true,
+          joinedAt: new Date().toISOString()
+        }
+      ]
+    };
+    
+    const response = await fetch(`${window.GAS_URL}?action=createTrainingRoom`, {
+      method: 'POST',
+      body: JSON.stringify(roomData),
+      headers: {
+        'Content-Type': 'application/json'
       }
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      GROUP_TRAINING.roomId = result.roomId;
+      GROUP_TRAINING.isHost = true;
+      GROUP_TRAINING.isGroupMode = true;
+      
+      hideLoading();
+      closeGroupTrainingModal();
+      showTrainingRoom();
+      
+      showToast('훈련실이 생성되었습니다!');
     } else {
-      throw new Error(result.error || '방 참가에 실패했습니다.');
+      throw new Error(result.error);
     }
     
   } catch (error) {
-    console.error('그룹 훈련방 참가 오류:', error);
-    showToast(error.message, 'error');
-    throw error;
-  } finally {
-    hideLoadingSpinner();
+    hideLoading();
+    console.error('훈련실 생성 오류:', error);
+    showToast('훈련실 생성에 실패했습니다: ' + error.message);
   }
 }
 
-/**
- * 그룹 훈련방 나가기
- */
-export async function leaveGroupRoom() {
-  try {
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    const roomId = window.groupTraining.currentRoom?.roomId;
+// ========== 훈련실 참가 모달 ==========
+export function showJoinRoomModal() {
+  const modalHtml = `
+    <div id="joinRoomModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>🚪 훈련실 참가</h3>
+          <button class="modal-close" onclick="closeJoinRoomModal()">✖</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="roomIdInput">훈련실 ID</label>
+            <input type="text" id="roomIdInput" placeholder="훈련실 ID를 입력하세요" maxlength="10">
+            <small class="form-help">관리자로부터 받은 훈련실 ID를 입력하세요</small>
+          </div>
+          
+          <div class="join-actions">
+            <button class="btn btn-primary" onclick="joinTrainingRoom()">
+              <span class="btn-icon">🔗</span>
+              참가하기
+            </button>
+            <button class="btn btn-secondary" onclick="closeJoinRoomModal()">
+              취소
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  removeExistingModal('joinRoomModal');
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  const modal = document.getElementById('joinRoomModal');
+  if (modal) {
+    modal.style.display = 'flex';
     
-    if (!roomId || !currentUser) {
-      throw new Error('참가 중인 방이 없습니다.');
+    // 입력 필드에 포커스
+    const input = document.getElementById('roomIdInput');
+    if (input) {
+      setTimeout(() => input.focus(), 100);
     }
+  }
+}
+
+// ========== 훈련실 참가 ==========
+export async function joinTrainingRoom() {
+  const roomIdInput = document.getElementById('roomIdInput');
+  const roomId = roomIdInput?.value?.trim();
+  const currentUser = window.currentUser;
+  
+  if (!roomId) {
+    showToast('훈련실 ID를 입력하세요');
+    return;
+  }
+  
+  if (!currentUser) {
+    showToast('로그인이 필요합니다');
+    return;
+  }
+  
+  try {
+    showLoading('훈련실에 참가하는 중...');
     
-    const params = {
-      action: 'leaveGroupRoom',
-      roomId: roomId,
-      userId: currentUser.userId
-    };
-    
-    const result = await makeGASRequest(params);
+    const response = await fetch(`${window.GAS_URL}?action=joinTrainingRoom&roomId=${roomId}&userId=${currentUser.id}&userName=${encodeURIComponent(currentUser.name)}`);
+    const result = await response.json();
     
     if (result.success) {
-      // 그룹 훈련 상태 정리
-      stopRoomStatusPolling();
-      window.groupTraining = {
-        currentRoom: null,
-        isGroupMode: false,
-        participants: [],
-        roomStatus: 'waiting',
-        isHost: false,
-        pollingInterval: null,
-        lastUpdate: null
-      };
+      GROUP_TRAINING.roomId = roomId;
+      GROUP_TRAINING.isHost = false;
+      GROUP_TRAINING.isGroupMode = true;
       
-      showToast('그룹 훈련방에서 나왔습니다.');
-      showWorkoutSelectionScreen();
+      // 워크아웃 정보 설정
+      if (result.workoutId) {
+        await loadWorkoutForGroup(result.workoutId);
+      }
       
-      return true;
+      hideLoading();
+      closeJoinRoomModal();
+      showTrainingRoom();
+      
+      showToast('훈련실에 참가했습니다!');
     } else {
-      throw new Error(result.error || '방 나가기에 실패했습니다.');
+      throw new Error(result.error);
     }
     
   } catch (error) {
-    console.error('그룹 훈련방 나가기 오류:', error);
-    showToast(error.message, 'error');
-    return false;
+    hideLoading();
+    console.error('훈련실 참가 오류:', error);
+    showToast('훈련실 참가에 실패했습니다: ' + error.message);
   }
 }
 
-/**
- * 그룹 훈련방 상태 조회
- */
-export async function getGroupRoomStatus(roomId) {
+// ========== 워크아웃 로드 ==========
+async function loadWorkoutForGroup(workoutId) {
   try {
-    const params = {
-      action: 'getGroupRoomStatus',
-      roomId: roomId
-    };
-    
-    const result = await makeGASRequest(params);
+    const response = await fetch(`${window.GAS_URL}?action=getWorkout&id=${workoutId}`);
+    const result = await response.json();
     
     if (result.success) {
-      return result.data;
-    } else {
-      console.error('방 상태 조회 실패:', result.error);
-      return null;
+      window.selectedWorkout = result.workout;
     }
-    
   } catch (error) {
-    console.error('그룹 훈련방 상태 조회 오류:', error);
-    return null;
+    console.error('워크아웃 로드 오류:', error);
   }
 }
 
-/**
- * 그룹 훈련 시작 (방장만)
- */
-export async function startGroupTraining() {
+// ========== 훈련실 화면 표시 ==========
+export function showTrainingRoom() {
+  // 기존 화면 숨기기
+  hideAllScreens();
+  
+  const roomHtml = `
+    <div id="groupTrainingRoomScreen" class="screen active">
+      <div class="header">
+        <h1>🏆 그룹 훈련실</h1>
+        <p class="subtitle">
+          ${GROUP_TRAINING.isHost ? '관리자' : '참가자'} | 
+          훈련실 ID: <strong>${GROUP_TRAINING.roomId}</strong>
+        </p>
+      </div>
+      
+      <div class="room-content">
+        <!-- 훈련 상태 표시 -->
+        <div class="training-status-card">
+          <div class="status-info">
+            <div class="status-indicator" id="roomStatusIndicator">
+              <span class="status-dot waiting"></span>
+              <span id="roomStatusText">대기 중</span>
+            </div>
+            <div class="workout-info">
+              <h3 id="roomWorkoutTitle">${window.selectedWorkout?.title || '워크아웃'}</h3>
+              <p id="roomWorkoutDuration">${formatDuration(window.selectedWorkout?.total_seconds || 0)}</p>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 참가자 목록 -->
+        <div class="participants-section">
+          <h3>👥 참가자 목록</h3>
+          <div id="participantsList" class="participants-list">
+            <!-- 동적으로 생성 -->
+          </div>
+        </div>
+        
+        <!-- 관리자 컨트롤 (호스트만 표시) -->
+        ${GROUP_TRAINING.isHost ? `
+          <div class="host-controls">
+            <h3>🎮 관리자 컨트롤</h3>
+            <div class="control-buttons">
+              <button class="btn btn-primary" id="btnStartCountdown">
+                <span class="btn-icon">⏰</span>
+                훈련 시작 (10초 카운트다운)
+              </button>
+              
+              <button class="btn btn-secondary" id="btnToggleMic" disabled>
+                <span class="btn-icon">🎤</span>
+                <span id="micStatus">마이크 켜기</span>
+              </button>
+              
+              <button class="btn btn-warning" id="btnEndTraining" style="display: none;">
+                <span class="btn-icon">⏹️</span>
+                훈련 종료
+              </button>
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- 채팅/메시지 -->
+        <div class="chat-section">
+          <h3>💬 메시지</h3>
+          <div id="chatMessages" class="chat-messages">
+            <div class="chat-message system">
+              <span class="timestamp">${formatTime(new Date())}</span>
+              <span class="message">훈련실에 입장했습니다</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 하단 버튼 -->
+        <div class="room-actions">
+          <button class="btn btn-danger" onclick="leaveTrainingRoom()">
+            <span class="btn-icon">🚪</span>
+            훈련실 나가기
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // 기존 그룹 훈련 화면 제거 후 새로 추가
+  const existingScreen = document.getElementById('groupTrainingRoomScreen');
+  if (existingScreen) {
+    existingScreen.remove();
+  }
+  
+  document.body.insertAdjacentHTML('beforeend', roomHtml);
+  
+  // 이벤트 리스너 설정
+  setupRoomEvents();
+  
+  // 상태 업데이트 시작
+  startRoomStatusUpdates();
+  
+  // 초기 참가자 목록 로드
+  updateParticipantsList();
+}
+
+// ========== 훈련실 이벤트 설정 ==========
+function setupRoomEvents() {
+  const startBtn = document.getElementById('btnStartCountdown');
+  const micBtn = document.getElementById('btnToggleMic');
+  const endBtn = document.getElementById('btnEndTraining');
+  
+  if (startBtn) {
+    startBtn.addEventListener('click', startGroupTrainingCountdown);
+  }
+  
+  if (micBtn) {
+    micBtn.addEventListener('click', toggleMicrophone);
+  }
+  
+  if (endBtn) {
+    endBtn.addEventListener('click', endGroupTraining);
+  }
+}
+
+// ========== 그룹 훈련 시작 카운트다운 ==========
+export async function startGroupTrainingCountdown() {
+  if (!GROUP_TRAINING.isHost) {
+    showToast('훈련 시작은 관리자만 가능합니다');
+    return;
+  }
+  
   try {
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    const roomId = window.groupTraining.currentRoom?.roomId;
-    
-    if (!window.groupTraining.isHost) {
-      throw new Error('방장만 훈련을 시작할 수 있습니다.');
-    }
-    
-    if (!roomId) {
-      throw new Error('참가 중인 방이 없습니다.');
-    }
-    
-    showLoadingSpinner('그룹 훈련을 시작하는 중...');
-    
-    const params = {
-      action: 'startGroupTraining',
-      roomId: roomId,
-      hostUserId: currentUser.userId
-    };
-    
-    const result = await makeGASRequest(params);
+    // 서버에 훈련 시작 신호 전송
+    const response = await fetch(`${window.GAS_URL}?action=startGroupTraining&roomId=${GROUP_TRAINING.roomId}`);
+    const result = await response.json();
     
     if (result.success) {
-      window.groupTraining.roomStatus = 'training';
-      showToast('그룹 훈련이 시작되었습니다!');
-      
-      // 훈련 화면으로 전환
-      await startActualGroupTraining();
-      
-      return true;
+      showGroupCountdown();
     } else {
-      throw new Error(result.error || '그룹 훈련 시작에 실패했습니다.');
+      throw new Error(result.error);
     }
-    
   } catch (error) {
     console.error('그룹 훈련 시작 오류:', error);
-    showToast(error.message, 'error');
-    return false;
-  } finally {
-    hideLoadingSpinner();
+    showToast('훈련 시작에 실패했습니다');
   }
 }
 
-/**
- * 실제 그룹 훈련 시작 (훈련 화면 표시)
- */
-async function startActualGroupTraining() {
+// ========== 그룹 카운트다운 표시 ==========
+function showGroupCountdown() {
+  const countdownOverlay = `
+    <div id="groupCountdownOverlay" class="countdown-overlay">
+      <div class="countdown-content">
+        <h2>🚀 그룹 훈련 시작!</h2>
+        <div class="countdown-number" id="countdownNumber">10</div>
+        <p>모든 참가자가 동시에 시작합니다</p>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', countdownOverlay);
+  
+  let count = 10;
+  const countdownInterval = setInterval(() => {
+    count--;
+    const numberEl = document.getElementById('countdownNumber');
+    if (numberEl) {
+      numberEl.textContent = count;
+      
+      if (count <= 3) {
+        numberEl.style.color = '#e74c3c';
+        numberEl.style.transform = 'scale(1.2)';
+      }
+    }
+    
+    if (count <= 0) {
+      clearInterval(countdownInterval);
+      
+      // 카운트다운 오버레이 제거
+      const overlay = document.getElementById('groupCountdownOverlay');
+      if (overlay) {
+        overlay.remove();
+      }
+      
+      // 실제 훈련 시작
+      startActualGroupTraining();
+    }
+  }, 1000);
+}
+
+// ========== 실제 그룹 훈련 시작 ==========
+function startActualGroupTraining() {
+  // 기존 훈련 화면으로 전환
+  hideAllScreens();
+  
+  const trainingScreen = document.getElementById('trainingScreen');
+  if (trainingScreen) {
+    trainingScreen.classList.add('active');
+  }
+  
+  // 그룹 모드로 훈련 시작
+  if (window.initTraining) {
+    GROUP_TRAINING.isGroupMode = true;
+    window.trainingSession.isGroupMode = true;
+    window.initTraining();
+  }
+  
+  // 관리자용 모니터링 오버레이 추가
+  if (GROUP_TRAINING.isHost) {
+    addMonitoringOverlay();
+  }
+  
+  showToast('그룹 훈련이 시작되었습니다!');
+}
+
+// ========== 관리자 모니터링 오버레이 ==========
+function addMonitoringOverlay() {
+  const monitoringHtml = `
+    <div id="monitoringOverlay" class="monitoring-overlay">
+      <div class="monitoring-header">
+        <h4>📊 참가자 모니터링</h4>
+        <button class="btn-close-monitoring" onclick="toggleMonitoringOverlay()">─</button>
+      </div>
+      <div id="monitoringContent" class="monitoring-content">
+        <!-- 동적으로 생성 -->
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', monitoringHtml);
+  
+  // 모니터링 데이터 업데이트 시작
+  startMonitoringUpdates();
+}
+
+// ========== 마이크 토글 ==========
+export async function toggleMicrophone() {
+  if (!GROUP_TRAINING.isHost) {
+    showToast('마이크 기능은 관리자만 사용할 수 있습니다');
+    return;
+  }
+  
   try {
-    // 워크아웃 데이터 로드
-    const workoutId = window.groupTraining.currentRoom?.workoutId;
-    if (!workoutId) {
-      throw new Error('워크아웃 정보가 없습니다.');
+    if (!GROUP_TRAINING.audioEnabled) {
+      // 마이크 활성화
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      GROUP_TRAINING.localStream = stream;
+      GROUP_TRAINING.audioEnabled = true;
+      
+      updateMicButton(true);
+      showToast('마이크가 활성화되었습니다');
+      
+      // WebRTC 연결 설정 (실제 구현 시 추가)
+      // setupWebRTCConnections();
+      
+    } else {
+      // 마이크 비활성화
+      if (GROUP_TRAINING.localStream) {
+        GROUP_TRAINING.localStream.getTracks().forEach(track => track.stop());
+        GROUP_TRAINING.localStream = null;
+      }
+      
+      GROUP_TRAINING.audioEnabled = false;
+      updateMicButton(false);
+      showToast('마이크가 비활성화되었습니다');
     }
-    
-    // 기존 개인 훈련 함수 활용하여 워크아웃 로드
-    await loadWorkoutForTraining(workoutId);
-    
-    // 그룹 훈련 전용 UI로 변경
-    showGroupTrainingScreen();
-    
-    // 그룹 훈련 데이터 전송 시작
-    startGroupTrainingDataSync();
-    
-    // 기존 훈련 타이머 시작 (개인 훈련 로직 재활용)
-    if (window.startTraining) {
-      window.startTraining();
-    }
-    
   } catch (error) {
-    console.error('실제 그룹 훈련 시작 오류:', error);
-    showToast('훈련 시작에 실패했습니다: ' + error.message, 'error');
+    console.error('마이크 설정 오류:', error);
+    showToast('마이크 접근에 실패했습니다. 브라우저 권한을 확인해주세요.');
   }
 }
 
-/**
- * 그룹 훈련 데이터 동기화 시작
- */
-function startGroupTrainingDataSync() {
-  // 기존 동기화 정리
-  if (window.groupTraining.dataSyncInterval) {
-    clearInterval(window.groupTraining.dataSyncInterval);
-  }
+// ========== 마이크 버튼 업데이트 ==========
+function updateMicButton(enabled) {
+  const micBtn = document.getElementById('btnToggleMic');
+  const micStatus = document.getElementById('micStatus');
   
-  // 5초마다 데이터 전송
-  window.groupTraining.dataSyncInterval = setInterval(async () => {
-    await syncGroupTrainingData();
-  }, 5000);
-  
-  console.log('그룹 훈련 데이터 동기화 시작');
-}
-
-/**
- * 그룹 훈련 데이터 동기화
- */
-async function syncGroupTrainingData() {
-  try {
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    const roomId = window.groupTraining.currentRoom?.roomId;
-    
-    if (!roomId || !currentUser || window.groupTraining.roomStatus !== 'training') {
-      return;
+  if (micBtn && micStatus) {
+    if (enabled) {
+      micBtn.className = 'btn btn-danger';
+      micStatus.textContent = '마이크 끄기';
+      micBtn.querySelector('.btn-icon').textContent = '🔴';
+    } else {
+      micBtn.className = 'btn btn-secondary';
+      micStatus.textContent = '마이크 켜기';
+      micBtn.querySelector('.btn-icon').textContent = '🎤';
     }
-    
-    // 현재 훈련 데이터 수집
-    const liveData = window.liveData || {};
-    const trainingState = window.trainingState || {};
-    
-    const params = {
-      action: 'updateGroupTrainingData',
-      roomId: roomId,
-      userId: currentUser.userId,
-      power: liveData.power || 0,
-      cadence: liveData.cadence || 0,
-      heartRate: liveData.heartRate || 0,
-      currentSegment: trainingState.segIndex || 0,
-      elapsedTime: trainingState.elapsedSec || 0
-    };
-    
-    const result = await makeGASRequest(params);
-    
-    if (!result.success) {
-      console.error('그룹 훈련 데이터 동기화 실패:', result.error);
-    }
-    
-  } catch (error) {
-    console.error('그룹 훈련 데이터 동기화 오류:', error);
   }
 }
 
-/**
- * 방 상태 폴링 시작
- */
-function startRoomStatusPolling() {
-  // 기존 폴링 정리
-  stopRoomStatusPolling();
+// ========== 상태 업데이트 시작 ==========
+function startRoomStatusUpdates() {
+  if (GROUP_TRAINING.updateInterval) {
+    clearInterval(GROUP_TRAINING.updateInterval);
+  }
   
-  // 3초마다 방 상태 확인
-  window.groupTraining.pollingInterval = setInterval(async () => {
+  GROUP_TRAINING.updateInterval = setInterval(async () => {
     await updateRoomStatus();
-  }, 3000);
+  }, GROUP_TRAINING.syncInterval);
   
-  console.log('방 상태 폴링 시작');
+  // 초기 업데이트
+  updateRoomStatus();
 }
 
-/**
- * 방 상태 폴링 중지
- */
-function stopRoomStatusPolling() {
-  if (window.groupTraining.pollingInterval) {
-    clearInterval(window.groupTraining.pollingInterval);
-    window.groupTraining.pollingInterval = null;
-  }
-  
-  if (window.groupTraining.dataSyncInterval) {
-    clearInterval(window.groupTraining.dataSyncInterval);
-    window.groupTraining.dataSyncInterval = null;
-  }
-}
-
-/**
- * 방 상태 업데이트
- */
+// ========== 방 상태 업데이트 ==========
 async function updateRoomStatus() {
+  if (!GROUP_TRAINING.roomId) return;
+  
   try {
-    const roomId = window.groupTraining.currentRoom?.roomId;
-    if (!roomId) return;
+    const response = await fetch(`${window.GAS_URL}?action=getRoomStatus&roomId=${GROUP_TRAINING.roomId}`);
+    const result = await response.json();
     
-    const status = await getGroupRoomStatus(roomId);
-    if (!status) return;
-    
-    const oldStatus = window.groupTraining.roomStatus;
-    const newStatus = status.room.status;
-    
-    // 상태 업데이트
-    window.groupTraining.participants = status.participants;
-    window.groupTraining.roomStatus = newStatus;
-    
-    // 상태 변화 감지
-    if (oldStatus !== newStatus) {
-      handleRoomStatusChange(oldStatus, newStatus);
+    if (result.success) {
+      const roomData = result.room;
+      updateRoomUI(roomData);
+      
+      // 훈련 시작 신호 체크
+      if (roomData.status === ROOM_STATUS.STARTING && !GROUP_TRAINING.isHost) {
+        startGroupTrainingCountdown();
+      }
     }
-    
-    // UI 업데이트
-    updateGroupTrainingUI();
-    
-    // 관리자인 경우 참가자 모니터링 데이터 업데이트
-    if (window.groupTraining.isHost && newStatus === 'training') {
-      await updateAdminMonitoring();
-    }
-    
   } catch (error) {
     console.error('방 상태 업데이트 오류:', error);
   }
 }
 
-/**
- * 방 상태 변화 처리
- */
-function handleRoomStatusChange(oldStatus, newStatus) {
-  console.log('방 상태 변화:', oldStatus, '->', newStatus);
+// ========== 방 UI 업데이트 ==========
+function updateRoomUI(roomData) {
+  // 상태 표시 업데이트
+  const statusIndicator = document.getElementById('roomStatusIndicator');
+  const statusText = document.getElementById('roomStatusText');
   
-  if (oldStatus === 'waiting' && newStatus === 'training') {
-    // 훈련 시작됨
-    showToast('그룹 훈련이 시작되었습니다!');
-    if (!window.groupTraining.isHost) {
-      // 참가자는 자동으로 훈련 화면으로 전환
-      startActualGroupTraining();
-    }
-  } else if (newStatus === 'finished') {
-    // 훈련 종료됨
-    showToast('그룹 훈련이 종료되었습니다.');
-    handleGroupTrainingFinished();
-  }
-}
-
-/**
- * 그룹 훈련 종료 처리
- */
-function handleGroupTrainingFinished() {
-  // 폴링 중지
-  stopRoomStatusPolling();
-  
-  // 훈련 타이머 정지
-  if (window.trainingState && window.trainingState.timerId) {
-    clearInterval(window.trainingState.timerId);
-  }
-  
-  // 결과 화면 표시
-  showGroupTrainingResults();
-}
-
-/**
- * 관리자 모니터링 데이터 업데이트
- */
-async function updateAdminMonitoring() {
-  try {
-    const roomId = window.groupTraining.currentRoom?.roomId;
-    if (!roomId) return;
+  if (statusIndicator && statusText) {
+    const statusDot = statusIndicator.querySelector('.status-dot');
+    statusDot.className = `status-dot ${roomData.status}`;
     
-    const params = {
-      action: 'getGroupTrainingData',
-      roomId: roomId
+    const statusTexts = {
+      [ROOM_STATUS.WAITING]: '대기 중',
+      [ROOM_STATUS.STARTING]: '시작 준비 중',
+      [ROOM_STATUS.TRAINING]: '훈련 중',
+      [ROOM_STATUS.FINISHED]: '훈련 완료'
     };
     
-    const result = await makeGASRequest(params);
-    
-    if (result.success) {
-      updateAdminMonitoringUI(result.data);
-    }
-    
-  } catch (error) {
-    console.error('관리자 모니터링 데이터 업데이트 오류:', error);
+    statusText.textContent = statusTexts[roomData.status] || '알 수 없음';
   }
+  
+  // 참가자 목록 업데이트
+  GROUP_TRAINING.participants = roomData.participants || [];
+  updateParticipantsList();
 }
 
-// ===== UI 관련 함수들 =====
-
-/**
- * 그룹 훈련 UI 업데이트
- */
-function updateGroupTrainingUI() {
-  const container = document.getElementById('groupTrainingContainer');
-  if (!container) return;
+// ========== 참가자 목록 업데이트 ==========
+function updateParticipantsList() {
+  const participantsList = document.getElementById('participantsList');
+  if (!participantsList) return;
   
-  const room = window.groupTraining.currentRoom;
-  const participants = window.groupTraining.participants;
-  const isHost = window.groupTraining.isHost;
-  const status = window.groupTraining.roomStatus;
-  
-  // 방 정보 표시
-  const roomInfoElement = document.getElementById('groupRoomInfo');
-  if (roomInfoElement && room) {
-    roomInfoElement.innerHTML = `
-      <h3>${escapeHtml(room.roomName)}</h3>
-      <p>상태: ${getStatusText(status)} | 참가자: ${participants.length}명</p>
-      ${isHost ? '<span class="host-badge">방장</span>' : ''}
+  if (GROUP_TRAINING.participants.length === 0) {
+    participantsList.innerHTML = `
+      <div class="empty-participants">
+        <p>아직 참가자가 없습니다</p>
+      </div>
     `;
-  }
-  
-  // 참가자 목록 표시
-  const participantsElement = document.getElementById('groupParticipantsList');
-  if (participantsElement) {
-    participantsElement.innerHTML = participants.map(p => `
-      <div class="participant-item">
-        <span class="participant-name">${escapeHtml(p.userName || p.userId)}</span>
-        <span class="participant-status">참가중</span>
-      </div>
-    `).join('');
-  }
-  
-  // 버튼 상태 업데이트
-  updateGroupTrainingButtons(status, isHost);
-}
-
-/**
- * 그룹 훈련 버튼 상태 업데이트
- */
-function updateGroupTrainingButtons(status, isHost) {
-  const startButton = document.getElementById('groupTrainingStartBtn');
-  const leaveButton = document.getElementById('groupTrainingLeaveBtn');
-  
-  if (startButton) {
-    if (status === 'waiting' && isHost) {
-      startButton.style.display = 'block';
-      startButton.disabled = false;
-    } else {
-      startButton.style.display = 'none';
-    }
-  }
-  
-  if (leaveButton) {
-    leaveButton.style.display = status === 'waiting' ? 'block' : 'none';
-  }
-}
-
-/**
- * 그룹 대기실 화면 표시
- */
-function showGroupWaitingRoom() {
-  const mainContent = document.getElementById('mainContent');
-  if (!mainContent) return;
-  
-  mainContent.innerHTML = `
-    <div id="groupTrainingContainer" class="group-training-container">
-      <div class="group-room-header">
-        <div id="groupRoomInfo"></div>
-        <button id="groupTrainingLeaveBtn" class="btn btn-secondary">방 나가기</button>
-      </div>
-      
-      <div class="group-participants-section">
-        <h4>참가자 목록</h4>
-        <div id="groupParticipantsList" class="participants-list"></div>
-      </div>
-      
-      <div class="group-waiting-actions">
-        <button id="groupTrainingStartBtn" class="btn btn-primary" style="display: none;">
-          훈련 시작
-        </button>
-        <div class="waiting-message">
-          <p>다른 참가자들을 기다리는 중입니다...</p>
-          <div class="loading-dots">
-            <span></span><span></span><span></span>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  // 이벤트 리스너 등록
-  const startBtn = document.getElementById('groupTrainingStartBtn');
-  const leaveBtn = document.getElementById('groupTrainingLeaveBtn');
-  
-  if (startBtn) {
-    startBtn.addEventListener('click', startGroupTraining);
-  }
-  
-  if (leaveBtn) {
-    leaveBtn.addEventListener('click', leaveGroupRoom);
-  }
-  
-  // 초기 UI 업데이트
-  updateGroupTrainingUI();
-}
-
-/**
- * 그룹 훈련 화면 표시
- */
-function showGroupTrainingScreen() {
-  // 기존 훈련 화면을 베이스로 하되, 그룹 요소 추가
-  if (window.showTrainingScreen) {
-    window.showTrainingScreen();
-  }
-  
-  // 그룹 훈련 전용 요소 추가
-  addGroupTrainingElements();
-}
-
-/**
- * 그룹 훈련 전용 요소 추가
- */
-function addGroupTrainingElements() {
-  const trainingScreen = document.querySelector('.training-screen');
-  if (!trainingScreen) return;
-  
-  // 그룹 정보 패널 추가
-  const groupPanel = document.createElement('div');
-  groupPanel.className = 'group-training-panel';
-  groupPanel.innerHTML = `
-    <div class="group-info">
-      <span class="group-icon">👥</span>
-      <span class="group-text">그룹 훈련 중</span>
-      <span id="groupParticipantCount">${window.groupTraining.participants.length}명</span>
-    </div>
-    ${window.groupTraining.isHost ? '<button id="adminMonitorBtn" class="btn btn-sm">모니터링</button>' : ''}
-  `;
-  
-  trainingScreen.insertBefore(groupPanel, trainingScreen.firstChild);
-  
-  // 관리자 모니터링 버튼 이벤트
-  const monitorBtn = document.getElementById('adminMonitorBtn');
-  if (monitorBtn) {
-    monitorBtn.addEventListener('click', showAdminMonitoring);
-  }
-}
-
-/**
- * 관리자 모니터링 화면 표시
- */
-function showAdminMonitoring() {
-  if (!window.groupTraining.isHost) return;
-  
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `
-    <div class="modal-content admin-monitoring-modal">
-      <div class="modal-header">
-        <h3>그룹 훈련 모니터링</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div id="adminMonitoringData" class="monitoring-grid">
-          <div class="loading-spinner">데이터를 불러오는 중...</div>
-        </div>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(modal);
-  
-  // 닫기 버튼 이벤트
-  modal.querySelector('.modal-close').addEventListener('click', () => {
-    document.body.removeChild(modal);
-  });
-  
-  // 모니터링 데이터 업데이트
-  updateAdminMonitoring();
-}
-
-/**
- * 관리자 모니터링 UI 업데이트
- */
-function updateAdminMonitoringUI(data) {
-  const container = document.getElementById('adminMonitoringData');
-  if (!container) return;
-  
-  if (!data || data.length === 0) {
-    container.innerHTML = '<div class="no-data">훈련 데이터가 없습니다.</div>';
     return;
   }
   
-  // 사용자별로 최신 데이터 그룹화
-  const userDataMap = {};
-  data.forEach(log => {
-    if (!userDataMap[log.userId] || new Date(log.timestamp) > new Date(userDataMap[log.userId].timestamp)) {
-      userDataMap[log.userId] = log;
-    }
-  });
-  
-  const userDataArray = Object.values(userDataMap);
-  
-  container.innerHTML = userDataArray.map(log => {
-    const participant = window.groupTraining.participants.find(p => p.userId === log.userId);
-    const userName = participant ? participant.userName : log.userId;
-    
-    return `
-      <div class="monitoring-card">
-        <div class="user-info">
-          <h4>${escapeHtml(userName)}</h4>
-          <span class="segment-info">세그먼트 ${log.currentSegment + 1}</span>
-        </div>
-        <div class="training-data">
-          <div class="data-item">
-            <span class="label">파워</span>
-            <span class="value">${log.power}W</span>
-          </div>
-          <div class="data-item">
-            <span class="label">케이던스</span>
-            <span class="value">${log.cadence}rpm</span>
-          </div>
-          <div class="data-item">
-            <span class="label">심박수</span>
-            <span class="value">${log.heartRate}bpm</span>
-          </div>
-          <div class="data-item">
-            <span class="label">경과시간</span>
-            <span class="value">${formatTime(log.elapsedTime)}</span>
-          </div>
-        </div>
-        <div class="last-update">
-          마지막 업데이트: ${formatTimestamp(log.timestamp)}
-        </div>
+  const participantsHtml = GROUP_TRAINING.participants.map(participant => `
+    <div class="participant-item ${participant.isHost ? 'host' : ''}">
+      <div class="participant-info">
+        <span class="participant-name">${escapeHtml(participant.userName)}</span>
+        ${participant.isHost ? '<span class="host-badge">관리자</span>' : ''}
       </div>
-    `;
-  }).join('');
+      <div class="participant-status">
+        <span class="status-dot online"></span>
+        <small>온라인</small>
+      </div>
+    </div>
+  `).join('');
+  
+  participantsList.innerHTML = participantsHtml;
 }
 
-/**
- * 그룹 훈련 결과 화면 표시
- */
-function showGroupTrainingResults() {
-  // 기존 결과 화면을 베이스로 하되, 그룹 요소 추가
-  if (window.showResultScreen) {
-    window.showResultScreen();
+// ========== 활성 훈련실 보기 ==========
+export async function showActiveRooms() {
+  try {
+    showLoading('활성 훈련실을 조회하는 중...');
+    
+    const response = await fetch(`${window.GAS_URL}?action=listActiveRooms`);
+    const result = await response.json();
+    
+    hideLoading();
+    
+    if (result.success) {
+      displayActiveRoomsModal(result.rooms || []);
+    } else {
+      throw new Error(result.error);
+    }
+  } catch (error) {
+    hideLoading();
+    console.error('활성 훈련실 조회 오류:', error);
+    showToast('훈련실 목록을 가져올 수 없습니다');
   }
-  
-  // 그룹 결과 추가 정보 표시
-  addGroupResultElements();
 }
 
-/**
- * 그룹 결과 추가 요소
- */
-function addGroupResultElements() {
-  const resultScreen = document.querySelector('.result-screen');
-  if (!resultScreen) return;
-  
-  const groupResultPanel = document.createElement('div');
-  groupResultPanel.className = 'group-result-panel';
-  groupResultPanel.innerHTML = `
-    <h3>그룹 훈련 완료</h3>
-    <p>참가자 ${window.groupTraining.participants.length}명과 함께 훈련을 완료했습니다!</p>
-    <button id="backToGroupListBtn" class="btn btn-primary">그룹 훈련 목록으로</button>
-  `;
-  
-  resultScreen.appendChild(groupResultPanel);
-  
-  // 버튼 이벤트
-  document.getElementById('backToGroupListBtn').addEventListener('click', () => {
-    leaveGroupRoom();
-  });
-}
-
-/**
- * 워크아웃 선택 화면 표시 (그룹 훈련 옵션 포함)
- */
-export function showWorkoutSelectionWithGroupOption() {
-  const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-  const isAdmin = currentUser && currentUser.grade === '1';
-  
-  // 기존 워크아웃 선택 화면 표시
-  if (window.showWorkoutSelection) {
-    window.showWorkoutSelection();
-  }
-  
-  // 그룹 훈련 옵션 추가
-  setTimeout(() => {
-    addGroupTrainingOptions(isAdmin);
-  }, 100);
-}
-
-/**
- * 워크아웃 선택 화면에 그룹 훈련 옵션 추가
- */
-function addGroupTrainingOptions(isAdmin) {
-  const workoutActions = document.querySelector('.workout-actions');
-  if (!workoutActions) return;
-  
-  // 그룹 훈련 버튼들 추가
-  const groupButtons = document.createElement('div');
-  groupButtons.className = 'group-training-buttons';
-  groupButtons.innerHTML = `
-    <div class="button-group">
-      <button id="joinGroupRoomBtn" class="btn btn-secondary">
-        <span class="icon">👥</span>
-        그룹 훈련 참가
-      </button>
-      ${isAdmin ? `
-        <button id="createGroupRoomBtn" class="btn btn-primary">
-          <span class="icon">➕</span>
-          그룹 훈련방 생성
+// ========== 활성 훈련실 모달 표시 ==========
+function displayActiveRoomsModal(rooms) {
+  const roomsHtml = rooms.length > 0 ? rooms.map(room => `
+    <div class="room-item">
+      <div class="room-info">
+        <h4>${escapeHtml(room.workoutTitle)}</h4>
+        <p>관리자: ${escapeHtml(room.hostName)}</p>
+        <p>참가자: ${room.participantCount}/${room.maxParticipants}명</p>
+      </div>
+      <div class="room-actions">
+        <button class="btn btn-primary btn-sm" onclick="quickJoinRoom('${room.id}')">
+          참가하기
         </button>
-      ` : ''}
+      </div>
+    </div>
+  `).join('') : `
+    <div class="empty-rooms">
+      <p>현재 활성 상태인 훈련실이 없습니다</p>
     </div>
   `;
   
-  workoutActions.appendChild(groupButtons);
-  
-  // 이벤트 리스너 등록
-  document.getElementById('joinGroupRoomBtn').addEventListener('click', showGroupRoomList);
-  
-  if (isAdmin) {
-    document.getElementById('createGroupRoomBtn').addEventListener('click', showCreateGroupRoomModal);
-  }
-}
-
-/**
- * 그룹 훈련방 목록 표시
- */
-async function showGroupRoomList() {
-  try {
-    showLoadingSpinner('그룹 훈련방 목록을 불러오는 중...');
-    
-    const rooms = await getGroupRoomList();
-    
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-content group-room-list-modal">
+  const modalHtml = `
+    <div id="activeRoomsModal" class="modal">
+      <div class="modal-content">
         <div class="modal-header">
-          <h3>그룹 훈련방 목록</h3>
-          <button class="modal-close">&times;</button>
+          <h3>🏠 활성 훈련실</h3>
+          <button class="modal-close" onclick="closeActiveRoomsModal()">✖</button>
         </div>
+        
         <div class="modal-body">
-          <div id="groupRoomList" class="room-list">
-            ${rooms.length === 0 ? 
-              '<div class="no-rooms">현재 활성 중인 그룹 훈련방이 없습니다.</div>' :
-              rooms.map(room => `
-                <div class="room-item" data-room-id="${room.roomId}">
-                  <div class="room-info">
-                    <h4>${escapeHtml(room.roomName)}</h4>
-                    <p>상태: ${getStatusText(room.status)}</p>
-                    <p>워크아웃: ${room.workoutId}</p>
-                  </div>
-                  <button class="btn btn-primary join-room-btn" data-room-id="${room.roomId}">
-                    참가하기
-                  </button>
-                </div>
-              `).join('')
-            }
+          <div class="rooms-list">
+            ${roomsHtml}
           </div>
         </div>
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // 이벤트 리스너
-    modal.querySelector('.modal-close').addEventListener('click', () => {
-      document.body.removeChild(modal);
-    });
-    
-    modal.querySelectorAll('.join-room-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const roomId = e.target.dataset.roomId;
-        document.body.removeChild(modal);
-        await joinGroupRoom(roomId);
-      });
-    });
-    
-  } catch (error) {
-    console.error('그룹 훈련방 목록 표시 오류:', error);
-    showToast('방 목록을 불러올 수 없습니다.', 'error');
-  } finally {
-    hideLoadingSpinner();
-  }
-}
-
-/**
- * 그룹 훈련방 생성 모달 표시
- */
-function showCreateGroupRoomModal() {
-  const modal = document.createElement('div');
-  modal.className = 'modal-overlay';
-  modal.innerHTML = `
-    <div class="modal-content create-room-modal">
-      <div class="modal-header">
-        <h3>그룹 훈련방 생성</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="createGroupRoomForm">
-          <div class="form-group">
-            <label for="roomName">방 이름</label>
-            <input type="text" id="roomName" required placeholder="예: 오늘 저녁 그룹 훈련">
-          </div>
-          
-          <div class="form-group">
-            <label for="workoutSelect">워크아웃 선택</label>
-            <select id="workoutSelect" required>
-              <option value="">워크아웃을 선택하세요</option>
-              <!-- 워크아웃 목록이 동적으로 추가됩니다 -->
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="maxParticipants">최대 참가자 수</label>
-            <input type="number" id="maxParticipants" value="10" min="2" max="20">
-          </div>
-          
-          <div class="form-group">
-            <label for="scheduledTime">시작 시간 (선택사항)</label>
-            <input type="datetime-local" id="scheduledTime">
-          </div>
-          
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary modal-close">취소</button>
-            <button type="submit" class="btn btn-primary">방 생성</button>
-          </div>
-        </form>
       </div>
     </div>
   `;
   
-  document.body.appendChild(modal);
+  removeExistingModal('activeRoomsModal');
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
   
-  // 워크아웃 목록 로드
-  loadWorkoutOptionsForGroupRoom();
-  
-  // 이벤트 리스너
-  modal.querySelectorAll('.modal-close').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.body.removeChild(modal);
-    });
-  });
-  
-  modal.querySelector('#createGroupRoomForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.target);
-    const roomName = formData.get('roomName');
-    const workoutId = formData.get('workoutSelect');
-    const maxParticipants = parseInt(formData.get('maxParticipants'));
-    const scheduledTime = formData.get('scheduledTime');
-    
-    try {
-      document.body.removeChild(modal);
-      await createGroupRoom(roomName, workoutId, scheduledTime, maxParticipants);
-    } catch (error) {
-      // 오류 처리는 createGroupRoom에서 함
-    }
-  });
+  const modal = document.getElementById('activeRoomsModal');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
 }
 
-/**
- * 그룹 훈련방 생성용 워크아웃 옵션 로드
- */
-async function loadWorkoutOptionsForGroupRoom() {
+// ========== 빠른 방 참가 ==========
+export async function quickJoinRoom(roomId) {
+  const currentUser = window.currentUser;
+  
+  if (!currentUser) {
+    showToast('로그인이 필요합니다');
+    return;
+  }
+  
   try {
-    const workoutSelect = document.getElementById('workoutSelect');
-    if (!workoutSelect) return;
+    showLoading('훈련실에 참가하는 중...');
     
-    // 기존 워크아웃 목록 가져오기
-    if (window.loadWorkouts) {
-      await window.loadWorkouts();
+    const response = await fetch(`${window.GAS_URL}?action=joinTrainingRoom&roomId=${roomId}&userId=${currentUser.id}&userName=${encodeURIComponent(currentUser.name)}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      GROUP_TRAINING.roomId = roomId;
+      GROUP_TRAINING.isHost = false;
+      GROUP_TRAINING.isGroupMode = true;
+      
+      // 워크아웃 정보 설정
+      if (result.workoutId) {
+        await loadWorkoutForGroup(result.workoutId);
+      }
+      
+      hideLoading();
+      closeActiveRoomsModal();
+      closeGroupTrainingModal();
+      showTrainingRoom();
+      
+      showToast('훈련실에 참가했습니다!');
+    } else {
+      throw new Error(result.error);
     }
-    
-    // 전역 workouts 변수에서 옵션 생성
-    const workouts = window.workouts || [];
-    workouts.forEach(workout => {
-      const option = document.createElement('option');
-      option.value = workout.workoutId;
-      option.textContent = workout.workoutName;
-      workoutSelect.appendChild(option);
-    });
     
   } catch (error) {
-    console.error('워크아웃 옵션 로드 오류:', error);
+    hideLoading();
+    console.error('훈련실 참가 오류:', error);
+    showToast('훈련실 참가에 실패했습니다: ' + error.message);
   }
 }
 
-// ===== 유틸리티 함수들 =====
-
-/**
- * 상태 텍스트 반환
- */
-function getStatusText(status) {
-  const statusMap = {
-    'waiting': '대기 중',
-    'training': '훈련 중',
-    'finished': '완료'
-  };
-  return statusMap[status] || status;
+// ========== 훈련실 나가기 ==========
+export async function leaveTrainingRoom() {
+  const currentUser = window.currentUser;
+  
+  if (!currentUser || !GROUP_TRAINING.roomId) {
+    return;
+  }
+  
+  try {
+    // 서버에 나가기 신호 전송
+    await fetch(`${window.GAS_URL}?action=leaveTrainingRoom&roomId=${GROUP_TRAINING.roomId}&userId=${currentUser.id}`);
+    
+    // 로컬 상태 정리
+    cleanupGroupTraining();
+    
+    // 원래 화면으로 돌아가기
+    hideAllScreens();
+    const readyScreen = document.getElementById('trainingReadyScreen');
+    if (readyScreen) {
+      readyScreen.classList.add('active');
+    }
+    
+    showToast('훈련실에서 나왔습니다');
+    
+  } catch (error) {
+    console.error('훈련실 나가기 오류:', error);
+    showToast('훈련실 나가기에 실패했습니다');
+  }
 }
 
-/**
- * 시간 포맷팅 (초 -> MM:SS)
- */
-function formatTime(seconds) {
-  const minutes = Math.floor(seconds / 60);
+// ========== 정리 함수 ==========
+function cleanupGroupTraining() {
+  // 인터벌 정리
+  if (GROUP_TRAINING.updateInterval) {
+    clearInterval(GROUP_TRAINING.updateInterval);
+    GROUP_TRAINING.updateInterval = null;
+  }
+  
+  // 마이크 스트림 정리
+  if (GROUP_TRAINING.localStream) {
+    GROUP_TRAINING.localStream.getTracks().forEach(track => track.stop());
+    GROUP_TRAINING.localStream = null;
+  }
+  
+  // WebRTC 연결 정리
+  Object.values(GROUP_TRAINING.peerConnections).forEach(pc => {
+    if (pc) pc.close();
+  });
+  GROUP_TRAINING.peerConnections = {};
+  
+  // 상태 초기화
+  GROUP_TRAINING.isGroupMode = false;
+  GROUP_TRAINING.isHost = false;
+  GROUP_TRAINING.roomId = null;
+  GROUP_TRAINING.sessionId = null;
+  GROUP_TRAINING.participants = [];
+  GROUP_TRAINING.audioEnabled = false;
+  
+  // UI 요소 제거
+  const groupElements = [
+    'groupTrainingRoomScreen',
+    'monitoringOverlay',
+    'groupCountdownOverlay'
+  ];
+  
+  groupElements.forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.remove();
+  });
+  
+  // 훈련 세션 그룹 모드 해제
+  if (window.trainingSession) {
+    window.trainingSession.isGroupMode = false;
+  }
+}
+
+// ========== 유틸리티 함수들 ==========
+function hideAllScreens() {
+  const screens = document.querySelectorAll('.screen');
+  screens.forEach(screen => screen.classList.remove('active'));
+}
+
+function removeExistingModal(modalId) {
+  const existing = document.getElementById(modalId);
+  if (existing) {
+    existing.remove();
+  }
+}
+
+function formatDuration(seconds) {
+  const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  return `${mins}분 ${secs}초`;
 }
 
-/**
- * 타임스탬프 포맷팅
- */
-function formatTimestamp(timestamp) {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('ko-KR');
+function formatTime(date) {
+  return date.toLocaleTimeString('ko-KR', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  });
 }
 
-/**
- * HTML 이스케이프
- */
 function escapeHtml(unsafe) {
-  if (unsafe === null || unsafe === undefined) {
-    return '';
-  }
-  return String(unsafe)
+  if (!unsafe) return '';
+  return unsafe
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -1042,75 +965,67 @@ function escapeHtml(unsafe) {
     .replace(/'/g, "&#039;");
 }
 
-/**
- * GAS 요청 (기존 함수 활용)
- */
-async function makeGASRequest(params) {
-  if (window.makeGASRequest) {
-    return await window.makeGASRequest(params);
+function showLoading(message = '처리 중...') {
+  // 기존 로딩 함수 사용 또는 구현
+  if (window.showLoading) {
+    window.showLoading(message);
   } else {
-    throw new Error('GAS 요청 함수를 찾을 수 없습니다.');
+    console.log('Loading:', message);
   }
 }
 
-/**
- * 로딩 스피너 표시 (기존 함수 활용)
- */
-function showLoadingSpinner(message) {
-  if (window.showLoadingSpinner) {
-    window.showLoadingSpinner(message);
+function hideLoading() {
+  // 기존 로딩 함수 사용 또는 구현
+  if (window.hideLoading) {
+    window.hideLoading();
   }
 }
 
-/**
- * 로딩 스피너 숨김 (기존 함수 활용)
- */
-function hideLoadingSpinner() {
-  if (window.hideLoadingSpinner) {
-    window.hideLoadingSpinner();
-  }
-}
-
-/**
- * 토스트 메시지 표시 (기존 함수 활용)
- */
-function showToast(message, type = 'info') {
+function showToast(message) {
+  // 기존 토스트 함수 사용 또는 구현
   if (window.showToast) {
-    window.showToast(message, type);
+    window.showToast(message);
   } else {
     alert(message);
   }
 }
 
-/**
- * 워크아웃 선택 화면 표시 (기존 함수 활용)
- */
-function showWorkoutSelectionScreen() {
-  if (window.showWorkoutSelection) {
-    window.showWorkoutSelection();
+// ========== 모달 닫기 함수들 (전역으로 노출) ==========
+window.closeGroupTrainingModal = closeGroupTrainingModal;
+window.closeJoinRoomModal = () => {
+  const modal = document.getElementById('joinRoomModal');
+  if (modal) modal.remove();
+};
+window.closeActiveRoomsModal = () => {
+  const modal = document.getElementById('activeRoomsModal');
+  if (modal) modal.remove();
+};
+window.joinTrainingRoom = joinTrainingRoom;
+window.quickJoinRoom = quickJoinRoom;
+window.leaveTrainingRoom = leaveTrainingRoom;
+window.toggleMonitoringOverlay = () => {
+  const overlay = document.getElementById('monitoringOverlay');
+  if (overlay) {
+    overlay.style.display = overlay.style.display === 'none' ? 'block' : 'none';
   }
+};
+
+// ========== 초기화 실행 ==========
+if (typeof window !== 'undefined' && document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initGroupTraining);
+} else if (typeof window !== 'undefined') {
+  initGroupTraining();
 }
 
-/**
- * 훈련용 워크아웃 로드 (기존 함수 활용)
- */
-async function loadWorkoutForTraining(workoutId) {
-  if (window.loadWorkoutForTraining) {
-    return await window.loadWorkoutForTraining(workoutId);
-  } else {
-    throw new Error('워크아웃 로드 함수를 찾을 수 없습니다.');
-  }
-}
-
-// ===== 모듈 초기화 =====
-console.log('그룹 훈련 모듈 로드 완료');
-
-// 전역 함수로 등록하여 다른 모듈에서 사용 가능
-window.groupTrainingModule = {
-  initGroupTraining,
-  createGroupRoom,
-  joinGroupRoom,
-  leaveGroupRoom,
-  startGroupTraining,
-  showWorkoutSelectionWithGroupOption
+// ========== 내보내기 ==========
+export {
+  GROUP_TRAINING,
+  ROOM_STATUS,
+  showGroupTrainingModal,
+  createTrainingRoom,
+  joinTrainingRoom,
+  leaveTrainingRoom,
+  startGroupTrainingCountdown,
+  toggleMicrophone,
+  showActiveRooms
 };
