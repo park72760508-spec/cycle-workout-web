@@ -2429,3 +2429,6 @@ window.normalizeWorkoutData = normalizeWorkoutData;
 window.safeGetElement = safeGetElement;
 
 console.log('완전 통합 워크아웃 매니저 (최종 버전) 로드 완료');
+
+
+GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec"
