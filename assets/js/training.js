@@ -1056,5 +1056,20 @@ window.startGroupTrainingCountdown = startGroupTrainingCountdown;
 window.toggleMicrophone = toggleMicrophone;
 window.showActiveRooms = showActiveRooms;
 
-// ✅ 파일 끝 마크 추가
-console.log('✅ training.js 모듈 로딩 완료');
+// ✅ 파일 끝 마크 및 안전한 종료
+console.log('✅ training.js 그룹 훈련 모듈 로딩 완료');
+
+// ✅ 그룹 훈련 시스템 상태 확인
+if (typeof window !== 'undefined') {
+  window.GROUP_TRAINING_LOADED = true;
+  console.log('🏆 GROUP_TRAINING_LOADED 플래그 설정 완료');
+}
+
+// ✅ 모듈 안전성 검증
+try {
+  if (typeof initGroupTraining === 'function') {
+    console.log('🔧 그룹 훈련 시스템 함수 검증 완료');
+  }
+} catch (e) {
+  console.warn('⚠️ 그룹 훈련 함수 검증 중 경고:', e);
+}
