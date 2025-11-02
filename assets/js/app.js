@@ -1,61 +1,6 @@
 /* ==========================================================
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
-// ✅ 전역 오류 처리 강화
-window.addEventListener('error', function(event) {
-  console.error('🚨 전역 오류 감지:', event.error);
-  
-  // 오류 상세 정보 로깅
-  const errorInfo = {
-    message: event.message || 'Unknown error',
-    filename: event.filename || 'Unknown file', 
-    lineno: event.lineno || 0,
-    colno: event.colno || 0,
-    stack: event.error ? event.error.stack : 'No stack trace'
-  };
-  
-  console.log('Error details:', errorInfo);
-  
-  // ✅ training.js 구문 오류 특별 처리
-  if (event.filename && event.filename.includes('training.js')) {
-    if (event.message && event.message.includes('Unexpected end of input')) {
-      console.error('❌ training.js 파일 구문 오류 감지');
-      console.error('💡 해결방법: training.js 파일의 마지막 부분에 누락된 괄호나 세미콜론 확인');
-      
-      // 사용자에게 알림
-      setTimeout(() => {
-        showToast('스크립트 오류 감지 - 페이지를 새로고침해주세요', 'error');
-      }, 1000);
-      
-      return; // 이후 처리 중단
-    }
-  }
-
-// ✅ Promise rejection 처리 강화
-window.addEventListener('unhandledrejection', function(event) {
-  console.error('🚨 처리되지 않은 Promise 오류:', event.reason);
-  
-  if (event.reason && event.reason.message) {
-    const message = event.reason.message;
-    
-    // DB 관련 오류는 자동으로 재시도
-    if (message.includes('네트워크 연결 오류') || message.includes('요청 시간 초과')) {
-      event.preventDefault(); // 기본 오류 처리 방지
-      console.log('🔄 DB 연결 오류 자동 처리 중...');
-      
-      // 3초 후 자동 재시도
-      setTimeout(() => {
-        if (typeof retryDBConnection === 'function') {
-          retryDBConnection();
-        }
-      }, 3000);
-    }
-  }
-});
-
-
-
-
 
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
 (function initializeGlobals() {
@@ -141,48 +86,6 @@ window.userPanelNeonMode = 'static';  // 'static' 고정 (동적 계산 끔)
    
   console.log('Global variables initialized safely');
 })();
-
-
-
-// app.js 상단에 추가
-window.addEventListener('error', function(event) {
-  console.error('🚨 전역 오류 감지:', event.error);
-  
-  if (event.error && event.error.message) {
-    const message = event.error.message;
-    
-    // JSONP 관련 오류
-    if (message.includes('JSONP') || message.includes('네트워크 연결')) {
-      console.log('🔄 네트워크 오류 감지 - 자동 재시도 중...');
-      setTimeout(() => {
-        if (typeof retryDBConnection === 'function') {
-          retryDBConnection();
-        }
-      }, 3000);
-    }
-    
-    // Script 로딩 오류
-    if (message.includes('userManager') || message.includes('apiGetUsers')) {
-      console.log('🔄 스크립트 로딩 오류 감지 - 페이지 새로고침 권장');
-      showToast('스크립트 로딩 오류 - 페이지를 새로고침해주세요', 'error');
-    }
-  }
-});
-
-// Promise rejection 처리
-window.addEventListener('unhandledrejection', function(event) {
-  console.error('🚨 처리되지 않은 Promise 오류:', event.reason);
-  
-  // DB 관련 오류는 자동으로 재시도
-  if (event.reason && event.reason.message && 
-      event.reason.message.includes('네트워크 연결 오류')) {
-    event.preventDefault(); // 기본 오류 처리 방지
-    console.log('🔄 DB 연결 오류 자동 처리 중...');
-  }
-});
-
-
-
 
 // ========== 안전 접근 헬퍼 함수들 ==========
 // ========== 안전 접근 헬퍼 함수들 ==========
@@ -1938,16 +1841,9 @@ function startSegmentLoop() {
    const currentSegIndex = ts.segIndex;
    const currentSeg = w.segments[currentSegIndex];
    if (!currentSeg) {
-     console.error('현재 세그먼트가 없습니다.'); // ← 따옴표/줄 닫기
-     // 안전 처리: 루프 정지 및 조기 반환으로 블록도 확실히 닫힘
-     try { 
-       if (typeof stopSegmentLoop === 'function') stopSegmentLoop();
-     } catch (e) {
-       console.warn('세그먼트 루프 정지 중 경고:', e);
-     }
+     console.error('현재 세그먼트가 없습니다. 인덱스:', currentSegIndex);
      return;
    }
-
    const segDur = segDurationSec(currentSeg);
    const segRemaining = segDur - ts.segElapsedSec;
 
@@ -3227,7 +3123,17 @@ window.testNeonEffect = function(achievementPercent) {
   }, 3000);
 };
 
-
+// 전역 에러 핸들러 추가
+window.addEventListener('error', function(event) {
+  console.error('Global JavaScript error:', event.error);
+  console.error('Error details:', {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    stack: event.error?.stack
+  });
+});
 
 window.addEventListener('unhandledrejection', function(event) {
   console.error('Unhandled promise rejection:', event.reason);
@@ -3944,6 +3850,39 @@ function validateNewUserForm() {
 // 📍 위치: 라인 3032+
 // ✅ 전체 이벤트를 아래로 교체:
 
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('📱 인증 시스템 초기화 시작');
+  
+  setTimeout(() => {
+    // 모든 화면 완전히 숨기기
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
+    });
+    
+    // authScreen만 표시
+    const authScreen = document.getElementById('authScreen');
+    if (authScreen) {
+      authScreen.style.display = 'block';
+      authScreen.classList.add('active');
+      authScreen.style.opacity = '1';
+      authScreen.style.visibility = 'visible';
+      
+      setTimeout(() => {
+        const phoneInput = document.getElementById('phoneInput');
+        if (phoneInput) {
+          phoneInput.focus();
+        }
+      }, 500);
+    }
+  }, 200);
+  
+  setTimeout(() => {
+    initializeAuthenticationSystem();
+  }, 500);
+});
 
 // 개발자 도구 함수들
 window.resetAuth = function() {
@@ -4157,40 +4096,6 @@ async function syncUsersFromDB() {
   return __syncInFlight;
 }
 
-
-
-// ✅ 여기에 testGASConnection 함수 추가
-async function testGASConnection() {
-  console.log('🔧 Google Apps Script 연결 테스트 시작...');
-  
-  try {
-    const testResult = await jsonpRequest(window.GAS_URL, { 
-      action: 'listUsers' 
-    });
-    
-    if (testResult && testResult.success !== undefined) {
-      console.log('✅ Google Apps Script 연결 성공');
-      console.log('📊 응답 데이터:', testResult);
-      return true;
-    } else {
-      console.error('❌ 잘못된 응답 형식:', testResult);
-      return false;
-    }
-    
-  } catch (error) {
-    console.error('❌ Google Apps Script 연결 실패:', error);
-    console.error('💡 확인사항:');
-    console.error('   1. Google Apps Script 배포 상태');
-    console.error('   2. 실행 권한 설정');
-    console.error('   3. 인터넷 연결 상태');
-    return false;
-  }
-}
-
-// ========== 다음 섹션 계속 ==========
-
-
-   
 
 
 
@@ -4616,185 +4521,19 @@ window.listRegisteredPhones = function() {
 
 // ========== 9. 초기화 ==========
 document.addEventListener('DOMContentLoaded', async function() {
-  if (window.__DB_AUTH_INIT_DONE__) return;
+  if (window.__DB_AUTH_INIT_DONE__) return;  // ★ 가드: 다중 초기화 방지
   window.__DB_AUTH_INIT_DONE__ = true;
 
   console.log('📱 DB 연동 인증 시스템 초기화 중...');
 
-  // ✅ 필수 설정 검증 강화
-  if (!window.GAS_URL) {
-    console.error('❌ GAS_URL이 설정되지 않았습니다!');
-    showToast('시스템 설정 오류: GAS_URL이 필요합니다', 'error');
-    showRetryButton();
-    return;
-  }
-
-  if (window.GAS_URL.includes('YOUR_SCRIPT_ID') || window.GAS_URL.includes('XXXXXXX')) {
-    console.error('❌ GAS_URL이 실제 값으로 설정되지 않았습니다!');
-    showToast('시스템 설정 오류: Google Apps Script URL을 실제 값으로 설정하세요', 'error');
-    showRetryButton();
-    return;
-  }
-
-  console.log('✅ GAS_URL 검증 완료:', window.GAS_URL);
-
-  // ✅ 의존성 함수들 체크 강화
-  const requiredFunctions = ['apiGetUsers', 'jsonpRequest', 'showToast'];
-  let allFunctionsLoaded = false;
-  let retryCount = 0;
-  const maxRetries = 30; // 더 많은 재시도
-  
-  while (!allFunctionsLoaded && retryCount < maxRetries) {
-    const missingFunctions = requiredFunctions.filter(funcName => typeof window[funcName] !== 'function');
-    
-    if (missingFunctions.length === 0) {
-      allFunctionsLoaded = true;
-      console.log('✅ 모든 필수 함수 로드 완료');
-    } else {
-      console.log(`⏳ 함수 로드 대기 중... (${retryCount + 1}/${maxRetries})`);
-      console.log('누락된 함수들:', missingFunctions);
-      await new Promise(resolve => setTimeout(resolve, 200)); // 더 짧은 간격
-      retryCount++;
-    }
-  }
-  
-  if (!allFunctionsLoaded) {
-    console.error('❌ 필수 함수 로드 실패');
-    showToast('스크립트 로딩 실패 - 페이지를 새로고침해주세요', 'error');
-    showRetryButton();
-    return;
-  }
-  
-  if (typeof apiGetUsers !== 'function') {
-    console.error('❌ userManager.js 로드 실패 - 수동으로 새로고침하세요');
-    showToast('스크립트 로딩 실패 - 페이지를 새로고침해주세요', 'error');
-    showRetryButton();
-    return;
-  }
-
-  console.log('✅ userManager.js 로드 완료');
-
-  // ✅ DB 연결 시도
-  let dbSyncSuccess = false;
-  let dbRetryCount = 0;
-  const maxDbRetries = 3;
-  
-  while (!dbSyncSuccess && dbRetryCount < maxDbRetries) {
-    try {
-      console.log(`🔄 DB 동기화 시도 (${dbRetryCount + 1}/${maxDbRetries})`);
-      dbSyncSuccess = await syncUsersFromDB();
-      
-      if (!dbSyncSuccess) {
-        dbRetryCount++;
-        if (dbRetryCount < maxDbRetries) {
-          console.log(`⏳ ${2000}ms 후 재시도...`);
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      }
-    } catch (error) {
-      console.error(`❌ DB 동기화 오류 (시도 ${dbRetryCount + 1}):`, error);
-      dbRetryCount++;
-      if (dbRetryCount < maxDbRetries) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
-  }
-
-  if (dbSyncSuccess) {
+  const syncSuccess = await syncUsersFromDB();
+  if (syncSuccess) {
     console.log('✅ DB 연동 인증 시스템 초기화 완료!');
-    showToast('시스템 초기화 완료', 'success');
+    console.log('📞 실시간 DB 검색으로 전화번호를 인증합니다');
   } else {
-    console.warn('⚠️ DB 초기화 실패 - 네트워크 연결을 확인하세요');
-    showRetryButton();
+    console.warn('⚠️ DB 초기화 실패 - userManager.js 로드 상태를 확인하세요');
   }
 });
-
-
-
-
-
-// 재시도 버튼 표시 함수 추가
-// ✅ 개선된 재시도 버튼 표시 함수
-function showRetryButton() {
-  // 기존 재시도 버튼 제거
-  const existingRetry = document.getElementById('dbRetryNotice');
-  if (existingRetry) existingRetry.remove();
-  
-  const retryHtml = `
-    <div id="dbRetryNotice" style="
-      position: fixed; top: 20px; right: 20px; 
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white; padding: 20px; border-radius: 12px; 
-      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-      z-index: 10000; max-width: 320px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    ">
-      <div style="font-weight: 600; margin-bottom: 8px;">
-        🔧 시스템 연결 실패
-      </div>
-      <div style="font-size: 14px; opacity: 0.9; margin-bottom: 15px;">
-        Google Apps Script 연결에 실패했습니다
-      </div>
-      <div style="display: flex; gap: 10px;">
-        <button onclick="retryDBConnection()" style="
-          background: white; color: #667eea; 
-          border: none; padding: 8px 16px; 
-          border-radius: 6px; cursor: pointer;
-          font-weight: 600; flex: 1;
-        ">다시 시도</button>
-        <button onclick="document.getElementById('dbRetryNotice').remove()" style="
-          background: rgba(255,255,255,0.2); color: white;
-          border: none; padding: 8px 16px; 
-          border-radius: 6px; cursor: pointer;
-        ">닫기</button>
-      </div>
-    </div>
-  `;
-  document.body.insertAdjacentHTML('beforeend', retryHtml);
-}
-
-// ✅ 개선된 DB 연결 재시도 함수
-// ✅ 개선된 DB 연결 재시도 함수
-   async function retryDBConnection() {
-     const notice = document.getElementById('dbRetryNotice');
-     if (notice) {
-       const retryBtn = notice.querySelector('button');
-       if (retryBtn) {
-         retryBtn.textContent = '재시도 중...';
-         retryBtn.disabled = true;
-       }
-     }
-     
-     console.log('🔄 DB 연결 재시도 중...');
-     
-     try {
-       const testResult = await testGASConnection();
-       
-       if (testResult) {
-         if (notice) notice.remove();
-         if (typeof showToast === 'function') {
-           showToast('✅ 연결 성공! 시스템이 정상 작동합니다', 'success');
-         }
-         await syncUsersFromDB();
-       } else {
-         throw new Error('연결 테스트 실패');
-       }
-     } catch (error) {
-       console.error('❌ 재시도 실패:', error);
-       
-       if (notice) {
-         const retryBtn = notice.querySelector('button');
-         if (retryBtn) {
-           retryBtn.textContent = '다시 시도';
-           retryBtn.disabled = false;
-         }
-       }
-       
-       if (typeof showToast === 'function') {
-         showToast('연결 재시도 실패 - Google Apps Script 상태를 확인하세요', 'error');
-       }
-     }
-   }
 
 // 새 사용자 등록 후 자동 인증 처리 함수
 async function handleNewUserRegistered(userData) {
@@ -5010,107 +4749,3 @@ function appendResultStreamSamples(now = new Date()) {
 
   console.log('[Global] CORS/네트워크 오류 전역 처리기 설정 완료');
 })();
-
-
-// ========== 기존 app.js 파일의 맨 끝 ==========
-
-// ✅ 여기에 페이지 로드 이벤트 리스너 추가
-// 페이지 로드 시 연결 테스트 실행
-window.addEventListener('load', async function() {
-  console.log('🎯 페이지 로드 완료 - Google Apps Script 연결 테스트 예약');
-  
-  setTimeout(async () => {
-    console.log('⏰ 연결 테스트 시작 (2초 지연 후)');
-    
-    try {
-      const isConnected = await testGASConnection();
-      
-      if (isConnected) {
-        console.log('🎉 시스템 연결 상태 양호');
-        
-        // 성공 시 간단한 알림 (선택사항)
-        if (typeof showToast === 'function') {
-          showToast('✅ 시스템 연결 완료', 'success');
-        }
-      } else {
-        console.warn('⚠️ 시스템 연결 문제 감지 - 재시도 버튼 표시');
-        
-        // 연결 실패 시 재시도 버튼 표시
-        if (typeof showRetryButton === 'function') {
-          showRetryButton();
-        }
-      }
-    } catch (testError) {
-      console.error('❌ 연결 테스트 자체 실패:', testError);
-    }
-  }, 2000); // 2초 후 테스트 시작
-});
-
-console.log('🔧 연결 테스트 시스템 준비 완료');
-
-// ✅ 파일 끝 마크 및 안전한 종료
-console.log('✅ app.js 모든 모듈 로딩 완료');
-
-// ✅ 전역 객체 최종 확인
-if (typeof window !== 'undefined') {
-  window.APP_LOADED = true;
-  console.log('🎯 APP_LOADED 플래그 설정 완료');
-}
-
-
-
-
-// ✅ 페이지 로드 시 연결 테스트 실행 (DOMContentLoaded 이후 실행)
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('📱 DOM 로딩 완료 - 연결 테스트 예약');
-  
-  // 모든 스크립트 로딩 대기 후 테스트
-  setTimeout(async () => {
-    console.log('⏰ Google Apps Script 연결 테스트 시작 (3초 지연 후)');
-    
-    try {
-      // 필수 함수들이 로드되었는지 확인
-      if (typeof testGASConnection === 'function') {
-        const isConnected = await testGASConnection();
-        
-        if (isConnected) {
-          console.log('🎉 시스템 연결 상태 양호');
-        } else {
-          console.warn('⚠️ 시스템 연결 문제 감지');
-          if (typeof showRetryButton === 'function') {
-            showRetryButton();
-          }
-        }
-      } else {
-        console.warn('⚠️ testGASConnection 함수가 정의되지 않음');
-      }
-    } catch (testError) {
-      console.error('❌ 연결 테스트 실행 오류:', testError);
-    }
-  }, 3000); // 3초 후 테스트 시작
-});
-
-// ✅ 추가 안전장치: window.onload 이벤트
-window.addEventListener('load', function() {
-  console.log('🌐 전체 페이지 로딩 완료');
-  
-  // 최종 시스템 상태 확인
-  setTimeout(() => {
-    const systemStatus = {
-      APP_LOADED: window.APP_LOADED || false,
-      GROUP_TRAINING_LOADED: window.GROUP_TRAINING_LOADED || false,
-      GAS_URL: !!window.GAS_URL,
-      jsonpRequest: typeof jsonpRequest === 'function',
-      testGASConnection: typeof testGASConnection === 'function'
-    };
-    
-    console.log('🔍 최종 시스템 상태:', systemStatus);
-    
-    const allLoaded = Object.values(systemStatus).every(status => status === true);
-    if (allLoaded) {
-      console.log('✅ 모든 시스템 모듈 정상 로딩 완료');
-    } else {
-      console.warn('⚠️ 일부 시스템 모듈 로딩 실패');
-    }
-  }, 1000);
-});
