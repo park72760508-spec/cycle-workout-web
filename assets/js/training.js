@@ -48,29 +48,26 @@ function initGroupTraining() {
     return;
   }
   
-  // 필수 의존성 확인
-  if (typeof workoutManager === 'undefined' || typeof apiGetUsers !== 'function') {
+  // ✅ 수정된 필수 의존성 확인 (실제 존재하는 함수들만 체크)
+  const requiredFunctions = [
+    'apiGetUsers',
+    'jsonpRequest', 
+    'showToast',
+    'showScreen'
+  ];
+  
+  const missingFunctions = requiredFunctions.filter(funcName => typeof window[funcName] !== 'function');
+  
+  if (missingFunctions.length > 0) {
     groupTrainingInitRetry++;
     console.warn(`⚠️ 그룹 트레이닝 초기화 지연 - 의존성 로딩 대기 (${groupTrainingInitRetry}/${maxGroupTrainingRetries})`);
-    setTimeout(initGroupTraining, 1000);
+    console.warn('누락된 함수들:', missingFunctions);
+    
+    // ✅ 점진적 대기 시간 증가 (최대 5초까지)
+    const waitTime = Math.min(500 * groupTrainingInitRetry, 5000);
+    setTimeout(initGroupTraining, waitTime);
     return;
   }
-  
-  // ✅ 초기화 성공
-  groupTrainingInitRetry = 0;
-  console.log('✅ 그룹 트레이닝 의존성 확인 완료');
-  
-  // 기존 기능과 충돌 방지
-  if (window.trainingSession) {
-    window.trainingSession.isGroupMode = false;
-  }
-  
-  // 이벤트 리스너 설정
-  setupGroupTrainingEvents();
-  
-  // 페이지 종료 시 정리
-  window.addEventListener('beforeunload', cleanupGroupTraining);
-}
 
 
 // ========== 이벤트 설정 ==========
