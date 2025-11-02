@@ -1,6 +1,63 @@
 /* ==========================================================
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
+// ✅ 전역 오류 처리 강화
+window.addEventListener('error', function(event) {
+  console.error('🚨 전역 오류 감지:', event.error);
+  
+  if (event.error && event.error.message) {
+    const message = event.error.message;
+    
+    // finalUrl 관련 오류
+    if (message.includes('finalUrl is not defined')) {
+      console.error('❌ workoutManager.js 변수 스코프 오류 감지');
+      showToast('시스템 오류 - 페이지를 새로고침해주세요', 'error');
+      return;
+    }
+    
+    // JSONP 관련 오류
+    if (message.includes('JSONP') || message.includes('네트워크 연결')) {
+      console.log('🔄 네트워크 오류 감지 - 자동 재시도 중...');
+      setTimeout(() => {
+        if (typeof retryDBConnection === 'function') {
+          retryDBConnection();
+        }
+      }, 3000);
+    }
+    
+    // Script 로딩 오류
+    if (message.includes('userManager') || message.includes('apiGetUsers')) {
+      console.log('🔄 스크립트 로딩 오류 감지');
+      showToast('스크립트 로딩 오류 - 잠시 후 자동으로 재시도됩니다', 'warning');
+    }
+  }
+});
+
+// ✅ Promise rejection 처리 강화
+window.addEventListener('unhandledrejection', function(event) {
+  console.error('🚨 처리되지 않은 Promise 오류:', event.reason);
+  
+  if (event.reason && event.reason.message) {
+    const message = event.reason.message;
+    
+    // DB 관련 오류는 자동으로 재시도
+    if (message.includes('네트워크 연결 오류') || message.includes('요청 시간 초과')) {
+      event.preventDefault(); // 기본 오류 처리 방지
+      console.log('🔄 DB 연결 오류 자동 처리 중...');
+      
+      // 3초 후 자동 재시도
+      setTimeout(() => {
+        if (typeof retryDBConnection === 'function') {
+          retryDBConnection();
+        }
+      }, 3000);
+    }
+  }
+});
+
+
+
+
 
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
 (function initializeGlobals() {
