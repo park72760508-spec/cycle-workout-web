@@ -4190,6 +4190,40 @@ async function syncUsersFromDB() {
 
 
 
+// ✅ 여기에 testGASConnection 함수 추가
+async function testGASConnection() {
+  console.log('🔧 Google Apps Script 연결 테스트 시작...');
+  
+  try {
+    const testResult = await jsonpRequest(window.GAS_URL, { 
+      action: 'listUsers' 
+    });
+    
+    if (testResult && testResult.success !== undefined) {
+      console.log('✅ Google Apps Script 연결 성공');
+      console.log('📊 응답 데이터:', testResult);
+      return true;
+    } else {
+      console.error('❌ 잘못된 응답 형식:', testResult);
+      return false;
+    }
+    
+  } catch (error) {
+    console.error('❌ Google Apps Script 연결 실패:', error);
+    console.error('💡 확인사항:');
+    console.error('   1. Google Apps Script 배포 상태');
+    console.error('   2. 실행 권한 설정');
+    console.error('   3. 인터넷 연결 상태');
+    return false;
+  }
+}
+
+// ========== 다음 섹션 계속 ==========
+
+
+   
+
+
 
 // ========== 5. DB 기반 전화번호 인증 함수 ==========
 // ========== 5. 수정된 authenticatePhone 함수 (기존 함수 교체) ==========
@@ -5007,3 +5041,41 @@ function appendResultStreamSamples(now = new Date()) {
 
   console.log('[Global] CORS/네트워크 오류 전역 처리기 설정 완료');
 })();
+
+
+// ========== 기존 app.js 파일의 맨 끝 ==========
+
+// ✅ 여기에 페이지 로드 이벤트 리스너 추가
+// 페이지 로드 시 연결 테스트 실행
+window.addEventListener('load', async function() {
+  console.log('🎯 페이지 로드 완료 - Google Apps Script 연결 테스트 예약');
+  
+  setTimeout(async () => {
+    console.log('⏰ 연결 테스트 시작 (2초 지연 후)');
+    
+    try {
+      const isConnected = await testGASConnection();
+      
+      if (isConnected) {
+        console.log('🎉 시스템 연결 상태 양호');
+        
+        // 성공 시 간단한 알림 (선택사항)
+        if (typeof showToast === 'function') {
+          showToast('✅ 시스템 연결 완료', 'success');
+        }
+      } else {
+        console.warn('⚠️ 시스템 연결 문제 감지 - 재시도 버튼 표시');
+        
+        // 연결 실패 시 재시도 버튼 표시
+        if (typeof showRetryButton === 'function') {
+          showRetryButton();
+        }
+      }
+    } catch (testError) {
+      console.error('❌ 연결 테스트 자체 실패:', testError);
+    }
+  }, 2000); // 2초 후 테스트 시작
+});
+
+console.log('🔧 연결 테스트 시스템 준비 완료');
+   
