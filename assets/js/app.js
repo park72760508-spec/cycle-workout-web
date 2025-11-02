@@ -3926,6 +3926,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 500);
 });
 
+
+
+
+
+
 // 개발자 도구 함수들
 window.resetAuth = function() {
   isPhoneAuthenticated = false;
@@ -4568,28 +4573,64 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   console.log('📱 DB 연동 인증 시스템 초기화 중...');
 
+  // ✅ GAS_URL 검증 먼저 수행
+  if (!window.GAS_URL || window.GAS_URL.includes('YOUR_SCRIPT_ID')) {
+    console.error('❌ GAS_URL이 설정되지 않았습니다!');
+    showToast('시스템 설정 오류: GAS_URL을 확인하세요', 'error');
+    showRetryButton();
+    return;
+  }
+
   // userManager.js 로드 대기
   let retryCount = 0;
-  const maxRetries = 10;
+  const maxRetries = 20; // ✅ 재시도 횟수 증가
   
   while (typeof apiGetUsers !== 'function' && retryCount < maxRetries) {
     console.log(`⏳ userManager.js 로드 대기 중... (${retryCount + 1}/${maxRetries})`);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300)); // ✅ 대기 시간 단축
     retryCount++;
   }
   
   if (typeof apiGetUsers !== 'function') {
     console.error('❌ userManager.js 로드 실패 - 수동으로 새로고침하세요');
-    showToast('시스템 로딩 실패 - 페이지를 새로고침해주세요', 'error');
+    showToast('스크립트 로딩 실패 - 페이지를 새로고침해주세요', 'error');
+    showRetryButton();
     return;
   }
 
-  const syncSuccess = await syncUsersFromDB();
-  if (syncSuccess) {
+  console.log('✅ userManager.js 로드 완료');
+
+  // ✅ DB 연결 시도
+  let dbSyncSuccess = false;
+  let dbRetryCount = 0;
+  const maxDbRetries = 3;
+  
+  while (!dbSyncSuccess && dbRetryCount < maxDbRetries) {
+    try {
+      console.log(`🔄 DB 동기화 시도 (${dbRetryCount + 1}/${maxDbRetries})`);
+      dbSyncSuccess = await syncUsersFromDB();
+      
+      if (!dbSyncSuccess) {
+        dbRetryCount++;
+        if (dbRetryCount < maxDbRetries) {
+          console.log(`⏳ ${2000}ms 후 재시도...`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      }
+    } catch (error) {
+      console.error(`❌ DB 동기화 오류 (시도 ${dbRetryCount + 1}):`, error);
+      dbRetryCount++;
+      if (dbRetryCount < maxDbRetries) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  }
+
+  if (dbSyncSuccess) {
     console.log('✅ DB 연동 인증 시스템 초기화 완료!');
+    showToast('시스템 초기화 완료', 'success');
   } else {
     console.warn('⚠️ DB 초기화 실패 - 네트워크 연결을 확인하세요');
-    // 재시도 버튼 표시
     showRetryButton();
   }
 });
