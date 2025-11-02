@@ -1227,13 +1227,14 @@
   <!-- JavaScript 파일들 -->
   
 
-  <script src="assets/js/data.js" defer></script>
-  <script src="assets/js/bluetooth.js" defer></script>
-  <script src="assets/js/userManager.js" defer></script>
-  <script src="assets/js/resultManager.js" defer></script>
-  <script src="assets/js/workoutManager.js" defer></script>
-  <script src="assets/js/app.js" defer></script>
-  <script src="assets/js/training.js" defer></script>
+<!-- 순차 로딩으로 변경하여 의존성 문제 해결 -->
+<script src="assets/js/data.js"></script>
+<script src="assets/js/userManager.js"></script>
+<script src="assets/js/workoutManager.js"></script>
+<script src="assets/js/resultManager.js"></script>
+<script src="assets/js/bluetooth.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/training.js"></script>
 
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
