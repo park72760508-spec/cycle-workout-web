@@ -893,11 +893,57 @@
         <h3 class="mb-15">훈련 준비 완료</h3>
         <p class="muted">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
       </div>
-      <div class="btn-row center">
-        <button class="btn btn-secondary" id="btnBackToWorkouts">← 워크아웃 변경</button>
-        <button class="btn btn-success" id="btnStartTraining">🚀 훈련 시작</button>
-        <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
+
+      
+      <div class="training-mode-selection">
+        <div class="mb-30">
+          <h3 class="mb-15">훈련 방식 선택</h3>
+          <p class="muted">개인 훈련 또는 그룹 훈련을 선택하세요</p>
+        </div>
+        
+        <div class="training-modes">
+          <!-- 개인 훈련 카드 -->
+          <div class="training-mode-card individual-training">
+            <div class="mode-icon">🏃‍♂️</div>
+            <h4>개인 훈련</h4>
+            <p>혼자서 집중해서 훈련하세요</p>
+            <ul class="mode-features">
+              <li>개인 맞춤 페이스</li>
+              <li>자유로운 일시정지</li>
+              <li>개별 목표 설정</li>
+            </ul>
+            <button class="btn btn-success" id="btnStartTraining">
+              <span class="btn-icon">🚀</span>
+              개인 훈련 시작
+            </button>
+          </div>
+          
+          <!-- 그룹 훈련 카드 -->
+          <div class="training-mode-card group-training">
+            <div class="mode-icon">👥</div>
+            <h4>그룹 훈련</h4>
+            <p>다른 사람들과 함께 훈련하세요</p>
+            <ul class="mode-features">
+              <li>실시간 동기화</li>
+              <li>관리자 음성 코칭</li>
+              <li>함께하는 동기부여</li>
+            </ul>
+            <button class="btn btn-primary" id="btnGroupTraining">
+              <span class="btn-icon">🏆</span>
+              그룹 훈련 참가
+            </button>
+          </div>
+        </div>
+        
+        <!-- 기존 하단 버튼들 -->
+        <div class="btn-row center mt-30">
+          <button class="btn btn-secondary" id="btnBackToWorkouts">← 워크아웃 변경</button>
+          <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
+        </div>
       </div>
+
+
+      
     </div>
   </div>
 
