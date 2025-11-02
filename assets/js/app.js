@@ -1938,7 +1938,9 @@ function startSegmentLoop() {
    const currentSegIndex = ts.segIndex;
    const currentSeg = w.segments[currentSegIndex];
    if (!currentSeg) {
-     console.error('현재 세그먼트가 없습니다. 인덱스:', currentSegIndex);
+     console.error('현재 세그먼트가 없습니다.');
+     // 안전 처리: 루프 정지 및 조기 반환
+     try { stopSegmentLoop?.(); } catch (e) {}
      return;
    }
    const segDur = segDurationSec(currentSeg);
