@@ -2642,6 +2642,20 @@ document.addEventListener("DOMContentLoaded", () => {
     btnStartTraining.addEventListener("click", () => startWithCountdown(5));
   }
 
+  // 그룹 훈련 버튼 이벤트 핸들러 추가
+  const btnGroupTraining = safeGetElement("btnGroupTraining");
+  if (btnGroupTraining) {
+    btnGroupTraining.addEventListener("click", () => {
+      console.log('Group training button clicked');
+      if (typeof selectTrainingMode === 'function') {
+        selectTrainingMode('group');
+      } else {
+        console.warn('selectTrainingMode function not found');
+        showToast('그룹 훈련 기능을 찾을 수 없습니다', 'error');
+      }
+    });
+  }
+
   // 훈련 준비 → 워크아웃 변경
   const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
   if (btnBackToWorkouts) {
