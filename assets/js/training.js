@@ -1103,3 +1103,212 @@ console.log('✅ training.js 그룹 훈련 모듈 로딩 완료');
   console.log('training.js 로딩 완료');
 })(); // ← 파일 말미 구문 안정화
 
+
+
+
+// ========== 관리자 기능 표시 및 관리 ==========
+
+/**
+ * 훈련 준비 화면 로드 시 관리자 권한 확인
+ */
+function checkAndShowAdminFeatures() {
+  const currentUser = window.currentUser;
+  if (!currentUser) {
+    console.log('사용자 정보가 없습니다');
+    return;
+  }
+  
+  const isAdmin = currentUser.grade === '1' || currentUser.grade === 1;
+  console.log('관리자 권한 확인:', { userId: currentUser.id, grade: currentUser.grade, isAdmin });
+  
+  if (isAdmin) {
+    showAdminFeatures();
+  } else {
+    hideAdminFeatures();
+  }
+}
+
+/**
+ * 관리자 기능 표시
+ */
+function showAdminFeatures() {
+  console.log('관리자 기능을 표시합니다');
+  
+  // 관리자 전용 섹션 표시
+  const adminSection = document.getElementById('adminFunctionsSection');
+  if (adminSection) {
+    adminSection.style.display = 'block';
+  }
+  
+  // 그룹 훈련 카드 내 관리자 버튼 표시
+  const adminGroupButtons = document.getElementById('adminGroupButtons');
+  if (adminGroupButtons) {
+    adminGroupButtons.style.display = 'block';
+  }
+  
+  // 관리자 배지 추가
+  addAdminBadgeToHeader();
+  
+  if (typeof toast === 'function') {
+    toast('관리자 기능이 활성화되었습니다 👑');
+  }
+}
+
+/**
+ * 관리자 기능 숨김
+ */
+function hideAdminFeatures() {
+  console.log('관리자 기능을 숨깁니다');
+  
+  // 관리자 전용 섹션 숨김
+  const adminSection = document.getElementById('adminFunctionsSection');
+  if (adminSection) {
+    adminSection.style.display = 'none';
+  }
+  
+  // 그룹 훈련 카드 내 관리자 버튼 숨김
+  const adminGroupButtons = document.getElementById('adminGroupButtons');
+  if (adminGroupButtons) {
+    adminGroupButtons.style.display = 'none';
+  }
+  
+  // 관리자 배지 제거
+  removeAdminBadgeFromHeader();
+}
+
+/**
+ * 헤더에 관리자 배지 추가
+ */
+function addAdminBadgeToHeader() {
+  const header = document.querySelector('#trainingReadyScreen .header h1');
+  if (header && !header.querySelector('.admin-badge')) {
+    const badge = document.createElement('span');
+    badge.className = 'admin-badge';
+    badge.textContent = 'ADMIN';
+    header.appendChild(badge);
+  }
+}
+
+/**
+ * 헤더에서 관리자 배지 제거
+ */
+function removeAdminBadgeFromHeader() {
+  const badge = document.querySelector('#trainingReadyScreen .admin-badge');
+  if (badge) {
+    badge.remove();
+  }
+}
+
+/**
+ * 빠른 훈련실 생성 (관리자 전용)
+ */
+async function quickCreateRoom() {
+  const currentUser = window.currentUser;
+  const selectedWorkout = window.selectedWorkout;
+  
+  if (!currentUser || (currentUser.grade !== '1' && currentUser.grade !== 1)) {
+    if (typeof toast === 'function') toast('관리자 권한이 필요합니다');
+    return;
+  }
+  
+  if (!selectedWorkout) {
+    if (typeof toast === 'function') toast('먼저 워크아웃을 선택해주세요');
+    return;
+  }
+  
+  const confirmed = confirm(`현재 선택된 워크아웃 "${selectedWorkout.title}"으로 훈련실을 즉시 생성하시겠습니까?`);
+  if (!confirmed) return;
+  
+  try {
+    if (typeof loading === 'function') loading('훈련실을 생성하는 중...');
+    
+    const q = new URLSearchParams({
+      action: 'createTrainingRoom',
+      hostId: currentUser.id,
+      hostName: currentUser.name,
+      workoutId: selectedWorkout.id,
+      workoutTitle: selectedWorkout.title,
+      maxParticipants: '20',
+      status: 'waiting',
+      quickCreate: 'true'
+    });
+    
+    const response = await fetch(`${window.GAS_URL}?${q.toString()}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      GROUP_TRAINING.roomId = result.roomId;
+      GROUP_TRAINING.isHost = true;
+      GROUP_TRAINING.isGroupMode = true;
+      
+      if (typeof hide === 'function') hide();
+      if (typeof toast === 'function') toast('훈련실이 생성되었습니다! 🎉');
+      
+      setTimeout(() => {
+        if (typeof showTrainingRoom === 'function') {
+          showTrainingRoom();
+        }
+      }, 1000);
+      
+    } else {
+      throw new Error(result.error || '훈련실 생성에 실패했습니다');
+    }
+    
+  } catch (error) {
+    if (typeof hide === 'function') hide();
+    console.error('빠른 훈련실 생성 오류:', error);
+    if (typeof toast === 'function') toast('훈련실 생성에 실패했습니다: ' + error.message);
+  }
+}
+
+// ========== 화면 전환 감지 ==========
+
+/**
+ * 훈련 준비 화면이 표시될 때 관리자 기능 확인
+ */
+function onTrainingReadyScreenShow() {
+  console.log('훈련 준비 화면 표시됨');
+  setTimeout(() => {
+    checkAndShowAdminFeatures();
+  }, 100);
+}
+
+// 기존 showScreen 함수 확장
+const originalShowScreen = window.showScreen;
+if (typeof originalShowScreen === 'function') {
+  window.showScreen = function(screenId) {
+    const result = originalShowScreen.apply(this, arguments);
+    
+    if (screenId === 'trainingReadyScreen') {
+      onTrainingReadyScreenShow();
+    }
+    
+    return result;
+  };
+}
+
+// ========== 전역 함수 등록 ==========
+window.checkAndShowAdminFeatures = checkAndShowAdminFeatures;
+window.showAdminFeatures = showAdminFeatures;
+window.hideAdminFeatures = hideAdminFeatures;
+window.quickCreateRoom = quickCreateRoom;
+window.onTrainingReadyScreenShow = onTrainingReadyScreenShow;
+
+// ========== 자동 초기화 ==========
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(checkAndShowAdminFeatures, 500);
+});
+
+// 사용자 정보 변경 감지
+let lastUserId = null;
+setInterval(() => {
+  const currentUser = window.currentUser;
+  const currentUserId = currentUser ? currentUser.id : null;
+  
+  if (lastUserId !== currentUserId) {
+    lastUserId = currentUserId;
+    checkAndShowAdminFeatures();
+  }
+}, 2000);
+
+console.log('✅ 관리자 기능 모듈 추가 완료');
