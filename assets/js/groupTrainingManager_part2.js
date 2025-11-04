@@ -3,6 +3,20 @@
    그룹 훈련 관리 모듈의 2부
 ========================================================== */
 
+let groupTrainingState = {
+  currentRoom: null,
+  isAdmin: false,
+  isManager: false,        // 🆕 추가
+  participants: [],
+  roomCode: null,
+  syncInterval: null,
+  managerInterval: null,   // 🆕 추가
+  isConnected: false,
+  lastSyncTime: null
+};
+
+
+
 // ========== 대기실 참가자 기능들 ==========
 
 /**
@@ -688,5 +702,15 @@ window.sendCustomCoaching = sendCustomCoaching;
 window.sendQuickCoaching = sendQuickCoaching;
 window.sendChatMessage = sendChatMessage;
 window.initializeGroupRoomScreen = initializeGroupRoomScreen;
+
+// 🆕 관리자 기능 전역 함수 등록 추가
+window.refreshActiveRooms = refreshActiveRooms;
+window.updateRoomStatistics = updateRoomStatistics;
+window.monitorRoom = monitorRoom;
+window.forceStopRoom = forceStopRoom;
+window.cleanupExpiredRooms = cleanupExpiredRooms;
+window.emergencyStopAllRooms = emergencyStopAllRooms;
+window.initializeManagerDashboard = initializeManagerDashboard;
+
 
 console.log('✅ Group Training Manager Part 2 loaded');
