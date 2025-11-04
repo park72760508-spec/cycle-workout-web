@@ -103,20 +103,28 @@ function setupGroupTrainingEvents() {
 }
 
 // ========== 그룹 훈련 모달 표시 ==========
+/**
+ * 향상된 그룹 훈련 모달 (관리자용 버튼 수정)
+ */
 function showGroupTrainingModal() {
   const currentUser = window.currentUser;
   if (!currentUser) {
-    showToast('로그인이 필요합니다');
+    if (typeof showToast === 'function') {
+      showToast('로그인이 필요합니다');
+    } else {
+      alert('로그인이 필요합니다');
+    }
     return;
   }
   
-  const isAdmin = currentUser.grade === '1';
+  const isAdmin = currentUser.grade === '1' || currentUser.grade === 1;
+  console.log('그룹 훈련 모달 표시 - 관리자 권한:', isAdmin);
   
   const modalHtml = `
     <div id="groupTrainingModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>🏆 그룹 훈련</h3>
+          <h3>🏆 그룹 훈련 ${isAdmin ? '<span class="admin-badge">ADMIN</span>' : ''}</h3>
           <button class="modal-close" onclick="closeGroupTrainingModal()">✖</button>
         </div>
         
@@ -143,28 +151,50 @@ function showGroupTrainingModal() {
             </div>
           </div>
           
-          <div class="group-actions">
-            ${isAdmin ? `
-              <button class="btn btn-success" id="btnCreateRoom">
-                <span class="btn-icon">🏠</span>
-                훈련실 만들기
+          ${isAdmin ? `
+            <div class="admin-actions-section" style="margin: 24px 0; padding: 20px; background: rgba(111, 66, 193, 0.1); border-radius: 12px; border: 1px solid rgba(111, 66, 193, 0.2);">
+              <h4 style="color: #6f42c1; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                👑 관리자 전용 기능
+              </h4>
+              <div class="admin-modal-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                <button class="btn btn-success" onclick="showTrainingRoomManagement(); closeGroupTrainingModal();" style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 12px 16px;">
+                  <span class="btn-icon">🏠</span>
+                  훈련실 관리
+                </button>
+                
+                <button class="btn btn-warning" onclick="showActiveRoomsManagement(); closeGroupTrainingModal();" style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 12px 16px;">
+                  <span class="btn-icon">📊</span>
+                  모니터링
+                </button>
+                
+                <button class="btn btn-info" onclick="quickCreateRoom(); closeGroupTrainingModal();" style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 12px 16px;">
+                  <span class="btn-icon">⚡</span>
+                  즉시 생성
+                </button>
+              </div>
+            </div>
+          ` : ''}
+          
+          <div class="general-actions" style="margin-top: ${isAdmin ? '16px' : '24px'};">
+            <h4 style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+              🚪 일반 기능
+            </h4>
+            <div class="group-actions" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+              <button class="btn btn-primary" id="btnJoinRoom" style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 12px 16px;">
+                <span class="btn-icon">🚪</span>
+                훈련실 참가하기
               </button>
-            ` : ''}
-            
-            <button class="btn btn-primary" id="btnJoinRoom">
-              <span class="btn-icon">🚪</span>
-              훈련실 참가하기
-            </button>
-            
-            <button class="btn btn-secondary" id="btnViewActiveRooms">
-              <span class="btn-icon">👀</span>
-              활성 훈련실 보기
-            </button>
+              
+              <button class="btn btn-secondary" onclick="showActiveRoomsManagement(); closeGroupTrainingModal();" style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 12px 16px;">
+                <span class="btn-icon">👀</span>
+                활성 훈련실 보기
+              </button>
+            </div>
           </div>
           
           ${!isAdmin ? `
-            <div class="admin-notice">
-              <p><strong>💡 알림:</strong> 훈련실 생성은 관리자만 가능합니다</p>
+            <div class="admin-notice" style="margin-top: 20px; padding: 16px; background: rgba(45, 116, 232, 0.1); border-radius: 8px; border-left: 4px solid #2e74e8;">
+              <p style="margin: 0; color: #2e74e8;"><strong>💡 알림:</strong> 훈련실 생성은 관리자만 가능합니다</p>
             </div>
           ` : ''}
         </div>
@@ -173,11 +203,19 @@ function showGroupTrainingModal() {
   `;
   
   // 기존 모달 제거 후 새로 추가
-  removeExistingModal('groupTrainingModal');
+  if (typeof removeExistingModal === 'function') {
+    removeExistingModal('groupTrainingModal');
+  } else {
+    const existing = document.getElementById('groupTrainingModal');
+    if (existing) existing.remove();
+  }
+  
   document.body.insertAdjacentHTML('beforeend', modalHtml);
   
   // 이벤트 리스너 재설정
-  setupModalEvents();
+  if (typeof setupModalEvents === 'function') {
+    setupModalEvents();
+  }
   
   // 모달 표시
   const modal = document.getElementById('groupTrainingModal');
@@ -185,6 +223,11 @@ function showGroupTrainingModal() {
     modal.style.display = 'flex';
   }
 }
+
+
+
+
+
 
 // ========== 모달 이벤트 설정 ==========
 function setupModalEvents() {
