@@ -873,13 +873,12 @@
 
   
  <!-- 5) 훈련 준비 화면 -->
-  <!-- 5) 훈련 준비 화면 -->
   <div id="trainingReadyScreen" class="screen">
     <div class="header">
       <h1>🎯 훈련 준비</h1>
       <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
     </div>
-  
+
     <div class="workout-preview">
       <h2 id="previewWorkoutName">워크아웃</h2>
       <div class="preview-stats">
@@ -889,46 +888,13 @@
       </div>
       <div class="segment-preview" id="segmentPreview"></div>
     </div>
-  
+
     <div class="training-ready">
       <div class="mb-30">
         <h3 class="mb-15">훈련 준비 완료</h3>
         <p class="muted">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
       </div>
-  
-      <!-- 관리자 전용 섹션 (권한에 따라 표시) -->
-      <div id="adminFunctionsSection" class="admin-functions-section" style="display: none;">
-        <div class="mb-30">
-          <h3 class="mb-15">🔧 관리자 기능</h3>
-          <p class="muted">관리자 권한으로 추가 기능을 사용할 수 있습니다</p>
-        </div>
-        
-        <div class="admin-actions-grid">
-          <button class="btn btn-warning admin-action-btn" onclick="showTrainingRoomManagement()">
-            <span class="btn-icon">🏠</span>
-            <span class="btn-text">
-              <strong>훈련실 관리</strong>
-              <small>방 만들기 / 참가자 관리</small>
-            </span>
-          </button>
-          
-          <button class="btn btn-info admin-action-btn" onclick="showActiveRoomsManagement()">
-            <span class="btn-icon">📊</span>
-            <span class="btn-text">
-              <strong>활성 훈련실 모니터링</strong>
-              <small>진행 중인 훈련실 관리</small>
-            </span>
-          </button>
-          
-          <button class="btn btn-success admin-action-btn" onclick="quickCreateRoom()">
-            <span class="btn-icon">⚡</span>
-            <span class="btn-text">
-              <strong>빠른 훈련실 생성</strong>
-              <small>현재 워크아웃으로 즉시 생성</small>
-            </span>
-          </button>
-        </div>
-      </div>
+
       
       <div class="training-mode-selection">
         <div class="mb-30">
@@ -954,7 +920,6 @@
           </div>
           
           <!-- 그룹 훈련 카드 -->
-          <!-- 그룹 훈련 카드 -->
           <div class="training-mode-card group-training">
             <div class="mode-icon">👥</div>
             <h4>그룹 훈련</h4>
@@ -964,20 +929,12 @@
               <li>관리자 음성 코칭</li>
               <li>함께하는 동기부여</li>
             </ul>
-            <button class="btn btn-primary" id="btnGroupTraining" onclick="selectTrainingMode('group')">
+            <button class="btn btn-primary" id="btnGroupTraining">
               <span class="btn-icon">🏆</span>
               그룹 훈련 참가
             </button>
-            
-            <!-- 🆕 관리자용 추가 버튼 -->
-            <div id="adminGroupButtons" class="admin-group-buttons" style="display: none;">
-              <button class="btn btn-outline admin-quick-btn" onclick="showTrainingRoomManagement()">
-                <span class="btn-icon">⚙️</span>
-                훈련실 관리
-              </button>
-            </div>
           </div>
-
+        </div>
         
         <!-- 기존 하단 버튼들 -->
         <div class="btn-row center mt-30">
@@ -985,6 +942,9 @@
           <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
         </div>
       </div>
+
+
+      
     </div>
   </div>
 
@@ -1189,7 +1149,6 @@
     </div>
 
     <!-- 관리자/참가자 역할 선택 -->
-    <!-- 관리자/참가자 역할 선택 -->
     <div class="role-selection card">
       <h3>역할 선택</h3>
       <div class="role-buttons">
@@ -1200,11 +1159,6 @@
         <button id="participantRoleBtn" class="role-btn participant" onclick="selectRole('participant')">
           🏃‍♂️ <span>참가자</span>
           <small>기존 훈련방 참가</small>
-        </button>
-        <!-- grade=1 사용자에게만 표시되는 훈련방 관리 버튼 -->
-        <button id="managerRoleBtn" class="role-btn manager hidden" onclick="selectRole('manager')">
-          ⚙️ <span>훈련방 관리</span>
-          <small>전체 훈련방 모니터링 및 관리</small>
         </button>
       </div>
     </div>
@@ -1257,74 +1211,6 @@
       </div>
     </div>
 
-
-    <!-- 훈련방 관리자 섹션 (grade=1 전용) -->
-    <div id="managerSection" class="card hidden">
-      <h3>⚙️ 훈련방 관리 (시스템 관리자)</h3>
-      
-      <!-- 활성 훈련방 목록 -->
-      <div class="active-rooms-section">
-        <div class="section-header">
-          <h4>🔴 활성 훈련방 목록</h4>
-          <button class="btn btn-outline btn-sm" onclick="refreshActiveRooms()">🔄 새로고침</button>
-        </div>
-        <div id="activeRoomsList" class="active-rooms-list">
-          <div class="loading-spinner">
-            <div class="spinner"></div>
-            <p>활성 훈련방을 불러오는 중...</p>
-          </div>
-        </div>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <!-- 전체 훈련방 통계 -->
-      <div class="rooms-statistics">
-        <h4>📊 훈련방 통계</h4>
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-value" id="totalRoomsCount">0</span>
-            <span class="stat-label">전체 방</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="activeRoomsCount">0</span>
-            <span class="stat-label">활성 방</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="totalParticipantsCount">0</span>
-            <span class="stat-label">총 참가자</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value" id="trainingRoomsCount">0</span>
-            <span class="stat-label">훈련 진행중</span>
-          </div>
-        </div>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <!-- 관리 작업 버튼들 -->
-      <div class="manager-actions">
-        <h4>🛠️ 관리 작업</h4>
-        <div class="action-buttons">
-          <button class="btn btn-secondary" onclick="showAllRoomsModal()">
-            📋 전체 방 목록 보기
-          </button>
-          <button class="btn btn-warning" onclick="cleanupExpiredRooms()">
-            🧹 만료된 방 정리
-          </button>
-          <button class="btn btn-info" onclick="exportRoomData()">
-            📊 방 데이터 내보내기
-          </button>
-          <button class="btn btn-danger" onclick="emergencyStopAllRooms()">
-            🚨 전체 방 긴급 중단
-          </button>
-        </div>
-      </div>
-    </div>
-
-
-    
     <div class="btn-row mt-30">
       <button class="btn" onclick="showScreen('trainingModeScreen')">⬅️ 뒤로 가기</button>
     </div>
