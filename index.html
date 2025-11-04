@@ -873,12 +873,13 @@
 
   
  <!-- 5) 훈련 준비 화면 -->
+  <!-- 5) 훈련 준비 화면 -->
   <div id="trainingReadyScreen" class="screen">
     <div class="header">
       <h1>🎯 훈련 준비</h1>
       <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
     </div>
-
+  
     <div class="workout-preview">
       <h2 id="previewWorkoutName">워크아웃</h2>
       <div class="preview-stats">
@@ -888,13 +889,46 @@
       </div>
       <div class="segment-preview" id="segmentPreview"></div>
     </div>
-
+  
     <div class="training-ready">
       <div class="mb-30">
         <h3 class="mb-15">훈련 준비 완료</h3>
         <p class="muted">시작 버튼을 누르면 5초 카운트다운 후 훈련이 시작됩니다.</p>
       </div>
-
+  
+      <!-- 🆕 관리자 전용 섹션 (권한에 따라 표시) -->
+      <div id="adminFunctionsSection" class="admin-functions-section" style="display: none;">
+        <div class="mb-30">
+          <h3 class="mb-15">🔧 관리자 기능</h3>
+          <p class="muted">관리자 권한으로 추가 기능을 사용할 수 있습니다</p>
+        </div>
+        
+        <div class="admin-actions-grid">
+          <button class="btn btn-warning admin-action-btn" onclick="showGroupTrainingModal()">
+            <span class="btn-icon">🏠</span>
+            <span class="btn-text">
+              <strong>훈련실 관리</strong>
+              <small>방 만들기 / 참가자 관리</small>
+            </span>
+          </button>
+          
+          <button class="btn btn-info admin-action-btn" onclick="showActiveRooms()">
+            <span class="btn-icon">📊</span>
+            <span class="btn-text">
+              <strong>활성 훈련실 모니터링</strong>
+              <small>진행 중인 훈련실 관리</small>
+            </span>
+          </button>
+          
+          <button class="btn btn-success admin-action-btn" onclick="quickCreateRoom()">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text">
+              <strong>빠른 훈련실 생성</strong>
+              <small>현재 워크아웃으로 즉시 생성</small>
+            </span>
+          </button>
+        </div>
+      </div>
       
       <div class="training-mode-selection">
         <div class="mb-30">
@@ -933,6 +967,14 @@
               <span class="btn-icon">🏆</span>
               그룹 훈련 참가
             </button>
+            
+            <!-- 🆕 관리자용 추가 버튼 -->
+            <div id="adminGroupButtons" class="admin-group-buttons" style="display: none;">
+              <button class="btn btn-outline admin-quick-btn" onclick="showGroupTrainingModal()">
+                <span class="btn-icon">⚙️</span>
+                관리자 옵션
+              </button>
+            </div>
           </div>
         </div>
         
@@ -942,9 +984,6 @@
           <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
         </div>
       </div>
-
-
-      
     </div>
   </div>
 
