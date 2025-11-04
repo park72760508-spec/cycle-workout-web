@@ -3589,8 +3589,11 @@ if (typeof window.originalShowScreen === 'undefined') {
 window.showScreen = function(screenId) {
   console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
   
-  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
-  if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
+  // ✅ 수정된 부분: trainingScreen 예외 추가
+  if (!isPhoneAuthenticated && 
+      screenId !== 'authScreen' && 
+      screenId !== 'loadingScreen' && 
+      screenId !== 'trainingScreen') {
     screenId = 'authScreen';
   }
   
@@ -3602,15 +3605,17 @@ window.showScreen = function(screenId) {
     screen.style.visibility = 'hidden';
   });
   
-  // 선택된 화면만 표시
+  // 선택된 화면 표시
   const targetScreen = document.getElementById(screenId);
   if (targetScreen) {
-    targetScreen.style.display = 'block';
     targetScreen.classList.add('active');
+    targetScreen.style.display = 'block';
     targetScreen.style.opacity = '1';
     targetScreen.style.visibility = 'visible';
     
-    initializeCurrentScreen(screenId);
+    console.log('✅ 화면 전환 완료:', screenId);
+  } else {
+    console.error('❌ 화면을 찾을 수 없습니다:', screenId);
   }
 };
 
