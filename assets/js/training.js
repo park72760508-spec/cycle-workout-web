@@ -1312,3 +1312,167 @@ setInterval(() => {
 }, 2000);
 
 console.log('✅ 관리자 기능 모듈 추가 완료');
+
+
+
+// ========== 관리자 화면 전환 함수들 ==========
+
+/**
+ * 훈련실 관리 화면으로 이동
+ */
+function showTrainingRoomManagement() {
+  const currentUser = window.currentUser;
+  
+  if (!currentUser || (currentUser.grade !== '1' && currentUser.grade !== 1)) {
+    if (typeof toast === 'function') {
+      toast('관리자 권한이 필요합니다');
+    } else {
+      alert('관리자 권한이 필요합니다');
+    }
+    return;
+  }
+  
+  console.log('훈련실 관리 화면으로 이동');
+  
+  // 그룹 룸 화면으로 이동
+  if (typeof showScreen === 'function') {
+    showScreen('groupRoomScreen');
+  }
+  
+  // 잠깐 대기 후 관리자 역할 자동 선택
+  setTimeout(() => {
+    if (typeof selectRole === 'function') {
+      selectRole('manager');
+    } else {
+      // selectRole 함수가 없는 경우 직접 구현
+      showManagerSection();
+    }
+    
+    if (typeof toast === 'function') {
+      toast('훈련실 관리 화면으로 이동했습니다 🏠');
+    }
+  }, 100);
+}
+
+/**
+ * 활성 훈련실 모니터링 화면으로 이동
+ */
+function showActiveRoomsManagement() {
+  const currentUser = window.currentUser;
+  
+  if (!currentUser || (currentUser.grade !== '1' && currentUser.grade !== 1)) {
+    if (typeof toast === 'function') {
+      toast('관리자 권한이 필요합니다');
+    } else {
+      alert('관리자 권한이 필요합니다');
+    }
+    return;
+  }
+  
+  console.log('활성 훈련실 모니터링 화면으로 이동');
+  
+  // 기존 showActiveRooms 함수가 있는지 확인
+  if (typeof showActiveRooms === 'function') {
+    showActiveRooms();
+  } else {
+    // showActiveRooms 함수가 없는 경우 관리자 화면으로 이동
+    showTrainingRoomManagement();
+    
+    setTimeout(() => {
+      if (typeof refreshActiveRooms === 'function') {
+        refreshActiveRooms();
+      }
+      if (typeof toast === 'function') {
+        toast('활성 훈련실을 확인하세요 📊');
+      }
+    }, 200);
+  }
+}
+
+/**
+ * 관리자 섹션 직접 표시 (selectRole 함수가 없는 경우 대비)
+ */
+function showManagerSection() {
+  console.log('관리자 섹션을 직접 표시합니다');
+  
+  // 모든 섹션 숨김
+  const sections = ['adminSection', 'participantSection', 'managerSection'];
+  sections.forEach(sectionId => {
+    const section = document.getElementById(sectionId);
+    if (section) {
+      section.classList.add('hidden');
+    }
+  });
+  
+  // 역할 버튼들 상태 초기화
+  const roleButtons = document.querySelectorAll('.role-btn');
+  roleButtons.forEach(btn => btn.classList.remove('active'));
+  
+  // 관리자 섹션 표시
+  const managerSection = document.getElementById('managerSection');
+  if (managerSection) {
+    managerSection.classList.remove('hidden');
+    console.log('관리자 섹션이 표시되었습니다');
+  }
+  
+  // 관리자 역할 버튼 활성화
+  const managerBtn = document.getElementById('managerRoleBtn');
+  if (managerBtn) {
+    managerBtn.classList.add('active');
+    managerBtn.classList.remove('hidden'); // 관리자에게 표시
+  }
+  
+  // 활성 훈련실 목록 자동 새로고침
+  setTimeout(() => {
+    if (typeof refreshActiveRooms === 'function') {
+      refreshActiveRooms();
+    }
+    loadRoomStatistics();
+  }, 300);
+}
+
+/**
+ * 훈련방 통계 로드
+ */
+async function loadRoomStatistics() {
+  try {
+    const response = await fetch(`${window.GAS_URL}?action=getRoomStatistics`);
+    const result = await response.json();
+    
+    if (result.success && result.stats) {
+      const stats = result.stats;
+      
+      // 통계 업데이트
+      const statsElements = {
+        'totalRoomsCount': stats.totalRooms || 0,
+        'activeRoomsCount': stats.activeRooms || 0,
+        'totalParticipantsCount': stats.totalParticipants || 0,
+        'trainingRoomsCount': stats.trainingRooms || 0
+      };
+      
+      Object.entries(statsElements).forEach(([elementId, value]) => {
+        const element = document.getElementById(elementId);
+        if (element) {
+          element.textContent = value;
+        }
+      });
+      
+      console.log('훈련방 통계가 업데이트되었습니다:', stats);
+    }
+  } catch (error) {
+    console.error('훈련방 통계 로드 오류:', error);
+  }
+}
+
+// ========== 전역 함수 등록 ==========
+window.showTrainingRoomManagement = showTrainingRoomManagement;
+window.showActiveRoomsManagement = showActiveRoomsManagement;
+window.showManagerSection = showManagerSection;
+window.loadRoomStatistics = loadRoomStatistics;
+
+console.log('✅ 관리자 화면 전환 함수들이 등록되었습니다');
+
+
+
+
+
