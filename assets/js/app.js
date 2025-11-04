@@ -297,8 +297,8 @@ function getPlannedTotalSecondsFromSegments(workout) {
 
 
 
- * 그룹훈련 데이터베이스 초기화 확인
- */
+ // 그룹훈련 데이터베이스 초기화 확인
+ //
 async function ensureGroupTrainingDatabase() {
   try {
     console.log('Checking group training database...');
