@@ -3,17 +3,7 @@
    그룹 훈련 관리 모듈의 2부
 ========================================================== */
 
-let groupTrainingState = {
-  currentRoom: null,
-  isAdmin: false,
-  isManager: false,        // 🆕 추가
-  participants: [],
-  roomCode: null,
-  syncInterval: null,
-  managerInterval: null,   // 🆕 추가
-  isConnected: false,
-  lastSyncTime: null
-};
+
 
 
 
