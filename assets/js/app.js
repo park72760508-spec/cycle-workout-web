@@ -2,6 +2,11 @@
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
 
+// ========== Google Apps Script 설정 ==========
+// 실제 배포된 Google Apps Script URL로 교체하세요
+const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec';
+
+
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
 (function initializeGlobals() {
   // liveData 객체 안전 초기화
