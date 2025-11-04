@@ -297,8 +297,7 @@ function getPlannedTotalSecondsFromSegments(workout) {
 
 
 
-/**
- * 그룹훈련 데이터베이스 초기화 확인!!!!
+ * 그룹훈련 데이터베이스 초기화 확인
  */
 async function ensureGroupTrainingDatabase() {
   try {
@@ -324,17 +323,6 @@ async function ensureGroupTrainingDatabase() {
     return false;
   }
 }
-
-// 기존 initializeApp 함수에 추가
-async function initializeApp() {
-  // ... 기존 초기화 코드 ...
-  
-  // 그룹훈련 데이터베이스 확인
-  await ensureGroupTrainingDatabase();
-  
-  // ... 나머지 초기화 코드 ...
-}
-
 
 
 
