@@ -859,11 +859,6 @@ function startWithCountdown(sec = 5) {
 
   console.log(`Starting ${sec}s countdown...`);
 
-  // 🆕 개인훈련 시작 시 임시 인증 활성화
-  const originalAuthState = window.isPhoneAuthenticated;
-  window.isPhoneAuthenticated = true;
-  console.log('✅ 개인훈련을 위한 임시 인증 활성화');
-
   // 오버레이 확실히 표시
   overlay.classList.remove("hidden");
   overlay.style.display = "flex";
@@ -897,12 +892,6 @@ function startWithCountdown(sec = 5) {
         overlay.style.display = "none";
         console.log('Countdown finished, starting workout...');
         startWorkoutTraining();
-        
-        // 🆕 훈련 시작 후 3초 뒤에 원래 인증 상태로 복원 (선택사항)
-        // setTimeout(() => {
-        //   window.isPhoneAuthenticated = originalAuthState;
-        //   console.log('인증 상태 원복:', originalAuthState);
-        // }, 3000);
       }, 500);
       
       // 타이머 정리
@@ -914,15 +903,7 @@ function startWithCountdown(sec = 5) {
       clearInterval(timer);
       overlay.classList.add("hidden");
       overlay.style.display = "none";
-      
-      // 🆕 안전장치에서도 인증 활성화
-      window.isPhoneAuthenticated = true;
       startWorkoutTraining();
-      
-      // 원래 인증 상태 복원 (선택사항)
-      // setTimeout(() => {
-      //   window.isPhoneAuthenticated = originalAuthState;
-      // }, 3000);
     }
   }, 1000);
 }
