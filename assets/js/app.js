@@ -297,6 +297,47 @@ function getPlannedTotalSecondsFromSegments(workout) {
 
 
 
+/**
+ * 그룹훈련 데이터베이스 초기화 확인!!!!
+ */
+async function ensureGroupTrainingDatabase() {
+  try {
+    console.log('Checking group training database...');
+    
+    const params = new URLSearchParams({
+      action: 'initGroupTrainingDb'
+    });
+    
+    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log('Group training database ready:', result.sheets);
+      return true;
+    } else {
+      console.error('Failed to initialize group training database:', result.error);
+      return false;
+    }
+    
+  } catch (error) {
+    console.error('Error checking group training database:', error);
+    return false;
+  }
+}
+
+// 기존 initializeApp 함수에 추가
+async function initializeApp() {
+  // ... 기존 초기화 코드 ...
+  
+  // 그룹훈련 데이터베이스 확인
+  await ensureGroupTrainingDatabase();
+  
+  // ... 나머지 초기화 코드 ...
+}
+
+
+
+
 
 // 그래프 초기화
 // 세그먼트 합으로 버퍼 용량을 유동 계산
