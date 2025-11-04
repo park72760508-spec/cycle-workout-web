@@ -236,15 +236,44 @@ async function createGroupRoom() {
  * 백엔드에 방 생성 (임시 구현)
  */
 async function createRoomOnBackend(roomData) {
-  // 임시: localStorage에 저장
   try {
-    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
-    rooms[roomData.code] = roomData;
-    localStorage.setItem('groupTrainingRooms', JSON.stringify(rooms));
-    return true;
+    // Google Apps Script API 호출
+    const params = new URLSearchParams({
+      action: 'createGroupRoom',
+      code: encodeURIComponent(roomData.code),
+      name: encodeURIComponent(roomData.name),
+      workoutId: roomData.workoutId,
+      adminId: roomData.adminId,
+      adminName: encodeURIComponent(roomData.adminName),
+      maxParticipants: roomData.maxParticipants,
+      status: roomData.status,
+      participants: encodeURIComponent(JSON.stringify(roomData.participants)),
+      settings: encodeURIComponent(JSON.stringify(roomData.settings))
+    });
+    
+    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      return true;
+    } else {
+      console.error('Backend error:', result.error);
+      return false;
+    }
+    
   } catch (error) {
-    console.error('Failed to save room:', error);
-    return false;
+    console.error('Failed to create room on backend:', error);
+    
+    // Fallback: localStorage에 저장
+    try {
+      const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+      rooms[roomData.code] = roomData;
+      localStorage.setItem('groupTrainingRooms', JSON.stringify(rooms));
+      return true;
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      return false;
+    }
   }
 }
 
@@ -312,14 +341,39 @@ async function refreshRoomList() {
  */
 async function getRoomsFromBackend() {
   try {
-    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
-    return Object.values(rooms).filter(room => 
-      room.status === 'waiting' && 
-      room.participants.length < room.maxParticipants
-    );
+    // Google Apps Script API 호출
+    const params = new URLSearchParams({
+      action: 'listGroupRooms',
+      status: 'waiting'
+    });
+    
+    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      return result.items.filter(room => 
+        room.Status === 'waiting' && 
+        (room.ParticipantsData || []).length < room.MaxParticipants
+      );
+    } else {
+      console.error('Backend error:', result.error);
+      return [];
+    }
+    
   } catch (error) {
-    console.error('Failed to get rooms:', error);
-    return [];
+    console.error('Failed to get rooms from backend:', error);
+    
+    // Fallback: localStorage에서 조회
+    try {
+      const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+      return Object.values(rooms).filter(room => 
+        room.status === 'waiting' && 
+        room.participants.length < room.maxParticipants
+      );
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+      return [];
+    }
   }
 }
 
