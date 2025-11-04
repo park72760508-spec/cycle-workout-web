@@ -666,27 +666,22 @@ function initializeGroupRoomScreen() {
   if (managerSection) managerSection.classList.add('hidden');
   
   // grade=1 사용자인지 확인하여 관리자 메뉴 표시
-  const currentUser = window.currentUser;
-  console.log('👑 User grade check:', {
-    hasUser: !!currentUser,
-    grade: currentUser?.grade,
-    isGrade1: currentUser?.grade === '1'
-  });
-  
-  if (currentUser && currentUser.grade === '1') {
-    console.log('✅ Grade 1 user detected, showing manager options');
-    if (managerBtn) {
-      managerBtn.classList.remove('hidden');
-      console.log('🔓 Manager button shown');
-    } else {
-      console.error('❌ Manager button not found in DOM');
-    }
-  } else {
-    console.log('❌ Not grade 1 user or no user, hiding manager options');
-    if (managerBtn) {
-      managerBtn.classList.add('hidden');
-    }
-  }
+   // grade=1 사용자인지 확인하여 관리자 메뉴 표시
+   const currentUser = window.currentUser;
+   console.log('👤 Current user grade check:', currentUser?.grade, typeof currentUser?.grade);
+   
+   if (currentUser && (currentUser.grade === 1 || currentUser.grade === '1')) {
+     console.log('✅ Grade 1 user detected, showing manager options');
+     if (managerBtn) {
+       managerBtn.classList.remove('hidden');
+       managerBtn.style.display = 'flex'; // 추가 보장
+     }
+   } else {
+     console.log('❌ Not grade 1 user, hiding manager options');
+     if (managerBtn) {
+       managerBtn.classList.add('hidden');
+     }
+   }
   
   // 입력값 초기화
   const roomNameInput = safeGet('roomNameInput');
