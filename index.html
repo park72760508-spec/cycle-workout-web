@@ -1149,6 +1149,7 @@
     </div>
 
     <!-- 관리자/참가자 역할 선택 -->
+    <!-- 관리자/참가자 역할 선택 -->
     <div class="role-selection card">
       <h3>역할 선택</h3>
       <div class="role-buttons">
@@ -1159,6 +1160,11 @@
         <button id="participantRoleBtn" class="role-btn participant" onclick="selectRole('participant')">
           🏃‍♂️ <span>참가자</span>
           <small>기존 훈련방 참가</small>
+        </button>
+        <!-- grade=1 사용자에게만 표시되는 훈련방 관리 버튼 -->
+        <button id="managerRoleBtn" class="role-btn manager hidden" onclick="selectRole('manager')">
+          ⚙️ <span>훈련방 관리</span>
+          <small>전체 훈련방 모니터링 및 관리</small>
         </button>
       </div>
     </div>
@@ -1211,6 +1217,74 @@
       </div>
     </div>
 
+
+    <!-- 훈련방 관리자 섹션 (grade=1 전용) -->
+    <div id="managerSection" class="card hidden">
+      <h3>⚙️ 훈련방 관리 (시스템 관리자)</h3>
+      
+      <!-- 활성 훈련방 목록 -->
+      <div class="active-rooms-section">
+        <div class="section-header">
+          <h4>🔴 활성 훈련방 목록</h4>
+          <button class="btn btn-outline btn-sm" onclick="refreshActiveRooms()">🔄 새로고침</button>
+        </div>
+        <div id="activeRoomsList" class="active-rooms-list">
+          <div class="loading-spinner">
+            <div class="spinner"></div>
+            <p>활성 훈련방을 불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <!-- 전체 훈련방 통계 -->
+      <div class="rooms-statistics">
+        <h4>📊 훈련방 통계</h4>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="totalRoomsCount">0</span>
+            <span class="stat-label">전체 방</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="activeRoomsCount">0</span>
+            <span class="stat-label">활성 방</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="totalParticipantsCount">0</span>
+            <span class="stat-label">총 참가자</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="trainingRoomsCount">0</span>
+            <span class="stat-label">훈련 진행중</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="divider"></div>
+      
+      <!-- 관리 작업 버튼들 -->
+      <div class="manager-actions">
+        <h4>🛠️ 관리 작업</h4>
+        <div class="action-buttons">
+          <button class="btn btn-secondary" onclick="showAllRoomsModal()">
+            📋 전체 방 목록 보기
+          </button>
+          <button class="btn btn-warning" onclick="cleanupExpiredRooms()">
+            🧹 만료된 방 정리
+          </button>
+          <button class="btn btn-info" onclick="exportRoomData()">
+            📊 방 데이터 내보내기
+          </button>
+          <button class="btn btn-danger" onclick="emergencyStopAllRooms()">
+            🚨 전체 방 긴급 중단
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    
     <div class="btn-row mt-30">
       <button class="btn" onclick="showScreen('trainingModeScreen')">⬅️ 뒤로 가기</button>
     </div>
