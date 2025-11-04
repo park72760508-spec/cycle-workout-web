@@ -2,11 +2,6 @@
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
 
-// ========== Google Apps Script 설정 ==========
-// 실제 배포된 Google Apps Script URL로 교체하세요
-const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec';
-
-
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
 (function initializeGlobals() {
   // liveData 객체 안전 초기화
@@ -298,35 +293,6 @@ function getPlannedTotalSecondsFromSegments(workout) {
   if (Array.isArray(w?.children)) return sumSegments(w.children);
   if (Array.isArray(w?.sets))     return sumSegments(w.sets);
   return 0;
-}
-
-
-
- // 그룹훈련 데이터베이스 초기화 확인
- //
-async function ensureGroupTrainingDatabase() {
-  try {
-    console.log('Checking group training database...');
-    
-    const params = new URLSearchParams({
-      action: 'initGroupTrainingDb'
-    });
-    
-    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
-    const result = await response.json();
-    
-    if (result.success) {
-      console.log('Group training database ready:', result.sheets);
-      return true;
-    } else {
-      console.error('Failed to initialize group training database:', result.error);
-      return false;
-    }
-    
-  } catch (error) {
-    console.error('Error checking group training database:', error);
-    return false;
-  }
 }
 
 
@@ -2478,53 +2444,10 @@ function startWorkoutTraining() {
     }
 
     // (E) 화면 전환
-   // (E) 화면 전환 - 강화된 버전
-       console.log('훈련 화면으로 전환 시도...');
-       
-       // 1. 인증 상태 확실히 설정
-       window.isPhoneAuthenticated = true;
-       
-       // 2. showScreen 시도
-       if (typeof showScreen === "function") {
-         showScreen("trainingScreen");
-         console.log('Switched to training screen');
-       }
-       
-       // 3. 0.5초 후 강제 확인 및 보정
-       setTimeout(() => {
-         const trainingScreen = document.getElementById('trainingScreen');
-         const isVisible = trainingScreen && 
-                          window.getComputedStyle(trainingScreen).display !== 'none' &&
-                          window.getComputedStyle(trainingScreen).visibility !== 'hidden';
-         
-         if (!isVisible && trainingScreen) {
-           console.warn('⚠️ 훈련 화면이 제대로 표시되지 않음 - 강제 표시');
-           
-           // 모든 화면 숨기기
-           document.querySelectorAll('.screen').forEach(s => {
-             s.classList.remove('active');
-             s.style.display = 'none';
-           });
-           
-           // 훈련 화면만 강제 표시
-           trainingScreen.classList.add('active');
-           trainingScreen.style.cssText = `
-             display: block !important;
-             visibility: visible !important;
-             opacity: 1 !important;
-             position: relative !important;
-             z-index: 1000 !important;
-             width: 100% !important;
-             height: 100vh !important;
-           `;
-           
-           console.log('✅ 훈련 화면 강제 표시 완료');
-         } else if (isVisible) {
-           console.log('✅ 훈련 화면 정상 표시됨');
-         } else {
-           console.error('❌ 훈련 화면 요소를 찾을 수 없음');
-         }
-       }, 500);
+    if (typeof showScreen === "function") {
+      showScreen("trainingScreen");
+      console.log('Switched to training screen');
+    }
 
       // ⬇ 차트 초기화 1회
       window.initTrainingCharts?.();     
@@ -2714,16 +2637,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 훈련 준비 → 훈련 시작
-   const btnStartTraining = safeGetElement("btnStartTraining");
-   if (btnStartTraining) {
-     btnStartTraining.addEventListener("click", () => {
-       // 🆕 개인훈련 시작 시 임시 인증 활성화
-       console.log('개인훈련 시작 - 임시 인증 활성화');
-       window.isPhoneAuthenticated = true;
-       
-       startWithCountdown(5);
-     });
-   }
+  const btnStartTraining = safeGetElement("btnStartTraining");
+  if (btnStartTraining) {
+    btnStartTraining.addEventListener("click", () => startWithCountdown(5));
+  }
 
   // 그룹 훈련 버튼 이벤트 핸들러 추가
   const btnGroupTraining = safeGetElement("btnGroupTraining");
@@ -3635,99 +3552,33 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
-
-
 window.showScreen = function(screenId) {
-  console.log('🔄 화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
+  console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
   
-  try {
-    // 1. 특별 처리: 훈련 화면
-    if (screenId === 'trainingScreen') {
-      console.log('🏃‍♂️ 훈련 화면 특별 처리 시작');
-      
-      // 인증 상태 강제 활성화
-      window.isPhoneAuthenticated = true;
-      
-      // 모든 화면 완전 숨기기
-      document.querySelectorAll('.screen').forEach(screen => {
-        screen.classList.remove('active');
-        screen.style.cssText = 'display: none !important; visibility: hidden !important; opacity: 0 !important;';
-      });
-      
-      // 훈련 화면 찾기
-      const trainingScreen = document.getElementById('trainingScreen');
-      if (!trainingScreen) {
-        console.error('❌ trainingScreen 요소를 찾을 수 없습니다');
-        return;
-      }
-      
-      // 훈련 화면 강제 표시
-      trainingScreen.style.cssText = `
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        position: relative !important;
-        z-index: 1000 !important;
-        width: 100% !important;
-        height: 100vh !important;
-        background: white !important;
-      `;
-      trainingScreen.classList.add('active');
-      
-      // 차트 초기화
-      setTimeout(() => {
-        if (typeof window.initTrainingCharts === 'function') {
-          try {
-            window.initTrainingCharts();
-            console.log('📊 훈련 차트 초기화 완료');
-          } catch (e) {
-            console.warn('차트 초기화 오류:', e);
-          }
-        }
-      }, 100);
-      
-      console.log('✅ 훈련 화면 특별 처리 완료');
-      return;
-    }
+  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
+  if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
+    screenId = 'authScreen';
+  }
+  
+  // 모든 화면 숨기기
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.classList.remove('active');
+    screen.style.display = 'none';
+    screen.style.opacity = '0';
+    screen.style.visibility = 'hidden';
+  });
+  
+  // 선택된 화면만 표시
+  const targetScreen = document.getElementById(screenId);
+  if (targetScreen) {
+    targetScreen.style.display = 'block';
+    targetScreen.classList.add('active');
+    targetScreen.style.opacity = '1';
+    targetScreen.style.visibility = 'visible';
     
-    // 2. 일반 화면 처리
-    const trainingRelatedScreens = ['trainingScreen', 'resultScreen', 'trainingReadyScreen'];
-    const publicScreens = ['authScreen', 'loadingScreen', 'profileScreen', 'workoutScreen'];
-    const allowedScreens = [...publicScreens, ...trainingRelatedScreens];
-    
-    // 인증 체크
-    if (!isPhoneAuthenticated && !allowedScreens.includes(screenId)) {
-      console.log('❌ 인증 필요 - 인증 화면으로 리다이렉트');
-      screenId = 'authScreen';
-    }
-    
-    // 모든 화면 숨기기
-    document.querySelectorAll('.screen').forEach(screen => {
-      screen.classList.remove('active');
-      screen.style.display = 'none';
-      screen.style.opacity = '0';
-      screen.style.visibility = 'hidden';
-    });
-    
-    // 선택된 화면 표시
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-      targetScreen.classList.add('active');
-      targetScreen.style.display = 'block';
-      targetScreen.style.opacity = '1';
-      targetScreen.style.visibility = 'visible';
-      
-      console.log('✅ 화면 전환 완료:', screenId);
-    } else {
-      console.error('❌ 화면을 찾을 수 없습니다:', screenId);
-    }
-    
-  } catch (error) {
-    console.error('❌ showScreen 오류:', error);
+    initializeCurrentScreen(screenId);
   }
 };
-
-
 
 // 화면별 초기화 함수
 function initializeCurrentScreen(screenId) {
