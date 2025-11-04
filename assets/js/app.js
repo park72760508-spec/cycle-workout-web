@@ -859,6 +859,11 @@ function startWithCountdown(sec = 5) {
 
   console.log(`Starting ${sec}s countdown...`);
 
+  // 🆕 개인훈련 시작 시 임시 인증 활성화
+  const originalAuthState = window.isPhoneAuthenticated;
+  window.isPhoneAuthenticated = true;
+  console.log('✅ 개인훈련을 위한 임시 인증 활성화');
+
   // 오버레이 확실히 표시
   overlay.classList.remove("hidden");
   overlay.style.display = "flex";
@@ -892,6 +897,12 @@ function startWithCountdown(sec = 5) {
         overlay.style.display = "none";
         console.log('Countdown finished, starting workout...');
         startWorkoutTraining();
+        
+        // 🆕 훈련 시작 후 3초 뒤에 원래 인증 상태로 복원 (선택사항)
+        // setTimeout(() => {
+        //   window.isPhoneAuthenticated = originalAuthState;
+        //   console.log('인증 상태 원복:', originalAuthState);
+        // }, 3000);
       }, 500);
       
       // 타이머 정리
@@ -903,7 +914,15 @@ function startWithCountdown(sec = 5) {
       clearInterval(timer);
       overlay.classList.add("hidden");
       overlay.style.display = "none";
+      
+      // 🆕 안전장치에서도 인증 활성화
+      window.isPhoneAuthenticated = true;
       startWorkoutTraining();
+      
+      // 원래 인증 상태 복원 (선택사항)
+      // setTimeout(() => {
+      //   window.isPhoneAuthenticated = originalAuthState;
+      // }, 3000);
     }
   }, 1000);
 }
@@ -2671,10 +2690,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 훈련 준비 → 훈련 시작
-  const btnStartTraining = safeGetElement("btnStartTraining");
-  if (btnStartTraining) {
-    btnStartTraining.addEventListener("click", () => startWithCountdown(5));
-  }
+   const btnStartTraining = safeGetElement("btnStartTraining");
+   if (btnStartTraining) {
+     btnStartTraining.addEventListener("click", () => {
+       // 🆕 개인훈련 시작 시 임시 인증 활성화
+       console.log('개인훈련 시작 - 임시 인증 활성화');
+       window.isPhoneAuthenticated = true;
+       
+       startWithCountdown(5);
+     });
+   }
 
   // 그룹 훈련 버튼 이벤트 핸들러 추가
   const btnGroupTraining = safeGetElement("btnGroupTraining");
@@ -3586,14 +3611,31 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
+
+
 window.showScreen = function(screenId) {
   console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
   
-  // ✅ 수정된 부분: trainingScreen 예외 추가
-  if (!isPhoneAuthenticated && 
-      screenId !== 'authScreen' && 
-      screenId !== 'loadingScreen' && 
-      screenId !== 'trainingScreen') {
+  // 🆕 훈련 관련 화면들은 인증 없이도 접근 허용
+  const trainingRelatedScreens = [
+    'trainingScreen', 
+    'resultScreen', 
+    'trainingReadyScreen',
+    'countdownOverlay'
+  ];
+  
+  const publicScreens = [
+    'authScreen', 
+    'loadingScreen', 
+    'profileScreen',
+    'workoutScreen'
+  ];
+  
+  const allowedScreens = [...publicScreens, ...trainingRelatedScreens];
+  
+  // 인증이 필요한 화면인지 확인
+  if (!isPhoneAuthenticated && !allowedScreens.includes(screenId)) {
+    console.log('❌ 인증 필요 - 인증 화면으로 리다이렉트');
     screenId = 'authScreen';
   }
   
@@ -3613,11 +3655,34 @@ window.showScreen = function(screenId) {
     targetScreen.style.opacity = '1';
     targetScreen.style.visibility = 'visible';
     
+    // 🆕 훈련 화면 특별 처리
+    if (screenId === 'trainingScreen') {
+      // 확실한 표시를 위한 추가 스타일
+      targetScreen.style.position = 'relative';
+      targetScreen.style.zIndex = '1000';
+      targetScreen.style.width = '100%';
+      targetScreen.style.height = '100vh';
+      
+      // 차트 초기화
+      setTimeout(() => {
+        if (typeof window.initTrainingCharts === 'function') {
+          try {
+            window.initTrainingCharts();
+            console.log('📊 훈련 차트 초기화 완료');
+          } catch (e) {
+            console.warn('차트 초기화 오류:', e);
+          }
+        }
+      }, 100);
+    }
+    
     console.log('✅ 화면 전환 완료:', screenId);
   } else {
     console.error('❌ 화면을 찾을 수 없습니다:', screenId);
   }
 };
+
+
 
 // 화면별 초기화 함수
 function initializeCurrentScreen(screenId) {
