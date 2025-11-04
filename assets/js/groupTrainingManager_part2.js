@@ -637,16 +637,33 @@ function initializeGroupRoomScreen() {
   // 역할 선택 초기화
   const adminBtn = safeGet('adminRoleBtn');
   const participantBtn = safeGet('participantRoleBtn');
+  const managerBtn = safeGet('managerRoleBtn');
   
   if (adminBtn) adminBtn.classList.remove('active');
   if (participantBtn) participantBtn.classList.remove('active');
+  if (managerBtn) managerBtn.classList.remove('active');
   
   // 섹션 숨김
   const adminSection = safeGet('adminSection');
   const participantSection = safeGet('participantSection');
+  const managerSection = safeGet('managerSection');
   
   if (adminSection) adminSection.classList.add('hidden');
   if (participantSection) participantSection.classList.add('hidden');
+  if (managerSection) managerSection.classList.add('hidden');
+  
+  // grade=1 사용자인지 확인하여 관리자 메뉴 표시
+  const currentUser = window.currentUser;
+  if (currentUser && currentUser.grade === '1') {
+    console.log('Grade 1 user detected, showing manager options');
+    if (managerBtn) {
+      managerBtn.classList.remove('hidden');
+    }
+  } else {
+    if (managerBtn) {
+      managerBtn.classList.add('hidden');
+    }
+  }
   
   // 입력값 초기화
   const roomNameInput = safeGet('roomNameInput');
