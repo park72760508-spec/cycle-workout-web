@@ -155,13 +155,20 @@ function selectRole(role) {
     groupTrainingState.isAdmin = false;
     groupTrainingState.isManager = false;
     refreshRoomList();
-  } else if (role === 'manager') {
-    if (managerBtn) managerBtn.classList.add('active');
-    if (managerSection) managerSection.classList.remove('hidden');
-    groupTrainingState.isAdmin = false;
-    groupTrainingState.isManager = true;
-    initializeManagerDashboard();
-  }
+   } else if (role === 'manager') {
+     console.log('🔧 Manager role selected');
+     if (managerBtn) managerBtn.classList.add('active');
+     if (managerSection) managerSection.classList.remove('hidden');
+     groupTrainingState.isAdmin = false;
+     groupTrainingState.isManager = true;
+     
+     // initializeManagerDashboard 함수가 정의되어 있는지 확인
+     if (typeof initializeManagerDashboard === 'function') {
+       initializeManagerDashboard();
+     } else {
+       console.error('❌ initializeManagerDashboard function not found');
+     }
+   }
 }
 
 // ========== 관리자 기능들 ==========
