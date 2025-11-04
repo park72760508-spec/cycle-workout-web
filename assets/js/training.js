@@ -1363,6 +1363,11 @@ console.log('✅ 관리자 기능 모듈 추가 완료');
 /**
  * 훈련실 관리 화면으로 이동
  */
+// ========== 수정된 관리자 화면 전환 함수 (빈 화면 문제 해결) ==========
+
+/**
+ * 훈련실 관리 화면으로 이동 (개선된 버전)
+ */
 function showTrainingRoomManagement() {
   const currentUser = window.currentUser;
   
@@ -1375,27 +1380,283 @@ function showTrainingRoomManagement() {
     return;
   }
   
-  console.log('훈련실 관리 화면으로 이동');
+  console.log('🏠 훈련실 관리 화면으로 이동');
   
-  // 그룹 룸 화면으로 이동
+  // 1단계: 그룹 룸 화면으로 이동
   if (typeof showScreen === 'function') {
     showScreen('groupRoomScreen');
+  } else {
+    // showScreen 함수가 없는 경우 직접 화면 전환
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.remove('active');
+    });
+    const groupRoomScreen = document.getElementById('groupRoomScreen');
+    if (groupRoomScreen) {
+      groupRoomScreen.classList.add('active');
+    }
   }
   
-  // 잠깐 대기 후 관리자 역할 자동 선택
+  // 2단계: 관리자 UI 설정 (약간의 지연을 둬서 DOM이 준비되도록)
   setTimeout(() => {
-    if (typeof selectRole === 'function') {
-      selectRole('manager');
+    setupManagerMode();
+  }, 150);
+}
+
+/**
+ * 관리자 모드 UI 설정
+ */
+function setupManagerMode() {
+  console.log('🔧 관리자 모드 UI 설정 중...');
+  
+  // 1. 관리자 역할 버튼 표시 및 활성화
+  const managerBtn = document.getElementById('managerRoleBtn');
+  if (managerBtn) {
+    managerBtn.classList.remove('hidden');
+    managerBtn.classList.add('active');
+    console.log('✅ 관리자 버튼 활성화');
+  }
+  
+  // 2. 다른 역할 버튼들 비활성화
+  const adminBtn = document.getElementById('adminRoleBtn');
+  const participantBtn = document.getElementById('participantRoleBtn');
+  if (adminBtn) adminBtn.classList.remove('active');
+  if (participantBtn) participantBtn.classList.remove('active');
+  
+  // 3. 모든 섹션 숨김
+  const sections = ['adminSection', 'participantSection', 'managerSection'];
+  sections.forEach(sectionId => {
+    const section = document.getElementById(sectionId);
+    if (section) {
+      section.classList.add('hidden');
+    }
+  });
+  
+  // 4. 관리자 섹션 표시
+  const managerSection = document.getElementById('managerSection');
+  if (managerSection) {
+    managerSection.classList.remove('hidden');
+    console.log('✅ 관리자 섹션 표시');
+  } else {
+    console.error('❌ managerSection을 찾을 수 없습니다');
+    return;
+  }
+  
+  // 5. 관리자 데이터 로드
+  loadManagerData();
+  
+  // 6. 사용자 알림
+  if (typeof toast === 'function') {
+    toast('훈련실 관리 화면으로 이동했습니다 🏠');
+  }
+}
+
+/**
+ * 관리자 데이터 로드
+ */
+async function loadManagerData() {
+  console.log('📊 관리자 데이터 로딩 중...');
+  
+  try {
+    // 활성 훈련실 목록 새로고침
+    if (typeof refreshActiveRooms === 'function') {
+      await refreshActiveRooms();
     } else {
-      // selectRole 함수가 없는 경우 직접 구현
-      showManagerSection();
+      await loadActiveRoomsList();
     }
     
-    if (typeof toast === 'function') {
-      toast('훈련실 관리 화면으로 이동했습니다 🏠');
-    }
-  }, 100);
+    // 훈련방 통계 로드
+    await loadRoomStatistics();
+    
+    console.log('✅ 관리자 데이터 로딩 완료');
+    
+  } catch (error) {
+    console.error('❌ 관리자 데이터 로딩 오류:', error);
+  }
 }
+
+/**
+ * 활성 훈련실 목록 로드 (대체 함수)
+ */
+async function loadActiveRoomsList() {
+  const activeRoomsList = document.getElementById('activeRoomsList');
+  if (!activeRoomsList) return;
+  
+  try {
+    // 로딩 표시
+    activeRoomsList.innerHTML = `
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>활성 훈련방을 불러오는 중...</p>
+      </div>
+    `;
+    
+    // 서버에서 활성 방 목록 가져오기
+    const response = await fetch(`${window.GAS_URL}?action=getActiveRooms`);
+    const result = await response.json();
+    
+    if (result.success && result.rooms) {
+      displayActiveRooms(result.rooms);
+    } else {
+      activeRoomsList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🏠</div>
+          <div class="empty-state-title">활성 훈련방이 없습니다</div>
+          <div class="empty-state-description">현재 진행 중인 훈련방이 없습니다</div>
+        </div>
+      `;
+    }
+    
+  } catch (error) {
+    console.error('활성 훈련실 목록 로드 오류:', error);
+    activeRoomsList.innerHTML = `
+      <div class="error-state">
+        <div class="error-state-icon">❌</div>
+        <div class="error-state-title">로딩 실패</div>
+        <div class="error-state-description">활성 훈련방 목록을 불러올 수 없습니다</div>
+        <button class="retry-button" onclick="loadActiveRoomsList()">다시 시도</button>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 활성 훈련실 표시
+ */
+function displayActiveRooms(rooms) {
+  const activeRoomsList = document.getElementById('activeRoomsList');
+  if (!activeRoomsList) return;
+  
+  if (!rooms || rooms.length === 0) {
+    activeRoomsList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🏠</div>
+        <div class="empty-state-title">활성 훈련방이 없습니다</div>
+        <div class="empty-state-description">현재 진행 중인 훈련방이 없습니다</div>
+      </div>
+    `;
+    return;
+  }
+  
+  const roomsHtml = rooms.map(room => `
+    <div class="active-room-card">
+      <div class="room-header">
+        <div class="room-title">
+          <strong>${escapeHtml(room.name || `방 ${room.id}`)}</strong>
+          <span class="room-status ${room.status}">${getStatusText(room.status)}</span>
+        </div>
+        <div class="room-code">코드: ${room.code || room.id}</div>
+      </div>
+      
+      <div class="room-details">
+        <div class="room-info">
+          <span>호스트: ${escapeHtml(room.hostName || '알 수 없음')}</span>
+          <span>참가자: ${room.participantCount || 0}/${room.maxParticipants || 4}명</span>
+        </div>
+        <div class="room-workout">
+          워크아웃: ${escapeHtml(room.workoutTitle || '선택 안됨')}
+        </div>
+      </div>
+      
+      <div class="room-actions">
+        <button class="btn btn-sm btn-outline" onclick="viewRoomDetails('${room.id}')">
+          👀 상세보기
+        </button>
+        <button class="btn btn-sm btn-warning" onclick="manageRoom('${room.id}')">
+          ⚙️ 관리
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="closeRoom('${room.id}')">
+          🚪 종료
+        </button>
+      </div>
+    </div>
+  `).join('');
+  
+  activeRoomsList.innerHTML = roomsHtml;
+}
+
+/**
+ * 상태 텍스트 변환
+ */
+function getStatusText(status) {
+  switch (status) {
+    case 'waiting': return '대기중';
+    case 'starting': return '시작중';
+    case 'training': return '훈련중';
+    case 'finished': return '종료됨';
+    default: return '알 수 없음';
+  }
+}
+
+/**
+ * 훈련방 통계 로드 (개선된 버전)
+ */
+async function loadRoomStatistics() {
+  try {
+    const response = await fetch(`${window.GAS_URL}?action=getRoomStatistics`);
+    const result = await response.json();
+    
+    if (result.success && result.stats) {
+      const stats = result.stats;
+      
+      // 통계 업데이트
+      const statsElements = {
+        'totalRoomsCount': stats.totalRooms || 0,
+        'activeRoomsCount': stats.activeRooms || 0,
+        'totalParticipantsCount': stats.totalParticipants || 0,
+        'trainingRoomsCount': stats.trainingRooms || 0
+      };
+      
+      Object.entries(statsElements).forEach(([elementId, value]) => {
+        const element = document.getElementById(elementId);
+        if (element) {
+          element.textContent = value;
+          // 애니메이션 효과 추가
+          element.style.transform = 'scale(1.1)';
+          setTimeout(() => {
+            element.style.transform = 'scale(1)';
+          }, 200);
+        }
+      });
+      
+      console.log('✅ 훈련방 통계 업데이트 완료:', stats);
+    } else {
+      console.warn('⚠️ 훈련방 통계를 가져올 수 없습니다');
+    }
+  } catch (error) {
+    console.error('❌ 훈련방 통계 로드 오류:', error);
+    // 기본값으로 설정
+    ['totalRoomsCount', 'activeRoomsCount', 'totalParticipantsCount', 'trainingRoomsCount'].forEach(id => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = '-';
+    });
+  }
+}
+
+/**
+ * 문자열 이스케이프 (보안)
+ */
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe.toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// ========== 전역 함수 등록 ==========
+window.showTrainingRoomManagement = showTrainingRoomManagement;
+window.setupManagerMode = setupManagerMode;
+window.loadManagerData = loadManagerData;
+window.loadActiveRoomsList = loadActiveRoomsList;
+window.displayActiveRooms = displayActiveRooms;
+window.getStatusText = getStatusText;
+window.loadRoomStatistics = loadRoomStatistics;
+
+console.log('✅ 개선된 관리자 화면 전환 함수들이 등록되었습니다');
+
+
 
 /**
  * 활성 훈련실 모니터링 화면으로 이동
