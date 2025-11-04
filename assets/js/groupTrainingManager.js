@@ -6,16 +6,21 @@
 // ========== 전역 변수 초기화 ==========
 window.groupTrainingManager = window.groupTrainingManager || {};
 
+
 // 그룹 훈련 상태 관리
 let groupTrainingState = {
   currentRoom: null,
   isAdmin: false,
+  isManager: false,        // 🆕 추가
   participants: [],
   roomCode: null,
   syncInterval: null,
+  managerInterval: null,   // 🆕 추가
   isConnected: false,
   lastSyncTime: null
 };
+
+
 
 // 마이크 상태 관리
 let microphoneState = {
