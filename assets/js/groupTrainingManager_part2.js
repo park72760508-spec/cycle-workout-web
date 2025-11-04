@@ -638,10 +638,19 @@ function addChatMessage(chatMessage) {
  * 그룹 방 화면 초기화
  */
 function initializeGroupRoomScreen() {
+  console.log('🔍 initializeGroupRoomScreen called');
+  console.log('👤 Current user:', window.currentUser);
+  
   // 역할 선택 초기화
   const adminBtn = safeGet('adminRoleBtn');
   const participantBtn = safeGet('participantRoleBtn');
   const managerBtn = safeGet('managerRoleBtn');
+  
+  console.log('🔘 UI Elements found:', {
+    adminBtn: !!adminBtn,
+    participantBtn: !!participantBtn,
+    managerBtn: !!managerBtn
+  });
   
   if (adminBtn) adminBtn.classList.remove('active');
   if (participantBtn) participantBtn.classList.remove('active');
@@ -658,12 +667,22 @@ function initializeGroupRoomScreen() {
   
   // grade=1 사용자인지 확인하여 관리자 메뉴 표시
   const currentUser = window.currentUser;
+  console.log('👑 User grade check:', {
+    hasUser: !!currentUser,
+    grade: currentUser?.grade,
+    isGrade1: currentUser?.grade === '1'
+  });
+  
   if (currentUser && currentUser.grade === '1') {
-    console.log('Grade 1 user detected, showing manager options');
+    console.log('✅ Grade 1 user detected, showing manager options');
     if (managerBtn) {
       managerBtn.classList.remove('hidden');
+      console.log('🔓 Manager button shown');
+    } else {
+      console.error('❌ Manager button not found in DOM');
     }
   } else {
+    console.log('❌ Not grade 1 user or no user, hiding manager options');
     if (managerBtn) {
       managerBtn.classList.add('hidden');
     }
@@ -675,6 +694,8 @@ function initializeGroupRoomScreen() {
   
   if (roomNameInput) roomNameInput.value = '';
   if (roomCodeInput) roomCodeInput.value = '';
+  
+  console.log('✅ initializeGroupRoomScreen completed');
 }
 
 // ========== 전역 함수 등록 ==========
