@@ -1581,29 +1581,59 @@ async function loadWorkoutOptions() {
     let workouts = [];
     
     // 1순위: listWorkouts 함수 사용 (실제 등록된 워크아웃)
-    if (typeof listWorkouts === 'function') {
-      try {
-        console.log('📋 등록된 워크아웃 데이터를 로드합니다...');
-        const registeredWorkouts = await Promise.resolve(listWorkouts());
-        if (registeredWorkouts && registeredWorkouts.length > 0) {
-          workouts = registeredWorkouts.map(workout => ({
-            id: workout.id || workout.title || workout.name,
-            name: workout.title || workout.name,
-            duration: workout.duration || workout.estimatedDuration || 60,
-            description: workout.description || workout.summary || ''
-          }));
-          console.log(`✅ ${workouts.length}개의 등록된 워크아웃을 로드했습니다`);
-        } else {
-          console.warn('등록된 워크아웃이 없습니다. 기본 워크아웃을 사용합니다.');
-          workouts = getDefaultWorkouts();
+    // 1순위: 그룹훈련 DB에서 워크아웃 로드
+        if (typeof apiGetGroupWorkouts === 'function') {
+          try {
+            console.log('📋 그룹훈련 DB에서 워크아웃 데이터를 로드합니다...');
+            const dbResult = await apiGetGroupWorkouts();
+            if (dbResult && dbResult.success && dbResult.workouts && dbResult.workouts.length > 0) {
+              workouts = dbResult.workouts.map(workout => ({
+                id: workout.id,
+                name: workout.title || workout.name,
+                duration: workout.duration || 60,
+                description: workout.description || '',
+                difficulty: workout.difficulty || 'medium',
+                category: workout.category || 'general'
+              }));
+              console.log(`✅ DB에서 ${workouts.length}개의 그룹훈련 워크아웃을 로드했습니다`);
+            } else {
+              console.warn('DB에 그룹훈련 워크아웃이 없습니다. 대체 방법을 시도합니다.');
+              // 2순위로 넘어감
+              await tryAlternativeWorkoutLoading();
+            }
+          } catch (error) {
+            console.error('그룹훈련 DB 워크아웃 로드 실패:', error);
+            await tryAlternativeWorkoutLoading();
+          }
         }
-      } catch (error) {
-        console.error('등록된 워크아웃 로드 실패:', error);
-        console.log('🔄 기본 워크아웃으로 대체합니다.');
-        workouts = getDefaultWorkouts();
-      }
-      
-      } 
+        // 2순위: listWorkouts 함수 사용 (기존 등록된 워크아웃)
+        else if (typeof listWorkouts === 'function') {
+          await tryAlternativeWorkoutLoading();
+        }
+        
+        // 대체 워크아웃 로딩 함수
+        async function tryAlternativeWorkoutLoading() {
+          try {
+            console.log('📋 등록된 워크아웃 데이터를 로드합니다...');
+            const registeredWorkouts = await Promise.resolve(listWorkouts());
+            if (registeredWorkouts && registeredWorkouts.length > 0) {
+              workouts = registeredWorkouts.map(workout => ({
+                id: workout.id || workout.title || workout.name,
+                name: workout.title || workout.name,
+                duration: workout.duration || workout.estimatedDuration || 60,
+                description: workout.description || workout.summary || ''
+              }));
+              console.log(`✅ ${workouts.length}개의 등록된 워크아웃을 로드했습니다`);
+            } else {
+              console.warn('등록된 워크아웃이 없습니다. 기본 워크아웃을 사용합니다.');
+              workouts = getDefaultWorkouts();
+            }
+          } catch (error) {
+            console.error('등록된 워크아웃 로드 실패:', error);
+            console.log('🔄 기본 워크아웃으로 대체합니다.');
+            workouts = getDefaultWorkouts();
+          }
+        }
           // 2순위: 전역 workoutPlans 배열 확인
           else if (typeof window.workoutPlans !== 'undefined' && Array.isArray(window.workoutPlans) && window.workoutPlans.length > 0) {
             console.log('📋 전역 workoutPlans 데이터를 사용합니다.');
