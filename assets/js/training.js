@@ -1405,7 +1405,7 @@ function showTrainingRoomManagement() {
 /**
  * 관리자 모드 UI 설정
  */
-function setupManagerMode() {
+async function setupManagerMode() {
   console.log('🔧 관리자 모드 UI 설정 중...');
   
   // 1. 관리자 역할 버튼 표시 및 활성화
