@@ -1164,6 +1164,7 @@
     </div>
 
     <!-- 관리자 섹션 -->
+<!-- 관리자 섹션 -->
     <div id="adminSection" class="card hidden">
       <h3>🎯 관리자 - 훈련방 생성</h3>
       <div class="form-group">
@@ -1179,13 +1180,69 @@
       <div class="form-group">
         <label>최대 참가자</label>
         <select id="maxParticipants">
+          <option value="1">1명</option>
           <option value="2">2명</option>
+          <option value="3">3명</option>
           <option value="4" selected>4명</option>
+          <option value="5">5명</option>
           <option value="6">6명</option>
+          <option value="7">7명</option>
           <option value="8">8명</option>
+          <option value="9">9명</option>
+          <option value="10">10명</option>
+          <option value="11">11명</option>
+          <option value="12">12명</option>
+          <option value="13">13명</option>
+          <option value="14">14명</option>
+          <option value="15">15명</option>
+          <option value="16">16명</option>
+          <option value="17">17명</option>
+          <option value="18">18명</option>
+          <option value="19">19명</option>
+          <option value="20">20명</option>
         </select>
       </div>
       <button class="btn btn-primary" onclick="createGroupRoom()">🚀 훈련방 생성</button>
+    </div>
+
+    <!-- 훈련실 관리자 섹션 -->
+    <div id="managerSection" class="card hidden">
+      <h3>🏠 훈련실 관리</h3>
+      <div class="manager-controls">
+        <div class="active-rooms-list">
+          <h4>활성 훈련실 목록</h4>
+          <div id="activeRoomsList" class="rooms-grid">
+            <div class="loading-spinner">
+              <div class="spinner"></div>
+              <p>훈련실 목록을 불러오는 중...</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="room-statistics">
+          <h4>📊 훈련실 통계</h4>
+          <div id="roomStatistics" class="stats-grid">
+            <div class="stat-item">
+              <span class="stat-label">총 활성 방</span>
+              <span class="stat-value" id="totalActiveRooms">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">총 참가자</span>
+              <span class="stat-value" id="totalParticipants">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">평균 참가율</span>
+              <span class="stat-value" id="averageOccupancy">0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="manager-actions">
+        <button class="btn btn-primary" onclick="refreshActiveRooms()">🔄 새로고침</button>
+        <button class="btn btn-secondary" onclick="showRoomStatistics()">📊 상세 통계</button>
+        <button class="btn btn-outline" onclick="exportRoomData()">📤 데이터 내보내기</button>
+      </div>
     </div>
 
     <!-- 참가자 섹션 -->
