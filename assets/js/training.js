@@ -302,8 +302,17 @@ async function createTrainingRoom() {
       maxParticipants: '30',
       status: ROOM_STATUS.WAITING
     });
-    const response = await fetch(`${window.GAS_URL}?${q.toString()}`);
-    const result = await response.json();
+    
+    // GAS_URL 확인
+        if (!window.GAS_URL || window.GAS_URL.includes('https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec')) {
+          throw new Error('GAS_URL이 설정되지 않았습니다. 관리자에게 문의하세요.');
+        }
+        
+        const response = await fetch(`${window.GAS_URL}?${q.toString()}`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const result = await response.json();
 
     
     if (result.success) {
@@ -311,11 +320,27 @@ async function createTrainingRoom() {
       GROUP_TRAINING.isHost = true;
       GROUP_TRAINING.isGroupMode = true;
       
-      hideLoading();
-      closeGroupTrainingModal();
-      showTrainingRoom();
-      
-      showToast('훈련실이 생성되었습니다!');
+      if (typeof hideLoading === 'function') hideLoading();
+            
+            if (typeof closeGroupTrainingModal === 'function') {
+              closeGroupTrainingModal();
+            }
+            
+            if (typeof showTrainingRoom === 'function') {
+              showTrainingRoom();
+            } else {
+              console.log('훈련실 화면으로 이동합니다...');
+              // 대체 로직: 화면 전환
+              if (typeof showScreen === 'function') {
+                showScreen('groupTrainingScreen');
+              }
+            }
+            
+            if (typeof showToast === 'function') {
+              showToast('훈련실이 생성되었습니다!');
+            } else {
+              alert('훈련실이 생성되었습니다!');
+            }
     } else {
       throw new Error(result.error);
     }
@@ -1577,27 +1602,42 @@ async function loadWorkoutOptions() {
         console.log('🔄 기본 워크아웃으로 대체합니다.');
         workouts = getDefaultWorkouts();
       }
-    } 
-    // 2순위: 전역 workoutPlans 배열 확인
-    else if (typeof workoutPlans !== 'undefined' && Array.isArray(workoutPlans) && workoutPlans.length > 0) {
-      console.log('📋 전역 workoutPlans 데이터를 사용합니다.');
-      workouts = workoutPlans.map(workout => ({
-        id: workout.id || workout.name,
-        name: workout.name || workout.title,
-        duration: workout.duration || 60,
-        description: workout.description || ''
-      }));
-    } 
-    // 3순위: window.workoutData 확인
-    else if (typeof window.workoutData !== 'undefined' && Array.isArray(window.workoutData) && window.workoutData.length > 0) {
-      console.log('📋 window.workoutData를 사용합니다.');
-      workouts = window.workoutData;
-    } 
-        // 최종: 기본 워크아웃 사용
-        else {
-          console.log('📋 기본 워크아웃 데이터를 사용합니다.');
-          workouts = getDefaultWorkouts();
-        }
+      
+      } 
+          // 2순위: 전역 workoutPlans 배열 확인
+          else if (typeof window.workoutPlans !== 'undefined' && Array.isArray(window.workoutPlans) && window.workoutPlans.length > 0) {
+            console.log('📋 전역 workoutPlans 데이터를 사용합니다.');
+            workouts = window.workoutPlans.map(workout => ({
+              id: workout.id || workout.name,
+              name: workout.name || workout.title,
+              duration: workout.duration || workout.estimatedDuration || 60,
+              description: workout.description || workout.summary || ''
+            }));
+          } 
+          // 3순위: localStorage에서 저장된 워크아웃 확인
+          else {
+            try {
+              const savedWorkouts = JSON.parse(localStorage.getItem('workoutPlans') || '[]');
+              if (savedWorkouts.length > 0) {
+                console.log('📋 localStorage에서 저장된 워크아웃을 사용합니다.');
+                workouts = savedWorkouts.map(workout => ({
+                  id: workout.id || workout.name,
+                  name: workout.name || workout.title,
+                  duration: workout.duration || workout.estimatedDuration || 60,
+                  description: workout.description || workout.summary || ''
+                }));
+              } else if (typeof window.workoutData !== 'undefined' && Array.isArray(window.workoutData) && window.workoutData.length > 0) {
+                console.log('📋 window.workoutData를 사용합니다.');
+                workouts = window.workoutData;
+              } else {
+                console.log('📋 기본 워크아웃 데이터를 사용합니다.');
+                workouts = getDefaultWorkouts();
+              }
+            } catch (error) {
+              console.error('localStorage 워크아웃 로드 실패:', error);
+              workouts = window.workoutData || getDefaultWorkouts();
+            }
+          }
         
         // 워크아웃 옵션 추가
         workouts.forEach(workout => {
