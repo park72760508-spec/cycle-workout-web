@@ -149,7 +149,7 @@ function selectRole(role) {
     if (adminSection) adminSection.classList.remove('hidden');
     groupTrainingState.isAdmin = true;
     groupTrainingState.isManager = false;
-    loadWorkoutsForRoom();
+    await loadWorkoutsForRoom();
   } else if (role === 'participant') {
     participantBtn.classList.add('active');
     if (participantSection) participantSection.classList.remove('hidden');
@@ -177,14 +177,14 @@ function selectRole(role) {
 /**
  * 워크아웃 목록 로드 (방 생성용)
  */
-function loadWorkoutsForRoom() {
+async function loadWorkoutsForRoom() {
   const select = safeGet('roomWorkoutSelect');
   if (!select) return;
   
   try {
     // training.js의 loadWorkoutOptions 함수 사용
     if (typeof loadWorkoutOptions === 'function') {
-      loadWorkoutOptions();
+      await loadWorkoutOptions();
       console.log('✅ 워크아웃 옵션이 로드되었습니다');
     } else if (typeof listWorkouts === 'function') {
       // 대안: 기존 워크아웃 목록 사용
@@ -383,7 +383,7 @@ async function refreshRoomList() {
       <div class="error-state">
         <div class="error-state-icon">⚠️</div>
         <div class="error-state-title">방 목록을 불러올 수 없습니다</div>
-        <button class="retry-button" onclick="refreshRoomList()">다시 시도</button>
+        <button class="retry-button" onclick="refreshRoomList().catch(console.error)">다시 시도</button>
       </div>
     `;
   }
