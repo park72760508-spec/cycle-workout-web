@@ -710,13 +710,28 @@ window.sendChatMessage = sendChatMessage;
 window.initializeGroupRoomScreen = initializeGroupRoomScreen;
 
 // 🆕 관리자 기능 전역 함수 등록 추가
-window.refreshActiveRooms = refreshActiveRooms;
-window.updateRoomStatistics = updateRoomStatistics;
-window.monitorRoom = monitorRoom;
-window.forceStopRoom = forceStopRoom;
-window.cleanupExpiredRooms = cleanupExpiredRooms;
-window.emergencyStopAllRooms = emergencyStopAllRooms;
-window.initializeManagerDashboard = initializeManagerDashboard;
+// 🆕 관리자 기능 전역 함수 등록 추가 (조건부 확인)
+if (typeof refreshActiveRooms === 'function') {
+  window.refreshActiveRooms = refreshActiveRooms;
+}
+if (typeof updateRoomStatistics === 'function') {
+  window.updateRoomStatistics = updateRoomStatistics;
+}
+if (typeof monitorRoom === 'function') {
+  window.monitorRoom = monitorRoom;
+}
+if (typeof forceStopRoom === 'function') {
+  window.forceStopRoom = forceStopRoom;
+}
+if (typeof cleanupExpiredRooms === 'function') {
+  window.cleanupExpiredRooms = cleanupExpiredRooms;
+}
+if (typeof emergencyStopAllRooms === 'function') {
+  window.emergencyStopAllRooms = emergencyStopAllRooms;
+}
+if (typeof initializeManagerDashboard === 'function') {
+  window.initializeManagerDashboard = initializeManagerDashboard;
+}
 
 
 console.log('✅ Group Training Manager Part 2 loaded');
