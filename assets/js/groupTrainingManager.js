@@ -180,22 +180,40 @@ function loadWorkoutsForRoom() {
   const select = safeGet('roomWorkoutSelect');
   if (!select) return;
   
-  // 기존 워크아웃 목록 사용
-  if (typeof listWorkouts === 'function') {
-    listWorkouts().then(workouts => {
-      select.innerHTML = '<option value="">워크아웃 선택...</option>';
-      workouts.forEach(workout => {
-        const option = document.createElement('option');
-        option.value = workout.id;
-        option.textContent = `${workout.title} (${workout.duration || '?'}분)`;
-        select.appendChild(option);
+  try {
+    // training.js의 loadWorkoutOptions 함수 사용
+    if (typeof loadWorkoutOptions === 'function') {
+      loadWorkoutOptions();
+      console.log('✅ 워크아웃 옵션이 로드되었습니다');
+    } else if (typeof listWorkouts === 'function') {
+      // 대안: 기존 워크아웃 목록 사용
+      listWorkouts().then(workouts => {
+        select.innerHTML = '<option value="">워크아웃 선택...</option>';
+        workouts.forEach(workout => {
+          const option = document.createElement('option');
+          option.value = workout.id;
+          option.textContent = `${workout.title} (${workout.duration || '?'}분)`;
+          select.appendChild(option);
+        });
+      }).catch(err => {
+        console.error('Failed to load workouts:', err);
+        showToast('워크아웃 목록을 불러올 수 없습니다', 'error');
       });
-    }).catch(err => {
-      console.error('Failed to load workouts:', err);
-      showToast('워크아웃 목록을 불러올 수 없습니다', 'error');
-    });
-  } else {
-    console.warn('listWorkouts function not found');
+    } else {
+      console.warn('워크아웃 로드 함수를 찾을 수 없습니다 - 기본 옵션을 추가합니다');
+      // 기본 워크아웃 옵션 추가
+      select.innerHTML = `
+        <option value="">워크아웃 선택...</option>
+        <option value="ftp-test">FTP 테스트 (75분)</option>
+        <option value="vo2max">VO2 Max 인터벌 (45분)</option>
+        <option value="endurance">지구력 훈련 (90분)</option>
+        <option value="threshold">역치 훈련 (60분)</option>
+        <option value="recovery">회복 라이드 (30분)</option>
+      `;
+    }
+  } catch (error) {
+    console.error('워크아웃 로드 중 오류:', error);
+    showToast('워크아웃 목록 로딩 실패', 'error');
   }
 }
 
@@ -279,7 +297,8 @@ async function createRoomOnBackend(roomData) {
       settings: encodeURIComponent(JSON.stringify(roomData.settings))
     });
     
-    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const scriptUrl = window.GAS_URL || window.APP_SCRIPT_URL || 'your-gas-deployment-url';
+    const response = await fetch(`${scriptUrl}?${params.toString()}`);
     const result = await response.json();
     
     if (result.success) {
