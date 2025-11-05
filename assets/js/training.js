@@ -1397,8 +1397,8 @@ function showTrainingRoomManagement() {
   }
   
   // 2단계: 관리자 UI 설정 (약간의 지연을 둬서 DOM이 준비되도록)
-  setTimeout(() => {
-    setupManagerMode();
+  setTimeout(async () => {
+    await setupManagerMode();
   }, 150);
 }
 
@@ -1433,30 +1433,28 @@ function setupManagerMode() {
   
   // 4. 관리자 섹션 표시
   // 4. 관리자 섹션 표시
-    const managerSection = document.getElementById('managerSection');
-    if (managerSection) {
-      managerSection.classList.remove('hidden');
-      console.log('✅ 관리자 섹션 표시');
+  // 4. 관리자 섹션 표시
+  const managerSection = document.getElementById('managerSection');
+  if (managerSection) {
+    managerSection.classList.remove('hidden');
+    console.log('✅ 관리자 섹션 표시');
+    
+    // 워크아웃 리스트 로드
+    await loadWorkoutOptions();
+  } else {
+    console.error('❌ managerSection을 찾을 수 없습니다 - 대신 adminSection을 사용합니다');
+    
+    // adminSection을 대안으로 사용
+    const adminSection = document.getElementById('adminSection');
+    if (adminSection) {
+      adminSection.classList.remove('hidden');
+      console.log('✅ adminSection 표시 (대안)');
       
       // 워크아웃 리스트 로드
       await loadWorkoutOptions();
-    } else {
-      console.error('❌ managerSection을 찾을 수 없습니다 - 대신 adminSection을 사용합니다');
-      
-      // adminSection을 대안으로 사용
-      const adminSection = document.getElementById('adminSection');
-      if (adminSection) {
-        adminSection.classList.remove('hidden');
-        console.log('✅ adminSection 표시 (대안)');
-        
-        // 워크아웃 리스트 로드
-        await loadWorkoutOptions();
-      } else {
-        console.error('❌ adminSection도 찾을 수 없습니다');
-        showToast('관리자 화면을 찾을 수 없습니다', 'error');
-        return;
-      }
     }
+  }
+  
   
   // 5. 관리자 데이터 로드
   await loadManagerData();
@@ -1466,6 +1464,8 @@ function setupManagerMode() {
     toast('훈련실 관리 화면으로 이동했습니다 🏠');
   }
 }
+
+
 
 /**
  * 관리자 데이터 로드
