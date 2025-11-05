@@ -1814,11 +1814,11 @@ function showManagerSection() {
   }
   
   // 활성 훈련실 목록 자동 새로고침
-  setTimeout(() => {
+  setTimeout(async () => {
     if (typeof refreshActiveRooms === 'function') {
-      refreshActiveRooms();
+      await refreshActiveRooms().catch(console.error);
     }
-    loadRoomStatistics();
+    await loadRoomStatistics().catch(console.error);
   }, 300);
 }
 
