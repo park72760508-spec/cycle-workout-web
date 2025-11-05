@@ -2000,14 +2000,32 @@ function exportRoomData() {
 }
 
 // 전역 함수로 등록
+// 전역 함수로 등록
 window.refreshActiveRooms = refreshActiveRooms;
 window.updateRoomStatistics = updateRoomStatistics;
 window.viewRoomDetails = viewRoomDetails;
 window.showRoomStatistics = showRoomStatistics;
 window.exportRoomData = exportRoomData;
 
-
-console.log('✅ 훈련실 관리 모듈 로딩 완료');
+// 모듈 로딩 완료 확인
+try {
+  console.log('✅ 훈련실 관리 모듈 전역 등록 완료');
+  
+  // 필수 함수들 등록 확인
+  const requiredFunctions = [
+    'refreshActiveRooms', 'updateRoomStatistics', 
+    'viewRoomDetails', 'showRoomStatistics', 'exportRoomData'
+  ];
+  
+  requiredFunctions.forEach(funcName => {
+    if (typeof window[funcName] !== 'function') {
+      console.warn(`⚠️ ${funcName} 함수가 제대로 등록되지 않았습니다`);
+    }
+  });
+  
+} catch (error) {
+  console.error('❌ 모듈 등록 중 오류:', error);
+}
 
 // 누락된 중괄호 추가 (구문 오류 해결)
 } // 첫 번째 누락된 중괄호
