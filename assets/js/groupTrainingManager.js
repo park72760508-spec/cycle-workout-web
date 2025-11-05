@@ -122,7 +122,8 @@ function selectRole(role) {
   
   const adminBtn = safeGet('adminRoleBtn');
   const participantBtn = safeGet('participantRoleBtn');
-  const managerBtn = safeGet('managerRoleBtn');
+  // managerRoleBtn은 선택사항이므로 경고 없이 처리
+  const managerBtn = document.getElementById('managerRoleBtn'); // safeGet 대신 직접 접근
   const adminSection = safeGet('adminSection');
   const participantSection = safeGet('participantSection');
   const managerSection = safeGet('managerSection');
@@ -239,23 +240,28 @@ async function createGroupRoom() {
     showToast('훈련방을 생성 중입니다...', 'info');
     
     const roomCode = generateRoomCode();
-    const roomData = {
-      code: roomCode,
-      name: roomName,
-      workoutId: workoutId,
-      maxParticipants: maxParticipants,
-      adminId: window.currentUser?.id || 'admin',
-      adminName: window.currentUser?.name || '관리자',
-      status: 'waiting',
-      createdAt: new Date().toISOString(),
-      participants: [{
-        id: window.currentUser?.id || 'admin',
-        name: window.currentUser?.name || '관리자',
-        role: 'admin',
-        ready: true,
-        joinedAt: new Date().toISOString()
-      }]
-    };
+      const roomData = {
+        code: roomCode,
+        name: roomName,
+        workoutId: workoutId,
+        maxParticipants: maxParticipants,
+        adminId: window.currentUser?.id || 'admin',
+        adminName: window.currentUser?.name || '관리자',
+        status: 'waiting',
+        createdAt: new Date().toISOString(),
+        participants: [{
+          id: window.currentUser?.id || 'admin',
+          name: window.currentUser?.name || '관리자',
+          role: 'admin',
+          ready: true,
+          joinedAt: new Date().toISOString()
+        }],
+        settings: {
+          allowSpectators: false,
+          autoStart: false,
+          voiceChat: true
+        }
+      };
     
     // 백엔드에 방 생성 요청 (실제 구현 시 API 호출)
     const success = await createRoomOnBackend(roomData);
@@ -847,7 +853,8 @@ async function getAllRoomsFromBackend() {
       // status 파라미터 없이 모든 방 조회
     });
     
-    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const scriptUrl = window.GAS_URL || window.APP_SCRIPT_URL || 'your-gas-deployment-url';
+    const response = await fetch(`${scriptUrl}?${params.toString()}`);
     const result = await response.json();
     
     if (result.success) {
