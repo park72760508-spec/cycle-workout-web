@@ -1152,11 +1152,11 @@
     <div class="role-selection card">
       <h3>역할 선택</h3>
       <div class="role-buttons">
-        <button id="adminRoleBtn" class="role-btn admin" onclick="selectRole('admin'<button id="adminRoleBtn" class="role-btn admin" onclick="selectRole('admin').catch(console.error)">)">
+        <button id="adminRoleBtn" class="role-btn admin" onclick="selectRole('admin').catch(console.error)">
           🎯 <span>관리자</span>
           <small>훈련방 생성 및 관리</small>
         </button>
-        <button id="participantRoleBtn" class="role-btn participant" onclick="selectRole('participant')">
+        <button id="participantRoleBtn" class="role-btn participant" onclick="selectRole('participant').catch(console.error)">
           🏃‍♂️ <span>참가자</span>
           <small>기존 훈련방 참가</small>
         </button>
@@ -1251,7 +1251,7 @@
       <div class="form-group">
         <label>방 코드 입력</label>
         <input type="text" id="roomCodeInput" placeholder="6자리 방 코드 입력" maxlength="6">
-        <button class="btn btn-secondary" onclick="joinGroupRoom()">참가하기</button>
+        <button class="btn btn-secondary" onclick="joinGroupRoom().catch(console.error)">참가하기</button>
       </div>
       
       <div class="divider">또는</div>
@@ -1264,7 +1264,7 @@
             <p>방 목록을 불러오는 중...</p>
           </div>
         </div>
-        <button class="btn btn-outline" onclick="refreshRoomList()">🔄 새로고침</button>
+        <button class="btn btn-outline" onclick="refreshRoomList().catch(console.error)">🔄 새로고침</button>
       </div>
     </div>
 
