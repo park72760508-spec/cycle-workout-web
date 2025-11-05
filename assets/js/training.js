@@ -1496,7 +1496,7 @@ async function loadManagerData() {
 /**
  * 워크아웃 옵션 로드
  */
-function loadWorkoutOptions() {
+async function loadWorkoutOptions() {
   console.log('📋 워크아웃 옵션 로딩 중...');
   
   const workoutSelect = document.getElementById('roomWorkoutSelect');
@@ -1515,13 +1515,20 @@ function loadWorkoutOptions() {
     // 1순위: listWorkouts 함수 사용 (실제 등록된 워크아웃)
     if (typeof listWorkouts === 'function') {
       try {
-        const registeredWorkouts = await listWorkouts();
-        workouts = registeredWorkouts.map(workout => ({
-          id: workout.id || workout.title,
-          name: workout.title || workout.name,
-          duration: workout.duration || workout.estimatedDuration || 60,
-          description: workout.description || workout.summary || ''
-        }));
+        console.log('📋 등록된 워크아웃 데이터를 로드합니다...');
+        const registeredWorkouts = await Promise.resolve(listWorkouts());
+        if (registeredWorkouts && registeredWorkouts.length > 0) {
+          workouts = registeredWorkouts.map(workout => ({
+            id: workout.id || workout.title,
+            name: workout.title || workout.name,
+            duration: workout.duration || workout.estimatedDuration || 60,
+            description: workout.description || workout.summary || ''
+          }));
+          console.log(`✅ ${workouts.length}개의 등록된 워크아웃을 로드했습니다`);
+        } else {
+          console.warn('등록된 워크아웃이 없습니다. 기본 워크아웃을 사용합니다.');
+          workouts = getDefaultWorkouts();
+        }
       } catch (error) {
         console.error('등록된 워크아웃 로드 실패:', error);
         workouts = getDefaultWorkouts();
