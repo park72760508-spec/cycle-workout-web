@@ -1239,7 +1239,7 @@
       </div>
       
       <div class="manager-actions">
-        <button class="btn btn-primary" onclick="refreshActiveRooms()">🔄 새로고침</button>
+        <button class="btn btn-primary" onclick="refreshActiveRooms().catch(console.error)">🔄 새로고침</button>
         <button class="btn btn-secondary" onclick="showRoomStatistics()">📊 상세 통계</button>
         <button class="btn btn-outline" onclick="exportRoomData()">📤 데이터 내보내기</button>
       </div>
