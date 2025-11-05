@@ -1592,7 +1592,7 @@ function escapeHtml(unsafe) {
 }
 
 // ========== 전역 함수 등록 ==========
-
+// ========== 전역 함수 등록 ==========
 window.showGroupWorkoutManagement = showGroupWorkoutManagement;
 window.loadGroupWorkoutList = loadGroupWorkoutList;
 window.deleteGroupWorkout = deleteGroupWorkout;
@@ -1602,16 +1602,16 @@ window.apiDeleteGroupWorkout = apiDeleteGroupWorkout;
 window.showToast = showToast;
 window.safeGet = safeGet;
 
-// 전역 등록 확인 로그
-const registeredFunctions = [
+// 그룹훈련 모듈 함수 등록 확인 (변수명 변경으로 충돌 방지)
+const groupTrainingFunctions = [
   'showGroupWorkoutManagement', 'loadGroupWorkoutList', 'deleteGroupWorkout',
   'apiGetGroupWorkouts', 'apiCreateGroupWorkout', 'apiDeleteGroupWorkout',
   'showToast', 'safeGet'
 ];
 
-registeredFunctions.forEach(funcName => {
+groupTrainingFunctions.forEach(funcName => {
   if (typeof window[funcName] !== 'function') {
-    console.warn(`⚠️ ${funcName} 함수가 제대로 등록되지 않았습니다`);
+    console.warn(`⚠️ 그룹훈련 함수 ${funcName}가 제대로 등록되지 않았습니다`);
   }
 });
 
