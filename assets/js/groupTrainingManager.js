@@ -2,6 +2,13 @@
    groupTrainingManager.js - 그룹 훈련 전용 관리 모듈
    기존 모듈들과 일관성을 유지하면서 그룹 훈련 기능 구현
 ========================================================== */
+// ========== 모듈 중복 로딩 방지 ==========
+if (window.groupTrainingManagerLoaded) {
+  console.warn('⚠️ groupTrainingManager.js가 이미 로드되었습니다. 중복 로딩을 방지합니다.');
+} else {
+  window.groupTrainingManagerLoaded = true;
+
+
 
 // ========== 전역 변수 초기화 ==========
 window.groupTrainingManager = window.groupTrainingManager || {};
@@ -1616,4 +1623,25 @@ groupTrainingFunctions.forEach(funcName => {
 });
 
 console.log('✅ 그룹 훈련 관리자 모듈 로딩 완료');
+
+// 추가 그룹훈련 유틸리티 함수들 전역 등록
+try {
+  window.generateRoomCode = generateRoomCode;
+  window.getCurrentTimeString = getCurrentTimeString;
+  window.selectTrainingMode = selectTrainingMode;
+  window.selectGroupMode = selectGroupMode;
+  window.createGroupRoom = createGroupRoom;
+  window.joinGroupRoom = joinGroupRoom;
+  window.leaveGroupRoom = leaveGroupRoom;
+  
+  console.log('✅ 그룹훈련 추가 함수들 전역 등록 완료');
+} catch (error) {
+  console.error('❌ 그룹훈련 함수 등록 중 오류:', error);
+}
+
+// 모듈 로딩 완료 마크
+window.groupTrainingManagerReady = true;
+console.log('🎯 그룹훈련 관리자 모듈 준비 완료');
+
+} // 모듈 중복 로딩 방지 블록 종료
 
