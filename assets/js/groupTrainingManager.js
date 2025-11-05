@@ -117,7 +117,7 @@ function selectGroupMode(mode) {
 /**
  * 역할 선택 (관리자/참가자)
  */
-function selectRole(role) {
+async function selectRole(role) {
   console.log('Role selected:', role);
   
   const adminBtn = safeGet('adminRoleBtn');
