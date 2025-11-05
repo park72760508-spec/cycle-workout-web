@@ -1727,3 +1727,145 @@
 
 
 
+
+/* 훈련실 관리자 섹션 스타일_1105추가 */
+.manager-controls {
+  margin-bottom: 20px;
+}
+
+.active-rooms-list {
+  margin-bottom: 20px;
+}
+
+.rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.room-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.room-card:hover {
+  border-color: #2e74e8;
+  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.1);
+}
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.room-name {
+  font-weight: 600;
+  font-size: 16px;
+  color: #111827;
+}
+
+.room-status {
+  background: #10b981;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.room-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.room-detail-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #374151;
+}
+
+.room-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.room-action-btn {
+  background: none;
+  border: 1px solid #d1d5db;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.room-action-btn:hover {
+  background: #f3f4f6;
+}
+
+.room-action-btn.primary {
+  background: #2e74e8;
+  color: white;
+  border-color: #2e74e8;
+}
+
+.room-action-btn.primary:hover {
+  background: #1d4ed8;
+}
+
+.room-action-btn.danger {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.room-action-btn.danger:hover {
+  background: #b91c1c;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.stat-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.manager-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
