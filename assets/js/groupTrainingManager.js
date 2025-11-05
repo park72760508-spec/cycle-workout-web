@@ -400,7 +400,8 @@ async function getRoomsFromBackend() {
       status: 'waiting'
     });
     
-    const response = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const scriptUrl = window.GAS_URL || window.APP_SCRIPT_URL || 'your-gas-deployment-url';
+    const response = await fetch(`${scriptUrl}?${params.toString()}`);
     const result = await response.json();
     
     if (result.success) {
