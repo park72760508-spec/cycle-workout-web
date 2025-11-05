@@ -1769,9 +1769,9 @@ function showActiveRoomsManagement() {
     // showActiveRooms 함수가 없는 경우 관리자 화면으로 이동
     showTrainingRoomManagement();
     
-    setTimeout(() => {
+    setTimeout(async () => {
       if (typeof refreshActiveRooms === 'function') {
-        refreshActiveRooms();
+        await refreshActiveRooms().catch(console.error);
       }
       if (typeof toast === 'function') {
         toast('활성 훈련실을 확인하세요 📊');
