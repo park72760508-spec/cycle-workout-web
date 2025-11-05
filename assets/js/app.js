@@ -38,12 +38,37 @@
   }
 
   // connectedDevices 안전 초기화
+// connectedDevices 안전 초기화
   if (!window.connectedDevices) {
     window.connectedDevices = {
       trainer: null,
       powerMeter: null,
       heartRate: null
     };
+  }
+
+  // workoutData 전역 초기화 (그룹 훈련용)
+  if (!window.workoutData) {
+    window.workoutData = [
+      {
+        id: 'basic-endurance',
+        name: '기본 지구력 훈련',
+        duration: 60,
+        description: '중강도 지구력 향상을 위한 기본 훈련'
+      },
+      {
+        id: 'interval-training', 
+        name: '인터벌 훈련',
+        duration: 45,
+        description: '고강도 인터벌 훈련으로 심폐 능력 향상'
+      },
+      {
+        id: 'recovery-ride',
+        name: '회복 라이딩', 
+        duration: 30,
+        description: '저강도 회복 라이딩'
+      }
+    ];
   }
 
 // === 인증 폼 초기화 유틸 ===
