@@ -1439,7 +1439,7 @@ function setupManagerMode() {
       console.log('✅ 관리자 섹션 표시');
       
       // 워크아웃 리스트 로드
-      loadWorkoutOptions();
+      await loadWorkoutOptions();
     } else {
       console.error('❌ managerSection을 찾을 수 없습니다 - 대신 adminSection을 사용합니다');
       
@@ -1450,7 +1450,7 @@ function setupManagerMode() {
         console.log('✅ adminSection 표시 (대안)');
         
         // 워크아웃 리스트 로드
-        loadWorkoutOptions();
+        await loadWorkoutOptions();
       } else {
         console.error('❌ adminSection도 찾을 수 없습니다');
         showToast('관리자 화면을 찾을 수 없습니다', 'error');
@@ -1512,22 +1512,26 @@ function loadWorkoutOptions() {
     // 전역 워크아웃 데이터 확인
     let workouts = [];
     
-    if (typeof workoutPlans !== 'undefined' && workoutPlans.length > 0) {
+    // 1순위: listWorkouts 함수 사용 (실제 등록된 워크아웃)
+    if (typeof listWorkouts === 'function') {
+      try {
+        const registeredWorkouts = await listWorkouts();
+        workouts = registeredWorkouts.map(workout => ({
+          id: workout.id || workout.title,
+          name: workout.title || workout.name,
+          duration: workout.duration || workout.estimatedDuration || 60,
+          description: workout.description || workout.summary || ''
+        }));
+      } catch (error) {
+        console.error('등록된 워크아웃 로드 실패:', error);
+        workouts = getDefaultWorkouts();
+      }
+    } else if (typeof workoutPlans !== 'undefined' && workoutPlans.length > 0) {
       workouts = workoutPlans;
     } else if (typeof window.workoutData !== 'undefined' && window.workoutData.length > 0) {
       workouts = window.workoutData;
     } else {
-      // 기본 워크아웃 데이터
-      workouts = [
-        { id: 'ftp-test', name: 'FTP 테스트', duration: 75, description: '기능성 역치 파워 측정' },
-        { id: 'vo2max', name: 'VO2 Max 인터벌', duration: 45, description: '최대 산소 섭취량 향상' },
-        { id: 'endurance', name: '지구력 훈련', duration: 90, description: '유산소 지구력 향상' },
-        { id: 'threshold', name: '역치 훈련', duration: 60, description: '젖산 역치 개선' },
-        { id: 'recovery', name: '회복 라이드', duration: 30, description: '액티브 리커버리' },
-        { id: 'sprint', name: '스프린트 훈련', duration: 45, description: '순간 파워 향상' },
-        { id: 'tempo', name: '템포 라이드', duration: 60, description: '템포 페이스 유지' },
-        { id: 'hill-repeat', name: '힐 리피트', duration: 50, description: '오르막 반복 훈련' }
-      ];
+      workouts = getDefaultWorkouts();
     }
     
     // 워크아웃 옵션 추가
