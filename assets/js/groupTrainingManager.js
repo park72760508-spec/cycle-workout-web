@@ -51,6 +51,19 @@ function safeGet(id) {
  */
 function showToast(message, type = 'info') {
   const toast = safeGet('toast');
+  if (toast) {
+    toast.textContent = message;
+    toast.className = `toast toast-${type}`;
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 3000);
+  } else if (typeof window.showToast === 'function') {
+    window.showToast(message);
+  } else {
+    console.log(`[${type}] ${message}`);
+  }
+}
 
 // ========== JSONP API 연동 함수들 ==========
 
@@ -167,6 +180,10 @@ async function jsonpRequestWithRetry(url, params = {}, maxRetries = 3) {
  */
 async function apiGetGroupWorkouts() {
   try {
+    if (!window.GAS_URL) {
+      console.warn('GAS_URL이 설정되지 않았습니다.');
+      return { success: false, error: 'GAS_URL이 설정되지 않았습니다.' };
+    }
     return await jsonpRequest(window.GAS_URL, { action: 'listGroupWorkouts' });
   } catch (error) {
     console.error('apiGetGroupWorkouts 실패:', error);
@@ -301,6 +318,11 @@ async function apiDeleteGroupWorkout(id) {
     toast.classList.remove('show');
   }, 3000);
 }
+
+
+
+
+
 
 /**
  * 6자리 랜덤 방 코드 생성
