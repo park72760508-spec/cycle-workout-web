@@ -179,42 +179,93 @@ async function selectRole(role) {
  */
 async function loadWorkoutsForRoom() {
   const select = safeGet('roomWorkoutSelect');
-  if (!select) return;
+  if (!select) {
+    console.warn('❌ roomWorkoutSelect 요소를 찾을 수 없습니다');
+    return;
+  }
   
   try {
-    // training.js의 loadWorkoutOptions 함수 사용
+    console.log('🔄 그룹 훈련용 워크아웃 로딩 시작...');
+    
+    // 1순위: training.js의 loadWorkoutOptions 함수 사용
     if (typeof loadWorkoutOptions === 'function') {
       await loadWorkoutOptions();
-      console.log('✅ 워크아웃 옵션이 로드되었습니다');
-    } else if (typeof listWorkouts === 'function') {
-      // 대안: 기존 워크아웃 목록 사용
-      listWorkouts().then(workouts => {
-        select.innerHTML = '<option value="">워크아웃 선택...</option>';
-        workouts.forEach(workout => {
-          const option = document.createElement('option');
-          option.value = workout.id;
-          option.textContent = `${workout.title} (${workout.duration || '?'}분)`;
-          select.appendChild(option);
-        });
-      }).catch(err => {
-        console.error('Failed to load workouts:', err);
-        showToast('워크아웃 목록을 불러올 수 없습니다', 'error');
+      console.log('✅ training.js loadWorkoutOptions으로 워크아웃 옵션이 로드되었습니다');
+      
+      // 로드 후 옵션 개수 확인
+      const optionCount = select.options.length;
+      if (optionCount <= 1) { // 기본 옵션만 있는 경우
+        console.warn('⚠️ 워크아웃 옵션이 부족합니다. 추가 로딩을 시도합니다.');
+        await fallbackWorkoutLoading(select);
+      }
+      return;
+    } 
+    
+    // 2순위: listWorkouts 함수 직접 사용
+    if (typeof listWorkouts === 'function') {
+      console.log('🔄 listWorkouts 함수로 워크아웃 로딩 시도...');
+      try {
+        const workouts = await Promise.resolve(listWorkouts());
+        if (workouts && workouts.length > 0) {
+          select.innerHTML = '<option value="">워크아웃 선택...</option>';
+          workouts.forEach(workout => {
+            const option = document.createElement('option');
+            option.value = workout.id || workout.title;
+            option.textContent = `${workout.title || workout.name} (${workout.duration || workout.estimatedDuration || '?'}분)`;
+            option.dataset.description = workout.description || workout.summary || '';
+            select.appendChild(option);
+          });
+          console.log(`✅ listWorkouts로 ${workouts.length}개 워크아웃을 로드했습니다`);
+          return;
+        }
+      } catch (err) {
+        console.error('❌ listWorkouts 호출 실패:', err);
+      }
+    }
+    
+    // 3순위: 폴백 워크아웃 로딩
+    console.log('🔄 폴백 워크아웃 로딩...');
+    await fallbackWorkoutLoading(select);
+    
+  } catch (error) {
+    console.error('❌ 워크아웃 로딩 전체 실패:', error);
+    // 최종 에러 시 기본 옵션이라도 제공
+    select.innerHTML = `
+      <option value="">워크아웃 선택...</option>
+      <option value="basic-training">기본 훈련 (60분)</option>
+    `;
+  }
+}
+
+/**
+ * 폴백 워크아웃 로딩 함수
+ */
+async function fallbackWorkoutLoading(select) {
+  try {
+    // getDefaultWorkouts 함수가 있다면 사용
+    if (typeof getDefaultWorkouts === 'function') {
+      const defaultWorkouts = getDefaultWorkouts();
+      select.innerHTML = '<option value="">워크아웃 선택...</option>';
+      defaultWorkouts.forEach(workout => {
+        const option = document.createElement('option');
+        option.value = workout.id;
+        option.textContent = `${workout.name} (${workout.duration}분)`;
+        option.dataset.description = workout.description || '';
+        select.appendChild(option);
       });
+      console.log(`✅ 기본 워크아웃 ${defaultWorkouts.length}개를 로드했습니다`);
     } else {
-      console.warn('워크아웃 로드 함수를 찾을 수 없습니다 - 기본 옵션을 추가합니다');
-      // 기본 워크아웃 옵션 추가
+      // 최종 대안: 하드코딩된 기본 옵션
       select.innerHTML = `
         <option value="">워크아웃 선택...</option>
-        <option value="ftp-test">FTP 테스트 (75분)</option>
-        <option value="vo2max">VO2 Max 인터벌 (45분)</option>
-        <option value="endurance">지구력 훈련 (90분)</option>
-        <option value="threshold">역치 훈련 (60분)</option>
-        <option value="recovery">회복 라이드 (30분)</option>
+        <option value="basic-endurance">기본 지구력 훈련 (60분)</option>
+        <option value="interval-training">인터벌 훈련 (45분)</option>
+        <option value="recovery-ride">회복 라이딩 (30분)</option>
       `;
+      console.log('✅ 하드코딩된 기본 워크아웃을 로드했습니다');
     }
   } catch (error) {
-    console.error('워크아웃 로드 중 오류:', error);
-    showToast('워크아웃 목록 로딩 실패', 'error');
+    console.error('❌ 폴백 워크아웃 로딩 실패:', error);
   }
 }
 
