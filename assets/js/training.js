@@ -1600,7 +1600,7 @@ async function loadActiveRoomsList() {
         <div class="error-state-icon">❌</div>
         <div class="error-state-title">로딩 실패</div>
         <div class="error-state-description">활성 훈련방 목록을 불러올 수 없습니다</div>
-        <button class="retry-button" onclick="loadActiveRoomsList()">다시 시도</button>
+        <button class="retry-button" onclick="loadActiveRoomsList().catch(console.error)">다시 시도</button>
       </div>
     `;
   }
@@ -1899,7 +1899,7 @@ async function refreshActiveRooms() {
         <div class="error-state-icon">❌</div>
         <div class="error-state-title">새로고침 실패</div>
         <div class="error-state-description">활성 훈련방 목록을 새로고침할 수 없습니다</div>
-        <button class="retry-button" onclick="refreshActiveRooms()">다시 시도</button>
+        <button class="retry-button" onclick="refreshActiveRooms().catch(console.error)">다시 시도</button>
       </div>
     `;
   }
