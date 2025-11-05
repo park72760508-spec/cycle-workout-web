@@ -1432,14 +1432,31 @@ function setupManagerMode() {
   });
   
   // 4. 관리자 섹션 표시
-  const managerSection = document.getElementById('managerSection');
-  if (managerSection) {
-    managerSection.classList.remove('hidden');
-    console.log('✅ 관리자 섹션 표시');
-  } else {
-    console.error('❌ managerSection을 찾을 수 없습니다');
-    return;
-  }
+  // 4. 관리자 섹션 표시
+    const managerSection = document.getElementById('managerSection');
+    if (managerSection) {
+      managerSection.classList.remove('hidden');
+      console.log('✅ 관리자 섹션 표시');
+      
+      // 워크아웃 리스트 로드
+      loadWorkoutOptions();
+    } else {
+      console.error('❌ managerSection을 찾을 수 없습니다 - 대신 adminSection을 사용합니다');
+      
+      // adminSection을 대안으로 사용
+      const adminSection = document.getElementById('adminSection');
+      if (adminSection) {
+        adminSection.classList.remove('hidden');
+        console.log('✅ adminSection 표시 (대안)');
+        
+        // 워크아웃 리스트 로드
+        loadWorkoutOptions();
+      } else {
+        console.error('❌ adminSection도 찾을 수 없습니다');
+        showToast('관리자 화면을 찾을 수 없습니다', 'error');
+        return;
+      }
+    }
   
   // 5. 관리자 데이터 로드
   loadManagerData();
@@ -1473,6 +1490,72 @@ async function loadManagerData() {
     console.error('❌ 관리자 데이터 로딩 오류:', error);
   }
 }
+
+
+
+/**
+ * 워크아웃 옵션 로드
+ */
+function loadWorkoutOptions() {
+  console.log('📋 워크아웃 옵션 로딩 중...');
+  
+  const workoutSelect = document.getElementById('roomWorkoutSelect');
+  if (!workoutSelect) {
+    console.warn('워크아웃 선택 요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  try {
+    // 기존 옵션 제거 (기본 옵션 제외)
+    workoutSelect.innerHTML = '<option value="">워크아웃 선택...</option>';
+    
+    // 전역 워크아웃 데이터 확인
+    let workouts = [];
+    
+    if (typeof workoutPlans !== 'undefined' && workoutPlans.length > 0) {
+      workouts = workoutPlans;
+    } else if (typeof window.workoutData !== 'undefined' && window.workoutData.length > 0) {
+      workouts = window.workoutData;
+    } else {
+      // 기본 워크아웃 데이터
+      workouts = [
+        { id: 'ftp-test', name: 'FTP 테스트', duration: 75, description: '기능성 역치 파워 측정' },
+        { id: 'vo2max', name: 'VO2 Max 인터벌', duration: 45, description: '최대 산소 섭취량 향상' },
+        { id: 'endurance', name: '지구력 훈련', duration: 90, description: '유산소 지구력 향상' },
+        { id: 'threshold', name: '역치 훈련', duration: 60, description: '젖산 역치 개선' },
+        { id: 'recovery', name: '회복 라이드', duration: 30, description: '액티브 리커버리' },
+        { id: 'sprint', name: '스프린트 훈련', duration: 45, description: '순간 파워 향상' },
+        { id: 'tempo', name: '템포 라이드', duration: 60, description: '템포 페이스 유지' },
+        { id: 'hill-repeat', name: '힐 리피트', duration: 50, description: '오르막 반복 훈련' }
+      ];
+    }
+    
+    // 워크아웃 옵션 추가
+    workouts.forEach(workout => {
+      const option = document.createElement('option');
+      option.value = workout.id || workout.name;
+      option.textContent = `${workout.name} (${workout.duration || 60}분)`;
+      option.dataset.description = workout.description || '';
+      workoutSelect.appendChild(option);
+    });
+    
+    console.log(`✅ ${workouts.length}개 워크아웃 옵션 로드 완료`);
+    
+  } catch (error) {
+    console.error('❌ 워크아웃 옵션 로딩 실패:', error);
+    
+    // 에러 시 기본 옵션 추가
+    const defaultOption = document.createElement('option');
+    defaultOption.value = 'basic-training';
+    defaultOption.textContent = '기본 훈련 (60분)';
+    workoutSelect.appendChild(defaultOption);
+  }
+}
+
+
+
+
+
 
 /**
  * 활성 훈련실 목록 로드 (대체 함수)
