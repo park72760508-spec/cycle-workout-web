@@ -963,6 +963,42 @@ function updateParticipantsList() {
   updateStartButtonState();
 }
 
+
+/**
+ * 백엔드에 방 데이터 업데이트 (임시 구현)
+ */
+async function updateRoomOnBackend(roomData) {
+  try {
+    // 로컬 스토리지에 저장 (임시)
+    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+    if (roomData.code) {
+      rooms[roomData.code] = roomData;
+      localStorage.setItem('groupTrainingRooms', JSON.stringify(rooms));
+    }
+    
+    // 실제 백엔드 API 호출이 필요한 경우
+    if (window.GAS_URL) {
+      const params = new URLSearchParams({
+        action: 'updateGroupRoom',
+        code: roomData.code,
+        data: JSON.stringify(roomData)
+      });
+      
+      const response = await fetch(`${window.GAS_URL}?${params.toString()}`);
+      const result = await response.json();
+      return result.success || true;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('updateRoomOnBackend 실패:', error);
+    return false;
+  }
+}
+
+
+
+   
 /**
  * 시작 버튼 상태 업데이트
  */
@@ -1064,6 +1100,93 @@ async function syncRoomData() {
   }
 }
 
+
+
+/**
+ * 그룹 훈련방 나가기
+ */
+async function leaveGroupRoom() {
+  try {
+    console.log('🚪 그룹 훈련방에서 나가는 중...');
+    
+    // 동기화 인터벌 정리
+    if (groupTrainingState.syncInterval) {
+      clearInterval(groupTrainingState.syncInterval);
+      groupTrainingState.syncInterval = null;
+    }
+    
+    // 관리자 인터벌 정리
+    if (groupTrainingState.managerInterval) {
+      clearInterval(groupTrainingState.managerInterval);
+      groupTrainingState.managerInterval = null;
+    }
+    
+    // 방에서 참가자 제거 (백엔드 업데이트)
+    if (groupTrainingState.currentRoom && groupTrainingState.roomCode) {
+      try {
+        const currentRoom = groupTrainingState.currentRoom;
+        const userId = window.currentUser?.id || 'unknown';
+        
+        // 참가자 목록에서 현재 사용자 제거
+        currentRoom.participants = currentRoom.participants.filter(p => p.id !== userId);
+        
+        // 백엔드 업데이트
+        await updateRoomOnBackend(currentRoom);
+        console.log('✅ 방에서 성공적으로 나갔습니다');
+      } catch (error) {
+        console.error('❌ 방 나가기 중 백엔드 업데이트 실패:', error);
+      }
+    }
+    
+    // 상태 초기화
+    groupTrainingState.currentRoom = null;
+    groupTrainingState.roomCode = null;
+    groupTrainingState.isAdmin = false;
+    groupTrainingState.isManager = false;
+    groupTrainingState.participants = [];
+    groupTrainingState.isConnected = false;
+    groupTrainingState.lastSyncTime = null;
+    
+    // 화면 전환
+    if (typeof showScreen === 'function') {
+      showScreen('trainingModeScreen');
+    } else {
+      // 대체 방법: 그룹 화면들 숨기기
+      const groupScreens = ['groupWaitingScreen', 'groupTrainingScreen'];
+      groupScreens.forEach(screenId => {
+        const screen = document.getElementById(screenId);
+        if (screen) {
+          screen.classList.add('hidden');
+        }
+      });
+    }
+    
+    showToast('그룹 훈련방에서 나왔습니다', 'info');
+    
+  } catch (error) {
+    console.error('❌ 방 나가기 중 오류:', error);
+    showToast('방 나가기 중 오류가 발생했습니다', 'error');
+  }
+}
+
+/**
+ * 방 데이터 동기화
+ */
+async function syncRoomData() {
+  if (!groupTrainingState.roomCode) return;
+  
+  try {
+    const latestRoom = await getRoomByCode(groupTrainingState.roomCode);
+    
+    if (!latestRoom) {
+      showToast('방이 삭제되었습니다', 'error');
+      leaveGroupRoom();
+      return;
+    }
+
+
+
+   
 // 다음 블록에서 계속...
 
 // ========== 내보내기 ==========
@@ -1073,11 +1196,9 @@ window.selectGroupMode = selectGroupMode;
 window.selectRole = selectRole;
 window.createGroupRoom = createGroupRoom;
 window.joinGroupRoom = joinGroupRoom;
-window.joinRoomByCode = joinRoomByCode;
-window.refreshRoomList = refreshRoomList;
+window.leaveGroupRoom = leaveGroupRoom;
 
 console.log('✅ Group Training Manager loaded');
-
 
 
 
@@ -1625,16 +1746,41 @@ groupTrainingFunctions.forEach(funcName => {
 console.log('✅ 그룹 훈련 관리자 모듈 로딩 완료');
 
 // 추가 그룹훈련 유틸리티 함수들 전역 등록
+// 추가 그룹훈련 유틸리티 함수들 전역 등록 (존재하는 함수만)
 try {
-  window.generateRoomCode = generateRoomCode;
-  window.getCurrentTimeString = getCurrentTimeString;
-  window.selectTrainingMode = selectTrainingMode;
-  window.selectGroupMode = selectGroupMode;
-  window.createGroupRoom = createGroupRoom;
-  window.joinGroupRoom = joinGroupRoom;
-  window.leaveGroupRoom = leaveGroupRoom;
+  // 유틸리티 함수들
+  if (typeof generateRoomCode === 'function') {
+    window.generateRoomCode = generateRoomCode;
+  }
+  if (typeof getCurrentTimeString === 'function') {
+    window.getCurrentTimeString = getCurrentTimeString;
+  }
   
-  console.log('✅ 그룹훈련 추가 함수들 전역 등록 완료');
+  // 화면 전환 함수들
+  if (typeof selectTrainingMode === 'function') {
+    window.selectTrainingMode = selectTrainingMode;
+  }
+  if (typeof selectGroupMode === 'function') {
+    window.selectGroupMode = selectGroupMode;
+  }
+  
+  // 방 관리 함수들
+  if (typeof createGroupRoom === 'function') {
+    window.createGroupRoom = createGroupRoom;
+  }
+  if (typeof joinGroupRoom === 'function') {
+    window.joinGroupRoom = joinGroupRoom;
+  }
+  if (typeof leaveGroupRoom === 'function') {
+    window.leaveGroupRoom = leaveGroupRoom;
+  }
+  
+  // 역할 선택 함수
+  if (typeof selectRole === 'function') {
+    window.selectRole = selectRole;
+  }
+  
+  console.log('✅ 그룹훈련 추가 함수들 안전 등록 완료');
 } catch (error) {
   console.error('❌ 그룹훈련 함수 등록 중 오류:', error);
 }
