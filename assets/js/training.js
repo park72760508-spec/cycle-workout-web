@@ -1493,8 +1493,51 @@ async function loadManagerData() {
 
 
 
+
+
+
+
+
 /**
- * 워크아웃 옵션 로드
+ * 기본 워크아웃 데이터 반환
+ */
+function getDefaultWorkouts() {
+  return [
+    {
+      id: 'basic-endurance',
+      name: '기본 지구력 훈련',
+      duration: 60,
+      description: '중강도 지구력 향상을 위한 기본 훈련'
+    },
+    {
+      id: 'interval-training',
+      name: '인터벌 훈련',
+      duration: 45,
+      description: '고강도 인터벌 훈련으로 심폐 능력 향상'
+    },
+    {
+      id: 'recovery-ride',
+      name: '회복 라이딩',
+      duration: 30,
+      description: '저강도 회복 라이딩'
+    },
+    {
+      id: 'tempo-training',
+      name: '템포 훈련',
+      duration: 50,
+      description: '중고강도 템포 훈련'
+    },
+    {
+      id: 'hill-climbing',
+      name: '언덕 오르기',
+      duration: 40,
+      description: '언덕 오르기 시뮬레이션 훈련'
+    }
+  ];
+}
+
+/**
+ * 워크아웃 옵션 로드 (개선된 버전)
  */
 async function loadWorkoutOptions() {
   console.log('📋 워크아웃 옵션 로딩 중...');
@@ -1519,7 +1562,7 @@ async function loadWorkoutOptions() {
         const registeredWorkouts = await Promise.resolve(listWorkouts());
         if (registeredWorkouts && registeredWorkouts.length > 0) {
           workouts = registeredWorkouts.map(workout => ({
-            id: workout.id || workout.title,
+            id: workout.id || workout.title || workout.name,
             name: workout.title || workout.name,
             duration: workout.duration || workout.estimatedDuration || 60,
             description: workout.description || workout.summary || ''
@@ -1531,37 +1574,30 @@ async function loadWorkoutOptions() {
         }
       } catch (error) {
         console.error('등록된 워크아웃 로드 실패:', error);
+        console.log('🔄 기본 워크아웃으로 대체합니다.');
         workouts = getDefaultWorkouts();
       }
-    } else if (typeof workoutPlans !== 'undefined' && workoutPlans.length > 0) {
-      workouts = workoutPlans;
-    } else if (typeof window.workoutData !== 'undefined' && window.workoutData.length > 0) {
+    } 
+    // 2순위: 전역 workoutPlans 배열 확인
+    else if (typeof workoutPlans !== 'undefined' && Array.isArray(workoutPlans) && workoutPlans.length > 0) {
+      console.log('📋 전역 workoutPlans 데이터를 사용합니다.');
+      workouts = workoutPlans.map(workout => ({
+        id: workout.id || workout.name,
+        name: workout.name || workout.title,
+        duration: workout.duration || 60,
+        description: workout.description || ''
+      }));
+    } 
+    // 3순위: window.workoutData 확인
+    else if (typeof window.workoutData !== 'undefined' && Array.isArray(window.workoutData) && window.workoutData.length > 0) {
+      console.log('📋 window.workoutData를 사용합니다.');
       workouts = window.workoutData;
-    } else {
+    } 
+    // 최종: 기본 워크아웃 사용
+    else {
+      console.log('📋 기본 워크아웃 데이터를 사용합니다.');
       workouts = getDefaultWorkouts();
     }
-    
-    // 워크아웃 옵션 추가
-    workouts.forEach(workout => {
-      const option = document.createElement('option');
-      option.value = workout.id || workout.name;
-      option.textContent = `${workout.name} (${workout.duration || 60}분)`;
-      option.dataset.description = workout.description || '';
-      workoutSelect.appendChild(option);
-    });
-    
-    console.log(`✅ ${workouts.length}개 워크아웃 옵션 로드 완료`);
-    
-  } catch (error) {
-    console.error('❌ 워크아웃 옵션 로딩 실패:', error);
-    
-    // 에러 시 기본 옵션 추가
-    const defaultOption = document.createElement('option');
-    defaultOption.value = 'basic-training';
-    defaultOption.textContent = '기본 훈련 (60분)';
-    workoutSelect.appendChild(defaultOption);
-  }
-}
 
 
 
