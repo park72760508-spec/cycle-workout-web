@@ -1776,6 +1776,7 @@ function escapeHtml(unsafe) {
 }
 
 // ========== 전역 함수 등록 ==========
+// ========== 전역 함수 등록 ==========
 window.showTrainingRoomManagement = showTrainingRoomManagement;
 window.setupManagerMode = setupManagerMode;
 window.loadManagerData = loadManagerData;
@@ -1783,8 +1784,23 @@ window.loadActiveRoomsList = loadActiveRoomsList;
 window.displayActiveRooms = displayActiveRooms;
 window.getStatusText = getStatusText;
 window.loadRoomStatistics = loadRoomStatistics;
+window.loadWorkoutOptions = loadWorkoutOptions;
+window.getDefaultWorkouts = getDefaultWorkouts;
 
-console.log('✅ 개선된 관리자 화면 전환 함수들이 등록되었습니다');
+// 안전한 함수 등록 확인
+const registeredFunctions = [
+  'showTrainingRoomManagement', 'setupManagerMode', 'loadManagerData',
+  'loadActiveRoomsList', 'displayActiveRooms', 'getStatusText', 
+  'loadRoomStatistics', 'loadWorkoutOptions', 'getDefaultWorkouts'
+];
+
+registeredFunctions.forEach(funcName => {
+  if (typeof window[funcName] !== 'function') {
+    console.warn(`⚠️ ${funcName} 함수가 제대로 등록되지 않았습니다`);
+  }
+});
+
+console.log('✅ 관리자 화면 및 워크아웃 관련 함수들이 등록되었습니다');
 
 
 
@@ -1865,44 +1881,14 @@ function showManagerSection() {
   }, 300);
 }
 
-/**
- * 훈련방 통계 로드
- */
-async function loadRoomStatistics() {
-  try {
-    const response = await fetch(`${window.GAS_URL}?action=getRoomStatistics`);
-    const result = await response.json();
-    
-    if (result.success && result.stats) {
-      const stats = result.stats;
-      
-      // 통계 업데이트
-      const statsElements = {
-        'totalRoomsCount': stats.totalRooms || 0,
-        'activeRoomsCount': stats.activeRooms || 0,
-        'totalParticipantsCount': stats.totalParticipants || 0,
-        'trainingRoomsCount': stats.trainingRooms || 0
-      };
-      
-      Object.entries(statsElements).forEach(([elementId, value]) => {
-        const element = document.getElementById(elementId);
-        if (element) {
-          element.textContent = value;
-        }
-      });
-      
-      console.log('훈련방 통계가 업데이트되었습니다:', stats);
-    }
-  } catch (error) {
-    console.error('훈련방 통계 로드 오류:', error);
-  }
-}
+
 
 // ========== 전역 함수 등록 ==========
-window.showTrainingRoomManagement = showTrainingRoomManagement;
-window.showActiveRoomsManagement = showActiveRoomsManagement;
-window.showManagerSection = showManagerSection;
-window.loadRoomStatistics = loadRoomStatistics;
+// ========== 전역 함수 등록 (중복 제거) ==========
+// 이미 위에서 등록된 함수들은 제거하고 새로운 함수만 추가
+if (typeof window.refreshActiveRooms !== 'function') {
+  window.refreshActiveRooms = refreshActiveRooms;
+}
 
 console.log('✅ 관리자 화면 전환 함수들이 등록되었습니다');
 
