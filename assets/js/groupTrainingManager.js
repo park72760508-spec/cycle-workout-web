@@ -51,18 +51,21 @@ function safeGet(id) {
  */
 function showToast(message, type = 'info') {
   const toast = safeGet('toast');
-  if (toast) {
-    toast.textContent = message;
-    toast.className = `toast toast-${type}`;
-    toast.style.display = 'block';
-    setTimeout(() => {
-      toast.style.display = 'none';
-    }, 3000);
-  } else if (typeof window.showToast === 'function') {
-    window.showToast(message);
-  } else {
-    console.log(`[${type}] ${message}`);
+  if (!toast) {
+    if (typeof window.showToast === 'function') {
+      window.showToast(message);
+    } else {
+      console.log(`[${type}] ${message}`);
+    }
+    return;
   }
+  
+  toast.textContent = message;
+  toast.className = `toast show ${type}`;
+  
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
 }
 
 // ========== JSONP API 연동 함수들 ==========
@@ -307,20 +310,6 @@ async function apiDeleteGroupWorkout(id) {
     return { success: false, error: error.message };
   }
 }
-
- 
-  if (!toast) return;
-  
-  toast.textContent = message;
-  toast.className = `toast show ${type}`;
-  
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 3000);
-}
-
-
-
 
 
 
@@ -1603,14 +1592,28 @@ function escapeHtml(unsafe) {
 }
 
 // ========== 전역 함수 등록 ==========
+
 window.showGroupWorkoutManagement = showGroupWorkoutManagement;
 window.loadGroupWorkoutList = loadGroupWorkoutList;
 window.deleteGroupWorkout = deleteGroupWorkout;
 window.apiGetGroupWorkouts = apiGetGroupWorkouts;
 window.apiCreateGroupWorkout = apiCreateGroupWorkout;
-window.apiUpdateGroupWorkout = apiUpdateGroupWorkout;
 window.apiDeleteGroupWorkout = apiDeleteGroupWorkout;
+window.showToast = showToast;
+window.safeGet = safeGet;
 
+// 전역 등록 확인 로그
+const registeredFunctions = [
+  'showGroupWorkoutManagement', 'loadGroupWorkoutList', 'deleteGroupWorkout',
+  'apiGetGroupWorkouts', 'apiCreateGroupWorkout', 'apiDeleteGroupWorkout',
+  'showToast', 'safeGet'
+];
 
-console.log('✅ 그룹 훈련 워크아웃 DB 연동 모듈 로딩 완료');
+registeredFunctions.forEach(funcName => {
+  if (typeof window[funcName] !== 'function') {
+    console.warn(`⚠️ ${funcName} 함수가 제대로 등록되지 않았습니다`);
+  }
+});
+
+console.log('✅ 그룹 훈련 관리자 모듈 로딩 완료');
 
