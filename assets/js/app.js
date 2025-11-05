@@ -48,6 +48,7 @@
   }
 
   // workoutData 전역 초기화 (그룹 훈련용)
+// workoutData 전역 초기화 (그룹 훈련용)
   if (!window.workoutData) {
     window.workoutData = [
       {
@@ -66,9 +67,31 @@
         id: 'recovery-ride',
         name: '회복 라이딩', 
         duration: 30,
-        description: '저강도 회복 라이딩'
+        description: '저장소 회복 라이딩'
+      },
+      {
+        id: 'tempo-training',
+        name: '템포 훈련',
+        duration: 50,
+        description: '중고강도 템포 훈련'
+      },
+      {
+        id: 'hill-climbing',
+        name: '언덕 오르기',
+        duration: 40,
+        description: '언덕 오르기 시뮬레이션 훈련'
       }
     ];
+  }
+
+  // GAS_URL 전역 초기화
+  if (!window.GAS_URL) {
+    window.GAS_URL = 'https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec'; // 실제 URL로 변경 필요
+  }
+
+  // 저장된 워크아웃 계획들 초기화
+  if (!window.workoutPlans) {
+    window.workoutPlans = [];
   }
 
 // === 인증 폼 초기화 유틸 ===
@@ -4787,4 +4810,93 @@ function appendResultStreamSamples(now = new Date()) {
   });
 
   console.log('[Global] CORS/네트워크 오류 전역 처리기 설정 완료');
+
+
+
+/**
+ * 저장된 워크아웃 목록 불러오기
+ */
+function listWorkouts() {
+  try {
+    // 1순위: localStorage에서 저장된 워크아웃 불러오기
+    const savedWorkouts = localStorage.getItem('workoutPlans');
+    if (savedWorkouts) {
+      const workouts = JSON.parse(savedWorkouts);
+      if (Array.isArray(workouts) && workouts.length > 0) {
+        console.log(`✅ localStorage에서 ${workouts.length}개 워크아웃을 로드했습니다`);
+        return workouts;
+      }
+    }
+
+    // 2순위: 전역 workoutPlans 사용
+    if (window.workoutPlans && Array.isArray(window.workoutPlans) && window.workoutPlans.length > 0) {
+      console.log(`✅ 전역 workoutPlans에서 ${window.workoutPlans.length}개 워크아웃을 로드했습니다`);
+      return window.workoutPlans;
+    }
+
+    // 3순위: 전역 workoutData 사용
+    if (window.workoutData && Array.isArray(window.workoutData)) {
+      console.log(`✅ 기본 workoutData에서 ${window.workoutData.length}개 워크아웃을 로드했습니다`);
+      return window.workoutData;
+    }
+
+    console.warn('⚠️ 저장된 워크아웃이 없습니다');
+    return [];
+    
+  } catch (error) {
+    console.error('❌ 워크아웃 로딩 오류:', error);
+    return window.workoutData || [];
+  }
+}
+
+/**
+ * 워크아웃 계획 저장
+ */
+function saveWorkoutPlan(workout) {
+  try {
+    const savedWorkouts = JSON.parse(localStorage.getItem('workoutPlans') || '[]');
+    
+    // 중복 ID 체크
+    const existingIndex = savedWorkouts.findIndex(w => w.id === workout.id);
+    if (existingIndex >= 0) {
+      savedWorkouts[existingIndex] = workout; // 업데이트
+    } else {
+      savedWorkouts.push(workout); // 새로 추가
+    }
+    
+    localStorage.setItem('workoutPlans', JSON.stringify(savedWorkouts));
+    window.workoutPlans = savedWorkouts; // 전역 변수도 업데이트
+    
+    console.log(`✅ 워크아웃 "${workout.title || workout.name}" 저장 완료`);
+    return true;
+  } catch (error) {
+    console.error('❌ 워크아웃 저장 오류:', error);
+    return false;
+  }
+}
+
+/**
+ * 워크아웃 계획 삭제
+ */
+function deleteWorkoutPlan(workoutId) {
+  try {
+    const savedWorkouts = JSON.parse(localStorage.getItem('workoutPlans') || '[]');
+    const filteredWorkouts = savedWorkouts.filter(w => w.id !== workoutId);
+    
+    localStorage.setItem('workoutPlans', JSON.stringify(filteredWorkouts));
+    window.workoutPlans = filteredWorkouts;
+    
+    console.log(`✅ 워크아웃 ID "${workoutId}" 삭제 완료`);
+    return true;
+  } catch (error) {
+    console.error('❌ 워크아웃 삭제 오류:', error);
+    return false;
+  }
+}
+
+// 전역 함수로 등록
+window.listWorkouts = listWorkouts;
+window.saveWorkoutPlan = saveWorkoutPlan;
+window.deleteWorkoutPlan = deleteWorkoutPlan;
+
 })();
