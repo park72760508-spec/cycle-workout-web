@@ -1861,5 +1861,119 @@ console.log('✅ 관리자 화면 전환 함수들이 등록되었습니다');
 
 
 
+/**
+ * 활성 훈련실 새로고침
+ */
+async function refreshActiveRooms() {
+  console.log('🔄 활성 훈련실 새로고침...');
+  
+  const activeRoomsList = document.getElementById('activeRoomsList');
+  if (!activeRoomsList) return;
+  
+  try {
+    // 로딩 표시
+    activeRoomsList.innerHTML = `
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <p>훈련실 목록을 새로고침하는 중...</p>
+      </div>
+    `;
+    
+    // 실제 API 호출 또는 로컬 저장소에서 데이터 가져오기
+    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+    const roomList = Object.values(rooms).filter(room => room.status !== 'finished');
+    
+    displayActiveRooms(roomList);
+    
+    // 통계 업데이트
+    updateRoomStatistics(roomList);
+    
+  } catch (error) {
+    console.error('활성 훈련실 새로고침 실패:', error);
+    activeRoomsList.innerHTML = `
+      <div class="error-state">
+        <div class="error-state-icon">❌</div>
+        <div class="error-state-title">새로고침 실패</div>
+        <div class="error-state-description">활성 훈련방 목록을 새로고침할 수 없습니다</div>
+        <button class="retry-button" onclick="refreshActiveRooms()">다시 시도</button>
+      </div>
+    `;
+  }
+}
 
+/**
+ * 훈련실 통계 업데이트
+ */
+function updateRoomStatistics(rooms) {
+  const totalActiveRoomsEl = document.getElementById('totalActiveRooms');
+  const totalParticipantsEl = document.getElementById('totalParticipants');
+  const averageOccupancyEl = document.getElementById('averageOccupancy');
+  
+  if (totalActiveRoomsEl) {
+    totalActiveRoomsEl.textContent = rooms.length;
+  }
+  
+  if (totalParticipantsEl) {
+    const totalParticipants = rooms.reduce((sum, room) => sum + (room.participantCount || 0), 0);
+    totalParticipantsEl.textContent = totalParticipants;
+  }
+  
+  if (averageOccupancyEl) {
+    const avgOccupancy = rooms.length > 0 
+      ? Math.round(rooms.reduce((sum, room) => {
+          return sum + ((room.participantCount || 0) / (room.maxParticipants || 4)) * 100;
+        }, 0) / rooms.length)
+      : 0;
+    averageOccupancyEl.textContent = `${avgOccupancy}%`;
+  }
+}
+
+/**
+ * 방 상세보기
+ */
+function viewRoomDetails(roomId) {
+  console.log('방 상세보기:', roomId);
+  // TODO: 방 상세 정보 모달 표시
+  showToast('방 상세보기 기능 준비 중입니다', 'info');
+}
+
+/**
+ * 훈련실 통계 표시
+ */
+function showRoomStatistics() {
+  console.log('훈련실 통계 표시');
+  // TODO: 상세 통계 모달 표시
+  showToast('상세 통계 기능 준비 중입니다', 'info');
+}
+
+/**
+ * 데이터 내보내기
+ */
+function exportRoomData() {
+  console.log('데이터 내보내기');
+  try {
+    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+    const dataStr = JSON.stringify(rooms, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `training-rooms-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+    
+    showToast('훈련실 데이터가 내보내졌습니다', 'success');
+  } catch (error) {
+    console.error('데이터 내보내기 실패:', error);
+    showToast('데이터 내보내기에 실패했습니다', 'error');
+  }
+}
+
+// 전역 함수로 등록
+window.refreshActiveRooms = refreshActiveRooms;
+window.updateRoomStatistics = updateRoomStatistics;
+window.viewRoomDetails = viewRoomDetails;
+window.showRoomStatistics = showRoomStatistics;
+window.exportRoomData = exportRoomData;
 
