@@ -2006,3 +2006,9 @@ window.viewRoomDetails = viewRoomDetails;
 window.showRoomStatistics = showRoomStatistics;
 window.exportRoomData = exportRoomData;
 
+
+console.log('✅ 훈련실 관리 모듈 로딩 완료');
+
+// 누락된 중괄호 추가 (구문 오류 해결)
+} // 첫 번째 누락된 중괄호
+} // 두 번째 누락된 중괄호
