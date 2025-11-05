@@ -1886,11 +1886,7 @@ function showManagerSection() {
 // ========== 전역 함수 등록 ==========
 // ========== 전역 함수 등록 (중복 제거) ==========
 // 이미 위에서 등록된 함수들은 제거하고 새로운 함수만 추가
-if (typeof window.refreshActiveRooms !== 'function') {
-  window.refreshActiveRooms = refreshActiveRooms;
-}
 
-console.log('✅ 관리자 화면 전환 함수들이 등록되었습니다');
 
 
 
