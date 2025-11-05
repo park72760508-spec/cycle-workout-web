@@ -1459,7 +1459,7 @@ function setupManagerMode() {
     }
   
   // 5. 관리자 데이터 로드
-  loadManagerData();
+  await loadManagerData();
   
   // 6. 사용자 알림
   if (typeof toast === 'function') {
