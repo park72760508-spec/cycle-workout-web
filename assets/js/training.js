@@ -1593,11 +1593,37 @@ async function loadWorkoutOptions() {
       console.log('📋 window.workoutData를 사용합니다.');
       workouts = window.workoutData;
     } 
-    // 최종: 기본 워크아웃 사용
-    else {
-      console.log('📋 기본 워크아웃 데이터를 사용합니다.');
-      workouts = getDefaultWorkouts();
+        // 최종: 기본 워크아웃 사용
+        else {
+          console.log('📋 기본 워크아웃 데이터를 사용합니다.');
+          workouts = getDefaultWorkouts();
+        }
+        
+        // 워크아웃 옵션 추가
+        workouts.forEach(workout => {
+          const option = document.createElement('option');
+          option.value = workout.id || workout.name;
+          option.textContent = `${workout.name} (${workout.duration || 60}분)`;
+          option.dataset.description = workout.description || '';
+          workoutSelect.appendChild(option);
+        });
+        
+        console.log(`✅ ${workouts.length}개 워크아웃 옵션 로드 완료`);
+        
+      } catch (error) {
+        console.error('❌ 워크아웃 옵션 로딩 실패:', error);
+        
+        // 에러 시 기본 옵션 추가
+        const defaultOption = document.createElement('option');
+        defaultOption.value = 'basic-training';
+        defaultOption.textContent = '기본 훈련 (60분)';
+        workoutSelect.appendChild(defaultOption);
+      }
     }
+
+/**
+ * 활성 훈련실 목록 로드 (대체 함수)
+ */
 
 
 
