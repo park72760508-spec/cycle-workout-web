@@ -46,8 +46,252 @@ function safeGet(id) {
 /**
  * 토스트 메시지 표시
  */
+/**
+ * 토스트 메시지 표시
+ */
 function showToast(message, type = 'info') {
   const toast = safeGet('toast');
+
+// ========== JSONP API 연동 함수들 ==========
+
+/**
+ * JSONP 요청 함수 (workoutManager 방식 적용)
+ */
+function jsonpRequest(url, params = {}) {
+  return new Promise((resolve, reject) => {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      reject(new Error('유효하지 않은 URL입니다.'));
+      return;
+    }
+    
+    const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+    const script = document.createElement('script');
+    let isResolved = false;
+    
+    console.log('그룹훈련 JSONP request to:', url, 'with params:', params);
+    
+    window[callbackName] = function(data) {
+      if (isResolved) return;
+      isResolved = true;
+      
+      console.log('그룹훈련 JSONP response received:', data);
+      cleanup();
+      resolve(data);
+    };
+    
+    function cleanup() {
+      try {
+        if (window[callbackName]) {
+          delete window[callbackName];
+        }
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      } catch (e) {
+        console.warn('JSONP cleanup warning:', e);
+      }
+    }
+    
+    script.onerror = function() {
+      if (isResolved) return;
+      isResolved = true;
+      
+      console.error('그룹훈련 JSONP script loading failed');
+      cleanup();
+      reject(new Error('네트워크 연결 오류'));
+    };
+    
+    try {
+      // 안전한 파라미터 인코딩
+      const urlParts = [];
+      Object.keys(params).forEach(key => {
+        if (params[key] !== null && params[key] !== undefined) {
+          const value = String(params[key]);
+          urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+      });
+      
+      // callback 파라미터 추가
+      urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
+      
+      const finalUrl = `${url}?${urlParts.join('&')}`;
+      script.src = finalUrl;
+      
+      document.head.appendChild(script);
+      
+      // 타임아웃 설정 (30초)
+      setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          cleanup();
+          reject(new Error('요청 시간 초과'));
+        }
+      }, 30000);
+      
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
+/**
+ * 재시도가 포함된 JSONP 요청
+ */
+async function jsonpRequestWithRetry(url, params = {}, maxRetries = 3) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`그룹훈련 API 요청 시도 ${attempt}/${maxRetries}`);
+      const result = await jsonpRequest(url, params);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.warn(`그룹훈련 API 요청 ${attempt}회 실패:`, error.message);
+      
+      if (attempt < maxRetries) {
+        // 재시도 전 대기 (1초 * 시도 횟수)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+// ========== 그룹훈련 워크아웃 API 함수들 ==========
+
+/**
+ * 그룹훈련용 워크아웃 목록 조회
+ */
+async function apiGetGroupWorkouts() {
+  try {
+    return await jsonpRequest(window.GAS_URL, { action: 'listGroupWorkouts' });
+  } catch (error) {
+    console.error('apiGetGroupWorkouts 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 그룹훈련용 워크아웃 단일 조회
+ */
+async function apiGetGroupWorkout(id) {
+  if (!id) {
+    return { success: false, error: '워크아웃 ID가 필요합니다.' };
+  }
+  
+  try {
+    return await jsonpRequest(window.GAS_URL, { 
+      action: 'getGroupWorkout', 
+      id: String(id) 
+    });
+  } catch (error) {
+    console.error('apiGetGroupWorkout 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 그룹훈련용 워크아웃 생성
+ */
+async function apiCreateGroupWorkout(workoutData) {
+  console.log('=== 그룹훈련 워크아웃 생성 시작 ===');
+  console.log('워크아웃 데이터:', workoutData);
+  
+  if (!workoutData || typeof workoutData !== 'object') {
+    return { success: false, error: '유효하지 않은 워크아웃 데이터입니다.' };
+  }
+  
+  try {
+    const params = {
+      action: 'createGroupWorkout',
+      title: String(workoutData.title || ''),
+      description: String(workoutData.description || ''),
+      author: String(workoutData.author || ''),
+      duration: Number(workoutData.duration) || 60,
+      difficulty: String(workoutData.difficulty || 'medium'),
+      category: String(workoutData.category || 'general'),
+      maxParticipants: Number(workoutData.maxParticipants) || 20,
+      status: String(workoutData.status || 'active')
+    };
+    
+    // 세그먼트 데이터가 있으면 추가
+    if (workoutData.segments && Array.isArray(workoutData.segments)) {
+      params.segments = JSON.stringify(workoutData.segments);
+    }
+    
+    console.log('그룹훈련 워크아웃 생성 요청:', params);
+    const result = await jsonpRequestWithRetry(window.GAS_URL, params);
+    
+    if (result && result.success) {
+      console.log('✅ 그룹훈련 워크아웃 생성 성공:', result);
+    } else {
+      console.error('❌ 그룹훈련 워크아웃 생성 실패:', result);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('apiCreateGroupWorkout 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 그룹훈련용 워크아웃 수정
+ */
+async function apiUpdateGroupWorkout(id, workoutData) {
+  if (!id || !workoutData) {
+    return { success: false, error: '워크아웃 ID와 데이터가 필요합니다.' };
+  }
+  
+  const params = {
+    action: 'updateGroupWorkout',
+    id: String(id),
+    title: String(workoutData.title || ''),
+    description: String(workoutData.description || ''),
+    author: String(workoutData.author || ''),
+    duration: Number(workoutData.duration) || 60,
+    difficulty: String(workoutData.difficulty || 'medium'),
+    category: String(workoutData.category || 'general'),
+    maxParticipants: Number(workoutData.maxParticipants) || 20,
+    status: String(workoutData.status || 'active')
+  };
+  
+  // 세그먼트 데이터가 있으면 추가
+  if (workoutData.segments && Array.isArray(workoutData.segments)) {
+    params.segments = JSON.stringify(workoutData.segments);
+  }
+  
+  try {
+    return await jsonpRequest(window.GAS_URL, params);
+  } catch (error) {
+    console.error('apiUpdateGroupWorkout 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 그룹훈련용 워크아웃 삭제
+ */
+async function apiDeleteGroupWorkout(id) {
+  if (!id) {
+    return { success: false, error: '워크아웃 ID가 필요합니다.' };
+  }
+  
+  try {
+    return await jsonpRequest(window.GAS_URL, { 
+      action: 'deleteGroupWorkout', 
+      id: String(id) 
+    });
+  } catch (error) {
+    console.error('apiDeleteGroupWorkout 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+ 
   if (!toast) return;
   
   toast.textContent = message;
@@ -177,6 +421,9 @@ async function selectRole(role) {
 /**
  * 워크아웃 목록 로드 (방 생성용)
  */
+/**
+ * 그룹훈련용 워크아웃 목록 로드 (DB 연동 버전)
+ */
 async function loadWorkoutsForRoom() {
   const select = safeGet('roomWorkoutSelect');
   if (!select) {
@@ -185,9 +432,41 @@ async function loadWorkoutsForRoom() {
   }
   
   try {
-    console.log('🔄 그룹 훈련용 워크아웃 로딩 시작...');
+    console.log('🔄 그룹 훈련용 워크아웃 DB 로딩 시작...');
     
-    // 1순위: training.js의 loadWorkoutOptions 함수 사용
+    // 로딩 상태 표시
+    select.innerHTML = '<option value="">워크아웃 로딩 중...</option>';
+    select.disabled = true;
+    
+    // 1순위: DB에서 그룹훈련용 워크아웃 로드
+    const result = await apiGetGroupWorkouts();
+    
+    if (result && result.success && result.workouts && result.workouts.length > 0) {
+      console.log(`✅ DB에서 ${result.workouts.length}개 그룹훈련 워크아웃을 로드했습니다`);
+      
+      // 기본 옵션 설정
+      select.innerHTML = '<option value="">워크아웃 선택...</option>';
+      
+      // DB에서 로드한 워크아웃들 추가
+      result.workouts.forEach(workout => {
+        const option = document.createElement('option');
+        option.value = workout.id;
+        option.textContent = `${workout.title} (${workout.duration || 60}분)`;
+        option.dataset.description = workout.description || '';
+        option.dataset.difficulty = workout.difficulty || 'medium';
+        option.dataset.category = workout.category || 'general';
+        option.dataset.maxParticipants = workout.maxParticipants || 20;
+        select.appendChild(option);
+      });
+      
+      select.disabled = false;
+      console.log('✅ DB 워크아웃 옵션 로드 완료');
+      return;
+    }
+    
+    console.warn('⚠️ DB에서 그룹훈련 워크아웃을 찾을 수 없습니다. 대체 방법을 시도합니다.');
+    
+    // 2순위: training.js의 loadWorkoutOptions 함수 사용
     if (typeof loadWorkoutOptions === 'function') {
       await loadWorkoutOptions();
       console.log('✅ training.js loadWorkoutOptions으로 워크아웃 옵션이 로드되었습니다');
@@ -198,8 +477,9 @@ async function loadWorkoutsForRoom() {
         console.warn('⚠️ 워크아웃 옵션이 부족합니다. 추가 로딩을 시도합니다.');
         await fallbackWorkoutLoading(select);
       }
+      select.disabled = false;
       return;
-    } 
+    }
     
     // 2순위: listWorkouts 함수 직접 사용
     if (typeof listWorkouts === 'function') {
@@ -1093,4 +1373,222 @@ window.forceStopRoom = forceStopRoom;
 window.cleanupExpiredRooms = cleanupExpiredRooms;
 window.emergencyStopAllRooms = emergencyStopAllRooms;
 window.initializeManagerDashboard = initializeManagerDashboard;
+
+
+// ========== 그룹훈련 워크아웃 관리 UI 함수들 ==========
+
+/**
+ * 그룹훈련 워크아웃 목록 화면 표시
+ */
+async function showGroupWorkoutManagement() {
+  console.log('🎯 그룹훈련 워크아웃 관리 화면 표시');
+  
+  const currentUser = window.currentUser;
+  if (!currentUser || (currentUser.grade !== '1' && currentUser.grade !== 1)) {
+    if (typeof showToast === 'function') {
+      showToast('그룹훈련 워크아웃 관리는 관리자만 접근할 수 있습니다');
+    } else {
+      alert('관리자 권한이 필요합니다');
+    }
+    return;
+  }
+  
+  // 화면 전환
+  if (typeof showScreen === 'function') {
+    showScreen('groupWorkoutManagementScreen');
+  } else {
+    // 대체 방법: 모든 화면 숨김 후 그룹워크아웃 관리 화면만 표시
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.add('hidden');
+    });
+    
+    const groupWorkoutScreen = document.getElementById('groupWorkoutManagementScreen');
+    if (groupWorkoutScreen) {
+      groupWorkoutScreen.classList.remove('hidden');
+    }
+  }
+  
+  // 워크아웃 목록 로드
+  setTimeout(async () => {
+    await loadGroupWorkoutList();
+  }, 150);
+}
+
+/**
+ * 그룹훈련 워크아웃 목록 로드
+ */
+async function loadGroupWorkoutList() {
+  const workoutList = safeGet('groupWorkoutList');
+  if (!workoutList) {
+    console.warn('groupWorkoutList 요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  try {
+    workoutList.innerHTML = `
+      <div class="loading-container">
+        <div class="spinner"></div>
+        <div style="color: #666; font-size: 14px;">그룹훈련 워크아웃 목록을 불러오는 중...</div>
+      </div>
+    `;
+    
+    const result = await apiGetGroupWorkouts();
+    
+    if (result && result.success && result.workouts) {
+      renderGroupWorkoutList(result.workouts);
+    } else {
+      workoutList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📝</div>
+          <div class="empty-state-title">그룹훈련 워크아웃이 없습니다</div>
+          <div class="empty-state-description">새로운 그룹훈련 워크아웃을 추가해보세요</div>
+          <button class="btn btn-primary" onclick="showCreateGroupWorkoutModal()">
+            <span class="btn-icon">➕</span>
+            워크아웃 추가
+          </button>
+        </div>
+      `;
+    }
+  } catch (error) {
+    console.error('그룹훈련 워크아웃 목록 로드 실패:', error);
+    workoutList.innerHTML = `
+      <div class="error-state">
+        <div class="error-state-icon">❌</div>
+        <div class="error-state-title">로딩 실패</div>
+        <div class="error-state-description">그룹훈련 워크아웃 목록을 불러올 수 없습니다</div>
+        <button class="retry-button" onclick="loadGroupWorkoutList()">다시 시도</button>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 그룹훈련 워크아웃 목록 렌더링
+ */
+function renderGroupWorkoutList(workouts) {
+  const workoutList = safeGet('groupWorkoutList');
+  if (!workoutList) return;
+  
+  const workoutCards = workouts.map(workout => `
+    <div class="workout-card" data-workout-id="${workout.id}">
+      <div class="workout-header">
+        <h3 class="workout-title">${escapeHtml(workout.title)}</h3>
+        <div class="workout-badges">
+          <span class="badge badge-${workout.difficulty || 'medium'}">${workout.difficulty || 'Medium'}</span>
+          <span class="badge badge-category">${workout.category || 'General'}</span>
+        </div>
+      </div>
+      
+      <div class="workout-info">
+        <div class="workout-meta">
+          <span class="meta-item">
+            <i class="icon-time"></i>
+            ${workout.duration || 60}분
+          </span>
+          <span class="meta-item">
+            <i class="icon-users"></i>
+            최대 ${workout.maxParticipants || 20}명
+          </span>
+          <span class="meta-item">
+            <i class="icon-user"></i>
+            ${escapeHtml(workout.author || '미상')}
+          </span>
+        </div>
+        
+        <p class="workout-description">${escapeHtml(workout.description || '설명 없음')}</p>
+      </div>
+      
+      <div class="workout-actions">
+        <button class="btn btn-secondary btn-sm" onclick="editGroupWorkout('${workout.id}')">
+          <span class="btn-icon">✏️</span>
+          편집
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="useGroupWorkout('${workout.id}')">
+          <span class="btn-icon">🚀</span>
+          사용
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGroupWorkout('${workout.id}')">
+          <span class="btn-icon">🗑️</span>
+          삭제
+        </button>
+      </div>
+    </div>
+  `).join('');
+  
+  workoutList.innerHTML = `
+    <div class="workout-management-header">
+      <h2>그룹훈련 워크아웃 관리</h2>
+      <button class="btn btn-primary" onclick="showCreateGroupWorkoutModal()">
+        <span class="btn-icon">➕</span>
+        새 워크아웃 추가
+      </button>
+    </div>
+    <div class="workout-grid">
+      ${workoutCards}
+    </div>
+  `;
+}
+
+/**
+ * 그룹훈련 워크아웃 삭제
+ */
+async function deleteGroupWorkout(workoutId) {
+  if (!workoutId) {
+    showToast('유효하지 않은 워크아웃 ID입니다');
+    return;
+  }
+  
+  if (!confirm('정말로 이 그룹훈련 워크아웃을 삭제하시겠습니까?\n삭제된 워크아웃은 복구할 수 없습니다.')) {
+    return;
+  }
+  
+  try {
+    if (typeof showLoading === 'function') showLoading('워크아웃 삭제 중...');
+    
+    const result = await apiDeleteGroupWorkout(workoutId);
+    
+    if (result && result.success) {
+      if (typeof showToast === 'function') {
+        showToast('그룹훈련 워크아웃이 삭제되었습니다');
+      }
+      await loadGroupWorkoutList(); // 목록 새로고침
+    } else {
+      throw new Error(result.error || '삭제 실패');
+    }
+  } catch (error) {
+    console.error('그룹훈련 워크아웃 삭제 실패:', error);
+    if (typeof showToast === 'function') {
+      showToast('워크아웃 삭제에 실패했습니다: ' + error.message);
+    }
+  } finally {
+    if (typeof hideLoading === 'function') hideLoading();
+  }
+}
+
+/**
+ * HTML 이스케이프 (XSS 방지)
+ */
+function escapeHtml(unsafe) {
+  if (unsafe === null || unsafe === undefined) {
+    return '';
+  }
+  return String(unsafe)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+// ========== 전역 함수 등록 ==========
+window.showGroupWorkoutManagement = showGroupWorkoutManagement;
+window.loadGroupWorkoutList = loadGroupWorkoutList;
+window.deleteGroupWorkout = deleteGroupWorkout;
+window.apiGetGroupWorkouts = apiGetGroupWorkouts;
+window.apiCreateGroupWorkout = apiCreateGroupWorkout;
+window.apiUpdateGroupWorkout = apiUpdateGroupWorkout;
+window.apiDeleteGroupWorkout = apiDeleteGroupWorkout;
+
+
+console.log('✅ 그룹 훈련 워크아웃 DB 연동 모듈 로딩 완료');
 
