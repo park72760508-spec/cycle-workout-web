@@ -1594,100 +1594,105 @@ async function tryAlternativeWorkoutLoading() {
 /**
  * 워크아웃 옵션 로드 (개선된 버전 - 구문 오류 수정)
  */
+/**
+ * 워크아웃 옵션 로드 (개선된 버전 - 오류 수정)
+ */
 async function loadWorkoutOptions() {
   console.log('📋 워크아웃 옵션 로딩 중...');
   
-  const workoutSelect = document.getElementById('roomWorkoutSelect');
+  // 여러 가능한 워크아웃 선택 요소 확인
+  const possibleSelectors = ['roomWorkoutSelect', 'workoutSelect', 'adminWorkoutSelect'];
+  let workoutSelect = null;
+  
+  for (const selector of possibleSelectors) {
+    workoutSelect = document.getElementById(selector);
+    if (workoutSelect) {
+      console.log(`워크아웃 선택 요소 발견: ${selector}`);
+      break;
+    }
+  }
+  
   if (!workoutSelect) {
-    console.warn('워크아웃 선택 요소를 찾을 수 없습니다');
+    console.warn('워크아웃 선택 요소를 찾을 수 없습니다. DOM 생성 후 재시도');
+    
+    // 0.5초 후 재시도
+    setTimeout(() => {
+      loadWorkoutOptions();
+    }, 500);
     return;
   }
   
   try {
     // 기존 옵션 제거 (기본 옵션 제외)
-    workoutSelect.innerHTML = '<option value="">워크아웃 선택...</option>';
+    workoutSelect.innerHTML = '<option value="">워크아웃 로딩 중...</option>';
     
-    // 전역 워크아웃 데이터 확인
     let workouts = [];
     
-    // 1순위: 그룹훈련 DB에서 워크아웃 로드
-    if (typeof window.apiGetGroupWorkouts === 'function') {
-      try {
-        console.log('📋 그룹훈련 DB에서 워크아웃 데이터를 로드합니다...');
-        const dbResult = await window.apiGetGroupWorkouts();
-        if (dbResult && dbResult.success && dbResult.workouts && dbResult.workouts.length > 0) {
-          workouts = dbResult.workouts.map(workout => ({
-            id: workout.id,
-            name: workout.title || workout.name,
-            duration: workout.duration || 60,
-            description: workout.description || '',
-            difficulty: workout.difficulty || 'medium',
-            category: workout.category || 'general'
-          }));
-          console.log(`✅ DB에서 ${workouts.length}개의 그룹훈련 워크아웃을 로드했습니다`);
-        } else {
-          console.warn('DB에 그룹훈련 워크아웃이 없습니다. 대체 방법을 시도합니다.');
-          workouts = await tryAlternativeWorkoutLoading();
+    // 1순위: API를 통한 워크아웃 조회
+    try {
+      if (typeof apiGetWorkouts === 'function') {
+        console.log('API를 통한 워크아웃 조회 시도');
+        const result = await apiGetWorkouts();
+        
+        if (result && result.success) {
+          // 다양한 응답 구조 지원
+          const apiWorkouts = result.items || result.workouts || result.data || [];
+          
+          if (Array.isArray(apiWorkouts) && apiWorkouts.length > 0) {
+            workouts = apiWorkouts;
+            console.log(`API를 통한 워크아웃 조회 성공: ${workouts.length}개`);
+          }
         }
-      } catch (error) {
-        console.error('그룹훈련 DB 워크아웃 로드 실패:', error);
-        workouts = await tryAlternativeWorkoutLoading();
       }
+    } catch (apiError) {
+      console.warn('API 워크아웃 조회 실패:', apiError);
     }
-    // 2순위: 전역 workoutPlans 배열 확인
-    else if (typeof window.workoutPlans !== 'undefined' && Array.isArray(window.workoutPlans) && window.workoutPlans.length > 0) {
-      console.log('📋 전역 workoutPlans 데이터를 사용합니다.');
-      workouts = window.workoutPlans.map(workout => ({
-        id: workout.id || workout.name,
-        name: workout.name || workout.title,
-        duration: workout.duration || workout.estimatedDuration || 60,
-        description: workout.description || workout.summary || ''
-      }));
-    } 
-    // 3순위: localStorage에서 저장된 워크아웃 확인
-    else {
-      try {
-        const savedWorkouts = JSON.parse(localStorage.getItem('workoutPlans') || '[]');
-        if (savedWorkouts.length > 0) {
-          console.log('📋 localStorage에서 저장된 워크아웃을 사용합니다.');
-          workouts = savedWorkouts.map(workout => ({
-            id: workout.id || workout.name,
-            name: workout.name || workout.title,
-            duration: workout.duration || workout.estimatedDuration || 60,
-            description: workout.description || workout.summary || ''
-          }));
-        } else if (typeof window.workoutData !== 'undefined' && Array.isArray(window.workoutData) && window.workoutData.length > 0) {
-          console.log('📋 window.workoutData를 사용합니다.');
-          workouts = window.workoutData;
-        } else {
-          console.log('📋 기본 워크아웃 데이터를 사용합니다.');
-          workouts = getDefaultWorkouts();
-        }
-      } catch (error) {
-        console.error('localStorage 워크아웃 로드 실패:', error);
-        workouts = window.workoutData || getDefaultWorkouts();
+    
+    // 2순위: 전역 워크아웃 데이터 사용
+    if (workouts.length === 0) {
+      if (window.workoutData && Array.isArray(window.workoutData) && window.workoutData.length > 0) {
+        workouts = window.workoutData;
+        console.log(`전역 워크아웃 데이터 사용: ${workouts.length}개`);
       }
     }
     
-    // 워크아웃 옵션 추가
+    // 3순위: 기본 워크아웃 사용
+    if (workouts.length === 0) {
+      workouts = getDefaultWorkouts();
+      console.log(`기본 워크아웃 사용: ${workouts.length}개`);
+    }
+    
+    // 워크아웃 옵션 생성
+    const options = [`<option value="">워크아웃을 선택하세요</option>`];
+    
     workouts.forEach(workout => {
-      const option = document.createElement('option');
-      option.value = workout.id || workout.name;
-      option.textContent = `${workout.name} (${workout.duration || 60}분)`;
-      option.dataset.description = workout.description || '';
-      workoutSelect.appendChild(option);
+      const id = workout.id || workout.workoutId || workout.key;
+      const name = workout.name || workout.title || workout.workoutName || `워크아웃 ${id}`;
+      options.push(`<option value="${id}">${escapeHtml(name)}</option>`);
     });
+    
+    workoutSelect.innerHTML = options.join('');
     
     console.log(`✅ ${workouts.length}개 워크아웃 옵션 로드 완료`);
     
   } catch (error) {
-    console.error('❌ 워크아웃 옵션 로딩 실패:', error);
+    console.error('워크아웃 옵션 로드 실패:', error);
     
-    // 에러 시 기본 옵션 추가
-    const defaultOption = document.createElement('option');
-    defaultOption.value = 'basic-training';
-    defaultOption.textContent = '기본 훈련 (60분)';
-    workoutSelect.appendChild(defaultOption);
+    // 최종 대체: 기본 워크아웃 로드
+    try {
+      const defaults = getDefaultWorkouts();
+      const fallbackOptions = [`<option value="">워크아웃을 선택하세요</option>`];
+      
+      defaults.forEach(workout => {
+        fallbackOptions.push(`<option value="${workout.id}">${escapeHtml(workout.name)}</option>`);
+      });
+      
+      workoutSelect.innerHTML = fallbackOptions.join('');
+      console.log(`기본 워크아웃으로 복구: ${defaults.length}개`);
+    } catch (fallbackError) {
+      console.error('기본 워크아웃 로드도 실패:', fallbackError);
+      workoutSelect.innerHTML = '<option value="">워크아웃을 사용할 수 없습니다</option>';
+    }
   }
 }
 
