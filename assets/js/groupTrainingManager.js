@@ -1272,20 +1272,6 @@ async function leaveGroupRoom() {
   }
 }
 
-/**
- * 방 데이터 동기화
- */
-async function syncRoomData() {
-  if (!groupTrainingState.roomCode) return;
-  
-  try {
-    const latestRoom = await getRoomByCode(groupTrainingState.roomCode);
-    
-    if (!latestRoom) {
-      showToast('방이 삭제되었습니다', 'error');
-      leaveGroupRoom();
-      return;
-    }
 
 
 
