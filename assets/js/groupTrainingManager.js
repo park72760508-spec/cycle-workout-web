@@ -38,7 +38,36 @@ let microphoneState = {
 };
 
 // ========== 기본 유틸리티 함수들 ==========
+/**
+ * 고유 ID 생성 함수
+ */
+function generateId(prefix = 'id') {
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).substring(2, 8);
+  return `${prefix}_${timestamp}_${randomStr}`;
+}
 
+/**
+ * 6자리 랜덤 방 코드 생성
+ */
+function generateRoomCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * 현재 시간 문자열 생성
+ */
+function getCurrentTimeString() {
+  return new Date().toISOString();
+}
+
+   
+   
 /**
  * 안전한 요소 접근
  */
@@ -184,7 +213,91 @@ async function jsonpRequestWithRetry(url, params = {}, maxRetries = 3) {
 }
 
 
+// ========== 그룹 훈련 API 함수들 ==========
 
+/**
+ * 그룹 훈련방 생성 API 호출
+ */
+async function apiCreateRoom(roomData) {
+  if (!roomData || typeof roomData !== 'object') {
+    return { success: false, error: '유효하지 않은 방 데이터입니다.' };
+  }
+  
+  try {
+    const params = {
+      action: 'createRoom',
+      roomName: String(roomData.roomName || ''),
+      maxParticipants: Number(roomData.maxParticipants) || 10,
+      workoutId: String(roomData.workoutId || ''),
+      adminId: String(roomData.adminId || ''),
+      adminName: String(roomData.adminName || '')
+    };
+    
+    console.log('방 생성 요청:', params);
+    return await jsonpRequestWithRetry(window.GAS_URL, params);
+  } catch (error) {
+    console.error('apiCreateRoom 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 그룹 훈련방 조회
+ */
+async function apiGetRoom(roomCode) {
+  if (!roomCode) {
+    return { success: false, error: '방 코드가 필요합니다.' };
+  }
+  
+  try {
+    return await jsonpRequest(window.GAS_URL, { 
+      action: 'getRoom', 
+      roomCode: String(roomCode) 
+    });
+  } catch (error) {
+    console.error('apiGetRoom 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 그룹 훈련방 참가
+ */
+async function apiJoinRoom(roomCode, participantData) {
+  if (!roomCode || !participantData) {
+    return { success: false, error: '방 코드와 참가자 데이터가 필요합니다.' };
+  }
+  
+  try {
+    const params = {
+      action: 'joinRoom',
+      roomCode: String(roomCode),
+      participantId: String(participantData.participantId || ''),
+      participantName: String(participantData.participantName || '')
+    };
+    
+    return await jsonpRequest(window.GAS_URL, params);
+  } catch (error) {
+    console.error('apiJoinRoom 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 워크아웃 목록 조회 API
+ */
+async function apiGetWorkouts() {
+  try {
+    if (!window.GAS_URL) {
+      console.warn('GAS_URL이 설정되지 않았습니다.');
+      return { success: false, error: 'GAS_URL이 설정되지 않았습니다.' };
+    }
+    return await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+  } catch (error) {
+    console.error('apiGetWorkouts 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
 
 
 
@@ -353,22 +466,6 @@ async function apiDeleteGroupWorkout(id) {
 
 
 
-/**
- * 6자리 랜덤 방 코드 생성
- */
-function generateRoomCode() {
-  return Math.random().toString(36).substr(2, 6).toUpperCase();
-}
-
-/**
- * 현재 시간 문자열 생성
- */
-function getCurrentTimeString() {
-  return new Date().toLocaleTimeString('ko-KR', {
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-}
 
 // ========== 화면 전환 함수들 ==========
 
@@ -570,26 +667,6 @@ async function loadWorkoutsForGroupRoom() {
     }
   }
 }
-
-/**
- * 그룹훈련용 워크아웃 API 함수 (워크아웃 매니저와 동일)
- */
-async function apiGetWorkouts() {
-  try {
-    if (!window.GAS_URL) {
-      console.warn('GAS_URL이 설정되지 않았습니다.');
-      return { success: false, error: 'GAS_URL이 설정되지 않았습니다.' };
-    }
-    
-    console.log('워크아웃 목록 API 호출:', window.GAS_URL);
-    return await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
-  } catch (error) {
-    console.error('apiGetWorkouts 실패:', error);
-    return { success: false, error: error.message };
-  }
-}
-
-
 
 
 
@@ -1102,15 +1179,7 @@ async function getRoomByCode(roomCode) {
 }
 
 
-/**
- * 고유 ID 생성 함수
- */
-   
-function generateId(prefix = 'id') {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 8);
-  return `${prefix}_${timestamp}_${randomStr}`;
-}
+
 
 // ========== 대기실 기능들 ==========
 
