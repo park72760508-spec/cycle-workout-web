@@ -331,21 +331,36 @@ async function apiGetWorkouts() {
 /**
  * 관리자 섹션 초기화 (워크아웃 목록 포함)
  */
+/**
+ * 관리자 섹션 초기화 (워크아웃 목록 포함) - 개선된 버전
+ */
 async function initializeAdminSection() {
   console.log('🎯 관리자 섹션 초기화');
   
-  // 워크아웃 목록 로드
-  await loadWorkoutsForGroupRoom();
-  
-  // 기타 초기화 작업
-  const roomNameInput = safeGet('roomNameInput');
-  if (roomNameInput) {
-    roomNameInput.value = '';
-  }
-  
-  const maxParticipants = safeGet('maxParticipants');
-  if (maxParticipants && !maxParticipants.value) {
-    maxParticipants.value = '10'; // 기본값 설정
+  try {
+    // 워크아웃 목록 로드
+    await loadWorkoutsForGroupRoom();
+    
+    // 추가 초기화 작업
+    if (typeof loadManagerData === 'function') {
+      await loadManagerData();
+    }
+    
+    // 활성 방 목록 초기화
+    if (typeof refreshActiveRooms === 'function') {
+      setTimeout(async () => {
+        try {
+          await refreshActiveRooms();
+        } catch (error) {
+          console.warn('활성 방 목록 초기화 실패:', error);
+        }
+      }, 1000);
+    }
+    
+    console.log('✅ 관리자 섹션 초기화 완료');
+  } catch (error) {
+    console.error('❌ 관리자 섹션 초기화 실패:', error);
+    console.log('기본 설정으로 계속 진행');
   }
 }
 
