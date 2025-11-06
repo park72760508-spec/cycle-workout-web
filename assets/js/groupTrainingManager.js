@@ -773,69 +773,130 @@ async function createGroupRoom() {
       };
     
     // 백엔드에 방 생성 요청 (실제 구현 시 API 호출)
-    const success = await createRoomOnBackend(roomData);
-    
-    if (success) {
-      groupTrainingState.currentRoom = roomData;
-      groupTrainingState.roomCode = roomCode;
-      groupTrainingState.isAdmin = true;
-      
-      showToast('훈련방이 생성되었습니다!', 'success');
-      showScreen('groupWaitingScreen');
-      initializeWaitingRoom();
-    } else {
-      throw new Error('Failed to create room');
-    }
-    
-  } catch (error) {
-    console.error('Error creating room:', error);
-    showToast('훈련방 생성에 실패했습니다', 'error');
-  }
+   try {
+     // 방 생성 시도
+     const success = await createRoomOnBackend(roomData);
+     
+     if (success) {
+       // 상태 업데이트
+       groupTrainingState.currentRoom = roomData;
+       groupTrainingState.roomCode = roomCode;
+       groupTrainingState.isAdmin = true;
+       
+       showToast(`방 생성 완료! 코드: ${roomCode}`, 'success');
+       
+       // 대기실로 이동
+       if (typeof showScreen === 'function') {
+         showScreen('waitingRoomScreen');
+       }
+       if (typeof initializeWaitingRoom === 'function') {
+         initializeWaitingRoom();
+       }
+       
+     } else {
+       throw new Error('방 생성에 실패했습니다');
+     }
+   } catch (creationError) {
+     console.error('방 생성 중 오류:', creationError);
+     showToast('방 생성에 실패했습니다: ' + (creationError.message || '알 수 없는 오류'), 'error');
+     
+     // 입력 필드 다시 활성화
+     if (roomNameInput) roomNameInput.disabled = false;
+     if (roomWorkoutSelect) roomWorkoutSelect.disabled = false;
+     if (maxParticipantsSelect) maxParticipantsSelect.disabled = false;
+   }
 }
 
 /**
  * 백엔드에 방 생성 (임시 구현)
  */
+/**
+ * 백엔드에 방 생성 (안전한 구현)
+ */
 async function createRoomOnBackend(roomData) {
   try {
-    // Google Apps Script API 호출
-    const params = new URLSearchParams({
-      action: 'createGroupRoom',
-      code: encodeURIComponent(roomData.code),
-      name: encodeURIComponent(roomData.name),
-      workoutId: roomData.workoutId,
-      adminId: roomData.adminId,
-      adminName: encodeURIComponent(roomData.adminName),
-      maxParticipants: roomData.maxParticipants,
-      status: roomData.status,
-      participants: encodeURIComponent(JSON.stringify(roomData.participants)),
-      settings: encodeURIComponent(JSON.stringify(roomData.settings))
-    });
+    console.log('Creating room on backend:', roomData);
     
-    const scriptUrl = window.GAS_URL || window.APP_SCRIPT_URL || 'your-gas-deployment-url';
-    const response = await fetch(`${scriptUrl}?${params.toString()}`);
-    const result = await response.json();
-    
-    if (result.success) {
-      return true;
-    } else {
-      console.error('Backend error:', result.error);
-      return false;
+    // 방 데이터 유효성 검사
+    if (!roomData || !roomData.code || !roomData.name) {
+      throw new Error('Invalid room data');
     }
     
-  } catch (error) {
-    console.error('Failed to create room on backend:', error);
+    // 고유 ID가 없으면 생성
+    if (!roomData.id) {
+      roomData.id = generateId('room');
+    }
     
-    // Fallback: localStorage에 저장
+    // 안전한 참가자 데이터 처리
+    const safeParticipants = (roomData.participants || []).map(p => ({
+      id: p.id || generateId('user'),
+      name: String(p.name || '참가자'),
+      role: String(p.role || 'participant'),
+      ready: Boolean(p.ready),
+      joinedAt: p.joinedAt || new Date().toISOString()
+    }));
+    
+    // 먼저 로컬 스토리지에 저장 (빠른 응답)
     try {
       const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
-      rooms[roomData.code] = roomData;
+      const safeRoomData = {
+        id: roomData.id,
+        code: String(roomData.code),
+        name: String(roomData.name),
+        workoutId: String(roomData.workoutId || 'default'),
+        adminId: String(roomData.adminId || generateId('admin')),
+        adminName: String(roomData.adminName || '관리자'),
+        maxParticipants: Number(roomData.maxParticipants) || 10,
+        status: String(roomData.status || 'waiting'),
+        participants: safeParticipants,
+        createdAt: roomData.createdAt || new Date().toISOString(),
+        settings: roomData.settings || {}
+      };
+      
+      rooms[roomData.code] = safeRoomData;
       localStorage.setItem('groupTrainingRooms', JSON.stringify(rooms));
-      return true;
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      return false;
+      console.log('Room saved to localStorage');
+    } catch (localError) {
+      console.warn('Failed to save to localStorage:', localError);
     }
+    
+    // Google Apps Script API 호출 시도 (백그라운드)
+    if (window.GAS_URL) {
+      try {
+        const params = {
+          action: 'createGroupRoom',
+          roomData: JSON.stringify({
+            id: roomData.id,
+            code: roomData.code,
+            name: roomData.name,
+            workoutId: roomData.workoutId,
+            adminId: roomData.adminId,
+            adminName: roomData.adminName,
+            maxParticipants: roomData.maxParticipants,
+            status: roomData.status,
+            participants: safeParticipants,
+            createdAt: roomData.createdAt || new Date().toISOString(),
+            settings: roomData.settings || {}
+          })
+        };
+        
+        const result = await jsonpRequest(window.GAS_URL, params);
+        
+        if (result && result.success) {
+          console.log('Room successfully created on backend');
+        } else {
+          console.warn('Backend creation failed, using localStorage only:', result?.error);
+        }
+      } catch (apiError) {
+        console.warn('API call failed, using localStorage only:', apiError);
+      }
+    }
+    
+    return true;
+    
+  } catch (error) {
+    console.error('Failed to create room:', error);
+    return false;
   }
 }
 
@@ -1030,7 +1091,13 @@ async function getRoomByCode(roomCode) {
 }
 
 
-
+ * 고유 ID 생성 함수
+ */
+function generateId(prefix = 'id') {
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).substring(2, 8);
+  return `${prefix}_${timestamp}_${randomStr}`;
+}
 
 // ========== 대기실 기능들 ==========
 
@@ -1892,6 +1959,9 @@ try {
   if (typeof generateRoomCode === 'function') {
     window.generateRoomCode = generateRoomCode;
   }
+  if (typeof generateId === 'function') {
+    window.generateId = generateId;
+  }
   if (typeof getCurrentTimeString === 'function') {
     window.getCurrentTimeString = getCurrentTimeString;
   }
@@ -1907,6 +1977,9 @@ try {
   // 방 관리 함수들
   if (typeof createGroupRoom === 'function') {
     window.createGroupRoom = createGroupRoom;
+  }
+  if (typeof createRoomOnBackend === 'function') {
+    window.createRoomOnBackend = createRoomOnBackend;
   }
   if (typeof joinGroupRoom === 'function') {
     window.joinGroupRoom = joinGroupRoom;
