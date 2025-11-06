@@ -286,16 +286,43 @@ async function apiJoinRoom(roomCode, participantData) {
 /**
  * 워크아웃 목록 조회 API
  */
+/**
+ * 워크아웃 목록 조회 API (개선된 버전)
+ */
 async function apiGetWorkouts() {
   try {
     if (!window.GAS_URL) {
-      console.warn('GAS_URL이 설정되지 않았습니다.');
-      return { success: false, error: 'GAS_URL이 설정되지 않았습니다.' };
+      console.warn('GAS_URL이 설정되지 않았습니다. 기본 워크아웃 사용');
+      return { 
+        success: true, 
+        items: getDefaultWorkouts() 
+      };
     }
-    return await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+    
+    console.log('워크아웃 목록 API 요청 시작');
+    const result = await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+    
+    // API 응답 검증 및 정규화
+    if (result && result.success) {
+      console.log('API 응답 성공:', result);
+      
+      // 워크아웃 데이터가 있는지 확인
+      let workouts = result.items || result.workouts || result.data || [];
+      
+      if (Array.isArray(workouts) && workouts.length > 0) {
+        return { success: true, items: workouts };
+      } else {
+        console.warn('API에서 워크아웃 데이터가 없음. 기본 워크아웃 사용');
+        return { success: true, items: getDefaultWorkouts() };
+      }
+    } else {
+      console.warn('API 응답 실패 또는 성공하지 않음:', result);
+      return { success: true, items: getDefaultWorkouts() };
+    }
   } catch (error) {
     console.error('apiGetWorkouts 실패:', error);
-    return { success: false, error: error.message };
+    console.log('기본 워크아웃 목록으로 대체');
+    return { success: true, items: getDefaultWorkouts() };
   }
 }
 
@@ -586,45 +613,94 @@ function normalizeWorkoutDataForGroup(workout) {
 /**
  * 그룹 방용 워크아웃 목록 로드
  */
+/**
+ * 그룹 방용 워크아웃 목록 로드 (개선된 버전)
+ */
 async function loadWorkoutsForGroupRoom() {
   console.log('🎯 그룹 방용 워크아웃 목록 로드');
   
-  const workoutSelect = safeGet('workoutSelect');
+  // 여러 가능한 워크아웃 선택 요소 확인
+  const possibleSelectors = ['roomWorkoutSelect', 'workoutSelect', 'adminWorkoutSelect'];
+  let workoutSelect = null;
+  
+  for (const selector of possibleSelectors) {
+    workoutSelect = safeGet(selector);
+    if (workoutSelect) {
+      console.log(`워크아웃 선택 요소 발견: ${selector}`);
+      break;
+    }
+  }
+  
   if (!workoutSelect) {
-    console.warn('workoutSelect 요소를 찾을 수 없습니다');
-    return;
+    console.warn('워크아웃 선택 요소를 찾을 수 없습니다. 기본 워크아웃 목록 사용');
+    // 기본 워크아웃 목록 반환
+    return getDefaultWorkouts();
   }
   
   try {
+    // 로딩 표시
     workoutSelect.innerHTML = '<option value="">워크아웃 로딩 중...</option>';
-    workoutSelect.disabled = true;
     
     const result = await apiGetWorkouts();
     
-    if (result && result.success && result.workouts) {
-      const options = result.workouts.map(workout => 
-        `<option value="${workout.ID}">${escapeHtml(workout.Title)}</option>`
-      ).join('');
+    // API 응답 구조 개선된 처리
+    let workouts = [];
+    
+    if (result && result.success) {
+      // 다양한 응답 구조 지원
+      if (result.items && Array.isArray(result.items)) {
+        workouts = result.items;
+      } else if (result.workouts && Array.isArray(result.workouts)) {
+        workouts = result.workouts;
+      } else if (result.data && Array.isArray(result.data)) {
+        workouts = result.data;
+      }
+    }
+    
+    console.log('API 응답 워크아웃 목록:', workouts);
+    
+    if (workouts && workouts.length > 0) {
+      const options = workouts.map(workout => {
+        const id = workout.id || workout.workoutId || workout.key;
+        const name = workout.name || workout.title || workout.workoutName || `워크아웃 ${id}`;
+        return `<option value="${id}">${escapeHtml(name)}</option>`;
+      }).join('');
       
       workoutSelect.innerHTML = `
         <option value="">워크아웃을 선택하세요</option>
         ${options}
       `;
       
-      console.log(`✅ ${result.workouts.length}개의 워크아웃 로드 완료`);
+      console.log(`✅ ${workouts.length}개의 워크아웃 로드 완료`);
     } else {
-      console.warn('워크아웃 목록이 비어있음:', result);
-      workoutSelect.innerHTML = `
-        <option value="">사용 가능한 워크아웃이 없습니다</option>
-      `;
+      console.warn('워크아웃 목록이 비어있음. 기본 워크아웃 사용');
+      // 기본 워크아웃 목록 사용
+      loadDefaultWorkouts(workoutSelect);
     }
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
+    console.log('기본 워크아웃 목록으로 대체');
+    loadDefaultWorkouts(workoutSelect);
+  }
+}
+
+/**
+ * 기본 워크아웃 목록 로드 (대체 함수)
+ */
+function loadDefaultWorkouts(workoutSelect) {
+  const defaultWorkouts = getDefaultWorkouts();
+  
+  if (workoutSelect && defaultWorkouts.length > 0) {
+    const options = defaultWorkouts.map(workout => 
+      `<option value="${workout.id}">${escapeHtml(workout.name)}</option>`
+    ).join('');
+    
     workoutSelect.innerHTML = `
-      <option value="">워크아웃 로드 실패</option>
+      <option value="">워크아웃을 선택하세요</option>
+      ${options}
     `;
-  } finally {
-    workoutSelect.disabled = false;
+    
+    console.log(`✅ ${defaultWorkouts.length}개의 기본 워크아웃 로드 완료`);
   }
 }
 
