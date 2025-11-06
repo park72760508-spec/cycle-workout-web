@@ -1102,8 +1102,10 @@ async function getRoomByCode(roomCode) {
 }
 
 
+/**
  * 고유 ID 생성 함수
  */
+   
 function generateId(prefix = 'id') {
   const timestamp = Date.now().toString(36);
   const randomStr = Math.random().toString(36).substring(2, 8);
