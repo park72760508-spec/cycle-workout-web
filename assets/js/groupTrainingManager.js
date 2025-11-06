@@ -731,80 +731,91 @@ async function fallbackWorkoutLoading(select) {
  * 그룹 훈련방 생성
  */
 async function createGroupRoom() {
-  const roomName = safeGet('roomNameInput')?.value?.trim();
-  const workoutId = safeGet('roomWorkoutSelect')?.value;
-  const maxParticipants = parseInt(safeGet('maxParticipants')?.value) || 4;
+  const roomNameInput = safeGet('roomNameInput');
+  const roomWorkoutSelect = safeGet('roomWorkoutSelect');
+  const maxParticipantsSelect = safeGet('maxParticipants');
+  
+  const roomName = roomNameInput?.value?.trim();
+  const workoutId = roomWorkoutSelect?.value;
+  const maxParticipants = parseInt(maxParticipantsSelect?.value) || 4;
   
   if (!roomName) {
     showToast('방 이름을 입력해주세요', 'error');
+    if (roomNameInput) roomNameInput.focus();
     return;
   }
   
   if (!workoutId) {
     showToast('훈련 종목을 선택해주세요', 'error');
+    if (roomWorkoutSelect) roomWorkoutSelect.focus();
     return;
   }
   
   try {
     showToast('훈련방을 생성 중입니다...', 'info');
     
-    const roomCode = generateRoomCode();
-      const roomData = {
-        code: roomCode,
-        name: roomName,
-        workoutId: workoutId,
-        maxParticipants: maxParticipants,
-        adminId: window.currentUser?.id || 'admin',
-        adminName: window.currentUser?.name || '관리자',
-        status: 'waiting',
-        createdAt: new Date().toISOString(),
-        participants: [{
-          id: window.currentUser?.id || 'admin',
-          name: window.currentUser?.name || '관리자',
-          role: 'admin',
-          ready: true,
-          joinedAt: new Date().toISOString()
-        }],
-        settings: {
-          allowSpectators: false,
-          autoStart: false,
-          voiceChat: true
-        }
-      };
+    // 입력 필드 비활성화 (중복 클릭 방지)
+    if (roomNameInput) roomNameInput.disabled = true;
+    if (roomWorkoutSelect) roomWorkoutSelect.disabled = true;
+    if (maxParticipantsSelect) maxParticipantsSelect.disabled = true;
     
-    // 백엔드에 방 생성 요청 (실제 구현 시 API 호출)
-   try {
-     // 방 생성 시도
-     const success = await createRoomOnBackend(roomData);
-     
-     if (success) {
-       // 상태 업데이트
-       groupTrainingState.currentRoom = roomData;
-       groupTrainingState.roomCode = roomCode;
-       groupTrainingState.isAdmin = true;
-       
-       showToast(`방 생성 완료! 코드: ${roomCode}`, 'success');
-       
-       // 대기실로 이동
-       if (typeof showScreen === 'function') {
-         showScreen('waitingRoomScreen');
-       }
-       if (typeof initializeWaitingRoom === 'function') {
-         initializeWaitingRoom();
-       }
-       
-     } else {
-       throw new Error('방 생성에 실패했습니다');
-     }
-   } catch (creationError) {
-     console.error('방 생성 중 오류:', creationError);
-     showToast('방 생성에 실패했습니다: ' + (creationError.message || '알 수 없는 오류'), 'error');
-     
-     // 입력 필드 다시 활성화
-     if (roomNameInput) roomNameInput.disabled = false;
-     if (roomWorkoutSelect) roomWorkoutSelect.disabled = false;
-     if (maxParticipantsSelect) maxParticipantsSelect.disabled = false;
-   }
+    const roomCode = generateRoomCode();
+    const roomData = {
+      code: roomCode,
+      name: roomName,
+      workoutId: workoutId,
+      maxParticipants: maxParticipants,
+      adminId: window.currentUser?.id || 'admin',
+      adminName: window.currentUser?.name || '관리자',
+      status: 'waiting',
+      createdAt: new Date().toISOString(),
+      participants: [{
+        id: window.currentUser?.id || 'admin',
+        name: window.currentUser?.name || '관리자',
+        role: 'admin',
+        ready: true,
+        joinedAt: new Date().toISOString()
+      }],
+      settings: {
+        allowSpectators: false,
+        autoStart: false,
+        voiceChat: true
+      }
+    };
+    
+    // 방 생성 시도
+    const success = await createRoomOnBackend(roomData);
+    
+    if (success) {
+      // 상태 업데이트
+      groupTrainingState.currentRoom = roomData;
+      groupTrainingState.roomCode = roomCode;
+      groupTrainingState.isAdmin = true;
+      
+      showToast(`방 생성 완료! 코드: ${roomCode}`, 'success');
+      
+      // 대기실로 이동
+      if (typeof showScreen === 'function') {
+        showScreen('waitingRoomScreen');
+      }
+      if (typeof initializeWaitingRoom === 'function') {
+        initializeWaitingRoom();
+      }
+      
+    } else {
+      throw new Error('방 생성에 실패했습니다');
+    }
+    
+  } catch (error) {
+    console.error('방 생성 중 오류:', error);
+    showToast('방 생성에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+    
+  } finally {
+    // 입력 필드 다시 활성화
+    if (roomNameInput) roomNameInput.disabled = false;
+    if (roomWorkoutSelect) roomWorkoutSelect.disabled = false;
+    if (maxParticipantsSelect) maxParticipantsSelect.disabled = false;
+  }
 }
 
 /**
