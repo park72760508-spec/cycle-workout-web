@@ -183,6 +183,121 @@ async function jsonpRequestWithRetry(url, params = {}, maxRetries = 3) {
   throw lastError;
 }
 
+
+
+
+/**
+ * 그룹방 생성을 위한 워크아웃 목록 로드
+ */
+async function loadWorkoutsForGroupRoom() {
+  console.log('🔄 그룹방용 워크아웃 목록 로드 시작');
+  
+  const select = safeGet('roomWorkoutSelect');
+  if (!select) {
+    console.warn('roomWorkoutSelect 요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  try {
+    // 기본 옵션만 유지
+    select.innerHTML = '<option value="">워크아웃을 불러오는 중...</option>';
+    
+    // 기존 워크아웃 매니저의 API 사용
+    let workouts = [];
+    
+    // 1. 로컬 워크아웃 데이터 확인
+    if (window.workoutData && Array.isArray(window.workoutData)) {
+      workouts = [...window.workoutData];
+    }
+    
+    // 2. DB에서 워크아웃 목록 조회 (workoutManager의 방식 사용)
+    if (typeof window.apiGetWorkouts === 'function') {
+      try {
+        const result = await window.apiGetWorkouts();
+        if (result && result.success && Array.isArray(result.workouts)) {
+          // DB 워크아웃과 로컬 워크아웃 병합 (중복 제거)
+          const dbWorkouts = result.workouts.map(w => ({
+            id: w.id,
+            name: w.title || w.name,
+            duration: w.duration || 60,
+            description: w.description || '',
+            author: w.author || '',
+            difficulty: w.difficulty || 'medium'
+          }));
+          
+          workouts = [...workouts, ...dbWorkouts];
+        }
+      } catch (error) {
+        console.warn('DB 워크아웃 로드 실패:', error);
+      }
+    }
+    
+    // 3. 중복 제거 (ID 기준)
+    const uniqueWorkouts = workouts.filter((workout, index, self) => 
+      index === self.findIndex(w => w.id === workout.id)
+    );
+    
+    // 4. 옵션 생성
+    if (uniqueWorkouts.length > 0) {
+      select.innerHTML = `
+        <option value="">워크아웃 선택...</option>
+        ${uniqueWorkouts.map(workout => `
+          <option value="${workout.id}" data-duration="${workout.duration || 60}">
+            ${escapeHtml(workout.name)} (${workout.duration || 60}분) ${workout.difficulty ? `- ${workout.difficulty}` : ''}
+          </option>
+        `).join('')}
+      `;
+      
+      console.log(`✅ ${uniqueWorkouts.length}개의 워크아웃 로드 완료`);
+    } else {
+      select.innerHTML = `
+        <option value="">워크아웃이 없습니다</option>
+        <option value="default">기본 훈련 (60분)</option>
+      `;
+      console.warn('⚠️ 로드된 워크아웃이 없습니다');
+    }
+    
+  } catch (error) {
+    console.error('워크아웃 목록 로드 실패:', error);
+    select.innerHTML = `
+      <option value="">로드 실패</option>
+      <option value="default">기본 훈련 (60분)</option>
+    `;
+    
+    if (typeof showToast === 'function') {
+      showToast('워크아웃 목록을 불러오지 못했습니다', 'error');
+    }
+  }
+}
+
+/**
+ * 관리자 섹션 초기화 (워크아웃 목록 포함)
+ */
+async function initializeAdminSection() {
+  console.log('🎯 관리자 섹션 초기화');
+  
+  // 워크아웃 목록 로드
+  await loadWorkoutsForGroupRoom();
+  
+  // 기타 초기화 작업
+  const roomNameInput = safeGet('roomNameInput');
+  if (roomNameInput) {
+    roomNameInput.value = '';
+  }
+  
+  const maxParticipants = safeGet('maxParticipants');
+  if (maxParticipants && !maxParticipants.value) {
+    maxParticipants.value = '10'; // 기본값 설정
+  }
+}
+
+
+
+
+
+
+
+   
 // ========== 그룹훈련 워크아웃 API 함수들 ==========
 
 /**
@@ -380,58 +495,49 @@ function selectGroupMode(mode) {
  * 역할 선택 (관리자/참가자)
  */
 async function selectRole(role) {
-  console.log('Role selected:', role);
+  console.log(`🎭 역할 선택: ${role}`);
   
-  const adminBtn = safeGet('adminRoleBtn');
-  const participantBtn = safeGet('participantRoleBtn');
-  // managerRoleBtn은 선택사항이므로 경고 없이 처리
-  const managerBtn = document.getElementById('managerRoleBtn'); // safeGet 대신 직접 접근
-  const adminSection = safeGet('adminSection');
-  const participantSection = safeGet('participantSection');
-  const managerSection = safeGet('managerSection');
+  // 기존 선택 해제
+  document.querySelectorAll('.role-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
   
-  if (!adminBtn || !participantBtn) {
-    console.error('Role UI elements not found');
-    return;
+  // 현재 선택 활성화
+  const currentBtn = safeGet(`${role}RoleBtn`);
+  if (currentBtn) {
+    currentBtn.classList.add('active');
   }
   
-  // 모든 버튼 비활성화
-  adminBtn.classList.remove('active');
-  participantBtn.classList.remove('active');
-  if (managerBtn) managerBtn.classList.remove('active');
+  // 섹션 표시/숨김
+  const sections = ['adminSection', 'participantSection', 'managerSection'];
+  sections.forEach(sectionId => {
+    const section = safeGet(sectionId);
+    if (section) {
+      if (sectionId === `${role}Section`) {
+        section.classList.remove('hidden');
+      } else {
+        section.classList.add('hidden');
+      }
+    }
+  });
   
-  // 모든 섹션 숨김
-  if (adminSection) adminSection.classList.add('hidden');
-  if (participantSection) participantSection.classList.add('hidden');
-  if (managerSection) managerSection.classList.add('hidden');
+  // 상태 업데이트
+  groupTrainingState.isAdmin = (role === 'admin');
+  groupTrainingState.isManager = (role === 'manager');
   
-  // 선택된 역할에 따라 활성화
+  // 관리자 선택 시 워크아웃 목록 로드
   if (role === 'admin') {
-    adminBtn.classList.add('active');
-    if (adminSection) adminSection.classList.remove('hidden');
-    groupTrainingState.isAdmin = true;
-    groupTrainingState.isManager = false;
-    await loadWorkoutsForRoom();
-  } else if (role === 'participant') {
-    participantBtn.classList.add('active');
-    if (participantSection) participantSection.classList.remove('hidden');
-    groupTrainingState.isAdmin = false;
-    groupTrainingState.isManager = false;
-    refreshRoomList();
-   } else if (role === 'manager') {
-     console.log('🔧 Manager role selected');
-     if (managerBtn) managerBtn.classList.add('active');
-     if (managerSection) managerSection.classList.remove('hidden');
-     groupTrainingState.isAdmin = false;
-     groupTrainingState.isManager = true;
-     
-     // initializeManagerDashboard 함수가 정의되어 있는지 확인
-     if (typeof initializeManagerDashboard === 'function') {
-       initializeManagerDashboard();
-     } else {
-       console.error('❌ initializeManagerDashboard function not found');
-     }
-   }
+    await initializeAdminSection();
+  }
+  
+  if (typeof showToast === 'function') {
+    const roleNames = {
+      admin: '관리자',
+      participant: '참가자', 
+      manager: '슈퍼 관리자'
+    };
+    showToast(`${roleNames[role]} 모드로 전환되었습니다`);
+  }
 }
 
 // ========== 관리자 기능들 ==========
@@ -869,20 +975,8 @@ async function getRoomByCode(roomCode) {
   }
 }
 
-/**
- * 백엔드에 방 정보 업데이트 (임시 구현)
- */
-async function updateRoomOnBackend(roomData) {
-  try {
-    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
-    rooms[roomData.code] = roomData;
-    localStorage.setItem('groupTrainingRooms', JSON.stringify(rooms));
-    return true;
-  } catch (error) {
-    console.error('Failed to update room:', error);
-    return false;
-  }
-}
+
+
 
 // ========== 대기실 기능들 ==========
 
@@ -1729,7 +1823,13 @@ window.apiCreateGroupWorkout = apiCreateGroupWorkout;
 window.apiDeleteGroupWorkout = apiDeleteGroupWorkout;
 window.showToast = showToast;
 window.safeGet = safeGet;
+window.loadWorkoutsForGroupRoom = loadWorkoutsForGroupRoom;
+window.initializeAdminSection = initializeAdminSection;
 
+
+
+
+     
 // 그룹훈련 모듈 함수 등록 확인 (변수명 변경으로 충돌 방지)
 const groupTrainingFunctions = [
   'showGroupWorkoutManagement', 'loadGroupWorkoutList', 'deleteGroupWorkout',
