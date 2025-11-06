@@ -583,88 +583,48 @@ function normalizeWorkoutDataForGroup(workout) {
 /**
  * 그룹방 생성을 위한 워크아웃 목록 로드 (워크아웃 매니저 방식 적용)
  */
+/**
+ * 그룹 방용 워크아웃 목록 로드
+ */
 async function loadWorkoutsForGroupRoom() {
-  console.log('🔄 그룹방용 워크아웃 목록 로드 시작');
+  console.log('🎯 그룹 방용 워크아웃 목록 로드');
   
-  const select = safeGet('roomWorkoutSelect');
-  if (!select) {
-    console.warn('roomWorkoutSelect 요소를 찾을 수 없습니다');
+  const workoutSelect = safeGet('workoutSelect');
+  if (!workoutSelect) {
+    console.warn('workoutSelect 요소를 찾을 수 없습니다');
     return;
   }
   
   try {
-    // 로딩 상태 표시
-    select.innerHTML = '<option value="">워크아웃을 불러오는 중...</option>';
+    workoutSelect.innerHTML = '<option value="">워크아웃 로딩 중...</option>';
+    workoutSelect.disabled = true;
     
-    // 워크아웃 매니저와 동일한 방식으로 API 호출
     const result = await apiGetWorkouts();
-    console.log('그룹방 워크아웃 API 응답:', result);
     
-    if (!result || !result.success) {
-      const errorMsg = result?.error || '알 수 없는 오류';
-      select.innerHTML = `
-        <option value="">워크아웃 로드 실패: ${escapeHtml(errorMsg)}</option>
-        <option value="default">기본 훈련 (60분)</option>
+    if (result && result.success && result.workouts) {
+      const options = result.workouts.map(workout => 
+        `<option value="${workout.ID}">${escapeHtml(workout.Title)}</option>`
+      ).join('');
+      
+      workoutSelect.innerHTML = `
+        <option value="">워크아웃을 선택하세요</option>
+        ${options}
       `;
       
-      if (typeof showToast === 'function') {
-        showToast('워크아웃 목록을 불러오지 못했습니다: ' + errorMsg, 'error');
-      }
-      return;
-    }
-
-    // 워크아웃 매니저와 동일한 방식으로 데이터 처리
-    const rawWorkouts = result.items || [];
-    console.log('Raw workouts received for group:', rawWorkouts);
-    
-    const validWorkouts = rawWorkouts
-      .filter(validateWorkoutDataForGroup)
-      .map(normalizeWorkoutDataForGroup)
-      .filter(w => w.status === '보이기'); // 활성 워크아웃만 표시
-    
-    console.log('Normalized workouts for group:', validWorkouts);
-    
-    if (validWorkouts.length === 0) {
-      select.innerHTML = `
-        <option value="">등록된 워크아웃이 없습니다</option>
-        <option value="default">기본 훈련 (60분)</option>
+      console.log(`✅ ${result.workouts.length}개의 워크아웃 로드 완료`);
+    } else {
+      console.warn('워크아웃 목록이 비어있음:', result);
+      workoutSelect.innerHTML = `
+        <option value="">사용 가능한 워크아웃이 없습니다</option>
       `;
-      console.warn('⚠️ 유효한 워크아웃이 없습니다');
-      return;
     }
-
-    // 드롭다운 옵션 생성
-    const options = validWorkouts.map(workout => {
-      const duration = Math.round(workout.total_seconds / 60); // 초를 분으로 변환
-      const title = escapeHtml(workout.title);
-      const author = workout.author ? ` - ${escapeHtml(workout.author)}` : '';
-      
-      return `<option value="${workout.id}" data-duration="${duration}">
-        ${title} (${duration}분)${author}
-      </option>`;
-    }).join('');
-    
-    select.innerHTML = `
-      <option value="">워크아웃 선택...</option>
-      ${options}
-    `;
-    
-    console.log(`✅ ${validWorkouts.length}개의 워크아웃 로드 완료`);
-    
-    if (typeof showToast === 'function') {
-      showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다`, 'success');
-    }
-    
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
-    select.innerHTML = `
-      <option value="">네트워크 오류</option>
-      <option value="default">기본 훈련 (60분)</option>
+    workoutSelect.innerHTML = `
+      <option value="">워크아웃 로드 실패</option>
     `;
-    
-    if (typeof showToast === 'function') {
-      showToast('네트워크 오류로 워크아웃을 불러올 수 없습니다', 'error');
-    }
+  } finally {
+    workoutSelect.disabled = false;
   }
 }
 
@@ -898,95 +858,30 @@ async function createGroupRoom() {
 /**
  * 백엔드에 방 생성 (임시 구현)
  */
+
 /**
- * 백엔드에 방 생성 (안전한 구현)
+ * 백엔드에서 방 생성
  */
 async function createRoomOnBackend(roomData) {
+  console.log('🔄 백엔드 방 생성 요청:', roomData);
+  
   try {
-    console.log('Creating room on backend:', roomData);
+    const result = await apiCreateRoom(roomData);
     
-    // 방 데이터 유효성 검사
-    if (!roomData || !roomData.code || !roomData.name) {
-      throw new Error('Invalid room data');
+    if (result && result.success) {
+      console.log('✅ 백엔드 방 생성 성공:', result);
+      return result;
+    } else {
+      console.error('❌ 백엔드 방 생성 실패:', result);
+      throw new Error(result?.error || '방 생성 실패');
     }
-    
-    // 고유 ID가 없으면 생성
-    if (!roomData.id) {
-      roomData.id = generateId('room');
-    }
-    
-    // 안전한 참가자 데이터 처리
-    const safeParticipants = (roomData.participants || []).map(p => ({
-      id: p.id || generateId('user'),
-      name: String(p.name || '참가자'),
-      role: String(p.role || 'participant'),
-      ready: Boolean(p.ready),
-      joinedAt: p.joinedAt || new Date().toISOString()
-    }));
-    
-    // 먼저 로컬 스토리지에 저장 (빠른 응답)
-    try {
-      const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
-      const safeRoomData = {
-        id: roomData.id,
-        code: String(roomData.code),
-        name: String(roomData.name),
-        workoutId: String(roomData.workoutId || 'default'),
-        adminId: String(roomData.adminId || generateId('admin')),
-        adminName: String(roomData.adminName || '관리자'),
-        maxParticipants: Number(roomData.maxParticipants) || 10,
-        status: String(roomData.status || 'waiting'),
-        participants: safeParticipants,
-        createdAt: roomData.createdAt || new Date().toISOString(),
-        settings: roomData.settings || {}
-      };
-      
-      rooms[roomData.code] = safeRoomData;
-      localStorage.setItem('groupTrainingRooms', JSON.stringify(rooms));
-      console.log('Room saved to localStorage');
-    } catch (localError) {
-      console.warn('Failed to save to localStorage:', localError);
-    }
-    
-    // Google Apps Script API 호출 시도 (백그라운드)
-    if (window.GAS_URL) {
-      try {
-        const params = {
-          action: 'createGroupRoom',
-          roomData: JSON.stringify({
-            id: roomData.id,
-            code: roomData.code,
-            name: roomData.name,
-            workoutId: roomData.workoutId,
-            adminId: roomData.adminId,
-            adminName: roomData.adminName,
-            maxParticipants: roomData.maxParticipants,
-            status: roomData.status,
-            participants: safeParticipants,
-            createdAt: roomData.createdAt || new Date().toISOString(),
-            settings: roomData.settings || {}
-          })
-        };
-        
-        const result = await jsonpRequest(window.GAS_URL, params);
-        
-        if (result && result.success) {
-          console.log('Room successfully created on backend');
-        } else {
-          console.warn('Backend creation failed, using localStorage only:', result?.error);
-        }
-      } catch (apiError) {
-        console.warn('API call failed, using localStorage only:', apiError);
-      }
-    }
-    
-    return true;
-    
   } catch (error) {
-    console.error('Failed to create room:', error);
-    return false;
+    console.error('createRoomOnBackend 실패:', error);
+    throw error;
   }
 }
+
+
 
 // ========== 참가자 기능들 ==========
 
@@ -2046,6 +1941,26 @@ try {
   }
   if (typeof getCurrentTimeString === 'function') {
     window.getCurrentTimeString = getCurrentTimeString;
+  }
+  
+  // 🆕 API 함수들 추가
+  if (typeof apiCreateRoom === 'function') {
+    window.apiCreateRoom = apiCreateRoom;
+  }
+  if (typeof apiGetRoom === 'function') {
+    window.apiGetRoom = apiGetRoom;
+  }
+  if (typeof apiJoinRoom === 'function') {
+    window.apiJoinRoom = apiJoinRoom;
+  }
+  if (typeof apiGetWorkouts === 'function') {
+    window.apiGetWorkouts = apiGetWorkouts;
+  }
+  if (typeof apiLeaveRoom === 'function') {
+    window.apiLeaveRoom = apiLeaveRoom;
+  }
+  if (typeof apiSyncRoom === 'function') {
+    window.apiSyncRoom = apiSyncRoom;
   }
   
   // 화면 전환 함수들
