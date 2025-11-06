@@ -186,89 +186,7 @@ async function jsonpRequestWithRetry(url, params = {}, maxRetries = 3) {
 
 
 
-/**
- * 그룹방 생성을 위한 워크아웃 목록 로드
- */
-async function loadWorkoutsForGroupRoom() {
-  console.log('🔄 그룹방용 워크아웃 목록 로드 시작');
-  
-  const select = safeGet('roomWorkoutSelect');
-  if (!select) {
-    console.warn('roomWorkoutSelect 요소를 찾을 수 없습니다');
-    return;
-  }
-  
-  try {
-    // 기본 옵션만 유지
-    select.innerHTML = '<option value="">워크아웃을 불러오는 중...</option>';
-    
-    // 기존 워크아웃 매니저의 API 사용
-    let workouts = [];
-    
-    // 1. 로컬 워크아웃 데이터 확인
-    if (window.workoutData && Array.isArray(window.workoutData)) {
-      workouts = [...window.workoutData];
-    }
-    
-    // 2. DB에서 워크아웃 목록 조회 (workoutManager의 방식 사용)
-    if (typeof window.apiGetWorkouts === 'function') {
-      try {
-        const result = await window.apiGetWorkouts();
-        if (result && result.success && Array.isArray(result.workouts)) {
-          // DB 워크아웃과 로컬 워크아웃 병합 (중복 제거)
-          const dbWorkouts = result.workouts.map(w => ({
-            id: w.id,
-            name: w.title || w.name,
-            duration: w.duration || 60,
-            description: w.description || '',
-            author: w.author || '',
-            difficulty: w.difficulty || 'medium'
-          }));
-          
-          workouts = [...workouts, ...dbWorkouts];
-        }
-      } catch (error) {
-        console.warn('DB 워크아웃 로드 실패:', error);
-      }
-    }
-    
-    // 3. 중복 제거 (ID 기준)
-    const uniqueWorkouts = workouts.filter((workout, index, self) => 
-      index === self.findIndex(w => w.id === workout.id)
-    );
-    
-    // 4. 옵션 생성
-    if (uniqueWorkouts.length > 0) {
-      select.innerHTML = `
-        <option value="">워크아웃 선택...</option>
-        ${uniqueWorkouts.map(workout => `
-          <option value="${workout.id}" data-duration="${workout.duration || 60}">
-            ${escapeHtml(workout.name)} (${workout.duration || 60}분) ${workout.difficulty ? `- ${workout.difficulty}` : ''}
-          </option>
-        `).join('')}
-      `;
-      
-      console.log(`✅ ${uniqueWorkouts.length}개의 워크아웃 로드 완료`);
-    } else {
-      select.innerHTML = `
-        <option value="">워크아웃이 없습니다</option>
-        <option value="default">기본 훈련 (60분)</option>
-      `;
-      console.warn('⚠️ 로드된 워크아웃이 없습니다');
-    }
-    
-  } catch (error) {
-    console.error('워크아웃 목록 로드 실패:', error);
-    select.innerHTML = `
-      <option value="">로드 실패</option>
-      <option value="default">기본 훈련 (60분)</option>
-    `;
-    
-    if (typeof showToast === 'function') {
-      showToast('워크아웃 목록을 불러오지 못했습니다', 'error');
-    }
-  }
-}
+
 
 /**
  * 관리자 섹션 초기화 (워크아웃 목록 포함)
@@ -542,6 +460,97 @@ async function selectRole(role) {
 
 // ========== 관리자 기능들 ==========
 
+/**
+ * 그룹방 생성을 위한 워크아웃 목록 로드
+ */
+async function loadWorkoutsForGroupRoom() {
+  console.log('🔄 그룹방용 워크아웃 목록 로드 시작');
+  
+  const select = safeGet('roomWorkoutSelect');
+  if (!select) {
+    console.warn('roomWorkoutSelect 요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  try {
+    // 기본 옵션만 유지
+    select.innerHTML = '<option value="">워크아웃을 불러오는 중...</option>';
+    
+    // 기존 워크아웃 매니저의 API 사용
+    let workouts = [];
+    
+    // 1. 로컬 워크아웃 데이터 확인
+    if (window.workoutData && Array.isArray(window.workoutData)) {
+      workouts = [...window.workoutData];
+    }
+    
+    // 2. DB에서 워크아웃 목록 조회 (workoutManager의 방식 사용)
+    if (typeof window.apiGetWorkouts === 'function') {
+      try {
+        const result = await window.apiGetWorkouts();
+        if (result && result.success && Array.isArray(result.workouts)) {
+          // DB 워크아웃과 로컬 워크아웃 병합 (중복 제거)
+          const dbWorkouts = result.workouts.map(w => ({
+            id: w.id,
+            name: w.title || w.name,
+            duration: w.duration || 60,
+            description: w.description || '',
+            author: w.author || '',
+            difficulty: w.difficulty || 'medium'
+          }));
+          
+          workouts = [...workouts, ...dbWorkouts];
+        }
+      } catch (error) {
+        console.warn('DB 워크아웃 로드 실패:', error);
+      }
+    }
+    
+    // 3. 중복 제거 (ID 기준)
+    const uniqueWorkouts = workouts.filter((workout, index, self) => 
+      index === self.findIndex(w => w.id === workout.id)
+    );
+    
+    // 4. 옵션 생성
+    if (uniqueWorkouts.length > 0) {
+      select.innerHTML = `
+        <option value="">워크아웃 선택...</option>
+        ${uniqueWorkouts.map(workout => `
+          <option value="${workout.id}" data-duration="${workout.duration || 60}">
+            ${escapeHtml(workout.name)} (${workout.duration || 60}분) ${workout.difficulty ? `- ${workout.difficulty}` : ''}
+          </option>
+        `).join('')}
+      `;
+      
+      console.log(`✅ ${uniqueWorkouts.length}개의 워크아웃 로드 완료`);
+    } else {
+      select.innerHTML = `
+        <option value="">워크아웃이 없습니다</option>
+        <option value="default">기본 훈련 (60분)</option>
+      `;
+      console.warn('⚠️ 로드된 워크아웃이 없습니다');
+    }
+    
+  } catch (error) {
+    console.error('워크아웃 목록 로드 실패:', error);
+    select.innerHTML = `
+      <option value="">로드 실패</option>
+      <option value="default">기본 훈련 (60분)</option>
+    `;
+    
+    if (typeof showToast === 'function') {
+      showToast('워크아웃 목록을 불러오지 못했습니다', 'error');
+    }
+  }
+}
+
+
+
+
+
+
+
+   
 /**
  * 워크아웃 목록 로드 (방 생성용)
  */
