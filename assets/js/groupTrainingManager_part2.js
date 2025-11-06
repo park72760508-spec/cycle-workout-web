@@ -637,7 +637,7 @@ function addChatMessage(chatMessage) {
 /**
  * 그룹 방 화면 초기화
  */
-function initializeGroupRoomScreen() {
+async function initializeGroupRoomScreen() {
   console.log('🔍 initializeGroupRoomScreen called');
   console.log('👤 Current user:', window.currentUser);
   
@@ -666,7 +666,6 @@ function initializeGroupRoomScreen() {
   if (managerSection) managerSection.classList.add('hidden');
   
   // grade=1 사용자인지 확인하여 관리자 메뉴 표시
-   // grade=1 사용자인지 확인하여 관리자 메뉴 표시
    const currentUser = window.currentUser;
    console.log('👤 Current user grade check:', currentUser?.grade, typeof currentUser?.grade);
    
@@ -689,6 +688,15 @@ function initializeGroupRoomScreen() {
   
   if (roomNameInput) roomNameInput.value = '';
   if (roomCodeInput) roomCodeInput.value = '';
+  
+  // 워크아웃 드롭다운 미리 로드 (성능 향상)
+  if (typeof window.loadWorkoutsForGroupRoom === 'function') {
+    try {
+      await window.loadWorkoutsForGroupRoom();
+    } catch (error) {
+      console.warn('워크아웃 목록 사전 로드 실패:', error);
+    }
+  }
   
   console.log('✅ initializeGroupRoomScreen completed');
 }
