@@ -465,12 +465,8 @@ async function selectRole(role) {
  */
 // 워크아웃 매니저와 동일한 데이터 검증 함수들 추가
 function validateWorkoutDataForGroup(workout) {
-  if (!workout || typeof workout !== 'object') {
-    return false;
-  }
-  if (workout.id === null || workout.id === undefined) {
-    return false;
-  }
+  if (!workout || typeof workout !== 'object') return false;
+  if (workout.id === null || workout.id === undefined) return false;
   return true;
 }
 
