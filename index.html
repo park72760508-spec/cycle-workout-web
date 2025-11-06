@@ -929,7 +929,7 @@
               <li>관리자 음성 코칭</li>
               <li>함께하는 동기부여</li>
             </ul>
-            <button class="btn btn-primary" id="btnGroupTraining">
+            <button class="btn btn-primary" id="btnGroupTraining" onclick="selectTrainingMode('group')">
               <span class="btn-icon">🏆</span>
               그룹 훈련 참가
             </button>
@@ -1173,9 +1173,9 @@
       </div>
       <div class="form-group">
         <label>훈련 종목</label>
-        <select id="roomWorkoutSelect">
-          <option value="">워크아웃 선택...</option>
-        </select>
+          <select id="workoutSelect">
+            <option value="">워크아웃 선택...</option>
+          </select>
       </div>
       <div class="form-group">
         <label>최대 참가자</label>
@@ -1512,12 +1512,13 @@
 <script src="assets/js/userManager.js"></script>
 <script src="assets/js/resultManager.js"></script>
 <script src="assets/js/bluetooth.js"></script>
-<script src="assets/js/app.js"></script>
 <script src="assets/js/training.js"></script>
 <!-- 그룹 훈련 모듈들 -->
 <script src="assets/js/groupTrainingManager.js"></script>
 <script src="assets/js/groupTrainingManager_part2.js"></script>
+<script src="assets/js/app.js"></script>  
 
+  
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 </body>
