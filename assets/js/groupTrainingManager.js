@@ -815,29 +815,7 @@ async function selectRole(role) {
 
    
   
-  if (typeof showToast === 'function') {
-    const roleNames = {
-      admin: '관리자',
-      participant: '참가자', 
-      manager: '슈퍼 관리자'
-    };
-    showToast(`${roleNames[role]} 모드로 전환되었습니다`);
-  }
-}
-
-
-// 기존 selectRole 함수에서 participant 부분을 찾아서 다음 코드 추가
-
-if (role === 'participant') {
-  // 기존 코드...
-  
-  // 참가자 섹션 표시 후 방 목록 자동 로드
-  setTimeout(async () => {
-    console.log('🎯 참가자 모드 - 방 목록 자동 로드 시작');
-    await refreshRoomList();
-  }, 150);
-}
-
+ 
 
 
 
