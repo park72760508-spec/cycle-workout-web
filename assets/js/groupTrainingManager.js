@@ -370,45 +370,114 @@ async function apiGetWorkouts() {
 }
 
 
-
 /**
- * 관리자 섹션 초기화 (워크아웃 목록 포함)
+ * 즉시 중복 워크아웃 선택 요소 제거 (개선된 버전)
  */
-/**
- * 관리자 섹션 초기화 (워크아웃 목록 포함) - 개선된 버전
- */
-/**
- * 관리자 섹션 초기화 (워크아웃 드롭다운 포함)
- */
-/**
- * 관리자 섹션 초기화 (중복 제거 우선)
- */
-async function initializeAdminSection() {
-  console.log('🎯 관리자 섹션 초기화 시작 - 중복 제거 우선 모드');
+function removeDuplicateWorkoutSelectsNow() {
+  console.log('🧹 즉시 중복 워크아웃 선택 요소 제거 실행');
   
-  const adminSection = safeGet('adminSection');
+  const adminSection = document.getElementById('adminSection');
   if (!adminSection) {
     console.warn('adminSection을 찾을 수 없습니다');
     return;
   }
   
-  // 1단계: 모든 워크아웃 관련 요소들 정리
-  await cleanupWorkoutElements(adminSection);
-  
-  // 2단계: 단일 워크아웃 선택 요소 확보
-  let roomWorkoutSelect = ensureSingleWorkoutSelect(adminSection);
-  
-  if (!roomWorkoutSelect) {
-    console.error('❌ 워크아웃 선택 요소를 생성할 수 없습니다');
-    return;
+  try {
+    // 모든 select 요소들 찾기
+    const allSelects = adminSection.querySelectorAll('select');
+    const workoutSelects = [];
+    
+    // 워크아웃 관련 select들만 필터링
+    allSelects.forEach(select => {
+      const hasWorkoutOptions = Array.from(select.options).some(option => 
+        option.textContent.includes('SST') || 
+        option.textContent.includes('Zone') || 
+        option.textContent.includes('Sweet') ||
+        option.textContent.includes('Threshold') ||
+        option.textContent.includes('Vo2max') ||
+        option.textContent.includes('워크아웃')
+      );
+      
+      const hasWorkoutAttribute = 
+        (select.id && select.id.includes('workout')) || 
+        (select.name && select.name.includes('workout')) ||
+        (select.className && select.className.includes('workout'));
+      
+      if (hasWorkoutOptions || hasWorkoutAttribute) {
+        workoutSelects.push(select);
+      }
+    });
+    
+    console.log(`🔍 워크아웃 선택 요소 ${workoutSelects.length}개 발견`);
+    
+    // 첫 번째만 남기고 나머지 제거
+    if (workoutSelects.length > 1) {
+      for (let i = 1; i < workoutSelects.length; i++) {
+        const selectToRemove = workoutSelects[i];
+        
+        // 부모 요소들 중에서 form-group, input-group 등을 찾아 제거
+        let parentToRemove = selectToRemove.parentElement;
+        
+        // 적절한 부모 요소 찾기
+        while (parentToRemove && !parentToRemove.classList.contains('form-group') && 
+               !parentToRemove.classList.contains('input-group') && 
+               !parentToRemove.classList.contains('field-group') &&
+               parentToRemove !== adminSection) {
+          parentToRemove = parentToRemove.parentElement;
+        }
+        
+        if (parentToRemove && parentToRemove !== adminSection) {
+          parentToRemove.remove();
+          console.log(`✅ 중복 워크아웃 선택 그룹 제거됨 (${i}번째)`);
+        } else {
+          selectToRemove.remove();
+          console.log(`✅ 중복 워크아웃 선택 요소 제거됨 (${i}번째)`);
+        }
+      }
+      
+      // 남은 첫 번째 요소의 ID 설정
+      if (workoutSelects[0]) {
+        workoutSelects[0].id = 'roomWorkoutSelect';
+        console.log('✅ 첫 번째 워크아웃 선택 요소를 roomWorkoutSelect로 설정');
+      }
+    } else if (workoutSelects.length === 1) {
+      // 하나만 있으면 ID만 설정
+      workoutSelects[0].id = 'roomWorkoutSelect';
+      console.log('✅ 워크아웃 선택 요소 ID를 roomWorkoutSelect로 설정');
+    }
+    
+  } catch (error) {
+    console.error('❌ 워크아웃 요소 제거 중 오류:', error);
   }
+}
+   
+
+
+
+/**
+ * 관리자 섹션 초기화 (간단하고 안전한 버전)
+ */
+async function initializeAdminSection() {
+  console.log('🎯 관리자 섹션 초기화 시작');
   
-  // 3단계: 워크아웃 목록 로드
-  setTimeout(async () => {
-    await loadWorkoutsForRoom();
-  }, 100);
-  
-  console.log('✅ 관리자 섹션 초기화 완료');
+  try {
+    // 즉시 중복 제거
+    removeDuplicateWorkoutSelectsNow();
+    
+    // 워크아웃 목록 로드
+    setTimeout(async () => {
+      try {
+        await loadWorkoutsForRoom();
+      } catch (error) {
+        console.error('워크아웃 로드 중 오류:', error);
+      }
+    }, 100);
+    
+    console.log('✅ 관리자 섹션 초기화 완료');
+    
+  } catch (error) {
+    console.error('❌ 관리자 섹션 초기화 중 오류:', error);
+  }
 }
 
 /**
@@ -456,7 +525,13 @@ async function cleanupWorkoutElements(adminSection) {
   }
   
   // 라벨 중복도 확인 및 제거
-  const workoutLabels = adminSection.querySelectorAll('label[for*="workout"], label:contains("훈련"), label:contains("종목")');
+  // 라벨 중복도 확인 및 제거
+const allLabels = adminSection.querySelectorAll('label');
+const workoutLabels = Array.from(allLabels).filter(label => 
+  label.getAttribute('for') && label.getAttribute('for').includes('workout') ||
+  label.textContent.includes('훈련') || 
+  label.textContent.includes('종목')
+);
   if (workoutLabels.length > 1) {
     for (let i = 1; i < workoutLabels.length; i++) {
       const labelToRemove = workoutLabels[i];
