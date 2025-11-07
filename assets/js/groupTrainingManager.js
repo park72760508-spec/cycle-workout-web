@@ -2337,7 +2337,10 @@ window.loadWorkoutsForGroupRoom = loadWorkoutsForGroupRoom;
 window.initializeAdminSection = initializeAdminSection;
 
 
-
+// 🆕 새로 추가된 함수들
+window.initializeParticipantSection = initializeParticipantSection;
+window.refreshRoomList = refreshRoomList;
+window.removeDuplicateWorkoutSelectsNow = removeDuplicateWorkoutSelectsNow;
 
      
 // 그룹훈련 모듈 함수 등록 확인 (변수명 변경으로 충돌 방지)
