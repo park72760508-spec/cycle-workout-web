@@ -786,13 +786,31 @@ async function selectRole(role) {
   groupTrainingState.isManager = (role === 'manager');
   
   // 관리자 선택 시 워크아웃 목록 로드
-if (role === 'admin') {
-  // 기존 코드...
-  
-  // 관리자 섹션 초기화 (워크아웃 드롭다운 포함)
-  setTimeout(async () => {
+// 관리자 선택 시 워크아웃 목록 로드
+  if (role === 'admin') {
     await initializeAdminSection();
-  }, 150);
+  }
+  
+  // 참가자 선택 시 방 목록 로드
+  if (role === 'participant') {
+    setTimeout(async () => {
+      console.log('🎯 참가자 모드 - 방 목록 자동 로드 시작');
+      try {
+        await initializeParticipantSection();
+      } catch (error) {
+        console.error('참가자 섹션 초기화 실패:', error);
+      }
+    }, 150);
+  }
+  
+  if (typeof showToast === 'function') {
+    const roleNames = {
+      admin: '관리자',
+      participant: '참가자', 
+      manager: '슈퍼 관리자'
+    };
+    showToast(`${roleNames[role]} 모드로 전환되었습니다`);
+  }
 }
 
    
