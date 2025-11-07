@@ -288,6 +288,172 @@ async function closeGroupRoom() {
 
 // ========== 그룹 모니터링 기능들 ==========
 
+
+// ========== 그룹 모니터링 기능들 ==========
+
+/**
+ * 모니터링 오버레이용 CSS 스타일 추가
+ */
+function addMonitoringStyles() {
+  if (document.getElementById('monitoringStyles')) return; // 이미 추가됨
+  
+  const style = document.createElement('style');
+  style.id = 'monitoringStyles';
+  style.textContent = `
+    .monitoring-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .monitoring-overlay.hidden {
+      display: none;
+    }
+    
+    .monitoring-container {
+      background: white;
+      border-radius: 12px;
+      width: 90vw;
+      max-width: 1200px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    .monitoring-header {
+      background: #2196F3;
+      color: white;
+      padding: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: 12px 12px 0 0;
+    }
+    
+    .monitoring-content {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: 1fr 300px 300px;
+      gap: 20px;
+    }
+    
+    .participants-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .monitoring-participant-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+      background: #f9f9f9;
+    }
+    
+    .mic-btn {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    
+    .mic-btn.active {
+      background: #F44336;
+    }
+    
+    .coaching-section {
+      margin-top: 15px;
+    }
+    
+    .coaching-section.hidden {
+      display: none;
+    }
+    
+    .coaching-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .coach-btn {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+    }
+    
+    .coach-btn:hover {
+      background: #f0f0f0;
+    }
+    
+    .chat-messages {
+      height: 200px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      background: white;
+    }
+    
+    .chat-input-group, .custom-input-group {
+      display: flex;
+      gap: 10px;
+    }
+    
+    .chat-input-group input, .custom-input-group input {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    .send-btn {
+      background: #2196F3;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .close-btn {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  `;
+  
+  document.head.appendChild(style);
+  console.log('✅ 모니터링 스타일 추가 완료');
+}
+
+// 그 다음에 ensureMonitoringOverlay 함수도 추가...
+
+
+
+
+
 /**
  * 그룹 모니터링 오버레이 열기
  */
