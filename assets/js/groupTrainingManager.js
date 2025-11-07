@@ -74,7 +74,12 @@ function getCurrentTimeString() {
 function safeGet(id) {
   const element = document.getElementById(id);
   if (!element) {
-    console.warn(`Element not found: ${id}`);
+    // roomWorkoutSelect의 경우 더 친화적인 메시지 출력
+    if (id === 'roomWorkoutSelect') {
+      console.log(`🔍 ${id} 요소를 찾는 중... (동적 생성 예정)`);
+    } else {
+      console.warn(`Element not found: ${id}`);
+    }
   }
   return element;
 }
@@ -334,34 +339,48 @@ async function apiGetWorkouts() {
 /**
  * 관리자 섹션 초기화 (워크아웃 목록 포함) - 개선된 버전
  */
+/**
+ * 관리자 섹션 초기화 (워크아웃 드롭다운 포함)
+ */
 async function initializeAdminSection() {
-  console.log('🎯 관리자 섹션 초기화');
+  console.log('🎯 관리자 섹션 초기화 시작');
   
-  try {
-    // 워크아웃 목록 로드
-    await loadWorkoutsForGroupRoom();
-    
-    // 추가 초기화 작업
-    if (typeof loadManagerData === 'function') {
-      await loadManagerData();
-    }
-    
-    // 활성 방 목록 초기화
-    if (typeof refreshActiveRooms === 'function') {
-      setTimeout(async () => {
-        try {
-          await refreshActiveRooms();
-        } catch (error) {
-          console.warn('활성 방 목록 초기화 실패:', error);
-        }
-      }, 1000);
-    }
-    
-    console.log('✅ 관리자 섹션 초기화 완료');
-  } catch (error) {
-    console.error('❌ 관리자 섹션 초기화 실패:', error);
-    console.log('기본 설정으로 계속 진행');
+  const adminSection = safeGet('adminSection');
+  if (!adminSection) {
+    console.warn('adminSection을 찾을 수 없습니다');
+    return;
   }
+  
+  // 워크아웃 선택 드롭다운이 없으면 생성
+  let roomWorkoutSelect = safeGet('roomWorkoutSelect');
+  if (!roomWorkoutSelect) {
+    console.log('🔨 roomWorkoutSelect 요소 생성 중...');
+    
+    // 워크아웃 선택 폼 그룹 생성
+    const workoutFormGroup = document.createElement('div');
+    workoutFormGroup.className = 'form-group';
+    workoutFormGroup.innerHTML = `
+      <label for="roomWorkoutSelect" class="form-label">훈련 종목</label>
+      <select id="roomWorkoutSelect" class="form-control">
+        <option value="">훈련 종목을 선택하세요</option>
+      </select>
+    `;
+    
+    // 방 이름 입력 필드 뒤에 삽입
+    const roomNameGroup = adminSection.querySelector('.form-group');
+    if (roomNameGroup && roomNameGroup.nextSibling) {
+      adminSection.insertBefore(workoutFormGroup, roomNameGroup.nextSibling);
+    } else {
+      adminSection.appendChild(workoutFormGroup);
+    }
+    
+    console.log('✅ roomWorkoutSelect 요소가 생성되었습니다');
+  }
+  
+  // 워크아웃 목록 로드
+  setTimeout(async () => {
+    await loadWorkoutsForRoom();
+  }, 100);
 }
 
 
@@ -583,9 +602,16 @@ async function selectRole(role) {
   groupTrainingState.isManager = (role === 'manager');
   
   // 관리자 선택 시 워크아웃 목록 로드
-  if (role === 'admin') {
+if (role === 'admin') {
+  // 기존 코드...
+  
+  // 관리자 섹션 초기화 (워크아웃 드롭다운 포함)
+  setTimeout(async () => {
     await initializeAdminSection();
-  }
+  }, 150);
+}
+
+   
   
   if (typeof showToast === 'function') {
     const roleNames = {
@@ -731,9 +757,46 @@ function loadDefaultWorkouts(workoutSelect) {
  * 그룹훈련용 워크아웃 목록 로드 (DB 연동 버전)
  */
 async function loadWorkoutsForRoom() {
-  const select = safeGet('roomWorkoutSelect');
+  // 여러 가능한 워크아웃 선택 요소 확인 및 동적 생성
+  let select = safeGet('roomWorkoutSelect');
+  
   if (!select) {
-    console.warn('❌ roomWorkoutSelect 요소를 찾을 수 없습니다');
+    // adminSection 내부에 select 요소가 있는지 확인
+    const adminSection = safeGet('adminSection');
+    if (adminSection) {
+      select = adminSection.querySelector('select[name*="workout"], select[id*="workout"]');
+    }
+  }
+  
+  if (!select) {
+    // 동적으로 select 요소 생성 및 삽입
+    const targetContainer = safeGet('adminSection') || safeGet('createRoomForm') || document.body;
+    if (targetContainer) {
+      // 워크아웃 선택 컨테이너 생성
+      const workoutContainer = document.createElement('div');
+      workoutContainer.className = 'form-group';
+      workoutContainer.innerHTML = `
+        <label for="roomWorkoutSelect">훈련 종목 선택:</label>
+        <select id="roomWorkoutSelect" class="form-control">
+          <option value="">워크아웃을 선택하세요</option>
+        </select>
+      `;
+      
+      // 기존 요소 앞에 삽입하거나 끝에 추가
+      const insertPoint = targetContainer.querySelector('.form-group, .btn-group') || null;
+      if (insertPoint) {
+        targetContainer.insertBefore(workoutContainer, insertPoint);
+      } else {
+        targetContainer.appendChild(workoutContainer);
+      }
+      
+      select = safeGet('roomWorkoutSelect');
+      console.log('✅ roomWorkoutSelect 요소를 동적으로 생성했습니다');
+    }
+  }
+  
+  if (!select) {
+    console.warn('❌ roomWorkoutSelect 요소를 찾을 수 없고 생성할 수도 없습니다');
     return;
   }
   
@@ -860,8 +923,15 @@ async function fallbackWorkoutLoading(select) {
  */
 async function createGroupRoom() {
   const roomNameInput = safeGet('roomNameInput');
-  const roomWorkoutSelect = safeGet('roomWorkoutSelect');
+  let roomWorkoutSelect = safeGet('roomWorkoutSelect');
   const maxParticipantsSelect = safeGet('maxParticipants');
+  
+  // roomWorkoutSelect 요소가 없으면 워크아웃 로드 시도
+  if (!roomWorkoutSelect) {
+    console.log('🔄 roomWorkoutSelect 요소가 없어 워크아웃 목록을 먼저 로드합니다');
+    await loadWorkoutsForRoom();
+    roomWorkoutSelect = safeGet('roomWorkoutSelect');
+  }
   
   const roomName = roomNameInput?.value?.trim();
   const workoutId = roomWorkoutSelect?.value;
