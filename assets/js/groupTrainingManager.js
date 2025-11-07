@@ -807,6 +807,40 @@ if (role === 'admin') {
   }
 }
 
+
+// 기존 selectRole 함수에서 participant 부분을 찾아서 다음 코드 추가
+
+if (role === 'participant') {
+  // 기존 코드...
+  
+  // 참가자 섹션 표시 후 방 목록 자동 로드
+  setTimeout(async () => {
+    console.log('🎯 참가자 모드 - 방 목록 자동 로드 시작');
+    await refreshRoomList();
+  }, 150);
+}
+
+
+/**
+ * 참가자 섹션 초기화
+ */
+async function initializeParticipantSection() {
+  console.log('🎯 참가자 섹션 초기화 시작');
+  
+  // 방 코드 입력 필드 초기화
+  const roomCodeInput = safeGet('roomCodeInput');
+  if (roomCodeInput) {
+    roomCodeInput.value = '';
+  }
+  
+  // 방 목록 로드
+  await refreshRoomList();
+  
+  console.log('✅ 참가자 섹션 초기화 완료');
+}
+
+   
+   
 // ========== 관리자 기능들 ==========
 
 /**
