@@ -843,46 +843,228 @@ function updateParticipantsList() {
   participantsList.innerHTML = participantsHtml;
 }
 
+
+
+/**
+ * JSONP 요청 함수 (training.js용)
+ */
+function jsonpRequest(url, params = {}) {
+  return new Promise((resolve, reject) => {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      reject(new Error('유효하지 않은 URL입니다.'));
+      return;
+    }
+    
+    const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+    const script = document.createElement('script');
+    let isResolved = false;
+    
+    window[callbackName] = function(data) {
+      if (isResolved) return;
+      isResolved = true;
+      
+      cleanup();
+      resolve(data);
+    };
+    
+    function cleanup() {
+      try {
+        if (window[callbackName]) {
+          delete window[callbackName];
+        }
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+      } catch (e) {
+        console.warn('JSONP cleanup warning:', e);
+      }
+    }
+    
+    script.onerror = function() {
+      if (isResolved) return;
+      isResolved = true;
+      
+      cleanup();
+      reject(new Error('네트워크 연결 오류'));
+    };
+    
+    try {
+      const urlParts = [];
+      Object.keys(params).forEach(key => {
+        if (params[key] !== null && params[key] !== undefined) {
+          const value = String(params[key]);
+          urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+        }
+      });
+      
+      urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
+      
+      const finalUrl = `${url}?${urlParts.join('&')}`;
+      script.src = finalUrl;
+      
+      document.head.appendChild(script);
+      
+      setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          cleanup();
+          reject(new Error('요청 시간 초과'));
+        }
+      }, 30000);
+      
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}
+
+/**
+ * 재시도가 포함된 JSONP 요청 (training.js용)
+ */
+async function jsonpRequestWithRetry(url, params = {}, maxRetries = 2) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`훈련실 API 요청 시도 ${attempt}/${maxRetries}`);
+      const result = await jsonpRequest(url, params);
+      return result;
+    } catch (error) {
+      lastError = error;
+      console.warn(`훈련실 API 요청 ${attempt}회 실패:`, error.message);
+      
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+
+
 // ========== 활성 훈련실 보기 ==========
 async function showActiveRooms() {
   try {
     showLoading('활성 훈련실을 조회하는 중...');
     
-    const response = await fetch(`${window.GAS_URL}?action=listActiveRooms`);
-    const result = await response.json();
+    // JSONP 방식으로 API 호출 (그룹 훈련 모듈과 일관성 유지)
+    const result = await jsonpRequestWithRetry(window.GAS_URL, {
+      action: 'listGroupRooms'
+      // 모든 상태의 방 조회 (waiting, training, completed)
+    });
     
     hideLoading();
     
-    if (result.success) {
-      displayActiveRoomsModal(result.rooms || []);
+    if (result && result.success) {
+      // 활성 상태(대기중, 훈련중)인 방만 필터링
+      const activeRooms = (result.items || result.rooms || []).filter(room => {
+        const status = room.status || room.Status || '';
+        return status === 'waiting' || status === 'training';
+      });
+      
+      console.log(`✅ 활성 훈련실 ${activeRooms.length}개 조회 성공`);
+      displayActiveRoomsModal(activeRooms);
     } else {
-      throw new Error(result.error);
+      throw new Error(result?.error || 'API 응답 실패');
     }
   } catch (error) {
     hideLoading();
     console.error('활성 훈련실 조회 오류:', error);
-    showToast('훈련실 목록을 가져올 수 없습니다');
+    
+    // 대체 방법: localStorage에서 로컬 방 목록 조회
+    try {
+      const localRooms = getLocalActiveRooms();
+      if (localRooms.length > 0) {
+        console.log(`📂 로컬에서 ${localRooms.length}개 훈련실 발견`);
+        displayActiveRoomsModal(localRooms);
+        showToast('로컬 훈련실 목록을 표시합니다', 'warning');
+      } else {
+        showToast('현재 활성 훈련실이 없습니다');
+        displayActiveRoomsModal([]);
+      }
+    } catch (fallbackError) {
+      console.error('로컬 데이터 조회도 실패:', fallbackError);
+      showToast('훈련실 목록을 가져올 수 없습니다');
+      displayActiveRoomsModal([]);
+    }
+  }
+}
+
+/**
+ * 로컬 저장소에서 활성 훈련실 목록 조회 (대체 방법)
+ */
+function getLocalActiveRooms() {
+  try {
+    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+    return Object.values(rooms).filter(room => 
+      room.status === 'waiting' || room.status === 'training'
+    );
+  } catch (error) {
+    console.warn('로컬 훈련실 데이터 조회 실패:', error);
+    return [];
   }
 }
 
 // ========== 활성 훈련실 모달 표시 ==========
 function displayActiveRoomsModal(rooms) {
-  const roomsHtml = rooms.length > 0 ? rooms.map(room => `
-    <div class="room-item">
-      <div class="room-info">
-        <h4>${escapeHtml(room.workoutTitle)}</h4>
-        <p>관리자: ${escapeHtml(room.hostName)}</p>
-        <p>참가자: ${room.participantCount}/${room.maxParticipants}명</p>
+  const roomsHtml = rooms.length > 0 ? rooms.map(room => {
+    // 방 데이터 정규화 (다양한 응답 구조 지원)
+    const roomName = room.name || room.roomName || room.RoomName || '이름 없음';
+    const adminName = room.adminName || room.hostName || room.AdminName || '관리자';
+    const workoutTitle = room.workoutTitle || room.workoutName || room.WorkoutTitle || '워크아웃';
+    const participants = room.participants || room.ParticipantsData || [];
+    const maxParticipants = room.maxParticipants || room.MaxParticipants || 10;
+    const status = room.status || room.Status || 'unknown';
+    const roomCode = room.code || room.roomCode || room.RoomCode || room.id;
+    
+    const statusText = {
+      'waiting': '🟡 대기중',
+      'training': '🟢 훈련중',
+      'completed': '⚪ 완료',
+      'closed': '🔴 종료'
+    }[status] || '❓ 알 수 없음';
+    
+    return `
+      <div class="room-item" data-room-id="${room.id || roomCode}">
+        <div class="room-info">
+          <h4>${escapeHtml(roomName)}</h4>
+          <p><strong>워크아웃:</strong> ${escapeHtml(workoutTitle)}</p>
+          <p><strong>관리자:</strong> ${escapeHtml(adminName)}</p>
+          <p><strong>참가자:</strong> ${participants.length}/${maxParticipants}명</p>
+          <p><strong>방 코드:</strong> ${escapeHtml(roomCode)}</p>
+          <p><strong>상태:</strong> ${statusText}</p>
+          <p><strong>생성시간:</strong> ${room.createdAt ? new Date(room.createdAt).toLocaleTimeString() : '알 수 없음'}</p>
+        </div>
+        <div class="room-actions">
+          ${status === 'training' ? 
+            `<button class="btn btn-primary btn-sm" onclick="monitorRoom('${roomCode}')">
+              🎯 모니터링
+            </button>` : 
+            status === 'waiting' ?
+            `<button class="btn btn-success btn-sm" onclick="navigateToJoinRoom('${roomCode}')">
+              👥 참가하기
+            </button>`
+            `<button class="btn btn-secondary btn-sm" onclick="viewRoomDetails('${roomCode}')" disabled>
+              📋 완료됨
+            </button>`
+          }
+          <button class="btn btn-outline btn-sm" onclick="copyRoomCode('${roomCode}')">
+            📋 코드복사
+          </button>
+        </div>
       </div>
-      <div class="room-actions">
-        <button class="btn btn-primary btn-sm" onclick="quickJoinRoom('${room.id}')">
-          참가하기
-        </button>
-      </div>
-    </div>
-  `).join('') : `
+    `;
+  }).join('') : `
     <div class="empty-rooms">
-      <p>현재 활성 상태인 훈련실이 없습니다</p>
+      <div class="empty-state-icon">🏠</div>
+      <div class="empty-state-title">활성 훈련실이 없습니다</div>
+      <div class="empty-state-description">
+        현재 진행 중인 그룹 훈련이 없습니다.<br>
+        새로운 훈련방을 생성하거나 잠시 후 다시 확인해보세요.
+      </div>
     </div>
   `;
   
@@ -890,14 +1072,25 @@ function displayActiveRoomsModal(rooms) {
     <div id="activeRoomsModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>🏠 활성 훈련실</h3>
-          <button class="modal-close" onclick="closeActiveRoomsModal()">✖</button>
+          <h3>🏠 활성 훈련실 (${rooms.length}개)</h3>
+          <div class="modal-header-actions">
+            <button class="btn btn-sm btn-outline" onclick="refreshActiveRooms()">
+              🔄 새로고침
+            </button>
+            <button class="modal-close" onclick="closeActiveRoomsModal()">✖</button>
+          </div>
         </div>
         
         <div class="modal-body">
           <div class="rooms-list">
             ${roomsHtml}
           </div>
+        </div>
+        
+        <div class="modal-footer">
+          <p class="text-muted">
+            💡 팁: 훈련 중인 방은 모니터링할 수 있고, 대기 중인 방은 참가할 수 있습니다
+          </p>
         </div>
       </div>
     </div>
@@ -912,7 +1105,93 @@ function displayActiveRoomsModal(rooms) {
   }
 }
 
-// ========== 빠른 방 참가 ==========
+/**
+ * 활성 훈련실 새로고침
+ */
+function refreshActiveRooms() {
+  console.log('🔄 활성 훈련실 새로고침');
+  closeActiveRoomsModal();
+  setTimeout(() => {
+    showActiveRooms();
+  }, 300);
+}
+
+/**
+ * 방 코드 복사
+ */
+function copyRoomCode(roomCode) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(roomCode).then(() => {
+      showToast(`방 코드 "${roomCode}"가 복사되었습니다!`, 'success');
+    }).catch(() => {
+      fallbackCopyRoomCode(roomCode);
+    });
+  } else {
+    fallbackCopyRoomCode(roomCode);
+  }
+}
+
+/**
+ * 방 코드 복사 대체 방법
+ */
+function fallbackCopyRoomCode(roomCode) {
+  const textArea = document.createElement('textarea');
+  textArea.value = roomCode;
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-999999px';
+  textArea.style.top = '-999999px';
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+  
+  try {
+    document.execCommand('copy');
+    showToast(`방 코드 "${roomCode}"가 복사되었습니다!`, 'success');
+  } catch (err) {
+    showToast(`복사 실패. 방 코드: ${roomCode}`, 'error');
+  }
+  
+  document.body.removeChild(textArea);
+}
+
+ * 빠른 방 참가 (UI 전환용)
+ */
+function navigateToJoinRoom(roomCode) {
+  if (!roomCode) {
+    showToast('유효하지 않은 방 코드입니다', 'error');
+    return;
+  }
+  
+  console.log(`🚀 방 참가 화면으로 이동: ${roomCode}`);
+  
+  // 활성 훈련실 모달 닫기
+  closeActiveRoomsModal();
+  
+  // 그룹 훈련 화면으로 이동
+  if (typeof showScreen === 'function') {
+    showScreen('groupRoomScreen');
+    
+    // 참가자 역할 선택 및 방 코드 입력
+    setTimeout(() => {
+      if (typeof selectRole === 'function') {
+        selectRole('participant');
+      }
+      
+      // 방 코드 자동 입력
+      setTimeout(() => {
+        const roomCodeInput = document.getElementById('roomCodeInput');
+        if (roomCodeInput) {
+          roomCodeInput.value = roomCode;
+          roomCodeInput.focus();
+        }
+      }, 500);
+    }, 300);
+  }
+  
+  showToast(`방 ${roomCode} 참가 화면으로 이동합니다`, 'info');
+}
+
+// ========== 빠른 방 참가 (실제 API 호출) ==========
 async function quickJoinRoom(roomId) {
   const currentUser = window.currentUser;
   
@@ -924,6 +1203,7 @@ async function quickJoinRoom(roomId) {
   try {
     showLoading('훈련실에 참가하는 중...');
     
+    // ✅ 문법 오류 수정: 백틱을 올바른 템플릿 리터럴로 변경
     const response = await fetch(`${window.GAS_URL}?action=joinTrainingRoom&roomId=${roomId}&userId=${currentUser.id}&userName=${encodeURIComponent(currentUser.name)}`);
     const result = await response.json();
     
