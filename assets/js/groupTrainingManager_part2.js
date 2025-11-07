@@ -971,6 +971,8 @@ async function initializeGroupRoomScreen() {
   console.log('✅ initializeGroupRoomScreen completed');
 }
 
+
+
 // ========== 전역 함수 등록 ==========
 window.toggleReady = toggleReady;
 window.leaveGroupRoom = leaveGroupRoom;
@@ -986,6 +988,11 @@ window.sendCustomCoaching = sendCustomCoaching;
 window.sendQuickCoaching = sendQuickCoaching;
 window.sendChatMessage = sendChatMessage;
 window.initializeGroupRoomScreen = initializeGroupRoomScreen;
+
+// 🆕 새로 추가된 함수들
+window.ensureMonitoringOverlay = ensureMonitoringOverlay;
+window.addMonitoringStyles = addMonitoringStyles;
+
 
 // 🆕 관리자 기능 전역 함수 등록 추가
 // 🆕 관리자 기능 전역 함수 등록 추가 (조건부 확인)
