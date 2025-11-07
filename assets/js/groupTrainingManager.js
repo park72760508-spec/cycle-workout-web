@@ -2423,3 +2423,4 @@ try {
 window.groupTrainingManagerReady = true;
 console.log('🎯 그룹훈련 관리자 모듈 준비 완료');
 
+} // 모듈 중복 로딩 방지 블록 종료
