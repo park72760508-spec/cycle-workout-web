@@ -839,23 +839,7 @@ if (role === 'participant') {
 }
 
 
-/**
- * 참가자 섹션 초기화
- */
-async function initializeParticipantSection() {
-  console.log('🎯 참가자 섹션 초기화 시작');
-  
-  // 방 코드 입력 필드 초기화
-  const roomCodeInput = safeGet('roomCodeInput');
-  if (roomCodeInput) {
-    roomCodeInput.value = '';
-  }
-  
-  // 방 목록 로드
-  await refreshRoomList();
-  
-  console.log('✅ 참가자 섹션 초기화 완료');
-}
+
 
    
    
@@ -2093,6 +2077,36 @@ async function emergencyStopAllRooms() {
     showToast('긴급 중단에 실패했습니다', 'error');
   }
 }
+
+
+
+/**
+ * 참가자 섹션 초기화
+ */
+async function initializeParticipantSection() {
+  console.log('🎯 참가자 섹션 초기화 시작');
+  
+  // 방 코드 입력 필드 초기화
+  const roomCodeInput = safeGet('roomCodeInput');
+  if (roomCodeInput) {
+    roomCodeInput.value = '';
+  }
+  
+  // 방 목록 로드
+  await refreshRoomList();
+  
+  console.log('✅ 참가자 섹션 초기화 완료');
+}
+
+// 그룹훈련 모듈 함수 등록 확인 (변수명 변경으로 충돌 방지)
+const groupTrainingFunctions = [
+  'showGroupWorkoutManagement', 'loadGroupWorkoutList', 'deleteGroupWorkout',
+  'apiGetGroupWorkouts', 'apiCreateGroupWorkout', 'apiDeleteGroupWorkout',
+  'showToast', 'safeGet'
+];
+
+
+
 
 // 전역 함수 등록
 window.refreshActiveRooms = refreshActiveRooms;
