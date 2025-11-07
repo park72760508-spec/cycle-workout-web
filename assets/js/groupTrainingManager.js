@@ -2102,7 +2102,8 @@ async function initializeParticipantSection() {
 const groupTrainingFunctions = [
   'showGroupWorkoutManagement', 'loadGroupWorkoutList', 'deleteGroupWorkout',
   'apiGetGroupWorkouts', 'apiCreateGroupWorkout', 'apiDeleteGroupWorkout',
-  'showToast', 'safeGet'
+  'showToast', 'safeGet',
+  'initializeParticipantSection', 'refreshRoomList', 'removeDuplicateWorkoutSelectsNow'
 ];
 
 
@@ -2343,12 +2344,6 @@ window.refreshRoomList = refreshRoomList;
 window.removeDuplicateWorkoutSelectsNow = removeDuplicateWorkoutSelectsNow;
 
      
-// 그룹훈련 모듈 함수 등록 확인 (변수명 변경으로 충돌 방지)
-const groupTrainingFunctions = [
-  'showGroupWorkoutManagement', 'loadGroupWorkoutList', 'deleteGroupWorkout',
-  'apiGetGroupWorkouts', 'apiCreateGroupWorkout', 'apiDeleteGroupWorkout',
-  'showToast', 'safeGet'
-];
 
 groupTrainingFunctions.forEach(funcName => {
   if (typeof window[funcName] !== 'function') {
