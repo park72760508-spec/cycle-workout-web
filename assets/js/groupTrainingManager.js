@@ -84,9 +84,47 @@ function safeGet(id) {
   return element;
 }
 
+
 /**
- * 토스트 메시지 표시
+ * 필수 HTML 요소들이 있는지 확인하고 없으면 생성
  */
+function ensureRequiredElements() {
+  const requiredElements = [
+    {
+      id: 'roomNameInput',
+      parent: 'adminSection',
+      html: '<input type="text" id="roomNameInput" class="form-control" placeholder="방 이름을 입력하세요" maxlength="20">'
+    },
+    {
+      id: 'maxParticipants', 
+      parent: 'adminSection',
+      html: `<select id="maxParticipants" class="form-control">
+        <option value="2">2명</option>
+        <option value="4" selected>4명</option>
+        <option value="6">6명</option>
+        <option value="8">8명</option>
+        <option value="10">10명</option>
+        <option value="20">20명</option>
+      </select>`
+    }
+  ];
+  
+  requiredElements.forEach(({ id, parent, html }) => {
+    if (!safeGet(id)) {
+      const parentEl = safeGet(parent);
+      if (parentEl) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'form-group';
+        wrapper.innerHTML = html;
+        parentEl.appendChild(wrapper);
+        console.log(`✅ ${id} 요소가 생성되었습니다`);
+      }
+    }
+  });
+}
+
+
+   
 /**
  * 토스트 메시지 표시
  */
