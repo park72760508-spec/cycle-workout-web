@@ -3907,8 +3907,44 @@ function validateNewUserForm() {
   submitBtn.style.cursor = isValid ? 'pointer' : 'not-allowed';
 }
 
+// 페이지 로드 시 초기화
+// 🔍 검색: "DOMContentLoaded"
+// 📍 위치: 라인 3032+
+// ✅ 전체 이벤트를 아래로 교체:
 
-
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('📱 인증 시스템 초기화 시작');
+  
+  setTimeout(() => {
+    // 모든 화면 완전히 숨기기
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
+    });
+    
+    // authScreen만 표시
+    const authScreen = document.getElementById('authScreen');
+    if (authScreen) {
+      authScreen.style.display = 'block';
+      authScreen.classList.add('active');
+      authScreen.style.opacity = '1';
+      authScreen.style.visibility = 'visible';
+      
+      setTimeout(() => {
+        const phoneInput = document.getElementById('phoneInput');
+        if (phoneInput) {
+          phoneInput.focus();
+        }
+      }, 500);
+    }
+  }, 200);
+  
+  setTimeout(() => {
+    initializeAuthenticationSystem();
+  }, 500);
+});
 
 // 개발자 도구 함수들
 window.resetAuth = function() {
@@ -4864,52 +4900,3 @@ window.saveWorkoutPlan = saveWorkoutPlan;
 window.deleteWorkoutPlan = deleteWorkoutPlan;
 
 })();
-
-// 🆕 그룹 훈련 모니터링 시스템 초기화 (IIFE 외부에 추가)
-/**
- * 앱 로드 시 모니터링 관련 초기화
- */
-document.addEventListener('DOMContentLoaded', function() {
-  console.log('🎯 그룹 훈련 시스템 초기화 시작');
-  
-  // 모니터링 스타일이 정의되어 있으면 추가
-  if (typeof addMonitoringStyles === 'function') {
-    try {
-      addMonitoringStyles();
-    } catch (error) {
-      console.warn('모니터링 스타일 초기화 실패:', error);
-    }
-  }
-  
-  // 그룹 훈련 준비 확인
-  setTimeout(() => {
-    if (window.groupTrainingManagerReady) {
-      console.log('✅ 그룹 훈련 관리자 모듈 준비 완료');
-    } else {
-      console.warn('⚠️ 그룹 훈련 관리자 모듈이 아직 로드되지 않았습니다');
-    }
-  }, 1000);
-  
-  console.log('✅ 그룹 훈련 모니터링 시스템 초기화 완료');
-});
-
-// 그룹 훈련 모듈들이 모두 로드된 후 실행되는 초기화
-window.addEventListener('load', function() {
-  // 그룹 훈련 관련 요소들 사전 확인
-  setTimeout(() => {
-    console.log('🔍 그룹 훈련 UI 요소 확인');
-    
-    const requiredElements = [
-      'groupRoomScreen', 'adminSection', 'participantSection'
-    ];
-    
-    requiredElements.forEach(elementId => {
-      const element = document.getElementById(elementId);
-      if (element) {
-        console.log(`✅ ${elementId} 요소 확인됨`);
-      } else {
-        console.warn(`❌ ${elementId} 요소 없음`);
-      }
-    });
-  }, 500);
-});
