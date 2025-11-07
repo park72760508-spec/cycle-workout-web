@@ -291,20 +291,31 @@ async function closeGroupRoom() {
 /**
  * 그룹 모니터링 오버레이 열기
  */
+/**
+ * 그룹 모니터링 오버레이 열기 (개선된 버전)
+ */
 function openGroupMonitoring() {
   if (!groupTrainingState.isAdmin) {
     showToast('관리자만 모니터링을 사용할 수 있습니다', 'error');
     return;
   }
   
-  const overlay = safeGet('groupMonitoringOverlay');
+  console.log('🎯 그룹 모니터링 오버레이 열기');
+  
+  // 모니터링 오버레이 확보 (없으면 생성)
+  const overlay = ensureMonitoringOverlay();
   if (!overlay) {
-    console.error('Monitoring overlay not found');
+    showToast('모니터링 화면을 열 수 없습니다', 'error');
     return;
   }
   
+  // 오버레이 표시
   overlay.classList.remove('hidden');
+  
+  // 모니터링 초기화
   initializeMonitoring();
+  
+  console.log('✅ 그룹 모니터링 화면 열림');
 }
 
 /**
@@ -393,6 +404,99 @@ function updateMonitoringParticipants() {
     `;
   }).join('');
 }
+
+
+
+/**
+ * 모니터링 오버레이 HTML 요소 확보
+ */
+function ensureMonitoringOverlay() {
+  let overlay = safeGet('groupMonitoringOverlay');
+  
+  if (!overlay) {
+    console.log('🔨 모니터링 오버레이 생성 중...');
+    
+    // 모니터링 오버레이 HTML 생성
+    const overlayHTML = `
+      <div id="groupMonitoringOverlay" class="monitoring-overlay hidden">
+        <div class="monitoring-container">
+          <div class="monitoring-header">
+            <h2>🎯 그룹 모니터링</h2>
+            <button class="close-btn" onclick="closeMonitoring()">✕</button>
+          </div>
+          
+          <div class="monitoring-content">
+            <div class="monitoring-participants">
+              <h3>참가자 모니터링</h3>
+              <div id="monitoringParticipantsList" class="participants-list">
+                <!-- 참가자 목록이 여기에 로드됩니다 -->
+              </div>
+            </div>
+            
+            <div class="monitoring-controls">
+              <h3>코칭 제어</h3>
+              
+              <div class="microphone-section">
+                <button id="micToggleBtn" class="mic-btn" onclick="toggleMicrophone()">
+                  🎤 마이크 켜기
+                </button>
+                <span id="micStatus" class="mic-status">마이크 준비됨</span>
+              </div>
+              
+              <div id="coachingSection" class="coaching-section hidden">
+                <div class="quick-coaching">
+                  <h4>빠른 코칭</h4>
+                  <div class="coaching-buttons">
+                    <button onclick="sendQuickCoaching('motivation')" class="coach-btn">💪 동기부여</button>
+                    <button onclick="sendQuickCoaching('technique')" class="coach-btn">🎯 기술지도</button>
+                    <button onclick="sendQuickCoaching('warning')" class="coach-btn">⚠️ 주의사항</button>
+                    <button onclick="sendQuickCoaching('encouragement')" class="coach-btn">👏 격려</button>
+                  </div>
+                </div>
+                
+                <div class="custom-coaching">
+                  <h4>사용자 정의 메시지</h4>
+                  <div class="custom-input-group">
+                    <input type="text" id="customCoachingInput" placeholder="코칭 메시지를 입력하세요..." maxlength="100">
+                    <button onclick="sendCustomCoaching()" class="send-btn">전송</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="monitoring-chat">
+              <h3>실시간 채팅</h3>
+              <div id="chatMessages" class="chat-messages">
+                <!-- 채팅 메시지들이 여기에 표시됩니다 -->
+              </div>
+              <div class="chat-input-group">
+                <input type="text" id="chatInput" placeholder="메시지를 입력하세요..." maxlength="200" onkeypress="if(event.key==='Enter') sendChatMessage()">
+                <button onclick="sendChatMessage()" class="send-btn">전송</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // body에 추가
+    document.body.insertAdjacentHTML('beforeend', overlayHTML);
+    overlay = safeGet('groupMonitoringOverlay');
+    
+    if (overlay) {
+      console.log('✅ 모니터링 오버레이 생성 완료');
+    } else {
+      console.error('❌ 모니터링 오버레이 생성 실패');
+    }
+  }
+  
+  return overlay;
+}
+
+
+
+
+
 
 /**
  * 참가자 실시간 데이터 가져오기 (임시 구현)
