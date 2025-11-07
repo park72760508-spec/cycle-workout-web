@@ -1290,42 +1290,57 @@ async function refreshRoomList() {
 /**
  * 백엔드에서 방 목록 가져오기 (임시 구현)
  */
+/**
+ * 백엔드에서 방 목록 가져오기 (JSONP 방식으로 수정)
+ */
 async function getRoomsFromBackend() {
   try {
-    // Google Apps Script API 호출
-    const params = new URLSearchParams({
+    console.log('🔄 백엔드에서 방 목록 조회 시작...');
+    
+    // JSONP 방식으로 API 호출 (다른 함수들과 일관성 유지)
+    const result = await jsonpRequestWithRetry(window.GAS_URL, {
       action: 'listGroupRooms',
       status: 'waiting'
     });
     
-    const scriptUrl = window.GAS_URL || window.APP_SCRIPT_URL || 'your-gas-deployment-url';
-    const response = await fetch(`${scriptUrl}?${params.toString()}`);
-    const result = await response.json();
-    
-    if (result.success) {
-      return result.items.filter(room => 
-        room.Status === 'waiting' && 
-        (room.ParticipantsData || []).length < room.MaxParticipants
-      );
+    if (result && result.success) {
+      console.log(`✅ 백엔드에서 방 목록 조회 성공: ${result.items?.length || 0}개`);
+      
+      // 대기 중이고 자리가 있는 방들만 필터링
+      const availableRooms = (result.items || result.rooms || []).filter(room => {
+        const status = room.status || room.Status || 'unknown';
+        const currentParticipants = (room.participants || room.ParticipantsData || []).length;
+        const maxParticipants = room.maxParticipants || room.MaxParticipants || 10;
+        
+        return status.toLowerCase() === 'waiting' && currentParticipants < maxParticipants;
+      });
+      
+      console.log(`✅ 참가 가능한 방: ${availableRooms.length}개`);
+      return availableRooms;
+      
     } else {
-      console.error('Backend error:', result.error);
-      return [];
+      console.warn('백엔드 API 응답 실패:', result?.error || 'Unknown error');
     }
     
   } catch (error) {
-    console.error('Failed to get rooms from backend:', error);
+    console.error('백엔드 방 목록 조회 실패:', error);
+  }
+  
+  // Fallback: localStorage에서 조회
+  try {
+    console.log('🔄 로컬 저장소에서 방 목록 조회...');
+    const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
+    const availableRooms = Object.values(rooms).filter(room => 
+      room.status === 'waiting' && 
+      (room.participants || []).length < (room.maxParticipants || 10)
+    );
     
-    // Fallback: localStorage에서 조회
-    try {
-      const rooms = JSON.parse(localStorage.getItem('groupTrainingRooms') || '{}');
-      return Object.values(rooms).filter(room => 
-        room.status === 'waiting' && 
-        room.participants.length < room.maxParticipants
-      );
-    } catch (fallbackError) {
-      console.error('Fallback also failed:', fallbackError);
-      return [];
-    }
+    console.log(`✅ 로컬에서 찾은 참가 가능한 방: ${availableRooms.length}개`);
+    return availableRooms;
+    
+  } catch (fallbackError) {
+    console.error('로컬 저장소 조회도 실패:', fallbackError);
+    return [];
   }
 }
 
