@@ -380,8 +380,11 @@ async function apiGetWorkouts() {
 /**
  * 관리자 섹션 초기화 (워크아웃 드롭다운 포함)
  */
+/**
+ * 관리자 섹션 초기화 (중복 제거 우선)
+ */
 async function initializeAdminSection() {
-  console.log('🎯 관리자 섹션 초기화 시작');
+  console.log('🎯 관리자 섹션 초기화 시작 - 중복 제거 우선 모드');
   
   const adminSection = safeGet('adminSection');
   if (!adminSection) {
@@ -389,36 +392,104 @@ async function initializeAdminSection() {
     return;
   }
   
-  // 워크아웃 선택 드롭다운이 없으면 생성
-  let roomWorkoutSelect = safeGet('roomWorkoutSelect');
+  // 1단계: 모든 워크아웃 관련 요소들 정리
+  await cleanupWorkoutElements(adminSection);
+  
+  // 2단계: 단일 워크아웃 선택 요소 확보
+  let roomWorkoutSelect = ensureSingleWorkoutSelect(adminSection);
+  
   if (!roomWorkoutSelect) {
-    console.log('🔨 roomWorkoutSelect 요소 생성 중...');
-    
-    // 워크아웃 선택 폼 그룹 생성
-    const workoutFormGroup = document.createElement('div');
-    workoutFormGroup.className = 'form-group';
-    workoutFormGroup.innerHTML = `
-      <label for="roomWorkoutSelect" class="form-label">훈련 종목</label>
-      <select id="roomWorkoutSelect" class="form-control">
-        <option value="">훈련 종목을 선택하세요</option>
-      </select>
-    `;
-    
-    // 방 이름 입력 필드 뒤에 삽입
-    const roomNameGroup = adminSection.querySelector('.form-group');
-    if (roomNameGroup && roomNameGroup.nextSibling) {
-      adminSection.insertBefore(workoutFormGroup, roomNameGroup.nextSibling);
-    } else {
-      adminSection.appendChild(workoutFormGroup);
-    }
-    
-    console.log('✅ roomWorkoutSelect 요소가 생성되었습니다');
+    console.error('❌ 워크아웃 선택 요소를 생성할 수 없습니다');
+    return;
   }
   
-  // 워크아웃 목록 로드
+  // 3단계: 워크아웃 목록 로드
   setTimeout(async () => {
     await loadWorkoutsForRoom();
   }, 100);
+  
+  console.log('✅ 관리자 섹션 초기화 완료');
+}
+
+/**
+ * 워크아웃 관련 요소들 정리 (중복 제거)
+ */
+async function cleanupWorkoutElements(adminSection) {
+  console.log('🧹 워크아웃 요소 정리 시작');
+  
+  // 가능한 모든 워크아웃 선택 요소들 찾기
+  const workoutSelectors = [
+    '#roomWorkoutSelect',
+    'select[name*="workout"]',
+    'select[id*="workout"]', 
+    'select[class*="workout"]',
+    'select[data-type="workout"]'
+  ];
+  
+  let foundElements = [];
+  
+  workoutSelectors.forEach(selector => {
+    const elements = adminSection.querySelectorAll(selector);
+    elements.forEach(el => {
+      if (!foundElements.includes(el)) {
+        foundElements.push(el);
+      }
+    });
+  });
+  
+  console.log(`🔍 발견된 워크아웃 관련 요소: ${foundElements.length}개`);
+  
+  // 중복 요소들 제거 (첫 번째 것만 남김)
+  if (foundElements.length > 1) {
+    for (let i = 1; i < foundElements.length; i++) {
+      const elementToRemove = foundElements[i];
+      console.log(`🗑️ 중복 요소 제거: ${elementToRemove.id || elementToRemove.className || 'unnamed'}`);
+      
+      // 부모 form-group도 함께 제거
+      const parentGroup = elementToRemove.closest('.form-group, .input-group, .field-group');
+      if (parentGroup) {
+        parentGroup.remove();
+      } else {
+        elementToRemove.remove();
+      }
+    }
+  }
+  
+  // 라벨 중복도 확인 및 제거
+  const workoutLabels = adminSection.querySelectorAll('label[for*="workout"], label:contains("훈련"), label:contains("종목")');
+  if (workoutLabels.length > 1) {
+    for (let i = 1; i < workoutLabels.length; i++) {
+      const labelToRemove = workoutLabels[i];
+      const parentGroup = labelToRemove.closest('.form-group, .input-group, .field-group');
+      if (parentGroup && !parentGroup.querySelector('select')) {
+        parentGroup.remove();
+        console.log('🗑️ 중복 라벨 그룹 제거');
+      }
+    }
+  }
+  
+  console.log('✅ 워크아웃 요소 정리 완료');
+}
+
+/**
+ * 단일 워크아웃 선택 요소 확보
+ */
+function ensureSingleWorkoutSelect(adminSection) {
+  // 남은 워크아웃 선택 요소 찾기
+  let workoutSelect = adminSection.querySelector(
+    '#roomWorkoutSelect, select[name*="workout"], select[id*="workout"]'
+  );
+  
+  if (workoutSelect) {
+    // 기존 요소가 있으면 ID 설정하고 사용
+    workoutSelect.id = 'roomWorkoutSelect';
+    console.log('✅ 기존 워크아웃 선택 요소 재사용');
+    return workoutSelect;
+  }
+  
+  // 요소가 없으면 새로 생성하지 말고 에러 리포트
+  console.warn('❌ 워크아웃 선택 요소가 완전히 사라졌습니다. HTML 구조를 확인해주세요.');
+  return null;
 }
 
 
