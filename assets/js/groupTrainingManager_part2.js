@@ -149,19 +149,16 @@ async function startGroupTraining() {
   try {
     showToast('그룹 훈련을 시작합니다...', 'info');
     
-    // 방 상태를 'training'으로 변경
-    room.status = 'training';
-    room.startedAt = new Date().toISOString();
+    // 방 상태를 'starting'으로 변경 (카운트다운 중)
+    room.status = 'starting';
+    room.countdownStartTime = new Date().toISOString();
     
     // 백엔드 업데이트
     const success = await updateRoomOnBackend(room);
     
     if (success) {
-      // 모든 참가자에게 훈련 시작 알림
-      await broadcastTrainingStart();
-      
-      // 훈련 세션 시작
-      startGroupTrainingSession();
+      // 관리자 제어 카운트다운 시작 (10초)
+      startAdminControlledCountdown(10);
     } else {
       throw new Error('Failed to start training');
     }
@@ -169,6 +166,186 @@ async function startGroupTraining() {
   } catch (error) {
     console.error('Failed to start group training:', error);
     showToast('그룹 훈련 시작에 실패했습니다', 'error');
+  }
+}
+
+/**
+ * 관리자 제어 카운트다운 시스템 (모든 참가자가 동시에 시작)
+ */
+async function startAdminControlledCountdown(seconds = 10) {
+  const room = groupTrainingState.currentRoom;
+  if (!room) return;
+  
+  // 관리자 화면에 카운트다운 표시
+  if (groupTrainingState.isAdmin) {
+    showAdminCountdownOverlay(seconds);
+  }
+  
+  // 모든 참가자에게 카운트다운 시작 신호 전송
+  await broadcastCountdownStart(seconds);
+  
+  // 백엔드에 카운트다운 시작 시간 저장
+  const countdownEndTime = new Date(Date.now() + seconds * 1000).toISOString();
+  await apiUpdateRoom(groupTrainingState.roomCode, {
+    countdownEndTime: countdownEndTime,
+    status: 'starting'
+  });
+  
+  // 카운트다운 완료 후 실제 훈련 시작
+  setTimeout(async () => {
+    room.status = 'training';
+    room.startedAt = new Date().toISOString();
+    
+    await updateRoomOnBackend(room);
+    await broadcastTrainingStart();
+    
+    // 실제 훈련 세션 시작
+    startGroupTrainingSession();
+  }, seconds * 1000);
+}
+
+/**
+ * 관리자 카운트다운 오버레이 표시
+ */
+function showAdminCountdownOverlay(seconds) {
+  const overlay = document.createElement('div');
+  overlay.id = 'adminCountdownOverlay';
+  overlay.className = 'countdown-overlay';
+  overlay.innerHTML = `
+    <div class="countdown-content">
+      <h2>🚀 그룹 훈련 시작!</h2>
+      <div class="countdown-number" id="adminCountdownNumber">${seconds}</div>
+      <p>모든 참가자가 동시에 시작합니다</p>
+      <button class="btn btn-danger" onclick="cancelGroupCountdown()">취소</button>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  let count = seconds;
+  const countdownInterval = setInterval(() => {
+    count--;
+    const numberEl = document.getElementById('adminCountdownNumber');
+    if (numberEl) {
+      numberEl.textContent = count;
+      
+      if (count <= 3) {
+        numberEl.style.color = '#e74c3c';
+        numberEl.style.transform = 'scale(1.2)';
+      }
+    }
+    
+    if (count <= 0) {
+      clearInterval(countdownInterval);
+      overlay.remove();
+    }
+  }, 1000);
+}
+
+/**
+ * 참가자 카운트다운 표시 (동기화)
+ */
+function showParticipantCountdown(seconds) {
+  const overlay = document.createElement('div');
+  overlay.id = 'participantCountdownOverlay';
+  overlay.className = 'countdown-overlay';
+  overlay.innerHTML = `
+    <div class="countdown-content">
+      <h2>🚀 그룹 훈련 시작!</h2>
+      <div class="countdown-number" id="participantCountdownNumber">${seconds}</div>
+      <p>관리자가 훈련을 시작합니다</p>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  let count = seconds;
+  const countdownInterval = setInterval(() => {
+    count--;
+    const numberEl = document.getElementById('participantCountdownNumber');
+    if (numberEl) {
+      numberEl.textContent = count;
+      
+      if (count <= 3) {
+        numberEl.style.color = '#e74c3c';
+        numberEl.style.transform = 'scale(1.2)';
+      }
+    }
+    
+    if (count <= 0) {
+      clearInterval(countdownInterval);
+      overlay.remove();
+    }
+  }, 1000);
+}
+
+/**
+ * 카운트다운 취소
+ */
+async function cancelGroupCountdown() {
+  const room = groupTrainingState.currentRoom;
+  if (!room || !groupTrainingState.isAdmin) return;
+  
+  room.status = 'waiting';
+  delete room.countdownStartTime;
+  delete room.countdownEndTime;
+  
+  await updateRoomOnBackend(room);
+  await broadcastCountdownCancel();
+  
+  const overlay = document.getElementById('adminCountdownOverlay');
+  if (overlay) overlay.remove();
+  
+  showToast('카운트다운이 취소되었습니다', 'info');
+}
+
+/**
+ * 카운트다운 시작 브로드캐스트
+ */
+async function broadcastCountdownStart(seconds) {
+  // 실제 구현 시 웹소켓 또는 서버 푸시 사용
+  console.log(`Broadcasting countdown start: ${seconds} seconds`);
+  
+  // 참가자들은 방 동기화를 통해 카운트다운 시작 시간을 감지
+  if (!groupTrainingState.isAdmin) {
+    // 참가자는 방 상태를 확인하여 카운트다운 시작
+    checkAndSyncCountdown();
+  }
+}
+
+/**
+ * 카운트다운 취소 브로드캐스트
+ */
+async function broadcastCountdownCancel() {
+  console.log('Broadcasting countdown cancel');
+  
+  const overlay = document.getElementById('participantCountdownOverlay');
+  if (overlay) overlay.remove();
+}
+
+/**
+ * 참가자가 카운트다운 동기화 확인
+ */
+async function checkAndSyncCountdown() {
+  if (!groupTrainingState.roomCode) return;
+  
+  try {
+    const roomRes = await apiGetRoom(groupTrainingState.roomCode);
+    if (roomRes?.success && roomRes.item) {
+      const room = normalizeRoomData(roomRes.item);
+      
+      if (room.status === 'starting' && room.countdownEndTime) {
+        const endTime = new Date(room.countdownEndTime);
+        const now = new Date();
+        const remainingSeconds = Math.max(0, Math.ceil((endTime - now) / 1000));
+        
+        if (remainingSeconds > 0) {
+          showParticipantCountdown(remainingSeconds);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to sync countdown:', error);
   }
 }
 
@@ -991,6 +1168,10 @@ window.sendCustomCoaching = sendCustomCoaching;
 window.sendQuickCoaching = sendQuickCoaching;
 window.sendChatMessage = sendChatMessage;
 window.initializeGroupRoomScreen = initializeGroupRoomScreen;
+window.createGroupRoomFromWorkout = createGroupRoomFromWorkout;
+window.startAdminControlledCountdown = startAdminControlledCountdown;
+window.cancelGroupCountdown = cancelGroupCountdown;
+window.checkAndSyncCountdown = checkAndSyncCountdown;
 
 // 🆕 새로 추가된 함수들
 window.ensureMonitoringOverlay = ensureMonitoringOverlay;
