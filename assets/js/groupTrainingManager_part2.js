@@ -458,33 +458,136 @@ async function kickParticipant() {
  * 방 닫기
  */
 async function closeGroupRoom() {
-  if (!groupTrainingState.isAdmin) {
+  // 상태 확인
+  if (!groupTrainingState || !groupTrainingState.isAdmin) {
     showToast('관리자만 방을 닫을 수 있습니다', 'error');
     return;
   }
   
-  const confirmed = confirm('정말 방을 닫으시겠습니까? 모든 참가자가 방에서 나가게 됩니다.');
-  if (!confirmed) return;
+  const room = groupTrainingState.currentRoom;
+  const roomCode = groupTrainingState.roomCode;
   
-  try {
-    const room = groupTrainingState.currentRoom;
-    room.status = 'closed';
-    
-    // 백엔드 업데이트
-    await updateRoomOnBackend(room);
-    
-    // 로컬 상태 정리
+  // 방 정보 확인
+  if (!room || !roomCode) {
+    showToast('방 정보를 찾을 수 없습니다', 'error');
+    console.error('방 닫기 실패: 방 정보 없음', { room, roomCode });
+    return;
+  }
+  
+  // 이미 닫힌 방인지 확인
+  if (room.status === 'closed' || room.status === 'finished') {
+    showToast('이미 닫힌 방입니다', 'warning');
+    // 상태 정리 후 화면 전환
     stopRoomSync();
     groupTrainingState.currentRoom = null;
     groupTrainingState.roomCode = null;
     groupTrainingState.isAdmin = false;
+    if (typeof showScreen === 'function') {
+      showScreen('groupRoomScreen');
+    }
+    return;
+  }
+  
+  // 확인 대화상자
+  const confirmed = confirm('정말 방을 닫으시겠습니까?\n\n모든 참가자가 방에서 나가게 되며, 이 작업은 되돌릴 수 없습니다.');
+  if (!confirmed) return;
+  
+  try {
+    showToast('방을 닫는 중입니다...', 'info');
     
-    showToast('방이 닫혔습니다', 'info');
-    showScreen('groupRoomScreen');
+    // 백엔드에 방 상태 업데이트
+    const updateData = {
+      status: 'closed',
+      closedAt: new Date().toISOString()
+    };
+    
+    // apiUpdateRoom 함수 사용 (더 안정적)
+    let updateSuccess = false;
+    if (typeof apiUpdateRoom === 'function') {
+      const updateResult = await apiUpdateRoom(roomCode, updateData);
+      updateSuccess = updateResult && updateResult.success;
+    } else if (typeof updateRoomOnBackend === 'function') {
+      // 대체 방법: updateRoomOnBackend 사용
+      room.status = 'closed';
+      updateSuccess = await updateRoomOnBackend(room);
+    } else {
+      throw new Error('방 업데이트 함수를 찾을 수 없습니다');
+    }
+    
+    if (!updateSuccess) {
+      throw new Error('백엔드 업데이트 실패');
+    }
+    
+    // 로컬 상태 정리
+    if (typeof stopRoomSync === 'function') {
+      stopRoomSync();
+    }
+    
+    // 동기화 인터벌 정리
+    if (groupTrainingState.syncInterval) {
+      clearInterval(groupTrainingState.syncInterval);
+      groupTrainingState.syncInterval = null;
+    }
+    
+    // 관리자 인터벌 정리
+    if (groupTrainingState.managerInterval) {
+      clearInterval(groupTrainingState.managerInterval);
+      groupTrainingState.managerInterval = null;
+    }
+    
+    // 상태 초기화
+    groupTrainingState.currentRoom = null;
+    groupTrainingState.roomCode = null;
+    groupTrainingState.isAdmin = false;
+    groupTrainingState.isManager = false;
+    groupTrainingState.participants = [];
+    groupTrainingState.isConnected = false;
+    groupTrainingState.lastSyncTime = null;
+    
+    // 훅 호출
+    if (window.groupTrainingHooks?.endSession) {
+      window.groupTrainingHooks.endSession();
+    }
+    
+    showToast('방이 성공적으로 닫혔습니다', 'success');
+    
+    // 화면 전환
+    if (typeof showScreen === 'function') {
+      showScreen('groupRoomScreen');
+    } else {
+      // 대체 방법: 그룹 화면들 숨기기
+      const groupScreens = ['groupWaitingScreen', 'groupTrainingScreen'];
+      groupScreens.forEach(screenId => {
+        const screen = document.getElementById(screenId);
+        if (screen) {
+          screen.classList.add('hidden');
+        }
+      });
+    }
     
   } catch (error) {
-    console.error('Failed to close room:', error);
-    showToast('방 닫기에 실패했습니다', 'error');
+    console.error('❌ 방 닫기 실패:', error);
+    
+    // 오류 메시지 상세화
+    let errorMessage = '방 닫기에 실패했습니다';
+    if (error.message) {
+      errorMessage += `: ${error.message}`;
+    } else if (typeof error === 'string') {
+      errorMessage += `: ${error}`;
+    }
+    
+    showToast(errorMessage, 'error');
+    
+    // 네트워크 오류인 경우 재시도 옵션 제공
+    if (error.message && (error.message.includes('네트워크') || error.message.includes('연결') || error.message.includes('timeout'))) {
+      const retry = confirm('네트워크 오류가 발생했습니다.\n다시 시도하시겠습니까?');
+      if (retry) {
+        // 1초 후 재시도
+        setTimeout(() => {
+          closeGroupRoom();
+        }, 1000);
+      }
+    }
   }
 }
 
