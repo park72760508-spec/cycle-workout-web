@@ -3599,6 +3599,12 @@ try {
   if (typeof apiJoinRoom === 'function') {
     window.apiJoinRoom = apiJoinRoom;
   }
+  if (typeof apiUpdateRoom === 'function') {
+    window.apiUpdateRoom = apiUpdateRoom;
+  }
+  if (typeof updateRoomOnBackend === 'function') {
+    window.updateRoomOnBackend = updateRoomOnBackend;
+  }
   if (typeof apiGetWorkouts === 'function') {
     window.apiGetWorkouts = apiGetWorkouts;
   }
