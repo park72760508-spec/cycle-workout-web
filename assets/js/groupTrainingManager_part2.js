@@ -3,6 +3,23 @@
    그룹 훈련 관리 모듈의 2부
 ========================================================== */
 
+// groupTrainingState 전역 참조 (groupTrainingManager.js에서 정의됨)
+// groupTrainingManager.js가 먼저 로드되어야 함
+const groupTrainingState = window.groupTrainingState || (() => {
+  console.warn('groupTrainingState가 아직 초기화되지 않았습니다. groupTrainingManager.js가 먼저 로드되어야 합니다.');
+  return {
+    currentRoom: null,
+    isAdmin: false,
+    isManager: false,
+    participants: [],
+    roomCode: null,
+    syncInterval: null,
+    managerInterval: null,
+    isConnected: false,
+    lastSyncTime: null
+  };
+})();
+
 
 
 
@@ -82,8 +99,13 @@ async function leaveGroupRoom() {
  * 방 코드 복사
  */
 function copyRoomCode() {
-  const roomCode = groupTrainingState.roomCode;
-  if (!roomCode) return;
+  // groupTrainingState가 전역으로 노출되어 있는지 확인
+  const state = window.groupTrainingState || groupTrainingState;
+  const roomCode = state?.roomCode;
+  if (!roomCode) {
+    showToast('방 코드를 찾을 수 없습니다', 'error');
+    return;
+  }
   
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(roomCode).then(() => {
