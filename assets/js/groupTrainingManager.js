@@ -2176,19 +2176,254 @@ async function updateRoomStatistics() {
  */
 async function monitorRoom(roomCode) {
   try {
+    console.log('🎯 방 모니터링 시작:', roomCode);
+    
     const room = await getRoomByCode(roomCode);
     if (!room) {
       showToast('방 정보를 찾을 수 없습니다', 'error');
       return;
     }
     
-    // 모니터링 모달 또는 새 창 열기
-    showRoomMonitoringModal(room);
+    // 방 데이터 정규화
+    const normalizedRoom = normalizeRoomData(room);
+    if (!normalizedRoom) {
+      showToast('방 정보를 처리할 수 없습니다', 'error');
+      return;
+    }
+    
+    // 모니터링 모달 표시
+    showRoomMonitoringModal(normalizedRoom, roomCode);
     
   } catch (error) {
     console.error('Failed to monitor room:', error);
-    showToast('방 모니터링에 실패했습니다', 'error');
+    showToast('방 모니터링에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
   }
+}
+
+/**
+ * 방 모니터링 모달 표시
+ */
+function showRoomMonitoringModal(room, roomCode) {
+  console.log('📊 모니터링 모달 표시:', room, roomCode);
+  
+  // 기존 모니터링 오버레이가 있으면 제거
+  const existingOverlay = document.getElementById('roomMonitoringModal');
+  if (existingOverlay) {
+    existingOverlay.remove();
+  }
+  
+  // 모니터링 모달 HTML 생성
+  const modalHTML = `
+    <div id="roomMonitoringModal" class="monitoring-modal">
+      <div class="monitoring-modal-content">
+        <div class="monitoring-modal-header">
+          <div class="modal-header-info">
+            <h2>🎯 방 모니터링</h2>
+            <div class="room-info-summary">
+              <span class="room-name">${escapeHtml(room.name || roomCode)}</span>
+              <span class="room-code">코드: ${escapeHtml(roomCode)}</span>
+            </div>
+          </div>
+          <button class="close-btn" onclick="closeRoomMonitoringModal()" title="닫기">✕</button>
+        </div>
+        
+        <div class="monitoring-modal-body">
+          <div class="room-status-section">
+            <div class="status-item">
+              <span class="status-label">상태:</span>
+              <span class="status-value ${room.status}">
+                ${room.status === 'waiting' ? '⏳ 대기중' : 
+                  room.status === 'starting' ? '🚀 시작중' :
+                  room.status === 'training' ? '🟢 훈련중' :
+                  room.status === 'finished' ? '✅ 완료' :
+                  room.status === 'closed' ? '🔴 종료' : '❓ 알 수 없음'}
+              </span>
+            </div>
+            <div class="status-item">
+              <span class="status-label">참가자:</span>
+              <span class="status-value">${(room.participants || []).length}/${room.maxParticipants || 0}명</span>
+            </div>
+          </div>
+          
+          <div class="participants-monitoring-section">
+            <h3>👥 참가자 모니터링</h3>
+            <div id="roomMonitoringParticipantsList" class="monitoring-participants-list">
+              ${renderMonitoringParticipants(room.participants || [])}
+            </div>
+          </div>
+          
+          ${room.status === 'training' ? `
+          <div class="monitoring-controls-section">
+            <h3>🎤 코칭 제어</h3>
+            <div class="coaching-controls">
+              <button class="btn btn-primary" onclick="startRoomMonitoringCoaching('${roomCode}')">
+                🎤 코칭 시작
+              </button>
+              <button class="btn btn-secondary" onclick="refreshRoomMonitoring('${roomCode}')">
+                🔄 새로고침
+              </button>
+            </div>
+          </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // 모달을 body에 추가
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  // 모달 표시
+  const modal = document.getElementById('roomMonitoringModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    
+    // 모달 배경 클릭 시 닫기
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        closeRoomMonitoringModal();
+      }
+    });
+    
+    // 주기적으로 참가자 목록 업데이트 (5초마다)
+    if (window.roomMonitoringInterval) {
+      clearInterval(window.roomMonitoringInterval);
+    }
+    
+    window.roomMonitoringInterval = setInterval(async () => {
+      await refreshRoomMonitoring(roomCode);
+    }, 5000);
+  }
+  
+  console.log('✅ 모니터링 모달 표시 완료');
+}
+
+/**
+ * 모니터링 참가자 목록 렌더링
+ */
+function renderMonitoringParticipants(participants) {
+  if (!participants || participants.length === 0) {
+    return '<div class="empty-participants">참가자가 없습니다</div>';
+  }
+  
+  return participants.map(p => {
+    // 참가자 데이터 정규화
+    const name = p.name || p.participantName || p.userName || '이름 없음';
+    const id = p.id || p.participantId || '';
+    const role = p.role || 'participant';
+    const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
+    
+    // 실시간 데이터 가져오기 (임시)
+    const liveData = getParticipantLiveDataForRoom(id);
+    
+    return `
+      <div class="monitoring-participant-item" data-id="${id}">
+        <div class="participant-header">
+          <div class="participant-name-section">
+            <span class="participant-name">${escapeHtml(name)}</span>
+            <span class="participant-role-badge ${role}">
+              ${role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}
+            </span>
+          </div>
+          <span class="participant-status-indicator ${ready ? 'ready' : 'not-ready'}">
+            ${ready ? '🟢 활성' : '🔴 비활성'}
+          </span>
+        </div>
+        <div class="participant-metrics">
+          <div class="metric-item">
+            <span class="metric-label">파워</span>
+            <span class="metric-value">${liveData.power || 0}W</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">심박</span>
+            <span class="metric-value">${liveData.heartRate || 0}bpm</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">케이던스</span>
+            <span class="metric-value">${liveData.cadence || 0}rpm</span>
+          </div>
+        </div>
+        <div class="participant-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${liveData.progress || 0}%"></div>
+          </div>
+          <span class="progress-text">${liveData.progress || 0}% 완료</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * 방 모니터링 새로고침
+ */
+async function refreshRoomMonitoring(roomCode) {
+  try {
+    const room = await getRoomByCode(roomCode);
+    if (!room) return;
+    
+    const normalizedRoom = normalizeRoomData(room);
+    if (!normalizedRoom) return;
+    
+    const participantsList = document.getElementById('roomMonitoringParticipantsList');
+    if (participantsList) {
+      participantsList.innerHTML = renderMonitoringParticipants(normalizedRoom.participants || []);
+    }
+    
+    // 방 상태 업데이트
+    const statusValue = document.querySelector('#roomMonitoringModal .status-value');
+    if (statusValue) {
+      const status = normalizedRoom.status;
+      statusValue.className = `status-value ${status}`;
+      statusValue.textContent = 
+        status === 'waiting' ? '⏳ 대기중' : 
+        status === 'starting' ? '🚀 시작중' :
+        status === 'training' ? '🟢 훈련중' :
+        status === 'finished' ? '✅ 완료' :
+        status === 'closed' ? '🔴 종료' : '❓ 알 수 없음';
+    }
+    
+  } catch (error) {
+    console.error('방 모니터링 새로고침 실패:', error);
+  }
+}
+
+/**
+ * 방 모니터링 모달 닫기
+ */
+function closeRoomMonitoringModal() {
+  const modal = document.getElementById('roomMonitoringModal');
+  if (modal) {
+    modal.remove();
+  }
+  
+  // 인터벌 정리
+  if (window.roomMonitoringInterval) {
+    clearInterval(window.roomMonitoringInterval);
+    window.roomMonitoringInterval = null;
+  }
+}
+
+/**
+ * 방 모니터링 코칭 시작
+ */
+function startRoomMonitoringCoaching(roomCode) {
+  showToast('코칭 기능은 준비 중입니다', 'info');
+  // TODO: 코칭 기능 구현
+}
+
+/**
+ * 참가자 실시간 데이터 가져오기 (방 모니터링용)
+ */
+function getParticipantLiveDataForRoom(participantId) {
+  // 실제 구현 시 백엔드에서 실시간 데이터를 가져와야 함
+  // 여기서는 임시 데이터 반환
+  return {
+    power: Math.floor(Math.random() * 300) + 100,
+    heartRate: Math.floor(Math.random() * 50) + 120,
+    cadence: Math.floor(Math.random() * 30) + 70,
+    progress: Math.floor(Math.random() * 100)
+  };
 }
 
 /**
@@ -2331,6 +2566,10 @@ const groupTrainingFunctions = [
 window.refreshActiveRooms = refreshActiveRooms;
 window.updateRoomStatistics = updateRoomStatistics;
 window.monitorRoom = monitorRoom;
+window.showRoomMonitoringModal = showRoomMonitoringModal;
+window.closeRoomMonitoringModal = closeRoomMonitoringModal;
+window.refreshRoomMonitoring = refreshRoomMonitoring;
+window.startRoomMonitoringCoaching = startRoomMonitoringCoaching;
 window.forceStopRoom = forceStopRoom;
 window.cleanupExpiredRooms = cleanupExpiredRooms;
 window.emergencyStopAllRooms = emergencyStopAllRooms;
