@@ -418,6 +418,12 @@
   position: relative;
 }
 
+.participant-card.current-user {
+  border: 2px solid #007bff;
+  background: linear-gradient(135deg, #e7f3ff 0%, white 100%);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
 .participant-card.admin {
   border-left: 4px solid #dc3545;
   background: linear-gradient(135deg, #fff5f5 0%, white 100%);
@@ -472,6 +478,82 @@
 .join-time {
   font-size: 12px;
   color: #6c757d;
+}
+
+/* 블루투스 기기 연결 상태 */
+.participant-bluetooth-status {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.bluetooth-devices {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.device-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: white;
+  border: 1px solid #e9ecef;
+  transition: all 0.3s ease;
+}
+
+.device-icon:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.device-status-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  transition: opacity 0.3s ease;
+}
+
+.device-status-img.active {
+  opacity: 1;
+  filter: brightness(1);
+}
+
+.device-status-img.inactive {
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.ready-toggle-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid #ffc107;
+  background: #fff3cd;
+  color: #856404;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.ready-toggle-btn:hover {
+  background: #ffe69c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ready-toggle-btn.ready {
+  border-color: #28a745;
+  background: #d4edda;
+  color: #155724;
+}
+
+.ready-toggle-btn.ready:hover {
+  background: #c3e6cb;
 }
 
 /* 관리자 및 참가자 컨트롤 */
