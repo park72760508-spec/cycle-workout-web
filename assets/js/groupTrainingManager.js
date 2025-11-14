@@ -1643,16 +1643,35 @@ function initializeWaitingRoom() {
   const adminControls = safeGet('adminControls');
   const participantControls = safeGet('participantControls');
   
+  console.log('대기실 초기화 - 관리자 여부:', groupTrainingState.isAdmin);
+  console.log('adminControls 요소:', adminControls);
+  console.log('participantControls 요소:', participantControls);
+  
   if (groupTrainingState.isAdmin) {
-    adminControls?.classList.remove('hidden');
-    participantControls?.classList.add('hidden');
+    if (adminControls) {
+      adminControls.classList.remove('hidden');
+      adminControls.style.display = '';
+    }
+    if (participantControls) {
+      participantControls.classList.add('hidden');
+      participantControls.style.display = 'none';
+    }
   } else {
-    adminControls?.classList.add('hidden');
-    participantControls?.classList.remove('hidden');
+    if (adminControls) {
+      adminControls.classList.add('hidden');
+      adminControls.style.display = 'none';
+    }
+    if (participantControls) {
+      participantControls.classList.remove('hidden');
+      participantControls.style.display = '';
+    }
   }
   
   // 참가자 목록 업데이트
   updateParticipantsList();
+  
+  // 시작 버튼 상태 즉시 업데이트
+  updateStartButtonState();
   
   // 실시간 동기화 시작
   startRoomSync();
@@ -1676,17 +1695,39 @@ function updateParticipantsList() {
   if (maxCountEl) maxCountEl.textContent = room.maxParticipants;
   
   if (listEl) {
-    listEl.innerHTML = room.participants.map(p => `
+    // 참가자 데이터 정규화 (다양한 필드명 지원)
+    const normalizedParticipants = room.participants.map(p => {
+      // 이름 필드 정규화
+      const name = p.name || p.participantName || p.userName || p.displayName || '이름 없음';
+      // ID 필드 정규화
+      const id = p.id || p.participantId || p.userId || '';
+      // 역할 정규화
+      const role = p.role || 'participant';
+      // 준비 상태 정규화
+      const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
+      // 참가 시간 정규화
+      const joinedAt = p.joinedAt || p.joined_at || p.createdAt || new Date().toISOString();
+      
+      return {
+        id,
+        name: String(name),
+        role,
+        ready: Boolean(ready),
+        joinedAt
+      };
+    });
+    
+    listEl.innerHTML = normalizedParticipants.map(p => `
       <div class="participant-card ${p.role}" data-id="${p.id}">
         <div class="participant-info">
-          <span class="participant-name">${p.name}</span>
+          <span class="participant-name">${escapeHtml(p.name)}</span>
           <span class="participant-role">${p.role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}</span>
         </div>
         <div class="participant-status">
           <span class="ready-status ${p.ready ? 'ready' : 'not-ready'}">
             ${p.ready ? '✅ 준비완료' : '⏳ 준비중'}
           </span>
-          <span class="join-time">${new Date(p.joinedAt).toLocaleTimeString('ko-KR')}</span>
+          <span class="join-time">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>
         </div>
       </div>
     `).join('');
@@ -1732,19 +1773,40 @@ async function updateRoomOnBackend(roomData) {
  */
 function updateStartButtonState() {
   const startBtn = safeGet('startGroupTrainingBtn');
-  if (!startBtn || !groupTrainingState.isAdmin) return;
+  if (!startBtn || !groupTrainingState.isAdmin) {
+    // 관리자가 아니면 버튼 숨기기
+    if (startBtn) {
+      startBtn.style.display = 'none';
+    }
+    return;
+  }
+  
+  // 관리자면 버튼 표시
+  if (startBtn) {
+    startBtn.style.display = '';
+  }
   
   const room = groupTrainingState.currentRoom;
-  if (!room) return;
+  if (!room || !room.participants) {
+    startBtn.disabled = true;
+    startBtn.textContent = '⏳ 방 정보 로딩 중...';
+    return;
+  }
   
-  const allReady = room.participants.every(p => p.ready);
+  // 참가자 준비 상태 정규화하여 확인
+  const allReady = room.participants.every(p => {
+    const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
+    return ready;
+  });
+  
   const hasParticipants = room.participants.length >= 2; // 최소 2명
   
   const canStart = allReady && hasParticipants;
   
   startBtn.disabled = !canStart;
   startBtn.textContent = canStart ? '🚀 그룹 훈련 시작' : 
-    !hasParticipants ? '👥 참가자 대기 중' : '⏳ 준비 완료 대기 중';
+    !hasParticipants ? '👥 참가자 대기 중 (최소 2명 필요)' : 
+    '⏳ 준비 완료 대기 중';
 }
 
 /**
@@ -1925,7 +1987,8 @@ window.selectGroupMode = selectGroupMode;
 window.selectRole = selectRole;
 window.createGroupRoom = createGroupRoom;
 window.joinGroupRoom = joinGroupRoom;
-window.leaveGroupRoom = leaveGroupRoom;
+// leaveGroupRoom은 groupTrainingManager_part2.js에서 최종 등록됨
+// window.leaveGroupRoom = leaveGroupRoom; // 주석 처리 - part2에서 등록
 
 console.log('✅ Group Training Manager loaded');
 
@@ -2562,7 +2625,8 @@ try {
     window.joinGroupRoom = joinGroupRoom;
   }
   if (typeof leaveGroupRoom === 'function') {
-    window.leaveGroupRoom = leaveGroupRoom;
+    // leaveGroupRoom은 groupTrainingManager_part2.js에서 최종 등록됨
+// window.leaveGroupRoom = leaveGroupRoom; // 주석 처리 - part2에서 등록
   }
   
   // 역할 선택 함수
