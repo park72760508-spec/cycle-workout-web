@@ -664,6 +664,7 @@
 
 .participant-progress {
   margin-bottom: 16px;
+  position: relative; /* 진행바 컨테이너 기준점 설정 */
 }
 
 .progress-bar {
@@ -673,13 +674,18 @@
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 8px;
+  position: relative; /* 진행바 기준점 설정 */
 }
 
 .progress-fill {
   height: 100%;
+  width: 0%; /* 기본값 0%, 인라인 스타일로 덮어쓰기됨 */
   background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
   border-radius: 4px;
   transition: width 0.3s ease;
+  position: relative; /* 부모 요소 내에서만 위치 지정 */
+  display: block; /* 블록 요소로 명시 */
+  max-width: 100%; /* 최대 너비 제한 */
 }
 
 .progress-text {
@@ -1314,6 +1320,7 @@
 
 .participant-progress {
   margin-top: 12px;
+  position: relative; /* 진행바 컨테이너 기준점 설정 */
 }
 
 .progress-bar {
@@ -1323,13 +1330,18 @@
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 4px;
+  position: relative; /* 진행바 기준점 설정 */
 }
 
 .progress-fill {
   height: 100%;
+  width: 0%; /* 기본값 0%, 인라인 스타일로 덮어쓰기됨 */
   background: linear-gradient(90deg, #3b82f6, #8b5cf6);
   transition: width 0.3s ease;
   border-radius: 4px;
+  position: relative; /* 부모 요소 내에서만 위치 지정 */
+  display: block; /* 블록 요소로 명시 */
+  max-width: 100%; /* 최대 너비 제한 */
 }
 
 .progress-text {
