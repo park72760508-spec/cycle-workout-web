@@ -1218,6 +1218,71 @@ async function fallbackWorkoutLoading(select) {
 }
 
 /**
+ * 워크아웃 선택 화면에서 그룹훈련방 생성 (grade=1 관리자용)
+ */
+async function createGroupRoomFromWorkout(workoutId, workoutTitle) {
+  // 권한 확인
+  const currentUser = window.currentUser;
+  if (!currentUser || (currentUser.grade !== '1' && currentUser.grade !== 1)) {
+    showToast('그룹훈련방 생성은 관리자만 가능합니다', 'error');
+    return;
+  }
+
+  // 방 이름 입력 받기
+  const roomName = prompt(`"${workoutTitle}" 워크아웃으로 그룹훈련방을 생성합니다.\n방 이름을 입력하세요:`, `${workoutTitle} 그룹훈련`);
+  
+  if (!roomName || !roomName.trim()) {
+    return; // 취소 또는 빈 값
+  }
+
+  // 최대 참가자 수 선택
+  const maxParticipants = prompt('최대 참가자 수를 입력하세요 (20~50명):', '20');
+  const maxParticipantsNum = parseInt(maxParticipants) || 20;
+  
+  if (maxParticipantsNum < 20 || maxParticipantsNum > 50) {
+    showToast('참가자 수는 20~50명 사이여야 합니다', 'error');
+    return;
+  }
+
+  try {
+    showToast('그룹훈련방을 생성 중입니다...', 'info');
+    
+    const roomCode = generateRoomCode();
+    const roomData = {
+      roomName: roomName.trim(),
+      workoutId: String(workoutId),
+      maxParticipants: maxParticipantsNum,
+      adminId: currentUser.id || 'admin',
+      adminName: currentUser.name || '관리자'
+    };
+    
+    const result = await apiCreateRoom(roomData);
+    
+    if (result && result.success) {
+      const createdRoom = result.room || result;
+      groupTrainingState.currentRoom = normalizeRoomData(createdRoom);
+      groupTrainingState.roomCode = createdRoom.roomCode || createdRoom.code || roomCode;
+      groupTrainingState.isAdmin = true;
+      
+      showToast(`그룹훈련방 생성 완료! 방 코드: ${groupTrainingState.roomCode}`, 'success');
+      
+      // 대기실로 이동
+      if (typeof showScreen === 'function') {
+        showScreen('groupWaitingScreen');
+      }
+      if (typeof initializeWaitingRoom === 'function') {
+        initializeWaitingRoom();
+      }
+    } else {
+      throw new Error(result?.error || '방 생성 실패');
+    }
+  } catch (error) {
+    console.error('그룹훈련방 생성 오류:', error);
+    showToast('그룹훈련방 생성에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+  }
+}
+
+/**
  * 그룹 훈련방 생성
  */
 async function createGroupRoom() {
@@ -1751,9 +1816,18 @@ async function syncRoomData() {
         });
       }
       
+      // 카운트다운 시작 상태 확인 (참가자용)
+      if (latestRoom.status === 'starting' && !groupTrainingState.isAdmin) {
+        if (typeof checkAndSyncCountdown === 'function') {
+          checkAndSyncCountdown();
+        }
+      }
+      
       // 훈련 시작 상태 확인
       if (latestRoom.status === 'training' && !groupTrainingState.isTraining) {
-        startGroupTrainingSession();
+        if (typeof startGroupTrainingSession === 'function') {
+          startGroupTrainingSession();
+        }
       }
     }
     
@@ -2414,6 +2488,7 @@ window.showToast = showToast;
 window.safeGet = safeGet;
 window.loadWorkoutsForGroupRoom = loadWorkoutsForGroupRoom;
 window.initializeAdminSection = initializeAdminSection;
+window.createGroupRoomFromWorkout = createGroupRoomFromWorkout;
 
 
 // 🆕 새로 추가된 함수들
