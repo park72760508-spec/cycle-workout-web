@@ -1723,9 +1723,67 @@ async function joinRoomByCode(roomCode) {
     }
 
     if (!joinResult.success) {
+      // "Already joined" 오류인 경우 재접속으로 처리
+      if (joinResult.error === 'Already joined' || joinResult.error?.includes('Already joined')) {
+        console.log('ℹ️ 이미 참가한 방입니다. 기존 참가 정보로 재접속합니다.');
+        
+        // 방 정보 새로고침
+        const refreshedRoomRes = await apiGetRoom(roomCode);
+        let refreshedRoom = null;
+        if (refreshedRoomRes?.success && refreshedRoomRes.item) {
+          refreshedRoom = normalizeRoomData(refreshedRoomRes.item);
+        }
+        
+        // 상태 업데이트
+        groupTrainingState.currentRoom = refreshedRoom || room;
+        groupTrainingState.roomCode = roomCode;
+        groupTrainingState.isAdmin = false;
+        groupTrainingState.isManager = false;
+        
+        showToast('기존 참가 정보로 재접속했습니다', 'success');
+        
+        // 화면 전환
+        if (typeof showScreen === 'function') {
+          showScreen('groupWaitingScreen');
+        }
+        if (typeof initializeWaitingRoom === 'function') {
+          initializeWaitingRoom();
+        }
+        return;
+      }
+      
       const errorMsg = joinResult.error || '방 참가에 실패했습니다';
       console.error('❌ 방 참가 실패:', errorMsg);
       showToast(errorMsg, 'error');
+      return;
+    }
+    
+    // 이미 참가한 경우 (백엔드에서 alreadyJoined 플래그로 반환)
+    if (joinResult.alreadyJoined) {
+      console.log('ℹ️ 이미 참가한 방입니다. 기존 참가 정보로 재접속합니다.');
+      
+      // 방 정보 새로고침
+      const refreshedRoomRes = await apiGetRoom(roomCode);
+      let refreshedRoom = null;
+      if (refreshedRoomRes?.success && refreshedRoomRes.item) {
+        refreshedRoom = normalizeRoomData(refreshedRoomRes.item);
+      }
+      
+      // 상태 업데이트
+      groupTrainingState.currentRoom = refreshedRoom || room;
+      groupTrainingState.roomCode = roomCode;
+      groupTrainingState.isAdmin = false;
+      groupTrainingState.isManager = false;
+      
+      showToast('기존 참가 정보로 재접속했습니다', 'success');
+      
+      // 화면 전환
+      if (typeof showScreen === 'function') {
+        showScreen('groupWaitingScreen');
+      }
+      if (typeof initializeWaitingRoom === 'function') {
+        initializeWaitingRoom();
+      }
       return;
     }
 
