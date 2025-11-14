@@ -1006,7 +1006,12 @@ async function loadWorkouts() {
             <div class="workout-description">${escapeHtml(safeDescription)}</div>
             ${workout.publish_date ? `<div class="publish-date">게시일: ${new Date(workout.publish_date).toLocaleDateString()}</div>` : ''}
           </div>
-          <button class="btn btn-primary" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
+          <div class="workout-actions-bottom">
+            <button class="btn btn-primary" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
+            ${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? 
+              `<button class="btn btn-success" id="createGroupRoomBtn-${workout.id}" onclick="createGroupRoomFromWorkout(${workout.id}, '${escapeHtml(safeTitle)}')" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : 
+              ''}
+          </div>
         </div>
       `;
     }).filter(Boolean).join('');
