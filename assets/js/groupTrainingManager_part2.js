@@ -47,6 +47,7 @@ async function toggleReady() {
   }
   
   // 준비 상태 변경
+  const wasReady = myParticipant.ready;
   myParticipant.ready = !myParticipant.ready;
   
   try {
@@ -73,7 +74,17 @@ async function toggleReady() {
       }
       
       updateParticipantsList();
-      showToast(myParticipant.ready ? '준비 완료!' : '준비 취소', 'success');
+      
+      // 준비 완료 시 훈련 화면으로 전환 (타이머는 멈춘 상태)
+      if (myParticipant.ready && !wasReady) {
+        // 관리자가 아닌 경우에만 훈련 화면으로 전환
+        if (!groupTrainingState.isAdmin) {
+          await moveToTrainingScreenWithPausedTimer();
+        }
+        showToast('준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
+      } else if (!myParticipant.ready) {
+        showToast('준비 취소', 'info');
+      }
     }
     
   } catch (error) {
@@ -81,6 +92,222 @@ async function toggleReady() {
     showToast('준비 상태 변경에 실패했습니다', 'error');
     // 상태 되돌리기
     myParticipant.ready = !myParticipant.ready;
+  }
+}
+
+/**
+ * 훈련 화면으로 전환 (타이머는 멈춘 상태로 시작)
+ */
+async function moveToTrainingScreenWithPausedTimer() {
+  try {
+    const room = groupTrainingState.currentRoom;
+    if (!room || !room.workoutId) {
+      showToast('워크아웃 정보가 없습니다', 'error');
+      return;
+    }
+    
+    // 워크아웃 로드
+    if (room.workoutId) {
+      try {
+        // apiGetWorkout 함수 사용
+        if (typeof apiGetWorkout === 'function') {
+          const workoutResult = await apiGetWorkout(room.workoutId);
+          if (workoutResult && workoutResult.success && workoutResult.item) {
+            window.currentWorkout = workoutResult.item;
+            // 로컬 스토리지에도 저장
+            try {
+              localStorage.setItem('currentWorkout', JSON.stringify(workoutResult.item));
+            } catch (e) {
+              console.warn('로컬 스토리지 저장 실패:', e);
+            }
+          } else {
+            console.warn('워크아웃 로드 실패:', workoutResult?.error);
+            showToast('워크아웃 정보를 불러올 수 없습니다', 'error');
+            return;
+          }
+        } else {
+          console.warn('apiGetWorkout 함수를 찾을 수 없습니다');
+        }
+      } catch (error) {
+        console.error('워크아웃 로드 중 오류:', error);
+        showToast('워크아웃 로드 중 오류가 발생했습니다', 'error');
+        return;
+      }
+    }
+    
+    // 그룹 훈련 모드 설정
+    window.isGroupTraining = true;
+    window.groupTrainingRoom = {
+      ...room,
+      code: groupTrainingState.roomCode,
+      isAdmin: false
+    };
+    
+    // 훈련 화면으로 전환
+    if (typeof showScreen === 'function') {
+      showScreen('trainingScreen');
+    }
+    
+    // 훈련 초기화 (타이머는 시작하지 않음)
+    if (typeof startWorkoutTraining === 'function') {
+      // 훈련 상태 초기화
+      if (window.trainingState) {
+        window.trainingState.elapsedSec = 0;
+        window.trainingState.segElapsedSec = 0;
+        window.trainingState.segIndex = 0;
+        window.trainingState.paused = true; // 일시정지 상태로 시작
+        window.trainingState.isRunning = false; // 실행 중이 아님
+      }
+      
+      // 워크아웃 초기화만 수행 (타이머는 시작하지 않음)
+      initializeWorkoutForGroupTraining();
+      
+      // 시작 신호 확인 시작
+      startCheckingTrainingStartSignal();
+    }
+    
+    showToast('훈련 화면으로 이동했습니다. 관리자가 시작할 때까지 대기합니다.', 'info');
+    
+  } catch (error) {
+    console.error('Failed to move to training screen:', error);
+    showToast('훈련 화면으로 이동하는데 실패했습니다', 'error');
+  }
+}
+
+/**
+ * 그룹 훈련용 워크아웃 초기화 (타이머 시작 없이)
+ */
+function initializeWorkoutForGroupTraining() {
+  try {
+    const w = window.currentWorkout;
+    if (!w) {
+      console.error('No workout available');
+      return;
+    }
+    
+    // 세그먼트 타임라인 생성
+    if (typeof buildSegmentBar === 'function') {
+      buildSegmentBar();
+    }
+    
+    // 첫 세그먼트 타겟 적용
+    if (typeof applySegmentTarget === 'function') {
+      applySegmentTarget(0);
+    }
+    
+    // 시간 UI 초기화
+    if (typeof updateTimeUI === 'function') {
+      updateTimeUI();
+    }
+    
+    // 차트 초기화
+    if (window.initTrainingCharts) {
+      window.initTrainingCharts();
+    }
+    
+    // 사용자 정보 렌더링
+    if (typeof renderUserInfo === 'function') {
+      renderUserInfo();
+    }
+    
+    console.log('✅ 그룹 훈련 워크아웃 초기화 완료 (타이머 대기 중)');
+    
+  } catch (error) {
+    console.error('Failed to initialize workout:', error);
+  }
+}
+
+/**
+ * 훈련 시작 신호 확인 시작
+ */
+function startCheckingTrainingStartSignal() {
+  // 기존 인터벌 정리
+  if (window.trainingStartCheckInterval) {
+    clearInterval(window.trainingStartCheckInterval);
+  }
+  
+  // 1초마다 시작 신호 확인
+  window.trainingStartCheckInterval = setInterval(async () => {
+    try {
+      const roomCode = groupTrainingState.roomCode;
+      if (!roomCode) {
+        clearInterval(window.trainingStartCheckInterval);
+        return;
+      }
+      
+      // 방 정보 가져오기
+      const roomResponse = await apiGetRoom(roomCode);
+      if (!roomResponse?.success || !roomResponse.item) {
+        return;
+      }
+      
+      const room = normalizeRoomData(roomResponse.item);
+      if (!room) return;
+      
+      // 훈련 시작 시간 확인
+      const trainingStartTime = room.trainingStartTime || room.TrainingStartTime;
+      
+      if (trainingStartTime) {
+        // 시작 신호가 있으면 타이머 시작
+        clearInterval(window.trainingStartCheckInterval);
+        window.trainingStartCheckInterval = null;
+        
+        // 시작 시간 계산 (서버 시간 기준)
+        const startTime = new Date(trainingStartTime).getTime();
+        const now = Date.now();
+        const delay = Math.max(0, startTime - now);
+        
+        if (delay > 0) {
+          // 약간의 지연이 있으면 대기
+          setTimeout(() => {
+            startGroupTrainingTimer();
+          }, delay);
+        } else {
+          // 이미 시작 시간이 지났으면 즉시 시작
+          startGroupTrainingTimer();
+        }
+      }
+      
+    } catch (error) {
+      console.error('Failed to check training start signal:', error);
+    }
+  }, 1000); // 1초마다 확인
+}
+
+/**
+ * 그룹 훈련 타이머 시작
+ */
+function startGroupTrainingTimer() {
+  try {
+    console.log('🚀 그룹 훈련 타이머 시작!');
+    
+    // 훈련 상태 활성화
+    if (window.trainingState) {
+      window.trainingState.paused = false;
+      window.trainingState.isRunning = true;
+      window.trainingState.workoutStartMs = Date.now();
+      window.trainingState.pauseAccumMs = 0;
+      window.trainingState.pausedAtMs = null;
+    }
+    
+    // 세그먼트 루프 시작
+    if (typeof startSegmentLoop === 'function') {
+      startSegmentLoop();
+    } else if (typeof startWorkoutTraining === 'function') {
+      // 폴백: 전체 훈련 시작
+      startWorkoutTraining();
+    }
+    
+    // 화면 항상 켜짐 요청
+    if (typeof ScreenAwake !== 'undefined' && ScreenAwake.acquire) {
+      ScreenAwake.acquire();
+    }
+    
+    showToast('훈련이 시작되었습니다!', 'success');
+    
+  } catch (error) {
+    console.error('Failed to start training timer:', error);
+    showToast('훈련 시작에 실패했습니다', 'error');
   }
 }
 
