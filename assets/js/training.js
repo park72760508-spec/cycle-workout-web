@@ -1154,6 +1154,8 @@ function fallbackCopyRoomCode(roomCode) {
   document.body.removeChild(textArea);
 }
 
+
+/**
  * 빠른 방 참가 (UI 전환용)
  */
 function navigateToJoinRoom(roomCode) {
@@ -2478,4 +2480,5 @@ try {
 } catch (error) {
   console.error('❌ 모듈 등록 중 오류:', error);
 }
+
 
