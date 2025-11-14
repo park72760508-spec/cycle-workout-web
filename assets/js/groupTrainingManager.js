@@ -343,17 +343,35 @@ async function apiCreateRoom(roomData) {
  */
 async function apiGetRoom(roomCode) {
   if (!roomCode) {
+    console.error('❌ apiGetRoom: 방 코드 누락');
     return { success: false, error: '방 코드가 필요합니다.' };
   }
   
+  if (!window.GAS_URL) {
+    console.error('❌ apiGetRoom: GAS_URL이 설정되지 않았습니다');
+    return { success: false, error: '서버 URL이 설정되지 않았습니다.' };
+  }
+  
   try {
-    return await jsonpRequest(window.GAS_URL, { 
+    const params = { 
       action: 'getRoom', 
-      roomCode: String(roomCode) 
-    });
+      roomCode: String(roomCode).toUpperCase().trim()
+    };
+    
+    console.log('📡 apiGetRoom 요청:', params);
+    
+    const result = await jsonpRequest(window.GAS_URL, params);
+    
+    console.log('📡 apiGetRoom 응답:', result);
+    
+    return result;
   } catch (error) {
-    console.error('apiGetRoom 실패:', error);
-    return { success: false, error: error.message };
+    console.error('❌ apiGetRoom 실패:', error);
+    console.error('오류 스택:', error.stack);
+    return { 
+      success: false, 
+      error: error.message || '방 정보를 가져오는 중 오류가 발생했습니다.' 
+    };
   }
 }
 
@@ -362,21 +380,37 @@ async function apiGetRoom(roomCode) {
  */
 async function apiJoinRoom(roomCode, participantData) {
   if (!roomCode || !participantData) {
+    console.error('❌ apiJoinRoom: 필수 파라미터 누락', { roomCode, participantData });
     return { success: false, error: '방 코드와 참가자 데이터가 필요합니다.' };
+  }
+  
+  if (!window.GAS_URL) {
+    console.error('❌ apiJoinRoom: GAS_URL이 설정되지 않았습니다');
+    return { success: false, error: '서버 URL이 설정되지 않았습니다.' };
   }
   
   try {
     const params = {
       action: 'joinRoom',
-      roomCode: String(roomCode),
-      participantId: String(participantData.participantId || ''),
-      participantName: String(participantData.participantName || '')
+      roomCode: String(roomCode).toUpperCase().trim(),
+      participantId: String(participantData.participantId || '').trim(),
+      participantName: String(participantData.participantName || '참가자').trim()
     };
     
-    return await jsonpRequest(window.GAS_URL, params);
+    console.log('📡 apiJoinRoom 요청:', params);
+    
+    const result = await jsonpRequest(window.GAS_URL, params);
+    
+    console.log('📡 apiJoinRoom 응답:', result);
+    
+    return result;
   } catch (error) {
-    console.error('apiJoinRoom 실패:', error);
-    return { success: false, error: error.message };
+    console.error('❌ apiJoinRoom 실패:', error);
+    console.error('오류 스택:', error.stack);
+    return { 
+      success: false, 
+      error: error.message || '방 참가 요청 중 오류가 발생했습니다.' 
+    };
   }
 }
 
@@ -1539,60 +1573,184 @@ async function joinGroupRoom() {
  */
 async function joinRoomByCode(roomCode) {
   try {
+    console.log('🚀 방 참가 시작:', roomCode);
     showToast('방에 참가 중입니다...', 'info');
     
+    // 사용자 정보 확인
+    if (!window.currentUser || !window.currentUser.id) {
+      const errorMsg = '로그인이 필요합니다. 사용자를 선택해주세요.';
+      console.error('❌ 사용자 정보 없음');
+      showToast(errorMsg, 'error');
+      return;
+    }
+    
+    const participantId = window.currentUser.id;
+    const participantName = window.currentUser.name || '참가자';
+    console.log('👤 참가자 정보:', { participantId, participantName });
+    
     // 백엔드에서 방 정보 확인
+    console.log('📡 방 정보 조회 중...');
     const roomResponse = await apiGetRoom(roomCode);
-    if (!roomResponse?.success || !roomResponse.item) {
-      showToast('방을 찾을 수 없습니다', 'error');
+    console.log('📡 방 정보 응답:', roomResponse);
+    
+    if (!roomResponse) {
+      const errorMsg = '방 정보를 가져올 수 없습니다. 네트워크를 확인해주세요.';
+      console.error('❌ 방 정보 응답 없음');
+      showToast(errorMsg, 'error');
+      return;
+    }
+    
+    if (!roomResponse.success) {
+      const errorMsg = roomResponse.error || '방을 찾을 수 없습니다';
+      console.error('❌ 방 조회 실패:', errorMsg);
+      showToast(errorMsg, 'error');
+      return;
+    }
+    
+    if (!roomResponse.item) {
+      const errorMsg = '방 정보가 없습니다. 방 코드를 확인해주세요.';
+      console.error('❌ 방 데이터 없음');
+      showToast(errorMsg, 'error');
       return;
     }
 
+    console.log('🔄 방 데이터 정규화 중...');
     const room = normalizeRoomData(roomResponse.item);
+    console.log('✅ 정규화된 방 데이터:', room);
+    
     if (!room) {
-      showToast('방 정보를 불러올 수 없습니다', 'error');
+      const errorMsg = '방 정보를 처리할 수 없습니다.';
+      console.error('❌ 방 데이터 정규화 실패');
+      showToast(errorMsg, 'error');
       return;
     }
 
-    if (room.status !== 'waiting') {
-      showToast('이미 시작된 방입니다', 'error');
+    // 방 상태 확인
+    if (room.status !== 'waiting' && room.status !== 'starting') {
+      const statusMsg = room.status === 'training' ? '이미 시작된 방입니다' :
+                       room.status === 'finished' ? '이미 종료된 방입니다' :
+                       room.status === 'closed' ? '닫힌 방입니다' :
+                       '참가할 수 없는 상태입니다';
+      console.error('❌ 방 상태 오류:', room.status);
+      showToast(statusMsg, 'error');
       return;
     }
 
-    if (room.participants.length >= room.maxParticipants) {
-      showToast('방이 가득 찼습니다', 'error');
+    // 참가자 수 확인
+    const currentParticipants = Array.isArray(room.participants) ? room.participants.length : 0;
+    const maxParticipants = room.maxParticipants || 50;
+    
+    if (currentParticipants >= maxParticipants) {
+      const errorMsg = `방이 가득 찼습니다 (${currentParticipants}/${maxParticipants})`;
+      console.error('❌ 방 정원 초과');
+      showToast(errorMsg, 'error');
+      return;
+    }
+    
+    // 이미 참가한 사용자인지 확인
+    const isAlreadyJoined = room.participants.some(p => {
+      const pId = p.id || p.participantId || p.userId;
+      return pId === participantId;
+    });
+    
+    if (isAlreadyJoined) {
+      console.log('ℹ️ 이미 참가한 방입니다. 대기실로 이동합니다.');
+      groupTrainingState.currentRoom = room;
+      groupTrainingState.roomCode = roomCode;
+      groupTrainingState.isAdmin = false;
+      
+      if (typeof showScreen === 'function') {
+        showScreen('groupWaitingScreen');
+      }
+      if (typeof initializeWaitingRoom === 'function') {
+        initializeWaitingRoom();
+      }
+      showToast('이미 참가한 방입니다', 'info');
       return;
     }
 
-    const participantId = window.currentUser?.id || `user_${Date.now()}`;
-    const participantName = window.currentUser?.name || '참가자';
-
+    // 방 참가 API 호출
+    console.log('📡 방 참가 API 호출 중...');
     const joinResult = await apiJoinRoom(roomCode, {
       participantId,
       participantName
     });
+    console.log('📡 방 참가 응답:', joinResult);
 
-    if (!joinResult?.success) {
-      throw new Error(joinResult?.error || '방 참가에 실패했습니다');
+    if (!joinResult) {
+      const errorMsg = '방 참가 요청에 응답이 없습니다. 네트워크를 확인해주세요.';
+      console.error('❌ 방 참가 응답 없음');
+      showToast(errorMsg, 'error');
+      return;
     }
 
-    const refreshedRoomRes = await apiGetRoom(roomCode);
-    const refreshedRoom = normalizeRoomData(refreshedRoomRes?.item);
+    if (!joinResult.success) {
+      const errorMsg = joinResult.error || '방 참가에 실패했습니다';
+      console.error('❌ 방 참가 실패:', errorMsg);
+      showToast(errorMsg, 'error');
+      return;
+    }
 
+    // 방 정보 새로고침
+    console.log('🔄 방 정보 새로고침 중...');
+    const refreshedRoomRes = await apiGetRoom(roomCode);
+    console.log('📡 새로고침된 방 정보:', refreshedRoomRes);
+    
+    let refreshedRoom = null;
+    if (refreshedRoomRes?.success && refreshedRoomRes.item) {
+      refreshedRoom = normalizeRoomData(refreshedRoomRes.item);
+    }
+    
+    // 상태 업데이트
     groupTrainingState.currentRoom = refreshedRoom || {
       ...room,
-      participants: [...room.participants, { participantId, participantName, role: 'participant', ready: false }]
+      participants: [...(room.participants || []), { 
+        id: participantId,
+        participantId: participantId,
+        name: participantName,
+        participantName: participantName,
+        role: 'participant', 
+        ready: false 
+      }]
     };
     groupTrainingState.roomCode = roomCode;
     groupTrainingState.isAdmin = false;
+    groupTrainingState.isManager = false;
+    
+    console.log('✅ 방 참가 완료. 상태:', groupTrainingState);
     
     showToast('방에 참가했습니다!', 'success');
-    showScreen('groupWaitingScreen');
-    initializeWaitingRoom();
+    
+    // 화면 전환
+    if (typeof showScreen === 'function') {
+      showScreen('groupWaitingScreen');
+    } else {
+      console.warn('⚠️ showScreen 함수를 찾을 수 없습니다');
+      const waitingScreen = document.getElementById('groupWaitingScreen');
+      if (waitingScreen) {
+        waitingScreen.classList.remove('hidden');
+      }
+    }
+    
+    // 대기실 초기화
+    if (typeof initializeWaitingRoom === 'function') {
+      initializeWaitingRoom();
+    } else {
+      console.warn('⚠️ initializeWaitingRoom 함수를 찾을 수 없습니다');
+    }
     
   } catch (error) {
-    console.error('Error joining room:', error);
-    showToast('방 참가에 실패했습니다', 'error');
+    console.error('❌ 방 참가 오류:', error);
+    console.error('오류 스택:', error.stack);
+    
+    let errorMessage = '방 참가에 실패했습니다';
+    if (error.message) {
+      errorMessage += ': ' + error.message;
+    } else if (typeof error === 'string') {
+      errorMessage += ': ' + error;
+    }
+    
+    showToast(errorMessage, 'error');
   }
 }
 
