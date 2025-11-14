@@ -2464,6 +2464,10 @@ function renderMonitoringParticipants(participants) {
     return '<div class="empty-participants">참가자가 없습니다</div>';
   }
   
+  // 현재 방 상태 확인 (훈련 중인지 여부)
+  const room = groupTrainingState?.currentRoom || null;
+  const isTraining = room?.status === 'training';
+  
   return participants.map(p => {
     // 참가자 데이터 정규화
     const name = p.name || p.participantName || p.userName || '이름 없음';
@@ -2471,8 +2475,39 @@ function renderMonitoringParticipants(participants) {
     const role = p.role || 'participant';
     const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
     
-    // 실시간 데이터 가져오기 (임시)
-    const liveData = getParticipantLiveDataForRoom(id);
+    // 상태에 따른 설명
+    let statusText = '';
+    let statusDescription = '';
+    
+    if (!ready) {
+      // 비활성 상태: 준비 완료 버튼을 누르지 않은 상태
+      statusText = '🔴 비활성';
+      statusDescription = '대기 중 - 준비 완료 버튼을 누르지 않음';
+    } else if (!isTraining) {
+      // 준비 완료 상태: 준비는 했지만 훈련이 시작되지 않음
+      statusText = '🟡 준비완료';
+      statusDescription = '준비 완료 - 훈련 시작 대기 중';
+    } else {
+      // 활성 상태: 훈련 진행 중
+      statusText = '🟢 활성';
+      statusDescription = '훈련 진행 중';
+    }
+    
+    // 실시간 데이터 가져오기
+    // 훈련 중이 아니거나 준비하지 않은 경우에는 데이터를 표시하지 않음
+    let liveData = null;
+    if (isTraining && ready) {
+      // 훈련 중이고 준비 완료한 참가자만 실시간 데이터 표시
+      liveData = getParticipantLiveDataForRoom(id);
+    } else {
+      // 그 외의 경우는 빈 데이터
+      liveData = {
+        power: 0,
+        heartRate: 0,
+        cadence: 0,
+        progress: 0
+      };
+    }
     
     return `
       <div class="monitoring-participant-item" data-id="${id}">
@@ -2483,10 +2518,11 @@ function renderMonitoringParticipants(participants) {
               ${role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}
             </span>
           </div>
-          <span class="participant-status-indicator ${ready ? 'ready' : 'not-ready'}">
-            ${ready ? '🟢 활성' : '🔴 비활성'}
+          <span class="participant-status-indicator ${ready && isTraining ? 'ready' : 'not-ready'}" title="${statusDescription}">
+            ${statusText}
           </span>
         </div>
+        ${isTraining && ready ? `
         <div class="participant-metrics">
           <div class="metric-item">
             <span class="metric-label">파워</span>
@@ -2507,6 +2543,14 @@ function renderMonitoringParticipants(participants) {
           </div>
           <span class="progress-text">${liveData.progress || 0}% 완료</span>
         </div>
+        ` : `
+        <div class="participant-status-message">
+          ${!ready ? 
+            '<p class="status-info">⏳ 참가자가 준비 완료 버튼을 누르지 않았습니다.</p>' :
+            '<p class="status-info">⏸️ 훈련이 시작되면 실시간 데이터가 표시됩니다.</p>'
+          }
+        </div>
+        `}
       </div>
     `;
   }).join('');
@@ -2522,6 +2566,11 @@ async function refreshRoomMonitoring(roomCode) {
     
     const normalizedRoom = normalizeRoomData(room);
     if (!normalizedRoom) return;
+    
+    // groupTrainingState에 방 정보 업데이트 (renderMonitoringParticipants에서 사용)
+    if (window.groupTrainingState) {
+      window.groupTrainingState.currentRoom = normalizedRoom;
+    }
     
     const participantsList = document.getElementById('roomMonitoringParticipantsList');
     if (participantsList) {
