@@ -401,48 +401,112 @@ function showJoinRoomModal() {
 // ========== 훈련실 참가 ==========
 async function joinTrainingRoom() {
   const roomIdInput = document.getElementById('roomIdInput');
-  const roomId = roomIdInput?.value?.trim();
+  const roomCode = roomIdInput?.value?.trim()?.toUpperCase();
   const currentUser = window.currentUser;
   
-  if (!roomId) {
-    showToast('훈련실 ID를 입력하세요');
+  if (!roomCode) {
+    showToast('훈련실 코드를 입력하세요', 'error');
+    return;
+  }
+  
+  if (roomCode.length !== 6) {
+    showToast('방 코드는 6자리여야 합니다', 'error');
     return;
   }
   
   if (!currentUser) {
-    showToast('로그인이 필요합니다');
+    showToast('로그인이 필요합니다. 사용자를 선택해주세요.', 'error');
     return;
   }
   
   try {
-    showLoading('훈련실에 참가하는 중...');
+    console.log('🚀 joinTrainingRoom 호출:', roomCode);
     
-    const response = await fetch(`${window.GAS_URL}?action=joinTrainingRoom&roomId=${roomId}&userId=${currentUser.id}&userName=${encodeURIComponent(currentUser.name)}`);
-    const result = await response.json();
+    // groupTrainingManager.js의 joinRoomByCode 함수 사용
+    if (typeof joinRoomByCode === 'function') {
+      console.log('✅ joinRoomByCode 함수 사용');
+      closeJoinRoomModal();
+      await joinRoomByCode(roomCode);
+      return;
+    }
     
-    if (result.success) {
-      GROUP_TRAINING.roomId = roomId;
-      GROUP_TRAINING.isHost = false;
-      GROUP_TRAINING.isGroupMode = true;
-      
-      // 워크아웃 정보 설정
-      if (result.workoutId) {
-        await loadWorkoutForGroup(result.workoutId);
+    // 대체 방법: groupTrainingManager.js의 joinGroupRoom 함수 사용
+    if (typeof joinGroupRoom === 'function') {
+      console.log('✅ joinGroupRoom 함수 사용');
+      // 방 코드 입력 필드 설정
+      const roomCodeInput = document.getElementById('roomCodeInput');
+      if (roomCodeInput) {
+        roomCodeInput.value = roomCode;
+      } else {
+        // roomCodeInput이 없으면 임시로 생성
+        const tempInput = document.createElement('input');
+        tempInput.id = 'roomCodeInput';
+        tempInput.value = roomCode;
+        tempInput.style.display = 'none';
+        document.body.appendChild(tempInput);
       }
       
-      hideLoading();
       closeJoinRoomModal();
-      showTrainingRoom();
+      await joinGroupRoom();
+      return;
+    }
+    
+    // 최후의 수단: 직접 API 호출 (JSONP 방식)
+    console.log('⚠️ 직접 API 호출 (fallback)');
+    showLoading('훈련실에 참가하는 중...');
+    
+    // JSONP 방식으로 joinRoom API 호출
+    if (typeof jsonpRequest === 'function' && window.GAS_URL) {
+      const joinResult = await jsonpRequest(window.GAS_URL, {
+        action: 'joinRoom',
+        roomCode: roomCode,
+        participantId: String(currentUser.id),
+        participantName: String(currentUser.name || '참가자')
+      });
       
-      showToast('훈련실에 참가했습니다!');
+      hideLoading();
+      
+      if (joinResult?.success) {
+        closeJoinRoomModal();
+        
+        // 그룹 훈련 상태 업데이트
+        if (window.groupTrainingState) {
+          window.groupTrainingState.roomCode = roomCode;
+          window.groupTrainingState.isAdmin = false;
+        }
+        
+        // 화면 전환
+        if (typeof showScreen === 'function') {
+          showScreen('groupWaitingScreen');
+        }
+        
+        if (typeof initializeWaitingRoom === 'function') {
+          initializeWaitingRoom();
+        }
+        
+        showToast('방에 참가했습니다!', 'success');
+      } else {
+        throw new Error(joinResult?.error || '방 참가에 실패했습니다');
+      }
     } else {
-      throw new Error(result.error);
+      throw new Error('그룹 훈련 참가 기능을 사용할 수 없습니다. groupTrainingManager.js가 로드되었는지 확인해주세요.');
     }
     
   } catch (error) {
-    hideLoading();
-    console.error('훈련실 참가 오류:', error);
-    showToast('훈련실 참가에 실패했습니다: ' + error.message);
+    if (typeof hideLoading === 'function') {
+      hideLoading();
+    }
+    console.error('❌ 훈련실 참가 오류:', error);
+    console.error('오류 스택:', error.stack);
+    
+    let errorMessage = '훈련실 참가에 실패했습니다';
+    if (error.message) {
+      errorMessage += ': ' + error.message;
+    } else if (typeof error === 'string') {
+      errorMessage += ': ' + error;
+    }
+    
+    showToast(errorMessage, 'error');
   }
 }
 
@@ -1154,7 +1218,6 @@ function fallbackCopyRoomCode(roomCode) {
   document.body.removeChild(textArea);
 }
 
-
 /**
  * 빠른 방 참가 (UI 전환용)
  */
@@ -1194,45 +1257,99 @@ function navigateToJoinRoom(roomCode) {
 }
 
 // ========== 빠른 방 참가 (실제 API 호출) ==========
-async function quickJoinRoom(roomId) {
+async function quickJoinRoom(roomCode) {
   const currentUser = window.currentUser;
   
   if (!currentUser) {
-    showToast('로그인이 필요합니다');
+    showToast('로그인이 필요합니다', 'error');
+    return;
+  }
+  
+  if (!roomCode) {
+    showToast('방 코드가 필요합니다', 'error');
+    return;
+  }
+  
+  const normalizedRoomCode = String(roomCode).toUpperCase().trim();
+  
+  if (normalizedRoomCode.length !== 6) {
+    showToast('방 코드는 6자리여야 합니다', 'error');
     return;
   }
   
   try {
-    showLoading('훈련실에 참가하는 중...');
+    console.log('🚀 quickJoinRoom 호출:', normalizedRoomCode);
     
-    // ✅ 문법 오류 수정: 백틱을 올바른 템플릿 리터럴로 변경
-    const response = await fetch(`${window.GAS_URL}?action=joinTrainingRoom&roomId=${roomId}&userId=${currentUser.id}&userName=${encodeURIComponent(currentUser.name)}`);
-    const result = await response.json();
+    // groupTrainingManager.js의 joinRoomByCode 함수 사용
+    if (typeof joinRoomByCode === 'function') {
+      console.log('✅ joinRoomByCode 함수 사용');
+      await joinRoomByCode(normalizedRoomCode);
+      return;
+    }
     
-    if (result.success) {
-      GROUP_TRAINING.roomId = roomId;
-      GROUP_TRAINING.isHost = false;
-      GROUP_TRAINING.isGroupMode = true;
+    // 대체 방법: 직접 API 호출
+    console.log('⚠️ 직접 API 호출 (fallback)');
+    if (typeof showLoading === 'function') {
+      showLoading('훈련실에 참가하는 중...');
+    }
+    
+    if (typeof jsonpRequest === 'function' && window.GAS_URL) {
+      const joinResult = await jsonpRequest(window.GAS_URL, {
+        action: 'joinRoom',
+        roomCode: normalizedRoomCode,
+        participantId: String(currentUser.id),
+        participantName: String(currentUser.name || '참가자')
+      });
       
-      // 워크아웃 정보 설정
-      if (result.workoutId) {
-        await loadWorkoutForGroup(result.workoutId);
+      if (typeof hideLoading === 'function') {
+        hideLoading();
       }
       
-      hideLoading();
-      closeActiveRoomsModal();
-      closeGroupTrainingModal();
-      showTrainingRoom();
-      
-      showToast('훈련실에 참가했습니다!');
+      if (joinResult?.success) {
+        // 그룹 훈련 상태 업데이트
+        if (window.groupTrainingState) {
+          window.groupTrainingState.roomCode = normalizedRoomCode;
+          window.groupTrainingState.isAdmin = false;
+        }
+        
+        // 모달 닫기
+        if (typeof closeActiveRoomsModal === 'function') {
+          closeActiveRoomsModal();
+        }
+        if (typeof closeGroupTrainingModal === 'function') {
+          closeGroupTrainingModal();
+        }
+        
+        // 화면 전환
+        if (typeof showScreen === 'function') {
+          showScreen('groupWaitingScreen');
+        }
+        
+        if (typeof initializeWaitingRoom === 'function') {
+          initializeWaitingRoom();
+        }
+        
+        showToast('방에 참가했습니다!', 'success');
+      } else {
+        throw new Error(joinResult?.error || '방 참가에 실패했습니다');
+      }
     } else {
-      throw new Error(result.error);
+      throw new Error('그룹 훈련 참가 기능을 사용할 수 없습니다.');
     }
     
   } catch (error) {
-    hideLoading();
-    console.error('훈련실 참가 오류:', error);
-    showToast('훈련실 참가에 실패했습니다: ' + error.message);
+    if (typeof hideLoading === 'function') {
+      hideLoading();
+    }
+    console.error('❌ 훈련실 참가 오류:', error);
+    console.error('오류 스택:', error.stack);
+    
+    let errorMessage = '훈련실 참가에 실패했습니다';
+    if (error.message) {
+      errorMessage += ': ' + error.message;
+    }
+    
+    showToast(errorMessage, 'error');
   }
 }
 
@@ -2480,5 +2597,4 @@ try {
 } catch (error) {
   console.error('❌ 모듈 등록 중 오류:', error);
 }
-
 
