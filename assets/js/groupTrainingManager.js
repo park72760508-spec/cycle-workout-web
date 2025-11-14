@@ -100,7 +100,11 @@ function normalizeRoomData(raw) {
       maxParticipants: Number(raw.MaxParticipants || raw.maxParticipants || 0) || 0,
       status: raw.Status || raw.status || 'waiting',
       createdAt: raw.CreatedAt || raw.createdAt || null,
+      updatedAt: raw.UpdatedAt || raw.updatedAt || null,
       startedAt: raw.StartedAt || raw.startedAt || null,
+      trainingStartTime: raw.TrainingStartTime || raw.trainingStartTime || null,
+      countdownStartTime: raw.CountdownStartTime || raw.countdownStartTime || null,
+      countdownEndTime: raw.CountdownEndTime || raw.countdownEndTime || null,
       participants,
       settings: (() => {
         const s = raw.Settings || raw.settings;
@@ -2927,7 +2931,7 @@ async function startTrainingFromMonitoring(roomCode) {
       return;
     }
     
-    if (normalizedRoom.status !== 'waiting') {
+    if (normalizedRoom.status !== 'waiting' && normalizedRoom.status !== 'starting') {
       showToast('이미 시작되었거나 종료된 방입니다', 'error');
       return;
     }
@@ -2939,34 +2943,25 @@ async function startTrainingFromMonitoring(roomCode) {
       window.groupTrainingState.isAdmin = true;
     }
     
-    // 그룹 훈련 시작 함수 호출
-    if (typeof startGroupTraining === 'function') {
-      await startGroupTraining();
+    // 훈련 시작 시간 설정 (3초 후 시작 - 참가자들이 준비할 시간)
+    const startDelay = 3000; // 3초
+    const trainingStartTime = new Date(Date.now() + startDelay).toISOString();
+    
+    showToast('3초 후 모든 참가자의 훈련이 동시에 시작됩니다!', 'info');
+    
+    // 방 상태 업데이트 (trainingStartTime 포함)
+    const success = await apiUpdateRoom(roomCode, {
+      status: 'training',
+      trainingStartTime: trainingStartTime
+    });
+    
+    if (success) {
+      // 모니터링 화면 새로고침
+      await refreshRoomMonitoring(roomCode);
+      
+      showToast('훈련이 시작되었습니다! 모든 참가자가 동시에 시작됩니다.', 'success');
     } else {
-      // 직접 시작 로직 실행
-      showToast('그룹 훈련을 시작합니다...', 'info');
-      
-      normalizedRoom.status = 'starting';
-      normalizedRoom.countdownStartTime = new Date().toISOString();
-      
-      const success = await apiUpdateRoom(roomCode, {
-        status: 'starting',
-        countdownStartTime: normalizedRoom.countdownStartTime
-      });
-      
-      if (success) {
-        // 모니터링 화면 새로고침
-        await refreshRoomMonitoring(roomCode);
-        
-        // 카운트다운 시작
-        if (typeof startAdminControlledCountdown === 'function') {
-          startAdminControlledCountdown(10);
-        } else {
-          showToast('훈련 시작 기능을 찾을 수 없습니다', 'error');
-        }
-      } else {
-        throw new Error('방 상태 업데이트 실패');
-      }
+      throw new Error('방 상태 업데이트 실패');
     }
     
   } catch (error) {
