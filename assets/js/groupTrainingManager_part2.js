@@ -110,6 +110,11 @@ async function leaveGroupRoom() {
       groupTrainingState.managerInterval = null;
     }
     
+    // 실시간 데이터 동기화 중지
+    if (typeof stopParticipantDataSync === 'function') {
+      stopParticipantDataSync();
+    }
+    
     // 방에서 참가자 제거 (백엔드 업데이트)
     if (groupTrainingState.currentRoom && groupTrainingState.roomCode) {
       try {
@@ -471,11 +476,96 @@ function startGroupTrainingSession() {
     // 모니터링 버튼 추가
     addMonitoringButton();
     
+    // 실시간 데이터 전송 시작 (참가자만)
+    if (!groupTrainingState.isAdmin) {
+      startParticipantDataSync();
+    }
+    
     showToast('그룹 훈련이 시작되었습니다!', 'success');
     
   } catch (error) {
     console.error('Failed to start training session:', error);
     showToast('훈련 세션 시작에 실패했습니다', 'error');
+  }
+}
+
+/**
+ * 참가자 실시간 데이터 동기화 시작
+ */
+function startParticipantDataSync() {
+  // 기존 인터벌 정리
+  if (window.participantDataSyncInterval) {
+    clearInterval(window.participantDataSyncInterval);
+  }
+  
+  console.log('🔄 참가자 실시간 데이터 동기화 시작');
+  
+  // 3초마다 블루투스 데이터를 백엔드에 전송
+  window.participantDataSyncInterval = setInterval(async () => {
+    await syncParticipantLiveData();
+  }, 3000); // 3초마다 전송
+}
+
+/**
+ * 참가자 실시간 데이터 동기화 중지
+ */
+function stopParticipantDataSync() {
+  if (window.participantDataSyncInterval) {
+    clearInterval(window.participantDataSyncInterval);
+    window.participantDataSyncInterval = null;
+    console.log('⏹️ 참가자 실시간 데이터 동기화 중지');
+  }
+}
+
+/**
+ * 참가자 실시간 데이터를 백엔드에 전송
+ */
+async function syncParticipantLiveData() {
+  try {
+    const roomCode = groupTrainingState?.roomCode;
+    const participantId = window.currentUser?.id;
+    
+    if (!roomCode || !participantId) {
+      return; // 방 코드나 참가자 ID가 없으면 전송하지 않음
+    }
+    
+    // 블루투스에서 실시간 데이터 가져오기
+    const liveData = window.liveData || {};
+    
+    // 훈련 진행률 계산 (trainingState에서 가져오기)
+    const trainingState = window.trainingState || {};
+    const currentWorkout = window.currentWorkout;
+    let progress = 0;
+    
+    if (currentWorkout && currentWorkout.segments) {
+      const elapsedSec = trainingState.elapsedSec || 0;
+      const totalDuration = currentWorkout.segments.reduce((sum, seg) => {
+        return sum + (seg.duration_sec || 0);
+      }, 0);
+      
+      if (totalDuration > 0) {
+        progress = Math.min(100, Math.floor((elapsedSec / totalDuration) * 100));
+      }
+    }
+    
+    // 백엔드에 데이터 전송
+    const result = await apiSaveParticipantLiveData(roomCode, participantId, {
+      power: liveData.power || 0,
+      heartRate: liveData.heartRate || 0,
+      cadence: liveData.cadence || 0,
+      progress: progress,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (result?.success) {
+      // 성공적으로 전송됨 (조용히 처리)
+      console.log('✅ 실시간 데이터 전송 성공');
+    } else {
+      console.warn('⚠️ 실시간 데이터 전송 실패:', result?.error);
+    }
+    
+  } catch (error) {
+    console.error('❌ 실시간 데이터 동기화 오류:', error);
   }
 }
 
@@ -601,6 +691,11 @@ async function closeGroupRoom() {
     if (groupTrainingState.managerInterval) {
       clearInterval(groupTrainingState.managerInterval);
       groupTrainingState.managerInterval = null;
+    }
+    
+    // 실시간 데이터 동기화 중지
+    if (typeof stopParticipantDataSync === 'function') {
+      stopParticipantDataSync();
     }
     
     // 상태 초기화
