@@ -435,6 +435,44 @@ async function apiLeaveRoom(roomCode, participantId) {
 }
 
 /**
+ * 참가자 실시간 데이터 저장
+ */
+async function apiSaveParticipantLiveData(roomCode, participantId, liveData) {
+  if (!roomCode || !participantId || !liveData) {
+    return { success: false, error: '필수 파라미터가 누락되었습니다.' };
+  }
+  
+  if (!window.GAS_URL) {
+    return { success: false, error: '서버 URL이 설정되지 않았습니다.' };
+  }
+  
+  try {
+    const params = {
+      action: 'saveParticipantLiveData',
+      roomCode: String(roomCode).toUpperCase().trim(),
+      participantId: String(participantId).trim(),
+      power: Number(liveData.power || 0),
+      heartRate: Number(liveData.heartRate || 0),
+      cadence: Number(liveData.cadence || 0),
+      progress: Number(liveData.progress || 0),
+      timestamp: String(liveData.timestamp || new Date().toISOString())
+    };
+    
+    console.log('📡 실시간 데이터 전송:', params);
+    
+    const result = await jsonpRequest(window.GAS_URL, params);
+    
+    return result;
+  } catch (error) {
+    console.error('❌ apiSaveParticipantLiveData 실패:', error);
+    return { 
+      success: false, 
+      error: error.message || '실시간 데이터 저장 중 오류가 발생했습니다.' 
+    };
+  }
+}
+
+/**
  * 그룹 훈련방 업데이트
  */
 async function apiUpdateRoom(roomCode, data = {}) {
@@ -2410,7 +2448,26 @@ function showRoomMonitoringModal(room, roomCode) {
             </div>
           </div>
           
-          ${room.status === 'training' ? `
+          ${room.status === 'waiting' || room.status === 'starting' ? `
+          <div class="monitoring-controls-section">
+            <h3>🚀 훈련 제어</h3>
+            <div class="coaching-controls">
+              <button class="btn btn-success" onclick="startTrainingFromMonitoring('${roomCode}')" id="startTrainingFromMonitoringBtn">
+                🚀 훈련 시작
+              </button>
+              <button class="btn btn-secondary" onclick="refreshRoomMonitoring('${roomCode}')">
+                🔄 새로고침
+              </button>
+            </div>
+            <div class="training-requirements">
+              <p class="requirements-text">
+                <small>
+                  ${(room.participants || []).filter(p => p.ready || p.isReady).length}/${(room.participants || []).length}명 준비 완료
+                </small>
+              </p>
+            </div>
+          </div>
+          ` : room.status === 'training' ? `
           <div class="monitoring-controls-section">
             <h3>🎤 코칭 제어</h3>
             <div class="coaching-controls">
@@ -2493,21 +2550,14 @@ function renderMonitoringParticipants(participants) {
       statusDescription = '훈련 진행 중';
     }
     
-    // 실시간 데이터 가져오기
-    // 훈련 중이 아니거나 준비하지 않은 경우에는 데이터를 표시하지 않음
-    let liveData = null;
-    if (isTraining && ready) {
-      // 훈련 중이고 준비 완료한 참가자만 실시간 데이터 표시
-      liveData = getParticipantLiveDataForRoom(id);
-    } else {
-      // 그 외의 경우는 빈 데이터
-      liveData = {
-        power: 0,
-        heartRate: 0,
-        cadence: 0,
-        progress: 0
-      };
-    }
+    // 실시간 데이터는 비동기로 가져오므로 여기서는 플레이스홀더 사용
+    // 실제 데이터는 refreshRoomMonitoring에서 업데이트됨
+    const liveData = {
+      power: 0,
+      heartRate: 0,
+      cadence: 0,
+      progress: 0
+    };
     
     return `
       <div class="monitoring-participant-item" data-id="${id}">
@@ -2572,9 +2622,26 @@ async function refreshRoomMonitoring(roomCode) {
       window.groupTrainingState.currentRoom = normalizedRoom;
     }
     
+    // 훈련 중인 경우 참가자들의 실시간 데이터 가져오기
+    if (normalizedRoom.status === 'training') {
+      const participantsWithData = await Promise.all(
+        (normalizedRoom.participants || []).map(async (p) => {
+          const id = p.id || p.participantId || '';
+          const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
+          
+          if (ready) {
+            const liveData = await getParticipantLiveDataForRoom(id);
+            return { ...p, liveData };
+          }
+          return { ...p, liveData: { power: 0, heartRate: 0, cadence: 0, progress: 0 } };
+        })
+      );
+      normalizedRoom.participants = participantsWithData;
+    }
+    
     const participantsList = document.getElementById('roomMonitoringParticipantsList');
     if (participantsList) {
-      participantsList.innerHTML = renderMonitoringParticipants(normalizedRoom.participants || []);
+      participantsList.innerHTML = renderMonitoringParticipantsWithData(normalizedRoom.participants || [], normalizedRoom.status);
     }
     
     // 방 상태 업데이트
@@ -2590,9 +2657,95 @@ async function refreshRoomMonitoring(roomCode) {
         status === 'closed' ? '🔴 종료' : '❓ 알 수 없음';
     }
     
+    // 훈련 시작 버튼 상태 업데이트
+    const startBtn = document.getElementById('startTrainingFromMonitoringBtn');
+    if (startBtn) {
+      const readyCount = (normalizedRoom.participants || []).filter(p => p.ready || p.isReady).length;
+      const totalCount = (normalizedRoom.participants || []).length;
+      startBtn.disabled = readyCount < 2 || normalizedRoom.status !== 'waiting';
+    }
+    
   } catch (error) {
     console.error('방 모니터링 새로고침 실패:', error);
   }
+}
+
+/**
+ * 실시간 데이터가 포함된 참가자 목록 렌더링
+ */
+function renderMonitoringParticipantsWithData(participants, roomStatus) {
+  if (!participants || participants.length === 0) {
+    return '<div class="empty-participants">참가자가 없습니다</div>';
+  }
+  
+  const isTraining = roomStatus === 'training';
+  
+  return participants.map(p => {
+    const name = p.name || p.participantName || p.userName || '이름 없음';
+    const id = p.id || p.participantId || '';
+    const role = p.role || 'participant';
+    const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
+    const liveData = p.liveData || { power: 0, heartRate: 0, cadence: 0, progress: 0 };
+    
+    let statusText = '';
+    let statusDescription = '';
+    
+    if (!ready) {
+      statusText = '🔴 비활성';
+      statusDescription = '대기 중 - 준비 완료 버튼을 누르지 않음';
+    } else if (!isTraining) {
+      statusText = '🟡 준비완료';
+      statusDescription = '준비 완료 - 훈련 시작 대기 중';
+    } else {
+      statusText = '🟢 활성';
+      statusDescription = '훈련 진행 중';
+    }
+    
+    return `
+      <div class="monitoring-participant-item" data-id="${id}">
+        <div class="participant-header">
+          <div class="participant-name-section">
+            <span class="participant-name">${escapeHtml(name)}</span>
+            <span class="participant-role-badge ${role}">
+              ${role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}
+            </span>
+          </div>
+          <span class="participant-status-indicator ${ready && isTraining ? 'ready' : 'not-ready'}" title="${statusDescription}">
+            ${statusText}
+          </span>
+        </div>
+        ${isTraining && ready ? `
+        <div class="participant-metrics">
+          <div class="metric-item">
+            <span class="metric-label">파워</span>
+            <span class="metric-value">${liveData.power || 0}W</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">심박</span>
+            <span class="metric-value">${liveData.heartRate || 0}bpm</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">케이던스</span>
+            <span class="metric-value">${liveData.cadence || 0}rpm</span>
+          </div>
+        </div>
+        <div class="participant-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${liveData.progress || 0}%"></div>
+          </div>
+          <span class="progress-text">${liveData.progress || 0}% 완료</span>
+        </div>
+        ` : `
+        <div class="participant-status-message">
+          ${!ready ? 
+            '<p class="status-info">⏳ 참가자가 준비 완료 버튼을 누르지 않았습니다.</p>' :
+            '<p class="status-info">⏸️ 훈련이 시작되면 실시간 데이터가 표시됩니다.</p>'
+          }
+        </div>
+        `}
+      </div>
+    `;
+  }).join('');
 }
 
 /**
@@ -2612,6 +2765,84 @@ function closeRoomMonitoringModal() {
 }
 
 /**
+ * 모니터링 화면에서 훈련 시작
+ */
+async function startTrainingFromMonitoring(roomCode) {
+  try {
+    console.log('🚀 모니터링 화면에서 훈련 시작:', roomCode);
+    
+    // 방 정보 확인
+    const room = await getRoomByCode(roomCode);
+    if (!room) {
+      showToast('방 정보를 찾을 수 없습니다', 'error');
+      return;
+    }
+    
+    const normalizedRoom = normalizeRoomData(room);
+    if (!normalizedRoom) {
+      showToast('방 정보를 처리할 수 없습니다', 'error');
+      return;
+    }
+    
+    // 시작 조건 확인
+    const readyParticipants = (normalizedRoom.participants || []).filter(p => 
+      p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false)
+    );
+    
+    if (readyParticipants.length < 2) {
+      showToast('최소 2명의 참가자가 준비되어야 합니다', 'error');
+      return;
+    }
+    
+    if (normalizedRoom.status !== 'waiting') {
+      showToast('이미 시작되었거나 종료된 방입니다', 'error');
+      return;
+    }
+    
+    // groupTrainingState 업데이트
+    if (window.groupTrainingState) {
+      window.groupTrainingState.currentRoom = normalizedRoom;
+      window.groupTrainingState.roomCode = roomCode;
+      window.groupTrainingState.isAdmin = true;
+    }
+    
+    // 그룹 훈련 시작 함수 호출
+    if (typeof startGroupTraining === 'function') {
+      await startGroupTraining();
+    } else {
+      // 직접 시작 로직 실행
+      showToast('그룹 훈련을 시작합니다...', 'info');
+      
+      normalizedRoom.status = 'starting';
+      normalizedRoom.countdownStartTime = new Date().toISOString();
+      
+      const success = await apiUpdateRoom(roomCode, {
+        status: 'starting',
+        countdownStartTime: normalizedRoom.countdownStartTime
+      });
+      
+      if (success) {
+        // 모니터링 화면 새로고침
+        await refreshRoomMonitoring(roomCode);
+        
+        // 카운트다운 시작
+        if (typeof startAdminControlledCountdown === 'function') {
+          startAdminControlledCountdown(10);
+        } else {
+          showToast('훈련 시작 기능을 찾을 수 없습니다', 'error');
+        }
+      } else {
+        throw new Error('방 상태 업데이트 실패');
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ 모니터링 화면에서 훈련 시작 실패:', error);
+    showToast('훈련 시작에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+  }
+}
+
+/**
  * 방 모니터링 코칭 시작
  */
 function startRoomMonitoringCoaching(roomCode) {
@@ -2622,15 +2853,44 @@ function startRoomMonitoringCoaching(roomCode) {
 /**
  * 참가자 실시간 데이터 가져오기 (방 모니터링용)
  */
-function getParticipantLiveDataForRoom(participantId) {
-  // 실제 구현 시 백엔드에서 실시간 데이터를 가져와야 함
-  // 여기서는 임시 데이터 반환
-  return {
-    power: Math.floor(Math.random() * 300) + 100,
-    heartRate: Math.floor(Math.random() * 50) + 120,
-    cadence: Math.floor(Math.random() * 30) + 70,
-    progress: Math.floor(Math.random() * 100)
-  };
+async function getParticipantLiveDataForRoom(participantId) {
+  try {
+    // 백엔드에서 실시간 데이터 가져오기
+    if (window.GAS_URL && participantId) {
+      const result = await jsonpRequest(window.GAS_URL, {
+        action: 'getParticipantLiveData',
+        participantId: String(participantId)
+      });
+      
+      if (result?.success && result.data) {
+        return {
+          power: result.data.power || 0,
+          heartRate: result.data.heartRate || 0,
+          cadence: result.data.cadence || 0,
+          progress: result.data.progress || 0,
+          timestamp: result.data.timestamp || new Date().toISOString()
+        };
+      }
+    }
+    
+    // 백엔드에서 데이터를 가져올 수 없는 경우 빈 데이터 반환
+    return {
+      power: 0,
+      heartRate: 0,
+      cadence: 0,
+      progress: 0,
+      timestamp: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error('참가자 실시간 데이터 가져오기 실패:', error);
+    return {
+      power: 0,
+      heartRate: 0,
+      cadence: 0,
+      progress: 0,
+      timestamp: new Date().toISOString()
+    };
+  }
 }
 
 /**
@@ -2776,6 +3036,8 @@ window.monitorRoom = monitorRoom;
 window.showRoomMonitoringModal = showRoomMonitoringModal;
 window.closeRoomMonitoringModal = closeRoomMonitoringModal;
 window.refreshRoomMonitoring = refreshRoomMonitoring;
+window.startTrainingFromMonitoring = startTrainingFromMonitoring;
+window.getParticipantLiveDataForRoom = getParticipantLiveDataForRoom;
 window.startRoomMonitoringCoaching = startRoomMonitoringCoaching;
 window.forceStopRoom = forceStopRoom;
 window.cleanupExpiredRooms = cleanupExpiredRooms;
