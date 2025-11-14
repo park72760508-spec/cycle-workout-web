@@ -2225,7 +2225,9 @@ button[aria-disabled="true"] {
 }
 
 /* 파란 투명 진행 채움 (width는 CSS 변수로 제어) */
-.enhanced-current-segment-name::before{
+/* 모니터링 화면에 영향을 주지 않도록 #trainingScreen 내부에서만 적용 */
+#trainingScreen .enhanced-current-segment-name::before,
+.training-screen .enhanced-current-segment-name::before{
   content:"";
   position:absolute; inset:0;
   width: var(--name-progress, 0%);   /* ⬅ 이 값을 JS에서 0~100%로 변경 */
