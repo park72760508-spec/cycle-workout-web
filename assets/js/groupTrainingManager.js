@@ -1924,6 +1924,26 @@ function initializeWaitingRoom() {
   // 참가자 목록 업데이트
   updateParticipantsList();
   
+  // 준비 완료 버튼 활성화 (참가자인 경우)
+  if (!groupTrainingState.isAdmin) {
+    const readyBtn = safeGet('readyToggleBtn');
+    if (readyBtn) {
+      readyBtn.disabled = false;
+      readyBtn.removeAttribute('disabled');
+      // 현재 준비 상태 확인
+      const currentUserId = window.currentUser?.id || '';
+      const myParticipant = room.participants.find(p => {
+        const pId = p.id || p.participantId || p.userId;
+        return String(pId) === String(currentUserId);
+      });
+      if (myParticipant) {
+        const isReady = myParticipant.ready !== undefined ? myParticipant.ready : (myParticipant.isReady !== undefined ? myParticipant.isReady : false);
+        readyBtn.textContent = isReady ? '✅ 준비 완료' : '⏳ 준비 중';
+        readyBtn.classList.toggle('ready', isReady);
+      }
+    }
+  }
+  
   // 시작 버튼 상태 즉시 업데이트
   updateStartButtonState();
   
@@ -1971,20 +1991,75 @@ function updateParticipantsList() {
       };
     });
     
-    listEl.innerHTML = normalizedParticipants.map(p => `
-      <div class="participant-card ${p.role}" data-id="${p.id}">
+    // 현재 사용자 ID 확인
+    const currentUserId = window.currentUser?.id || '';
+    const isCurrentUser = (participantId) => String(participantId) === String(currentUserId);
+    
+    // 블루투스 연결 상태 확인 함수
+    const getBluetoothStatus = (participantId) => {
+      if (!isCurrentUser(participantId)) {
+        // 다른 참가자는 연결 상태를 알 수 없으므로 모두 비활성으로 표시
+        return {
+          trainer: false,
+          powerMeter: false,
+          heartRate: false
+        };
+      }
+      
+      // 본인인 경우 실제 연결 상태 확인
+      const connectedDevices = window.connectedDevices || {};
+      return {
+        trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
+        powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
+        heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
+      };
+    };
+    
+    listEl.innerHTML = normalizedParticipants.map(p => {
+      const bluetoothStatus = getBluetoothStatus(p.id);
+      const isMe = isCurrentUser(p.id);
+      
+      return `
+      <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
         <div class="participant-info">
-          <span class="participant-name">${escapeHtml(p.name)}</span>
+          <span class="participant-name">${escapeHtml(p.name)}${isMe ? ' (나)' : ''}</span>
           <span class="participant-role">${p.role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}</span>
+        </div>
+        <div class="participant-bluetooth-status">
+          <div class="bluetooth-devices">
+            <div class="device-icon" title="심박계">
+              <img src="assets/img/${bluetoothStatus.heartRate ? 'bmp_g.png' : 'bmp_i.png'}" 
+                   alt="심박계" 
+                   class="device-status-img ${bluetoothStatus.heartRate ? 'active' : 'inactive'}" />
+            </div>
+            <div class="device-icon" title="파워메터">
+              <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" 
+                   alt="파워메터" 
+                   class="device-status-img ${bluetoothStatus.powerMeter ? 'active' : 'inactive'}" />
+            </div>
+            <div class="device-icon" title="스마트 트레이너">
+              <img src="assets/img/${bluetoothStatus.trainer ? 'triner_g.png' : 'trainer_i.png'}" 
+                   alt="스마트 트레이너" 
+                   class="device-status-img ${bluetoothStatus.trainer ? 'active' : 'inactive'}"
+                   onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+            </div>
+          </div>
         </div>
         <div class="participant-status">
           <span class="ready-status ${p.ready ? 'ready' : 'not-ready'}">
             ${p.ready ? '✅ 준비완료' : '⏳ 준비중'}
           </span>
+          ${isMe ? `
+          <button class="btn btn-sm ready-toggle-btn ${p.ready ? 'ready' : ''}" 
+                  onclick="toggleReady()">
+            ${p.ready ? '✅ 준비 완료' : '⏳ 준비 중'}
+          </button>
+          ` : ''}
           <span class="join-time">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
   
   // 시작 버튼 활성화 체크
