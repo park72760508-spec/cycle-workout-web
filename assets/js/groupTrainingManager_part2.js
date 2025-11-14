@@ -26,8 +26,6 @@ const groupTrainingState = window.groupTrainingState || (() => {
 
 // ========== 대기실 참가자 기능들 ==========
 
-const baseLeaveGroupRoom = window.leaveGroupRoom;
-
 /**
  * 준비 상태 토글
  */
@@ -87,11 +85,81 @@ async function toggleReady() {
 }
 
 /**
- * 방 나가기
+ * 방 나가기 (무한 재귀 방지)
  */
 async function leaveGroupRoom() {
-  if (typeof baseLeaveGroupRoom === 'function') {
-    return baseLeaveGroupRoom();
+  // 재귀 방지 플래그
+  if (groupTrainingState._leaving) {
+    console.warn('방 나가기 이미 진행 중입니다');
+    return;
+  }
+  
+  try {
+    groupTrainingState._leaving = true;
+    console.log('🚪 그룹 훈련방에서 나가는 중...');
+    
+    // 동기화 인터벌 정리
+    if (groupTrainingState.syncInterval) {
+      clearInterval(groupTrainingState.syncInterval);
+      groupTrainingState.syncInterval = null;
+    }
+    
+    // 관리자 인터벌 정리
+    if (groupTrainingState.managerInterval) {
+      clearInterval(groupTrainingState.managerInterval);
+      groupTrainingState.managerInterval = null;
+    }
+    
+    // 방에서 참가자 제거 (백엔드 업데이트)
+    if (groupTrainingState.currentRoom && groupTrainingState.roomCode) {
+      try {
+        const userId = window.currentUser?.id || 'unknown';
+        if (typeof apiLeaveRoom === 'function') {
+          await apiLeaveRoom(groupTrainingState.roomCode, userId);
+          console.log('✅ 방에서 성공적으로 나갔습니다');
+        }
+      } catch (error) {
+        console.error('❌ 방 나가기 중 백엔드 업데이트 실패:', error);
+        // 백엔드 업데이트 실패해도 로컬 상태는 정리
+      }
+    }
+    
+    // 상태 초기화
+    groupTrainingState.currentRoom = null;
+    groupTrainingState.roomCode = null;
+    groupTrainingState.isAdmin = false;
+    groupTrainingState.isManager = false;
+    groupTrainingState.participants = [];
+    groupTrainingState.isConnected = false;
+    groupTrainingState.lastSyncTime = null;
+    
+    // 훅 호출
+    if (window.groupTrainingHooks?.endSession) {
+      window.groupTrainingHooks.endSession();
+    }
+    
+    // 화면 전환
+    if (typeof showScreen === 'function') {
+      showScreen('groupRoomScreen');
+    } else {
+      // 대체 방법: 그룹 화면들 숨기기
+      const groupScreens = ['groupWaitingScreen', 'groupTrainingScreen'];
+      groupScreens.forEach(screenId => {
+        const screen = document.getElementById(screenId);
+        if (screen) {
+          screen.classList.add('hidden');
+        }
+      });
+    }
+    
+    showToast('그룹 훈련방에서 나왔습니다', 'info');
+    
+  } catch (error) {
+    console.error('❌ 방 나가기 중 오류:', error);
+    showToast('방 나가기 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+  } finally {
+    // 재귀 방지 플래그 해제
+    groupTrainingState._leaving = false;
   }
 }
 
