@@ -1899,11 +1899,29 @@ async function getRoomByCode(roomCode) {
 
   try {
     const response = await apiGetRoom(roomCode);
-    if (response?.success && response.item) {
+    
+    // 네트워크 오류인 경우와 실제 방이 없는 경우를 구분
+    if (!response) {
+      // 응답 자체가 없는 경우 (네트워크 오류 가능성)
+      throw new Error('NETWORK_ERROR');
+    }
+    
+    if (response.success && response.item) {
       return normalizeRoomData(response.item);
     }
-    return null;
+    
+    // 방이 실제로 없는 경우 (success: false이고 error가 'Room not found' 등)
+    if (response.error && (response.error.includes('not found') || response.error.includes('찾을 수 없'))) {
+      return null; // 방이 실제로 삭제됨
+    }
+    
+    // 기타 오류는 네트워크 오류로 간주
+    throw new Error('NETWORK_ERROR');
   } catch (error) {
+    // 네트워크 오류인 경우 재throw하여 호출자가 구분할 수 있도록
+    if (error.message === 'NETWORK_ERROR' || error.message?.includes('네트워크')) {
+      throw error;
+    }
     console.error('Failed to get room:', error);
     return null;
   }
@@ -2272,6 +2290,10 @@ async function leaveGroupRoomSilently() {
 /**
  * 방 데이터 동기화
  */
+// 네트워크 오류 카운터 (연속 실패 추적)
+let networkErrorCount = 0;
+const MAX_NETWORK_ERRORS = 5; // 연속 5번 실패하면 방 삭제로 간주
+
 async function syncRoomData() {
   if (!groupTrainingState.roomCode) {
     // 방 코드가 없으면 동기화 중지
@@ -2282,13 +2304,20 @@ async function syncRoomData() {
   try {
     const latestRoom = await getRoomByCode(groupTrainingState.roomCode);
     
-    if (!latestRoom) {
-      // 방이 삭제되었거나 찾을 수 없음
-      console.log('⚠️ 방을 찾을 수 없습니다. 동기화를 중지합니다.');
-      stopRoomSync();
-      showToast('방이 삭제되었거나 찾을 수 없습니다', 'error');
-      // 방 나가기 처리 (API 호출 실패는 무시)
-      await leaveGroupRoomSilently();
+    // 성공적으로 방 정보를 가져온 경우 오류 카운터 리셋
+    if (latestRoom) {
+      networkErrorCount = 0;
+    } else {
+      // 방이 실제로 없는 경우 (연속 실패가 아닌 경우에만 처리)
+      if (networkErrorCount === 0) {
+        console.log('⚠️ 방을 찾을 수 없습니다. 동기화를 중지합니다.');
+        stopRoomSync();
+        showToast('방이 삭제되었거나 찾을 수 없습니다', 'error');
+        // 방 나가기 처리 (API 호출 실패는 무시)
+        await leaveGroupRoomSilently();
+        return;
+      }
+      // 네트워크 오류로 인한 null인 경우는 catch 블록에서 처리
       return;
     }
     
@@ -2325,7 +2354,26 @@ async function syncRoomData() {
     groupTrainingState.lastSyncTime = new Date();
     
   } catch (error) {
-    console.error('Sync error:', error);
+    // 네트워크 오류인 경우
+    if (error.message === 'NETWORK_ERROR' || error.message?.includes('네트워크')) {
+      networkErrorCount++;
+      console.warn(`⚠️ 네트워크 오류 발생 (${networkErrorCount}/${MAX_NETWORK_ERRORS}), 다음 동기화에서 재시도`);
+      
+      // 연속으로 여러 번 실패한 경우에만 방 삭제로 간주
+      if (networkErrorCount >= MAX_NETWORK_ERRORS) {
+        console.error('❌ 네트워크 오류가 계속 발생합니다. 동기화를 중지합니다.');
+        stopRoomSync();
+        showToast('네트워크 연결이 불안정합니다. 잠시 후 다시 시도해주세요.', 'error');
+        // 사용자를 강제로 나가게 하지 않고, 동기화만 중지
+        return;
+      }
+      // 네트워크 오류는 일시적일 수 있으므로 계속 시도
+      return;
+    }
+    
+    // 기타 오류
+    console.error('방 동기화 오류:', error);
+    networkErrorCount = 0; // 네트워크 오류가 아니면 카운터 리셋
     // 연결 오류 시 사용자에게 알림
     if (groupTrainingState.isConnected) {
       showToast('연결이 불안정합니다', 'warning');
