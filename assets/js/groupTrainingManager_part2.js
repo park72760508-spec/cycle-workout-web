@@ -5,9 +5,10 @@
 
 // groupTrainingState 전역 참조 (groupTrainingManager.js에서 정의됨)
 // groupTrainingManager.js가 먼저 로드되어야 함
-const groupTrainingState = window.groupTrainingState || (() => {
+// 안전하게 초기화 (groupTrainingManager.js가 로드되지 않은 경우를 대비)
+if (!window.groupTrainingState) {
   console.warn('groupTrainingState가 아직 초기화되지 않았습니다. groupTrainingManager.js가 먼저 로드되어야 합니다.');
-  return {
+  window.groupTrainingState = {
     currentRoom: null,
     isAdmin: false,
     isManager: false,
@@ -18,7 +19,8 @@ const groupTrainingState = window.groupTrainingState || (() => {
     isConnected: false,
     lastSyncTime: null
   };
-})();
+}
+const groupTrainingState = window.groupTrainingState;
 
 
 
@@ -1683,7 +1685,8 @@ window.sendCustomCoaching = sendCustomCoaching;
 window.sendQuickCoaching = sendQuickCoaching;
 window.sendChatMessage = sendChatMessage;
 window.initializeGroupRoomScreen = initializeGroupRoomScreen;
-window.createGroupRoomFromWorkout = createGroupRoomFromWorkout;
+// createGroupRoomFromWorkout는 groupTrainingManager.js에서 등록됨
+// window.createGroupRoomFromWorkout = createGroupRoomFromWorkout; // 주석 처리
 window.startAdminControlledCountdown = startAdminControlledCountdown;
 window.cancelGroupCountdown = cancelGroupCountdown;
 window.checkAndSyncCountdown = checkAndSyncCountdown;
