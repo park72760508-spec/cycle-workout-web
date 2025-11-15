@@ -967,24 +967,50 @@ async function selectTrainingMode(mode) {
             const roomCode = waitingRoom.code || waitingRoom.Code;
             if (roomCode) {
               console.log('대기 중인 그룹방 발견, 자동 입장:', roomCode);
-              showToast('그룹방에 입장합니다...', 'info');
+              // 바로 입장 (중간 화면 건너뛰기)
               await joinRoomByCode(roomCode);
               return;
             }
           }
         }
         
-        // 그룹방이 없거나 대기 중인 방이 없으면 기존 화면으로 이동
-        console.log('대기 중인 그룹방이 없습니다. 그룹 훈련 화면으로 이동');
-        showScreen('trainingModeScreen');
+        // 그룹방이 없거나 대기 중인 방이 없으면 안내 메시지와 함께 그룹방 화면으로 이동
+        console.log('대기 중인 그룹방이 없습니다.');
+        showToast('현재 워크아웃으로 생성된 그룹방이 없습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'info');
+        // 그룹방 화면으로 바로 이동 (참가자 역할 선택)
+        if (typeof showScreen === 'function') {
+          showScreen('groupRoomScreen');
+        }
+        if (typeof initializeGroupRoomScreen === 'function') {
+          await initializeGroupRoomScreen();
+        }
+        // 참가자 역할 자동 선택
+        if (typeof selectRole === 'function') {
+          await selectRole('participant');
+        }
       } catch (error) {
         console.error('그룹방 자동 입장 실패:', error);
-        showToast('그룹방 입장에 실패했습니다. 그룹 훈련 화면으로 이동합니다.', 'warning');
-        showScreen('trainingModeScreen');
+        showToast('그룹방 입장에 실패했습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'warning');
+        // 그룹방 화면으로 바로 이동
+        if (typeof showScreen === 'function') {
+          showScreen('groupRoomScreen');
+        }
+        if (typeof initializeGroupRoomScreen === 'function') {
+          await initializeGroupRoomScreen();
+        }
+        // 참가자 역할 자동 선택
+        if (typeof selectRole === 'function') {
+          await selectRole('participant');
+        }
       }
     } else {
-      // grade=1이거나 워크아웃이 없으면 기존 화면으로 이동
-      showScreen('trainingModeScreen');
+      // grade=1이거나 워크아웃이 없으면 그룹방 화면으로 바로 이동
+      if (typeof showScreen === 'function') {
+        showScreen('groupRoomScreen');
+      }
+      if (typeof initializeGroupRoomScreen === 'function') {
+        await initializeGroupRoomScreen();
+      }
     }
   }
 }
@@ -2066,15 +2092,14 @@ function initializeWaitingRoom() {
     }
   }
   
-  // 참가자 목록 업데이트
+  // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
   
-  // 준비 완료 버튼 활성화 (참가자인 경우)
+  // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
+  // 여기서는 추가로 준비 상태 텍스트만 업데이트
   if (!groupTrainingState.isAdmin) {
     const readyBtn = safeGet('readyToggleBtn');
     if (readyBtn) {
-      readyBtn.disabled = false;
-      readyBtn.removeAttribute('disabled');
       // 현재 준비 상태 확인
       const currentUserId = window.currentUser?.id || '';
       const myParticipant = room.participants.find(p => {
@@ -2085,6 +2110,20 @@ function initializeWaitingRoom() {
         const isReady = myParticipant.ready !== undefined ? myParticipant.ready : (myParticipant.isReady !== undefined ? myParticipant.isReady : false);
         readyBtn.textContent = isReady ? '✅ 준비 완료' : '⏳ 준비 중';
         readyBtn.classList.toggle('ready', isReady);
+      }
+      
+      // 기기 연결 상태 확인하여 버튼 활성/비활성화 (updateParticipantsList와 동일한 로직)
+      const connectedDevices = window.connectedDevices || {};
+      const hasTrainer = !!(connectedDevices.trainer && connectedDevices.trainer.device);
+      const hasPowerMeter = !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device);
+      const hasHeartRate = !!(connectedDevices.heartRate && connectedDevices.heartRate.device);
+      const hasBluetoothDevice = hasTrainer || hasPowerMeter || hasHeartRate;
+      
+      readyBtn.disabled = !hasBluetoothDevice;
+      if (!hasBluetoothDevice) {
+        readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
+      } else {
+        readyBtn.title = '';
       }
     }
   }
@@ -2224,8 +2263,21 @@ function updateParticipantsList() {
       const myParticipant = normalizedParticipants.find(p => isCurrentUser(p.id));
       if (myParticipant) {
         // 트레이너, 파워미터, 심박계 중 하나 이상 연결되면 활성화
+        // getBluetoothStatus와 동일한 로직 사용 (device 속성 확인)
         const connectedDevices = window.connectedDevices || {};
-        const hasBluetoothDevice = connectedDevices.trainer || connectedDevices.powerMeter || connectedDevices.heartRate;
+        const hasTrainer = !!(connectedDevices.trainer && connectedDevices.trainer.device);
+        const hasPowerMeter = !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device);
+        const hasHeartRate = !!(connectedDevices.heartRate && connectedDevices.heartRate.device);
+        const hasBluetoothDevice = hasTrainer || hasPowerMeter || hasHeartRate;
+        
+        console.log('기기 연결 상태 확인:', {
+          trainer: hasTrainer,
+          powerMeter: hasPowerMeter,
+          heartRate: hasHeartRate,
+          hasBluetoothDevice: hasBluetoothDevice,
+          connectedDevices: connectedDevices
+        });
+        
         readyBtn.disabled = !hasBluetoothDevice;
         if (!hasBluetoothDevice) {
           readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
