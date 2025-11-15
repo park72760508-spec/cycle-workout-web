@@ -520,6 +520,9 @@ async function startGroupTraining() {
   try {
     showToast('그룹 훈련을 시작합니다...', 'info');
     
+    // 그룹운동 대기 상태 표시
+    showGroupTrainingWaitingStatus();
+    
     // 방 상태를 'starting'으로 변경 (카운트다운 중)
     room.status = 'starting';
     room.countdownStartTime = new Date().toISOString();
@@ -537,7 +540,93 @@ async function startGroupTraining() {
   } catch (error) {
     console.error('Failed to start group training:', error);
     showToast('그룹 훈련 시작에 실패했습니다', 'error');
+    // 대기 상태 오버레이 제거
+    const waitingOverlay = document.getElementById('groupTrainingWaitingOverlay');
+    if (waitingOverlay) {
+      waitingOverlay.remove();
+    }
   }
+}
+
+/**
+ * 그룹운동 대기 상태 표시
+ */
+function showGroupTrainingWaitingStatus() {
+  // 기존 오버레이가 있으면 제거
+  const existingOverlay = document.getElementById('groupTrainingWaitingOverlay');
+  if (existingOverlay) {
+    existingOverlay.remove();
+  }
+  
+  // 대기 상태 오버레이 생성
+  const overlay = document.createElement('div');
+  overlay.id = 'groupTrainingWaitingOverlay';
+  overlay.className = 'group-training-waiting-overlay';
+  overlay.innerHTML = `
+    <div class="waiting-content">
+      <div class="waiting-icon">⏳</div>
+      <h2>그룹운동 대기 중</h2>
+      <p>모든 참가자가 준비되었습니다.</p>
+      <p>곧 훈련이 시작됩니다...</p>
+      <div class="waiting-spinner">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  `;
+  
+  // 스타일 추가 (없는 경우)
+  if (!document.getElementById('groupTrainingWaitingStyles')) {
+    const style = document.createElement('style');
+    style.id = 'groupTrainingWaitingStyles';
+    style.textContent = `
+      .group-training-waiting-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+      }
+      .waiting-content {
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        max-width: 400px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      }
+      .waiting-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+      }
+      .waiting-content h2 {
+        margin: 0 0 10px 0;
+        color: #333;
+      }
+      .waiting-content p {
+        margin: 10px 0;
+        color: #666;
+      }
+      .waiting-spinner {
+        margin-top: 20px;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  document.body.appendChild(overlay);
+  
+  // 훈련 시작 시 오버레이 자동 제거 (5초 후 또는 훈련 시작 시)
+  setTimeout(() => {
+    const overlayToRemove = document.getElementById('groupTrainingWaitingOverlay');
+    if (overlayToRemove) {
+      overlayToRemove.remove();
+    }
+  }, 15000); // 15초 후 자동 제거 (안전장치)
 }
 
 /**
@@ -546,6 +635,12 @@ async function startGroupTraining() {
 async function startAdminControlledCountdown(seconds = 10) {
   const room = groupTrainingState.currentRoom;
   if (!room) return;
+  
+  // 대기 상태 오버레이 제거
+  const waitingOverlay = document.getElementById('groupTrainingWaitingOverlay');
+  if (waitingOverlay) {
+    waitingOverlay.remove();
+  }
   
   // 관리자 화면에 카운트다운 표시
   if (groupTrainingState.isAdmin) {
@@ -706,12 +801,32 @@ async function checkAndSyncCountdown() {
       const room = normalizeRoomData(roomRes.item);
       
       if (room.status === 'starting' && room.countdownEndTime) {
+        // 대기 상태 오버레이 제거
+        const waitingOverlay = document.getElementById('groupTrainingWaitingOverlay');
+        if (waitingOverlay) {
+          waitingOverlay.remove();
+        }
+        
         const endTime = new Date(room.countdownEndTime);
         const now = new Date();
         const remainingSeconds = Math.max(0, Math.ceil((endTime - now) / 1000));
         
         if (remainingSeconds > 0) {
           showParticipantCountdown(remainingSeconds);
+        }
+      } else if (room.status === 'waiting' && room.participants) {
+        // 모든 참가자가 준비되었는지 확인
+        const allReady = room.participants.every(p => {
+          const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
+          return ready;
+        });
+        
+        // 모든 참가자가 준비되었고 아직 시작하지 않았으면 대기 상태 표시
+        if (allReady && room.participants.length >= 2 && !groupTrainingState.isAdmin) {
+          const existingOverlay = document.getElementById('groupTrainingWaitingOverlay');
+          if (!existingOverlay) {
+            showGroupTrainingWaitingStatus();
+          }
         }
       }
     }
