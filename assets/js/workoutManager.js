@@ -630,6 +630,36 @@ async function apiGetWorkout(id) {
 }
 
 /**
+ * 워크아웃 ID로 그룹방 조회
+ */
+async function getRoomsByWorkoutId(workoutId) {
+  if (!workoutId) {
+    return [];
+  }
+  
+  try {
+    if (!window.GAS_URL) {
+      console.warn('GAS_URL이 설정되지 않았습니다.');
+      return [];
+    }
+    
+    const result = await jsonpRequest(window.GAS_URL, {
+      action: 'listGroupRooms',
+      workoutId: String(workoutId)
+    });
+    
+    if (result && result.success) {
+      return result.items || result.rooms || [];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('getRoomsByWorkoutId 실패:', error);
+    return [];
+  }
+}
+
+/**
  * 통합 워크아웃 생성 함수 (개선된 버전)
  */
 async function apiCreateWorkoutWithSegments(workoutData) {
@@ -974,6 +1004,31 @@ async function loadWorkouts() {
       return;
     }
 
+    // 워크아웃별 그룹방 생성 상태 확인 (grade=2 사용자용)
+    const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+    const workoutRoomStatusMap = {};
+    
+    if (grade === '2') {
+      // 각 워크아웃에 대해 그룹방이 있는지 확인
+      await Promise.all(validWorkouts.map(async (workout) => {
+        try {
+          const rooms = await getRoomsByWorkoutId(workout.id);
+          if (rooms && rooms.length > 0) {
+            // 대기 중인 방이 있는지 확인
+            const waitingRoom = rooms.find(r => 
+              (r.status || r.Status || '').toLowerCase() === 'waiting'
+            );
+            workoutRoomStatusMap[workout.id] = waitingRoom ? 'available' : 'exists';
+          } else {
+            workoutRoomStatusMap[workout.id] = 'none';
+          }
+        } catch (error) {
+          console.warn(`워크아웃 ${workout.id}의 그룹방 확인 실패:`, error);
+          workoutRoomStatusMap[workout.id] = 'none';
+        }
+      }));
+    }
+    
     workoutList.innerHTML = validWorkouts.map(workout => {
       if (!workout || typeof workout !== 'object' || !workout.id) {
         return '';
@@ -988,10 +1043,16 @@ async function loadWorkouts() {
         '<span class="status-badge visible">공개</span>' : 
         '<span class="status-badge hidden">비공개</span>';
       
+      // grade=2 사용자용 그룹방 생성 상태 표시
+      let groupRoomBadge = '';
+      if (grade === '2' && workoutRoomStatusMap[workout.id] === 'available') {
+        groupRoomBadge = '<span class="group-room-badge" style="display:inline-block;background:#4CAF50;color:white;padding:4px 8px;border-radius:4px;font-size:12px;margin-left:8px;">👥 그룹 훈련방 생성</span>';
+      }
+      
       return `
         <div class="workout-card" data-workout-id="${workout.id}">
           <div class="workout-header">
-            <div class="workout-title">${escapeHtml(safeTitle)}</div>
+            <div class="workout-title">${escapeHtml(safeTitle)}${groupRoomBadge}</div>
             <div class="workout-actions">
               <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
               <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
@@ -2392,6 +2453,9 @@ window.updateWorkoutPreview = updateWorkoutPreview;
 window.showAddWorkoutForm = showAddWorkoutForm;
 window.resetWorkoutFormMode = resetWorkoutFormMode;
 window.performWorkoutUpdate = performWorkoutUpdate;
+
+// 워크아웃 관련
+window.getRoomsByWorkoutId = getRoomsByWorkoutId;
 
 // 세그먼트 관리
 window.addQuickSegment = addQuickSegment;
