@@ -2176,13 +2176,22 @@ function updateParticipantsList() {
         <div class="participant-bluetooth-status">
           <div class="bluetooth-devices">
             <div class="device-icon" title="심박계">
-              <span class="device-status ${bluetoothStatus.heartRate ? 'active' : 'inactive'}">❤️</span>
+              <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}" 
+                   alt="심박계" 
+                   class="device-status-img ${bluetoothStatus.heartRate ? 'active' : 'inactive'}"
+                   onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
             </div>
             <div class="device-icon" title="파워메터">
-              <span class="device-status ${bluetoothStatus.powerMeter ? 'active' : 'inactive'}">⚡</span>
+              <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" 
+                   alt="파워메터" 
+                   class="device-status-img ${bluetoothStatus.powerMeter ? 'active' : 'inactive'}"
+                   onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
             </div>
             <div class="device-icon" title="스마트 트레이너">
-              <span class="device-status ${bluetoothStatus.trainer ? 'active' : 'inactive'}">🚴</span>
+              <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}" 
+                   alt="스마트 트레이너" 
+                   class="device-status-img ${bluetoothStatus.trainer ? 'active' : 'inactive'}"
+                   onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
             </div>
           </div>
           ${isMe ? `
