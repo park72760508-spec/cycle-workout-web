@@ -888,11 +888,41 @@ async function apiDeleteGroupWorkout(id) {
   try {
     return await jsonpRequest(window.GAS_URL, { 
       action: 'deleteGroupWorkout', 
-      id: String(id) 
+      id: String(id)
     });
   } catch (error) {
     console.error('apiDeleteGroupWorkout 실패:', error);
     return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 워크아웃 ID로 그룹방 조회
+ */
+async function getRoomsByWorkoutId(workoutId) {
+  if (!workoutId) {
+    return [];
+  }
+  
+  try {
+    if (!window.GAS_URL) {
+      console.warn('GAS_URL이 설정되지 않았습니다.');
+      return [];
+    }
+    
+    const result = await jsonpRequest(window.GAS_URL, {
+      action: 'listGroupRooms',
+      workoutId: String(workoutId)
+    });
+    
+    if (result && result.success) {
+      return result.items || result.rooms || [];
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('getRoomsByWorkoutId 실패:', error);
+    return [];
   }
 }
 
@@ -904,7 +934,7 @@ async function apiDeleteGroupWorkout(id) {
 /**
  * 훈련 방식 선택 (기존 ready 화면에서 호출)
  */
-function selectTrainingMode(mode) {
+async function selectTrainingMode(mode) {
   console.log('Training mode selected:', mode);
   
   if (mode === 'individual') {
@@ -916,8 +946,46 @@ function selectTrainingMode(mode) {
       showToast('개인 훈련 기능을 찾을 수 없습니다', 'error');
     }
   } else if (mode === 'group') {
-    // 그룹 훈련 화면으로 이동
-    showScreen('trainingModeScreen');
+    // grade=2 사용자의 경우: 현재 워크아웃으로 생성된 그룹방이 있으면 자동 입장
+    const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+    const currentWorkout = window.currentWorkout;
+    
+    if (grade === '2' && currentWorkout && currentWorkout.id) {
+      try {
+        console.log('워크아웃으로 그룹방 자동 입장 시도:', currentWorkout.id);
+        showToast('그룹방을 찾는 중...', 'info');
+        
+        // 워크아웃 ID로 그룹방 조회
+        const rooms = await getRoomsByWorkoutId(currentWorkout.id);
+        if (rooms && rooms.length > 0) {
+          // 대기 중인 방 찾기
+          const waitingRoom = rooms.find(r => 
+            (r.status || r.Status || '').toLowerCase() === 'waiting'
+          );
+          
+          if (waitingRoom) {
+            const roomCode = waitingRoom.code || waitingRoom.Code;
+            if (roomCode) {
+              console.log('대기 중인 그룹방 발견, 자동 입장:', roomCode);
+              showToast('그룹방에 입장합니다...', 'info');
+              await joinRoomByCode(roomCode);
+              return;
+            }
+          }
+        }
+        
+        // 그룹방이 없거나 대기 중인 방이 없으면 기존 화면으로 이동
+        console.log('대기 중인 그룹방이 없습니다. 그룹 훈련 화면으로 이동');
+        showScreen('trainingModeScreen');
+      } catch (error) {
+        console.error('그룹방 자동 입장 실패:', error);
+        showToast('그룹방 입장에 실패했습니다. 그룹 훈련 화면으로 이동합니다.', 'warning');
+        showScreen('trainingModeScreen');
+      }
+    } else {
+      // grade=1이거나 워크아웃이 없으면 기존 화면으로 이동
+      showScreen('trainingModeScreen');
+    }
   }
 }
 
@@ -2096,6 +2164,9 @@ function updateParticipantsList() {
       const bluetoothStatus = getBluetoothStatus(p.id);
       const isMe = isCurrentUser(p.id);
       
+      // 본인의 블루투스 기기 활성화 여부 확인 (트레이너, 파워미터, 심박계 중 하나 이상)
+      const hasBluetoothDevice = isMe && (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate);
+      
       return `
       <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
         <div class="participant-info">
@@ -2105,23 +2176,20 @@ function updateParticipantsList() {
         <div class="participant-bluetooth-status">
           <div class="bluetooth-devices">
             <div class="device-icon" title="심박계">
-              <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}" 
-                   alt="심박계" 
-                   class="device-status-img ${bluetoothStatus.heartRate ? 'active' : 'inactive'}"
-                   onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
+              <span class="device-status ${bluetoothStatus.heartRate ? 'active' : 'inactive'}">❤️</span>
             </div>
             <div class="device-icon" title="파워메터">
-              <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" 
-                   alt="파워메터" 
-                   class="device-status-img ${bluetoothStatus.powerMeter ? 'active' : 'inactive'}" />
+              <span class="device-status ${bluetoothStatus.powerMeter ? 'active' : 'inactive'}">⚡</span>
             </div>
             <div class="device-icon" title="스마트 트레이너">
-              <img src="assets/img/${bluetoothStatus.trainer ? 'triner_g.png' : 'trainer_i.png'}" 
-                   alt="스마트 트레이너" 
-                   class="device-status-img ${bluetoothStatus.trainer ? 'active' : 'inactive'}"
-                   onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+              <span class="device-status ${bluetoothStatus.trainer ? 'active' : 'inactive'}">🚴</span>
             </div>
           </div>
+          ${isMe ? `
+          <div class="my-device-status">
+            ${hasBluetoothDevice ? '<span class="device-connected-badge">✅ 기기 연결됨</span>' : '<span class="device-disconnected-badge">⚠️ 기기 미연결</span>'}
+          </div>
+          ` : ''}
         </div>
         <div class="participant-status">
           <span class="ready-status ${p.ready ? 'ready' : 'not-ready'}">
@@ -2129,6 +2197,8 @@ function updateParticipantsList() {
           </span>
           ${isMe ? `
           <button class="btn btn-sm ready-toggle-btn ${p.ready ? 'ready' : ''}" 
+                  id="readyToggleBtn"
+                  ${hasBluetoothDevice ? '' : 'disabled'}
                   onclick="toggleReady()">
             ${p.ready ? '✅ 준비 완료' : '⏳ 준비 중'}
           </button>
@@ -2138,6 +2208,23 @@ function updateParticipantsList() {
       </div>
     `;
     }).join('');
+    
+    // 본인의 준비완료 버튼 상태 업데이트
+    const readyBtn = safeGet('readyToggleBtn');
+    if (readyBtn) {
+      const myParticipant = normalizedParticipants.find(p => isCurrentUser(p.id));
+      if (myParticipant) {
+        // 트레이너, 파워미터, 심박계 중 하나 이상 연결되면 활성화
+        const connectedDevices = window.connectedDevices || {};
+        const hasBluetoothDevice = connectedDevices.trainer || connectedDevices.powerMeter || connectedDevices.heartRate;
+        readyBtn.disabled = !hasBluetoothDevice;
+        if (!hasBluetoothDevice) {
+          readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
+        } else {
+          readyBtn.title = '';
+        }
+      }
+    }
   }
   
   // 시작 버튼 활성화 체크
@@ -3564,6 +3651,7 @@ window.createGroupRoomFromWorkout = createGroupRoomFromWorkout;
 window.initializeParticipantSection = initializeParticipantSection;
 window.refreshRoomList = refreshRoomList;
 window.removeDuplicateWorkoutSelectsNow = removeDuplicateWorkoutSelectsNow;
+window.getRoomsByWorkoutId = getRoomsByWorkoutId;
 
      
 
@@ -3653,3 +3741,4 @@ window.groupTrainingManagerReady = true;
 console.log('🎯 그룹훈련 관리자 모듈 준비 완료');
 
 } // 모듈 중복 로딩 방지 블록 종료
+
