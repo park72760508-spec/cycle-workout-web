@@ -2693,8 +2693,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // 그룹 훈련 버튼 이벤트 핸들러 추가
   const btnGroupTraining = safeGetElement("btnGroupTraining");
   if (btnGroupTraining) {
-    btnGroupTraining.addEventListener("click", () => {
-      // 버튼 애니메이션 (워크아웃 선택과 유사한 눌림 효과)
+    btnGroupTraining.addEventListener("click", async () => {
+      // 버튼 눌림 효과
       try {
         btnGroupTraining.style.transition = 'transform 0.15s ease';
         btnGroupTraining.style.transform = 'scale(0.96)';
@@ -2703,12 +2703,57 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 160);
       } catch (_) {}
 
+      // 접속중 스피너 표시
+      let spinner;
+      try {
+        // 이미 스피너가 없는 경우에만 추가
+        if (!btnGroupTraining.querySelector('.btn-inline-spinner')) {
+          spinner = document.createElement('span');
+          spinner.className = 'btn-inline-spinner';
+          spinner.setAttribute('aria-hidden', 'true');
+          spinner.style.display = 'inline-block';
+          spinner.style.width = '16px';
+          spinner.style.height = '16px';
+          spinner.style.marginLeft = '8px';
+          spinner.style.border = '2px solid rgba(255,255,255,0.35)';
+          spinner.style.borderTopColor = '#fff';
+          spinner.style.borderRadius = '50%';
+          spinner.style.verticalAlign = 'middle';
+          spinner.style.animation = 'spinBtn 0.8s linear infinite';
+
+          // 키프레임 주입(중복 방지)
+          if (!document.getElementById('btnSpinnerKeyframes')) {
+            const style = document.createElement('style');
+            style.id = 'btnSpinnerKeyframes';
+            style.textContent = '@keyframes spinBtn { to { transform: rotate(360deg); } }';
+            document.head.appendChild(style);
+          }
+
+          btnGroupTraining.appendChild(spinner);
+        }
+        // 중복 클릭 방지
+        btnGroupTraining.disabled = true;
+        btnGroupTraining.style.pointerEvents = 'none';
+        btnGroupTraining.dataset.loading = 'true';
+      } catch (_) {}
+
       console.log('Group training button clicked');
-      if (typeof selectTrainingMode === 'function') {
-        selectTrainingMode('group');
-      } else {
-        console.warn('selectTrainingMode function not found');
-        showToast('그룹 훈련 기능을 찾을 수 없습니다', 'error');
+      try {
+        if (typeof selectTrainingMode === 'function') {
+          await selectTrainingMode('group');
+        } else {
+          console.warn('selectTrainingMode function not found');
+          showToast('그룹 훈련 기능을 찾을 수 없습니다', 'error');
+        }
+      } finally {
+        // 접속 완료/실패 시 스피너 제거 및 버튼 복구
+        try {
+          const sp = btnGroupTraining.querySelector('.btn-inline-spinner');
+          if (sp) sp.remove();
+          btnGroupTraining.disabled = false;
+          btnGroupTraining.style.pointerEvents = '';
+          delete btnGroupTraining.dataset.loading;
+        } catch (_) {}
       }
     });
   }
