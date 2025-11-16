@@ -946,6 +946,12 @@ async function selectTrainingMode(mode) {
       showToast('개인 훈련 기능을 찾을 수 없습니다', 'error');
     }
   } else if (mode === 'group') {
+    // 혹시 남아있는 그룹 훈련 모달이 있다면 즉시 제거
+    const residualGroupModal = document.getElementById('groupTrainingModal');
+    if (residualGroupModal) {
+      residualGroupModal.remove();
+    }
+
     // grade=2 사용자의 경우: 현재 워크아웃으로 생성된 그룹방이 있으면 자동 입장
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     const currentWorkout = window.currentWorkout;
@@ -2384,23 +2390,23 @@ function updateParticipantsList() {
       
       // 이름 옆에 기기 연결 상태 이미지 표시 (하단 네모 박스 스타일을 이름 옆으로 이동, 검정 배경)
       const deviceStatusIcons = `
-        <span class="inline-device-badges" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px;">
-          <span class="device-badge" title="심박계" style="width:20px; height:20px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
+        <span class="inline-device-badges" style="display:inline-flex; align-items:center; gap:8px; margin-left:10px;">
+          <span class="device-badge" title="심박계" style="width:24px; height:24px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
             <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}"
                  alt="심박계"
-                 style="width:16px; height:16px; display:block;"
+                 style="width:20px; height:20px; display:block;"
                  onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
           </span>
-          <span class="device-badge" title="파워메터" style="width:20px; height:20px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
+          <span class="device-badge" title="파워메터" style="width:24px; height:24px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
             <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}"
                  alt="파워메터"
-                 style="width:16px; height:16px; display:block;"
+                 style="width:20px; height:20px; display:block;"
                  onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
           </span>
-          <span class="device-badge" title="스마트 트레이너" style="width:20px; height:20px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
+          <span class="device-badge" title="스마트 트레이너" style="width:24px; height:24px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
             <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}"
                  alt="스마트 트레이너"
-                 style="width:16px; height:16px; display:block;"
+                 style="width:20px; height:20px; display:block;"
                  onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
           </span>
         </span>
@@ -2412,6 +2418,8 @@ function updateParticipantsList() {
       const targetPower = trainingState.currentTargetPowerW || trainingState.targetPowerW || trainingState.segmentTargetPowerW || null;
       const avgPower = liveData.avgPower || liveData.averagePower || null;
       const currentPower = liveData.power || liveData.instantPower || liveData.watts || null;
+      const heartRate = liveData.heartRate || liveData.hr || liveData.bpm || null;
+      const cadence = liveData.cadence || liveData.rpm || null;
       const fmt = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : '-');
       
       return `
@@ -2425,7 +2433,7 @@ function updateParticipantsList() {
         </div>
 
         <!-- 하단 영역: 메트릭 표시 (하단 아이콘 제거 후 메트릭 표시로 대체) -->
-        <div class="participant-metrics" style="margin-top:8px; display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+        <div class="participant-metrics" style="margin-top:8px; display:grid; grid-template-columns: repeat(5, 1fr); gap:8px;">
           <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
             <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">세그먼트 목표</div>
             <div class="metric-value" style="font-size:16px; font-weight:700; color:#ffd166;">
@@ -2442,6 +2450,18 @@ function updateParticipantsList() {
             <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">현재 파워</div>
             <div class="metric-value" style="font-size:16px; font-weight:700; color:#4cc9f0;">
               ${fmt(currentPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
+            </div>
+          </div>
+          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
+            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">심박수</div>
+            <div class="metric-value" style="font-size:16px; font-weight:700; color:#ef476f;">
+              ${fmt(heartRate)}<span style="font-size:12px; color:#888; margin-left:4px;">bpm</span>
+            </div>
+          </div>
+          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
+            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">케이던스</div>
+            <div class="metric-value" style="font-size:16px; font-weight:700; color:#b388ff;">
+              ${fmt(cadence)}<span style="font-size:12px; color:#888; margin-left:4px;">rpm</span>
             </div>
           </div>
         </div>
