@@ -2322,6 +2322,11 @@ function initializeWaitingRoom() {
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
   
+  // 대기실에서도 참가자 실시간 데이터 업로드 시작(일반 참가자만)
+  if (!groupTrainingState.isAdmin && typeof startParticipantDataSync === 'function') {
+    startParticipantDataSync();
+  }
+  
   // 메트릭 주기적 갱신 타이머 시작 (2초마다 목록 갱신)
   if (window.participantMetricsUpdateInterval) {
     clearInterval(window.participantMetricsUpdateInterval);
@@ -2485,14 +2490,21 @@ function updateParticipantsList() {
         </span>
       `;
 
-      // 세그먼트/파워 메트릭 값 계산 (가용 시 표시, 없으면 '-')
+      // 서버 참가자 데이터 가져오기 (타인 메트릭 반영용)
+      const serverParticipant = (room.participants || []).find(pp => {
+        const pId = pp.id || pp.participantId || pp.userId;
+        return String(pId) === String(p.id);
+      }) || {};
+      const serverMetrics = serverParticipant.metrics || serverParticipant.live || serverParticipant.liveData || serverParticipant || {};
+
+      // 세그먼트/파워 메트릭 값 계산 (본인은 로컬 우선, 타인은 서버 우선)
       const liveData = (isMe ? (window.liveData || {}) : {});
       const trainingState = window.trainingState || {};
       const targetPower = trainingState.currentTargetPowerW || trainingState.targetPowerW || trainingState.segmentTargetPowerW || null;
-      const avgPower = liveData.avgPower || liveData.averagePower || null;
-      const currentPower = liveData.power || liveData.instantPower || liveData.watts || null;
-      const heartRate = liveData.heartRate || liveData.hr || liveData.bpm || null;
-      const cadence = liveData.cadence || liveData.rpm || null;
+      const avgPower = isMe ? (liveData.avgPower || liveData.averagePower || null) : (serverMetrics.avgPower || serverMetrics.averagePower || null);
+      const currentPower = isMe ? (liveData.power || liveData.instantPower || liveData.watts || null) : (serverMetrics.power || serverMetrics.currentPower || null);
+      const heartRate = isMe ? (liveData.heartRate || liveData.hr || liveData.bpm || null) : (serverMetrics.heartRate || serverMetrics.hr || null);
+      const cadence = isMe ? (liveData.cadence || liveData.rpm || null) : (serverMetrics.cadence || serverMetrics.rpm || null);
       const fmt = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : '-');
 
       // 상단 라인 배치: 좌측(이름+BT), 우측(상태/버튼/접속시간)
