@@ -972,6 +972,27 @@ async function syncParticipantLiveData() {
 }
 
 /**
+ * 참가자 실시간 데이터 저장 API
+ */
+async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
+  try {
+    if (!window.GAS_URL) {
+      return { success: false, error: 'GAS_URL not configured' };
+    }
+    const params = {
+      action: 'updateParticipantLiveData',
+      roomCode: String(roomCode),
+      participantId: String(participantId),
+      payload: JSON.stringify(payload || {})
+    };
+    const res = await jsonpRequest(window.GAS_URL, params);
+    return res || { success: false, error: 'No response' };
+  } catch (e) {
+    return { success: false, error: e.message || 'request failed' };
+  }
+}
+
+/**
  * 훈련 화면에 모니터링 버튼 추가
  */
 function addMonitoringButton() {
