@@ -2254,6 +2254,23 @@ function initializeWaitingRoom() {
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
   
+  // 메트릭 주기적 갱신 타이머 시작 (2초마다 목록 갱신)
+  if (window.participantMetricsUpdateInterval) {
+    clearInterval(window.participantMetricsUpdateInterval);
+    window.participantMetricsUpdateInterval = null;
+  }
+  window.participantMetricsUpdateInterval = setInterval(() => {
+    try {
+      // 대기실 화면이 표시 중일 때만 갱신
+      const screen = document.getElementById('groupWaitingScreen');
+      if (screen && !screen.classList.contains('hidden')) {
+        updateParticipantsList();
+      }
+    } catch (e) {
+      console.warn('participantMetricsUpdateInterval 오류:', e);
+    }
+  }, 2000);
+  
   // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
   // 여기서는 추가로 준비 상태 텍스트만 업데이트
   if (!groupTrainingState.isAdmin) {
@@ -2365,26 +2382,37 @@ function updateParticipantsList() {
       // 본인의 블루투스 기기 활성화 여부 확인 (트레이너, 파워미터, 심박계 중 하나 이상)
       const hasBluetoothDevice = isMe && (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate);
       
-      // 이름 옆에 기기 연결 상태 이미지 표시 (작은 아이콘 형태)
+      // 이름 옆에 기기 연결 상태 이미지 표시 (하단 네모 박스 스타일을 이름 옆으로 이동, 검정 배경)
       const deviceStatusIcons = `
-        <span class="device-status-inline" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px;">
-          <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}" 
-               alt="심박계" 
-               class="device-status-img-inline" 
-               style="width: 16px; height: 16px;"
-               onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
-          <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" 
-               alt="파워메터" 
-               class="device-status-img-inline" 
-               style="width: 16px; height: 16px;"
-               onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
-          <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}" 
-               alt="스마트 트레이너" 
-               class="device-status-img-inline" 
-               style="width: 16px; height: 16px;"
-               onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+        <span class="inline-device-badges" style="display:inline-flex; align-items:center; gap:6px; margin-left:8px;">
+          <span class="device-badge" title="심박계" style="width:20px; height:20px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
+            <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}"
+                 alt="심박계"
+                 style="width:16px; height:16px; display:block;"
+                 onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
+          </span>
+          <span class="device-badge" title="파워메터" style="width:20px; height:20px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
+            <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}"
+                 alt="파워메터"
+                 style="width:16px; height:16px; display:block;"
+                 onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
+          </span>
+          <span class="device-badge" title="스마트 트레이너" style="width:20px; height:20px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
+            <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}"
+                 alt="스마트 트레이너"
+                 style="width:16px; height:16px; display:block;"
+                 onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+          </span>
         </span>
       `;
+
+      // 세그먼트/파워 메트릭 값 계산 (가용 시 표시, 없으면 '-')
+      const liveData = (isMe ? (window.liveData || {}) : {});
+      const trainingState = window.trainingState || {};
+      const targetPower = trainingState.currentTargetPowerW || trainingState.targetPowerW || trainingState.segmentTargetPowerW || null;
+      const avgPower = liveData.avgPower || liveData.averagePower || null;
+      const currentPower = liveData.power || liveData.instantPower || liveData.watts || null;
+      const fmt = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : '-');
       
       return `
       <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
@@ -2395,28 +2423,29 @@ function updateParticipantsList() {
           </span>
           <span class="participant-role">${p.role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}</span>
         </div>
-        <div class="participant-bluetooth-status">
-          <div class="bluetooth-devices">
-            <div class="device-icon" title="심박계">
-              <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}" 
-                   alt="심박계" 
-                   class="device-status-img ${bluetoothStatus.heartRate ? 'active' : 'inactive'}"
-                   onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
+
+        <!-- 하단 영역: 메트릭 표시 (하단 아이콘 제거 후 메트릭 표시로 대체) -->
+        <div class="participant-metrics" style="margin-top:8px; display:grid; grid-template-columns: repeat(3, 1fr); gap:8px;">
+          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
+            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">세그먼트 목표</div>
+            <div class="metric-value" style="font-size:16px; font-weight:700; color:#ffd166;">
+              ${fmt(targetPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
             </div>
-            <div class="device-icon" title="파워메터">
-              <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" 
-                   alt="파워메터" 
-                   class="device-status-img ${bluetoothStatus.powerMeter ? 'active' : 'inactive'}"
-                   onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
+          </div>
+          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
+            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">세그먼트 평균</div>
+            <div class="metric-value" style="font-size:16px; font-weight:700; color:#9be564;">
+              ${fmt(avgPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
             </div>
-            <div class="device-icon" title="스마트 트레이너">
-              <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}" 
-                   alt="스마트 트레이너" 
-                   class="device-status-img ${bluetoothStatus.trainer ? 'active' : 'inactive'}"
-                   onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+          </div>
+          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
+            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">현재 파워</div>
+            <div class="metric-value" style="font-size:16px; font-weight:700; color:#4cc9f0;">
+              ${fmt(currentPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
             </div>
           </div>
         </div>
+
         <div class="participant-status">
           <span class="ready-status ${p.ready ? 'ready' : 'not-ready'}">
             ${p.ready ? '✅ 준비완료' : '⏳ 준비중'}
@@ -2591,6 +2620,11 @@ async function leaveGroupRoomSilently() {
   try {
     // 동기화 인터벌 정리
     stopRoomSync();
+    // 메트릭 인터벌 정리
+    if (window.participantMetricsUpdateInterval) {
+      clearInterval(window.participantMetricsUpdateInterval);
+      window.participantMetricsUpdateInterval = null;
+    }
     
     // 관리자 인터벌 정리
     if (groupTrainingState.managerInterval) {
@@ -2740,6 +2774,11 @@ async function leaveGroupRoom() {
     
     // 동기화 인터벌 정리 (먼저 정리하여 중복 호출 방지)
     stopRoomSync();
+    // 메트릭 인터벌 정리
+    if (window.participantMetricsUpdateInterval) {
+      clearInterval(window.participantMetricsUpdateInterval);
+      window.participantMetricsUpdateInterval = null;
+    }
     
     // 관리자 인터벌 정리
     if (groupTrainingState.managerInterval) {
