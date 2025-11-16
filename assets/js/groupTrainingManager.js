@@ -1,3 +1,5 @@
+// Updated: 2025-11-16 00:00 (KST) - Change header added for ongoing edits
+
 /* ==========================================================
    groupTrainingManager.js - 그룹 훈련 전용 관리 모듈
    기존 모듈들과 일관성을 유지하면서 그룹 훈련 기능 구현
@@ -2220,14 +2222,8 @@ function initializeWaitingRoom() {
   
   const room = groupTrainingState.currentRoom;
   
-  // 방 정보 업데이트
-  const titleEl = safeGet('waitingRoomTitle');
-  const codeEl = safeGet('currentRoomCode');
-  const workoutEl = safeGet('currentRoomWorkout');
-  
-  if (titleEl) titleEl.textContent = `📱 훈련방: ${room.name}`;
-  if (codeEl) codeEl.textContent = room.code;
-  if (workoutEl) workoutEl.textContent = '로딩 중...';
+  // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링
+  renderWaitingHeaderSegmentTable();
   
   // 관리자/참가자 컨트롤 표시
   const adminControls = safeGet('adminControls');
@@ -2271,6 +2267,7 @@ function initializeWaitingRoom() {
       const screen = document.getElementById('groupWaitingScreen');
       if (screen && !screen.classList.contains('hidden')) {
         updateParticipantsList();
+        renderWaitingHeaderSegmentTable();
       }
     } catch (e) {
       console.warn('participantMetricsUpdateInterval 오류:', e);
@@ -2519,6 +2516,80 @@ function updateParticipantsList() {
   updateStartButtonState();
 }
 
+/**
+ * 대기실 상단: 워크아웃 세그먼트 테이블 렌더링
+ */
+function renderWaitingHeaderSegmentTable() {
+  try {
+    const screen = document.getElementById('groupWaitingScreen');
+    if (!screen) return;
+    const roomInfoCard = screen.querySelector('.room-info.card');
+    if (!roomInfoCard) return;
+
+    const workout = window.currentWorkout || {};
+    const segments = Array.isArray(workout.segments) ? workout.segments : [];
+
+    // 테이블 행 구성
+    const tableRows = segments.map((seg, idx) => {
+      const name = seg.name || seg.title || `세그먼트 ${idx + 1}`;
+      const durationSec = Number(seg.duration_sec || seg.duration || 0);
+      const targetW = Math.round(Number(seg.target_power_w || seg.targetPowerW || seg.power || 0));
+      const durationStr = durationSec > 0 ? new Date(durationSec * 1000).toISOString().substr(14, 5) : '-';
+
+      // 현재 세그먼트 하이라이트
+      let isActive = false;
+      const ts = window.trainingState || {};
+      const elapsed = Number(ts.elapsedSec || 0);
+      if (elapsed >= 0 && durationSec >= 0) {
+        let start = 0;
+        for (let i = 0; i < segments.length; i++) {
+          const segDur = Number(segments[i].duration_sec || segments[i].duration || 0);
+          const end = start + segDur;
+          if (i === idx && elapsed >= start && elapsed < end) {
+            isActive = true;
+            break;
+          }
+          start = end;
+        }
+      }
+
+      return `
+        <tr style="${isActive ? 'background: rgba(76, 201, 240, 0.12);' : ''}">
+          <td style="padding:6px 8px; color:#bbb;">${idx + 1}</td>
+          <td style="padding:6px 8px; color:#fff;">${escapeHtml(String(name))}</td>
+          <td style="padding:6px 8px; color:#ffd166; text-align:right;">${isFinite(targetW) ? targetW : '-'} W</td>
+          <td style="padding:6px 8px; color:#9be564; text-align:center;">${durationStr}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
+
+    roomInfoCard.innerHTML = `
+      <div class="segment-table-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <h3 style="margin:0; font-size:16px;">📋 ${workoutTitle} - 세그먼트</h3>
+        <span style="font-size:12px; color:#888;">전체 훈련 상황 모니터링</span>
+      </div>
+      <div class="segment-table-wrap" style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:12px; border:1px solid rgba(255,255,255,0.08);">
+          <thead>
+            <tr style="background:#0b0b0b; color:#aaa; text-align:left;">
+              <th style="padding:6px 8px; width:48px;">#</th>
+              <th style="padding:6px 8px;">세그먼트</th>
+              <th style="padding:6px 8px; width:110px; text-align:right;">목표 파워</th>
+              <th style="padding:6px 8px; width:90px; text-align:center;">시간</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows || ''}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch (error) {
+    console.warn('renderWaitingHeaderSegmentTable 오류:', error);
+  }
+}
 
 /**
  * 백엔드에 방 데이터 업데이트 (임시 구현)
