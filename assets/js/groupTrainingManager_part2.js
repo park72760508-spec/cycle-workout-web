@@ -920,7 +920,8 @@ async function syncParticipantLiveData() {
       return; // 방 코드나 참가자 ID가 없으면 전송하지 않음
     }
     
-    // 블루투스에서 실시간 데이터 가져오기
+    // 블루투스에서 실시간 데이터 및 연결 상태 가져오기
+    const connectedDevices = window.connectedDevices || {};
     const liveData = window.liveData || {};
     
     // 훈련 진행률 계산 (trainingState에서 가져오기)
@@ -939,11 +940,21 @@ async function syncParticipantLiveData() {
       }
     }
     
-    // 백엔드에 데이터 전송
+    // 현재 세그먼트 타깃 파워
+    const segmentTargetPowerW = trainingState.currentTargetPowerW || trainingState.targetPowerW || 0;
+    
+    // 백엔드에 데이터 전송 (BLE 상태 + 메트릭 확장)
     const result = await apiSaveParticipantLiveData(roomCode, participantId, {
-      power: liveData.power || 0,
-      heartRate: liveData.heartRate || 0,
-      cadence: liveData.cadence || 0,
+      bluetoothStatus: {
+        trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
+        powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
+        heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
+      },
+      power: liveData.power || liveData.instantPower || 0,
+      avgPower: liveData.avgPower || liveData.averagePower || null,
+      heartRate: liveData.heartRate || liveData.hr || 0,
+      cadence: liveData.cadence || liveData.rpm || 0,
+      segmentTargetPowerW,
       progress: progress,
       timestamp: new Date().toISOString()
     });
