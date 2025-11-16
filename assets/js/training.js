@@ -83,11 +83,8 @@ function initGroupTraining() {
 
 // ========== 이벤트 설정 ==========
 function setupGroupTrainingEvents() {
-  // 그룹 훈련 버튼 이벤트
-  const groupTrainingBtn = document.getElementById('btnGroupTraining');
-  if (groupTrainingBtn) {
-    groupTrainingBtn.addEventListener('click', showGroupTrainingModal);
-  }
+  // 그룹 훈련 버튼 이벤트는 index.html의 onclick 또는 app.js에서 처리하므로 여기서는 제거
+  // btnGroupTraining 버튼은 selectTrainingMode('group')를 직접 호출하도록 변경됨
   
   // 방 생성 버튼
   const createRoomBtn = document.getElementById('btnCreateRoom');
