@@ -979,14 +979,49 @@ async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
     if (!window.GAS_URL) {
       return { success: false, error: 'GAS_URL not configured' };
     }
-    const params = {
-      action: 'updateParticipantLiveData',
-      roomCode: String(roomCode),
-      participantId: String(participantId),
-      payload: JSON.stringify(payload || {})
-    };
-    const res = await jsonpRequest(window.GAS_URL, params);
-    return res || { success: false, error: 'No response' };
+
+    // 여러 백엔드 버전 호환: 순차적으로 시도
+    const actionsToTry = ['updateParticipantLiveData', 'saveParticipantLiveData', 'saveLiveData'];
+
+    // 일부 백엔드는 개별 필드로 받는 경우가 있어 병행 제공
+    const flat = payload || {};
+
+    let lastError = 'Unknown error';
+    for (const action of actionsToTry) {
+      try {
+        const params = {
+          action,
+          roomCode: String(roomCode),
+          participantId: String(participantId),
+          // 공통: payload JSON
+          payload: JSON.stringify(flat),
+          // 호환용 개별 필드
+          power: flat.power ?? flat.metrics?.currentPower ?? null,
+          avgPower: flat.avgPower ?? flat.metrics?.avgPower ?? null,
+          heartRate: flat.heartRate ?? flat.metrics?.heartRate ?? null,
+          cadence: flat.cadence ?? flat.metrics?.cadence ?? null,
+          segmentTargetPowerW: flat.segmentTargetPowerW ?? flat.metrics?.segmentTargetPowerW ?? null,
+          progress: flat.progress ?? null,
+          trainerConnected: flat.bluetoothStatus?.trainer ?? null,
+          powerConnected: flat.bluetoothStatus?.powerMeter ?? null,
+          hrConnected: flat.bluetoothStatus?.heartRate ?? null,
+          timestamp: flat.timestamp || new Date().toISOString()
+        };
+        const res = await jsonpRequest(window.GAS_URL, params);
+        if (res && res.success) {
+          return res;
+        }
+        lastError = res?.error || 'Unknown action';
+        // Unknown action이면 다음 액션 시도
+        if (String(lastError).toLowerCase().includes('unknown')) {
+          continue;
+        }
+      } catch (inner) {
+        lastError = inner?.message || 'request failed';
+        continue;
+      }
+    }
+    return { success: false, error: lastError };
   } catch (e) {
     return { success: false, error: e.message || 'request failed' };
   }
