@@ -867,10 +867,8 @@ function startGroupTrainingSession() {
     // 모니터링 버튼 추가
     addMonitoringButton();
     
-    // 실시간 데이터 전송 시작 (참가자만)
-    if (!groupTrainingState.isAdmin) {
-      startParticipantDataSync();
-    }
+    // 실시간 데이터 전송 시작 (관리자 포함 모든 사용자)
+    startParticipantDataSync();
     
     showToast('그룹 훈련이 시작되었습니다!', 'success');
     
