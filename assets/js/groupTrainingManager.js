@@ -953,7 +953,13 @@ async function selectTrainingMode(mode) {
     if (grade === '2' && currentWorkout && currentWorkout.id) {
       try {
         console.log('워크아웃으로 그룹방 자동 입장 시도:', currentWorkout.id);
-        showToast('그룹방을 찾는 중...', 'info');
+        
+        // 진행 중 표시
+        if (typeof showLoading === 'function') {
+          showLoading('그룹 훈련 입장 중입니다...');
+        } else {
+          showToast('그룹 훈련 입장 중입니다...', 'info');
+        }
         
         // 워크아웃 ID로 그룹방 조회
         const rooms = await getRoomsByWorkoutId(currentWorkout.id);
@@ -969,6 +975,10 @@ async function selectTrainingMode(mode) {
               console.log('대기 중인 그룹방 발견, 자동 입장:', roomCode);
               // 바로 입장 (중간 화면 건너뛰기)
               await joinRoomByCode(roomCode);
+              // 로딩 숨기기
+              if (typeof hideLoading === 'function') {
+                hideLoading();
+              }
               return;
             }
           }
@@ -976,6 +986,10 @@ async function selectTrainingMode(mode) {
         
         // 그룹방이 없거나 대기 중인 방이 없으면 안내 메시지와 함께 그룹방 화면으로 이동
         console.log('대기 중인 그룹방이 없습니다.');
+        // 로딩 숨기기
+        if (typeof hideLoading === 'function') {
+          hideLoading();
+        }
         showToast('현재 워크아웃으로 생성된 그룹방이 없습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'info');
         // 그룹방 화면으로 바로 이동 (참가자 역할 선택)
         if (typeof showScreen === 'function') {
@@ -990,6 +1004,10 @@ async function selectTrainingMode(mode) {
         }
       } catch (error) {
         console.error('그룹방 자동 입장 실패:', error);
+        // 로딩 숨기기
+        if (typeof hideLoading === 'function') {
+          hideLoading();
+        }
         showToast('그룹방 입장에 실패했습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'warning');
         // 그룹방 화면으로 바로 이동
         if (typeof showScreen === 'function') {
@@ -2206,10 +2224,34 @@ function updateParticipantsList() {
       // 본인의 블루투스 기기 활성화 여부 확인 (트레이너, 파워미터, 심박계 중 하나 이상)
       const hasBluetoothDevice = isMe && (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate);
       
+      // 이름 옆에 기기 연결 상태 이미지 표시 (작은 아이콘 형태)
+      const deviceStatusIcons = `
+        <span class="device-status-inline" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px;">
+          <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}" 
+               alt="심박계" 
+               class="device-status-img-inline" 
+               style="width: 16px; height: 16px;"
+               onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
+          <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" 
+               alt="파워메터" 
+               class="device-status-img-inline" 
+               style="width: 16px; height: 16px;"
+               onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
+          <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}" 
+               alt="스마트 트레이너" 
+               class="device-status-img-inline" 
+               style="width: 16px; height: 16px;"
+               onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+        </span>
+      `;
+      
       return `
       <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
         <div class="participant-info">
-          <span class="participant-name">${escapeHtml(p.name)}${isMe ? ' (나)' : ''}</span>
+          <span class="participant-name">
+            ${escapeHtml(p.name)}${isMe ? ' (나)' : ''}
+            ${deviceStatusIcons}
+          </span>
           <span class="participant-role">${p.role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}</span>
         </div>
         <div class="participant-bluetooth-status">
@@ -2233,11 +2275,6 @@ function updateParticipantsList() {
                    onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
             </div>
           </div>
-          ${isMe ? `
-          <div class="my-device-status">
-            ${hasBluetoothDevice ? '<span class="device-connected-badge">✅ 기기 연결됨</span>' : '<span class="device-disconnected-badge">⚠️ 기기 미연결</span>'}
-          </div>
-          ` : ''}
         </div>
         <div class="participant-status">
           <span class="ready-status ${p.ready ? 'ready' : 'not-ready'}">
