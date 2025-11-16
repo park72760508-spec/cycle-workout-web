@@ -1735,12 +1735,59 @@ async function joinGroupRoom() {
 async function joinRoomByCode(roomCode) {
   try {
     console.log('🚀 방 참가 시작:', roomCode);
-    showToast('방에 참가 중입니다...', 'info');
+    
+    // 로딩 메시지 표시 (모달이 아닌 로딩 오버레이)
+    let usedInlineOverlay = false;
+    const ensureInlineLoadingOverlay = (message) => {
+      // 간단한 인라인 로딩 오버레이 생성
+      let overlay = document.getElementById('inlineLoadingOverlay');
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'inlineLoadingOverlay';
+        overlay.style.position = 'fixed';
+        overlay.style.inset = '0';
+        overlay.style.background = 'rgba(0,0,0,0.35)';
+        overlay.style.zIndex = '9999';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        overlay.innerHTML = `
+          <div style="background: #111; color: #fff; padding: 16px 20px; border-radius: 10px; display: flex; align-items: center; gap: 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.4)">
+            <div class="spinner" style="width: 22px; height: 22px; border: 3px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: spin 0.9s linear infinite;"></div>
+            <span style="font-weight: 600;">${message || '처리 중...'}</span>
+          </div>
+          <style>
+            @keyframes spin { to { transform: rotate(360deg); } }
+          </style>
+        `;
+        document.body.appendChild(overlay);
+      } else {
+        const span = overlay.querySelector('span');
+        if (span) span.textContent = message || '처리 중...';
+      }
+    };
+    const removeInlineLoadingOverlay = () => {
+      const overlay = document.getElementById('inlineLoadingOverlay');
+      if (overlay) overlay.remove();
+    };
+
+    if (typeof showLoading === 'function') {
+      showLoading('그룹 훈련 입장 중입니다...');
+    } else {
+      ensureInlineLoadingOverlay('그룹 훈련 입장 중입니다...');
+      usedInlineOverlay = true;
+    }
     
     // 사용자 정보 확인
     if (!window.currentUser || !window.currentUser.id) {
       const errorMsg = '로그인이 필요합니다. 사용자를 선택해주세요.';
       console.error('❌ 사용자 정보 없음');
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1757,6 +1804,12 @@ async function joinRoomByCode(roomCode) {
     if (!roomResponse) {
       const errorMsg = '방 정보를 가져올 수 없습니다. 네트워크를 확인해주세요.';
       console.error('❌ 방 정보 응답 없음');
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1764,6 +1817,12 @@ async function joinRoomByCode(roomCode) {
     if (!roomResponse.success) {
       const errorMsg = roomResponse.error || '방을 찾을 수 없습니다';
       console.error('❌ 방 조회 실패:', errorMsg);
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1771,6 +1830,12 @@ async function joinRoomByCode(roomCode) {
     if (!roomResponse.item) {
       const errorMsg = '방 정보가 없습니다. 방 코드를 확인해주세요.';
       console.error('❌ 방 데이터 없음');
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1782,6 +1847,12 @@ async function joinRoomByCode(roomCode) {
     if (!room) {
       const errorMsg = '방 정보를 처리할 수 없습니다.';
       console.error('❌ 방 데이터 정규화 실패');
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1793,6 +1864,12 @@ async function joinRoomByCode(roomCode) {
                        room.status === 'closed' ? '닫힌 방입니다' :
                        '참가할 수 없는 상태입니다';
       console.error('❌ 방 상태 오류:', room.status);
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+       if (usedInlineOverlay) {
+         removeInlineLoadingOverlay();
+       }
       showToast(statusMsg, 'error');
       return;
     }
@@ -1804,6 +1881,12 @@ async function joinRoomByCode(roomCode) {
     if (currentParticipants >= maxParticipants) {
       const errorMsg = `방이 가득 찼습니다 (${currentParticipants}/${maxParticipants})`;
       console.error('❌ 방 정원 초과');
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1816,11 +1899,20 @@ async function joinRoomByCode(roomCode) {
     
     if (isAlreadyJoined) {
       console.log('ℹ️ 이미 참가한 방입니다. 대기실로 이동합니다.');
+      
+      // 로딩 숨기기
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
+      
       groupTrainingState.currentRoom = room;
       groupTrainingState.roomCode = roomCode;
       groupTrainingState.isAdmin = false;
       
-      // 모달 닫기
+      // 모달 닫기 (혹시 열려있다면)
       if (typeof closeJoinRoomModal === 'function') {
         closeJoinRoomModal();
       }
@@ -1850,14 +1942,28 @@ async function joinRoomByCode(roomCode) {
     if (!joinResult) {
       const errorMsg = '방 참가 요청에 응답이 없습니다. 네트워크를 확인해주세요.';
       console.error('❌ 방 참가 응답 없음');
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
-
+    
     if (!joinResult.success) {
       // "Already joined" 오류인 경우 재접속으로 처리
       if (joinResult.error === 'Already joined' || joinResult.error?.includes('Already joined')) {
         console.log('ℹ️ 이미 참가한 방입니다. 기존 참가 정보로 재접속합니다.');
+        
+        // 로딩 숨기기
+        if (typeof hideLoading === 'function') {
+          hideLoading();
+        }
+        if (usedInlineOverlay) {
+          removeInlineLoadingOverlay();
+        }
         
         // 방 정보 새로고침
         const refreshedRoomRes = await apiGetRoom(roomCode);
@@ -1874,7 +1980,7 @@ async function joinRoomByCode(roomCode) {
         
         showToast('기존 참가 정보로 재접속했습니다', 'success');
         
-        // 모달 닫기
+        // 모달 닫기 (혹시 열려있다면)
         if (typeof closeJoinRoomModal === 'function') {
           closeJoinRoomModal();
         }
@@ -1895,6 +2001,12 @@ async function joinRoomByCode(roomCode) {
       
       const errorMsg = joinResult.error || '방 참가에 실패했습니다';
       console.error('❌ 방 참가 실패:', errorMsg);
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       showToast(errorMsg, 'error');
       return;
     }
@@ -1902,6 +2014,14 @@ async function joinRoomByCode(roomCode) {
     // 이미 참가한 경우 (백엔드에서 alreadyJoined 플래그로 반환)
     if (joinResult.alreadyJoined) {
       console.log('ℹ️ 이미 참가한 방입니다. 기존 참가 정보로 재접속합니다.');
+      
+      // 로딩 숨기기
+      if (typeof hideLoading === 'function') {
+        hideLoading();
+      }
+      if (usedInlineOverlay) {
+        removeInlineLoadingOverlay();
+      }
       
       // 방 정보 새로고침
       const refreshedRoomRes = await apiGetRoom(roomCode);
@@ -1918,7 +2038,7 @@ async function joinRoomByCode(roomCode) {
       
       showToast('기존 참가 정보로 재접속했습니다', 'success');
       
-      // 모달 닫기
+      // 모달 닫기 (혹시 열려있다면)
       if (typeof closeJoinRoomModal === 'function') {
         closeJoinRoomModal();
       }
@@ -1965,9 +2085,17 @@ async function joinRoomByCode(roomCode) {
     
     console.log('✅ 방 참가 완료. 상태:', groupTrainingState);
     
+    // 로딩 숨기기
+    if (typeof hideLoading === 'function') {
+      hideLoading();
+    }
+    if (usedInlineOverlay) {
+      removeInlineLoadingOverlay();
+    }
+    
     showToast('방에 참가했습니다!', 'success');
     
-    // 모달 닫기 (훈련실 참가 모달 등)
+    // 모달 닫기 (훈련실 참가 모달 등 - 혹시 열려있다면)
     if (typeof closeJoinRoomModal === 'function') {
       closeJoinRoomModal();
     }
@@ -1975,6 +2103,11 @@ async function joinRoomByCode(roomCode) {
     const joinRoomModal = document.getElementById('joinRoomModal');
     if (joinRoomModal) {
       joinRoomModal.remove();
+    }
+    // 그룹 훈련 모달도 닫기
+    const groupTrainingModal = document.getElementById('groupTrainingModal');
+    if (groupTrainingModal) {
+      groupTrainingModal.remove();
     }
     
     // 화면 전환
@@ -1998,6 +2131,14 @@ async function joinRoomByCode(roomCode) {
   } catch (error) {
     console.error('❌ 방 참가 오류:', error);
     console.error('오류 스택:', error.stack);
+    
+    // 로딩 숨기기
+    if (typeof hideLoading === 'function') {
+      hideLoading();
+    }
+    // 인라인 오버레이 제거
+    const overlay = document.getElementById('inlineLoadingOverlay');
+    if (overlay) overlay.remove();
     
     let errorMessage = '방 참가에 실패했습니다';
     if (error.message) {
