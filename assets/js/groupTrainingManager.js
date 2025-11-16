@@ -2421,29 +2421,32 @@ function updateParticipantsList() {
       const cadence = liveData.cadence || liveData.rpm || null;
       const fmt = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : '-');
 
-      // 상단 라인에 배치할 준비 상태/버튼/접속시간
-      const readyStatusChip = `<span class="ready-chip ${p.ready ? 'ready' : 'not-ready'}" style="margin-left:8px; padding:2px 6px; border-radius:10px; font-size:11px; ${p.ready ? 'background:#1b4332; color:#95d5b2;' : 'background:#3a2a00; color:#ffd166;'}">${p.ready ? '준비완료' : '준비중'}</span>`;
-      const readyToggleInline = isMe ? `
+      // 상단 라인 배치: 좌측(이름+BT), 우측(상태/버튼/접속시간)
+      const readyStatusChip = `<span class="ready-chip ${p.ready ? 'ready' : 'not-ready'}" style="padding:2px 6px; border-radius:10px; font-size:11px; ${p.ready ? 'background:#1b4332; color:#95d5b2;' : 'background:#3a2a00; color:#ffd166;'}">${p.ready ? '준비완료' : '준비중'}</span>`;
+      const readyToggleInline = (isMe && hasBluetoothDevice) ? `
         <button class="btn btn-xs ready-toggle-inline ${p.ready ? 'ready' : ''}" 
                 id="readyToggleBtn"
-                style="margin-left:6px; padding:3px 6px; font-size:11px; border-radius:8px; ${hasBluetoothDevice ? '' : 'opacity:0.6;'}"
-                ${hasBluetoothDevice ? '' : 'disabled'}
+                style="padding:3px 6px; font-size:11px; border-radius:8px; margin-left:6px;"
                 onclick="toggleReady()">
           ${p.ready ? '✅' : '⏳'}
         </button>
       ` : '';
-      const joinTimeInline = `<span class="join-time" style="margin-left:8px; font-size:11px; color:#8a94a6;">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>`;
+      const joinTimeInline = `<span class="join-time" style="font-size:11px; color:#8a94a6; margin-left:8px;">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>`;
       
       return `
       <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
-        <div class="participant-info" style="display:flex; flex-direction:column; gap:4px;">
-          <span class="participant-name" style="display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; color:#e6f4ff; font-weight:700;">
-            ${escapeHtml(p.name)}${isMe ? ' (나)' : ''}
+        <div class="participant-info" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div class="name-left" style="display:inline-flex; align-items:center; gap:10px; min-width:0;">
+            <span class="participant-name" style="color:#000; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 60%;">
+              ${escapeHtml(p.name)}${isMe ? ' (나)' : ''}
+            </span>
             ${deviceStatusIcons}
+          </div>
+          <div class="controls-right" style="display:inline-flex; align-items:center; gap:8px;">
             ${readyStatusChip}
             ${readyToggleInline}
             ${joinTimeInline}
-          </span>
+          </div>
         </div>
 
         <!-- 하단 영역: 메트릭 표시 (하단 아이콘 제거 후 메트릭 표시로 대체) -->
@@ -2531,36 +2534,43 @@ function renderWaitingHeaderSegmentTable() {
     const workout = window.currentWorkout || {};
     const segments = Array.isArray(workout.segments) ? workout.segments : [];
 
-    // 테이블 행 구성
-    const tableRows = segments.map((seg, idx) => {
+    // 현재 세그먼트 인덱스 계산
+    const ts = window.trainingState || {};
+    const elapsed = Number(ts.elapsedSec || 0);
+    let currentIdx = -1;
+    if (segments.length > 0) {
+      let start = 0;
+      for (let i = 0; i < segments.length; i++) {
+        const segDur = Number(segments[i].duration_sec || segments[i].duration || 0);
+        const end = start + segDur;
+        if (elapsed >= start && elapsed < end) {
+          currentIdx = i;
+          break;
+        }
+        start = end;
+      }
+    }
+
+    // 보이는 5개 윈도우 선택 (현재 세그먼트부터 최대 5개)
+    const startIdx = Math.max(0, currentIdx >= 0 ? currentIdx : 0);
+    const visibleSegments = segments.slice(startIdx, startIdx + 5);
+
+    // 테이블 행 구성 (컴팩트 스타일)
+    const tableRows = visibleSegments.map((seg, localIdx) => {
+      const idx = startIdx + localIdx;
       const name = seg.name || seg.title || `세그먼트 ${idx + 1}`;
       const durationSec = Number(seg.duration_sec || seg.duration || 0);
       const targetW = Math.round(Number(seg.target_power_w || seg.targetPowerW || seg.power || 0));
       const durationStr = durationSec > 0 ? new Date(durationSec * 1000).toISOString().substr(14, 5) : '-';
 
-      // 현재 세그먼트 하이라이트
-      let isActive = false;
-      const ts = window.trainingState || {};
-      const elapsed = Number(ts.elapsedSec || 0);
-      if (elapsed >= 0 && durationSec >= 0) {
-        let start = 0;
-        for (let i = 0; i < segments.length; i++) {
-          const segDur = Number(segments[i].duration_sec || segments[i].duration || 0);
-          const end = start + segDur;
-          if (i === idx && elapsed >= start && elapsed < end) {
-            isActive = true;
-            break;
-          }
-          start = end;
-        }
-      }
+      const isActive = (idx === currentIdx);
 
       return `
         <tr style="${isActive ? 'background: rgba(76, 201, 240, 0.12);' : ''}">
-          <td style="padding:6px 8px; color:#bbb;">${idx + 1}</td>
-          <td style="padding:6px 8px; color:#fff;">${escapeHtml(String(name))}</td>
-          <td style="padding:6px 8px; color:#ffd166; text-align:right;">${isFinite(targetW) ? targetW : '-'} W</td>
-          <td style="padding:6px 8px; color:#9be564; text-align:center;">${durationStr}</td>
+          <td style="padding:4px 6px; color:#bbb;">${idx + 1}</td>
+          <td style="padding:4px 6px; color:#fff;">${escapeHtml(String(name))}</td>
+          <td style="padding:4px 6px; color:#ffd166; text-align:right;">${isFinite(targetW) ? targetW : '-'} W</td>
+          <td style="padding:4px 6px; color:#9be564; text-align:center;">${durationStr}</td>
         </tr>
       `;
     }).join('');
@@ -2572,14 +2582,14 @@ function renderWaitingHeaderSegmentTable() {
         <h3 style="margin:0; font-size:16px;">📋 ${workoutTitle} - 세그먼트</h3>
         <span style="font-size:12px; color:#888;">전체 훈련 상황 모니터링</span>
       </div>
-      <div class="segment-table-wrap" style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; font-size:12px; border:1px solid rgba(255,255,255,0.08);">
+      <div class="segment-table-wrap" style="overflow:auto; max-height:148px;">
+        <table style="width:100%; border-collapse:collapse; font-size:11px; border:1px solid rgba(255,255,255,0.08);">
           <thead>
             <tr style="background:#0b0b0b; color:#aaa; text-align:left;">
-              <th style="padding:6px 8px; width:48px;">#</th>
-              <th style="padding:6px 8px;">세그먼트</th>
-              <th style="padding:6px 8px; width:110px; text-align:right;">목표 파워</th>
-              <th style="padding:6px 8px; width:90px; text-align:center;">시간</th>
+              <th style="padding:4px 6px; width:40px;">#</th>
+              <th style="padding:4px 6px;">세그먼트</th>
+              <th style="padding:4px 6px; width:96px; text-align:right;">목표 파워</th>
+              <th style="padding:4px 6px; width:80px; text-align:center;">시간</th>
             </tr>
           </thead>
           <tbody>
