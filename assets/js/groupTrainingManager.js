@@ -1,4 +1,5 @@
-// Updated: 2025-11-16 12:00 (KST) - Change header auto-stamped per edit
+// Updated: 2025-11-16 12:30 (KST) - Change header auto-stamped per edit
+// Updated: 2025-11-16 12:45 (KST) - Show all participants' BLE status; admin start button placement
 
 /* ==========================================================
    groupTrainingManager.js - 그룹 훈련 전용 관리 모듈
@@ -2283,6 +2284,37 @@ function initializeWaitingRoom() {
       participantControls.style.display = '';
     }
   }
+
+  // 관리자일 때 참가자 컨트롤 영역에도 '훈련 시작' 버튼 노출(요청 배치에 맞춤)
+  if (groupTrainingState.isAdmin && participantControls && !participantControls.querySelector('#startTrainingBtnInline')) {
+    const inlineBtn = document.createElement('button');
+    inlineBtn.id = 'startTrainingBtnInline';
+    inlineBtn.className = 'btn btn-primary';
+    inlineBtn.style.marginLeft = '8px';
+    inlineBtn.textContent = '🚀 훈련 시작';
+    inlineBtn.onclick = async () => {
+      try {
+        // 참여자 모두 준비 완료로 정규화
+        const room = groupTrainingState.currentRoom;
+        if (room && Array.isArray(room.participants)) {
+          room.participants = room.participants.map(p => ({ ...p, ready: true }));
+        }
+        updateStartButtonState();
+        // 동시에 카운트다운 및 시작
+        if (typeof startAdminControlledCountdown === 'function') {
+          await startAdminControlledCountdown(5); // 5,4,3,2,1 카운트다운
+        } else if (typeof startGroupTraining === 'function') {
+          await startGroupTraining();
+        } else {
+          showToast('시작 함수가 없습니다', 'error');
+        }
+      } catch (e) {
+        console.error('훈련 시작 실패:', e);
+        showToast('훈련 시작에 실패했습니다', 'error');
+      }
+    };
+    participantControls.appendChild(inlineBtn);
+  }
   
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
@@ -2391,21 +2423,31 @@ function updateParticipantsList() {
     
     // 블루투스 연결 상태 확인 함수
     const getBluetoothStatus = (participantId) => {
-      if (!isCurrentUser(participantId)) {
-        // 다른 참가자는 연결 상태를 알 수 없으므로 모두 비활성으로 표시
+      // 1) 서버에 동기화된 참가자별 BLE 상태 우선 사용
+      const serverParticipant = (room.participants || []).find(pp => {
+        const pId = pp.id || pp.participantId || pp.userId;
+        return String(pId) === String(participantId);
+      }) || {};
+      const serverBle = serverParticipant.bluetoothStatus || serverParticipant.ble || serverParticipant.devices || {};
+      const sTrainer = !!(serverBle.trainer || serverBle.trainerConnected || serverBle.trainer_on);
+      const sPower = !!(serverBle.powerMeter || serverBle.powerConnected || serverBle.power_on || serverBle.powerMeter_on);
+      const sHr = !!(serverBle.heartRate || serverBle.hrConnected || serverBle.hr_on || serverBle.bpm_on);
+
+      // 2) 본인인 경우는 로컬 연결 상태로 보강
+      if (isCurrentUser(participantId)) {
+        const connectedDevices = window.connectedDevices || {};
         return {
-          trainer: false,
-          powerMeter: false,
-          heartRate: false
+          trainer: sTrainer || !!(connectedDevices.trainer && connectedDevices.trainer.device),
+          powerMeter: sPower || !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
+          heartRate: sHr || !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
         };
       }
-      
-      // 본인인 경우 실제 연결 상태 확인
-      const connectedDevices = window.connectedDevices || {};
+
+      // 3) 타인인 경우 서버 동기화 값 표시 (없으면 false)
       return {
-        trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
-        powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
-        heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
+        trainer: sTrainer,
+        powerMeter: sPower,
+        heartRate: sHr
       };
     };
     
