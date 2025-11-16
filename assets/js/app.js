@@ -2694,6 +2694,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnGroupTraining = safeGetElement("btnGroupTraining");
   if (btnGroupTraining) {
     btnGroupTraining.addEventListener("click", () => {
+      // 버튼 애니메이션 (워크아웃 선택과 유사한 눌림 효과)
+      try {
+        btnGroupTraining.style.transition = 'transform 0.15s ease';
+        btnGroupTraining.style.transform = 'scale(0.96)';
+        setTimeout(() => {
+          btnGroupTraining.style.transform = 'scale(1)';
+        }, 160);
+      } catch (_) {}
+
       console.log('Group training button clicked');
       if (typeof selectTrainingMode === 'function') {
         selectTrainingMode('group');
