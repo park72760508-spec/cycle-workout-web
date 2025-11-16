@@ -1,4 +1,4 @@
-// Updated: 2025-11-16 00:00 (KST) - Change header added for ongoing edits
+// Updated: 2025-11-16 12:00 (KST) - Change header auto-stamped per edit
 
 /* ==========================================================
    groupTrainingManager.js - 그룹 훈련 전용 관리 모듈
@@ -379,6 +379,7 @@ async function apiGetRoom(roomCode) {
     const isNetworkError = error.message?.includes('네트워크') || 
                           error.message?.includes('Network') ||
                           error.message?.includes('연결') ||
+                          error.message?.includes('시간 초과') || // timeout을 네트워크 오류로 간주
                           error.message === '네트워크 연결 오류';
     
     return { 
@@ -2182,7 +2183,8 @@ async function getRoomByCode(roomCode) {
     if (response.error === 'NETWORK_ERROR' || 
         response.error?.includes('네트워크') || 
         response.error?.includes('Network') ||
-        response.error?.includes('연결')) {
+        response.error?.includes('연결') ||
+        response.error?.includes('시간 초과')) {
       throw new Error('NETWORK_ERROR');
     }
     
@@ -2190,7 +2192,7 @@ async function getRoomByCode(roomCode) {
     if (response.error && (response.error.includes('not found') || 
                           response.error.includes('찾을 수 없') ||
                           response.error.includes('Room not found'))) {
-      return null; // 방이 실제로 삭제됨
+      return { __roomDeleted: true }; // 방이 실제로 삭제됨
     }
     
     // 기타 오류는 네트워크 오류로 간주하지 않고 null 반환 (재시도하지 않음)
@@ -2198,7 +2200,7 @@ async function getRoomByCode(roomCode) {
     return null;
   } catch (error) {
     // 네트워크 오류인 경우 재throw하여 호출자가 구분할 수 있도록
-    if (error.message === 'NETWORK_ERROR' || error.message?.includes('네트워크')) {
+    if (error.message === 'NETWORK_ERROR' || error.message?.includes('네트워크') || error.message?.includes('시간 초과')) {
       throw error;
     }
     console.error('Failed to get room:', error);
@@ -2418,15 +2420,30 @@ function updateParticipantsList() {
       const heartRate = liveData.heartRate || liveData.hr || liveData.bpm || null;
       const cadence = liveData.cadence || liveData.rpm || null;
       const fmt = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : '-');
+
+      // 상단 라인에 배치할 준비 상태/버튼/접속시간
+      const readyStatusChip = `<span class="ready-chip ${p.ready ? 'ready' : 'not-ready'}" style="margin-left:8px; padding:2px 6px; border-radius:10px; font-size:11px; ${p.ready ? 'background:#1b4332; color:#95d5b2;' : 'background:#3a2a00; color:#ffd166;'}">${p.ready ? '준비완료' : '준비중'}</span>`;
+      const readyToggleInline = isMe ? `
+        <button class="btn btn-xs ready-toggle-inline ${p.ready ? 'ready' : ''}" 
+                id="readyToggleBtn"
+                style="margin-left:6px; padding:3px 6px; font-size:11px; border-radius:8px; ${hasBluetoothDevice ? '' : 'opacity:0.6;'}"
+                ${hasBluetoothDevice ? '' : 'disabled'}
+                onclick="toggleReady()">
+          ${p.ready ? '✅' : '⏳'}
+        </button>
+      ` : '';
+      const joinTimeInline = `<span class="join-time" style="margin-left:8px; font-size:11px; color:#8a94a6;">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>`;
       
       return `
       <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
-        <div class="participant-info">
-          <span class="participant-name">
+        <div class="participant-info" style="display:flex; flex-direction:column; gap:4px;">
+          <span class="participant-name" style="display:inline-flex; align-items:center; gap:8px; flex-wrap:wrap; color:#e6f4ff; font-weight:700;">
             ${escapeHtml(p.name)}${isMe ? ' (나)' : ''}
             ${deviceStatusIcons}
+            ${readyStatusChip}
+            ${readyToggleInline}
+            ${joinTimeInline}
           </span>
-          <span class="participant-role">${p.role === 'admin' ? '🎯 관리자' : '🏃‍♂️ 참가자'}</span>
         </div>
 
         <!-- 하단 영역: 메트릭 표시 (하단 아이콘 제거 후 메트릭 표시로 대체) -->
@@ -2461,21 +2478,6 @@ function updateParticipantsList() {
               ${fmt(cadence)}<span style="font-size:12px; color:#888; margin-left:4px;">rpm</span>
             </div>
           </div>
-        </div>
-
-        <div class="participant-status">
-          <span class="ready-status ${p.ready ? 'ready' : 'not-ready'}">
-            ${p.ready ? '✅ 준비완료' : '⏳ 준비중'}
-          </span>
-          ${isMe ? `
-          <button class="btn btn-sm ready-toggle-btn ${p.ready ? 'ready' : ''}" 
-                  id="readyToggleBtn"
-                  ${hasBluetoothDevice ? '' : 'disabled'}
-                  onclick="toggleReady()">
-            ${p.ready ? '✅ 준비 완료' : '⏳ 준비 중'}
-          </button>
-          ` : ''}
-          <span class="join-time">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>
         </div>
       </div>
     `;
@@ -2774,18 +2776,19 @@ async function syncRoomData() {
     const latestRoom = await getRoomByCode(groupTrainingState.roomCode);
     
     // 성공적으로 방 정보를 가져온 경우 오류 카운터 리셋
-    if (latestRoom) {
+    if (latestRoom && !latestRoom.__roomDeleted) {
       networkErrorCount = 0;
-    } else {
-      // latestRoom이 null인 경우는 getRoomByCode에서 실제 방 삭제로 판단한 경우
-      // (네트워크 오류는 throw되므로 여기까지 오지 않음)
-      // 방이 실제로 없는 경우
-      networkErrorCount = 0; // 카운터 리셋 (실제 방 삭제는 네트워크 오류가 아님)
-      console.log('⚠️ 방을 찾을 수 없습니다. 동기화를 중지합니다.');
+    } else if (latestRoom && latestRoom.__roomDeleted) {
+      // 방이 실제로 삭제됨 → 동기화 중지 및 조용히 방 나가기
+      networkErrorCount = 0;
+      console.log('⚠️ 방이 삭제되었습니다. 동기화를 중지하고 방에서 나갑니다.');
       stopRoomSync();
       showToast('방이 삭제되었거나 찾을 수 없습니다', 'error');
-      // 방 나가기 처리 (API 호출 실패는 무시)
       await leaveGroupRoomSilently();
+      return;
+    } else {
+      // latestRoom이 null: 일시적/알 수 없는 오류 → 강제 퇴장 없이 다음 주기로 재시도
+      console.warn('⚠️ 방 정보를 일시적으로 가져오지 못했습니다. 다음 동기화에서 재시도합니다.');
       return;
     }
     
