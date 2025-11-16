@@ -955,11 +955,11 @@ async function selectTrainingMode(mode) {
       residualGroupModal.remove();
     }
 
-    // grade=2 사용자의 경우: 현재 워크아웃으로 생성된 그룹방이 있으면 자동 입장
+    // 현재 워크아웃으로 생성된 그룹방이 있으면 자동 입장 (grade=1 관리자도 동일 동작)
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     const currentWorkout = window.currentWorkout;
     
-    if (grade === '2' && currentWorkout && currentWorkout.id) {
+    if (currentWorkout && currentWorkout.id) {
       try {
         console.log('워크아웃으로 그룹방 자동 입장 시도:', currentWorkout.id);
         
@@ -1031,7 +1031,7 @@ async function selectTrainingMode(mode) {
         }
       }
     } else {
-      // grade=1이거나 워크아웃이 없으면 그룹방 화면으로 바로 이동
+      // 워크아웃이 없으면 그룹방 화면으로 바로 이동
       if (typeof showScreen === 'function') {
         showScreen('groupRoomScreen');
       }
@@ -2239,6 +2239,35 @@ function initializeWaitingRoom() {
     if (adminControls) {
       adminControls.classList.remove('hidden');
       adminControls.style.display = '';
+    }
+    // 관리자용 '전체 훈련 시작' 버튼 주입 (중복 생성 방지)
+    if (adminControls && !adminControls.querySelector('#startAllTrainingBtn')) {
+      const btn = document.createElement('button');
+      btn.id = 'startAllTrainingBtn';
+      btn.className = 'btn btn-danger';
+      btn.style.marginLeft = '8px';
+      btn.textContent = '🚀 전체 훈련 시작';
+      btn.onclick = async () => {
+        try {
+          // 모든 참가자를 준비 상태로 만들고 즉시 시작
+          const room = groupTrainingState.currentRoom;
+          if (room && Array.isArray(room.participants)) {
+            room.participants = room.participants.map(p => ({ ...p, ready: true }));
+          }
+          updateStartButtonState();
+          if (typeof startGroupTraining === 'function') {
+            await startGroupTraining(); // 기존 시작 로직 호출
+          } else if (typeof startAdminControlledCountdown === 'function') {
+            await startAdminControlledCountdown(3); // 카운트다운 3초 등
+          } else {
+            showToast('시작 함수가 없습니다', 'error');
+          }
+        } catch (e) {
+          console.error('전체 훈련 시작 실패:', e);
+          showToast('전체 훈련 시작에 실패했습니다', 'error');
+        }
+      };
+      adminControls.appendChild(btn);
     }
     if (participantControls) {
       participantControls.classList.add('hidden');
