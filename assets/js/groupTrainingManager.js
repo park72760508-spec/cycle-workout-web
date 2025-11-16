@@ -2874,6 +2874,48 @@ async function syncRoomData() {
     // 성공적으로 방 정보를 가져온 경우 오류 카운터 리셋
     if (latestRoom && !latestRoom.__roomDeleted) {
       networkErrorCount = 0;
+
+      // 참가자 라이브 데이터 조회 후 병합(모든 참가자의 화면에 실시간 반영)
+      try {
+        if (typeof apiGetParticipantsLiveData === 'function') {
+          const liveRes = await apiGetParticipantsLiveData(groupTrainingState.roomCode);
+          const liveItems = Array.isArray(liveRes?.items) ? liveRes.items : [];
+          if (Array.isArray(latestRoom.participants) && liveItems.length > 0) {
+            const idOf = (p) => String(p.id || p.participantId || p.userId || '');
+            const liveById = {};
+            liveItems.forEach(item => {
+              const pid = String(item.participantId || item.id || item.userId || '');
+              if (!pid) return;
+              liveById[pid] = item;
+            });
+            latestRoom.participants = latestRoom.participants.map(p => {
+              const pid = idOf(p);
+              const live = liveById[pid];
+              if (!live) return p;
+              // 표준화된 필드로 병합
+              const bluetoothStatus = live.bluetoothStatus || {
+                trainer: !!live.trainerConnected,
+                powerMeter: !!live.powerConnected,
+                heartRate: !!live.hrConnected
+              };
+              const metrics = {
+                segmentTargetPowerW: live.segmentTargetPowerW ?? live.targetPowerW ?? null,
+                avgPower: live.avgPower ?? live.averagePower ?? null,
+                currentPower: live.power ?? live.currentPower ?? null,
+                heartRate: live.heartRate ?? live.hr ?? null,
+                cadence: live.cadence ?? live.rpm ?? null
+              };
+              return {
+                ...p,
+                bluetoothStatus,
+                metrics
+              };
+            });
+          }
+        }
+      } catch (mergeErr) {
+        console.warn('라이브 데이터 병합 오류:', mergeErr?.message || mergeErr);
+      }
     } else if (latestRoom && latestRoom.__roomDeleted) {
       // 방이 실제로 삭제됨 → 동기화 중지 및 조용히 방 나가기
       networkErrorCount = 0;
