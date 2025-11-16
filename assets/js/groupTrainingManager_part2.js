@@ -1028,6 +1028,40 @@ async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
 }
 
 /**
+ * 참가자 실시간 데이터 조회 API (전체 방 참가자)
+ */
+async function apiGetParticipantsLiveData(roomCode) {
+  try {
+    if (!window.GAS_URL) {
+      return { success: false, error: 'GAS_URL not configured' };
+    }
+    const actionsToTry = ['getParticipantsLiveData', 'listParticipantLiveData', 'getLiveData'];
+    let last = { success: false, error: 'Unknown error' };
+    for (const action of actionsToTry) {
+      try {
+        const res = await jsonpRequest(window.GAS_URL, {
+          action,
+          roomCode: String(roomCode)
+        });
+        if (res && res.success && Array.isArray(res.items || res.list || res.data)) {
+          return {
+            success: true,
+            items: res.items || res.list || res.data
+          };
+        }
+        last = res || last;
+        if (String(last?.error || '').toLowerCase().includes('unknown')) continue;
+      } catch (inner) {
+        last = { success: false, error: inner?.message || 'request failed' };
+      }
+    }
+    return last;
+  } catch (e) {
+    return { success: false, error: e.message || 'request failed' };
+  }
+}
+
+/**
  * 훈련 화면에 모니터링 버튼 추가
  */
 function addMonitoringButton() {
