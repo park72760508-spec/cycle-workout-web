@@ -2876,11 +2876,12 @@ async function syncRoomData() {
       networkErrorCount = 0;
 
       // 참가자 라이브 데이터 조회 후 병합(모든 참가자의 화면에 실시간 반영)
+      let mergedRoom = latestRoom;
       try {
         if (typeof apiGetParticipantsLiveData === 'function') {
           const liveRes = await apiGetParticipantsLiveData(groupTrainingState.roomCode);
           const liveItems = Array.isArray(liveRes?.items) ? liveRes.items : [];
-          if (Array.isArray(latestRoom.participants) && liveItems.length > 0) {
+          if (Array.isArray(mergedRoom.participants) && liveItems.length > 0) {
             const idOf = (p) => String(p.id || p.participantId || p.userId || '');
             const liveById = {};
             liveItems.forEach(item => {
@@ -2888,7 +2889,7 @@ async function syncRoomData() {
               if (!pid) return;
               liveById[pid] = item;
             });
-            latestRoom.participants = latestRoom.participants.map(p => {
+            mergedRoom.participants = mergedRoom.participants.map(p => {
               const pid = idOf(p);
               const live = liveById[pid];
               if (!live) return p;
@@ -2916,6 +2917,43 @@ async function syncRoomData() {
       } catch (mergeErr) {
         console.warn('라이브 데이터 병합 오류:', mergeErr?.message || mergeErr);
       }
+
+      // 방 상태가 변경되었는지 확인
+      const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(groupTrainingState.currentRoom);
+
+      if (hasChanges) {
+        groupTrainingState.currentRoom = mergedRoom;
+        updateParticipantsList();
+        
+        if (window.groupTrainingHooks?.updateRoom) {
+          window.groupTrainingHooks.updateRoom({
+            ...mergedRoom,
+            code: groupTrainingState.roomCode,
+            isAdmin: !!groupTrainingState.isAdmin
+          });
+        }
+
+        // 카운트다운/훈련 시작 상태 체크
+        if (mergedRoom.status === 'starting' && !groupTrainingState.isAdmin) {
+          if (typeof checkAndSyncCountdown === 'function') {
+            checkAndSyncCountdown();
+          }
+        }
+        if (mergedRoom.status === 'training' && !groupTrainingState.isTraining) {
+          if (typeof startGroupTrainingSession === 'function') {
+            startGroupTrainingSession();
+          }
+        }
+      } else {
+        // 구조 변경이 없어도 라이브 데이터가 갱신될 수 있으므로 상태에 병합된 참가자만 반영하고 UI 갱신
+        if (groupTrainingState.currentRoom && mergedRoom?.participants) {
+          groupTrainingState.currentRoom.participants = mergedRoom.participants;
+          updateParticipantsList();
+        }
+      }
+
+      groupTrainingState.lastSyncTime = new Date();
+
     } else if (latestRoom && latestRoom.__roomDeleted) {
       // 방이 실제로 삭제됨 → 동기화 중지 및 조용히 방 나가기
       networkErrorCount = 0;
@@ -2929,38 +2967,6 @@ async function syncRoomData() {
       console.warn('⚠️ 방 정보를 일시적으로 가져오지 못했습니다. 다음 동기화에서 재시도합니다.');
       return;
     }
-    
-    // 방 상태가 변경되었는지 확인
-    const hasChanges = JSON.stringify(latestRoom) !== JSON.stringify(groupTrainingState.currentRoom);
-    
-    if (hasChanges) {
-      groupTrainingState.currentRoom = latestRoom;
-      updateParticipantsList();
-      
-      if (window.groupTrainingHooks?.updateRoom) {
-        window.groupTrainingHooks.updateRoom({
-          ...latestRoom,
-          code: groupTrainingState.roomCode,
-          isAdmin: !!groupTrainingState.isAdmin
-        });
-      }
-      
-      // 카운트다운 시작 상태 확인 (참가자용)
-      if (latestRoom.status === 'starting' && !groupTrainingState.isAdmin) {
-        if (typeof checkAndSyncCountdown === 'function') {
-          checkAndSyncCountdown();
-        }
-      }
-      
-      // 훈련 시작 상태 확인
-      if (latestRoom.status === 'training' && !groupTrainingState.isTraining) {
-        if (typeof startGroupTrainingSession === 'function') {
-          startGroupTrainingSession();
-        }
-      }
-    }
-    
-    groupTrainingState.lastSyncTime = new Date();
     
   } catch (error) {
     // 네트워크 오류인 경우
