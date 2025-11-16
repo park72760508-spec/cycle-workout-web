@@ -2285,8 +2285,9 @@ function initializeWaitingRoom() {
     }
   }
 
-  // 관리자일 때 참가자 컨트롤 영역에도 '훈련 시작' 버튼 노출(요청 배치에 맞춤)
+  // 관리자일 때 참가자 컨트롤 영역의 "방 나가기" 버튼 옆에 '훈련 시작' 버튼 배치
   if (groupTrainingState.isAdmin && participantControls && !participantControls.querySelector('#startTrainingBtnInline')) {
+    const leaveBtn = participantControls.querySelector("button[onclick='leaveGroupRoom()']");
     const inlineBtn = document.createElement('button');
     inlineBtn.id = 'startTrainingBtnInline';
     inlineBtn.className = 'btn btn-primary';
@@ -2294,15 +2295,13 @@ function initializeWaitingRoom() {
     inlineBtn.textContent = '🚀 훈련 시작';
     inlineBtn.onclick = async () => {
       try {
-        // 참여자 모두 준비 완료로 정규화
         const room = groupTrainingState.currentRoom;
         if (room && Array.isArray(room.participants)) {
           room.participants = room.participants.map(p => ({ ...p, ready: true }));
         }
         updateStartButtonState();
-        // 동시에 카운트다운 및 시작
         if (typeof startAdminControlledCountdown === 'function') {
-          await startAdminControlledCountdown(5); // 5,4,3,2,1 카운트다운
+          await startAdminControlledCountdown(5);
         } else if (typeof startGroupTraining === 'function') {
           await startGroupTraining();
         } else {
@@ -2313,7 +2312,11 @@ function initializeWaitingRoom() {
         showToast('훈련 시작에 실패했습니다', 'error');
       }
     };
-    participantControls.appendChild(inlineBtn);
+    if (leaveBtn && leaveBtn.parentNode === participantControls) {
+      participantControls.insertBefore(inlineBtn, leaveBtn.nextSibling);
+    } else {
+      participantControls.appendChild(inlineBtn);
+    }
   }
   
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
