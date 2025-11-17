@@ -130,16 +130,17 @@ function normalizeRoomData(raw) {
 }
 
    
+const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn'];
+
 /**
  * 안전한 요소 접근
  */
 function safeGet(id) {
   const element = document.getElementById(id);
   if (!element) {
-    // roomWorkoutSelect의 경우 더 친화적인 메시지 출력
     if (id === 'roomWorkoutSelect') {
       console.log(`🔍 ${id} 요소를 찾는 중... (동적 생성 예정)`);
-    } else {
+    } else if (!SAFEGET_SUPPRESSED_IDS.includes(id)) {
       console.warn(`Element not found: ${id}`);
     }
   }
@@ -2727,12 +2728,18 @@ function renderWaitingHeaderSegmentTable() {
         </div>
         <div class="workout-timers">
           <div class="workout-timer elapsed">
-            <span class="timer-label">경과 시간</span>
-            <span class="timer-value">${elapsedTimer}</span>
+            <div class="timer-icon">⏱️</div>
+            <div class="timer-content">
+              <span class="timer-label">경과 시간</span>
+              <span class="timer-value">${elapsedTimer}</span>
+            </div>
           </div>
           <div class="workout-timer segment">
-            <span class="timer-label">세그먼트 카운트다운</span>
-            <span class="timer-value">${segmentTimer}</span>
+            <div class="timer-icon">⏳</div>
+            <div class="timer-content">
+              <span class="timer-label">세그먼트 카운트다운</span>
+              <span class="timer-value">${segmentTimer}</span>
+            </div>
           </div>
         </div>
         <div class="workout-table-wrapper">
