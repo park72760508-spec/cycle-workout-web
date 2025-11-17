@@ -2685,10 +2685,7 @@ function renderWaitingHeaderSegmentTable() {
       return `
         <tr class="${isActive ? 'active' : ''}">
           <td class="seg-col-index"><span class="seg-index-badge">${idx + 1}</span></td>
-          <td class="seg-col-label">
-            <span class="seg-label">${escapeHtml(String(label))}</span>
-            <span class="seg-sub">${durationStr}</span>
-          </td>
+          <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
           <td class="seg-col-type"><span class="seg-type">${segType}</span></td>
           <td class="seg-col-ftp">${Number.isFinite(ftp) ? `${ftp}<small class="unit">%</small>` : '-'}</td>
           <td class="seg-col-duration">${durationStr}</td>
