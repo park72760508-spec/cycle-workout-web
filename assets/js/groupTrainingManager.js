@@ -2640,6 +2640,8 @@ function renderWaitingHeaderSegmentTable() {
     const ts = window.trainingState || {};
     const elapsed = Number(ts.elapsedSec || 0);
     let currentIdx = -1;
+    let currentSegStart = 0;
+    let currentSegRemaining = null;
     if (segments.length > 0) {
       let start = 0;
       for (let i = 0; i < segments.length; i++) {
@@ -2647,6 +2649,9 @@ function renderWaitingHeaderSegmentTable() {
         const end = start + segDur;
         if (elapsed >= start && elapsed < end) {
           currentIdx = i;
+          currentSegStart = start;
+          const segElapsed = Math.max(0, elapsed - start);
+          currentSegRemaining = Math.max(0, segDur - segElapsed);
           break;
         }
         start = end;
@@ -2660,6 +2665,22 @@ function renderWaitingHeaderSegmentTable() {
       const s = Math.floor(value % 60).toString().padStart(2, '0');
       return `${m}:${s}`;
     };
+
+    const formatTimer = (sec) => {
+      const value = Number(sec);
+      if (!Number.isFinite(value) || value < 0) return '--:--';
+      const total = Math.max(0, Math.floor(value));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const seconds = total % 60;
+      if (hours > 0) {
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    const elapsedTimer = formatTimer(elapsed);
+    const segmentTimer = currentIdx >= 0 ? formatTimer(currentSegRemaining) : '--:--';
 
     const tableRows = segments.map((seg, idx) => {
       const label = seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`;
@@ -2702,6 +2723,16 @@ function renderWaitingHeaderSegmentTable() {
           </div>
           <div class="workout-status-pill ${currentIdx >= 0 ? 'is-live' : ''}">
             ${currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중'}
+          </div>
+        </div>
+        <div class="workout-timers">
+          <div class="workout-timer elapsed">
+            <span class="timer-label">경과 시간</span>
+            <span class="timer-value">${elapsedTimer}</span>
+          </div>
+          <div class="workout-timer segment">
+            <span class="timer-label">세그먼트 카운트다운</span>
+            <span class="timer-value">${segmentTimer}</span>
           </div>
         </div>
         <div class="workout-table-wrapper">
