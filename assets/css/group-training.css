@@ -644,6 +644,159 @@
   font-style: italic;
 }
 
+/* 워크아웃 세그먼트 테이블 */
+.workout-table-card {
+  background: rgba(12, 16, 28, 0.9);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 16px;
+  margin-top: 16px;
+  backdrop-filter: blur(6px);
+}
+
+.workout-table-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12-incpx;
+  gap: 12px;
+}
+
+.workout-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.workout-title .icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 230, 109, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.workout-title h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #f8f9ff;
+}
+
+.workout-title p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.workout-status-pill {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.workout-status-pill.is-live {
+  background: rgba(76, 201, 240, 0.2);
+  color: #4cc9f0;
+}
+
+.workout-table-wrapper {
+  max-height: 200px;
+  overflow-y: auto;
+  border-radius: 10px;
+}
+
+.workout-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #f5f7ff;
+}
+
+.workout-table thead {
+  background: rgba(255,255,255,0.03);
+}
+
+.workout-table th {
+  padding: 10px;
+  text-align: left;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.6);
+}
+
+.workout-table td {
+  padding: 10px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.workout-table tbody tr.active {
+  background: rgba(76, 201, 240, 0.12);
+}
+
+.workout-table .seg-index-badge {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.1);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.workout-table .seg-label {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.workout-table .seg-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.5);
+  margin-top: 2px;
+}
+
+.workout-table .seg-type {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.workout-table .seg-col-ftp {
+  text-align: right;
+  font-weight: 600;
+  color: #ffd166;
+}
+
+.workout-table .seg-col-duration {
+  text-align: center;
+  color: #9be564;
+  font-weight: 600;
+}
+
+.workout-table .unit {
+  font-size: 10px;
+  margin-left: 4px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.empty-segment {
+  text-align: center;
+  padding: 16px;
+  color: rgba(255,255,255,0.6);
+}
+
 .bluetooth-devices {
   display: flex;
   gap: 12px;
