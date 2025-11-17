@@ -2652,26 +2652,46 @@ function renderWaitingHeaderSegmentTable() {
       }
     }
 
-    // 보이는 5개 윈도우 선택 (현재 세그먼트부터 최대 5개)
-    const startIdx = Math.max(0, currentIdx >= 0 ? currentIdx : 0);
-    const visibleSegments = segments.slice(startIdx, startIdx + 5);
+    const windowSize = 5;
+    const centerIndex = currentIdx >= 0 ? currentIdx : 0;
+    const startIdx = Math.max(0, centerIndex - Math.floor(windowSize / 2));
+    const visibleSegments = segments.slice(startIdx, startIdx + windowSize);
 
-    // 테이블 행 구성 (컴팩트 스타일)
+    const formatDuration = (sec) => {
+      const value = Number(sec || 0);
+      if (!Number.isFinite(value) || value <= 0) return '-';
+      const m = Math.floor(value / 60).toString().padStart(2, '0');
+      const s = Math.floor(value % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    };
+
     const tableRows = visibleSegments.map((seg, localIdx) => {
       const idx = startIdx + localIdx;
-      const name = seg.name || seg.title || `세그먼트 ${idx + 1}`;
-      const durationSec = Number(seg.duration_sec || seg.duration || 0);
-      const targetW = Math.round(Number(seg.target_power_w || seg.targetPowerW || seg.power || 0));
-      const durationStr = durationSec > 0 ? new Date(durationSec * 1000).toISOString().substr(14, 5) : '-';
-
-      const isActive = (idx === currentIdx);
+      const label = seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`;
+      const segType = (seg.segment_type || seg.type || '-').toString().toUpperCase();
+      const ftp = Math.round(Number(
+        seg.target_value ??
+        seg.targetValue ??
+        seg.target ??
+        seg.target_power_w ??
+        seg.targetPowerW ??
+        seg.target_power ??
+        seg.intensity ??
+        0
+      ));
+      const durationStr = formatDuration(seg.duration_sec ?? seg.duration);
+      const isActive = idx === currentIdx;
 
       return `
-        <tr style="${isActive ? 'background: rgba(76, 201, 240, 0.12);' : ''}">
-          <td style="padding:4px 6px; color:#bbb;">${idx + 1}</td>
-          <td style="padding:4px 6px; color:#fff;">${escapeHtml(String(name))}</td>
-          <td style="padding:4px 6px; color:#ffd166; text-align:right;">${isFinite(targetW) ? targetW : '-'} W</td>
-          <td style="padding:4px 6px; color:#9be564; text-align:center;">${durationStr}</td>
+        <tr class="${isActive ? 'active' : ''}">
+          <td class="seg-col-index"><span class="seg-index-badge">${idx + 1}</span></td>
+          <td class="seg-col-label">
+            <span class="seg-label">${escapeHtml(String(label))}</span>
+            <span class="seg-sub">${durationStr}</span>
+          </td>
+          <td class="seg-col-type"><span class="seg-type">${segType}</span></td>
+          <td class="seg-col-ftp">${Number.isFinite(ftp) ? `${ftp}<small class="unit">%</small>` : '-'}</td>
+          <td class="seg-col-duration">${durationStr}</td>
         </tr>
       `;
     }).join('');
@@ -2679,24 +2699,35 @@ function renderWaitingHeaderSegmentTable() {
     const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
 
     roomInfoCard.innerHTML = `
-      <div class="segment-table-header" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-        <h3 style="margin:0; font-size:16px;">📋 ${workoutTitle} - 세그먼트</h3>
-        <span style="font-size:12px; color:#888;">전체 훈련 상황 모니터링</span>
-      </div>
-      <div class="segment-table-wrap" style="overflow:auto; max-height:148px;">
-        <table style="width:100%; border-collapse:collapse; font-size:11px; border:1px solid rgba(255,255,255,0.08);">
-          <thead>
-            <tr style="background:#0b0b0b; color:#aaa; text-align:left;">
-              <th style="padding:4px 6px; width:40px;">#</th>
-              <th style="padding:4px 6px;">세그먼트</th>
-              <th style="padding:4px 6px; width:96px; text-align:right;">목표 파워</th>
-              <th style="padding:4px 6px; width:80px; text-align:center;">시간</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tableRows || ''}
-          </tbody>
-        </table>
+      <div class="workout-table-card">
+        <div class="workout-table-head">
+          <div class="workout-title">
+            <span class="icon">📋</span>
+            <div>
+              <h3>${workoutTitle}</h3>
+              <p>${segments.length || 0}개 세그먼트 • 실시간 진행 상황</p>
+            </div>
+          </div>
+          <div class="workout-status-pill ${currentIdx >= 0 ? 'is-live' : ''}">
+            ${currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중'}
+          </div>
+        </div>
+        <div class="workout-table-wrapper">
+          <table class="workout-table">
+            <thead>
+              <tr>
+                <th class="col-index">#</th>
+                <th>세그먼트명</th>
+                <th>세그먼트 타입</th>
+                <th>FTP 강도</th>
+                <th>시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${tableRows || '<tr><td colspan="5" class="empty-segment">등록된 세그먼트가 없습니다.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
       </div>
     `;
   } catch (error) {
