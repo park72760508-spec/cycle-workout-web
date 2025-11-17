@@ -1,3 +1,5 @@
+// Updated: 2025-11-16 12:30 (KST) - Change header auto-stamped per edit
+
 /* ==========================================================
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
@@ -1372,6 +1374,9 @@ const segBar = {
   sumPower: [],    // 세그먼트별 평균 파워 계산용 합
   samples: [],     // 세그먼트별 표본 수(초)
 };
+
+// 전역에서 접근 가능하도록 window에 노출 (그룹 훈련 실시간 데이터 동기화용)
+window.segBar = segBar;
 
 // 초 → "m분" 짧은 표기
 function secToMinShort(sec){ return `${Math.floor((sec||0)/60)}분`; }
