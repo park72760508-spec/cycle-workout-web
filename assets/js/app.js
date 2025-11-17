@@ -2079,6 +2079,10 @@ function stopSegmentLoop() {
      window.trainingState = window.trainingState || {};
      window.trainingState.isRunning = false;   // 훈련 상태 off
    
+     if (typeof window.updateGroupTrainingControlButtons === "function") {
+       window.updateGroupTrainingControlButtons();
+     }
+
      if (typeof ScreenAwake !== "undefined" && ScreenAwake.release) {
        ScreenAwake.release();                  // 화면 항상 켜짐 해제(원복)
      } else {
@@ -2121,6 +2125,10 @@ function setPaused(isPaused) {
     btn.setAttribute("aria-label", wantPause ? "재생" : "일시정지");
   }
   showToast?.(wantPause ? "일시정지됨" : "재개됨");
+
+  if (typeof window.updateGroupTrainingControlButtons === "function") {
+    window.updateGroupTrainingControlButtons();
+  }
 }
 
 
@@ -2514,6 +2522,10 @@ function startWorkoutTraining() {
       } else {
         console.warn("[ScreenAwake] util not found or acquire missing");
       }
+
+  if (typeof window.updateGroupTrainingControlButtons === "function") {
+    window.updateGroupTrainingControlButtons();
+  }
       /* ⬆⬆⬆ A) 훈련 시작 지점 — 여기까지 ⬆⬆⬆ */
 
      
