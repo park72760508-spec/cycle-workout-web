@@ -1,3 +1,5 @@
+// Updated: 2025-11-16 12:00 (KST) - Change header auto-stamped per edit
+
 /**
  * Group Training System - 그룹 훈련 시스템 (assets/js/training.js)
  * 실시간 그룹 훈련, 관리자 모니터링, WebRTC 음성 통신 기능
@@ -581,17 +583,6 @@ function showTrainingRoom() {
             </div>
           </div>
         ` : ''}
-        
-        <!-- 채팅/메시지 -->
-        <div class="chat-section">
-          <h3>💬 메시지</h3>
-          <div id="chatMessages" class="chat-messages">
-            <div class="chat-message system">
-              <span class="timestamp">${formatTime(new Date())}</span>
-              <span class="message">훈련실에 입장했습니다</span>
-            </div>
-          </div>
-        </div>
         
         <!-- 하단 버튼 -->
         <div class="room-actions">
