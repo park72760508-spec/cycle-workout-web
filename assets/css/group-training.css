@@ -737,6 +737,11 @@
   border-top: 1px solid rgba(255,255,255,0.05);
 }
 
+.workout-table th.col-ftp,
+.workout-table th.col-duration {
+  text-align: center;
+}
+
 .workout-table tbody tr.active {
   background: rgba(76, 201, 240, 0.12);
 }
