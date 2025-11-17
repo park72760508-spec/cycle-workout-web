@@ -401,6 +401,32 @@
   margin-bottom: 20px;
 }
 
+.participants-list.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 520px;
+}
+
+.participants-list.card #participantsList {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.participants-list.card #participantsList .participant-table-wrapper {
+  flex: 1;
+  max-height: none;
+  overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+  .participants-list.card {
+    max-height: none;
+  }
+}
+
 .participants-list h3 {
   display: flex;
   align-items: center;
@@ -706,6 +732,51 @@
   color: #4cc9f0;
 }
 
+.workout-timers {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  margin: 12px 0 18px;
+}
+
+.workout-timer {
+  text-align: center;
+  min-width: 150px;
+}
+
+.workout-timer .timer-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.workout-timer .timer-value {
+  display: block;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.workout-timer.elapsed .timer-value {
+  color: #2dd4bf;
+  text-shadow: 0 0 12px rgba(45, 212, 191, 0.45);
+}
+
+.workout-timer.segment .timer-value {
+  color: #fb923c;
+  text-shadow: 0 0 12px rgba(251, 146, 60, 0.45);
+}
+
+@media (max-width: 640px) {
+  .workout-timers {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
 .workout-table-wrapper {
   max-height: 200px;
   overflow-y: auto;
@@ -730,6 +801,11 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: rgba(255,255,255,0.6);
+  position: sticky;
+  top: 0;
+  background: rgba(12, 16, 28, 0.95);
+  backdrop-filter: blur(6px);
+  z-index: 1;
 }
 
 .workout-table td {
@@ -1152,101 +1228,7 @@
   color: #2e74e8;
 }
 
-/* ========== [6] 채팅 시스템 ========== */
-
-.group-chat {
-  margin-top: 20px;
-}
-
-.chat-messages {
-  height: 200px;
-  overflow-y: auto;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  padding: 16px;
-  background: #f8f9fa;
-  margin-bottom: 12px;
-  scroll-behavior: smooth;
-}
-
-.chat-message {
-  margin-bottom: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  position: relative;
-  animation: messageSlideIn 0.3s ease;
-}
-
-@keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.chat-message.chat {
-  background: white;
-  border-left: 3px solid #2e74e8;
-}
-
-.chat-message.coaching {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-  border-left: 3px solid #ffc107;
-}
-
-.chat-from {
-  font-weight: 600;
-  font-size: 14px;
-  color: #2c3e50;
-  margin-right: 8px;
-}
-
-.chat-text {
-  font-size: 14px;
-  color: #495057;
-}
-
-.chat-time {
-  font-size: 11px;
-  color: #6c757d;
-  position: absolute;
-  right: 8px;
-  top: 8px;
-}
-
-.chat-input {
-  display: flex;
-  gap: 8px;
-}
-
-.chat-input input {
-  flex: 1;
-  padding: 10px 12px;
-  border: 1px solid #e9ecef;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.chat-input button {
-  padding: 10px 16px;
-  background: #2e74e8;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s ease;
-}
-
-.chat-input button:hover {
-  background: #2562c8;
-}
-
-/* ========== [7] 마이크 및 코칭 기능 ========== */
+/* ========== [6] 마이크 및 코칭 기능 ========== */
 
 .coaching-section {
   background: rgba(255, 255, 255, 0.1);
@@ -1419,10 +1401,6 @@
   .room-code strong {
     font-size: 16px;
     padding: 6px 12px;
-  }
-  
-  .chat-messages {
-    height: 150px;
   }
 }
 
@@ -1888,31 +1866,26 @@
 }
 
 /* 스크롤 성능 최적화 */
-.chat-messages,
 .rooms-list,
 .monitoring-participants {
   scrollbar-width: thin;
   scrollbar-color: #cbd5e0 #f7fafc;
 }
 
-.chat-messages::-webkit-scrollbar,
 .rooms-list::-webkit-scrollbar {
   width: 6px;
 }
 
-.chat-messages::-webkit-scrollbar-track,
 .rooms-list::-webkit-scrollbar-track {
   background: #f7fafc;
   border-radius: 3px;
 }
 
-.chat-messages::-webkit-scrollbar-thumb,
 .rooms-list::-webkit-scrollbar-thumb {
   background: #cbd5e0;
   border-radius: 3px;
 }
 
-.chat-messages::-webkit-scrollbar-thumb:hover,
 .rooms-list::-webkit-scrollbar-thumb:hover {
   background: #a0aec0;
 }
@@ -1955,16 +1928,6 @@
     color: #e2e8f0;
   }
   
-  .chat-messages {
-    background: #2d3748;
-    border-color: #4a5568;
-  }
-  
-  .chat-message {
-    background: #4a5568;
-    color: #e2e8f0;
-  }
-  
   .metric {
     background: #4a5568;
     color: #e2e8f0;
@@ -1982,8 +1945,7 @@
 /* 인쇄 스타일 */
 @media print {
   .group-monitoring-overlay,
-  .coaching-section,
-  .chat-input {
+  .coaching-section {
     display: none !important;
   }
   
