@@ -1,5 +1,6 @@
 // Updated: 2025-11-16 12:30 (KST) - Change header auto-stamped per edit
 // Updated: 2025-11-16 12:45 (KST) - Show all participants' BLE status; admin start button placement
+// Updated: 2025-11-17 15:02 (KST) - 다른 사용자 상태 동기화 개선 (블루투스 상태, 메트릭 실시간 반영)
 
 /* ==========================================================
    groupTrainingManager.js - 그룹 훈련 전용 관리 모듈
@@ -2436,10 +2437,29 @@ function updateParticipantsList() {
         const pId = pp.id || pp.participantId || pp.userId;
         return String(pId) === String(participantId);
       }) || {};
+      
+      // 다양한 필드명 지원 (bluetoothStatus 우선, 그 다음 별칭 필드들)
       const serverBle = serverParticipant.bluetoothStatus || serverParticipant.ble || serverParticipant.devices || {};
-      const sTrainer = !!(serverBle.trainer || serverBle.trainerConnected || serverBle.trainer_on);
-      const sPower = !!(serverBle.powerMeter || serverBle.powerConnected || serverBle.power_on || serverBle.powerMeter_on);
-      const sHr = !!(serverBle.heartRate || serverBle.hrConnected || serverBle.hr_on || serverBle.bpm_on);
+      const sTrainer = !!(serverBle.trainer || 
+                         serverBle.trainerConnected || 
+                         serverParticipant.trainerConnected ||
+                         serverBle.trainer_on);
+      const sPower = !!(serverBle.powerMeter || 
+                       serverBle.powerMeterConnected ||
+                       serverBle.powerConnected || 
+                       serverParticipant.powerConnected ||
+                       serverParticipant.powerMeterConnected ||
+                       serverBle.power || 
+                       serverBle.power_on || 
+                       serverBle.powerMeter_on);
+      const sHr = !!(serverBle.heartRate || 
+                    serverBle.heartRateConnected ||
+                    serverBle.hrConnected || 
+                    serverParticipant.hrConnected ||
+                    serverParticipant.heartRateConnected ||
+                    serverBle.hr || 
+                    serverBle.hr_on || 
+                    serverBle.bpm_on);
 
       // 2) 본인인 경우는 로컬 연결 상태로 보강
       if (isCurrentUser(participantId)) {
@@ -2452,11 +2472,23 @@ function updateParticipantsList() {
       }
 
       // 3) 타인인 경우 서버 동기화 값 표시 (없으면 false)
-      return {
+      const result = {
         trainer: sTrainer,
         powerMeter: sPower,
         heartRate: sHr
       };
+      
+      // 디버깅: 타인의 블루투스 상태 확인 (연결된 기기가 있을 때만)
+      if (sTrainer || sPower || sHr) {
+        console.log(`🔌 타인 ${serverParticipant.name || participantId} 블루투스 상태:`, result, '서버 데이터:', {
+          bluetoothStatus: serverParticipant.bluetoothStatus,
+          trainerConnected: serverParticipant.trainerConnected,
+          powerMeterConnected: serverParticipant.powerMeterConnected,
+          heartRateConnected: serverParticipant.heartRateConnected
+        });
+      }
+      
+      return result;
     };
     
     listEl.innerHTML = normalizedParticipants.map(p => {
@@ -2881,6 +2913,12 @@ async function syncRoomData() {
         if (typeof apiGetParticipantsLiveData === 'function') {
           const liveRes = await apiGetParticipantsLiveData(groupTrainingState.roomCode);
           const liveItems = Array.isArray(liveRes?.items) ? liveRes.items : [];
+          
+          // 디버깅: 라이브 데이터 수신 확인
+          if (liveItems.length > 0) {
+            console.log(`📊 라이브 데이터 수신: ${liveItems.length}명의 참가자 데이터`, liveItems);
+          }
+          
           if (Array.isArray(mergedRoom.participants) && liveItems.length > 0) {
             const idOf = (p) => String(p.id || p.participantId || p.userId || '');
             const liveById = {};
@@ -2893,24 +2931,41 @@ async function syncRoomData() {
               const pid = idOf(p);
               const live = liveById[pid];
               if (!live) return p;
-              // 표준화된 필드로 병합
+              
+              // 블루투스 상태 병합 (다양한 필드명 지원)
               const bluetoothStatus = live.bluetoothStatus || {
-                trainer: !!live.trainerConnected,
-                powerMeter: !!live.powerConnected,
-                heartRate: !!live.hrConnected
+                trainer: !!(live.trainerConnected || live.trainer || live.trainer_on),
+                powerMeter: !!(live.powerMeterConnected || live.powerConnected || live.powerMeter || live.power || live.power_on || live.powerMeter_on),
+                heartRate: !!(live.heartRateConnected || live.hrConnected || live.heartRate || live.hr || live.hr_on || live.bpm_on)
               };
+              
+              // 메트릭 병합 (다양한 필드명 지원)
               const metrics = {
-                segmentTargetPowerW: live.segmentTargetPowerW ?? live.targetPowerW ?? null,
-                avgPower: live.avgPower ?? live.averagePower ?? null,
-                currentPower: live.power ?? live.currentPower ?? null,
-                heartRate: live.heartRate ?? live.hr ?? null,
-                cadence: live.cadence ?? live.rpm ?? null
+                segmentTargetPowerW: live.segmentTargetPowerW ?? live.targetPowerW ?? live.segmentTargetPower ?? null,
+                segmentAvgPowerW: live.segmentAvgPowerW ?? live.segmentAvgPower ?? null,
+                currentPower: live.power ?? live.currentPowerW ?? live.currentPower ?? live.instantPower ?? null,
+                avgPower: live.avgPower ?? live.overallAvgPowerW ?? live.averagePower ?? live.avgPowerW ?? null,
+                heartRate: live.heartRate ?? live.hr ?? live.bpm ?? null,
+                cadence: live.cadence ?? live.rpm ?? null,
+                progress: live.progress ?? null,
+                segmentIndex: live.segmentIndex ?? null
               };
-              return {
+              
+              const mergedParticipant = {
                 ...p,
                 bluetoothStatus,
-                metrics
+                metrics,
+                // 호환성을 위한 별칭 필드도 유지
+                live: metrics,
+                liveData: metrics
               };
+              
+              // 디버깅: 병합된 참가자 데이터 확인
+              if (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate) {
+                console.log(`🔌 참가자 ${p.name} (${pid}) 블루투스 상태 병합:`, bluetoothStatus);
+              }
+              
+              return mergedParticipant;
             });
           }
         }
@@ -2946,8 +3001,17 @@ async function syncRoomData() {
         }
       } else {
         // 구조 변경이 없어도 라이브 데이터가 갱신될 수 있으므로 상태에 병합된 참가자만 반영하고 UI 갱신
+        // 항상 UI를 갱신하여 실시간 데이터 반영 (블루투스 상태, 메트릭 등)
         if (groupTrainingState.currentRoom && mergedRoom?.participants) {
           groupTrainingState.currentRoom.participants = mergedRoom.participants;
+          updateParticipantsList(); // 강제 UI 갱신
+        } else if (mergedRoom?.participants) {
+          // currentRoom이 없어도 participants만 있으면 UI 갱신
+          if (!groupTrainingState.currentRoom) {
+            groupTrainingState.currentRoom = mergedRoom;
+          } else {
+            groupTrainingState.currentRoom.participants = mergedRoom.participants;
+          }
           updateParticipantsList();
         }
       }
