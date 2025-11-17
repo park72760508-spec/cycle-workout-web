@@ -2708,10 +2708,10 @@ function renderWaitingHeaderSegmentTable() {
             <thead>
               <tr>
                 <th class="col-index">#</th>
-                <th>세그먼트명</th>
-                <th>세그먼트 타입</th>
-                <th>FTP 강도</th>
-                <th>시간</th>
+                <th class="col-label">세그먼트명</th>
+                <th class="col-type">세그먼트 타입</th>
+                <th class="col-ftp">FTP 강도</th>
+                <th class="col-duration">시간</th>
               </tr>
             </thead>
             <tbody>
