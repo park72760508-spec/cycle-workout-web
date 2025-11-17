@@ -2322,6 +2322,7 @@ function initializeWaitingRoom() {
   
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
+  setupGroupTrainingControlBar();
   
   // 대기실에서도 참가자 실시간 데이터 업로드 시작(관리자 포함)
   if (typeof startParticipantDataSync === 'function') {
