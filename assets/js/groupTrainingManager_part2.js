@@ -148,6 +148,164 @@ async function toggleReady() {
 }
 
 /**
+ * 그룹 훈련 컨트롤 바 초기화
+ */
+function setupGroupTrainingControlBar() {
+  const bar = document.getElementById('groupTrainingControlBar');
+  if (!bar) return;
+
+  if (!groupTrainingState.isAdmin) {
+    bar.classList.add('hidden');
+    return;
+  }
+
+  bar.classList.remove('hidden');
+
+  const skipBtn = document.getElementById('groupSkipSegmentBtn');
+  const toggleBtn = document.getElementById('groupToggleTrainingBtn');
+  const stopBtn = document.getElementById('groupStopTrainingBtn');
+
+  if (skipBtn && !skipBtn.dataset.bound) {
+    skipBtn.addEventListener('click', handleGroupSegmentSkip);
+    skipBtn.dataset.bound = '1';
+  }
+  if (toggleBtn && !toggleBtn.dataset.bound) {
+    toggleBtn.addEventListener('click', handleGroupTrainingToggle);
+    toggleBtn.dataset.bound = '1';
+  }
+  if (stopBtn && !stopBtn.dataset.bound) {
+    stopBtn.addEventListener('click', handleGroupTrainingStop);
+    stopBtn.dataset.bound = '1';
+  }
+
+  updateGroupTrainingControlButtons();
+}
+
+/**
+ * 그룹 훈련: 세그먼트 건너뛰기
+ */
+function handleGroupSegmentSkip() {
+  if (!groupTrainingState.isAdmin) {
+    showToast('관리자만 사용할 수 있습니다', 'error');
+    return;
+  }
+
+  const trainingState = window.trainingState || {};
+  if (!trainingState.isRunning) {
+    showToast('진행 중인 훈련이 없습니다', 'warning');
+    return;
+  }
+
+  if (typeof skipCurrentSegment === 'function') {
+    skipCurrentSegment();
+  } else {
+    showToast('세그먼트를 건너뛸 수 없습니다', 'error');
+  }
+}
+
+/**
+ * 그룹 훈련: 시작 / 일시정지 토글
+ */
+async function handleGroupTrainingToggle() {
+  if (!groupTrainingState.isAdmin) {
+    showToast('관리자만 사용할 수 있습니다', 'error');
+    return;
+  }
+
+  const trainingState = window.trainingState || {};
+
+  if (!trainingState.isRunning) {
+    if (typeof startGroupTraining === 'function') {
+      await startGroupTraining();
+    } else if (typeof startWorkoutTraining === 'function') {
+      startWorkoutTraining();
+    } else {
+      showToast('훈련을 시작할 수 없습니다', 'error');
+    }
+    return;
+  }
+
+  if (typeof togglePause === 'function') {
+    togglePause();
+  } else if (typeof setPaused === 'function') {
+    setPaused(!trainingState.paused);
+  } else {
+    showToast('일시정지 기능을 찾을 수 없습니다', 'error');
+  }
+
+  updateGroupTrainingControlButtons();
+}
+
+/**
+ * 그룹 훈련: 강제 종료
+ */
+function handleGroupTrainingStop() {
+  if (!groupTrainingState.isAdmin) {
+    showToast('관리자만 사용할 수 있습니다', 'error');
+    return;
+  }
+
+  const trainingState = window.trainingState || {};
+  if (!trainingState.isRunning) {
+    showToast('진행 중인 훈련이 없습니다', 'warning');
+    return;
+  }
+
+  const confirmed = confirm('정말 훈련을 종료하시겠습니까?\n현재 진행 중인 세션이 종료됩니다.');
+  if (!confirmed) return;
+
+  if (typeof stopSegmentLoop === 'function') {
+    stopSegmentLoop();
+  } else {
+    showToast('훈련 종료 기능을 찾을 수 없습니다', 'error');
+  }
+
+  updateGroupTrainingControlButtons();
+}
+
+/**
+ * 그룹 컨트롤 버튼 상태 갱신 (전역 노출)
+ */
+function updateGroupTrainingControlButtons() {
+  const toggleBtn = document.getElementById('groupToggleTrainingBtn');
+  const skipBtn = document.getElementById('groupSkipSegmentBtn');
+  const stopBtn = document.getElementById('groupStopTrainingBtn');
+  const trainingState = window.trainingState || {};
+  const running = !!trainingState.isRunning;
+  const paused = !!trainingState.paused;
+
+  if (toggleBtn) {
+    toggleBtn.classList.remove('play', 'pause');
+    let ariaLabel = '훈련 시작';
+
+    if (!running) {
+      toggleBtn.classList.add('play');
+      ariaLabel = '훈련 시작';
+    } else if (paused) {
+      toggleBtn.classList.add('play');
+      ariaLabel = '훈련 재개';
+    } else {
+      toggleBtn.classList.add('pause');
+      ariaLabel = '훈련 일시정지';
+    }
+
+    toggleBtn.setAttribute('aria-label', ariaLabel);
+  }
+
+  if (skipBtn) {
+    skipBtn.disabled = !running;
+    skipBtn.title = running ? '' : '훈련이 시작되면 활성화됩니다';
+  }
+
+  if (stopBtn) {
+    stopBtn.disabled = !running;
+    stopBtn.title = running ? '훈련을 강제 종료합니다' : '훈련이 시작되면 활성화됩니다';
+  }
+}
+
+window.updateGroupTrainingControlButtons = updateGroupTrainingControlButtons;
+
+/**
  * 훈련 화면으로 전환 (타이머는 멈춘 상태로 시작)
  */
 async function moveToTrainingScreenWithPausedTimer() {
