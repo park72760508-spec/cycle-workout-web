@@ -425,16 +425,14 @@
 <!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
   <div id="authScreen" class="screen">
     <div class="auth-main-container">
-    
-      <div class="auth-form-container">
-
-  
-        <div class="auth-form-card">
-
+      <div class="auth-hero-section">
         <div class="auth-hero-icon">
           <img src="assets/img/title.jpg" alt="AI 트레이닝 대시보드" class="hero-image">
         </div>
-          
+      </div>
+      
+      <div class="auth-form-container">
+        <div class="auth-form-card">
           <div class="auth-form-header">
             <!-- <div class="form-icon">📱</div>-->
             <h3>사용자 인증</h3>
@@ -1323,14 +1321,33 @@
       </div>
     </div>
 
-    <!-- 참가자 전용 컨트롤 -->
-    <div id="participantControls" class="participant-controls">
-      <div class="ready-status">
-        <button id="readyToggleBtn" class="btn ready-btn" onclick="toggleReady()">
-          ⏳ 준비 중
+    <!-- 그룹 훈련 컨트롤 -->
+    <div id="groupTrainingControlBar" class="card group-training-control-bar hidden">
+      <div class="group-training-control-buttons">
+        <button
+          id="groupSkipSegmentBtn"
+          class="enhanced-control-btn skip"
+          aria-label="세그먼트 건너뛰기"
+          type="button">
+        </button>
+        <button
+          id="groupToggleTrainingBtn"
+          class="enhanced-control-btn play"
+          aria-label="훈련 시작"
+          type="button">
+        </button>
+        <button
+          id="groupStopTrainingBtn"
+          class="enhanced-control-btn stop"
+          aria-label="훈련 종료"
+          type="button">
         </button>
       </div>
-      <button class="btn btn-outline" onclick="leaveGroupRoom()">🚪 방 나가기</button>
+      <div class="group-training-control-labels">
+        <span>건너뛰기</span>
+        <span>시작/일시정지</span>
+        <span>종료</span>
+      </div>
     </div>
 
     <!-- 실시간 채팅 (옵션) -->
@@ -1532,6 +1549,3 @@
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 </body>
 </html>
-
-
-
