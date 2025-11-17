@@ -1869,16 +1869,6 @@ function ensureMonitoringOverlay() {
               </div>
             </div>
             
-            <div class="monitoring-chat">
-              <h3>실시간 채팅</h3>
-              <div id="chatMessages" class="chat-messages">
-                <!-- 채팅 메시지들이 여기에 표시됩니다 -->
-              </div>
-              <div class="chat-input-group">
-                <input type="text" id="chatInput" placeholder="메시지를 입력하세요..." maxlength="200" onkeypress="if(event.key==='Enter') sendChatMessage()">
-                <button onclick="sendChatMessage()" class="send-btn">전송</button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -2094,53 +2084,6 @@ function sendChatMessageToParticipants(chatMessage) {
   console.log('Sending chat message to participants:', chatMessage);
 }
 
-// ========== 채팅 기능 ==========
-
-/**
- * 채팅 메시지 전송
- */
-function sendChatMessage() {
-  const input = safeGet('chatInput');
-  if (!input) return;
-  
-  const message = input.value.trim();
-  if (!message) return;
-  
-  const chatMessage = {
-    type: 'chat',
-    from: window.currentUser?.name || '익명',
-    message: message,
-    timestamp: new Date().toISOString()
-  };
-  
-  // 채팅 메시지 표시
-  addChatMessage(chatMessage);
-  
-  // 백엔드로 전송 (실제 구현 시)
-  sendChatMessageToParticipants(chatMessage);
-  
-  input.value = '';
-}
-
-/**
- * 채팅 메시지 추가
- */
-function addChatMessage(chatMessage) {
-  const container = safeGet('chatMessages');
-  if (!container) return;
-  
-  const messageEl = document.createElement('div');
-  messageEl.className = `chat-message ${chatMessage.type}`;
-  messageEl.innerHTML = `
-    <span class="chat-from">${chatMessage.from}</span>
-    <span class="chat-text">${chatMessage.message}</span>
-    <span class="chat-time">${getCurrentTimeString()}</span>
-  `;
-  
-  container.appendChild(messageEl);
-  container.scrollTop = container.scrollHeight;
-}
-
 // ========== 그룹 훈련 화면 초기화 함수 ==========
 
 /**
@@ -2225,7 +2168,6 @@ window.toggleMicrophone = toggleMicrophone;
 window.broadcastMessage = broadcastMessage;
 window.sendCustomCoaching = sendCustomCoaching;
 window.sendQuickCoaching = sendQuickCoaching;
-window.sendChatMessage = sendChatMessage;
 window.initializeGroupRoomScreen = initializeGroupRoomScreen;
 // createGroupRoomFromWorkout는 groupTrainingManager.js에서 등록됨
 // window.createGroupRoomFromWorkout = createGroupRoomFromWorkout; // 주석 처리
