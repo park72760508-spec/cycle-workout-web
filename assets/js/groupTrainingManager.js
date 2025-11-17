@@ -2652,11 +2652,6 @@ function renderWaitingHeaderSegmentTable() {
       }
     }
 
-    const windowSize = 5;
-    const centerIndex = currentIdx >= 0 ? currentIdx : 0;
-    const startIdx = Math.max(0, centerIndex - Math.floor(windowSize / 2));
-    const visibleSegments = segments.slice(startIdx, startIdx + windowSize);
-
     const formatDuration = (sec) => {
       const value = Number(sec || 0);
       if (!Number.isFinite(value) || value <= 0) return '-';
@@ -2665,8 +2660,7 @@ function renderWaitingHeaderSegmentTable() {
       return `${m}:${s}`;
     };
 
-    const tableRows = visibleSegments.map((seg, localIdx) => {
-      const idx = startIdx + localIdx;
+    const tableRows = segments.map((seg, idx) => {
       const label = seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`;
       const segType = (seg.segment_type || seg.type || '-').toString().toUpperCase();
       const ftp = Math.round(Number(
@@ -2727,6 +2721,16 @@ function renderWaitingHeaderSegmentTable() {
         </div>
       </div>
     `;
+
+    // 현재 세그먼트 위치로 자동 스크롤 (최대 5행 높이를 유지한 채 스크롤 허용)
+    requestAnimationFrame(() => {
+      const wrapper = roomInfoCard.querySelector('.workout-table-wrapper');
+      const activeRow = wrapper?.querySelector('tbody tr.active');
+      if (wrapper && activeRow) {
+        const targetScroll = activeRow.offsetTop - (wrapper.clientHeight / 2) + (activeRow.clientHeight / 2);
+        wrapper.scrollTop = Math.max(0, targetScroll);
+      }
+    });
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
   }
