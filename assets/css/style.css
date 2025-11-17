@@ -2384,6 +2384,12 @@ button[aria-disabled="true"] {
   .auth-hero-icon {
     padding: 0 24px;            /* 카드 좌우 패딩과 동일하게 유지 */
   } 
+  .auth-title-image {
+    margin-bottom: 24px;
+  }
+  .auth-title-image img {
+    border-width: 2px;
+  }
 }
 
 /* 시각적으로 더 동일해 보이도록 히어로 이미지를 카드처럼 */
@@ -2419,6 +2425,18 @@ button[aria-disabled="true"] {
   border: 1px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
   text-align: center;
+}
+
+.auth-title-image {
+  margin-bottom: 30px;
+}
+
+.auth-title-image img {
+  width: 100%;
+  display: block;
+  border-radius: 16px;
+  border: 3px solid #e2e8f0;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
 }
 
 .auth-form-header {
