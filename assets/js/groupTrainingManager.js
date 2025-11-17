@@ -2491,118 +2491,101 @@ function updateParticipantsList() {
       return result;
     };
     
-    listEl.innerHTML = normalizedParticipants.map(p => {
+    const tableRows = normalizedParticipants.map((p, index) => {
+      const rowNumber = index + 1;
       const bluetoothStatus = getBluetoothStatus(p.id);
       const isMe = isCurrentUser(p.id);
       
-      // 본인의 블루투스 기기 활성화 여부 확인 (트레이너, 파워미터, 심박계 중 하나 이상)
       const hasBluetoothDevice = isMe && (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate);
       
-      // 이름 옆에 기기 연결 상태 이미지 표시 (하단 네모 박스 스타일을 이름 옆으로 이동, 검정 배경)
       const deviceStatusIcons = `
-        <span class="inline-device-badges" style="display:inline-flex; align-items:center; gap:8px; margin-left:10px;">
-          <span class="device-badge" title="심박계" style="width:24px; height:24px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
-            <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}"
-                 alt="심박계"
-                 style="width:20px; height:20px; display:block;"
-                 onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
+        <span class="ble-icons" aria-label="기기 연결 상태">
+          <span class="device-badge" title="심박계">
+            <img src="assets/img/${bluetoothStatus.heartRate ? 'bpm_g.png' : 'bpm_i.png'}" alt="심박계" onerror="this.onerror=null; this.src='assets/img/bpm_i.png';" />
           </span>
-          <span class="device-badge" title="파워메터" style="width:24px; height:24px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
-            <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}"
-                 alt="파워메터"
-                 style="width:20px; height:20px; display:block;"
-                 onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
+          <span class="device-badge" title="파워미터">
+            <img src="assets/img/${bluetoothStatus.powerMeter ? 'power_g.png' : 'power_i.png'}" alt="파워미터" onerror="this.onerror=null; this.src='assets/img/power_i.png';" />
           </span>
-          <span class="device-badge" title="스마트 트레이너" style="width:24px; height:24px; background:#000; border-radius:4px; display:inline-flex; align-items:center; justify-content:center;">
-            <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}"
-                 alt="스마트 트레이너"
-                 style="width:20px; height:20px; display:block;"
-                 onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
+          <span class="device-badge" title="스마트 트레이너">
+            <img src="assets/img/${bluetoothStatus.trainer ? 'trainer_g.png' : 'trainer_i.png'}" alt="스마트 트레이너" onerror="this.onerror=null; this.src='assets/img/trainer_i.png';" />
           </span>
         </span>
       `;
 
-      // 서버 참가자 데이터 가져오기 (타인 메트릭 반영용)
       const serverParticipant = (room.participants || []).find(pp => {
         const pId = pp.id || pp.participantId || pp.userId;
         return String(pId) === String(p.id);
       }) || {};
       const serverMetrics = serverParticipant.metrics || serverParticipant.live || serverParticipant.liveData || serverParticipant || {};
 
-      // 세그먼트/파워 메트릭 값 계산 (본인은 로컬 우선, 타인은 서버 우선)
       const liveData = (isMe ? (window.liveData || {}) : {});
       const trainingState = window.trainingState || {};
-      const targetPower = trainingState.currentTargetPowerW || trainingState.targetPowerW || trainingState.segmentTargetPowerW || null;
-      const avgPower = isMe ? (liveData.avgPower || liveData.averagePower || null) : (serverMetrics.avgPower || serverMetrics.averagePower || null);
-      const currentPower = isMe ? (liveData.power || liveData.instantPower || liveData.watts || null) : (serverMetrics.power || serverMetrics.currentPower || null);
-      const heartRate = isMe ? (liveData.heartRate || liveData.hr || liveData.bpm || null) : (serverMetrics.heartRate || serverMetrics.hr || null);
-      const cadence = isMe ? (liveData.cadence || liveData.rpm || null) : (serverMetrics.cadence || serverMetrics.rpm || null);
-      const fmt = (v) => (typeof v === 'number' && isFinite(v) ? Math.round(v) : '-');
+      const targetPower = (serverMetrics.segmentTargetPowerW ?? serverMetrics.targetPowerW ?? trainingState.currentTargetPowerW ?? trainingState.targetPowerW ?? null);
+      const avgPower = isMe ? (liveData.avgPower || liveData.averagePower || serverMetrics.avgPower || null) : (serverMetrics.avgPower || serverMetrics.averagePower || serverMetrics.segmentAvgPowerW || null);
+      const currentPower = isMe ? (liveData.power || liveData.instantPower || liveData.watts || serverMetrics.currentPower || null) : (serverMetrics.currentPower || serverMetrics.power || serverMetrics.currentPowerW || null);
+      const heartRate = isMe ? (liveData.heartRate || liveData.hr || liveData.bpm || serverMetrics.heartRate || null) : (serverMetrics.heartRate || serverMetrics.hr || null);
+      const cadence = isMe ? (liveData.cadence || liveData.rpm || serverMetrics.cadence || null) : (serverMetrics.cadence || serverMetrics.rpm || null);
+      const fmt = (v, unit) => {
+        if (typeof v === 'number' && isFinite(v)) {
+          return `${Math.round(v)}${unit ? `<span class="metric-unit">${unit}</span>` : ''}`;
+        }
+        return '-';
+      };
 
-      // 상단 라인 배치: 좌측(이름+BT), 우측(상태/버튼/접속시간)
-      const readyStatusChip = `<span class="ready-chip ${p.ready ? 'ready' : 'not-ready'}" style="padding:2px 6px; border-radius:10px; font-size:11px; ${p.ready ? 'background:#1b4332; color:#95d5b2;' : 'background:#3a2a00; color:#ffd166;'}">${p.ready ? '준비완료' : '준비중'}</span>`;
+      const readyStatusChip = `<span class="ready-chip ${p.ready ? 'ready' : 'not-ready'}">${p.ready ? '준비완료' : '준비중'}</span>`;
       const readyToggleInline = (isMe && hasBluetoothDevice) ? `
         <button class="btn btn-xs ready-toggle-inline ${p.ready ? 'ready' : ''}" 
                 id="readyToggleBtn"
-                style="padding:3px 6px; font-size:11px; border-radius:8px; margin-left:6px;"
                 onclick="toggleReady()">
-          ${p.ready ? '✅' : '⏳'}
+          ${p.ready ? '✅ 준비완료' : '⏳ 준비하기'}
         </button>
-      ` : '';
-      const joinTimeInline = `<span class="join-time" style="font-size:11px; color:#8a94a6; margin-left:8px;">${p.joinedAt ? new Date(p.joinedAt).toLocaleTimeString('ko-KR') : '-'}</span>`;
+      ` : (isMe ? `<span class="ready-hint">기기를 연결해주세요</span>` : '-');
       
       return `
-      <div class="participant-card ${p.role} ${isMe ? 'current-user' : ''}" data-id="${p.id}">
-        <div class="participant-info" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-          <div class="name-left" style="display:inline-flex; align-items:center; gap:10px; min-width:0;">
-            <span class="participant-name" style="color:#000; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 60%;">
-              ${escapeHtml(p.name)}${isMe ? ' (나)' : ''}
-            </span>
-            ${deviceStatusIcons}
-          </div>
-          <div class="controls-right" style="display:inline-flex; align-items:center; gap:8px;">
-            ${readyStatusChip}
-            ${readyToggleInline}
-            ${joinTimeInline}
-          </div>
-        </div>
+        <tr class="${isMe ? 'current-user' : ''}">
+          <td>${rowNumber}</td>
+          <td class="participant-name-cell">
+            <span class="participant-name-text">${escapeHtml(p.name)}${isMe ? ' (나)' : ''}</span>
+          </td>
+          <td>${deviceStatusIcons}</td>
+          <td>${fmt(targetPower, '<span>W</span>')}</td>
+          <td>${fmt(avgPower, '<span>W</span>')}</td>
+          <td>${fmt(currentPower, '<span>W</span>')}</td>
+          <td>${fmt(heartRate, '<span>bpm</span>')}</td>
+          <td>${fmt(cadence, '<span>rpm</span>')}</td>
+          <td>${readyStatusChip}</td>
+          <td>${readyToggleInline}</td>
+        </tr>
+      `;
+    }).join('') || `
+      <tr>
+        <td colspan="10" class="empty-state">참가자가 없습니다. 첫 번째로 참여해보세요!</td>
+      </tr>
+    `;
 
-        <!-- 하단 영역: 메트릭 표시 (하단 아이콘 제거 후 메트릭 표시로 대체) -->
-        <div class="participant-metrics" style="margin-top:8px; display:grid; grid-template-columns: repeat(5, 1fr); gap:8px;">
-          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
-            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">세그먼트 목표</div>
-            <div class="metric-value" style="font-size:16px; font-weight:700; color:#ffd166;">
-              ${fmt(targetPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
-            </div>
-          </div>
-          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
-            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">세그먼트 평균</div>
-            <div class="metric-value" style="font-size:16px; font-weight:700; color:#9be564;">
-              ${fmt(avgPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
-            </div>
-          </div>
-          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
-            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">현재 파워</div>
-            <div class="metric-value" style="font-size:16px; font-weight:700; color:#4cc9f0;">
-              ${fmt(currentPower)}<span style="font-size:12px; color:#888; margin-left:4px;">W</span>
-            </div>
-          </div>
-          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
-            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">심박수</div>
-            <div class="metric-value" style="font-size:16px; font-weight:700; color:#ef476f;">
-              ${fmt(heartRate)}<span style="font-size:12px; color:#888; margin-left:4px;">bpm</span>
-            </div>
-          </div>
-          <div class="metric-card" style="background:#0b0b0b; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 10px; text-align:center;">
-            <div class="metric-label" style="font-size:12px; color:#bbb; margin-bottom:4px;">케이던스</div>
-            <div class="metric-value" style="font-size:16px; font-weight:700; color:#b388ff;">
-              ${fmt(cadence)}<span style="font-size:12px; color:#888; margin-left:4px;">rpm</span>
-            </div>
-          </div>
-        </div>
+    listEl.innerHTML = `
+      <div class="participant-table-wrapper">
+        <table class="participant-table">
+          <thead>
+            <tr>
+              <th>순번</th>
+              <th>사용자명</th>
+              <th>기기 연결 상태</th>
+              <th>세그먼트 목표값</th>
+              <th>세그먼트 평균값</th>
+              <th>세그먼트 현재값</th>
+              <th>심박수</th>
+              <th>케이던스</th>
+              <th>사용자 상태</th>
+              <th>동작</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
       </div>
     `;
-    }).join('');
     
     // 본인의 준비완료 버튼 상태 업데이트
     const readyBtn = safeGet('readyToggleBtn');
