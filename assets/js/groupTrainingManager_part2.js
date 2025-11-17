@@ -1,4 +1,5 @@
 // Updated: 2025-11-17 14:13 (KST) - 실시간 데이터 저장/갱신 로직 개선 및 구글 시트 구조 설계
+// Updated: 2025-11-17 15:02 (KST) - 다른 사용자 상태 동기화 개선 (블루투스 상태 실시간 전송 강화)
 
 /* ==========================================================
    groupTrainingManager_part2.js - 그룹 훈련 대기실 및 모니터링 기능
@@ -1025,14 +1026,23 @@ async function syncParticipantLiveData() {
     });
     
     if (result?.success) {
-      // 성공적으로 전송됨 (조용히 처리)
+      // 성공적으로 전송됨
+      const bluetoothStatus = {
+        trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
+        powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
+        heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
+      };
+      
       console.log('✅ 실시간 데이터 전송 성공', {
+        participantId,
+        roomCode,
         segmentIndex,
         segmentTargetPowerW,
         segmentAvgPowerW,
         currentPowerW,
         heartRate: liveData.heartRate || liveData.hr || 0,
-        cadence: liveData.cadence || liveData.rpm || 0
+        cadence: liveData.cadence || liveData.rpm || 0,
+        bluetoothStatus
       });
     } else {
       console.warn('⚠️ 실시간 데이터 전송 실패:', result?.error);
