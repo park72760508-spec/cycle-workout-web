@@ -488,6 +488,162 @@
   border-radius: 8px;
 }
 
+/* ===== 참가자 목록 (표 형식) ===== */
+.participant-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.participant-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: linear-gradient(180deg, #11131a 0%, #090a0f 100%);
+  color: #f4f6fb;
+  font-size: 0.92rem;
+  min-width: 960px;
+}
+
+.participant-table thead {
+  background: linear-gradient(90deg, rgba(63,89,144,0.95) 0%, rgba(33,45,70,0.95) 100%);
+}
+
+.participant-table th {
+  padding: 14px 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #e8efff;
+  text-align: center;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.participant-table td {
+  padding: 12px 10px;
+  text-align: center;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  vertical-align: middle;
+}
+
+.participant-table tbody tr {
+  transition: background 0.2s ease;
+}
+
+.participant-table tbody tr:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.participant-table tbody tr.current-user {
+  background: rgba(76,201,240,0.12);
+  border-left: 3px solid #4cc9f0;
+}
+
+.participant-name-cell {
+  text-align: left;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.participant-name-cell .participant-name-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ble-icons {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ble-icons .device-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: rgba(5,5,5,0.8);
+  border: 1px solid rgba(255,255,255,0.06);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.ble-icons .device-badge img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.ble-icons .device-badge:hover {
+  transform: scale(1.08);
+}
+
+.ready-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ready-chip.ready {
+  background: rgba(76,201,240,0.2);
+  color: #4cc9f0;
+  border: 1px solid rgba(76,201,240,0.5);
+}
+
+.ready-chip.not-ready {
+  background: rgba(255,193,7,0.15);
+  color: #ffd166;
+  border: 1px solid rgba(255,193,7,0.4);
+}
+
+.ready-toggle-inline {
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.05);
+  color: #f1f5f9;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ready-toggle-inline.ready {
+  background: rgba(76,201,240,0.2);
+  border-color: rgba(76,201,240,0.4);
+  color: #4cc9f0;
+}
+
+.ready-toggle-inline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ready-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  display: block;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 10px;
+  color: rgba(255,255,255,0.65);
+  font-style: italic;
+}
+
 .bluetooth-devices {
   display: flex;
   gap: 12px;
