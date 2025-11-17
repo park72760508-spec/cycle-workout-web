@@ -876,6 +876,45 @@
   margin-bottom: 20px;
 }
 
+.group-training-control-bar {
+  margin: 24px auto 0;
+  padding: 24px 20px 28px;
+  max-width: 420px;
+  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.45);
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.group-training-control-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+}
+
+.group-training-control-labels {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  width: 100%;
+  font-size: 13px;
+  color: #cbd5f5;
+  letter-spacing: 0.2px;
+}
+
+.group-training-control-labels span {
+  width: 80px;
+  text-align: center;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: rgba(203, 213, 255, 0.85);
+}
+
 .admin-buttons {
   display: flex;
   gap: 12px;
