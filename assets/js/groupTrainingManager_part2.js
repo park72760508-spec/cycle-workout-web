@@ -1,3 +1,5 @@
+// Updated: 2025-11-17 14:13 (KST) - 실시간 데이터 저장/갱신 로직 개선 및 구글 시트 구조 설계
+
 /* ==========================================================
    groupTrainingManager_part2.js - 그룹 훈련 대기실 및 모니터링 기능
    그룹 훈련 관리 모듈의 2부
@@ -880,6 +882,7 @@ function startGroupTrainingSession() {
 
 /**
  * 참가자 실시간 데이터 동기화 시작
+ * 훈련방 입장 순간부터 즉시 첫 데이터를 전송하고, 이후 3초마다 주기적으로 전송
  */
 function startParticipantDataSync() {
   // 기존 인터벌 정리
@@ -888,6 +891,11 @@ function startParticipantDataSync() {
   }
   
   console.log('🔄 참가자 실시간 데이터 동기화 시작');
+  
+  // 즉시 첫 데이터 전송 (훈련방 입장 순간부터 데이터 저장 시작)
+  syncParticipantLiveData().catch(err => {
+    console.warn('⚠️ 첫 데이터 전송 실패 (재시도 예정):', err);
+  });
   
   // 3초마다 블루투스 데이터를 백엔드에 전송
   window.participantDataSyncInterval = setInterval(async () => {
@@ -908,6 +916,7 @@ function stopParticipantDataSync() {
 
 /**
  * 참가자 실시간 데이터를 백엔드에 전송
+ * 훈련방 입장 순간부터 실시간으로 데이터를 저장/갱신
  */
 async function syncParticipantLiveData() {
   try {
@@ -926,6 +935,10 @@ async function syncParticipantLiveData() {
     const trainingState = window.trainingState || {};
     const currentWorkout = window.currentWorkout;
     let progress = 0;
+    let segmentIndex = 0;
+    let segmentTargetPowerW = 0;
+    let segmentAvgPowerW = 0;
+    let currentPowerW = 0;
     
     if (currentWorkout && currentWorkout.segments) {
       const elapsedSec = trainingState.elapsedSec || 0;
@@ -936,10 +949,53 @@ async function syncParticipantLiveData() {
       if (totalDuration > 0) {
         progress = Math.min(100, Math.floor((elapsedSec / totalDuration) * 100));
       }
+      
+      // 현재 세그먼트 인덱스 가져오기
+      segmentIndex = trainingState.segIndex || 0;
+      const currentSegment = currentWorkout.segments[segmentIndex];
+      
+      // 현재 세그먼트 타깃 파워 계산
+      if (currentSegment) {
+        const ftp = Number(window.currentUser?.ftp) || 200;
+        const ftpPercent = getSegmentFtpPercent(currentSegment);
+        segmentTargetPowerW = Math.round(ftp * (ftpPercent / 100));
+      } else {
+        segmentTargetPowerW = trainingState.currentTargetPowerW || trainingState.targetPowerW || 0;
+      }
+      
+      // 현재 세그먼트 평균 파워 계산 (segBar에서 가져오기)
+      if (typeof window.segBar !== 'undefined' && window.segBar) {
+        const segBar = window.segBar;
+        if (segBar.samples && segBar.samples[segmentIndex] && segBar.sumPower && segBar.sumPower[segmentIndex]) {
+          const samples = segBar.samples[segmentIndex] || 0;
+          segmentAvgPowerW = samples > 0 ? Math.round(segBar.sumPower[segmentIndex] / samples) : 0;
+        }
+      }
+      
+      // 세그먼트 평균값을 가져올 수 없는 경우 대체 방법 시도
+      if (segmentAvgPowerW === 0) {
+        // DOM에서 직접 가져오기
+        const avgEl = document.getElementById('avgSegmentPowerValue');
+        if (avgEl) {
+          const avgText = avgEl.textContent || avgEl.innerText || '';
+          const avgNum = parseFloat(avgText);
+          if (!isNaN(avgNum) && avgNum > 0) {
+            segmentAvgPowerW = Math.round(avgNum);
+          }
+        }
+      }
+      
+      // 전체 평균 파워 (세션 전체 평균)
+      const overallAvgPower = liveData.avgPower || liveData.averagePower || segmentAvgPowerW || 0;
+      
+      // 현재 파워값
+      currentPowerW = liveData.power || liveData.instantPower || 0;
+    } else {
+      // 워크아웃이 없는 경우 (대기실 상태)
+      segmentTargetPowerW = trainingState.currentTargetPowerW || trainingState.targetPowerW || 0;
+      currentPowerW = liveData.power || liveData.instantPower || 0;
+      segmentAvgPowerW = liveData.avgPower || liveData.averagePower || 0;
     }
-    
-    // 현재 세그먼트 타깃 파워
-    const segmentTargetPowerW = trainingState.currentTargetPowerW || trainingState.targetPowerW || 0;
     
     // 백엔드에 데이터 전송 (BLE 상태 + 메트릭 확장)
     const result = await apiSaveParticipantLiveData(roomCode, participantId, {
@@ -948,18 +1004,36 @@ async function syncParticipantLiveData() {
         powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
         heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
       },
-      power: liveData.power || liveData.instantPower || 0,
-      avgPower: liveData.avgPower || liveData.averagePower || null,
+      // 현재 파워값 (W)
+      power: currentPowerW,
+      // 세그먼트 평균 파워값 (W) - 현재 세그먼트의 평균
+      segmentAvgPowerW: segmentAvgPowerW,
+      // 전체 평균 파워값 (W) - 세션 전체 평균
+      avgPower: liveData.avgPower || liveData.averagePower || segmentAvgPowerW || 0,
+      // 세그먼트 목표 파워값 (W)
+      segmentTargetPowerW: segmentTargetPowerW,
+      // 현재 세그먼트 인덱스
+      segmentIndex: segmentIndex,
+      // 심박수 (bpm)
       heartRate: liveData.heartRate || liveData.hr || 0,
+      // 케이던스 (rpm)
       cadence: liveData.cadence || liveData.rpm || 0,
-      segmentTargetPowerW,
+      // 훈련 진행률 (%)
       progress: progress,
+      // 타임스탬프
       timestamp: new Date().toISOString()
     });
     
     if (result?.success) {
       // 성공적으로 전송됨 (조용히 처리)
-      console.log('✅ 실시간 데이터 전송 성공');
+      console.log('✅ 실시간 데이터 전송 성공', {
+        segmentIndex,
+        segmentTargetPowerW,
+        segmentAvgPowerW,
+        currentPowerW,
+        heartRate: liveData.heartRate || liveData.hr || 0,
+        cadence: liveData.cadence || liveData.rpm || 0
+      });
     } else {
       console.warn('⚠️ 실시간 데이터 전송 실패:', result?.error);
     }
@@ -970,7 +1044,39 @@ async function syncParticipantLiveData() {
 }
 
 /**
+ * 세그먼트 FTP 백분율 가져오기 (app.js의 getSegmentFtpPercent 함수와 동일한 로직)
+ */
+function getSegmentFtpPercent(seg) {
+  if (!seg) return 100;
+  
+  // 직접 ftp_percent 필드가 있는 경우
+  if (seg.ftp_percent !== undefined && seg.ftp_percent !== null) {
+    return Number(seg.ftp_percent);
+  }
+  
+  // segment_type으로 판단
+  const type = String(seg.segment_type || seg.type || '').toLowerCase();
+  if (type.includes('warmup') || type.includes('warm-up')) return 50;
+  if (type.includes('cooldown') || type.includes('cool-down')) return 50;
+  if (type.includes('rest') || type.includes('recovery')) return 30;
+  if (type.includes('interval')) return 120;
+  if (type.includes('tempo')) return 85;
+  if (type.includes('endurance')) return 70;
+  
+  // target_value가 있는 경우 (FTP 기준 백분율로 가정)
+  if (seg.target_value !== undefined && seg.target_value !== null) {
+    const ftp = Number(window.currentUser?.ftp) || 200;
+    if (ftp > 0) {
+      return Math.round((Number(seg.target_value) / ftp) * 100);
+    }
+  }
+  
+  return 100; // 기본값
+}
+
+/**
  * 참가자 실시간 데이터 저장 API
+ * 구글 시트 "GroupTrainingLiveData"에 저장
  */
 async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
   try {
@@ -995,11 +1101,18 @@ async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
           payload: JSON.stringify(flat),
           // 호환용 개별 필드
           power: flat.power ?? flat.metrics?.currentPower ?? null,
+          // 세그먼트 평균 파워값 (W)
+          segmentAvgPowerW: flat.segmentAvgPowerW ?? flat.metrics?.segmentAvgPowerW ?? null,
+          // 전체 평균 파워값 (W)
           avgPower: flat.avgPower ?? flat.metrics?.avgPower ?? null,
           heartRate: flat.heartRate ?? flat.metrics?.heartRate ?? null,
           cadence: flat.cadence ?? flat.metrics?.cadence ?? null,
+          // 세그먼트 목표 파워값 (W)
           segmentTargetPowerW: flat.segmentTargetPowerW ?? flat.metrics?.segmentTargetPowerW ?? null,
+          // 현재 세그먼트 인덱스
+          segmentIndex: flat.segmentIndex ?? flat.metrics?.segmentIndex ?? null,
           progress: flat.progress ?? null,
+          // 블루투스 연결 상태
           trainerConnected: flat.bluetoothStatus?.trainer ?? null,
           powerConnected: flat.bluetoothStatus?.powerMeter ?? null,
           hrConnected: flat.bluetoothStatus?.heartRate ?? null,
