@@ -2572,13 +2572,13 @@ function updateParticipantsList() {
             <tr>
               <th>순번</th>
               <th>사용자명</th>
-              <th>기기 연결 상태</th>
-              <th>세그먼트 목표값</th>
-              <th>세그먼트 평균값</th>
-              <th>세그먼트 현재값</th>
+              <th>기기 연결</th>
+              <th>목표값</th>
+              <th>랩파워</th>
+              <th>현재파워</th>
               <th>심박수</th>
               <th>케이던스</th>
-              <th>사용자 상태</th>
+              <th>상태</th>
               <th>동작</th>
             </tr>
           </thead>
