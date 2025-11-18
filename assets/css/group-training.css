@@ -566,6 +566,26 @@
   border-left: 3px solid #4cc9f0;
 }
 
+.participant-table tbody tr.segment-active {
+  position: relative;
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  box-shadow:
+    0 0 8px rgba(16, 185, 129, 0.35),
+    0 0 14px rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.08);
+}
+.participant-table tbody tr.segment-active::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 10px;
+  border: 2px solid rgba(16, 185, 129, 0.45);
+  box-shadow:
+    0 0 10px rgba(16, 185, 129, 0.35),
+    0 0 20px rgba(16, 185, 129, 0.25);
+  pointer-events: none;
+}
+
 .participant-name-cell {
   text-align: left;
   font-weight: 700;
@@ -869,21 +889,22 @@
 }
 
 .workout-table tbody tr.active {
-  background: rgba(76, 201, 240, 0.12);
-}
-
-.workout-table tbody tr.segment-active {
   position: relative;
   border: 1px solid rgba(16, 185, 129, 0.6);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+  box-shadow:
+    0 0 8px rgba(16, 185, 129, 0.35),
+    0 0 18px rgba(16, 185, 129, 0.25);
   background: rgba(16, 185, 129, 0.12);
 }
-.workout-table tbody tr.segment-active::before {
+.workout-table tbody tr.active::before {
   content: "";
   position: absolute;
-  inset: 0;
+  inset: 2px;
   border: 2px solid rgba(16, 185, 129, 0.5);
   border-radius: 8px;
+  box-shadow:
+    0 0 12px rgba(16, 185, 129, 0.45),
+    0 0 24px rgba(16, 185, 129, 0.25);
   pointer-events: none;
 }
 
