@@ -1323,10 +1323,8 @@ function updateTimelineByTime() {
         ratio = Math.max(0, Math.min(1, ratio));
         fillEl.style.width = (ratio * 100) + "%";
 
-        // 현재 세그먼트면 파랑으로 강제
-        if (elapsed > startAt && elapsed < endAt) {
-          fillEl.style.background = "#2E74E8";
-        }
+        // 현재 세그먼트 색상은 CSS의 .is-current 클래스로 처리 (주황색)
+        // 인라인 스타일로 색상을 강제 설정하지 않음
       }
 
       startAt = endAt;
@@ -1514,10 +1512,8 @@ function updateSegmentBarTick(){
       ratio = Math.min(1, Math.max(0, ratio));
       fill.style.width = (ratio * 100) + "%";
        
-        // 🔵 현재 세그먼트면 파랑색으로 강제
-        if (elapsed > startAt && elapsed < endAt) {
-          fill.style.background = "#2E74E8";
-        }
+        // 현재 세그먼트 색상은 CSS의 .is-current 클래스로 처리 (주황색)
+        // 인라인 스타일로 색상을 강제 설정하지 않음
        
     }
     startAt = endAt;
