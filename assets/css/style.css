@@ -2966,7 +2966,17 @@ button[aria-disabled="true"] {
 }
 
 /* 라벨 스택 */
-.segment-labels{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px; z-index:3; position:relative; }
+.segment-labels{ 
+  display:flex; 
+  flex-direction:column; 
+  align-items:center; 
+  justify-content:center; 
+  gap:1px; 
+  z-index:3; 
+  position:relative; 
+  height:100%; /* 전체 높이 사용 */
+  width:100%; /* 전체 너비 사용 */
+}
 .segment-number{ font-size:10px; font-weight:600; color:#475569; line-height:1; opacity:.8; }
 .segment-time{ font-size:9px; font-weight:400; color:#64748b; line-height:1; margin-top:1px; }
 .repeat-count{ font-size:8px; font-weight:600; color:#0ea5e9; background:rgba(14,165,233,.1); padding:1px 4px; border-radius:6px; line-height:1; margin:1px 0; }
@@ -2974,8 +2984,14 @@ button[aria-disabled="true"] {
 /* 진행 채움바 */
 .progress-fill{
   --pf-alpha:0.28;
-  opacity:0.32; position:absolute; inset:0 auto 0 0; height:100%; width:0%;
-  z-index:1; transition:width .4s ease-out, background .3s ease; border-radius:inherit;
+  opacity:0.32; 
+  position:absolute; 
+  inset:0; /* 상단, 하단 모두 채우도록 수정 */
+  height:100%; 
+  width:0%;
+  z-index:1; 
+  transition:width .4s ease-out, background .3s ease; 
+  border-radius:inherit;
 }
 .timeline-segment:first-child .progress-fill{ border-radius:16px 0 0 16px; }
 .timeline-segment:last-child  .progress-fill{ border-radius:0 16px 16px 0; }
@@ -3054,12 +3070,15 @@ button[aria-disabled="true"] {
 .timeline-segment.is-complete .progress-fill::after{ content:""; display:none !important; opacity:0 !important; animation:none !important; background:none !important; }
 
 
-/* 진행 중(현재) 세그먼트/그룹 공통: 투명 민트 */
+/* 진행 중(현재) 세그먼트/그룹 공통: 상단 판넬과 동일한 주황색 */
 .timeline-segment.is-current .progress-fill,
 .timeline-group.is-current .progress-fill{
-  background: rgba(64, 224, 208, 0.30) !important; /* mint (#40E0D0 @ 30%) */
+  background: linear-gradient(90deg,
+              rgba(245,158,11,0.22) 0%,    /* 밝은 주황 #f59e0b / 22% 투명 */
+              rgba(245,158,11,0.14) 100%) !important; /* 상단 판넬과 동일한 색상 */
   background-image: none !important;               /* 기존 gradient 무시 */
-  opacity: .40;                                     /* 살짝 더 또렷하게 (원하면 .32~.45로 조정) */
+  opacity: 1 !important;                            /* 투명도는 배경색에 포함되어 있음 */
+  border-right: 1px solid rgba(245,158,11,0.35);   /* 상단 판넬과 동일한 테두리 */
 }
 
 
