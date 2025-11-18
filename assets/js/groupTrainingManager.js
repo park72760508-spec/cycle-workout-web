@@ -2817,6 +2817,8 @@ function renderWaitingHeaderSegmentTable() {
     }).join('');
 
     const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
+    const prevActiveIndex = Number(roomInfoCard.dataset.activeSegmentIndex ?? -1);
+    roomInfoCard.dataset.activeSegmentIndex = String(currentIdx);
 
     roomInfoCard.innerHTML = `
       <div class="workout-table-card">
@@ -2867,22 +2869,40 @@ function renderWaitingHeaderSegmentTable() {
       </div>
     `;
 
-    // 현재 세그먼트 위치로 자동 스크롤 (최대 5행 높이를 유지한 채 스크롤 허용)
+    // 현재 세그먼트 위치로 자동 스크롤 (최대 3행 표시)
     requestAnimationFrame(() => {
       const wrapper = roomInfoCard.querySelector('.workout-table-wrapper');
       const rows = Array.from(wrapper?.querySelectorAll('tbody tr') || []);
-      const maxVisible = 3;
-      let activeRow = wrapper?.querySelector('tbody tr.active');
-      if (wrapper && rows.length > maxVisible) {
+      if (!wrapper || rows.length === 0) return;
+
+      const maxVisible = Math.min(3, rows.length);
+      if (rows.length > maxVisible) {
         const rowHeight = rows[0].offsetHeight || 0;
-        wrapper.style.maxHeight = `${rowHeight * maxVisible + 2}px`;
+        wrapper.style.maxHeight = `${rowHeight * maxVisible + 4}px`;
+      } else {
+        wrapper.style.removeProperty('max-height');
       }
-      if (wrapper && activeRow) {
-        const targetIndex = rows.indexOf(activeRow);
-        const startIndex = Math.max(0, Math.min(targetIndex - 1, rows.length - maxVisible));
-        const targetScroll = (rows[startIndex]?.offsetTop ?? 0);
-        wrapper.scrollTop = Math.max(0, targetScroll);
+
+      const activeRow = wrapper.querySelector('tbody tr.active');
+      if (!activeRow || currentIdx < 0) return;
+
+      const targetIndex = Math.min(
+        Math.max(0, currentIdx),
+        Math.max(0, rows.length - maxVisible)
+      );
+
+      if (prevActiveIndex === currentIdx && wrapper.dataset.scrolled === 'true') {
+        return;
       }
+
+      const header = wrapper.querySelector('thead');
+      const headerHeight = header ? header.offsetHeight : 0;
+      const targetRow = rows[targetIndex];
+      if (!targetRow) return;
+
+      const targetScroll = Math.max(0, (targetRow.offsetTop || 0) - headerHeight);
+      wrapper.scrollTop = targetScroll;
+      wrapper.dataset.scrolled = 'true';
     });
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
