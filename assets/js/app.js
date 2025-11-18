@@ -1317,10 +1317,15 @@ function updateTimelineByTime() {
 
       if (fillEl) {
         let ratio = 0;
-        if (elapsed >= endAt)      ratio = 1;
-        else if (elapsed > startAt) ratio = (elapsed - startAt) / dur;
+        if (elapsed >= endAt) {
+          ratio = 1; // 완료된 세그먼트
+        } else if (elapsed >= startAt && elapsed < endAt) {
+          // 현재 진행 중인 세그먼트: 해당 세그먼트 내에서의 경과 시간 기준
+          const segElapsed = elapsed - startAt;
+          ratio = Math.min(1, Math.max(0, segElapsed / dur));
+        }
+        // else ratio = 0 (아직 시작 안 된 세그먼트)
 
-        ratio = Math.max(0, Math.min(1, ratio));
         fillEl.style.width = (ratio * 100) + "%";
 
         // 현재 세그먼트 색상은 CSS의 .is-current 클래스로 처리 (주황색)
@@ -1493,6 +1498,7 @@ function updateSegmentBarTick(){
   const segIndex = window.trainingState.segIndex || 0;
 
   // 1) 개별 세그먼트 진행률 업데이트
+  // 각 세그먼트의 진행률은 해당 세그먼트 내에서의 경과 시간 기준으로 계산
   let startAt = 0;
   for (let i = 0; i < w.segments.length; i++) {
     const seg = w.segments[i];
@@ -1504,12 +1510,13 @@ function updateSegmentBarTick(){
       let ratio = 0;
       if (elapsed >= endAt) {
         ratio = 1; // 완료된 세그먼트
-      } else if (elapsed > startAt) {
-        ratio = (elapsed - startAt) / dur; // 진행 중인 세그먼트
+      } else if (elapsed >= startAt && elapsed < endAt) {
+        // 현재 진행 중인 세그먼트: 해당 세그먼트 내에서의 경과 시간 기준
+        const segElapsed = elapsed - startAt;
+        ratio = Math.min(1, Math.max(0, segElapsed / dur));
       }
       // else ratio = 0 (아직 시작 안 된 세그먼트)
       
-      ratio = Math.min(1, Math.max(0, ratio));
       fill.style.width = (ratio * 100) + "%";
        
         // 현재 세그먼트 색상은 CSS의 .is-current 클래스로 처리 (주황색)
