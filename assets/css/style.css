@@ -3007,9 +3007,9 @@ button[aria-disabled="true"] {
   transition:width .4s ease-out, background .3s ease; 
   border-radius:inherit;
   background: linear-gradient(90deg,
-              rgba(245,158,11,0.35) 0%,
-              rgba(245,158,11,0.25) 100%);
-  border-right: 1px solid rgba(245,158,11,0.35);
+              rgba(148,163,184,0.32) 0%,
+              rgba(148,163,184,0.12) 100%);
+  border-right: 1px solid rgba(148,163,184,0.35);
   box-shadow: inset 0 0 6px rgba(0,0,0,0.08);
 }
 .timeline-segment:first-child .progress-fill{ border-radius:16px 0 0 16px; }
@@ -3048,10 +3048,14 @@ button[aria-disabled="true"] {
 .timeline-segment.is-complete .repeat-count{ color:#fff; }
 
 /* 달성도 버킷 */
-.timeline-segment.is-complete.achievement-low  .progress-fill{ background:rgba(245,158,11,0.28); opacity:.30; }
-.timeline-segment.is-complete.achievement-good .progress-fill{ background:rgba(34,197,94,0.28);  opacity:.30; }
-.timeline-segment.is-complete.achievement-high .progress-fill,
-.timeline-segment.is-complete.achievement-over .progress-fill{ background:rgba(64,224,208,0.30); opacity:.30; }
+.timeline-segment.is-complete.timeline-ach-low .progress-fill{
+  background: linear-gradient(90deg,#f97316 0%,#ea580c 100%) !important;
+  opacity:.95;
+}
+.timeline-segment.is-complete.timeline-ach-good .progress-fill{
+  background: linear-gradient(90deg,#34d399 0%,#10b981 100%) !important;
+  opacity:.95;
+}
 
 /* 그룹 세그먼트 */
 /* 대기(그룹) — 연녹색 톤 배경 */
