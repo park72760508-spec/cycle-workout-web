@@ -2220,12 +2220,11 @@ async function getRoomByCode(roomCode) {
  * 대기실 화면 초기화
  */
 function initializeWaitingRoom() {
-  if (!groupTrainingState.currentRoom) {
+  const room = groupTrainingState.currentRoom;
+  if (!room) {
     console.error('No current room found');
     return;
   }
-  
-  const room = groupTrainingState.currentRoom;
   
   // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링
   renderWaitingHeaderSegmentTable();
@@ -2623,8 +2622,16 @@ function updateParticipantsList() {
         </button>
       ` : (isMe ? `<span class="ready-hint">기기를 연결해주세요</span>` : '-');
       
+      const isCurrentSegment = currentSegment && p.currentSegmentIndex !== undefined
+        ? Number(p.currentSegmentIndex) === currentSegIndex
+        : false;
+      const rowClasses = [
+        isMe ? 'current-user' : '',
+        isCurrentSegment ? 'segment-active' : ''
+      ].filter(Boolean).join(' ');
+
       return `
-        <tr class="${isMe ? 'current-user' : ''}">
+        <tr class="${rowClasses}">
           <td>${rowNumber}</td>
           <td class="participant-name-cell">
             <span class="participant-name-text">${escapeHtml(p.name)}${isMe ? ' (나)' : ''}</span>
@@ -2728,8 +2735,13 @@ function renderWaitingHeaderSegmentTable() {
     const roomInfoCard = screen.querySelector('.room-info.card');
     if (!roomInfoCard) return;
 
-    const workout = window.currentWorkout || {};
-    const segments = Array.isArray(workout.segments) ? workout.segments : [];
+    if (!window.currentWorkout || !Array.isArray(window.currentWorkout.segments)) {
+      console.warn('No workout segments available for waiting room table');
+      return;
+    }
+
+    const workout = window.currentWorkout;
+    const segments = workout.segments;
 
     // 현재 세그먼트 인덱스 계산
     const ts = window.trainingState || {};
@@ -2858,9 +2870,17 @@ function renderWaitingHeaderSegmentTable() {
     // 현재 세그먼트 위치로 자동 스크롤 (최대 5행 높이를 유지한 채 스크롤 허용)
     requestAnimationFrame(() => {
       const wrapper = roomInfoCard.querySelector('.workout-table-wrapper');
-      const activeRow = wrapper?.querySelector('tbody tr.active');
+      const rows = Array.from(wrapper?.querySelectorAll('tbody tr') || []);
+      const maxVisible = 3;
+      let activeRow = wrapper?.querySelector('tbody tr.active');
+      if (wrapper && rows.length > maxVisible) {
+        const rowHeight = rows[0].offsetHeight || 0;
+        wrapper.style.maxHeight = `${rowHeight * maxVisible + 2}px`;
+      }
       if (wrapper && activeRow) {
-        const targetScroll = activeRow.offsetTop - (wrapper.clientHeight / 2) + (activeRow.clientHeight / 2);
+        const targetIndex = rows.indexOf(activeRow);
+        const startIndex = Math.max(0, Math.min(targetIndex - 1, rows.length - maxVisible));
+        const targetScroll = (rows[startIndex]?.offsetTop ?? 0);
         wrapper.scrollTop = Math.max(0, targetScroll);
       }
     });
