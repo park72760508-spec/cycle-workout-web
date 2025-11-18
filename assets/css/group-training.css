@@ -872,6 +872,21 @@
   background: rgba(76, 201, 240, 0.12);
 }
 
+.workout-table tbody tr.segment-active {
+  position: relative;
+  border: 1px solid rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+}
+.workout-table tbody tr.segment-active::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(16, 185, 129, 0.5);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
 .workout-table .seg-index-badge {
   display: inline-flex;
   width: 26px;
