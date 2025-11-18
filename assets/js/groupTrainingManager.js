@@ -2886,21 +2886,26 @@ function renderWaitingHeaderSegmentTable() {
       const activeRow = wrapper.querySelector('tbody tr.active');
       if (!activeRow || currentIdx < 0) return;
 
-      const targetIndex = Math.min(
-        Math.max(0, currentIdx),
-        Math.max(0, rows.length - maxVisible)
-      );
+      const header = wrapper.querySelector('thead');
+      const headerHeight = header ? header.offsetHeight : 0;
+      const rowHeight = rows[0]?.offsetHeight || 0;
+      const visibleHeight = maxVisible * rowHeight;
+      let targetScroll;
 
-      if (prevActiveIndex === currentIdx && wrapper.dataset.scrolled === 'true') {
+      if (currentIdx <= 0) {
+        targetScroll = 0;
+      } else if (currentIdx === 1) {
+        targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - rowHeight);
+      } else if (currentIdx >= rows.length - 1) {
+        targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - (visibleHeight - rowHeight));
+      } else {
+        targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - rowHeight);
+      }
+
+      if (prevActiveIndex === currentIdx && Math.abs(wrapper.scrollTop - targetScroll) < 2) {
         return;
       }
 
-      const header = wrapper.querySelector('thead');
-      const headerHeight = header ? header.offsetHeight : 0;
-      const targetRow = rows[targetIndex];
-      if (!targetRow) return;
-
-      const targetScroll = Math.max(0, (targetRow.offsetTop || 0) - headerHeight);
       wrapper.scrollTop = targetScroll;
       wrapper.dataset.scrolled = 'true';
     });
