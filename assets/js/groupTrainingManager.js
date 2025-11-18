@@ -2493,6 +2493,36 @@ function updateParticipantsList() {
       return result;
     };
     
+    const pickNumber = (...values) => {
+      for (const value of values) {
+        const n = Number(value);
+        if (Number.isFinite(n)) {
+          return n;
+        }
+      }
+      return null;
+    };
+    
+    const workout = window.currentWorkout || null;
+    const trainingState = window.trainingState || {};
+    const currentSegIndex = Math.max(0, Number(trainingState.segIndex) || 0);
+    const currentSegment = workout?.segments?.[currentSegIndex] || null;
+    const getFtpPercent = (segment) => {
+      if (!segment) return null;
+      if (segment.ftp_percent !== undefined && segment.ftp_percent !== null) {
+        return Number(segment.ftp_percent);
+      }
+      if (typeof window.getSegmentFtpPercent === 'function') {
+        const pct = Number(window.getSegmentFtpPercent(segment));
+        if (Number.isFinite(pct)) return pct;
+      }
+      if (segment.target_value !== undefined && segment.target_value !== null) {
+        return Number(segment.target_value);
+      }
+      return null;
+    };
+    const currentSegmentFtpPercent = getFtpPercent(currentSegment);
+    
     const tableRows = normalizedParticipants.map((p, index) => {
       const rowNumber = index + 1;
       const bluetoothStatus = getBluetoothStatus(p.id);
@@ -2519,14 +2549,64 @@ function updateParticipantsList() {
         return String(pId) === String(p.id);
       }) || {};
       const serverMetrics = serverParticipant.metrics || serverParticipant.live || serverParticipant.liveData || serverParticipant || {};
+      const participantFtp = pickNumber(
+        serverParticipant.ftp,
+        serverParticipant.FTP,
+        serverParticipant.userFtp,
+        serverParticipant.profileFtp,
+        serverParticipant.powerFtp,
+        serverParticipant?.stats?.ftp
+      );
 
       const liveData = (isMe ? (window.liveData || {}) : {});
-      const trainingState = window.trainingState || {};
-      const targetPower = (serverMetrics.segmentTargetPowerW ?? serverMetrics.targetPowerW ?? trainingState.currentTargetPowerW ?? trainingState.targetPowerW ?? null);
-      const avgPower = isMe ? (liveData.avgPower || liveData.averagePower || serverMetrics.avgPower || null) : (serverMetrics.avgPower || serverMetrics.averagePower || serverMetrics.segmentAvgPowerW || null);
-      const currentPower = isMe ? (liveData.power || liveData.instantPower || liveData.watts || serverMetrics.currentPower || null) : (serverMetrics.currentPower || serverMetrics.power || serverMetrics.currentPowerW || null);
-      const heartRate = isMe ? (liveData.heartRate || liveData.hr || liveData.bpm || serverMetrics.heartRate || null) : (serverMetrics.heartRate || serverMetrics.hr || null);
-      const cadence = isMe ? (liveData.cadence || liveData.rpm || serverMetrics.cadence || null) : (serverMetrics.cadence || serverMetrics.rpm || null);
+      
+      const computeTargetPower = () => {
+        const direct = pickNumber(
+          serverMetrics.segmentTargetPowerW,
+          serverMetrics.targetPowerW,
+          serverMetrics.segmentTargetPower,
+          serverParticipant.targetPowerW,
+          serverParticipant.segmentTargetPowerW,
+          serverParticipant.liveData?.targetPower,
+          serverParticipant.live?.targetPower
+        );
+        if (direct !== null) return direct;
+        
+        const ftpPercent = currentSegmentFtpPercent;
+        if (!ftpPercent) {
+          const fallback = pickNumber(
+            trainingState.currentTargetPowerW,
+            trainingState.targetPowerW,
+            liveData.targetPower
+          );
+          return fallback;
+        }
+        
+        if (isMe) {
+          const ftp = pickNumber(window.currentUser?.ftp);
+          if (ftp) return Math.round(ftp * ftpPercent / 100);
+          const fromLive = pickNumber(liveData.targetPower);
+          if (fromLive !== null) return fromLive;
+        } else if (participantFtp) {
+          return Math.round(participantFtp * ftpPercent / 100);
+        }
+        
+        return null;
+      };
+      
+      const targetPower = computeTargetPower();
+      const avgPower = isMe
+        ? pickNumber(liveData.avgPower, liveData.averagePower, serverMetrics.segmentAvgPowerW, serverMetrics.avgPower, serverMetrics.averagePower)
+        : pickNumber(serverMetrics.segmentAvgPowerW, serverMetrics.avgPower, serverMetrics.averagePower, serverMetrics.segmentAvgPower, serverParticipant.liveData?.avgPower);
+      const currentPower = isMe
+        ? pickNumber(liveData.power, liveData.instantPower, liveData.watts, serverMetrics.currentPower)
+        : pickNumber(serverMetrics.currentPower, serverMetrics.power, serverMetrics.currentPowerW, serverParticipant.liveData?.power);
+      const heartRate = isMe
+        ? pickNumber(liveData.heartRate, liveData.hr, liveData.bpm, serverMetrics.heartRate)
+        : pickNumber(serverMetrics.heartRate, serverMetrics.hr, serverParticipant.liveData?.heartRate);
+      const cadence = isMe
+        ? pickNumber(liveData.cadence, liveData.rpm, serverMetrics.cadence)
+        : pickNumber(serverMetrics.cadence, serverMetrics.rpm, serverParticipant.liveData?.cadence);
       const fmt = (v, unit) => {
         if (typeof v === 'number' && isFinite(v)) {
           return `${Math.round(v)}${unit ? `<span class="metric-unit">${unit}</span>` : ''}`;
