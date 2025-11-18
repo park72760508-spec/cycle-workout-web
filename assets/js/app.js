@@ -1626,10 +1626,17 @@ function updateSegmentBarTick(){
         const achievement = targetW > 0 ? (avgW / targetW) : 0;
         
         // 달성도에 따른 CSS 클래스 추가
-        if (achievement >= 0.95) {
-          el.classList.add("timeline-ach-good");
-        } else {
-          el.classList.add("timeline-ach-low");
+        const segType = (typeof normalizeType === "function")
+          ? normalizeType(seg)
+          : (seg.segment_type || seg.label || "").toLowerCase();
+        const isRecovery = segType === "rest" || segType === "cooldown";
+        
+        if (!isRecovery) {
+          if (achievement >= 0.95) {
+            el.classList.add("timeline-ach-good");
+          } else {
+            el.classList.add("timeline-ach-low");
+          }
         }
         
       } else if (elapsed >= startAt2 && elapsed < endAt2) {
