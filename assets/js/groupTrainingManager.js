@@ -2565,6 +2565,11 @@ function updateParticipantsList() {
       </tr>
     `;
 
+    // 스크롤 위치 보존: 업데이트 전 현재 스크롤 위치 저장
+    const existingWrapper = listEl.querySelector('.participant-table-wrapper');
+    const savedScrollLeft = existingWrapper ? existingWrapper.scrollLeft : 0;
+    const savedScrollTop = existingWrapper ? existingWrapper.scrollTop : 0;
+    
     listEl.innerHTML = `
       <div class="participant-table-wrapper">
         <table class="participant-table">
@@ -2588,6 +2593,15 @@ function updateParticipantsList() {
         </table>
       </div>
     `;
+    
+    // 스크롤 위치 복원: 업데이트 후 저장된 스크롤 위치로 복원
+    requestAnimationFrame(() => {
+      const newWrapper = listEl.querySelector('.participant-table-wrapper');
+      if (newWrapper) {
+        newWrapper.scrollLeft = savedScrollLeft;
+        newWrapper.scrollTop = savedScrollTop;
+      }
+    });
     
     // 본인의 준비완료 버튼 상태 업데이트
     const readyBtn = safeGet('readyToggleBtn');
