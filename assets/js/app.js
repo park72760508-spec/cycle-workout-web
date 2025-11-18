@@ -1,6 +1,5 @@
 // Updated: 2025-11-16 12:30 (KST) - Change header auto-stamped per edit
 
-
 /* ==========================================================
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
@@ -1605,8 +1604,17 @@ function updateSegmentBarTick(){
 
     const el = document.querySelector(`.timeline-segment[data-index="${i}"]`);
     if (el) {
-      el.classList.remove("is-complete", "is-current", "is-upcoming");
-      el.classList.remove("achievement-low", "achievement-good", "achievement-high", "achievement-over");
+      el.classList.remove(
+        "is-complete",
+        "is-current",
+        "is-upcoming",
+        "achievement-low",
+        "achievement-good",
+        "achievement-high",
+        "achievement-over",
+        "timeline-ach-low",
+        "timeline-ach-good"
+      );
       
       if (elapsed >= endAt2) {
         // 완료된 세그먼트 - 달성도 기반 색상 적용
@@ -1618,14 +1626,10 @@ function updateSegmentBarTick(){
         const achievement = targetW > 0 ? (avgW / targetW) : 0;
         
         // 달성도에 따른 CSS 클래스 추가
-        if (achievement < 0.85) {
-          el.classList.add("achievement-low");
-        } else if (achievement >= 0.85 && achievement <= 1.15) {
-          el.classList.add("achievement-good");
-        } else if (achievement > 1.15 && achievement <= 1.3) {
-          el.classList.add("achievement-high");
-        } else if (achievement > 1.3) {
-          el.classList.add("achievement-over");
+        if (achievement >= 0.95) {
+          el.classList.add("timeline-ach-good");
+        } else {
+          el.classList.add("timeline-ach-low");
         }
         
       } else if (elapsed >= startAt2 && elapsed < endAt2) {
