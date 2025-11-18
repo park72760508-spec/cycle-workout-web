@@ -2976,15 +2976,17 @@ button[aria-disabled="true"] {
 
 /* 라벨 스택 */
 .segment-labels{ 
-  display:flex; 
-  flex-direction:column; 
-  align-items:center; 
-  justify-content:center; 
+  display:flex !important; 
+  flex-direction:column !important; 
+  align-items:center !important; 
+  justify-content:center !important; 
   gap:1px; 
   z-index:3; 
   position:relative; 
-  height:100%; /* 전체 높이 사용 */
-  width:100%; /* 전체 너비 사용 */
+  height:100% !important; /* 전체 높이 사용 */
+  width:100%; 
+  margin:0;
+  padding:0;
 }
 .segment-number{ font-size:10px; font-weight:600; color:#475569; line-height:1; opacity:.8; }
 .segment-time{ font-size:9px; font-weight:400; color:#64748b; line-height:1; margin-top:1px; }
@@ -2995,11 +2997,11 @@ button[aria-disabled="true"] {
   --pf-alpha:0.28;
   opacity:0.32; 
   position:absolute; 
-  top:0; 
+  top:0 !important; 
   left:0; 
-  bottom:0; 
-  right:auto; /* 명시적으로 상하좌우 설정 */
-  height:100%; 
+  bottom:0 !important; 
+  right:auto; 
+  height:100% !important; 
   width:0%;
   z-index:1; 
   transition:width .4s ease-out, background .3s ease; 
