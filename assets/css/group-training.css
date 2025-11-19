@@ -889,6 +889,55 @@
   text-align: center;
 }
 
+/* 활성 세그먼트 스타일 (훈련 시작 시) */
+.workout-table tbody tr.active {
+  position: relative;
+}
+
+.workout-table tbody tr.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 2px solid rgba(255, 165, 0, 0.9);
+  border-radius: 8px;
+  background: rgba(255, 165, 0, 0.2);
+  box-shadow:
+    0 0 10px rgba(255, 165, 0, 0.6),
+    0 0 20px rgba(255, 165, 0, 0.4),
+    0 0 30px rgba(255, 165, 0, 0.2),
+    inset 0 0 15px rgba(255, 165, 0, 0.1);
+  pointer-events: none;
+  z-index: 1;
+  animation: activeSegmentGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes activeSegmentGlow {
+  0% {
+    box-shadow:
+      0 0 10px rgba(255, 165, 0, 0.6),
+      0 0 20px rgba(255, 165, 0, 0.4),
+      0 0 30px rgba(255, 165, 0, 0.2),
+      inset 0 0 15px rgba(255, 165, 0, 0.1);
+    border-color: rgba(255, 165, 0, 0.9);
+  }
+  100% {
+    box-shadow:
+      0 0 15px rgba(255, 165, 0, 0.8),
+      0 0 30px rgba(255, 165, 0, 0.6),
+      0 0 45px rgba(255, 165, 0, 0.4),
+      inset 0 0 20px rgba(255, 165, 0, 0.15);
+    border-color: rgba(255, 140, 0, 1);
+  }
+}
+
+.workout-table tbody tr.active td {
+  position: relative;
+  z-index: 2;
+}
+
 .workout-table .seg-index-badge {
   display: inline-flex;
   width: 26px;
