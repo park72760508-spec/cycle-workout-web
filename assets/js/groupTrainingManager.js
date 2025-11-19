@@ -2803,10 +2803,9 @@ function renderWaitingHeaderSegmentTable() {
         0
       ));
       const durationStr = formatDuration(seg.duration_sec ?? seg.duration);
-      const isActive = idx === currentIdx;
 
       return `
-        <tr class="${isActive ? 'active' : ''}">
+        <tr>
           <td class="seg-col-index"><span class="seg-index-badge">${idx + 1}</span></td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
           <td class="seg-col-type"><span class="seg-type">${segType}</span></td>
@@ -2817,8 +2816,6 @@ function renderWaitingHeaderSegmentTable() {
     }).join('');
 
     const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
-    const prevActiveIndex = Number(roomInfoCard.dataset.activeSegmentIndex ?? -1);
-    roomInfoCard.dataset.activeSegmentIndex = String(currentIdx);
 
     roomInfoCard.innerHTML = `
       <div class="workout-table-card">
@@ -2869,7 +2866,7 @@ function renderWaitingHeaderSegmentTable() {
       </div>
     `;
 
-    // 현재 세그먼트 위치로 자동 스크롤 (최대 3행 표시)
+    // 테이블 스크롤 설정 (최대 3행 표시)
     requestAnimationFrame(() => {
       const wrapper = roomInfoCard.querySelector('.workout-table-wrapper');
       const rows = Array.from(wrapper?.querySelectorAll('tbody tr') || []);
@@ -2882,32 +2879,6 @@ function renderWaitingHeaderSegmentTable() {
       } else {
         wrapper.style.removeProperty('max-height');
       }
-
-      const activeRow = wrapper.querySelector('tbody tr.active');
-      if (!activeRow || currentIdx < 0) return;
-
-      const header = wrapper.querySelector('thead');
-      const headerHeight = header ? header.offsetHeight : 0;
-      const rowHeight = rows[0]?.offsetHeight || 0;
-      const visibleHeight = maxVisible * rowHeight;
-      let targetScroll;
-
-      if (currentIdx <= 0) {
-        targetScroll = 0;
-      } else if (currentIdx === 1) {
-        targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - rowHeight);
-      } else if (currentIdx >= rows.length - 1) {
-        targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - (visibleHeight - rowHeight));
-      } else {
-        targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - rowHeight);
-      }
-
-      if (prevActiveIndex === currentIdx && Math.abs(wrapper.scrollTop - targetScroll) < 2) {
-        return;
-      }
-
-      wrapper.scrollTop = targetScroll;
-      wrapper.dataset.scrolled = 'true';
     });
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
