@@ -491,7 +491,9 @@ function startGroupTrainingTimer() {
     if (window.trainingState) {
       window.trainingState.paused = false;
       window.trainingState.isRunning = true;
-      window.trainingState.workoutStartMs = Date.now();
+      const expectedStart = groupTrainingState.currentRoom?.trainingStartTime;
+      const startMs = expectedStart ? new Date(expectedStart).getTime() : Date.now();
+      window.trainingState.workoutStartMs = startMs;
       window.trainingState.pauseAccumMs = 0;
       window.trainingState.pausedAtMs = null;
     }
@@ -817,7 +819,9 @@ async function startAdminControlledCountdown(seconds = 10) {
   // 카운트다운 완료 후 실제 훈련 시작
   setTimeout(async () => {
     room.status = 'training';
-    room.startedAt = new Date().toISOString();
+    const startIso = new Date().toISOString();
+    room.startedAt = startIso;
+    room.trainingStartTime = startIso;
     
     await updateRoomOnBackend(room);
     await broadcastTrainingStart();
@@ -998,6 +1002,14 @@ async function checkAndSyncCountdown() {
  */
 function startGroupTrainingSession() {
   try {
+    const canAutoStart = typeof shouldAutoStartLocalTraining === 'function'
+      ? shouldAutoStartLocalTraining()
+      : true;
+    if (groupTrainingState.isAdmin && !canAutoStart) {
+      console.log('관리자 모니터링 모드 - startGroupTrainingSession 실행을 건너뜁니다');
+      return;
+    }
+    
     const roomSnapshot = {
       ...(groupTrainingState.currentRoom || {}),
       code: groupTrainingState.roomCode,
