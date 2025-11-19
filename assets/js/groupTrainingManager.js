@@ -249,6 +249,13 @@ function synchronizeTrainingClock(trainingStartTime) {
   ts.workoutStartMs = startMs;
 }
 
+function triggerCountdownOverlay(seconds) {
+  if (groupTrainingState.isAdmin || typeof showParticipantCountdown !== 'function') {
+    return showGroupCountdownOverlay(seconds);
+  }
+  return Promise.resolve(showParticipantCountdown(seconds));
+}
+
 
 
 // 마이크 상태 관리
@@ -2869,11 +2876,21 @@ function updateParticipantsList() {
         <div class="admin-controls-header">
           <h4>관리자 제어</h4>
           <p class="controls-hint">훈련 시작 버튼을 누르면 모든 참가자가 동시에 훈련을 시작합니다</p>
+        </div>
+        <div class="admin-training-controls">
+          <button id="adminStartTrainingBtn" class="enhanced-control-btn play" aria-label="훈련 시작" title="훈련 시작">
+          </button>
+          <button id="adminPauseTrainingBtn" class="enhanced-control-btn pause" aria-label="일시정지/재생" title="일시정지/재생" disabled>
+          </button>
+          <button id="adminSkipSegmentBtn" class="enhanced-control-btn skip" aria-label="구간 건너뛰기" title="구간 건너뛰기" disabled>
+          </button>
+          <button id="adminStopTrainingBtn" class="enhanced-control-btn stop" aria-label="훈련 종료" title="훈련 종료" disabled>
+          </button>
+        </div>
+        <div class="admin-mode-selector compact">
           <span class="admin-mode-chip ${adminMode === ADMIN_MODE_PARTICIPATE ? 'participate' : 'monitor'}">
             ${adminMode === ADMIN_MODE_PARTICIPATE ? '🚴‍♂️ 관리자도 참가' : '👀 모니터링 전용'}
           </span>
-        </div>
-        <div class="admin-mode-selector">
           <p class="mode-title">관리자 모드 선택</p>
           <label class="mode-option">
             <input type="radio" name="adminModeChoice" value="monitor" ${adminMode === ADMIN_MODE_MONITOR ? 'checked' : ''}>
@@ -2887,16 +2904,6 @@ function updateParticipantsList() {
             모니터링 모드를 선택하면 관리자 화면에서 참가자 데이터를 실시간으로 확인할 수 있고,
             참가 모드를 선택하면 관리자도 동일한 훈련 화면으로 전환됩니다.
           </p>
-        </div>
-        <div class="admin-training-controls">
-          <button id="adminStartTrainingBtn" class="enhanced-control-btn play" aria-label="훈련 시작" title="훈련 시작">
-          </button>
-          <button id="adminPauseTrainingBtn" class="enhanced-control-btn pause" aria-label="일시정지/재생" title="일시정지/재생" disabled>
-          </button>
-          <button id="adminSkipSegmentBtn" class="enhanced-control-btn skip" aria-label="구간 건너뛰기" title="구간 건너뛰기" disabled>
-          </button>
-          <button id="adminStopTrainingBtn" class="enhanced-control-btn stop" aria-label="훈련 종료" title="훈련 종료" disabled>
-          </button>
         </div>
       `;
       
@@ -3572,14 +3579,16 @@ async function syncRoomData() {
               // 참가자 화면에도 카운트다운 표시 (중복 방지를 위해 플래그 설정)
               if (!groupTrainingState.countdownStarted) {
                 groupTrainingState.countdownStarted = true;
-                showGroupCountdownOverlay(remainingSeconds).then(() => {
-                  groupTrainingState.countdownStarted = false;
-                });
+                Promise.resolve(triggerCountdownOverlay(remainingSeconds))
+                  .catch(err => console.warn('카운트다운 표시 실패:', err))
+                  .finally(() => {
+                    groupTrainingState.countdownStarted = false;
+                  });
               }
             } else {
               // 카운트다운이 이미 끝났으면 바로 훈련 시작
               console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작');
-              if (!groupTrainingState.countdownStarted) {
+              if (!groupTrainingState.countdownStarted && shouldAutoStartLocalTraining()) {
                 startLocalGroupTraining();
               }
             }
@@ -3588,9 +3597,11 @@ async function syncRoomData() {
             console.log('⏱️ 카운트다운 시작 (기본 5초)');
             if (!groupTrainingState.countdownStarted) {
               groupTrainingState.countdownStarted = true;
-              showGroupCountdownOverlay(5).then(() => {
-                groupTrainingState.countdownStarted = false;
-              });
+              Promise.resolve(triggerCountdownOverlay(5))
+                .catch(err => console.warn('카운트다운 표시 실패:', err))
+                .finally(() => {
+                  groupTrainingState.countdownStarted = false;
+                });
             }
           }
         }
@@ -4922,6 +4933,14 @@ async function startGroupTrainingWithCountdown() {
     } catch (error) {
       console.warn('서버에 카운트다운 시작 신호 전송 실패:', error);
       // 서버 전송 실패해도 로컬에서는 계속 진행
+    }
+    
+    if (typeof broadcastCountdownStart === 'function') {
+      try {
+        await broadcastCountdownStart(countdownSeconds);
+      } catch (err) {
+        console.warn('카운트다운 브로드캐스트 실패:', err);
+      }
     }
 
     // 관리자 화면에서 카운트다운 오버레이 표시
