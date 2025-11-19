@@ -2529,6 +2529,7 @@ function updateParticipantsList() {
       const rowNumber = index + 1;
       const bluetoothStatus = getBluetoothStatus(p.id);
       const isMe = isCurrentUser(p.id);
+      const ready = !!p.ready;
       
       const hasBluetoothDevice = isMe && (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate);
       
