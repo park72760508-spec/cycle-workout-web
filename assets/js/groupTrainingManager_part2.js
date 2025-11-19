@@ -39,10 +39,11 @@ async function toggleReady() {
   
   const room = groupTrainingState.currentRoom;
   const myId = window.currentUser?.id || 'user_' + Date.now();
-  const match = (participant) => {
-    const pid = participant.id || participant.participantId;
-    return String(pid) === String(myId);
+  const normalizeParticipantId = (participant) => {
+    const pid = participant?.id ?? participant?.participantId ?? participant?.userId;
+    return pid !== undefined && pid !== null ? String(pid) : '';
   };
+  const match = (participant) => normalizeParticipantId(participant) === String(myId);
   
   // 내 참가자 정보 찾기
   const myParticipant = room.participants.find(match);
@@ -54,6 +55,14 @@ async function toggleReady() {
   // 준비 상태 변경
   const wasReady = myParticipant.ready;
   myParticipant.ready = !myParticipant.ready;
+  const participantKey = typeof getParticipantIdentifier === 'function'
+    ? getParticipantIdentifier(myParticipant)
+    : (myParticipant.id || myParticipant.participantId || myParticipant.userId || String(myId));
+  const applyReadyOverride = () => {
+    if (typeof setReadyOverride === 'function' && participantKey) {
+      setReadyOverride(participantKey, myParticipant.ready);
+    }
+  };
   
   try {
     // 백엔드 업데이트
@@ -79,6 +88,7 @@ async function toggleReady() {
       
       if (success && success.success !== false) {
         groupTrainingState.currentRoom.participants = updatedParticipants;
+        applyReadyOverride();
         // UI 업데이트
         const readyBtn = safeGet('readyToggleBtn');
         if (readyBtn) {
@@ -107,6 +117,7 @@ async function toggleReady() {
     
     if (success) {
       groupTrainingState.currentRoom.participants = updatedParticipants;
+      applyReadyOverride();
       // UI 업데이트
       const readyBtn = safeGet('readyToggleBtn');
       if (readyBtn) {
@@ -649,18 +660,18 @@ async function startGroupTraining() {
   
   const room = groupTrainingState.currentRoom;
   
-  // 시작 조건 확인
-  const allReady = room.participants.every(p => p.ready);
-  const hasParticipants = room.participants.length >= 2;
-  
-  if (!allReady) {
-    showToast('모든 참가자가 준비되지 않았습니다', 'error');
+  const participantCount = room.participants.length;
+  if (participantCount < 2) {
+    showToast('최소 2명의 참가자가 필요합니다', 'error');
     return;
   }
   
-  if (!hasParticipants) {
-    showToast('최소 2명의 참가자가 필요합니다', 'error');
-    return;
+  const readyCount = typeof countReadyParticipants === 'function'
+    ? countReadyParticipants(room.participants)
+    : room.participants.filter(p => p.ready).length;
+  
+  if (readyCount < participantCount) {
+    showToast(`준비되지 않은 참가자가 있지만 훈련을 시작합니다 (${readyCount}/${participantCount})`, 'warning');
   }
   
   try {
@@ -963,8 +974,9 @@ async function checkAndSyncCountdown() {
       } else if (room.status === 'waiting' && room.participants) {
         // 모든 참가자가 준비되었는지 확인
         const allReady = room.participants.every(p => {
-          const ready = p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false);
-          return ready;
+          return typeof isParticipantReady === 'function'
+            ? isParticipantReady(p)
+            : (p.ready !== undefined ? p.ready : (p.isReady !== undefined ? p.isReady : false));
         });
         
         // 모든 참가자가 준비되었고 아직 시작하지 않았으면 대기 상태 표시
