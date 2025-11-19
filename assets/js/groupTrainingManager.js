@@ -2789,6 +2789,9 @@ function renderWaitingHeaderSegmentTable() {
     const elapsedTimer = formatTimer(elapsed);
     const segmentTimer = currentIdx >= 0 ? formatTimer(currentSegRemaining) : '--:--';
 
+    // 훈련 시작 여부 확인 (elapsed > 0이면 훈련이 시작된 것으로 판단)
+    const isTrainingStarted = elapsed > 0;
+
     const tableRows = segments.map((seg, idx) => {
       const label = seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`;
       const segType = (seg.segment_type || seg.type || '-').toString().toUpperCase();
@@ -2803,9 +2806,10 @@ function renderWaitingHeaderSegmentTable() {
         0
       ));
       const durationStr = formatDuration(seg.duration_sec ?? seg.duration);
+      const isActive = isTrainingStarted && idx === currentIdx;
 
       return `
-        <tr>
+        <tr class="${isActive ? 'active' : ''}">
           <td class="seg-col-index"><span class="seg-index-badge">${idx + 1}</span></td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
           <td class="seg-col-type"><span class="seg-type">${segType}</span></td>
@@ -2866,7 +2870,7 @@ function renderWaitingHeaderSegmentTable() {
       </div>
     `;
 
-    // 테이블 스크롤 설정 (최대 3행 표시)
+    // 테이블 스크롤 설정 및 활성 세그먼트 추적
     requestAnimationFrame(() => {
       const wrapper = roomInfoCard.querySelector('.workout-table-wrapper');
       const rows = Array.from(wrapper?.querySelectorAll('tbody tr') || []);
@@ -2879,6 +2883,23 @@ function renderWaitingHeaderSegmentTable() {
       } else {
         wrapper.style.removeProperty('max-height');
       }
+
+      // 훈련이 시작된 경우에만 활성 세그먼트 추적 스크롤 실행
+      if (isTrainingStarted && currentIdx >= 0) {
+        const activeRow = wrapper.querySelector('tbody tr.active');
+        if (activeRow) {
+          const header = wrapper.querySelector('thead');
+          const headerHeight = header ? header.offsetHeight : 0;
+          const rowHeight = rows[0]?.offsetHeight || 0;
+          
+          // 헤더 바로 아래에 활성 세그먼트가 보이도록 스크롤 위치 계산
+          // 활성 행을 헤더 바로 아래에 배치
+          const targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - 2);
+          
+          wrapper.scrollTop = targetScroll;
+        }
+      }
+      // 훈련 시작 전에는 스크롤 위치를 변경하지 않음 (자동 복귀 없음)
     });
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
