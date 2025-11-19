@@ -194,7 +194,7 @@ function normalizeRoomData(raw) {
 }
 
    
-const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn'];
+const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn', 'startGroupTrainingBtn'];
 
 /**
  * 안전한 요소 접근
@@ -3105,40 +3105,66 @@ async function updateRoomOnBackend(roomData) {
  * 시작 버튼 상태 업데이트
  */
 function updateStartButtonState() {
-  const startBtn = safeGet('startGroupTrainingBtn');
-  if (!startBtn || !groupTrainingState.isAdmin) {
-    // 관리자가 아니면 버튼 숨기기
-    if (startBtn) {
-      startBtn.style.display = 'none';
+  const legacyStartBtn = document.getElementById('startGroupTrainingBtn');
+  const adminPanelStartBtn = document.getElementById('adminStartTrainingBtn');
+  const hasStartButton = !!legacyStartBtn || !!adminPanelStartBtn;
+  
+  if (!groupTrainingState.isAdmin || !hasStartButton) {
+    if (legacyStartBtn) {
+      legacyStartBtn.style.display = 'none';
+    }
+    if (adminPanelStartBtn) {
+      adminPanelStartBtn.disabled = true;
+      adminPanelStartBtn.classList.add('disabled');
+      adminPanelStartBtn.title = '관리자만 사용할 수 있습니다';
     }
     return;
   }
   
-  // 관리자면 버튼 표시
-  if (startBtn) {
-    startBtn.style.display = '';
+  if (legacyStartBtn) {
+    legacyStartBtn.style.display = '';
   }
   
   const room = groupTrainingState.currentRoom;
-  if (!room || !room.participants) {
-    startBtn.disabled = true;
-    startBtn.textContent = '⏳ 방 정보 로딩 중...';
+  if (!room || !Array.isArray(room.participants)) {
+    if (legacyStartBtn) {
+      legacyStartBtn.disabled = true;
+      legacyStartBtn.textContent = '⏳ 방 정보 로딩 중...';
+      legacyStartBtn.title = '';
+    }
+    if (adminPanelStartBtn) {
+      adminPanelStartBtn.disabled = true;
+      adminPanelStartBtn.classList.add('disabled');
+      adminPanelStartBtn.textContent = '⏳ 방 정보 로딩 중...';
+      adminPanelStartBtn.title = '방 정보가 로딩되는 중입니다';
+    }
     return;
   }
   
   const totalParticipants = room.participants.length;
-  const readyCount = room.participants.reduce((count, participant) => {
-    return count + (isParticipantReady(participant) ? 1 : 0);
-  }, 0);
-  
+  const readyCount = countReadyParticipants(room.participants);
   const hasParticipants = totalParticipants >= 2; // 최소 2명
   const canStart = hasParticipants;
   
-  startBtn.disabled = !canStart;
-  startBtn.textContent = canStart
-    ? `🚀 그룹 훈련 시작 (${readyCount}/${totalParticipants}명 준비)`
-    : '👥 참가자 대기 중 (최소 2명 필요)';
-  startBtn.title = `${readyCount}/${totalParticipants}명 준비 완료`;
+  if (legacyStartBtn) {
+    legacyStartBtn.disabled = !canStart;
+    legacyStartBtn.textContent = canStart
+      ? `🚀 그룹 훈련 시작 (${readyCount}/${totalParticipants}명 준비)`
+      : '👥 참가자 대기 중 (최소 2명 필요)';
+    legacyStartBtn.title = `${readyCount}/${totalParticipants}명 준비 완료`;
+  }
+  
+  if (adminPanelStartBtn) {
+    adminPanelStartBtn.disabled = !canStart;
+    adminPanelStartBtn.classList.toggle('disabled', !canStart);
+    adminPanelStartBtn.title = canStart
+      ? `${readyCount}/${totalParticipants}명 준비 완료`
+      : '최소 2명 이상의 참가자가 필요합니다';
+    adminPanelStartBtn.textContent = canStart
+      ? `🚀 훈련 시작 (${readyCount}/${totalParticipants})`
+      : '👥 참가자 대기 중';
+    adminPanelStartBtn.setAttribute('aria-label', adminPanelStartBtn.textContent);
+  }
 }
 
 /**
