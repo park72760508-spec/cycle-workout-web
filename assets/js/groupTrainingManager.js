@@ -2690,6 +2690,102 @@ function updateParticipantsList() {
       }
     });
     
+    // 관리자 전용 제어 블록 추가 (참가자 목록 아래)
+    if (groupTrainingState.isAdmin) {
+      const participantsListContainer = listEl.parentElement;
+      let adminControlsBlock = participantsListContainer.querySelector('.admin-training-controls-block');
+      
+      if (!adminControlsBlock) {
+        adminControlsBlock = document.createElement('div');
+        adminControlsBlock.className = 'admin-training-controls-block';
+        participantsListContainer.appendChild(adminControlsBlock);
+      }
+      
+      // 관리자 제어 블록 렌더링
+      adminControlsBlock.innerHTML = `
+        <div class="admin-controls-header">
+          <h4>관리자 제어</h4>
+          <p class="controls-hint">훈련 시작 버튼을 누르면 모든 참가자가 동시에 훈련을 시작합니다</p>
+        </div>
+        <div class="admin-training-controls">
+          <button id="adminStartTrainingBtn" class="enhanced-control-btn play" aria-label="훈련 시작" title="훈련 시작">
+          </button>
+          <button id="adminPauseTrainingBtn" class="enhanced-control-btn pause" aria-label="일시정지/재생" title="일시정지/재생" disabled>
+          </button>
+          <button id="adminSkipSegmentBtn" class="enhanced-control-btn skip" aria-label="구간 건너뛰기" title="구간 건너뛰기" disabled>
+          </button>
+          <button id="adminStopTrainingBtn" class="enhanced-control-btn stop" aria-label="훈련 종료" title="훈련 종료" disabled>
+          </button>
+        </div>
+      `;
+      
+      // 이벤트 리스너 설정
+      const startBtn = adminControlsBlock.querySelector('#adminStartTrainingBtn');
+      const pauseBtn = adminControlsBlock.querySelector('#adminPauseTrainingBtn');
+      const skipBtn = adminControlsBlock.querySelector('#adminSkipSegmentBtn');
+      const stopBtn = adminControlsBlock.querySelector('#adminStopTrainingBtn');
+      
+      if (startBtn) {
+        startBtn.onclick = () => startGroupTrainingWithCountdown();
+      }
+      if (pauseBtn) {
+        pauseBtn.onclick = () => {
+          const ts = window.trainingState || {};
+          if (ts.paused) {
+            if (typeof togglePause === 'function') togglePause();
+          } else {
+            if (typeof togglePause === 'function') togglePause();
+          }
+        };
+      }
+      if (skipBtn) {
+        skipBtn.onclick = () => {
+          if (typeof skipCurrentSegment === 'function') skipCurrentSegment();
+        };
+      }
+      if (stopBtn) {
+        stopBtn.onclick = () => {
+          if (confirm('정말 훈련을 종료하시겠습니까?')) {
+            if (typeof stopSegmentLoop === 'function') stopSegmentLoop();
+          }
+        };
+      }
+      
+      // 훈련 상태에 따른 버튼 활성화
+      const ts = window.trainingState || {};
+      const isRunning = !!ts.isRunning;
+      const isPaused = !!ts.paused;
+      
+      if (startBtn) {
+        startBtn.disabled = isRunning && !isPaused;
+        if (isRunning && !isPaused) {
+          startBtn.classList.remove('play');
+          startBtn.classList.add('hidden');
+        } else {
+          startBtn.classList.remove('hidden');
+          startBtn.classList.add('play');
+        }
+      }
+      if (pauseBtn) {
+        pauseBtn.disabled = !isRunning;
+        pauseBtn.classList.remove('play', 'pause');
+        pauseBtn.classList.add(isPaused ? 'play' : 'pause');
+      }
+      if (skipBtn) {
+        skipBtn.disabled = !isRunning;
+      }
+      if (stopBtn) {
+        stopBtn.disabled = !isRunning;
+      }
+    } else {
+      // 관리자가 아니면 제어 블록 제거
+      const participantsListContainer = listEl.parentElement;
+      const adminControlsBlock = participantsListContainer?.querySelector('.admin-training-controls-block');
+      if (adminControlsBlock) {
+        adminControlsBlock.remove();
+      }
+    }
+
     // 본인의 준비완료 버튼 상태 업데이트
     const readyBtn = safeGet('readyToggleBtn');
     if (readyBtn) {
@@ -4417,6 +4513,248 @@ window.initializeParticipantSection = initializeParticipantSection;
 window.refreshRoomList = refreshRoomList;
 window.removeDuplicateWorkoutSelectsNow = removeDuplicateWorkoutSelectsNow;
 window.getRoomsByWorkoutId = getRoomsByWorkoutId;
+
+/**
+ * 그룹 훈련 시작 (5초 카운트다운 포함)
+ * 모든 참가자가 동시에 훈련을 시작하도록 함
+ */
+async function startGroupTrainingWithCountdown() {
+  try {
+    if (!groupTrainingState.isAdmin) {
+      showToast('관리자만 훈련을 시작할 수 있습니다', 'error');
+      return;
+    }
+
+    const room = groupTrainingState.currentRoom;
+    if (!room || !room.workoutId) {
+      showToast('워크아웃 정보가 없습니다', 'error');
+      return;
+    }
+
+    // 워크아웃 확인
+    if (!window.currentWorkout) {
+      showToast('워크아웃을 먼저 로드해주세요', 'error');
+      return;
+    }
+
+    console.log('🚀 그룹 훈련 시작 카운트다운 시작');
+
+    // 카운트다운 오버레이 표시 (그룹 훈련 화면에서)
+    await showGroupCountdownOverlay(5);
+
+  } catch (error) {
+    console.error('❌ 그룹 훈련 시작 실패:', error);
+    showToast('훈련 시작에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+  }
+}
+
+/**
+ * 그룹 훈련 카운트다운 오버레이 표시 (5초)
+ */
+async function showGroupCountdownOverlay(seconds = 5) {
+  return new Promise((resolve) => {
+    // 카운트다운 오버레이 요소 찾기 또는 생성
+    let overlay = document.getElementById('countdownOverlay');
+    let countdownNumber = document.getElementById('countdownNumber');
+
+    if (!overlay) {
+      // 오버레이 생성 (groupWaitingScreen 또는 전체 화면에)
+      overlay = document.createElement('div');
+      overlay.id = 'countdownOverlay';
+      overlay.className = 'countdown-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        backdrop-filter: blur(10px);
+      `;
+
+      countdownNumber = document.createElement('div');
+      countdownNumber.id = 'countdownNumber';
+      countdownNumber.className = 'countdown-number';
+      countdownNumber.style.cssText = `
+        font-size: 120px;
+        font-weight: 900;
+        color: #4cc9f0;
+        text-shadow: 0 0 40px rgba(76, 201, 240, 0.8), 0 0 80px rgba(76, 201, 240, 0.5);
+        animation: countdownPulse 1s ease-in-out infinite;
+      `;
+
+      overlay.appendChild(countdownNumber);
+      document.body.appendChild(overlay);
+
+      // 애니메이션 CSS 추가
+      if (!document.getElementById('countdownAnimationStyle')) {
+        const style = document.createElement('style');
+        style.id = 'countdownAnimationStyle';
+        style.textContent = `
+          @keyframes countdownPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+
+    // 오버레이 표시
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+
+    let remain = seconds;
+    countdownNumber.textContent = remain;
+
+    // 첫 삐 소리
+    if (typeof playBeep === 'function') {
+      playBeep(880, 120, 0.25);
+    }
+
+    const timer = setInterval(() => {
+      remain -= 1;
+
+      if (remain > 0) {
+        countdownNumber.textContent = remain;
+        if (typeof playBeep === 'function') {
+          playBeep(880, 120, 0.25);
+        }
+      } else if (remain === 0) {
+        countdownNumber.textContent = '0';
+        if (typeof playBeep === 'function') {
+          playBeep(1500, 700, 0.35, 'square').catch(() => {});
+        }
+
+        // 0.5초 후 오버레이 닫고 훈련 시작
+        setTimeout(async () => {
+          overlay.classList.add('hidden');
+          overlay.style.display = 'none';
+          clearInterval(timer);
+
+          console.log('✅ 카운트다운 완료, 훈련 시작');
+
+          // 모든 참가자 화면을 개인 훈련 화면으로 전환하고 훈련 시작
+          await startAllParticipantsTraining();
+
+          resolve();
+        }, 500);
+      } else {
+        clearInterval(timer);
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+        resolve();
+      }
+    }, 1000);
+  });
+}
+
+/**
+ * 모든 참가자에게 훈련 시작 신호 전송 및 로컬 훈련 시작
+ */
+async function startAllParticipantsTraining() {
+  try {
+    const room = groupTrainingState.currentRoom;
+    if (!room || !room.roomCode) {
+      console.error('방 정보가 없습니다');
+      return;
+    }
+
+    // 서버에 훈련 시작 신호 전송 (관리자)
+    if (groupTrainingState.isAdmin) {
+      try {
+        // API 호출로 모든 참가자에게 훈련 시작 신호 전송
+        if (typeof apiStartGroupTraining === 'function') {
+          await apiStartGroupTraining(room.roomCode);
+        } else if (typeof updateRoomStatus === 'function') {
+          await updateRoomStatus(room.roomCode, 'training');
+        }
+        console.log('✅ 서버에 훈련 시작 신호 전송 완료');
+      } catch (error) {
+        console.warn('서버에 훈련 시작 신호 전송 실패:', error);
+        // 서버 전송 실패해도 로컬 훈련은 시작
+      }
+    }
+
+    // 로컬 훈련 시작 (모든 참가자, 관리자 포함)
+    await startLocalGroupTraining();
+
+  } catch (error) {
+    console.error('❌ 모든 참가자 훈련 시작 실패:', error);
+    showToast('훈련 시작에 실패했습니다', 'error');
+  }
+}
+
+/**
+ * 로컬 훈련 시작 (개인 훈련 화면 전환 및 훈련 시작)
+ */
+async function startLocalGroupTraining() {
+  try {
+    const room = groupTrainingState.currentRoom;
+    if (!room || !room.workoutId) {
+      console.error('워크아웃 정보가 없습니다');
+      return;
+    }
+
+    // 워크아웃이 로드되지 않았다면 로드
+    if (!window.currentWorkout) {
+      if (typeof loadWorkoutInfo === 'function') {
+        await loadWorkoutInfo(room.workoutId);
+      } else if (typeof apiGetWorkout === 'function') {
+        const result = await apiGetWorkout(room.workoutId);
+        if (result && result.success && result.item) {
+          window.currentWorkout = result.item;
+        }
+      }
+    }
+
+    if (!window.currentWorkout) {
+      showToast('워크아웃을 로드할 수 없습니다', 'error');
+      return;
+    }
+
+    // 개인 훈련 화면으로 전환
+    const trainingScreen = document.getElementById('trainingScreen');
+    const waitingScreen = document.getElementById('groupWaitingScreen');
+
+    if (trainingScreen && waitingScreen) {
+      waitingScreen.classList.remove('active');
+      waitingScreen.classList.add('hidden');
+      trainingScreen.classList.remove('hidden');
+      trainingScreen.classList.add('active');
+    } else if (typeof showScreen === 'function') {
+      showScreen('trainingScreen');
+    }
+
+    // 훈련 시작 (개인 훈련 시작 함수 호출)
+    if (typeof startWithCountdown === 'function') {
+      // startWithCountdown은 이미 카운트다운을 표시하므로 바로 startWorkoutTraining 호출
+      if (typeof startWorkoutTraining === 'function') {
+        startWorkoutTraining();
+      } else {
+        console.warn('startWorkoutTraining 함수를 찾을 수 없습니다');
+      }
+    } else if (typeof startWorkoutTraining === 'function') {
+      startWorkoutTraining();
+    } else {
+      console.error('훈련 시작 함수를 찾을 수 없습니다');
+      showToast('훈련을 시작할 수 없습니다', 'error');
+    }
+
+    console.log('✅ 로컬 훈련 시작 완료');
+
+  } catch (error) {
+    console.error('❌ 로컬 훈련 시작 실패:', error);
+    showToast('훈련 시작에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+  }
+}
+
+// 함수를 전역으로 노출
+window.startGroupTrainingWithCountdown = startGroupTrainingWithCountdown;
+window.showGroupCountdownOverlay = showGroupCountdownOverlay;
+window.startAllParticipantsTraining = startAllParticipantsTraining;
+window.startLocalGroupTraining = startLocalGroupTraining;
 
      
 
