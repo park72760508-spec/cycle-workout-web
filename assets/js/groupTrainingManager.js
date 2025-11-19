@@ -30,13 +30,29 @@ window.groupTrainingState = window.groupTrainingState || {
   isConnected: false,
   lastSyncTime: null,
   countdownStarted: false,  // 카운트다운 시작 여부 (중복 방지)
-  readyOverrides: {}
+  readyOverrides: {},
+  adminParticipationMode: 'monitor',
+  trainingStartSignaled: false
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
 let groupTrainingState = window.groupTrainingState;
 
+const ADMIN_MODE_STORAGE_KEY = 'groupTrainingAdminMode';
+if (typeof localStorage !== 'undefined') {
+  try {
+    const storedMode = localStorage.getItem(ADMIN_MODE_STORAGE_KEY);
+    if (storedMode === 'participate' || storedMode === 'monitor') {
+      groupTrainingState.adminParticipationMode = storedMode;
+    }
+  } catch (e) {
+    console.warn('관리자 모드 설정을 불러오지 못했습니다:', e?.message || e);
+  }
+}
+
 const READY_OVERRIDE_TTL = 60000; // 백엔드 동기화 지연 시 최대 60초 동안 로컬 상태 유지
+const ADMIN_MODE_MONITOR = 'monitor';
+const ADMIN_MODE_PARTICIPATE = 'participate';
 
 function getParticipantIdentifier(participant) {
   if (!participant) return '';
@@ -96,6 +112,141 @@ function countReadyParticipants(participants = []) {
   return participants.reduce((count, participant) => {
     return count + (isParticipantReady(participant) ? 1 : 0);
   }, 0);
+}
+
+function getAdminParticipationMode() {
+  return groupTrainingState.adminParticipationMode === ADMIN_MODE_PARTICIPATE
+    ? ADMIN_MODE_PARTICIPATE
+    : ADMIN_MODE_MONITOR;
+}
+
+function isAdminMonitoringOnly() {
+  return groupTrainingState.isAdmin && getAdminParticipationMode() === ADMIN_MODE_MONITOR;
+}
+
+function shouldAutoStartLocalTraining() {
+  if (!groupTrainingState.isAdmin) return true;
+  return getAdminParticipationMode() === ADMIN_MODE_PARTICIPATE;
+}
+
+function isTrainingScreenActive() {
+  const trainingScreen = document.getElementById('trainingScreen');
+  if (!trainingScreen) return false;
+  return !trainingScreen.classList.contains('hidden');
+}
+
+function showWaitingScreen() {
+  const waitingScreen = document.getElementById('groupWaitingScreen');
+  if (waitingScreen) {
+    waitingScreen.classList.remove('hidden');
+    waitingScreen.classList.add('active');
+  }
+  if (typeof showScreen === 'function') {
+    showScreen('groupWaitingScreen');
+  }
+}
+
+function persistAdminMode(mode) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(ADMIN_MODE_STORAGE_KEY, mode);
+  } catch (error) {
+    console.warn('관리자 모드 설정 저장 실패:', error?.message || error);
+  }
+}
+
+async function handleAdminModeChange(nextMode) {
+  const normalized = nextMode === ADMIN_MODE_PARTICIPATE
+    ? ADMIN_MODE_PARTICIPATE
+    : ADMIN_MODE_MONITOR;
+  const previous = getAdminParticipationMode();
+  if (previous === normalized) return;
+  
+  groupTrainingState.adminParticipationMode = normalized;
+  persistAdminMode(normalized);
+  updateAdminModeUI();
+  updateStartButtonState();
+  
+  if (normalized === ADMIN_MODE_PARTICIPATE) {
+    if (typeof moveToTrainingScreenWithPausedTimer === 'function' && !isTrainingScreenActive()) {
+      try {
+        await moveToTrainingScreenWithPausedTimer();
+      } catch (error) {
+        console.warn('관리자 훈련 화면 준비 실패:', error?.message || error);
+      }
+    }
+    
+    const roomStatus = groupTrainingState.currentRoom?.status;
+    const ts = window.trainingState || {};
+    if (roomStatus === 'training' && !ts.isRunning && typeof startGroupTrainingSession === 'function') {
+      startGroupTrainingSession();
+    }
+    
+    showToast('관리자가 훈련에 참가합니다', 'info');
+  } else {
+    showWaitingScreen();
+    showToast('관리자 모드를 모니터링 전용으로 전환했습니다', 'info');
+  }
+}
+
+function updateAdminModeUI() {
+  const block = document.querySelector('.admin-training-controls-block');
+  if (!block) return;
+  
+  const currentMode = getAdminParticipationMode();
+  const chip = block.querySelector('.admin-mode-chip');
+  if (chip) {
+    chip.textContent = currentMode === ADMIN_MODE_PARTICIPATE ? '🚴‍♂️ 관리자도 참가' : '👀 모니터링 전용';
+    chip.classList.toggle('monitor', currentMode === ADMIN_MODE_MONITOR);
+    chip.classList.toggle('participate', currentMode === ADMIN_MODE_PARTICIPATE);
+  }
+  
+  block.querySelectorAll('input[name="adminModeChoice"]').forEach(input => {
+    input.checked = input.value === currentMode;
+  });
+}
+
+function bindAdminModeSelector(container) {
+  if (!container) return;
+  const radios = container.querySelectorAll('input[name="adminModeChoice"]');
+  radios.forEach(radio => {
+    if (!radio.dataset.boundMode) {
+      radio.dataset.boundMode = '1';
+      radio.addEventListener('change', (event) => {
+        if (event.target.checked) {
+          handleAdminModeChange(event.target.value);
+        }
+      });
+    }
+  });
+  
+  updateAdminModeUI();
+}
+
+function synchronizeTrainingClock(trainingStartTime) {
+  if (!trainingStartTime || !window.trainingState) return;
+  const startMs = new Date(trainingStartTime).getTime();
+  if (!Number.isFinite(startMs)) return;
+  
+  const ts = window.trainingState;
+  if (!ts.isRunning) return;
+  
+  const targetElapsed = Math.max(0, (Date.now() - startMs) / 1000);
+  const currentElapsed = Number(ts.elapsedSec) || 0;
+  const drift = targetElapsed - currentElapsed;
+  
+  if (!Number.isFinite(drift) || Math.abs(drift) < 0.25) {
+    return;
+  }
+  
+  const maxStep = 0.75;
+  const adjustment = Math.max(Math.min(drift, maxStep), -maxStep);
+  
+  ts.elapsedSec = Math.max(0, currentElapsed + adjustment);
+  if (typeof ts.segElapsedSec === 'number') {
+    ts.segElapsedSec = Math.max(0, ts.segElapsedSec + adjustment);
+  }
+  ts.workoutStartMs = startMs;
 }
 
 
@@ -2705,6 +2856,7 @@ function updateParticipantsList() {
     if (isAdminUser) {
       const participantsListContainer = listEl.parentElement;
       let adminControlsBlock = participantsListContainer.querySelector('.admin-training-controls-block');
+      const adminMode = getAdminParticipationMode();
       
       if (!adminControlsBlock) {
         adminControlsBlock = document.createElement('div');
@@ -2717,6 +2869,24 @@ function updateParticipantsList() {
         <div class="admin-controls-header">
           <h4>관리자 제어</h4>
           <p class="controls-hint">훈련 시작 버튼을 누르면 모든 참가자가 동시에 훈련을 시작합니다</p>
+          <span class="admin-mode-chip ${adminMode === ADMIN_MODE_PARTICIPATE ? 'participate' : 'monitor'}">
+            ${adminMode === ADMIN_MODE_PARTICIPATE ? '🚴‍♂️ 관리자도 참가' : '👀 모니터링 전용'}
+          </span>
+        </div>
+        <div class="admin-mode-selector">
+          <p class="mode-title">관리자 모드 선택</p>
+          <label class="mode-option">
+            <input type="radio" name="adminModeChoice" value="monitor" ${adminMode === ADMIN_MODE_MONITOR ? 'checked' : ''}>
+            모니터링만 진행
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="adminModeChoice" value="participate" ${adminMode === ADMIN_MODE_PARTICIPATE ? 'checked' : ''}>
+            관리자도 훈련에 참가
+          </label>
+          <p class="mode-hint">
+            모니터링 모드를 선택하면 관리자 화면에서 참가자 데이터를 실시간으로 확인할 수 있고,
+            참가 모드를 선택하면 관리자도 동일한 훈련 화면으로 전환됩니다.
+          </p>
         </div>
         <div class="admin-training-controls">
           <button id="adminStartTrainingBtn" class="enhanced-control-btn play" aria-label="훈련 시작" title="훈련 시작">
@@ -2761,6 +2931,8 @@ function updateParticipantsList() {
           }
         };
       }
+      
+      bindAdminModeSelector(adminControlsBlock);
       
       // 훈련 상태에 따른 버튼 활성화
       const ts = window.trainingState || {};
@@ -3426,15 +3598,23 @@ async function syncRoomData() {
         // 훈련 상태 체크 (카운트다운 후)
         if (roomStatus === 'training') {
           const ts = window.trainingState || {};
-          if (!ts.isRunning) {
-            // 훈련이 시작되었지만 아직 로컬에서 시작하지 않은 경우
+          const canAutoStart = shouldAutoStartLocalTraining();
+          if (!ts.isRunning && canAutoStart) {
             console.log('📢 훈련 시작 신호 감지됨');
             if (typeof startGroupTrainingSession === 'function') {
               startGroupTrainingSession();
             } else {
               startLocalGroupTraining();
             }
+          } else if (!ts.isRunning && !canAutoStart) {
+            console.log('관리자 모니터링 모드 - 로컬 세션 시작을 건너뜁니다');
+            showWaitingScreen();
           }
+          
+          const trainingStartTime = mergedRoom.trainingStartTime || mergedRoom.TrainingStartTime || mergedRoom.startedAt;
+          synchronizeTrainingClock(trainingStartTime);
+        } else if (roomStatus === 'waiting') {
+          groupTrainingState.trainingStartSignaled = false;
         }
       } else {
         // 구조 변경이 없어도 라이브 데이터가 갱신될 수 있으므로 상태에 병합된 참가자만 반영하고 UI 갱신
@@ -4873,19 +5053,30 @@ async function startAllParticipantsTraining() {
                        currentUser.grade === '1' || 
                        currentUser.grade === 1 ||
                        (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+    const trainingStartTime = new Date().toISOString();
     
     if (isAdminUser) {
       try {
         // API 호출로 방 상태를 'training'으로 변경하여 모든 참가자에게 신호 전송
         if (typeof apiUpdateRoom === 'function') {
           await apiUpdateRoom(room.roomCode, {
-            status: 'training'
+            status: 'training',
+            trainingStartTime,
+            countdownEndTime: null
           });
         } else if (typeof updateRoomOnBackend === 'function') {
           await updateRoomOnBackend({
             ...room,
-            status: 'training'
+            status: 'training',
+            trainingStartTime,
+            countdownEndTime: null
           });
+        }
+        groupTrainingState.trainingStartSignaled = true;
+        if (groupTrainingState.currentRoom) {
+          groupTrainingState.currentRoom.status = 'training';
+          groupTrainingState.currentRoom.trainingStartTime = trainingStartTime;
+          delete groupTrainingState.currentRoom.countdownEndTime;
         }
         console.log('✅ 서버에 훈련 시작 신호 전송 완료');
       } catch (error) {
@@ -4894,8 +5085,13 @@ async function startAllParticipantsTraining() {
       }
     }
 
-    // 로컬 훈련 시작 (모든 참가자, 관리자 포함)
-    await startLocalGroupTraining();
+    // 로컬 훈련 시작 (관리자 모니터링 모드 제외)
+    if (shouldAutoStartLocalTraining()) {
+      await startLocalGroupTraining();
+    } else {
+      console.log('관리자 모니터링 모드 - 로컬 훈련을 시작하지 않습니다');
+      showWaitingScreen();
+    }
 
   } catch (error) {
     console.error('❌ 모든 참가자 훈련 시작 실패:', error);
