@@ -86,18 +86,14 @@ async function toggleReady() {
           readyBtn.classList.toggle('ready', myParticipant.ready);
         }
         
-        updateParticipantsList();
-        
-        // 준비 완료 시 훈련 화면으로 전환 (타이머는 멈춘 상태)
-        if (myParticipant.ready && !wasReady) {
-          // 관리자가 아닌 경우에만 훈련 화면으로 전환
-          if (!groupTrainingState.isAdmin) {
-            await moveToTrainingScreenWithPausedTimer();
-          }
-          showToast('준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
-        } else if (!myParticipant.ready) {
-          showToast('준비 취소', 'info');
-        }
+      updateParticipantsList();
+      
+      // 준비 완료 시 대기 상태 유지 (훈련 화면으로 전환하지 않음)
+      if (myParticipant.ready && !wasReady) {
+        showToast('✅ 준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
+      } else if (!myParticipant.ready) {
+        showToast('⏳ 준비 취소', 'info');
+      }
         return;
       } else {
         throw new Error('방 업데이트 실패');
@@ -120,22 +116,11 @@ async function toggleReady() {
       
       updateParticipantsList();
       
-      // 준비 완료 시 훈련 화면으로 전환 (타이머는 멈춘 상태)
+      // 준비 완료 시 대기 상태 유지 (훈련 화면으로 전환하지 않음)
       if (myParticipant.ready && !wasReady) {
-        // 관리자가 아닌 경우에만 훈련 화면으로 전환
-        if (!groupTrainingState.isAdmin) {
-          await moveToTrainingScreenWithPausedTimer();
-        }
-        showToast('준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
+        showToast('✅ 준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
       } else if (!myParticipant.ready) {
-        // 준비 취소 시 대기실로 돌아가기 (훈련 화면에서 나온 경우)
-        if (typeof showScreen === 'function') {
-          const currentScreen = document.querySelector('.screen.active, #trainingScreen.active');
-          if (currentScreen && (currentScreen.id === 'trainingScreen' || currentScreen.classList.contains('training-screen'))) {
-            showScreen('groupWaitingScreen');
-          }
-        }
-        showToast('준비 취소', 'info');
+        showToast('⏳ 준비 취소', 'info');
       }
     }
     
