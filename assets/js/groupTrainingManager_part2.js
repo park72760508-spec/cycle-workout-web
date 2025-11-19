@@ -873,37 +873,49 @@ function showAdminCountdownOverlay(seconds) {
  * 참가자 카운트다운 표시 (동기화)
  */
 function showParticipantCountdown(seconds) {
-  const overlay = document.createElement('div');
-  overlay.id = 'participantCountdownOverlay';
-  overlay.className = 'countdown-overlay';
-  overlay.innerHTML = `
-    <div class="countdown-content">
-      <h2>🚀 그룹 훈련 시작!</h2>
-      <div class="countdown-number" id="participantCountdownNumber">${seconds}</div>
-      <p>관리자가 훈련을 시작합니다</p>
-    </div>
-  `;
-  
-  document.body.appendChild(overlay);
-  
-  let count = seconds;
-  const countdownInterval = setInterval(() => {
-    count--;
-    const numberEl = document.getElementById('participantCountdownNumber');
-    if (numberEl) {
-      numberEl.textContent = count;
-      
-      if (count <= 3) {
-        numberEl.style.color = '#e74c3c';
-        numberEl.style.transform = 'scale(1.2)';
-      }
+  return new Promise((resolve) => {
+    if (typeof showToast === 'function') {
+      showToast('관리자가 훈련 시작을 알렸습니다. 잠시 후 시작합니다!', 'info');
     }
     
-    if (count <= 0) {
-      clearInterval(countdownInterval);
-      overlay.remove();
+    const existing = document.getElementById('participantCountdownOverlay');
+    if (existing) {
+      existing.remove();
     }
-  }, 1000);
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'participantCountdownOverlay';
+    overlay.className = 'countdown-overlay';
+    overlay.innerHTML = `
+      <div class="countdown-content">
+        <h2>🚀 곧 훈련이 시작됩니다</h2>
+        <div class="countdown-number" id="participantCountdownNumber">${seconds}</div>
+        <p>관리자가 훈련을 시작합니다. 준비해주세요!</p>
+      </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    let count = seconds;
+    const countdownInterval = setInterval(() => {
+      count--;
+      const numberEl = document.getElementById('participantCountdownNumber');
+      if (numberEl) {
+        numberEl.textContent = count;
+        
+        if (count <= 3) {
+          numberEl.style.color = '#e74c3c';
+          numberEl.style.transform = 'scale(1.2)';
+        }
+      }
+      
+      if (count <= 0) {
+        clearInterval(countdownInterval);
+        overlay.remove();
+        resolve();
+      }
+    }, 1000);
+  });
 }
 
 /**
@@ -934,8 +946,7 @@ async function broadcastCountdownStart(seconds) {
   console.log(`Broadcasting countdown start: ${seconds} seconds`);
   
   // 참가자들은 방 동기화를 통해 카운트다운 시작 시간을 감지
-  if (!groupTrainingState.isAdmin) {
-    // 참가자는 방 상태를 확인하여 카운트다운 시작
+  if (typeof checkAndSyncCountdown === 'function') {
     checkAndSyncCountdown();
   }
 }
@@ -2183,6 +2194,8 @@ window.initializeGroupRoomScreen = initializeGroupRoomScreen;
 window.startAdminControlledCountdown = startAdminControlledCountdown;
 window.cancelGroupCountdown = cancelGroupCountdown;
 window.checkAndSyncCountdown = checkAndSyncCountdown;
+window.broadcastCountdownStart = broadcastCountdownStart;
+window.showParticipantCountdown = showParticipantCountdown;
 
 // 🆕 새로 추가된 함수들
 window.ensureMonitoringOverlay = ensureMonitoringOverlay;
