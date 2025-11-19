@@ -28,7 +28,8 @@ window.groupTrainingState = window.groupTrainingState || {
   syncInterval: null,
   managerInterval: null,
   isConnected: false,
-  lastSyncTime: null
+  lastSyncTime: null,
+  countdownStarted: false  // 카운트다운 시작 여부 (중복 방지)
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -3335,14 +3336,61 @@ async function syncRoomData() {
         }
 
         // 카운트다운/훈련 시작 상태 체크
-        if (mergedRoom.status === 'starting' && !groupTrainingState.isAdmin) {
-          if (typeof checkAndSyncCountdown === 'function') {
-            checkAndSyncCountdown();
+        const roomStatus = mergedRoom.status || mergedRoom.Status || 'waiting';
+        const countdownEndTime = mergedRoom.countdownEndTime || mergedRoom.CountdownEndTime;
+        const wasStarting = groupTrainingState.currentRoom?.status === 'starting';
+        const isStarting = roomStatus === 'starting';
+        
+        // 참가자가 카운트다운 시작 신호를 감지한 경우 (중복 실행 방지)
+        if (isStarting && !groupTrainingState.isAdmin && !wasStarting) {
+          console.log('📢 훈련 시작 카운트다운 감지됨');
+          
+          // 카운트다운 종료 시간이 있으면 그 시간을 기준으로 카운트다운
+          if (countdownEndTime) {
+            const endTime = new Date(countdownEndTime).getTime();
+            const now = Date.now();
+            const remainingMs = Math.max(0, endTime - now);
+            const remainingSeconds = Math.ceil(remainingMs / 1000);
+            
+            if (remainingSeconds > 0) {
+              console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음`);
+              // 참가자 화면에도 카운트다운 표시 (중복 방지를 위해 플래그 설정)
+              if (!groupTrainingState.countdownStarted) {
+                groupTrainingState.countdownStarted = true;
+                showGroupCountdownOverlay(remainingSeconds).then(() => {
+                  groupTrainingState.countdownStarted = false;
+                });
+              }
+            } else {
+              // 카운트다운이 이미 끝났으면 바로 훈련 시작
+              console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작');
+              if (!groupTrainingState.countdownStarted) {
+                startLocalGroupTraining();
+              }
+            }
+          } else {
+            // 카운트다운 종료 시간이 없으면 기본 5초 카운트다운
+            console.log('⏱️ 카운트다운 시작 (기본 5초)');
+            if (!groupTrainingState.countdownStarted) {
+              groupTrainingState.countdownStarted = true;
+              showGroupCountdownOverlay(5).then(() => {
+                groupTrainingState.countdownStarted = false;
+              });
+            }
           }
         }
-        if (mergedRoom.status === 'training' && !groupTrainingState.isTraining) {
-          if (typeof startGroupTrainingSession === 'function') {
-            startGroupTrainingSession();
+        
+        // 훈련 상태 체크 (카운트다운 후)
+        if (roomStatus === 'training') {
+          const ts = window.trainingState || {};
+          if (!ts.isRunning) {
+            // 훈련이 시작되었지만 아직 로컬에서 시작하지 않은 경우
+            console.log('📢 훈련 시작 신호 감지됨');
+            if (typeof startGroupTrainingSession === 'function') {
+              startGroupTrainingSession();
+            } else {
+              startLocalGroupTraining();
+            }
           }
         }
       } else {
@@ -4591,8 +4639,8 @@ async function startGroupTrainingWithCountdown() {
     }
 
     const room = groupTrainingState.currentRoom;
-    if (!room || !room.workoutId) {
-      showToast('워크아웃 정보가 없습니다', 'error');
+    if (!room || !room.workoutId || !room.roomCode) {
+      showToast('방 정보가 없습니다', 'error');
       return;
     }
 
@@ -4602,10 +4650,42 @@ async function startGroupTrainingWithCountdown() {
       return;
     }
 
-    console.log('🚀 그룹 훈련 시작 카운트다운 시작');
+    // 준비 완료된 참가자 확인
+    const readyParticipants = room.participants?.filter(p => p.ready === true || p.isReady === true) || [];
+    if (readyParticipants.length === 0) {
+      showToast('준비 완료된 참가자가 없습니다', 'warning');
+      return;
+    }
 
-    // 카운트다운 오버레이 표시 (그룹 훈련 화면에서)
-    await showGroupCountdownOverlay(5);
+    console.log('🚀 그룹 훈련 시작 카운트다운 시작');
+    console.log(`✅ 준비 완료된 참가자: ${readyParticipants.length}명`);
+
+    // 서버에 카운트다운 시작 신호 전송 (모든 참가자가 감지할 수 있도록)
+    const countdownSeconds = 5;
+    const countdownEndTime = new Date(Date.now() + countdownSeconds * 1000).toISOString();
+    
+    try {
+      // 방 상태를 'starting'으로 변경하고 카운트다운 종료 시간 저장
+      if (typeof apiUpdateRoom === 'function') {
+        await apiUpdateRoom(room.roomCode, {
+          status: 'starting',
+          countdownEndTime: countdownEndTime
+        });
+      } else if (typeof updateRoomOnBackend === 'function') {
+        await updateRoomOnBackend({
+          ...room,
+          status: 'starting',
+          countdownEndTime: countdownEndTime
+        });
+      }
+      console.log('✅ 서버에 카운트다운 시작 신호 전송 완료');
+    } catch (error) {
+      console.warn('서버에 카운트다운 시작 신호 전송 실패:', error);
+      // 서버 전송 실패해도 로컬에서는 계속 진행
+    }
+
+    // 관리자 화면에서 카운트다운 오버레이 표시
+    await showGroupCountdownOverlay(countdownSeconds);
 
   } catch (error) {
     console.error('❌ 그룹 훈련 시작 실패:', error);
@@ -4726,14 +4806,19 @@ async function startAllParticipantsTraining() {
       return;
     }
 
-    // 서버에 훈련 시작 신호 전송 (관리자)
+    // 서버에 훈련 시작 신호 전송 (관리자만)
     if (groupTrainingState.isAdmin) {
       try {
-        // API 호출로 모든 참가자에게 훈련 시작 신호 전송
-        if (typeof apiStartGroupTraining === 'function') {
-          await apiStartGroupTraining(room.roomCode);
-        } else if (typeof updateRoomStatus === 'function') {
-          await updateRoomStatus(room.roomCode, 'training');
+        // API 호출로 방 상태를 'training'으로 변경하여 모든 참가자에게 신호 전송
+        if (typeof apiUpdateRoom === 'function') {
+          await apiUpdateRoom(room.roomCode, {
+            status: 'training'
+          });
+        } else if (typeof updateRoomOnBackend === 'function') {
+          await updateRoomOnBackend({
+            ...room,
+            status: 'training'
+          });
         }
         console.log('✅ 서버에 훈련 시작 신호 전송 완료');
       } catch (error) {
