@@ -2691,7 +2691,14 @@ function updateParticipantsList() {
     });
     
     // 관리자 전용 제어 블록 추가 (참가자 목록 아래)
-    if (groupTrainingState.isAdmin) {
+    // grade=1 사용자 또는 isAdmin인 경우 표시
+    const currentUser = window.currentUser || {};
+    const isAdminUser = groupTrainingState.isAdmin || 
+                       currentUser.grade === '1' || 
+                       currentUser.grade === 1 ||
+                       (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+    
+    if (isAdminUser) {
       const participantsListContainer = listEl.parentElement;
       let adminControlsBlock = participantsListContainer.querySelector('.admin-training-controls-block');
       
@@ -2838,6 +2845,7 @@ function renderWaitingHeaderSegmentTable() {
 
     const workout = window.currentWorkout;
     const segments = workout.segments;
+    const room = groupTrainingState.currentRoom || {};
 
     // 현재 세그먼트 인덱스 계산
     const ts = window.trainingState || {};
@@ -2972,6 +2980,23 @@ function renderWaitingHeaderSegmentTable() {
       const rows = Array.from(wrapper?.querySelectorAll('tbody tr') || []);
       if (!wrapper || rows.length === 0) return;
 
+      // 훈련 시작 전 스크롤 위치 보존을 위한 저장소 키
+      const scrollStorageKey = `workoutTableScroll_${room.roomCode || 'default'}`;
+      
+      // 현재 스크롤 위치 가져오기 (렌더링 전 사용자가 설정한 위치)
+      const currentScrollTop = wrapper.scrollTop;
+      
+      // 저장된 스크롤 위치 읽기
+      let savedScrollTop = null;
+      try {
+        const saved = sessionStorage.getItem(scrollStorageKey);
+        if (saved !== null) {
+          savedScrollTop = Number(saved);
+        }
+      } catch (e) {
+        console.warn('스크롤 위치 저장소 읽기 실패:', e);
+      }
+
       const maxVisible = Math.min(3, rows.length);
       if (rows.length > maxVisible) {
         const rowHeight = rows[0].offsetHeight || 0;
@@ -2994,8 +3019,48 @@ function renderWaitingHeaderSegmentTable() {
           
           wrapper.scrollTop = targetScroll;
         }
+      } else {
+        // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
+        // 현재 스크롤 위치가 있으면 그것을 우선 사용, 없으면 저장된 위치 사용
+        if (currentScrollTop > 0) {
+          // 사용자가 이미 스크롤한 위치가 있으면 그대로 유지
+          wrapper.scrollTop = currentScrollTop;
+        } else if (savedScrollTop !== null && savedScrollTop > 0) {
+          // 저장된 스크롤 위치 복원
+          wrapper.scrollTop = savedScrollTop;
+        }
+        // 둘 다 없으면 스크롤 위치 변경하지 않음 (상단 유지)
       }
-      // 훈련 시작 전에는 스크롤 위치를 변경하지 않음 (자동 복귀 없음)
+
+      // 사용자 스크롤 이벤트 감지하여 위치 저장 (훈련 시작 전에만)
+      if (!isTrainingStarted) {
+        // 기존 이벤트 리스너 제거 (중복 방지)
+        const existingHandler = wrapper._scrollHandler;
+        if (existingHandler) {
+          wrapper.removeEventListener('scroll', existingHandler);
+        }
+
+        // 새로운 스크롤 핸들러 생성
+        const handleScroll = () => {
+          const scrollTop = wrapper.scrollTop;
+          try {
+            sessionStorage.setItem(scrollStorageKey, String(scrollTop));
+          } catch (e) {
+            console.warn('스크롤 위치 저장 실패:', e);
+          }
+        };
+
+        // 핸들러 저장 및 이벤트 등록
+        wrapper._scrollHandler = handleScroll;
+        wrapper.addEventListener('scroll', handleScroll, { passive: true });
+      } else {
+        // 훈련 시작 후에는 스크롤 이벤트 리스너 제거
+        const existingHandler = wrapper._scrollHandler;
+        if (existingHandler) {
+          wrapper.removeEventListener('scroll', existingHandler);
+          delete wrapper._scrollHandler;
+        }
+      }
     });
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
