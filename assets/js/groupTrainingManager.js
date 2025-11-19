@@ -2231,10 +2231,17 @@ function initializeWaitingRoom() {
   renderWaitingHeaderSegmentTable();
   
   // 관리자/참가자 컨트롤 표시
+  // grade=1 사용자도 관리자로 인식
+  const currentUser = window.currentUser || {};
+  if (!groupTrainingState.isAdmin && (currentUser.grade === '1' || currentUser.grade === 1 || (typeof getViewerGrade === 'function' && getViewerGrade() === '1'))) {
+    groupTrainingState.isAdmin = true;
+    console.log('✅ grade=1 사용자를 관리자로 설정했습니다');
+  }
+  
   const adminControls = safeGet('adminControls');
   const participantControls = safeGet('participantControls');
   
-  console.log('대기실 초기화 - 관리자 여부:', groupTrainingState.isAdmin);
+  console.log('대기실 초기화 - 관리자 여부:', groupTrainingState.isAdmin, '사용자 grade:', currentUser.grade);
   console.log('adminControls 요소:', adminControls);
   console.log('participantControls 요소:', participantControls);
   
@@ -4633,7 +4640,14 @@ window.getRoomsByWorkoutId = getRoomsByWorkoutId;
  */
 async function startGroupTrainingWithCountdown() {
   try {
-    if (!groupTrainingState.isAdmin) {
+    // 관리자 체크 (groupTrainingState.isAdmin 또는 grade=1)
+    const currentUser = window.currentUser || {};
+    const isAdminUser = groupTrainingState.isAdmin || 
+                       currentUser.grade === '1' || 
+                       currentUser.grade === 1 ||
+                       (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+    
+    if (!isAdminUser) {
       showToast('관리자만 훈련을 시작할 수 있습니다', 'error');
       return;
     }
@@ -4807,7 +4821,14 @@ async function startAllParticipantsTraining() {
     }
 
     // 서버에 훈련 시작 신호 전송 (관리자만)
-    if (groupTrainingState.isAdmin) {
+    // grade=1 사용자도 관리자로 인식
+    const currentUser = window.currentUser || {};
+    const isAdminUser = groupTrainingState.isAdmin || 
+                       currentUser.grade === '1' || 
+                       currentUser.grade === 1 ||
+                       (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+    
+    if (isAdminUser) {
       try {
         // API 호출로 방 상태를 'training'으로 변경하여 모든 참가자에게 신호 전송
         if (typeof apiUpdateRoom === 'function') {
