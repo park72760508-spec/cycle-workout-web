@@ -4867,8 +4867,8 @@ async function startGroupTrainingWithCountdown() {
     }
 
     const participantCount = room.participants?.length || 0;
-    if (participantCount < 2) {
-      showToast('최소 2명의 참가자가 필요합니다', 'warning');
+    if (participantCount < 1) {
+      showToast('참가자가 없습니다', 'warning');
       return;
     }
     
