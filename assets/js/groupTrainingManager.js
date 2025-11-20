@@ -2419,7 +2419,10 @@ async function getRoomByCode(roomCode) {
  */
 function setupGroupTrainingControlBar() {
   const controlBar = document.getElementById('groupTrainingControlBar');
-  if (!controlBar) return;
+  if (!controlBar) {
+    console.warn('groupTrainingControlBar 요소를 찾을 수 없습니다');
+    return;
+  }
   
   // 관리자 권한 확인
   const currentUser = window.currentUser || {};
@@ -2432,6 +2435,9 @@ function setupGroupTrainingControlBar() {
     controlBar.classList.add('hidden');
     return;
   }
+  
+  // 관리자인 경우 제어 바 표시
+  controlBar.classList.remove('hidden');
   
   // 버튼 이벤트 리스너 설정
   const skipBtn = document.getElementById('groupSkipSegmentBtn');
@@ -3226,6 +3232,11 @@ function updateStartButtonState() {
     return;
   }
   
+  // 관리자인 경우 제어 바 표시
+  if (groupControlBar) {
+    groupControlBar.classList.remove('hidden');
+  }
+  
   if (legacyStartBtn) {
     legacyStartBtn.style.display = '';
   }
@@ -3271,6 +3282,9 @@ function updateStartButtonState() {
   }
   
   // 그룹 훈련 제어 바 버튼 상태 업데이트
+  const skipBtn = document.getElementById('groupSkipSegmentBtn');
+  const stopBtn = document.getElementById('groupStopTrainingBtn');
+  
   if (groupToggleBtn) {
     if (isRunning) {
       groupToggleBtn.disabled = false;
@@ -3286,6 +3300,18 @@ function updateStartButtonState() {
         ? `${readyCount}/${totalParticipants}명 준비완료 - 훈련 시작 가능`
         : `준비완료된 참가자가 필요합니다 (현재: ${readyCount}명)`;
     }
+  }
+  
+  // 건너뛰기 버튼 상태 업데이트
+  if (skipBtn) {
+    skipBtn.disabled = !isRunning;
+    skipBtn.title = isRunning ? '현재 세그먼트 건너뛰기' : '훈련이 시작되면 활성화됩니다';
+  }
+  
+  // 종료 버튼 상태 업데이트
+  if (stopBtn) {
+    stopBtn.disabled = !isRunning;
+    stopBtn.title = isRunning ? '훈련을 강제 종료합니다' : '훈련이 시작되면 활성화됩니다';
   }
 }
 
