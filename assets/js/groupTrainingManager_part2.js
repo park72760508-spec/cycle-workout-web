@@ -2163,6 +2163,14 @@ function sendChatMessageToParticipants(chatMessage) {
 async function initializeGroupRoomScreen() {
   console.log('🔍 initializeGroupRoomScreen called');
   console.log('👤 Current user:', window.currentUser);
+
+  try {
+    if (typeof ensureRequiredElements === 'function') {
+      ensureRequiredElements();
+    }
+  } catch (error) {
+    console.warn('ensureRequiredElements 실행 중 문제 발생:', error);
+  }
   
   // 역할 선택 초기화
   const adminBtn = safeGet('adminRoleBtn');
