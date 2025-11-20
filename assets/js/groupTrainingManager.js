@@ -1322,6 +1322,11 @@ function selectGroupMode(mode) {
  */
 async function selectRole(role) {
   console.log(`🎭 역할 선택: ${role}`);
+
+  // 매니저 모드에서 다른 역할로 전환 시 매니저 대시보드 업데이트 중지
+  if (role !== 'manager') {
+    stopManagerDashboardUpdates();
+  }
   
   // 기존 선택 해제
   document.querySelectorAll('.role-btn').forEach(btn => {
@@ -1367,6 +1372,17 @@ async function selectRole(role) {
         console.error('참가자 섹션 초기화 실패:', error);
       }
     }, 150);
+  }
+
+  if (role === 'manager') {
+    try {
+      await initializeManagerDashboard();
+    } catch (error) {
+      console.error('관리자 대시보드 초기화 실패:', error);
+      if (typeof showToast === 'function') {
+        showToast('관리자 대시보드를 불러오지 못했습니다', 'error');
+      }
+    }
   }
   
   if (typeof showToast === 'function') {
@@ -3918,6 +3934,7 @@ console.log('✅ Group Training Manager loaded');
 
 async function initializeManagerDashboard() {
   console.log('Initializing manager dashboard');
+  groupTrainingState.isManager = true;
   
   try {
     // 활성 훈련방 목록 로드
@@ -3936,12 +3953,20 @@ async function initializeManagerDashboard() {
         refreshActiveRooms();
         updateRoomStatistics();
       }
-    }, 30000);
+    }, 10000);
     
   } catch (error) {
     console.error('Failed to initialize manager dashboard:', error);
     showToast('관리자 대시보드 초기화에 실패했습니다', 'error');
   }
+}
+
+function stopManagerDashboardUpdates() {
+  if (groupTrainingState.managerInterval) {
+    clearInterval(groupTrainingState.managerInterval);
+    groupTrainingState.managerInterval = null;
+  }
+  groupTrainingState.isManager = false;
 }
 
 /**
@@ -3963,9 +3988,10 @@ async function refreshActiveRooms() {
     const allRooms = await getAllRoomsFromBackend();
     
     // 활성 방만 필터링 (waiting, training 상태)
-    const activeRooms = allRooms.filter(room => 
-      room.Status === 'waiting' || room.Status === 'training'
-    );
+    const activeRooms = allRooms.filter(room => {
+      const status = (room.Status || room.status || '').toLowerCase();
+      return status === 'waiting' || status === 'training';
+    });
     
     if (activeRooms.length === 0) {
       container.innerHTML = `
@@ -3978,26 +4004,52 @@ async function refreshActiveRooms() {
       return;
     }
     
-    container.innerHTML = activeRooms.map(room => `
-      <div class="active-room-card ${room.Status}">
+    container.innerHTML = activeRooms.map(room => {
+      const status = (room.Status || room.status || 'waiting').toLowerCase();
+      const statusLabel = status === 'waiting'
+        ? '⏳ 대기중'
+        : status === 'training'
+          ? '🟢 진행중'
+          : '🔄 활성';
+      const participants = Array.isArray(room.ParticipantsData)
+        ? room.ParticipantsData
+        : (Array.isArray(room.participants) ? room.participants : []);
+      const readyCount = participants.reduce((count, participant) => {
+        return count + (isParticipantReady(participant) ? 1 : 0);
+      }, 0);
+      const participantTags = participants.length > 0
+        ? participants.map(p => {
+            const isReady = isParticipantReady(p);
+            const name = escapeHtml(p.name || p.participantName || '이름 없음');
+            const roleClass = p.role ? ` ${String(p.role).replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
+            const readinessClass = isReady ? ' ready' : ' waiting';
+            const readinessIcon = isReady ? '🟢' : '⚪';
+            const readinessLabel = isReady ? '준비 완료' : '대기 중';
+            return `<span class="participant-tag${roleClass}${readinessClass}" title="${readinessLabel}">
+              ${readinessIcon} ${name}
+            </span>`;
+          }).join('')
+        : '<span class="empty-participants">참가자 없음</span>';
+
+      return `
+      <div class="active-room-card ${status}">
         <div class="room-header">
-          <span class="room-name">${room.Name}</span>
-          <span class="room-status ${room.Status}">
-            ${room.Status === 'waiting' ? '⏳ 대기중' : '🔴 진행중'}
+          <span class="room-name">${escapeHtml(room.Name || room.name || room.Code)}</span>
+          <span class="room-status ${status}">
+            ${statusLabel}
           </span>
         </div>
         
         <div class="room-details">
-          <div><strong>방 코드:</strong> ${room.Code}</div>
-          <div><strong>관리자:</strong> ${room.AdminName}</div>
-          <div><strong>참가자:</strong> ${(room.ParticipantsData || []).length}/${room.MaxParticipants}명</div>
-          <div><strong>생성시간:</strong> ${new Date(room.CreatedAt).toLocaleString()}</div>
+          <div><strong>방 코드:</strong> ${escapeHtml(room.Code)}</div>
+          <div><strong>관리자:</strong> ${escapeHtml(room.AdminName || '미지정')}</div>
+          <div><strong>참가자:</strong> ${participants.length}/${room.MaxParticipants || room.maxParticipants || '-'}명</div>
+          <div><strong>준비 상태:</strong> ${readyCount}/${participants.length}명</div>
+          <div class="room-created-at"><strong>생성시간:</strong> ${room.CreatedAt ? new Date(room.CreatedAt).toLocaleString() : '-'}</div>
         </div>
         
         <div class="room-participants">
-          ${(room.ParticipantsData || []).map(p => `
-            <span class="participant-tag ${p.role}">${p.name}</span>
-          `).join('')}
+          ${participantTags}
         </div>
         
         <div class="room-actions">
@@ -4008,8 +4060,8 @@ async function refreshActiveRooms() {
             🛑 강제 중단
           </button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
     
   } catch (error) {
     console.error('Failed to refresh active rooms:', error);
