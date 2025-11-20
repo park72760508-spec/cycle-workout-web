@@ -173,6 +173,16 @@ function normalizeParticipantsArray(rawParticipants) {
   return array.map(normalizeParticipantReady);
 }
 
+function normalizeRoomParticipantsInPlace(room) {
+  if (!room || typeof room !== 'object') {
+    return [];
+  }
+  const normalized = normalizeParticipantsArray(room.participants || room.ParticipantsData || []);
+  room.participants = normalized;
+  room.ParticipantsData = normalized;
+  return normalized;
+}
+
 function getParticipantIdentifier(participant) {
   if (!participant) return '';
   const id = participant.id ?? participant.participantId ?? participant.userId;
@@ -470,7 +480,8 @@ function normalizeRoomData(raw) {
           }
         }
         return s;
-      })()
+      })(),
+      ParticipantsData: participants
     };
   } catch (error) {
     console.warn('normalizeRoomData 실패:', error);
@@ -2098,8 +2109,9 @@ async function getRoomsFromBackend() {
       
       // 대기 중이고 자리가 있는 방들만 필터링
       const availableRooms = (result.items || result.rooms || []).filter(room => {
+        normalizeRoomParticipantsInPlace(room);
         const status = (room.status || room.Status || 'unknown').toLowerCase();
-        const participants = normalizeParticipantsArray(room.participants || room.ParticipantsData || []);
+        const participants = room.participants || [];
         const currentParticipants = participants.length;
         const maxParticipants = Number(room.maxParticipants || room.MaxParticipants || 10) || 10;
         
@@ -2736,6 +2748,8 @@ function initializeWaitingRoom() {
     console.error('No current room found');
     return;
   }
+
+  normalizeRoomParticipantsInPlace(room);
   
   // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링
   renderWaitingHeaderSegmentTable();
@@ -2845,6 +2859,8 @@ function initializeWaitingRoom() {
 function updateParticipantsList() {
   const room = groupTrainingState.currentRoom;
   if (!room) return;
+  
+  normalizeRoomParticipantsInPlace(room);
   
   const countEl = safeGet('participantCount');
   const maxCountEl = safeGet('maxParticipantCount');
@@ -3696,6 +3712,7 @@ async function syncRoomData() {
     
     // 성공적으로 방 정보를 가져온 경우 오류 카운터 리셋
     if (latestRoom && !latestRoom.__roomDeleted) {
+      normalizeRoomParticipantsInPlace(latestRoom);
       networkErrorCount = 0;
 
       // 참가자 라이브 데이터 조회 후 병합(모든 참가자의 화면에 실시간 반영)
@@ -4138,7 +4155,8 @@ async function refreshActiveRooms() {
         : status === 'training'
           ? '🟢 진행중'
           : '🔄 활성';
-      const participants = normalizeParticipantsArray(room.ParticipantsData || room.participants || []);
+    normalizeRoomParticipantsInPlace(room);
+    const participants = room.participants;
       const readyCount = participants.reduce((count, participant) => {
         return count + (isParticipantReady(participant) ? 1 : 0);
       }, 0);
@@ -4215,7 +4233,9 @@ async function getAllRoomsFromBackend() {
     const result = await response.json();
     
     if (result.success) {
-      return result.items || [];
+      const rooms = result.items || [];
+      rooms.forEach(room => normalizeRoomParticipantsInPlace(room));
+      return rooms;
     } else {
       console.error('Backend error:', result.error);
       return [];
