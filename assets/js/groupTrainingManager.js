@@ -55,6 +55,19 @@ const GROUP_COUNTDOWN_SECONDS = 10; // 그룹 훈련 카운트다운 기본 10�
 const ADMIN_MODE_MONITOR = 'monitor';
 const ADMIN_MODE_PARTICIPATE = 'participate';
 
+async function fetchLatestRoomState(roomCode) {
+  if (!roomCode) return null;
+  try {
+    const latest = await getRoomByCode(roomCode);
+    if (latest && !latest.__roomDeleted) {
+      return latest;
+    }
+  } catch (error) {
+    console.warn('fetchLatestRoomState 실패:', error?.message || error);
+  }
+  return null;
+}
+
 function parseBooleanLike(value) {
   if (value === undefined || value === null) return undefined;
   if (typeof value === 'boolean') return value;
