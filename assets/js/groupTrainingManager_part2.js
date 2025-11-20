@@ -99,7 +99,15 @@ async function toggleReady() {
         
         if (result && result.success !== false) {
           groupTrainingState.currentRoom.participants = updatedParticipants;
+          
+          // 준비 상태 오버라이드 설정 (서버 동기화 지연 대비)
+          // TTL을 갱신하여 자동 리셋 방지
           applyReadyOverride();
+          
+          // 오버라이드 TTL 갱신 (서버 업데이트 성공 시 만료 시간 연장)
+          if (typeof setReadyOverride === 'function' && participantKey) {
+            setReadyOverride(participantKey, newReadyState);
+          }
           
           // UI 업데이트
           const readyBtn = safeGet('readyToggleBtn');
@@ -140,7 +148,15 @@ async function toggleReady() {
     
     if (success) {
       groupTrainingState.currentRoom.participants = updatedParticipants;
+      
+      // 준비 상태 오버라이드 설정 (서버 동기화 지연 대비)
+      // TTL을 갱신하여 자동 리셋 방지
       applyReadyOverride();
+      
+      // 오버라이드 TTL 갱신 (서버 업데이트 성공 시 만료 시간 연장)
+      if (typeof setReadyOverride === 'function' && participantKey) {
+        setReadyOverride(participantKey, newReadyState);
+      }
       
       // UI 업데이트
       const readyBtn = safeGet('readyToggleBtn');
