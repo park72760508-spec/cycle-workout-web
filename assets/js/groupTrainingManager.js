@@ -51,6 +51,7 @@ if (typeof localStorage !== 'undefined') {
 }
 
 const READY_OVERRIDE_TTL = 300000; // 백엔드 동기화 지연 시 최대 5분 동안 로컬 상태 유지 (자동 리셋 방지)
+const GROUP_COUNTDOWN_SECONDS = 10; // 그룹 훈련 카운트다운 기본 10초
 const ADMIN_MODE_MONITOR = 'monitor';
 const ADMIN_MODE_PARTICIPATE = 'participate';
 
@@ -3614,8 +3615,11 @@ async function syncRoomData() {
         });
       }
 
+      const previousRoomState = groupTrainingState.currentRoom;
+      const previousStatus = previousRoomState?.status || previousRoomState?.Status || 'waiting';
+
       // 방 상태가 변경되었는지 확인
-      const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(groupTrainingState.currentRoom);
+      const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(previousRoomState);
 
       if (hasChanges) {
         groupTrainingState.currentRoom = mergedRoom;
@@ -3632,7 +3636,7 @@ async function syncRoomData() {
         // 카운트다운/훈련 시작 상태 체크
         const roomStatus = mergedRoom.status || mergedRoom.Status || 'waiting';
         const countdownEndTime = mergedRoom.countdownEndTime || mergedRoom.CountdownEndTime;
-        const wasStarting = groupTrainingState.currentRoom?.status === 'starting';
+        const wasStarting = previousStatus === 'starting';
         const isStarting = roomStatus === 'starting';
         
         // 참가자가 카운트다운 시작 신호를 감지한 경우 (중복 실행 방지)
@@ -3666,11 +3670,11 @@ async function syncRoomData() {
               }
             }
           } else {
-            // 카운트다운 종료 시간이 없으면 기본 5초 카운트다운
-            console.log('⏱️ 카운트다운 시작 (기본 5초, 모든 참가자)');
+            // 카운트다운 종료 시간이 없으면 기본 카운트다운
+            console.log(`⏱️ 카운트다운 시작 (기본 ${GROUP_COUNTDOWN_SECONDS}초, 모든 참가자)`);
             if (!groupTrainingState.countdownStarted) {
               groupTrainingState.countdownStarted = true;
-              Promise.resolve(triggerCountdownOverlay(5))
+              Promise.resolve(triggerCountdownOverlay(GROUP_COUNTDOWN_SECONDS))
                 .catch(err => console.warn('카운트다운 표시 실패:', err))
                 .finally(() => {
                   groupTrainingState.countdownStarted = false;
@@ -4987,7 +4991,7 @@ async function startGroupTrainingWithCountdown() {
     console.log(`✅ 준비 완료된 참가자: ${readyCount}명`);
 
     // 서버에 카운트다운 시작 신호 전송 (모든 참가자가 감지할 수 있도록)
-    const countdownSeconds = 5;
+    const countdownSeconds = GROUP_COUNTDOWN_SECONDS;
     const countdownEndTime = new Date(Date.now() + countdownSeconds * 1000).toISOString();
     
     try {
@@ -5030,7 +5034,7 @@ async function startGroupTrainingWithCountdown() {
 /**
  * 그룹 훈련 카운트다운 오버레이 표시 (5초)
  */
-async function showGroupCountdownOverlay(seconds = 5) {
+async function showGroupCountdownOverlay(seconds = GROUP_COUNTDOWN_SECONDS) {
   return new Promise((resolve) => {
     // 카운트다운 오버레이 요소 찾기 또는 생성
     let overlay = document.getElementById('countdownOverlay');
