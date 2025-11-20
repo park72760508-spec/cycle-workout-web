@@ -52,15 +52,21 @@ async function toggleReady() {
     return;
   }
   
-  // 준비 상태 변경
-  const wasReady = myParticipant.ready;
-  myParticipant.ready = !myParticipant.ready;
+  // 준비 상태 변경 (다양한 필드명 지원)
+  const wasReady = typeof isParticipantReady === 'function' 
+    ? isParticipantReady(myParticipant) 
+    : (myParticipant.ready !== undefined ? myParticipant.ready : (myParticipant.isReady !== undefined ? myParticipant.isReady : false));
+  const newReadyState = !wasReady;
+  
+  // 모든 가능한 필드에 준비 상태 저장
+  myParticipant.ready = newReadyState;
+  myParticipant.isReady = newReadyState;
   const participantKey = typeof getParticipantIdentifier === 'function'
     ? getParticipantIdentifier(myParticipant)
     : (myParticipant.id || myParticipant.participantId || myParticipant.userId || String(myId));
   const applyReadyOverride = () => {
     if (typeof setReadyOverride === 'function' && participantKey) {
-      setReadyOverride(participantKey, myParticipant.ready);
+      setReadyOverride(participantKey, newReadyState);
     }
   };
   
@@ -68,7 +74,11 @@ async function toggleReady() {
     // 백엔드 업데이트
     const updatedParticipants = room.participants.map(p => {
       if (match(p)) {
-        return { ...p, ready: myParticipant.ready };
+        return { 
+          ...p, 
+          ready: newReadyState,
+          isReady: newReadyState
+        };
       }
       return p;
     });
@@ -82,31 +92,44 @@ async function toggleReady() {
     
     if (!updateRoomFunc) {
       // apiUpdateRoom을 직접 사용
-      const success = await apiUpdateRoom(groupTrainingState.roomCode, {
-        participants: updatedParticipants
-      });
-      
-      if (success && success.success !== false) {
-        groupTrainingState.currentRoom.participants = updatedParticipants;
-        applyReadyOverride();
-        // UI 업데이트
-        const readyBtn = safeGet('readyToggleBtn');
-        if (readyBtn) {
-          readyBtn.textContent = myParticipant.ready ? '✅ 준비 완료' : '⏳ 준비 중';
-          readyBtn.classList.toggle('ready', myParticipant.ready);
-        }
+      if (typeof apiUpdateRoom === 'function') {
+        const result = await apiUpdateRoom(groupTrainingState.roomCode, {
+          participants: updatedParticipants
+        });
         
-      updateParticipantsList();
-      
-      // 준비 완료 시 대기 상태 유지 (훈련 화면으로 전환하지 않음)
-      if (myParticipant.ready && !wasReady) {
-        showToast('✅ 준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
-      } else if (!myParticipant.ready) {
-        showToast('⏳ 준비 취소', 'info');
-      }
-        return;
+        if (result && result.success !== false) {
+          groupTrainingState.currentRoom.participants = updatedParticipants;
+          applyReadyOverride();
+          
+          // UI 업데이트
+          const readyBtn = safeGet('readyToggleBtn');
+          if (readyBtn) {
+            readyBtn.textContent = newReadyState ? '✅ 준비 완료' : '⏳ 준비 중';
+            readyBtn.classList.toggle('ready', newReadyState);
+          }
+          
+          // 참가자 목록 업데이트
+          if (typeof updateParticipantsList === 'function') {
+            updateParticipantsList();
+          }
+          
+          // 시작 버튼 상태 업데이트
+          if (typeof updateStartButtonState === 'function') {
+            updateStartButtonState();
+          }
+          
+          // 준비 완료 시 대기 상태 유지 (훈련 화면으로 전환하지 않음)
+          if (newReadyState && !wasReady) {
+            showToast('✅ 준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
+          } else if (!newReadyState) {
+            showToast('⏳ 준비 취소', 'info');
+          }
+          return;
+        } else {
+          throw new Error(result?.error || '방 업데이트 실패');
+        }
       } else {
-        throw new Error('방 업데이트 실패');
+        throw new Error('apiUpdateRoom 함수를 찾을 수 없습니다');
       }
     }
 
@@ -118,28 +141,40 @@ async function toggleReady() {
     if (success) {
       groupTrainingState.currentRoom.participants = updatedParticipants;
       applyReadyOverride();
+      
       // UI 업데이트
       const readyBtn = safeGet('readyToggleBtn');
       if (readyBtn) {
-        readyBtn.textContent = myParticipant.ready ? '✅ 준비 완료' : '⏳ 준비 중';
-        readyBtn.classList.toggle('ready', myParticipant.ready);
+        readyBtn.textContent = newReadyState ? '✅ 준비 완료' : '⏳ 준비 중';
+        readyBtn.classList.toggle('ready', newReadyState);
       }
       
-      updateParticipantsList();
+      // 참가자 목록 업데이트
+      if (typeof updateParticipantsList === 'function') {
+        updateParticipantsList();
+      }
+      
+      // 시작 버튼 상태 업데이트
+      if (typeof updateStartButtonState === 'function') {
+        updateStartButtonState();
+      }
       
       // 준비 완료 시 대기 상태 유지 (훈련 화면으로 전환하지 않음)
-      if (myParticipant.ready && !wasReady) {
+      if (newReadyState && !wasReady) {
         showToast('✅ 준비 완료! 관리자가 훈련을 시작할 때까지 대기합니다.', 'success');
-      } else if (!myParticipant.ready) {
+      } else if (!newReadyState) {
         showToast('⏳ 준비 취소', 'info');
       }
+    } else {
+      throw new Error('방 업데이트 실패');
     }
     
   } catch (error) {
     console.error('Failed to toggle ready:', error);
-    showToast('준비 상태 변경에 실패했습니다', 'error');
+    showToast('준비 상태 변경에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
     // 상태 되돌리기
-    myParticipant.ready = !myParticipant.ready;
+    myParticipant.ready = wasReady;
+    myParticipant.isReady = wasReady;
   }
 }
 
