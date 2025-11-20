@@ -55,6 +55,124 @@ const GROUP_COUNTDOWN_SECONDS = 10; // 그룹 훈련 카운트다운 기본 10�
 const ADMIN_MODE_MONITOR = 'monitor';
 const ADMIN_MODE_PARTICIPATE = 'participate';
 
+function parseBooleanLike(value) {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) return undefined;
+    return value !== 0;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return undefined;
+    if (['true', '1', 'ready', 'prepared', 'complete', 'completed', '완료', '준비완료', 'ok', 'yes', 'y'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'waiting', 'pending', 'notready', '대기', '대기중', 'no', 'n'].includes(normalized)) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
+function coerceParticipantsArray(rawParticipants) {
+  if (rawParticipants === undefined || rawParticipants === null) {
+    return [];
+  }
+
+  if (Array.isArray(rawParticipants)) {
+    return rawParticipants;
+  }
+
+  if (typeof rawParticipants === 'string') {
+    try {
+      let parsed = JSON.parse(rawParticipants);
+      if (typeof parsed === 'string') {
+        try {
+          parsed = JSON.parse(parsed);
+        } catch {
+          // keep as string if double parsing fails
+        }
+      }
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.warn('ParticipantsData JSON 파싱 실패:', error);
+      return [];
+    }
+  }
+
+  if (typeof rawParticipants === 'object') {
+    return Array.isArray(rawParticipants.data)
+      ? rawParticipants.data
+      : Object.values(rawParticipants);
+  }
+
+  return [];
+}
+
+function normalizeParticipantReady(participant) {
+  if (!participant || typeof participant !== 'object') {
+    return participant;
+  }
+
+  const normalized = { ...participant };
+  const normalizedId = getParticipantIdentifier(participant);
+  if (normalizedId) {
+    normalized.id = normalizedId;
+    if (!normalized.participantId) {
+      normalized.participantId = normalizedId;
+    }
+  }
+
+  const readyCandidates = [
+    participant.ready,
+    participant.isReady,
+    participant.Ready,
+    participant.IsReady,
+    participant.readyState,
+    participant.ReadyState,
+    participant.state,
+    participant.State,
+    participant.status
+  ];
+
+  let readyValue;
+  for (const candidate of readyCandidates) {
+    const parsed = parseBooleanLike(candidate);
+    if (parsed !== undefined) {
+      readyValue = parsed;
+      break;
+    }
+  }
+
+  if (readyValue === undefined && typeof participant.status === 'string') {
+    const status = participant.status.trim().toLowerCase();
+    if (['ready', 'prepared', 'active', 'confirmed'].includes(status)) {
+      readyValue = true;
+    } else if (['waiting', 'pending', 'idle', 'requested'].includes(status)) {
+      readyValue = false;
+    }
+  }
+
+  if (readyValue === undefined) {
+    readyValue = false;
+  }
+
+  normalized.ready = readyValue;
+  normalized.isReady = readyValue;
+
+  if (!normalized.joinedAt) {
+    normalized.joinedAt = participant.joined_at || participant.JoinedAt || participant.createdAt || new Date().toISOString();
+  }
+
+  return normalized;
+}
+
+function normalizeParticipantsArray(rawParticipants) {
+  const array = coerceParticipantsArray(rawParticipants);
+  return array.map(normalizeParticipantReady);
+}
+
 function getParticipantIdentifier(participant) {
   if (!participant) return '';
   const id = participant.id ?? participant.participantId ?? participant.userId;
@@ -63,8 +181,26 @@ function getParticipantIdentifier(participant) {
 
 function getRawReadyValue(participant) {
   if (!participant) return undefined;
-  if (participant.ready !== undefined) return !!participant.ready;
-  if (participant.isReady !== undefined) return !!participant.isReady;
+  const fieldsToCheck = [
+    participant.ready,
+    participant.isReady,
+    participant.Ready,
+    participant.IsReady,
+    participant.readyState,
+    participant.ReadyState,
+    participant.state,
+    participant.State,
+    participant.status,
+    participant.readyStatus
+  ];
+
+  for (const field of fieldsToCheck) {
+    const parsed = parseBooleanLike(field);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+  }
+
   return undefined;
 }
 
@@ -304,18 +440,8 @@ function normalizeRoomData(raw) {
   if (!raw || typeof raw !== 'object') return null;
 
   try {
-    const participantsRaw = raw.ParticipantsData || raw.participants || [];
-    let participants = [];
-
-    if (typeof participantsRaw === 'string') {
-      try {
-        participants = JSON.parse(participantsRaw);
-      } catch {
-        participants = [];
-      }
-    } else if (Array.isArray(participantsRaw)) {
-      participants = participantsRaw;
-    }
+    const participantsRaw = raw.ParticipantsData ?? raw.participants ?? [];
+    const participants = normalizeParticipantsArray(participantsRaw);
 
     return {
       id: raw.ID || raw.id || raw.roomId || '',
@@ -1972,11 +2098,12 @@ async function getRoomsFromBackend() {
       
       // 대기 중이고 자리가 있는 방들만 필터링
       const availableRooms = (result.items || result.rooms || []).filter(room => {
-        const status = room.status || room.Status || 'unknown';
-        const currentParticipants = (room.participants || room.ParticipantsData || []).length;
-        const maxParticipants = room.maxParticipants || room.MaxParticipants || 10;
+        const status = (room.status || room.Status || 'unknown').toLowerCase();
+        const participants = normalizeParticipantsArray(room.participants || room.ParticipantsData || []);
+        const currentParticipants = participants.length;
+        const maxParticipants = Number(room.maxParticipants || room.MaxParticipants || 10) || 10;
         
-        return status.toLowerCase() === 'waiting' && currentParticipants < maxParticipants;
+        return status === 'waiting' && currentParticipants < maxParticipants;
       });
       
       console.log(`✅ 참가 가능한 방: ${availableRooms.length}개`);
@@ -4011,9 +4138,7 @@ async function refreshActiveRooms() {
         : status === 'training'
           ? '🟢 진행중'
           : '🔄 활성';
-      const participants = Array.isArray(room.ParticipantsData)
-        ? room.ParticipantsData
-        : (Array.isArray(room.participants) ? room.participants : []);
+      const participants = normalizeParticipantsArray(room.ParticipantsData || room.participants || []);
       const readyCount = participants.reduce((count, participant) => {
         return count + (isParticipantReady(participant) ? 1 : 0);
       }, 0);
@@ -4120,9 +4245,10 @@ async function updateRoomStatistics() {
     const totalRooms = allRooms.length;
     const activeRooms = allRooms.filter(r => r.Status === 'waiting' || r.Status === 'training').length;
     const trainingRooms = allRooms.filter(r => r.Status === 'training').length;
-    const totalParticipants = allRooms.reduce((sum, room) => 
-      sum + (room.ParticipantsData || []).length, 0
-    );
+    const totalParticipants = allRooms.reduce((sum, room) => {
+      const participants = normalizeParticipantsArray(room.ParticipantsData || room.participants || []);
+      return sum + participants.length;
+    }, 0);
     
     // UI 업데이트
     const totalEl = safeGet('totalRoomsCount');
