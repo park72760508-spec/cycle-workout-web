@@ -351,6 +351,13 @@ function normalizeRoomData(raw) {
   }
 }
 
+function getCurrentRoomCode(room = groupTrainingState.currentRoom) {
+  if (!room) {
+    return groupTrainingState.roomCode || '';
+  }
+  return room.code || room.roomCode || groupTrainingState.roomCode || '';
+}
+
    
 const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn', 'startGroupTrainingBtn'];
 
@@ -3163,7 +3170,7 @@ function renderWaitingHeaderSegmentTable() {
       if (!wrapper || rows.length === 0) return;
 
       // 훈련 시작 전 스크롤 위치 보존을 위한 저장소 키
-      const scrollStorageKey = `workoutTableScroll_${room.roomCode || 'default'}`;
+      const scrollStorageKey = `workoutTableScroll_${getCurrentRoomCode(room) || 'default'}`;
       
       // 현재 스크롤 위치 가져오기 (렌더링 전 사용자가 설정한 위치)
       const currentScrollTop = wrapper.scrollTop;
@@ -4951,7 +4958,8 @@ async function startGroupTrainingWithCountdown() {
     }
 
     const room = groupTrainingState.currentRoom;
-    if (!room || !room.workoutId || !room.roomCode) {
+    const roomCode = getCurrentRoomCode(room);
+    if (!room || !room.workoutId || !roomCode) {
       showToast('방 정보가 없습니다', 'error');
       return;
     }
@@ -4985,7 +4993,7 @@ async function startGroupTrainingWithCountdown() {
     try {
       // 방 상태를 'starting'으로 변경하고 카운트다운 종료 시간 저장
       if (typeof apiUpdateRoom === 'function') {
-        await apiUpdateRoom(room.roomCode, {
+        await apiUpdateRoom(roomCode, {
           status: 'starting',
           countdownEndTime: countdownEndTime
         });
@@ -5127,7 +5135,8 @@ async function showGroupCountdownOverlay(seconds = 5) {
 async function startAllParticipantsTraining() {
   try {
     const room = groupTrainingState.currentRoom;
-    if (!room || !room.roomCode) {
+    const roomCode = getCurrentRoomCode(room);
+    if (!room || !roomCode) {
       console.error('방 정보가 없습니다');
       return;
     }
@@ -5145,7 +5154,7 @@ async function startAllParticipantsTraining() {
       try {
         // API 호출로 방 상태를 'training'으로 변경하여 모든 참가자에게 신호 전송
         if (typeof apiUpdateRoom === 'function') {
-          await apiUpdateRoom(room.roomCode, {
+          await apiUpdateRoom(roomCode, {
             status: 'training',
             trainingStartTime,
             countdownEndTime: null
