@@ -1977,11 +1977,26 @@ async function getRoomsFromBackend() {
       
       // 대기 중이고 자리가 있는 방들만 필터링
       const availableRooms = (result.items || result.rooms || []).filter(room => {
-        const status = room.status || room.Status || 'unknown';
-        const currentParticipants = (room.participants || room.ParticipantsData || []).length;
-        const maxParticipants = room.maxParticipants || room.MaxParticipants || 10;
+        const status = (room.status || room.Status || 'unknown').toLowerCase();
+        const participantsRaw = room.participants || room.ParticipantsData || [];
+        let currentParticipants = 0;
+
+        if (Array.isArray(participantsRaw)) {
+          currentParticipants = participantsRaw.length;
+        } else if (typeof participantsRaw === 'string') {
+          try {
+            const parsed = JSON.parse(participantsRaw);
+            currentParticipants = Array.isArray(parsed) ? parsed.length : 0;
+          } catch {
+            currentParticipants = 0;
+          }
+        } else if (participantsRaw && typeof participantsRaw === 'object') {
+          currentParticipants = Array.isArray(participantsRaw.data) ? participantsRaw.data.length : 0;
+        }
+
+        const maxParticipants = Number(room.maxParticipants || room.MaxParticipants || 10) || 10;
         
-        return status.toLowerCase() === 'waiting' && currentParticipants < maxParticipants;
+        return status === 'waiting' && currentParticipants < maxParticipants;
       });
       
       console.log(`✅ 참가 가능한 방: ${availableRooms.length}개`);
