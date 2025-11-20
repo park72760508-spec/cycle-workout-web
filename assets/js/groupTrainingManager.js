@@ -399,6 +399,14 @@ function ensureRequiredElements() {
         <option value="10">10명</option>
         <option value="20">20명</option>
       </select>`
+    },
+    {
+      id: 'managerRoleBtn',
+      parent: 'roleButtonsContainer',
+      html: `<button id="managerRoleBtn" class="role-btn manager hidden" onclick="selectRole('manager').catch(console.error)">
+        🛡️ <span>관리자 모니터링</span>
+        <small>훈련실 모니터링·제어</small>
+      </button>`
     }
   ];
   
