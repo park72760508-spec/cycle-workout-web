@@ -399,14 +399,6 @@ function ensureRequiredElements() {
         <option value="10">10명</option>
         <option value="20">20명</option>
       </select>`
-    },
-    {
-      id: 'managerRoleBtn',
-      parent: 'roleButtonsContainer',
-      html: `<button id="managerRoleBtn" class="role-btn manager hidden" onclick="selectRole('manager').catch(console.error)">
-        🛡️ <span>관리자 모니터링</span>
-        <small>훈련실 모니터링·제어</small>
-      </button>`
     }
   ];
   
@@ -1259,15 +1251,6 @@ async function selectTrainingMode(mode) {
           }
         }
         
-        // 중간에 다른 경로로 이미 그룹방에 입장했는지 확인
-        if (groupTrainingState.currentRoom || groupTrainingState.roomCode) {
-          console.log('다른 경로로 이미 그룹방에 접속함을 감지, 안내 메시지를 생략합니다.');
-          if (typeof hideLoading === 'function') {
-            hideLoading();
-          }
-          return;
-        }
-
         // 그룹방이 없거나 대기 중인 방이 없으면 안내 메시지와 함께 그룹방 화면으로 이동
         console.log('대기 중인 그룹방이 없습니다.');
         // 로딩 숨기기
@@ -1291,10 +1274,6 @@ async function selectTrainingMode(mode) {
         // 로딩 숨기기
         if (typeof hideLoading === 'function') {
           hideLoading();
-        }
-        if (groupTrainingState.currentRoom || groupTrainingState.roomCode) {
-          console.log('다른 경로로 이미 그룹방에 접속함을 감지 (에러 경로), 안내 메시지를 생략합니다.');
-          return;
         }
         showToast('그룹방 입장에 실패했습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'warning');
         // 그룹방 화면으로 바로 이동
@@ -1977,26 +1956,11 @@ async function getRoomsFromBackend() {
       
       // 대기 중이고 자리가 있는 방들만 필터링
       const availableRooms = (result.items || result.rooms || []).filter(room => {
-        const status = (room.status || room.Status || 'unknown').toLowerCase();
-        const participantsRaw = room.participants || room.ParticipantsData || [];
-        let currentParticipants = 0;
-
-        if (Array.isArray(participantsRaw)) {
-          currentParticipants = participantsRaw.length;
-        } else if (typeof participantsRaw === 'string') {
-          try {
-            const parsed = JSON.parse(participantsRaw);
-            currentParticipants = Array.isArray(parsed) ? parsed.length : 0;
-          } catch {
-            currentParticipants = 0;
-          }
-        } else if (participantsRaw && typeof participantsRaw === 'object') {
-          currentParticipants = Array.isArray(participantsRaw.data) ? participantsRaw.data.length : 0;
-        }
-
-        const maxParticipants = Number(room.maxParticipants || room.MaxParticipants || 10) || 10;
+        const status = room.status || room.Status || 'unknown';
+        const currentParticipants = (room.participants || room.ParticipantsData || []).length;
+        const maxParticipants = room.maxParticipants || room.MaxParticipants || 10;
         
-        return status === 'waiting' && currentParticipants < maxParticipants;
+        return status.toLowerCase() === 'waiting' && currentParticipants < maxParticipants;
       });
       
       console.log(`✅ 참가 가능한 방: ${availableRooms.length}개`);
