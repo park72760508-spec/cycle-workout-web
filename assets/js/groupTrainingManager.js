@@ -1188,6 +1188,31 @@ async function selectTrainingMode(mode) {
       residualGroupModal.remove();
     }
 
+    // 이미 참가중인 그룹방이 있으면 즉시 그룹 대기실 화면으로 이동
+    const existingRoom = groupTrainingState.currentRoom;
+    const existingRoomCode = getCurrentRoomCode(existingRoom);
+    if (existingRoomCode) {
+      console.log('기존 그룹방 감지, 대기실로 바로 이동:', existingRoomCode);
+      if (typeof showScreen === 'function') {
+        showScreen('groupWaitingScreen');
+      }
+      if (typeof initializeWaitingRoom === 'function') {
+        initializeWaitingRoom();
+      }
+      return;
+    }
+
+    // roomCode만 저장된 경우 자동 참가 시도
+    if (!existingRoom && groupTrainingState.roomCode) {
+      try {
+        console.log('저장된 roomCode로 그룹방 자동 참가 시도:', groupTrainingState.roomCode);
+        await joinRoomByCode(groupTrainingState.roomCode);
+        return;
+      } catch (autoJoinError) {
+        console.warn('저장된 roomCode 자동 참가 실패:', autoJoinError);
+      }
+    }
+
     // 현재 워크아웃으로 생성된 그룹방이 있으면 자동 입장 (grade=1 관리자도 동일 동작)
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     const currentWorkout = window.currentWorkout;
