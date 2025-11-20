@@ -50,7 +50,7 @@ if (typeof localStorage !== 'undefined') {
   }
 }
 
-const READY_OVERRIDE_TTL = 60000; // 백엔드 동기화 지연 시 최대 60초 동안 로컬 상태 유지
+const READY_OVERRIDE_TTL = 300000; // 백엔드 동기화 지연 시 최대 5분 동안 로컬 상태 유지 (자동 리셋 방지)
 const ADMIN_MODE_MONITOR = 'monitor';
 const ADMIN_MODE_PARTICIPATE = 'participate';
 
@@ -2444,32 +2444,81 @@ function setupGroupTrainingControlBar() {
   const toggleBtn = document.getElementById('groupToggleTrainingBtn');
   const stopBtn = document.getElementById('groupStopTrainingBtn');
   
+  // 건너뛰기 버튼: 훈련시작 후 세그먼트 건너뛰기 기능
   if (skipBtn && !skipBtn.dataset.bound) {
     skipBtn.dataset.bound = '1';
     skipBtn.onclick = () => {
-      if (typeof skipCurrentSegment === 'function') skipCurrentSegment();
+      const ts = window.trainingState || {};
+      if (!ts.isRunning) {
+        showToast('훈련이 시작되지 않았습니다', 'warning');
+        return;
+      }
+      if (typeof skipCurrentSegment === 'function') {
+        skipCurrentSegment();
+        showToast('세그먼트를 건너뛰었습니다', 'info');
+      } else {
+        console.error('skipCurrentSegment 함수를 찾을 수 없습니다');
+        showToast('세그먼트 건너뛰기 기능을 사용할 수 없습니다', 'error');
+      }
     };
   }
   
+  // 시작/일시정지 버튼: 훈련 시작 동작, 일시정지 모양으로 변경
   if (toggleBtn && !toggleBtn.dataset.bound) {
     toggleBtn.dataset.bound = '1';
     toggleBtn.onclick = () => {
       const ts = window.trainingState || {};
       if (ts.isRunning) {
-        if (typeof togglePause === 'function') togglePause();
+        // 훈련 중: 일시정지/재개 토글
+        if (typeof togglePause === 'function') {
+          togglePause();
+          // 버튼 상태 업데이트
+          setTimeout(() => {
+            if (typeof updateStartButtonState === 'function') {
+              updateStartButtonState();
+            }
+          }, 100);
+        } else {
+          console.error('togglePause 함수를 찾을 수 없습니다');
+          showToast('일시정지 기능을 사용할 수 없습니다', 'error');
+        }
       } else {
+        // 훈련 시작 전: 훈련 시작
         if (typeof startGroupTrainingWithCountdown === 'function') {
           startGroupTrainingWithCountdown();
+        } else {
+          console.error('startGroupTrainingWithCountdown 함수를 찾을 수 없습니다');
+          showToast('훈련 시작 기능을 사용할 수 없습니다', 'error');
         }
       }
     };
   }
   
+  // 종료 버튼: 훈련종료, 훈련종료 전 정말 종료할지 확인 후 종료
   if (stopBtn && !stopBtn.dataset.bound) {
     stopBtn.dataset.bound = '1';
     stopBtn.onclick = () => {
-      if (confirm('정말 훈련을 종료하시겠습니까?')) {
-        if (typeof stopSegmentLoop === 'function') stopSegmentLoop();
+      const ts = window.trainingState || {};
+      if (!ts.isRunning) {
+        showToast('훈련이 시작되지 않았습니다', 'warning');
+        return;
+      }
+      
+      // 정말 종료할지 확인
+      if (confirm('정말 훈련을 종료하시겠습니까?\n\n종료하면 현재 진행 중인 훈련이 중단됩니다.')) {
+        if (typeof stopSegmentLoop === 'function') {
+          stopSegmentLoop();
+          showToast('훈련이 종료되었습니다', 'info');
+          // 버튼 상태 업데이트
+          setTimeout(() => {
+            if (typeof updateStartButtonState === 'function') {
+              updateStartButtonState();
+            }
+          }, 100);
+        } else {
+          console.error('stopSegmentLoop 함수를 찾을 수 없습니다');
+          showToast('훈련 종료 기능을 사용할 수 없습니다', 'error');
+        }
       }
     };
   }
@@ -3496,6 +3545,8 @@ async function syncRoomData() {
         console.warn('라이브 데이터 병합 오류:', mergeErr?.message || mergeErr);
       }
 
+      // 준비 상태 오버라이드 적용 (서버 동기화 지연 대비)
+      // 서버에서 준비 상태가 제대로 저장되었는지 확인한 후에만 오버라이드 제거
       if (Array.isArray(mergedRoom.participants) && groupTrainingState.readyOverrides) {
         mergedRoom.participants = mergedRoom.participants.map(p => {
           const participantId = getParticipantIdentifier(p);
@@ -3503,11 +3554,21 @@ async function syncRoomData() {
           const override = getReadyOverride(participantId);
           if (!override) return p;
           const rawReady = getRawReadyValue(p);
-          if (rawReady === override.ready) {
+          
+          // 서버에서 준비 상태가 로컬 오버라이드와 일치하면 오버라이드 제거
+          // 단, 서버 상태가 false이고 오버라이드가 true인 경우는 서버 동기화 지연일 수 있으므로 유지
+          if (rawReady === override.ready && rawReady === true) {
+            // 서버에서도 준비완료 상태로 확인되면 오버라이드 제거 (동기화 완료)
+            clearReadyOverride(participantId);
+            return p;
+          } else if (rawReady === override.ready && rawReady === false) {
+            // 서버에서도 준비안됨 상태로 확인되면 오버라이드 제거
             clearReadyOverride(participantId);
             return p;
           }
-          return { ...p, ready: override.ready };
+          
+          // 서버와 로컬 상태가 다르면 로컬 오버라이드 우선 적용
+          return { ...p, ready: override.ready, isReady: override.ready };
         });
       }
 
