@@ -2198,11 +2198,32 @@
   padding: 4px 8px;
   border-radius: 8px;
   font-size: 12px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .participant-tag.admin {
   background: #dbeafe;
   color: #1e40af;
+}
+
+.participant-tag.ready {
+  background: #ecfdf3;
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.3);
+}
+
+.participant-tag.waiting {
+  background: #fff7ed;
+  color: #b45309;
+  border-color: rgba(251, 146, 60, 0.4);
+}
+
+.empty-participants {
+  color: #9ca3af;
+  font-size: 12px;
 }
 
 .room-actions {
