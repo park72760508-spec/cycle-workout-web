@@ -1259,6 +1259,15 @@ async function selectTrainingMode(mode) {
           }
         }
         
+        // 중간에 다른 경로로 이미 그룹방에 입장했는지 확인
+        if (groupTrainingState.currentRoom || groupTrainingState.roomCode) {
+          console.log('다른 경로로 이미 그룹방에 접속함을 감지, 안내 메시지를 생략합니다.');
+          if (typeof hideLoading === 'function') {
+            hideLoading();
+          }
+          return;
+        }
+
         // 그룹방이 없거나 대기 중인 방이 없으면 안내 메시지와 함께 그룹방 화면으로 이동
         console.log('대기 중인 그룹방이 없습니다.');
         // 로딩 숨기기
@@ -1282,6 +1291,10 @@ async function selectTrainingMode(mode) {
         // 로딩 숨기기
         if (typeof hideLoading === 'function') {
           hideLoading();
+        }
+        if (groupTrainingState.currentRoom || groupTrainingState.roomCode) {
+          console.log('다른 경로로 이미 그룹방에 접속함을 감지 (에러 경로), 안내 메시지를 생략합니다.');
+          return;
         }
         showToast('그룹방 입장에 실패했습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'warning');
         // 그룹방 화면으로 바로 이동
