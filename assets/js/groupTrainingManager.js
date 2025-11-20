@@ -50,8 +50,7 @@ if (typeof localStorage !== 'undefined') {
   }
 }
 
-const READY_OVERRIDE_TTL = 300000; // 백엔드 동기화 지연 시 최대 5분 동안 로컬 상태 유지 (자동 리셋 방지)
-const GROUP_COUNTDOWN_SECONDS = 10; // 그룹 훈련 카운트다운 기본 10초
+const READY_OVERRIDE_TTL = 60000; // 백엔드 동기화 지연 시 최대 60초 동안 로컬 상태 유지
 const ADMIN_MODE_MONITOR = 'monitor';
 const ADMIN_MODE_PARTICIPATE = 'participate';
 
@@ -72,8 +71,7 @@ function getReadyOverride(participantId) {
   if (!participantId || !groupTrainingState.readyOverrides) return null;
   const override = groupTrainingState.readyOverrides[participantId];
   if (!override) return null;
-  // TTL이 null이면 무제한 유지 (서버 동기화 완료 시에만 제거)
-  if (override.expiresAt !== null && override.expiresAt && override.expiresAt <= Date.now()) {
+  if (override.expiresAt && override.expiresAt <= Date.now()) {
     delete groupTrainingState.readyOverrides[participantId];
     return null;
   }
@@ -85,10 +83,9 @@ function setReadyOverride(participantId, ready) {
   if (!groupTrainingState.readyOverrides) {
     groupTrainingState.readyOverrides = {};
   }
-  // TTL을 무제한으로 설정하여 자동 리셋 방지 (서버 동기화 완료 시에만 제거)
   groupTrainingState.readyOverrides[participantId] = {
     ready: !!ready,
-    expiresAt: null // TTL 무제한 (서버 동기화 완료 시에만 제거)
+    expiresAt: Date.now() + READY_OVERRIDE_TTL
   };
 }
 
@@ -102,34 +99,12 @@ function clearReadyOverride(participantId) {
 function isParticipantReady(participant) {
   if (!participant) return false;
   const participantId = getParticipantIdentifier(participant);
-  
-  // 서버 데이터의 ready 상태를 우선 확인
-  const rawReady = getRawReadyValue(participant);
-  
-  // 서버에 준비 상태가 있으면 서버 데이터 우선 적용
-  if (rawReady !== undefined && rawReady !== null) {
-    // 로컬 오버라이드가 있고 서버 상태와 다르면 오버라이드 확인
-    const override = getReadyOverride(participantId);
-    if (override && override.ready !== rawReady) {
-      // 서버 동기화 지연 가능성이 있으므로 오버라이드 우선 적용
-      // 단, 서버 상태가 true이고 오버라이드가 false인 경우는 서버 우선
-      if (rawReady === true && override.ready === false) {
-        // 서버에서 준비완료로 확인되면 서버 우선 (다른 사용자가 변경한 경우)
-        return true;
-      }
-      // 그 외에는 오버라이드 우선 (로컬에서 변경한 경우)
-      return !!override.ready;
-    }
-    return !!rawReady;
-  }
-  
-  // 서버에 준비 상태가 없으면 로컬 오버라이드 확인
   const override = getReadyOverride(participantId);
   if (override) {
     return !!override.ready;
   }
-  
-  return false;
+  const rawReady = getRawReadyValue(participant);
+  return rawReady !== undefined ? rawReady : false;
 }
 
 function countReadyParticipants(participants = []) {
@@ -146,36 +121,12 @@ function getAdminParticipationMode() {
 }
 
 function isAdminMonitoringOnly() {
-  // 관리자 모니터링 전용 모드 제거
-  // 관리자도 일반 참가자처럼 준비완료 상태를 가져야 함
-  return false;
+  return groupTrainingState.isAdmin && getAdminParticipationMode() === ADMIN_MODE_MONITOR;
 }
 
 function shouldAutoStartLocalTraining() {
-  // 모든 사용자(관리자/일반 참가자)가 준비완료 상태를 확인해야 함
-  const room = groupTrainingState.currentRoom;
-  if (!room || !Array.isArray(room.participants)) {
-    return false;
-  }
-  
-  const currentUserId = window.currentUser?.id || '';
-  const myParticipant = room.participants.find(p => {
-    const pId = p.id || p.participantId || p.userId;
-    return String(pId) === String(currentUserId);
-  });
-  
-  if (!myParticipant) {
-    // 참가자 목록에 없으면 모니터링 모드
-    return false;
-  }
-  
-  // 자신의 준비완료 상태 확인 (관리자/일반 참가자 모두)
-  const isReady = isParticipantReady(myParticipant);
-  
-  // 준비완료 상태에 따라 반환
-  // - 준비완료: true (훈련 화면으로 전환)
-  // - 준비완료 아님: false (모니터링 상태 유지, 대기실 화면 유지)
-  return isReady;
+  if (!groupTrainingState.isAdmin) return true;
+  return getAdminParticipationMode() === ADMIN_MODE_PARTICIPATE;
 }
 
 function isTrainingScreenActive() {
@@ -204,24 +155,72 @@ function persistAdminMode(mode) {
   }
 }
 
-// 관리자 모드 선택 기능 제거됨
-// 관리자도 일반 참가자처럼 준비완료 상태를 가져야 함
-// 아래 함수들은 더 이상 사용되지 않지만 호환성을 위해 유지
-
 async function handleAdminModeChange(nextMode) {
-  // 더 이상 사용되지 않음 - 관리자도 준비완료 상태 기준으로 동작
-  console.warn('handleAdminModeChange는 더 이상 사용되지 않습니다');
+  const normalized = nextMode === ADMIN_MODE_PARTICIPATE
+    ? ADMIN_MODE_PARTICIPATE
+    : ADMIN_MODE_MONITOR;
+  const previous = getAdminParticipationMode();
+  if (previous === normalized) return;
+  
+  groupTrainingState.adminParticipationMode = normalized;
+  persistAdminMode(normalized);
+  updateAdminModeUI();
   updateStartButtonState();
+  
+  if (normalized === ADMIN_MODE_PARTICIPATE) {
+    if (typeof moveToTrainingScreenWithPausedTimer === 'function' && !isTrainingScreenActive()) {
+      try {
+        await moveToTrainingScreenWithPausedTimer();
+      } catch (error) {
+        console.warn('관리자 훈련 화면 준비 실패:', error?.message || error);
+      }
+    }
+    
+    const roomStatus = groupTrainingState.currentRoom?.status;
+    const ts = window.trainingState || {};
+    if (roomStatus === 'training' && !ts.isRunning && typeof startGroupTrainingSession === 'function') {
+      startGroupTrainingSession();
+    }
+    
+    showToast('관리자가 훈련에 참가합니다', 'info');
+  } else {
+    showWaitingScreen();
+    showToast('관리자 모드를 모니터링 전용으로 전환했습니다', 'info');
+  }
 }
 
 function updateAdminModeUI() {
-  // 더 이상 사용되지 않음 - 내부 제어 블록이 제거됨
-  // 빈 함수로 유지 (호환성)
+  const block = document.querySelector('.admin-training-controls-block');
+  if (!block) return;
+  
+  const currentMode = getAdminParticipationMode();
+  const chip = block.querySelector('.admin-mode-chip');
+  if (chip) {
+    chip.textContent = currentMode === ADMIN_MODE_PARTICIPATE ? '🚴‍♂️ 관리자도 참가' : '👀 모니터링 전용';
+    chip.classList.toggle('monitor', currentMode === ADMIN_MODE_MONITOR);
+    chip.classList.toggle('participate', currentMode === ADMIN_MODE_PARTICIPATE);
+  }
+  
+  block.querySelectorAll('input[name="adminModeChoice"]').forEach(input => {
+    input.checked = input.value === currentMode;
+  });
 }
 
 function bindAdminModeSelector(container) {
-  // 더 이상 사용되지 않음 - 내부 제어 블록이 제거됨
-  // 빈 함수로 유지 (호환성)
+  if (!container) return;
+  const radios = container.querySelectorAll('input[name="adminModeChoice"]');
+  radios.forEach(radio => {
+    if (!radio.dataset.boundMode) {
+      radio.dataset.boundMode = '1';
+      radio.addEventListener('change', (event) => {
+        if (event.target.checked) {
+          handleAdminModeChange(event.target.value);
+        }
+      });
+    }
+  });
+  
+  updateAdminModeUI();
 }
 
 function synchronizeTrainingClock(trainingStartTime) {
@@ -248,13 +247,6 @@ function synchronizeTrainingClock(trainingStartTime) {
     ts.segElapsedSec = Math.max(0, ts.segElapsedSec + adjustment);
   }
   ts.workoutStartMs = startMs;
-}
-
-function triggerCountdownOverlay(seconds) {
-  if (groupTrainingState.isAdmin || typeof showParticipantCountdown !== 'function') {
-    return showGroupCountdownOverlay(seconds);
-  }
-  return Promise.resolve(showParticipantCountdown(seconds));
 }
 
 
@@ -350,13 +342,6 @@ function normalizeRoomData(raw) {
     console.warn('normalizeRoomData 실패:', error);
     return null;
   }
-}
-
-function getCurrentRoomCode(room = groupTrainingState.currentRoom) {
-  if (!room) {
-    return groupTrainingState.roomCode || '';
-  }
-  return room.code || room.roomCode || groupTrainingState.roomCode || '';
 }
 
    
@@ -1186,31 +1171,6 @@ async function selectTrainingMode(mode) {
     const residualGroupModal = document.getElementById('groupTrainingModal');
     if (residualGroupModal) {
       residualGroupModal.remove();
-    }
-
-    // 이미 참가중인 그룹방이 있으면 즉시 그룹 대기실 화면으로 이동
-    const existingRoom = groupTrainingState.currentRoom;
-    const existingRoomCode = getCurrentRoomCode(existingRoom);
-    if (existingRoomCode) {
-      console.log('기존 그룹방 감지, 대기실로 바로 이동:', existingRoomCode);
-      if (typeof showScreen === 'function') {
-        showScreen('groupWaitingScreen');
-      }
-      if (typeof initializeWaitingRoom === 'function') {
-        initializeWaitingRoom();
-      }
-      return;
-    }
-
-    // roomCode만 저장된 경우 자동 참가 시도
-    if (!existingRoom && groupTrainingState.roomCode) {
-      try {
-        console.log('저장된 roomCode로 그룹방 자동 참가 시도:', groupTrainingState.roomCode);
-        await joinRoomByCode(groupTrainingState.roomCode);
-        return;
-      } catch (autoJoinError) {
-        console.warn('저장된 roomCode 자동 참가 실패:', autoJoinError);
-      }
     }
 
     // 현재 워크아웃으로 생성된 그룹방이 있으면 자동 입장 (grade=1 관리자도 동일 동작)
@@ -2472,119 +2432,6 @@ async function getRoomByCode(roomCode) {
 // ========== 대기실 기능들 ==========
 
 /**
- * 그룹 훈련 제어 바 설정 (외부 제어 버튼 블록)
- */
-function setupGroupTrainingControlBar() {
-  const controlBar = document.getElementById('groupTrainingControlBar');
-  if (!controlBar) {
-    console.warn('groupTrainingControlBar 요소를 찾을 수 없습니다');
-    return;
-  }
-  
-  // 관리자 권한 확인
-  const currentUser = window.currentUser || {};
-  const isAdminUser = groupTrainingState.isAdmin || 
-                     currentUser.grade === '1' || 
-                     currentUser.grade === 1 ||
-                     (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
-  
-  if (!isAdminUser) {
-    controlBar.classList.add('hidden');
-    return;
-  }
-  
-  // 관리자인 경우 제어 바 표시
-  controlBar.classList.remove('hidden');
-  
-  // 버튼 이벤트 리스너 설정
-  const skipBtn = document.getElementById('groupSkipSegmentBtn');
-  const toggleBtn = document.getElementById('groupToggleTrainingBtn');
-  const stopBtn = document.getElementById('groupStopTrainingBtn');
-  
-  // 건너뛰기 버튼: 훈련시작 후 세그먼트 건너뛰기 기능
-  if (skipBtn && !skipBtn.dataset.bound) {
-    skipBtn.dataset.bound = '1';
-    skipBtn.onclick = () => {
-      const ts = window.trainingState || {};
-      if (!ts.isRunning) {
-        showToast('훈련이 시작되지 않았습니다', 'warning');
-        return;
-      }
-      if (typeof skipCurrentSegment === 'function') {
-        skipCurrentSegment();
-        showToast('세그먼트를 건너뛰었습니다', 'info');
-      } else {
-        console.error('skipCurrentSegment 함수를 찾을 수 없습니다');
-        showToast('세그먼트 건너뛰기 기능을 사용할 수 없습니다', 'error');
-      }
-    };
-  }
-  
-  // 시작/일시정지 버튼: 훈련 시작 동작, 일시정지 모양으로 변경
-  if (toggleBtn && !toggleBtn.dataset.bound) {
-    toggleBtn.dataset.bound = '1';
-    toggleBtn.onclick = () => {
-      const ts = window.trainingState || {};
-      if (ts.isRunning) {
-        // 훈련 중: 일시정지/재개 토글
-        if (typeof togglePause === 'function') {
-          togglePause();
-          // 버튼 상태 업데이트
-          setTimeout(() => {
-            if (typeof updateStartButtonState === 'function') {
-              updateStartButtonState();
-            }
-          }, 100);
-        } else {
-          console.error('togglePause 함수를 찾을 수 없습니다');
-          showToast('일시정지 기능을 사용할 수 없습니다', 'error');
-        }
-      } else {
-        // 훈련 시작 전: 훈련 시작
-        if (typeof startGroupTrainingWithCountdown === 'function') {
-          startGroupTrainingWithCountdown();
-        } else {
-          console.error('startGroupTrainingWithCountdown 함수를 찾을 수 없습니다');
-          showToast('훈련 시작 기능을 사용할 수 없습니다', 'error');
-        }
-      }
-    };
-  }
-  
-  // 종료 버튼: 훈련종료, 훈련종료 전 정말 종료할지 확인 후 종료
-  if (stopBtn && !stopBtn.dataset.bound) {
-    stopBtn.dataset.bound = '1';
-    stopBtn.onclick = () => {
-      const ts = window.trainingState || {};
-      if (!ts.isRunning) {
-        showToast('훈련이 시작되지 않았습니다', 'warning');
-        return;
-      }
-      
-      // 정말 종료할지 확인
-      if (confirm('정말 훈련을 종료하시겠습니까?\n\n종료하면 현재 진행 중인 훈련이 중단됩니다.')) {
-        if (typeof stopSegmentLoop === 'function') {
-          stopSegmentLoop();
-          showToast('훈련이 종료되었습니다', 'info');
-          // 버튼 상태 업데이트
-          setTimeout(() => {
-            if (typeof updateStartButtonState === 'function') {
-              updateStartButtonState();
-            }
-          }, 100);
-        } else {
-          console.error('stopSegmentLoop 함수를 찾을 수 없습니다');
-          showToast('훈련 종료 기능을 사용할 수 없습니다', 'error');
-        }
-      }
-    };
-  }
-  
-  // 버튼 상태 업데이트
-  updateStartButtonState();
-}
-
-/**
  * 대기실 화면 초기화
  */
 function initializeWaitingRoom() {
@@ -2655,34 +2502,35 @@ function initializeWaitingRoom() {
   }, 2000);
   
   // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
-  // 관리자도 일반 참가자처럼 준비완료 버튼을 사용할 수 있도록 설정
-  const readyBtn = safeGet('readyToggleBtn');
-  if (readyBtn) {
-    // 현재 준비 상태 확인 (관리자 포함)
-    const currentUserId = window.currentUser?.id || '';
-    const myParticipant = room.participants.find(p => {
-      const pId = p.id || p.participantId || p.userId;
-      return String(pId) === String(currentUserId);
-    });
-    if (myParticipant) {
-      const isReady = isParticipantReady(myParticipant);
-      readyBtn.textContent = isReady ? '✅ 준비 완료' : '⏳ 준비 중';
-      readyBtn.classList.toggle('ready', isReady);
-    }
-    
-    // 기기 연결 상태 확인하여 버튼 활성/비활성화 (updateParticipantsList와 동일한 로직)
-    const connectedDevices = window.connectedDevices || {};
-    const hasTrainer = !!(connectedDevices.trainer && connectedDevices.trainer.device);
-    const hasPowerMeter = !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device);
-    const hasHeartRate = !!(connectedDevices.heartRate && connectedDevices.heartRate.device);
-    const hasBluetoothDevice = hasTrainer || hasPowerMeter || hasHeartRate;
-    
-    // 관리자도 일반 참가자처럼 준비완료 버튼 사용 가능
-    readyBtn.disabled = !hasBluetoothDevice;
-    if (!hasBluetoothDevice) {
-      readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
-    } else {
-      readyBtn.title = '';
+  // 여기서는 추가로 준비 상태 텍스트만 업데이트
+  if (!groupTrainingState.isAdmin) {
+    const readyBtn = safeGet('readyToggleBtn');
+    if (readyBtn) {
+      // 현재 준비 상태 확인
+      const currentUserId = window.currentUser?.id || '';
+      const myParticipant = room.participants.find(p => {
+        const pId = p.id || p.participantId || p.userId;
+        return String(pId) === String(currentUserId);
+      });
+      if (myParticipant) {
+        const isReady = isParticipantReady(myParticipant);
+        readyBtn.textContent = isReady ? '✅ 준비 완료' : '⏳ 준비 중';
+        readyBtn.classList.toggle('ready', isReady);
+      }
+      
+      // 기기 연결 상태 확인하여 버튼 활성/비활성화 (updateParticipantsList와 동일한 로직)
+      const connectedDevices = window.connectedDevices || {};
+      const hasTrainer = !!(connectedDevices.trainer && connectedDevices.trainer.device);
+      const hasPowerMeter = !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device);
+      const hasHeartRate = !!(connectedDevices.heartRate && connectedDevices.heartRate.device);
+      const hasBluetoothDevice = hasTrainer || hasPowerMeter || hasHeartRate;
+      
+      readyBtn.disabled = !hasBluetoothDevice;
+      if (!hasBluetoothDevice) {
+        readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
+      } else {
+        readyBtn.title = '';
+      }
     }
   }
   
@@ -2997,17 +2845,131 @@ function updateParticipantsList() {
       }
     });
     
-    // 참가자 목록 컨테이너 내부 제어 버튼 블록은 제거됨
-    // 관리자도 일반 참가자처럼 준비완료 상태를 가져야 함
-    // 기존 내부 제어 블록이 있다면 제거
-    const participantsListContainer = listEl.parentElement;
-    const adminControlsBlock = participantsListContainer?.querySelector('.admin-training-controls-block');
-    if (adminControlsBlock) {
-      adminControlsBlock.remove();
+    // 관리자 전용 제어 블록 추가 (참가자 목록 아래)
+    // grade=1 사용자 또는 isAdmin인 경우 표시
+    const currentUser = window.currentUser || {};
+    const isAdminUser = groupTrainingState.isAdmin || 
+                       currentUser.grade === '1' || 
+                       currentUser.grade === 1 ||
+                       (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+    
+    if (isAdminUser) {
+      const participantsListContainer = listEl.parentElement;
+      let adminControlsBlock = participantsListContainer.querySelector('.admin-training-controls-block');
+      const adminMode = getAdminParticipationMode();
+      
+      if (!adminControlsBlock) {
+        adminControlsBlock = document.createElement('div');
+        adminControlsBlock.className = 'admin-training-controls-block';
+        participantsListContainer.appendChild(adminControlsBlock);
+      }
+      
+      // 관리자 제어 블록 렌더링
+      adminControlsBlock.innerHTML = `
+        <div class="admin-controls-header">
+          <h4>관리자 제어</h4>
+          <p class="controls-hint">훈련 시작 버튼을 누르면 모든 참가자가 동시에 훈련을 시작합니다</p>
+          <span class="admin-mode-chip ${adminMode === ADMIN_MODE_PARTICIPATE ? 'participate' : 'monitor'}">
+            ${adminMode === ADMIN_MODE_PARTICIPATE ? '🚴‍♂️ 관리자도 참가' : '👀 모니터링 전용'}
+          </span>
+        </div>
+        <div class="admin-mode-selector">
+          <p class="mode-title">관리자 모드 선택</p>
+          <label class="mode-option">
+            <input type="radio" name="adminModeChoice" value="monitor" ${adminMode === ADMIN_MODE_MONITOR ? 'checked' : ''}>
+            모니터링만 진행
+          </label>
+          <label class="mode-option">
+            <input type="radio" name="adminModeChoice" value="participate" ${adminMode === ADMIN_MODE_PARTICIPATE ? 'checked' : ''}>
+            관리자도 훈련에 참가
+          </label>
+          <p class="mode-hint">
+            모니터링 모드를 선택하면 관리자 화면에서 참가자 데이터를 실시간으로 확인할 수 있고,
+            참가 모드를 선택하면 관리자도 동일한 훈련 화면으로 전환됩니다.
+          </p>
+        </div>
+        <div class="admin-training-controls">
+          <button id="adminStartTrainingBtn" class="enhanced-control-btn play" aria-label="훈련 시작" title="훈련 시작">
+          </button>
+          <button id="adminPauseTrainingBtn" class="enhanced-control-btn pause" aria-label="일시정지/재생" title="일시정지/재생" disabled>
+          </button>
+          <button id="adminSkipSegmentBtn" class="enhanced-control-btn skip" aria-label="구간 건너뛰기" title="구간 건너뛰기" disabled>
+          </button>
+          <button id="adminStopTrainingBtn" class="enhanced-control-btn stop" aria-label="훈련 종료" title="훈련 종료" disabled>
+          </button>
+        </div>
+      `;
+      
+      // 이벤트 리스너 설정
+      const startBtn = adminControlsBlock.querySelector('#adminStartTrainingBtn');
+      const pauseBtn = adminControlsBlock.querySelector('#adminPauseTrainingBtn');
+      const skipBtn = adminControlsBlock.querySelector('#adminSkipSegmentBtn');
+      const stopBtn = adminControlsBlock.querySelector('#adminStopTrainingBtn');
+      
+      if (startBtn) {
+        startBtn.onclick = () => startGroupTrainingWithCountdown();
+      }
+      if (pauseBtn) {
+        pauseBtn.onclick = () => {
+          const ts = window.trainingState || {};
+          if (ts.paused) {
+            if (typeof togglePause === 'function') togglePause();
+          } else {
+            if (typeof togglePause === 'function') togglePause();
+          }
+        };
+      }
+      if (skipBtn) {
+        skipBtn.onclick = () => {
+          if (typeof skipCurrentSegment === 'function') skipCurrentSegment();
+        };
+      }
+      if (stopBtn) {
+        stopBtn.onclick = () => {
+          if (confirm('정말 훈련을 종료하시겠습니까?')) {
+            if (typeof stopSegmentLoop === 'function') stopSegmentLoop();
+          }
+        };
+      }
+      
+      bindAdminModeSelector(adminControlsBlock);
+      
+      // 훈련 상태에 따른 버튼 활성화
+      const ts = window.trainingState || {};
+      const isRunning = !!ts.isRunning;
+      const isPaused = !!ts.paused;
+      
+      if (startBtn) {
+        startBtn.disabled = isRunning && !isPaused;
+        if (isRunning && !isPaused) {
+          startBtn.classList.remove('play');
+          startBtn.classList.add('hidden');
+        } else {
+          startBtn.classList.remove('hidden');
+          startBtn.classList.add('play');
+        }
+      }
+      if (pauseBtn) {
+        pauseBtn.disabled = !isRunning;
+        pauseBtn.classList.remove('play', 'pause');
+        pauseBtn.classList.add(isPaused ? 'play' : 'pause');
+      }
+      if (skipBtn) {
+        skipBtn.disabled = !isRunning;
+      }
+      if (stopBtn) {
+        stopBtn.disabled = !isRunning;
+      }
+    } else {
+      // 관리자가 아니면 제어 블록 제거
+      const participantsListContainer = listEl.parentElement;
+      const adminControlsBlock = participantsListContainer?.querySelector('.admin-training-controls-block');
+      if (adminControlsBlock) {
+        adminControlsBlock.remove();
+      }
     }
 
-    // 본인의 준비완료 버튼 상태 업데이트 (관리자 포함)
-    // 관리자도 일반 참가자처럼 준비완료 상태를 가져야 함
+    // 본인의 준비완료 버튼 상태 업데이트
     const readyBtn = safeGet('readyToggleBtn');
     if (readyBtn) {
       const myParticipant = normalizedParticipants.find(p => isCurrentUser(p.id));
@@ -3028,7 +2990,6 @@ function updateParticipantsList() {
           connectedDevices: connectedDevices
         });
         
-        // 관리자도 일반 참가자처럼 준비완료 버튼 사용 가능
         readyBtn.disabled = !hasBluetoothDevice;
         if (!hasBluetoothDevice) {
           readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
@@ -3061,25 +3022,10 @@ function renderWaitingHeaderSegmentTable() {
     const workout = window.currentWorkout;
     const segments = workout.segments;
     const room = groupTrainingState.currentRoom || {};
-    const roomStatus = room.status || room.Status || 'waiting';
-    const remoteTrainingStart = room.trainingStartTime || room.TrainingStartTime || room.startedAt || null;
 
     // 현재 세그먼트 인덱스 계산
     const ts = window.trainingState || {};
-    const hasLocalLoop = !!ts.isRunning;
-    let elapsed = Number(ts.elapsedSec);
-    if (!Number.isFinite(elapsed) || elapsed < 0) {
-      elapsed = 0;
-    }
-
-    if ((!hasLocalLoop || elapsed === 0) && remoteTrainingStart) {
-      const remoteStartMs = new Date(remoteTrainingStart).getTime();
-      if (Number.isFinite(remoteStartMs)) {
-        const remoteElapsed = Math.max(0, (Date.now() - remoteStartMs) / 1000);
-        elapsed = Math.max(elapsed, remoteElapsed);
-      }
-    }
-
+    const elapsed = Number(ts.elapsedSec || 0);
     let currentIdx = -1;
     let currentSegStart = 0;
     let currentSegRemaining = null;
@@ -3124,14 +3070,12 @@ function renderWaitingHeaderSegmentTable() {
     const segmentTimer = currentIdx >= 0 ? formatTimer(currentSegRemaining) : '--:--';
 
     // 훈련 시작 여부 확인 (elapsed > 0이면 훈련이 시작된 것으로 판단)
-    const isTrainingStarted = roomStatus === 'training' || elapsed > 0;
+    const isTrainingStarted = elapsed > 0;
 
-    const normalizedSegments = segments.map((seg, idx) => ({
-      seg,
-      originalIndex: idx,
-      label: seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`,
-      type: (seg.segment_type || seg.type || '-').toString().toUpperCase(),
-      ftp: Math.round(Number(
+    const tableRows = segments.map((seg, idx) => {
+      const label = seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`;
+      const segType = (seg.segment_type || seg.type || '-').toString().toUpperCase();
+      const ftp = Math.round(Number(
         seg.target_value ??
         seg.targetValue ??
         seg.target ??
@@ -3140,30 +3084,15 @@ function renderWaitingHeaderSegmentTable() {
         seg.target_power ??
         seg.intensity ??
         0
-      )),
-      durationStr: formatDuration(seg.duration_sec ?? seg.duration)
-    }));
-
-    let orderedSegments = normalizedSegments;
-    if (isTrainingStarted && currentIdx >= 0) {
-      orderedSegments = [
-        ...normalizedSegments.slice(currentIdx),
-        ...normalizedSegments.slice(0, currentIdx)
-      ];
-    }
-
-    const tableRows = orderedSegments.map((item, orderIdx) => {
-      const { seg, originalIndex, label, type, ftp, durationStr } = item;
-      const isActive = isTrainingStarted && originalIndex === currentIdx;
+      ));
+      const durationStr = formatDuration(seg.duration_sec ?? seg.duration);
+      const isActive = isTrainingStarted && idx === currentIdx;
 
       return `
         <tr class="${isActive ? 'active' : ''}">
-          <td class="seg-col-index">
-            <span class="seg-index-badge">${originalIndex + 1}</span>
-            ${isActive ? '<span class="seg-progress-indicator" aria-hidden="true"></span>' : ''}
-          </td>
+          <td class="seg-col-index"><span class="seg-index-badge">${idx + 1}</span></td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
-          <td class="seg-col-type"><span class="seg-type">${type}</span></td>
+          <td class="seg-col-type"><span class="seg-type">${segType}</span></td>
           <td class="seg-col-ftp">${Number.isFinite(ftp) ? `${ftp}<small class="unit">%</small>` : '-'}</td>
           <td class="seg-col-duration">${durationStr}</td>
         </tr>
@@ -3228,7 +3157,7 @@ function renderWaitingHeaderSegmentTable() {
       if (!wrapper || rows.length === 0) return;
 
       // 훈련 시작 전 스크롤 위치 보존을 위한 저장소 키
-      const scrollStorageKey = `workoutTableScroll_${getCurrentRoomCode(room) || 'default'}`;
+      const scrollStorageKey = `workoutTableScroll_${room.roomCode || 'default'}`;
       
       // 현재 스크롤 위치 가져오기 (렌더링 전 사용자가 설정한 위치)
       const currentScrollTop = wrapper.scrollTop;
@@ -3254,11 +3183,17 @@ function renderWaitingHeaderSegmentTable() {
 
       // 훈련이 시작된 경우에만 활성 세그먼트 추적 스크롤 실행
       if (isTrainingStarted && currentIdx >= 0) {
-        wrapper.scrollTop = 0;
-        const existingHandler = wrapper._scrollHandler;
-        if (existingHandler) {
-          wrapper.removeEventListener('scroll', existingHandler);
-          delete wrapper._scrollHandler;
+        const activeRow = wrapper.querySelector('tbody tr.active');
+        if (activeRow) {
+          const header = wrapper.querySelector('thead');
+          const headerHeight = header ? header.offsetHeight : 0;
+          const rowHeight = rows[0]?.offsetHeight || 0;
+          
+          // 헤더 바로 아래에 활성 세그먼트가 보이도록 스크롤 위치 계산
+          // 활성 행을 헤더 바로 아래에 배치
+          const targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - 2);
+          
+          wrapper.scrollTop = targetScroll;
         }
       } else {
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
@@ -3294,6 +3229,13 @@ function renderWaitingHeaderSegmentTable() {
         // 핸들러 저장 및 이벤트 등록
         wrapper._scrollHandler = handleScroll;
         wrapper.addEventListener('scroll', handleScroll, { passive: true });
+      } else {
+        // 훈련 시작 후에는 스크롤 이벤트 리스너 제거
+        const existingHandler = wrapper._scrollHandler;
+        if (existingHandler) {
+          wrapper.removeEventListener('scroll', existingHandler);
+          delete wrapper._scrollHandler;
+        }
       }
     });
   } catch (error) {
@@ -3333,33 +3275,22 @@ async function updateRoomOnBackend(roomData) {
    
 /**
  * 시작 버튼 상태 업데이트
- * 준비완료 상태를 기준으로 훈련 시작 가능 여부 판단 (관리자/일반 사용자 구분 없음)
  */
 function updateStartButtonState() {
   const legacyStartBtn = document.getElementById('startGroupTrainingBtn');
-  const groupControlBar = document.getElementById('groupTrainingControlBar');
-  const groupToggleBtn = document.getElementById('groupToggleTrainingBtn');
+  const adminPanelStartBtn = document.getElementById('adminStartTrainingBtn');
+  const hasStartButton = !!legacyStartBtn || !!adminPanelStartBtn;
   
-  // 관리자 권한 확인
-  const currentUser = window.currentUser || {};
-  const isAdminUser = groupTrainingState.isAdmin || 
-                     currentUser.grade === '1' || 
-                     currentUser.grade === 1 ||
-                     (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
-  
-  if (!isAdminUser) {
+  if (!groupTrainingState.isAdmin || !hasStartButton) {
     if (legacyStartBtn) {
       legacyStartBtn.style.display = 'none';
     }
-    if (groupControlBar) {
-      groupControlBar.classList.add('hidden');
+    if (adminPanelStartBtn) {
+      adminPanelStartBtn.disabled = true;
+      adminPanelStartBtn.classList.add('disabled');
+      adminPanelStartBtn.title = '관리자만 사용할 수 있습니다';
     }
     return;
-  }
-  
-  // 관리자인 경우 제어 바 표시
-  if (groupControlBar) {
-    groupControlBar.classList.remove('hidden');
   }
   
   if (legacyStartBtn) {
@@ -3373,70 +3304,38 @@ function updateStartButtonState() {
       legacyStartBtn.textContent = '⏳ 방 정보 로딩 중...';
       legacyStartBtn.title = '';
     }
-    if (groupToggleBtn) {
-      groupToggleBtn.disabled = true;
+    if (adminPanelStartBtn) {
+      adminPanelStartBtn.disabled = true;
+      adminPanelStartBtn.classList.add('disabled');
+      adminPanelStartBtn.textContent = '⏳ 방 정보 로딩 중...';
+      adminPanelStartBtn.title = '방 정보가 로딩되는 중입니다';
     }
     return;
   }
   
-  // 준비완료 상태 기준으로 훈련 시작 가능 여부 판단
   const totalParticipants = room.participants.length;
   const readyCount = countReadyParticipants(room.participants);
-  const hasParticipants = totalParticipants >= 1; // 최소 1명 이상
-  const hasReadyParticipants = readyCount >= 1; // 최소 1명 이상 준비완료
-  const canStart = hasParticipants && hasReadyParticipants;
-  
-  // 훈련 상태 확인
-  const ts = window.trainingState || {};
-  const isRunning = !!ts.isRunning;
-  const isPaused = !!ts.paused;
+  const hasParticipants = totalParticipants >= 2; // 최소 2명
+  const canStart = hasParticipants;
   
   if (legacyStartBtn) {
-    legacyStartBtn.disabled = !canStart || (isRunning && !isPaused);
-    if (isRunning && !isPaused) {
-      legacyStartBtn.style.display = 'none';
-    } else {
-      legacyStartBtn.style.display = '';
-      legacyStartBtn.textContent = canStart
-        ? `🚀 그룹 훈련 시작 (${readyCount}/${totalParticipants}명 준비완료)`
-        : `👥 참가자 대기 중 (준비완료: ${readyCount}/${totalParticipants}명)`;
-      legacyStartBtn.title = canStart
-        ? `${readyCount}/${totalParticipants}명 준비완료 - 훈련 시작 가능`
-        : `준비완료된 참가자가 필요합니다 (현재: ${readyCount}명)`;
-    }
+    legacyStartBtn.disabled = !canStart;
+    legacyStartBtn.textContent = canStart
+      ? `🚀 그룹 훈련 시작 (${readyCount}/${totalParticipants}명 준비)`
+      : '👥 참가자 대기 중 (최소 2명 필요)';
+    legacyStartBtn.title = `${readyCount}/${totalParticipants}명 준비 완료`;
   }
   
-  // 그룹 훈련 제어 바 버튼 상태 업데이트
-  const skipBtn = document.getElementById('groupSkipSegmentBtn');
-  const stopBtn = document.getElementById('groupStopTrainingBtn');
-  
-  if (groupToggleBtn) {
-    if (isRunning) {
-      groupToggleBtn.disabled = false;
-      groupToggleBtn.classList.remove('play');
-      groupToggleBtn.classList.add(isPaused ? 'play' : 'pause');
-      groupToggleBtn.setAttribute('aria-label', isPaused ? '훈련 재개' : '훈련 일시정지');
-    } else {
-      groupToggleBtn.disabled = !canStart;
-      groupToggleBtn.classList.remove('pause');
-      groupToggleBtn.classList.add('play');
-      groupToggleBtn.setAttribute('aria-label', canStart ? '훈련 시작' : '준비완료된 참가자 필요');
-      groupToggleBtn.title = canStart
-        ? `${readyCount}/${totalParticipants}명 준비완료 - 훈련 시작 가능`
-        : `준비완료된 참가자가 필요합니다 (현재: ${readyCount}명)`;
-    }
-  }
-  
-  // 건너뛰기 버튼 상태 업데이트
-  if (skipBtn) {
-    skipBtn.disabled = !isRunning;
-    skipBtn.title = isRunning ? '현재 세그먼트 건너뛰기' : '훈련이 시작되면 활성화됩니다';
-  }
-  
-  // 종료 버튼 상태 업데이트
-  if (stopBtn) {
-    stopBtn.disabled = !isRunning;
-    stopBtn.title = isRunning ? '훈련을 강제 종료합니다' : '훈련이 시작되면 활성화됩니다';
+  if (adminPanelStartBtn) {
+    adminPanelStartBtn.disabled = !canStart;
+    adminPanelStartBtn.classList.toggle('disabled', !canStart);
+    adminPanelStartBtn.title = canStart
+      ? `${readyCount}/${totalParticipants}명 준비 완료`
+      : '최소 2명 이상의 참가자가 필요합니다';
+    adminPanelStartBtn.textContent = canStart
+      ? `🚀 훈련 시작 (${readyCount}/${totalParticipants})`
+      : '👥 참가자 대기 중';
+    adminPanelStartBtn.setAttribute('aria-label', adminPanelStartBtn.textContent);
   }
 }
 
@@ -3621,49 +3520,23 @@ async function syncRoomData() {
         console.warn('라이브 데이터 병합 오류:', mergeErr?.message || mergeErr);
       }
 
-      // 준비 상태 동기화: 서버 데이터를 우선 적용하되, 로컬 오버라이드가 있으면 확인
-      // 서버에서 준비 상태가 제대로 저장되었는지 확인한 후에만 오버라이드 제거
       if (Array.isArray(mergedRoom.participants) && groupTrainingState.readyOverrides) {
         mergedRoom.participants = mergedRoom.participants.map(p => {
           const participantId = getParticipantIdentifier(p);
           if (!participantId) return p;
           const override = getReadyOverride(participantId);
+          if (!override) return p;
           const rawReady = getRawReadyValue(p);
-          
-          // 서버에서 준비 상태가 있는 경우 서버 데이터를 우선 적용
-          if (rawReady !== undefined && rawReady !== null) {
-            // 서버 상태와 로컬 오버라이드가 일치하면 오버라이드 제거 (동기화 완료)
-            if (override && rawReady === override.ready) {
-              clearReadyOverride(participantId);
-            }
-            // 서버 데이터를 우선 적용 (ready와 isReady 모두 업데이트)
-            return { ...p, ready: !!rawReady, isReady: !!rawReady };
+          if (rawReady === override.ready) {
+            clearReadyOverride(participantId);
+            return p;
           }
-          
-          // 서버에 준비 상태가 없고 로컬 오버라이드가 있으면 오버라이드 적용
-          if (override) {
-            return { ...p, ready: override.ready, isReady: override.ready };
-          }
-          
-          // 둘 다 없으면 기본값 false
-          return { ...p, ready: false, isReady: false };
-        });
-      } else if (Array.isArray(mergedRoom.participants)) {
-        // 오버라이드가 없어도 서버 데이터의 ready 상태를 명시적으로 설정
-        mergedRoom.participants = mergedRoom.participants.map(p => {
-          const rawReady = getRawReadyValue(p);
-          if (rawReady !== undefined && rawReady !== null) {
-            return { ...p, ready: !!rawReady, isReady: !!rawReady };
-          }
-          return { ...p, ready: false, isReady: false };
+          return { ...p, ready: override.ready };
         });
       }
 
-      const previousRoomState = groupTrainingState.currentRoom;
-      const previousStatus = previousRoomState?.status || previousRoomState?.Status || 'waiting';
-
       // 방 상태가 변경되었는지 확인
-      const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(previousRoomState);
+      const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(groupTrainingState.currentRoom);
 
       if (hasChanges) {
         groupTrainingState.currentRoom = mergedRoom;
@@ -3680,13 +3553,12 @@ async function syncRoomData() {
         // 카운트다운/훈련 시작 상태 체크
         const roomStatus = mergedRoom.status || mergedRoom.Status || 'waiting';
         const countdownEndTime = mergedRoom.countdownEndTime || mergedRoom.CountdownEndTime;
-        const wasStarting = previousStatus === 'starting';
+        const wasStarting = groupTrainingState.currentRoom?.status === 'starting';
         const isStarting = roomStatus === 'starting';
         
         // 참가자가 카운트다운 시작 신호를 감지한 경우 (중복 실행 방지)
-        // 모든 사용자(관리자/일반 참가자)에게 카운트다운 표시
-        if (isStarting && !wasStarting) {
-          console.log('📢 훈련 시작 카운트다운 감지됨 (모든 참가자)');
+        if (isStarting && !groupTrainingState.isAdmin && !wasStarting) {
+          console.log('📢 훈련 시작 카운트다운 감지됨');
           
           // 카운트다운 종료 시간이 있으면 그 시간을 기준으로 카운트다운
           if (countdownEndTime) {
@@ -3696,33 +3568,29 @@ async function syncRoomData() {
             const remainingSeconds = Math.ceil(remainingMs / 1000);
             
             if (remainingSeconds > 0) {
-              console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음 (모든 참가자)`);
-              // 모든 참가자 화면에 카운트다운 표시 (중복 방지를 위해 플래그 설정)
+              console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음`);
+              // 참가자 화면에도 카운트다운 표시 (중복 방지를 위해 플래그 설정)
               if (!groupTrainingState.countdownStarted) {
                 groupTrainingState.countdownStarted = true;
-                Promise.resolve(triggerCountdownOverlay(remainingSeconds))
-                  .catch(err => console.warn('카운트다운 표시 실패:', err))
-                  .finally(() => {
-                    groupTrainingState.countdownStarted = false;
-                  });
+                showGroupCountdownOverlay(remainingSeconds).then(() => {
+                  groupTrainingState.countdownStarted = false;
+                });
               }
             } else {
-              // 카운트다운이 이미 끝났으면 바로 훈련 시작 (준비완료된 사용자만)
-              console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작 (준비완료된 사용자만)');
-              if (!groupTrainingState.countdownStarted && shouldAutoStartLocalTraining()) {
+              // 카운트다운이 이미 끝났으면 바로 훈련 시작
+              console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작');
+              if (!groupTrainingState.countdownStarted) {
                 startLocalGroupTraining();
               }
             }
           } else {
-            // 카운트다운 종료 시간이 없으면 기본 카운트다운
-            console.log(`⏱️ 카운트다운 시작 (기본 ${GROUP_COUNTDOWN_SECONDS}초, 모든 참가자)`);
+            // 카운트다운 종료 시간이 없으면 기본 5초 카운트다운
+            console.log('⏱️ 카운트다운 시작 (기본 5초)');
             if (!groupTrainingState.countdownStarted) {
               groupTrainingState.countdownStarted = true;
-              Promise.resolve(triggerCountdownOverlay(GROUP_COUNTDOWN_SECONDS))
-                .catch(err => console.warn('카운트다운 표시 실패:', err))
-                .finally(() => {
-                  groupTrainingState.countdownStarted = false;
-                });
+              showGroupCountdownOverlay(5).then(() => {
+                groupTrainingState.countdownStarted = false;
+              });
             }
           }
         }
@@ -3739,8 +3607,7 @@ async function syncRoomData() {
               startLocalGroupTraining();
             }
           } else if (!ts.isRunning && !canAutoStart) {
-            // 준비완료되지 않은 사용자(관리자/일반 참가자 모두)는 모니터링 모드 유지
-            console.log('준비완료되지 않음 - 모니터링 모드 유지 (대기실 화면 유지)');
+            console.log('관리자 모니터링 모드 - 로컬 세션 시작을 건너뜁니다');
             showWaitingScreen();
           }
           
@@ -5006,8 +4873,7 @@ async function startGroupTrainingWithCountdown() {
     }
 
     const room = groupTrainingState.currentRoom;
-    const roomCode = getCurrentRoomCode(room);
-    if (!room || !room.workoutId || !roomCode) {
+    if (!room || !room.workoutId || !room.roomCode) {
       showToast('방 정보가 없습니다', 'error');
       return;
     }
@@ -5019,8 +4885,8 @@ async function startGroupTrainingWithCountdown() {
     }
 
     const participantCount = room.participants?.length || 0;
-    if (participantCount < 1) {
-      showToast('참가자가 없습니다', 'warning');
+    if (participantCount < 2) {
+      showToast('최소 2명의 참가자가 필요합니다', 'warning');
       return;
     }
     
@@ -5035,13 +4901,13 @@ async function startGroupTrainingWithCountdown() {
     console.log(`✅ 준비 완료된 참가자: ${readyCount}명`);
 
     // 서버에 카운트다운 시작 신호 전송 (모든 참가자가 감지할 수 있도록)
-    const countdownSeconds = GROUP_COUNTDOWN_SECONDS;
+    const countdownSeconds = 5;
     const countdownEndTime = new Date(Date.now() + countdownSeconds * 1000).toISOString();
     
     try {
       // 방 상태를 'starting'으로 변경하고 카운트다운 종료 시간 저장
       if (typeof apiUpdateRoom === 'function') {
-        await apiUpdateRoom(roomCode, {
+        await apiUpdateRoom(room.roomCode, {
           status: 'starting',
           countdownEndTime: countdownEndTime
         });
@@ -5057,14 +4923,6 @@ async function startGroupTrainingWithCountdown() {
       console.warn('서버에 카운트다운 시작 신호 전송 실패:', error);
       // 서버 전송 실패해도 로컬에서는 계속 진행
     }
-    
-    if (typeof broadcastCountdownStart === 'function') {
-      try {
-        await broadcastCountdownStart(countdownSeconds);
-      } catch (err) {
-        console.warn('카운트다운 브로드캐스트 실패:', err);
-      }
-    }
 
     // 관리자 화면에서 카운트다운 오버레이 표시
     await showGroupCountdownOverlay(countdownSeconds);
@@ -5078,7 +4936,7 @@ async function startGroupTrainingWithCountdown() {
 /**
  * 그룹 훈련 카운트다운 오버레이 표시 (5초)
  */
-async function showGroupCountdownOverlay(seconds = GROUP_COUNTDOWN_SECONDS) {
+async function showGroupCountdownOverlay(seconds = 5) {
   return new Promise((resolve) => {
     // 카운트다운 오버레이 요소 찾기 또는 생성
     let overlay = document.getElementById('countdownOverlay');
@@ -5183,8 +5041,7 @@ async function showGroupCountdownOverlay(seconds = GROUP_COUNTDOWN_SECONDS) {
 async function startAllParticipantsTraining() {
   try {
     const room = groupTrainingState.currentRoom;
-    const roomCode = getCurrentRoomCode(room);
-    if (!room || !roomCode) {
+    if (!room || !room.roomCode) {
       console.error('방 정보가 없습니다');
       return;
     }
@@ -5202,7 +5059,7 @@ async function startAllParticipantsTraining() {
       try {
         // API 호출로 방 상태를 'training'으로 변경하여 모든 참가자에게 신호 전송
         if (typeof apiUpdateRoom === 'function') {
-          await apiUpdateRoom(roomCode, {
+          await apiUpdateRoom(room.roomCode, {
             status: 'training',
             trainingStartTime,
             countdownEndTime: null
@@ -5311,7 +5168,6 @@ window.startGroupTrainingWithCountdown = startGroupTrainingWithCountdown;
 window.showGroupCountdownOverlay = showGroupCountdownOverlay;
 window.startAllParticipantsTraining = startAllParticipantsTraining;
 window.startLocalGroupTraining = startLocalGroupTraining;
-window.setupGroupTrainingControlBar = setupGroupTrainingControlBar;
 
      
 
