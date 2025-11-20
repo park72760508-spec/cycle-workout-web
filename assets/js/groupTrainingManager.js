@@ -3036,10 +3036,25 @@ function renderWaitingHeaderSegmentTable() {
     const workout = window.currentWorkout;
     const segments = workout.segments;
     const room = groupTrainingState.currentRoom || {};
+    const roomStatus = room.status || room.Status || 'waiting';
+    const remoteTrainingStart = room.trainingStartTime || room.TrainingStartTime || room.startedAt || null;
 
     // 현재 세그먼트 인덱스 계산
     const ts = window.trainingState || {};
-    const elapsed = Number(ts.elapsedSec || 0);
+    const hasLocalLoop = !!ts.isRunning;
+    let elapsed = Number(ts.elapsedSec);
+    if (!Number.isFinite(elapsed) || elapsed < 0) {
+      elapsed = 0;
+    }
+
+    if ((!hasLocalLoop || elapsed === 0) && remoteTrainingStart) {
+      const remoteStartMs = new Date(remoteTrainingStart).getTime();
+      if (Number.isFinite(remoteStartMs)) {
+        const remoteElapsed = Math.max(0, (Date.now() - remoteStartMs) / 1000);
+        elapsed = Math.max(elapsed, remoteElapsed);
+      }
+    }
+
     let currentIdx = -1;
     let currentSegStart = 0;
     let currentSegRemaining = null;
@@ -3084,12 +3099,14 @@ function renderWaitingHeaderSegmentTable() {
     const segmentTimer = currentIdx >= 0 ? formatTimer(currentSegRemaining) : '--:--';
 
     // 훈련 시작 여부 확인 (elapsed > 0이면 훈련이 시작된 것으로 판단)
-    const isTrainingStarted = elapsed > 0;
+    const isTrainingStarted = roomStatus === 'training' || elapsed > 0;
 
-    const tableRows = segments.map((seg, idx) => {
-      const label = seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`;
-      const segType = (seg.segment_type || seg.type || '-').toString().toUpperCase();
-      const ftp = Math.round(Number(
+    const normalizedSegments = segments.map((seg, idx) => ({
+      seg,
+      originalIndex: idx,
+      label: seg.label || seg.name || seg.title || `세그먼트 ${idx + 1}`,
+      type: (seg.segment_type || seg.type || '-').toString().toUpperCase(),
+      ftp: Math.round(Number(
         seg.target_value ??
         seg.targetValue ??
         seg.target ??
@@ -3098,15 +3115,30 @@ function renderWaitingHeaderSegmentTable() {
         seg.target_power ??
         seg.intensity ??
         0
-      ));
-      const durationStr = formatDuration(seg.duration_sec ?? seg.duration);
-      const isActive = isTrainingStarted && idx === currentIdx;
+      )),
+      durationStr: formatDuration(seg.duration_sec ?? seg.duration)
+    }));
+
+    let orderedSegments = normalizedSegments;
+    if (isTrainingStarted && currentIdx >= 0) {
+      orderedSegments = [
+        ...normalizedSegments.slice(currentIdx),
+        ...normalizedSegments.slice(0, currentIdx)
+      ];
+    }
+
+    const tableRows = orderedSegments.map((item, orderIdx) => {
+      const { seg, originalIndex, label, type, ftp, durationStr } = item;
+      const isActive = isTrainingStarted && originalIndex === currentIdx;
 
       return `
         <tr class="${isActive ? 'active' : ''}">
-          <td class="seg-col-index"><span class="seg-index-badge">${idx + 1}</span></td>
+          <td class="seg-col-index">
+            <span class="seg-index-badge">${originalIndex + 1}</span>
+            ${isActive ? '<span class="seg-progress-indicator" aria-hidden="true"></span>' : ''}
+          </td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
-          <td class="seg-col-type"><span class="seg-type">${segType}</span></td>
+          <td class="seg-col-type"><span class="seg-type">${type}</span></td>
           <td class="seg-col-ftp">${Number.isFinite(ftp) ? `${ftp}<small class="unit">%</small>` : '-'}</td>
           <td class="seg-col-duration">${durationStr}</td>
         </tr>
@@ -3197,17 +3229,11 @@ function renderWaitingHeaderSegmentTable() {
 
       // 훈련이 시작된 경우에만 활성 세그먼트 추적 스크롤 실행
       if (isTrainingStarted && currentIdx >= 0) {
-        const activeRow = wrapper.querySelector('tbody tr.active');
-        if (activeRow) {
-          const header = wrapper.querySelector('thead');
-          const headerHeight = header ? header.offsetHeight : 0;
-          const rowHeight = rows[0]?.offsetHeight || 0;
-          
-          // 헤더 바로 아래에 활성 세그먼트가 보이도록 스크롤 위치 계산
-          // 활성 행을 헤더 바로 아래에 배치
-          const targetScroll = Math.max(0, activeRow.offsetTop - headerHeight - 2);
-          
-          wrapper.scrollTop = targetScroll;
+        wrapper.scrollTop = 0;
+        const existingHandler = wrapper._scrollHandler;
+        if (existingHandler) {
+          wrapper.removeEventListener('scroll', existingHandler);
+          delete wrapper._scrollHandler;
         }
       } else {
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
@@ -3243,13 +3269,6 @@ function renderWaitingHeaderSegmentTable() {
         // 핸들러 저장 및 이벤트 등록
         wrapper._scrollHandler = handleScroll;
         wrapper.addEventListener('scroll', handleScroll, { passive: true });
-      } else {
-        // 훈련 시작 후에는 스크롤 이벤트 리스너 제거
-        const existingHandler = wrapper._scrollHandler;
-        if (existingHandler) {
-          wrapper.removeEventListener('scroll', existingHandler);
-          delete wrapper._scrollHandler;
-        }
       }
     });
   } catch (error) {
