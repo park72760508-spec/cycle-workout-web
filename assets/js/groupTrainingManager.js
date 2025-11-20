@@ -71,7 +71,8 @@ function getReadyOverride(participantId) {
   if (!participantId || !groupTrainingState.readyOverrides) return null;
   const override = groupTrainingState.readyOverrides[participantId];
   if (!override) return null;
-  if (override.expiresAt && override.expiresAt <= Date.now()) {
+  // TTL이 null이면 무제한 유지 (서버 동기화 완료 시에만 제거)
+  if (override.expiresAt !== null && override.expiresAt && override.expiresAt <= Date.now()) {
     delete groupTrainingState.readyOverrides[participantId];
     return null;
   }
@@ -83,9 +84,10 @@ function setReadyOverride(participantId, ready) {
   if (!groupTrainingState.readyOverrides) {
     groupTrainingState.readyOverrides = {};
   }
+  // TTL을 무제한으로 설정하여 자동 리셋 방지 (서버 동기화 완료 시에만 제거)
   groupTrainingState.readyOverrides[participantId] = {
     ready: !!ready,
-    expiresAt: Date.now() + READY_OVERRIDE_TTL
+    expiresAt: null // TTL 무제한 (서버 동기화 완료 시에만 제거)
   };
 }
 
@@ -99,12 +101,34 @@ function clearReadyOverride(participantId) {
 function isParticipantReady(participant) {
   if (!participant) return false;
   const participantId = getParticipantIdentifier(participant);
+  
+  // 서버 데이터의 ready 상태를 우선 확인
+  const rawReady = getRawReadyValue(participant);
+  
+  // 서버에 준비 상태가 있으면 서버 데이터 우선 적용
+  if (rawReady !== undefined && rawReady !== null) {
+    // 로컬 오버라이드가 있고 서버 상태와 다르면 오버라이드 확인
+    const override = getReadyOverride(participantId);
+    if (override && override.ready !== rawReady) {
+      // 서버 동기화 지연 가능성이 있으므로 오버라이드 우선 적용
+      // 단, 서버 상태가 true이고 오버라이드가 false인 경우는 서버 우선
+      if (rawReady === true && override.ready === false) {
+        // 서버에서 준비완료로 확인되면 서버 우선 (다른 사용자가 변경한 경우)
+        return true;
+      }
+      // 그 외에는 오버라이드 우선 (로컬에서 변경한 경우)
+      return !!override.ready;
+    }
+    return !!rawReady;
+  }
+  
+  // 서버에 준비 상태가 없으면 로컬 오버라이드 확인
   const override = getReadyOverride(participantId);
   if (override) {
     return !!override.ready;
   }
-  const rawReady = getRawReadyValue(participant);
-  return rawReady !== undefined ? rawReady : false;
+  
+  return false;
 }
 
 function countReadyParticipants(participants = []) {
@@ -3545,30 +3569,41 @@ async function syncRoomData() {
         console.warn('라이브 데이터 병합 오류:', mergeErr?.message || mergeErr);
       }
 
-      // 준비 상태 오버라이드 적용 (서버 동기화 지연 대비)
+      // 준비 상태 동기화: 서버 데이터를 우선 적용하되, 로컬 오버라이드가 있으면 확인
       // 서버에서 준비 상태가 제대로 저장되었는지 확인한 후에만 오버라이드 제거
       if (Array.isArray(mergedRoom.participants) && groupTrainingState.readyOverrides) {
         mergedRoom.participants = mergedRoom.participants.map(p => {
           const participantId = getParticipantIdentifier(p);
           if (!participantId) return p;
           const override = getReadyOverride(participantId);
-          if (!override) return p;
           const rawReady = getRawReadyValue(p);
           
-          // 서버에서 준비 상태가 로컬 오버라이드와 일치하면 오버라이드 제거
-          // 단, 서버 상태가 false이고 오버라이드가 true인 경우는 서버 동기화 지연일 수 있으므로 유지
-          if (rawReady === override.ready && rawReady === true) {
-            // 서버에서도 준비완료 상태로 확인되면 오버라이드 제거 (동기화 완료)
-            clearReadyOverride(participantId);
-            return p;
-          } else if (rawReady === override.ready && rawReady === false) {
-            // 서버에서도 준비안됨 상태로 확인되면 오버라이드 제거
-            clearReadyOverride(participantId);
-            return p;
+          // 서버에서 준비 상태가 있는 경우 서버 데이터를 우선 적용
+          if (rawReady !== undefined && rawReady !== null) {
+            // 서버 상태와 로컬 오버라이드가 일치하면 오버라이드 제거 (동기화 완료)
+            if (override && rawReady === override.ready) {
+              clearReadyOverride(participantId);
+            }
+            // 서버 데이터를 우선 적용 (ready와 isReady 모두 업데이트)
+            return { ...p, ready: !!rawReady, isReady: !!rawReady };
           }
           
-          // 서버와 로컬 상태가 다르면 로컬 오버라이드 우선 적용
-          return { ...p, ready: override.ready, isReady: override.ready };
+          // 서버에 준비 상태가 없고 로컬 오버라이드가 있으면 오버라이드 적용
+          if (override) {
+            return { ...p, ready: override.ready, isReady: override.ready };
+          }
+          
+          // 둘 다 없으면 기본값 false
+          return { ...p, ready: false, isReady: false };
+        });
+      } else if (Array.isArray(mergedRoom.participants)) {
+        // 오버라이드가 없어도 서버 데이터의 ready 상태를 명시적으로 설정
+        mergedRoom.participants = mergedRoom.participants.map(p => {
+          const rawReady = getRawReadyValue(p);
+          if (rawReady !== undefined && rawReady !== null) {
+            return { ...p, ready: !!rawReady, isReady: !!rawReady };
+          }
+          return { ...p, ready: false, isReady: false };
         });
       }
 
