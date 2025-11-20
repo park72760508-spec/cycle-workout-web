@@ -38,6 +38,27 @@ async function toggleReady() {
   if (!groupTrainingState.currentRoom) return;
   
   const room = groupTrainingState.currentRoom;
+  if (typeof normalizeRoomParticipantsInPlace === 'function') {
+    normalizeRoomParticipantsInPlace(room);
+  }
+  
+  let participantsSnapshot = Array.isArray(room.participants) ? [...room.participants] : [];
+  
+  // 최신 방 정보를 가져와 동시 업데이트 시 서로의 상태가 덮어쓰이지 않도록 보호
+  if (typeof fetchLatestRoomState === 'function') {
+    try {
+      const latestRoom = await fetchLatestRoomState(groupTrainingState.roomCode);
+      if (latestRoom && Array.isArray(latestRoom.participants)) {
+        if (typeof normalizeRoomParticipantsInPlace === 'function') {
+          normalizeRoomParticipantsInPlace(latestRoom);
+        }
+        Object.assign(groupTrainingState.currentRoom, latestRoom);
+        participantsSnapshot = [...latestRoom.participants];
+      }
+    } catch (syncError) {
+      console.warn('준비 상태 동기화 실패:', syncError?.message || syncError);
+    }
+  }
   const myId = window.currentUser?.id || 'user_' + Date.now();
   const normalizeParticipantId = (participant) => {
     const pid = participant?.id ?? participant?.participantId ?? participant?.userId;
@@ -46,7 +67,7 @@ async function toggleReady() {
   const match = (participant) => normalizeParticipantId(participant) === String(myId);
   
   // 내 참가자 정보 찾기
-  const myParticipant = room.participants.find(match);
+  const myParticipant = participantsSnapshot.find(match);
   if (!myParticipant) {
     showToast('참가자 정보를 찾을 수 없습니다', 'error');
     return;
@@ -72,7 +93,7 @@ async function toggleReady() {
   
   try {
     // 백엔드 업데이트
-    const updatedParticipants = room.participants.map(p => {
+    const updatedParticipants = participantsSnapshot.map(p => {
       if (match(p)) {
         return { 
           ...p, 
