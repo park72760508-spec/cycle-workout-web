@@ -196,6 +196,30 @@ function normalizeRoomParticipantsInPlace(room) {
   return normalized;
 }
 
+/**
+ * 참가자 라이브 데이터 객체(payload 포함)를 평탄화
+ */
+function expandLiveParticipantData(liveItem) {
+  if (!liveItem || typeof liveItem !== 'object') {
+    return {};
+  }
+  const expanded = { ...liveItem };
+  if (typeof liveItem.payload === 'string') {
+    try {
+      const payloadObj = JSON.parse(liveItem.payload);
+      expanded._payload = payloadObj;
+      Object.entries(payloadObj).forEach(([key, value]) => {
+        if (expanded[key] === undefined) {
+          expanded[key] = value;
+        }
+      });
+    } catch (err) {
+      console.warn('라이브 데이터 payload 파싱 실패:', err?.message || err);
+    }
+  }
+  return expanded;
+}
+
 function getParticipantIdentifier(participant) {
   if (!participant) return '';
   const id = participant.id ?? participant.participantId ?? participant.userId;
@@ -3752,37 +3776,38 @@ async function syncRoomData() {
               const pid = idOf(p);
               const live = liveById[pid];
               if (!live) return p;
+              const liveData = expandLiveParticipantData(live);
               
               // 블루투스 상태 병합 (다양한 필드명 지원)
-              const bluetoothStatus = live.bluetoothStatus || {
-                trainer: !!(live.trainerConnected || live.trainer || live.trainer_on),
-                powerMeter: !!(live.powerMeterConnected || live.powerConnected || live.powerMeter || live.power || live.power_on || live.powerMeter_on),
-                heartRate: !!(live.heartRateConnected || live.hrConnected || live.heartRate || live.hr || live.hr_on || live.bpm_on)
+              const bluetoothStatus = liveData.bluetoothStatus || {
+                trainer: !!(liveData.trainerConnected || liveData.trainer || liveData.trainer_on),
+                powerMeter: !!(liveData.powerMeterConnected || liveData.powerConnected || liveData.powerMeter || liveData.power || liveData.power_on || liveData.powerMeter_on),
+                heartRate: !!(liveData.heartRateConnected || liveData.hrConnected || liveData.heartRate || liveData.hr || liveData.hr_on || liveData.bpm_on)
               };
               
               // 메트릭 병합 (다양한 필드명 지원)
               const metrics = {
-                segmentTargetPowerW: live.segmentTargetPowerW ?? live.targetPowerW ?? live.segmentTargetPower ?? null,
-                segmentAvgPowerW: live.segmentAvgPowerW ?? live.segmentAvgPower ?? null,
-                currentPower: live.power ?? live.currentPowerW ?? live.currentPower ?? live.instantPower ?? null,
-                avgPower: live.avgPower ?? live.overallAvgPowerW ?? live.averagePower ?? live.avgPowerW ?? null,
-                heartRate: live.heartRate ?? live.hr ?? live.bpm ?? null,
-                cadence: live.cadence ?? live.rpm ?? null,
-                progress: live.progress ?? null,
-                segmentIndex: live.segmentIndex ?? null
+                segmentTargetPowerW: liveData.segmentTargetPowerW ?? liveData.targetPowerW ?? liveData.segmentTargetPower ?? null,
+                segmentAvgPowerW: liveData.segmentAvgPowerW ?? liveData.segmentAvgPower ?? null,
+                currentPower: liveData.power ?? liveData.currentPowerW ?? liveData.currentPower ?? liveData.instantPower ?? null,
+                avgPower: liveData.avgPower ?? liveData.overallAvgPowerW ?? liveData.averagePower ?? liveData.avgPowerW ?? null,
+                heartRate: liveData.heartRate ?? liveData.hr ?? liveData.bpm ?? null,
+                cadence: liveData.cadence ?? liveData.rpm ?? null,
+                progress: liveData.progress ?? null,
+                segmentIndex: liveData.segmentIndex ?? null
               };
               
               const resolveLiveReady = () => {
                 const candidates = [
-                  live.ready,
-                  live.isReady,
-                  live.readyState,
-                  live.ready_status,
-                  live.readyFlag,
-                  live.readyValue,
-                  live.ready_value,
-                  live.readyDeviceConnected,
-                  live.readyDevice
+                  liveData.ready,
+                  liveData.isReady,
+                  liveData.readyState,
+                  liveData.ready_status,
+                  liveData.readyFlag,
+                  liveData.readyValue,
+                  liveData.ready_value,
+                  liveData.readyDeviceConnected,
+                  liveData.readyDevice
                 ];
                 for (const candidate of candidates) {
                   const parsed = parseBooleanLike(candidate);
@@ -3794,7 +3819,7 @@ async function syncRoomData() {
               };
               
               const liveReady = resolveLiveReady();
-              const liveReadyTimestamp = live.readyUpdatedAt || live.readyUpdated || live.ready_at || live.readyTimestamp || live.timestamp || null;
+              const liveReadyTimestamp = liveData.readyUpdatedAt || liveData.readyUpdated || liveData.ready_at || liveData.readyTimestamp || liveData.timestamp || null;
               const liveReadyTimeMs = liveReadyTimestamp ? Date.parse(liveReadyTimestamp) : null;
               const existingReadyTimeMs = p.readyUpdatedAt ? Date.parse(p.readyUpdatedAt) : null;
               const currentReady = parseBooleanLike(p.ready ?? p.isReady);
@@ -3824,13 +3849,13 @@ async function syncRoomData() {
                 if (shouldApplyLiveReady) {
                   mergedParticipant.ready = !!liveReady;
                   mergedParticipant.isReady = !!liveReady;
-                  mergedParticipant.readyUpdatedAt = liveReadyTimestamp || mergedParticipant.readyUpdatedAt || live.timestamp || new Date().toISOString();
-                  mergedParticipant.readySource = live.readySource || mergedParticipant.readySource || 'live';
-                  mergedParticipant.readyDeterminedBy = live.readyDeterminedBy || mergedParticipant.readyDeterminedBy || 'live-data';
-                  mergedParticipant.readyBroadcastedAt = live.readyBroadcastedAt || mergedParticipant.readyBroadcastedAt || null;
+                  mergedParticipant.readyUpdatedAt = liveReadyTimestamp || mergedParticipant.readyUpdatedAt || liveData.timestamp || new Date().toISOString();
+                  mergedParticipant.readySource = liveData.readySource || mergedParticipant.readySource || 'live';
+                  mergedParticipant.readyDeterminedBy = liveData.readyDeterminedBy || mergedParticipant.readyDeterminedBy || 'live-data';
+                  mergedParticipant.readyBroadcastedAt = liveData.readyBroadcastedAt || mergedParticipant.readyBroadcastedAt || null;
                 }
-              } else if (live.readyDeviceConnected !== undefined) {
-                mergedParticipant.readyDeviceConnected = !!live.readyDeviceConnected;
+              } else if (liveData.readyDeviceConnected !== undefined) {
+                mergedParticipant.readyDeviceConnected = !!liveData.readyDeviceConnected;
               }
               
               return mergedParticipant;
