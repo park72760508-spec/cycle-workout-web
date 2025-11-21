@@ -90,6 +90,12 @@ async function toggleReady() {
       setReadyOverride(participantKey, newReadyState);
     }
   };
+  const broadcastReadyState = () => {
+    if (typeof syncParticipantLiveData === 'function') {
+      Promise.resolve(syncParticipantLiveData())
+        .catch(err => console.warn('준비 상태 실시간 브로드캐스트 실패:', err?.message || err));
+    }
+  };
   
   try {
     // 백엔드 업데이트
@@ -153,6 +159,9 @@ async function toggleReady() {
           } else if (!newReadyState) {
             showToast('⏳ 준비 취소', 'info');
           }
+          
+          // 다른 참가자들에게 즉시 준비 상태를 공유
+          broadcastReadyState();
           return;
         } else {
           throw new Error(result?.error || '방 업데이트 실패');
@@ -202,6 +211,9 @@ async function toggleReady() {
       } else if (!newReadyState) {
         showToast('⏳ 준비 취소', 'info');
       }
+
+      // 다른 참가자들에게 즉시 준비 상태를 공유
+      broadcastReadyState();
     } else {
       throw new Error('방 업데이트 실패');
     }
@@ -1180,6 +1192,12 @@ async function syncParticipantLiveData() {
     
     // 블루투스에서 실시간 데이터 및 연결 상태 가져오기
     const connectedDevices = window.connectedDevices || {};
+    const bluetoothStatusSnapshot = {
+      trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
+      powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
+      heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
+    };
+    const hasBluetoothDevice = bluetoothStatusSnapshot.trainer || bluetoothStatusSnapshot.powerMeter || bluetoothStatusSnapshot.heartRate;
     const liveData = window.liveData || {};
     
     // 훈련 진행률 계산 (trainingState에서 가져오기)
@@ -1248,13 +1266,48 @@ async function syncParticipantLiveData() {
       segmentAvgPowerW = liveData.avgPower || liveData.averagePower || 0;
     }
     
+    // 현재 준비 상태 파악 (참가자 정보 또는 로컬 오버라이드 기반)
+    let readyState = false;
+    let readyDeterminedBy = 'unknown';
+    if (groupTrainingState?.currentRoom && Array.isArray(groupTrainingState.currentRoom.participants)) {
+      try {
+        if (typeof normalizeRoomParticipantsInPlace === 'function') {
+          normalizeRoomParticipantsInPlace(groupTrainingState.currentRoom);
+        }
+      } catch (e) {
+        console.warn('normalizeRoomParticipantsInPlace 실행 중 오류 (무시):', e);
+      }
+      const myParticipant = groupTrainingState.currentRoom.participants.find(p => {
+        const pId = p.id || p.participantId || p.userId;
+        return String(pId) === String(participantId);
+      });
+      if (myParticipant && typeof isParticipantReady === 'function') {
+        readyState = !!isParticipantReady(myParticipant);
+        readyDeterminedBy = 'participant-state';
+      }
+    }
+    if (!readyState && groupTrainingState?.readyOverrides) {
+      const override = groupTrainingState.readyOverrides[String(participantId)];
+      if (override) {
+        readyState = !!override.ready;
+        readyDeterminedBy = 'override';
+      }
+    }
+    const readyTimestamp = new Date().toISOString();
+    const readyMeta = {
+      ready: readyState,
+      isReady: readyState,
+      readyState: readyState ? 'ready' : 'waiting',
+      readyUpdatedAt: readyTimestamp,
+      readySource: readyState ? (hasBluetoothDevice ? 'device-ready' : 'manual-ready') : 'not-ready',
+      readyDeviceConnected: hasBluetoothDevice,
+      readyDeterminedBy,
+      readyBroadcastedAt: readyTimestamp
+    };
+
     // 백엔드에 데이터 전송 (BLE 상태 + 메트릭 확장)
-    const result = await apiSaveParticipantLiveData(roomCode, participantId, {
-      bluetoothStatus: {
-        trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
-        powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
-        heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
-      },
+    const payload = {
+      bluetoothStatus: bluetoothStatusSnapshot,
       // 현재 파워값 (W)
       power: currentPowerW,
       // 세그먼트 평균 파워값 (W) - 현재 세그먼트의 평균
@@ -1272,17 +1325,14 @@ async function syncParticipantLiveData() {
       // 훈련 진행률 (%)
       progress: progress,
       // 타임스탬프
-      timestamp: new Date().toISOString()
-    });
+      timestamp: readyTimestamp,
+      ...readyMeta
+    };
+
+    const result = await apiSaveParticipantLiveData(roomCode, participantId, payload);
     
     if (result?.success) {
       // 성공적으로 전송됨
-      const bluetoothStatus = {
-        trainer: !!(connectedDevices.trainer && connectedDevices.trainer.device),
-        powerMeter: !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device),
-        heartRate: !!(connectedDevices.heartRate && connectedDevices.heartRate.device)
-      };
-      
       console.log('✅ 실시간 데이터 전송 성공', {
         participantId,
         roomCode,
@@ -1292,7 +1342,8 @@ async function syncParticipantLiveData() {
         currentPowerW,
         heartRate: liveData.heartRate || liveData.hr || 0,
         cadence: liveData.cadence || liveData.rpm || 0,
-        bluetoothStatus
+        bluetoothStatus: bluetoothStatusSnapshot,
+        ready: readyState
       });
     } else {
       console.warn('⚠️ 실시간 데이터 전송 실패:', result?.error);
@@ -1376,6 +1427,15 @@ async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
           trainerConnected: flat.bluetoothStatus?.trainer ?? null,
           powerConnected: flat.bluetoothStatus?.powerMeter ?? null,
           hrConnected: flat.bluetoothStatus?.heartRate ?? null,
+          // 준비 상태 동기화
+          ready: flat.ready ?? (typeof flat.isReady === 'boolean' ? flat.isReady : null),
+          isReady: flat.isReady ?? (typeof flat.ready === 'boolean' ? flat.ready : null),
+          readyState: flat.readyState ?? null,
+          readyUpdatedAt: flat.readyUpdatedAt ?? flat.ready_at ?? null,
+          readySource: flat.readySource ?? null,
+          readyDeviceConnected: flat.readyDeviceConnected ?? null,
+          readyDeterminedBy: flat.readyDeterminedBy ?? null,
+          readyBroadcastedAt: flat.readyBroadcastedAt ?? null,
           timestamp: flat.timestamp || new Date().toISOString()
         };
         const res = await jsonpRequest(window.GAS_URL, params);
