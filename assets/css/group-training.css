@@ -852,6 +852,7 @@
   max-height: 200px;
   overflow-y: auto;
   border-radius: 10px;
+  position: relative;
 }
 
 .workout-table {
@@ -859,6 +860,8 @@
   border-collapse: collapse;
   font-size: 13px;
   color: #f5f7ff;
+  position: relative;
+  z-index: 1;
 }
 
 .workout-table thead {
@@ -889,18 +892,12 @@
   text-align: center;
 }
 
-/* 활성 세그먼트 스타일 (훈련 시작 시) */
-.workout-table tbody tr.active {
-  position: relative;
-}
-
-.workout-table tbody tr.active::before {
-  content: "";
+.segment-active-overlay {
   position: absolute;
-  top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
+  height: 0;
   border: 2px solid rgba(45, 212, 191, 0.95);
   border-radius: 14px;
   background: rgba(45, 212, 191, 0.15);
@@ -910,7 +907,13 @@
     0 0 55px rgba(45, 212, 191, 0.25),
     inset 0 0 18px rgba(45, 212, 191, 0.18);
   pointer-events: none;
-  z-index: 1;
+  opacity: 0;
+  transform: translateY(0);
+  transition:
+    transform 0.25s ease,
+    height 0.2s ease,
+    opacity 0.15s ease;
+  z-index: 0;
   animation: activeSegmentGlow 2s ease-in-out infinite alternate;
 }
 
@@ -933,9 +936,8 @@
   }
 }
 
-.workout-table tbody tr.active td {
-  position: relative;
-  z-index: 2;
+.segment-active-overlay {
+  animation: activeSegmentGlow 2s ease-in-out infinite alternate;
 }
 
 .workout-table .seg-index-badge {
@@ -948,20 +950,6 @@
   background: rgba(255,255,255,0.1);
   font-weight: 600;
   font-size: 12px;
-}
-
-.workout-table .seg-progress-indicator {
-  display: inline-flex;
-  margin-left: 8px;
-  width: 26px;
-  height: 26px;
-  border-radius: 13px;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.95), rgba(45, 212, 191, 0.75));
-  box-shadow:
-    0 0 12px rgba(45, 212, 191, 0.9),
-    0 0 24px rgba(45, 212, 191, 0.55),
-    inset 0 0 8px rgba(255,255,255,0.35);
-  animation: activeSegmentGlow 2s ease-in-out infinite alternate;
 }
 
 .workout-table .seg-label {
