@@ -3772,6 +3772,33 @@ async function syncRoomData() {
                 segmentIndex: live.segmentIndex ?? null
               };
               
+              const resolveLiveReady = () => {
+                const candidates = [
+                  live.ready,
+                  live.isReady,
+                  live.readyState,
+                  live.ready_status,
+                  live.readyFlag,
+                  live.readyValue,
+                  live.ready_value,
+                  live.readyDeviceConnected,
+                  live.readyDevice
+                ];
+                for (const candidate of candidates) {
+                  const parsed = parseBooleanLike(candidate);
+                  if (parsed !== undefined) {
+                    return parsed;
+                  }
+                }
+                return undefined;
+              };
+              
+              const liveReady = resolveLiveReady();
+              const liveReadyTimestamp = live.readyUpdatedAt || live.readyUpdated || live.ready_at || live.readyTimestamp || live.timestamp || null;
+              const liveReadyTimeMs = liveReadyTimestamp ? Date.parse(liveReadyTimestamp) : null;
+              const existingReadyTimeMs = p.readyUpdatedAt ? Date.parse(p.readyUpdatedAt) : null;
+              const currentReady = parseBooleanLike(p.ready ?? p.isReady);
+
               const mergedParticipant = {
                 ...p,
                 bluetoothStatus,
@@ -3784,6 +3811,26 @@ async function syncRoomData() {
               // 디버깅: 병합된 참가자 데이터 확인
               if (bluetoothStatus.trainer || bluetoothStatus.powerMeter || bluetoothStatus.heartRate) {
                 console.log(`🔌 참가자 ${p.name} (${pid}) 블루투스 상태 병합:`, bluetoothStatus);
+              }
+              
+              if (liveReady !== undefined) {
+                const shouldApplyLiveReady = (
+                  currentReady === undefined ||
+                  currentReady === null ||
+                  liveReady ||
+                  (liveReadyTimeMs !== null && (!existingReadyTimeMs || liveReadyTimeMs >= existingReadyTimeMs))
+                );
+                
+                if (shouldApplyLiveReady) {
+                  mergedParticipant.ready = !!liveReady;
+                  mergedParticipant.isReady = !!liveReady;
+                  mergedParticipant.readyUpdatedAt = liveReadyTimestamp || mergedParticipant.readyUpdatedAt || live.timestamp || new Date().toISOString();
+                  mergedParticipant.readySource = live.readySource || mergedParticipant.readySource || 'live';
+                  mergedParticipant.readyDeterminedBy = live.readyDeterminedBy || mergedParticipant.readyDeterminedBy || 'live-data';
+                  mergedParticipant.readyBroadcastedAt = live.readyBroadcastedAt || mergedParticipant.readyBroadcastedAt || null;
+                }
+              } else if (live.readyDeviceConnected !== undefined) {
+                mergedParticipant.readyDeviceConnected = !!live.readyDeviceConnected;
               }
               
               return mergedParticipant;
