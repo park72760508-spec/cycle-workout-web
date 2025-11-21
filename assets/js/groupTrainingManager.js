@@ -59,6 +59,32 @@ const ADMIN_MODE_PARTICIPATE = 'participate';
 const pendingReadyPersistMap = new Map();
 let readyPersistTimer = null;
 
+function sanitizeParticipantForPersistence(participant = {}) {
+  const id = participant.id ?? participant.participantId ?? participant.userId ?? '';
+  const name = participant.name ?? participant.participantName ?? participant.userName ?? '';
+  const role = participant.role ?? 'participant';
+  const joinedAt = participant.joinedAt ?? participant.joined_at ?? participant.createdAt ?? new Date().toISOString();
+  return {
+    id,
+    participantId: participant.participantId ?? id,
+    userId: participant.userId ?? id,
+    name: String(name),
+    participantName: String(participant.participantName ?? name),
+    role,
+    ready: !!participant.ready,
+    isReady: !!participant.isReady,
+    readyState: participant.readyState ?? (participant.ready ? 'ready' : 'waiting'),
+    readyStatus: participant.readyStatus ?? (participant.ready ? 'ready' : 'waiting'),
+    readyUpdatedAt: participant.readyUpdatedAt ?? null,
+    joinedAt,
+    ftp: participant.ftp ?? null,
+    weight: participant.weight ?? null,
+    gender: participant.gender ?? null,
+    bike: participant.bike ?? null,
+    status: participant.status ?? null
+  };
+}
+
 function queueReadyStatePersist(participantId, ready) {
   if (!participantId) return;
   pendingReadyPersistMap.set(String(participantId), !!ready);
@@ -77,7 +103,7 @@ async function flushReadyStatePersist() {
   }
 
   const room = groupTrainingState.currentRoom;
-  const participants = Array.isArray(room.participants) ? room.participants.map(participant => {
+  const updatedRoomParticipants = Array.isArray(room.participants) ? room.participants.map(participant => {
     const pid = getParticipantIdentifier(participant);
     if (!pid || !pendingReadyPersistMap.has(pid)) {
       return participant;
@@ -91,7 +117,7 @@ async function flushReadyStatePersist() {
   }) : [];
 
   const payload = {
-    participants
+    participants: updatedRoomParticipants
   };
 
   pendingReadyPersistMap.clear();
@@ -104,17 +130,16 @@ async function flushReadyStatePersist() {
     } else if (typeof updateRoomOnBackend === 'function') {
       success = await updateRoomOnBackend({
         ...room,
-        participants
+        participants: updatedRoomParticipants
       });
     }
 
     if (!success) {
       console.warn('준비 상태 저장 실패: apiUpdateRoom 응답 실패');
     } else {
-      groupTrainingState.currentRoom = {
-        ...(groupTrainingState.currentRoom || {}),
-        participants
-      };
+      if (Array.isArray(room.participants)) {
+        room.participants = updatedRoomParticipants;
+      }
       console.log('✅ 준비 상태가 GroupTrainingRooms 쉬트에 반영되었습니다');
     }
   } catch (err) {
@@ -978,19 +1003,19 @@ async function apiUpdateRoom(roomCode, data = {}) {
 
     Object.entries(data).forEach(([key, value]) => {
       if (value === undefined || value === null) return;
+      if (key === 'participants' && Array.isArray(value)) {
+        const sanitizedParticipants = value.map(sanitizeParticipantForPersistence);
+        participantsJson = JSON.stringify(sanitizedParticipants);
+        payload.participants = participantsJson;
+        payload.ParticipantsData = participantsJson;
+        return;
+      }
       if (typeof value === 'object') {
         payload[key] = JSON.stringify(value);
-        if (key === 'participants' && Array.isArray(value)) {
-          participantsJson = payload[key];
-        }
       } else {
         payload[key] = String(value);
       }
     });
-
-    if (participantsJson) {
-      payload.ParticipantsData = participantsJson;
-    }
 
     return await jsonpRequestWithRetry(window.GAS_URL, payload);
   } catch (error) {
