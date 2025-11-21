@@ -3457,7 +3457,6 @@ function renderWaitingHeaderSegmentTable() {
         <tr class="${isActive ? 'active' : ''}">
           <td class="seg-col-index">
             <span class="seg-index-badge">${originalIndex + 1}</span>
-            ${isActive ? '<span class="seg-progress-indicator" aria-hidden="true"></span>' : ''}
           </td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
           <td class="seg-col-type"><span class="seg-type">${type}</span></td>
@@ -3592,10 +3591,65 @@ function renderWaitingHeaderSegmentTable() {
         wrapper._scrollHandler = handleScroll;
         wrapper.addEventListener('scroll', handleScroll, { passive: true });
       }
+
+      setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0);
     });
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
   }
+}
+
+function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
+  if (!wrapper) return;
+
+  const handlerKey = '_segmentOverlayScrollHandler';
+  const overlayClassName = 'segment-active-overlay';
+
+  if (wrapper[handlerKey]) {
+    wrapper.removeEventListener('scroll', wrapper[handlerKey]);
+    wrapper[handlerKey] = null;
+  }
+
+  let overlay = wrapper.querySelector(`.${overlayClassName}`);
+
+  if (!shouldShowOverlay) {
+    if (overlay) {
+      overlay.remove();
+    }
+    return;
+  }
+
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = overlayClassName;
+    wrapper.appendChild(overlay);
+  }
+
+  const syncOverlayPosition = () => {
+    if (!overlay || !overlay.isConnected) return;
+    const activeRow = wrapper.querySelector('tbody tr.active');
+    if (!activeRow) {
+      overlay.style.opacity = '0';
+      return;
+    }
+
+    const rowHeight = activeRow.offsetHeight || 0;
+    if (rowHeight <= 0) {
+      overlay.style.opacity = '0';
+      return;
+    }
+
+    const relativeTop = activeRow.offsetTop - wrapper.scrollTop;
+    overlay.style.opacity = '1';
+    overlay.style.transform = `translateY(${relativeTop}px)`;
+    overlay.style.height = `${rowHeight}px`;
+  };
+
+  const handleScroll = () => syncOverlayPosition();
+  wrapper[handlerKey] = handleScroll;
+  wrapper.addEventListener('scroll', handleScroll, { passive: true });
+
+  requestAnimationFrame(syncOverlayPosition);
 }
 
 /**
