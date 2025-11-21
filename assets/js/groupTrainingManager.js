@@ -3884,7 +3884,8 @@ async function syncRoomData() {
                   liveData.readyValue,
                   liveData.ready_value,
                   liveData.readyDeviceConnected,
-                  liveData.readyDevice
+                  liveData.readyDevice,
+                  liveData.sts
                 ];
                 for (const candidate of candidates) {
                   const parsed = parseBooleanLike(candidate);
