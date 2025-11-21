@@ -974,26 +974,22 @@ async function apiUpdateRoom(roomCode, data = {}) {
       roomCode: String(roomCode)
     };
 
-    let participantsArray = null;
+    let participantsJson = null;
 
     Object.entries(data).forEach(([key, value]) => {
       if (value === undefined || value === null) return;
-      if (key === 'participants' && Array.isArray(value)) {
-        participantsArray = value.map(p => ({ ...p }));
-      }
       if (typeof value === 'object') {
         payload[key] = JSON.stringify(value);
+        if (key === 'participants' && Array.isArray(value)) {
+          participantsJson = payload[key];
+        }
       } else {
         payload[key] = String(value);
       }
     });
 
-    if (participantsArray) {
-      const participantsJson = JSON.stringify(participantsArray);
-      payload.participants = participantsJson;
-      payload.Participants = participantsJson;
+    if (participantsJson) {
       payload.ParticipantsData = participantsJson;
-      payload.participantsJson = participantsJson;
     }
 
     return await jsonpRequestWithRetry(window.GAS_URL, payload);
