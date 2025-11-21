@@ -55,6 +55,69 @@ const GROUP_COUNTDOWN_SECONDS = 10; // 그룹 훈련 카운트다운 기본 10�
 const ADMIN_MODE_MONITOR = 'monitor';
 const ADMIN_MODE_PARTICIPATE = 'participate';
 
+// 준비 상태를 구글 쉬트에 반영하기 위한 대기열
+const pendingReadyPersistMap = new Map();
+let readyPersistTimer = null;
+
+function queueReadyStatePersist(participantId, ready) {
+  if (!participantId) return;
+  pendingReadyPersistMap.set(String(participantId), !!ready);
+  if (readyPersistTimer) return;
+  readyPersistTimer = setTimeout(flushReadyStatePersist, 1500);
+}
+
+async function flushReadyStatePersist() {
+  readyPersistTimer = null;
+  if (!groupTrainingState.roomCode || !groupTrainingState.currentRoom) {
+    pendingReadyPersistMap.clear();
+    return;
+  }
+  if (!pendingReadyPersistMap.size) {
+    return;
+  }
+
+  const room = groupTrainingState.currentRoom;
+  const participants = Array.isArray(room.participants) ? room.participants.map(participant => {
+    const pid = getParticipantIdentifier(participant);
+    if (!pid || !pendingReadyPersistMap.has(pid)) {
+      return participant;
+    }
+    const readyValue = pendingReadyPersistMap.get(pid);
+    return {
+      ...participant,
+      ready: !!readyValue,
+      isReady: !!readyValue
+    };
+  }) : [];
+
+  const payload = {
+    participants
+  };
+
+  pendingReadyPersistMap.clear();
+
+  try {
+    let success = false;
+    if (typeof apiUpdateRoom === 'function') {
+      const res = await apiUpdateRoom(groupTrainingState.roomCode, payload);
+      success = !!(res && res.success);
+    } else if (typeof updateRoomOnBackend === 'function') {
+      success = await updateRoomOnBackend({
+        ...room,
+        participants
+      });
+    }
+
+    if (!success) {
+      console.warn('준비 상태 저장 실패: apiUpdateRoom 응답 실패');
+    } else {
+      console.log('✅ 준비 상태가 GroupTrainingRooms 쉬트에 반영되었습니다');
+    }
+  } catch (err) {
+    console.warn('준비 상태 저장 중 오류:', err?.message || err);
+  }
+}
+
 async function fetchLatestRoomState(roomCode) {
   if (!roomCode) return null;
   try {
@@ -3777,6 +3840,7 @@ async function syncRoomData() {
               const live = liveById[pid];
               if (!live) return p;
               const liveData = expandLiveParticipantData(live);
+              const originalReadyValue = parseBooleanLike(p.ready ?? p.isReady);
               
               // 블루투스 상태 병합 (다양한 필드명 지원)
               const bluetoothStatus = liveData.bluetoothStatus || {
@@ -3853,6 +3917,10 @@ async function syncRoomData() {
                   mergedParticipant.readySource = liveData.readySource || mergedParticipant.readySource || 'live';
                   mergedParticipant.readyDeterminedBy = liveData.readyDeterminedBy || mergedParticipant.readyDeterminedBy || 'live-data';
                   mergedParticipant.readyBroadcastedAt = liveData.readyBroadcastedAt || mergedParticipant.readyBroadcastedAt || null;
+
+                  if (originalReadyValue !== mergedParticipant.ready) {
+                    queueReadyStatePersist(pid, mergedParticipant.ready);
+                  }
                 }
               } else if (liveData.readyDeviceConnected !== undefined) {
                 mergedParticipant.readyDeviceConnected = !!liveData.readyDeviceConnected;
