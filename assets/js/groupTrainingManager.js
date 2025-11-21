@@ -111,6 +111,10 @@ async function flushReadyStatePersist() {
     if (!success) {
       console.warn('준비 상태 저장 실패: apiUpdateRoom 응답 실패');
     } else {
+      groupTrainingState.currentRoom = {
+        ...(groupTrainingState.currentRoom || {}),
+        participants
+      };
       console.log('✅ 준비 상태가 GroupTrainingRooms 쉬트에 반영되었습니다');
     }
   } catch (err) {
@@ -970,14 +974,27 @@ async function apiUpdateRoom(roomCode, data = {}) {
       roomCode: String(roomCode)
     };
 
+    let participantsArray = null;
+
     Object.entries(data).forEach(([key, value]) => {
       if (value === undefined || value === null) return;
+      if (key === 'participants' && Array.isArray(value)) {
+        participantsArray = value.map(p => ({ ...p }));
+      }
       if (typeof value === 'object') {
         payload[key] = JSON.stringify(value);
       } else {
         payload[key] = String(value);
       }
     });
+
+    if (participantsArray) {
+      const participantsJson = JSON.stringify(participantsArray);
+      payload.participants = participantsJson;
+      payload.Participants = participantsJson;
+      payload.ParticipantsData = participantsJson;
+      payload.participantsJson = participantsJson;
+    }
 
     return await jsonpRequestWithRetry(window.GAS_URL, payload);
   } catch (error) {
