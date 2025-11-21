@@ -1312,7 +1312,8 @@ async function syncParticipantLiveData() {
       readySource: readyState ? (hasBluetoothDevice ? 'device-ready' : 'manual-ready') : 'not-ready',
       readyDeviceConnected: hasBluetoothDevice,
       readyDeterminedBy,
-      readyBroadcastedAt: readyTimestamp
+      readyBroadcastedAt: readyTimestamp,
+      sts: readyState ? 'ready' : 'waiting'
     };
 
     // 백엔드에 데이터 전송 (BLE 상태 + 메트릭 확장)
@@ -1446,6 +1447,7 @@ async function apiSaveParticipantLiveData(roomCode, participantId, payload) {
           readyDeviceConnected: flat.readyDeviceConnected ?? null,
           readyDeterminedBy: flat.readyDeterminedBy ?? null,
           readyBroadcastedAt: flat.readyBroadcastedAt ?? null,
+          sts: flat.sts ?? (flat.ready ? 'ready' : 'waiting'),
           timestamp: flat.timestamp || new Date().toISOString()
         };
         const res = await jsonpRequest(window.GAS_URL, params);
