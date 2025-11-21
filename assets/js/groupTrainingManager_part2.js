@@ -162,6 +162,11 @@ async function toggleReady() {
           
           // 다른 참가자들에게 즉시 준비 상태를 공유
           broadcastReadyState();
+
+          // 구글 쉬트에도 최신 준비 상태 반영
+          if (typeof queueReadyStatePersist === 'function' && participantKey) {
+            queueReadyStatePersist(participantKey, newReadyState);
+          }
           return;
         } else {
           throw new Error(result?.error || '방 업데이트 실패');
@@ -214,6 +219,11 @@ async function toggleReady() {
 
       // 다른 참가자들에게 즉시 준비 상태를 공유
       broadcastReadyState();
+
+      // 구글 쉬트에도 최신 준비 상태 반영
+      if (typeof queueReadyStatePersist === 'function' && participantKey) {
+        queueReadyStatePersist(participantKey, newReadyState);
+      }
     } else {
       throw new Error('방 업데이트 실패');
     }
