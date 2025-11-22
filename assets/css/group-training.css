@@ -753,6 +753,11 @@
   color: #4cc9f0;
 }
 
+.workout-status-pill.is-countdown {
+  background: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+}
+
 .workout-timers {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -940,16 +945,15 @@
   animation: activeSegmentGlow 2s ease-in-out infinite alternate;
 }
 
-.workout-table .seg-index-badge {
+.workout-table .seg-index-text {
   display: inline-flex;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  align-items: center;
+  min-width: 32px;
   justify-content: center;
-  background: rgba(255,255,255,0.1);
   font-weight: 600;
   font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
 }
 
 .workout-table .seg-label {
