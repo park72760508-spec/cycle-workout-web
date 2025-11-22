@@ -1862,6 +1862,9 @@ function startSegmentLoop() {
    
   // 세그먼트별 카운트다운 트리거 상태 초기화
   countdownTriggered = Array(w.segments.length).fill(false);
+  
+  // 세그먼트 전환 추적 변수 초기화
+  window.trainingState._lastProcessedSegIndex = 0;
 
   // 첫 번째 세그먼트 타겟 적용
   applySegmentTarget(0);
@@ -2024,7 +2027,9 @@ function startSegmentLoop() {
 
 
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
-   if (window.trainingState.segElapsedSec >= segDur) {
+   // 중복 전환 방지를 위해 이전 세그먼트 인덱스를 추적
+   const prevSegIndex = ts._lastProcessedSegIndex ?? currentSegIndex;
+   if (window.trainingState.segElapsedSec >= segDur && prevSegIndex === currentSegIndex) {
      // (변경) 소리와 전환을 분리: 전환은 즉시, 소리는 비동기로 마무리
      if (segmentCountdownActive && typeof stopSegmentCountdown === "function") {
        setTimeout(() => { try { stopSegmentCountdown(); } catch(_){} }, 750);
@@ -2050,16 +2055,22 @@ function startSegmentLoop() {
      console.log(`세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
    
      // 다음 세그먼트로 인덱스 전환
-     window.trainingState.segIndex += 1;
+     const nextSegIndex = currentSegIndex + 1;
+     window.trainingState.segIndex = nextSegIndex;
      window.trainingState.segElapsedSec = 0;
+     ts._lastProcessedSegIndex = nextSegIndex;  // 전환 완료 표시
 
       // 다음 세그먼트의 카운트다운 상태 초기화
-      ts._countdownFired[String(ts.segIndex)] = {};
-      ts._prevRemainMs[String(ts.segIndex)]   = segDur * 1000; // 새 세그 초기 남은 ms      
+      if (nextSegIndex < w.segments.length) {
+        const nextSeg = w.segments[nextSegIndex];
+        const nextSegDur = segDurationSec(nextSeg);
+        ts._countdownFired[String(nextSegIndex)] = {};
+        ts._prevRemainMs[String(nextSegIndex)] = nextSegDur * 1000; // 새 세그 초기 남은 ms
+      }
    
-     if (window.trainingState.segIndex < w.segments.length) {
-       console.log(`세그먼트 ${window.trainingState.segIndex + 1}로 전환`);
-       applySegmentTarget(window.trainingState.segIndex);
+     if (nextSegIndex < w.segments.length) {
+       console.log(`세그먼트 ${nextSegIndex + 1}로 전환`);
+       applySegmentTarget(nextSegIndex);
    
        // 남아있을 수 있는 카운트다운 정리
        if (segmentCountdownActive) {
@@ -2073,6 +2084,9 @@ function startSegmentLoop() {
      } else {
        console.log('모든 세그먼트 완료');
      }
+   } else if (prevSegIndex !== currentSegIndex) {
+     // 세그먼트가 이미 전환된 경우, 추적 변수만 업데이트
+     ts._lastProcessedSegIndex = currentSegIndex;
    }
 
   }, 1000);
