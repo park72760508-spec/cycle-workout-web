@@ -695,9 +695,70 @@ function startMonitoringTimelineLoop() {
 
     if (snapshot.phase === 'training' || snapshot.phase === 'countdown') {
       if (!shouldAutoStartLocalTraining()) {
+        // 모니터링 모드: 타임라인 스냅샷을 기반으로 세그먼트 상태 업데이트
+        if (snapshot.phase === 'training') {
+          applyTimelineSnapshotToTrainingState(snapshot);
+          
+          // 세그먼트 전환 로직: 세그먼트 인덱스가 변경되었는지 확인
+          const ts = window.trainingState || {};
+          const w = window.currentWorkout;
+          
+          if (Number.isFinite(snapshot.segmentIndex) && snapshot.segmentIndex >= 0 && w) {
+            const currentSegIndex = ts.segIndex || 0;
+            const newSegIndex = snapshot.segmentIndex;
+            
+            // 세그먼트가 변경된 경우 타겟 적용 및 UI 업데이트
+            if (newSegIndex !== currentSegIndex && newSegIndex < w.segments.length) {
+              console.log(`모니터링 모드: 세그먼트 ${newSegIndex + 1}로 전환`);
+              if (typeof applySegmentTarget === 'function') {
+                applySegmentTarget(newSegIndex);
+              }
+              // 세그먼트 전환 추적 변수 업데이트
+              ts._lastProcessedSegIndex = newSegIndex;
+              // 세그먼트 경과 시간 초기화
+              ts.segElapsedSec = snapshot.segmentElapsedSec || 0;
+            }
+            
+            // 세그먼트 종료 6초 전 카운트다운 체크 (모니터링 모드)
+            if (Number.isFinite(snapshot.segmentRemainingSec) && snapshot.segmentRemainingSec > 0) {
+              const remainingSec = snapshot.segmentRemainingSec;
+              const nextSeg = (newSegIndex < w.segments.length - 1) ? w.segments[newSegIndex + 1] : null;
+              
+              // 6초 전부터 카운트다운 시작 (5, 4, 3, 2, 1, 0)
+              if (remainingSec <= 6 && remainingSec > 0 && nextSeg) {
+                const countdownNumber = Math.ceil(remainingSec) - 1; // 6초일 때 5 표시
+                if (countdownNumber >= 0 && countdownNumber <= 5) {
+                  const key = String(newSegIndex);
+                  ts._countdownFired = ts._countdownFired || {};
+                  const firedMap = ts._countdownFired[key] || {};
+                  
+                  if (!firedMap[countdownNumber]) {
+                    // 카운트다운 표시 (모니터링 모드에서는 간단한 표시만)
+                    if (countdownNumber === 5) {
+                      // 6초 시점에 카운트다운 시작 표시
+                      console.log(`모니터링 모드: 세그먼트 ${newSegIndex + 1} 종료 ${countdownNumber + 1}초 전`);
+                    }
+                    ts._countdownFired[key] = { ...firedMap, [countdownNumber]: true };
+                  }
+                }
+              }
+            }
+          }
+        }
+        
         requestAnimationFrame(() => {
           try {
             renderWaitingHeaderSegmentTable();
+            // UI 업데이트
+            if (typeof updateTimeUI === 'function') {
+              updateTimeUI();
+            }
+            if (typeof updateSegmentBarTick === 'function') {
+              updateSegmentBarTick();
+            }
+            if (typeof updateTimelineByTime === 'function') {
+              updateTimelineByTime();
+            }
           } catch (error) {
             console.warn('monitoringTimelineLoop 렌더링 실패:', error);
           }
@@ -722,6 +783,12 @@ function stopMonitoringTimelineLoop() {
 function triggerCountdownOverlay(options) {
   const opts = typeof options === 'number' ? { seconds: options } : (options || {});
   const seconds = Number.isFinite(opts.seconds) ? opts.seconds : GROUP_COUNTDOWN_SECONDS;
+
+  // 모니터링 모드에서는 카운트다운을 표시하지 않음
+  if (!shouldAutoStartLocalTraining()) {
+    console.log('모니터링 모드 - 카운트다운을 표시하지 않습니다');
+    return Promise.resolve();
+  }
 
   if (groupTrainingState.isAdmin || typeof showParticipantCountdown !== 'function') {
     return showGroupCountdownOverlay(opts);
@@ -4263,46 +4330,52 @@ async function syncRoomData() {
             console.log('📢 관리자가 이미 카운트다운을 시작했으므로 중복 카운트다운 방지');
             // 관리자 카운트다운 플래그는 카운트다운이 완료되면 리셋됨 (showGroupCountdownOverlay 내부에서 처리)
           } else {
-            console.log('📢 훈련 시작 카운트다운 감지됨 (모든 참가자)');
-            
-            // 카운트다운 종료 시간이 있으면 그 시간을 기준으로 카운트다운
-            if (countdownEndTime) {
-              const endTime = new Date(countdownEndTime).getTime();
-              const now = Date.now();
-              const remainingMs = Math.max(0, endTime - now);
-              const remainingSeconds = Math.ceil(remainingMs / 1000);
+            // 모니터링 모드가 아닌 경우에만 카운트다운 표시
+            const isMonitoringMode = !shouldAutoStartLocalTraining();
+            if (isMonitoringMode) {
+              console.log('📢 모니터링 모드 - 카운트다운을 표시하지 않습니다');
+            } else {
+              console.log('📢 훈련 시작 카운트다운 감지됨 (모든 참가자)');
               
-              if (remainingSeconds > 0) {
-                console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음 (모든 참가자)`);
-                // 모든 참가자 화면에 카운트다운 표시 (중복 방지를 위해 플래그 설정)
+              // 카운트다운 종료 시간이 있으면 그 시간을 기준으로 카운트다운
+              if (countdownEndTime) {
+                const endTime = new Date(countdownEndTime).getTime();
+                const now = Date.now();
+                const remainingMs = Math.max(0, endTime - now);
+                const remainingSeconds = Math.ceil(remainingMs / 1000);
+                
+                if (remainingSeconds > 0) {
+                  console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음 (모든 참가자)`);
+                  // 모든 참가자 화면에 카운트다운 표시 (중복 방지를 위해 플래그 설정)
+                  if (!groupTrainingState.countdownStarted) {
+                    groupTrainingState.countdownStarted = true;
+                    Promise.resolve(triggerCountdownOverlay({
+                      seconds: remainingSeconds,
+                      targetEndTime: countdownEndTime
+                    }))
+                      .catch(err => console.warn('카운트다운 표시 실패:', err))
+                      .finally(() => {
+                        groupTrainingState.countdownStarted = false;
+                      });
+                  }
+                } else {
+                  // 카운트다운이 이미 끝났으면 바로 훈련 시작 (준비완료된 사용자만)
+                  console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작 (준비완료된 사용자만)');
+                  if (!groupTrainingState.countdownStarted && shouldAutoStartLocalTraining()) {
+                    startLocalGroupTraining();
+                  }
+                }
+              } else {
+                // 카운트다운 종료 시간이 없으면 기본 카운트다운
+                console.log(`⏱️ 카운트다운 시작 (기본 ${GROUP_COUNTDOWN_SECONDS}초, 모든 참가자)`);
                 if (!groupTrainingState.countdownStarted) {
                   groupTrainingState.countdownStarted = true;
-                  Promise.resolve(triggerCountdownOverlay({
-                    seconds: remainingSeconds,
-                    targetEndTime: countdownEndTime
-                  }))
+                  Promise.resolve(triggerCountdownOverlay(GROUP_COUNTDOWN_SECONDS))
                     .catch(err => console.warn('카운트다운 표시 실패:', err))
                     .finally(() => {
                       groupTrainingState.countdownStarted = false;
                     });
                 }
-              } else {
-                // 카운트다운이 이미 끝났으면 바로 훈련 시작 (준비완료된 사용자만)
-                console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작 (준비완료된 사용자만)');
-                if (!groupTrainingState.countdownStarted && shouldAutoStartLocalTraining()) {
-                  startLocalGroupTraining();
-                }
-              }
-            } else {
-              // 카운트다운 종료 시간이 없으면 기본 카운트다운
-              console.log(`⏱️ 카운트다운 시작 (기본 ${GROUP_COUNTDOWN_SECONDS}초, 모든 참가자)`);
-              if (!groupTrainingState.countdownStarted) {
-                groupTrainingState.countdownStarted = true;
-                Promise.resolve(triggerCountdownOverlay(GROUP_COUNTDOWN_SECONDS))
-                  .catch(err => console.warn('카운트다운 표시 실패:', err))
-                  .finally(() => {
-                    groupTrainingState.countdownStarted = false;
-                  });
               }
             }
           }
@@ -5692,11 +5765,19 @@ async function startGroupTrainingWithCountdown() {
     }
 
     // 관리자 화면에서 카운트다운 오버레이 표시 (서버 기준 종료 시각으로 동기화)
-    groupTrainingState.adminCountdownInitiated = true;  // 관리자가 카운트다운을 시작했음을 표시
-    await showGroupCountdownOverlay({
-      seconds: countdownSeconds,
-      targetEndTime: countdownEndTime
-    });
+    // 모니터링 모드가 아닌 경우에만 카운트다운 표시
+    const isMonitoringMode = !shouldAutoStartLocalTraining();
+    if (!isMonitoringMode) {
+      groupTrainingState.adminCountdownInitiated = true;  // 관리자가 카운트다운을 시작했음을 표시
+      await showGroupCountdownOverlay({
+        seconds: countdownSeconds,
+        targetEndTime: countdownEndTime
+      });
+    } else {
+      console.log('모니터링 모드 - 관리자 카운트다운을 표시하지 않습니다');
+      // 모니터링 모드에서는 카운트다운 없이 바로 훈련 시작 처리
+      groupTrainingState.adminCountdownInitiated = false;
+    }
 
   } catch (error) {
     console.error('❌ 그룹 훈련 시작 실패:', error);
