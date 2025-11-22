@@ -33,7 +33,8 @@ window.groupTrainingState = window.groupTrainingState || {
   readyOverrides: {},
   adminParticipationMode: 'monitor',
   trainingStartSignaled: false,
-  timelineSnapshot: null
+  timelineSnapshot: null,
+  monitoringTimelineInterval: null
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -645,6 +646,51 @@ function applyTimelineSnapshotToTrainingState(snapshot) {
   }
   ts.isRunning = true;
   ts.lastServerSnapshot = snapshot;
+}
+
+function syncMonitoringLoopWithSnapshot(snapshot) {
+  const shouldMonitor = snapshot
+    && (snapshot.phase === 'training' || snapshot.phase === 'countdown')
+    && !shouldAutoStartLocalTraining();
+  if (shouldMonitor) {
+    startMonitoringTimelineLoop();
+  } else {
+    stopMonitoringTimelineLoop();
+  }
+}
+
+function startMonitoringTimelineLoop() {
+  if (groupTrainingState.monitoringTimelineInterval) return;
+  const tick = () => {
+    const room = groupTrainingState.currentRoom;
+    if (!room) return;
+    const snapshot = updateTimelineSnapshot(room);
+    if (!snapshot) return;
+
+    if (snapshot.phase === 'training' || snapshot.phase === 'countdown') {
+      if (!shouldAutoStartLocalTraining()) {
+        requestAnimationFrame(() => {
+          try {
+            renderWaitingHeaderSegmentTable();
+          } catch (error) {
+            console.warn('monitoringTimelineLoop 렌더링 실패:', error);
+          }
+        });
+      }
+    } else {
+      stopMonitoringTimelineLoop();
+    }
+  };
+
+  tick();
+  groupTrainingState.monitoringTimelineInterval = setInterval(tick, 1000);
+}
+
+function stopMonitoringTimelineLoop() {
+  if (groupTrainingState.monitoringTimelineInterval) {
+    clearInterval(groupTrainingState.monitoringTimelineInterval);
+    groupTrainingState.monitoringTimelineInterval = null;
+  }
 }
 
 function triggerCountdownOverlay(options) {
@@ -3502,27 +3548,6 @@ function renderWaitingHeaderSegmentTable() {
       ? (Number.isFinite(snapshot?.segmentRemainingSec) ? snapshot.segmentRemainingSec : null)
       : null;
 
-    const formatDuration = (sec) => {
-      const value = Number(sec || 0);
-      if (!Number.isFinite(value) || value <= 0) return '-';
-      const m = Math.floor(value / 60).toString().padStart(2, '0');
-      const s = Math.floor(value % 60).toString().padStart(2, '0');
-      return `${m}:${s}`;
-    };
-
-    const formatTimer = (sec) => {
-      const value = Number(sec);
-      if (!Number.isFinite(value) || value < 0) return '--:--';
-      const total = Math.max(0, Math.floor(value));
-      const hours = Math.floor(total / 3600);
-      const minutes = Math.floor((total % 3600) / 60);
-      const seconds = total % 60;
-      if (hours > 0) {
-        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      }
-      return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    };
-
     const elapsedTimer = formatTimer(elapsed);
     const segmentTimer = isTrainingStarted
       ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
@@ -4184,6 +4209,7 @@ async function syncRoomData() {
       const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(previousRoomState);
 
       const timelineSnapshot = updateTimelineSnapshot(mergedRoom);
+      syncMonitoringLoopWithSnapshot(timelineSnapshot);
 
       if (hasChanges) {
         groupTrainingState.currentRoom = mergedRoom;
@@ -4364,6 +4390,8 @@ async function leaveGroupRoom() {
       clearInterval(groupTrainingState.managerInterval);
       groupTrainingState.managerInterval = null;
     }
+
+    stopMonitoringTimelineLoop();
     
     // 훈련 시작 신호 확인 인터벌 정리
     if (window.trainingStartCheckInterval) {
@@ -5822,6 +5850,8 @@ async function startAllParticipantsTraining() {
     } else {
       console.log('관리자 모니터링 모드 - 로컬 훈련을 시작하지 않습니다');
       showWaitingScreen();
+      const monitoringSnapshot = updateTimelineSnapshot(groupTrainingState.currentRoom);
+      syncMonitoringLoopWithSnapshot(monitoringSnapshot);
     }
 
   } catch (error) {
@@ -5862,6 +5892,7 @@ async function startLocalGroupTraining() {
     if (latestSnapshot) {
       applyTimelineSnapshotToTrainingState(latestSnapshot);
     }
+    stopMonitoringTimelineLoop();
 
     // 개인 훈련 화면으로 전환
     const trainingScreen = document.getElementById('trainingScreen');
