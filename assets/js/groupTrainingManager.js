@@ -525,9 +525,12 @@ function synchronizeTrainingClock(trainingStartTime) {
   ts.workoutStartMs = startMs;
 }
 
-function triggerCountdownOverlay(seconds) {
+function triggerCountdownOverlay(options) {
+  const opts = typeof options === 'number' ? { seconds: options } : (options || {});
+  const seconds = Number.isFinite(opts.seconds) ? opts.seconds : GROUP_COUNTDOWN_SECONDS;
+
   if (groupTrainingState.isAdmin || typeof showParticipantCountdown !== 'function') {
-    return showGroupCountdownOverlay(seconds);
+    return showGroupCountdownOverlay(opts);
   }
   return Promise.resolve(showParticipantCountdown(seconds));
 }
@@ -3360,27 +3363,36 @@ function renderWaitingHeaderSegmentTable() {
     const room = groupTrainingState.currentRoom || {};
     const roomStatus = room.status || room.Status || 'waiting';
     const remoteTrainingStart = room.trainingStartTime || room.TrainingStartTime || room.startedAt || null;
+    const countdownEndIso = room.countdownEndTime || room.CountdownEndTime || null;
+    const countdownEndMs = countdownEndIso ? new Date(countdownEndIso).getTime() : null;
+    const nowMs = Date.now();
+    const remoteStartMs = remoteTrainingStart ? new Date(remoteTrainingStart).getTime() : null;
 
     // 현재 세그먼트 인덱스 계산
     const ts = window.trainingState || {};
     const hasLocalLoop = !!ts.isRunning;
-    let elapsed = Number(ts.elapsedSec);
-    if (!Number.isFinite(elapsed) || elapsed < 0) {
-      elapsed = 0;
-    }
+    const localElapsed = Number(ts.elapsedSec);
+    let elapsed = hasLocalLoop && Number.isFinite(localElapsed) ? Math.max(0, localElapsed) : 0;
 
-    if ((!hasLocalLoop || elapsed === 0) && remoteTrainingStart) {
-      const remoteStartMs = new Date(remoteTrainingStart).getTime();
-      if (Number.isFinite(remoteStartMs)) {
-        const remoteElapsed = Math.max(0, (Date.now() - remoteStartMs) / 1000);
-        elapsed = Math.max(elapsed, remoteElapsed);
+    if (Number.isFinite(remoteStartMs)) {
+      const remoteElapsed = Math.max(0, (nowMs - remoteStartMs) / 1000);
+      if (!hasLocalLoop || remoteElapsed > elapsed) {
+        elapsed = remoteElapsed;
       }
     }
+
+    const countdownRemainingSeconds = Number.isFinite(countdownEndMs)
+      ? Math.max(0, Math.ceil((countdownEndMs - nowMs) / 1000))
+      : null;
+
+    const isTrainingStarted = roomStatus === 'training'
+      || (hasLocalLoop && elapsed > 0)
+      || (Number.isFinite(remoteStartMs) && nowMs >= remoteStartMs);
 
     let currentIdx = -1;
     let currentSegStart = 0;
     let currentSegRemaining = null;
-    if (segments.length > 0) {
+    if (isTrainingStarted && segments.length > 0) {
       let start = 0;
       for (let i = 0; i < segments.length; i++) {
         const segDur = Number(segments[i].duration_sec || segments[i].duration || 0);
@@ -3418,10 +3430,16 @@ function renderWaitingHeaderSegmentTable() {
     };
 
     const elapsedTimer = formatTimer(elapsed);
-    const segmentTimer = currentIdx >= 0 ? formatTimer(currentSegRemaining) : '--:--';
+    const segmentTimer = isTrainingStarted
+      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
+      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
 
-    // 훈련 시작 여부 확인 (elapsed > 0이면 훈련이 시작된 것으로 판단)
-    const isTrainingStarted = roomStatus === 'training' || elapsed > 0;
+    const statusPillClass = isTrainingStarted
+      ? 'is-live'
+      : (roomStatus === 'starting' && countdownRemainingSeconds !== null ? 'is-countdown' : '');
+    const statusPillLabel = roomStatus === 'starting' && countdownRemainingSeconds !== null
+      ? `카운트다운 ${countdownRemainingSeconds}초`
+      : (isTrainingStarted && currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중');
 
     const normalizedSegments = segments.map((seg, idx) => ({
       seg,
@@ -3456,7 +3474,7 @@ function renderWaitingHeaderSegmentTable() {
       return `
         <tr class="${isActive ? 'active' : ''}">
           <td class="seg-col-index">
-            <span class="seg-index-badge">${originalIndex + 1}</span>
+            <span class="seg-index-text">${String(originalIndex + 1).padStart(2, '0')}</span>
           </td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
           <td class="seg-col-type"><span class="seg-type">${type}</span></td>
@@ -3478,8 +3496,8 @@ function renderWaitingHeaderSegmentTable() {
               <p>${segments.length || 0}개 세그먼트 • 실시간 진행 상황</p>
             </div>
           </div>
-          <div class="workout-status-pill ${currentIdx >= 0 ? 'is-live' : ''}">
-            ${currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중'}
+          <div class="workout-status-pill ${statusPillClass}">
+            ${statusPillLabel}
           </div>
         </div>
         <div class="workout-timers">
@@ -4106,7 +4124,10 @@ async function syncRoomData() {
               // 모든 참가자 화면에 카운트다운 표시 (중복 방지를 위해 플래그 설정)
               if (!groupTrainingState.countdownStarted) {
                 groupTrainingState.countdownStarted = true;
-                Promise.resolve(triggerCountdownOverlay(remainingSeconds))
+                Promise.resolve(triggerCountdownOverlay({
+                  seconds: remainingSeconds,
+                  targetEndTime: countdownEndTime
+                }))
                   .catch(err => console.warn('카운트다운 표시 실패:', err))
                   .finally(() => {
                     groupTrainingState.countdownStarted = false;
@@ -5510,8 +5531,11 @@ async function startGroupTrainingWithCountdown() {
       }
     }
 
-    // 관리자 화면에서 카운트다운 오버레이 표시
-    await showGroupCountdownOverlay(countdownSeconds);
+    // 관리자 화면에서 카운트다운 오버레이 표시 (서버 기준 종료 시각으로 동기화)
+    await showGroupCountdownOverlay({
+      seconds: countdownSeconds,
+      targetEndTime: countdownEndTime
+    });
 
   } catch (error) {
     console.error('❌ 그룹 훈련 시작 실패:', error);
@@ -5522,14 +5546,18 @@ async function startGroupTrainingWithCountdown() {
 /**
  * 그룹 훈련 카운트다운 오버레이 표시 (5초)
  */
-async function showGroupCountdownOverlay(seconds = GROUP_COUNTDOWN_SECONDS) {
+async function showGroupCountdownOverlay(options = {}) {
+  const opts = typeof options === 'number' ? { seconds: options } : (options || {});
+  const baseSeconds = Number.isFinite(opts.seconds) ? opts.seconds : GROUP_COUNTDOWN_SECONDS;
+  const explicitEndMs = opts.targetEndTime ? new Date(opts.targetEndTime).getTime() : null;
+  const fallbackEndMs = Date.now() + baseSeconds * 1000;
+  const countdownEndMs = Number.isFinite(explicitEndMs) ? explicitEndMs : fallbackEndMs;
+
   return new Promise((resolve) => {
-    // 카운트다운 오버레이 요소 찾기 또는 생성
     let overlay = document.getElementById('countdownOverlay');
     let countdownNumber = document.getElementById('countdownNumber');
 
     if (!overlay) {
-      // 오버레이 생성 (groupWaitingScreen 또는 전체 화면에)
       overlay = document.createElement('div');
       overlay.id = 'countdownOverlay';
       overlay.className = 'countdown-overlay';
@@ -5558,7 +5586,6 @@ async function showGroupCountdownOverlay(seconds = GROUP_COUNTDOWN_SECONDS) {
       overlay.appendChild(countdownNumber);
       document.body.appendChild(overlay);
 
-      // 애니메이션 CSS 추가
       if (!document.getElementById('countdownAnimationStyle')) {
         const style = document.createElement('style');
         style.id = 'countdownAnimationStyle';
@@ -5572,52 +5599,69 @@ async function showGroupCountdownOverlay(seconds = GROUP_COUNTDOWN_SECONDS) {
       }
     }
 
-    // 오버레이 표시
     overlay.classList.remove('hidden');
     overlay.style.display = 'flex';
 
-    let remain = seconds;
-    countdownNumber.textContent = remain;
+    let tickInterval = null;
 
-    // 첫 삐 소리
-    if (typeof playBeep === 'function') {
-      playBeep(880, 120, 0.25);
+    const getRemainingSeconds = () => {
+      const diffMs = countdownEndMs - Date.now();
+      return Math.max(0, Math.ceil(diffMs / 1000));
+    };
+
+    let lastDisplayed = -1;
+    let finished = false;
+
+    const updateDisplay = () => {
+      if (finished) return;
+      const remaining = getRemainingSeconds();
+
+      if (remaining !== lastDisplayed) {
+        countdownNumber.textContent = remaining;
+        if (remaining > 0 && typeof playBeep === 'function') {
+          try {
+            playBeep(880, 120, 0.25);
+          } catch (e) {
+            console.warn('카운트다운 비프 실패:', e);
+          }
+        } else if (remaining === 0 && typeof playBeep === 'function') {
+          try {
+            playBeep(1500, 700, 0.35, 'square');
+          } catch (e) {
+            console.warn('카운트다운 종료 비프 실패:', e);
+          }
+        }
+        lastDisplayed = remaining;
+      }
+
+      if (remaining <= 0) {
+        finishCountdown();
+      }
+    };
+
+    const finishCountdown = () => {
+      if (finished) return;
+      finished = true;
+      overlay.classList.add('hidden');
+      overlay.style.display = 'none';
+      if (tickInterval) {
+        clearInterval(tickInterval);
+      }
+
+      console.log('✅ 카운트다운 완료, 훈련 시작');
+
+      Promise.resolve(startAllParticipantsTraining())
+        .catch(err => console.error('startAllParticipantsTraining 실패:', err))
+        .finally(resolve);
+    };
+
+    if (countdownEndMs <= Date.now()) {
+      finishCountdown();
+      return;
     }
 
-    const timer = setInterval(() => {
-      remain -= 1;
-
-      if (remain > 0) {
-        countdownNumber.textContent = remain;
-        if (typeof playBeep === 'function') {
-          playBeep(880, 120, 0.25);
-        }
-      } else if (remain === 0) {
-        countdownNumber.textContent = '0';
-        if (typeof playBeep === 'function') {
-          playBeep(1500, 700, 0.35, 'square').catch(() => {});
-        }
-
-        // 0.5초 후 오버레이 닫고 훈련 시작
-        setTimeout(async () => {
-          overlay.classList.add('hidden');
-          overlay.style.display = 'none';
-          clearInterval(timer);
-
-          console.log('✅ 카운트다운 완료, 훈련 시작');
-
-          // 모든 참가자 화면을 개인 훈련 화면으로 전환하고 훈련 시작
-          await startAllParticipantsTraining();
-
-          resolve();
-        }, 500);
-      } else {
-        clearInterval(timer);
-        overlay.classList.add('hidden');
-        overlay.style.display = 'none';
-        resolve();
-      }
-    }, 1000);
+    updateDisplay();
+    tickInterval = setInterval(updateDisplay, 250);
   });
 }
 
