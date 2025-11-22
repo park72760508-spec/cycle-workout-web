@@ -32,7 +32,8 @@ window.groupTrainingState = window.groupTrainingState || {
   countdownStarted: false,  // 카운트다운 시작 여부 (중복 방지)
   readyOverrides: {},
   adminParticipationMode: 'monitor',
-  trainingStartSignaled: false
+  trainingStartSignaled: false,
+  timelineSnapshot: null
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -523,6 +524,127 @@ function synchronizeTrainingClock(trainingStartTime) {
     ts.segElapsedSec = Math.max(0, ts.segElapsedSec + adjustment);
   }
   ts.workoutStartMs = startMs;
+}
+
+function getActiveWorkoutSegments(workout = window.currentWorkout) {
+  if (workout && Array.isArray(workout.segments)) {
+    return workout.segments;
+  }
+  return [];
+}
+
+function computeServerTimelineSnapshot(room, options = {}) {
+  if (!room) return null;
+
+  const workout = options.workout || window.currentWorkout || {};
+  const segments = getActiveWorkoutSegments(workout);
+  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+
+  const roomStatus = room.status || room.Status || 'waiting';
+  const trainingStartIso = room.trainingStartTime || room.TrainingStartTime || room.startedAt || null;
+  const countdownEndIso = room.countdownEndTime || room.CountdownEndTime || null;
+
+  const trainingStartMs = trainingStartIso ? new Date(trainingStartIso).getTime() : null;
+  const countdownEndMs = countdownEndIso ? new Date(countdownEndIso).getTime() : null;
+
+  const totalDurationSec = segments.reduce((sum, seg) => {
+    const raw = Number(seg?.duration_sec ?? seg?.duration ?? 0);
+    return sum + (Number.isFinite(raw) && raw > 0 ? raw : 0);
+  }, 0);
+
+  let phase = 'idle';
+  let timelineEpochMs = null;
+  let countdownRemainingSec = null;
+
+  if (roomStatus === 'starting' && Number.isFinite(countdownEndMs) && nowMs <= countdownEndMs) {
+    phase = 'countdown';
+    countdownRemainingSec = Math.max(0, Math.ceil((countdownEndMs - nowMs) / 1000));
+  }
+
+  if (Number.isFinite(trainingStartMs)) {
+    if (nowMs >= trainingStartMs) {
+      phase = 'training';
+      timelineEpochMs = trainingStartMs;
+    } else if (!Number.isFinite(countdownRemainingSec)) {
+      phase = 'countdown';
+      countdownRemainingSec = Math.max(0, Math.ceil((trainingStartMs - nowMs) / 1000));
+    }
+  }
+
+  let elapsedSec = 0;
+  if (phase === 'training' && Number.isFinite(timelineEpochMs)) {
+    elapsedSec = Math.max(0, (nowMs - timelineEpochMs) / 1000);
+    if (Number.isFinite(totalDurationSec) && totalDurationSec > 0) {
+      elapsedSec = Math.min(elapsedSec, totalDurationSec);
+    }
+  }
+
+  let segmentIndex = -1;
+  let segmentElapsedSec = null;
+  let segmentRemainingSec = null;
+  let segmentStartSec = null;
+
+  if (phase === 'training' && segments.length > 0) {
+    let cursor = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const dur = Math.max(0, Number(segments[i]?.duration_sec ?? segments[i]?.duration ?? 0) || 0);
+      const end = cursor + dur;
+      if (elapsedSec < end || i === segments.length - 1) {
+        segmentIndex = i;
+        segmentStartSec = cursor;
+        segmentElapsedSec = Math.max(0, elapsedSec - cursor);
+        segmentRemainingSec = Math.max(0, end - elapsedSec);
+        break;
+      }
+      cursor = end;
+    }
+  }
+
+  return {
+    status: roomStatus,
+    phase,
+    timelineEpochMs,
+    countdownTargetMs: countdownEndMs || (phase === 'countdown' ? trainingStartMs : null),
+    countdownRemainingSec: Number.isFinite(countdownRemainingSec) ? countdownRemainingSec : null,
+    elapsedSec,
+    totalDurationSec,
+    segmentIndex,
+    segmentElapsedSec,
+    segmentRemainingSec,
+    segmentStartSec,
+    computedAtMs: nowMs,
+    hasSegments: segments.length > 0
+  };
+}
+
+function updateTimelineSnapshot(room, options = {}) {
+  const snapshot = computeServerTimelineSnapshot(room || groupTrainingState.currentRoom, {
+    workout: options.workout || window.currentWorkout,
+    nowMs: options.nowMs
+  });
+  groupTrainingState.timelineSnapshot = snapshot;
+  return snapshot;
+}
+
+function applyTimelineSnapshotToTrainingState(snapshot) {
+  if (!snapshot || snapshot.phase !== 'training') return;
+  window.trainingState = window.trainingState || {};
+  const ts = window.trainingState;
+
+  if (Number.isFinite(snapshot.timelineEpochMs)) {
+    ts.workoutStartMs = snapshot.timelineEpochMs;
+  }
+  if (Number.isFinite(snapshot.elapsedSec)) {
+    ts.elapsedSec = snapshot.elapsedSec;
+  }
+  if (Number.isFinite(snapshot.segmentIndex) && snapshot.segmentIndex >= 0) {
+    ts.segIndex = snapshot.segmentIndex;
+    if (Number.isFinite(snapshot.segmentElapsedSec)) {
+      ts.segElapsedSec = snapshot.segmentElapsedSec;
+    }
+  }
+  ts.isRunning = true;
+  ts.lastServerSnapshot = snapshot;
 }
 
 function triggerCountdownOverlay(options) {
@@ -3362,51 +3484,23 @@ function renderWaitingHeaderSegmentTable() {
     const segments = workout.segments;
     const room = groupTrainingState.currentRoom || {};
     const roomStatus = room.status || room.Status || 'waiting';
-    const remoteTrainingStart = room.trainingStartTime || room.TrainingStartTime || room.startedAt || null;
-    const countdownEndIso = room.countdownEndTime || room.CountdownEndTime || null;
-    const countdownEndMs = countdownEndIso ? new Date(countdownEndIso).getTime() : null;
-    const nowMs = Date.now();
-    const remoteStartMs = remoteTrainingStart ? new Date(remoteTrainingStart).getTime() : null;
+    const snapshot = groupTrainingState.timelineSnapshot
+      || updateTimelineSnapshot(room, { workout });
 
-    // 현재 세그먼트 인덱스 계산
-    const ts = window.trainingState || {};
-    const hasLocalLoop = !!ts.isRunning;
-    const localElapsed = Number(ts.elapsedSec);
-    let elapsed = hasLocalLoop && Number.isFinite(localElapsed) ? Math.max(0, localElapsed) : 0;
-
-    if (Number.isFinite(remoteStartMs)) {
-      const remoteElapsed = Math.max(0, (nowMs - remoteStartMs) / 1000);
-      if (!hasLocalLoop || remoteElapsed > elapsed) {
-        elapsed = remoteElapsed;
-      }
+    if (!groupTrainingState.timelineSnapshot && snapshot) {
+      groupTrainingState.timelineSnapshot = snapshot;
     }
 
-    const countdownRemainingSeconds = Number.isFinite(countdownEndMs)
-      ? Math.max(0, Math.ceil((countdownEndMs - nowMs) / 1000))
+    const phase = snapshot?.phase || 'idle';
+    const isTrainingStarted = phase === 'training';
+    const countdownRemainingSeconds = snapshot?.countdownRemainingSec ?? null;
+    const elapsed = Number.isFinite(snapshot?.elapsedSec) ? snapshot.elapsedSec : 0;
+    const currentIdx = isTrainingStarted && Number.isFinite(snapshot?.segmentIndex)
+      ? snapshot.segmentIndex
+      : -1;
+    const currentSegRemaining = isTrainingStarted
+      ? (Number.isFinite(snapshot?.segmentRemainingSec) ? snapshot.segmentRemainingSec : null)
       : null;
-
-    const isTrainingStarted = roomStatus === 'training'
-      || (hasLocalLoop && elapsed > 0)
-      || (Number.isFinite(remoteStartMs) && nowMs >= remoteStartMs);
-
-    let currentIdx = -1;
-    let currentSegStart = 0;
-    let currentSegRemaining = null;
-    if (isTrainingStarted && segments.length > 0) {
-      let start = 0;
-      for (let i = 0; i < segments.length; i++) {
-        const segDur = Number(segments[i].duration_sec || segments[i].duration || 0);
-        const end = start + segDur;
-        if (elapsed >= start && elapsed < end) {
-          currentIdx = i;
-          currentSegStart = start;
-          const segElapsed = Math.max(0, elapsed - start);
-          currentSegRemaining = Math.max(0, segDur - segElapsed);
-          break;
-        }
-        start = end;
-      }
-    }
 
     const formatDuration = (sec) => {
       const value = Number(sec || 0);
@@ -3436,8 +3530,8 @@ function renderWaitingHeaderSegmentTable() {
 
     const statusPillClass = isTrainingStarted
       ? 'is-live'
-      : (roomStatus === 'starting' && countdownRemainingSeconds !== null ? 'is-countdown' : '');
-    const statusPillLabel = roomStatus === 'starting' && countdownRemainingSeconds !== null
+      : (phase === 'countdown' && countdownRemainingSeconds !== null ? 'is-countdown' : '');
+    const statusPillLabel = phase === 'countdown' && countdownRemainingSeconds !== null
       ? `카운트다운 ${countdownRemainingSeconds}초`
       : (isTrainingStarted && currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중');
 
@@ -4089,6 +4183,8 @@ async function syncRoomData() {
       // 방 상태가 변경되었는지 확인
       const hasChanges = JSON.stringify(mergedRoom) !== JSON.stringify(previousRoomState);
 
+      const timelineSnapshot = updateTimelineSnapshot(mergedRoom);
+
       if (hasChanges) {
         groupTrainingState.currentRoom = mergedRoom;
         updateParticipantsList();
@@ -4191,6 +4287,10 @@ async function syncRoomData() {
           }
           updateParticipantsList();
         }
+      }
+
+      if (timelineSnapshot && timelineSnapshot.phase === 'training') {
+        applyTimelineSnapshotToTrainingState(timelineSnapshot);
       }
 
       groupTrainingState.lastSyncTime = new Date();
@@ -5756,6 +5856,11 @@ async function startLocalGroupTraining() {
     if (!window.currentWorkout) {
       showToast('워크아웃을 로드할 수 없습니다', 'error');
       return;
+    }
+
+    const latestSnapshot = updateTimelineSnapshot(room, { workout: window.currentWorkout });
+    if (latestSnapshot) {
+      applyTimelineSnapshotToTrainingState(latestSnapshot);
     }
 
     // 개인 훈련 화면으로 전환
