@@ -534,6 +534,31 @@ function getActiveWorkoutSegments(workout = window.currentWorkout) {
   return [];
 }
 
+function formatDuration(sec) {
+  const value = Number(sec || 0);
+  if (!Number.isFinite(value) || value <= 0) return '-';
+  const minutes = Math.floor(value / 60).toString().padStart(2, '0');
+  const seconds = Math.floor(value % 60).toString().padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
+function formatTimer(sec) {
+  const value = Number(sec);
+  if (!Number.isFinite(value) || value < 0) return '--:--';
+  const total = Math.max(0, Math.floor(value));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) {
+    return [
+      hours.toString().padStart(2, '0'),
+      minutes.toString().padStart(2, '0'),
+      seconds.toString().padStart(2, '0')
+    ].join(':');
+  }
+  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
 function computeServerTimelineSnapshot(room, options = {}) {
   if (!room) return null;
 
