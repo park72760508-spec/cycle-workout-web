@@ -3391,6 +3391,155 @@ function setupGroupTrainingControlBar() {
 /**
  * 대기실 화면 초기화
  */
+// 훈련 시작 시간 체크 인터벌
+let trainingStartCheckInterval = null;
+let countdownStarted = false; // 카운트다운 시작 여부
+
+/**
+ * 훈련 시작 시간 체크 및 카운트다운 시작
+ */
+async function checkTrainingStartTime() {
+  try {
+    const room = groupTrainingState.currentRoom;
+    if (!room) return;
+    
+    const roomCode = getCurrentRoomCode(room);
+    if (!roomCode) return;
+    
+    // 구글 시트에서 최신 방 정보 가져오기
+    const latestRoom = await getRoomFromBackend(roomCode);
+    if (!latestRoom) return;
+    
+    // 훈련 시작 시간 가져오기 (CreatedAt 또는 trainingStartTime)
+    const trainingStartTimeStr = latestRoom.createdAt || 
+                                 latestRoom.CreatedAt || 
+                                 latestRoom.trainingStartTime || 
+                                 latestRoom.TrainingStartTime;
+    
+    if (!trainingStartTimeStr) {
+      // 훈련 시작 시간이 아직 설정되지 않음
+      return;
+    }
+    
+    const trainingStartTime = new Date(trainingStartTimeStr).getTime();
+    const currentTime = getSyncedTime().getTime();
+    const timeUntilStart = trainingStartTime - currentTime;
+    const secondsUntilStart = Math.floor(timeUntilStart / 1000);
+    
+    console.log('⏰ 훈련 시작 시간 체크:', {
+      훈련시작시간: new Date(trainingStartTimeStr).toISOString(),
+      현재시간: getSyncedTime().toISOString(),
+      남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`
+    });
+    
+    // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작
+    if (secondsUntilStart <= 11 && secondsUntilStart > 0 && !countdownStarted) {
+      countdownStarted = true;
+      console.log('🚀 훈련 시작 카운트다운 시작!', secondsUntilStart, '초 후 시작');
+      
+      // 10초 카운트다운 시작
+      startTrainingCountdown(secondsUntilStart);
+    } else if (secondsUntilStart <= 0 && !countdownStarted) {
+      // 이미 시간이 지났으면 즉시 훈련 시작
+      countdownStarted = true;
+      console.log('⏱️ 훈련 시작 시간 도달, 즉시 훈련 시작');
+      startLocalGroupTraining();
+    }
+  } catch (error) {
+    console.error('훈련 시작 시간 체크 중 오류:', error);
+  }
+}
+
+/**
+ * 훈련 시작 카운트다운 시작
+ */
+function startTrainingCountdown(secondsUntilStart) {
+  // 카운트다운 오버레이 표시
+  const countdownOverlay = document.createElement('div');
+  countdownOverlay.id = 'trainingStartCountdownOverlay';
+  countdownOverlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    flex-direction: column;
+    gap: 20px;
+  `;
+  
+  const countdownNumber = document.createElement('div');
+  countdownNumber.id = 'trainingStartCountdownNumber';
+  countdownNumber.style.cssText = `
+    font-size: 120px;
+    font-weight: bold;
+    color: #4cc9f0;
+    text-shadow: 0 0 30px rgba(76, 201, 240, 0.8);
+    font-family: 'Courier New', monospace;
+  `;
+  
+  const countdownMessage = document.createElement('div');
+  countdownMessage.style.cssText = `
+    font-size: 24px;
+    color: #fff;
+    text-align: center;
+  `;
+  countdownMessage.textContent = '훈련이 곧 시작됩니다!';
+  
+  countdownOverlay.appendChild(countdownNumber);
+  countdownOverlay.appendChild(countdownMessage);
+  document.body.appendChild(countdownOverlay);
+  
+  let countdown = secondsUntilStart;
+  countdownNumber.textContent = countdown;
+  
+  const countdownInterval = setInterval(() => {
+    countdown--;
+    countdownNumber.textContent = countdown;
+    
+    if (countdown <= 0) {
+      clearInterval(countdownInterval);
+      countdownOverlay.remove();
+      // 훈련 화면으로 전환
+      startLocalGroupTraining();
+    }
+  }, 1000);
+}
+
+/**
+ * 로컬 훈련 시작 (훈련 화면 전환)
+ */
+function startLocalGroupTraining() {
+  try {
+    console.log('🚀 로컬 훈련 시작 - 훈련 화면으로 전환');
+    
+    // 훈련 시작 시간 체크 중지
+    if (trainingStartCheckInterval) {
+      clearInterval(trainingStartCheckInterval);
+      trainingStartCheckInterval = null;
+    }
+    
+    // 훈련 화면으로 전환
+    if (typeof startGroupTrainingSession === 'function') {
+      startGroupTrainingSession();
+    } else if (typeof showScreen === 'function') {
+      showScreen('trainingScreen');
+      if (typeof startWorkoutTraining === 'function') {
+        setTimeout(() => {
+          startWorkoutTraining();
+        }, 100);
+      }
+    }
+  } catch (error) {
+    console.error('로컬 훈련 시작 실패:', error);
+    showToast('훈련 시작에 실패했습니다', 'error');
+  }
+}
+
 async function initializeWaitingRoom() {
   const room = groupTrainingState.currentRoom;
   if (!room) {
@@ -3403,6 +3552,22 @@ async function initializeWaitingRoom() {
   // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링 (시계 시작 포함)
   // startClock() 함수 내부에서 최초 1회 시간 동기화 및 1분마다 자동 동기화 처리
   renderWaitingHeaderSegmentTable();
+  
+  // 기존 체크 인터벌 정리
+  if (trainingStartCheckInterval) {
+    clearInterval(trainingStartCheckInterval);
+  }
+  countdownStarted = false;
+  
+  // 5초마다 훈련 시작 시간 체크 시작
+  trainingStartCheckInterval = setInterval(() => {
+    checkTrainingStartTime();
+  }, 5000); // 5초마다 체크
+  
+  // 즉시 한 번 체크
+  setTimeout(() => {
+    checkTrainingStartTime();
+  }, 1000);
   
   // 관리자/참가자 컨트롤 표시
   // grade=1 사용자도 관리자로 인식
@@ -4316,6 +4481,14 @@ function stopRoomSync() {
     clearInterval(groupTrainingState.syncInterval);
     groupTrainingState.syncInterval = null;
   }
+  
+  // 훈련 시작 시간 체크 인터벌 정리
+  if (trainingStartCheckInterval) {
+    clearInterval(trainingStartCheckInterval);
+    trainingStartCheckInterval = null;
+  }
+  countdownStarted = false;
+  
   groupTrainingState.isConnected = false;
 }
 
@@ -6005,6 +6178,43 @@ async function startGroupTrainingWithCountdown() {
     console.log('🚀 그룹 훈련 시작 카운트다운 시작');
     console.log(`✅ 준비 완료된 참가자: ${readyCount}명`);
 
+    // 현재 동기화된 시간 기준으로 1분 후 훈련 시작 시간 계산
+    const syncedTime = getSyncedTime();
+    const trainingStartTime = new Date(syncedTime.getTime() + 60 * 1000); // 1분 후
+    const trainingStartTimeISO = trainingStartTime.toISOString();
+    
+    console.log('⏰ 훈련 시작 시간 설정:', {
+      현재시간: formatTime(syncedTime),
+      훈련시작시간: formatTime(trainingStartTime),
+      ISO: trainingStartTimeISO
+    });
+    
+    // 구글 시트에 훈련 시작 시간 업데이트 (CreatedAt 필드에 저장)
+    try {
+      if (typeof apiUpdateRoom === 'function') {
+        await apiUpdateRoom(roomCode, {
+          createdAt: trainingStartTimeISO,
+          trainingStartTime: trainingStartTimeISO
+        });
+        console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료');
+      } else if (typeof updateRoomOnBackend === 'function') {
+        await updateRoomOnBackend({
+          ...room,
+          createdAt: trainingStartTimeISO,
+          trainingStartTime: trainingStartTimeISO
+        });
+        console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료');
+      }
+    } catch (error) {
+      console.error('❌ 구글 시트 업데이트 실패:', error);
+      showToast('훈련 시작 시간 업데이트에 실패했습니다', 'error');
+      return;
+    }
+    
+    // 알림 표시
+    const startTimeFormatted = formatTime(trainingStartTime);
+    showToast(`훈련이 ${startTimeFormatted}에 시작됩니다`, 'success');
+    
     // 서버에 카운트다운 시작 신호 전송 (모든 참가자가 감지할 수 있도록)
     const countdownSeconds = GROUP_COUNTDOWN_SECONDS;
     const countdownEndTime = new Date(Date.now() + countdownSeconds * 1000).toISOString();
