@@ -883,10 +883,26 @@ const TIME_APIS = [
         throw new Error(`Google Time Zone API error: ${data.status}`);
       }
       
-      // UTC 타임스탬프 + 오프셋 = 서울 시간
-      const totalOffset = data.rawOffset + (data.dstOffset || 0); // 초 단위
-      const seoulTimestamp = (requestTimestamp + totalOffset) * 1000; // 밀리초로 변환
-      return new Date(seoulTimestamp);
+      // UTC 타임스탬프를 밀리초로 변환
+      const utcTime = new Date(requestTimestamp * 1000);
+      
+      // 오프셋 계산 (초 단위를 밀리초로 변환)
+      const totalOffset = (data.rawOffset + (data.dstOffset || 0)) * 1000; // 밀리초 단위
+      
+      // UTC 시간 + 오프셋 = 서울 시간
+      const seoulTime = new Date(utcTime.getTime() + totalOffset);
+      
+      console.log('구글 타임존 API 시간 계산:', {
+        requestTimestamp,
+        utcTime: utcTime.toISOString(),
+        rawOffset: data.rawOffset,
+        dstOffset: data.dstOffset || 0,
+        totalOffsetSeconds: (data.rawOffset + (data.dstOffset || 0)),
+        seoulTime: seoulTime.toISOString(),
+        seoulTimeLocal: seoulTime.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+      });
+      
+      return seoulTime;
     },
     requiresTimestamp: true // 타임스탬프가 필요한 API
   },
