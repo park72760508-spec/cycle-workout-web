@@ -4544,7 +4544,6 @@ async function syncRoomData() {
       }
 
       groupTrainingState.lastSyncTime = new Date();
-
     } else if (latestRoom && latestRoom.__roomDeleted) {
       // 방이 실제로 삭제됨 → 동기화 중지 및 조용히 방 나가기
       networkErrorCount = 0;
@@ -4558,7 +4557,6 @@ async function syncRoomData() {
       console.warn('⚠️ 방 정보를 일시적으로 가져오지 못했습니다. 다음 동기화에서 재시도합니다.');
       return;
     }
-    
   } catch (error) {
     // 네트워크 오류인 경우
     if (error.message === 'NETWORK_ERROR' || error.message?.includes('네트워크')) {
