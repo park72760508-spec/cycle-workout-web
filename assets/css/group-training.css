@@ -789,6 +789,10 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
+  /* 깜빡임 방지 */
+  will-change: contents;
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 .clock-digits {
@@ -826,16 +830,20 @@
   left: 0;
   right: 0;
   top: 0;
+  /* 깜빡임 방지 */
+  opacity: 1 !important;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .digit-value.digit-old {
   top: 0;
-  opacity: 1;
+  opacity: 1 !important;
 }
 
 .digit-value.digit-new {
   top: 100%;
-  opacity: 1;
+  opacity: 1 !important;
 }
 
 .clock-separator {
