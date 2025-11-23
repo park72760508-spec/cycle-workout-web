@@ -3967,15 +3967,24 @@ async function checkTrainingStartTime() {
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
     // 디버깅: 시간 계산 로그 (상세)
-    console.log('🔍 시간 계산 (checkTrainingStartTime):', {
-      현재시간_원본: currentTimeStr,
-      현재시간_파싱: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
-      현재시간_초: currentTotalSeconds,
-      훈련시작시간_원본: trainingStartTimeStr,
-      훈련시작시간_파싱: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
-      훈련시작시간_초: trainingTotalSeconds,
+    // 디버깅: 시간 계산 로그 (상세 - 초 단위까지 정확히)
+    console.log('🔍 시간 계산 (checkTrainingStartTime) - 초 단위까지 정확히:', {
+      현재시간_원본문자열: currentTimeStr,
+      현재시간_파싱결과: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
+      현재시간_시: currentHours,
+      현재시간_분: currentMinutes,
+      현재시간_초: currentSeconds,
+      현재시간_초단위총합: currentTotalSeconds,
+      훈련시작시간_원본문자열: trainingStartTimeStr,
+      훈련시작시간_파싱결과: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
+      훈련시작시간_시: trainingHours,
+      훈련시작시간_분: trainingMinutes,
+      훈련시작시간_초: trainingSeconds,
+      훈련시작시간_초단위총합: trainingTotalSeconds,
       차이_초_계산전: secondsUntilStart,
-      차이_분초: `${Math.floor(Math.abs(secondsUntilStart) / 60)}:${String(Math.abs(secondsUntilStart) % 60).padStart(2, '0')}`
+      차이_시분초: `${Math.floor(Math.abs(secondsUntilStart) / 3600)}:${String(Math.floor((Math.abs(secondsUntilStart) % 3600) / 60)).padStart(2, '0')}:${String(Math.abs(secondsUntilStart) % 60).padStart(2, '0')}`,
+      차이_분초: `${Math.floor(Math.abs(secondsUntilStart) / 60)}:${String(Math.abs(secondsUntilStart) % 60).padStart(2, '0')}`,
+      계산식: `${trainingTotalSeconds}초 - ${currentTotalSeconds}초 = ${secondsUntilStart}초`
     });
     
     // 만약 훈련 시작 시간이 이미 지났다면 (같은 날 내에서 시간이 지난 경우)
@@ -4166,18 +4175,25 @@ async function updateCountdownFromTrainingStartTime() {
     
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
-    // 디버깅: 시간 계산 로그 (상세)
-    console.log('🔍 시간 계산 (updateCountdownFromTrainingStartTime):', {
+    // 디버깅: 시간 계산 로그 (상세 - 초 단위까지 정확히)
+    console.log('🔍 시간 계산 (updateCountdownFromTrainingStartTime) - 초 단위까지 정확히:', {
       현재시간_원본문자열: currentTimeStr,
       현재시간_파싱결과: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
-      현재시간_초단위: currentTotalSeconds,
+      현재시간_시: currentHours,
+      현재시간_분: currentMinutes,
+      현재시간_초: currentSeconds,
+      현재시간_초단위총합: currentTotalSeconds,
       훈련시작시간_원본문자열: trainingStartTimeStr,
       훈련시작시간_원본Raw: trainingStartTimeRaw,
       훈련시작시간_파싱결과: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
-      훈련시작시간_초단위: trainingTotalSeconds,
+      훈련시작시간_시: trainingHours,
+      훈련시작시간_분: trainingMinutes,
+      훈련시작시간_초: trainingSeconds,
+      훈련시작시간_초단위총합: trainingTotalSeconds,
       차이_초_계산결과: secondsUntilStart,
+      차이_시분초: `${Math.floor(secondsUntilStart / 3600)}:${String(Math.floor((secondsUntilStart % 3600) / 60)).padStart(2, '0')}:${String(secondsUntilStart % 60).padStart(2, '0')}`,
       차이_분초: `${Math.floor(secondsUntilStart / 60)}:${String(secondsUntilStart % 60).padStart(2, '0')}`,
-      계산식: `${trainingTotalSeconds} - ${currentTotalSeconds} = ${secondsUntilStart}`
+      계산식: `${trainingTotalSeconds}초 - ${currentTotalSeconds}초 = ${secondsUntilStart}초`
     });
     
     // 만약 훈련 시작 시간이 이미 지났다면 (같은 날 내에서 시간이 지난 경우)
