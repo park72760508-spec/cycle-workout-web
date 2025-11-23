@@ -3959,15 +3959,29 @@ async function checkTrainingStartTime() {
     const trainingMinutes = parseInt(timeParts[1], 10);
     const trainingSeconds = parseInt(timeParts[2], 10);
     
-    // 서울 시간 기준으로 초 단위 차이 계산
+    // 서울 시간 기준으로 초 단위 차이 계산 (HH:MM:SS 형식의 시간만 비교)
+    // 예: 22:50:50 - 22:49:55 = 55초
     const currentTotalSeconds = currentHours * 3600 + currentMinutes * 60 + currentSeconds;
     const trainingTotalSeconds = trainingHours * 3600 + trainingMinutes * 60 + trainingSeconds;
     
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
-    // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정 (24시간 = 86400초 추가)
+    // 디버깅: 시간 계산 로그
+    console.log('🔍 시간 계산 (checkTrainingStartTime):', {
+      현재시간: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
+      현재시간_초: currentTotalSeconds,
+      훈련시작시간: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
+      훈련시작시간_초: trainingTotalSeconds,
+      차이_초: secondsUntilStart,
+      차이_분초: `${Math.floor(secondsUntilStart / 60)}:${String(secondsUntilStart % 60).padStart(2, '0')}`
+    });
+    
+    // 만약 훈련 시작 시간이 이미 지났다면 (같은 날 내에서 시간이 지난 경우)
+    // 음수인 경우만 처리 (예: 22:49:55에서 22:50:50까지는 양수이므로 그대로 사용)
     if (secondsUntilStart < 0) {
-      secondsUntilStart += 86400; // 다음날 같은 시간
+      // 같은 날 내에서 시간이 지난 경우, 다음날로 간주하지 않고 0으로 설정
+      secondsUntilStart = 0;
+      console.log('⚠️ 훈련 시작 시간이 이미 지났습니다. 00:00으로 표시합니다.');
     }
     
     // 디버깅: 시간 계산 상세 로그
@@ -4131,15 +4145,31 @@ async function updateCountdownFromTrainingStartTime() {
     const trainingMinutes = parseInt(timeParts[1], 10);
     const trainingSeconds = parseInt(timeParts[2], 10);
     
-    // 초 단위 차이 계산
+    // 초 단위 차이 계산 (HH:MM:SS 형식의 시간만 비교)
+    // 예: 22:50:50 - 22:49:55 = 55초
     const currentTotalSeconds = currentHours * 3600 + currentMinutes * 60 + currentSeconds;
     const trainingTotalSeconds = trainingHours * 3600 + trainingMinutes * 60 + trainingSeconds;
     
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
-    // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정
+    // 디버깅: 시간 계산 로그
+    console.log('🔍 시간 계산:', {
+      현재시간: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
+      현재시간_초: currentTotalSeconds,
+      훈련시작시간: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
+      훈련시작시간_초: trainingTotalSeconds,
+      차이_초: secondsUntilStart,
+      차이_분초: `${Math.floor(secondsUntilStart / 60)}:${String(secondsUntilStart % 60).padStart(2, '0')}`
+    });
+    
+    // 만약 훈련 시작 시간이 이미 지났다면 (같은 날 내에서 시간이 지난 경우)
+    // 음수인 경우만 처리 (예: 22:49:55에서 22:50:50까지는 양수이므로 그대로 사용)
     if (secondsUntilStart < 0) {
-      secondsUntilStart += 86400;
+      // 같은 날 내에서 시간이 지난 경우, 다음날로 간주하지 않고 0으로 설정
+      // 또는 실제로 다음날인 경우에만 86400을 더함
+      // 하지만 일반적으로 같은 날 훈련이므로, 음수면 0으로 처리
+      secondsUntilStart = 0;
+      console.log('⚠️ 훈련 시작 시간이 이미 지났습니다. 00:00으로 표시합니다.');
     }
     
     // 준비 완료 상태 확인
@@ -4235,8 +4265,22 @@ function updateTrainingCountdownTimer(secondsUntilStart) {
     const formatCountdownTime = (totalSeconds) => {
       if (totalSeconds < 0) return '00:00';
       
+      // totalSeconds가 86400(24시간)보다 크면 잘못된 계산이므로 0으로 처리
+      if (totalSeconds >= 86400) {
+        console.warn('⚠️ 계산된 시간이 24시간을 초과합니다:', totalSeconds, '초를 0으로 설정합니다.');
+        return '00:00';
+      }
+      
       const minutes = Math.floor(totalSeconds / 60);
       const seconds = totalSeconds % 60;
+      
+      // 디버깅: 포맷팅 로그
+      console.log('📊 카운트다운 포맷팅:', {
+        입력_초: totalSeconds,
+        계산된_분: minutes,
+        계산된_초: seconds,
+        결과: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      });
       
       return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
