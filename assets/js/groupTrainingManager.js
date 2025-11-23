@@ -6468,88 +6468,9 @@ async function startAllParticipantsTraining() {
 
 /**
  * 로컬 훈련 시작 (개인 훈련 화면 전환 및 훈련 시작)
+ * 주의: startLocalGroupTraining 함수는 이미 3516번 줄에 선언되어 있으므로 중복 선언 제거됨
+ * 기존 함수를 사용하되, 훈련 시작 시간 체크 중지 기능이 이미 포함되어 있음
  */
-async function startLocalGroupTraining() {
-  try {
-    const room = groupTrainingState.currentRoom;
-    if (!room || !room.workoutId) {
-      console.error('워크아웃 정보가 없습니다');
-      return;
-    }
-
-    // 워크아웃이 로드되지 않았다면 로드
-    if (!window.currentWorkout) {
-      if (typeof loadWorkoutInfo === 'function') {
-        await loadWorkoutInfo(room.workoutId);
-      } else if (typeof apiGetWorkout === 'function') {
-        const result = await apiGetWorkout(room.workoutId);
-        if (result && result.success && result.item) {
-          window.currentWorkout = result.item;
-        }
-      }
-    }
-
-    if (!window.currentWorkout) {
-      showToast('워크아웃을 로드할 수 없습니다', 'error');
-      return;
-    }
-
-    // 타임라인 스냅샷 업데이트 (초기 상태 설정)
-    const latestSnapshot = updateTimelineSnapshot(room, { workout: window.currentWorkout });
-    if (latestSnapshot) {
-      applyTimelineSnapshotToTrainingState(latestSnapshot);
-    }
-    
-    // 훈련 상태 초기화 (경과시간 0으로 시작)
-    if (window.trainingState) {
-      window.trainingState.elapsedSec = 0;
-      window.trainingState.segIndex = 0;
-      window.trainingState.segElapsedSec = 0;
-      window.trainingState.isRunning = false; // startWorkoutTraining에서 true로 설정됨
-    }
-    
-    stopMonitoringTimelineLoop();
-
-    // 개인 훈련 화면으로 전환
-    const trainingScreen = document.getElementById('trainingScreen');
-    const waitingScreen = document.getElementById('groupWaitingScreen');
-
-    if (trainingScreen && waitingScreen) {
-      waitingScreen.classList.remove('active');
-      waitingScreen.classList.add('hidden');
-      trainingScreen.classList.remove('hidden');
-      trainingScreen.classList.add('active');
-    } else if (typeof showScreen === 'function') {
-      showScreen('trainingScreen');
-    }
-
-    // 훈련 시작 (개인 훈련 시작 함수 호출)
-    // 카운트다운은 이미 완료되었으므로 바로 startWorkoutTraining 호출
-    if (typeof startWorkoutTraining === 'function') {
-      console.log('🚀 startWorkoutTraining 호출 시작');
-      startWorkoutTraining();
-      
-      // startWorkoutTraining 내부에서 startSegmentLoop가 호출되는지 확인
-      // 만약 호출되지 않았다면 직접 호출
-      setTimeout(() => {
-        const ts = window.trainingState || {};
-        if (!ts.timerId && typeof startSegmentLoop === 'function') {
-          console.log('⚠️ startSegmentLoop가 자동으로 시작되지 않았습니다. 수동으로 시작합니다.');
-          startSegmentLoop();
-        }
-      }, 100);
-    } else {
-      console.error('훈련 시작 함수를 찾을 수 없습니다');
-      showToast('훈련을 시작할 수 없습니다', 'error');
-    }
-
-    console.log('✅ 로컬 훈련 시작 완료');
-
-  } catch (error) {
-    console.error('❌ 로컬 훈련 시작 실패:', error);
-    showToast('훈련 시작에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
-  }
-}
 
 // 함수를 전역으로 노출
 window.startGroupTrainingWithCountdown = startGroupTrainingWithCountdown;
