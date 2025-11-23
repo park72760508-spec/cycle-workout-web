@@ -6283,6 +6283,65 @@ try {
   console.error('❌ 그룹훈련 함수 등록 중 오류:', error);
 }
 
+/**
+ * 그룹 훈련 카드 상태 업데이트 (훈련방 존재 여부에 따라)
+ */
+async function updateGroupTrainingCardStatus() {
+  try {
+    const groupTrainingCard = document.querySelector('.training-mode-card.group-training');
+    if (!groupTrainingCard) {
+      console.log('그룹 훈련 카드를 찾을 수 없습니다.');
+      return;
+    }
+
+    // 훈련방 목록 확인
+    const availableRooms = await getRoomsFromBackend();
+    const hasAvailableRooms = availableRooms && availableRooms.length > 0;
+
+    // 상태 업데이트
+    if (hasAvailableRooms) {
+      // 훈련방이 있으면 활성화 상태
+      groupTrainingCard.classList.remove('disabled');
+      groupTrainingCard.classList.add('active');
+      const btn = groupTrainingCard.querySelector('#btnGroupTraining');
+      if (btn) {
+        btn.disabled = false;
+        btn.style.pointerEvents = '';
+        btn.style.opacity = '1';
+      }
+      console.log('✅ 그룹 훈련 카드 활성화 (훈련방 있음)');
+    } else {
+      // 훈련방이 없으면 비활성화 상태
+      groupTrainingCard.classList.remove('active');
+      groupTrainingCard.classList.add('disabled');
+      const btn = groupTrainingCard.querySelector('#btnGroupTraining');
+      if (btn) {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.5';
+      }
+      console.log('⚠️ 그룹 훈련 카드 비활성화 (훈련방 없음)');
+    }
+  } catch (error) {
+    console.error('그룹 훈련 카드 상태 업데이트 실패:', error);
+    // 에러 발생 시 기본적으로 비활성화 상태로 설정
+    const groupTrainingCard = document.querySelector('.training-mode-card.group-training');
+    if (groupTrainingCard) {
+      groupTrainingCard.classList.remove('active');
+      groupTrainingCard.classList.add('disabled');
+      const btn = groupTrainingCard.querySelector('#btnGroupTraining');
+      if (btn) {
+        btn.disabled = true;
+        btn.style.pointerEvents = 'none';
+        btn.style.opacity = '0.5';
+      }
+    }
+  }
+}
+
+// 전역 함수로 등록
+window.updateGroupTrainingCardStatus = updateGroupTrainingCardStatus;
+
 // 모듈 로딩 완료 마크
 window.groupTrainingManagerReady = true;
 console.log('🎯 그룹훈련 관리자 모듈 준비 완료');
