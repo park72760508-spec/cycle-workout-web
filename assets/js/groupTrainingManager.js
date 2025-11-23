@@ -855,6 +855,7 @@ function getCurrentTimeString() {
  */
 let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초)
 let worldTimeInitialized = false;
+let worldTimeSyncInterval = null; // 1분마다 동기화하는 인터벌
 
 async function fetchWorldTime() {
   try {
@@ -867,26 +868,34 @@ async function fetchWorldTime() {
     
     // 서버 시간 (ISO 8601 형식)
     const serverTime = new Date(data.datetime);
-    // 로컬 시간
+    // 로컬 시간 (API 호출 직후 측정)
     const localTime = new Date();
     
     // 시간 차이 계산 (서버 시간 - 로컬 시간)
-    worldTimeOffset = serverTime.getTime() - localTime.getTime();
+    const newOffset = serverTime.getTime() - localTime.getTime();
+    const previousOffset = worldTimeOffset;
+    worldTimeOffset = newOffset;
     worldTimeInitialized = true;
+    
+    // 오프셋 변화량 계산 (디버깅용)
+    const offsetChange = previousOffset !== null ? (newOffset - previousOffset) : 0;
     
     console.log('✅ WorldTimeAPI 시간 동기화 완료:', {
       serverTime: serverTime.toISOString(),
       localTime: localTime.toISOString(),
       offset: worldTimeOffset,
-      offsetSeconds: Math.round(worldTimeOffset / 1000)
+      offsetSeconds: Math.round(worldTimeOffset / 1000),
+      offsetChange: offsetChange !== 0 ? `${offsetChange > 0 ? '+' : ''}${Math.round(offsetChange / 1000)}초` : '변화 없음'
     });
     
     return serverTime;
   } catch (error) {
     console.error('❌ WorldTimeAPI 시간 가져오기 실패:', error);
-    // 실패 시 로컬 시간 사용
-    worldTimeOffset = 0;
-    worldTimeInitialized = true;
+    // 실패 시 이전 오프셋 유지 (있는 경우) 또는 0으로 설정
+    if (worldTimeOffset === null) {
+      worldTimeOffset = 0;
+      worldTimeInitialized = true;
+    }
     return new Date();
   }
 }
@@ -924,6 +933,9 @@ function startClock() {
   if (clockUpdateInterval) {
     clearInterval(clockUpdateInterval);
   }
+  if (worldTimeSyncInterval) {
+    clearInterval(worldTimeSyncInterval);
+  }
   
   // 시계 요소 찾기
   const clockElement = document.getElementById('groupTrainingClock');
@@ -932,15 +944,37 @@ function startClock() {
     return;
   }
   
-  // 즉시 업데이트
-  const syncedTime = getSyncedTime();
-  clockElement.textContent = formatTime(syncedTime);
+  // 최초 1회 시간 동기화 (즉시)
+  if (!worldTimeInitialized) {
+    fetchWorldTime().then(() => {
+      // 동기화 후 즉시 업데이트
+      const syncedTime = getSyncedTime();
+      clockElement.textContent = formatTime(syncedTime);
+    });
+  } else {
+    // 이미 초기화되었으면 즉시 업데이트
+    const syncedTime = getSyncedTime();
+    clockElement.textContent = formatTime(syncedTime);
+  }
   
-  // 1초마다 업데이트
+  // 1초마다 시계 업데이트
   clockUpdateInterval = setInterval(() => {
     const syncedTime = getSyncedTime();
     clockElement.textContent = formatTime(syncedTime);
   }, 1000);
+  
+  // 1분(60초)마다 WorldTimeAPI로 시간 동기화
+  worldTimeSyncInterval = setInterval(async () => {
+    console.log('🔄 1분 주기 시간 동기화 시작...');
+    await fetchWorldTime();
+    // 동기화 후 즉시 시계 업데이트
+    const syncedTime = getSyncedTime();
+    if (clockElement) {
+      clockElement.textContent = formatTime(syncedTime);
+    }
+  }, 60000); // 60000ms = 1분
+  
+  console.log('✅ 시계 시작 (1초 업데이트, 1분 동기화)');
 }
 
 function stopClock() {
@@ -948,6 +982,11 @@ function stopClock() {
     clearInterval(clockUpdateInterval);
     clockUpdateInterval = null;
   }
+  if (worldTimeSyncInterval) {
+    clearInterval(worldTimeSyncInterval);
+    worldTimeSyncInterval = null;
+  }
+  console.log('⏹️ 시계 정지');
 }
 
    
@@ -3361,12 +3400,8 @@ async function initializeWaitingRoom() {
 
   normalizeRoomParticipantsInPlace(room);
   
-  // WorldTimeAPI에서 시간 가져오기 (최초 1회만)
-  if (!worldTimeInitialized) {
-    await fetchWorldTime();
-  }
-  
   // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링 (시계 시작 포함)
+  // startClock() 함수 내부에서 최초 1회 시간 동기화 및 1분마다 자동 동기화 처리
   renderWaitingHeaderSegmentTable();
   
   // 관리자/참가자 컨트롤 표시
