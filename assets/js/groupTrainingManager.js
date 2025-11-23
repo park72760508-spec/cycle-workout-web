@@ -3834,6 +3834,8 @@ function setupGroupTrainingControlBar() {
 // 훈련 시작 시간 체크 인터벌
 let trainingStartCheckInterval = null;
 let countdownStarted = false; // 카운트다운 시작 여부
+let trainingStartTimeFound = false; // 훈련 시작 시간을 찾았는지 여부
+let countdownUpdateInterval = null; // 카운트다운 업데이트 인터벌
 
 /**
  * 훈련 시작 시간 체크 및 카운트다운 시작
@@ -3850,22 +3852,92 @@ async function checkTrainingStartTime() {
     const latestRoom = await getRoomByCode(roomCode);
     if (!latestRoom) return;
     
-    // 훈련 시작 시간 가져오기 (CreatedAt 또는 trainingStartTime) - HH:MM:SS 형식
-    const trainingStartTimeStr = latestRoom.createdAt || 
-                                 latestRoom.CreatedAt || 
-                                 latestRoom.trainingStartTime || 
-                                 latestRoom.TrainingStartTime;
+    // 훈련 시작 시간 가져오기 (CreatedAt 또는 trainingStartTime)
+    let trainingStartTimeRaw = latestRoom.createdAt || 
+                                latestRoom.CreatedAt || 
+                                latestRoom.trainingStartTime || 
+                                latestRoom.TrainingStartTime;
     
-    if (!trainingStartTimeStr) {
+    if (!trainingStartTimeRaw) {
       // 훈련 시작 시간이 아직 설정되지 않음
-      console.log('⏳ 훈련 시작 시간이 아직 설정되지 않음');
+      if (!trainingStartTimeFound) {
+        console.log('⏳ 훈련 시작 시간이 아직 설정되지 않음');
+      }
       return;
     }
     
-    // 시간 형식 검증 (HH:MM:SS 형식이어야 함)
-    const timePattern = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/;
-    if (!timePattern.test(trainingStartTimeStr)) {
-      console.warn('⚠️ 잘못된 시간 형식:', trainingStartTimeStr, '예상 형식: HH:MM:SS');
+    // 훈련 시작 시간을 찾았으면 체크 인터벌 중지하고 카운트다운 업데이트 시작
+    if (!trainingStartTimeFound) {
+      trainingStartTimeFound = true;
+      console.log('✅ 훈련 시작 시간 발견:', trainingStartTimeRaw);
+      
+      // 5초마다 체크하는 인터벌 중지
+      if (trainingStartCheckInterval) {
+        clearInterval(trainingStartCheckInterval);
+        trainingStartCheckInterval = null;
+      }
+      
+      // 1초마다 카운트다운 업데이트 시작
+      if (countdownUpdateInterval) {
+        clearInterval(countdownUpdateInterval);
+      }
+      countdownUpdateInterval = setInterval(() => {
+        updateCountdownFromTrainingStartTime();
+      }, 1000);
+      
+      // 즉시 한 번 실행
+      updateCountdownFromTrainingStartTime();
+      return;
+    }
+    
+    // 시간 형식 변환 함수 (ISO 형식 또는 HH:MM:SS 형식 지원)
+    const normalizeTrainingStartTime = (timeValue) => {
+      if (!timeValue) return null;
+      
+      const timeStr = String(timeValue).trim();
+      
+      // 1. HH:MM:SS 형식인지 확인
+      const timePattern = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/;
+      if (timePattern.test(timeStr)) {
+        return timeStr; // 이미 HH:MM:SS 형식
+      }
+      
+      // 2. ISO 형식인지 확인 (예: 1899-12-30T13:44:43.000Z 또는 2025-11-23T20:34:00.000Z)
+      const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+      if (isoPattern.test(timeStr)) {
+        try {
+          const dateObj = new Date(timeStr);
+          if (isNaN(dateObj.getTime())) {
+            console.warn('⚠️ 잘못된 ISO 날짜 형식:', timeStr);
+            return null;
+          }
+          
+          // ISO 형식의 날짜를 서울 시간으로 변환하여 HH:MM:SS 형식으로 반환
+          // ISO 형식은 UTC 시간이므로, 서울 시간(UTC+9)으로 변환
+          const seoulHours = dateObj.getUTCHours();
+          const seoulMinutes = dateObj.getUTCMinutes();
+          const seoulSeconds = dateObj.getUTCSeconds();
+          
+          // 서울 시간으로 변환 (UTC+9)
+          let seoulTimeHours = (seoulHours + 9) % 24;
+          
+          return `${String(seoulTimeHours).padStart(2, '0')}:${String(seoulMinutes).padStart(2, '0')}:${String(seoulSeconds).padStart(2, '0')}`;
+        } catch (error) {
+          console.warn('⚠️ ISO 날짜 파싱 실패:', timeStr, error);
+          return null;
+        }
+      }
+      
+      // 3. 기타 형식은 경고 후 null 반환
+      console.warn('⚠️ 지원하지 않는 시간 형식:', timeStr, '예상 형식: HH:MM:SS 또는 ISO 8601');
+      return null;
+    };
+    
+    // 시간 형식 정규화
+    const trainingStartTimeStr = normalizeTrainingStartTime(trainingStartTimeRaw);
+    
+    if (!trainingStartTimeStr) {
+      console.warn('⚠️ 훈련 시작 시간을 파싱할 수 없습니다:', trainingStartTimeRaw);
       return;
     }
     
@@ -3964,62 +4036,8 @@ async function checkTrainingStartTime() {
       훈련시작시간_서울: formatTime(trainingStartDate)
     });
     
-    // 카운트다운 타이머 업데이트 (준비 완료된 사용자만 표시)
-    if (isReady) {
-      updateTrainingCountdownTimer(secondsUntilStart);
-    } else {
-      // 준비 완료되지 않은 사용자는 카운트다운 타이머 숨김
-      const countdownTimer = document.getElementById('trainingCountdownTimer');
-      if (countdownTimer) {
-        countdownTimer.style.display = 'none';
-      }
-    }
-    
-    // 준비 완료된 사용자만 카운트다운 실행
-    if (!isReady) {
-      // 준비 완료되지 않은 사용자는 카운트다운 실행하지 않음
-      return;
-    }
-    
-    // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작 (준비 완료된 사용자만)
-    // 조건: 11초 이하이고 0초 초과일 때 카운트다운 시작
-    if (secondsUntilStart <= 11 && secondsUntilStart > 0) {
-      if (!countdownStarted) {
-        countdownStarted = true;
-        console.log('🚀 훈련 시작 카운트다운 시작! (준비 완료된 사용자)', {
-          남은초: secondsUntilStart,
-          현재시간: currentTimeStr,
-          훈련시작시간: trainingStartTimeStr
-        });
-        
-        // 10초 카운트다운 시작
-        startTrainingCountdown(secondsUntilStart);
-      } else {
-        // 이미 카운트다운이 시작되었으면 로그만 출력
-        console.log('⏰ 카운트다운 진행 중...', secondsUntilStart, '초 남음');
-      }
-    } else if (secondsUntilStart <= 0) {
-      // 이미 시간이 지났으면 즉시 훈련 시작 (준비 완료된 사용자만)
-      if (!countdownStarted) {
-        countdownStarted = true;
-        console.log('⏱️ 훈련 시작 시간 도달, 즉시 훈련 시작 (준비 완료된 사용자)', {
-          현재시간: currentTimeStr,
-          훈련시작시간: trainingStartTimeStr,
-          지난초: Math.abs(secondsUntilStart)
-        });
-        startLocalGroupTraining();
-      }
-    } else {
-      // 아직 11초 전이 아닌 경우
-      if (secondsUntilStart > 11) {
-        console.log('⏳ 훈련 시작 대기 중...', {
-          남은초: secondsUntilStart,
-          남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`,
-          현재시간: currentTimeStr,
-          훈련시작시간: trainingStartTimeStr
-        });
-      }
-    }
+    // 훈련 시작 시간을 찾았으면, 이 함수는 더 이상 실행하지 않음
+    // updateCountdownFromTrainingStartTime 함수가 1초마다 카운트다운을 업데이트함
   } catch (error) {
     console.error('훈련 시작 시간 체크 중 오류:', error);
   }
@@ -4179,13 +4197,20 @@ async function initializeWaitingRoom() {
   // 기존 체크 인터벌 정리
   if (trainingStartCheckInterval) {
     clearInterval(trainingStartCheckInterval);
+    trainingStartCheckInterval = null;
   }
-  countdownStarted = false;
+  if (countdownUpdateInterval) {
+    clearInterval(countdownUpdateInterval);
+    countdownUpdateInterval = null;
+  }
   
-  // 10초마다 훈련 시작 시간 체크 시작 (준비 완료된 참가자만)
+  countdownStarted = false;
+  trainingStartTimeFound = false;
+  
+  // 5초마다 훈련 시작 시간 체크 시작 (훈련 시작 시간을 찾을 때까지)
   trainingStartCheckInterval = setInterval(() => {
     checkTrainingStartTime();
-  }, 10000); // 10초마다 체크
+  }, 5000); // 5초마다 체크
   
   // 즉시 한 번 체크
   setTimeout(() => {
