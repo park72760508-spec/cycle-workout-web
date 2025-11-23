@@ -3861,52 +3861,89 @@ async function checkTrainingStartTime() {
       return;
     }
     
-    // HH:MM:SS 형식의 시간 문자열을 오늘 날짜와 결합하여 Date 객체 생성
-    const currentDate = getSyncedTime();
-    const today = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    // HH:MM:SS 형식의 시간 문자열을 서울 시간 기준으로 파싱
+    const currentDate = getSyncedTime(); // 서울 시간 기준 (UTC+9)
     
-    // 시간 문자열 파싱 (HH:MM:SS)
+    // 현재 서울 시간 정보 추출 (formatTime은 서울 시간 반환)
+    const currentTimeStr = formatTime(currentDate); // "HH:MM:SS" 형식
+    const [currentHours, currentMinutes, currentSeconds] = currentTimeStr.split(':').map(Number);
+    
+    // 시간 문자열 파싱 (HH:MM:SS) - 서울 시간
     const timeParts = trainingStartTimeStr.split(':');
     if (timeParts.length !== 3) {
       console.warn('⚠️ 잘못된 시간 형식:', trainingStartTimeStr);
       return;
     }
     
-    const hours = parseInt(timeParts[0], 10);
-    const minutes = parseInt(timeParts[1], 10);
-    const seconds = parseInt(timeParts[2], 10);
+    const trainingHours = parseInt(timeParts[0], 10);
+    const trainingMinutes = parseInt(timeParts[1], 10);
+    const trainingSeconds = parseInt(timeParts[2], 10);
     
-    // 오늘 날짜 + 훈련 시작 시간으로 Date 객체 생성
-    const trainingStartDate = new Date(`${today}T${trainingStartTimeStr}`);
+    // 서울 시간 기준으로 초 단위 차이 계산
+    const currentTotalSeconds = currentHours * 3600 + currentMinutes * 60 + currentSeconds;
+    const trainingTotalSeconds = trainingHours * 3600 + trainingMinutes * 60 + trainingSeconds;
+    
+    let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
+    
+    // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정 (24시간 = 86400초 추가)
+    if (secondsUntilStart <= 0) {
+      secondsUntilStart += 86400; // 다음날 같은 시간
+    }
+    
+    // 현재 날짜 기준으로 훈련 시작 시간 Date 객체 생성 (비교용)
+    const trainingStartDate = new Date(currentDate);
+    trainingStartDate.setUTCHours(trainingHours - 9, trainingMinutes, trainingSeconds, 0); // 서울 시간을 UTC로 변환
     
     // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정
     if (trainingStartDate.getTime() < currentDate.getTime()) {
-      const tomorrow = new Date(currentDate);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      trainingStartDate.setTime(new Date(`${tomorrowStr}T${trainingStartTimeStr}`).getTime());
+      trainingStartDate.setUTCDate(trainingStartDate.getUTCDate() + 1);
     }
     
-    const trainingStartTime = trainingStartDate.getTime();
-    const currentTime = currentDate.getTime();
-    const timeUntilStart = trainingStartTime - currentTime;
-    const secondsUntilStart = Math.floor(timeUntilStart / 1000);
-    
     // 현재 사용자의 준비 완료 상태 확인
+    // LiveData 시트의 sts 칼럼이 "ready"인지 확인
     const currentUserId = window.currentUser?.id || '';
-    const myParticipant = latestRoom.participants?.find(p => {
-      const pId = p.id || p.participantId || p.userId;
-      return String(pId) === String(currentUserId);
-    });
+    let isReady = false;
     
-    const isReady = myParticipant ? isParticipantReady(myParticipant) : false;
+    // 1. LiveData 시트에서 sts 칼럼 확인 (우선순위)
+    try {
+      if (typeof apiGetParticipantsLiveData === 'function') {
+        const liveRes = await apiGetParticipantsLiveData(roomCode);
+        const liveItems = Array.isArray(liveRes?.items) ? liveRes.items : [];
+        const myLiveData = liveItems.find(item => {
+          const pid = String(item.participantId || item.id || item.userId || '');
+          return pid === String(currentUserId);
+        });
+        
+        if (myLiveData && myLiveData.sts) {
+          isReady = String(myLiveData.sts).toLowerCase().trim() === 'ready';
+          console.log('📊 LiveData 시트에서 준비 상태 확인:', {
+            participantId: currentUserId,
+            sts: myLiveData.sts,
+            isReady: isReady
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ LiveData 시트 조회 실패, 참가자 정보로 확인:', error);
+    }
     
-    console.log('⏰ 훈련 시작 시간 체크:', {
+    // 2. LiveData에서 확인되지 않으면 참가자 정보로 확인 (하위 호환성)
+    if (!isReady) {
+      const myParticipant = latestRoom.participants?.find(p => {
+        const pId = p.id || p.participantId || p.userId;
+        return String(pId) === String(currentUserId);
+      });
+      isReady = myParticipant ? isParticipantReady(myParticipant) : false;
+    }
+    
+    console.log('⏰ 훈련 시작 시간 체크 (10초 주기):', {
       훈련시작시간: trainingStartTimeStr,
       현재시간: formatTime(currentDate),
       남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`,
+      남은초: secondsUntilStart,
       준비완료: isReady,
-      훈련시작시간_Date: trainingStartDate.toISOString()
+      훈련시작시간_Date: trainingStartDate.toISOString(),
+      훈련시작시간_서울: formatTime(trainingStartDate)
     });
     
     // 준비 완료된 사용자만 카운트다운 실행
@@ -4042,10 +4079,10 @@ async function initializeWaitingRoom() {
   }
   countdownStarted = false;
   
-  // 5초마다 훈련 시작 시간 체크 시작
+  // 10초마다 훈련 시작 시간 체크 시작 (준비 완료된 참가자만)
   trainingStartCheckInterval = setInterval(() => {
     checkTrainingStartTime();
-  }, 5000); // 5초마다 체크
+  }, 10000); // 10초마다 체크
   
   // 즉시 한 번 체크
   setTimeout(() => {
@@ -5118,6 +5155,12 @@ async function syncRoomData() {
               };
               
               const resolveLiveReady = () => {
+                // LiveData 시트의 sts 칼럼이 "ready"인지 확인 (최우선순위)
+                if (liveData.sts && String(liveData.sts).toLowerCase().trim() === 'ready') {
+                  return true;
+                }
+                
+                // 기존 필드들도 확인 (하위 호환성)
                 const candidates = [
                   liveData.ready,
                   liveData.isReady,
@@ -5127,8 +5170,7 @@ async function syncRoomData() {
                   liveData.readyValue,
                   liveData.ready_value,
                   liveData.readyDeviceConnected,
-                  liveData.readyDevice,
-                  liveData.sts
+                  liveData.readyDevice
                 ];
                 for (const candidate of candidates) {
                   const parsed = parseBooleanLike(candidate);
@@ -6683,14 +6725,29 @@ async function startGroupTrainingWithCountdown() {
     console.log('🚀 그룹 훈련 시작 카운트다운 시작');
     console.log(`✅ 준비 완료된 참가자: ${readyCount}명`);
 
-    // 현재 동기화된 시간 기준으로 1분 후 훈련 시작 시간 계산
+    // 현재시간 타이머에 표시된 시간 기준으로 1분 후 훈련 시작 시간 계산
+    // formatTime은 서울 시간을 반환하므로, 이를 기준으로 계산
     const syncedTime = getSyncedTime();
-    const trainingStartTime = new Date(syncedTime.getTime() + 60 * 1000); // 1분 후
+    const currentTimeStr = formatTime(syncedTime); // 현재시간 타이머 표시 시간 (HH:MM:SS)
     
-    // 현재시간 (HH:MM:SS 형식)
-    const currentTimeStr = formatTime(syncedTime);
+    // 현재시간 타이머 시간 + 1분 계산
+    const [hours, minutes, seconds] = currentTimeStr.split(':').map(Number);
+    let trainingHours = hours;
+    let trainingMinutes = minutes + 1; // 1분 추가
+    let trainingSeconds = seconds;
+    
+    // 분이 60을 넘으면 시간 증가
+    if (trainingMinutes >= 60) {
+      trainingMinutes = trainingMinutes - 60;
+      trainingHours = (trainingHours + 1) % 24;
+    }
+    
     // 훈련 시작 시간 (HH:MM:SS 형식)
-    const trainingStartTimeStr = formatTime(trainingStartTime);
+    const trainingStartTimeStr = `${String(trainingHours).padStart(2, '0')}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`;
+    
+    // Date 객체로 변환 (비교용)
+    const trainingStartTime = new Date(syncedTime);
+    trainingStartTime.setUTCHours(trainingHours - 9, trainingMinutes, trainingSeconds, 0); // 서울 시간을 UTC로 변환
     
     console.log('⏰ 훈련 시작 시간 설정:', {
       현재시간: currentTimeStr,
