@@ -10,7 +10,8 @@
 // groupTrainingManager.js가 먼저 로드되어야 함
 // 안전하게 초기화 (groupTrainingManager.js가 로드되지 않은 경우를 대비)
 if (!window.groupTrainingState) {
-  console.warn('groupTrainingState가 아직 초기화되지 않았습니다. groupTrainingManager.js가 먼저 로드되어야 합니다.');
+  // groupTrainingManager.js가 아직 로드되지 않은 경우, 기본 구조만 초기화
+  // 경고 메시지는 제거 (정상적인 로딩 순서에서도 발생할 수 있음)
   window.groupTrainingState = {
     currentRoom: null,
     isAdmin: false,
@@ -20,7 +21,14 @@ if (!window.groupTrainingState) {
     syncInterval: null,
     managerInterval: null,
     isConnected: false,
-    lastSyncTime: null
+    lastSyncTime: null,
+    countdownStarted: false,
+    adminCountdownInitiated: false,
+    readyOverrides: {},
+    adminParticipationMode: 'monitor',
+    trainingStartSignaled: false,
+    timelineSnapshot: null,
+    monitoringTimelineInterval: null
   };
 }
 const groupTrainingState = window.groupTrainingState;
