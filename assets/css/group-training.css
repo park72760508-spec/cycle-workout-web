@@ -78,6 +78,63 @@
   box-shadow: 0 16px 32px rgba(40, 167, 69, 0.3);
 }
 
+/* 그룹 훈련 카드 비활성화 상태 (훈련방 없을 때) */
+.training-mode-card.group-training.disabled {
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  opacity: 0.7;
+  filter: grayscale(0.6);
+  cursor: not-allowed;
+  position: relative;
+}
+
+.training-mode-card.group-training.disabled::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  pointer-events: none;
+}
+
+.training-mode-card.group-training.disabled:hover {
+  transform: none;
+  box-shadow: 0 4px 8px rgba(108, 117, 125, 0.2);
+  border-color: transparent;
+}
+
+.training-mode-card.group-training.disabled .mode-icon,
+.training-mode-card.group-training.disabled h4,
+.training-mode-card.group-training.disabled p,
+.training-mode-card.group-training.disabled .mode-features li {
+  opacity: 0.6;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.training-mode-card.group-training.disabled button {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* 그룹 훈련 카드 활성화 상태 (훈련방 있을 때) */
+.training-mode-card.group-training.active {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  animation: pulseGlow 2s ease-in-out infinite;
+  box-shadow: 0 8px 24px rgba(40, 167, 69, 0.4);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 8px 24px rgba(40, 167, 69, 0.4);
+  }
+  50% {
+    box-shadow: 0 12px 32px rgba(40, 167, 69, 0.6);
+  }
+}
+
 .mode-icon {
   font-size: 52px;
   margin-bottom: 16px;
