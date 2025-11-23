@@ -6191,23 +6191,42 @@ async function startGroupTrainingWithCountdown() {
     
     // 구글 시트에 훈련 시작 시간 업데이트 (CreatedAt 필드에 저장)
     try {
+      let updateSuccess = false;
       if (typeof apiUpdateRoom === 'function') {
-        await apiUpdateRoom(roomCode, {
+        const result = await apiUpdateRoom(roomCode, {
           createdAt: trainingStartTimeISO,
           trainingStartTime: trainingStartTimeISO
         });
-        console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료');
+        updateSuccess = !!(result && result.success);
+        if (updateSuccess) {
+          console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료:', {
+            roomCode,
+            createdAt: trainingStartTimeISO,
+            trainingStartTime: trainingStartTimeISO,
+            result
+          });
+        } else {
+          console.error('❌ 구글 시트 업데이트 실패:', result);
+        }
       } else if (typeof updateRoomOnBackend === 'function') {
-        await updateRoomOnBackend({
+        updateSuccess = await updateRoomOnBackend({
           ...room,
           createdAt: trainingStartTimeISO,
           trainingStartTime: trainingStartTimeISO
         });
-        console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료');
+        if (updateSuccess) {
+          console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료 (updateRoomOnBackend)');
+        } else {
+          console.error('❌ 구글 시트 업데이트 실패 (updateRoomOnBackend)');
+        }
+      }
+      
+      if (!updateSuccess) {
+        throw new Error('구글 시트 업데이트가 실패했습니다');
       }
     } catch (error) {
       console.error('❌ 구글 시트 업데이트 실패:', error);
-      showToast('훈련 시작 시간 업데이트에 실패했습니다', 'error');
+      showToast('훈련 시작 시간 업데이트에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
       return;
     }
     
