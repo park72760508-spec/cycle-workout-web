@@ -855,36 +855,78 @@ function getCurrentTimeString() {
  */
 let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초)
 let worldTimeInitialized = false;
-let worldTimeSyncInterval = null; // 20초마다 동기화하는 인터벌
+let worldTimeSyncInterval = null; // 동기화 인터벌 (1회만 실행)
+let worldTimeSyncAttempted = false; // 동기화 시도 여부
+let worldTimeSyncRetryTimeout = null; // 재시도 타임아웃
 let worldTimeErrorCount = 0; // 연속 실패 횟수
 let lastWorldTimeError = 0; // 마지막 에러 발생 시간
 let currentTimeApiIndex = 0; // 현재 사용 중인 API 인덱스
 
+// 구글 타임존 API 키
+const GOOGLE_TIMEZONE_API_KEY = 'AIzaSyAv2S_3hfPhEIv6CI2ZtwGKMIdOuV6a_OA';
+
+// 서울의 위도/경도
+const SEOUL_LATITUDE = 37.5665;
+const SEOUL_LONGITUDE = 126.9780;
+
 // 여러 시간 API 엔드포인트 (순차적으로 시도)
 const TIME_APIS = [
   {
-    name: 'WorldTimeAPI',
-    url: 'https://worldtimeapi.org/api/timezone/Asia/Seoul',
-    parser: (data) => new Date(data.datetime)
+    name: 'Google Time Zone API',
+    url: (timestamp) => {
+      // 구글 타임존 API는 동적 URL 생성 필요
+      return `https://maps.googleapis.com/maps/api/timezone/json?location=${SEOUL_LATITUDE},${SEOUL_LONGITUDE}&timestamp=${timestamp}&key=${GOOGLE_TIMEZONE_API_KEY}`;
+    },
+    parser: (data, requestTimestamp) => {
+      // 구글 타임존 API 응답 처리
+      if (data.status !== 'OK') {
+        throw new Error(`Google Time Zone API error: ${data.status}`);
+      }
+      
+      // UTC 타임스탬프 + 오프셋 = 서울 시간
+      const totalOffset = data.rawOffset + (data.dstOffset || 0); // 초 단위
+      const seoulTimestamp = (requestTimestamp + totalOffset) * 1000; // 밀리초로 변환
+      return new Date(seoulTimestamp);
+    },
+    requiresTimestamp: true // 타임스탬프가 필요한 API
   },
   {
     name: 'TimeAPI.io',
     url: 'https://timeapi.io/api/Time/current/zone?timeZone=Asia/Seoul',
-    parser: (data) => new Date(data.dateTime)
+    parser: (data) => new Date(data.dateTime),
+    requiresTimestamp: false
+  },
+  {
+    name: 'WorldTimeAPI (백업)',
+    url: 'https://worldtimeapi.org/api/timezone/Asia/Seoul',
+    parser: (data) => new Date(data.datetime),
+    requiresTimestamp: false
   }
-  // WorldClockAPI는 CORS 문제로 제외
 ];
 
 /**
  * 단일 시간 API 호출 시도
  */
-async function tryFetchTimeFromAPI(api, timeout = 5000) {
+async function tryFetchTimeFromAPI(api, timeout = 5000, requestTimestamp = null) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
   try {
+    // 구글 타임존 API는 타임스탬프가 필요
+    if (api.requiresTimestamp) {
+      // 타임스탬프가 없으면 현재 UTC 타임스탬프 사용
+      if (!requestTimestamp) {
+        requestTimestamp = Math.floor(Date.now() / 1000); // 초 단위
+      }
+    }
+    
+    // URL 생성 (함수인 경우 호출)
+    const apiUrl = typeof api.url === 'function' 
+      ? api.url(requestTimestamp || Math.floor(Date.now() / 1000))
+      : api.url;
+    
     // User-Agent 헤더 추가 (일부 서버에서 요구)
-    const response = await fetch(api.url, {
+    const response = await fetch(apiUrl, {
       signal: controller.signal,
       cache: 'no-cache',
       headers: {
@@ -902,7 +944,11 @@ async function tryFetchTimeFromAPI(api, timeout = 5000) {
     }
     
     const data = await response.json();
-    const serverTime = api.parser(data);
+    
+    // 구글 타임존 API는 타임스탬프를 파서에 전달
+    const serverTime = api.requiresTimestamp 
+      ? api.parser(data, requestTimestamp)
+      : api.parser(data);
     
     if (!serverTime || isNaN(serverTime.getTime())) {
       throw new Error('Invalid time data received');
@@ -921,6 +967,9 @@ async function tryFetchTimeFromAPI(api, timeout = 5000) {
     } else if (error.message && error.message.includes('CORS')) {
       error.apiName = api.name;
       error.errorType = 'CORS_ERROR';
+    } else if (error.message && error.message.includes('Google Time Zone API error')) {
+      error.apiName = api.name;
+      error.errorType = 'API_ERROR';
     }
     throw error;
   }
@@ -939,7 +988,12 @@ async function fetchWorldTime() {
     const api = TIME_APIS[apiIndex];
     
     try {
-      const serverTime = await tryFetchTimeFromAPI(api, 5000); // 5초 타임아웃
+      // 구글 타임존 API는 현재 UTC 타임스탬프 필요
+      const requestTimestamp = api.requiresTimestamp 
+        ? Math.floor(Date.now() / 1000) 
+        : null;
+      
+      const serverTime = await tryFetchTimeFromAPI(api, 5000, requestTimestamp); // 5초 타임아웃
       
       // 시간 차이 계산 (서버 시간 - 로컬 시간)
       const newOffset = serverTime.getTime() - localTime.getTime();
@@ -1033,7 +1087,24 @@ if (typeof window.clockDigitValues === 'undefined') {
 }
 
 /**
- * 시계를 숫자 스크롤 효과로 업데이트
+ * 시계를 간단한 텍스트로 업데이트 (초 단위 변경)
+ */
+function updateClockSimple(clockElement, newTime) {
+  if (!clockElement) return;
+  
+  const timeStr = formatTime(newTime);
+  
+  // 시계 구조가 있으면 제거하고 간단한 텍스트로 변경
+  if (clockElement.querySelector('.clock-digits')) {
+    clockElement.innerHTML = timeStr;
+  } else {
+    // 기존 텍스트 업데이트
+    clockElement.textContent = timeStr;
+  }
+}
+
+/**
+ * 시계를 숫자 스크롤 효과로 업데이트 (사용 안 함)
  */
 function updateClockWithScroll(clockElement, newTime) {
   if (!clockElement) return;
@@ -1212,61 +1283,73 @@ function startClock() {
     fetchWorldTime().then(() => {
       // 동기화 후 즉시 업데이트
       const syncedTime = getSyncedTime();
-      updateClockWithScroll(clockElement, syncedTime);
+      updateClockSimple(clockElement, syncedTime);
     });
   } else {
     // 이미 초기화되었으면 즉시 업데이트
     const syncedTime = getSyncedTime();
-    updateClockWithScroll(clockElement, syncedTime);
+    updateClockSimple(clockElement, syncedTime);
   }
   
-  // 1초마다 시계 업데이트 (스크롤 효과)
+  // 1초마다 시계 업데이트 (간단한 텍스트 업데이트)
   clockUpdateInterval = setInterval(() => {
     const syncedTime = getSyncedTime();
-    updateClockWithScroll(clockElement, syncedTime);
+    updateClockSimple(clockElement, syncedTime);
   }, 1000);
   
-  // 동적 동기화 주기 설정 (연속 실패 시 주기 증가)
-  let syncInterval = 20000; // 기본 20초
-  
-  // 동기화 함수
+  // 동기화 함수 (1회만 실행)
   const syncTime = async () => {
-    // 에러가 너무 많으면 로그 출력 안 함
-    if (worldTimeErrorCount < 10) {
-      console.log(`🔄 ${syncInterval/1000}초 주기 시간 동기화 시작...`);
+    // 이미 시도했으면 종료
+    if (worldTimeSyncAttempted) {
+      return;
     }
     
-    await fetchWorldTime();
+    worldTimeSyncAttempted = true;
+    console.log('🔄 시간 동기화 시작 (20초 후)...');
     
-    // 동기화 후 즉시 시계 업데이트
-    const syncedTime = getSyncedTime();
-    if (clockElement) {
-      updateClockWithScroll(clockElement, syncedTime);
+    try {
+      await fetchWorldTime();
+      
+      // 동기화 후 즉시 시계 업데이트
+      const syncedTime = getSyncedTime();
+      if (clockElement) {
+        updateClockSimple(clockElement, syncedTime);
+      }
+      
+      console.log('✅ 시간 동기화 완료 (반복 동기화 종료)');
+      
+      // 타임아웃 정리 (setTimeout이므로 clearTimeout 사용)
+      if (worldTimeSyncInterval) {
+        clearTimeout(worldTimeSyncInterval);
+        worldTimeSyncInterval = null;
+      }
+    } catch (error) {
+      // 실패 시 10초 후 재시도 1회
+      console.warn('⚠️ 시간 동기화 실패, 10초 후 재시도...');
+      
+      worldTimeSyncRetryTimeout = setTimeout(async () => {
+        try {
+          await fetchWorldTime();
+          
+          const syncedTime = getSyncedTime();
+          if (clockElement) {
+            updateClockSimple(clockElement, syncedTime);
+          }
+          
+          console.log('✅ 시간 동기화 재시도 완료');
+        } catch (retryError) {
+          console.warn('⚠️ 시간 동기화 재시도 실패, 로컬 시간 사용');
+        }
+        
+        worldTimeSyncRetryTimeout = null;
+      }, 10000); // 10초 후 재시도
     }
-    
-    // 연속 실패 시 동기화 주기 조절
-    if (worldTimeErrorCount > 5) {
-      // 5회 이상 실패 시 주기를 60초로 증가
-      syncInterval = 60000;
-    } else if (worldTimeErrorCount > 2) {
-      // 2회 이상 실패 시 주기를 40초로 증가
-      syncInterval = 40000;
-    } else {
-      // 정상 시 20초로 복귀
-      syncInterval = 20000;
-    }
-    
-    // 인터벌 재설정 (동적 주기 적용)
-    if (worldTimeSyncInterval) {
-      clearInterval(worldTimeSyncInterval);
-    }
-    worldTimeSyncInterval = setInterval(syncTime, syncInterval);
   };
   
-  // 첫 동기화 시작
-  worldTimeSyncInterval = setInterval(syncTime, syncInterval);
+  // 20초 후 첫 동기화 시작 (1회만)
+  worldTimeSyncInterval = setTimeout(syncTime, 20000);
   
-  console.log('✅ 시계 시작 (1초 업데이트, 20초 동기화)');
+  console.log('✅ 시계 시작 (1초 업데이트, 20초 후 1회 동기화)');
 }
 
 function stopClock() {
@@ -4594,7 +4677,7 @@ function renderWaitingHeaderSegmentTable() {
         newClockContainer.innerHTML = clockElement.innerHTML;
         // 시계 업데이트만 수행 (리셋 방지)
         const syncedTime = getSyncedTime();
-        updateClockWithScroll(newClockContainer, syncedTime);
+        updateClockSimple(newClockContainer, syncedTime);
       }
     } else {
       // 시계 시작 (요소가 생성된 후)
@@ -6978,11 +7061,19 @@ window.testTimeAPIs = async function() {
   
   for (const api of TIME_APIS) {
     console.log(`\n[${api.name}] 테스트 중...`);
-    console.log(`URL: ${api.url}`);
+    const apiUrl = typeof api.url === 'function' 
+      ? api.url(Math.floor(Date.now() / 1000))
+      : api.url;
+    console.log(`URL: ${apiUrl}`);
     
     try {
       const startTime = Date.now();
-      const serverTime = await tryFetchTimeFromAPI(api, 5000);
+      // 구글 타임존 API는 현재 UTC 타임스탬프 필요
+      const requestTimestamp = api.requiresTimestamp 
+        ? Math.floor(Date.now() / 1000) 
+        : null;
+      
+      const serverTime = await tryFetchTimeFromAPI(api, 5000, requestTimestamp);
       const endTime = Date.now();
       const responseTime = endTime - startTime;
       
