@@ -856,48 +856,152 @@ function getCurrentTimeString() {
 let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초)
 let worldTimeInitialized = false;
 let worldTimeSyncInterval = null; // 20초마다 동기화하는 인터벌
+let worldTimeErrorCount = 0; // 연속 실패 횟수
+let lastWorldTimeError = 0; // 마지막 에러 발생 시간
+let currentTimeApiIndex = 0; // 현재 사용 중인 API 인덱스
 
-async function fetchWorldTime() {
+// 여러 시간 API 엔드포인트 (순차적으로 시도)
+const TIME_APIS = [
+  {
+    name: 'WorldTimeAPI',
+    url: 'https://worldtimeapi.org/api/timezone/Asia/Seoul',
+    parser: (data) => new Date(data.datetime)
+  },
+  {
+    name: 'TimeAPI.io',
+    url: 'https://timeapi.io/api/Time/current/zone?timeZone=Asia/Seoul',
+    parser: (data) => new Date(data.dateTime)
+  }
+  // WorldClockAPI는 CORS 문제로 제외
+];
+
+/**
+ * 단일 시간 API 호출 시도
+ */
+async function tryFetchTimeFromAPI(api, timeout = 5000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
   try {
-    // WorldTimeAPI에서 Asia/Seoul 시간 가져오기
-    const response = await fetch('https://worldtimeapi.org/api/timezone/Asia/Seoul');
+    // User-Agent 헤더 추가 (일부 서버에서 요구)
+    const response = await fetch(api.url, {
+      signal: controller.signal,
+      cache: 'no-cache',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      mode: 'cors',
+      credentials: 'omit' // 쿠키 전송 방지
+    });
+    
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
     const data = await response.json();
+    const serverTime = api.parser(data);
     
-    // 서버 시간 (ISO 8601 형식)
-    const serverTime = new Date(data.datetime);
-    // 로컬 시간 (API 호출 직후 측정)
-    const localTime = new Date();
-    
-    // 시간 차이 계산 (서버 시간 - 로컬 시간)
-    const newOffset = serverTime.getTime() - localTime.getTime();
-    const previousOffset = worldTimeOffset;
-    worldTimeOffset = newOffset;
-    worldTimeInitialized = true;
-    
-    // 오프셋 변화량 계산 (디버깅용)
-    const offsetChange = previousOffset !== null ? (newOffset - previousOffset) : 0;
-    
-    console.log('✅ WorldTimeAPI 시간 동기화 완료:', {
-      serverTime: serverTime.toISOString(),
-      localTime: localTime.toISOString(),
-      offset: worldTimeOffset,
-      offsetSeconds: Math.round(worldTimeOffset / 1000),
-      offsetChange: offsetChange !== 0 ? `${offsetChange > 0 ? '+' : ''}${Math.round(offsetChange / 1000)}초` : '변화 없음'
-    });
+    if (!serverTime || isNaN(serverTime.getTime())) {
+      throw new Error('Invalid time data received');
+    }
     
     return serverTime;
   } catch (error) {
-    console.error('❌ WorldTimeAPI 시간 가져오기 실패:', error);
-    // 실패 시 이전 오프셋 유지 (있는 경우) 또는 0으로 설정
-    if (worldTimeOffset === null) {
-      worldTimeOffset = 0;
-      worldTimeInitialized = true;
+    clearTimeout(timeoutId);
+    // 에러 타입 구분
+    if (error.name === 'AbortError') {
+      error.apiName = api.name;
+      error.errorType = 'TIMEOUT';
+    } else if (error.message && error.message.includes('Failed to fetch')) {
+      error.apiName = api.name;
+      error.errorType = 'NETWORK_ERROR';
+    } else if (error.message && error.message.includes('CORS')) {
+      error.apiName = api.name;
+      error.errorType = 'CORS_ERROR';
     }
-    return new Date();
+    throw error;
   }
+}
+
+/**
+ * 여러 시간 API를 순차적으로 시도하여 시간 가져오기
+ */
+async function fetchWorldTime() {
+  const localTime = new Date();
+  let lastError = null;
+  
+  // 모든 API를 순차적으로 시도
+  for (let i = 0; i < TIME_APIS.length; i++) {
+    const apiIndex = (currentTimeApiIndex + i) % TIME_APIS.length;
+    const api = TIME_APIS[apiIndex];
+    
+    try {
+      const serverTime = await tryFetchTimeFromAPI(api, 5000); // 5초 타임아웃
+      
+      // 시간 차이 계산 (서버 시간 - 로컬 시간)
+      const newOffset = serverTime.getTime() - localTime.getTime();
+      const previousOffset = worldTimeOffset;
+      worldTimeOffset = newOffset;
+      worldTimeInitialized = true;
+      worldTimeErrorCount = 0; // 성공 시 에러 카운트 리셋
+      currentTimeApiIndex = apiIndex; // 성공한 API를 다음에 우선 사용
+      
+      // 오프셋 변화량 계산 (디버깅용)
+      const offsetChange = previousOffset !== null ? (newOffset - previousOffset) : 0;
+      
+      // 첫 동기화이거나 오프셋이 크게 변경된 경우에만 로그 출력
+      if (previousOffset === null || Math.abs(offsetChange) > 1000) {
+        console.log(`✅ ${api.name} 시간 동기화 완료:`, {
+          api: api.name,
+          serverTime: serverTime.toISOString(),
+          localTime: localTime.toISOString(),
+          offset: worldTimeOffset,
+          offsetSeconds: Math.round(worldTimeOffset / 1000),
+          offsetChange: offsetChange !== 0 ? `${offsetChange > 0 ? '+' : ''}${Math.round(offsetChange / 1000)}초` : '변화 없음'
+        });
+      }
+      
+      return serverTime;
+    } catch (error) {
+      lastError = error;
+      // 다음 API 시도 (로그는 마지막에 한 번만)
+      continue;
+    }
+  }
+  
+  // 모든 API 실패
+  worldTimeErrorCount++;
+  const now = Date.now();
+  
+    // 에러 로그는 1분에 한 번만 출력 (상세 정보 포함)
+    if (now - lastWorldTimeError > 60000 || worldTimeErrorCount === 1) {
+      const errorType = lastError?.errorType || 'UNKNOWN';
+      const apiName = lastError?.apiName || '알 수 없음';
+      
+      if (errorType === 'TIMEOUT') {
+        console.warn(`⚠️ ${apiName} 타임아웃 (5초 초과)`);
+      } else if (errorType === 'NETWORK_ERROR') {
+        console.warn(`⚠️ ${apiName} 네트워크 오류 (연결 실패 또는 ERR_CONNECTION_RESET)`);
+        console.warn('   → 가능한 원인: 방화벽, 프록시, 네트워크 정책, API 서버 장애');
+      } else if (errorType === 'CORS_ERROR') {
+        console.warn(`⚠️ ${apiName} CORS 오류 (브라우저 정책 위반)`);
+      } else {
+        console.warn(`⚠️ ${apiName} 실패:`, lastError?.message || '알 수 없는 오류');
+      }
+      lastWorldTimeError = now;
+    }
+  
+  // 실패 시 이전 오프셋 유지 (있는 경우) 또는 0으로 설정
+  if (worldTimeOffset === null) {
+    worldTimeOffset = 0;
+    worldTimeInitialized = true;
+    console.log('ℹ️ 로컬 시간 사용 (모든 시간 API 동기화 실패)');
+  }
+  
+  return new Date();
 }
 
 /**
@@ -1097,16 +1201,45 @@ function startClock() {
     updateClockWithScroll(clockElement, syncedTime);
   }, 1000);
   
-  // 20초마다 WorldTimeAPI로 시간 동기화 (참가자 간 시간 차이 최소화)
-  worldTimeSyncInterval = setInterval(async () => {
-    console.log('🔄 20초 주기 시간 동기화 시작...');
+  // 동적 동기화 주기 설정 (연속 실패 시 주기 증가)
+  let syncInterval = 20000; // 기본 20초
+  
+  // 동기화 함수
+  const syncTime = async () => {
+    // 에러가 너무 많으면 로그 출력 안 함
+    if (worldTimeErrorCount < 10) {
+      console.log(`🔄 ${syncInterval/1000}초 주기 시간 동기화 시작...`);
+    }
+    
     await fetchWorldTime();
+    
     // 동기화 후 즉시 시계 업데이트
     const syncedTime = getSyncedTime();
     if (clockElement) {
       updateClockWithScroll(clockElement, syncedTime);
     }
-  }, 20000); // 20000ms = 20초
+    
+    // 연속 실패 시 동기화 주기 조절
+    if (worldTimeErrorCount > 5) {
+      // 5회 이상 실패 시 주기를 60초로 증가
+      syncInterval = 60000;
+    } else if (worldTimeErrorCount > 2) {
+      // 2회 이상 실패 시 주기를 40초로 증가
+      syncInterval = 40000;
+    } else {
+      // 정상 시 20초로 복귀
+      syncInterval = 20000;
+    }
+    
+    // 인터벌 재설정 (동적 주기 적용)
+    if (worldTimeSyncInterval) {
+      clearInterval(worldTimeSyncInterval);
+    }
+    worldTimeSyncInterval = setInterval(syncTime, syncInterval);
+  };
+  
+  // 첫 동기화 시작
+  worldTimeSyncInterval = setInterval(syncTime, syncInterval);
   
   console.log('✅ 시계 시작 (1초 업데이트, 20초 동기화)');
 }
@@ -6813,6 +6946,46 @@ window.updateGroupTrainingCardStatus = updateGroupTrainingCardStatus;
 // 모듈 로딩 완료 마크
 window.groupTrainingManagerReady = true;
 console.log('🎯 그룹훈련 관리자 모듈 준비 완료');
+
+// 시간 API 테스트 함수 (브라우저 콘솔에서 직접 호출 가능)
+window.testTimeAPIs = async function() {
+  console.log('=== 시간 API 테스트 시작 ===\n');
+  
+  for (const api of TIME_APIS) {
+    console.log(`\n[${api.name}] 테스트 중...`);
+    console.log(`URL: ${api.url}`);
+    
+    try {
+      const startTime = Date.now();
+      const serverTime = await tryFetchTimeFromAPI(api, 5000);
+      const endTime = Date.now();
+      const responseTime = endTime - startTime;
+      
+      const localTime = new Date();
+      const offset = serverTime.getTime() - localTime.getTime();
+      
+      console.log('✅ 응답 성공!');
+      console.log('응답 시간:', responseTime + 'ms');
+      console.log('서버 시간:', serverTime.toISOString());
+      console.log('로컬 시간:', localTime.toISOString());
+      console.log('시간 차이:', Math.round(offset / 1000) + '초');
+      
+    } catch (error) {
+      console.error('❌ 실패:', error.name, error.message);
+      if (error.errorType === 'TIMEOUT') {
+        console.error('   → 타임아웃 (5초 초과)');
+      } else if (error.errorType === 'NETWORK_ERROR') {
+        console.error('   → 네트워크 연결 실패 (ERR_CONNECTION_RESET 가능)');
+        console.error('   → 가능한 원인: 방화벽, 프록시, 네트워크 정책, API 서버 장애');
+      } else if (error.errorType === 'CORS_ERROR') {
+        console.error('   → CORS 정책 위반');
+      }
+    }
+  }
+  
+  console.log('\n=== 테스트 완료 ===');
+  console.log('💡 브라우저 콘솔에서 testTimeAPIs() 함수를 호출하여 언제든지 테스트할 수 있습니다.');
+};
 
 } // 모듈 중복 로딩 방지 블록 종료
 
