@@ -933,8 +933,10 @@ function updateClockWithScroll(clockElement, newTime) {
   const timeParts = timeStr.split(':');
   const [hours, minutes, seconds] = timeParts;
   
-  // 시계 구조가 없으면 생성
+  // 시계 구조가 없으면 생성 (한 번만)
   if (!clockElement.querySelector('.clock-digits')) {
+    // 기존 텍스트 내용 제거하고 구조 생성
+    clockElement.innerHTML = '';
     clockElement.innerHTML = `
       <div class="clock-digits">
         <div class="clock-digit" data-index="0">
@@ -4250,6 +4252,16 @@ function renderWaitingHeaderSegmentTable() {
 
     const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
 
+    // 시계 요소가 이미 있으면 보존 (리셋 방지)
+    const existingClock = roomInfoCard.querySelector('#groupTrainingClock');
+    const clockPreserved = existingClock && existingClock.querySelector('.clock-digits');
+    let clockElement = null;
+    
+    if (clockPreserved) {
+      // 시계 요소를 임시로 보존
+      clockElement = existingClock.cloneNode(true);
+    }
+
     roomInfoCard.innerHTML = `
       <div class="workout-table-card">
         <div class="workout-table-head">
@@ -4261,7 +4273,7 @@ function renderWaitingHeaderSegmentTable() {
             </div>
           </div>
           <div class="workout-header-right">
-            <div class="group-training-clock" id="groupTrainingClock">--:--:--</div>
+            <div class="group-training-clock" id="groupTrainingClock"></div>
             <div class="workout-status-pill ${statusPillClass}">
               ${statusPillLabel}
             </div>
@@ -4380,10 +4392,22 @@ function renderWaitingHeaderSegmentTable() {
       setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0);
     });
     
-    // 시계 시작 (요소가 생성된 후)
-    setTimeout(() => {
-      startClock();
-    }, 100);
+    // 시계 요소 복원 또는 시작
+    if (clockPreserved && clockElement) {
+      // 보존된 시계 요소 복원
+      const newClockContainer = roomInfoCard.querySelector('#groupTrainingClock');
+      if (newClockContainer && clockElement) {
+        newClockContainer.innerHTML = clockElement.innerHTML;
+        // 시계 업데이트만 수행 (리셋 방지)
+        const syncedTime = getSyncedTime();
+        updateClockWithScroll(newClockContainer, syncedTime);
+      }
+    } else {
+      // 시계 시작 (요소가 생성된 후)
+      setTimeout(() => {
+        startClock();
+      }, 100);
+    }
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
   }
