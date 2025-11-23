@@ -766,6 +766,106 @@
   gap: 12px;
 }
 
+.training-countdown-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(46, 116, 232, 0.1);
+  border: 1px solid rgba(46, 116, 232, 0.3);
+  border-radius: 12px;
+  margin-right: 12px;
+  font-size: 14px;
+  color: #2e74e8;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.training-countdown-timer .countdown-label {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.training-countdown-timer .countdown-time {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2e74e8;
+  min-width: 50px;
+  text-align: center;
+}
+
+.training-countdown-timer.urgent {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.5);
+  animation: pulse-urgent 1s ease-in-out infinite;
+}
+
+.training-countdown-timer.urgent .countdown-time {
+  color: #ef4444;
+}
+
+@keyframes pulse-urgent {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+.training-countdown-timer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(46, 116, 232, 0.1);
+  border: 1px solid rgba(46, 116, 232, 0.3);
+  border-radius: 12px;
+  margin-right: 12px;
+  font-size: 14px;
+  color: #2e74e8;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.training-countdown-timer .countdown-label {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.training-countdown-timer .countdown-time {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2e74e8;
+  min-width: 50px;
+  text-align: center;
+}
+
+.training-countdown-timer.urgent {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.5);
+  animation: pulse-urgent 1s ease-in-out infinite;
+}
+
+.training-countdown-timer.urgent .countdown-time {
+  color: #ef4444;
+}
+
+@keyframes pulse-urgent {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
 .workout-header-right {
   display: flex;
   align-items: center;
