@@ -3407,10 +3407,10 @@ async function checkTrainingStartTime() {
     if (!roomCode) return;
     
     // 구글 시트에서 최신 방 정보 가져오기
-    const latestRoom = await getRoomFromBackend(roomCode);
+    const latestRoom = await getRoomByCode(roomCode);
     if (!latestRoom) return;
     
-    // 훈련 시작 시간 가져오기 (CreatedAt 또는 trainingStartTime)
+    // 훈련 시작 시간 가져오기 (CreatedAt 또는 trainingStartTime) - HH:MM:SS 형식
     const trainingStartTimeStr = latestRoom.createdAt || 
                                  latestRoom.CreatedAt || 
                                  latestRoom.trainingStartTime || 
@@ -3421,15 +3421,42 @@ async function checkTrainingStartTime() {
       return;
     }
     
-    const trainingStartTime = new Date(trainingStartTimeStr).getTime();
-    const currentTime = getSyncedTime().getTime();
+    // HH:MM:SS 형식의 시간 문자열을 오늘 날짜와 결합하여 Date 객체 생성
+    const currentDate = getSyncedTime();
+    const today = currentDate.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    
+    // 시간 문자열 파싱 (HH:MM:SS)
+    const timeParts = trainingStartTimeStr.split(':');
+    if (timeParts.length !== 3) {
+      console.warn('⚠️ 잘못된 시간 형식:', trainingStartTimeStr);
+      return;
+    }
+    
+    const hours = parseInt(timeParts[0], 10);
+    const minutes = parseInt(timeParts[1], 10);
+    const seconds = parseInt(timeParts[2], 10);
+    
+    // 오늘 날짜 + 훈련 시작 시간으로 Date 객체 생성
+    const trainingStartDate = new Date(`${today}T${trainingStartTimeStr}`);
+    
+    // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정
+    if (trainingStartDate.getTime() < currentDate.getTime()) {
+      const tomorrow = new Date(currentDate);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      trainingStartDate.setTime(new Date(`${tomorrowStr}T${trainingStartTimeStr}`).getTime());
+    }
+    
+    const trainingStartTime = trainingStartDate.getTime();
+    const currentTime = currentDate.getTime();
     const timeUntilStart = trainingStartTime - currentTime;
     const secondsUntilStart = Math.floor(timeUntilStart / 1000);
     
     console.log('⏰ 훈련 시작 시간 체크:', {
-      훈련시작시간: new Date(trainingStartTimeStr).toISOString(),
-      현재시간: getSyncedTime().toISOString(),
-      남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`
+      훈련시작시간: trainingStartTimeStr,
+      현재시간: formatTime(currentDate),
+      남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`,
+      훈련시작시간_Date: trainingStartDate.toISOString()
     });
     
     // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작
@@ -6181,28 +6208,33 @@ async function startGroupTrainingWithCountdown() {
     // 현재 동기화된 시간 기준으로 1분 후 훈련 시작 시간 계산
     const syncedTime = getSyncedTime();
     const trainingStartTime = new Date(syncedTime.getTime() + 60 * 1000); // 1분 후
-    const trainingStartTimeISO = trainingStartTime.toISOString();
+    
+    // 현재시간 (HH:MM:SS 형식)
+    const currentTimeStr = formatTime(syncedTime);
+    // 훈련 시작 시간 (HH:MM:SS 형식)
+    const trainingStartTimeStr = formatTime(trainingStartTime);
     
     console.log('⏰ 훈련 시작 시간 설정:', {
-      현재시간: formatTime(syncedTime),
-      훈련시작시간: formatTime(trainingStartTime),
-      ISO: trainingStartTimeISO
+      현재시간: currentTimeStr,
+      훈련시작시간: trainingStartTimeStr,
+      현재시간ISO: syncedTime.toISOString(),
+      훈련시작시간ISO: trainingStartTime.toISOString()
     });
     
-    // 구글 시트에 훈련 시작 시간 업데이트 (CreatedAt 필드에 저장)
+    // 구글 시트에 훈련 시작 시간 업데이트 (시간만 HH:MM:SS 형식으로 저장)
     try {
       let updateSuccess = false;
       if (typeof apiUpdateRoom === 'function') {
         const result = await apiUpdateRoom(roomCode, {
-          createdAt: trainingStartTimeISO,
-          trainingStartTime: trainingStartTimeISO
+          createdAt: trainingStartTimeStr, // HH:MM:SS 형식
+          trainingStartTime: trainingStartTimeStr // HH:MM:SS 형식
         });
         updateSuccess = !!(result && result.success);
         if (updateSuccess) {
           console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료:', {
             roomCode,
-            createdAt: trainingStartTimeISO,
-            trainingStartTime: trainingStartTimeISO,
+            현재시간: currentTimeStr,
+            훈련시작시간: trainingStartTimeStr,
             result
           });
         } else {
@@ -6211,11 +6243,14 @@ async function startGroupTrainingWithCountdown() {
       } else if (typeof updateRoomOnBackend === 'function') {
         updateSuccess = await updateRoomOnBackend({
           ...room,
-          createdAt: trainingStartTimeISO,
-          trainingStartTime: trainingStartTimeISO
+          createdAt: trainingStartTimeStr, // HH:MM:SS 형식
+          trainingStartTime: trainingStartTimeStr // HH:MM:SS 형식
         });
         if (updateSuccess) {
-          console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료 (updateRoomOnBackend)');
+          console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료 (updateRoomOnBackend):', {
+            현재시간: currentTimeStr,
+            훈련시작시간: trainingStartTimeStr
+          });
         } else {
           console.error('❌ 구글 시트 업데이트 실패 (updateRoomOnBackend)');
         }
