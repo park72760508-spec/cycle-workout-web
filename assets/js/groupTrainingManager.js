@@ -4166,24 +4166,43 @@ async function updateCountdownFromTrainingStartTime() {
     
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
-    // 디버깅: 시간 계산 로그
-    console.log('🔍 시간 계산:', {
-      현재시간: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
-      현재시간_초: currentTotalSeconds,
-      훈련시작시간: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
-      훈련시작시간_초: trainingTotalSeconds,
-      차이_초: secondsUntilStart,
-      차이_분초: `${Math.floor(secondsUntilStart / 60)}:${String(secondsUntilStart % 60).padStart(2, '0')}`
+    // 디버깅: 시간 계산 로그 (상세)
+    console.log('🔍 시간 계산 (updateCountdownFromTrainingStartTime):', {
+      현재시간_원본문자열: currentTimeStr,
+      현재시간_파싱결과: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
+      현재시간_초단위: currentTotalSeconds,
+      훈련시작시간_원본문자열: trainingStartTimeStr,
+      훈련시작시간_원본Raw: trainingStartTimeRaw,
+      훈련시작시간_파싱결과: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
+      훈련시작시간_초단위: trainingTotalSeconds,
+      차이_초_계산결과: secondsUntilStart,
+      차이_분초: `${Math.floor(secondsUntilStart / 60)}:${String(secondsUntilStart % 60).padStart(2, '0')}`,
+      계산식: `${trainingTotalSeconds} - ${currentTotalSeconds} = ${secondsUntilStart}`
     });
     
     // 만약 훈련 시작 시간이 이미 지났다면 (같은 날 내에서 시간이 지난 경우)
     // 음수인 경우만 처리 (예: 22:49:55에서 22:50:50까지는 양수이므로 그대로 사용)
     if (secondsUntilStart < 0) {
       // 같은 날 내에서 시간이 지난 경우, 다음날로 간주하지 않고 0으로 설정
-      // 또는 실제로 다음날인 경우에만 86400을 더함
-      // 하지만 일반적으로 같은 날 훈련이므로, 음수면 0으로 처리
+      console.warn('⚠️ 훈련 시작 시간이 이미 지났습니다. 음수 차이:', secondsUntilStart, '초를 0으로 설정합니다.');
       secondsUntilStart = 0;
-      console.log('⚠️ 훈련 시작 시간이 이미 지났습니다. 00:00으로 표시합니다.');
+    }
+    
+    // 1시간(3600초) 이상 차이나면 계산 오류로 간주 (같은 날 훈련이므로 최대 1시간 이내여야 함)
+    if (secondsUntilStart > 3600) {
+      console.error('❌ 시간 계산 오류: 차이가 1시간을 초과합니다.', {
+        차이_초: secondsUntilStart,
+        차이_분: Math.floor(secondsUntilStart / 60),
+        현재시간_원본: currentTimeStr,
+        현재시간_파싱: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
+        훈련시작시간_원본: trainingStartTimeStr,
+        훈련시작시간_파싱: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
+        훈련시작시간_Raw: trainingStartTimeRaw
+      });
+      
+      // 계산 오류 시 0으로 설정 (또는 재계산 시도)
+      // 시간 파싱이 잘못되었을 가능성이 있으므로, 원본 값을 다시 확인
+      secondsUntilStart = 0;
     }
     
     // 준비 완료 상태 확인
@@ -4282,9 +4301,13 @@ function updateTrainingCountdownTimer(secondsUntilStart) {
         return '00:00';
       }
       
-      // 1시간(3600초) 이상이면 계산 오류로 간주
+      // 1시간(3600초) 이상이면 계산 오류로 간주하고 00:00 반환
       if (totalSeconds >= 3600) {
-        console.error('❌ 포맷팅 오류: 시간이 1시간을 초과합니다:', totalSeconds, '초 (', Math.floor(totalSeconds / 60), '분)를 00:00으로 설정합니다.');
+        console.error('❌ 포맷팅 오류: 시간이 1시간을 초과합니다:', {
+          입력_초: totalSeconds,
+          입력_분: Math.floor(totalSeconds / 60),
+          메시지: '같은 날 훈련이므로 1시간 이상 차이는 계산 오류입니다. 00:00으로 설정합니다.'
+        });
         return '00:00';
       }
       
@@ -4293,13 +4316,14 @@ function updateTrainingCountdownTimer(secondsUntilStart) {
       
       const result = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       
-      // 디버깅: 포맷팅 로그 (1분 이상일 때만 경고)
+      // 디버깅: 포맷팅 로그 (1분 이상일 때 경고)
       if (totalSeconds > 60) {
-        console.warn('⚠️ 포맷팅: 1분 이상의 시간이 계산되었습니다:', {
+        console.warn('⚠️ 포맷팅: 1분 이상의 시간이 계산되었습니다 (의도된 값이 아닐 수 있음):', {
           입력_초: totalSeconds,
           계산된_분: minutes,
           계산된_초: seconds,
-          결과: result
+          결과: result,
+          참고: '훈련 시작은 보통 1분 후이므로 60초 이내여야 합니다.'
         });
       }
       
