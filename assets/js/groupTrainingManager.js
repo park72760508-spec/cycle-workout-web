@@ -853,7 +853,9 @@ function getCurrentTimeString() {
 /**
  * WorldTimeAPI에서 시간 가져오기 (한국 시간대)
  */
-let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초)
+let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초) - 하위 호환성 유지
+let worldTimeBase = null; // 구글 타임존 API에서 받은 서버 시간 (기준 시간)
+let worldTimeSyncLocalTime = null; // 동기화 시점의 로컬 시간 (기준 시간)
 let worldTimeInitialized = false;
 let worldTimeSyncInterval = null; // 동기화 인터벌 (1회만 실행)
 let worldTimeSyncAttempted = false; // 동기화 시도 여부
@@ -1011,7 +1013,11 @@ async function fetchWorldTime() {
       
       const serverTime = await tryFetchTimeFromAPI(api, 5000, requestTimestamp); // 5초 타임아웃
       
-      // 시간 차이 계산 (서버 시간 - 로컬 시간)
+      // 구글 타임존 API에서 받은 서버 시간을 직접 저장 (서울 시간)
+      worldTimeBase = serverTime;
+      worldTimeSyncLocalTime = localTime.getTime(); // 동기화 시점의 로컬 시간 저장
+      
+      // 하위 호환성을 위한 오프셋 계산 (기존 로직 유지)
       const newOffset = serverTime.getTime() - localTime.getTime();
       const previousOffset = worldTimeOffset;
       worldTimeOffset = newOffset;
@@ -1027,6 +1033,7 @@ async function fetchWorldTime() {
         console.log(`✅ ${api.name} 시간 동기화 완료:`, {
           api: api.name,
           serverTime: serverTime.toISOString(),
+          serverTimeLocal: serverTime.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }),
           localTime: localTime.toISOString(),
           offset: worldTimeOffset,
           offsetSeconds: Math.round(worldTimeOffset / 1000),
@@ -1083,7 +1090,14 @@ function getSyncedTime() {
     return new Date();
   }
   
-  // 로컬 시간 + 오프셋 = 동기화된 시간
+  // 구글 타임존 API에서 받은 서버 시간을 기준으로 계산 (더 정확)
+  if (worldTimeBase && worldTimeSyncLocalTime !== null) {
+    // 서버 시간 + (현재 로컬 시간 - 동기화 시점 로컬 시간) = 현재 서버 시간
+    const elapsedSinceSync = Date.now() - worldTimeSyncLocalTime;
+    return new Date(worldTimeBase.getTime() + elapsedSinceSync);
+  }
+  
+  // 하위 호환성: 기존 오프셋 방식 사용
   return new Date(Date.now() + worldTimeOffset);
 }
 
