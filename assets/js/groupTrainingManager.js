@@ -888,23 +888,34 @@ const TIME_APIS = [
       // UTC 타임스탬프를 밀리초로 변환
       const utcTime = new Date(requestTimestamp * 1000);
       
-      // 오프셋 계산 (초 단위를 밀리초로 변환)
-      const totalOffset = (data.rawOffset + (data.dstOffset || 0)) * 1000; // 밀리초 단위
+      // 오프셋 계산 (초 단위)
+      // 서울은 UTC+9이므로 rawOffset은 32400초 (9시간)
+      const totalOffsetSeconds = data.rawOffset + (data.dstOffset || 0);
       
-      // UTC 시간 + 오프셋 = 서울 시간
-      const seoulTime = new Date(utcTime.getTime() + totalOffset);
+      // 서울 시간 = UTC 시간 + 오프셋
+      // 예: UTC 11:47:13 + 9시간 = 서울 20:47:13
+      // Date 객체는 UTC 기준으로 저장되므로:
+      // UTC 시간을 그대로 저장하고, formatTime에서 getUTCHours() + 오프셋을 적용
+      // 예: UTC 11:47:13 저장 → formatTime에서 11 + 9 = 20:47:13 표시
+      
+      // UTC 시간을 그대로 저장 (formatTime에서 오프셋 적용)
+      const seoulTimeAsUTC = utcTime;
       
       console.log('구글 타임존 API 시간 계산:', {
         requestTimestamp,
         utcTime: utcTime.toISOString(),
+        utcHours: utcTime.getUTCHours(),
         rawOffset: data.rawOffset,
         dstOffset: data.dstOffset || 0,
-        totalOffsetSeconds: (data.rawOffset + (data.dstOffset || 0)),
-        seoulTime: seoulTime.toISOString(),
-        seoulTimeLocal: seoulTime.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })
+        totalOffsetSeconds: totalOffsetSeconds,
+        totalOffsetHours: totalOffsetSeconds / 3600,
+        seoulTimeAsUTC: seoulTimeAsUTC.toISOString(),
+        seoulTimeUTCHours: seoulTimeAsUTC.getUTCHours(),
+        expectedSeoulHours: (seoulTimeAsUTC.getUTCHours() + 9) % 24,
+        seoulTimeFormatted: formatTime(seoulTimeAsUTC)
       });
       
-      return seoulTime;
+      return seoulTimeAsUTC;
     },
     requiresTimestamp: true // 타임스탬프가 필요한 API
   },
@@ -1082,7 +1093,7 @@ async function fetchWorldTime() {
 }
 
 /**
- * 동기화된 현재 시간 가져오기
+ * 동기화된 현재 시간 가져오기 (서울 시간)
  */
 function getSyncedTime() {
   if (!worldTimeInitialized) {
@@ -1090,25 +1101,49 @@ function getSyncedTime() {
     return new Date();
   }
   
-  // 구글 타임존 API에서 받은 서버 시간을 기준으로 계산 (더 정확)
+  // 구글 타임존 API에서 받은 서버 시간을 기준으로 계산
   if (worldTimeBase && worldTimeSyncLocalTime !== null) {
-    // 서버 시간 + (현재 로컬 시간 - 동기화 시점 로컬 시간) = 현재 서버 시간
+    // 서버 시간(서울 시간) + (현재 로컬 시간 - 동기화 시점 로컬 시간) = 현재 서울 시간
     const elapsedSinceSync = Date.now() - worldTimeSyncLocalTime;
-    return new Date(worldTimeBase.getTime() + elapsedSinceSync);
+    const currentSeoulTime = new Date(worldTimeBase.getTime() + elapsedSinceSync);
+    
+    // 디버깅: 주기적으로 시간 확인 (10초마다, 첫 번째 호출 시)
+    const elapsedSeconds = Math.floor(elapsedSinceSync / 1000);
+    if (elapsedSeconds % 10 === 0 || elapsedSeconds < 2) {
+      const formattedTime = formatTime(currentSeoulTime);
+      console.log('현재 시간 계산:', {
+        worldTimeBase: worldTimeBase.toISOString(),
+        worldTimeBaseFormatted: formatTime(worldTimeBase),
+        elapsedSinceSync: elapsedSeconds + '초',
+        currentSeoulTime: currentSeoulTime.toISOString(),
+        currentSeoulTimeFormatted: formattedTime,
+        currentSeoulTimeUTCHours: currentSeoulTime.getUTCHours(),
+        expectedSeoulHours: (currentSeoulTime.getUTCHours() + 9) % 24
+      });
+    }
+    
+    return currentSeoulTime;
   }
   
   // 하위 호환성: 기존 오프셋 방식 사용
-  return new Date(Date.now() + worldTimeOffset);
+  return new Date(Date.now() + (worldTimeOffset || 0));
 }
 
 /**
- * 시간을 HH:MM:SS 형식으로 포맷
+ * 시간을 HH:MM:SS 형식으로 포맷 (서울 시간대 기준)
+ * Date 객체는 UTC 기준으로 저장되므로, 서울 시간을 표시하려면 UTC 시간에 9시간을 더해야 함
  */
 function formatTime(date) {
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  return `${hours}:${minutes}:${seconds}`;
+  // Date 객체의 UTC 시간을 가져와서 서울 오프셋(9시간)을 더함
+  // worldTimeBase가 이미 서울 시간으로 계산되어 있으므로, UTC 시간에 9시간을 더하면 서울 시간
+  let hours = date.getUTCHours();
+  const minutes = date.getUTCMinutes();
+  const seconds = date.getUTCSeconds();
+  
+  // 서울은 UTC+9이므로 9시간 추가
+  hours = (hours + 9) % 24;
+  
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 // 각 자리수의 마지막 값 추적 (정확한 변경 감지)
