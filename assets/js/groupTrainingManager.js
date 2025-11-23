@@ -850,6 +850,106 @@ function getCurrentTimeString() {
   return new Date().toISOString();
 }
 
+/**
+ * WorldTimeAPI에서 시간 가져오기 (한국 시간대)
+ */
+let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초)
+let worldTimeInitialized = false;
+
+async function fetchWorldTime() {
+  try {
+    // WorldTimeAPI에서 Asia/Seoul 시간 가져오기
+    const response = await fetch('https://worldtimeapi.org/api/timezone/Asia/Seoul');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    
+    // 서버 시간 (ISO 8601 형식)
+    const serverTime = new Date(data.datetime);
+    // 로컬 시간
+    const localTime = new Date();
+    
+    // 시간 차이 계산 (서버 시간 - 로컬 시간)
+    worldTimeOffset = serverTime.getTime() - localTime.getTime();
+    worldTimeInitialized = true;
+    
+    console.log('✅ WorldTimeAPI 시간 동기화 완료:', {
+      serverTime: serverTime.toISOString(),
+      localTime: localTime.toISOString(),
+      offset: worldTimeOffset,
+      offsetSeconds: Math.round(worldTimeOffset / 1000)
+    });
+    
+    return serverTime;
+  } catch (error) {
+    console.error('❌ WorldTimeAPI 시간 가져오기 실패:', error);
+    // 실패 시 로컬 시간 사용
+    worldTimeOffset = 0;
+    worldTimeInitialized = true;
+    return new Date();
+  }
+}
+
+/**
+ * 동기화된 현재 시간 가져오기
+ */
+function getSyncedTime() {
+  if (!worldTimeInitialized) {
+    // 아직 초기화되지 않았으면 로컬 시간 반환
+    return new Date();
+  }
+  
+  // 로컬 시간 + 오프셋 = 동기화된 시간
+  return new Date(Date.now() + worldTimeOffset);
+}
+
+/**
+ * 시간을 HH:MM:SS 형식으로 포맷
+ */
+function formatTime(date) {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * 시계 업데이트 함수
+ */
+let clockUpdateInterval = null;
+
+function startClock() {
+  // 기존 인터벌 제거
+  if (clockUpdateInterval) {
+    clearInterval(clockUpdateInterval);
+  }
+  
+  // 시계 요소 찾기
+  const clockElement = document.getElementById('groupTrainingClock');
+  if (!clockElement) {
+    console.warn('시계 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 즉시 업데이트
+  const syncedTime = getSyncedTime();
+  clockElement.textContent = formatTime(syncedTime);
+  
+  // 1초마다 업데이트
+  clockUpdateInterval = setInterval(() => {
+    const syncedTime = getSyncedTime();
+    clockElement.textContent = formatTime(syncedTime);
+  }, 1000);
+}
+
+function stopClock() {
+  if (clockUpdateInterval) {
+    clearInterval(clockUpdateInterval);
+    clockUpdateInterval = null;
+  }
+}
+
    
 /**
  * 백엔드에서 받아온 방 데이터를 일관된 형태로 변환
@@ -3252,7 +3352,7 @@ function setupGroupTrainingControlBar() {
 /**
  * 대기실 화면 초기화
  */
-function initializeWaitingRoom() {
+async function initializeWaitingRoom() {
   const room = groupTrainingState.currentRoom;
   if (!room) {
     console.error('No current room found');
@@ -3261,7 +3361,12 @@ function initializeWaitingRoom() {
 
   normalizeRoomParticipantsInPlace(room);
   
-  // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링
+  // WorldTimeAPI에서 시간 가져오기 (최초 1회만)
+  if (!worldTimeInitialized) {
+    await fetchWorldTime();
+  }
+  
+  // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링 (시계 시작 포함)
   renderWaitingHeaderSegmentTable();
   
   // 관리자/참가자 컨트롤 표시
@@ -3816,8 +3921,11 @@ function renderWaitingHeaderSegmentTable() {
               <p>${segments.length || 0}개 세그먼트 • 실시간 진행 상황</p>
             </div>
           </div>
-          <div class="workout-status-pill ${statusPillClass}">
-            ${statusPillLabel}
+          <div class="workout-header-right">
+            <div class="group-training-clock" id="groupTrainingClock">--:--:--</div>
+            <div class="workout-status-pill ${statusPillClass}">
+              ${statusPillLabel}
+            </div>
           </div>
         </div>
         <div class="workout-timers">
@@ -3932,6 +4040,11 @@ function renderWaitingHeaderSegmentTable() {
 
       setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0);
     });
+    
+    // 시계 시작 (요소가 생성된 후)
+    setTimeout(() => {
+      startClock();
+    }, 100);
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
   }
