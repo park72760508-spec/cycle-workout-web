@@ -3858,6 +3858,14 @@ async function checkTrainingStartTime() {
     
     if (!trainingStartTimeStr) {
       // 훈련 시작 시간이 아직 설정되지 않음
+      console.log('⏳ 훈련 시작 시간이 아직 설정되지 않음');
+      return;
+    }
+    
+    // 시간 형식 검증 (HH:MM:SS 형식이어야 함)
+    const timePattern = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/;
+    if (!timePattern.test(trainingStartTimeStr)) {
+      console.warn('⚠️ 잘못된 시간 형식:', trainingStartTimeStr, '예상 형식: HH:MM:SS');
       return;
     }
     
@@ -3886,9 +3894,19 @@ async function checkTrainingStartTime() {
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
     // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정 (24시간 = 86400초 추가)
-    if (secondsUntilStart <= 0) {
+    if (secondsUntilStart < 0) {
       secondsUntilStart += 86400; // 다음날 같은 시간
     }
+    
+    // 디버깅: 시간 계산 상세 로그
+    console.log('🔍 시간 계산 상세:', {
+      현재시간_문자열: currentTimeStr,
+      현재시간_초: currentTotalSeconds,
+      훈련시작시간_문자열: trainingStartTimeStr,
+      훈련시작시간_초: trainingTotalSeconds,
+      차이_초: secondsUntilStart,
+      차이_분초: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`
+    });
     
     // 현재 날짜 기준으로 훈련 시작 시간 Date 객체 생성 (비교용)
     const trainingStartDate = new Date(currentDate);
@@ -3946,6 +3964,17 @@ async function checkTrainingStartTime() {
       훈련시작시간_서울: formatTime(trainingStartDate)
     });
     
+    // 카운트다운 타이머 업데이트 (준비 완료된 사용자만 표시)
+    if (isReady) {
+      updateTrainingCountdownTimer(secondsUntilStart);
+    } else {
+      // 준비 완료되지 않은 사용자는 카운트다운 타이머 숨김
+      const countdownTimer = document.getElementById('trainingCountdownTimer');
+      if (countdownTimer) {
+        countdownTimer.style.display = 'none';
+      }
+    }
+    
     // 준비 완료된 사용자만 카운트다운 실행
     if (!isReady) {
       // 준비 완료되지 않은 사용자는 카운트다운 실행하지 않음
@@ -3953,20 +3982,94 @@ async function checkTrainingStartTime() {
     }
     
     // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작 (준비 완료된 사용자만)
-    if (secondsUntilStart <= 11 && secondsUntilStart > 0 && !countdownStarted) {
-      countdownStarted = true;
-      console.log('🚀 훈련 시작 카운트다운 시작! (준비 완료된 사용자)', secondsUntilStart, '초 후 시작');
-      
-      // 10초 카운트다운 시작
-      startTrainingCountdown(secondsUntilStart);
-    } else if (secondsUntilStart <= 0 && !countdownStarted) {
+    // 조건: 11초 이하이고 0초 초과일 때 카운트다운 시작
+    if (secondsUntilStart <= 11 && secondsUntilStart > 0) {
+      if (!countdownStarted) {
+        countdownStarted = true;
+        console.log('🚀 훈련 시작 카운트다운 시작! (준비 완료된 사용자)', {
+          남은초: secondsUntilStart,
+          현재시간: currentTimeStr,
+          훈련시작시간: trainingStartTimeStr
+        });
+        
+        // 10초 카운트다운 시작
+        startTrainingCountdown(secondsUntilStart);
+      } else {
+        // 이미 카운트다운이 시작되었으면 로그만 출력
+        console.log('⏰ 카운트다운 진행 중...', secondsUntilStart, '초 남음');
+      }
+    } else if (secondsUntilStart <= 0) {
       // 이미 시간이 지났으면 즉시 훈련 시작 (준비 완료된 사용자만)
-      countdownStarted = true;
-      console.log('⏱️ 훈련 시작 시간 도달, 즉시 훈련 시작 (준비 완료된 사용자)');
-      startLocalGroupTraining();
+      if (!countdownStarted) {
+        countdownStarted = true;
+        console.log('⏱️ 훈련 시작 시간 도달, 즉시 훈련 시작 (준비 완료된 사용자)', {
+          현재시간: currentTimeStr,
+          훈련시작시간: trainingStartTimeStr,
+          지난초: Math.abs(secondsUntilStart)
+        });
+        startLocalGroupTraining();
+      }
+    } else {
+      // 아직 11초 전이 아닌 경우
+      if (secondsUntilStart > 11) {
+        console.log('⏳ 훈련 시작 대기 중...', {
+          남은초: secondsUntilStart,
+          남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`,
+          현재시간: currentTimeStr,
+          훈련시작시간: trainingStartTimeStr
+        });
+      }
     }
   } catch (error) {
     console.error('훈련 시작 시간 체크 중 오류:', error);
+  }
+}
+
+/**
+ * 훈련 시작까지 남은 시간 카운트다운 타이머 업데이트
+ */
+function updateTrainingCountdownTimer(secondsUntilStart) {
+  try {
+    const countdownTimer = document.getElementById('trainingCountdownTimer');
+    const countdownTime = document.getElementById('countdownTime');
+    
+    if (!countdownTimer || !countdownTime) {
+      return;
+    }
+    
+    // 훈련 시작 시간이 없거나 유효하지 않으면 숨김
+    if (secondsUntilStart === undefined || secondsUntilStart === null || secondsUntilStart < 0) {
+      countdownTimer.style.display = 'none';
+      return;
+    }
+    
+    // 카운트다운 시간 포맷팅 (MM:SS 또는 HH:MM:SS)
+    const formatCountdownTime = (totalSeconds) => {
+      if (totalSeconds < 0) return '00:00';
+      
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      
+      if (hours > 0) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      } else {
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      }
+    };
+    
+    // 카운트다운 표시
+    countdownTimer.style.display = 'flex';
+    countdownTime.textContent = formatCountdownTime(secondsUntilStart);
+    
+    // 11초 이하일 때 강조 스타일
+    if (secondsUntilStart <= 11) {
+      countdownTimer.classList.add('urgent');
+    } else {
+      countdownTimer.classList.remove('urgent');
+    }
+  } catch (error) {
+    console.warn('카운트다운 타이머 업데이트 실패:', error);
   }
 }
 
@@ -4652,6 +4755,10 @@ function renderWaitingHeaderSegmentTable() {
             </div>
           </div>
           <div class="workout-header-right">
+            <div class="training-countdown-timer" id="trainingCountdownTimer" style="display: none;">
+              <span class="countdown-label">훈련 시작까지</span>
+              <span class="countdown-time" id="countdownTime">--:--</span>
+            </div>
             <div class="group-training-clock" id="groupTrainingClock"></div>
             <div class="workout-status-pill ${statusPillClass}">
               ${statusPillLabel}
