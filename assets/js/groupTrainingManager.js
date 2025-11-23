@@ -4058,13 +4058,18 @@ async function updateCountdownFromTrainingStartTime() {
     const latestRoom = await getRoomByCode(roomCode);
     if (!latestRoom) return;
     
-    // 훈련 시작 시간 가져오기
+    // 훈련 시작 시간 가져오기 (CreatedAt 우선)
     let trainingStartTimeRaw = latestRoom.createdAt || 
                                 latestRoom.CreatedAt || 
                                 latestRoom.trainingStartTime || 
                                 latestRoom.TrainingStartTime;
     
+    // 훈련 시작 시간이 없으면 카운트다운 타이머 숨김
     if (!trainingStartTimeRaw) {
+      const countdownTimer = document.getElementById('trainingCountdownTimer');
+      if (countdownTimer) {
+        countdownTimer.style.display = 'none';
+      }
       return;
     }
     
@@ -4164,10 +4169,12 @@ async function updateCountdownFromTrainingStartTime() {
       isReady = myParticipant ? isParticipantReady(myParticipant) : false;
     }
     
-    // 준비 완료된 사용자만 카운트다운 타이머 표시
+    // 상시 카운트다운 타이머 표시 (준비 완료 상태와 관계없이)
+    // CreatedAt(훈련시작시간) - 현재시간표시타이머 = 남은 시간
+    updateTrainingCountdownTimer(secondsUntilStart);
+    
+    // 준비 완료된 사용자만 자동 훈련 시작 로직 실행
     if (isReady) {
-      updateTrainingCountdownTimer(secondsUntilStart);
-      
       // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작
       if (secondsUntilStart <= 11 && secondsUntilStart > 0 && !countdownStarted) {
         countdownStarted = true;
@@ -4193,12 +4200,6 @@ async function updateCountdownFromTrainingStartTime() {
         }
         startLocalGroupTraining();
       }
-    } else {
-      // 준비 완료되지 않은 사용자는 카운트다운 타이머 숨김
-      const countdownTimer = document.getElementById('trainingCountdownTimer');
-      if (countdownTimer) {
-        countdownTimer.style.display = 'none';
-      }
     }
   } catch (error) {
     console.error('카운트다운 업데이트 중 오류:', error);
@@ -4218,27 +4219,29 @@ function updateTrainingCountdownTimer(secondsUntilStart) {
     }
     
     // 훈련 시작 시간이 없거나 유효하지 않으면 숨김
-    if (secondsUntilStart === undefined || secondsUntilStart === null || secondsUntilStart < 0) {
+    if (secondsUntilStart === undefined || secondsUntilStart === null) {
       countdownTimer.style.display = 'none';
       return;
     }
     
-    // 카운트다운 시간 포맷팅 (MM:SS 또는 HH:MM:SS)
+    // 시간이 지났으면 00:00으로 표시
+    if (secondsUntilStart < 0) {
+      countdownTimer.style.display = 'flex';
+      countdownTime.textContent = '00:00';
+      return;
+    }
+    
+    // 카운트다운 시간 포맷팅 (MM:SS 형식으로 고정)
     const formatCountdownTime = (totalSeconds) => {
       if (totalSeconds < 0) return '00:00';
       
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const minutes = Math.floor(totalSeconds / 60);
       const seconds = totalSeconds % 60;
       
-      if (hours > 0) {
-        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      } else {
-        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      }
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
-    // 카운트다운 표시
+    // 카운트다운 표시 (상시 표기)
     countdownTimer.style.display = 'flex';
     countdownTime.textContent = formatCountdownTime(secondsUntilStart);
     
