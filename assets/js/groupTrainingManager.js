@@ -999,13 +999,12 @@ function updateClockWithScroll(clockElement, newTime) {
       
       // 초기 위치 설정
       requestAnimationFrame(() => {
-        // 애니메이션 시작
-        currentValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s';
+        // 애니메이션 시작 (opacity 제거하여 깜빡임 방지)
+        currentValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
         newValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
         
-        // 기존 값은 위로 이동, 새 값은 아래에서 위로 이동
+        // 기존 값은 위로 이동, 새 값은 아래에서 위로 이동 (opacity 변경 없이)
         currentValueEl.style.transform = 'translateY(-100%)';
-        currentValueEl.style.opacity = '0';
         newValueEl.style.transform = 'translateY(-100%)';
       });
       
