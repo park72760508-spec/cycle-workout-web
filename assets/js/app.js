@@ -2189,7 +2189,7 @@ if (!window.showScreen) {
         setTimeout(() => loadWorkouts(), 100);
       }
 
-       //프로필 선택 화면: “새 사용자 추가” 메뉴 제거(간단)
+       //프로필 선택 화면: "새 사용자 추가" 메뉴 제거(간단)
       if (id === 'profileScreen') {
         console.log('Loading users for profile screen.');
         setTimeout(() => {
@@ -2198,10 +2198,19 @@ if (!window.showScreen) {
           } else {
             console.error('loadUsers function not available');
           }
-          // ✅ 프로필 화면 진입 시 “새 사용자 추가” 카드 제거(간단)
+          // ✅ 프로필 화면 진입 시 "새 사용자 추가" 카드 제거(간단)
           const addCard = document.getElementById('cardAddUser');
           if (addCard) addCard.remove();
         }, 100);
+      }
+
+      // 훈련 준비 화면: 그룹 훈련 카드 상태 업데이트
+      if (id === 'trainingReadyScreen') {
+        setTimeout(() => {
+          if (typeof window.updateGroupTrainingCardStatus === 'function') {
+            window.updateGroupTrainingCardStatus();
+          }
+        }, 200);
       }
 
       
