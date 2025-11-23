@@ -782,12 +782,29 @@ function triggerCountdownOverlay(options) {
   const opts = typeof options === 'number' ? { seconds: options } : (options || {});
   const seconds = Number.isFinite(opts.seconds) ? opts.seconds : GROUP_COUNTDOWN_SECONDS;
 
-  // 모니터링 모드에서는 카운트다운을 표시하지 않음
+  // 관리자가 카운트다운을 시작한 경우는 항상 표시
+  // 참가자도 카운트다운을 볼 수 있어야 함 (준비완료 상태와 관계없이)
+  // 단, 관리자가 모니터링 모드이고 카운트다운을 시작하지 않은 경우에만 제외
+  const currentUser = window.currentUser || {};
+  const isAdminUser = groupTrainingState.isAdmin || 
+                     currentUser.grade === '1' || 
+                     currentUser.grade === 1 ||
+                     (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+  
+  // 관리자가 카운트다운을 시작했거나, 참가자인 경우 카운트다운 표시
+  if (groupTrainingState.adminCountdownInitiated || !isAdminUser) {
+    if (groupTrainingState.isAdmin || typeof showParticipantCountdown !== 'function') {
+      return showGroupCountdownOverlay(opts);
+    }
+    return Promise.resolve(showParticipantCountdown(seconds));
+  }
+  
+  // 관리자 모니터링 모드이고 카운트다운을 시작하지 않은 경우에만 제외
   if (!shouldAutoStartLocalTraining()) {
-    console.log('모니터링 모드 - 카운트다운을 표시하지 않습니다');
+    console.log('관리자 모니터링 모드 - 카운트다운을 표시하지 않습니다');
     return Promise.resolve();
   }
-
+  
   if (groupTrainingState.isAdmin || typeof showParticipantCountdown !== 'function') {
     return showGroupCountdownOverlay(opts);
   }
@@ -1776,24 +1793,58 @@ async function selectTrainingMode(mode) {
           if (waitingRoom) {
             const roomCode = waitingRoom.code || waitingRoom.Code;
             if (roomCode) {
-              console.log('대기 중인 그룹방 발견, 자동 입장:', roomCode);
-              // 바로 입장 (중간 화면 건너뛰기)
-              await joinRoomByCode(roomCode);
-              // 로딩 숨기기
-              if (typeof hideLoading === 'function') {
-                hideLoading();
+              // 정원 체크
+              normalizeRoomParticipantsInPlace(waitingRoom);
+              const currentParticipants = Array.isArray(waitingRoom.participants) ? waitingRoom.participants.length : 0;
+              const maxParticipants = Number(waitingRoom.maxParticipants || waitingRoom.MaxParticipants || 50) || 50;
+              
+              if (currentParticipants >= maxParticipants) {
+                console.log('⚠️ 정원 초과로 자동 입장 불가:', { currentParticipants, maxParticipants });
+                // 로딩 숨기기
+                if (typeof hideLoading === 'function') {
+                  hideLoading();
+                }
+                showToast('정원이 초과하여 입장할 수 없습니다.', 'error');
+                // 다음 단계로 진행 (다른 방 찾기 또는 안내 메시지)
+              } else {
+                console.log('대기 중인 그룹방 발견, 자동 입장:', roomCode);
+                // 바로 입장 (중간 화면 건너뛰기)
+                await joinRoomByCode(roomCode);
+                // 로딩 숨기기
+                if (typeof hideLoading === 'function') {
+                  hideLoading();
+                }
+                return;
               }
-              return;
             }
           }
         }
         
-        // 그룹방이 없거나 대기 중인 방이 없으면 안내 메시지와 함께 그룹방 화면으로 이동
+        // 그룹방이 없거나 대기 중인 방이 없으면 모든 waiting 상태인 방 확인
         console.log('대기 중인 그룹방이 없습니다.');
         // 로딩 숨기기
         if (typeof hideLoading === 'function') {
           hideLoading();
         }
+        
+        // 모든 waiting 상태인 방 확인
+        try {
+          const waitingRooms = await getAllWaitingRooms();
+          
+          if (waitingRooms.length === 0) {
+            // waiting 상태인 방이 없으면 메시지 표시하고 진행 막기
+            showToast('그룹훈련방 생성이 되지 않았습니다.', 'error');
+            console.log('⚠️ waiting 상태인 그룹훈련방이 없습니다.');
+            return; // 진행 중단
+          }
+        } catch (error) {
+          console.error('방 목록 확인 실패:', error);
+          // 에러 발생 시에도 진행을 막지 않고 사용자에게 알림
+          showToast('방 목록을 확인할 수 없습니다. 다시 시도해주세요.', 'warning');
+          return; // 진행 중단
+        }
+        
+        // waiting 상태인 방이 있으면 안내 메시지와 함께 그룹방 화면으로 이동
         showToast('현재 워크아웃으로 생성된 그룹방이 없습니다. 방 코드를 입력하거나 방 목록에서 선택하세요.', 'info');
         // 그룹방 화면으로 바로 이동 (참가자 역할 선택)
         if (typeof showScreen === 'function') {
@@ -1826,7 +1877,24 @@ async function selectTrainingMode(mode) {
         }
       }
     } else {
-      // 워크아웃이 없으면 그룹방 화면으로 바로 이동
+      // 워크아웃이 없으면 먼저 waiting 상태인 방이 있는지 확인
+      try {
+        const waitingRooms = await getAllWaitingRooms();
+        
+        if (waitingRooms.length === 0) {
+          // waiting 상태인 방이 없으면 메시지 표시하고 진행 막기
+          showToast('그룹훈련방 생성이 되지 않았습니다.', 'error');
+          console.log('⚠️ waiting 상태인 그룹훈련방이 없습니다.');
+          return; // 진행 중단
+        }
+      } catch (error) {
+        console.error('방 목록 확인 실패:', error);
+        // 에러 발생 시에도 진행을 막지 않고 사용자에게 알림
+        showToast('방 목록을 확인할 수 없습니다. 다시 시도해주세요.', 'warning');
+        return; // 진행 중단
+      }
+      
+      // waiting 상태인 방이 있으면 그룹방 화면으로 이동
       if (typeof showScreen === 'function') {
         showScreen('groupRoomScreen');
       }
@@ -2489,6 +2557,46 @@ async function refreshRoomList() {
  * 백엔드에서 방 목록 가져오기 (임시 구현)
  */
 /**
+ * 백엔드에서 모든 waiting 상태인 방 목록 가져오기 (정원 체크 없이)
+ */
+async function getAllWaitingRooms() {
+  try {
+    console.log('🔄 백엔드에서 모든 waiting 상태인 방 목록 조회 시작...');
+    
+    if (!window.GAS_URL) {
+      throw new Error('GAS_URL이 설정되지 않았습니다.');
+    }
+
+    const result = await jsonpRequestWithRetry(window.GAS_URL, {
+      action: 'listGroupRooms'
+      // status 파라미터 없이 모든 방 조회
+    });
+    
+    if (result && result.success) {
+      console.log(`✅ 백엔드에서 방 목록 조회 성공: ${result.items?.length || 0}개`);
+      
+      // waiting 상태인 모든 방 필터링 (정원 체크 없이)
+      const waitingRooms = (result.items || result.rooms || []).filter(room => {
+        normalizeRoomParticipantsInPlace(room);
+        const status = (room.status || room.Status || 'unknown').toLowerCase();
+        return status === 'waiting';
+      });
+      
+      console.log(`✅ waiting 상태인 방: ${waitingRooms.length}개`);
+      return waitingRooms;
+      
+    } else {
+      console.warn('백엔드 API 응답 실패:', result?.error || 'Unknown error');
+      return [];
+    }
+    
+  } catch (error) {
+    console.error('백엔드 방 목록 조회 실패:', error);
+    return [];
+  }
+}
+
+/**
  * 백엔드에서 방 목록 가져오기 (JSONP 방식으로 수정)
  */
 async function getRoomsFromBackend() {
@@ -2696,13 +2804,15 @@ async function joinRoomByCode(roomCode) {
       return;
     }
 
-    // 참가자 수 확인
+    // 참가자 수 확인 및 정원 체크
+    normalizeRoomParticipantsInPlace(room);
     const currentParticipants = Array.isArray(room.participants) ? room.participants.length : 0;
-    const maxParticipants = room.maxParticipants || 50;
+    const maxParticipants = Number(room.maxParticipants || room.MaxParticipants || 50) || 50;
     
+    // 정원 초과 체크
     if (currentParticipants >= maxParticipants) {
-      const errorMsg = `방이 가득 찼습니다 (${currentParticipants}/${maxParticipants})`;
-      console.error('❌ 방 정원 초과');
+      const errorMsg = '정원이 초과하여 입장할 수 없습니다.';
+      console.error('❌ 정원 초과:', { currentParticipants, maxParticipants });
       if (typeof hideLoading === 'function') {
         hideLoading();
       }
@@ -4328,72 +4438,83 @@ async function syncRoomData() {
             console.log('📢 관리자가 이미 카운트다운을 시작했으므로 중복 카운트다운 방지');
             // 관리자 카운트다운 플래그는 카운트다운이 완료되면 리셋됨 (showGroupCountdownOverlay 내부에서 처리)
           } else {
-            // 모니터링 모드가 아닌 경우에만 카운트다운 표시
-            const isMonitoringMode = !shouldAutoStartLocalTraining();
-            if (isMonitoringMode) {
-              console.log('📢 모니터링 모드 - 카운트다운을 표시하지 않습니다');
-            } else {
-              console.log('📢 훈련 시작 카운트다운 감지됨 (모든 참가자)');
+            // 참가자는 항상 카운트다운을 볼 수 있어야 함 (준비완료 상태와 관계없이)
+            // 관리자가 카운트다운을 시작했다는 것은 훈련이 시작된다는 의미이므로
+            console.log('📢 훈련 시작 카운트다운 감지됨 (모든 참가자)');
+            
+            // 카운트다운 종료 시간이 있으면 그 시간을 기준으로 카운트다운
+            if (countdownEndTime) {
+              const endTime = new Date(countdownEndTime).getTime();
+              const now = Date.now();
+              const remainingMs = Math.max(0, endTime - now);
+              const remainingSeconds = Math.ceil(remainingMs / 1000);
               
-              // 카운트다운 종료 시간이 있으면 그 시간을 기준으로 카운트다운
-              if (countdownEndTime) {
-                const endTime = new Date(countdownEndTime).getTime();
-                const now = Date.now();
-                const remainingMs = Math.max(0, endTime - now);
-                const remainingSeconds = Math.ceil(remainingMs / 1000);
-                
-                if (remainingSeconds > 0) {
-                  console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음 (모든 참가자)`);
-                  // 모든 참가자 화면에 카운트다운 표시 (중복 방지를 위해 플래그 설정)
-                  if (!groupTrainingState.countdownStarted) {
-                    groupTrainingState.countdownStarted = true;
-                    Promise.resolve(triggerCountdownOverlay({
-                      seconds: remainingSeconds,
-                      targetEndTime: countdownEndTime
-                    }))
-                      .catch(err => console.warn('카운트다운 표시 실패:', err))
-                      .finally(() => {
-                        groupTrainingState.countdownStarted = false;
-                      });
-                  }
-                } else {
-                  // 카운트다운이 이미 끝났으면 바로 훈련 시작 (준비완료된 사용자만)
-                  console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작 (준비완료된 사용자만)');
-                  if (!groupTrainingState.countdownStarted && shouldAutoStartLocalTraining()) {
-                    startLocalGroupTraining();
-                  }
-                }
-              } else {
-                // 카운트다운 종료 시간이 없으면 기본 카운트다운
-                console.log(`⏱️ 카운트다운 시작 (기본 ${GROUP_COUNTDOWN_SECONDS}초, 모든 참가자)`);
+              if (remainingSeconds > 0) {
+                console.log(`⏱️ 카운트다운 시작: ${remainingSeconds}초 남음 (모든 참가자)`);
+                // 모든 참가자 화면에 카운트다운 표시 (중복 방지를 위해 플래그 설정)
                 if (!groupTrainingState.countdownStarted) {
                   groupTrainingState.countdownStarted = true;
-                  Promise.resolve(triggerCountdownOverlay(GROUP_COUNTDOWN_SECONDS))
+                  Promise.resolve(triggerCountdownOverlay({
+                    seconds: remainingSeconds,
+                    targetEndTime: countdownEndTime
+                  }))
                     .catch(err => console.warn('카운트다운 표시 실패:', err))
                     .finally(() => {
                       groupTrainingState.countdownStarted = false;
                     });
                 }
+              } else {
+                // 카운트다운이 이미 끝났으면 바로 훈련 시작
+                console.log('⏱️ 카운트다운 이미 종료됨, 즉시 훈련 시작');
+                if (!groupTrainingState.countdownStarted) {
+                  // 준비완료 상태와 관계없이 훈련 화면으로 전환
+                  startLocalGroupTraining();
+                }
+              }
+            } else {
+              // 카운트다운 종료 시간이 없으면 기본 카운트다운
+              console.log(`⏱️ 카운트다운 시작 (기본 ${GROUP_COUNTDOWN_SECONDS}초, 모든 참가자)`);
+              if (!groupTrainingState.countdownStarted) {
+                groupTrainingState.countdownStarted = true;
+                Promise.resolve(triggerCountdownOverlay(GROUP_COUNTDOWN_SECONDS))
+                  .catch(err => console.warn('카운트다운 표시 실패:', err))
+                  .finally(() => {
+                    groupTrainingState.countdownStarted = false;
+                  });
               }
             }
           }
-        }
         
         // 훈련 상태 체크 (카운트다운 후)
         if (roomStatus === 'training') {
           const ts = window.trainingState || {};
-          const canAutoStart = shouldAutoStartLocalTraining();
-          if (!ts.isRunning && canAutoStart) {
-            console.log('📢 훈련 시작 신호 감지됨');
-            if (typeof startGroupTrainingSession === 'function') {
-              startGroupTrainingSession();
+          const currentUser = window.currentUser || {};
+          const isAdminUser = groupTrainingState.isAdmin || 
+                             currentUser.grade === '1' || 
+                             currentUser.grade === 1 ||
+                             (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+          
+          // 카운트다운이 완료되어 상태가 'training'으로 변경되었다는 것은
+          // 관리자가 훈련을 시작했다는 의미이므로, 준비완료 상태와 관계없이
+          // 일반 참가자는 훈련 화면으로 전환되어야 함
+          if (!ts.isRunning) {
+            const canAutoStart = shouldAutoStartLocalTraining();
+            
+            // 관리자가 모니터링 모드인 경우에만 모니터링 모드로 유지
+            // 일반 참가자 또는 준비완료된 관리자는 훈련 화면으로 전환
+            if (isAdminUser && !canAutoStart) {
+              // 관리자 모니터링 모드 - 모니터링 모드 유지
+              console.log('관리자 모니터링 모드 - 모니터링 모드 유지 (대기실 화면 유지)');
+              showWaitingScreen();
             } else {
-              startLocalGroupTraining();
+              // 일반 참가자 또는 준비완료된 관리자 - 훈련 화면으로 전환
+              console.log('📢 훈련 시작 신호 감지됨 - 훈련 화면으로 전환');
+              if (typeof startGroupTrainingSession === 'function') {
+                startGroupTrainingSession();
+              } else {
+                startLocalGroupTraining();
+              }
             }
-          } else if (!ts.isRunning && !canAutoStart) {
-            // 준비완료되지 않은 사용자(관리자/일반 참가자 모두)는 모니터링 모드 유지
-            console.log('준비완료되지 않음 - 모니터링 모드 유지 (대기실 화면 유지)');
-            showWaitingScreen();
           }
           
           const trainingStartTime = mergedRoom.trainingStartTime || mergedRoom.TrainingStartTime || mergedRoom.startedAt;
@@ -5764,19 +5885,12 @@ async function startGroupTrainingWithCountdown() {
     }
 
     // 관리자 화면에서 카운트다운 오버레이 표시 (서버 기준 종료 시각으로 동기화)
-    // 모니터링 모드가 아닌 경우에만 카운트다운 표시
-    const isMonitoringMode = !shouldAutoStartLocalTraining();
-    if (!isMonitoringMode) {
-      groupTrainingState.adminCountdownInitiated = true;  // 관리자가 카운트다운을 시작했음을 표시
-      await showGroupCountdownOverlay({
-        seconds: countdownSeconds,
-        targetEndTime: countdownEndTime
-      });
-    } else {
-      console.log('모니터링 모드 - 관리자 카운트다운을 표시하지 않습니다');
-      // 모니터링 모드에서는 카운트다운 없이 바로 훈련 시작 처리
-      groupTrainingState.adminCountdownInitiated = false;
-    }
+    // 관리자는 준비완료 상태와 관계없이 항상 카운트다운을 볼 수 있어야 함
+    groupTrainingState.adminCountdownInitiated = true;  // 관리자가 카운트다운을 시작했음을 표시
+    await showGroupCountdownOverlay({
+      seconds: countdownSeconds,
+      targetEndTime: countdownEndTime
+    });
 
   } catch (error) {
     console.error('❌ 그룹 훈련 시작 실패:', error);
@@ -5925,14 +6039,14 @@ async function startAllParticipantsTraining() {
 
     // 서버에 훈련 시작 신호 전송 (관리자만)
     // grade=1 사용자도 관리자로 인식
-    const currentUser = window.currentUser || {};
-    const isAdminUser = groupTrainingState.isAdmin || 
-                       currentUser.grade === '1' || 
-                       currentUser.grade === 1 ||
+    const adminUser = window.currentUser || {};
+    const adminUserCheck = groupTrainingState.isAdmin || 
+                       adminUser.grade === '1' || 
+                       adminUser.grade === 1 ||
                        (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
     const trainingStartTime = new Date().toISOString();
     
-    if (isAdminUser) {
+    if (adminUserCheck) {
       try {
         // API 호출로 방 상태를 'training'으로 변경하여 모든 참가자에게 신호 전송
         if (typeof apiUpdateRoom === 'function') {
@@ -5962,14 +6076,25 @@ async function startAllParticipantsTraining() {
       }
     }
 
-    // 로컬 훈련 시작 (관리자 모니터링 모드 제외)
-    if (shouldAutoStartLocalTraining()) {
-      await startLocalGroupTraining();
-    } else {
+    // 로컬 훈련 시작
+    // 카운트다운이 완료되었다는 것은 관리자가 훈련을 시작했다는 의미이므로,
+    // 준비완료 상태와 관계없이 모든 참가자가 훈련 화면으로 전환되어야 함
+    const participantUser = window.currentUser || {};
+    const participantIsAdmin = groupTrainingState.isAdmin || 
+                       participantUser.grade === '1' || 
+                       participantUser.grade === 1 ||
+                       (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
+    
+    // 관리자가 모니터링 모드인 경우에만 모니터링 모드로 유지
+    // 일반 참가자는 항상 훈련 화면으로 전환
+    if (participantIsAdmin && !shouldAutoStartLocalTraining()) {
       console.log('관리자 모니터링 모드 - 로컬 훈련을 시작하지 않습니다');
       showWaitingScreen();
       const monitoringSnapshot = updateTimelineSnapshot(groupTrainingState.currentRoom);
       syncMonitoringLoopWithSnapshot(monitoringSnapshot);
+    } else {
+      // 일반 참가자 또는 준비완료된 관리자는 훈련 화면으로 전환
+      await startLocalGroupTraining();
     }
 
   } catch (error) {
