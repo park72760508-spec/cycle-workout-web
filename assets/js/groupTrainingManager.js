@@ -3452,24 +3452,40 @@ async function checkTrainingStartTime() {
     const timeUntilStart = trainingStartTime - currentTime;
     const secondsUntilStart = Math.floor(timeUntilStart / 1000);
     
+    // 현재 사용자의 준비 완료 상태 확인
+    const currentUserId = window.currentUser?.id || '';
+    const myParticipant = latestRoom.participants?.find(p => {
+      const pId = p.id || p.participantId || p.userId;
+      return String(pId) === String(currentUserId);
+    });
+    
+    const isReady = myParticipant ? isParticipantReady(myParticipant) : false;
+    
     console.log('⏰ 훈련 시작 시간 체크:', {
       훈련시작시간: trainingStartTimeStr,
       현재시간: formatTime(currentDate),
       남은시간: `${Math.floor(secondsUntilStart / 60)}분 ${secondsUntilStart % 60}초`,
+      준비완료: isReady,
       훈련시작시간_Date: trainingStartDate.toISOString()
     });
     
-    // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작
+    // 준비 완료된 사용자만 카운트다운 실행
+    if (!isReady) {
+      // 준비 완료되지 않은 사용자는 카운트다운 실행하지 않음
+      return;
+    }
+    
+    // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작 (준비 완료된 사용자만)
     if (secondsUntilStart <= 11 && secondsUntilStart > 0 && !countdownStarted) {
       countdownStarted = true;
-      console.log('🚀 훈련 시작 카운트다운 시작!', secondsUntilStart, '초 후 시작');
+      console.log('🚀 훈련 시작 카운트다운 시작! (준비 완료된 사용자)', secondsUntilStart, '초 후 시작');
       
       // 10초 카운트다운 시작
       startTrainingCountdown(secondsUntilStart);
     } else if (secondsUntilStart <= 0 && !countdownStarted) {
-      // 이미 시간이 지났으면 즉시 훈련 시작
+      // 이미 시간이 지났으면 즉시 훈련 시작 (준비 완료된 사용자만)
       countdownStarted = true;
-      console.log('⏱️ 훈련 시작 시간 도달, 즉시 훈련 시작');
+      console.log('⏱️ 훈련 시작 시간 도달, 즉시 훈련 시작 (준비 완료된 사용자)');
       startLocalGroupTraining();
     }
   } catch (error) {
@@ -6269,45 +6285,8 @@ async function startGroupTrainingWithCountdown() {
     const startTimeFormatted = formatTime(trainingStartTime);
     showToast(`훈련이 ${startTimeFormatted}에 시작됩니다`, 'success');
     
-    // 서버에 카운트다운 시작 신호 전송 (모든 참가자가 감지할 수 있도록)
-    const countdownSeconds = GROUP_COUNTDOWN_SECONDS;
-    const countdownEndTime = new Date(Date.now() + countdownSeconds * 1000).toISOString();
-    
-    try {
-      // 방 상태를 'starting'으로 변경하고 카운트다운 종료 시간 저장
-      if (typeof apiUpdateRoom === 'function') {
-        await apiUpdateRoom(roomCode, {
-          status: 'starting',
-          countdownEndTime: countdownEndTime
-        });
-      } else if (typeof updateRoomOnBackend === 'function') {
-        await updateRoomOnBackend({
-          ...room,
-          status: 'starting',
-          countdownEndTime: countdownEndTime
-        });
-      }
-      console.log('✅ 서버에 카운트다운 시작 신호 전송 완료');
-    } catch (error) {
-      console.warn('서버에 카운트다운 시작 신호 전송 실패:', error);
-      // 서버 전송 실패해도 로컬에서는 계속 진행
-    }
-    
-    if (typeof broadcastCountdownStart === 'function') {
-      try {
-        await broadcastCountdownStart(countdownSeconds);
-      } catch (err) {
-        console.warn('카운트다운 브로드캐스트 실패:', err);
-      }
-    }
-
-    // 관리자 화면에서 카운트다운 오버레이 표시 (서버 기준 종료 시각으로 동기화)
-    // 관리자는 준비완료 상태와 관계없이 항상 카운트다운을 볼 수 있어야 함
-    groupTrainingState.adminCountdownInitiated = true;  // 관리자가 카운트다운을 시작했음을 표시
-    await showGroupCountdownOverlay({
-      seconds: countdownSeconds,
-      targetEndTime: countdownEndTime
-    });
+    // 카운트다운 로직 제거: 현재시간과 훈련시작시간 비교로만 동작
+    // 참가자들이 5초마다 checkTrainingStartTime을 통해 자동으로 체크하고 카운트다운 시작
 
   } catch (error) {
     console.error('❌ 그룹 훈련 시작 실패:', error);
