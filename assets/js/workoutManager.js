@@ -1070,7 +1070,7 @@ async function loadWorkouts() {
           <div class="workout-actions-bottom">
             <button class="btn btn-primary" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
             ${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? 
-              `<button class="btn btn-success" id="createGroupRoomBtn-${workout.id}" onclick="createGroupRoomFromWorkout(${workout.id}, '${escapeHtml(safeTitle)}')" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : 
+              `<button class="btn btn-success" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : 
               ''}
           </div>
         </div>
@@ -1083,6 +1083,25 @@ async function loadWorkouts() {
       // [만료일 점검: grade=2 만료 시 알림]
       checkExpiryAndWarn();  // ← 이 한 줄을 추가
 
+      // 그룹훈련 버튼에 이벤트 리스너 추가
+      document.querySelectorAll('[id^="createGroupRoomBtn-"]').forEach(btn => {
+        const workoutId = btn.dataset.workoutId;
+        const workoutTitle = btn.dataset.workoutTitle;
+        if (workoutId && workoutTitle) {
+          btn.addEventListener('click', async () => {
+            if (typeof window.createGroupRoomFromWorkout === 'function') {
+              await window.createGroupRoomFromWorkout(workoutId, workoutTitle);
+            } else if (typeof createGroupRoomFromWorkout === 'function') {
+              await createGroupRoomFromWorkout(workoutId, workoutTitle);
+            } else {
+              console.error('createGroupRoomFromWorkout 함수를 찾을 수 없습니다.');
+              if (typeof showToast === 'function') {
+                showToast('그룹훈련방 생성 기능을 찾을 수 없습니다', 'error');
+              }
+            }
+          });
+        }
+      });
       
       window.workouts = validWorkouts;
       window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
