@@ -4044,6 +4044,168 @@ async function checkTrainingStartTime() {
 }
 
 /**
+ * 훈련 시작 시간을 기반으로 카운트다운 업데이트 (1초마다 호출)
+ */
+async function updateCountdownFromTrainingStartTime() {
+  try {
+    const room = groupTrainingState.currentRoom;
+    if (!room) return;
+    
+    const roomCode = getCurrentRoomCode(room);
+    if (!roomCode) return;
+    
+    // 최신 방 정보 가져오기
+    const latestRoom = await getRoomByCode(roomCode);
+    if (!latestRoom) return;
+    
+    // 훈련 시작 시간 가져오기
+    let trainingStartTimeRaw = latestRoom.createdAt || 
+                                latestRoom.CreatedAt || 
+                                latestRoom.trainingStartTime || 
+                                latestRoom.TrainingStartTime;
+    
+    if (!trainingStartTimeRaw) {
+      return;
+    }
+    
+    // 시간 형식 정규화 함수
+    const normalizeTrainingStartTime = (timeValue) => {
+      if (!timeValue) return null;
+      
+      const timeStr = String(timeValue).trim();
+      
+      // 1. HH:MM:SS 형식인지 확인
+      const timePattern = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/;
+      if (timePattern.test(timeStr)) {
+        return timeStr;
+      }
+      
+      // 2. ISO 형식인지 확인
+      const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
+      if (isoPattern.test(timeStr)) {
+        try {
+          const dateObj = new Date(timeStr);
+          if (isNaN(dateObj.getTime())) {
+            return null;
+          }
+          
+          const seoulHours = dateObj.getUTCHours();
+          const seoulMinutes = dateObj.getUTCMinutes();
+          const seoulSeconds = dateObj.getUTCSeconds();
+          
+          let seoulTimeHours = (seoulHours + 9) % 24;
+          
+          return `${String(seoulTimeHours).padStart(2, '0')}:${String(seoulMinutes).padStart(2, '0')}:${String(seoulSeconds).padStart(2, '0')}`;
+        } catch (error) {
+          return null;
+        }
+      }
+      
+      return null;
+    };
+    
+    // 시간 형식 정규화
+    const trainingStartTimeStr = normalizeTrainingStartTime(trainingStartTimeRaw);
+    
+    if (!trainingStartTimeStr) {
+      return;
+    }
+    
+    // 현재 시간 가져오기
+    const currentDate = getSyncedTime();
+    const currentTimeStr = formatTime(currentDate);
+    const [currentHours, currentMinutes, currentSeconds] = currentTimeStr.split(':').map(Number);
+    
+    // 훈련 시작 시간 파싱
+    const timeParts = trainingStartTimeStr.split(':');
+    if (timeParts.length !== 3) {
+      return;
+    }
+    
+    const trainingHours = parseInt(timeParts[0], 10);
+    const trainingMinutes = parseInt(timeParts[1], 10);
+    const trainingSeconds = parseInt(timeParts[2], 10);
+    
+    // 초 단위 차이 계산
+    const currentTotalSeconds = currentHours * 3600 + currentMinutes * 60 + currentSeconds;
+    const trainingTotalSeconds = trainingHours * 3600 + trainingMinutes * 60 + trainingSeconds;
+    
+    let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
+    
+    // 만약 훈련 시작 시간이 이미 지났다면 내일로 설정
+    if (secondsUntilStart < 0) {
+      secondsUntilStart += 86400;
+    }
+    
+    // 준비 완료 상태 확인
+    const currentUserId = window.currentUser?.id || '';
+    let isReady = false;
+    
+    // LiveData 시트에서 sts 칼럼 확인
+    try {
+      if (typeof apiGetParticipantsLiveData === 'function') {
+        const liveRes = await apiGetParticipantsLiveData(roomCode);
+        const liveItems = Array.isArray(liveRes?.items) ? liveRes.items : [];
+        const myLiveData = liveItems.find(item => {
+          const pid = String(item.participantId || item.id || item.userId || '');
+          return pid === String(currentUserId);
+        });
+        
+        if (myLiveData && myLiveData.sts) {
+          isReady = String(myLiveData.sts).toLowerCase().trim() === 'ready';
+        }
+      }
+    } catch (error) {
+      // LiveData 조회 실패 시 참가자 정보로 확인
+      const myParticipant = latestRoom.participants?.find(p => {
+        const pId = p.id || p.participantId || p.userId;
+        return String(pId) === String(currentUserId);
+      });
+      isReady = myParticipant ? isParticipantReady(myParticipant) : false;
+    }
+    
+    // 준비 완료된 사용자만 카운트다운 타이머 표시
+    if (isReady) {
+      updateTrainingCountdownTimer(secondsUntilStart);
+      
+      // 훈련 시작 시간 11초 전부터 10초 카운트다운 시작
+      if (secondsUntilStart <= 11 && secondsUntilStart > 0 && !countdownStarted) {
+        countdownStarted = true;
+        console.log('🚀 훈련 시작 카운트다운 시작!', {
+          남은초: secondsUntilStart,
+          현재시간: currentTimeStr,
+          훈련시작시간: trainingStartTimeStr
+        });
+        
+        // 카운트다운 업데이트 인터벌 중지 (오버레이 카운트다운 시작)
+        if (countdownUpdateInterval) {
+          clearInterval(countdownUpdateInterval);
+          countdownUpdateInterval = null;
+        }
+        
+        startTrainingCountdown(secondsUntilStart);
+      } else if (secondsUntilStart <= 0 && !countdownStarted) {
+        // 이미 시간이 지났으면 즉시 훈련 시작
+        countdownStarted = true;
+        if (countdownUpdateInterval) {
+          clearInterval(countdownUpdateInterval);
+          countdownUpdateInterval = null;
+        }
+        startLocalGroupTraining();
+      }
+    } else {
+      // 준비 완료되지 않은 사용자는 카운트다운 타이머 숨김
+      const countdownTimer = document.getElementById('trainingCountdownTimer');
+      if (countdownTimer) {
+        countdownTimer.style.display = 'none';
+      }
+    }
+  } catch (error) {
+    console.error('카운트다운 업데이트 중 오류:', error);
+  }
+}
+
+/**
  * 훈련 시작까지 남은 시간 카운트다운 타이머 업데이트
  */
 function updateTrainingCountdownTimer(secondsUntilStart) {
