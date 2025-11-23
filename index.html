@@ -926,7 +926,7 @@
               <li>관리자 음성 코칭</li>
               <li>함께하는 동기부여</li>
             </ul>
-            <button class="btn btn-primary" id="btnGroupTraining" onclick="selectTrainingMode('group')">
+            <button class="btn btn-primary" id="btnGroupTraining">
               <span class="btn-icon">🏆</span>
               그룹 훈련 참가
             </button>
@@ -1106,7 +1106,7 @@
     <div class="training-mode-selection">
       <div class="training-modes">
         <!-- 개인 훈련 카드 -->
-        <div class="training-mode-card individual-training" onclick="selectTrainingMode('individual')">
+        <div class="training-mode-card individual-training" id="individualTrainingCard">
           <span class="mode-icon">🏃‍♂️</span>
           <h4>개인 훈련</h4>
           <p>나만의 페이스로 집중적인 훈련을 진행합니다</p>
@@ -1119,7 +1119,7 @@
         </div>
 
         <!-- 그룹 훈련 카드 -->
-        <div class="training-mode-card group-training" onclick="selectTrainingMode('group')">
+        <div class="training-mode-card group-training" id="groupTrainingCard">
           <span class="mode-icon">👥</span>
           <h4>그룹 훈련</h4>
           <p>함께 훈련하며 동기부여를 받아보세요</p>
