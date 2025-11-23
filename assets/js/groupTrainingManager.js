@@ -3966,22 +3966,36 @@ async function checkTrainingStartTime() {
     
     let secondsUntilStart = trainingTotalSeconds - currentTotalSeconds;
     
-    // 디버깅: 시간 계산 로그
+    // 디버깅: 시간 계산 로그 (상세)
     console.log('🔍 시간 계산 (checkTrainingStartTime):', {
-      현재시간: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
+      현재시간_원본: currentTimeStr,
+      현재시간_파싱: `${currentHours}:${String(currentMinutes).padStart(2, '0')}:${String(currentSeconds).padStart(2, '0')}`,
       현재시간_초: currentTotalSeconds,
-      훈련시작시간: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
+      훈련시작시간_원본: trainingStartTimeStr,
+      훈련시작시간_파싱: `${trainingHours}:${String(trainingMinutes).padStart(2, '0')}:${String(trainingSeconds).padStart(2, '0')}`,
       훈련시작시간_초: trainingTotalSeconds,
-      차이_초: secondsUntilStart,
-      차이_분초: `${Math.floor(secondsUntilStart / 60)}:${String(secondsUntilStart % 60).padStart(2, '0')}`
+      차이_초_계산전: secondsUntilStart,
+      차이_분초: `${Math.floor(Math.abs(secondsUntilStart) / 60)}:${String(Math.abs(secondsUntilStart) % 60).padStart(2, '0')}`
     });
     
     // 만약 훈련 시작 시간이 이미 지났다면 (같은 날 내에서 시간이 지난 경우)
     // 음수인 경우만 처리 (예: 22:49:55에서 22:50:50까지는 양수이므로 그대로 사용)
     if (secondsUntilStart < 0) {
       // 같은 날 내에서 시간이 지난 경우, 다음날로 간주하지 않고 0으로 설정
+      console.warn('⚠️ 훈련 시작 시간이 이미 지났습니다. 음수 차이:', secondsUntilStart, '초를 0으로 설정합니다.');
       secondsUntilStart = 0;
-      console.log('⚠️ 훈련 시작 시간이 이미 지났습니다. 00:00으로 표시합니다.');
+    }
+    
+    // 1시간(3600초) 이상 차이나면 계산 오류로 간주 (같은 날 훈련이므로 최대 1시간 이내여야 함)
+    if (secondsUntilStart > 3600) {
+      console.error('❌ 시간 계산 오류: 차이가 1시간을 초과합니다.', {
+        차이_초: secondsUntilStart,
+        차이_분: Math.floor(secondsUntilStart / 60),
+        현재시간: currentTimeStr,
+        훈련시작시간: trainingStartTimeStr
+      });
+      // 계산 오류 시 0으로 설정
+      secondsUntilStart = 0;
     }
     
     // 디버깅: 시간 계산 상세 로그
@@ -4263,26 +4277,33 @@ function updateTrainingCountdownTimer(secondsUntilStart) {
     
     // 카운트다운 시간 포맷팅 (MM:SS 형식으로 고정)
     const formatCountdownTime = (totalSeconds) => {
-      if (totalSeconds < 0) return '00:00';
+      if (totalSeconds < 0) {
+        console.warn('⚠️ 음수 시간:', totalSeconds, '초를 00:00으로 표시합니다.');
+        return '00:00';
+      }
       
-      // totalSeconds가 86400(24시간)보다 크면 잘못된 계산이므로 0으로 처리
-      if (totalSeconds >= 86400) {
-        console.warn('⚠️ 계산된 시간이 24시간을 초과합니다:', totalSeconds, '초를 0으로 설정합니다.');
+      // 1시간(3600초) 이상이면 계산 오류로 간주
+      if (totalSeconds >= 3600) {
+        console.error('❌ 포맷팅 오류: 시간이 1시간을 초과합니다:', totalSeconds, '초 (', Math.floor(totalSeconds / 60), '분)를 00:00으로 설정합니다.');
         return '00:00';
       }
       
       const minutes = Math.floor(totalSeconds / 60);
       const seconds = totalSeconds % 60;
       
-      // 디버깅: 포맷팅 로그
-      console.log('📊 카운트다운 포맷팅:', {
-        입력_초: totalSeconds,
-        계산된_분: minutes,
-        계산된_초: seconds,
-        결과: `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-      });
+      const result = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
       
-      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      // 디버깅: 포맷팅 로그 (1분 이상일 때만 경고)
+      if (totalSeconds > 60) {
+        console.warn('⚠️ 포맷팅: 1분 이상의 시간이 계산되었습니다:', {
+          입력_초: totalSeconds,
+          계산된_분: minutes,
+          계산된_초: seconds,
+          결과: result
+        });
+      }
+      
+      return result;
     };
     
     // 카운트다운 표시 (상시 표기)
