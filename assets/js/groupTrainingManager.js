@@ -545,19 +545,17 @@ function formatDuration(sec) {
 
 function formatTimer(sec) {
   const value = Number(sec);
-  if (!Number.isFinite(value) || value < 0) return '--:--';
+  if (!Number.isFinite(value) || value < 0) return '00:00:00';
   const total = Math.max(0, Math.floor(value));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
-  if (hours > 0) {
-    return [
-      hours.toString().padStart(2, '0'),
-      minutes.toString().padStart(2, '0'),
-      seconds.toString().padStart(2, '0')
-    ].join(':');
-  }
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  // 항상 00:00:00 형식으로 반환
+  return [
+    hours.toString().padStart(2, '0'),
+    minutes.toString().padStart(2, '0'),
+    seconds.toString().padStart(2, '0')
+  ].join(':');
 }
 
 function computeServerTimelineSnapshot(room, options = {}) {
@@ -5723,8 +5721,9 @@ async function startGroupTrainingWithCountdown() {
     }
     
     const readyCount = countReadyParticipants(room.participants || []);
-    if (readyCount === 0) {
-      showToast('준비 완료된 참가자가 없지만 훈련을 시작합니다', 'warning');
+    if (readyCount < 1) {
+      showToast('준비 완료된 참가자가 1명 이상 필요합니다', 'error');
+      return;
     } else if (readyCount < participantCount) {
       showToast(`일부 참가자가 아직 준비되지 않았습니다 (${readyCount}/${participantCount})`, 'info');
     }
@@ -6007,10 +6006,20 @@ async function startLocalGroupTraining() {
       return;
     }
 
+    // 타임라인 스냅샷 업데이트 (초기 상태 설정)
     const latestSnapshot = updateTimelineSnapshot(room, { workout: window.currentWorkout });
     if (latestSnapshot) {
       applyTimelineSnapshotToTrainingState(latestSnapshot);
     }
+    
+    // 훈련 상태 초기화 (경과시간 0으로 시작)
+    if (window.trainingState) {
+      window.trainingState.elapsedSec = 0;
+      window.trainingState.segIndex = 0;
+      window.trainingState.segElapsedSec = 0;
+      window.trainingState.isRunning = false; // startWorkoutTraining에서 true로 설정됨
+    }
+    
     stopMonitoringTimelineLoop();
 
     // 개인 훈련 화면으로 전환
@@ -6027,15 +6036,20 @@ async function startLocalGroupTraining() {
     }
 
     // 훈련 시작 (개인 훈련 시작 함수 호출)
-    if (typeof startWithCountdown === 'function') {
-      // startWithCountdown은 이미 카운트다운을 표시하므로 바로 startWorkoutTraining 호출
-      if (typeof startWorkoutTraining === 'function') {
-        startWorkoutTraining();
-      } else {
-        console.warn('startWorkoutTraining 함수를 찾을 수 없습니다');
-      }
-    } else if (typeof startWorkoutTraining === 'function') {
+    // 카운트다운은 이미 완료되었으므로 바로 startWorkoutTraining 호출
+    if (typeof startWorkoutTraining === 'function') {
+      console.log('🚀 startWorkoutTraining 호출 시작');
       startWorkoutTraining();
+      
+      // startWorkoutTraining 내부에서 startSegmentLoop가 호출되는지 확인
+      // 만약 호출되지 않았다면 직접 호출
+      setTimeout(() => {
+        const ts = window.trainingState || {};
+        if (!ts.timerId && typeof startSegmentLoop === 'function') {
+          console.log('⚠️ startSegmentLoop가 자동으로 시작되지 않았습니다. 수동으로 시작합니다.');
+          startSegmentLoop();
+        }
+      }, 100);
     } else {
       console.error('훈련 시작 함수를 찾을 수 없습니다');
       showToast('훈련을 시작할 수 없습니다', 'error');
