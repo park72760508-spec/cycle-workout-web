@@ -982,13 +982,36 @@ function updateClockWithScroll(clockElement, newTime) {
   
   digitElements.forEach((digitEl, index) => {
     const digitContainer = digitEl.querySelector('.digit-container');
-    // digit-old가 아닌 첫 번째 digit-value 찾기
-    const allValues = digitContainer.querySelectorAll('.digit-value');
-    const currentValueEl = Array.from(allValues).find(el => !el.classList.contains('digit-old'));
     const newValue = digits[index];
     
+    // 모든 digit-value 요소 가져오기 (애니메이션 중인 요소 포함)
+    const allValues = digitContainer.querySelectorAll('.digit-value');
+    
+    // 현재 표시 중인 값 찾기 (digit-old가 아니고, transform이 translateY(0)이거나 없는 것)
+    let currentValueEl = null;
+    for (const el of allValues) {
+      const transform = el.style.transform || '';
+      const isOld = el.classList.contains('digit-old');
+      // digit-old가 아니고, transform이 없거나 translateY(0)인 것이 현재 표시 중인 값
+      if (!isOld && (!transform || transform.includes('translateY(0)') || transform === '')) {
+        currentValueEl = el;
+        break;
+      }
+    }
+    
+    // 현재 값이 없으면 첫 번째 요소 사용
+    if (!currentValueEl && allValues.length > 0) {
+      currentValueEl = allValues[0];
+    }
+    
+    // 숫자가 변경되었을 때만 스크롤 효과 적용
     if (currentValueEl && currentValueEl.textContent !== newValue) {
-      // 숫자가 변경되었을 때만 스크롤 효과 적용
+      // 기존 애니메이션 중인 요소들 정리
+      allValues.forEach(el => {
+        if (el !== currentValueEl && el.classList.contains('digit-old')) {
+          el.remove();
+        }
+      });
       
       // 기존 값에 old 클래스 추가
       currentValueEl.classList.add('digit-old');
@@ -997,26 +1020,39 @@ function updateClockWithScroll(clockElement, newTime) {
       const newValueEl = document.createElement('span');
       newValueEl.className = 'digit-value digit-new';
       newValueEl.textContent = newValue;
+      newValueEl.style.transform = 'translateY(100%)'; // 초기 위치: 아래
       digitContainer.appendChild(newValueEl);
       
-      // 초기 위치 설정
+      // 애니메이션 시작
       requestAnimationFrame(() => {
-        // 애니메이션 시작 (opacity 제거하여 깜빡임 방지)
-        currentValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-        newValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-        
-        // 기존 값은 위로 이동, 새 값은 아래에서 위로 이동 (opacity 변경 없이)
-        currentValueEl.style.transform = 'translateY(-100%)';
-        newValueEl.style.transform = 'translateY(-100%)';
+        requestAnimationFrame(() => {
+          // 애니메이션 시작 (opacity 제거하여 깜빡임 방지)
+          currentValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+          newValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+          
+          // 기존 값은 위로 이동, 새 값은 아래에서 위로 이동
+          currentValueEl.style.transform = 'translateY(-100%)';
+          newValueEl.style.transform = 'translateY(0)';
+        });
       });
       
       // 애니메이션 완료 후 정리
       setTimeout(() => {
-        currentValueEl.remove();
-        newValueEl.classList.remove('digit-new');
-        newValueEl.style.transform = 'translateY(0)';
-        newValueEl.style.transition = '';
+        if (currentValueEl && currentValueEl.parentNode) {
+          currentValueEl.remove();
+        }
+        if (newValueEl && newValueEl.parentNode) {
+          newValueEl.classList.remove('digit-new');
+          newValueEl.style.transition = '';
+        }
       }, 300);
+    } else if (!currentValueEl) {
+      // 현재 값이 없으면 즉시 표시 (초기화 시)
+      const newValueEl = document.createElement('span');
+      newValueEl.className = 'digit-value';
+      newValueEl.textContent = newValue;
+      newValueEl.style.transform = 'translateY(0)';
+      digitContainer.appendChild(newValueEl);
     }
   });
 }
