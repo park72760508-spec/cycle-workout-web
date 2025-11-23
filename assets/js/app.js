@@ -2804,6 +2804,35 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // trainingModeScreen의 카드들에 이벤트 리스너 추가
+  const individualTrainingCard = safeGetElement("individualTrainingCard");
+  if (individualTrainingCard) {
+    individualTrainingCard.addEventListener("click", async () => {
+      if (typeof selectTrainingMode === 'function') {
+        await selectTrainingMode('individual');
+      } else {
+        console.warn('selectTrainingMode function not found');
+        if (typeof showToast === 'function') {
+          showToast('개인 훈련 기능을 찾을 수 없습니다', 'error');
+        }
+      }
+    });
+  }
+
+  const groupTrainingCard = safeGetElement("groupTrainingCard");
+  if (groupTrainingCard) {
+    groupTrainingCard.addEventListener("click", async () => {
+      if (typeof selectTrainingMode === 'function') {
+        await selectTrainingMode('group');
+      } else {
+        console.warn('selectTrainingMode function not found');
+        if (typeof showToast === 'function') {
+          showToast('그룹 훈련 기능을 찾을 수 없습니다', 'error');
+        }
+      }
+    });
+  }
+
   // 훈련 준비 → 워크아웃 변경
   const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
   if (btnBackToWorkouts) {
