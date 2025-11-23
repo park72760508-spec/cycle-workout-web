@@ -855,7 +855,7 @@ function getCurrentTimeString() {
  */
 let worldTimeOffset = null; // 서버 시간과 로컬 시간의 차이 (밀리초)
 let worldTimeInitialized = false;
-let worldTimeSyncInterval = null; // 1분마다 동기화하는 인터벌
+let worldTimeSyncInterval = null; // 20초마다 동기화하는 인터벌
 
 async function fetchWorldTime() {
   try {
@@ -924,6 +924,103 @@ function formatTime(date) {
 }
 
 /**
+ * 시계를 숫자 스크롤 효과로 업데이트
+ */
+function updateClockWithScroll(clockElement, newTime) {
+  if (!clockElement) return;
+  
+  const timeStr = formatTime(newTime);
+  const timeParts = timeStr.split(':');
+  const [hours, minutes, seconds] = timeParts;
+  
+  // 시계 구조가 없으면 생성
+  if (!clockElement.querySelector('.clock-digits')) {
+    clockElement.innerHTML = `
+      <div class="clock-digits">
+        <div class="clock-digit" data-index="0">
+          <div class="digit-container">
+            <span class="digit-value">${hours[0]}</span>
+          </div>
+        </div>
+        <div class="clock-digit" data-index="1">
+          <div class="digit-container">
+            <span class="digit-value">${hours[1]}</span>
+          </div>
+        </div>
+        <span class="clock-separator">:</span>
+        <div class="clock-digit" data-index="2">
+          <div class="digit-container">
+            <span class="digit-value">${minutes[0]}</span>
+          </div>
+        </div>
+        <div class="clock-digit" data-index="3">
+          <div class="digit-container">
+            <span class="digit-value">${minutes[1]}</span>
+          </div>
+        </div>
+        <span class="clock-separator">:</span>
+        <div class="clock-digit" data-index="4">
+          <div class="digit-container">
+            <span class="digit-value">${seconds[0]}</span>
+          </div>
+        </div>
+        <div class="clock-digit" data-index="5">
+          <div class="digit-container">
+            <span class="digit-value">${seconds[1]}</span>
+          </div>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  // 각 자리수 업데이트
+  const digitElements = clockElement.querySelectorAll('.clock-digit');
+  const digits = [hours[0], hours[1], minutes[0], minutes[1], seconds[0], seconds[1]];
+  
+  digitElements.forEach((digitEl, index) => {
+    const digitContainer = digitEl.querySelector('.digit-container');
+    // digit-old가 아닌 첫 번째 digit-value 찾기
+    const allValues = digitContainer.querySelectorAll('.digit-value');
+    const currentValueEl = Array.from(allValues).find(el => !el.classList.contains('digit-old'));
+    const newValue = digits[index];
+    
+    if (currentValueEl && currentValueEl.textContent !== newValue) {
+      // 숫자가 변경되었을 때만 스크롤 효과 적용
+      
+      // 기존 값에 old 클래스 추가
+      currentValueEl.classList.add('digit-old');
+      
+      // 새 값 요소 생성 (아래에 위치)
+      const newValueEl = document.createElement('span');
+      newValueEl.className = 'digit-value digit-new';
+      newValueEl.textContent = newValue;
+      digitContainer.appendChild(newValueEl);
+      
+      // 초기 위치 설정
+      requestAnimationFrame(() => {
+        // 애니메이션 시작
+        currentValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s';
+        newValueEl.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        
+        // 기존 값은 위로 이동, 새 값은 아래에서 위로 이동
+        currentValueEl.style.transform = 'translateY(-100%)';
+        currentValueEl.style.opacity = '0';
+        newValueEl.style.transform = 'translateY(-100%)';
+      });
+      
+      // 애니메이션 완료 후 정리
+      setTimeout(() => {
+        currentValueEl.remove();
+        newValueEl.classList.remove('digit-new');
+        newValueEl.style.transform = 'translateY(0)';
+        newValueEl.style.transition = '';
+      }, 300);
+    }
+  });
+}
+
+/**
  * 시계 업데이트 함수
  */
 let clockUpdateInterval = null;
@@ -949,32 +1046,32 @@ function startClock() {
     fetchWorldTime().then(() => {
       // 동기화 후 즉시 업데이트
       const syncedTime = getSyncedTime();
-      clockElement.textContent = formatTime(syncedTime);
+      updateClockWithScroll(clockElement, syncedTime);
     });
   } else {
     // 이미 초기화되었으면 즉시 업데이트
     const syncedTime = getSyncedTime();
-    clockElement.textContent = formatTime(syncedTime);
+    updateClockWithScroll(clockElement, syncedTime);
   }
   
-  // 1초마다 시계 업데이트
+  // 1초마다 시계 업데이트 (스크롤 효과)
   clockUpdateInterval = setInterval(() => {
     const syncedTime = getSyncedTime();
-    clockElement.textContent = formatTime(syncedTime);
+    updateClockWithScroll(clockElement, syncedTime);
   }, 1000);
   
-  // 1분(60초)마다 WorldTimeAPI로 시간 동기화
+  // 20초마다 WorldTimeAPI로 시간 동기화 (참가자 간 시간 차이 최소화)
   worldTimeSyncInterval = setInterval(async () => {
-    console.log('🔄 1분 주기 시간 동기화 시작...');
+    console.log('🔄 20초 주기 시간 동기화 시작...');
     await fetchWorldTime();
     // 동기화 후 즉시 시계 업데이트
     const syncedTime = getSyncedTime();
     if (clockElement) {
-      clockElement.textContent = formatTime(syncedTime);
+      updateClockWithScroll(clockElement, syncedTime);
     }
-  }, 60000); // 60000ms = 1분
+  }, 20000); // 20000ms = 20초
   
-  console.log('✅ 시계 시작 (1초 업데이트, 1분 동기화)');
+  console.log('✅ 시계 시작 (1초 업데이트, 20초 동기화)');
 }
 
 function stopClock() {
@@ -3593,7 +3690,7 @@ async function initializeWaitingRoom() {
   normalizeRoomParticipantsInPlace(room);
   
   // 상단 정보를 워크아웃 세그먼트 테이블로 렌더링 (시계 시작 포함)
-  // startClock() 함수 내부에서 최초 1회 시간 동기화 및 1분마다 자동 동기화 처리
+  // startClock() 함수 내부에서 최초 1회 시간 동기화 및 20초마다 자동 동기화 처리
   renderWaitingHeaderSegmentTable();
   
   // 기존 체크 인터벌 정리
