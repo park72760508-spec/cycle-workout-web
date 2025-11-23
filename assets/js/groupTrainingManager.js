@@ -4544,7 +4544,9 @@ async function syncRoomData() {
       }
 
       groupTrainingState.lastSyncTime = new Date();
-    } else if (latestRoom && latestRoom.__roomDeleted) {
+    }
+    
+    if (latestRoom && latestRoom.__roomDeleted) {
       // 방이 실제로 삭제됨 → 동기화 중지 및 조용히 방 나가기
       networkErrorCount = 0;
       console.log('⚠️ 방이 삭제되었습니다. 동기화를 중지하고 방에서 나갑니다.');
@@ -4552,7 +4554,9 @@ async function syncRoomData() {
       showToast('방이 삭제되었거나 찾을 수 없습니다', 'error');
       await leaveGroupRoomSilently();
       return;
-    } else {
+    }
+    
+    if (!latestRoom) {
       // latestRoom이 null: 일시적/알 수 없는 오류 → 강제 퇴장 없이 다음 주기로 재시도
       console.warn('⚠️ 방 정보를 일시적으로 가져오지 못했습니다. 다음 동기화에서 재시도합니다.');
       return;
