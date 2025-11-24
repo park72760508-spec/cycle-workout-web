@@ -1129,6 +1129,93 @@ function getSyncedTime() {
   return new Date(Date.now() + (worldTimeOffset || 0));
 }
 
+let lastCreatedAtSyncAppliedAt = 0;
+let clockSyncFlashTimeout = null;
+
+function parseRoomTimestampForClock(value) {
+  if (!value) return null;
+  
+  if (value instanceof Date) {
+    return new Date(value.getTime());
+  }
+  
+  if (typeof value === 'number') {
+    const numericDate = new Date(value);
+    return isNaN(numericDate.getTime()) ? null : numericDate;
+  }
+  
+  const str = String(value).trim();
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed;
+  }
+  
+  const timeMatch = /^(\d{1,2}):(\d{1,2}):(\d{1,2})$/.exec(str);
+  if (timeMatch) {
+    const [, hh, mm, ss] = timeMatch;
+    const base = getSyncedTime();
+    const seeded = new Date(base.getTime());
+    seeded.setHours(parseInt(hh, 10), parseInt(mm, 10), parseInt(ss, 10), 0);
+    return seeded;
+  }
+  
+  return null;
+}
+
+function flashClockSyncIndicator(duration = 2000) {
+  const clockElement = document.getElementById('groupTrainingClock');
+  if (!clockElement) return;
+  
+  clockElement.classList.add('clock-sync-alert');
+  if (clockSyncFlashTimeout) {
+    clearTimeout(clockSyncFlashTimeout);
+  }
+  clockSyncFlashTimeout = setTimeout(() => {
+    clockElement.classList.remove('clock-sync-alert');
+  }, duration);
+}
+
+function handleCreatedAtClockSync(createdAtDate, diffMs) {
+  if (!createdAtDate || typeof diffMs !== 'number' || diffMs <= 0) {
+    return;
+  }
+  
+  const now = Date.now();
+  if (now - lastCreatedAtSyncAppliedAt < 20000) {
+    return;
+  }
+  
+  const referenceTime = new Date(createdAtDate.getTime());
+  worldTimeBase = referenceTime;
+  worldTimeSyncLocalTime = Date.now();
+  worldTimeOffset = referenceTime.getTime() - worldTimeSyncLocalTime;
+  worldTimeInitialized = true;
+  lastCreatedAtSyncAppliedAt = now;
+  
+  flashClockSyncIndicator();
+  const clockElement = document.getElementById('groupTrainingClock');
+  if (clockElement) {
+    updateClockSimple(clockElement, getSyncedTime());
+  }
+  
+  console.log('⏱️ CreatedAt 기반 시간 보정 적용', {
+    createdAtISO: referenceTime.toISOString(),
+    diffMs,
+    diffSeconds: Math.round(diffMs / 1000)
+  });
+}
+
+function formatCreatedAtDifference(diffMs) {
+  if (typeof diffMs !== 'number' || diffMs <= 0) {
+    return '00:00';
+  }
+  
+  const totalSeconds = Math.max(0, Math.round(diffMs / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 /**
  * 시간을 HH:MM:SS 형식으로 포맷 (서울 시간대 기준)
  * Date 객체는 UTC 기준으로 저장되므로, 서울 시간을 표시하려면 UTC 시간에 9시간을 더해야 함
@@ -4095,9 +4182,14 @@ async function updateCountdownFromTrainingStartTime() {
     const latestRoom = await getRoomByCode(roomCode);
     if (!latestRoom) return;
     
+    const createdAtRaw = latestRoom.createdAt || latestRoom.CreatedAt || null;
+    const createdAtDate = parseRoomTimestampForClock(createdAtRaw);
+    const clockBeforeSync = getSyncedTime();
+    const createdAtDiffMs = createdAtDate ? createdAtDate.getTime() - clockBeforeSync.getTime() : null;
+    handleCreatedAtClockSync(createdAtDate, createdAtDiffMs);
+
     // 훈련 시작 시간 가져오기 (CreatedAt 우선)
-    let trainingStartTimeRaw = latestRoom.createdAt || 
-                                latestRoom.CreatedAt || 
+    let trainingStartTimeRaw = createdAtRaw || 
                                 latestRoom.trainingStartTime || 
                                 latestRoom.TrainingStartTime;
     
@@ -4250,7 +4342,7 @@ async function updateCountdownFromTrainingStartTime() {
     
     // 상시 카운트다운 타이머 표시 (준비 완료 상태와 관계없이)
     // CreatedAt(훈련시작시간) - 현재시간표시타이머 = 남은 시간
-    updateTrainingCountdownTimer(secondsUntilStart);
+    updateTrainingCountdownTimer(secondsUntilStart, { createdAtDiffMs });
     
     // 준비 완료된 사용자만 자동 훈련 시작 로직 실행
     if (isReady) {
@@ -4288,13 +4380,36 @@ async function updateCountdownFromTrainingStartTime() {
 /**
  * 훈련 시작까지 남은 시간 카운트다운 타이머 업데이트
  */
-function updateTrainingCountdownTimer(secondsUntilStart) {
+function updateTrainingCountdownTimer(secondsUntilStart, options = {}) {
   try {
     const countdownTimer = document.getElementById('trainingCountdownTimer');
     const countdownTime = document.getElementById('countdownTime');
+    const countdownLabel = countdownTimer?.querySelector('.countdown-label');
     
     if (!countdownTimer || !countdownTime) {
       return;
+    }
+    
+    if (countdownLabel && !countdownTimer.dataset.defaultLabel) {
+      countdownTimer.dataset.defaultLabel = countdownLabel.textContent || '훈련 시작까지';
+    }
+
+    const diffMs = options?.createdAtDiffMs;
+    if (typeof diffMs === 'number') {
+      countdownTimer.style.display = 'flex';
+      countdownTimer.classList.add('diff-message');
+      countdownTimer.classList.remove('urgent');
+      if (countdownLabel) {
+        countdownLabel.textContent = '시간 동기화 상태';
+      }
+      const formattedDiff = formatCreatedAtDifference(diffMs);
+      countdownTime.textContent = `CreatedAt에 표시된 시간-실시간 시계(groupTrainingClock)의 시간 의 시간차는 ${formattedDiff} 입니다.`;
+      return;
+    } else {
+      countdownTimer.classList.remove('diff-message');
+      if (countdownLabel) {
+        countdownLabel.textContent = countdownTimer.dataset.defaultLabel || '훈련 시작까지';
+      }
     }
     
     // 훈련 시작 시간이 없거나 유효하지 않으면 숨김
