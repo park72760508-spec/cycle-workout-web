@@ -812,6 +812,19 @@
   white-space: normal;
 }
 
+.training-countdown-timer.diff-message .countdown-time .time-line {
+  display: block;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.training-countdown-timer.diff-message .countdown-time .time-diff {
+  display: block;
+  margin-top: 4px;
+  font-weight: 700;
+  color: #ef4444;
+}
+
 .training-countdown-timer.urgent {
   background: rgba(239, 68, 68, 0.1);
   border-color: rgba(239, 68, 68, 0.5);
