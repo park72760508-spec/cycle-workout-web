@@ -795,6 +795,23 @@
   text-align: center;
 }
 
+.training-countdown-timer.diff-message {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.training-countdown-timer.diff-message .countdown-time {
+  font-family: 'Noto Sans KR', 'Pretendard', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+  min-width: auto;
+  text-align: left;
+  line-height: 1.4;
+  white-space: normal;
+}
+
 .training-countdown-timer.urgent {
   background: rgba(239, 68, 68, 0.1);
   border-color: rgba(239, 68, 68, 0.5);
@@ -893,6 +910,13 @@
   will-change: contents;
   backface-visibility: hidden;
   -webkit-font-smoothing: antialiased;
+}
+
+.group-training-clock.clock-sync-alert {
+  color: #fff;
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.6);
+  text-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
 }
 
 .clock-digits {
