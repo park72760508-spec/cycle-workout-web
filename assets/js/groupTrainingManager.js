@@ -1206,11 +1206,11 @@ function handleCreatedAtClockSync(createdAtDate, diffMs) {
 }
 
 function formatCreatedAtDifference(diffMs) {
-  if (typeof diffMs !== 'number' || diffMs <= 0) {
+  if (typeof diffMs !== 'number') {
     return '00:00';
   }
   
-  const totalSeconds = Math.max(0, Math.round(diffMs / 1000));
+  const totalSeconds = Math.max(0, Math.round(Math.abs(diffMs) / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
@@ -4185,8 +4185,12 @@ async function updateCountdownFromTrainingStartTime() {
     const createdAtRaw = latestRoom.createdAt || latestRoom.CreatedAt || null;
     const createdAtDate = parseRoomTimestampForClock(createdAtRaw);
     const clockBeforeSync = getSyncedTime();
-    const createdAtDiffMs = createdAtDate ? createdAtDate.getTime() - clockBeforeSync.getTime() : null;
-    handleCreatedAtClockSync(createdAtDate, createdAtDiffMs);
+    const createdAtDiffBeforeSync = createdAtDate ? createdAtDate.getTime() - clockBeforeSync.getTime() : null;
+    handleCreatedAtClockSync(createdAtDate, createdAtDiffBeforeSync);
+    const clockNow = getSyncedTime();
+    const createdAtDiffMs = createdAtDate ? createdAtDate.getTime() - clockNow.getTime() : null;
+    const createdAtDisplay = createdAtDate ? formatTime(createdAtDate) : null;
+    const clockDisplay = formatTime(clockNow);
 
     // 훈련 시작 시간 가져오기 (CreatedAt 우선)
     let trainingStartTimeRaw = createdAtRaw || 
@@ -4246,7 +4250,7 @@ async function updateCountdownFromTrainingStartTime() {
     }
     
     // 현재 시간 가져오기
-    const currentDate = getSyncedTime();
+    const currentDate = clockNow;
     const currentTimeStr = formatTime(currentDate);
     const [currentHours, currentMinutes, currentSeconds] = currentTimeStr.split(':').map(Number);
     
@@ -4342,7 +4346,11 @@ async function updateCountdownFromTrainingStartTime() {
     
     // 상시 카운트다운 타이머 표시 (준비 완료 상태와 관계없이)
     // CreatedAt(훈련시작시간) - 현재시간표시타이머 = 남은 시간
-    updateTrainingCountdownTimer(secondsUntilStart, { createdAtDiffMs });
+    updateTrainingCountdownTimer(secondsUntilStart, {
+      createdAtDiffMs,
+      createdAtDisplay,
+      clockDisplay
+    });
     
     // 준비 완료된 사용자만 자동 훈련 시작 로직 실행
     if (isReady) {
@@ -4403,13 +4411,21 @@ function updateTrainingCountdownTimer(secondsUntilStart, options = {}) {
         countdownLabel.textContent = '시간 동기화 상태';
       }
       const formattedDiff = formatCreatedAtDifference(diffMs);
-      countdownTime.textContent = `CreatedAt에 표시된 시간-실시간 시계(groupTrainingClock)의 시간 의 시간차는 ${formattedDiff} 입니다.`;
+      const diffPrefix = diffMs > 0 ? '+' : diffMs < 0 ? '-' : '±';
+      const createdAtText = options?.createdAtDisplay || '-';
+      const clockText = options?.clockDisplay || '-';
+      countdownTime.innerHTML = `
+        <span class="time-line">CreatedAt: ${createdAtText}</span>
+        <span class="time-line">실시간 시계: ${clockText}</span>
+        <span class="time-diff">차이: ${diffPrefix}${formattedDiff}</span>
+      `;
       return;
     } else {
       countdownTimer.classList.remove('diff-message');
       if (countdownLabel) {
         countdownLabel.textContent = countdownTimer.dataset.defaultLabel || '훈련 시작까지';
       }
+      countdownTime.textContent = '';
     }
     
     // 훈련 시작 시간이 없거나 유효하지 않으면 숨김
