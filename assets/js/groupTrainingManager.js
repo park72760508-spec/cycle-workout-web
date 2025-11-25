@@ -1201,17 +1201,6 @@ function handleCreatedAtClockSync(createdAtDate, diffMs) {
   });
 }
 
-function formatCreatedAtDifference(diffMs) {
-  if (typeof diffMs !== 'number') {
-    return '00:00';
-  }
-  
-  const totalSeconds = Math.max(0, Math.round(Math.abs(diffMs) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
-
 function formatToKstIsoString(date) {
   if (!(date instanceof Date) || isNaN(date.getTime())) {
     return '';
@@ -3945,6 +3934,7 @@ let trainingStartCheckInterval = null;
 let countdownStarted = false; // 카운트다운 시작 여부
 let trainingStartTimeFound = false; // 훈련 시작 시간을 찾았는지 여부
 let countdownUpdateInterval = null; // 카운트다운 업데이트 인터벌
+let waitingCountdownShown = false; // 대기실 전용 카운트다운 표시 여부
 
 /**
  * 훈련 시작 시간 체크 및 카운트다운 시작
@@ -4209,22 +4199,17 @@ async function updateCountdownFromTrainingStartTime() {
     // CreatedAt 기반 시계 동기화 제거: Google Time Zone API만 사용
     // handleCreatedAtClockSync(createdAtDate, createdAtDiffBeforeSync); // 제거됨
     const clockNow = getSyncedTime();
-    const createdAtDiffMs = createdAtDate ? createdAtDate.getTime() - clockNow.getTime() : null;
-    const createdAtDisplay = createdAtDate ? formatTime(createdAtDate) : null;
-    const clockDisplay = formatTime(clockNow);
-
     // 훈련 시작 시간 가져오기 (CreatedAt 우선)
     let trainingStartTimeRaw = createdAtRaw || 
                                 latestRoom.trainingStartTime || 
                                 latestRoom.TrainingStartTime;
     
-    // 훈련 시작 시간이 없으면 카운트다운 타이머 숨김
     if (!trainingStartTimeRaw) {
-      const countdownTimer = document.getElementById('trainingCountdownTimer');
-      if (countdownTimer) {
-        countdownTimer.style.display = 'none';
-      }
       return;
+    }
+    
+    if (groupTrainingState.currentRoom) {
+      groupTrainingState.currentRoom.trainingStartTime = trainingStartTimeRaw;
     }
     
     // 시간 형식 정규화 함수
@@ -4365,13 +4350,11 @@ async function updateCountdownFromTrainingStartTime() {
       isReady = myParticipant ? isParticipantReady(myParticipant) : false;
     }
     
-    // 상시 카운트다운 타이머 표시 (준비 완료 상태와 관계없이)
-    // CreatedAt(훈련시작시간) - 현재시간표시타이머 = 남은 시간
-    updateTrainingCountdownTimer(secondsUntilStart, {
-      createdAtDiffMs,
-      createdAtDisplay,
-      clockDisplay
-    });
+    // 준비되지 않은 사용자에게도 전역 카운트다운 표시 (훈련 시작 11초 전)
+    if (!isReady && secondsUntilStart <= 11 && secondsUntilStart > 0 && !waitingCountdownShown) {
+      waitingCountdownShown = true;
+      startWaitingRoomCountdown(secondsUntilStart);
+    }
     
     // 준비 완료된 사용자만 자동 훈련 시작 로직 실행
     if (isReady) {
@@ -4391,7 +4374,7 @@ async function updateCountdownFromTrainingStartTime() {
         }
         
         const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
-        startTrainingCountdown(countdownSeconds);
+        startTrainingCountdown(countdownSeconds, { startTraining: true });
       } else if (secondsUntilStart <= 0 && !countdownStarted) {
         // 이미 시간이 지났으면 즉시 훈련 시작
         countdownStarted = true;
@@ -4410,117 +4393,25 @@ async function updateCountdownFromTrainingStartTime() {
 /**
  * 훈련 시작까지 남은 시간 카운트다운 타이머 업데이트
  */
-function updateTrainingCountdownTimer(secondsUntilStart, options = {}) {
-  try {
-    const countdownTimer = document.getElementById('trainingCountdownTimer');
-    const countdownTime = document.getElementById('countdownTime');
-    const countdownLabel = countdownTimer?.querySelector('.countdown-label');
-    
-    if (!countdownTimer || !countdownTime) {
-      return;
-    }
-    
-    if (countdownLabel && !countdownTimer.dataset.defaultLabel) {
-      countdownTimer.dataset.defaultLabel = countdownLabel.textContent || '훈련 시작까지';
-    }
-
-    const diffMs = options?.createdAtDiffMs;
-    if (typeof diffMs === 'number') {
-      countdownTimer.style.display = 'flex';
-      countdownTimer.classList.add('diff-message');
-      countdownTimer.classList.remove('urgent');
-      if (countdownLabel) {
-        countdownLabel.textContent = '시간 동기화 상태';
-      }
-      const formattedDiff = formatCreatedAtDifference(diffMs);
-      const diffPrefix = diffMs > 0 ? '+' : diffMs < 0 ? '-' : '±';
-      const createdAtText = options?.createdAtDisplay || '-';
-      const clockText = options?.clockDisplay || '-';
-      countdownTime.innerHTML = `
-        <span class="time-line">CreatedAt: ${createdAtText}</span>
-        <span class="time-line">실시간 시계: ${clockText}</span>
-        <span class="time-diff">차이: ${diffPrefix}${formattedDiff}</span>
-      `;
-      return;
-    } else {
-      countdownTimer.classList.remove('diff-message');
-      if (countdownLabel) {
-        countdownLabel.textContent = countdownTimer.dataset.defaultLabel || '훈련 시작까지';
-      }
-      countdownTime.textContent = '';
-    }
-    
-    // 훈련 시작 시간이 없거나 유효하지 않으면 숨김
-    if (secondsUntilStart === undefined || secondsUntilStart === null) {
-      countdownTimer.style.display = 'none';
-      return;
-    }
-    
-    // 시간이 지났으면 00:00으로 표시
-    if (secondsUntilStart < 0) {
-      countdownTimer.style.display = 'flex';
-      countdownTime.textContent = '00:00';
-      return;
-    }
-    
-    // 카운트다운 시간 포맷팅 (MM:SS 형식으로 고정)
-    const formatCountdownTime = (totalSeconds) => {
-      if (totalSeconds < 0) {
-        console.warn('⚠️ 음수 시간:', totalSeconds, '초를 00:00으로 표시합니다.');
-        return '00:00';
-      }
-      
-      // 1시간(3600초) 이상이면 계산 오류로 간주하고 00:00 반환
-      if (totalSeconds >= 3600) {
-        console.error('❌ 포맷팅 오류: 시간이 1시간을 초과합니다:', {
-          입력_초: totalSeconds,
-          입력_분: Math.floor(totalSeconds / 60),
-          메시지: '같은 날 훈련이므로 1시간 이상 차이는 계산 오류입니다. 00:00으로 설정합니다.'
-        });
-        return '00:00';
-      }
-      
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      
-      const result = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      
-      // 디버깅: 포맷팅 로그 (1분 이상일 때 경고)
-      if (totalSeconds > 60) {
-        console.warn('⚠️ 포맷팅: 1분 이상의 시간이 계산되었습니다 (의도된 값이 아닐 수 있음):', {
-          입력_초: totalSeconds,
-          계산된_분: minutes,
-          계산된_초: seconds,
-          결과: result,
-          참고: '훈련 시작은 보통 1분 후이므로 60초 이내여야 합니다.'
-        });
-      }
-      
-      return result;
-    };
-    
-    // 카운트다운 표시 (상시 표기)
-    countdownTimer.style.display = 'flex';
-    countdownTime.textContent = formatCountdownTime(secondsUntilStart);
-    
-    // 11초 이하일 때 강조 스타일
-    if (secondsUntilStart <= 11) {
-      countdownTimer.classList.add('urgent');
-    } else {
-      countdownTimer.classList.remove('urgent');
-    }
-  } catch (error) {
-    console.warn('카운트다운 타이머 업데이트 실패:', error);
-  }
-}
 
 /**
  * 훈련 시작 카운트다운 시작
  */
-function startTrainingCountdown(secondsUntilStart) {
+function startTrainingCountdown(secondsUntilStart, options = {}) {
+  const opts = typeof options === 'object' && options !== null ? options : {};
+  const shouldStartTraining = opts.startTraining !== false;
+  const overlayId = opts.overlayId || 'trainingStartCountdownOverlay';
+  const messageText = opts.message || '훈련이 곧 시작됩니다!';
+  const onComplete = typeof opts.onComplete === 'function' ? opts.onComplete : null;
+
   // 카운트다운 오버레이 표시
-  const countdownOverlay = document.createElement('div');
-  countdownOverlay.id = 'trainingStartCountdownOverlay';
+  let countdownOverlay = document.getElementById(overlayId);
+  if (countdownOverlay) {
+    countdownOverlay.remove();
+  }
+  
+  countdownOverlay = document.createElement('div');
+  countdownOverlay.id = overlayId;
   countdownOverlay.style.cssText = `
     position: fixed;
     top: 0;
@@ -4552,7 +4443,7 @@ function startTrainingCountdown(secondsUntilStart) {
     color: #fff;
     text-align: center;
   `;
-  countdownMessage.textContent = '훈련이 곧 시작됩니다!';
+  countdownMessage.textContent = messageText;
   
   countdownOverlay.appendChild(countdownNumber);
   countdownOverlay.appendChild(countdownMessage);
@@ -4569,9 +4460,28 @@ function startTrainingCountdown(secondsUntilStart) {
       clearInterval(countdownInterval);
       countdownOverlay.remove();
       // 훈련 화면으로 전환
-      startLocalGroupTraining();
+      if (shouldStartTraining) {
+        startLocalGroupTraining();
+      } else if (onComplete) {
+        onComplete();
+      }
     }
   }, 1000);
+}
+
+function startWaitingRoomCountdown(secondsUntilStart) {
+  const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
+  startTrainingCountdown(countdownSeconds, {
+    startTraining: false,
+    overlayId: 'waitingRoomCountdownOverlay',
+    message: '훈련 시작까지',
+    onComplete: () => {
+      const overlay = document.getElementById('waitingRoomCountdownOverlay');
+      if (overlay) {
+        overlay.remove();
+      }
+    }
+  });
 }
 
 /**
@@ -4629,6 +4539,7 @@ async function initializeWaitingRoom() {
   
   countdownStarted = false;
   trainingStartTimeFound = false;
+  waitingCountdownShown = false;
   
   // 5초마다 훈련 시작 시간 체크 시작 (훈련 시작 시간을 찾을 때까지)
   trainingStartCheckInterval = setInterval(() => {
@@ -4679,7 +4590,7 @@ async function initializeWaitingRoom() {
     startParticipantDataSync();
   }
   
-  // 메트릭 주기적 갱신 타이머 시작 (2초마다 목록 갱신)
+  // 메트릭 주기적 갱신 타이머 시작 (1초마다 목록 갱신)
   if (window.participantMetricsUpdateInterval) {
     clearInterval(window.participantMetricsUpdateInterval);
     window.participantMetricsUpdateInterval = null;
@@ -4695,7 +4606,7 @@ async function initializeWaitingRoom() {
     } catch (e) {
       console.warn('participantMetricsUpdateInterval 오류:', e);
     }
-  }, 2000);
+  }, 1000);
   
   // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
   // 관리자도 일반 참가자처럼 준비완료 버튼을 사용할 수 있도록 설정
@@ -5126,9 +5037,39 @@ function renderWaitingHeaderSegmentTable() {
       : null;
 
     const elapsedTimer = formatTimer(elapsed);
-    const segmentTimer = isTrainingStarted
+    const segmentTimerFormatted = isTrainingStarted
       ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
       : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
+
+    const currentSegmentInfo = currentIdx >= 0
+      ? normalizedSegments.find(item => item.originalIndex === currentIdx)
+      : null;
+    const nextSegmentInfo = currentIdx >= 0
+      ? normalizedSegments.find(item => item.originalIndex === currentIdx + 1)
+      : (phase === 'countdown' ? normalizedSegments[0] : null);
+
+    const elapsedSubtext = isTrainingStarted && currentSegmentInfo
+      ? `${currentSegmentInfo.label} 진행 중`
+      : (phase === 'countdown' && countdownRemainingSeconds !== null
+        ? `시작까지 ${countdownRemainingSeconds}초`
+        : '대기 중');
+
+    const segmentSubtext = isTrainingStarted
+      ? (nextSegmentInfo ? `다음: ${nextSegmentInfo.label}` : '마지막 구간')
+      : (countdownRemainingSeconds !== null ? `시작까지 ${countdownRemainingSeconds}초` : '대기 중');
+
+    let segmentCountdownDisplay = segmentTimerFormatted;
+    let segmentTimerClass = 'timer-value';
+
+    if (isTrainingStarted && currentSegRemaining !== null) {
+      if (currentSegRemaining <= 6 && currentSegRemaining > 0) {
+        segmentTimerClass += ' is-countdown';
+        segmentCountdownDisplay = Math.max(0, Math.ceil(currentSegRemaining) - 1).toString();
+      }
+    } else if (!isTrainingStarted && countdownRemainingSeconds !== null && countdownRemainingSeconds <= 11) {
+      segmentTimerClass += ' is-countdown';
+      segmentCountdownDisplay = Math.min(10, countdownRemainingSeconds).toString();
+    }
 
     const statusPillClass = isTrainingStarted
       ? 'is-live'
@@ -5203,10 +5144,6 @@ function renderWaitingHeaderSegmentTable() {
             </div>
           </div>
           <div class="workout-header-right">
-            <div class="training-countdown-timer" id="trainingCountdownTimer" style="display: none;">
-              <span class="countdown-label">훈련 시작까지</span>
-              <span class="countdown-time" id="countdownTime">--:--</span>
-            </div>
             <div class="group-training-clock" id="groupTrainingClock"></div>
             <div class="workout-status-pill ${statusPillClass}">
               ${statusPillLabel}
@@ -5219,13 +5156,15 @@ function renderWaitingHeaderSegmentTable() {
             <div class="timer-content">
               <span class="timer-label">경과 시간</span>
               <span class="timer-value">${elapsedTimer}</span>
+              <span class="timer-subtext">${escapeHtml(elapsedSubtext)}</span>
             </div>
           </div>
           <div class="workout-timer segment">
             <div class="timer-icon">⏳</div>
             <div class="timer-content">
               <span class="timer-label">세그먼트 카운트다운</span>
-              <span class="timer-value">${segmentTimer}</span>
+              <span class="${segmentTimerClass}">${segmentCountdownDisplay}</span>
+              <span class="timer-subtext">${escapeHtml(segmentSubtext)}</span>
             </div>
           </div>
         </div>
