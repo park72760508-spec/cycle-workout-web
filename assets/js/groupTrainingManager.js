@@ -863,6 +863,7 @@ let worldTimeSyncRetryTimeout = null; // 재시도 타임아웃
 let worldTimeErrorCount = 0; // 연속 실패 횟수
 let lastWorldTimeError = 0; // 마지막 에러 발생 시간
 let currentTimeApiIndex = 0; // 현재 사용 중인 API 인덱스
+let worldTimeSyncCompleted = false; // 20초 후 동기화 완료 여부 (더 이상 동기화 안 함)
 
 // 구글 타임존 API 키
 const GOOGLE_TIMEZONE_API_KEY = 'AIzaSyAv2S_3hfPhEIv6CI2ZtwGKMIdOuV6a_OA';
@@ -1005,59 +1006,54 @@ async function tryFetchTimeFromAPI(api, timeout = 5000, requestTimestamp = null)
 }
 
 /**
- * 여러 시간 API를 순차적으로 시도하여 시간 가져오기
+ * Google Time Zone API만 사용하여 시간 가져오기
  */
 async function fetchWorldTime() {
   const localTime = new Date();
   let lastError = null;
   
-  // 모든 API를 순차적으로 시도
-  for (let i = 0; i < TIME_APIS.length; i++) {
-    const apiIndex = (currentTimeApiIndex + i) % TIME_APIS.length;
-    const api = TIME_APIS[apiIndex];
+  // Google Time Zone API만 사용 (인덱스 0)
+  const googleTimeZoneAPI = TIME_APIS[0];
+  
+  try {
+    // 구글 타임존 API는 현재 UTC 타임스탬프 필요
+    const requestTimestamp = Math.floor(Date.now() / 1000);
     
-    try {
-      // 구글 타임존 API는 현재 UTC 타임스탬프 필요
-      const requestTimestamp = api.requiresTimestamp 
-        ? Math.floor(Date.now() / 1000) 
-        : null;
-      
-      const serverTime = await tryFetchTimeFromAPI(api, 5000, requestTimestamp); // 5초 타임아웃
-      
-      // 구글 타임존 API에서 받은 서버 시간을 직접 저장 (서울 시간)
-      worldTimeBase = serverTime;
-      worldTimeSyncLocalTime = localTime.getTime(); // 동기화 시점의 로컬 시간 저장
-      
-      // 하위 호환성을 위한 오프셋 계산 (기존 로직 유지)
-      const newOffset = serverTime.getTime() - localTime.getTime();
-      const previousOffset = worldTimeOffset;
-      worldTimeOffset = newOffset;
-      worldTimeInitialized = true;
-      worldTimeErrorCount = 0; // 성공 시 에러 카운트 리셋
-      currentTimeApiIndex = apiIndex; // 성공한 API를 다음에 우선 사용
-      
-      // 오프셋 변화량 계산 (디버깅용)
-      const offsetChange = previousOffset !== null ? (newOffset - previousOffset) : 0;
-      
-      // 첫 동기화이거나 오프셋이 크게 변경된 경우에만 로그 출력
-      if (previousOffset === null || Math.abs(offsetChange) > 1000) {
-        console.log(`✅ ${api.name} 시간 동기화 완료:`, {
-          api: api.name,
-          serverTime: serverTime.toISOString(),
-          serverTimeLocal: serverTime.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }),
-          localTime: localTime.toISOString(),
-          offset: worldTimeOffset,
-          offsetSeconds: Math.round(worldTimeOffset / 1000),
-          offsetChange: offsetChange !== 0 ? `${offsetChange > 0 ? '+' : ''}${Math.round(offsetChange / 1000)}초` : '변화 없음'
-        });
-      }
-      
-      return serverTime;
-    } catch (error) {
-      lastError = error;
-      // 다음 API 시도 (로그는 마지막에 한 번만)
-      continue;
+    const serverTime = await tryFetchTimeFromAPI(googleTimeZoneAPI, 5000, requestTimestamp); // 5초 타임아웃
+    
+    // 구글 타임존 API에서 받은 서버 시간을 직접 저장 (서울 시간)
+    worldTimeBase = serverTime;
+    worldTimeSyncLocalTime = localTime.getTime(); // 동기화 시점의 로컬 시간 저장
+    
+    // 하위 호환성을 위한 오프셋 계산 (기존 로직 유지)
+    const newOffset = serverTime.getTime() - localTime.getTime();
+    const previousOffset = worldTimeOffset;
+    worldTimeOffset = newOffset;
+    worldTimeInitialized = true;
+    worldTimeErrorCount = 0; // 성공 시 에러 카운트 리셋
+    currentTimeApiIndex = 0; // Google Time Zone API만 사용
+    
+    // 오프셋 변화량 계산 (디버깅용)
+    const offsetChange = previousOffset !== null ? (newOffset - previousOffset) : 0;
+    
+    // 첫 동기화이거나 오프셋이 크게 변경된 경우에만 로그 출력
+    if (previousOffset === null || Math.abs(offsetChange) > 1000) {
+      console.log(`✅ ${googleTimeZoneAPI.name} 시간 동기화 완료:`, {
+        api: googleTimeZoneAPI.name,
+        serverTime: serverTime.toISOString(),
+        serverTimeLocal: serverTime.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }),
+        localTime: localTime.toISOString(),
+        offset: worldTimeOffset,
+        offsetSeconds: Math.round(worldTimeOffset / 1000),
+        offsetChange: offsetChange !== 0 ? `${offsetChange > 0 ? '+' : ''}${Math.round(offsetChange / 1000)}초` : '변화 없음'
+      });
     }
+    
+    return serverTime;
+  } catch (error) {
+    lastError = error;
+    // Google Time Zone API 실패 시 에러만 기록 (다른 API로 폴백하지 않음)
+    console.warn('⚠️ Google Time Zone API 실패:', error);
   }
   
   // 모든 API 실패
@@ -1434,7 +1430,8 @@ function startClock() {
     clearInterval(clockUpdateInterval);
   }
   if (worldTimeSyncInterval) {
-    clearInterval(worldTimeSyncInterval);
+    clearTimeout(worldTimeSyncInterval);
+    worldTimeSyncInterval = null;
   }
   
   // 시계 요소 찾기
@@ -1444,7 +1441,7 @@ function startClock() {
     return;
   }
   
-  // 최초 1회 시간 동기화 (즉시)
+  // 최초 1회 시간 동기화 (즉시) - Google Time Zone API만 사용
   if (!worldTimeInitialized) {
     fetchWorldTime().then(() => {
       // 동기화 후 즉시 업데이트
@@ -1457,21 +1454,24 @@ function startClock() {
     updateClockSimple(clockElement, syncedTime);
   }
   
+  // 20초 후 동기화는 아직 완료되지 않았을 때만 실행
+  // (새로 시작할 때는 플래그 리셋하지 않음 - 한 번 완료되면 더 이상 동기화 안 함)
+  
   // 1초마다 시계 업데이트 (간단한 텍스트 업데이트)
   clockUpdateInterval = setInterval(() => {
     const syncedTime = getSyncedTime();
     updateClockSimple(clockElement, syncedTime);
   }, 1000);
   
-  // 동기화 함수 (1회만 실행)
+  // 동기화 함수 (1회만 실행, 20초 후)
   const syncTime = async () => {
-    // 이미 시도했으면 종료
-    if (worldTimeSyncAttempted) {
+    // 이미 시도했거나 동기화가 완료되었으면 종료
+    if (worldTimeSyncAttempted || worldTimeSyncCompleted) {
       return;
     }
     
     worldTimeSyncAttempted = true;
-    console.log('🔄 시간 동기화 시작 (20초 후)...');
+    console.log('🔄 Google Time Zone API 시간 동기화 시작 (20초 후)...');
     
     try {
       await fetchWorldTime();
@@ -1482,7 +1482,9 @@ function startClock() {
         updateClockSimple(clockElement, syncedTime);
       }
       
-      console.log('✅ 시간 동기화 완료 (반복 동기화 종료)');
+      // 동기화 완료 플래그 설정 (더 이상 동기화 안 함)
+      worldTimeSyncCompleted = true;
+      console.log('✅ Google Time Zone API 시간 동기화 완료 (더 이상 동기화하지 않음)');
       
       // 타임아웃 정리 (setTimeout이므로 clearTimeout 사용)
       if (worldTimeSyncInterval) {
@@ -1491,7 +1493,7 @@ function startClock() {
       }
     } catch (error) {
       // 실패 시 10초 후 재시도 1회
-      console.warn('⚠️ 시간 동기화 실패, 10초 후 재시도...');
+      console.warn('⚠️ Google Time Zone API 시간 동기화 실패, 10초 후 재시도...');
       
       worldTimeSyncRetryTimeout = setTimeout(async () => {
         try {
@@ -1502,9 +1504,13 @@ function startClock() {
             updateClockSimple(clockElement, syncedTime);
           }
           
-          console.log('✅ 시간 동기화 재시도 완료');
+          // 동기화 완료 플래그 설정 (더 이상 동기화 안 함)
+          worldTimeSyncCompleted = true;
+          console.log('✅ Google Time Zone API 시간 동기화 재시도 완료 (더 이상 동기화하지 않음)');
         } catch (retryError) {
-          console.warn('⚠️ 시간 동기화 재시도 실패, 로컬 시간 사용');
+          console.warn('⚠️ Google Time Zone API 시간 동기화 재시도 실패, 로컬 시간 사용');
+          // 실패해도 동기화 완료 플래그 설정하여 더 이상 시도하지 않음
+          worldTimeSyncCompleted = true;
         }
         
         worldTimeSyncRetryTimeout = null;
@@ -1513,9 +1519,11 @@ function startClock() {
   };
   
   // 20초 후 첫 동기화 시작 (1회만)
-  worldTimeSyncInterval = setTimeout(syncTime, 20000);
+  if (!worldTimeSyncCompleted) {
+    worldTimeSyncInterval = setTimeout(syncTime, 20000);
+  }
   
-  console.log('✅ 시계 시작 (1초 업데이트, 20초 후 1회 동기화)');
+  console.log('✅ 시계 시작 (1초 업데이트, Google Time Zone API만 사용, 20초 후 1회 동기화 후 종료)');
 }
 
 function stopClock() {
@@ -4198,9 +4206,8 @@ async function updateCountdownFromTrainingStartTime() {
     
     const createdAtRaw = latestRoom.createdAt || latestRoom.CreatedAt || null;
     const createdAtDate = parseRoomTimestampForClock(createdAtRaw);
-    const clockBeforeSync = getSyncedTime();
-    const createdAtDiffBeforeSync = createdAtDate ? createdAtDate.getTime() - clockBeforeSync.getTime() : null;
-    handleCreatedAtClockSync(createdAtDate, createdAtDiffBeforeSync);
+    // CreatedAt 기반 시계 동기화 제거: Google Time Zone API만 사용
+    // handleCreatedAtClockSync(createdAtDate, createdAtDiffBeforeSync); // 제거됨
     const clockNow = getSyncedTime();
     const createdAtDiffMs = createdAtDate ? createdAtDate.getTime() - clockNow.getTime() : null;
     const createdAtDisplay = createdAtDate ? formatTime(createdAtDate) : null;
@@ -4383,7 +4390,8 @@ async function updateCountdownFromTrainingStartTime() {
           countdownUpdateInterval = null;
         }
         
-        startTrainingCountdown(secondsUntilStart);
+        const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
+        startTrainingCountdown(countdownSeconds);
       } else if (secondsUntilStart <= 0 && !countdownStarted) {
         // 이미 시간이 지났으면 즉시 훈련 시작
         countdownStarted = true;
