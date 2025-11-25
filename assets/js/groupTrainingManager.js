@@ -1216,6 +1216,20 @@ function formatCreatedAtDifference(diffMs) {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
+function formatToKstIsoString(date) {
+  if (!(date instanceof Date) || isNaN(date.getTime())) {
+    return '';
+  }
+  
+  const KST_OFFSET_MINUTES = 9 * 60;
+  const kstTime = new Date(date.getTime() + KST_OFFSET_MINUTES * 60 * 1000);
+  const isoWithoutZ = kstTime.toISOString().replace('Z', '');
+  const offsetSign = '+';
+  const offsetHours = String(Math.floor(KST_OFFSET_MINUTES / 60)).padStart(2, '0');
+  const offsetMinutes = String(KST_OFFSET_MINUTES % 60).padStart(2, '0');
+  return `${isoWithoutZ}${offsetSign}${offsetHours}:${offsetMinutes}`;
+}
+
 /**
  * 시간을 HH:MM:SS 형식으로 포맷 (서울 시간대 기준)
  * Date 객체는 UTC 기준으로 저장되므로, 서울 시간을 표시하려면 UTC 시간에 9시간을 더해야 함
@@ -6756,8 +6770,9 @@ async function startTrainingFromMonitoring(roomCode) {
     
     // 훈련 시작 시간 설정 (3초 후 시작 - 참가자들이 준비할 시간)
     const startDelay = 3000; // 3초
-    const trainingStartTime = new Date(Date.now() + startDelay).toISOString();
-    const createdAtISO = trainingStartTime; // ISO 형식으로 저장
+    const trainingStartTimeDate = new Date(Date.now() + startDelay);
+    const trainingStartTime = trainingStartTimeDate.toISOString();
+    const createdAtISO = formatToKstIsoString(trainingStartTimeDate); // ISO 형식으로 저장
     
     showToast('3초 후 모든 참가자의 훈련이 동시에 시작됩니다!', 'info');
     
@@ -7291,10 +7306,10 @@ async function startGroupTrainingWithCountdown() {
       훈련시작시간ISO: trainingStartTime.toISOString()
     });
     
-    // 구글 시트에 훈련 시작 시간 업데이트 (ISO 형식으로 저장)
+    // 구글 시트에 훈련 시작 시간 업데이트 (ISO 형식으로 저장, KST 기준)
     try {
       let updateSuccess = false;
-      const createdAtISO = trainingStartTime.toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ 형식
+      const createdAtISO = formatToKstIsoString(trainingStartTime); // YYYY-MM-DDTHH:mm:ss.sss+09:00 형식
       if (typeof apiUpdateRoom === 'function') {
         const result = await apiUpdateRoom(roomCode, {
           createdAt: createdAtISO, // ISO 형식
@@ -7497,8 +7512,9 @@ async function startAllParticipantsTraining() {
                        adminUser.grade === '1' || 
                        adminUser.grade === 1 ||
                        (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
-    const trainingStartTime = new Date().toISOString();
-    const createdAtISO = trainingStartTime; // ISO 형식으로 저장
+    const trainingStartDate = new Date();
+    const trainingStartTime = trainingStartDate.toISOString();
+    const createdAtISO = formatToKstIsoString(trainingStartDate); // ISO 형식으로 저장
     
     if (adminUserCheck) {
       try {
