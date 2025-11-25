@@ -6757,12 +6757,14 @@ async function startTrainingFromMonitoring(roomCode) {
     // 훈련 시작 시간 설정 (3초 후 시작 - 참가자들이 준비할 시간)
     const startDelay = 3000; // 3초
     const trainingStartTime = new Date(Date.now() + startDelay).toISOString();
+    const createdAtISO = trainingStartTime; // ISO 형식으로 저장
     
     showToast('3초 후 모든 참가자의 훈련이 동시에 시작됩니다!', 'info');
     
-    // 방 상태 업데이트 (trainingStartTime 포함)
+    // 방 상태 업데이트 (trainingStartTime 및 createdAt 포함)
     const success = await apiUpdateRoom(roomCode, {
       status: 'training',
+      createdAt: createdAtISO, // ISO 형식
       trainingStartTime: trainingStartTime
     });
     
@@ -7289,13 +7291,14 @@ async function startGroupTrainingWithCountdown() {
       훈련시작시간ISO: trainingStartTime.toISOString()
     });
     
-    // 구글 시트에 훈련 시작 시간 업데이트 (시간만 HH:MM:SS 형식으로 저장)
+    // 구글 시트에 훈련 시작 시간 업데이트 (ISO 형식으로 저장)
     try {
       let updateSuccess = false;
+      const createdAtISO = trainingStartTime.toISOString(); // YYYY-MM-DDTHH:mm:ss.sssZ 형식
       if (typeof apiUpdateRoom === 'function') {
         const result = await apiUpdateRoom(roomCode, {
-          createdAt: trainingStartTimeStr, // HH:MM:SS 형식
-          trainingStartTime: trainingStartTimeStr // HH:MM:SS 형식
+          createdAt: createdAtISO, // ISO 형식
+          trainingStartTime: trainingStartTimeStr // HH:MM:SS 형식 (하위 호환성)
         });
         updateSuccess = !!(result && result.success);
         if (updateSuccess) {
@@ -7303,6 +7306,7 @@ async function startGroupTrainingWithCountdown() {
             roomCode,
             현재시간: currentTimeStr,
             훈련시작시간: trainingStartTimeStr,
+            createdAtISO: createdAtISO,
             result
           });
         } else {
@@ -7311,13 +7315,14 @@ async function startGroupTrainingWithCountdown() {
       } else if (typeof updateRoomOnBackend === 'function') {
         updateSuccess = await updateRoomOnBackend({
           ...room,
-          createdAt: trainingStartTimeStr, // HH:MM:SS 형식
-          trainingStartTime: trainingStartTimeStr // HH:MM:SS 형식
+          createdAt: createdAtISO, // ISO 형식
+          trainingStartTime: trainingStartTimeStr // HH:MM:SS 형식 (하위 호환성)
         });
         if (updateSuccess) {
           console.log('✅ 구글 시트에 훈련 시작 시간 업데이트 완료 (updateRoomOnBackend):', {
             현재시간: currentTimeStr,
-            훈련시작시간: trainingStartTimeStr
+            훈련시작시간: trainingStartTimeStr,
+            createdAtISO: createdAtISO
           });
         } else {
           console.error('❌ 구글 시트 업데이트 실패 (updateRoomOnBackend)');
@@ -7493,6 +7498,7 @@ async function startAllParticipantsTraining() {
                        adminUser.grade === 1 ||
                        (typeof getViewerGrade === 'function' && getViewerGrade() === '1');
     const trainingStartTime = new Date().toISOString();
+    const createdAtISO = trainingStartTime; // ISO 형식으로 저장
     
     if (adminUserCheck) {
       try {
@@ -7500,6 +7506,7 @@ async function startAllParticipantsTraining() {
         if (typeof apiUpdateRoom === 'function') {
           await apiUpdateRoom(roomCode, {
             status: 'training',
+            createdAt: createdAtISO, // ISO 형식
             trainingStartTime,
             countdownEndTime: null
           });
@@ -7507,6 +7514,7 @@ async function startAllParticipantsTraining() {
           await updateRoomOnBackend({
             ...room,
             status: 'training',
+            createdAt: createdAtISO, // ISO 형식
             trainingStartTime,
             countdownEndTime: null
           });
