@@ -35,7 +35,8 @@ window.groupTrainingState = window.groupTrainingState || {
   adminParticipationMode: 'monitor',
   trainingStartSignaled: false,
   timelineSnapshot: null,
-  monitoringTimelineInterval: null
+  monitoringTimelineInterval: null,
+  lastScrolledSegmentIndex: -1  // 마지막으로 스크롤한 세그먼트 인덱스 (세그먼트 변경 시에만 스크롤)
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -5911,18 +5912,21 @@ function renderWaitingHeaderSegmentTable() {
       }
 
       // 스크롤 위치 복원 (우선순위: 보존된 스크롤 > 저장된 스크롤 > 현재 세그먼트 기준)
+      // 세그먼트 인덱스가 실제로 변경되었을 때만 스크롤 (테이블 높이 출렁임 방지)
       if (isTrainingStarted && currentIdx >= 0) {
-        const lastAutoScrollIndex = Number(wrapper.dataset.lastAutoScrollIndex ?? '-1');
+        const lastScrolledIndex = groupTrainingState.lastScrolledSegmentIndex;
         const activeRow = wrapper.querySelector('tbody tr.active');
 
-        if (activeRow && lastAutoScrollIndex !== currentIdx) {
+        // 세그먼트 인덱스가 실제로 변경되었을 때만 스크롤
+        if (activeRow && lastScrolledIndex !== currentIdx) {
           const rowTop = activeRow.offsetTop;
           const wrapperHeight = wrapper.clientHeight;
           const rowHeight = activeRow.offsetHeight;
 
           const targetScroll = Math.max(0, rowTop - (wrapperHeight / 2) + (rowHeight / 2));
           wrapper.scrollTop = targetScroll;
-          wrapper.dataset.lastAutoScrollIndex = String(currentIdx);
+          // 전역 상태에 마지막 스크롤한 세그먼트 인덱스 저장
+          groupTrainingState.lastScrolledSegmentIndex = currentIdx;
         }
 
         const existingHandler = wrapper._scrollHandler;
@@ -5931,7 +5935,8 @@ function renderWaitingHeaderSegmentTable() {
           delete wrapper._scrollHandler;
         }
       } else {
-        wrapper.dataset.lastAutoScrollIndex = '-1';
+        // 훈련 시작 전 또는 세그먼트 인덱스가 없을 때: 스크롤 상태 초기화
+        groupTrainingState.lastScrolledSegmentIndex = -1;
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
         // 우선순위: 보존된 스크롤 > 저장된 스크롤 > 상단
         if (preservedScrollTop !== null && preservedScrollTop > 0) {
