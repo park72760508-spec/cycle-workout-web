@@ -5243,9 +5243,6 @@ function updateTimersOnly() {
     const countdownRemainingSeconds = snapshot.countdownRemainingSec ?? null;
     
     const elapsedTimer = formatTimer(elapsed);
-    const segmentTimerFormatted = isTrainingStarted
-      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
-      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
     
     // 타이머 값만 업데이트 (요소가 존재하는 경우에만)
     const screen = document.getElementById('groupWaitingScreen');
@@ -5260,9 +5257,25 @@ function updateTimersOnly() {
       elapsedTimerValue.textContent = elapsedTimer;
     }
     
-    // 세그먼트 카운트다운 타이머 업데이트
+    // 세그먼트 카운트다운 타이머 업데이트 (이전 값 유지하여 --:-- 리셋 방지)
     const segmentTimerValue = roomInfoCard.querySelector('.workout-timer.segment .timer-value');
     if (segmentTimerValue) {
+      let segmentTimerFormatted;
+      if (isTrainingStarted) {
+        if (currentSegRemaining !== null && currentSegRemaining !== undefined) {
+          segmentTimerFormatted = formatTimer(currentSegRemaining);
+        } else {
+          // 이전 값을 유지 (--:--로 리셋하지 않음)
+          const currentText = segmentTimerValue.textContent;
+          if (currentText && currentText !== '--:--') {
+            segmentTimerFormatted = currentText;
+          } else {
+            segmentTimerFormatted = '--:--';
+          }
+        }
+      } else {
+        segmentTimerFormatted = countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--';
+      }
       segmentTimerValue.textContent = segmentTimerFormatted;
     }
     
@@ -5712,11 +5725,26 @@ function renderWaitingHeaderSegmentTable() {
       ? normalizedSegments.find(item => item.originalIndex === currentIdx + 1)
       : (phase === 'countdown' ? normalizedSegments[0] : null);
 
-    // 타이머 표시 포맷
+    // 타이머 표시 포맷 (이전 값 유지하여 --:-- 리셋 방지)
     const elapsedTimer = formatTimer(elapsed);
-    const segmentTimerFormatted = isTrainingStarted
-      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
-      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
+    let segmentTimerFormatted;
+    if (isTrainingStarted) {
+      if (currentSegRemaining !== null && Number.isFinite(currentSegRemaining)) {
+        segmentTimerFormatted = formatTimer(currentSegRemaining);
+      } else {
+        // 이전 값을 유지하려고 시도 (요소가 이미 존재하는 경우)
+        const screen = document.getElementById('groupWaitingScreen');
+        const roomInfoCard = screen?.querySelector('.room-info.card');
+        const existingTimer = roomInfoCard?.querySelector('.workout-timer.segment .timer-value');
+        if (existingTimer && existingTimer.textContent && existingTimer.textContent !== '--:--') {
+          segmentTimerFormatted = existingTimer.textContent;
+        } else {
+          segmentTimerFormatted = '--:--';
+        }
+      }
+    } else {
+      segmentTimerFormatted = countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--';
+    }
 
     // 서브텍스트 정보
     const elapsedSubtext = isTrainingStarted && currentSegmentInfo
@@ -5775,10 +5803,10 @@ function renderWaitingHeaderSegmentTable() {
 
     const tableRows = orderedSegments.map((item, orderIdx) => {
       const { seg, originalIndex, label, type, ftp, durationStr } = item;
-      const isActive = isTrainingStarted && originalIndex === currentIdx;
+      // active 클래스 제거 - 네온 효과 오버레이만 사용
 
       return `
-        <tr class="${isActive ? 'active' : ''}">
+        <tr data-segment-index="${originalIndex}">
           <td class="seg-col-index">
             <span class="seg-index-text">${String(originalIndex + 1).padStart(2, '0')}</span>
           </td>
@@ -5805,16 +5833,9 @@ function renderWaitingHeaderSegmentTable() {
     // 스크롤 위치 보존: innerHTML 재생성 전에 현재 스크롤 위치 저장
     const existingWrapper = roomInfoCard.querySelector('.workout-table-wrapper');
     let preservedScrollTop = null;
-    let preservedCurrentSegIndex = null;
     
     if (existingWrapper) {
       preservedScrollTop = existingWrapper.scrollTop;
-      // 현재 활성 세그먼트 인덱스도 저장 (스크롤 계산용)
-      const activeRow = existingWrapper.querySelector('tbody tr.active');
-      if (activeRow) {
-        const allRows = Array.from(existingWrapper.querySelectorAll('tbody tr'));
-        preservedCurrentSegIndex = allRows.indexOf(activeRow);
-      }
     }
 
     roomInfoCard.innerHTML = `
@@ -5911,32 +5932,9 @@ function renderWaitingHeaderSegmentTable() {
         }
       }
 
-      // 스크롤 위치 복원 (우선순위: 보존된 스크롤 > 저장된 스크롤 > 현재 세그먼트 기준)
-      // 세그먼트 인덱스가 실제로 변경되었을 때만 스크롤 (테이블 높이 출렁임 방지)
-      if (isTrainingStarted && currentIdx >= 0) {
-        const lastScrolledIndex = groupTrainingState.lastScrolledSegmentIndex;
-        const activeRow = wrapper.querySelector('tbody tr.active');
-
-        // 세그먼트 인덱스가 실제로 변경되었을 때만 스크롤
-        if (activeRow && lastScrolledIndex !== currentIdx) {
-          const rowTop = activeRow.offsetTop;
-          const wrapperHeight = wrapper.clientHeight;
-          const rowHeight = activeRow.offsetHeight;
-
-          const targetScroll = Math.max(0, rowTop - (wrapperHeight / 2) + (rowHeight / 2));
-          wrapper.scrollTop = targetScroll;
-          // 전역 상태에 마지막 스크롤한 세그먼트 인덱스 저장
-          groupTrainingState.lastScrolledSegmentIndex = currentIdx;
-        }
-
-        const existingHandler = wrapper._scrollHandler;
-        if (existingHandler) {
-          wrapper.removeEventListener('scroll', existingHandler);
-          delete wrapper._scrollHandler;
-        }
-      } else {
-        // 훈련 시작 전 또는 세그먼트 인덱스가 없을 때: 스크롤 상태 초기화
-        groupTrainingState.lastScrolledSegmentIndex = -1;
+      // 활성 행 추적 기능 제거 - 스크롤 자동 이동 없음
+      // 훈련 시작 전: 사용자가 스크롤한 위치 유지
+      if (!isTrainingStarted || currentIdx < 0) {
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
         // 우선순위: 보존된 스크롤 > 저장된 스크롤 > 상단
         if (preservedScrollTop !== null && preservedScrollTop > 0) {
@@ -5970,7 +5968,7 @@ function renderWaitingHeaderSegmentTable() {
         wrapper.addEventListener('scroll', handleScroll, { passive: true });
       }
 
-      setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0);
+      setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0, currentIdx);
     });
     
     // 시계 요소 복원 또는 시작
@@ -5994,7 +5992,7 @@ function renderWaitingHeaderSegmentTable() {
   }
 }
 
-function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
+function setupSegmentActiveOverlay(wrapper, shouldShowOverlay, currentSegmentIndex) {
   if (!wrapper) return;
 
   const handlerKey = '_segmentOverlayScrollHandler';
@@ -6007,9 +6005,9 @@ function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
 
   let overlay = wrapper.querySelector(`.${overlayClassName}`);
 
-  if (!shouldShowOverlay) {
+  if (!shouldShowOverlay || currentSegmentIndex < 0) {
     if (overlay) {
-      overlay.remove();
+      overlay.style.opacity = '0';
     }
     return;
   }
@@ -6020,9 +6018,10 @@ function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
     wrapper.appendChild(overlay);
   }
 
+  // active 클래스 대신 data-segment-index 속성으로 현재 세그먼트 행 찾기
   const syncOverlayPosition = () => {
     if (!overlay || !overlay.isConnected) return;
-    const activeRow = wrapper.querySelector('tbody tr.active');
+    const activeRow = wrapper.querySelector(`tbody tr[data-segment-index="${currentSegmentIndex}"]`);
     if (!activeRow) {
       overlay.style.opacity = '0';
       return;
@@ -6040,6 +6039,7 @@ function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
     overlay.style.height = `${rowHeight}px`;
   };
 
+  // 스크롤 이벤트 핸들러 등록 (오버레이 위치만 동기화, 스크롤 추적 없음)
   const handleScroll = () => syncOverlayPosition();
   wrapper[handlerKey] = handleScroll;
   wrapper.addEventListener('scroll', handleScroll, { passive: true });
