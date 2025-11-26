@@ -1016,9 +1016,13 @@
 
 .workout-table-wrapper {
   max-height: 200px;
+  min-height: 200px;
   overflow-y: auto;
+  overflow-x: hidden;
   border-radius: 10px;
   position: relative;
+  /* 스크롤바 깜빡임 방지: 스크롤바 공간을 항상 예약 */
+  scrollbar-gutter: stable;
 }
 
 .workout-table {
