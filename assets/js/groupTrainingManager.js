@@ -5233,15 +5233,19 @@ async function initializeWaitingRoom() {
             }))
           );
           
-          // 데이터 변경 여부 확인
+          // 데이터 변경 여부 확인 (타이머 값 변경은 제외하여 깜빡임 최소화)
           const hasChanged = 
-            window.lastRenderState.elapsed !== currentElapsed ||
             window.lastRenderState.segmentIndex !== currentSegIndex ||
-            window.lastRenderState.segmentRemaining !== currentSegRemaining ||
             window.lastRenderState.participantsHash !== participantsHash;
           
+          // 타이머 값만 변경된 경우 (elapsed, segmentRemaining)
+          const onlyTimerChanged = 
+            !hasChanged &&
+            (window.lastRenderState.elapsed !== currentElapsed ||
+             window.lastRenderState.segmentRemaining !== currentSegRemaining);
+          
           if (hasChanged) {
-            // 변경된 경우에만 업데이트
+            // 세그먼트 인덱스나 참가자 목록이 변경된 경우에만 전체 업데이트
             updateParticipantsList();
             renderWaitingHeaderSegmentTable();
             
@@ -5252,9 +5256,13 @@ async function initializeWaitingRoom() {
               segmentRemaining: currentSegRemaining,
               participantsHash: participantsHash
             };
-          } else {
-            // 변경되지 않은 경우 타이머 값만 업데이트 (DOM 재생성 없이)
+          } else if (onlyTimerChanged) {
+            // 타이머 값만 변경된 경우 타이머 값만 업데이트 (DOM 재생성 없이, 깜빡임 방지)
             updateTimersOnly();
+            
+            // 상태 저장 (타이머 값만)
+            window.lastRenderState.elapsed = currentElapsed;
+            window.lastRenderState.segmentRemaining = currentSegRemaining;
           }
         }
       }
@@ -5294,41 +5302,88 @@ function updateTimersOnly() {
     
     // 경과 시간 타이머 업데이트
     const elapsedTimerValue = roomInfoCard.querySelector('.workout-timer.elapsed .timer-value');
-    if (elapsedTimerValue) {
+    if (elapsedTimerValue && elapsedTimerValue.textContent !== elapsedTimer) {
       elapsedTimerValue.textContent = elapsedTimer;
     }
     
+    // 경과 시간 서브텍스트 업데이트
+    const elapsedSubtextEl = roomInfoCard.querySelector('.workout-timer.elapsed .timer-subtext');
+    if (elapsedSubtextEl && isTrainingStarted) {
+      const snapshot = groupTrainingState.timelineSnapshot;
+      const currentIdx = isTrainingStarted && snapshot?.segmentIndex !== undefined ? snapshot.segmentIndex : -1;
+      const workout = window.currentWorkout;
+      if (workout && workout.segments && currentIdx >= 0 && currentIdx < workout.segments.length) {
+        const currentSegment = workout.segments[currentIdx];
+        const segmentLabel = currentSegment.label || currentSegment.name || currentSegment.title || `세그먼트 ${currentIdx + 1}`;
+        const newSubtext = `${segmentLabel} 진행 중`;
+        if (elapsedSubtextEl.textContent !== newSubtext) {
+          elapsedSubtextEl.textContent = newSubtext;
+        }
+      }
+    }
+    
     // 세그먼트 카운트다운 타이머 업데이트 (이전 값 유지하여 --:-- 리셋 방지)
-    const segmentTimerValue = roomInfoCard.querySelector('.workout-timer.segment .timer-value');
+    // 선택자를 더 유연하게 수정 (클래스가 추가되어도 찾을 수 있도록)
+    const segmentTimerContainer = roomInfoCard.querySelector('.workout-timer.segment');
+    const segmentTimerValue = segmentTimerContainer?.querySelector('.timer-value, .timer-value.is-countdown');
     if (segmentTimerValue) {
       let segmentTimerFormatted;
       if (isTrainingStarted) {
-      if (currentSegRemaining !== null && currentSegRemaining !== undefined && Number.isFinite(currentSegRemaining)) {
-        segmentTimerFormatted = formatSegmentTimer(currentSegRemaining); // hh:mm 형식
-        // 유효한 값이면 전역 상태에 저장
-        groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
-      } else {
-        // 이전 값을 유지 (--:--로 리셋하지 않음)
-        if (groupTrainingState.lastSegmentTimerValue && groupTrainingState.lastSegmentTimerValue !== '--:--') {
-          segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
+        if (currentSegRemaining !== null && currentSegRemaining !== undefined && Number.isFinite(currentSegRemaining) && currentSegRemaining >= 0) {
+          segmentTimerFormatted = formatSegmentTimer(currentSegRemaining); // mm:ss 형식
+          // 유효한 값이면 전역 상태에 저장
+          groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
         } else {
-          const currentText = segmentTimerValue.textContent;
-          if (currentText && currentText !== '--:--') {
-            segmentTimerFormatted = currentText;
-            groupTrainingState.lastSegmentTimerValue = currentText;
+          // 이전 값을 유지 (--:--로 리셋하지 않음)
+          if (groupTrainingState.lastSegmentTimerValue && groupTrainingState.lastSegmentTimerValue !== '--:--') {
+            segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
           } else {
-            segmentTimerFormatted = '--:--';
+            const currentText = segmentTimerValue.textContent?.trim();
+            if (currentText && currentText !== '--:--' && currentText !== '') {
+              segmentTimerFormatted = currentText;
+              groupTrainingState.lastSegmentTimerValue = currentText;
+            } else {
+              segmentTimerFormatted = '--:--';
+            }
+          }
+        }
+      } else {
+        segmentTimerFormatted = countdownRemainingSeconds !== null && countdownRemainingSeconds >= 0 
+          ? formatSegmentTimer(countdownRemainingSeconds) 
+          : '--:--'; // mm:ss 형식
+        // 카운트다운 중이 아니면 전역 상태 초기화
+        if (countdownRemainingSeconds === null) {
+          groupTrainingState.lastSegmentTimerValue = null;
+        }
+      }
+      // 텍스트 업데이트 (값이 변경된 경우에만)
+      if (segmentTimerValue.textContent !== segmentTimerFormatted) {
+        segmentTimerValue.textContent = segmentTimerFormatted;
+      }
+      
+      // 세그먼트 서브텍스트 업데이트
+      const segmentSubtextEl = segmentTimerContainer?.querySelector('.timer-subtext');
+      if (segmentSubtextEl && isTrainingStarted) {
+        const snapshot = groupTrainingState.timelineSnapshot;
+        const currentIdx = isTrainingStarted && snapshot?.segmentIndex !== undefined ? snapshot.segmentIndex : -1;
+        const workout = window.currentWorkout;
+        if (workout && workout.segments) {
+          const nextIdx = currentIdx >= 0 && currentIdx < workout.segments.length - 1 ? currentIdx + 1 : -1;
+          let newSubtext = '대기 중';
+          if (nextIdx >= 0 && nextIdx < workout.segments.length) {
+            const nextSegment = workout.segments[nextIdx];
+            newSubtext = `다음: ${nextSegment.label || nextSegment.name || nextSegment.title || `세그먼트 ${nextIdx + 1}`}`;
+          } else if (currentIdx >= 0 && currentIdx < workout.segments.length) {
+            const currentSegment = workout.segments[currentIdx];
+            newSubtext = `${currentSegment.label || currentSegment.name || currentSegment.title || `세그먼트 ${currentIdx + 1}`} 진행 중`;
+          } else {
+            newSubtext = '마지막 구간';
+          }
+          if (segmentSubtextEl.textContent !== newSubtext) {
+            segmentSubtextEl.textContent = newSubtext;
           }
         }
       }
-    } else {
-      segmentTimerFormatted = countdownRemainingSeconds !== null ? formatSegmentTimer(countdownRemainingSeconds) : '--:--'; // hh:mm 형식
-      // 카운트다운 중이 아니면 전역 상태 초기화
-      if (countdownRemainingSeconds === null) {
-        groupTrainingState.lastSegmentTimerValue = null;
-      }
-    }
-      segmentTimerValue.textContent = segmentTimerFormatted;
     }
     
   } catch (e) {
