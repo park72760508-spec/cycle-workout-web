@@ -929,7 +929,19 @@ let microphoneState = {
   isActive: false,
   mediaStream: null,
   audioContext: null,
-  analyser: null
+  analyser: null,
+  mediaRecorder: null,
+  recordingChunks: [],
+  audioChunkInterval: null,
+  lastChunkId: 0
+};
+
+// 참가자 오디오 재생 상태 관리
+let participantAudioState = {
+  isListening: false,
+  audioCheckInterval: null,
+  lastReceivedChunkId: 0,
+  audioQueue: []
 };
 
 // ========== 기본 유틸리티 함수들 ==========
@@ -4033,8 +4045,396 @@ function setupGroupTrainingControlBar() {
     };
   }
   
+  // 마이크 버튼 이벤트 리스너 설정
+  const micBtn = document.getElementById('groupMicrophoneBtn');
+  if (micBtn && !micBtn.dataset.bound) {
+    micBtn.dataset.bound = '1';
+    micBtn.onclick = async () => {
+      if (microphoneState.isActive) {
+        await stopAdminMicrophone();
+      } else {
+        await startAdminMicrophone();
+      }
+    };
+  }
+  
+  // 마이크 상태에 따라 버튼 업데이트
+  updateAdminMicrophoneUI();
+  
   // 버튼 상태 업데이트
   updateStartButtonState();
+}
+
+// ========== 관리자 마이크 음성 코칭 기능 ==========
+
+/**
+ * 관리자 마이크 시작 (실시간 음성 코칭)
+ */
+async function startAdminMicrophone() {
+  try {
+    if (!groupTrainingState.isAdmin) {
+      showToast('관리자만 마이크를 사용할 수 있습니다', 'error');
+      return;
+    }
+    
+    if (!groupTrainingState.roomCode) {
+      showToast('훈련방에 입장해야 합니다', 'error');
+      return;
+    }
+    
+    // 마이크 권한 요청
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: 16000 // 음성 코칭에 적합한 샘플레이트
+      }
+    });
+    
+    microphoneState.mediaStream = stream;
+    microphoneState.isActive = true;
+    
+    // 오디오 컨텍스트 생성 (음성 레벨 표시용)
+    microphoneState.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    microphoneState.analyser = microphoneState.audioContext.createAnalyser();
+    microphoneState.analyser.fftSize = 256;
+    
+    const source = microphoneState.audioContext.createMediaStreamSource(stream);
+    source.connect(microphoneState.analyser);
+    
+    // MediaRecorder 초기화 (실시간 오디오 청크 녹음)
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+      ? 'audio/webm' 
+      : MediaRecorder.isTypeSupported('audio/ogg') 
+        ? 'audio/ogg' 
+        : 'audio/webm'; // 기본값
+    
+    microphoneState.mediaRecorder = new MediaRecorder(stream, {
+      mimeType: mimeType,
+      audioBitsPerSecond: 128000
+    });
+    
+    microphoneState.recordingChunks = [];
+    microphoneState.lastChunkId = 0;
+    
+    // 오디오 데이터 수집
+    microphoneState.mediaRecorder.ondataavailable = async (event) => {
+      if (event.data && event.data.size > 0) {
+        await sendAudioChunk(event.data);
+      }
+    };
+    
+    // 2초마다 오디오 청크 생성 및 전송
+    microphoneState.mediaRecorder.start(2000);
+    
+    // UI 업데이트
+    updateAdminMicrophoneUI();
+    
+    // 음성 레벨 표시 시작 (선택사항)
+    startAudioLevelIndicator();
+    
+    showToast('🎤 마이크가 활성화되었습니다. 참가자들에게 음성 코칭을 시작합니다.', 'success');
+    
+    console.log('✅ 관리자 마이크 활성화 성공');
+    
+  } catch (error) {
+    console.error('❌ 관리자 마이크 활성화 실패:', error);
+    microphoneState.isActive = false;
+    
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      showToast('마이크 권한이 필요합니다. 브라우저 설정에서 마이크 권한을 허용해주세요.', 'error');
+    } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+      showToast('마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.', 'error');
+    } else {
+      showToast('마이크를 시작할 수 없습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+    }
+  }
+}
+
+/**
+ * 관리자 마이크 중지
+ */
+async function stopAdminMicrophone() {
+  try {
+    // MediaRecorder 중지
+    if (microphoneState.mediaRecorder && microphoneState.mediaRecorder.state !== 'inactive') {
+      microphoneState.mediaRecorder.stop();
+      microphoneState.mediaRecorder = null;
+    }
+    
+    // 오디오 청크 전송 인터벌 중지
+    if (microphoneState.audioChunkInterval) {
+      clearInterval(microphoneState.audioChunkInterval);
+      microphoneState.audioChunkInterval = null;
+    }
+    
+    // 음성 레벨 표시 중지
+    stopAudioLevelIndicator();
+    
+    // 스트림 중지
+    if (microphoneState.mediaStream) {
+      microphoneState.mediaStream.getTracks().forEach(track => track.stop());
+      microphoneState.mediaStream = null;
+    }
+    
+    // 오디오 컨텍스트 종료
+    if (microphoneState.audioContext) {
+      await microphoneState.audioContext.close();
+      microphoneState.audioContext = null;
+      microphoneState.analyser = null;
+    }
+    
+    microphoneState.isActive = false;
+    microphoneState.recordingChunks = [];
+    microphoneState.lastChunkId = 0;
+    
+    // UI 업데이트
+    updateAdminMicrophoneUI();
+    
+    showToast('🎤 마이크가 비활성화되었습니다', 'info');
+    
+    console.log('⏹️ 관리자 마이크 비활성화 완료');
+    
+  } catch (error) {
+    console.error('❌ 관리자 마이크 비활성화 오류:', error);
+  }
+}
+
+/**
+ * 오디오 청크 전송 (서버에 저장)
+ */
+async function sendAudioChunk(audioBlob) {
+  try {
+    if (!groupTrainingState.roomCode || !microphoneState.isActive) {
+      return;
+    }
+    
+    // 오디오 블롭을 base64로 변환
+    const reader = new FileReader();
+    const base64Audio = await new Promise((resolve, reject) => {
+      reader.onloadend = () => {
+        const base64 = reader.result.split(',')[1]; // data:audio/webm;base64, 부분 제거
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(audioBlob);
+    });
+    
+    // 청크 ID 생성
+    microphoneState.lastChunkId++;
+    const chunkId = microphoneState.lastChunkId;
+    const timestamp = Date.now();
+    
+    // 서버에 오디오 청크 저장 (Google Sheets를 통한 임시 저장)
+    // 실제로는 실시간 스트리밍을 위한 별도 서버가 필요하지만, 
+    // 현재 구조에서는 방 데이터에 최신 오디오 청크 정보만 저장
+    const audioChunkData = {
+      chunkId: chunkId,
+      timestamp: timestamp,
+      audioData: base64Audio,
+      roomCode: groupTrainingState.roomCode,
+      adminId: window.currentUser?.id || 'admin'
+    };
+    
+    // 방 데이터에 최신 오디오 청크 정보 저장
+    await apiUpdateRoom(groupTrainingState.roomCode, {
+      lastAudioChunk: JSON.stringify(audioChunkData)
+    });
+    
+    console.log(`📤 오디오 청크 전송: 청크 ID ${chunkId}, 크기: ${(audioBlob.size / 1024).toFixed(2)}KB`);
+    
+  } catch (error) {
+    console.error('❌ 오디오 청크 전송 실패:', error);
+  }
+}
+
+/**
+ * 관리자 마이크 UI 업데이트
+ */
+function updateAdminMicrophoneUI() {
+  const micBtn = document.getElementById('groupMicrophoneBtn');
+  const micLabel = document.getElementById('microphoneLabel');
+  
+  if (micBtn) {
+    if (microphoneState.isActive) {
+      micBtn.classList.add('active');
+      micBtn.title = '마이크 끄기 (음성 코칭 종료)';
+      if (micLabel) {
+        micLabel.textContent = '마이크 ON';
+      }
+    } else {
+      micBtn.classList.remove('active');
+      micBtn.title = '마이크 켜기 (음성 코칭 시작)';
+      if (micLabel) {
+        micLabel.textContent = '마이크';
+      }
+    }
+  }
+}
+
+/**
+ * 음성 레벨 표시 (선택사항)
+ */
+function startAudioLevelIndicator() {
+  if (!microphoneState.analyser) return;
+  
+  const bufferLength = microphoneState.analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+  
+  function updateLevel() {
+    if (!microphoneState.isActive || !microphoneState.analyser) {
+      return;
+    }
+    
+    microphoneState.analyser.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((sum, val) => sum + val, 0) / bufferLength;
+    
+    // 음성 레벨 표시 (선택사항 - UI에 표시하려면 추가)
+    // const micBtn = document.getElementById('groupMicrophoneBtn');
+    // if (micBtn) {
+    //   const level = Math.min(100, (average / 255) * 100);
+    //   micBtn.style.opacity = 0.5 + (level / 200);
+    // }
+    
+    requestAnimationFrame(updateLevel);
+  }
+  
+  updateLevel();
+}
+
+/**
+ * 음성 레벨 표시 중지
+ */
+function stopAudioLevelIndicator() {
+  // 레벨 표시 중지 로직 (필요 시 구현)
+}
+
+/**
+ * 참가자 오디오 수신 시작 (관리자 음성 코칭 수신)
+ */
+function startParticipantAudioListening() {
+  if (participantAudioState.isListening) {
+    return; // 이미 수신 중
+  }
+  
+  if (groupTrainingState.isAdmin) {
+    return; // 관리자는 수신하지 않음
+  }
+  
+  participantAudioState.isListening = true;
+  participantAudioState.lastReceivedChunkId = 0;
+  
+  // 1초마다 새로운 오디오 청크 확인
+  participantAudioState.audioCheckInterval = setInterval(async () => {
+    await checkAndPlayAudioChunk();
+  }, 1000);
+  
+  console.log('🎧 참가자 오디오 수신 시작');
+}
+
+/**
+ * 참가자 오디오 수신 중지
+ */
+function stopParticipantAudioListening() {
+  participantAudioState.isListening = false;
+  
+  if (participantAudioState.audioCheckInterval) {
+    clearInterval(participantAudioState.audioCheckInterval);
+    participantAudioState.audioCheckInterval = null;
+  }
+  
+  // 오디오 큐 정리
+  participantAudioState.audioQueue = [];
+  
+  console.log('🔇 참가자 오디오 수신 중지');
+}
+
+/**
+ * 새로운 오디오 청크 확인 및 재생 (syncRoomData에서 호출)
+ */
+async function checkAndPlayAudioChunkFromRoom(room) {
+  try {
+    if (!room || !room.lastAudioChunk || !participantAudioState.isListening) {
+      return;
+    }
+    
+    let audioChunkData;
+    try {
+      audioChunkData = typeof room.lastAudioChunk === 'string' 
+        ? JSON.parse(room.lastAudioChunk) 
+        : room.lastAudioChunk;
+    } catch (e) {
+      console.warn('오디오 청크 데이터 파싱 실패:', e);
+      return;
+    }
+    
+    if (!audioChunkData || !audioChunkData.chunkId || !audioChunkData.audioData) {
+      return;
+    }
+    
+    // 이미 재생한 청크는 건너뛰기
+    if (audioChunkData.chunkId <= participantAudioState.lastReceivedChunkId) {
+      return;
+    }
+    
+    // 새로운 청크 재생
+    await playAudioChunk(audioChunkData);
+    
+    participantAudioState.lastReceivedChunkId = audioChunkData.chunkId;
+    
+  } catch (error) {
+    console.error('❌ 오디오 청크 확인 오류:', error);
+  }
+}
+
+/**
+ * 오디오 청크 재생
+ */
+async function playAudioChunk(audioChunkData) {
+  try {
+    const { audioData, chunkId, timestamp } = audioChunkData;
+    
+    if (!audioData) {
+      return;
+    }
+    
+    // base64를 Blob으로 변환
+    const byteCharacters = atob(audioData);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    
+    // MIME 타입 결정
+    const mimeType = 'audio/webm'; // 또는 audio/ogg 등
+    const blob = new Blob([byteArray], { type: mimeType });
+    const audioUrl = URL.createObjectURL(blob);
+    
+    // 오디오 재생
+    const audio = new Audio(audioUrl);
+    audio.volume = 1.0; // 볼륨 설정
+    
+    await new Promise((resolve, reject) => {
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        resolve();
+      };
+      audio.onerror = (error) => {
+        URL.revokeObjectURL(audioUrl);
+        console.error('오디오 재생 오류:', error);
+        reject(error);
+      };
+      
+      audio.play().catch(reject);
+    });
+    
+    console.log(`🔊 오디오 청크 재생 완료: 청크 ID ${chunkId}`);
+    
+  } catch (error) {
+    console.error('❌ 오디오 청크 재생 실패:', error);
+  }
 }
 
 /**
@@ -4696,6 +5096,11 @@ async function initializeWaitingRoom() {
   updateParticipantsList();
   setupGroupTrainingControlBar();
   
+  // 참가자 오디오 수신 시작 (관리자 음성 코칭 수신)
+  if (!groupTrainingState.isAdmin) {
+    startParticipantAudioListening();
+  }
+  
   // 대기실에서도 참가자 실시간 데이터 업로드 시작(관리자 포함)
   if (typeof startParticipantDataSync === 'function') {
     startParticipantDataSync();
@@ -4706,6 +5111,14 @@ async function initializeWaitingRoom() {
     clearInterval(window.participantMetricsUpdateInterval);
     window.participantMetricsUpdateInterval = null;
   }
+  // 이전 렌더링 상태를 저장하여 변경된 경우에만 DOM 업데이트
+  let lastRenderState = {
+    elapsed: null,
+    segmentIndex: null,
+    segmentRemaining: null,
+    participantsHash: null
+  };
+  
   window.participantMetricsUpdateInterval = setInterval(() => {
     try {
       // 대기실 화면이 표시 중일 때만 갱신
@@ -4715,15 +5128,105 @@ async function initializeWaitingRoom() {
         const room = groupTrainingState.currentRoom;
         if (room) {
           updateTimelineSnapshot(room);
+          
+          // 스냅샷 데이터로 변경 여부 확인
+          const snapshot = groupTrainingState.timelineSnapshot;
+          const currentElapsed = snapshot?.elapsedSec || 0;
+          const currentSegIndex = snapshot?.segmentIndex || -1;
+          const currentSegRemaining = snapshot?.segmentRemainingSec || null;
+          
+          // 참가자 목록 해시 생성 (변경 여부 확인용)
+          const participantsHash = JSON.stringify(
+            (room.participants || []).map(p => ({
+              id: p.id || p.participantId,
+              ready: p.ready || p.isReady,
+              name: p.name || p.participantName
+            }))
+          );
+          
+          // 데이터 변경 여부 확인
+          const hasChanged = 
+            lastRenderState.elapsed !== currentElapsed ||
+            lastRenderState.segmentIndex !== currentSegIndex ||
+            lastRenderState.segmentRemaining !== currentSegRemaining ||
+            lastRenderState.participantsHash !== participantsHash;
+          
+          if (hasChanged) {
+            // 변경된 경우에만 업데이트
+            updateParticipantsList();
+            renderWaitingHeaderSegmentTable();
+            
+            // 상태 저장
+            lastRenderState = {
+              elapsed: currentElapsed,
+              segmentIndex: currentSegIndex,
+              segmentRemaining: currentSegRemaining,
+              participantsHash: participantsHash
+            };
+          } else {
+            // 변경되지 않은 경우 타이머 값만 업데이트 (DOM 재생성 없이)
+            updateTimersOnly();
+          }
         }
-        
-        updateParticipantsList();
-        renderWaitingHeaderSegmentTable();
       }
     } catch (e) {
       console.warn('participantMetricsUpdateInterval 오류:', e);
     }
   }, 1000);
+}
+
+/**
+ * 타이머 값만 업데이트 (DOM 재생성 없이)
+ */
+function updateTimersOnly() {
+  try {
+    const snapshot = groupTrainingState.timelineSnapshot;
+    if (!snapshot) return;
+    
+    const phase = snapshot.phase || 'idle';
+    const isTrainingStarted = phase === 'training';
+    const elapsed = snapshot.elapsedSec || 0;
+    const currentIdx = isTrainingStarted && snapshot.segmentIndex !== undefined
+      ? snapshot.segmentIndex
+      : -1;
+    const currentSegRemaining = isTrainingStarted && snapshot
+      ? (snapshot.segmentRemainingSec !== null && snapshot.segmentRemainingSec !== undefined ? snapshot.segmentRemainingSec : null)
+      : null;
+    const countdownRemainingSeconds = snapshot.countdownRemainingSec ?? null;
+    
+    const elapsedTimer = formatTimer(elapsed);
+    const segmentTimerFormatted = isTrainingStarted
+      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
+      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
+    
+    // 타이머 값만 업데이트 (요소가 존재하는 경우에만)
+    const screen = document.getElementById('groupWaitingScreen');
+    if (!screen) return;
+    
+    const roomInfoCard = screen.querySelector('.room-info.card');
+    if (!roomInfoCard) return;
+    
+    // 경과 시간 타이머 업데이트
+    const elapsedTimerValue = roomInfoCard.querySelector('.workout-timer.elapsed .timer-value');
+    if (elapsedTimerValue) {
+      elapsedTimerValue.textContent = elapsedTimer;
+    }
+    
+    // 세그먼트 카운트다운 타이머 업데이트
+    const segmentTimerValue = roomInfoCard.querySelector('.workout-timer.segment .timer-value');
+    if (segmentTimerValue) {
+      segmentTimerValue.textContent = segmentTimerFormatted;
+    }
+    
+  } catch (e) {
+    console.warn('updateTimersOnly 오류:', e);
+  }
+}
+  
+  // 참가자 오디오 수신 시작 (관리자 음성 코칭 수신)
+  if (!groupTrainingState.isAdmin) {
+    startParticipantAudioListening();
+  }
   
   // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
   // 관리자도 일반 참가자처럼 준비완료 버튼을 사용할 수 있도록 설정
@@ -5387,12 +5890,24 @@ function renderWaitingHeaderSegmentTable() {
         console.warn('스크롤 위치 저장소 읽기 실패:', e);
       }
 
+      // 스크롤바 깜빡임 방지: 고정 높이 설정 (변경하지 않음)
       const maxVisible = Math.min(3, rows.length);
       if (rows.length > maxVisible) {
         const rowHeight = rows[0].offsetHeight || 0;
-        wrapper.style.maxHeight = `${rowHeight * maxVisible + 4}px`;
+        // 최초 1회만 설정하고 이후에는 변경하지 않음
+        if (!wrapper.dataset.heightSet) {
+          wrapper.style.maxHeight = `${rowHeight * maxVisible + 4}px`;
+          wrapper.style.minHeight = `${rowHeight * maxVisible + 4}px`;
+          wrapper.dataset.heightSet = 'true';
+        }
       } else {
-        wrapper.style.removeProperty('max-height');
+        // 행이 적어도 최소 높이 유지 (스크롤바 깜빡임 방지)
+        if (!wrapper.dataset.heightSet) {
+          const defaultHeight = 150; // 기본 높이
+          wrapper.style.maxHeight = `${defaultHeight}px`;
+          wrapper.style.minHeight = `${defaultHeight}px`;
+          wrapper.dataset.heightSet = 'true';
+        }
       }
 
       // 스크롤 위치 복원 (우선순위: 보존된 스크롤 > 저장된 스크롤 > 현재 세그먼트 기준)
@@ -5969,6 +6484,12 @@ async function syncRoomData() {
 
       if (hasChanges) {
         groupTrainingState.currentRoom = mergedRoom;
+        
+        // 참가자 오디오 청크 확인 및 재생 (관리자가 아닌 경우)
+        if (!groupTrainingState.isAdmin && participantAudioState.isListening) {
+          checkAndPlayAudioChunkFromRoom(mergedRoom);
+        }
+        
         updateParticipantsList();
         
         if (window.groupTrainingHooks?.updateRoom) {
