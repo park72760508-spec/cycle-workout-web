@@ -5111,13 +5111,16 @@ async function initializeWaitingRoom() {
     clearInterval(window.participantMetricsUpdateInterval);
     window.participantMetricsUpdateInterval = null;
   }
-  // 이전 렌더링 상태를 저장하여 변경된 경우에만 DOM 업데이트
-  let lastRenderState = {
-    elapsed: null,
-    segmentIndex: null,
-    segmentRemaining: null,
-    participantsHash: null
-  };
+  
+  // 이전 렌더링 상태를 저장하여 변경된 경우에만 DOM 업데이트 (전역 스코프로 이동)
+  if (!window.lastRenderState) {
+    window.lastRenderState = {
+      elapsed: null,
+      segmentIndex: null,
+      segmentRemaining: null,
+      participantsHash: null
+    };
+  }
   
   window.participantMetricsUpdateInterval = setInterval(() => {
     try {
@@ -5146,10 +5149,10 @@ async function initializeWaitingRoom() {
           
           // 데이터 변경 여부 확인
           const hasChanged = 
-            lastRenderState.elapsed !== currentElapsed ||
-            lastRenderState.segmentIndex !== currentSegIndex ||
-            lastRenderState.segmentRemaining !== currentSegRemaining ||
-            lastRenderState.participantsHash !== participantsHash;
+            window.lastRenderState.elapsed !== currentElapsed ||
+            window.lastRenderState.segmentIndex !== currentSegIndex ||
+            window.lastRenderState.segmentRemaining !== currentSegRemaining ||
+            window.lastRenderState.participantsHash !== participantsHash;
           
           if (hasChanged) {
             // 변경된 경우에만 업데이트
@@ -5157,7 +5160,7 @@ async function initializeWaitingRoom() {
             renderWaitingHeaderSegmentTable();
             
             // 상태 저장
-            lastRenderState = {
+            window.lastRenderState = {
               elapsed: currentElapsed,
               segmentIndex: currentSegIndex,
               segmentRemaining: currentSegRemaining,
