@@ -1371,12 +1371,16 @@ function updateClockSimple(clockElement, newTime) {
   
   const timeStr = formatTime(newTime);
   
-  // 시계 구조가 있으면 제거하고 간단한 텍스트로 변경
+  // 깜빡임 방지: innerHTML 사용하지 않고 textContent만 업데이트
+  // 시계 구조가 있으면 제거하고 간단한 텍스트로 변경 (최초 1회만)
   if (clockElement.querySelector('.clock-digits')) {
+    // 최초 1회만 구조 제거
     clockElement.innerHTML = timeStr;
   } else {
-    // 기존 텍스트 업데이트
-    clockElement.textContent = timeStr;
+    // 기존 텍스트만 업데이트 (깜빡임 없음 - 값이 변경될 때만)
+    if (clockElement.textContent !== timeStr) {
+      clockElement.textContent = timeStr;
+    }
   }
 }
 
@@ -4867,11 +4871,11 @@ async function updateCountdownFromTrainingStartTime() {
       isReady = myParticipant ? isParticipantReady(myParticipant) : false;
     }
     
-    // 준비되지 않은 사용자에게도 전역 카운트다운 표시 (훈련 시작 11초 전)
-    if (!isReady && secondsUntilStart <= 11 && secondsUntilStart > 0 && !waitingCountdownShown) {
-      waitingCountdownShown = true;
-      startWaitingRoomCountdown(secondsUntilStart);
-    }
+    // 카운트다운 오버레이 제거
+    // if (!isReady && secondsUntilStart <= 11 && secondsUntilStart > 0 && !waitingCountdownShown) {
+    //   waitingCountdownShown = true;
+    //   startWaitingRoomCountdown(secondsUntilStart);
+    // }
     
     // 준비 완료된 사용자만 자동 훈련 시작 로직 실행
     if (isReady) {
@@ -4890,8 +4894,13 @@ async function updateCountdownFromTrainingStartTime() {
           countdownUpdateInterval = null;
         }
         
-        const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
-        startTrainingCountdown(countdownSeconds, { startTraining: true });
+        // 카운트다운 오버레이 제거 - 훈련 시작만 실행
+        // const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
+        // startTrainingCountdown(countdownSeconds, { startTraining: true });
+        // 카운트다운 없이 바로 훈련 시작
+        if (secondsUntilStart <= 0) {
+          startLocalGroupTraining();
+        }
       } else if (secondsUntilStart <= 0 && !countdownStarted) {
         // 이미 시간이 지났으면 즉시 훈련 시작
         countdownStarted = true;
@@ -5838,14 +5847,14 @@ function renderWaitingHeaderSegmentTable() {
 
     const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
 
-    // 시계 요소가 이미 있으면 보존 (리셋 방지)
+    // 시계 요소 보존 (깜빡임 방지 - innerHTML 재생성 시 시계는 제외)
     const existingClock = roomInfoCard.querySelector('#groupTrainingClock');
-    const clockPreserved = existingClock && existingClock.querySelector('.clock-digits');
-    let clockElement = null;
+    const clockPreserved = existingClock && existingClock.textContent;
+    let clockTextContent = null;
     
     if (clockPreserved) {
-      // 시계 요소를 임시로 보존
-      clockElement = existingClock.cloneNode(true);
+      // 시계 텍스트 내용만 보존 (innerHTML 재생성 시 시계는 건드리지 않음)
+      clockTextContent = existingClock.textContent;
     }
 
     // 스크롤 위치 및 높이 보존: innerHTML 재생성 전에 현재 상태 저장
@@ -6000,18 +6009,24 @@ function renderWaitingHeaderSegmentTable() {
       // 네온 효과 오버레이 제거 - 빨간색 세로바만 사용
     });
     
-    // 시계 요소 복원 또는 시작
-    if (clockPreserved && clockElement) {
-      // 보존된 시계 요소 복원
-      const newClockContainer = roomInfoCard.querySelector('#groupTrainingClock');
-      if (newClockContainer && clockElement) {
-        newClockContainer.innerHTML = clockElement.innerHTML;
-        // 시계 업데이트만 수행 (리셋 방지)
+    // 시계 요소는 innerHTML 재생성 시 건드리지 않음 (깜빡임 방지)
+    // 시계는 별도의 setInterval로 업데이트되므로 재생성 불필요
+    const newClockContainer = roomInfoCard.querySelector('#groupTrainingClock');
+    if (newClockContainer) {
+      // 시계가 이미 동작 중이면 그대로 유지 (textContent만 업데이트)
+      // startClock()이 이미 실행 중이면 추가로 시작하지 않음
+      if (!clockUpdateInterval) {
+        // 시계가 시작되지 않았으면 시작
+        setTimeout(() => {
+          startClock();
+        }, 100);
+      } else {
+        // 시계가 이미 동작 중이면 현재 시간만 업데이트 (깜빡임 없이)
         const syncedTime = getSyncedTime();
         updateClockSimple(newClockContainer, syncedTime);
       }
     } else {
-      // 시계 시작 (요소가 생성된 후)
+      // 시계 요소가 없으면 시작
       setTimeout(() => {
         startClock();
       }, 100);
