@@ -4610,6 +4610,12 @@ async function initializeWaitingRoom() {
       // 대기실 화면이 표시 중일 때만 갱신
       const screen = document.getElementById('groupWaitingScreen');
       if (screen && !screen.classList.contains('hidden')) {
+        // 타임라인 스냅샷 업데이트 (경과 시간 및 세그먼트 진행 상황 반영)
+        const room = groupTrainingState.currentRoom;
+        if (room) {
+          updateTimelineSnapshot(room);
+        }
+        
         updateParticipantsList();
         renderWaitingHeaderSegmentTable();
       }
