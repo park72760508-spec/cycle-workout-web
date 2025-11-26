@@ -36,7 +36,8 @@ window.groupTrainingState = window.groupTrainingState || {
   trainingStartSignaled: false,
   timelineSnapshot: null,
   monitoringTimelineInterval: null,
-  lastScrolledSegmentIndex: -1  // 마지막으로 스크롤한 세그먼트 인덱스 (세그먼트 변경 시에만 스크롤)
+  lastScrolledSegmentIndex: -1,  // 마지막으로 스크롤한 세그먼트 인덱스 (세그먼트 변경 시에만 스크롤)
+  lastSegmentTimerValue: null  // 마지막 세그먼트 타이머 값 (--:-- 리셋 방지)
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -5262,19 +5263,30 @@ function updateTimersOnly() {
     if (segmentTimerValue) {
       let segmentTimerFormatted;
       if (isTrainingStarted) {
-        if (currentSegRemaining !== null && currentSegRemaining !== undefined) {
+        if (currentSegRemaining !== null && currentSegRemaining !== undefined && Number.isFinite(currentSegRemaining)) {
           segmentTimerFormatted = formatTimer(currentSegRemaining);
+          // 유효한 값이면 전역 상태에 저장
+          groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
         } else {
           // 이전 값을 유지 (--:--로 리셋하지 않음)
-          const currentText = segmentTimerValue.textContent;
-          if (currentText && currentText !== '--:--') {
-            segmentTimerFormatted = currentText;
+          if (groupTrainingState.lastSegmentTimerValue && groupTrainingState.lastSegmentTimerValue !== '--:--') {
+            segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
           } else {
-            segmentTimerFormatted = '--:--';
+            const currentText = segmentTimerValue.textContent;
+            if (currentText && currentText !== '--:--') {
+              segmentTimerFormatted = currentText;
+              groupTrainingState.lastSegmentTimerValue = currentText;
+            } else {
+              segmentTimerFormatted = '--:--';
+            }
           }
         }
       } else {
         segmentTimerFormatted = countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--';
+        // 카운트다운 중이 아니면 전역 상태 초기화
+        if (countdownRemainingSeconds === null) {
+          groupTrainingState.lastSegmentTimerValue = null;
+        }
       }
       segmentTimerValue.textContent = segmentTimerFormatted;
     }
@@ -5731,19 +5743,22 @@ function renderWaitingHeaderSegmentTable() {
     if (isTrainingStarted) {
       if (currentSegRemaining !== null && Number.isFinite(currentSegRemaining)) {
         segmentTimerFormatted = formatTimer(currentSegRemaining);
+        // 유효한 값이면 전역 상태에 저장
+        groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
       } else {
-        // 이전 값을 유지하려고 시도 (요소가 이미 존재하는 경우)
-        const screen = document.getElementById('groupWaitingScreen');
-        const roomInfoCard = screen?.querySelector('.room-info.card');
-        const existingTimer = roomInfoCard?.querySelector('.workout-timer.segment .timer-value');
-        if (existingTimer && existingTimer.textContent && existingTimer.textContent !== '--:--') {
-          segmentTimerFormatted = existingTimer.textContent;
+        // 이전 값을 유지 (--:--로 리셋하지 않음)
+        if (groupTrainingState.lastSegmentTimerValue && groupTrainingState.lastSegmentTimerValue !== '--:--') {
+          segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
         } else {
           segmentTimerFormatted = '--:--';
         }
       }
     } else {
       segmentTimerFormatted = countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--';
+      // 카운트다운 중이 아니면 전역 상태 초기화
+      if (countdownRemainingSeconds === null) {
+        groupTrainingState.lastSegmentTimerValue = null;
+      }
     }
 
     // 서브텍스트 정보
@@ -5803,10 +5818,12 @@ function renderWaitingHeaderSegmentTable() {
 
     const tableRows = orderedSegments.map((item, orderIdx) => {
       const { seg, originalIndex, label, type, ftp, durationStr } = item;
-      // active 클래스 제거 - 네온 효과 오버레이만 사용
+      // 현재 세그먼트인지 확인 (active 클래스 대신 current-segment 클래스 사용)
+      const isCurrentSegment = isTrainingStarted && originalIndex === currentIdx;
+      const rowClass = isCurrentSegment ? 'current-segment' : '';
 
       return `
-        <tr data-segment-index="${originalIndex}">
+        <tr class="${rowClass}" data-segment-index="${originalIndex}">
           <td class="seg-col-index">
             <span class="seg-index-text">${String(originalIndex + 1).padStart(2, '0')}</span>
           </td>
@@ -5968,7 +5985,7 @@ function renderWaitingHeaderSegmentTable() {
         wrapper.addEventListener('scroll', handleScroll, { passive: true });
       }
 
-      setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0, currentIdx);
+      // 네온 효과 오버레이 제거 - 빨간색 세로바만 사용
     });
     
     // 시계 요소 복원 또는 시작
