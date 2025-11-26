@@ -715,28 +715,38 @@ function startMonitoringTimelineLoop() {
               ts._lastProcessedSegIndex = newSegIndex;
               // 세그먼트 경과 시간 초기화
               ts.segElapsedSec = snapshot.segmentElapsedSec || 0;
+              // 세그먼트 전환 시 카운트다운 상태 초기화 (다음 세그먼트에도 카운트다운이 동작하도록)
+              if (!ts._countdownFired) {
+                ts._countdownFired = {};
+              }
+              // 이전 세그먼트의 카운트다운 상태는 유지하고, 새 세그먼트를 위한 초기화는 자동으로 됨
+              // (세그먼트 인덱스별로 관리되므로 각 세그먼트마다 독립적으로 동작)
             }
             
             // 세그먼트 종료 6초 전 카운트다운 체크 (모니터링 모드)
+            // 각 세그먼트마다 독립적으로 카운트다운이 동작하도록 개선
             if (Number.isFinite(snapshot.segmentRemainingSec) && snapshot.segmentRemainingSec > 0) {
               const remainingSec = snapshot.segmentRemainingSec;
               const nextSeg = (newSegIndex < w.segments.length - 1) ? w.segments[newSegIndex + 1] : null;
               
               // 6초 전부터 카운트다운 시작 (5, 4, 3, 2, 1, 0)
+              // 각 세그먼트별로 카운트다운이 정상적으로 동작하도록 개선
               if (remainingSec <= 6 && remainingSec > 0 && nextSeg) {
-                const countdownNumber = Math.ceil(remainingSec) - 1; // 6초일 때 5 표시
+                const key = String(newSegIndex);
+                ts._countdownFired = ts._countdownFired || {};
+                const firedMap = ts._countdownFired[key] || {};
+                
+                // 현재 남은 시간에 해당하는 카운트다운 숫자 계산
+                // 6.0~5.1초: 5 표시, 5.0~4.1초: 4 표시, ..., 1.0~0.1초: 0 표시
+                const countdownNumber = Math.max(0, Math.ceil(remainingSec) - 1);
+                
                 if (countdownNumber >= 0 && countdownNumber <= 5) {
-                  const key = String(newSegIndex);
-                  ts._countdownFired = ts._countdownFired || {};
-                  const firedMap = ts._countdownFired[key] || {};
-                  
+                  // 각 숫자별로 한 번만 표시되도록 체크
                   if (!firedMap[countdownNumber]) {
-                    // 카운트다운 표시 (모니터링 모드에서는 간단한 표시만)
-                    if (countdownNumber === 5) {
-                      // 6초 시점에 카운트다운 시작 표시
-                      console.log(`모니터링 모드: 세그먼트 ${newSegIndex + 1} 종료 ${countdownNumber + 1}초 전`);
-                    }
-                    ts._countdownFired[key] = { ...firedMap, [countdownNumber]: true };
+                    // 카운트다운 표시 로그 (디버깅용)
+                    console.log(`모니터링 모드: 세그먼트 ${newSegIndex + 1} 종료 ${countdownNumber + 1}초 전 (다음: ${nextSeg.label || nextSeg.segment_type || '세그먼트'})`);
+                    firedMap[countdownNumber] = true;
+                    ts._countdownFired[key] = firedMap;
                   }
                 }
               }
@@ -5036,48 +5046,7 @@ function renderWaitingHeaderSegmentTable() {
       ? (Number.isFinite(snapshot?.segmentRemainingSec) ? snapshot.segmentRemainingSec : null)
       : null;
 
-    const elapsedTimer = formatTimer(elapsed);
-    const segmentTimerFormatted = isTrainingStarted
-      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
-      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
-
-    const currentSegmentInfo = currentIdx >= 0
-      ? normalizedSegments.find(item => item.originalIndex === currentIdx)
-      : null;
-    const nextSegmentInfo = currentIdx >= 0
-      ? normalizedSegments.find(item => item.originalIndex === currentIdx + 1)
-      : (phase === 'countdown' ? normalizedSegments[0] : null);
-
-    const elapsedSubtext = isTrainingStarted && currentSegmentInfo
-      ? `${currentSegmentInfo.label} 진행 중`
-      : (phase === 'countdown' && countdownRemainingSeconds !== null
-        ? `시작까지 ${countdownRemainingSeconds}초`
-        : '대기 중');
-
-    const segmentSubtext = isTrainingStarted
-      ? (nextSegmentInfo ? `다음: ${nextSegmentInfo.label}` : '마지막 구간')
-      : (countdownRemainingSeconds !== null ? `시작까지 ${countdownRemainingSeconds}초` : '대기 중');
-
-    let segmentCountdownDisplay = segmentTimerFormatted;
-    let segmentTimerClass = 'timer-value';
-
-    if (isTrainingStarted && currentSegRemaining !== null) {
-      if (currentSegRemaining <= 6 && currentSegRemaining > 0) {
-        segmentTimerClass += ' is-countdown';
-        segmentCountdownDisplay = Math.max(0, Math.ceil(currentSegRemaining) - 1).toString();
-      }
-    } else if (!isTrainingStarted && countdownRemainingSeconds !== null && countdownRemainingSeconds <= 11) {
-      segmentTimerClass += ' is-countdown';
-      segmentCountdownDisplay = Math.min(10, countdownRemainingSeconds).toString();
-    }
-
-    const statusPillClass = isTrainingStarted
-      ? 'is-live'
-      : (phase === 'countdown' && countdownRemainingSeconds !== null ? 'is-countdown' : '');
-    const statusPillLabel = phase === 'countdown' && countdownRemainingSeconds !== null
-      ? `카운트다운 ${countdownRemainingSeconds}초`
-      : (isTrainingStarted && currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중');
-
+    // normalizedSegments를 먼저 정의 (다른 로직에서 사용하기 전에)
     const normalizedSegments = segments.map((seg, idx) => ({
       seg,
       originalIndex: idx,
@@ -5095,6 +5064,56 @@ function renderWaitingHeaderSegmentTable() {
       )),
       durationStr: formatDuration(seg.duration_sec ?? seg.duration)
     }));
+
+    // 세그먼트 정보 계산 (normalizedSegments 정의 후)
+    const currentSegmentInfo = currentIdx >= 0
+      ? normalizedSegments.find(item => item.originalIndex === currentIdx)
+      : null;
+    const nextSegmentInfo = currentIdx >= 0
+      ? normalizedSegments.find(item => item.originalIndex === currentIdx + 1)
+      : (phase === 'countdown' ? normalizedSegments[0] : null);
+
+    // 타이머 표시 포맷
+    const elapsedTimer = formatTimer(elapsed);
+    const segmentTimerFormatted = isTrainingStarted
+      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
+      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
+
+    // 서브텍스트 정보
+    const elapsedSubtext = isTrainingStarted && currentSegmentInfo
+      ? `${currentSegmentInfo.label} 진행 중`
+      : (phase === 'countdown' && countdownRemainingSeconds !== null
+        ? `시작까지 ${countdownRemainingSeconds}초`
+        : '대기 중');
+
+    const segmentSubtext = isTrainingStarted
+      ? (nextSegmentInfo ? `다음: ${nextSegmentInfo.label}` : '마지막 구간')
+      : (countdownRemainingSeconds !== null ? `시작까지 ${countdownRemainingSeconds}초` : '대기 중');
+
+    // 세그먼트 카운트다운 표시 로직 개선
+    let segmentCountdownDisplay = segmentTimerFormatted;
+    let segmentTimerClass = 'timer-value';
+
+    if (isTrainingStarted && currentSegRemaining !== null && currentSegRemaining > 0) {
+      // 세그먼트 종료 6초 전부터 5초 카운트다운 표시 (5, 4, 3, 2, 1, 0)
+      if (currentSegRemaining <= 6 && nextSegmentInfo) {
+        segmentTimerClass += ' is-countdown';
+        // 6초일 때 5 표시, 5초일 때 4 표시, ..., 1초일 때 0 표시
+        const countdownNumber = Math.max(0, Math.ceil(currentSegRemaining) - 1);
+        segmentCountdownDisplay = countdownNumber.toString();
+      }
+    } else if (!isTrainingStarted && countdownRemainingSeconds !== null && countdownRemainingSeconds <= 11) {
+      segmentTimerClass += ' is-countdown';
+      segmentCountdownDisplay = Math.min(10, countdownRemainingSeconds).toString();
+    }
+
+    // 상태 표시
+    const statusPillClass = isTrainingStarted
+      ? 'is-live'
+      : (phase === 'countdown' && countdownRemainingSeconds !== null ? 'is-countdown' : '');
+    const statusPillLabel = phase === 'countdown' && countdownRemainingSeconds !== null
+      ? `카운트다운 ${countdownRemainingSeconds}초`
+      : (isTrainingStarted && currentIdx >= 0 ? `현재 ${currentIdx + 1}번째 구간` : '대기 중');
 
     let orderedSegments = normalizedSegments;
     if (isTrainingStarted && currentIdx >= 0) {
