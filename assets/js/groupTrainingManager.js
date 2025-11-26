@@ -643,9 +643,15 @@ function computeServerTimelineSnapshot(room, options = {}) {
 
   let elapsedSec = 0;
   if (phase === 'training' && Number.isFinite(timelineEpochMs)) {
-    elapsedSec = Math.max(0, (nowMs - timelineEpochMs) / 1000);
+    // 훈련 시작 시간부터 현재까지의 경과 시간 계산
+    const rawElapsedSec = (nowMs - timelineEpochMs) / 1000;
+    elapsedSec = Math.max(0, rawElapsedSec);
+    
+    // 경과 시간이 총 시간을 초과하지 않도록 제한
+    // 단, 마지막 세그먼트까지는 진행할 수 있도록 약간의 여유를 둠
     if (Number.isFinite(totalDurationSec) && totalDurationSec > 0) {
-      elapsedSec = Math.min(elapsedSec, totalDurationSec);
+      // 마지막 세그먼트까지 진행할 수 있도록 1초 여유
+      elapsedSec = Math.min(elapsedSec, totalDurationSec + 1);
     }
   }
 
@@ -656,17 +662,41 @@ function computeServerTimelineSnapshot(room, options = {}) {
 
   if (phase === 'training' && segments.length > 0) {
     let cursor = 0;
+    // elapsedSec가 0보다 작으면 0으로 설정 (훈련 시작 직후)
+    const safeElapsedSec = Math.max(0, elapsedSec);
+    
     for (let i = 0; i < segments.length; i++) {
       const dur = Math.max(0, Number(segments[i]?.duration_sec ?? segments[i]?.duration ?? 0) || 0);
+      if (dur <= 0) {
+        cursor += 0; // 0초 세그먼트는 건너뜀
+        continue;
+      }
+      
       const end = cursor + dur;
-      if (elapsedSec < end || i === segments.length - 1) {
+      
+      // 현재 세그먼트를 찾는 로직:
+      // 1. elapsedSec가 현재 세그먼트 범위 내에 있으면 (cursor <= elapsedSec < end)
+      // 2. 마지막 세그먼트이고 elapsedSec가 cursor 이상이면 (마지막 세그먼트 진행 중 또는 완료)
+      const isInSegment = safeElapsedSec >= cursor && (safeElapsedSec < end || (i === segments.length - 1 && safeElapsedSec >= cursor));
+      
+      if (isInSegment) {
         segmentIndex = i;
         segmentStartSec = cursor;
-        segmentElapsedSec = Math.max(0, elapsedSec - cursor);
-        segmentRemainingSec = Math.max(0, end - elapsedSec);
+        segmentElapsedSec = Math.max(0, safeElapsedSec - cursor);
+        segmentRemainingSec = Math.max(0, end - safeElapsedSec);
         break;
       }
+      
       cursor = end;
+    }
+    
+    // 세그먼트를 찾지 못한 경우 (elapsedSec가 0이거나 음수인 경우) 첫 번째 세그먼트로 설정
+    if (segmentIndex === -1 && segments.length > 0) {
+      const firstDur = Math.max(0, Number(segments[0]?.duration_sec ?? segments[0]?.duration ?? 0) || 0);
+      segmentIndex = 0;
+      segmentStartSec = 0;
+      segmentElapsedSec = Math.max(0, safeElapsedSec);
+      segmentRemainingSec = Math.max(0, firstDur - safeElapsedSec);
     }
   }
 
@@ -725,17 +755,37 @@ function updateTimelineSnapshot(room, options = {}) {
           return sum + (Number.isFinite(raw) && raw > 0 ? raw : 0);
         }, 0);
         
+        const safeElapsedSec = Math.max(0, elapsedSec);
         for (let i = 0; i < segments.length; i++) {
           const dur = Math.max(0, Number(segments[i]?.duration_sec ?? segments[i]?.duration ?? 0) || 0);
+          if (dur <= 0) {
+            cursor += 0; // 0초 세그먼트는 건너뜀
+            continue;
+          }
+          
           const end = cursor + dur;
-          if (elapsedSec < end || i === segments.length - 1) {
+          
+          // 현재 세그먼트를 찾는 로직 (computeServerTimelineSnapshot과 동일)
+          const isInSegment = safeElapsedSec >= cursor && (safeElapsedSec < end || (i === segments.length - 1 && safeElapsedSec >= cursor));
+          
+          if (isInSegment) {
             segmentIndex = i;
             segmentStartSec = cursor;
-            segmentElapsedSec = Math.max(0, elapsedSec - cursor);
-            segmentRemainingSec = Math.max(0, end - elapsedSec);
+            segmentElapsedSec = Math.max(0, safeElapsedSec - cursor);
+            segmentRemainingSec = Math.max(0, end - safeElapsedSec);
             break;
           }
+          
           cursor = end;
+        }
+        
+        // 세그먼트를 찾지 못한 경우 첫 번째 세그먼트로 설정
+        if (segmentIndex === -1 && segments.length > 0) {
+          const firstDur = Math.max(0, Number(segments[0]?.duration_sec ?? segments[0]?.duration ?? 0) || 0);
+          segmentIndex = 0;
+          segmentStartSec = 0;
+          segmentElapsedSec = Math.max(0, safeElapsedSec);
+          segmentRemainingSec = Math.max(0, firstDur - safeElapsedSec);
         }
         
         // training 상태 유지된 스냅샷 생성
@@ -1742,7 +1792,7 @@ function getCurrentRoomCode(room = groupTrainingState.currentRoom) {
 }
 
    
-const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn', 'startGroupTrainingBtn'];
+const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn', 'startGroupTrainingBtn', 'participantControls'];
 
 /**
  * 안전한 요소 접근
@@ -5116,11 +5166,9 @@ async function initializeWaitingRoom() {
   }
   
   const adminControls = safeGet('adminControls');
-  const participantControls = safeGet('participantControls');
   
   console.log('대기실 초기화 - 관리자 여부:', groupTrainingState.isAdmin, '사용자 grade:', currentUser.grade);
   console.log('adminControls 요소:', adminControls);
-  console.log('participantControls 요소:', participantControls);
   
   if (adminControls) {
     adminControls.classList.add('hidden');
@@ -5128,14 +5176,7 @@ async function initializeWaitingRoom() {
     adminControls.innerHTML = '';
   }
   
-  if (participantControls) {
-    participantControls.classList.remove('hidden');
-    participantControls.style.display = '';
-    const inlineBtn = participantControls.querySelector('#startTrainingBtnInline');
-    if (inlineBtn) {
-      inlineBtn.remove();
-    }
-  }
+  // participantControls 요소는 제거되었으므로 참조하지 않음
   
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
