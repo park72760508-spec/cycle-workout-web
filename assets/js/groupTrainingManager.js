@@ -647,8 +647,15 @@ function updateTimelineSnapshot(room, options = {}) {
     workout: options.workout || window.currentWorkout,
     nowMs: options.nowMs
   });
-  groupTrainingState.timelineSnapshot = snapshot;
-  return snapshot;
+  
+  // 스냅샷이 null이거나 유효하지 않으면 이전 스냅샷 유지 (초기화 방지)
+  if (snapshot && snapshot.phase) {
+    groupTrainingState.timelineSnapshot = snapshot;
+    return snapshot;
+  } else {
+    // 유효하지 않은 스냅샷이면 이전 스냅샷 반환 (없으면 null)
+    return groupTrainingState.timelineSnapshot || null;
+  }
 }
 
 function applyTimelineSnapshotToTrainingState(snapshot) {
@@ -5034,22 +5041,37 @@ function renderWaitingHeaderSegmentTable() {
     const segments = workout.segments;
     const room = groupTrainingState.currentRoom || {};
     const roomStatus = room.status || room.Status || 'waiting';
-    const snapshot = groupTrainingState.timelineSnapshot
-      || updateTimelineSnapshot(room, { workout });
-
-    if (!groupTrainingState.timelineSnapshot && snapshot) {
+    
+    // 타임라인 스냅샷 업데이트 시도
+    const newSnapshot = updateTimelineSnapshot(room, { workout });
+    
+    // 스냅샷이 null이거나 유효하지 않으면 이전 스냅샷 유지 (초기화 방지)
+    const snapshot = (newSnapshot && newSnapshot.phase) 
+      ? newSnapshot 
+      : (groupTrainingState.timelineSnapshot || null);
+    
+    // 유효한 스냅샷이 있으면 저장
+    if (snapshot && snapshot.phase) {
       groupTrainingState.timelineSnapshot = snapshot;
     }
 
+    // 스냅샷이 없을 때는 기본값으로 처리 (초기화 방지)
+    if (!snapshot) {
+      console.warn('타임라인 스냅샷이 없습니다. 이전 값을 유지합니다.');
+    }
+    
     const phase = snapshot?.phase || 'idle';
     const isTrainingStarted = phase === 'training';
     const countdownRemainingSeconds = snapshot?.countdownRemainingSec ?? null;
-    const elapsed = Number.isFinite(snapshot?.elapsedSec) ? snapshot.elapsedSec : 0;
-    const currentIdx = isTrainingStarted && Number.isFinite(snapshot?.segmentIndex)
+    // 스냅샷이 있을 때만 경과 시간 표시, 없으면 이전 값 유지 또는 0
+    const elapsed = snapshot && Number.isFinite(snapshot.elapsedSec) 
+      ? snapshot.elapsedSec 
+      : (snapshot?.elapsedSec ?? 0);
+    const currentIdx = isTrainingStarted && snapshot && Number.isFinite(snapshot.segmentIndex)
       ? snapshot.segmentIndex
       : -1;
-    const currentSegRemaining = isTrainingStarted
-      ? (Number.isFinite(snapshot?.segmentRemainingSec) ? snapshot.segmentRemainingSec : null)
+    const currentSegRemaining = isTrainingStarted && snapshot
+      ? (Number.isFinite(snapshot.segmentRemainingSec) ? snapshot.segmentRemainingSec : null)
       : null;
 
     // normalizedSegments를 먼저 정의 (다른 로직에서 사용하기 전에)
@@ -5158,6 +5180,21 @@ function renderWaitingHeaderSegmentTable() {
       clockElement = existingClock.cloneNode(true);
     }
 
+    // 스크롤 위치 보존: innerHTML 재생성 전에 현재 스크롤 위치 저장
+    const existingWrapper = roomInfoCard.querySelector('.workout-table-wrapper');
+    let preservedScrollTop = null;
+    let preservedCurrentSegIndex = null;
+    
+    if (existingWrapper) {
+      preservedScrollTop = existingWrapper.scrollTop;
+      // 현재 활성 세그먼트 인덱스도 저장 (스크롤 계산용)
+      const activeRow = existingWrapper.querySelector('tbody tr.active');
+      if (activeRow) {
+        const allRows = Array.from(existingWrapper.querySelectorAll('tbody tr'));
+        preservedCurrentSegIndex = allRows.indexOf(activeRow);
+      }
+    }
+
     roomInfoCard.innerHTML = `
       <div class="workout-table-card">
         <div class="workout-table-head">
@@ -5221,10 +5258,7 @@ function renderWaitingHeaderSegmentTable() {
       // 훈련 시작 전 스크롤 위치 보존을 위한 저장소 키
       const scrollStorageKey = `workoutTableScroll_${getCurrentRoomCode(room) || 'default'}`;
       
-      // 현재 스크롤 위치 가져오기 (렌더링 전 사용자가 설정한 위치)
-      const currentScrollTop = wrapper.scrollTop;
-      
-      // 저장된 스크롤 위치 읽기
+      // 저장된 스크롤 위치 읽기 (sessionStorage)
       let savedScrollTop = null;
       try {
         const saved = sessionStorage.getItem(scrollStorageKey);
@@ -5243,9 +5277,27 @@ function renderWaitingHeaderSegmentTable() {
         wrapper.style.removeProperty('max-height');
       }
 
-      // 훈련이 시작된 경우에만 활성 세그먼트 추적 스크롤 실행
+      // 스크롤 위치 복원 (우선순위: 보존된 스크롤 > 저장된 스크롤 > 현재 세그먼트 기준)
       if (isTrainingStarted && currentIdx >= 0) {
-        wrapper.scrollTop = 0;
+        // 훈련 중: 스크롤 위치를 최대한 유지하되, 현재 세그먼트가 보이도록 조정
+        if (preservedScrollTop !== null && preservedScrollTop >= 0) {
+          // 보존된 스크롤 위치 복원 (렌더링 전 위치 유지)
+          wrapper.scrollTop = preservedScrollTop;
+        } else {
+          // 보존된 위치가 없으면 현재 활성 세그먼트로 스크롤
+          const activeRow = wrapper.querySelector('tbody tr.active');
+          if (activeRow) {
+            const rowTop = activeRow.offsetTop;
+            const wrapperHeight = wrapper.clientHeight;
+            const rowHeight = activeRow.offsetHeight;
+            
+            // 활성 세그먼트가 중앙에 오도록 스크롤
+            const targetScroll = Math.max(0, rowTop - (wrapperHeight / 2) + (rowHeight / 2));
+            wrapper.scrollTop = targetScroll;
+          }
+        }
+        
+        // 훈련 중에는 스크롤 핸들러 제거 (자동 스크롤만)
         const existingHandler = wrapper._scrollHandler;
         if (existingHandler) {
           wrapper.removeEventListener('scroll', existingHandler);
@@ -5253,12 +5305,10 @@ function renderWaitingHeaderSegmentTable() {
         }
       } else {
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
-        // 현재 스크롤 위치가 있으면 그것을 우선 사용, 없으면 저장된 위치 사용
-        if (currentScrollTop > 0) {
-          // 사용자가 이미 스크롤한 위치가 있으면 그대로 유지
-          wrapper.scrollTop = currentScrollTop;
+        // 우선순위: 보존된 스크롤 > 저장된 스크롤 > 상단
+        if (preservedScrollTop !== null && preservedScrollTop > 0) {
+          wrapper.scrollTop = preservedScrollTop;
         } else if (savedScrollTop !== null && savedScrollTop > 0) {
-          // 저장된 스크롤 위치 복원
           wrapper.scrollTop = savedScrollTop;
         }
         // 둘 다 없으면 스크롤 위치 변경하지 않음 (상단 유지)
