@@ -406,6 +406,11 @@
 
 /* ========== [4] 대기실 화면 ========== */
 
+/* 훈련방 화면 스크롤바 깜빡임 방지 */
+#groupWaitingScreen {
+  overflow-y: hidden;
+}
+
 .room-info {
   margin-bottom: 20px;
 }
