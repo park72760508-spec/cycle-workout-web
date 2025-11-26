@@ -37,7 +37,8 @@ window.groupTrainingState = window.groupTrainingState || {
   timelineSnapshot: null,
   monitoringTimelineInterval: null,
   lastScrolledSegmentIndex: -1,  // 마지막으로 스크롤한 세그먼트 인덱스 (세그먼트 변경 시에만 스크롤)
-  lastSegmentTimerValue: null  // 마지막 세그먼트 타이머 값 (--:-- 리셋 방지)
+  lastSegmentTimerValue: null,  // 마지막 세그먼트 타이머 값 (--:-- 리셋 방지)
+  workoutTableHeight: null  // 워크아웃 테이블 고정 높이 (크기 변경 방지)
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -5847,12 +5848,20 @@ function renderWaitingHeaderSegmentTable() {
       clockElement = existingClock.cloneNode(true);
     }
 
-    // 스크롤 위치 보존: innerHTML 재생성 전에 현재 스크롤 위치 저장
+    // 스크롤 위치 및 높이 보존: innerHTML 재생성 전에 현재 상태 저장
     const existingWrapper = roomInfoCard.querySelector('.workout-table-wrapper');
     let preservedScrollTop = null;
+    let preservedHeight = null;
     
     if (existingWrapper) {
       preservedScrollTop = existingWrapper.scrollTop;
+      // 높이도 보존 (전역 변수 우선, 없으면 현재 높이)
+      if (groupTrainingState.workoutTableHeight) {
+        preservedHeight = groupTrainingState.workoutTableHeight;
+      } else if (existingWrapper.style.maxHeight) {
+        preservedHeight = existingWrapper.style.maxHeight;
+        groupTrainingState.workoutTableHeight = preservedHeight;
+      }
     }
 
     roomInfoCard.innerHTML = `
@@ -5929,24 +5938,27 @@ function renderWaitingHeaderSegmentTable() {
         console.warn('스크롤 위치 저장소 읽기 실패:', e);
       }
 
-      // 스크롤바 깜빡임 방지: 고정 높이 설정 (변경하지 않음)
-      const maxVisible = Math.min(3, rows.length);
-      if (rows.length > maxVisible) {
-        const rowHeight = rows[0].offsetHeight || 0;
-        // 최초 1회만 설정하고 이후에는 변경하지 않음
-        if (!wrapper.dataset.heightSet) {
-          wrapper.style.maxHeight = `${rowHeight * maxVisible + 4}px`;
-          wrapper.style.minHeight = `${rowHeight * maxVisible + 4}px`;
-          wrapper.dataset.heightSet = 'true';
+      // 스크롤바 깜빡임 방지: 고정 높이 설정 (한 번만 설정하고 절대 변경하지 않음)
+      if (preservedHeight) {
+        // 보존된 높이가 있으면 그대로 사용 (전역 변수에서 가져온 값)
+        wrapper.style.maxHeight = preservedHeight;
+        wrapper.style.minHeight = preservedHeight;
+        wrapper.dataset.heightSet = 'true';
+      } else if (!wrapper.dataset.heightSet) {
+        // 최초 1회만 높이 계산 및 설정
+        const maxVisible = Math.min(3, rows.length);
+        let calculatedHeight;
+        if (rows.length > maxVisible) {
+          const rowHeight = rows[0].offsetHeight || 0;
+          calculatedHeight = `${rowHeight * maxVisible + 4}px`;
+        } else {
+          calculatedHeight = '150px'; // 기본 높이
         }
-      } else {
-        // 행이 적어도 최소 높이 유지 (스크롤바 깜빡임 방지)
-        if (!wrapper.dataset.heightSet) {
-          const defaultHeight = 150; // 기본 높이
-          wrapper.style.maxHeight = `${defaultHeight}px`;
-          wrapper.style.minHeight = `${defaultHeight}px`;
-          wrapper.dataset.heightSet = 'true';
-        }
+        wrapper.style.maxHeight = calculatedHeight;
+        wrapper.style.minHeight = calculatedHeight;
+        wrapper.dataset.heightSet = 'true';
+        // 전역 변수에 저장하여 이후 재생성 시에도 같은 높이 유지
+        groupTrainingState.workoutTableHeight = calculatedHeight;
       }
 
       // 활성 행 추적 기능 제거 - 스크롤 자동 이동 없음
