@@ -561,6 +561,20 @@ function formatTimer(sec) {
   ].join(':');
 }
 
+// 세그먼트 카운트다운 전용 포맷 함수 (mm:ss 형식)
+function formatSegmentTimer(sec) {
+  const value = Number(sec);
+  if (!Number.isFinite(value) || value < 0) return '00:00';
+  const total = Math.max(0, Math.floor(value));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  // mm:ss 형식으로 반환
+  return [
+    minutes.toString().padStart(2, '0'),
+    seconds.toString().padStart(2, '0')
+  ].join(':');
+}
+
 function computeServerTimelineSnapshot(room, options = {}) {
   if (!room) return null;
 
@@ -5273,31 +5287,31 @@ function updateTimersOnly() {
     if (segmentTimerValue) {
       let segmentTimerFormatted;
       if (isTrainingStarted) {
-        if (currentSegRemaining !== null && currentSegRemaining !== undefined && Number.isFinite(currentSegRemaining)) {
-          segmentTimerFormatted = formatTimer(currentSegRemaining);
-          // 유효한 값이면 전역 상태에 저장
-          groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
+      if (currentSegRemaining !== null && currentSegRemaining !== undefined && Number.isFinite(currentSegRemaining)) {
+        segmentTimerFormatted = formatSegmentTimer(currentSegRemaining); // hh:mm 형식
+        // 유효한 값이면 전역 상태에 저장
+        groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
+      } else {
+        // 이전 값을 유지 (--:--로 리셋하지 않음)
+        if (groupTrainingState.lastSegmentTimerValue && groupTrainingState.lastSegmentTimerValue !== '--:--') {
+          segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
         } else {
-          // 이전 값을 유지 (--:--로 리셋하지 않음)
-          if (groupTrainingState.lastSegmentTimerValue && groupTrainingState.lastSegmentTimerValue !== '--:--') {
-            segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
+          const currentText = segmentTimerValue.textContent;
+          if (currentText && currentText !== '--:--') {
+            segmentTimerFormatted = currentText;
+            groupTrainingState.lastSegmentTimerValue = currentText;
           } else {
-            const currentText = segmentTimerValue.textContent;
-            if (currentText && currentText !== '--:--') {
-              segmentTimerFormatted = currentText;
-              groupTrainingState.lastSegmentTimerValue = currentText;
-            } else {
-              segmentTimerFormatted = '--:--';
-            }
+            segmentTimerFormatted = '--:--';
           }
         }
-      } else {
-        segmentTimerFormatted = countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--';
-        // 카운트다운 중이 아니면 전역 상태 초기화
-        if (countdownRemainingSeconds === null) {
-          groupTrainingState.lastSegmentTimerValue = null;
-        }
       }
+    } else {
+      segmentTimerFormatted = countdownRemainingSeconds !== null ? formatSegmentTimer(countdownRemainingSeconds) : '--:--'; // hh:mm 형식
+      // 카운트다운 중이 아니면 전역 상태 초기화
+      if (countdownRemainingSeconds === null) {
+        groupTrainingState.lastSegmentTimerValue = null;
+      }
+    }
       segmentTimerValue.textContent = segmentTimerFormatted;
     }
     
@@ -5752,7 +5766,7 @@ function renderWaitingHeaderSegmentTable() {
     let segmentTimerFormatted;
     if (isTrainingStarted) {
       if (currentSegRemaining !== null && Number.isFinite(currentSegRemaining)) {
-        segmentTimerFormatted = formatTimer(currentSegRemaining);
+        segmentTimerFormatted = formatSegmentTimer(currentSegRemaining); // hh:mm 형식
         // 유효한 값이면 전역 상태에 저장
         groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
       } else {
@@ -5764,7 +5778,7 @@ function renderWaitingHeaderSegmentTable() {
         }
       }
     } else {
-      segmentTimerFormatted = countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--';
+      segmentTimerFormatted = countdownRemainingSeconds !== null ? formatSegmentTimer(countdownRemainingSeconds) : '--:--'; // hh:mm 형식
       // 카운트다운 중이 아니면 전역 상태 초기화
       if (countdownRemainingSeconds === null) {
         groupTrainingState.lastSegmentTimerValue = null;
