@@ -5912,31 +5912,26 @@ function renderWaitingHeaderSegmentTable() {
 
       // 스크롤 위치 복원 (우선순위: 보존된 스크롤 > 저장된 스크롤 > 현재 세그먼트 기준)
       if (isTrainingStarted && currentIdx >= 0) {
-        // 훈련 중: 스크롤 위치를 최대한 유지하되, 현재 세그먼트가 보이도록 조정
-        if (preservedScrollTop !== null && preservedScrollTop >= 0) {
-          // 보존된 스크롤 위치 복원 (렌더링 전 위치 유지)
-          wrapper.scrollTop = preservedScrollTop;
-        } else {
-          // 보존된 위치가 없으면 현재 활성 세그먼트로 스크롤
-          const activeRow = wrapper.querySelector('tbody tr.active');
-          if (activeRow) {
-            const rowTop = activeRow.offsetTop;
-            const wrapperHeight = wrapper.clientHeight;
-            const rowHeight = activeRow.offsetHeight;
-            
-            // 활성 세그먼트가 중앙에 오도록 스크롤
-            const targetScroll = Math.max(0, rowTop - (wrapperHeight / 2) + (rowHeight / 2));
-            wrapper.scrollTop = targetScroll;
-          }
+        const lastAutoScrollIndex = Number(wrapper.dataset.lastAutoScrollIndex ?? '-1');
+        const activeRow = wrapper.querySelector('tbody tr.active');
+
+        if (activeRow && lastAutoScrollIndex !== currentIdx) {
+          const rowTop = activeRow.offsetTop;
+          const wrapperHeight = wrapper.clientHeight;
+          const rowHeight = activeRow.offsetHeight;
+
+          const targetScroll = Math.max(0, rowTop - (wrapperHeight / 2) + (rowHeight / 2));
+          wrapper.scrollTop = targetScroll;
+          wrapper.dataset.lastAutoScrollIndex = String(currentIdx);
         }
-        
-        // 훈련 중에는 스크롤 핸들러 제거 (자동 스크롤만)
+
         const existingHandler = wrapper._scrollHandler;
         if (existingHandler) {
           wrapper.removeEventListener('scroll', existingHandler);
           delete wrapper._scrollHandler;
         }
       } else {
+        wrapper.dataset.lastAutoScrollIndex = '-1';
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
         // 우선순위: 보존된 스크롤 > 저장된 스크롤 > 상단
         if (preservedScrollTop !== null && preservedScrollTop > 0) {
