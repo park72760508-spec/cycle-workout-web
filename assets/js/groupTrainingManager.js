@@ -5871,19 +5871,16 @@ function renderWaitingHeaderSegmentTable() {
       clockTextContent = existingClock.textContent;
     }
 
-    // 스크롤 위치 및 높이 보존: innerHTML 재생성 전에 현재 상태 저장
+    // 스크롤 위치 보존: innerHTML 재생성 전에 현재 상태 저장
     const existingWrapper = roomInfoCard.querySelector('.workout-table-wrapper');
     let preservedScrollTop = null;
-    let preservedHeight = null;
     
     if (existingWrapper) {
       preservedScrollTop = existingWrapper.scrollTop;
-      // 높이도 보존 (전역 변수 우선, 없으면 현재 높이)
-      if (groupTrainingState.workoutTableHeight) {
-        preservedHeight = groupTrainingState.workoutTableHeight;
-      } else if (existingWrapper.style.maxHeight) {
-        preservedHeight = existingWrapper.style.maxHeight;
-        groupTrainingState.workoutTableHeight = preservedHeight;
+      // 높이는 전역 변수에서만 가져옴 (동적 계산 제거)
+      // 전역 변수에 높이가 없고 현재 높이가 있으면 저장 (최초 1회만)
+      if (!groupTrainingState.workoutTableHeight && existingWrapper.style.maxHeight) {
+        groupTrainingState.workoutTableHeight = existingWrapper.style.maxHeight;
       }
     }
 
@@ -5961,27 +5958,40 @@ function renderWaitingHeaderSegmentTable() {
         console.warn('스크롤 위치 저장소 읽기 실패:', e);
       }
 
-      // 스크롤바 깜빡임 방지: 고정 높이 설정 (한 번만 설정하고 절대 변경하지 않음)
-      if (preservedHeight) {
-        // 보존된 높이가 있으면 그대로 사용 (전역 변수에서 가져온 값)
-        wrapper.style.maxHeight = preservedHeight;
-        wrapper.style.minHeight = preservedHeight;
+      // 스크롤바 깜빡임 방지: 고정 높이 설정 (전역 변수 우선, 절대 재계산하지 않음)
+      // 전역 변수에 저장된 높이가 있으면 무조건 사용 (높이 계산 로직 완전 제거)
+      if (groupTrainingState.workoutTableHeight) {
+        // 전역 변수에 저장된 높이 사용 (절대 변경하지 않음)
+        wrapper.style.maxHeight = groupTrainingState.workoutTableHeight;
+        wrapper.style.minHeight = groupTrainingState.workoutTableHeight;
         wrapper.dataset.heightSet = 'true';
       } else if (!wrapper.dataset.heightSet) {
-        // 최초 1회만 높이 계산 및 설정
+        // 최초 1회만 높이 계산 (이후에는 절대 재계산하지 않음)
+        // offsetHeight 계산은 DOM이 완전히 렌더링된 후에만 정확하므로,
+        // requestAnimationFrame 내부에서 계산하되 한 번만 실행
         const maxVisible = Math.min(3, rows.length);
         let calculatedHeight;
-        if (rows.length > maxVisible) {
+        if (rows.length > maxVisible && rows[0]) {
           const rowHeight = rows[0].offsetHeight || 0;
-          calculatedHeight = `${rowHeight * maxVisible + 4}px`;
+          if (rowHeight > 0) {
+            calculatedHeight = `${rowHeight * maxVisible + 4}px`;
+          } else {
+            // offsetHeight가 0이면 다음 프레임에서 다시 시도하지 않고 기본값 사용
+            calculatedHeight = '150px'; // 기본 높이
+          }
         } else {
           calculatedHeight = '150px'; // 기본 높이
         }
         wrapper.style.maxHeight = calculatedHeight;
         wrapper.style.minHeight = calculatedHeight;
         wrapper.dataset.heightSet = 'true';
-        // 전역 변수에 저장하여 이후 재생성 시에도 같은 높이 유지
+        // 전역 변수에 저장하여 이후 재생성 시에도 같은 높이 유지 (절대 변경하지 않음)
         groupTrainingState.workoutTableHeight = calculatedHeight;
+      } else {
+        // 이미 높이가 설정되어 있으면 전역 변수에 저장 (혹시 모를 경우 대비)
+        if (wrapper.style.maxHeight && !groupTrainingState.workoutTableHeight) {
+          groupTrainingState.workoutTableHeight = wrapper.style.maxHeight;
+        }
       }
 
       // 활성 행 추적 기능 제거 - 스크롤 자동 이동 없음
