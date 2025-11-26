@@ -4327,7 +4327,10 @@ function startParticipantAudioListening() {
   
   // 1초마다 새로운 오디오 청크 확인
   participantAudioState.audioCheckInterval = setInterval(async () => {
-    await checkAndPlayAudioChunk();
+    const room = groupTrainingState.currentRoom;
+    if (room) {
+      await checkAndPlayAudioChunkFromRoom(room);
+    }
   }, 1000);
   
   console.log('🎧 참가자 오디오 수신 시작');
@@ -5101,10 +5104,51 @@ async function initializeWaitingRoom() {
     startParticipantAudioListening();
   }
   
+  // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
+  // 관리자도 일반 참가자처럼 준비완료 버튼을 사용할 수 있도록 설정
+  const readyBtn = safeGet('readyToggleBtn');
+  if (readyBtn) {
+    // 현재 준비 상태 확인 (관리자 포함)
+    const currentUserId = window.currentUser?.id || '';
+    const myParticipant = room.participants.find(p => {
+      const pId = p.id || p.participantId || p.userId;
+      return String(pId) === String(currentUserId);
+    });
+    if (myParticipant) {
+      const isReady = isParticipantReady(myParticipant);
+      readyBtn.textContent = isReady ? '✅ 준비 완료' : '⏳ 준비 중';
+      readyBtn.classList.toggle('ready', isReady);
+    }
+    
+    // 기기 연결 상태 확인하여 버튼 활성/비활성화 (updateParticipantsList와 동일한 로직)
+    const connectedDevices = window.connectedDevices || {};
+    const hasTrainer = !!(connectedDevices.trainer && connectedDevices.trainer.device);
+    const hasPowerMeter = !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device);
+    const hasHeartRate = !!(connectedDevices.heartRate && connectedDevices.heartRate.device);
+    const hasBluetoothDevice = hasTrainer || hasPowerMeter || hasHeartRate;
+    
+    // 관리자도 일반 참가자처럼 준비완료 버튼 사용 가능
+    readyBtn.disabled = !hasBluetoothDevice;
+    if (!hasBluetoothDevice) {
+      readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
+    } else {
+      readyBtn.title = '';
+    }
+  }
+  
   // 대기실에서도 참가자 실시간 데이터 업로드 시작(관리자 포함)
   if (typeof startParticipantDataSync === 'function') {
     startParticipantDataSync();
   }
+  
+  // 시작 버튼 상태 즉시 업데이트
+  updateStartButtonState();
+  
+  // 실시간 동기화 시작
+  startRoomSync();
+  
+  // 워크아웃 정보 로드
+  loadWorkoutInfo(room.workoutId);
   
   // 메트릭 주기적 갱신 타이머 시작 (1초마다 목록 갱신)
   if (window.participantMetricsUpdateInterval) {
@@ -5224,53 +5268,6 @@ function updateTimersOnly() {
   } catch (e) {
     console.warn('updateTimersOnly 오류:', e);
   }
-}
-  
-  // 참가자 오디오 수신 시작 (관리자 음성 코칭 수신)
-  if (!groupTrainingState.isAdmin) {
-    startParticipantAudioListening();
-  }
-  
-  // 준비 완료 버튼 상태는 updateParticipantsList에서 기기 연결 상태를 확인하여 설정됨
-  // 관리자도 일반 참가자처럼 준비완료 버튼을 사용할 수 있도록 설정
-  const readyBtn = safeGet('readyToggleBtn');
-  if (readyBtn) {
-    // 현재 준비 상태 확인 (관리자 포함)
-    const currentUserId = window.currentUser?.id || '';
-    const myParticipant = room.participants.find(p => {
-      const pId = p.id || p.participantId || p.userId;
-      return String(pId) === String(currentUserId);
-    });
-    if (myParticipant) {
-      const isReady = isParticipantReady(myParticipant);
-      readyBtn.textContent = isReady ? '✅ 준비 완료' : '⏳ 준비 중';
-      readyBtn.classList.toggle('ready', isReady);
-    }
-    
-    // 기기 연결 상태 확인하여 버튼 활성/비활성화 (updateParticipantsList와 동일한 로직)
-    const connectedDevices = window.connectedDevices || {};
-    const hasTrainer = !!(connectedDevices.trainer && connectedDevices.trainer.device);
-    const hasPowerMeter = !!(connectedDevices.powerMeter && connectedDevices.powerMeter.device);
-    const hasHeartRate = !!(connectedDevices.heartRate && connectedDevices.heartRate.device);
-    const hasBluetoothDevice = hasTrainer || hasPowerMeter || hasHeartRate;
-    
-    // 관리자도 일반 참가자처럼 준비완료 버튼 사용 가능
-    readyBtn.disabled = !hasBluetoothDevice;
-    if (!hasBluetoothDevice) {
-      readyBtn.title = '블루투스 기기를 먼저 연결하세요 (트레이너, 파워미터, 심박계 중 하나 이상)';
-    } else {
-      readyBtn.title = '';
-    }
-  }
-  
-  // 시작 버튼 상태 즉시 업데이트
-  updateStartButtonState();
-  
-  // 실시간 동기화 시작
-  startRoomSync();
-  
-  // 워크아웃 정보 로드
-  loadWorkoutInfo(room.workoutId);
 }
 
 /**
@@ -8447,4 +8444,5 @@ window.testTimeAPIs = async function() {
 };
 
 // 모듈 중복 로딩 방지 블록 종료
+}
 
