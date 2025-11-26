@@ -572,6 +572,11 @@ function computeServerTimelineSnapshot(room, options = {}) {
   const trainingStartMs = trainingStartIso ? new Date(trainingStartIso).getTime() : null;
   const countdownEndMs = countdownEndIso ? new Date(countdownEndIso).getTime() : null;
 
+  // 이전 스냅샷 확인 (훈련 중 상태 유지용)
+  const previousSnapshot = groupTrainingState.timelineSnapshot;
+  const wasTraining = previousSnapshot && previousSnapshot.phase === 'training';
+  const previousTimelineEpochMs = previousSnapshot?.timelineEpochMs;
+
   const totalDurationSec = segments.reduce((sum, seg) => {
     const raw = Number(seg?.duration_sec ?? seg?.duration ?? 0);
     return sum + (Number.isFinite(raw) && raw > 0 ? raw : 0);
@@ -581,6 +586,19 @@ function computeServerTimelineSnapshot(room, options = {}) {
   let timelineEpochMs = null;
   let countdownRemainingSec = null;
 
+  // 훈련 중이었던 경우, 방 상태나 trainingStartTime이 일시적으로 없어도 training 상태 유지
+  if (wasTraining && Number.isFinite(previousTimelineEpochMs)) {
+    // 이전 훈련 시작 시간이 유효하면, 훈련이 계속 진행 중인 것으로 간주
+    timelineEpochMs = previousTimelineEpochMs;
+    const elapsedSinceStart = (nowMs - previousTimelineEpochMs) / 1000;
+    
+    // 총 시간 내에 있으면 훈련 중으로 유지
+    if (elapsedSinceStart >= 0 && (!Number.isFinite(totalDurationSec) || elapsedSinceStart <= totalDurationSec + 10)) {
+      phase = 'training';
+    }
+  }
+
+  // 방 상태나 시간 기반으로 phase 결정 (기존 로직)
   if (roomStatus === 'starting' && Number.isFinite(countdownEndMs) && nowMs <= countdownEndMs) {
     phase = 'countdown';
     countdownRemainingSec = Math.max(0, Math.ceil((countdownEndMs - nowMs) / 1000));
@@ -593,6 +611,16 @@ function computeServerTimelineSnapshot(room, options = {}) {
     } else if (!Number.isFinite(countdownRemainingSec)) {
       phase = 'countdown';
       countdownRemainingSec = Math.max(0, Math.ceil((trainingStartMs - nowMs) / 1000));
+    }
+  }
+  
+  // 방 상태가 'training'이면 무조건 training phase로 설정
+  if (roomStatus === 'training') {
+    phase = 'training';
+    if (!Number.isFinite(timelineEpochMs) && Number.isFinite(trainingStartMs)) {
+      timelineEpochMs = trainingStartMs;
+    } else if (!Number.isFinite(timelineEpochMs) && Number.isFinite(previousTimelineEpochMs)) {
+      timelineEpochMs = previousTimelineEpochMs;
     }
   }
 
@@ -643,19 +671,85 @@ function computeServerTimelineSnapshot(room, options = {}) {
 }
 
 function updateTimelineSnapshot(room, options = {}) {
+  const previousSnapshot = groupTrainingState.timelineSnapshot;
+  const wasTraining = previousSnapshot && previousSnapshot.phase === 'training';
+  
   const snapshot = computeServerTimelineSnapshot(room || groupTrainingState.currentRoom, {
     workout: options.workout || window.currentWorkout,
     nowMs: options.nowMs
   });
   
   // 스냅샷이 null이거나 유효하지 않으면 이전 스냅샷 유지 (초기화 방지)
+  if (!snapshot || !snapshot.phase) {
+    return previousSnapshot || null;
+  }
+  
+  // 훈련 중이었는데 새로운 스냅샷이 'idle'로 변경된 경우, 이전 training 상태 유지
+  if (wasTraining && snapshot.phase === 'idle' && previousSnapshot) {
+    // 이전 스냅샷의 시간 기반으로 계속 진행
+    const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
+    const previousTimelineEpochMs = previousSnapshot.timelineEpochMs;
+    
+    if (Number.isFinite(previousTimelineEpochMs)) {
+      // 이전 스냅샷의 경과 시간을 기반으로 새로운 스냅샷 생성
+      const elapsedSec = Math.max(0, (nowMs - previousTimelineEpochMs) / 1000);
+      const workout = options.workout || window.currentWorkout || {};
+      const segments = getActiveWorkoutSegments(workout);
+      
+      let segmentIndex = -1;
+      let segmentElapsedSec = null;
+      let segmentRemainingSec = null;
+      let segmentStartSec = null;
+      
+      if (segments.length > 0) {
+        let cursor = 0;
+        const totalDurationSec = segments.reduce((sum, seg) => {
+          const raw = Number(seg?.duration_sec ?? seg?.duration ?? 0);
+          return sum + (Number.isFinite(raw) && raw > 0 ? raw : 0);
+        }, 0);
+        
+        for (let i = 0; i < segments.length; i++) {
+          const dur = Math.max(0, Number(segments[i]?.duration_sec ?? segments[i]?.duration ?? 0) || 0);
+          const end = cursor + dur;
+          if (elapsedSec < end || i === segments.length - 1) {
+            segmentIndex = i;
+            segmentStartSec = cursor;
+            segmentElapsedSec = Math.max(0, elapsedSec - cursor);
+            segmentRemainingSec = Math.max(0, end - elapsedSec);
+            break;
+          }
+          cursor = end;
+        }
+        
+        // training 상태 유지된 스냅샷 생성
+        const preservedSnapshot = {
+          ...previousSnapshot,
+          phase: 'training',
+          elapsedSec,
+          segmentIndex,
+          segmentElapsedSec,
+          segmentRemainingSec,
+          segmentStartSec,
+          computedAtMs: nowMs,
+          status: room?.status || room?.Status || 'training'
+        };
+        
+        groupTrainingState.timelineSnapshot = preservedSnapshot;
+        return preservedSnapshot;
+      }
+    }
+    
+    // 이전 스냅샷 그대로 반환
+    return previousSnapshot;
+  }
+  
+  // 정상적인 스냅샷이면 저장하고 반환
   if (snapshot && snapshot.phase) {
     groupTrainingState.timelineSnapshot = snapshot;
     return snapshot;
-  } else {
-    // 유효하지 않은 스냅샷이면 이전 스냅샷 반환 (없으면 null)
-    return groupTrainingState.timelineSnapshot || null;
   }
+  
+  return previousSnapshot || null;
 }
 
 function applyTimelineSnapshotToTrainingState(snapshot) {
@@ -5074,6 +5168,19 @@ function renderWaitingHeaderSegmentTable() {
       ? (Number.isFinite(snapshot.segmentRemainingSec) ? snapshot.segmentRemainingSec : null)
       : null;
 
+    // 상단 타이틀 상태 업데이트 (훈련 시작 여부에 따라 문구 변경)
+    const waitingTitleEl = document.getElementById('waitingRoomTitle');
+    const waitingSubtitleEl = screen.querySelector('.subtitle');
+    if (waitingTitleEl) {
+      const titleStatusText = isTrainingStarted ? '훈련 진행중...' : '로딩중...';
+      waitingTitleEl.textContent = `📱 훈련방: ${titleStatusText}`;
+    }
+    if (waitingSubtitleEl) {
+      waitingSubtitleEl.textContent = isTrainingStarted
+        ? '훈련이 진행되고 있습니다.'
+        : '모든 참가자가 준비될 때까지 대기해주세요';
+    }
+
     // normalizedSegments를 먼저 정의 (다른 로직에서 사용하기 전에)
     const normalizedSegments = segments.map((seg, idx) => ({
       seg,
@@ -5114,9 +5221,20 @@ function renderWaitingHeaderSegmentTable() {
         ? `시작까지 ${countdownRemainingSeconds}초`
         : '대기 중');
 
-    const segmentSubtext = isTrainingStarted
-      ? (nextSegmentInfo ? `다음: ${nextSegmentInfo.label}` : '마지막 구간')
-      : (countdownRemainingSeconds !== null ? `시작까지 ${countdownRemainingSeconds}초` : '대기 중');
+    // 세그먼트 서브텍스트 계산 (훈련 중에는 항상 유효한 정보 표시, 대기중 방지)
+    let segmentSubtext = '대기 중';
+    if (isTrainingStarted) {
+      // 훈련 중: 다음 세그먼트가 있으면 다음 세그먼트 표시, 없으면 현재 세그먼트 또는 마지막 구간 표시
+      if (nextSegmentInfo) {
+        segmentSubtext = `다음: ${nextSegmentInfo.label}`;
+      } else if (currentSegmentInfo) {
+        segmentSubtext = `${currentSegmentInfo.label} 진행 중`;
+      } else {
+        segmentSubtext = '마지막 구간';
+      }
+    } else if (countdownRemainingSeconds !== null) {
+      segmentSubtext = `시작까지 ${countdownRemainingSeconds}초`;
+    }
 
     // 세그먼트 카운트다운 표시 로직 개선
     let segmentCountdownDisplay = segmentTimerFormatted;
