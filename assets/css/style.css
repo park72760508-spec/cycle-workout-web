@@ -21,14 +21,12 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { 
   height: 100%; 
-  overflow-y: hidden; /* 스크롤바 깜빡임 방지 */
 }
 body {
   font-family: "Pretendard", "Noto Sans KR", sans-serif;
   background: #f6f8fa;
   color: #222;
   overflow-x: hidden;
-  overflow-y: hidden; /* 스크롤바 깜빡임 방지 */
 }
 h1,h2,h3,h4 { font-weight: 600; }
 
