@@ -1110,6 +1110,11 @@
   animation: activeSegmentGlow 2s ease-in-out infinite alternate;
 }
 
+.workout-table tbody tr.current-segment {
+  background: rgba(239, 68, 68, 0.12);
+  border-left: 3px solid #ef4444;
+}
+
 .workout-table .seg-index-text {
   display: inline-flex;
   min-width: 32px;
