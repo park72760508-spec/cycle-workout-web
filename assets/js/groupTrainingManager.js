@@ -1561,16 +1561,32 @@ function startClock() {
   // 기존 인터벌 제거
   if (clockUpdateInterval) {
     clearInterval(clockUpdateInterval);
+    clockUpdateInterval = null;
   }
   if (worldTimeSyncInterval) {
     clearTimeout(worldTimeSyncInterval);
     worldTimeSyncInterval = null;
   }
   
-  // 시계 요소 찾기
-  const clockElement = document.getElementById('groupTrainingClock');
+  // 시계 요소 찾기 (여러 방법으로 시도)
+  let clockElement = document.getElementById('groupTrainingClock');
   if (!clockElement) {
-    console.warn('시계 요소를 찾을 수 없습니다.');
+    // roomInfoCard 내부에서 찾기
+    const screen = document.getElementById('groupWaitingScreen');
+    if (screen) {
+      const roomInfoCard = screen.querySelector('.room-info.card');
+      if (roomInfoCard) {
+        clockElement = roomInfoCard.querySelector('#groupTrainingClock');
+      }
+    }
+  }
+  
+  if (!clockElement) {
+    console.warn('시계 요소를 찾을 수 없습니다. 재시도합니다...');
+    // 시계 요소를 찾지 못하면 500ms 후 재시도
+    setTimeout(() => {
+      startClock();
+    }, 500);
     return;
   }
   
@@ -6037,23 +6053,25 @@ function renderWaitingHeaderSegmentTable() {
     // 시계는 별도의 setInterval로 업데이트되므로 재생성 불필요
     const newClockContainer = roomInfoCard.querySelector('#groupTrainingClock');
     if (newClockContainer) {
-      // 시계가 이미 동작 중이면 그대로 유지 (textContent만 업데이트)
-      // startClock()이 이미 실행 중이면 추가로 시작하지 않음
-      if (!clockUpdateInterval) {
-        // 시계가 시작되지 않았으면 시작
-        setTimeout(() => {
+      // 시계 요소가 생성되었으므로 시계 시작 (clockUpdateInterval 상태와 무관하게 시작)
+      // 기존 interval이 있으면 startClock() 내부에서 정리됨
+      setTimeout(() => {
+        // 시계 요소가 확실히 DOM에 렌더링된 후 시작
+        const clockEl = document.getElementById('groupTrainingClock');
+        if (clockEl) {
           startClock();
-        }, 100);
-      } else {
-        // 시계가 이미 동작 중이면 현재 시간만 업데이트 (깜빡임 없이)
-        const syncedTime = getSyncedTime();
-        updateClockSimple(newClockContainer, syncedTime);
-      }
+        } else {
+          // 요소를 찾지 못하면 재시도
+          setTimeout(() => {
+            startClock();
+          }, 200);
+        }
+      }, 100);
     } else {
-      // 시계 요소가 없으면 시작
+      // 시계 요소가 없으면 재시도
       setTimeout(() => {
         startClock();
-      }, 100);
+      }, 200);
     }
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
