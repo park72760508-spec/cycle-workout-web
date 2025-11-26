@@ -8446,5 +8446,5 @@ window.testTimeAPIs = async function() {
   console.log('💡 브라우저 콘솔에서 testTimeAPIs() 함수를 호출하여 언제든지 테스트할 수 있습니다.');
 };
 
-} // 모듈 중복 로딩 방지 블록 종료
+// 모듈 중복 로딩 방지 블록 종료
 
