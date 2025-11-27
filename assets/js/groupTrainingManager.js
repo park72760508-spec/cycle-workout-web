@@ -44,6 +44,43 @@ window.groupTrainingState = window.groupTrainingState || {
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
 let groupTrainingState = window.groupTrainingState;
 
+let segmentHighlightStylesInjected = false;
+function ensureSegmentHighlightStyles() {
+  if (segmentHighlightStylesInjected || typeof document === 'undefined') return;
+  const style = document.createElement('style');
+  style.id = 'segmentHighlightStyles';
+  style.textContent = `
+    .workout-table tbody tr.current-segment-row {
+      background: rgba(16, 185, 129, 0.12);
+      transition: background 0.3s ease;
+    }
+    .workout-table tbody tr.current-segment-row td {
+      position: relative;
+    }
+    .seg-current-indicator {
+      width: 4px;
+      height: 100%;
+      border-radius: 999px;
+      background: transparent;
+      display: inline-block;
+      margin-right: 8px;
+      opacity: 0;
+      transition: opacity 0.2s ease, background 0.2s ease;
+      vertical-align: middle;
+    }
+    .current-segment-row .seg-current-indicator {
+      background: #f97316;
+      opacity: 1;
+    }
+    .seg-index-text {
+      display: inline-block;
+      vertical-align: middle;
+    }
+  `;
+  document.head.appendChild(style);
+  segmentHighlightStylesInjected = true;
+}
+
 const ADMIN_MODE_STORAGE_KEY = 'groupTrainingAdminMode';
 if (typeof localStorage !== 'undefined') {
   try {
@@ -5914,6 +5951,8 @@ function renderWaitingHeaderSegmentTable() {
         : '모든 참가자가 준비될 때까지 대기해주세요';
     }
 
+    ensureSegmentHighlightStyles();
+
     // normalizedSegments를 먼저 정의 (다른 로직에서 사용하기 전에)
     const normalizedSegments = segments.map((seg, idx) => ({
       seg,
@@ -6029,11 +6068,12 @@ function renderWaitingHeaderSegmentTable() {
       const { seg, originalIndex, label, type, ftp, durationStr } = item;
       // 현재 세그먼트인지 확인 (active 클래스 대신 current-segment 클래스 사용)
       const isCurrentSegment = isTrainingStarted && originalIndex === currentIdx;
-      const rowClass = isCurrentSegment ? 'current-segment' : '';
+      const rowClass = isCurrentSegment ? 'current-segment-row' : '';
 
       return `
         <tr class="${rowClass}" data-segment-index="${originalIndex}">
           <td class="seg-col-index">
+            <span class="seg-current-indicator" aria-hidden="true"></span>
             <span class="seg-index-text">${String(originalIndex + 1).padStart(2, '0')}</span>
           </td>
           <td class="seg-col-label"><span class="seg-label">${escapeHtml(String(label))}</span></td>
@@ -6193,7 +6233,6 @@ function renderWaitingHeaderSegmentTable() {
         }
       }
 
-      // 활성 행 추적 기능 제거 - 스크롤 자동 이동 없음
       // 훈련 시작 전: 사용자가 스크롤한 위치 유지
       if (!isTrainingStarted || currentIdx < 0) {
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
@@ -6204,6 +6243,17 @@ function renderWaitingHeaderSegmentTable() {
           wrapper.scrollTop = savedScrollTop;
         }
         // 둘 다 없으면 스크롤 위치 변경하지 않음 (상단 유지)
+      } else {
+        // 훈련 중: 현재 세그먼트를 항상 상단에 위치시키기 위해 자동 스크롤
+        const activeRow = wrapper.querySelector(`tbody tr[data-segment-index="${currentIdx}"]`);
+        if (activeRow) {
+          const alreadyScrolled = groupTrainingState.lastScrolledSegmentIndex === currentIdx;
+          if (!alreadyScrolled) {
+            const rowTop = activeRow.offsetTop;
+            wrapper.scrollTop = Math.max(0, rowTop - 4);
+            groupTrainingState.lastScrolledSegmentIndex = currentIdx;
+          }
+        }
       }
 
       // 사용자 스크롤 이벤트 감지하여 위치 저장 (훈련 시작 전에만)
