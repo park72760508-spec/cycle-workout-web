@@ -646,6 +646,34 @@ function getSegmentCountdownDisplay({
   };
 }
 
+function getHighlightedSegmentIndex({
+  isTrainingStarted,
+  currentIdx,
+  currentSegRemaining,
+  hasNextSegment,
+  countdownRemainingSeconds,
+  phase,
+  totalSegments
+}) {
+  if (isTrainingStarted) {
+    if (
+      Number.isFinite(currentSegRemaining) &&
+      currentSegRemaining > 0 &&
+      currentSegRemaining <= 6 &&
+      hasNextSegment
+    ) {
+      return Math.min(totalSegments - 1, currentIdx + 1);
+    }
+    return currentIdx;
+  }
+
+  if (phase === 'countdown' && countdownRemainingSeconds !== null && totalSegments > 0) {
+    return 0;
+  }
+
+  return -1;
+}
+
 function computeServerTimelineSnapshot(room, options = {}) {
   if (!room) return null;
 
@@ -5520,6 +5548,44 @@ function updateTimersOnly() {
         }
       }
     }
+
+    ensureSegmentHighlightStyles();
+    const highlightedSegmentIndex = getHighlightedSegmentIndex({
+      isTrainingStarted,
+      currentIdx,
+      currentSegRemaining,
+      hasNextSegment: Boolean(
+        workout?.segments &&
+        currentIdx >= 0 &&
+        currentIdx < (workout.segments.length - 1)
+      ),
+      countdownRemainingSeconds,
+      phase,
+      totalSegments: workout?.segments?.length || 0
+    });
+
+    const rows = roomInfoCard.querySelectorAll('.workout-table tbody tr');
+    rows.forEach(row => {
+      const segIdx = Number(row.dataset.segmentIndex);
+      if (highlightedSegmentIndex >= 0 && segIdx === highlightedSegmentIndex) {
+        row.classList.add('current-segment-row');
+      } else {
+        row.classList.remove('current-segment-row');
+      }
+    });
+
+    const wrapper = roomInfoCard.querySelector('.workout-table-wrapper');
+    const shouldAutoScroll = wrapper && highlightedSegmentIndex >= 0 && (isTrainingStarted || phase === 'countdown');
+    if (shouldAutoScroll) {
+      const activeRow = wrapper.querySelector(`tbody tr[data-segment-index="${highlightedSegmentIndex}"]`);
+      if (activeRow) {
+        const alreadyScrolled = groupTrainingState.lastScrolledSegmentIndex === highlightedSegmentIndex;
+        if (!alreadyScrolled) {
+          wrapper.scrollTop = Math.max(0, activeRow.offsetTop - 4);
+          groupTrainingState.lastScrolledSegmentIndex = highlightedSegmentIndex;
+        }
+      }
+    }
     
   } catch (e) {
     console.warn('updateTimersOnly 오류:', e);
@@ -6048,6 +6114,16 @@ function renderWaitingHeaderSegmentTable() {
       segmentTimerClass += ' is-countdown';
     }
 
+    const highlightedSegmentIndex = getHighlightedSegmentIndex({
+      isTrainingStarted,
+      currentIdx,
+      currentSegRemaining,
+      hasNextSegment: Boolean(nextSegmentInfo),
+      countdownRemainingSeconds,
+      phase,
+      totalSegments: normalizedSegments.length
+    });
+
     // 상태 표시
     const statusPillClass = isTrainingStarted
       ? 'is-live'
@@ -6067,8 +6143,8 @@ function renderWaitingHeaderSegmentTable() {
     const tableRows = orderedSegments.map((item, orderIdx) => {
       const { seg, originalIndex, label, type, ftp, durationStr } = item;
       // 현재 세그먼트인지 확인 (active 클래스 대신 current-segment 클래스 사용)
-      const isCurrentSegment = isTrainingStarted && originalIndex === currentIdx;
-      const rowClass = isCurrentSegment ? 'current-segment-row' : '';
+      const isHighlighted = highlightedSegmentIndex >= 0 && originalIndex === highlightedSegmentIndex;
+      const rowClass = isHighlighted ? 'current-segment-row' : '';
 
       return `
         <tr class="${rowClass}" data-segment-index="${originalIndex}">
@@ -6233,25 +6309,36 @@ function renderWaitingHeaderSegmentTable() {
         }
       }
 
-      // 훈련 시작 전: 사용자가 스크롤한 위치 유지
+      // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (카운트다운 시에는 자동 스크롤)
       if (!isTrainingStarted || currentIdx < 0) {
-        // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
-        // 우선순위: 보존된 스크롤 > 저장된 스크롤 > 상단
-        if (preservedScrollTop !== null && preservedScrollTop > 0) {
-          wrapper.scrollTop = preservedScrollTop;
-        } else if (savedScrollTop !== null && savedScrollTop > 0) {
-          wrapper.scrollTop = savedScrollTop;
+        if (phase === 'countdown' && highlightedSegmentIndex >= 0) {
+          const countdownRow = wrapper.querySelector(`tbody tr[data-segment-index="${highlightedSegmentIndex}"]`);
+          if (countdownRow) {
+            const alreadyScrolled = groupTrainingState.lastScrolledSegmentIndex === highlightedSegmentIndex;
+            if (!alreadyScrolled) {
+              wrapper.scrollTop = Math.max(0, countdownRow.offsetTop - 4);
+              groupTrainingState.lastScrolledSegmentIndex = highlightedSegmentIndex;
+            }
+          }
+        } else {
+          if (preservedScrollTop !== null && preservedScrollTop > 0) {
+            wrapper.scrollTop = preservedScrollTop;
+          } else if (savedScrollTop !== null && savedScrollTop > 0) {
+            wrapper.scrollTop = savedScrollTop;
+          }
         }
-        // 둘 다 없으면 스크롤 위치 변경하지 않음 (상단 유지)
       } else {
-        // 훈련 중: 현재 세그먼트를 항상 상단에 위치시키기 위해 자동 스크롤
-        const activeRow = wrapper.querySelector(`tbody tr[data-segment-index="${currentIdx}"]`);
-        if (activeRow) {
-          const alreadyScrolled = groupTrainingState.lastScrolledSegmentIndex === currentIdx;
-          if (!alreadyScrolled) {
-            const rowTop = activeRow.offsetTop;
-            wrapper.scrollTop = Math.max(0, rowTop - 4);
-            groupTrainingState.lastScrolledSegmentIndex = currentIdx;
+        const scrollTargetIndex = highlightedSegmentIndex >= 0 ? highlightedSegmentIndex : currentIdx;
+        const shouldAutoScroll = scrollTargetIndex >= 0;
+        if (shouldAutoScroll) {
+          const activeRow = wrapper.querySelector(`tbody tr[data-segment-index="${scrollTargetIndex}"]`);
+          if (activeRow) {
+            const alreadyScrolled = groupTrainingState.lastScrolledSegmentIndex === scrollTargetIndex;
+            if (!alreadyScrolled) {
+              const rowTop = activeRow.offsetTop;
+              wrapper.scrollTop = Math.max(0, rowTop - 4);
+              groupTrainingState.lastScrolledSegmentIndex = scrollTargetIndex;
+            }
           }
         }
       }
