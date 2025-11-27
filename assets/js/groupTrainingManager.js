@@ -35,7 +35,10 @@ window.groupTrainingState = window.groupTrainingState || {
   adminParticipationMode: 'monitor',
   trainingStartSignaled: false,
   timelineSnapshot: null,
-  monitoringTimelineInterval: null
+  monitoringTimelineInterval: null,
+  lastScrolledSegmentIndex: -1,  // 마지막으로 스크롤한 세그먼트 인덱스 (세그먼트 변경 시에만 스크롤)
+  lastSegmentTimerValue: null,  // 마지막 세그먼트 타이머 값 (--:-- 리셋 방지)
+  workoutTableHeight: null  // 워크아웃 테이블 고정 높이 (크기 변경 방지)
 };
 
 // 로컬 변수로도 참조 유지 (기존 코드 호환성)
@@ -558,6 +561,20 @@ function formatTimer(sec) {
   ].join(':');
 }
 
+// 세그먼트 카운트다운 전용 포맷 함수 (mm:ss 형식)
+function formatSegmentTimer(sec) {
+  const value = Number(sec);
+  if (!Number.isFinite(value) || value < 0) return '00:00';
+  const total = Math.max(0, Math.floor(value));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  // mm:ss 형식으로 반환
+  return [
+    minutes.toString().padStart(2, '0'),
+    seconds.toString().padStart(2, '0')
+  ].join(':');
+}
+
 function computeServerTimelineSnapshot(room, options = {}) {
   if (!room) return null;
 
@@ -626,9 +643,15 @@ function computeServerTimelineSnapshot(room, options = {}) {
 
   let elapsedSec = 0;
   if (phase === 'training' && Number.isFinite(timelineEpochMs)) {
-    elapsedSec = Math.max(0, (nowMs - timelineEpochMs) / 1000);
+    // 훈련 시작 시간부터 현재까지의 경과 시간 계산
+    const rawElapsedSec = (nowMs - timelineEpochMs) / 1000;
+    elapsedSec = Math.max(0, rawElapsedSec);
+    
+    // 경과 시간이 총 시간을 초과하지 않도록 제한
+    // 단, 마지막 세그먼트까지는 진행할 수 있도록 약간의 여유를 둠
     if (Number.isFinite(totalDurationSec) && totalDurationSec > 0) {
-      elapsedSec = Math.min(elapsedSec, totalDurationSec);
+      // 마지막 세그먼트까지 진행할 수 있도록 1초 여유
+      elapsedSec = Math.min(elapsedSec, totalDurationSec + 1);
     }
   }
 
@@ -639,17 +662,41 @@ function computeServerTimelineSnapshot(room, options = {}) {
 
   if (phase === 'training' && segments.length > 0) {
     let cursor = 0;
+    // elapsedSec가 0보다 작으면 0으로 설정 (훈련 시작 직후)
+    const safeElapsedSec = Math.max(0, elapsedSec);
+    
     for (let i = 0; i < segments.length; i++) {
       const dur = Math.max(0, Number(segments[i]?.duration_sec ?? segments[i]?.duration ?? 0) || 0);
+      if (dur <= 0) {
+        cursor += 0; // 0초 세그먼트는 건너뜀
+        continue;
+      }
+      
       const end = cursor + dur;
-      if (elapsedSec < end || i === segments.length - 1) {
+      
+      // 현재 세그먼트를 찾는 로직:
+      // 1. elapsedSec가 현재 세그먼트 범위 내에 있으면 (cursor <= elapsedSec < end)
+      // 2. 마지막 세그먼트이고 elapsedSec가 cursor 이상이면 (마지막 세그먼트 진행 중 또는 완료)
+      const isInSegment = safeElapsedSec >= cursor && (safeElapsedSec < end || (i === segments.length - 1 && safeElapsedSec >= cursor));
+      
+      if (isInSegment) {
         segmentIndex = i;
         segmentStartSec = cursor;
-        segmentElapsedSec = Math.max(0, elapsedSec - cursor);
-        segmentRemainingSec = Math.max(0, end - elapsedSec);
+        segmentElapsedSec = Math.max(0, safeElapsedSec - cursor);
+        segmentRemainingSec = Math.max(0, end - safeElapsedSec);
         break;
       }
+      
       cursor = end;
+    }
+    
+    // 세그먼트를 찾지 못한 경우 (elapsedSec가 0이거나 음수인 경우) 첫 번째 세그먼트로 설정
+    if (segmentIndex === -1 && segments.length > 0) {
+      const firstDur = Math.max(0, Number(segments[0]?.duration_sec ?? segments[0]?.duration ?? 0) || 0);
+      segmentIndex = 0;
+      segmentStartSec = 0;
+      segmentElapsedSec = Math.max(0, safeElapsedSec);
+      segmentRemainingSec = Math.max(0, firstDur - safeElapsedSec);
     }
   }
 
@@ -708,17 +755,37 @@ function updateTimelineSnapshot(room, options = {}) {
           return sum + (Number.isFinite(raw) && raw > 0 ? raw : 0);
         }, 0);
         
+        const safeElapsedSec = Math.max(0, elapsedSec);
         for (let i = 0; i < segments.length; i++) {
           const dur = Math.max(0, Number(segments[i]?.duration_sec ?? segments[i]?.duration ?? 0) || 0);
+          if (dur <= 0) {
+            cursor += 0; // 0초 세그먼트는 건너뜀
+            continue;
+          }
+          
           const end = cursor + dur;
-          if (elapsedSec < end || i === segments.length - 1) {
+          
+          // 현재 세그먼트를 찾는 로직 (computeServerTimelineSnapshot과 동일)
+          const isInSegment = safeElapsedSec >= cursor && (safeElapsedSec < end || (i === segments.length - 1 && safeElapsedSec >= cursor));
+          
+          if (isInSegment) {
             segmentIndex = i;
             segmentStartSec = cursor;
-            segmentElapsedSec = Math.max(0, elapsedSec - cursor);
-            segmentRemainingSec = Math.max(0, end - elapsedSec);
+            segmentElapsedSec = Math.max(0, safeElapsedSec - cursor);
+            segmentRemainingSec = Math.max(0, end - safeElapsedSec);
             break;
           }
+          
           cursor = end;
+        }
+        
+        // 세그먼트를 찾지 못한 경우 첫 번째 세그먼트로 설정
+        if (segmentIndex === -1 && segments.length > 0) {
+          const firstDur = Math.max(0, Number(segments[0]?.duration_sec ?? segments[0]?.duration ?? 0) || 0);
+          segmentIndex = 0;
+          segmentStartSec = 0;
+          segmentElapsedSec = Math.max(0, safeElapsedSec);
+          segmentRemainingSec = Math.max(0, firstDur - safeElapsedSec);
         }
         
         // training 상태 유지된 스냅샷 생성
@@ -1368,12 +1435,16 @@ function updateClockSimple(clockElement, newTime) {
   
   const timeStr = formatTime(newTime);
   
-  // 시계 구조가 있으면 제거하고 간단한 텍스트로 변경
+  // 깜빡임 방지: innerHTML 사용하지 않고 textContent만 업데이트
+  // 시계 구조가 있으면 제거하고 간단한 텍스트로 변경 (최초 1회만)
   if (clockElement.querySelector('.clock-digits')) {
+    // 최초 1회만 구조 제거
     clockElement.innerHTML = timeStr;
   } else {
-    // 기존 텍스트 업데이트
-    clockElement.textContent = timeStr;
+    // 기존 텍스트만 업데이트 (깜빡임 없음 - 값이 변경될 때만)
+    if (clockElement.textContent !== timeStr) {
+      clockElement.textContent = timeStr;
+    }
   }
 }
 
@@ -1540,16 +1611,32 @@ function startClock() {
   // 기존 인터벌 제거
   if (clockUpdateInterval) {
     clearInterval(clockUpdateInterval);
+    clockUpdateInterval = null;
   }
   if (worldTimeSyncInterval) {
     clearTimeout(worldTimeSyncInterval);
     worldTimeSyncInterval = null;
   }
   
-  // 시계 요소 찾기
-  const clockElement = document.getElementById('groupTrainingClock');
+  // 시계 요소 찾기 (여러 방법으로 시도)
+  let clockElement = document.getElementById('groupTrainingClock');
   if (!clockElement) {
-    console.warn('시계 요소를 찾을 수 없습니다.');
+    // roomInfoCard 내부에서 찾기
+    const screen = document.getElementById('groupWaitingScreen');
+    if (screen) {
+      const roomInfoCard = screen.querySelector('.room-info.card');
+      if (roomInfoCard) {
+        clockElement = roomInfoCard.querySelector('#groupTrainingClock');
+      }
+    }
+  }
+  
+  if (!clockElement) {
+    console.warn('시계 요소를 찾을 수 없습니다. 재시도합니다...');
+    // 시계 요소를 찾지 못하면 500ms 후 재시도
+    setTimeout(() => {
+      startClock();
+    }, 500);
     return;
   }
   
@@ -1705,7 +1792,7 @@ function getCurrentRoomCode(room = groupTrainingState.currentRoom) {
 }
 
    
-const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn', 'startGroupTrainingBtn'];
+const SAFEGET_SUPPRESSED_IDS = ['readyToggleBtn', 'startGroupTrainingBtn', 'participantControls'];
 
 /**
  * 안전한 요소 접근
@@ -4864,11 +4951,11 @@ async function updateCountdownFromTrainingStartTime() {
       isReady = myParticipant ? isParticipantReady(myParticipant) : false;
     }
     
-    // 준비되지 않은 사용자에게도 전역 카운트다운 표시 (훈련 시작 11초 전)
-    if (!isReady && secondsUntilStart <= 11 && secondsUntilStart > 0 && !waitingCountdownShown) {
-      waitingCountdownShown = true;
-      startWaitingRoomCountdown(secondsUntilStart);
-    }
+    // 카운트다운 오버레이 제거
+    // if (!isReady && secondsUntilStart <= 11 && secondsUntilStart > 0 && !waitingCountdownShown) {
+    //   waitingCountdownShown = true;
+    //   startWaitingRoomCountdown(secondsUntilStart);
+    // }
     
     // 준비 완료된 사용자만 자동 훈련 시작 로직 실행
     if (isReady) {
@@ -4887,8 +4974,13 @@ async function updateCountdownFromTrainingStartTime() {
           countdownUpdateInterval = null;
         }
         
-        const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
-        startTrainingCountdown(countdownSeconds, { startTraining: true });
+        // 카운트다운 오버레이 제거 - 훈련 시작만 실행
+        // const countdownSeconds = secondsUntilStart > 10 ? 10 : secondsUntilStart;
+        // startTrainingCountdown(countdownSeconds, { startTraining: true });
+        // 카운트다운 없이 바로 훈련 시작
+        if (secondsUntilStart <= 0) {
+          startLocalGroupTraining();
+        }
       } else if (secondsUntilStart <= 0 && !countdownStarted) {
         // 이미 시간이 지났으면 즉시 훈련 시작
         countdownStarted = true;
@@ -5074,11 +5166,9 @@ async function initializeWaitingRoom() {
   }
   
   const adminControls = safeGet('adminControls');
-  const participantControls = safeGet('participantControls');
   
   console.log('대기실 초기화 - 관리자 여부:', groupTrainingState.isAdmin, '사용자 grade:', currentUser.grade);
   console.log('adminControls 요소:', adminControls);
-  console.log('participantControls 요소:', participantControls);
   
   if (adminControls) {
     adminControls.classList.add('hidden');
@@ -5086,14 +5176,7 @@ async function initializeWaitingRoom() {
     adminControls.innerHTML = '';
   }
   
-  if (participantControls) {
-    participantControls.classList.remove('hidden');
-    participantControls.style.display = '';
-    const inlineBtn = participantControls.querySelector('#startTrainingBtnInline');
-    if (inlineBtn) {
-      inlineBtn.remove();
-    }
-  }
+  // participantControls 요소는 제거되었으므로 참조하지 않음
   
   // 참가자 목록 업데이트 (기기 연결 상태 확인 포함)
   updateParticipantsList();
@@ -5191,15 +5274,19 @@ async function initializeWaitingRoom() {
             }))
           );
           
-          // 데이터 변경 여부 확인
+          // 데이터 변경 여부 확인 (타이머 값 변경은 제외하여 깜빡임 최소화)
           const hasChanged = 
-            window.lastRenderState.elapsed !== currentElapsed ||
             window.lastRenderState.segmentIndex !== currentSegIndex ||
-            window.lastRenderState.segmentRemaining !== currentSegRemaining ||
             window.lastRenderState.participantsHash !== participantsHash;
           
+          // 타이머 값만 변경된 경우 (elapsed, segmentRemaining)
+          const onlyTimerChanged = 
+            !hasChanged &&
+            (window.lastRenderState.elapsed !== currentElapsed ||
+             window.lastRenderState.segmentRemaining !== currentSegRemaining);
+          
           if (hasChanged) {
-            // 변경된 경우에만 업데이트
+            // 세그먼트 인덱스나 참가자 목록이 변경된 경우에만 전체 업데이트
             updateParticipantsList();
             renderWaitingHeaderSegmentTable();
             
@@ -5210,9 +5297,13 @@ async function initializeWaitingRoom() {
               segmentRemaining: currentSegRemaining,
               participantsHash: participantsHash
             };
-          } else {
-            // 변경되지 않은 경우 타이머 값만 업데이트 (DOM 재생성 없이)
+          } else if (onlyTimerChanged) {
+            // 타이머 값만 변경된 경우 타이머 값만 업데이트 (DOM 재생성 없이, 깜빡임 방지)
             updateTimersOnly();
+            
+            // 상태 저장 (타이머 값만)
+            window.lastRenderState.elapsed = currentElapsed;
+            window.lastRenderState.segmentRemaining = currentSegRemaining;
           }
         }
       }
@@ -5242,9 +5333,6 @@ function updateTimersOnly() {
     const countdownRemainingSeconds = snapshot.countdownRemainingSec ?? null;
     
     const elapsedTimer = formatTimer(elapsed);
-    const segmentTimerFormatted = isTrainingStarted
-      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
-      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
     
     // 타이머 값만 업데이트 (요소가 존재하는 경우에만)
     const screen = document.getElementById('groupWaitingScreen');
@@ -5255,14 +5343,95 @@ function updateTimersOnly() {
     
     // 경과 시간 타이머 업데이트
     const elapsedTimerValue = roomInfoCard.querySelector('.workout-timer.elapsed .timer-value');
-    if (elapsedTimerValue) {
+    if (elapsedTimerValue && elapsedTimerValue.textContent !== elapsedTimer) {
       elapsedTimerValue.textContent = elapsedTimer;
     }
     
-    // 세그먼트 카운트다운 타이머 업데이트
-    const segmentTimerValue = roomInfoCard.querySelector('.workout-timer.segment .timer-value');
+    // 경과 시간 서브텍스트 업데이트
+    const elapsedSubtextEl = roomInfoCard.querySelector('.workout-timer.elapsed .timer-subtext');
+    if (elapsedSubtextEl && isTrainingStarted) {
+      const snapshot = groupTrainingState.timelineSnapshot;
+      const currentIdx = isTrainingStarted && snapshot?.segmentIndex !== undefined ? snapshot.segmentIndex : -1;
+      const workout = window.currentWorkout;
+      if (workout && workout.segments && currentIdx >= 0 && currentIdx < workout.segments.length) {
+        const currentSegment = workout.segments[currentIdx];
+        const segmentLabel = currentSegment.label || currentSegment.name || currentSegment.title || `세그먼트 ${currentIdx + 1}`;
+        const newSubtext = `${segmentLabel} 진행 중`;
+        if (elapsedSubtextEl.textContent !== newSubtext) {
+          elapsedSubtextEl.textContent = newSubtext;
+        }
+      }
+    }
+    
+    // 세그먼트 카운트다운 타이머 업데이트 (--:-- 제거, 항상 mm:ss 형식으로 표시)
+    // 선택자를 더 유연하게 수정 (클래스가 추가되어도 찾을 수 있도록)
+    const segmentTimerContainer = roomInfoCard.querySelector('.workout-timer.segment');
+    const segmentTimerValue = segmentTimerContainer?.querySelector('.timer-value, .timer-value.is-countdown');
     if (segmentTimerValue) {
-      segmentTimerValue.textContent = segmentTimerFormatted;
+      let segmentTimerFormatted;
+      if (isTrainingStarted) {
+        if (currentSegRemaining !== null && currentSegRemaining !== undefined && Number.isFinite(currentSegRemaining) && currentSegRemaining >= 0) {
+          segmentTimerFormatted = formatSegmentTimer(currentSegRemaining); // mm:ss 형식
+          // 유효한 값이면 전역 상태에 저장
+          groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
+        } else {
+          // 이전 값을 유지 (계속 카운트다운 진행)
+          if (groupTrainingState.lastSegmentTimerValue) {
+            segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
+          } else {
+            const currentText = segmentTimerValue.textContent?.trim();
+            if (currentText && currentText !== '--:--' && currentText !== '') {
+              segmentTimerFormatted = currentText;
+              groupTrainingState.lastSegmentTimerValue = currentText;
+            } else {
+              // 기본값으로 00:00 표시 (--:-- 대신)
+              segmentTimerFormatted = '00:00';
+              groupTrainingState.lastSegmentTimerValue = '00:00';
+            }
+          }
+        }
+      } else {
+        // 훈련 시작 전: 카운트다운 표시
+        if (countdownRemainingSeconds !== null && countdownRemainingSeconds >= 0) {
+          segmentTimerFormatted = formatSegmentTimer(countdownRemainingSeconds); // mm:ss 형식
+          groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
+        } else {
+          // 카운트다운 중이 아니면 이전 값 유지 또는 기본값
+          if (groupTrainingState.lastSegmentTimerValue) {
+            segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
+          } else {
+            segmentTimerFormatted = '00:00';
+          }
+        }
+      }
+      // 텍스트 업데이트 (값이 변경된 경우에만)
+      if (segmentTimerValue.textContent !== segmentTimerFormatted) {
+        segmentTimerValue.textContent = segmentTimerFormatted;
+      }
+      
+      // 세그먼트 서브텍스트 업데이트
+      const segmentSubtextEl = segmentTimerContainer?.querySelector('.timer-subtext');
+      if (segmentSubtextEl && isTrainingStarted) {
+        const snapshot = groupTrainingState.timelineSnapshot;
+        const currentIdx = isTrainingStarted && snapshot?.segmentIndex !== undefined ? snapshot.segmentIndex : -1;
+        const workout = window.currentWorkout;
+        if (workout && workout.segments) {
+          const nextIdx = currentIdx >= 0 && currentIdx < workout.segments.length - 1 ? currentIdx + 1 : -1;
+          let newSubtext = '대기 중';
+          if (nextIdx >= 0 && nextIdx < workout.segments.length) {
+            const nextSegment = workout.segments[nextIdx];
+            newSubtext = `다음: ${nextSegment.label || nextSegment.name || nextSegment.title || `세그먼트 ${nextIdx + 1}`}`;
+          } else if (currentIdx >= 0 && currentIdx < workout.segments.length) {
+            const currentSegment = workout.segments[currentIdx];
+            newSubtext = `${currentSegment.label || currentSegment.name || currentSegment.title || `세그먼트 ${currentIdx + 1}`} 진행 중`;
+          } else {
+            newSubtext = '마지막 구간';
+          }
+          if (segmentSubtextEl.textContent !== newSubtext) {
+            segmentSubtextEl.textContent = newSubtext;
+          }
+        }
+      }
     }
     
   } catch (e) {
@@ -5634,6 +5803,17 @@ function renderWaitingHeaderSegmentTable() {
       return;
     }
 
+    // 테이블 높이가 이미 설정되어 있고 DOM이 존재하면 재생성하지 않음 (크기 변경 방지)
+    const existingTableWrapper = roomInfoCard.querySelector('.workout-table-wrapper');
+    if (existingTableWrapper && groupTrainingState.workoutTableHeight && existingTableWrapper.dataset.heightSet === 'true') {
+      // 높이가 이미 고정되어 있으면 타이머만 업데이트하고 DOM 재생성 방지
+      const snapshot = groupTrainingState.timelineSnapshot;
+      if (snapshot) {
+        updateTimersOnly();
+        return; // DOM 재생성 없이 타이머만 업데이트
+      }
+    }
+
     const workout = window.currentWorkout;
     const segments = workout.segments;
     const room = groupTrainingState.currentRoom || {};
@@ -5711,11 +5891,38 @@ function renderWaitingHeaderSegmentTable() {
       ? normalizedSegments.find(item => item.originalIndex === currentIdx + 1)
       : (phase === 'countdown' ? normalizedSegments[0] : null);
 
-    // 타이머 표시 포맷
+    // 타이머 표시 포맷 (--:-- 제거, 항상 mm:ss 형식으로 표시)
     const elapsedTimer = formatTimer(elapsed);
-    const segmentTimerFormatted = isTrainingStarted
-      ? (currentSegRemaining !== null ? formatTimer(currentSegRemaining) : '--:--')
-      : (countdownRemainingSeconds !== null ? formatTimer(countdownRemainingSeconds) : '--:--');
+    let segmentTimerFormatted;
+    if (isTrainingStarted) {
+      if (currentSegRemaining !== null && Number.isFinite(currentSegRemaining)) {
+        segmentTimerFormatted = formatSegmentTimer(currentSegRemaining); // mm:ss 형식
+        // 유효한 값이면 전역 상태에 저장
+        groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
+      } else {
+        // 이전 값을 유지 (계속 카운트다운 진행)
+        if (groupTrainingState.lastSegmentTimerValue) {
+          segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
+        } else {
+          // 기본값으로 00:00 표시 (--:-- 대신)
+          segmentTimerFormatted = '00:00';
+          groupTrainingState.lastSegmentTimerValue = '00:00';
+        }
+      }
+    } else {
+      // 훈련 시작 전: 카운트다운 표시
+      if (countdownRemainingSeconds !== null) {
+        segmentTimerFormatted = formatSegmentTimer(countdownRemainingSeconds); // mm:ss 형식
+        groupTrainingState.lastSegmentTimerValue = segmentTimerFormatted;
+      } else {
+        // 카운트다운 중이 아니면 이전 값 유지 또는 기본값
+        if (groupTrainingState.lastSegmentTimerValue) {
+          segmentTimerFormatted = groupTrainingState.lastSegmentTimerValue;
+        } else {
+          segmentTimerFormatted = '00:00';
+        }
+      }
+    }
 
     // 서브텍스트 정보
     const elapsedSubtext = isTrainingStarted && currentSegmentInfo
@@ -5739,22 +5946,12 @@ function renderWaitingHeaderSegmentTable() {
       segmentSubtext = `시작까지 ${countdownRemainingSeconds}초`;
     }
 
-    // 세그먼트 카운트다운 표시 로직 개선
+    // 세그먼트 카운트다운 표시 로직 (항상 mm:ss 형식으로 표시, 숫자 카운트다운 제거)
     let segmentCountdownDisplay = segmentTimerFormatted;
     let segmentTimerClass = 'timer-value';
 
-    if (isTrainingStarted && currentSegRemaining !== null && currentSegRemaining > 0) {
-      // 세그먼트 종료 6초 전부터 5초 카운트다운 표시 (5, 4, 3, 2, 1, 0)
-      if (currentSegRemaining <= 6 && nextSegmentInfo) {
-        segmentTimerClass += ' is-countdown';
-        // 6초일 때 5 표시, 5초일 때 4 표시, ..., 1초일 때 0 표시
-        const countdownNumber = Math.max(0, Math.ceil(currentSegRemaining) - 1);
-        segmentCountdownDisplay = countdownNumber.toString();
-      }
-    } else if (!isTrainingStarted && countdownRemainingSeconds !== null && countdownRemainingSeconds <= 11) {
-      segmentTimerClass += ' is-countdown';
-      segmentCountdownDisplay = Math.min(10, countdownRemainingSeconds).toString();
-    }
+    // 훈련 시작 후에는 항상 mm:ss 형식으로 표시 (숫자 카운트다운 제거)
+    // 훈련 시작 전 10초 카운트다운 효과도 제거
 
     // 상태 표시
     const statusPillClass = isTrainingStarted
@@ -5774,10 +5971,12 @@ function renderWaitingHeaderSegmentTable() {
 
     const tableRows = orderedSegments.map((item, orderIdx) => {
       const { seg, originalIndex, label, type, ftp, durationStr } = item;
-      const isActive = isTrainingStarted && originalIndex === currentIdx;
+      // 현재 세그먼트인지 확인 (active 클래스 대신 current-segment 클래스 사용)
+      const isCurrentSegment = isTrainingStarted && originalIndex === currentIdx;
+      const rowClass = isCurrentSegment ? 'current-segment' : '';
 
       return `
-        <tr class="${isActive ? 'active' : ''}">
+        <tr class="${rowClass}" data-segment-index="${originalIndex}">
           <td class="seg-col-index">
             <span class="seg-index-text">${String(originalIndex + 1).padStart(2, '0')}</span>
           </td>
@@ -5791,28 +5990,33 @@ function renderWaitingHeaderSegmentTable() {
 
     const workoutTitle = escapeHtml(String(workout.title || workout.name || '워크아웃'));
 
-    // 시계 요소가 이미 있으면 보존 (리셋 방지)
+    // 시계 요소 보존 (깜빡임 방지 - innerHTML 재생성 시 시계는 제외)
     const existingClock = roomInfoCard.querySelector('#groupTrainingClock');
-    const clockPreserved = existingClock && existingClock.querySelector('.clock-digits');
-    let clockElement = null;
+    const clockPreserved = existingClock && existingClock.textContent;
+    let clockTextContent = null;
     
     if (clockPreserved) {
-      // 시계 요소를 임시로 보존
-      clockElement = existingClock.cloneNode(true);
+      // 시계 텍스트 내용만 보존 (innerHTML 재생성 시 시계는 건드리지 않음)
+      clockTextContent = existingClock.textContent;
     }
 
-    // 스크롤 위치 보존: innerHTML 재생성 전에 현재 스크롤 위치 저장
+    // 스크롤 위치 보존: innerHTML 재생성 전에 현재 상태 저장
     const existingWrapper = roomInfoCard.querySelector('.workout-table-wrapper');
     let preservedScrollTop = null;
-    let preservedCurrentSegIndex = null;
     
     if (existingWrapper) {
       preservedScrollTop = existingWrapper.scrollTop;
-      // 현재 활성 세그먼트 인덱스도 저장 (스크롤 계산용)
-      const activeRow = existingWrapper.querySelector('tbody tr.active');
-      if (activeRow) {
-        const allRows = Array.from(existingWrapper.querySelectorAll('tbody tr'));
-        preservedCurrentSegIndex = allRows.indexOf(activeRow);
+      // 높이는 전역 변수에서만 가져옴 (동적 계산 제거)
+      // 전역 변수에 높이가 없고 현재 높이가 있으면 저장 (최초 1회만)
+      if (!groupTrainingState.workoutTableHeight && existingWrapper.style.maxHeight) {
+        groupTrainingState.workoutTableHeight = existingWrapper.style.maxHeight;
+      }
+      // 높이가 이미 설정되어 있으면 그대로 유지 (재계산 방지)
+      if (groupTrainingState.workoutTableHeight && !existingWrapper.dataset.heightSet) {
+        existingWrapper.style.maxHeight = groupTrainingState.workoutTableHeight;
+        existingWrapper.style.minHeight = groupTrainingState.workoutTableHeight;
+        existingWrapper.style.height = groupTrainingState.workoutTableHeight;
+        existingWrapper.dataset.heightSet = 'true';
       }
     }
 
@@ -5890,53 +6094,52 @@ function renderWaitingHeaderSegmentTable() {
         console.warn('스크롤 위치 저장소 읽기 실패:', e);
       }
 
-      // 스크롤바 깜빡임 방지: 고정 높이 설정 (변경하지 않음)
-      const maxVisible = Math.min(3, rows.length);
-      if (rows.length > maxVisible) {
-        const rowHeight = rows[0].offsetHeight || 0;
-        // 최초 1회만 설정하고 이후에는 변경하지 않음
-        if (!wrapper.dataset.heightSet) {
-          wrapper.style.maxHeight = `${rowHeight * maxVisible + 4}px`;
-          wrapper.style.minHeight = `${rowHeight * maxVisible + 4}px`;
-          wrapper.dataset.heightSet = 'true';
+      // 스크롤바 깜빡임 방지: 고정 높이 설정 (처음 로드 시 한 번만 계산, 이후 절대 변경하지 않음)
+      // 전역 변수에 저장된 높이가 있으면 무조건 사용 (재계산 완전 제거)
+      if (groupTrainingState.workoutTableHeight) {
+        // 전역 변수에 저장된 높이 사용 (절대 변경하지 않음)
+        wrapper.style.maxHeight = groupTrainingState.workoutTableHeight;
+        wrapper.style.minHeight = groupTrainingState.workoutTableHeight;
+        wrapper.style.height = groupTrainingState.workoutTableHeight; // height도 고정
+        wrapper.dataset.heightSet = 'true';
+      } else if (!wrapper.dataset.heightSet) {
+        // 최초 1회만 높이 계산 (이후에는 절대 재계산하지 않음)
+        // offsetHeight 계산은 DOM이 완전히 렌더링된 후에만 정확하므로,
+        // requestAnimationFrame 내부에서 계산하되 한 번만 실행
+        const maxVisible = Math.min(3, rows.length);
+        let calculatedHeight;
+        if (rows.length > maxVisible && rows[0]) {
+          const rowHeight = rows[0].offsetHeight || 0;
+          if (rowHeight > 0) {
+            calculatedHeight = `${rowHeight * maxVisible + 4}px`;
+          } else {
+            // offsetHeight가 0이면 기본값 사용 (재시도하지 않음)
+            calculatedHeight = '150px'; // 기본 높이
+          }
+        } else {
+          calculatedHeight = '150px'; // 기본 높이
         }
+        // 높이를 한 번만 설정하고 전역 변수에 저장 (절대 변경하지 않음)
+        wrapper.style.maxHeight = calculatedHeight;
+        wrapper.style.minHeight = calculatedHeight;
+        wrapper.style.height = calculatedHeight; // height도 고정
+        wrapper.dataset.heightSet = 'true';
+        groupTrainingState.workoutTableHeight = calculatedHeight; // 전역 변수에 저장
       } else {
-        // 행이 적어도 최소 높이 유지 (스크롤바 깜빡임 방지)
-        if (!wrapper.dataset.heightSet) {
-          const defaultHeight = 150; // 기본 높이
-          wrapper.style.maxHeight = `${defaultHeight}px`;
-          wrapper.style.minHeight = `${defaultHeight}px`;
-          wrapper.dataset.heightSet = 'true';
+        // 이미 높이가 설정되어 있으면 전역 변수에 저장 (혹시 모를 경우 대비)
+        if (wrapper.style.maxHeight && !groupTrainingState.workoutTableHeight) {
+          groupTrainingState.workoutTableHeight = wrapper.style.maxHeight;
+          wrapper.style.height = wrapper.style.maxHeight; // height도 동기화
+        }
+        // 높이가 이미 설정되어 있으면 그대로 유지 (재계산하지 않음)
+        if (wrapper.style.maxHeight) {
+          wrapper.style.height = wrapper.style.maxHeight; // height도 동기화
         }
       }
 
-      // 스크롤 위치 복원 (우선순위: 보존된 스크롤 > 저장된 스크롤 > 현재 세그먼트 기준)
-      if (isTrainingStarted && currentIdx >= 0) {
-        // 훈련 중: 스크롤 위치를 최대한 유지하되, 현재 세그먼트가 보이도록 조정
-        if (preservedScrollTop !== null && preservedScrollTop >= 0) {
-          // 보존된 스크롤 위치 복원 (렌더링 전 위치 유지)
-          wrapper.scrollTop = preservedScrollTop;
-        } else {
-          // 보존된 위치가 없으면 현재 활성 세그먼트로 스크롤
-          const activeRow = wrapper.querySelector('tbody tr.active');
-          if (activeRow) {
-            const rowTop = activeRow.offsetTop;
-            const wrapperHeight = wrapper.clientHeight;
-            const rowHeight = activeRow.offsetHeight;
-            
-            // 활성 세그먼트가 중앙에 오도록 스크롤
-            const targetScroll = Math.max(0, rowTop - (wrapperHeight / 2) + (rowHeight / 2));
-            wrapper.scrollTop = targetScroll;
-          }
-        }
-        
-        // 훈련 중에는 스크롤 핸들러 제거 (자동 스크롤만)
-        const existingHandler = wrapper._scrollHandler;
-        if (existingHandler) {
-          wrapper.removeEventListener('scroll', existingHandler);
-          delete wrapper._scrollHandler;
-        }
-      } else {
+      // 활성 행 추적 기능 제거 - 스크롤 자동 이동 없음
+      // 훈련 시작 전: 사용자가 스크롤한 위치 유지
+      if (!isTrainingStarted || currentIdx < 0) {
         // 훈련 시작 전: 사용자가 스크롤한 위치 유지 (자동 복귀 없음)
         // 우선순위: 보존된 스크롤 > 저장된 스크롤 > 상단
         if (preservedScrollTop !== null && preservedScrollTop > 0) {
@@ -5970,31 +6173,39 @@ function renderWaitingHeaderSegmentTable() {
         wrapper.addEventListener('scroll', handleScroll, { passive: true });
       }
 
-      setupSegmentActiveOverlay(wrapper, isTrainingStarted && currentIdx >= 0);
+      // 네온 효과 오버레이 제거 - 빨간색 세로바만 사용
     });
     
-    // 시계 요소 복원 또는 시작
-    if (clockPreserved && clockElement) {
-      // 보존된 시계 요소 복원
-      const newClockContainer = roomInfoCard.querySelector('#groupTrainingClock');
-      if (newClockContainer && clockElement) {
-        newClockContainer.innerHTML = clockElement.innerHTML;
-        // 시계 업데이트만 수행 (리셋 방지)
-        const syncedTime = getSyncedTime();
-        updateClockSimple(newClockContainer, syncedTime);
-      }
+    // 시계 요소는 innerHTML 재생성 시 건드리지 않음 (깜빡임 방지)
+    // 시계는 별도의 setInterval로 업데이트되므로 재생성 불필요
+    const newClockContainer = roomInfoCard.querySelector('#groupTrainingClock');
+    if (newClockContainer) {
+      // 시계 요소가 생성되었으므로 시계 시작 (clockUpdateInterval 상태와 무관하게 시작)
+      // 기존 interval이 있으면 startClock() 내부에서 정리됨
+      setTimeout(() => {
+        // 시계 요소가 확실히 DOM에 렌더링된 후 시작
+        const clockEl = document.getElementById('groupTrainingClock');
+        if (clockEl) {
+          startClock();
+        } else {
+          // 요소를 찾지 못하면 재시도
+          setTimeout(() => {
+            startClock();
+          }, 200);
+        }
+      }, 100);
     } else {
-      // 시계 시작 (요소가 생성된 후)
+      // 시계 요소가 없으면 재시도
       setTimeout(() => {
         startClock();
-      }, 100);
+      }, 200);
     }
   } catch (error) {
     console.warn('renderWaitingHeaderSegmentTable 오류:', error);
   }
 }
 
-function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
+function setupSegmentActiveOverlay(wrapper, shouldShowOverlay, currentSegmentIndex) {
   if (!wrapper) return;
 
   const handlerKey = '_segmentOverlayScrollHandler';
@@ -6007,9 +6218,9 @@ function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
 
   let overlay = wrapper.querySelector(`.${overlayClassName}`);
 
-  if (!shouldShowOverlay) {
+  if (!shouldShowOverlay || currentSegmentIndex < 0) {
     if (overlay) {
-      overlay.remove();
+      overlay.style.opacity = '0';
     }
     return;
   }
@@ -6020,9 +6231,10 @@ function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
     wrapper.appendChild(overlay);
   }
 
+  // active 클래스 대신 data-segment-index 속성으로 현재 세그먼트 행 찾기
   const syncOverlayPosition = () => {
     if (!overlay || !overlay.isConnected) return;
-    const activeRow = wrapper.querySelector('tbody tr.active');
+    const activeRow = wrapper.querySelector(`tbody tr[data-segment-index="${currentSegmentIndex}"]`);
     if (!activeRow) {
       overlay.style.opacity = '0';
       return;
@@ -6040,6 +6252,7 @@ function setupSegmentActiveOverlay(wrapper, shouldShowOverlay) {
     overlay.style.height = `${rowHeight}px`;
   };
 
+  // 스크롤 이벤트 핸들러 등록 (오버레이 위치만 동기화, 스크롤 추적 없음)
   const handleScroll = () => syncOverlayPosition();
   wrapper[handlerKey] = handleScroll;
   wrapper.addEventListener('scroll', handleScroll, { passive: true });
