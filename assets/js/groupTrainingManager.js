@@ -575,6 +575,40 @@ function formatSegmentTimer(sec) {
   ].join(':');
 }
 
+/**
+ * 세그먼트 타이머 표시 정보 계산
+ * - 기본은 mm:ss 형식 (segmentTimerFormatted)
+ * - 세그먼트 종료 6초 전에는 숫자 카운트다운(5~0) 표시
+ * - 훈련 시작 전 11초 이하에서는 남은 초(10~0) 표시
+ */
+function getSegmentCountdownDisplay({
+  segmentTimerFormatted,
+  isTrainingStarted,
+  currentSegRemaining,
+  countdownRemainingSeconds,
+  hasNextSegment
+}) {
+  let display = segmentTimerFormatted || '00:00';
+  let isCountdown = false;
+
+  if (isTrainingStarted && Number.isFinite(currentSegRemaining) && currentSegRemaining > 0 && hasNextSegment) {
+    if (currentSegRemaining <= 6) {
+      const countdownNumber = Math.max(0, Math.ceil(currentSegRemaining) - 1);
+      display = countdownNumber.toString();
+      isCountdown = true;
+    }
+  } else if (!isTrainingStarted && countdownRemainingSeconds !== null && countdownRemainingSeconds <= 11) {
+    const safeCountdown = Math.max(0, Math.min(10, Math.floor(countdownRemainingSeconds)));
+    display = safeCountdown.toString();
+    isCountdown = true;
+  }
+
+  return {
+    display,
+    isCountdown
+  };
+}
+
 function computeServerTimelineSnapshot(room, options = {}) {
   if (!room) return null;
 
@@ -5331,6 +5365,7 @@ function updateTimersOnly() {
       ? (snapshot.segmentRemainingSec !== null && snapshot.segmentRemainingSec !== undefined ? snapshot.segmentRemainingSec : null)
       : null;
     const countdownRemainingSeconds = snapshot.countdownRemainingSec ?? null;
+    const workout = window.currentWorkout;
     
     const elapsedTimer = formatTimer(elapsed);
     
@@ -5404,9 +5439,25 @@ function updateTimersOnly() {
           }
         }
       }
-      // 텍스트 업데이트 (값이 변경된 경우에만)
-      if (segmentTimerValue.textContent !== segmentTimerFormatted) {
-        segmentTimerValue.textContent = segmentTimerFormatted;
+      const hasNextSegment = isTrainingStarted && workout?.segments && currentIdx >= 0
+        ? currentIdx < (workout.segments.length - 1)
+        : false;
+      const displayInfo = getSegmentCountdownDisplay({
+        segmentTimerFormatted,
+        isTrainingStarted,
+        currentSegRemaining,
+        countdownRemainingSeconds,
+        hasNextSegment
+      });
+
+      if (segmentTimerValue.textContent !== displayInfo.display) {
+        segmentTimerValue.textContent = displayInfo.display;
+      }
+      segmentTimerValue.classList.add('timer-value');
+      if (displayInfo.isCountdown) {
+        segmentTimerValue.classList.add('is-countdown');
+      } else {
+        segmentTimerValue.classList.remove('is-countdown');
       }
       
       // 세그먼트 서브텍스트 업데이트
@@ -5414,7 +5465,6 @@ function updateTimersOnly() {
       if (segmentSubtextEl && isTrainingStarted) {
         const snapshot = groupTrainingState.timelineSnapshot;
         const currentIdx = isTrainingStarted && snapshot?.segmentIndex !== undefined ? snapshot.segmentIndex : -1;
-        const workout = window.currentWorkout;
         if (workout && workout.segments) {
           const nextIdx = currentIdx >= 0 && currentIdx < workout.segments.length - 1 ? currentIdx + 1 : -1;
           let newSubtext = '대기 중';
@@ -5946,12 +5996,18 @@ function renderWaitingHeaderSegmentTable() {
       segmentSubtext = `시작까지 ${countdownRemainingSeconds}초`;
     }
 
-    // 세그먼트 카운트다운 표시 로직 (항상 mm:ss 형식으로 표시, 숫자 카운트다운 제거)
-    let segmentCountdownDisplay = segmentTimerFormatted;
+    // 세그먼트 카운트다운 표시 로직
+    const { display: segmentCountdownDisplay, isCountdown } = getSegmentCountdownDisplay({
+      segmentTimerFormatted,
+      isTrainingStarted,
+      currentSegRemaining,
+      countdownRemainingSeconds,
+      hasNextSegment: Boolean(nextSegmentInfo)
+    });
     let segmentTimerClass = 'timer-value';
-
-    // 훈련 시작 후에는 항상 mm:ss 형식으로 표시 (숫자 카운트다운 제거)
-    // 훈련 시작 전 10초 카운트다운 효과도 제거
+    if (isCountdown) {
+      segmentTimerClass += ' is-countdown';
+    }
 
     // 상태 표시
     const statusPillClass = isTrainingStarted
