@@ -1029,7 +1029,26 @@ async function loadWorkouts() {
       }));
     }
     
-    workoutList.innerHTML = validWorkouts.map(workout => {
+    // 테이블 헤더 생성
+    const tableHeader = `
+      <table class="workout-table">
+        <thead>
+          <tr>
+            <th style="width: 50px;">순번</th>
+            <th style="width: 200px;">제목</th>
+            <th style="width: 120px;">작성자</th>
+            <th style="width: 80px;">시간</th>
+            <th style="width: 80px;">상태</th>
+            <th>설명</th>
+            <th style="width: 120px;">게시일</th>
+            <th style="width: 180px;">작업</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+    
+    // 테이블 행 생성
+    const tableRows = validWorkouts.map((workout, index) => {
       if (!workout || typeof workout !== 'object' || !workout.id) {
         return '';
       }
@@ -1044,38 +1063,49 @@ async function loadWorkouts() {
         '<span class="status-badge hidden">비공개</span>';
       
       // grade=2 사용자용 그룹방 생성 상태 표시
-      let groupRoomBadge = '';
+      let groupRoomStatus = '';
       if (grade === '2' && workoutRoomStatusMap[workout.id] === 'available') {
-        groupRoomBadge = '<span class="group-room-badge" style="display:inline-block;background:#4CAF50;color:white;padding:4px 8px;border-radius:4px;font-size:12px;margin-left:8px;">👥 그룹 훈련방 생성</span>';
+        groupRoomStatus = '<span class="group-room-badge" style="display:inline-block;background:#4CAF50;color:white;padding:4px 8px;border-radius:4px;font-size:12px;">👥 그룹 훈련방</span>';
       }
       
+      const publishDate = workout.publish_date ? new Date(workout.publish_date).toLocaleDateString() : '-';
+      
+      const rowNumber = index + 1;
+      
       return `
-        <div class="workout-card" data-workout-id="${workout.id}">
-          <div class="workout-header">
-            <div class="workout-title">${escapeHtml(safeTitle)}${groupRoomBadge}</div>
-            <div class="workout-actions">
+        <tr class="workout-row" data-workout-id="${workout.id}">
+          <td class="text-center">${rowNumber}</td>
+          <td>
+            <div class="workout-title-cell">
+              ${escapeHtml(safeTitle)}
+              ${groupRoomStatus}
+            </div>
+          </td>
+          <td>${escapeHtml(safeAuthor)}</td>
+          <td class="text-center">${totalMinutes}분</td>
+          <td class="text-center">${statusBadge}</td>
+          <td class="workout-description-cell">${escapeHtml(safeDescription)}</td>
+          <td class="text-center">${publishDate}</td>
+          <td class="workout-actions-cell">
+            <div class="workout-actions-wrapper">
               <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
               <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
+              <button class="btn btn-primary btn-sm" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
+              ${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? 
+                `<button class="btn btn-success btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : 
+                ''}
             </div>
-          </div>
-          <div class="workout-details">
-            <div class="workout-meta">
-              <span class="author">작성자: ${escapeHtml(safeAuthor)}</span>
-              <span class="duration">${totalMinutes}분</span>
-              ${statusBadge}
-            </div>
-            <div class="workout-description">${escapeHtml(safeDescription)}</div>
-            ${workout.publish_date ? `<div class="publish-date">게시일: ${new Date(workout.publish_date).toLocaleDateString()}</div>` : ''}
-          </div>
-          <div class="workout-actions-bottom">
-            <button class="btn btn-primary" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
-            ${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? 
-              `<button class="btn btn-success" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : 
-              ''}
-          </div>
-        </div>
+          </td>
+        </tr>
       `;
     }).filter(Boolean).join('');
+    
+    const tableFooter = `
+        </tbody>
+      </table>
+    `;
+    
+    workoutList.innerHTML = tableHeader + tableRows + tableFooter;
 
       // [권한 적용: 등급별 버튼 처리 - 이미 넣으셨다면 유지]
       applyWorkoutPermissions?.();
@@ -1150,10 +1180,10 @@ async function loadWorkouts() {
        }
      }
    
-     // 2) 각 워크아웃 카드의 수정/삭제 버튼
-     // loadWorkouts가 렌더하는 클래스: .btn-edit, .btn-delete :contentReference[oaicite:2]{index=2}
-     const editBtns = document.querySelectorAll('.workout-actions .btn-edit');
-     const delBtns  = document.querySelectorAll('.workout-actions .btn-delete');
+     // 2) 각 워크아웃 테이블 행의 수정/삭제 버튼
+     // loadWorkouts가 렌더하는 클래스: .btn-edit, .btn-delete
+     const editBtns = document.querySelectorAll('.workout-actions-cell .btn-edit');
+     const delBtns  = document.querySelectorAll('.workout-actions-cell .btn-delete');
    
      const setDisabled = (btn, disabled) => {
        if (!btn) return;
