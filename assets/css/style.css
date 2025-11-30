@@ -239,7 +239,161 @@ button[aria-disabled="true"] {
 
 
 /* ========== 3) 워크아웃 선택 화면 (#workoutScreen) ========== */
-.workout-list { display: grid; gap: 12px; }
+.workout-list { 
+  overflow-x: auto;
+  width: 100%;
+}
+
+/* 워크아웃 테이블 스타일 */
+.workout-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.workout-table thead {
+  background: linear-gradient(135deg, #2e74e8 0%, #1e5bb8 100%);
+  color: #fff;
+}
+
+.workout-table thead th {
+  padding: 14px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+  border-bottom: 2px solid #1e5bb8;
+}
+
+.workout-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s ease;
+}
+
+.workout-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.workout-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.workout-table td {
+  padding: 12px;
+  font-size: 14px;
+  color: #374151;
+  vertical-align: middle;
+}
+
+.workout-table .text-center {
+  text-align: center;
+}
+
+.workout-title-cell {
+  font-weight: 600;
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.workout-title-cell .group-room-badge {
+  align-self: flex-start;
+}
+
+.workout-description-cell {
+  color: #6b7280;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workout-actions-cell {
+  white-space: nowrap;
+}
+
+.workout-actions-wrapper {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.workout-actions-wrapper .btn-edit,
+.workout-actions-wrapper .btn-delete {
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.workout-actions-wrapper .btn-edit:hover {
+  background: #eff6ff;
+  border-color: #2e74e8;
+  color: #2e74e8;
+}
+
+.workout-actions-wrapper .btn-delete:hover {
+  background: #fef2f2;
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.workout-actions-wrapper .btn-edit.is-disabled,
+.workout-actions-wrapper .btn-delete.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.workout-actions-wrapper .btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+/* 반응형 처리 */
+@media (max-width: 1200px) {
+  .workout-table {
+    font-size: 13px;
+  }
+  
+  .workout-table thead th,
+  .workout-table td {
+    padding: 10px 8px;
+  }
+  
+  .workout-description-cell {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .workout-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .workout-table {
+    min-width: 800px;
+  }
+  
+  .workout-actions-wrapper {
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .workout-actions-wrapper .btn-sm {
+    width: 100%;
+  }
+}
 
 /* ==== Workout Builder: 하단 액션 바 고정 & 덮임 방지 ==== */
 .builder-actions {
