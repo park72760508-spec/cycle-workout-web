@@ -1032,7 +1032,8 @@ async function loadWorkouts() {
           workoutRoomStatusMap[workout.id] = 'none';
         }
       } catch (error) {
-        console.warn(`워크아웃 ${workout.id}의 그룹방 확인 실패:`, error);
+        // 그룹방 확인 실패 시 조용히 처리 (기본값 'none' 설정)
+        // 오류 로깅 제거 (워크아웃 목록 로딩 시 반복 오류 방지)
         workoutRoomStatusMap[workout.id] = 'none';
       }
     }));

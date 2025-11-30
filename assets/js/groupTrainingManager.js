@@ -2015,7 +2015,7 @@ function jsonpRequest(url, params = {}) {
       if (isResolved) return;
       isResolved = true;
       
-      console.error('그룹훈련 JSONP script loading failed');
+      // 오류 로깅 제거 (워크아웃 목록 로딩 시 반복 오류 방지)
       cleanup();
       reject(new Error('네트워크 연결 오류'));
     };
@@ -2697,7 +2697,8 @@ async function getRoomsByWorkoutId(workoutId) {
     
     return [];
   } catch (error) {
-    console.error('getRoomsByWorkoutId 실패:', error);
+    // 오류 로깅 제거 (워크아웃 목록 로딩 시 반복 오류 방지)
+    // 조용히 빈 배열 반환
     return [];
   }
 }
