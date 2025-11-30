@@ -1352,63 +1352,59 @@ function applyWorkoutPermissions() {
      const disable = (grade === '2');
      editBtns.forEach(b => setDisabled(b, disable));
      delBtns.forEach(b  => setDisabled(b, disable));
-   }
+}
 
-
-   /* ===== 만료일 점검: grade=2 → D-7~D-1 사전 알림 + 만료일/만료 후 알림 ===== */
-   function checkExpiryAndWarn() {
-     // 중복 표시 방지 (한 화면 로딩당 1회)
-     if (window.__expiryWarnShown) return;
-   
-     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
-     if (grade !== '2') return; // 등급 1은 알림 불필요
-   
-     // 현재 사용자 정보 (currentUser → localStorage 폴백)
-     let user = null;
-     try {
-       user = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-     } catch (e) { user = null; }
-   
-     const exp = user?.expiry_date;
-     if (!exp) return; // 만료일 미설정이면 종료
-   
-     // 날짜 파싱 (YYYY-MM-DD 권장, 실패 시 Date.parse 폴백)
-     const today = new Date(); today.setHours(0,0,0,0);
-     const expDate = new Date(exp);
-     if (isNaN(expDate.getTime())) {
-       const alt = Date.parse(String(exp));
-       if (isNaN(alt)) return;
-       expDate.setTime(alt);
-     }
-     expDate.setHours(0,0,0,0);
-   
-     // 남은 일수 계산 (exp - today)
-     const msPerDay = 24 * 60 * 60 * 1000;
-     const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
-   
-     let msg = null;
-     if (diffDays < 0) {
-       // 만료 후
-       msg = '만료일이 지났습니다. 만료일 갱신 메세지를 띄워주세요';
-     } else if (diffDays === 0) {
-       // D-day
-       msg = '오늘이 만료일입니다. 만료일 갱신 메세지를 띄워주세요';
-     } else if (diffDays <= 7) {
-       // D-7 ~ D-1 사전 알림
-       msg = `만료일까지 D-${diffDays}일 남았습니다. 만료일 갱신 메세지를 띄워주세요`;
-     }
-   
-     if (msg) {
-       window.__expiryWarnShown = true;
-       if (typeof window.showToast === 'function') {
-         window.showToast(msg);
-       } else {
-         alert(msg);
-       }
-     }
-   }
-
-
+/* ===== 만료일 점검: grade=2 → D-7~D-1 사전 알림 + 만료일/만료 후 알림 ===== */
+function checkExpiryAndWarn() {
+  // 중복 표시 방지 (한 화면 로딩당 1회)
+  if (window.__expiryWarnShown) return;
+  
+  const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+  if (grade !== '2') return; // 등급 1은 알림 불필요
+  
+  // 현재 사용자 정보 (currentUser → localStorage 폴백)
+  let user = null;
+  try {
+    user = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+  } catch (e) { user = null; }
+  
+  const exp = user?.expiry_date;
+  if (!exp) return; // 만료일 미설정이면 종료
+  
+  // 날짜 파싱 (YYYY-MM-DD 권장, 실패 시 Date.parse 폴백)
+  const today = new Date(); today.setHours(0,0,0,0);
+  const expDate = new Date(exp);
+  if (isNaN(expDate.getTime())) {
+    const alt = Date.parse(String(exp));
+    if (isNaN(alt)) return;
+    expDate.setTime(alt);
+  }
+  expDate.setHours(0,0,0,0);
+  
+  // 남은 일수 계산 (exp - today)
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const diffDays = Math.round((expDate.getTime() - today.getTime()) / msPerDay);
+  
+  let msg = null;
+  if (diffDays < 0) {
+    // 만료 후
+    msg = '만료일이 지났습니다. 만료일 갱신 메세지를 띄워주세요';
+  } else if (diffDays === 0) {
+    // D-day
+    msg = '오늘이 만료일입니다. 만료일 갱신 메세지를 띄워주세요';
+  } else if (diffDays <= 7) {
+    // D-7 ~ D-1 사전 알림
+    msg = `만료일까지 D-${diffDays}일 남았습니다. 만료일 갱신 메세지를 띄워주세요`;
+  }
+  
+  if (msg) {
+    window.__expiryWarnShown = true;
+    if (typeof window.showToast === 'function') {
+      window.showToast(msg);
+    } else {
+      alert(msg);
+    }
+  }
 }
 
 
