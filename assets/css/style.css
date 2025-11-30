@@ -304,6 +304,23 @@ button[aria-disabled="true"] {
   align-self: flex-start;
 }
 
+/* 그룹 훈련방 개설 아이콘 스타일 */
+.group-room-open-icon {
+  display: inline-block;
+  font-size: 20px;
+  cursor: help;
+  transition: transform 0.2s ease;
+}
+
+.group-room-open-icon:hover {
+  transform: scale(1.2);
+}
+
+.workout-actions-wrapper .group-room-open-icon {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .workout-description-cell {
   color: #6b7280;
   max-width: 300px;
