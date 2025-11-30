@@ -1091,9 +1091,7 @@ async function loadWorkouts() {
               <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
               <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
               <button class="btn btn-primary btn-sm" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
-              ${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? 
-                `<button class="btn btn-success btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : 
-                ''}
+              <button class="btn btn-success btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? '이 워크아웃으로 그룹훈련방 생성' : '그룹훈련방 참가'}">👥 그룹훈련</button>
             </div>
           </td>
         </tr>

@@ -3295,10 +3295,58 @@ async function fallbackWorkoutLoading(select) {
 async function createGroupRoomFromWorkout(workoutId, workoutTitle) {
   // 권한 확인
   const currentUser = window.currentUser;
-  if (!currentUser || (currentUser.grade !== '1' && currentUser.grade !== 1)) {
-    showToast('그룹훈련방 생성은 관리자만 가능합니다', 'error');
+  if (!currentUser) {
+    showToast('로그인이 필요합니다. 사용자를 선택해주세요.', 'error');
     return;
   }
+  
+  const grade = currentUser.grade === '1' || currentUser.grade === 1 ? '1' : '2';
+  
+  // 일반 사용자(grade=2)의 경우 그룹방 참가 처리
+  if (grade === '2') {
+    try {
+      showToast('그룹훈련방을 찾는 중...', 'info');
+      
+      // 해당 워크아웃의 그룹방 목록 조회
+      const rooms = await getRoomsByWorkoutId(workoutId);
+      if (!rooms || rooms.length === 0) {
+        showToast('이 워크아웃으로 생성된 그룹훈련방이 없습니다.', 'warning');
+        return;
+      }
+      
+      // waiting 상태의 방 찾기
+      const waitingRoom = rooms.find(r => {
+        const status = (r.status || r.Status || '').toLowerCase();
+        return status === 'waiting';
+      });
+      
+      if (waitingRoom) {
+        const roomCode = waitingRoom.code || waitingRoom.Code || waitingRoom.roomCode;
+        if (roomCode) {
+          showToast('그룹훈련방에 참가 중...', 'info');
+          
+          // 그룹방 참가
+          if (typeof joinRoomByCode === 'function') {
+            await joinRoomByCode(roomCode);
+          } else {
+            showToast('그룹훈련방 참가 기능을 찾을 수 없습니다.', 'error');
+          }
+          return;
+        }
+      }
+      
+      // waiting 상태의 방이 없는 경우
+      showToast('현재 참가 가능한 그룹훈련방이 없습니다.', 'warning');
+      return;
+      
+    } catch (error) {
+      console.error('그룹훈련방 참가 오류:', error);
+      showToast('그룹훈련방 참가에 실패했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+      return;
+    }
+  }
+  
+  // 관리자(grade=1)만 그룹방 생성 가능
 
   // 방 이름 입력 받기
   const roomName = prompt(`"${workoutTitle}" 워크아웃으로 그룹훈련방을 생성합니다.\n방 이름을 입력하세요:`, `${workoutTitle} 그룹훈련`);
