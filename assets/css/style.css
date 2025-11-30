@@ -307,13 +307,48 @@ button[aria-disabled="true"] {
 /* 그룹 훈련방 개설 아이콘 스타일 */
 .group-room-open-icon {
   display: inline-block;
-  font-size: 20px;
   cursor: help;
   transition: transform 0.2s ease;
 }
 
-.group-room-open-icon:hover {
-  transform: scale(1.2);
+.group-room-open-icon img {
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.group-room-open-icon.clickable {
+  cursor: pointer;
+}
+
+.group-room-open-icon.clickable:hover {
+  transform: scale(1.1);
+}
+
+.group-room-open-icon.clickable:hover img {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+/* 이미지 버튼 스타일 */
+.btn-image {
+  padding: 6px 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-image:hover {
+  background: #f0f0f0;
+  border-color: #e5e7eb;
+}
+
+.btn-image:active {
+  transform: scale(0.95);
 }
 
 .workout-actions-wrapper .group-room-open-icon {
