@@ -1004,30 +1004,28 @@ async function loadWorkouts() {
       return;
     }
 
-    // 워크아웃별 그룹방 생성 상태 확인 (grade=2 사용자용)
+    // 워크아웃별 그룹방 생성 상태 확인 (모든 사용자용)
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     const workoutRoomStatusMap = {};
     
-    if (grade === '2') {
-      // 각 워크아웃에 대해 그룹방이 있는지 확인
-      await Promise.all(validWorkouts.map(async (workout) => {
-        try {
-          const rooms = await getRoomsByWorkoutId(workout.id);
-          if (rooms && rooms.length > 0) {
-            // 대기 중인 방이 있는지 확인
-            const waitingRoom = rooms.find(r => 
-              (r.status || r.Status || '').toLowerCase() === 'waiting'
-            );
-            workoutRoomStatusMap[workout.id] = waitingRoom ? 'available' : 'exists';
-          } else {
-            workoutRoomStatusMap[workout.id] = 'none';
-          }
-        } catch (error) {
-          console.warn(`워크아웃 ${workout.id}의 그룹방 확인 실패:`, error);
+    // 모든 사용자에게 그룹방 상태 확인 적용
+    await Promise.all(validWorkouts.map(async (workout) => {
+      try {
+        const rooms = await getRoomsByWorkoutId(workout.id);
+        if (rooms && rooms.length > 0) {
+          // 대기 중인 방이 있는지 확인
+          const waitingRoom = rooms.find(r => 
+            (r.status || r.Status || '').toLowerCase() === 'waiting'
+          );
+          workoutRoomStatusMap[workout.id] = waitingRoom ? 'available' : 'exists';
+        } else {
           workoutRoomStatusMap[workout.id] = 'none';
         }
-      }));
-    }
+      } catch (error) {
+        console.warn(`워크아웃 ${workout.id}의 그룹방 확인 실패:`, error);
+        workoutRoomStatusMap[workout.id] = 'none';
+      }
+    }));
     
     // 테이블 헤더 생성
     const tableHeader = `
@@ -1036,7 +1034,7 @@ async function loadWorkouts() {
           <tr>
             <th style="width: 50px;">순번</th>
             <th style="width: 200px;">제목</th>
-            <th style="width: 120px;">작성자</th>
+            <th style="width: 120px;">그룹훈련</th>
             <th style="width: 80px;">시간</th>
             <th style="width: 80px;">상태</th>
             <th>설명</th>
@@ -1055,22 +1053,22 @@ async function loadWorkouts() {
       
       const safeTitle = String(workout.title || '제목 없음');
       const safeDescription = String(workout.description || '');
-      const safeAuthor = String(workout.author || '미상');
       
       const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
       const statusBadge = workout.status === '보이기' ? 
         '<span class="status-badge visible">공개</span>' : 
         '<span class="status-badge hidden">비공개</span>';
       
-      // grade=2 사용자용 그룹방 생성 상태 표시
-      let groupRoomStatus = '';
-      if (grade === '2' && workoutRoomStatusMap[workout.id] === 'available') {
-        groupRoomStatus = '<span class="group-room-badge" style="display:inline-block;background:#4CAF50;color:white;padding:4px 8px;border-radius:4px;font-size:12px;">👥 그룹 훈련방</span>';
-      }
+      // 그룹 훈련방 개설 상태 확인 (waiting 상태)
+      const hasWaitingRoom = workoutRoomStatusMap[workout.id] === 'available';
+      const groupRoomImage = hasWaitingRoom 
+        ? '<span class="group-room-open-icon" title="그룹 훈련방 개설됨 (참가 가능)">👥</span>' 
+        : '';
       
       const publishDate = workout.publish_date ? new Date(workout.publish_date).toLocaleDateString() : '-';
       
       const rowNumber = index + 1;
+      const isAdmin = grade === '1';
       
       return `
         <tr class="workout-row" data-workout-id="${workout.id}">
@@ -1078,10 +1076,9 @@ async function loadWorkouts() {
           <td>
             <div class="workout-title-cell">
               ${escapeHtml(safeTitle)}
-              ${groupRoomStatus}
             </div>
           </td>
-          <td>${escapeHtml(safeAuthor)}</td>
+          <td class="text-center">${groupRoomImage}</td>
           <td class="text-center">${totalMinutes}분</td>
           <td class="text-center">${statusBadge}</td>
           <td class="workout-description-cell">${escapeHtml(safeDescription)}</td>
@@ -1091,7 +1088,8 @@ async function loadWorkouts() {
               <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
               <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
               <button class="btn btn-primary btn-sm" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
-              <button class="btn btn-success btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="${(typeof getViewerGrade === 'function' && getViewerGrade() === '1') ? '이 워크아웃으로 그룹훈련방 생성' : '그룹훈련방 참가'}">👥 그룹훈련</button>
+              ${groupRoomImage}
+              ${isAdmin ? `<button class="btn btn-success btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : ''}
             </div>
           </td>
         </tr>
