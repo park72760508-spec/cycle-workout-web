@@ -1041,7 +1041,7 @@ async function loadWorkouts() {
             <th style="width: 80px;">상태</th>
             <th>설명</th>
             <th style="width: 120px;">게시일</th>
-            <th style="width: 180px;">작업</th>
+            <th style="width: 220px;">작업</th>
           </tr>
         </thead>
         <tbody>
