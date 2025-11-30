@@ -1305,30 +1305,7 @@ function attachTableEventListeners() {
   });
 }
 
-  } catch (error) {
-    console.error('워크아웃 목록 로드 실패:', error);
-    
-    let errorMessage = '알 수 없는 오류가 발생했습니다.';
-    if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    workoutList.innerHTML = `
-      <div class="error-state">
-        <div class="error-state-icon">🌐</div>
-        <div class="error-state-title">연결 오류</div>
-        <div class="error-state-description">
-          서버 연결에 문제가 발생했습니다.<br>
-          오류: ${escapeHtml(errorMessage)}
-        </div>
-        <button class="retry-button" onclick="loadWorkouts()">다시 시도</button>
-      </div>
-    `;
-  }
-   // ▼▼ 이 줄을 추가하세요 (렌더 직후 권한 적용)
-   //applyWorkoutPermissions();
-
-   function applyWorkoutPermissions() {
+function applyWorkoutPermissions() {
      // 등급 판정: userManager의 getViewerGrade() 사용 (없으면 기본 '2')
      const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
    
