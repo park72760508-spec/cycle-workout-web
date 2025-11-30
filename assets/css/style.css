@@ -261,7 +261,7 @@ button[aria-disabled="true"] {
 
 .workout-table thead th {
   padding: 14px 12px;
-  text-align: left;
+  text-align: center;
   font-weight: 600;
   font-size: 14px;
   white-space: nowrap;
