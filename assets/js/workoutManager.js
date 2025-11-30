@@ -1007,6 +1007,7 @@ async function loadWorkouts() {
     // 워크아웃별 그룹방 생성 상태 확인 (모든 사용자용)
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     const workoutRoomStatusMap = {};
+    const workoutRoomCodeMap = {}; // 워크아웃 ID별 그룹방 코드 저장
     
     // 모든 사용자에게 그룹방 상태 확인 적용
     await Promise.all(validWorkouts.map(async (workout) => {
@@ -1017,7 +1018,16 @@ async function loadWorkouts() {
           const waitingRoom = rooms.find(r => 
             (r.status || r.Status || '').toLowerCase() === 'waiting'
           );
-          workoutRoomStatusMap[workout.id] = waitingRoom ? 'available' : 'exists';
+          if (waitingRoom) {
+            workoutRoomStatusMap[workout.id] = 'available';
+            // roomCode 저장
+            const roomCode = waitingRoom.code || waitingRoom.Code || waitingRoom.roomCode;
+            if (roomCode) {
+              workoutRoomCodeMap[workout.id] = roomCode;
+            }
+          } else {
+            workoutRoomStatusMap[workout.id] = 'exists';
+          }
         } else {
           workoutRoomStatusMap[workout.id] = 'none';
         }
@@ -1061,8 +1071,9 @@ async function loadWorkouts() {
       
       // 그룹 훈련방 개설 상태 확인 (waiting 상태)
       const hasWaitingRoom = workoutRoomStatusMap[workout.id] === 'available';
+      const roomCode = workoutRoomCodeMap[workout.id] || '';
       const groupRoomImage = hasWaitingRoom 
-        ? '<span class="group-room-open-icon" title="그룹 훈련방 개설됨 (참가 가능)">👥</span>' 
+        ? `<span class="group-room-open-icon clickable" data-room-code="${escapeHtml(roomCode)}" title="그룹 훈련방 개설됨 (클릭하여 참가)"><img src="assets/img/network (1).png" alt="그룹 훈련방 개설" style="width: 24px; height: 24px; vertical-align: middle;"></span>` 
         : '';
       
       const publishDate = workout.publish_date ? new Date(workout.publish_date).toLocaleDateString() : '-';
@@ -1088,8 +1099,7 @@ async function loadWorkouts() {
               <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
               <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
               <button class="btn btn-primary btn-sm" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
-              ${groupRoomImage}
-              ${isAdmin ? `<button class="btn btn-success btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성">👥 그룹훈련</button>` : ''}
+              ${isAdmin ? `<button class="btn btn-image btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성"><img src="assets/img/network (2).png" alt="그룹훈련방 생성" style="width: 20px; height: 20px; vertical-align: middle;"></button>` : ''}
             </div>
           </td>
         </tr>
@@ -1123,6 +1133,26 @@ async function loadWorkouts() {
               console.error('createGroupRoomFromWorkout 함수를 찾을 수 없습니다.');
               if (typeof showToast === 'function') {
                 showToast('그룹훈련방 생성 기능을 찾을 수 없습니다', 'error');
+              }
+            }
+          });
+        }
+      });
+      
+      // 그룹훈련 칼럼 이미지 클릭 시 그룹훈련방 입장
+      document.querySelectorAll('.group-room-open-icon.clickable').forEach(icon => {
+        const roomCode = icon.dataset.roomCode;
+        if (roomCode) {
+          icon.addEventListener('click', async () => {
+            console.log('그룹훈련방 입장 시도:', roomCode);
+            if (typeof window.joinRoomByCode === 'function') {
+              await window.joinRoomByCode(roomCode);
+            } else if (typeof joinRoomByCode === 'function') {
+              await joinRoomByCode(roomCode);
+            } else {
+              console.error('joinRoomByCode 함수를 찾을 수 없습니다.');
+              if (typeof showToast === 'function') {
+                showToast('그룹훈련방 입장 기능을 찾을 수 없습니다', 'error');
               }
             }
           });
