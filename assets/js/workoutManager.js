@@ -1013,20 +1013,16 @@ async function loadWorkouts() {
     await Promise.all(validWorkouts.map(async (workout) => {
       try {
         const rooms = await getRoomsByWorkoutId(workout.id);
+        // 백엔드에서 이미 WorkoutId로 필터링된 결과를 받음
+        // GroupTrainingRooms.WorkoutId = Workouts.id 인 경우 이미지 표시
+        // Status와 관계없이 존재 여부만 확인
         if (rooms && rooms.length > 0) {
-          // 대기 중인 방이 있는지 확인
-          const waitingRoom = rooms.find(r => 
-            (r.status || r.Status || '').toLowerCase() === 'waiting'
-          );
-          if (waitingRoom) {
-            workoutRoomStatusMap[workout.id] = 'available';
-            // roomCode 저장
-            const roomCode = waitingRoom.code || waitingRoom.Code || waitingRoom.roomCode;
-            if (roomCode) {
-              workoutRoomCodeMap[workout.id] = roomCode;
-            }
-          } else {
-            workoutRoomStatusMap[workout.id] = 'exists';
+          workoutRoomStatusMap[workout.id] = 'available';
+          // roomCode 저장 (첫 번째 방의 roomCode 사용)
+          const firstRoom = rooms[0];
+          const roomCode = firstRoom.code || firstRoom.Code || firstRoom.roomCode;
+          if (roomCode) {
+            workoutRoomCodeMap[workout.id] = roomCode;
           }
         } else {
           workoutRoomStatusMap[workout.id] = 'none';
