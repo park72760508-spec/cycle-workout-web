@@ -1034,26 +1034,84 @@ async function loadWorkouts() {
       }
     }));
     
-    // 테이블 헤더 생성
-    const tableHeader = `
-      <table class="workout-table">
-        <thead>
-          <tr>
-            <th style="width: 50px;">순번</th>
-            <th style="width: 200px;">제목</th>
-            <th style="width: 120px;">그룹훈련</th>
-            <th style="width: 80px;">시간</th>
-            <th style="width: 80px;">상태</th>
-            <th>설명</th>
-            <th style="width: 120px;">게시일</th>
-            <th style="width: 220px;">작업</th>
-          </tr>
-        </thead>
-        <tbody>
-    `;
+    // 테이블 렌더링
+    renderWorkoutTable(validWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
     
-    // 테이블 행 생성
-    const tableRows = validWorkouts.map((workout, index) => {
+    // 전역 변수에 저장 (검색 기능에서 사용)
+    window.workouts = validWorkouts;
+    window.workoutRoomStatusMap = workoutRoomStatusMap;
+    window.workoutRoomCodeMap = workoutRoomCodeMap;
+    
+    window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
+    
+  } catch (error) {
+    console.error('워크아웃 목록 로드 실패:', error);
+    
+    let errorMessage = '알 수 없는 오류가 발생했습니다.';
+    if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    workoutList.innerHTML = `
+      <div class="error-state">
+        <div class="error-state-icon">🌐</div>
+        <div class="error-state-title">연결 오류</div>
+        <div class="error-state-description">
+          서버 연결에 문제가 발생했습니다.<br>
+          오류: ${escapeHtml(errorMessage)}
+        </div>
+        <button class="retry-button" onclick="loadWorkouts()">다시 시도</button>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 워크아웃 테이블 렌더링 함수
+ */
+function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCodeMap = {}, grade = '2') {
+  const workoutList = safeGetElement('workoutList');
+  if (!workoutList) {
+    console.warn('workoutList 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  if (!workouts || workouts.length === 0) {
+    workoutList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-title">등록된 워크아웃이 없습니다</div>
+        <div class="empty-state-description">새로운 워크아웃을 만들어 훈련을 시작해보세요.</div>
+        <div class="empty-state-action">
+          <button class="btn btn-primary" onclick="showAddWorkoutForm(true)">
+            ➕ 첫 번째 워크아웃 만들기
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+  
+  // 테이블 헤더 생성
+  const tableHeader = `
+    <table class="workout-table">
+      <thead>
+        <tr>
+          <th style="width: 50px;">순번</th>
+          <th style="width: 200px;">제목</th>
+          <th style="width: 120px;">그룹훈련</th>
+          <th style="width: 80px;">시간</th>
+          <th style="width: 80px;">상태</th>
+          <th>설명</th>
+          <th style="width: 120px;">게시일</th>
+          <th style="width: 220px;">작업</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  // 테이블 행 생성
+  const tableRows = workouts.map((workout, index) => {
       if (!workout || typeof workout !== 'object' || !workout.id) {
         return '';
       }
@@ -1110,55 +1168,143 @@ async function loadWorkouts() {
     
     workoutList.innerHTML = tableHeader + tableRows + tableFooter;
 
-      // [권한 적용: 등급별 버튼 처리 - 이미 넣으셨다면 유지]
-      applyWorkoutPermissions?.();
-      
-      // [만료일 점검: grade=2 만료 시 알림]
-      checkExpiryAndWarn();  // ← 이 한 줄을 추가
-
-      // 그룹훈련 버튼에 이벤트 리스너 추가
-      document.querySelectorAll('[id^="createGroupRoomBtn-"]').forEach(btn => {
-        const workoutId = btn.dataset.workoutId;
-        const workoutTitle = btn.dataset.workoutTitle;
-        if (workoutId && workoutTitle) {
-          btn.addEventListener('click', async () => {
-            if (typeof window.createGroupRoomFromWorkout === 'function') {
-              await window.createGroupRoomFromWorkout(workoutId, workoutTitle);
-            } else if (typeof createGroupRoomFromWorkout === 'function') {
-              await createGroupRoomFromWorkout(workoutId, workoutTitle);
-            } else {
-              console.error('createGroupRoomFromWorkout 함수를 찾을 수 없습니다.');
-              if (typeof showToast === 'function') {
-                showToast('그룹훈련방 생성 기능을 찾을 수 없습니다', 'error');
-              }
-            }
-          });
-        }
-      });
-      
-      // 그룹훈련 칼럼 이미지 클릭 시 그룹훈련방 입장
-      document.querySelectorAll('.group-room-open-icon.clickable').forEach(icon => {
-        const roomCode = icon.dataset.roomCode;
-        if (roomCode) {
-          icon.addEventListener('click', async () => {
-            console.log('그룹훈련방 입장 시도:', roomCode);
-            if (typeof window.joinRoomByCode === 'function') {
-              await window.joinRoomByCode(roomCode);
-            } else if (typeof joinRoomByCode === 'function') {
-              await joinRoomByCode(roomCode);
-            } else {
-              console.error('joinRoomByCode 함수를 찾을 수 없습니다.');
-              if (typeof showToast === 'function') {
-                showToast('그룹훈련방 입장 기능을 찾을 수 없습니다', 'error');
-              }
-            }
-          });
-        }
-      });
-      
-      window.workouts = validWorkouts;
-      window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
+    // [권한 적용: 등급별 버튼 처리 - 이미 넣으셨다면 유지]
+    applyWorkoutPermissions?.();
     
+    // [만료일 점검: grade=2 만료 시 알림]
+    checkExpiryAndWarn();  // ← 이 한 줄을 추가
+
+    // 이벤트 리스너 연결
+    attachTableEventListeners();
+}
+
+/**
+ * 워크아웃 검색 함수 (제목, 시간으로 검색)
+ */
+function searchWorkouts() {
+  const searchInput = safeGetElement('qWorkout');
+  if (!searchInput) {
+    console.warn('qWorkout 검색 입력 필드를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const searchQuery = (searchInput.value || '').trim();
+  
+  // 검색어가 없으면 전체 목록 표시
+  if (!searchQuery) {
+    if (window.workouts && window.workouts.length > 0) {
+      const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+      renderWorkoutTable(
+        window.workouts,
+        window.workoutRoomStatusMap || {},
+        window.workoutRoomCodeMap || {},
+        grade
+      );
+      attachTableEventListeners();
+      window.showToast(`전체 ${window.workouts.length}개의 워크아웃을 표시합니다.`);
+    } else {
+      loadWorkouts();
+    }
+    return;
+  }
+  
+  // 전체 워크아웃 목록이 없으면 로드
+  if (!window.workouts || window.workouts.length === 0) {
+    window.showToast('워크아웃 목록을 먼저 불러와주세요.');
+    loadWorkouts();
+    return;
+  }
+  
+  // 검색어가 숫자인지 확인 (시간 검색)
+  const isNumeric = /^\d+$/.test(searchQuery);
+  const searchNumber = isNumeric ? parseInt(searchQuery, 10) : null;
+  
+  // 검색 필터링
+  const filteredWorkouts = window.workouts.filter(workout => {
+    if (!workout || typeof workout !== 'object') {
+      return false;
+    }
+    
+    const title = String(workout.title || '').toLowerCase();
+    const searchLower = searchQuery.toLowerCase();
+    
+    // 제목 검색
+    const titleMatch = title.includes(searchLower);
+    
+    // 시간 검색 (분 단위)
+    let timeMatch = false;
+    if (isNumeric && searchNumber !== null) {
+      const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+      timeMatch = totalMinutes === searchNumber;
+    }
+    
+    // 제목 또는 시간 중 하나라도 일치하면 표시
+    return titleMatch || timeMatch;
+  });
+  
+  // 검색 결과 렌더링
+  const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+  renderWorkoutTable(
+    filteredWorkouts,
+    window.workoutRoomStatusMap || {},
+    window.workoutRoomCodeMap || {},
+    grade
+  );
+  attachTableEventListeners();
+  
+  // 검색 결과 메시지
+  if (filteredWorkouts.length === 0) {
+    window.showToast(`'${searchQuery}'에 대한 검색 결과가 없습니다.`, 'warning');
+  } else {
+    window.showToast(`검색 결과: ${filteredWorkouts.length}개의 워크아웃을 찾았습니다.`);
+  }
+}
+
+/**
+ * 테이블 이벤트 리스너 연결 (재사용 함수)
+ */
+function attachTableEventListeners() {
+  // 그룹훈련 버튼에 이벤트 리스너 추가
+  document.querySelectorAll('[id^="createGroupRoomBtn-"]').forEach(btn => {
+    const workoutId = btn.dataset.workoutId;
+    const workoutTitle = btn.dataset.workoutTitle;
+    if (workoutId && workoutTitle) {
+      btn.addEventListener('click', async () => {
+        if (typeof window.createGroupRoomFromWorkout === 'function') {
+          await window.createGroupRoomFromWorkout(workoutId, workoutTitle);
+        } else if (typeof createGroupRoomFromWorkout === 'function') {
+          await createGroupRoomFromWorkout(workoutId, workoutTitle);
+        } else {
+          console.error('createGroupRoomFromWorkout 함수를 찾을 수 없습니다.');
+          if (typeof showToast === 'function') {
+            showToast('그룹훈련방 생성 기능을 찾을 수 없습니다', 'error');
+          }
+        }
+      });
+    }
+  });
+  
+  // 그룹훈련 칼럼 이미지 클릭 시 그룹훈련방 입장
+  document.querySelectorAll('.group-room-open-icon.clickable').forEach(icon => {
+    const roomCode = icon.dataset.roomCode;
+    if (roomCode) {
+      icon.addEventListener('click', async () => {
+        console.log('그룹훈련방 입장 시도:', roomCode);
+        if (typeof window.joinRoomByCode === 'function') {
+          await window.joinRoomByCode(roomCode);
+        } else if (typeof joinRoomByCode === 'function') {
+          await joinRoomByCode(roomCode);
+        } else {
+          console.error('joinRoomByCode 함수를 찾을 수 없습니다.');
+          if (typeof showToast === 'function') {
+            showToast('그룹훈련방 입장 기능을 찾을 수 없습니다', 'error');
+          }
+        }
+      });
+    }
+  });
+}
+
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
     
@@ -2509,6 +2655,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSave) {
     btnSave.addEventListener('click', saveWorkout);
   }
+  
+  // 검색 버튼 이벤트 리스너 추가
+  const btnSearchWorkout = safeGetElement('btnSearchWorkout');
+  if (btnSearchWorkout) {
+    btnSearchWorkout.addEventListener('click', searchWorkouts);
+  }
+  
+  // 검색 입력 필드에서 Enter 키 눌렀을 때 검색
+  const qWorkout = safeGetElement('qWorkout');
+  if (qWorkout) {
+    qWorkout.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchWorkouts();
+      }
+    });
+  }
 });
 
 // ==========================================================
@@ -2517,6 +2680,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // 워크아웃 관리
 window.loadWorkouts = loadWorkouts;
+window.searchWorkouts = searchWorkouts;
 window.selectWorkout = selectWorkout;
 window.editWorkout = editWorkout;
 window.deleteWorkout = deleteWorkout;
