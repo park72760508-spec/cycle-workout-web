@@ -320,7 +320,8 @@ button[aria-disabled="true"] {
   display: flex;
   gap: 6px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .workout-actions-wrapper .btn-edit,
@@ -386,12 +387,14 @@ button[aria-disabled="true"] {
   }
   
   .workout-actions-wrapper {
-    flex-direction: column;
+    flex-wrap: nowrap;
     gap: 4px;
   }
   
   .workout-actions-wrapper .btn-sm {
-    width: 100%;
+    padding: 5px 8px;
+    font-size: 12px;
+    white-space: nowrap;
   }
 }
 
