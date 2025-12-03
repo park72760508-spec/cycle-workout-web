@@ -40,7 +40,7 @@ async function loadTrainingSchedules() {
           <div class="empty-state-title">아직 스케줄이 없습니다</div>
           <div class="empty-state-description">새로운 훈련 스케줄을 만들어보세요!</div>
           <div class="empty-state-action">
-            <button class="btn btn-success" onclick="showScreen('scheduleCreateScreen')">➕ 새 스케줄 만들기</button>
+            <button class="btn btn-success" onclick="typeof showScreen === 'function' ? showScreen('scheduleCreateScreen') : (typeof window.showScreen === 'function' ? window.showScreen('scheduleCreateScreen') : console.error('showScreen not found'))">➕ 새 스케줄 만들기</button>
           </div>
         </div>
       `;
@@ -190,7 +190,7 @@ async function openScheduleDays(scheduleId) {
     console.error('Error loading schedule:', error);
   }
   
-  showScreen('scheduleDaysScreen');
+  showScheduleScreen('scheduleDaysScreen');
   await loadScheduleDays();
 }
 
@@ -353,7 +353,11 @@ async function saveScheduleDays() {
   if (errorCount === 0) {
     showToast(`${savedCount}개의 일별 계획이 저장되었습니다!`, 'success');
     setTimeout(() => {
-      showScreen('scheduleListScreen');
+      if (typeof showScreen === 'function') {
+        showScreen('scheduleListScreen');
+      } else {
+        showScheduleScreen('scheduleListScreen');
+      }
     }, 1000);
   } else {
     showToast(`${savedCount}개 저장, ${errorCount}개 실패`, 'error');
@@ -383,7 +387,7 @@ async function openScheduleCalendar(scheduleId) {
     console.error('Error loading schedule:', error);
   }
   
-  showScreen('scheduleCalendarScreen');
+  showScheduleScreen('scheduleCalendarScreen');
   await loadScheduleCalendar();
 }
 
@@ -625,16 +629,40 @@ function showToast(message, type = 'info') {
 }
 
 /**
- * 화면 전환
+ * 화면 전환 (기존 함수가 있으면 사용, 없으면 새로 정의)
  */
-function showScreen(screenId) {
-  document.querySelectorAll('.screen').forEach(screen => {
-    screen.classList.remove('active');
-  });
+function showScheduleScreen(screenId) {
+  if (typeof showScreen === 'function') {
+    showScreen(screenId);
+  } else {
+    document.querySelectorAll('.screen').forEach(screen => {
+      screen.classList.remove('active');
+    });
+    
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+      targetScreen.classList.add('active');
+    }
+  }
+}
+
+// 전역 함수로 노출 (HTML에서 직접 호출 가능하도록)
+if (typeof window !== 'undefined') {
+  window.loadTrainingSchedules = loadTrainingSchedules;
+  window.createTrainingSchedule = createTrainingSchedule;
+  window.openScheduleDays = openScheduleDays;
+  window.loadScheduleDays = loadScheduleDays;
+  window.saveScheduleDays = saveScheduleDays;
+  window.openScheduleCalendar = openScheduleCalendar;
+  window.loadScheduleCalendar = loadScheduleCalendar;
+  window.startScheduleTraining = startScheduleTraining;
+  window.handleCalendarDayClick = handleCalendarDayClick;
+  window.updateDayWorkout = updateDayWorkout;
+  window.updateDayNote = updateDayNote;
   
-  const targetScreen = document.getElementById(screenId);
-  if (targetScreen) {
-    targetScreen.classList.add('active');
+  // showScreen이 없으면 scheduleManager의 것을 사용
+  if (typeof window.showScreen === 'undefined') {
+    window.showScreen = showScheduleScreen;
   }
 }
 
