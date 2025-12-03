@@ -199,7 +199,40 @@ async function saveTrainingResult(extra = {}) {
        }
      }
 
-     // 3. 결과 처리 및 반환
+     // 3. 스케줄 결과 저장 (스케줄에서 시작한 경우)
+     if (window.currentScheduleDayId && gasSuccess) {
+       try {
+         const scheduleResultData = {
+           scheduleDayId: window.currentScheduleDayId,
+           actualWorkoutId: trainingResult.workoutId || null,
+           status: 'completed',
+           duration_min: trainingResult.totalDuration ? Math.floor(trainingResult.totalDuration / 60) : 0,
+           avg_power: trainingResult.avgPower || 0,
+           np: trainingResult.normalizedPower || trainingResult.avgPower || 0,
+           tss: trainingResult.tss || 0,
+           hr_avg: trainingResult.avgHR || 0,
+           rpe: 0 // RPE는 사용자 입력 필요
+         };
+         
+         const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${scheduleResultData.scheduleDayId}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
+         
+         const scheduleResponse = await fetch(scheduleUrl);
+         const scheduleResult = await scheduleResponse.json();
+         
+         if (scheduleResult.success) {
+           console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공');
+           // 스케줄 결과 저장 후 currentScheduleDayId 초기화
+           window.currentScheduleDayId = null;
+         } else {
+           console.warn('[saveTrainingResult] ⚠️ 스케줄 결과 저장 실패:', scheduleResult.error);
+         }
+       } catch (scheduleError) {
+         console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
+         // 스케줄 결과 저장 실패해도 계속 진행
+       }
+     }
+
+     // 4. 결과 처리 및 반환
      if (gasSuccess) {
        console.log('[saveTrainingResult] 🎉 서버 저장 성공 + 로컬 백업 완료');
        return { 
