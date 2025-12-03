@@ -3632,3 +3632,395 @@ button[aria-disabled="true"] {
   }
 }
 
+/* ========== 훈련 스케줄 관련 스타일 ========== */
+
+/* 스케줄 목록 */
+.schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.schedule-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 20px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.schedule-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.schedule-card-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.schedule-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.schedule-title-section {
+  flex: 1;
+}
+
+.schedule-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: white;
+}
+
+.schedule-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.schedule-progress-section {
+  margin: 16px 0;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.progress-percentage {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.progress-bar-container {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.progress-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.schedule-dates {
+  margin: 12px 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.schedule-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+/* 일별 워크아웃 지정 */
+.schedule-days-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.schedule-day-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.schedule-day-card.today {
+  border-color: #2e74e8;
+  box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
+}
+
+.schedule-day-card.past {
+  opacity: 0.7;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.day-date {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.day-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2e74e8;
+}
+
+.day-name {
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.today-badge {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.past-badge {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.day-workout-section,
+.day-note-section {
+  margin-bottom: 16px;
+}
+
+.day-workout-section label,
+.day-note-section label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.workout-select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.day-note {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  min-height: 80px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* 캘린더 */
+.training-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.calendar-month {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.calendar-month-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: #1f2937;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+}
+
+.calendar-day {
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 120px;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.calendar-day.today {
+  border-color: #2e74e8;
+  box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
+}
+
+.calendar-day.completed {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #10b981;
+}
+
+.calendar-day.partial {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+}
+
+.calendar-day.skipped {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.calendar-day.missed {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  opacity: 0.6;
+}
+
+.calendar-day.planned {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #3b82f6;
+}
+
+.calendar-day.rest {
+  background: #f9fafb;
+  opacity: 0.5;
+  cursor: default;
+}
+
+.calendar-day:hover:not(.rest) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.calendar-day-number {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.calendar-day-name {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.calendar-day-content {
+  margin-top: 8px;
+}
+
+.calendar-status-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.calendar-workout-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-workout-duration {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.calendar-no-workout {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.calendar-result-stats {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.result-stat-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.result-label {
+  color: #6b7280;
+}
+
+.result-value {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.calendar-note {
+  font-size: 10px;
+  color: #6b7280;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rest-day {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.rest-day-text {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .calendar-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .schedule-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .schedule-actions {
+    flex-direction: column;
+  }
+}
+
