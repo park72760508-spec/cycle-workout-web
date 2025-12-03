@@ -671,11 +671,119 @@
     <button class="btn" id="btnSearchWorkout">검색</button>
     <!-- <button class="btn btn-secondary" onclick="loadWorkouts()" title="목록 새로고침">🔄</button> -->
     <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
+    <button class="btn btn-primary" onclick="showScreen('scheduleListScreen')">📅 훈련 스케줄</button>
     <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
   </div>
   
     <div id="workoutList" class="workout-list">
       <div class="loading-spinner">워크아웃 목록을 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- ========== 훈련 스케줄 관련 화면들 ========== -->
+  
+  <!-- 스케줄 목록 화면 -->
+  <div id="scheduleListScreen" class="screen">
+    <div class="header">
+      <h1>📅 훈련 스케줄</h1>
+      <p class="subtitle">나의 훈련 계획을 관리하세요</p>
+    </div>
+    
+    <div class="card" style="display:flex; gap:8px; align-items:center;">
+      <button class="btn btn-success" onclick="showScreen('scheduleCreateScreen')">➕ 새 스케줄 만들기</button>
+      <button class="btn btn-secondary" onclick="loadTrainingSchedules()">🔄 새로고침</button>
+      <button class="btn" onclick="showScreen('workoutScreen')">← 뒤로</button>
+    </div>
+    
+    <div id="scheduleList" class="schedule-list">
+      <div class="loading-spinner">스케줄 목록을 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 스케줄 작성 화면 -->
+  <div id="scheduleCreateScreen" class="screen">
+    <div class="header">
+      <h1>✏️ 훈련 스케줄 작성</h1>
+      <p class="subtitle">새로운 훈련 계획을 만들어보세요</p>
+    </div>
+    
+    <div class="card">
+      <div class="form-group">
+        <label>스케줄 훈련명 *</label>
+        <input type="text" id="scheduleTitle" placeholder="예: 4주 FTP 향상 프로그램" required />
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label>기간 (주) *</label>
+          <select id="scheduleTotalWeeks" required>
+            <option value="4">4주</option>
+            <option value="8">8주</option>
+            <option value="12" selected>12주</option>
+            <option value="16">16주</option>
+            <option value="20">20주</option>
+            <option value="24">24주</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>주당 훈련 횟수 *</label>
+          <select id="scheduleWeeklyFrequency" required>
+            <option value="1">1회</option>
+            <option value="2">2회</option>
+            <option value="3" selected>3회</option>
+            <option value="4">4회</option>
+            <option value="5">5회</option>
+            <option value="6">6회</option>
+            <option value="7">7회 (매일)</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>시작일 *</label>
+        <input type="date" id="scheduleStartDate" required />
+      </div>
+      
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="createTrainingSchedule()">생성하기</button>
+        <button class="btn btn-secondary" onclick="showScreen('scheduleListScreen')">취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 일별 워크아웃 지정 화면 -->
+  <div id="scheduleDaysScreen" class="screen">
+    <div class="header">
+      <h1>📝 일별 워크아웃 지정</h1>
+      <p class="subtitle" id="scheduleDaysSubtitle">각 훈련일에 워크아웃을 지정하세요</p>
+    </div>
+    
+    <div class="card" style="display:flex; gap:8px; align-items:center;">
+      <button class="btn btn-secondary" onclick="loadScheduleDays()">🔄 새로고침</button>
+      <button class="btn btn-success" onclick="saveScheduleDays()">💾 저장</button>
+      <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
+    </div>
+    
+    <div id="scheduleDaysList" class="schedule-days-list">
+      <div class="loading-spinner">일별 계획을 불러오는 중...</div>
+    </div>
+  </div>
+
+  <!-- 훈련 캘린더 화면 -->
+  <div id="scheduleCalendarScreen" class="screen">
+    <div class="header">
+      <h1>📅 훈련 캘린더</h1>
+      <p class="subtitle" id="calendarSubtitle">나의 훈련 일정과 결과를 확인하세요</p>
+    </div>
+    
+    <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button class="btn btn-secondary" onclick="loadScheduleCalendar()">🔄 새로고침</button>
+      <button class="btn btn-primary" id="btnStartTodayTraining" style="display:none;">🚀 오늘 훈련 시작</button>
+      <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
+    </div>
+    
+    <div id="scheduleCalendar" class="training-calendar">
+      <div class="loading-spinner">캘린더를 불러오는 중...</div>
     </div>
   </div>
 
@@ -1542,6 +1650,8 @@
 <!-- 그룹 훈련 모듈들 -->
 <script src="assets/js/groupTrainingManager.js"></script>
 <script src="assets/js/groupTrainingManager_part2.js"></script>
+<!-- 훈련 스케줄 모듈 -->
+<script src="scheduleManager.js"></script>
 <script src="assets/js/app.js"></script>  
 
   
