@@ -1160,7 +1160,7 @@ async function loadScheduleCalendar() {
 }
 
 /**
- * 캘린더 렌더링 (요일 고정 타입)
+ * 캘린더 렌더링 (요일 고정 타입 - 실제 캘린더 방식)
  */
 function renderCalendar(calendar) {
   const container = document.getElementById('scheduleCalendar');
@@ -1181,10 +1181,23 @@ function renderCalendar(calendar) {
   
   container.innerHTML = monthKeys.map(monthKey => {
     const days = months[monthKey];
+    
+    // 날짜 순서대로 정렬
+    days.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA - dateB;
+    });
+    
+    if (days.length === 0) return '';
+    
     const firstDay = new Date(days[0].date);
     const monthName = `${firstDay.getFullYear()}년 ${firstDay.getMonth() + 1}월`;
     
-    // 요일별로 그룹화 (일=0, 월=1, 화=2, 수=3, 목=4, 금=5, 토=6)
+    // 첫 번째 날짜의 요일 확인 (일=0, 월=1, 화=2, 수=3, 목=4, 금=5, 토=6)
+    const firstDayWeekday = firstDay.getDay();
+    
+    // 요일별로 그룹화
     const daysByWeekday = {};
     const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
     
@@ -1206,10 +1219,19 @@ function renderCalendar(calendar) {
         <div class="calendar-weekday-grid">
           ${sortedWeekdays.map(weekday => {
             const weekdayDays = daysByWeekday[weekday] || [];
+            
+            // 첫 번째 주의 빈칸 처리
+            // 첫 번째 날짜의 요일 이전 요일들은 빈칸
+            let emptyDays = '';
+            if (weekday < firstDayWeekday) {
+              emptyDays = '<div class="calendar-day-empty"></div>';
+            }
+            
             return `
               <div class="calendar-weekday-column">
                 <div class="calendar-weekday-header">${weekdays[weekday]}</div>
                 <div class="calendar-weekday-days">
+                  ${emptyDays}
                   ${weekdayDays.map(day => renderCalendarDay(day)).join('')}
                 </div>
               </div>
