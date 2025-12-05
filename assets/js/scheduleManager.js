@@ -872,8 +872,16 @@ async function saveScheduleDays() {
       
       try {
         // 날짜를 YYYY-MM-DD 형식으로 변환 (타임존 문제 방지)
+        // UI에서 직접 날짜 입력 필드의 값을 읽어옴 (날짜 변경 반영)
         let dateStr = '';
-        if (day.date) {
+        const dateInput = document.querySelector(`.day-date-input[data-day-id="${day.id}"]`);
+        
+        if (dateInput && dateInput.value) {
+          // UI에서 직접 읽은 값 사용 (사용자가 변경한 날짜 반영)
+          dateStr = dateInput.value.trim();
+          console.log(`[saveScheduleDays] UI에서 날짜 읽기: dayId=${day.id}, date=${dateStr}`);
+        } else if (day.date) {
+          // UI에서 값을 읽을 수 없으면 day 객체의 값 사용
           if (typeof day.date === 'string') {
             // 이미 문자열인 경우 YYYY-MM-DD 형식인지 확인
             if (day.date.includes('T')) {
@@ -898,6 +906,13 @@ async function saveScheduleDays() {
             const dayNum = String(dateObj.getDate()).padStart(2, '0');
             dateStr = `${year}-${month}-${dayNum}`;
           }
+        }
+        
+        // 날짜가 없으면 오류 처리
+        if (!dateStr) {
+          console.error(`[saveScheduleDays] 날짜를 찾을 수 없음: dayId=${day.id}`);
+          errorCount++;
+          continue;
         }
         
         // 워크아웃 ID 처리 (명확한 값 검증)
@@ -1288,7 +1303,8 @@ function renderCalendarDay(day) {
   if (day.result) {
     if (day.result.status === 'completed') {
       statusClass = 'completed';
-      statusIcon = '✅';
+      // 완료된 날짜에는 valid.png 사용 (녹색톤)
+      statusIcon = '<img src="assets/img/valid.png" alt="완료" style="width: 20px; height: 20px; filter: hue-rotate(0deg) saturate(1.2) brightness(1.1);" />';
       statusText = '완료';
     } else if (day.result.status === 'partial') {
       statusClass = 'partial';
@@ -1306,7 +1322,12 @@ function renderCalendarDay(day) {
       statusText = '미실시';
     } else {
       statusClass = 'planned';
-      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
+      // 현재 날짜에는 주황색톤 이미지 적용
+      if (isToday) {
+        statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
+      } else {
+        statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
+      }
       statusText = '예정';
     }
   } else {
