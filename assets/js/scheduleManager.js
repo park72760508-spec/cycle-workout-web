@@ -650,6 +650,10 @@ async function renderScheduleDays(days) {
       </div>
     `;
   }).join('');
+  
+  // 그리드 컨테이너로 감싸기
+  const cardsHtml = listContainer.innerHTML;
+  listContainer.innerHTML = `<div class="schedule-days-grid">${cardsHtml}</div>`;
 }
 
 /**
