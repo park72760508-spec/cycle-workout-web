@@ -1311,7 +1311,7 @@ function renderCalendarDay(day) {
     }
   } else {
     statusClass = 'rest';
-    statusIcon = '😌';
+    statusIcon = '<img src="assets/img/rest.png" alt="휴식" style="width: 22px; height: 22px;" />';
     statusText = '휴식';
   }
   
