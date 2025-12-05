@@ -3325,6 +3325,20 @@ window.testNeonEffect = function(achievementPercent) {
 
 // 전역 에러 핸들러 추가
 window.addEventListener('error', function(event) {
+  // JSONP 콜백 관련 오류는 조용히 무시 (이미 처리됨)
+  if (event.message && typeof event.message === 'string') {
+    if (event.message.includes('jsonp_callback_') && event.message.includes('is not defined')) {
+      // JSONP 콜백 오류는 조용히 무시 (이미 타임아웃이나 에러 핸들링으로 처리됨)
+      return;
+    }
+    // Script error는 일반적으로 CORS나 외부 스크립트 오류로, 상세 정보가 없음
+    if (event.message === 'Script error.' && !event.filename) {
+      // 상세 정보가 없는 Script error는 조용히 무시
+      return;
+    }
+  }
+  
+  // 다른 오류는 정상적으로 로깅
   console.error('Global JavaScript error:', event.error);
   console.error('Error details:', {
     message: event.message,

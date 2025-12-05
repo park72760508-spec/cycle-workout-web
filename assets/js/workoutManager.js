@@ -149,12 +149,14 @@ function jsonpRequest(url, params = {}) {
       return;
     }
     
-    const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.floor(Math.random() * 10000);
+    // 고유한 콜백 이름 생성 (타임스탬프 + 랜덤)
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 10000);
+    const callbackName = 'jsonp_callback_' + timestamp + '_' + random;
     const script = document.createElement('script');
     let isResolved = false;
     
-    console.log('JSONP request to:', url, 'with params:', params);
-    
+    // 콜백 함수를 먼저 정의 (스크립트 로드 전에 반드시 정의되어야 함)
     window[callbackName] = function(data) {
       if (isResolved) return;
       isResolved = true;
@@ -163,6 +165,12 @@ function jsonpRequest(url, params = {}) {
       cleanup();
       resolve(data);
     };
+    
+    // 콜백 함수가 제대로 정의되었는지 확인
+    if (typeof window[callbackName] !== 'function') {
+      reject(new Error('JSONP 콜백 함수 생성 실패'));
+      return;
+    }
     
     function cleanup() {
       try {
@@ -186,36 +194,35 @@ function jsonpRequest(url, params = {}) {
       reject(new Error('네트워크 연결 오류'));
     };
     
-      try {
-        // 안전한 수동 인코딩 방식 사용
-        const urlParts = [];
-        Object.keys(params).forEach(key => {
-          if (params[key] !== null && params[key] !== undefined) {
-            const value = String(params[key]);
-            // segments 데이터는 Base64로 인코딩하여 안전하게 전송
-            if (key === 'segments') {
-              try {
-                const base64Data = btoa(unescape(encodeURIComponent(value)));
-                urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(base64Data)}`);
-              } catch (e) {
-                console.warn('Base64 인코딩 실패, 일반 인코딩 사용:', e);
-                urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-              }
-            } else {
+    try {
+      // 안전한 수동 인코딩 방식 사용
+      const urlParts = [];
+      Object.keys(params).forEach(key => {
+        if (params[key] !== null && params[key] !== undefined) {
+          const value = String(params[key]);
+          // segments 데이터는 Base64로 인코딩하여 안전하게 전송
+          if (key === 'segments') {
+            try {
+              const base64Data = btoa(unescape(encodeURIComponent(value)));
+              urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(base64Data)}`);
+            } catch (e) {
+              console.warn('Base64 인코딩 실패, 일반 인코딩 사용:', e);
               urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
             }
+          } else {
+            urlParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
           }
-        });
-        urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
-        
-        const finalUrl = `${url}?${urlParts.join('&')}`;
+        }
+      });
+      urlParts.push(`callback=${encodeURIComponent(callbackName)}`);
       
+      const finalUrl = `${url}?${urlParts.join('&')}`;
+    
       if (finalUrl.length > 2000) {
         throw new Error('요청 URL이 너무 깁니다. 데이터를 줄여주세요.');
       }
       
-      console.log('Final JSONP URL length:', finalUrl.length);
-      
+      // 콜백 함수가 정의된 후 스크립트 추가
       script.src = finalUrl;
       document.head.appendChild(script);
       
@@ -1009,30 +1016,44 @@ async function loadWorkouts() {
     const workoutRoomStatusMap = {};
     const workoutRoomCodeMap = {}; // 워크아웃 ID별 그룹방 코드 저장
     
-    // 모든 사용자에게 그룹방 상태 확인 적용
-    await Promise.all(validWorkouts.map(async (workout) => {
-      try {
-        const rooms = await getRoomsByWorkoutId(workout.id);
-        // 백엔드에서 이미 WorkoutId로 필터링된 결과를 받음
-        // GroupTrainingRooms.WorkoutId = Workouts.id 인 경우 이미지 표시
-        // Status와 관계없이 존재 여부만 확인
-        if (rooms && rooms.length > 0) {
-          workoutRoomStatusMap[workout.id] = 'available';
-          // roomCode 저장 (첫 번째 방의 roomCode 사용)
-          const firstRoom = rooms[0];
-          const roomCode = firstRoom.code || firstRoom.Code || firstRoom.roomCode;
-          if (roomCode) {
-            workoutRoomCodeMap[workout.id] = roomCode;
+    // 배치 처리로 동시 요청 수 제한 (JSONP 콜백 충돌 방지)
+    const BATCH_SIZE = 5; // 한 번에 처리할 워크아웃 수
+    const batches = [];
+    for (let i = 0; i < validWorkouts.length; i += BATCH_SIZE) {
+      batches.push(validWorkouts.slice(i, i + BATCH_SIZE));
+    }
+    
+    // 배치별로 순차 처리
+    for (const batch of batches) {
+      await Promise.all(batch.map(async (workout) => {
+        try {
+          const rooms = await getRoomsByWorkoutId(workout.id);
+          // 백엔드에서 이미 WorkoutId로 필터링된 결과를 받음
+          // GroupTrainingRooms.WorkoutId = Workouts.id 인 경우 이미지 표시
+          // Status와 관계없이 존재 여부만 확인
+          if (rooms && rooms.length > 0) {
+            workoutRoomStatusMap[workout.id] = 'available';
+            // roomCode 저장 (첫 번째 방의 roomCode 사용)
+            const firstRoom = rooms[0];
+            const roomCode = firstRoom.code || firstRoom.Code || firstRoom.roomCode;
+            if (roomCode) {
+              workoutRoomCodeMap[workout.id] = roomCode;
+            }
+          } else {
+            workoutRoomStatusMap[workout.id] = 'none';
           }
-        } else {
+        } catch (error) {
+          // 그룹방 확인 실패 시 조용히 처리 (기본값 'none' 설정)
+          // 오류 로깅 제거 (워크아웃 목록 로딩 시 반복 오류 방지)
           workoutRoomStatusMap[workout.id] = 'none';
         }
-      } catch (error) {
-        // 그룹방 확인 실패 시 조용히 처리 (기본값 'none' 설정)
-        // 오류 로깅 제거 (워크아웃 목록 로딩 시 반복 오류 방지)
-        workoutRoomStatusMap[workout.id] = 'none';
+      }));
+      
+      // 배치 간 짧은 지연 (JSONP 콜백 정리 시간 확보)
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
-    }));
+    }
     
     // 테이블 렌더링
     renderWorkoutTable(validWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
