@@ -2213,6 +2213,17 @@ if (!window.showScreen) {
         }, 200);
       }
 
+      // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
+      if (id === 'scheduleListScreen') {
+        setTimeout(() => {
+          if (typeof window.loadTrainingSchedules === 'function') {
+            console.log('스케줄 목록 화면 진입 - 자동 로딩 시작');
+            window.loadTrainingSchedules();
+          } else {
+            console.error('loadTrainingSchedules function not available');
+          }
+        }, 100);
+      }
       
     } catch (error) {
       console.error('Error in showScreen:', error);

@@ -10,7 +10,7 @@ let scheduleDays = [];
 let scheduleCalendar = [];
 
 /**
- * 진행 표시 업데이트 헬퍼 함수
+ * 진행 표시 업데이트 헬퍼 함수 (부드러운 애니메이션 포함)
  */
 function updateLoadingProgress(container, progress, message) {
   if (!container) return;
@@ -20,16 +20,52 @@ function updateLoadingProgress(container, progress, message) {
   const progressMessage = container.querySelector('.loading-progress-message');
   
   if (progressBar) {
-    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+    // 부드러운 진행률 애니메이션
+    const targetWidth = Math.min(100, Math.max(0, progress));
+    progressBar.style.transition = 'width 0.3s ease-out';
+    progressBar.style.width = `${targetWidth}%`;
   }
   
   if (progressText) {
-    progressText.textContent = `${Math.round(progress)}%`;
+    // 숫자 카운트업 애니메이션
+    const targetPercent = Math.round(progress);
+    animateNumber(progressText, parseInt(progressText.textContent) || 0, targetPercent, 200);
   }
   
   if (progressMessage) {
-    progressMessage.textContent = message || '처리 중...';
+    // 메시지 페이드 효과
+    progressMessage.style.opacity = '0';
+    setTimeout(() => {
+      progressMessage.textContent = message || '처리 중...';
+      progressMessage.style.transition = 'opacity 0.3s ease-in';
+      progressMessage.style.opacity = '1';
+    }, 150);
   }
+}
+
+/**
+ * 숫자 카운트업 애니메이션
+ */
+function animateNumber(element, start, end, duration) {
+  if (start === end) {
+    element.textContent = `${end}%`;
+    return;
+  }
+  
+  const range = end - start;
+  const increment = range > 0 ? 1 : -1;
+  const stepTime = Math.abs(Math.floor(duration / range));
+  let current = start;
+  
+  const timer = setInterval(() => {
+    current += increment;
+    element.textContent = `${current}%`;
+    
+    if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
+      element.textContent = `${end}%`;
+      clearInterval(timer);
+    }
+  }, stepTime);
 }
 
 /**
@@ -91,20 +127,47 @@ async function loadTrainingSchedules() {
     }
     
     if (result.items.length === 0) {
-      listContainer.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📅</div>
-          <div class="empty-state-title">아직 스케줄이 없습니다</div>
-          <div class="empty-state-description">새로운 훈련 스케줄을 만들어보세요!</div>
-          <div class="empty-state-action">
-            <button class="btn btn-success" onclick="typeof showScreen === 'function' ? showScreen('scheduleCreateScreen') : (typeof window.showScreen === 'function' ? window.showScreen('scheduleCreateScreen') : console.error('showScreen not found'))">➕ 새 스케줄 만들기</button>
+      // 페이드아웃 후 빈 상태 표시
+      if (progressContainer) {
+        progressContainer.style.transition = 'opacity 0.3s ease-out';
+        progressContainer.style.opacity = '0';
+        setTimeout(() => {
+          listContainer.innerHTML = `
+            <div class="empty-state" style="opacity: 0; animation: fadeIn 0.5s ease-in forwards;">
+              <div class="empty-state-icon">📅</div>
+              <div class="empty-state-title">아직 스케줄이 없습니다</div>
+              <div class="empty-state-description">새로운 훈련 스케줄을 만들어보세요!</div>
+              <div class="empty-state-action">
+                <button class="btn btn-success" onclick="typeof showScreen === 'function' ? showScreen('scheduleCreateScreen') : (typeof window.showScreen === 'function' ? window.showScreen('scheduleCreateScreen') : console.error('showScreen not found'))">➕ 새 스케줄 만들기</button>
+              </div>
+            </div>
+          `;
+        }, 300);
+      } else {
+        listContainer.innerHTML = `
+          <div class="empty-state" style="opacity: 0; animation: fadeIn 0.5s ease-in forwards;">
+            <div class="empty-state-icon">📅</div>
+            <div class="empty-state-title">아직 스케줄이 없습니다</div>
+            <div class="empty-state-description">새로운 훈련 스케줄을 만들어보세요!</div>
+            <div class="empty-state-action">
+              <button class="btn btn-success" onclick="typeof showScreen === 'function' ? showScreen('scheduleCreateScreen') : (typeof window.showScreen === 'function' ? window.showScreen('scheduleCreateScreen') : console.error('showScreen not found'))">➕ 새 스케줄 만들기</button>
+            </div>
           </div>
-        </div>
-      `;
+        `;
+      }
       return;
     }
     
-    renderScheduleList(result.items);
+    // 페이드아웃 후 목록 표시
+    if (progressContainer) {
+      progressContainer.style.transition = 'opacity 0.3s ease-out';
+      progressContainer.style.opacity = '0';
+      setTimeout(() => {
+        renderScheduleList(result.items);
+      }, 300);
+    } else {
+      renderScheduleList(result.items);
+    }
     
   } catch (error) {
     console.error('Error loading schedules:', error);
@@ -120,19 +183,22 @@ async function loadTrainingSchedules() {
 }
 
 /**
- * 스케줄 목록 렌더링 (동기부여 디자인)
+ * 스케줄 목록 렌더링 (동기부여 디자인 + 페이드인 애니메이션)
  */
 function renderScheduleList(schedules) {
   const listContainer = document.getElementById('scheduleList');
   if (!listContainer) return;
   
-  listContainer.innerHTML = schedules.map(schedule => {
+  // 페이드인 애니메이션과 함께 목록 렌더링
+  listContainer.innerHTML = schedules.map((schedule, index) => {
     const progress = schedule.progress || 0;
     const progressColor = progress >= 80 ? '#10b981' : progress >= 50 ? '#f59e0b' : '#ef4444';
     const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '📅';
+    const animationDelay = index * 0.1; // 각 카드마다 순차적 애니메이션
     
     return `
-      <div class="schedule-card" onclick="openScheduleCalendar('${schedule.id}')">
+      <div class="schedule-card" onclick="openScheduleCalendar('${schedule.id}')" 
+           style="opacity: 0; animation: fadeInUp 0.5s ease-out ${animationDelay}s forwards;">
         <div class="schedule-card-header">
           <div class="schedule-icon">${statusIcon}</div>
           <div class="schedule-title-section">
