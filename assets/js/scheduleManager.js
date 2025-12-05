@@ -229,10 +229,10 @@ function renderScheduleList(schedules) {
         </div>
         
         <div class="schedule-actions">
-          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}')">
+          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
             📅 캘린더 보기
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}')">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)">
             ✏️ 일별 지정
           </button>
         </div>
@@ -410,13 +410,32 @@ function updateScheduleCreateProgress(overlay, progress, message) {
 }
 
 /**
- * 일별 워크아웃 지정 화면 열기
+ * 일별 워크아웃 지정 화면 열기 (버튼 진행 애니메이션 포함)
  */
-async function openScheduleDays(scheduleId) {
+async function openScheduleDays(scheduleId, event) {
+  // 버튼 찾기 및 진행 애니메이션 시작
+  let button = null;
+  let originalText = '✏️ 일별 지정';
+  
+  if (event && event.target) {
+    button = event.target.closest('button');
+  } else {
+    // 이벤트가 없으면 스케줄 카드의 버튼 찾기
+    button = document.querySelector(`button[onclick*="openScheduleDays('${scheduleId}')"]`);
+  }
+  
+  if (button) {
+    button.disabled = true;
+    button.style.opacity = '0.6';
+    button.style.cursor = 'not-allowed';
+    originalText = button.innerHTML;
+    button.innerHTML = '<span class="btn-loading-spinner"></span> 로딩 중...';
+  }
+  
   currentScheduleId = scheduleId;
   
-  // 스케줄 정보 로드
   try {
+    // 스케줄 정보 로드
     const url = `${window.GAS_URL}?action=getTrainingSchedule&id=${scheduleId}`;
     const response = await fetch(url);
     const result = await response.json();
@@ -428,12 +447,22 @@ async function openScheduleDays(scheduleId) {
         subtitle.textContent = `${result.item.title} - 일별 워크아웃 지정`;
       }
     }
+    
+    showScheduleScreen('scheduleDaysScreen');
+    await loadScheduleDays();
+    
   } catch (error) {
     console.error('Error loading schedule:', error);
+    showToast('일별 지정 화면을 불러오는데 실패했습니다', 'error');
+  } finally {
+    // 버튼 복원
+    if (button) {
+      button.disabled = false;
+      button.style.opacity = '1';
+      button.style.cursor = 'pointer';
+      button.innerHTML = originalText;
+    }
   }
-  
-  showScheduleScreen('scheduleDaysScreen');
-  await loadScheduleDays();
 }
 
 /**
@@ -506,17 +535,32 @@ async function renderScheduleDays(days) {
   }
   
   listContainer.innerHTML = trainingDays.map((day, index) => {
-    const date = new Date(day.date);
-    const dayName = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
-    const isPast = date < new Date();
-    const isToday = date.toDateString() === new Date().toDateString();
-    const dateInputValue = day.date.split('T')[0]; // YYYY-MM-DD 형식
+    // 날짜 파싱 (타임존 문제 해결)
+    let dateObj;
+    if (typeof day.date === 'string') {
+      // 문자열인 경우 YYYY-MM-DD 형식으로 파싱 (로컬 시간대로 처리)
+      const dateStr = day.date.split('T')[0]; // ISO 형식에서 날짜만 추출
+      const [year, month, dayNum] = dateStr.split('-');
+      dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
+    } else {
+      dateObj = new Date(day.date);
+    }
+    
+    const dayName = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
+    const isPast = dateObj < new Date();
+    const isToday = dateObj.toDateString() === new Date().toDateString();
+    
+    // 날짜 입력 필드용 값 (YYYY-MM-DD 형식)
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dayNum = String(dateObj.getDate()).padStart(2, '0');
+    const dateInputValue = `${year}-${month}-${dayNum}`;
     
     return `
       <div class="schedule-day-card ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
         <div class="day-header">
           <div class="day-date">
-            <span class="day-number">${date.getDate()}</span>
+            <span class="day-number">${dateObj.getDate()}</span>
             <span class="day-name">${dayName}</span>
           </div>
           <div class="day-label">
@@ -576,11 +620,14 @@ function updateDayNote(dayId, note) {
 function updateDayDate(dayId, newDate) {
   const day = scheduleDays.find(d => d.id === dayId);
   if (day) {
-    day.date = newDate;
-    // 날짜 변경 시 UI 업데이트 (옵션)
+    // 날짜를 YYYY-MM-DD 형식으로 저장 (타임존 문제 방지)
+    day.date = newDate; // 이미 YYYY-MM-DD 형식
+    // 날짜 변경 시 UI 업데이트
     const dayCard = document.querySelector(`.schedule-day-card .day-date-input[data-day-id="${dayId}"]`)?.closest('.schedule-day-card');
     if (dayCard) {
-      const dateObj = new Date(newDate);
+      // 로컬 시간대로 파싱 (타임존 문제 방지)
+      const [year, month, dayNum] = newDate.split('-');
+      const dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
       const dayName = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
       const dayNumberEl = dayCard.querySelector('.day-number');
       const dayNameEl = dayCard.querySelector('.day-name');
@@ -667,12 +714,46 @@ async function saveScheduleDays() {
       updateScheduleSaveProgress(progressOverlay, progress, `저장 중... (${i + 1}/${trainingDays.length})`, i + 1, trainingDays.length);
       
       try {
-        // 빈 문자열을 null로 변환하여 전송
-        const workoutId = (day.plannedWorkoutId && day.plannedWorkoutId.trim() !== '') ? day.plannedWorkoutId : '';
-        const note = day.plannedNote || '';
-        const date = day.date || '';
+        // 날짜를 YYYY-MM-DD 형식으로 변환 (타임존 문제 방지)
+        let dateStr = '';
+        if (day.date) {
+          if (typeof day.date === 'string') {
+            // 이미 문자열인 경우 YYYY-MM-DD 형식인지 확인
+            if (day.date.includes('T')) {
+              // ISO 형식인 경우 날짜만 추출
+              dateStr = day.date.split('T')[0];
+            } else if (/^\d{4}-\d{2}-\d{2}$/.test(day.date)) {
+              // 이미 YYYY-MM-DD 형식
+              dateStr = day.date;
+            } else {
+              // 다른 형식인 경우 Date 객체로 파싱 후 변환
+              const dateObj = new Date(day.date);
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const dayNum = String(dateObj.getDate()).padStart(2, '0');
+              dateStr = `${year}-${month}-${dayNum}`;
+            }
+          } else {
+            // Date 객체인 경우
+            const dateObj = new Date(day.date);
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dayNum = String(dateObj.getDate()).padStart(2, '0');
+            dateStr = `${year}-${month}-${dayNum}`;
+          }
+        }
         
-        const url = `${window.GAS_URL}?action=updateScheduleDay&scheduleDayId=${day.id}&date=${encodeURIComponent(date)}&plannedWorkoutId=${workoutId}&plannedNote=${encodeURIComponent(note)}`;
+        // 워크아웃 ID 처리 (빈 문자열이 아닌 null로 전송)
+        let workoutId = '';
+        if (day.plannedWorkoutId && String(day.plannedWorkoutId).trim() !== '') {
+          workoutId = String(day.plannedWorkoutId).trim();
+        }
+        // 빈 문자열인 경우 null로 전송하기 위해 특별 처리
+        const workoutIdParam = workoutId ? workoutId : 'null';
+        
+        const note = day.plannedNote || '';
+        
+        const url = `${window.GAS_URL}?action=updateScheduleDay&scheduleDayId=${day.id}&date=${encodeURIComponent(dateStr)}&plannedWorkoutId=${workoutIdParam}&plannedNote=${encodeURIComponent(note)}`;
         const response = await fetch(url);
         const result = await response.json();
         
@@ -773,13 +854,32 @@ function updateScheduleSaveProgress(overlay, progress, message, current, total) 
 }
 
 /**
- * 캘린더 화면 열기
+ * 캘린더 화면 열기 (버튼 진행 애니메이션 포함)
  */
-async function openScheduleCalendar(scheduleId) {
+async function openScheduleCalendar(scheduleId, event) {
+  // 버튼 찾기 및 진행 애니메이션 시작
+  let button = null;
+  let originalText = '📅 캘린더 보기';
+  
+  if (event && event.target) {
+    button = event.target.closest('button');
+  } else {
+    // 이벤트가 없으면 스케줄 카드의 버튼 찾기
+    button = document.querySelector(`button[onclick*="openScheduleCalendar('${scheduleId}')"]`);
+  }
+  
+  if (button) {
+    button.disabled = true;
+    button.style.opacity = '0.6';
+    button.style.cursor = 'not-allowed';
+    originalText = button.innerHTML;
+    button.innerHTML = '<span class="btn-loading-spinner"></span> 로딩 중...';
+  }
+  
   currentScheduleId = scheduleId;
   
-  // 스케줄 정보 로드
   try {
+    // 스케줄 정보 로드
     const url = `${window.GAS_URL}?action=getTrainingSchedule&id=${scheduleId}`;
     const response = await fetch(url);
     const result = await response.json();
@@ -791,12 +891,22 @@ async function openScheduleCalendar(scheduleId) {
         subtitle.textContent = `${result.item.title} - 훈련 캘린더`;
       }
     }
+    
+    showScheduleScreen('scheduleCalendarScreen');
+    await loadScheduleCalendar();
+    
   } catch (error) {
     console.error('Error loading schedule:', error);
+    showToast('캘린더를 불러오는데 실패했습니다', 'error');
+  } finally {
+    // 버튼 복원
+    if (button) {
+      button.disabled = false;
+      button.style.opacity = '1';
+      button.style.cursor = 'pointer';
+      button.innerHTML = originalText;
+    }
   }
-  
-  showScheduleScreen('scheduleCalendarScreen');
-  await loadScheduleCalendar();
 }
 
 /**
