@@ -245,7 +245,7 @@ function renderScheduleList(schedules) {
 let isCreatingSchedule = false;
 
 /**
- * 훈련 스케줄 생성
+ * 훈련 스케줄 생성 (진행 애니메이션 포함)
  */
 async function createTrainingSchedule() {
   // 중복 호출 방지
@@ -275,15 +275,78 @@ async function createTrainingSchedule() {
     return;
   }
   
+  // 생성 버튼 찾기 및 진행 표시
+  const createBtn = document.querySelector('#scheduleCreateScreen .btn-success[onclick*="createTrainingSchedule"]');
+  const originalBtnText = createBtn ? createBtn.innerHTML : '';
+  
+  // 진행 표시 오버레이 생성
+  const screen = document.getElementById('scheduleCreateScreen');
+  let progressOverlay = null;
+  if (screen) {
+    progressOverlay = document.createElement('div');
+    progressOverlay.className = 'schedule-create-progress-overlay';
+    progressOverlay.innerHTML = `
+      <div class="schedule-create-progress-container">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+        </div>
+        <div class="loading-progress-section">
+          <div class="loading-progress-header">
+            <span class="loading-progress-message">스케줄을 생성하는 중...</span>
+            <span class="loading-progress-text">0%</span>
+          </div>
+          <div class="loading-progress-bar-container">
+            <div class="loading-progress-bar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    screen.appendChild(progressOverlay);
+    
+    // 버튼 비활성화
+    if (createBtn) {
+      createBtn.disabled = true;
+      createBtn.style.opacity = '0.6';
+      createBtn.style.cursor = 'not-allowed';
+    }
+  }
+  
   isCreatingSchedule = true;
   
   try {
+    // 1단계: 데이터 검증 (20%)
+    updateScheduleCreateProgress(progressOverlay, 20, '데이터 검증 중...');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 2단계: 서버 요청 전송 (40%)
+    updateScheduleCreateProgress(progressOverlay, 40, '서버에 전송 중...');
     const url = `${window.GAS_URL}?action=createTrainingSchedule&userId=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}&totalWeeks=${totalWeeks}&weeklyFrequency=${weeklyFrequency}&startDate=${startDate}`;
+    
+    // 3단계: 서버 응답 대기 (60%)
+    updateScheduleCreateProgress(progressOverlay, 60, '서버 응답 대기 중...');
     const response = await fetch(url);
+    
+    // 4단계: 데이터 처리 (80%)
+    updateScheduleCreateProgress(progressOverlay, 80, '데이터 처리 중...');
     const result = await response.json();
+    
+    // 5단계: 완료 (100%)
+    updateScheduleCreateProgress(progressOverlay, 100, '완료!');
+    await new Promise(resolve => setTimeout(resolve, 300));
     
     if (!result.success) {
       throw new Error(result.error || '스케줄 생성에 실패했습니다');
+    }
+    
+    // 진행 오버레이 페이드아웃
+    if (progressOverlay) {
+      progressOverlay.style.transition = 'opacity 0.3s ease-out';
+      progressOverlay.style.opacity = '0';
+      setTimeout(() => {
+        if (progressOverlay && progressOverlay.parentNode) {
+          progressOverlay.parentNode.removeChild(progressOverlay);
+        }
+      }, 300);
     }
     
     showToast('스케줄이 생성되었습니다!', 'success');
@@ -297,9 +360,52 @@ async function createTrainingSchedule() {
     
   } catch (error) {
     console.error('Error creating schedule:', error);
+    
+    // 오류 시 진행 오버레이 제거
+    if (progressOverlay && progressOverlay.parentNode) {
+      progressOverlay.parentNode.removeChild(progressOverlay);
+    }
+    
     showToast(error.message, 'error');
   } finally {
     isCreatingSchedule = false;
+    
+    // 버튼 복원
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.style.opacity = '1';
+      createBtn.style.cursor = 'pointer';
+    }
+  }
+}
+
+/**
+ * 스케줄 생성 진행 표시 업데이트
+ */
+function updateScheduleCreateProgress(overlay, progress, message) {
+  if (!overlay) return;
+  
+  const progressBar = overlay.querySelector('.loading-progress-bar');
+  const progressText = overlay.querySelector('.loading-progress-text');
+  const progressMessage = overlay.querySelector('.loading-progress-message');
+  
+  if (progressBar) {
+    progressBar.style.transition = 'width 0.3s ease-out';
+    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+  }
+  
+  if (progressText) {
+    const targetPercent = Math.round(progress);
+    animateNumber(progressText, parseInt(progressText.textContent) || 0, targetPercent, 200);
+  }
+  
+  if (progressMessage) {
+    progressMessage.style.opacity = '0';
+    setTimeout(() => {
+      progressMessage.textContent = message || '처리 중...';
+      progressMessage.style.transition = 'opacity 0.3s ease-in';
+      progressMessage.style.opacity = '1';
+    }, 150);
   }
 }
 
@@ -404,6 +510,7 @@ async function renderScheduleDays(days) {
     const dayName = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
     const isPast = date < new Date();
     const isToday = date.toDateString() === new Date().toDateString();
+    const dateInputValue = day.date.split('T')[0]; // YYYY-MM-DD 형식
     
     return `
       <div class="schedule-day-card ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
@@ -416,6 +523,11 @@ async function renderScheduleDays(days) {
             ${isToday ? '<span class="badge today-badge">오늘</span>' : ''}
             ${isPast ? '<span class="badge past-badge">과거</span>' : ''}
           </div>
+        </div>
+        
+        <div class="day-date-section">
+          <label>훈련 날짜</label>
+          <input type="date" class="day-date-input" data-day-id="${day.id}" value="${dateInputValue}" onchange="updateDayDate('${day.id}', this.value)" />
         </div>
         
         <div class="day-workout-section">
@@ -459,50 +571,204 @@ function updateDayNote(dayId, note) {
 }
 
 /**
- * 일별 계획 저장
+ * 일별 날짜 업데이트
+ */
+function updateDayDate(dayId, newDate) {
+  const day = scheduleDays.find(d => d.id === dayId);
+  if (day) {
+    day.date = newDate;
+    // 날짜 변경 시 UI 업데이트 (옵션)
+    const dayCard = document.querySelector(`.schedule-day-card .day-date-input[data-day-id="${dayId}"]`)?.closest('.schedule-day-card');
+    if (dayCard) {
+      const dateObj = new Date(newDate);
+      const dayName = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
+      const dayNumberEl = dayCard.querySelector('.day-number');
+      const dayNameEl = dayCard.querySelector('.day-name');
+      
+      if (dayNumberEl) dayNumberEl.textContent = dateObj.getDate();
+      if (dayNameEl) dayNameEl.textContent = dayName;
+      
+      // 과거/오늘 배지 업데이트
+      const isPast = dateObj < new Date();
+      const isToday = dateObj.toDateString() === new Date().toDateString();
+      dayCard.classList.toggle('past', isPast);
+      dayCard.classList.toggle('today', isToday);
+      
+      const labelDiv = dayCard.querySelector('.day-label');
+      if (labelDiv) {
+        labelDiv.innerHTML = `
+          ${isToday ? '<span class="badge today-badge">오늘</span>' : ''}
+          ${isPast ? '<span class="badge past-badge">과거</span>' : ''}
+        `;
+      }
+    }
+  }
+}
+
+/**
+ * 일별 계획 저장 (진행 애니메이션 포함)
  */
 async function saveScheduleDays() {
   if (!currentScheduleId) return;
   
   const trainingDays = scheduleDays.filter(day => day.isTrainingDay);
-  let savedCount = 0;
-  let errorCount = 0;
+  if (trainingDays.length === 0) {
+    showToast('저장할 훈련일이 없습니다', 'warning');
+    return;
+  }
   
-  showToast('저장 중...', 'info');
+  // 저장 버튼 찾기 및 비활성화
+  const saveBtn = document.querySelector('#scheduleDaysScreen .btn-success, #scheduleDaysScreen button[onclick*="saveScheduleDays"]');
+  const originalBtnText = saveBtn ? saveBtn.innerHTML : '';
   
-  for (const day of trainingDays) {
-    try {
-      // 빈 문자열을 null로 변환하여 전송
-      const workoutId = (day.plannedWorkoutId && day.plannedWorkoutId.trim() !== '') ? day.plannedWorkoutId : '';
-      const note = day.plannedNote || '';
-      
-      const url = `${window.GAS_URL}?action=updateScheduleDay&scheduleDayId=${day.id}&plannedWorkoutId=${workoutId}&plannedNote=${encodeURIComponent(note)}`;
-      const response = await fetch(url);
-      const result = await response.json();
-      
-      if (result.success) {
-        savedCount++;
-      } else {
-        errorCount++;
-        console.error(`Failed to save day ${day.id}:`, result.error);
-      }
-    } catch (error) {
-      console.error(`Error saving day ${day.id}:`, error);
-      errorCount++;
+  // 진행 표시 오버레이 생성
+  const screen = document.getElementById('scheduleDaysScreen');
+  let progressOverlay = null;
+  if (screen) {
+    progressOverlay = document.createElement('div');
+    progressOverlay.className = 'schedule-save-progress-overlay';
+    progressOverlay.innerHTML = `
+      <div class="schedule-save-progress-container">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+        </div>
+        <div class="loading-progress-section">
+          <div class="loading-progress-header">
+            <span class="loading-progress-message">일별 계획을 저장하는 중...</span>
+            <span class="loading-progress-text">0%</span>
+          </div>
+          <div class="loading-progress-bar-container">
+            <div class="loading-progress-bar" style="width: 0%"></div>
+          </div>
+          <div class="loading-progress-detail" style="margin-top: 10px; font-size: 12px; color: #666;">
+            <span class="progress-detail-text">0 / ${trainingDays.length}개 저장 중...</span>
+          </div>
+        </div>
+      </div>
+    `;
+    screen.appendChild(progressOverlay);
+    
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.style.opacity = '0.6';
+      saveBtn.style.cursor = 'not-allowed';
     }
   }
   
-  if (errorCount === 0) {
-    showToast(`${savedCount}개의 일별 계획이 저장되었습니다!`, 'success');
-    setTimeout(() => {
-      if (typeof showScreen === 'function') {
-        showScreen('scheduleListScreen');
-      } else {
-        showScheduleScreen('scheduleListScreen');
+  let savedCount = 0;
+  let errorCount = 0;
+  
+  try {
+    for (let i = 0; i < trainingDays.length; i++) {
+      const day = trainingDays[i];
+      const progress = Math.round(((i + 1) / trainingDays.length) * 100);
+      
+      // 진행률 업데이트
+      updateScheduleSaveProgress(progressOverlay, progress, `저장 중... (${i + 1}/${trainingDays.length})`, i + 1, trainingDays.length);
+      
+      try {
+        // 빈 문자열을 null로 변환하여 전송
+        const workoutId = (day.plannedWorkoutId && day.plannedWorkoutId.trim() !== '') ? day.plannedWorkoutId : '';
+        const note = day.plannedNote || '';
+        const date = day.date || '';
+        
+        const url = `${window.GAS_URL}?action=updateScheduleDay&scheduleDayId=${day.id}&date=${encodeURIComponent(date)}&plannedWorkoutId=${workoutId}&plannedNote=${encodeURIComponent(note)}`;
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.success) {
+          savedCount++;
+        } else {
+          errorCount++;
+          console.error(`Failed to save day ${day.id}:`, result.error);
+        }
+      } catch (error) {
+        console.error(`Error saving day ${day.id}:`, error);
+        errorCount++;
       }
-    }, 1000);
-  } else {
-    showToast(`${savedCount}개 저장, ${errorCount}개 실패`, 'error');
+      
+      // 짧은 지연 (UI 업데이트를 위해)
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    
+    // 완료 (100%)
+    updateScheduleSaveProgress(progressOverlay, 100, '저장 완료!', trainingDays.length, trainingDays.length);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 진행 오버레이 페이드아웃
+    if (progressOverlay) {
+      progressOverlay.style.transition = 'opacity 0.3s ease-out';
+      progressOverlay.style.opacity = '0';
+      setTimeout(() => {
+        if (progressOverlay && progressOverlay.parentNode) {
+          progressOverlay.parentNode.removeChild(progressOverlay);
+        }
+      }, 300);
+    }
+    
+    if (errorCount === 0) {
+      showToast(`${savedCount}개의 일별 계획이 저장되었습니다!`, 'success');
+      setTimeout(() => {
+        if (typeof showScreen === 'function') {
+          showScreen('scheduleListScreen');
+        } else {
+          showScheduleScreen('scheduleListScreen');
+        }
+      }, 800);
+    } else {
+      showToast(`${savedCount}개 저장, ${errorCount}개 실패`, 'error');
+    }
+    
+  } catch (error) {
+    console.error('Error in saveScheduleDays:', error);
+    
+    if (progressOverlay && progressOverlay.parentNode) {
+      progressOverlay.parentNode.removeChild(progressOverlay);
+    }
+    
+    showToast('저장 중 오류가 발생했습니다', 'error');
+  } finally {
+    // 버튼 복원
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = '1';
+      saveBtn.style.cursor = 'pointer';
+    }
+  }
+}
+
+/**
+ * 일별 계획 저장 진행 표시 업데이트
+ */
+function updateScheduleSaveProgress(overlay, progress, message, current, total) {
+  if (!overlay) return;
+  
+  const progressBar = overlay.querySelector('.loading-progress-bar');
+  const progressText = overlay.querySelector('.loading-progress-text');
+  const progressMessage = overlay.querySelector('.loading-progress-message');
+  const progressDetail = overlay.querySelector('.progress-detail-text');
+  
+  if (progressBar) {
+    progressBar.style.transition = 'width 0.3s ease-out';
+    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+  }
+  
+  if (progressText) {
+    const targetPercent = Math.round(progress);
+    animateNumber(progressText, parseInt(progressText.textContent) || 0, targetPercent, 200);
+  }
+  
+  if (progressMessage) {
+    progressMessage.style.opacity = '0';
+    setTimeout(() => {
+      progressMessage.textContent = message || '저장 중...';
+      progressMessage.style.transition = 'opacity 0.3s ease-in';
+      progressMessage.style.opacity = '1';
+    }, 150);
+  }
+  
+  if (progressDetail && current !== undefined && total !== undefined) {
+    progressDetail.textContent = `${current} / ${total}개 저장 중...`;
   }
 }
 
@@ -724,7 +990,7 @@ function handleCalendarDayClick(element) {
 }
 
 /**
- * 스케줄 훈련 시작
+ * 스케줄 훈련 시작 (진행 애니메이션 포함)
  */
 function startScheduleTraining(day) {
   if (!day.plannedWorkout) {
@@ -732,17 +998,127 @@ function startScheduleTraining(day) {
     return;
   }
   
-  // 워크아웃 선택 및 훈련 시작
-  if (typeof window.selectWorkout === 'function') {
-    // scheduleDayId를 전역 변수에 저장 (훈련 완료 시 사용)
-    window.currentScheduleDayId = day.id;
-    window.selectWorkout(day.plannedWorkout.id);
-  } else if (typeof selectWorkout === 'function') {
-    window.currentScheduleDayId = day.id;
-    selectWorkout(day.plannedWorkout.id);
-  } else {
-    showToast('워크아웃을 불러올 수 없습니다', 'error');
+  // 진행 표시 오버레이 생성
+  const calendarContainer = document.getElementById('scheduleCalendar');
+  let progressOverlay = null;
+  
+  if (calendarContainer) {
+    progressOverlay = document.createElement('div');
+    progressOverlay.className = 'schedule-training-progress-overlay';
+    progressOverlay.innerHTML = `
+      <div class="schedule-training-progress-container">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+        </div>
+        <div class="loading-progress-section">
+          <div class="loading-progress-header">
+            <span class="loading-progress-message">훈련을 준비하는 중...</span>
+            <span class="loading-progress-text">0%</span>
+          </div>
+          <div class="loading-progress-bar-container">
+            <div class="loading-progress-bar" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    calendarContainer.appendChild(progressOverlay);
   }
+  
+  // 진행 애니메이션 시작
+  let progress = 0;
+  const progressInterval = setInterval(() => {
+    progress += 10;
+    if (progress > 90) {
+      clearInterval(progressInterval);
+      return;
+    }
+    updateScheduleTrainingProgress(progressOverlay, progress, getProgressMessage(progress));
+  }, 200);
+  
+  // 워크아웃 선택 및 훈련 시작
+  setTimeout(async () => {
+    try {
+      updateScheduleTrainingProgress(progressOverlay, 50, '워크아웃 로딩 중...');
+      
+      if (typeof window.selectWorkout === 'function') {
+        // scheduleDayId를 전역 변수에 저장 (훈련 완료 시 사용)
+        window.currentScheduleDayId = day.id;
+        updateScheduleTrainingProgress(progressOverlay, 80, '워크아웃 준비 중...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        window.selectWorkout(day.plannedWorkout.id);
+      } else if (typeof selectWorkout === 'function') {
+        window.currentScheduleDayId = day.id;
+        updateScheduleTrainingProgress(progressOverlay, 80, '워크아웃 준비 중...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        selectWorkout(day.plannedWorkout.id);
+      } else {
+        throw new Error('워크아웃을 불러올 수 없습니다');
+      }
+      
+      clearInterval(progressInterval);
+      updateScheduleTrainingProgress(progressOverlay, 100, '완료!');
+      
+      // 진행 오버레이 페이드아웃
+      setTimeout(() => {
+        if (progressOverlay && progressOverlay.parentNode) {
+          progressOverlay.style.transition = 'opacity 0.3s ease-out';
+          progressOverlay.style.opacity = '0';
+          setTimeout(() => {
+            if (progressOverlay && progressOverlay.parentNode) {
+              progressOverlay.parentNode.removeChild(progressOverlay);
+            }
+          }, 300);
+        }
+      }, 500);
+      
+    } catch (error) {
+      clearInterval(progressInterval);
+      if (progressOverlay && progressOverlay.parentNode) {
+        progressOverlay.parentNode.removeChild(progressOverlay);
+      }
+      showToast(error.message || '워크아웃을 불러올 수 없습니다', 'error');
+    }
+  }, 100);
+}
+
+/**
+ * 스케줄 훈련 진행 표시 업데이트
+ */
+function updateScheduleTrainingProgress(overlay, progress, message) {
+  if (!overlay) return;
+  
+  const progressBar = overlay.querySelector('.loading-progress-bar');
+  const progressText = overlay.querySelector('.loading-progress-text');
+  const progressMessage = overlay.querySelector('.loading-progress-message');
+  
+  if (progressBar) {
+    progressBar.style.transition = 'width 0.3s ease-out';
+    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+  }
+  
+  if (progressText) {
+    const targetPercent = Math.round(progress);
+    animateNumber(progressText, parseInt(progressText.textContent) || 0, targetPercent, 200);
+  }
+  
+  if (progressMessage) {
+    progressMessage.style.opacity = '0';
+    setTimeout(() => {
+      progressMessage.textContent = message || '처리 중...';
+      progressMessage.style.transition = 'opacity 0.3s ease-in';
+      progressMessage.style.opacity = '1';
+    }, 150);
+  }
+}
+
+/**
+ * 진행률에 따른 메시지 반환
+ */
+function getProgressMessage(progress) {
+  if (progress < 30) return '훈련을 준비하는 중...';
+  if (progress < 60) return '워크아웃 정보 확인 중...';
+  if (progress < 90) return '워크아웃 로딩 중...';
+  return '거의 완료!';
 }
 
 /**
@@ -801,6 +1177,7 @@ if (typeof window !== 'undefined') {
   window.handleCalendarDayClick = handleCalendarDayClick;
   window.updateDayWorkout = updateDayWorkout;
   window.updateDayNote = updateDayNote;
+  window.updateDayDate = updateDayDate;
   
   // showScreen이 없으면 scheduleManager의 것을 사용
   if (typeof window.showScreen === 'undefined') {
