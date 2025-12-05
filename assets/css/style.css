@@ -4271,15 +4271,19 @@ button[aria-disabled="true"] {
 }
 
 .calendar-day.today {
-  border: 2px solid rgba(59, 130, 246, 0.6);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 4px 12px rgba(59, 130, 246, 0.2);
-  background: linear-gradient(135deg, rgba(219, 234, 254, 0.6) 0%, rgba(191, 219, 254, 0.6) 100%);
+  border: 2px solid rgba(251, 146, 60, 0.6);
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.15), 0 4px 12px rgba(251, 146, 60, 0.2);
+  background: linear-gradient(135deg, rgba(255, 237, 213, 0.6) 0%, rgba(254, 215, 170, 0.6) 100%);
 }
 
 .calendar-day.completed {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(52, 211, 153, 0.3) 100%);
   border: 2px solid rgba(16, 185, 129, 0.4);
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+}
+
+.calendar-day.completed .calendar-status-icon img {
+  filter: hue-rotate(0deg) saturate(1.2) brightness(1.1);
 }
 
 .calendar-day.partial {
@@ -4304,6 +4308,16 @@ button[aria-disabled="true"] {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(96, 165, 250, 0.25) 100%);
   border: 2px solid rgba(59, 130, 246, 0.4);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.calendar-day.today.planned {
+  background: linear-gradient(135deg, rgba(255, 237, 213, 0.6) 0%, rgba(254, 215, 170, 0.6) 100%);
+  border: 2px solid rgba(251, 146, 60, 0.6);
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.15), 0 4px 12px rgba(251, 146, 60, 0.2);
+}
+
+.calendar-day.today.planned .calendar-status-icon img {
+  filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);
 }
 
 .calendar-day.rest {
