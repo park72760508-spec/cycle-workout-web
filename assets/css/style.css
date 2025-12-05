@@ -1139,6 +1139,96 @@ button[aria-disabled="true"] {
   animation: fadeIn 0.3s ease-in;
 }
 
+/* 진행 표시가 포함된 로딩 컨테이너 */
+.loading-container-with-progress {
+  padding: 40px 20px;
+  text-align: center;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.loading-container-with-progress .loading-spinner {
+  margin-bottom: 30px;
+}
+
+.loading-container-with-progress .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e9ecef;
+  border-top-color: #2e74e8;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-progress-section {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.loading-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.loading-progress-message {
+  color: #555;
+  font-weight: 500;
+}
+
+.loading-progress-text {
+  color: #2e74e8;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.loading-progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.loading-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #2e74e8 0%, #4a90e2 50%, #2e74e8 100%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease-out;
+  animation: progress-shimmer 2s ease-in-out infinite;
+  position: relative;
+}
+
+.loading-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: progress-glow 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes progress-glow {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
