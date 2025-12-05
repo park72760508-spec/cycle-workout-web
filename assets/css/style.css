@@ -1234,6 +1234,17 @@ button[aria-disabled="true"] {
   to { opacity: 1; }
 }
 
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .empty-state {
   animation: slideUp 0.5s ease-out;
 }
