@@ -485,7 +485,26 @@ async function loadScheduleDays() {
       throw new Error(result.error || '일별 계획을 불러오는데 실패했습니다');
     }
     
-    scheduleDays = result.items || [];
+    // 기존 scheduleDays에서 사용자가 선택한 워크아웃 ID 유지
+    const existingWorkoutIds = {};
+    if (Array.isArray(scheduleDays)) {
+      scheduleDays.forEach(day => {
+        if (day.plannedWorkoutId !== null && day.plannedWorkoutId !== undefined) {
+          existingWorkoutIds[day.id] = day.plannedWorkoutId;
+        }
+      });
+    }
+    
+    // 서버에서 받은 데이터와 기존 선택값 병합
+    const newDays = result.items || [];
+    scheduleDays = newDays.map(day => {
+      // 기존에 사용자가 선택한 워크아웃 ID가 있으면 유지
+      if (existingWorkoutIds[day.id]) {
+        day.plannedWorkoutId = existingWorkoutIds[day.id];
+      }
+      return day;
+    });
+    
     renderScheduleDays(scheduleDays);
     
   } catch (error) {
@@ -535,26 +554,52 @@ async function renderScheduleDays(days) {
   }
   
   listContainer.innerHTML = trainingDays.map((day, index) => {
-    // 날짜 파싱 (타임존 문제 해결)
+    // 날짜 파싱 (타임존 문제 완전 해결)
     let dateObj;
+    let dateInputValue;
+    
     if (typeof day.date === 'string') {
       // 문자열인 경우 YYYY-MM-DD 형식으로 파싱 (로컬 시간대로 처리)
-      const dateStr = day.date.split('T')[0]; // ISO 형식에서 날짜만 추출
-      const [year, month, dayNum] = dateStr.split('-');
-      dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
+      let dateStr = day.date;
+      
+      // ISO 형식인 경우 날짜만 추출
+      if (dateStr.includes('T')) {
+        dateStr = dateStr.split('T')[0];
+      }
+      
+      // YYYY-MM-DD 형식인지 확인
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const [year, month, dayNum] = dateStr.split('-');
+        // 로컬 시간대로 Date 객체 생성 (타임존 문제 방지)
+        dateObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(dayNum));
+        dateInputValue = dateStr; // 이미 YYYY-MM-DD 형식
+      } else {
+        // 다른 형식인 경우 Date 객체로 파싱 후 변환
+        dateObj = new Date(day.date);
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dayNum = String(dateObj.getDate()).padStart(2, '0');
+        dateInputValue = `${year}-${month}-${dayNum}`;
+      }
+    } else if (day.date instanceof Date) {
+      // Date 객체인 경우
+      dateObj = day.date;
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(dateObj.getDate()).padStart(2, '0');
+      dateInputValue = `${year}-${month}-${dayNum}`;
     } else {
-      dateObj = new Date(day.date);
+      // 날짜가 없는 경우 오늘 날짜 사용
+      dateObj = new Date();
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const dayNum = String(dateObj.getDate()).padStart(2, '0');
+      dateInputValue = `${year}-${month}-${dayNum}`;
     }
     
     const dayName = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
     const isPast = dateObj < new Date();
     const isToday = dateObj.toDateString() === new Date().toDateString();
-    
-    // 날짜 입력 필드용 값 (YYYY-MM-DD 형식)
-    const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const dayNum = String(dateObj.getDate()).padStart(2, '0');
-    const dateInputValue = `${year}-${month}-${dayNum}`;
     
     return `
       <div class="schedule-day-card ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
@@ -576,12 +621,26 @@ async function renderScheduleDays(days) {
         
         <div class="day-workout-section">
           <label>워크아웃 선택</label>
-          <select class="workout-select" data-day-id="${day.id}" onchange="updateDayWorkout('${day.id}', this.value)">
-            <option value="">워크아웃 선택...</option>
-            ${workouts.map(w => `
-              <option value="${w.id}" ${w.id == day.plannedWorkoutId ? 'selected' : ''}>${w.title} (${Math.floor((w.total_seconds || 0) / 60)}분)</option>
-            `).join('')}
-          </select>
+          <div class="workout-select-container">
+            <div class="workout-select-grid" data-day-id="${day.id}">
+              ${workouts.map(w => {
+                const isSelected = w.id == day.plannedWorkoutId;
+                const duration = Math.floor((w.total_seconds || 0) / 60);
+                const title = (w.title || '제목 없음').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                return `
+                  <div class="workout-option-card ${isSelected ? 'selected' : ''}" 
+                       data-workout-id="${w.id}" 
+                       data-day-id="${day.id}"
+                       onclick="selectWorkoutForDay('${day.id}', '${w.id}')">
+                    <div class="workout-option-title">${title}</div>
+                    <div class="workout-option-duration">${duration}분</div>
+                    ${isSelected ? '<div class="workout-option-check">✓</div>' : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <input type="hidden" class="workout-select-hidden" data-day-id="${day.id}" value="${day.plannedWorkoutId || ''}" />
+          </div>
         </div>
         
         <div class="day-note-section">
@@ -596,17 +655,102 @@ async function renderScheduleDays(days) {
 /**
  * 일별 워크아웃 업데이트
  */
+/**
+ * 워크아웃 선택 (그리드 UI용)
+ */
+function selectWorkoutForDay(dayId, workoutId) {
+  const day = scheduleDays.find(d => d.id == dayId || String(d.id) === String(dayId));
+  if (day) {
+    // 이전 선택 해제
+    const previousSelected = document.querySelector(`.workout-option-card.selected[data-day-id="${dayId}"]`);
+    if (previousSelected) {
+      previousSelected.classList.remove('selected');
+      previousSelected.querySelector('.workout-option-check')?.remove();
+    }
+    
+    // 새 선택 적용
+    const newSelected = document.querySelector(`.workout-option-card[data-day-id="${dayId}"][data-workout-id="${workoutId}"]`);
+    if (newSelected) {
+      newSelected.classList.add('selected');
+      if (!newSelected.querySelector('.workout-option-check')) {
+        const checkMark = document.createElement('div');
+        checkMark.className = 'workout-option-check';
+        checkMark.textContent = '✓';
+        newSelected.appendChild(checkMark);
+      }
+    }
+    
+    // hidden input 업데이트
+    const hiddenInput = document.querySelector(`.workout-select-hidden[data-day-id="${dayId}"]`);
+    if (hiddenInput) {
+      hiddenInput.value = workoutId;
+    }
+    
+    // scheduleDays 배열 업데이트
+    day.plannedWorkoutId = String(workoutId).trim();
+    console.log(`[selectWorkoutForDay] 워크아웃 선택: dayId=${dayId}, workoutId=${day.plannedWorkoutId}`);
+  }
+  
+  // 기존 함수도 호출 (호환성)
+  updateDayWorkout(dayId, workoutId);
+}
+
+/**
+ * 일별 워크아웃 업데이트 (기존 함수 유지 - 호환성)
+ */
 function updateDayWorkout(dayId, workoutId) {
-  const day = scheduleDays.find(d => d.id === dayId);
+  const day = scheduleDays.find(d => d.id == dayId || String(d.id) === String(dayId));
   if (day) {
     // 워크아웃 ID 처리 (명확한 값 검증)
     if (workoutId && String(workoutId).trim() !== '' && String(workoutId).trim() !== 'null') {
       day.plannedWorkoutId = String(workoutId).trim();
-      console.log(`[updateDayWorkout] 워크아웃 선택: dayId=${dayId}, workoutId=${day.plannedWorkoutId}`);
+      console.log(`[updateDayWorkout] 워크아웃 선택: dayId=${dayId}, workoutId=${day.plannedWorkoutId}, day 객체:`, day);
+      
+      // UI에서도 즉시 반영 (그리드 UI)
+      const selectedCard = document.querySelector(`.workout-option-card[data-day-id="${dayId}"][data-workout-id="${day.plannedWorkoutId}"]`);
+      if (selectedCard) {
+        // 이전 선택 해제
+        const previousSelected = document.querySelector(`.workout-option-card.selected[data-day-id="${dayId}"]`);
+        if (previousSelected) {
+          previousSelected.classList.remove('selected');
+          previousSelected.querySelector('.workout-option-check')?.remove();
+        }
+        
+        // 새 선택 적용
+        selectedCard.classList.add('selected');
+        if (!selectedCard.querySelector('.workout-option-check')) {
+          const checkMark = document.createElement('div');
+          checkMark.className = 'workout-option-check';
+          checkMark.textContent = '✓';
+          selectedCard.appendChild(checkMark);
+        }
+      }
+      
+      // hidden input 업데이트
+      const hiddenInput = document.querySelector(`.workout-select-hidden[data-day-id="${dayId}"]`);
+      if (hiddenInput) {
+        hiddenInput.value = day.plannedWorkoutId;
+      }
     } else {
       day.plannedWorkoutId = null;
       console.log(`[updateDayWorkout] 워크아웃 제거: dayId=${dayId}`);
+      
+      // UI에서도 즉시 반영
+      const selectedCard = document.querySelector(`.workout-option-card.selected[data-day-id="${dayId}"]`);
+      if (selectedCard) {
+        selectedCard.classList.remove('selected');
+        selectedCard.querySelector('.workout-option-check')?.remove();
+      }
+      
+      // hidden input 업데이트
+      const hiddenInput = document.querySelector(`.workout-select-hidden[data-day-id="${dayId}"]`);
+      if (hiddenInput) {
+        hiddenInput.value = '';
+      }
     }
+  } else {
+    console.error(`[updateDayWorkout] day를 찾을 수 없음: dayId=${dayId}, scheduleDays 길이: ${scheduleDays.length}`);
+    console.log(`[updateDayWorkout] scheduleDays:`, scheduleDays.map(d => ({ id: d.id, date: d.date })));
   }
 }
 
@@ -751,17 +895,56 @@ async function saveScheduleDays() {
         
         // 워크아웃 ID 처리 (명확한 값 검증)
         let workoutIdParam = 'null'; // 기본값: null
+        
+        // day 객체에서 워크아웃 ID 확인
+        console.log(`[saveScheduleDays] day 객체 확인: dayId=${day.id}, plannedWorkoutId=${day.plannedWorkoutId}, type=${typeof day.plannedWorkoutId}`);
+        
         if (day.plannedWorkoutId !== null && day.plannedWorkoutId !== undefined) {
           const workoutIdStr = String(day.plannedWorkoutId).trim();
-          // 유효한 워크아웃 ID인 경우에만 전송
-          if (workoutIdStr !== '' && workoutIdStr !== 'null' && workoutIdStr !== 'undefined' && !isNaN(workoutIdStr)) {
-            workoutIdParam = workoutIdStr;
-            console.log(`[saveScheduleDays] 워크아웃 ID 저장: dayId=${day.id}, workoutId=${workoutIdParam}`);
+          // 유효한 워크아웃 ID인 경우에만 전송 (숫자 또는 숫자 문자열)
+          if (workoutIdStr !== '' && workoutIdStr !== 'null' && workoutIdStr !== 'undefined') {
+            // 숫자인지 확인 (워크아웃 ID는 숫자여야 함)
+            const workoutIdNum = parseInt(workoutIdStr, 10);
+            if (!isNaN(workoutIdNum) && workoutIdNum > 0) {
+              workoutIdParam = String(workoutIdNum);
+              console.log(`[saveScheduleDays] ✅ 워크아웃 ID 저장: dayId=${day.id}, workoutId=${workoutIdParam}`);
+            } else {
+              console.log(`[saveScheduleDays] ⚠️ 워크아웃 ID가 숫자가 아님: dayId=${day.id}, value="${workoutIdStr}"`);
+            }
           } else {
-            console.log(`[saveScheduleDays] 워크아웃 ID 무효: dayId=${day.id}, value="${workoutIdStr}"`);
+            console.log(`[saveScheduleDays] ⚠️ 워크아웃 ID 무효: dayId=${day.id}, value="${workoutIdStr}"`);
           }
         } else {
-          console.log(`[saveScheduleDays] 워크아웃 ID 없음: dayId=${day.id}`);
+          console.log(`[saveScheduleDays] ⚠️ 워크아웃 ID 없음: dayId=${day.id}, plannedWorkoutId=${day.plannedWorkoutId}`);
+          
+          // UI에서 선택된 값 확인 (백업 - 그리드 UI)
+          const hiddenInput = document.querySelector(`.workout-select-hidden[data-day-id="${day.id}"]`);
+          if (hiddenInput && hiddenInput.value) {
+            const uiValue = hiddenInput.value.trim();
+            if (uiValue !== '' && uiValue !== 'null') {
+              const workoutIdNum = parseInt(uiValue, 10);
+              if (!isNaN(workoutIdNum) && workoutIdNum > 0) {
+                workoutIdParam = String(workoutIdNum);
+                console.log(`[saveScheduleDays] ✅ UI에서 워크아웃 ID 복구: dayId=${day.id}, workoutId=${workoutIdParam}`);
+                // day 객체에도 저장
+                day.plannedWorkoutId = workoutIdParam;
+              }
+            }
+          }
+          
+          // 기존 select 요소도 확인 (호환성)
+          const selectElement = document.querySelector(`select.workout-select[data-day-id="${day.id}"]`);
+          if (selectElement && selectElement.value) {
+            const uiValue = selectElement.value.trim();
+            if (uiValue !== '' && uiValue !== 'null') {
+              const workoutIdNum = parseInt(uiValue, 10);
+              if (!isNaN(workoutIdNum) && workoutIdNum > 0) {
+                workoutIdParam = String(workoutIdNum);
+                console.log(`[saveScheduleDays] ✅ 기존 select에서 워크아웃 ID 복구: dayId=${day.id}, workoutId=${workoutIdParam}`);
+                day.plannedWorkoutId = workoutIdParam;
+              }
+            }
+          }
         }
         
         const note = day.plannedNote || '';
@@ -1299,6 +1482,7 @@ if (typeof window !== 'undefined') {
   window.startScheduleTraining = startScheduleTraining;
   window.handleCalendarDayClick = handleCalendarDayClick;
   window.updateDayWorkout = updateDayWorkout;
+  window.selectWorkoutForDay = selectWorkoutForDay;
   window.updateDayNote = updateDayNote;
   window.updateDayDate = updateDayDate;
   
