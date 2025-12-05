@@ -134,7 +134,7 @@ async function loadTrainingSchedules() {
         setTimeout(() => {
           listContainer.innerHTML = `
             <div class="empty-state" style="opacity: 0; animation: fadeIn 0.5s ease-in forwards;">
-              <div class="empty-state-icon">📅</div>
+              <div class="empty-state-icon"><img src="assets/img/business.png" alt="캘린더" style="width: 48px; height: 48px;" /></div>
               <div class="empty-state-title">아직 스케줄이 없습니다</div>
               <div class="empty-state-description">새로운 훈련 스케줄을 만들어보세요!</div>
               <div class="empty-state-action">
@@ -146,7 +146,7 @@ async function loadTrainingSchedules() {
       } else {
         listContainer.innerHTML = `
           <div class="empty-state" style="opacity: 0; animation: fadeIn 0.5s ease-in forwards;">
-            <div class="empty-state-icon">📅</div>
+            <div class="empty-state-icon"><img src="assets/img/business.png" alt="캘린더" style="width: 48px; height: 48px;" /></div>
             <div class="empty-state-title">아직 스케줄이 없습니다</div>
             <div class="empty-state-description">새로운 훈련 스케줄을 만들어보세요!</div>
             <div class="empty-state-action">
@@ -194,7 +194,7 @@ function renderScheduleList(schedules) {
     const progress = schedule.progress || 0;
     // 녹색/민트 톤으로 진행률 색상 조정
     const progressColor = progress >= 80 ? '#10b981' : progress >= 50 ? '#34d399' : '#6ee7b7';
-    const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '📅';
+    const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '<img src="assets/img/business.png" alt="캘린더" style="width: 24px; height: 24px;" />';
     const animationDelay = index * 0.1; // 각 카드마다 순차적 애니메이션
     
     return `
@@ -231,7 +231,7 @@ function renderScheduleList(schedules) {
         
         <div class="schedule-actions">
           <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
-            📅 캘린더 보기
+            <img src="assets/img/business.png" alt="캘린더" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" /> 캘린더 보기
           </button>
           <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)">
             ✏️ 일별 지정
@@ -1062,7 +1062,7 @@ function updateScheduleSaveProgress(overlay, progress, message, current, total) 
 async function openScheduleCalendar(scheduleId, event) {
   // 버튼 찾기 및 진행 애니메이션 시작
   let button = null;
-  let originalText = '📅 캘린더 보기';
+  let originalText = '<img src="assets/img/business.png" alt="캘린더" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" /> 캘린더 보기';
   
   if (event && event.target) {
     button = event.target.closest('button');
@@ -1160,7 +1160,7 @@ async function loadScheduleCalendar() {
 }
 
 /**
- * 캘린더 렌더링 (요일 고정 타입 - 실제 캘린더 방식)
+ * 캘린더 렌더링 (표 형식 - 정사각형 셀)
  */
 function renderCalendar(calendar) {
   const container = document.getElementById('scheduleCalendar');
@@ -1178,6 +1178,7 @@ function renderCalendar(calendar) {
   });
   
   const monthKeys = Object.keys(months).sort();
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
   
   container.innerHTML = monthKeys.map(monthKey => {
     const days = months[monthKey];
@@ -1192,52 +1193,78 @@ function renderCalendar(calendar) {
     if (days.length === 0) return '';
     
     const firstDay = new Date(days[0].date);
+    const lastDay = new Date(days[days.length - 1].date);
     const monthName = `${firstDay.getFullYear()}년 ${firstDay.getMonth() + 1}월`;
     
     // 첫 번째 날짜의 요일 확인 (일=0, 월=1, 화=2, 수=3, 목=4, 금=5, 토=6)
     const firstDayWeekday = firstDay.getDay();
     
-    // 요일별로 그룹화
-    const daysByWeekday = {};
-    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-    
+    // 날짜를 맵으로 변환 (빠른 검색을 위해)
+    const daysMap = {};
     days.forEach(day => {
       const date = new Date(day.date);
-      const weekday = date.getDay();
-      if (!daysByWeekday[weekday]) {
-        daysByWeekday[weekday] = [];
-      }
-      daysByWeekday[weekday].push(day);
+      const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      daysMap[dateKey] = day;
     });
     
-    // 요일별로 정렬 (일요일부터)
-    const sortedWeekdays = [0, 1, 2, 3, 4, 5, 6];
+    // 주별로 그룹화 (7일씩)
+    const weeks = [];
+    
+    // 첫 번째 주의 빈칸 처리
+    const firstWeek = [];
+    for (let i = 0; i < firstDayWeekday; i++) {
+      firstWeek.push(null); // 빈칸
+    }
+    
+    // 첫 번째 날짜부터 마지막 날짜까지 주별로 구성
+    let currentWeek = [...firstWeek];
+    let dateCounter = new Date(firstDay);
+    
+    while (dateCounter <= lastDay) {
+      const dateKey = `${dateCounter.getFullYear()}-${String(dateCounter.getMonth() + 1).padStart(2, '0')}-${String(dateCounter.getDate()).padStart(2, '0')}`;
+      const day = daysMap[dateKey] || null;
+      currentWeek.push(day);
+      
+      // 주가 완성되면 (7일)
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+      
+      // 다음 날짜로 이동
+      dateCounter.setDate(dateCounter.getDate() + 1);
+    }
+    
+    // 마지막 주 처리 (7일이 안 되면 빈칸으로 채움)
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) {
+        currentWeek.push(null);
+      }
+      weeks.push(currentWeek);
+    }
     
     return `
       <div class="calendar-month">
         <h3 class="calendar-month-title">${monthName}</h3>
-        <div class="calendar-weekday-grid">
-          ${sortedWeekdays.map(weekday => {
-            const weekdayDays = daysByWeekday[weekday] || [];
-            
-            // 첫 번째 주의 빈칸 처리
-            // 첫 번째 날짜의 요일 이전 요일들은 빈칸
-            let emptyDays = '';
-            if (weekday < firstDayWeekday) {
-              emptyDays = '<div class="calendar-day-empty"></div>';
-            }
-            
-            return `
-              <div class="calendar-weekday-column">
-                <div class="calendar-weekday-header">${weekdays[weekday]}</div>
-                <div class="calendar-weekday-days">
-                  ${emptyDays}
-                  ${weekdayDays.map(day => renderCalendarDay(day)).join('')}
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
+        <table class="calendar-table">
+          <thead>
+            <tr>
+              ${weekdays.map(weekday => `<th class="calendar-table-header">${weekday}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${weeks.map(week => `
+              <tr>
+                ${week.map(day => {
+                  if (day === null) {
+                    return '<td class="calendar-table-cell calendar-day-empty"></td>';
+                  }
+                  return `<td class="calendar-table-cell">${renderCalendarDay(day)}</td>`;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     `;
   }).join('');
@@ -1279,7 +1306,7 @@ function renderCalendarDay(day) {
       statusText = '미실시';
     } else {
       statusClass = 'planned';
-      statusIcon = '📅';
+      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
       statusText = '예정';
     }
   } else {
