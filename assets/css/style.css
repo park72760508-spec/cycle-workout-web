@@ -1229,6 +1229,62 @@ button[aria-disabled="true"] {
   50% { opacity: 1; }
 }
 
+/* 스케줄 생성/저장 진행 오버레이 */
+.schedule-create-progress-overlay,
+.schedule-save-progress-overlay,
+.schedule-training-progress-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.schedule-create-progress-container,
+.schedule-save-progress-container,
+.schedule-training-progress-container {
+  background: white;
+  border-radius: 12px;
+  padding: 40px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* 일별 워크아웃 지정 - 날짜 입력 필드 */
+.day-date-section {
+  margin-bottom: 15px;
+}
+
+.day-date-section label {
+  display: block;
+  font-size: 0.9em;
+  margin-bottom: 4px;
+  color: #555;
+  font-weight: 500;
+}
+
+.day-date-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.day-date-input:focus {
+  outline: none;
+  border-color: #2e74e8;
+  box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.1);
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
