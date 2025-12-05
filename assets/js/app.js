@@ -3807,6 +3807,18 @@ function initializeCurrentScreen(screenId) {
       console.log('기기 연결 화면 초기화');
       break;
       
+    case 'scheduleListScreen':
+      // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
+      setTimeout(() => {
+        if (typeof window.loadTrainingSchedules === 'function') {
+          console.log('스케줄 목록 화면 진입 - 자동 로딩 시작');
+          window.loadTrainingSchedules();
+        } else {
+          console.error('loadTrainingSchedules function not available');
+        }
+      }, 100);
+      break;
+      
     default:
       console.log('기타 화면 초기화:', screenId);
   }

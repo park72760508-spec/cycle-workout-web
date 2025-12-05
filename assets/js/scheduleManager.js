@@ -622,18 +622,20 @@ async function renderScheduleDays(days) {
         <div class="day-workout-section">
           <label>워크아웃 선택</label>
           <div class="workout-select-container">
-            <div class="workout-select-grid" data-day-id="${day.id}">
+            <div class="workout-select-list" data-day-id="${day.id}">
               ${workouts.map(w => {
                 const isSelected = w.id == day.plannedWorkoutId;
                 const duration = Math.floor((w.total_seconds || 0) / 60);
                 const title = (w.title || '제목 없음').replace(/'/g, "&#39;").replace(/"/g, "&quot;");
                 return `
-                  <div class="workout-option-card ${isSelected ? 'selected' : ''}" 
+                  <div class="workout-option-item ${isSelected ? 'selected' : ''}" 
                        data-workout-id="${w.id}" 
                        data-day-id="${day.id}"
                        onclick="selectWorkoutForDay('${day.id}', '${w.id}')">
-                    <div class="workout-option-title">${title}</div>
-                    <div class="workout-option-duration">${duration}분</div>
+                    <div class="workout-option-content">
+                      <div class="workout-option-title">${title}</div>
+                      <div class="workout-option-duration">${duration}분</div>
+                    </div>
                     ${isSelected ? '<div class="workout-option-check">✓</div>' : ''}
                   </div>
                 `;
@@ -666,14 +668,14 @@ function selectWorkoutForDay(dayId, workoutId) {
   const day = scheduleDays.find(d => d.id == dayId || String(d.id) === String(dayId));
   if (day) {
     // 이전 선택 해제
-    const previousSelected = document.querySelector(`.workout-option-card.selected[data-day-id="${dayId}"]`);
+    const previousSelected = document.querySelector(`.workout-option-item.selected[data-day-id="${dayId}"]`);
     if (previousSelected) {
       previousSelected.classList.remove('selected');
       previousSelected.querySelector('.workout-option-check')?.remove();
     }
     
     // 새 선택 적용
-    const newSelected = document.querySelector(`.workout-option-card[data-day-id="${dayId}"][data-workout-id="${workoutId}"]`);
+    const newSelected = document.querySelector(`.workout-option-item[data-day-id="${dayId}"][data-workout-id="${workoutId}"]`);
     if (newSelected) {
       newSelected.classList.add('selected');
       if (!newSelected.querySelector('.workout-option-check')) {
@@ -710,11 +712,11 @@ function updateDayWorkout(dayId, workoutId) {
       day.plannedWorkoutId = String(workoutId).trim();
       console.log(`[updateDayWorkout] 워크아웃 선택: dayId=${dayId}, workoutId=${day.plannedWorkoutId}, day 객체:`, day);
       
-      // UI에서도 즉시 반영 (그리드 UI)
-      const selectedCard = document.querySelector(`.workout-option-card[data-day-id="${dayId}"][data-workout-id="${day.plannedWorkoutId}"]`);
+      // UI에서도 즉시 반영 (리스트 UI)
+      const selectedCard = document.querySelector(`.workout-option-item[data-day-id="${dayId}"][data-workout-id="${day.plannedWorkoutId}"]`);
       if (selectedCard) {
         // 이전 선택 해제
-        const previousSelected = document.querySelector(`.workout-option-card.selected[data-day-id="${dayId}"]`);
+        const previousSelected = document.querySelector(`.workout-option-item.selected[data-day-id="${dayId}"]`);
         if (previousSelected) {
           previousSelected.classList.remove('selected');
           previousSelected.querySelector('.workout-option-check')?.remove();
@@ -740,7 +742,7 @@ function updateDayWorkout(dayId, workoutId) {
       console.log(`[updateDayWorkout] 워크아웃 제거: dayId=${dayId}`);
       
       // UI에서도 즉시 반영
-      const selectedCard = document.querySelector(`.workout-option-card.selected[data-day-id="${dayId}"]`);
+      const selectedCard = document.querySelector(`.workout-option-item.selected[data-day-id="${dayId}"]`);
       if (selectedCard) {
         selectedCard.classList.remove('selected');
         selectedCard.querySelector('.workout-option-check')?.remove();
