@@ -667,6 +667,99 @@ async function getRoomsByWorkoutId(workoutId) {
 }
 
 /**
+ * 워크아웃별 그룹방 상태를 백그라운드에서 비동기로 로드 (점진적 UI 업데이트)
+ */
+async function loadWorkoutRoomStatusesAsync(workouts, workoutRoomStatusMap, workoutRoomCodeMap, grade) {
+  if (!workouts || workouts.length === 0) return;
+  
+  // 배치 크기 증가 (성능 최적화)
+  const BATCH_SIZE = 15; // 한 번에 처리할 워크아웃 수 증가
+  const batches = [];
+  for (let i = 0; i < workouts.length; i += BATCH_SIZE) {
+    batches.push(workouts.slice(i, i + BATCH_SIZE));
+  }
+  
+  console.log(`그룹방 상태 로딩 시작: ${workouts.length}개 워크아웃, ${batches.length}개 배치`);
+  
+  // 배치별로 병렬 처리 (지연 시간 최소화)
+  for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+    const batch = batches[batchIndex];
+    
+    // 배치 내에서 병렬 처리
+    await Promise.all(batch.map(async (workout) => {
+      try {
+        const rooms = await getRoomsByWorkoutId(workout.id);
+        
+        if (rooms && rooms.length > 0) {
+          workoutRoomStatusMap[workout.id] = 'available';
+          const firstRoom = rooms[0];
+          const roomCode = firstRoom.code || firstRoom.Code || firstRoom.roomCode;
+          if (roomCode) {
+            workoutRoomCodeMap[workout.id] = roomCode;
+          }
+        } else {
+          workoutRoomStatusMap[workout.id] = 'none';
+        }
+        
+        // 점진적 UI 업데이트 (각 워크아웃마다 즉시 반영)
+        updateWorkoutRowRoomStatus(workout.id, workoutRoomStatusMap[workout.id], workoutRoomCodeMap[workout.id], grade);
+        
+      } catch (error) {
+        workoutRoomStatusMap[workout.id] = 'none';
+        updateWorkoutRowRoomStatus(workout.id, 'none', null, grade);
+      }
+    }));
+    
+    // 배치 간 최소 지연 (JSONP 콜백 정리 시간만 확보)
+    if (batchIndex < batches.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 50)); // 100ms → 50ms로 감소
+    }
+  }
+  
+  console.log('그룹방 상태 로딩 완료');
+  
+  // 전역 변수 업데이트
+  window.workoutRoomStatusMap = workoutRoomStatusMap;
+  window.workoutRoomCodeMap = workoutRoomCodeMap;
+}
+
+/**
+ * 특정 워크아웃 행의 그룹방 상태만 업데이트 (점진적 UI 업데이트)
+ */
+function updateWorkoutRowRoomStatus(workoutId, status, roomCode, grade) {
+  const workoutList = safeGetElement('workoutList');
+  if (!workoutList) return;
+  
+  // 해당 워크아웃 행 찾기
+  const row = workoutList.querySelector(`tr[data-workout-id="${workoutId}"]`);
+  if (!row) return;
+  
+  // 그룹훈련 셀 찾기 (3번째 열)
+  const groupCell = row.querySelector('td:nth-child(3)');
+  if (!groupCell) return;
+  
+  // 상태에 따라 아이콘 업데이트 (기존 renderWorkoutTable 구조와 동일하게)
+  if (status === 'available' && roomCode) {
+    // 그룹방이 있으면 클릭 가능한 아이콘 표시
+    const escapedRoomCode = escapeHtml(roomCode);
+    groupCell.innerHTML = `
+      <span class="group-room-open-icon clickable" data-room-code="${escapedRoomCode}" title="그룹 훈련방 개설됨 (클릭하여 참가)">
+        <img src="assets/img/network (1).png" alt="그룹 훈련방 개설" style="width: 24px; height: 24px; vertical-align: middle;">
+      </span>
+    `;
+    
+    // 클릭 이벤트 리스너 재연결 (새로 추가된 요소에 대해)
+    const iconElement = groupCell.querySelector('.group-room-open-icon.clickable');
+    if (iconElement && typeof attachTableEventListeners === 'function') {
+      // 기존 이벤트 리스너가 자동으로 처리하도록 (전역 이벤트 위임 사용)
+    }
+  } else {
+    // 그룹방 없음 (빈 문자열)
+    groupCell.innerHTML = '';
+  }
+}
+
+/**
  * 통합 워크아웃 생성 함수 (개선된 버전)
  */
 async function apiCreateWorkoutWithSegments(workoutData) {
@@ -1011,51 +1104,17 @@ async function loadWorkouts() {
       return;
     }
 
-    // 워크아웃별 그룹방 생성 상태 확인 (모든 사용자용)
+    // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
-    const workoutRoomStatusMap = {};
-    const workoutRoomCodeMap = {}; // 워크아웃 ID별 그룹방 코드 저장
+    const workoutRoomStatusMap = {}; // 초기값: 모두 'none'
+    const workoutRoomCodeMap = {};
     
-    // 배치 처리로 동시 요청 수 제한 (JSONP 콜백 충돌 방지)
-    const BATCH_SIZE = 5; // 한 번에 처리할 워크아웃 수
-    const batches = [];
-    for (let i = 0; i < validWorkouts.length; i += BATCH_SIZE) {
-      batches.push(validWorkouts.slice(i, i + BATCH_SIZE));
-    }
+    // 모든 워크아웃에 대해 기본값 설정
+    validWorkouts.forEach(workout => {
+      workoutRoomStatusMap[workout.id] = 'none';
+    });
     
-    // 배치별로 순차 처리
-    for (const batch of batches) {
-      await Promise.all(batch.map(async (workout) => {
-        try {
-          const rooms = await getRoomsByWorkoutId(workout.id);
-          // 백엔드에서 이미 WorkoutId로 필터링된 결과를 받음
-          // GroupTrainingRooms.WorkoutId = Workouts.id 인 경우 이미지 표시
-          // Status와 관계없이 존재 여부만 확인
-          if (rooms && rooms.length > 0) {
-            workoutRoomStatusMap[workout.id] = 'available';
-            // roomCode 저장 (첫 번째 방의 roomCode 사용)
-            const firstRoom = rooms[0];
-            const roomCode = firstRoom.code || firstRoom.Code || firstRoom.roomCode;
-            if (roomCode) {
-              workoutRoomCodeMap[workout.id] = roomCode;
-            }
-          } else {
-            workoutRoomStatusMap[workout.id] = 'none';
-          }
-        } catch (error) {
-          // 그룹방 확인 실패 시 조용히 처리 (기본값 'none' 설정)
-          // 오류 로깅 제거 (워크아웃 목록 로딩 시 반복 오류 방지)
-          workoutRoomStatusMap[workout.id] = 'none';
-        }
-      }));
-      
-      // 배치 간 짧은 지연 (JSONP 콜백 정리 시간 확보)
-      if (batches.indexOf(batch) < batches.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-    }
-    
-    // 테이블 렌더링
+    // 먼저 테이블 렌더링 (빠른 사용자 경험)
     renderWorkoutTable(validWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
     
     // 전역 변수에 저장 (검색 기능에서 사용)
@@ -1064,6 +1123,9 @@ async function loadWorkouts() {
     window.workoutRoomCodeMap = workoutRoomCodeMap;
     
     window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
+    
+    // 그룹방 상태는 백그라운드에서 비동기로 로드 (블로킹 없음)
+    loadWorkoutRoomStatusesAsync(validWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
     
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
