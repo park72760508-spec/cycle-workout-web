@@ -10,7 +10,30 @@ let scheduleDays = [];
 let scheduleCalendar = [];
 
 /**
- * 훈련 스케줄 목록 로드
+ * 진행 표시 업데이트 헬퍼 함수
+ */
+function updateLoadingProgress(container, progress, message) {
+  if (!container) return;
+  
+  const progressBar = container.querySelector('.loading-progress-bar');
+  const progressText = container.querySelector('.loading-progress-text');
+  const progressMessage = container.querySelector('.loading-progress-message');
+  
+  if (progressBar) {
+    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+  }
+  
+  if (progressText) {
+    progressText.textContent = `${Math.round(progress)}%`;
+  }
+  
+  if (progressMessage) {
+    progressMessage.textContent = message || '처리 중...';
+  }
+}
+
+/**
+ * 훈련 스케줄 목록 로드 (진행 표시 포함)
  */
 async function loadTrainingSchedules() {
   const userId = window.currentUser?.id || '';
@@ -22,12 +45,46 @@ async function loadTrainingSchedules() {
   const listContainer = document.getElementById('scheduleList');
   if (!listContainer) return;
   
-  listContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>스케줄 목록을 불러오는 중...</p></div>';
+  // 진행 표시 UI 생성
+  listContainer.innerHTML = `
+    <div class="loading-container-with-progress">
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+      </div>
+      <div class="loading-progress-section">
+        <div class="loading-progress-header">
+          <span class="loading-progress-message">스케줄 목록을 불러오는 중...</span>
+          <span class="loading-progress-text">0%</span>
+        </div>
+        <div class="loading-progress-bar-container">
+          <div class="loading-progress-bar" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  const progressContainer = listContainer.querySelector('.loading-container-with-progress');
   
   try {
+    // 1단계: 서버 연결 중 (20%)
+    updateLoadingProgress(progressContainer, 20, '서버에 연결하는 중...');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 2단계: 요청 전송 중 (40%)
+    updateLoadingProgress(progressContainer, 40, '데이터 요청 중...');
     const url = `${window.GAS_URL}?action=listTrainingSchedules&userId=${userId}`;
+    
+    // 3단계: 응답 대기 중 (60%)
+    updateLoadingProgress(progressContainer, 60, '서버 응답 대기 중...');
     const response = await fetch(url);
+    
+    // 4단계: 데이터 파싱 중 (80%)
+    updateLoadingProgress(progressContainer, 80, '데이터 처리 중...');
     const result = await response.json();
+    
+    // 5단계: 완료 (100%)
+    updateLoadingProgress(progressContainer, 100, '완료!');
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     if (!result.success) {
       throw new Error(result.error || '스케줄 목록을 불러오는데 실패했습니다');
