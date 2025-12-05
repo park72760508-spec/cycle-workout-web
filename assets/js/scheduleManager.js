@@ -175,10 +175,19 @@ function renderScheduleList(schedules) {
   }).join('');
 }
 
+// 스케줄 생성 중복 호출 방지
+let isCreatingSchedule = false;
+
 /**
  * 훈련 스케줄 생성
  */
 async function createTrainingSchedule() {
+  // 중복 호출 방지
+  if (isCreatingSchedule) {
+    console.log('스케줄 생성이 이미 진행 중입니다.');
+    return;
+  }
+  
   const userId = window.currentUser?.id || '';
   if (!userId) {
     showToast('사용자를 먼저 선택해주세요', 'error');
@@ -199,6 +208,8 @@ async function createTrainingSchedule() {
     showToast('시작일을 선택해주세요', 'error');
     return;
   }
+  
+  isCreatingSchedule = true;
   
   try {
     const url = `${window.GAS_URL}?action=createTrainingSchedule&userId=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}&totalWeeks=${totalWeeks}&weeklyFrequency=${weeklyFrequency}&startDate=${startDate}`;
@@ -221,6 +232,8 @@ async function createTrainingSchedule() {
   } catch (error) {
     console.error('Error creating schedule:', error);
     showToast(error.message, 'error');
+  } finally {
+    isCreatingSchedule = false;
   }
 }
 
@@ -364,7 +377,8 @@ async function renderScheduleDays(days) {
 function updateDayWorkout(dayId, workoutId) {
   const day = scheduleDays.find(d => d.id === dayId);
   if (day) {
-    day.plannedWorkoutId = workoutId || null;
+    // 빈 문자열이나 undefined를 null로 변환
+    day.plannedWorkoutId = (workoutId && workoutId.trim() !== '') ? workoutId : null;
   }
 }
 
@@ -392,7 +406,11 @@ async function saveScheduleDays() {
   
   for (const day of trainingDays) {
     try {
-      const url = `${window.GAS_URL}?action=updateScheduleDay&scheduleDayId=${day.id}&plannedWorkoutId=${day.plannedWorkoutId || ''}&plannedNote=${encodeURIComponent(day.plannedNote || '')}`;
+      // 빈 문자열을 null로 변환하여 전송
+      const workoutId = (day.plannedWorkoutId && day.plannedWorkoutId.trim() !== '') ? day.plannedWorkoutId : '';
+      const note = day.plannedNote || '';
+      
+      const url = `${window.GAS_URL}?action=updateScheduleDay&scheduleDayId=${day.id}&plannedWorkoutId=${workoutId}&plannedNote=${encodeURIComponent(note)}`;
       const response = await fetch(url);
       const result = await response.json();
       
@@ -400,6 +418,7 @@ async function saveScheduleDays() {
         savedCount++;
       } else {
         errorCount++;
+        console.error(`Failed to save day ${day.id}:`, result.error);
       }
     } catch (error) {
       console.error(`Error saving day ${day.id}:`, error);
