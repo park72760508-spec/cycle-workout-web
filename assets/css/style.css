@@ -4242,6 +4242,12 @@ button[aria-disabled="true"] {
   background: #f9fafb;
   opacity: 0.5;
   cursor: default;
+  min-height: 100px;
+}
+
+.calendar-day-empty {
+  min-height: 100px;
+  visibility: hidden;
 }
 
 .calendar-day:hover:not(.rest) {
