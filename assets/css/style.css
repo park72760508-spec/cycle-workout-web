@@ -3917,6 +3917,27 @@ button[aria-disabled="true"] {
   gap: 16px;
 }
 
+/* 일별 워크아웃 목록 그리드 */
+.schedule-days-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  width: 100%;
+}
+
+/* 반응형: 작은 화면에서는 2개씩, 매우 작은 화면에서는 1개씩 */
+@media (max-width: 1024px) {
+  .schedule-days-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .schedule-days-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .schedule-day-card {
   background: white;
   border-radius: 12px;
