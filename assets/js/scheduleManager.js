@@ -192,7 +192,8 @@ function renderScheduleList(schedules) {
   // 페이드인 애니메이션과 함께 목록 렌더링
   listContainer.innerHTML = schedules.map((schedule, index) => {
     const progress = schedule.progress || 0;
-    const progressColor = progress >= 80 ? '#10b981' : progress >= 50 ? '#f59e0b' : '#ef4444';
+    // 녹색/민트 톤으로 진행률 색상 조정
+    const progressColor = progress >= 80 ? '#10b981' : progress >= 50 ? '#34d399' : '#6ee7b7';
     const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '📅';
     const animationDelay = index * 0.1; // 각 카드마다 순차적 애니메이션
     
@@ -1159,7 +1160,7 @@ async function loadScheduleCalendar() {
 }
 
 /**
- * 캘린더 렌더링 (동기부여 디자인)
+ * 캘린더 렌더링 (요일 고정 타입)
  */
 function renderCalendar(calendar) {
   const container = document.getElementById('scheduleCalendar');
@@ -1183,11 +1184,37 @@ function renderCalendar(calendar) {
     const firstDay = new Date(days[0].date);
     const monthName = `${firstDay.getFullYear()}년 ${firstDay.getMonth() + 1}월`;
     
+    // 요일별로 그룹화 (일=0, 월=1, 화=2, 수=3, 목=4, 금=5, 토=6)
+    const daysByWeekday = {};
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    
+    days.forEach(day => {
+      const date = new Date(day.date);
+      const weekday = date.getDay();
+      if (!daysByWeekday[weekday]) {
+        daysByWeekday[weekday] = [];
+      }
+      daysByWeekday[weekday].push(day);
+    });
+    
+    // 요일별로 정렬 (일요일부터)
+    const sortedWeekdays = [0, 1, 2, 3, 4, 5, 6];
+    
     return `
       <div class="calendar-month">
         <h3 class="calendar-month-title">${monthName}</h3>
-        <div class="calendar-grid">
-          ${days.map(day => renderCalendarDay(day)).join('')}
+        <div class="calendar-weekday-grid">
+          ${sortedWeekdays.map(weekday => {
+            const weekdayDays = daysByWeekday[weekday] || [];
+            return `
+              <div class="calendar-weekday-column">
+                <div class="calendar-weekday-header">${weekdays[weekday]}</div>
+                <div class="calendar-weekday-days">
+                  ${weekdayDays.map(day => renderCalendarDay(day)).join('')}
+                </div>
+              </div>
+            `;
+          }).join('')}
         </div>
       </div>
     `;
@@ -1245,10 +1272,7 @@ function renderCalendarDay(day) {
   return `
     <div class="calendar-day ${statusClass} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" 
          ${dayDataAttr} ${clickHandler}>
-      <div class="calendar-day-header">
-        <span class="calendar-day-number">${date.getDate()}</span>
-        <span class="calendar-day-name">${dayName}</span>
-      </div>
+      <div class="calendar-day-number">${date.getDate()}</div>
       
       ${isTrainingDay ? `
         <div class="calendar-day-content">
@@ -1256,7 +1280,7 @@ function renderCalendarDay(day) {
           ${day.plannedWorkout ? `
             <div class="calendar-workout-title">${day.plannedWorkout.title}</div>
             <div class="calendar-workout-duration">${Math.floor((day.plannedWorkout.total_seconds || 0) / 60)}분</div>
-          ` : '<div class="calendar-no-workout">워크아웃 미지정</div>'}
+          ` : '<div class="calendar-no-workout">미지정</div>'}
           
           ${day.result ? `
             <div class="calendar-result-stats">
@@ -1278,7 +1302,7 @@ function renderCalendarDay(day) {
       ` : `
         <div class="calendar-day-content rest-day">
           <div class="calendar-status-icon">${statusIcon}</div>
-          <div class="rest-day-text">휴식일</div>
+          <div class="rest-day-text">휴식</div>
         </div>
       `}
     </div>
