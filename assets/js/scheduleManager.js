@@ -599,8 +599,14 @@ async function renderScheduleDays(days) {
 function updateDayWorkout(dayId, workoutId) {
   const day = scheduleDays.find(d => d.id === dayId);
   if (day) {
-    // 빈 문자열이나 undefined를 null로 변환
-    day.plannedWorkoutId = (workoutId && workoutId.trim() !== '') ? workoutId : null;
+    // 워크아웃 ID 처리 (명확한 값 검증)
+    if (workoutId && String(workoutId).trim() !== '' && String(workoutId).trim() !== 'null') {
+      day.plannedWorkoutId = String(workoutId).trim();
+      console.log(`[updateDayWorkout] 워크아웃 선택: dayId=${dayId}, workoutId=${day.plannedWorkoutId}`);
+    } else {
+      day.plannedWorkoutId = null;
+      console.log(`[updateDayWorkout] 워크아웃 제거: dayId=${dayId}`);
+    }
   }
 }
 
@@ -743,13 +749,20 @@ async function saveScheduleDays() {
           }
         }
         
-        // 워크아웃 ID 처리 (빈 문자열이 아닌 null로 전송)
-        let workoutId = '';
-        if (day.plannedWorkoutId && String(day.plannedWorkoutId).trim() !== '') {
-          workoutId = String(day.plannedWorkoutId).trim();
+        // 워크아웃 ID 처리 (명확한 값 검증)
+        let workoutIdParam = 'null'; // 기본값: null
+        if (day.plannedWorkoutId !== null && day.plannedWorkoutId !== undefined) {
+          const workoutIdStr = String(day.plannedWorkoutId).trim();
+          // 유효한 워크아웃 ID인 경우에만 전송
+          if (workoutIdStr !== '' && workoutIdStr !== 'null' && workoutIdStr !== 'undefined' && !isNaN(workoutIdStr)) {
+            workoutIdParam = workoutIdStr;
+            console.log(`[saveScheduleDays] 워크아웃 ID 저장: dayId=${day.id}, workoutId=${workoutIdParam}`);
+          } else {
+            console.log(`[saveScheduleDays] 워크아웃 ID 무효: dayId=${day.id}, value="${workoutIdStr}"`);
+          }
+        } else {
+          console.log(`[saveScheduleDays] 워크아웃 ID 없음: dayId=${day.id}`);
         }
-        // 빈 문자열인 경우 null로 전송하기 위해 특별 처리
-        const workoutIdParam = workoutId ? workoutId : 'null';
         
         const note = day.plannedNote || '';
         
