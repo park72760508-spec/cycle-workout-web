@@ -199,22 +199,44 @@ async function saveTrainingResult(extra = {}) {
        }
      }
 
-     // 3. 스케줄 결과 저장 (스케줄에서 시작한 경우)
-     if (window.currentScheduleDayId && gasSuccess) {
+     // 3. 스케줄 결과 저장 (스케줄에서 시작한 경우) - GAS 저장 성공 여부와 관계없이 저장
+     if (window.currentScheduleDayId) {
        try {
+         // 세션 통계 계산
+         const stats = calculateSessionStats();
+         
+         // 훈련 시간 계산 (초 단위)
+         const startTime = trainingResult.startTime ? new Date(trainingResult.startTime) : null;
+         const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : new Date();
+         const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+         const duration_min = Math.floor(totalSeconds / 60);
+         
+         // TSS 계산 (간단한 공식: 평균파워 * 시간(분) / FTP / 60, 또는 기존 값 사용)
+         let tss = trainingResult.tss || 0;
+         if (!tss && stats.avgPower > 0 && duration_min > 0) {
+           // 기본 TSS 계산 (FTP 기준, 사용자 FTP가 있으면 사용)
+           const userFtp = window.currentUser?.ftp || 200; // 기본값 200W
+           tss = Math.round((stats.avgPower * duration_min) / (userFtp * 60) * 100) / 100;
+         }
+         
+         // Normalized Power 계산 (간단한 근사치: 평균 파워 * 1.05 또는 기존 값 사용)
+         const np = trainingResult.normalizedPower || Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
+         
          const scheduleResultData = {
            scheduleDayId: window.currentScheduleDayId,
-           actualWorkoutId: trainingResult.workoutId || null,
+           actualWorkoutId: trainingResult.workoutId || extra.workoutId || null,
            status: 'completed',
-           duration_min: trainingResult.totalDuration ? Math.floor(trainingResult.totalDuration / 60) : 0,
-           avg_power: trainingResult.avgPower || 0,
-           np: trainingResult.normalizedPower || trainingResult.avgPower || 0,
-           tss: trainingResult.tss || 0,
-           hr_avg: trainingResult.avgHR || 0,
+           duration_min: duration_min,
+           avg_power: stats.avgPower || 0,
+           np: np,
+           tss: tss,
+           hr_avg: stats.avgHR || 0,
            rpe: 0 // RPE는 사용자 입력 필요
          };
          
-         const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${scheduleResultData.scheduleDayId}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
+         console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
+         
+         const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${encodeURIComponent(scheduleResultData.scheduleDayId)}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
          
          const scheduleResponse = await fetch(scheduleUrl);
          const scheduleResult = await scheduleResponse.json();

@@ -599,8 +599,16 @@ async function renderScheduleDays(days) {
     }
     
     const dayName = ['일', '월', '화', '수', '목', '금', '토'][dateObj.getDay()];
-    const isPast = dateObj < new Date();
-    const isToday = dateObj.toDateString() === new Date().toDateString();
+    
+    // 오늘 날짜 확인 (날짜만 비교, 시간 제외)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayDate = new Date(dateObj);
+    dayDate.setHours(0, 0, 0, 0);
+    const isToday = dayDate.getTime() === today.getTime();
+    
+    // 과거 날짜 확인 (오늘 날짜는 과거가 아님)
+    const isPast = !isToday && dayDate < today;
     
     return `
       <div class="schedule-day-card ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}">
@@ -792,9 +800,14 @@ function updateDayDate(dayId, newDate) {
       if (dayNumberEl) dayNumberEl.textContent = dateObj.getDate();
       if (dayNameEl) dayNameEl.textContent = dayName;
       
-      // 과거/오늘 배지 업데이트
-      const isPast = dateObj < new Date();
-      const isToday = dateObj.toDateString() === new Date().toDateString();
+      // 과거/오늘 배지 업데이트 (날짜만 비교, 시간 제외)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const dayDate = new Date(dateObj);
+      dayDate.setHours(0, 0, 0, 0);
+      const isToday = dayDate.getTime() === today.getTime();
+      const isPast = !isToday && dayDate < today;
+      
       dayCard.classList.toggle('past', isPast);
       dayCard.classList.toggle('today', isToday);
       
