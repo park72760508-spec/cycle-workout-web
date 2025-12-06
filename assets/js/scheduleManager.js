@@ -1735,3 +1735,124 @@ function updateWeekdayCheckboxStyle(checkbox) {
   }
 }
 
+/**
+ * 엑셀 파일 업로드 처리
+ */
+function handleExcelUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      // 첫 번째 시트 읽기
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // B열 데이터 읽기 (B2부터)
+      const workoutNumbers = [];
+      let rowIndex = 2; // B2부터 시작
+      
+      while (true) {
+        const cellAddress = XLSX.utils.encode_cell({ r: rowIndex - 1, c: 1 }); // B열은 1번째 컬럼
+        const cell = worksheet[cellAddress];
+        
+        if (!cell || cell.v === undefined || cell.v === null || cell.v === '') {
+          break; // 빈 셀이면 종료
+        }
+        
+        // 숫자로 변환
+        const num = parseFloat(cell.v);
+        if (!isNaN(num) && num > 0) {
+          workoutNumbers.push(Math.floor(num)); // 정수로 변환
+        }
+        
+        rowIndex++;
+      }
+      
+      // 데이터 저장
+      window.excelWorkoutData = workoutNumbers;
+      
+      console.log(`[handleExcelUpload] ${workoutNumbers.length}개 워크아웃 번호 읽음 (B열):`, workoutNumbers);
+      showToast(`엑셀 파일에서 ${workoutNumbers.length}개의 워크아웃 번호를 읽었습니다. "적용" 버튼을 클릭하세요.`, 'success');
+      
+    } catch (error) {
+      console.error('[handleExcelUpload] 엑셀 파일 읽기 오류:', error);
+      showToast('엑셀 파일을 읽는 중 오류가 발생했습니다.', 'error');
+    }
+  };
+  
+  reader.readAsArrayBuffer(file);
+}
+
+/**
+ * 엑셀 데이터를 기반으로 워크아웃 자동 선택
+ */
+function applyExcelWorkout() {
+  if (!window.excelWorkoutData || window.excelWorkoutData.length === 0) {
+    showToast('먼저 엑셀 파일을 선택해주세요.', 'error');
+    return;
+  }
+  
+  const workoutNumbers = window.excelWorkoutData;
+  
+  // 현재 스케줄의 모든 날짜 가져오기
+  const days = scheduleDays || [];
+  const sortedDays = days
+    .filter(d => d.isTrainingDay)
+    .sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA - dateB;
+    });
+  
+  if (sortedDays.length === 0) {
+    showToast('훈련일이 없습니다.', 'error');
+    return;
+  }
+  
+  // 워크아웃 목록 가져오기
+  const workouts = window.allWorkouts || [];
+  if (workouts.length === 0) {
+    showToast('워크아웃 목록을 불러오는 중입니다. 잠시 후 다시 시도해주세요.', 'error');
+    return;
+  }
+  
+  let appliedCount = 0;
+  let skippedCount = 0;
+  
+  // 각 날짜에 워크아웃 번호 매칭
+  workoutNumbers.forEach((workoutNum, index) => {
+    if (index >= sortedDays.length) {
+      skippedCount++;
+      return; // 날짜가 부족하면 스킵
+    }
+    
+    const day = sortedDays[index];
+    const workoutIndex = workoutNum - 1; // 1-based to 0-based (엑셀의 1번 = 배열의 0번)
+    
+    if (workoutIndex >= 0 && workoutIndex < workouts.length) {
+      const workout = workouts[workoutIndex];
+      selectWorkoutForDay(day.id, workout.id);
+      appliedCount++;
+      console.log(`[applyExcelWorkout] Day ${day.date}: 워크아웃 ${workoutNum} (${workout.title}) 선택`);
+    } else {
+      skippedCount++;
+      console.warn(`[applyExcelWorkout] 워크아웃 번호 ${workoutNum}이 범위를 벗어남 (총 ${workouts.length}개)`);
+    }
+  });
+  
+  // 결과 메시지
+  if (appliedCount > 0) {
+    showToast(`${appliedCount}개의 워크아웃이 자동 선택되었습니다.${skippedCount > 0 ? ` (${skippedCount}개 건너뜀)` : ''}`, 'success');
+  } else {
+    showToast('적용된 워크아웃이 없습니다. 엑셀 파일의 번호를 확인해주세요.', 'error');
+  }
+  
+  // 사용한 데이터 초기화
+  window.excelWorkoutData = null;
+}
+
