@@ -699,40 +699,79 @@ async function renderScheduleDays(days) {
  * 워크아웃 선택 (그리드 UI용)
  */
 function selectWorkoutForDay(dayId, workoutId) {
+  console.log(`[selectWorkoutForDay] 호출: dayId=${dayId}, workoutId=${workoutId}`);
+  
   const day = scheduleDays.find(d => d.id == dayId || String(d.id) === String(dayId));
-  if (day) {
-    // 이전 선택 해제
-    const previousSelected = document.querySelector(`.workout-option-item.selected[data-day-id="${dayId}"]`);
-    if (previousSelected) {
-      previousSelected.classList.remove('selected');
-      previousSelected.querySelector('.workout-option-check')?.remove();
-    }
-    
-    // 새 선택 적용
-    const newSelected = document.querySelector(`.workout-option-item[data-day-id="${dayId}"][data-workout-id="${workoutId}"]`);
-    if (newSelected) {
-      newSelected.classList.add('selected');
-      if (!newSelected.querySelector('.workout-option-check')) {
-        const checkMark = document.createElement('div');
-        checkMark.className = 'workout-option-check';
-        checkMark.textContent = '✓';
-        newSelected.appendChild(checkMark);
-      }
-    }
-    
-    // hidden input 업데이트
-    const hiddenInput = document.querySelector(`.workout-select-hidden[data-day-id="${dayId}"]`);
-    if (hiddenInput) {
-      hiddenInput.value = workoutId;
-    }
-    
-    // scheduleDays 배열 업데이트
-    day.plannedWorkoutId = String(workoutId).trim();
-    console.log(`[selectWorkoutForDay] 워크아웃 선택: dayId=${dayId}, workoutId=${day.plannedWorkoutId}`);
+  if (!day) {
+    console.warn(`[selectWorkoutForDay] Day를 찾을 수 없음: dayId=${dayId}`);
+    return;
   }
   
+  // workoutId가 유효한지 확인
+  if (!workoutId || String(workoutId).trim() === '' || String(workoutId).trim() === 'null' || String(workoutId).trim() === 'undefined') {
+    console.warn(`[selectWorkoutForDay] 유효하지 않은 workoutId: ${workoutId}`);
+    return;
+  }
+  
+  const workoutIdStr = String(workoutId).trim();
+  
+  // 이전 선택 해제
+  const previousSelected = document.querySelector(`.workout-option-item.selected[data-day-id="${dayId}"]`);
+  if (previousSelected) {
+    previousSelected.classList.remove('selected');
+    const checkMark = previousSelected.querySelector('.workout-option-check');
+    if (checkMark) checkMark.remove();
+  }
+  
+  // 새 선택 적용
+  const newSelected = document.querySelector(`.workout-option-item[data-day-id="${dayId}"][data-workout-id="${workoutIdStr}"]`);
+  if (newSelected) {
+    newSelected.classList.add('selected');
+    if (!newSelected.querySelector('.workout-option-check')) {
+      const checkMark = document.createElement('div');
+      checkMark.className = 'workout-option-check';
+      checkMark.textContent = '✓';
+      newSelected.appendChild(checkMark);
+    }
+    console.log(`[selectWorkoutForDay] UI 업데이트 완료: dayId=${dayId}, workoutId=${workoutIdStr}`);
+  } else {
+    console.warn(`[selectWorkoutForDay] 워크아웃 옵션을 찾을 수 없음: dayId=${dayId}, workoutId=${workoutIdStr}`);
+    // DOM이 아직 렌더링되지 않았을 수 있으므로 강제로 스크롤하여 렌더링 유도
+    const targetCard = Array.from(document.querySelectorAll('.schedule-day-card')).find(card => {
+      const workoutList = card.querySelector(`.workout-select-list[data-day-id="${dayId}"]`);
+      return workoutList !== null;
+    });
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // 잠시 후 다시 시도
+      setTimeout(() => {
+        const retrySelected = document.querySelector(`.workout-option-item[data-day-id="${dayId}"][data-workout-id="${workoutIdStr}"]`);
+        if (retrySelected) {
+          retrySelected.classList.add('selected');
+          if (!retrySelected.querySelector('.workout-option-check')) {
+            const checkMark = document.createElement('div');
+            checkMark.className = 'workout-option-check';
+            checkMark.textContent = '✓';
+            retrySelected.appendChild(checkMark);
+          }
+          console.log(`[selectWorkoutForDay] 재시도 성공: dayId=${dayId}, workoutId=${workoutIdStr}`);
+        }
+      }, 300);
+    }
+  }
+  
+  // hidden input 업데이트
+  const hiddenInput = document.querySelector(`.workout-select-hidden[data-day-id="${dayId}"]`);
+  if (hiddenInput) {
+    hiddenInput.value = workoutIdStr;
+  }
+  
+  // scheduleDays 배열 업데이트
+  day.plannedWorkoutId = workoutIdStr;
+  console.log(`[selectWorkoutForDay] 완료: dayId=${dayId}, workoutId=${day.plannedWorkoutId}`);
+  
   // 기존 함수도 호출 (호환성)
-  updateDayWorkout(dayId, workoutId);
+  updateDayWorkout(dayId, workoutIdStr);
 }
 
 /**
@@ -1789,9 +1828,9 @@ function handleExcelUpload(event) {
 }
 
 /**
- * 엑셀 데이터를 기반으로 워크아웃 자동 선택
+ * 엑셀 데이터를 기반으로 워크아웃 자동 선택 (진행 애니메이션 포함)
  */
-function applyExcelWorkout() {
+async function applyExcelWorkout() {
   if (!window.excelWorkoutData || window.excelWorkoutData.length === 0) {
     showToast('먼저 엑셀 파일을 선택해주세요.', 'error');
     return;
@@ -1821,38 +1860,105 @@ function applyExcelWorkout() {
     return;
   }
   
-  let appliedCount = 0;
-  let skippedCount = 0;
-  
-  // 각 날짜에 워크아웃 번호 매칭
-  workoutNumbers.forEach((workoutNum, index) => {
-    if (index >= sortedDays.length) {
-      skippedCount++;
-      return; // 날짜가 부족하면 스킵
-    }
-    
-    const day = sortedDays[index];
-    const workoutIndex = workoutNum - 1; // 1-based to 0-based (엑셀의 1번 = 배열의 0번)
-    
-    if (workoutIndex >= 0 && workoutIndex < workouts.length) {
-      const workout = workouts[workoutIndex];
-      selectWorkoutForDay(day.id, workout.id);
-      appliedCount++;
-      console.log(`[applyExcelWorkout] Day ${day.date}: 워크아웃 ${workoutNum} (${workout.title}) 선택`);
-    } else {
-      skippedCount++;
-      console.warn(`[applyExcelWorkout] 워크아웃 번호 ${workoutNum}이 범위를 벗어남 (총 ${workouts.length}개)`);
-    }
-  });
-  
-  // 결과 메시지
-  if (appliedCount > 0) {
-    showToast(`${appliedCount}개의 워크아웃이 자동 선택되었습니다.${skippedCount > 0 ? ` (${skippedCount}개 건너뜀)` : ''}`, 'success');
-  } else {
-    showToast('적용된 워크아웃이 없습니다. 엑셀 파일의 번호를 확인해주세요.', 'error');
+  // 진행 애니메이션 오버레이 생성
+  const screen = document.getElementById('scheduleDaysScreen');
+  let progressOverlay = null;
+  if (screen) {
+    progressOverlay = document.createElement('div');
+    progressOverlay.className = 'schedule-create-progress-overlay';
+    progressOverlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.7); z-index: 9999; display: flex; align-items: center; justify-content: center;';
+    progressOverlay.innerHTML = `
+      <div class="schedule-create-progress-container" style="background: white; padding: 30px; border-radius: 12px; max-width: 400px; width: 90%;">
+        <div class="loading-spinner">
+          <div class="spinner" style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2e74e8; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+        </div>
+        <div class="loading-progress-section">
+          <div class="loading-progress-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span class="loading-progress-message" style="font-weight: 600; color: #333;">워크아웃 적용 중...</span>
+            <span class="loading-progress-text" style="font-weight: 600; color: #2e74e8;">0%</span>
+          </div>
+          <div class="loading-progress-bar-container" style="width: 100%; height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden;">
+            <div class="loading-progress-bar" style="height: 100%; background: #2e74e8; width: 0%; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    screen.appendChild(progressOverlay);
   }
   
-  // 사용한 데이터 초기화
-  window.excelWorkoutData = null;
+  // 진행률 업데이트 함수
+  const updateProgress = (percent, message) => {
+    if (progressOverlay) {
+      const progressBar = progressOverlay.querySelector('.loading-progress-bar');
+      const progressText = progressOverlay.querySelector('.loading-progress-text');
+      const progressMessage = progressOverlay.querySelector('.loading-progress-message');
+      if (progressBar) progressBar.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = `${Math.round(percent)}%`;
+      if (progressMessage) progressMessage.textContent = message || '워크아웃 적용 중...';
+    }
+  };
+  
+  try {
+    let appliedCount = 0;
+    let skippedCount = 0;
+    const totalCount = Math.min(workoutNumbers.length, sortedDays.length);
+    
+    // 각 날짜에 워크아웃 번호 매칭 (순차적으로 처리)
+    for (let index = 0; index < workoutNumbers.length; index++) {
+      const workoutNum = workoutNumbers[index];
+      const progress = ((index + 1) / totalCount) * 100;
+      
+      if (index >= sortedDays.length) {
+        skippedCount++;
+        updateProgress(progress, `처리 중... (${index + 1}/${totalCount})`);
+        await new Promise(resolve => setTimeout(resolve, 50));
+        continue; // 날짜가 부족하면 스킵
+      }
+      
+      const day = sortedDays[index];
+      const workoutIndex = workoutNum - 1; // 1-based to 0-based (엑셀의 1번 = 배열의 0번)
+      
+      updateProgress(progress, `워크아웃 적용 중... (${index + 1}/${totalCount})`);
+      
+      if (workoutIndex >= 0 && workoutIndex < workouts.length) {
+        const workout = workouts[workoutIndex];
+        
+        // 워크아웃 선택
+        selectWorkoutForDay(day.id, workout.id);
+        
+        // UI 업데이트를 위한 약간의 딜레이
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        appliedCount++;
+        console.log(`[applyExcelWorkout] Day ${day.date}: 워크아웃 ${workoutNum} (${workout.title}) 선택`);
+      } else {
+        skippedCount++;
+        console.warn(`[applyExcelWorkout] 워크아웃 번호 ${workoutNum}이 범위를 벗어남 (총 ${workouts.length}개, 요청 인덱스: ${workoutIndex})`);
+      }
+    }
+    
+    // 완료 애니메이션
+    updateProgress(100, '완료!');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // 결과 메시지
+    if (appliedCount > 0) {
+      showToast(`${appliedCount}개의 워크아웃이 자동 선택되었습니다.${skippedCount > 0 ? ` (${skippedCount}개 건너뜀)` : ''}`, 'success');
+    } else {
+      showToast('적용된 워크아웃이 없습니다. 엑셀 파일의 번호를 확인해주세요.', 'error');
+    }
+    
+  } catch (error) {
+    console.error('[applyExcelWorkout] 오류 발생:', error);
+    showToast('워크아웃 적용 중 오류가 발생했습니다.', 'error');
+  } finally {
+    // 진행 오버레이 제거
+    if (progressOverlay && progressOverlay.parentNode) {
+      progressOverlay.parentNode.removeChild(progressOverlay);
+    }
+    
+    // 사용한 데이터 초기화
+    window.excelWorkoutData = null;
+  }
 }
 
