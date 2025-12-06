@@ -526,11 +526,11 @@ async function selectUser(userId) {
 
     showToast(`${user.name}님이 선택되었습니다.`);
     
-    // 워크아웃 선택 화면으로 이동
+    // 훈련 스케줄 화면으로 이동
     if (typeof showScreen === 'function') {
-      showScreen('workoutScreen');
-      if (typeof loadWorkouts === 'function') {
-        loadWorkouts();
+      showScreen('scheduleListScreen');
+      if (typeof loadTrainingSchedules === 'function') {
+        loadTrainingSchedules();
       }
     }
     
