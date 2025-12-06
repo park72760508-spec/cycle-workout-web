@@ -88,45 +88,69 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
   
   // 스마트 트레이너 버튼
   if (btnTrainer) {
-    const img = btnTrainer.querySelector(".device-btn-icon");
-    if (img) {
-      if (window.connectedDevices.trainer) {
-        img.src = "assets/img/trainer_g.png";
-        btnTrainer.classList.add("connected");
-      } else {
-        img.src = "assets/img/trainer_i.png";
-        btnTrainer.classList.remove("connected");
-      }
+    let img = btnTrainer.querySelector(".device-btn-icon");
+    if (!img) {
+      // 이미지가 없으면 생성
+      img = document.createElement("img");
+      img.className = "device-btn-icon";
+      img.alt = "스마트 트레이너";
+      btnTrainer.insertBefore(img, btnTrainer.firstChild);
     }
+    if (window.connectedDevices && window.connectedDevices.trainer) {
+      img.src = "assets/img/trainer_g.png";
+      btnTrainer.classList.add("connected");
+    } else {
+      img.src = "assets/img/trainer_i.png";
+      btnTrainer.classList.remove("connected");
+    }
+    img.style.display = "block";
   }
   
   // 심박계 버튼
   if (btnHR) {
-    const img = btnHR.querySelector(".device-btn-icon");
-    if (img) {
-      if (window.connectedDevices.heartRate) {
-        img.src = "assets/img/bpm_g.png";
-        btnHR.classList.add("connected");
-      } else {
-        img.src = "assets/img/bpm_i.png";
-        btnHR.classList.remove("connected");
-      }
+    let img = btnHR.querySelector(".device-btn-icon");
+    if (!img) {
+      // 이미지가 없으면 생성
+      img = document.createElement("img");
+      img.className = "device-btn-icon";
+      img.alt = "심박계 연결";
+      btnHR.insertBefore(img, btnHR.firstChild);
     }
+    if (window.connectedDevices && window.connectedDevices.heartRate) {
+      img.src = "assets/img/bpm_g.png";
+      btnHR.classList.add("connected");
+    } else {
+      img.src = "assets/img/bpm_i.png";
+      btnHR.classList.remove("connected");
+    }
+    img.style.display = "block";
   }
   
   // 파워미터 버튼
   if (btnPM) {
-    const img = btnPM.querySelector(".device-btn-icon");
-    if (img) {
-      if (window.connectedDevices.powerMeter) {
-        img.src = "assets/img/power_g.png";
-        btnPM.classList.add("connected");
-      } else {
-        img.src = "assets/img/power_i.png";
-        btnPM.classList.remove("connected");
-      }
+    let img = btnPM.querySelector(".device-btn-icon");
+    if (!img) {
+      // 이미지가 없으면 생성
+      img = document.createElement("img");
+      img.className = "device-btn-icon";
+      img.alt = "파워미터 연결";
+      btnPM.insertBefore(img, btnPM.firstChild);
     }
+    if (window.connectedDevices && window.connectedDevices.powerMeter) {
+      img.src = "assets/img/power_g.png";
+      btnPM.classList.add("connected");
+    } else {
+      img.src = "assets/img/power_i.png";
+      btnPM.classList.remove("connected");
+    }
+    img.style.display = "block";
   }
+  
+  console.log("Device button images updated", {
+    trainer: window.connectedDevices?.trainer ? "connected" : "disconnected",
+    heartRate: window.connectedDevices?.heartRate ? "connected" : "disconnected",
+    powerMeter: window.connectedDevices?.powerMeter ? "connected" : "disconnected"
+  });
 }
 
 window.updateDevicesList = window.updateDevicesList || function () {
