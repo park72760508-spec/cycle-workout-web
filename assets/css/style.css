@@ -138,6 +138,89 @@ h1,h2,h3,h4 { font-weight: 600; }
   opacity: 1;
 }
 
+/* 블루투스 기기 연결 버튼 스타일 - 훈련 스케줄 톤과 유사하게 */
+#connectionScreen .btn-device {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 16px;
+  min-height: 120px;
+  background: linear-gradient(135deg, rgba(46, 116, 232, 0.1) 0%, rgba(37, 98, 200, 0.15) 100%);
+  border: 2px solid rgba(46, 116, 232, 0.2);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+#connectionScreen .btn-device::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#connectionScreen .btn-device:hover {
+  background: linear-gradient(135deg, rgba(46, 116, 232, 0.15) 0%, rgba(37, 98, 200, 0.2) 100%);
+  border-color: rgba(46, 116, 232, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.2);
+}
+
+#connectionScreen .btn-device:hover::before {
+  opacity: 1;
+}
+
+#connectionScreen .btn-device:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(46, 116, 232, 0.15);
+}
+
+#connectionScreen .btn-device .device-btn-icon {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+#connectionScreen .btn-device:hover .device-btn-icon {
+  transform: scale(1.1);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+#connectionScreen .btn-device span {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2e74e8;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+/* 연결된 상태 스타일 */
+#connectionScreen .btn-device.connected {
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(34, 139, 58, 0.2) 100%);
+  border-color: rgba(40, 167, 69, 0.4);
+}
+
+#connectionScreen .btn-device.connected:hover {
+  background: linear-gradient(135deg, rgba(40, 167, 69, 0.2) 0%, rgba(34, 139, 58, 0.25) 100%);
+  border-color: rgba(40, 167, 69, 0.5);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.25);
+}
+
+#connectionScreen .btn-device.connected span {
+  color: #28a745;
+}
+
 /* iOS 안내/아이콘 카드 */
 #connectionScreen .ios-info{
   background:#fff; border:1px solid #e5e7eb; border-radius:12px;
