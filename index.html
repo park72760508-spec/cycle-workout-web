@@ -780,9 +780,18 @@
       <p class="subtitle" id="scheduleDaysSubtitle">각 훈련일에 워크아웃을 지정하세요</p>
     </div>
     
-    <div class="card" style="display:flex; gap:8px; align-items:center;">
+    <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
       <button class="btn btn-secondary" onclick="loadScheduleDays()">🔄 새로고침</button>
       <button class="btn btn-success" onclick="saveScheduleDays()">💾 저장</button>
+      <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelUpload(event)" />
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('excelFileInput').click()" style="padding: 6px 12px;">
+          📁 파일 선택
+        </button>
+        <button type="button" class="btn btn-primary" onclick="applyExcelWorkout()" style="padding: 6px 12px;">
+          적용
+        </button>
+      </div>
       <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
     </div>
     
@@ -1679,5 +1688,8 @@
   
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
+  
+  <!-- SheetJS for Excel file reading -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </body>
 </html>
