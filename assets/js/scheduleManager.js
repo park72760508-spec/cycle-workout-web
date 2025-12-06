@@ -1411,7 +1411,7 @@ function renderCalendarDay(day) {
       statusText = '예정';
     } else if (isPast) {
       statusClass = 'missed';
-      statusIcon = '<img src="assets/img/cancel.png" alt="미실시" style="width: 24px; height: 24px;" />';
+      statusIcon = '<img src="assets/img/cancel.png" alt="미실시" style="width: 48px; height: 48px;" />';
       statusText = '미실시';
     } else {
       statusClass = 'planned';
