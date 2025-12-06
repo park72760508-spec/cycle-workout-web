@@ -1420,7 +1420,7 @@ function renderCalendarDay(day) {
     }
   } else {
     statusClass = 'rest';
-    statusIcon = '<img src="assets/img/rest.png" alt="휴식" style="width: 22px; height: 22px;" />';
+    statusIcon = '<img src="assets/img/rest.png" alt="휴식" style="width: 33px; height: 33px;" />';
     statusText = '휴식';
   }
   
