@@ -197,9 +197,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   height: 72px;
   object-fit: contain;
   display: block;
+  margin: 0 auto;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
   transition: transform 0.3s ease, filter 0.3s ease;
   flex-shrink: 0;
+  align-self: center;
 }
 
 #connectionScreen .btn-device:hover .device-btn-icon {
@@ -208,12 +210,14 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device span {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e5bb8;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #1e5bb8 !important;
   text-align: center;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
   line-height: 1.4;
+  width: 100%;
+  display: block;
 }
 
 /* 연결된 상태 스타일 */
@@ -231,7 +235,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 #connectionScreen .btn-device.connected span {
   color: #1e7e34 !important;
-  font-weight: 700;
+  font-size: 18px !important;
+  font-weight: 700 !important;
 }
 
 /* iOS 안내/아이콘 카드 */
