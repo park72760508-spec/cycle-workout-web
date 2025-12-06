@@ -1371,7 +1371,10 @@ function renderCalendarDay(day) {
         <div class="calendar-day-content">
           <div class="calendar-status-icon">${statusIcon}</div>
           ${day.plannedWorkout ? `
-            <div class="calendar-workout-title">${day.plannedWorkout.title}</div>
+            <div class="calendar-workout-title">
+              ${day.plannedWorkout.title}
+              ${day.result && day.result.status === 'completed' ? '<img src="assets/img/valid.png" alt="완료" style="width: 16px; height: 16px; vertical-align: middle; margin-left: 4px;" />' : ''}
+            </div>
             <div class="calendar-workout-duration">${Math.floor((day.plannedWorkout.total_seconds || 0) / 60)}분</div>
           ` : '<div class="calendar-no-workout">미지정</div>'}
           
