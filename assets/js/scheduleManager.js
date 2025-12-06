@@ -559,6 +559,8 @@ async function renderScheduleDays(days) {
     const workoutResult = await workoutResponse.json();
     if (workoutResult.success) {
       workouts = workoutResult.items || [];
+      // 전역 변수에 저장 (엑셀 업로드 기능에서 사용)
+      window.allWorkouts = workouts;
     }
   } catch (error) {
     console.error('Error loading workouts:', error);
@@ -1683,6 +1685,10 @@ if (typeof window !== 'undefined') {
   
   // 훈련 요일 체크박스 이벤트 핸들러 초기화
   initializeWeekdayCheckboxes();
+  
+  // 엑셀 업로드 관련 전역 함수 노출
+  window.handleExcelUpload = handleExcelUpload;
+  window.applyExcelWorkout = applyExcelWorkout;
 }
 
 /**
