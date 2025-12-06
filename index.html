@@ -692,7 +692,7 @@
     <div class="card" style="display:flex; gap:8px; align-items:center;">
       <button class="btn btn-success" onclick="showScreen('scheduleCreateScreen')">➕ 새 스케줄 만들기</button>
       <button class="btn btn-secondary" onclick="loadTrainingSchedules()">🔄 새로고침</button>
-      <button class="btn" onclick="showScreen('workoutScreen')">← 뒤로</button>
+      <button class="btn" onclick="showScreen('workoutScreen')">← 워크아웃 목록</button>
     </div>
     
     <div id="scheduleList" class="schedule-list">
@@ -783,6 +783,7 @@
     <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
       <button class="btn btn-secondary" onclick="loadScheduleDays()">🔄 새로고침</button>
       <button class="btn btn-success" onclick="saveScheduleDays()">💾 저장</button>
+      <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
       <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
         <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary" style="padding: 6px 12px; text-decoration: none; display: inline-block;">
           📥 샘플파일 다운로드
@@ -795,7 +796,6 @@
           적용
         </button>
       </div>
-      <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
     </div>
     
     <div id="scheduleDaysList" class="schedule-days-list">
