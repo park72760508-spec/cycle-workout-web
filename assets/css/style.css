@@ -131,6 +131,13 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* ========== 1) 연결 화면 (#connectionScreen) ========== */
+/* 연결 화면 이미지톤 - 훈련 스케줄/캘린더와 동일한 스타일 */
+#connectionScreen .header h1 img,
+#connectionScreen .card h3 img {
+  filter: none;
+  opacity: 1;
+}
+
 /* iOS 안내/아이콘 카드 */
 #connectionScreen .ios-info{
   background:#fff; border:1px solid #e5e7eb; border-radius:12px;
