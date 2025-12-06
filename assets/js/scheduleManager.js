@@ -1165,7 +1165,9 @@ async function loadScheduleCalendar() {
   calendarContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p>캘린더를 불러오는 중...</p></div>';
   
   try {
-    const url = `${window.GAS_URL}?action=getScheduleCalendar&scheduleId=${currentScheduleId}`;
+    // 현재 사용자 ID 가져오기
+    const userId = window.currentUser?.id || '';
+    const url = `${window.GAS_URL}?action=getScheduleCalendar&scheduleId=${currentScheduleId}${userId ? `&userId=${userId}` : ''}`;
     const response = await fetch(url);
     const result = await response.json();
     

@@ -222,8 +222,12 @@ async function saveTrainingResult(extra = {}) {
          // Normalized Power 계산 (간단한 근사치: 평균 파워 * 1.05 또는 기존 값 사용)
          const np = trainingResult.normalizedPower || Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
          
+         // 현재 사용자 ID 가져오기
+         const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
+         
          const scheduleResultData = {
            scheduleDayId: window.currentScheduleDayId,
+           userId: currentUserId,
            actualWorkoutId: trainingResult.workoutId || extra.workoutId || null,
            status: 'completed',
            duration_min: duration_min,
@@ -236,7 +240,7 @@ async function saveTrainingResult(extra = {}) {
          
          console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
          
-         const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${encodeURIComponent(scheduleResultData.scheduleDayId)}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
+         const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${encodeURIComponent(scheduleResultData.scheduleDayId)}&userId=${scheduleResultData.userId || ''}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
          
          const scheduleResponse = await fetch(scheduleUrl);
          const scheduleResult = await scheduleResponse.json();
