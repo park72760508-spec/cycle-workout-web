@@ -276,8 +276,11 @@ async function createTrainingSchedule() {
   
   const title = document.getElementById('scheduleTitle')?.value?.trim();
   const totalWeeks = parseInt(document.getElementById('scheduleTotalWeeks')?.value) || 12;
-  const weeklyFrequency = parseInt(document.getElementById('scheduleWeeklyFrequency')?.value) || 3;
   const startDate = document.getElementById('scheduleStartDate')?.value;
+  
+  // 선택된 요일 가져오기
+  const weekdayCheckboxes = document.querySelectorAll('input[name="scheduleWeekdays"]:checked');
+  const selectedDaysOfWeek = Array.from(weekdayCheckboxes).map(cb => parseInt(cb.value));
   
   if (!title) {
     showToast('스케줄 훈련명을 입력해주세요', 'error');
@@ -286,6 +289,11 @@ async function createTrainingSchedule() {
   
   if (!startDate) {
     showToast('시작일을 선택해주세요', 'error');
+    return;
+  }
+  
+  if (selectedDaysOfWeek.length === 0) {
+    showToast('최소 1개 이상의 훈련 요일을 선택해주세요', 'error');
     return;
   }
   
@@ -334,7 +342,9 @@ async function createTrainingSchedule() {
     
     // 2단계: 서버 요청 전송 (40%)
     updateScheduleCreateProgress(progressOverlay, 40, '서버에 전송 중...');
-    const url = `${window.GAS_URL}?action=createTrainingSchedule&userId=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}&totalWeeks=${totalWeeks}&weeklyFrequency=${weeklyFrequency}&startDate=${startDate}`;
+    // 선택된 요일을 쉼표로 구분하여 전송
+    const selectedDaysStr = selectedDaysOfWeek.join(',');
+    const url = `${window.GAS_URL}?action=createTrainingSchedule&userId=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}&totalWeeks=${totalWeeks}&selectedDaysOfWeek=${selectedDaysStr}&startDate=${startDate}`;
     
     // 3단계: 서버 응답 대기 (60%)
     updateScheduleCreateProgress(progressOverlay, 60, '서버 응답 대기 중...');
@@ -1628,6 +1638,13 @@ function showToast(message, type = 'info') {
  * 화면 전환 (기존 함수가 있으면 사용, 없으면 새로 정의)
  */
 function showScheduleScreen(screenId) {
+  // 스케줄 생성 화면이 열릴 때 체크박스 초기화
+  if (screenId === 'scheduleCreateScreen') {
+    // DOM이 완전히 로드된 후 체크박스 초기화
+    setTimeout(() => {
+      initializeWeekdayCheckboxes();
+    }, 100);
+  }
   if (typeof showScreen === 'function') {
     showScreen(screenId);
   } else {
@@ -1662,6 +1679,53 @@ if (typeof window !== 'undefined') {
   // showScreen이 없으면 scheduleManager의 것을 사용
   if (typeof window.showScreen === 'undefined') {
     window.showScreen = showScheduleScreen;
+  }
+  
+  // 훈련 요일 체크박스 이벤트 핸들러 초기화
+  initializeWeekdayCheckboxes();
+}
+
+/**
+ * 훈련 요일 체크박스 초기화 및 이벤트 핸들러
+ */
+function initializeWeekdayCheckboxes() {
+  const checkboxes = document.querySelectorAll('input[name="scheduleWeekdays"]');
+  checkboxes.forEach(checkbox => {
+    // 초기 체크 상태에 따라 스타일 적용
+    updateWeekdayCheckboxStyle(checkbox);
+    
+    // 체크박스 변경 이벤트
+    checkbox.addEventListener('change', function() {
+      updateWeekdayCheckboxStyle(this);
+    });
+  });
+}
+
+/**
+ * 체크박스 상태에 따라 스타일 업데이트
+ */
+function updateWeekdayCheckboxStyle(checkbox) {
+  const label = checkbox.closest('.weekday-checkbox-label');
+  if (!label) return;
+  
+  if (checkbox.checked) {
+    label.style.borderColor = '#3b82f6';
+    label.style.background = '#dbeafe';
+    label.style.boxShadow = '0 2px 4px rgba(59, 130, 246, 0.1)';
+    const span = label.querySelector('span');
+    if (span) {
+      span.style.fontWeight = '600';
+      span.style.color = '#3b82f6';
+    }
+  } else {
+    label.style.borderColor = '#ddd';
+    label.style.background = '#f9fafb';
+    label.style.boxShadow = 'none';
+    const span = label.querySelector('span');
+    if (span) {
+      span.style.fontWeight = 'normal';
+      span.style.color = '#374151';
+    }
   }
 }
 
