@@ -108,7 +108,8 @@ async function loadTrainingSchedules() {
     
     // 2단계: 요청 전송 중 (40%)
     updateLoadingProgress(progressContainer, 40, '데이터 요청 중...');
-    const url = `${window.GAS_URL}?action=listTrainingSchedules&userId=${userId}`;
+    // userId와 상관없이 모든 스케줄 표시
+    const url = `${window.GAS_URL}?action=listTrainingSchedules`;
     
     // 3단계: 응답 대기 중 (60%)
     updateLoadingProgress(progressContainer, 60, '서버 응답 대기 중...');
@@ -189,6 +190,9 @@ function renderScheduleList(schedules) {
   const listContainer = document.getElementById('scheduleList');
   if (!listContainer) return;
   
+  // 현재 사용자 ID 확인
+  const currentUserId = window.currentUser?.id || '';
+  
   // 페이드인 애니메이션과 함께 목록 렌더링
   listContainer.innerHTML = schedules.map((schedule, index) => {
     const progress = schedule.progress || 0;
@@ -196,6 +200,10 @@ function renderScheduleList(schedules) {
     const progressColor = progress >= 80 ? '#10b981' : progress >= 50 ? '#34d399' : '#6ee7b7';
     const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '<img src="assets/img/business.png" alt="캘린더" style="width: 24px; height: 24px;" />';
     const animationDelay = index * 0.1; // 각 카드마다 순차적 애니메이션
+    
+    // 삭제 권한 확인 (생성자만 삭제 가능)
+    const canDelete = currentUserId && String(schedule.userId) === String(currentUserId);
+    const canEdit = canDelete; // 수정 권한도 생성자만
     
     return `
       <div class="schedule-card" onclick="openScheduleCalendar('${schedule.id}')" 
@@ -233,9 +241,14 @@ function renderScheduleList(schedules) {
           <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
             <img src="assets/img/business.png" alt="캘린더" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" /> 캘린더 보기
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)">
+          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
             ✏️ 일별 지정
           </button>
+          ${canDelete ? `
+          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
+            🗑️ 삭제
+          </button>
+          ` : ''}
         </div>
       </div>
     `;
@@ -1567,6 +1580,33 @@ function formatDate(dateString) {
 }
 
 /**
+ * 훈련 스케줄 삭제
+ */
+async function deleteTrainingSchedule(scheduleId, scheduleTitle) {
+  // 확인 메시지
+  if (!confirm(`정말 삭제하시겠습니까?\n\n스케줄: ${scheduleTitle || '무제목'}\n\n이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+  
+  try {
+    const url = `${window.GAS_URL}?action=deleteTrainingSchedule&id=${scheduleId}`;
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (result.success) {
+      showToast('스케줄이 삭제되었습니다', 'success');
+      // 목록 새로고침
+      await loadTrainingSchedules();
+    } else {
+      showToast(result.error || '스케줄 삭제에 실패했습니다', 'error');
+    }
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    showToast('스케줄 삭제 중 오류가 발생했습니다', 'error');
+  }
+}
+
+/**
  * 토스트 메시지 표시
  */
 function showToast(message, type = 'info') {
@@ -1605,6 +1645,7 @@ if (typeof window !== 'undefined') {
   window.loadTrainingSchedules = loadTrainingSchedules;
   window.createTrainingSchedule = createTrainingSchedule;
   window.openScheduleDays = openScheduleDays;
+  window.deleteTrainingSchedule = deleteTrainingSchedule;
   window.loadScheduleDays = loadScheduleDays;
   window.saveScheduleDays = saveScheduleDays;
   window.openScheduleCalendar = openScheduleCalendar;
