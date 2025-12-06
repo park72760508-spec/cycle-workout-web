@@ -94,16 +94,25 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
       img = document.createElement("img");
       img.className = "device-btn-icon";
       img.alt = "스마트 트레이너";
-      btnTrainer.insertBefore(img, btnTrainer.firstChild);
+      const span = btnTrainer.querySelector("span");
+      if (span) {
+        btnTrainer.insertBefore(img, span);
+      } else {
+        btnTrainer.appendChild(img);
+      }
     }
-    if (window.connectedDevices && window.connectedDevices.trainer) {
+    const isConnected = window.connectedDevices && window.connectedDevices.trainer;
+    if (isConnected) {
       img.src = "assets/img/trainer_g.png";
       btnTrainer.classList.add("connected");
+      console.log("스마트 트레이너 연결됨 - trainer_g.png로 변경");
     } else {
       img.src = "assets/img/trainer_i.png";
       btnTrainer.classList.remove("connected");
+      console.log("스마트 트레이너 연결 해제 - trainer_i.png로 변경");
     }
     img.style.display = "block";
+    img.style.margin = "0 auto";
   }
   
   // 심박계 버튼
@@ -114,16 +123,25 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
       img = document.createElement("img");
       img.className = "device-btn-icon";
       img.alt = "심박계 연결";
-      btnHR.insertBefore(img, btnHR.firstChild);
+      const span = btnHR.querySelector("span");
+      if (span) {
+        btnHR.insertBefore(img, span);
+      } else {
+        btnHR.appendChild(img);
+      }
     }
-    if (window.connectedDevices && window.connectedDevices.heartRate) {
+    const isConnected = window.connectedDevices && window.connectedDevices.heartRate;
+    if (isConnected) {
       img.src = "assets/img/bpm_g.png";
       btnHR.classList.add("connected");
+      console.log("심박계 연결됨 - bpm_g.png로 변경");
     } else {
       img.src = "assets/img/bpm_i.png";
       btnHR.classList.remove("connected");
+      console.log("심박계 연결 해제 - bpm_i.png로 변경");
     }
     img.style.display = "block";
+    img.style.margin = "0 auto";
   }
   
   // 파워미터 버튼
@@ -134,16 +152,25 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
       img = document.createElement("img");
       img.className = "device-btn-icon";
       img.alt = "파워미터 연결";
-      btnPM.insertBefore(img, btnPM.firstChild);
+      const span = btnPM.querySelector("span");
+      if (span) {
+        btnPM.insertBefore(img, span);
+      } else {
+        btnPM.appendChild(img);
+      }
     }
-    if (window.connectedDevices && window.connectedDevices.powerMeter) {
+    const isConnected = window.connectedDevices && window.connectedDevices.powerMeter;
+    if (isConnected) {
       img.src = "assets/img/power_g.png";
       btnPM.classList.add("connected");
+      console.log("파워미터 연결됨 - power_g.png로 변경");
     } else {
       img.src = "assets/img/power_i.png";
       btnPM.classList.remove("connected");
+      console.log("파워미터 연결 해제 - power_i.png로 변경");
     }
     img.style.display = "block";
+    img.style.margin = "0 auto";
   }
   
   console.log("Device button images updated", {
@@ -265,10 +292,18 @@ async function connectTrainer() {
         if (window.connectedDevices.trainer?.device === device) window.connectedDevices.trainer = null;
         if (window.connectedDevices.powerMeter?.device === device) window.connectedDevices.powerMeter = null;
         updateDevicesList();
+        // 연결 해제 시 버튼 이미지 업데이트
+        if (typeof window.updateDeviceButtonImages === "function") {
+          setTimeout(() => window.updateDeviceButtonImages(), 100);
+        }
       } catch (e) { console.warn(e); }
     });
 
     updateDevicesList();
+    // 버튼 이미지 즉시 업데이트
+    if (typeof window.updateDeviceButtonImages === "function") {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "Trainer"} 연결 성공`);
    
@@ -277,6 +312,10 @@ async function connectTrainer() {
     showConnectionStatus(false);
     console.error("트레이너 연결 오류:", err);
     showToast("❌ 트레이너 연결 실패: " + err.message);
+    // 연결 실패 시에도 버튼 이미지 업데이트
+    if (typeof window.updateDeviceButtonImages === "function") {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
   }
 }
 
@@ -320,9 +359,17 @@ async function connectPowerMeter() {
     device.addEventListener("gattserverdisconnected", () => {
       if (window.connectedDevices.powerMeter?.device === device) window.connectedDevices.powerMeter = null;
       updateDevicesList();
+      // 연결 해제 시 버튼 이미지 업데이트
+      if (typeof window.updateDeviceButtonImages === "function") {
+        setTimeout(() => window.updateDeviceButtonImages(), 100);
+      }
     });
 
     updateDevicesList();
+    // 버튼 이미지 즉시 업데이트
+    if (typeof window.updateDeviceButtonImages === "function") {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "Power Meter"} 연결 성공`);
     
@@ -332,6 +379,10 @@ async function connectPowerMeter() {
     showConnectionStatus(false);
     console.error("파워미터 연결 오류:", err);
     showToast("❌ 파워미터 연결 실패: " + err.message);
+    // 연결 실패 시에도 버튼 이미지 업데이트
+    if (typeof window.updateDeviceButtonImages === "function") {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
   }
 }
 
@@ -379,6 +430,10 @@ async function connectHeartRate() {
     });
 
     updateDevicesList();
+    // 버튼 이미지 즉시 업데이트
+    if (typeof window.updateDeviceButtonImages === "function") {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
     showConnectionStatus(false);
     showToast(`✅ ${device.name || "HR"} 연결 성공`);
     
@@ -386,6 +441,10 @@ async function connectHeartRate() {
     showConnectionStatus(false);
     console.error("심박계 연결 오류:", err);
     showToast("❌ 심박계 연결 실패: " + err.message);
+    // 연결 실패 시에도 버튼 이미지 업데이트
+    if (typeof window.updateDeviceButtonImages === "function") {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
   }
 }
 
