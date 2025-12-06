@@ -80,6 +80,55 @@ if (!window.showScreen) {
     if (el) el.classList.add("active");
   };
 }
+// 버튼 이미지 업데이트 함수 (전역으로 노출)
+window.updateDeviceButtonImages = window.updateDeviceButtonImages || function updateDeviceButtonImages() {
+  const btnTrainer = document.getElementById("btnConnectTrainer");
+  const btnHR = document.getElementById("btnConnectHR");
+  const btnPM = document.getElementById("btnConnectPM");
+  
+  // 스마트 트레이너 버튼
+  if (btnTrainer) {
+    const img = btnTrainer.querySelector(".device-btn-icon");
+    if (img) {
+      if (window.connectedDevices.trainer) {
+        img.src = "assets/img/trainer_g.png";
+        btnTrainer.classList.add("connected");
+      } else {
+        img.src = "assets/img/trainer_i.png";
+        btnTrainer.classList.remove("connected");
+      }
+    }
+  }
+  
+  // 심박계 버튼
+  if (btnHR) {
+    const img = btnHR.querySelector(".device-btn-icon");
+    if (img) {
+      if (window.connectedDevices.heartRate) {
+        img.src = "assets/img/bpm_g.png";
+        btnHR.classList.add("connected");
+      } else {
+        img.src = "assets/img/bpm_i.png";
+        btnHR.classList.remove("connected");
+      }
+    }
+  }
+  
+  // 파워미터 버튼
+  if (btnPM) {
+    const img = btnPM.querySelector(".device-btn-icon");
+    if (img) {
+      if (window.connectedDevices.powerMeter) {
+        img.src = "assets/img/power_g.png";
+        btnPM.classList.add("connected");
+      } else {
+        img.src = "assets/img/power_i.png";
+        btnPM.classList.remove("connected");
+      }
+    }
+  }
+}
+
 window.updateDevicesList = window.updateDevicesList || function () {
   const deviceList = document.getElementById("connectedDevicesList");
   const summary = document.getElementById("connectedDevicesSummary");
@@ -89,37 +138,37 @@ window.updateDevicesList = window.updateDevicesList || function () {
   let html = "";
   let count = 0;
 
-  if (connectedDevices.trainer) {
+  if (window.connectedDevices.trainer) {
     count++;
     html += `
       <div class="card device-card connected">
         <div class="device-info">
           <div class="device-icon">🚴‍♂️</div>
-          <div class="device-details"><h3>${connectedDevices.trainer.name || "Smart Trainer"}</h3>
+          <div class="device-details"><h3>${window.connectedDevices.trainer.name || "Smart Trainer"}</h3>
           <p>Smart Trainer (FTMS)</p></div>
         </div>
         <div style="color:#28A745;font-weight:600;">연결됨</div>
       </div>`;
   }
-  if (connectedDevices.powerMeter) {
+  if (window.connectedDevices.powerMeter) {
     count++;
     html += `
       <div class="card device-card connected">
         <div class="device-info">
           <div class="device-icon">⚡</div>
-          <div class="device-details"><h3>${connectedDevices.powerMeter.name || "Power Meter"}</h3>
+          <div class="device-details"><h3>${window.connectedDevices.powerMeter.name || "Power Meter"}</h3>
           <p>Crank Power (CPS)</p></div>
         </div>
         <div style="color:#28A745;font-weight:600;">연결됨</div>
       </div>`;
   }
-  if (connectedDevices.heartRate) {
+  if (window.connectedDevices.heartRate) {
     count++;
     html += `
       <div class="card device-card connected">
         <div class="device-info">
           <div class="device-icon" style="background:#DC3545;">❤️</div>
-          <div class="device-details"><h3>${connectedDevices.heartRate.name || "Heart Rate"}</h3>
+          <div class="device-details"><h3>${window.connectedDevices.heartRate.name || "Heart Rate"}</h3>
           <p>Heart Rate (HRS)</p></div>
         </div>
         <div style="color:#28A745;font-weight:600;">연결됨</div>
@@ -133,6 +182,9 @@ window.updateDevicesList = window.updateDevicesList || function () {
   } else {
     summary.classList.add("hidden");
   }
+  
+  // 버튼 이미지 업데이트
+  updateDeviceButtonImages();
 };
 
 
@@ -179,15 +231,15 @@ async function connectTrainer() {
     );
 
     if (isFTMS) {
-      connectedDevices.trainer = { name: device.name || "Smart Trainer", device, server, characteristic };
+      window.connectedDevices.trainer = { name: device.name || "Smart Trainer", device, server, characteristic };
     } else {
-      connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic };
+      window.connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic };
     }
 
     device.addEventListener("gattserverdisconnected", () => {
       try {
-        if (connectedDevices.trainer?.device === device) connectedDevices.trainer = null;
-        if (connectedDevices.powerMeter?.device === device) connectedDevices.powerMeter = null;
+        if (window.connectedDevices.trainer?.device === device) window.connectedDevices.trainer = null;
+        if (window.connectedDevices.powerMeter?.device === device) window.connectedDevices.powerMeter = null;
         updateDevicesList();
       } catch (e) { console.warn(e); }
     });
@@ -239,10 +291,10 @@ async function connectPowerMeter() {
     ch.addEventListener("characteristicvaluechanged", handlePowerMeterData);
      
     trySubscribeCSC(server);
-    connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic: ch };
+    window.connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic: ch };
 
     device.addEventListener("gattserverdisconnected", () => {
-      if (connectedDevices.powerMeter?.device === device) connectedDevices.powerMeter = null;
+      if (window.connectedDevices.powerMeter?.device === device) window.connectedDevices.powerMeter = null;
       updateDevicesList();
     });
 
@@ -288,7 +340,7 @@ async function connectHeartRate() {
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
 
-    connectedDevices.heartRate = { 
+    window.connectedDevices.heartRate = { 
       name: device.name || "Heart Rate", 
       device, 
       server, 
@@ -296,8 +348,8 @@ async function connectHeartRate() {
     };
 
     device.addEventListener("gattserverdisconnected", () => {
-      if (connectedDevices.heartRate?.device === device) {
-        connectedDevices.heartRate = null;
+      if (window.connectedDevices.heartRate?.device === device) {
+        window.connectedDevices.heartRate = null;
       }
       updateDevicesList();
     });

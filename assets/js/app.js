@@ -2179,6 +2179,11 @@ if (!window.showScreen) {
         el.style.display = "block";
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
+        
+        // 연결 화면이 표시될 때 버튼 이미지 업데이트
+        if (id === "connectionScreen" && typeof updateDeviceButtonImages === "function") {
+          updateDeviceButtonImages();
+        }
       } else {
         console.error(`Screen element '${id}' not found`);
         return;
@@ -2748,6 +2753,10 @@ document.addEventListener("DOMContentLoaded", () => {
   
   if (typeof showScreen === "function") {
     showScreen("connectionScreen");
+    // 연결 화면 표시 시 버튼 이미지 초기화
+    if (typeof updateDeviceButtonImages === "function") {
+      setTimeout(() => updateDeviceButtonImages(), 100);
+    }
   }
 
   // 훈련 준비 → 훈련 시작
