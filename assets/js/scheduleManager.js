@@ -1324,8 +1324,8 @@ function renderCalendarDay(day) {
   if (day.result) {
     if (day.result.status === 'completed') {
       statusClass = 'completed';
-      // 완료된 날짜에는 valid.png 사용 (녹색톤)
-      statusIcon = '<img src="assets/img/valid.png" alt="완료" style="width: 20px; height: 20px; filter: hue-rotate(0deg) saturate(1.2) brightness(1.1);" />';
+      // 완료된 날짜에는 아이콘 없음
+      statusIcon = '';
       statusText = '완료';
     } else if (day.result.status === 'partial') {
       statusClass = 'partial';
@@ -1371,7 +1371,10 @@ function renderCalendarDay(day) {
         <div class="calendar-day-content">
           <div class="calendar-status-icon">${statusIcon}</div>
           ${day.plannedWorkout ? `
-            <div class="calendar-workout-title">${day.plannedWorkout.title}</div>
+            <div class="calendar-workout-title">
+              ${day.plannedWorkout.title}
+              ${day.result && day.result.status === 'completed' ? '<img src="assets/img/valid.png" alt="완료" style="width: 16px; height: 16px; vertical-align: middle; margin-left: 4px;" />' : ''}
+            </div>
             <div class="calendar-workout-duration">${Math.floor((day.plannedWorkout.total_seconds || 0) / 60)}분</div>
           ` : '<div class="calendar-no-workout">미지정</div>'}
           
