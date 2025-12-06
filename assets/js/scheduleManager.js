@@ -1291,8 +1291,16 @@ function renderCalendar(calendar) {
 function renderCalendarDay(day) {
   const date = new Date(day.date);
   const dayName = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
-  const isToday = day.date === new Date().toISOString().split('T')[0];
-  const isPast = date < new Date();
+  
+  // 오늘 날짜 확인 (날짜만 비교, 시간 제외)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayDate = new Date(date);
+  dayDate.setHours(0, 0, 0, 0);
+  const isToday = dayDate.getTime() === today.getTime();
+  
+  // 과거 날짜 확인 (오늘 날짜는 과거가 아님)
+  const isPast = !isToday && dayDate < today;
   const isTrainingDay = day.isTrainingDay;
   
   // 결과 상태에 따른 스타일
@@ -1316,18 +1324,19 @@ function renderCalendarDay(day) {
       statusText = '건너뜀';
     }
   } else if (isTrainingDay) {
-    if (isPast) {
+    // 오늘 날짜에 워크아웃이 있으면 주황색톤으로 표시 (과거가 아님)
+    if (isToday) {
+      statusClass = 'planned';
+      // 현재 날짜에는 주황색톤 이미지 적용
+      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
+      statusText = '예정';
+    } else if (isPast) {
       statusClass = 'missed';
       statusIcon = '❌';
       statusText = '미실시';
     } else {
       statusClass = 'planned';
-      // 현재 날짜에는 주황색톤 이미지 적용
-      if (isToday) {
-        statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
-      } else {
-        statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
-      }
+      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
       statusText = '예정';
     }
   } else {
@@ -1336,8 +1345,9 @@ function renderCalendarDay(day) {
     statusText = '휴식';
   }
   
-  const dayDataAttr = isTrainingDay && !isPast ? `data-day-id="${day.id}" data-day-data='${JSON.stringify(day).replace(/'/g, "&apos;")}'` : '';
-  const clickHandler = isTrainingDay && !isPast ? 'onclick="handleCalendarDayClick(this)"' : '';
+  // 오늘 날짜는 클릭 가능하도록 설정 (과거가 아니므로)
+  const dayDataAttr = isTrainingDay && (!isPast || isToday) ? `data-day-id="${day.id}" data-day-data='${JSON.stringify(day).replace(/'/g, "&apos;")}'` : '';
+  const clickHandler = isTrainingDay && (!isPast || isToday) ? 'onclick="handleCalendarDayClick(this)"' : '';
   
   return `
     <div class="calendar-day ${statusClass} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" 
