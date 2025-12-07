@@ -107,9 +107,9 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
       btnTrainer.classList.add("connected");
       console.log("스마트 트레이너 연결됨 - trainer_g.png로 변경");
     } else {
-      img.src = "assets/img/trainer_g.png";
+      img.src = "assets/img/trainer_i.png";
       btnTrainer.classList.remove("connected");
-      console.log("스마트 트레이너 연결 해제 - trainer_g.png로 변경");
+      console.log("스마트 트레이너 연결 해제 - trainer_i.png로 변경");
     }
     img.style.display = "block";
     img.style.margin = "0 auto";
@@ -136,9 +136,9 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
       btnHR.classList.add("connected");
       console.log("심박계 연결됨 - bpm_g.png로 변경");
     } else {
-      img.src = "assets/img/bpm_g.png";
+      img.src = "assets/img/bpm_i.png";
       btnHR.classList.remove("connected");
-      console.log("심박계 연결 해제 - bpm_g.png로 변경");
+      console.log("심박계 연결 해제 - bpm_i.png로 변경");
     }
     img.style.display = "block";
     img.style.margin = "0 auto";
@@ -165,9 +165,9 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
       btnPM.classList.add("connected");
       console.log("파워미터 연결됨 - power_g.png로 변경");
     } else {
-      img.src = "assets/img/power_g.png";
+      img.src = "assets/img/power_i.png";
       btnPM.classList.remove("connected");
-      console.log("파워미터 연결 해제 - power_g.png로 변경");
+      console.log("파워미터 연결 해제 - power_i.png로 변경");
     }
     img.style.display = "block";
     img.style.margin = "0 auto";
