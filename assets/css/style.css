@@ -653,6 +653,164 @@ button[aria-disabled="true"] {
   font-size: 13px;
 }
 
+/* 패스워드 확인 모달 스타일 */
+.schedule-password-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.schedule-password-modal-card {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 24px;
+  padding: 40px 35px;
+  backdrop-filter: blur(25px);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
+  max-width: 450px;
+  width: 90%;
+  animation: slideInUp 0.4s ease;
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-10px);
+  }
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+.schedule-password-modal-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.schedule-password-modal-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 12px;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.schedule-password-modal-header h3 {
+  font-size: 1.5em;
+  color: #1e293b;
+  margin: 0;
+  font-weight: 700;
+}
+
+.schedule-password-modal-body {
+  margin-bottom: 24px;
+}
+
+.schedule-password-modal-title {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #1e293b;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.schedule-password-modal-message {
+  font-size: 0.9em;
+  color: #666;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.schedule-password-input-container {
+  margin-bottom: 12px;
+}
+
+.schedule-password-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.schedule-password-input:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.schedule-password-error {
+  color: #dc2626;
+  font-size: 13px;
+  text-align: center;
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.schedule-password-modal-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 600px) {
+  .schedule-password-modal-card {
+    padding: 24px;
+    max-width: 95%;
+  }
+  
+  .schedule-password-modal-icon {
+    width: 40px;
+    height: 40px;
+  }
+  
+  .schedule-password-modal-header h3 {
+    font-size: 1.3em;
+  }
+}
+
 /* 관리자용 추가 필드 가독성 향상 */
 #adminFields .form-row label { font-weight: 600; }
 #adminFields .form-row select,
