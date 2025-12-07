@@ -488,6 +488,75 @@ button[aria-disabled="true"] {
   flex-shrink: 0;
 }
 
+/* 캘린더 관련 화면 버튼 스타일 - 기기연결 버튼 패턴 적용 */
+.btn-with-icon,
+.btn-refresh {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* 새로고침 버튼 - 민트색톤 */
+.btn-refresh {
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.15) 0%, rgba(20, 184, 166, 0.2) 100%) !important;
+  border: 2px solid rgba(45, 212, 191, 0.3) !important;
+  color: #0d9488 !important;
+}
+
+.btn-refresh:hover {
+  background: linear-gradient(135deg, rgba(45, 212, 191, 0.2) 0%, rgba(20, 184, 166, 0.25) 100%) !important;
+  border-color: rgba(45, 212, 191, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(45, 212, 191, 0.2);
+}
+
+.btn-refresh:active {
+  transform: translateY(0);
+}
+
+/* 저장 버튼 - 녹색톤 */
+.btn-success.btn-with-icon {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 100%) !important;
+  border: 2px solid rgba(34, 197, 94, 0.3) !important;
+  color: #15803d !important;
+}
+
+.btn-success.btn-with-icon:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.25) 100%) !important;
+  border-color: rgba(34, 197, 94, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+.btn-success.btn-with-icon:active {
+  transform: translateY(0);
+}
+
+/* 파랑색톤 버튼 (primary) */
+.btn-primary.btn-with-icon {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%) !important;
+  border: 2px solid rgba(59, 130, 246, 0.3) !important;
+  color: #2563eb !important;
+}
+
+.btn-primary.btn-with-icon:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+.btn-primary.btn-with-icon:active {
+  transform: translateY(0);
+}
+
 /* 관리자용 추가 필드 가독성 향상 */
 #adminFields .form-row label { font-weight: 600; }
 #adminFields .form-row select,
