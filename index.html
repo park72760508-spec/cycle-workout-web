@@ -903,16 +903,16 @@
   
   <!-- 세그먼트 추가 버튼 -->
   <div class="segment-actions">
-    <button class="btn btn-primary" id="btnAddSegment">
+    <button class="btn btn-primary btn-default-style" id="btnAddSegment">
       <span class="btn-icon">➕</span>
       세그먼트 추가
     </button>
     <div class="quick-add-buttons">
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('warmup')">워밍업</button>
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('interval')">인터벌</button>
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('rest')">휴식</button>
-      <button class="btn btn-secondary btn-sm" onclick="addQuickSegment('cooldown')">쿨다운</button>
-      <button class="btn btn-secondary btn-sm" onclick="showRepeatModal()">🔄 반복</button>
+      <button class="btn btn-secondary btn-sm btn-default-style" onclick="addQuickSegment('warmup')">워밍업</button>
+      <button class="btn btn-secondary btn-sm btn-default-style" onclick="addQuickSegment('interval')">인터벌</button>
+      <button class="btn btn-secondary btn-sm btn-default-style" onclick="addQuickSegment('rest')">휴식</button>
+      <button class="btn btn-secondary btn-sm btn-default-style" onclick="addQuickSegment('cooldown')">쿨다운</button>
+      <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="showRepeatModal()"><img src="assets/img/reload.png" alt="반복" class="btn-icon-image" style="width: 18px; height: 18px; margin-right: 6px; vertical-align: middle;" /> 반복</button>
     </div>
   </div>
 </div>
@@ -983,8 +983,8 @@
     </div>
     
     <div class="modal-footer">
-      <button class="btn btn-success" onclick="saveSegment()">저장</button>
-      <button class="btn btn-secondary" onclick="closeSegmentModal()">취소</button>
+      <button class="btn btn-success btn-default-style btn-with-icon" onclick="saveSegment()"><img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
+      <button class="btn btn-secondary btn-default-style btn-with-icon" onclick="closeSegmentModal()"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
       <button class="btn btn-danger btn-default-style" id="btnDeleteSegment" onclick="deleteCurrentSegment()" style="display:none;">삭제</button>
     </div>
   </div>
@@ -992,8 +992,8 @@
     
     <div class="builder-actions">
       <div class="btn-row">
-        <button class="btn btn-success" id="btnSaveWorkout">💾 저장</button>
-        <button class="btn btn-secondary" id="btnCancelBuilder">✖ 취소</button>
+        <button class="btn btn-success btn-default-style btn-with-icon" id="btnSaveWorkout"><img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
+        <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnCancelBuilder"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
       </div>
     </div>
   </div>
@@ -1025,8 +1025,8 @@
     </div>
     
     <div class="modal-footer">
-      <button class="btn btn-success" onclick="applyRepeat()">반복 적용</button>
-      <button class="btn btn-secondary" onclick="closeRepeatModal()">취소</button>
+      <button class="btn btn-success btn-default-style btn-with-icon" onclick="applyRepeat()"><img src="assets/img/execution.png" alt="반복 적용" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 반복 적용</button>
+      <button class="btn btn-secondary btn-default-style btn-with-icon" onclick="closeRepeatModal()"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
     </div>
   </div>
 </div>
