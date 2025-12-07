@@ -659,11 +659,10 @@
 
     
   <!-- ✅ 나가기 버튼 -->
-
-  <div class="exit-container bottom-center">
-    <button class="btn-exit" onclick="refreshPage()" aria-label="나가기">
-      <img class="btn-exit-icon" src="assets/img/exit.png" alt="" />
-      <span class="btn-exit-label">나가기</span>
+  <div class="profile-exit-container">
+    <button class="btn btn-exit-inline" onclick="refreshPage()" aria-label="나가기">
+      <img class="btn-exit-icon" src="assets/img/exit.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+      <span>나가기</span>
     </button>
   </div>
     
@@ -684,7 +683,7 @@
     <button class="btn" id="btnSearchWorkout">검색</button>
     <!-- <button class="btn btn-secondary" onclick="loadWorkouts()" title="목록 새로고침">🔄</button> -->
     <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
-    <button class="btn btn-primary" onclick="showScreen('scheduleListScreen')"><img src="assets/img/business.png" alt="캘린더" style="width: 16px; height: 16px; vertical-align: middle; margin-right: 4px;" /> 훈련 스케줄</button>
+    <button class="btn btn-primary" onclick="showScreen('scheduleListScreen')"><img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련 스케줄</button>
     <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
   </div>
   
@@ -703,8 +702,8 @@
     </div>
     
     <div class="card" style="display:flex; gap:8px; align-items:center;">
-      <button class="btn btn-success" onclick="showScreen('scheduleCreateScreen')">➕ 새 스케줄 만들기</button>
-      <button class="btn btn-secondary" onclick="loadTrainingSchedules()">🔄 새로고침</button>
+      <button class="btn btn-success" onclick="showScreen('scheduleCreateScreen')"><img src="assets/img/business.png" alt="새 스케줄" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새 스케줄 만들기</button>
+      <button class="btn btn-secondary" onclick="loadTrainingSchedules()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
       <button class="btn" onclick="showScreen('workoutScreen'); if (typeof loadWorkouts === 'function') { loadWorkouts(); }">← 워크아웃 목록</button>
     </div>
     
@@ -794,8 +793,8 @@
     </div>
     
     <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
-      <button class="btn btn-secondary" onclick="loadScheduleDays()">🔄 새로고침</button>
-      <button class="btn btn-success" onclick="saveScheduleDays()">💾 저장</button>
+      <button class="btn btn-secondary" onclick="loadScheduleDays()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
+      <button class="btn btn-success" onclick="saveScheduleDays()"><img src="assets/img/business.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
       <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
       <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
         <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary" style="padding: 6px 12px; text-decoration: none; display: inline-block;">
@@ -824,8 +823,8 @@
     </div>
     
     <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <button class="btn btn-secondary" onclick="loadScheduleCalendar()">🔄 새로고침</button>
-      <button class="btn btn-primary" id="btnStartTodayTraining" style="display:none;">🚀 오늘 훈련 시작</button>
+      <button class="btn btn-secondary" onclick="loadScheduleCalendar()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
+      <button class="btn btn-primary" id="btnStartTodayTraining" style="display:none;"><img src="assets/img/business.png" alt="훈련 시작" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 오늘 훈련 시작</button>
       <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
     </div>
     
