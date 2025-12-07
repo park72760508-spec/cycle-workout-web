@@ -117,15 +117,73 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* ========== 인증완료 후 화면 전환 ========== */
 
-/* connectionScreen 특별 처리 - trainingScreen과 동일하게 */
+/* connectionScreen 특별 처리 - 컴팩트한 블럭 구조 */
 #connectionScreen.active {
-  display: block !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
   min-height: 100vh;
-  background: #f6f8fa;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
   padding: 20px;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+}
+
+/* 컴팩트한 블럭 구조 (사용자 인증 화면과 유사) */
+.connection-main-container {
+  max-width: 500px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.connection-form-container {
+  animation: slideInUp 0.6s ease;
+}
+
+.connection-form-card {
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 24px;
+  padding: 40px 35px;
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25);
+}
+
+.connection-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.connection-header h1 {
+  font-size: 1.8em;
+  margin-bottom: 5px;
+  color: #1e293b;
+}
+
+.connection-header .subtitle {
+  font-size: 0.9em;
+  color: #666;
+}
+
+.connection-device-section {
+  margin-bottom: 20px;
+}
+
+.connection-device-section h3 {
+  font-size: 1.1em;
+  color: #1e293b;
+  margin-bottom: 15px;
+}
+
+.connection-status-card,
+.connection-summary-card {
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  padding: 18px;
+  margin-top: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
 #connectionScreen .header,
@@ -138,13 +196,13 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* ========== 1) 연결 화면 (#connectionScreen) ========== */
 /* 연결 화면 이미지톤 - 훈련 스케줄/캘린더와 동일한 스타일 */
-#connectionScreen .header h1 img,
-#connectionScreen .card h3 img {
+#connectionScreen .connection-header h1 img,
+#connectionScreen .connection-device-section h3 img {
   filter: none;
   opacity: 1;
 }
 
-/* 블루투스 기기 연결 버튼 스타일 - 훈련 스케줄 톤과 유사하게 */
+/* 블루투스 기기 연결 버튼 스타일 - 연결 전: 반투명 파랑색 계열 */
 #connectionScreen .btn-device {
   position: relative;
   display: flex;
@@ -154,13 +212,13 @@ h1,h2,h3,h4 { font-weight: 600; }
   gap: 12px;
   padding: 24px 20px;
   min-height: 160px;
-  background: linear-gradient(135deg, rgba(46, 116, 232, 0.1) 0%, rgba(37, 98, 200, 0.15) 100%);
-  border: 2px solid rgba(46, 116, 232, 0.2);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border: 2px solid rgba(59, 130, 246, 0.3);
   border-radius: 12px;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
   overflow: visible;
-  color: #1e5bb8;
+  color: #2563eb;
 }
 
 #connectionScreen .btn-device::before {
@@ -177,10 +235,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device:hover {
-  background: linear-gradient(135deg, rgba(46, 116, 232, 0.15) 0%, rgba(37, 98, 200, 0.2) 100%);
-  border-color: rgba(46, 116, 232, 0.4);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
+  border-color: rgba(59, 130, 246, 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.2);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
 #connectionScreen .btn-device:hover::before {
@@ -189,7 +247,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 #connectionScreen .btn-device:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(46, 116, 232, 0.15);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
 
 #connectionScreen .btn-device .device-btn-icon {
@@ -212,7 +270,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 #connectionScreen .btn-device span {
   font-size: 18px !important;
   font-weight: 700 !important;
-  color: #1e5bb8 !important;
+  color: #2563eb !important;
   text-align: center;
   text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
   line-height: 1.4;
@@ -220,21 +278,21 @@ h1,h2,h3,h4 { font-weight: 600; }
   display: block;
 }
 
-/* 연결된 상태 스타일 */
+/* 연결된 상태 스타일 - 반투명 녹색 계열, 폰트 크기 유지, 텍스트 색깔만 진한 녹색 */
 #connectionScreen .btn-device.connected {
-  background: linear-gradient(135deg, rgba(40, 167, 69, 0.15) 0%, rgba(34, 139, 58, 0.2) 100%);
-  border-color: rgba(40, 167, 69, 0.4);
-  color: #1e7e34;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 100%);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #15803d;
 }
 
 #connectionScreen .btn-device.connected:hover {
-  background: linear-gradient(135deg, rgba(40, 167, 69, 0.2) 0%, rgba(34, 139, 58, 0.25) 100%);
-  border-color: rgba(40, 167, 69, 0.5);
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.25);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.25) 100%);
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
 #connectionScreen .btn-device.connected span {
-  color: #1e7e34 !important;
+  color: #15803d !important;
   font-size: 18px !important;
   font-weight: 700 !important;
 }
@@ -2876,6 +2934,24 @@ button[aria-disabled="true"] {
   }
   .auth-title-image img {
     border-width: 2px;
+  }
+  /* 연결 화면 모바일 스타일 */
+  .connection-form-card {
+    padding: 24px;              /* 모바일에서 패딩 축소 */
+  }
+  .connection-header h1 {
+    font-size: 1.5em;
+  }
+  #connectionScreen .btn-device {
+    min-height: 140px;
+    padding: 20px 16px;
+  }
+  #connectionScreen .btn-device .device-btn-icon {
+    width: 60px;
+    height: 60px;
+  }
+  #connectionScreen .btn-device span {
+    font-size: 16px !important;
   }
 }
 
