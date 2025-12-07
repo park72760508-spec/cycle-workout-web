@@ -186,14 +186,47 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
-/* 나가기 버튼 컨테이너 */
+/* 다음 단계로 & 나가기 버튼 컨테이너 */
 .connection-exit-container {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
+/* 다음 단계로 버튼 (녹색톤) */
+.connection-exit-container .btn-next-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 8px;
+  color: #16a34a;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connection-exit-container .btn-next-inline:hover {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
+}
+
+.connection-exit-container .btn-next-inline:active {
+  transform: translateY(0);
+}
+
+/* 나가기 버튼 (빨간색톤) */
 .connection-exit-container .btn-exit-inline {
   display: inline-flex;
   align-items: center;
