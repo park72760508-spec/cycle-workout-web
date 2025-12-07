@@ -680,11 +680,11 @@
   
   <div class="card" style="display:flex; gap:8px; align-items:center;">
     <input id="qWorkout" type="search" placeholder="제목 또는 시간(분)으로 검색" style="flex:1;padding:8px;border:1px solid #ccc;border-radius:8px;">
-    <button class="btn" id="btnSearchWorkout">검색</button>
+    <button class="btn btn-default-style" id="btnSearchWorkout">검색</button>
     <!-- <button class="btn btn-secondary" onclick="loadWorkouts()" title="목록 새로고침">🔄</button> -->
-    <button class="btn btn-success" id="btnOpenBuilder">+ 새 워크아웃</button>
+    <button class="btn btn-success btn-default-style" id="btnOpenBuilder">+ 새 워크아웃</button>
     <button class="btn btn-primary btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련 스케줄</button>
-    <button class="btn btn-danger" onclick="refreshPage()">나가기</button>
+    <button class="btn btn-danger btn-default-style" onclick="refreshPage()">나가기</button>
   </div>
   
     <div id="workoutList" class="workout-list">
@@ -704,7 +704,7 @@
     <div class="card" style="display:flex; gap:8px; align-items:center;">
       <button class="btn btn-success btn-with-icon" onclick="showScreen('scheduleCreateScreen')"><img src="assets/img/business.png" alt="새 스케줄" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새 스케줄 만들기</button>
       <button class="btn btn-secondary btn-refresh" onclick="loadTrainingSchedules()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
-      <button class="btn" onclick="showScreen('workoutScreen'); if (typeof loadWorkouts === 'function') { loadWorkouts(); }">← 워크아웃 목록</button>
+      <button class="btn btn-default-style" onclick="showScreen('workoutScreen'); if (typeof loadWorkouts === 'function') { loadWorkouts(); }">← 워크아웃 목록</button>
     </div>
     
     <div id="scheduleList" class="schedule-list">
@@ -795,16 +795,16 @@
     <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
       <button class="btn btn-secondary btn-refresh" onclick="loadScheduleDays()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
       <button class="btn btn-success btn-with-icon" onclick="saveScheduleDays()"><img src="assets/img/business.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
-      <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
+      <button class="btn btn-default-style" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
       <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
-        <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary" style="padding: 6px 12px; text-decoration: none; display: inline-block;">
+        <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary btn-default-style" style="padding: 6px 12px; text-decoration: none; display: inline-block;">
           📥 샘플파일 다운로드
         </a>
         <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelUpload(event)" />
-        <button type="button" class="btn btn-secondary" onclick="document.getElementById('excelFileInput').click()" style="padding: 6px 12px;">
+        <button type="button" class="btn btn-secondary btn-default-style" onclick="document.getElementById('excelFileInput').click()" style="padding: 6px 12px;">
           📁 파일 선택
         </button>
-        <button type="button" class="btn btn-primary" onclick="applyExcelWorkout()" style="padding: 6px 12px;">
+        <button type="button" class="btn btn-primary btn-default-style" onclick="applyExcelWorkout()" style="padding: 6px 12px;">
           적용
         </button>
       </div>
@@ -825,7 +825,7 @@
     <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <button class="btn btn-secondary btn-refresh" onclick="loadScheduleCalendar()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
       <button class="btn btn-primary btn-with-icon" id="btnStartTodayTraining" style="display:none;"><img src="assets/img/business.png" alt="훈련 시작" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 오늘 훈련 시작</button>
-      <button class="btn" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
+      <button class="btn btn-default-style" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
     </div>
     
     <div id="scheduleCalendar" class="training-calendar">
@@ -973,7 +973,7 @@
     <div class="modal-footer">
       <button class="btn btn-success" onclick="saveSegment()">저장</button>
       <button class="btn btn-secondary" onclick="closeSegmentModal()">취소</button>
-      <button class="btn btn-danger" id="btnDeleteSegment" onclick="deleteCurrentSegment()" style="display:none;">삭제</button>
+      <button class="btn btn-danger btn-default-style" id="btnDeleteSegment" onclick="deleteCurrentSegment()" style="display:none;">삭제</button>
     </div>
   </div>
 </div>
