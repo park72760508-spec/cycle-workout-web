@@ -253,8 +253,8 @@ function renderScheduleList(schedules) {
             <img src="assets/img/check.png" alt="일별 지정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 일별 지정
           </button>
           ${canDelete ? `
-          <button class="btn btn-danger btn-sm btn-default-style" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
-            🗑️ 삭제
+          <button class="btn btn-danger btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
+            <img src="assets/img/delete.png" alt="삭제" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 삭제
           </button>
           ` : ''}
         </div>
