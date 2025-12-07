@@ -314,6 +314,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device .device-btn-icon {
+  order: 1 !important; /* span 아래에 표시 */
   width: 72px;
   height: 72px;
   object-fit: contain;
@@ -330,15 +331,20 @@ h1,h2,h3,h4 { font-weight: 600; }
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
 }
 
+/* 기기 연결 버튼의 span - 이미지 위에 표시되도록 order 설정 */
 #connectionScreen .btn-device span {
+  order: -1 !important; /* 이미지 위에 표시 */
   font-size: 18px !important;
   font-weight: 700 !important;
   color: #2563eb !important;
-  text-align: center;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
-  line-height: 1.4;
-  width: 100%;
-  display: block;
+  text-align: center !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8) !important;
+  line-height: 1.4 !important;
+  width: 100% !important;
+  display: block !important;
+  margin-bottom: 0 !important;
+  position: relative !important;
+  z-index: 1 !important;
 }
 
 /* 연결된 상태 스타일 - 반투명 녹색 계열, 폰트 크기 유지, 텍스트 색깔만 진한 녹색 */
@@ -356,6 +362,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 연결된 상태의 span - 위치와 크기는 연결 전과 동일, 색상만 녹색으로 변경 */
 #connectionScreen .btn-device.connected span {
+  order: -1 !important; /* 이미지 위에 표시 */
   color: #15803d !important;
   font-size: 18px !important;
   font-weight: 700 !important;
@@ -364,6 +371,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   line-height: 1.4 !important;
   width: 100% !important;
   display: block !important;
+  margin-bottom: 0 !important;
+  position: relative !important;
+  z-index: 1 !important;
 }
 
 /* iOS 안내/아이콘 카드 */
@@ -406,19 +416,21 @@ button[aria-disabled="true"] {
 /* 연결된 기기 카드 */
 .device-card{
   display:flex; justify-content:space-between; align-items:center;
-  padding:15px; margin-bottom:10px; background:#f8f9fa; border-radius:10px; transition:.3s;
+  padding:15px; margin-bottom:10px; background:transparent; border-radius:10px; transition:.3s;
 }
-.device-card.connected{ background:#e8f5e9; border:1px solid #4caf50; }
+.device-card.connected{ background:transparent; border:1px solid transparent; }
 .device-info{ display:flex; align-items:center; gap:15px; }
 .device-icon{
   width:72px; height:72px;
   display:flex; align-items:center; justify-content:center;
   flex-shrink: 0;
+  background: transparent !important;
 }
 .device-icon img {
   width: 72px;
   height: 72px;
   object-fit: contain;
+  background: transparent !important;
 }
 .device-details h3{ margin:0; font-size:16px; font-weight:600; }
 .device-details p{ margin:2px 0 0 0; font-size:14px; color:#666; }
@@ -3021,19 +3033,27 @@ button[aria-disabled="true"] {
     padding: 20px 16px;
   }
   #connectionScreen .btn-device .device-btn-icon {
+    order: 1 !important; /* span 아래에 표시 */
     width: 60px;
     height: 60px;
   }
   #connectionScreen .btn-device span {
-    font-size: 16px !important;
-  }
-  /* 연결된 상태의 span도 모바일에서 동일하게 적용 */
-  #connectionScreen .btn-device.connected span {
+    order: -1 !important; /* 이미지 위에 표시 */
     font-size: 16px !important;
     text-align: center !important;
     line-height: 1.4 !important;
     width: 100% !important;
     display: block !important;
+  }
+  /* 연결된 상태의 span도 모바일에서 동일하게 적용 */
+  #connectionScreen .btn-device.connected span {
+    order: -1 !important; /* 이미지 위에 표시 */
+    font-size: 16px !important;
+    text-align: center !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    display: block !important;
+    color: #15803d !important;
   }
 }
 
