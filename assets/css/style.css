@@ -557,6 +557,102 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
+/* 캘린더 관련 화면의 기본 버튼 스타일 - 기기연결 버튼 패턴 적용 */
+.btn-default-style {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  font-weight: 600;
+  font-size: 14px;
+  border: 2px solid transparent;
+}
+
+/* 기본 버튼 (검색, 목록으로 등) - 회색톤 */
+.btn-default-style:not(.btn-success):not(.btn-danger):not(.btn-primary):not(.btn-secondary) {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.15) 0%, rgba(75, 85, 99, 0.2) 100%) !important;
+  border-color: rgba(107, 114, 128, 0.3) !important;
+  color: #374151 !important;
+}
+
+.btn-default-style:not(.btn-success):not(.btn-danger):not(.btn-primary):not(.btn-secondary):hover {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.2) 0%, rgba(75, 85, 99, 0.25) 100%) !important;
+  border-color: rgba(107, 114, 128, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
+}
+
+/* btn-secondary 기본 스타일 (샘플파일 다운로드, 파일 선택 등) - 회색톤 */
+.btn-secondary.btn-default-style {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.15) 0%, rgba(75, 85, 99, 0.2) 100%) !important;
+  border-color: rgba(107, 114, 128, 0.3) !important;
+  color: #374151 !important;
+}
+
+.btn-secondary.btn-default-style:hover {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.2) 0%, rgba(75, 85, 99, 0.25) 100%) !important;
+  border-color: rgba(107, 114, 128, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
+}
+
+/* btn-success 기본 스타일 (+ 새 워크아웃 등) - 녹색톤 */
+.btn-success.btn-default-style {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 100%) !important;
+  border-color: rgba(34, 197, 94, 0.3) !important;
+  color: #15803d !important;
+}
+
+.btn-success.btn-default-style:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.25) 100%) !important;
+  border-color: rgba(34, 197, 94, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+/* btn-danger 기본 스타일 (나가기, 삭제 등) - 빨간색톤 */
+.btn-danger.btn-default-style {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.2) 100%) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #dc2626 !important;
+}
+
+.btn-danger.btn-default-style:hover {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.25) 100%) !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+/* btn-primary 기본 스타일 (적용 등) - 파랑색톤 */
+.btn-primary.btn-default-style {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  color: #2563eb !important;
+}
+
+.btn-primary.btn-default-style:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* 모든 btn-default-style의 active 상태 */
+.btn-default-style:active {
+  transform: translateY(0);
+}
+
+/* 작은 버튼(btn-sm)에도 동일한 스타일 적용 */
+.btn-sm.btn-default-style {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
 /* 관리자용 추가 필드 가독성 향상 */
 #adminFields .form-row label { font-weight: 600; }
 #adminFields .form-row select,
