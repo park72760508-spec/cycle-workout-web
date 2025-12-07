@@ -211,7 +211,10 @@ function renderScheduleList(schedules) {
         <div class="schedule-card-header">
           <div class="schedule-icon">${statusIcon}</div>
           <div class="schedule-title-section">
-            <h3 class="schedule-title">${schedule.title || '무제목'}</h3>
+            <h3 class="schedule-title">
+              ${schedule.title || '무제목'}
+              ${schedule.password ? '<img src="assets/img/lock.png" alt="비밀번호 보호" class="schedule-lock-icon" style="width: 16px; height: 16px; margin-left: 6px; vertical-align: middle;" />' : ''}
+            </h3>
             <div class="schedule-meta">
               <span class="schedule-period">${schedule.totalWeeks}주 프로그램</span>
               <span class="schedule-frequency">주 ${schedule.weeklyFrequency}회</span>
@@ -277,6 +280,7 @@ async function createTrainingSchedule() {
   const title = document.getElementById('scheduleTitle')?.value?.trim();
   const totalWeeks = parseInt(document.getElementById('scheduleTotalWeeks')?.value) || 12;
   const startDate = document.getElementById('scheduleStartDate')?.value;
+  const password = document.getElementById('schedulePassword')?.value?.trim() || '';
   
   // 선택된 요일 가져오기
   const weekdayCheckboxes = document.querySelectorAll('input[name="scheduleWeekdays"]:checked');
@@ -344,7 +348,7 @@ async function createTrainingSchedule() {
     updateScheduleCreateProgress(progressOverlay, 40, '서버에 전송 중...');
     // 선택된 요일을 쉼표로 구분하여 전송
     const selectedDaysStr = selectedDaysOfWeek.join(',');
-    const url = `${window.GAS_URL}?action=createTrainingSchedule&userId=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}&totalWeeks=${totalWeeks}&selectedDaysOfWeek=${selectedDaysStr}&startDate=${startDate}`;
+    const url = `${window.GAS_URL}?action=createTrainingSchedule&userId=${encodeURIComponent(userId)}&title=${encodeURIComponent(title)}&totalWeeks=${totalWeeks}&selectedDaysOfWeek=${selectedDaysStr}&startDate=${startDate}&password=${encodeURIComponent(password)}`;
     
     // 3단계: 서버 응답 대기 (60%)
     updateScheduleCreateProgress(progressOverlay, 60, '서버 응답 대기 중...');
@@ -466,6 +470,22 @@ async function openScheduleDays(scheduleId, event) {
     
     if (result.success && result.item) {
       currentSchedule = result.item;
+      
+      // 패스워드 확인
+      if (result.item.password && result.item.password.trim() !== '') {
+        const passwordCorrect = await showPasswordModal(result.item.title);
+        if (!passwordCorrect) {
+          // 버튼 복원
+          if (button) {
+            button.disabled = false;
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.innerHTML = originalText;
+          }
+          return; // 패스워드가 틀리면 중단
+        }
+      }
+      
       const subtitle = document.getElementById('scheduleDaysSubtitle');
       if (subtitle) {
         subtitle.textContent = `${result.item.title} - 일별 워크아웃 지정`;
@@ -1181,6 +1201,22 @@ async function openScheduleCalendar(scheduleId, event) {
     
     if (result.success && result.item) {
       currentSchedule = result.item;
+      
+      // 패스워드 확인
+      if (result.item.password && result.item.password.trim() !== '') {
+        const passwordCorrect = await showPasswordModal(result.item.title);
+        if (!passwordCorrect) {
+          // 버튼 복원
+          if (button) {
+            button.disabled = false;
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.innerHTML = originalText;
+          }
+          return; // 패스워드가 틀리면 중단
+        }
+      }
+      
       const subtitle = document.getElementById('calendarSubtitle');
       if (subtitle) {
         subtitle.textContent = `${result.item.title} - 훈련 캘린더`;
@@ -1699,6 +1735,117 @@ function showScheduleScreen(screenId) {
 if (typeof window !== 'undefined') {
   window.loadTrainingSchedules = loadTrainingSchedules;
   window.createTrainingSchedule = createTrainingSchedule;
+/**
+ * 패스워드 확인 모달 표시
+ */
+async function showPasswordModal(scheduleTitle) {
+  return new Promise((resolve) => {
+    // 기존 모달이 있으면 제거
+    const existingModal = document.getElementById('schedulePasswordModal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+    
+    // 모달 생성
+    const modal = document.createElement('div');
+    modal.id = 'schedulePasswordModal';
+    modal.className = 'schedule-password-modal-overlay';
+    modal.innerHTML = `
+      <div class="schedule-password-modal-card">
+        <div class="schedule-password-modal-header">
+          <img src="assets/img/lock.png" alt="비밀번호" class="schedule-password-modal-icon" />
+          <h3>비밀번호 확인</h3>
+        </div>
+        <div class="schedule-password-modal-body">
+          <p class="schedule-password-modal-title">${scheduleTitle || '스케줄'}</p>
+          <p class="schedule-password-modal-message">이 스케줄은 비밀번호로 보호되어 있습니다.</p>
+          <div class="schedule-password-input-container">
+            <input type="password" id="schedulePasswordInput" class="schedule-password-input" placeholder="비밀번호를 입력하세요" autofocus />
+          </div>
+          <div class="schedule-password-error" id="schedulePasswordError" style="display: none;"></div>
+        </div>
+        <div class="schedule-password-modal-footer">
+          <button class="btn btn-secondary btn-default-style schedule-password-cancel-btn">
+            <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            취소
+          </button>
+          <button class="btn btn-primary btn-with-icon schedule-password-confirm-btn">
+            <img src="assets/img/save.png" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            확인
+          </button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const passwordInput = document.getElementById('schedulePasswordInput');
+    const errorDiv = document.getElementById('schedulePasswordError');
+    const cancelBtn = modal.querySelector('.schedule-password-cancel-btn');
+    const confirmBtn = modal.querySelector('.schedule-password-confirm-btn');
+    
+    // 취소 버튼
+    cancelBtn.addEventListener('click', () => {
+      modal.remove();
+      resolve(false);
+    });
+    
+    // 확인 버튼
+    const handleConfirm = () => {
+      const enteredPassword = passwordInput.value.trim();
+      if (!enteredPassword) {
+        errorDiv.textContent = '비밀번호를 입력해주세요.';
+        errorDiv.style.display = 'block';
+        passwordInput.focus();
+        return;
+      }
+      
+      // 여기서는 실제 패스워드 확인은 서버에서 받은 값과 비교
+      // 실제로는 서버에서 확인해야 하지만, 여기서는 간단히 처리
+      // 실제 패스워드는 currentSchedule.password에 저장되어 있음
+      const correctPassword = (currentSchedule && currentSchedule.password) || '';
+      
+      if (enteredPassword === correctPassword) {
+        modal.remove();
+        resolve(true);
+      } else {
+        errorDiv.textContent = '비밀번호가 일치하지 않습니다.';
+        errorDiv.style.display = 'block';
+        passwordInput.value = '';
+        passwordInput.focus();
+        // 에러 메시지 애니메이션
+        errorDiv.style.animation = 'shake 0.3s ease';
+        setTimeout(() => {
+          errorDiv.style.animation = '';
+        }, 300);
+      }
+    };
+    
+    confirmBtn.addEventListener('click', handleConfirm);
+    
+    // Enter 키로 확인
+    passwordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        handleConfirm();
+      }
+    });
+    
+    // 모달 외부 클릭 시 닫기
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+        resolve(false);
+      }
+    });
+    
+    // 패스워드 저장 (확인용)
+    window.currentSchedulePassword = null;
+    
+    // 포커스
+    setTimeout(() => passwordInput.focus(), 100);
+  });
+}
+
   window.openScheduleDays = openScheduleDays;
   window.deleteTrainingSchedule = deleteTrainingSchedule;
   window.loadScheduleDays = loadScheduleDays;
