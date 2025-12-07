@@ -213,7 +213,7 @@ function renderScheduleList(schedules) {
           <div class="schedule-title-section">
             <h3 class="schedule-title">
               ${schedule.title || '무제목'}
-              ${schedule.password ? '<img src="assets/img/lock.png" alt="비밀번호 보호" class="schedule-lock-icon" style="width: 16px; height: 16px; margin-left: 6px; vertical-align: middle;" />' : ''}
+              ${schedule.password ? '<img src="assets/img/lock.png" alt="비밀번호 보호" class="schedule-lock-icon" style="width: 32px; height: 32px; margin-left: 6px; vertical-align: middle;" />' : ''}
             </h3>
             <div class="schedule-meta">
               <span class="schedule-period">${schedule.totalWeeks}주 프로그램</span>
@@ -1731,10 +1731,6 @@ function showScheduleScreen(screenId) {
   }
 }
 
-// 전역 함수로 노출 (HTML에서 직접 호출 가능하도록)
-if (typeof window !== 'undefined') {
-  window.loadTrainingSchedules = loadTrainingSchedules;
-  window.createTrainingSchedule = createTrainingSchedule;
 /**
  * 패스워드 확인 모달 표시
  */
@@ -1858,6 +1854,7 @@ async function showPasswordModal(scheduleTitle) {
   window.selectWorkoutForDay = selectWorkoutForDay;
   window.updateDayNote = updateDayNote;
   window.updateDayDate = updateDayDate;
+  window.showPasswordModal = showPasswordModal;
   
   // showScreen이 없으면 scheduleManager의 것을 사용
   if (typeof window.showScreen === 'undefined') {
