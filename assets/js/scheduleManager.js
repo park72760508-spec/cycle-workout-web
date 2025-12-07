@@ -238,14 +238,14 @@ function renderScheduleList(schedules) {
         </div>
         
         <div class="schedule-actions">
-          <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
-            <img src="assets/img/business.png" alt="캘린더" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" /> 캘린더 보기
+          <button class="btn btn-primary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
+            <img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 캘린더 보기
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+          <button class="btn btn-secondary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
             ✏️ 일별 지정
           </button>
           ${canDelete ? `
-          <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
+          <button class="btn btn-danger btn-sm btn-default-style" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
             🗑️ 삭제
           </button>
           ` : ''}
@@ -1154,7 +1154,7 @@ function updateScheduleSaveProgress(overlay, progress, message, current, total) 
 async function openScheduleCalendar(scheduleId, event) {
   // 버튼 찾기 및 진행 애니메이션 시작
   let button = null;
-  let originalText = '<img src="assets/img/business.png" alt="캘린더" style="width: 14px; height: 14px; vertical-align: middle; margin-right: 4px;" /> 캘린더 보기';
+  let originalText = '<img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 캘린더 보기';
   
   if (event && event.target) {
     button = event.target.closest('button');
