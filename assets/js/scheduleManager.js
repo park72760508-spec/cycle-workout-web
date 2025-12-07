@@ -249,8 +249,8 @@ function renderScheduleList(schedules) {
             <img src="assets/img/modify.png" alt="수정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 수정
           </button>
           ` : ''}
-          <button class="btn btn-secondary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-            ✏️ 일별 지정
+          <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+            <img src="assets/img/check.png" alt="일별 지정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 일별 지정
           </button>
           ${canDelete ? `
           <button class="btn btn-danger btn-sm btn-default-style" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
@@ -634,7 +634,7 @@ function updateScheduleCreateProgress(overlay, progress, message) {
 async function openScheduleDays(scheduleId, event) {
   // 버튼 찾기 및 진행 애니메이션 시작
   let button = null;
-  let originalText = '✏️ 일별 지정';
+  let originalText = '<img src="assets/img/check.png" alt="일별 지정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 일별 지정';
   
   if (event && event.target) {
     button = event.target.closest('button');
