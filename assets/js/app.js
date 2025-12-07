@@ -2220,14 +2220,21 @@ if (!window.showScreen) {
 
       // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
       if (id === 'scheduleListScreen') {
-        setTimeout(() => {
+        // 함수가 로드될 때까지 재시도
+        let retryCount = 0;
+        const maxRetries = 10;
+        const checkAndLoad = () => {
           if (typeof window.loadTrainingSchedules === 'function') {
             console.log('스케줄 목록 화면 진입 - 자동 로딩 시작');
             window.loadTrainingSchedules();
+          } else if (retryCount < maxRetries) {
+            retryCount++;
+            setTimeout(checkAndLoad, 100);
           } else {
-            console.error('loadTrainingSchedules function not available');
+            console.error('loadTrainingSchedules function not available after retries');
           }
-        }, 100);
+        };
+        setTimeout(checkAndLoad, 100);
       }
       
     } catch (error) {
@@ -3811,14 +3818,21 @@ function initializeCurrentScreen(screenId) {
       
     case 'scheduleListScreen':
       // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
-      setTimeout(() => {
+      // 함수가 로드될 때까지 재시도
+      let retryCount = 0;
+      const maxRetries = 10;
+      const checkAndLoad = () => {
         if (typeof window.loadTrainingSchedules === 'function') {
           console.log('스케줄 목록 화면 진입 - 자동 로딩 시작');
           window.loadTrainingSchedules();
+        } else if (retryCount < maxRetries) {
+          retryCount++;
+          setTimeout(checkAndLoad, 100);
         } else {
-          console.error('loadTrainingSchedules function not available');
+          console.error('loadTrainingSchedules function not available after retries');
         }
-      }, 100);
+      };
+      setTimeout(checkAndLoad, 100);
       break;
       
     default:

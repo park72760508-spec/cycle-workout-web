@@ -1842,33 +1842,37 @@ async function showPasswordModal(scheduleTitle) {
   });
 }
 
-  window.loadTrainingSchedules = loadTrainingSchedules;
-  window.openScheduleDays = openScheduleDays;
-  window.deleteTrainingSchedule = deleteTrainingSchedule;
-  window.loadScheduleDays = loadScheduleDays;
-  window.saveScheduleDays = saveScheduleDays;
-  window.openScheduleCalendar = openScheduleCalendar;
-  window.loadScheduleCalendar = loadScheduleCalendar;
-  window.startScheduleTraining = startScheduleTraining;
-  window.handleCalendarDayClick = handleCalendarDayClick;
-  window.updateDayWorkout = updateDayWorkout;
-  window.selectWorkoutForDay = selectWorkoutForDay;
-  window.updateDayNote = updateDayNote;
-  window.updateDayDate = updateDayDate;
-  window.showPasswordModal = showPasswordModal;
-  
-  // showScreen이 없으면 scheduleManager의 것을 사용
-  if (typeof window.showScreen === 'undefined') {
-    window.showScreen = showScheduleScreen;
+// 전역 함수 노출 (즉시 실행)
+(function() {
+  if (typeof window !== 'undefined') {
+    window.loadTrainingSchedules = loadTrainingSchedules;
+    window.openScheduleDays = openScheduleDays;
+    window.deleteTrainingSchedule = deleteTrainingSchedule;
+    window.loadScheduleDays = loadScheduleDays;
+    window.saveScheduleDays = saveScheduleDays;
+    window.openScheduleCalendar = openScheduleCalendar;
+    window.loadScheduleCalendar = loadScheduleCalendar;
+    window.startScheduleTraining = startScheduleTraining;
+    window.handleCalendarDayClick = handleCalendarDayClick;
+    window.updateDayWorkout = updateDayWorkout;
+    window.selectWorkoutForDay = selectWorkoutForDay;
+    window.updateDayNote = updateDayNote;
+    window.updateDayDate = updateDayDate;
+    window.showPasswordModal = showPasswordModal;
+    
+    // showScreen이 없으면 scheduleManager의 것을 사용
+    if (typeof window.showScreen === 'undefined') {
+      window.showScreen = showScheduleScreen;
+    }
+    
+    // 훈련 요일 체크박스 이벤트 핸들러 초기화
+    initializeWeekdayCheckboxes();
+    
+    // 엑셀 업로드 관련 전역 함수 노출
+    window.handleExcelUpload = handleExcelUpload;
+    window.applyExcelWorkout = applyExcelWorkout;
   }
-  
-  // 훈련 요일 체크박스 이벤트 핸들러 초기화
-  initializeWeekdayCheckboxes();
-  
-  // 엑셀 업로드 관련 전역 함수 노출
-  window.handleExcelUpload = handleExcelUpload;
-  window.applyExcelWorkout = applyExcelWorkout;
-}
+})();
 
 /**
  * 훈련 요일 체크박스 초기화 및 이벤트 핸들러
