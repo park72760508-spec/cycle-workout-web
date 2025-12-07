@@ -77,11 +77,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 .btn-success { background: #28a745; }
 .btn-row { display: flex; justify-content: center; gap: 10px; }
 
-/* btn-device는 공통 버튼 스타일을 오버라이드 */
-#connectionScreen .btn-device {
-  color: inherit !important;
-  background: transparent !important;
-}
+/* btn-device는 공통 버튼 스타일을 오버라이드 - 제거: 나중에 정의된 스타일이 적용되도록 */
 
 /* 폼 공통 */
 .form-group { margin-bottom: 12px; }
@@ -358,10 +354,16 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
+/* 연결된 상태의 span - 위치와 크기는 연결 전과 동일, 색상만 녹색으로 변경 */
 #connectionScreen .btn-device.connected span {
   color: #15803d !important;
   font-size: 18px !important;
   font-weight: 700 !important;
+  text-align: center !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8) !important;
+  line-height: 1.4 !important;
+  width: 100% !important;
+  display: block !important;
 }
 
 /* iOS 안내/아이콘 카드 */
@@ -3024,6 +3026,14 @@ button[aria-disabled="true"] {
   }
   #connectionScreen .btn-device span {
     font-size: 16px !important;
+  }
+  /* 연결된 상태의 span도 모바일에서 동일하게 적용 */
+  #connectionScreen .btn-device.connected span {
+    font-size: 16px !important;
+    text-align: center !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    display: block !important;
   }
 }
 
