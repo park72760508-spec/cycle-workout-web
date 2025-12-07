@@ -244,6 +244,11 @@ function renderScheduleList(schedules) {
           <button class="btn btn-primary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
             <img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 캘린더 보기
           </button>
+          ${canEdit ? `
+          <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); editTrainingSchedule('${schedule.id}', event)">
+            <img src="assets/img/modify.png" alt="수정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 수정
+          </button>
+          ` : ''}
           <button class="btn btn-secondary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
             ✏️ 일별 지정
           </button>
@@ -260,6 +265,191 @@ function renderScheduleList(schedules) {
 
 // 스케줄 생성 중복 호출 방지
 let isCreatingSchedule = false;
+
+/**
+ * 훈련 스케줄 수정 화면으로 이동
+ */
+async function editTrainingSchedule(scheduleId, event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  try {
+    // 스케줄 데이터 가져오기
+    const response = await fetch(`${SCRIPT_URL}?action=getTrainingSchedule&id=${scheduleId}`);
+    const result = await response.json();
+    
+    if (!result.success || !result.item) {
+      showToast('스케줄 정보를 불러올 수 없습니다', 'error');
+      return;
+    }
+  
+    const schedule = result.item;
+    
+    // 수정 모드로 설정
+    window.currentEditingScheduleId = scheduleId;
+    
+    // 화면 전환
+    showScheduleScreen('scheduleCreateScreen');
+    
+    // 헤더 텍스트 변경
+    const header = document.querySelector('#scheduleCreateScreen .header h1');
+    const subtitle = document.querySelector('#scheduleCreateScreen .header .subtitle');
+    if (header) header.textContent = '✏️ 훈련 스케줄 수정';
+    if (subtitle) subtitle.textContent = '훈련 계획을 수정하세요';
+    
+    // 폼에 기존 데이터 채우기
+    const titleInput = document.getElementById('scheduleTitle');
+    const weeksSelect = document.getElementById('scheduleTotalWeeks');
+    const startDateInput = document.getElementById('scheduleStartDate');
+    const passwordInput = document.getElementById('schedulePassword');
+    
+    if (titleInput) titleInput.value = schedule.title || '';
+    if (weeksSelect) weeksSelect.value = schedule.totalWeeks || 12;
+    if (startDateInput) startDateInput.value = schedule.startDate || '';
+    if (passwordInput) passwordInput.value = schedule.password || '';
+    
+    // 요일 체크박스 설정
+    const weekdayCheckboxes = document.querySelectorAll('input[name="scheduleWeekdays"]');
+    weekdayCheckboxes.forEach(cb => {
+      // weeklyFrequency를 기반으로 요일 추정 (정확하지 않으므로 기본값 사용)
+      // 실제로는 selectedDaysOfWeek을 저장해야 하지만, 현재는 weeklyFrequency만 저장됨
+      // 일단 기본값(월, 화, 수)으로 설정
+      cb.checked = [1, 2, 3].includes(parseInt(cb.value));
+    });
+    
+    // 생성 버튼을 수정 버튼으로 변경
+    const createBtn = document.querySelector('#scheduleCreateScreen .btn-success[onclick*="createTrainingSchedule"]');
+    if (createBtn) {
+      createBtn.innerHTML = '<img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 수정하기';
+      createBtn.setAttribute('onclick', 'updateTrainingSchedule()');
+    }
+    
+  } catch (error) {
+    console.error('Error loading schedule for edit:', error);
+    showToast('스케줄 정보를 불러오는 중 오류가 발생했습니다', 'error');
+  }
+}
+
+/**
+ * 훈련 스케줄 수정
+ */
+async function updateTrainingSchedule() {
+  const scheduleId = window.currentEditingScheduleId;
+  if (!scheduleId) {
+    showToast('수정할 스케줄이 선택되지 않았습니다', 'error');
+    return;
+  }
+  
+  const userId = window.currentUser?.id || '';
+  if (!userId) {
+    showToast('사용자를 먼저 선택해주세요', 'error');
+    return;
+  }
+  
+  const title = document.getElementById('scheduleTitle')?.value?.trim();
+  const totalWeeks = parseInt(document.getElementById('scheduleTotalWeeks')?.value) || 12;
+  const startDate = document.getElementById('scheduleStartDate')?.value;
+  const password = document.getElementById('schedulePassword')?.value?.trim() || '';
+  
+  // 선택된 요일 가져오기
+  const weekdayCheckboxes = document.querySelectorAll('input[name="scheduleWeekdays"]:checked');
+  const selectedDaysOfWeek = Array.from(weekdayCheckboxes).map(cb => parseInt(cb.value));
+  
+  if (!title) {
+    showToast('스케줄 훈련명을 입력해주세요', 'error');
+    return;
+  }
+  
+  if (!startDate) {
+    showToast('시작일을 선택해주세요', 'error');
+    return;
+  }
+  
+  if (selectedDaysOfWeek.length === 0) {
+    showToast('최소 1개 이상의 훈련 요일을 선택해주세요', 'error');
+    return;
+  }
+  
+  // 수정 버튼 찾기 및 진행 표시
+  const updateBtn = document.querySelector('#scheduleCreateScreen .btn-success[onclick*="updateTrainingSchedule"]');
+  const originalBtnText = updateBtn ? updateBtn.innerHTML : '';
+  
+  if (updateBtn) {
+    updateBtn.innerHTML = '수정 중...';
+    updateBtn.disabled = true;
+  }
+  
+  try {
+    const params = new URLSearchParams({
+      action: 'updateTrainingSchedule',
+      id: scheduleId,
+      title: title,
+      totalWeeks: totalWeeks,
+      startDate: startDate,
+      selectedDaysOfWeek: selectedDaysOfWeek.join(','),
+      password: password
+    });
+    
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: params.toString()
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      showToast('스케줄이 수정되었습니다', 'success');
+      
+      // 수정 모드 해제
+      window.currentEditingScheduleId = null;
+      
+      // 헤더 텍스트 원복
+      const header = document.querySelector('#scheduleCreateScreen .header h1');
+      const subtitle = document.querySelector('#scheduleCreateScreen .header .subtitle');
+      if (header) header.textContent = '✏️ 훈련 스케줄 작성';
+      if (subtitle) subtitle.textContent = '새로운 훈련 계획을 만들어보세요';
+      
+      // 생성 버튼 원복
+      if (updateBtn) {
+        updateBtn.innerHTML = '<img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 생성하기';
+        updateBtn.setAttribute('onclick', 'createTrainingSchedule()');
+        updateBtn.disabled = false;
+      }
+      
+      // 폼 초기화
+      document.getElementById('scheduleTitle').value = '';
+      document.getElementById('scheduleTotalWeeks').value = 12;
+      document.getElementById('scheduleStartDate').value = '';
+      document.getElementById('schedulePassword').value = '';
+      initializeWeekdayCheckboxes();
+      
+      // 목록 화면으로 이동 및 새로고침
+      showScheduleScreen('scheduleListScreen');
+      setTimeout(() => {
+        if (typeof window.loadTrainingSchedules === 'function') {
+          window.loadTrainingSchedules();
+        }
+      }, 100);
+      
+    } else {
+      showToast(result.error || '스케줄 수정에 실패했습니다', 'error');
+      if (updateBtn) {
+        updateBtn.innerHTML = originalBtnText;
+        updateBtn.disabled = false;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    showToast('스케줄 수정 중 오류가 발생했습니다', 'error');
+    if (updateBtn) {
+      updateBtn.innerHTML = originalBtnText;
+      updateBtn.disabled = false;
+    }
+  }
+}
 
 /**
  * 훈련 스케줄 생성 (진행 애니메이션 포함)
@@ -1712,9 +1902,37 @@ function showToast(message, type = 'info') {
 function showScheduleScreen(screenId) {
   // 스케줄 생성 화면이 열릴 때 체크박스 초기화
   if (screenId === 'scheduleCreateScreen') {
+    // 수정 모드가 아닌 경우에만 초기화 (새로 만들기)
+    if (!window.currentEditingScheduleId) {
+      // 헤더 텍스트 원복
+      const header = document.querySelector('#scheduleCreateScreen .header h1');
+      const subtitle = document.querySelector('#scheduleCreateScreen .header .subtitle');
+      if (header) header.textContent = '✏️ 훈련 스케줄 작성';
+      if (subtitle) subtitle.textContent = '새로운 훈련 계획을 만들어보세요';
+      
+      // 생성 버튼 원복
+      const createBtn = document.querySelector('#scheduleCreateScreen .btn-success');
+      if (createBtn) {
+        createBtn.innerHTML = '<img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 생성하기';
+        createBtn.setAttribute('onclick', 'createTrainingSchedule()');
+      }
+      
+      // 폼 초기화
+      const titleInput = document.getElementById('scheduleTitle');
+      const weeksSelect = document.getElementById('scheduleTotalWeeks');
+      const startDateInput = document.getElementById('scheduleStartDate');
+      const passwordInput = document.getElementById('schedulePassword');
+      if (titleInput) titleInput.value = '';
+      if (weeksSelect) weeksSelect.value = 12;
+      if (startDateInput) startDateInput.value = '';
+      if (passwordInput) passwordInput.value = '';
+    }
+    
     // DOM이 완전히 로드된 후 체크박스 초기화
     setTimeout(() => {
-      initializeWeekdayCheckboxes();
+      if (!window.currentEditingScheduleId) {
+        initializeWeekdayCheckboxes();
+      }
     }, 100);
   }
   if (typeof showScreen === 'function') {
@@ -1859,6 +2077,8 @@ async function showPasswordModal(scheduleTitle) {
     window.updateDayNote = updateDayNote;
     window.updateDayDate = updateDayDate;
     window.showPasswordModal = showPasswordModal;
+    window.editTrainingSchedule = editTrainingSchedule;
+    window.updateTrainingSchedule = updateTrainingSchedule;
     
     // showScreen이 없으면 scheduleManager의 것을 사용
     if (typeof window.showScreen === 'undefined') {
