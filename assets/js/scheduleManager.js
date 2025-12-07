@@ -276,7 +276,8 @@ async function editTrainingSchedule(scheduleId, event) {
   
   try {
     // 스케줄 데이터 가져오기
-    const response = await fetch(`${SCRIPT_URL}?action=getTrainingSchedule&id=${scheduleId}`);
+    const url = `${window.GAS_URL}?action=getTrainingSchedule&id=${scheduleId}`;
+    const response = await fetch(url);
     const result = await response.json();
     
     if (!result.success || !result.item) {
@@ -391,7 +392,7 @@ async function updateTrainingSchedule() {
       password: password
     });
     
-    const response = await fetch(SCRIPT_URL, {
+    const response = await fetch(window.GAS_URL, {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: params.toString()
