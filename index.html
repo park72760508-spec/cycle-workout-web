@@ -800,14 +800,14 @@
   <!-- 일별 워크아웃 지정 화면 -->
   <div id="scheduleDaysScreen" class="screen">
     <div class="header">
-      <h1>📝 일별 워크아웃 지정</h1>
+      <h1><img src="assets/img/selection.png" alt="일별 워크아웃 지정" style="width: 1em; height: 1em; vertical-align: middle; margin-right: 8px;" /> 일별 워크아웃 지정</h1>
       <p class="subtitle" id="scheduleDaysSubtitle">각 훈련일에 워크아웃을 지정하세요</p>
     </div>
     
     <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
-      <button class="btn btn-secondary btn-refresh" onclick="loadScheduleDays()"><img src="assets/img/business.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
-      <button class="btn btn-success btn-with-icon" onclick="saveScheduleDays()"><img src="assets/img/business.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
-      <button class="btn btn-default-style" onclick="showScreen('scheduleListScreen')">← 목록으로</button>
+      <button class="btn btn-secondary btn-refresh" onclick="loadScheduleDays()"><img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
+      <button class="btn btn-success btn-with-icon" onclick="saveScheduleDays()"><img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
+      <button class="btn btn-default-style btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/left-arrow.png" alt="목록으로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 목록으로</button>
       <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
         <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary btn-default-style" style="padding: 6px 12px; text-decoration: none; display: inline-block;">
           📥 샘플파일 다운로드
@@ -816,8 +816,8 @@
         <button type="button" class="btn btn-secondary btn-default-style" onclick="document.getElementById('excelFileInput').click()" style="padding: 6px 12px;">
           📁 파일 선택
         </button>
-        <button type="button" class="btn btn-primary btn-default-style" onclick="applyExcelWorkout()" style="padding: 6px 12px;">
-          적용
+        <button type="button" class="btn btn-primary btn-default-style btn-with-icon" onclick="applyExcelWorkout()" style="padding: 6px 12px;">
+          <img src="assets/img/execution.png" alt="적용" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 적용
         </button>
       </div>
     </div>
