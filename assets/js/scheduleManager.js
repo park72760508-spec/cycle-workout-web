@@ -198,7 +198,7 @@ function renderScheduleList(schedules) {
     const progress = schedule.progress || 0;
     // 녹색/민트 톤으로 진행률 색상 조정
     const progressColor = progress >= 80 ? '#10b981' : progress >= 50 ? '#34d399' : '#6ee7b7';
-    const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '<img src="assets/img/business.png" alt="캘린더" style="width: 24px; height: 24px;" />';
+    const statusIcon = progress === 100 ? '🏆' : progress >= 50 ? '🔥' : '<img src="assets/img/planning.png" alt="캘린더" style="width: 48px; height: 48px;" />';
     const animationDelay = index * 0.1; // 각 카드마다 순차적 애니메이션
     
     // 삭제 권한 확인 (생성자만 삭제 가능)
