@@ -182,9 +182,7 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
 
 window.updateDevicesList = window.updateDevicesList || function () {
   const deviceList = document.getElementById("connectedDevicesList");
-  const summary = document.getElementById("connectedDevicesSummary");
-  const summaryList = document.getElementById("connectedDevicesList"); // const summaryList = document.getElementById("connectedDevicesSummaryList");로 구분 권장
-  if (!deviceList || !summary || !summaryList) return;
+  if (!deviceList) return;
 
   let html = "";
   let count = 0;
@@ -194,7 +192,7 @@ window.updateDevicesList = window.updateDevicesList || function () {
     html += `
       <div class="card device-card connected">
         <div class="device-info">
-          <div class="device-icon">🚴‍♂️</div>
+          <div class="device-icon"><img src="assets/img/trainer_g.png" alt="스마트 트레이너" style="width: 72px; height: 72px; object-fit: contain;" /></div>
           <div class="device-details"><h3>${window.connectedDevices.trainer.name || "Smart Trainer"}</h3>
           <p>Smart Trainer (FTMS)</p></div>
         </div>
@@ -206,7 +204,7 @@ window.updateDevicesList = window.updateDevicesList || function () {
     html += `
       <div class="card device-card connected">
         <div class="device-info">
-          <div class="device-icon">⚡</div>
+          <div class="device-icon"><img src="assets/img/power_g.png" alt="파워미터" style="width: 72px; height: 72px; object-fit: contain;" /></div>
           <div class="device-details"><h3>${window.connectedDevices.powerMeter.name || "Power Meter"}</h3>
           <p>Crank Power (CPS)</p></div>
         </div>
@@ -218,7 +216,7 @@ window.updateDevicesList = window.updateDevicesList || function () {
     html += `
       <div class="card device-card connected">
         <div class="device-info">
-          <div class="device-icon" style="background:#DC3545;">❤️</div>
+          <div class="device-icon"><img src="assets/img/bpm_g.png" alt="심박계" style="width: 72px; height: 72px; object-fit: contain;" /></div>
           <div class="device-details"><h3>${window.connectedDevices.heartRate.name || "Heart Rate"}</h3>
           <p>Heart Rate (HRS)</p></div>
         </div>
@@ -227,12 +225,6 @@ window.updateDevicesList = window.updateDevicesList || function () {
   }
 
   deviceList.innerHTML = html;
-  if (count > 0) {
-    summaryList.innerHTML = html;
-    summary.classList.remove("hidden");
-  } else {
-    summary.classList.add("hidden");
-  }
   
   // 버튼 이미지 업데이트
   updateDeviceButtonImages();
