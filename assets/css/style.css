@@ -186,6 +186,40 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
+/* 나가기 버튼 컨테이너 */
+.connection-exit-container {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.connection-exit-container .btn-exit-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connection-exit-container .btn-exit-inline:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+.connection-exit-container .btn-exit-inline:active {
+  transform: translateY(0);
+}
+
 #connectionScreen .header,
 #connectionScreen .card,
 #connectionScreen .btn {
