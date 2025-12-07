@@ -78,6 +78,23 @@ async function loadTrainingSchedules() {
     return;
   }
   
+  // grade 체크: grade=1 사용자만 "새 스케줄 만들기" 버튼 활성화
+  const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
+  const canCreateSchedule = userGrade === '1';
+  
+  // "새 스케줄 만들기" 버튼 제어
+  const createBtn = document.querySelector('#scheduleListScreen .btn-success[onclick*="scheduleCreateScreen"]');
+  if (createBtn) {
+    if (canCreateSchedule) {
+      createBtn.style.display = '';
+      createBtn.disabled = false;
+      createBtn.style.opacity = '1';
+      createBtn.style.cursor = 'pointer';
+    } else {
+      createBtn.style.display = 'none';
+    }
+  }
+  
   const listContainer = document.getElementById('scheduleList');
   if (!listContainer) return;
   
@@ -1901,6 +1918,26 @@ function showToast(message, type = 'info') {
  * 화면 전환 (기존 함수가 있으면 사용, 없으면 새로 정의)
  */
 function showScheduleScreen(screenId) {
+  // 스케줄 목록 화면이 열릴 때 "새 스케줄 만들기" 버튼 제어
+  if (screenId === 'scheduleListScreen') {
+    setTimeout(() => {
+      const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
+      const canCreateSchedule = userGrade === '1';
+      
+      const createBtn = document.querySelector('#scheduleListScreen .btn-success[onclick*="scheduleCreateScreen"]');
+      if (createBtn) {
+        if (canCreateSchedule) {
+          createBtn.style.display = '';
+          createBtn.disabled = false;
+          createBtn.style.opacity = '1';
+          createBtn.style.cursor = 'pointer';
+        } else {
+          createBtn.style.display = 'none';
+        }
+      }
+    }, 100);
+  }
+  
   // 스케줄 생성 화면이 열릴 때 체크박스 초기화
   if (screenId === 'scheduleCreateScreen') {
     // 수정 모드가 아닌 경우에만 초기화 (새로 만들기)
