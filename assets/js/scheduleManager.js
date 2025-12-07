@@ -1842,6 +1842,7 @@ async function showPasswordModal(scheduleTitle) {
   });
 }
 
+  window.loadTrainingSchedules = loadTrainingSchedules;
   window.openScheduleDays = openScheduleDays;
   window.deleteTrainingSchedule = deleteTrainingSchedule;
   window.loadScheduleDays = loadScheduleDays;
