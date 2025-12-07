@@ -213,7 +213,7 @@ function renderScheduleList(schedules) {
           <div class="schedule-title-section">
             <h3 class="schedule-title">
               ${schedule.title || '무제목'}
-              ${schedule.password ? '<img src="assets/img/lock.png" alt="비밀번호 보호" class="schedule-lock-icon" style="width: 32px; height: 32px; margin-left: 6px; vertical-align: middle;" />' : ''}
+              ${schedule.password ? '<img src="assets/img/lock.gif" alt="비밀번호 보호" class="schedule-lock-icon" style="width: 32px; height: 32px; margin-left: 6px; vertical-align: middle;" />' : ''}
             </h3>
             <div class="schedule-meta">
               <span class="schedule-period">${schedule.totalWeeks}주 프로그램</span>
