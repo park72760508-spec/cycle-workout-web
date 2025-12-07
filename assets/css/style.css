@@ -440,6 +440,54 @@ button[aria-disabled="true"] {
 
 /* ========== 2) 프로필 선택 화면 (#profileScreen) ========== */
 
+/* 프로필 선택 화면 나가기 버튼 - 기기연결 화면과 동일한 스타일 */
+.profile-exit-container {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.profile-exit-container .btn-exit-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profile-exit-container .btn-exit-inline:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+.profile-exit-container .btn-exit-inline:active {
+  transform: translateY(0);
+}
+
+/* 캘린더 관련 버튼 이미지 스타일 - 기기선택 화면과 동일한 패턴 */
+.btn-icon-image {
+  width: 21px;
+  height: 21px;
+  margin-right: 6px;
+  vertical-align: middle;
+  object-fit: contain;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
 /* 관리자용 추가 필드 가독성 향상 */
 #adminFields .form-row label { font-weight: 600; }
 #adminFields .form-row select,
