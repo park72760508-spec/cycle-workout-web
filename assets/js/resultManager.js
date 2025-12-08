@@ -211,16 +211,48 @@ async function saveTrainingResult(extra = {}) {
          const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
          const duration_min = Math.floor(totalSeconds / 60);
          
-         // TSS 계산 (간단한 공식: 평균파워 * 시간(분) / FTP / 60, 또는 기존 값 사용)
+         // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
          let tss = trainingResult.tss || 0;
-         if (!tss && stats.avgPower > 0 && duration_min > 0) {
-           // 기본 TSS 계산 (FTP 기준, 사용자 FTP가 있으면 사용)
-           const userFtp = window.currentUser?.ftp || 200; // 기본값 200W
-           tss = Math.round((stats.avgPower * duration_min) / (userFtp * 60) * 100) / 100;
+         let np = trainingResult.normalizedPower || 0;
+         
+         // trainingMetrics에서 계산된 값이 있으면 사용 (가장 정확)
+         if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+           const elapsedSec = window.trainingMetrics.elapsedSec;
+           const np4sum = window.trainingMetrics.np4sum || 0;
+           const count = window.trainingMetrics.count || 1;
+           
+           if (count > 0 && np4sum > 0) {
+             // Normalized Power 계산
+             np = Math.pow(np4sum / count, 0.25);
+             
+             // Intensity Factor 계산
+             const userFtp = window.currentUser?.ftp || 200;
+             const IF = userFtp > 0 ? (np / userFtp) : 0;
+             
+             // TSS 계산: (시간(시간) * IF^2 * 100)
+             tss = (elapsedSec / 3600) * (IF * IF) * 100;
+           }
          }
          
-         // Normalized Power 계산 (간단한 근사치: 평균 파워 * 1.05 또는 기존 값 사용)
-         const np = trainingResult.normalizedPower || Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
+         // trainingMetrics가 없거나 값이 0인 경우 대체 계산
+         if (!tss || tss === 0) {
+           const userFtp = window.currentUser?.ftp || 200;
+           
+           // NP가 없으면 평균 파워 * 1.05로 근사 (일반적인 근사치)
+           if (!np || np === 0) {
+             np = Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
+           }
+           
+           // IF 계산
+           const IF = userFtp > 0 ? (np / userFtp) : 0;
+           
+           // TSS 계산: (시간(시간) * IF^2 * 100)
+           tss = (totalSeconds / 3600) * (IF * IF) * 100;
+         }
+         
+         // 값 반올림
+         tss = Math.round(tss * 100) / 100;
+         np = Math.round(np * 10) / 10;
          
          // 현재 사용자 ID 가져오기
          const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;

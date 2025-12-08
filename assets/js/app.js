@@ -1049,6 +1049,9 @@ const trainingMetrics = {
   count: 0            // 표본 개수(초 단위)
 };
 
+// 전역으로 노출 (resultManager.js에서 TSS 계산 시 사용)
+window.trainingMetrics = trainingMetrics;
+
 // 훈련화면의 건너뛰기에서 활용 >>> 새 세그먼트의 누적 시작 시각(초) 구하기
 function getCumulativeStartSec(index) {
   const w = window.currentWorkout;
