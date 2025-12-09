@@ -1118,8 +1118,8 @@ button[aria-disabled="true"] {
   gap: 8px;
   margin-top: 20px;
   padding: 12px;
-  background: rgba(248, 249, 250, 0.5);
-  backdrop-filter: blur(8px);
+  background: rgba(248, 249, 250, 0.4);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 10px;
   overflow-x: auto;
@@ -1138,29 +1138,55 @@ button[aria-disabled="true"] {
   flex-direction:column; 
   align-items:center; 
   justify-content:center;
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.segment-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+.segment-item > * {
+  position: relative;
+  z-index: 1;
 }
 .segment-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 .segment-item h4{ font-size:13px; margin:0 0 8px; font-weight:500; }
 .segment-item .ftp-percent{ font-size:24px; font-weight:700; margin:4px 0; line-height:1; }
 .segment-item .duration{ font-size:12px; opacity:.9; margin-top:4px; }
 .segment-item.warmup{ 
-  background: rgba(76, 175, 80, 0.75);
-  border-color: rgba(76, 175, 80, 0.4);
+  background: rgba(76, 175, 80, 0.65);
+  border-color: rgba(76, 175, 80, 0.35);
 }
 .segment-item.interval{ 
-  background: rgba(33, 150, 243, 0.75);
-  border-color: rgba(33, 150, 243, 0.4);
+  background: rgba(33, 150, 243, 0.65);
+  border-color: rgba(33, 150, 243, 0.35);
 }
 .segment-item.rest{ 
-  background: rgba(158, 158, 158, 0.75);
-  border-color: rgba(158, 158, 158, 0.4);
+  background: rgba(158, 158, 158, 0.65);
+  border-color: rgba(158, 158, 158, 0.35);
+}
+.segment-item.cooldown {
+  background: rgba(156, 39, 176, 0.65);
+  border-color: rgba(156, 39, 176, 0.35);
+}
+.segment-item.sweetspot {
+  background: rgba(255, 152, 0, 0.65);
+  border-color: rgba(255, 152, 0, 0.35);
 }
 
 /* 훈련 준비 화면 전체 컨테이너 */
@@ -1184,18 +1210,17 @@ button[aria-disabled="true"] {
 
 .training-modes {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
   margin-bottom: 20px;
 }
 
 /* 개인훈련/그룹훈련 블럭 - 반투명, 얇은 실선 테두리, 컴팩트 */
 .training-mode-card {
-  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   text-align: center;
   transition: all 0.3s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -1207,36 +1232,72 @@ button[aria-disabled="true"] {
   border-color: rgba(0, 0, 0, 0.15);
 }
 
+/* 개인훈련 블럭 - 민트색톤 */
+.training-mode-card.individual-training {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.training-mode-card.individual-training:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+/* 그룹훈련 블럭 - 주황색톤 */
+.training-mode-card.group-training {
+  background: rgba(251, 146, 60, 0.15);
+  border-color: rgba(251, 146, 60, 0.25);
+}
+
+.training-mode-card.group-training:hover {
+  background: rgba(251, 146, 60, 0.2);
+  border-color: rgba(251, 146, 60, 0.35);
+}
+
 .training-mode-card .mode-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.training-mode-card .mode-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 .training-mode-card h4 {
-  font-size: 18px;
-  margin-bottom: 8px;
+  font-size: 16px;
+  margin-bottom: 6px;
   color: #1e293b;
+  font-weight: 600;
 }
 
 .training-mode-card p {
-  font-size: 14px;
-  color: #64748b;
-  margin-bottom: 16px;
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 12px;
+  line-height: 1.4;
 }
 
 .training-mode-card .mode-features {
   list-style: none;
   padding: 0;
-  margin: 16px 0;
+  margin: 12px 0;
   text-align: left;
 }
 
 .training-mode-card .mode-features li {
-  padding: 6px 0;
-  font-size: 13px;
+  padding: 4px 0;
+  font-size: 12px;
   color: #475569;
   position: relative;
-  padding-left: 20px;
+  padding-left: 18px;
+  line-height: 1.4;
 }
 
 .training-mode-card .mode-features li::before {
@@ -1245,11 +1306,14 @@ button[aria-disabled="true"] {
   left: 0;
   color: #2e74e8;
   font-weight: bold;
+  font-size: 13px;
 }
 
 .training-mode-card .btn {
-  margin-top: 16px;
+  margin-top: 12px;
   width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
 }
 
 .btn-row.center {
