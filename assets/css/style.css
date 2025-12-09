@@ -1273,8 +1273,14 @@ button[aria-disabled="true"] {
 .training-mode-card h4 {
   font-size: 16px;
   margin-bottom: 6px;
-  color: #1e3a8a;
+  color: #1e3a8a !important;
   font-weight: 600;
+}
+
+/* 개인훈련/그룹훈련 블럭 제목 색상 명시적 지정 */
+.training-mode-card.individual-training h4,
+.training-mode-card.group-training h4 {
+  color: #1e3a8a !important;
 }
 
 .training-mode-card p {
