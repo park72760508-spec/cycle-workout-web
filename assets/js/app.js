@@ -2954,8 +2954,6 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       btnHR.disabled = true;
-      const originalText = btnHR.textContent;
-      btnHR.textContent = "검색 중...";
       
       try {
         await window.connectHeartRate();
@@ -2963,7 +2961,6 @@ document.addEventListener("DOMContentLoaded", () => {
         console.error("HR connection error:", err);
       } finally {
         btnHR.disabled = false;
-        btnHR.textContent = originalText;
       }
     });
   }
