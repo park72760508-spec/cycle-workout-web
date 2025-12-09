@@ -1243,15 +1243,15 @@ button[aria-disabled="true"] {
   border-color: rgba(16, 185, 129, 0.35);
 }
 
-/* 그룹훈련 블럭 - 주황색톤 */
+/* 그룹훈련 블럭 - 주황색톤 반투명 */
 .training-mode-card.group-training {
-  background: rgba(251, 146, 60, 0.15);
-  border-color: rgba(251, 146, 60, 0.25);
+  background: rgba(251, 146, 60, 0.15) !important;
+  border-color: rgba(251, 146, 60, 0.25) !important;
 }
 
 .training-mode-card.group-training:hover {
-  background: rgba(251, 146, 60, 0.2);
-  border-color: rgba(251, 146, 60, 0.35);
+  background: rgba(251, 146, 60, 0.2) !important;
+  border-color: rgba(251, 146, 60, 0.35) !important;
 }
 
 .training-mode-card .mode-icon {
