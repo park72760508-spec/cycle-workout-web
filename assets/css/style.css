@@ -1088,9 +1088,11 @@ button[aria-disabled="true"] {
 
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
 .workout-preview {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 12px;
-  padding: 20px;
+  padding: 18px;
   margin-bottom: 20px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   position: relative;
@@ -1099,19 +1101,27 @@ button[aria-disabled="true"] {
 }
 .workout-preview h2{ text-align:center; color:#2e74e8; margin-bottom:20px; font-size:24px; }
 .preview-stats{
-  display:grid; grid-template-columns:repeat(3,1fr); gap:15px; margin-bottom:20px; text-align:center;
+  display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; text-align:center;
 }
-.preview-stats > div{ padding:15px; background:#f8f9fa; border-radius:8px; }
+.preview-stats > div{ 
+  padding:12px; 
+  background: rgba(248, 249, 250, 0.6);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius:8px; 
+}
 .preview-stats strong{ font-size:28px; color:#2e74e8; display:block; margin-bottom:5px; }
 
-/* 세그먼트 프리뷰 영역 개선 */
+/* 세그먼트 프리뷰 영역 개선 - 반투명 스타일 */
 .segment-preview {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   margin-top: 20px;
-  padding: 9px;
-  background: #f8f9fa;
-  border-radius: 8px;
+  padding: 12px;
+  background: rgba(248, 249, 250, 0.5);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
   overflow-x: auto;
   align-items: center;
   margin-bottom: 20px;
@@ -1119,26 +1129,127 @@ button[aria-disabled="true"] {
   z-index: 1;
 }
 .segment-item{
-  padding:15px 20px; border-radius:8px; min-width:120px; text-align:center; color:#fff;
-  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:12px 16px; 
+  border-radius:10px; 
+  min-width:110px; 
+  text-align:center; 
+  color:#fff;
+  display:flex; 
+  flex-direction:column; 
+  align-items:center; 
+  justify-content:center;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
 }
-.segment-item h4{ font-size:14px; margin:0 0 10px; font-weight:500; }
-.segment-item .ftp-percent{ font-size:26px; font-weight:700; margin:5px 0; line-height:1; }
-.segment-item .duration{ font-size:13px; opacity:.9; margin-top:5px; }
-.segment-item.warmup{ background:#4caf50; }
-.segment-item.interval{ background:#2196f3; }
-.segment-item.rest{ background:#9e9e9e; }
+.segment-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+.segment-item h4{ font-size:13px; margin:0 0 8px; font-weight:500; }
+.segment-item .ftp-percent{ font-size:24px; font-weight:700; margin:4px 0; line-height:1; }
+.segment-item .duration{ font-size:12px; opacity:.9; margin-top:4px; }
+.segment-item.warmup{ 
+  background: rgba(76, 175, 80, 0.75);
+  border-color: rgba(76, 175, 80, 0.4);
+}
+.segment-item.interval{ 
+  background: rgba(33, 150, 243, 0.75);
+  border-color: rgba(33, 150, 243, 0.4);
+}
+.segment-item.rest{ 
+  background: rgba(158, 158, 158, 0.75);
+  border-color: rgba(158, 158, 158, 0.4);
+}
 
 /* 훈련 준비 화면 전체 컨테이너 */
 .training-ready {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 12px;
-  padding: 20px;
+  padding: 18px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.05);
   text-align: center;
   position: relative;
   z-index: 1;
   padding-bottom: 100px;
+}
+
+/* 훈련 방식 선택 영역 */
+.training-mode-selection {
+  margin-top: 20px;
+}
+
+.training-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* 개인훈련/그룹훈련 블럭 - 반투명, 얇은 실선 테두리, 컴팩트 */
+.training-mode-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.training-mode-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.training-mode-card .mode-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.training-mode-card h4 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: #1e293b;
+}
+
+.training-mode-card p {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 16px;
+}
+
+.training-mode-card .mode-features {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  text-align: left;
+}
+
+.training-mode-card .mode-features li {
+  padding: 6px 0;
+  font-size: 13px;
+  color: #475569;
+  position: relative;
+  padding-left: 20px;
+}
+
+.training-mode-card .mode-features li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #2e74e8;
+  font-weight: bold;
+}
+
+.training-mode-card .btn {
+  margin-top: 16px;
+  width: 100%;
 }
 
 .btn-row.center {
@@ -1150,7 +1261,9 @@ button[aria-disabled="true"] {
   text-align: center !important;
   position: relative;
   z-index: 100;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   padding: 15px 0;
   border-radius: 8px;
   box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
