@@ -1273,7 +1273,7 @@ button[aria-disabled="true"] {
 .training-mode-card h4 {
   font-size: 16px;
   margin-bottom: 6px;
-  color: #1e293b;
+  color: #1e3a8a;
   font-weight: 600;
 }
 
@@ -1314,6 +1314,20 @@ button[aria-disabled="true"] {
   width: 100%;
   padding: 10px 14px;
   font-size: 14px;
+}
+
+/* 그룹훈련 블럭 내 버튼 - 주황색톤으로 고정 */
+.training-mode-card.group-training .btn-primary.btn-default-style {
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(234, 88, 12, 0.2) 100%) !important;
+  border-color: rgba(251, 146, 60, 0.3) !important;
+  color: #ea580c !important;
+}
+
+.training-mode-card.group-training .btn-primary.btn-default-style:hover {
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.2) 0%, rgba(234, 88, 12, 0.25) 100%) !important;
+  border-color: rgba(251, 146, 60, 0.4) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(251, 146, 60, 0.2);
 }
 
 .btn-row.center {
