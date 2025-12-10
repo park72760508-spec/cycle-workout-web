@@ -1378,6 +1378,7 @@ const segBar = {
   totalSec: 0,     // 전체 운동 시간(초)
   ends: [],        // 각 세그먼트의 누적 종료시각(초)
   sumPower: [],    // 세그먼트별 평균 파워 계산용 합
+  sumCadence: [],  // 세그먼트별 평균 RPM 계산용 합
   samples: [],     // 세그먼트별 표본 수(초)
 };
 
@@ -1429,6 +1430,7 @@ function buildSegmentBar(){
   segBar.totalSec = total;
   segBar.ends = [];
   segBar.sumPower = Array(segs.length).fill(0);
+  segBar.sumCadence = Array(segs.length).fill(0);
   segBar.samples  = Array(segs.length).fill(0);
 
   // 누적 종료시각 계산 (원본 세그먼트 기준)
@@ -1682,16 +1684,49 @@ function updateSegmentBarTick(){
 
 
    
-  // 5) 평균 파워 누적
+  // 5) 평균 파워 및 RPM 누적
   const p = Math.max(0, Number(window.liveData?.power) || 0);
+  const c = Math.max(0, Number(window.liveData?.cadence) || 0);
   if (w.segments[segIndex]) {
     segBar.sumPower[segIndex] = (segBar.sumPower[segIndex] || 0) + p;
+    segBar.sumCadence[segIndex] = (segBar.sumCadence[segIndex] || 0) + c;
     segBar.samples[segIndex] = (segBar.samples[segIndex] || 0) + 1;
 
     const curSamples = segBar.samples[segIndex] || 0;
-    const curAvg = curSamples > 0 ? Math.round(segBar.sumPower[segIndex] / curSamples) : 0;
+    const curAvgPower = curSamples > 0 ? Math.round(segBar.sumPower[segIndex] / curSamples) : 0;
+    const curAvgCadence = curSamples > 0 ? Math.round(segBar.sumCadence[segIndex] / curSamples) : 0;
+    
+    // target_type에 따라 세그먼트 평균 표시 변경
+    const seg = w.segments[segIndex];
+    const targetType = seg?.target_type || 'ftp_pct';
+    
     const elAvg = document.getElementById("avgSegmentPowerValue");
-    if (elAvg) elAvg.textContent = String(curAvg);
+    const elAvgUnit = document.getElementById("avgSegmentPowerUnit");
+    const elAvgRpmSection = document.getElementById("avgSegmentRpmSection");
+    const elAvgRpmValue = document.getElementById("avgSegmentRpmValue");
+    
+    if (targetType === 'cadence_rpm') {
+      // cadence_rpm 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM)
+      if (elAvg) elAvg.textContent = String(curAvgPower);
+      if (elAvgUnit) elAvgUnit.textContent = "W";
+      if (elAvgRpmSection) {
+        elAvgRpmSection.style.display = "inline";
+        if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
+      }
+    } else if (targetType === 'dual') {
+      // dual 타입: 세그먼트 평균 파워 (세그먼트 평균 RPM)
+      if (elAvg) elAvg.textContent = String(curAvgPower);
+      if (elAvgUnit) elAvgUnit.textContent = "W";
+      if (elAvgRpmSection) {
+        elAvgRpmSection.style.display = "inline";
+        if (elAvgRpmValue) elAvgRpmValue.textContent = String(curAvgCadence);
+      }
+    } else {
+      // ftp_pct 타입 (기본): 세그먼트 평균 파워만 표시
+      if (elAvg) elAvg.textContent = String(curAvgPower);
+      if (elAvgUnit) elAvgUnit.textContent = "W";
+      if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
+    }
   }
 }
 
@@ -1778,26 +1813,101 @@ function applySegmentTarget(i) {
     const seg = w?.segments?.[i];
     if (!seg) return;
 
-    // 목표 파워 계산 - 통일된 방식 사용
-    const ftpPercent = getSegmentFtpPercent(seg);
-    const targetW = Math.round(ftp * (ftpPercent / 100));
+    const targetType = seg.target_type || 'ftp_pct';
+    const targetValue = seg.target_value;
     
     window.liveData = window.liveData || {};
-    window.liveData.targetPower = targetW;
-
-    // DOM 즉시 반영
-    safeSetText("targetPowerValue", String(targetW || 0));
+    
+    // target_type에 따라 목표 값 설정 및 표시
+    const targetLabelEl = safeGetElement("targetLabel");
+    const targetValueEl = safeGetElement("targetPowerValue");
+    const targetUnitEl = safeGetElement("targetUnit");
+    const targetRpmSectionEl = safeGetElement("targetRpmSection");
+    const targetRpmValueEl = safeGetElement("targetRpmValue");
+    
+    if (targetType === 'cadence_rpm') {
+      // cadence_rpm 타입: target_value는 RPM 값
+      const targetRpm = Number(targetValue) || 0;
+      
+      if (targetLabelEl) targetLabelEl.textContent = "목표 RPM";
+      if (targetValueEl) targetValueEl.textContent = String(targetRpm);
+      if (targetUnitEl) targetUnitEl.textContent = "rpm";
+      if (targetRpmSectionEl) targetRpmSectionEl.style.display = "none";
+      
+      // 목표 파워는 계산하지 않음 (RPM만 표시)
+      window.liveData.targetPower = 0;
+      window.liveData.targetRpm = targetRpm;
+      
+    } else if (targetType === 'dual') {
+      // dual 타입: target_value는 "105,90" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+      let ftpPercent = 100;
+      let targetRpm = 0;
+      
+      if (Array.isArray(targetValue)) {
+        // 배열 형식: [105, 90]
+        ftpPercent = Number(targetValue[0]) || 100;
+        targetRpm = Number(targetValue[1]) || 0;
+      } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+        // 문자열 형식: "105,90" (앞값: ftp%, 뒤값: rpm)
+        const parts = targetValue.split(',').map(s => s.trim());
+        ftpPercent = Number(parts[0]) || 100;
+        targetRpm = Number(parts[1]) || 0;
+      } else {
+        // 기본값: target_value를 ftp%로 사용
+        ftpPercent = Number(targetValue) || 100;
+      }
+      
+      const targetW = Math.round(ftp * (ftpPercent / 100));
+      
+      if (targetLabelEl) targetLabelEl.textContent = "목표파워";
+      if (targetValueEl) targetValueEl.textContent = String(targetW);
+      if (targetUnitEl) targetUnitEl.textContent = "W";
+      
+      // RPM 표시
+      if (targetRpmSectionEl) {
+        targetRpmSectionEl.style.display = "inline";
+        if (targetRpmValueEl) targetRpmValueEl.textContent = String(targetRpm);
+      }
+      
+      window.liveData.targetPower = targetW;
+      window.liveData.targetRpm = targetRpm;
+      
+    } else {
+      // ftp_pct 타입 (기본): 기존 로직 유지
+      const ftpPercent = getSegmentFtpPercent(seg);
+      const targetW = Math.round(ftp * (ftpPercent / 100));
+      
+      if (targetLabelEl) targetLabelEl.textContent = "목표 파워";
+      if (targetValueEl) targetValueEl.textContent = String(targetW || 0);
+      if (targetUnitEl) targetUnitEl.textContent = "W";
+      if (targetRpmSectionEl) targetRpmSectionEl.style.display = "none";
+      
+      window.liveData.targetPower = targetW;
+      window.liveData.targetRpm = 0;
+    }
     
     const nameEl = safeGetElement("currentSegmentName");
     if (nameEl) {
       const segmentName = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
-      nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+      if (targetType === 'cadence_rpm') {
+        nameEl.textContent = `${segmentName} - RPM ${window.liveData.targetRpm || 0}`;
+      } else if (targetType === 'dual') {
+        const ftpPercent = getSegmentFtpPercent(seg);
+        nameEl.textContent = `${segmentName} - FTP ${ftpPercent}% / RPM ${window.liveData.targetRpm || 0}`;
+      } else {
+        const ftpPercent = getSegmentFtpPercent(seg);
+        nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+      }
      // ⬇⬇⬇ 새 세그먼트 진입 시 진행바 0%로 리셋
      setNameProgress(0);       
     }
     
     safeSetText("segmentProgress", "0");
     safeSetText("avgSegmentPowerValue", "—");
+    
+    // 세그먼트 평균 RPM 초기화
+    const avgSegmentRpmValueEl = safeGetElement("avgSegmentRpmValue");
+    if (avgSegmentRpmValueEl) avgSegmentRpmValueEl.textContent = "—";
 
     // 첫 프레임 즉시 반영
     if (typeof window.updateTrainingDisplay === "function") {
@@ -2292,7 +2402,9 @@ function updateMascotProgress(percent) {
 window.updateTrainingDisplay = function () {
   // *** 중요: currentPower 변수를 맨 앞에서 정의 ***
   const currentPower = window.liveData?.power || 0;
+  const currentCadence = Number(window.liveData?.cadence || 0);
   const target = window.liveData?.targetPower || 200;
+  const targetRpm = window.liveData?.targetRpm || 0;
   const hr = window.liveData?.heartRate || 0;
 
    // ▼▼ 추가: 실시간 데이터 누적
@@ -2304,35 +2416,103 @@ window.updateTrainingDisplay = function () {
      // ✅ 결과 저장용(세션 스트림)
      window.trainingResults?.appendStreamSample?.('power', currentPower);
      window.trainingResults?.appendStreamSample?.('hr', hr);
-     const cad = Number(window.liveData?.cadence || 0);
-     if (!Number.isNaN(cad)) {
-       window.trainingResults?.appendStreamSample?.('cadence', cad);
+     if (!Number.isNaN(currentCadence)) {
+       window.trainingResults?.appendStreamSample?.('cadence', currentCadence);
      }
    } catch (_) {}
 
+  // 현재 세그먼트의 target_type 확인
+  const segIndex = window.trainingState?.segIndex || 0;
+  const seg = window.currentWorkout?.segments?.[segIndex];
+  const targetType = seg?.target_type || 'ftp_pct';
    
   const p = safeGetElement("currentPowerValue");
   const h = safeGetElement("heartRateValue");
   const bar = safeGetElement("powerProgressBar");
   const t = safeGetElement("targetPowerValue");
+  const currentPowerUnitEl = safeGetElement("currentPowerUnit");
+  const currentRpmSectionEl = safeGetElement("currentRpmSection");
+  const currentRpmValueEl = safeGetElement("currentRpmValue");
 
-  if (p) {
-    p.textContent = Math.round(currentPower);
-    p.classList.remove("power-low","power-mid","power-high","power-max");
-    const ratio = currentPower / target;
-    if (ratio < 0.8) p.classList.add("power-low");
-    else if (ratio < 1.0) p.classList.add("power-mid");
-    else if (ratio < 1.2) p.classList.add("power-high");
-    else p.classList.add("power-max");
-  }
-
-  if (bar) {
-    const pct = target > 0 ? Math.min(100, (currentPower / target) * 100) : 0;
-    bar.style.width = pct + "%";
-    if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
-    else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
-    else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
-    else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+  // target_type에 따라 현재 파워/RPM 표시 변경
+  if (targetType === 'cadence_rpm') {
+    // cadence_rpm 타입: 현재 W (현재 RPM) 형식
+    if (p) {
+      p.textContent = Math.round(currentPower);
+      p.classList.remove("power-low","power-mid","power-high","power-max");
+      // RPM 기준으로 색상 변경
+      const rpmRatio = targetRpm > 0 ? (currentCadence / targetRpm) : 0;
+      if (rpmRatio < 0.8) p.classList.add("power-low");
+      else if (rpmRatio < 1.0) p.classList.add("power-mid");
+      else if (rpmRatio < 1.2) p.classList.add("power-high");
+      else p.classList.add("power-max");
+    }
+    if (currentPowerUnitEl) currentPowerUnitEl.textContent = "W";
+    if (currentRpmSectionEl) {
+      currentRpmSectionEl.style.display = "inline";
+      if (currentRpmValueEl) currentRpmValueEl.textContent = String(Math.round(currentCadence));
+    }
+    
+    // 프로그레스 바는 RPM 기준
+    if (bar && targetRpm > 0) {
+      const pct = Math.min(100, (currentCadence / targetRpm) * 100);
+      bar.style.width = pct + "%";
+      if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
+      else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+      else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+    }
+    
+  } else if (targetType === 'dual') {
+    // dual 타입: 현재 W (현재 RPM) 형식
+    if (p) {
+      p.textContent = Math.round(currentPower);
+      p.classList.remove("power-low","power-mid","power-high","power-max");
+      const ratio = target > 0 ? (currentPower / target) : 0;
+      if (ratio < 0.8) p.classList.add("power-low");
+      else if (ratio < 1.0) p.classList.add("power-mid");
+      else if (ratio < 1.2) p.classList.add("power-high");
+      else p.classList.add("power-max");
+    }
+    if (currentPowerUnitEl) currentPowerUnitEl.textContent = "W";
+    if (currentRpmSectionEl) {
+      currentRpmSectionEl.style.display = "inline";
+      if (currentRpmValueEl) currentRpmValueEl.textContent = String(Math.round(currentCadence));
+    }
+    
+    // 프로그레스 바는 파워 기준
+    if (bar) {
+      const pct = target > 0 ? Math.min(100, (currentPower / target) * 100) : 0;
+      bar.style.width = pct + "%";
+      if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
+      else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+      else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+    }
+    
+  } else {
+    // ftp_pct 타입 (기본): 기존 로직 유지
+    if (p) {
+      p.textContent = Math.round(currentPower);
+      p.classList.remove("power-low","power-mid","power-high","power-max");
+      const ratio = target > 0 ? (currentPower / target) : 0;
+      if (ratio < 0.8) p.classList.add("power-low");
+      else if (ratio < 1.0) p.classList.add("power-mid");
+      else if (ratio < 1.2) p.classList.add("power-high");
+      else p.classList.add("power-max");
+    }
+    if (currentPowerUnitEl) currentPowerUnitEl.textContent = "WATTS";
+    if (currentRpmSectionEl) currentRpmSectionEl.style.display = "none";
+    
+    // 프로그레스 바는 파워 기준
+    if (bar) {
+      const pct = target > 0 ? Math.min(100, (currentPower / target) * 100) : 0;
+      bar.style.width = pct + "%";
+      if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
+      else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
+      else if (pct < 120) bar.style.background = "linear-gradient(90deg,#ffb400,#ff9000)";
+      else bar.style.background = "linear-gradient(90deg,#ff4c4c,#ff1a1a)";
+    }
   }
 
   if (t) t.textContent = String(Math.round(target));
