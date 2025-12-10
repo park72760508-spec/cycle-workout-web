@@ -1142,7 +1142,7 @@
       <div class="enhanced-metric-item">
         <div class="enhanced-metric-label">칼로리</div>
         <div class="enhanced-metric-value" id="kcalValue">0</div>
-        <div class="enhanced-metric-unit">kcal</div>
+        <div class="enhanced-metric-unit">cal</div>
       </div>
       <!-- 파워 스파크라인 -->
       <div class="chart-card">
@@ -1167,21 +1167,36 @@
       <!-- 목표 파워와 세그먼트 평균 파워 같은 라인 -->
       <div class="enhanced-power-targets-row">
         <div class="enhanced-target-power-section">
-          <div class="enhanced-target-label">목표 파워</div>
+          <div class="enhanced-target-label" id="targetLabel">목표 파워</div>
           <div class="enhanced-target-value" id="targetPowerValue">250</div>
-          <div class="enhanced-target-unit">W</div>
+          <div class="enhanced-target-unit" id="targetUnit">W</div>
+          <!-- RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
+          <div class="enhanced-target-rpm" id="targetRpmSection" style="display: none;">
+            <span class="enhanced-target-rpm-value" id="targetRpmValue">90</span>
+            <span class="enhanced-target-rpm-unit">rpm</span>
+          </div>
         </div>
         <div class="enhanced-segment-avg-power">
           <span class="enhanced-avg-label">세그먼트 평균</span>
           <span class="enhanced-avg-value" id="avgSegmentPowerValue">242</span>
-          <span class="enhanced-avg-unit">W</span>
+          <span class="enhanced-avg-unit" id="avgSegmentPowerUnit">W</span>
+          <!-- 세그먼트 평균 RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
+          <span class="enhanced-avg-rpm" id="avgSegmentRpmSection" style="display: none;">
+            (<span class="enhanced-avg-rpm-value" id="avgSegmentRpmValue">88</span>
+            <span class="enhanced-avg-rpm-unit">rpm</span>)
+          </span>
         </div>
       </div>
 
       <!-- 현재 파워 (가장 크게) -->
       <div class="enhanced-current-power-section">
         <div class="enhanced-current-power-value" id="currentPowerValue">245</div>
-        <div class="enhanced-current-power-unit">WATTS</div>
+        <div class="enhanced-current-power-unit" id="currentPowerUnit">WATTS</div>
+        <!-- 현재 RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
+        <div class="enhanced-current-rpm" id="currentRpmSection" style="display: none;">
+          (<span class="enhanced-current-rpm-value" id="currentRpmValue">85</span>
+          <span class="enhanced-current-rpm-unit">rpm</span>)
+        </div>
       </div>
 
       <!-- 달성도 프로그레스 바 -->
