@@ -1878,7 +1878,7 @@ function applySegmentTarget(i) {
       let targetRpm = 0;
       
       // target_value를 문자열로 변환하여 처리
-      const targetValueStr = String(targetValue || '');
+      const targetValueStr = String(targetValue || '').trim();
       
       if (Array.isArray(targetValue)) {
         // 배열 형식: [100, 120]
@@ -1886,9 +1886,11 @@ function applySegmentTarget(i) {
         targetRpm = Number(targetValue[1]) || 0;
       } else if (targetValueStr.includes(',')) {
         // 문자열 형식: "100,120" (앞값: ftp%, 뒤값: rpm)
-        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s);
+        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
         if (parts.length >= 2) {
+          // 첫 번째 값: FTP% (100)
           ftpPercent = Number(parts[0]) || 100;
+          // 두 번째 값: RPM (120)
           targetRpm = Number(parts[1]) || 0;
         } else if (parts.length === 1) {
           // 쉼표는 있지만 값이 하나만 있는 경우
@@ -1905,23 +1907,56 @@ function applySegmentTarget(i) {
       parsedFtpPercent = ftpPercent;
       parsedTargetRpm = targetRpm;
       
-      // 디버깅 로그
-      console.log('[dual] target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
-      
-      const targetW = Math.round(ftp * (ftpPercent / 100));
-      
-      if (targetLabelEl) targetLabelEl.textContent = "목표파워";
-      if (targetValueEl) targetValueEl.textContent = String(targetW);
-      if (targetUnitEl) targetUnitEl.textContent = "W";
-      
-      // RPM 표시
-      if (targetRpmSectionEl) {
-        targetRpmSectionEl.style.display = "inline";
-        if (targetRpmValueEl) targetRpmValueEl.textContent = String(targetRpm);
+      // 값 검증
+      if (isNaN(ftpPercent) || ftpPercent <= 0) {
+        console.warn('[dual] 유효하지 않은 FTP%:', ftpPercent, '기본값 100 사용');
+        ftpPercent = 100;
+      }
+      if (isNaN(targetRpm) || targetRpm < 0) {
+        console.warn('[dual] 유효하지 않은 RPM:', targetRpm, '기본값 0 사용');
+        targetRpm = 0;
       }
       
+      // 파싱된 값 저장 (세그먼트 이름 표시에 사용)
+      parsedFtpPercent = ftpPercent;
+      parsedTargetRpm = targetRpm;
+      
+      // 디버깅 로그
+      console.log('[dual] 파싱 결과 - target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
+      
+      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환
+      const targetW = Math.round(ftp * (ftpPercent / 100));
+      
+      // 목표 파워 표시: 첫 번째 값(ftp%)을 파워(W)로 변환하여 표시
+      if (targetLabelEl) {
+        targetLabelEl.textContent = "목표파워";
+      }
+      if (targetValueEl) {
+        targetValueEl.textContent = String(targetW);
+        console.log('[dual] 목표 파워 표시:', targetW, 'W (FTP%:', ftpPercent, '→', ftp, '*', ftpPercent, '/ 100)');
+      }
+      if (targetUnitEl) {
+        targetUnitEl.textContent = "W";
+      }
+      
+      // RPM 표시: 두 번째 값(rpm)을 아랫줄에 표시
+      if (targetRpmSectionEl) {
+        targetRpmSectionEl.style.display = "block"; // block으로 설정하여 아랫줄에 표시
+        if (targetRpmValueEl) {
+          targetRpmValueEl.textContent = String(targetRpm);
+          console.log('[dual] 목표 RPM 표시:', targetRpm, 'rpm');
+        } else {
+          console.error('[dual] targetRpmValueEl을 찾을 수 없습니다');
+        }
+      } else {
+        console.error('[dual] targetRpmSectionEl을 찾을 수 없습니다');
+      }
+      
+      // liveData에 저장
       window.liveData.targetPower = targetW;
       window.liveData.targetRpm = targetRpm;
+      
+      console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', targetRpm, 'rpm');
       
     } else {
       // ftp_pct 타입 (기본): 기존 로직 유지
