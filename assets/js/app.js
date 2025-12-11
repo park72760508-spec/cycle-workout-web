@@ -2401,10 +2401,11 @@ function updateMascotProgress(percent) {
 // *** 핵심 수정: updateTrainingDisplay 함수 - currentPower 변수 초기화 문제 해결 ***
 window.updateTrainingDisplay = function () {
   // *** 중요: currentPower 변수를 맨 앞에서 정의 ***
-  const currentPower = window.liveData?.power || 0;
-  const currentCadence = Number(window.liveData?.cadence || 0);
-  const target = window.liveData?.targetPower || 200;
-  const targetRpm = window.liveData?.targetRpm || 0;
+  const currentPower = Number(window.liveData?.power ?? 0);
+  const currentCadence = Number(window.liveData?.cadence ?? 0);
+  // targetPower가 0일 수 있으므로 ?? 로 기본값을 설정
+  const targetPower = Number(window.liveData?.targetPower ?? 0);
+  const targetRpm = Number(window.liveData?.targetRpm ?? 0);
   const hr = window.liveData?.heartRate || 0;
 
    // ▼▼ 추가: 실시간 데이터 누적
@@ -2468,7 +2469,7 @@ window.updateTrainingDisplay = function () {
     if (p) {
       p.textContent = Math.round(currentPower);
       p.classList.remove("power-low","power-mid","power-high","power-max");
-      const ratio = target > 0 ? (currentPower / target) : 0;
+      const ratio = targetPower > 0 ? (currentPower / targetPower) : 0;
       if (ratio < 0.8) p.classList.add("power-low");
       else if (ratio < 1.0) p.classList.add("power-mid");
       else if (ratio < 1.2) p.classList.add("power-high");
@@ -2482,7 +2483,7 @@ window.updateTrainingDisplay = function () {
     
     // 프로그레스 바는 파워 기준
     if (bar) {
-      const pct = target > 0 ? Math.min(100, (currentPower / target) * 100) : 0;
+      const pct = targetPower > 0 ? Math.min(100, (currentPower / targetPower) * 100) : 0;
       bar.style.width = pct + "%";
       if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
       else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
@@ -2495,7 +2496,7 @@ window.updateTrainingDisplay = function () {
     if (p) {
       p.textContent = Math.round(currentPower);
       p.classList.remove("power-low","power-mid","power-high","power-max");
-      const ratio = target > 0 ? (currentPower / target) : 0;
+      const ratio = targetPower > 0 ? (currentPower / targetPower) : 0;
       if (ratio < 0.8) p.classList.add("power-low");
       else if (ratio < 1.0) p.classList.add("power-mid");
       else if (ratio < 1.2) p.classList.add("power-high");
@@ -2506,7 +2507,7 @@ window.updateTrainingDisplay = function () {
     
     // 프로그레스 바는 파워 기준
     if (bar) {
-      const pct = target > 0 ? Math.min(100, (currentPower / target) * 100) : 0;
+      const pct = targetPower > 0 ? Math.min(100, (currentPower / targetPower) * 100) : 0;
       bar.style.width = pct + "%";
       if (pct < 80) bar.style.background = "linear-gradient(90deg,#00b7ff,#0072ff)";
       else if (pct < 100) bar.style.background = "linear-gradient(90deg,#3cff4e,#00ff88)";
@@ -2515,7 +2516,10 @@ window.updateTrainingDisplay = function () {
     }
   }
 
-  if (t) t.textContent = String(Math.round(target));
+  // ftp_pct / dual일 때만 목표 파워 텍스트를 덮어쓴다 (cadence_rpm은 RPM 표시를 유지)
+  if (t && (targetType === 'ftp_pct' || targetType === 'dual')) {
+    t.textContent = String(Math.round(targetPower));
+  }
 
   if (h) {
     h.textContent = Math.round(hr);
