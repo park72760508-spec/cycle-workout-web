@@ -1839,23 +1839,36 @@ function applySegmentTarget(i) {
       window.liveData.targetRpm = targetRpm;
       
     } else if (targetType === 'dual') {
-      // dual 타입: target_value는 "105,90" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+      // dual 타입: target_value는 "100,120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
       let ftpPercent = 100;
       let targetRpm = 0;
       
+      // target_value를 문자열로 변환하여 처리
+      const targetValueStr = String(targetValue || '');
+      
       if (Array.isArray(targetValue)) {
-        // 배열 형식: [105, 90]
+        // 배열 형식: [100, 120]
         ftpPercent = Number(targetValue[0]) || 100;
         targetRpm = Number(targetValue[1]) || 0;
-      } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
-        // 문자열 형식: "105,90" (앞값: ftp%, 뒤값: rpm)
-        const parts = targetValue.split(',').map(s => s.trim());
-        ftpPercent = Number(parts[0]) || 100;
-        targetRpm = Number(parts[1]) || 0;
+      } else if (targetValueStr.includes(',')) {
+        // 문자열 형식: "100,120" (앞값: ftp%, 뒤값: rpm)
+        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s);
+        if (parts.length >= 2) {
+          ftpPercent = Number(parts[0]) || 100;
+          targetRpm = Number(parts[1]) || 0;
+        } else if (parts.length === 1) {
+          // 쉼표는 있지만 값이 하나만 있는 경우
+          ftpPercent = Number(parts[0]) || 100;
+          targetRpm = 0;
+        }
       } else {
-        // 기본값: target_value를 ftp%로 사용
+        // 쉼표가 없는 경우: target_value를 ftp%로 사용 (RPM은 0)
         ftpPercent = Number(targetValue) || 100;
+        targetRpm = 0;
       }
+      
+      // 디버깅 로그
+      console.log('[dual] target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
       
       const targetW = Math.round(ftp * (ftpPercent / 100));
       
