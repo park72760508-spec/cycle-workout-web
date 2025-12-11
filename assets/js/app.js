@@ -1023,7 +1023,7 @@ function getSegmentFtpPercent(seg) {
   
   const targetType = seg.target_type || 'ftp_pct';
   
-  // dual 타입인 경우: target_value가 "100,120" 형식이면 첫 번째 값(ftp%)만 추출
+  // dual 타입인 경우: target_value가 "100/120" 형식이면 첫 번째 값(ftp%)만 추출
   if (targetType === 'dual') {
     const targetValue = seg.target_value;
     if (targetValue != null) {
@@ -1033,22 +1033,22 @@ function getSegmentFtpPercent(seg) {
       }
       
       const targetValueStr = String(targetValue).trim();
-      if (targetValueStr.includes(',')) {
-        // "100,120" 형식: 쉼표로 분리하여 첫 번째 값만 반환
-        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      if (targetValueStr.includes('/')) {
+        // "100/120" 형식: 슬래시로 분리하여 첫 번째 값만 반환
+        const parts = targetValueStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (parts.length > 0) {
           const ftpPercent = Number(parts[0]) || 100;
           return Math.round(ftpPercent);
         }
       } else {
-        // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
-        // DB에서 "100,120"이 숫자 100120으로 변환된 경우 처리
+        // 슬래시가 없는 경우: 숫자로 저장된 경우일 수 있음
+        // DB에서 "100/120"이 숫자 100120으로 변환된 경우 처리
         const numValue = Number(targetValueStr);
         if (!isNaN(numValue) && numValue > 0) {
-          // 숫자가 1000보다 크면 (예: 100120) "100,120"이 숫자로 변환된 것으로 간주
+          // 숫자가 1000보다 크면 (예: 100120) "100/120"이 숫자로 변환된 것으로 간주
           if (numValue > 1000 && numValue < 1000000) {
             // 100120을 100과 120으로 분리 시도
-            // 마지막 3자리가 RPM일 가능성이 높음 (예: 100120 → 100, 120)
+            // 마지막 3자리가 RPM일 가능성이 높음 (예: 100120 → 100/120)
             const str = String(numValue);
             if (str.length >= 4) {
               // 마지막 3자리를 RPM으로, 나머지를 FTP%로 추정
@@ -1059,11 +1059,11 @@ function getSegmentFtpPercent(seg) {
               
               // 유효성 검사: FTP%는 30-200, RPM은 50-200 범위
               if (estimatedFtp >= 30 && estimatedFtp <= 200 && estimatedRpm >= 50 && estimatedRpm <= 200) {
-                console.warn('[getSegmentFtpPercent] 숫자로 변환된 값을 복원 시도:', numValue, '→', estimatedFtp, ',', estimatedRpm);
+                console.warn('[getSegmentFtpPercent] 숫자로 변환된 값을 복원 시도:', numValue, '→', estimatedFtp, '/', estimatedRpm);
                 return Math.round(estimatedFtp);
               }
             }
-            console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다:', targetValue);
+            console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다. "100/120" 형식이어야 합니다:', targetValue);
             return 100; // 기본값 반환
           } else if (numValue <= 1000) {
             // 1000 이하는 FTP%로만 간주
@@ -1907,7 +1907,7 @@ function applySegmentTarget(i) {
       window.liveData.targetRpm = targetRpm;
       
     } else if (targetType === 'dual') {
-      // dual 타입: target_value는 "100,120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+      // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
       let ftpPercent = 100;
       let targetRpm = 0;
       
@@ -1923,7 +1923,7 @@ function applySegmentTarget(i) {
         console.log('[dual] 배열 형식으로 파싱:', targetValue);
         ftpPercent = Number(targetValue[0]) || 100;
         targetRpm = Number(targetValue[1]) || 0;
-        targetValueStr = `${targetValue[0]},${targetValue[1]}`;
+        targetValueStr = `${targetValue[0]}/${targetValue[1]}`;
       } else {
         // 숫자 또는 문자열로 변환
         targetValueStr = String(targetValue).trim();
@@ -1932,10 +1932,10 @@ function applySegmentTarget(i) {
       
       // 배열이 아닌 경우에만 파싱 수행
       if (!Array.isArray(targetValue)) {
-        if (targetValueStr.includes(',')) {
-          // 문자열 형식: "100,120" (앞값: ftp%, 뒤값: rpm)
-          const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-          console.log('[dual] 쉼표로 분리된 parts:', parts, '길이:', parts.length);
+        if (targetValueStr.includes('/')) {
+          // 문자열 형식: "100/120" (앞값: ftp%, 뒤값: rpm)
+          const parts = targetValueStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
+          console.log('[dual] 슬래시로 분리된 parts:', parts, '길이:', parts.length);
           
           if (parts.length >= 2) {
             // 첫 번째 값: FTP% (100)
@@ -1960,25 +1960,25 @@ function applySegmentTarget(i) {
             
             console.log('[dual] 파싱 성공 - ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
           } else if (parts.length === 1) {
-            // 쉼표는 있지만 값이 하나만 있는 경우
-            console.warn('[dual] 쉼표는 있지만 값이 하나만 있습니다:', parts);
+            // 슬래시는 있지만 값이 하나만 있는 경우
+            console.warn('[dual] 슬래시는 있지만 값이 하나만 있습니다:', parts);
             ftpPercent = Number(parts[0]) || 100;
             targetRpm = 0;
           } else {
-            console.error('[dual] 쉼표로 분리했지만 parts가 비어있습니다:', parts);
+            console.error('[dual] 슬래시로 분리했지만 parts가 비어있습니다:', parts);
             ftpPercent = 100;
             targetRpm = 0;
           }
         } else if (targetValueStr.length > 0) {
-          // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
-          // DB에서 "100,120"이 숫자 100120으로 변환된 경우 처리
-          console.warn('[dual] target_value에 쉼표가 없습니다. 문자열:', targetValueStr);
+          // 슬래시가 없는 경우: 숫자로 저장된 경우일 수 있음
+          // DB에서 "100/120"이 숫자 100120으로 변환된 경우 처리
+          console.warn('[dual] target_value에 슬래시가 없습니다. 문자열:', targetValueStr);
           const numValue = Number(targetValueStr);
           if (!isNaN(numValue) && numValue > 0) {
-            // 숫자가 1000보다 크고 1000000보다 작으면 (예: 100120) "100,120"이 숫자로 변환된 것으로 간주
+            // 숫자가 1000보다 크고 1000000보다 작으면 (예: 100120) "100/120"이 숫자로 변환된 것으로 간주
             if (numValue > 1000 && numValue < 1000000) {
               // 100120을 100과 120으로 분리 시도
-              // 마지막 3자리가 RPM일 가능성이 높음 (예: 100120 → 100, 120)
+              // 마지막 3자리가 RPM일 가능성이 높음 (예: 100120 → 100/120)
               const str = String(numValue);
               if (str.length >= 4) {
                 // 마지막 3자리를 RPM으로, 나머지를 FTP%로 추정
@@ -1998,13 +1998,13 @@ function applySegmentTarget(i) {
                   targetRpm = 0;
                 }
               } else {
-                console.error('[dual] target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
+                console.error('[dual] target_value가 잘못된 형식입니다. "100/120" 형식이어야 합니다. 현재 값:', targetValueStr);
                 ftpPercent = 100;
                 targetRpm = 0;
               }
             } else if (numValue <= 1000) {
               // 1000 이하의 숫자는 FTP%로만 간주 (RPM은 0)
-              console.warn('[dual] target_value에 쉼표가 없습니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
+              console.warn('[dual] target_value에 슬래시가 없습니다. "100/120" 형식이어야 합니다. 현재 값:', targetValueStr);
               ftpPercent = numValue;
               targetRpm = 0;
             } else {
@@ -2033,11 +2033,11 @@ function applySegmentTarget(i) {
       parsedTargetRpm = targetRpm;
       
       // 최종 검증: 파싱된 값이 올바른지 확인
-      if (targetRpm === 0 && targetValueStr.includes(',')) {
-        // 쉼표가 있는데 RPM이 0이면 파싱에 문제가 있을 수 있음
-        console.error('[dual] 경고: 쉼표가 있는데 RPM이 0입니다. target_value:', targetValue, 'targetValueStr:', targetValueStr);
+      if (targetRpm === 0 && targetValueStr.includes('/')) {
+        // 슬래시가 있는데 RPM이 0이면 파싱에 문제가 있을 수 있음
+        console.error('[dual] 경고: 슬래시가 있는데 RPM이 0입니다. target_value:', targetValue, 'targetValueStr:', targetValueStr);
         // 다시 한 번 파싱 시도
-        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        const parts = targetValueStr.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (parts.length >= 2) {
           const retryFtpPercent = Number(parts[0]) || 100;
           const retryTargetRpm = Number(parts[1]) || 0;
