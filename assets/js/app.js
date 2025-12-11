@@ -1894,16 +1894,21 @@ function applySegmentTarget(i) {
       
       // target_value를 문자열로 변환하여 처리
       let targetValueStr = '';
+      console.log('[dual] 원본 target_value:', targetValue, '타입:', typeof targetValue);
+      
       if (targetValue == null || targetValue === '') {
         targetValueStr = '';
+        console.warn('[dual] target_value가 null이거나 빈 문자열입니다');
       } else if (Array.isArray(targetValue)) {
         // 배열 형식: [100, 120]
+        console.log('[dual] 배열 형식으로 파싱:', targetValue);
         ftpPercent = Number(targetValue[0]) || 100;
         targetRpm = Number(targetValue[1]) || 0;
         targetValueStr = `${targetValue[0]},${targetValue[1]}`;
       } else {
         // 숫자 또는 문자열로 변환
         targetValueStr = String(targetValue).trim();
+        console.log('[dual] 문자열로 변환된 target_value:', targetValueStr);
       }
       
       // 배열이 아닌 경우에만 파싱 수행
@@ -1911,18 +1916,43 @@ function applySegmentTarget(i) {
         if (targetValueStr.includes(',')) {
           // 문자열 형식: "100,120" (앞값: ftp%, 뒤값: rpm)
           const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+          console.log('[dual] 쉼표로 분리된 parts:', parts, '길이:', parts.length);
+          
           if (parts.length >= 2) {
             // 첫 번째 값: FTP% (100)
-            ftpPercent = Number(parts[0]) || 100;
+            const parsedFtp = Number(parts[0]);
             // 두 번째 값: RPM (120)
-            targetRpm = Number(parts[1]) || 0;
+            const parsedRpm = Number(parts[1]);
+            
+            // 파싱 결과 검증
+            if (!isNaN(parsedFtp) && parsedFtp > 0) {
+              ftpPercent = parsedFtp;
+            } else {
+              console.warn('[dual] 첫 번째 값 파싱 실패:', parts[0], '기본값 100 사용');
+              ftpPercent = 100;
+            }
+            
+            if (!isNaN(parsedRpm) && parsedRpm >= 0) {
+              targetRpm = parsedRpm;
+            } else {
+              console.warn('[dual] 두 번째 값 파싱 실패:', parts[1], '기본값 0 사용');
+              targetRpm = 0;
+            }
+            
+            console.log('[dual] 파싱 성공 - ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
           } else if (parts.length === 1) {
             // 쉼표는 있지만 값이 하나만 있는 경우
+            console.warn('[dual] 쉼표는 있지만 값이 하나만 있습니다:', parts);
             ftpPercent = Number(parts[0]) || 100;
+            targetRpm = 0;
+          } else {
+            console.error('[dual] 쉼표로 분리했지만 parts가 비어있습니다:', parts);
+            ftpPercent = 100;
             targetRpm = 0;
           }
         } else if (targetValueStr.length > 0) {
           // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
+          console.warn('[dual] target_value에 쉼표가 없습니다. 문자열:', targetValueStr);
           const numValue = Number(targetValueStr);
           if (!isNaN(numValue) && numValue > 0) {
             // 숫자가 너무 크면 (예: 100120) 잘못된 형식으로 판단
@@ -1938,6 +1968,8 @@ function applySegmentTarget(i) {
               targetRpm = 0;
             }
           }
+        } else {
+          console.warn('[dual] target_value가 빈 문자열입니다');
         }
       }
       
@@ -1955,8 +1987,27 @@ function applySegmentTarget(i) {
       parsedFtpPercent = ftpPercent;
       parsedTargetRpm = targetRpm;
       
+      // 최종 검증: 파싱된 값이 올바른지 확인
+      if (targetRpm === 0 && targetValueStr.includes(',')) {
+        // 쉼표가 있는데 RPM이 0이면 파싱에 문제가 있을 수 있음
+        console.error('[dual] 경고: 쉼표가 있는데 RPM이 0입니다. target_value:', targetValue, 'targetValueStr:', targetValueStr);
+        // 다시 한 번 파싱 시도
+        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        if (parts.length >= 2) {
+          const retryFtpPercent = Number(parts[0]) || 100;
+          const retryTargetRpm = Number(parts[1]) || 0;
+          if (retryTargetRpm > 0) {
+            console.log('[dual] 재파싱 성공 - ftpPercent:', retryFtpPercent, 'targetRpm:', retryTargetRpm);
+            ftpPercent = retryFtpPercent;
+            targetRpm = retryTargetRpm;
+            parsedFtpPercent = ftpPercent;
+            parsedTargetRpm = targetRpm;
+          }
+        }
+      }
+      
       // 디버깅 로그
-      console.log('[dual] 파싱 결과 - target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
+      console.log('[dual] 최종 파싱 결과 - target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
       
       // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환
       const targetW = Math.round(ftp * (ftpPercent / 100));
