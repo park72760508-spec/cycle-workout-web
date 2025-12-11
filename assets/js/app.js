@@ -1021,6 +1021,35 @@ function skipCurrentSegment() {
 function getSegmentFtpPercent(seg) {
   if (!seg) return 0;
   
+  const targetType = seg.target_type || 'ftp_pct';
+  
+  // dual 타입인 경우: target_value가 "100,120" 형식이면 첫 번째 값(ftp%)만 추출
+  if (targetType === 'dual') {
+    const targetValue = seg.target_value;
+    if (targetValue != null) {
+      const targetValueStr = String(targetValue);
+      if (targetValueStr.includes(',')) {
+        // "100,120" 형식: 쉼표로 분리하여 첫 번째 값만 반환
+        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s);
+        if (parts.length > 0) {
+          const ftpPercent = Number(parts[0]) || 100;
+          return Math.round(ftpPercent);
+        }
+      } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+        // 배열 형식: [100, 120]
+        return Math.round(Number(targetValue[0]) || 100);
+      } else if (typeof targetValue === "number") {
+        // 숫자만 있는 경우
+        return Math.round(targetValue);
+      }
+    }
+  }
+  
+  // cadence_rpm 타입인 경우: FTP%가 없으므로 0 반환
+  if (targetType === 'cadence_rpm') {
+    return 0;
+  }
+  
   // 1순위: target_value (이미 퍼센트)
   if (typeof seg.target_value === "number") {
     return Math.round(seg.target_value);
@@ -1818,6 +1847,10 @@ function applySegmentTarget(i) {
     
     window.liveData = window.liveData || {};
     
+    // 파싱된 값들을 저장할 변수 (세그먼트 이름 표시에 사용)
+    let parsedFtpPercent = 100;
+    let parsedTargetRpm = 0;
+    
     // target_type에 따라 목표 값 설정 및 표시
     const targetLabelEl = safeGetElement("targetLabel");
     const targetValueEl = safeGetElement("targetPowerValue");
@@ -1828,6 +1861,7 @@ function applySegmentTarget(i) {
     if (targetType === 'cadence_rpm') {
       // cadence_rpm 타입: target_value는 RPM 값
       const targetRpm = Number(targetValue) || 0;
+      parsedTargetRpm = targetRpm;
       
       if (targetLabelEl) targetLabelEl.textContent = "목표 RPM";
       if (targetValueEl) targetValueEl.textContent = String(targetRpm);
@@ -1867,6 +1901,10 @@ function applySegmentTarget(i) {
         targetRpm = 0;
       }
       
+      // 파싱된 값 저장 (세그먼트 이름 표시에 사용)
+      parsedFtpPercent = ftpPercent;
+      parsedTargetRpm = targetRpm;
+      
       // 디버깅 로그
       console.log('[dual] target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
       
@@ -1888,6 +1926,7 @@ function applySegmentTarget(i) {
     } else {
       // ftp_pct 타입 (기본): 기존 로직 유지
       const ftpPercent = getSegmentFtpPercent(seg);
+      parsedFtpPercent = ftpPercent;
       const targetW = Math.round(ftp * (ftpPercent / 100));
       
       if (targetLabelEl) targetLabelEl.textContent = "목표 파워";
@@ -1903,13 +1942,12 @@ function applySegmentTarget(i) {
     if (nameEl) {
       const segmentName = seg.label || seg.segment_type || `세그먼트 ${i + 1}`;
       if (targetType === 'cadence_rpm') {
-        nameEl.textContent = `${segmentName} - RPM ${window.liveData.targetRpm || 0}`;
+        nameEl.textContent = `${segmentName} - RPM ${parsedTargetRpm || 0}`;
       } else if (targetType === 'dual') {
-        const ftpPercent = getSegmentFtpPercent(seg);
-        nameEl.textContent = `${segmentName} - FTP ${ftpPercent}% / RPM ${window.liveData.targetRpm || 0}`;
+        // dual 타입: 이미 파싱한 값 사용
+        nameEl.textContent = `${segmentName} - FTP ${parsedFtpPercent}% / RPM ${parsedTargetRpm || 0}`;
       } else {
-        const ftpPercent = getSegmentFtpPercent(seg);
-        nameEl.textContent = `${segmentName} - FTP ${ftpPercent}%`;
+        nameEl.textContent = `${segmentName} - FTP ${parsedFtpPercent}%`;
       }
      // ⬇⬇⬇ 새 세그먼트 진입 시 진행바 0%로 리셋
      setNameProgress(0);       
