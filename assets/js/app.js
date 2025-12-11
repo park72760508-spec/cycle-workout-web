@@ -1027,22 +1027,37 @@ function getSegmentFtpPercent(seg) {
   if (targetType === 'dual') {
     const targetValue = seg.target_value;
     if (targetValue != null) {
-      const targetValueStr = String(targetValue);
+      if (Array.isArray(targetValue) && targetValue.length > 0) {
+        // 배열 형식: [100, 120]
+        return Math.round(Number(targetValue[0]) || 100);
+      }
+      
+      const targetValueStr = String(targetValue).trim();
       if (targetValueStr.includes(',')) {
         // "100,120" 형식: 쉼표로 분리하여 첫 번째 값만 반환
-        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s);
+        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
         if (parts.length > 0) {
           const ftpPercent = Number(parts[0]) || 100;
           return Math.round(ftpPercent);
         }
-      } else if (Array.isArray(targetValue) && targetValue.length > 0) {
-        // 배열 형식: [100, 120]
-        return Math.round(Number(targetValue[0]) || 100);
-      } else if (typeof targetValue === "number") {
-        // 숫자만 있는 경우
-        return Math.round(targetValue);
+      } else {
+        // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
+        // 하지만 dual 타입은 "100,120" 형식이어야 하므로 경고
+        console.warn('[getSegmentFtpPercent] dual 타입인데 target_value에 쉼표가 없습니다:', targetValue);
+        // 숫자로 변환 시도 (하지만 이는 정확하지 않음)
+        const numValue = Number(targetValueStr);
+        if (!isNaN(numValue) && numValue > 0) {
+          // 숫자가 너무 크면 (예: 100120) 잘못된 형식으로 판단
+          if (numValue > 1000) {
+            console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다:', targetValue);
+            return 100; // 기본값 반환
+          }
+          return Math.round(numValue);
+        }
       }
     }
+    // 기본값 반환
+    return 100;
   }
   
   // cadence_rpm 타입인 경우: FTP%가 없으므로 0 반환
@@ -1878,34 +1893,53 @@ function applySegmentTarget(i) {
       let targetRpm = 0;
       
       // target_value를 문자열로 변환하여 처리
-      const targetValueStr = String(targetValue || '').trim();
-      
-      if (Array.isArray(targetValue)) {
+      let targetValueStr = '';
+      if (targetValue == null || targetValue === '') {
+        targetValueStr = '';
+      } else if (Array.isArray(targetValue)) {
         // 배열 형식: [100, 120]
         ftpPercent = Number(targetValue[0]) || 100;
         targetRpm = Number(targetValue[1]) || 0;
-      } else if (targetValueStr.includes(',')) {
-        // 문자열 형식: "100,120" (앞값: ftp%, 뒤값: rpm)
-        const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
-        if (parts.length >= 2) {
-          // 첫 번째 값: FTP% (100)
-          ftpPercent = Number(parts[0]) || 100;
-          // 두 번째 값: RPM (120)
-          targetRpm = Number(parts[1]) || 0;
-        } else if (parts.length === 1) {
-          // 쉼표는 있지만 값이 하나만 있는 경우
-          ftpPercent = Number(parts[0]) || 100;
-          targetRpm = 0;
-        }
+        targetValueStr = `${targetValue[0]},${targetValue[1]}`;
       } else {
-        // 쉼표가 없는 경우: target_value를 ftp%로 사용 (RPM은 0)
-        ftpPercent = Number(targetValue) || 100;
-        targetRpm = 0;
+        // 숫자 또는 문자열로 변환
+        targetValueStr = String(targetValue).trim();
       }
       
-      // 파싱된 값 저장 (세그먼트 이름 표시에 사용)
-      parsedFtpPercent = ftpPercent;
-      parsedTargetRpm = targetRpm;
+      // 배열이 아닌 경우에만 파싱 수행
+      if (!Array.isArray(targetValue)) {
+        if (targetValueStr.includes(',')) {
+          // 문자열 형식: "100,120" (앞값: ftp%, 뒤값: rpm)
+          const parts = targetValueStr.split(',').map(s => s.trim()).filter(s => s.length > 0);
+          if (parts.length >= 2) {
+            // 첫 번째 값: FTP% (100)
+            ftpPercent = Number(parts[0]) || 100;
+            // 두 번째 값: RPM (120)
+            targetRpm = Number(parts[1]) || 0;
+          } else if (parts.length === 1) {
+            // 쉼표는 있지만 값이 하나만 있는 경우
+            ftpPercent = Number(parts[0]) || 100;
+            targetRpm = 0;
+          }
+        } else if (targetValueStr.length > 0) {
+          // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
+          const numValue = Number(targetValueStr);
+          if (!isNaN(numValue) && numValue > 0) {
+            // 숫자가 너무 크면 (예: 100120) 잘못된 형식으로 판단
+            if (numValue > 1000) {
+              console.error('[dual] target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
+              // 기본값 사용
+              ftpPercent = 100;
+              targetRpm = 0;
+            } else {
+              // 1000 이하의 숫자는 FTP%로만 간주 (RPM은 0)
+              console.warn('[dual] target_value에 쉼표가 없습니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
+              ftpPercent = numValue;
+              targetRpm = 0;
+            }
+          }
+        }
+      }
       
       // 값 검증
       if (isNaN(ftpPercent) || ftpPercent <= 0) {
