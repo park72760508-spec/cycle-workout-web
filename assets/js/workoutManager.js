@@ -420,11 +420,51 @@ function createSingleSegmentPreview(segment) {
   const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
   
   const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
+  const targetType = segment.target_type || 'ftp_pct';
+  
+  // target_type에 따라 표시 형식 변경
+  let targetDisplay = '';
+  if (targetType === 'ftp_pct') {
+    const ftpValue = Number(segment.target_value) || 0;
+    targetDisplay = `${ftpValue}% FTP`;
+  } else if (targetType === 'cadence_rpm') {
+    const rpmValue = Number(segment.target_value) || 0;
+    targetDisplay = `${rpmValue} rpm`;
+  } else if (targetType === 'dual') {
+    // dual 타입: "100/120" 형식 파싱
+    const targetValue = segment.target_value;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        targetDisplay = `${parts[0]}% FTP / ${parts[1]} rpm`;
+      } else {
+        targetDisplay = `${parts[0]}% FTP`;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      targetDisplay = `${targetValue[0]}% FTP / ${targetValue[1]} rpm`;
+    } else {
+      const numValue = Number(targetValue);
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const rpmPart = str.slice(-3);
+          const ftpPart = str.slice(0, -3);
+          targetDisplay = `${ftpPart}% FTP / ${rpmPart} rpm`;
+        } else {
+          targetDisplay = `${numValue}% FTP`;
+        }
+      } else {
+        targetDisplay = `${numValue || 100}% FTP`;
+      }
+    }
+  } else {
+    targetDisplay = `${Number(segment.target_value) || 0}% FTP`;
+  }
   
   return `
     <div class="segment-item ${segmentTypeClass}">
       <h4>${escapeHtml(segment.label || '세그먼트')}</h4>
-      <div class="ftp-percent">${Number(segment.target_value) || 0}%</div>
+      <div class="ftp-percent">${targetDisplay}</div>
       <div class="duration">${duration}</div>
     </div>
   `;
@@ -450,8 +490,36 @@ function createGroupedSegmentPreview(groupedItem) {
       duration = `${minutes}분`;
     }
     
+    // target_type에 따라 표시 형식 변경
+    const targetType = segment.target_type || 'ftp_pct';
+    let targetDisplay = '';
+    if (targetType === 'ftp_pct') {
+      const ftpValue = Number(segment.target_value) || 0;
+      targetDisplay = `FTP ${ftpValue}%`;
+    } else if (targetType === 'cadence_rpm') {
+      const rpmValue = Number(segment.target_value) || 0;
+      targetDisplay = `${rpmValue} rpm`;
+    } else if (targetType === 'dual') {
+      // dual 타입: "100/120" 형식 파싱
+      const targetValue = segment.target_value;
+      if (typeof targetValue === 'string' && targetValue.includes('/')) {
+        const parts = targetValue.split('/').map(s => s.trim());
+        if (parts.length >= 2) {
+          targetDisplay = `FTP ${parts[0]}% / ${parts[1]} rpm`;
+        } else {
+          targetDisplay = `FTP ${parts[0]}%`;
+        }
+      } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+        targetDisplay = `FTP ${targetValue[0]}% / ${targetValue[1]} rpm`;
+      } else {
+        targetDisplay = `FTP ${Number(targetValue) || 100}%`;
+      }
+    } else {
+      targetDisplay = `FTP ${Number(segment.target_value) || 0}%`;
+    }
+    
     // 줄바꿈 적용: 공백 대신 \n 사용
-    return `FTP ${segment.target_value}%\n${duration}`;
+    return `${targetDisplay}\n${duration}`;
   }).join('\n'); // 세그먼트 간에도 줄바꿈 적용
   
   const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
@@ -799,12 +867,27 @@ async function apiCreateWorkoutWithSegments(workoutData) {
      
      // 세그먼트 데이터 정규화 및 검증
      const normalizedSegments = segments.map((seg, index) => {
+       const targetType = String(seg.target_type || 'ftp_pct');
+       let targetValue = seg.target_value;
+       
+       // target_type에 따라 target_value 처리
+       if (targetType === 'dual') {
+         // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
+         targetValue = String(targetValue || '100/90');
+       } else if (targetType === 'cadence_rpm') {
+         // cadence_rpm 타입: 숫자로 저장 (50-200 범위)
+         targetValue = Math.max(50, Math.min(200, Number(targetValue) || 90));
+       } else {
+         // ftp_pct 타입: 숫자로 저장 (30-200 범위)
+         targetValue = Math.max(30, Math.min(200, Number(targetValue) || 100));
+       }
+       
        const normalized = {
          label: String(seg.label || `세그먼트 ${index + 1}`).trim(),
          segment_type: normalizeSegmentType(seg.segment_type),
          duration_sec: Math.max(1, Number(seg.duration_sec) || 300),
-         target_type: 'ftp_percent',
-         target_value: Math.max(30, Math.min(200, Number(seg.target_value) || 100)),
+         target_type: targetType,
+         target_value: targetValue,
          ramp: seg.ramp === 'linear' ? 'linear' : 'none',
          ramp_to_value: seg.ramp === 'linear' ? Number(seg.ramp_to_value) : null
        };
@@ -1626,15 +1709,29 @@ async function saveWorkout() {
 
     const validSegments = workoutSegments.filter(segment => 
       segment && typeof segment === 'object' && segment.label
-    ).map(segment => ({
-      label: String(segment.label || '세그먼트'),
-      segment_type: String(segment.segment_type || 'interval'),
-      duration_sec: Number(segment.duration_sec) || 300,
-      target_type: String(segment.target_type || 'ftp_percent'),
-      target_value: Number(segment.target_value) || 100,
-      ramp: String(segment.ramp || 'none'),
-      ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
-    }));
+    ).map(segment => {
+      const targetType = String(segment.target_type || 'ftp_pct');
+      let targetValue = segment.target_value;
+      
+      // target_type에 따라 target_value 처리
+      if (targetType === 'dual') {
+        // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
+        targetValue = String(targetValue || '100/90');
+      } else {
+        // ftp_pct 또는 cadence_rpm 타입: 숫자로 저장
+        targetValue = Number(targetValue) || (targetType === 'cadence_rpm' ? 90 : 100);
+      }
+      
+      return {
+        label: String(segment.label || '세그먼트'),
+        segment_type: String(segment.segment_type || 'interval'),
+        duration_sec: Number(segment.duration_sec) || 300,
+        target_type: targetType,
+        target_value: targetValue,
+        ramp: String(segment.ramp || 'none'),
+        ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
+      };
+    });
 
     const workoutData = { 
       title, 
@@ -1854,15 +1951,32 @@ async function performWorkoutUpdate() {
       // 세그먼트 데이터 정규화
       const validSegments = workoutSegments.filter(segment => 
         segment && typeof segment === 'object' && segment.label
-      ).map(segment => ({
-        label: String(segment.label || '세그먼트'),
-        segment_type: String(segment.segment_type || 'interval'),
-        duration_sec: Number(segment.duration_sec) || 300,
-        target_type: String(segment.target_type || 'ftp_percent'),
-        target_value: Number(segment.target_value) || 100,
-        ramp: String(segment.ramp || 'none'),
-        ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
-      }));
+      ).map(segment => {
+        const targetType = String(segment.target_type || 'ftp_pct');
+        let targetValue = segment.target_value;
+        
+        // target_type에 따라 target_value 처리
+        if (targetType === 'dual') {
+          // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
+          targetValue = String(targetValue || '100/90');
+        } else if (targetType === 'cadence_rpm') {
+          // cadence_rpm 타입: 숫자로 저장 (50-200 범위)
+          targetValue = Math.max(50, Math.min(200, Number(targetValue) || 90));
+        } else {
+          // ftp_pct 타입: 숫자로 저장 (30-200 범위)
+          targetValue = Math.max(30, Math.min(200, Number(targetValue) || 100));
+        }
+        
+        return {
+          label: String(segment.label || '세그먼트'),
+          segment_type: String(segment.segment_type || 'interval'),
+          duration_sec: Number(segment.duration_sec) || 300,
+          target_type: targetType,
+          target_value: targetValue,
+          ramp: String(segment.ramp || 'none'),
+          ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
+        };
+      });
 
       // 기존 워크아웃 삭제
       const deleteResult = await apiDeleteWorkout(currentEditWorkoutId);
@@ -2143,9 +2257,48 @@ function createSegmentCard(segment, index) {
   const seconds = (segment.duration_sec || 0) % 60;
   const duration = `${minutes}:${seconds.toString().padStart(2, '0')}`;
   
-  const intensityText = segment.ramp !== 'none' 
-    ? `${segment.target_value}% → ${segment.ramp_to_value}%`
-    : `${segment.target_value}%`;
+  // target_type에 따라 표시 형식 변경
+  const targetType = segment.target_type || 'ftp_pct';
+  let intensityText = '';
+  
+  if (targetType === 'ftp_pct') {
+    const ftpValue = Number(segment.target_value) || 0;
+    intensityText = segment.ramp !== 'none' 
+      ? `${ftpValue}% → ${segment.ramp_to_value}%`
+      : `${ftpValue}% FTP`;
+  } else if (targetType === 'cadence_rpm') {
+    const rpmValue = Number(segment.target_value) || 0;
+    intensityText = `${rpmValue} rpm`;
+  } else if (targetType === 'dual') {
+    // dual 타입: "100/120" 형식 파싱
+    const targetValue = segment.target_value;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        intensityText = `${parts[0]}% FTP / ${parts[1]} rpm`;
+      } else {
+        intensityText = `${parts[0]}% FTP`;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      intensityText = `${targetValue[0]}% FTP / ${targetValue[1]} rpm`;
+    } else {
+      const numValue = Number(targetValue);
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const rpmPart = str.slice(-3);
+          const ftpPart = str.slice(0, -3);
+          intensityText = `${ftpPart}% FTP / ${rpmPart} rpm`;
+        } else {
+          intensityText = `${numValue}% FTP`;
+        }
+      } else {
+        intensityText = `${numValue || 100}% FTP`;
+      }
+    }
+  } else {
+    intensityText = `${Number(segment.target_value) || 0}% FTP`;
+  }
   
   card.innerHTML = `
     <div class="segment-info">
@@ -2235,14 +2388,22 @@ function showAddSegmentModal() {
   const rampSettings = safeGetElement('rampSettings');
   const segmentModal = safeGetElement('segmentModal');
   
+  const segmentTargetType = safeGetElement('segmentTargetType');
+  const segmentTargetRpm = safeGetElement('segmentTargetRpm');
+  
   if (modalTitle) modalTitle.textContent = '새 세그먼트 추가';
   if (segmentLabel) segmentLabel.value = '';
   if (segmentType) segmentType.value = 'interval';
   if (segmentMinutes) segmentMinutes.value = '5';
   if (segmentSeconds) segmentSeconds.value = '0';
   if (segmentIntensity) segmentIntensity.value = '100';
+  if (segmentTargetType) segmentTargetType.value = 'ftp_pct';
+  if (segmentTargetRpm) segmentTargetRpm.value = '90';
   if (segmentRamp) segmentRamp.checked = false;
   if (rampEndIntensity) rampEndIntensity.value = '120';
+  
+  // target_type에 따라 필드 업데이트
+  updateTargetTypeFields();
   
   if (btnDeleteSegment) btnDeleteSegment.style.display = 'none';
   if (rampSettings) rampSettings.classList.add('hidden');
@@ -2276,7 +2437,58 @@ function showEditSegmentModal(index) {
   if (segmentMinutes) segmentMinutes.value = minutes;
   if (segmentSeconds) segmentSeconds.value = seconds;
   
-  if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+  // target_type 설정
+  const segmentTargetType = safeGetElement('segmentTargetType');
+  const segmentTargetRpm = safeGetElement('segmentTargetRpm');
+  const targetType = segment.target_type || 'ftp_pct';
+  
+  if (segmentTargetType) {
+    segmentTargetType.value = targetType;
+  }
+  
+  // target_value 파싱 및 설정
+  if (targetType === 'dual') {
+    // dual 타입: "100/120" 형식
+    const targetValue = segment.target_value;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        if (segmentIntensity) segmentIntensity.value = parts[0] || 100;
+        if (segmentTargetRpm) segmentTargetRpm.value = parts[1] || 90;
+      } else {
+        if (segmentIntensity) segmentIntensity.value = parts[0] || 100;
+        if (segmentTargetRpm) segmentTargetRpm.value = 90;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      if (segmentIntensity) segmentIntensity.value = targetValue[0] || 100;
+      if (segmentTargetRpm) segmentTargetRpm.value = targetValue[1] || 90;
+    } else {
+      // 숫자로 저장된 경우 복원 시도
+      const numValue = Number(targetValue);
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const rpmPart = str.slice(-3);
+          const ftpPart = str.slice(0, -3);
+          if (segmentIntensity) segmentIntensity.value = ftpPart || 100;
+          if (segmentTargetRpm) segmentTargetRpm.value = rpmPart || 90;
+        } else {
+          if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+          if (segmentTargetRpm) segmentTargetRpm.value = 90;
+        }
+      } else {
+        if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+        if (segmentTargetRpm) segmentTargetRpm.value = 90;
+      }
+    }
+  } else {
+    // ftp_pct 또는 cadence_rpm 타입
+    if (segmentIntensity) segmentIntensity.value = segment.target_value || (targetType === 'cadence_rpm' ? 90 : 100);
+    if (segmentTargetRpm) segmentTargetRpm.value = 90;
+  }
+  
+  // target_type에 따라 필드 업데이트
+  updateTargetTypeFields();
   
   const hasRamp = segment.ramp && segment.ramp !== 'none';
   if (segmentRamp) segmentRamp.checked = hasRamp;
@@ -2309,6 +2521,69 @@ function toggleRampSettings() {
   }
 }
 
+// target_type에 따라 입력 필드 동적 변경
+function updateTargetTypeFields() {
+  const targetType = safeGetElement('segmentTargetType');
+  const targetValueGroup = safeGetElement('targetValueGroup');
+  const targetRpmGroup = safeGetElement('targetRpmGroup');
+  const targetValueLabel = safeGetElement('targetValueLabel');
+  const targetValueSuffix = safeGetElement('targetValueSuffix');
+  const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentTargetRpm = safeGetElement('segmentTargetRpm');
+  
+  if (!targetType) return;
+  
+  const type = targetType.value;
+  
+  if (type === 'ftp_pct') {
+    // % FTP 타입
+    if (targetValueLabel) targetValueLabel.textContent = '목표 강도 *';
+    if (targetValueSuffix) targetValueSuffix.textContent = '% FTP';
+    if (segmentIntensity) {
+      segmentIntensity.min = '30';
+      segmentIntensity.max = '200';
+      if (!segmentIntensity.value || segmentIntensity.value < 30) {
+        segmentIntensity.value = '100';
+      }
+    }
+    if (targetValueGroup) targetValueGroup.style.display = 'block';
+    if (targetRpmGroup) targetRpmGroup.classList.add('hidden');
+    
+  } else if (type === 'cadence_rpm') {
+    // rpm 타입
+    if (targetValueLabel) targetValueLabel.textContent = '목표 강도 *';
+    if (targetValueSuffix) targetValueSuffix.textContent = 'rpm';
+    if (segmentIntensity) {
+      segmentIntensity.min = '50';
+      segmentIntensity.max = '200';
+      if (!segmentIntensity.value || segmentIntensity.value < 50) {
+        segmentIntensity.value = '90';
+      }
+    }
+    if (targetValueGroup) targetValueGroup.style.display = 'block';
+    if (targetRpmGroup) targetRpmGroup.classList.add('hidden');
+    
+  } else if (type === 'dual') {
+    // dual 타입: %FTP와 rpm 모두 입력
+    if (targetValueLabel) targetValueLabel.textContent = '목표 FTP% *';
+    if (targetValueSuffix) targetValueSuffix.textContent = '% FTP';
+    if (segmentIntensity) {
+      segmentIntensity.min = '30';
+      segmentIntensity.max = '200';
+      if (!segmentIntensity.value || segmentIntensity.value < 30) {
+        segmentIntensity.value = '100';
+      }
+    }
+    if (targetValueGroup) targetValueGroup.style.display = 'block';
+    if (targetRpmGroup) {
+      targetRpmGroup.classList.remove('hidden');
+      if (segmentTargetRpm && (!segmentTargetRpm.value || segmentTargetRpm.value < 50)) {
+        segmentTargetRpm.value = '90';
+      }
+    }
+  }
+}
+
 function saveSegment() {
   if (typeof currentEditingRepeatIndex === 'number' && currentEditingRepeatIndex !== null) {
     console.log('Saving repeat segment at index:', currentEditingRepeatIndex);
@@ -2323,10 +2598,12 @@ function saveSegment() {
   const segmentMinutes = safeGetElement('segmentMinutes');
   const segmentSeconds = safeGetElement('segmentSeconds');
   const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentTargetType = safeGetElement('segmentTargetType');
+  const segmentTargetRpm = safeGetElement('segmentTargetRpm');
   const segmentRamp = safeGetElement('segmentRamp');
   const rampEndIntensity = safeGetElement('rampEndIntensity');
   
-  if (!segmentLabel || !segmentType || !segmentMinutes || !segmentSeconds || !segmentIntensity) {
+  if (!segmentLabel || !segmentType || !segmentMinutes || !segmentSeconds || !segmentIntensity || !segmentTargetType) {
     window.showToast('세그먼트 폼 요소를 찾을 수 없습니다.');
     return;
   }
@@ -2335,7 +2612,9 @@ function saveSegment() {
   const type = segmentType.value;
   const minutes = parseInt(segmentMinutes.value) || 0;
   const seconds = parseInt(segmentSeconds.value) || 0;
-  const intensity = parseInt(segmentIntensity.value) || 100;
+  const targetType = segmentTargetType.value || 'ftp_pct';
+  const intensity = parseInt(segmentIntensity.value) || (targetType === 'cadence_rpm' ? 90 : 100);
+  const targetRpm = segmentTargetRpm ? parseInt(segmentTargetRpm.value) || 90 : 90;
   const hasRamp = segmentRamp ? segmentRamp.checked : false;
   const rampEndIntensityValue = rampEndIntensity ? parseInt(rampEndIntensity.value) || 120 : 120;
   
@@ -2350,8 +2629,33 @@ function saveSegment() {
     return;
   }
   
-  if (intensity < 30 || intensity > 200) {
-    window.showToast('목표 강도는 30-200% 범위여야 합니다.');
+  // target_type에 따른 유효성 검사
+  let targetValue;
+  if (targetType === 'ftp_pct') {
+    if (intensity < 30 || intensity > 200) {
+      window.showToast('목표 강도는 30-200% 범위여야 합니다.');
+      return;
+    }
+    targetValue = intensity;
+  } else if (targetType === 'cadence_rpm') {
+    if (intensity < 50 || intensity > 200) {
+      window.showToast('목표 RPM은 50-200 범위여야 합니다.');
+      return;
+    }
+    targetValue = intensity;
+  } else if (targetType === 'dual') {
+    if (intensity < 30 || intensity > 200) {
+      window.showToast('목표 FTP%는 30-200% 범위여야 합니다.');
+      return;
+    }
+    if (targetRpm < 50 || targetRpm > 200) {
+      window.showToast('목표 RPM은 50-200 범위여야 합니다.');
+      return;
+    }
+    // dual 타입: "100/120" 형식으로 저장
+    targetValue = `${intensity}/${targetRpm}`;
+  } else {
+    window.showToast('올바른 목표 강도 카테고리를 선택해주세요.');
     return;
   }
   
@@ -2360,8 +2664,8 @@ function saveSegment() {
     label: label,
     segment_type: type,
     duration_sec: totalSeconds,
-    target_type: 'ftp_percent',
-    target_value: intensity,
+    target_type: targetType,
+    target_value: targetValue,
     ramp: hasRamp ? 'linear' : 'none',
     ramp_to_value: hasRamp ? rampEndIntensityValue : null
   };
@@ -2473,7 +2777,30 @@ function renderRepeatSegments() {
         <div class="repeat-segment-info">
           <div class="repeat-segment-label">${escapeHtml(segment.label)}</div>
           <div class="repeat-segment-details">
-            ${segment.segment_type} · ${duration} · ${segment.target_value}% FTP
+            ${(() => {
+              const targetType = segment.target_type || 'ftp_pct';
+              if (targetType === 'ftp_pct') {
+                return `${segment.segment_type} · ${duration} · ${Number(segment.target_value) || 0}% FTP`;
+              } else if (targetType === 'cadence_rpm') {
+                return `${segment.segment_type} · ${duration} · ${Number(segment.target_value) || 0} rpm`;
+              } else if (targetType === 'dual') {
+                const targetValue = segment.target_value;
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                  const parts = targetValue.split('/').map(s => s.trim());
+                  if (parts.length >= 2) {
+                    return `${segment.segment_type} · ${duration} · ${parts[0]}% FTP / ${parts[1]} rpm`;
+                  } else {
+                    return `${segment.segment_type} · ${duration} · ${parts[0]}% FTP`;
+                  }
+                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                  return `${segment.segment_type} · ${duration} · ${targetValue[0]}% FTP / ${targetValue[1]} rpm`;
+                } else {
+                  return `${segment.segment_type} · ${duration} · ${Number(targetValue) || 100}% FTP`;
+                }
+              } else {
+                return `${segment.segment_type} · ${duration} · ${Number(segment.target_value) || 0}% FTP`;
+              }
+            })()}
           </div>
         </div>
         <div class="repeat-segment-actions">
@@ -2511,6 +2838,9 @@ function editRepeatSegment(index) {
   const repeatModal = safeGetElement('repeatModal');
   const segmentModal = safeGetElement('segmentModal');
   
+  const segmentTargetType = safeGetElement('segmentTargetType');
+  const segmentTargetRpm = safeGetElement('segmentTargetRpm');
+  
   if (modalTitle) modalTitle.textContent = '반복 세그먼트 편집';
   if (segmentLabel) segmentLabel.value = segment.label || '';
   if (segmentType) segmentType.value = segment.segment_type || 'interval';
@@ -2520,7 +2850,40 @@ function editRepeatSegment(index) {
   if (segmentMinutes) segmentMinutes.value = minutes;
   if (segmentSeconds) segmentSeconds.value = seconds;
   
-  if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+  // target_type 설정
+  const targetType = segment.target_type || 'ftp_pct';
+  if (segmentTargetType) {
+    segmentTargetType.value = targetType;
+  }
+  
+  // target_value 파싱 및 설정
+  if (targetType === 'dual') {
+    // dual 타입: "100/120" 형식
+    const targetValue = segment.target_value;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        if (segmentIntensity) segmentIntensity.value = parts[0] || 100;
+        if (segmentTargetRpm) segmentTargetRpm.value = parts[1] || 90;
+      } else {
+        if (segmentIntensity) segmentIntensity.value = parts[0] || 100;
+        if (segmentTargetRpm) segmentTargetRpm.value = 90;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      if (segmentIntensity) segmentIntensity.value = targetValue[0] || 100;
+      if (segmentTargetRpm) segmentTargetRpm.value = targetValue[1] || 90;
+    } else {
+      if (segmentIntensity) segmentIntensity.value = segment.target_value || 100;
+      if (segmentTargetRpm) segmentTargetRpm.value = 90;
+    }
+  } else {
+    // ftp_pct 또는 cadence_rpm 타입
+    if (segmentIntensity) segmentIntensity.value = segment.target_value || (targetType === 'cadence_rpm' ? 90 : 100);
+    if (segmentTargetRpm) segmentTargetRpm.value = 90;
+  }
+  
+  // target_type에 따라 필드 업데이트
+  updateTargetTypeFields();
   
   const hasRamp = segment.ramp && segment.ramp !== 'none';
   if (segmentRamp) segmentRamp.checked = hasRamp;
@@ -2596,10 +2959,12 @@ function saveRepeatSegment() {
   const segmentMinutes = safeGetElement('segmentMinutes');
   const segmentSeconds = safeGetElement('segmentSeconds');
   const segmentIntensity = safeGetElement('segmentIntensity');
+  const segmentTargetType = safeGetElement('segmentTargetType');
+  const segmentTargetRpm = safeGetElement('segmentTargetRpm');
   const segmentRamp = safeGetElement('segmentRamp');
   const rampEndIntensity = safeGetElement('rampEndIntensity');
   
-  if (!segmentLabel || !segmentType || !segmentMinutes || !segmentSeconds || !segmentIntensity) {
+  if (!segmentLabel || !segmentType || !segmentMinutes || !segmentSeconds || !segmentIntensity || !segmentTargetType) {
     window.showToast('세그먼트 폼 요소를 찾을 수 없습니다.');
     return;
   }
@@ -2608,7 +2973,9 @@ function saveRepeatSegment() {
   const type = segmentType.value;
   const minutes = parseInt(segmentMinutes.value) || 0;
   const seconds = parseInt(segmentSeconds.value) || 0;
-  const intensity = parseInt(segmentIntensity.value) || 100;
+  const targetType = segmentTargetType.value || 'ftp_pct';
+  const intensity = parseInt(segmentIntensity.value) || (targetType === 'cadence_rpm' ? 90 : 100);
+  const targetRpm = segmentTargetRpm ? parseInt(segmentTargetRpm.value) || 90 : 90;
   const hasRamp = segmentRamp ? segmentRamp.checked : false;
   const rampEndIntensityValue = rampEndIntensity ? parseInt(rampEndIntensity.value) || 120 : 120;
   
@@ -2623,8 +2990,33 @@ function saveRepeatSegment() {
     return;
   }
   
-  if (intensity < 30 || intensity > 200) {
-    window.showToast('목표 강도는 30-200% 범위여야 합니다.');
+  // target_type에 따른 유효성 검사
+  let targetValue;
+  if (targetType === 'ftp_pct') {
+    if (intensity < 30 || intensity > 200) {
+      window.showToast('목표 강도는 30-200% 범위여야 합니다.');
+      return;
+    }
+    targetValue = intensity;
+  } else if (targetType === 'cadence_rpm') {
+    if (intensity < 50 || intensity > 200) {
+      window.showToast('목표 RPM은 50-200 범위여야 합니다.');
+      return;
+    }
+    targetValue = intensity;
+  } else if (targetType === 'dual') {
+    if (intensity < 30 || intensity > 200) {
+      window.showToast('목표 FTP%는 30-200% 범위여야 합니다.');
+      return;
+    }
+    if (targetRpm < 50 || targetRpm > 200) {
+      window.showToast('목표 RPM은 50-200 범위여야 합니다.');
+      return;
+    }
+    // dual 타입: "100/120" 형식으로 저장
+    targetValue = `${intensity}/${targetRpm}`;
+  } else {
+    window.showToast('올바른 목표 강도 카테고리를 선택해주세요.');
     return;
   }
   
@@ -2634,8 +3026,8 @@ function saveRepeatSegment() {
       label: label,
       segment_type: type,
       duration_sec: totalSeconds,
-      target_type: 'ftp_percent',
-      target_value: intensity,
+      target_type: targetType,
+      target_value: targetValue,
       ramp: hasRamp ? 'linear' : 'none',
       ramp_to_value: hasRamp ? rampEndIntensityValue : null
     };
@@ -2758,6 +3150,7 @@ window.saveSegment = saveSegment;
 window.closeSegmentModal = closeSegmentModal;
 window.deleteCurrentSegment = deleteCurrentSegment;
 window.toggleRampSettings = toggleRampSettings;
+window.updateTargetTypeFields = updateTargetTypeFields;
 window.renderSegments = renderSegments;
 window.updateSegmentSummary = updateSegmentSummary;
 window.changeSegmentPage = changeSegmentPage;
