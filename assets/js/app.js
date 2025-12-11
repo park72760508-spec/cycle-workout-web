@@ -1042,17 +1042,36 @@ function getSegmentFtpPercent(seg) {
         }
       } else {
         // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
-        // 하지만 dual 타입은 "100,120" 형식이어야 하므로 경고
-        console.warn('[getSegmentFtpPercent] dual 타입인데 target_value에 쉼표가 없습니다:', targetValue);
-        // 숫자로 변환 시도 (하지만 이는 정확하지 않음)
+        // DB에서 "100,120"이 숫자 100120으로 변환된 경우 처리
         const numValue = Number(targetValueStr);
         if (!isNaN(numValue) && numValue > 0) {
-          // 숫자가 너무 크면 (예: 100120) 잘못된 형식으로 판단
-          if (numValue > 1000) {
+          // 숫자가 1000보다 크면 (예: 100120) "100,120"이 숫자로 변환된 것으로 간주
+          if (numValue > 1000 && numValue < 1000000) {
+            // 100120을 100과 120으로 분리 시도
+            // 마지막 3자리가 RPM일 가능성이 높음 (예: 100120 → 100, 120)
+            const str = String(numValue);
+            if (str.length >= 4) {
+              // 마지막 3자리를 RPM으로, 나머지를 FTP%로 추정
+              const rpmPart = str.slice(-3);
+              const ftpPart = str.slice(0, -3);
+              const estimatedFtp = Number(ftpPart);
+              const estimatedRpm = Number(rpmPart);
+              
+              // 유효성 검사: FTP%는 30-200, RPM은 50-200 범위
+              if (estimatedFtp >= 30 && estimatedFtp <= 200 && estimatedRpm >= 50 && estimatedRpm <= 200) {
+                console.warn('[getSegmentFtpPercent] 숫자로 변환된 값을 복원 시도:', numValue, '→', estimatedFtp, ',', estimatedRpm);
+                return Math.round(estimatedFtp);
+              }
+            }
             console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다:', targetValue);
             return 100; // 기본값 반환
+          } else if (numValue <= 1000) {
+            // 1000 이하는 FTP%로만 간주
+            return Math.round(numValue);
+          } else {
+            console.error('[getSegmentFtpPercent] dual 타입의 target_value가 잘못된 형식입니다:', targetValue);
+            return 100; // 기본값 반환
           }
-          return Math.round(numValue);
         }
       }
     }
@@ -1952,19 +1971,45 @@ function applySegmentTarget(i) {
           }
         } else if (targetValueStr.length > 0) {
           // 쉼표가 없는 경우: 숫자로 저장된 경우일 수 있음
+          // DB에서 "100,120"이 숫자 100120으로 변환된 경우 처리
           console.warn('[dual] target_value에 쉼표가 없습니다. 문자열:', targetValueStr);
           const numValue = Number(targetValueStr);
           if (!isNaN(numValue) && numValue > 0) {
-            // 숫자가 너무 크면 (예: 100120) 잘못된 형식으로 판단
-            if (numValue > 1000) {
-              console.error('[dual] target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
-              // 기본값 사용
-              ftpPercent = 100;
-              targetRpm = 0;
-            } else {
+            // 숫자가 1000보다 크고 1000000보다 작으면 (예: 100120) "100,120"이 숫자로 변환된 것으로 간주
+            if (numValue > 1000 && numValue < 1000000) {
+              // 100120을 100과 120으로 분리 시도
+              // 마지막 3자리가 RPM일 가능성이 높음 (예: 100120 → 100, 120)
+              const str = String(numValue);
+              if (str.length >= 4) {
+                // 마지막 3자리를 RPM으로, 나머지를 FTP%로 추정
+                const rpmPart = str.slice(-3);
+                const ftpPart = str.slice(0, -3);
+                const estimatedFtp = Number(ftpPart);
+                const estimatedRpm = Number(rpmPart);
+                
+                // 유효성 검사: FTP%는 30-200, RPM은 50-200 범위
+                if (estimatedFtp >= 30 && estimatedFtp <= 200 && estimatedRpm >= 50 && estimatedRpm <= 200) {
+                  console.log('[dual] 숫자로 변환된 값을 복원:', numValue, '→ FTP%:', estimatedFtp, 'RPM:', estimatedRpm);
+                  ftpPercent = estimatedFtp;
+                  targetRpm = estimatedRpm;
+                } else {
+                  console.error('[dual] 복원 시도 실패. 유효하지 않은 값:', estimatedFtp, estimatedRpm);
+                  ftpPercent = 100;
+                  targetRpm = 0;
+                }
+              } else {
+                console.error('[dual] target_value가 잘못된 형식입니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
+                ftpPercent = 100;
+                targetRpm = 0;
+              }
+            } else if (numValue <= 1000) {
               // 1000 이하의 숫자는 FTP%로만 간주 (RPM은 0)
               console.warn('[dual] target_value에 쉼표가 없습니다. "100,120" 형식이어야 합니다. 현재 값:', targetValueStr);
               ftpPercent = numValue;
+              targetRpm = 0;
+            } else {
+              console.error('[dual] target_value가 잘못된 형식입니다. 현재 값:', targetValueStr);
+              ftpPercent = 100;
               targetRpm = 0;
             }
           }
