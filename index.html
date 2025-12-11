@@ -957,10 +957,28 @@
           </div>
         </div>
         <div class="form-group">
-          <label>목표 강도 *</label>
+          <label>목표 강도 카테고리 *</label>
+          <select id="segmentTargetType" required onchange="updateTargetTypeFields()">
+            <option value="ftp_pct">% FTP</option>
+            <option value="cadence_rpm">rpm</option>
+            <option value="dual">%FTP, rpm</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-row">
+        <div class="form-group" id="targetValueGroup">
+          <label id="targetValueLabel">목표 강도 *</label>
           <div class="intensity-input">
             <input type="number" id="segmentIntensity" min="30" max="200" value="100" />
-            <span class="input-suffix">% FTP</span>
+            <span class="input-suffix" id="targetValueSuffix">% FTP</span>
+          </div>
+        </div>
+        <div class="form-group hidden" id="targetRpmGroup">
+          <label>목표 RPM *</label>
+          <div class="intensity-input">
+            <input type="number" id="segmentTargetRpm" min="50" max="200" value="90" />
+            <span class="input-suffix">rpm</span>
           </div>
         </div>
       </div>
