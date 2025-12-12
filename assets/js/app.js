@@ -1587,14 +1587,14 @@ function updateSegmentBarTick(){
       
       fill.style.width = (ratio * 100) + "%";
        
-        // 현재 세그먼트인 경우 노란색 투명 배경 강제 적용
+        // 현재 세그먼트인 경우 투명 노란색 배경 강제 적용
         const segEl = document.querySelector(`.timeline-segment[data-index="${i}"]`);
         if (segEl && segEl.classList.contains('is-current')) {
           // CSS가 적용되지 않는 경우를 대비해 인라인 스타일로도 설정
-          fill.style.background = 'linear-gradient(90deg, rgba(255,255,0,0.6) 0%, rgba(255,255,0,0.4) 100%)';
-          fill.style.backgroundColor = 'rgba(255,255,0,0.5)';
+          fill.style.background = 'linear-gradient(90deg, rgba(255,255,0,0.3) 0%, rgba(255,255,0,0.2) 100%)';
+          fill.style.backgroundColor = 'rgba(255,255,0,0.25)';
           fill.style.opacity = '1';
-          fill.style.borderRight = '1px solid rgba(255,255,0,0.7)';
+          fill.style.borderRight = '1px solid rgba(255,255,0,0.4)';
         } else if (elapsed < startAt) {
           // 아직 시작하지 않은 세그먼트는 기본 스타일로 리셋
           fill.style.background = '';
@@ -1678,12 +1678,12 @@ function updateSegmentBarTick(){
         }
       } else if (elapsed >= groupStart && elapsed < groupEnd) {
         groupEl.classList.add("is-current");
-        // 현재 그룹 세그먼트인 경우 노란색 투명 배경 강제 적용
+        // 현재 그룹 세그먼트인 경우 투명 노란색 배경 강제 적용
         if (groupFill) {
-          groupFill.style.background = 'linear-gradient(90deg, rgba(255,255,0,0.6) 0%, rgba(255,255,0,0.4) 100%)';
-          groupFill.style.backgroundColor = 'rgba(255,255,0,0.5)';
+          groupFill.style.background = 'linear-gradient(90deg, rgba(255,255,0,0.3) 0%, rgba(255,255,0,0.2) 100%)';
+          groupFill.style.backgroundColor = 'rgba(255,255,0,0.25)';
           groupFill.style.opacity = '1';
-          groupFill.style.borderRight = '1px solid rgba(255,255,0,0.7)';
+          groupFill.style.borderRight = '1px solid rgba(255,255,0,0.4)';
         }
       } else {
         groupEl.classList.add("is-upcoming");
