@@ -1634,8 +1634,8 @@ function renderCalendarDay(day) {
   if (day.result) {
     if (day.result.status === 'completed') {
       statusClass = 'completed';
-      // 완료된 날짜에도 캘린더 이미지 표시
-      statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px;" />';
+      // 완료된 날짜에는 이미지 없음
+      statusIcon = '';
       statusText = '완료';
     } else if (day.result.status === 'partial') {
       statusClass = 'partial';
@@ -1647,10 +1647,10 @@ function renderCalendarDay(day) {
       statusText = '건너뜀';
     }
   } else if (isTrainingDay) {
-    // 오늘 날짜에 워크아웃이 있으면 주황색톤으로 표시 (과거가 아님)
+    // 오늘 날짜에 워크아웃이 있으면 calendar_n.gif 사용
     if (isToday) {
       statusClass = 'planned';
-      // 현재 날짜에는 주황색톤 이미지 적용
+      // 현재 날짜에는 calendar_n.gif 이미지 적용
       statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
       statusText = '예정';
     } else if (isPast) {
@@ -1658,8 +1658,9 @@ function renderCalendarDay(day) {
       statusIcon = '<img src="assets/img/cancel.png" alt="미실시" style="width: 48px; height: 48px;" />';
       statusText = '미실시';
     } else {
+      // 오늘 이후 나머지 날짜에는 business.png 적용
       statusClass = 'planned';
-      statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px;" />';
+      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
       statusText = '예정';
     }
   } else {
