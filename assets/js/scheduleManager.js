@@ -1872,6 +1872,40 @@ function formatDate(dateString) {
 }
 
 /**
+ * 삭제 진행 오버레이 표시
+ */
+function showDeleteProgressOverlay() {
+  // 기존 오버레이 제거
+  const existing = document.getElementById('schedule-delete-progress-overlay');
+  if (existing) existing.remove();
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'schedule-delete-progress-overlay';
+  overlay.className = 'schedule-delete-progress-overlay';
+  overlay.innerHTML = `
+    <div class="schedule-delete-progress-container">
+      <div class="schedule-delete-spinner">
+        <div class="spinner"></div>
+      </div>
+      <h3>스케줄 삭제 중...</h3>
+      <p class="schedule-delete-message">잠시만 기다려주세요</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+/**
+ * 삭제 진행 오버레이 숨기기
+ */
+function hideDeleteProgressOverlay() {
+  const overlay = document.getElementById('schedule-delete-progress-overlay');
+  if (overlay) {
+    overlay.style.animation = 'fadeOut 0.3s ease-out';
+    setTimeout(() => overlay.remove(), 300);
+  }
+}
+
+/**
  * 훈련 스케줄 삭제
  */
 async function deleteTrainingSchedule(scheduleId, scheduleTitle) {
@@ -1880,20 +1914,30 @@ async function deleteTrainingSchedule(scheduleId, scheduleTitle) {
     return;
   }
   
+  // 삭제 진행 오버레이 표시
+  showDeleteProgressOverlay();
+  
   try {
     const url = `${window.GAS_URL}?action=deleteTrainingSchedule&id=${scheduleId}`;
     const response = await fetch(url);
     const result = await response.json();
     
+    // 삭제 완료 후 약간의 지연 (사용자가 완료를 인지할 수 있도록)
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
     if (result.success) {
+      // 오버레이 숨기기
+      hideDeleteProgressOverlay();
       showToast('스케줄이 삭제되었습니다', 'success');
       // 목록 새로고침
       await loadTrainingSchedules();
     } else {
+      hideDeleteProgressOverlay();
       showToast(result.error || '스케줄 삭제에 실패했습니다', 'error');
     }
   } catch (error) {
     console.error('Error deleting schedule:', error);
+    hideDeleteProgressOverlay();
     showToast('스케줄 삭제 중 오류가 발생했습니다', 'error');
   }
 }
