@@ -5522,9 +5522,35 @@ button[aria-disabled="true"] {
   .calendar-day-content {
     margin-top: 2px;
   }
+  
+  .calendar-result-stats {
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+  
+  .result-stat-item {
+    font-size: 9px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
+  }
+  
+  .result-label {
+    font-size: 8px;
+  }
+  
+  .result-value {
+    font-size: 9px;
+  }
+  
+  .calendar-note {
+    font-size: 9px;
+    padding: 2px 4px;
+    margin-top: 2px;
+  }
 }
 
-@media (max-width: 768px) {
+/* 480px 이상 테블릿 - 모든 정보 표시하되 크기 조정 */
+@media (max-width: 768px) and (min-width: 481px) {
   .calendar-table {
     font-size: 12px;
     border-spacing: 2px;
@@ -5585,6 +5611,7 @@ button[aria-disabled="true"] {
     margin-top: 4px;
     padding-top: 4px;
     font-size: 9px;
+    display: block;
   }
   
   .result-stat-item {
@@ -5605,6 +5632,7 @@ button[aria-disabled="true"] {
     font-size: 9px;
     padding: 2px 4px;
     margin-top: 2px;
+    display: block;
   }
   
   .calendar-no-workout {
@@ -5641,6 +5669,7 @@ button[aria-disabled="true"] {
   }
 }
 
+/* 480px 이하 모바일 - 날짜와 훈련 시간만 표시 */
 @media (max-width: 480px) {
   .calendar-table {
     font-size: 10px;
@@ -5681,16 +5710,17 @@ button[aria-disabled="true"] {
     height: 14px;
   }
   
+  /* 워크아웃 제목 숨김 */
   .calendar-workout-title {
-    font-size: 9px;
-    margin: 1px 0;
-    line-height: 1.1;
+    display: none;
   }
   
+  /* 훈련 시간만 표시 */
   .calendar-workout-duration {
     font-size: 8px;
     padding: 2px 5px;
     margin-top: 1px;
+    display: block;
   }
   
   .calendar-day-content {
@@ -5698,30 +5728,14 @@ button[aria-disabled="true"] {
     gap: 1px;
   }
   
+  /* 평균파워, TSS 등 결과 통계 숨김 */
   .calendar-result-stats {
-    margin-top: 3px;
-    padding-top: 3px;
-    font-size: 7px;
+    display: none;
   }
   
-  .result-stat-item {
-    font-size: 7px;
-    padding: 1px 2px;
-    margin-bottom: 1px;
-  }
-  
-  .result-label {
-    font-size: 7px;
-  }
-  
-  .result-value {
-    font-size: 8px;
-  }
-  
+  /* 노트 숨김 */
   .calendar-note {
-    font-size: 7px;
-    padding: 2px 3px;
-    margin-top: 1px;
+    display: none;
   }
   
   .calendar-no-workout {
