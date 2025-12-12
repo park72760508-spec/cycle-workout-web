@@ -4447,26 +4447,26 @@ button[aria-disabled="true"] {
 .timeline-segment.is-complete .progress-fill::after{ content:""; display:none !important; opacity:0 !important; animation:none !important; background:none !important; }
 
 
-/* 진행 중(현재) 세그먼트/그룹 공통: 노란색 투명 - 최우선 적용 */
+/* 진행 중(현재) 세그먼트/그룹 공통: 투명 노란색 - 최우선 적용 */
 .timeline-segment.is-current .progress-fill,
 .timeline-group.is-current .progress-fill{
   background: linear-gradient(90deg,
-              rgba(255,255,0,0.6) 0%,
-              rgba(255,255,0,0.4) 100%) !important;
+              rgba(255,255,0,0.3) 0%,
+              rgba(255,255,0,0.2) 100%) !important;
   background-image: none !important;
-  background-color: rgba(255,255,0,0.5) !important;
+  background-color: rgba(255,255,0,0.25) !important;
   opacity: 1 !important;
-  border-right: 1px solid rgba(255,255,0,0.7) !important;
-  box-shadow: inset 0 0 6px rgba(255,255,0,0.2) !important;
+  border-right: 1px solid rgba(255,255,0,0.4) !important;
+  box-shadow: inset 0 0 6px rgba(255,255,0,0.15) !important;
 }
 
 /* 현재 세그먼트 인라인 스타일 덮어쓰기 (JS에서 설정하는 색상 무시) */
 .timeline-segment.is-current .progress-fill[style*="background"],
 .timeline-group.is-current .progress-fill[style*="background"] {
   background: linear-gradient(90deg,
-              rgba(255,255,0,0.6) 0%,
-              rgba(255,255,0,0.4) 100%) !important;
-  background-color: rgba(255,255,0,0.5) !important;
+              rgba(255,255,0,0.3) 0%,
+              rgba(255,255,0,0.2) 100%) !important;
+  background-color: rgba(255,255,0,0.25) !important;
   opacity: 1 !important;
 }
 
@@ -4474,12 +4474,12 @@ button[aria-disabled="true"] {
 #timelineSegments .timeline-segment.is-current .progress-fill,
 #timelineSegments .timeline-group.is-current .progress-fill {
   background: linear-gradient(90deg,
-              rgba(255,255,0,0.6) 0%,
-              rgba(255,255,0,0.4) 100%) !important;
-  background-color: rgba(255,255,0,0.5) !important;
+              rgba(255,255,0,0.3) 0%,
+              rgba(255,255,0,0.2) 100%) !important;
+  background-color: rgba(255,255,0,0.25) !important;
   opacity: 1 !important;
-  border-right: 1px solid rgba(255,255,0,0.7) !important;
-  box-shadow: inset 0 0 6px rgba(255,255,0,0.2) !important;
+  border-right: 1px solid rgba(255,255,0,0.4) !important;
+  box-shadow: inset 0 0 6px rgba(255,255,0,0.15) !important;
 }
 
 
