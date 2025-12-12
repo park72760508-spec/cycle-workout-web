@@ -5486,7 +5486,44 @@ button[aria-disabled="true"] {
   border-radius: 8px;
 }
 
-/* 반응형 */
+/* 반응형 - 테블릿 및 작은 화면 대응 */
+@media (max-width: 1024px) {
+  .calendar-day {
+    padding: 8px;
+  }
+  
+  .calendar-day-number {
+    font-size: 18px;
+    padding: 3px 8px;
+    margin-bottom: 4px;
+  }
+  
+  .calendar-status-icon {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+  
+  .calendar-status-icon img {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .calendar-workout-title {
+    font-size: 12px;
+    margin: 2px 0;
+  }
+  
+  .calendar-workout-duration {
+    font-size: 10px;
+    padding: 3px 8px;
+    margin-top: 2px;
+  }
+  
+  .calendar-day-content {
+    margin-top: 2px;
+  }
+}
+
 @media (max-width: 768px) {
   .calendar-table {
     font-size: 12px;
@@ -5495,27 +5532,85 @@ button[aria-disabled="true"] {
   }
   
   .calendar-table-header {
-    font-size: 14px;
-    padding: 10px 6px;
+    font-size: 13px;
+    padding: 8px 4px;
   }
   
   .calendar-month-title {
-    font-size: 22px;
-    padding: 12px;
+    font-size: 20px;
+    padding: 10px;
+    margin-bottom: 16px;
+  }
+  
+  .calendar-day {
+    padding: 6px;
+    border-radius: 10px;
   }
   
   .calendar-day-number {
+    font-size: 15px;
+    padding: 2px 6px;
+    margin-bottom: 3px;
+    min-width: 28px;
+  }
+  
+  .calendar-status-icon {
     font-size: 16px;
-    padding: 3px 8px;
+    margin-bottom: 2px;
+  }
+  
+  .calendar-status-icon img {
+    width: 16px;
+    height: 16px;
   }
   
   .calendar-workout-title {
     font-size: 11px;
+    margin: 2px 0;
+    line-height: 1.2;
   }
   
   .calendar-workout-duration {
+    font-size: 9px;
+    padding: 2px 6px;
+    margin-top: 2px;
+  }
+  
+  .calendar-day-content {
+    margin-top: 2px;
+    gap: 2px;
+  }
+  
+  .calendar-result-stats {
+    margin-top: 4px;
+    padding-top: 4px;
+    font-size: 9px;
+  }
+  
+  .result-stat-item {
+    font-size: 9px;
+    padding: 2px 3px;
+    margin-bottom: 2px;
+  }
+  
+  .result-label {
+    font-size: 8px;
+  }
+  
+  .result-value {
+    font-size: 9px;
+  }
+  
+  .calendar-note {
+    font-size: 9px;
+    padding: 2px 4px;
+    margin-top: 2px;
+  }
+  
+  .calendar-no-workout {
     font-size: 10px;
-    padding: 3px 8px;
+    padding: 3px 6px;
+    margin-top: 2px;
   }
   
   .calendar-weekday-grid {
@@ -5524,8 +5619,8 @@ button[aria-disabled="true"] {
   }
   
   .calendar-weekday-header {
-    font-size: 14px;
-    padding: 10px 6px;
+    font-size: 13px;
+    padding: 8px 4px;
   }
   
   .calendar-weekday-days {
@@ -5549,32 +5644,90 @@ button[aria-disabled="true"] {
 @media (max-width: 480px) {
   .calendar-table {
     font-size: 10px;
-    border-spacing: 2px;
+    border-spacing: 1px;
     padding: 2px;
   }
   
   .calendar-table-header {
-    font-size: 12px;
-    padding: 8px 4px;
+    font-size: 11px;
+    padding: 6px 3px;
   }
   
   .calendar-month-title {
-    font-size: 18px;
-    padding: 10px;
+    font-size: 16px;
+    padding: 8px;
+    margin-bottom: 12px;
+  }
+  
+  .calendar-day {
+    padding: 4px;
+    border-radius: 8px;
   }
   
   .calendar-day-number {
+    font-size: 13px;
+    padding: 2px 5px;
+    margin-bottom: 2px;
+    min-width: 24px;
+  }
+  
+  .calendar-status-icon {
     font-size: 14px;
-    padding: 2px 6px;
+    margin-bottom: 1px;
+  }
+  
+  .calendar-status-icon img {
+    width: 14px;
+    height: 14px;
   }
   
   .calendar-workout-title {
-    font-size: 10px;
+    font-size: 9px;
+    margin: 1px 0;
+    line-height: 1.1;
   }
   
   .calendar-workout-duration {
-    font-size: 9px;
-    padding: 2px 6px;
+    font-size: 8px;
+    padding: 2px 5px;
+    margin-top: 1px;
+  }
+  
+  .calendar-day-content {
+    margin-top: 1px;
+    gap: 1px;
+  }
+  
+  .calendar-result-stats {
+    margin-top: 3px;
+    padding-top: 3px;
+    font-size: 7px;
+  }
+  
+  .result-stat-item {
+    font-size: 7px;
+    padding: 1px 2px;
+    margin-bottom: 1px;
+  }
+  
+  .result-label {
+    font-size: 7px;
+  }
+  
+  .result-value {
+    font-size: 8px;
+  }
+  
+  .calendar-note {
+    font-size: 7px;
+    padding: 2px 3px;
+    margin-top: 1px;
+  }
+  
+  .calendar-no-workout {
+    font-size: 8px;
+    padding: 2px 4px;
+    margin-top: 1px;
   }
   
   .calendar-weekday-grid {
