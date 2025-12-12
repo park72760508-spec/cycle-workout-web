@@ -5334,18 +5334,18 @@ button[aria-disabled="true"] {
 }
 
 .calendar-day-number {
-  font-size: 1.4em; /* 부모 폰트 크기의 1.4배 (블록 크기에 비례) */
+  font-size: 0.84em; /* 부모 폰트 크기의 1.4배 * 0.6 = 0.84em (60% 축소) */
   font-weight: 800;
   color: #064e3b;
-  margin-bottom: 0.4em;
+  margin-bottom: 0.15em; /* 여백 최소화 */
   text-align: center;
-  padding: 0.25em 0.6em;
+  padding: 0.1em 0.35em; /* 여백 최소화 (60% 축소) */
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
-  border-radius: 0.5em;
+  border-radius: 0.3em; /* 여백 최소화 */
   flex-shrink: 0;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* 그림자 축소 */
   border: 1px solid rgba(16, 185, 129, 0.2);
-  min-width: 2em;
+  min-width: 1.2em; /* 60% 축소 */
 }
 
 .calendar-day-content {
