@@ -2080,7 +2080,8 @@ button[aria-disabled="true"] {
 /* 스케줄 생성/저장 진행 오버레이 */
 .schedule-create-progress-overlay,
 .schedule-save-progress-overlay,
-.schedule-training-progress-overlay {
+.schedule-training-progress-overlay,
+.schedule-delete-progress-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -2096,13 +2097,53 @@ button[aria-disabled="true"] {
 
 .schedule-create-progress-container,
 .schedule-save-progress-container,
-.schedule-training-progress-container {
+.schedule-training-progress-container,
+.schedule-delete-progress-container {
   background: white;
   border-radius: 12px;
   padding: 40px;
   max-width: 400px;
   width: 90%;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.schedule-delete-progress-container h3 {
+  margin: 20px 0 10px;
+  color: #dc2626;
+  font-size: 1.5em;
+  font-weight: 700;
+}
+
+.schedule-delete-progress-container .schedule-delete-message {
+  color: #666;
+  font-size: 1em;
+  margin-top: 10px;
+}
+
+.schedule-delete-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.schedule-delete-spinner .spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #dc2626;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 /* 일별 워크아웃 지정 - 날짜 입력 필드 */
