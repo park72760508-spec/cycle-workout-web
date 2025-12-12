@@ -3835,11 +3835,12 @@ button[aria-disabled="true"] {
   font-weight: 700;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
 }
 
 .user-reg-icon {
-  height: 1em;
+  height: 2em;
   width: auto;
   vertical-align: middle;
 }
@@ -3939,7 +3940,7 @@ button[aria-disabled="true"] {
 }
 
 .new-user-icon {
-  height: 1em;
+  height: 2em;
   width: auto;
   vertical-align: middle;
 }
