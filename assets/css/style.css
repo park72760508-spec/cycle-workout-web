@@ -3833,6 +3833,15 @@ button[aria-disabled="true"] {
   margin-bottom: 15px;
   font-size: 1.1em;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-reg-icon {
+  height: 1em;
+  width: auto;
+  vertical-align: middle;
 }
 
 .test-numbers {
@@ -3923,6 +3932,16 @@ button[aria-disabled="true"] {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(104, 211, 145, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.new-user-icon {
+  height: 1em;
+  width: auto;
+  vertical-align: middle;
 }
 
 .new-user-btn:hover {
