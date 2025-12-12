@@ -3586,7 +3586,8 @@ button[aria-disabled="true"] {
   .auth-title-image {
     margin-bottom: 24px;
   }
-  .auth-title-image img {
+  .auth-title-image img,
+  .auth-title-image video {
     border-width: 2px;
   }
   /* 연결 화면 모바일 스타일 */
@@ -3669,7 +3670,8 @@ button[aria-disabled="true"] {
   margin-bottom: 30px;
 }
 
-.auth-title-image img {
+.auth-title-image img,
+.auth-title-image video {
   width: 100%;
   display: block;
   border-radius: 16px;
