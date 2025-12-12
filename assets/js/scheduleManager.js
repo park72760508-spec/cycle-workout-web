@@ -223,7 +223,7 @@ function renderScheduleList(schedules) {
     const canEdit = canDelete; // 수정 권한도 생성자만
     
     return `
-      <div class="schedule-card" onclick="openScheduleCalendar('${schedule.id}')" 
+      <div class="schedule-card ${schedule.password ? 'has-password' : ''}" onclick="openScheduleCalendar('${schedule.id}')" 
            style="opacity: 0; animation: fadeInUp 0.5s ease-out ${animationDelay}s forwards;">
         <div class="schedule-card-header">
           <div class="schedule-icon">${statusIcon}</div>
