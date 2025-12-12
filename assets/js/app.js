@@ -2491,10 +2491,30 @@ function setPaused(isPaused) {
 
 
 // 중복 선언 방지
+// 화면 히스토리 관리
+if (!window.screenHistory) {
+  window.screenHistory = [];
+}
+
 if (!window.showScreen) {
-  window.showScreen = function(id) {
+  window.showScreen = function(id, skipHistory) {
     try {
       console.log(`Switching to screen: ${id}`);
+      
+      // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 히스토리가 비어있지 않을 때)
+      if (!skipHistory) {
+        const currentActive = document.querySelector(".screen.active");
+        if (currentActive && currentActive.id && currentActive.id !== id) {
+          // 같은 화면으로 이동하는 경우는 히스토리에 추가하지 않음
+          if (window.screenHistory.length === 0 || window.screenHistory[window.screenHistory.length - 1] !== currentActive.id) {
+            window.screenHistory.push(currentActive.id);
+            // 히스토리 크기 제한 (최대 10개)
+            if (window.screenHistory.length > 10) {
+              window.screenHistory.shift();
+            }
+          }
+        }
+      }
       
       // 1) 모든 화면 숨김
       document.querySelectorAll(".screen").forEach(s => {
@@ -3063,6 +3083,33 @@ function backToWorkoutSelection() {
   }
 }
 
+// 이전 화면으로 이동하는 함수
+function goBackToPreviousScreen() {
+  if (!window.screenHistory || window.screenHistory.length === 0) {
+    // 히스토리가 없으면 기본적으로 워크아웃 화면으로 이동
+    if (typeof showScreen === "function") {
+      showScreen("workoutScreen", true);
+    }
+    return;
+  }
+  
+  // 히스토리에서 마지막 화면 가져오기
+  const previousScreen = window.screenHistory.pop();
+  
+  if (previousScreen && typeof showScreen === "function") {
+    // skipHistory를 true로 설정하여 이전 화면으로 이동할 때는 히스토리에 추가하지 않음
+    showScreen(previousScreen, true);
+  } else {
+    // 이전 화면이 없거나 유효하지 않으면 워크아웃 화면으로 이동
+    if (typeof showScreen === "function") {
+      showScreen("workoutScreen", true);
+    }
+  }
+}
+
+// 전역 함수로 export
+window.goBackToPreviousScreen = goBackToPreviousScreen;
+
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
 // 사용자 정보 렌더 + W/kg 네온(정적) 적용
 function renderUserInfo() {
@@ -3272,11 +3319,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 훈련 준비 → 워크아웃 변경
+  // 훈련 준비 → 이전 화면으로 이동
   const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
   if (btnBackToWorkouts) {
     btnBackToWorkouts.addEventListener("click", () => {
-      backToWorkoutSelection();
+      goBackToPreviousScreen();
     });
   }
 
