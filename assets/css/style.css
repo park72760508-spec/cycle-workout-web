@@ -440,6 +440,20 @@ button[aria-disabled="true"] {
 
 /* ========== 2) 프로필 선택 화면 (#profileScreen) ========== */
 
+/* 프로필 선택 화면 헤더 아이콘 */
+#profileScreen .header h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.profile-select-icon {
+  height: 3.6em; /* 1.8em (글자 크기) * 2 = 3.6em */
+  width: auto;
+  vertical-align: middle;
+}
+
 /* 프로필 선택 화면 나가기 버튼 - 기기연결 화면과 동일한 스타일 */
 .profile-exit-container {
   margin-top: 24px;
