@@ -2501,13 +2501,21 @@ if (!window.showScreen) {
     try {
       console.log(`Switching to screen: ${id}`);
       
-      // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 히스토리가 비어있지 않을 때)
+      // 현재 활성화된 화면을 히스토리에 추가 (skipHistory가 true가 아니고, 다른 화면으로 이동할 때)
       if (!skipHistory) {
-        const currentActive = document.querySelector(".screen.active");
+        // 현재 활성화된 화면 찾기 (active 클래스 또는 display: block인 화면)
+        const currentActive = document.querySelector(".screen.active") || 
+                              Array.from(document.querySelectorAll(".screen")).find(s => 
+                                s.style.display === "block" || window.getComputedStyle(s).display === "block"
+                              );
+        
         if (currentActive && currentActive.id && currentActive.id !== id) {
           // 같은 화면으로 이동하는 경우는 히스토리에 추가하지 않음
-          if (window.screenHistory.length === 0 || window.screenHistory[window.screenHistory.length - 1] !== currentActive.id) {
+          // 마지막 히스토리와 다를 때만 추가 (중복 방지)
+          const lastHistory = window.screenHistory.length > 0 ? window.screenHistory[window.screenHistory.length - 1] : null;
+          if (lastHistory !== currentActive.id) {
             window.screenHistory.push(currentActive.id);
+            console.log(`Added to history: ${currentActive.id}, History:`, window.screenHistory);
             // 히스토리 크기 제한 (최대 10개)
             if (window.screenHistory.length > 10) {
               window.screenHistory.shift();
@@ -3085,8 +3093,11 @@ function backToWorkoutSelection() {
 
 // 이전 화면으로 이동하는 함수
 function goBackToPreviousScreen() {
+  console.log('goBackToPreviousScreen called, History:', window.screenHistory);
+  
   if (!window.screenHistory || window.screenHistory.length === 0) {
     // 히스토리가 없으면 기본적으로 워크아웃 화면으로 이동
+    console.log('No history, going to workoutScreen');
     if (typeof showScreen === "function") {
       showScreen("workoutScreen", true);
     }
@@ -3095,12 +3106,14 @@ function goBackToPreviousScreen() {
   
   // 히스토리에서 마지막 화면 가져오기
   const previousScreen = window.screenHistory.pop();
+  console.log(`Going back to: ${previousScreen}`);
   
   if (previousScreen && typeof showScreen === "function") {
     // skipHistory를 true로 설정하여 이전 화면으로 이동할 때는 히스토리에 추가하지 않음
     showScreen(previousScreen, true);
   } else {
     // 이전 화면이 없거나 유효하지 않으면 워크아웃 화면으로 이동
+    console.log('Invalid previous screen, going to workoutScreen');
     if (typeof showScreen === "function") {
       showScreen("workoutScreen", true);
     }
