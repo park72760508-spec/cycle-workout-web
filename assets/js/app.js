@@ -3308,7 +3308,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       return `
         <div class="user-card" data-id="${u.id}">
-          <div class="user-name">👤 ${name}</div>
+          <div class="user-name"><img src="assets/img/add-user3.gif" alt="" class="user-name-icon"> ${name}</div>
           <div class="user-meta">FTP ${Number.isFinite(ftp) ? ftp : "-"}W · ${wkg} W/kg</div>
           <button class="btn btn-primary" data-action="select" aria-label="${name} 선택">선택</button>
         </div>

@@ -423,7 +423,7 @@ async function loadUsers() {
       return `
         <div class="user-card" data-user-id="${user.id}">
           <div class="user-header">
-            <div class="user-name">👤 ${user.name}</div>
+            <div class="user-name"><img src="assets/img/add-user3.gif" alt="" class="user-name-icon"> ${user.name}</div>
             <div class="user-actions">
               ${canEdit ? `
                 <button class="btn-edit"   onclick="editUser(${user.id})"   title="수정">✏️</button>
