@@ -2773,11 +2773,11 @@ button[aria-disabled="true"] {
 }
 
 .enhanced-power-progress-bar.achievement-high {
-  background: linear-gradient(90deg, #65a30d 0%, #4d7c0f 100%); /* 진한 녹색 */
+  background: linear-gradient(90deg, #2dd4bf 0%, #14b8a6 100%); /* 민트색 */
 }
 
 .enhanced-power-progress-bar.achievement-over {
-  background: linear-gradient(90deg, #047857 0%, #065f46 100%); /* 매우 진한 녹색 */
+  background: linear-gradient(90deg, #2dd4bf 0%, #14b8a6 100%); /* 민트색 */
 }
 
 /* 현재 파워 상태별 색상 변화 (녹색 톤 기반) */
@@ -4438,22 +4438,22 @@ button[aria-disabled="true"] {
 .timeline-segment.is-complete .progress-fill::after{ content:""; display:none !important; opacity:0 !important; animation:none !important; background:none !important; }
 
 
-/* 진행 중(현재) 세그먼트/그룹 공통: 상단 판넬과 동일한 주황색 */
+/* 진행 중(현재) 세그먼트/그룹 공통: 노란색 투명 */
 .timeline-segment.is-current .progress-fill,
 .timeline-group.is-current .progress-fill{
   background: linear-gradient(90deg,
-              rgba(245,158,11,0.18) 0%,
-              rgba(245,158,11,0.10) 100%) !important;
+              rgba(255,255,0,0.5) 0%,
+              rgba(255,255,0,0.3) 100%) !important;
   background-image: none !important;
   opacity: 1 !important;
-  border-right: 1px solid rgba(245,158,11,0.25) !important;
+  border-right: 1px solid rgba(255,255,0,0.6) !important;
 }
 
 /* 현재 세그먼트 인라인 스타일 덮어쓰기 (JS에서 설정하는 색상 무시) */
 .timeline-segment.is-current .progress-fill[style*="background"] {
   background: linear-gradient(90deg,
-              rgba(245,158,11,0.18) 0%,
-              rgba(245,158,11,0.10) 100%) !important;
+              rgba(255,255,0,0.5) 0%,
+              rgba(255,255,0,0.3) 100%) !important;
   opacity: 1 !important;
 }
 
