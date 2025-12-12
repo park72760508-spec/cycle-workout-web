@@ -861,7 +861,7 @@ button[aria-disabled="true"] {
 }
 
 .user-name-icon {
-  height: 1em; /* 16px (글자 크기)에 맞춤 */
+  height: 2em; /* 16px (글자 크기) * 2 = 2배 크기 */
   width: auto;
   vertical-align: middle;
 }
