@@ -1647,11 +1647,11 @@ function renderCalendarDay(day) {
       statusText = '건너뜀';
     }
   } else if (isTrainingDay) {
-    // 오늘 날짜에 워크아웃이 있으면 calendar_n.gif 사용
+    // 오늘 날짜에 워크아웃이 있으면 calendar_n2.gif 사용
     if (isToday) {
       statusClass = 'planned';
-      // 현재 날짜에는 calendar_n.gif 이미지 적용
-      statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
+      // 현재 날짜에는 calendar_n2.gif 이미지 적용
+      statusIcon = '<img src="assets/img/calendar_n2.gif" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
       statusText = '예정';
     } else if (isPast) {
       statusClass = 'missed';
