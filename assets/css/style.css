@@ -449,7 +449,7 @@ button[aria-disabled="true"] {
 }
 
 .profile-select-icon {
-  height: 3.6em; /* 1.8em (글자 크기) * 2 = 3.6em */
+  height: 2.52em; /* 1.8em (글자 크기) * 2 * 0.7 = 2.52em (70%) */
   width: auto;
   vertical-align: middle;
 }
@@ -850,7 +850,21 @@ button[aria-disabled="true"] {
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
 }
 #profileScreen .user-card:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.08); border-color:#d1d5db; }
-#profileScreen .user-card .user-name{ font-weight:700; font-size:16px; color:var(--text-strong); margin-bottom:4px; }
+#profileScreen .user-card .user-name{ 
+  font-weight:700; 
+  font-size:16px; 
+  color:var(--text-strong); 
+  margin-bottom:4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-name-icon {
+  height: 1em; /* 16px (글자 크기)에 맞춤 */
+  width: auto;
+  vertical-align: middle;
+}
 #profileScreen .user-card .user-meta{ color:var(--text-muted); font-size:13px; }
 
 #profileScreen .btn{
