@@ -1782,6 +1782,21 @@ function startScheduleTraining(day) {
     try {
       updateScheduleTrainingProgress(progressOverlay, 50, '워크아웃 로딩 중...');
       
+      // 현재 화면(훈련 캘린더 화면)을 히스토리에 명시적으로 추가
+      if (!window.screenHistory) {
+        window.screenHistory = [];
+      }
+      const currentScreenId = 'scheduleCalendarScreen';
+      const lastHistory = window.screenHistory.length > 0 ? window.screenHistory[window.screenHistory.length - 1] : null;
+      if (lastHistory !== currentScreenId) {
+        window.screenHistory.push(currentScreenId);
+        console.log(`[startScheduleTraining] Added to history: ${currentScreenId}, History:`, window.screenHistory);
+        // 히스토리 크기 제한
+        if (window.screenHistory.length > 10) {
+          window.screenHistory.shift();
+        }
+      }
+      
       if (typeof window.selectWorkout === 'function') {
         // scheduleDayId를 전역 변수에 저장 (훈련 완료 시 사용)
         window.currentScheduleDayId = day.id;
