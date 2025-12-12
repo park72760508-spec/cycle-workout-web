@@ -1634,8 +1634,8 @@ function renderCalendarDay(day) {
   if (day.result) {
     if (day.result.status === 'completed') {
       statusClass = 'completed';
-      // 완료된 날짜에는 아이콘 없음
-      statusIcon = '';
+      // 완료된 날짜에도 캘린더 이미지 표시
+      statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px;" />';
       statusText = '완료';
     } else if (day.result.status === 'partial') {
       statusClass = 'partial';
@@ -1651,7 +1651,7 @@ function renderCalendarDay(day) {
     if (isToday) {
       statusClass = 'planned';
       // 현재 날짜에는 주황색톤 이미지 적용
-      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
+      statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px; filter: hue-rotate(-20deg) saturate(1.3) brightness(1.1);" />';
       statusText = '예정';
     } else if (isPast) {
       statusClass = 'missed';
@@ -1659,7 +1659,7 @@ function renderCalendarDay(day) {
       statusText = '미실시';
     } else {
       statusClass = 'planned';
-      statusIcon = '<img src="assets/img/business.png" alt="캘린더" style="width: 20px; height: 20px;" />';
+      statusIcon = '<img src="assets/img/calendar_n.gif" alt="캘린더" style="width: 20px; height: 20px;" />';
       statusText = '예정';
     }
   } else {
