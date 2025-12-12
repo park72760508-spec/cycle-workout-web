@@ -5332,22 +5332,22 @@ button[aria-disabled="true"] {
 }
 
 .calendar-day-number {
-  font-size: 20px;
+  font-size: clamp(12px, 2.5vw, 20px); /* 블록 크기에 비례하여 조정 */
   font-weight: 800;
   color: #064e3b;
-  margin-bottom: 6px;
+  margin-bottom: clamp(3px, 0.5vw, 6px);
   text-align: center;
-  padding: 4px 10px;
+  padding: clamp(2px, 0.5vw, 4px) clamp(5px, 1vw, 10px);
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
-  border-radius: 8px;
+  border-radius: clamp(6px, 1vw, 8px);
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(16, 185, 129, 0.2);
-  min-width: 32px;
+  min-width: clamp(24px, 3vw, 32px);
 }
 
 .calendar-day-content {
-  margin-top: 4px;
+  margin-top: clamp(2px, 0.4vw, 4px);
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -5358,23 +5358,23 @@ button[aria-disabled="true"] {
 }
 
 .calendar-status-icon {
-  font-size: 22px;
-  margin-bottom: 4px;
+  font-size: clamp(14px, 2.2vw, 22px); /* 블록 크기에 비례하여 조정 */
+  margin-bottom: clamp(2px, 0.4vw, 4px);
   flex-shrink: 0;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 .calendar-status-icon img {
-  width: 22px;
-  height: 22px;
+  width: clamp(14px, 2.2vw, 22px); /* 블록 크기에 비례하여 조정 */
+  height: clamp(14px, 2.2vw, 22px);
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 .calendar-workout-title {
-  font-size: 13px;
+  font-size: clamp(9px, 1.3vw, 13px); /* 블록 크기에 비례하여 조정 */
   font-weight: 700;
   color: #064e3b;
-  margin: 4px 0;
+  margin: clamp(2px, 0.4vw, 4px) 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5385,14 +5385,14 @@ button[aria-disabled="true"] {
 }
 
 .calendar-workout-duration {
-  font-size: 11px;
+  font-size: clamp(8px, 1.1vw, 11px); /* 블록 크기에 비례하여 조정 */
   font-weight: 600;
   color: #ffffff;
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: clamp(2px, 0.4vw, 4px) clamp(5px, 1vw, 10px);
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.8) 0%, rgba(52, 211, 153, 0.8) 100%);
-  border-radius: 12px;
-  margin-top: 4px;
+  border-radius: clamp(8px, 1.2vw, 12px);
+  margin-top: clamp(2px, 0.4vw, 4px);
   box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.3);
   min-width: fit-content;
@@ -5410,20 +5410,20 @@ button[aria-disabled="true"] {
 }
 
 .calendar-no-workout {
-  font-size: 11px;
+  font-size: clamp(8px, 1.1vw, 11px); /* 블록 크기에 비례하여 조정 */
   font-weight: 600;
   color: #6b7280;
   font-style: italic;
   text-align: center;
-  padding: 4px 8px;
+  padding: clamp(2px, 0.4vw, 4px) clamp(4px, 0.8vw, 8px);
   background: rgba(156, 163, 175, 0.15);
-  border-radius: 8px;
-  margin-top: 4px;
+  border-radius: clamp(6px, 0.8vw, 8px);
+  margin-top: clamp(2px, 0.4vw, 4px);
 }
 
 .calendar-result-stats {
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: clamp(3px, 0.6vw, 6px);
+  padding-top: clamp(3px, 0.6vw, 6px);
   border-top: 1px solid rgba(16, 185, 129, 0.2);
   width: 100%;
 }
@@ -5431,37 +5431,37 @@ button[aria-disabled="true"] {
 .result-stat-item {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
-  margin-bottom: 3px;
-  padding: 2px 4px;
+  font-size: clamp(8px, 1vw, 10px); /* 블록 크기에 비례하여 조정 */
+  margin-bottom: clamp(2px, 0.3vw, 3px);
+  padding: clamp(1px, 0.2vw, 2px) clamp(2px, 0.4vw, 4px);
   background: rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
+  border-radius: clamp(4px, 0.6vw, 6px);
 }
 
 .result-label {
   color: #064e3b;
-  font-size: 9px;
+  font-size: clamp(7px, 0.9vw, 9px); /* 블록 크기에 비례하여 조정 */
   font-weight: 600;
 }
 
 .result-value {
   font-weight: 700;
   color: #059669;
-  font-size: 10px;
+  font-size: clamp(8px, 1vw, 10px); /* 블록 크기에 비례하여 조정 */
 }
 
 .calendar-note {
-  font-size: 10px;
+  font-size: clamp(8px, 1vw, 10px); /* 블록 크기에 비례하여 조정 */
   font-weight: 500;
   color: #047857;
-  margin-top: 4px;
+  margin-top: clamp(2px, 0.4vw, 4px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
-  padding: 3px 6px;
+  padding: clamp(2px, 0.3vw, 3px) clamp(3px, 0.6vw, 6px);
   background: rgba(16, 185, 129, 0.1);
-  border-radius: 6px;
+  border-radius: clamp(4px, 0.6vw, 6px);
   border-left: 3px solid rgba(16, 185, 129, 0.4);
 }
 
@@ -5489,63 +5489,64 @@ button[aria-disabled="true"] {
 /* 반응형 - 테블릿 및 작은 화면 대응 */
 @media (max-width: 1024px) {
   .calendar-day {
-    padding: 8px;
+    padding: clamp(4px, 0.8vw, 8px);
   }
   
+  /* clamp() 함수가 이미 적용되어 있어 추가 조정은 최소값만 조정 */
   .calendar-day-number {
-    font-size: 18px;
-    padding: 3px 8px;
-    margin-bottom: 4px;
+    font-size: clamp(14px, 2.2vw, 18px);
+    padding: clamp(2px, 0.3vw, 3px) clamp(4px, 0.8vw, 8px);
+    margin-bottom: clamp(2px, 0.4vw, 4px);
   }
   
   .calendar-status-icon {
-    font-size: 18px;
-    margin-bottom: 2px;
+    font-size: clamp(16px, 1.8vw, 18px);
+    margin-bottom: clamp(1px, 0.2vw, 2px);
   }
   
   .calendar-status-icon img {
-    width: 18px;
-    height: 18px;
+    width: clamp(16px, 1.8vw, 18px);
+    height: clamp(16px, 1.8vw, 18px);
   }
   
   .calendar-workout-title {
-    font-size: 12px;
-    margin: 2px 0;
+    font-size: clamp(10px, 1.2vw, 12px);
+    margin: clamp(1px, 0.2vw, 2px) 0;
   }
   
   .calendar-workout-duration {
-    font-size: 10px;
-    padding: 3px 8px;
-    margin-top: 2px;
+    font-size: clamp(9px, 1vw, 10px);
+    padding: clamp(2px, 0.3vw, 3px) clamp(4px, 0.8vw, 8px);
+    margin-top: clamp(1px, 0.2vw, 2px);
   }
   
   .calendar-day-content {
-    margin-top: 2px;
+    margin-top: clamp(1px, 0.2vw, 2px);
   }
   
   .calendar-result-stats {
-    margin-top: 4px;
-    padding-top: 4px;
+    margin-top: clamp(2px, 0.4vw, 4px);
+    padding-top: clamp(2px, 0.4vw, 4px);
   }
   
   .result-stat-item {
-    font-size: 9px;
-    padding: 2px 4px;
-    margin-bottom: 2px;
+    font-size: clamp(8px, 0.9vw, 9px);
+    padding: clamp(1px, 0.2vw, 2px) clamp(2px, 0.4vw, 4px);
+    margin-bottom: clamp(1px, 0.2vw, 2px);
   }
   
   .result-label {
-    font-size: 8px;
+    font-size: clamp(7px, 0.8vw, 8px);
   }
   
   .result-value {
-    font-size: 9px;
+    font-size: clamp(8px, 0.9vw, 9px);
   }
   
   .calendar-note {
-    font-size: 9px;
-    padding: 2px 4px;
-    margin-top: 2px;
+    font-size: clamp(8px, 0.9vw, 9px);
+    padding: clamp(1px, 0.2vw, 2px) clamp(2px, 0.4vw, 4px);
+    margin-top: clamp(1px, 0.2vw, 2px);
   }
 }
 
