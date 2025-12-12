@@ -64,6 +64,12 @@ h1,h2,h3,h4 { font-weight: 600; }
   width: auto;
   vertical-align: middle;
 }
+
+.calendar-title-icon {
+  height: 1.2em; /* 글자 높이보다 20% 더 크게 (1.8em * 1.2 = 2.16em) */
+  width: auto;
+  vertical-align: middle;
+}
 .subtitle { font-size: 0.9em; color: #666; }
 
 .card {
