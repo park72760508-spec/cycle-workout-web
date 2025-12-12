@@ -1587,8 +1587,21 @@ function updateSegmentBarTick(){
       
       fill.style.width = (ratio * 100) + "%";
        
-        // 현재 세그먼트 색상은 CSS의 .is-current 클래스로 처리 (주황색)
-        // 인라인 스타일로 색상을 강제 설정하지 않음
+        // 현재 세그먼트인 경우 노란색 투명 배경 강제 적용
+        const segEl = document.querySelector(`.timeline-segment[data-index="${i}"]`);
+        if (segEl && segEl.classList.contains('is-current')) {
+          // CSS가 적용되지 않는 경우를 대비해 인라인 스타일로도 설정
+          fill.style.background = 'linear-gradient(90deg, rgba(255,255,0,0.6) 0%, rgba(255,255,0,0.4) 100%)';
+          fill.style.backgroundColor = 'rgba(255,255,0,0.5)';
+          fill.style.opacity = '1';
+          fill.style.borderRight = '1px solid rgba(255,255,0,0.7)';
+        } else if (elapsed < startAt) {
+          // 아직 시작하지 않은 세그먼트는 기본 스타일로 리셋
+          fill.style.background = '';
+          fill.style.backgroundColor = '';
+          fill.style.opacity = '';
+          fill.style.borderRight = '';
+        }
        
     }
     startAt = endAt;
@@ -1617,6 +1630,10 @@ function updateSegmentBarTick(){
     const groupElapsed = Math.max(0, elapsed - groupStartTime);
     const groupRatio = Math.min(1, Math.max(0, groupElapsed / groupTotalTime));
     
+    // 그룹 경계
+    const groupStart = groupStartTime;
+    const groupEnd   = groupStartTime + groupTotalTime;
+    
     const groupFill = document.getElementById(`groupFill-${groupIndex}`);
     if (groupFill) {
       groupFill.style.width = (groupRatio * 100) + "%";
@@ -1630,9 +1647,6 @@ function updateSegmentBarTick(){
       );
      
       
-      // 그룹 경계
-      const groupStart = groupStartTime;
-      const groupEnd   = groupStartTime + groupTotalTime;
       
       // 달성도 계산: (가중평균 실제W) / (가중평균 타깃W)
       let targetSum = 0, actualSum = 0;
@@ -1655,10 +1669,31 @@ function updateSegmentBarTick(){
         else if (groupAch <= 1.15)        groupEl.classList.add("achievement-good");
         else if (groupAch <= 1.30)        groupEl.classList.add("achievement-high");
         else                              groupEl.classList.add("achievement-over");
+        // 완료된 그룹은 기본 스타일로 리셋
+        if (groupFill) {
+          groupFill.style.background = '';
+          groupFill.style.backgroundColor = '';
+          groupFill.style.opacity = '';
+          groupFill.style.borderRight = '';
+        }
       } else if (elapsed >= groupStart && elapsed < groupEnd) {
         groupEl.classList.add("is-current");
+        // 현재 그룹 세그먼트인 경우 노란색 투명 배경 강제 적용
+        if (groupFill) {
+          groupFill.style.background = 'linear-gradient(90deg, rgba(255,255,0,0.6) 0%, rgba(255,255,0,0.4) 100%)';
+          groupFill.style.backgroundColor = 'rgba(255,255,0,0.5)';
+          groupFill.style.opacity = '1';
+          groupFill.style.borderRight = '1px solid rgba(255,255,0,0.7)';
+        }
       } else {
         groupEl.classList.add("is-upcoming");
+        // 아직 시작하지 않은 그룹은 기본 스타일로 리셋
+        if (groupFill) {
+          groupFill.style.background = '';
+          groupFill.style.backgroundColor = '';
+          groupFill.style.opacity = '';
+          groupFill.style.borderRight = '';
+        }
       }
    
   });
