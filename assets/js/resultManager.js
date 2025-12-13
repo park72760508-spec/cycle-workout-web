@@ -199,95 +199,103 @@ async function saveTrainingResult(extra = {}) {
        }
      }
 
-     // 3. 스케줄 결과 저장 (스케줄에서 시작한 경우) - GAS 저장 성공 여부와 관계없이 저장
-     if (window.currentScheduleDayId) {
-       try {
-         // 세션 통계 계산
-         const stats = calculateSessionStats();
+     // 3. 스케줄 결과 저장 (모든 훈련에 대해 SCHEDULE_RESULTS에 저장)
+     //    - 스케줄 훈련: schedule_day_id는 window.currentScheduleDayId 사용
+     //    - 일반 훈련: schedule_day_id는 null로 저장
+     try {
+       // 세션 통계 계산
+       const stats = calculateSessionStats();
+       
+       // 훈련 시간 계산 (초 단위)
+       const startTime = trainingResult.startTime ? new Date(trainingResult.startTime) : null;
+       const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : new Date();
+       const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+       const duration_min = Math.floor(totalSeconds / 60);
+       
+       // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
+       let tss = trainingResult.tss || 0;
+       let np = trainingResult.normalizedPower || 0;
+       
+       // trainingMetrics에서 계산된 값이 있으면 사용 (가장 정확)
+       if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+         const elapsedSec = window.trainingMetrics.elapsedSec;
+         const np4sum = window.trainingMetrics.np4sum || 0;
+         const count = window.trainingMetrics.count || 1;
          
-         // 훈련 시간 계산 (초 단위)
-         const startTime = trainingResult.startTime ? new Date(trainingResult.startTime) : null;
-         const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : new Date();
-         const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
-         const duration_min = Math.floor(totalSeconds / 60);
-         
-         // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
-         let tss = trainingResult.tss || 0;
-         let np = trainingResult.normalizedPower || 0;
-         
-         // trainingMetrics에서 계산된 값이 있으면 사용 (가장 정확)
-         if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
-           const elapsedSec = window.trainingMetrics.elapsedSec;
-           const np4sum = window.trainingMetrics.np4sum || 0;
-           const count = window.trainingMetrics.count || 1;
+         if (count > 0 && np4sum > 0) {
+           // Normalized Power 계산
+           np = Math.pow(np4sum / count, 0.25);
            
-           if (count > 0 && np4sum > 0) {
-             // Normalized Power 계산
-             np = Math.pow(np4sum / count, 0.25);
-             
-             // Intensity Factor 계산
-             const userFtp = window.currentUser?.ftp || 200;
-             const IF = userFtp > 0 ? (np / userFtp) : 0;
-             
-             // TSS 계산: (시간(시간) * IF^2 * 100)
-             tss = (elapsedSec / 3600) * (IF * IF) * 100;
-           }
-         }
-         
-         // trainingMetrics가 없거나 값이 0인 경우 대체 계산
-         if (!tss || tss === 0) {
+           // Intensity Factor 계산
            const userFtp = window.currentUser?.ftp || 200;
-           
-           // NP가 없으면 평균 파워 * 1.05로 근사 (일반적인 근사치)
-           if (!np || np === 0) {
-             np = Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
-           }
-           
-           // IF 계산
            const IF = userFtp > 0 ? (np / userFtp) : 0;
            
            // TSS 계산: (시간(시간) * IF^2 * 100)
-           tss = (totalSeconds / 3600) * (IF * IF) * 100;
+           tss = (elapsedSec / 3600) * (IF * IF) * 100;
          }
-         
-         // 값 반올림
-         tss = Math.round(tss * 100) / 100;
-         np = Math.round(np * 10) / 10;
-         
-         // 현재 사용자 ID 가져오기
-         const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
-         
-         const scheduleResultData = {
-           scheduleDayId: window.currentScheduleDayId,
-           userId: currentUserId,
-           actualWorkoutId: trainingResult.workoutId || extra.workoutId || null,
-           status: 'completed',
-           duration_min: duration_min,
-           avg_power: stats.avgPower || 0,
-           np: np,
-           tss: tss,
-           hr_avg: stats.avgHR || 0,
-           rpe: 0 // RPE는 사용자 입력 필요
-         };
-         
-         console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
-         
-         const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${encodeURIComponent(scheduleResultData.scheduleDayId)}&userId=${scheduleResultData.userId || ''}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
-         
-         const scheduleResponse = await fetch(scheduleUrl);
-         const scheduleResult = await scheduleResponse.json();
-         
-         if (scheduleResult.success) {
-           console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공');
-           // 스케줄 결과 저장 후 currentScheduleDayId 초기화
-           window.currentScheduleDayId = null;
-         } else {
-           console.warn('[saveTrainingResult] ⚠️ 스케줄 결과 저장 실패:', scheduleResult.error);
-         }
-       } catch (scheduleError) {
-         console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
-         // 스케줄 결과 저장 실패해도 계속 진행
        }
+       
+       // trainingMetrics가 없거나 값이 0인 경우 대체 계산
+       if (!tss || tss === 0) {
+         const userFtp = window.currentUser?.ftp || 200;
+         
+         // NP가 없으면 평균 파워 * 1.05로 근사 (일반적인 근사치)
+         if (!np || np === 0) {
+           np = Math.round(stats.avgPower * 1.05) || stats.avgPower || 0;
+         }
+         
+         // IF 계산
+         const IF = userFtp > 0 ? (np / userFtp) : 0;
+         
+         // TSS 계산: (시간(시간) * IF^2 * 100)
+         tss = (totalSeconds / 3600) * (IF * IF) * 100;
+       }
+       
+       // 값 반올림
+       tss = Math.round(tss * 100) / 100;
+       np = Math.round(np * 10) / 10;
+       
+       // 현재 사용자 ID 가져오기
+       const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
+       
+       // schedule_day_id: 스케줄 훈련이면 window.currentScheduleDayId, 일반 훈련이면 null
+       const scheduleDayId = window.currentScheduleDayId || null;
+       
+       const scheduleResultData = {
+         scheduleDayId: scheduleDayId,
+         userId: currentUserId,
+         actualWorkoutId: trainingResult.workoutId || extra.workoutId || null,
+         status: 'completed',
+         duration_min: duration_min,
+         avg_power: stats.avgPower || 0,
+         np: np,
+         tss: tss,
+         hr_avg: stats.avgHR || 0,
+         rpe: 0 // RPE는 사용자 입력 필요
+       };
+       
+       console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
+       
+       // scheduleDayId가 null인 경우 빈 문자열로 전송 (Code.gs에서 null로 처리)
+       const scheduleDayIdParam = scheduleDayId ? encodeURIComponent(scheduleDayId) : '';
+       
+       const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${scheduleDayIdParam}&userId=${scheduleResultData.userId || ''}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
+       
+       const scheduleResponse = await fetch(scheduleUrl);
+       const scheduleResult = await scheduleResponse.json();
+       
+       if (scheduleResult.success) {
+         console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공');
+         // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
+         if (window.currentScheduleDayId) {
+           window.currentScheduleDayId = null;
+         }
+       } else {
+         console.warn('[saveTrainingResult] ⚠️ 스케줄 결과 저장 실패:', scheduleResult.error);
+       }
+     } catch (scheduleError) {
+       console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
+       // 스케줄 결과 저장 실패해도 계속 진행
      }
 
      // 4. 결과 처리 및 반환

@@ -5672,10 +5672,28 @@ async function loadTrainingJournalCalendar(direction) {
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
     
-    // 훈련 결과 조회
+    // 훈련 결과 조회 (SCHEDULE_RESULTS에서 조회)
     let trainingResults = [];
     try {
-      const result = await window.trainingResults?.getTrainingResults?.(userId, startDateStr, endDateStr);
+      // ensureBaseUrl 함수 사용 (resultManager.js와 동일)
+      const ensureBaseUrl = () => {
+        const base = window.GAS_URL;
+        if (!base) {
+          throw new Error('GAS_URL is not set');
+        }
+        return base;
+      };
+      
+      const baseUrl = ensureBaseUrl();
+      const params = new URLSearchParams({
+        action: 'getScheduleResultsByUser',
+        userId: userId || '',
+        startDate: startDateStr,
+        endDate: endDateStr
+      });
+      const response = await fetch(`${baseUrl}?${params.toString()}`);
+      const result = await response.json();
+      
       if (result?.success && Array.isArray(result.items)) {
         trainingResults = result.items;
       }
@@ -5686,7 +5704,11 @@ async function loadTrainingJournalCalendar(direction) {
     // 날짜별로 그룹화
     const resultsByDate = {};
     trainingResults.forEach(result => {
-      const date = new Date(result.started_at || result.completed_at);
+      // completed_at 또는 completedAt 사용
+      const completedAt = result.completed_at || result.completedAt;
+      if (!completedAt) return;
+      
+      const date = new Date(completedAt);
       const dateStr = date.toISOString().split('T')[0];
       if (!resultsByDate[dateStr]) {
         resultsByDate[dateStr] = [];
@@ -5802,12 +5824,12 @@ function renderTrainingJournalDay(dayData) {
   let content = `<div class="calendar-day-number">${day}</div>`;
   
   if (result) {
-    // 훈련 완료 데이터 표시
-    const durationMin = Math.round((new Date(result.completed_at) - new Date(result.started_at)) / (1000 * 60)) || 0;
+    // 훈련 완료 데이터 표시 (SCHEDULE_RESULTS 구조 사용)
+    const durationMin = result.duration_min || 0;
     const avgPower = Math.round(result.avg_power || 0);
-    const np = Math.round(result.avg_power || 0); // NP는 avg_power로 대체 (실제로는 별도 계산 필요)
+    const np = Math.round(result.np || result.avg_power || 0);
     const tss = Math.round(result.tss || 0);
-    const hrAvg = Math.round(result.avg_hr || 0);
+    const hrAvg = Math.round(result.hr_avg || 0);
     
     content += `
       <div class="calendar-day-content">
