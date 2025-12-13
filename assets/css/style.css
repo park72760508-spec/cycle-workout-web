@@ -5339,6 +5339,67 @@ button[aria-disabled="true"] {
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
 }
 
+/* 훈련일지 캘린더 스타일 */
+#trainingJournalScreen .calendar-day.completed {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(74, 222, 128, 0.35) 100%);
+  border: 2px solid rgba(34, 197, 94, 0.5);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.2);
+}
+
+/* 훈련일지 통계 표시 */
+.training-journal-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  font-size: 0.65em;
+  margin-top: 4px;
+}
+
+.journal-stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1px 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.journal-stat-item .stat-label {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.85em;
+}
+
+.journal-stat-item .stat-value {
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 0.9em;
+}
+
+/* 훈련일지 캘린더에서 휴식 이미지 제거 */
+#trainingJournalScreen .calendar-day.rest,
+#trainingJournalScreen .calendar-day .calendar-status-icon {
+  display: none;
+}
+
+/* 훈련일지 캘린더 날짜 셀 스타일 개선 */
+#trainingJournalScreen .calendar-day {
+  min-height: 80px;
+  padding: 4px;
+}
+
+#trainingJournalScreen .calendar-day-content {
+  margin-top: 2px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  width: 100%;
+  overflow: hidden;
+}
+
 .calendar-day.completed .calendar-status-icon img {
   filter: hue-rotate(0deg) saturate(1.2) brightness(1.1);
 }
