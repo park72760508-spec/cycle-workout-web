@@ -5846,6 +5846,27 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
   `;
   
   container.innerHTML = html;
+  
+  // 훈련 결과가 있는 날짜에 클릭 이벤트 리스너 추가
+  container.querySelectorAll('.calendar-day[data-result]').forEach(dayElement => {
+    dayElement.addEventListener('click', function() {
+      const date = this.getAttribute('data-date');
+      const resultDataStr = this.getAttribute('data-result');
+      if (date && resultDataStr) {
+        try {
+          // HTML 이스케이프 해제
+          const unescaped = resultDataStr.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
+          const resultData = JSON.parse(unescaped);
+          handleTrainingDayClick(date, resultData);
+        } catch (error) {
+          console.error('훈련 데이터 파싱 오류:', error);
+          if (typeof showToast === 'function') {
+            showToast('훈련 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
+          }
+        }
+      }
+    });
+  });
 }
 
 // 훈련일지 날짜 셀 렌더링
@@ -5904,10 +5925,11 @@ function renderTrainingJournalDay(dayData) {
   }
   
   // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
-  const clickHandler = result ? `onclick="handleTrainingDayClick('${date}', ${JSON.stringify(result).replace(/'/g, "&apos;")})"` : '';
+  // JSON을 HTML 이스케이프하여 data 속성에 저장
+  const dataResult = result ? `data-result='${JSON.stringify(result).replace(/'/g, "&#39;").replace(/"/g, "&quot;")}'` : '';
   const cursorStyle = result ? 'style="cursor: pointer;"' : '';
   
-  return `<div class="${classes.join(' ')}" data-date="${date}" ${clickHandler} ${cursorStyle}>${content}</div>`;
+  return `<div class="${classes.join(' ')}" data-date="${date}" ${dataResult} ${cursorStyle}>${content}</div>`;
 }
 
 // 훈련일지 날짜 클릭 핸들러
