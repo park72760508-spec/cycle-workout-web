@@ -6603,3 +6603,211 @@ button[aria-disabled="true"] {
   }
 }
 
+/* ========== 심박수 분석 확대 블록 (좌우 분할 레이아웃) ========== */
+.hr-analysis-expanded {
+  width: 100%;
+  margin-top: 24px;
+}
+
+.hr-analysis-container {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.hr-analysis-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hr-analysis-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.hr-chart-wrapper {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.hr-evaluation-result {
+  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.hr-eval-title {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #dc2626;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.hr-eval-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hr-eval-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+}
+
+.hr-eval-label {
+  font-size: 0.95em;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.hr-eval-value {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.hr-chart-guide-expanded {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.hr-guide-title {
+  font-size: 1.2em;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.hr-guide-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hr-zone-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.hr-zone-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.hr-zone-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.hr-zone-info {
+  flex: 1;
+}
+
+.hr-zone-name {
+  font-size: 1em;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.hr-zone-range {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #3b82f6;
+  margin-bottom: 4px;
+}
+
+.hr-zone-desc {
+  font-size: 0.85em;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.hr-current-analysis {
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+}
+
+.hr-current-title {
+  font-size: 1.1em;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.hr-current-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hr-current-value {
+  font-size: 1em;
+  color: #374151;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.hr-current-desc {
+  font-size: 0.9em;
+  color: #4b5563;
+  line-height: 1.6;
+  text-align: center;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 8px;
+}
+
+/* 반응형: 모바일에서는 세로 배치 */
+@media (max-width: 768px) {
+  .hr-analysis-container {
+    flex-direction: column;
+  }
+  
+  .hr-analysis-left,
+  .hr-analysis-right {
+    flex: 1;
+  }
+  
+  .hr-chart-wrapper {
+    min-height: 250px;
+  }
+  
+  .hr-chart-guide-expanded {
+    min-height: 300px;
+  }
+}
+
