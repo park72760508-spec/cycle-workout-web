@@ -5472,6 +5472,12 @@ button[aria-disabled="true"] {
   font-size: 1em; /* 훈련 캘린더와 동일한 크기 */
 }
 
+/* 훈련 캘린더 및 훈련일지 주말/공휴일 주황색 표시 */
+.calendar-day.holiday-weekend .calendar-day-number {
+  color: #f97316; /* 주황색 */
+  font-weight: 700;
+}
+
 /* 훈련일지 캘린더에서 휴식 이미지 제거 */
 #trainingJournalScreen .calendar-day.rest,
 #trainingJournalScreen .calendar-day .calendar-status-icon {
