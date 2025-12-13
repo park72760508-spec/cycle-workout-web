@@ -5983,7 +5983,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
     
-    // 프롬프트 생성
+    // 프롬프트 생성 (JSON 형식으로 구조화된 응답 요청)
     const prompt = `다음은 사이클 훈련 데이터입니다. 전문적인 분석, 평가, 그리고 코칭 피드백을 제공해주세요.
 
 **훈련 정보:**
@@ -6002,27 +6002,43 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
 - 체중: ${weight}kg
 - W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
 
-다음 형식으로 분석 보고서를 작성해주세요:
+다음 JSON 형식으로 응답해주세요. 지표는 숫자로, 평가는 0-100 점수로, 텍스트는 한국어로 제공해주세요:
 
-1. **훈련 요약**
-   - 훈련 강도 평가
-   - 목표 달성도
+{
+  "summary": {
+    "intensityLevel": "낮음|보통|높음|매우높음",
+    "intensityScore": 0-100,
+    "goalAchievement": 0-100,
+    "overallRating": 0-100
+  },
+  "metrics": {
+    "powerAnalysis": {
+      "avgPowerPercent": ${ftp > 0 ? ((avgPower / ftp) * 100).toFixed(1) : 0},
+      "npPercent": ${ftp > 0 ? ((np / ftp) * 100).toFixed(1) : 0},
+      "powerZone": "회복|지구력|템포|역치|VO2max|무산소|신경근",
+      "powerScore": 0-100
+    },
+    "tssAnalysis": {
+      "tssValue": ${tss},
+      "tssCategory": "낮음|보통|높음|매우높음",
+      "recoveryTime": "시간",
+      "tssScore": 0-100
+    },
+    "heartRateAnalysis": {
+      "hrAvg": ${hrAvg},
+      "hrZone": "회복|지구력|역치|무산소",
+      "hrScore": 0-100
+    }
+  },
+  "coaching": {
+    "strengths": ["강점1", "강점2", "강점3"],
+    "improvements": ["개선점1", "개선점2", "개선점3"],
+    "recommendations": ["권장사항1", "권장사항2", "권장사항3"]
+  },
+  "overallAnalysis": "종합적인 훈련 평가와 장기적인 발전 방향에 대한 상세한 서술형 분석 (2-3 문단)"
+}
 
-2. **데이터 분석**
-   - 파워 분석 (FTP 대비)
-   - TSS 해석
-   - 심박수 분석
-
-3. **코칭 피드백**
-   - 강점
-   - 개선점
-   - 다음 훈련 권장사항
-
-4. **종합 평가**
-   - 전체적인 훈련 평가
-   - 장기적인 발전 방향
-
-한국어로 상세하고 전문적인 분석을 제공해주세요.`;
+중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
     // 사용 가능한 모델 및 API 버전 확인
     let modelName = localStorage.getItem('geminiModelName');
@@ -6122,7 +6138,24 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       throw new Error('API 응답 형식이 올바르지 않습니다.');
     }
     
-    const analysisText = data.candidates[0].content.parts[0].text;
+    let analysisText = data.candidates[0].content.parts[0].text;
+    
+    // JSON 파싱 시도
+    let analysisData = null;
+    try {
+      // JSON 코드 블록 제거 (```json ... ```)
+      const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        analysisData = JSON.parse(jsonMatch[1]);
+      } else {
+        // 순수 JSON인 경우
+        analysisData = JSON.parse(analysisText);
+      }
+    } catch (e) {
+      console.warn('JSON 파싱 실패, 텍스트로 표시:', e);
+      // JSON 파싱 실패 시 기존 방식으로 폴백
+      analysisData = null;
+    }
     
     // 분석 결과 저장 (나중에 내보내기용)
     window.currentAnalysisReport = {
@@ -6135,25 +6168,33 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       hrAvg,
       ftp,
       weight,
-      analysis: analysisText
+      analysis: analysisData ? JSON.stringify(analysisData, null, 2) : analysisText,
+      analysisData: analysisData
     };
     
-    // 결과 표시 (마크다운 형식으로 렌더링)
-    contentDiv.innerHTML = `
-      <div class="analysis-header">
-        <h3>${date} - ${workoutName}</h3>
-        <div class="analysis-meta">
-          <span>훈련 시간: ${durationMin}분</span>
-          <span>평균 파워: ${avgPower}W</span>
-          <span>NP: ${np}W</span>
-          <span>TSS: ${tss}</span>
-          <span>평균 심박: ${hrAvg} bpm</span>
+    // 결과 표시 (구조화된 데이터가 있으면 시각화, 없으면 텍스트)
+    if (analysisData) {
+      contentDiv.innerHTML = renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, analysisData);
+      // 차트 렌더링 (비동기)
+      setTimeout(() => renderAnalysisCharts(analysisData, avgPower, np, tss, hrAvg, ftp), 100);
+    } else {
+      // 폴백: 기존 텍스트 형식
+      contentDiv.innerHTML = `
+        <div class="analysis-header">
+          <h3>${date} - ${workoutName}</h3>
+          <div class="analysis-meta">
+            <span>훈련 시간: ${durationMin}분</span>
+            <span>평균 파워: ${avgPower}W</span>
+            <span>NP: ${np}W</span>
+            <span>TSS: ${tss}</span>
+            <span>평균 심박: ${hrAvg} bpm</span>
+          </div>
         </div>
-      </div>
-      <div class="analysis-content">
-        ${formatAnalysisText(analysisText)}
-      </div>
-    `;
+        <div class="analysis-content">
+          ${formatAnalysisText(analysisText)}
+        </div>
+      `;
+    }
     
   } catch (error) {
     console.error('Gemini API 오류:', error);
@@ -6207,8 +6248,272 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   }
 }
 
+// 시각화된 분석 결과 렌더링
+function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, data) {
+  const summary = data.summary || {};
+  const metrics = data.metrics || {};
+  const coaching = data.coaching || {};
+  const overallAnalysis = data.overallAnalysis || '';
+  
+  // 강도 레벨 색상
+  const intensityColors = {
+    '낮음': '#10b981',
+    '보통': '#3b82f6',
+    '높음': '#f59e0b',
+    '매우높음': '#ef4444'
+  };
+  
+  // 점수 색상
+  function getScoreColor(score) {
+    if (score >= 80) return '#10b981';
+    if (score >= 60) return '#3b82f6';
+    if (score >= 40) return '#f59e0b';
+    return '#ef4444';
+  }
+  
+  return `
+    <div class="analysis-header">
+      <h3>${date} - ${workoutName}</h3>
+      <div class="analysis-meta">
+        <span>훈련 시간: ${durationMin}분</span>
+        <span>평균 파워: ${avgPower}W</span>
+        <span>NP: ${np}W</span>
+        <span>TSS: ${tss}</span>
+        <span>평균 심박: ${hrAvg} bpm</span>
+      </div>
+    </div>
+    
+    <div class="analysis-visualized">
+      <!-- 요약 지표 카드 -->
+      <div class="analysis-section">
+        <h3 class="section-title">📊 훈련 요약</h3>
+        <div class="metric-cards">
+          <div class="metric-card">
+            <div class="metric-label">훈련 강도</div>
+            <div class="metric-value" style="color: ${intensityColors[summary.intensityLevel] || '#666'}">
+              ${summary.intensityLevel || 'N/A'}
+            </div>
+            <div class="metric-score" style="color: ${getScoreColor(summary.intensityScore || 0)}">
+              ${summary.intensityScore || 0}점
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">목표 달성도</div>
+            <div class="metric-value" style="color: ${getScoreColor(summary.goalAchievement || 0)}">
+              ${summary.goalAchievement || 0}%
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar" style="width: ${summary.goalAchievement || 0}%; background: ${getScoreColor(summary.goalAchievement || 0)}"></div>
+            </div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">종합 평가</div>
+            <div class="metric-value" style="color: ${getScoreColor(summary.overallRating || 0)}">
+              ${summary.overallRating || 0}점
+            </div>
+            <div class="metric-score">/ 100점</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 데이터 분석 -->
+      <div class="analysis-section">
+        <h3 class="section-title">📈 데이터 분석</h3>
+        <div class="analysis-charts-container">
+          <div class="chart-wrapper">
+            <div id="powerAnalysisChart" style="width: 100%; height: 250px;"></div>
+          </div>
+          <div class="chart-wrapper">
+            <div id="tssAnalysisChart" style="width: 100%; height: 200px;"></div>
+          </div>
+          <div class="chart-wrapper">
+            <div id="hrAnalysisChart" style="width: 100%; height: 200px;"></div>
+          </div>
+        </div>
+        <div class="metric-details">
+          <div class="detail-card">
+            <div class="detail-label">파워 분석</div>
+            <div class="detail-value">${metrics.powerAnalysis?.powerZone || 'N/A'}</div>
+            <div class="detail-sub">평균: ${avgPower}W (FTP의 ${metrics.powerAnalysis?.avgPowerPercent || 0}%)</div>
+            <div class="detail-score" style="color: ${getScoreColor(metrics.powerAnalysis?.powerScore || 0)}">
+              ${metrics.powerAnalysis?.powerScore || 0}점
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">TSS 분석</div>
+            <div class="detail-value">${metrics.tssAnalysis?.tssCategory || 'N/A'}</div>
+            <div class="detail-sub">회복 예상 시간: ${metrics.tssAnalysis?.recoveryTime || 'N/A'}</div>
+            <div class="detail-score" style="color: ${getScoreColor(metrics.tssAnalysis?.tssScore || 0)}">
+              ${metrics.tssAnalysis?.tssScore || 0}점
+            </div>
+          </div>
+          <div class="detail-card">
+            <div class="detail-label">심박수 분석</div>
+            <div class="detail-value">${metrics.heartRateAnalysis?.hrZone || 'N/A'}</div>
+            <div class="detail-sub">평균: ${hrAvg} bpm</div>
+            <div class="detail-score" style="color: ${getScoreColor(metrics.heartRateAnalysis?.hrScore || 0)}">
+              ${metrics.heartRateAnalysis?.hrScore || 0}점
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 코칭 피드백 -->
+      <div class="analysis-section">
+        <h3 class="section-title">💡 코칭 피드백</h3>
+        <div class="coaching-grid">
+          <div class="coaching-card positive">
+            <div class="coaching-icon">✅</div>
+            <div class="coaching-title">강점</div>
+            <ul class="coaching-list">
+              ${(coaching.strengths || []).map(s => `<li>${s}</li>`).join('')}
+            </ul>
+          </div>
+          <div class="coaching-card improvement">
+            <div class="coaching-icon">🔧</div>
+            <div class="coaching-title">개선점</div>
+            <ul class="coaching-list">
+              ${(coaching.improvements || []).map(i => `<li>${i}</li>`).join('')}
+            </ul>
+          </div>
+          <div class="coaching-card recommendation">
+            <div class="coaching-icon">📋</div>
+            <div class="coaching-title">권장사항</div>
+            <ul class="coaching-list">
+              ${(coaching.recommendations || []).map(r => `<li>${r}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 종합 분석 (서술형) -->
+      <div class="analysis-section">
+        <h3 class="section-title">📝 종합 평가</h3>
+        <div class="overall-analysis-text">
+          ${formatAnalysisText(overallAnalysis)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 차트 렌더링
+function renderAnalysisCharts(data, avgPower, np, tss, hrAvg, ftp) {
+  if (typeof google === 'undefined' || !google.charts) {
+    console.warn('Google Charts가 로드되지 않았습니다.');
+    return;
+  }
+  
+  google.charts.load('current', { packages: ['corechart', 'gauge'] });
+  google.charts.setOnLoadCallback(() => {
+    renderPowerChart(data, avgPower, np, ftp);
+    renderTSSChart(data, tss);
+    renderHRChart(data, hrAvg);
+  });
+}
+
+// 파워 분석 차트
+function renderPowerChart(data, avgPower, np, ftp) {
+  const powerAnalysis = data.metrics?.powerAnalysis || {};
+  const avgPercent = ftp > 0 ? (avgPower / ftp) * 100 : 0;
+  const npPercent = ftp > 0 ? (np / ftp) * 100 : 0;
+  
+  const chartData = google.visualization.arrayToDataTable([
+    ['구분', 'FTP 대비 (%)'],
+    ['평균 파워', avgPercent],
+    ['NP', npPercent]
+  ]);
+  
+  const options = {
+    title: '파워 분석 (FTP 대비)',
+    titleTextStyle: { fontSize: 16, bold: true },
+    hAxis: { title: 'FTP 대비 (%)', min: 0, max: 150 },
+    vAxis: { title: '구분' },
+    bars: 'horizontal',
+    colors: ['#3b82f6'],
+    legend: { position: 'none' },
+    backgroundColor: 'transparent',
+    chartArea: { left: 100, top: 40, width: '70%', height: '70%' }
+  };
+  
+  const chart = new google.visualization.BarChart(document.getElementById('powerAnalysisChart'));
+  chart.draw(chartData, options);
+}
+
+// TSS 분석 차트
+function renderTSSChart(data, tss) {
+  const tssAnalysis = data.metrics?.tssAnalysis || {};
+  const tssValue = tss || 0;
+  
+  // TSS 범주별 기준
+  const categories = [
+    { name: '낮음', max: 50, color: '#10b981' },
+    { name: '보통', max: 100, color: '#3b82f6' },
+    { name: '높음', max: 150, color: '#f59e0b' },
+    { name: '매우높음', max: 300, color: '#ef4444' }
+  ];
+  
+  const chartData = google.visualization.arrayToDataTable([
+    ['범주', 'TSS 값'],
+    ['낮음 (0-50)', Math.min(tssValue, 50)],
+    ['보통 (51-100)', tssValue > 50 ? Math.min(tssValue - 50, 50) : 0],
+    ['높음 (101-150)', tssValue > 100 ? Math.min(tssValue - 100, 50) : 0],
+    ['매우높음 (151+)', tssValue > 150 ? tssValue - 150 : 0]
+  ]);
+  
+  const options = {
+    title: `TSS: ${tssValue} (${tssAnalysis.tssCategory || 'N/A'})`,
+    titleTextStyle: { fontSize: 16, bold: true },
+    pieHole: 0.4,
+    colors: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444'],
+    legend: { position: 'bottom' },
+    backgroundColor: 'transparent',
+    pieSliceText: 'none'
+  };
+  
+  const chart = new google.visualization.PieChart(document.getElementById('tssAnalysisChart'));
+  chart.draw(chartData, options);
+}
+
+// 심박수 분석 차트
+function renderHRChart(data, hrAvg) {
+  const hrAnalysis = data.metrics?.heartRateAnalysis || {};
+  
+  // 심박수 구간 (예시, 실제로는 사용자 최대 심박수 기준)
+  const zones = [
+    { name: '회복', min: 0, max: 60 },
+    { name: '지구력', min: 60, max: 70 },
+    { name: '역치', min: 70, max: 80 },
+    { name: '무산소', min: 80, max: 100 }
+  ];
+  
+  const chartData = google.visualization.arrayToDataTable([
+    ['구간', '심박수'],
+    ['회복', 60],
+    ['지구력', 70],
+    ['역치', 80],
+    ['무산소', 100]
+  ]);
+  
+  const options = {
+    title: `평균 심박수: ${hrAvg} bpm (${hrAnalysis.hrZone || 'N/A'})`,
+    titleTextStyle: { fontSize: 16, bold: true },
+    hAxis: { title: '구간' },
+    vAxis: { title: '심박수 (bpm)', min: 0, max: 200 },
+    colors: ['#ef4444'],
+    legend: { position: 'none' },
+    backgroundColor: 'transparent',
+    chartArea: { left: 60, top: 40, width: '75%', height: '70%' }
+  };
+  
+  const chart = new google.visualization.ColumnChart(document.getElementById('hrAnalysisChart'));
+  chart.draw(chartData, options);
+}
+
 // 분석 텍스트 포맷팅 (마크다운 스타일)
 function formatAnalysisText(text) {
+  if (!text) return '<p>분석 내용이 없습니다.</p>';
+  
   // 마크다운 스타일을 HTML로 변환
   let html = text
     // 헤더 변환
