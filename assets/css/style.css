@@ -5455,7 +5455,7 @@ button[aria-disabled="true"] {
   justify-content: space-between;
   align-items: center;
   padding: 2px 4px;
-  background: rgba(255, 255, 255, 0.18); /* 40% 더 연하게 (0.3 * 0.6 = 0.18) */
+  background: rgba(240, 253, 244, 0.8); /* 흰색에 가까운 연한 녹색 바탕 */
   border-radius: 4px;
   margin-bottom: 2px;
 }
