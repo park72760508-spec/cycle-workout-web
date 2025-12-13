@@ -209,7 +209,6 @@ function drawSparkline(canvas, series, opts = {}) {
   ctx.clearRect(0, 0, W, H);
 
   const pad = 10;
-  const bottomPad = 20; // 하단 시간 라벨 공간
   const windowSec = (opts.windowSec ?? 600); // null/0 이면 전체 누적
   const d = series.data();
   if (!d.length) return;
@@ -233,8 +232,8 @@ function drawSparkline(canvas, series, opts = {}) {
   const tSpan = Math.max(1, tMax - tMin);
   const vSpan = Math.max(1e-6, maxV - minV); // 0인 경우 방지
 
-  // 그래프 영역 높이 (하단 시간 라벨 공간 제외)
-  const graphHeight = H - pad - bottomPad;
+  // 그래프 영역 높이 (시간 표시는 별도 블록으로 이동)
+  const graphHeight = H - pad * 2;
 
   // 배경 그라디언트
   const g = ctx.createLinearGradient(0, 0, 0, graphHeight + pad);
@@ -301,41 +300,7 @@ function drawSparkline(canvas, series, opts = {}) {
     ctx.restore();
   }
 
-  // 하단 시간 라벨 그리기
-  // 시간 포맷팅 함수 (초를 MM:SS 형식으로)
-  function formatMMSS(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
-  }
-
-  // 누적 시간 계산 (밀리초를 초로 변환)
-  const totalSeconds = tSpan / 1000;
-  const startTime = 0;
-  const midTime = totalSeconds / 2;
-  const endTime = totalSeconds;
-
-  // 하단 시간 라벨 Y 위치 (캔버스 하단에서 약간 위로)
-  const timeLabelY = H - bottomPad + 8;
-
-  ctx.save();
-  ctx.font = (opts.timeFont || '24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
-  ctx.fillStyle = (opts.timeColor || 'rgba(255,255,255,0.9)');
-  ctx.textBaseline = 'top';
-
-  // 시작 시간 (왼쪽) - "Start 00:00"
-  ctx.textAlign = 'left';
-  ctx.fillText('Start ' + formatMMSS(startTime), pad, timeLabelY);
-
-  // 중간 시간 (가운데) - "Middle (현재 누적 시간 1/2)"
-  ctx.textAlign = 'center';
-  ctx.fillText(formatMMSS(midTime), W / 2, timeLabelY);
-
-  // 끝 시간 (오른쪽) - "End (현재까지 누적 시간)"
-  ctx.textAlign = 'right';
-  ctx.fillText('End ' + formatMMSS(endTime), W - pad, timeLabelY);
-
-  ctx.restore();
+  // 그래프 내부 시간 표시 제거 (별도 블록으로 이동)
 }
 
 // 시리즈에서 AVG/MAX 계산 (windowSec=0 이면 누적 전체)
@@ -2382,6 +2347,9 @@ function startSegmentLoop() {
     if (typeof updateTimeUI === "function") updateTimeUI();
     if (typeof window.updateTrainingDisplay === "function") window.updateTrainingDisplay();
     if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
+    
+    // 그래프 하단 시간 표시 업데이트
+    if (typeof updateChartTimeLabels === "function") updateChartTimeLabels();
 
     // 전체 종료 판단
    // 전체 종료 판단
@@ -2946,12 +2914,54 @@ window.updateTrainingDisplay = function () {
           const hEl = document.getElementById('hrHeaderStats');
           if (pEl) pEl.textContent = `AVG ${pStats.avg} · MAX ${pStats.max}`;
           if (hEl) hEl.textContent = `AVG ${hStats.avg} · MAX ${hStats.max}`;
+          
+          // 3) 그래프 하단 시간 표시 업데이트
+          updateChartTimeLabels();
         }
       } catch (e) {
         console.warn('chart render skipped:', e);
       }
 
 };
+
+// 그래프 하단 시간 표시 업데이트 함수
+function updateChartTimeLabels() {
+  try {
+    // 시간 포맷팅 함수 (초를 MM:SS 형식으로)
+    function formatMMSS(seconds) {
+      const totalSec = Math.floor(seconds);
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+    }
+
+    // 현재 누적 시간 계산 (훈련 시작 후 경과 시간)
+    const elapsedSec = window.trainingState?.elapsedSec || 0;
+    const startTime = 0;
+    const midTime = elapsedSec / 2;
+    const endTime = elapsedSec;
+
+    // 파워 그래프 시간 표시
+    const powerTimeStart = document.getElementById('powerTimeStart');
+    const powerTimeMid = document.getElementById('powerTimeMid');
+    const powerTimeEnd = document.getElementById('powerTimeEnd');
+    
+    if (powerTimeStart) powerTimeStart.textContent = formatMMSS(startTime);
+    if (powerTimeMid) powerTimeMid.textContent = formatMMSS(midTime);
+    if (powerTimeEnd) powerTimeEnd.textContent = formatMMSS(endTime);
+
+    // 심박 그래프 시간 표시
+    const hrTimeStart = document.getElementById('hrTimeStart');
+    const hrTimeMid = document.getElementById('hrTimeMid');
+    const hrTimeEnd = document.getElementById('hrTimeEnd');
+    
+    if (hrTimeStart) hrTimeStart.textContent = formatMMSS(startTime);
+    if (hrTimeMid) hrTimeMid.textContent = formatMMSS(midTime);
+    if (hrTimeEnd) hrTimeEnd.textContent = formatMMSS(endTime);
+  } catch (e) {
+    console.warn('chart time labels update failed:', e);
+  }
+}
 
 
 // *** 시작 시 복구 시도 및 오류 처리 강화 ***
