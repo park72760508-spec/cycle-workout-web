@@ -4363,8 +4363,11 @@ function initializeCurrentScreen(screenId) {
       break;
       
     case 'trainingJournalScreen':
-      // 훈련일지 화면: 캘린더 자동 로드
+      // 훈련일지 화면: 캘린더 자동 로드 및 API 키 로드
       console.log('훈련일지 화면 진입 - 캘린더 로딩 시작');
+      if (typeof loadGeminiApiKey === 'function') {
+        loadGeminiApiKey();
+      }
       if (typeof loadTrainingJournalCalendar === 'function') {
         // 현재 월로 초기화
         trainingJournalCurrentMonth = new Date().getMonth();
@@ -5860,6 +5863,7 @@ function renderTrainingJournalDay(dayData) {
   
   if (result) {
     classes.push('completed');
+    classes.push('clickable-training-day'); // 클릭 가능한 훈련일 표시
   }
   
   // 주말 또는 공휴일인 경우 주황색 클래스 추가
@@ -5899,8 +5903,317 @@ function renderTrainingJournalDay(dayData) {
     `;
   }
   
-  return `<div class="${classes.join(' ')}" data-date="${date}">${content}</div>`;
+  // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
+  const clickHandler = result ? `onclick="handleTrainingDayClick('${date}', ${JSON.stringify(result).replace(/'/g, "&apos;")})"` : '';
+  const cursorStyle = result ? 'style="cursor: pointer;"' : '';
+  
+  return `<div class="${classes.join(' ')}" data-date="${date}" ${clickHandler} ${cursorStyle}>${content}</div>`;
+}
+
+// 훈련일지 날짜 클릭 핸들러
+async function handleTrainingDayClick(date, resultData) {
+  try {
+    // API 키 확인
+    const apiKey = localStorage.getItem('geminiApiKey');
+    if (!apiKey) {
+      if (confirm('Gemini API 키가 설정되지 않았습니다.\n훈련일지 상단에서 API 키를 입력해주세요.\n\n지금 설정하시겠습니까?')) {
+        const apiKeyInput = document.getElementById('geminiApiKey');
+        if (apiKeyInput) {
+          apiKeyInput.focus();
+          apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+      return;
+    }
+    
+    // 모달 표시
+    showTrainingAnalysisModal();
+    
+    // 사용자 정보 가져오기
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (!currentUser) {
+      document.getElementById('trainingAnalysisContent').innerHTML = '<div class="error-message">사용자 정보를 찾을 수 없습니다.</div>';
+      return;
+    }
+    
+    // 분석 실행
+    await analyzeTrainingWithGemini(date, resultData, currentUser, apiKey);
+    
+  } catch (error) {
+    console.error('훈련 분석 오류:', error);
+    document.getElementById('trainingAnalysisContent').innerHTML = 
+      `<div class="error-message">분석 중 오류가 발생했습니다: ${error.message}</div>`;
+  }
+}
+
+// Gemini API를 사용한 훈련 분석
+async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
+  const contentDiv = document.getElementById('trainingAnalysisContent');
+  
+  try {
+    // 훈련 데이터 포맷팅
+    const workoutName = resultData.workout_name || resultData.actual_workout_id || '워크아웃';
+    const durationMin = resultData.duration_min || 0;
+    const avgPower = Math.round(resultData.avg_power || 0);
+    const np = Math.round(resultData.np || resultData.avg_power || 0);
+    const tss = Math.round(resultData.tss || 0);
+    const hrAvg = Math.round(resultData.hr_avg || 0);
+    const ftp = user.ftp || 0;
+    const weight = user.weight || 0;
+    
+    // 프롬프트 생성
+    const prompt = `다음은 사이클 훈련 데이터입니다. 전문적인 분석, 평가, 그리고 코칭 피드백을 제공해주세요.
+
+**훈련 정보:**
+- 날짜: ${date}
+- 워크아웃: ${workoutName}
+- 훈련 시간: ${durationMin}분
+
+**훈련 데이터:**
+- 평균 파워: ${avgPower}W
+- NP (Normalized Power): ${np}W
+- TSS (Training Stress Score): ${tss}
+- 평균 심박수: ${hrAvg} bpm
+
+**사용자 정보:**
+- FTP (Functional Threshold Power): ${ftp}W
+- 체중: ${weight}kg
+- W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
+
+다음 형식으로 분석 보고서를 작성해주세요:
+
+1. **훈련 요약**
+   - 훈련 강도 평가
+   - 목표 달성도
+
+2. **데이터 분석**
+   - 파워 분석 (FTP 대비)
+   - TSS 해석
+   - 심박수 분석
+
+3. **코칭 피드백**
+   - 강점
+   - 개선점
+   - 다음 훈련 권장사항
+
+4. **종합 평가**
+   - 전체적인 훈련 평가
+   - 장기적인 발전 방향
+
+한국어로 상세하고 전문적인 분석을 제공해주세요.`;
+
+    // Gemini API 호출
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      throw new Error('API 응답 형식이 올바르지 않습니다.');
+    }
+    
+    const analysisText = data.candidates[0].content.parts[0].text;
+    
+    // 분석 결과 저장 (나중에 내보내기용)
+    window.currentAnalysisReport = {
+      date,
+      workoutName,
+      durationMin,
+      avgPower,
+      np,
+      tss,
+      hrAvg,
+      ftp,
+      weight,
+      analysis: analysisText
+    };
+    
+    // 결과 표시 (마크다운 형식으로 렌더링)
+    contentDiv.innerHTML = `
+      <div class="analysis-header">
+        <h3>${date} - ${workoutName}</h3>
+        <div class="analysis-meta">
+          <span>훈련 시간: ${durationMin}분</span>
+          <span>평균 파워: ${avgPower}W</span>
+          <span>NP: ${np}W</span>
+          <span>TSS: ${tss}</span>
+          <span>평균 심박: ${hrAvg} bpm</span>
+        </div>
+      </div>
+      <div class="analysis-content">
+        ${formatAnalysisText(analysisText)}
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Gemini API 오류:', error);
+    contentDiv.innerHTML = `
+      <div class="error-message">
+        <h3>분석 오류</h3>
+        <p>${error.message}</p>
+        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+          API 키가 올바른지 확인하거나, Google AI Studio에서 API 사용량을 확인해주세요.
+        </p>
+      </div>
+    `;
+  }
+}
+
+// 분석 텍스트 포맷팅 (마크다운 스타일)
+function formatAnalysisText(text) {
+  // 마크다운 스타일을 HTML로 변환
+  let html = text
+    // 헤더 변환
+    .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+    .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+    .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+    // 볼드
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    // 리스트
+    .replace(/^\- (.*$)/gim, '<li>$1</li>')
+    .replace(/^(\d+)\. (.*$)/gim, '<li>$2</li>')
+    // 줄바꿈
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  
+  // 리스트 래핑
+  html = html.replace(/(<li>.*<\/li>)/g, '<ul>$1</ul>');
+  
+  return `<p>${html}</p>`;
+}
+
+// 분석 모달 표시
+function showTrainingAnalysisModal() {
+  const modal = document.getElementById('trainingAnalysisModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.getElementById('trainingAnalysisContent').innerHTML = `
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">분석 중...</div>
+      </div>
+    `;
+  }
+}
+
+// 분석 모달 닫기
+function closeTrainingAnalysisModal() {
+  const modal = document.getElementById('trainingAnalysisModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  window.currentAnalysisReport = null;
+}
+
+// API 키 저장
+function saveGeminiApiKey() {
+  const apiKeyInput = document.getElementById('geminiApiKey');
+  if (!apiKeyInput) return;
+  
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    if (typeof showToast === 'function') {
+      showToast('API 키를 입력해주세요.', 'error');
+    } else {
+      alert('API 키를 입력해주세요.');
+    }
+    return;
+  }
+  
+  localStorage.setItem('geminiApiKey', apiKey);
+  apiKeyInput.type = 'password'; // 보안을 위해 password 타입 유지
+  
+  if (typeof showToast === 'function') {
+    showToast('API 키가 저장되었습니다.', 'success');
+  } else {
+    alert('API 키가 저장되었습니다.');
+  }
+}
+
+// API 키 로드 (페이지 로드 시)
+function loadGeminiApiKey() {
+  const apiKey = localStorage.getItem('geminiApiKey');
+  const apiKeyInput = document.getElementById('geminiApiKey');
+  if (apiKeyInput && apiKey) {
+    apiKeyInput.value = apiKey;
+  }
+}
+
+// 보고서 내보내기
+function exportAnalysisReport() {
+  if (!window.currentAnalysisReport) {
+    if (typeof showToast === 'function') {
+      showToast('내보낼 분석 결과가 없습니다.', 'error');
+    }
+    return;
+  }
+  
+  const report = window.currentAnalysisReport;
+  
+  // 마크다운 형식으로 보고서 생성
+  const markdown = `# 훈련 분석 보고서
+
+**날짜:** ${report.date}
+**워크아웃:** ${report.workoutName}
+**훈련 시간:** ${report.durationMin}분
+
+## 훈련 데이터
+- 평균 파워: ${report.avgPower}W
+- NP (Normalized Power): ${report.np}W
+- TSS (Training Stress Score): ${report.tss}
+- 평균 심박수: ${report.hrAvg} bpm
+
+## 사용자 정보
+- FTP: ${report.ftp}W
+- 체중: ${report.weight}kg
+- W/kg: ${report.weight > 0 ? (report.ftp / report.weight).toFixed(2) : 'N/A'}
+
+---
+
+## AI 분석 결과
+
+${report.analysis}
+
+---
+
+*생성일시: ${new Date().toLocaleString('ko-KR')}*
+`;
+  
+  // 파일 다운로드
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `훈련분석_${report.date.replace(/-/g, '')}.md`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  if (typeof showToast === 'function') {
+    showToast('보고서가 다운로드되었습니다.', 'success');
+  }
 }
 
 // 전역 함수로 등록
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
+window.handleTrainingDayClick = handleTrainingDayClick;
+window.saveGeminiApiKey = saveGeminiApiKey;
+window.closeTrainingAnalysisModal = closeTrainingAnalysisModal;
+window.exportAnalysisReport = exportAnalysisReport;
