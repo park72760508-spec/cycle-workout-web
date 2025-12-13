@@ -6763,11 +6763,19 @@ async function saveGeminiApiKey() {
     return;
   }
   
-  // API 키 유효성 검증
-  const validateBtn = apiKeyInput.nextElementSibling;
-  if (validateBtn && validateBtn.textContent.includes('저장')) {
-    validateBtn.disabled = true;
-    validateBtn.textContent = '확인 중...';
+  // 저장 버튼 참조 (ID로 정확히 선택)
+  const saveBtn = document.getElementById('saveApiKeyBtn');
+  const originalSaveBtnText = saveBtn ? saveBtn.innerHTML : '저장';
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    // 이미지와 텍스트를 모두 포함한 원본 HTML 저장
+    const saveBtnImg = saveBtn.querySelector('img');
+    if (saveBtnImg) {
+      saveBtn.innerHTML = '<img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 확인 중...';
+    } else {
+      saveBtn.textContent = '확인 중...';
+    }
   }
   
   try {
@@ -6804,9 +6812,10 @@ async function saveGeminiApiKey() {
     }
     return;
   } finally {
-    if (validateBtn) {
-      validateBtn.disabled = false;
-      validateBtn.textContent = '저장';
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      // 원본 HTML 복원
+      saveBtn.innerHTML = originalSaveBtnText;
     }
   }
 }
