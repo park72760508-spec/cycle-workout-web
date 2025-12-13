@@ -6796,6 +6796,7 @@ async function saveGeminiApiKey() {
     // API 키 저장
     localStorage.setItem('geminiApiKey', apiKey);
     apiKeyInput.type = 'password'; // 보안을 위해 password 타입 유지
+    apiKeyInput.disabled = true; // 저장 후 텍스트 상자 비활성화
     
     if (typeof showToast === 'function') {
       showToast('API 키가 확인되고 저장되었습니다.', 'success');
@@ -6824,6 +6825,12 @@ async function saveGeminiApiKey() {
 async function testGeminiApiKey() {
   const apiKeyInput = document.getElementById('geminiApiKey');
   if (!apiKeyInput) return;
+  
+  // 텍스트 상자가 비활성화 상태이면 활성화
+  if (apiKeyInput.disabled) {
+    apiKeyInput.disabled = false;
+    apiKeyInput.focus(); // 포커스 이동
+  }
   
   const apiKey = apiKeyInput.value.trim();
   if (!apiKey) {
