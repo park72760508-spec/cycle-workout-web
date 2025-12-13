@@ -5769,8 +5769,9 @@ button[aria-disabled="true"] {
 /* 코칭 피드백 */
 .coaching-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
+  width: 100%;
 }
 
 .coaching-card {
@@ -5779,6 +5780,10 @@ button[aria-disabled="true"] {
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
 }
 
 .coaching-card.positive {
