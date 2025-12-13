@@ -1759,9 +1759,13 @@
         <label style="font-size: 0.9em; margin-bottom: 4px;">Gemini API 키 (Google AI Studio에서 발급)</label>
         <div style="display: flex; gap: 8px;">
           <input type="password" id="geminiApiKey" placeholder="API 키를 입력하세요" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-          <button class="btn btn-secondary" onclick="saveGeminiApiKey()" style="white-space: nowrap;">저장</button>
+          <button class="btn btn-secondary" id="testApiKeyBtn" onclick="testGeminiApiKey()" style="white-space: nowrap;">API 키 확인</button>
+          <button class="btn btn-primary" onclick="saveGeminiApiKey()" style="white-space: nowrap;">저장</button>
         </div>
-        <small style="color: #666; font-size: 0.85em; margin-top: 4px; display: block;">API 키는 브라우저에 저장됩니다 (localStorage)</small>
+        <small style="color: #666; font-size: 0.85em; margin-top: 4px; display: block;">
+          API 키는 브라우저에 저장됩니다 (localStorage)<br>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8; text-decoration: underline;">Google AI Studio에서 API 키 발급받기</a>
+        </small>
       </div>
     </div>
     
