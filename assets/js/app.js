@@ -5782,7 +5782,11 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
   
   // 6주치 날짜 생성 (42일)
   for (let i = 0; i < 42; i++) {
-    const dateStr = currentDate.toISOString().split('T')[0];
+    // 훈련 캘린더와 동일한 방식으로 로컬 날짜 문자열 생성
+    const year = currentDate.getFullYear();
+    const monthNum = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const dayNum = String(currentDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${monthNum}-${dayNum}`;
     const isCurrentMonth = currentDate.getMonth() === month;
     const isToday = currentDate.getTime() === today.getTime();
     const result = resultsByDate[dateStr]?.[0]; // 첫 번째 결과만 사용
