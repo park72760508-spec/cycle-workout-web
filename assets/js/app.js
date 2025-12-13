@@ -303,7 +303,7 @@ function drawSparkline(canvas, series, opts = {}) {
 
   // 하단 시간 라벨 그리기
   // 시간 포맷팅 함수 (초를 MM:SS 형식으로)
-  function formatTime(seconds) {
+  function formatMMSS(seconds) {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
@@ -315,25 +315,25 @@ function drawSparkline(canvas, series, opts = {}) {
   const midTime = totalSeconds / 2;
   const endTime = totalSeconds;
 
-  // 하단 시간 라벨 Y 위치
-  const timeLabelY = pad + graphHeight + 5;
+  // 하단 시간 라벨 Y 위치 (캔버스 하단에서 약간 위로)
+  const timeLabelY = H - bottomPad + 8;
 
   ctx.save();
   ctx.font = (opts.timeFont || '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
   ctx.fillStyle = (opts.timeColor || 'rgba(255,255,255,0.7)');
   ctx.textBaseline = 'top';
 
-  // 시작 시간 (왼쪽)
+  // 시작 시간 (왼쪽) - "Start 00:00"
   ctx.textAlign = 'left';
-  ctx.fillText(formatTime(startTime), pad, timeLabelY);
+  ctx.fillText('Start ' + formatMMSS(startTime), pad, timeLabelY);
 
-  // 중간 시간 (가운데)
+  // 중간 시간 (가운데) - "Middle (현재 누적 시간 1/2)"
   ctx.textAlign = 'center';
-  ctx.fillText(formatTime(midTime), W / 2, timeLabelY);
+  ctx.fillText(formatMMSS(midTime), W / 2, timeLabelY);
 
-  // 끝 시간 (오른쪽)
+  // 끝 시간 (오른쪽) - "End (현재까지 누적 시간)"
   ctx.textAlign = 'right';
-  ctx.fillText(formatTime(endTime), W - pad, timeLabelY);
+  ctx.fillText('End ' + formatMMSS(endTime), W - pad, timeLabelY);
 
   ctx.restore();
 }
