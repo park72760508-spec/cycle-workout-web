@@ -5635,6 +5635,233 @@ button[aria-disabled="true"] {
   color: #991b1b;
 }
 
+/* 시각화된 분석 결과 스타일 */
+.analysis-visualized {
+  padding: 20px 0;
+}
+
+.analysis-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 1.3em;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #1f2937;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 8px;
+}
+
+/* 지표 카드 */
+.metric-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.metric-label {
+  font-size: 0.9em;
+  color: #6b7280;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.metric-value {
+  font-size: 1.8em;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.metric-score {
+  font-size: 0.85em;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.progress-bar-container {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* 차트 컨테이너 */
+.analysis-charts-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.chart-wrapper {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* 상세 지표 카드 */
+.metric-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.detail-card {
+  background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.detail-label {
+  font-size: 0.9em;
+  color: #3b82f6;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.detail-value {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 4px;
+}
+
+.detail-sub {
+  font-size: 0.85em;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.detail-score {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+/* 코칭 피드백 */
+.coaching-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.coaching-card {
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.coaching-card.positive {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+}
+
+.coaching-card.improvement {
+  border-color: #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.coaching-card.recommendation {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+}
+
+.coaching-icon {
+  font-size: 2em;
+  margin-bottom: 8px;
+}
+
+.coaching-title {
+  font-size: 1.2em;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #1f2937;
+}
+
+.coaching-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.coaching-list li {
+  padding: 8px 0;
+  padding-left: 24px;
+  position: relative;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.coaching-list li::before {
+  content: '•';
+  position: absolute;
+  left: 8px;
+  color: #9ca3af;
+  font-weight: bold;
+}
+
+.coaching-card.positive .coaching-list li::before {
+  color: #10b981;
+}
+
+.coaching-card.improvement .coaching-list li::before {
+  color: #f59e0b;
+}
+
+.coaching-card.recommendation .coaching-list li::before {
+  color: #3b82f6;
+}
+
+/* 종합 분석 텍스트 */
+.overall-analysis-text {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  line-height: 1.8;
+  color: #374151;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.overall-analysis-text p {
+  margin-bottom: 12px;
+}
+
+.overall-analysis-text strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
 #trainingAnalysisModal .error-message h3 {
   margin-top: 0;
   color: #dc2626;
