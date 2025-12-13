@@ -5713,8 +5713,14 @@ async function loadTrainingJournalCalendar(direction) {
       const completedAt = result.completed_at || result.completedAt;
       if (!completedAt) return;
       
+      // 타임존 문제 해결: 로컬 날짜로 변환
       const date = new Date(completedAt);
-      const dateStr = date.toISOString().split('T')[0];
+      // 로컬 날짜 문자열 생성 (YYYY-MM-DD)
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
       if (!resultsByDate[dateStr]) {
         resultsByDate[dateStr] = [];
       }
