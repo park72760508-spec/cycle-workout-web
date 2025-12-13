@@ -6024,12 +6024,16 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
 
 한국어로 상세하고 전문적인 분석을 제공해주세요.`;
 
-    // Gemini API 호출 (최신 모델 사용: gemini-1.5-flash 또는 gemini-1.5-pro)
-    // gemini-1.5-flash는 빠르고 저렴, gemini-1.5-pro는 더 정확하지만 느리고 비쌈
-    const modelName = 'gemini-1.5-flash'; // 또는 'gemini-1.5-pro'
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    // Gemini API 호출 (최신 API 버전 및 모델 사용)
+    // 저장된 모델 설정 확인 (없으면 기본값 사용)
+    let modelName = localStorage.getItem('geminiModelName') || 'gemini-pro'; // 기본 모델
+    let apiVersion = 'v1'; // 기본 API 버전
     
-    const response = await fetch(apiUrl, {
+    // 모델 이름에 따라 API 버전 결정
+    // gemini-pro는 v1beta에서도 작동할 수 있으므로, v1 실패 시 v1beta 시도
+    let apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+    
+    let response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -6042,6 +6046,26 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         }]
       })
     });
+    
+    // v1이 실패하면 v1beta 시도
+    if (!response.ok && apiVersion === 'v1') {
+      console.log('v1 API 실패, v1beta 시도 중...');
+      apiVersion = 'v1beta';
+      apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{
+              text: prompt
+            }]
+          }]
+        })
+      });
+    }
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -6248,7 +6272,7 @@ async function saveGeminiApiKey() {
   }
 }
 
-// API 키 확인 (테스트)
+// API 키 확인 (테스트) 및 사용 가능한 모델 조회
 async function testGeminiApiKey() {
   const apiKeyInput = document.getElementById('geminiApiKey');
   if (!apiKeyInput) return;
@@ -6268,30 +6292,92 @@ async function testGeminiApiKey() {
   }
   
   try {
-    // 사용 가능한 모델 목록 조회
-    const testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    // v1 API로 사용 가능한 모델 목록 조회
+    const testUrl = `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`;
     const testResponse = await fetch(testUrl);
     
     if (!testResponse.ok) {
-      const errorData = await testResponse.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API 오류: ${testResponse.status}`);
+      // v1이 실패하면 v1beta 시도
+      const testUrlBeta = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      const testResponseBeta = await fetch(testUrlBeta);
+      
+      if (!testResponseBeta.ok) {
+        const errorData = await testResponseBeta.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API 오류: ${testResponseBeta.status}`);
+      }
+      
+      const modelsData = await testResponseBeta.json();
+      const availableModels = modelsData.models || [];
+      const geminiModels = availableModels
+        .filter(m => m.name && m.name.includes('gemini'))
+        .map(m => ({
+          name: m.name,
+          displayName: m.displayName || m.name,
+          supportedMethods: m.supportedGenerationMethods || []
+        }));
+      
+      if (geminiModels.length === 0) {
+        throw new Error('사용 가능한 Gemini 모델을 찾을 수 없습니다.');
+      }
+      
+      // generateContent를 지원하는 모델 찾기
+      const supportedModels = geminiModels.filter(m => 
+        m.supportedMethods.includes('generateContent')
+      );
+      
+      if (supportedModels.length === 0) {
+        throw new Error('generateContent를 지원하는 모델을 찾을 수 없습니다.');
+      }
+      
+      // 첫 번째 지원 모델을 기본값으로 저장
+      const defaultModel = supportedModels[0].name.split('/').pop(); // models/gemini-pro -> gemini-pro
+      localStorage.setItem('geminiModelName', defaultModel);
+      
+      if (typeof showToast === 'function') {
+        showToast(`API 키 확인 완료! 사용 가능한 모델: ${supportedModels.length}개`, 'success');
+      } else {
+        alert(`API 키 확인 완료!\n사용 가능한 모델: ${supportedModels.map(m => m.displayName || m.name).join(', ')}`);
+      }
+      
+      console.log('사용 가능한 모델:', supportedModels);
+      return;
     }
     
+    // v1 API 성공
     const modelsData = await testResponse.json();
     const availableModels = modelsData.models || [];
-    const modelNames = availableModels.map(m => m.name).filter(n => n.includes('gemini'));
+    const geminiModels = availableModels
+      .filter(m => m.name && m.name.includes('gemini'))
+      .map(m => ({
+        name: m.name,
+        displayName: m.displayName || m.name,
+        supportedMethods: m.supportedGenerationMethods || []
+      }));
     
-    if (modelNames.length === 0) {
+    if (geminiModels.length === 0) {
       throw new Error('사용 가능한 Gemini 모델을 찾을 수 없습니다.');
     }
     
-    if (typeof showToast === 'function') {
-      showToast(`API 키 확인 완료! 사용 가능한 모델: ${modelNames.length}개`, 'success');
-    } else {
-      alert(`API 키 확인 완료!\n사용 가능한 모델: ${modelNames.join(', ')}`);
+    // generateContent를 지원하는 모델 찾기
+    const supportedModels = geminiModels.filter(m => 
+      m.supportedMethods.includes('generateContent')
+    );
+    
+    if (supportedModels.length === 0) {
+      throw new Error('generateContent를 지원하는 모델을 찾을 수 없습니다.');
     }
     
-    console.log('사용 가능한 모델:', modelNames);
+    // 첫 번째 지원 모델을 기본값으로 저장
+    const defaultModel = supportedModels[0].name.split('/').pop();
+    localStorage.setItem('geminiModelName', defaultModel);
+    
+    if (typeof showToast === 'function') {
+      showToast(`API 키 확인 완료! 사용 가능한 모델: ${supportedModels.length}개`, 'success');
+    } else {
+      alert(`API 키 확인 완료!\n사용 가능한 모델: ${supportedModels.map(m => m.displayName || m.name).join(', ')}`);
+    }
+    
+    console.log('사용 가능한 모델:', supportedModels);
     
   } catch (error) {
     console.error('API 키 테스트 오류:', error);
