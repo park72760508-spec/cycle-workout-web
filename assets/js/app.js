@@ -6024,13 +6024,52 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
 
 한국어로 상세하고 전문적인 분석을 제공해주세요.`;
 
-    // Gemini API 호출 (최신 API 버전 및 모델 사용)
-    // 저장된 모델 설정 확인 (없으면 기본값 사용)
-    let modelName = localStorage.getItem('geminiModelName') || 'gemini-pro'; // 기본 모델
-    let apiVersion = 'v1'; // 기본 API 버전
+    // 사용 가능한 모델 및 API 버전 확인
+    let modelName = localStorage.getItem('geminiModelName');
+    let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
     
-    // 모델 이름에 따라 API 버전 결정
-    // gemini-pro는 v1beta에서도 작동할 수 있으므로, v1 실패 시 v1beta 시도
+    // 저장된 모델이 없거나 유효하지 않으면 동적으로 조회
+    if (!modelName) {
+      console.log('저장된 모델이 없습니다. 사용 가능한 모델을 조회 중...');
+      
+      // v1beta API로 사용 가능한 모델 조회
+      const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      const modelsResponse = await fetch(modelsUrl);
+      
+      if (!modelsResponse.ok) {
+        throw new Error('사용 가능한 모델을 조회할 수 없습니다. API 키를 확인해주세요.');
+      }
+      
+      const modelsData = await modelsResponse.json();
+      const availableModels = modelsData.models || [];
+      
+      // generateContent를 지원하는 Gemini 모델 찾기
+      const supportedModels = availableModels
+        .filter(m => m.name && m.name.includes('gemini') && 
+                     (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => ({
+          name: m.name,
+          shortName: m.name.split('/').pop(), // models/gemini-pro -> gemini-pro
+          displayName: m.displayName || m.name
+        }));
+      
+      if (supportedModels.length === 0) {
+        throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
+      }
+      
+      // 첫 번째 지원 모델 사용
+      const selectedModel = supportedModels[0];
+      modelName = selectedModel.shortName;
+      apiVersion = 'v1beta'; // v1beta에서 조회했으므로 v1beta 사용
+      
+      // 저장
+      localStorage.setItem('geminiModelName', modelName);
+      localStorage.setItem('geminiApiVersion', apiVersion);
+      
+      console.log(`사용 가능한 모델 선택: ${modelName} (${apiVersion})`);
+    }
+    
+    // API 호출
     let apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
     
     let response = await fetch(apiUrl, {
@@ -6047,10 +6086,10 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       })
     });
     
-    // v1이 실패하면 v1beta 시도
-    if (!response.ok && apiVersion === 'v1') {
-      console.log('v1 API 실패, v1beta 시도 중...');
-      apiVersion = 'v1beta';
+    // v1beta가 실패하면 v1 시도
+    if (!response.ok && apiVersion === 'v1beta') {
+      console.log('v1beta API 실패, v1 시도 중...');
+      apiVersion = 'v1';
       apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
       response = await fetch(apiUrl, {
         method: 'POST',
@@ -6065,6 +6104,11 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           }]
         })
       });
+      
+      // 성공하면 API 버전 저장
+      if (response.ok) {
+        localStorage.setItem('geminiApiVersion', apiVersion);
+      }
     }
     
     if (!response.ok) {
@@ -6331,7 +6375,9 @@ async function testGeminiApiKey() {
       
       // 첫 번째 지원 모델을 기본값으로 저장
       const defaultModel = supportedModels[0].name.split('/').pop(); // models/gemini-pro -> gemini-pro
+      const apiVersion = testResponse.ok ? 'v1' : 'v1beta';
       localStorage.setItem('geminiModelName', defaultModel);
+      localStorage.setItem('geminiApiVersion', apiVersion);
       
       if (typeof showToast === 'function') {
         showToast(`API 키 확인 완료! 사용 가능한 모델: ${supportedModels.length}개`, 'success');
@@ -6367,9 +6413,10 @@ async function testGeminiApiKey() {
       throw new Error('generateContent를 지원하는 모델을 찾을 수 없습니다.');
     }
     
-    // 첫 번째 지원 모델을 기본값으로 저장
-    const defaultModel = supportedModels[0].name.split('/').pop();
-    localStorage.setItem('geminiModelName', defaultModel);
+      // 첫 번째 지원 모델을 기본값으로 저장
+      const defaultModel = supportedModels[0].name.split('/').pop();
+      localStorage.setItem('geminiModelName', defaultModel);
+      localStorage.setItem('geminiApiVersion', 'v1');
     
     if (typeof showToast === 'function') {
       showToast(`API 키 확인 완료! 사용 가능한 모델: ${supportedModels.length}개`, 'success');
