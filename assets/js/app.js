@@ -5747,6 +5747,23 @@ async function loadTrainingJournalCalendar(direction) {
   }
 }
 
+// 한국 공휴일 확인 함수
+function isKoreanHoliday(year, month, day) {
+  const holidays = [
+    // 고정 공휴일 (월은 0부터 시작하므로 -1)
+    { month: 0, day: 1 },   // 신정 (1월 1일)
+    { month: 2, day: 1 },   // 삼일절 (3월 1일)
+    { month: 4, day: 5 },   // 어린이날 (5월 5일)
+    { month: 5, day: 6 },   // 현충일 (6월 6일)
+    { month: 7, day: 15 },  // 광복절 (8월 15일)
+    { month: 9, day: 3 },   // 개천절 (10월 3일)
+    { month: 9, day: 9 },   // 한글날 (10월 9일)
+    { month: 11, day: 25 }, // 크리스마스 (12월 25일)
+  ];
+  
+  return holidays.some(h => h.month === month && h.day === day);
+}
+
 // 훈련일지 캘린더 렌더링
 function renderTrainingJournalCalendar(year, month, resultsByDate) {
   const container = document.getElementById('trainingJournalCalendar');
@@ -5770,12 +5787,21 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
     const isToday = currentDate.getTime() === today.getTime();
     const result = resultsByDate[dateStr]?.[0]; // 첫 번째 결과만 사용
     
+    // 요일 확인 (0: 일요일, 6: 토요일)
+    const dayOfWeek = currentDate.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    
+    // 공휴일 확인
+    const isHoliday = isKoreanHoliday(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    
     days.push({
       date: dateStr,
       day: currentDate.getDate(),
       isCurrentMonth,
       isToday,
-      result
+      result,
+      isWeekend,
+      isHoliday
     });
     
     currentDate.setDate(currentDate.getDate() + 1);
@@ -5821,7 +5847,7 @@ function renderTrainingJournalDay(dayData) {
     return '<div class="calendar-day-empty"></div>';
   }
   
-  const { date, day, isToday, result } = dayData;
+  const { date, day, isToday, result, isWeekend, isHoliday } = dayData;
   const classes = ['calendar-day'];
   
   if (isToday) {
@@ -5830,6 +5856,11 @@ function renderTrainingJournalDay(dayData) {
   
   if (result) {
     classes.push('completed');
+  }
+  
+  // 주말 또는 공휴일인 경우 주황색 클래스 추가
+  if (isWeekend || isHoliday) {
+    classes.push('holiday-weekend');
   }
   
   let content = `<div class="calendar-day-number">${day}</div>`;

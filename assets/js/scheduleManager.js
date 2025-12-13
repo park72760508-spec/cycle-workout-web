@@ -1609,6 +1609,25 @@ function renderCalendar(calendar) {
 }
 
 /**
+ * 한국 공휴일 확인 함수
+ */
+function isKoreanHoliday(year, month, day) {
+  const holidays = [
+    // 고정 공휴일 (월은 0부터 시작하므로 -1)
+    { month: 0, day: 1 },   // 신정 (1월 1일)
+    { month: 2, day: 1 },   // 삼일절 (3월 1일)
+    { month: 4, day: 5 },   // 어린이날 (5월 5일)
+    { month: 5, day: 6 },   // 현충일 (6월 6일)
+    { month: 7, day: 15 },  // 광복절 (8월 15일)
+    { month: 9, day: 3 },   // 개천절 (10월 3일)
+    { month: 9, day: 9 },   // 한글날 (10월 9일)
+    { month: 11, day: 25 }, // 크리스마스 (12월 25일)
+  ];
+  
+  return holidays.some(h => h.month === month && h.day === day);
+}
+
+/**
  * 캘린더 일별 셀 렌더링
  */
 function renderCalendarDay(day) {
@@ -1625,6 +1644,13 @@ function renderCalendarDay(day) {
   // 과거 날짜 확인 (오늘 날짜는 과거가 아님)
   const isPast = !isToday && dayDate < today;
   const isTrainingDay = day.isTrainingDay;
+  
+  // 요일 확인 (0: 일요일, 6: 토요일)
+  const dayOfWeek = date.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  
+  // 공휴일 확인
+  const isHoliday = isKoreanHoliday(date.getFullYear(), date.getMonth(), date.getDate());
   
   // 결과 상태에 따른 스타일
   let statusClass = '';
@@ -1669,12 +1695,15 @@ function renderCalendarDay(day) {
     statusText = '휴식';
   }
   
+  // 주말 또는 공휴일인 경우 주황색 클래스 추가
+  const holidayClass = (isWeekend || isHoliday) ? 'holiday-weekend' : '';
+  
   // 오늘 날짜는 클릭 가능하도록 설정 (과거가 아니므로)
   const dayDataAttr = isTrainingDay && (!isPast || isToday) ? `data-day-id="${day.id}" data-day-data='${JSON.stringify(day).replace(/'/g, "&apos;")}'` : '';
   const clickHandler = isTrainingDay && (!isPast || isToday) ? 'onclick="handleCalendarDayClick(this)"' : '';
   
   return `
-    <div class="calendar-day ${statusClass} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''}" 
+    <div class="calendar-day ${statusClass} ${isToday ? 'today' : ''} ${isPast ? 'past' : ''} ${holidayClass}" 
          ${dayDataAttr} ${clickHandler}>
       <div class="calendar-day-number">${date.getDate()}</div>
       
