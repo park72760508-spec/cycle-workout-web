@@ -1756,7 +1756,12 @@
     <!-- Gemini API 키 설정 -->
     <div class="card" style="margin-top: 16px; padding: 12px;">
       <div class="form-group" style="margin-bottom: 0;">
-        <label style="font-size: 0.9em; margin-bottom: 4px;">Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8; text-decoration: underline;">Google AI Studio에서 API 키 발급받기</a>)</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <label style="font-size: 0.9em; margin: 0;">Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8; text-decoration: underline; font-weight: normal;">Google AI Studio에서 API 키 발급받기</a>)</label>
+          <small style="color: #666; font-size: 0.85em; margin: 0;">
+            API 키는 브라우저에 저장됩니다 (localStorage)
+          </small>
+        </div>
         <div style="display: flex; gap: 8px;">
           <input type="password" id="geminiApiKey" placeholder="API 키를 입력하세요" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
           <button class="btn btn-default-style btn-with-icon" id="testApiKeyBtn" onclick="testGeminiApiKey()" style="white-space: nowrap;">
@@ -1768,9 +1773,6 @@
             저장
           </button>
         </div>
-        <small style="color: #666; font-size: 0.85em; margin-top: 4px; display: block;">
-          API 키는 브라우저에 저장됩니다 (localStorage)
-        </small>
       </div>
     </div>
     
