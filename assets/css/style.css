@@ -6269,3 +6269,337 @@ button[aria-disabled="true"] {
   transition: all 0.2s ease;
 }
 
+/* ========== AI 분석 로딩 애니메이션 ========== */
+.ai-loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  min-height: 400px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-size: 200% 200%;
+  animation: aiGradientShift 8s ease infinite;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+@keyframes aiGradientShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* AI 뇌 네트워크 애니메이션 */
+.ai-brain-animation {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin-bottom: 40px;
+}
+
+.ai-neural-network {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.neural-node {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00d4ff, #5b86e5);
+  box-shadow: 
+    0 0 20px rgba(0, 212, 255, 0.8),
+    0 0 40px rgba(91, 134, 229, 0.6),
+    inset 0 0 10px rgba(255, 255, 255, 0.3);
+  animation: neuralPulse 2s ease-in-out infinite;
+}
+
+.neural-node.node-1 {
+  top: 20%;
+  left: 30%;
+  animation-delay: 0s;
+}
+
+.neural-node.node-2 {
+  top: 20%;
+  right: 30%;
+  animation-delay: 0.3s;
+}
+
+.neural-node.node-3 {
+  top: 50%;
+  left: 10%;
+  animation-delay: 0.6s;
+}
+
+.neural-node.node-4 {
+  top: 50%;
+  right: 10%;
+  animation-delay: 0.9s;
+}
+
+.neural-node.node-5 {
+  bottom: 20%;
+  left: 30%;
+  animation-delay: 1.2s;
+}
+
+.neural-node.node-6 {
+  bottom: 20%;
+  right: 30%;
+  animation-delay: 1.5s;
+}
+
+@keyframes neuralPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 
+      0 0 20px rgba(0, 212, 255, 0.8),
+      0 0 40px rgba(91, 134, 229, 0.6),
+      inset 0 0 10px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
+    box-shadow: 
+      0 0 30px rgba(0, 212, 255, 1),
+      0 0 60px rgba(91, 134, 229, 0.8),
+      inset 0 0 15px rgba(255, 255, 255, 0.5);
+  }
+}
+
+.neural-connection {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(0, 212, 255, 0.6) 50%, 
+    transparent 100%);
+  transform-origin: left center;
+  animation: neuralFlow 2s ease-in-out infinite;
+}
+
+.neural-connection.conn-1 {
+  top: 25%;
+  left: 35%;
+  width: 60px;
+  transform: rotate(15deg);
+  animation-delay: 0s;
+}
+
+.neural-connection.conn-2 {
+  top: 25%;
+  left: 50%;
+  width: 60px;
+  transform: rotate(-15deg);
+  animation-delay: 0.3s;
+}
+
+.neural-connection.conn-3 {
+  top: 55%;
+  left: 15%;
+  width: 80px;
+  transform: rotate(45deg);
+  animation-delay: 0.6s;
+}
+
+.neural-connection.conn-4 {
+  top: 55%;
+  left: 50%;
+  width: 80px;
+  transform: rotate(-45deg);
+  animation-delay: 0.9s;
+}
+
+.neural-connection.conn-5 {
+  bottom: 25%;
+  left: 35%;
+  width: 60px;
+  transform: rotate(-15deg);
+  animation-delay: 1.2s;
+}
+
+.neural-connection.conn-6 {
+  bottom: 25%;
+  left: 50%;
+  width: 60px;
+  transform: rotate(15deg);
+  animation-delay: 1.5s;
+}
+
+@keyframes neuralFlow {
+  0% {
+    opacity: 0.3;
+    transform: scaleX(0.5);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  100% {
+    opacity: 0.3;
+    transform: scaleX(0.5);
+  }
+}
+
+/* AI 파티클 효과 */
+.ai-particles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.8);
+  animation: particleFloat 3s ease-in-out infinite;
+}
+
+.particle-1 {
+  top: 10%;
+  left: 20%;
+  animation-delay: 0s;
+}
+
+.particle-2 {
+  top: 30%;
+  right: 15%;
+  animation-delay: 0.5s;
+}
+
+.particle-3 {
+  top: 60%;
+  left: 25%;
+  animation-delay: 1s;
+}
+
+.particle-4 {
+  bottom: 20%;
+  right: 30%;
+  animation-delay: 1.5s;
+}
+
+.particle-5 {
+  top: 15%;
+  left: 50%;
+  animation-delay: 2s;
+}
+
+.particle-6 {
+  bottom: 15%;
+  left: 45%;
+  animation-delay: 2.5s;
+}
+
+@keyframes particleFloat {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translate(20px, -30px) scale(1.5);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(-15px, -50px) scale(1.2);
+    opacity: 0.8;
+  }
+  75% {
+    transform: translate(25px, -20px) scale(1.3);
+    opacity: 0.9;
+  }
+}
+
+/* AI 로딩 텍스트 */
+.ai-loading-text {
+  text-align: center;
+  z-index: 10;
+  position: relative;
+}
+
+.ai-title {
+  font-size: 1.4em;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 24px;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.5),
+    0 0 20px rgba(0, 212, 255, 0.5),
+    0 0 30px rgba(91, 134, 229, 0.3);
+  animation: aiTitleGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes aiTitleGlow {
+  0% {
+    text-shadow: 
+      0 0 10px rgba(255, 255, 255, 0.5),
+      0 0 20px rgba(0, 212, 255, 0.5),
+      0 0 30px rgba(91, 134, 229, 0.3);
+  }
+  100% {
+    text-shadow: 
+      0 0 20px rgba(255, 255, 255, 0.8),
+      0 0 30px rgba(0, 212, 255, 0.8),
+      0 0 40px rgba(91, 134, 229, 0.6);
+  }
+}
+
+.ai-status {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.ai-status-item {
+  font-size: 1em;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  transition: all 0.5s ease;
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.ai-status-item.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.25);
+  opacity: 1;
+  transform: scale(1.05);
+  box-shadow: 
+    0 0 20px rgba(0, 212, 255, 0.6),
+    0 4px 12px rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+  animation: aiStatusPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes aiStatusPulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 20px rgba(0, 212, 255, 0.6),
+      0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  50% {
+    box-shadow: 
+      0 0 30px rgba(0, 212, 255, 0.9),
+      0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+}
+
