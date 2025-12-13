@@ -1575,6 +1575,41 @@ button[aria-disabled="true"] {
   border-color: rgba(255,255,255,0.06);
 }
 
+/* 그래프 하단 시간 표시 블록 */
+.chart-time-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chart-time-labels span {
+  font-size: 32px;
+  font-weight: 800;
+  color: #e5e7eb;
+  line-height: 1;
+}
+
+/* 시작 시간: 왼쪽 끝 */
+.chart-time-labels span:first-child {
+  flex: 0 0 auto;
+  text-align: left;
+}
+
+/* 중간 시간: 가운데 */
+.chart-time-labels span:nth-child(2) {
+  flex: 1;
+  text-align: center;
+}
+
+/* 현재 누적 시간: 오른쪽 끝 */
+.chart-time-labels span:last-child {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
 
 
 
