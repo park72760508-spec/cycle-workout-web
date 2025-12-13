@@ -6024,8 +6024,12 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
 
 한국어로 상세하고 전문적인 분석을 제공해주세요.`;
 
-    // Gemini API 호출
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+    // Gemini API 호출 (최신 모델 사용: gemini-1.5-flash 또는 gemini-1.5-pro)
+    // gemini-1.5-flash는 빠르고 저렴, gemini-1.5-pro는 더 정확하지만 느리고 비쌈
+    const modelName = 'gemini-1.5-flash'; // 또는 'gemini-1.5-pro'
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -6085,13 +6089,51 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     
   } catch (error) {
     console.error('Gemini API 오류:', error);
+    
+    let errorMessage = error.message;
+    let helpMessage = '';
+    
+    // 모델 이름 오류인 경우
+    if (errorMessage.includes('not found') || errorMessage.includes('not supported')) {
+      helpMessage = `
+        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+          <strong>해결 방법:</strong><br>
+          1. API 키가 올바른지 확인해주세요.<br>
+          2. Google AI Studio (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8;">https://aistudio.google.com/app/apikey</a>)에서 API 키를 발급받으세요.<br>
+          3. API 키에 "API 사용" 권한이 있는지 확인하세요.<br>
+          4. 훈련일지 상단의 "API 키 확인" 버튼으로 키를 테스트해보세요.
+        </p>
+      `;
+    } else if (errorMessage.includes('API_KEY_INVALID') || errorMessage.includes('403')) {
+      helpMessage = `
+        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+          <strong>API 키 오류:</strong><br>
+          - API 키가 유효하지 않거나 만료되었습니다.<br>
+          - Google AI Studio에서 새로운 API 키를 발급받아주세요.
+        </p>
+      `;
+    } else if (errorMessage.includes('429') || errorMessage.includes('quota')) {
+      helpMessage = `
+        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+          <strong>사용량 초과:</strong><br>
+          - API 사용량이 초과되었습니다.<br>
+          - Google AI Studio에서 사용량을 확인하거나 잠시 후 다시 시도해주세요.
+        </p>
+      `;
+    } else {
+      helpMessage = `
+        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+          API 키가 올바른지 확인하거나, Google AI Studio에서 API 사용량을 확인해주세요.<br>
+          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8; text-decoration: underline;">Google AI Studio에서 API 키 확인하기</a>
+        </p>
+      `;
+    }
+    
     contentDiv.innerHTML = `
       <div class="error-message">
         <h3>분석 오류</h3>
-        <p>${error.message}</p>
-        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
-          API 키가 올바른지 확인하거나, Google AI Studio에서 API 사용량을 확인해주세요.
-        </p>
+        <p>${errorMessage}</p>
+        ${helpMessage}
       </div>
     `;
   }
@@ -6143,8 +6185,8 @@ function closeTrainingAnalysisModal() {
   window.currentAnalysisReport = null;
 }
 
-// API 키 저장
-function saveGeminiApiKey() {
+// API 키 저장 및 검증
+async function saveGeminiApiKey() {
   const apiKeyInput = document.getElementById('geminiApiKey');
   if (!apiKeyInput) return;
   
@@ -6158,13 +6200,111 @@ function saveGeminiApiKey() {
     return;
   }
   
-  localStorage.setItem('geminiApiKey', apiKey);
-  apiKeyInput.type = 'password'; // 보안을 위해 password 타입 유지
+  // API 키 유효성 검증
+  const validateBtn = apiKeyInput.nextElementSibling;
+  if (validateBtn && validateBtn.textContent.includes('저장')) {
+    validateBtn.disabled = true;
+    validateBtn.textContent = '확인 중...';
+  }
   
-  if (typeof showToast === 'function') {
-    showToast('API 키가 저장되었습니다.', 'success');
-  } else {
-    alert('API 키가 저장되었습니다.');
+  try {
+    // 간단한 API 키 검증 (사용 가능한 모델 목록 조회)
+    const testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const testResponse = await fetch(testUrl);
+    
+    if (!testResponse.ok) {
+      const errorData = await testResponse.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API 키 검증 실패: ${testResponse.status}`);
+    }
+    
+    const modelsData = await testResponse.json();
+    if (!modelsData.models || modelsData.models.length === 0) {
+      throw new Error('사용 가능한 모델을 찾을 수 없습니다.');
+    }
+    
+    // API 키 저장
+    localStorage.setItem('geminiApiKey', apiKey);
+    apiKeyInput.type = 'password'; // 보안을 위해 password 타입 유지
+    
+    if (typeof showToast === 'function') {
+      showToast('API 키가 확인되고 저장되었습니다.', 'success');
+    } else {
+      alert('API 키가 확인되고 저장되었습니다.');
+    }
+    
+  } catch (error) {
+    console.error('API 키 검증 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast(`API 키 검증 실패: ${error.message}`, 'error');
+    } else {
+      alert(`API 키 검증 실패: ${error.message}`);
+    }
+    return;
+  } finally {
+    if (validateBtn) {
+      validateBtn.disabled = false;
+      validateBtn.textContent = '저장';
+    }
+  }
+}
+
+// API 키 확인 (테스트)
+async function testGeminiApiKey() {
+  const apiKeyInput = document.getElementById('geminiApiKey');
+  if (!apiKeyInput) return;
+  
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    if (typeof showToast === 'function') {
+      showToast('API 키를 먼저 입력해주세요.', 'error');
+    }
+    return;
+  }
+  
+  const testBtn = document.getElementById('testApiKeyBtn');
+  if (testBtn) {
+    testBtn.disabled = true;
+    testBtn.textContent = '확인 중...';
+  }
+  
+  try {
+    // 사용 가능한 모델 목록 조회
+    const testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const testResponse = await fetch(testUrl);
+    
+    if (!testResponse.ok) {
+      const errorData = await testResponse.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API 오류: ${testResponse.status}`);
+    }
+    
+    const modelsData = await testResponse.json();
+    const availableModels = modelsData.models || [];
+    const modelNames = availableModels.map(m => m.name).filter(n => n.includes('gemini'));
+    
+    if (modelNames.length === 0) {
+      throw new Error('사용 가능한 Gemini 모델을 찾을 수 없습니다.');
+    }
+    
+    if (typeof showToast === 'function') {
+      showToast(`API 키 확인 완료! 사용 가능한 모델: ${modelNames.length}개`, 'success');
+    } else {
+      alert(`API 키 확인 완료!\n사용 가능한 모델: ${modelNames.join(', ')}`);
+    }
+    
+    console.log('사용 가능한 모델:', modelNames);
+    
+  } catch (error) {
+    console.error('API 키 테스트 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast(`API 키 확인 실패: ${error.message}`, 'error');
+    } else {
+      alert(`API 키 확인 실패: ${error.message}\n\nAPI 키 발급 방법:\n1. https://aistudio.google.com/app/apikey 접속\n2. "Create API Key" 클릭\n3. 생성된 API 키를 복사하여 입력`);
+    }
+  } finally {
+    if (testBtn) {
+      testBtn.disabled = false;
+      testBtn.textContent = 'API 키 확인';
+    }
   }
 }
 
@@ -6237,5 +6377,6 @@ ${report.analysis}
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
 window.handleTrainingDayClick = handleTrainingDayClick;
 window.saveGeminiApiKey = saveGeminiApiKey;
+window.testGeminiApiKey = testGeminiApiKey;
 window.closeTrainingAnalysisModal = closeTrainingAnalysisModal;
 window.exportAnalysisReport = exportAnalysisReport;
