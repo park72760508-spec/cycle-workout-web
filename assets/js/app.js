@@ -209,6 +209,7 @@ function drawSparkline(canvas, series, opts = {}) {
   ctx.clearRect(0, 0, W, H);
 
   const pad = 10;
+  const bottomPad = 20; // 하단 시간 라벨 공간
   const windowSec = (opts.windowSec ?? 600); // null/0 이면 전체 누적
   const d = series.data();
   if (!d.length) return;
@@ -232,18 +233,21 @@ function drawSparkline(canvas, series, opts = {}) {
   const tSpan = Math.max(1, tMax - tMin);
   const vSpan = Math.max(1e-6, maxV - minV); // 0인 경우 방지
 
+  // 그래프 영역 높이 (하단 시간 라벨 공간 제외)
+  const graphHeight = H - pad - bottomPad;
+
   // 배경 그라디언트
-  const g = ctx.createLinearGradient(0, 0, 0, H);
+  const g = ctx.createLinearGradient(0, 0, 0, graphHeight + pad);
   g.addColorStop(0, (opts.bgTop   ?? 'rgba(59,130,246,0.10)'));
   g.addColorStop(1, (opts.bgBottom?? 'rgba(59,130,246,0.00)'));
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, W, graphHeight + pad);
 
   // 메인 라인
   ctx.beginPath();
   vis.forEach((p, i) => {
     const x = pad + ((p.t - tMin) / tSpan) * (W - pad * 2);
-    const y = pad + (1 - ((p.v - minV) / vSpan)) * (H - pad * 2);
+    const y = pad + (1 - ((p.v - minV) / vSpan)) * graphHeight;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
   ctx.lineWidth = opts.lineWidth ?? 2;
@@ -252,8 +256,8 @@ function drawSparkline(canvas, series, opts = {}) {
 
   // 영역 채움(선택)
   if (opts.fill !== false) {
-    ctx.lineTo(pad + (vis[vis.length - 1].t - tMin) / tSpan * (W - pad * 2), H - pad);
-    ctx.lineTo(pad, H - pad);
+    ctx.lineTo(pad + (vis[vis.length - 1].t - tMin) / tSpan * (W - pad * 2), pad + graphHeight);
+    ctx.lineTo(pad, pad + graphHeight);
     ctx.closePath();
     ctx.fillStyle = opts.fill ?? 'rgba(0,215,200,0.15)';
     ctx.fill();
@@ -261,7 +265,7 @@ function drawSparkline(canvas, series, opts = {}) {
 
   // 평균 가이드라인(선택)
   if (opts.avgLine) {
-    const avgY = pad + (1 - ((avgV - minV) / vSpan)) * (H - pad * 2);
+    const avgY = pad + (1 - ((avgV - minV) / vSpan)) * graphHeight;
     ctx.save();
     if (opts.avgLineStyle === 'dashed') {
       ctx.setLineDash([8, 6]);
@@ -296,6 +300,42 @@ function drawSparkline(canvas, series, opts = {}) {
     ctx.fillText(maxText, W - pad - 2, pad + 2);
     ctx.restore();
   }
+
+  // 하단 시간 라벨 그리기
+  // 시간 포맷팅 함수 (초를 MM:SS 형식으로)
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+  }
+
+  // 누적 시간 계산 (밀리초를 초로 변환)
+  const totalSeconds = tSpan / 1000;
+  const startTime = 0;
+  const midTime = totalSeconds / 2;
+  const endTime = totalSeconds;
+
+  // 하단 시간 라벨 Y 위치
+  const timeLabelY = pad + graphHeight + 5;
+
+  ctx.save();
+  ctx.font = (opts.timeFont || '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
+  ctx.fillStyle = (opts.timeColor || 'rgba(255,255,255,0.7)');
+  ctx.textBaseline = 'top';
+
+  // 시작 시간 (왼쪽)
+  ctx.textAlign = 'left';
+  ctx.fillText(formatTime(startTime), pad, timeLabelY);
+
+  // 중간 시간 (가운데)
+  ctx.textAlign = 'center';
+  ctx.fillText(formatTime(midTime), W / 2, timeLabelY);
+
+  // 끝 시간 (오른쪽)
+  ctx.textAlign = 'right';
+  ctx.fillText(formatTime(endTime), W - pad, timeLabelY);
+
+  ctx.restore();
 }
 
 // 시리즈에서 AVG/MAX 계산 (windowSec=0 이면 누적 전체)
