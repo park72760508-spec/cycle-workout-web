@@ -6479,35 +6479,97 @@ function renderTSSChart(data, tss) {
 function renderHRChart(data, hrAvg) {
   const hrAnalysis = data.metrics?.heartRateAnalysis || {};
   
-  // 심박수 구간 (예시, 실제로는 사용자 최대 심박수 기준)
+  // 최대 심박수 추정 (220 - 나이, 또는 평균 심박수 기반 추정)
+  // 실제로는 사용자 정보에서 가져와야 하지만, 여기서는 평균 심박수 기반으로 추정
+  // 일반적으로 지구력 구간이 60-70%이므로 역산
+  let maxHR = 200; // 기본값
+  if (hrAnalysis.hrZone === '지구력' && hrAvg > 0) {
+    // 지구력 구간이 60-70%이므로 평균값을 65%로 가정
+    maxHR = Math.round(hrAvg / 0.65);
+  } else if (hrAnalysis.hrZone === '역치' && hrAvg > 0) {
+    // 역치 구간이 70-80%이므로 평균값을 75%로 가정
+    maxHR = Math.round(hrAvg / 0.75);
+  } else if (hrAnalysis.hrZone === '무산소' && hrAvg > 0) {
+    // 무산소 구간이 80-90%이므로 평균값을 85%로 가정
+    maxHR = Math.round(hrAvg / 0.85);
+  } else if (hrAvg > 0) {
+    // 회복 구간이 50-60%이므로 평균값을 55%로 가정
+    maxHR = Math.round(hrAvg / 0.55);
+  }
+  
+  // 심박수 구간 계산 (최대 심박수의 비율)
   const zones = [
-    { name: '회복', min: 0, max: 60 },
-    { name: '지구력', min: 60, max: 70 },
-    { name: '역치', min: 70, max: 80 },
-    { name: '무산소', min: 80, max: 100 }
+    { name: '회복', min: Math.round(maxHR * 0.50), max: Math.round(maxHR * 0.60), color: '#10b981' },
+    { name: '지구력', min: Math.round(maxHR * 0.60), max: Math.round(maxHR * 0.70), color: '#3b82f6' },
+    { name: '역치', min: Math.round(maxHR * 0.70), max: Math.round(maxHR * 0.80), color: '#f59e0b' },
+    { name: '무산소', min: Math.round(maxHR * 0.80), max: Math.round(maxHR * 0.90), color: '#ef4444' },
+    { name: '최대', min: Math.round(maxHR * 0.90), max: maxHR, color: '#dc2626' }
   ];
   
+  // 현재 평균 심박수가 속한 구간 찾기
+  const currentZone = zones.find(z => hrAvg >= z.min && hrAvg < z.max) || zones[0];
+  
+  // 구간별 범위 표시 및 현재 심박수 위치 표시
   const chartData = google.visualization.arrayToDataTable([
-    ['구간', '심박수'],
-    ['회복', 60],
-    ['지구력', 70],
-    ['역치', 80],
-    ['무산소', 100]
+    ['구간', '최소 심박수', '최대 심박수', '현재 평균'],
+    ['회복', zones[0].min, zones[0].max, hrAvg >= zones[0].min && hrAvg < zones[0].max ? hrAvg : null],
+    ['지구력', zones[1].min, zones[1].max, hrAvg >= zones[1].min && hrAvg < zones[1].max ? hrAvg : null],
+    ['역치', zones[2].min, zones[2].max, hrAvg >= zones[2].min && hrAvg < zones[2].max ? hrAvg : null],
+    ['무산소', zones[3].min, zones[3].max, hrAvg >= zones[3].min && hrAvg < zones[3].max ? hrAvg : null],
+    ['최대', zones[4].min, zones[4].max, hrAvg >= zones[4].min ? hrAvg : null]
   ]);
   
   const options = {
-    title: `평균 심박수: ${hrAvg} bpm (${hrAnalysis.hrZone || 'N/A'})`,
-    titleTextStyle: { fontSize: 16, bold: true },
-    hAxis: { title: '구간' },
-    vAxis: { title: '심박수 (bpm)', min: 0, max: 200 },
-    colors: ['#ef4444'],
-    legend: { position: 'none' },
+    title: `평균 심박수: ${hrAvg} bpm (${hrAnalysis.hrZone || 'N/A'}) | 추정 최대 심박수: ${maxHR} bpm`,
+    titleTextStyle: { fontSize: 14, bold: true },
+    hAxis: { title: '심박수 구간' },
+    vAxis: { title: '심박수 (bpm)', min: 0, max: Math.max(maxHR + 20, 200) },
+    seriesType: 'bars',
+    series: {
+      0: { type: 'bars', color: '#e5e7eb' }, // 최소 심박수 (회색)
+      1: { type: 'bars', color: '#d1d5db' }, // 최대 심박수 (회색)
+      2: { type: 'line', color: '#ef4444', lineWidth: 3, pointSize: 8 } // 현재 평균 (빨간 선)
+    },
+    legend: { position: 'bottom' },
     backgroundColor: 'transparent',
-    chartArea: { left: 60, top: 40, width: '75%', height: '70%' }
+    chartArea: { left: 80, top: 50, width: '70%', height: '65%' },
+    annotations: {
+      textStyle: {
+        fontSize: 10,
+        bold: true
+      }
+    }
   };
   
-  const chart = new google.visualization.ColumnChart(document.getElementById('hrAnalysisChart'));
+  const chart = new google.visualization.ComboChart(document.getElementById('hrAnalysisChart'));
   chart.draw(chartData, options);
+  
+  // 그래프 아래에 해석 가이드 추가
+  setTimeout(() => {
+    const chartElement = document.getElementById('hrAnalysisChart');
+    if (chartElement && !chartElement.querySelector('.hr-chart-guide')) {
+      const guide = document.createElement('div');
+      guide.className = 'hr-chart-guide';
+      guide.style.cssText = 'margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; font-size: 0.9em; line-height: 1.6;';
+      guide.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 8px; color: #1f2937;">📊 그래프 해석 가이드:</div>
+        <div style="color: #4b5563;">
+          <div><strong>회복 구간</strong> (${zones[0].min}-${zones[0].max} bpm): 가벼운 회복 운동, 활성 회복</div>
+          <div><strong>지구력 구간</strong> (${zones[1].min}-${zones[1].max} bpm): 장시간 지속 가능한 강도, 기초 체력 향상</div>
+          <div><strong>역치 구간</strong> (${zones[2].min}-${zones[2].max} bpm): 유산소 역치 근처, 지구력 향상에 효과적</div>
+          <div><strong>무산소 구간</strong> (${zones[3].min}-${zones[3].max} bpm): 고강도 간격 훈련, 무산소 능력 향상</div>
+          <div><strong>최대 구간</strong> (${zones[4].min}-${zones[4].max} bpm): 최대 강도, 단시간만 유지 가능</div>
+          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+            <strong style="color: #ef4444;">현재 평균 심박수 ${hrAvg} bpm</strong>은 <strong>${hrAnalysis.hrZone || 'N/A'}</strong> 구간에 속합니다.
+            ${hrAnalysis.hrZone === '지구력' ? '장시간 지속 가능한 강도로 훈련하셨습니다. 기초 체력 향상에 효과적입니다.' : ''}
+            ${hrAnalysis.hrZone === '역치' ? '유산소 역치 근처에서 훈련하셨습니다. 지구력 향상에 매우 효과적입니다.' : ''}
+            ${hrAnalysis.hrZone === '무산소' ? '고강도 훈련을 수행하셨습니다. 무산소 능력 향상에 효과적이지만 충분한 회복이 필요합니다.' : ''}
+          </div>
+        </div>
+      `;
+      chartElement.parentElement.appendChild(guide);
+    }
+  }, 500);
 }
 
 // 분석 텍스트 포맷팅 (마크다운 스타일)
