@@ -6603,11 +6603,61 @@ function showTrainingAnalysisModal() {
   if (modal) {
     modal.style.display = 'flex';
     document.getElementById('trainingAnalysisContent').innerHTML = `
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <div class="loading-text">분석 중...</div>
+      <div class="ai-loading-container">
+        <div class="ai-brain-animation">
+          <div class="ai-neural-network">
+            <div class="neural-node node-1"></div>
+            <div class="neural-node node-2"></div>
+            <div class="neural-node node-3"></div>
+            <div class="neural-node node-4"></div>
+            <div class="neural-node node-5"></div>
+            <div class="neural-node node-6"></div>
+            <div class="neural-connection conn-1"></div>
+            <div class="neural-connection conn-2"></div>
+            <div class="neural-connection conn-3"></div>
+            <div class="neural-connection conn-4"></div>
+            <div class="neural-connection conn-5"></div>
+            <div class="neural-connection conn-6"></div>
+          </div>
+          <div class="ai-particles">
+            <div class="particle particle-1"></div>
+            <div class="particle particle-2"></div>
+            <div class="particle particle-3"></div>
+            <div class="particle particle-4"></div>
+            <div class="particle particle-5"></div>
+            <div class="particle particle-6"></div>
+          </div>
+        </div>
+        <div class="ai-loading-text">
+          <div class="ai-title">🤖 AI 최첨단 분석 엔진 가동 중</div>
+          <div class="ai-status">
+            <span class="ai-status-item active">데이터 전처리 중</span>
+            <span class="ai-status-item">머신러닝 모델 적용 중</span>
+            <span class="ai-status-item">딥러닝 분석 수행 중</span>
+            <span class="ai-status-item">패턴 인식 및 예측 중</span>
+            <span class="ai-status-item">종합 평가 생성 중</span>
+          </div>
+        </div>
       </div>
     `;
+    
+    // AI 상태 텍스트 순환 애니메이션
+    let statusIndex = 0;
+    const statusItems = document.querySelectorAll('.ai-status-item');
+    if (statusItems.length > 0) {
+      const statusInterval = setInterval(() => {
+        statusItems.forEach((item, index) => {
+          item.classList.remove('active');
+          if (index === statusIndex) {
+            item.classList.add('active');
+          }
+        });
+        statusIndex = (statusIndex + 1) % statusItems.length;
+      }, 1500);
+      
+      // 모달이 닫히면 인터벌 정리
+      window.currentAnalysisStatusInterval = statusInterval;
+    }
   }
 }
 
@@ -6616,6 +6666,11 @@ function closeTrainingAnalysisModal() {
   const modal = document.getElementById('trainingAnalysisModal');
   if (modal) {
     modal.style.display = 'none';
+  }
+  // AI 상태 애니메이션 인터벌 정리
+  if (window.currentAnalysisStatusInterval) {
+    clearInterval(window.currentAnalysisStatusInterval);
+    window.currentAnalysisStatusInterval = null;
   }
   window.currentAnalysisReport = null;
 }
