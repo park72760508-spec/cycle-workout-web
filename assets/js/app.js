@@ -5830,11 +5830,20 @@ function renderTrainingJournalDay(dayData) {
     const np = Math.round(result.np || result.avg_power || 0);
     const tss = Math.round(result.tss || 0);
     const hrAvg = Math.round(result.hr_avg || 0);
+    const workoutName = result.workout_name || result.actual_workout_id || '워크아웃';
+    
+    // HTML 이스케이프 간단 함수
+    const escapeHtml = (text) => {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    };
     
     content += `
       <div class="calendar-day-content">
+        <div class="journal-workout-name">${escapeHtml(workoutName)}</div>
         <div class="training-journal-stats">
-          <div class="journal-stat-item"><span class="stat-label">시간</span><span class="stat-value">${durationMin}분</span></div>
+          <div class="journal-duration-badge">${durationMin}분</div>
           <div class="journal-stat-item"><span class="stat-label">파워</span><span class="stat-value">${avgPower}W</span></div>
           <div class="journal-stat-item"><span class="stat-label">NP</span><span class="stat-value">${np}W</span></div>
           <div class="journal-stat-item"><span class="stat-label">TSS</span><span class="stat-value">${tss}</span></div>
