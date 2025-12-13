@@ -5382,6 +5382,7 @@ button[aria-disabled="true"] {
 
 /* 훈련일지 컨트롤 버튼 레이아웃 */
 .training-journal-controls {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -5396,18 +5397,30 @@ button[aria-disabled="true"] {
 }
 
 .journal-nav-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: center;
-  flex: 0 0 auto;
   justify-content: center;
 }
 
+.journal-nav-prev {
+  order: 1;
+}
+
 .journal-month-label {
+  order: 2;
   font-weight: 700;
   font-size: 18px;
   min-width: 150px;
   text-align: center;
+  flex-shrink: 0;
+}
+
+.journal-nav-next {
+  order: 3;
 }
 
 .journal-nav-right {
