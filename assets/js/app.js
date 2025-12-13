@@ -319,8 +319,8 @@ function drawSparkline(canvas, series, opts = {}) {
   const timeLabelY = H - bottomPad + 8;
 
   ctx.save();
-  ctx.font = (opts.timeFont || '12px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
-  ctx.fillStyle = (opts.timeColor || 'rgba(255,255,255,0.7)');
+  ctx.font = (opts.timeFont || '24px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto');
+  ctx.fillStyle = (opts.timeColor || 'rgba(255,255,255,0.9)');
   ctx.textBaseline = 'top';
 
   // 시작 시간 (왼쪽) - "Start 00:00"
