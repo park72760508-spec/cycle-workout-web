@@ -705,6 +705,7 @@
       <button class="btn btn-success btn-with-icon" id="btnCreateSchedule" onclick="if (typeof getViewerGrade === 'function' && getViewerGrade() !== '1') { showToast('스케줄 생성 권한이 없습니다. 관리자만 스케줄을 생성할 수 있습니다.', 'error'); return false; } showScreen('scheduleCreateScreen');"><img src="assets/img/business.png" alt="새 스케줄" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새 스케줄 만들기</button>
       <button class="btn btn-secondary btn-refresh" onclick="loadTrainingSchedules()"><img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
       <button class="btn btn-default-style btn-with-icon" onclick="showScreen('workoutScreen'); if (typeof loadWorkouts === 'function') { loadWorkouts(); }"><img src="assets/img/left-arrow.png" alt="워크아웃 목록" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 워크아웃 목록</button>
+      <button class="btn btn-default-style btn-with-icon" onclick="showScreen('trainingJournalScreen')"><img src="assets/img/calendar_n.gif" alt="훈련일지" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련일지</button>
     </div>
     
     <div id="scheduleList" class="schedule-list">
@@ -1748,7 +1749,7 @@
       </div>
       <div class="journal-nav-right">
         <button class="btn btn-secondary btn-refresh" onclick="loadTrainingJournalCalendar()"><img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
-        <button class="btn btn-default-style btn-with-icon" onclick="showScreen('resultScreen')"><img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 뒤로</button>
+        <button class="btn btn-default-style btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 뒤로</button>
       </div>
     </div>
     
