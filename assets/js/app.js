@@ -2372,7 +2372,7 @@ function startSegmentLoop() {
        .then(() => window.trainingResults?.initializeResultScreen?.())
        .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
        .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
-       .then(() => { if (typeof showScreen === "function") showScreen("resultScreen"); });
+       .then(() => { if (typeof showScreen === "function") showScreen("trainingJournalScreen"); });
    
      return;
    }
@@ -3624,15 +3624,15 @@ document.addEventListener("DOMContentLoaded", () => {
                   }
                 })
                 .then(() => {
-                  console.log('[훈련완료] 🎯 4단계: 결과 화면으로 전환');
+                  console.log('[훈련완료] 🎯 4단계: 훈련일지 화면으로 전환');
                   
                   // 화면 전환 전 추가 검증
                   const hasSession = !!window.trainingResults?.getCurrentSessionData?.();
                   console.log('[훈련완료] 세션 데이터 존재:', hasSession);
                   
                   if (typeof showScreen === "function") {
-                    showScreen("resultScreen");
-                    console.log('[훈련완료] 🎉 결과 화면 전환 완료');
+                    showScreen("trainingJournalScreen");
+                    console.log('[훈련완료] 🎉 훈련일지 화면 전환 완료');
                   } else {
                     console.error('[훈련완료] showScreen 함수를 찾을 수 없습니다');
                   }
@@ -3640,17 +3640,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 .catch((criticalError) => {
                   console.error('[훈련완료] 💥 치명적 오류 발생:', criticalError);
                   
-                  // 그래도 결과 화면으로 이동 시도
+                  // 그래도 훈련일지 화면으로 이동 시도
                   try {
                     if (typeof showToast === "function") {
-                      showToast("오류가 발생했지만 결과를 표시합니다", "error");
+                      showToast("오류가 발생했지만 훈련일지를 표시합니다", "error");
                     }
                     if (typeof showScreen === "function") {
-                      showScreen("resultScreen");
+                      showScreen("trainingJournalScreen");
                     }
                   } catch (finalError) {
                     console.error('[훈련완료] 🔥 최종 복구도 실패:', finalError);
-                    alert('결과 화면 표시 중 오류가 발생했습니다. 페이지를 새로고침해주세요.');
+                    alert('훈련일지 화면 표시 중 오류가 발생했습니다. 페이지를 새로고침해주세요.');
                   }
                 });
      });
@@ -4360,6 +4360,19 @@ function initializeCurrentScreen(screenId) {
         }
       };
       setTimeout(checkAndLoad, 100);
+      break;
+      
+    case 'trainingJournalScreen':
+      // 훈련일지 화면: 캘린더 자동 로드
+      console.log('훈련일지 화면 진입 - 캘린더 로딩 시작');
+      if (typeof loadTrainingJournalCalendar === 'function') {
+        // 현재 월로 초기화
+        trainingJournalCurrentMonth = new Date().getMonth();
+        trainingJournalCurrentYear = new Date().getFullYear();
+        loadTrainingJournalCalendar();
+      } else {
+        console.warn('loadTrainingJournalCalendar function not available');
+      }
       break;
       
     default:
@@ -5618,3 +5631,199 @@ window.saveWorkoutPlan = saveWorkoutPlan;
 window.deleteWorkoutPlan = deleteWorkoutPlan;
 
 })();
+
+// ========== 훈련일지 캘린더 ==========
+let trainingJournalCurrentMonth = new Date().getMonth();
+let trainingJournalCurrentYear = new Date().getFullYear();
+
+// 훈련일지 캘린더 로드
+async function loadTrainingJournalCalendar(direction) {
+  const calendarContainer = document.getElementById('trainingJournalCalendar');
+  if (!calendarContainer) return;
+  
+  try {
+    // 월 이동 처리
+    if (direction === 'prev') {
+      trainingJournalCurrentMonth--;
+      if (trainingJournalCurrentMonth < 0) {
+        trainingJournalCurrentMonth = 11;
+        trainingJournalCurrentYear--;
+      }
+    } else if (direction === 'next') {
+      trainingJournalCurrentMonth++;
+      if (trainingJournalCurrentMonth > 11) {
+        trainingJournalCurrentMonth = 0;
+        trainingJournalCurrentYear++;
+      }
+    }
+    
+    calendarContainer.innerHTML = '<div class="loading-spinner">캘린더를 불러오는 중...</div>';
+    
+    // 현재 사용자 ID 가져오기
+    const userId = window.currentUser?.id || JSON.parse(localStorage.getItem('currentUser') || 'null')?.id;
+    if (!userId) {
+      calendarContainer.innerHTML = '<div class="error-message">사용자 정보를 찾을 수 없습니다.</div>';
+      return;
+    }
+    
+    // 해당 월의 시작일과 종료일 계산
+    const startDate = new Date(trainingJournalCurrentYear, trainingJournalCurrentMonth, 1);
+    const endDate = new Date(trainingJournalCurrentYear, trainingJournalCurrentMonth + 1, 0);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    // 훈련 결과 조회
+    let trainingResults = [];
+    try {
+      const result = await window.trainingResults?.getTrainingResults?.(userId, startDateStr, endDateStr);
+      if (result?.success && Array.isArray(result.items)) {
+        trainingResults = result.items;
+      }
+    } catch (error) {
+      console.error('훈련 결과 조회 실패:', error);
+    }
+    
+    // 날짜별로 그룹화
+    const resultsByDate = {};
+    trainingResults.forEach(result => {
+      const date = new Date(result.started_at || result.completed_at);
+      const dateStr = date.toISOString().split('T')[0];
+      if (!resultsByDate[dateStr]) {
+        resultsByDate[dateStr] = [];
+      }
+      resultsByDate[dateStr].push(result);
+    });
+    
+    // 캘린더 렌더링
+    renderTrainingJournalCalendar(trainingJournalCurrentYear, trainingJournalCurrentMonth, resultsByDate);
+    
+    // 월 표시 업데이트
+    const monthEl = document.getElementById('trainingJournalMonth');
+    if (monthEl) {
+      monthEl.textContent = `${trainingJournalCurrentYear}년 ${trainingJournalCurrentMonth + 1}월`;
+    }
+    
+  } catch (error) {
+    console.error('훈련일지 캘린더 로드 실패:', error);
+    calendarContainer.innerHTML = `
+      <div class="error-message">
+        <p>캘린더를 불러오는데 실패했습니다.</p>
+        <button class="btn" onclick="loadTrainingJournalCalendar()">다시 시도</button>
+      </div>
+    `;
+  }
+}
+
+// 훈련일지 캘린더 렌더링
+function renderTrainingJournalCalendar(year, month, resultsByDate) {
+  const container = document.getElementById('trainingJournalCalendar');
+  if (!container) return;
+  
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDate = new Date(firstDay);
+  startDate.setDate(startDate.getDate() - startDate.getDay()); // 주의 첫날로 조정
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const days = [];
+  const currentDate = new Date(startDate);
+  
+  // 6주치 날짜 생성 (42일)
+  for (let i = 0; i < 42; i++) {
+    const dateStr = currentDate.toISOString().split('T')[0];
+    const isCurrentMonth = currentDate.getMonth() === month;
+    const isToday = currentDate.getTime() === today.getTime();
+    const result = resultsByDate[dateStr]?.[0]; // 첫 번째 결과만 사용
+    
+    days.push({
+      date: dateStr,
+      day: currentDate.getDate(),
+      isCurrentMonth,
+      isToday,
+      result
+    });
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  // 요일 헤더
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+  
+  // 캘린더 HTML 생성
+  let html = `
+    <div class="calendar-month">
+      <table class="calendar-table">
+        <thead>
+          <tr>
+            ${weekdays.map(day => `<th class="calendar-weekday-header">${day}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+  `;
+  
+  // 주별로 행 생성
+  for (let week = 0; week < 6; week++) {
+    html += '<tr>';
+    for (let day = 0; day < 7; day++) {
+      const dayData = days[week * 7 + day];
+      html += `<td class="calendar-table-cell">${renderTrainingJournalDay(dayData)}</td>`;
+    }
+    html += '</tr>';
+  }
+  
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+  
+  container.innerHTML = html;
+}
+
+// 훈련일지 날짜 셀 렌더링
+function renderTrainingJournalDay(dayData) {
+  if (!dayData.isCurrentMonth) {
+    return '<div class="calendar-day-empty"></div>';
+  }
+  
+  const { date, day, isToday, result } = dayData;
+  const classes = ['calendar-day'];
+  
+  if (isToday) {
+    classes.push('today');
+  }
+  
+  if (result) {
+    classes.push('completed');
+  }
+  
+  let content = `<div class="calendar-day-number">${day}</div>`;
+  
+  if (result) {
+    // 훈련 완료 데이터 표시
+    const durationMin = Math.round((new Date(result.completed_at) - new Date(result.started_at)) / (1000 * 60)) || 0;
+    const avgPower = Math.round(result.avg_power || 0);
+    const np = Math.round(result.avg_power || 0); // NP는 avg_power로 대체 (실제로는 별도 계산 필요)
+    const tss = Math.round(result.tss || 0);
+    const hrAvg = Math.round(result.avg_hr || 0);
+    
+    content += `
+      <div class="calendar-day-content">
+        <div class="training-journal-stats">
+          <div class="journal-stat-item"><span class="stat-label">시간</span><span class="stat-value">${durationMin}분</span></div>
+          <div class="journal-stat-item"><span class="stat-label">파워</span><span class="stat-value">${avgPower}W</span></div>
+          <div class="journal-stat-item"><span class="stat-label">NP</span><span class="stat-value">${np}W</span></div>
+          <div class="journal-stat-item"><span class="stat-label">TSS</span><span class="stat-value">${tss}</span></div>
+          <div class="journal-stat-item"><span class="stat-label">심박</span><span class="stat-value">${hrAvg}</span></div>
+        </div>
+      </div>
+    `;
+  }
+  
+  return `<div class="${classes.join(' ')}" data-date="${date}">${content}</div>`;
+}
+
+// 전역 함수로 등록
+window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
