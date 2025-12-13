@@ -6755,7 +6755,7 @@ function loadGeminiApiKey() {
   }
 }
 
-// 보고서 내보내기
+// 보고서 내보내기 (PDF 형식)
 function exportAnalysisReport() {
   if (!window.currentAnalysisReport) {
     if (typeof showToast === 'function') {
@@ -6764,50 +6764,247 @@ function exportAnalysisReport() {
     return;
   }
   
+  if (typeof window.jspdf === 'undefined' && typeof jsPDF === 'undefined') {
+    if (typeof showToast === 'function') {
+      showToast('PDF 라이브러리를 불러올 수 없습니다.', 'error');
+    } else {
+      alert('PDF 라이브러리를 불러올 수 없습니다.');
+    }
+    return;
+  }
+  
   const report = window.currentAnalysisReport;
+  const { jsPDF } = window.jspdf || window;
   
-  // 마크다운 형식으로 보고서 생성
-  const markdown = `# 훈련 분석 보고서
-
-**날짜:** ${report.date}
-**워크아웃:** ${report.workoutName}
-**훈련 시간:** ${report.durationMin}분
-
-## 훈련 데이터
-- 평균 파워: ${report.avgPower}W
-- NP (Normalized Power): ${report.np}W
-- TSS (Training Stress Score): ${report.tss}
-- 평균 심박수: ${report.hrAvg} bpm
-
-## 사용자 정보
-- FTP: ${report.ftp}W
-- 체중: ${report.weight}kg
-- W/kg: ${report.weight > 0 ? (report.ftp / report.weight).toFixed(2) : 'N/A'}
-
----
-
-## AI 분석 결과
-
-${report.analysis}
-
----
-
-*생성일시: ${new Date().toLocaleString('ko-KR')}*
-`;
-  
-  // 파일 다운로드
-  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `훈련분석_${report.date.replace(/-/g, '')}.md`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  
-  if (typeof showToast === 'function') {
-    showToast('보고서가 다운로드되었습니다.', 'success');
+  try {
+    // PDF 생성 (A4 크기, 세로 방향)
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+    
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPos = margin;
+    
+    // 제목
+    doc.setFontSize(20);
+    doc.setFont(undefined, 'bold');
+    doc.text('훈련 분석 보고서', margin, yPos);
+    yPos += 10;
+    
+    // 구분선
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 8;
+    
+    // 기본 정보
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    doc.text(`날짜: ${report.date}`, margin, yPos);
+    yPos += 6;
+    doc.text(`워크아웃: ${report.workoutName}`, margin, yPos);
+    yPos += 6;
+    doc.text(`훈련 시간: ${report.durationMin}분`, margin, yPos);
+    yPos += 10;
+    
+    // 훈련 데이터 섹션
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('훈련 데이터', margin, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(`평균 파워: ${report.avgPower}W`, margin, yPos);
+    yPos += 6;
+    doc.text(`NP (Normalized Power): ${report.np}W`, margin, yPos);
+    yPos += 6;
+    doc.text(`TSS (Training Stress Score): ${report.tss}`, margin, yPos);
+    yPos += 6;
+    doc.text(`평균 심박수: ${report.hrAvg} bpm`, margin, yPos);
+    yPos += 10;
+    
+    // 사용자 정보 섹션
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('사용자 정보', margin, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    doc.text(`FTP: ${report.ftp}W`, margin, yPos);
+    yPos += 6;
+    doc.text(`체중: ${report.weight}kg`, margin, yPos);
+    yPos += 6;
+    const wkg = report.weight > 0 ? (report.ftp / report.weight).toFixed(2) : 'N/A';
+    doc.text(`W/kg: ${wkg}`, margin, yPos);
+    yPos += 10;
+    
+    // 구조화된 분석 데이터가 있으면 시각화 정보 포함
+    if (report.analysisData) {
+      const data = report.analysisData;
+      const summary = data.summary || {};
+      const metrics = data.metrics || {};
+      const coaching = data.coaching || {};
+      
+      // 훈련 요약
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('훈련 요약', margin, yPos);
+      yPos += 8;
+      
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'normal');
+      doc.text(`훈련 강도: ${summary.intensityLevel || 'N/A'} (${summary.intensityScore || 0}점)`, margin, yPos);
+      yPos += 6;
+      doc.text(`목표 달성도: ${summary.goalAchievement || 0}%`, margin, yPos);
+      yPos += 6;
+      doc.text(`종합 평가: ${summary.overallRating || 0}점`, margin, yPos);
+      yPos += 10;
+      
+      // 데이터 분석
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('데이터 분석', margin, yPos);
+      yPos += 8;
+      
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'normal');
+      const powerAnalysis = metrics.powerAnalysis || {};
+      doc.text(`파워 분석: ${powerAnalysis.powerZone || 'N/A'} (${powerAnalysis.powerScore || 0}점)`, margin, yPos);
+      yPos += 6;
+      doc.text(`평균 파워: ${report.avgPower}W (FTP의 ${powerAnalysis.avgPowerPercent || 0}%)`, margin, yPos);
+      yPos += 6;
+      
+      const tssAnalysis = metrics.tssAnalysis || {};
+      doc.text(`TSS 분석: ${tssAnalysis.tssCategory || 'N/A'} (${tssAnalysis.tssScore || 0}점)`, margin, yPos);
+      yPos += 6;
+      doc.text(`회복 예상 시간: ${tssAnalysis.recoveryTime || 'N/A'}`, margin, yPos);
+      yPos += 6;
+      
+      const hrAnalysis = metrics.heartRateAnalysis || {};
+      doc.text(`심박수 분석: ${hrAnalysis.hrZone || 'N/A'} (${hrAnalysis.hrScore || 0}점)`, margin, yPos);
+      yPos += 10;
+      
+      // 코칭 피드백
+      doc.setFontSize(14);
+      doc.setFont(undefined, 'bold');
+      doc.text('코칭 피드백', margin, yPos);
+      yPos += 8;
+      
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text('강점:', margin, yPos);
+      yPos += 6;
+      doc.setFont(undefined, 'normal');
+      (coaching.strengths || []).forEach(strength => {
+        if (yPos > pageHeight - 20) {
+          doc.addPage();
+          yPos = margin;
+        }
+        doc.text(`  • ${strength}`, margin + 5, yPos);
+        yPos += 6;
+      });
+      yPos += 4;
+      
+      doc.setFont(undefined, 'bold');
+      doc.text('개선점:', margin, yPos);
+      yPos += 6;
+      doc.setFont(undefined, 'normal');
+      (coaching.improvements || []).forEach(improvement => {
+        if (yPos > pageHeight - 20) {
+          doc.addPage();
+          yPos = margin;
+        }
+        doc.text(`  • ${improvement}`, margin + 5, yPos);
+        yPos += 6;
+      });
+      yPos += 4;
+      
+      doc.setFont(undefined, 'bold');
+      doc.text('권장사항:', margin, yPos);
+      yPos += 6;
+      doc.setFont(undefined, 'normal');
+      (coaching.recommendations || []).forEach(recommendation => {
+        if (yPos > pageHeight - 20) {
+          doc.addPage();
+          yPos = margin;
+        }
+        doc.text(`  • ${recommendation}`, margin + 5, yPos);
+        yPos += 6;
+      });
+      yPos += 10;
+    }
+    
+    // 종합 분석
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    if (yPos > pageHeight - 30) {
+      doc.addPage();
+      yPos = margin;
+    }
+    doc.text('종합 평가', margin, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'normal');
+    
+    // 종합 분석 텍스트 처리
+    let overallText = '';
+    if (report.analysisData && report.analysisData.overallAnalysis) {
+      overallText = report.analysisData.overallAnalysis;
+    } else if (report.analysis) {
+      // 기존 텍스트 형식인 경우 HTML 태그 제거
+      overallText = report.analysis.replace(/<[^>]*>/g, '').replace(/\*\*/g, '');
+    }
+    
+    // 텍스트를 여러 줄로 분할하여 PDF에 추가
+    const splitText = doc.splitTextToSize(overallText || '분석 내용이 없습니다.', contentWidth);
+    splitText.forEach((line, index) => {
+      if (yPos > pageHeight - 20) {
+        doc.addPage();
+        yPos = margin;
+      }
+      doc.text(line, margin, yPos);
+      yPos += 6;
+    });
+    
+    yPos += 10;
+    
+    // 구분선
+    if (yPos > pageHeight - 20) {
+      doc.addPage();
+      yPos = margin;
+    }
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, yPos, pageWidth - margin, yPos);
+    yPos += 8;
+    
+    // 생성일시
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'italic');
+    doc.setTextColor(128, 128, 128);
+    doc.text(`생성일시: ${new Date().toLocaleString('ko-KR')}`, margin, yPos);
+    
+    // PDF 저장
+    const fileName = `훈련분석_${report.date.replace(/-/g, '')}.pdf`;
+    doc.save(fileName);
+    
+    if (typeof showToast === 'function') {
+      showToast('PDF 보고서가 다운로드되었습니다.', 'success');
+    }
+    
+  } catch (error) {
+    console.error('PDF 생성 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('PDF 생성 중 오류가 발생했습니다.', 'error');
+    } else {
+      alert('PDF 생성 중 오류가 발생했습니다: ' + error.message);
+    }
   }
 }
 
