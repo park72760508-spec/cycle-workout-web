@@ -5657,7 +5657,12 @@ async function loadTrainingJournalCalendar(direction) {
       }
     }
     
-    calendarContainer.innerHTML = '<div class="loading-spinner">캘린더를 불러오는 중...</div>';
+    calendarContainer.innerHTML = `
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">캘린더를 불러오는 중...</div>
+      </div>
+    `;
     
     // 현재 사용자 ID 가져오기
     const userId = window.currentUser?.id || JSON.parse(localStorage.getItem('currentUser') || 'null')?.id;
