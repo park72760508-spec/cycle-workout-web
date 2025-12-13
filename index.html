@@ -1753,6 +1753,18 @@
       </div>
     </div>
     
+    <!-- Gemini API 키 설정 -->
+    <div class="card" style="margin-top: 16px; padding: 12px;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label style="font-size: 0.9em; margin-bottom: 4px;">Gemini API 키 (Google AI Studio에서 발급)</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="password" id="geminiApiKey" placeholder="API 키를 입력하세요" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+          <button class="btn btn-secondary" onclick="saveGeminiApiKey()" style="white-space: nowrap;">저장</button>
+        </div>
+        <small style="color: #666; font-size: 0.85em; margin-top: 4px; display: block;">API 키는 브라우저에 저장됩니다 (localStorage)</small>
+      </div>
+    </div>
+    
     <div id="trainingJournalCalendar" class="training-calendar">
       <div class="loading-spinner">
         <div class="spinner"></div>
@@ -1768,6 +1780,26 @@
 
   <!-- 토스트 메시지 -->
   <div id="toast" class="toast hidden"></div>
+
+  <!-- 훈련 분석 결과 모달 -->
+  <div id="trainingAnalysisModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h2>훈련 분석 결과</h2>
+        <button class="modal-close" onclick="closeTrainingAnalysisModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="trainingAnalysisContent">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+          <div class="loading-text">분석 중...</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTrainingAnalysisModal()">닫기</button>
+        <button class="btn btn-primary" onclick="exportAnalysisReport()">보고서 내보내기</button>
+      </div>
+    </div>
+  </div>
 
 <!-- 순차 로딩으로 변경하여 의존성 문제 해결 -->
 <!-- ✅ JavaScript 파일들 - 의존성 순서대로 로딩 -->
