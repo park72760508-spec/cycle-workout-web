@@ -5478,6 +5478,168 @@ button[aria-disabled="true"] {
   font-weight: 700;
 }
 
+/* 훈련일지 클릭 가능한 훈련일 스타일 */
+.calendar-day.clickable-training-day {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.calendar-day.clickable-training-day:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+/* 훈련 분석 모달 스타일 */
+#trainingAnalysisModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+#trainingAnalysisModal .modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+#trainingAnalysisModal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#trainingAnalysisModal .modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #064e3b;
+}
+
+#trainingAnalysisModal .modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+#trainingAnalysisModal .modal-close:hover {
+  background: #f3f4f6;
+  color: #333;
+}
+
+#trainingAnalysisModal .modal-body {
+  padding: 24px;
+}
+
+#trainingAnalysisModal .analysis-header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+#trainingAnalysisModal .analysis-header h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #064e3b;
+}
+
+#trainingAnalysisModal .analysis-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.9em;
+  color: #666;
+}
+
+#trainingAnalysisModal .analysis-meta span {
+  padding: 4px 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+  color: #059669;
+  font-weight: 500;
+}
+
+#trainingAnalysisModal .analysis-content {
+  line-height: 1.8;
+  color: #333;
+}
+
+#trainingAnalysisModal .analysis-content h1,
+#trainingAnalysisModal .analysis-content h2,
+#trainingAnalysisModal .analysis-content h3 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  color: #064e3b;
+  font-weight: 700;
+}
+
+#trainingAnalysisModal .analysis-content h1 {
+  font-size: 1.5em;
+}
+
+#trainingAnalysisModal .analysis-content h2 {
+  font-size: 1.3em;
+}
+
+#trainingAnalysisModal .analysis-content h3 {
+  font-size: 1.1em;
+}
+
+#trainingAnalysisModal .analysis-content p {
+  margin-bottom: 12px;
+}
+
+#trainingAnalysisModal .analysis-content strong {
+  color: #059669;
+  font-weight: 600;
+}
+
+#trainingAnalysisModal .analysis-content ul {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+#trainingAnalysisModal .analysis-content li {
+  margin-bottom: 8px;
+}
+
+#trainingAnalysisModal .error-message {
+  padding: 20px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+}
+
+#trainingAnalysisModal .error-message h3 {
+  margin-top: 0;
+  color: #dc2626;
+}
+
 /* 훈련일지 캘린더에서 휴식 이미지 제거 */
 #trainingJournalScreen .calendar-day.rest,
 #trainingJournalScreen .calendar-day .calendar-status-icon {
