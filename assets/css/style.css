@@ -5389,12 +5389,18 @@ button[aria-disabled="true"] {
   flex-wrap: wrap;
 }
 
+.journal-nav-left {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .journal-nav-center {
   display: flex;
   gap: 8px;
   align-items: center;
   flex: 0 0 auto;
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 .journal-month-label {
