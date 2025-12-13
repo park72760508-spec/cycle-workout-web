@@ -6326,9 +6326,6 @@ function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, 
           <div class="chart-wrapper">
             <div id="tssAnalysisChart" style="width: 100%; height: 200px;"></div>
           </div>
-          <div class="chart-wrapper">
-            <div id="hrAnalysisChart" style="width: 100%; height: 200px;"></div>
-          </div>
         </div>
         <div class="metric-details">
           <div class="detail-card">
@@ -6347,13 +6344,43 @@ function renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, 
               ${metrics.tssAnalysis?.tssScore || 0}점
             </div>
           </div>
-          <div class="detail-card">
-            <div class="detail-label">심박수 분석</div>
-            <div class="detail-value">${metrics.heartRateAnalysis?.hrZone || 'N/A'}</div>
-            <div class="detail-sub">평균: ${hrAvg} bpm</div>
-            <div class="detail-score" style="color: ${getScoreColor(metrics.heartRateAnalysis?.hrScore || 0)}">
-              ${metrics.heartRateAnalysis?.hrScore || 0}점
+        </div>
+      </div>
+      
+      <!-- 심박수 분석 (확대된 블록) -->
+      <div class="analysis-section hr-analysis-expanded">
+        <h3 class="section-title">❤️ 심박수 분석</h3>
+        <div class="hr-analysis-container">
+          <div class="hr-analysis-left">
+            <div class="hr-chart-wrapper">
+              <div id="hrAnalysisChart" style="width: 100%; height: 300px;"></div>
             </div>
+            <div class="hr-evaluation-result">
+              <div class="hr-eval-title">평가 결과</div>
+              <div class="hr-eval-content">
+                <div class="hr-eval-item">
+                  <span class="hr-eval-label">평균 심박수:</span>
+                  <span class="hr-eval-value">${hrAvg} bpm</span>
+                </div>
+                <div class="hr-eval-item">
+                  <span class="hr-eval-label">심박 구간:</span>
+                  <span class="hr-eval-value">${metrics.heartRateAnalysis?.hrZone || 'N/A'}</span>
+                </div>
+                <div class="hr-eval-item">
+                  <span class="hr-eval-label">추정 최대 심박수:</span>
+                  <span class="hr-eval-value" id="hrMaxHRValue">계산 중...</span>
+                </div>
+                <div class="hr-eval-item">
+                  <span class="hr-eval-label">평가 점수:</span>
+                  <span class="hr-eval-value" style="color: ${getScoreColor(metrics.heartRateAnalysis?.hrScore || 0)}">
+                    ${metrics.heartRateAnalysis?.hrScore || 0}점
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="hr-analysis-right">
+            <div id="hrAnalysisGuide" class="hr-chart-guide-expanded"></div>
           </div>
         </div>
       </div>
@@ -6520,19 +6547,18 @@ function renderHRChart(data, hrAvg) {
   ]);
   
   const options = {
-    title: `평균 심박수: ${hrAvg} bpm (${hrAnalysis.hrZone || 'N/A'}) | 추정 최대 심박수: ${maxHR} bpm`,
-    titleTextStyle: { fontSize: 14, bold: true },
-    hAxis: { title: '심박수 구간' },
-    vAxis: { title: '심박수 (bpm)', min: 0, max: Math.max(maxHR + 20, 200) },
+    title: '',
+    hAxis: { title: '심박수 구간', titleTextStyle: { fontSize: 12 } },
+    vAxis: { title: '심박수 (bpm)', min: 0, max: Math.max(maxHR + 20, 200), titleTextStyle: { fontSize: 12 } },
     seriesType: 'bars',
     series: {
       0: { type: 'bars', color: '#e5e7eb' }, // 최소 심박수 (회색)
       1: { type: 'bars', color: '#d1d5db' }, // 최대 심박수 (회색)
       2: { type: 'line', color: '#ef4444', lineWidth: 3, pointSize: 8 } // 현재 평균 (빨간 선)
     },
-    legend: { position: 'bottom' },
+    legend: { position: 'bottom', textStyle: { fontSize: 11 } },
     backgroundColor: 'transparent',
-    chartArea: { left: 80, top: 50, width: '70%', height: '65%' },
+    chartArea: { left: 80, top: 20, width: '70%', height: '75%' },
     annotations: {
       textStyle: {
         fontSize: 10,
@@ -6544,30 +6570,77 @@ function renderHRChart(data, hrAvg) {
   const chart = new google.visualization.ComboChart(document.getElementById('hrAnalysisChart'));
   chart.draw(chartData, options);
   
-  // 그래프 아래에 해석 가이드 추가
+  // 추정 최대 심박수 표시 업데이트
+  const maxHRElement = document.getElementById('hrMaxHRValue');
+  if (maxHRElement) {
+    maxHRElement.textContent = `${maxHR} bpm`;
+  }
+  
+  // 우측에 해석 가이드 추가
   setTimeout(() => {
-    const chartElement = document.getElementById('hrAnalysisChart');
-    if (chartElement && !chartElement.querySelector('.hr-chart-guide')) {
-      const guide = document.createElement('div');
-      guide.className = 'hr-chart-guide';
-      guide.style.cssText = 'margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 8px; font-size: 0.9em; line-height: 1.6;';
-      guide.innerHTML = `
-        <div style="font-weight: 600; margin-bottom: 8px; color: #1f2937;">📊 그래프 해석 가이드:</div>
-        <div style="color: #4b5563;">
-          <div><strong>회복 구간</strong> (${zones[0].min}-${zones[0].max} bpm): 가벼운 회복 운동, 활성 회복</div>
-          <div><strong>지구력 구간</strong> (${zones[1].min}-${zones[1].max} bpm): 장시간 지속 가능한 강도, 기초 체력 향상</div>
-          <div><strong>역치 구간</strong> (${zones[2].min}-${zones[2].max} bpm): 유산소 역치 근처, 지구력 향상에 효과적</div>
-          <div><strong>무산소 구간</strong> (${zones[3].min}-${zones[3].max} bpm): 고강도 간격 훈련, 무산소 능력 향상</div>
-          <div><strong>최대 구간</strong> (${zones[4].min}-${zones[4].max} bpm): 최대 강도, 단시간만 유지 가능</div>
-          <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-            <strong style="color: #ef4444;">현재 평균 심박수 ${hrAvg} bpm</strong>은 <strong>${hrAnalysis.hrZone || 'N/A'}</strong> 구간에 속합니다.
-            ${hrAnalysis.hrZone === '지구력' ? '장시간 지속 가능한 강도로 훈련하셨습니다. 기초 체력 향상에 효과적입니다.' : ''}
-            ${hrAnalysis.hrZone === '역치' ? '유산소 역치 근처에서 훈련하셨습니다. 지구력 향상에 매우 효과적입니다.' : ''}
-            ${hrAnalysis.hrZone === '무산소' ? '고강도 훈련을 수행하셨습니다. 무산소 능력 향상에 효과적이지만 충분한 회복이 필요합니다.' : ''}
+    const guideElement = document.getElementById('hrAnalysisGuide');
+    if (guideElement) {
+      guideElement.innerHTML = `
+        <div class="hr-guide-title">📊 심박수 구간 해석 가이드</div>
+        <div class="hr-guide-content">
+          <div class="hr-zone-item">
+            <div class="hr-zone-color" style="background: ${zones[0].color};"></div>
+            <div class="hr-zone-info">
+              <div class="hr-zone-name">회복 구간</div>
+              <div class="hr-zone-range">${zones[0].min}-${zones[0].max} bpm</div>
+              <div class="hr-zone-desc">가벼운 회복 운동, 활성 회복</div>
+            </div>
+          </div>
+          <div class="hr-zone-item">
+            <div class="hr-zone-color" style="background: ${zones[1].color};"></div>
+            <div class="hr-zone-info">
+              <div class="hr-zone-name">지구력 구간</div>
+              <div class="hr-zone-range">${zones[1].min}-${zones[1].max} bpm</div>
+              <div class="hr-zone-desc">장시간 지속 가능한 강도, 기초 체력 향상</div>
+            </div>
+          </div>
+          <div class="hr-zone-item">
+            <div class="hr-zone-color" style="background: ${zones[2].color};"></div>
+            <div class="hr-zone-info">
+              <div class="hr-zone-name">역치 구간</div>
+              <div class="hr-zone-range">${zones[2].min}-${zones[2].max} bpm</div>
+              <div class="hr-zone-desc">유산소 역치 근처, 지구력 향상에 효과적</div>
+            </div>
+          </div>
+          <div class="hr-zone-item">
+            <div class="hr-zone-color" style="background: ${zones[3].color};"></div>
+            <div class="hr-zone-info">
+              <div class="hr-zone-name">무산소 구간</div>
+              <div class="hr-zone-range">${zones[3].min}-${zones[3].max} bpm</div>
+              <div class="hr-zone-desc">고강도 간격 훈련, 무산소 능력 향상</div>
+            </div>
+          </div>
+          <div class="hr-zone-item">
+            <div class="hr-zone-color" style="background: ${zones[4].color};"></div>
+            <div class="hr-zone-info">
+              <div class="hr-zone-name">최대 구간</div>
+              <div class="hr-zone-range">${zones[4].min}-${zones[4].max} bpm</div>
+              <div class="hr-zone-desc">최대 강도, 단시간만 유지 가능</div>
+            </div>
+          </div>
+          <div class="hr-current-analysis">
+            <div class="hr-current-title">현재 분석</div>
+            <div class="hr-current-content">
+              <div class="hr-current-value">
+                <strong style="color: #ef4444;">${hrAvg} bpm</strong>은 
+                <strong>${hrAnalysis.hrZone || 'N/A'}</strong> 구간에 속합니다.
+              </div>
+              <div class="hr-current-desc">
+                ${hrAnalysis.hrZone === '지구력' ? '장시간 지속 가능한 강도로 훈련하셨습니다. 기초 체력 향상에 효과적입니다.' : ''}
+                ${hrAnalysis.hrZone === '역치' ? '유산소 역치 근처에서 훈련하셨습니다. 지구력 향상에 매우 효과적입니다.' : ''}
+                ${hrAnalysis.hrZone === '무산소' ? '고강도 훈련을 수행하셨습니다. 무산소 능력 향상에 효과적이지만 충분한 회복이 필요합니다.' : ''}
+                ${hrAnalysis.hrZone === '회복' ? '가벼운 강도로 훈련하셨습니다. 회복과 기초 체력 유지에 도움이 됩니다.' : ''}
+                ${!hrAnalysis.hrZone || hrAnalysis.hrZone === 'N/A' ? '심박수 구간을 분석할 수 없습니다.' : ''}
+              </div>
+            </div>
           </div>
         </div>
       `;
-      chartElement.parentElement.appendChild(guide);
     }
   }, 500);
 }
