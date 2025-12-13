@@ -1683,32 +1683,38 @@ function updateSegmentBarTick(){
       // [변경 후] 그룹세그먼트 왼쪽 라인 유지 보장
       groupEl.classList.remove(
         "is-complete","is-current","is-upcoming",
-        "achievement-low","achievement-good","achievement-high","achievement-over"
+        "timeline-ach-low","timeline-ach-good"
       );
      
       
       
-      // 달성도 계산: (가중평균 실제W) / (가중평균 타깃W)
-      let targetSum = 0, actualSum = 0;
+      // 달성도 계산: 그룹 내 인터벌 세그먼트들의 평균 달성율
+      let achievementSum = 0;
+      let achievementCount = 0;
       for (let i = startIndex; i < endIndex; i++) {
         const seg = w.segments[i];
-        const dur = segDurationSec(seg);
-        const tgt = segTargetW(seg, ftp);                          // 기존 함수 사용
+        const tgt = segTargetW(seg, ftp);
         const samples = segBar.samples[i] || 0;
-        const avgW    = samples ? (segBar.sumPower[i] / samples) : 0;
-      
-        targetSum += (tgt * dur);
-        actualSum += (avgW * dur);
+        const avgW = samples ? (segBar.sumPower[i] / samples) : 0;
+        
+        // 각 인터벌 세그먼트의 달성율 계산
+        if (tgt > 0) {
+          const achievement = avgW / tgt;
+          achievementSum += achievement;
+          achievementCount++;
+        }
       }
-      const groupAch = targetSum > 0 ? (actualSum / targetSum) : 0;
+      const groupAch = achievementCount > 0 ? (achievementSum / achievementCount) : 0;
       
-      // 상태 + 달성도 클래스 부여
+      // 상태 + 달성도 클래스 부여 (인터벌 세그먼트와 동일한 클래스명 사용)
       if (elapsed >= groupEnd) {
         groupEl.classList.add("is-complete");
-        if (groupAch < 0.85)              groupEl.classList.add("achievement-low");
-        else if (groupAch <= 1.15)        groupEl.classList.add("achievement-good");
-        else if (groupAch <= 1.30)        groupEl.classList.add("achievement-high");
-        else                              groupEl.classList.add("achievement-over");
+        // 인터벌 세그먼트와 동일한 기준 사용 (0.95 이상이면 good, 미만이면 low)
+        if (groupAch >= 0.95) {
+          groupEl.classList.add("timeline-ach-good");
+        } else {
+          groupEl.classList.add("timeline-ach-low");
+        }
         // 완료된 그룹은 기본 스타일로 리셋
         if (groupFill) {
           groupFill.style.background = '';
