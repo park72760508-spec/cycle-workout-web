@@ -5393,7 +5393,7 @@ button[aria-disabled="true"] {
   display: flex;
   gap: 8px;
   align-items: center;
-  flex: 0 0 auto;
+  flex: 1;
   justify-content: flex-start;
 }
 
