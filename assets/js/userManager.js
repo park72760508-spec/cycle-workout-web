@@ -526,13 +526,8 @@ async function selectUser(userId) {
 
     showToast(`${user.name}님이 선택되었습니다.`);
     
-    // 훈련 스케줄 화면으로 이동
-    if (typeof showScreen === 'function') {
-      showScreen('scheduleListScreen');
-      if (typeof loadTrainingSchedules === 'function') {
-        loadTrainingSchedules();
-      }
-    }
+    // RPE 컨디션 선택 모달 표시
+    showRPEModal();
     
   } catch (error) {
     console.error('사용자 선택 실패:', error);
