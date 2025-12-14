@@ -2549,10 +2549,12 @@ if (!window.showScreen) {
         }
       }
       
-      // 1) 모든 화면 숨김
+      // 1) 모든 화면 숨김 (스플래시 화면 제외)
       document.querySelectorAll(".screen").forEach(s => {
-        s.style.display = "none";
-        s.classList.remove("active");
+        if (s.id !== 'splashScreen') {
+          s.style.display = "none";
+          s.classList.remove("active");
+        }
       });
       
       // 2) 대상 화면만 표시
@@ -3288,12 +3290,83 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("HTTPS required for BLE");
   }
   
-  if (typeof showScreen === "function") {
-    showScreen("connectionScreen");
-    // 연결 화면 표시 시 버튼 이미지 초기화
-    if (typeof updateDeviceButtonImages === "function") {
-      setTimeout(() => updateDeviceButtonImages(), 100);
+  // 스플래시 화면 처리
+  const splashScreen = document.getElementById("splashScreen");
+  const splashVideo = document.getElementById("splashVideo");
+  const splashLoaderProgress = document.getElementById("splashLoaderProgress");
+  
+  if (splashScreen && splashScreen.classList.contains("active")) {
+    // 스플래시 화면이 활성화되어 있으면 처리
+    let elapsedTime = 0;
+    const totalDuration = 13000; // 13초
+    
+    // 동영상 재생 시작
+    if (splashVideo) {
+      splashVideo.play().catch(err => {
+        console.warn("동영상 자동 재생 실패:", err);
+      });
     }
+    
+    // 로딩 바 애니메이션
+    const progressInterval = setInterval(() => {
+      elapsedTime += 100;
+      const progress = Math.min((elapsedTime / totalDuration) * 100, 100);
+      
+      if (splashLoaderProgress) {
+        splashLoaderProgress.style.width = progress + "%";
+      }
+      
+      if (elapsedTime >= totalDuration) {
+        clearInterval(progressInterval);
+        
+        // 페이드 아웃 애니메이션
+        splashScreen.style.transition = "opacity 0.8s ease-out";
+        splashScreen.style.opacity = "0";
+        
+        // 인증 화면으로 전환
+        setTimeout(() => {
+          splashScreen.classList.remove("active");
+          splashScreen.style.display = "none";
+          
+          // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
+          const authScreen = document.getElementById("authScreen");
+          if (authScreen) {
+            // 다른 모든 화면 숨기기
+            document.querySelectorAll(".screen").forEach(screen => {
+              screen.classList.remove("active");
+              screen.style.display = "none";
+            });
+            
+            // 인증 화면 표시
+            authScreen.style.display = "block";
+            authScreen.classList.add("active");
+            authScreen.style.opacity = "1";
+            authScreen.style.visibility = "visible";
+          }
+        }, 800);
+      }
+    }, 100);
+  } else {
+    // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
+    const authScreen = document.getElementById("authScreen");
+    if (authScreen) {
+      // 다른 모든 화면 숨기기
+      document.querySelectorAll(".screen").forEach(screen => {
+        screen.classList.remove("active");
+        screen.style.display = "none";
+      });
+      
+      // 인증 화면 표시
+      authScreen.style.display = "block";
+      authScreen.classList.add("active");
+      authScreen.style.opacity = "1";
+      authScreen.style.visibility = "visible";
+    }
+  }
+  
+  // 연결 화면 표시 시 버튼 이미지 초기화 (스플래시 후에 실행될 수 있도록)
+  if (typeof updateDeviceButtonImages === "function") {
+    setTimeout(() => updateDeviceButtonImages(), 100);
   }
 
   // 훈련 준비 → 훈련 시작
@@ -4307,12 +4380,14 @@ window.showScreen = function(screenId) {
     screenId = 'authScreen';
   }
   
-  // 모든 화면 숨기기
+  // 모든 화면 숨기기 (스플래시 화면 제외)
   document.querySelectorAll('.screen').forEach(screen => {
-    screen.classList.remove('active');
-    screen.style.display = 'none';
-    screen.style.opacity = '0';
-    screen.style.visibility = 'hidden';
+    if (screen.id !== 'splashScreen') {
+      screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
+    }
   });
   
   // 선택된 화면만 표시
