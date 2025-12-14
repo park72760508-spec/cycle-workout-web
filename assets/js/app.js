@@ -6010,24 +6010,29 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
 
 // 훈련일지 날짜 셀 렌더링
 function renderTrainingJournalDay(dayData) {
+  // 현재 월이 아닌 날짜는 빈 셀 반환
   if (!dayData.isCurrentMonth) {
     return '<div class="calendar-day-empty"></div>';
   }
   
   const { date, day, isToday, result, isWeekend, isHoliday } = dayData;
+  
+  // 모든 날짜에 대해 기본 클래스 설정
   const classes = ['calendar-day'];
   
+  // 오늘 날짜 표시
   if (isToday) {
     classes.push('today');
   }
   
-  // 훈련 결과가 없고 과거 날짜인 경우 확인
+  // 과거 날짜 확인
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dayDate = new Date(date.split('-')[0], parseInt(date.split('-')[1]) - 1, parseInt(date.split('-')[2]));
   dayDate.setHours(0, 0, 0, 0);
   const isPast = dayDate < today;
   
+  // 훈련 결과에 따른 클래스 추가
   if (result) {
     classes.push('completed');
     classes.push('clickable-training-day'); // 클릭 가능한 훈련일 표시
@@ -6041,8 +6046,10 @@ function renderTrainingJournalDay(dayData) {
     classes.push('holiday-weekend');
   }
   
+  // 날짜 번호는 항상 표시
   let content = `<div class="calendar-day-number">${day}</div>`;
   
+  // 훈련 결과가 있는 경우
   if (result) {
     // 훈련 완료 데이터 표시 (SCHEDULE_RESULTS 구조 사용)
     const durationMin = result.duration_min || 0;
@@ -6071,8 +6078,10 @@ function renderTrainingJournalDay(dayData) {
         </div>
       </div>
     `;
-  } else if (!result && isPast) {
-    // 과거 날짜에 훈련 이력이 없으면 STELVIO AI 로고 표시
+  } 
+  // 과거 날짜에 훈련 이력이 없는 경우
+  else if (!result && isPast) {
+    // STELVIO AI 로고 표시
     content += `
       <div class="calendar-day-content rest-day">
         <div class="calendar-status-icon">
@@ -6081,13 +6090,14 @@ function renderTrainingJournalDay(dayData) {
       </div>
     `;
   }
-  // 미래 날짜나 오늘 날짜에 훈련 이력이 없는 경우는 날짜 번호만 표시 (기본 상태)
+  // 미래 날짜나 오늘 날짜에 훈련 이력이 없는 경우
+  // 날짜 번호만 표시 (기본 상태 - 빈 블럭)
   
   // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
-  // JSON을 HTML 이스케이프하여 data 속성에 저장
   const dataResult = result ? `data-result='${JSON.stringify(result).replace(/'/g, "&#39;").replace(/"/g, "&quot;")}'` : '';
   const cursorStyle = result ? 'style="cursor: pointer;"' : '';
   
+  // 모든 날짜 블럭 반환 (날짜 번호는 항상 포함됨)
   return `<div class="${classes.join(' ')}" data-date="${date}" ${dataResult} ${cursorStyle}>${content}</div>`;
 }
 
