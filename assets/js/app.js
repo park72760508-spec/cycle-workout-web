@@ -49,6 +49,16 @@
     };
   }
 
+  // RPE 강도 보정값 초기화 (로컬 스토리지에서 복원)
+  if (window.trainingIntensityAdjustment === undefined) {
+    try {
+      const saved = localStorage.getItem('trainingIntensityAdjustment');
+      window.trainingIntensityAdjustment = saved ? parseFloat(saved) : 1.0;
+    } catch (e) {
+      window.trainingIntensityAdjustment = 1.0;
+    }
+  }
+
   // workoutData 전역 초기화 (그룹 훈련용)
 // workoutData 전역 초기화 (그룹 훈련용)
   if (!window.workoutData) {
@@ -1148,14 +1158,18 @@ function getCumulativeStartSec(index) {
 
 
 
-// 세그먼트 목표 파워(W) 계산
+// 세그먼트 목표 파워(W) 계산 (RPE 강도 보정 적용)
 function getSegmentTargetW(i) {
   const w = window.currentWorkout;
   const seg = w?.segments?.[i];
   if (!seg) return 0;
   const ftp = Number(window.currentUser?.ftp) || 200;
   const ftpPercent = getSegmentFtpPercent(seg); // 기존 로직 활용
-  return Math.round(ftp * (ftpPercent / 100));
+  const basePower = ftp * (ftpPercent / 100);
+  
+  // RPE 강도 보정 적용 (기본값 1.0 = 100%)
+  const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+  return Math.round(basePower * intensityAdjustment);
 }
 
 // 세그먼트 타입(휴식/쿨다운 여부 확인용)
@@ -2076,8 +2090,10 @@ function applySegmentTarget(i) {
       // 디버깅 로그
       console.log('[dual] 최종 파싱 결과 - target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
       
-      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환
-      const targetW = Math.round(ftp * (ftpPercent / 100));
+      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환 (RPE 보정 적용)
+      const basePower = ftp * (ftpPercent / 100);
+      const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      const targetW = Math.round(basePower * intensityAdjustment);
       
       // 목표 파워 표시: 첫 번째 값(ftp%)을 파워(W)로 변환하여 표시
       if (targetLabelEl) {
@@ -2085,7 +2101,7 @@ function applySegmentTarget(i) {
       }
       if (targetValueEl) {
         targetValueEl.textContent = String(targetW);
-        console.log('[dual] 목표 파워 표시:', targetW, 'W (FTP%:', ftpPercent, '→', ftp, '*', ftpPercent, '/ 100)');
+        console.log('[dual] 목표 파워 표시:', targetW, 'W (FTP%:', ftpPercent, '→', ftp, '*', ftpPercent, '/ 100 *', intensityAdjustment, ')');
       }
       if (targetUnitEl) {
         targetUnitEl.textContent = "W";
@@ -2111,10 +2127,12 @@ function applySegmentTarget(i) {
       console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', targetRpm, 'rpm');
       
     } else {
-      // ftp_pct 타입 (기본): 기존 로직 유지
+      // ftp_pct 타입 (기본): 기존 로직 유지 (RPE 보정 적용)
       const ftpPercent = getSegmentFtpPercent(seg);
       parsedFtpPercent = ftpPercent;
-      const targetW = Math.round(ftp * (ftpPercent / 100));
+      const basePower = ftp * (ftpPercent / 100);
+      const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      const targetW = Math.round(basePower * intensityAdjustment);
       
       if (targetLabelEl) targetLabelEl.textContent = "목표 파워";
       if (targetValueEl) targetValueEl.textContent = String(targetW || 0);
@@ -2552,8 +2570,8 @@ if (!window.showScreen) {
       // 1) 모든 화면 숨김 (스플래시 화면 제외)
       document.querySelectorAll(".screen").forEach(s => {
         if (s.id !== 'splashScreen') {
-          s.style.display = "none";
-          s.classList.remove("active");
+        s.style.display = "none";
+        s.classList.remove("active");
         }
       });
       
@@ -3415,8 +3433,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   
   // 연결 화면 표시 시 버튼 이미지 초기화 (스플래시 후에 실행될 수 있도록)
-  if (typeof updateDeviceButtonImages === "function") {
-    setTimeout(() => updateDeviceButtonImages(), 100);
+    if (typeof updateDeviceButtonImages === "function") {
+      setTimeout(() => updateDeviceButtonImages(), 100);
   }
 
   // 훈련 준비 → 훈련 시작
@@ -4433,10 +4451,10 @@ window.showScreen = function(screenId) {
   // 모든 화면 숨기기 (스플래시 화면 제외)
   document.querySelectorAll('.screen').forEach(screen => {
     if (screen.id !== 'splashScreen') {
-      screen.classList.remove('active');
-      screen.style.display = 'none';
-      screen.style.opacity = '0';
-      screen.style.visibility = 'hidden';
+    screen.classList.remove('active');
+    screen.style.display = 'none';
+    screen.style.opacity = '0';
+    screen.style.visibility = 'hidden';
     }
   });
   
@@ -4790,10 +4808,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 모든 화면 완전히 숨기기 (스플래시 화면 제외)
     document.querySelectorAll('.screen').forEach(screen => {
       if (screen.id !== 'splashScreen') {
-        screen.classList.remove('active');
-        screen.style.display = 'none';
-        screen.style.opacity = '0';
-        screen.style.visibility = 'hidden';
+      screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
       }
     });
     
@@ -7245,7 +7263,111 @@ async function exportAnalysisReport() {
   }
 }
 
+// ========== RPE 컨디션 선택 모달 함수 ==========
+function showRPEModal() {
+  const modal = document.getElementById('rpeConditionModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    // 기존 선택 해제
+    document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
+      btn.classList.remove('selected');
+    });
+    
+    // 저장된 값이 있으면 해당 버튼 선택
+    const savedAdjustment = window.trainingIntensityAdjustment || 1.0;
+    const savedBtn = document.querySelector(`.rpe-condition-btn[data-adjustment="${savedAdjustment}"]`);
+    if (savedBtn) {
+      savedBtn.classList.add('selected');
+    }
+    
+    // 확인 버튼 초기화
+    const confirmBtn = document.getElementById('rpeConfirmBtn');
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = '1';
+    }
+  }
+}
+
+function closeRPEModal() {
+  const modal = document.getElementById('rpeConditionModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function selectRPECondition(adjustment, conditionName) {
+  // 모든 버튼에서 selected 클래스 제거
+  document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
+    btn.classList.remove('selected');
+  });
+  
+  // 선택한 버튼에 selected 클래스 추가
+  const selectedBtn = event.target.closest('.rpe-condition-btn');
+  if (selectedBtn) {
+    selectedBtn.classList.add('selected');
+  }
+  
+  // 전역 변수에 강도 보정값 저장
+  window.trainingIntensityAdjustment = adjustment;
+  
+  // 로컬 스토리지에 저장 (세션 유지)
+  try {
+    localStorage.setItem('trainingIntensityAdjustment', String(adjustment));
+  } catch (e) {
+    console.warn('로컬 스토리지 저장 실패:', e);
+  }
+  
+  console.log(`RPE 컨디션 선택: ${conditionName} (${(adjustment * 100).toFixed(0)}%)`);
+  
+  // 확인 버튼 활성화
+  const confirmBtn = document.getElementById('rpeConfirmBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '1';
+  }
+}
+
+function confirmRPESelection() {
+  const adjustment = window.trainingIntensityAdjustment;
+  if (!adjustment) {
+    if (typeof showToast === 'function') {
+      showToast('컨디션을 선택해주세요', 'warning');
+    } else {
+      alert('컨디션을 선택해주세요');
+    }
+    return;
+  }
+  
+  // 모달 닫기
+  closeRPEModal();
+  
+  // 훈련 스케줄 화면으로 이동
+  if (typeof showScreen === 'function') {
+    showScreen('scheduleListScreen');
+    if (typeof loadTrainingSchedules === 'function') {
+      loadTrainingSchedules();
+    }
+  }
+  
+  const conditionNames = {
+    1.03: '최상',
+    1.00: '좋음',
+    0.98: '보통',
+    0.95: '나쁨'
+  };
+  
+  const conditionName = conditionNames[adjustment] || '선택됨';
+  if (typeof showToast === 'function') {
+    showToast(`컨디션: ${conditionName} (${(adjustment * 100).toFixed(0)}%) 적용됨`, 'success');
+  }
+}
+
 // 전역 함수로 등록
+window.showRPEModal = showRPEModal;
+window.closeRPEModal = closeRPEModal;
+window.selectRPECondition = selectRPECondition;
+window.confirmRPESelection = confirmRPESelection;
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
 window.handleTrainingDayClick = handleTrainingDayClick;
 window.saveGeminiApiKey = saveGeminiApiKey;
