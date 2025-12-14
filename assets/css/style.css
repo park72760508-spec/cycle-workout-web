@@ -5963,13 +5963,13 @@ button[aria-disabled="true"] {
 }
 
 .calendar-day.rest {
-  background: linear-gradient(135deg, rgba(249, 250, 251, 0.4) 0%, rgba(243, 244, 246, 0.4) 100%);
-  opacity: 0.5;
+  background: linear-gradient(135deg, rgba(249, 250, 251, 0.8) 0%, rgba(243, 244, 246, 0.8) 100%);
+  opacity: 1;
   cursor: default;
   width: 100%;
   height: 100%;
   aspect-ratio: 1;
-  border: 2px solid rgba(156, 163, 175, 0.2);
+  border: 2px solid rgba(156, 163, 175, 0.3);
 }
 
 /* STELVIO AI 로고 캘린더 스타일 (날짜 도형 크기의 60%, 흐릿하게) */
