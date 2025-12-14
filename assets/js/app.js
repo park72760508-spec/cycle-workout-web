@@ -6090,6 +6090,13 @@ function renderTrainingJournalDay(dayData) {
         </div>
       </div>
     `;
+  } else {
+    // 훈련 이력이 없는 날짜에 STELVIO AI 로고 표시
+    content += `
+      <div class="calendar-day-content journal-no-training">
+        <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
+      </div>
+    `;
   }
   
   // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
