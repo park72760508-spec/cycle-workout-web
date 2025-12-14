@@ -6011,13 +6011,19 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
 // 훈련일지 날짜 셀 렌더링
 function renderTrainingJournalDay(dayData) {
   // 현재 월이 아닌 날짜는 빈 셀 반환
-  if (!dayData.isCurrentMonth) {
+  if (!dayData || !dayData.isCurrentMonth) {
     return '<div class="calendar-day-empty"></div>';
   }
   
-  const { date, day, isToday, result, isWeekend, isHoliday } = dayData;
+  // dayData에서 필요한 값 추출 (안전하게)
+  const date = dayData.date || '';
+  const day = dayData.day || 0;
+  const isToday = dayData.isToday || false;
+  const result = dayData.result || null;
+  const isWeekend = dayData.isWeekend || false;
+  const isHoliday = dayData.isHoliday || false;
   
-  // 모든 날짜에 대해 기본 클래스 설정
+  // 모든 날짜에 대해 기본 클래스 설정 (반드시 calendar-day 포함)
   const classes = ['calendar-day'];
   
   // 오늘 날짜 표시
@@ -6025,12 +6031,22 @@ function renderTrainingJournalDay(dayData) {
     classes.push('today');
   }
   
-  // 과거 날짜 확인
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayDate = new Date(date.split('-')[0], parseInt(date.split('-')[1]) - 1, parseInt(date.split('-')[2]));
-  dayDate.setHours(0, 0, 0, 0);
-  const isPast = dayDate < today;
+  // 과거 날짜 확인 (안전하게)
+  let isPast = false;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (date && date.includes('-')) {
+      const dateParts = date.split('-');
+      if (dateParts.length === 3) {
+        const dayDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
+        dayDate.setHours(0, 0, 0, 0);
+        isPast = dayDate < today;
+      }
+    }
+  } catch (e) {
+    console.warn('날짜 파싱 오류:', e);
+  }
   
   // 훈련 결과에 따른 클래스 추가
   if (result) {
@@ -6046,7 +6062,7 @@ function renderTrainingJournalDay(dayData) {
     classes.push('holiday-weekend');
   }
   
-  // 날짜 번호는 항상 표시
+  // 날짜 번호는 항상 표시 (반드시 포함)
   let content = `<div class="calendar-day-number">${day}</div>`;
   
   // 훈련 결과가 있는 경우
@@ -6091,14 +6107,15 @@ function renderTrainingJournalDay(dayData) {
     `;
   }
   // 미래 날짜나 오늘 날짜에 훈련 이력이 없는 경우
-  // 날짜 번호만 표시 (기본 상태 - 빈 블럭)
+  // 날짜 번호만 표시 (기본 상태 - 빈 블럭이지만 날짜는 표시됨)
   
   // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
   const dataResult = result ? `data-result='${JSON.stringify(result).replace(/'/g, "&#39;").replace(/"/g, "&quot;")}'` : '';
   const cursorStyle = result ? 'style="cursor: pointer;"' : '';
   
-  // 모든 날짜 블럭 반환 (날짜 번호는 항상 포함됨)
-  return `<div class="${classes.join(' ')}" data-date="${date}" ${dataResult} ${cursorStyle}>${content}</div>`;
+  // 모든 날짜 블럭 반환 (날짜 번호는 항상 포함됨, calendar-day 클래스는 반드시 포함)
+  // date가 없어도 빈 문자열로 처리하여 블럭은 표시
+  return `<div class="${classes.join(' ')}" data-date="${date || ''}" ${dataResult} ${cursorStyle}>${content}</div>`;
 }
 
 // 훈련일지 날짜 클릭 핸들러
