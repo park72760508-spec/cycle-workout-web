@@ -6043,16 +6043,7 @@ function renderTrainingJournalDay(dayData) {
   
   let content = `<div class="calendar-day-number">${day}</div>`;
   
-  if (!result && isPast) {
-    // 과거 날짜에 훈련 이력이 없으면 STELVIO AI 로고 표시
-    content += `
-      <div class="calendar-day-content rest-day">
-        <div class="calendar-status-icon">
-          <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="stelvio-logo-calendar" />
-        </div>
-      </div>
-    `;
-  } else if (result) {
+  if (result) {
     // 훈련 완료 데이터 표시 (SCHEDULE_RESULTS 구조 사용)
     const durationMin = result.duration_min || 0;
     const avgPower = Math.round(result.avg_power || 0);
@@ -6080,7 +6071,17 @@ function renderTrainingJournalDay(dayData) {
         </div>
       </div>
     `;
+  } else if (!result && isPast) {
+    // 과거 날짜에 훈련 이력이 없으면 STELVIO AI 로고 표시
+    content += `
+      <div class="calendar-day-content rest-day">
+        <div class="calendar-status-icon">
+          <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="stelvio-logo-calendar" />
+        </div>
+      </div>
+    `;
   }
+  // 미래 날짜나 오늘 날짜에 훈련 이력이 없는 경우는 날짜 번호만 표시 (기본 상태)
   
   // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
   // JSON을 HTML 이스케이프하여 data 속성에 저장
