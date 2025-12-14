@@ -3290,18 +3290,31 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("HTTPS required for BLE");
   }
   
-  // 스플래시 화면 처리
+  // 스플래시 화면 처리 (최우선 실행)
   const splashScreen = document.getElementById("splashScreen");
   const splashVideo = document.getElementById("splashVideo");
   const splashLoaderProgress = document.getElementById("splashLoaderProgress");
   
-  if (splashScreen && splashScreen.classList.contains("active")) {
+  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
+  const isSplashActive = splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
+  
+  if (isSplashActive && splashScreen) {
+    // 스플래시 화면 강제 표시 보호
+    splashScreen.style.display = "block";
+    splashScreen.style.opacity = "1";
+    splashScreen.style.visibility = "visible";
+    splashScreen.style.zIndex = "10000";
+    splashScreen.classList.add("active");
+    
+    console.log("🎬 스플래시 화면 시작 - 14초 후 인증 화면으로 전환");
+    
     // 스플래시 화면이 활성화되어 있으면 처리
     let elapsedTime = 0;
-    const totalDuration = 13000; // 13초
+    const totalDuration = 14000; // 14초
     
     // 동영상 재생 시작
     if (splashVideo) {
+      splashVideo.currentTime = 0; // 동영상 처음부터 재생
       splashVideo.play().catch(err => {
         console.warn("동영상 자동 재생 실패:", err);
       });
@@ -3316,8 +3329,20 @@ document.addEventListener("DOMContentLoaded", () => {
         splashLoaderProgress.style.width = progress + "%";
       }
       
+      // 스플래시 화면이 숨겨지지 않도록 주기적으로 확인 및 복구
+      if (splashScreen && (splashScreen.style.display === "none" || !splashScreen.classList.contains("active"))) {
+        console.warn("⚠️ 스플래시 화면이 숨겨짐 - 복구 중");
+        splashScreen.style.display = "block";
+        splashScreen.style.opacity = "1";
+        splashScreen.style.visibility = "visible";
+        splashScreen.style.zIndex = "10000";
+        splashScreen.classList.add("active");
+      }
+      
       if (elapsedTime >= totalDuration) {
         clearInterval(progressInterval);
+        
+        console.log("✅ 스플래시 화면 완료 - 인증 화면으로 전환");
         
         // 페이드 아웃 애니메이션
         splashScreen.style.transition = "opacity 0.8s ease-out";
@@ -3333,8 +3358,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (authScreen) {
             // 다른 모든 화면 숨기기
             document.querySelectorAll(".screen").forEach(screen => {
-              screen.classList.remove("active");
-              screen.style.display = "none";
+              if (screen.id !== 'splashScreen') {
+                screen.classList.remove("active");
+                screen.style.display = "none";
+              }
             });
             
             // 인증 화면 표시
@@ -3342,6 +3369,14 @@ document.addEventListener("DOMContentLoaded", () => {
             authScreen.classList.add("active");
             authScreen.style.opacity = "1";
             authScreen.style.visibility = "visible";
+            
+            // 인증 시스템 초기화 (스플래시 후 실행)
+            setTimeout(() => {
+              const phoneInput = document.getElementById('phoneInput');
+              if (phoneInput) {
+                phoneInput.focus();
+              }
+            }, 100);
           }
         }, 800);
       }
@@ -4724,13 +4759,24 @@ function validateNewUserForm() {
 document.addEventListener('DOMContentLoaded', function() {
   console.log('📱 인증 시스템 초기화 시작');
   
+  // 스플래시 화면이 활성화되어 있으면 인증 화면 초기화 건너뛰기
+  const splashScreen = document.getElementById('splashScreen');
+  const isSplashActive = splashScreen && splashScreen.classList.contains('active');
+  
+  if (isSplashActive) {
+    console.log('⏳ 스플래시 화면 표시 중 - 인증 화면 초기화 대기');
+    return; // 스플래시 화면이 활성화되어 있으면 여기서 종료
+  }
+  
   setTimeout(() => {
-    // 모든 화면 완전히 숨기기
+    // 모든 화면 완전히 숨기기 (스플래시 화면 제외)
     document.querySelectorAll('.screen').forEach(screen => {
-      screen.classList.remove('active');
-      screen.style.display = 'none';
-      screen.style.opacity = '0';
-      screen.style.visibility = 'hidden';
+      if (screen.id !== 'splashScreen') {
+        screen.classList.remove('active');
+        screen.style.display = 'none';
+        screen.style.opacity = '0';
+        screen.style.visibility = 'hidden';
+      }
     });
     
     // authScreen만 표시
