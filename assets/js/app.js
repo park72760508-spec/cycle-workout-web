@@ -6021,9 +6021,19 @@ function renderTrainingJournalDay(dayData) {
     classes.push('today');
   }
   
+  // 훈련 결과가 없고 과거 날짜인 경우 확인
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayDate = new Date(date.split('-')[0], parseInt(date.split('-')[1]) - 1, parseInt(date.split('-')[2]));
+  dayDate.setHours(0, 0, 0, 0);
+  const isPast = dayDate < today;
+  
   if (result) {
     classes.push('completed');
     classes.push('clickable-training-day'); // 클릭 가능한 훈련일 표시
+  } else if (!result && isPast) {
+    // 과거 날짜에 훈련 이력이 없으면 rest 클래스 추가
+    classes.push('rest');
   }
   
   // 주말 또는 공휴일인 경우 주황색 클래스 추가
@@ -6032,13 +6042,6 @@ function renderTrainingJournalDay(dayData) {
   }
   
   let content = `<div class="calendar-day-number">${day}</div>`;
-  
-  // 훈련 결과가 없고 과거 날짜인 경우 STELVIO AI 로고 표시
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayDate = new Date(date.split('-')[0], parseInt(date.split('-')[1]) - 1, parseInt(date.split('-')[2]));
-  dayDate.setHours(0, 0, 0, 0);
-  const isPast = dayDate < today;
   
   if (!result && isPast) {
     // 과거 날짜에 훈련 이력이 없으면 STELVIO AI 로고 표시
