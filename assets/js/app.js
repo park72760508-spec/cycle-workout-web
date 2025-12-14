@@ -3320,6 +3320,9 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
     
+    // 페이드 아웃 시작 여부 추적
+    let isFadingOut = false;
+    
     // 로딩 바 애니메이션
     const progressInterval = setInterval(() => {
       elapsedTime += 100;
@@ -3329,8 +3332,10 @@ document.addEventListener("DOMContentLoaded", () => {
         splashLoaderProgress.style.width = progress + "%";
       }
       
-      // 스플래시 화면이 숨겨지지 않도록 주기적으로 확인 및 복구
-      if (splashScreen && (splashScreen.style.display === "none" || !splashScreen.classList.contains("active"))) {
+      // 스플래시 화면이 숨겨지지 않도록 주기적으로 확인 및 복구 (페이드 아웃 중이 아닐 때만)
+      if (!isFadingOut && splashScreen && 
+          (splashScreen.style.display === "none" || 
+           (!splashScreen.classList.contains("active") && splashScreen.style.opacity !== "0"))) {
         console.warn("⚠️ 스플래시 화면이 숨겨짐 - 복구 중");
         splashScreen.style.display = "block";
         splashScreen.style.opacity = "1";
@@ -3341,6 +3346,7 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (elapsedTime >= totalDuration) {
         clearInterval(progressInterval);
+        isFadingOut = true;
         
         console.log("✅ 스플래시 화면 완료 - 인증 화면으로 전환");
         
@@ -3372,11 +3378,20 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // 인증 시스템 초기화 (스플래시 후 실행)
             setTimeout(() => {
+              // 인증 시스템 이벤트 리스너 초기화
+              if (typeof initializeAuthenticationSystem === 'function') {
+                console.log('🔧 인증 시스템 초기화 시작');
+                initializeAuthenticationSystem();
+              } else {
+                console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
+              }
+              
+              // 전화번호 입력 필드 포커스
               const phoneInput = document.getElementById('phoneInput');
               if (phoneInput) {
                 phoneInput.focus();
               }
-            }, 100);
+            }, 200);
           }
         }, 800);
       }
@@ -4733,6 +4748,9 @@ function initializeAuthenticationSystem() {
   
   console.log('✅ 인증 시스템 모든 이벤트 리스너 초기화 완료');
 }
+
+// 전역으로 노출
+window.initializeAuthenticationSystem = initializeAuthenticationSystem;
 
 // 실시간 유효성 검사
 function validateNewUserForm() {
