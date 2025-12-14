@@ -6033,7 +6033,23 @@ function renderTrainingJournalDay(dayData) {
   
   let content = `<div class="calendar-day-number">${day}</div>`;
   
-  if (result) {
+  // 훈련 결과가 없고 과거 날짜인 경우 STELVIO AI 로고 표시
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayDate = new Date(date.split('-')[0], parseInt(date.split('-')[1]) - 1, parseInt(date.split('-')[2]));
+  dayDate.setHours(0, 0, 0, 0);
+  const isPast = dayDate < today;
+  
+  if (!result && isPast) {
+    // 과거 날짜에 훈련 이력이 없으면 STELVIO AI 로고 표시
+    content += `
+      <div class="calendar-day-content rest-day">
+        <div class="calendar-status-icon">
+          <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="stelvio-logo-calendar" />
+        </div>
+      </div>
+    `;
+  } else if (result) {
     // 훈련 완료 데이터 표시 (SCHEDULE_RESULTS 구조 사용)
     const durationMin = result.duration_min || 0;
     const avgPower = Math.round(result.avg_power || 0);
