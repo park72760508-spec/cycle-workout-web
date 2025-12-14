@@ -1827,8 +1827,8 @@
   <div id="toast" class="toast hidden"></div>
 
   <!-- RPE 컨디션 선택 모달 -->
-  <div id="rpeConditionModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content" style="max-width: 500px;">
+  <div id="rpeConditionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeRPEModal();">
+    <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation();">
       <div class="modal-header">
         <h2>컨디션별 강도 보정</h2>
         <button class="modal-close" onclick="closeRPEModal()">&times;</button>
@@ -1859,6 +1859,16 @@
             <div class="rpe-condition-value">95%</div>
           </button>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success btn-default-style btn-with-icon" id="rpeConfirmBtn" onclick="confirmRPESelection()" disabled style="opacity: 0.5;">
+          <img src="assets/img/save.png" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          확인
+        </button>
+        <button class="btn btn-secondary btn-default-style btn-with-icon" onclick="closeRPEModal()">
+          <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          취소
+        </button>
       </div>
     </div>
   </div>
