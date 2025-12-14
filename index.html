@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>AI 트레이닝 웹코치</title>
+  <title>STELVIO AI - 사이클 AI 트레이닝 전문 프로그램</title>
 
   <!-- GitHub Pages / HTTPS / BLE 권장 헤더 -->
   <meta http-equiv="origin-trial" content="">
@@ -421,6 +421,36 @@
 </head>
 
 <body>
+  <!-- 스플래시 화면 (첫 화면) -->
+  <div id="splashScreen" class="screen active">
+    <div class="splash-container">
+      <!-- 동영상 배경 -->
+      <div class="splash-video-wrapper">
+        <video id="splashVideo" class="splash-video" autoplay muted playsinline>
+          <source src="assets/img/STELVIO.mp4" type="video/mp4">
+        </video>
+        <!-- 동영상 오버레이 (그라데이션) -->
+        <div class="splash-video-overlay"></div>
+      </div>
+      
+      <!-- 브랜딩 콘텐츠 -->
+      <div class="splash-content">
+        <div class="splash-logo-container">
+          <h1 class="splash-title">STELVIO</h1>
+          <div class="splash-subtitle">AI</div>
+          <div class="splash-tagline">사이클 AI 트레이닝 전문 프로그램</div>
+        </div>
+        
+        <!-- 로딩 인디케이터 -->
+        <div class="splash-loader">
+          <div class="splash-loader-bar">
+            <div class="splash-loader-progress" id="splashLoaderProgress"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 0) 사용자 인증 -->
 <!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
   <div id="authScreen" class="screen">
