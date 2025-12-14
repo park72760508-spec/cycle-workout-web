@@ -1691,8 +1691,9 @@ function renderCalendarDay(day) {
     }
   } else {
     statusClass = 'rest';
-    statusIcon = '<img src="assets/img/rest.png" alt="휴식" style="width: 33px; height: 33px;" />';
-    statusText = '휴식';
+    // STELVIO AI 로고 이미지로 대체 (흐릿하게)
+    statusIcon = '';
+    statusText = '';
   }
   
   // 주말 또는 공휴일인 경우 주황색 클래스 추가
@@ -1736,8 +1737,7 @@ function renderCalendarDay(day) {
         </div>
       ` : `
         <div class="calendar-day-content rest-day">
-          <div class="calendar-status-icon">${statusIcon}</div>
-          <div class="rest-day-text">휴식</div>
+          <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="calendar-stelvio-logo" />
         </div>
       `}
     </div>
