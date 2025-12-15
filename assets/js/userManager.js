@@ -280,7 +280,8 @@ async function apiCreateUser(userData) {
 
     // ▼ 신규 필드 (요청 사양)
     grade: (userData.grade ?? '2').toString(),      // 가입시 기본값 "2"
-    expiry_date: userData.expiry_date ?? ''         // 기본값 공백 저장
+    expiry_date: userData.expiry_date ?? '',         // 기본값 공백 저장
+    challenge: (userData.challenge ?? 'Fitness').toString()  // 운동 목적 기본값 "Fitness"
   };
   console.log('Sending params:', params);
   return jsonpRequest(GAS_URL, params);
@@ -300,6 +301,8 @@ async function apiUpdateUser(id, userData) {
   // ▼ 관리자일 때만 들어오는 선택 필드(있을 때만 전송)
   if (userData.grade != null)       params.grade = String(userData.grade);
   if (userData.expiry_date != null) params.expiry_date = String(userData.expiry_date);
+  // ▼ 운동 목적 필드 (항상 전송)
+  if (userData.challenge != null)   params.challenge = String(userData.challenge);
 
   return jsonpRequest(GAS_URL, params);
 }
