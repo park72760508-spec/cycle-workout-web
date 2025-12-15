@@ -4636,7 +4636,8 @@ function handleNewUserSubmit(event) {
     name: document.getElementById('newUserName')?.value?.trim(),
     contact: document.getElementById('newUserPhone')?.value?.trim(),
     ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
-    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
+    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0,
+    challenge: document.getElementById('newUserChallenge')?.value || 'Fitness'
   };
 
   // 1) 필수값/형식
@@ -4755,7 +4756,7 @@ function initializeAuthenticationSystem() {
   }
   
   // 새 사용자 필드 실시간 유효성 검사
-  const requiredFields = ['newUserName', 'newUserPhone', 'newUserFTP', 'newUserWeight'];
+  const requiredFields = ['newUserName', 'newUserPhone', 'newUserFTP', 'newUserWeight', 'newUserChallenge'];
   requiredFields.forEach(fieldId => {
     const field = document.getElementById(fieldId);
     if (field) {
@@ -4776,11 +4777,12 @@ function validateNewUserForm() {
   const contact = document.getElementById('newUserPhone')?.value?.trim();
   const ftp = document.getElementById('newUserFTP')?.value;
   const weight = document.getElementById('newUserWeight')?.value;
+  const challenge = document.getElementById('newUserChallenge')?.value;
   
   const submitBtn = document.querySelector('#newUserForm button[type="submit"]');
   if (!submitBtn) return;
   
-  const isValid = name && contact && ftp && weight && /^010-\d{4}-\d{4}$/.test(contact);
+  const isValid = name && contact && ftp && weight && challenge && /^010-\d{4}-\d{4}$/.test(contact);
   
   submitBtn.disabled = !isValid;
   submitBtn.style.opacity = isValid ? '1' : '0.6';
@@ -4886,6 +4888,7 @@ async function registerNewUserViaAPI(formData, submitBtn, originalText) {
       contact: formData.contact,
       ftp: formData.ftp,
       weight: formData.weight,
+      challenge: formData.challenge || 'Fitness',
       grade: '2',
       expiry_date: ''
     });
@@ -5217,12 +5220,13 @@ async function authenticatePhone() {
 async function handleNewUserSubmit(event) {
   event.preventDefault();
   
-  // 간소화된 폼 데이터 수집 (이름, 전화번호, FTP, 몸무게만)
+  // 간소화된 폼 데이터 수집 (이름, 전화번호, FTP, 몸무게, 운동목적)
   const formData = {
     name: document.getElementById('newUserName')?.value?.trim(),
     contact: document.getElementById('newUserPhone')?.value?.trim(),
     ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
-    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
+    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0,
+    challenge: document.getElementById('newUserChallenge')?.value || 'Fitness'
   };
   
   // 유효성 검사
@@ -5265,6 +5269,7 @@ async function handleNewUserSubmit(event) {
         contact: formData.contact,
         ftp: formData.ftp,
         weight: formData.weight,
+        challenge: formData.challenge || 'Fitness',
         grade: '2',
         expiry_date: ''
       }, 'auth');
@@ -5273,6 +5278,7 @@ async function handleNewUserSubmit(event) {
       // 직접 API 함수 사용 (폴백)
       registrationResult = await apiCreateUser({
         name: formData.name,
+        challenge: formData.challenge || 'Fitness',
         contact: formData.contact,
         ftp: formData.ftp,
         weight: formData.weight,
@@ -5375,9 +5381,10 @@ async function handleNewUserSubmitWithDuplicateCheck(event) {
     name: document.getElementById('newUserName')?.value?.trim(),
     contact: document.getElementById('newUserPhone')?.value?.trim(),
     ftp: parseInt(document.getElementById('newUserFTP')?.value) || 0,
-    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0
+    weight: parseFloat(document.getElementById('newUserWeight')?.value) || 0,
+    challenge: document.getElementById('newUserChallenge')?.value || 'Fitness'
   };
-  
+
   // 유효성 검사
   if (!formData.name || !formData.contact || !formData.ftp || !formData.weight) {
     if (typeof showToast === 'function') {
@@ -6140,7 +6147,9 @@ function renderTrainingJournalDay(dayData) {
 
 // AI 워크아웃 추천 핸들러
 async function handleAIWorkoutRecommendation(event, date) {
-  event.stopPropagation(); // 캘린더 셀 클릭 이벤트 방지
+  if (event) {
+    event.stopPropagation(); // 캘린더 셀 클릭 이벤트 방지
+  }
   
   try {
     // API 키 확인
@@ -6156,8 +6165,9 @@ async function handleAIWorkoutRecommendation(event, date) {
       return;
     }
     
-    // 확인 대화상자
-    if (!confirm('AI가 분석한 최적의 훈련을 추천할까요?')) {
+    // 확인 대화상자 (재시도인 경우 스킵)
+    const isRetry = event && event.isRetry;
+    if (!isRetry && !confirm('AI가 분석한 최적의 훈련을 추천할까요?')) {
       return;
     }
     
@@ -6176,7 +6186,10 @@ async function handleAIWorkoutRecommendation(event, date) {
     
   } catch (error) {
     console.error('AI 워크아웃 추천 오류:', error);
-    showToast('워크아웃 추천 중 오류가 발생했습니다: ' + error.message, 'error');
+    // 모달 내에서 오류가 표시되므로 여기서는 토스트만 표시
+    if (typeof showToast === 'function') {
+      showToast('워크아웃 추천 중 오류가 발생했습니다. 모달에서 자세한 내용을 확인하세요.', 'error');
+    }
   }
 }
 
@@ -7581,6 +7594,10 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
       }))
     }));
     
+    // 프롬프트 생성 (워크아웃 정보는 최대 15개로 제한하여 토큰 수 감소)
+    const limitedWorkouts = workoutsSummary.slice(0, 15);
+    const limitedHistory = historySummary.slice(0, 7);
+    
     const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 추천해주세요.
 
 **사용자 정보:**
@@ -7590,11 +7607,17 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
 - 운동 목적: ${challenge} (Diet: 다이어트, Fitness: 일반 피트니스, GranFondo: 그란폰도, Racing: 레이싱)
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
 
-**최근 운동 이력 (최근 ${recentHistory.length}회):**
-${JSON.stringify(historySummary, null, 2)}
+**최근 운동 이력 (최근 ${limitedHistory.length}회):**
+${JSON.stringify(limitedHistory, null, 2)}
 
-**사용 가능한 워크아웃 목록:**
-${JSON.stringify(workoutsSummary, null, 2)}
+**사용 가능한 워크아웃 목록 (${limitedWorkouts.length}개):**
+${JSON.stringify(limitedWorkouts.map(w => ({
+  id: w.id,
+  title: w.title,
+  author: w.author,
+  totalSeconds: w.totalSeconds,
+  segmentCount: w.segments?.length || 0
+})), null, 2)}
 
 **분석 요청사항:**
 1. 사용자의 운동 목적(${challenge})과 최근 운동 이력을 분석하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 선정하세요.
@@ -7663,26 +7686,91 @@ ${JSON.stringify(workoutsSummary, null, 2)}
     
     const apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
     
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    // 재시도 로직이 포함된 API 호출 함수
+    const callGeminiAPI = async (url, body, maxRetries = 3) => {
+      let lastError;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          // 재시도 전 대기 (exponential backoff)
+          if (attempt > 1) {
+            const waitTime = Math.min(1000 * Math.pow(2, attempt - 2), 10000); // 최대 10초
+            contentDiv.innerHTML = `
+              <div class="loading-spinner">
+                <div class="spinner"></div>
+                <div class="loading-text">API 서버가 일시적으로 과부하 상태입니다. 재시도 중... (${attempt}/${maxRetries})</div>
+                <div class="loading-text" style="font-size: 0.85em; color: #666; margin-top: 8px;">
+                  ${Math.ceil(waitTime / 1000)}초 후 재시도합니다...
+                </div>
+              </div>
+            `;
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+          }
+          
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body)
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const errorMessage = errorData.error?.message || `API 오류: ${response.status}`;
+            
+            // 503 오류 (서비스 과부하) 또는 429 오류 (요청 한도 초과)인 경우 재시도
+            if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+              lastError = new Error(errorMessage);
+              console.warn(`API 호출 실패 (시도 ${attempt}/${maxRetries}): ${errorMessage}`);
+              continue; // 재시도
+            }
+            
+            // 그 외 오류는 즉시 throw
+            throw new Error(errorMessage);
+          }
+          
+          // 성공한 경우 응답 반환
+          return await response.json();
+          
+        } catch (error) {
+          lastError = error;
+          
+          // 네트워크 오류나 타임아웃인 경우 재시도
+          if ((error.message.includes('Failed to fetch') || 
+               error.message.includes('network') ||
+               error.message.includes('timeout')) && 
+              attempt < maxRetries) {
+            console.warn(`네트워크 오류 (시도 ${attempt}/${maxRetries}): ${error.message}`);
+            continue; // 재시도
+          }
+          
+          // 재시도 불가능한 오류는 즉시 throw
+          if (attempt >= maxRetries) {
+            throw error;
+          }
+        }
+      }
+      
+      // 모든 재시도 실패
+      throw lastError || new Error('API 호출에 실패했습니다.');
+    };
+    
+    // API 호출 (재시도 포함)
+    let data;
+    try {
+      data = await callGeminiAPI(apiUrl, {
         contents: [{
           parts: [{
             text: prompt
           }]
         }]
-      })
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
+      });
+    } catch (apiError) {
+      // API 호출 실패 시 사용자에게 재시도 옵션 제공
+      throw new Error(`API 호출 실패: ${apiError.message}\n\n서버가 일시적으로 과부하 상태일 수 있습니다. 잠시 후 다시 시도해주세요.`);
     }
     
-    const data = await response.json();
     const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
     // JSON 파싱
@@ -7701,13 +7789,56 @@ ${JSON.stringify(workoutsSummary, null, 2)}
     
   } catch (error) {
     console.error('워크아웃 추천 오류:', error);
-    contentDiv.innerHTML = `
+    
+    // 오류 메시지 파싱
+    const errorMessage = error.message || '알 수 없는 오류가 발생했습니다.';
+    const isOverloadError = errorMessage.includes('overloaded') || 
+                           errorMessage.includes('503') || 
+                           errorMessage.includes('Service Unavailable');
+    
+    let errorHtml = `
       <div class="error-message">
-        <h3>추천 오류</h3>
-        <p>${error.message}</p>
-        <button class="btn btn-secondary" onclick="closeWorkoutRecommendationModal()">닫기</button>
-      </div>
+        <h3>${isOverloadError ? '⚠️ 서버 과부하' : '추천 오류'}</h3>
+        <p style="margin: 16px 0; line-height: 1.6;">${errorMessage}</p>
     `;
+    
+    // 과부하 오류인 경우 재시도 버튼 제공
+    if (isOverloadError) {
+      const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const apiKey = localStorage.getItem('geminiApiKey');
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      
+      errorHtml += `
+        <div style="margin-top: 20px; padding: 16px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107;">
+          <p style="margin: 0 0 12px 0; color: #856404; font-weight: 500;">
+            💡 해결 방법:
+          </p>
+          <ul style="margin: 0; padding-left: 20px; color: #856404;">
+            <li>잠시 후 다시 시도해주세요 (1-2분 후)</li>
+            <li>서버가 일시적으로 과부하 상태일 수 있습니다</li>
+            <li>재시도 버튼을 클릭하여 다시 시도할 수 있습니다</li>
+          </ul>
+        </div>
+        <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
+          <button class="btn btn-primary" onclick="
+            const fakeEvent = { stopPropagation: () => {}, isRetry: true };
+            handleAIWorkoutRecommendation(fakeEvent, '${todayStr}');
+          ">🔄 다시 시도</button>
+          <button class="btn btn-secondary" onclick="closeWorkoutRecommendationModal()">닫기</button>
+        </div>
+      `;
+    } else {
+      errorHtml += `
+        <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
+          <button class="btn btn-secondary" onclick="closeWorkoutRecommendationModal()">닫기</button>
+        </div>
+      `;
+    }
+    
+    errorHtml += `</div>`;
+    
+    contentDiv.innerHTML = errorHtml;
   }
 }
 

@@ -69,6 +69,7 @@ function createUserFromAuth(authFormData) {
     contact: formatPhoneForDB(authFormData.contact || ''), // 하이픈 포맷으로 변환
     ftp: parseInt(authFormData.ftp) || 0,
     weight: parseFloat(authFormData.weight) || 0,
+    challenge: authFormData.challenge || 'Fitness', // 운동 목적 추가
     grade: '2', // 기본 사용자 등급
     expiry_date: '' // 빈 값
   };
@@ -634,11 +635,16 @@ function showAddUserForm(clearForm = true) {
   
   // clearForm이 true일 때만 폼 초기화 (기본값은 true로 기존 동작 유지)
   if (clearForm) {
-    document.getElementById('userName').value = '';
-    document.getElementById('userContact').value = '';
-    document.getElementById('userFTP').value = '';
-    document.getElementById('userWeight').value = '';
+    const nameEl = document.getElementById('userName');
+    const contactEl = document.getElementById('userContact');
+    const ftpEl = document.getElementById('userFTP');
+    const weightEl = document.getElementById('userWeight');
     const challengeSelect = document.getElementById('userChallenge');
+    
+    if (nameEl) nameEl.value = '';
+    if (contactEl) contactEl.value = '';
+    if (ftpEl) ftpEl.value = '';
+    if (weightEl) weightEl.value = '';
     if (challengeSelect) challengeSelect.value = 'Fitness';
   }
 }
@@ -667,14 +673,39 @@ async function editUser(userId) {
     // 폼 표시 (초기화하지 않음)
     showAddUserForm(false);
     
-    // 수정 폼에 기존 데이터 채우기
-   // ... user 로드 및 모드 전환 생략 ...
-   document.getElementById('userName').value = user.name || '';
-   document.getElementById('userContact').value = unformatPhone(user.contact || '');
-   document.getElementById('userFTP').value = user.ftp || '';
-   document.getElementById('userWeight').value = user.weight || '';
-   const challengeSelect = document.getElementById('userChallenge');
-   if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
+    // 폼이 완전히 렌더링될 때까지 대기 후 데이터 채우기
+    // 요소가 존재할 때까지 재시도하는 함수
+    const fillFormData = (retries = 10) => {
+      const nameEl = document.getElementById('userName');
+      const contactEl = document.getElementById('userContact');
+      const ftpEl = document.getElementById('userFTP');
+      const weightEl = document.getElementById('userWeight');
+      const challengeSelect = document.getElementById('userChallenge');
+      
+      // 모든 필수 요소가 존재하는지 확인
+      if (nameEl && contactEl && ftpEl && weightEl && challengeSelect) {
+        // 수정 폼에 기존 데이터 채우기
+        nameEl.value = user.name || '';
+        contactEl.value = unformatPhone(user.contact || '');
+        ftpEl.value = user.ftp || '';
+        weightEl.value = user.weight || '';
+        challengeSelect.value = user.challenge || 'Fitness';
+      } else if (retries > 0) {
+        // 요소가 아직 준비되지 않았으면 재시도
+        setTimeout(() => fillFormData(retries - 1), 50);
+      } else {
+        console.warn('폼 요소를 찾을 수 없습니다. 일부 필드가 채워지지 않았을 수 있습니다.');
+        // 최소한 존재하는 요소만 채우기
+        if (nameEl) nameEl.value = user.name || '';
+        if (contactEl) contactEl.value = unformatPhone(user.contact || '');
+        if (ftpEl) ftpEl.value = user.ftp || '';
+        if (weightEl) weightEl.value = user.weight || '';
+        if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
+      }
+    };
+    
+    // 초기 시도
+    setTimeout(() => fillFormData(), 100);
    
    // ▼ 관리자(grade=1)일 때만 추가 필드 표시
    const isAdmin = (typeof getViewerGrade === 'function' ? getViewerGrade() === '1' : false);
