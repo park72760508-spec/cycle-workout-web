@@ -526,6 +526,16 @@
                       <input type="number" id="newUserWeight" required min="40" max="150" step="0.1" placeholder="70.0">
                     </div>
                   </div>
+                  
+                  <div class="form-group">
+                    <label for="newUserChallenge">운동 목적 *</label>
+                    <select id="newUserChallenge" required>
+                      <option value="Diet">Diet (다이어트)</option>
+                      <option value="Fitness" selected>Fitness (일반 피트니스)</option>
+                      <option value="GranFondo">GranFondo (그란폰도)</option>
+                      <option value="Racing">Racing (레이싱)</option>
+                    </select>
+                  </div>
             
                   <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="toggleNewUserForm()">
@@ -643,55 +653,49 @@
 
 
       <!-- 신규 사용자 추가 카드 비활성화 -->
-      <div class="card hidden" id="cardAddUser" aria-hidden="true"></div>
-      <!-- 신규 사용자 폼 비활성화 -->
-      <div id="addUserForm" class="card hidden" aria-hidden="true"></div>
-
-    
-    <!-- 2) 프로필 선택 화면 숨기기 시작
-    <div class="card" id="cardAddUser">
-      <div class="text-center">
-        <div class="big-plus mb-10">➕</div>
-        <h3>새 사용자 추가</h3>
-        <p class="muted mt-5">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
-      </div>
-    </div>
-
-    <div id="addUserForm" class="card hidden">
-      <h3 class="mb-20">새 사용자 등록</h3>
-      <div class="form-group">
-        <label>이름 *</label>
-        <input type="text" id="userName" placeholder="이름을 입력하세요" required />
-      </div>
-      <div class="form-group">
-        <label>연락처</label>
-        <input type="tel" id="userContact" placeholder="01012345678" />
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>FTP (W) *</label>
-          <input type="number" id="userFTP" placeholder="250" min="50" max="600" required />
-        </div>
-        <div class="form-group">
-          <label>몸무게 (kg) *</label>
-          <input type="number" id="userWeight" placeholder="70" min="30" max="200" step="0.1" required />
+      <div class="card hidden" id="cardAddUser" aria-hidden="true">
+        <div class="text-center">
+          <div class="big-plus mb-10">➕</div>
+          <h3>새 사용자 추가</h3>
+          <p class="muted mt-5">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
         </div>
       </div>
-      <div class="form-group">
-        <label>운동 목적 *</label>
-        <select id="userChallenge" required>
-          <option value="Diet">Diet (다이어트)</option>
-          <option value="Fitness" selected>Fitness (일반 피트니스)</option>
-          <option value="GranFondo">GranFondo (그란폰도)</option>
-          <option value="Racing">Racing (레이싱)</option>
-        </select>
-      </div> 
 
-      <div class="btn-row mt-10">
-        <button class="btn btn-success" id="btnSaveUser">저장</button>
-        <button class="btn btn-secondary" id="btnCancelAddUser">취소</button>
+      <div id="addUserForm" class="card hidden">
+        <h3 class="mb-20">새 사용자 등록</h3>
+        <div class="form-group">
+          <label>이름 *</label>
+          <input type="text" id="userName" placeholder="이름을 입력하세요" required />
+        </div>
+        <div class="form-group">
+          <label>연락처</label>
+          <input type="tel" id="userContact" placeholder="01012345678" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>FTP (W) *</label>
+            <input type="number" id="userFTP" placeholder="250" min="50" max="600" required />
+          </div>
+          <div class="form-group">
+            <label>몸무게 (kg) *</label>
+            <input type="number" id="userWeight" placeholder="70" min="30" max="200" step="0.1" required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>운동 목적 *</label>
+          <select id="userChallenge" required>
+            <option value="Diet">Diet (다이어트)</option>
+            <option value="Fitness" selected>Fitness (일반 피트니스)</option>
+            <option value="GranFondo">GranFondo (그란폰도)</option>
+            <option value="Racing">Racing (레이싱)</option>
+          </select>
+        </div> 
+
+        <div class="btn-row mt-10">
+          <button class="btn btn-success" id="btnSaveUser">저장</button>
+          <button class="btn btn-secondary" id="btnCancelAddUser">취소</button>
+        </div>
       </div>
-    </div>  숨기기 끝  -->
 
 
     
