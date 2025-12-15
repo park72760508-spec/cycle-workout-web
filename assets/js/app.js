@@ -6109,12 +6109,24 @@ function renderTrainingJournalDay(dayData) {
       </div>
     `;
   } else {
-    // 훈련 이력이 없는 날짜에 STELVIO AI 로고 표시
-    content += `
-      <div class="calendar-day-content journal-no-training">
-        <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
-      </div>
-    `;
+    // 오늘 날짜이고 훈련 이력이 없는 경우 AI 추천 버튼 표시
+    if (isToday) {
+      content += `
+        <div class="calendar-day-content journal-no-training">
+          <button class="ai-recommend-btn" onclick="handleAIWorkoutRecommendation(event, '${date}')" title="AI 최적훈련 추천">
+            <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
+            <span class="ai-recommend-text">AI 최적훈련 추천</span>
+          </button>
+        </div>
+      `;
+    } else {
+      // 과거 날짜는 기존처럼 로고만 표시
+      content += `
+        <div class="calendar-day-content journal-no-training">
+          <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
+        </div>
+      `;
+    }
   }
   
   // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
@@ -6124,6 +6136,48 @@ function renderTrainingJournalDay(dayData) {
   // 모든 날짜 블럭 반환 (날짜 번호는 항상 포함됨, calendar-day 클래스는 반드시 포함)
   // date가 없어도 빈 문자열로 처리하여 블럭은 표시
   return `<div class="${classes.join(' ')}" data-date="${date || ''}" ${dataResult} ${cursorStyle}>${content}</div>`;
+}
+
+// AI 워크아웃 추천 핸들러
+async function handleAIWorkoutRecommendation(event, date) {
+  event.stopPropagation(); // 캘린더 셀 클릭 이벤트 방지
+  
+  try {
+    // API 키 확인
+    const apiKey = localStorage.getItem('geminiApiKey');
+    if (!apiKey) {
+      if (confirm('Gemini API 키가 설정되지 않았습니다.\n훈련일지 상단에서 API 키를 입력해주세요.\n\n지금 설정하시겠습니까?')) {
+        const apiKeyInput = document.getElementById('geminiApiKey');
+        if (apiKeyInput) {
+          apiKeyInput.focus();
+          apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+      return;
+    }
+    
+    // 확인 대화상자
+    if (!confirm('AI가 분석한 최적의 훈련을 추천할까요?')) {
+      return;
+    }
+    
+    // 사용자 정보 가져오기
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (!currentUser) {
+      showToast('사용자 정보를 찾을 수 없습니다.', 'error');
+      return;
+    }
+    
+    // 추천 모달 표시
+    showWorkoutRecommendationModal();
+    
+    // 분석 및 추천 실행
+    await analyzeAndRecommendWorkouts(date, currentUser, apiKey);
+    
+  } catch (error) {
+    console.error('AI 워크아웃 추천 오류:', error);
+    showToast('워크아웃 추천 중 오류가 발생했습니다: ' + error.message, 'error');
+  }
 }
 
 // 훈련일지 날짜 클릭 핸들러
@@ -7314,6 +7368,11 @@ function selectRPECondition(adjustment, conditionName) {
   // 로컬 스토리지에 저장 (세션 유지)
   try {
     localStorage.setItem('trainingIntensityAdjustment', String(adjustment));
+    
+    // 오늘 날짜의 몸상태도 저장
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    localStorage.setItem(`bodyCondition_${todayStr}`, conditionName);
   } catch (e) {
     console.warn('로컬 스토리지 저장 실패:', e);
   }
@@ -7368,6 +7427,411 @@ window.showRPEModal = showRPEModal;
 window.closeRPEModal = closeRPEModal;
 window.selectRPECondition = selectRPECondition;
 window.confirmRPESelection = confirmRPESelection;
+window.handleAIWorkoutRecommendation = handleAIWorkoutRecommendation;
+
+// ========== AI 워크아웃 추천 기능 ==========
+
+// 추천 워크아웃 모달 표시
+function showWorkoutRecommendationModal() {
+  const modal = document.getElementById('workoutRecommendationModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.getElementById('workoutRecommendationContent').innerHTML = `
+      <div class="loading-spinner">
+        <div class="spinner"></div>
+        <div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div>
+      </div>
+    `;
+  }
+}
+
+// 추천 워크아웃 모달 닫기
+function closeWorkoutRecommendationModal() {
+  const modal = document.getElementById('workoutRecommendationModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// Gemini API를 사용한 워크아웃 분석 및 추천
+async function analyzeAndRecommendWorkouts(date, user, apiKey) {
+  const contentDiv = document.getElementById('workoutRecommendationContent');
+  
+  try {
+    // 1. 사용자 기본 정보 수집
+    const ftp = user.ftp || 0;
+    const weight = user.weight || 0;
+    const challenge = user.challenge || 'Fitness';
+    
+    // 2. 오늘의 몸상태 확인 (localStorage에서)
+    const todayCondition = localStorage.getItem(`bodyCondition_${date}`) || '보통';
+    const conditionMap = {
+      '최상': 1.03,
+      '좋음': 1.00,
+      '보통': 0.98,
+      '나쁨': 0.95
+    };
+    const conditionAdjustment = conditionMap[todayCondition] || 0.98;
+    
+    // 3. 최근 운동 이력 조회 (최근 14일)
+    const today = new Date(date);
+    const startDate = new Date(today);
+    startDate.setDate(startDate.getDate() - 14);
+    const startDateStr = startDate.toISOString().split('T')[0];
+    const endDateStr = date;
+    
+    let recentHistory = [];
+    try {
+      const ensureBaseUrl = () => {
+        const base = window.GAS_URL;
+        if (!base) throw new Error('GAS_URL is not set');
+        return base;
+      };
+      
+      const baseUrl = ensureBaseUrl();
+      const params = new URLSearchParams({
+        action: 'getScheduleResultsByUser',
+        userId: user.id,
+        startDate: startDateStr,
+        endDate: endDateStr
+      });
+      const response = await fetch(`${baseUrl}?${params.toString()}`);
+      const result = await response.json();
+      
+      if (result?.success && Array.isArray(result.items)) {
+        recentHistory = result.items.slice(0, 10); // 최근 10개만
+      }
+    } catch (error) {
+      console.warn('최근 운동 이력 조회 실패:', error);
+    }
+    
+    // 4. 워크아웃 목록 조회 (모든 카테고리)
+    const categories = ['Endurance', 'Tempo', 'SweetSpot', 'Threshold', 'VO2Max', 'Recovery'];
+    let availableWorkouts = [];
+    
+    try {
+      const ensureBaseUrl = () => {
+        const base = window.GAS_URL;
+        if (!base) throw new Error('GAS_URL is not set');
+        return base;
+      };
+      
+      const baseUrl = ensureBaseUrl();
+      const params = new URLSearchParams({
+        action: 'getWorkoutsByCategory',
+        categories: categories.join(',')
+      });
+      const response = await fetch(`${baseUrl}?${params.toString()}`);
+      const result = await response.json();
+      
+      if (result?.success && Array.isArray(result.items)) {
+        availableWorkouts = result.items;
+      }
+    } catch (error) {
+      console.warn('워크아웃 목록 조회 실패:', error);
+    }
+    
+    // 5. 워크아웃 상세 정보 조회 (세그먼트 포함)
+    const workoutDetails = [];
+    for (const workout of availableWorkouts.slice(0, 20)) { // 최대 20개만
+      try {
+        const ensureBaseUrl = () => {
+          const base = window.GAS_URL;
+          if (!base) throw new Error('GAS_URL is not set');
+          return base;
+        };
+        
+        const baseUrl = ensureBaseUrl();
+        const params = new URLSearchParams({
+          action: 'getWorkout',
+          id: workout.id
+        });
+        const response = await fetch(`${baseUrl}?${params.toString()}`);
+        const result = await response.json();
+        
+        if (result?.success && result.item) {
+          workoutDetails.push(result.item);
+        }
+      } catch (error) {
+        console.warn(`워크아웃 ${workout.id} 상세 조회 실패:`, error);
+      }
+    }
+    
+    // 6. Gemini API에 전달할 프롬프트 생성
+    const historySummary = recentHistory.map(h => ({
+      date: h.completed_at ? new Date(h.completed_at).toISOString().split('T')[0] : '',
+      workout: h.workout_name || '알 수 없음',
+      duration: h.duration_min || 0,
+      avgPower: h.avg_power || 0,
+      tss: h.tss || 0
+    }));
+    
+    const workoutsSummary = workoutDetails.map(w => ({
+      id: w.id,
+      title: w.title,
+      author: w.author,
+      description: w.description || '',
+      totalSeconds: w.total_seconds || 0,
+      segments: (w.segments || []).map(s => ({
+        label: s.label,
+        type: s.segment_type,
+        duration: s.duration_sec,
+        targetType: s.target_type,
+        targetValue: s.target_value
+      }))
+    }));
+    
+    const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 추천해주세요.
+
+**사용자 정보:**
+- FTP: ${ftp}W
+- 체중: ${weight}kg
+- W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
+- 운동 목적: ${challenge} (Diet: 다이어트, Fitness: 일반 피트니스, GranFondo: 그란폰도, Racing: 레이싱)
+- 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
+
+**최근 운동 이력 (최근 ${recentHistory.length}회):**
+${JSON.stringify(historySummary, null, 2)}
+
+**사용 가능한 워크아웃 목록:**
+${JSON.stringify(workoutsSummary, null, 2)}
+
+**분석 요청사항:**
+1. 사용자의 운동 목적(${challenge})과 최근 운동 이력을 분석하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 선정하세요.
+2. 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 목적에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
+3. 각 추천 워크아웃에 대해 추천 이유를 간단히 설명하세요.
+
+다음 JSON 형식으로 응답해주세요:
+{
+  "selectedCategory": "선정된 카테고리",
+  "categoryReason": "카테고리 선정 이유",
+  "recommendations": [
+    {
+      "rank": 1,
+      "workoutId": 워크아웃 ID (숫자),
+      "reason": "추천 이유"
+    },
+    {
+      "rank": 2,
+      "workoutId": 워크아웃 ID (숫자),
+      "reason": "추천 이유"
+    },
+    {
+      "rank": 3,
+      "workoutId": 워크아웃 ID (숫자),
+      "reason": "추천 이유"
+    }
+  ]
+}
+
+중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
+
+    // 7. Gemini API 호출
+    let modelName = localStorage.getItem('geminiModelName');
+    let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
+    
+    if (!modelName) {
+      const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      const modelsResponse = await fetch(modelsUrl);
+      
+      if (!modelsResponse.ok) {
+        throw new Error('사용 가능한 모델을 조회할 수 없습니다.');
+      }
+      
+      const modelsData = await modelsResponse.json();
+      const availableModels = modelsData.models || [];
+      const supportedModels = availableModels
+        .filter(m => m.name && m.name.includes('gemini') && 
+                     (m.supportedGenerationMethods || []).includes('generateContent'))
+        .map(m => ({
+          name: m.name,
+          shortName: m.name.split('/').pop(),
+          displayName: m.displayName || m.name
+        }));
+      
+      if (supportedModels.length === 0) {
+        throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
+      }
+      
+      const selectedModel = supportedModels[0];
+      modelName = selectedModel.shortName;
+      apiVersion = 'v1beta';
+      
+      localStorage.setItem('geminiModelName', modelName);
+      localStorage.setItem('geminiApiVersion', apiVersion);
+    }
+    
+    const apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // JSON 파싱
+    let recommendationData;
+    try {
+      // 마크다운 코드 블록 제거
+      const cleanedText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      recommendationData = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error('JSON 파싱 오류:', parseError, responseText);
+      throw new Error('AI 응답을 파싱할 수 없습니다.');
+    }
+    
+    // 8. 추천 워크아웃 표시
+    displayWorkoutRecommendations(recommendationData, workoutDetails, date);
+    
+  } catch (error) {
+    console.error('워크아웃 추천 오류:', error);
+    contentDiv.innerHTML = `
+      <div class="error-message">
+        <h3>추천 오류</h3>
+        <p>${error.message}</p>
+        <button class="btn btn-secondary" onclick="closeWorkoutRecommendationModal()">닫기</button>
+      </div>
+    `;
+  }
+}
+
+// 추천 워크아웃 표시
+function displayWorkoutRecommendations(recommendationData, workoutDetails, date) {
+  const contentDiv = document.getElementById('workoutRecommendationContent');
+  
+  const selectedCategory = recommendationData.selectedCategory || '알 수 없음';
+  const categoryReason = recommendationData.categoryReason || '';
+  const recommendations = recommendationData.recommendations || [];
+  
+  // 워크아웃 ID로 상세 정보 매핑
+  const workoutMap = {};
+  workoutDetails.forEach(w => {
+    workoutMap[w.id] = w;
+  });
+  
+  let html = `
+    <div class="workout-recommendation-container">
+      <div class="recommendation-header">
+        <h3>🤖 AI 추천 워크아웃</h3>
+        <p class="recommendation-date">날짜: ${date}</p>
+      </div>
+      
+      <div class="category-info">
+        <h4>선정된 카테고리: <span class="category-name">${selectedCategory}</span></h4>
+        <p class="category-reason">${categoryReason}</p>
+      </div>
+      
+      <div class="recommendations-list">
+  `;
+  
+  recommendations.forEach((rec, index) => {
+    const workout = workoutMap[rec.workoutId];
+    if (!workout) {
+      html += `
+        <div class="recommendation-item error">
+          <p>워크아웃 ID ${rec.workoutId}를 찾을 수 없습니다.</p>
+        </div>
+      `;
+      return;
+    }
+    
+    const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+    const rankBadge = ['🥇', '🥈', '🥉'][index] || `${rec.rank}위`;
+    
+    html += `
+      <div class="recommendation-item" data-workout-id="${workout.id}">
+        <div class="recommendation-rank">${rankBadge}</div>
+        <div class="recommendation-content">
+          <h4 class="workout-title">${workout.title || '워크아웃'}</h4>
+          <div class="workout-meta">
+            <span class="workout-category">${workout.author || '카테고리 없음'}</span>
+            <span class="workout-duration">${totalMinutes}분</span>
+          </div>
+          <p class="recommendation-reason">${rec.reason || '추천 이유 없음'}</p>
+          ${workout.description ? `<p class="workout-description">${workout.description}</p>` : ''}
+        </div>
+        <div class="recommendation-action">
+          <button class="btn btn-primary" onclick="selectRecommendedWorkout(${workout.id}, '${date}')">
+            선택
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += `
+      </div>
+    </div>
+  `;
+  
+  contentDiv.innerHTML = html;
+}
+
+// 추천된 워크아웃 선택
+async function selectRecommendedWorkout(workoutId, date) {
+  try {
+    // 워크아웃 정보 조회
+    const ensureBaseUrl = () => {
+      const base = window.GAS_URL;
+      if (!base) throw new Error('GAS_URL is not set');
+      return base;
+    };
+    
+    const baseUrl = ensureBaseUrl();
+    const params = new URLSearchParams({
+      action: 'getWorkout',
+      id: workoutId
+    });
+    const response = await fetch(`${baseUrl}?${params.toString()}`);
+    const result = await response.json();
+    
+    if (!result.success || !result.item) {
+      throw new Error('워크아웃 정보를 불러올 수 없습니다.');
+    }
+    
+    // 전역 워크아웃 데이터 설정
+    if (typeof window.setSelectedWorkout === 'function') {
+      window.setSelectedWorkout(result.item);
+    } else {
+      window.selectedWorkout = result.item;
+    }
+    
+    // 모달 닫기
+    closeWorkoutRecommendationModal();
+    
+    // 훈련 준비 화면으로 이동
+    if (typeof showScreen === 'function') {
+      showScreen('trainingReadyScreen');
+    }
+    
+    showToast('워크아웃이 선택되었습니다. 훈련을 시작하세요!', 'success');
+    
+  } catch (error) {
+    console.error('워크아웃 선택 오류:', error);
+    showToast('워크아웃 선택 중 오류가 발생했습니다: ' + error.message, 'error');
+  }
+}
+
+// 전역 함수로 등록
+window.showWorkoutRecommendationModal = showWorkoutRecommendationModal;
+window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
+window.selectRecommendedWorkout = selectRecommendedWorkout;
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
 window.handleTrainingDayClick = handleTrainingDayClick;
 window.saveGeminiApiKey = saveGeminiApiKey;

@@ -588,6 +588,7 @@ async function saveUser() {
   const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
+  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
 
   // 유효성 검사
   if (!name) { showToast('이름을 입력해주세요.'); return; }
@@ -595,7 +596,7 @@ async function saveUser() {
   if (!weight || weight < 30 || weight > 200) { showToast('올바른 체중을 입력해주세요. (30-200kg)'); return; }
 
   try {
-    const userData = { name, contact: contactDB, ftp, weight }; // ← 여기!
+    const userData = { name, contact: contactDB, ftp, weight, challenge }; // ← challenge 추가
    // 5) 실제 생성 (재귀 금지: API 직접 호출)
       const payload = {
         ...userData,
@@ -634,6 +635,8 @@ function showAddUserForm(clearForm = true) {
     document.getElementById('userContact').value = '';
     document.getElementById('userFTP').value = '';
     document.getElementById('userWeight').value = '';
+    const challengeSelect = document.getElementById('userChallenge');
+    if (challengeSelect) challengeSelect.value = 'Fitness';
   }
 }
 
@@ -667,6 +670,8 @@ async function editUser(userId) {
    document.getElementById('userContact').value = unformatPhone(user.contact || '');
    document.getElementById('userFTP').value = user.ftp || '';
    document.getElementById('userWeight').value = user.weight || '';
+   const challengeSelect = document.getElementById('userChallenge');
+   if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
    
    // ▼ 관리자(grade=1)일 때만 추가 필드 표시
    const isAdmin = (typeof getViewerGrade === 'function' ? getViewerGrade() === '1' : false);
@@ -759,6 +764,7 @@ async function updateUser(userId) {
   const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
+  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
 
   // 유효성 검사
   if (!name || !ftp || !weight) {
@@ -767,7 +773,7 @@ async function updateUser(userId) {
   }
 
   try {
-    const userData = { name, contact: contactDB, ftp, weight }; // ← 여기!
+    const userData = { name, contact: contactDB, ftp, weight, challenge }; // ← challenge 추가
     const result = await apiUpdateUser(userId, userData);
 
     if (result.success) {
@@ -805,6 +811,7 @@ async function performUpdate() {
   const contactDB  = formatPhoneForDB(contactRaw);                          // ← 추가
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
+  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
 
   // 유효성 검사
   if (!name || !ftp || !weight) {
@@ -817,6 +824,7 @@ async function performUpdate() {
       name,
       contact: contactDB, // ← contactDB 사용
       ftp,
+      challenge,
       weight
     };
 
