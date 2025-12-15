@@ -676,6 +676,15 @@
           <label>몸무게 (kg) *</label>
           <input type="number" id="userWeight" placeholder="70" min="30" max="200" step="0.1" required />
         </div>
+      </div>
+      <div class="form-group">
+        <label>운동 목적 *</label>
+        <select id="userChallenge" required>
+          <option value="Diet">Diet (다이어트)</option>
+          <option value="Fitness" selected>Fitness (일반 피트니스)</option>
+          <option value="GranFondo">GranFondo (그란폰도)</option>
+          <option value="Racing">Racing (레이싱)</option>
+        </select>
       </div> 
 
       <div class="btn-row mt-10">
@@ -1825,6 +1834,22 @@
 
   <!-- 토스트 메시지 -->
   <div id="toast" class="toast hidden"></div>
+
+  <!-- AI 워크아웃 추천 모달 -->
+  <div id="workoutRecommendationModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeWorkoutRecommendationModal();">
+    <div class="modal-content" style="max-width: 900px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h2>🤖 AI 워크아웃 추천</h2>
+        <button class="modal-close" onclick="closeWorkoutRecommendationModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="workoutRecommendationContent">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
+          <div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- RPE 컨디션 선택 모달 -->
   <div id="rpeConditionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeRPEModal();">
