@@ -5986,6 +5986,207 @@ button[aria-disabled="true"] {
   pointer-events: none;
 }
 
+/* AI 추천 버튼 스타일 */
+.ai-recommend-btn {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 4px;
+  transition: all 0.3s ease;
+}
+
+.ai-recommend-btn:hover {
+  background: rgba(46, 116, 232, 0.1);
+  border-radius: 4px;
+}
+
+.ai-recommend-btn .journal-stelvio-logo {
+  opacity: 0.3;
+  filter: blur(0.3px);
+  transition: all 0.3s ease;
+}
+
+.ai-recommend-btn:hover .journal-stelvio-logo {
+  opacity: 0.5;
+  filter: blur(0px);
+}
+
+.ai-recommend-text {
+  font-size: 0.7em;
+  color: #2e74e8;
+  font-weight: 600;
+  margin-top: 2px;
+  text-align: center;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+/* 워크아웃 추천 모달 스타일 */
+.workout-recommendation-container {
+  padding: 20px;
+}
+
+.recommendation-header {
+  margin-bottom: 24px;
+  text-align: center;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 16px;
+}
+
+.recommendation-header h3 {
+  margin: 0 0 8px 0;
+  color: #2e74e8;
+  font-size: 1.5em;
+}
+
+.recommendation-date {
+  color: #666;
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.category-info {
+  background: #f5f5f5;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.category-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 1.1em;
+}
+
+.category-name {
+  color: #2e74e8;
+  font-weight: 700;
+}
+
+.category-reason {
+  margin: 8px 0 0 0;
+  color: #555;
+  line-height: 1.6;
+}
+
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fff;
+  transition: all 0.3s ease;
+}
+
+.recommendation-item:hover {
+  border-color: #2e74e8;
+  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.15);
+  transform: translateY(-2px);
+}
+
+.recommendation-rank {
+  font-size: 2em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.recommendation-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.workout-title {
+  margin: 0 0 8px 0;
+  font-size: 1.2em;
+  color: #333;
+  font-weight: 600;
+}
+
+.workout-meta {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.workout-category {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.workout-duration {
+  background: #f5f5f5;
+  color: #666;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85em;
+}
+
+.recommendation-reason {
+  margin: 0 0 8px 0;
+  color: #555;
+  line-height: 1.6;
+  font-size: 0.95em;
+}
+
+.workout-description {
+  margin: 8px 0 0 0;
+  color: #777;
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.recommendation-action {
+  flex-shrink: 0;
+}
+
+.recommendation-item.error {
+  border-color: #f44336;
+  background: #ffebee;
+}
+
+.recommendation-item.error p {
+  margin: 0;
+  color: #c62828;
+}
+
+@media (max-width: 768px) {
+  .recommendation-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .recommendation-rank {
+    text-align: center;
+  }
+  
+  .recommendation-action {
+    width: 100%;
+  }
+  
+  .recommendation-action .btn {
+    width: 100%;
+  }
+}
+
 /* 훈련 캘린더 - 휴식일의 STELVIO AI 로고 */
 .calendar-day-content.rest-day {
   position: relative;
