@@ -7450,11 +7450,70 @@ function showWorkoutRecommendationModal() {
   if (modal) {
     modal.style.display = 'flex';
     document.getElementById('workoutRecommendationContent').innerHTML = `
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-        <div class="loading-text">AI가 최적의 워크아웃을 분석 중입니다...</div>
+      <div class="ai-loading-container">
+        <div class="ai-brain-animation">
+          <div class="ai-neural-network">
+            <div class="neural-node node-1"></div>
+            <div class="neural-node node-2"></div>
+            <div class="neural-node node-3"></div>
+            <div class="neural-node node-4"></div>
+            <div class="neural-node node-5"></div>
+            <div class="neural-node node-6"></div>
+            <div class="neural-connection conn-1"></div>
+            <div class="neural-connection conn-2"></div>
+            <div class="neural-connection conn-3"></div>
+            <div class="neural-connection conn-4"></div>
+            <div class="neural-connection conn-5"></div>
+            <div class="neural-connection conn-6"></div>
+          </div>
+          <div class="ai-particles">
+            <div class="particle particle-1"></div>
+            <div class="particle particle-2"></div>
+            <div class="particle particle-3"></div>
+            <div class="particle particle-4"></div>
+            <div class="particle particle-5"></div>
+            <div class="particle particle-6"></div>
+          </div>
+        </div>
+        <div class="ai-loading-text">
+          <div class="ai-title">🤖 AI 최첨단 분석 엔진 가동 중</div>
+          <div class="ai-status">
+            <span class="ai-status-item active">훈련 목적 분석 중</span>
+            <span class="ai-status-item">몸상태 데이터 처리 중</span>
+            <span class="ai-status-item">훈련 이력 패턴 분석 중</span>
+            <span class="ai-status-item">최적 카테고리 선정 중</span>
+            <span class="ai-status-item">워크아웃 프로그램 작성 중</span>
+          </div>
+        </div>
       </div>
     `;
+    
+    // AI 상태 텍스트 순환 애니메이션
+    let statusIndex = 0;
+    const statusItems = document.querySelectorAll('#workoutRecommendationContent .ai-status-item');
+    if (statusItems.length > 0) {
+      const statusInterval = setInterval(() => {
+        statusItems.forEach((item, index) => {
+          item.classList.remove('active');
+          if (index === statusIndex) {
+            item.classList.add('active');
+          }
+        });
+        statusIndex = (statusIndex + 1) % statusItems.length;
+      }, 1500);
+      
+      // 모달이 닫히면 인터벌 정리
+      const cleanup = () => {
+        clearInterval(statusInterval);
+        modal.removeEventListener('click', cleanup);
+      };
+      
+      // 모달 닫기 버튼 클릭 시 정리
+      const closeBtn = modal.querySelector('.modal-close');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', cleanup);
+      }
+    }
   }
 }
 
@@ -7696,14 +7755,61 @@ ${JSON.stringify(limitedWorkouts.map(w => ({
           if (attempt > 1) {
             const waitTime = Math.min(1000 * Math.pow(2, attempt - 2), 10000); // 최대 10초
             contentDiv.innerHTML = `
-              <div class="loading-spinner">
-                <div class="spinner"></div>
-                <div class="loading-text">API 서버가 일시적으로 과부하 상태입니다. 재시도 중... (${attempt}/${maxRetries})</div>
-                <div class="loading-text" style="font-size: 0.85em; color: #666; margin-top: 8px;">
-                  ${Math.ceil(waitTime / 1000)}초 후 재시도합니다...
+              <div class="ai-loading-container">
+                <div class="ai-brain-animation">
+                  <div class="ai-neural-network">
+                    <div class="neural-node node-1"></div>
+                    <div class="neural-node node-2"></div>
+                    <div class="neural-node node-3"></div>
+                    <div class="neural-node node-4"></div>
+                    <div class="neural-node node-5"></div>
+                    <div class="neural-node node-6"></div>
+                    <div class="neural-connection conn-1"></div>
+                    <div class="neural-connection conn-2"></div>
+                    <div class="neural-connection conn-3"></div>
+                    <div class="neural-connection conn-4"></div>
+                    <div class="neural-connection conn-5"></div>
+                    <div class="neural-connection conn-6"></div>
+                  </div>
+                  <div class="ai-particles">
+                    <div class="particle particle-1"></div>
+                    <div class="particle particle-2"></div>
+                    <div class="particle particle-3"></div>
+                    <div class="particle particle-4"></div>
+                    <div class="particle particle-5"></div>
+                    <div class="particle particle-6"></div>
+                  </div>
+                </div>
+                <div class="ai-loading-text">
+                  <div class="ai-title">🔄 AI 분석 엔진 재시도 중</div>
+                  <div class="ai-status" id="retryStatusContainer">
+                    <span class="ai-status-item active">서버 연결 대기 중 (${attempt}/${maxRetries})</span>
+                    <span class="ai-status-item">${Math.ceil(waitTime / 1000)}초 후 재시도합니다...</span>
+                    <span class="ai-status-item">분석을 계속 진행합니다</span>
+                  </div>
                 </div>
               </div>
             `;
+            
+            // 재시도 중에도 상태 텍스트 순환 애니메이션
+            let retryStatusIndex = 0;
+            const retryStatusItems = contentDiv.querySelectorAll('#retryStatusContainer .ai-status-item');
+            if (retryStatusItems.length > 0) {
+              const retryStatusInterval = setInterval(() => {
+                retryStatusItems.forEach((item, index) => {
+                  item.classList.remove('active');
+                  if (index === retryStatusIndex) {
+                    item.classList.add('active');
+                  }
+                });
+                retryStatusIndex = (retryStatusIndex + 1) % retryStatusItems.length;
+              }, 1000);
+              
+              // waitTime 후 인터벌 정리
+              setTimeout(() => {
+                clearInterval(retryStatusInterval);
+              }, waitTime);
+            }
             await new Promise(resolve => setTimeout(resolve, waitTime));
           }
           
@@ -7917,6 +8023,8 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
 // 추천된 워크아웃 선택
 async function selectRecommendedWorkout(workoutId, date) {
   try {
+    console.log('Selecting recommended workout with ID:', workoutId);
+    
     // 워크아웃 정보 조회
     const ensureBaseUrl = () => {
       const base = window.GAS_URL;
@@ -7936,22 +8044,69 @@ async function selectRecommendedWorkout(workoutId, date) {
       throw new Error('워크아웃 정보를 불러올 수 없습니다.');
     }
     
-    // 전역 워크아웃 데이터 설정
-    if (typeof window.setSelectedWorkout === 'function') {
-      window.setSelectedWorkout(result.item);
-    } else {
-      window.selectedWorkout = result.item;
+    const workout = result.item;
+    console.log('Retrieved workout:', workout);
+    
+    // 워크아웃 데이터 정규화 (selectWorkout과 동일한 방식)
+    // workoutManager.js의 normalizeWorkoutData와 동일한 로직 적용
+    const normalizedWorkout = {
+      id: workout.id,
+      title: String(workout.title || '제목 없음'),
+      description: String(workout.description || ''),
+      author: String(workout.author || '미상'),
+      status: String(workout.status || '보이기'),
+      total_seconds: Number(workout.total_seconds) || 0,
+      publish_date: workout.publish_date || null,
+      segments: Array.isArray(workout.segments) ? workout.segments : []
+    };
+    
+    // 전역 워크아웃 데이터 설정 (selectWorkout과 동일한 방식)
+    window.currentWorkout = normalizedWorkout;
+    
+    // localStorage에 저장
+    try {
+      localStorage.setItem('currentWorkout', JSON.stringify(normalizedWorkout));
+      console.log('Workout saved to localStorage');
+    } catch (e) {
+      console.warn('로컬 스토리지 저장 실패:', e);
     }
     
     // 모달 닫기
     closeWorkoutRecommendationModal();
     
-    // 훈련 준비 화면으로 이동
+    // 훈련 준비 화면으로 이동 (selectWorkout과 동일한 방식)
     if (typeof showScreen === 'function') {
-      showScreen('trainingReadyScreen');
+      // 현재 활성화된 화면을 히스토리에 추가
+      if (!window.screenHistory) {
+        window.screenHistory = [];
+      }
+      
+      const currentActive = document.querySelector(".screen.active") || 
+                            Array.from(document.querySelectorAll(".screen")).find(s => 
+                              s.style.display === "block" || window.getComputedStyle(s).display === "block"
+                            );
+      
+      if (currentActive && currentActive.id && currentActive.id !== 'trainingReadyScreen') {
+        const lastHistory = window.screenHistory.length > 0 ? window.screenHistory[window.screenHistory.length - 1] : null;
+        if (lastHistory !== currentActive.id) {
+          window.screenHistory.push(currentActive.id);
+          if (window.screenHistory.length > 10) {
+            window.screenHistory.shift();
+          }
+        }
+      }
+      
+      showScreen('trainingReadyScreen', false);
     }
     
-    showToast('워크아웃이 선택되었습니다. 훈련을 시작하세요!', 'success');
+    // 워크아웃 미리보기 업데이트 (있는 경우)
+    if (typeof updateWorkoutPreview === 'function') {
+      setTimeout(() => {
+        updateWorkoutPreview();
+      }, 100);
+    }
+    
+    showToast(`${normalizedWorkout.title || '워크아웃'}이 선택되었습니다. 훈련을 시작하세요!`, 'success');
     
   } catch (error) {
     console.error('워크아웃 선택 오류:', error);
