@@ -6644,24 +6644,29 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           }
         }
         
-        // 503 오류 또는 overloaded 오류인 경우 재시도
-        if (response.status === 503 || response.status === 429) {
+        // 응답 상태 확인 및 처리
+        if (!response.ok) {
+          // 에러 응답 body 읽기 (한 번만)
           let errorData = {};
           let errorMessage = '';
           
-          // 응답 body를 읽기 전에 텍스트로 먼저 읽어서 JSON 파싱 시도
           try {
             const responseText = await response.text();
             if (responseText) {
-              errorData = JSON.parse(responseText);
-              errorMessage = errorData.error?.message || '';
+              try {
+                errorData = JSON.parse(responseText);
+                errorMessage = errorData.error?.message || '';
+              } catch (e) {
+                errorMessage = responseText.substring(0, 200);
+              }
             }
           } catch (e) {
-            errorMessage = response.statusText || '';
+            errorMessage = response.statusText || `HTTP ${response.status}`;
           }
           
-          if (errorMessage.includes('overloaded') || errorMessage.includes('overload') || 
-              response.status === 503 || response.status === 429) {
+          // 503/429 오류 처리
+          if (response.status === 503 || response.status === 429 || 
+              errorMessage.includes('overloaded') || errorMessage.includes('overload')) {
             
             // 모델 실패 횟수 증가
             modelFailureCount++;
@@ -6690,7 +6695,6 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
                   return callGeminiAPI(0, true);
                 } catch (error) {
                   console.error('모델 전환 실패:', error);
-                  // 전환 실패 시 에러 throw
                 }
               }
               throw new Error(`서버가 과부하 상태입니다. ${MAX_RETRIES}번 재시도 후에도 응답을 받을 수 없었습니다. (시도한 모델: ${triedModels.join(', ')})`);
@@ -6713,21 +6717,8 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             // 재시도
             return callGeminiAPI(retryCount + 1, false);
           }
-        }
-        
-        // 기타 오류 처리
-        if (!response.ok) {
-          let errorData = {};
-          try {
-            const responseText = await response.text();
-            if (responseText) {
-              errorData = JSON.parse(responseText);
-            }
-          } catch (e) {
-            // JSON 파싱 실패 시 빈 객체 사용
-          }
           
-          // 모델 실패 횟수 증가
+          // 기타 HTTP 오류 처리
           modelFailureCount++;
           
           // 모델 실패 횟수가 임계값에 도달하면 모델 전환
@@ -6739,63 +6730,59 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
               return callGeminiAPI(0, true);
             } catch (error) {
               console.error('모델 전환 실패:', error);
-              // 전환 실패 시 기존 모델로 계속 재시도
             }
           }
           
-          throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
+          throw new Error(errorMessage || `API 오류: ${response.status}`);
         }
         
         // 성공 시 JSON 파싱하여 반환 (워크아웃 추천 API와 동일한 패턴)
-        try {
-          const data = await response.json();
-          
-          // 응답 데이터 검증
-          if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-            throw new Error('API 응답에 candidates가 없습니다.');
-          }
-          
-          const candidate = data.candidates[0];
-          if (!candidate || !candidate.content) {
-            throw new Error('API 응답에 content가 없습니다.');
-          }
-          
-          if (!candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
-            throw new Error('API 응답에 parts가 없습니다.');
-          }
-          
-          if (!candidate.content.parts[0] || !candidate.content.parts[0].text) {
-            throw new Error('API 응답에 text가 없습니다.');
-          }
-          
-          // 성공 시 실패 횟수 리셋
-          modelFailureCount = 0;
-          return data;
-        } catch (jsonError) {
-          // JSON 파싱 실패도 모델 실패로 간주
-          modelFailureCount++;
-          console.error('JSON 파싱 실패:', jsonError);
-          
-          if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 0 && triedModels.length < MAX_MODEL_ATTEMPTS) {
-            console.log(`JSON 파싱 실패로 모델 전환 시도... (시도한 모델: ${triedModels.length}/${MAX_MODEL_ATTEMPTS})`);
-            try {
-              switchToNextModel();
-              return callGeminiAPI(0, true);
-            } catch (error) {
-              console.error('모델 전환 실패:', error);
-            }
-          }
-          
-          throw new Error(`API 응답 파싱 실패: ${jsonError.message}`);
+        const data = await response.json();
+        
+        // 응답 데이터 검증
+        if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+          throw new Error('API 응답에 candidates가 없습니다.');
         }
         
+        const candidate = data.candidates[0];
+        if (!candidate || !candidate.content) {
+          throw new Error('API 응답에 content가 없습니다.');
+        }
+        
+        if (!candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+          throw new Error('API 응답에 parts가 없습니다.');
+        }
+        
+        if (!candidate.content.parts[0] || !candidate.content.parts[0].text) {
+          throw new Error('API 응답에 text가 없습니다.');
+        }
+        
+        // 텍스트가 완전한지 확인 (최소 길이 체크)
+        const responseText = candidate.content.parts[0].text;
+        if (responseText.length < 50) {
+          console.warn('응답 텍스트가 너무 짧습니다:', responseText);
+          throw new Error('API 응답이 불완전합니다. 응답이 중간에 잘렸을 수 있습니다.');
+        }
+        
+        // 성공 시 실패 횟수 리셋
+        modelFailureCount = 0;
+        return data;
+        
       } catch (error) {
-        // 네트워크 오류나 기타 오류인 경우에도 재시도 (503/429가 아닌 경우는 제한적으로)
-        if (retryCount < MAX_RETRIES && 
-            (error.message.includes('Failed to fetch') || 
-             error.message.includes('NetworkError') ||
-             error.message.includes('timeout'))) {
-          
+        // 에러 타입별 처리
+        const isNetworkError = error.message.includes('Failed to fetch') || 
+                              error.message.includes('NetworkError') ||
+                              error.message.includes('timeout') ||
+                              error.message.includes('network');
+        
+        const isResponseError = error.message.includes('candidates') ||
+                               error.message.includes('content') ||
+                               error.message.includes('parts') ||
+                               error.message.includes('text') ||
+                               error.message.includes('불완전');
+        
+        // 네트워크 오류나 응답 오류인 경우 재시도
+        if (retryCount < MAX_RETRIES && (isNetworkError || isResponseError)) {
           // 모델 실패 횟수 증가
           modelFailureCount++;
           
@@ -6806,8 +6793,8 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
               switchToNextModel();
               // 모델 전환 후 즉시 재시도
               return callGeminiAPI(0, true);
-            } catch (error) {
-              console.error('모델 전환 실패:', error);
+            } catch (switchError) {
+              console.error('모델 전환 실패:', switchError);
               // 전환 실패 시 기존 모델로 계속 재시도
             }
           }
@@ -6817,9 +6804,10 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             MAX_RETRY_DELAY
           );
           
-          console.log(`네트워크 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
+          const errorType = isNetworkError ? '네트워크' : '응답';
+          console.log(`${errorType} 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
           
-          updateLoadingMessage(`네트워크 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`, 'network');
+          updateLoadingMessage(`${errorType} 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`, isNetworkError ? 'network' : 'retry');
           
           await new Promise(resolve => setTimeout(resolve, delay));
           return callGeminiAPI(retryCount + 1, false);
@@ -6831,8 +6819,8 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           try {
             switchToNextModel();
             return callGeminiAPI(0, true);
-          } catch (error) {
-            console.error('모델 전환 실패:', error);
+          } catch (switchError) {
+            console.error('모델 전환 실패:', switchError);
             // 전환 실패 시 에러를 그대로 throw
           }
         }
@@ -6859,52 +6847,149 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     
     let analysisText = responseText;
     
-    // JSON 파싱 시도 (워크아웃 추천 API와 동일한 방식)
-    let analysisData = null;
-    try {
-      // 마크다운 코드 블록 제거 (워크아웃 추천 API와 동일)
-      let cleanedText = analysisText
-        .replace(/```json\n?/gi, '')
-        .replace(/```\n?/g, '')
+    // 강화된 JSON 파싱 및 복구 함수
+    const parseAndRecoverJSON = (text) => {
+      if (!text || typeof text !== 'string') {
+        return null;
+      }
+      
+      // 1단계: 마크다운 코드 블록 제거
+      let cleanedText = text
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
         .trim();
       
-      // JSON 객체 시작/끝 찾기
+      // 2단계: JSON 객체 시작/끝 찾기
       const jsonStart = cleanedText.indexOf('{');
       const jsonEnd = cleanedText.lastIndexOf('}');
       
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      if (jsonStart === -1) {
+        console.warn('JSON 시작 문자({)를 찾을 수 없습니다.');
+        return null;
+      }
+      
+      if (jsonEnd === -1 || jsonEnd <= jsonStart) {
+        console.warn('JSON 종료 문자(})를 찾을 수 없거나 잘못된 위치입니다.');
+        // 불완전한 JSON 복구 시도
+        cleanedText = cleanedText.substring(jsonStart);
+        // 마지막 불완전한 속성 제거 시도
+        cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
+        cleanedText = cleanedText.replace(/,\s*$/, '');
+        cleanedText += '}';
+      } else {
         cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
       }
       
-      // JSON 파싱
-      analysisData = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.error('JSON 파싱 오류:', parseError);
-      console.error('원본 텍스트 (처음 500자):', analysisText.substring(0, 500));
-      console.error('원본 텍스트 (마지막 200자):', analysisText.substring(Math.max(0, analysisText.length - 200)));
-      
-      // 추가 시도: 더 공격적인 정리
+      // 3단계: JSON 파싱 시도
       try {
-        let cleanedText = analysisText
-          .replace(/```json\s*/gi, '')
-          .replace(/```\s*/g, '')
-          .replace(/^[^{]*/, '')  // { 앞의 모든 문자 제거
-          .replace(/[^}]*$/, '')   // } 뒤의 모든 문자 제거
-          .trim();
+        return JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.warn('JSON 파싱 실패, 복구 시도 중...', parseError.message);
         
-        // 중괄호가 있는지 확인
-        if (cleanedText.startsWith('{') && cleanedText.endsWith('}')) {
-          analysisData = JSON.parse(cleanedText);
-        } else {
-          // JSON 파싱 실패 시 기존 방식으로 폴백
-          console.warn('JSON 파싱 실패, 텍스트 형식으로 표시합니다.');
-          analysisData = null;
+        // 4단계: 불완전한 JSON 복구 시도
+        try {
+          // 위치 기반 복구: parseError.message에서 position 추출
+          const positionMatch = parseError.message.match(/position (\d+)/);
+          if (positionMatch) {
+            const errorPosition = parseInt(positionMatch[1], 10);
+            // 오류 위치 이전까지만 사용
+            cleanedText = cleanedText.substring(0, errorPosition);
+            
+            // 마지막 불완전한 속성 제거
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*"[^"]*$/, '');
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\[[^\]]*$/, '');
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\{[^}]*$/, '');
+          } else {
+            // 위치 정보가 없으면 일반 복구 시도
+            // 불완전한 문자열 값 제거
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*"[^"]*$/, '');
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
+            
+            // 불완전한 배열 제거
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\[[^\]]*$/, '');
+            
+            // 불완전한 객체 제거
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\{[^}]*$/, '');
+          }
+          
+          // 마지막 쉼표 제거
+          cleanedText = cleanedText.replace(/,\s*}/g, '}');
+          cleanedText = cleanedText.replace(/,\s*]/g, ']');
+          
+          // 불완전한 숫자 값 제거 (예: "avgPowerPercent": 66.9, 에서 66.9, 이후가 잘린 경우)
+          cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\d+\.?\d*[^,}\]]*$/, '');
+          
+          // 닫는 중괄호 확인
+          if (!cleanedText.endsWith('}')) {
+            // 중괄호 개수 확인하여 닫기
+            const openBraces = (cleanedText.match(/{/g) || []).length;
+            const closeBraces = (cleanedText.match(/}/g) || []).length;
+            const missingBraces = openBraces - closeBraces;
+            for (let i = 0; i < missingBraces; i++) {
+              cleanedText += '}';
+            }
+          }
+          
+          // 대괄호도 확인
+          const openBrackets = (cleanedText.match(/\[/g) || []).length;
+          const closeBrackets = (cleanedText.match(/\]/g) || []).length;
+          const missingBrackets = openBrackets - closeBrackets;
+          for (let i = 0; i < missingBrackets; i++) {
+            cleanedText += ']';
+          }
+          
+          return JSON.parse(cleanedText);
+        } catch (recoverError) {
+          console.warn('JSON 복구 실패:', recoverError.message);
+          
+          // 5단계: 최후의 수단 - 부분 JSON 추출
+          try {
+            // 최소한의 유효한 JSON 구조 추출
+            const summaryMatch = cleanedText.match(/"summary"\s*:\s*\{[^}]*\}/);
+            const metricsMatch = cleanedText.match(/"metrics"\s*:\s*\{[^}]*\}/);
+            const coachingMatch = cleanedText.match(/"coaching"\s*:\s*\{[^}]*\}/);
+            
+            if (summaryMatch || metricsMatch || coachingMatch) {
+              const partialData = {};
+              if (summaryMatch) {
+                try {
+                  partialData.summary = JSON.parse('{' + summaryMatch[0] + '}').summary;
+                } catch (e) {}
+              }
+              if (metricsMatch) {
+                try {
+                  partialData.metrics = JSON.parse('{' + metricsMatch[0] + '}').metrics;
+                } catch (e) {}
+              }
+              if (coachingMatch) {
+                try {
+                  partialData.coaching = JSON.parse('{' + coachingMatch[0] + '}').coaching;
+                } catch (e) {}
+              }
+              
+              if (Object.keys(partialData).length > 0) {
+                console.warn('부분 JSON 추출 성공');
+                return partialData;
+              }
+            }
+          } catch (e) {
+            console.warn('부분 JSON 추출 실패:', e);
+          }
+          
+          return null;
         }
-      } catch (e2) {
-        console.warn('JSON 파싱 재시도 실패, 텍스트로 표시:', e2);
-        // JSON 파싱 실패 시 기존 방식으로 폴백
-        analysisData = null;
       }
+    };
+    
+    // JSON 파싱 시도
+    let analysisData = parseAndRecoverJSON(analysisText);
+    
+    if (!analysisData) {
+      console.error('JSON 파싱 완전 실패');
+      console.error('원본 텍스트 (처음 1000자):', analysisText.substring(0, 1000));
+      console.error('원본 텍스트 (마지막 500자):', analysisText.substring(Math.max(0, analysisText.length - 500)));
+      console.error('원본 텍스트 전체 길이:', analysisText.length);
     }
     
     // 분석 결과 저장 (나중에 내보내기용)
