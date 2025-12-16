@@ -6233,6 +6233,22 @@ async function handleTrainingDayClick(date, resultData) {
 async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   const contentDiv = document.getElementById('trainingAnalysisContent');
   
+  // 초기 로딩 메시지 표시
+  if (contentDiv) {
+    contentDiv.innerHTML = `
+      <div class="ai-analysis-progress">
+        <div class="progress-header">
+          <div class="progress-icon">🤖</div>
+          <div class="progress-title">AI 분석 시작</div>
+        </div>
+        <div class="progress-status neon-red-text">훈련 데이터 분석 준비 중...</div>
+        <div class="progress-bar">
+          <div class="progress-fill"></div>
+        </div>
+      </div>
+    `;
+  }
+  
   // 재시도 설정
   const MAX_RETRIES = 5; // 최대 재시도 횟수
   const INITIAL_RETRY_DELAY = 1000; // 초기 재시도 지연 (1초)
@@ -6312,55 +6328,142 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
 
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
+    // 사용 가능한 모델 목록 가져오기 함수
+    const getAvailableModels = async () => {
+      try {
+        // v1beta API로 사용 가능한 모델 조회
+        const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        const modelsResponse = await fetch(modelsUrl);
+        
+        if (!modelsResponse.ok) {
+          throw new Error('사용 가능한 모델을 조회할 수 없습니다. API 키를 확인해주세요.');
+        }
+        
+        const modelsData = await modelsResponse.json();
+        const availableModels = modelsData.models || [];
+        
+        // generateContent를 지원하는 Gemini 모델 찾기
+        const supportedModels = availableModels
+          .filter(m => m.name && m.name.includes('gemini') && 
+                       (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map(m => ({
+            name: m.name,
+            shortName: m.name.split('/').pop(), // models/gemini-pro -> gemini-pro
+            displayName: m.displayName || m.name
+          }));
+        
+        if (supportedModels.length === 0) {
+          throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
+        }
+        
+        return supportedModels;
+      } catch (error) {
+        console.error('모델 목록 조회 실패:', error);
+        throw error;
+      }
+    };
+    
     // 사용 가능한 모델 및 API 버전 확인
     let modelName = localStorage.getItem('geminiModelName');
     let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
+    let availableModelsList = [];
+    let currentModelIndex = 0;
+    let modelFailureCount = 0; // 현재 모델 실패 횟수 추적
+    const MAX_MODEL_FAILURES = 2; // 모델 전환 전 최대 실패 횟수
     
     // 저장된 모델이 없거나 유효하지 않으면 동적으로 조회
     if (!modelName) {
       console.log('저장된 모델이 없습니다. 사용 가능한 모델을 조회 중...');
       
-      // v1beta API로 사용 가능한 모델 조회
-      const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-      const modelsResponse = await fetch(modelsUrl);
-      
-      if (!modelsResponse.ok) {
-        throw new Error('사용 가능한 모델을 조회할 수 없습니다. API 키를 확인해주세요.');
-      }
-      
-      const modelsData = await modelsResponse.json();
-      const availableModels = modelsData.models || [];
-      
-      // generateContent를 지원하는 Gemini 모델 찾기
-      const supportedModels = availableModels
-        .filter(m => m.name && m.name.includes('gemini') && 
-                     (m.supportedGenerationMethods || []).includes('generateContent'))
-        .map(m => ({
-          name: m.name,
-          shortName: m.name.split('/').pop(), // models/gemini-pro -> gemini-pro
-          displayName: m.displayName || m.name
-        }));
-      
-      if (supportedModels.length === 0) {
-        throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
-      }
+      availableModelsList = await getAvailableModels();
       
       // 첫 번째 지원 모델 사용
-      const selectedModel = supportedModels[0];
+      const selectedModel = availableModelsList[0];
       modelName = selectedModel.shortName;
       apiVersion = 'v1beta'; // v1beta에서 조회했으므로 v1beta 사용
+      currentModelIndex = 0;
       
       // 저장
       localStorage.setItem('geminiModelName', modelName);
       localStorage.setItem('geminiApiVersion', apiVersion);
       
       console.log(`사용 가능한 모델 선택: ${modelName} (${apiVersion})`);
+    } else {
+      // 저장된 모델이 있으면 모델 목록을 가져와서 인덱스 찾기
+      try {
+        availableModelsList = await getAvailableModels();
+        if (availableModelsList.length === 0) {
+          throw new Error('사용 가능한 모델이 없습니다.');
+        }
+        currentModelIndex = availableModelsList.findIndex(m => m.shortName === modelName);
+        if (currentModelIndex === -1) {
+          // 저장된 모델이 목록에 없으면 첫 번째 모델 사용
+          currentModelIndex = 0;
+          const selectedModel = availableModelsList[0];
+          modelName = selectedModel.shortName;
+          localStorage.setItem('geminiModelName', modelName);
+        }
+      } catch (error) {
+        console.warn('모델 목록 조회 실패, 저장된 모델 사용:', error);
+        // 실패해도 저장된 모델로 계속 진행하되, 모델 전환 기능은 비활성화
+        availableModelsList = [];
+      }
     }
     
-    // API 호출 함수 (재시도 로직 포함)
-    const callGeminiAPI = async (retryCount = 0) => {
+    // 모델 전환 함수
+    const switchToNextModel = () => {
+      if (availableModelsList.length === 0) {
+        throw new Error('사용 가능한 모델이 없습니다.');
+      }
+      
+      // 다음 모델로 전환 (순환)
+      currentModelIndex = (currentModelIndex + 1) % availableModelsList.length;
+      const nextModel = availableModelsList[currentModelIndex];
+      modelName = nextModel.shortName;
+      modelFailureCount = 0; // 실패 횟수 리셋
+      
+      // 저장
+      localStorage.setItem('geminiModelName', modelName);
+      
+      console.log(`모델 전환: ${modelName} (인덱스: ${currentModelIndex})`);
+      
+      if (contentDiv) {
+        const switchMessage = `모델 전환 중... (${nextModel.displayName || modelName})`;
+        updateLoadingMessage(switchMessage, 'model-switch');
+      }
+    };
+    
+    // 로딩 메시지 업데이트 함수 (디자인 개선)
+    const updateLoadingMessage = (message, type = 'default') => {
+      if (!contentDiv) return;
+      
+      const statusIcon = type === 'model-switch' ? '🔄' : 
+                        type === 'retry' ? '⏳' : 
+                        type === 'network' ? '🌐' : '🤖';
+      
+      contentDiv.innerHTML = `
+        <div class="ai-analysis-progress">
+          <div class="progress-header">
+            <div class="progress-icon">${statusIcon}</div>
+            <div class="progress-title">AI 분석 진행 중</div>
+          </div>
+          <div class="progress-status neon-red-text">${message}</div>
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+        </div>
+      `;
+    };
+    
+    // API 호출 함수 (재시도 및 모델 전환 로직 포함)
+    const callGeminiAPI = async (retryCount = 0, isModelSwitch = false) => {
       let currentApiVersion = apiVersion;
       let apiUrl = `https://generativelanguage.googleapis.com/${currentApiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+      
+      // 모델 전환 시 사용자에게 알림
+      if (isModelSwitch && contentDiv) {
+        updateLoadingMessage(`모델 변경: ${modelName}로 분석 시도 중...`, 'model-switch');
+      }
       
       // 요청 본문 구성 (토큰 제한 포함)
       const requestBody = {
@@ -6403,6 +6506,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           if (response.ok) {
             localStorage.setItem('geminiApiVersion', currentApiVersion);
             apiVersion = currentApiVersion;
+            modelFailureCount = 0; // 성공 시 실패 횟수 리셋
           }
         }
         
@@ -6414,8 +6518,26 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           if (errorMessage.includes('overloaded') || errorMessage.includes('overload') || 
               response.status === 503 || response.status === 429) {
             
+            // 모델 실패 횟수 증가
+            modelFailureCount++;
+            
+            // 모델 실패 횟수가 임계값에 도달하면 모델 전환
+            if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 1) {
+              console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다.`);
+              switchToNextModel();
+              // 모델 전환 후 즉시 재시도 (retryCount는 유지)
+              return callGeminiAPI(retryCount, true);
+            }
+            
             // 최대 재시도 횟수 확인
             if (retryCount >= MAX_RETRIES) {
+              // 재시도 횟수 초과 시에도 모델 전환 시도
+              if (availableModelsList.length > 1 && !isModelSwitch) {
+                console.log('재시도 횟수 초과. 다른 모델로 전환 시도...');
+                switchToNextModel();
+                // 모델 전환 후 재시도 횟수 리셋하여 다시 시도
+                return callGeminiAPI(0, true);
+              }
               throw new Error(`서버가 과부하 상태입니다. ${MAX_RETRIES}번 재시도 후에도 응답을 받을 수 없었습니다. 잠시 후 다시 시도해주세요.`);
             }
             
@@ -6425,28 +6547,39 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
               MAX_RETRY_DELAY
             );
             
-            console.log(`서버 과부하 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}). ${delay}ms 후 재시도...`);
+            console.log(`서버 과부하 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
             
             // 사용자에게 진행 상황 표시
-            if (contentDiv) {
-              const retryMessage = `서버가 일시적으로 과부하 상태입니다. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`;
-              contentDiv.innerHTML = `<div class="loading-message">${retryMessage}</div>`;
-            }
+            updateLoadingMessage(`서버 과부하 감지. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`, 'retry');
             
             // 지연 후 재시도
             await new Promise(resolve => setTimeout(resolve, delay));
             
             // 재시도
-            return callGeminiAPI(retryCount + 1);
+            return callGeminiAPI(retryCount + 1, false);
           }
         }
         
         // 기타 오류 처리
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
+          
+          // 모델 실패 횟수 증가
+          modelFailureCount++;
+          
+          // 모델 실패 횟수가 임계값에 도달하면 모델 전환
+          if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 1) {
+            console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다.`);
+            switchToNextModel();
+            // 모델 전환 후 즉시 재시도
+            return callGeminiAPI(0, true);
+          }
+          
           throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
         }
         
+        // 성공 시 실패 횟수 리셋
+        modelFailureCount = 0;
         return response;
         
       } catch (error) {
@@ -6456,25 +6589,45 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
              error.message.includes('NetworkError') ||
              error.message.includes('timeout'))) {
           
+          // 모델 실패 횟수 증가
+          modelFailureCount++;
+          
+          // 모델 실패 횟수가 임계값에 도달하면 모델 전환
+          if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 1) {
+            console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다.`);
+            switchToNextModel();
+            // 모델 전환 후 즉시 재시도
+            return callGeminiAPI(0, true);
+          }
+          
           const delay = Math.min(
             INITIAL_RETRY_DELAY * Math.pow(BACKOFF_MULTIPLIER, retryCount),
             MAX_RETRY_DELAY
           );
           
-          console.log(`네트워크 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}). ${delay}ms 후 재시도...`);
+          console.log(`네트워크 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
           
-          if (contentDiv) {
-            const retryMessage = `네트워크 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`;
-            contentDiv.innerHTML = `<div class="loading-message">${retryMessage}</div>`;
-          }
+          updateLoadingMessage(`네트워크 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`, 'network');
           
           await new Promise(resolve => setTimeout(resolve, delay));
-          return callGeminiAPI(retryCount + 1);
+          return callGeminiAPI(retryCount + 1, false);
+        }
+        
+        // 최종 실패 시에도 모델 전환 시도
+        if (availableModelsList.length > 1 && !isModelSwitch && modelFailureCount >= MAX_MODEL_FAILURES) {
+          console.log('최종 실패. 다른 모델로 전환 시도...');
+          switchToNextModel();
+          return callGeminiAPI(0, true);
         }
         
         throw error;
       }
     };
+    
+    // API 호출 시작 시 로딩 메시지 업데이트
+    if (contentDiv) {
+      updateLoadingMessage(`모델 ${modelName}로 분석 요청 중...`, 'default');
+    }
     
     // API 호출 실행
     const response = await callGeminiAPI();
