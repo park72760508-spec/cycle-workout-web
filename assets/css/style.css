@@ -5654,6 +5654,16 @@ button[aria-disabled="true"] {
   color: #991b1b;
 }
 
+#trainingAnalysisModal .loading-message {
+  padding: 20px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e40af;
+  text-align: center;
+  font-size: 1em;
+}
+
 /* 시각화된 분석 결과 스타일 */
 .analysis-visualized {
   padding: 20px 0;
