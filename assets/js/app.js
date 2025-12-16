@@ -6233,6 +6233,40 @@ async function handleTrainingDayClick(date, resultData) {
 async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   const contentDiv = document.getElementById('trainingAnalysisContent');
   
+  // AI 분석 단계 문구 배열
+  const analysisSteps = [
+    '훈련 데이터 수집 중...',
+    '데이터 전처리 및 가공 중...',
+    'AI 모델 분석 실행 중...',
+    '결과 검증 및 정제 중...',
+    '최종 분석 리포트 생성 중...'
+  ];
+  
+  let currentStepIndex = 0;
+  let stepInterval = null;
+  
+  // 단계 문구 순환 함수
+  const updateAnalysisStep = () => {
+    if (!contentDiv) return;
+    
+    const statusBlock = contentDiv.querySelector('.progress-status-block .status-text');
+    if (statusBlock) {
+      // 페이드 아웃
+      statusBlock.style.opacity = '0';
+      statusBlock.style.transform = 'translateY(-5px)';
+      
+      setTimeout(() => {
+        // 다음 단계로 변경
+        currentStepIndex = (currentStepIndex + 1) % analysisSteps.length;
+        statusBlock.textContent = analysisSteps[currentStepIndex];
+        
+        // 페이드 인
+        statusBlock.style.opacity = '1';
+        statusBlock.style.transform = 'translateY(0)';
+      }, 250);
+    }
+  };
+  
   // 초기 로딩 메시지 표시
   if (contentDiv) {
     // 현재 모델 정보 가져오기
@@ -6264,7 +6298,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           ${modelInfoDisplay}
         </div>
         <div class="progress-status-block">
-          <div class="status-text">훈련 데이터 분석 준비 중...</div>
+          <div class="status-text">${analysisSteps[0]}</div>
         </div>
         <div class="progress-bar">
           <div class="progress-fill"></div>
@@ -6276,6 +6310,9 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         </div>
       </div>
     `;
+    
+    // 단계 문구 자동 순환 시작 (2초마다)
+    stepInterval = setInterval(updateAnalysisStep, 2000);
   }
   
   // 재시도 설정
@@ -6506,6 +6543,12 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     const updateLoadingMessage = (message, type = 'default') => {
       if (!contentDiv) return;
       
+      // 기존 인터벌 정리
+      if (stepInterval) {
+        clearInterval(stepInterval);
+        stepInterval = null;
+      }
+      
       const titleText = type === 'model-switch' ? '모델 전환 중' : 
                        type === 'retry' ? '재시도 중' : 
                        type === 'network' ? '네트워크 연결 중' : 
@@ -6513,6 +6556,9 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       
       // 현재 모델 정보 표시
       const currentModelDisplay = modelName ? `<div class="model-info">사용 모델: <strong>${modelName}</strong></div>` : '';
+      
+      // 특수 메시지인 경우 순환 중지, 일반 분석인 경우 순환 계속
+      const shouldRotate = type === 'default' && !message.includes('모델 변경');
       
       contentDiv.innerHTML = `
         <div class="ai-analysis-progress ${type === 'model-switch' ? 'model-switch' : ''}">
@@ -6549,6 +6595,12 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           </div>
         </div>
       `;
+      
+      // 일반 분석 진행 중이면 단계 문구 순환 재시작
+      if (shouldRotate) {
+        currentStepIndex = 0;
+        stepInterval = setInterval(updateAnalysisStep, 2000);
+      }
     };
     
     // API 호출 함수 (재시도 및 모델 전환 로직 포함)
@@ -6828,6 +6880,12 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       analysisData: analysisData
     };
     
+    // 단계 문구 순환 중지
+    if (stepInterval) {
+      clearInterval(stepInterval);
+      stepInterval = null;
+    }
+    
     // 결과 표시 (구조화된 데이터가 있으면 시각화, 없으면 텍스트)
     if (analysisData) {
       contentDiv.innerHTML = renderVisualizedAnalysis(date, workoutName, durationMin, avgPower, np, tss, hrAvg, ftp, weight, analysisData);
@@ -6853,6 +6911,12 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     }
     
   } catch (error) {
+    // 단계 문구 순환 중지
+    if (stepInterval) {
+      clearInterval(stepInterval);
+      stepInterval = null;
+    }
+    
     console.error('Gemini API 오류:', error);
     
     let errorMessage = error.message;
