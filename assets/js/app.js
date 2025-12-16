@@ -6233,6 +6233,16 @@ async function handleTrainingDayClick(date, resultData) {
 async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   const contentDiv = document.getElementById('trainingAnalysisContent');
   
+  // 재시도 설정
+  const MAX_RETRIES = 5; // 최대 재시도 횟수
+  const INITIAL_RETRY_DELAY = 1000; // 초기 재시도 지연 (1초)
+  const MAX_RETRY_DELAY = 30000; // 최대 재시도 지연 (30초)
+  const BACKOFF_MULTIPLIER = 2; // 지수 백오프 배수
+  
+  // 토큰 제한 설정 (안정적인 응답을 위해 제한)
+  const MAX_OUTPUT_TOKENS = 2048; // 최대 출력 토큰 수 (응답 크기 제한)
+  const MAX_INPUT_TOKENS = 4096; // 최대 입력 토큰 수 (프롬프트 크기 제한)
+  
   try {
     // 훈련 데이터 포맷팅
     const workoutName = resultData.workout_name || resultData.actual_workout_id || '워크아웃';
@@ -6245,6 +6255,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     const weight = user.weight || 0;
     
     // 프롬프트 생성 (JSON 형식으로 구조화된 응답 요청)
+    // 토큰 제한을 고려하여 간결하게 작성
     const prompt = `다음은 사이클 훈련 데이터입니다. 전문적인 분석, 평가, 그리고 코칭 피드백을 제공해주세요.
 
 **훈련 정보:**
@@ -6346,52 +6357,127 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       console.log(`사용 가능한 모델 선택: ${modelName} (${apiVersion})`);
     }
     
-    // API 호출
-    let apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-    
-    let response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    // API 호출 함수 (재시도 로직 포함)
+    const callGeminiAPI = async (retryCount = 0) => {
+      let currentApiVersion = apiVersion;
+      let apiUrl = `https://generativelanguage.googleapis.com/${currentApiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+      
+      // 요청 본문 구성 (토큰 제한 포함)
+      const requestBody = {
         contents: [{
           parts: [{
             text: prompt
           }]
-        }]
-      })
-    });
-    
-    // v1beta가 실패하면 v1 시도
-    if (!response.ok && apiVersion === 'v1beta') {
-      console.log('v1beta API 실패, v1 시도 중...');
-      apiVersion = 'v1';
-      apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
-      response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
-        })
-      });
+        }],
+        generationConfig: {
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          temperature: 0.7,
+          topP: 0.8,
+          topK: 40
+        }
+      };
       
-      // 성공하면 API 버전 저장
-      if (response.ok) {
-        localStorage.setItem('geminiApiVersion', apiVersion);
+      try {
+        let response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+        
+        // v1beta가 실패하면 v1 시도 (재시도가 아닌 API 버전 폴백)
+        if (!response.ok && currentApiVersion === 'v1beta' && response.status !== 503 && !response.statusText.includes('overloaded')) {
+          console.log('v1beta API 실패, v1 시도 중...');
+          currentApiVersion = 'v1';
+          apiUrl = `https://generativelanguage.googleapis.com/${currentApiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
+          response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          // 성공하면 API 버전 저장
+          if (response.ok) {
+            localStorage.setItem('geminiApiVersion', currentApiVersion);
+            apiVersion = currentApiVersion;
+          }
+        }
+        
+        // 503 오류 또는 overloaded 오류인 경우 재시도
+        if (response.status === 503 || response.status === 429) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.error?.message || response.statusText || '';
+          
+          if (errorMessage.includes('overloaded') || errorMessage.includes('overload') || 
+              response.status === 503 || response.status === 429) {
+            
+            // 최대 재시도 횟수 확인
+            if (retryCount >= MAX_RETRIES) {
+              throw new Error(`서버가 과부하 상태입니다. ${MAX_RETRIES}번 재시도 후에도 응답을 받을 수 없었습니다. 잠시 후 다시 시도해주세요.`);
+            }
+            
+            // 지수 백오프 계산
+            const delay = Math.min(
+              INITIAL_RETRY_DELAY * Math.pow(BACKOFF_MULTIPLIER, retryCount),
+              MAX_RETRY_DELAY
+            );
+            
+            console.log(`서버 과부하 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}). ${delay}ms 후 재시도...`);
+            
+            // 사용자에게 진행 상황 표시
+            if (contentDiv) {
+              const retryMessage = `서버가 일시적으로 과부하 상태입니다. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`;
+              contentDiv.innerHTML = `<div class="loading-message">${retryMessage}</div>`;
+            }
+            
+            // 지연 후 재시도
+            await new Promise(resolve => setTimeout(resolve, delay));
+            
+            // 재시도
+            return callGeminiAPI(retryCount + 1);
+          }
+        }
+        
+        // 기타 오류 처리
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
+        }
+        
+        return response;
+        
+      } catch (error) {
+        // 네트워크 오류나 기타 오류인 경우에도 재시도 (503/429가 아닌 경우는 제한적으로)
+        if (retryCount < MAX_RETRIES && 
+            (error.message.includes('Failed to fetch') || 
+             error.message.includes('NetworkError') ||
+             error.message.includes('timeout'))) {
+          
+          const delay = Math.min(
+            INITIAL_RETRY_DELAY * Math.pow(BACKOFF_MULTIPLIER, retryCount),
+            MAX_RETRY_DELAY
+          );
+          
+          console.log(`네트워크 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}). ${delay}ms 후 재시도...`);
+          
+          if (contentDiv) {
+            const retryMessage = `네트워크 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`;
+            contentDiv.innerHTML = `<div class="loading-message">${retryMessage}</div>`;
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return callGeminiAPI(retryCount + 1);
+        }
+        
+        throw error;
       }
-    }
+    };
     
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
-    }
+    // API 호출 실행
+    const response = await callGeminiAPI();
     
     const data = await response.json();
     
@@ -6488,6 +6574,17 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           <strong>사용량 초과:</strong><br>
           - API 사용량이 초과되었습니다.<br>
           - Google AI Studio에서 사용량을 확인하거나 잠시 후 다시 시도해주세요.
+        </p>
+      `;
+    } else if (errorMessage.includes('overloaded') || errorMessage.includes('overload') || 
+               errorMessage.includes('503') || errorMessage.includes('서버가 과부하')) {
+      helpMessage = `
+        <p style="margin-top: 12px; font-size: 0.9em; color: #666;">
+          <strong>서버 과부하 오류:</strong><br>
+          - Gemini API 서버가 일시적으로 과부하 상태입니다.<br>
+          - 자동으로 재시도했지만 응답을 받지 못했습니다.<br>
+          - 잠시 후(1-2분) 다시 시도해주세요.<br>
+          - 토큰 제한을 적용하여 안정성을 개선했습니다.
         </p>
       `;
     } else {
