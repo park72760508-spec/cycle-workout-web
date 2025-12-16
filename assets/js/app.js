@@ -6300,7 +6300,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   const BACKOFF_MULTIPLIER = 2; // 지수 백오프 배수
   
   // 토큰 제한 설정 (안정적인 응답을 위해 제한)
-  const MAX_OUTPUT_TOKENS = 2048; // 최대 출력 토큰 수 (응답 크기 제한)
+  const MAX_OUTPUT_TOKENS = 4096; // 최대 출력 토큰 수 (응답 크기 제한) - 완전한 분석을 위해 증가
   const MAX_INPUT_TOKENS = 4096; // 최대 입력 토큰 수 (프롬프트 크기 제한)
   
   try {
@@ -6757,11 +6757,32 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           throw new Error('API 응답에 text가 없습니다.');
         }
         
+        // 응답 완전성 검증 (finishReason 체크)
+        const finishReason = candidate.finishReason || candidate.finish_reason;
+        if (finishReason && finishReason !== 'STOP' && finishReason !== 'END_OF_TURN') {
+          console.warn('응답이 불완전합니다. finishReason:', finishReason);
+          throw new Error(`API 응답이 불완전합니다. finishReason: ${finishReason}`);
+        }
+        
         // 텍스트가 완전한지 확인 (최소 길이 체크)
         const responseText = candidate.content.parts[0].text;
         if (responseText.length < 50) {
           console.warn('응답 텍스트가 너무 짧습니다:', responseText);
           throw new Error('API 응답이 불완전합니다. 응답이 중간에 잘렸을 수 있습니다.');
+        }
+        
+        // JSON 완전성 사전 검증 (간단한 체크)
+        const jsonStart = responseText.indexOf('{');
+        const jsonEnd = responseText.lastIndexOf('}');
+        if (jsonStart !== -1 && jsonEnd !== -1) {
+          const jsonText = responseText.substring(jsonStart, jsonEnd + 1);
+          // 중괄호 균형 확인
+          const openBraces = (jsonText.match(/{/g) || []).length;
+          const closeBraces = (jsonText.match(/}/g) || []).length;
+          if (openBraces !== closeBraces) {
+            console.warn('JSON 중괄호 불균형 감지:', { openBraces, closeBraces });
+            throw new Error('API 응답이 불완전합니다. JSON 구조가 완전하지 않습니다.');
+          }
         }
         
         // 성공 시 실패 횟수 리셋
@@ -6892,14 +6913,47 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           const positionMatch = parseError.message.match(/position (\d+)/);
           if (positionMatch) {
             const errorPosition = parseInt(positionMatch[1], 10);
-            // 오류 위치 이전까지만 사용
-            cleanedText = cleanedText.substring(0, errorPosition);
+            console.log(`오류 위치: ${errorPosition}, 전체 길이: ${cleanedText.length}`);
+            
+            // 오류 위치 주변 텍스트 확인
+            const beforeError = cleanedText.substring(Math.max(0, errorPosition - 50), errorPosition);
+            const atError = cleanedText.substring(errorPosition, Math.min(cleanedText.length, errorPosition + 50));
+            console.log('오류 위치 이전:', beforeError);
+            console.log('오류 위치:', atError);
+            
+            // 오류 위치 이전의 마지막 완전한 속성 찾기
+            let safePosition = errorPosition;
+            
+            // 오류 위치 이전에서 마지막 완전한 속성의 끝 찾기
+            // 쉼표나 닫는 중괄호를 찾아서 그 이전까지만 사용
+            for (let i = errorPosition - 1; i >= 0; i--) {
+              const char = cleanedText[i];
+              if (char === '}' || char === ']') {
+                // 닫는 괄호를 찾았으면 그 이후부터 문제
+                safePosition = i + 1;
+                break;
+              } else if (char === ',' && i < errorPosition - 1) {
+                // 쉼표를 찾았으면 그 이전까지만 사용
+                // 하지만 이전 문자가 공백이면 더 앞으로
+                let j = i - 1;
+                while (j >= 0 && /\s/.test(cleanedText[j])) j--;
+                if (j >= 0 && cleanedText[j] === '}' || cleanedText[j] === ']') {
+                  safePosition = j + 1;
+                  break;
+                }
+              }
+            }
+            
+            // 안전한 위치까지만 사용
+            cleanedText = cleanedText.substring(0, safePosition);
+            console.log(`안전한 위치까지 자름: ${safePosition} (원래: ${errorPosition})`);
             
             // 마지막 불완전한 속성 제거
             cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
             cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*"[^"]*$/, '');
             cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\[[^\]]*$/, '');
             cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\{[^}]*$/, '');
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\d+\.?\d*[^,}\]]*$/, '');
           } else {
             // 위치 정보가 없으면 일반 복구 시도
             // 불완전한 문자열 값 제거
@@ -6911,14 +6965,14 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             
             // 불완전한 객체 제거
             cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\{[^}]*$/, '');
+            
+            // 불완전한 숫자 값 제거
+            cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\d+\.?\d*[^,}\]]*$/, '');
           }
           
           // 마지막 쉼표 제거
           cleanedText = cleanedText.replace(/,\s*}/g, '}');
           cleanedText = cleanedText.replace(/,\s*]/g, ']');
-          
-          // 불완전한 숫자 값 제거 (예: "avgPowerPercent": 66.9, 에서 66.9, 이후가 잘린 경우)
-          cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*\d+\.?\d*[^,}\]]*$/, '');
           
           // 닫는 중괄호 확인
           if (!cleanedText.endsWith('}')) {
@@ -6939,7 +6993,10 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             cleanedText += ']';
           }
           
-          return JSON.parse(cleanedText);
+          // 최종 검증: JSON이 유효한지 확인
+          const testParse = JSON.parse(cleanedText);
+          console.log('JSON 복구 성공!');
+          return testParse;
         } catch (recoverError) {
           console.warn('JSON 복구 실패:', recoverError.message);
           
@@ -6982,14 +7039,48 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       }
     };
     
-    // JSON 파싱 시도
+    // JSON 파싱 시도 (강화된 복구 로직)
     let analysisData = parseAndRecoverJSON(analysisText);
     
+    // JSON 파싱 실패 시 1회만 API 재호출 시도 (무한 루프 방지)
     if (!analysisData) {
-      console.error('JSON 파싱 완전 실패');
+      console.warn('JSON 파싱 실패, API 재호출 시도 (1회)...');
+      updateLoadingMessage('응답 검증 중... (재시도)', 'retry');
+      
+      // API 재호출 (응답이 불완전했을 가능성) - 1회만 시도
+      try {
+        // 새로운 API 호출 (기존 재시도 로직과 분리, JSON 파싱 실패 전용)
+        const retryData = await callGeminiAPI(0, false);
+        const newResponseText = retryData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        
+        if (newResponseText && newResponseText.length > analysisText.length) {
+          console.log('새로운 응답이 더 깁니다. 새로운 응답 사용:', newResponseText.length, 'vs', analysisText.length);
+          analysisText = newResponseText;
+          analysisData = parseAndRecoverJSON(analysisText);
+        } else if (newResponseText && newResponseText !== analysisText) {
+          console.log('새로운 응답 시도, 길이:', newResponseText.length, '기존:', analysisText.length);
+          // 새로운 응답도 시도
+          const newAnalysisData = parseAndRecoverJSON(newResponseText);
+          if (newAnalysisData) {
+            analysisData = newAnalysisData;
+            analysisText = newResponseText;
+            console.log('새로운 응답으로 JSON 파싱 성공!');
+          }
+        }
+      } catch (retryError) {
+        console.error('API 재호출 실패:', retryError);
+        // 재호출 실패 시 기존 텍스트로 복구 시도 계속
+      }
+    }
+    
+    if (!analysisData) {
+      console.error('JSON 파싱 완전 실패 (모든 복구 시도 실패)');
       console.error('원본 텍스트 (처음 1000자):', analysisText.substring(0, 1000));
       console.error('원본 텍스트 (마지막 500자):', analysisText.substring(Math.max(0, analysisText.length - 500)));
       console.error('원본 텍스트 전체 길이:', analysisText.length);
+      
+      // 최종 폴백: 부분 데이터라도 표시
+      throw new Error('JSON 파싱에 실패했습니다. API 응답이 불완전할 수 있습니다. 잠시 후 다시 시도해주세요.');
     }
     
     // 분석 결과 저장 (나중에 내보내기용)
