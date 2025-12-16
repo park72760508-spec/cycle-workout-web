@@ -6681,8 +6681,19 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         
         // 503 오류 또는 overloaded 오류인 경우 재시도
         if (response.status === 503 || response.status === 429) {
-          const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.error?.message || response.statusText || '';
+          let errorData = {};
+          let errorMessage = '';
+          
+          // 응답 body를 읽기 전에 텍스트로 먼저 읽어서 JSON 파싱 시도
+          try {
+            const responseText = await response.text();
+            if (responseText) {
+              errorData = JSON.parse(responseText);
+              errorMessage = errorData.error?.message || '';
+            }
+          } catch (e) {
+            errorMessage = response.statusText || '';
+          }
           
           if (errorMessage.includes('overloaded') || errorMessage.includes('overload') || 
               response.status === 503 || response.status === 429) {
@@ -6741,7 +6752,15 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         
         // 기타 오류 처리
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          let errorData = {};
+          try {
+            const responseText = await response.text();
+            if (responseText) {
+              errorData = JSON.parse(responseText);
+            }
+          } catch (e) {
+            // JSON 파싱 실패 시 빈 객체 사용
+          }
           
           // 모델 실패 횟수 증가
           modelFailureCount++;
@@ -6762,9 +6781,12 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           throw new Error(errorData.error?.message || `API 오류: ${response.status}`);
         }
         
+        // 성공 시 JSON 파싱하여 반환 (워크아웃 추천 API와 동일한 패턴)
+        const data = await response.json();
+        
         // 성공 시 실패 횟수 리셋
         modelFailureCount = 0;
-        return response;
+        return data;
         
       } catch (error) {
         // 네트워크 오류나 기타 오류인 경우에도 재시도 (503/429가 아닌 경우는 제한적으로)
@@ -6823,14 +6845,8 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
       updateLoadingMessage(`모델 ${modelName}로 분석 요청 중...`, 'default');
     }
     
-    // API 호출 실행
-    const response = await callGeminiAPI();
-    
-    if (!response || !response.ok) {
-      throw new Error(`API 호출 실패: ${response?.status || 'Unknown error'}`);
-    }
-    
-    const data = await response.json();
+    // API 호출 실행 (워크아웃 추천 API와 동일한 패턴으로 JSON 데이터 직접 반환)
+    const data = await callGeminiAPI();
     
     if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
       throw new Error('API 응답 형식이 올바르지 않습니다. (candidates 없음)');
