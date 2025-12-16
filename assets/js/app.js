@@ -6764,18 +6764,53 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     // JSON 파싱 시도
     let analysisData = null;
     try {
-      // JSON 코드 블록 제거 (```json ... ```)
-      const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
-        analysisData = JSON.parse(jsonMatch[1]);
+      // 1. 코드 블록에서 JSON 추출 시도
+      const jsonBlockMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonBlockMatch) {
+        const jsonInBlock = jsonBlockMatch[1].trim();
+        analysisData = JSON.parse(jsonInBlock);
       } else {
-        // 순수 JSON인 경우
-        analysisData = JSON.parse(analysisText);
+        // 2. 코드 블록 마커 제거 후 JSON 추출 시도
+        let cleanedText = analysisText
+          .replace(/```json\s*/gi, '')  // ```json 제거
+          .replace(/```\s*/g, '')        // ``` 제거
+          .trim();
+        
+        // 3. JSON 객체 시작/끝 찾기 ({ ... })
+        const jsonStart = cleanedText.indexOf('{');
+        const jsonEnd = cleanedText.lastIndexOf('}');
+        
+        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+          cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
+        }
+        
+        // 4. JSON 파싱 시도
+        analysisData = JSON.parse(cleanedText);
       }
     } catch (e) {
-      console.warn('JSON 파싱 실패, 텍스트로 표시:', e);
-      // JSON 파싱 실패 시 기존 방식으로 폴백
-      analysisData = null;
+      console.warn('JSON 파싱 실패, 재시도 중...', e);
+      
+      // 추가 시도: 더 공격적인 정리
+      try {
+        let cleanedText = analysisText
+          .replace(/```json\s*/gi, '')
+          .replace(/```\s*/g, '')
+          .replace(/^[^{]*/, '')  // { 앞의 모든 문자 제거
+          .replace(/[^}]*$/, '')  // } 뒤의 모든 문자 제거
+          .trim();
+        
+        // 중괄호가 있는지 확인
+        if (cleanedText.startsWith('{') && cleanedText.endsWith('}')) {
+          analysisData = JSON.parse(cleanedText);
+        } else {
+          throw new Error('유효한 JSON 형식을 찾을 수 없습니다.');
+        }
+      } catch (e2) {
+        console.warn('JSON 파싱 재시도 실패, 텍스트로 표시:', e2);
+        console.warn('원본 텍스트:', analysisText.substring(0, 200));
+        // JSON 파싱 실패 시 기존 방식으로 폴백
+        analysisData = null;
+      }
     }
     
     // 분석 결과 저장 (나중에 내보내기용)
