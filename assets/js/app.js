@@ -6782,11 +6782,47 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         }
         
         // 성공 시 JSON 파싱하여 반환 (워크아웃 추천 API와 동일한 패턴)
-        const data = await response.json();
-        
-        // 성공 시 실패 횟수 리셋
-        modelFailureCount = 0;
-        return data;
+        try {
+          const data = await response.json();
+          
+          // 응답 데이터 검증
+          if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+            throw new Error('API 응답에 candidates가 없습니다.');
+          }
+          
+          const candidate = data.candidates[0];
+          if (!candidate || !candidate.content) {
+            throw new Error('API 응답에 content가 없습니다.');
+          }
+          
+          if (!candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+            throw new Error('API 응답에 parts가 없습니다.');
+          }
+          
+          if (!candidate.content.parts[0] || !candidate.content.parts[0].text) {
+            throw new Error('API 응답에 text가 없습니다.');
+          }
+          
+          // 성공 시 실패 횟수 리셋
+          modelFailureCount = 0;
+          return data;
+        } catch (jsonError) {
+          // JSON 파싱 실패도 모델 실패로 간주
+          modelFailureCount++;
+          console.error('JSON 파싱 실패:', jsonError);
+          
+          if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 0 && triedModels.length < MAX_MODEL_ATTEMPTS) {
+            console.log(`JSON 파싱 실패로 모델 전환 시도... (시도한 모델: ${triedModels.length}/${MAX_MODEL_ATTEMPTS})`);
+            try {
+              switchToNextModel();
+              return callGeminiAPI(0, true);
+            } catch (error) {
+              console.error('모델 전환 실패:', error);
+            }
+          }
+          
+          throw new Error(`API 응답 파싱 실패: ${jsonError.message}`);
+        }
         
       } catch (error) {
         // 네트워크 오류나 기타 오류인 경우에도 재시도 (503/429가 아닌 경우는 제한적으로)
@@ -6848,52 +6884,39 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     // API 호출 실행 (워크아웃 추천 API와 동일한 패턴으로 JSON 데이터 직접 반환)
     const data = await callGeminiAPI();
     
-    if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-      throw new Error('API 응답 형식이 올바르지 않습니다. (candidates 없음)');
+    // 워크아웃 추천 API와 동일한 안전한 접근 방식 사용
+    const responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    if (!responseText || typeof responseText !== 'string') {
+      console.error('API 응답 데이터:', JSON.stringify(data, null, 2));
+      throw new Error('API 응답에 유효한 텍스트가 없습니다. 응답 구조를 확인하세요.');
     }
     
-    if (!data.candidates[0] || !data.candidates[0].content) {
-      throw new Error('API 응답 형식이 올바르지 않습니다. (content 없음)');
-    }
+    let analysisText = responseText;
     
-    if (!data.candidates[0].content.parts || !Array.isArray(data.candidates[0].content.parts) || data.candidates[0].content.parts.length === 0) {
-      throw new Error('API 응답 형식이 올바르지 않습니다. (parts 없음)');
-    }
-    
-    let analysisText = data.candidates[0].content.parts[0].text;
-    
-    if (!analysisText || typeof analysisText !== 'string') {
-      throw new Error('API 응답에 유효한 텍스트가 없습니다.');
-    }
-    
-    // JSON 파싱 시도
+    // JSON 파싱 시도 (워크아웃 추천 API와 동일한 방식)
     let analysisData = null;
     try {
-      // 1. 코드 블록에서 JSON 추출 시도
-      const jsonBlockMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (jsonBlockMatch) {
-        const jsonInBlock = jsonBlockMatch[1].trim();
-        analysisData = JSON.parse(jsonInBlock);
-      } else {
-        // 2. 코드 블록 마커 제거 후 JSON 추출 시도
-        let cleanedText = analysisText
-          .replace(/```json\s*/gi, '')  // ```json 제거
-          .replace(/```\s*/g, '')        // ``` 제거
-          .trim();
-        
-        // 3. JSON 객체 시작/끝 찾기 ({ ... })
-        const jsonStart = cleanedText.indexOf('{');
-        const jsonEnd = cleanedText.lastIndexOf('}');
-        
-        if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-          cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
-        }
-        
-        // 4. JSON 파싱 시도
-        analysisData = JSON.parse(cleanedText);
+      // 마크다운 코드 블록 제거 (워크아웃 추천 API와 동일)
+      let cleanedText = analysisText
+        .replace(/```json\n?/gi, '')
+        .replace(/```\n?/g, '')
+        .trim();
+      
+      // JSON 객체 시작/끝 찾기
+      const jsonStart = cleanedText.indexOf('{');
+      const jsonEnd = cleanedText.lastIndexOf('}');
+      
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
       }
-    } catch (e) {
-      console.warn('JSON 파싱 실패, 재시도 중...', e);
+      
+      // JSON 파싱
+      analysisData = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error('JSON 파싱 오류:', parseError);
+      console.error('원본 텍스트 (처음 500자):', analysisText.substring(0, 500));
+      console.error('원본 텍스트 (마지막 200자):', analysisText.substring(Math.max(0, analysisText.length - 200)));
       
       // 추가 시도: 더 공격적인 정리
       try {
@@ -6901,18 +6924,19 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           .replace(/```json\s*/gi, '')
           .replace(/```\s*/g, '')
           .replace(/^[^{]*/, '')  // { 앞의 모든 문자 제거
-          .replace(/[^}]*$/, '')  // } 뒤의 모든 문자 제거
+          .replace(/[^}]*$/, '')   // } 뒤의 모든 문자 제거
           .trim();
         
         // 중괄호가 있는지 확인
         if (cleanedText.startsWith('{') && cleanedText.endsWith('}')) {
           analysisData = JSON.parse(cleanedText);
         } else {
-          throw new Error('유효한 JSON 형식을 찾을 수 없습니다.');
+          // JSON 파싱 실패 시 기존 방식으로 폴백
+          console.warn('JSON 파싱 실패, 텍스트 형식으로 표시합니다.');
+          analysisData = null;
         }
       } catch (e2) {
         console.warn('JSON 파싱 재시도 실패, 텍스트로 표시:', e2);
-        console.warn('원본 텍스트:', analysisText.substring(0, 200));
         // JSON 파싱 실패 시 기존 방식으로 폴백
         analysisData = null;
       }
