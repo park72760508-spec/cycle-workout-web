@@ -6237,13 +6237,35 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   if (contentDiv) {
     contentDiv.innerHTML = `
       <div class="ai-analysis-progress">
+        <div class="ai-engine-container">
+          <div class="ai-engine-core">
+            <div class="engine-ring ring-1"></div>
+            <div class="engine-ring ring-2"></div>
+            <div class="engine-ring ring-3"></div>
+            <div class="engine-center">
+              <div class="engine-pulse"></div>
+            </div>
+          </div>
+          <div class="data-stream">
+            <div class="stream-line line-1"></div>
+            <div class="stream-line line-2"></div>
+            <div class="stream-line line-3"></div>
+            <div class="stream-line line-4"></div>
+          </div>
+        </div>
         <div class="progress-header">
-          <div class="progress-icon">🤖</div>
           <div class="progress-title">AI 분석 시작</div>
         </div>
-        <div class="progress-status neon-red-text">훈련 데이터 분석 준비 중...</div>
+        <div class="progress-status-block">
+          <div class="status-text">훈련 데이터 분석 준비 중...</div>
+        </div>
         <div class="progress-bar">
           <div class="progress-fill"></div>
+        </div>
+        <div class="processing-indicator">
+          <span class="processing-dot dot-1"></span>
+          <span class="processing-dot dot-2"></span>
+          <span class="processing-dot dot-3"></span>
         </div>
       </div>
     `;
@@ -6437,19 +6459,42 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     const updateLoadingMessage = (message, type = 'default') => {
       if (!contentDiv) return;
       
-      const statusIcon = type === 'model-switch' ? '🔄' : 
-                        type === 'retry' ? '⏳' : 
-                        type === 'network' ? '🌐' : '🤖';
+      const titleText = type === 'model-switch' ? '모델 전환 중' : 
+                       type === 'retry' ? '재시도 중' : 
+                       type === 'network' ? '네트워크 연결 중' : 
+                       'AI 분석 진행 중';
       
       contentDiv.innerHTML = `
-        <div class="ai-analysis-progress">
-          <div class="progress-header">
-            <div class="progress-icon">${statusIcon}</div>
-            <div class="progress-title">AI 분석 진행 중</div>
+        <div class="ai-analysis-progress ${type === 'model-switch' ? 'model-switch' : ''}">
+          <div class="ai-engine-container">
+            <div class="ai-engine-core">
+              <div class="engine-ring ring-1"></div>
+              <div class="engine-ring ring-2"></div>
+              <div class="engine-ring ring-3"></div>
+              <div class="engine-center">
+                <div class="engine-pulse"></div>
+              </div>
+            </div>
+            <div class="data-stream">
+              <div class="stream-line line-1"></div>
+              <div class="stream-line line-2"></div>
+              <div class="stream-line line-3"></div>
+              <div class="stream-line line-4"></div>
+            </div>
           </div>
-          <div class="progress-status neon-red-text">${message}</div>
+          <div class="progress-header">
+            <div class="progress-title">${titleText}</div>
+          </div>
+          <div class="progress-status-block">
+            <div class="status-text">${message}</div>
+          </div>
           <div class="progress-bar">
             <div class="progress-fill"></div>
+          </div>
+          <div class="processing-indicator">
+            <span class="processing-dot dot-1"></span>
+            <span class="processing-dot dot-2"></span>
+            <span class="processing-dot dot-3"></span>
           </div>
         </div>
       `;
