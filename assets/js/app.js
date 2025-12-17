@@ -6495,8 +6495,8 @@ ${pastSummary}
 
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
-    // 모델 우선순위 설정 (1순위: 1.5 Pro, 2순위: 2.0 Flash Exp, 3순위: 1.5 Flash)
-    const PRIMARY_MODEL = 'gemini-1.5-pro';
+    // 모델 우선순위 설정 (1순위: 1.5 Pro 002, 2순위: 2.0 Flash Exp, 3순위: 1.5 Flash)
+    const PRIMARY_MODEL = 'gemini-1.5-pro-002';
     const SECONDARY_MODEL = 'gemini-2.0-flash-exp';
     const TERTIARY_MODEL = 'gemini-1.5-flash';
     
