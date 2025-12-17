@@ -6011,11 +6011,22 @@ button[aria-disabled="true"] {
   position: relative;
   padding: 4px;
   transition: all 0.3s ease;
+  animation: aiRecommendButtonFloat 3s ease-in-out infinite;
 }
 
 .ai-recommend-btn:hover {
   background: rgba(46, 116, 232, 0.1);
   border-radius: 4px;
+  animation: aiRecommendButtonFloatHover 2s ease-in-out infinite;
+}
+
+@keyframes aiRecommendButtonFloatHover {
+  0%, 100% {
+    transform: translateY(-2px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
 }
 
 .ai-recommend-btn .journal-stelvio-logo {
@@ -6037,6 +6048,89 @@ button[aria-disabled="true"] {
   text-align: center;
   white-space: nowrap;
   z-index: 1;
+  position: relative;
+  animation: aiRecommendPulse 2s ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(46, 116, 232, 0.5);
+  transition: all 0.3s ease;
+}
+
+/* AI 추천 텍스트 애니메이션 */
+@keyframes aiRecommendPulse {
+  0%, 100% {
+    transform: scale(1);
+    color: #2e74e8;
+    text-shadow: 
+      0 0 8px rgba(46, 116, 232, 0.5),
+      0 0 12px rgba(46, 116, 232, 0.3);
+  }
+  50% {
+    transform: scale(1.05);
+    color: #3b82f6;
+    text-shadow: 
+      0 0 12px rgba(59, 130, 246, 0.7),
+      0 0 18px rgba(59, 130, 246, 0.5),
+      0 0 24px rgba(59, 130, 246, 0.3);
+  }
+}
+
+/* 추가 글로우 효과 */
+.ai-recommend-text::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%;
+  height: 150%;
+  background: radial-gradient(ellipse, rgba(46, 116, 232, 0.2) 0%, transparent 70%);
+  border-radius: 50%;
+  animation: aiRecommendGlow 2s ease-in-out infinite;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes aiRecommendGlow {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* 호버 시 더 강한 효과 */
+.ai-recommend-btn:hover .ai-recommend-text {
+  animation: aiRecommendPulseHover 1s ease-in-out infinite;
+  transform: scale(1.1);
+}
+
+@keyframes aiRecommendPulseHover {
+  0%, 100% {
+    color: #3b82f6;
+    text-shadow: 
+      0 0 15px rgba(59, 130, 246, 0.8),
+      0 0 25px rgba(59, 130, 246, 0.6),
+      0 0 35px rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    color: #60a5fa;
+    text-shadow: 
+      0 0 20px rgba(96, 165, 250, 1),
+      0 0 30px rgba(96, 165, 250, 0.7),
+      0 0 40px rgba(96, 165, 250, 0.5);
+  }
+}
+
+/* 버튼 전체에 부드러운 움직임 추가 */
+@keyframes aiRecommendButtonFloat {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
 }
 
 /* 워크아웃 추천 모달 스타일 */
