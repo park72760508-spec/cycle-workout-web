@@ -8869,7 +8869,7 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
           ${workout.description ? `<p class="workout-description">${workout.description}</p>` : ''}
         </div>
         <div class="recommendation-action">
-          <button class="btn btn-primary" onclick="selectRecommendedWorkout(${workout.id}, '${date}')">
+          <button class="btn btn-primary" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}">
             선택
           </button>
         </div>
@@ -8887,8 +8887,61 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
 
 // 추천된 워크아웃 선택
 async function selectRecommendedWorkout(workoutId, date) {
+  // 버튼 찾기 및 진행 애니메이션 시작
+  let button = null;
+  let originalButtonHTML = '';
+  
+  // 이벤트에서 버튼 찾기
+  if (event && event.target) {
+    button = event.target.closest('button');
+  }
+  
+  // 버튼을 찾지 못한 경우 데이터 속성으로 찾기
+  if (!button) {
+    button = document.querySelector(`button[data-workout-id="${workoutId}"]`);
+  }
+  
+  // 여전히 못 찾은 경우 recommendation-item으로 찾기
+  if (!button) {
+    const recommendationItem = document.querySelector(`.recommendation-item[data-workout-id="${workoutId}"]`);
+    if (recommendationItem) {
+      button = recommendationItem.querySelector('.recommendation-action .btn');
+    }
+  }
+  
+  // 여전히 못 찾은 경우 onclick 속성으로 찾기
+  if (!button) {
+    const buttons = document.querySelectorAll('.recommendation-action .btn');
+    buttons.forEach(btn => {
+      const onclickAttr = btn.getAttribute('onclick') || '';
+      if (onclickAttr.includes(`selectRecommendedWorkout(${workoutId}`)) {
+        button = btn;
+      }
+    });
+  }
+  
+  if (button) {
+    originalButtonHTML = button.innerHTML;
+    button.disabled = true;
+    button.classList.add('workout-selecting', 'selecting-loading');
+    button.innerHTML = `
+      <span class="select-progress-spinner"></span>
+      <span class="select-progress-text">선택 중...</span>
+    `;
+  }
+  
   try {
     console.log('Selecting recommended workout with ID:', workoutId);
+    
+    // 진행 상태 업데이트 - 워크아웃 정보 불러오는 중
+    if (button) {
+      button.classList.remove('selecting-loading');
+      button.classList.add('selecting-preparing');
+      button.innerHTML = `
+        <span class="select-progress-spinner"></span>
+        <span class="select-progress-text">워크아웃 정보 불러오는 중...</span>
+      `;
+    }
     
     // 워크아웃 정보 조회
     const ensureBaseUrl = () => {
@@ -8912,6 +8965,16 @@ async function selectRecommendedWorkout(workoutId, date) {
     const workout = result.item;
     console.log('Retrieved workout:', workout);
     
+    // 진행 상태 업데이트 - 워크아웃 준비 중
+    if (button) {
+      button.classList.remove('selecting-preparing');
+      button.classList.add('selecting-loading');
+      button.innerHTML = `
+        <span class="select-progress-spinner"></span>
+        <span class="select-progress-text">워크아웃 준비 중...</span>
+      `;
+    }
+    
     // 워크아웃 데이터 정규화 (selectWorkout과 동일한 방식)
     // workoutManager.js의 normalizeWorkoutData와 동일한 로직 적용
     const normalizedWorkout = {
@@ -8934,6 +8997,16 @@ async function selectRecommendedWorkout(workoutId, date) {
       console.log('Workout saved to localStorage');
     } catch (e) {
       console.warn('로컬 스토리지 저장 실패:', e);
+    }
+    
+    // 진행 상태 업데이트 - 완료 중
+    if (button) {
+      button.classList.remove('selecting-loading');
+      button.classList.add('selecting-completing');
+      button.innerHTML = `
+        <span class="select-progress-spinner"></span>
+        <span class="select-progress-text">완료 중...</span>
+      `;
     }
     
     // 모달 닫기
@@ -8976,6 +9049,13 @@ async function selectRecommendedWorkout(workoutId, date) {
   } catch (error) {
     console.error('워크아웃 선택 오류:', error);
     showToast('워크아웃 선택 중 오류가 발생했습니다: ' + error.message, 'error');
+    
+    // 오류 시 버튼 상태 복원
+    if (button && originalButtonHTML) {
+      button.disabled = false;
+      button.classList.remove('workout-selecting', 'selecting-loading', 'selecting-preparing', 'selecting-completing');
+      button.innerHTML = originalButtonHTML;
+    }
   }
 }
 
