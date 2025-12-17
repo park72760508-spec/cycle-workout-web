@@ -8577,38 +8577,109 @@ ${JSON.stringify(limitedWorkouts.map(w => ({
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
     // 7. Gemini API 호출
+    // 모델 우선순위 설정 (최고 분석 능력 기준)
+    // 1순위: Gemini 2.5 Pro - 최고 성능, 복잡한 분석 작업에 최적화, 2M 토큰 컨텍스트
+    // 2순위: Gemini 1.5 Pro - 강력한 분석 능력, 안정적
+    // 3순위: Gemini 2.5 Flash - 빠른 응답, 효율적
+    const PRIMARY_MODEL = 'gemini-2.5-pro';
+    const SECONDARY_MODEL = 'gemini-1.5-pro';
+    const TERTIARY_MODEL = 'gemini-2.5-flash';
+    
     let modelName = localStorage.getItem('geminiModelName');
     let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
+    let availableModelsList = [];
     
-    if (!modelName) {
-      const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-      const modelsResponse = await fetch(modelsUrl);
+    // 사용 가능한 모델 목록 가져오기 함수
+    const getAvailableModels = async () => {
+      try {
+        const modelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+        const modelsResponse = await fetch(modelsUrl);
+        
+        if (!modelsResponse.ok) {
+          throw new Error('사용 가능한 모델을 조회할 수 없습니다.');
+        }
+        
+        const modelsData = await modelsResponse.json();
+        const availableModels = modelsData.models || [];
+        
+        const supportedModels = availableModels
+          .filter(m => m.name && m.name.includes('gemini') && 
+                       (m.supportedGenerationMethods || []).includes('generateContent'))
+          .map(m => ({
+            name: m.name,
+            shortName: m.name.split('/').pop(),
+            displayName: m.displayName || m.name
+          }));
+        
+        if (supportedModels.length === 0) {
+          throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
+        }
+        
+        // 우선순위 정렬: 2.5 Pro -> 1.5 Pro -> 2.5 Flash -> 기타
+        const prioritizedModels = [];
+        const primaryModel = supportedModels.find(m => m.shortName === PRIMARY_MODEL);
+        const secondaryModel = supportedModels.find(m => m.shortName === SECONDARY_MODEL);
+        const tertiaryModel = supportedModels.find(m => m.shortName === TERTIARY_MODEL);
+        
+        if (primaryModel) prioritizedModels.push(primaryModel);
+        if (secondaryModel) prioritizedModels.push(secondaryModel);
+        if (tertiaryModel) prioritizedModels.push(tertiaryModel);
+        
+        // 나머지 모델 추가
+        supportedModels.forEach(m => {
+          if (m.shortName !== PRIMARY_MODEL && 
+              m.shortName !== SECONDARY_MODEL && 
+              m.shortName !== TERTIARY_MODEL) {
+            prioritizedModels.push(m);
+          }
+        });
+        
+        return prioritizedModels;
+      } catch (error) {
+        console.error('모델 목록 조회 실패:', error);
+        throw error;
+      }
+    };
+    
+    // 모델 목록 가져오기 및 우선순위에 따라 모델 선택
+    try {
+      availableModelsList = await getAvailableModels();
       
-      if (!modelsResponse.ok) {
-        throw new Error('사용 가능한 모델을 조회할 수 없습니다.');
+      // 1순위 모델(2.5 Pro)로 초기화
+      const primaryModelExists = availableModelsList.find(m => m.shortName === PRIMARY_MODEL);
+      if (primaryModelExists) {
+        modelName = PRIMARY_MODEL;
+        console.log(`1순위 모델 설정: ${modelName}`);
+      } else {
+        // 1순위 모델이 없으면 2순위 모델 시도
+        const secondaryModelExists = availableModelsList.find(m => m.shortName === SECONDARY_MODEL);
+        if (secondaryModelExists) {
+          modelName = SECONDARY_MODEL;
+          console.log(`1순위 모델을 사용할 수 없어 2순위 모델 설정: ${modelName}`);
+        } else {
+          // 2순위도 없으면 3순위 모델 시도
+          const tertiaryModelExists = availableModelsList.find(m => m.shortName === TERTIARY_MODEL);
+          if (tertiaryModelExists) {
+            modelName = TERTIARY_MODEL;
+            console.log(`2순위 모델도 사용할 수 없어 3순위 모델 설정: ${modelName}`);
+          } else {
+            // 모두 없으면 첫 번째 사용 가능한 모델 사용
+            modelName = availableModelsList[0].shortName;
+            console.log(`우선순위 모델을 사용할 수 없어 ${modelName} 사용`);
+          }
+        }
       }
       
-      const modelsData = await modelsResponse.json();
-      const availableModels = modelsData.models || [];
-      const supportedModels = availableModels
-        .filter(m => m.name && m.name.includes('gemini') && 
-                     (m.supportedGenerationMethods || []).includes('generateContent'))
-        .map(m => ({
-          name: m.name,
-          shortName: m.name.split('/').pop(),
-          displayName: m.displayName || m.name
-        }));
-      
-      if (supportedModels.length === 0) {
-        throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
-      }
-      
-      const selectedModel = supportedModels[0];
-      modelName = selectedModel.shortName;
       apiVersion = 'v1beta';
-      
       localStorage.setItem('geminiModelName', modelName);
       localStorage.setItem('geminiApiVersion', apiVersion);
+    } catch (error) {
+      console.warn('모델 목록 조회 실패, 기본 모델 사용:', error);
+      // 기본 모델로 폴백
+      if (!modelName) {
+        modelName = PRIMARY_MODEL;
+        apiVersion = 'v1beta';
+      }
     }
     
     const apiUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent?key=${apiKey}`;
