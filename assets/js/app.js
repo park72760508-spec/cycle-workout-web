@@ -6297,19 +6297,18 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     }
   }
   
-  // 재시도 설정
-  const MAX_RETRIES = 5; // 최대 재시도 횟수
-  const INITIAL_RETRY_DELAY = 1000; // 초기 재시도 지연 (1초)
-  const MAX_RETRY_DELAY = 30000; // 최대 재시도 지연 (30초)
-  const BACKOFF_MULTIPLIER = 2; // 지수 백오프 배수
+  // 재시도 설정 (고정 지연: 2초, 4초, 8초)
+  const RETRY_DELAYS = [2000, 4000, 8000]; // 2초, 4초, 8초
+  const MAX_RETRIES_PER_MODEL = 3; // 모델당 최대 재시도 횟수
   
   // 토큰 제한 설정 (안정적인 응답을 위해 제한)
   const MAX_OUTPUT_TOKENS = 4096; // 최대 출력 토큰 수 (응답 크기 제한) - 완전한 분석을 위해 증가
-  const MAX_INPUT_TOKENS = 4096; // 최대 입력 토큰 수 (프롬프트 크기 제한)
+  const MAX_INPUT_TOKENS = 8192; // 최대 입력 토큰 수 (프롬프트 크기 제한) - 과거 데이터 포함으로 증가
   
   try {
     // 훈련 데이터 포맷팅
     const workoutName = resultData.workout_name || resultData.actual_workout_id || '워크아웃';
+    const workoutId = resultData.workout_id || resultData.actual_workout_id;
     const durationMin = resultData.duration_min || 0;
     const avgPower = Math.round(resultData.avg_power || 0);
     const np = Math.round(resultData.np || resultData.avg_power || 0);
@@ -6318,25 +6317,145 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
     
-    // 프롬프트 생성 (JSON 형식으로 구조화된 응답 요청)
-    // 토큰 제한을 고려하여 간결하게 작성
-    const prompt = `다음은 사이클 훈련 데이터입니다. 전문적인 분석, 평가, 그리고 코칭 피드백을 제공해주세요.
+    // 워크아웃 프로그램 상세 정보 조회
+    let workoutDetails = null;
+    if (workoutId) {
+      try {
+        const ensureBaseUrl = () => {
+          const base = window.GAS_URL;
+          if (!base) throw new Error('GAS_URL is not set');
+          return base;
+        };
+        
+        const baseUrl = ensureBaseUrl();
+        const params = new URLSearchParams({
+          action: 'getWorkout',
+          id: workoutId
+        });
+        const response = await fetch(`${baseUrl}?${params.toString()}`);
+        const result = await response.json();
+        
+        if (result?.success && result.item) {
+          workoutDetails = result.item;
+        }
+      } catch (error) {
+        console.warn('워크아웃 상세 정보 조회 실패:', error);
+      }
+    }
+    
+    // 과거 훈련 데이터 조회 (최근 30일)
+    let pastTrainingData = [];
+    try {
+      const ensureBaseUrl = () => {
+        const base = window.GAS_URL;
+        if (!base) throw new Error('GAS_URL is not set');
+        return base;
+      };
+      
+      const baseUrl = ensureBaseUrl();
+      const today = new Date(date);
+      const startDate = new Date(today);
+      startDate.setDate(startDate.getDate() - 30); // 30일 전부터
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = new Date(today.getTime() - 86400000).toISOString().split('T')[0]; // 어제까지
+      
+      const params = new URLSearchParams({
+        action: 'getScheduleResultsByUser',
+        userId: user.id,
+        startDate: startDateStr,
+        endDate: endDateStr
+      });
+      const response = await fetch(`${baseUrl}?${params.toString()}`);
+      const result = await response.json();
+      
+      if (result?.success && Array.isArray(result.items)) {
+        // 최근 10개만 선택 (토큰 제한 고려)
+        pastTrainingData = result.items
+          .filter(item => item.completed_at && new Date(item.completed_at).toISOString().split('T')[0] < date)
+          .slice(0, 10)
+          .map(item => ({
+            date: new Date(item.completed_at).toISOString().split('T')[0],
+            workout: item.workout_name || '알 수 없음',
+            duration: item.duration_min || 0,
+            avgPower: Math.round(item.avg_power || 0),
+            np: Math.round(item.np || item.avg_power || 0),
+            tss: Math.round(item.tss || 0),
+            hrAvg: Math.round(item.hr_avg || 0)
+          }));
+      }
+    } catch (error) {
+      console.warn('과거 훈련 데이터 조회 실패:', error);
+    }
+    
+    // 워크아웃 프로그램 정보 포맷팅
+    let workoutProgramText = '';
+    if (workoutDetails && workoutDetails.segments && Array.isArray(workoutDetails.segments)) {
+      const segments = workoutDetails.segments.map(seg => {
+        const duration = Math.round((seg.duration_sec || 0) / 60);
+        const targetType = seg.target_type || 'ftp_pct';
+        let targetValue = seg.target_value || 100;
+        
+        if (targetType === 'dual' && typeof targetValue === 'string') {
+          const parts = targetValue.split('/');
+          targetValue = `${parts[0]}% FTP / ${parts[1]} RPM`;
+        } else if (targetType === 'ftp_pct') {
+          targetValue = `${targetValue}% FTP`;
+        } else if (targetType === 'cadence_rpm') {
+          targetValue = `${targetValue} RPM`;
+        }
+        
+        return `- ${seg.label || seg.segment_type || '세그먼트'}: ${duration}분, ${targetValue} (${seg.segment_type || 'unknown'})`;
+      }).join('\n');
+      
+      workoutProgramText = `\n**워크아웃 프로그램 상세:**
+${segments}`;
+    }
+    
+    // 과거 훈련 데이터 포맷팅
+    let pastTrainingText = '';
+    if (pastTrainingData.length > 0) {
+      const pastSummary = pastTrainingData.map(item => 
+        `- ${item.date}: ${item.workout} (${item.duration}분, 평균파워: ${item.avgPower}W, NP: ${item.np}W, TSS: ${item.tss}, 심박수: ${item.hrAvg} bpm)`
+      ).join('\n');
+      
+      // 통계 계산
+      const avgPowerHistory = pastTrainingData.map(d => d.avgPower).filter(p => p > 0);
+      const tssHistory = pastTrainingData.map(d => d.tss).filter(t => t > 0);
+      const avgPowerAvg = avgPowerHistory.length > 0 
+        ? Math.round(avgPowerHistory.reduce((a, b) => a + b, 0) / avgPowerHistory.length)
+        : 0;
+      const tssAvg = tssHistory.length > 0
+        ? Math.round(tssHistory.reduce((a, b) => a + b, 0) / tssHistory.length)
+        : 0;
+      
+      pastTrainingText = `\n**과거 훈련 이력 (최근 ${pastTrainingData.length}회):**
+${pastSummary}
 
-**훈련 정보:**
+**과거 훈련 통계:**
+- 평균 파워 평균: ${avgPowerAvg}W
+- TSS 평균: ${tssAvg}
+- 현재 훈련 대비: 평균 파워 ${avgPower > avgPowerAvg ? '+' : ''}${avgPower - avgPowerAvg}W (${avgPowerAvg > 0 ? ((avgPower / avgPowerAvg - 1) * 100).toFixed(1) : 0}%), TSS ${tss > tssAvg ? '+' : ''}${tss - tssAvg} (${tssAvg > 0 ? ((tss / tssAvg - 1) * 100).toFixed(1) : 0}%)`;
+    }
+    
+    // 프롬프트 생성 (JSON 형식으로 구조화된 응답 요청)
+    // 과거 데이터와 워크아웃 프로그램 정보 포함
+    const prompt = `다음은 사이클 훈련 데이터입니다. 전문적인 분석, 평가, 그리고 코칭 피드백을 제공해주세요. 과거 훈련 데이터를 활용하여 더 정밀한 분석을 수행해주세요.
+
+**현재 훈련 정보:**
 - 날짜: ${date}
 - 워크아웃: ${workoutName}
 - 훈련 시간: ${durationMin}분
 
-**훈련 데이터:**
+**현재 훈련 데이터:**
 - 평균 파워: ${avgPower}W
 - NP (Normalized Power): ${np}W
 - TSS (Training Stress Score): ${tss}
-- 평균 심박수: ${hrAvg} bpm
+- 평균 심박수: ${hrAvg} bpm${workoutProgramText}
 
 **사용자 정보:**
 - FTP (Functional Threshold Power): ${ftp}W
 - 체중: ${weight}kg
-- W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
+- W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}${pastTrainingText}
 
 다음 JSON 형식으로 응답해주세요. 지표는 숫자로, 평가는 0-100 점수로, 텍스트는 한국어로 제공해주세요:
 
@@ -6376,9 +6495,10 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
 
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
-    // 기본 모델 설정
-    const DEFAULT_MODEL = 'gemini-2.5-flash';
-    const FALLBACK_MODEL = 'gemini-1.5-pro';
+    // 모델 우선순위 설정 (1순위: 1.5 Pro, 2순위: 2.0 Flash Exp, 3순위: 1.5 Flash)
+    const PRIMARY_MODEL = 'gemini-1.5-pro';
+    const SECONDARY_MODEL = 'gemini-2.0-flash-exp';
+    const TERTIARY_MODEL = 'gemini-1.5-flash';
     
     // 사용 가능한 모델 목록 가져오기 함수
     const getAvailableModels = async () => {
@@ -6408,17 +6528,21 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
           throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
         }
         
-        // 우선순위 정렬: gemini-2.5-flash > gemini-1.5-pro > 기타
+        // 우선순위 정렬: 1.5 Pro -> 2.0 Flash Exp -> 1.5 Flash -> 기타
         const prioritizedModels = [];
-        const defaultModel = supportedModels.find(m => m.shortName === DEFAULT_MODEL);
-        const fallbackModel = supportedModels.find(m => m.shortName === FALLBACK_MODEL);
+        const primaryModel = supportedModels.find(m => m.shortName === PRIMARY_MODEL);
+        const secondaryModel = supportedModels.find(m => m.shortName === SECONDARY_MODEL);
+        const tertiaryModel = supportedModels.find(m => m.shortName === TERTIARY_MODEL);
         
-        if (defaultModel) prioritizedModels.push(defaultModel);
-        if (fallbackModel && defaultModel !== fallbackModel) prioritizedModels.push(fallbackModel);
+        if (primaryModel) prioritizedModels.push(primaryModel);
+        if (secondaryModel) prioritizedModels.push(secondaryModel);
+        if (tertiaryModel) prioritizedModels.push(tertiaryModel);
         
         // 나머지 모델 추가
         supportedModels.forEach(m => {
-          if (m.shortName !== DEFAULT_MODEL && m.shortName !== FALLBACK_MODEL) {
+          if (m.shortName !== PRIMARY_MODEL && 
+              m.shortName !== SECONDARY_MODEL && 
+              m.shortName !== TERTIARY_MODEL) {
             prioritizedModels.push(m);
           }
         });
@@ -6437,69 +6561,64 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     let currentModelIndex = 0;
     let modelFailureCount = 0; // 현재 모델 실패 횟수 추적
     let triedModels = []; // 시도한 모델 목록 추적
-    const MAX_MODEL_FAILURES = 2; // 모델 전환 전 최대 실패 횟수
-    const MAX_MODEL_ATTEMPTS = 4; // 최대 시도할 모델 개수
+    const MAX_MODEL_FAILURES = MAX_RETRIES_PER_MODEL; // 모델 전환 전 최대 실패 횟수 (재시도 횟수와 동일)
     
     // 모델 목록 가져오기
     try {
       availableModelsList = await getAvailableModels();
       
-        // 저장된 모델이 없거나 기본 모델이 아니면 기본 모델로 설정
-        if (!modelName || modelName !== DEFAULT_MODEL) {
-          // 기본 모델이 사용 가능한지 확인
-          const defaultModelExists = availableModelsList.find(m => m.shortName === DEFAULT_MODEL);
-          
-          if (defaultModelExists) {
-            modelName = DEFAULT_MODEL;
-            currentModelIndex = availableModelsList.findIndex(m => m.shortName === DEFAULT_MODEL);
-            console.log(`기본 모델 설정: ${modelName}`);
-          } else {
-            // 기본 모델이 없으면 첫 번째 사용 가능한 모델 사용
-            modelName = availableModelsList[0].shortName;
-            currentModelIndex = 0;
-            console.log(`기본 모델(${DEFAULT_MODEL})을 사용할 수 없어 ${modelName} 사용`);
-          }
-          
-          apiVersion = 'v1beta';
-          localStorage.setItem('geminiModelName', modelName);
-          localStorage.setItem('geminiApiVersion', apiVersion);
+        // 1순위 모델(1.5 Pro)로 초기화
+        const primaryModelExists = availableModelsList.find(m => m.shortName === PRIMARY_MODEL);
+        if (primaryModelExists) {
+          modelName = PRIMARY_MODEL;
+          currentModelIndex = availableModelsList.findIndex(m => m.shortName === PRIMARY_MODEL);
+          console.log(`1순위 모델 설정: ${modelName}`);
         } else {
-          // 저장된 모델이 있으면 인덱스 찾기
-          currentModelIndex = availableModelsList.findIndex(m => m.shortName === modelName);
-          if (currentModelIndex === -1) {
-            // 저장된 모델이 목록에 없으면 기본 모델로 재설정
-            const defaultModelExists = availableModelsList.find(m => m.shortName === DEFAULT_MODEL);
-            if (defaultModelExists) {
-              modelName = DEFAULT_MODEL;
-              currentModelIndex = availableModelsList.findIndex(m => m.shortName === DEFAULT_MODEL);
+          // 1순위 모델이 없으면 2순위 모델 시도
+          const secondaryModelExists = availableModelsList.find(m => m.shortName === SECONDARY_MODEL);
+          if (secondaryModelExists) {
+            modelName = SECONDARY_MODEL;
+            currentModelIndex = availableModelsList.findIndex(m => m.shortName === SECONDARY_MODEL);
+            console.log(`1순위 모델을 사용할 수 없어 2순위 모델 설정: ${modelName}`);
+          } else {
+            // 2순위도 없으면 3순위 모델 시도
+            const tertiaryModelExists = availableModelsList.find(m => m.shortName === TERTIARY_MODEL);
+            if (tertiaryModelExists) {
+              modelName = TERTIARY_MODEL;
+              currentModelIndex = availableModelsList.findIndex(m => m.shortName === TERTIARY_MODEL);
+              console.log(`2순위 모델도 사용할 수 없어 3순위 모델 설정: ${modelName}`);
             } else {
+              // 모두 없으면 첫 번째 사용 가능한 모델 사용
               modelName = availableModelsList[0].shortName;
               currentModelIndex = 0;
+              console.log(`우선순위 모델을 사용할 수 없어 ${modelName} 사용`);
             }
-            localStorage.setItem('geminiModelName', modelName);
-            console.log(`저장된 모델을 찾을 수 없어 ${modelName}로 재설정`);
           }
         }
+        
+        apiVersion = 'v1beta';
+        localStorage.setItem('geminiModelName', modelName);
+        localStorage.setItem('geminiApiVersion', apiVersion);
         
         // 초기 모델을 시도한 목록에 추가
         triedModels = [modelName];
     } catch (error) {
-      console.warn('모델 목록 조회 실패, 기본 모델 사용:', error);
-      // 기본 모델로 폴백
-      modelName = DEFAULT_MODEL;
+      console.warn('모델 목록 조회 실패, 1순위 모델 사용:', error);
+      // 1순위 모델로 폴백
+      modelName = PRIMARY_MODEL;
       apiVersion = 'v1beta';
       availableModelsList = [];
     }
     
-    // 모델 전환 함수 (사용하지 않은 다음 모델로 전환)
+    // 모델 전환 함수 (우선순위에 따라 다음 모델로 전환)
     const switchToNextModel = () => {
       if (availableModelsList.length === 0) {
         throw new Error('사용 가능한 모델이 없습니다.');
       }
       
-      // 이미 시도한 모델 개수 확인
-      if (triedModels.length >= MAX_MODEL_ATTEMPTS) {
-        throw new Error(`최대 ${MAX_MODEL_ATTEMPTS}개 모델까지 시도했지만 모두 실패했습니다.`);
+      // 이미 시도한 모델 개수 확인 (최대 3개 모델 시도)
+      if (triedModels.length >= 3) {
+        throw new Error(`최대 3개 모델까지 시도했지만 모두 실패했습니다.`);
       }
       
       // 현재 모델을 시도한 목록에 추가
@@ -6507,17 +6626,25 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
         triedModels.push(modelName);
       }
       
-      // 사용하지 않은 다음 모델 찾기
+      // 사용하지 않은 다음 모델 찾기 (우선순위에 따라)
       let nextModel = null;
-      let nextIndex = -1;
       
-      // 우선순위: gemini-1.5-pro > 사용하지 않은 다른 모델
-      if (triedModels.length === 1) {
-        // 첫 번째 모델 실패 후 gemini-1.5-pro로 전환
-        nextModel = availableModelsList.find(m => m.shortName === FALLBACK_MODEL && !triedModels.includes(m.shortName));
+      // 1순위 모델(1.5 Pro)이 시도되지 않았으면 시도
+      if (!triedModels.includes(PRIMARY_MODEL)) {
+        nextModel = availableModelsList.find(m => m.shortName === PRIMARY_MODEL);
       }
       
-      // fallback 모델이 없거나 이미 시도했으면 다른 사용하지 않은 모델 찾기
+      // 2순위 모델(2.0 Flash Exp)이 시도되지 않았으면 시도
+      if (!nextModel && !triedModels.includes(SECONDARY_MODEL)) {
+        nextModel = availableModelsList.find(m => m.shortName === SECONDARY_MODEL);
+      }
+      
+      // 3순위 모델(1.5 Flash)이 시도되지 않았으면 시도
+      if (!nextModel && !triedModels.includes(TERTIARY_MODEL)) {
+        nextModel = availableModelsList.find(m => m.shortName === TERTIARY_MODEL);
+      }
+      
+      // 우선순위 모델이 모두 시도되었으면 다른 사용하지 않은 모델 찾기
       if (!nextModel) {
         nextModel = availableModelsList.find(m => !triedModels.includes(m.shortName));
       }
@@ -6676,8 +6803,8 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             modelFailureCount++;
             
             // 모델 실패 횟수가 임계값에 도달하면 모델 전환
-            if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 0 && triedModels.length < MAX_MODEL_ATTEMPTS) {
-              console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다. (시도한 모델: ${triedModels.length}/${MAX_MODEL_ATTEMPTS})`);
+            if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 0 && triedModels.length < 3) {
+              console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다. (시도한 모델: ${triedModels.length}/3)`);
               try {
                 switchToNextModel();
                 // 모델 전환 후 즉시 재시도 (retryCount는 유지)
@@ -6689,10 +6816,10 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             }
             
             // 최대 재시도 횟수 확인
-            if (retryCount >= MAX_RETRIES) {
-              // 재시도 횟수 초과 시에도 모델 전환 시도
-              if (availableModelsList.length > 0 && !isModelSwitch && triedModels.length < MAX_MODEL_ATTEMPTS) {
-                console.log(`재시도 횟수 초과. 다른 모델로 전환 시도... (시도한 모델: ${triedModels.length}/${MAX_MODEL_ATTEMPTS})`);
+            if (retryCount >= MAX_RETRIES_PER_MODEL) {
+              // 재시도 횟수 초과 시 모델 전환 시도
+              if (availableModelsList.length > 0 && !isModelSwitch && triedModels.length < 3) {
+                console.log(`재시도 횟수 초과. 다른 모델로 전환 시도... (시도한 모델: ${triedModels.length}/3)`);
                 try {
                   switchToNextModel();
                   // 모델 전환 후 재시도 횟수 리셋하여 다시 시도
@@ -6701,19 +6828,18 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
                   console.error('모델 전환 실패:', error);
                 }
               }
-              throw new Error(`서버가 과부하 상태입니다. ${MAX_RETRIES}번 재시도 후에도 응답을 받을 수 없었습니다. (시도한 모델: ${triedModels.join(', ')})`);
+              throw new Error(`서버가 과부하 상태입니다. ${MAX_RETRIES_PER_MODEL}번 재시도 후에도 응답을 받을 수 없었습니다. (시도한 모델: ${triedModels.join(', ')})`);
             }
             
-            // 지수 백오프 계산
-            const delay = Math.min(
-              INITIAL_RETRY_DELAY * Math.pow(BACKOFF_MULTIPLIER, retryCount),
-              MAX_RETRY_DELAY
-            );
+            // 고정 지연 시간 사용 (2초, 4초, 8초)
+            const delay = retryCount < RETRY_DELAYS.length 
+              ? RETRY_DELAYS[retryCount] 
+              : RETRY_DELAYS[RETRY_DELAYS.length - 1]; // 마지막 지연 시간 반복
             
-            console.log(`서버 과부하 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
+            console.log(`서버 과부하 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES_PER_MODEL}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
             
             // 사용자에게 진행 상황 표시
-            updateLoadingMessage(`서버 과부하 감지. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`, 'retry');
+            updateLoadingMessage(`서버 과부하 감지. 재시도 중... (${retryCount + 1}/${MAX_RETRIES_PER_MODEL})`, 'retry');
             
             // 지연 후 재시도
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -6807,13 +6933,13 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
                                error.message.includes('불완전');
         
         // 네트워크 오류나 응답 오류인 경우 재시도
-        if (retryCount < MAX_RETRIES && (isNetworkError || isResponseError)) {
+        if (retryCount < MAX_RETRIES_PER_MODEL && (isNetworkError || isResponseError)) {
           // 모델 실패 횟수 증가
           modelFailureCount++;
           
           // 모델 실패 횟수가 임계값에 도달하면 모델 전환
-          if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 0 && triedModels.length < MAX_MODEL_ATTEMPTS) {
-            console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다. (시도한 모델: ${triedModels.length}/${MAX_MODEL_ATTEMPTS})`);
+          if (modelFailureCount >= MAX_MODEL_FAILURES && availableModelsList.length > 0 && triedModels.length < 3) {
+            console.log(`모델 ${modelName}이(가) ${modelFailureCount}번 실패했습니다. 다른 모델로 전환합니다. (시도한 모델: ${triedModels.length}/3)`);
             try {
               switchToNextModel();
               // 모델 전환 후 즉시 재시도
@@ -6824,23 +6950,23 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
             }
           }
           
-          const delay = Math.min(
-            INITIAL_RETRY_DELAY * Math.pow(BACKOFF_MULTIPLIER, retryCount),
-            MAX_RETRY_DELAY
-          );
+          // 고정 지연 시간 사용 (2초, 4초, 8초)
+          const delay = retryCount < RETRY_DELAYS.length 
+            ? RETRY_DELAYS[retryCount] 
+            : RETRY_DELAYS[RETRY_DELAYS.length - 1]; // 마지막 지연 시간 반복
           
           const errorType = isNetworkError ? '네트워크' : '응답';
-          console.log(`${errorType} 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
+          console.log(`${errorType} 오류 감지 (재시도 ${retryCount + 1}/${MAX_RETRIES_PER_MODEL}, 모델 실패: ${modelFailureCount}/${MAX_MODEL_FAILURES}). ${delay}ms 후 재시도...`);
           
-          updateLoadingMessage(`${errorType} 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES})`, isNetworkError ? 'network' : 'retry');
+          updateLoadingMessage(`${errorType} 오류 발생. 재시도 중... (${retryCount + 1}/${MAX_RETRIES_PER_MODEL})`, isNetworkError ? 'network' : 'retry');
           
           await new Promise(resolve => setTimeout(resolve, delay));
           return callGeminiAPI(retryCount + 1, false);
         }
         
         // 최종 실패 시에도 모델 전환 시도
-        if (availableModelsList.length > 0 && !isModelSwitch && modelFailureCount >= MAX_MODEL_FAILURES && triedModels.length < MAX_MODEL_ATTEMPTS) {
-          console.log(`최종 실패. 다른 모델로 전환 시도... (시도한 모델: ${triedModels.length}/${MAX_MODEL_ATTEMPTS})`);
+        if (availableModelsList.length > 0 && !isModelSwitch && modelFailureCount >= MAX_MODEL_FAILURES && triedModels.length < 3) {
+          console.log(`최종 실패. 다른 모델로 전환 시도... (시도한 모델: ${triedModels.length}/3)`);
           try {
             switchToNextModel();
             return callGeminiAPI(0, true);
