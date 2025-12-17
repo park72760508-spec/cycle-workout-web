@@ -6167,8 +6167,12 @@ async function handleAIWorkoutRecommendation(event, date) {
     
     // 확인 대화상자 (재시도인 경우 스킵)
     const isRetry = event && event.isRetry;
-    if (!isRetry && !confirm('AI가 분석한 최적의 훈련을 추천할까요?')) {
-      return;
+    if (!isRetry) {
+      // 커스텀 팝업으로 확인 요청
+      const confirmed = await showAIRecommendationConfirmModal();
+      if (!confirmed) {
+        return;
+      }
     }
     
     // 사용자 정보 가져오기
@@ -8213,6 +8217,53 @@ function closeWorkoutRecommendationModal() {
   }
 }
 
+// ========== AI 추천 확인 팝업 ==========
+
+// AI 추천 확인 팝업 표시 (Promise 반환)
+function showAIRecommendationConfirmModal() {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('aiRecommendationConfirmModal');
+    if (!modal) {
+      resolve(false);
+      return;
+    }
+    
+    // 확인 결과를 저장할 변수
+    window.aiRecommendationConfirmResult = null;
+    window.aiRecommendationConfirmResolve = resolve;
+    
+    modal.style.display = 'flex';
+  });
+}
+
+// AI 추천 확인 팝업 닫기
+function closeAIRecommendationConfirmModal() {
+  const modal = document.getElementById('aiRecommendationConfirmModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  
+  // 취소 처리
+  if (window.aiRecommendationConfirmResolve) {
+    window.aiRecommendationConfirmResolve(false);
+    window.aiRecommendationConfirmResolve = null;
+  }
+}
+
+// AI 추천 확인
+function confirmAIRecommendation() {
+  const modal = document.getElementById('aiRecommendationConfirmModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  
+  // 확인 처리
+  if (window.aiRecommendationConfirmResolve) {
+    window.aiRecommendationConfirmResolve(true);
+    window.aiRecommendationConfirmResolve = null;
+  }
+}
+
 // Gemini API를 사용한 워크아웃 분석 및 추천
 async function analyzeAndRecommendWorkouts(date, user, apiKey) {
   const contentDiv = document.getElementById('workoutRecommendationContent');
@@ -8812,3 +8863,6 @@ window.saveGeminiApiKey = saveGeminiApiKey;
 window.testGeminiApiKey = testGeminiApiKey;
 window.closeTrainingAnalysisModal = closeTrainingAnalysisModal;
 window.exportAnalysisReport = exportAnalysisReport;
+window.showAIRecommendationConfirmModal = showAIRecommendationConfirmModal;
+window.closeAIRecommendationConfirmModal = closeAIRecommendationConfirmModal;
+window.confirmAIRecommendation = confirmAIRecommendation;
