@@ -6495,10 +6495,13 @@ ${pastSummary}
 
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
-    // 모델 우선순위 설정 (1순위: 1.5 Pro 002, 2순위: 2.0 Flash Exp, 3순위: 1.5 Flash)
-    const PRIMARY_MODEL = 'gemini-1.5-pro-002';
-    const SECONDARY_MODEL = 'gemini-2.0-flash-exp';
-    const TERTIARY_MODEL = 'gemini-1.5-flash';
+    // 모델 우선순위 설정 (최고 분석 능력 기준)
+    // 1순위: Gemini 2.5 Pro - 최고 성능, 복잡한 분석 작업에 최적화, 2M 토큰 컨텍스트
+    // 2순위: Gemini 1.5 Pro - 강력한 분석 능력, 안정적
+    // 3순위: Gemini 2.5 Flash - 빠른 응답, 효율적
+    const PRIMARY_MODEL = 'gemini-2.5-pro';
+    const SECONDARY_MODEL = 'gemini-1.5-pro';
+    const TERTIARY_MODEL = 'gemini-2.5-flash';
     
     // 사용 가능한 모델 목록 가져오기 함수
     const getAvailableModels = async () => {
@@ -6528,7 +6531,7 @@ ${pastSummary}
           throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
         }
         
-        // 우선순위 정렬: 1.5 Pro -> 2.0 Flash Exp -> 1.5 Flash -> 기타
+        // 우선순위 정렬: 2.5 Pro -> 1.5 Pro -> 2.5 Flash -> 기타
         const prioritizedModels = [];
         const primaryModel = supportedModels.find(m => m.shortName === PRIMARY_MODEL);
         const secondaryModel = supportedModels.find(m => m.shortName === SECONDARY_MODEL);
