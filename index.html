@@ -1902,6 +1902,49 @@
     </div>
   </div>
 
+  <!-- AI 추천 확인 팝업 -->
+  <div id="aiRecommendationConfirmModal" class="modal-overlay ai-confirm-modal" style="display: none;" onclick="if(event.target === this) closeAIRecommendationConfirmModal();">
+    <div class="modal-content ai-confirm-modal-content" onclick="event.stopPropagation();">
+      <div class="modal-header ai-confirm-header">
+        <div class="ai-confirm-icon-wrapper">
+          <div class="ai-confirm-icon">
+            <div class="ai-confirm-pulse"></div>
+            <div class="ai-confirm-brain">🤖</div>
+          </div>
+        </div>
+        <h2 class="ai-confirm-title">AI 최적 훈련 추천</h2>
+        <button class="modal-close ai-confirm-close" onclick="closeAIRecommendationConfirmModal()">&times;</button>
+      </div>
+      <div class="modal-body ai-confirm-body">
+        <p class="ai-confirm-message">AI가 분석한 최적의 훈련을 추천할까요?</p>
+        <div class="ai-confirm-features">
+          <div class="ai-feature-item">
+            <span class="ai-feature-icon">📊</span>
+            <span class="ai-feature-text">훈련 이력 분석</span>
+          </div>
+          <div class="ai-feature-item">
+            <span class="ai-feature-icon">🎯</span>
+            <span class="ai-feature-text">개인 맞춤 추천</span>
+          </div>
+          <div class="ai-feature-item">
+            <span class="ai-feature-icon">⚡</span>
+            <span class="ai-feature-text">최적 워크아웃 선정</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer ai-confirm-footer">
+        <button class="btn btn-success btn-default-style btn-with-icon ai-confirm-btn-yes" onclick="confirmAIRecommendation()">
+          <img src="assets/img/calendar_n.gif" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          확인
+        </button>
+        <button class="btn btn-secondary btn-default-style btn-with-icon ai-confirm-btn-no" onclick="closeAIRecommendationConfirmModal()">
+          <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          취소
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- 훈련 분석 결과 모달 -->
   <div id="trainingAnalysisModal" class="modal-overlay" style="display: none;">
     <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
