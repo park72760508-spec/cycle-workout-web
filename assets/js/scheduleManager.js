@@ -68,15 +68,27 @@ function animateNumber(element, start, end, duration) {
   }, stepTime);
 }
 
+// 로딩 중 플래그 (중복 호출 방지)
+let isLoadingTrainingSchedules = false;
+
 /**
  * 훈련 스케줄 목록 로드 (진행 표시 포함)
  */
 async function loadTrainingSchedules() {
+  // 이미 로딩 중이면 중복 호출 방지
+  if (isLoadingTrainingSchedules) {
+    console.log('loadTrainingSchedules: 이미 로딩 중입니다. 중복 호출을 무시합니다.');
+    return;
+  }
+  
   const userId = window.currentUser?.id || '';
   if (!userId) {
     showToast('사용자를 먼저 선택해주세요', 'error');
     return;
   }
+  
+  // 로딩 시작 플래그 설정
+  isLoadingTrainingSchedules = true;
   
   // grade 체크: grade=1 사용자만 "새 스케줄 만들기" 버튼 활성화
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
@@ -96,25 +108,32 @@ async function loadTrainingSchedules() {
   }
   
   const listContainer = document.getElementById('scheduleList');
-  if (!listContainer) return;
+  if (!listContainer) {
+    isLoadingTrainingSchedules = false;
+    return;
+  }
   
-  // 진행 표시 UI 생성
-  listContainer.innerHTML = `
-    <div class="loading-container-with-progress">
-      <div class="loading-spinner">
-        <div class="spinner"></div>
-      </div>
-      <div class="loading-progress-section">
-        <div class="loading-progress-header">
-          <span class="loading-progress-message">스케줄 목록을 불러오는 중...</span>
-          <span class="loading-progress-text">0%</span>
+  // 이미 로딩 UI가 표시되어 있는지 확인
+  const existingLoadingContainer = listContainer.querySelector('.loading-container-with-progress');
+  if (!existingLoadingContainer) {
+    // 진행 표시 UI 생성 (기존에 없을 때만)
+    listContainer.innerHTML = `
+      <div class="loading-container-with-progress">
+        <div class="loading-spinner">
+          <div class="spinner"></div>
         </div>
-        <div class="loading-progress-bar-container">
-          <div class="loading-progress-bar" style="width: 0%"></div>
+        <div class="loading-progress-section">
+          <div class="loading-progress-header">
+            <span class="loading-progress-message">스케줄 목록을 불러오는 중...</span>
+            <span class="loading-progress-text">0%</span>
+          </div>
+          <div class="loading-progress-bar-container">
+            <div class="loading-progress-bar" style="width: 0%"></div>
+          </div>
         </div>
       </div>
-    </div>
-  `;
+    `;
+  }
   
   const progressContainer = listContainer.querySelector('.loading-container-with-progress');
   
@@ -197,6 +216,9 @@ async function loadTrainingSchedules() {
         <button class="retry-button" onclick="loadTrainingSchedules()">다시 시도</button>
       </div>
     `;
+  } finally {
+    // 로딩 완료 플래그 해제
+    isLoadingTrainingSchedules = false;
   }
 }
 

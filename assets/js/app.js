@@ -2620,24 +2620,8 @@ if (!window.showScreen) {
         }, 200);
       }
 
-      // 훈련 스케줄 목록 화면: 스케줄 목록 자동 로드
-      if (id === 'scheduleListScreen') {
-        // 함수가 로드될 때까지 재시도
-        let retryCount = 0;
-        const maxRetries = 10;
-        const checkAndLoad = () => {
-          if (typeof window.loadTrainingSchedules === 'function') {
-            console.log('스케줄 목록 화면 진입 - 자동 로딩 시작');
-            window.loadTrainingSchedules();
-          } else if (retryCount < maxRetries) {
-            retryCount++;
-            setTimeout(checkAndLoad, 100);
-          } else {
-            console.error('loadTrainingSchedules function not available after retries');
-          }
-        };
-        setTimeout(checkAndLoad, 100);
-      }
+      // 훈련 스케줄 목록 화면: initializeCurrentScreen에서 처리하므로 여기서는 제거
+      // (중복 호출 방지를 위해 initializeCurrentScreen에서만 처리)
       
     } catch (error) {
       console.error('Error in showScreen:', error);
