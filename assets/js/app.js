@@ -6105,6 +6105,7 @@ function renderTrainingJournalDay(dayData) {
       content += `
         <div class="calendar-day-content journal-no-training">
           <button class="ai-recommend-btn" onclick="handleAIWorkoutRecommendation(event, '${date}')" title="AI 최적훈련 추천">
+            <img src="assets/img/ai.gif" alt="AI" class="ai-recommend-icon" />
             <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
             <span class="ai-recommend-text">AI 최적훈련 추천</span>
           </button>
