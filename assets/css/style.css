@@ -6029,6 +6029,14 @@ button[aria-disabled="true"] {
   }
 }
 
+.ai-recommend-icon {
+  height: 5em;
+  width: auto;
+  margin-bottom: 4px;
+  z-index: 2;
+  position: relative;
+}
+
 .ai-recommend-btn .journal-stelvio-logo {
   opacity: 0.3;
   filter: blur(0.3px);
@@ -6041,7 +6049,7 @@ button[aria-disabled="true"] {
 }
 
 .ai-recommend-text {
-  font-size: 0.7em;
+  font-size: 0.91em;
   color: #2e74e8;
   font-weight: 600;
   margin-top: 2px;
