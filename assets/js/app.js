@@ -3629,6 +3629,10 @@ document.addEventListener("DOMContentLoaded", () => {
             splashScreen.style.setProperty('visibility', 'hidden', 'important');
             splashScreen.style.setProperty('z-index', '-1', 'important');
             splashScreen.style.setProperty('transition', 'none', 'important');
+            splashScreen.style.setProperty('background', 'transparent', 'important'); // 배경색 제거
+            
+            // body 배경색 원복 (원래 배경색으로 복원)
+            document.body.style.setProperty('background', '#f6f8fa', 'important');
             
             // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
             const splashContainer = document.querySelector('.splash-container');
@@ -3637,6 +3641,9 @@ document.addEventListener("DOMContentLoaded", () => {
               splashContainer.style.setProperty('opacity', '0', 'important');
               splashContainer.style.setProperty('visibility', 'hidden', 'important');
             }
+            
+            // body 배경색 원복 (원래 배경색으로 복원)
+            document.body.style.setProperty('background', '#f6f8fa', 'important');
             
             // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
             const authScreen = document.getElementById("authScreen");
@@ -3678,6 +3685,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 50); // 50ms마다 실행하여 정확히 4초(4000ms)에 100% 도달
   } else {
     // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
+    // body 배경색 원복 (원래 배경색으로 복원)
+    document.body.style.setProperty('background', '#f6f8fa', 'important');
+    
     const authScreen = document.getElementById("authScreen");
     if (authScreen) {
       // 다른 모든 화면 숨기기
