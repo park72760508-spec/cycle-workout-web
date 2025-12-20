@@ -3308,11 +3308,11 @@ document.addEventListener("DOMContentLoaded", () => {
     splashScreen.style.zIndex = "10000";
     splashScreen.classList.add("active");
     
-    console.log("🎬 스플래시 화면 시작 - 14초 후 인증 화면으로 전환");
+    console.log("🎬 스플래시 화면 시작 - 4초 후 인증 화면으로 전환");
     
     // 스플래시 화면이 활성화되어 있으면 처리
     let elapsedTime = 0;
-    const totalDuration = 14000; // 14초
+    const totalDuration = 4000; // 4초
     
     // 동영상 재생 시작
     if (splashVideo) {
