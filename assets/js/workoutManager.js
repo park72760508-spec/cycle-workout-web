@@ -62,11 +62,15 @@ function normalizeSegmentType(type) {
 // 데이터 검증 헬퍼 함수들
 function validateWorkoutData(workout) {
   if (!workout || typeof workout !== 'object') {
+    console.warn('워크아웃 데이터가 객체가 아님:', workout);
     return false;
   }
+  // id가 null이거나 undefined인 경우 제외 (빈 문자열이나 0은 허용)
   if (workout.id === null || workout.id === undefined) {
+    console.warn('워크아웃 ID가 없음:', workout);
     return false;
   }
+  // id가 빈 문자열인 경우도 제외하지 않음 (필요시 추가)
   return true;
 }
 
@@ -1163,37 +1167,77 @@ async function loadWorkouts() {
     }
 
     const rawWorkouts = result.items || [];
-    console.log('Raw workouts received:', rawWorkouts);
+    console.log('Raw workouts received:', rawWorkouts.length, '개');
+    
+    // 필터링 전 원본 데이터 상태 확인
+    const invalidWorkouts = rawWorkouts.filter(w => !validateWorkoutData(w));
+    if (invalidWorkouts.length > 0) {
+      console.warn('유효하지 않은 워크아웃 제외됨:', invalidWorkouts.length, '개', invalidWorkouts);
+    }
     
     const validWorkouts = rawWorkouts
       .filter(validateWorkoutData)
       .map(normalizeWorkoutData);
     
-    console.log('Normalized workouts:', validWorkouts);
+    console.log('Normalized workouts:', validWorkouts.length, '개');
     
     // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
     const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     
-    // grade=1 또는 grade=3이 아니면 비공개 워크아웃 필터링
+    // grade=1 또는 grade=3이면 관리자
     const isAdmin = (grade === '1' || grade === '3');
     
-    // 필터링: 일반 사용자는 공개 워크아웃만, 관리자는 모든 워크아웃 표시
-    const filteredWorkouts = isAdmin 
-      ? validWorkouts  // 관리자는 모든 워크아웃 표시
-      : validWorkouts.filter(workout => {
-          // status가 '보이기'인 경우만 공개로 간주
-          const workoutStatus = String(workout.status || '').trim();
-          return workoutStatus === '보이기';
-        });  // 일반 사용자는 공개 워크아웃만 표시
+    // 상태별 개수 계산 (필터링 전)
+    const publicWorkouts = validWorkouts.filter(w => {
+      const workoutStatus = String(w.status || '').trim();
+      return workoutStatus === '보이기';
+    });
+    const privateWorkouts = validWorkouts.filter(w => {
+      const workoutStatus = String(w.status || '').trim();
+      return workoutStatus !== '보이기';
+    });
+    
+    // 필터링: 관리자는 모든 워크아웃 표시, 일반 사용자는 공개 워크아웃만 표시
+    let filteredWorkouts;
+    if (isAdmin) {
+      // 관리자: 필터 없이 모든 워크아웃 표시 (공개 + 비공개 모두)
+      filteredWorkouts = validWorkouts;
+      console.log('✅ 관리자 모드: 모든 워크아웃 표시 (필터 없음)');
+    } else {
+      // 일반 사용자: 공개 워크아웃만 표시
+      filteredWorkouts = validWorkouts.filter(workout => {
+        const workoutStatus = String(workout.status || '').trim();
+        const isPublic = workoutStatus === '보이기';
+        return isPublic;
+      });
+      console.log('✅ 일반 사용자 모드: 공개 워크아웃만 표시');
+    }
     
     console.log('워크아웃 필터링 결과:', {
+      rawWorkoutsCount: rawWorkouts.length,
+      validWorkoutsCount: validWorkouts.length,
+      invalidWorkoutsCount: invalidWorkouts.length,
       grade: grade,
       isAdmin: isAdmin,
-      totalWorkouts: validWorkouts.length,
-      filteredWorkouts: filteredWorkouts.length,
-      publicCount: validWorkouts.filter(w => String(w.status || '').trim() === '보이기').length,
-      privateCount: validWorkouts.filter(w => String(w.status || '').trim() !== '보이기').length
+      filteredWorkoutsCount: filteredWorkouts.length,
+      publicCount: publicWorkouts.length,
+      privateCount: privateWorkouts.length,
+      expectedTotalForAdmin: validWorkouts.length,
+      statusBreakdown: {
+        '보이기': publicWorkouts.length,
+        '숨기기': privateWorkouts.filter(w => String(w.status || '').trim() === '숨기기').length,
+        '기타': validWorkouts.length - publicWorkouts.length - privateWorkouts.length
+      }
     });
+    
+    // 관리자인데 필터링된 개수가 전체와 다르면 경고
+    if (isAdmin && filteredWorkouts.length !== validWorkouts.length) {
+      console.error('⚠️ 관리자 모드인데 필터링된 워크아웃 개수가 다릅니다!', {
+        expected: validWorkouts.length,
+        actual: filteredWorkouts.length,
+        difference: validWorkouts.length - filteredWorkouts.length
+      });
+    }
     
     if (filteredWorkouts.length === 0) {
       workoutList.innerHTML = `
@@ -1311,6 +1355,7 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
       // status가 '보이기'인 경우만 공개로 간주, 그 외는 모두 비공개
       const workoutStatus = String(workout.status || '').trim();
       const isPublic = workoutStatus === '보이기';
+      // 비공개 워크아웃은 붉은 둥근 상자로 표시
       const statusBadge = isPublic ? 
         '<span class="status-badge visible">공개</span>' : 
         '<span class="status-badge hidden private">비공개</span>';
