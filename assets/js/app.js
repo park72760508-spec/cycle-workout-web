@@ -2567,11 +2567,17 @@ if (!window.showScreen) {
         }
       }
       
-      // 1) 모든 화면 숨김 (스플래시 화면 제외)
+      // 1) 모든 화면 숨김 (스플래시 화면 제외 및 보호)
+      const splashScreen = document.getElementById('splashScreen');
+      const isSplashActive = splashScreen && (splashScreen.classList.contains('active') || window.getComputedStyle(splashScreen).display !== 'none');
+      
       document.querySelectorAll(".screen").forEach(s => {
         if (s.id !== 'splashScreen') {
-        s.style.display = "none";
-        s.classList.remove("active");
+          s.style.display = "none";
+          s.classList.remove("active");
+        } else if (isSplashActive) {
+          // 스플래시 화면이 활성화되어 있으면 건드리지 않음
+          return;
         }
       });
       
@@ -3301,12 +3307,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const isSplashActive = splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
   
   if (isSplashActive && splashScreen) {
-    // 스플래시 화면 강제 표시 보호
+    // 스플래시 화면 강제 표시 보호 (깜빡임 방지)
     splashScreen.style.display = "block";
     splashScreen.style.opacity = "1";
     splashScreen.style.visibility = "visible";
     splashScreen.style.zIndex = "10000";
     splashScreen.classList.add("active");
+    
+    // 다른 모든 화면 완전히 숨기기 (깜빡임 방지)
+    document.querySelectorAll(".screen").forEach(screen => {
+      if (screen.id !== 'splashScreen') {
+        screen.style.display = "none";
+        screen.style.opacity = "0";
+        screen.style.visibility = "hidden";
+        screen.classList.remove("active");
+      }
+    });
     
     console.log("🎬 스플래시 화면 시작 - 4초 후 인증 화면으로 전환");
     
@@ -3335,15 +3351,27 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       // 스플래시 화면이 숨겨지지 않도록 주기적으로 확인 및 복구 (페이드 아웃 중이 아닐 때만)
-      if (!isFadingOut && splashScreen && 
-          (splashScreen.style.display === "none" || 
-           (!splashScreen.classList.contains("active") && splashScreen.style.opacity !== "0"))) {
-        console.warn("⚠️ 스플래시 화면이 숨겨짐 - 복구 중");
-        splashScreen.style.display = "block";
-        splashScreen.style.opacity = "1";
-        splashScreen.style.visibility = "visible";
-        splashScreen.style.zIndex = "10000";
-        splashScreen.classList.add("active");
+      if (!isFadingOut && splashScreen) {
+        // 깜빡임 방지를 위해 항상 최상위 유지
+        if (splashScreen.style.display === "none" || 
+            !splashScreen.classList.contains("active") || 
+            splashScreen.style.opacity === "0" ||
+            splashScreen.style.zIndex !== "10000") {
+          splashScreen.style.display = "block";
+          splashScreen.style.opacity = "1";
+          splashScreen.style.visibility = "visible";
+          splashScreen.style.zIndex = "10000";
+          splashScreen.classList.add("active");
+          
+          // 다른 화면들이 나타나지 않도록 강제로 숨김
+          document.querySelectorAll(".screen").forEach(screen => {
+            if (screen.id !== 'splashScreen') {
+              screen.style.display = "none";
+              screen.style.opacity = "0";
+              screen.style.visibility = "hidden";
+            }
+          });
+        }
       }
       
       if (elapsedTime >= totalDuration) {
@@ -4787,6 +4815,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (isSplashActive) {
     console.log('⏳ 스플래시 화면 표시 중 - 인증 화면 초기화 대기');
+    // 스플래시 화면이 활성화되어 있을 때는 다른 화면들이 나타나지 않도록 강제로 숨김
+    document.querySelectorAll('.screen').forEach(screen => {
+      if (screen.id !== 'splashScreen') {
+        screen.classList.remove('active');
+        screen.style.display = 'none';
+        screen.style.opacity = '0';
+        screen.style.visibility = 'hidden';
+      }
+    });
     return; // 스플래시 화면이 활성화되어 있으면 여기서 종료
   }
   
@@ -4794,10 +4831,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 모든 화면 완전히 숨기기 (스플래시 화면 제외)
     document.querySelectorAll('.screen').forEach(screen => {
       if (screen.id !== 'splashScreen') {
-      screen.classList.remove('active');
-      screen.style.display = 'none';
-      screen.style.opacity = '0';
-      screen.style.visibility = 'hidden';
+        screen.classList.remove('active');
+        screen.style.display = 'none';
+        screen.style.opacity = '0';
+        screen.style.visibility = 'hidden';
       }
     });
     
