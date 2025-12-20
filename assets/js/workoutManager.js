@@ -1182,10 +1182,36 @@ async function loadWorkouts() {
     console.log('Normalized workouts:', validWorkouts.length, '개');
     
     // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
-    const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+    // grade 확인: 여러 소스에서 확인
+    let grade = '2';
+    try {
+      if (typeof getViewerGrade === 'function') {
+        grade = String(getViewerGrade());
+      } else {
+        // getViewerGrade가 없으면 직접 확인
+        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+        if (viewer && viewer.grade != null) {
+          grade = String(viewer.grade);
+        } else if (authUser && authUser.grade != null) {
+          grade = String(authUser.grade);
+        }
+      }
+    } catch (e) {
+      console.warn('grade 확인 실패:', e);
+      grade = '2';
+    }
     
     // grade=1 또는 grade=3이면 관리자
     const isAdmin = (grade === '1' || grade === '3');
+    
+    console.log('🔍 사용자 등급 확인:', {
+      grade: grade,
+      isAdmin: isAdmin,
+      currentUser: window.currentUser,
+      localStorage_currentUser: localStorage.getItem('currentUser'),
+      localStorage_authUser: localStorage.getItem('authUser')
+    });
     
     // 상태별 개수 계산 (필터링 전)
     const publicWorkouts = validWorkouts.filter(w => {
@@ -1201,8 +1227,13 @@ async function loadWorkouts() {
     let filteredWorkouts;
     if (isAdmin) {
       // 관리자: 필터 없이 모든 워크아웃 표시 (공개 + 비공개 모두)
-      filteredWorkouts = validWorkouts;
-      console.log('✅ 관리자 모드: 모든 워크아웃 표시 (필터 없음)');
+      // 배열을 직접 복사하여 필터링이 일어나지 않도록 보장
+      filteredWorkouts = [...validWorkouts];
+      console.log('✅ 관리자 모드: 모든 워크아웃 표시 (필터 없음)', {
+        total: filteredWorkouts.length,
+        public: publicWorkouts.length,
+        private: privateWorkouts.length
+      });
     } else {
       // 일반 사용자: 공개 워크아웃만 표시
       filteredWorkouts = validWorkouts.filter(workout => {
@@ -1210,7 +1241,10 @@ async function loadWorkouts() {
         const isPublic = workoutStatus === '보이기';
         return isPublic;
       });
-      console.log('✅ 일반 사용자 모드: 공개 워크아웃만 표시');
+      console.log('✅ 일반 사용자 모드: 공개 워크아웃만 표시', {
+        total: filteredWorkouts.length,
+        public: filteredWorkouts.length
+      });
     }
     
     console.log('워크아웃 필터링 결과:', {
@@ -1230,12 +1264,30 @@ async function loadWorkouts() {
       }
     });
     
-    // 관리자인데 필터링된 개수가 전체와 다르면 경고
+    // 관리자인데 필터링된 개수가 전체와 다르면 경고 및 강제 수정
     if (isAdmin && filteredWorkouts.length !== validWorkouts.length) {
-      console.error('⚠️ 관리자 모드인데 필터링된 워크아웃 개수가 다릅니다!', {
+      console.error('⚠️ 관리자 모드인데 필터링된 워크아웃 개수가 다릅니다! 강제로 모든 워크아웃 포함', {
         expected: validWorkouts.length,
         actual: filteredWorkouts.length,
         difference: validWorkouts.length - filteredWorkouts.length
+      });
+      // 관리자 모드에서는 무조건 모든 워크아웃 포함
+      filteredWorkouts = [...validWorkouts];
+      console.log('✅ 관리자 모드: 모든 워크아웃 강제 포함 완료', filteredWorkouts.length);
+    }
+    
+    // 최종 확인: 관리자 모드에서 비공개 워크아웃이 포함되어 있는지 확인
+    if (isAdmin) {
+      const hasPrivateWorkouts = filteredWorkouts.some(w => {
+        const workoutStatus = String(w.status || '').trim();
+        return workoutStatus !== '보이기';
+      });
+      console.log('🔍 관리자 모드 최종 확인:', {
+        totalWorkouts: filteredWorkouts.length,
+        hasPrivateWorkouts: hasPrivateWorkouts,
+        privateWorkoutIds: filteredWorkouts
+          .filter(w => String(w.status || '').trim() !== '보이기')
+          .map(w => ({ id: w.id, title: w.title, status: w.status }))
       });
     }
     
