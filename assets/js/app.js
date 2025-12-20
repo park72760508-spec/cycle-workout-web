@@ -3478,9 +3478,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // 페이드 아웃 시작 여부 추적
     let isFadingOut = false;
     
-    // 로딩 바 애니메이션 (더 빠른 업데이트로 깜빡임 감소)
+    // 로딩 바 애니메이션 (4초 동안 완료되도록 정확한 간격 설정)
+    // 50ms마다 실행하고 50ms씩 증가 = 정확히 4초(4000ms)에 100% 도달
+    // setInterval의 두 번째 인자를 명시적으로 50ms로 설정
     const progressInterval = setInterval(() => {
-      elapsedTime += 50; // 100ms에서 50ms로 변경하여 더 부드러운 진행
+      elapsedTime += 50; // 50ms씩 증가
       const progress = Math.min((elapsedTime / totalDuration) * 100, 100);
       
       if (splashLoaderProgress) {
@@ -3522,11 +3524,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       
+      // 진행바가 100%에 도달했는지 확인
       if (elapsedTime >= totalDuration) {
         clearInterval(progressInterval);
         isFadingOut = true;
+        elapsedTime = totalDuration; // 정확히 100%로 설정
         
-        console.log("✅ 스플래시 화면 완료 - 진행바와 텍스트 숨기기 시작");
+        // 진행바를 100%로 설정
+        if (splashLoaderProgress) {
+          splashLoaderProgress.style.width = "100%";
+        }
+        
+        console.log("✅ 스플래시 화면 완료 (정확히 4초) - 진행바와 텍스트 숨기기 시작");
+      }
+    }, 50); // 50ms마다 실행하여 정확히 4초(4000ms)에 100% 도달
         
         // 진행바와 흰색 글씨 먼저 즉시 숨기기 (!important 사용) - 페이드 아웃 전에 실행
         const splashLoader = document.querySelector('.splash-loader');
