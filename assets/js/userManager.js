@@ -403,26 +403,42 @@ async function loadUsers() {
       const expRaw = user.expiry_date;
       let expiryText = '미설정';
       let expiryClass = '';
+      let isExpired = false;
+      let shouldShowWarning = false;
+      let expiryDate = null;
+      
       if (expRaw) {
-        const d = new Date(expRaw);
+        expiryDate = new Date(expRaw);
         const today = new Date();
-        d.setHours(0,0,0,0);
+        expiryDate.setHours(0,0,0,0);
         today.setHours(0,0,0,0);
-        const diffDays = Math.round((d - today) / (24*60*60*1000));
-        expiryText = d.toLocaleDateString();
+        const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
+        expiryText = expiryDate.toLocaleDateString();
 
         if (diffDays < 0) {
           expiryClass = 'is-expired';
+          isExpired = true;
         } else if (diffDays === 0) {
           expiryClass = 'is-soon';
           expiryText += ' (D-DAY)';
+          shouldShowWarning = true;
         } else if (diffDays <= 7) {
           expiryClass = 'is-soon';
           expiryText += ` (D-${diffDays})`;
+          shouldShowWarning = true;
+        } else if (diffDays <= 10) {
+          // 종료일 -10일 전부터 경고 표시
+          shouldShowWarning = true;
         }
       }
 
       const canEdit = canEditFor(user);
+      
+      // grade=2이고 만료일이 지난 경우 버튼 비활성화
+      const userGrade = String(user.grade || '2');
+      const isButtonDisabled = (userGrade === '2' && isExpired);
+      const buttonDisabledAttr = isButtonDisabled ? 'disabled' : '';
+      const buttonDisabledClass = isButtonDisabled ? 'disabled' : '';
 
       return `
         <div class="user-card" data-user-id="${user.id}">
@@ -448,12 +464,46 @@ async function loadUsers() {
             </div>
           </div>
 
-          <button class="btn btn-primary" id="selectBtn-${user.id}" onclick="selectUser(${user.id})">선택</button>
+          <button class="btn btn-primary ${buttonDisabledClass}" id="selectBtn-${user.id}" 
+                  onclick="selectUser(${user.id})" 
+                  ${buttonDisabledAttr}
+                  data-expiry-date="${expRaw || ''}"
+                  data-should-warn="${shouldShowWarning ? 'true' : 'false'}">선택</button>
         </div>
       `;
     }).join('');
 
-    // 9) 전역 상태/토스트
+    // 9) 만료일 경고 모달 표시 (종료일 -10일 전부터)
+    // 각 사용자 카드의 버튼을 확인하여 경고 표시 (한 번만 표시)
+    const warningShownToday = sessionStorage.getItem('expiryWarningShownToday');
+    if (!warningShownToday) {
+      const firstExpiringUser = visibleUsers.find(user => {
+        const expRaw = user.expiry_date;
+        if (expRaw) {
+          const expiryDate = new Date(expRaw);
+          const today = new Date();
+          expiryDate.setHours(0,0,0,0);
+          today.setHours(0,0,0,0);
+          const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
+          
+          const userGrade = String(user.grade || '2');
+          // 종료일 -10일 전부터 경고 표시
+          return userGrade === '2' && diffDays <= 10 && diffDays >= 0;
+        }
+        return false;
+      });
+      
+      if (firstExpiringUser) {
+        setTimeout(() => {
+          showExpiryWarningModal(firstExpiringUser.expiry_date);
+          // 오늘 날짜로 표시 여부 저장
+          const todayStr = new Date().toDateString();
+          sessionStorage.setItem('expiryWarningShownToday', todayStr);
+        }, 500);
+      }
+    }
+
+    // 10) 전역 상태/토스트
     window.users = users;
     window.userProfiles = users;
     if (typeof showToast === 'function') {
@@ -488,6 +538,11 @@ async function selectUser(userId) {
   let originalButtonText = '';
   
   if (selectButton) {
+    // 버튼이 비활성화되어 있으면 선택 불가
+    if (selectButton.disabled) {
+      return;
+    }
+    
     originalButtonText = selectButton.textContent;
     selectButton.textContent = '사용자 정보 연결 중...';
     selectButton.disabled = true;
@@ -505,6 +560,36 @@ async function selectUser(userId) {
     }
 
     const user = result.item;
+    
+    // grade=2이고 만료일 체크
+    const userGrade = String(user.grade || '2');
+    if (userGrade === '2' && user.expiry_date) {
+      const expiryDate = new Date(user.expiry_date);
+      const today = new Date();
+      expiryDate.setHours(0,0,0,0);
+      today.setHours(0,0,0,0);
+      const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
+      
+      if (diffDays < 0) {
+        // 만료일이 지난 경우 선택 불가
+        showToast('사용기간이 만료되어 선택할 수 없습니다.');
+        if (selectButton) {
+          selectButton.textContent = originalButtonText;
+          selectButton.disabled = true;
+          selectButton.classList.remove('loading');
+        }
+        return;
+      }
+      
+      // 종료일 -10일 전부터 경고 표시 (한 번만 표시)
+      if (diffDays <= 10 && diffDays >= 0) {
+        const warningShown = sessionStorage.getItem(`expiryWarningShown_${userId}`);
+        if (!warningShown) {
+          showExpiryWarningModal(user.expiry_date);
+          sessionStorage.setItem(`expiryWarningShown_${userId}`, 'true');
+        }
+      }
+    }
     
     // 전역 상태에 현재 사용자 설정
       // 기존 뷰어(등급 등 보존용) 가져오기
@@ -961,6 +1046,38 @@ window.editUser = editUser;
 window.deleteUser = deleteUser;
 window.saveUser = saveUser;
 window.selectProfile = selectUser; // 기존 코드와의 호환성
+
+// ========== 사용기간 만료 경고 모달 함수 ==========
+function showExpiryWarningModal(expiryDate) {
+  const modal = document.getElementById('expiryWarningModal');
+  const dateElement = document.getElementById('expiryWarningDate');
+  
+  if (modal && dateElement) {
+    // 만료일 포맷팅
+    if (expiryDate) {
+      const date = new Date(expiryDate);
+      const formattedDate = date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      dateElement.textContent = formattedDate;
+    }
+    
+    modal.style.display = 'flex';
+  }
+}
+
+function closeExpiryWarningModal() {
+  const modal = document.getElementById('expiryWarningModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// 전역으로 노출
+window.showExpiryWarningModal = showExpiryWarningModal;
+window.closeExpiryWarningModal = closeExpiryWarningModal;
 
 
 /**
