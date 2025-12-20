@@ -356,6 +356,54 @@ h1,h2,h3,h4 { font-weight: 600; }
   border-color: rgba(156, 163, 175, 0.3);
 }
 
+/* ANT+ 연결 버튼 특정 스타일 */
+#connectionScreen #btnConnectANT {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  color: #2563eb;
+}
+
+#connectionScreen #btnConnectANT:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+#connectionScreen #btnConnectANT:hover::before {
+  opacity: 1;
+}
+
+#connectionScreen #btnConnectANT:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+#connectionScreen #btnConnectANT .device-btn-icon {
+  width: 43.2px; /* 72px * 0.6 = 43.2px */
+  height: 43.2px; /* 72px * 0.6 = 43.2px */
+  object-fit: contain;
+}
+
+#connectionScreen #btnConnectANT:hover .device-btn-icon {
+  transform: scale(1.1);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+#connectionScreen #btnConnectANT.connected {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 100%);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #15803d;
+}
+
+#connectionScreen #btnConnectANT.connected:hover {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.2) 0%, rgba(22, 163, 74, 0.25) 100%);
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+  transform: translateY(-2px);
+}
+
 #connectionScreen .btn-device .device-btn-icon {
   order: 1 !important; /* span 아래에 표시 */
   width: 72px;
