@@ -75,12 +75,21 @@ function validateWorkoutData(workout) {
 }
 
 function normalizeWorkoutData(workout) {
+  // status 처리: '보이기' 또는 '숨기기' 값이 있으면 그대로 사용, 없으면 기본값 '보이기'
+  let status = '보이기';
+  if (workout.status !== null && workout.status !== undefined && workout.status !== '') {
+    const statusStr = String(workout.status).trim();
+    if (statusStr === '보이기' || statusStr === '숨기기') {
+      status = statusStr;
+    }
+  }
+  
   return {
     id: workout.id,
     title: String(workout.title || '제목 없음'),
     description: String(workout.description || ''),
     author: String(workout.author || '미상'),
-    status: String(workout.status || '보이기'),
+    status: status,
     total_seconds: Number(workout.total_seconds) || 0,
     publish_date: workout.publish_date || null,
     segments: Array.isArray(workout.segments) ? workout.segments : []
@@ -1169,6 +1178,45 @@ async function loadWorkouts() {
     const rawWorkouts = result.items || [];
     console.log('Raw workouts received:', rawWorkouts.length, '개');
     
+    // 원본 데이터의 status 확인 (디버깅용)
+    const rawStatusCount = {
+      '보이기': 0,
+      '숨기기': 0,
+      '기타': 0,
+      'null/undefined': 0,
+      '빈문자열': 0
+    };
+    rawWorkouts.forEach(w => {
+      if (w.status === null || w.status === undefined) {
+        rawStatusCount['null/undefined']++;
+      } else if (w.status === '') {
+        rawStatusCount['빈문자열']++;
+      } else {
+        const statusStr = String(w.status).trim();
+        if (statusStr === '보이기') {
+          rawStatusCount['보이기']++;
+        } else if (statusStr === '숨기기') {
+          rawStatusCount['숨기기']++;
+        } else {
+          rawStatusCount['기타']++;
+        }
+      }
+    });
+    console.log('📊 원본 데이터 status 분포:', rawStatusCount);
+    
+    // 숨기기 상태인 원본 워크아웃 확인
+    const rawPrivateWorkouts = rawWorkouts.filter(w => {
+      if (w.status === null || w.status === undefined || w.status === '') return false;
+      return String(w.status).trim() === '숨기기';
+    });
+    if (rawPrivateWorkouts.length > 0) {
+      console.log('🔍 원본 데이터의 숨기기 워크아웃:', rawPrivateWorkouts.map(w => ({
+        id: w.id,
+        title: w.title,
+        status: w.status
+      })));
+    }
+    
     // 필터링 전 원본 데이터 상태 확인
     const invalidWorkouts = rawWorkouts.filter(w => !validateWorkoutData(w));
     if (invalidWorkouts.length > 0) {
@@ -1180,6 +1228,37 @@ async function loadWorkouts() {
       .map(normalizeWorkoutData);
     
     console.log('Normalized workouts:', validWorkouts.length, '개');
+    
+    // 정규화 후 status 확인
+    const normalizedStatusCount = {
+      '보이기': 0,
+      '숨기기': 0,
+      '기타': 0
+    };
+    validWorkouts.forEach(w => {
+      const statusStr = String(w.status || '').trim();
+      if (statusStr === '보이기') {
+        normalizedStatusCount['보이기']++;
+      } else if (statusStr === '숨기기') {
+        normalizedStatusCount['숨기기']++;
+      } else {
+        normalizedStatusCount['기타']++;
+      }
+    });
+    console.log('📊 정규화 후 status 분포:', normalizedStatusCount);
+    
+    // 정규화 후 숨기기 워크아웃 확인
+    const normalizedPrivateWorkouts = validWorkouts.filter(w => {
+      const statusStr = String(w.status || '').trim();
+      return statusStr === '숨기기';
+    });
+    if (normalizedPrivateWorkouts.length > 0) {
+      console.log('🔍 정규화 후 숨기기 워크아웃:', normalizedPrivateWorkouts.map(w => ({
+        id: w.id,
+        title: w.title,
+        status: w.status
+      })));
+    }
     
     // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
     // grade 확인: 여러 소스에서 확인
