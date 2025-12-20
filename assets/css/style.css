@@ -380,8 +380,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen #btnConnectANT .device-btn-icon {
-  width: 43.2px; /* 72px * 0.6 = 43.2px */
-  height: 43.2px; /* 72px * 0.6 = 43.2px */
+  width: 30px;
+  height: 30px;
   object-fit: contain;
 }
 
