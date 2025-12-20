@@ -2569,15 +2569,18 @@ if (!window.showScreen) {
       
       // 1) 모든 화면 숨김 (스플래시 화면 제외 및 보호)
       const splashScreen = document.getElementById('splashScreen');
-      const isSplashActive = splashScreen && (splashScreen.classList.contains('active') || window.getComputedStyle(splashScreen).display !== 'none');
+      const isSplashActive = window.isSplashActive || (splashScreen && (splashScreen.classList.contains('active') || window.getComputedStyle(splashScreen).display !== 'none'));
+      
+      // 스플래시 화면이 활성화되어 있으면 화면 전환 차단
+      if (isSplashActive) {
+        console.log('⏸️ 스플래시 화면 활성화 중 - 화면 전환 차단');
+        return; // 화면 전환 자체를 차단
+      }
       
       document.querySelectorAll(".screen").forEach(s => {
         if (s.id !== 'splashScreen') {
           s.style.display = "none";
           s.classList.remove("active");
-        } else if (isSplashActive) {
-          // 스플래시 화면이 활성화되어 있으면 건드리지 않음
-          return;
         }
       });
       
@@ -3244,10 +3247,98 @@ function togglePause() {
   setPaused(!window.trainingState.paused);
 }
 
+// 스플래시 화면 보호를 가장 먼저 실행 (DOM 로드 전에도 실행 가능)
+(function protectSplashScreenImmediately() {
+  // 즉시 실행하여 다른 코드보다 먼저 실행되도록 보장
+  function protectSplash() {
+    const splashScreen = document.getElementById("splashScreen");
+    if (splashScreen) {
+      // 즉시 스플래시 화면 보호 설정
+      splashScreen.style.setProperty('display', 'block', 'important');
+      splashScreen.style.setProperty('opacity', '1', 'important');
+      splashScreen.style.setProperty('visibility', 'visible', 'important');
+      splashScreen.style.setProperty('z-index', '10000', 'important');
+      splashScreen.style.setProperty('transition', 'none', 'important');
+      splashScreen.classList.add("active");
+      
+      // 다른 모든 화면 즉시 숨기기
+      document.querySelectorAll(".screen").forEach(screen => {
+        if (screen.id !== 'splashScreen') {
+          screen.style.setProperty('display', 'none', 'important');
+          screen.style.setProperty('opacity', '0', 'important');
+          screen.style.setProperty('visibility', 'hidden', 'important');
+          screen.classList.remove("active");
+        }
+      });
+      
+      // 전역 플래그 설정
+      window.isSplashActive = true;
+    }
+  }
+  
+  // 즉시 실행
+  protectSplash();
+  
+  // DOM이 준비되면 다시 실행
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', protectSplash);
+  } else {
+    protectSplash();
+  }
+  
+  // 추가 보호: 주기적으로 확인 (매우 빠른 간격)
+  const protectionInterval = setInterval(() => {
+    if (window.isSplashActive) {
+      protectSplash();
+    } else {
+      clearInterval(protectionInterval);
+    }
+  }, 16); // 약 60fps로 확인
+  
+  // 5초 후 자동 정리 (스플래시 화면이 완료되어야 함)
+  setTimeout(() => {
+    clearInterval(protectionInterval);
+  }, 5000);
+})();
+
 // DOMContentLoaded 이벤트
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
 
+  // 스플래시 화면 처리 (최우선 실행 - 다른 모든 초기화보다 먼저)
+  const splashScreen = document.getElementById("splashScreen");
+  const splashVideo = document.getElementById("splashVideo");
+  const splashLoaderProgress = document.getElementById("splashLoaderProgress");
+  
+  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
+  const isSplashActive = splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
+  
+  // 스플래시 화면 보호 플래그 (전역)
+  window.isSplashActive = isSplashActive || window.isSplashActive;
+  
+  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
+  if (window.isSplashActive) {
+    // 즉시 다른 모든 화면 숨기기 - !important 사용
+    document.querySelectorAll(".screen").forEach(screen => {
+      if (screen.id !== 'splashScreen') {
+        screen.style.setProperty('display', 'none', 'important');
+        screen.style.setProperty('opacity', '0', 'important');
+        screen.style.setProperty('visibility', 'hidden', 'important');
+        screen.classList.remove("active");
+      }
+    });
+    
+    // 스플래시 화면도 다시 한번 보호
+    if (splashScreen) {
+      splashScreen.style.setProperty('display', 'block', 'important');
+      splashScreen.style.setProperty('opacity', '1', 'important');
+      splashScreen.style.setProperty('visibility', 'visible', 'important');
+      splashScreen.style.setProperty('z-index', '10000', 'important');
+      splashScreen.style.setProperty('transition', 'none', 'important');
+      splashScreen.classList.add("active");
+    }
+  }
+  
   // iOS용 처리 프로세스
   function isIOS() {
     const ua = navigator.userAgent || "";
@@ -3272,10 +3363,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (btn) {
       btn.addEventListener("click", () => {
         console.log("iOS continue button clicked");
-        if (typeof showScreen === "function") {
+        if (typeof showScreen === "function" && !window.isSplashActive) {
           showScreen("profileScreen");
         } else {
-          console.error("showScreen function not available");
+          console.error("showScreen function not available or splash active");
         }
       });
     } else {
@@ -3283,46 +3374,90 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // 브라우저 지원 확인
-  if (!navigator.bluetooth) {
-    if (typeof showToast === "function") {
-      showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+  // 브라우저 지원 확인 (스플래시 화면이 활성화되어 있으면 지연)
+  if (!window.isSplashActive) {
+    if (!navigator.bluetooth) {
+      if (typeof showToast === "function") {
+        showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
+      }
+      console.error("Web Bluetooth not supported");
     }
-    console.error("Web Bluetooth not supported");
-  }
-  
-  if (location.protocol !== "https:" && location.hostname !== "localhost") {
-    if (typeof showToast === "function") {
-      showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
-    }
-    console.warn("HTTPS required for BLE");
-  }
-  
-  // 스플래시 화면 처리 (최우선 실행)
-  const splashScreen = document.getElementById("splashScreen");
-  const splashVideo = document.getElementById("splashVideo");
-  const splashLoaderProgress = document.getElementById("splashLoaderProgress");
-  
-  // 스플래시 화면이 활성화되어 있으면 다른 초기화 코드 실행 방지
-  const isSplashActive = splashScreen && (splashScreen.classList.contains("active") || window.getComputedStyle(splashScreen).display !== "none");
-  
-  if (isSplashActive && splashScreen) {
-    // 스플래시 화면 강제 표시 보호 (깜빡임 방지)
-    splashScreen.style.display = "block";
-    splashScreen.style.opacity = "1";
-    splashScreen.style.visibility = "visible";
-    splashScreen.style.zIndex = "10000";
-    splashScreen.classList.add("active");
     
-    // 다른 모든 화면 완전히 숨기기 (깜빡임 방지)
+    if (location.protocol !== "https:" && location.hostname !== "localhost") {
+      if (typeof showToast === "function") {
+        showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
+      }
+      console.warn("HTTPS required for BLE");
+    }
+  }
+  
+  if (window.isSplashActive && splashScreen) {
+    // 즉시 다른 모든 화면 숨기기 (가장 먼저 실행) - 동기적으로 실행
     document.querySelectorAll(".screen").forEach(screen => {
       if (screen.id !== 'splashScreen') {
-        screen.style.display = "none";
-        screen.style.opacity = "0";
-        screen.style.visibility = "hidden";
+        screen.style.setProperty('display', 'none', 'important');
+        screen.style.setProperty('opacity', '0', 'important');
+        screen.style.setProperty('visibility', 'hidden', 'important');
         screen.classList.remove("active");
       }
     });
+    
+    // 스플래시 화면 강제 표시 보호 (깜빡임 방지) - !important 사용
+    splashScreen.style.setProperty('display', 'block', 'important');
+    splashScreen.style.setProperty('opacity', '1', 'important');
+    splashScreen.style.setProperty('visibility', 'visible', 'important');
+    splashScreen.style.setProperty('z-index', '10000', 'important');
+    splashScreen.style.setProperty('transition', 'none', 'important');
+    splashScreen.classList.add("active");
+    
+    // MutationObserver로 스플래시 화면 변경 감지 및 즉시 복구 (더 빠른 반응)
+    const splashObserver = new MutationObserver((mutations) => {
+      if (window.isSplashActive && splashScreen) {
+        // requestAnimationFrame으로 즉시 복구 (다음 프레임에서 실행)
+        requestAnimationFrame(() => {
+          const computedStyle = window.getComputedStyle(splashScreen);
+          const needsFix = 
+            splashScreen.style.display === "none" || 
+            computedStyle.display === "none" ||
+            !splashScreen.classList.contains("active") || 
+            splashScreen.style.opacity === "0" ||
+            computedStyle.opacity === "0" ||
+            splashScreen.style.zIndex !== "10000" ||
+            computedStyle.zIndex !== "10000";
+          
+          if (needsFix) {
+            // 즉시 복구 - !important 사용
+            splashScreen.style.setProperty('display', 'block', 'important');
+            splashScreen.style.setProperty('opacity', '1', 'important');
+            splashScreen.style.setProperty('visibility', 'visible', 'important');
+            splashScreen.style.setProperty('z-index', '10000', 'important');
+            splashScreen.style.setProperty('transition', 'none', 'important');
+            splashScreen.classList.add("active");
+            
+            // 다른 화면들도 강제로 숨김
+            document.querySelectorAll(".screen").forEach(screen => {
+              if (screen.id !== 'splashScreen') {
+                screen.style.setProperty('display', 'none', 'important');
+                screen.style.setProperty('opacity', '0', 'important');
+                screen.style.setProperty('visibility', 'hidden', 'important');
+                screen.classList.remove("active");
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    // 스플래시 화면 속성 변경 감지 시작
+    splashObserver.observe(splashScreen, {
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+      childList: false,
+      subtree: false
+    });
+    
+    // 전역에 observer 저장 (나중에 정리용)
+    window.splashObserver = splashObserver;
     
     console.log("🎬 스플래시 화면 시작 - 4초 후 인증 화면으로 전환");
     
@@ -3341,9 +3476,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // 페이드 아웃 시작 여부 추적
     let isFadingOut = false;
     
-    // 로딩 바 애니메이션
+    // 로딩 바 애니메이션 (더 빠른 업데이트로 깜빡임 감소)
     const progressInterval = setInterval(() => {
-      elapsedTime += 100;
+      elapsedTime += 50; // 100ms에서 50ms로 변경하여 더 부드러운 진행
       const progress = Math.min((elapsedTime / totalDuration) * 100, 100);
       
       if (splashLoaderProgress) {
@@ -3351,24 +3486,35 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       
       // 스플래시 화면이 숨겨지지 않도록 주기적으로 확인 및 복구 (페이드 아웃 중이 아닐 때만)
-      if (!isFadingOut && splashScreen) {
-        // 깜빡임 방지를 위해 항상 최상위 유지
-        if (splashScreen.style.display === "none" || 
-            !splashScreen.classList.contains("active") || 
-            splashScreen.style.opacity === "0" ||
-            splashScreen.style.zIndex !== "10000") {
-          splashScreen.style.display = "block";
-          splashScreen.style.opacity = "1";
-          splashScreen.style.visibility = "visible";
-          splashScreen.style.zIndex = "10000";
+      // 더 빠른 체크를 위해 50ms마다 실행 (기존 100ms보다 빠름)
+      if (!isFadingOut && splashScreen && window.isSplashActive) {
+        // 깜빡임 방지를 위해 항상 최상위 유지 (더 강력한 체크)
+        const computedStyle = window.getComputedStyle(splashScreen);
+        const needsFix = 
+          splashScreen.style.display === "none" || 
+          computedStyle.display === "none" ||
+          !splashScreen.classList.contains("active") || 
+          splashScreen.style.opacity === "0" ||
+          computedStyle.opacity === "0" ||
+          splashScreen.style.zIndex !== "10000" ||
+          computedStyle.zIndex !== "10000";
+          
+        if (needsFix) {
+          // 즉시 복구 (동기적으로 실행하여 깜빡임 최소화) - !important 사용
+          splashScreen.style.setProperty('display', 'block', 'important');
+          splashScreen.style.setProperty('opacity', '1', 'important');
+          splashScreen.style.setProperty('visibility', 'visible', 'important');
+          splashScreen.style.setProperty('z-index', '10000', 'important');
+          splashScreen.style.setProperty('transition', 'none', 'important');
           splashScreen.classList.add("active");
           
           // 다른 화면들이 나타나지 않도록 강제로 숨김
           document.querySelectorAll(".screen").forEach(screen => {
             if (screen.id !== 'splashScreen') {
-              screen.style.display = "none";
-              screen.style.opacity = "0";
-              screen.style.visibility = "hidden";
+              screen.style.setProperty('display', 'none', 'important');
+              screen.style.setProperty('opacity', '0', 'important');
+              screen.style.setProperty('visibility', 'hidden', 'important');
+              screen.classList.remove("active");
             }
           });
         }
@@ -3377,6 +3523,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (elapsedTime >= totalDuration) {
         clearInterval(progressInterval);
         isFadingOut = true;
+        window.isSplashActive = false; // 플래그 해제
+        
+        // Observer 정리
+        if (window.splashObserver) {
+          window.splashObserver.disconnect();
+          window.splashObserver = null;
+        }
         
         console.log("✅ 스플래시 화면 완료 - 인증 화면으로 전환");
         
@@ -4813,7 +4966,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const splashScreen = document.getElementById('splashScreen');
   const isSplashActive = splashScreen && splashScreen.classList.contains('active');
   
-  if (isSplashActive) {
+  // 스플래시 화면이 활성화되어 있으면 인증 화면 초기화 완전 차단
+  const splashScreenCheck = document.getElementById('splashScreen');
+  const isSplashActiveCheck = window.isSplashActive || (splashScreenCheck && (splashScreenCheck.classList.contains('active') || window.getComputedStyle(splashScreenCheck).display !== 'none'));
+  
+  if (isSplashActiveCheck) {
     console.log('⏳ 스플래시 화면 표시 중 - 인증 화면 초기화 대기');
     // 스플래시 화면이 활성화되어 있을 때는 다른 화면들이 나타나지 않도록 강제로 숨김
     document.querySelectorAll('.screen').forEach(screen => {
