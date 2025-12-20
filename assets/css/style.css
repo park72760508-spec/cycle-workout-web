@@ -340,6 +340,22 @@ h1,h2,h3,h4 { font-weight: 600; }
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
 
+#connectionScreen .btn-device.is-disabled,
+#connectionScreen .btn-device:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.15) 0%, rgba(107, 114, 128, 0.2) 100%);
+  border-color: rgba(156, 163, 175, 0.3);
+}
+
+#connectionScreen .btn-device.is-disabled:hover,
+#connectionScreen .btn-device:disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(156, 163, 175, 0.3);
+}
+
 #connectionScreen .btn-device .device-btn-icon {
   order: 1 !important; /* span 아래에 표시 */
   width: 72px;
