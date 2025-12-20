@@ -416,7 +416,34 @@
   // 👇 이 줄을 추가하세요 1013
   window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
     
-    
+    // 스플래시 화면 즉시 보호 (가장 먼저 실행 - 깜빡임 방지)
+    (function() {
+      'use strict';
+      const splashScreen = document.getElementById('splashScreen');
+      if (splashScreen && (splashScreen.classList.contains('active') || window.getComputedStyle(splashScreen).display !== 'none')) {
+        window.isSplashActive = true;
+        
+        // 즉시 다른 모든 화면 숨기기
+        document.querySelectorAll('.screen').forEach(screen => {
+          if (screen.id !== 'splashScreen') {
+            screen.style.display = 'none';
+            screen.style.opacity = '0';
+            screen.style.visibility = 'hidden';
+            screen.classList.remove('active');
+          }
+        });
+        
+        // 스플래시 화면 강제 표시
+        splashScreen.style.display = 'block';
+        splashScreen.style.opacity = '1';
+        splashScreen.style.visibility = 'visible';
+        splashScreen.style.zIndex = '10000';
+        splashScreen.style.transition = 'none';
+        splashScreen.classList.add('active');
+        
+        console.log('🛡️ 스플래시 화면 즉시 보호 활성화');
+      }
+    })();
   </script>
 </head>
 
