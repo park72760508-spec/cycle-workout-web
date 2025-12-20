@@ -7297,6 +7297,7 @@ button[aria-disabled="true"] {
   justify-content: flex-end;
   height: 100%;
   padding-bottom: 15%;
+  transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
 }
 
 .splash-logo-container {
@@ -7337,6 +7338,7 @@ button[aria-disabled="true"] {
   margin-top: 15px;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   order: 2;
+  transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
 }
 
 /* 로딩 인디케이터 */
@@ -7345,6 +7347,7 @@ button[aria-disabled="true"] {
   margin: 0 auto;
   margin-top: 15px;
   order: 3;
+  transition: opacity 0.3s ease-out, visibility 0.3s ease-out;
 }
 
 .splash-loader-bar {
