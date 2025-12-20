@@ -1885,6 +1885,29 @@
     </div>
   </div>
 
+  <!-- 사용기간 만료 경고 모달 -->
+  <div id="expiryWarningModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeExpiryWarningModal();">
+    <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation();">
+      <div class="modal-header">
+        <h2>사용기간 만료 안내</h2>
+        <button class="modal-close" onclick="closeExpiryWarningModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="margin-bottom: 20px; color: #666; text-align: center; line-height: 1.6;">
+          사용기간 만료일은 <strong id="expiryWarningDate" style="color: #dc2626;">2024-12-31</strong> 입니다.<br>
+          만료일 전에 갱신을 해 주십시요.<br>
+          감사합니다.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success btn-default-style btn-with-icon" onclick="closeExpiryWarningModal()" style="width: 100%;">
+          <img src="assets/img/save.png" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          확인
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- RPE 컨디션 선택 모달 -->
   <div id="rpeConditionModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeRPEModal();">
     <div class="modal-content" style="max-width: 500px;" onclick="event.stopPropagation();">
