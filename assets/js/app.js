@@ -3536,8 +3536,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         console.log("✅ 스플래시 화면 완료 (정확히 4초) - 진행바와 텍스트 숨기기 시작");
-      }
-    }, 50); // 50ms마다 실행하여 정확히 4초(4000ms)에 100% 도달
         
         // 진행바와 흰색 글씨 먼저 즉시 숨기기 (!important 사용) - 페이드 아웃 전에 실행
         const splashLoader = document.querySelector('.splash-loader');
@@ -3587,97 +3585,97 @@ document.addEventListener("DOMContentLoaded", () => {
           window.splashObserver = null;
         }
         
-          // 짧은 딜레이 후 스플래시 화면 페이드 아웃 (50ms 후)
-          setTimeout(() => {
-            console.log("✅ 진행바와 텍스트 숨김 완료 - 스플래시 화면 페이드 아웃 시작");
-            
-            // 페이드 아웃 애니메이션 (짧게)
-            splashScreen.style.transition = "opacity 0.3s ease-out";
-            splashScreen.style.opacity = "0";
-            
-            // 인증 화면으로 전환 (페이드 아웃 시간 단축 - 300ms)
-            setTimeout(() => {
-              // 진행바와 텍스트 다시 한번 확실하게 숨기기
-              if (splashLoader) {
-                splashLoader.style.setProperty('display', 'none', 'important');
-                splashLoader.style.setProperty('opacity', '0', 'important');
-                splashLoader.style.setProperty('visibility', 'hidden', 'important');
-              }
-              if (splashTagline) {
-                splashTagline.style.setProperty('display', 'none', 'important');
-                splashTagline.style.setProperty('opacity', '0', 'important');
-                splashTagline.style.setProperty('visibility', 'hidden', 'important');
-              }
-              if (splashContent) {
-                splashContent.style.setProperty('display', 'none', 'important');
-                splashContent.style.setProperty('opacity', '0', 'important');
-                splashContent.style.setProperty('visibility', 'hidden', 'important');
-              }
-              if (splashLogoContainer) {
-                splashLogoContainer.style.setProperty('display', 'none', 'important');
-                splashLogoContainer.style.setProperty('opacity', '0', 'important');
-                splashLogoContainer.style.setProperty('visibility', 'hidden', 'important');
-              }
-              if (splashLoaderProgress) {
-                splashLoaderProgress.style.setProperty('display', 'none', 'important');
-                splashLoaderProgress.style.setProperty('opacity', '0', 'important');
-                splashLoaderProgress.style.setProperty('visibility', 'hidden', 'important');
-              }
-              
-              // 스플래시 화면 완전히 숨기기
-              splashScreen.classList.remove("active");
-              splashScreen.style.setProperty('display', 'none', 'important');
-              splashScreen.style.setProperty('opacity', '0', 'important');
-              splashScreen.style.setProperty('visibility', 'hidden', 'important');
-              splashScreen.style.setProperty('z-index', '-1', 'important');
-              splashScreen.style.setProperty('transition', 'none', 'important');
-              
-              // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
-              const splashContainer = document.querySelector('.splash-container');
-              if (splashContainer) {
-                splashContainer.style.setProperty('display', 'none', 'important');
-                splashContainer.style.setProperty('opacity', '0', 'important');
-                splashContainer.style.setProperty('visibility', 'hidden', 'important');
-              }
+        // 짧은 딜레이 후 스플래시 화면 페이드 아웃 (50ms 후)
+        setTimeout(() => {
+          console.log("✅ 진행바와 텍스트 숨김 완료 - 스플래시 화면 페이드 아웃 시작");
           
-          // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
-          const authScreen = document.getElementById("authScreen");
-          if (authScreen) {
-            // 다른 모든 화면 숨기기
-            document.querySelectorAll(".screen").forEach(screen => {
-              if (screen.id !== 'splashScreen') {
-                screen.classList.remove("active");
-                screen.style.display = "none";
-              }
-            });
+          // 페이드 아웃 애니메이션 (짧게)
+          splashScreen.style.transition = "opacity 0.3s ease-out";
+          splashScreen.style.opacity = "0";
+          
+          // 인증 화면으로 전환 (페이드 아웃 시간 단축 - 300ms)
+          setTimeout(() => {
+            // 진행바와 텍스트 다시 한번 확실하게 숨기기
+            if (splashLoader) {
+              splashLoader.style.setProperty('display', 'none', 'important');
+              splashLoader.style.setProperty('opacity', '0', 'important');
+              splashLoader.style.setProperty('visibility', 'hidden', 'important');
+            }
+            if (splashTagline) {
+              splashTagline.style.setProperty('display', 'none', 'important');
+              splashTagline.style.setProperty('opacity', '0', 'important');
+              splashTagline.style.setProperty('visibility', 'hidden', 'important');
+            }
+            if (splashContent) {
+              splashContent.style.setProperty('display', 'none', 'important');
+              splashContent.style.setProperty('opacity', '0', 'important');
+              splashContent.style.setProperty('visibility', 'hidden', 'important');
+            }
+            if (splashLogoContainer) {
+              splashLogoContainer.style.setProperty('display', 'none', 'important');
+              splashLogoContainer.style.setProperty('opacity', '0', 'important');
+              splashLogoContainer.style.setProperty('visibility', 'hidden', 'important');
+            }
+            if (splashLoaderProgress) {
+              splashLoaderProgress.style.setProperty('display', 'none', 'important');
+              splashLoaderProgress.style.setProperty('opacity', '0', 'important');
+              splashLoaderProgress.style.setProperty('visibility', 'hidden', 'important');
+            }
             
-            // 인증 화면 표시
-            authScreen.style.display = "block";
-            authScreen.classList.add("active");
-            authScreen.style.opacity = "1";
-            authScreen.style.visibility = "visible";
+            // 스플래시 화면 완전히 숨기기
+            splashScreen.classList.remove("active");
+            splashScreen.style.setProperty('display', 'none', 'important');
+            splashScreen.style.setProperty('opacity', '0', 'important');
+            splashScreen.style.setProperty('visibility', 'hidden', 'important');
+            splashScreen.style.setProperty('z-index', '-1', 'important');
+            splashScreen.style.setProperty('transition', 'none', 'important');
             
-            // 인증 시스템 초기화 (스플래시 후 실행)
-            setTimeout(() => {
-              // 인증 시스템 이벤트 리스너 초기화
-              if (typeof initializeAuthenticationSystem === 'function') {
-                console.log('🔧 인증 시스템 초기화 시작');
-                initializeAuthenticationSystem();
-              } else {
-                console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
-              }
+            // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
+            const splashContainer = document.querySelector('.splash-container');
+            if (splashContainer) {
+              splashContainer.style.setProperty('display', 'none', 'important');
+              splashContainer.style.setProperty('opacity', '0', 'important');
+              splashContainer.style.setProperty('visibility', 'hidden', 'important');
+            }
+            
+            // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
+            const authScreen = document.getElementById("authScreen");
+            if (authScreen) {
+              // 다른 모든 화면 숨기기
+              document.querySelectorAll(".screen").forEach(screen => {
+                if (screen.id !== 'splashScreen') {
+                  screen.classList.remove("active");
+                  screen.style.display = "none";
+                }
+              });
               
-              // 전화번호 입력 필드 포커스
-              const phoneInput = document.getElementById('phoneInput');
-              if (phoneInput) {
-                phoneInput.focus();
-              }
-            }, 200);
-          }
-            }, 300); // 페이드 아웃 시간에 맞춰 300ms로 조정
-          }, 50); // 진행바와 텍스트 숨김 후 50ms 딜레이
+              // 인증 화면 표시
+              authScreen.style.display = "block";
+              authScreen.classList.add("active");
+              authScreen.style.opacity = "1";
+              authScreen.style.visibility = "visible";
+              
+              // 인증 시스템 초기화 (스플래시 후 실행)
+              setTimeout(() => {
+                // 인증 시스템 이벤트 리스너 초기화
+                if (typeof initializeAuthenticationSystem === 'function') {
+                  console.log('🔧 인증 시스템 초기화 시작');
+                  initializeAuthenticationSystem();
+                } else {
+                  console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
+                }
+                
+                // 전화번호 입력 필드 포커스
+                const phoneInput = document.getElementById('phoneInput');
+                if (phoneInput) {
+                  phoneInput.focus();
+                }
+              }, 200);
+            }
+          }, 300); // 페이드 아웃 시간에 맞춰 300ms로 조정
+        }, 50); // 진행바와 텍스트 숨김 후 50ms 딜레이
       }
-    }, 100);
+    }, 50); // 50ms마다 실행하여 정확히 4초(4000ms)에 100% 도달
   } else {
     // 스플래시 화면이 없거나 비활성화되어 있으면 바로 인증 화면 표시
     const authScreen = document.getElementById("authScreen");
