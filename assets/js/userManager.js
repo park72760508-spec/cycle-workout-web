@@ -474,32 +474,52 @@ async function loadUsers() {
     }).join('');
 
     // 9) 만료일 경고 모달 표시 (종료일 -10일 전부터)
-    // 각 사용자 카드의 버튼을 확인하여 경고 표시 (한 번만 표시)
-    const warningShownToday = sessionStorage.getItem('expiryWarningShownToday');
-    if (!warningShownToday) {
-      const firstExpiringUser = visibleUsers.find(user => {
-        const expRaw = user.expiry_date;
-        if (expRaw) {
-          const expiryDate = new Date(expRaw);
-          const today = new Date();
-          expiryDate.setHours(0,0,0,0);
-          today.setHours(0,0,0,0);
-          const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
-          
-          const userGrade = String(user.grade || '2');
-          // 종료일 -10일 전부터 경고 표시
-          return userGrade === '2' && diffDays <= 10 && diffDays >= 0;
-        }
-        return false;
-      });
+    // 프로필 화면에서만 표시 (한 번만 표시)
+    const profileScreen = document.getElementById('profileScreen');
+    const isProfileScreenActive = profileScreen && profileScreen.classList.contains('active');
+    
+    // 프로필 화면이 활성화되어 있고, 모달이 이미 열려있지 않을 때만 표시
+    if (isProfileScreenActive) {
+      // 모달이 이미 열려있는지 확인
+      const expiryModal = document.getElementById('expiryWarningModal');
+      const isModalAlreadyOpen = expiryModal && expiryModal.style.display !== 'none' && expiryModal.style.display !== '';
       
-      if (firstExpiringUser) {
-        setTimeout(() => {
-          showExpiryWarningModal(firstExpiringUser.expiry_date);
-          // 오늘 날짜로 표시 여부 저장
-          const todayStr = new Date().toDateString();
-          sessionStorage.setItem('expiryWarningShownToday', todayStr);
-        }, 500);
+      if (!isModalAlreadyOpen) {
+        // 사용자별로 이미 표시했는지 확인 (사용자 ID + 만료일 조합)
+        const firstExpiringUser = visibleUsers.find(user => {
+          const expRaw = user.expiry_date;
+          if (expRaw) {
+            const expiryDate = new Date(expRaw);
+            const today = new Date();
+            expiryDate.setHours(0,0,0,0);
+            today.setHours(0,0,0,0);
+            const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
+            
+            const userGrade = String(user.grade || '2');
+            // 종료일 -10일 전부터 경고 표시
+            if (userGrade === '2' && diffDays <= 10 && diffDays >= 0) {
+              // 이 사용자의 팝업이 이미 표시되었는지 확인
+              const warningKey = `expiryWarningShown_${user.id}_${expRaw}`;
+              const alreadyShown = sessionStorage.getItem(warningKey);
+              return !alreadyShown;
+            }
+          }
+          return false;
+        });
+        
+        if (firstExpiringUser) {
+          const warningKey = `expiryWarningShown_${firstExpiringUser.id}_${firstExpiringUser.expiry_date}`;
+          // 즉시 표시 여부를 저장하여 중복 방지
+          sessionStorage.setItem(warningKey, 'true');
+          
+          setTimeout(() => {
+            // 다시 한 번 모달이 열려있지 않은지 확인
+            const modal = document.getElementById('expiryWarningModal');
+            if (modal && (modal.style.display === 'none' || modal.style.display === '')) {
+              showExpiryWarningModal(firstExpiringUser.expiry_date);
+            }
+          }, 500);
+        }
       }
     }
 
@@ -581,14 +601,7 @@ async function selectUser(userId) {
         return;
       }
       
-      // 종료일 -10일 전부터 경고 표시 (한 번만 표시)
-      if (diffDays <= 10 && diffDays >= 0) {
-        const warningShown = sessionStorage.getItem(`expiryWarningShown_${userId}`);
-        if (!warningShown) {
-          showExpiryWarningModal(user.expiry_date);
-          sessionStorage.setItem(`expiryWarningShown_${userId}`, 'true');
-        }
-      }
+      // selectUser에서는 팝업을 표시하지 않음 (프로필 화면에서만 표시)
     }
     
     // 전역 상태에 현재 사용자 설정

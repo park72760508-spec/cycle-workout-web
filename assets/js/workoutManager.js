@@ -1171,7 +1171,18 @@ async function loadWorkouts() {
     
     console.log('Normalized workouts:', validWorkouts);
     
-    if (validWorkouts.length === 0) {
+    // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
+    const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
+    
+    // grade=1 또는 grade=3이 아니면 비공개 워크아웃 필터링
+    const isAdmin = (grade === '1' || grade === '3');
+    const filteredWorkouts = isAdmin 
+      ? validWorkouts  // 관리자는 모든 워크아웃 표시
+      : validWorkouts.filter(workout => workout.status === '보이기');  // 일반 사용자는 공개 워크아웃만 표시
+    
+    console.log('Filtered workouts (grade=' + grade + '):', filteredWorkouts);
+    
+    if (filteredWorkouts.length === 0) {
       workoutList.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">📋</div>
@@ -1187,28 +1198,26 @@ async function loadWorkouts() {
       return;
     }
 
-    // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
-    const grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
     const workoutRoomStatusMap = {}; // 초기값: 모두 'none'
     const workoutRoomCodeMap = {};
     
     // 모든 워크아웃에 대해 기본값 설정
-    validWorkouts.forEach(workout => {
+    filteredWorkouts.forEach(workout => {
       workoutRoomStatusMap[workout.id] = 'none';
     });
     
     // 먼저 테이블 렌더링 (빠른 사용자 경험)
-    renderWorkoutTable(validWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
+    renderWorkoutTable(filteredWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
     
     // 전역 변수에 저장 (검색 기능에서 사용)
-    window.workouts = validWorkouts;
+    window.workouts = filteredWorkouts;
     window.workoutRoomStatusMap = workoutRoomStatusMap;
     window.workoutRoomCodeMap = workoutRoomCodeMap;
     
-    window.showToast(`${validWorkouts.length}개의 워크아웃을 불러왔습니다.`);
+    window.showToast(`${filteredWorkouts.length}개의 워크아웃을 불러왔습니다.`);
     
     // 그룹방 상태는 백그라운드에서 비동기로 로드 (블로킹 없음)
-    loadWorkoutRoomStatusesAsync(validWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
+    loadWorkoutRoomStatusesAsync(filteredWorkouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
     
   } catch (error) {
     console.error('워크아웃 목록 로드 실패:', error);
@@ -1286,9 +1295,10 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
       const safeDescription = String(workout.description || '');
       
       const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
-      const statusBadge = workout.status === '보이기' ? 
+      const isPublic = workout.status === '보이기';
+      const statusBadge = isPublic ? 
         '<span class="status-badge visible">공개</span>' : 
-        '<span class="status-badge hidden">비공개</span>';
+        '<span class="status-badge hidden private">비공개</span>';
       
       // 그룹 훈련방 개설 상태 확인 (waiting 상태)
       const hasWaitingRoom = workoutRoomStatusMap[workout.id] === 'available';
@@ -1300,7 +1310,7 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
       const publishDate = workout.publish_date ? new Date(workout.publish_date).toLocaleDateString() : '-';
       
       const rowNumber = index + 1;
-      const isAdmin = grade === '1';
+      const isAdmin = (grade === '1' || grade === '3');
       
       return `
         <tr class="workout-row" data-workout-id="${workout.id}">

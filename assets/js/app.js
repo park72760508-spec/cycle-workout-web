@@ -2579,8 +2579,8 @@ if (!window.showScreen) {
       
       document.querySelectorAll(".screen").forEach(s => {
         if (s.id !== 'splashScreen') {
-          s.style.display = "none";
-          s.classList.remove("active");
+        s.style.display = "none";
+        s.classList.remove("active");
         }
       });
       
@@ -2632,7 +2632,7 @@ if (!window.showScreen) {
             }
           }
         }, 100);
-      }
+        }
       } else {
         console.error(`Screen element '${id}' not found`);
         return;
@@ -3378,7 +3378,7 @@ document.addEventListener("DOMContentLoaded", () => {
       splashScreen.classList.add("active");
     }
   }
-  
+
   // iOS용 처리 프로세스
   function isIOS() {
     const ua = navigator.userAgent || "";
@@ -3416,19 +3416,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 브라우저 지원 확인 (스플래시 화면이 활성화되어 있으면 지연)
   if (!window.isSplashActive) {
-    if (!navigator.bluetooth) {
-      if (typeof showToast === "function") {
-        showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
-      }
-      console.error("Web Bluetooth not supported");
+  if (!navigator.bluetooth) {
+    if (typeof showToast === "function") {
+      showToast("이 브라우저는 Web Bluetooth를 지원하지 않습니다.");
     }
-    
-    if (location.protocol !== "https:" && location.hostname !== "localhost") {
-      if (typeof showToast === "function") {
-        showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
-      }
-      console.warn("HTTPS required for BLE");
+    console.error("Web Bluetooth not supported");
+  }
+  
+  if (location.protocol !== "https:" && location.hostname !== "localhost") {
+    if (typeof showToast === "function") {
+      showToast("BLE를 사용하려면 HTTPS가 필요합니다.");
     }
+    console.warn("HTTPS required for BLE");
+  }
   }
   
   if (window.isSplashActive && splashScreen) {
@@ -3449,7 +3449,7 @@ document.addEventListener("DOMContentLoaded", () => {
     splashScreen.style.setProperty('z-index', '10000', 'important');
     splashScreen.style.setProperty('transition', 'none', 'important');
     splashScreen.classList.add("active");
-    
+  
     // MutationObserver로 스플래시 화면 변경 감지 및 즉시 복구 (더 빠른 반응)
     const splashObserver = new MutationObserver((mutations) => {
       if (window.isSplashActive && splashScreen) {
@@ -3472,8 +3472,8 @@ document.addEventListener("DOMContentLoaded", () => {
             splashScreen.style.setProperty('visibility', 'visible', 'important');
             splashScreen.style.setProperty('z-index', '10000', 'important');
             splashScreen.style.setProperty('transition', 'none', 'important');
-            splashScreen.classList.add("active");
-            
+    splashScreen.classList.add("active");
+    
             // 다른 화면들도 강제로 숨김
             document.querySelectorAll(".screen").forEach(screen => {
               if (screen.id !== 'splashScreen') {
@@ -3548,7 +3548,7 @@ document.addEventListener("DOMContentLoaded", () => {
           splashScreen.style.setProperty('visibility', 'visible', 'important');
           splashScreen.style.setProperty('z-index', '10000', 'important');
           splashScreen.style.setProperty('transition', 'none', 'important');
-          splashScreen.classList.add("active");
+        splashScreen.classList.add("active");
           
           // 다른 화면들이 나타나지 않도록 강제로 숨김
           document.querySelectorAll(".screen").forEach(screen => {
@@ -3626,13 +3626,13 @@ document.addEventListener("DOMContentLoaded", () => {
         // 짧은 딜레이 후 스플래시 화면 페이드 아웃 (50ms 후)
         setTimeout(() => {
           console.log("✅ 진행바와 텍스트 숨김 완료 - 스플래시 화면 페이드 아웃 시작");
-          
+        
           // 페이드 아웃 애니메이션 (짧게)
           splashScreen.style.transition = "opacity 0.3s ease-out";
-          splashScreen.style.opacity = "0";
-          
+        splashScreen.style.opacity = "0";
+        
           // 인증 화면으로 전환 (페이드 아웃 시간 단축 - 300ms)
-          setTimeout(() => {
+        setTimeout(() => {
             // 진행바와 텍스트 다시 한번 확실하게 숨기기
             if (splashLoader) {
               splashLoader.style.setProperty('display', 'none', 'important');
@@ -3661,7 +3661,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             
             // 스플래시 화면 완전히 숨기기
-            splashScreen.classList.remove("active");
+          splashScreen.classList.remove("active");
             splashScreen.style.setProperty('display', 'none', 'important');
             splashScreen.style.setProperty('opacity', '0', 'important');
             splashScreen.style.setProperty('visibility', 'hidden', 'important');
@@ -3682,41 +3682,41 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // body 배경색 원복 (원래 배경색으로 복원)
             document.body.style.setProperty('background', '#f6f8fa', 'important');
+          
+          // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
+          const authScreen = document.getElementById("authScreen");
+          if (authScreen) {
+            // 다른 모든 화면 숨기기
+            document.querySelectorAll(".screen").forEach(screen => {
+              if (screen.id !== 'splashScreen') {
+                screen.classList.remove("active");
+                screen.style.display = "none";
+              }
+            });
             
-            // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
-            const authScreen = document.getElementById("authScreen");
-            if (authScreen) {
-              // 다른 모든 화면 숨기기
-              document.querySelectorAll(".screen").forEach(screen => {
-                if (screen.id !== 'splashScreen') {
-                  screen.classList.remove("active");
-                  screen.style.display = "none";
-                }
-              });
+            // 인증 화면 표시
+            authScreen.style.display = "block";
+            authScreen.classList.add("active");
+            authScreen.style.opacity = "1";
+            authScreen.style.visibility = "visible";
+            
+            // 인증 시스템 초기화 (스플래시 후 실행)
+            setTimeout(() => {
+              // 인증 시스템 이벤트 리스너 초기화
+              if (typeof initializeAuthenticationSystem === 'function') {
+                console.log('🔧 인증 시스템 초기화 시작');
+                initializeAuthenticationSystem();
+              } else {
+                console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
+              }
               
-              // 인증 화면 표시
-              authScreen.style.display = "block";
-              authScreen.classList.add("active");
-              authScreen.style.opacity = "1";
-              authScreen.style.visibility = "visible";
-              
-              // 인증 시스템 초기화 (스플래시 후 실행)
-              setTimeout(() => {
-                // 인증 시스템 이벤트 리스너 초기화
-                if (typeof initializeAuthenticationSystem === 'function') {
-                  console.log('🔧 인증 시스템 초기화 시작');
-                  initializeAuthenticationSystem();
-                } else {
-                  console.warn('⚠️ initializeAuthenticationSystem 함수를 찾을 수 없습니다');
-                }
-                
-                // 전화번호 입력 필드 포커스
-                const phoneInput = document.getElementById('phoneInput');
-                if (phoneInput) {
-                  phoneInput.focus();
-                }
-              }, 200);
-            }
+              // 전화번호 입력 필드 포커스
+              const phoneInput = document.getElementById('phoneInput');
+              if (phoneInput) {
+                phoneInput.focus();
+              }
+            }, 200);
+          }
           }, 300); // 페이드 아웃 시간에 맞춰 300ms로 조정
         }, 50); // 진행바와 텍스트 숨김 후 50ms 딜레이
       }
@@ -5238,10 +5238,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 모든 화면 완전히 숨기기 (스플래시 화면 제외)
     document.querySelectorAll('.screen').forEach(screen => {
       if (screen.id !== 'splashScreen') {
-        screen.classList.remove('active');
-        screen.style.display = 'none';
-        screen.style.opacity = '0';
-        screen.style.visibility = 'hidden';
+      screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
       }
     });
     
