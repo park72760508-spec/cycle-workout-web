@@ -3298,6 +3298,8 @@ function togglePause() {
   // 5초 후 자동 정리 (스플래시 화면이 완료되어야 함)
   setTimeout(() => {
     clearInterval(protectionInterval);
+    // 스플래시 화면이 완료되면 보호 중단
+    window.isSplashActive = false;
   }, 5000);
 })();
 
@@ -3523,24 +3525,109 @@ document.addEventListener("DOMContentLoaded", () => {
       if (elapsedTime >= totalDuration) {
         clearInterval(progressInterval);
         isFadingOut = true;
-        window.isSplashActive = false; // 플래그 해제
         
-        // Observer 정리
+        console.log("✅ 스플래시 화면 완료 - 진행바와 텍스트 숨기기 시작");
+        
+        // 진행바와 흰색 글씨 먼저 즉시 숨기기 (!important 사용) - 페이드 아웃 전에 실행
+        const splashLoader = document.querySelector('.splash-loader');
+        const splashTagline = document.querySelector('.splash-tagline');
+        const splashContent = document.querySelector('.splash-content');
+        const splashLogoContainer = document.querySelector('.splash-logo-container');
+        
+        // 즉시 숨기기 (애니메이션 없이)
+        if (splashLoader) {
+          splashLoader.style.setProperty('display', 'none', 'important');
+          splashLoader.style.setProperty('opacity', '0', 'important');
+          splashLoader.style.setProperty('visibility', 'hidden', 'important');
+          splashLoader.style.setProperty('transition', 'none', 'important');
+        }
+        if (splashTagline) {
+          splashTagline.style.setProperty('display', 'none', 'important');
+          splashTagline.style.setProperty('opacity', '0', 'important');
+          splashTagline.style.setProperty('visibility', 'hidden', 'important');
+          splashTagline.style.setProperty('transition', 'none', 'important');
+        }
+        if (splashContent) {
+          splashContent.style.setProperty('opacity', '0', 'important');
+          splashContent.style.setProperty('visibility', 'hidden', 'important');
+          splashContent.style.setProperty('display', 'none', 'important');
+          splashContent.style.setProperty('transition', 'none', 'important');
+        }
+        if (splashLogoContainer) {
+          splashLogoContainer.style.setProperty('opacity', '0', 'important');
+          splashLogoContainer.style.setProperty('visibility', 'hidden', 'important');
+          splashLogoContainer.style.setProperty('display', 'none', 'important');
+          splashLogoContainer.style.setProperty('transition', 'none', 'important');
+        }
+        
+        // 진행바 내부 요소도 숨기기
+        if (splashLoaderProgress) {
+          splashLoaderProgress.style.setProperty('display', 'none', 'important');
+          splashLoaderProgress.style.setProperty('opacity', '0', 'important');
+          splashLoaderProgress.style.setProperty('visibility', 'hidden', 'important');
+          splashLoaderProgress.style.setProperty('width', '0%', 'important');
+          splashLoaderProgress.style.setProperty('transition', 'none', 'important');
+        }
+        
+        // Observer 정리 및 플래그 해제
+        window.isSplashActive = false;
         if (window.splashObserver) {
           window.splashObserver.disconnect();
           window.splashObserver = null;
         }
         
-        console.log("✅ 스플래시 화면 완료 - 인증 화면으로 전환");
-        
-        // 페이드 아웃 애니메이션
-        splashScreen.style.transition = "opacity 0.8s ease-out";
-        splashScreen.style.opacity = "0";
-        
-        // 인증 화면으로 전환
-        setTimeout(() => {
-          splashScreen.classList.remove("active");
-          splashScreen.style.display = "none";
+          // 짧은 딜레이 후 스플래시 화면 페이드 아웃 (50ms 후)
+          setTimeout(() => {
+            console.log("✅ 진행바와 텍스트 숨김 완료 - 스플래시 화면 페이드 아웃 시작");
+            
+            // 페이드 아웃 애니메이션 (짧게)
+            splashScreen.style.transition = "opacity 0.3s ease-out";
+            splashScreen.style.opacity = "0";
+            
+            // 인증 화면으로 전환 (페이드 아웃 시간 단축 - 300ms)
+            setTimeout(() => {
+              // 진행바와 텍스트 다시 한번 확실하게 숨기기
+              if (splashLoader) {
+                splashLoader.style.setProperty('display', 'none', 'important');
+                splashLoader.style.setProperty('opacity', '0', 'important');
+                splashLoader.style.setProperty('visibility', 'hidden', 'important');
+              }
+              if (splashTagline) {
+                splashTagline.style.setProperty('display', 'none', 'important');
+                splashTagline.style.setProperty('opacity', '0', 'important');
+                splashTagline.style.setProperty('visibility', 'hidden', 'important');
+              }
+              if (splashContent) {
+                splashContent.style.setProperty('display', 'none', 'important');
+                splashContent.style.setProperty('opacity', '0', 'important');
+                splashContent.style.setProperty('visibility', 'hidden', 'important');
+              }
+              if (splashLogoContainer) {
+                splashLogoContainer.style.setProperty('display', 'none', 'important');
+                splashLogoContainer.style.setProperty('opacity', '0', 'important');
+                splashLogoContainer.style.setProperty('visibility', 'hidden', 'important');
+              }
+              if (splashLoaderProgress) {
+                splashLoaderProgress.style.setProperty('display', 'none', 'important');
+                splashLoaderProgress.style.setProperty('opacity', '0', 'important');
+                splashLoaderProgress.style.setProperty('visibility', 'hidden', 'important');
+              }
+              
+              // 스플래시 화면 완전히 숨기기
+              splashScreen.classList.remove("active");
+              splashScreen.style.setProperty('display', 'none', 'important');
+              splashScreen.style.setProperty('opacity', '0', 'important');
+              splashScreen.style.setProperty('visibility', 'hidden', 'important');
+              splashScreen.style.setProperty('z-index', '-1', 'important');
+              splashScreen.style.setProperty('transition', 'none', 'important');
+              
+              // 스플래시 화면의 모든 자식 요소도 숨기기 (!important 사용)
+              const splashContainer = document.querySelector('.splash-container');
+              if (splashContainer) {
+                splashContainer.style.setProperty('display', 'none', 'important');
+                splashContainer.style.setProperty('opacity', '0', 'important');
+                splashContainer.style.setProperty('visibility', 'hidden', 'important');
+              }
           
           // 인증 화면 직접 표시 (showScreen 함수는 인증 체크를 하므로 우회)
           const authScreen = document.getElementById("authScreen");
@@ -3576,7 +3663,8 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             }, 200);
           }
-        }, 800);
+            }, 300); // 페이드 아웃 시간에 맞춰 300ms로 조정
+          }, 50); // 진행바와 텍스트 숨김 후 50ms 딜레이
       }
     }, 100);
   } else {
