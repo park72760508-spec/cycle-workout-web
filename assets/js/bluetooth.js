@@ -173,10 +173,41 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
     img.style.margin = "0 auto";
   }
   
+  // ANT+ 버튼
+  const btnANT = document.getElementById("btnConnectANT");
+  if (btnANT) {
+    let img = btnANT.querySelector(".device-btn-icon");
+    if (!img) {
+      // 이미지가 없으면 생성
+      img = document.createElement("img");
+      img.className = "device-btn-icon";
+      img.alt = "ANT+ 연결";
+      const span = btnANT.querySelector("span");
+      if (span) {
+        btnANT.insertBefore(img, span);
+      } else {
+        btnANT.appendChild(img);
+      }
+    }
+    const isConnected = window.connectedDevices && window.connectedDevices.ant;
+    if (isConnected) {
+      img.src = "assets/img/antlogo.gif";
+      btnANT.classList.add("connected");
+      console.log("ANT+ 연결됨");
+    } else {
+      img.src = "assets/img/antlogo.gif";
+      btnANT.classList.remove("connected");
+      console.log("ANT+ 연결 해제");
+    }
+    img.style.display = "block";
+    img.style.margin = "0 auto";
+  }
+  
   console.log("Device button images updated", {
     trainer: window.connectedDevices?.trainer ? "connected" : "disconnected",
     heartRate: window.connectedDevices?.heartRate ? "connected" : "disconnected",
-    powerMeter: window.connectedDevices?.powerMeter ? "connected" : "disconnected"
+    powerMeter: window.connectedDevices?.powerMeter ? "connected" : "disconnected",
+    ant: window.connectedDevices?.ant ? "connected" : "disconnected"
   });
 }
 

@@ -2591,10 +2591,48 @@ if (!window.showScreen) {
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
         
-        // 연결 화면이 표시될 때 버튼 이미지 업데이트
-        if (id === "connectionScreen" && typeof updateDeviceButtonImages === "function") {
+      // 연결 화면이 표시될 때 버튼 이미지 업데이트 및 ANT+ 버튼 활성화 상태 확인
+      if (id === "connectionScreen") {
+        if (typeof updateDeviceButtonImages === "function") {
           updateDeviceButtonImages();
         }
+        
+        // ANT+ 버튼 활성화/비활성화 상태 업데이트
+        setTimeout(() => {
+          const btnANT = safeGetElement("btnConnectANT");
+          if (btnANT) {
+            // 현재 사용자 grade 확인
+            let viewerGrade = '2'; // 기본값
+            try {
+              const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+              const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+              const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+              viewerGrade = String(mergedViewer?.grade || '2');
+            } catch (e) {
+              console.warn('사용자 grade 확인 실패:', e);
+            }
+            
+            // grade=1 또는 grade=3만 활성화
+            const isANTEnabled = (viewerGrade === '1' || viewerGrade === '3');
+            
+            if (!isANTEnabled) {
+              btnANT.disabled = true;
+              btnANT.classList.add('is-disabled');
+              btnANT.setAttribute('aria-disabled', 'true');
+              btnANT.title = 'ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다';
+              btnANT.style.opacity = '0.5';
+              btnANT.style.cursor = 'not-allowed';
+            } else {
+              btnANT.disabled = false;
+              btnANT.classList.remove('is-disabled');
+              btnANT.removeAttribute('aria-disabled');
+              btnANT.title = 'ANT+ 기기 연결';
+              btnANT.style.opacity = '1';
+              btnANT.style.cursor = 'pointer';
+            }
+          }
+        }, 100);
+      }
       } else {
         console.error(`Screen element '${id}' not found`);
         return;
@@ -3351,7 +3389,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const info = safeGetElement("iosInfo");
     if (info) info.classList.remove("hidden");
 
-    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+    ["btnConnectPM","btnConnectTrainer","btnConnectHR","btnConnectANT"].forEach(id => {
       const el = safeGetElement(id);
       if (el) {
         el.classList.add("is-disabled");
@@ -3872,12 +3910,47 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnHR = safeGetElement("btnConnectHR");
   const btnTrainer = safeGetElement("btnConnectTrainer");
   const btnPM = safeGetElement("btnConnectPM");
+  const btnANT = safeGetElement("btnConnectANT");
   
   console.log("Button elements found:", {
     HR: !!btnHR,
     Trainer: !!btnTrainer,
-    PM: !!btnPM
+    PM: !!btnPM,
+    ANT: !!btnANT
   });
+  
+  // ANT+ 버튼 활성화/비활성화 (grade=1 또는 grade=3만 활성화)
+  if (btnANT) {
+    // 현재 사용자 grade 확인
+    let viewerGrade = '2'; // 기본값
+    try {
+      const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+      const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+      viewerGrade = String(mergedViewer?.grade || '2');
+    } catch (e) {
+      console.warn('사용자 grade 확인 실패:', e);
+    }
+    
+    // grade=1 또는 grade=3만 활성화
+    const isANTEnabled = (viewerGrade === '1' || viewerGrade === '3');
+    
+    if (!isANTEnabled) {
+      btnANT.disabled = true;
+      btnANT.classList.add('is-disabled');
+      btnANT.setAttribute('aria-disabled', 'true');
+      btnANT.title = 'ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다';
+      btnANT.style.opacity = '0.5';
+      btnANT.style.cursor = 'not-allowed';
+    } else {
+      btnANT.disabled = false;
+      btnANT.classList.remove('is-disabled');
+      btnANT.removeAttribute('aria-disabled');
+      btnANT.title = 'ANT+ 기기 연결';
+      btnANT.style.opacity = '1';
+      btnANT.style.cursor = 'pointer';
+    }
+  }
   
   // 심박계 버튼
   if (btnHR) {
@@ -3923,6 +3996,41 @@ document.addEventListener("DOMContentLoaded", () => {
       console.log("PM button clicked!");
       if (window.connectPowerMeter) {
         await window.connectPowerMeter();
+      }
+    });
+  }
+  
+  // ANT+ 버튼
+  if (btnANT) {
+    btnANT.addEventListener("click", async (e) => {
+      e.preventDefault();
+      console.log("ANT+ button clicked!");
+      
+      // grade 체크 (추가 보안)
+      let viewerGrade = '2';
+      try {
+        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+        const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+        viewerGrade = String(mergedViewer?.grade || '2');
+      } catch (e) {
+        console.warn('사용자 grade 확인 실패:', e);
+      }
+      
+      if (viewerGrade !== '1' && viewerGrade !== '3') {
+        if (typeof showToast === "function") {
+          showToast("ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다.");
+        }
+        return;
+      }
+      
+      if (window.connectANT) {
+        await window.connectANT();
+      } else {
+        console.warn("connectANT function not found!");
+        if (typeof showToast === "function") {
+          showToast("ANT+ 연결 함수를 찾을 수 없습니다.");
+        }
       }
     });
   }
@@ -4756,6 +4864,41 @@ function initializeCurrentScreen(screenId) {
       
     case 'connectionScreen':
       console.log('기기 연결 화면 초기화');
+      // ANT+ 버튼 활성화/비활성화 상태 업데이트
+      setTimeout(() => {
+        const btnANT = safeGetElement("btnConnectANT");
+        if (btnANT) {
+          // 현재 사용자 grade 확인
+          let viewerGrade = '2'; // 기본값
+          try {
+            const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+            const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+            const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+            viewerGrade = String(mergedViewer?.grade || '2');
+          } catch (e) {
+            console.warn('사용자 grade 확인 실패:', e);
+          }
+          
+          // grade=1 또는 grade=3만 활성화
+          const isANTEnabled = (viewerGrade === '1' || viewerGrade === '3');
+          
+          if (!isANTEnabled) {
+            btnANT.disabled = true;
+            btnANT.classList.add('is-disabled');
+            btnANT.setAttribute('aria-disabled', 'true');
+            btnANT.title = 'ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다';
+            btnANT.style.opacity = '0.5';
+            btnANT.style.cursor = 'not-allowed';
+          } else {
+            btnANT.disabled = false;
+            btnANT.classList.remove('is-disabled');
+            btnANT.removeAttribute('aria-disabled');
+            btnANT.title = 'ANT+ 기기 연결';
+            btnANT.style.opacity = '1';
+            btnANT.style.cursor = 'pointer';
+          }
+        }
+      }, 100);
       break;
       
     case 'scheduleListScreen':
