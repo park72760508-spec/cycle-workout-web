@@ -697,7 +697,30 @@ function getSegmentTypeClass(segmentType) {
 
 async function apiGetWorkouts() {
   try {
-    return await jsonpRequest(window.GAS_URL, { action: 'listWorkouts' });
+    // 사용자 등급 확인하여 API에 전달
+    let grade = '2';
+    try {
+      if (typeof getViewerGrade === 'function') {
+        grade = String(getViewerGrade());
+      } else {
+        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+        if (viewer && viewer.grade != null) {
+          grade = String(viewer.grade);
+        } else if (authUser && authUser.grade != null) {
+          grade = String(authUser.grade);
+        }
+      }
+    } catch (e) {
+      console.warn('grade 확인 실패:', e);
+      grade = '2';
+    }
+    
+    console.log('API 요청 - grade:', grade);
+    return await jsonpRequest(window.GAS_URL, { 
+      action: 'listWorkouts',
+      grade: grade
+    });
   } catch (error) {
     console.error('apiGetWorkouts 실패:', error);
     return { success: false, error: error.message };
