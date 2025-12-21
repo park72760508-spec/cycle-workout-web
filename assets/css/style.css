@@ -930,6 +930,73 @@ button[aria-disabled="true"] {
   --text-strong:#111827; --text:#374151; --text-muted:#6b7280;
   --brand:#2e74e8; --accent-ok:#22c55e;
 }
+/* 훈련 목적 범례 컨테이너 */
+.challenge-legend-container {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+/* 훈련 목적 범례 카드 */
+.challenge-legend-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--card-border, #e5e7eb);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.06);
+  min-width: 240px;
+  flex-shrink: 0;
+}
+
+.challenge-legend-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-strong, #111827);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--card-border, #e5e7eb);
+  text-align: center;
+}
+
+.challenge-legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.challenge-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.challenge-legend-item:hover {
+  background: rgba(46, 116, 232, 0.05);
+}
+
+.challenge-legend-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.challenge-legend-text {
+  font-size: 13px;
+  color: var(--text, #374151);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* 사용자 목록 (범례와 함께 표시) */
+.user-list-with-legend {
+  flex: 1;
+  min-width: 0;
+}
+
 #profileScreen #userList{
   display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
   gap:12px; margin-bottom:16px;
@@ -3298,6 +3365,15 @@ button[aria-disabled="true"] {
 /* 기존 반응형 */
 @media (max-width: 768px) {
   #profileScreen #userList { grid-template-columns: 1fr; }
+  
+  /* 모바일에서 범례는 위로 배치 */
+  .challenge-legend-container {
+    flex-direction: column;
+  }
+  
+  .challenge-legend-card {
+    min-width: 100%;
+  }
   #trainingScreen .current-power { font-size: 48px; }
   #trainingScreen .segment-details1 { font-size: 14px; }
   .timeline-progress.timeline--xl {
