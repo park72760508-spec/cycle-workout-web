@@ -1357,6 +1357,13 @@
 
       <!-- 현재 세그먼트 이름 -->
       <div class="enhanced-current-segment-name" id="currentSegmentName">메인셋 - FTP 105%</div>
+
+      <!-- 세그먼트 그래프 (훈련 준비 화면과 동일한 형식) -->
+      <div class="training-segment-graph-container">
+        <div class="segment-graph-container" id="trainingSegmentGraphContainer">
+          <canvas id="trainingSegmentGraph"></canvas>
+        </div>
+      </div>
     </div>
 
     <!-- 오른쪽: 심박수 & 케이던스 -->
@@ -1409,13 +1416,6 @@
     <div class="timeline-legend">
       <!--<span>평균 파워: <span id="avgPowerValue">-</span>W</span>-->
       <span>진행율 : <span id="segmentProgressLegend">0</span>%</span>
-    </div>
-  </div>
-
-  <!-- 5. 세그먼트 그래프 (훈련 준비 화면과 동일한 형식) -->
-  <div class="training-segment-graph-container">
-    <div class="segment-graph-container" id="trainingSegmentGraphContainer">
-      <canvas id="trainingSegmentGraph"></canvas>
     </div>
   </div>
 
