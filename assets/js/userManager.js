@@ -383,7 +383,7 @@ async function loadUsers() {
           : String(mergedViewer?.grade ?? '2'));
     const viewerId     = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
 
-    // 5) grade=2 는 "본인만" 보이게, grade=1 은 전체
+    // 5) grade=2 는 "본인만" 보이게, grade=1,3 은 전체
     let visibleUsers = users;
     if (viewerGrade === '2' && viewerId) {
       visibleUsers = users.filter(u => String(u.id) === viewerId);
@@ -392,7 +392,8 @@ async function loadUsers() {
     // 6) 이름 정렬
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    // 7) 카드 단위 편집 권한: 관리자 or 본인
+    // 7) 카드 단위 편집 권한: 관리자(grade=1) or 본인
+    // grade=3 부관리자는 사용자 목록은 볼 수 있지만 편집 권한은 본인만
     const canEditFor = (u) => (viewerGrade === '1') || (viewerId && String(u.id) === viewerId);
 
     // 8) 렌더링
@@ -819,7 +820,8 @@ async function editUser(userId) {
     setTimeout(() => fillFormData(), 100);
    
    // ▼ 관리자(grade=1)일 때만 추가 필드 표시
-   const isAdmin = (typeof getViewerGrade === 'function' ? getViewerGrade() === '1' : false);
+   const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+   const isAdmin = (viewerGrade === '1');
    const form = document.getElementById('addUserForm');
    
    // 기존 adminFields 제거(중복 방지)
@@ -834,7 +836,8 @@ async function editUser(userId) {
          <label>회원등급</label>
          <select id="editGrade">
            <option value="1" ${String(user.grade || '') === '1' ? 'selected' : ''}>1 (관리자)</option>
-           <option value="2" ${String(user.grade || '2') !== '1' ? 'selected' : ''}>2 (일반)</option>
+           <option value="2" ${String(user.grade || '') === '2' ? 'selected' : ''}>2 (일반)</option>
+           <option value="3" ${String(user.grade || '') === '3' ? 'selected' : ''}>3 (부관리자)</option>
          </select>
        </div>
        <div class="form-row">
@@ -973,12 +976,16 @@ async function performUpdate() {
       weight
     };
 
-    if (typeof getViewerGrade === 'function' && getViewerGrade() === '1') {
+    // grade=1 관리자만 grade와 expiry_date 수정 가능
+    // grade=3 부관리자는 grade와 expiry_date 수정 불가
+    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+    if (viewerGrade === '1') {
       const gradeEl = document.getElementById('editGrade');
       const expiryEl = document.getElementById('editExpiryDate');
       if (gradeEl)  userData.grade = String(gradeEl.value || '2');
       if (expiryEl) userData.expiry_date = String(expiryEl.value || '');
     }
+    // grade=3일 때는 grade와 expiry_date를 userData에 포함하지 않음 (수정 불가)
 
     const result = await apiUpdateUser(currentEditUserId, userData);
 
