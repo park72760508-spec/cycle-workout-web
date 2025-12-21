@@ -629,18 +629,27 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   const ctx = canvas.getContext('2d');
   
-  // 배경 그리기 (부드러운 그라데이션)
-  const bgGradient = ctx.createLinearGradient(0, 0, 0, graphHeight);
-  bgGradient.addColorStop(0, '#ffffff');
-  bgGradient.addColorStop(1, '#f8f9fa');
-  ctx.fillStyle = bgGradient;
-  ctx.fillRect(0, 0, graphWidth, graphHeight);
+  // 배경 그리기 (투명 흰색 - 훈련 화면용)
+  // 훈련 화면에서는 배경을 투명하게 처리하여 전체 이미지에 어울리게 함
+  if (canvasId === 'trainingSegmentGraph') {
+    // 투명 배경 (배경을 그리지 않음)
+    ctx.clearRect(0, 0, graphWidth, graphHeight);
+  } else {
+    // 훈련 준비 화면용: 부드러운 그라데이션 배경
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, graphHeight);
+    bgGradient.addColorStop(0, '#ffffff');
+    bgGradient.addColorStop(1, '#f8f9fa');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, graphWidth, graphHeight);
+  }
   
-  // 그림자 효과를 위한 배경 레이어
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 2;
+  // 그림자 효과는 훈련 화면에서는 제거
+  if (canvasId !== 'trainingSegmentGraph') {
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 2;
+  }
   
   // 축 그리기 (부드러운 색상)
   ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
