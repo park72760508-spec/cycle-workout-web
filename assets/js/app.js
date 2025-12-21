@@ -2876,13 +2876,20 @@ function updateSegmentGraphMascot() {
   // Y 위치: 컨테이너(다크 레이어 블럭)의 하단 라인에 마스코트가 위치하도록
   // 컨테이너 높이는 Canvas 표시 높이 + padding (20px top + 20px bottom)
   const containerHeight = containerRect.height; // 컨테이너 실제 높이
-  const yPosition = containerHeight; // 컨테이너 하단 라인 Y 위치
+  // 마스코트가 컨테이너 밖으로 나가지 않도록 하단에 약간의 여유 공간 확보
+  // translate(-50%, -100%)로 인해 마스코트의 하단이 yPosition에 맞춰지므로, yPosition을 약간 위로 조정
+  const yPosition = containerHeight - 2; // 컨테이너 하단에서 2px 위로 조정하여 스크롤바 방지
+  
+  // X 위치도 컨테이너 내부에 완전히 포함되도록 제한
+  const minX = mascotWidth / 2; // 마스코트 중심이 컨테이너 왼쪽 경계를 넘지 않도록
+  const maxX = containerRect.width - (mascotWidth / 2); // 마스코트 중심이 컨테이너 오른쪽 경계를 넘지 않도록
+  const clampedXPosition = Math.max(minX, Math.min(maxX, xPosition));
   
   // 마스코트 이미지 위치 설정
   // X축: 시작 시간(0:00) 중앙에 마스코트 중심이 위치하여 시작, 종료 시간 중앙까지 이동
   // Y축: 컨테이너(다크 레이어 블럭) 하단 라인에 마스코트가 위치 (하단 기준)
   mascot.style.position = 'absolute';
-  mascot.style.left = xPosition + 'px';
+  mascot.style.left = clampedXPosition + 'px';
   mascot.style.top = yPosition + 'px';
   // 마스코트 크기는 고정 크기 사용
   mascot.style.width = mascotWidth + 'px';
