@@ -1705,6 +1705,12 @@ button[aria-disabled="true"] {
 
 /* 컨트롤 버튼 */
 #trainingScreen .training-controls{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+  margin-bottom: 20px;
   display:flex; justify-content:center; gap:25px; margin-top:20px;
 }
 #trainingScreen .control-btn{
