@@ -8817,21 +8817,29 @@ function initializeIntensitySlider() {
   const newSlider = slider.cloneNode(true);
   slider.parentNode.replaceChild(newSlider, slider);
   
-  // 슬라이더 이벤트 리스너
+  // 슬라이더 이벤트 리스너 (input: 실시간 반영)
   newSlider.addEventListener('input', function(e) {
-    const value = parseInt(e.target.value);
-    updateIntensityAdjustment(value);
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value)) {
+      // 실시간으로 목표 파워와 표시 값 업데이트
+      updateIntensityAdjustment(value);
+    }
   });
   
-  // 슬라이더 변경 완료 시 (마우스 떼거나 터치 종료)
+  // 슬라이더 변경 완료 시 (마우스 떼거나 터치 종료) - 로컬 스토리지 저장
   newSlider.addEventListener('change', function(e) {
-    const value = parseInt(e.target.value);
-    updateIntensityAdjustment(value);
-    // 로컬 스토리지에 저장
-    try {
-      localStorage.setItem('trainingIntensityAdjustment', String(window.trainingIntensityAdjustment));
-    } catch (err) {
-      console.warn('강도 조절값 저장 실패:', err);
+    const value = parseInt(e.target.value, 10);
+    if (!isNaN(value)) {
+      // 한 번 더 업데이트 (확실하게 반영)
+      updateIntensityAdjustment(value);
+      
+      // 로컬 스토리지에 저장
+      try {
+        localStorage.setItem('trainingIntensityAdjustment', String(window.trainingIntensityAdjustment));
+        console.log('[강도 조절] 로컬 스토리지에 저장:', window.trainingIntensityAdjustment);
+      } catch (err) {
+        console.warn('강도 조절값 저장 실패:', err);
+      }
     }
   });
 }
@@ -8844,15 +8852,42 @@ function updateIntensityAdjustment(sliderValue) {
   const adjustment = 1.0 + (sliderValue / 100);
   window.trainingIntensityAdjustment = adjustment;
   
-  // 표시 업데이트
+  console.log('[강도 조절] 값 변경:', {
+    sliderValue: sliderValue,
+    adjustment: adjustment,
+    percentage: (adjustment * 100).toFixed(1) + '%'
+  });
+  
+  // 1. 표시 업데이트 (강도 조절 % 표시) - 즉시 반영
   updateIntensityDisplay(sliderValue);
   
-  // 현재 세그먼트의 목표 파워 실시간 업데이트
-  if (window.trainingState && typeof window.trainingState.segIndex === 'number') {
-    const currentSegIndex = window.trainingState.segIndex;
-    if (typeof applySegmentTarget === 'function') {
-      applySegmentTarget(currentSegIndex);
+  // 2. 현재 세그먼트의 목표 파워 실시간 업데이트
+  const w = window.currentWorkout;
+  if (w && w.segments && w.segments.length > 0) {
+    // trainingState가 없어도 현재 세그먼트 인덱스 추정 시도
+    let currentSegIndex = 0;
+    if (window.trainingState && typeof window.trainingState.segIndex === 'number') {
+      currentSegIndex = window.trainingState.segIndex;
     }
+    
+    // 세그먼트 인덱스 유효성 검사
+    if (currentSegIndex >= 0 && currentSegIndex < w.segments.length) {
+      if (typeof applySegmentTarget === 'function') {
+        console.log('[강도 조절] 목표 파워 업데이트 - 세그먼트:', currentSegIndex);
+        try {
+          applySegmentTarget(currentSegIndex);
+          console.log('[강도 조절] 목표 파워 업데이트 완료');
+        } catch (err) {
+          console.error('[강도 조절] applySegmentTarget 실행 오류:', err);
+        }
+      } else {
+        console.warn('[강도 조절] applySegmentTarget 함수를 찾을 수 없습니다');
+      }
+    } else {
+      console.warn('[강도 조절] 유효하지 않은 세그먼트 인덱스:', currentSegIndex);
+    }
+  } else {
+    console.warn('[강도 조절] 워크아웃 또는 세그먼트를 찾을 수 없습니다');
   }
 }
 
@@ -8873,6 +8908,10 @@ function updateIntensityDisplay(sliderValue) {
     } else {
       valueDisplay.style.color = '#9ca3af'; // 회색
     }
+    
+    console.log('[강도 조절] 표시 업데이트:', `${sign}${sliderValue}%`);
+  } else {
+    console.warn('[강도 조절] intensityAdjustmentValue 요소를 찾을 수 없습니다');
   }
 }
 window.selectRPECondition = selectRPECondition;
