@@ -1952,7 +1952,10 @@ function applySegmentTarget(i) {
     
     if (targetType === 'cadence_rpm') {
       // cadence_rpm 타입: target_value는 RPM 값
-      const targetRpm = Number(targetValue) || 0;
+      const baseRpm = Number(targetValue) || 0;
+      // 강도 조절 비율 적용
+      const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      const targetRpm = Math.round(baseRpm * intensityAdjustment);
       parsedTargetRpm = targetRpm;
       
       if (targetLabelEl) targetLabelEl.textContent = "목표 RPM";
@@ -1963,6 +1966,8 @@ function applySegmentTarget(i) {
       // 목표 파워는 계산하지 않음 (RPM만 표시)
       window.liveData.targetPower = 0;
       window.liveData.targetRpm = targetRpm;
+      
+      console.log('[cadence_rpm] 목표 RPM 표시:', targetRpm, 'rpm (기본:', baseRpm, '* 강도조절:', intensityAdjustment, ')');
       
     } else if (targetType === 'dual') {
       // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
@@ -2112,11 +2117,15 @@ function applySegmentTarget(i) {
       // 디버깅 로그
       console.log('[dual] 최종 파싱 결과 - target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
       
-      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환 (RPE 보정 적용)
+      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환 (강도 조절 비율 적용)
       // 엘리트/PRO 선수는 별도 워크아웃이 작성되므로 강도 자동 증가 없음
       const basePower = ftp * (ftpPercent / 100);
       const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
       const targetW = Math.round(basePower * intensityAdjustment);
+      
+      // 목표 RPM 계산: 두 번째 값(rpm)에 강도 조절 비율 적용
+      const baseRpm = targetRpm;
+      const adjustedTargetRpm = Math.round(baseRpm * intensityAdjustment);
       
       // 목표 파워 표시: 첫 번째 값(ftp%)을 파워(W)로 변환하여 표시
       if (targetLabelEl) {
@@ -2130,12 +2139,12 @@ function applySegmentTarget(i) {
         targetUnitEl.textContent = "W";
       }
       
-      // RPM 표시: 두 번째 값(rpm)을 아랫줄에 표시
+      // RPM 표시: 두 번째 값(rpm)을 아랫줄에 표시 (강도 조절 비율 적용)
       if (targetRpmSectionEl) {
         targetRpmSectionEl.style.display = "block"; // block으로 설정하여 아랫줄에 표시
         if (targetRpmValueEl) {
-          targetRpmValueEl.textContent = String(targetRpm);
-          console.log('[dual] 목표 RPM 표시:', targetRpm, 'rpm');
+          targetRpmValueEl.textContent = String(adjustedTargetRpm);
+          console.log('[dual] 목표 RPM 표시:', adjustedTargetRpm, 'rpm (기본:', baseRpm, '* 강도조절:', intensityAdjustment, ')');
         } else {
           console.error('[dual] targetRpmValueEl을 찾을 수 없습니다');
         }
@@ -2145,9 +2154,9 @@ function applySegmentTarget(i) {
       
       // liveData에 저장
       window.liveData.targetPower = targetW;
-      window.liveData.targetRpm = targetRpm;
+      window.liveData.targetRpm = adjustedTargetRpm;
       
-      console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', targetRpm, 'rpm');
+      console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', adjustedTargetRpm, 'rpm (강도조절:', intensityAdjustment, ')');
       
     } else {
       // ftp_pct 타입 (기본): 기존 로직 유지 (RPE 보정 적용)
