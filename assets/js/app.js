@@ -8771,27 +8771,60 @@ function initializeIntensitySlider() {
   const slider = document.getElementById('intensityAdjustmentSlider');
   const valueDisplay = document.getElementById('intensityAdjustmentValue');
   
-  if (!slider || !valueDisplay) return;
+  if (!slider || !valueDisplay) {
+    console.warn('강도 조절 슬라이더 요소를 찾을 수 없습니다');
+    return;
+  }
   
   // 초기값 설정: 컨디션별 강도 보정 값에서 퍼센트로 변환
   // window.trainingIntensityAdjustment는 0.95 ~ 1.03 (95% ~ 103%)
   // 슬라이더는 -10% ~ +10% 범위이므로, 1.0 기준으로 변환
-  const currentAdjustment = window.trainingIntensityAdjustment || 1.0;
-  const sliderValue = Math.round((currentAdjustment - 1.0) * 100); // -5% ~ +3% → -5 ~ +3
+  // 예: 0.95 → (0.95 - 1.0) * 100 = -5%
+  let currentAdjustment = window.trainingIntensityAdjustment;
+  
+  // 로컬 스토리지에서 값 확인 (컨디션별 강도 보정에서 설정한 값)
+  if (currentAdjustment === undefined || currentAdjustment === null) {
+    try {
+      const saved = localStorage.getItem('trainingIntensityAdjustment');
+      if (saved) {
+        currentAdjustment = parseFloat(saved);
+        window.trainingIntensityAdjustment = currentAdjustment;
+      } else {
+        currentAdjustment = 1.0;
+        window.trainingIntensityAdjustment = 1.0;
+      }
+    } catch (e) {
+      currentAdjustment = 1.0;
+      window.trainingIntensityAdjustment = 1.0;
+    }
+  }
+  
+  // 조정 계수를 슬라이더 값으로 변환 (0.95 → -5, 1.0 → 0, 1.03 → +3)
+  const sliderValue = Math.round((currentAdjustment - 1.0) * 100);
   // 슬라이더 범위는 -10 ~ +10이므로 클램프
   const clampedValue = Math.max(-10, Math.min(10, sliderValue));
+  
+  console.log('[강도 조절] 초기값 설정:', {
+    adjustment: currentAdjustment,
+    sliderValue: sliderValue,
+    clampedValue: clampedValue
+  });
   
   slider.value = clampedValue;
   updateIntensityDisplay(clampedValue);
   
+  // 기존 이벤트 리스너 제거 (중복 방지)
+  const newSlider = slider.cloneNode(true);
+  slider.parentNode.replaceChild(newSlider, slider);
+  
   // 슬라이더 이벤트 리스너
-  slider.addEventListener('input', function(e) {
+  newSlider.addEventListener('input', function(e) {
     const value = parseInt(e.target.value);
     updateIntensityAdjustment(value);
   });
   
   // 슬라이더 변경 완료 시 (마우스 떼거나 터치 종료)
-  slider.addEventListener('change', function(e) {
+  newSlider.addEventListener('change', function(e) {
     const value = parseInt(e.target.value);
     updateIntensityAdjustment(value);
     // 로컬 스토리지에 저장
