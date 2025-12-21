@@ -2838,9 +2838,13 @@ function updateSegmentGraphMascot() {
   const mascotHeight = baseMascotHeight * 0.9; // 90%로 조정
   const mascotWidth = mascotHeight; // 정사각형 가정 (필요시 조정)
   
-  // X 위치 계산 (경과 시간에 비례) - 마스코트 중심이 경과 시간 위치에 맞도록
+  // 마스코트 이동 범위: 시작점(0:00 중심) ~ 종료점(마지막 시간 중심)
+  const startX = padding.left; // 시작점: 그래프 시간 0:00 위치의 중심
+  const endX = padding.left + chartWidth; // 종료점: 그래프의 끝에 표시된 시간 중심
+  
+  // X 위치 계산 (경과 시간에 비례) - 시작점과 종료점 사이를 경과 시간 비율로 이동
   const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
-  const xPosition = padding.left + (progressRatio * chartWidth);
+  const xPosition = startX + (progressRatio * (endX - startX));
   
   // Y 위치: FTP 라인에서 마스코트 높이의 90%만큼 아래로 이동 (마스코트 중심이 그 위치에 오도록)
   const yPosition = ftpY + (mascotHeight * 0.9);
