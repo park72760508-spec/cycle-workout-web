@@ -392,9 +392,9 @@ async function loadUsers() {
     // 6) 이름 정렬
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    // 7) 카드 단위 편집 권한: 관리자(grade=1) or 본인
-    // grade=3 부관리자는 사용자 목록은 볼 수 있지만 편집 권한은 본인만
-    const canEditFor = (u) => (viewerGrade === '1') || (viewerId && String(u.id) === viewerId);
+    // 7) 카드 단위 편집 권한: 관리자(grade=1), 부관리자(grade=3), 또는 본인
+    // grade=3 부관리자는 다른 사용자도 수정 가능 (단, grade와 expiry_date는 수정 불가)
+    const canEditFor = (u) => (viewerGrade === '1' || viewerGrade === '3') || (viewerId && String(u.id) === viewerId);
 
     // 8) 렌더링
     userList.innerHTML = visibleUsers.map(user => {
