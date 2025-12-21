@@ -811,17 +811,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
     
     if (isCurrentSegment) {
-      // 현재 세그먼트: 민트색 네온 애니메이션 효과
+      // 현재 세그먼트: 빨강색 네온 애니메이션 효과
       const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
       const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
-      const mintColor = `rgba(94, 234, 212, ${0.6 + 0.4 * neonIntensity})`; // 민트색 (cyan-300)
+      const redColor = `rgba(239, 68, 68, ${0.6 + 0.4 * neonIntensity})`; // 빨강색 (red-500)
       
       // 네온 효과를 위한 여러 레이어
-      ctx.shadowColor = 'rgba(94, 234, 212, 0.8)';
+      ctx.shadowColor = 'rgba(239, 68, 68, 0.8)';
       ctx.shadowBlur = 10 * neonIntensity;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = mintColor;
+      ctx.strokeStyle = redColor;
       ctx.lineWidth = 3;
       
       // 외곽 네온 효과
