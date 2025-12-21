@@ -626,13 +626,23 @@ function drawSegmentGraph(segments) {
   
   const ctx = canvas.getContext('2d');
   
-  // 배경 그리기
-  ctx.fillStyle = '#1a1d29';
+  // 배경 그리기 (부드러운 그라데이션)
+  const bgGradient = ctx.createLinearGradient(0, 0, 0, graphHeight);
+  bgGradient.addColorStop(0, '#ffffff');
+  bgGradient.addColorStop(1, '#f8f9fa');
+  ctx.fillStyle = bgGradient;
   ctx.fillRect(0, 0, graphWidth, graphHeight);
   
-  // 축 그리기
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-  ctx.lineWidth = 1;
+  // 그림자 효과를 위한 배경 레이어
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 2;
+  
+  // 축 그리기 (부드러운 색상)
+  ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.lineWidth = 2;
   
   // 세로축 (파워)
   ctx.beginPath();
@@ -656,23 +666,38 @@ function drawSegmentGraph(segments) {
     }
   });
   
-  // FTP 가이드 라인
+  // FTP 가이드 라인 (부드러운 색상)
   const ftpPower = ftp;
   const ftpY = padding.top + chartHeight - (chartHeight * (ftpPower / maxTargetPower));
-  ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([5, 5]);
+  ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
+  ctx.shadowBlur = 4;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)';
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([6, 4]);
   ctx.beginPath();
   ctx.moveTo(padding.left, ftpY);
   ctx.lineTo(padding.left + chartWidth, ftpY);
   ctx.stroke();
   ctx.setLineDash([]);
+  ctx.shadowColor = 'transparent';
   
-  // FTP 라벨
-  ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+  // FTP 라벨 (부드러운 배경)
+  ctx.fillStyle = '#fbbf24';
   ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillText(`FTP ${ftp}W`, padding.left - 10, ftpY + 4);
+  // 배경 박스
+  const labelText = `FTP ${ftp}W`;
+  const metrics = ctx.measureText(labelText);
+  const labelWidth = metrics.width + 8;
+  const labelHeight = 18;
+  const labelX = padding.left - 10 - labelWidth;
+  const labelY = ftpY - labelHeight / 2;
+  ctx.fillStyle = 'rgba(251, 191, 36, 0.2)';
+  ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillText(labelText, padding.left - 10, ftpY + 4);
   
   // 세로축 눈금 (파워)
   const powerSteps = 5;
@@ -680,24 +705,26 @@ function drawSegmentGraph(segments) {
     const power = (maxTargetPower * i) / powerSteps;
     const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
     
-    // 격자선
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    // 격자선 (부드러운 색상)
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
     ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
     ctx.beginPath();
     ctx.moveTo(padding.left, y);
     ctx.lineTo(padding.left + chartWidth, y);
     ctx.stroke();
+    ctx.setLineDash([]);
     
     // 눈금 표시
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(padding.left - 5, y);
     ctx.lineTo(padding.left, y);
     ctx.stroke();
     
     // 파워 값 표시
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillStyle = '#374151';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
@@ -716,8 +743,8 @@ function drawSegmentGraph(segments) {
     // 막대 위치 및 크기
     const x = padding.left + (currentTime / totalSeconds) * chartWidth;
     const barWidth = (duration / totalSeconds) * chartWidth;
-    const barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight); // 최소 2px 높이
-    const y = padding.top + chartHeight - barHeight;
+    let barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight); // 최소 2px 높이 (let으로 변경)
+    let y = padding.top + chartHeight - barHeight;
     
     // 세그먼트 타입 확인
     const segType = (seg.segment_type || '').toLowerCase();
@@ -733,6 +760,7 @@ function drawSegmentGraph(segments) {
       color = 'rgba(255, 255, 255, 0.4)';
       // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
       barHeight = Math.max(barHeight, 3);
+      y = padding.top + chartHeight - barHeight;
     } else if (targetPower >= ftp) {
       // FTP 초과: 빨강 (투명도 적용)
       color = 'rgba(239, 68, 68, 0.6)';
@@ -747,18 +775,41 @@ function drawSegmentGraph(segments) {
       color = 'rgba(34, 197, 94, 0.6)';
     }
     
-    // 막대 그리기
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, barWidth, barHeight);
+    // 막대 그리기 (부드러운 그라데이션)
+    const barGradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+    const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
+    const r = parseInt(baseColor[0]);
+    const g = parseInt(baseColor[1]);
+    const b = parseInt(baseColor[2]);
+    const a = parseFloat(baseColor[3]);
     
-    // 막대 테두리 (투명도 적용)
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    barGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a})`);
+    barGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
+    
+    ctx.fillStyle = barGradient;
+    
+    // 둥근 모서리를 위한 경로 생성
+    const radius = Math.min(4, barWidth / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + barWidth - radius, y);
+    ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+    ctx.lineTo(x + barWidth, y + barHeight);
+    ctx.lineTo(x, y + barHeight);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+    
+    // 막대 테두리 (부드러운 색상)
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
     ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, barWidth, barHeight);
+    ctx.stroke();
     
     // 세그먼트 라벨 (시간이 충분히 긴 경우에만)
     if (barWidth > 50) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillStyle = '#374151';
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       ctx.save();
@@ -782,8 +833,8 @@ function drawSegmentGraph(segments) {
     const x = padding.left + (time / totalSeconds) * chartWidth;
     
     // 눈금선
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(x, padding.top + chartHeight);
     ctx.lineTo(x, padding.top + chartHeight + 5);
@@ -792,7 +843,7 @@ function drawSegmentGraph(segments) {
     // 시간 표시
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillStyle = '#6b7280';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(
@@ -803,8 +854,8 @@ function drawSegmentGraph(segments) {
   }
   
   // 축 라벨
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-  ctx.font = '12px sans-serif';
+  ctx.fillStyle = '#374151';
+  ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, graphHeight - 10);
   
