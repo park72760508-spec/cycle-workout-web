@@ -4242,14 +4242,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       
-      if (window.connectANT) {
-        await window.connectANT();
+      // ANT+ 연결 버튼 클릭 시 평로라 대회 대시보드로 전환
+      if (typeof showScreen === 'function') {
+        showScreen('rollerRaceDashboardScreen');
       } else {
-        console.warn("connectANT function not found!");
+        console.warn("showScreen function not found!");
         if (typeof showToast === "function") {
-          showToast("ANT+ 연결 함수를 찾을 수 없습니다.");
+          showToast("화면 전환 함수를 찾을 수 없습니다.");
         }
       }
+      
+      // 기존 ANT+ 연결 로직은 대시보드에서 처리
+      // if (window.connectANT) {
+      //   await window.connectANT();
+      // } else {
+      //   console.warn("connectANT function not found!");
+      //   if (typeof showToast === "function") {
+      //     showToast("ANT+ 연결 함수를 찾을 수 없습니다.");
+      //   }
+      // }
     });
   }
 
