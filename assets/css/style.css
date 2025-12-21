@@ -2939,6 +2939,90 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* ERG 모드 컨테이너 */
+.erg-mode-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(26, 29, 41, 0.6);
+  border-radius: 12px;
+  min-width: 150px;
+}
+
+.erg-mode-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.erg-mode-status {
+  font-size: 14px;
+  font-weight: 700;
+  color: #9ca3af;
+  min-width: 40px;
+  text-align: center;
+}
+
+.erg-mode-container.active .erg-mode-status {
+  color: #10b981; /* ON일 때 녹색 */
+}
+
+.erg-mode-switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 30px;
+  cursor: pointer;
+}
+
+.erg-mode-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.erg-mode-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: 0.3s;
+  border-radius: 30px;
+}
+
+.erg-mode-slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.erg-mode-switch input:checked + .erg-mode-slider {
+  background-color: #10b981;
+}
+
+.erg-mode-switch input:checked + .erg-mode-slider:before {
+  transform: translateX(30px);
+}
+
+.erg-mode-switch:hover .erg-mode-slider {
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
 /* 3. 메인 메트릭 그리드 (3열) */
 .enhanced-metrics-grid {
   display: grid;
