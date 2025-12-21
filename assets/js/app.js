@@ -1915,6 +1915,10 @@ function applySegmentTarget(i) {
     const targetType = seg.target_type || 'ftp_pct';
     const targetValue = seg.target_value;
     
+    // 엘리트 선수 확인
+    const userChallenge = String(window.currentUser?.challenge || '').trim();
+    const isElite = userChallenge === 'Elite';
+    
     window.liveData = window.liveData || {};
     
     // 파싱된 값들을 저장할 변수 (세그먼트 이름 표시에 사용)
@@ -2090,9 +2094,16 @@ function applySegmentTarget(i) {
       // 디버깅 로그
       console.log('[dual] 최종 파싱 결과 - target_value:', targetValue, '→ ftpPercent:', ftpPercent, 'targetRpm:', targetRpm);
       
-      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환 (RPE 보정 적용)
+      // 목표 파워 계산: 첫 번째 값(ftp%)을 사용하여 W로 변환 (RPE 보정 + 엘리트 선수 보정 적용)
       const basePower = ftp * (ftpPercent / 100);
-      const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      let intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      
+      // 엘리트 선수는 기본 강도 5% 증가 (전문 훈련 강도)
+      if (isElite) {
+        intensityAdjustment = intensityAdjustment * 1.05;
+        console.log('🏆 엘리트 선수 모드: 강도 5% 증가 적용', intensityAdjustment);
+      }
+      
       const targetW = Math.round(basePower * intensityAdjustment);
       
       // 목표 파워 표시: 첫 번째 값(ftp%)을 파워(W)로 변환하여 표시
@@ -2127,11 +2138,18 @@ function applySegmentTarget(i) {
       console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', targetRpm, 'rpm');
       
     } else {
-      // ftp_pct 타입 (기본): 기존 로직 유지 (RPE 보정 적용)
+      // ftp_pct 타입 (기본): 기존 로직 유지 (RPE 보정 + 엘리트 선수 보정 적용)
       const ftpPercent = getSegmentFtpPercent(seg);
       parsedFtpPercent = ftpPercent;
       const basePower = ftp * (ftpPercent / 100);
-      const intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      let intensityAdjustment = window.trainingIntensityAdjustment || 1.0;
+      
+      // 엘리트 선수는 기본 강도 5% 증가 (전문 훈련 강도)
+      if (isElite) {
+        intensityAdjustment = intensityAdjustment * 1.05;
+        console.log('🏆 엘리트 선수 모드: 강도 5% 증가 적용', intensityAdjustment);
+      }
+      
       const targetW = Math.round(basePower * intensityAdjustment);
       
       if (targetLabelEl) targetLabelEl.textContent = "목표 파워";
@@ -4269,9 +4287,27 @@ function updateTrainingMetrics() {
     const IF = ftp ? (NP / ftp) : 0;
     const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
     const kcal = trainingMetrics.joules / 1000;
-
-    safeSetText("tssValue", TSS.toFixed(1));
-    safeSetText("kcalValue", Math.round(kcal));
+    
+    // 엘리트 선수 확인
+    const userChallenge = String(window.currentUser?.challenge || '').trim();
+    const isElite = userChallenge === 'Elite';
+    
+    // 엘리트 선수는 더 정밀한 메트릭 표시
+    if (isElite) {
+      // 엘리트 선수용 상세 메트릭 표시 (NP, IF 포함)
+      safeSetText("tssValue", `${TSS.toFixed(1)} (NP: ${NP.toFixed(0)}W)`);
+      safeSetText("kcalValue", `${Math.round(kcal)} (IF: ${IF.toFixed(2)})`);
+      
+      // 엘리트 선수 전용 메트릭을 liveData에 저장
+      if (window.liveData) {
+        window.liveData.np = NP;
+        window.liveData.if = IF;
+        window.liveData.tss = TSS;
+      }
+    } else {
+      safeSetText("tssValue", TSS.toFixed(1));
+      safeSetText("kcalValue", Math.round(kcal));
+    }
     
   } catch (error) {
     console.error('Error in updateTrainingMetrics:', error);
@@ -8986,7 +9022,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
 - FTP: ${ftp}W
 - 체중: ${weight}kg
 - W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
-- 운동 목적: ${challenge} (Diet: 다이어트, Fitness: 일반 피트니스, GranFondo: 그란폰도, Racing: 레이싱)
+- 운동 목적: ${challenge} (Diet: 다이어트, Fitness: 일반 피트니스, GranFondo: 그란폰도, Racing: 레이싱, Elite: 엘리트 선수)
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
 
 **최근 운동 이력 (최근 ${limitedHistory.length}회):**
@@ -9003,6 +9039,15 @@ ${JSON.stringify(limitedWorkouts.map(w => ({
 
 **분석 요청사항:**
 1. 사용자의 운동 목적(${challenge})과 최근 운동 이력을 분석하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 선정하세요.
+${challenge === 'Elite' ? `
+**엘리트 선수 특별 지침:**
+- 훈련 강도는 일반 사용자보다 5% 높게 설정됩니다.
+- 훈련/휴식 비율을 최적화하여 과훈련을 방지하세요.
+- 주간 TSS(Training Stress Score)를 고려하여 훈련 부하를 분산시키세요.
+- 고강도 훈련 후에는 충분한 회복 시간(최소 24-48시간)을 권장합니다.
+- 전문적인 메트릭 분석(NP, IF, TSS, TSB)을 제공하여 훈련 효과를 극대화하세요.
+- 피크 성능을 위한 주기화(Periodization) 전략을 고려하세요.
+` : ''}
 2. 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 목적에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
 3. 각 추천 워크아웃에 대해 추천 이유를 간단히 설명하세요.
 
