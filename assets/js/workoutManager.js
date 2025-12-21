@@ -553,7 +553,7 @@ function createGroupedSegmentPreview(groupedItem) {
 }
 
 /**
- * 개선된 세그먼트 프리뷰 업데이트 (그룹화 적용)
+ * 개선된 세그먼트 프리뷰 업데이트 (그래프 형식)
  */
 function updateSegmentPreviewGrouped(segments) {
   const segDiv = safeGetElement('segmentPreview');
@@ -564,15 +564,291 @@ function updateSegmentPreviewGrouped(segments) {
     return;
   }
 
-  const groupedSegments = detectAndGroupSegments(segments);
+  // 반복 훈련은 개별 그래프로 표시 (그룹화하지 않음)
+  // 모든 세그먼트를 평탄화하여 개별 표시
+  const flatSegments = [];
+  segments.forEach(seg => {
+    flatSegments.push(seg);
+  });
+
+  // Canvas 그래프 생성
+  segDiv.innerHTML = createSegmentGraph(flatSegments);
   
-  segDiv.innerHTML = groupedSegments.map(item => {
-    if (item.type === 'single') {
-      return createSingleSegmentPreview(item.segment);
-    } else {
-      return createGroupedSegmentPreview(item);
+  // Canvas에 실제로 그리기 (DOM이 준비된 후)
+  setTimeout(() => {
+    drawSegmentGraph(flatSegments);
+  }, 100);
+}
+
+/**
+ * 세그먼트 그래프 HTML 생성
+ */
+function createSegmentGraph(segments) {
+  if (!segments || segments.length === 0) return '';
+  
+  const canvasId = 'segmentPreviewGraph';
+  return `
+    <div class="segment-graph-container">
+      <canvas id="${canvasId}"></canvas>
+    </div>
+  `;
+}
+
+/**
+ * 세그먼트 그래프 그리기 (Canvas 기반)
+ */
+function drawSegmentGraph(segments) {
+  if (!segments || segments.length === 0) return;
+  
+  const canvas = document.getElementById('segmentPreviewGraph');
+  if (!canvas) return;
+  
+  // 사용자 FTP 가져오기
+  const ftp = Number(window.currentUser?.ftp) || 200;
+  
+  // 총 시간 계산
+  const totalSeconds = segments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+  if (totalSeconds <= 0) return;
+  
+  // 그래프 크기 설정
+  const graphHeight = 300; // 세로축 높이 (파워)
+  const graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
+  const padding = { top: 20, right: 40, bottom: 50, left: 70 };
+  const chartWidth = graphWidth - padding.left - padding.right;
+  const chartHeight = graphHeight - padding.top - padding.bottom;
+  
+  // Canvas 크기 설정
+  canvas.width = graphWidth;
+  canvas.height = graphHeight;
+  canvas.style.width = '100%';
+  canvas.style.height = 'auto';
+  canvas.style.maxWidth = '100%';
+  
+  const ctx = canvas.getContext('2d');
+  
+  // 배경 그리기
+  ctx.fillStyle = '#1a1d29';
+  ctx.fillRect(0, 0, graphWidth, graphHeight);
+  
+  // 축 그리기
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 1;
+  
+  // 세로축 (파워)
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, padding.top + chartHeight);
+  ctx.stroke();
+  
+  // 가로축 (시간)
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top + chartHeight);
+  ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+  ctx.stroke();
+  
+  // 최대 파워 계산 (세그먼트 중 최대값의 1.2배 또는 FTP의 1.5배 중 큰 값)
+  let maxTargetPower = ftp * 1.5;
+  segments.forEach(seg => {
+    const ftpPercent = getSegmentFtpPercentForPreview(seg);
+    const targetPower = ftp * (ftpPercent / 100);
+    if (targetPower > maxTargetPower) {
+      maxTargetPower = targetPower * 1.1;
     }
-  }).filter(Boolean).join('');
+  });
+  
+  // FTP 가이드 라인
+  const ftpPower = ftp;
+  const ftpY = padding.top + chartHeight - (chartHeight * (ftpPower / maxTargetPower));
+  ctx.strokeStyle = 'rgba(255, 255, 0, 0.6)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(padding.left, ftpY);
+  ctx.lineTo(padding.left + chartWidth, ftpY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // FTP 라벨
+  ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(`FTP ${ftp}W`, padding.left - 10, ftpY + 4);
+  
+  // 세로축 눈금 (파워)
+  const powerSteps = 5;
+  for (let i = 0; i <= powerSteps; i++) {
+    const power = (maxTargetPower * i) / powerSteps;
+    const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
+    
+    // 격자선
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(padding.left + chartWidth, y);
+    ctx.stroke();
+    
+    // 눈금 표시
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding.left - 5, y);
+    ctx.lineTo(padding.left, y);
+    ctx.stroke();
+    
+    // 파워 값 표시
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
+  }
+  
+  // 세그먼트 막대 그리기
+  let currentTime = 0;
+  segments.forEach((seg, index) => {
+    const duration = seg.duration_sec || 0;
+    if (duration <= 0) return;
+    
+    // 세그먼트 타겟 파워 계산
+    const ftpPercent = getSegmentFtpPercentForPreview(seg);
+    const targetPower = ftp * (ftpPercent / 100);
+    
+    // 막대 위치 및 크기
+    const x = padding.left + (currentTime / totalSeconds) * chartWidth;
+    const barWidth = (duration / totalSeconds) * chartWidth;
+    const barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight); // 최소 2px 높이
+    const y = padding.top + chartHeight - barHeight;
+    
+    // 세그먼트 타입 확인
+    const segType = (seg.segment_type || '').toLowerCase();
+    const isRest = segType === 'rest';
+    const isWarmup = segType === 'warmup';
+    const isCooldown = segType === 'cooldown';
+    const isInterval = segType === 'interval';
+    
+    // 색상 결정
+    let color;
+    if (isRest) {
+      // 휴식: 흰색 (투명도 적용)
+      color = 'rgba(255, 255, 255, 0.4)';
+      // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
+      barHeight = Math.max(barHeight, 3);
+    } else if (targetPower >= ftp) {
+      // FTP 초과: 빨강 (투명도 적용)
+      color = 'rgba(239, 68, 68, 0.6)';
+    } else if (targetPower >= ftp * 0.8) {
+      // FTP 80% 이상 100% 미만: 주황 (투명도 적용)
+      color = 'rgba(249, 115, 22, 0.6)';
+    } else if (isInterval || isWarmup || isCooldown) {
+      // FTP 80% 미만 (인터벌, 워밍업, 쿨다운): 녹색 (투명도 적용)
+      color = 'rgba(34, 197, 94, 0.6)';
+    } else {
+      // 기본: 녹색 (투명도 적용)
+      color = 'rgba(34, 197, 94, 0.6)';
+    }
+    
+    // 막대 그리기
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, barWidth, barHeight);
+    
+    // 막대 테두리 (투명도 적용)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, barWidth, barHeight);
+    
+    // 세그먼트 라벨 (시간이 충분히 긴 경우에만)
+    if (barWidth > 50) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.save();
+      ctx.translate(x + barWidth / 2, padding.top + chartHeight + 15);
+      ctx.rotate(-Math.PI / 4); // 45도 회전
+      ctx.fillText(
+        `${seg.label || segType || '세그먼트'}`,
+        0,
+        0
+      );
+      ctx.restore();
+    }
+    
+    currentTime += duration;
+  });
+  
+  // 가로축 시간 표시
+  const timeSteps = Math.min(10, Math.max(5, Math.floor(totalSeconds / 60))); // 1분 단위 또는 최대 10개
+  for (let i = 0; i <= timeSteps; i++) {
+    const time = (totalSeconds * i) / timeSteps;
+    const x = padding.left + (time / totalSeconds) * chartWidth;
+    
+    // 눈금선
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, padding.top + chartHeight);
+    ctx.lineTo(x, padding.top + chartHeight + 5);
+    ctx.stroke();
+    
+    // 시간 표시
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      `${minutes}:${seconds.toString().padStart(2, '0')}`,
+      x,
+      padding.top + chartHeight + 18
+    );
+  }
+  
+  // 축 라벨
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, graphHeight - 10);
+  
+  ctx.save();
+  ctx.translate(15, padding.top + chartHeight / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('파워 (W)', 0, 0);
+  ctx.restore();
+}
+
+/**
+ * 세그먼트 FTP 백분율 추출 (프리뷰용)
+ */
+function getSegmentFtpPercentForPreview(seg) {
+  if (!seg) return 0;
+  
+  const targetType = seg.target_type || 'ftp_pct';
+  
+  if (targetType === 'ftp_pct') {
+    return Number(seg.target_value) || 100;
+  } else if (targetType === 'dual') {
+    const targetValue = seg.target_value;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      return Number(parts[0]) || 100;
+    } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+      return Number(targetValue[0]) || 100;
+    } else {
+      // 숫자로 저장된 경우 (예: 100120)
+      const numValue = Number(targetValue);
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const ftpPart = str.slice(0, -3);
+          return Number(ftpPart) || 100;
+        }
+      }
+      return numValue <= 1000 ? numValue : 100;
+    }
+  } else if (targetType === 'cadence_rpm') {
+    return 0; // RPM만 있는 경우 파워는 0
+  }
+  
+  return 100;
 }
 
 /**
