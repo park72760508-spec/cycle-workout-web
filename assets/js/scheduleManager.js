@@ -804,7 +804,26 @@ async function renderScheduleDays(days) {
   // 워크아웃 목록 로드
   let workouts = [];
   try {
-    const workoutUrl = `${window.GAS_URL}?action=listAllWorkouts`;
+    // 사용자 등급 확인
+    let grade = '2';
+    try {
+      if (typeof getViewerGrade === 'function') {
+        grade = String(getViewerGrade());
+      } else {
+        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+        if (viewer && viewer.grade != null) {
+          grade = String(viewer.grade);
+        } else if (authUser && authUser.grade != null) {
+          grade = String(authUser.grade);
+        }
+      }
+    } catch (e) {
+      console.warn('grade 확인 실패:', e);
+      grade = '2';
+    }
+    
+    const workoutUrl = `${window.GAS_URL}?action=listAllWorkouts&grade=${grade}`;
     const workoutResponse = await fetch(workoutUrl);
     const workoutResult = await workoutResponse.json();
     if (workoutResult.success) {

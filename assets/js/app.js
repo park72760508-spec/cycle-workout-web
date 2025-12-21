@@ -8888,7 +8888,8 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
       const baseUrl = ensureBaseUrl();
       const params = new URLSearchParams({
         action: 'getWorkoutsByCategory',
-        categories: categories.join(',')
+        categories: categories.join(','),
+        grade: (typeof getViewerGrade === 'function') ? String(getViewerGrade()) : '2'
       });
       const response = await fetch(`${baseUrl}?${params.toString()}`);
       const result = await response.json();
