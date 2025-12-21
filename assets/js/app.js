@@ -4300,14 +4300,15 @@ function updateTrainingMetrics() {
     safeSetText("tssValue", TSS.toFixed(1));
     safeSetText("kcalValue", Math.round(kcal));
     
-    // 엘리트/PRO 선수는 파워 그래프 하단에 NP, IF 표시
+    // 엘리트/PRO 선수는 칼로리 밑에 NP, IF 표시
     if (isElite || isPRO) {
-      const eliteMetricsEl = document.getElementById('chartEliteMetrics');
-      if (eliteMetricsEl) {
-        eliteMetricsEl.style.display = 'flex';
-      }
+      // NP, IF 항목 표시
+      const npMetricItem = document.getElementById('npMetricItem');
+      const ifMetricItem = document.getElementById('ifMetricItem');
+      if (npMetricItem) npMetricItem.style.display = 'flex';
+      if (ifMetricItem) ifMetricItem.style.display = 'flex';
       
-      // NP, IF 값을 파워 그래프 하단에 표시
+      // NP, IF 값 업데이트
       const npValueEl = document.getElementById('npValue');
       const ifValueEl = document.getElementById('ifValue');
       if (npValueEl) npValueEl.textContent = NP.toFixed(0);
@@ -4321,10 +4322,10 @@ function updateTrainingMetrics() {
       }
     } else {
       // 일반 사용자는 NP, IF 숨김
-      const eliteMetricsEl = document.getElementById('chartEliteMetrics');
-      if (eliteMetricsEl) {
-        eliteMetricsEl.style.display = 'none';
-      }
+      const npMetricItem = document.getElementById('npMetricItem');
+      const ifMetricItem = document.getElementById('ifMetricItem');
+      if (npMetricItem) npMetricItem.style.display = 'none';
+      if (ifMetricItem) ifMetricItem.style.display = 'none';
     }
     
   } catch (error) {
