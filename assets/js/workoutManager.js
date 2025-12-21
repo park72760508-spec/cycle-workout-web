@@ -596,11 +596,14 @@ function createSegmentGraph(segments) {
 
 /**
  * 세그먼트 그래프 그리기 (Canvas 기반)
+ * @param {Array} segments - 세그먼트 배열
+ * @param {number} currentSegmentIndex - 현재 진행 중인 세그먼트 인덱스 (옵션)
+ * @param {string} canvasId - Canvas ID (기본값: 'segmentPreviewGraph')
  */
-function drawSegmentGraph(segments) {
+function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmentPreviewGraph') {
   if (!segments || segments.length === 0) return;
   
-  const canvas = document.getElementById('segmentPreviewGraph');
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   
   // 사용자 FTP 가져오기
@@ -803,9 +806,60 @@ function drawSegmentGraph(segments) {
     
     // 막대 테두리 (부드러운 색상)
     ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    
+    // 현재 진행 중인 세그먼트인지 확인
+    const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
+    
+    if (isCurrentSegment) {
+      // 현재 세그먼트: 민트색 네온 애니메이션 효과
+      const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
+      const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
+      const mintColor = `rgba(94, 234, 212, ${0.6 + 0.4 * neonIntensity})`; // 민트색 (cyan-300)
+      
+      // 네온 효과를 위한 여러 레이어
+      ctx.shadowColor = 'rgba(94, 234, 212, 0.8)';
+      ctx.shadowBlur = 10 * neonIntensity;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = mintColor;
+      ctx.lineWidth = 3;
+      
+      // 외곽 네온 효과
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + barWidth - radius, y);
+      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+      ctx.lineTo(x + barWidth, y + barHeight);
+      ctx.lineTo(x, y + barHeight);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.stroke();
+      
+      // 내부 네온 효과 (더 강한)
+      ctx.shadowBlur = 15 * neonIntensity;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      
+      // 그림자 초기화
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+    } else {
+      // 일반 세그먼트: 기본 테두리
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
+      ctx.lineWidth = 1;
+      
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + barWidth - radius, y);
+      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+      ctx.lineTo(x + barWidth, y + barHeight);
+      ctx.lineTo(x, y + barHeight);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      ctx.stroke();
+    }
     
     // 세그먼트 라벨 제거 (가로축에는 시간 표시만 남김)
     

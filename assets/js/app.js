@@ -1363,6 +1363,13 @@ function createTimeline() {
      </div>
    `;
   }).join("");
+  
+  // 세그먼트 그래프 초기화 (훈련 화면용)
+  if (typeof drawSegmentGraph === 'function' && segs.length > 0) {
+    setTimeout(() => {
+      drawSegmentGraph(segs, -1, 'trainingSegmentGraph');
+    }, 100);
+  }
 }
 
 
@@ -1825,6 +1832,16 @@ function updateSegmentBarTick(){
       if (elAvg) elAvg.textContent = String(curAvgPower);
       if (elAvgUnit) elAvgUnit.textContent = "W";
       if (elAvgRpmSection) elAvgRpmSection.style.display = "none";
+    }
+  }
+  
+  // 세그먼트 그래프 업데이트 (현재 세그먼트 강조)
+  if (typeof drawSegmentGraph === 'function' && w.segments && w.segments.length > 0) {
+    // 애니메이션을 위해 주기적으로 다시 그리기 (약 100ms마다)
+    const now = Date.now();
+    if (!window._lastGraphUpdate || (now - window._lastGraphUpdate) > 100) {
+      window._lastGraphUpdate = now;
+      drawSegmentGraph(w.segments, segIndex, 'trainingSegmentGraph');
     }
   }
 }
