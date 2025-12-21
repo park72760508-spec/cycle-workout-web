@@ -1844,6 +1844,15 @@ function updateSegmentBarTick(){
       drawSegmentGraph(w.segments, segIndex, 'trainingSegmentGraph');
     }
   }
+  
+  // ERG 모드 피로도 체크 (약 10초마다)
+  if (window.ergModeState && window.ergModeState.enabled && typeof checkFatigueAndAdjust === 'function') {
+    const now = Date.now();
+    if (!window._lastFatigueCheck || (now - window._lastFatigueCheck) > 10000) {
+      window._lastFatigueCheck = now;
+      checkFatigueAndAdjust();
+    }
+  }
 }
 
 // 2. 훈련 상태 객체 통일 (window.trainingState 사용)
@@ -1968,6 +1977,11 @@ function applySegmentTarget(i) {
       window.liveData.targetRpm = targetRpm;
       
       console.log('[cadence_rpm] 목표 RPM 표시:', targetRpm, 'rpm (기본:', baseRpm, '* 강도조절:', intensityAdjustment, ')');
+      
+      // ERG 모드는 파워 기반이므로 RPM만 있는 세그먼트에서는 ERG 모드 비활성화 권장
+      if (window.ergModeState && window.ergModeState.enabled) {
+        console.warn('[ERG] RPM만 있는 세그먼트 - ERG 모드 비활성화 권장');
+      }
       
     } else if (targetType === 'dual') {
       // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
@@ -2158,6 +2172,11 @@ function applySegmentTarget(i) {
       
       console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', adjustedTargetRpm, 'rpm (강도조절:', intensityAdjustment, ')');
       
+      // ERG 모드가 활성화되어 있으면 목표 파워 전송
+      if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') {
+        setErgTargetPower(targetW);
+      }
+      
     } else {
       // ftp_pct 타입 (기본): 기존 로직 유지 (RPE 보정 적용)
       // 엘리트/PRO 선수는 별도 워크아웃이 작성되므로 강도 자동 증가 없음
@@ -2174,6 +2193,11 @@ function applySegmentTarget(i) {
       
       window.liveData.targetPower = targetW;
       window.liveData.targetRpm = 0;
+    }
+    
+    // ERG 모드가 활성화되어 있으면 목표 파워 전송
+    if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') {
+      setErgTargetPower(window.liveData.targetPower);
     }
     
     const nameEl = safeGetElement("currentSegmentName");
@@ -2273,6 +2297,9 @@ function startSegmentLoop() {
   
   // 강도 조절 슬라이더 초기화
   initializeIntensitySlider();
+  
+  // ERG 모드 UI 초기화
+  initializeErgMode();
   updateTimeUI();
   
   // 세그먼트 바 초기화
@@ -8897,6 +8924,14 @@ function updateIntensityAdjustment(sliderValue) {
     }
   } else {
     console.warn('[강도 조절] 워크아웃 또는 세그먼트를 찾을 수 없습니다');
+  }
+  
+  // 3. ERG 모드가 활성화되어 있으면 목표 파워 전송
+  if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') {
+    const currentTargetPower = window.liveData?.targetPower || 0;
+    if (currentTargetPower > 0) {
+      setErgTargetPower(currentTargetPower);
+    }
   }
 }
 

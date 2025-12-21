@@ -305,14 +305,52 @@ async function connectTrainer() {
     );
 
     if (isFTMS) {
-      window.connectedDevices.trainer = { name: device.name || "Smart Trainer", device, server, characteristic };
+      // FTMS Control Point 서비스 및 특성 가져오기 (ERG 모드용)
+      let controlPointService = null;
+      let controlPointCharacteristic = null;
+      try {
+        controlPointService = await server.getPrimaryService("fitness_machine");
+        // Control Point 특성 UUID: 0x2AD9
+        try {
+          controlPointCharacteristic = await controlPointService.getCharacteristic("fitness_machine_control_point");
+        } catch {
+          // UUID로 직접 시도
+          controlPointCharacteristic = await controlPointService.getCharacteristic(0x2AD9);
+        }
+        console.log('✅ FTMS Control Point 연결 성공 (ERG 모드 지원)');
+      } catch (err) {
+        console.warn('⚠️ FTMS Control Point 연결 실패 (ERG 모드 미지원 가능):', err);
+      }
+      
+      window.connectedDevices.trainer = { 
+        name: device.name || "Smart Trainer", 
+        device, 
+        server, 
+        characteristic,
+        controlPoint: controlPointCharacteristic // ERG 모드용
+      };
+      
+      // ERG 모드 UI 표시
+      if (typeof updateErgModeUI === 'function') {
+        updateErgModeUI(true);
+      }
     } else {
       window.connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic };
     }
 
     device.addEventListener("gattserverdisconnected", () => {
       try {
-        if (window.connectedDevices.trainer?.device === device) window.connectedDevices.trainer = null;
+        if (window.connectedDevices.trainer?.device === device) {
+          // ERG 모드 비활성화
+          if (window.ergModeState && window.ergModeState.enabled && typeof toggleErgMode === 'function') {
+            toggleErgMode(false);
+          }
+          window.connectedDevices.trainer = null;
+          // ERG 모드 UI 숨김
+          if (typeof updateErgModeUI === 'function') {
+            updateErgModeUI(false);
+          }
+        }
         if (window.connectedDevices.powerMeter?.device === device) window.connectedDevices.powerMeter = null;
         updateDevicesList();
         // 연결 해제 시 버튼 이미지 업데이트
@@ -498,6 +536,12 @@ function handlePowerMeterData(event) {
   const instPower = dv.getInt16(off, true); off += 2;
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
+    // ERG 모드용 데이터 버퍼 업데이트
+    if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
+    window._recentPowerBuffer.push(instPower);
+    if (window._recentPowerBuffer.length > 120) { // 최근 2분 (1초당 1개 가정)
+      window._recentPowerBuffer.shift();
+    }
   }
 
   // 2) 옵션 필드 스킵
@@ -520,7 +564,15 @@ function handlePowerMeterData(event) {
       if (dRevs > 0 && dTicks > 0) {
         const dtSec = dTicks / 1024;
         const rpm = (dRevs / dtSec) * 60;
-        if (rpm > 0 && rpm < 220) window.liveData.cadence = Math.round(rpm);
+        if (rpm > 0 && rpm < 220) {
+          window.liveData.cadence = Math.round(rpm);
+          // ERG 모드용 데이터 버퍼 업데이트
+          if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
+          window._recentCadenceBuffer.push(Math.round(rpm));
+          if (window._recentCadenceBuffer.length > 120) {
+            window._recentCadenceBuffer.shift();
+          }
+        }
       }
     }
     powerMeterState.lastCrankRevs = crankRevs;
@@ -569,6 +621,12 @@ function handleTrainerData(e) {
     const cadHalf = dv.getUint16(off, true); off += 2;
     const rpm = cadHalf / 2;
     window.liveData.cadence = Math.round(rpm);
+    // ERG 모드용 데이터 버퍼 업데이트
+    if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
+    window._recentCadenceBuffer.push(Math.round(rpm));
+    if (window._recentCadenceBuffer.length > 120) {
+      window._recentCadenceBuffer.shift();
+    }
   }
 
   // Average Cadence 존재 시 스킵
@@ -584,6 +642,12 @@ function handleTrainerData(e) {
   if (flags & 0x0040) {
     const p = dv.getInt16(off, true); off += 2;
     window.liveData.power = p;
+    // ERG 모드용 데이터 버퍼 업데이트
+    if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
+    window._recentPowerBuffer.push(p);
+    if (window._recentPowerBuffer.length > 120) {
+      window._recentPowerBuffer.shift();
+    }
   }
 
   // Average Power 등 다른 필드들은 필요한 만큼 스킵/파싱 추가…
@@ -647,6 +711,12 @@ window.handleHeartRateData = window.handleHeartRateData || function (event) {
   const hr = (flags & 0x1) ? dv.getUint16(1, true) : dv.getUint8(1);
   window.liveData = window.liveData || {};
   window.liveData.heartRate = Math.round(hr);
+  // ERG 모드용 데이터 버퍼 업데이트
+  if (!window._recentHRBuffer) window._recentHRBuffer = [];
+  window._recentHRBuffer.push(Math.round(hr));
+  if (window._recentHRBuffer.length > 120) {
+    window._recentHRBuffer.shift();
+  }
   if (window.updateTrainingDisplay) window.updateTrainingDisplay();
 };
 
