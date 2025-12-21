@@ -756,8 +756,8 @@ function drawSegmentGraph(segments) {
     // 색상 결정
     let color;
     if (isRest) {
-      // 휴식: 흰색 (투명도 적용)
-      color = 'rgba(255, 255, 255, 0.4)';
+      // 휴식: 연한 투명 회색
+      color = 'rgba(156, 163, 175, 0.4)';
       // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
       barHeight = Math.max(barHeight, 3);
       y = padding.top + chartHeight - barHeight;
@@ -807,21 +807,7 @@ function drawSegmentGraph(segments) {
     ctx.lineWidth = 1;
     ctx.stroke();
     
-    // 세그먼트 라벨 (시간이 충분히 긴 경우에만)
-    if (barWidth > 50) {
-      ctx.fillStyle = '#374151';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.save();
-      ctx.translate(x + barWidth / 2, padding.top + chartHeight + 15);
-      ctx.rotate(-Math.PI / 4); // 45도 회전
-      ctx.fillText(
-        `${seg.label || segType || '세그먼트'}`,
-        0,
-        0
-      );
-      ctx.restore();
-    }
+    // 세그먼트 라벨 제거 (가로축에는 시간 표시만 남김)
     
     currentTime += duration;
   });
