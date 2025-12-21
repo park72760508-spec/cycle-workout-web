@@ -1268,6 +1268,17 @@
         <span class="intensity-adjustment-max">+10%</span>
       </div>
     </div>
+    <!-- ERG 모드 스위치 (스마트로라 연결 시에만 표시) -->
+    <div class="erg-mode-container" id="ergModeContainer" style="display: none;">
+      <div class="erg-mode-label">
+        <span>ERG Mode</span>
+        <span class="erg-mode-status" id="ergModeStatus">OFF</span>
+      </div>
+      <label class="erg-mode-switch">
+        <input type="checkbox" id="ergModeToggle">
+        <span class="erg-mode-slider"></span>
+      </label>
+    </div>
     <div class="enhanced-next-segment-info">
       <span class="enhanced-next-label">다음 세그먼트</span>
       <span class="enhanced-next-value" id="nextSegment">인터벌 FTP 140%</span>
@@ -2101,6 +2112,7 @@
 <script src="assets/js/userManager.js"></script>
 <script src="assets/js/resultManager.js"></script>
 <script src="assets/js/bluetooth.js"></script>
+<script src="assets/js/ergMode.js"></script>
 <script src="assets/js/training.js"></script>
 <!-- 그룹 훈련 모듈들 -->
 <script src="assets/js/groupTrainingManager.js"></script>
