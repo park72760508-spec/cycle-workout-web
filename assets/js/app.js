@@ -2868,8 +2868,26 @@ function updateSegmentGraphMascot() {
   const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
   const xPosition = startX + (progressRatio * (endX - startX));
   
-  // Y 위치: FTP 라인에 마스코트 하단이 붙도록 (마스코트 하단이 FTP 라인에 맞닿도록)
-  const yPosition = ftpY; // FTP 라인 Y 위치 (마스코트 하단이 이 위치에 오도록)
+  // Y 위치 계산
+  // 시작 위치(elapsedSec === 0): 마스코트 중심이 Y축 중심에 위치
+  // 그 외: FTP 라인에 마스코트 하단이 붙도록
+  const graphHeight = 300; // 그래프 높이 (workoutManager.js와 동일)
+  const padding = window._segmentGraphPadding;
+  const chartHeight = graphHeight - padding.top - padding.bottom;
+  const centerY = padding.top + (chartHeight / 2); // Y축 중심
+  
+  let yPosition;
+  let transformY;
+  
+  if (elapsedSec === 0 || progressRatio === 0) {
+    // 시작 위치: 마스코트 중심이 Y축 중심에 위치
+    yPosition = centerY;
+    transformY = '-50%'; // 중심 정렬
+  } else {
+    // 경과 시간이 있으면: FTP 라인에 마스코트 하단이 붙도록
+    yPosition = ftpY;
+    transformY = '-100%'; // 하단 기준
+  }
   
   // 마스코트 이미지 위치 설정
   mascot.style.position = 'absolute';
@@ -2877,7 +2895,7 @@ function updateSegmentGraphMascot() {
   mascot.style.top = (yPosition * scaleY) + 'px';
   mascot.style.width = (mascotWidth * scaleX) + 'px';
   mascot.style.height = (mascotHeight * scaleY) + 'px';
-  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬, Y는 하단 기준 (하단이 FTP 라인에 붙도록)
+  mascot.style.transform = `translate(-50%, ${transformY})`; // X는 중심 정렬, Y는 시작 시 중심, 이후 하단 기준
   mascot.style.zIndex = '10';
   
   // 깃발 이미지 제거됨
