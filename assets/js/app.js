@@ -1924,7 +1924,7 @@ function updateTimeUI() {
       //safeSetText("segmentProgressLegend", String(sp)); // ← 범례에도 동일 % 표시
       safeSetText("segmentProgressLegend", String(totalPct)); // ✅ 전체 %로 변경
        
-      updateMascotProgress(totalPct);          // ⭐ 라이더(GIF) 위치 동기화 (0~100%)
+      // updateMascotProgress 제거됨 (세그먼트 그래프 마스코트로 대체)
        
        
      // ⬇⬇⬇ 여기에 "이 한 줄" 추가 ⬇⬇⬇
@@ -2842,8 +2842,8 @@ function updateSegmentGraphMascot() {
   const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
   const xPosition = padding.left + (progressRatio * chartWidth);
   
-  // Y 위치는 FTP 라인 위 (마스코트 하단이 FTP 라인에 맞닿도록)
-  const yPosition = ftpY; // FTP 라인 Y 위치
+  // Y 위치: FTP 라인에서 마스코트 높이의 90%만큼 아래로 이동 (마스코트 중심이 그 위치에 오도록)
+  const yPosition = ftpY + (mascotHeight * 0.9);
   
   // 마스코트 이미지 위치 설정
   mascot.style.position = 'absolute';
@@ -2851,7 +2851,7 @@ function updateSegmentGraphMascot() {
   mascot.style.top = (yPosition * scaleY) + 'px';
   mascot.style.width = (mascotWidth * scaleX) + 'px';
   mascot.style.height = (mascotHeight * scaleY) + 'px';
-  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심, Y는 하단 기준
+  mascot.style.transform = 'translate(-50%, -50%)'; // X, Y 모두 중심 정렬
   mascot.style.zIndex = '10';
   
   // 깃발 위치 설정 (세그먼트 우측 끝, FTP 점선 위)
@@ -2866,30 +2866,32 @@ function updateSegmentGraphMascot() {
       flagSize = flagRect.height || 24; // 진행바 깃발의 실제 높이 사용
     }
     
-    // 세그먼트 그래프의 우측 끝 위치 (전체 시간의 끝)
+    // 세그먼트 그래프의 우측 끝 위치 (전체 시간의 끝) - 깃발 중심이 우측 끝에 맞도록
     const endXPosition = padding.left + chartWidth;
-    const flagYPosition = ftpY; // FTP 라인 Y 위치
+    // Y 위치: FTP 라인에서 깃발 높이의 90%만큼 아래로 이동 (깃발 중심이 그 위치에 오도록)
+    const flagYPosition = ftpY + (flagSize * 0.9);
     
     goalFlag.style.position = 'absolute';
     goalFlag.style.left = (endXPosition * scaleX) + 'px';
     goalFlag.style.top = (flagYPosition * scaleY) + 'px';
     goalFlag.style.width = (flagSize * scaleX) + 'px';
     goalFlag.style.height = (flagSize * scaleY) + 'px';
-    goalFlag.style.transform = 'translate(-50%, -100%)'; // X는 중심, Y는 하단 기준 (하단이 FTP 라인에 맞닿도록)
+    goalFlag.style.transform = 'translate(-50%, -50%)'; // X, Y 모두 중심 정렬 (우측 끝에 중심, 높이 90% 아래)
     goalFlag.style.zIndex = '10';
     goalFlag.style.display = 'block';
     goalFlag.style.objectFit = 'contain';
   }
   
-  console.log('[마스코트] 세그먼트 그래프 위치 업데이트:', {
-    elapsedSec: elapsedSec,
-    totalSeconds: totalSeconds,
-    progressRatio: progressRatio.toFixed(3),
-    xPosition: xPosition.toFixed(1),
-    yPosition: yPosition.toFixed(1),
-    ftpY: ftpY,
-    mascotHeight: mascotHeight.toFixed(1)
-  });
+  // 디버깅 로그 (필요시 주석 해제)
+  // console.log('[마스코트] 세그먼트 그래프 위치 업데이트:', {
+  //   elapsedSec: elapsedSec,
+  //   totalSeconds: totalSeconds,
+  //   progressRatio: progressRatio.toFixed(3),
+  //   xPosition: xPosition.toFixed(1),
+  //   yPosition: yPosition.toFixed(1),
+  //   ftpY: ftpY,
+  //   mascotHeight: mascotHeight.toFixed(1)
+  // });
 }
 
 
