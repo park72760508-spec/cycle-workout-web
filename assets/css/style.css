@@ -1706,11 +1706,12 @@ button[aria-disabled="true"] {
 /* 컨트롤 버튼 */
 /* 훈련 화면에만 버튼 표시 */
 .training-controls {
-  display: none; /* 기본적으로 숨김 */
+  display: none !important; /* 기본적으로 숨김 */
 }
 
+#trainingScreen.training-controls,
 #trainingScreen .training-controls {
-  display: flex;
+  display: flex !important;
   justify-content: center;
   align-items: center;
   gap: 16px;
@@ -3916,6 +3917,11 @@ button[aria-disabled="true"] {
 
 /* 훈련 컨트롤 버튼 개선된 디자인 */
 .enhanced-control-btn {
+  display: none !important; /* 기본적으로 숨김 */
+}
+
+#trainingScreen .enhanced-control-btn {
+  display: flex !important; /* 훈련 화면에서만 표시 */
   width: 64px;
   height: 64px;
   border-radius: 50%;
@@ -3924,7 +3930,6 @@ button[aria-disabled="true"] {
   color: #e2e8f0;
   cursor: pointer;
   transition: all 0.3s ease;
-  display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
