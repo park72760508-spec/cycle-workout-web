@@ -507,6 +507,10 @@ window.initTrainingCharts = function initTrainingCharts() {
 window.addEventListener('resize', () => {
   if (document.getElementById('trainingScreen')?.classList.contains('active')) {
     window.initTrainingCharts?.();
+    // 화면 크기 변경 시 마스코트 위치 재계산
+    if (typeof updateSegmentGraphMascot === 'function') {
+      updateSegmentGraphMascot();
+    }
   }
 });
 
@@ -2811,7 +2815,6 @@ function updateMascotProgress(percent) {
 function updateSegmentGraphMascot() {
   const mascotLayer = document.getElementById('segmentGraphMascotLayer');
   const mascot = document.getElementById('segmentGraphMascot');
-  const goalFlag = document.getElementById('segmentGraphGoalFlag');
   const canvas = document.getElementById('trainingSegmentGraph');
   
   if (!mascotLayer || !mascot || !canvas) return;
