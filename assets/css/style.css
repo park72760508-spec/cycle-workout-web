@@ -1694,13 +1694,13 @@ button[aria-disabled="true"] {
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
 
+/* 진행율 표시 제거됨 */
 .timeline-legend {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.2);
-  text-align: center;
-  font-size: 12px;
-  color: #94a3b8;
+  display: none !important; /* 진행율 표시 제거 */
+}
+
+#trainingScreen .timeline-legend {
+  display: none !important; /* 훈련 화면에서도 진행율 표시 제거 */
 }
 
 /* 컨트롤 버튼 */
@@ -1709,15 +1709,17 @@ button[aria-disabled="true"] {
   display: none !important; /* 기본적으로 숨김 */
 }
 
-#trainingScreen.training-controls,
 #trainingScreen .training-controls {
   display: flex !important;
   justify-content: center;
   align-items: center;
   gap: 16px;
-  margin-top: 0; /* 세그먼트 그래프 바로 아래 */
+  margin-top: 20px; /* 세그먼트 그래프 아래 간격 */
   margin-bottom: 20px;
-  padding-top: 10px; /* 그래프 하단 시간 표시와의 간격 */
+  padding: 0;
+  width: 100%;
+  position: relative;
+  z-index: 100;
 }
 #trainingScreen .control-btn{
   width:60px; height:60px; border-radius:50%; border:none;
