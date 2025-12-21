@@ -4296,11 +4296,22 @@ function updateTrainingMetrics() {
     const isElite = userChallenge === 'Elite';
     const isPRO = userChallenge === 'PRO';
     
-    // 엘리트/PRO 선수는 더 정밀한 메트릭 표시
+    // TSS와 칼로리는 항상 표시 (칼로리 형식: 항목, 값, 단위)
+    safeSetText("tssValue", TSS.toFixed(1));
+    safeSetText("kcalValue", Math.round(kcal));
+    
+    // 엘리트/PRO 선수는 파워 그래프 하단에 NP, IF 표시
     if (isElite || isPRO) {
-      // 엘리트 선수용 상세 메트릭 표시 (NP, IF 포함)
-      safeSetText("tssValue", `${TSS.toFixed(1)} (NP: ${NP.toFixed(0)}W)`);
-      safeSetText("kcalValue", `${Math.round(kcal)} (IF: ${IF.toFixed(2)})`);
+      const eliteMetricsEl = document.getElementById('chartEliteMetrics');
+      if (eliteMetricsEl) {
+        eliteMetricsEl.style.display = 'flex';
+      }
+      
+      // NP, IF 값을 파워 그래프 하단에 표시
+      const npValueEl = document.getElementById('npValue');
+      const ifValueEl = document.getElementById('ifValue');
+      if (npValueEl) npValueEl.textContent = NP.toFixed(0);
+      if (ifValueEl) ifValueEl.textContent = IF.toFixed(2);
       
       // 엘리트 선수 전용 메트릭을 liveData에 저장
       if (window.liveData) {
@@ -4309,8 +4320,11 @@ function updateTrainingMetrics() {
         window.liveData.tss = TSS;
       }
     } else {
-      safeSetText("tssValue", TSS.toFixed(1));
-      safeSetText("kcalValue", Math.round(kcal));
+      // 일반 사용자는 NP, IF 숨김
+      const eliteMetricsEl = document.getElementById('chartEliteMetrics');
+      if (eliteMetricsEl) {
+        eliteMetricsEl.style.display = 'none';
+      }
     }
     
   } catch (error) {
