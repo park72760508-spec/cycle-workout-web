@@ -440,10 +440,23 @@ async function loadUsers() {
       const buttonDisabledAttr = isButtonDisabled ? 'disabled' : '';
       const buttonDisabledClass = isButtonDisabled ? 'disabled' : '';
 
+      // 훈련 목표에 따른 이미지 선택
+      const challenge = String(user.challenge || 'Fitness').trim();
+      let challengeImage = 'yellow.png'; // 기본값: Fitness
+      if (challenge === 'GranFondo') {
+        challengeImage = 'green.png';
+      } else if (challenge === 'Racing') {
+        challengeImage = 'blue.png';
+      } else if (challenge === 'Elite') {
+        challengeImage = 'orenge.png';
+      } else if (challenge === 'PRO') {
+        challengeImage = 'red.png';
+      }
+
       return `
         <div class="user-card" data-user-id="${user.id}">
           <div class="user-header">
-            <div class="user-name"><img src="assets/img/add-user3.gif" alt="" class="user-name-icon"> ${user.name}</div>
+            <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
             <div class="user-actions">
               ${canEdit ? `
                 <button class="btn-edit"   onclick="editUser(${user.id})"   title="수정">✏️</button>

@@ -3272,7 +3272,21 @@ function renderUserInfo() {
     const ftpDisp = Number.isFinite(ftp) ? String(ftp) : "-";
     const wkgDisp = Number.isFinite(wkgNum) ? wkgNum.toFixed(2) : "-";
 
-    box.textContent = `${cleanName} · FTP ${ftpDisp}W · ${wkgDisp} W/kg`;
+    // 훈련 목표에 따른 이미지 선택
+    const challenge = String(u.challenge || 'Fitness').trim();
+    let challengeImage = 'yellow.png'; // 기본값: Fitness
+    if (challenge === 'GranFondo') {
+      challengeImage = 'green.png';
+    } else if (challenge === 'Racing') {
+      challengeImage = 'blue.png';
+    } else if (challenge === 'Elite') {
+      challengeImage = 'orenge.png';
+    } else if (challenge === 'PRO') {
+      challengeImage = 'red.png';
+    }
+
+    // 이미지와 텍스트를 함께 표시
+    box.innerHTML = `<img src="assets/img/${challengeImage}" alt="" class="training-user-challenge-icon"> ${cleanName} · FTP ${ftpDisp}W · ${wkgDisp} W/kg`;
 
     // ★ 사용자 판넬 네온은 "한 번만" 적용 (동적 갱신 안 함)
     if (typeof updateUserPanelNeonByWkg === "function") {
