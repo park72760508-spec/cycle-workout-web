@@ -930,14 +930,14 @@ button[aria-disabled="true"] {
   --text-strong:#111827; --text:#374151; --text-muted:#6b7280;
   --brand:#2e74e8; --accent-ok:#22c55e;
 }
-/* 훈련 목적 범례 컨테이너 */
+/* 훈련 등급 범례 컨테이너 */
 .challenge-legend-container {
   display: flex;
   gap: 16px;
   align-items: flex-start;
 }
 
-/* 훈련 목적 범례 카드 */
+/* 훈련 등급 범례 카드 */
 .challenge-legend-card {
   background: var(--card-bg, #fff);
   border: 1px solid var(--card-border, #e5e7eb);
@@ -1347,6 +1347,7 @@ button[aria-disabled="true"] {
   width: 100%;
   margin-top: 20px;
   margin-bottom: 0; /* 버튼과의 간격 제거 (바로 아래 배치) */
+  overflow: hidden; /* 스크롤바 방지 */
 }
 
 #trainingScreen .training-segment-graph-container .segment-graph-container {
@@ -1357,6 +1358,7 @@ button[aria-disabled="true"] {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.1);
   position: relative; /* 마스코트 레이어를 위한 relative 위치 */
+  overflow: hidden; /* 스크롤바 방지 */
 }
 
 /* 세그먼트 그래프 마스코트 레이어 */
@@ -1368,6 +1370,7 @@ button[aria-disabled="true"] {
   height: 100%;
   pointer-events: none;
   z-index: 10;
+  overflow: hidden; /* 스크롤바 방지 */
 }
 
 .segment-graph-mascot-layer img {
