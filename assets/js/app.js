@@ -2872,7 +2872,7 @@ function updateSegmentGraphMascot() {
   // 시작 위치(elapsedSec === 0): 마스코트 중심이 Y축 중심에 위치
   // 그 외: FTP 라인에 마스코트 하단이 붙도록
   const graphHeight = 300; // 그래프 높이 (workoutManager.js와 동일)
-  const padding = window._segmentGraphPadding;
+  // padding은 이미 위에서 선언됨 (2824번째 줄)
   const chartHeight = graphHeight - padding.top - padding.bottom;
   const centerY = padding.top + (chartHeight / 2); // Y축 중심
   
