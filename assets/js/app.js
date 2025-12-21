@@ -2816,8 +2816,9 @@ function updateSegmentGraphMascot() {
   const mascotLayer = document.getElementById('segmentGraphMascotLayer');
   const mascot = document.getElementById('segmentGraphMascot');
   const canvas = document.getElementById('trainingSegmentGraph');
+  const container = document.querySelector('#trainingScreen .segment-graph-container');
   
-  if (!mascotLayer || !mascot || !canvas) return;
+  if (!mascotLayer || !mascot || !canvas || !container) return;
   
   // 세그먼트 그래프 정보 확인
   const ftpY = window._segmentGraphFtpY;
@@ -2834,18 +2835,19 @@ function updateSegmentGraphMascot() {
   // 현재 경과 시간 가져오기
   const elapsedSec = window.trainingState?.elapsedSec || 0;
   
-  // Canvas의 실제 크기와 표시 크기 비율 계산
+  // 컨테이너와 Canvas의 실제 크기 가져오기
+  const containerRect = container.getBoundingClientRect();
   const canvasRect = canvas.getBoundingClientRect();
   const scaleX = canvasRect.width / canvas.width;
   const scaleY = canvasRect.height / canvas.height;
   
-  // 마스코트 위치 설정 (Canvas 기준 상대 위치)
+  // 마스코트 레이어를 컨테이너 전체 크기로 설정 (검정 바탕 그래프를 둘러싼 다크 레이어 블럭)
   mascotLayer.style.display = 'block';
   mascotLayer.style.position = 'absolute';
   mascotLayer.style.left = '0';
   mascotLayer.style.top = '0';
-  mascotLayer.style.width = canvasRect.width + 'px';
-  mascotLayer.style.height = canvasRect.height + 'px';
+  mascotLayer.style.width = containerRect.width + 'px';
+  mascotLayer.style.height = containerRect.height + 'px';
   mascotLayer.style.pointerEvents = 'none';
   
   // 마스코트 크기 (높이만 90%로 조정)
@@ -2853,17 +2855,15 @@ function updateSegmentGraphMascot() {
   const mascotHeight = baseMascotHeight * 0.9; // 90%로 조정
   const mascotWidth = mascotHeight; // 정사각형 가정 (필요시 조정)
   
-  // 그래프 하단 라인 위치: padding.top + chartHeight (가로축 시간 라인)
-  // 시간 표시 위치 계산 (0:00과 마지막 시간의 중심 위치)
-  // 시간 표시는 padding.top + chartHeight + 18 위치에 표시됨
-  // 첫 번째 시간 표시(0:00)의 X 위치: padding.left (시간 표시는 textAlign: 'center'이므로 중심이 padding.left)
-  // 마지막 시간 표시의 X 위치: padding.left + chartWidth
-  const graphHeight = 300; // 그래프 높이 (workoutManager.js와 동일)
-  const chartHeight = graphHeight - padding.top - padding.bottom;
-  const bottomLineY = padding.top + chartHeight; // 그래프 하단 라인 Y 위치 (가로축)
+  // 컨테이너 padding (CSS에서 20px로 설정됨)
+  const containerPadding = 20;
   
-  const startTimeX = padding.left; // 0:00 시간 표시 중심
-  const endTimeX = padding.left + chartWidth; // 마지막 시간 표시 중심
+  // 시간 표시 위치 계산 (0:00과 마지막 시간의 중심 위치)
+  // Canvas 내부 좌표를 컨테이너 좌표로 변환 (scaleX 적용)
+  // 첫 번째 시간 표시(0:00)의 X 위치: 컨테이너 padding + Canvas 내부 padding.left * scaleX
+  // 마지막 시간 표시의 X 위치: 컨테이너 padding + Canvas 내부 (padding.left + chartWidth) * scaleX
+  const startTimeX = containerPadding + (padding.left * scaleX); // 0:00 시간 표시 중심 (컨테이너 기준)
+  const endTimeX = containerPadding + ((padding.left + chartWidth) * scaleX); // 마지막 시간 표시 중심 (컨테이너 기준)
   
   // 마스코트 이동 범위: 시작점(0:00 시간 중앙) ~ 종료점(마지막 시간 중앙)
   const startX = startTimeX; // 시작점: 0:00 시간 문자 중앙
@@ -2873,18 +2873,21 @@ function updateSegmentGraphMascot() {
   const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
   const xPosition = startX + (progressRatio * (endX - startX));
   
-  // Y 위치: 그래프 하단 라인에 마스코트가 위치하도록
-  const yPosition = bottomLineY; // 그래프 하단 라인 Y 위치
+  // Y 위치: 컨테이너(다크 레이어 블럭)의 하단 라인에 마스코트가 위치하도록
+  // 컨테이너 높이는 Canvas 표시 높이 + padding (20px top + 20px bottom)
+  const containerHeight = containerRect.height; // 컨테이너 실제 높이
+  const yPosition = containerHeight; // 컨테이너 하단 라인 Y 위치
   
   // 마스코트 이미지 위치 설정
   // X축: 시작 시간(0:00) 중앙에 마스코트 중심이 위치하여 시작, 종료 시간 중앙까지 이동
-  // Y축: 그래프 하단 라인에 마스코트가 위치 (하단 기준)
+  // Y축: 컨테이너(다크 레이어 블럭) 하단 라인에 마스코트가 위치 (하단 기준)
   mascot.style.position = 'absolute';
-  mascot.style.left = (xPosition * scaleX) + 'px';
-  mascot.style.top = (yPosition * scaleY) + 'px';
-  mascot.style.width = (mascotWidth * scaleX) + 'px';
-  mascot.style.height = (mascotHeight * scaleY) + 'px';
-  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬 (0:00 시간 중앙에 맞춰짐), Y는 하단 기준 (하단 라인에 붙도록)
+  mascot.style.left = xPosition + 'px';
+  mascot.style.top = yPosition + 'px';
+  // 마스코트 크기는 고정 크기 사용
+  mascot.style.width = mascotWidth + 'px';
+  mascot.style.height = mascotHeight + 'px';
+  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬 (0:00 시간 중앙에 맞춰짐), Y는 하단 기준 (컨테이너 하단 라인에 붙도록)
   mascot.style.zIndex = '10';
   
   // 깃발 이미지 제거됨
@@ -2896,7 +2899,7 @@ function updateSegmentGraphMascot() {
   //   progressRatio: progressRatio.toFixed(3),
   //   xPosition: xPosition.toFixed(1),
   //   yPosition: yPosition.toFixed(1),
-  //   ftpY: ftpY,
+  //   containerHeight: containerHeight.toFixed(1),
   //   mascotHeight: mascotHeight.toFixed(1)
   // });
 }
