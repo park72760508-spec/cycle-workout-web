@@ -1920,9 +1920,9 @@ function updateTimeUI() {
       const segDur = Math.max(1, segDurationSec(seg) || 1);
       const segElapsed = Math.max(0, Number(window.trainingState?.segElapsedSec) || 0);
       const sp = Math.min(100, Math.floor((segElapsed / segDur) * 100));
-      safeSetText("segmentProgress", String(sp));
+      // safeSetText("segmentProgress", String(sp)); // 진행율 표시 제거됨
       //safeSetText("segmentProgressLegend", String(sp)); // ← 범례에도 동일 % 표시
-      safeSetText("segmentProgressLegend", String(totalPct)); // ✅ 전체 %로 변경
+      // safeSetText("segmentProgressLegend", String(totalPct)); // 진행율 표시 제거됨
        
       // updateMascotProgress 제거됨 (세그먼트 그래프 마스코트로 대체)
        
@@ -2222,7 +2222,7 @@ function applySegmentTarget(i) {
      setNameProgress(0);       
     }
     
-    safeSetText("segmentProgress", "0");
+    // safeSetText("segmentProgress", "0"); // 진행율 표시 제거됨
     safeSetText("avgSegmentPowerValue", "—");
     
     // 세그먼트 평균 RPM 초기화
