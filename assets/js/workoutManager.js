@@ -620,12 +620,15 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const chartWidth = graphWidth - padding.left - padding.right;
   const chartHeight = graphHeight - padding.top - padding.bottom;
   
-  // Canvas 크기 설정
+  // Canvas 크기 설정 (진행율 표시 공간 추가)
+  const extraHeight = canvasId === 'trainingSegmentGraph' ? 40 : 0; // 진행율 표시 공간
   canvas.width = graphWidth;
-  canvas.height = graphHeight;
+  canvas.height = graphHeight + extraHeight;
   canvas.style.width = '100%';
   canvas.style.height = 'auto';
   canvas.style.maxWidth = '100%';
+  
+  // 그래프 그리기 영역은 원래 높이 유지 (진행율은 추가 공간에 표시)
   
   const ctx = canvas.getContext('2d');
   
@@ -953,6 +956,25 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, graphHeight - 10);
+  
+  // 진행율 표시 (훈련 화면에만, 시간 표시 아래)
+  if (canvasId === 'trainingSegmentGraph') {
+    const elapsedSec = window.trainingState?.elapsedSec || 0;
+    const currentTotalSeconds = window._segmentGraphTotalSeconds || totalSeconds;
+    const progressPercent = currentTotalSeconds > 0 ? Math.round((elapsedSec / currentTotalSeconds) * 100) : 0;
+    
+    // 진행율 텍스트 (시간 표시보다 10% 더 큰 폰트: 10px * 1.1 = 11px)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'; // 훈련 화면: 밝은 색상
+    ctx.font = 'bold 11px sans-serif'; // 10px * 1.1 = 11px
+    ctx.textAlign = 'center';
+    // 시간 표시는 padding.top + chartHeight + 18 위치에 있으므로, 그 아래에 배치
+    // Canvas 높이가 graphHeight + 40이므로, 진행율은 graphHeight + 18 + 16 위치에 표시
+    ctx.fillText(
+      `진행율: ${progressPercent}%`,
+      padding.left + chartWidth / 2,
+      graphHeight + 18 + 16 // 시간 표시 아래 16px (graphHeight 기준)
+    );
+  }
   
   ctx.save();
   ctx.translate(15, padding.top + chartHeight / 2);
