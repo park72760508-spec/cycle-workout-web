@@ -1848,6 +1848,7 @@ function updateSegmentBarTick(){
       drawSegmentGraph(w.segments, segIndex, 'trainingSegmentGraph');
       
       // 마스코트 위치 업데이트 (세그먼트 그래프 기준)
+      // 화면 크기 변경 시에도 위치가 자동으로 재계산됨
       updateSegmentGraphMascot();
     }
   }
@@ -2307,6 +2308,16 @@ function startSegmentLoop() {
   
   // ERG 모드 UI 초기화
   initializeErgMode();
+  
+  // 화면 크기 변경 시 마스코트 위치 재계산
+  if (!window._mascotResizeHandler) {
+    window._mascotResizeHandler = function() {
+      if (typeof updateSegmentGraphMascot === 'function') {
+        updateSegmentGraphMascot();
+      }
+    };
+    window.addEventListener('resize', window._mascotResizeHandler);
+  }
   updateTimeUI();
   
   // 세그먼트 바 초기화
@@ -2795,6 +2806,7 @@ function updateMascotProgress(percent) {
 
 /**
  * 세그먼트 그래프 위에서 마스코트 위치 업데이트 (FTP 라인 위)
+ * 화면 크기 변경 시 자동으로 재계산됨
  */
 function updateSegmentGraphMascot() {
   const mascotLayer = document.getElementById('segmentGraphMascotLayer');
@@ -2838,16 +2850,23 @@ function updateSegmentGraphMascot() {
   const mascotHeight = baseMascotHeight * 0.9; // 90%로 조정
   const mascotWidth = mascotHeight; // 정사각형 가정 (필요시 조정)
   
+  // 시간 표시 위치 계산 (0:00과 마지막 시간의 중심 위치)
+  // 시간 표시는 padding.top + chartHeight + 18 위치에 표시됨
+  // 첫 번째 시간 표시(0:00)의 X 위치: padding.left
+  // 마지막 시간 표시의 X 위치: padding.left + chartWidth
+  const startTimeX = padding.left; // 0:00 시간 표시 중심
+  const endTimeX = padding.left + chartWidth; // 마지막 시간 표시 중심
+  
   // 마스코트 이동 범위: 시작점(0:00 중심) ~ 종료점(마지막 시간 중심)
-  const startX = padding.left; // 시작점: 그래프 시간 0:00 위치의 중심
-  const endX = padding.left + chartWidth; // 종료점: 그래프의 끝에 표시된 시간 중심
+  const startX = startTimeX; // 시작점: 0:00 시간 문자 중심
+  const endX = endTimeX; // 종료점: 마지막 시간 문자 중심
   
   // X 위치 계산 (경과 시간에 비례) - 시작점과 종료점 사이를 경과 시간 비율로 이동
   const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
   const xPosition = startX + (progressRatio * (endX - startX));
   
-  // Y 위치: FTP 라인에서 마스코트 높이의 90%만큼 아래로 이동 (마스코트 중심이 그 위치에 오도록)
-  const yPosition = ftpY + (mascotHeight * 0.9);
+  // Y 위치: FTP 라인에 마스코트 하단이 붙도록 (마스코트 하단이 FTP 라인에 맞닿도록)
+  const yPosition = ftpY; // FTP 라인 Y 위치 (마스코트 하단이 이 위치에 오도록)
   
   // 마스코트 이미지 위치 설정
   mascot.style.position = 'absolute';
@@ -2855,36 +2874,10 @@ function updateSegmentGraphMascot() {
   mascot.style.top = (yPosition * scaleY) + 'px';
   mascot.style.width = (mascotWidth * scaleX) + 'px';
   mascot.style.height = (mascotHeight * scaleY) + 'px';
-  mascot.style.transform = 'translate(-50%, -50%)'; // X, Y 모두 중심 정렬
+  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬, Y는 하단 기준 (하단이 FTP 라인에 붙도록)
   mascot.style.zIndex = '10';
   
-  // 깃발 위치 설정 (세그먼트 우측 끝, FTP 점선 위)
-  if (goalFlag) {
-    // 진행바의 깃발 크기 확인 (style.css: clamp(18px, 2.5vw, 28px))
-    // 실제 크기는 화면 크기에 따라 달라지지만, 평균적으로 약 20-24px 정도
-    // 진행바의 실제 깃발 요소에서 크기 가져오기
-    const timelineGoalFlag = document.getElementById('goalFlag');
-    let flagSize = 24; // 기본값
-    if (timelineGoalFlag) {
-      const flagRect = timelineGoalFlag.getBoundingClientRect();
-      flagSize = flagRect.height || 24; // 진행바 깃발의 실제 높이 사용
-    }
-    
-    // 세그먼트 그래프의 우측 끝 위치 (전체 시간의 끝) - 깃발 중심이 우측 끝에 맞도록
-    const endXPosition = padding.left + chartWidth;
-    // Y 위치: FTP 라인에서 깃발 높이의 90%만큼 아래로 이동 (깃발 중심이 그 위치에 오도록)
-    const flagYPosition = ftpY + (flagSize * 0.9);
-    
-    goalFlag.style.position = 'absolute';
-    goalFlag.style.left = (endXPosition * scaleX) + 'px';
-    goalFlag.style.top = (flagYPosition * scaleY) + 'px';
-    goalFlag.style.width = (flagSize * scaleX) + 'px';
-    goalFlag.style.height = (flagSize * scaleY) + 'px';
-    goalFlag.style.transform = 'translate(-50%, -50%)'; // X, Y 모두 중심 정렬 (우측 끝에 중심, 높이 90% 아래)
-    goalFlag.style.zIndex = '10';
-    goalFlag.style.display = 'block';
-    goalFlag.style.objectFit = 'contain';
-  }
+  // 깃발 이미지 제거됨
   
   // 디버깅 로그 (필요시 주석 해제)
   // console.log('[마스코트] 세그먼트 그래프 위치 업데이트:', {
