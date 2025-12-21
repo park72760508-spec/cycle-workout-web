@@ -2108,10 +2108,136 @@
 <script src="assets/js/app.js"></script>  
 
   
+  <!-- ========== 실내 평로라 대회 대시보드 화면 ========== -->
+  <div id="rollerRaceDashboardScreen" class="screen">
+    <div class="dashboard-header">
+      <h1>🏁 실내 평로라 대회</h1>
+      <button class="btn btn-secondary" onclick="showScreen('connectionScreen')">
+        <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+        뒤로
+      </button>
+    </div>
+
+    <!-- 전체 통계 -->
+    <div class="dashboard-stats">
+      <div class="stat-item">
+        <span class="stat-label">총 누적거리</span>
+        <span class="stat-value" id="totalDistance">0.0</span>
+        <span class="stat-unit">km</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">경과시간</span>
+        <span class="stat-value" id="elapsedTime">00:00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">참가자</span>
+        <span class="stat-value" id="activeRiders">0</span>
+        <span class="stat-unit">명</span>
+      </div>
+    </div>
+
+    <!-- 속도계 그리드 (5개씩 2줄) -->
+    <div class="speedometer-grid" id="speedometerGrid">
+      <!-- 속도계는 JavaScript로 동적 생성 -->
+    </div>
+
+    <!-- 속도계 목록 관리 -->
+    <div class="speedometer-list-section">
+      <div class="list-header">
+        <h3>속도계 목록</h3>
+        <button class="btn btn-primary btn-sm" onclick="showAddSpeedometerModal()">
+          <img src="assets/img/add.png" alt="추가" class="btn-icon-image" style="width: 16px; height: 16px; margin-right: 4px; vertical-align: middle;" />
+          속도계 추가
+        </button>
+      </div>
+      <div class="speedometer-list" id="speedometerList">
+        <!-- 속도계 목록은 JavaScript로 동적 생성 -->
+      </div>
+    </div>
+
+    <!-- 경기 제어 버튼 -->
+    <div class="race-controls">
+      <button class="btn btn-success btn-large" id="btnStartRace" onclick="startRace()">
+        <img src="assets/img/play.png" alt="시작" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
+        시작
+      </button>
+      <button class="btn btn-warning btn-large" id="btnPauseRace" onclick="pauseRace()" disabled>
+        <img src="assets/img/pause.png" alt="일시정지" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
+        일시정지
+      </button>
+      <button class="btn btn-danger btn-large" id="btnStopRace" onclick="stopRace()" disabled>
+        <img src="assets/img/stop.png" alt="종료" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
+        종료
+      </button>
+    </div>
+
+    <!-- 경기 설정 모달 -->
+    <div id="raceSettingsModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>경기 설정</h3>
+          <button class="modal-close" onclick="closeRaceSettingsModal()">✖</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>경기 종료 조건</label>
+            <div class="form-row">
+              <label>
+                <input type="checkbox" id="endByDistance" checked>
+                누적거리 달성
+              </label>
+              <input type="number" id="targetDistance" min="1" value="10" step="0.1" style="width: 100px;">
+              <span>km</span>
+            </div>
+            <div class="form-row">
+              <label>
+                <input type="checkbox" id="endByTime">
+                라이딩 시간 설정
+              </label>
+              <input type="number" id="targetTime" min="1" value="60" style="width: 100px;">
+              <span>분</span>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-success" onclick="saveRaceSettings()">저장</button>
+          <button class="btn btn-secondary" onclick="closeRaceSettingsModal()">취소</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 속도계 추가 모달 -->
+    <div id="addSpeedometerModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>속도계 추가</h3>
+          <button class="modal-close" onclick="closeAddSpeedometerModal()">✖</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>속도계 이름</label>
+            <input type="text" id="speedometerName" placeholder="예: 속도계 1">
+          </div>
+          <div class="form-group">
+            <label>ANT+ 디바이스 ID</label>
+            <input type="text" id="speedometerDeviceId" placeholder="자동 검색 또는 수동 입력">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-success" onclick="addSpeedometer()">추가</button>
+          <button class="btn btn-secondary" onclick="closeAddSpeedometerModal()">취소</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Google Charts for data visualization -->
   <script src="https://www.gstatic.com/charts/loader.js"></script>
   
   <!-- SheetJS for Excel file reading -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <!-- 평로라 대회 대시보드 스크립트 -->
+  <script src="rollerRaceDashboard.js"></script>
 </body>
 </html>
