@@ -3558,11 +3558,129 @@ button[aria-disabled="true"] {
   }
 }
 
-/* 시간 정보 영역도 태블릿에서 2열 유지 */
+/* 시간 정보 영역도 태블릿에서 3열 유지 (한 줄로 표시) */
 @media (max-width: 1024px) and (min-width: 481px) {
-  .enhanced-training-time-info {
-    grid-template-columns: 1fr 1fr; /* 2열 유지 */
-    gap: 12px;
+  #trainingScreen .enhanced-training-time-info {
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr !important; /* 3열 유지 (한 줄로 표시) */
+    gap: 8px !important; /* 간격 축소 */
+    grid-template-rows: 1fr !important; /* 한 줄 강제 */
+    flex-wrap: nowrap !important;
+  }
+  
+  /* 강도 조절 컨테이너 크기 축소 */
+  #trainingScreen .intensity-adjustment-container {
+    min-width: 150px !important; /* 200px에서 150px로 축소 */
+    max-width: 150px !important; /* 최대 너비 제한 */
+    padding: 8px !important; /* 12px에서 8px로 축소 */
+    gap: 6px !important; /* 8px에서 6px로 축소 */
+    flex-shrink: 0 !important; /* 축소 방지 */
+  }
+  
+  #trainingScreen .intensity-adjustment-label {
+    font-size: 11px !important; /* 12px에서 11px로 축소 */
+  }
+  
+  #trainingScreen .intensity-adjustment-value {
+    font-size: 14px !important; /* 16px에서 14px로 축소 */
+    min-width: 40px !important; /* 45px에서 40px로 축소 */
+  }
+  
+  #trainingScreen .intensity-adjustment-slider-wrapper {
+    gap: 6px !important; /* 10px에서 6px로 축소 */
+  }
+  
+  #trainingScreen .intensity-adjustment-min,
+  #trainingScreen .intensity-adjustment-max {
+    font-size: 10px !important; /* 11px에서 10px로 축소 */
+    min-width: 30px !important; /* 35px에서 30px로 축소 */
+  }
+  
+  /* 경과시간과 다음 세그먼트 정보 크기 조정 */
+  #trainingScreen .enhanced-time-elapsed, 
+  #trainingScreen .enhanced-next-segment-info {
+    padding: 10px 12px !important; /* 12px 16px에서 10px 12px로 축소 */
+    flex-shrink: 1 !important; /* 필요시 축소 허용 */
+    min-width: 0 !important; /* 최소 너비 제한 제거 */
+  }
+  
+  #trainingScreen .enhanced-time-value {
+    font-size: 28px !important; /* 32px에서 28px로 축소 */
+  }
+  
+  #trainingScreen .enhanced-next-value {
+    font-size: 12px !important; /* 14px에서 12px로 축소 */
+    white-space: nowrap !important; /* 줄바꿈 방지 */
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  #trainingScreen .enhanced-time-label, 
+  #trainingScreen .enhanced-next-label {
+    font-size: 10px !important; /* 11px에서 10px로 축소 */
+  }
+}
+
+/* 태블릿 10.4인치 이하 세로 모드 (768px 이하, 481px 이상): 경과시간, 강도 조절, 다음 세그먼트를 한 줄로 표시 */
+@media (max-width: 768px) and (min-width: 481px) {
+  #trainingScreen .enhanced-training-time-info {
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr !important; /* 3열 유지 (한 줄로 표시) */
+    grid-template-rows: 1fr !important; /* 한 줄 강제 */
+    gap: 6px !important; /* 간격 더 축소 */
+    flex-wrap: nowrap !important;
+  }
+  
+  /* 강도 조절 컨테이너 크기 더 축소 */
+  #trainingScreen .intensity-adjustment-container {
+    min-width: 140px !important; /* 더 축소 */
+    max-width: 140px !important; /* 최대 너비 제한 */
+    padding: 6px !important; /* 더 축소 */
+    gap: 4px !important; /* 더 축소 */
+    flex-shrink: 0 !important; /* 축소 방지 */
+  }
+  
+  #trainingScreen .intensity-adjustment-label {
+    font-size: 10px !important; /* 더 축소 */
+  }
+  
+  #trainingScreen .intensity-adjustment-value {
+    font-size: 13px !important; /* 더 축소 */
+    min-width: 35px !important; /* 더 축소 */
+  }
+  
+  #trainingScreen .intensity-adjustment-slider-wrapper {
+    gap: 4px !important; /* 더 축소 */
+  }
+  
+  #trainingScreen .intensity-adjustment-min,
+  #trainingScreen .intensity-adjustment-max {
+    font-size: 9px !important; /* 더 축소 */
+    min-width: 28px !important; /* 더 축소 */
+  }
+  
+  /* 경과시간과 다음 세그먼트 정보 크기 더 조정 */
+  #trainingScreen .enhanced-time-elapsed, 
+  #trainingScreen .enhanced-next-segment-info {
+    padding: 8px 10px !important; /* 더 축소 */
+    flex-shrink: 1 !important; /* 필요시 축소 허용 */
+    min-width: 0 !important; /* 최소 너비 제한 제거 */
+  }
+  
+  #trainingScreen .enhanced-time-value {
+    font-size: 24px !important; /* 더 축소 */
+  }
+  
+  #trainingScreen .enhanced-next-value {
+    font-size: 11px !important; /* 더 축소 */
+    white-space: nowrap !important; /* 줄바꿈 방지 */
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  #trainingScreen .enhanced-time-label, 
+  #trainingScreen .enhanced-next-label {
+    font-size: 9px !important; /* 더 축소 */
   }
 }
 
