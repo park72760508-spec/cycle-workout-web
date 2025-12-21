@@ -1696,6 +1696,46 @@ button[aria-disabled="true"] {
   text-align: right;
 }
 
+/* 엘리트/PRO 선수 전용 메트릭 (NP, IF) - 파워 그래프 하단 */
+.chart-elite-metrics {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 8px 12px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 16px;
+}
+
+.elite-metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.elite-metric-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.elite-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.elite-metric-unit {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
 
 
 
