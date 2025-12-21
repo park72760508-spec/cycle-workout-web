@@ -1704,14 +1704,18 @@ button[aria-disabled="true"] {
 }
 
 /* 컨트롤 버튼 */
-#trainingScreen .training-controls{
+/* 훈련 화면에만 버튼 표시 */
+.training-controls {
+  display: none; /* 기본적으로 숨김 */
+}
+
+#trainingScreen .training-controls {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 16px;
   margin-top: 10px; /* 세그먼트 그래프 바로 아래 */
   margin-bottom: 20px;
-  display:flex; justify-content:center; gap:25px; margin-top:20px;
 }
 #trainingScreen .control-btn{
   width:60px; height:60px; border-radius:50%; border:none;
@@ -3928,7 +3932,7 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-.enhanced-control-btn:hover {
+#trainingScreen .enhanced-control-btn:hover {
   transform: translateY(-2px);
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 
@@ -3936,7 +3940,7 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.enhanced-control-btn:active {
+#trainingScreen .enhanced-control-btn:active {
   transform: translateY(0);
 }
 
@@ -3951,7 +3955,7 @@ button[aria-disabled="true"] {
 }*/
 
 /* 위치: style (16).css - 개선형 컨트롤 버튼 아이콘 정의 구역(의사요소) */
-.enhanced-control-btn.pause::before {
+#trainingScreen .enhanced-control-btn.pause::before {
   content: "";
   width: 4px;
   height: 22px;
@@ -3966,7 +3970,7 @@ button[aria-disabled="true"] {
   border-radius: 2px;
 }
 
-.enhanced-control-btn.pause:hover {
+#trainingScreen .enhanced-control-btn.pause:hover {
   border-color: #fbbf24;
   box-shadow: 
     0 8px 25px rgba(251, 191, 36, 0.3),
@@ -3974,7 +3978,7 @@ button[aria-disabled="true"] {
 }
 
 /* 재생 아이콘 (일시정지 해제시) */
-.enhanced-control-btn.play::before {
+#trainingScreen .enhanced-control-btn.play::before {
   content: '';
   width: 0;
   height: 0;
@@ -3984,7 +3988,7 @@ button[aria-disabled="true"] {
   margin-left: 3px;
 }
 
-.enhanced-control-btn.play:hover {
+#trainingScreen .enhanced-control-btn.play:hover {
   border-color: #22c55e;
   box-shadow: 
     0 8px 25px rgba(34, 197, 94, 0.3),
@@ -3992,7 +3996,7 @@ button[aria-disabled="true"] {
 }
 
 /* 건너뛰기 아이콘 */
-.enhanced-control-btn.skip::before {
+#trainingScreen .enhanced-control-btn.skip::before {
   content: '';
   width: 0;
   height: 0;
@@ -4002,7 +4006,7 @@ button[aria-disabled="true"] {
   margin-right: 2px;
 }
 
-.enhanced-control-btn.skip::after {
+#trainingScreen .enhanced-control-btn.skip::after {
   content: '';
   width: 0;
   height: 0;
@@ -4012,7 +4016,7 @@ button[aria-disabled="true"] {
   margin-left: -2px;
 }
 
-.enhanced-control-btn.skip:hover {
+#trainingScreen .enhanced-control-btn.skip:hover {
   border-color: #3b82f6;
   box-shadow: 
     0 8px 25px rgba(59, 130, 246, 0.3),
@@ -4020,7 +4024,7 @@ button[aria-disabled="true"] {
 }
 
 /* 정지 아이콘 */
-.enhanced-control-btn.stop::before {
+#trainingScreen .enhanced-control-btn.stop::before {
   content: '';
   width: 18px;
   height: 18px;
@@ -4028,7 +4032,7 @@ button[aria-disabled="true"] {
   border-radius: 3px;
 }
 
-.enhanced-control-btn.stop:hover {
+#trainingScreen .enhanced-control-btn.stop:hover {
   border-color: #ef4444;
   box-shadow: 
     0 8px 25px rgba(239, 68, 68, 0.3),
@@ -4036,7 +4040,7 @@ button[aria-disabled="true"] {
 }
 
 /* 네온 글로우 효과 (활성화시) */
-.enhanced-control-btn.active {
+#trainingScreen .enhanced-control-btn.active {
   box-shadow: 
     0 0 20px currentColor,
     0 4px 12px rgba(0, 0, 0, 0.4),
