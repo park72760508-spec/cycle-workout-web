@@ -2794,6 +2794,7 @@ button[aria-disabled="true"] {
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  text-align: center;
 }
 
 .enhanced-left-panel .enhanced-metric-value {
@@ -2808,6 +2809,7 @@ button[aria-disabled="true"] {
   font-size: 14px;
   color: #9ca3af;
   font-weight: 500;
+  text-align: center;
 }
 
 /* 중앙 패널 - 메인 파워 디스플레이 */
