@@ -2853,37 +2853,38 @@ function updateSegmentGraphMascot() {
   const mascotHeight = baseMascotHeight * 0.9; // 90%로 조정
   const mascotWidth = mascotHeight; // 정사각형 가정 (필요시 조정)
   
-  // Y축 실선 위치: padding.left (70px) - 세로축(파워) 실선이 이 위치에 그려짐
+  // 그래프 하단 라인 위치: padding.top + chartHeight (가로축 시간 라인)
   // 시간 표시 위치 계산 (0:00과 마지막 시간의 중심 위치)
   // 시간 표시는 padding.top + chartHeight + 18 위치에 표시됨
   // 첫 번째 시간 표시(0:00)의 X 위치: padding.left (시간 표시는 textAlign: 'center'이므로 중심이 padding.left)
   // 마지막 시간 표시의 X 위치: padding.left + chartWidth
-  const yAxisX = padding.left; // Y축 실선 X 위치 (마스코트 중심이 이 위치에 맞춰짐)
-  const startTimeX = padding.left; // 0:00 시간 표시 중심 (Y축 실선과 동일한 위치)
+  const graphHeight = 300; // 그래프 높이 (workoutManager.js와 동일)
+  const chartHeight = graphHeight - padding.top - padding.bottom;
+  const bottomLineY = padding.top + chartHeight; // 그래프 하단 라인 Y 위치 (가로축)
+  
+  const startTimeX = padding.left; // 0:00 시간 표시 중심
   const endTimeX = padding.left + chartWidth; // 마지막 시간 표시 중심
   
-  // 마스코트 이동 범위: 시작점(Y축 실선 중심) ~ 종료점(마지막 시간 중심)
-  const startX = yAxisX; // 시작점: Y축 실선 중심 (마스코트 중심이 Y축 실선에 맞춰짐)
-  const endX = endTimeX; // 종료점: 마지막 시간 문자 중심
+  // 마스코트 이동 범위: 시작점(0:00 시간 중앙) ~ 종료점(마지막 시간 중앙)
+  const startX = startTimeX; // 시작점: 0:00 시간 문자 중앙
+  const endX = endTimeX; // 종료점: 마지막 시간 문자 중앙
   
-  // X 위치 계산 (경과 시간에 비례) - 시작점(Y축 실선)과 종료점 사이를 경과 시간 비율로 이동
+  // X 위치 계산 (경과 시간에 비례) - 시작점과 종료점 사이를 경과 시간 비율로 이동
   const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
   const xPosition = startX + (progressRatio * (endX - startX));
   
-  // Y 위치: FTP 오렌지 점선에 마스코트 바퀴가 붙도록
-  // 마스코트 이미지에서 바퀴는 하단 부분에 있으므로, 하단이 FTP 라인에 붙도록 배치
-  const yPosition = ftpY; // FTP 라인 Y 위치 (마스코트 바퀴 하단이 이 위치에 붙도록)
+  // Y 위치: 그래프 하단 라인에 마스코트가 위치하도록
+  const yPosition = bottomLineY; // 그래프 하단 라인 Y 위치
   
   // 마스코트 이미지 위치 설정
-  // X축: 시작 위치는 Y축 실선 중심에 마스코트 중심이 위치 (padding.left)
-  //      경과 시간에 따라 Y축 실선부터 마지막 시간까지 이동
-  // Y축: FTP 오렌지 점선에 마스코트 바퀴가 붙도록 (하단 기준)
+  // X축: 시작 시간(0:00) 중앙에 마스코트 중심이 위치하여 시작, 종료 시간 중앙까지 이동
+  // Y축: 그래프 하단 라인에 마스코트가 위치 (하단 기준)
   mascot.style.position = 'absolute';
   mascot.style.left = (xPosition * scaleX) + 'px';
   mascot.style.top = (yPosition * scaleY) + 'px';
   mascot.style.width = (mascotWidth * scaleX) + 'px';
   mascot.style.height = (mascotHeight * scaleY) + 'px';
-  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬 (Y축 실선에 마스코트 중심이 맞춰짐), Y는 하단 기준 (바퀴가 FTP 점선에 붙도록)
+  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬 (0:00 시간 중앙에 맞춰짐), Y는 하단 기준 (하단 라인에 붙도록)
   mascot.style.zIndex = '10';
   
   // 깃발 이미지 제거됨
