@@ -2619,9 +2619,20 @@ button[aria-disabled="true"] {
 }
 
 .enhanced-training-user-info #userInfo::before {
-  content: "👤";
+  content: "";
+  margin-right: 0;
+  font-size: 0;
+}
+
+/* 훈련 화면 사용자 이름 앞 이미지 스타일 (흰색 네온 효과) */
+.training-user-challenge-icon {
+  height: 2em; /* 기존 이미지 크기와 동일 */
+  width: auto;
+  vertical-align: middle;
   margin-right: 8px;
-  font-size: 18px;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6)) 
+          drop-shadow(0 0 6px rgba(255, 255, 255, 0.4))
+          drop-shadow(0 0 9px rgba(255, 255, 255, 0.2));
 }
 
 /* 2. 경과시간 및 다음 세그먼트 정보 */
