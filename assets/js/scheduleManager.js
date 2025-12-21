@@ -801,33 +801,41 @@ async function renderScheduleDays(days) {
   const listContainer = document.getElementById('scheduleDaysList');
   if (!listContainer) return;
   
-  // 워크아웃 목록 로드
+  // 워크아웃 목록 로드 (모든 워크아웃 조회 후 프론트엔드에서 필터링)
   let workouts = [];
   try {
-    // 사용자 등급 확인
-    let grade = '2';
-    try {
-      if (typeof getViewerGrade === 'function') {
-        grade = String(getViewerGrade());
-      } else {
-        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-        if (viewer && viewer.grade != null) {
-          grade = String(viewer.grade);
-        } else if (authUser && authUser.grade != null) {
-          grade = String(authUser.grade);
-        }
-      }
-    } catch (e) {
-      console.warn('grade 확인 실패:', e);
-      grade = '2';
-    }
-    
-    const workoutUrl = `${window.GAS_URL}?action=listAllWorkouts&grade=${grade}`;
+    const workoutUrl = `${window.GAS_URL}?action=listAllWorkouts`;
     const workoutResponse = await fetch(workoutUrl);
     const workoutResult = await workoutResponse.json();
     if (workoutResult.success) {
-      workouts = workoutResult.items || [];
+      const allWorkouts = workoutResult.items || [];
+      
+      // 프론트엔드에서 사용자 등급 확인하여 필터링
+      let grade = '2';
+      try {
+        if (typeof getViewerGrade === 'function') {
+          grade = String(getViewerGrade());
+        } else {
+          const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+          if (viewer && viewer.grade != null) {
+            grade = String(viewer.grade);
+          } else if (authUser && authUser.grade != null) {
+            grade = String(authUser.grade);
+          }
+        }
+      } catch (e) {
+        console.warn('grade 확인 실패:', e);
+        grade = '2';
+      }
+      
+      const isAdmin = (grade === '1' || grade === '3');
+      
+      // 관리자는 모든 워크아웃, 일반 사용자는 공개 워크아웃만
+      workouts = isAdmin 
+        ? allWorkouts 
+        : allWorkouts.filter(w => String(w.status || '').trim() === '보이기');
+      
       // 전역 변수에 저장 (엑셀 업로드 기능에서 사용)
       window.allWorkouts = workouts;
     }

@@ -697,29 +697,9 @@ function getSegmentTypeClass(segmentType) {
 
 async function apiGetWorkouts() {
   try {
-    // 사용자 등급 확인하여 API에 전달
-    let grade = '2';
-    try {
-      if (typeof getViewerGrade === 'function') {
-        grade = String(getViewerGrade());
-      } else {
-        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-        if (viewer && viewer.grade != null) {
-          grade = String(viewer.grade);
-        } else if (authUser && authUser.grade != null) {
-          grade = String(authUser.grade);
-        }
-      }
-    } catch (e) {
-      console.warn('grade 확인 실패:', e);
-      grade = '2';
-    }
-    
-    console.log('API 요청 - grade:', grade);
+    // 모든 워크아웃 조회 (필터링은 프론트엔드에서 처리)
     return await jsonpRequest(window.GAS_URL, { 
-      action: 'listWorkouts',
-      grade: grade
+      action: 'listWorkouts'
     });
   } catch (error) {
     console.error('apiGetWorkouts 실패:', error);
@@ -1283,7 +1263,7 @@ async function loadWorkouts() {
       })));
     }
     
-    // 워크아웃 목록을 먼저 렌더링 (그룹방 상태 없이 빠른 표시)
+    // 프론트엔드에서 사용자 등급 확인하여 필터링
     // grade 확인: 여러 소스에서 확인
     let grade = '2';
     try {
@@ -1325,11 +1305,10 @@ async function loadWorkouts() {
       return workoutStatus !== '보이기';
     });
     
-    // 필터링: 관리자는 모든 워크아웃 표시, 일반 사용자는 공개 워크아웃만 표시
+    // 프론트엔드에서 필터링: 관리자는 모든 워크아웃 표시, 일반 사용자는 공개 워크아웃만 표시
     let filteredWorkouts;
     if (isAdmin) {
       // 관리자: 필터 없이 모든 워크아웃 표시 (공개 + 비공개 모두)
-      // 배열을 직접 복사하여 필터링이 일어나지 않도록 보장
       filteredWorkouts = [...validWorkouts];
       console.log('✅ 관리자 모드: 모든 워크아웃 표시 (필터 없음)', {
         total: filteredWorkouts.length,

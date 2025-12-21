@@ -8888,14 +8888,39 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
       const baseUrl = ensureBaseUrl();
       const params = new URLSearchParams({
         action: 'getWorkoutsByCategory',
-        categories: categories.join(','),
-        grade: (typeof getViewerGrade === 'function') ? String(getViewerGrade()) : '2'
+        categories: categories.join(',')
       });
       const response = await fetch(`${baseUrl}?${params.toString()}`);
       const result = await response.json();
       
       if (result?.success && Array.isArray(result.items)) {
-        availableWorkouts = result.items;
+        const allWorkouts = result.items;
+        
+        // 프론트엔드에서 사용자 등급 확인하여 필터링
+        let grade = '2';
+        try {
+          if (typeof getViewerGrade === 'function') {
+            grade = String(getViewerGrade());
+          } else {
+            const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+            const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+            if (viewer && viewer.grade != null) {
+              grade = String(viewer.grade);
+            } else if (authUser && authUser.grade != null) {
+              grade = String(authUser.grade);
+            }
+          }
+        } catch (e) {
+          console.warn('grade 확인 실패:', e);
+          grade = '2';
+        }
+        
+        const isAdmin = (grade === '1' || grade === '3');
+        
+        // 관리자는 모든 워크아웃, 일반 사용자는 공개 워크아웃만
+        availableWorkouts = isAdmin 
+          ? allWorkouts 
+          : allWorkouts.filter(w => String(w.status || '').trim() === '보이기');
       }
     } catch (error) {
       console.warn('워크아웃 목록 조회 실패:', error);
