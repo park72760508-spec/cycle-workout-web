@@ -2799,6 +2799,7 @@ function updateMascotProgress(percent) {
 function updateSegmentGraphMascot() {
   const mascotLayer = document.getElementById('segmentGraphMascotLayer');
   const mascot = document.getElementById('segmentGraphMascot');
+  const goalFlag = document.getElementById('segmentGraphGoalFlag');
   const canvas = document.getElementById('trainingSegmentGraph');
   
   if (!mascotLayer || !mascot || !canvas) return;
@@ -2818,14 +2819,6 @@ function updateSegmentGraphMascot() {
   // 현재 경과 시간 가져오기
   const elapsedSec = window.trainingState?.elapsedSec || 0;
   
-  // X 위치 계산 (경과 시간에 비례)
-  const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
-  const xPosition = padding.left + (progressRatio * chartWidth);
-  
-  // Y 위치는 FTP 라인 위 (마스코트 중심이 FTP 라인에 맞도록)
-  const mascotHeight = 40; // 마스코트 높이 (추정, 필요시 조정)
-  const yPosition = ftpY - (mascotHeight / 2);
-  
   // Canvas의 실제 크기와 표시 크기 비율 계산
   const canvasRect = canvas.getBoundingClientRect();
   const scaleX = canvasRect.width / canvas.width;
@@ -2840,14 +2833,53 @@ function updateSegmentGraphMascot() {
   mascotLayer.style.height = canvasRect.height + 'px';
   mascotLayer.style.pointerEvents = 'none';
   
+  // 마스코트 크기 (높이만 90%로 조정)
+  const baseMascotHeight = 40; // 기본 높이
+  const mascotHeight = baseMascotHeight * 0.9; // 90%로 조정
+  const mascotWidth = mascotHeight; // 정사각형 가정 (필요시 조정)
+  
+  // X 위치 계산 (경과 시간에 비례) - 마스코트 중심이 경과 시간 위치에 맞도록
+  const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
+  const xPosition = padding.left + (progressRatio * chartWidth);
+  
+  // Y 위치는 FTP 라인 위 (마스코트 하단이 FTP 라인에 맞닿도록)
+  const yPosition = ftpY; // FTP 라인 Y 위치
+  
   // 마스코트 이미지 위치 설정
   mascot.style.position = 'absolute';
   mascot.style.left = (xPosition * scaleX) + 'px';
   mascot.style.top = (yPosition * scaleY) + 'px';
-  mascot.style.width = (mascotHeight * scaleX) + 'px';
+  mascot.style.width = (mascotWidth * scaleX) + 'px';
   mascot.style.height = (mascotHeight * scaleY) + 'px';
-  mascot.style.transform = 'translate(-50%, -50%)'; // 중심 정렬
+  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심, Y는 하단 기준
   mascot.style.zIndex = '10';
+  
+  // 깃발 위치 설정 (세그먼트 우측 끝, FTP 점선 위)
+  if (goalFlag) {
+    // 진행바의 깃발 크기 확인 (style.css: clamp(18px, 2.5vw, 28px))
+    // 실제 크기는 화면 크기에 따라 달라지지만, 평균적으로 약 20-24px 정도
+    // 진행바의 실제 깃발 요소에서 크기 가져오기
+    const timelineGoalFlag = document.getElementById('goalFlag');
+    let flagSize = 24; // 기본값
+    if (timelineGoalFlag) {
+      const flagRect = timelineGoalFlag.getBoundingClientRect();
+      flagSize = flagRect.height || 24; // 진행바 깃발의 실제 높이 사용
+    }
+    
+    // 세그먼트 그래프의 우측 끝 위치 (전체 시간의 끝)
+    const endXPosition = padding.left + chartWidth;
+    const flagYPosition = ftpY; // FTP 라인 Y 위치
+    
+    goalFlag.style.position = 'absolute';
+    goalFlag.style.left = (endXPosition * scaleX) + 'px';
+    goalFlag.style.top = (flagYPosition * scaleY) + 'px';
+    goalFlag.style.width = (flagSize * scaleX) + 'px';
+    goalFlag.style.height = (flagSize * scaleY) + 'px';
+    goalFlag.style.transform = 'translate(-50%, -100%)'; // X는 중심, Y는 하단 기준 (하단이 FTP 라인에 맞닿도록)
+    goalFlag.style.zIndex = '10';
+    goalFlag.style.display = 'block';
+    goalFlag.style.objectFit = 'contain';
+  }
   
   console.log('[마스코트] 세그먼트 그래프 위치 업데이트:', {
     elapsedSec: elapsedSec,
@@ -2855,7 +2887,8 @@ function updateSegmentGraphMascot() {
     progressRatio: progressRatio.toFixed(3),
     xPosition: xPosition.toFixed(1),
     yPosition: yPosition.toFixed(1),
-    ftpY: ftpY
+    ftpY: ftpY,
+    mascotHeight: mascotHeight.toFixed(1)
   });
 }
 
