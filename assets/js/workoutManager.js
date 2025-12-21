@@ -683,6 +683,14 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // FTP 가이드 라인 (부드러운 색상)
   const ftpPower = ftp;
   const ftpY = padding.top + chartHeight - (chartHeight * (ftpPower / maxTargetPower));
+  
+  // FTP Y 위치를 전역 변수로 저장 (마스코트 위치 계산용)
+  if (canvasId === 'trainingSegmentGraph') {
+    window._segmentGraphFtpY = ftpY;
+    window._segmentGraphPadding = padding;
+    window._segmentGraphChartWidth = chartWidth;
+    window._segmentGraphTotalSeconds = totalSeconds;
+  }
   if (canvasId === 'trainingSegmentGraph') {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.5)';
     ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면: 더 밝은 노란색

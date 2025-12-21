@@ -1364,12 +1364,16 @@ function createTimeline() {
    `;
   }).join("");
   
-  // 세그먼트 그래프 초기화 (훈련 화면용)
-  if (typeof drawSegmentGraph === 'function' && segs.length > 0) {
-    setTimeout(() => {
-      drawSegmentGraph(segs, -1, 'trainingSegmentGraph');
-    }, 100);
-  }
+        // 세그먼트 그래프 초기화 (훈련 화면용)
+        if (typeof drawSegmentGraph === 'function' && segs.length > 0) {
+          setTimeout(() => {
+            drawSegmentGraph(segs, -1, 'trainingSegmentGraph');
+            // 마스코트 위치 초기화
+            if (typeof updateSegmentGraphMascot === 'function') {
+              updateSegmentGraphMascot();
+            }
+          }, 100);
+        }
 }
 
 
@@ -1842,6 +1846,9 @@ function updateSegmentBarTick(){
     if (!window._lastGraphUpdate || (now - window._lastGraphUpdate) > 100) {
       window._lastGraphUpdate = now;
       drawSegmentGraph(w.segments, segIndex, 'trainingSegmentGraph');
+      
+      // 마스코트 위치 업데이트 (세그먼트 그래프 기준)
+      updateSegmentGraphMascot();
     }
   }
   
@@ -2784,6 +2791,72 @@ function updateMascotProgress(percent) {
 
   // CSS 변수로 전달 → translateX(var(--mascot-x))
   layer.style.setProperty("--mascot-x", px + "px");
+}
+
+/**
+ * 세그먼트 그래프 위에서 마스코트 위치 업데이트 (FTP 라인 위)
+ */
+function updateSegmentGraphMascot() {
+  const mascotLayer = document.getElementById('segmentGraphMascotLayer');
+  const mascot = document.getElementById('segmentGraphMascot');
+  const canvas = document.getElementById('trainingSegmentGraph');
+  
+  if (!mascotLayer || !mascot || !canvas) return;
+  
+  // 세그먼트 그래프 정보 확인
+  const ftpY = window._segmentGraphFtpY;
+  const padding = window._segmentGraphPadding;
+  const chartWidth = window._segmentGraphChartWidth;
+  const totalSeconds = window._segmentGraphTotalSeconds;
+  
+  if (!ftpY || !padding || !chartWidth || !totalSeconds) {
+    // 그래프 정보가 없으면 숨김
+    mascotLayer.style.display = 'none';
+    return;
+  }
+  
+  // 현재 경과 시간 가져오기
+  const elapsedSec = window.trainingState?.elapsedSec || 0;
+  
+  // X 위치 계산 (경과 시간에 비례)
+  const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
+  const xPosition = padding.left + (progressRatio * chartWidth);
+  
+  // Y 위치는 FTP 라인 위 (마스코트 중심이 FTP 라인에 맞도록)
+  const mascotHeight = 40; // 마스코트 높이 (추정, 필요시 조정)
+  const yPosition = ftpY - (mascotHeight / 2);
+  
+  // Canvas의 실제 크기와 표시 크기 비율 계산
+  const canvasRect = canvas.getBoundingClientRect();
+  const scaleX = canvasRect.width / canvas.width;
+  const scaleY = canvasRect.height / canvas.height;
+  
+  // 마스코트 위치 설정 (Canvas 기준 상대 위치)
+  mascotLayer.style.display = 'block';
+  mascotLayer.style.position = 'absolute';
+  mascotLayer.style.left = '0';
+  mascotLayer.style.top = '0';
+  mascotLayer.style.width = canvasRect.width + 'px';
+  mascotLayer.style.height = canvasRect.height + 'px';
+  mascotLayer.style.pointerEvents = 'none';
+  
+  // 마스코트 이미지 위치 설정
+  mascot.style.position = 'absolute';
+  mascot.style.left = (xPosition * scaleX) + 'px';
+  mascot.style.top = (yPosition * scaleY) + 'px';
+  mascot.style.width = (mascotHeight * scaleX) + 'px';
+  mascot.style.height = (mascotHeight * scaleY) + 'px';
+  mascot.style.transform = 'translate(-50%, -50%)'; // 중심 정렬
+  mascot.style.zIndex = '10';
+  
+  console.log('[마스코트] 세그먼트 그래프 위치 업데이트:', {
+    elapsedSec: elapsedSec,
+    totalSeconds: totalSeconds,
+    progressRatio: progressRatio.toFixed(3),
+    xPosition: xPosition.toFixed(1),
+    yPosition: yPosition.toFixed(1),
+    ftpY: ftpY
+  });
 }
 
 
