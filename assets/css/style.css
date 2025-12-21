@@ -1346,7 +1346,7 @@ button[aria-disabled="true"] {
 .training-segment-graph-container {
   width: 100%;
   margin-top: 20px;
-  margin-bottom: 10px; /* 버튼과의 간격 조정 */
+  margin-bottom: 0; /* 버튼과의 간격 제거 (바로 아래 배치) */
 }
 
 #trainingScreen .training-segment-graph-container .segment-graph-container {
@@ -1714,8 +1714,9 @@ button[aria-disabled="true"] {
   justify-content: center;
   align-items: center;
   gap: 16px;
-  margin-top: 10px; /* 세그먼트 그래프 바로 아래 */
+  margin-top: 0; /* 세그먼트 그래프 바로 아래 */
   margin-bottom: 20px;
+  padding-top: 10px; /* 그래프 하단 시간 표시와의 간격 */
 }
 #trainingScreen .control-btn{
   width:60px; height:60px; border-radius:50%; border:none;
