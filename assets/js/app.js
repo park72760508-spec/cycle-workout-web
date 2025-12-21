@@ -2261,6 +2261,9 @@ function startSegmentLoop() {
 
   // 첫 번째 세그먼트 타겟 적용
   applySegmentTarget(0);
+  
+  // 강도 조절 슬라이더 초기화
+  initializeIntensitySlider();
   updateTimeUI();
   
   // 세그먼트 바 초기화
@@ -8760,6 +8763,85 @@ function confirmRPESelection() {
 // 전역 함수로 등록
 window.showRPEModal = showRPEModal;
 window.closeRPEModal = closeRPEModal;
+
+/**
+ * 강도 조절 슬라이더 초기화 및 이벤트 핸들러
+ */
+function initializeIntensitySlider() {
+  const slider = document.getElementById('intensityAdjustmentSlider');
+  const valueDisplay = document.getElementById('intensityAdjustmentValue');
+  
+  if (!slider || !valueDisplay) return;
+  
+  // 초기값 설정: 컨디션별 강도 보정 값에서 퍼센트로 변환
+  // window.trainingIntensityAdjustment는 0.95 ~ 1.03 (95% ~ 103%)
+  // 슬라이더는 -10% ~ +10% 범위이므로, 1.0 기준으로 변환
+  const currentAdjustment = window.trainingIntensityAdjustment || 1.0;
+  const sliderValue = Math.round((currentAdjustment - 1.0) * 100); // -5% ~ +3% → -5 ~ +3
+  // 슬라이더 범위는 -10 ~ +10이므로 클램프
+  const clampedValue = Math.max(-10, Math.min(10, sliderValue));
+  
+  slider.value = clampedValue;
+  updateIntensityDisplay(clampedValue);
+  
+  // 슬라이더 이벤트 리스너
+  slider.addEventListener('input', function(e) {
+    const value = parseInt(e.target.value);
+    updateIntensityAdjustment(value);
+  });
+  
+  // 슬라이더 변경 완료 시 (마우스 떼거나 터치 종료)
+  slider.addEventListener('change', function(e) {
+    const value = parseInt(e.target.value);
+    updateIntensityAdjustment(value);
+    // 로컬 스토리지에 저장
+    try {
+      localStorage.setItem('trainingIntensityAdjustment', String(window.trainingIntensityAdjustment));
+    } catch (err) {
+      console.warn('강도 조절값 저장 실패:', err);
+    }
+  });
+}
+
+/**
+ * 강도 조절 값 업데이트 및 실시간 반영
+ */
+function updateIntensityAdjustment(sliderValue) {
+  // 슬라이더 값(-10 ~ +10)을 조정 계수로 변환 (0.9 ~ 1.1)
+  const adjustment = 1.0 + (sliderValue / 100);
+  window.trainingIntensityAdjustment = adjustment;
+  
+  // 표시 업데이트
+  updateIntensityDisplay(sliderValue);
+  
+  // 현재 세그먼트의 목표 파워 실시간 업데이트
+  if (window.trainingState && typeof window.trainingState.segIndex === 'number') {
+    const currentSegIndex = window.trainingState.segIndex;
+    if (typeof applySegmentTarget === 'function') {
+      applySegmentTarget(currentSegIndex);
+    }
+  }
+}
+
+/**
+ * 강도 조절 표시 업데이트
+ */
+function updateIntensityDisplay(sliderValue) {
+  const valueDisplay = document.getElementById('intensityAdjustmentValue');
+  if (valueDisplay) {
+    const sign = sliderValue >= 0 ? '+' : '';
+    valueDisplay.textContent = `${sign}${sliderValue}%`;
+    
+    // 색상 변경 (음수: 파란색, 0: 회색, 양수: 빨간색)
+    if (sliderValue < 0) {
+      valueDisplay.style.color = '#3b82f6'; // 파란색
+    } else if (sliderValue > 0) {
+      valueDisplay.style.color = '#ef4444'; // 빨간색
+    } else {
+      valueDisplay.style.color = '#9ca3af'; // 회색
+    }
+  }
+}
 window.selectRPECondition = selectRPECondition;
 window.confirmRPESelection = confirmRPESelection;
 window.handleAIWorkoutRecommendation = handleAIWorkoutRecommendation;
