@@ -1254,6 +1254,20 @@
       <span class="enhanced-time-value" id="elapsedTime">00:00</span>
       <span class="enhanced-time-percent">(<span id="elapsedPercent">0</span>%)</span>
     </div>
+    <!-- 훈련 강도 조절 슬라이더 -->
+    <div class="intensity-adjustment-container">
+      <div class="intensity-adjustment-label">
+        <span>강도 조절</span>
+        <span class="intensity-adjustment-value" id="intensityAdjustmentValue">0%</span>
+      </div>
+      <div class="intensity-adjustment-slider-wrapper">
+        <span class="intensity-adjustment-min">-10%</span>
+        <input type="range" id="intensityAdjustmentSlider" 
+               min="-10" max="10" step="1" value="0" 
+               class="intensity-adjustment-slider">
+        <span class="intensity-adjustment-max">+10%</span>
+      </div>
+    </div>
     <div class="enhanced-next-segment-info">
       <span class="enhanced-next-label">다음 세그먼트</span>
       <span class="enhanced-next-value" id="nextSegment">인터벌 FTP 140%</span>
