@@ -2722,6 +2722,15 @@ if (!window.showScreen) {
       }
 
       // 훈련 준비 화면: 그룹 훈련 카드 상태 업데이트
+      // 훈련 화면으로 전환 시 ERG 모드 UI 초기화
+      if (id === 'trainingScreen') {
+        setTimeout(() => {
+          if (typeof initializeErgMode === 'function') {
+            initializeErgMode();
+          }
+        }, 100);
+      }
+      
       if (id === 'trainingReadyScreen') {
         setTimeout(() => {
           if (typeof window.updateGroupTrainingCardStatus === 'function') {
@@ -3181,6 +3190,13 @@ function startWorkoutTraining() {
     if (typeof showScreen === "function") {
       showScreen("trainingScreen");
       console.log('Switched to training screen');
+      
+      // ERG 모드 UI 초기화 (스마트로라 연결 상태 확인)
+      if (typeof initializeErgMode === 'function') {
+        setTimeout(() => {
+          initializeErgMode();
+        }, 100);
+      }
     }
 
       // ⬇ 차트 초기화 1회

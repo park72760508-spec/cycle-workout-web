@@ -35,7 +35,7 @@ const ERG_OP_CODES = {
 };
 
 /**
- * ERG 모드 UI 초기화
+ * ERG 모드 UI 초기화 (훈련 화면 진입 시 호출)
  */
 function initializeErgMode() {
   const ergContainer = document.getElementById('ergModeContainer');
@@ -51,24 +51,10 @@ function initializeErgMode() {
   const isTrainerConnected = window.connectedDevices?.trainer && 
                              window.connectedDevices.trainer.controlPoint;
   
-  if (isTrainerConnected) {
-    ergContainer.style.display = 'flex';
-    console.log('[ERG] 스마트로라 연결됨 - ERG 모드 UI 표시');
-  } else {
-    ergContainer.style.display = 'none';
-    console.log('[ERG] 스마트로라 미연결 - ERG 모드 UI 숨김');
-    return;
-  }
+  // updateErgModeUI를 호출하여 UI 상태 업데이트 (이벤트 리스너 포함)
+  updateErgModeUI(isTrainerConnected);
   
-  // 초기 상태 설정
-  ergToggle.checked = window.ergModeState.enabled;
-  updateErgModeStatus();
-  
-  // 토글 이벤트 리스너
-  ergToggle.addEventListener('change', function(e) {
-    const enabled = e.target.checked;
-    toggleErgMode(enabled);
-  });
+  console.log('[ERG] ERG 모드 UI 초기화 완료, 스마트로라 연결 상태:', isTrainerConnected);
 }
 
 /**
@@ -76,13 +62,54 @@ function initializeErgMode() {
  */
 function updateErgModeUI(isConnected) {
   const ergContainer = document.getElementById('ergModeContainer');
-  if (ergContainer) {
-    ergContainer.style.display = isConnected ? 'flex' : 'none';
+  const ergToggle = document.getElementById('ergModeToggle');
+  const ergStatus = document.getElementById('ergModeStatus');
+  
+  if (!ergContainer) {
+    console.warn('[ERG] ERG 모드 컨테이너를 찾을 수 없습니다');
+    return;
   }
   
-  // 연결 해제 시 ERG 모드 비활성화
-  if (!isConnected && window.ergModeState.enabled) {
-    toggleErgMode(false);
+  // 스마트로라 연결 상태 확인 (controlPoint 존재 여부)
+  const hasControlPoint = window.connectedDevices?.trainer?.controlPoint;
+  const shouldShow = isConnected && hasControlPoint;
+  
+  // 디버깅 로그
+  console.log('[ERG] UI 업데이트:', {
+    isConnected: isConnected,
+    hasTrainer: !!window.connectedDevices?.trainer,
+    hasControlPoint: hasControlPoint,
+    shouldShow: shouldShow,
+    connectedDevices: window.connectedDevices
+  });
+  
+  if (shouldShow) {
+    ergContainer.style.display = 'flex';
+    console.log('[ERG] 스마트로라 연결됨 - ERG 모드 UI 표시');
+    
+    // 이벤트 리스너가 없으면 설정 (중복 방지)
+    if (ergToggle && !ergToggle.hasAttribute('data-erg-listener-attached')) {
+      ergToggle.setAttribute('data-erg-listener-attached', 'true');
+      ergToggle.addEventListener('change', function(e) {
+        const enabled = e.target.checked;
+        toggleErgMode(enabled);
+      });
+      console.log('[ERG] ERG 모드 토글 이벤트 리스너 설정');
+    }
+    
+    // 초기 상태 설정
+    if (ergToggle) {
+      ergToggle.checked = window.ergModeState.enabled;
+    }
+    updateErgModeStatus();
+  } else {
+    ergContainer.style.display = 'none';
+    console.log('[ERG] 스마트로라 미연결 또는 Control Point 없음 - ERG 모드 UI 숨김');
+    
+    // 연결 해제 시 ERG 모드 비활성화
+    if (!isConnected && window.ergModeState && window.ergModeState.enabled) {
+      toggleErgMode(false);
+    }
   }
 }
 
