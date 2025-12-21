@@ -629,11 +629,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   const ctx = canvas.getContext('2d');
   
-  // 배경 그리기 (투명 흰색 - 훈련 화면용)
-  // 훈련 화면에서는 배경을 투명하게 처리하여 전체 이미지에 어울리게 함
+  // 배경 그리기
   if (canvasId === 'trainingSegmentGraph') {
-    // 투명 배경 (배경을 그리지 않음)
-    ctx.clearRect(0, 0, graphWidth, graphHeight);
+    // 훈련 화면용: 검정 투명 배경
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, graphWidth, graphHeight);
   } else {
     // 훈련 준비 화면용: 부드러운 그라데이션 배경
     const bgGradient = ctx.createLinearGradient(0, 0, 0, graphHeight);
@@ -641,10 +641,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     bgGradient.addColorStop(1, '#f8f9fa');
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, graphWidth, graphHeight);
-  }
-  
-  // 그림자 효과는 훈련 화면에서는 제거
-  if (canvasId !== 'trainingSegmentGraph') {
+    
+    // 그림자 효과
     ctx.shadowColor = 'rgba(0, 0, 0, 0.1)';
     ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 0;
@@ -653,7 +651,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 축 그리기 (부드러운 색상)
   ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+  if (canvasId === 'trainingSegmentGraph') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면: 밝은 색상
+  } else {
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
+  }
   ctx.lineWidth = 2;
   
   // 세로축 (파워)
@@ -681,11 +683,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // FTP 가이드 라인 (부드러운 색상)
   const ftpPower = ftp;
   const ftpY = padding.top + chartHeight - (chartHeight * (ftpPower / maxTargetPower));
-  ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
+  if (canvasId === 'trainingSegmentGraph') {
+    ctx.shadowColor = 'rgba(234, 179, 8, 0.5)';
+    ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면: 더 밝은 노란색
+  } else {
+    ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
+    ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)'; // 훈련 준비 화면
+  }
   ctx.shadowBlur = 4;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
-  ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)';
   ctx.lineWidth = 2.5;
   ctx.setLineDash([6, 4]);
   ctx.beginPath();
@@ -696,19 +703,26 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.shadowColor = 'transparent';
   
   // FTP 라벨 (부드러운 배경)
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = 'bold 12px sans-serif';
-  ctx.textAlign = 'right';
-  // 배경 박스
   const labelText = `FTP ${ftp}W`;
   const metrics = ctx.measureText(labelText);
   const labelWidth = metrics.width + 8;
   const labelHeight = 18;
   const labelX = padding.left - 10 - labelWidth;
   const labelY = ftpY - labelHeight / 2;
-  ctx.fillStyle = 'rgba(251, 191, 36, 0.2)';
-  ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
-  ctx.fillStyle = '#f59e0b';
+  
+  if (canvasId === 'trainingSegmentGraph') {
+    // 훈련 화면: 밝은 배경과 텍스트
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+    ctx.fillStyle = '#fbbf24'; // 밝은 노란색
+  } else {
+    // 훈련 준비 화면
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.2)';
+    ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
+    ctx.fillStyle = '#f59e0b';
+  }
+  ctx.font = 'bold 12px sans-serif';
+  ctx.textAlign = 'right';
   ctx.fillText(labelText, padding.left - 10, ftpY + 4);
   
   // 세로축 눈금 (파워)
@@ -718,7 +732,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
     
     // 격자선 (부드러운 색상)
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+    if (canvasId === 'trainingSegmentGraph') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면: 밝은 색상
+    } else {
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'; // 훈련 준비 화면: 어두운 색상
+    }
     ctx.lineWidth = 1;
     ctx.setLineDash([2, 4]);
     ctx.beginPath();
@@ -728,7 +746,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.setLineDash([]);
     
     // 눈금 표시
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+    if (canvasId === 'trainingSegmentGraph') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면: 밝은 색상
+    } else {
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // 훈련 준비 화면: 어두운 색상
+    }
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(padding.left - 5, y);
@@ -736,7 +758,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.stroke();
     
     // 파워 값 표시
-    ctx.fillStyle = '#374151';
+    if (canvasId === 'trainingSegmentGraph') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
+    } else {
+      ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
+    }
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
@@ -882,7 +908,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const x = padding.left + (time / totalSeconds) * chartWidth;
     
     // 눈금선
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+    if (canvasId === 'trainingSegmentGraph') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면: 밝은 색상
+    } else {
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
+    }
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(x, padding.top + chartHeight);
@@ -892,7 +922,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 시간 표시
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    ctx.fillStyle = '#6b7280';
+    if (canvasId === 'trainingSegmentGraph') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면: 밝은 색상
+    } else {
+      ctx.fillStyle = '#6b7280'; // 훈련 준비 화면: 어두운 색상
+    }
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(
@@ -903,7 +937,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   }
   
   // 축 라벨
-  ctx.fillStyle = '#374151';
+  if (canvasId === 'trainingSegmentGraph') {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
+  } else {
+    ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
+  }
   ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, graphHeight - 10);
