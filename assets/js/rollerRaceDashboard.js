@@ -95,8 +95,8 @@ function createSpeedometerElement(speedometer) {
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 120">
-        <!-- 아래쪽 반원 배경 (검은색 배경 위에) -->
-        <path class="speedometer-arc-bg" d="M 20 100 A 80 80 0 0 1 180 100" 
+        <!-- 위쪽 반원 배경 (검은색 배경 위에) -->
+        <path class="speedometer-arc-bg" d="M 20 20 A 80 80 0 0 1 180 20" 
               fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="2"/>
         
         <!-- 속도 눈금 (0~120km/h) -->
@@ -159,22 +159,22 @@ function createSpeedometerElement(speedometer) {
 }
 
 /**
- * 속도계 눈금 생성 (0~120km/h, 아래쪽 반원 기준)
+ * 속도계 눈금 생성 (0~120km/h, 위쪽 반원 기준)
  * 20단위는 긴 눈금, 10단위는 짧은 눈금만 표시
- * 아래쪽 왼쪽(180도) = 0km/h, 위쪽(270도) = 60km/h, 아래쪽 오른쪽(0도) = 120km/h
+ * 왼쪽(180도) = 0km/h, 위쪽(270도) = 60km/h, 오른쪽(0도) = 120km/h
  */
 function generateSpeedometerTicks() {
   let ticks = '';
   const centerX = 100;
-  const centerY = 100; // 아래쪽 반원 중심
+  const centerY = 20; // 위쪽 반원 중심
   const radius = 80;
   const maxSpeed = 120;
   
   // 0~120km/h, 10km/h 간격
-  // 아래쪽 왼쪽(180도, 0km/h)에서 시작해서 위쪽(270도, 60km/h)를 거쳐 아래쪽 오른쪽(0도, 120km/h)까지
+  // 왼쪽(180도, 0km/h)에서 시작해서 위쪽(270도, 60km/h)를 거쳐 오른쪽(0도, 120km/h)까지
   for (let speed = 0; speed <= maxSpeed; speed += 10) {
     // 각도 계산: 180도에서 시작해서 270도를 거쳐 0도(360도)로
-    // speed = 0 → 180도 (아래 왼쪽), speed = 60 → 270도 (위쪽), speed = 120 → 0도 (아래 오른쪽)
+    // speed = 0 → 180도 (왼쪽), speed = 60 → 270도 (위쪽), speed = 120 → 0도 (오른쪽)
     let angle = 180 - (speed / maxSpeed) * 180;
     if (angle < 0) angle += 360; // 음수 각도를 360도 더해서 양수로 변환
     
@@ -202,14 +202,14 @@ function generateSpeedometerTicks() {
 }
 
 /**
- * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 아래쪽 반원 기준)
+ * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 위쪽 반원 기준)
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
- * 아래쪽 왼쪽(180도) = 0km/h, 위쪽(270도) = 60km/h, 아래쪽 오른쪽(0도) = 120km/h
+ * 왼쪽(180도) = 0km/h, 위쪽(270도) = 60km/h, 오른쪽(0도) = 120km/h
  */
 function generateSpeedometerLabels() {
   let labels = '';
   const centerX = 100;
-  const centerY = 100; // 아래쪽 반원 중심
+  const centerY = 20; // 위쪽 반원 중심
   const radius = 80;
   const maxSpeed = 120;
   
@@ -218,7 +218,7 @@ function generateSpeedometerLabels() {
   
   speeds.forEach(speed => {
     // 각도 계산: 180도에서 시작해서 270도를 거쳐 0도(360도)로
-    // speed = 0 → 180도 (아래 왼쪽), speed = 60 → 270도 (위쪽), speed = 120 → 0도 (아래 오른쪽)
+    // speed = 0 → 180도 (왼쪽), speed = 60 → 270도 (위쪽), speed = 120 → 0도 (오른쪽)
     let angle = 180 - (speed / maxSpeed) * 180;
     if (angle < 0) angle += 360; // 음수 각도를 360도 더해서 양수로 변환
     
