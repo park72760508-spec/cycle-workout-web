@@ -109,14 +109,6 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- km/h 라벨 (중앙 위쪽) -->
-        <text x="100" y="25" 
-              text-anchor="middle" 
-              dominant-baseline="middle"
-              fill="#ffffff" 
-              font-size="10" 
-              font-weight="500">km/h</text>
-        
         <!-- 바늘 (위쪽 반원 중심) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
@@ -128,6 +120,14 @@ function createSpeedometerElement(speedometer) {
                 transform="rotate(180 100 20)"/>
           <circle cx="100" cy="20" r="6" fill="#1a1a1a" stroke="#ff0000" stroke-width="2"/>
         </g>
+        
+        <!-- km/h 라벨 (바늘 중심 밑) -->
+        <text x="100" y="30" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#ffffff" 
+              font-size="10" 
+              font-weight="500">km/h</text>
       </svg>
     </div>
     <div class="speedometer-info disconnected">
@@ -180,14 +180,17 @@ function generateSpeedometerTicks() {
     
     const rad = (angle * Math.PI) / 180;
     
-    const x1 = centerX + radius * Math.cos(rad);
-    const y1 = centerY + radius * Math.sin(rad);
+    // 바늘 방향으로 눈금 표시 (중심에서 바깥쪽으로)
+    // x1, y1: 안쪽 시작점, x2, y2: 바깥쪽 끝점
+    const innerRadius = radius - 8; // 안쪽 시작점
+    const x1 = centerX + innerRadius * Math.cos(rad);
+    const y1 = centerY + innerRadius * Math.sin(rad);
     
     // 주요 눈금 (20km/h 간격)은 길게, 10단위는 짧게
     const isMajor = speed % 20 === 0;
     const tickLength = isMajor ? 12 : 6;
-    const x2 = centerX + (radius - tickLength) * Math.cos(rad);
-    const y2 = centerY + (radius - tickLength) * Math.sin(rad);
+    const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
+    const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
     
     // 흰색 눈금
     ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
