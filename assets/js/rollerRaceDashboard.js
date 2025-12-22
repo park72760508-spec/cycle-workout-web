@@ -130,7 +130,7 @@ function createSpeedometerElement(speedometer) {
         </g>
       </svg>
     </div>
-    <div class="speedometer-info">
+    <div class="speedometer-info disconnected">
       <div class="speed-display">
         <span class="speed-value" id="speed-value-${speedometer.id}">0</span>
         <span class="speed-unit">km/h</span>
@@ -538,14 +538,30 @@ function updateSpeedometerConnectionStatus(speedometerId, connected) {
   const dot = statusEl.querySelector('.status-dot');
   const text = statusEl.querySelector('.status-text');
   
+  // 속도계 정보 블록 찾기
+  const container = document.getElementById(`speedometer-${speedometerId}`);
+  const infoBlock = container ? container.querySelector('.speedometer-info') : null;
+  
   if (connected) {
     dot.classList.remove('disconnected');
     dot.classList.add('connected');
     if (text) text.textContent = '연결됨';
+    
+    // 연결됨: 연두색 배경으로 변경
+    if (infoBlock) {
+      infoBlock.classList.add('connected');
+      infoBlock.classList.remove('disconnected');
+    }
   } else {
     dot.classList.remove('connected');
     dot.classList.add('disconnected');
     if (text) text.textContent = '미연결';
+    
+    // 미연결: 주황색 배경으로 변경
+    if (infoBlock) {
+      infoBlock.classList.remove('connected');
+      infoBlock.classList.add('disconnected');
+    }
   }
 }
 
