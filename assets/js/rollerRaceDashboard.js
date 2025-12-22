@@ -95,9 +95,9 @@ function createSpeedometerElement(speedometer) {
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 120">
-        <!-- 반원 배경 -->
+        <!-- 오렌지색 반원 배경 -->
         <path class="speedometer-arc-bg" d="M 20 100 A 80 80 0 0 1 180 100" 
-              fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="8"/>
+              fill="none" stroke="#ff8c00" stroke-width="8"/>
         
         <!-- 속도 눈금 (0~120km/h) -->
         <g class="speedometer-ticks">
@@ -114,11 +114,11 @@ function createSpeedometerElement(speedometer) {
           <line id="needle-${speedometer.id}" 
                 x1="100" y1="100" 
                 x2="100" y2="30" 
-                stroke="#ff0000" 
+                stroke="#000000" 
                 stroke-width="3" 
                 stroke-linecap="round"
                 transform="rotate(0 100 100)"/>
-          <circle cx="100" cy="100" r="5" fill="#ff0000"/>
+          <circle cx="100" cy="100" r="5" fill="#000000"/>
         </g>
       </svg>
     </div>
@@ -128,10 +128,12 @@ function createSpeedometerElement(speedometer) {
         <span class="speed-unit">km/h</span>
       </div>
       <div class="distance-display">
-        <span class="distance-label">누적거리</span>
+        <span class="distance-label">DISTANCE:</span>
         <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
         <span class="distance-unit">km</span>
       </div>
+    </div>
+    <div class="speedometer-footer">
       <div class="rank-display">
         <span class="rank-label">순위</span>
         <span class="rank-value" id="rank-value-${speedometer.id}">-</span>
@@ -168,8 +170,9 @@ function generateSpeedometerTicks() {
     const x2 = centerX + (radius - tickLength) * Math.cos(rad);
     const y2 = centerY + (radius - tickLength) * Math.sin(rad);
     
+    // 검은색 눈금
     ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
-                    stroke="rgba(255, 255, 255, ${speed % 20 === 0 ? 0.8 : 0.4})" 
+                    stroke="#000000" 
                     stroke-width="${speed % 20 === 0 ? 2 : 1}"/>`;
   }
   
@@ -185,8 +188,8 @@ function generateSpeedometerLabels() {
   const centerY = 100;
   const radius = 70;
   
-  // 주요 속도 표시 (0, 20, 40, 60, 80, 100, 120)
-  const speeds = [0, 20, 40, 60, 80, 100, 120];
+  // 주요 속도 표시 (0, 20, 30, 40, 50, 60, 70, 80, 100, 110) - 이미지 참고
+  const speeds = [0, 20, 30, 40, 50, 60, 70, 80, 100, 110];
   
   speeds.forEach(speed => {
     const angle = -90 + (speed / 120) * 180;
@@ -195,19 +198,35 @@ function generateSpeedometerLabels() {
     const x = centerX + radius * Math.cos(rad);
     const y = centerY + radius * Math.sin(rad);
     
+    // 검은색 숫자
     labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
-                     fill="rgba(255, 255, 255, 0.9)" 
+                     fill="#000000" 
                      font-size="12" 
                      font-weight="600">${speed}</text>`;
   });
+  
+  // km/h 라벨 (50과 60 사이)
+  const kmhAngle1 = -90 + (50 / 120) * 180;
+  const kmhAngle2 = -90 + (60 / 120) * 180;
+  const kmhAngle = (kmhAngle1 + kmhAngle2) / 2;
+  const kmhRad = (kmhAngle * Math.PI) / 180;
+  const kmhX = centerX + (radius - 15) * Math.cos(kmhRad);
+  const kmhY = centerY + (radius - 15) * Math.sin(kmhRad);
+  
+  labels += `<text x="${kmhX}" y="${kmhY}" 
+                   text-anchor="middle" 
+                   dominant-baseline="middle"
+                   fill="#000000" 
+                   font-size="10" 
+                   font-weight="500">km/h</text>`;
   
   return labels;
 }
 
 /**
- * 속도계 바늘 업데이트
+ * 속도계 바늘 업데이트 (애니메이션 포함)
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
@@ -215,6 +234,9 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   
   // 속도 0~120km/h를 각도 -90~90도로 변환
   const angle = -90 + (speed / 120) * 180;
+  
+  // 부드러운 애니메이션을 위해 transition 적용
+  needle.style.transition = 'transform 0.3s ease-out';
   needle.setAttribute('transform', `rotate(${angle} 100 100)`);
 }
 
