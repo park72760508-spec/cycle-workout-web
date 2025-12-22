@@ -95,30 +95,38 @@ function createSpeedometerElement(speedometer) {
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 120">
-        <!-- 오렌지색 반원 배경 -->
+        <!-- 반원 배경 (검은색 배경 위에) -->
         <path class="speedometer-arc-bg" d="M 20 100 A 80 80 0 0 1 180 100" 
-              fill="none" stroke="#ff8c00" stroke-width="8"/>
+              fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="2"/>
         
-        <!-- 속도 눈금 (0~120km/h) -->
+        <!-- 속도 눈금 (0~110km/h) -->
         <g class="speedometer-ticks">
           ${generateSpeedometerTicks()}
         </g>
         
-        <!-- 속도 숫자 -->
+        <!-- 속도 숫자 (반원 바깥쪽) -->
         <g class="speedometer-labels">
           ${generateSpeedometerLabels()}
         </g>
+        
+        <!-- km/h 라벨 (중앙 아래) -->
+        <text x="100" y="95" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#ffffff" 
+              font-size="10" 
+              font-weight="500">km/h</text>
         
         <!-- 바늘 -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
                 x1="100" y1="100" 
                 x2="100" y2="30" 
-                stroke="#000000" 
+                stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
                 transform="rotate(0 100 100)"/>
-          <circle cx="100" cy="100" r="5" fill="#000000"/>
+          <circle cx="100" cy="100" r="6" fill="#1a1a1a" stroke="#ff0000" stroke-width="2"/>
         </g>
       </svg>
     </div>
@@ -149,91 +157,84 @@ function createSpeedometerElement(speedometer) {
 }
 
 /**
- * 속도계 눈금 생성
+ * 속도계 눈금 생성 (0~110km/h)
  */
 function generateSpeedometerTicks() {
   let ticks = '';
   const centerX = 100;
   const centerY = 100;
   const radius = 80;
+  const maxSpeed = 110;
   
-  // 0~120km/h, 10km/h 간격
-  for (let speed = 0; speed <= 120; speed += 10) {
-    const angle = -90 + (speed / 120) * 180; // -90도(왼쪽)에서 90도(오른쪽)까지
+  // 0~110km/h, 10km/h 간격
+  for (let speed = 0; speed <= maxSpeed; speed += 10) {
+    const angle = -90 + (speed / maxSpeed) * 180; // -90도(왼쪽)에서 90도(오른쪽)까지
     const rad = (angle * Math.PI) / 180;
     
     const x1 = centerX + radius * Math.cos(rad);
     const y1 = centerY + radius * Math.sin(rad);
     
-    // 주요 눈금 (20km/h 간격)은 길게
-    const tickLength = speed % 20 === 0 ? 12 : 6;
+    // 주요 눈금 (20km/h 간격)은 길게, 30과 50은 빨간색
+    const isMajor = speed % 20 === 0;
+    const isRed = speed === 30 || speed === 50;
+    const tickLength = isMajor ? 12 : 6;
     const x2 = centerX + (radius - tickLength) * Math.cos(rad);
     const y2 = centerY + (radius - tickLength) * Math.sin(rad);
     
-    // 검은색 눈금
+    // 흰색 눈금 (30, 50은 빨간색)
+    const strokeColor = isRed ? '#ff0000' : '#ffffff';
     ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
-                    stroke="#000000" 
-                    stroke-width="${speed % 20 === 0 ? 2 : 1}"/>`;
+                    stroke="${strokeColor}" 
+                    stroke-width="${isMajor ? 2 : 1}"/>`;
   }
   
   return ticks;
 }
 
 /**
- * 속도계 라벨 생성
+ * 속도계 라벨 생성 (0~110km/h, 반원 바깥쪽에 배치)
  */
 function generateSpeedometerLabels() {
   let labels = '';
   const centerX = 100;
   const centerY = 100;
-  const radius = 70;
+  const radius = 80; // 반원 바깥쪽에 배치하기 위해 반지름을 크게
+  const maxSpeed = 110;
   
-  // 주요 속도 표시 (0, 20, 30, 40, 50, 60, 70, 80, 100, 110) - 이미지 참고
-  const speeds = [0, 20, 30, 40, 50, 60, 70, 80, 100, 110];
+  // 주요 속도 표시 (0, 20, 40, 60, 80, 100, 110) - 자동차 대시보드 스타일
+  const speeds = [0, 20, 40, 60, 80, 100, 110];
   
   speeds.forEach(speed => {
-    const angle = -90 + (speed / 120) * 180;
+    const angle = -90 + (speed / maxSpeed) * 180;
     const rad = (angle * Math.PI) / 180;
     
-    const x = centerX + radius * Math.cos(rad);
-    const y = centerY + radius * Math.sin(rad);
+    // 반원 바깥쪽에 배치 (radius + 10)
+    const labelRadius = radius + 10;
+    const x = centerX + labelRadius * Math.cos(rad);
+    const y = centerY + labelRadius * Math.sin(rad);
     
-    // 검은색 숫자
+    // 흰색 숫자
     labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
-                     fill="#000000" 
-                     font-size="12" 
+                     fill="#ffffff" 
+                     font-size="14" 
                      font-weight="600">${speed}</text>`;
   });
-  
-  // km/h 라벨 (50과 60 사이)
-  const kmhAngle1 = -90 + (50 / 120) * 180;
-  const kmhAngle2 = -90 + (60 / 120) * 180;
-  const kmhAngle = (kmhAngle1 + kmhAngle2) / 2;
-  const kmhRad = (kmhAngle * Math.PI) / 180;
-  const kmhX = centerX + (radius - 15) * Math.cos(kmhRad);
-  const kmhY = centerY + (radius - 15) * Math.sin(kmhRad);
-  
-  labels += `<text x="${kmhX}" y="${kmhY}" 
-                   text-anchor="middle" 
-                   dominant-baseline="middle"
-                   fill="#000000" 
-                   font-size="10" 
-                   font-weight="500">km/h</text>`;
   
   return labels;
 }
 
 /**
- * 속도계 바늘 업데이트 (애니메이션 포함)
+ * 속도계 바늘 업데이트 (애니메이션 포함, 0~110km/h)
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
-  // 속도 0~120km/h를 각도 -90~90도로 변환
-  const angle = -90 + (speed / 120) * 180;
+  // 속도 0~110km/h를 각도 -90~90도로 변환
+  const maxSpeed = 110;
+  const angle = -90 + (speed / maxSpeed) * 180;
   
   // 부드러운 애니메이션을 위해 transition 적용
   needle.style.transition = 'transform 0.3s ease-out';
