@@ -109,7 +109,7 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (하단 중앙, 0과 120의 중간 위치) -->
+        <!-- 바늘 (하단 중앙, 0과 120의 중간 위치, 이미지처럼 위쪽을 향함) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
                 x1="100" y1="100" 
@@ -117,7 +117,7 @@ function createSpeedometerElement(speedometer) {
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(180 100 100)"/>
+                transform="rotate(90 100 100)"/>
           <circle cx="100" cy="100" r="6" fill="#1a1a1a" stroke="#ff0000" stroke-width="2"/>
         </g>
         
