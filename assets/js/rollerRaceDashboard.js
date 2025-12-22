@@ -136,9 +136,11 @@ function createSpeedometerElement(speedometer) {
         <span class="speed-unit">km/h</span>
       </div>
       <div class="distance-display">
-        <span class="distance-label">DISTANCE:</span>
-        <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
-        <span class="distance-unit">km</span>
+        <div class="distance-label">거리</div>
+        <div class="distance-value-wrapper">
+          <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
+          <span class="distance-unit">km</span>
+        </div>
       </div>
     </div>
     <div class="speedometer-footer">
