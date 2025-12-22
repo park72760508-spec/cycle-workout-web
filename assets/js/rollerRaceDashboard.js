@@ -157,9 +157,9 @@ function createSpeedometerElement(speedometer) {
 }
 
 /**
- * 속도계 눈금 생성 (0~120km/h, 0도에서 90도를 거쳐 180도 방향으로)
+ * 속도계 눈금 생성 (0~120km/h, 0도에서 270도를 거쳐 180도 방향으로)
  * 20단위는 긴 눈금, 10단위는 짧은 눈금만 표시
- * 0도(오른쪽) = 120km/h, 90도(위쪽) = 60km/h, 180도(왼쪽) = 0km/h
+ * 0도(오른쪽) = 120km/h, 270도(위쪽) = 60km/h, 180도(왼쪽) = 0km/h
  */
 function generateSpeedometerTicks() {
   let ticks = '';
@@ -169,11 +169,12 @@ function generateSpeedometerTicks() {
   const maxSpeed = 120;
   
   // 0~120km/h, 10km/h 간격
-  // 180도(왼쪽, 0km/h)에서 시작해서 90도(위쪽, 60km/h)를 거쳐 0도(오른쪽, 120km/h)까지
+  // 180도(왼쪽, 0km/h)에서 시작해서 270도(위쪽, 60km/h)를 거쳐 0도(오른쪽, 120km/h)까지
   for (let speed = 0; speed <= maxSpeed; speed += 10) {
-    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-    // speed = 0 → 180도, speed = 60 → 90도, speed = 120 → 0도
-    const angle = 180 - (speed / maxSpeed) * 180;
+    // 각도 계산: 180도에서 시작해서 270도를 거쳐 0도로
+    // speed = 0 → 180도, speed = 60 → 270도, speed = 120 → 0도
+    let angle = 180 - (speed / maxSpeed) * 180;
+    if (angle < 0) angle += 360; // 음수 각도를 360도 더해서 양수로 변환 (0도는 360도로)
     
     const rad = (angle * Math.PI) / 180;
     
@@ -196,9 +197,9 @@ function generateSpeedometerTicks() {
 }
 
 /**
- * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 0도에서 90도를 거쳐 180도 방향으로)
+ * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 0도에서 270도를 거쳐 180도 방향으로)
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
- * 0도(오른쪽) = 120km/h, 90도(위쪽) = 60km/h, 180도(왼쪽) = 0km/h
+ * 0도(오른쪽) = 120km/h, 270도(위쪽) = 60km/h, 180도(왼쪽) = 0km/h
  */
 function generateSpeedometerLabels() {
   let labels = '';
@@ -211,9 +212,10 @@ function generateSpeedometerLabels() {
   const speeds = [0, 20, 40, 60, 80, 100, 120];
   
   speeds.forEach(speed => {
-    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-    // speed = 0 → 180도, speed = 60 → 90도, speed = 120 → 0도
-    const angle = 180 - (speed / maxSpeed) * 180;
+    // 각도 계산: 180도에서 시작해서 270도를 거쳐 0도로
+    // speed = 0 → 180도, speed = 60 → 270도, speed = 120 → 0도
+    let angle = 180 - (speed / maxSpeed) * 180;
+    if (angle < 0) angle += 360; // 음수 각도를 360도 더해서 양수로 변환 (0도는 360도로)
     
     const rad = (angle * Math.PI) / 180;
     
@@ -235,17 +237,18 @@ function generateSpeedometerLabels() {
 }
 
 /**
- * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h, 0도에서 90도를 거쳐 180도 방향으로)
- * 0도(오른쪽) = 120km/h, 90도(위쪽) = 60km/h, 180도(왼쪽) = 0km/h
+ * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h, 0도에서 270도를 거쳐 180도 방향으로)
+ * 0도(오른쪽) = 120km/h, 270도(위쪽) = 60km/h, 180도(왼쪽) = 0km/h
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
-  // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-  // speed = 0 → 180도, speed = 60 → 90도, speed = 120 → 0도
+  // 각도 계산: 180도에서 시작해서 270도를 거쳐 0도로
+  // speed = 0 → 180도, speed = 60 → 270도, speed = 120 → 0도
   const maxSpeed = 120;
-  const angle = 180 - (speed / maxSpeed) * 180;
+  let angle = 180 - (speed / maxSpeed) * 180;
+  if (angle < 0) angle += 360; // 음수 각도를 360도 더해서 양수로 변환 (0도는 360도로)
   
   // 부드러운 애니메이션을 위해 transition 적용
   needle.style.transition = 'transform 0.3s ease-out';
