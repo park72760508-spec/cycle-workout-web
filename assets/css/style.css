@@ -8829,15 +8829,23 @@ button[aria-disabled="true"] {
 
 .distance-display {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 4px;
-  justify-content: flex-end;
+  justify-content: center;
   font-size: 12px;
 }
 
 .distance-label {
   color: #ffffff; /* 흰색 라벨 */
   font-weight: 500;
+  font-size: 11px;
+}
+
+.distance-value-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .distance-value {
@@ -8849,8 +8857,8 @@ button[aria-disabled="true"] {
 
 .distance-unit {
   color: #ffffff; /* 흰색 단위 */
-  margin-left: 4px;
   font-weight: 500;
+  font-size: 12px;
 }
 
 .speedometer-footer {
