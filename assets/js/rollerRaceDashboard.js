@@ -95,9 +95,9 @@ function createSpeedometerElement(speedometer) {
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 120">
-        <!-- 위쪽 반원 배경 (곡선 부분이 위로 향함) -->
+        <!-- 위쪽 반원 배경 (자동차 속도계 스타일) -->
         <path class="speedometer-arc-bg" d="M 20 20 A 80 80 0 0 1 180 20" 
-              fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="2"/>
+              fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
         <!-- 속도 눈금 (0~120km/h) -->
         <g class="speedometer-ticks">
@@ -109,7 +109,7 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (하단 중앙, 0과 120의 중간 위치, 이미지처럼 위쪽을 향함) -->
+        <!-- 바늘 (하단 중앙, 자동차 속도계 스타일) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
                 x1="100" y1="100" 
@@ -118,7 +118,7 @@ function createSpeedometerElement(speedometer) {
                 stroke-width="3" 
                 stroke-linecap="round"
                 transform="rotate(90 100 100)"/>
-          <circle cx="100" cy="100" r="6" fill="#1a1a1a" stroke="#ff0000" stroke-width="2"/>
+          <circle cx="100" cy="100" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
         <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지) -->
@@ -159,7 +159,7 @@ function createSpeedometerElement(speedometer) {
 }
 
 /**
- * 속도계 눈금 생성 (0~120km/h)
+ * 속도계 눈금 생성 (0~120km/h, 자동차 속도계 스타일)
  * 모든 눈금 표시 (5km/h 간격), 20단위는 긴 눈금, 나머지는 짧은 눈금
  * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
  * 바늘 중심: 하단 중앙 (100, 100)
@@ -180,29 +180,29 @@ function generateSpeedometerTicks() {
     
     const rad = (angle * Math.PI) / 180;
     
-    // 반원의 곡선 부분에 눈금 표시
+    // 반원의 곡선 부분에 눈금 표시 (자동차 속도계 스타일)
     // 눈금은 반원의 곡선을 따라 안쪽에서 바깥쪽으로
-    const innerRadius = radius - 8; // 안쪽 시작점
+    const innerRadius = radius - 10; // 안쪽 시작점
     const x1 = centerX + innerRadius * Math.cos(rad);
     const y1 = centerY + innerRadius * Math.sin(rad);
     
     // 주요 눈금 (20km/h 간격)은 길게, 나머지는 짧게
     const isMajor = speed % 20 === 0;
-    const tickLength = isMajor ? 12 : 6;
+    const tickLength = isMajor ? 14 : 7;
     const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
     const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
     
-    // 흰색 눈금
+    // 흰색 눈금 (자동차 속도계 스타일)
     ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
                     stroke="#ffffff" 
-                    stroke-width="${isMajor ? 2 : 1}"/>`;
+                    stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
   }
   
   return ticks;
 }
 
 /**
- * 속도계 라벨 생성 (0~120km/h, 20단위만 표시)
+ * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 자동차 속도계 스타일)
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
  * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
  * 바늘 중심: 하단 중앙 (100, 100)
@@ -224,18 +224,18 @@ function generateSpeedometerLabels() {
     
     const rad = (angle * Math.PI) / 180;
     
-    // 반원 바깥쪽에 배치, 숫자가 닿지 않도록 간격 유지 (radius + 15)
-    const labelRadius = radius + 15;
+    // 반원 바깥쪽에 배치, 숫자가 닿지 않도록 간격 유지 (자동차 속도계 스타일)
+    const labelRadius = radius + 18;
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    // 흰색 숫자
+    // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
                      fill="#ffffff" 
-                     font-size="14" 
-                     font-weight="600">${speed}</text>`;
+                     font-size="15" 
+                     font-weight="700">${speed}</text>`;
   });
   
   return labels;
