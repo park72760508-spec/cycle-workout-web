@@ -109,16 +109,16 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (위쪽 반원 중심, 곡선 부분이 위로 향함) -->
+        <!-- 바늘 (하단 중앙, 0과 120의 중간 위치) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
-                x1="100" y1="20" 
-                x2="100" y2="100" 
+                x1="100" y1="100" 
+                x2="100" y2="20" 
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(180 100 20)"/>
-          <circle cx="100" cy="20" r="6" fill="#1a1a1a" stroke="#ff0000" stroke-width="2"/>
+                transform="rotate(180 100 100)"/>
+          <circle cx="100" cy="100" r="6" fill="#1a1a1a" stroke="#ff0000" stroke-width="2"/>
         </g>
         
         <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지) -->
@@ -159,28 +159,28 @@ function createSpeedometerElement(speedometer) {
 }
 
 /**
- * 속도계 눈금 생성 (0~120km/h, 위쪽 반원 기준)
+ * 속도계 눈금 생성 (0~120km/h)
  * 20단위는 긴 눈금, 10단위는 짧은 눈금만 표시
- * 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 오른쪽(0도) = 120km/h
- * 반원의 곡선 부분이 위로 향하도록 수평 뒤집기
+ * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 바늘 중심: 하단 중앙 (100, 100)
  */
 function generateSpeedometerTicks() {
   let ticks = '';
   const centerX = 100;
-  const centerY = 20; // 위쪽 반원의 중심 (곡선 부분이 위로 향함)
+  const centerY = 100; // 바늘 중심 (하단 중앙, 0과 120의 중간)
   const radius = 80;
   const maxSpeed = 120;
   
   // 0~120km/h, 10km/h 간격
-  // 왼쪽(180도, 0km/h)에서 시작해서 위쪽(90도, 60km/h)를 거쳐 오른쪽(0도, 120km/h)까지
+  // 하단 왼쪽(180도, 0km/h)에서 시작해서 위쪽(90도, 60km/h)를 거쳐 하단 오른쪽(0도, 120km/h)까지
   for (let speed = 0; speed <= maxSpeed; speed += 10) {
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-    // speed = 0 → 180도 (왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (오른쪽)
+    // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
     let angle = 180 - (speed / maxSpeed) * 180;
     
     const rad = (angle * Math.PI) / 180;
     
-    // 반원의 곡선 부분(위쪽)에 눈금 표시
+    // 반원의 곡선 부분에 눈금 표시
     // 눈금은 반원의 곡선을 따라 안쪽에서 바깥쪽으로
     const innerRadius = radius - 8; // 안쪽 시작점
     const x1 = centerX + innerRadius * Math.cos(rad);
@@ -202,15 +202,15 @@ function generateSpeedometerTicks() {
 }
 
 /**
- * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 위쪽 반원 기준)
+ * 속도계 라벨 생성 (0~120km/h, 20단위만 표시)
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
- * 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 오른쪽(0도) = 120km/h
- * 반원의 곡선 부분이 위로 향하도록 수평 뒤집기
+ * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 바늘 중심: 하단 중앙 (100, 100)
  */
 function generateSpeedometerLabels() {
   let labels = '';
   const centerX = 100;
-  const centerY = 20; // 위쪽 반원의 중심 (곡선 부분이 위로 향함)
+  const centerY = 100; // 바늘 중심 (하단 중앙, 0과 120의 중간)
   const radius = 80;
   const maxSpeed = 120;
   
@@ -219,7 +219,7 @@ function generateSpeedometerLabels() {
   
   speeds.forEach(speed => {
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-    // speed = 0 → 180도 (왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (오른쪽)
+    // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
     let angle = 180 - (speed / maxSpeed) * 180;
     
     const rad = (angle * Math.PI) / 180;
@@ -242,23 +242,23 @@ function generateSpeedometerLabels() {
 }
 
 /**
- * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h, 위쪽 반원 기준)
- * 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 오른쪽(0도) = 120km/h
- * 반원의 곡선 부분이 위로 향하도록 수평 뒤집기
+ * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h)
+ * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 바늘 중심: 하단 중앙 (100, 100)
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
   // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-  // speed = 0 → 180도 (왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (오른쪽)
+  // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
   const maxSpeed = 120;
   const angle = 180 - (speed / maxSpeed) * 180;
   
   // 부드러운 애니메이션을 위해 transition 적용
-  // 위쪽 반원 중심 (100, 20) 기준으로 회전
+  // 하단 중앙 (100, 100) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
-  needle.setAttribute('transform', `rotate(${angle} 100 20)`);
+  needle.setAttribute('transform', `rotate(${angle} 100 100)`);
 }
 
 /**
