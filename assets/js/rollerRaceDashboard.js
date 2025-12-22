@@ -160,7 +160,7 @@ function createSpeedometerElement(speedometer) {
 
 /**
  * 속도계 눈금 생성 (0~120km/h)
- * 20단위는 긴 눈금, 10단위는 짧은 눈금만 표시
+ * 모든 눈금 표시 (5km/h 간격), 20단위는 긴 눈금, 나머지는 짧은 눈금
  * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
  * 바늘 중심: 하단 중앙 (100, 100)
  */
@@ -171,9 +171,9 @@ function generateSpeedometerTicks() {
   const radius = 80;
   const maxSpeed = 120;
   
-  // 0~120km/h, 10km/h 간격
+  // 0~120km/h, 5km/h 간격으로 모든 눈금 표시
   // 하단 왼쪽(180도, 0km/h)에서 시작해서 위쪽(90도, 60km/h)를 거쳐 하단 오른쪽(0도, 120km/h)까지
-  for (let speed = 0; speed <= maxSpeed; speed += 10) {
+  for (let speed = 0; speed <= maxSpeed; speed += 5) {
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
     // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
     let angle = 180 - (speed / maxSpeed) * 180;
@@ -186,7 +186,7 @@ function generateSpeedometerTicks() {
     const x1 = centerX + innerRadius * Math.cos(rad);
     const y1 = centerY + innerRadius * Math.sin(rad);
     
-    // 주요 눈금 (20km/h 간격)은 길게, 10단위는 짧게
+    // 주요 눈금 (20km/h 간격)은 길게, 나머지는 짧게
     const isMajor = speed % 20 === 0;
     const tickLength = isMajor ? 12 : 6;
     const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
