@@ -8671,7 +8671,7 @@ button[aria-disabled="true"] {
   display: flex;
   gap: 40px;
   margin-bottom: 30px;
-  padding: 28px 42px; /* 70% of 40px 60px */
+  padding: 20px 29px; /* 70% of 28px 42px (현재 높이의 70%) */
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
@@ -8724,30 +8724,30 @@ button[aria-disabled="true"] {
 .scoreboard-ranks {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px; /* 70% of 12px */
   width: 100%;
 }
 
 .rank-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 12px;
+  gap: 11px; /* 70% of 16px */
+  padding: 6px 8px; /* 70% of 8px 12px */
   background: rgba(0, 212, 170, 0.1);
-  border-radius: 8px;
+  border-radius: 6px; /* 70% of 8px */
   border: 1px solid rgba(0, 212, 170, 0.3);
 }
 
 .rank-number {
-  font-size: 20px;
+  font-size: 14px; /* 70% of 20px */
   font-weight: 700;
   color: #00d4aa;
-  min-width: 40px;
+  min-width: 28px; /* 70% of 40px */
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
 }
 
 .rank-name {
-  font-size: 24px;
+  font-size: 17px; /* 70% of 24px */
   font-weight: 600;
   color: #ffffff;
   flex: 1;
@@ -8755,7 +8755,7 @@ button[aria-disabled="true"] {
 }
 
 .rank-distance {
-  font-size: 20px;
+  font-size: 14px; /* 70% of 20px */
   font-weight: 600;
   color: #00d4aa;
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
@@ -9161,8 +9161,8 @@ button[aria-disabled="true"] {
   /* 전광판 반응형 */
   .scoreboard-display {
     flex-direction: column;
-    gap: 21px; /* 70% of 30px */
-    padding: 21px 14px; /* 70% of 30px 20px */
+    gap: 15px; /* 70% of 21px (현재 높이의 70%) */
+    padding: 15px 10px; /* 70% of 21px 14px (현재 높이의 70%) */
   }
   
   .scoreboard-label {
