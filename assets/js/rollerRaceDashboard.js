@@ -140,7 +140,7 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동) -->
+        <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 180도) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
                 x1="100" y1="140" 
@@ -148,7 +148,7 @@ function createSpeedometerElement(speedometer) {
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(90 100 140)"/>
+                transform="rotate(180 100 140)"/>
           <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
@@ -266,9 +266,8 @@ function generateSpeedometerLabels() {
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    // 숫자 정상 순서 표시: 속도값 그대로 표시
-    // speed = 0 → 표시 0, speed = 60 → 표시 60, speed = 120 → 표시 120
-    const displayValue = speed;
+    // 숫자 역순 표시: 120 → 0, 100 → 20, 80 → 40, 60 → 60, 40 → 80, 20 → 100, 0 → 120
+    const displayValue = maxSpeed - speed;
     
     // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
@@ -284,9 +283,8 @@ function generateSpeedometerLabels() {
 
 /**
  * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h)
- * 원 중심으로 180도 회전
- * 실제 속도값에 맞는 눈금을 가리키도록 각도 계산 (눈금 배치와 동일한 로직 사용)
- * 속도 0 → 눈금 0 위치 (왼쪽), 속도 60 → 눈금 60 위치 (위쪽), 속도 120 → 눈금 120 위치 (오른쪽)
+ * 바늘 각도 계산: 180도 - 180도*(속도/120)
+ * 속도 0 → 180도 (초기 위치), 속도 60 → 90도, 속도 120 → 0도
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
@@ -295,15 +293,11 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   
   const maxSpeed = 120;
   
-  // 눈금 배치와 동일한 각도 계산 로직 사용
-  // speed = 0 → 180도 (하단 왼쪽) → +180 = 360도 (0도) → 눈금 0 위치
-  // speed = 60 → 90도 (위쪽) → +180 = 270도 → 눈금 60 위치
-  // speed = 120 → 0도 (하단 오른쪽) → +180 = 180도 → 눈금 120 위치
-  let baseAngle = 180 - (speed / maxSpeed) * 180;
-  let angle = baseAngle + 180; // 원 중심으로 180도 회전
-  
-  // 360도는 0도와 같으므로 정규화
-  if (angle >= 360) angle = angle - 360;
+  // 바늘 각도 계산: 180도 - 180도*(속도/120)
+  // speed = 0 → angle = 180도 (초기 위치)
+  // speed = 60 → angle = 180 - 90 = 90도
+  // speed = 120 → angle = 180 - 180 = 0도
+  const angle = 180 - 180 * (speed / maxSpeed);
   
   // 부드러운 애니메이션을 위해 transition 적용
   // 원의 중심 (100, 140) 기준으로 회전 - 원지름의 1/4만큼 아래로 이동
