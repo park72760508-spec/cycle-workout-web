@@ -120,6 +120,10 @@ function createSpeedometerElement(speedometer) {
   container.innerHTML = `
     <div class="speedometer-header">
       <span class="speedometer-name">${speedometer.name}</span>
+      <div class="connection-status-center" id="status-${speedometer.id}">
+        <span class="status-dot disconnected"></span>
+        <span class="status-text">미연결</span>
+      </div>
       <button class="btn-pair btn-pair-sm" onclick="pairSpeedometer(${speedometer.id})" title="페어링">
         <img src="assets/img/wifi.png" alt="페어링" style="width: 16px; height: 16px;">
       </button>
@@ -160,6 +164,11 @@ function createSpeedometerElement(speedometer) {
               font-size="10" 
               font-weight="500">km/h</text>
       </svg>
+      <!-- 순위 표시 (속도계 검은 바탕 하단 중앙) -->
+      <div class="rank-display-bottom">
+        <span class="rank-label-bottom">순위</span>
+        <span class="rank-value-bottom" id="rank-value-${speedometer.id}">-</span>
+      </div>
     </div>
     <div class="speedometer-info disconnected">
       <div class="speed-display">
@@ -173,16 +182,6 @@ function createSpeedometerElement(speedometer) {
         <span class="distance-unit">km</span>
         </div>
       </div>
-    </div>
-    <div class="speedometer-footer">
-      <div class="rank-display">
-        <span class="rank-label">순위</span>
-        <span class="rank-value" id="rank-value-${speedometer.id}">-</span>
-      </div>
-    </div>
-    <div class="connection-status-center" id="status-${speedometer.id}">
-        <span class="status-dot disconnected"></span>
-        <span class="status-text">미연결</span>
     </div>
   `;
   
