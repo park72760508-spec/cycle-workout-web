@@ -8732,6 +8732,7 @@ button[aria-disabled="true"] {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  position: relative;
 }
 
 .speedometer-name {
@@ -8815,8 +8816,8 @@ button[aria-disabled="true"] {
 .speed-value {
   font-size: 36px;
   font-weight: 700;
-  color: #ffffff; /* 흰색 숫자 */
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+  color: #000000; /* 검정색 숫자 */
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
   line-height: 1;
 }
 
@@ -8850,7 +8851,7 @@ button[aria-disabled="true"] {
 
 .distance-value {
   font-weight: 700;
-  color: #ffffff; /* 흰색 숫자 */
+  color: #ff0000; /* 빨강색 숫자 */
   font-size: 18px;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
 }
@@ -8887,6 +8888,31 @@ button[aria-disabled="true"] {
   color: #fbbf24;
 }
 
+/* 속도계 검은 바탕 하단 중앙 순위 표시 */
+.rank-display-bottom {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  z-index: 10;
+}
+
+.rank-label-bottom {
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rank-value-bottom {
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 24px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
 .connection-status {
   display: flex;
   align-items: center;
@@ -8900,8 +8926,9 @@ button[aria-disabled="true"] {
   justify-content: center;
   gap: 6px;
   font-size: 11px;
-  margin-top: 8px;
-  padding: 4px 0;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .status-dot {
