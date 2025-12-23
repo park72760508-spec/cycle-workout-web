@@ -8762,23 +8762,41 @@ button[aria-disabled="true"] {
   position: relative;
 }
 
-/* 스크롤 애니메이션 (2초마다만 적용) */
+/* 스크롤 애니메이션 (3초마다만 적용) */
 .scoreboard-ranks.rank-scroll-animation .rank-item-content {
-  animation: rankTextScroll 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: rankTextScroll 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 @keyframes rankTextScroll {
   0% {
     transform: translateY(0);
+    opacity: 1;
   }
-  50% {
-    transform: translateY(-10px);
-    opacity: 0.7;
+  30% {
+    transform: translateY(-45px);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(45px);
+    opacity: 0;
   }
   100% {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+/* 각 순위 항목별로 순차적으로 애니메이션 적용 */
+.scoreboard-ranks.rank-scroll-animation .rank-item:nth-child(1) .rank-item-content {
+  animation-delay: 0s;
+}
+
+.scoreboard-ranks.rank-scroll-animation .rank-item:nth-child(2) .rank-item-content {
+  animation-delay: 0.05s;
+}
+
+.scoreboard-ranks.rank-scroll-animation .rank-item:nth-child(3) .rank-item-content {
+  animation-delay: 0.1s;
 }
 
 .rank-item-visible {
