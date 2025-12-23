@@ -140,7 +140,7 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 180도) -->
+        <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
                 x1="100" y1="140" 
@@ -148,7 +148,7 @@ function createSpeedometerElement(speedometer) {
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(180 100 140)"/>
+                transform="rotate(270 100 140)"/>
           <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
@@ -283,8 +283,8 @@ function generateSpeedometerLabels() {
 
 /**
  * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h)
- * 바늘 각도 계산: 180도 - 180도*(속도/120)
- * 속도 0 → 180도 (초기 위치), 속도 60 → 90도, 속도 120 → 0도
+ * 바늘 각도 계산: 270도 + 180도*(속도/120)
+ * 속도 0 → 270도 (초기 위치), 속도 60 → 360도(0도), 속도 120 → 450도(90도)
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
@@ -293,11 +293,14 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   
   const maxSpeed = 120;
   
-  // 바늘 각도 계산: 180도 - 180도*(속도/120)
-  // speed = 0 → angle = 180도 (초기 위치)
-  // speed = 60 → angle = 180 - 90 = 90도
-  // speed = 120 → angle = 180 - 180 = 0도
-  const angle = 180 - 180 * (speed / maxSpeed);
+  // 바늘 각도 계산: 270도 + 180도*(속도/120)
+  // speed = 0 → angle = 270도 (초기 위치)
+  // speed = 60 → angle = 270 + 90 = 360도 (0도)
+  // speed = 120 → angle = 270 + 180 = 450도 (90도)
+  let angle = 270 + 180 * (speed / maxSpeed);
+  
+  // 360도 이상인 경우 정규화 (450도 → 90도)
+  if (angle >= 360) angle = angle - 360;
   
   // 부드러운 애니메이션을 위해 transition 적용
   // 원의 중심 (100, 140) 기준으로 회전 - 원지름의 1/4만큼 아래로 이동
