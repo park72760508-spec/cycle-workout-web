@@ -2180,6 +2180,18 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <label>바퀴 규격 (로드바이크 700C 휠셋)</label>
+            <select id="wheelSize" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 8px;">
+              <option value="23-622">23-622 (700 x 23C) - 구형 로드, 트랙 - 2,096 mm</option>
+              <option value="25-622" selected>25-622 (700 x 25C) - 로드 표준 - 2,105 mm</option>
+              <option value="28-622">28-622 (700 x 28C) - 엔듀런스, 최신 로드 - 2,136 mm</option>
+              <option value="32-622">32-622 (700 x 32C) - 그래블, 하이브리드 - 2,155 mm</option>
+            </select>
+            <small style="display: block; margin-top: 4px; color: #666;">
+              이동 거리 계산: 총 회전수 × 둘레(mm) / 1,000,000
+            </small>
+          </div>
+          <div class="form-group" style="margin-top: 20px;">
             <label>경기 종료 조건</label>
             <div class="form-row">
               <label>
