@@ -85,6 +85,14 @@ function initRollerRaceDashboard() {
   
   // 타이머 초기화
   window.rollerRaceTimer = null;
+  
+  // 전광판 초기화
+  const scoreboardTimeEl = document.getElementById('scoreboardTime');
+  const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
+  const scoreboardRidersEl = document.getElementById('scoreboardRiders');
+  if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
+  if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = '0.0';
+  if (scoreboardRidersEl) scoreboardRidersEl.textContent = '0';
 }
 
 /**
@@ -378,6 +386,13 @@ function updateDashboardStats() {
   
   if (totalDistanceEl) totalDistanceEl.textContent = totalDistance.toFixed(2);
   if (activeRidersEl) activeRidersEl.textContent = activeRiders;
+  
+  // 전광판 업데이트
+  const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
+  const scoreboardRidersEl = document.getElementById('scoreboardRiders');
+  
+  if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = totalDistance.toFixed(2);
+  if (scoreboardRidersEl) scoreboardRidersEl.textContent = activeRiders;
 }
 
 /**
@@ -391,12 +406,18 @@ function updateElapsedTime() {
   
   window.rollerRaceState.totalElapsedTime = elapsed;
   
-  const minutes = Math.floor(elapsed / 60);
+  // 시간 형식: HH:MM:SS
+  const hours = Math.floor(elapsed / 3600);
+  const minutes = Math.floor((elapsed % 3600) / 60);
   const seconds = elapsed % 60;
-  const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   
   const elapsedTimeEl = document.getElementById('elapsedTime');
   if (elapsedTimeEl) elapsedTimeEl.textContent = timeString;
+  
+  // 전광판 경과시간 업데이트
+  const scoreboardTimeEl = document.getElementById('scoreboardTime');
+  if (scoreboardTimeEl) scoreboardTimeEl.textContent = timeString;
   
   // 경기 종료 조건 확인
   checkRaceEndConditions();
@@ -452,6 +473,7 @@ function startRace() {
     window.rollerRaceState.startTime = Date.now();
     window.rollerRaceState.pausedTime = 0;
     window.rollerRaceState.raceState = 'running';
+    window.rollerRaceState.totalElapsedTime = 0;
     
     // 모든 속도계 거리 및 회전수 초기화
     window.rollerRaceState.speedometers.forEach(s => {
@@ -460,9 +482,16 @@ function startRace() {
       s.currentSpeed = 0;
       s.lastRevolutions = 0;
     });
+    
+    // 초기 시간 표시
+    const elapsedTimeEl = document.getElementById('elapsedTime');
+    const scoreboardTimeEl = document.getElementById('scoreboardTime');
+    if (elapsedTimeEl) elapsedTimeEl.textContent = '00:00:00';
+    if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
   }
   
-  // 타이머 시작
+  // 타이머 시작 (즉시 시작)
+  updateElapsedTime(); // 즉시 한 번 실행
   window.rollerRaceTimer = setInterval(updateElapsedTime, 1000);
   
   // 버튼 상태 업데이트
