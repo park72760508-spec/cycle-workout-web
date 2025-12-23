@@ -2118,7 +2118,29 @@
       </button>
     </div>
 
-    <!-- 전체 통계 -->
+    <!-- 전광판 스타일 통계 (대회 전광판) -->
+    <div class="scoreboard-display">
+      <div class="scoreboard-item">
+        <div class="scoreboard-label">누적거리</div>
+        <div class="scoreboard-value">
+          <span id="scoreboardDistance">0.0</span>
+          <span class="scoreboard-unit">km</span>
+        </div>
+      </div>
+      <div class="scoreboard-item">
+        <div class="scoreboard-label">경과시간</div>
+        <div class="scoreboard-value" id="scoreboardTime">00:00:00</div>
+      </div>
+      <div class="scoreboard-item">
+        <div class="scoreboard-label">참여자</div>
+        <div class="scoreboard-value">
+          <span id="scoreboardRiders">0</span>
+          <span class="scoreboard-unit">명</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 전체 통계 (기존, 작은 크기) -->
     <div class="dashboard-stats">
       <div class="stat-item">
         <span class="stat-label">총 누적거리</span>
@@ -2127,7 +2149,7 @@
       </div>
       <div class="stat-item">
         <span class="stat-label">경과시간</span>
-        <span class="stat-value" id="elapsedTime">00:00</span>
+        <span class="stat-value" id="elapsedTime">00:00:00</span>
       </div>
       <div class="stat-item">
         <span class="stat-label">참가자</span>
