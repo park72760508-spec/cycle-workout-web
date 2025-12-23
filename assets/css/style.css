@@ -8720,12 +8720,37 @@ button[aria-disabled="true"] {
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
 }
 
+/* 순위 표시 컨테이너 */
+.scoreboard-ranks-container {
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  height: calc(3 * (24px + 8px)); /* 3개 항목 높이 + gap */
+}
+
 /* 순위 표시 스타일 */
 .scoreboard-ranks {
   display: flex;
   flex-direction: column;
   gap: 8px; /* 70% of 12px */
   width: 100%;
+  position: relative;
+}
+
+.scoreboard-ranks.rank-scroll-animation {
+  animation: rankScroll 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes rankScroll {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .rank-item {
@@ -8736,6 +8761,26 @@ button[aria-disabled="true"] {
   background: rgba(0, 212, 170, 0.1);
   border-radius: 6px; /* 70% of 8px */
   border: 1px solid rgba(0, 212, 170, 0.3);
+  transition: opacity 0.4s ease, transform 0.4s ease, max-height 0.4s ease;
+  opacity: 0;
+  transform: translateY(-10px);
+  max-height: 0;
+  overflow: hidden;
+}
+
+.rank-item-visible {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 50px;
+}
+
+.rank-item:not(.rank-item-visible) {
+  opacity: 0;
+  transform: translateY(-10px);
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin: 0;
 }
 
 .rank-number {
