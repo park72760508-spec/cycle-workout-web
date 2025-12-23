@@ -8764,7 +8764,7 @@ button[aria-disabled="true"] {
 
 /* 스크롤 애니메이션 (3초마다만 적용) */
 .scoreboard-ranks.rank-scroll-animation .rank-item-content {
-  animation: rankTextScroll 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: rankTextScroll 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 @keyframes rankTextScroll {
@@ -9214,6 +9214,7 @@ button[aria-disabled="true"] {
   padding: 20px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
+  margin-bottom: 20px;
 }
 
 .btn-large {
