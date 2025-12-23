@@ -8900,7 +8900,8 @@ button[aria-disabled="true"] {
   background: #ff8c00; /* 주황색 배경 (미연결 상태) */
 }
 
-.speed-display {
+/* 좌측: 현재속도 */
+.speed-display-left {
   display: flex;
   align-items: baseline;
   gap: 4px;
@@ -8916,32 +8917,44 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-.speed-unit {
-  font-size: 16px;
-  color: #ffffff; /* 흰색 단위 */
-  font-weight: 500;
-  margin-left: 2px;
-}
-
-.distance-display {
+/* 중앙: 최대속도, 평균속도 */
+.speed-display-center {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 4px;
+  flex: 1;
   justify-content: center;
-  font-size: 12px;
 }
 
-.distance-label {
-  color: #ffffff; /* 흰색 라벨 */
-  font-weight: 500;
-  font-size: 11px;
-}
-
-.distance-value-wrapper {
+.speed-stat-row {
   display: flex;
   align-items: baseline;
   gap: 4px;
+  justify-content: center;
+}
+
+.speed-stat-label {
+  font-size: 12px;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.speed-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #000000;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+  line-height: 1;
+}
+
+/* 우측: 거리 */
+.distance-display-right {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 1;
+  justify-content: flex-end;
 }
 
 .distance-value {
@@ -8949,12 +8962,31 @@ button[aria-disabled="true"] {
   color: #ff0000; /* 빨강색 숫자 */
   font-size: 18px;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+  line-height: 1;
 }
 
-.distance-unit {
-  color: #ffffff; /* 흰색 단위 */
+/* 단위 표시 (위 첨자, 폰트 크기 30%) */
+.speed-unit-sup,
+.distance-unit-sup {
+  font-size: 30%;
+  color: #ffffff;
   font-weight: 500;
-  font-size: 12px;
+  line-height: 0;
+}
+
+/* 현재속도 단위 (36px의 30% = 10.8px) */
+.speed-display-left .speed-unit-sup {
+  font-size: 10.8px; /* 36px * 0.3 */
+}
+
+/* 최대/평균속도 단위 (18px의 30% = 5.4px) */
+.speed-stat-row .speed-unit-sup {
+  font-size: 5.4px; /* 18px * 0.3 */
+}
+
+/* 거리 단위 (18px의 30% = 5.4px) */
+.distance-display-right .distance-unit-sup {
+  font-size: 5.4px; /* 18px * 0.3 */
 }
 
 .speedometer-footer {
