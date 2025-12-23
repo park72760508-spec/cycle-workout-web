@@ -284,18 +284,23 @@ function generateSpeedometerLabels() {
 /**
  * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h)
  * 원 중심으로 180도 회전
- * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 숫자 역순 표시와 동기화: 실제 속도값을 역순으로 변환하여 각도 계산
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
-  // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-  // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
-  // 원 중심으로 180도 회전: 각도에 180도 추가
   const maxSpeed = 120;
-  const baseAngle = 180 - (speed / maxSpeed) * 180;
+  
+  // 숫자 역순 표시와 동기화: 실제 속도를 역순으로 변환
+  // 실제 속도 0 → 표시 120, 실제 속도 120 → 표시 0
+  const displaySpeed = maxSpeed - speed;
+  
+  // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
+  // displaySpeed = 120 → 180도 (하단 왼쪽), displaySpeed = 60 → 90도 (위쪽), displaySpeed = 0 → 0도 (하단 오른쪽)
+  // 원 중심으로 180도 회전: 각도에 180도 추가
+  const baseAngle = 180 - (displaySpeed / maxSpeed) * 180;
   const angle = baseAngle + 180; // 원 중심으로 180도 회전
   
   // 부드러운 애니메이션을 위해 transition 적용
