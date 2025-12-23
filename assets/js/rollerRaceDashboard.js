@@ -620,7 +620,7 @@ function startRankDisplayRotation() {
     
     // 애니메이션과 함께 업데이트
     updateRankDisplay(true);
-  }, 3000); // 3초
+  }, 5000); // 5초
 }
 
 /**
