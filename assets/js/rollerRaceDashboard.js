@@ -500,21 +500,54 @@ function updateRankDisplay(withAnimation = true) {
     .sort((a, b) => b.totalDistance - a.totalDistance);
   
   const totalRanks = sorted.length;
-  if (totalRanks === 0) return;
+  if (totalRanks === 0) {
+    // 순위가 없을 때 빈 상태 표시
+    const rankItems = ranksContainer.querySelectorAll('.rank-item');
+    for (let i = 0; i < Math.min(3, rankItems.length); i++) {
+      const item = rankItems[i];
+      if (item) {
+        const nameEl = item.querySelector('.rank-name');
+        const distanceEl = item.querySelector('.rank-distance');
+        const numberEl = item.querySelector('.rank-number');
+        if (nameEl) nameEl.textContent = '-';
+        if (distanceEl) distanceEl.textContent = '0.0km';
+        if (numberEl) numberEl.textContent = '-';
+        item.classList.add('rank-item-visible');
+      }
+    }
+    return;
+  }
   
   // 표시할 순위 개수 (최대 3개)
   const displayCount = Math.min(3, totalRanks);
   
-  // 시작 인덱스 계산 (순환)
-  const startIndex = window.rollerRaceState.rankDisplayStartIndex;
+  // 시작 인덱스 계산
+  // 순위가 3개 초과일 때: 0부터 시작해서 (totalRanks - 3)까지, 그 다음 다시 0으로
+  // 순위가 3개 이하일 때: 항상 0부터 시작 (순환하지 않음)
+  let startIndex = window.rollerRaceState.rankDisplayStartIndex;
+  
+  // 순위가 3개 초과일 때, 마지막 순위까지 도달하면 다시 처음으로
+  if (totalRanks > 3) {
+    const maxStartIndex = totalRanks - 3; // 마지막으로 표시할 수 있는 시작 인덱스
+    if (startIndex > maxStartIndex) {
+      startIndex = 0; // 다시 처음으로
+      window.rollerRaceState.rankDisplayStartIndex = 0;
+    }
+  } else {
+    // 순위가 3개 이하일 때는 항상 처음부터 표시 (순환하지 않음)
+    startIndex = 0;
+    window.rollerRaceState.rankDisplayStartIndex = 0;
+  }
   
   const rankItems = ranksContainer.querySelectorAll('.rank-item');
   
   // 각 고정된 상자에 데이터 업데이트
   for (let i = 0; i < Math.min(3, rankItems.length); i++) {
-    const targetIndex = (startIndex + i) % totalRanks;
     const item = rankItems[i];
-    if (item && sorted[targetIndex]) {
+    
+    if (i < displayCount && (startIndex + i) < totalRanks) {
+      // 표시할 순위가 있는 경우
+      const targetIndex = startIndex + i;
       const speedometer = sorted[targetIndex];
       const nameEl = item.querySelector('.rank-name');
       const distanceEl = item.querySelector('.rank-distance');
@@ -525,6 +558,15 @@ function updateRankDisplay(withAnimation = true) {
       if (numberEl) numberEl.textContent = (targetIndex + 1) + '위';
       
       item.classList.add('rank-item-visible');
+    } else {
+      // 표시할 순위가 없는 경우 (빈 상자)
+      const nameEl = item.querySelector('.rank-name');
+      const distanceEl = item.querySelector('.rank-distance');
+      const numberEl = item.querySelector('.rank-number');
+      if (nameEl) nameEl.textContent = '-';
+      if (distanceEl) distanceEl.textContent = '0.0km';
+      if (numberEl) numberEl.textContent = '-';
+      item.classList.remove('rank-item-visible');
     }
   }
   
@@ -547,24 +589,46 @@ function startRankDisplayRotation() {
     window.rollerRaceState.rankDisplayTimer = null;
   }
   
+  // 시작 인덱스 초기화 (1~3위부터 시작)
+  window.rollerRaceState.rankDisplayStartIndex = 0;
+  
   // 초기 표시 (애니메이션 없이)
   updateRankDisplay(false);
   
   // 2초마다 순환 (애니메이션과 함께)
   window.rollerRaceState.rankDisplayTimer = setInterval(() => {
-    const ranksContainer = document.getElementById('scoreboardRanks');
-    if (!ranksContainer) return;
+    // 정렬된 순위 데이터 가져오기
+    const sorted = [...window.rollerRaceState.speedometers]
+      .filter(s => s.connected && s.totalDistance > 0)
+      .sort((a, b) => b.totalDistance - a.totalDistance);
     
-    const rankItems = ranksContainer.querySelectorAll('.rank-item');
-    const totalRanks = rankItems.length;
+    const totalRanks = sorted.length;
     
-    if (totalRanks > 3) {
-      // 다음 시작 인덱스로 이동 (순환)
-      window.rollerRaceState.rankDisplayStartIndex = 
-        (window.rollerRaceState.rankDisplayStartIndex + 1) % totalRanks;
-      // 애니메이션과 함께 업데이트
-      updateRankDisplay(true);
+    if (totalRanks === 0) {
+      // 순위가 없으면 업데이트하지 않음
+      return;
     }
+    
+    // 다음 시작 인덱스로 이동
+    if (totalRanks > 3) {
+      // 순위가 3개 초과일 때: 1씩 증가, 마지막에 도달하면 다시 0으로
+      // 예: 1~3위 → 2~4위 → 3~5위 → ... → 마지막-2~마지막 → 1~3위
+      const maxStartIndex = totalRanks - 3;
+      if (window.rollerRaceState.rankDisplayStartIndex >= maxStartIndex) {
+        // 마지막 순위까지 도달했으면 다시 처음으로 (1~3위)
+        window.rollerRaceState.rankDisplayStartIndex = 0;
+      } else {
+        // 다음 순위로 이동 (1~3위 → 2~4위 → 3~5위 → ...)
+        window.rollerRaceState.rankDisplayStartIndex += 1;
+      }
+    } else {
+      // 순위가 3개 이하일 때: 순환하지 않고 항상 처음부터 표시
+      // (1~2위 또는 1~3위만 표시)
+      window.rollerRaceState.rankDisplayStartIndex = 0;
+    }
+    
+    // 애니메이션과 함께 업데이트
+    updateRankDisplay(true);
   }, 2000); // 2초
 }
 
