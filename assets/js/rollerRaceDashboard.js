@@ -94,9 +94,9 @@ function createSpeedometerElement(speedometer) {
       </button>
     </div>
     <div class="speedometer-dial">
-      <svg class="speedometer-svg" viewBox="0 0 200 240">
-        <!-- 아래쪽 반원 배경 (원의 중심 아래로 20% 이동) -->
-        <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
+      <svg class="speedometer-svg" viewBox="0 0 200 200">
+        <!-- 아래쪽 반원 배경 (180도 회전, 반원만큼 아래로 이동) -->
+        <path class="speedometer-arc-bg" d="M 20 100 A 80 80 0 0 1 180 100" 
               fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
         <!-- 속도 눈금 (0~120km/h) -->
@@ -109,20 +109,20 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (원의 중심에 위치, 아래로 20% 이동) -->
+        <!-- 바늘 (원의 중심에 위치) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
-                x1="100" y1="140" 
-                x2="20" y2="140" 
+                x1="100" y1="100" 
+                x2="100" y2="20" 
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(180 100 140)"/>
-          <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
+                transform="rotate(90 100 100)"/>
+          <circle cx="100" cy="100" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
         <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지) -->
-        <text x="100" y="150" 
+        <text x="100" y="110" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
@@ -138,8 +138,8 @@ function createSpeedometerElement(speedometer) {
       <div class="distance-display">
         <div class="distance-label">거리</div>
         <div class="distance-value-wrapper">
-          <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
-          <span class="distance-unit">km</span>
+        <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
+        <span class="distance-unit">km</span>
         </div>
       </div>
     </div>
@@ -150,8 +150,8 @@ function createSpeedometerElement(speedometer) {
       </div>
     </div>
     <div class="connection-status-center" id="status-${speedometer.id}">
-      <span class="status-dot disconnected"></span>
-      <span class="status-text">미연결</span>
+        <span class="status-dot disconnected"></span>
+        <span class="status-text">미연결</span>
     </div>
   `;
   
@@ -161,22 +161,24 @@ function createSpeedometerElement(speedometer) {
 /**
  * 속도계 눈금 생성 (0~120km/h, 자동차 속도계 스타일)
  * 모든 눈금 표시 (5km/h 간격), 20단위는 긴 눈금, 나머지는 짧은 눈금
- * 원의 중심 아래로 20% 이동
- * 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 오른쪽(0도) = 120km/h
+ * 원 중심으로 180도 회전
+ * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
  */
 function generateSpeedometerTicks() {
   let ticks = '';
   const centerX = 100;
-  const centerY = 140; // 원의 중심 (아래로 20% 이동: 100 + 200*0.2 = 140)
+  const centerY = 100; // 원의 중심
   const radius = 80;
   const maxSpeed = 120;
   
   // 0~120km/h, 5km/h 간격으로 모든 눈금 표시
-  // 왼쪽(180도, 0km/h)에서 시작해서 위쪽(90도, 60km/h)를 거쳐 오른쪽(0도, 120km/h)까지
+  // 하단 왼쪽(180도, 0km/h)에서 시작해서 위쪽(90도, 60km/h)를 거쳐 하단 오른쪽(0도, 120km/h)까지
   for (let speed = 0; speed <= maxSpeed; speed += 5) {
-    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-    // speed = 0 → 180도 (왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (오른쪽)
+    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
+    // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
+    // 180도 회전: 각도에 180도 추가
     let angle = 180 - (speed / maxSpeed) * 180;
+    angle = angle + 180; // 원 중심으로 180도 회전
     
     const rad = (angle * Math.PI) / 180;
     
@@ -203,15 +205,14 @@ function generateSpeedometerTicks() {
 
 /**
  * 속도계 라벨 생성 (0~120km/h, 20단위만 표시, 자동차 속도계 스타일)
- * 원의 중심 아래로 20% 이동
+ * 원 중심으로 180도 회전
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
- * 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 오른쪽(0도) = 120km/h
- * 숫자 역순 표시: 실제 속도값을 (120 - speed)로 표시
+ * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
  */
 function generateSpeedometerLabels() {
   let labels = '';
   const centerX = 100;
-  const centerY = 140; // 원의 중심 (아래로 20% 이동: 100 + 200*0.2 = 140)
+  const centerY = 100; // 원의 중심
   const radius = 80;
   const maxSpeed = 120;
   
@@ -219,9 +220,11 @@ function generateSpeedometerLabels() {
   const speeds = [0, 20, 40, 60, 80, 100, 120];
   
   speeds.forEach(speed => {
-    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-    // speed = 0 → 180도 (왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (오른쪽)
+    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
+    // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
+    // 180도 회전: 각도에 180도 추가
     let angle = 180 - (speed / maxSpeed) * 180;
+    angle = angle + 180; // 원 중심으로 180도 회전
     
     const rad = (angle * Math.PI) / 180;
     
@@ -230,16 +233,13 @@ function generateSpeedometerLabels() {
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    // 숫자 역순 표시: 120 --> 0, 100 --> 20, 80 --> 40, 60 --> 60, 40 --> 80, 20 --> 100, 0 --> 120
-    const displayValue = maxSpeed - speed;
-    
     // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
                      fill="#ffffff" 
                      font-size="15" 
-                     font-weight="700">${displayValue}</text>`;
+                     font-weight="700">${speed}</text>`;
   });
   
   return labels;
@@ -247,23 +247,25 @@ function generateSpeedometerLabels() {
 
 /**
  * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h)
- * 원의 중심 아래로 20% 이동
- * 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 오른쪽(0도) = 120km/h
- * 바늘 중심: 원의 중심 (100, 140)
+ * 원 중심으로 180도 회전
+ * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 바늘 중심: 원의 중심 (100, 100)
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
   // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로
-  // speed = 0 → 180도 (왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (오른쪽)
+  // speed = 0 → 180도 (하단 왼쪽), speed = 60 → 90도 (위쪽), speed = 120 → 0도 (하단 오른쪽)
+  // 원 중심으로 180도 회전: 각도에 180도 추가
   const maxSpeed = 120;
-  const angle = 180 - (speed / maxSpeed) * 180;
+  const baseAngle = 180 - (speed / maxSpeed) * 180;
+  const angle = baseAngle + 180; // 원 중심으로 180도 회전
   
   // 부드러운 애니메이션을 위해 transition 적용
-  // 원의 중심 (100, 140) 기준으로 회전
+  // 원의 중심 (100, 100) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
-  needle.setAttribute('transform', `rotate(${angle} 100 140)`);
+  needle.setAttribute('transform', `rotate(${angle} 100 100)`);
 }
 
 /**
