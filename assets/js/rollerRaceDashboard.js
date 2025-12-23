@@ -163,11 +163,12 @@ function createSpeedometerElement(speedometer) {
  * 모든 눈금 표시 (5km/h 간격), 20단위는 긴 눈금, 나머지는 짧은 눈금
  * 원 중심으로 180도 회전
  * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 원지름의 1/4만큼 아래로 이동
  */
 function generateSpeedometerTicks() {
   let ticks = '';
   const centerX = 100;
-  const centerY = 100; // 원의 중심
+  const centerY = 140; // 원의 중심 (원지름의 1/4만큼 아래로 이동: 100 + 40 = 140)
   const radius = 80;
   const maxSpeed = 120;
   
@@ -208,11 +209,12 @@ function generateSpeedometerTicks() {
  * 원 중심으로 180도 회전
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
  * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
+ * 원지름의 1/4만큼 아래로 이동
  */
 function generateSpeedometerLabels() {
   let labels = '';
   const centerX = 100;
-  const centerY = 100; // 원의 중심
+  const centerY = 140; // 원의 중심 (원지름의 1/4만큼 아래로 이동: 100 + 40 = 140)
   const radius = 80;
   const maxSpeed = 120;
   
