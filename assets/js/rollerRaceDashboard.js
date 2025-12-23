@@ -95,8 +95,8 @@ function createSpeedometerElement(speedometer) {
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
-        <!-- 아래쪽 반원 배경 (180도 회전, 반원만큼 아래로 이동) -->
-        <path class="speedometer-arc-bg" d="M 20 100 A 80 80 0 0 1 180 100" 
+        <!-- 아래쪽 반원 배경 (원지름의 1/4만큼 아래로 이동) -->
+        <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
               fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
         <!-- 속도 눈금 (0~120km/h) -->
@@ -109,20 +109,20 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 (원의 중심에 위치) -->
+        <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
-                x1="100" y1="100" 
-                x2="100" y2="20" 
+                x1="100" y1="140" 
+                x2="100" y2="60" 
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(90 100 100)"/>
-          <circle cx="100" cy="100" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
+                transform="rotate(90 100 140)"/>
+          <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
         <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지) -->
-        <text x="100" y="110" 
+        <text x="100" y="150" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
@@ -249,7 +249,7 @@ function generateSpeedometerLabels() {
  * 속도계 바늘 업데이트 (애니메이션 포함, 0~120km/h)
  * 원 중심으로 180도 회전
  * 하단 왼쪽(180도) = 0km/h, 위쪽(90도) = 60km/h, 하단 오른쪽(0도) = 120km/h
- * 바늘 중심: 원의 중심 (100, 100)
+ * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
@@ -263,9 +263,9 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   const angle = baseAngle + 180; // 원 중심으로 180도 회전
   
   // 부드러운 애니메이션을 위해 transition 적용
-  // 원의 중심 (100, 100) 기준으로 회전
+  // 원의 중심 (100, 140) 기준으로 회전 - 원지름의 1/4만큼 아래로 이동
   needle.style.transition = 'transform 0.3s ease-out';
-  needle.setAttribute('transform', `rotate(${angle} 100 100)`);
+  needle.setAttribute('transform', `rotate(${angle} 100 140)`);
 }
 
 /**
