@@ -2118,6 +2118,22 @@
       </button>
     </div>
 
+    <!-- 경기 제어 버튼 -->
+    <div class="race-controls">
+      <button class="btn btn-success btn-large" id="btnStartRace" onclick="startRace()">
+        <img src="assets/img/play.png" alt="시작" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
+        시작
+      </button>
+      <button class="btn btn-warning btn-large" id="btnPauseRace" onclick="pauseRace()" disabled>
+        <img src="assets/img/pause.png" alt="일시정지" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
+        일시정지
+      </button>
+      <button class="btn btn-danger btn-large" id="btnStopRace" onclick="stopRace()" disabled>
+        <img src="assets/img/stop.png" alt="종료" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
+        종료
+      </button>
+    </div>
+
     <!-- 전광판 스타일 통계 (대회 전광판) -->
     <div class="scoreboard-display">
       <div class="scoreboard-item">
@@ -2157,22 +2173,6 @@
       <div class="speedometer-list" id="speedometerList">
         <!-- 속도계 목록은 JavaScript로 동적 생성 -->
       </div>
-    </div>
-
-    <!-- 경기 제어 버튼 -->
-    <div class="race-controls">
-      <button class="btn btn-success btn-large" id="btnStartRace" onclick="startRace()">
-        <img src="assets/img/play.png" alt="시작" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
-        시작
-      </button>
-      <button class="btn btn-warning btn-large" id="btnPauseRace" onclick="pauseRace()" disabled>
-        <img src="assets/img/pause.png" alt="일시정지" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
-        일시정지
-      </button>
-      <button class="btn btn-danger btn-large" id="btnStopRace" onclick="stopRace()" disabled>
-        <img src="assets/img/stop.png" alt="종료" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
-        종료
-      </button>
     </div>
 
     <!-- 경기 설정 모달 -->
