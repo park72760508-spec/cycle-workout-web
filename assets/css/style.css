@@ -8764,9 +8764,9 @@ button[aria-disabled="true"] {
   position: relative;
 }
 
-/* 스크롤 애니메이션 (3초마다만 적용) */
+/* 스크롤 애니메이션 (5초마다만 적용) */
 .scoreboard-ranks.rank-scroll-animation .rank-item-content {
-  animation: rankTextScroll 1.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: rankTextScroll 1.12s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 @keyframes rankTextScroll {
