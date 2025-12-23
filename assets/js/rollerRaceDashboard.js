@@ -3,6 +3,34 @@
  * ANT+ 1:N 연결로 10개 속도계 센서 관리
  */
 
+// 바퀴 규격 데이터 (로드바이크 700C 휠셋)
+const WHEEL_SPECS = {
+  '23-622': {
+    etrto: '23-622',
+    size: '700 x 23C',
+    circumference: 2096, // mm
+    description: '구형 로드, 트랙'
+  },
+  '25-622': {
+    etrto: '25-622',
+    size: '700 x 25C',
+    circumference: 2105, // mm
+    description: '로드 표준'
+  },
+  '28-622': {
+    etrto: '28-622',
+    size: '700 x 28C',
+    circumference: 2136, // mm
+    description: '엔듀런스, 최신 로드'
+  },
+  '32-622': {
+    etrto: '32-622',
+    size: '700 x 32C',
+    circumference: 2155, // mm
+    description: '그래블, 하이브리드'
+  }
+};
+
 // 전역 상태
 window.rollerRaceState = {
   speedometers: [], // 속도계 목록
@@ -15,7 +43,8 @@ window.rollerRaceState = {
     endByDistance: true,
     targetDistance: 10, // km
     endByTime: false,
-    targetTime: 60 // minutes
+    targetTime: 60, // minutes
+    wheelSize: '25-622' // 기본값: 700 x 25C
   },
   rankings: [] // 순위 정보
 };
@@ -29,7 +58,9 @@ class SpeedometerData {
     this.connected = false;
     this.currentSpeed = 0; // km/h
     this.totalDistance = 0; // km
+    this.totalRevolutions = 0; // 총 회전수
     this.lastUpdateTime = null;
+    this.lastRevolutions = 0; // 마지막 회전수 (CSC 센서에서)
     this.speedHistory = []; // 최근 속도 기록 (그래프용)
   }
 }
@@ -419,10 +450,12 @@ function startRace() {
     window.rollerRaceState.pausedTime = 0;
     window.rollerRaceState.raceState = 'running';
     
-    // 모든 속도계 거리 초기화
+    // 모든 속도계 거리 및 회전수 초기화
     window.rollerRaceState.speedometers.forEach(s => {
       s.totalDistance = 0;
+      s.totalRevolutions = 0;
       s.currentSpeed = 0;
+      s.lastRevolutions = 0;
     });
   }
   
@@ -584,11 +617,33 @@ function updateSpeedometerConnectionStatus(speedometerId, connected) {
 }
 
 /**
+ * 회전수 기반 거리 계산
+ * 이동 거리(km) = 총 회전수 × L(mm) / 1,000,000
+ */
+function calculateDistanceFromRevolutions(revolutions, wheelCircumference) {
+  return (revolutions * wheelCircumference) / 1000000; // km
+}
+
+/**
+ * 속도로부터 1초당 회전수 계산
+ * 속도(km/h) = 회전수(rpm) × 둘레(mm) / 1,000,000 × 60
+ * 1초당 회전수 = 속도(km/h) × 1,000,000 / (둘레(mm) × 3600)
+ */
+function calculateRevolutionsPerSecond(speed, wheelCircumference) {
+  return (speed * 1000000) / (wheelCircumference * 3600);
+}
+
+/**
  * 속도계 시뮬레이션 (테스트용)
+ * 회전수 기반 거리 계산 사용
  */
 function startSpeedometerSimulation(speedometerId) {
   const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
   if (!speedometer) return;
+  
+  // 선택된 바퀴 규격 가져오기
+  const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+  const wheelCircumference = wheelSpec.circumference; // mm
   
   // 시뮬레이션 인터벌
   const interval = setInterval(() => {
@@ -599,10 +654,16 @@ function startSpeedometerSimulation(speedometerId) {
     
     // 랜덤 속도 생성 (20~50 km/h)
     const speed = 20 + Math.random() * 30;
-    const distanceIncrement = (speed / 3600) * (1 / 60); // 1초당 거리 증가 (km)
     
+    // 1초당 회전수 계산
+    const revolutionsPerSecond = calculateRevolutionsPerSecond(speed, wheelCircumference);
+    
+    // 총 회전수 누적
+    speedometer.totalRevolutions += revolutionsPerSecond;
+    
+    // 회전수 기반 거리 계산
     speedometer.currentSpeed = speed;
-    speedometer.totalDistance += distanceIncrement;
+    speedometer.totalDistance = calculateDistanceFromRevolutions(speedometer.totalRevolutions, wheelCircumference);
     
     updateSpeedometerData(speedometerId, speed, speedometer.totalDistance);
   }, 1000); // 1초마다 업데이트
@@ -733,6 +794,8 @@ function removeSpeedometer(speedometerId) {
     speedometer.deviceId = null;
     speedometer.currentSpeed = 0;
     speedometer.totalDistance = 0;
+    speedometer.totalRevolutions = 0;
+    speedometer.lastRevolutions = 0;
     
     // 저장
     saveSpeedometerList();
@@ -796,11 +859,13 @@ function saveRaceSettings() {
   const targetDistance = document.getElementById('targetDistance');
   const endByTime = document.getElementById('endByTime');
   const targetTime = document.getElementById('targetTime');
+  const wheelSize = document.getElementById('wheelSize');
   
   if (endByDistance) window.rollerRaceState.raceSettings.endByDistance = endByDistance.checked;
   if (targetDistance) window.rollerRaceState.raceSettings.targetDistance = parseFloat(targetDistance.value) || 10;
   if (endByTime) window.rollerRaceState.raceSettings.endByTime = endByTime.checked;
   if (targetTime) window.rollerRaceState.raceSettings.targetTime = parseInt(targetTime.value) || 60;
+  if (wheelSize) window.rollerRaceState.raceSettings.wheelSize = wheelSize.value || '25-622';
   
   try {
     localStorage.setItem('rollerRaceSettings', JSON.stringify(window.rollerRaceState.raceSettings));
@@ -824,8 +889,40 @@ function loadRaceSettings() {
     if (data) {
       window.rollerRaceState.raceSettings = { ...window.rollerRaceState.raceSettings, ...JSON.parse(data) };
     }
+    // UI 업데이트
+    updateRaceSettingsUI();
   } catch (error) {
     console.error('[경기 설정 로드 오류]', error);
+  }
+}
+
+/**
+ * 경기 설정 UI 업데이트
+ */
+function updateRaceSettingsUI() {
+  const settings = window.rollerRaceState.raceSettings;
+  
+  const endByDistance = document.getElementById('endByDistance');
+  const targetDistance = document.getElementById('targetDistance');
+  const endByTime = document.getElementById('endByTime');
+  const targetTime = document.getElementById('targetTime');
+  const wheelSize = document.getElementById('wheelSize');
+  
+  if (endByDistance) endByDistance.checked = settings.endByDistance;
+  if (targetDistance) targetDistance.value = settings.targetDistance || 10;
+  if (endByTime) endByTime.checked = settings.endByTime;
+  if (targetTime) targetTime.value = settings.targetTime || 60;
+  if (wheelSize) wheelSize.value = settings.wheelSize || '25-622';
+}
+
+/**
+ * 경기 설정 모달 열기
+ */
+function openRaceSettingsModal() {
+  const modal = document.getElementById('raceSettingsModal');
+  if (modal) {
+    updateRaceSettingsUI();
+    modal.classList.remove('hidden');
   }
 }
 
