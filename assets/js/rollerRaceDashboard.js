@@ -57,11 +57,15 @@ class SpeedometerData {
     this.deviceId = deviceId;
     this.connected = false;
     this.currentSpeed = 0; // km/h
+    this.maxSpeed = 0; // km/h
+    this.averageSpeed = 0; // km/h
     this.totalDistance = 0; // km
     this.totalRevolutions = 0; // 총 회전수
     this.lastUpdateTime = null;
     this.lastRevolutions = 0; // 마지막 회전수 (CSC 센서에서)
     this.speedHistory = []; // 최근 속도 기록 (그래프용)
+    this.speedSum = 0; // 평균 속도 계산용
+    this.speedCount = 0; // 평균 속도 계산용
   }
 }
 
@@ -179,16 +183,28 @@ function createSpeedometerElement(speedometer) {
       </div>
     </div>
     <div class="speedometer-info disconnected">
-      <div class="speed-display">
+      <!-- 좌측: 현재속도 -->
+      <div class="speed-display-left">
         <span class="speed-value" id="speed-value-${speedometer.id}">0</span>
-        <span class="speed-unit">km/h</span>
+        <sup class="speed-unit-sup">km/h</sup>
       </div>
-      <div class="distance-display">
-        <div class="distance-label">거리</div>
-        <div class="distance-value-wrapper">
-        <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
-        <span class="distance-unit">km</span>
+      <!-- 중앙: 최대속도, 평균속도 (2줄) -->
+      <div class="speed-display-center">
+        <div class="speed-stat-row">
+          <span class="speed-stat-label">Max</span>
+          <span class="speed-stat-value" id="max-speed-value-${speedometer.id}">0</span>
+          <sup class="speed-unit-sup">km/h</sup>
         </div>
+        <div class="speed-stat-row">
+          <span class="speed-stat-label">Avg</span>
+          <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}">0</span>
+          <sup class="speed-unit-sup">km/h</sup>
+        </div>
+      </div>
+      <!-- 우측: 거리 -->
+      <div class="distance-display-right">
+        <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
+        <sup class="distance-unit-sup">km</sup>
       </div>
     </div>
   `;
@@ -326,11 +342,27 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   speedometer.totalDistance = distance;
   speedometer.lastUpdateTime = Date.now();
   
+  // 최대속도 업데이트
+  if (speed > speedometer.maxSpeed) {
+    speedometer.maxSpeed = speed;
+  }
+  
+  // 평균속도 계산 (누적 평균)
+  if (speed > 0) {
+    speedometer.speedSum += speed;
+    speedometer.speedCount += 1;
+    speedometer.averageSpeed = speedometer.speedSum / speedometer.speedCount;
+  }
+  
   // UI 업데이트
   const speedValueEl = document.getElementById(`speed-value-${speedometerId}`);
+  const maxSpeedValueEl = document.getElementById(`max-speed-value-${speedometerId}`);
+  const avgSpeedValueEl = document.getElementById(`avg-speed-value-${speedometerId}`);
   const distanceValueEl = document.getElementById(`distance-value-${speedometerId}`);
   
   if (speedValueEl) speedValueEl.textContent = speed.toFixed(1);
+  if (maxSpeedValueEl) maxSpeedValueEl.textContent = speedometer.maxSpeed.toFixed(1);
+  if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(1);
   if (distanceValueEl) distanceValueEl.textContent = distance.toFixed(2);
   
   // 바늘 업데이트
@@ -509,6 +541,10 @@ function startRace() {
       s.totalDistance = 0;
       s.totalRevolutions = 0;
       s.currentSpeed = 0;
+      s.maxSpeed = 0;
+      s.averageSpeed = 0;
+      s.speedSum = 0;
+      s.speedCount = 0;
       s.lastRevolutions = 0;
     });
     
@@ -862,6 +898,10 @@ function removeSpeedometer(speedometerId) {
     speedometer.name = `속도계 ${speedometerId}`;
     speedometer.deviceId = null;
     speedometer.currentSpeed = 0;
+    speedometer.maxSpeed = 0;
+    speedometer.averageSpeed = 0;
+    speedometer.speedSum = 0;
+    speedometer.speedCount = 0;
     speedometer.totalDistance = 0;
     speedometer.totalRevolutions = 0;
     speedometer.lastRevolutions = 0;
