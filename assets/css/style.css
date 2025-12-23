@@ -8666,6 +8666,60 @@ button[aria-disabled="true"] {
 }
 
 /* 전체 통계 */
+/* 전광판 스타일 (대회 전광판) */
+.scoreboard-display {
+  display: flex;
+  gap: 40px;
+  margin-bottom: 30px;
+  padding: 40px 60px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(0, 212, 170, 0.3);
+  justify-content: space-around;
+  align-items: center;
+}
+
+.scoreboard-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  text-align: center;
+}
+
+.scoreboard-label {
+  font-size: 28px;
+  font-weight: 600;
+  color: #00d4aa;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
+.scoreboard-value {
+  font-size: 72px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1.2;
+  text-shadow: 
+    0 0 20px rgba(0, 212, 170, 0.8),
+    0 4px 8px rgba(0, 0, 0, 0.5),
+    2px 2px 4px rgba(0, 0, 0, 0.8);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+}
+
+.scoreboard-unit {
+  font-size: 36px;
+  font-weight: 600;
+  color: #00d4aa;
+  margin-left: 8px;
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
 .dashboard-stats {
   display: flex;
   gap: 20px;
@@ -9061,6 +9115,36 @@ button[aria-disabled="true"] {
   
   .btn-large {
     width: 100%;
+  }
+  
+  /* 전광판 반응형 */
+  .scoreboard-display {
+    flex-direction: column;
+    gap: 30px;
+    padding: 30px 20px;
+  }
+  
+  .scoreboard-label {
+    font-size: 20px;
+    margin-bottom: 12px;
+  }
+  
+  .scoreboard-value {
+    font-size: 48px;
+  }
+  
+  .scoreboard-unit {
+    font-size: 24px;
+  }
+  
+  .dashboard-stats {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .stat-item {
+    flex-direction: row;
+    justify-content: space-between;
   }
 }
 
