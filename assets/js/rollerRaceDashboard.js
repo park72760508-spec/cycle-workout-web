@@ -46,7 +46,9 @@ window.rollerRaceState = {
     targetTime: 60, // minutes
     wheelSize: '25-622' // 기본값: 700 x 25C
   },
-  rankings: [] // 순위 정보
+  rankings: [], // 순위 정보
+  rankDisplayStartIndex: 0, // 전광판 순위 표시 시작 인덱스
+  rankDisplayTimer: null // 순위 표시 순환 타이머
 };
 
 // 속도계 데이터 구조
@@ -97,6 +99,13 @@ function initRollerRaceDashboard() {
   if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
   if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = '0.0';
   if (scoreboardRidersEl) scoreboardRidersEl.textContent = '0';
+  
+  // 순위 표시 초기화
+  window.rollerRaceState.rankDisplayStartIndex = 0;
+  stopRankDisplayRotation();
+  
+  // 초기 순위 표시
+  updateRankings();
 }
 
 /**
@@ -373,6 +382,11 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   
   // 전체 통계 업데이트
   updateDashboardStats();
+  
+  // 전광판 순위 순환 시작 (경기가 실행 중일 때만)
+  if (window.rollerRaceState.raceState === 'running') {
+    startRankDisplayRotation();
+  }
 }
 
 /**
@@ -402,36 +416,126 @@ function updateRankings() {
     }
   });
   
-  // 전광판 순위 1~3위 업데이트
-  const rank1NameEl = document.getElementById('rank1Name');
-  const rank1DistanceEl = document.getElementById('rank1Distance');
-  const rank2NameEl = document.getElementById('rank2Name');
-  const rank2DistanceEl = document.getElementById('rank2Distance');
-  const rank3NameEl = document.getElementById('rank3Name');
-  const rank3DistanceEl = document.getElementById('rank3Distance');
+  // 전광판 순위 목록 업데이트
+  updateScoreboardRankings(sorted);
+}
+
+/**
+ * 전광판 순위 목록 생성 및 업데이트
+ */
+function updateScoreboardRankings(sorted) {
+  const ranksContainer = document.getElementById('scoreboardRanks');
+  if (!ranksContainer) return;
   
-  if (sorted.length > 0) {
-    if (rank1NameEl) rank1NameEl.textContent = sorted[0].name;
-    if (rank1DistanceEl) rank1DistanceEl.textContent = sorted[0].totalDistance.toFixed(2) + 'km';
-  } else {
-    if (rank1NameEl) rank1NameEl.textContent = '-';
-    if (rank1DistanceEl) rank1DistanceEl.textContent = '0.0km';
+  // 모든 순위 항목 생성
+  ranksContainer.innerHTML = '';
+  sorted.forEach((speedometer, index) => {
+    const rankItem = document.createElement('div');
+    rankItem.className = 'rank-item';
+    rankItem.dataset.rankIndex = index;
+    rankItem.innerHTML = `
+      <span class="rank-number">${index + 1}위</span>
+      <span class="rank-name">${speedometer.name}</span>
+      <span class="rank-distance">${speedometer.totalDistance.toFixed(2)}km</span>
+    `;
+    ranksContainer.appendChild(rankItem);
+  });
+  
+  // 순위가 없으면 빈 상태 표시
+  if (sorted.length === 0) {
+    const emptyItem = document.createElement('div');
+    emptyItem.className = 'rank-item';
+    emptyItem.innerHTML = `
+      <span class="rank-number">-</span>
+      <span class="rank-name">-</span>
+      <span class="rank-distance">0.0km</span>
+    `;
+    ranksContainer.appendChild(emptyItem);
   }
   
-  if (sorted.length > 1) {
-    if (rank2NameEl) rank2NameEl.textContent = sorted[1].name;
-    if (rank2DistanceEl) rank2DistanceEl.textContent = sorted[1].totalDistance.toFixed(2) + 'km';
-  } else {
-    if (rank2NameEl) rank2NameEl.textContent = '-';
-    if (rank2DistanceEl) rank2DistanceEl.textContent = '0.0km';
+  // 현재 표시할 순위 범위 업데이트
+  updateRankDisplay();
+}
+
+/**
+ * 전광판 순위 표시 범위 업데이트 (순환 표시)
+ */
+function updateRankDisplay() {
+  const ranksContainer = document.getElementById('scoreboardRanks');
+  if (!ranksContainer) return;
+  
+  const rankItems = ranksContainer.querySelectorAll('.rank-item');
+  const totalRanks = rankItems.length;
+  
+  if (totalRanks === 0) return;
+  
+  // 표시할 순위 개수 (최대 3개)
+  const displayCount = Math.min(3, totalRanks);
+  
+  // 시작 인덱스 계산 (순환)
+  const startIndex = window.rollerRaceState.rankDisplayStartIndex;
+  
+  // 모든 항목 숨기기
+  rankItems.forEach((item) => {
+    item.classList.remove('rank-item-visible');
+  });
+  
+  // 표시할 항목만 보이기 (약간의 지연을 두어 순차적으로 나타나게 함)
+  for (let i = 0; i < displayCount; i++) {
+    const targetIndex = (startIndex + i) % totalRanks;
+    const item = rankItems[targetIndex];
+    if (item) {
+      item.style.display = 'flex';
+      setTimeout(() => {
+        item.classList.add('rank-item-visible');
+      }, i * 80);
+    }
   }
   
-  if (sorted.length > 2) {
-    if (rank3NameEl) rank3NameEl.textContent = sorted[2].name;
-    if (rank3DistanceEl) rank3DistanceEl.textContent = sorted[2].totalDistance.toFixed(2) + 'km';
-  } else {
-    if (rank3NameEl) rank3NameEl.textContent = '-';
-    if (rank3DistanceEl) rank3DistanceEl.textContent = '0.0km';
+  // 애니메이션 적용
+  ranksContainer.classList.remove('rank-scroll-animation');
+  // 강제 리플로우
+  void ranksContainer.offsetWidth;
+  ranksContainer.classList.add('rank-scroll-animation');
+}
+
+/**
+ * 전광판 순위 순환 타이머 시작
+ */
+function startRankDisplayRotation() {
+  // 기존 타이머 정리
+  if (window.rollerRaceState.rankDisplayTimer) {
+    clearInterval(window.rollerRaceState.rankDisplayTimer);
+    window.rollerRaceState.rankDisplayTimer = null;
+  }
+  
+  // 초기 표시
+  updateRankDisplay();
+  
+  // 2초마다 순환
+  window.rollerRaceState.rankDisplayTimer = setInterval(() => {
+    const ranksContainer = document.getElementById('scoreboardRanks');
+    if (!ranksContainer) return;
+    
+    const rankItems = ranksContainer.querySelectorAll('.rank-item');
+    const totalRanks = rankItems.length;
+    
+    if (totalRanks > 3) {
+      // 다음 시작 인덱스로 이동 (순환)
+      window.rollerRaceState.rankDisplayStartIndex = 
+        (window.rollerRaceState.rankDisplayStartIndex + 1) % totalRanks;
+      updateRankDisplay();
+    }
+  }, 2000); // 2초
+}
+
+/**
+ * 전광판 순위 순환 타이머 정지
+ */
+function stopRankDisplayRotation() {
+  if (window.rollerRaceState.rankDisplayTimer) {
+    clearInterval(window.rollerRaceState.rankDisplayTimer);
+    window.rollerRaceState.rankDisplayTimer = null;
   }
 }
 
@@ -571,11 +675,14 @@ function startRace() {
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
   const btnStop = document.getElementById('btnStopRace');
-  
+
   if (btnStart) btnStart.disabled = true;
   if (btnPause) btnPause.disabled = false;
   if (btnStop) btnStop.disabled = false;
   
+  // 전광판 순위 순환 시작
+  startRankDisplayRotation();
+
   if (typeof showToast === 'function') {
     showToast('경기가 시작되었습니다!');
   }
@@ -601,10 +708,13 @@ function pauseRace() {
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
-  
+
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
   
+  // 전광판 순위 순환 정지
+  stopRankDisplayRotation();
+
   if (typeof showToast === 'function') {
     showToast('경기가 일시정지되었습니다.');
   }
@@ -628,14 +738,21 @@ function stopRace() {
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
   const btnStop = document.getElementById('btnStopRace');
-  
+
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
   if (btnStop) btnStop.disabled = true;
-  
+
   // 최종 순위 표시
   updateRankings();
   
+  // 전광판 순위 순환 정지
+  stopRankDisplayRotation();
+  
+  // 첫 번째 순위부터 다시 표시
+  window.rollerRaceState.rankDisplayStartIndex = 0;
+  updateRankDisplay();
+
   if (typeof showToast === 'function') {
     showToast('경기가 종료되었습니다.');
   }
