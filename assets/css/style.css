@@ -8723,64 +8723,70 @@ button[aria-disabled="true"] {
 /* 순위 표시 컨테이너 */
 .scoreboard-ranks-container {
   width: 100%;
-  overflow: hidden;
   position: relative;
-  height: calc(3 * (24px + 8px)); /* 3개 항목 높이 + gap */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* 순위 표시 스타일 */
 .scoreboard-ranks {
   display: flex;
   flex-direction: column;
-  gap: 8px; /* 70% of 12px */
+  gap: 8px;
   width: 100%;
   position: relative;
 }
 
-.scoreboard-ranks.rank-scroll-animation {
-  animation: rankScroll 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+/* 고정된 순위 항목 상자 (항상 3개 표시) */
+.rank-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 6px 8px;
+  background: rgba(0, 212, 170, 0.1);
+  border-radius: 6px;
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  position: relative;
+  overflow: hidden;
+  min-height: 32px;
+  height: 32px;
 }
 
-@keyframes rankScroll {
+/* 순위 항목 내부 컨텐츠 (스크롤되는 부분) */
+.rank-item-content {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  position: relative;
+}
+
+/* 스크롤 애니메이션 (2초마다만 적용) */
+.scoreboard-ranks.rank-scroll-animation .rank-item-content {
+  animation: rankTextScroll 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes rankTextScroll {
   0% {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-15px);
+    transform: translateY(-10px);
+    opacity: 0.7;
   }
   100% {
     transform: translateY(0);
+    opacity: 1;
   }
 }
 
-.rank-item {
-  display: flex;
-  align-items: center;
-  gap: 11px; /* 70% of 16px */
-  padding: 6px 8px; /* 70% of 8px 12px */
-  background: rgba(0, 212, 170, 0.1);
-  border-radius: 6px; /* 70% of 8px */
-  border: 1px solid rgba(0, 212, 170, 0.3);
-  transition: opacity 0.4s ease, transform 0.4s ease, max-height 0.4s ease;
-  opacity: 0;
-  transform: translateY(-10px);
-  max-height: 0;
-  overflow: hidden;
-}
-
 .rank-item-visible {
-  opacity: 1;
-  transform: translateY(0);
-  max-height: 50px;
+  display: flex;
 }
 
 .rank-item:not(.rank-item-visible) {
-  opacity: 0;
-  transform: translateY(-10px);
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  margin: 0;
+  display: none;
 }
 
 .rank-number {
