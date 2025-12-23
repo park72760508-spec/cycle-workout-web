@@ -369,6 +369,38 @@ function updateRankings() {
       }
     }
   });
+  
+  // 전광판 순위 1~3위 업데이트
+  const rank1NameEl = document.getElementById('rank1Name');
+  const rank1DistanceEl = document.getElementById('rank1Distance');
+  const rank2NameEl = document.getElementById('rank2Name');
+  const rank2DistanceEl = document.getElementById('rank2Distance');
+  const rank3NameEl = document.getElementById('rank3Name');
+  const rank3DistanceEl = document.getElementById('rank3Distance');
+  
+  if (sorted.length > 0) {
+    if (rank1NameEl) rank1NameEl.textContent = sorted[0].name;
+    if (rank1DistanceEl) rank1DistanceEl.textContent = sorted[0].totalDistance.toFixed(2) + 'km';
+  } else {
+    if (rank1NameEl) rank1NameEl.textContent = '-';
+    if (rank1DistanceEl) rank1DistanceEl.textContent = '0.0km';
+  }
+  
+  if (sorted.length > 1) {
+    if (rank2NameEl) rank2NameEl.textContent = sorted[1].name;
+    if (rank2DistanceEl) rank2DistanceEl.textContent = sorted[1].totalDistance.toFixed(2) + 'km';
+  } else {
+    if (rank2NameEl) rank2NameEl.textContent = '-';
+    if (rank2DistanceEl) rank2DistanceEl.textContent = '0.0km';
+  }
+  
+  if (sorted.length > 2) {
+    if (rank3NameEl) rank3NameEl.textContent = sorted[2].name;
+    if (rank3DistanceEl) rank3DistanceEl.textContent = sorted[2].totalDistance.toFixed(2) + 'km';
+  } else {
+    if (rank3NameEl) rank3NameEl.textContent = '-';
+    if (rank3DistanceEl) rank3DistanceEl.textContent = '0.0km';
+  }
 }
 
 /**
@@ -378,31 +410,28 @@ function updateDashboardStats() {
   const totalDistance = window.rollerRaceState.speedometers
     .reduce((sum, s) => sum + s.totalDistance, 0);
   
-  const activeRiders = window.rollerRaceState.speedometers
-    .filter(s => s.connected && s.currentSpeed > 0).length;
-  
-  const totalDistanceEl = document.getElementById('totalDistance');
-  const activeRidersEl = document.getElementById('activeRiders');
-  
-  if (totalDistanceEl) totalDistanceEl.textContent = totalDistance.toFixed(2);
-  if (activeRidersEl) activeRidersEl.textContent = activeRiders;
-  
   // 전광판 업데이트
   const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
-  const scoreboardRidersEl = document.getElementById('scoreboardRiders');
-  
   if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = totalDistance.toFixed(2);
-  if (scoreboardRidersEl) scoreboardRidersEl.textContent = activeRiders;
 }
 
 /**
  * 경과시간 업데이트
  */
 function updateElapsedTime() {
-  if (window.rollerRaceState.raceState !== 'running') return;
+  // raceState 확인
+  if (!window.rollerRaceState || window.rollerRaceState.raceState !== 'running') {
+    return;
+  }
+  
+  // startTime이 없으면 초기화
+  if (!window.rollerRaceState.startTime) {
+    window.rollerRaceState.startTime = Date.now();
+    window.rollerRaceState.pausedTime = 0;
+  }
   
   const now = Date.now();
-  const elapsed = Math.floor((now - window.rollerRaceState.startTime - window.rollerRaceState.pausedTime) / 1000);
+  const elapsed = Math.floor((now - window.rollerRaceState.startTime - (window.rollerRaceState.pausedTime || 0)) / 1000);
   
   window.rollerRaceState.totalElapsedTime = elapsed;
   
@@ -490,9 +519,17 @@ function startRace() {
     if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
   }
   
+  // 기존 타이머가 있으면 정리
+  if (window.rollerRaceTimer) {
+    clearInterval(window.rollerRaceTimer);
+    window.rollerRaceTimer = null;
+  }
+  
   // 타이머 시작 (즉시 시작)
   updateElapsedTime(); // 즉시 한 번 실행
-  window.rollerRaceTimer = setInterval(updateElapsedTime, 1000);
+  window.rollerRaceTimer = setInterval(() => {
+    updateElapsedTime();
+  }, 1000);
   
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
