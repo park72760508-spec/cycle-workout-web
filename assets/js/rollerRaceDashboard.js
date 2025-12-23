@@ -121,8 +121,8 @@ function createSpeedometerElement(speedometer) {
           <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
-        <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지) -->
-        <text x="100" y="150" 
+        <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지, 문자 높이의 1/2만큼 아래로 이동) -->
+        <text x="100" y="155" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
@@ -235,13 +235,16 @@ function generateSpeedometerLabels() {
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
+    // 숫자 역순 표시: 120 → 0, 100 → 20, 80 → 40, 60 → 60, 40 → 80, 20 → 100, 0 → 120
+    const displayValue = maxSpeed - speed;
+    
     // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
                      fill="#ffffff" 
                      font-size="15" 
-                     font-weight="700">${speed}</text>`;
+                     font-weight="700">${displayValue}</text>`;
   });
   
   return labels;
