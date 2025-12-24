@@ -1698,46 +1698,81 @@ async function scanANTDevices() {
     throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
   }
   
+  console.log('[ANT+ 스캔] 디바이스 검색 시작...');
+  
   // 기존 검색 결과 초기화
   window.antState.foundDevices = [];
   window.antState.isScanning = true;
+  window.antState.lastBroadcastLog = 0;
   
   // 스캔 채널 열기 (채널 0 사용)
   const channelNumber = ANT_CHANNEL_CONFIG.SCAN_CHANNEL;
   window.antState.scanChannel = channelNumber;
   
-  // 채널 할당
-  await sendANTMessage(0x42, [channelNumber, 0x20]); // Assign Channel (Scan Mode)
-  
-  // 채널 ID 설정 (Wildcard: 모든 디바이스 검색)
-  await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]); // Set Channel ID (Wildcard)
-  
-  // 채널 주기 설정 (8192 * 1/32768 초 = 250ms)
-  await sendANTMessage(0x60, [channelNumber, 0x00, 0x20]); // Set Channel Period
-  
-  // 채널 RF 주파수 설정 (ANT+ 공개 주파수: 57)
-  await sendANTMessage(0x45, [channelNumber, 0x39]); // Set Channel RF Frequency
-  
-  // 채널 열기
-  await sendANTMessage(0x4B, [channelNumber]); // Open Channel
-  
-  // 메시지 수신 시작
-  startANTMessageListener();
-  
-  // 스캔 시작 후 Channel ID 요청을 주기적으로 보내어 디바이스 정보 얻기
-  startChannelIDRequest(channelNumber);
-  
-  // 15초간 스캔 (스피드센서 검색을 위해 시간 연장)
-  await new Promise(resolve => setTimeout(resolve, 15000));
-  
-  // 스캔 중지
-  await sendANTMessage(0x4C, [channelNumber]); // Close Channel
-  window.antState.isScanning = false;
-  
-  // Channel ID 요청 중지
-  if (window.antChannelIDRequestInterval) {
-    clearInterval(window.antChannelIDRequestInterval);
-    window.antChannelIDRequestInterval = null;
+  try {
+    // 채널 할당 (Scan Mode: 0x20)
+    console.log('[ANT+ 스캔] 채널 할당 중...');
+    await sendANTMessage(0x42, [channelNumber, 0x20]); // Assign Channel (Scan Mode)
+    await new Promise(resolve => setTimeout(resolve, 100)); // 짧은 대기
+    
+    // 채널 ID 설정 (Wildcard: 모든 디바이스 검색)
+    // Wildcard 설정: DeviceNumber=0, DeviceType=0, TransmissionType=0
+    console.log('[ANT+ 스캔] 채널 ID 설정 (Wildcard)...');
+    await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]); // Set Channel ID (Wildcard)
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 채널 주기 설정 (8192 * 1/32768 초 = 250ms)
+    console.log('[ANT+ 스캔] 채널 주기 설정...');
+    await sendANTMessage(0x60, [channelNumber, 0x00, 0x20]); // Set Channel Period
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 채널 RF 주파수 설정 (ANT+ 공개 주파수: 57 = 0x39)
+    console.log('[ANT+ 스캔] 채널 RF 주파수 설정...');
+    await sendANTMessage(0x45, [channelNumber, 0x39]); // Set Channel RF Frequency
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 채널 열기
+    console.log('[ANT+ 스캔] 채널 열기...');
+    await sendANTMessage(0x4B, [channelNumber]); // Open Channel
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    console.log('[ANT+ 스캔] 스캔 채널 열림, 메시지 수신 시작...');
+    
+    // 메시지 수신 시작
+    startANTMessageListener();
+    
+    // 스캔 시작 후 Channel ID 요청을 주기적으로 보내어 디바이스 정보 얻기
+    startChannelIDRequest(channelNumber);
+    
+    // 20초간 스캔 (더 많은 디바이스를 찾기 위해 시간 연장)
+    console.log('[ANT+ 스캔] 20초간 디바이스 검색 중...');
+    for (let i = 0; i < 20; i++) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (i % 5 === 4) {
+        console.log(`[ANT+ 스캔] 검색 중... (${i + 1}/20초, 발견된 디바이스: ${window.antState.foundDevices.length}개)`);
+      }
+    }
+    
+    console.log('[ANT+ 스캔] 검색 완료. 발견된 디바이스:', window.antState.foundDevices.length, '개');
+    
+  } catch (error) {
+    console.error('[ANT+ 스캔] 오류 발생:', error);
+    throw error;
+  } finally {
+    // 스캔 중지
+    console.log('[ANT+ 스캔] 채널 닫기...');
+    try {
+      await sendANTMessage(0x4C, [channelNumber]); // Close Channel
+    } catch (closeError) {
+      console.warn('[ANT+ 스캔] 채널 닫기 오류 (무시):', closeError);
+    }
+    window.antState.isScanning = false;
+    
+    // Channel ID 요청 중지
+    if (window.antChannelIDRequestInterval) {
+      clearInterval(window.antChannelIDRequestInterval);
+      window.antChannelIDRequestInterval = null;
+    }
   }
   
   return window.antState.foundDevices;
@@ -1748,13 +1783,17 @@ async function scanANTDevices() {
  */
 function startANTMessageListener() {
   if (window.antMessageListener) {
+    console.log('[ANT+ 메시지 리스너] 이미 실행 중');
     return; // 이미 실행 중
   }
   
+  console.log('[ANT+ 메시지 리스너] 시작');
   window.antMessageListener = true;
   
   const listen = async () => {
-    if (!window.antState.isScanning && !window.antState.usbDevice) {
+    // USB 디바이스가 연결되어 있으면 계속 수신
+    if (!window.antState.usbDevice) {
+      console.log('[ANT+ 메시지 리스너] USB 디바이스 없음, 중지');
       window.antMessageListener = false;
       return;
     }
@@ -1765,11 +1804,17 @@ function startANTMessageListener() {
         handleANTMessage(message);
       }
     } catch (error) {
+      // USB 전송 오류는 조용히 처리 (연결 해제 등)
+      if (error.name === 'NetworkError' || error.name === 'NotFoundError') {
+        console.warn('[ANT+ 메시지 리스너] USB 연결 오류:', error.name);
+        window.antMessageListener = false;
+        return;
+      }
       console.error('[ANT+ 메시지 수신 오류]', error);
     }
     
-    // 다음 메시지 대기
-    setTimeout(listen, 10);
+    // 다음 메시지 대기 (짧은 지연으로 빠른 응답)
+    setTimeout(listen, 5);
   };
   
   listen();
@@ -1850,9 +1895,16 @@ function handleBroadcastData(data) {
     return;
   }
   
-  // 브로드캐스트 데이터는 8바이트
-  // 실제 디바이스 정보는 Channel ID Response를 통해 얻어야 함
-  // 여기서는 브로드캐스트 데이터가 수신되었다는 것만 확인
+  // 브로드캐스트 데이터 수신 확인 (디버깅용)
+  // 실제 디바이스 정보는 Channel ID Response를 통해 얻어야 하지만,
+  // 브로드캐스트 데이터가 수신되면 디바이스가 활성화되어 있다는 신호
+  if (data.length >= 8) {
+    // 브로드캐스트 데이터 수신 로그 (너무 많이 출력되지 않도록 제한)
+    if (!window.antState.lastBroadcastLog || Date.now() - window.antState.lastBroadcastLog > 2000) {
+      console.log('[ANT+] 브로드캐스트 데이터 수신 (스캔 채널 활성)');
+      window.antState.lastBroadcastLog = Date.now();
+    }
+  }
 }
 
 /**
@@ -1866,6 +1918,7 @@ function handleChannelIDResponse(data) {
   
   // Channel ID Response 메시지 구조: [Channel, DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType]
   if (data.length < 5) {
+    console.warn('[ANT+] Channel ID Response 데이터 길이 부족:', data.length);
     return;
   }
   
@@ -1874,38 +1927,82 @@ function handleChannelIDResponse(data) {
   const deviceType = data[3];
   const transmissionType = data[4];
   
+  console.log('[ANT+] Channel ID Response 수신:', {
+    channel: channelNumber,
+    deviceNumber: deviceNumber,
+    deviceType: '0x' + deviceType.toString(16).toUpperCase(),
+    transmissionType: transmissionType
+  });
+  
   // 스캔 채널의 응답만 처리
   if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
     return;
   }
   
-  // Speed/Cadence 센서 타입 확인
+  // ANT+ 디바이스 타입 정의
+  // 0x78: Cadence Sensor (Separate) - 케이던스만
   // 0x79: Speed and Cadence Sensor (Combined) - 속도와 케이던스 모두
   // 0x7A: Speed Sensor (Separate) - 속도만
-  // 0x78: Cadence Sensor (Separate) - 케이던스만
-  if (deviceType === 0x79 || deviceType === 0x7A) {
-    // 이미 발견된 디바이스인지 확인
-    const existingDevice = window.antState.foundDevices.find(
-      d => d.deviceNumber === deviceNumber
-    );
+  // 0x7B: Power Meter
+  // 0x7C: Fitness Equipment
+  // 0x7D: Heart Rate Monitor - 심박계
+  // 0x7E: Multi-Sport Speed and Distance
+  // 0x7F: Control
+  
+  // 지원하는 디바이스 타입 확인
+  let deviceName = '';
+  let deviceCategory = '';
+  
+  if (deviceType === 0x79) {
+    deviceName = `ANT+ Speed/Cadence Sensor ${deviceNumber}`;
+    deviceCategory = 'Speed/Cadence (Combined)';
+  } else if (deviceType === 0x7A) {
+    deviceName = `ANT+ Speed Sensor ${deviceNumber}`;
+    deviceCategory = 'Speed Sensor';
+  } else if (deviceType === 0x78) {
+    deviceName = `ANT+ Cadence Sensor ${deviceNumber}`;
+    deviceCategory = 'Cadence Sensor';
+  } else if (deviceType === 0x7D) {
+    deviceName = `ANT+ Heart Rate Monitor ${deviceNumber}`;
+    deviceCategory = 'Heart Rate Monitor';
+  } else if (deviceType === 0x7B) {
+    deviceName = `ANT+ Power Meter ${deviceNumber}`;
+    deviceCategory = 'Power Meter';
+  } else if (deviceType === 0x7C) {
+    deviceName = `ANT+ Fitness Equipment ${deviceNumber}`;
+    deviceCategory = 'Fitness Equipment';
+  } else {
+    // 알 수 없는 타입도 표시 (디버깅용)
+    deviceName = `ANT+ Device ${deviceNumber} (Type: 0x${deviceType.toString(16).toUpperCase()})`;
+    deviceCategory = `Unknown (0x${deviceType.toString(16).toUpperCase()})`;
+    console.log('[ANT+] 알 수 없는 디바이스 타입 발견:', {
+      deviceNumber,
+      deviceType: '0x' + deviceType.toString(16).toUpperCase(),
+      transmissionType
+    });
+  }
+  
+  // 이미 발견된 디바이스인지 확인
+  const existingDevice = window.antState.foundDevices.find(
+    d => d.deviceNumber === deviceNumber && d.deviceType === deviceType
+  );
+  
+  if (!existingDevice) {
+    // 새 디바이스 추가
+    const device = {
+      id: deviceNumber.toString(),
+      name: deviceName,
+      type: deviceCategory,
+      deviceNumber: deviceNumber,
+      deviceType: deviceType,
+      transmissionType: transmissionType
+    };
     
-    if (!existingDevice) {
-      // 새 스피드센서 추가
-      const device = {
-        id: deviceNumber.toString(),
-        name: `ANT+ Speed Sensor ${deviceNumber}`,
-        type: deviceType === 0x79 ? 'Speed/Cadence (Combined)' : 'Speed Sensor',
-        deviceNumber: deviceNumber,
-        deviceType: deviceType,
-        transmissionType: transmissionType
-      };
-      
-      window.antState.foundDevices.push(device);
-      console.log('[ANT+] 스피드센서 발견:', device);
-      
-      // UI 업데이트
-      displayANTDevices(window.antState.foundDevices);
-    }
+    window.antState.foundDevices.push(device);
+    console.log('[ANT+] 디바이스 발견:', device);
+    
+    // UI 업데이트
+    displayANTDevices(window.antState.foundDevices);
   }
 }
 
@@ -1916,6 +2013,8 @@ function startChannelIDRequest(channelNumber) {
   if (window.antChannelIDRequestInterval) {
     clearInterval(window.antChannelIDRequestInterval);
   }
+  
+  console.log('[ANT+ 스캔] Channel ID 요청 시작 (500ms 간격)');
   
   // 500ms마다 Channel ID 요청 전송
   window.antChannelIDRequestInterval = setInterval(async () => {
