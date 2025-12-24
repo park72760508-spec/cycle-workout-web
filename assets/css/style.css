@@ -8810,11 +8810,12 @@ button[aria-disabled="true"] {
 }
 
 .rank-number {
-  font-size: 14px; /* 70% of 20px */
-  font-weight: 700;
-  color: #00d4aa;
-  min-width: 28px; /* 70% of 40px */
-  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: inline-block;
+  vertical-align: middle;
+  min-width: 20px;
 }
 
 .rank-name {
@@ -9290,8 +9291,9 @@ button[aria-disabled="true"] {
   }
   
   .rank-number {
-    font-size: 14px; /* 70% of 20px */
-    min-width: 28px; /* 70% of 40px */
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
   }
   
   .rank-name {
