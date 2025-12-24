@@ -1290,12 +1290,26 @@ function showAddSpeedometerModal() {
   // 디바이스 목록 초기화
   const deviceList = document.getElementById('antDeviceList');
   if (deviceList) {
-    deviceList.classList.add('hidden');
-    deviceList.innerHTML = '';
+    deviceList.classList.remove('hidden'); // 목록 영역 표시
+    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기 연결 확인 중...</div>';
   }
   
   // USB 수신기 상태 확인
-  checkANTUSBStatus();
+  checkANTUSBStatus().then(() => {
+    // USB 수신기가 연결되어 있으면 자동으로 검색 시작
+    if (window.antState.usbDevice && window.antState.usbDevice.opened) {
+      console.log('[ANT+] 모달 열림 - 자동 검색 시작');
+      // 약간의 지연 후 자동 검색 시작 (UI 업데이트 대기)
+      setTimeout(() => {
+        searchANTDevices();
+      }, 500);
+    } else {
+      // USB 수신기가 연결되지 않은 경우 안내 메시지
+      if (deviceList) {
+        deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기를 먼저 연결해주세요.<br><small>위의 "USB 수신기 연결" 버튼을 클릭하세요.</small></div>';
+      }
+    }
+  });
   
   // 주기적으로 상태 확인 (5초마다)
   if (window.antUSBStatusInterval) {
@@ -1917,14 +1931,24 @@ function handleBroadcastData(data) {
     return;
   }
   
-  // 브로드캐스트 데이터 수신 확인 (디버깅용)
-  // 실제 디바이스 정보는 Channel ID Response를 통해 얻어야 하지만,
-  // 브로드캐스트 데이터가 수신되면 디바이스가 활성화되어 있다는 신호
+  // 브로드캐스트 데이터 수신 확인
   if (data.length >= 8) {
     // 브로드캐스트 데이터 수신 로그 (너무 많이 출력되지 않도록 제한)
     if (!window.antState.lastBroadcastLog || Date.now() - window.antState.lastBroadcastLog > 2000) {
-      console.log('[ANT+] 브로드캐스트 데이터 수신 (스캔 채널 활성)');
+      console.log('[ANT+] 브로드캐스트 데이터 수신 (스캔 채널 활성)', {
+        channel: channelNumber,
+        dataLength: data.length,
+        rawData: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+      });
       window.antState.lastBroadcastLog = Date.now();
+    }
+    
+    // 브로드캐스트 데이터에서 디바이스 정보 추출 시도
+    // 일부 ANT+ 디바이스는 브로드캐스트 데이터에 디바이스 번호를 포함할 수 있음
+    // 하지만 일반적으로는 Channel ID Response가 필요함
+    // 여기서는 브로드캐스트 데이터가 수신되면 Channel ID 요청을 더 자주 보냄
+    if (window.antChannelIDRequestInterval) {
+      // 이미 요청 중이면 추가 요청은 하지 않음
     }
   }
 }
@@ -2038,11 +2062,11 @@ function startChannelIDRequest(channelNumber) {
     clearInterval(window.antChannelIDRequestInterval);
   }
   
-  console.log('[ANT+ 스캔] Channel ID 요청 시작 (1초 간격)');
+  console.log('[ANT+ 스캔] Channel ID 요청 시작 (500ms 간격)');
   
   let requestCount = 0;
   
-  // 1초마다 Channel ID 요청 전송 (더 자주 요청)
+  // 500ms마다 Channel ID 요청 전송 (더 자주 요청하여 디바이스 발견 확률 증가)
   window.antChannelIDRequestInterval = setInterval(async () => {
     if (!window.antState.isScanning || !window.antState.usbDevice) {
       clearInterval(window.antChannelIDRequestInterval);
@@ -2057,14 +2081,17 @@ function startChannelIDRequest(channelNumber) {
       // 0x51은 Channel ID Response 메시지 ID이므로, 이를 요청
       await sendANTMessage(0x4D, [channelNumber, 0x51]); // Request Channel ID
       
-      // 5번마다 로그 출력
-      if (requestCount % 5 === 0) {
+      // 10번마다 로그 출력 (너무 많은 로그 방지)
+      if (requestCount % 10 === 0) {
         console.log(`[ANT+ 스캔] Channel ID 요청 전송 (${requestCount}회, 발견된 디바이스: ${window.antState.foundDevices.length}개)`);
       }
     } catch (error) {
-      console.error('[ANT+] Channel ID 요청 오류:', error);
+      // 오류는 조용히 처리 (너무 많은 오류 로그 방지)
+      if (requestCount % 20 === 0) {
+        console.error('[ANT+] Channel ID 요청 오류:', error);
+      }
     }
-  }, 1000); // 500ms -> 1초로 변경 (너무 자주 요청하지 않도록)
+  }, 500); // 500ms 간격으로 요청 (더 빠른 디바이스 발견)
 }
 
 /**
