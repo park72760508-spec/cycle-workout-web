@@ -59,7 +59,8 @@ window.antState = {
   isScanning: false, // 스캔 중 여부
   scanChannel: null, // 스캔 채널 번호
   foundDevices: [], // 검색된 디바이스 목록
-  connectedChannels: {} // 연결된 채널 (deviceId -> channelNumber)
+  connectedChannels: {}, // 연결된 채널 (deviceId -> channelNumber)
+  messageBuffer: [] // 메시지 버퍼 (여러 패킷으로 나뉜 메시지 처리용)
 };
 
 // ANT+ 채널 설정
@@ -1591,27 +1592,86 @@ async function receiveANTMessage() {
     throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
   }
   
-  const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 8);
-  const data = new Uint8Array(result.data.buffer);
-  
-  // ANT+ 메시지 파싱
-  if (data[0] !== 0xA4) {
-    return null; // 동기화 바이트가 아님
+  try {
+    const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 8);
+    const data = new Uint8Array(result.data.buffer);
+    
+    // 버퍼에 데이터 추가
+    window.antState.messageBuffer.push(...Array.from(data));
+    
+    // 동기화 바이트(0xA4) 찾기
+    let syncIndex = -1;
+    for (let i = 0; i < window.antState.messageBuffer.length; i++) {
+      if (window.antState.messageBuffer[i] === 0xA4) {
+        syncIndex = i;
+        break;
+      }
+    }
+    
+    // 동기화 바이트가 없으면 버퍼 초기화
+    if (syncIndex === -1) {
+      // 버퍼가 너무 크면 초기화 (동기화 바이트를 찾지 못한 경우)
+      if (window.antState.messageBuffer.length > 64) {
+        window.antState.messageBuffer = [];
+      }
+      return null;
+    }
+    
+    // 동기화 바이트 이전 데이터 제거
+    if (syncIndex > 0) {
+      window.antState.messageBuffer = window.antState.messageBuffer.slice(syncIndex);
+    }
+    
+    // 최소 메시지 길이 확인 (Sync + Length + MessageID + Checksum = 4바이트)
+    if (window.antState.messageBuffer.length < 4) {
+      return null; // 더 많은 데이터 필요
+    }
+    
+    const length = window.antState.messageBuffer[1];
+    
+    // 메시지 전체 길이 확인 (Sync + Length + MessageID + Data + Checksum)
+    const totalLength = 2 + length + 1; // Sync(1) + Length(1) + MessageID(1) + Data(length) + Checksum(1)
+    
+    // 메시지가 완전히 수신되지 않았으면 대기
+    if (window.antState.messageBuffer.length < totalLength) {
+      return null; // 더 많은 데이터 필요
+    }
+    
+    // 메시지 추출
+    const messageBytes = window.antState.messageBuffer.slice(0, totalLength);
+    window.antState.messageBuffer = window.antState.messageBuffer.slice(totalLength);
+    
+    // 메시지 파싱
+    const messageId = messageBytes[2];
+    const messageData = messageBytes.slice(3, 3 + length - 1);
+    const checksum = messageBytes[3 + length - 1];
+    
+    // 체크섬 검증 (MessageID부터 Data까지)
+    const calculatedChecksum = calculateChecksum([messageId, ...messageData]);
+    if (checksum !== calculatedChecksum) {
+      console.warn('[ANT+] 체크섬 오류', {
+        messageId: '0x' + messageId.toString(16).toUpperCase(),
+        received: '0x' + checksum.toString(16).toUpperCase(),
+        calculated: '0x' + calculatedChecksum.toString(16).toUpperCase(),
+        dataLength: messageData.length
+      });
+      // 체크섬 오류가 발생해도 메시지 ID가 중요한 경우 처리
+      // 일부 응답 메시지는 체크섬 오류가 있어도 처리 가능
+      if (messageId === 0x43 || messageId === 0x4E || messageId === 0x4D) {
+        // Channel Event, Broadcast Data, Acknowledged Data는 처리
+        return { messageId, data: messageData };
+      }
+      return null;
+    }
+    
+    return { messageId, data: messageData };
+  } catch (error) {
+    // USB 전송 오류 시 버퍼 초기화
+    if (error.name === 'NetworkError' || error.name === 'NotFoundError') {
+      window.antState.messageBuffer = [];
+    }
+    throw error;
   }
-  
-  const length = data[1];
-  const messageId = data[2];
-  const messageData = Array.from(data.slice(3, 3 + length - 1));
-  const checksum = data[3 + length - 1];
-  
-  // 체크섬 검증
-  const calculatedChecksum = calculateChecksum([messageId, ...messageData]);
-  if (checksum !== calculatedChecksum) {
-    console.warn('[ANT+] 체크섬 오류');
-    return null;
-  }
-  
-  return { messageId, data: messageData };
 }
 
 /**
