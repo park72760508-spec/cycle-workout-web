@@ -2269,6 +2269,41 @@ button[aria-disabled="true"] {
   touch-action: manipulation;
 }
 
+/* ANT+ 디바이스 검색 목록 스타일 */
+.ant-device-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 8px;
+  background: #f9f9f9;
+}
+
+.ant-device-item {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+  transition: background 0.2s, border-color 0.2s;
+  margin-bottom: 8px;
+}
+
+.ant-device-item:last-child {
+  margin-bottom: 0;
+}
+
+.ant-device-item:hover {
+  background: #f0f0f0;
+  border-color: #bbb;
+}
+
+.ant-device-item.selected {
+  border: 2px solid #28a745;
+  background: #f0f9ff;
+}
+
 .duration-input {
   display: flex;
   align-items: center;
