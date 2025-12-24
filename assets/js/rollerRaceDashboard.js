@@ -1652,11 +1652,26 @@ async function receiveANTMessage() {
     
     const length = window.antState.messageBuffer[1];
     
-    // Length 필드 유효성 검사 (1-8 사이여야 함)
-    if (length < 1 || length > 8) {
+    // Length 필드 유효성 검사
+    // 일반적으로 1-8 사이지만, 일부 확장 메시지는 더 클 수 있음
+    // 9 이상이면 버퍼에 여러 메시지가 섞여있을 가능성이 높음
+    if (length < 1) {
       console.warn('[ANT+] 잘못된 Length 필드:', length, '버퍼 초기화');
       window.antState.messageBuffer = [];
       return null;
+    }
+    
+    // Length가 8보다 크면 버퍼에 문제가 있을 수 있음
+    // 하지만 일부 특수 메시지는 더 클 수 있으므로, 최대 길이를 더 크게 설정
+    if (length > 16) {
+      console.warn('[ANT+] 비정상적으로 큰 Length 필드:', length, '버퍼 초기화');
+      window.antState.messageBuffer = [];
+      return null;
+    }
+    
+    // Length가 9 이상이면 로그만 출력하고 계속 진행 (확장 메시지일 수 있음)
+    if (length > 8) {
+      console.log('[ANT+] 확장 메시지 감지 (Length > 8):', length);
     }
     
     // 메시지 전체 길이 확인 (Sync + Length + MessageID + Data + Checksum)
