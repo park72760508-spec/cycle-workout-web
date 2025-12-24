@@ -1633,6 +1633,8 @@ async function receiveANTMessage() {
     
     // 동기화 바이트 이전 데이터 제거
     if (syncIndex > 0) {
+      // 동기화 바이트 이전의 잘못된 데이터 제거
+      console.log(`[ANT+] 동기화 바이트 이전 ${syncIndex}바이트 제거`);
       window.antState.messageBuffer = window.antState.messageBuffer.slice(syncIndex);
     }
     
@@ -1641,10 +1643,26 @@ async function receiveANTMessage() {
       return null; // 더 많은 데이터 필요
     }
     
+    // 동기화 바이트 확인 (버퍼의 첫 번째 바이트가 0xA4여야 함)
+    if (window.antState.messageBuffer[0] !== 0xA4) {
+      console.warn('[ANT+] 동기화 바이트 오류:', '0x' + window.antState.messageBuffer[0].toString(16).toUpperCase());
+      window.antState.messageBuffer = [];
+      return null;
+    }
+    
     const length = window.antState.messageBuffer[1];
     
+    // Length 필드 유효성 검사 (1-8 사이여야 함)
+    if (length < 1 || length > 8) {
+      console.warn('[ANT+] 잘못된 Length 필드:', length, '버퍼 초기화');
+      window.antState.messageBuffer = [];
+      return null;
+    }
+    
     // 메시지 전체 길이 확인 (Sync + Length + MessageID + Data + Checksum)
-    const totalLength = 2 + length + 1; // Sync(1) + Length(1) + MessageID(1) + Data(length) + Checksum(1)
+    // Length는 MessageID(1바이트) + Data 바이트 수를 나타냄
+    // 따라서 전체 길이 = Sync(1) + Length(1) + Length바이트 + Checksum(1) = 2 + length + 1
+    const totalLength = 2 + length + 1;
     
     // 메시지가 완전히 수신되지 않았으면 대기
     if (window.antState.messageBuffer.length < totalLength) {
@@ -1657,11 +1675,23 @@ async function receiveANTMessage() {
     
     // 메시지 파싱
     // ANT+ 메시지 구조: [Sync(0xA4), Length, MessageID, Data..., Checksum]
-    // Length 필드는 MessageID + Data의 바이트 수를 나타냄
+    // Length 필드는 MessageID(1바이트) + Data 바이트 수를 나타냄
+    // 예: Length=3이면 MessageID(1) + Data(2) = 3바이트
     const messageId = messageBytes[2];
     const dataLength = length - 1; // Length에서 MessageID(1바이트) 제외
     const messageData = messageBytes.slice(3, 3 + dataLength);
     const checksum = messageBytes[2 + length]; // Sync(1) + Length(1) + MessageID(1) + Data(length-1) = 2 + length
+    
+    // 디버깅: 원시 메시지 로그 (중요한 메시지만)
+    if (messageId === 0x51 || messageId === 0x4E || messageId === 0x43) {
+      console.log('[ANT+] 메시지 파싱:', {
+        messageId: '0x' + messageId.toString(16).toUpperCase(),
+        length: length,
+        dataLength: dataLength,
+        rawMessage: Array.from(messageBytes).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
+        parsedData: Array.from(messageData).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+      });
+    }
     
     // 디버깅: 특정 메시지 타입에 대한 상세 로그
     const isImportantMessage = messageId === 0x43 || messageId === 0x4E || messageId === 0x4D || 
@@ -1880,7 +1910,9 @@ function handleANTMessage(message) {
     case 0x4E: // Broadcast Data
       handleBroadcastData(data);
       break;
-    case 0x4D: // Acknowledged Data
+    case 0x4D: // Acknowledged Data (또는 Request Message 응답)
+      // Request Message (0x4D)는 Channel ID 요청에 대한 응답일 수 있음
+      // 하지만 실제 Channel ID Response는 0x51 메시지 ID를 가짐
       handleAcknowledgedData(data);
       break;
     case 0x51: // Channel ID Response
@@ -1888,9 +1920,7 @@ function handleANTMessage(message) {
       break;
     case 0xAE: // Capabilities
       // Capabilities 메시지는 무시 (스틱 정보만 제공)
-      if (window.antState.isScanning) {
-        console.log('[ANT+] Capabilities 메시지 수신 (스캔 중)');
-      }
+      // 로그는 최소화 (이미 receiveANTMessage에서 처리)
       break;
     default:
       // 기타 메시지 무시
