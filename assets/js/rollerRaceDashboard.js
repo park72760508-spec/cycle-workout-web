@@ -173,9 +173,10 @@ function createSpeedometerElement(speedometer) {
         <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         
         <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
+        <!-- 바늘은 원의 위쪽 가장자리에서 시작하여 원 안에 보이지 않게 함 -->
         <g class="speedometer-needle" transform="translate(100, 140)">
           <line id="needle-${speedometer.id}" 
-                x1="0" y1="0" 
+                x1="0" y1="-7" 
                 x2="0" y2="-80" 
                 stroke="#ff0000" 
                 stroke-width="3" 
