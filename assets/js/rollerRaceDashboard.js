@@ -1054,6 +1054,155 @@ function showAddSpeedometerModal() {
   if (modal) {
     modal.classList.remove('hidden');
   }
+  
+  // 디바이스 목록 초기화
+  const deviceList = document.getElementById('antDeviceList');
+  if (deviceList) {
+    deviceList.classList.add('hidden');
+    deviceList.innerHTML = '';
+  }
+}
+
+/**
+ * ANT+ 디바이스 검색
+ */
+async function searchANTDevices() {
+  const searchButton = document.getElementById('btnSearchANTDevices');
+  const searchButtonText = document.getElementById('searchButtonText');
+  const deviceList = document.getElementById('antDeviceList');
+  const deviceIdInput = document.getElementById('speedometerDeviceId');
+  
+  if (!searchButton || !deviceList) return;
+  
+  // 검색 중 상태로 변경
+  searchButton.disabled = true;
+  if (searchButtonText) searchButtonText.textContent = '검색 중...';
+  deviceList.classList.remove('hidden');
+  deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">ANT+ 디바이스를 검색하는 중...</div>';
+  
+  // 검색된 디바이스 목록
+  const foundDevices = [];
+  
+  try {
+    // ANT+ 디바이스 검색 로직
+    // 실제 구현은 ANT+ 라이브러리나 Web USB/Serial API를 사용해야 합니다
+    // 여기서는 시뮬레이션으로 구현
+    
+    if (typeof connectANTSpeedometer === 'function') {
+      // 실제 ANT+ 검색 함수가 있는 경우
+      const devices = await scanANTDevices();
+      foundDevices.push(...devices);
+    } else {
+      // 시뮬레이션 모드: 실제 하드웨어가 없을 때 테스트용 디바이스 표시
+      // 실제 구현 시 이 부분은 제거하고 실제 검색 로직으로 대체
+      setTimeout(() => {
+        const simulatedDevices = [
+          { id: '12345', name: 'ANT+ Speed Sensor 1', type: 'Speed/Cadence' },
+          { id: '23456', name: 'ANT+ Speed Sensor 2', type: 'Speed/Cadence' },
+          { id: '34567', name: 'ANT+ Speed Sensor 3', type: 'Speed/Cadence' }
+        ];
+        displayANTDevices(simulatedDevices);
+      }, 2000);
+      return;
+    }
+    
+    // 실제 검색 결과 표시
+    if (foundDevices.length > 0) {
+      displayANTDevices(foundDevices);
+    } else {
+      deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #999;">검색된 디바이스가 없습니다.<br>디바이스가 켜져 있고 페어링 모드인지 확인하세요.</div>';
+    }
+  } catch (error) {
+    console.error('[ANT+ 디바이스 검색 오류]', error);
+    deviceList.innerHTML = `<div style="padding: 16px; text-align: center; color: #d32f2f;">검색 중 오류가 발생했습니다.<br>${error.message || '알 수 없는 오류'}</div>`;
+  } finally {
+    // 검색 완료 후 버튼 상태 복원
+    searchButton.disabled = false;
+    if (searchButtonText) searchButtonText.textContent = '다시 검색';
+  }
+}
+
+/**
+ * ANT+ 디바이스 스캔 (실제 구현 필요)
+ */
+async function scanANTDevices() {
+  // 실제 ANT+ 디바이스 스캔 로직
+  // ANT+ USB 스틱이나 Web USB/Serial API를 사용하여 구현
+  // 반환 형식: [{ id: string, name: string, type: string }, ...]
+  
+  return new Promise((resolve) => {
+    // 시뮬레이션: 2초 후 빈 배열 반환 (실제 구현 시 제거)
+    setTimeout(() => {
+      resolve([]);
+    }, 2000);
+  });
+}
+
+/**
+ * 검색된 ANT+ 디바이스 목록 표시
+ */
+function displayANTDevices(devices) {
+  const deviceList = document.getElementById('antDeviceList');
+  if (!deviceList) return;
+  
+  if (devices.length === 0) {
+    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #999;">검색된 디바이스가 없습니다.<br>디바이스가 켜져 있고 페어링 모드인지 확인하세요.</div>';
+    return;
+  }
+  
+  let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+  devices.forEach(device => {
+    html += `
+      <div class="ant-device-item" 
+           style="padding: 12px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: white; transition: background 0.2s;"
+           onmouseover="this.style.background='#f0f0f0'"
+           onmouseout="this.style.background='white'"
+           onclick="selectANTDevice('${device.id}', '${device.name || device.id}')">
+        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${device.name || `디바이스 ${device.id}`}</div>
+        <div style="font-size: 12px; color: #666;">
+          <span>ID: ${device.id}</span>
+          ${device.type ? `<span style="margin-left: 8px;">타입: ${device.type}</span>` : ''}
+        </div>
+      </div>
+    `;
+  });
+  html += '</div>';
+  
+  deviceList.innerHTML = html;
+}
+
+/**
+ * ANT+ 디바이스 선택
+ */
+function selectANTDevice(deviceId, deviceName) {
+  const deviceIdInput = document.getElementById('speedometerDeviceId');
+  const deviceList = document.getElementById('antDeviceList');
+  
+  if (deviceIdInput) {
+    deviceIdInput.value = deviceId;
+  }
+  
+  // 선택된 디바이스 하이라이트
+  if (deviceList) {
+    const items = deviceList.querySelectorAll('.ant-device-item');
+    items.forEach(item => {
+      item.style.border = '1px solid #ddd';
+      item.style.background = 'white';
+    });
+    
+    // 선택된 항목 찾기
+    const selectedItem = Array.from(items).find(item => 
+      item.textContent.includes(deviceId)
+    );
+    if (selectedItem) {
+      selectedItem.style.border = '2px solid #28a745';
+      selectedItem.style.background = '#f0f9ff';
+    }
+  }
+  
+  if (typeof showToast === 'function') {
+    showToast(`${deviceName || deviceId} 선택됨`);
+  }
 }
 
 /**
@@ -1068,8 +1217,24 @@ function closeAddSpeedometerModal() {
   // 입력 필드 초기화
   const nameInput = document.getElementById('speedometerName');
   const deviceIdInput = document.getElementById('speedometerDeviceId');
+  const deviceList = document.getElementById('antDeviceList');
+  const searchButton = document.getElementById('btnSearchANTDevices');
+  const searchButtonText = document.getElementById('searchButtonText');
+  
   if (nameInput) nameInput.value = '';
   if (deviceIdInput) deviceIdInput.value = '';
+  if (deviceList) {
+    deviceList.classList.add('hidden');
+    deviceList.innerHTML = '';
+  }
+  if (searchButton) searchButton.disabled = false;
+  if (searchButtonText) searchButtonText.textContent = '디바이스 검색';
+  
+  // 검색 중지
+  if (window.antDeviceSearchInterval) {
+    clearInterval(window.antDeviceSearchInterval);
+    window.antDeviceSearchInterval = null;
+  }
 }
 
 /**
