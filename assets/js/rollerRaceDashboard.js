@@ -2321,9 +2321,24 @@ async function checkANTUSBStatus() {
           
           // 자동 연결 시도 (이미 권한이 부여된 디바이스는 자동으로 열 수 있음)
           try {
-            await autoConnectANTUSBStick(device);
+            const connectedDevice = await autoConnectANTUSBStick(device);
+            
+            // 연결 성공 확인
+            if (connectedDevice) {
+              // 연결 성공 시 상태 다시 확인
+              const connectedDeviceInfo = {
+                vendorId: '0x' + connectedDevice.vendorId.toString(16).toUpperCase(),
+                productId: '0x' + connectedDevice.productId.toString(16).toUpperCase(),
+                manufacturerName: connectedDevice.manufacturerName || '알 수 없음',
+                productName: connectedDevice.productName || 'ANT+ USB 수신기'
+              };
+              updateANTUSBStatusUI('connected', `${connectedDeviceInfo.productName} 연결됨`, connectedDeviceInfo);
+              if (connectButton) connectButton.style.display = 'none';
+              if (refreshButton) refreshButton.disabled = false;
+              return; // 성공적으로 연결되었으므로 종료
+            }
           } catch (error) {
-            console.log('[ANT+] 자동 연결 실패, 수동 연결 필요:', error.message);
+            console.error('[ANT+] 자동 연결 실패:', error);
             updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (연결 필요)`, deviceInfo);
           }
         }
@@ -2352,8 +2367,39 @@ async function checkANTUSBStatus() {
  */
 async function autoConnectANTUSBStick(device) {
   try {
-    // 디바이스 열기
-    await device.open();
+    // 이미 열려있는 디바이스인지 확인
+    let isOpened = false;
+    try {
+      isOpened = device.opened;
+    } catch (e) {
+      isOpened = false;
+    }
+    
+    // 이미 열려있고 연결된 상태면 재사용
+    if (isOpened && window.antState.usbDevice === device) {
+      console.log('[ANT+ USB 스틱] 이미 연결된 디바이스 재사용');
+      const deviceInfo = {
+        vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+        productId: '0x' + device.productId.toString(16).toUpperCase(),
+        manufacturerName: device.manufacturerName || '알 수 없음',
+        productName: device.productName || 'ANT+ USB 수신기'
+      };
+      updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
+      return device;
+    }
+    
+    // 디바이스 열기 (이미 열려있으면 오류 발생할 수 있으므로 try-catch)
+    try {
+      if (!isOpened) {
+        await device.open();
+      }
+    } catch (openError) {
+      // 이미 열려있는 경우 무시
+      if (!openError.message.includes('already') && !openError.message.includes('열려')) {
+        throw openError;
+      }
+      console.log('[ANT+] 디바이스가 이미 열려있음');
+    }
     
     // 디바이스 구성 확인 및 선택
     const configurations = device.configurations;
@@ -2363,7 +2409,18 @@ async function autoConnectANTUSBStick(device) {
     
     // 첫 번째 구성 선택
     const configNumber = configurations[0].configurationValue || 1;
-    await device.selectConfiguration(configNumber);
+    try {
+      await device.selectConfiguration(configNumber);
+      console.log('[ANT+] 구성 선택 성공');
+    } catch (configError) {
+      // 이미 선택된 구성이면 무시
+      if (configError.message && (configError.message.includes('already') || configError.message.includes('선택') || configError.message.includes('selected'))) {
+        console.log('[ANT+] 구성이 이미 선택됨');
+      } else {
+        console.error('[ANT+] 구성 선택 오류:', configError);
+        throw configError;
+      }
+    }
     
     // 인터페이스 찾기
     const interfaces = configurations[0].interfaces;
@@ -2391,8 +2448,18 @@ async function autoConnectANTUSBStick(device) {
       };
     }
     
-    // 인터페이스 클레임
-    await device.claimInterface(targetInterface.interfaceNumber);
+    // 인터페이스 클레임 (이미 클레임된 경우 오류 발생할 수 있음)
+    try {
+      await device.claimInterface(targetInterface.interfaceNumber);
+      console.log('[ANT+] 인터페이스 클레임 성공');
+    } catch (claimError) {
+      // 이미 클레임된 경우 무시
+      if (claimError.message && (claimError.message.includes('already') || claimError.message.includes('클레임') || claimError.message.includes('claimed'))) {
+        console.log('[ANT+] 인터페이스가 이미 클레임됨');
+      } else {
+        throw claimError;
+      }
+    }
     
     // 엔드포인트 찾기
     const inEndpoint = targetInterface.alternate.endpoints.find(
@@ -2413,9 +2480,32 @@ async function autoConnectANTUSBStick(device) {
     window.antState.interfaceNumber = targetInterface.interfaceNumber;
     
     // ANT+ 초기화 메시지 전송
-    await initializeANT();
+    try {
+      await initializeANT();
+    } catch (initError) {
+      console.warn('[ANT+] 초기화 오류 (무시하고 계속):', initError);
+      // 초기화 오류는 무시하고 계속 진행
+    }
     
-    console.log('[ANT+ USB 스틱] 자동 연결 성공');
+    console.log('[ANT+ USB 스틱] 자동 연결 성공', {
+      vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+      productId: '0x' + device.productId.toString(16).toUpperCase(),
+      interface: targetInterface.interfaceNumber,
+      inEndpoint: inEndpoint.endpointNumber,
+      outEndpoint: outEndpoint.endpointNumber
+    });
+    
+    // 연결 상태 최종 확인
+    let finalOpened = false;
+    try {
+      finalOpened = device.opened;
+    } catch (e) {
+      finalOpened = false;
+    }
+    
+    if (!finalOpened) {
+      throw new Error('디바이스가 열리지 않았습니다.');
+    }
     
     // 상태 업데이트
     const deviceInfo = {
@@ -2425,6 +2515,8 @@ async function autoConnectANTUSBStick(device) {
       productName: device.productName || 'ANT+ USB 수신기'
     };
     updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
+    
+    console.log('[ANT+ USB 스틱] 자동 연결 완료 및 상태 업데이트됨');
     
     return device;
   } catch (error) {
