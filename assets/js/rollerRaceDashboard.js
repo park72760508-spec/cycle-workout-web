@@ -1824,12 +1824,12 @@ async function scanANTDevices() {
     // 스캔 시작 후 Channel ID 요청을 주기적으로 보내어 디바이스 정보 얻기
     startChannelIDRequest(channelNumber);
     
-    // 20초간 스캔 (더 많은 디바이스를 찾기 위해 시간 연장)
-    console.log('[ANT+ 스캔] 20초간 디바이스 검색 중...');
-    for (let i = 0; i < 20; i++) {
+    // 30초간 스캔 (더 많은 디바이스를 찾기 위해 시간 연장)
+    console.log('[ANT+ 스캔] 30초간 디바이스 검색 중...');
+    for (let i = 0; i < 30; i++) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       if (i % 5 === 4) {
-        console.log(`[ANT+ 스캔] 검색 중... (${i + 1}/20초, 발견된 디바이스: ${window.antState.foundDevices.length}개)`);
+        console.log(`[ANT+ 스캔] 검색 중... (${i + 1}/30초, 발견된 디바이스: ${window.antState.foundDevices.length}개)`);
       }
     }
     
@@ -1961,13 +1961,29 @@ function handleANTMessage(message) {
  * 채널 이벤트 처리
  */
 function handleChannelEvent(data) {
+  if (!window.antState.isScanning) {
+    return;
+  }
+  
   const channelNumber = data[0];
   const messageId = data[1];
   const messageCode = data[2];
   
+  // 스캔 채널의 이벤트만 처리
+  if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
+    return;
+  }
+  
+  console.log('[ANT+] Channel Event:', {
+    channel: channelNumber,
+    messageId: '0x' + messageId.toString(16).toUpperCase(),
+    eventCode: '0x' + messageCode.toString(16).toUpperCase(),
+    eventName: getChannelEventName(messageCode)
+  });
+  
   switch (messageCode) {
     case 0x01: // RX_SEARCH_TIMEOUT
-      // 검색 타임아웃
+      // 검색 타임아웃 - 정상적인 이벤트
       break;
     case 0x03: // RX_FAIL
       // 수신 실패
@@ -1990,6 +2006,29 @@ function handleChannelEvent(data) {
     default:
       break;
   }
+}
+
+/**
+ * Channel Event 코드 이름 반환
+ */
+function getChannelEventName(code) {
+  const eventNames = {
+    0x01: 'RX_SEARCH_TIMEOUT',
+    0x02: 'RX_SEARCH_TIMEOUT',
+    0x03: 'RX_FAIL',
+    0x04: 'TX',
+    0x05: 'TRANSFER_RX_FAILED',
+    0x06: 'TRANSFER_TX_COMPLETED',
+    0x07: 'TRANSFER_TX_FAILED',
+    0x08: 'CHANNEL_CLOSED',
+    0x09: 'RX_FAIL_GO_TO_SEARCH',
+    0x0A: 'CHANNEL_COLLISION',
+    0x0B: 'TRANSFER_TX_START',
+    0x0C: 'TRANSFER_NEXT_DATA_BLOCK',
+    0x0D: 'RX_EXT_MESSAGE',
+    0x0E: 'RX_EXT_MESSAGE'
+  };
+  return eventNames[code] || 'UNKNOWN';
 }
 
 /**
@@ -2019,12 +2058,13 @@ function handleBroadcastData(data) {
       window.antState.lastBroadcastLog = Date.now();
     }
     
-    // 브로드캐스트 데이터에서 디바이스 정보 추출 시도
-    // 일부 ANT+ 디바이스는 브로드캐스트 데이터에 디바이스 번호를 포함할 수 있음
-    // 하지만 일반적으로는 Channel ID Response가 필요함
-    // 여기서는 브로드캐스트 데이터가 수신되면 Channel ID 요청을 더 자주 보냄
-    if (window.antChannelIDRequestInterval) {
-      // 이미 요청 중이면 추가 요청은 하지 않음
+    // 브로드캐스트 데이터가 수신되면 디바이스가 활성화되어 있다는 신호
+    // Channel ID Request를 즉시 전송하여 디바이스 정보 얻기
+    if (window.antState.usbDevice && window.antState.scanChannel !== undefined) {
+      // 즉시 Channel ID Request 전송 (비동기로 처리하여 블로킹 방지)
+      sendANTMessage(0x4D, [window.antState.scanChannel, 0x51]).catch(err => {
+        // 오류는 조용히 무시
+      });
     }
   }
 }
