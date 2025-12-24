@@ -9106,8 +9106,8 @@ button[aria-disabled="true"] {
 }
 
 .rank-value-bottom {
-  width: 24px;
-  height: 24px;
+  width: 29px;
+  height: 29px;
   object-fit: contain;
   display: inline-block;
   vertical-align: middle;
