@@ -51,6 +51,17 @@ window.rollerRaceState = {
   rankDisplayTimer: null // 순위 표시 순환 타이머
 };
 
+// ANT+ 통신 관련 전역 상태
+window.antState = {
+  usbDevice: null, // Web USB 디바이스
+  inEndpoint: null, // 입력 엔드포인트
+  outEndpoint: null, // 출력 엔드포인트
+  isScanning: false, // 스캔 중 여부
+  scanChannel: null, // 스캔 채널 번호
+  foundDevices: [], // 검색된 디바이스 목록
+  connectedChannels: {} // 연결된 채널 (deviceId -> channelNumber)
+};
+
 // 속도계 데이터 구조
 class SpeedometerData {
   constructor(id, name, deviceId = null) {
@@ -888,40 +899,285 @@ async function pairSpeedometer(speedometerId) {
   const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
   if (!speedometer) return;
   
+  // 이미 연결되어 있으면 연결 해제
+  if (speedometer.connected) {
+    await unpairSpeedometer(speedometerId);
+    return;
+  }
+  
   console.log(`[속도계 페어링] ${speedometer.name} (ID: ${speedometerId})`);
   
-  // ANT+ 연결 로직 (실제 구현 필요)
-  // 여기서는 시뮬레이션
-  if (typeof connectANTSpeedometer === 'function') {
+  if (!speedometer.deviceId) {
+    if (typeof showToast === 'function') {
+      showToast('디바이스 ID가 설정되지 않았습니다. 속도계를 추가할 때 디바이스를 선택해주세요.');
+    }
+    return;
+  }
+  
+  try {
+    // ANT+ USB 스틱 연결 확인
+    if (!window.antState.usbDevice) {
+      await connectANTUSBStick();
+    }
+    
+    // ANT+ 디바이스 연결
+    const device = await connectANTSpeedometer(speedometer.deviceId);
+    if (device) {
+      speedometer.connected = true;
+      speedometer.deviceId = device.id;
+      window.rollerRaceState.connectedDevices[speedometer.deviceId] = device;
+      updateSpeedometerConnectionStatus(speedometerId, true);
+      
+      if (typeof showToast === 'function') {
+        showToast(`${speedometer.name} 연결 완료`);
+      }
+    }
+  } catch (error) {
+    console.error('[속도계 페어링 오류]', error);
+    speedometer.connected = false;
+    updateSpeedometerConnectionStatus(speedometerId, false);
+    
+    if (typeof showToast === 'function') {
+      showToast(`${speedometer.name} 연결 실패: ${error.message || '알 수 없는 오류'}`);
+    }
+  }
+}
+
+/**
+ * 속도계 연결 해제
+ */
+async function unpairSpeedometer(speedometerId) {
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
+  if (!speedometer || !speedometer.connected) return;
+  
+  try {
+    // 연결된 채널 찾기
+    const channelEntry = Object.entries(window.antState.connectedChannels).find(
+      ([channel, info]) => info.deviceId === speedometer.deviceId
+    );
+    
+    if (channelEntry) {
+      const [channelNumber, channelInfo] = channelEntry;
+      
+      // 데이터 수신 중지
+      if (channelInfo.receiving) {
+        channelInfo.receiving = false;
+      }
+      
+      // 채널 닫기
+      if (window.antState.usbDevice) {
+        await sendANTMessage(0x4C, [parseInt(channelNumber)]); // Close Channel
+      }
+      
+      // 연결된 채널에서 제거
+      delete window.antState.connectedChannels[channelNumber];
+    }
+    
+    // 속도계 상태 업데이트
+    speedometer.connected = false;
+    delete window.rollerRaceState.connectedDevices[speedometer.deviceId];
+    updateSpeedometerConnectionStatus(speedometerId, false);
+    
+    if (typeof showToast === 'function') {
+      showToast(`${speedometer.name} 연결 해제됨`);
+    }
+  } catch (error) {
+    console.error('[속도계 연결 해제 오류]', error);
+    // 오류가 발생해도 상태는 업데이트
+    speedometer.connected = false;
+    updateSpeedometerConnectionStatus(speedometerId, false);
+  }
+}
+
+/**
+ * ANT+ 속도계 연결
+ */
+async function connectANTSpeedometer(deviceId) {
+  if (!window.antState.usbDevice) {
+    throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
+  }
+  
+  const deviceNumber = parseInt(deviceId, 10);
+  if (isNaN(deviceNumber)) {
+    throw new Error('유효하지 않은 디바이스 ID입니다.');
+  }
+  
+  // 사용 가능한 채널 찾기 (0-7, 스캔 채널 제외)
+  let channelNumber = 1;
+  while (channelNumber <= 7 && window.antState.connectedChannels[channelNumber]) {
+    channelNumber++;
+  }
+  
+  if (channelNumber > 7) {
+    throw new Error('사용 가능한 채널이 없습니다. (최대 7개 디바이스 연결 가능)');
+  }
+  
+  // 채널 할당
+  await sendANTMessage(0x42, [channelNumber, 0x00]); // Assign Channel (Receive Mode)
+  
+  // 채널 ID 설정 (Speed/Cadence 센서)
+  const deviceType = 0x79; // Speed and Cadence Sensor
+  const transmissionType = 0x05; // ANT+ 표준 전송 타입
+  await sendANTMessage(0x51, [
+    channelNumber,
+    deviceNumber & 0xFF,
+    (deviceNumber >> 8) & 0xFF,
+    deviceType,
+    transmissionType,
+    0x00 // Device Number (MSB)
+  ]);
+  
+  // 채널 주기 설정 (4096 * 1/32768 초 = 125ms)
+  await sendANTMessage(0x60, [channelNumber, 0x00, 0x10]); // Set Channel Period
+  
+  // 채널 RF 주파수 설정 (ANT+ 공개 주파수: 57)
+  await sendANTMessage(0x45, [channelNumber, 0x39]); // Set Channel RF Frequency
+  
+  // 채널 열기
+  await sendANTMessage(0x4B, [channelNumber]); // Open Channel
+  
+  // 연결된 채널 저장
+  window.antState.connectedChannels[channelNumber] = {
+    deviceId: deviceId,
+    deviceNumber: deviceNumber,
+    speedometerId: null // 나중에 설정
+  };
+  
+  // 속도계 데이터 수신 시작
+  startSpeedometerDataReceiver(channelNumber, deviceId);
+  
+  console.log(`[ANT+] 속도계 연결 완료: 디바이스 ${deviceId}, 채널 ${channelNumber}`);
+  
+  return {
+    id: deviceId,
+    name: `ANT+ Speed Sensor ${deviceId}`,
+    channelNumber: channelNumber,
+    deviceNumber: deviceNumber
+  };
+}
+
+/**
+ * 속도계 데이터 수신 시작
+ */
+function startSpeedometerDataReceiver(channelNumber, deviceId) {
+  // 이미 수신 중인 경우 무시
+  if (window.antState.connectedChannels[channelNumber]?.receiving) {
+    return;
+  }
+  
+  window.antState.connectedChannels[channelNumber].receiving = true;
+  
+  const receiveData = async () => {
+    const channelInfo = window.antState.connectedChannels[channelNumber];
+    if (!channelInfo || !channelInfo.receiving) {
+      return;
+    }
+    
     try {
-      const device = await connectANTSpeedometer(speedometer.deviceId);
-      if (device) {
-        speedometer.connected = true;
-        speedometer.deviceId = device.id;
-        updateSpeedometerConnectionStatus(speedometerId, true);
-        
-        if (typeof showToast === 'function') {
-          showToast(`${speedometer.name} 연결 완료`);
+      const message = await receiveANTMessage();
+      if (message) {
+        // 브로드캐스트 데이터 처리
+        if (message.messageId === 0x4E) {
+          const data = message.data;
+          const msgChannel = data[0];
+          
+          if (msgChannel === channelNumber) {
+            // Speed/Cadence 데이터 파싱
+            // ANT+ 브로드캐스트 메시지 구조: [Channel, Data...]
+            // Speed/Cadence 데이터는 8바이트
+            const speedData = data.slice(1, 9);
+            if (speedData.length >= 6) {
+              processSpeedCadenceData(deviceId, speedData);
+            }
+          }
         }
       }
     } catch (error) {
-      console.error('[속도계 페어링 오류]', error);
-      if (typeof showToast === 'function') {
-        showToast(`${speedometer.name} 연결 실패: ${error.message}`);
+      // 연결이 끊어진 경우 오류 무시
+      if (error.message && error.message.includes('연결')) {
+        console.log(`[ANT+ 채널 ${channelNumber}] 연결 해제됨`);
+        return;
       }
+      console.error(`[ANT+ 채널 ${channelNumber}] 데이터 수신 오류:`, error);
     }
-  } else {
-    // 시뮬레이션 모드
-    speedometer.connected = true;
-    updateSpeedometerConnectionStatus(speedometerId, true);
     
-    // 시뮬레이션 데이터 시작
-    startSpeedometerSimulation(speedometerId);
-    
-    if (typeof showToast === 'function') {
-      showToast(`${speedometer.name} 연결 완료 (시뮬레이션)`);
-    }
+    // 다음 데이터 대기
+    setTimeout(receiveData, 10);
+  };
+  
+  receiveData();
+}
+
+/**
+ * Speed/Cadence 데이터 처리
+ */
+function processSpeedCadenceData(deviceId, data) {
+  // Speed/Cadence 센서 데이터 구조:
+  // Byte 0-1: Event Time (LSB, MSB) - 1/1024초 단위
+  // Byte 2-3: Cumulative Wheel Revolutions (LSB, MSB)
+  // Byte 4-5: Last Wheel Event Time (LSB, MSB) - 1/1024초 단위
+  // Byte 6-7: Cumulative Crank Revolutions (LSB, MSB) - 선택적
+  
+  if (data.length < 6) {
+    return; // 데이터가 충분하지 않음
   }
+  
+  const eventTime = (data[1] << 8) | data[0];
+  const wheelRevolutions = (data[3] << 8) | data[2];
+  const lastWheelEventTime = (data[5] << 8) | data[4];
+  
+  // 해당 속도계 찾기
+  const speedometer = window.rollerRaceState.speedometers.find(
+    s => s.deviceId === deviceId
+  );
+  
+  if (!speedometer) {
+    return;
+  }
+  
+  // 속도 계산
+  const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+  const wheelCircumference = wheelSpec.circumference; // mm
+  
+  // 이전 회전수와 시간
+  const prevRevolutions = speedometer.lastRevolutions || 0;
+  const prevEventTime = speedometer.lastEventTime || lastWheelEventTime;
+  
+  // 회전수 차이
+  let revolutionDelta = wheelRevolutions - prevRevolutions;
+  
+  // 오버플로우 처리 (65535를 넘어가면 0으로 리셋)
+  if (revolutionDelta < 0) {
+    revolutionDelta += 65536;
+  }
+  
+  // 시간 차이 (1/1024초 단위)
+  let timeDelta = lastWheelEventTime - prevEventTime;
+  if (timeDelta < 0) {
+    timeDelta += 65536;
+  }
+  
+  // 속도 계산 (km/h)
+  // 속도 = (회전수 차이 × 둘레(mm)) / (시간 차이(초) × 1000) × 3600
+  let speed = 0;
+  if (timeDelta > 0 && revolutionDelta > 0) {
+    const timeDeltaSeconds = timeDelta / 1024.0;
+    const distanceMeters = (revolutionDelta * wheelCircumference) / 1000.0;
+    speed = (distanceMeters / timeDeltaSeconds) * 3.6; // m/s to km/h
+  }
+  
+  // 데이터 업데이트
+  speedometer.lastRevolutions = wheelRevolutions;
+  speedometer.lastEventTime = lastWheelEventTime;
+  speedometer.totalRevolutions += revolutionDelta;
+  speedometer.totalDistance = calculateDistanceFromRevolutions(
+    speedometer.totalRevolutions,
+    wheelCircumference
+  );
+  speedometer.currentSpeed = speed;
+  
+  // UI 업데이트
+  updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
 }
 
 /**
@@ -979,42 +1235,9 @@ function calculateRevolutionsPerSecond(speed, wheelCircumference) {
 }
 
 /**
- * 속도계 시뮬레이션 (테스트용)
- * 회전수 기반 거리 계산 사용
+ * 속도계 시뮬레이션 함수 제거됨
+ * 실제 ANT+ 하드웨어 연결 사용
  */
-function startSpeedometerSimulation(speedometerId) {
-  const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
-  if (!speedometer) return;
-  
-  // 선택된 바퀴 규격 가져오기
-  const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
-  const wheelCircumference = wheelSpec.circumference; // mm
-  
-  // 시뮬레이션 인터벌
-  const interval = setInterval(() => {
-    if (!speedometer.connected) {
-      clearInterval(interval);
-      return;
-    }
-    
-    // 랜덤 속도 생성 (20~50 km/h)
-    const speed = 20 + Math.random() * 30;
-    
-    // 1초당 회전수 계산
-    const revolutionsPerSecond = calculateRevolutionsPerSecond(speed, wheelCircumference);
-    
-    // 총 회전수 누적
-    speedometer.totalRevolutions += revolutionsPerSecond;
-    
-    // 회전수 기반 거리 계산
-    speedometer.currentSpeed = speed;
-    speedometer.totalDistance = calculateDistanceFromRevolutions(speedometer.totalRevolutions, wheelCircumference);
-    
-    updateSpeedometerData(speedometerId, speed, speedometer.totalDistance);
-  }, 1000); // 1초마다 업데이트
-  
-  speedometer.simulationInterval = interval;
-}
 
 /**
  * 속도계 목록 UI 업데이트
@@ -1070,7 +1293,6 @@ async function searchANTDevices() {
   const searchButton = document.getElementById('btnSearchANTDevices');
   const searchButtonText = document.getElementById('searchButtonText');
   const deviceList = document.getElementById('antDeviceList');
-  const deviceIdInput = document.getElementById('speedometerDeviceId');
   
   if (!searchButton || !deviceList) return;
   
@@ -1080,41 +1302,24 @@ async function searchANTDevices() {
   deviceList.classList.remove('hidden');
   deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">ANT+ 디바이스를 검색하는 중...</div>';
   
-  // 검색된 디바이스 목록
-  const foundDevices = [];
-  
   try {
-    // ANT+ 디바이스 검색 로직
-    // 실제 구현은 ANT+ 라이브러리나 Web USB/Serial API를 사용해야 합니다
-    // 여기서는 시뮬레이션으로 구현
-    
-    if (typeof connectANTSpeedometer === 'function') {
-      // 실제 ANT+ 검색 함수가 있는 경우
-      const devices = await scanANTDevices();
-      foundDevices.push(...devices);
-    } else {
-      // 시뮬레이션 모드: 실제 하드웨어가 없을 때 테스트용 디바이스 표시
-      // 실제 구현 시 이 부분은 제거하고 실제 검색 로직으로 대체
-      setTimeout(() => {
-        const simulatedDevices = [
-          { id: '12345', name: 'ANT+ Speed Sensor 1', type: 'Speed/Cadence' },
-          { id: '23456', name: 'ANT+ Speed Sensor 2', type: 'Speed/Cadence' },
-          { id: '34567', name: 'ANT+ Speed Sensor 3', type: 'Speed/Cadence' }
-        ];
-        displayANTDevices(simulatedDevices);
-      }, 2000);
-      return;
+    // ANT+ USB 스틱 연결 확인 및 연결
+    if (!window.antState.usbDevice) {
+      await connectANTUSBStick();
     }
     
-    // 실제 검색 결과 표시
-    if (foundDevices.length > 0) {
-      displayANTDevices(foundDevices);
+    // 디바이스 검색 시작
+    const devices = await scanANTDevices();
+    
+    // 검색 결과 표시
+    if (devices.length > 0) {
+      displayANTDevices(devices);
     } else {
       deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #999;">검색된 디바이스가 없습니다.<br>디바이스가 켜져 있고 페어링 모드인지 확인하세요.</div>';
     }
   } catch (error) {
     console.error('[ANT+ 디바이스 검색 오류]', error);
-    deviceList.innerHTML = `<div style="padding: 16px; text-align: center; color: #d32f2f;">검색 중 오류가 발생했습니다.<br>${error.message || '알 수 없는 오류'}</div>`;
+    deviceList.innerHTML = `<div style="padding: 16px; text-align: center; color: #d32f2f;">검색 중 오류가 발생했습니다.<br>${error.message || '알 수 없는 오류'}<br><small>ANT+ USB 스틱이 연결되어 있는지 확인하세요.</small></div>`;
   } finally {
     // 검색 완료 후 버튼 상태 복원
     searchButton.disabled = false;
@@ -1123,19 +1328,340 @@ async function searchANTDevices() {
 }
 
 /**
- * ANT+ 디바이스 스캔 (실제 구현 필요)
+ * ANT+ USB 스틱 연결 (Web USB API)
+ */
+async function connectANTUSBStick() {
+  try {
+    // ANT+ USB 스틱의 Vendor ID와 Product ID
+    // 일반적인 ANT+ USB 스틱: Garmin (0x0FCF), Dynastream (0x0FCF)
+    const filters = [
+      { vendorId: 0x0fcf }, // Garmin/Dynastream
+      { vendorId: 0x04d8 }, // Microchip (일부 ANT+ 스틱)
+    ];
+    
+    // Web USB API로 디바이스 요청
+    const device = await navigator.usb.requestDevice({ filters });
+    
+    // 디바이스 열기
+    await device.open();
+    
+    // 디바이스 구성 선택 (기본 구성)
+    await device.selectConfiguration(1);
+    
+    // 인터페이스 클레임 (ANT+ USB 스틱은 일반적으로 인터페이스 0 사용)
+    await device.claimInterface(0);
+    
+    // 엔드포인트 찾기
+    const interfaces = device.configuration.interfaces;
+    const interface = interfaces.find(i => i.interfaceNumber === 0);
+    
+    if (!interface) {
+      throw new Error('ANT+ 인터페이스를 찾을 수 없습니다.');
+    }
+    
+    // 입력/출력 엔드포인트 찾기
+    const inEndpoint = interface.alternate.endpoints.find(
+      e => e.direction === 'in' && e.type === 'interrupt'
+    );
+    const outEndpoint = interface.alternate.endpoints.find(
+      e => e.direction === 'out' && e.type === 'interrupt'
+    );
+    
+    if (!inEndpoint || !outEndpoint) {
+      throw new Error('ANT+ 엔드포인트를 찾을 수 없습니다.');
+    }
+    
+    // 전역 상태에 저장
+    window.antState.usbDevice = device;
+    window.antState.inEndpoint = inEndpoint.endpointNumber;
+    window.antState.outEndpoint = outEndpoint.endpointNumber;
+    
+    // ANT+ 초기화 메시지 전송
+    await initializeANT();
+    
+    console.log('[ANT+ USB 스틱] 연결 성공');
+    return device;
+  } catch (error) {
+    console.error('[ANT+ USB 스틱 연결 오류]', error);
+    if (error.name === 'NotFoundError') {
+      throw new Error('ANT+ USB 스틱을 찾을 수 없습니다. USB 스틱이 연결되어 있는지 확인하세요.');
+    }
+    throw error;
+  }
+}
+
+/**
+ * ANT+ 초기화
+ */
+async function initializeANT() {
+  // ANT+ 리셋 메시지 전송
+  await sendANTMessage(0x4A, [0x00]); // Reset System
+  
+  // 초기화 대기
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // 네트워크 키 설정 (ANT+ 공개 네트워크 키)
+  const networkKey = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45];
+  await sendANTMessage(0x46, [0x00, ...networkKey]); // Set Network Key
+  
+  // 채널 주기 설정
+  await sendANTMessage(0x60, [0x00, 0x00, 0x00]); // Set Channel Period (기본값)
+  
+  console.log('[ANT+] 초기화 완료');
+}
+
+/**
+ * ANT+ 메시지 전송
+ */
+async function sendANTMessage(messageId, data = []) {
+  if (!window.antState.usbDevice || !window.antState.outEndpoint) {
+    throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
+  }
+  
+  // ANT+ 메시지 포맷: [Sync(0xA4), Length, MessageID, Data..., Checksum]
+  const length = data.length + 1; // MessageID 포함
+  const checksum = calculateChecksum([messageId, ...data]);
+  const message = [0xA4, length, messageId, ...data, checksum];
+  
+  // 8바이트 패킷으로 전송
+  const packet = new Uint8Array(8);
+  packet.set(message.slice(0, 8), 0);
+  
+  await window.antState.usbDevice.transferOut(window.antState.outEndpoint, packet);
+  
+  // 메시지가 8바이트보다 길면 추가 패킷 전송
+  if (message.length > 8) {
+    for (let i = 8; i < message.length; i += 8) {
+      const remainingPacket = new Uint8Array(8);
+      remainingPacket.set(message.slice(i, i + 8), 0);
+      await window.antState.usbDevice.transferOut(window.antState.outEndpoint, remainingPacket);
+    }
+  }
+}
+
+/**
+ * ANT+ 체크섬 계산
+ */
+function calculateChecksum(data) {
+  let checksum = 0;
+  for (let byte of data) {
+    checksum ^= byte;
+  }
+  return checksum;
+}
+
+/**
+ * ANT+ 메시지 수신
+ */
+async function receiveANTMessage() {
+  if (!window.antState.usbDevice || !window.antState.inEndpoint) {
+    throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
+  }
+  
+  const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 8);
+  const data = new Uint8Array(result.data.buffer);
+  
+  // ANT+ 메시지 파싱
+  if (data[0] !== 0xA4) {
+    return null; // 동기화 바이트가 아님
+  }
+  
+  const length = data[1];
+  const messageId = data[2];
+  const messageData = Array.from(data.slice(3, 3 + length - 1));
+  const checksum = data[3 + length - 1];
+  
+  // 체크섬 검증
+  const calculatedChecksum = calculateChecksum([messageId, ...messageData]);
+  if (checksum !== calculatedChecksum) {
+    console.warn('[ANT+] 체크섬 오류');
+    return null;
+  }
+  
+  return { messageId, data: messageData };
+}
+
+/**
+ * ANT+ 디바이스 스캔
  */
 async function scanANTDevices() {
-  // 실제 ANT+ 디바이스 스캔 로직
-  // ANT+ USB 스틱이나 Web USB/Serial API를 사용하여 구현
-  // 반환 형식: [{ id: string, name: string, type: string }, ...]
+  if (!window.antState.usbDevice) {
+    throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
+  }
   
-  return new Promise((resolve) => {
-    // 시뮬레이션: 2초 후 빈 배열 반환 (실제 구현 시 제거)
-    setTimeout(() => {
-      resolve([]);
-    }, 2000);
-  });
+  // 기존 검색 결과 초기화
+  window.antState.foundDevices = [];
+  window.antState.isScanning = true;
+  
+  // 스캔 채널 열기 (채널 0 사용)
+  const channelNumber = 0;
+  window.antState.scanChannel = channelNumber;
+  
+  // 채널 할당
+  await sendANTMessage(0x42, [channelNumber, 0x20]); // Assign Channel (Scan Mode)
+  
+  // 채널 ID 설정 (Wildcard: 모든 디바이스 검색)
+  await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]); // Set Channel ID (Wildcard)
+  
+  // 채널 주기 설정 (8192 * 1/32768 초 = 250ms)
+  await sendANTMessage(0x60, [channelNumber, 0x00, 0x20]); // Set Channel Period
+  
+  // 채널 RF 주파수 설정 (ANT+ 공개 주파수: 57)
+  await sendANTMessage(0x45, [channelNumber, 0x39]); // Set Channel RF Frequency
+  
+  // 채널 열기
+  await sendANTMessage(0x4B, [channelNumber]); // Open Channel
+  
+  // 메시지 수신 시작
+  startANTMessageListener();
+  
+  // 10초간 스캔
+  await new Promise(resolve => setTimeout(resolve, 10000));
+  
+  // 스캔 중지
+  await sendANTMessage(0x4C, [channelNumber]); // Close Channel
+  window.antState.isScanning = false;
+  
+  return window.antState.foundDevices;
+}
+
+/**
+ * ANT+ 메시지 리스너 시작
+ */
+function startANTMessageListener() {
+  if (window.antMessageListener) {
+    return; // 이미 실행 중
+  }
+  
+  window.antMessageListener = true;
+  
+  const listen = async () => {
+    if (!window.antState.isScanning && !window.antState.usbDevice) {
+      window.antMessageListener = false;
+      return;
+    }
+    
+    try {
+      const message = await receiveANTMessage();
+      if (message) {
+        handleANTMessage(message);
+      }
+    } catch (error) {
+      console.error('[ANT+ 메시지 수신 오류]', error);
+    }
+    
+    // 다음 메시지 대기
+    setTimeout(listen, 10);
+  };
+  
+  listen();
+}
+
+/**
+ * ANT+ 메시지 처리
+ */
+function handleANTMessage(message) {
+  const { messageId, data } = message;
+  
+  switch (messageId) {
+    case 0x43: // Channel Event
+      handleChannelEvent(data);
+      break;
+    case 0x4E: // Broadcast Data
+      handleBroadcastData(data);
+      break;
+    case 0x4D: // Acknowledged Data
+      handleAcknowledgedData(data);
+      break;
+    default:
+      // 기타 메시지 무시
+      break;
+  }
+}
+
+/**
+ * 채널 이벤트 처리
+ */
+function handleChannelEvent(data) {
+  const channelNumber = data[0];
+  const messageId = data[1];
+  const messageCode = data[2];
+  
+  switch (messageCode) {
+    case 0x01: // RX_SEARCH_TIMEOUT
+      // 검색 타임아웃
+      break;
+    case 0x03: // RX_FAIL
+      // 수신 실패
+      break;
+    case 0x06: // TRANSFER_RX_FAILED
+      // 전송 수신 실패
+      break;
+    case 0x07: // TRANSFER_TX_COMPLETED
+      // 전송 완료
+      break;
+    case 0x08: // TRANSFER_TX_FAILED
+      // 전송 실패
+      break;
+    case 0x09: // CHANNEL_CLOSED
+      // 채널 닫힘
+      break;
+    case 0x0F: // RX_EXT_MESSAGE
+      // 확장 메시지 수신
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * 브로드캐스트 데이터 처리 (스캔 중 발견된 디바이스)
+ */
+function handleBroadcastData(data) {
+  if (!window.antState.isScanning) {
+    return;
+  }
+  
+  // 채널 번호는 첫 번째 바이트 (실제로는 메시지 구조에 따라 다를 수 있음)
+  // ANT+ 브로드캐스트 메시지 구조: [Channel, Data...]
+  const channelNumber = data[0];
+  const deviceData = data.slice(1);
+  
+  // 디바이스 번호 추출 (일반적으로 첫 2바이트)
+  const deviceNumber = (deviceData[1] << 8) | deviceData[0];
+  const deviceType = deviceData[2];
+  
+  // Speed/Cadence 센서 타입 확인 (0x79 또는 0x7A)
+  if (deviceType === 0x79 || deviceType === 0x7A) {
+    // 이미 발견된 디바이스인지 확인
+    const existingDevice = window.antState.foundDevices.find(
+      d => d.id === deviceNumber.toString()
+    );
+    
+    if (!existingDevice) {
+      // 새 디바이스 추가
+      const device = {
+        id: deviceNumber.toString(),
+        name: `ANT+ Speed Sensor ${deviceNumber}`,
+        type: 'Speed/Cadence',
+        deviceNumber: deviceNumber,
+        deviceType: deviceType
+      };
+      
+      window.antState.foundDevices.push(device);
+      console.log('[ANT+] 디바이스 발견:', device);
+      
+      // UI 업데이트
+      displayANTDevices(window.antState.foundDevices);
+    }
+  }
+}
+
+/**
+ * 확인된 데이터 처리
+ */
+function handleAcknowledgedData(data) {
+  // 확인된 데이터 처리 (필요시 구현)
 }
 
 /**
