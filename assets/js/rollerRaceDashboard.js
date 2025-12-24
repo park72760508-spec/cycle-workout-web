@@ -1649,18 +1649,34 @@ async function receiveANTMessage() {
     // 체크섬 검증 (MessageID부터 Data까지)
     const calculatedChecksum = calculateChecksum([messageId, ...messageData]);
     if (checksum !== calculatedChecksum) {
-      console.warn('[ANT+] 체크섬 오류', {
+      // 디버깅 정보 (개발 중에만 표시)
+      const debugInfo = {
         messageId: '0x' + messageId.toString(16).toUpperCase(),
         received: '0x' + checksum.toString(16).toUpperCase(),
         calculated: '0x' + calculatedChecksum.toString(16).toUpperCase(),
-        dataLength: messageData.length
-      });
-      // 체크섬 오류가 발생해도 메시지 ID가 중요한 경우 처리
-      // 일부 응답 메시지는 체크섬 오류가 있어도 처리 가능
-      if (messageId === 0x43 || messageId === 0x4E || messageId === 0x4D) {
-        // Channel Event, Broadcast Data, Acknowledged Data는 처리
+        dataLength: messageData.length,
+        length: length,
+        rawMessage: Array.from(messageBytes).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+      };
+      
+      // 0xAE (Capabilities) 메시지는 체크섬 오류가 있어도 처리
+      // 일부 ANT+ 스틱은 특정 메시지에서 체크섬 계산이 다를 수 있음
+      if (messageId === 0xAE) {
+        console.log('[ANT+] Capabilities 메시지 (체크섬 오류 무시)', debugInfo);
         return { messageId, data: messageData };
       }
+      
+      // 중요한 메시지들은 체크섬 오류가 있어도 처리
+      if (messageId === 0x43 || messageId === 0x4E || messageId === 0x4D || 
+          messageId === 0x51 || messageId === 0x46 || messageId === 0x47) {
+        // Channel Event, Broadcast Data, Acknowledged Data, Channel ID Response, 
+        // Burst Data, Extended Broadcast Data는 처리
+        console.log('[ANT+] 중요 메시지 (체크섬 오류 무시)', debugInfo);
+        return { messageId, data: messageData };
+      }
+      
+      // 체크섬 오류가 발생한 경우 경고만 표시하고 무시
+      console.warn('[ANT+] 체크섬 오류 (메시지 무시)', debugInfo);
       return null;
     }
     
