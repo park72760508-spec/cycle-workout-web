@@ -9065,14 +9065,14 @@ button[aria-disabled="true"] {
   line-height: 0;
 }
 
-/* 최대/평균속도 단위 (18px의 30% = 5.4px) */
+/* 최대/평균속도 단위 (18px의 40% = 7.2px) */
 .speed-stat-row .speed-unit-sup {
-  font-size: 5.4px; /* 18px * 0.3 */
+  font-size: 7.2px; /* 18px * 0.4 */
 }
 
-/* 거리 단위 (18px의 30% = 5.4px) */
+/* 거리 단위 (18px의 40% = 7.2px) */
 .distance-display-right .distance-unit-sup {
-  font-size: 5.4px; /* 18px * 0.3 */
+  font-size: 7.2px; /* 18px * 0.4 */
 }
 
 .speedometer-footer {
