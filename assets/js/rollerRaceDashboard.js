@@ -1656,41 +1656,61 @@ async function receiveANTMessage() {
     window.antState.messageBuffer = window.antState.messageBuffer.slice(totalLength);
     
     // 메시지 파싱
+    // ANT+ 메시지 구조: [Sync(0xA4), Length, MessageID, Data..., Checksum]
+    // Length 필드는 MessageID + Data의 바이트 수를 나타냄
     const messageId = messageBytes[2];
-    const messageData = messageBytes.slice(3, 3 + length - 1);
-    const checksum = messageBytes[3 + length - 1];
+    const dataLength = length - 1; // Length에서 MessageID(1바이트) 제외
+    const messageData = messageBytes.slice(3, 3 + dataLength);
+    const checksum = messageBytes[2 + length]; // Sync(1) + Length(1) + MessageID(1) + Data(length-1) = 2 + length
+    
+    // 디버깅: 특정 메시지 타입에 대한 상세 로그
+    const isImportantMessage = messageId === 0x43 || messageId === 0x4E || messageId === 0x4D || 
+                                messageId === 0x51 || messageId === 0x46 || messageId === 0x47 || 
+                                messageId === 0xAE;
     
     // 체크섬 검증 (MessageID부터 Data까지)
     const calculatedChecksum = calculateChecksum([messageId, ...messageData]);
     if (checksum !== calculatedChecksum) {
-      // 디버깅 정보 (개발 중에만 표시)
+      // 디버깅 정보
       const debugInfo = {
         messageId: '0x' + messageId.toString(16).toUpperCase(),
         received: '0x' + checksum.toString(16).toUpperCase(),
         calculated: '0x' + calculatedChecksum.toString(16).toUpperCase(),
         dataLength: messageData.length,
         length: length,
-        rawMessage: Array.from(messageBytes).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+        rawMessage: Array.from(messageBytes).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
+        parsedData: Array.from(messageData).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
       };
       
-      // 0xAE (Capabilities) 메시지는 체크섬 오류가 있어도 처리
-      // 일부 ANT+ 스틱은 특정 메시지에서 체크섬 계산이 다를 수 있음
-      if (messageId === 0xAE) {
-        console.log('[ANT+] Capabilities 메시지 (체크섬 오류 무시)', debugInfo);
+      // 중요한 메시지들은 체크섬 오류가 있어도 처리
+      if (messageId === 0x51) {
+        // Channel ID Response는 매우 중요하므로 체크섬 오류가 있어도 처리
+        console.log('[ANT+] Channel ID Response (체크섬 오류 무시)', debugInfo);
         return { messageId, data: messageData };
       }
       
-      // 중요한 메시지들은 체크섬 오류가 있어도 처리
       if (messageId === 0x43 || messageId === 0x4E || messageId === 0x4D || 
-          messageId === 0x51 || messageId === 0x46 || messageId === 0x47) {
-        // Channel Event, Broadcast Data, Acknowledged Data, Channel ID Response, 
+          messageId === 0x46 || messageId === 0x47) {
+        // Channel Event, Broadcast Data, Acknowledged Data, 
         // Burst Data, Extended Broadcast Data는 처리
         console.log('[ANT+] 중요 메시지 (체크섬 오류 무시)', debugInfo);
         return { messageId, data: messageData };
       }
       
+      // 0xAE (Capabilities) 메시지는 체크섬 오류가 있어도 처리하되 로그는 최소화
+      if (messageId === 0xAE) {
+        // Capabilities 메시지는 너무 자주 오므로 로그 최소화
+        if (!window.antState.lastCapabilitiesLog || Date.now() - window.antState.lastCapabilitiesLog > 5000) {
+          console.log('[ANT+] Capabilities 메시지 (체크섬 오류 무시)', debugInfo);
+          window.antState.lastCapabilitiesLog = Date.now();
+        }
+        return { messageId, data: messageData };
+      }
+      
       // 체크섬 오류가 발생한 경우 경고만 표시하고 무시
-      console.warn('[ANT+] 체크섬 오류 (메시지 무시)', debugInfo);
+      if (isImportantMessage) {
+        console.warn('[ANT+] 체크섬 오류 (메시지 무시)', debugInfo);
+      }
       return null;
     }
     
@@ -1962,27 +1982,42 @@ function handleChannelIDResponse(data) {
     return;
   }
   
-  // Channel ID Response 메시지 구조: [Channel, DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType]
-  if (data.length < 5) {
+  // Channel ID Response 메시지 구조 확인
+  // 실제 구조는 ANT+ 스틱에 따라 다를 수 있음
+  console.log('[ANT+] Channel ID Response 수신 (원시 데이터):', {
+    dataLength: data.length,
+    rawData: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+  });
+  
+  // 데이터 길이에 따라 다른 구조로 파싱 시도
+  let channelNumber, deviceNumber, deviceType, transmissionType;
+  
+  if (data.length >= 5) {
+    // 구조 1: [Channel, DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType]
+    channelNumber = data[0];
+    deviceNumber = (data[2] << 8) | data[1]; // LSB, MSB 순서
+    deviceType = data[3];
+    transmissionType = data[4];
+  } else if (data.length >= 4) {
+    // 구조 2: [DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType] (Channel 없음)
+    channelNumber = ANT_CHANNEL_CONFIG.SCAN_CHANNEL; // 스캔 채널로 가정
+    deviceNumber = (data[1] << 8) | data[0]; // LSB, MSB 순서
+    deviceType = data[2];
+    transmissionType = data[3];
+  } else {
     console.warn('[ANT+] Channel ID Response 데이터 길이 부족:', data.length, '데이터:', Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '));
     return;
   }
   
-  const channelNumber = data[0];
-  const deviceNumber = (data[2] << 8) | data[1]; // LSB, MSB 순서
-  const deviceType = data[3];
-  const transmissionType = data[4];
-  
-  console.log('[ANT+] Channel ID Response 수신:', {
+  console.log('[ANT+] Channel ID Response 파싱 결과:', {
     channel: channelNumber,
     deviceNumber: deviceNumber,
     deviceType: '0x' + deviceType.toString(16).toUpperCase(),
-    transmissionType: transmissionType,
-    rawData: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+    transmissionType: transmissionType
   });
   
-  // 스캔 채널의 응답만 처리
-  if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
+  // 스캔 채널의 응답만 처리 (또는 Channel 필드가 없는 경우 모두 처리)
+  if (data.length >= 5 && channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
     console.log('[ANT+] Channel ID Response가 스캔 채널이 아님:', channelNumber, 'vs', ANT_CHANNEL_CONFIG.SCAN_CHANNEL);
     return;
   }
