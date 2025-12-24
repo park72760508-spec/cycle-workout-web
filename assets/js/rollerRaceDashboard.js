@@ -1906,15 +1906,26 @@ function startANTMessageListener() {
 function handleANTMessage(message) {
   const { messageId, data } = message;
   
-  // 디버깅: 스캔 중인 경우 모든 메시지 로그 (너무 많이 출력되지 않도록 제한)
+  // 디버깅: 스캔 중인 경우 중요한 메시지만 로그
   if (window.antState.isScanning) {
-    if (!window.antState.lastMessageLog || Date.now() - window.antState.lastMessageLog > 1000) {
-      console.log('[ANT+ 메시지] 수신:', {
+    // Channel ID Response는 항상 로그 출력
+    if (messageId === 0x51) {
+      console.log('[ANT+ 메시지] Channel ID Response 수신:', {
         messageId: '0x' + messageId.toString(16).toUpperCase(),
         dataLength: data.length,
-        data: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+        data: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
+        decimal: Array.from(data).join(', ')
       });
-      window.antState.lastMessageLog = Date.now();
+    } else if (messageId === 0x4E || messageId === 0x43) {
+      // Broadcast Data와 Channel Event도 로그 출력
+      if (!window.antState.lastMessageLog || Date.now() - window.antState.lastMessageLog > 2000) {
+        console.log('[ANT+ 메시지] 수신:', {
+          messageId: '0x' + messageId.toString(16).toUpperCase(),
+          dataLength: data.length,
+          data: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+        });
+        window.antState.lastMessageLog = Date.now();
+      }
     }
   }
   
@@ -2028,10 +2039,11 @@ function handleChannelIDResponse(data) {
   }
   
   // Channel ID Response 메시지 구조 확인
-  // 실제 구조는 ANT+ 스틱에 따라 다를 수 있음
+  // ANT+ Channel ID Response 구조: [Channel, DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType]
   console.log('[ANT+] Channel ID Response 수신 (원시 데이터):', {
     dataLength: data.length,
-    rawData: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+    rawData: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
+    decimal: Array.from(data).join(', ')
   });
   
   // 데이터 길이에 따라 다른 구조로 파싱 시도
@@ -2043,23 +2055,34 @@ function handleChannelIDResponse(data) {
     deviceNumber = (data[2] << 8) | data[1]; // LSB, MSB 순서
     deviceType = data[3];
     transmissionType = data[4];
+    
+    console.log('[ANT+] Channel ID Response 파싱 (구조 1):', {
+      channel: channelNumber,
+      deviceNumberLSB: '0x' + data[1].toString(16).toUpperCase(),
+      deviceNumberMSB: '0x' + data[2].toString(16).toUpperCase(),
+      deviceNumber: deviceNumber,
+      deviceType: '0x' + deviceType.toString(16).toUpperCase(),
+      transmissionType: transmissionType
+    });
   } else if (data.length >= 4) {
     // 구조 2: [DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType] (Channel 없음)
     channelNumber = ANT_CHANNEL_CONFIG.SCAN_CHANNEL; // 스캔 채널로 가정
     deviceNumber = (data[1] << 8) | data[0]; // LSB, MSB 순서
     deviceType = data[2];
     transmissionType = data[3];
+    
+    console.log('[ANT+] Channel ID Response 파싱 (구조 2):', {
+      channel: channelNumber,
+      deviceNumberLSB: '0x' + data[0].toString(16).toUpperCase(),
+      deviceNumberMSB: '0x' + data[1].toString(16).toUpperCase(),
+      deviceNumber: deviceNumber,
+      deviceType: '0x' + deviceType.toString(16).toUpperCase(),
+      transmissionType: transmissionType
+    });
   } else {
     console.warn('[ANT+] Channel ID Response 데이터 길이 부족:', data.length, '데이터:', Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '));
     return;
   }
-  
-  console.log('[ANT+] Channel ID Response 파싱 결과:', {
-    channel: channelNumber,
-    deviceNumber: deviceNumber,
-    deviceType: '0x' + deviceType.toString(16).toUpperCase(),
-    transmissionType: transmissionType
-  });
   
   // 스캔 채널의 응답만 처리 (또는 Channel 필드가 없는 경우 모두 처리)
   if (data.length >= 5 && channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
