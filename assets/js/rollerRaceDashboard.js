@@ -1296,6 +1296,7 @@ function showAddSpeedometerModal() {
 
 /**
  * ANT+ 디바이스 검색
+ * 사용자 제스처 컨텍스트를 유지하기 위해 동기적으로 USB 디바이스 선택
  */
 async function searchANTDevices() {
   const searchButton = document.getElementById('btnSearchANTDevices');
@@ -1306,15 +1307,21 @@ async function searchANTDevices() {
   
   // 검색 중 상태로 변경
   searchButton.disabled = true;
-  if (searchButtonText) searchButtonText.textContent = '검색 중...';
+  if (searchButtonText) searchButtonText.textContent = 'USB 스틱 연결 중...';
   deviceList.classList.remove('hidden');
-  deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">ANT+ 디바이스를 검색하는 중...</div>';
+  deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 스틱을 선택해주세요...</div>';
   
   try {
     // ANT+ USB 스틱 연결 확인 및 연결
+    // 사용자 제스처가 있는 동안 즉시 호출해야 함
     if (!window.antState.usbDevice) {
+      // 사용자 제스처 컨텍스트에서 직접 호출
       await connectANTUSBStick();
     }
+    
+    // USB 스틱 연결 후 검색 시작
+    if (searchButtonText) searchButtonText.textContent = '디바이스 검색 중...';
+    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">ANT+ 디바이스를 검색하는 중...</div>';
     
     // 디바이스 검색 시작
     const devices = await scanANTDevices();
@@ -1327,11 +1334,26 @@ async function searchANTDevices() {
     }
   } catch (error) {
     console.error('[ANT+ 디바이스 검색 오류]', error);
-    deviceList.innerHTML = `<div style="padding: 16px; text-align: center; color: #d32f2f;">검색 중 오류가 발생했습니다.<br>${error.message || '알 수 없는 오류'}<br><small>ANT+ USB 스틱이 연결되어 있는지 확인하세요.</small></div>`;
+    
+    // SecurityError인 경우 사용자에게 안내
+    if (error.name === 'SecurityError' || error.message.includes('user gesture')) {
+      deviceList.innerHTML = `<div style="padding: 16px; text-align: center; color: #d32f2f;">
+        USB 디바이스 선택 권한 오류가 발생했습니다.<br>
+        <small>버튼을 다시 클릭해주세요.</small>
+      </div>`;
+    } else {
+      deviceList.innerHTML = `<div style="padding: 16px; text-align: center; color: #d32f2f;">검색 중 오류가 발생했습니다.<br>${error.message || '알 수 없는 오류'}<br><small>ANT+ USB 스틱이 연결되어 있는지 확인하세요.</small></div>`;
+    }
   } finally {
     // 검색 완료 후 버튼 상태 복원
     searchButton.disabled = false;
-    if (searchButtonText) searchButtonText.textContent = '다시 검색';
+    if (searchButtonText) {
+      if (window.antState.usbDevice) {
+        searchButtonText.textContent = '다시 검색';
+      } else {
+        searchButtonText.textContent = '디바이스 검색';
+      }
+    }
   }
 }
 
@@ -1340,6 +1362,12 @@ async function searchANTDevices() {
  */
 async function connectANTUSBStick() {
   try {
+    // 이미 연결된 디바이스가 있으면 재사용
+    if (window.antState.usbDevice && window.antState.usbDevice.opened) {
+      console.log('[ANT+ USB 스틱] 이미 연결된 디바이스 재사용');
+      return window.antState.usbDevice;
+    }
+    
     // ANT+ USB 스틱의 Vendor ID 목록
     // 일반적인 ANT+ USB 스틱: Garmin (0x0FCF), Dynastream (0x0FCF), Tacx (0x0FCF 또는 다른 ID)
     const filters = [
@@ -1349,12 +1377,21 @@ async function connectANTUSBStick() {
     ];
     
     let device;
+    
+    // 사용자 제스처 컨텍스트에서 즉시 호출
+    // requestDevice는 동기적으로 호출되어야 사용자 제스처가 유지됨
     try {
-      // 필터를 사용하여 디바이스 요청
+      // 필터를 사용하여 디바이스 요청 (사용자 제스처 컨텍스트에서 즉시 실행)
       device = await navigator.usb.requestDevice({ filters });
     } catch (filterError) {
       // 필터로 찾지 못한 경우, 필터 없이 모든 USB 디바이스 목록 표시
+      // 여전히 사용자 제스처 컨텍스트 내에서 실행
       console.log('[ANT+] 필터로 디바이스를 찾지 못함, 전체 목록에서 선택');
+      
+      if (filterError.name === 'SecurityError') {
+        throw new Error('USB 디바이스 접근 권한이 필요합니다. 버튼을 다시 클릭해주세요.');
+      }
+      
       try {
         device = await navigator.usb.requestDevice({ 
           filters: [] // 필터 없음 - 모든 USB 디바이스 표시
@@ -1363,6 +1400,9 @@ async function connectANTUSBStick() {
         // 사용자가 취소한 경우
         if (noFilterError.name === 'NotFoundError') {
           throw new Error('ANT+ USB 스틱을 찾을 수 없습니다. USB 스틱이 연결되어 있고, 디바이스 선택 창에서 Tacx ANT+ USB 수신기를 선택해주세요.');
+        }
+        if (noFilterError.name === 'SecurityError') {
+          throw new Error('USB 디바이스 접근 권한이 필요합니다. 버튼을 다시 클릭해주세요.');
         }
         throw noFilterError;
       }
