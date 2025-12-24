@@ -1443,25 +1443,20 @@ async function searchANTDevices() {
  * 이 함수는 동기적으로 호출되어야 함
  */
 function requestANTUSBDevice() {
-  // ANT+ USB 스틱의 Vendor ID 목록
+  // Tacx T2028(0x1008)을 포함하도록 필터 수정
   const filters = [
-    { vendorId: 0x0fcf }, // Garmin/Dynastream/Tacx (대부분의 ANT+ 스틱)
-    { vendorId: 0x04d8 }, // Microchip (일부 ANT+ 스틱)
-    { vendorId: 0x0483 }, // STMicroelectronics (일부 ANT+ 스틱)
+    { vendorId: 0x0fcf, productId: 0x1008 }, // Tacx T2028 및 구형 스틱
+    { vendorId: 0x0fcf, productId: 0x1009 }, // 신형 m-stick
+    { vendorId: 0x0fcf } // 또는 그냥 제조사(Garmin/Dynastream)만 보고 다 찾기
   ];
   
-  // 사용자 제스처 컨텍스트에서 즉시 호출
-  try {
-    return navigator.usb.requestDevice({ filters });
-  } catch (filterError) {
-    // 필터로 찾지 못한 경우, 필터 없이 모든 USB 디바이스 목록 표시
-    console.log('[ANT+] 필터로 디바이스를 찾지 못함, 전체 목록에서 선택');
-    if (filterError.name === 'SecurityError') {
-      throw filterError;
-    }
-    return navigator.usb.requestDevice({ filters: [] });
-  }
+  // 만약 위 필터로도 안 되면, 아래처럼 필터를 비워서 모든 USB를 다 띄우게 하세요 (가장 확실)
+  // return navigator.usb.requestDevice({ filters: [] }); 
+  
+  return navigator.usb.requestDevice({ filters: filters });
 }
+
+
 
 /**
  * 요청된 USB 디바이스로 연결 설정
@@ -3247,6 +3242,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
