@@ -1340,54 +1340,115 @@ async function searchANTDevices() {
  */
 async function connectANTUSBStick() {
   try {
-    // ANT+ USB 스틱의 Vendor ID와 Product ID
-    // 일반적인 ANT+ USB 스틱: Garmin (0x0FCF), Dynastream (0x0FCF)
+    // ANT+ USB 스틱의 Vendor ID 목록
+    // 일반적인 ANT+ USB 스틱: Garmin (0x0FCF), Dynastream (0x0FCF), Tacx (0x0FCF 또는 다른 ID)
     const filters = [
-      { vendorId: 0x0fcf }, // Garmin/Dynastream
+      { vendorId: 0x0fcf }, // Garmin/Dynastream/Tacx (대부분의 ANT+ 스틱)
       { vendorId: 0x04d8 }, // Microchip (일부 ANT+ 스틱)
+      { vendorId: 0x0483 }, // STMicroelectronics (일부 ANT+ 스틱)
     ];
     
-    // Web USB API로 디바이스 요청
-    const device = await navigator.usb.requestDevice({ filters });
+    let device;
+    try {
+      // 필터를 사용하여 디바이스 요청
+      device = await navigator.usb.requestDevice({ filters });
+    } catch (filterError) {
+      // 필터로 찾지 못한 경우, 필터 없이 모든 USB 디바이스 목록 표시
+      console.log('[ANT+] 필터로 디바이스를 찾지 못함, 전체 목록에서 선택');
+      try {
+        device = await navigator.usb.requestDevice({ 
+          filters: [] // 필터 없음 - 모든 USB 디바이스 표시
+        });
+      } catch (noFilterError) {
+        // 사용자가 취소한 경우
+        if (noFilterError.name === 'NotFoundError') {
+          throw new Error('ANT+ USB 스틱을 찾을 수 없습니다. USB 스틱이 연결되어 있고, 디바이스 선택 창에서 Tacx ANT+ USB 수신기를 선택해주세요.');
+        }
+        throw noFilterError;
+      }
+    }
+    
+    // 디바이스 정보 로그
+    console.log('[ANT+ USB 스틱] 발견된 디바이스:', {
+      vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+      productId: '0x' + device.productId.toString(16).toUpperCase(),
+      manufacturerName: device.manufacturerName,
+      productName: device.productName
+    });
     
     // 디바이스 열기
     await device.open();
     
-    // 디바이스 구성 선택 (기본 구성)
-    await device.selectConfiguration(1);
-    
-    // 인터페이스 클레임 (ANT+ USB 스틱은 일반적으로 인터페이스 0 사용)
-    await device.claimInterface(0);
-    
-    // 엔드포인트 찾기
-    const interfaces = device.configuration.interfaces;
-    const interface = interfaces.find(i => i.interfaceNumber === 0);
-    
-    if (!interface) {
-      throw new Error('ANT+ 인터페이스를 찾을 수 없습니다.');
+    // 디바이스 구성 확인 및 선택
+    const configurations = device.configurations;
+    if (configurations.length === 0) {
+      throw new Error('디바이스 구성이 없습니다.');
     }
     
-    // 입력/출력 엔드포인트 찾기
-    const inEndpoint = interface.alternate.endpoints.find(
-      e => e.direction === 'in' && e.type === 'interrupt'
+    // 첫 번째 구성 선택 (일반적으로 구성 1)
+    const configNumber = configurations[0].configurationValue || 1;
+    await device.selectConfiguration(configNumber);
+    
+    // 인터페이스 찾기 (ANT+ USB 스틱은 일반적으로 인터페이스 0 사용)
+    const interfaces = configurations[0].interfaces;
+    let targetInterface = null;
+    
+    // 인터페이스 0부터 순차적으로 확인
+    for (let i = 0; i < interfaces.length; i++) {
+      const intf = interfaces[i];
+      // 인터럽트 또는 벌크 타입 엔드포인트가 있는 인터페이스 찾기
+      const alt = intf.alternates.find(alt => 
+        alt.endpoints.some(ep => (ep.type === 'interrupt' || ep.type === 'bulk'))
+      );
+      if (alt) {
+        targetInterface = { interfaceNumber: intf.interfaceNumber, alternate: alt };
+        break;
+      }
+    }
+    
+    if (!targetInterface) {
+      // 인터페이스 0을 기본으로 시도
+      targetInterface = interfaces.find(i => i.interfaceNumber === 0);
+      if (!targetInterface) {
+        throw new Error('ANT+ 인터페이스를 찾을 수 없습니다.');
+      }
+      targetInterface = {
+        interfaceNumber: targetInterface.interfaceNumber,
+        alternate: targetInterface.alternates[0]
+      };
+    }
+    
+    // 인터페이스 클레임
+    await device.claimInterface(targetInterface.interfaceNumber);
+    
+    // 입력/출력 엔드포인트 찾기 (interrupt 또는 bulk 타입)
+    const inEndpoint = targetInterface.alternate.endpoints.find(
+      e => e.direction === 'in' && (e.type === 'interrupt' || e.type === 'bulk')
     );
-    const outEndpoint = interface.alternate.endpoints.find(
-      e => e.direction === 'out' && e.type === 'interrupt'
+    const outEndpoint = targetInterface.alternate.endpoints.find(
+      e => e.direction === 'out' && (e.type === 'interrupt' || e.type === 'bulk')
     );
     
     if (!inEndpoint || !outEndpoint) {
-      throw new Error('ANT+ 엔드포인트를 찾을 수 없습니다.');
+      throw new Error('ANT+ 엔드포인트를 찾을 수 없습니다. (입력/출력 엔드포인트 필요)');
     }
     
     // 전역 상태에 저장
     window.antState.usbDevice = device;
     window.antState.inEndpoint = inEndpoint.endpointNumber;
     window.antState.outEndpoint = outEndpoint.endpointNumber;
+    window.antState.interfaceNumber = targetInterface.interfaceNumber;
     
     // ANT+ 초기화 메시지 전송
     await initializeANT();
     
-    console.log('[ANT+ USB 스틱] 연결 성공');
+    console.log('[ANT+ USB 스틱] 연결 성공', {
+      vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+      productId: '0x' + device.productId.toString(16).toUpperCase(),
+      interface: targetInterface.interfaceNumber,
+      inEndpoint: inEndpoint.endpointNumber,
+      outEndpoint: outEndpoint.endpointNumber
+    });
     return device;
   } catch (error) {
     console.error('[ANT+ USB 스틱 연결 오류]', error);
