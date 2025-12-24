@@ -900,17 +900,18 @@ async function searchANTDevices() {
 /**
  * UI Helper Functions
  */
-/**
- * [수정] 필터 없이 모든 USB 장치를 검색하도록 변경
- */
 function requestANTUSBDevice() {
-  // 기존 필터 코드는 주석 처리
-  // const filters = [{ vendorId: 0x0fcf }, { vendorId: 0x04d8 }, { vendorId: 0x0483 }];
+  // Tacx T2028(0x1008)을 포함하도록 필터 수정
+  const filters = [
+    { vendorId: 0x0fcf, productId: 0x1008 }, // Tacx T2028 및 구형 스틱
+    { vendorId: 0x0fcf, productId: 0x1009 }, // 신형 m-stick
+    { vendorId: 0x0fcf } // 또는 그냥 제조사(Garmin/Dynastream)만 보고 다 찾기
+  ];
   
-  // filters: [] 빈 배열을 넘기면 모든 장치를 보여줍니다.
-  // 주의: 브라우저 보안 정책상 filters: []가 허용되지 않는 경우도 있으나,
-  // 최신 크롬에서는 보통 동작합니다. 만약 에러가 나면 아래 '2번 방법'으로 ID를 확인해야 합니다.
-  return navigator.usb.requestDevice({ filters: [] });
+  // 만약 위 필터로도 안 되면, 아래처럼 필터를 비워서 모든 USB를 다 띄우게 하세요 (가장 확실)
+  // return navigator.usb.requestDevice({ filters: [] }); 
+  
+  return navigator.usb.requestDevice({ filters: filters });
 }
 
 async function connectUSBStickDirectly() {
