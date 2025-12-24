@@ -1,6 +1,6 @@
 /**
  * 실내 평로라 대회 대시보드
- * ANT+ 1:N 연결로 10개 속도계 센서 관리
+ * ANT+ 1:N 연결로 최대 15개 속도계 센서 관리
  */
 
 // 바퀴 규격 데이터 (로드바이크 700C 휠셋)
@@ -60,6 +60,14 @@ window.antState = {
   scanChannel: null, // 스캔 채널 번호
   foundDevices: [], // 검색된 디바이스 목록
   connectedChannels: {} // 연결된 채널 (deviceId -> channelNumber)
+};
+
+// ANT+ 채널 설정
+const ANT_CHANNEL_CONFIG = {
+  MAX_CHANNELS: 15, // 최대 동시 연결 채널 수 (스캔 채널 0번 제외, 1-15번 사용)
+  SCAN_CHANNEL: 0, // 스캔용 채널 번호
+  MIN_CHANNEL: 1, // 사용 가능한 최소 채널 번호
+  MAX_CHANNEL: 15 // 사용 가능한 최대 채널 번호
 };
 
 // 속도계 데이터 구조
@@ -1002,14 +1010,14 @@ async function connectANTSpeedometer(deviceId) {
     throw new Error('유효하지 않은 디바이스 ID입니다.');
   }
   
-  // 사용 가능한 채널 찾기 (0-7, 스캔 채널 제외)
-  let channelNumber = 1;
-  while (channelNumber <= 7 && window.antState.connectedChannels[channelNumber]) {
+  // 사용 가능한 채널 찾기 (1-15, 스캔 채널 0번 제외)
+  let channelNumber = ANT_CHANNEL_CONFIG.MIN_CHANNEL;
+  while (channelNumber <= ANT_CHANNEL_CONFIG.MAX_CHANNEL && window.antState.connectedChannels[channelNumber]) {
     channelNumber++;
   }
   
-  if (channelNumber > 7) {
-    throw new Error('사용 가능한 채널이 없습니다. (최대 7개 디바이스 연결 가능)');
+  if (channelNumber > ANT_CHANNEL_CONFIG.MAX_CHANNEL) {
+    throw new Error(`사용 가능한 채널이 없습니다. (최대 ${ANT_CHANNEL_CONFIG.MAX_CHANNELS}개 디바이스 연결 가능)`);
   }
   
   // 채널 할당
@@ -1494,7 +1502,7 @@ async function scanANTDevices() {
   window.antState.isScanning = true;
   
   // 스캔 채널 열기 (채널 0 사용)
-  const channelNumber = 0;
+  const channelNumber = ANT_CHANNEL_CONFIG.SCAN_CHANNEL;
   window.antState.scanChannel = channelNumber;
   
   // 채널 할당
