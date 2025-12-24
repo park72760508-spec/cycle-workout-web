@@ -2233,8 +2233,16 @@
             <input type="text" id="speedometerName" placeholder="예: 속도계 1">
           </div>
           <div class="form-group">
-            <label>ANT+ 디바이스 ID</label>
-            <input type="text" id="speedometerDeviceId" placeholder="자동 검색 또는 수동 입력">
+            <label>ANT+ 디바이스 선택</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button type="button" class="btn btn-primary" id="btnSearchANTDevices" onclick="searchANTDevices()" style="flex: 0 0 auto;">
+                <span id="searchButtonText">디바이스 검색</span>
+              </button>
+              <input type="text" id="speedometerDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+            </div>
+            <div id="antDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
+              <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
+            </div>
           </div>
         </div>
         <div class="modal-footer">
