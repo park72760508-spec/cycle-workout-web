@@ -1708,12 +1708,21 @@ async function scanANTDevices() {
   // 메시지 수신 시작
   startANTMessageListener();
   
-  // 10초간 스캔
-  await new Promise(resolve => setTimeout(resolve, 10000));
+  // 스캔 시작 후 Channel ID 요청을 주기적으로 보내어 디바이스 정보 얻기
+  startChannelIDRequest(channelNumber);
+  
+  // 15초간 스캔 (스피드센서 검색을 위해 시간 연장)
+  await new Promise(resolve => setTimeout(resolve, 15000));
   
   // 스캔 중지
   await sendANTMessage(0x4C, [channelNumber]); // Close Channel
   window.antState.isScanning = false;
+  
+  // Channel ID 요청 중지
+  if (window.antChannelIDRequestInterval) {
+    clearInterval(window.antChannelIDRequestInterval);
+    window.antChannelIDRequestInterval = null;
+  }
   
   return window.antState.foundDevices;
 }
@@ -1766,6 +1775,9 @@ function handleANTMessage(message) {
     case 0x4D: // Acknowledged Data
       handleAcknowledgedData(data);
       break;
+    case 0x51: // Channel ID Response
+      handleChannelIDResponse(data);
+      break;
     default:
       // 기타 메시지 무시
       break;
@@ -1815,39 +1827,98 @@ function handleBroadcastData(data) {
     return;
   }
   
-  // 채널 번호는 첫 번째 바이트 (실제로는 메시지 구조에 따라 다를 수 있음)
-  // ANT+ 브로드캐스트 메시지 구조: [Channel, Data...]
+  // ANT+ 브로드캐스트 메시지 구조: [Channel, Data0-7]
+  // 스캔 채널(0번)의 브로드캐스트 데이터만 처리
   const channelNumber = data[0];
-  const deviceData = data.slice(1);
+  if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
+    return;
+  }
   
-  // 디바이스 번호 추출 (일반적으로 첫 2바이트)
-  const deviceNumber = (deviceData[1] << 8) | deviceData[0];
-  const deviceType = deviceData[2];
+  // 브로드캐스트 데이터는 8바이트
+  // 실제 디바이스 정보는 Channel ID Response를 통해 얻어야 함
+  // 여기서는 브로드캐스트 데이터가 수신되었다는 것만 확인
+}
+
+/**
+ * Channel ID Response 처리 (스캔 중 발견된 디바이스 정보)
+ * 이 메시지에서 실제 디바이스 타입과 번호를 얻을 수 있음
+ */
+function handleChannelIDResponse(data) {
+  if (!window.antState.isScanning) {
+    return;
+  }
   
-  // Speed/Cadence 센서 타입 확인 (0x79 또는 0x7A)
+  // Channel ID Response 메시지 구조: [Channel, DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType]
+  if (data.length < 5) {
+    return;
+  }
+  
+  const channelNumber = data[0];
+  const deviceNumber = (data[2] << 8) | data[1]; // LSB, MSB 순서
+  const deviceType = data[3];
+  const transmissionType = data[4];
+  
+  // 스캔 채널의 응답만 처리
+  if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
+    return;
+  }
+  
+  // Speed/Cadence 센서 타입 확인
+  // 0x79: Speed and Cadence Sensor (Combined) - 속도와 케이던스 모두
+  // 0x7A: Speed Sensor (Separate) - 속도만
+  // 0x78: Cadence Sensor (Separate) - 케이던스만
   if (deviceType === 0x79 || deviceType === 0x7A) {
     // 이미 발견된 디바이스인지 확인
     const existingDevice = window.antState.foundDevices.find(
-      d => d.id === deviceNumber.toString()
+      d => d.deviceNumber === deviceNumber
     );
     
     if (!existingDevice) {
-      // 새 디바이스 추가
+      // 새 스피드센서 추가
       const device = {
         id: deviceNumber.toString(),
         name: `ANT+ Speed Sensor ${deviceNumber}`,
-        type: 'Speed/Cadence',
+        type: deviceType === 0x79 ? 'Speed/Cadence (Combined)' : 'Speed Sensor',
         deviceNumber: deviceNumber,
-        deviceType: deviceType
+        deviceType: deviceType,
+        transmissionType: transmissionType
       };
       
       window.antState.foundDevices.push(device);
-      console.log('[ANT+] 디바이스 발견:', device);
+      console.log('[ANT+] 스피드센서 발견:', device);
       
       // UI 업데이트
       displayANTDevices(window.antState.foundDevices);
     }
   }
+}
+
+/**
+ * Channel ID 요청 주기적 전송 (스캔 중 디바이스 정보 얻기)
+ */
+function startChannelIDRequest(channelNumber) {
+  if (window.antChannelIDRequestInterval) {
+    clearInterval(window.antChannelIDRequestInterval);
+  }
+  
+  // 500ms마다 Channel ID 요청 전송
+  window.antChannelIDRequestInterval = setInterval(async () => {
+    if (!window.antState.isScanning || !window.antState.usbDevice) {
+      clearInterval(window.antChannelIDRequestInterval);
+      window.antChannelIDRequestInterval = null;
+      return;
+    }
+    
+    try {
+      // Channel ID 요청은 Request Message (0x4D)를 사용
+      // Request Message 구조: [Channel, Requested Message ID]
+      // 0x51은 Channel ID Response 메시지 ID이므로, 이를 요청
+      await sendANTMessage(0x4D, [channelNumber, 0x51]); // Request Channel ID
+    } catch (error) {
+      // 오류는 조용히 무시 (스캔 중이므로)
+      // console.error('[ANT+] Channel ID 요청 오류:', error);
+    }
+  }, 500);
 }
 
 /**
@@ -2245,8 +2316,16 @@ async function checkANTUSBStatus() {
           updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
           if (connectButton) connectButton.style.display = 'none';
         } else {
-          updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (연결 필요)`, deviceInfo);
+          updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (자동 연결 중...)`, deviceInfo);
           if (connectButton) connectButton.style.display = 'inline-block';
+          
+          // 자동 연결 시도 (이미 권한이 부여된 디바이스는 자동으로 열 수 있음)
+          try {
+            await autoConnectANTUSBStick(device);
+          } catch (error) {
+            console.log('[ANT+] 자동 연결 실패, 수동 연결 필요:', error.message);
+            updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (연결 필요)`, deviceInfo);
+          }
         }
       } else {
         // 권한이 부여된 디바이스가 없는 경우
@@ -2265,6 +2344,92 @@ async function checkANTUSBStatus() {
   } finally {
     if (refreshButton) refreshButton.disabled = false;
     if (connectButton) connectButton.disabled = false;
+  }
+}
+
+/**
+ * USB 수신기 자동 연결 (이미 권한이 부여된 디바이스)
+ */
+async function autoConnectANTUSBStick(device) {
+  try {
+    // 디바이스 열기
+    await device.open();
+    
+    // 디바이스 구성 확인 및 선택
+    const configurations = device.configurations;
+    if (configurations.length === 0) {
+      throw new Error('디바이스 구성이 없습니다.');
+    }
+    
+    // 첫 번째 구성 선택
+    const configNumber = configurations[0].configurationValue || 1;
+    await device.selectConfiguration(configNumber);
+    
+    // 인터페이스 찾기
+    const interfaces = configurations[0].interfaces;
+    let targetInterface = null;
+    
+    for (let i = 0; i < interfaces.length; i++) {
+      const intf = interfaces[i];
+      const alt = intf.alternates.find(alt => 
+        alt.endpoints.some(ep => (ep.type === 'interrupt' || ep.type === 'bulk'))
+      );
+      if (alt) {
+        targetInterface = { interfaceNumber: intf.interfaceNumber, alternate: alt };
+        break;
+      }
+    }
+    
+    if (!targetInterface) {
+      targetInterface = interfaces.find(i => i.interfaceNumber === 0);
+      if (!targetInterface) {
+        throw new Error('ANT+ 인터페이스를 찾을 수 없습니다.');
+      }
+      targetInterface = {
+        interfaceNumber: targetInterface.interfaceNumber,
+        alternate: targetInterface.alternates[0]
+      };
+    }
+    
+    // 인터페이스 클레임
+    await device.claimInterface(targetInterface.interfaceNumber);
+    
+    // 엔드포인트 찾기
+    const inEndpoint = targetInterface.alternate.endpoints.find(
+      e => e.direction === 'in' && (e.type === 'interrupt' || e.type === 'bulk')
+    );
+    const outEndpoint = targetInterface.alternate.endpoints.find(
+      e => e.direction === 'out' && (e.type === 'interrupt' || e.type === 'bulk')
+    );
+    
+    if (!inEndpoint || !outEndpoint) {
+      throw new Error('ANT+ 엔드포인트를 찾을 수 없습니다.');
+    }
+    
+    // 전역 상태에 저장
+    window.antState.usbDevice = device;
+    window.antState.inEndpoint = inEndpoint.endpointNumber;
+    window.antState.outEndpoint = outEndpoint.endpointNumber;
+    window.antState.interfaceNumber = targetInterface.interfaceNumber;
+    
+    // ANT+ 초기화 메시지 전송
+    await initializeANT();
+    
+    console.log('[ANT+ USB 스틱] 자동 연결 성공');
+    
+    // 상태 업데이트
+    const deviceInfo = {
+      vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+      productId: '0x' + device.productId.toString(16).toUpperCase(),
+      manufacturerName: device.manufacturerName || '알 수 없음',
+      productName: device.productName || 'ANT+ USB 수신기'
+    };
+    updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
+    
+    return device;
+  } catch (error) {
+    console.error('[ANT+ USB 스틱 자동 연결 오류]', error);
+    throw error;
   }
 }
 
