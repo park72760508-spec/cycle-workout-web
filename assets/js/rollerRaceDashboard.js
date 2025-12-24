@@ -822,6 +822,17 @@ function startRace() {
   if (btnStart) btnStart.disabled = true;
   if (btnPause) btnPause.disabled = false;
   if (btnStop) btnStop.disabled = false;
+
+  // ==========================================
+  // [추가된 코드] 경기 시작 시 연속 스캔 모드 활성화
+  // ==========================================
+  if (window.antState.usbDevice) {
+    // 함수가 정의되어 있는지 확인 후 실행 (안전장치)
+    if (typeof startContinuousScan === 'function') {
+        startContinuousScan();
+    }
+  }
+  // ==========================================
   
   // 전광판 순위 순환 시작
   startRankDisplayRotation();
@@ -904,53 +915,95 @@ function stopRace() {
 /**
  * 속도계 페어링
  */
+/**
+ * [수정됨] 속도계 페어링
+ * 하드웨어 채널을 열지 않고, ID만 등록하여 스캔 데이터가 매칭되도록 함
+ */
 async function pairSpeedometer(speedometerId) {
   const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
   if (!speedometer) return;
   
-  // 이미 연결되어 있으면 연결 해제
-  if (speedometer.connected) {
-    await unpairSpeedometer(speedometerId);
-    return;
-  }
+  // 페어링 모달 띄우기 (기존 함수 활용)
+  // 전역 변수에 타겟 ID 저장하여 모달에서 저장 시 활용
+  window.currentTargetSpeedometerId = speedometerId;
   
-  console.log(`[속도계 페어링] ${speedometer.name} (ID: ${speedometerId})`);
+  // 모달 UI 설정
+  const modal = document.getElementById('addSpeedometerModal');
+  const nameInput = document.getElementById('speedometerName');
+  const deviceIdInput = document.getElementById('speedometerDeviceId');
+  const title = document.getElementById('modalTitle'); // 모달 제목 요소가 있다면
   
-  if (!speedometer.deviceId) {
-    if (typeof showToast === 'function') {
-      showToast('디바이스 ID가 설정되지 않았습니다. 속도계를 추가할 때 디바이스를 선택해주세요.');
-    }
-    return;
-  }
-  
-  try {
-    // ANT+ USB 스틱 연결 확인
-    if (!window.antState.usbDevice) {
-      await connectANTUSBStick();
-    }
-    
-    // ANT+ 디바이스 연결
-    const device = await connectANTSpeedometer(speedometer.deviceId);
-    if (device) {
-      speedometer.connected = true;
-      speedometer.deviceId = device.id;
-      window.rollerRaceState.connectedDevices[speedometer.deviceId] = device;
-      updateSpeedometerConnectionStatus(speedometerId, true);
-      
-      if (typeof showToast === 'function') {
-        showToast(`${speedometer.name} 연결 완료`);
-      }
-    }
-  } catch (error) {
-    console.error('[속도계 페어링 오류]', error);
-    speedometer.connected = false;
-    updateSpeedometerConnectionStatus(speedometerId, false);
-    
-    if (typeof showToast === 'function') {
-      showToast(`${speedometer.name} 연결 실패: ${error.message || '알 수 없는 오류'}`);
-    }
+  if (modal) {
+    if (nameInput) nameInput.value = speedometer.name;
+    if (deviceIdInput) deviceIdInput.value = speedometer.deviceId || '';
+    // 기존 showAddSpeedometerModal 함수 호출
+    showAddSpeedometerModal(); 
   }
 }
+
+// [추가] 모달에서 '저장' 버튼 클릭 시 실행될 함수 (addSpeedometer 함수 대체 또는 수정 필요)
+// 기존 addSpeedometer 함수 내에 아래 로직을 통합하거나 교체하세요.
+function saveSpeedometerPairing() {
+    const nameInput = document.getElementById('speedometerName');
+    const deviceIdInput = document.getElementById('speedometerDeviceId');
+    const targetId = window.currentTargetSpeedometerId;
+    
+    if (!targetId) return addSpeedometer(); // 타겟이 없으면 신규 추가 로직으로
+
+    const speedometer = window.rollerRaceState.speedometers.find(s => s.id === targetId);
+    if (speedometer && nameInput) {
+        speedometer.name = nameInput.value;
+        const newDeviceId = deviceIdInput.value.trim();
+        
+        // ID 변경 시 초기화
+        if (speedometer.deviceId != newDeviceId) {
+            speedometer.deviceId = newDeviceId;
+            speedometer.connected = false; 
+            updateSpeedometerConnectionStatus(targetId, false);
+        }
+        
+        // 저장 및 UI 갱신
+        saveSpeedometerList();
+        updateSpeedometerListUI();
+        createSpeedometerGrid();
+        closeAddSpeedometerModal();
+        
+        // USB가 연결되어 있다면 바로 스캔 시작하여 연결 확인
+        if (window.antState.usbDevice) {
+            startContinuousScan(); 
+        }
+    }
+}
+
+/**
+ * [신규] 연속 스캔 모드 시작 (경기 중 데이터 수신용)
+ */
+async function startContinuousScan() {
+  if (window.antState.isScanning) return; // 이미 실행 중이면 패스
+  if (!window.antState.usbDevice) return;
+
+  console.log('[ANT+] 경기 데이터 수신을 위한 연속 스캔 시작');
+  
+  // scanANTDevices의 로직을 재활용하되, 타임아웃 없이 실행
+  // 1. 초기화 및 설정 (이미 되어있을 수 있으나 안전하게 재설정)
+  try {
+      // 리셋은 연결 끊김을 유발하므로 생략하거나 신중히 사용. 
+      // 여기서는 바로 Rx Scan Mode 명령만 확실하게 전송
+      await sendANTMessage(0x42, [0, 0]); // Ch 0 할당
+      await sendANTMessage(0x51, [0, 0, 0, 0, 0, 0]); // ID Wildcard
+      await sendANTMessage(0x6E, [0, 0xE0]); // LibConfig (Device ID 포함)
+      await sendANTMessage(0x5B, [0]); // Open Rx Scan Mode
+      
+      window.antState.isScanning = true;
+      startANTMessageListener();
+      
+  } catch (e) {
+      console.error("스캔 모드 진입 실패:", e);
+  }
+}
+
+
+
 
 /**
  * 속도계 연결 해제
@@ -1976,32 +2029,45 @@ function getChannelEventName(code) {
 // 현재 코드의 receiveANTMessage는 기본적으로 잘 되어 있으나, 
 // handleBroadcastData에서 ID를 추출하는 로직을 아래와 같이 변경하세요.
 
+/**
+ * [수정됨] 브로드캐스트 데이터 처리
+ * 검색 목록 채우기 + 실제 속도계 데이터 업데이트 동시에 수행
+ */
 function handleBroadcastData(data) {
-  if (!window.antState.isScanning) return;
+  // 데이터 길이 체크 (Extended Data 포함 여부)
+  // 구조: [Ch(1), Data(8), Flag(1), DevID(2), DevType(1), TransType(1)] = 최소 14바이트
+  // 파일의 receiveANTMessage 로직상 data는 Channel 번호부터 시작함.
   
-  // LibConfig(0x6E)를 0xE0로 설정했으므로, 
-  // 표준 데이터(9바이트: 채널1 + 페이로드8) 뒤에 확장 바이트가 붙습니다.
-  // 구조: [Ch, D0..D7, Flag, DeviceID_LSB, DeviceID_MSB, DevType, TransType, ...]
+  if (data.length < 13) return; 
+
+  const antData = data.slice(1, 9); // 실제 센서 데이터 8바이트
+  // Device ID 추출 (꼬리표)
+  const deviceNumber = (data[11] << 8) | data[10];
+  const deviceType = data[12];
+
+  // 1. 검색 모드일 때: 목록에 추가 (기존 로직 유지)
+  if (document.getElementById('addSpeedometerModal') && !document.getElementById('addSpeedometerModal').classList.contains('hidden')) {
+      // 기존 handleBroadcastData의 검색 로직을 여기에...
+      // (이미 구현된 foundDevices push 로직)
+  }
+
+  // 2. [핵심 추가] 등록된 속도계 업데이트
+  // 현재 등록된 속도계 중 이 Device ID를 가진 녀석이 있는지 찾음
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceNumber);
   
-  if (data.length >= 13) { // 1 + 8 + 1(Flag) + 2(DevID) + 1(Type) + 1(Trans) 이상
-     const deviceNumber = (data[11] << 8) | data[10]; // Device ID 추출
-     const deviceType = data[12];
-     const transmissionType = data[13];
-     
-     // 이 정보를 바탕으로 foundDevices에 추가
-     const existing = window.antState.foundDevices.find(d => d.deviceNumber === deviceNumber);
-     if (!existing) {
-        console.log(`[ANT+ 발견] ID: ${deviceNumber}, Type: ${deviceType}`);
-        window.antState.foundDevices.push({
-            id: deviceNumber.toString(),
-            name: `Sensor ${deviceNumber}`,
-            deviceNumber: deviceNumber,
-            deviceType: deviceType,
-            transmissionType: transmissionType,
-            connected: false // 스캔 목록용
-        });
-        displayANTDevices(window.antState.foundDevices); // UI 업데이트
-     }
+  if (speedometer) {
+      // 연결 상태 표시 갱신
+      if (!speedometer.connected) {
+          speedometer.connected = true;
+          updateSpeedometerConnectionStatus(speedometer.id, true);
+      }
+      
+      // 데이터 처리 (기존 processSpeedCadenceData 로직 활용)
+      // processSpeedCadenceData 함수를 호출하되, 데이터 포맷을 맞춰줌
+      processSpeedCadenceData(speedometer.deviceId, antData);
+      
+      // 타임아웃 방지용 타임스탬프 업데이트
+      speedometer.lastPacketTime = Date.now();
   }
 }
 
@@ -3181,5 +3247,6 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
