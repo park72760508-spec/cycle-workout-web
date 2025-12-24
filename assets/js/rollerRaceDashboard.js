@@ -1710,31 +1710,32 @@ async function scanANTDevices() {
   window.antState.scanChannel = channelNumber;
   
   try {
-    // 채널 할당 (Scan Mode: 0x20)
-    console.log('[ANT+ 스캔] 채널 할당 중...');
+    // 채널 할당 (Scan Mode: 0x20 = Background Scanning)
+    console.log('[ANT+ 스캔] 채널 할당 중 (Scan Mode)...');
     await sendANTMessage(0x42, [channelNumber, 0x20]); // Assign Channel (Scan Mode)
-    await new Promise(resolve => setTimeout(resolve, 100)); // 짧은 대기
+    await new Promise(resolve => setTimeout(resolve, 200)); // 대기 시간 증가
     
     // 채널 ID 설정 (Wildcard: 모든 디바이스 검색)
     // Wildcard 설정: DeviceNumber=0, DeviceType=0, TransmissionType=0
-    console.log('[ANT+ 스캔] 채널 ID 설정 (Wildcard)...');
+    console.log('[ANT+ 스캔] 채널 ID 설정 (Wildcard - 모든 디바이스 검색)...');
     await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]); // Set Channel ID (Wildcard)
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // 채널 주기 설정 (8192 * 1/32768 초 = 250ms)
-    console.log('[ANT+ 스캔] 채널 주기 설정...');
+    // 0x00, 0x20 = 8192 (LSB, MSB)
+    console.log('[ANT+ 스캔] 채널 주기 설정 (250ms)...');
     await sendANTMessage(0x60, [channelNumber, 0x00, 0x20]); // Set Channel Period
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // 채널 RF 주파수 설정 (ANT+ 공개 주파수: 57 = 0x39)
-    console.log('[ANT+ 스캔] 채널 RF 주파수 설정...');
+    console.log('[ANT+ 스캔] 채널 RF 주파수 설정 (57 = 0x39)...');
     await sendANTMessage(0x45, [channelNumber, 0x39]); // Set Channel RF Frequency
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // 채널 열기
     console.log('[ANT+ 스캔] 채널 열기...');
     await sendANTMessage(0x4B, [channelNumber]); // Open Channel
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await new Promise(resolve => setTimeout(resolve, 500)); // 채널 열기 후 더 긴 대기
     
     console.log('[ANT+ 스캔] 스캔 채널 열림, 메시지 수신 시작...');
     
@@ -1826,6 +1827,18 @@ function startANTMessageListener() {
 function handleANTMessage(message) {
   const { messageId, data } = message;
   
+  // 디버깅: 스캔 중인 경우 모든 메시지 로그 (너무 많이 출력되지 않도록 제한)
+  if (window.antState.isScanning) {
+    if (!window.antState.lastMessageLog || Date.now() - window.antState.lastMessageLog > 1000) {
+      console.log('[ANT+ 메시지] 수신:', {
+        messageId: '0x' + messageId.toString(16).toUpperCase(),
+        dataLength: data.length,
+        data: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+      });
+      window.antState.lastMessageLog = Date.now();
+    }
+  }
+  
   switch (messageId) {
     case 0x43: // Channel Event
       handleChannelEvent(data);
@@ -1839,8 +1852,17 @@ function handleANTMessage(message) {
     case 0x51: // Channel ID Response
       handleChannelIDResponse(data);
       break;
+    case 0xAE: // Capabilities
+      // Capabilities 메시지는 무시 (스틱 정보만 제공)
+      if (window.antState.isScanning) {
+        console.log('[ANT+] Capabilities 메시지 수신 (스캔 중)');
+      }
+      break;
     default:
       // 기타 메시지 무시
+      if (window.antState.isScanning && (messageId === 0x46 || messageId === 0x47)) {
+        console.log('[ANT+] 기타 메시지 수신:', '0x' + messageId.toString(16).toUpperCase());
+      }
       break;
   }
 }
@@ -1918,7 +1940,7 @@ function handleChannelIDResponse(data) {
   
   // Channel ID Response 메시지 구조: [Channel, DeviceNumber(LSB), DeviceNumber(MSB), DeviceType, TransmissionType]
   if (data.length < 5) {
-    console.warn('[ANT+] Channel ID Response 데이터 길이 부족:', data.length);
+    console.warn('[ANT+] Channel ID Response 데이터 길이 부족:', data.length, '데이터:', Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '));
     return;
   }
   
@@ -1931,11 +1953,13 @@ function handleChannelIDResponse(data) {
     channel: channelNumber,
     deviceNumber: deviceNumber,
     deviceType: '0x' + deviceType.toString(16).toUpperCase(),
-    transmissionType: transmissionType
+    transmissionType: transmissionType,
+    rawData: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
   });
   
   // 스캔 채널의 응답만 처리
   if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
+    console.log('[ANT+] Channel ID Response가 스캔 채널이 아님:', channelNumber, 'vs', ANT_CHANNEL_CONFIG.SCAN_CHANNEL);
     return;
   }
   
@@ -2014,9 +2038,11 @@ function startChannelIDRequest(channelNumber) {
     clearInterval(window.antChannelIDRequestInterval);
   }
   
-  console.log('[ANT+ 스캔] Channel ID 요청 시작 (500ms 간격)');
+  console.log('[ANT+ 스캔] Channel ID 요청 시작 (1초 간격)');
   
-  // 500ms마다 Channel ID 요청 전송
+  let requestCount = 0;
+  
+  // 1초마다 Channel ID 요청 전송 (더 자주 요청)
   window.antChannelIDRequestInterval = setInterval(async () => {
     if (!window.antState.isScanning || !window.antState.usbDevice) {
       clearInterval(window.antChannelIDRequestInterval);
@@ -2025,15 +2051,20 @@ function startChannelIDRequest(channelNumber) {
     }
     
     try {
+      requestCount++;
       // Channel ID 요청은 Request Message (0x4D)를 사용
       // Request Message 구조: [Channel, Requested Message ID]
       // 0x51은 Channel ID Response 메시지 ID이므로, 이를 요청
       await sendANTMessage(0x4D, [channelNumber, 0x51]); // Request Channel ID
+      
+      // 5번마다 로그 출력
+      if (requestCount % 5 === 0) {
+        console.log(`[ANT+ 스캔] Channel ID 요청 전송 (${requestCount}회, 발견된 디바이스: ${window.antState.foundDevices.length}개)`);
+      }
     } catch (error) {
-      // 오류는 조용히 무시 (스캔 중이므로)
-      // console.error('[ANT+] Channel ID 요청 오류:', error);
+      console.error('[ANT+] Channel ID 요청 오류:', error);
     }
-  }, 500);
+  }, 1000); // 500ms -> 1초로 변경 (너무 자주 요청하지 않도록)
 }
 
 /**
