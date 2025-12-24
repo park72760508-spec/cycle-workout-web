@@ -1783,16 +1783,29 @@ async function scanANTDevices() {
   window.antState.foundDevices = [];
   window.antState.isScanning = true;
   window.antState.lastBroadcastLog = 0;
+  window.antState.broadcastDevices = window.antState.broadcastDevices || new Map(); // 브로드캐스트 디바이스 추적
+  window.antState.broadcastDevices.clear();
   
   // 스캔 채널 열기 (채널 0 사용)
   const channelNumber = ANT_CHANNEL_CONFIG.SCAN_CHANNEL;
   window.antState.scanChannel = channelNumber;
   
   try {
+    // ANT+ 초기화 (검증된 로직)
+    console.log('[ANT+ 스캔] ANT+ 리셋...');
+    await sendANTMessage(0x4A, [0x00]); // Reset System
+    await new Promise(resolve => setTimeout(resolve, 500)); // 리셋 후 충분한 대기
+    
+    // 네트워크 키 설정 (ANT+ 공개 네트워크 키)
+    console.log('[ANT+ 스캔] 네트워크 키 설정...');
+    const networkKey = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45];
+    await sendANTMessage(0x46, [0x00, ...networkKey]); // Set Network Key
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
     // 채널 할당 (Scan Mode: 0x20 = Background Scanning)
     console.log('[ANT+ 스캔] 채널 할당 중 (Scan Mode)...');
     await sendANTMessage(0x42, [channelNumber, 0x20]); // Assign Channel (Scan Mode)
-    await new Promise(resolve => setTimeout(resolve, 200)); // 대기 시간 증가
+    await new Promise(resolve => setTimeout(resolve, 200));
     
     // 채널 ID 설정 (Wildcard: 모든 디바이스 검색)
     // Wildcard 설정: DeviceNumber=0, DeviceType=0, TransmissionType=0
@@ -1814,7 +1827,7 @@ async function scanANTDevices() {
     // 채널 열기
     console.log('[ANT+ 스캔] 채널 열기...');
     await sendANTMessage(0x4B, [channelNumber]); // Open Channel
-    await new Promise(resolve => setTimeout(resolve, 500)); // 채널 열기 후 더 긴 대기
+    await new Promise(resolve => setTimeout(resolve, 1000)); // 채널 열기 후 충분한 대기
     
     console.log('[ANT+ 스캔] 스캔 채널 열림, 메시지 수신 시작...');
     
@@ -1852,6 +1865,36 @@ async function scanANTDevices() {
     if (window.antChannelIDRequestInterval) {
       clearInterval(window.antChannelIDRequestInterval);
       window.antChannelIDRequestInterval = null;
+    }
+    
+    // 브로드캐스트 데이터에서 발견된 디바이스가 있지만 Channel ID Response가 없는 경우
+    // 임시 디바이스로 추가 (사용자가 수동으로 디바이스 번호를 입력할 수 있도록)
+    if (window.antState.foundDevices.length === 0 && window.antState.broadcastDevices && window.antState.broadcastDevices.size > 0) {
+      console.log('[ANT+] 브로드캐스트 데이터는 수신되었지만 Channel ID Response가 없습니다.');
+      console.log('[ANT+] 발견된 브로드캐스트 패턴:', window.antState.broadcastDevices.size, '개');
+      
+      // 브로드캐스트 디바이스를 임시 디바이스로 추가
+      let tempDeviceId = 1000; // 임시 ID 시작 번호
+      window.antState.broadcastDevices.forEach((deviceInfo, hash) => {
+        if (deviceInfo.count >= 3) { // 최소 3번 이상 수신된 패턴만 추가
+          const tempDevice = {
+            id: `temp_${tempDeviceId++}`,
+            name: `ANT+ Device (Broadcast Detected ${tempDeviceId - 1000})`,
+            type: 'Unknown (Broadcast Detected)',
+            deviceNumber: tempDeviceId - 1,
+            deviceType: 0,
+            transmissionType: 0,
+            isTemporary: true,
+            broadcastHash: hash
+          };
+          window.antState.foundDevices.push(tempDevice);
+          console.log('[ANT+] 임시 디바이스 추가:', tempDevice);
+        }
+      });
+      
+      if (window.antState.foundDevices.length > 0) {
+        displayANTDevices(window.antState.foundDevices);
+      }
     }
   }
   
@@ -2048,23 +2091,45 @@ function handleBroadcastData(data) {
   
   // 브로드캐스트 데이터 수신 확인
   if (data.length >= 8) {
-    // 브로드캐스트 데이터 수신 로그 (너무 많이 출력되지 않도록 제한)
-    if (!window.antState.lastBroadcastLog || Date.now() - window.antState.lastBroadcastLog > 2000) {
-      console.log('[ANT+] 브로드캐스트 데이터 수신 (스캔 채널 활성)', {
-        channel: channelNumber,
-        dataLength: data.length,
+    // 브로드캐스트 데이터 패턴으로 디바이스 식별 시도
+    // Speed/Cadence 센서의 브로드캐스트 데이터 패턴 분석
+    const broadcastData = Array.from(data.slice(1, 9)); // Channel 제외한 데이터
+    
+    // 브로드캐스트 데이터의 해시를 생성하여 고유 디바이스 식별
+    const dataHash = broadcastData.slice(0, 4).join(',');
+    
+    // 이미 처리한 디바이스인지 확인
+    if (!window.antState.broadcastDevices.has(dataHash)) {
+      window.antState.broadcastDevices.set(dataHash, {
+        firstSeen: Date.now(),
+        count: 0,
+        data: broadcastData
+      });
+      
+      console.log('[ANT+] 새로운 브로드캐스트 데이터 패턴 발견:', {
+        hash: dataHash,
         rawData: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
       });
-      window.antState.lastBroadcastLog = Date.now();
+      
+      // Channel ID Request 전송
+      if (window.antState.usbDevice && window.antState.scanChannel !== undefined) {
+        sendANTMessage(0x4D, [window.antState.scanChannel, 0x51]).catch(err => {
+          // 오류는 조용히 무시
+        });
+      }
+    } else {
+      const deviceInfo = window.antState.broadcastDevices.get(dataHash);
+      deviceInfo.count++;
     }
     
-    // 브로드캐스트 데이터가 수신되면 디바이스가 활성화되어 있다는 신호
-    // Channel ID Request를 즉시 전송하여 디바이스 정보 얻기
-    if (window.antState.usbDevice && window.antState.scanChannel !== undefined) {
-      // 즉시 Channel ID Request 전송 (비동기로 처리하여 블로킹 방지)
-      sendANTMessage(0x4D, [window.antState.scanChannel, 0x51]).catch(err => {
-        // 오류는 조용히 무시
+    // 브로드캐스트 데이터 수신 로그 (너무 많이 출력되지 않도록 제한)
+    if (!window.antState.lastBroadcastLog || Date.now() - window.antState.lastBroadcastLog > 5000) {
+      console.log('[ANT+] 브로드캐스트 데이터 수신 (스캔 채널 활성)', {
+        channel: channelNumber,
+        uniqueDevices: window.antState.broadcastDevices.size,
+        totalBroadcasts: Array.from(window.antState.broadcastDevices.values()).reduce((sum, d) => sum + d.count, 0)
       });
+      window.antState.lastBroadcastLog = Date.now();
     }
   }
 }
@@ -2258,16 +2323,22 @@ function displayANTDevices(devices) {
   
   let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
   devices.forEach(device => {
+    const isTemporary = device.isTemporary || false;
+    const deviceIdDisplay = device.deviceNumber ? device.deviceNumber.toString() : device.id;
     html += `
       <div class="ant-device-item" 
-           style="padding: 12px; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: white; transition: background 0.2s;"
+           style="padding: 12px; border: 1px solid ${isTemporary ? '#ffa500' : '#ddd'}; border-radius: 4px; cursor: pointer; background: ${isTemporary ? '#fff8e1' : 'white'}; transition: background 0.2s;"
            onmouseover="this.style.background='#f0f0f0'"
-           onmouseout="this.style.background='white'"
-           onclick="selectANTDevice('${device.id}', '${device.name || device.id}')">
-        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">${device.name || `디바이스 ${device.id}`}</div>
+           onmouseout="this.style.background='${isTemporary ? '#fff8e1' : 'white'}'"
+           onclick="selectANTDevice('${deviceIdDisplay}', '${device.name || device.id}')">
+        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
+          ${device.name || `디바이스 ${deviceIdDisplay}`}
+          ${isTemporary ? '<span style="font-size: 10px; color: #ff9800; margin-left: 8px;">(브로드캐스트 감지)</span>' : ''}
+        </div>
         <div style="font-size: 12px; color: #666;">
-          <span>ID: ${device.id}</span>
+          <span>ID: ${deviceIdDisplay}</span>
           ${device.type ? `<span style="margin-left: 8px;">타입: ${device.type}</span>` : ''}
+          ${device.deviceNumber ? `<span style="margin-left: 8px;">디바이스 번호: ${device.deviceNumber}</span>` : ''}
         </div>
       </div>
     `;
