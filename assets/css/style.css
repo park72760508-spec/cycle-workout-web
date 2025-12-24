@@ -8972,13 +8972,57 @@ button[aria-disabled="true"] {
   background: #ff8c00; /* 주황색 배경 (미연결 상태) */
 }
 
-/* 좌측: 현재속도 */
+/* 좌측: 최대속도, 평균속도 */
 .speed-display-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.speed-stat-row {
   display: flex;
   align-items: baseline;
   gap: 4px;
-  flex: 1;
   justify-content: flex-start;
+}
+
+.speed-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.speed-stat-max .speed-stat-label {
+  color: #ff0000; /* Max: 빨강색 */
+}
+
+.speed-stat-avg .speed-stat-label {
+  color: #2563eb; /* Avg: 파랑색 */
+}
+
+.speed-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #000000;
+  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+  line-height: 1;
+}
+
+/* 중앙: 현재속도 */
+.speed-display-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.speed-value-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .speed-value {
@@ -8989,34 +9033,10 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-/* 중앙: 최대속도, 평균속도 */
-.speed-display-center {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-  justify-content: center;
-}
-
-.speed-stat-row {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  justify-content: center;
-}
-
-.speed-stat-label {
-  font-size: 12px;
-  color: #ffffff;
-  font-weight: 500;
-}
-
-.speed-stat-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #000000;
-  text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+.speed-unit-bottom {
+  font-size: 10.8px; /* 36px * 0.3 */
+  color: #000000; /* 검정색 */
+  font-weight: 300;
   line-height: 1;
 }
 
@@ -9033,7 +9053,6 @@ button[aria-disabled="true"] {
   font-weight: 700;
   color: #ff0000; /* 빨강색 숫자 */
   font-size: 18px;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
   line-height: 1;
 }
 
@@ -9041,14 +9060,9 @@ button[aria-disabled="true"] {
 .speed-unit-sup,
 .distance-unit-sup {
   font-size: 30%;
-  color: #888888;
+  color: #000000; /* 검정색 */
   font-weight: 300;
   line-height: 0;
-}
-
-/* 현재속도 단위 (36px의 30% = 10.8px) */
-.speed-display-left .speed-unit-sup {
-  font-size: 10.8px; /* 36px * 0.3 */
 }
 
 /* 최대/평균속도 단위 (18px의 30% = 5.4px) */
