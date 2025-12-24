@@ -1413,112 +1413,49 @@ function requestANTUSBDevice() {
 /**
  * 요청된 USB 디바이스로 연결 설정
  */
+/**
+ * [수정됨] 요청된 USB 디바이스로 연결 설정
+ */
 async function connectANTUSBStickWithDevice(devicePromise) {
   try {
-    // 디바이스 Promise 해결 (사용자 선택 대기)
     const device = await devicePromise;
-    
-    // 이미 연결된 디바이스가 있으면 재사용
-    if (window.antState.usbDevice && window.antState.usbDevice === device && device.opened) {
-      console.log('[ANT+ USB 스틱] 이미 연결된 디바이스 재사용');
-      return device;
-    }
-    
-    // 디바이스 정보 로그
-    console.log('[ANT+ USB 스틱] 발견된 디바이스:', {
-      vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
-      productId: '0x' + device.productId.toString(16).toUpperCase(),
-      manufacturerName: device.manufacturerName,
-      productName: device.productName
-    });
-    
-    // 디바이스 열기
     await device.open();
     
-    // 디바이스 구성 확인 및 선택
-    const configurations = device.configurations;
-    if (configurations.length === 0) {
-      throw new Error('디바이스 구성이 없습니다.');
-    }
+    // 설정 선택 (일반적으로 1번)
+    await device.selectConfiguration(1);
     
-    // 첫 번째 구성 선택 (일반적으로 구성 1)
-    const configNumber = configurations[0].configurationValue || 1;
-    await device.selectConfiguration(configNumber);
+    // 인터페이스 찾기 (ANT+ 스틱은 보통 Interface 0)
+    await device.claimInterface(0);
+
+    // [중요] 엔드포인트 명시적 탐색
+    // ANT+ 스틱은 Bulk Transfer를 선호합니다.
+    const endpoints = device.configuration.interfaces[0].alternate.endpoints;
     
-    // 인터페이스 찾기 (ANT+ USB 스틱은 일반적으로 인터페이스 0 사용)
-    const interfaces = configurations[0].interfaces;
-    let targetInterface = null;
-    
-    // 인터페이스 0부터 순차적으로 확인
-    for (let i = 0; i < interfaces.length; i++) {
-      const intf = interfaces[i];
-      // 인터럽트 또는 벌크 타입 엔드포인트가 있는 인터페이스 찾기
-      const alt = intf.alternates.find(alt => 
-        alt.endpoints.some(ep => (ep.type === 'interrupt' || ep.type === 'bulk'))
-      );
-      if (alt) {
-        targetInterface = { interfaceNumber: intf.interfaceNumber, alternate: alt };
-        break;
-      }
-    }
-    
-    if (!targetInterface) {
-      // 인터페이스 0을 기본으로 시도
-      targetInterface = interfaces.find(i => i.interfaceNumber === 0);
-      if (!targetInterface) {
-        throw new Error('ANT+ 인터페이스를 찾을 수 없습니다.');
-      }
-      targetInterface = {
-        interfaceNumber: targetInterface.interfaceNumber,
-        alternate: targetInterface.alternates[0]
-      };
-    }
-    
-    // 인터페이스 클레임
-    await device.claimInterface(targetInterface.interfaceNumber);
-    
-    // 입력/출력 엔드포인트 찾기 (interrupt 또는 bulk 타입)
-    const inEndpoint = targetInterface.alternate.endpoints.find(
-      e => e.direction === 'in' && (e.type === 'interrupt' || e.type === 'bulk')
-    );
-    const outEndpoint = targetInterface.alternate.endpoints.find(
-      e => e.direction === 'out' && (e.type === 'interrupt' || e.type === 'bulk')
-    );
-    
+    let inEndpoint = endpoints.find(e => e.direction === 'in' && e.type === 'bulk');
+    let outEndpoint = endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
+
+    // Bulk가 없으면 Interrupt 시도 (일부 호환 스틱용)
+    if (!inEndpoint) inEndpoint = endpoints.find(e => e.direction === 'in' && e.type === 'interrupt');
+    if (!outEndpoint) outEndpoint = endpoints.find(e => e.direction === 'out' && e.type === 'interrupt');
+
     if (!inEndpoint || !outEndpoint) {
-      throw new Error('ANT+ 엔드포인트를 찾을 수 없습니다. (입력/출력 엔드포인트 필요)');
+        throw new Error('적절한 ANT+ 통신 엔드포인트를 찾을 수 없습니다.');
     }
-    
-    // 전역 상태에 저장
+
     window.antState.usbDevice = device;
     window.antState.inEndpoint = inEndpoint.endpointNumber;
     window.antState.outEndpoint = outEndpoint.endpointNumber;
-    window.antState.interfaceNumber = targetInterface.interfaceNumber;
     
-    // ANT+ 초기화 메시지 전송
+    // 초기화
     await initializeANT();
     
-    console.log('[ANT+ USB 스틱] 연결 성공', {
-      vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
-      productId: '0x' + device.productId.toString(16).toUpperCase(),
-      interface: targetInterface.interfaceNumber,
-      inEndpoint: inEndpoint.endpointNumber,
-      outEndpoint: outEndpoint.endpointNumber
-    });
-    
-    // USB 상태 UI 업데이트
+    console.log('[ANT+ USB] 연결 성공 (EP IN:', inEndpoint.endpointNumber, 'OUT:', outEndpoint.endpointNumber, ')');
     checkANTUSBStatus();
     
     return device;
   } catch (error) {
-    console.error('[ANT+ USB 스틱 연결 오류]', error);
-    if (error.name === 'SecurityError') {
-      throw new Error('USB 디바이스 접근 권한이 필요합니다. 버튼을 다시 클릭해주세요.');
-    }
-    if (error.message) {
-      throw error;
-    }
-    throw new Error(`ANT+ USB 스틱 연결 실패: ${error.name || '알 수 없는 오류'}`);
+    console.error('[ANT+ USB 연결 오류]', error);
+    throw error;
   }
 }
 
@@ -1772,130 +1709,84 @@ async function receiveANTMessage() {
 /**
  * ANT+ 디바이스 스캔
  */
+/**
+ * [수정됨] ANT+ 디바이스 스캔 (Continuous Scanning Mode 적용)
+ * 상용 표준 방식으로 변경: 채널 0번을 '연속 스캔 모드'로 열어 모든 패킷을 수신합니다.
+ */
 async function scanANTDevices() {
   if (!window.antState.usbDevice) {
     throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
   }
   
-  console.log('[ANT+ 스캔] 디바이스 검색 시작...');
+  console.log('[ANT+ 스캔] Continuous Scanning Mode 진입 시작...');
   
   // 기존 검색 결과 초기화
   window.antState.foundDevices = [];
   window.antState.isScanning = true;
-  window.antState.lastBroadcastLog = 0;
-  window.antState.broadcastDevices = window.antState.broadcastDevices || new Map(); // 브로드캐스트 디바이스 추적
+  window.antState.broadcastDevices = window.antState.broadcastDevices || new Map();
   window.antState.broadcastDevices.clear();
   
-  // 스캔 채널 열기 (채널 0 사용)
-  const channelNumber = ANT_CHANNEL_CONFIG.SCAN_CHANNEL;
+  // 스캔은 항상 0번 채널 사용
+  const channelNumber = 0;
   window.antState.scanChannel = channelNumber;
   
   try {
-    // ANT+ 초기화 (검증된 로직)
-    console.log('[ANT+ 스캔] ANT+ 리셋...');
-    await sendANTMessage(0x4A, [0x00]); // Reset System
-    await new Promise(resolve => setTimeout(resolve, 500)); // 리셋 후 충분한 대기
+    // 1. ANT+ 리셋
+    await sendANTMessage(0x4A, [0x00]); 
+    await new Promise(r => setTimeout(r, 500)); // 리셋 대기 필수
     
-    // 네트워크 키 설정 (ANT+ 공개 네트워크 키)
-    console.log('[ANT+ 스캔] 네트워크 키 설정...');
+    // 2. 네트워크 키 설정 (공개 키)
     const networkKey = [0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45];
-    await sendANTMessage(0x46, [0x00, ...networkKey]); // Set Network Key
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await sendANTMessage(0x46, [0x00, ...networkKey]);
+    await new Promise(r => setTimeout(r, 100));
+
+    // 3. 채널 할당 (중요: 0x00 = 일반 양방향 수신 모드로 할당)
+    // *기존 코드의 0x20(Background) 대신 0x00 사용*
+    await sendANTMessage(0x42, [channelNumber, 0x00]); 
+    await new Promise(r => setTimeout(r, 100));
+
+    // 4. 채널 ID 설정 (Wildcard: 0, 0, 0 -> 모든 디바이스 수신)
+    await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    await new Promise(r => setTimeout(r, 100));
+
+    console.log('[ANT+ 스캔] LibConfig 설정 (Device ID 포함 요청)');
+    await sendANTMessage(0x6E, [0x00, 0xE0]); // Channel 0, Enable ID, RSSI, Timestamp
+    await new Promise(r => setTimeout(r, 100));
     
-    // 채널 할당 (Scan Mode: 0x20 = Background Scanning)
-    console.log('[ANT+ 스캔] 채널 할당 중 (Scan Mode)...');
-    await sendANTMessage(0x42, [channelNumber, 0x20]); // Assign Channel (Scan Mode)
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // 5. RF 주파수 설정 (57 = 2457MHz)
+    await sendANTMessage(0x45, [channelNumber, 57]);
+    await new Promise(r => setTimeout(r, 100));
+
+    // 6. [핵심] Open Rx Scan Mode (0x5B)
+    // 이 명령어가 '채널 열기(0x4B)'를 대체하며, 스틱을 '고성능 스캔 모드'로 만듭니다.
+    // 데이터 패킷 1: [0x00] (채널 0번을 스캔 모드로)
+    // 주의: 일부 구형 스틱은 0x4B를 써야하지만, 다중 연결을 위해선 0x5B가 필수입니다.
+    console.log('[ANT+ 스캔] Open Rx Scan Mode (0x5B) 명령 전송');
+    // 메시지 구조: [Sync, Len, 0x5B, ChannelNum, Sync]
+    await sendANTMessage(0x5B, [0x00]); 
+    await new Promise(r => setTimeout(r, 100));
     
-    // 채널 ID 설정 (Wildcard: 모든 디바이스 검색)
-    // Wildcard 설정: DeviceNumber=0, DeviceType=0, TransmissionType=0
-    console.log('[ANT+ 스캔] 채널 ID 설정 (Wildcard - 모든 디바이스 검색)...');
-    await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]); // Set Channel ID (Wildcard)
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    // 채널 주기 설정 (8192 * 1/32768 초 = 250ms)
-    // 0x00, 0x20 = 8192 (LSB, MSB)
-    console.log('[ANT+ 스캔] 채널 주기 설정 (250ms)...');
-    await sendANTMessage(0x60, [channelNumber, 0x00, 0x20]); // Set Channel Period
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    // 채널 RF 주파수 설정 (ANT+ 공개 주파수: 57 = 0x39)
-    console.log('[ANT+ 스캔] 채널 RF 주파수 설정 (57 = 0x39)...');
-    await sendANTMessage(0x45, [channelNumber, 0x39]); // Set Channel RF Frequency
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-    // 채널 열기
-    console.log('[ANT+ 스캔] 채널 열기...');
-    await sendANTMessage(0x4B, [channelNumber]); // Open Channel
-    await new Promise(resolve => setTimeout(resolve, 1000)); // 채널 열기 후 충분한 대기
-    
-    console.log('[ANT+ 스캔] 스캔 채널 열림, 메시지 수신 시작...');
-    
-    // 메시지 수신 시작
+    console.log('[ANT+ 스캔] 메시지 리스너 시작');
     startANTMessageListener();
-    
-    // 스캔 시작 후 Channel ID 요청을 주기적으로 보내어 디바이스 정보 얻기
-    startChannelIDRequest(channelNumber);
-    
-    // 30초간 스캔 (더 많은 디바이스를 찾기 위해 시간 연장)
-    console.log('[ANT+ 스캔] 30초간 디바이스 검색 중...');
+
+    // 7. 검색 루프 (30초)
+    // Rx Scan Mode에서는 별도의 요청 없이도 브로드캐스트 패킷이 쏟아져 들어옵니다.
     for (let i = 0; i < 30; i++) {
+      if (!window.antState.isScanning) break;
       await new Promise(resolve => setTimeout(resolve, 1000));
-      if (i % 5 === 4) {
-        console.log(`[ANT+ 스캔] 검색 중... (${i + 1}/30초, 발견된 디바이스: ${window.antState.foundDevices.length}개)`);
-      }
+      if (i % 5 === 0) console.log(`[ANT+ 스캔] 진행 중... ${i}/30초`);
     }
-    
-    console.log('[ANT+ 스캔] 검색 완료. 발견된 디바이스:', window.antState.foundDevices.length, '개');
-    
+
   } catch (error) {
-    console.error('[ANT+ 스캔] 오류 발생:', error);
+    console.error('[ANT+ 스캔] 오류:', error);
     throw error;
   } finally {
-    // 스캔 중지
-    console.log('[ANT+ 스캔] 채널 닫기...');
-    try {
-      await sendANTMessage(0x4C, [channelNumber]); // Close Channel
-    } catch (closeError) {
-      console.warn('[ANT+ 스캔] 채널 닫기 오류 (무시):', closeError);
+    // 스캔 종료 시 채널 닫기 대신 리셋 권장 (Rx Scan Mode는 닫기가 잘 안될 수 있음)
+    // 하지만 여기서는 채널 닫기 시도
+    if (window.antState.isScanning) {
+        await sendANTMessage(0x4C, [channelNumber]); 
     }
     window.antState.isScanning = false;
-    
-    // Channel ID 요청 중지
-    if (window.antChannelIDRequestInterval) {
-      clearInterval(window.antChannelIDRequestInterval);
-      window.antChannelIDRequestInterval = null;
-    }
-    
-    // 브로드캐스트 데이터에서 발견된 디바이스가 있지만 Channel ID Response가 없는 경우
-    // 임시 디바이스로 추가 (사용자가 수동으로 디바이스 번호를 입력할 수 있도록)
-    if (window.antState.foundDevices.length === 0 && window.antState.broadcastDevices && window.antState.broadcastDevices.size > 0) {
-      console.log('[ANT+] 브로드캐스트 데이터는 수신되었지만 Channel ID Response가 없습니다.');
-      console.log('[ANT+] 발견된 브로드캐스트 패턴:', window.antState.broadcastDevices.size, '개');
-      
-      // 브로드캐스트 디바이스를 임시 디바이스로 추가
-      let tempDeviceId = 1000; // 임시 ID 시작 번호
-      window.antState.broadcastDevices.forEach((deviceInfo, hash) => {
-        if (deviceInfo.count >= 3) { // 최소 3번 이상 수신된 패턴만 추가
-          const tempDevice = {
-            id: `temp_${tempDeviceId++}`,
-            name: `ANT+ Device (Broadcast Detected ${tempDeviceId - 1000})`,
-            type: 'Unknown (Broadcast Detected)',
-            deviceNumber: tempDeviceId - 1,
-            deviceType: 0,
-            transmissionType: 0,
-            isTemporary: true,
-            broadcastHash: hash
-          };
-          window.antState.foundDevices.push(tempDevice);
-          console.log('[ANT+] 임시 디바이스 추가:', tempDevice);
-        }
-      });
-      
-      if (window.antState.foundDevices.length > 0) {
-        displayANTDevices(window.antState.foundDevices);
-      }
-    }
   }
   
   return window.antState.foundDevices;
@@ -2077,60 +1968,40 @@ function getChannelEventName(code) {
 /**
  * 브로드캐스트 데이터 처리 (스캔 중 발견된 디바이스)
  */
+/**
+ * [수정됨] 브로드캐스트 데이터 처리
+ * Extended Data를 통해 Device ID를 바로 얻어오는 로직 추가
+ */
+// receiveANTMessage 함수 내에서 데이터가 8바이트보다 클 때(확장 메시지) 처리 로직 필요
+// 현재 코드의 receiveANTMessage는 기본적으로 잘 되어 있으나, 
+// handleBroadcastData에서 ID를 추출하는 로직을 아래와 같이 변경하세요.
+
 function handleBroadcastData(data) {
-  if (!window.antState.isScanning) {
-    return;
-  }
+  if (!window.antState.isScanning) return;
   
-  // ANT+ 브로드캐스트 메시지 구조: [Channel, Data0-7]
-  // 스캔 채널(0번)의 브로드캐스트 데이터만 처리
-  const channelNumber = data[0];
-  if (channelNumber !== ANT_CHANNEL_CONFIG.SCAN_CHANNEL) {
-    return;
-  }
+  // LibConfig(0x6E)를 0xE0로 설정했으므로, 
+  // 표준 데이터(9바이트: 채널1 + 페이로드8) 뒤에 확장 바이트가 붙습니다.
+  // 구조: [Ch, D0..D7, Flag, DeviceID_LSB, DeviceID_MSB, DevType, TransType, ...]
   
-  // 브로드캐스트 데이터 수신 확인
-  if (data.length >= 8) {
-    // 브로드캐스트 데이터 패턴으로 디바이스 식별 시도
-    // Speed/Cadence 센서의 브로드캐스트 데이터 패턴 분석
-    const broadcastData = Array.from(data.slice(1, 9)); // Channel 제외한 데이터
-    
-    // 브로드캐스트 데이터의 해시를 생성하여 고유 디바이스 식별
-    const dataHash = broadcastData.slice(0, 4).join(',');
-    
-    // 이미 처리한 디바이스인지 확인
-    if (!window.antState.broadcastDevices.has(dataHash)) {
-      window.antState.broadcastDevices.set(dataHash, {
-        firstSeen: Date.now(),
-        count: 0,
-        data: broadcastData
-      });
-      
-      console.log('[ANT+] 새로운 브로드캐스트 데이터 패턴 발견:', {
-        hash: dataHash,
-        rawData: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
-      });
-      
-      // Channel ID Request 전송
-      if (window.antState.usbDevice && window.antState.scanChannel !== undefined) {
-        sendANTMessage(0x4D, [window.antState.scanChannel, 0x51]).catch(err => {
-          // 오류는 조용히 무시
+  if (data.length >= 13) { // 1 + 8 + 1(Flag) + 2(DevID) + 1(Type) + 1(Trans) 이상
+     const deviceNumber = (data[11] << 8) | data[10]; // Device ID 추출
+     const deviceType = data[12];
+     const transmissionType = data[13];
+     
+     // 이 정보를 바탕으로 foundDevices에 추가
+     const existing = window.antState.foundDevices.find(d => d.deviceNumber === deviceNumber);
+     if (!existing) {
+        console.log(`[ANT+ 발견] ID: ${deviceNumber}, Type: ${deviceType}`);
+        window.antState.foundDevices.push({
+            id: deviceNumber.toString(),
+            name: `Sensor ${deviceNumber}`,
+            deviceNumber: deviceNumber,
+            deviceType: deviceType,
+            transmissionType: transmissionType,
+            connected: false // 스캔 목록용
         });
-      }
-    } else {
-      const deviceInfo = window.antState.broadcastDevices.get(dataHash);
-      deviceInfo.count++;
-    }
-    
-    // 브로드캐스트 데이터 수신 로그 (너무 많이 출력되지 않도록 제한)
-    if (!window.antState.lastBroadcastLog || Date.now() - window.antState.lastBroadcastLog > 5000) {
-      console.log('[ANT+] 브로드캐스트 데이터 수신 (스캔 채널 활성)', {
-        channel: channelNumber,
-        uniqueDevices: window.antState.broadcastDevices.size,
-        totalBroadcasts: Array.from(window.antState.broadcastDevices.values()).reduce((sum, d) => sum + d.count, 0)
-      });
-      window.antState.lastBroadcastLog = Date.now();
-    }
+        displayANTDevices(window.antState.foundDevices); // UI 업데이트
+     }
   }
 }
 
@@ -3310,4 +3181,5 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
