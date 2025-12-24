@@ -192,7 +192,7 @@ function createSpeedometerElement(speedometer) {
       <!-- 순위 표시 (속도계 검은 바탕 하단 중앙) -->
       <div class="rank-display-bottom">
         <span class="rank-label-bottom">순위</span>
-        <span class="rank-value-bottom" id="rank-value-${speedometer.id}">-</span>
+        <img class="rank-value-bottom" id="rank-value-${speedometer.id}" src="" alt="" style="display: none;" />
       </div>
     </div>
     <div class="speedometer-info disconnected">
@@ -401,7 +401,14 @@ function updateRankings() {
   sorted.forEach((speedometer, index) => {
     const rankEl = document.getElementById(`rank-value-${speedometer.id}`);
     if (rankEl) {
-      rankEl.textContent = index + 1;
+      const rank = index + 1;
+      if (rank >= 1 && rank <= 10) {
+        rankEl.src = `assets/img/${rank}.png`;
+        rankEl.alt = `${rank}위`;
+        rankEl.style.display = 'inline-block';
+      } else {
+        rankEl.style.display = 'none';
+      }
     }
   });
   
@@ -410,7 +417,7 @@ function updateRankings() {
     if (!speedometer.connected || speedometer.totalDistance === 0) {
       const rankEl = document.getElementById(`rank-value-${speedometer.id}`);
       if (rankEl) {
-        rankEl.textContent = '-';
+        rankEl.style.display = 'none';
       }
     }
   });
