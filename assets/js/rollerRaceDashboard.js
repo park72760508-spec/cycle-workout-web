@@ -1292,6 +1292,17 @@ function showAddSpeedometerModal() {
     deviceList.classList.add('hidden');
     deviceList.innerHTML = '';
   }
+  
+  // USB 수신기 상태 확인
+  checkANTUSBStatus();
+  
+  // 주기적으로 상태 확인 (5초마다)
+  if (window.antUSBStatusInterval) {
+    clearInterval(window.antUSBStatusInterval);
+  }
+  window.antUSBStatusInterval = setInterval(() => {
+    checkANTUSBStatus();
+  }, 5000);
 }
 
 /**
@@ -1479,6 +1490,10 @@ async function connectANTUSBStickWithDevice(devicePromise) {
       inEndpoint: inEndpoint.endpointNumber,
       outEndpoint: outEndpoint.endpointNumber
     });
+    
+    // USB 상태 UI 업데이트
+    checkANTUSBStatus();
+    
     return device;
   } catch (error) {
     console.error('[ANT+ USB 스틱 연결 오류]', error);
@@ -2091,6 +2106,326 @@ function closeRaceSettingsModal() {
   const modal = document.getElementById('raceSettingsModal');
   if (modal) {
     modal.classList.add('hidden');
+  }
+}
+
+/**
+ * ANT+ USB 수신기 연결 상태 확인
+ */
+async function checkANTUSBStatus() {
+  const statusIcon = document.getElementById('antUSBStatusIcon');
+  const statusText = document.getElementById('antUSBStatusText');
+  const refreshButton = document.getElementById('btnRefreshUSBStatus');
+  
+  if (!statusIcon || !statusText) return;
+  
+  // 새로고침 버튼 비활성화
+  if (refreshButton) refreshButton.disabled = true;
+  
+  try {
+    // 이미 연결된 디바이스 확인
+    if (window.antState.usbDevice) {
+      try {
+        // 디바이스가 여전히 열려있는지 확인
+        if (window.antState.usbDevice.opened) {
+          updateANTUSBStatusUI('connected', 'USB 수신기 연결됨', window.antState.usbDevice);
+          if (refreshButton) refreshButton.disabled = false;
+          return;
+        }
+      } catch (error) {
+        // 디바이스가 연결 해제된 경우
+        window.antState.usbDevice = null;
+      }
+    }
+    
+    // Web USB API로 이미 권한이 부여된 디바이스 목록 확인
+    if (navigator.usb && typeof navigator.usb.getDevices === 'function') {
+      const devices = await navigator.usb.getDevices();
+      
+      // ANT+ USB 스틱 찾기 (Vendor ID로 필터링)
+      const antDevices = devices.filter(device => {
+        const vendorId = device.vendorId;
+        return vendorId === 0x0fcf || vendorId === 0x04d8 || vendorId === 0x0483;
+      });
+      
+      if (antDevices.length > 0) {
+        const device = antDevices[0];
+        const deviceInfo = {
+          vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+          productId: '0x' + device.productId.toString(16).toUpperCase(),
+          manufacturerName: device.manufacturerName || '알 수 없음',
+          productName: device.productName || 'ANT+ USB 수신기'
+        };
+        
+        // 디바이스가 열려있는지 확인
+        let isOpened = false;
+        try {
+          isOpened = device.opened;
+        } catch (e) {
+          isOpened = false;
+        }
+        
+        if (isOpened) {
+          updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
+        } else {
+          updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (연결 필요)`, deviceInfo);
+        }
+      } else {
+        updateANTUSBStatusUI('not_found', 'USB 수신기를 찾을 수 없습니다', null);
+      }
+    } else {
+      updateANTUSBStatusUI('not_supported', 'Web USB API를 지원하지 않습니다', null);
+    }
+  } catch (error) {
+    console.error('[ANT+ USB 상태 확인 오류]', error);
+    updateANTUSBStatusUI('error', '상태 확인 실패: ' + (error.message || '알 수 없는 오류'), null);
+  } finally {
+    if (refreshButton) refreshButton.disabled = false;
+  }
+}
+
+/**
+ * ANT+ USB 상태 UI 업데이트
+ */
+function updateANTUSBStatusUI(status, message, deviceInfo) {
+  const statusIcon = document.getElementById('antUSBStatusIcon');
+  const statusText = document.getElementById('antUSBStatusText');
+  const statusContainer = document.getElementById('antUSBStatus');
+  
+  if (!statusIcon || !statusText) return;
+  
+  // 상태에 따른 아이콘 색상 및 배경색 설정
+  switch (status) {
+    case 'connected':
+      statusIcon.style.background = '#28a745';
+      statusIcon.style.boxShadow = '0 0 8px rgba(40, 167, 69, 0.6)';
+      if (statusContainer) {
+        statusContainer.style.background = '#d4edda';
+        statusContainer.style.border = '1px solid #c3e6cb';
+      }
+      statusText.style.color = '#155724';
+      break;
+    case 'available':
+      statusIcon.style.background = '#ffc107';
+      statusIcon.style.boxShadow = '0 0 8px rgba(255, 193, 7, 0.6)';
+      if (statusContainer) {
+        statusContainer.style.background = '#fff3cd';
+        statusContainer.style.border = '1px solid #ffeaa7';
+      }
+      statusText.style.color = '#856404';
+      break;
+    case 'not_found':
+      statusIcon.style.background = '#dc3545';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#f8d7da';
+        statusContainer.style.border = '1px solid #f5c6cb';
+      }
+      statusText.style.color = '#721c24';
+      break;
+    case 'not_supported':
+      statusIcon.style.background = '#6c757d';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#e2e3e5';
+        statusContainer.style.border = '1px solid #d6d8db';
+      }
+      statusText.style.color = '#383d41';
+      break;
+    case 'error':
+      statusIcon.style.background = '#dc3545';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#f8d7da';
+        statusContainer.style.border = '1px solid #f5c6cb';
+      }
+      statusText.style.color = '#721c24';
+      break;
+    default:
+      statusIcon.style.background = '#999';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#f0f0f0';
+        statusContainer.style.border = '1px solid #ddd';
+      }
+      statusText.style.color = '#666';
+  }
+  
+  // 메시지 업데이트
+  let displayMessage = message;
+  if (deviceInfo && deviceInfo.productName) {
+    displayMessage = message;
+  }
+  statusText.textContent = displayMessage;
+  
+  // 디바이스 정보가 있으면 툴팁에 표시
+  if (deviceInfo) {
+    statusText.title = `제조사: ${deviceInfo.manufacturerName}\n제품: ${deviceInfo.productName}\nVendor ID: ${deviceInfo.vendorId}\nProduct ID: ${deviceInfo.productId}`;
+  } else {
+    statusText.title = '';
+  }
+}
+
+/**
+ * ANT+ USB 수신기 연결 상태 확인
+ */
+async function checkANTUSBStatus() {
+  const statusIcon = document.getElementById('antUSBStatusIcon');
+  const statusText = document.getElementById('antUSBStatusText');
+  const refreshButton = document.getElementById('btnRefreshUSBStatus');
+  
+  if (!statusIcon || !statusText) return;
+  
+  // 새로고침 버튼 비활성화
+  if (refreshButton) refreshButton.disabled = true;
+  
+  try {
+    // 이미 연결된 디바이스 확인
+    if (window.antState.usbDevice) {
+      try {
+        // 디바이스가 여전히 열려있는지 확인
+        if (window.antState.usbDevice.opened) {
+          const deviceInfo = {
+            vendorId: '0x' + window.antState.usbDevice.vendorId.toString(16).toUpperCase(),
+            productId: '0x' + window.antState.usbDevice.productId.toString(16).toUpperCase(),
+            manufacturerName: window.antState.usbDevice.manufacturerName || '알 수 없음',
+            productName: window.antState.usbDevice.productName || 'ANT+ USB 수신기'
+          };
+          updateANTUSBStatusUI('connected', 'USB 수신기 연결됨', deviceInfo);
+          if (refreshButton) refreshButton.disabled = false;
+          return;
+        }
+      } catch (error) {
+        // 디바이스가 연결 해제된 경우
+        window.antState.usbDevice = null;
+      }
+    }
+    
+    // Web USB API로 이미 권한이 부여된 디바이스 목록 확인
+    if (navigator.usb && typeof navigator.usb.getDevices === 'function') {
+      const devices = await navigator.usb.getDevices();
+      
+      // ANT+ USB 스틱 찾기 (Vendor ID로 필터링)
+      const antDevices = devices.filter(device => {
+        const vendorId = device.vendorId;
+        return vendorId === 0x0fcf || vendorId === 0x04d8 || vendorId === 0x0483;
+      });
+      
+      if (antDevices.length > 0) {
+        const device = antDevices[0];
+        const deviceInfo = {
+          vendorId: '0x' + device.vendorId.toString(16).toUpperCase(),
+          productId: '0x' + device.productId.toString(16).toUpperCase(),
+          manufacturerName: device.manufacturerName || '알 수 없음',
+          productName: device.productName || 'ANT+ USB 수신기'
+        };
+        
+        // 디바이스가 열려있는지 확인
+        let isOpened = false;
+        try {
+          isOpened = device.opened;
+        } catch (e) {
+          isOpened = false;
+        }
+        
+        if (isOpened) {
+          updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
+        } else {
+          updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (연결 필요)`, deviceInfo);
+        }
+      } else {
+        updateANTUSBStatusUI('not_found', 'USB 수신기를 찾을 수 없습니다', null);
+      }
+    } else {
+      updateANTUSBStatusUI('not_supported', 'Web USB API를 지원하지 않습니다', null);
+    }
+  } catch (error) {
+    console.error('[ANT+ USB 상태 확인 오류]', error);
+    updateANTUSBStatusUI('error', '상태 확인 실패: ' + (error.message || '알 수 없는 오류'), null);
+  } finally {
+    if (refreshButton) refreshButton.disabled = false;
+  }
+}
+
+/**
+ * ANT+ USB 상태 UI 업데이트
+ */
+function updateANTUSBStatusUI(status, message, deviceInfo) {
+  const statusIcon = document.getElementById('antUSBStatusIcon');
+  const statusText = document.getElementById('antUSBStatusText');
+  const statusContainer = document.getElementById('antUSBStatus');
+  
+  if (!statusIcon || !statusText) return;
+  
+  // 상태에 따른 아이콘 색상 및 배경색 설정
+  switch (status) {
+    case 'connected':
+      statusIcon.style.background = '#28a745';
+      statusIcon.style.boxShadow = '0 0 8px rgba(40, 167, 69, 0.6)';
+      if (statusContainer) {
+        statusContainer.style.background = '#d4edda';
+        statusContainer.style.border = '1px solid #c3e6cb';
+      }
+      statusText.style.color = '#155724';
+      break;
+    case 'available':
+      statusIcon.style.background = '#ffc107';
+      statusIcon.style.boxShadow = '0 0 8px rgba(255, 193, 7, 0.6)';
+      if (statusContainer) {
+        statusContainer.style.background = '#fff3cd';
+        statusContainer.style.border = '1px solid #ffeaa7';
+      }
+      statusText.style.color = '#856404';
+      break;
+    case 'not_found':
+      statusIcon.style.background = '#dc3545';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#f8d7da';
+        statusContainer.style.border = '1px solid #f5c6cb';
+      }
+      statusText.style.color = '#721c24';
+      break;
+    case 'not_supported':
+      statusIcon.style.background = '#6c757d';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#e2e3e5';
+        statusContainer.style.border = '1px solid #d6d8db';
+      }
+      statusText.style.color = '#383d41';
+      break;
+    case 'error':
+      statusIcon.style.background = '#dc3545';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#f8d7da';
+        statusContainer.style.border = '1px solid #f5c6cb';
+      }
+      statusText.style.color = '#721c24';
+      break;
+    default:
+      statusIcon.style.background = '#999';
+      statusIcon.style.boxShadow = 'none';
+      if (statusContainer) {
+        statusContainer.style.background = '#f0f0f0';
+        statusContainer.style.border = '1px solid #ddd';
+      }
+      statusText.style.color = '#666';
+  }
+  
+  // 메시지 업데이트
+  let displayMessage = message;
+  if (deviceInfo && deviceInfo.productName) {
+    displayMessage = message;
+  }
+  statusText.textContent = displayMessage;
+  
+  // 디바이스 정보가 있으면 툴팁에 표시
+  if (deviceInfo) {
+    statusText.title = `제조사: ${deviceInfo.manufacturerName}\n제품: ${deviceInfo.productName}\nVendor ID: ${deviceInfo.vendorId}\nProduct ID: ${deviceInfo.productId}`;
+  } else {
+    statusText.title = '';
   }
 }
 
