@@ -191,7 +191,6 @@ function createSpeedometerElement(speedometer) {
       </svg>
       <!-- 순위 표시 (속도계 검은 바탕 하단 중앙) -->
       <div class="rank-display-bottom">
-        <span class="rank-label-bottom">순위</span>
         <img class="rank-value-bottom" id="rank-value-${speedometer.id}" src="" alt="" style="display: none;" />
       </div>
     </div>
@@ -448,7 +447,7 @@ function updateScoreboardRankings(sorted, updateDisplay = false) {
       rankItem.dataset.slotIndex = i;
       rankItem.innerHTML = `
         <div class="rank-item-content">
-          <span class="rank-number">-</span>
+          <img class="rank-number" src="" alt="" style="display: none;" />
           <span class="rank-name">-</span>
           <span class="rank-distance">0.0km</span>
         </div>
@@ -469,14 +468,23 @@ function updateScoreboardRankings(sorted, updateDisplay = false) {
       
       if (sorted.length > 0 && sorted[targetIndex]) {
         const speedometer = sorted[targetIndex];
+        const rank = targetIndex + 1;
         if (nameEl) nameEl.textContent = speedometer.name;
         if (distanceEl) distanceEl.textContent = speedometer.totalDistance.toFixed(2) + 'km';
-        if (numberEl) numberEl.textContent = (targetIndex + 1) + '위';
+        if (numberEl) {
+          if (rank >= 1 && rank <= 10) {
+            numberEl.src = `assets/img/${rank}.png`;
+            numberEl.alt = `${rank}위`;
+            numberEl.style.display = 'inline-block';
+          } else {
+            numberEl.style.display = 'none';
+          }
+        }
         item.classList.add('rank-item-visible');
       } else {
         if (nameEl) nameEl.textContent = '-';
         if (distanceEl) distanceEl.textContent = '0.0km';
-        if (numberEl) numberEl.textContent = '-';
+        if (numberEl) numberEl.style.display = 'none';
         item.classList.add('rank-item-visible');
       }
     }
@@ -518,7 +526,7 @@ function updateRankDisplay(withAnimation = true) {
         const numberEl = item.querySelector('.rank-number');
         if (nameEl) nameEl.textContent = '-';
         if (distanceEl) distanceEl.textContent = '0.0km';
-        if (numberEl) numberEl.textContent = '-';
+        if (numberEl) numberEl.style.display = 'none';
         item.classList.add('rank-item-visible');
       }
     }
@@ -554,9 +562,18 @@ function updateRankDisplay(withAnimation = true) {
       const distanceEl = item.querySelector('.rank-distance');
       const numberEl = item.querySelector('.rank-number');
       
+      const rank = targetIndex + 1;
       if (nameEl) nameEl.textContent = speedometer.name;
       if (distanceEl) distanceEl.textContent = speedometer.totalDistance.toFixed(2) + 'km';
-      if (numberEl) numberEl.textContent = (targetIndex + 1) + '위';
+      if (numberEl) {
+        if (rank >= 1 && rank <= 10) {
+          numberEl.src = `assets/img/${rank}.png`;
+          numberEl.alt = `${rank}위`;
+          numberEl.style.display = 'inline-block';
+        } else {
+          numberEl.style.display = 'none';
+        }
+      }
       
       item.classList.add('rank-item-visible');
     } else {
@@ -566,7 +583,7 @@ function updateRankDisplay(withAnimation = true) {
       const numberEl = item.querySelector('.rank-number');
       if (nameEl) nameEl.textContent = '-';
       if (distanceEl) distanceEl.textContent = '0.0km';
-      if (numberEl) numberEl.textContent = '-';
+      if (numberEl) numberEl.style.display = 'none';
       item.classList.remove('rank-item-visible');
     }
   }
