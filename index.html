@@ -2235,10 +2235,13 @@
           <div class="form-group">
             <label>ANT+ 디바이스 선택</label>
             <!-- USB 수신기 연결 상태 표시 -->
-            <div id="antUSBStatus" style="margin-bottom: 8px; padding: 8px; border-radius: 4px; background: #f0f0f0; display: flex; align-items: center; gap: 8px;">
-              <span id="antUSBStatusIcon" style="width: 12px; height: 12px; border-radius: 50%; background: #999; display: inline-block;"></span>
-              <span id="antUSBStatusText" style="font-size: 12px; color: #666;">USB 수신기 상태 확인 중...</span>
-              <button type="button" id="btnRefreshUSBStatus" onclick="checkANTUSBStatus()" style="margin-left: auto; padding: 4px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">새로고침</button>
+            <div id="antUSBStatus" style="margin-bottom: 8px; padding: 8px; border-radius: 4px; background: #f0f0f0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="antUSBStatusIcon" style="width: 12px; height: 12px; border-radius: 50%; background: #999; display: inline-block; flex-shrink: 0;"></span>
+              <span id="antUSBStatusText" style="font-size: 12px; color: #666; flex: 1; min-width: 200px;">USB 수신기 상태 확인 중...</span>
+              <div style="display: flex; gap: 4px; margin-left: auto;">
+                <button type="button" id="btnConnectUSBStick" onclick="connectUSBStickDirectly()" style="display: none; padding: 4px 8px; font-size: 11px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">USB 수신기 연결</button>
+                <button type="button" id="btnRefreshUSBStatus" onclick="checkANTUSBStatus()" style="padding: 4px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">새로고침</button>
+              </div>
             </div>
             <div style="display: flex; gap: 8px; margin-bottom: 8px;">
               <button type="button" class="btn btn-primary" id="btnSearchANTDevices" onclick="searchANTDevices()" style="flex: 0 0 auto;">
