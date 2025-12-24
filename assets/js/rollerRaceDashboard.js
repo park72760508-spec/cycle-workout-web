@@ -169,6 +169,9 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
+        <!-- 바늘 중심 원 (고정) -->
+        <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
+        
         <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
         <g class="speedometer-needle">
           <line id="needle-${speedometer.id}" 
@@ -178,7 +181,6 @@ function createSpeedometerElement(speedometer) {
                 stroke-width="3" 
                 stroke-linecap="round"
                 transform="rotate(270 100 140)"/>
-          <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         </g>
         
         <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지, 문자 높이의 1/2만큼 아래로 이동) -->
