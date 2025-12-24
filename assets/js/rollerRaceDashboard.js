@@ -2116,11 +2116,13 @@ async function checkANTUSBStatus() {
   const statusIcon = document.getElementById('antUSBStatusIcon');
   const statusText = document.getElementById('antUSBStatusText');
   const refreshButton = document.getElementById('btnRefreshUSBStatus');
+  const connectButton = document.getElementById('btnConnectUSBStick');
   
   if (!statusIcon || !statusText) return;
   
   // 새로고침 버튼 비활성화
   if (refreshButton) refreshButton.disabled = true;
+  if (connectButton) connectButton.disabled = true;
   
   try {
     // 이미 연결된 디바이스 확인
@@ -2128,8 +2130,15 @@ async function checkANTUSBStatus() {
       try {
         // 디바이스가 여전히 열려있는지 확인
         if (window.antState.usbDevice.opened) {
-          updateANTUSBStatusUI('connected', 'USB 수신기 연결됨', window.antState.usbDevice);
+          const deviceInfo = {
+            vendorId: '0x' + window.antState.usbDevice.vendorId.toString(16).toUpperCase(),
+            productId: '0x' + window.antState.usbDevice.productId.toString(16).toUpperCase(),
+            manufacturerName: window.antState.usbDevice.manufacturerName || '알 수 없음',
+            productName: window.antState.usbDevice.productName || 'ANT+ USB 수신기'
+          };
+          updateANTUSBStatusUI('connected', 'USB 수신기 연결됨', deviceInfo);
           if (refreshButton) refreshButton.disabled = false;
+          if (connectButton) connectButton.style.display = 'none';
           return;
         }
       } catch (error) {
@@ -2138,8 +2147,15 @@ async function checkANTUSBStatus() {
       }
     }
     
+    // Web USB API 지원 확인
+    if (!navigator.usb) {
+      updateANTUSBStatusUI('not_supported', 'Web USB API를 지원하지 않습니다 (Chrome/Edge 필요)', null);
+      if (connectButton) connectButton.style.display = 'none';
+      return;
+    }
+    
     // Web USB API로 이미 권한이 부여된 디바이스 목록 확인
-    if (navigator.usb && typeof navigator.usb.getDevices === 'function') {
+    if (typeof navigator.usb.getDevices === 'function') {
       const devices = await navigator.usb.getDevices();
       
       // ANT+ USB 스틱 찾기 (Vendor ID로 필터링)
@@ -2167,20 +2183,77 @@ async function checkANTUSBStatus() {
         
         if (isOpened) {
           updateANTUSBStatusUI('connected', `${deviceInfo.productName} 연결됨`, deviceInfo);
+          if (connectButton) connectButton.style.display = 'none';
         } else {
           updateANTUSBStatusUI('available', `${deviceInfo.productName} 감지됨 (연결 필요)`, deviceInfo);
+          if (connectButton) connectButton.style.display = 'inline-block';
         }
       } else {
-        updateANTUSBStatusUI('not_found', 'USB 수신기를 찾을 수 없습니다', null);
+        // 권한이 부여된 디바이스가 없는 경우
+        // USB 수신기가 연결되어 있지만 권한이 없는 상태
+        updateANTUSBStatusUI('not_found', 'USB 수신기 권한이 필요합니다. "USB 수신기 연결" 버튼을 클릭하세요', null);
+        if (connectButton) connectButton.style.display = 'inline-block';
       }
     } else {
       updateANTUSBStatusUI('not_supported', 'Web USB API를 지원하지 않습니다', null);
+      if (connectButton) connectButton.style.display = 'none';
     }
   } catch (error) {
     console.error('[ANT+ USB 상태 확인 오류]', error);
     updateANTUSBStatusUI('error', '상태 확인 실패: ' + (error.message || '알 수 없는 오류'), null);
+    if (connectButton) connectButton.style.display = 'inline-block';
   } finally {
     if (refreshButton) refreshButton.disabled = false;
+    if (connectButton) connectButton.disabled = false;
+  }
+}
+
+/**
+ * USB 수신기 직접 연결 (권한 요청)
+ */
+async function connectUSBStickDirectly() {
+  const statusText = document.getElementById('antUSBStatusText');
+  const connectButton = document.getElementById('btnConnectUSBStick');
+  
+  if (connectButton) connectButton.disabled = true;
+  if (statusText) statusText.textContent = 'USB 수신기 연결 중...';
+  
+  try {
+    // 사용자 제스처 컨텍스트에서 즉시 requestDevice 호출
+    const devicePromise = requestANTUSBDevice();
+    await connectANTUSBStickWithDevice(devicePromise);
+    
+    // 연결 성공 시 상태 업데이트
+    await checkANTUSBStatus();
+    
+    if (typeof showToast === 'function') {
+      showToast('USB 수신기 연결 완료');
+    }
+  } catch (error) {
+    console.error('[USB 수신기 연결 오류]', error);
+    
+    if (error.name === 'SecurityError' || error.message.includes('접근 권한')) {
+      if (statusText) {
+        statusText.textContent = '권한 오류: 버튼을 다시 클릭해주세요';
+      }
+    } else if (error.name === 'NotFoundError') {
+      if (statusText) {
+        statusText.textContent = 'USB 수신기를 찾을 수 없습니다. USB 포트를 확인하세요';
+      }
+    } else {
+      if (statusText) {
+        statusText.textContent = '연결 실패: ' + (error.message || '알 수 없는 오류');
+      }
+    }
+    
+    // 상태 다시 확인
+    await checkANTUSBStatus();
+    
+    if (typeof showToast === 'function') {
+      showToast('USB 수신기 연결 실패: ' + (error.message || '알 수 없는 오류'));
+    }
+  } finally {
+    if (connectButton) connectButton.disabled = false;
   }
 }
 
