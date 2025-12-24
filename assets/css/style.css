@@ -9041,8 +9041,8 @@ button[aria-disabled="true"] {
 .speed-unit-sup,
 .distance-unit-sup {
   font-size: 30%;
-  color: #ffffff;
-  font-weight: 500;
+  color: #888888;
+  font-weight: 300;
   line-height: 0;
 }
 
