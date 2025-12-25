@@ -1004,7 +1004,7 @@ function saveSpeedometerPairing() {
     const speedometer = window.rollerRaceState.speedometers.find(s => s.id === targetId);
     if (speedometer && nameInput) {
         // 트랙명은 유지하고, 이름만 저장 (별도 필드로 관리하거나 deviceId 옆에 표시)
-        const pairingName = nameInput.value.trim() || speedometer.name;
+        const pairingName = nameInput.value.trim();
         const newDeviceId = deviceIdInput.value.trim();
         
         // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
@@ -1033,7 +1033,15 @@ function saveSpeedometerPairing() {
         }
         
         // 페어링 이름을 별도로 저장 (deviceId 옆에 표시용)
-        speedometer.pairingName = pairingName;
+        // 빈 문자열이어도 저장 (사용자가 의도적으로 빈 값으로 설정할 수 있음)
+        speedometer.pairingName = pairingName || null;
+        
+        console.log('[페어링 저장]', {
+            speedometerId: targetId,
+            pairingName: pairingName,
+            savedPairingName: speedometer.pairingName,
+            deviceId: newDeviceId
+        });
         
         // ID 변경 시 (센서 교체 시)
         if (speedometer.deviceId != newDeviceId) {
@@ -1067,10 +1075,41 @@ function saveSpeedometerPairing() {
         
         // 저장 및 UI 갱신
         saveSpeedometerList();
+        
+        // UI 업데이트 전에 pairingName이 제대로 저장되었는지 확인
+        console.log('[UI 업데이트 전]', {
+            speedometerId: targetId,
+            pairingName: speedometer.pairingName,
+            speedometer: speedometer
+        });
+        
+        // 속도계 목록 UI 업데이트
         updateSpeedometerListUI();
-        updateSpeedometerPairingName(targetId, pairingName);
+        
+        // 속도계 그리드 재생성 (이름이 포함되도록)
         createSpeedometerGrid();
+        
+        // 페어링 이름 업데이트 (그리드 생성 후)
+        updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
+        
+        // 약간의 지연 후 다시 한 번 이름 업데이트 (DOM 업데이트 보장)
+        setTimeout(() => {
+            updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
+            // 속도계 목록도 다시 업데이트
+            updateSpeedometerListUI();
+        }, 100);
+        
         closeAddSpeedometerModal();
+        
+        // 토스트 메시지 표시
+        if (typeof showToast === 'function') {
+            const trackName = `트랙${targetId}`;
+            if (speedometer.pairingName) {
+                showToast(`${trackName}에 ${speedometer.pairingName}이(가) 페어링되었습니다.`);
+            } else {
+                showToast(`${trackName}에 페어링되었습니다.`);
+            }
+        }
         
         // USB가 연결되어 있다면 바로 스캔 시작하여 연결 확인
         if (window.antState.usbDevice) {
@@ -1400,8 +1439,23 @@ function processSpeedCadenceData(deviceId, data) {
 function updateSpeedometerPairingName(speedometerId, pairingName) {
   const pairingNameEl = document.getElementById(`pairing-name-${speedometerId}`);
   if (pairingNameEl) {
-    pairingNameEl.textContent = pairingName || '';
-    pairingNameEl.style.color = pairingName ? '#333' : '#999';
+    const displayName = pairingName || '';
+    pairingNameEl.textContent = displayName;
+    pairingNameEl.style.color = displayName ? '#333' : '#999';
+    pairingNameEl.style.fontWeight = displayName ? '500' : 'normal';
+    
+    console.log('[페어링 이름 업데이트]', {
+      speedometerId: speedometerId,
+      pairingName: pairingName,
+      displayName: displayName,
+      elementFound: true
+    });
+  } else {
+    console.warn('[페어링 이름 업데이트 실패]', {
+      speedometerId: speedometerId,
+      pairingName: pairingName,
+      elementNotFound: `pairing-name-${speedometerId}`
+    });
   }
 }
 
