@@ -8798,7 +8798,7 @@ button[aria-disabled="true"] {
 }
 
 .scoreboard-label {
-  font-size: 20px; /* 70% of 28px */
+  font-size: 28px; /* 40% 증가: 20px * 1.4 = 28px */
   font-weight: 600;
   color: #00d4aa;
   text-transform: uppercase;
@@ -8808,7 +8808,7 @@ button[aria-disabled="true"] {
 }
 
 .scoreboard-value {
-  font-size: 50px; /* 70% of 72px */
+  font-size: 40px; /* 20% 감소: 50px * 0.8 = 40px */
   font-weight: 900;
   color: #ffffff;
   line-height: 1.2;
@@ -8816,16 +8816,21 @@ button[aria-disabled="true"] {
     0 0 20px rgba(0, 212, 170, 0.8),
     0 4px 8px rgba(0, 0, 0, 0.5),
     2px 2px 4px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', monospace;
-  letter-spacing: 2px;
+  font-family: 'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace; /* digital-number와 동일한 폰트 */
+  letter-spacing: 4px; /* digital-number와 동일한 letter-spacing */
 }
 
 .scoreboard-unit {
-  font-size: 25px; /* 70% of 36px */
-  font-weight: 600;
-  color: #00d4aa;
+  font-size: 20px; /* 20% 감소: 25px * 0.8 = 20px */
+  font-weight: 900;
+  color: #00ff88; /* digital-number와 동일한 색상 */
   margin-left: 6px; /* 70% of 8px */
-  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+  font-family: 'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace; /* digital-number와 동일한 폰트 */
+  letter-spacing: 4px; /* digital-number와 동일한 letter-spacing */
+  text-shadow: 
+    0 0 10px rgba(0, 255, 136, 0.8),
+    0 0 20px rgba(0, 255, 136, 0.6),
+    0 0 30px rgba(0, 255, 136, 0.4);
 }
 
 /* 디지털 숫자 스타일 (전광판용) */
@@ -9517,16 +9522,16 @@ button[aria-disabled="true"] {
   }
   
   .scoreboard-label {
-    font-size: 14px; /* 70% of 20px */
+    font-size: 19.6px; /* 40% 증가: 14px * 1.4 = 19.6px (반응형) */
     margin-bottom: 8px; /* 70% of 12px */
   }
   
   .scoreboard-value {
-    font-size: 34px; /* 70% of 48px */
+    font-size: 32px; /* 20% 감소: 40px * 0.8 = 32px (반응형) */
   }
   
   .scoreboard-unit {
-    font-size: 17px; /* 70% of 24px */
+    font-size: 16px; /* 20% 감소: 20px * 0.8 = 16px (반응형) */
   }
   
   .rank-item {
