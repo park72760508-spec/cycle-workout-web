@@ -4232,7 +4232,7 @@ function saveRaceDataSnapshot() {
  */
 function generateRaceReportPDF() {
   try {
-    // jsPDF가 로드되어 있는지 확인
+    // jsPDF와 html2canvas가 로드되어 있는지 확인
     if (typeof window.jspdf === 'undefined' && typeof jsPDF === 'undefined') {
       console.error('[PDF 생성] jsPDF가 로드되지 않았습니다.');
       if (typeof showToast === 'function') {
@@ -4241,78 +4241,126 @@ function generateRaceReportPDF() {
       return;
     }
     
+    if (typeof html2canvas === 'undefined') {
+      console.error('[PDF 생성] html2canvas가 로드되지 않았습니다.');
+      if (typeof showToast === 'function') {
+        showToast('PDF 생성에 필요한 라이브러리를 불러올 수 없습니다.', 'error');
+      }
+      return;
+    }
+    
     const { jsPDF } = window.jspdf || window;
-    const doc = new jsPDF();
-    
-    // 제목
-    doc.setFontSize(20);
-    doc.text('실내 평로라 대회 결과 리포트', 105, 20, { align: 'center' });
-    
-    // 경기 정보
-    doc.setFontSize(12);
-    const raceDate = new Date().toLocaleString('ko-KR');
-    doc.text(`경기 일시: ${raceDate}`, 20, 35);
-    
-    const elapsedTime = window.rollerRaceState.totalElapsedTime || 0;
-    const hours = Math.floor(elapsedTime / 3600);
-    const minutes = Math.floor((elapsedTime % 3600) / 60);
-    const seconds = elapsedTime % 60;
-    const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-    doc.text(`경기 시간: ${timeStr}`, 20, 42);
     
     // 순위별 데이터 정렬
     const sorted = [...window.rollerRaceState.speedometers]
       .filter(s => s.totalDistance > 0)
       .sort((a, b) => b.totalDistance - a.totalDistance);
     
-    // 테이블 헤더
-    let yPos = 55;
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
-    doc.text('순위', 20, yPos);
-    doc.text('트랙', 35, yPos);
-    doc.text('이름', 55, yPos);
-    doc.text('이동거리(km)', 90, yPos);
-    doc.text('평균속도(km/h)', 130, yPos);
-    doc.text('최고속도(km/h)', 170, yPos);
+    // HTML 테이블 생성 (한글 폰트 문제 해결을 위해 HTML로 생성 후 이미지 변환)
+    const reportHTML = `
+      <div style="font-family: 'Pretendard', 'Noto Sans KR', sans-serif; padding: 20px; background: white; color: #333;">
+        <h1 style="text-align: center; font-size: 24px; margin-bottom: 20px; color: #2563eb;">
+          Stelvio Indoor Grand Prix - 경기 결과 리포트
+        </h1>
+        
+        <div style="margin-bottom: 20px; font-size: 14px;">
+          <p><strong>경기 일시:</strong> ${new Date().toLocaleString('ko-KR')}</p>
+          <p><strong>경기 시간:</strong> ${formatTime(window.rollerRaceState.totalElapsedTime || 0)}</p>
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="background: #2563eb; color: white;">
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">순위</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">트랙</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">이름</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">이동거리(km)</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">평균속도(km/h)</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">최고속도(km/h)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sorted.slice(0, 10).map((speedometer, index) => {
+              const rank = index + 1;
+              const trackName = `트랙${speedometer.id}`;
+              const name = speedometer.pairingName || '-';
+              const distance = speedometer.totalDistance.toFixed(2);
+              const avgSpeed = speedometer.averageSpeed > 0 ? speedometer.averageSpeed.toFixed(1) : '0.0';
+              const maxSpeed = speedometer.maxSpeed > 0 ? speedometer.maxSpeed.toFixed(1) : '0.0';
+              
+              return `
+                <tr style="background: ${index % 2 === 0 ? '#f9f9f9' : 'white'};">
+                  <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${rank}</td>
+                  <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${trackName}</td>
+                  <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${name}</td>
+                  <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${distance}</td>
+                  <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${avgSpeed}</td>
+                  <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${maxSpeed}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
     
-    yPos += 8;
-    doc.setFont(undefined, 'normal');
-    doc.setDrawColor(200, 200, 200);
-    doc.line(20, yPos - 3, 190, yPos - 3);
+    // 임시 div 생성
+    const tempDiv = document.createElement('div');
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    tempDiv.style.width = '800px';
+    tempDiv.innerHTML = reportHTML;
+    document.body.appendChild(tempDiv);
     
-    // 순위별 데이터 출력 (1~10위)
-    sorted.slice(0, 10).forEach((speedometer, index) => {
-      const rank = index + 1;
-      const trackName = `트랙${speedometer.id}`;
-      const name = speedometer.pairingName || '-';
-      const distance = speedometer.totalDistance.toFixed(2);
-      const avgSpeed = speedometer.averageSpeed > 0 ? speedometer.averageSpeed.toFixed(1) : '0.0';
-      const maxSpeed = speedometer.maxSpeed > 0 ? speedometer.maxSpeed.toFixed(1) : '0.0';
+    // html2canvas로 이미지 변환
+    html2canvas(tempDiv, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff'
+    }).then(canvas => {
+      // 임시 div 제거
+      document.body.removeChild(tempDiv);
       
-      doc.text(rank.toString(), 20, yPos);
-      doc.text(trackName, 35, yPos);
-      doc.text(name, 55, yPos);
-      doc.text(distance, 90, yPos);
-      doc.text(avgSpeed, 130, yPos);
-      doc.text(maxSpeed, 170, yPos);
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
       
-      yPos += 7;
+      const doc = new jsPDF('p', 'mm', 'a4');
+      let position = 0;
       
-      // 페이지 넘김 (한 페이지에 최대 20개)
-      if (yPos > 270 && index < sorted.length - 1) {
+      // 첫 페이지 추가
+      doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      
+      // 여러 페이지가 필요한 경우
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
         doc.addPage();
-        yPos = 20;
+        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      // 파일명 생성
+      const fileName = `경기결과_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}.pdf`;
+      
+      // PDF 저장
+      doc.save(fileName);
+      
+      console.log('[PDF 리포트] 생성 완료:', fileName);
+      
+      if (typeof showToast === 'function') {
+        showToast('PDF 리포트가 생성되었습니다.');
+      }
+    }).catch(error => {
+      document.body.removeChild(tempDiv);
+      console.error('[PDF 리포트 생성 오류]', error);
+      if (typeof showToast === 'function') {
+        showToast('PDF 리포트 생성 중 오류가 발생했습니다.', 'error');
       }
     });
-    
-    // 파일명 생성
-    const fileName = `경기결과_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}.pdf`;
-    
-    // PDF 저장
-    doc.save(fileName);
-    
-    console.log('[PDF 리포트] 생성 완료:', fileName);
     
   } catch (error) {
     console.error('[PDF 리포트 생성 오류]', error);
@@ -4320,6 +4368,16 @@ function generateRaceReportPDF() {
       showToast('PDF 리포트 생성 중 오류가 발생했습니다.', 'error');
     }
   }
+}
+
+/**
+ * 시간 포맷팅 헬퍼 함수
+ */
+function formatTime(seconds) {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 
