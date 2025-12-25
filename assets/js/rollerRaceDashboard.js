@@ -396,34 +396,38 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
   if (!speedometer) return;
   
+  // 속도 값을 즉시 반영 (0이어도 반영)
   speedometer.currentSpeed = speed;
   speedometer.totalDistance = distance;
   speedometer.lastUpdateTime = Date.now();
   
-  // 최대속도 업데이트
+  // 최대속도 업데이트 (속도가 0이 아닐 때만)
   if (speed > speedometer.maxSpeed) {
     speedometer.maxSpeed = speed;
   }
   
-  // 평균속도 계산 (누적 평균)
+  // 평균속도 계산 (누적 평균, 속도가 0보다 클 때만)
   if (speed > 0) {
     speedometer.speedSum += speed;
     speedometer.speedCount += 1;
     speedometer.averageSpeed = speedometer.speedSum / speedometer.speedCount;
   }
   
-  // UI 업데이트
+  // UI 업데이트 (속도가 0이어도 즉시 반영)
   const speedValueEl = document.getElementById(`speed-value-${speedometerId}`);
   const maxSpeedValueEl = document.getElementById(`max-speed-value-${speedometerId}`);
   const avgSpeedValueEl = document.getElementById(`avg-speed-value-${speedometerId}`);
   const distanceValueEl = document.getElementById(`distance-value-${speedometerId}`);
   
-  if (speedValueEl) speedValueEl.textContent = speed.toFixed(1);
+  if (speedValueEl) {
+    // 속도가 0이어도 즉시 "0.0"으로 표시
+    speedValueEl.textContent = speed.toFixed(1);
+  }
   if (maxSpeedValueEl) maxSpeedValueEl.textContent = speedometer.maxSpeed.toFixed(1);
   if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(1);
   if (distanceValueEl) distanceValueEl.textContent = distance.toFixed(2);
   
-  // 바늘 업데이트
+  // 바늘 업데이트 (속도가 0이어도 즉시 반영)
   updateSpeedometerNeedle(speedometerId, speed);
   
   // 순위 업데이트
@@ -1415,6 +1419,9 @@ function processSpeedCadenceData(deviceId, data) {
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
+  // 패킷 수신 시간 업데이트 (데이터가 있으면 항상 업데이트)
+  speedometer.lastPacketTime = Date.now();
+
   // 속도 갱신
   if (timeDiff > 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
@@ -1423,7 +1430,8 @@ function processSpeedCadenceData(deviceId, data) {
     // 속도(km/h) = (회전수 * 둘레(mm) / 1000) / (시간 / 1024) * 3.6
     const distM = (revDiff * circumference) / 1000;
     const timeS = timeDiff / 1024;
-    const speed = (distM / timeS) * 3.6;
+    // revDiff가 0이면 속도도 0 (바퀴가 멈춘 경우), timeS가 0이면 속도도 0
+    const speed = (timeS > 0 && revDiff > 0) ? (distM / timeS) * 3.6 : 0;
 
     // 비정상 값 필터링 (200km/h 이상 무시)
     if (speed < 200) {
@@ -1431,10 +1439,10 @@ function processSpeedCadenceData(deviceId, data) {
         speedometer.totalDistance += (distM / 1000);
         speedometer.totalRevolutions += revDiff;
       }
+      // 속도가 0이어도 즉시 반영
       updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
       
       // 센서 데이터를 받으면 연결됨 상태로 업데이트 (초록색)
-      speedometer.lastPacketTime = Date.now(); // 패킷 수신 시간 업데이트
       if (!speedometer.connected) {
         speedometer.connected = true;
         if(typeof updateSpeedometerConnectionStatus === 'function') {
@@ -1446,17 +1454,29 @@ function processSpeedCadenceData(deviceId, data) {
           updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
         }
       }
+    } else {
+      // 비정상 값(200km/h 이상)인 경우에도 0으로 표시
+      updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
     }
     
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
   } else {
-    // 데이터가 없는 경우
+    // 데이터가 없는 경우 - 속도를 즉시 0으로 업데이트
     const timeSinceLastPacket = Date.now() - speedometer.lastPacketTime;
     
-    // 3초 이상 데이터 없으면 0 처리
+    // 3초 이상 데이터 없으면 0 처리 (즉시 반영)
     if (timeSinceLastPacket > 3000) {
+      // 속도를 즉시 0으로 업데이트
+      speedometer.currentSpeed = 0;
       updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+    } else {
+      // 3초 미만이어도 timeDiff가 0이면 속도를 0으로 표시 (즉시 반영)
+      // 바퀴가 멈춘 경우에도 속도가 0으로 표시되어야 함
+      if (speedometer.currentSpeed !== 0) {
+        speedometer.currentSpeed = 0;
+        updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+      }
     }
     
     // 30초 이상 데이터 없으면 주황색으로 변경
