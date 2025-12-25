@@ -401,7 +401,32 @@
 
 
     
+    /* 육상 트랙 경기장 스타일 */
+    .race-track-container {
+      width: 100%;
+      height: 120px;
+      margin: 8px 0;
+      position: relative;
+      background: linear-gradient(135deg, rgba(45, 80, 22, 0.1) 0%, rgba(74, 124, 89, 0.15) 100%);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(139, 69, 19, 0.3);
+    }
     
+    .race-track-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    
+    .race-mascot {
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* 마스코트 위치 업데이트 애니메이션 */
+    .race-mascot.moving {
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    }
   </style>
 
   <!-- 외부 스타일 -->
