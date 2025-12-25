@@ -70,10 +70,12 @@ window.antState = {
 
 // ANT+ 채널 설정
 const ANT_CHANNEL_CONFIG = {
-  MAX_CHANNELS: 15, // 최대 동시 연결 채널 수 (스캔 채널 0번 제외, 1-15번 사용)
-  SCAN_CHANNEL: 0, // 스캔용 채널 번호
+  MAX_CHANNELS: 8, // USB ANT+ 수신기의 실제 최대 채널 수 (채널 0-7 또는 1-8)
+  SCAN_CHANNEL: 0, // 스캔용 채널 번호 (스캔 모드에서는 채널 0번 하나만 사용)
   MIN_CHANNEL: 1, // 사용 가능한 최소 채널 번호
-  MAX_CHANNEL: 15 // 사용 가능한 최대 채널 번호
+  MAX_CHANNEL: 7, // 사용 가능한 최대 채널 번호 (USB 수신기는 8개 채널만 지원)
+  // 참고: 스캔 모드를 사용하므로 실제로는 채널 제한 없이 여러 디바이스 수신 가능
+  // 하지만 하드웨어 제한을 고려하여 MAX_CHANNELS를 8로 설정
 };
 
 // 속도계 데이터 구조
@@ -245,6 +247,44 @@ function createSpeedometerElement(speedometer) {
       <div class="rank-display-bottom">
         <img class="rank-value-bottom" id="rank-value-${speedometer.id}" src="" alt="" style="display: none;" />
       </div>
+    </div>
+    <!-- 육상 트랙 경기장 -->
+    <div class="race-track-container" id="race-track-${speedometer.id}">
+      <svg class="race-track-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet">
+        <!-- 트랙 배경 (잔디 느낌) -->
+        <rect x="0" y="0" width="400" height="120" fill="#2d5016" opacity="0.3"/>
+        
+        <!-- 트랙 외곽 (타원형) -->
+        <ellipse cx="200" cy="60" rx="180" ry="50" fill="none" stroke="#8B4513" stroke-width="4" opacity="0.6"/>
+        
+        <!-- 트랙 내부 (타원형) -->
+        <ellipse cx="200" cy="60" rx="170" ry="45" fill="#4a7c59" opacity="0.4"/>
+        
+        <!-- 트랙 레인 구분선 (좌우 양쪽 제외) -->
+        <ellipse cx="200" cy="60" rx="160" ry="42" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="5,5" opacity="0.3"/>
+        <ellipse cx="200" cy="60" rx="150" ry="38" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="5,5" opacity="0.3"/>
+        
+        <!-- 시작/종료선 (좌측) -->
+        <line x1="20" y1="10" x2="20" y2="110" stroke="#ffffff" stroke-width="2" opacity="0.8"/>
+        
+        <!-- 마스코트 위치 (자전거 타는 모습) -->
+        <g class="race-mascot" id="mascot-${speedometer.id}" transform="translate(20, 60)">
+          <!-- 자전거 프레임 -->
+          <circle cx="0" cy="0" r="8" fill="#ff6b6b" opacity="0.9"/>
+          <circle cx="0" cy="0" r="5" fill="#ffffff"/>
+          <!-- 자전거 바퀴 -->
+          <circle cx="-12" cy="8" r="6" fill="#333" opacity="0.7"/>
+          <circle cx="12" cy="8" r="6" fill="#333" opacity="0.7"/>
+          <!-- 자전거 바퀴 스포크 -->
+          <line x1="-12" y1="8" x2="-8" y2="4" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+          <line x1="-12" y1="8" x2="-8" y2="12" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+          <line x1="12" y1="8" x2="8" y2="4" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+          <line x1="12" y1="8" x2="8" y2="12" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+        </g>
+        
+        <!-- 순위 표시 (트랙 상단) -->
+        <text x="200" y="15" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" id="rank-text-${speedometer.id}" opacity="0">-</text>
+      </svg>
     </div>
     <div class="speedometer-info disconnected">
       <!-- 좌측: 최대속도, 평균속도 (2줄) -->
@@ -454,11 +494,16 @@ function updateRankings() {
     .filter(s => s.connected && s.totalDistance > 0)
     .sort((a, b) => b.totalDistance - a.totalDistance);
   
-  // 순위 UI 업데이트
+  // 최대 거리 계산 (진행률 계산용)
+  const maxDistance = sorted.length > 0 ? sorted[0].totalDistance : 1;
+  
+  // 순위 UI 업데이트 및 마스코트 위치 업데이트
   sorted.forEach((speedometer, index) => {
+    const rank = index + 1;
+    
+    // 순위 이미지 업데이트
     const rankEl = document.getElementById(`rank-value-${speedometer.id}`);
     if (rankEl) {
-      const rank = index + 1;
       if (rank >= 1 && rank <= 10) {
         rankEl.src = `assets/img/${rank}.png`;
         rankEl.alt = `${rank}위`;
@@ -466,6 +511,15 @@ function updateRankings() {
       } else {
         rankEl.style.display = 'none';
       }
+    }
+    
+    // 경기 트랙 순위 업데이트
+    updateRaceTrackRank(speedometer.id, rank);
+    
+    // 경기 트랙 마스코트 위치 업데이트 (거리 기반 진행률)
+    if (maxDistance > 0) {
+      const progress = Math.min(speedometer.totalDistance / maxDistance, 1.0);
+      updateRaceTrackMascot(speedometer.id, progress);
     }
   });
   
@@ -476,6 +530,10 @@ function updateRankings() {
       if (rankEl) {
         rankEl.style.display = 'none';
       }
+      // 경기 트랙 순위 숨김
+      updateRaceTrackRank(speedometer.id, null);
+      // 마스코트를 시작 위치로
+      updateRaceTrackMascot(speedometer.id, 0);
     }
   });
   
@@ -1600,14 +1658,16 @@ async function connectANTSpeedometer(deviceId) {
     throw new Error('유효하지 않은 디바이스 ID입니다.');
   }
   
-  // 사용 가능한 채널 찾기 (1-15, 스캔 채널 0번 제외)
+  // 사용 가능한 채널 찾기 (1-7, 스캔 채널 0번 제외)
+  // 참고: 현재는 스캔 모드를 사용하므로 이 함수는 실제로 호출되지 않지만,
+  // 향후 개별 채널 연결 방식으로 변경 시를 대비하여 유지
   let channelNumber = ANT_CHANNEL_CONFIG.MIN_CHANNEL;
   while (channelNumber <= ANT_CHANNEL_CONFIG.MAX_CHANNEL && window.antState.connectedChannels[channelNumber]) {
     channelNumber++;
   }
   
   if (channelNumber > ANT_CHANNEL_CONFIG.MAX_CHANNEL) {
-    throw new Error(`사용 가능한 채널이 없습니다. (최대 ${ANT_CHANNEL_CONFIG.MAX_CHANNELS}개 디바이스 연결 가능)`);
+    throw new Error(`사용 가능한 채널이 없습니다. (최대 ${ANT_CHANNEL_CONFIG.MAX_CHANNELS}개 채널 사용 가능)`);
   }
   
   // 채널 할당
@@ -1704,6 +1764,54 @@ function startSpeedometerDataReceiver(channelNumber, deviceId) {
   };
   
   receiveData();
+}
+
+/**
+ * 경기 트랙 마스코트 위치 업데이트
+ */
+function updateRaceTrackMascot(speedometerId, progress) {
+  // progress: 0.0 ~ 1.0 (트랙 진행률)
+  const mascotEl = document.getElementById(`mascot-${speedometerId}`);
+  if (!mascotEl) return;
+  
+  // 트랙의 타원형 경로를 따라 마스코트 이동
+  // 타원형 경로: x = 200 + 180 * cos(t), y = 60 + 50 * sin(t)
+  // t는 0부터 2π까지 (progress에 따라)
+  const t = progress * 2 * Math.PI;
+  const centerX = 200;
+  const centerY = 60;
+  const radiusX = 180;
+  const radiusY = 50;
+  
+  const x = centerX + radiusX * Math.cos(t - Math.PI / 2); // -π/2로 시작 (상단에서 시작)
+  const y = centerY + radiusY * Math.sin(t - Math.PI / 2);
+  
+  // 마스코트 회전 각도 (트랙 방향에 맞춰)
+  const angle = (t * 180 / Math.PI) - 90;
+  
+  mascotEl.classList.add('moving');
+  mascotEl.setAttribute('transform', `translate(${x}, ${y}) rotate(${angle})`);
+  
+  // 애니메이션 완료 후 클래스 제거
+  setTimeout(() => {
+    mascotEl.classList.remove('moving');
+  }, 500);
+}
+
+/**
+ * 경기 트랙 순위 업데이트
+ */
+function updateRaceTrackRank(speedometerId, rank) {
+  const rankTextEl = document.getElementById(`rank-text-${speedometerId}`);
+  if (!rankTextEl) return;
+  
+  if (rank && rank > 0) {
+    rankTextEl.textContent = `${rank}위`;
+    rankTextEl.style.opacity = '1';
+    rankTextEl.style.fill = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
+  } else {
+    rankTextEl.style.opacity = '0';
+  }
 }
 
 /**
