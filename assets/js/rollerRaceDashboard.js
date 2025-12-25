@@ -3403,6 +3403,182 @@ function selectANTDevice(deviceId, deviceName) {
 
 
 
+// =========================================================================
+// [최종 마스터 패치] 센서 데이터 강제 처리 및 화면 표시 통합 모듈
+// (이 코드가 파일의 맨 마지막에 위치해야 합니다)
+// =========================================================================
+
+// 1. 데이터 수신 버퍼 처리 (함수 이름 혼동 방지를 위해 두 가지 이름 모두 정의)
+let masterRxBuffer = new Uint8Array(0);
+
+// 기존 코드에서 어떤 이름을 쓰든 이 로직이 실행되도록 연결
+window.processBuffer = processMasterBuffer;
+window.processIncomingData = processMasterBuffer;
+
+function processMasterBuffer(newData) {
+  // 버퍼 병합
+  const combined = new Uint8Array(masterRxBuffer.length + newData.length);
+  combined.set(masterRxBuffer);
+  combined.set(newData, masterRxBuffer.length);
+  masterRxBuffer = combined;
+
+  while (masterRxBuffer.length >= 4) {
+    const syncIndex = masterRxBuffer.indexOf(0xA4);
+    if (syncIndex === -1) {
+      if (masterRxBuffer.length > 256) masterRxBuffer = new Uint8Array(0); // 너무 쌓이면 비움
+      break;
+    }
+    if (syncIndex > 0) {
+      masterRxBuffer = masterRxBuffer.slice(syncIndex); // Sync 앞부분 제거
+      continue;
+    }
+
+    const length = masterRxBuffer[1];
+    const totalLen = length + 4; // ANT+ 패킷 길이 계산
+
+    if (masterRxBuffer.length < totalLen) break; // 데이터 대기
+
+    // 패킷 추출
+    const packet = masterRxBuffer.slice(0, totalLen);
+    masterRxBuffer = masterRxBuffer.slice(totalLen);
+
+    // [핵심] 메시지 처리기로 전달
+    routeANTMessage(packet);
+  }
+}
+
+// 2. 메시지 라우팅 (Wrapper 해제 및 데이터 분배)
+function routeANTMessage(packet) {
+  const msgId = packet[2];
+  const payload = packet.slice(3, packet.length - 1);
+
+  // Tacx Wrapper (0xAE) 해제
+  if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
+      // console.log('[ANT+] Wrapper 해제');
+      processMasterBuffer(payload.slice(1)); // 내부 데이터 재처리
+      return;
+  }
+
+  // 센서 데이터 (0x4E) 처리
+  if (msgId === 0x4E) {
+      handleBroadcastData(payload);
+  }
+}
+
+// 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
+function handleBroadcastData(payload) {
+  if (payload.length < 9) return;
+  const antData = payload.slice(1, 9); 
+  
+  // Extended Data (ID 정보) 확인
+  if (payload.length >= 13) {
+    const flag = payload[9];
+    
+    // 0x80 비트가 있거나, 길이가 충분하면 ID가 있다고 가정
+    if ((flag & 0x80) || payload.length > 12) { 
+      const idLow = payload[10];
+      const idHigh = payload[11];
+      const deviceType = payload[12]; // 0x78(구형속도), 0x7B(신형속도) 등
+      const transType = payload[13];
+      
+      // ID 계산
+      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+      
+      // [디버그] 센서 감지 로그
+      // console.log(`[ANT+] 센서 감지: ID=${extendedId}, Type=0x${deviceType.toString(16)}`);
+
+      // 목록 추가 및 데이터 업데이트
+      addFoundDeviceToUI(extendedId, deviceType);
+      updateSpeedometerDataInternal(extendedId, antData);
+    }
+  }
+}
+
+// 4. 화면 목록에 강제 추가 (필터 완화)
+function addFoundDeviceToUI(deviceId, deviceType) {
+  // 0x78 (Bike Speed Sensor) 필수 포함
+  const validTypes = [0x79, 0x7A, 0x7B, 0x78, 0x0B]; 
+  
+  // 타입이 리스트에 없어도 일단 로그 남기고 추가 시도 (강제 표시)
+  if (!validTypes.includes(deviceType)) {
+      console.log(`[UI] 새로운 타입 센서 발견: ${deviceId} (Type: 0x${deviceType.toString(16)})`);
+  }
+
+  // 중복 방지
+  const existing = window.antState.foundDevices.find(d => d.deviceNumber === deviceId);
+  if (existing) return;
+
+  console.log(`[UI] 목록 추가 성공: ${deviceId}`);
+
+  let typeName = '알 수 없음';
+  if (deviceType === 0x79) typeName = '콤보 센서';
+  else if (deviceType === 0x7B) typeName = '속도 센서 (New)';
+  else if (deviceType === 0x78) typeName = '속도 센서 (Old)'; // 사용자님 센서
+  else if (deviceType === 0x7A) typeName = '케이던스';
+  
+  const device = {
+    deviceNumber: deviceId,
+    name: `ANT+ ${typeName}`,
+    id: deviceId,
+    type: typeName
+  };
+  
+  window.antState.foundDevices.push(device);
+  displayANTDevices(window.antState.foundDevices);
+}
+
+// 5. 화면 그리기 (DOM 강제 주입)
+function displayANTDevices(devices) {
+  const list = document.getElementById('antDeviceList');
+  if (!list) return;
+
+  // 숨겨진 목록 강제 표시
+  if (list.parentElement && list.parentElement.classList.contains('hidden')) {
+      list.parentElement.classList.remove('hidden');
+  }
+
+  if (devices.length === 0) return;
+  
+  let html = '<div style="display:flex;flex-direction:column;gap:5px; max-height:200px; overflow-y:auto;">';
+  devices.forEach(d => {
+    html += `
+      <div style="padding:10px; border:1px solid #007bff; background:#eef6fc; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;"
+           onclick="selectANTDevice('${d.deviceNumber}', '${d.name}')">
+        <div>
+            <div style="font-weight:bold; color:#0056b3;">${d.name}</div>
+            <div style="font-size:12px; color:#555;">ID: ${d.deviceNumber}</div>
+        </div>
+        <button style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:3px;">선택</button>
+      </div>
+    `;
+  });
+  html += '</div>';
+  list.innerHTML = html;
+}
+
+// 6. 내부 데이터 업데이트 헬퍼
+function updateSpeedometerDataInternal(deviceId, antData) {
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
+  if (speedometer) {
+    if (!speedometer.connected) {
+      speedometer.connected = true;
+      if(typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
+    }
+    if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
+    speedometer.lastPacketTime = Date.now();
+  }
+}
+
+// 7. 선택 함수 (입력창 연동)
+window.selectANTDevice = function(deviceId, deviceName) {
+  const input = document.getElementById('speedometerDeviceId');
+  if (input) {
+      input.value = deviceId;
+      input.style.backgroundColor = '#d4edda';
+      setTimeout(() => input.style.backgroundColor = '', 300);
+  }
+  if (typeof showToast === 'function') showToast(`${deviceId} 선택됨`);
+};
 
 
 
