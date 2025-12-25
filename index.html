@@ -2165,49 +2165,45 @@
     <div class="speedometer-list-section">
       <div class="list-header">
         <h3>속도계 목록</h3>
-        <button class="btn btn-primary btn-sm" onclick="showAddSpeedometerModal()">
-          <img src="assets/img/add.png" alt="추가" class="btn-icon-image" style="width: 16px; height: 16px; margin-right: 4px; vertical-align: middle;" />
-          속도계 추가
-        </button>
-      </div>
-      
-      <!-- 타겟 설정 섹션 -->
-      <div class="target-settings-section" style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #dee2e6;">
-        <h4 style="margin-bottom: 16px; color: #333; font-size: 16px; font-weight: 600;">타겟 설정</h4>
-        <div style="display: flex; flex-direction: column; gap: 16px;">
+        
+        <!-- 타겟 설정 (컴팩트) -->
+        <div class="target-settings-compact">
           <!-- 거리 설정 -->
-          <div class="target-setting-item">
-            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 500; color: #555;">
-              <input type="checkbox" id="targetDistanceEnabled" style="width: 18px; height: 18px; cursor: pointer;" onchange="toggleTargetDistance()">
+          <div class="target-setting-compact-item">
+            <label class="target-checkbox-label">
+              <input type="checkbox" id="targetDistanceEnabled" onchange="toggleTargetDistance()">
               <span>거리</span>
             </label>
-            <div id="targetDistanceControls" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-              <input type="number" id="targetDistanceValue" min="0" step="0.1" value="10" style="width: 100px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;">
-              <span style="color: #666; font-size: 14px;">km</span>
-              <select id="targetDistanceMode" style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; cursor: pointer;">
-                <option value="total">통합거리</option>
-                <option value="individual">개인거리</option>
+            <div id="targetDistanceControls" class="target-controls">
+              <input type="number" id="targetDistanceValue" min="0" step="0.1" value="10" class="target-input-small">
+              <span class="target-unit">km</span>
+              <select id="targetDistanceMode" class="target-select-small">
+                <option value="total">통합</option>
+                <option value="individual">개인</option>
               </select>
             </div>
           </div>
           
           <!-- 시간 설정 -->
-          <div class="target-setting-item">
-            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 500; color: #555;">
-              <input type="checkbox" id="targetTimeEnabled" style="width: 18px; height: 18px; cursor: pointer;" onchange="toggleTargetTime()">
+          <div class="target-setting-compact-item">
+            <label class="target-checkbox-label">
+              <input type="checkbox" id="targetTimeEnabled" onchange="toggleTargetTime()">
               <span>시간</span>
             </label>
-            <div id="targetTimeControls" style="display: flex; gap: 12px; align-items: center;">
-              <input type="text" id="targetTimeValue" placeholder="00:00:00" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}" style="width: 120px; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-family: monospace;" maxlength="8" oninput="formatTimeInput(this)">
-              <small style="color: #666; font-size: 12px;">형식: HH:MM:SS</small>
+            <div id="targetTimeControls" class="target-controls">
+              <input type="text" id="targetTimeValue" placeholder="00:00:00" pattern="[0-9]{2}:[0-9]{2}:[0-9]{2}" class="target-input-time" maxlength="8" oninput="formatTimeInput(this)">
             </div>
           </div>
-        </div>
-        <div style="margin-top: 16px;">
-          <button class="btn btn-success btn-sm" onclick="saveTargetSettings()" style="padding: 8px 16px;">
-            설정 실행
+          
+          <button class="btn btn-success btn-xs" onclick="saveTargetSettings()" style="padding: 4px 12px; font-size: 12px;">
+            설정
           </button>
         </div>
+        
+        <button class="btn btn-primary btn-sm" onclick="showAddSpeedometerModal()">
+          <img src="assets/img/add.png" alt="추가" class="btn-icon-image" style="width: 16px; height: 16px; margin-right: 4px; vertical-align: middle;" />
+          속도계 추가
+        </button>
       </div>
       
       <div class="speedometer-list" id="speedometerList">
