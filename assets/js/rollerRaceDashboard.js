@@ -991,6 +991,31 @@ function saveSpeedometerPairing() {
         const pairingName = nameInput.value.trim() || speedometer.name;
         const newDeviceId = deviceIdInput.value.trim();
         
+        // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
+        if (newDeviceId) {
+            const existingSpeedometer = window.rollerRaceState.speedometers.find(
+                s => s.id !== targetId && s.deviceId === newDeviceId && s.deviceId
+            );
+            
+            if (existingSpeedometer) {
+                // 이미 다른 트랙에 지정된 경우
+                const existingTrackName = `트랙${existingSpeedometer.id}`;
+                const currentTrackName = `트랙${targetId}`;
+                if (typeof showToast === 'function') {
+                    showToast(`이미 ${existingTrackName}에 지정된 센서입니다. 기존 트랙에서 삭제 후 다시 시도해주세요.`, 'error');
+                }
+                return;
+            }
+        }
+        
+        // 기존에 다른 디바이스가 지정되어 있었다면 해당 디바이스 해제
+        const oldDeviceId = speedometer.deviceId;
+        if (oldDeviceId && oldDeviceId !== newDeviceId) {
+            // 기존 디바이스 연결 해제
+            speedometer.connected = false;
+            updateSpeedometerConnectionStatus(targetId, false);
+        }
+        
         // 페어링 이름을 별도로 저장 (deviceId 옆에 표시용)
         speedometer.pairingName = pairingName;
         
@@ -3348,6 +3373,22 @@ if (typeof window.showScreen === 'function') {
 
 // 4. 선택 함수 (입력창 연동)
 function selectANTDevice(deviceId, deviceName) {
+  const currentTargetId = window.currentTargetSpeedometerId;
+  
+  // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
+  const existingSpeedometer = window.rollerRaceState.speedometers.find(
+    s => s.deviceId == deviceId && s.deviceId && s.id !== currentTargetId
+  );
+  
+  if (existingSpeedometer) {
+    // 이미 다른 트랙에 지정된 경우
+    const existingTrackName = `트랙${existingSpeedometer.id}`;
+    if (typeof showToast === 'function') {
+      showToast(`이미 ${existingTrackName}에 지정된 센서입니다. 기존 트랙에서 삭제 후 다시 시도해주세요.`, 'error');
+    }
+    return;
+  }
+  
   const input = document.getElementById('speedometerDeviceId');
   if (input) {
       input.value = deviceId;
@@ -3498,16 +3539,37 @@ function displayANTDevices(devices) {
 
   if (devices.length === 0) return;
   
+  // 현재 페어링 중인 트랙 ID 가져오기
+  const currentTargetId = window.currentTargetSpeedometerId;
+  
   let html = '<div style="display:flex;flex-direction:column;gap:5px; max-height:200px; overflow-y:auto;">';
   devices.forEach(d => {
+    // 이미 다른 트랙에 지정된 디바이스인지 확인
+    const existingSpeedometer = window.rollerRaceState.speedometers.find(
+      s => s.deviceId == d.deviceNumber && s.deviceId && s.id !== currentTargetId
+    );
+    
+    const isAssigned = !!existingSpeedometer;
+    const assignedTrack = existingSpeedometer ? `트랙${existingSpeedometer.id}` : '';
+    const isCurrentDevice = currentTargetId && window.rollerRaceState.speedometers.find(
+      s => s.id === currentTargetId && s.deviceId == d.deviceNumber
+    );
+    
+    // 현재 트랙에 이미 지정된 디바이스이거나 사용 가능한 경우만 활성화
+    const isEnabled = isCurrentDevice || !isAssigned;
+    
     html += `
-      <div style="padding:10px; border:1px solid #007bff; background:#eef6fc; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;"
-           onclick="selectANTDevice('${d.deviceNumber}', '${d.name}')">
+      <div style="padding:10px; border:1px solid ${isEnabled ? '#007bff' : '#ccc'}; background:${isEnabled ? '#eef6fc' : '#f5f5f5'}; border-radius:5px; cursor:${isEnabled ? 'pointer' : 'not-allowed'}; display:flex; justify-content:space-between; align-items:center; opacity:${isEnabled ? '1' : '0.6'};"
+           onclick="${isEnabled ? `selectANTDevice('${d.deviceNumber}', '${d.name}')` : ''}">
         <div>
-            <div style="font-weight:bold; color:#0056b3;">${d.name}</div>
-            <div style="font-size:12px; color:#555;">ID: ${d.deviceNumber}</div>
+            <div style="font-weight:bold; color:${isEnabled ? '#0056b3' : '#999'};">
+              ${d.name}
+              ${isAssigned && !isCurrentDevice ? ` <span style="color:#dc3545; font-size:11px;">(이미 ${assignedTrack}에 지정됨)</span>` : ''}
+              ${isCurrentDevice ? ` <span style="color:#28a745; font-size:11px;">(현재 트랙)</span>` : ''}
+            </div>
+            <div style="font-size:12px; color:${isEnabled ? '#555' : '#999'};">ID: ${d.deviceNumber}</div>
         </div>
-        <button style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:3px;">선택</button>
+        <button style="background:${isEnabled ? '#007bff' : '#ccc'}; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:${isEnabled ? 'pointer' : 'not-allowed'};" ${isEnabled ? '' : 'disabled'}>${isEnabled ? '선택' : '사용중'}</button>
       </div>
     `;
   });
@@ -3530,6 +3592,22 @@ function updateSpeedometerDataInternal(deviceId, antData) {
 
 // 7. 선택 함수 (입력창 연동)
 window.selectANTDevice = function(deviceId, deviceName) {
+  const currentTargetId = window.currentTargetSpeedometerId;
+  
+  // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
+  const existingSpeedometer = window.rollerRaceState.speedometers.find(
+    s => s.deviceId == deviceId && s.deviceId && s.id !== currentTargetId
+  );
+  
+  if (existingSpeedometer) {
+    // 이미 다른 트랙에 지정된 경우
+    const existingTrackName = `트랙${existingSpeedometer.id}`;
+    if (typeof showToast === 'function') {
+      showToast(`이미 ${existingTrackName}에 지정된 센서입니다. 기존 트랙에서 삭제 후 다시 시도해주세요.`, 'error');
+    }
+    return;
+  }
+  
   const input = document.getElementById('speedometerDeviceId');
   if (input) {
       input.value = deviceId;
