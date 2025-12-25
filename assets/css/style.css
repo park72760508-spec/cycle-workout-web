@@ -8689,7 +8689,7 @@ button[aria-disabled="true"] {
 
 .dashboard-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 20px;
   gap: 16px;
@@ -8710,6 +8710,7 @@ button[aria-disabled="true"] {
   align-items: center;
   flex-shrink: 0;
   margin-left: auto;
+  margin-right: 0;
 }
 
 .dashboard-header-right {
@@ -8810,11 +8811,7 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.race-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
+/* 중복 정의 제거 - 상단 정의 사용 */
 
 .dashboard-header h1 {
   position: relative;
@@ -9584,13 +9581,15 @@ button[aria-disabled="true"] {
 /* 경기 제어 버튼 */
 .race-controls {
   display: flex;
-  justify-content: center;
   gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: 0;
   padding: 0;
   background: transparent;
   border-radius: 0;
   margin-bottom: 0;
-  flex: 1;
 }
 
 .btn-large {
