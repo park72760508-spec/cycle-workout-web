@@ -1557,6 +1557,10 @@ async function initializeANT() {
 /**
  * [수정됨] ANT+ 메시지 전송 (Tacx 호환성 패치: 패딩 제거)
  */
+/**
+ * [수정됨] ANT+ 메시지 전송 (Tacx T2028 호환성: 64바이트 패딩 적용)
+ * 짧은 패킷(5바이트 등)이 거부되는 문제를 해결하기 위해 0으로 채워서 보냅니다.
+ */
 async function sendANTMessage(messageId, data) {
   if (!window.antState.usbDevice) return;
   
@@ -1564,16 +1568,19 @@ async function sendANTMessage(messageId, data) {
   let checksum = 0xA4 ^ length ^ messageId;
   for (let b of data) checksum ^= b;
   
-  // [핵심 변경] 0으로 채운 8바이트 고정 패킷이 아니라, 
-  // 실제 데이터 길이만큼만 잘라서 보냅니다. (Tacx 거부 방지)
+  // 실제 보낼 ANT+ 메시지
   const message = [0xA4, length, messageId, ...data, checksum];
-  const packet = new Uint8Array(message);
+  
+  // [핵심 변경] Tacx T2028은 짧은 패킷을 싫어하므로 64바이트로 패딩
+  // (USB 엔드포인트의 최대 패킷 크기에 맞춤)
+  const paddedPacket = new Uint8Array(64); 
+  paddedPacket.set(message, 0); // 앞부분에 메시지 복사, 나머지는 0
   
   try {
-    // console.log('[TX Raw]', Array.from(packet).map(b=>b.toString(16).padStart(2,'0')).join(' '));
-    await window.antState.usbDevice.transferOut(window.antState.outEndpoint, packet);
+    // console.log('[TX]', Array.from(message).map(b=>b.toString(16).padStart(2,'0')).join(' '));
+    await window.antState.usbDevice.transferOut(window.antState.outEndpoint, paddedPacket);
   } catch (e) {
-    console.warn('전송 실패:', e);
+    console.warn('[ANT+] 전송 실패:', e);
   }
 }
 
@@ -3455,6 +3462,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
