@@ -2001,6 +2001,10 @@ function updateSpeedometerListUI() {
       <div class="list-item-id-section">
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
       </div>
+      <!-- 이름 표시 (경기장 트랙 왼쪽) -->
+      <div class="list-item-pairing-name-section">
+        <span class="list-item-pairing-name-display">${pairingName || ''}</span>
+      </div>
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}">
         <svg class="straight-track-svg" viewBox="0 0 700 40" preserveAspectRatio="xMidYMid meet">
@@ -2015,9 +2019,6 @@ function updateSpeedometerListUI() {
           
           <!-- 종료선 (우측) -->
           <line x1="682.5" y1="0" x2="682.5" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
-          
-          <!-- 트랙 왼쪽에 이름 표시 -->
-          <text x="5" y="25" fill="#00ff88" font-size="11" font-weight="bold" text-shadow="0 0 10px rgba(0, 255, 136, 0.8), 0 0 20px rgba(0, 255, 136, 0.6), 0 0 30px rgba(0, 255, 136, 0.4);">${pairingName || trackName}</text>
           
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
@@ -2079,10 +2080,11 @@ function normalizeTrackWidths() {
   listItems.forEach((item, index) => {
     const trackNumberEl = item.querySelector('.list-item-track-number');
     const idSectionEl = item.querySelector('.list-item-id-section');
+    const pairingNameEl = item.querySelector('.list-item-pairing-name-section');
     const actionsEl = item.querySelector('.list-item-actions');
     const trackEl = item.querySelector('.straight-track-container');
     
-    if (!trackNumberEl || !idSectionEl || !actionsEl || !trackEl) return;
+    if (!trackNumberEl || !idSectionEl || !pairingNameEl || !actionsEl || !trackEl) return;
     
     // 현재 트랙 스타일 저장
     const originalTrackWidth = trackEl.style.width;
@@ -2101,6 +2103,9 @@ function normalizeTrackWidths() {
     // ID 영역 너비 측정
     const idSectionWidth = idSectionEl.offsetWidth;
     
+    // 이름 표시 영역 너비 측정
+    const pairingNameWidth = pairingNameEl.offsetWidth;
+    
     // 버튼 영역 너비 측정
     const actionsWidth = actionsEl.offsetWidth;
     
@@ -2111,9 +2116,9 @@ function normalizeTrackWidths() {
     const itemPaddingRight = parseFloat(itemStyle.paddingRight);
     const itemGap = parseFloat(itemStyle.gap) || 12;
     
-    // 트랙번호 + ID + 버튼 영역 + 간격들을 제외한 트랙이 사용할 수 있는 공간
-    // (간격: trackNumber와 idSection 사이, idSection와 track 사이, track과 actions 사이)
-    const availableWidth = itemWidth - itemPaddingLeft - itemPaddingRight - trackNumberWidth - idSectionWidth - actionsWidth - (itemGap * 3);
+    // 트랙번호 + ID + 이름 표시 + 버튼 영역 + 간격들을 제외한 트랙이 사용할 수 있는 공간
+    // (간격: trackNumber와 idSection 사이, idSection와 pairingName 사이, pairingName와 track 사이, track과 actions 사이)
+    const availableWidth = itemWidth - itemPaddingLeft - itemPaddingRight - trackNumberWidth - idSectionWidth - pairingNameWidth - actionsWidth - (itemGap * 4);
     
     // 가장 짧은 트랙 찾기
     if (availableWidth < minTrackWidth && availableWidth > 0) {
@@ -2126,10 +2131,12 @@ function normalizeTrackWidths() {
       item,
       trackNumberEl,
       idSectionEl,
+      pairingNameEl,
       actionsEl,
       trackEl,
       trackNumberWidth,
       idSectionWidth,
+      pairingNameWidth,
       actionsWidth,
       itemWidth,
       itemPaddingLeft,
@@ -2186,8 +2193,8 @@ function normalizeTrackWidths() {
       // 항목의 왼쪽 끝 위치 (부모 컨테이너 기준)
       const itemLeftEdge = itemRect.left - parentRect.left;
       
-      // 트랙번호 + ID 영역의 오른쪽 끝 위치 (부모 컨테이너 기준)
-      const infoRightEdge = itemLeftEdge + data.itemPaddingLeft + data.trackNumberWidth + data.itemGap + data.idSectionWidth + data.itemGap;
+      // 트랙번호 + ID + 이름 표시 영역의 오른쪽 끝 위치 (부모 컨테이너 기준)
+      const infoRightEdge = itemLeftEdge + data.itemPaddingLeft + data.trackNumberWidth + data.itemGap + data.idSectionWidth + data.itemGap + data.pairingNameWidth + data.itemGap;
       
       // 트랙의 왼쪽 시작 위치가 정보 영역 오른쪽 끝보다 왼쪽에 있으면 조정
       const actualTrackLeft = Math.max(trackLeftEdge, infoRightEdge);
