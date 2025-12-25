@@ -8701,6 +8701,15 @@ button[aria-disabled="true"] {
   flex: 1;
   text-align: center;
   margin: 0;
+  min-width: 0; /* 텍스트 오버플로우 방지 */
+}
+
+.race-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .dashboard-header-right {
