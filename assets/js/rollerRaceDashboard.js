@@ -1994,7 +1994,8 @@ function updateSpeedometerListUI() {
     const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #00ff88; font-weight: 500; margin-left: 8px; text-shadow: 0 0 10px rgba(0, 255, 136, 0.8), 0 0 20px rgba(0, 255, 136, 0.6), 0 0 30px rgba(0, 255, 136, 0.4);">${speedometer.pairingName}</span>` : '';
     item.innerHTML = `
       <div class="list-item-info">
-        <span class="list-item-name">${trackName}${pairingNameDisplay}</span>
+        <span class="list-item-name">${trackName}</span>
+        <span class="list-item-pairing-name">${pairingNameDisplay || ''}</span>
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
       </div>
       <!-- 직선 100m 경기장 -->
