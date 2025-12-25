@@ -248,44 +248,6 @@ function createSpeedometerElement(speedometer) {
         <img class="rank-value-bottom" id="rank-value-${speedometer.id}" src="" alt="" style="display: none;" />
       </div>
     </div>
-    <!-- 육상 트랙 경기장 -->
-    <div class="race-track-container" id="race-track-${speedometer.id}">
-      <svg class="race-track-svg" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet">
-        <!-- 트랙 배경 (잔디 느낌) -->
-        <rect x="0" y="0" width="400" height="120" fill="#2d5016" opacity="0.3"/>
-        
-        <!-- 트랙 외곽 (타원형) -->
-        <ellipse cx="200" cy="60" rx="180" ry="50" fill="none" stroke="#8B4513" stroke-width="4" opacity="0.6"/>
-        
-        <!-- 트랙 내부 (타원형) -->
-        <ellipse cx="200" cy="60" rx="170" ry="45" fill="#4a7c59" opacity="0.4"/>
-        
-        <!-- 트랙 레인 구분선 (좌우 양쪽 제외) -->
-        <ellipse cx="200" cy="60" rx="160" ry="42" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="5,5" opacity="0.3"/>
-        <ellipse cx="200" cy="60" rx="150" ry="38" fill="none" stroke="#ffffff" stroke-width="1" stroke-dasharray="5,5" opacity="0.3"/>
-        
-        <!-- 시작/종료선 (좌측) -->
-        <line x1="20" y1="10" x2="20" y2="110" stroke="#ffffff" stroke-width="2" opacity="0.8"/>
-        
-        <!-- 마스코트 위치 (자전거 타는 모습) -->
-        <g class="race-mascot" id="mascot-${speedometer.id}" transform="translate(20, 60)">
-          <!-- 자전거 프레임 -->
-          <circle cx="0" cy="0" r="8" fill="#ff6b6b" opacity="0.9"/>
-          <circle cx="0" cy="0" r="5" fill="#ffffff"/>
-          <!-- 자전거 바퀴 -->
-          <circle cx="-12" cy="8" r="6" fill="#333" opacity="0.7"/>
-          <circle cx="12" cy="8" r="6" fill="#333" opacity="0.7"/>
-          <!-- 자전거 바퀴 스포크 -->
-          <line x1="-12" y1="8" x2="-8" y2="4" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
-          <line x1="-12" y1="8" x2="-8" y2="12" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
-          <line x1="12" y1="8" x2="8" y2="4" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
-          <line x1="12" y1="8" x2="8" y2="12" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
-        </g>
-        
-        <!-- 순위 표시 (트랙 상단) -->
-        <text x="200" y="15" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" id="rank-text-${speedometer.id}" opacity="0">-</text>
-      </svg>
-    </div>
     <div class="speedometer-info disconnected">
       <!-- 좌측: 최대속도, 평균속도 (2줄) -->
       <div class="speed-display-left">
@@ -483,6 +445,11 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   
   // 전체 통계 업데이트
   updateDashboardStats();
+  
+  // 직선 트랙 마스코트 위치 업데이트 (경기 진행 중일 때만)
+  if (window.rollerRaceState.raceState === 'running') {
+    updateAllStraightTrackMascots();
+  }
 }
 
 /**
@@ -513,14 +480,8 @@ function updateRankings() {
       }
     }
     
-    // 경기 트랙 순위 업데이트
-    updateRaceTrackRank(speedometer.id, rank);
-    
-    // 경기 트랙 마스코트 위치 업데이트 (거리 기반 진행률)
-    if (maxDistance > 0) {
-      const progress = Math.min(speedometer.totalDistance / maxDistance, 1.0);
-      updateRaceTrackMascot(speedometer.id, progress);
-    }
+    // 직선 트랙 순위 업데이트
+    updateStraightTrackRank(speedometer.id, rank);
   });
   
   // 연결되지 않았거나 거리가 0인 속도계는 순위 표시 안 함
@@ -530,10 +491,10 @@ function updateRankings() {
       if (rankEl) {
         rankEl.style.display = 'none';
       }
-      // 경기 트랙 순위 숨김
-      updateRaceTrackRank(speedometer.id, null);
+      // 직선 트랙 순위 숨김
+      updateStraightTrackRank(speedometer.id, null);
       // 마스코트를 시작 위치로
-      updateRaceTrackMascot(speedometer.id, 0);
+      updateStraightTrackMascot(speedometer.id, 0);
     }
   });
   
@@ -1168,6 +1129,9 @@ function startRace() {
     const scoreboardTimeEl = document.getElementById('scoreboardTime');
     if (elapsedTimeEl) elapsedTimeEl.textContent = '00:00:00';
     if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
+    
+    // 모든 마스코트를 시작 위치로 초기화
+    updateAllStraightTrackMascots();
   }
   
   // 기존 타이머가 있으면 정리
@@ -1305,6 +1269,9 @@ function stopRace() {
 
   // 최종 순위 표시
   updateRankings();
+  
+  // 모든 마스코트 위치 업데이트 (최종 위치)
+  updateAllStraightTrackMascots();
   
   // 전광판 순위 순환 정지
   stopRankDisplayRotation();
@@ -1766,53 +1733,6 @@ function startSpeedometerDataReceiver(channelNumber, deviceId) {
   receiveData();
 }
 
-/**
- * 경기 트랙 마스코트 위치 업데이트
- */
-function updateRaceTrackMascot(speedometerId, progress) {
-  // progress: 0.0 ~ 1.0 (트랙 진행률)
-  const mascotEl = document.getElementById(`mascot-${speedometerId}`);
-  if (!mascotEl) return;
-  
-  // 트랙의 타원형 경로를 따라 마스코트 이동
-  // 타원형 경로: x = 200 + 180 * cos(t), y = 60 + 50 * sin(t)
-  // t는 0부터 2π까지 (progress에 따라)
-  const t = progress * 2 * Math.PI;
-  const centerX = 200;
-  const centerY = 60;
-  const radiusX = 180;
-  const radiusY = 50;
-  
-  const x = centerX + radiusX * Math.cos(t - Math.PI / 2); // -π/2로 시작 (상단에서 시작)
-  const y = centerY + radiusY * Math.sin(t - Math.PI / 2);
-  
-  // 마스코트 회전 각도 (트랙 방향에 맞춰)
-  const angle = (t * 180 / Math.PI) - 90;
-  
-  mascotEl.classList.add('moving');
-  mascotEl.setAttribute('transform', `translate(${x}, ${y}) rotate(${angle})`);
-  
-  // 애니메이션 완료 후 클래스 제거
-  setTimeout(() => {
-    mascotEl.classList.remove('moving');
-  }, 500);
-}
-
-/**
- * 경기 트랙 순위 업데이트
- */
-function updateRaceTrackRank(speedometerId, rank) {
-  const rankTextEl = document.getElementById(`rank-text-${speedometerId}`);
-  if (!rankTextEl) return;
-  
-  if (rank && rank > 0) {
-    rankTextEl.textContent = `${rank}위`;
-    rankTextEl.style.opacity = '1';
-    rankTextEl.style.fill = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
-  } else {
-    rankTextEl.style.opacity = '0';
-  }
-}
 
 /**
  * Speed/Cadence 데이터 처리
@@ -2077,6 +1997,43 @@ function updateSpeedometerListUI() {
         <span class="list-item-name">${trackName}${pairingNameDisplay}</span>
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
       </div>
+      <!-- 직선 100m 경기장 -->
+      <div class="straight-track-container" id="straight-track-${speedometer.id}">
+        <svg class="straight-track-svg" viewBox="0 0 1000 80" preserveAspectRatio="xMidYMid meet">
+          <!-- 트랙 배경 (잔디 느낌) -->
+          <rect x="0" y="0" width="1000" height="80" fill="#2d5016" opacity="0.2"/>
+          
+          <!-- 트랙 레인 (10개 레인) -->
+          ${generateTrackLanes()}
+          
+          <!-- 시작선 (좌측) -->
+          <line x1="50" y1="0" x2="50" y2="80" stroke="#ffffff" stroke-width="3" opacity="0.9"/>
+          
+          <!-- 종료선 (우측) -->
+          <line x1="950" y1="0" x2="950" y2="80" stroke="#ff0000" stroke-width="3" opacity="0.9"/>
+          
+          <!-- 100m 표시 -->
+          <text x="500" y="25" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="bold" opacity="0.8">100m</text>
+          
+          <!-- 마스코트 위치 (자전거 타는 모습) -->
+          <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(50, 40)">
+            <!-- 자전거 프레임 -->
+            <circle cx="0" cy="0" r="10" fill="#ff6b6b" opacity="0.9"/>
+            <circle cx="0" cy="0" r="6" fill="#ffffff"/>
+            <!-- 자전거 바퀴 -->
+            <circle cx="-15" cy="10" r="8" fill="#333" opacity="0.7"/>
+            <circle cx="15" cy="10" r="8" fill="#333" opacity="0.7"/>
+            <!-- 자전거 바퀴 스포크 -->
+            <line x1="-15" y1="10" x2="-10" y2="5" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
+            <line x1="-15" y1="10" x2="-10" y2="15" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
+            <line x1="15" y1="10" x2="10" y2="5" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
+            <line x1="15" y1="10" x2="10" y2="15" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
+          </g>
+          
+          <!-- 순위 표시 (트랙 상단 중앙) -->
+          <text x="500" y="15" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
+        </svg>
+      </div>
       <div class="list-item-actions">
         <button class="btn btn-sm btn-primary" onclick="pairSpeedometer(${speedometer.id})">
           페어링
@@ -2087,6 +2044,102 @@ function updateSpeedometerListUI() {
       </div>
     `;
     listEl.appendChild(item);
+  }
+  
+  // 초기 마스코트 위치 설정
+  updateAllStraightTrackMascots();
+}
+
+/**
+ * 트랙 레인 생성 (10개 레인)
+ */
+function generateTrackLanes() {
+  let lanes = '';
+  const laneWidth = 80 / 10; // 총 높이 80을 10개 레인으로 나눔
+  
+  for (let i = 0; i < 10; i++) {
+    const y = i * laneWidth;
+    // 레인 구분선
+    lanes += `<line x1="50" y1="${y}" x2="950" y2="${y}" stroke="#ffffff" stroke-width="1" stroke-dasharray="10,5" opacity="0.4"/>`;
+  }
+  
+  return lanes;
+}
+
+/**
+ * 모든 직선 트랙 마스코트 위치 업데이트
+ */
+function updateAllStraightTrackMascots() {
+  if (window.rollerRaceState.raceState !== 'running') {
+    // 경기가 진행 중이 아니면 모든 마스코트를 시작 위치로
+    for (let i = 1; i <= 10; i++) {
+      updateStraightTrackMascot(i, 0);
+    }
+    return;
+  }
+  
+  // 누적거리 기준으로 정렬
+  const sorted = [...window.rollerRaceState.speedometers]
+    .filter(s => s.connected && s.totalDistance > 0)
+    .sort((a, b) => b.totalDistance - a.totalDistance);
+  
+  if (sorted.length === 0) return;
+  
+  const maxDistance = sorted[0].totalDistance;
+  
+  sorted.forEach((speedometer) => {
+    if (maxDistance > 0) {
+      // 100m = 0.1km 기준으로 진행률 계산
+      const progress = Math.min((speedometer.totalDistance / 0.1) % 1.0, 1.0);
+      updateStraightTrackMascot(speedometer.id, progress);
+    }
+  });
+  
+  // 연결되지 않았거나 거리가 0인 속도계는 시작 위치로
+  window.rollerRaceState.speedometers.forEach(speedometer => {
+    if (!speedometer.connected || speedometer.totalDistance === 0) {
+      updateStraightTrackMascot(speedometer.id, 0);
+    }
+  });
+}
+
+/**
+ * 직선 트랙 마스코트 위치 업데이트
+ */
+function updateStraightTrackMascot(speedometerId, progress) {
+  // progress: 0.0 ~ 1.0 (0m ~ 100m 진행률)
+  const mascotEl = document.getElementById(`straight-mascot-${speedometerId}`);
+  if (!mascotEl) return;
+  
+  // 직선 트랙: 시작선(50)에서 종료선(950)까지
+  const startX = 50;
+  const endX = 950;
+  const trackLength = endX - startX;
+  const x = startX + (trackLength * progress);
+  const y = 40; // 트랙 중앙
+  
+  mascotEl.classList.add('moving');
+  mascotEl.setAttribute('transform', `translate(${x}, ${y})`);
+  
+  // 애니메이션 완료 후 클래스 제거
+  setTimeout(() => {
+    mascotEl.classList.remove('moving');
+  }, 500);
+}
+
+/**
+ * 직선 트랙 순위 업데이트
+ */
+function updateStraightTrackRank(speedometerId, rank) {
+  const rankTextEl = document.getElementById(`straight-rank-text-${speedometerId}`);
+  if (!rankTextEl) return;
+  
+  if (rank && rank > 0) {
+    rankTextEl.textContent = `${rank}위`;
+    rankTextEl.style.opacity = '1';
+    rankTextEl.style.fill = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
+  } else {
+    rankTextEl.style.opacity = '0';
   }
 }
 
