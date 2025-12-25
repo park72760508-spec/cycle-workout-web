@@ -2161,51 +2161,54 @@ function handleANTMessage(message) {
 /**
  * [최종 수정] 브로드캐스트 데이터 처리 (ID 추출 강화)
  */
+/**
+ * [수정됨] 데이터 처리 및 ID 추출 (20-bit ID 지원)
+ */
 function handleBroadcastData(payload) {
-  // payload: [Channel, Data0..7, Flag, DeviceID_L, DeviceID_H, ...]
-  // T2028은 데이터 앞에 Channel 번호가 없을 수도 있으므로 유연하게 처리
-  
-  // 데이터 길이 체크
-  if (payload.length < 8) return;
+  // payload: [Channel(0), Data(1..8), Flag(9), ID_L(10), ID_H(11), Type(12), Trans(13)]
+  if (payload.length < 9) return;
 
-  // 실제 데이터(8바이트) 위치 찾기
-  // 보통 payload[1]부터 데이터지만, T2028은 payload[0]부터일 수도 있음
-  // 여기서는 표준(payload[0]=Channel)을 가정하되, ID가 안 잡히면 오프셋 조정 필요
+  const antData = payload.slice(1, 9); // 데이터 8바이트
   
-  const antData = payload.slice(1, 9); // 일단 표준대로 (1~8인덱스)
-  
-  // ID 추출 시도 (Extended Data)
-  // Flag 바이트(0x80 bit)를 찾아서 ID 위치를 역추적
-  let deviceId = 0;
-  let deviceType = 0;
-  
-  // T2028 패킷 구조상 끝에서부터 ID를 찾는 게 더 안전할 수 있음
-  // 보통 끝에서 4번째, 3번째가 ID
-  if (payload.length >= 12) {
-      // payload[9]가 Flag라고 가정
-      const flagIndex = 9;
-      if (payload[flagIndex] & 0x80) {
-          deviceId = (payload[flagIndex + 2] << 8) | payload[flagIndex + 1];
-          deviceType = payload[flagIndex + 3];
-          
-          // console.log(`[ANT+] ID 감지: ${deviceId} (Type: ${deviceType})`);
-          
-          // UI 업데이트
-          if (document.getElementById('addSpeedometerModal') && !document.getElementById('addSpeedometerModal').classList.contains('hidden')) {
-              if (typeof addFoundDeviceToUI === 'function') addFoundDeviceToUI(deviceId, deviceType);
-          }
-          
-          // 데이터 업데이트
-          const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
-          if (speedometer) {
-              if (!speedometer.connected) {
-                  speedometer.connected = true;
-                  if (typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
-              }
-              if (typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
-              speedometer.lastPacketTime = Date.now();
-          }
+  // Extended Data가 있는지 확인
+  if (payload.length >= 13) {
+    const flag = payload[9];
+    
+    // 0x80 플래그(Device ID)가 있거나, T2028 특성상 위치가 고정적일 수 있음
+    if (flag & 0x80) { 
+      const idLow = payload[10];
+      const idHigh = payload[11];
+      const deviceType = payload[12];
+      const transType = payload[13]; // 전송 타입 (상위 4비트가 ID의 일부)
+      
+      // [핵심] 가민과 동일한 20-bit ID 계산 (TransType의 상위 4비트 + ID 16비트)
+      // 예: 0x15(Trans) -> 0x1(상위) + 07D0(ID) = 0x107D0 = 67536
+      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+      
+      const deviceId = extendedId; // 이제 67536으로 표시될 것입니다.
+
+      // UI 목록에 추가 요청
+      const modal = document.getElementById('addSpeedometerModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        if (typeof addFoundDeviceToUI === 'function') addFoundDeviceToUI(deviceId, deviceType);
       }
+
+      // 등록된 속도계 데이터 업데이트
+      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
+      if (speedometer) {
+        if (!speedometer.connected) {
+          speedometer.connected = true;
+          if(typeof updateSpeedometerConnectionStatus === 'function') {
+              updateSpeedometerConnectionStatus(speedometer.id, true);
+          }
+        }
+        // 데이터 처리
+        if(typeof processSpeedCadenceData === 'function') {
+            processSpeedCadenceData(speedometer.deviceId, antData);
+        }
+        speedometer.lastPacketTime = Date.now();
+      }
+    }
   }
 }
 
@@ -2291,23 +2294,38 @@ function handleBroadcastData(payload) {
 /**
  * 검색된 디바이스 UI 추가
  */
+/**
+ * [수정됨] 검색된 디바이스 UI 추가 (속도 센서 필터 추가)
+ */
 function addFoundDeviceToUI(deviceId, deviceType) {
-  // 속도계(123), 케이던스(122), 콤보(121) 필터링
-  // 0x7B(123), 0x7A(122), 0x79(121)
-  // Tacx 센서는 보통 0x79(Combo) 또는 0x7A(Speed) 사용
-  const validTypes = [0x79, 0x7A, 0x78]; 
-  if (!validTypes.includes(deviceType)) return;
+  // 기존: 0x79(Combo), 0x7A(Cadence)만 허용 -> 속도센서(0x7B)가 무시됨
+  // 수정: 0x7B (Speed Sensor) 추가
+  const validTypes = [0x79, 0x7A, 0x7B, 0x78]; 
+  
+  if (!validTypes.includes(deviceType)) {
+      console.log(`[ANT+] 필터링된 디바이스: ID=${deviceId}, Type=${deviceType.toString(16)}`);
+      return;
+  }
 
   const existing = window.antState.foundDevices.find(d => d.deviceNumber === deviceId);
   if (!existing) {
-    const typeName = (deviceType === 0x79) ? 'Speed/Cadence' : 'Speed Sensor';
+    let typeName = 'Unknown';
+    if (deviceType === 0x79) typeName = 'Speed/Cadence (콤보)';
+    else if (deviceType === 0x7B) typeName = 'Speed Sensor (속도)'; // 가민 속도센서
+    else if (deviceType === 0x7A) typeName = 'Cadence Sensor (케이던스)';
+    
     const device = {
       deviceNumber: deviceId,
       name: `ANT+ ${typeName} (${deviceId})`,
-      type: typeName
+      type: typeName,
+      id: deviceId // displayANTDevices 호환용
     };
+    
     window.antState.foundDevices.push(device);
     displayANTDevices(window.antState.foundDevices);
+    
+    // 알림 표시
+    if (typeof showToast === 'function') showToast(`${typeName} 검색됨!`);
   }
 }
 
@@ -3487,6 +3505,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
