@@ -8708,34 +8708,73 @@ button[aria-disabled="true"] {
   letter-spacing: 4px;
   text-transform: uppercase;
   color: #ffffff;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+/* Stelvio 아이콘 */
+.race-title-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8))
+          drop-shadow(0 0 20px rgba(255, 255, 255, 0.6))
+          drop-shadow(0 0 30px rgba(255, 255, 255, 0.4));
+  animation: iconGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes iconGlow {
+  0% {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.8))
+            drop-shadow(0 0 20px rgba(255, 255, 255, 0.6))
+            drop-shadow(0 0 30px rgba(255, 255, 255, 0.4));
+  }
+  100% {
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 1))
+            drop-shadow(0 0 30px rgba(255, 255, 255, 0.8))
+            drop-shadow(0 0 45px rgba(255, 255, 255, 0.6));
+  }
+}
+
+/* 타이틀 텍스트 */
+.race-title-text {
+  position: relative;
+  display: inline-block;
+  color: #ffffff;
   text-shadow: 
     0 0 10px rgba(255, 255, 255, 0.8),
     0 0 20px rgba(255, 255, 255, 0.6),
     0 0 30px rgba(255, 255, 255, 0.4),
-    0 0 40px rgba(255, 255, 255, 0.2),
-    0 4px 8px rgba(0, 0, 0, 0.5);
-  position: relative;
-  display: inline-block;
-  overflow: hidden;
-  margin: 0;
-  padding: 10px 20px;
+    0 0 40px rgba(255, 255, 255, 0.2);
+  animation: neonTextSweep 3s ease-in-out infinite, glowPulse 2s ease-in-out infinite alternate;
 }
 
-/* 네온 스위프 효과 (좌에서 우로 이동) */
-.race-title-animated::before {
-  content: '';
+/* 네온 텍스트 스위프 효과 (좌에서 우로 이동하는 하이라이트) */
+.race-title-text::before {
+  content: 'Stelvio Indoor Grand Prix';
   position: absolute;
   top: 0;
-  left: -100%;
+  left: 0;
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, 
     transparent 0%, 
-    rgba(255, 255, 255, 0.3) 30%, 
-    rgba(255, 255, 255, 0.8) 50%, 
-    rgba(255, 255, 255, 0.3) 70%, 
+    transparent 20%,
+    rgba(255, 255, 255, 0.8) 30%,
+    rgba(255, 255, 255, 1) 50%,
+    rgba(255, 255, 255, 0.8) 70%,
+    transparent 80%,
     transparent 100%
   );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
   animation: neonSweep 3s ease-in-out infinite;
   pointer-events: none;
   z-index: 1;
@@ -8743,37 +8782,48 @@ button[aria-disabled="true"] {
 
 @keyframes neonSweep {
   0% {
-    left: -100%;
+    background-position: -200% 0;
   }
   50% {
-    left: 100%;
+    background-position: 200% 0;
   }
   100% {
-    left: -100%;
+    background-position: -200% 0;
   }
 }
 
-/* 추가 글로우 펄스 효과 */
-.race-title-animated {
-  animation: glowPulse 2s ease-in-out infinite alternate;
-}
-
-@keyframes glowPulse {
-  0% {
+/* 네온 텍스트 스위프 효과 (글로우 강도 변화) */
+@keyframes neonTextSweep {
+  0%, 100% {
     text-shadow: 
       0 0 10px rgba(255, 255, 255, 0.8),
       0 0 20px rgba(255, 255, 255, 0.6),
       0 0 30px rgba(255, 255, 255, 0.4),
-      0 0 40px rgba(255, 255, 255, 0.2),
-      0 4px 8px rgba(0, 0, 0, 0.5);
+      0 0 40px rgba(255, 255, 255, 0.2);
   }
-  100% {
+  25%, 75% {
     text-shadow: 
       0 0 15px rgba(255, 255, 255, 1),
       0 0 30px rgba(255, 255, 255, 0.8),
       0 0 45px rgba(255, 255, 255, 0.6),
-      0 0 60px rgba(255, 255, 255, 0.4),
-      0 4px 8px rgba(0, 0, 0, 0.5);
+      0 0 60px rgba(255, 255, 255, 0.4);
+  }
+  50% {
+    text-shadow: 
+      0 0 10px rgba(255, 255, 255, 0.8),
+      0 0 20px rgba(255, 255, 255, 0.6),
+      0 0 30px rgba(255, 255, 255, 0.4),
+      0 0 40px rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* 글로우 펄스 효과 */
+@keyframes glowPulse {
+  0% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 1;
   }
 }
 
@@ -9563,4 +9613,5 @@ button[aria-disabled="true"] {
     justify-content: space-between;
   }
 }
+
 
