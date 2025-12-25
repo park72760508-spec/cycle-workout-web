@@ -9588,6 +9588,24 @@ button[aria-disabled="true"] {
   flex: 0 0 auto;
 }
 
+.list-item-pairing-name-section {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto; /* 고정 너비 */
+  min-width: 0;
+}
+
+.list-item-pairing-name-display {
+  font-weight: 500;
+  color: #00ff88;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  text-shadow: 
+    0 0 10px rgba(0, 255, 136, 0.8),
+    0 0 20px rgba(0, 255, 136, 0.6),
+    0 0 30px rgba(0, 255, 136, 0.4);
+}
+
 .list-item-actions {
   display: flex;
   gap: 8px;
