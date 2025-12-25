@@ -2195,7 +2195,7 @@
             <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
             뒤로
           </button>
-          <button class="btn btn-primary btn-sm" id="btnActivateReceiver" onclick="showAddSpeedometerModal()">
+          <button class="btn btn-primary btn-sm" id="btnActivateReceiver" onclick="showReceiverSelectionModal()">
             <span class="receiver-status-indicator" id="receiverStatusIndicator" style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #dc3545; margin-right: 6px; vertical-align: middle;"></span>
             수신기 활성화
           </button>
@@ -2292,6 +2292,44 @@
           <button class="btn btn-success" onclick="saveSpeedometerPairing()">추가</button>
           <button class="btn btn-secondary" onclick="closeAddSpeedometerModal()">닫기</button>
         </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 수신기 선택 모달 -->
+  <div id="receiverSelectionModal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>수신기 선택</h3>
+        <button class="modal-close" onclick="closeReceiverSelectionModal()">✖</button>
+      </div>
+      <div class="modal-body">
+        <!-- USB 수신기 연결 상태 표시 -->
+        <div id="receiverSelectionUSBStatus" style="margin-bottom: 16px; padding: 12px; border-radius: 4px; background: #f0f0f0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+          <span id="receiverSelectionUSBStatusIcon" style="width: 12px; height: 12px; border-radius: 50%; background: #999; display: inline-block; flex-shrink: 0;"></span>
+          <span id="receiverSelectionUSBStatusText" style="font-size: 12px; color: #666; flex: 1; min-width: 200px;">USB 수신기 상태 확인 중...</span>
+          <div style="display: flex; gap: 4px; margin-left: auto;">
+            <button type="button" id="btnReceiverSelectionConnectUSB" onclick="connectUSBStickDirectly()" style="display: none; padding: 6px 12px; font-size: 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">USB 수신기 연결</button>
+            <button type="button" id="btnReceiverSelectionActivate" onclick="activateReceiverFromSelection()" style="padding: 6px 12px; font-size: 12px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">활성화</button>
+          </div>
+        </div>
+        
+        <!-- 디바이스 검색 버튼 -->
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button type="button" class="btn btn-primary" id="btnReceiverSelectionSearch" onclick="searchSpeedometerDevicesForSelection()" style="flex: 0 0 auto;">
+            <span id="receiverSelectionSearchButtonText">디바이스 검색</span>
+          </button>
+        </div>
+        
+        <!-- 검색된 디바이스 목록 -->
+        <div id="receiverSelectionDeviceList" class="ant-device-list" style="max-height: 400px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 12px; background: #f9f9f9;">
+          <div style="padding: 20px; text-align: center; color: #666;">
+            디바이스 검색 버튼을 클릭하여 수신기를 검색하세요.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeReceiverSelectionModal()">닫기</button>
       </div>
     </div>
   </div>
