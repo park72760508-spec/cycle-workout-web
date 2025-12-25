@@ -2049,6 +2049,58 @@ function updateSpeedometerListUI() {
   
   // 초기 마스코트 위치 설정
   updateAllStraightTrackMascots();
+  
+  // 모든 경기장 트랙의 너비를 동일하게 맞춤 (가장 작은 넓이 기준)
+  // DOM 렌더링 완료 후 실행
+  setTimeout(() => {
+    normalizeTrackWidths();
+  }, 100);
+}
+
+/**
+ * 모든 경기장 트랙의 너비를 동일하게 맞춤 (가장 작은 넓이 기준)
+ */
+function normalizeTrackWidths() {
+  const trackContainers = document.querySelectorAll('.straight-track-container');
+  if (trackContainers.length === 0) return;
+  
+  // 모든 트랙의 실제 너비를 측정하여 가장 작은 값 찾기
+  let minWidth = Infinity;
+  const originalWidths = [];
+  
+  // 1단계: 모든 트랙의 실제 너비 측정
+  trackContainers.forEach((container, index) => {
+    const originalWidth = container.style.width;
+    originalWidths[index] = originalWidth;
+    
+    // 임시로 auto로 설정하여 실제 콘텐츠 너비 측정
+    container.style.width = 'auto';
+    container.style.minWidth = '0';
+    container.style.maxWidth = 'none';
+    
+    // 강제로 리플로우 발생
+    void container.offsetWidth;
+    
+    const width = container.offsetWidth;
+    
+    if (width < minWidth && width > 0) {
+      minWidth = width;
+    }
+  });
+  
+  // 2단계: 모든 트랙을 가장 작은 너비로 설정 (우측 정렬 유지)
+  if (minWidth !== Infinity && minWidth > 0) {
+    trackContainers.forEach(container => {
+      container.style.width = minWidth + 'px';
+      container.style.marginLeft = 'auto'; // 우측 정렬 유지
+      container.style.marginRight = '0';
+    });
+  } else {
+    // 측정 실패 시 원래 너비 복원
+    trackContainers.forEach((container, index) => {
+      container.style.width = originalWidths[index] || '70%';
+    });
+  }
 }
 
 /**
