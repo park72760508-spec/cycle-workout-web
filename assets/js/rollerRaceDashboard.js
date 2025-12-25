@@ -47,6 +47,7 @@ window.rollerRaceState = {
     targetTime: 0, // seconds (HH:MM:SS 형식으로 저장)
     wheelSize: '25-622' // 기본값: 700 x 25C
   },
+  wakeLock: null, // 화면 잠금 해제용
   rankings: [], // 순위 정보
   rankDisplayStartIndex: 0, // 전광판 순위 표시 시작 인덱스
   rankDisplayTimer: null, // 순위 표시 순환 타이머
@@ -954,6 +955,76 @@ function checkRaceEndConditions() {
 }
 
 /**
+ * 경기 시작 카운트다운
+ */
+function startRaceWithCountdown() {
+  if (window.rollerRaceState.raceState === 'running') return;
+  
+  // 일시정지 상태에서 재개하는 경우는 카운트다운 없이 바로 시작
+  if (window.rollerRaceState.raceState === 'paused') {
+    startRace();
+    return;
+  }
+  
+  console.log('[경기 시작 카운트다운]');
+  
+  const overlay = document.getElementById('countdownOverlay');
+  const numberEl = document.getElementById('countdownNumber');
+  
+  if (!overlay || !numberEl) {
+    console.warn('카운트다운 오버레이를 찾을 수 없습니다. 바로 시작합니다.');
+    startRace();
+    return;
+  }
+  
+  // 오버레이 표시
+  overlay.classList.remove('hidden');
+  overlay.style.display = 'flex';
+  
+  let countdown = 5;
+  numberEl.textContent = countdown;
+  numberEl.style.fontSize = '120px';
+  numberEl.style.color = '#ffffff';
+  
+  // 첫 번째 비프음
+  if (typeof playBeep === 'function') {
+    playBeep(880, 120, 0.25);
+  }
+  
+  const countdownTimer = setInterval(() => {
+    countdown -= 1;
+    
+    if (countdown > 0) {
+      numberEl.textContent = countdown;
+      // 비프음 재생
+      if (typeof playBeep === 'function') {
+        playBeep(880, 120, 0.25);
+      }
+    } else {
+      // "Go!" 표시
+      numberEl.textContent = 'Go!';
+      numberEl.style.fontSize = '100px';
+      numberEl.style.color = '#00ff88';
+      numberEl.style.textShadow = '0 0 20px rgba(0, 255, 136, 0.8), 0 0 40px rgba(0, 255, 136, 0.6)';
+      
+      // Go! 효과음 (더 긴 소리)
+      if (typeof playBeep === 'function') {
+        playBeep(1500, 700, 0.4, 'square');
+      }
+      
+      clearInterval(countdownTimer);
+      
+      // 0.5초 후 오버레이 숨기고 경기 시작
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+        startRace();
+      }, 500);
+    }
+  }, 1000);
+}
+
+/**
  * 경기 시작
  */
 function startRace() {
@@ -1037,6 +1108,12 @@ function startRace() {
   
   // 전광판 순위 순환 시작
   startRankDisplayRotation();
+  
+  // 연결 상태 체크 타이머 시작
+  startConnectionStatusCheck();
+  
+  // 화면 잠금 활성화 (절전 모드 방지)
+  activateWakeLock();
 
   if (typeof showToast === 'function') {
     showToast('경기가 시작되었습니다!');
@@ -1100,6 +1177,9 @@ function stopRace() {
   
   // 연결 상태 체크 정지
   stopConnectionStatusCheck();
+  
+  // 화면 잠금 해제
+  releaseWakeLock();
   
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
