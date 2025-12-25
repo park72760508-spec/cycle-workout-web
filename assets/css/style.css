@@ -9588,18 +9588,21 @@ button[aria-disabled="true"] {
   flex: 0 0 auto;
 }
 
-.list-item-pairing-name-section {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto; /* 고정 너비 */
-  min-width: 0;
+/* 주황색 블럭 안에 이름 표시 */
+.track-name-inside {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  pointer-events: none;
 }
 
-.list-item-pairing-name-display {
+.track-name-text {
   font-weight: 500;
   color: #00ff88;
   white-space: nowrap;
-  flex: 0 0 auto;
+  font-size: 12px;
   text-shadow: 
     0 0 10px rgba(0, 255, 136, 0.8),
     0 0 20px rgba(0, 255, 136, 0.6),
