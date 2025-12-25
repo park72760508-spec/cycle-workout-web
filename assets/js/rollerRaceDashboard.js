@@ -1007,10 +1007,10 @@ function saveSpeedometerPairing() {
         const pairingName = nameInput.value.trim();
         const newDeviceId = deviceIdInput.value.trim();
         
-        // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
+        // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인 (트랙1~10만 체크)
         if (newDeviceId) {
             const existingSpeedometer = window.rollerRaceState.speedometers.find(
-                s => s.id !== targetId && s.deviceId === newDeviceId && s.deviceId
+                s => s.id !== targetId && s.id >= 1 && s.id <= 10 && s.deviceId === newDeviceId && s.deviceId
             );
             
             if (existingSpeedometer) {
@@ -3515,9 +3515,9 @@ if (typeof window.showScreen === 'function') {
 function selectANTDevice(deviceId, deviceName) {
   const currentTargetId = window.currentTargetSpeedometerId;
   
-  // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
+  // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인 (트랙1~10만 체크)
   const existingSpeedometer = window.rollerRaceState.speedometers.find(
-    s => s.deviceId == deviceId && s.deviceId && s.id !== currentTargetId
+    s => s.id >= 1 && s.id <= 10 && s.deviceId == deviceId && s.deviceId && s.id !== currentTargetId
   );
   
   if (existingSpeedometer) {
@@ -3684,15 +3684,15 @@ function displayANTDevices(devices) {
   
   let html = '<div style="display:flex;flex-direction:column;gap:5px; max-height:200px; overflow-y:auto;">';
   devices.forEach(d => {
-    // 이미 다른 트랙에 지정된 디바이스인지 확인
+    // 이미 다른 트랙에 지정된 디바이스인지 확인 (트랙1~10만 체크)
     const existingSpeedometer = window.rollerRaceState.speedometers.find(
-      s => s.deviceId == d.deviceNumber && s.deviceId && s.id !== currentTargetId
+      s => s.id >= 1 && s.id <= 10 && s.deviceId == d.deviceNumber && s.deviceId && s.id !== currentTargetId
     );
     
     const isAssigned = !!existingSpeedometer;
     const assignedTrack = existingSpeedometer ? `트랙${existingSpeedometer.id}` : '';
     const isCurrentDevice = currentTargetId && window.rollerRaceState.speedometers.find(
-      s => s.id === currentTargetId && s.deviceId == d.deviceNumber
+      s => s.id >= 1 && s.id <= 10 && s.id === currentTargetId && s.deviceId == d.deviceNumber
     );
     
     // 현재 트랙에 이미 지정된 디바이스이거나 사용 가능한 경우만 활성화
@@ -3734,9 +3734,9 @@ function updateSpeedometerDataInternal(deviceId, antData) {
 window.selectANTDevice = function(deviceId, deviceName) {
   const currentTargetId = window.currentTargetSpeedometerId;
   
-  // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인
+  // 중복 체크: 다른 트랙에 이미 지정된 디바이스인지 확인 (트랙1~10만 체크)
   const existingSpeedometer = window.rollerRaceState.speedometers.find(
-    s => s.deviceId == deviceId && s.deviceId && s.id !== currentTargetId
+    s => s.id >= 1 && s.id <= 10 && s.deviceId == deviceId && s.deviceId && s.id !== currentTargetId
   );
   
   if (existingSpeedometer) {
