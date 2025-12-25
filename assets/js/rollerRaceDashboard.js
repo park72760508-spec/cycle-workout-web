@@ -2162,57 +2162,6 @@ function handleANTMessage(message) {
  * [최종 수정] 브로드캐스트 데이터 처리 (ID 추출 강화)
  */
 /**
- * [수정됨] 데이터 처리 및 ID 추출 (20-bit ID 지원)
- */
-function handleBroadcastData(payload) {
-  // payload: [Channel(0), Data(1..8), Flag(9), ID_L(10), ID_H(11), Type(12), Trans(13)]
-  if (payload.length < 9) return;
-
-  const antData = payload.slice(1, 9); // 데이터 8바이트
-  
-  // Extended Data가 있는지 확인
-  if (payload.length >= 13) {
-    const flag = payload[9];
-    
-    // 0x80 플래그(Device ID)가 있거나, T2028 특성상 위치가 고정적일 수 있음
-    if (flag & 0x80) { 
-      const idLow = payload[10];
-      const idHigh = payload[11];
-      const deviceType = payload[12];
-      const transType = payload[13]; // 전송 타입 (상위 4비트가 ID의 일부)
-      
-      // [핵심] 가민과 동일한 20-bit ID 계산 (TransType의 상위 4비트 + ID 16비트)
-      // 예: 0x15(Trans) -> 0x1(상위) + 07D0(ID) = 0x107D0 = 67536
-      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
-      
-      const deviceId = extendedId; // 이제 67536으로 표시될 것입니다.
-
-      // UI 목록에 추가 요청
-      const modal = document.getElementById('addSpeedometerModal');
-      if (modal && !modal.classList.contains('hidden')) {
-        if (typeof addFoundDeviceToUI === 'function') addFoundDeviceToUI(deviceId, deviceType);
-      }
-
-      // 등록된 속도계 데이터 업데이트
-      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
-      if (speedometer) {
-        if (!speedometer.connected) {
-          speedometer.connected = true;
-          if(typeof updateSpeedometerConnectionStatus === 'function') {
-              updateSpeedometerConnectionStatus(speedometer.id, true);
-          }
-        }
-        // 데이터 처리
-        if(typeof processSpeedCadenceData === 'function') {
-            processSpeedCadenceData(speedometer.deviceId, antData);
-        }
-        speedometer.lastPacketTime = Date.now();
-      }
-    }
-  }
-}
-
-
 
 
 
@@ -2234,60 +2183,48 @@ function handleBroadcastData(payload) {
 /**
  * [수정됨] 브로드캐스트 데이터 처리 (디버깅 강화)
  */
+/**
+ * 1. 브로드캐스트 데이터 처리 (ID 추출 및 로그 출력 강화)
+ */
 function handleBroadcastData(payload) {
-  // 1. 데이터 수신 여부 확인용 로그 (데이터가 들어오면 콘솔에 찍힘)
-  // console.log('[ANT+] 데이터 수신:', payload.length, 'bytes'); 
-
-  // 최소 길이 체크 (9바이트: 채널번호 1 + 데이터 8)
+  // payload: [Channel, Data0..7, Flag, ExtData...]
   if (payload.length < 9) return;
 
-  const antData = payload.slice(1, 9); // 순수 센서 데이터 8바이트
-  let deviceId = 0;
-  let deviceType = 0;
-
-  // 2. Extended Data(ID 정보)가 있는 경우 (13바이트 이상)
+  const antData = payload.slice(1, 9); // 센서 데이터
+  
+  // Extended Data가 있는지 확인 (길이 13 이상)
   if (payload.length >= 13) {
-    const flag = payload[9];
-    if (flag & 0x80) { // Device ID Flag 확인
-      deviceId = (payload[11] << 8) | payload[10];
-      deviceType = payload[12];
-    }
-  } 
-  
-  // 3. [핵심 수정] ID 정보가 없더라도(구형 스틱 등) 0번 ID로라도 처리 시도
-  // 만약 payload가 9바이트라면 deviceId는 0이 됩니다.
-  // 이 경우 '검색'은 안 되더라도 데이터가 들어오는지 확인할 수 있습니다.
-  
-  if (deviceId === 0 && payload.length < 13) {
-      // ID를 못 읽었을 때 경고 로그
-      // console.warn('[ANT+] ID 정보 없음 (LibConfig 설정 필요)');
-      return; // ID가 없으면 누구 데이터인지 모르므로 리턴 (또는 테스트시 주석 처리)
-  }
+    const flag = payload[9]; // Flag Byte (보통 E0 또는 80)
+    
+    // 0x80 비트가 있으면 Device ID가 포함되어 있다는 뜻
+    if (flag & 0x80) { 
+      const idLow = payload[10];
+      const idHigh = payload[11];
+      const deviceType = payload[12];
+      const transType = payload[13];
+      
+      // [가민 호환 ID 계산 공식]
+      // Transmission Type의 상위 4비트를 ID의 최상위 4비트로 사용
+      // 예: Trans(0x15) -> 상위 1 + ID(07D0) = 107D0 = 67536
+      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+      
+      // 콘솔에 발견 사실을 알림 (한 번만 뜨게 필터링하면 좋지만 확인을 위해 출력)
+      // console.log(`[ANT+] ID 발견: ${extendedId} (Type: ${deviceType})`);
 
-  // 4. UI 및 데이터 업데이트
-  const modal = document.getElementById('addSpeedometerModal');
-  
-  // 검색 모달이 열려있다면 목록에 추가
-  if (modal && !modal.classList.contains('hidden')) {
-    if (typeof addFoundDeviceToUI === 'function') {
-        addFoundDeviceToUI(deviceId, deviceType);
-    }
-  }
+      // 1. 검색 목록에 무조건 추가 시도
+      addFoundDeviceToUI(extendedId, deviceType);
 
-  // 등록된 속도계 데이터 업데이트
-  const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
-  if (speedometer) {
-    if (!speedometer.connected) {
-      speedometer.connected = true;
-      if (typeof updateSpeedometerConnectionStatus === 'function') {
-          updateSpeedometerConnectionStatus(speedometer.id, true);
+      // 2. 이미 등록된 속도계라면 데이터 업데이트
+      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == extendedId);
+      if (speedometer) {
+        if (!speedometer.connected) {
+          speedometer.connected = true;
+          if(typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
+        }
+        if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
+        speedometer.lastPacketTime = Date.now();
       }
     }
-    // 속도 계산
-    if (typeof processSpeedCadenceData === 'function') {
-        processSpeedCadenceData(speedometer.deviceId, antData);
-    }
-    speedometer.lastPacketTime = Date.now();
   }
 }
 
@@ -2297,37 +2234,44 @@ function handleBroadcastData(payload) {
 /**
  * [수정됨] 검색된 디바이스 UI 추가 (속도 센서 필터 추가)
  */
+/**
+ * 2. 검색된 디바이스 UI 추가 (모달 상태 무시하고 강제 실행)
+ */
 function addFoundDeviceToUI(deviceId, deviceType) {
-  // 기존: 0x79(Combo), 0x7A(Cadence)만 허용 -> 속도센서(0x7B)가 무시됨
-  // 수정: 0x7B (Speed Sensor) 추가
+  // 속도(123=0x7B), 콤보(121=0x79), 케이던스(122=0x7A) 허용
+  // 가민 속도센서는 0x7B입니다.
   const validTypes = [0x79, 0x7A, 0x7B, 0x78]; 
   
-  if (!validTypes.includes(deviceType)) {
-      console.log(`[ANT+] 필터링된 디바이스: ID=${deviceId}, Type=${deviceType.toString(16)}`);
-      return;
-  }
+  if (!validTypes.includes(deviceType)) return;
 
+  // 이미 목록에 있는지 확인
   const existing = window.antState.foundDevices.find(d => d.deviceNumber === deviceId);
-  if (!existing) {
-    let typeName = 'Unknown';
-    if (deviceType === 0x79) typeName = 'Speed/Cadence (콤보)';
-    else if (deviceType === 0x7B) typeName = 'Speed Sensor (속도)'; // 가민 속도센서
-    else if (deviceType === 0x7A) typeName = 'Cadence Sensor (케이던스)';
-    
-    const device = {
-      deviceNumber: deviceId,
-      name: `ANT+ ${typeName} (${deviceId})`,
-      type: typeName,
-      id: deviceId // displayANTDevices 호환용
-    };
-    
-    window.antState.foundDevices.push(device);
-    displayANTDevices(window.antState.foundDevices);
-    
-    // 알림 표시
-    if (typeof showToast === 'function') showToast(`${typeName} 검색됨!`);
-  }
+  if (existing) return; // 이미 있으면 패스
+
+  // 새 디바이스 발견!
+  console.log(`[UI] 새 센서 목록에 추가: ${deviceId}`);
+
+  let typeName = 'Unknown';
+  if (deviceType === 0x79) typeName = '콤보 센서';
+  else if (deviceType === 0x7B) typeName = '속도 센서';
+  else if (deviceType === 0x7A) typeName = '케이던스 센서';
+  
+  const device = {
+    deviceNumber: deviceId,
+    name: `ANT+ ${typeName} (${deviceId})`,
+    id: deviceId
+  };
+  
+  window.antState.foundDevices.push(device);
+  
+  // 화면 그리기
+  displayANTDevices(window.antState.foundDevices);
+  
+  // 알림 토스트 (선택 사항)
+  if (typeof showToast === 'function') showToast(`${typeName} (${deviceId}) 발견!`);
 }
+
+
 
 /**
  * Channel ID Response 처리 (스캔 중 발견된 디바이스 정보)
@@ -2507,73 +2451,92 @@ function handleAcknowledgedData(data) {
 /**
  * 검색된 ANT+ 디바이스 목록 표시
  */
+/**
+ * 3. 디바이스 목록 화면 그리기 (디자인 보정)
+ */
 function displayANTDevices(devices) {
-  const deviceList = document.getElementById('antDeviceList');
-  if (!deviceList) return;
+  const list = document.getElementById('antDeviceList');
   
+  // 리스트 엘리먼트가 없으면(모달이 닫혀있어도) 강제로 찾거나 로그만 남김
+  if (!list) {
+      console.log('검색된 기기 목록:', devices);
+      return;
+  }
+  
+  // 모달이 숨겨져 있다면 강제로 보이게 처리 (선택 사항)
+  const listContainer = list.parentElement; // 리스트 감싸는 div
+  if (listContainer && listContainer.classList.contains('hidden')) {
+      listContainer.classList.remove('hidden');
+  }
+
   if (devices.length === 0) {
-    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #999;">검색된 디바이스가 없습니다.<br>디바이스가 켜져 있고 페어링 모드인지 확인하세요.</div>';
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:#666">센서 검색 중...<br>바퀴를 돌려주세요.</div>';
     return;
   }
   
-  let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-  devices.forEach(device => {
-    const isTemporary = device.isTemporary || false;
-    const deviceIdDisplay = device.deviceNumber ? device.deviceNumber.toString() : device.id;
+  let html = '<div style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;">';
+  devices.forEach(d => {
     html += `
       <div class="ant-device-item" 
-           style="padding: 12px; border: 1px solid ${isTemporary ? '#ffa500' : '#ddd'}; border-radius: 4px; cursor: pointer; background: ${isTemporary ? '#fff8e1' : 'white'}; transition: background 0.2s;"
-           onmouseover="this.style.background='#f0f0f0'"
-           onmouseout="this.style.background='${isTemporary ? '#fff8e1' : 'white'}'"
-           onclick="selectANTDevice('${deviceIdDisplay}', '${device.name || device.id}')">
-        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-          ${device.name || `디바이스 ${deviceIdDisplay}`}
-          ${isTemporary ? '<span style="font-size: 10px; color: #ff9800; margin-left: 8px;">(브로드캐스트 감지)</span>' : ''}
+           style="padding:12px; border:1px solid #007bff; background:#f0f8ff; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;"
+           onclick="selectANTDevice('${d.deviceNumber}')">
+        <div>
+            <strong style="color:#0056b3; font-size:14px;">${d.name}</strong>
         </div>
-        <div style="font-size: 12px; color: #666;">
-          <span>ID: ${deviceIdDisplay}</span>
-          ${device.type ? `<span style="margin-left: 8px;">타입: ${device.type}</span>` : ''}
-          ${device.deviceNumber ? `<span style="margin-left: 8px;">디바이스 번호: ${device.deviceNumber}</span>` : ''}
-        </div>
+        <button style="background:#007bff; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer;">선택</button>
       </div>
     `;
   });
   html += '</div>';
-  
-  deviceList.innerHTML = html;
+  list.innerHTML = html;
 }
 
 /**
- * ANT+ 디바이스 선택
+/**
+ * [최종 수정] ANT+ 디바이스 선택 (기능 통합 버전)
  */
 function selectANTDevice(deviceId, deviceName) {
   const deviceIdInput = document.getElementById('speedometerDeviceId');
   const deviceList = document.getElementById('antDeviceList');
   
+  // 1. 입력창에 값 넣기
   if (deviceIdInput) {
     deviceIdInput.value = deviceId;
+    
+    // 시각적 피드백 (잠깐 파란색으로 깜빡임)
+    deviceIdInput.style.backgroundColor = '#e8f0fe';
+    setTimeout(() => deviceIdInput.style.backgroundColor = '', 500);
   }
   
-  // 선택된 디바이스 하이라이트
+  // 2. 목록에서 선택된 항목 하이라이트 (시각 효과)
   if (deviceList) {
     const items = deviceList.querySelectorAll('.ant-device-item');
+    
+    // 기존 선택 해제
     items.forEach(item => {
-      item.style.border = '1px solid #ddd';
-      item.style.background = 'white';
+      // 인라인 스타일 초기화 (클래스로 제어하면 더 좋지만 기존 방식 존중)
+      item.style.borderColor = '#ddd'; 
+      item.style.backgroundColor = '#f0f8ff'; // 기본 배경색
     });
     
-    // 선택된 항목 찾기
+    // 클릭된 항목 찾아서 강조 (ID가 포함된 텍스트 찾기)
+    // 주의: onclick 이벤트에서 넘겨준 deviceId와 텍스트 내의 ID를 비교
     const selectedItem = Array.from(items).find(item => 
       item.textContent.includes(deviceId)
     );
+    
     if (selectedItem) {
-      selectedItem.style.border = '2px solid #28a745';
-      selectedItem.style.background = '#f0f9ff';
+      selectedItem.style.borderColor = '#007bff'; // 파란 테두리
+      selectedItem.style.backgroundColor = '#fff';  // 흰 배경 (강조)
+      selectedItem.style.boxShadow = '0 0 5px rgba(0,123,255,0.3)'; // 그림자 추가
     }
   }
   
+  // 3. 알림 메시지
   if (typeof showToast === 'function') {
-    showToast(`${deviceName || deviceId} 선택됨`);
+    // deviceName이 없으면 그냥 ID만 표시
+    const name = deviceName || `ID: ${deviceId}`;
+    showToast(`${name} 선택 완료`);
   }
 }
 
@@ -3505,6 +3468,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
