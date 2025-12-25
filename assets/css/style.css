@@ -9034,7 +9034,12 @@ button[aria-disabled="true"] {
 .speedometer-name {
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: #ffffff !important;
+  background: #2563eb !important;
+  padding: 6px 12px !important;
+  border-radius: 8px !important;
+  display: inline-block !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .btn-pair {
