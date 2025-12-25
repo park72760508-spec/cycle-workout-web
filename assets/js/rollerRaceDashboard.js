@@ -1999,39 +1999,39 @@ function updateSpeedometerListUI() {
       </div>
       <!-- 직선 100m 경기장 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}">
-        <svg class="straight-track-svg" viewBox="0 0 1000 80" preserveAspectRatio="xMidYMid meet">
+        <svg class="straight-track-svg" viewBox="0 0 700 40" preserveAspectRatio="xMidYMid meet">
           <!-- 트랙 배경 (잔디 느낌) -->
-          <rect x="0" y="0" width="1000" height="80" fill="#2d5016" opacity="0.2"/>
+          <rect x="0" y="0" width="700" height="40" fill="#2d5016" opacity="0.2"/>
           
           <!-- 트랙 레인 (10개 레인) -->
           ${generateTrackLanes()}
           
           <!-- 시작선 (좌측) -->
-          <line x1="50" y1="0" x2="50" y2="80" stroke="#ffffff" stroke-width="3" opacity="0.9"/>
+          <line x1="35" y1="0" x2="35" y2="40" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
           
           <!-- 종료선 (우측) -->
-          <line x1="950" y1="0" x2="950" y2="80" stroke="#ff0000" stroke-width="3" opacity="0.9"/>
+          <line x1="665" y1="0" x2="665" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
           
           <!-- 100m 표시 -->
-          <text x="500" y="25" text-anchor="middle" fill="#ffffff" font-size="16" font-weight="bold" opacity="0.8">100m</text>
+          <text x="350" y="12" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="bold" opacity="0.8">100m</text>
           
           <!-- 마스코트 위치 (자전거 타는 모습) -->
-          <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(50, 40)">
+          <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
             <!-- 자전거 프레임 -->
-            <circle cx="0" cy="0" r="10" fill="#ff6b6b" opacity="0.9"/>
-            <circle cx="0" cy="0" r="6" fill="#ffffff"/>
+            <circle cx="0" cy="0" r="7" fill="#ff6b6b" opacity="0.9"/>
+            <circle cx="0" cy="0" r="4" fill="#ffffff"/>
             <!-- 자전거 바퀴 -->
-            <circle cx="-15" cy="10" r="8" fill="#333" opacity="0.7"/>
-            <circle cx="15" cy="10" r="8" fill="#333" opacity="0.7"/>
+            <circle cx="-10" cy="7" r="5" fill="#333" opacity="0.7"/>
+            <circle cx="10" cy="7" r="5" fill="#333" opacity="0.7"/>
             <!-- 자전거 바퀴 스포크 -->
-            <line x1="-15" y1="10" x2="-10" y2="5" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
-            <line x1="-15" y1="10" x2="-10" y2="15" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
-            <line x1="15" y1="10" x2="10" y2="5" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
-            <line x1="15" y1="10" x2="10" y2="15" stroke="#ffffff" stroke-width="1.5" opacity="0.5"/>
+            <line x1="-10" y1="7" x2="-7" y2="4" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+            <line x1="-10" y1="7" x2="-7" y2="10" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+            <line x1="10" y1="7" x2="7" y2="4" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
+            <line x1="10" y1="7" x2="7" y2="10" stroke="#ffffff" stroke-width="1" opacity="0.5"/>
           </g>
           
           <!-- 순위 표시 (트랙 상단 중앙) -->
-          <text x="500" y="15" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
+          <text x="350" y="10" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
         </svg>
       </div>
       <div class="list-item-actions">
@@ -2055,12 +2055,12 @@ function updateSpeedometerListUI() {
  */
 function generateTrackLanes() {
   let lanes = '';
-  const laneWidth = 80 / 10; // 총 높이 80을 10개 레인으로 나눔
+  const laneWidth = 40 / 10; // 총 높이 40을 10개 레인으로 나눔 (50% 축소)
   
   for (let i = 0; i < 10; i++) {
     const y = i * laneWidth;
-    // 레인 구분선
-    lanes += `<line x1="50" y1="${y}" x2="950" y2="${y}" stroke="#ffffff" stroke-width="1" stroke-dasharray="10,5" opacity="0.4"/>`;
+    // 레인 구분선 (길이 70% 축소: 50~950 → 35~665)
+    lanes += `<line x1="35" y1="${y}" x2="665" y2="${y}" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="7,3" opacity="0.4"/>`;
   }
   
   return lanes;
@@ -2111,12 +2111,12 @@ function updateStraightTrackMascot(speedometerId, progress) {
   const mascotEl = document.getElementById(`straight-mascot-${speedometerId}`);
   if (!mascotEl) return;
   
-  // 직선 트랙: 시작선(50)에서 종료선(950)까지
-  const startX = 50;
-  const endX = 950;
+  // 직선 트랙: 시작선(35)에서 종료선(665)까지 (길이 70% 축소)
+  const startX = 35;
+  const endX = 665;
   const trackLength = endX - startX;
   const x = startX + (trackLength * progress);
-  const y = 40; // 트랙 중앙
+  const y = 20; // 트랙 중앙 (높이 50% 축소: 40 → 20)
   
   mascotEl.classList.add('moving');
   mascotEl.setAttribute('transform', `translate(${x}, ${y})`);
