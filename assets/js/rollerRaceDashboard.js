@@ -994,49 +994,45 @@ function saveSpeedometerPairing() {
 // [수정 3] 연속 스캔 모드 진입 (안정성 강화)
 // =========================================================
 
+/**
+ * [수정됨] 스캔 모드 설정 (호환성 모드)
+ */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  
-  console.log('[ANT+] T2028 스캔 모드 설정 시작 (Slow Init)...');
+  console.log('[ANT+] 호환성 스캔 모드 시작 (Legacy)...');
   window.antState.isScanning = true;
 
   try {
-    // 1. Reset (초기화)
+    // 1. Reset
     await sendANTMessage(0x4A, [0x00]);
-    await new Promise(r => setTimeout(r, 1000)); // 리셋은 1초 대기
+    await new Promise(r => setTimeout(r, 1500)); // 리셋 대기 시간 증가
 
-    // 2. Network Key (가장 중요)
+    // 2. Network Key
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
-    await new Promise(r => setTimeout(r, 500)); // 500ms로 늘림
+    await new Promise(r => setTimeout(r, 300));
 
     // 3. Assign Channel 0
     await sendANTMessage(0x42, [0x00, 0x00]); 
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
 
-    // 4. Channel ID (Wildcard - 모든 장치 수신)
+    // 4. Set ID (Wildcard)
     await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
 
-    // 5. Frequency 57 (2457MHz)
+    // 5. Frequency 57
     await sendANTMessage(0x45, [0x00, 57]);
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
 
-    // 6. LibConfig (ID 정보 포함 요청 - 필수)
-    await sendANTMessage(0x6E, [0x00, 0xE0]); 
-    await new Promise(r => setTimeout(r, 500));
-
-    // 7. Rx Scan Mode (0x5B) - 15대 연결을 위해 필수
-    console.log('[ANT+] Rx Scan Mode(0x5B) 명령 전송');
-    await sendANTMessage(0x5B, [0x00]); 
+    // 6. [변경] 0x5B(스캔모드) 대신 0x4B(채널열기) 사용
+    // T2028이 0x5B를 지원하지 않을 가능성이 매우 높음
+    console.log('[ANT+] 일반 채널 열기(0x4B) 시도');
+    await sendANTMessage(0x4B, [0x00]); 
     
-    // 수신 확인을 위해 메시지 리스너가 켜져 있는지 확인
-    if (!window.antMessageListener) {
-        startANTMessageListener();
-    }
+    // 리스너가 죽어있으면 살리기
+    if (!window.antMessageListener) startANTMessageListener();
 
   } catch (e) {
-    console.error('[ANT+] 스캔 설정 실패:', e);
-    window.antState.isScanning = false;
+    console.error('설정 실패:', e);
   }
 }
 
@@ -1542,29 +1538,26 @@ async function initializeANT() {
 /**
  * ANT+ 메시지 전송
  */
-async function sendANTMessage(messageId, data = []) {
-  if (!window.antState.usbDevice || !window.antState.outEndpoint) {
-    throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
-  }
+/**
+ * [수정됨] ANT+ 메시지 전송 (Tacx 호환성 패치: 패딩 제거)
+ */
+async function sendANTMessage(messageId, data) {
+  if (!window.antState.usbDevice) return;
   
-  // ANT+ 메시지 포맷: [Sync(0xA4), Length, MessageID, Data..., Checksum]
-  const length = data.length + 1; // MessageID 포함
-  const checksum = calculateChecksum([messageId, ...data]);
+  const length = data.length + 1; // MsgID 포함 길이
+  let checksum = 0xA4 ^ length ^ messageId;
+  for (let b of data) checksum ^= b;
+  
+  // [핵심 변경] 0으로 채운 8바이트 고정 패킷이 아니라, 
+  // 실제 데이터 길이만큼만 잘라서 보냅니다. (Tacx 거부 방지)
   const message = [0xA4, length, messageId, ...data, checksum];
+  const packet = new Uint8Array(message);
   
-  // 8바이트 패킷으로 전송
-  const packet = new Uint8Array(8);
-  packet.set(message.slice(0, 8), 0);
-  
-  await window.antState.usbDevice.transferOut(window.antState.outEndpoint, packet);
-  
-  // 메시지가 8바이트보다 길면 추가 패킷 전송
-  if (message.length > 8) {
-    for (let i = 8; i < message.length; i += 8) {
-      const remainingPacket = new Uint8Array(8);
-      remainingPacket.set(message.slice(i, i + 8), 0);
-      await window.antState.usbDevice.transferOut(window.antState.outEndpoint, remainingPacket);
-    }
+  try {
+    // console.log('[TX Raw]', Array.from(packet).map(b=>b.toString(16).padStart(2,'0')).join(' '));
+    await window.antState.usbDevice.transferOut(window.antState.outEndpoint, packet);
+  } catch (e) {
+    console.warn('전송 실패:', e);
   }
 }
 
@@ -1886,51 +1879,63 @@ async function startANTMessageListener() {
 // [수정 1] 데이터 버퍼링 및 파싱 로직 (Tacx 호환성 강화)
 // =========================================================
 
-let packetBuffer = new Uint8Array(0);
 
 /**
  * USB로부터 들어온 Raw 데이터를 처리하는 함수
  */
+// [수정됨] 수신 데이터 처리기
+let packetBuffer = new Uint8Array(0);
+
 function processIncomingData(newData) {
-  // 1. 기존 버퍼에 새 데이터 병합
-  const combinedBuffer = new Uint8Array(packetBuffer.length + newData.length);
-  combinedBuffer.set(packetBuffer);
-  combinedBuffer.set(newData, packetBuffer.length);
-  packetBuffer = combinedBuffer;
+  const combined = new Uint8Array(packetBuffer.length + newData.length);
+  combined.set(packetBuffer);
+  combined.set(newData, packetBuffer.length);
+  packetBuffer = combined;
 
-  // 2. 패킷 파싱 루프
   while (packetBuffer.length >= 4) {
-    // Sync Byte (0xA4) 찾기
     const syncIndex = packetBuffer.indexOf(0xA4);
-    
-    if (syncIndex === -1) {
-      // Sync가 없으면 잘못된 데이터이므로 버림 (단, 마지막 일부는 남길 수도 있으나 여기선 초기화)
-      // 데이터 유입이 끊기지 않게 0으로 초기화하지 않고 대기
-      break; 
+    if (syncIndex === -1) { 
+        // Sync 없으면 버림 (단, 데이터가 끊겨 올 수 있으므로 너무 빨리 버리지 않도록 주의)
+        if(packetBuffer.length > 64) packetBuffer = new Uint8Array(0);
+        break; 
     }
-
-    // Sync 바이트 앞의 쓰레기 데이터 제거
+    
     if (syncIndex > 0) {
       packetBuffer = packetBuffer.slice(syncIndex);
       continue;
     }
 
-    // 데이터 길이 확인 (패킷 구조: Sync(1) + Len(1) + MsgID(1) + Payload(Len-1) + Chk(1))
-    // 표준 드라이버 계산식: TotalLength = LengthByte + 4
-    const lengthByte = packetBuffer[1];
-    const totalPacketSize = lengthByte + 4;
+    const length = packetBuffer[1];
+    const totalLen = length + 4;
 
-    // 버퍼에 아직 전체 패킷이 다 안 들어왔으면 대기
-    if (packetBuffer.length < totalPacketSize) {
-      break;
+    if (packetBuffer.length < totalLen) break;
+
+    const packet = packetBuffer.slice(0, totalLen);
+    packetBuffer = packetBuffer.slice(totalLen);
+
+    // [핵심] Tacx Wrapper (0xAE) 처리
+    // 구조: [A4][09][AE][Status][InnerSync]...
+    if (packet[2] === 0xAE) {
+        const status = packet[3]; // 0x02면 에러/Echo 가능성
+        const innerSyncIndex = 4; // 보통 5번째 바이트가 내부 패킷 시작
+        
+        if (status !== 0x00) {
+            // console.warn('[ANT+] Tacx 상태 코드:', status.toString(16));
+        }
+
+        if (packet.length > innerSyncIndex && packet[innerSyncIndex] === 0xA4) {
+            // 포장지 뜯고 내부 데이터만 다시 처리
+            console.log('[ANT+] Tacx 포장지 해제 -> 재처리');
+            const innerData = packet.slice(innerSyncIndex); // 0xA4부터 끝까지
+            
+            // 재귀 호출로 내부 패킷 처리
+            processIncomingData(innerData);
+            continue; 
+        }
     }
 
-    // 3. 온전한 패킷 한 개 추출
-    const packet = packetBuffer.slice(0, totalPacketSize);
-    packetBuffer = packetBuffer.slice(totalPacketSize); // 처리한 부분 제거
-
-    // 4. 패킷 처리 핸들러로 전달
-    parseAndHandlePacket(packet);
+    // 일반 메시지 처리
+    handleANTMessage({ messageId: packet[2], data: packet.slice(3, totalLen - 1) });
   }
 }
 
@@ -3434,6 +3439,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
