@@ -1003,9 +1003,13 @@ function saveSpeedometerPairing() {
 /**
  * [재확인] 안정적인 스캔 모드 설정
  */
+/**
+ * [수정됨] Tacx T2028 전용 스캔 설정 (파라미터 수정)
+ * 0x42(Assign Channel) 명령의 파라미터 갯수 오류 수정
+ */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  console.log('[ANT+] Tacx T2028 스캔 가동 (Padding Fix)...');
+  console.log('[ANT+] Tacx T2028 스캔 가동 (Parameter Fix)...');
   window.antState.isScanning = true;
 
   try {
@@ -1017,12 +1021,15 @@ async function startContinuousScan() {
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
     await new Promise(r => setTimeout(r, 300));
 
-    // 3. Assign Channel 0
-    await sendANTMessage(0x42, [0x00, 0x00]); 
+    // 3. Assign Channel 0 [중요 수정]
+    // 기존: [0x00, 0x00] -> 2바이트 (에러 원인)
+    // 수정: [0x00, 0x00, 0x00] -> 3바이트 (채널0, 타입0, 네트워크0)
+    await sendANTMessage(0x42, [0x00, 0x00, 0x00]); 
     await new Promise(r => setTimeout(r, 300));
 
-    // 4. Channel ID (Wildcard)
-    await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    // 4. Channel ID (Wildcard) [수정]
+    // 기존 6바이트에서 표준 5바이트로 수정 (채널, 디바이스ID_L, 디바이스ID_H, 타입, 전송타입)
+    await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00]);
     await new Promise(r => setTimeout(r, 300));
 
     // 5. Search Timeout (무한대)
@@ -1033,19 +1040,22 @@ async function startContinuousScan() {
     await sendANTMessage(0x45, [0x00, 57]);
     await new Promise(r => setTimeout(r, 300));
 
-    // 7. LibConfig (ID 정보)
+    // 7. LibConfig
     await sendANTMessage(0x6E, [0x00, 0xE0]); 
     await new Promise(r => setTimeout(r, 300));
 
     // 8. Open Channel (0x4B)
-    // T2028은 0x5B보다 0x4B가 안정적일 수 있습니다. (패딩이 해결되면 0x5B도 될 수 있음)
+    // 모든 설정이 완료되었으므로 이제 채널을 엽니다.
     console.log('[ANT+] 채널 열기(0x4B) 전송');
     await sendANTMessage(0x4B, [0x00]); 
     
-    if (!window.antMessageListener) startANTMessageListener();
+    if (!window.antMessageListener) {
+        startANTMessageListener();
+    }
 
   } catch (e) {
-    console.error('설정 실패:', e);
+    console.error('[ANT+] 설정 실패:', e);
+    window.antState.isScanning = false;
   }
 }
 
@@ -3459,6 +3469,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
