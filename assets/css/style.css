@@ -8757,6 +8757,23 @@ button[aria-disabled="true"] {
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
 }
 
+/* 디지털 숫자 스타일 (전광판용) */
+.digital-number {
+  font-family: 'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace;
+  font-weight: 900;
+  letter-spacing: 4px;
+  display: inline-block;
+  color: #00ff88;
+  text-shadow: 
+    0 0 10px rgba(0, 255, 136, 0.8),
+    0 0 20px rgba(0, 255, 136, 0.6),
+    0 0 30px rgba(0, 255, 136, 0.4),
+    0 4px 8px rgba(0, 0, 0, 0.5),
+    2px 2px 4px rgba(0, 0, 0, 0.8);
+  font-variant-numeric: tabular-nums;
+  text-rendering: optimizeLegibility;
+}
+
 /* 순위 표시 컨테이너 */
 .scoreboard-ranks-container {
   width: 100%;
