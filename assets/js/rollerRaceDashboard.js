@@ -560,47 +560,27 @@ function updateRankDisplay(withAnimation = true) {
     .sort((a, b) => b.totalDistance - a.totalDistance);
   
   const totalRanks = sorted.length;
-  if (totalRanks === 0) {
-    // 순위가 없을 때 빈 상태 표시
-    const rankItems = ranksContainer.querySelectorAll('.rank-item');
-    for (let i = 0; i < Math.min(3, rankItems.length); i++) {
-      const item = rankItems[i];
-      if (item) {
-        const nameEl = item.querySelector('.rank-name');
-        const distanceEl = item.querySelector('.rank-distance');
-        const numberEl = item.querySelector('.rank-number');
-        if (nameEl) nameEl.textContent = '-';
-        if (distanceEl) distanceEl.textContent = '0.0km';
-        if (numberEl) numberEl.style.display = 'none';
-        item.classList.add('rank-item-visible');
-      }
-    }
-    return;
-  }
   
-  // 표시할 순위 개수 (항상 3개)
-  const displayCount = 3;
-  
-  // 시작 인덱스 계산 (무한 순환)
-  // 예: 1~3위 → 2~4위 → ... → 마지막-2~마지막 → 마지막-1, 마지막, 1위 → 마지막, 1~2위 → 1~3위 → ...
-  let startIndex = window.rollerRaceState.rankDisplayStartIndex;
-  
-  // 순위가 3개 이하일 때는 순환하지 않음
-  if (totalRanks <= 3) {
-    startIndex = 0;
+  // 항상 3개 고정 표시 (순위가 1개만 있어도 3개 표시)
+  // 시작 인덱스는 항상 0 (순위가 3개 이하일 때는 순환하지 않음)
+  let startIndex = 0;
+  if (totalRanks > 3) {
+    startIndex = window.rollerRaceState.rankDisplayStartIndex;
+  } else {
     window.rollerRaceState.rankDisplayStartIndex = 0;
   }
   
   const rankItems = ranksContainer.querySelectorAll('.rank-item');
   
-  // 각 고정된 상자에 데이터 업데이트 (무한 순환)
-  for (let i = 0; i < Math.min(3, rankItems.length); i++) {
+  // 항상 3개 고정 표시 (순위가 1개만 있어도 3개 표시)
+  for (let i = 0; i < 3; i++) {
     const item = rankItems[i];
+    if (!item) continue;
     
-    // 순환 인덱스 계산: startIndex + i가 totalRanks를 넘어가면 0부터 다시 시작
-    let targetIndex = (startIndex + i) % totalRanks;
+    // 순환 인덱스 계산: startIndex + i가 totalRanks를 넘어가면 빈 상태로 표시
+    let targetIndex = startIndex + i;
     
-    if (totalRanks > 0) {
+    if (totalRanks > 0 && targetIndex < totalRanks) {
       // 표시할 순위가 있는 경우
       const speedometer = sorted[targetIndex];
       const nameEl = item.querySelector('.rank-name');
@@ -608,7 +588,7 @@ function updateRankDisplay(withAnimation = true) {
       const numberEl = item.querySelector('.rank-number');
       
       const rank = targetIndex + 1;
-      if (nameEl) nameEl.textContent = speedometer.name;
+      if (nameEl) nameEl.textContent = speedometer.pairingName || speedometer.name || '-';
       if (distanceEl) distanceEl.textContent = speedometer.totalDistance.toFixed(2) + 'km';
       if (numberEl) {
         if (rank >= 1 && rank <= 10) {
@@ -622,14 +602,14 @@ function updateRankDisplay(withAnimation = true) {
       
       item.classList.add('rank-item-visible');
     } else {
-      // 순위가 없는 경우 (빈 상자)
+      // 순위가 없거나 해당 인덱스에 데이터가 없는 경우 (빈 상자)
       const nameEl = item.querySelector('.rank-name');
       const distanceEl = item.querySelector('.rank-distance');
       const numberEl = item.querySelector('.rank-number');
       if (nameEl) nameEl.textContent = '-';
       if (distanceEl) distanceEl.textContent = '0.0km';
       if (numberEl) numberEl.style.display = 'none';
-      item.classList.remove('rank-item-visible');
+      item.classList.add('rank-item-visible'); // 항상 표시
     }
   }
   
