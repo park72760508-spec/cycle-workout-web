@@ -2008,8 +2008,8 @@ function updateSpeedometerListUI() {
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}">
         <svg class="straight-track-svg" viewBox="0 0 700 40" preserveAspectRatio="xMidYMid meet">
-          <!-- 트랙 배경 (잔디 느낌) -->
-          <rect x="0" y="0" width="700" height="40" fill="#2d5016" opacity="0.2"/>
+          <!-- 트랙 배경 (잔디 느낌) - 오른쪽 여백 70%까지 확장 -->
+          <rect x="0" y="0" width="694.75" height="40" fill="#2d5016" opacity="0.2"/>
           
           <!-- 트랙 레인 (10개 레인) -->
           ${generateTrackLanes()}
@@ -2017,8 +2017,8 @@ function updateSpeedometerListUI() {
           <!-- 시작선 (좌측) -->
           <line x1="35" y1="0" x2="35" y2="40" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
           
-          <!-- 종료선 (우측) -->
-          <line x1="682.5" y1="0" x2="682.5" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
+          <!-- 종료선 (우측) - 오른쪽 여백 70%까지 확장 -->
+          <line x1="694.75" y1="0" x2="694.75" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
           
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
@@ -2225,8 +2225,8 @@ function generateTrackLanes() {
   
   for (let i = 0; i < 10; i++) {
     const y = i * laneWidth;
-    // 레인 구분선 (좌측 시작 35, 우측 여백 50%까지 확장: 665 → 682.5)
-    lanes += `<line x1="35" y1="${y}" x2="682.5" y2="${y}" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="7,3" opacity="0.4"/>`;
+    // 레인 구분선 (좌측 시작 35, 우측 여백 70%까지 확장: 682.5 → 694.75)
+    lanes += `<line x1="35" y1="${y}" x2="694.75" y2="${y}" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="7,3" opacity="0.4"/>`;
   }
   
   return lanes;
@@ -2277,9 +2277,9 @@ function updateStraightTrackMascot(speedometerId, progress) {
   const mascotEl = document.getElementById(`straight-mascot-${speedometerId}`);
   if (!mascotEl) return;
   
-  // 직선 트랙: 시작선(35)에서 종료선(682.5)까지 (우측 여백 50% 확장)
+  // 직선 트랙: 시작선(35)에서 종료선(694.75)까지 (우측 여백 70% 확장)
   const startX = 35;
-  const endX = 682.5;
+  const endX = 694.75;
   const trackLength = endX - startX;
   const x = startX + (trackLength * progress);
   const y = 20; // 트랙 중앙 (높이 50% 축소: 40 → 20)
