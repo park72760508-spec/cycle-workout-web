@@ -8813,10 +8813,7 @@ button[aria-disabled="true"] {
   font-weight: 900;
   color: #ffffff;
   line-height: 1.2;
-  text-shadow: 
-    0 0 20px rgba(0, 212, 170, 0.8),
-    0 4px 8px rgba(0, 0, 0, 0.5),
-    2px 2px 4px rgba(0, 0, 0, 0.8);
+  text-shadow: none; /* 네온 효과 제거 */
   font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
   letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
 }
@@ -8824,14 +8821,11 @@ button[aria-disabled="true"] {
 .scoreboard-unit {
   font-size: 40px; /* 2배 확대: 20px * 2 = 40px */
   font-weight: 900;
-  color: #00ff88; /* digital-number와 동일한 색상 */
+  color: #00d4aa; /* 라벨과 동일한 색상 */
   margin-left: 6px; /* 70% of 8px */
   font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
   letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
-  text-shadow: 
-    0 0 10px rgba(0, 255, 136, 0.8),
-    0 0 20px rgba(0, 255, 136, 0.6),
-    0 0 30px rgba(0, 255, 136, 0.4);
+  text-shadow: none; /* 네온 효과 제거 */
 }
 
 /* 디지털 숫자 스타일 (전광판용) */
@@ -8840,13 +8834,8 @@ button[aria-disabled="true"] {
   font-weight: 900;
   letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
   display: inline-block;
-  color: #00ff88;
-  text-shadow: 
-    0 0 10px rgba(0, 255, 136, 0.8),
-    0 0 20px rgba(0, 255, 136, 0.6),
-    0 0 30px rgba(0, 255, 136, 0.4),
-    0 4px 8px rgba(0, 0, 0, 0.5),
-    2px 2px 4px rgba(0, 0, 0, 0.8);
+  color: #ffffff; /* 흰색으로 변경 */
+  text-shadow: none; /* 네온 효과 제거 */
   font-variant-numeric: tabular-nums;
   text-rendering: optimizeLegibility;
 }
