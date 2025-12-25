@@ -171,10 +171,10 @@ function createSpeedometerElement(speedometer) {
   container.dataset.speedometerId = speedometer.id;
   
   container.innerHTML = `
-    <div class="speedometer-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #333; font-weight: 500; flex: 0 0 auto;">${speedometer.pairingName || ''}</span>
-      <span class="speedometer-name" style="flex: 1; text-align: center; font-weight: 600;">${speedometer.name}</span>
-      <div class="connection-status-center" id="status-${speedometer.id}" style="flex: 0 0 auto;">
+    <div class="speedometer-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%; position: relative;">
+      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #333; font-weight: 500; flex: 0 0 auto; text-align: left; min-width: 80px;">${speedometer.pairingName || ''}</span>
+      <span class="speedometer-name" style="position: absolute; left: 50%; transform: translateX(-50%); font-weight: 600; text-align: center;">${speedometer.name}</span>
+      <div class="connection-status-center" id="status-${speedometer.id}" style="flex: 0 0 auto; text-align: right; margin-left: auto;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
       </div>
