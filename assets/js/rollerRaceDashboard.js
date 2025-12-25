@@ -1052,6 +1052,19 @@ function saveSpeedometerPairing() {
             }
         }
         
+        // deviceId가 설정되어 있고 경기 시작 전이면 준비 상태로 표시
+        if (newDeviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
+            // 경기 시작 전 준비 상태로 연결 상태 업데이트
+            speedometer.connected = true;
+            updateSpeedometerConnectionStatus(targetId, true, 'ready');
+        } else if (newDeviceId && speedometer.deviceId === newDeviceId) {
+            // deviceId가 이미 설정되어 있고 변경되지 않은 경우에도 준비 상태로 표시
+            if (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState) {
+                speedometer.connected = true;
+                updateSpeedometerConnectionStatus(targetId, true, 'ready');
+            }
+        }
+        
         // 저장 및 UI 갱신
         saveSpeedometerList();
         updateSpeedometerListUI();
@@ -1394,8 +1407,11 @@ function updateSpeedometerPairingName(speedometerId, pairingName) {
 
 /**
  * 속도계 연결 상태 UI 업데이트
+ * @param {number} speedometerId - 속도계 ID
+ * @param {boolean} connected - 연결 여부
+ * @param {string} status - 상태 ('ready': 준비됨, 'connected': 연결됨, 'disconnected': 미연결)
  */
-function updateSpeedometerConnectionStatus(speedometerId, connected) {
+function updateSpeedometerConnectionStatus(speedometerId, connected, status = null) {
   const statusEl = document.getElementById(`status-${speedometerId}`);
   if (!statusEl) return;
   
@@ -1406,12 +1422,20 @@ function updateSpeedometerConnectionStatus(speedometerId, connected) {
   const container = document.getElementById(`speedometer-${speedometerId}`);
   const infoBlock = container ? container.querySelector('.speedometer-info') : null;
   
-  if (connected) {
+  // 상태에 따라 텍스트 결정
+  let statusText = '미연결';
+  if (status === 'ready') {
+    statusText = '준비됨';
+  } else if (connected) {
+    statusText = '연결됨';
+  }
+  
+  if (connected || status === 'ready') {
     dot.classList.remove('disconnected');
     dot.classList.add('connected');
-    if (text) text.textContent = '연결됨';
+    if (text) text.textContent = statusText;
     
-    // 연결됨: 연두색 배경으로 변경
+    // 연결됨/준비됨: 연두색 배경으로 변경
     if (infoBlock) {
       infoBlock.classList.add('connected');
       infoBlock.classList.remove('disconnected');
@@ -1419,7 +1443,7 @@ function updateSpeedometerConnectionStatus(speedometerId, connected) {
   } else {
     dot.classList.remove('connected');
     dot.classList.add('disconnected');
-    if (text) text.textContent = '미연결';
+    if (text) text.textContent = statusText;
     
     // 미연결: 주황색 배경으로 변경
     if (infoBlock) {
