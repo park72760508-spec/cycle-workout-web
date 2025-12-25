@@ -172,12 +172,12 @@ function createSpeedometerElement(speedometer) {
   
   container.innerHTML = `
     <div class="speedometer-header">
+      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #333; margin-right: 8px; font-weight: 500;">${speedometer.pairingName || ''}</span>
       <span class="speedometer-name">${speedometer.name}</span>
       <div class="connection-status-center" id="status-${speedometer.id}">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
       </div>
-      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #999; margin-right: 8px;">${speedometer.pairingName || ''}</span>
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
@@ -962,10 +962,10 @@ async function pairSpeedometer(speedometerId) {
     if (nameInput) {
       const nameLabel = nameInput.previousElementSibling;
       if (nameLabel && nameLabel.tagName === 'LABEL') {
-        nameLabel.innerHTML = `이름 <span style="color: #666; font-size: 0.9em;">(${speedometer.name} > 이름)</span>`;
+        nameLabel.innerHTML = `이름 <span style="color: #666; font-size: 0.9em;">(팀명 및 선수명)</span>`;
       }
-      // 기존 이름이 트랙명이 아니면 그대로, 트랙명이면 빈 값으로
-      nameInput.value = speedometer.name.startsWith('트랙') ? (speedometer.pairingName || '') : speedometer.name;
+      // 페어링 이름이 있으면 표시, 없으면 빈 값
+      nameInput.value = speedometer.pairingName || '';
     }
     if (deviceIdInput) deviceIdInput.value = speedometer.deviceId || '';
     // 기존 showAddSpeedometerModal 함수 호출
@@ -1406,13 +1406,18 @@ function updateSpeedometerListUI() {
   
   listEl.innerHTML = '';
   
-  window.rollerRaceState.speedometers.forEach(speedometer => {
+  // 트랙1~10 순서대로 정렬하여 표시
+  for (let i = 0; i < 10; i++) {
+    const speedometer = window.rollerRaceState.speedometers[i];
+    if (!speedometer) continue;
+    
     const item = document.createElement('div');
     item.className = 'speedometer-list-item';
+    const trackName = `트랙${speedometer.id}`;
     const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #666;">(${speedometer.pairingName})</span>` : '';
     item.innerHTML = `
       <div class="list-item-info">
-        <span class="list-item-name">${speedometer.name}${pairingNameDisplay}</span>
+        <span class="list-item-name">${trackName}${pairingNameDisplay}</span>
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
       </div>
       <div class="list-item-actions">
@@ -1425,7 +1430,7 @@ function updateSpeedometerListUI() {
       </div>
     `;
     listEl.appendChild(item);
-  });
+  }
 }
 
 /**
