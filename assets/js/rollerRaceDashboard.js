@@ -174,7 +174,7 @@ function createSpeedometerElement(speedometer) {
   
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
-      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px !important; color: #333 !important; font-weight: 500 !important; flex: 0 0 auto !important; text-align: left !important; min-width: 80px !important; order: 1 !important;">${speedometer.pairingName || ''}</span>
+      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px !important; color: #ffffff !important; font-weight: 500 !important; flex: 0 0 auto !important; text-align: left !important; min-width: 80px !important; order: 1 !important;">${speedometer.pairingName || ''}</span>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important;">트랙${speedometer.id}</span>
       <div class="connection-status-center" id="status-${speedometer.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
@@ -1053,24 +1053,20 @@ function saveSpeedometerPairing() {
                 updateSpeedometerConnectionStatus(targetId, false);
                 console.log(`[경기 중 센서 교체] 트랙${targetId}: 기존 데이터 유지, 새 센서 ID: ${newDeviceId}`);
             } else {
-                // 경기 중이 아닌 경우: 기존처럼 초기화
+                // 경기 중이 아닌 경우: deviceId만 변경
                 speedometer.deviceId = newDeviceId;
-                speedometer.connected = false; 
-                updateSpeedometerConnectionStatus(targetId, false);
             }
+        } else if (!speedometer.deviceId && newDeviceId) {
+            // deviceId가 없었는데 새로 설정하는 경우
+            speedometer.deviceId = newDeviceId;
         }
         
-        // deviceId가 설정되어 있고 경기 시작 전이면 준비 상태로 표시
-        if (newDeviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
+        // deviceId가 설정되어 있으면 준비 상태로 표시 (경기 시작 전)
+        if (speedometer.deviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
             // 경기 시작 전 준비 상태로 연결 상태 업데이트
             speedometer.connected = true;
             updateSpeedometerConnectionStatus(targetId, true, 'ready');
-        } else if (newDeviceId && speedometer.deviceId === newDeviceId) {
-            // deviceId가 이미 설정되어 있고 변경되지 않은 경우에도 준비 상태로 표시
-            if (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState) {
-                speedometer.connected = true;
-                updateSpeedometerConnectionStatus(targetId, true, 'ready');
-            }
+            console.log(`[페어링 완료] 트랙${targetId}: 준비 상태로 설정, deviceId: ${speedometer.deviceId}`);
         }
         
         // 저장 및 UI 갱신
@@ -1441,7 +1437,7 @@ function updateSpeedometerPairingName(speedometerId, pairingName) {
   if (pairingNameEl) {
     const displayName = pairingName || '';
     pairingNameEl.textContent = displayName;
-    pairingNameEl.style.color = displayName ? '#333' : '#999';
+    pairingNameEl.style.color = displayName ? '#ffffff' : '#999';
     pairingNameEl.style.fontWeight = displayName ? '500' : 'normal';
     
     console.log('[페어링 이름 업데이트]', {
