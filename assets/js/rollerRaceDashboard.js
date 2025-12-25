@@ -1811,7 +1811,7 @@ function updateSpeedometerListUI() {
     const item = document.createElement('div');
     item.className = 'speedometer-list-item';
     const trackName = `트랙${speedometer.id}`;
-    const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #ffffff; font-weight: 500; margin-left: 8px;">${speedometer.pairingName}</span>` : '';
+    const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #00ff88; font-weight: 500; margin-left: 8px; text-shadow: 0 0 10px rgba(0, 255, 136, 0.8), 0 0 20px rgba(0, 255, 136, 0.6), 0 0 30px rgba(0, 255, 136, 0.4);">${speedometer.pairingName}</span>` : '';
     item.innerHTML = `
       <div class="list-item-info">
         <span class="list-item-name">${trackName}${pairingNameDisplay}</span>
