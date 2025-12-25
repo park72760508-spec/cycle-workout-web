@@ -77,6 +77,7 @@ class SpeedometerData {
     this.id = id;
     this.name = name;
     this.deviceId = deviceId;
+    this.pairingName = null; // 페어링 시 설정되는 이름 (트랙명과 별도)
     this.connected = false;
     this.currentSpeed = 0; // km/h
     this.maxSpeed = 0; // km/h
@@ -145,13 +146,18 @@ function createSpeedometerGrid() {
   
   // 10개 속도계 생성
   for (let i = 0; i < 10; i++) {
-    const speedometer = window.rollerRaceState.speedometers[i] || new SpeedometerData(i + 1, `속도계 ${i + 1}`);
+    const speedometer = window.rollerRaceState.speedometers[i] || new SpeedometerData(i + 1, `트랙${i + 1}`);
     if (!window.rollerRaceState.speedometers[i]) {
       window.rollerRaceState.speedometers[i] = speedometer;
     }
     
     const speedometerEl = createSpeedometerElement(speedometer);
     grid.appendChild(speedometerEl);
+    
+    // 페어링 이름 업데이트
+    if (speedometer.pairingName) {
+      updateSpeedometerPairingName(speedometer.id, speedometer.pairingName);
+    }
   }
 }
 
@@ -171,9 +177,7 @@ function createSpeedometerElement(speedometer) {
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
       </div>
-      <button class="btn-pair btn-pair-sm" onclick="pairSpeedometer(${speedometer.id})" title="페어링">
-        <img src="assets/img/wifi.png" alt="페어링" style="width: 16px; height: 16px;">
-      </button>
+      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #999; margin-right: 8px;">${speedometer.pairingName || ''}</span>
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
@@ -933,10 +937,36 @@ async function pairSpeedometer(speedometerId) {
   const modal = document.getElementById('addSpeedometerModal');
   const nameInput = document.getElementById('speedometerName');
   const deviceIdInput = document.getElementById('speedometerDeviceId');
-  const title = document.getElementById('modalTitle'); // 모달 제목 요소가 있다면
+  const modalTitle = modal ? modal.querySelector('.modal-header h3') : null;
   
   if (modal) {
-    if (nameInput) nameInput.value = speedometer.name;
+    // 모달 제목에 트랙명 표시
+    if (modalTitle) {
+      modalTitle.textContent = `${speedometer.name} 페어링`;
+    }
+    
+    // 트랙명 표시 영역 추가/업데이트
+    let trackNameDisplay = modal.querySelector('.track-name-display');
+    if (!trackNameDisplay) {
+      trackNameDisplay = document.createElement('div');
+      trackNameDisplay.className = 'track-name-display';
+      trackNameDisplay.style.cssText = 'padding: 12px; background: #f0f0f0; border-radius: 4px; margin-bottom: 16px; font-weight: 600; color: #333;';
+      const modalBody = modal.querySelector('.modal-body');
+      if (modalBody) {
+        modalBody.insertBefore(trackNameDisplay, modalBody.firstChild);
+      }
+    }
+    trackNameDisplay.innerHTML = `<span style="color: #666;">트랙:</span> <span style="color: #2e74e8;">${speedometer.name}</span>`;
+    
+    // 이름 입력 필드 레이블 변경 및 값 설정
+    if (nameInput) {
+      const nameLabel = nameInput.previousElementSibling;
+      if (nameLabel && nameLabel.tagName === 'LABEL') {
+        nameLabel.innerHTML = `이름 <span style="color: #666; font-size: 0.9em;">(${speedometer.name} > 이름)</span>`;
+      }
+      // 기존 이름이 트랙명이 아니면 그대로, 트랙명이면 빈 값으로
+      nameInput.value = speedometer.name.startsWith('트랙') ? (speedometer.pairingName || '') : speedometer.name;
+    }
     if (deviceIdInput) deviceIdInput.value = speedometer.deviceId || '';
     // 기존 showAddSpeedometerModal 함수 호출
     showAddSpeedometerModal(); 
@@ -954,8 +984,12 @@ function saveSpeedometerPairing() {
 
     const speedometer = window.rollerRaceState.speedometers.find(s => s.id === targetId);
     if (speedometer && nameInput) {
-        speedometer.name = nameInput.value;
+        // 트랙명은 유지하고, 이름만 저장 (별도 필드로 관리하거나 deviceId 옆에 표시)
+        const pairingName = nameInput.value.trim() || speedometer.name;
         const newDeviceId = deviceIdInput.value.trim();
+        
+        // 페어링 이름을 별도로 저장 (deviceId 옆에 표시용)
+        speedometer.pairingName = pairingName;
         
         // ID 변경 시 초기화
         if (speedometer.deviceId != newDeviceId) {
@@ -967,6 +1001,7 @@ function saveSpeedometerPairing() {
         // 저장 및 UI 갱신
         saveSpeedometerList();
         updateSpeedometerListUI();
+        updateSpeedometerPairingName(targetId, pairingName);
         createSpeedometerGrid();
         closeAddSpeedometerModal();
         
@@ -1293,6 +1328,17 @@ function processSpeedCadenceData(deviceId, data) {
 }
 
 /**
+ * 속도계 페어링 이름 업데이트
+ */
+function updateSpeedometerPairingName(speedometerId, pairingName) {
+  const pairingNameEl = document.getElementById(`pairing-name-${speedometerId}`);
+  if (pairingNameEl) {
+    pairingNameEl.textContent = pairingName || '';
+    pairingNameEl.style.color = pairingName ? '#333' : '#999';
+  }
+}
+
+/**
  * 속도계 연결 상태 UI 업데이트
  */
 function updateSpeedometerConnectionStatus(speedometerId, connected) {
@@ -1363,9 +1409,10 @@ function updateSpeedometerListUI() {
   window.rollerRaceState.speedometers.forEach(speedometer => {
     const item = document.createElement('div');
     item.className = 'speedometer-list-item';
+    const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #666;">(${speedometer.pairingName})</span>` : '';
     item.innerHTML = `
       <div class="list-item-info">
-        <span class="list-item-name">${speedometer.name}</span>
+        <span class="list-item-name">${speedometer.name}${pairingNameDisplay}</span>
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
       </div>
       <div class="list-item-actions">
@@ -2389,11 +2436,12 @@ function addSpeedometer() {
   
   // 빈 슬롯 찾기 또는 새로 추가
   let speedometer;
-  const emptySlot = window.rollerRaceState.speedometers.findIndex(s => !s.name || s.name.startsWith('속도계 ') && !s.deviceId);
+  const emptySlot = window.rollerRaceState.speedometers.findIndex(s => !s.name || s.name.startsWith('트랙') && !s.deviceId);
   
   if (emptySlot >= 0 && emptySlot < 10) {
     speedometer = window.rollerRaceState.speedometers[emptySlot];
-    speedometer.name = name;
+    // 트랙명은 유지하고, 입력된 이름은 pairingName으로 저장
+    speedometer.pairingName = name;
     speedometer.deviceId = deviceId;
   } else {
     // 10개 초과 시 목록에만 추가 (화면에는 표시 안 됨)
@@ -2409,10 +2457,15 @@ function addSpeedometer() {
   updateSpeedometerListUI();
   createSpeedometerGrid();
   
+  // 페어링 이름 업데이트
+  if (speedometer.pairingName) {
+    updateSpeedometerPairingName(speedometer.id, speedometer.pairingName);
+  }
+  
   closeAddSpeedometerModal();
   
   if (typeof showToast === 'function') {
-    showToast(`${name} 속도계가 추가되었습니다.`);
+    showToast(`${speedometer.name}에 ${speedometer.pairingName || '이름 없음'}이 추가되었습니다.`);
   }
 }
 
@@ -2433,8 +2486,9 @@ function removeSpeedometer(speedometerId) {
     }
     
     // 기본값으로 리셋
-    speedometer.name = `속도계 ${speedometerId}`;
+    speedometer.name = `트랙${speedometerId}`;
     speedometer.deviceId = null;
+    speedometer.pairingName = null;
     speedometer.currentSpeed = 0;
     speedometer.maxSpeed = 0;
     speedometer.averageSpeed = 0;
@@ -2451,6 +2505,9 @@ function removeSpeedometer(speedometerId) {
     updateSpeedometerListUI();
     createSpeedometerGrid();
     
+    // 페어링 이름 초기화
+    updateSpeedometerPairingName(speedometerId, '');
+    
     if (typeof showToast === 'function') {
       showToast('속도계가 삭제되었습니다.');
     }
@@ -2465,7 +2522,8 @@ function saveSpeedometerList() {
     const data = window.rollerRaceState.speedometers.map(s => ({
       id: s.id,
       name: s.name,
-      deviceId: s.deviceId
+      deviceId: s.deviceId,
+      pairingName: s.pairingName || null
     }));
     localStorage.setItem('rollerRaceSpeedometers', JSON.stringify(data));
   } catch (error) {
@@ -2483,6 +2541,9 @@ function loadSpeedometerList() {
       const list = JSON.parse(data);
       list.forEach(item => {
         const speedometer = new SpeedometerData(item.id, item.name, item.deviceId);
+        if (item.pairingName) {
+          speedometer.pairingName = item.pairingName;
+        }
         window.rollerRaceState.speedometers[item.id - 1] = speedometer;
       });
     }
@@ -2493,7 +2554,7 @@ function loadSpeedometerList() {
   // 10개 미만이면 기본값으로 채우기
   for (let i = 0; i < 10; i++) {
     if (!window.rollerRaceState.speedometers[i]) {
-      window.rollerRaceState.speedometers[i] = new SpeedometerData(i + 1, `속도계 ${i + 1}`);
+      window.rollerRaceState.speedometers[i] = new SpeedometerData(i + 1, `트랙${i + 1}`);
     }
   }
 }
