@@ -1316,8 +1316,8 @@ async function pairSpeedometer(speedometerId) {
       nameInput.value = speedometer.pairingName || '';
     }
     if (deviceIdInput) deviceIdInput.value = speedometer.deviceId || '';
-    // 기존 showAddSpeedometerModal 함수 호출
-    showAddSpeedometerModal(); 
+    // 기존 showAddSpeedometerModal 함수 호출 (자동 활성화 비활성화)
+    showAddSpeedometerModal(false); 
   }
 }
 
@@ -2257,7 +2257,7 @@ async function checkANTUSBStatusForSelection() {
 /**
  * 속도계 추가 모달 표시 (기존 함수 유지 - 페어링 화면용)
  */
-async function showAddSpeedometerModal() {
+async function showAddSpeedometerModal(autoActivate = true) {
   const modal = document.getElementById('addSpeedometerModal');
   if (modal) {
     modal.classList.remove('hidden');
@@ -2267,19 +2267,34 @@ async function showAddSpeedometerModal() {
   const deviceList = document.getElementById('antDeviceList');
   if (deviceList) {
     deviceList.classList.remove('hidden'); // 목록 영역 표시
-    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기 연결 중...</div>';
+    if (autoActivate) {
+      deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기 연결 중...</div>';
+    } else {
+      deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">디바이스 검색 버튼을 클릭하여 수신기를 검색하세요.</div>';
+    }
   }
   
-  // 모달을 열면서 바로 수신기 활성화 시도
-  await activateANTReceiver();
-  
-  // 주기적으로 상태 확인 (5초마다)
-  if (window.antUSBStatusInterval) {
-    clearInterval(window.antUSBStatusInterval);
+  // autoActivate가 true일 때만 자동으로 수신기 활성화 시도
+  if (autoActivate) {
+    // 모달을 열면서 바로 수신기 활성화 시도
+    await activateANTReceiver();
+    
+    // 주기적으로 상태 확인 (5초마다)
+    if (window.antUSBStatusInterval) {
+      clearInterval(window.antUSBStatusInterval);
+    }
+    window.antUSBStatusInterval = setInterval(() => {
+      checkANTUSBStatus();
+    }, 5000);
+  } else {
+    // 페어링 모드에서는 주기적 상태 확인만 수행
+    if (window.antUSBStatusInterval) {
+      clearInterval(window.antUSBStatusInterval);
+    }
+    window.antUSBStatusInterval = setInterval(() => {
+      checkANTUSBStatus();
+    }, 5000);
   }
-  window.antUSBStatusInterval = setInterval(() => {
-    checkANTUSBStatus();
-  }, 5000);
 }
 
 /**
