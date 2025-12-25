@@ -997,17 +997,20 @@ function saveSpeedometerPairing() {
 /**
  * [수정됨] 스캔 모드 설정 (호환성 모드)
  */
+/**
+ * [수정됨] Tacx T2028 전용 연속 스캔 모드 설정
+ */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  console.log('[ANT+] 호환성 스캔 모드 시작 (Legacy)...');
+  console.log('[ANT+] Tacx T2028 스캔 가동 시작...');
   window.antState.isScanning = true;
 
   try {
-    // 1. Reset
+    // 1. Reset (초기화)
     await sendANTMessage(0x4A, [0x00]);
-    await new Promise(r => setTimeout(r, 1500)); // 리셋 대기 시간 증가
+    await new Promise(r => setTimeout(r, 1000));
 
-    // 2. Network Key
+    // 2. Network Key (필수)
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
     await new Promise(r => setTimeout(r, 300));
 
@@ -1015,24 +1018,37 @@ async function startContinuousScan() {
     await sendANTMessage(0x42, [0x00, 0x00]); 
     await new Promise(r => setTimeout(r, 300));
 
-    // 4. Set ID (Wildcard)
+    // 4. Channel ID (Wildcard)
     await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     await new Promise(r => setTimeout(r, 300));
 
-    // 5. Frequency 57
+    // 5. [추가] Search Timeout (무한대 설정: 0xFF)
+    // 이 설정이 없으면 채널이 열렸다가 금방 닫힐 수 있습니다.
+    await sendANTMessage(0x44, [0x00, 0xFF]); 
+    await new Promise(r => setTimeout(r, 300));
+
+    // 6. Frequency 57 (2457MHz)
     await sendANTMessage(0x45, [0x00, 57]);
     await new Promise(r => setTimeout(r, 300));
 
-    // 6. [변경] 0x5B(스캔모드) 대신 0x4B(채널열기) 사용
-    // T2028이 0x5B를 지원하지 않을 가능성이 매우 높음
-    console.log('[ANT+] 일반 채널 열기(0x4B) 시도');
-    await sendANTMessage(0x4B, [0x00]); 
+    // 7. LibConfig (ID 정보 표시)
+    // T2028은 이 설정이 있어야만 누구 데이터인지 알려줍니다.
+    await sendANTMessage(0x6E, [0x00, 0xE0]); 
+    await new Promise(r => setTimeout(r, 300));
+
+    // 8. Open Rx Scan Mode (0x5B)
+    // 다시 0x5B로 돌아갑니다. T2028은 이 모드에서 성능이 가장 좋습니다.
+    console.log('[ANT+] Rx Scan Mode(0x5B) 명령 전송');
+    await sendANTMessage(0x5B, [0x00]); 
     
-    // 리스너가 죽어있으면 살리기
-    if (!window.antMessageListener) startANTMessageListener();
+    // 리스너가 혹시 꺼져있다면 켜기
+    if (!window.antMessageListener) {
+        startANTMessageListener();
+    }
 
   } catch (e) {
-    console.error('설정 실패:', e);
+    console.error('[ANT+] 설정 실패:', e);
+    window.antState.isScanning = false;
   }
 }
 
@@ -3439,6 +3455,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
