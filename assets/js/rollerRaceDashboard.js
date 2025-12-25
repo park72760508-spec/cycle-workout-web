@@ -1025,6 +1025,47 @@ function startRaceWithCountdown() {
 }
 
 /**
+ * 화면 잠금 활성화 (절전 모드 방지)
+ */
+async function activateWakeLock() {
+  if (!('wakeLock' in navigator)) {
+    console.warn('[WakeLock] Wake Lock API not supported in this browser.');
+    return;
+  }
+  try {
+    // 이미 있으면 재요청하지 않음
+    if (window.rollerRaceState.wakeLock) return;
+    window.rollerRaceState.wakeLock = await navigator.wakeLock.request('screen');
+    console.log('[WakeLock] Screen wake lock acquired');
+
+    // 시스템이 임의로 해제했을 때 플래그 정리
+    window.rollerRaceState.wakeLock.addEventListener('release', () => {
+      console.log('[WakeLock] Screen wake lock released by system');
+      window.rollerRaceState.wakeLock = null;
+    });
+  } catch (err) {
+    console.warn('[WakeLock] Failed to acquire wake lock:', err);
+    window.rollerRaceState.wakeLock = null;
+  }
+}
+
+/**
+ * 화면 잠금 해제
+ */
+async function releaseWakeLock() {
+  try {
+    if (window.rollerRaceState.wakeLock) {
+      await window.rollerRaceState.wakeLock.release();
+      console.log('[WakeLock] Screen wake lock released by app');
+    }
+  } catch (err) {
+    console.warn('[WakeLock] Failed to release wake lock:', err);
+  } finally {
+    window.rollerRaceState.wakeLock = null;
+  }
+}
+
+/**
  * 경기 시작
  */
 function startRace() {
@@ -1124,7 +1165,10 @@ function startRace() {
  * 경기 일시정지
  */
 function pauseRace() {
-  if (window.rollerRaceState.raceState !== 'running') return;
+  if (window.rollerRaceState.raceState !== 'running') {
+    console.warn('[경기 일시정지] 경기가 실행 중이 아닙니다. 현재 상태:', window.rollerRaceState.raceState);
+    return;
+  }
   
   console.log('[경기 일시정지]');
   
@@ -1146,9 +1190,11 @@ function pauseRace() {
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
+  const btnStop = document.getElementById('btnStopRace');
 
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
+  if (btnStop) btnStop.disabled = false; // 종료 버튼은 일시정지 중에도 활성화
 
   // 전광판 순위 순환 정지
   stopRankDisplayRotation();
@@ -1163,6 +1209,12 @@ function pauseRace() {
  */
 function stopRace() {
   console.log('[경기 종료]');
+  
+  // 경기가 이미 종료되었거나 시작되지 않았으면 무시
+  if (window.rollerRaceState.raceState === 'finished' || window.rollerRaceState.raceState === 'idle') {
+    console.warn('[경기 종료] 경기가 이미 종료되었거나 시작되지 않았습니다. 현재 상태:', window.rollerRaceState.raceState);
+    return;
+  }
   
   window.rollerRaceState.raceState = 'finished';
   
