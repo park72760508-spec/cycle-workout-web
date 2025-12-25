@@ -171,10 +171,10 @@ function createSpeedometerElement(speedometer) {
   container.dataset.speedometerId = speedometer.id;
   
   container.innerHTML = `
-    <div class="speedometer-header">
-      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #333; margin-right: 8px; font-weight: 500;">${speedometer.pairingName || ''}</span>
-      <span class="speedometer-name">${speedometer.name}</span>
-      <div class="connection-status-center" id="status-${speedometer.id}">
+    <div class="speedometer-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px; color: #333; font-weight: 500; flex: 0 0 auto;">${speedometer.pairingName || ''}</span>
+      <span class="speedometer-name" style="flex: 1; text-align: center; font-weight: 600;">${speedometer.name}</span>
+      <div class="connection-status-center" id="status-${speedometer.id}" style="flex: 0 0 auto;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
       </div>
@@ -956,7 +956,7 @@ async function pairSpeedometer(speedometerId) {
         modalBody.insertBefore(trackNameDisplay, modalBody.firstChild);
       }
     }
-    trackNameDisplay.innerHTML = `<span style="color: #666;">트랙:</span> <span style="color: #2e74e8;">${speedometer.name}</span>`;
+    trackNameDisplay.innerHTML = `<span style="color: #2e74e8; font-size: 1.1em;">${speedometer.name}</span>`;
     
     // 이름 입력 필드 레이블 변경 및 값 설정
     if (nameInput) {
