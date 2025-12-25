@@ -42,8 +42,9 @@ window.rollerRaceState = {
   raceSettings: {
     endByDistance: true,
     targetDistance: 10, // km
+    distanceMode: 'total', // 'individual' or 'total' (개인 거리 or 통합 거리)
     endByTime: false,
-    targetTime: 60, // minutes
+    targetTime: 0, // seconds (HH:MM:SS 형식으로 저장)
     wheelSize: '25-622' // 기본값: 700 x 25C
   },
   rankings: [], // 순위 정보
@@ -114,6 +115,9 @@ function initRollerRaceDashboard() {
   
   // 경기 설정 로드
   loadRaceSettings();
+  
+  // 타겟 설정 로드
+  loadTargetSettings();
   
   // 타이머 초기화
   window.rollerRaceTimer = null;
@@ -697,6 +701,11 @@ function updateDashboardStats() {
   // 전광판 업데이트
   const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
   if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = totalDistance.toFixed(2);
+  
+  // 경기 종료 조건 확인 (거리 체크)
+  if (window.rollerRaceState.raceState === 'running') {
+    checkRaceEndConditions();
+  }
 }
 
 /**
@@ -732,38 +741,200 @@ function updateElapsedTime() {
   const scoreboardTimeEl = document.getElementById('scoreboardTime');
   if (scoreboardTimeEl) scoreboardTimeEl.textContent = timeString;
   
-  // 경기 종료 조건 확인
+  // 경기 종료 조건 확인 (시간 체크)
   checkRaceEndConditions();
+}
+
+/**
+ * 타겟 설정 토글 함수
+ */
+function toggleTargetDistance() {
+  const enabled = document.getElementById('targetDistanceEnabled');
+  const controls = document.getElementById('targetDistanceControls');
+  if (enabled && controls) {
+    controls.style.opacity = enabled.checked ? '1' : '0.5';
+    controls.style.pointerEvents = enabled.checked ? 'auto' : 'none';
+  }
+}
+
+function toggleTargetTime() {
+  const enabled = document.getElementById('targetTimeEnabled');
+  const controls = document.getElementById('targetTimeControls');
+  if (enabled && controls) {
+    controls.style.opacity = enabled.checked ? '1' : '0.5';
+    controls.style.pointerEvents = enabled.checked ? 'auto' : 'none';
+  }
+}
+
+/**
+ * 타겟 설정 저장
+ */
+function saveTargetSettings() {
+  const distanceEnabled = document.getElementById('targetDistanceEnabled');
+  const distanceValue = document.getElementById('targetDistanceValue');
+  const distanceMode = document.getElementById('targetDistanceMode');
+  const timeEnabled = document.getElementById('targetTimeEnabled');
+  const timeValue = document.getElementById('targetTimeValue');
+  
+  if (!distanceEnabled || !timeEnabled) return;
+  
+  const settings = window.rollerRaceState.raceSettings;
+  
+  // 거리 설정
+  settings.endByDistance = distanceEnabled.checked;
+  if (distanceEnabled.checked && distanceValue) {
+    settings.targetDistance = parseFloat(distanceValue.value) || 0;
+  }
+  if (distanceMode) {
+    settings.distanceMode = distanceMode.value || 'total';
+  }
+  
+  // 시간 설정
+  settings.endByTime = timeEnabled.checked;
+  if (timeEnabled.checked && timeValue) {
+    const timeStr = timeValue.value.trim();
+    if (timeStr.match(/^(\d{2}):(\d{2}):(\d{2})$/)) {
+      const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+      settings.targetTime = hours * 3600 + minutes * 60 + seconds;
+    } else {
+      settings.targetTime = 0;
+    }
+  }
+  
+  // 저장
+  try {
+    localStorage.setItem('rollerRaceSettings', JSON.stringify(settings));
+  } catch (error) {
+    console.error('[타겟 설정 저장 오류]', error);
+  }
+  
+  if (typeof showToast === 'function') {
+    showToast('타겟 설정이 저장되었습니다.');
+  }
+  
+  console.log('[타겟 설정 저장]', settings);
+}
+
+/**
+ * 타겟 설정 로드
+ */
+function loadTargetSettings() {
+  const settings = window.rollerRaceState.raceSettings;
+  
+  const distanceEnabled = document.getElementById('targetDistanceEnabled');
+  const distanceValue = document.getElementById('targetDistanceValue');
+  const distanceMode = document.getElementById('targetDistanceMode');
+  const timeEnabled = document.getElementById('targetTimeEnabled');
+  const timeValue = document.getElementById('targetTimeValue');
+  
+  if (distanceEnabled) distanceEnabled.checked = settings.endByDistance || false;
+  if (distanceValue) distanceValue.value = settings.targetDistance || 10;
+  if (distanceMode) distanceMode.value = settings.distanceMode || 'total';
+  if (timeEnabled) timeEnabled.checked = settings.endByTime || false;
+  
+  if (timeValue && settings.targetTime) {
+    const hours = Math.floor(settings.targetTime / 3600);
+    const minutes = Math.floor((settings.targetTime % 3600) / 60);
+    const seconds = settings.targetTime % 60;
+    timeValue.value = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  } else if (timeValue) {
+    timeValue.value = '00:00:00';
+  }
+  
+  // 토글 상태 적용
+  toggleTargetDistance();
+  toggleTargetTime();
+}
+
+/**
+ * 시간 입력 자동 포맷팅 (HH:MM:SS)
+ */
+function formatTimeInput(input) {
+  let value = input.value.replace(/[^0-9]/g, ''); // 숫자만 추출
+  
+  if (value.length > 6) {
+    value = value.substring(0, 6); // 최대 6자리
+  }
+  
+  // HH:MM:SS 형식으로 변환
+  let formatted = '';
+  if (value.length > 0) {
+    formatted = value.substring(0, 2);
+    if (value.length > 2) {
+      formatted += ':' + value.substring(2, 4);
+      if (value.length > 4) {
+        formatted += ':' + value.substring(4, 6);
+      }
+    }
+  }
+  
+  input.value = formatted;
 }
 
 /**
  * 경기 종료 조건 확인
  */
 function checkRaceEndConditions() {
+  if (window.rollerRaceState.raceState !== 'running') {
+    return;
+  }
+  
   const settings = window.rollerRaceState.raceSettings;
   let shouldEnd = false;
+  let endReason = '';
   
-  if (settings.endByDistance) {
-    const totalDistance = window.rollerRaceState.speedometers
-      .reduce((sum, s) => sum + s.totalDistance, 0);
-    if (totalDistance >= settings.targetDistance) {
-      shouldEnd = true;
-      console.log(`[경기 종료] 목표 거리 달성: ${totalDistance.toFixed(2)}km >= ${settings.targetDistance}km`);
+  // 거리 조건 체크
+  if (settings.endByDistance && settings.targetDistance > 0) {
+    if (settings.distanceMode === 'total') {
+      // 통합 거리: 모든 속도계의 총 거리 합계
+      const totalDistance = window.rollerRaceState.speedometers
+        .filter(s => s.deviceId && s.connected)
+        .reduce((sum, s) => sum + s.totalDistance, 0);
+      
+      if (totalDistance >= settings.targetDistance) {
+        shouldEnd = true;
+        endReason = `통합 거리 달성: ${totalDistance.toFixed(2)}km >= ${settings.targetDistance}km`;
+        console.log(`[경기 종료] ${endReason}`);
+      }
+    } else if (settings.distanceMode === 'individual') {
+      // 개인 거리: 모든 선수가 목표 거리에 도달했는지 확인
+      const connectedSpeedometers = window.rollerRaceState.speedometers
+        .filter(s => s.deviceId && s.connected);
+      
+      if (connectedSpeedometers.length > 0) {
+        // 모든 연결된 속도계가 목표 거리에 도달했는지 확인
+        const allReached = connectedSpeedometers.every(s => s.totalDistance >= settings.targetDistance);
+        
+        if (allReached) {
+          shouldEnd = true;
+          const lastReached = connectedSpeedometers
+            .filter(s => s.totalDistance >= settings.targetDistance)
+            .sort((a, b) => b.totalDistance - a.totalDistance)[0];
+          endReason = `모든 선수 목표 거리 달성 (마지막 주자: ${lastReached.pairingName || lastReached.name}, ${lastReached.totalDistance.toFixed(2)}km)`;
+          console.log(`[경기 종료] ${endReason}`);
+        }
+      }
     }
   }
   
-  if (settings.endByTime) {
-    const elapsedMinutes = window.rollerRaceState.totalElapsedTime / 60;
-    if (elapsedMinutes >= settings.targetTime) {
+  // 시간 조건 체크
+  if (!shouldEnd && settings.endByTime && settings.targetTime > 0) {
+    const elapsed = window.rollerRaceState.totalElapsedTime || 0;
+    if (elapsed >= settings.targetTime) {
       shouldEnd = true;
-      console.log(`[경기 종료] 목표 시간 달성: ${elapsedMinutes.toFixed(1)}분 >= ${settings.targetTime}분`);
+      const hours = Math.floor(settings.targetTime / 3600);
+      const minutes = Math.floor((settings.targetTime % 3600) / 60);
+      const seconds = settings.targetTime % 60;
+      const targetTimeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      endReason = `목표 시간 도달: ${targetTimeStr}`;
+      console.log(`[경기 종료] ${endReason}`);
     }
   }
   
   if (shouldEnd) {
     stopRace();
     if (typeof showToast === 'function') {
-      showToast('경기가 종료되었습니다!');
+      showToast(endReason || '경기가 종료되었습니다!');
     }
   }
 }
