@@ -1983,6 +1983,194 @@ function updateSpeedometerListUI() {
 }
 
 /**
+ * USB 수신기 활성화 모달 표시
+ */
+async function showUSBReceiverActivationModal() {
+  const modal = document.getElementById('usbReceiverActivationModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+  
+  // 상태 메시지 초기화
+  const messageEl = document.getElementById('usbActivationMessage');
+  if (messageEl) {
+    messageEl.textContent = 'USB 수신기 상태를 확인 중입니다...';
+    messageEl.style.background = '#e7f3ff';
+    messageEl.style.color = '#0056b3';
+  }
+  
+  // USB 상태 확인
+  await checkUSBActivationStatus();
+  
+  // 주기적으로 상태 확인 (5초마다)
+  if (window.usbActivationStatusInterval) {
+    clearInterval(window.usbActivationStatusInterval);
+  }
+  window.usbActivationStatusInterval = setInterval(() => {
+    checkUSBActivationStatus();
+  }, 5000);
+}
+
+/**
+ * USB 수신기 활성화 모달 닫기
+ */
+function closeUSBReceiverActivationModal() {
+  const modal = document.getElementById('usbReceiverActivationModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  
+  // 주기적 상태 확인 중지
+  if (window.usbActivationStatusInterval) {
+    clearInterval(window.usbActivationStatusInterval);
+    window.usbActivationStatusInterval = null;
+  }
+}
+
+/**
+ * USB 수신기 활성화 모달에서 활성화 버튼 클릭
+ */
+async function activateUSBReceiverFromModal() {
+  const activateBtn = document.getElementById('btnUSBActivationActivate');
+  const messageEl = document.getElementById('usbActivationMessage');
+  
+  if(activateBtn) activateBtn.disabled = true;
+  
+  if(messageEl) {
+    messageEl.textContent = 'USB 수신기 연결 중...';
+    messageEl.style.background = '#fff3cd';
+    messageEl.style.color = '#856404';
+  }
+
+  // USB가 없으면 연결 시도
+  if (!window.antState.usbDevice) {
+    try {
+      const device = await requestANTUSBDevice();
+      await connectANTUSBStickWithDevice(Promise.resolve(device));
+      if(messageEl) {
+        messageEl.textContent = 'USB 수신기 연결 완료! 스캔 모드를 활성화합니다...';
+        messageEl.style.background = '#d4edda';
+        messageEl.style.color = '#155724';
+      }
+      
+      // 스캔 모드 활성화
+      await startContinuousScan();
+      
+      if(messageEl) {
+        messageEl.textContent = 'USB 수신기 활성화 완료!';
+        messageEl.style.background = '#d4edda';
+        messageEl.style.color = '#155724';
+      }
+    } catch(e) {
+      if(messageEl) {
+        messageEl.textContent = `USB 연결 실패: ${e.message}`;
+        messageEl.style.background = '#f8d7da';
+        messageEl.style.color = '#721c24';
+      }
+      if(activateBtn) activateBtn.disabled = false;
+      return;
+    }
+  } else {
+    // 이미 연결되어 있다면 스캔 모드 확실히 켜기
+    await startContinuousScan();
+    if(messageEl) {
+      messageEl.textContent = 'USB 수신기 활성화 완료!';
+      messageEl.style.background = '#d4edda';
+      messageEl.style.color = '#155724';
+    }
+  }
+  
+  // USB 상태 업데이트
+  await checkUSBActivationStatus();
+  
+  // 수신기 활성화 버튼 상태 업데이트
+  updateReceiverButtonStatus();
+  
+  if(activateBtn) activateBtn.disabled = false;
+}
+
+/**
+ * USB 수신기 활성화 모달용 USB 상태 확인
+ */
+async function checkUSBActivationStatus() {
+  const statusIcon = document.getElementById('usbActivationStatusIcon');
+  const statusText = document.getElementById('usbActivationStatusText');
+  const activateButton = document.getElementById('btnUSBActivationActivate');
+  const connectButton = document.getElementById('btnUSBActivationConnect');
+  
+  if (!statusIcon || !statusText) return;
+  
+  if (activateButton) activateButton.disabled = true;
+  if (connectButton) connectButton.disabled = true;
+  
+  try {
+    if (window.antState.usbDevice) {
+      try {
+        if (window.antState.usbDevice.opened) {
+          const deviceInfo = {
+            vendorId: '0x' + window.antState.usbDevice.vendorId.toString(16).toUpperCase(),
+            productId: '0x' + window.antState.usbDevice.productId.toString(16).toUpperCase(),
+            manufacturerName: window.antState.usbDevice.manufacturerName || '알 수 없음',
+            productName: window.antState.usbDevice.productName || 'ANT+ USB 수신기'
+          };
+          statusIcon.style.background = '#28a745';
+          statusText.textContent = 'USB 수신기 연결됨';
+          if (activateButton) activateButton.disabled = false;
+          if (connectButton) connectButton.style.display = 'none';
+          return;
+        }
+      } catch (error) {
+        window.antState.usbDevice = null;
+      }
+    }
+    
+    if (!navigator.usb) {
+      statusIcon.style.background = '#dc3545';
+      statusText.textContent = 'Web USB API를 지원하지 않습니다 (Chrome/Edge 필요)';
+      if (connectButton) connectButton.style.display = 'none';
+      return;
+    }
+    
+    if (typeof navigator.usb.getDevices === 'function') {
+      const devices = await navigator.usb.getDevices();
+      const antDevices = devices.filter(device => {
+        const vid = device.vendorId;
+        return vid === 0x0FCF || vid === 0x1004;
+      });
+      
+      if (antDevices.length > 0) {
+        const device = antDevices[0];
+        let isOpened = false;
+        try {
+          isOpened = device.opened;
+        } catch (e) {
+          isOpened = false;
+        }
+        
+        if (isOpened) {
+          window.antState.usbDevice = device;
+          statusIcon.style.background = '#28a745';
+          statusText.textContent = `${device.productName || 'ANT+ USB 수신기'} 연결됨`;
+          if (activateButton) activateButton.disabled = false;
+          if (connectButton) connectButton.style.display = 'none';
+          return;
+        }
+      }
+    }
+    
+    statusIcon.style.background = '#ffc107';
+    statusText.textContent = 'USB 수신기를 연결해주세요';
+    if (connectButton) connectButton.style.display = 'inline-block';
+    if (activateButton) activateButton.disabled = false;
+  } catch (error) {
+    console.error('[ANT+ USB 상태 확인 오류]', error);
+    statusIcon.style.background = '#dc3545';
+    statusText.textContent = '상태 확인 중 오류 발생';
+    if (activateButton) activateButton.disabled = false;
+  }
+}
+
+/**
  * 수신기 선택 모달 표시
  */
 async function showReceiverSelectionModal() {
