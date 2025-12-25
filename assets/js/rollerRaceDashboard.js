@@ -987,46 +987,45 @@ function saveSpeedometerPairing() {
 /**
  * [수정됨] 스캔 모드 진입 (안전한 초기화)
  */
+/**
+ * [수정] 스캔 모드 대신 일반 채널 열기 테스트
+ */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  console.log('[ANT+] 스캔 설정 시작...');
+  console.log('[ANT+] 스캔 설정 시작 (Standard Search Test)...');
 
   try {
-    // 1. Reset (0x4A) - Tacx가 꼬였을 때를 대비해 리셋 시도
+    // 1. Reset
     await sendANTMessage(0x4A, [0x00]);
-    await new Promise(r => setTimeout(r, 1000)); // 리셋 후 1초 대기 (필수)
+    await new Promise(r => setTimeout(r, 1000));
 
-    // 2. Capabilities Request (0x4D, 0x54) - 장치가 살아있는지 확인하는 노크
-    // 콘솔에 [RX Raw] A4 ... 로 응답이 오는지 확인하세요.
-    await sendANTMessage(0x4D, [0x00, 0x54]); 
-    await new Promise(r => setTimeout(r, 200));
-
-    // 3. Network Key
+    // 2. Network Key
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
     await new Promise(r => setTimeout(r, 200));
 
-    // 4. Assign Channel 0 (Type 0x00: Receive)
+    // 3. Assign Channel 0
     await sendANTMessage(0x42, [0x00, 0x00]); 
     await new Promise(r => setTimeout(r, 200));
 
-    // 5. Channel ID (Wildcard)
+    // 4. Channel ID (Wildcard) -> 모든 장치 검색
     await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     await new Promise(r => setTimeout(r, 200));
 
-    // 6. Frequency 57
+    // 5. Frequency 57
     await sendANTMessage(0x45, [0x00, 57]);
     await new Promise(r => setTimeout(r, 200));
 
-    // 7. LibConfig (Device ID 포함)
-    await sendANTMessage(0x6E, [0x00, 0xE0]); 
-    await new Promise(r => setTimeout(r, 200));
+    // 6. LibConfig (이 부분은 테스트를 위해 잠시 뺍니다)
+    // await sendANTMessage(0x6E, [0x00, 0xE0]); 
+    // await new Promise(r => setTimeout(r, 200));
 
-    // 8. Open Rx Scan Mode (0x5B)
-    console.log('[ANT+] Rx Scan Mode 명령(0x5B) 전송');
-    await sendANTMessage(0x5B, [0x00]); 
+    // 7. [핵심 변경] Rx Scan Mode(0x5B) 대신 Open Channel(0x4B) 사용
+    // 이 명령은 가장 기본적인 검색 명령입니다. 이게 되면 하드웨어는 정상입니다.
+    console.log('[ANT+] 일반 검색 명령(0x4B) 전송');
+    await sendANTMessage(0x4B, [0x00]); 
     
   } catch (e) {
-    console.error('스캔 설정 실패:', e);
+    console.error('설정 실패:', e);
   }
 }
 
@@ -3330,6 +3329,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
