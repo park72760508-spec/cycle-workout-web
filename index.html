@@ -401,30 +401,31 @@
 
 
     
-    /* 육상 트랙 경기장 스타일 */
-    .race-track-container {
+    /* 직선 100m 경기장 스타일 */
+    .straight-track-container {
       width: 100%;
-      height: 120px;
-      margin: 8px 0;
+      height: 100px;
+      margin: 12px 0;
       position: relative;
-      background: linear-gradient(135deg, rgba(45, 80, 22, 0.1) 0%, rgba(74, 124, 89, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(45, 80, 22, 0.15) 0%, rgba(74, 124, 89, 0.2) 100%);
       border-radius: 8px;
       overflow: hidden;
-      border: 1px solid rgba(139, 69, 19, 0.3);
+      border: 2px solid rgba(139, 69, 19, 0.4);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
     
-    .race-track-svg {
+    .straight-track-svg {
       width: 100%;
       height: 100%;
       display: block;
     }
     
-    .race-mascot {
+    .straight-race-mascot {
       transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
     
     /* 마스코트 위치 업데이트 애니메이션 */
-    .race-mascot.moving {
+    .straight-race-mascot.moving {
       transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
   </style>
