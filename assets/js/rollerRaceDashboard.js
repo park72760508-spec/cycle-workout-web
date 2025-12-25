@@ -160,6 +160,15 @@ function createSpeedometerGrid() {
     if (speedometer.pairingName) {
       updateSpeedometerPairingName(speedometer.id, speedometer.pairingName);
     }
+    
+    // 연결 상태 업데이트 (deviceId가 있으면 준비 상태로 표시)
+    if (speedometer.deviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
+      updateSpeedometerConnectionStatus(speedometer.id, true, 'ready');
+    } else if (speedometer.connected) {
+      updateSpeedometerConnectionStatus(speedometer.id, true);
+    } else {
+      updateSpeedometerConnectionStatus(speedometer.id, false);
+    }
   }
 }
 
@@ -1088,9 +1097,18 @@ function saveSpeedometerPairing() {
         // 페어링 이름 업데이트 (그리드 생성 후)
         updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
         
-        // 약간의 지연 후 다시 한 번 이름 업데이트 (DOM 업데이트 보장)
+        // 연결 상태 업데이트 (그리드 생성 후)
+        if (speedometer.deviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
+            updateSpeedometerConnectionStatus(targetId, true, 'ready');
+        }
+        
+        // 약간의 지연 후 다시 한 번 이름 및 연결 상태 업데이트 (DOM 업데이트 보장)
         setTimeout(() => {
             updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
+            // 연결 상태도 다시 업데이트
+            if (speedometer.deviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
+                updateSpeedometerConnectionStatus(targetId, true, 'ready');
+            }
             // 속도계 목록도 다시 업데이트
             updateSpeedometerListUI();
         }, 100);
