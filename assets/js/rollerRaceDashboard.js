@@ -3408,6 +3408,134 @@ function selectANTDevice(deviceId, deviceName) {
 
 
 
+// =========================================================================
+// [최종 강제 표시 패치] 조건 검사 없이 무조건 화면에 센서 표시
+// =========================================================================
+
+// 1. 데이터 해석 및 ID 추출
+function handleBroadcastData(payload) {
+  // 데이터 길이 체크
+  if (payload.length < 9) return;
+
+  const antData = payload.slice(1, 9); 
+  
+  // Extended Data 확인 (ID 정보)
+  if (payload.length >= 13) {
+    const flag = payload[9];
+    
+    // 0x80 비트가 포함되어 있으면 ID가 있다는 뜻 (0xE0도 0x80을 포함함)
+    if (flag & 0x80) { 
+      const idLow = payload[10];
+      const idHigh = payload[11];
+      const deviceType = payload[12]; 
+      const transType = payload[13];
+      
+      // ID 계산 (가민 호환 20-bit)
+      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+      
+      // [디버깅] 콘솔에 ID가 찍히는지 확인
+      // console.log(`[ANT+] 센서 감지: ${extendedId} (Type: 0x${deviceType.toString(16)})`);
+
+      // 1. [핵심 변경] 모달창이 열렸는지 확인하지 않고 무조건 목록 추가 시도
+      addFoundDeviceToUI(extendedId, deviceType);
+
+      // 2. 데이터 업데이트
+      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == extendedId);
+      if (speedometer) {
+        if (!speedometer.connected) {
+          speedometer.connected = true;
+          if(typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
+        }
+        if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
+        speedometer.lastPacketTime = Date.now();
+      }
+    }
+  }
+}
+
+// 2. 목록에 추가 (필터링 완화)
+function addFoundDeviceToUI(deviceId, deviceType) {
+  // 0x7B(속도), 0x79(콤보), 0x7A(케이던스) 허용
+  const validTypes = [0x79, 0x7A, 0x7B, 0x78]; 
+  
+  if (!validTypes.includes(deviceType)) return;
+
+  // 이미 목록에 있으면 패스
+  const existing = window.antState.foundDevices.find(d => d.deviceNumber === deviceId);
+  if (existing) return;
+
+  // 새 기기 발견!
+  console.log(`[UI] 새 기기 목록 추가: ${deviceId}`);
+
+  let typeName = '알 수 없음';
+  if (deviceType === 0x79) typeName = '콤보 센서';
+  else if (deviceType === 0x7B) typeName = '속도 센서';
+  else if (deviceType === 0x7A) typeName = '케이던스';
+  
+  const device = {
+    deviceNumber: deviceId,
+    name: `ANT+ ${typeName}`,
+    id: deviceId,
+    type: typeName
+  };
+  
+  window.antState.foundDevices.push(device);
+  
+  // 화면 그리기 즉시 호출
+  displayANTDevices(window.antState.foundDevices);
+}
+
+// 3. 화면 그리기 (DOM 강제 접근)
+function displayANTDevices(devices) {
+  const list = document.getElementById('antDeviceList');
+  
+  // HTML 요소가 없으면 종료
+  if (!list) {
+      console.warn('[UI Warning] id="antDeviceList" 요소를 찾을 수 없습니다. (화면이 다른 곳에 있나요?)');
+      return;
+  }
+  
+  // 숨김 클래스 강제 제거 (목록이 숨어있다면 보이게 함)
+  if (list.classList.contains('hidden')) list.classList.remove('hidden');
+  if (list.parentElement && list.parentElement.classList.contains('hidden')) {
+      list.parentElement.classList.remove('hidden');
+  }
+
+  // 목록 초기화 및 렌더링
+  let html = '<div style="display:flex;flex-direction:column;gap:5px; max-height:200px; overflow-y:auto;">';
+  
+  if (devices.length === 0) {
+      html += '<div style="padding:10px;text-align:center;">센서 찾는 중...</div>';
+  } else {
+      devices.forEach(d => {
+        html += `
+          <div style="padding:10px; border:1px solid #007bff; background:#eef6fc; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;"
+               onclick="selectANTDevice('${d.deviceNumber}', '${d.name}')">
+            <div>
+                <div style="font-weight:bold; color:#0056b3;">${d.name}</div>
+                <div style="font-size:12px; color:#555;">ID: ${d.deviceNumber}</div>
+            </div>
+            <button style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:3px;">선택</button>
+          </div>
+        `;
+      });
+  }
+  html += '</div>';
+  list.innerHTML = html;
+}
+
+// 4. 선택 함수 (입력창 연동)
+function selectANTDevice(deviceId, deviceName) {
+  const input = document.getElementById('speedometerDeviceId');
+  if (input) {
+      input.value = deviceId;
+      input.style.backgroundColor = '#d4edda'; // 녹색 깜빡임
+      setTimeout(() => input.style.backgroundColor = '', 300);
+      
+      // 토스트 알림
+      if (typeof showToast === 'function') showToast(`${deviceId} 선택됨`);
+  }
+}
 
 
 
