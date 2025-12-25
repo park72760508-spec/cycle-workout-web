@@ -940,9 +940,12 @@ async function pairSpeedometer(speedometerId) {
   const modalTitle = modal ? modal.querySelector('.modal-header h3') : null;
   
   if (modal) {
+    // 트랙명 생성 (트랙1~10 형식)
+    const trackName = `트랙${speedometerId}`;
+    
     // 모달 제목에 트랙명 표시
     if (modalTitle) {
-      modalTitle.textContent = `${speedometer.name} 페어링`;
+      modalTitle.textContent = `${trackName} 페어링`;
     }
     
     // 트랙명 표시 영역 추가/업데이트
@@ -956,7 +959,7 @@ async function pairSpeedometer(speedometerId) {
         modalBody.insertBefore(trackNameDisplay, modalBody.firstChild);
       }
     }
-    trackNameDisplay.innerHTML = `<span style="color: #2e74e8; font-size: 1.1em; font-weight: 600;">${speedometer.name}</span>`;
+    trackNameDisplay.innerHTML = `<span style="color: #2e74e8; font-size: 1.1em; font-weight: 600;">${trackName}</span>`;
     
     // 이름 입력 필드 레이블 변경 및 값 설정
     if (nameInput) {
