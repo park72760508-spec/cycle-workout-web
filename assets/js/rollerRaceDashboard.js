@@ -50,7 +50,8 @@ window.rollerRaceState = {
   rankDisplayStartIndex: 0, // 전광판 순위 표시 시작 인덱스
   rankDisplayTimer: null, // 순위 표시 순환 타이머
   raceDataHistory: [], // 경기 중 데이터 히스토리 (주기적 저장)
-  dataSaveTimer: null // 데이터 저장 타이머
+  dataSaveTimer: null, // 데이터 저장 타이머
+  connectionStatusCheckTimer: null // 연결 상태 체크 타이머
 };
 
 // ANT+ 통신 관련 전역 상태
@@ -778,6 +779,9 @@ function startRace() {
     window.rollerRaceState.raceState = 'running';
     // 데이터 저장 재개
     startRaceDataSaving();
+    
+    // 연결 상태 체크 재개
+    startConnectionStatusCheck();
   } else {
     // 새 경기 시작
     window.rollerRaceState.startTime = Date.now();
@@ -818,6 +822,9 @@ function startRace() {
   
   // 경기 데이터 저장 시작 (5초마다 저장)
   startRaceDataSaving();
+  
+  // 센서 연결 상태 주기적 체크 시작 (1초마다)
+  startConnectionStatusCheck();
   
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
@@ -867,6 +874,9 @@ function pauseRace() {
   // 데이터 저장 일시정지 (데이터는 유지)
   stopRaceDataSaving();
   
+  // 연결 상태 체크 일시정지
+  stopConnectionStatusCheck();
+  
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
@@ -898,6 +908,9 @@ function stopRace() {
   
   // 데이터 저장 정지
   stopRaceDataSaving();
+  
+  // 연결 상태 체크 정지
+  stopConnectionStatusCheck();
   
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
@@ -1420,9 +1433,15 @@ function processSpeedCadenceData(deviceId, data) {
       }
       updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
       
-      // 센서 데이터를 받으면 연결됨 상태로 업데이트
+      // 센서 데이터를 받으면 연결됨 상태로 업데이트 (초록색)
+      speedometer.lastPacketTime = Date.now(); // 패킷 수신 시간 업데이트
       if (!speedometer.connected) {
         speedometer.connected = true;
+        if(typeof updateSpeedometerConnectionStatus === 'function') {
+          updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
+        }
+      } else {
+        // 이미 연결된 상태이지만 상태를 다시 확인하여 초록색으로 업데이트
         if(typeof updateSpeedometerConnectionStatus === 'function') {
           updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
         }
@@ -1431,11 +1450,21 @@ function processSpeedCadenceData(deviceId, data) {
     
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastPacketTime = Date.now(); // 패킷 수신 시간 업데이트
   } else {
+    // 데이터가 없는 경우
+    const timeSinceLastPacket = Date.now() - speedometer.lastPacketTime;
+    
     // 3초 이상 데이터 없으면 0 처리
-    if (Date.now() - speedometer.lastPacketTime > 3000) {
+    if (timeSinceLastPacket > 3000) {
       updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+    }
+    
+    // 30초 이상 데이터 없으면 주황색으로 변경
+    if (timeSinceLastPacket > 30000 && speedometer.deviceId) {
+      // deviceId가 있지만 30초 이상 데이터 미수신 시 주황색으로 표시
+      if(typeof updateSpeedometerConnectionStatus === 'function') {
+        updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
+      }
     }
   }
 }
@@ -1490,6 +1519,7 @@ function updateSpeedometerConnectionStatus(speedometerId, connected, status = nu
   // 1. deviceId가 없으면: 미연결 (주황, 미연결)
   // 2. deviceId가 있고 센서 데이터를 받지 않으면: 준비됨 (주황, 준비됨)
   // 3. deviceId가 있고 센서 데이터를 받고 있으면: 연결됨 (초록, 연결됨)
+  // 4. deviceId가 있고 30초 이상 데이터 미수신: 타임아웃 (주황, 준비됨)
   
   let finalStatus = 'disconnected';
   let statusText = '미연결';
@@ -1500,13 +1530,18 @@ function updateSpeedometerConnectionStatus(speedometerId, connected, status = nu
     finalStatus = 'disconnected';
     statusText = '미연결';
     isConnected = false;
+  } else if (status === 'timeout') {
+    // 30초 이상 데이터 미수신
+    finalStatus = 'timeout';
+    statusText = '준비됨';
+    isConnected = false;
   } else if (status === 'connected' || (connected && status !== 'ready')) {
     // deviceId 있음 + 센서 데이터 수신 중
     finalStatus = 'connected';
     statusText = '연결됨';
     isConnected = true;
   } else {
-    // deviceId 있음 + 센서 데이터 미수신
+    // deviceId 있음 + 센서 데이터 미수신 (30초 미만)
     finalStatus = 'ready';
     statusText = '준비됨';
     isConnected = false;
@@ -1524,8 +1559,8 @@ function updateSpeedometerConnectionStatus(speedometerId, connected, status = nu
       infoBlock.classList.remove('disconnected');
     }
   } else {
-    // 준비됨 또는 미연결: 주황색 배경
-    if (finalStatus === 'ready') {
+    // 준비됨, 타임아웃 또는 미연결: 주황색 배경
+    if (finalStatus === 'ready' || finalStatus === 'timeout') {
       dot.classList.remove('disconnected');
       dot.classList.add('connected');
     } else {
@@ -1585,7 +1620,7 @@ function updateSpeedometerListUI() {
     const item = document.createElement('div');
     item.className = 'speedometer-list-item';
     const trackName = `트랙${speedometer.id}`;
-    const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #333; font-weight: 500; margin-left: 8px;">${speedometer.pairingName}</span>` : '';
+    const pairingNameDisplay = speedometer.pairingName ? ` <span style="color: #ffffff; font-weight: 500; margin-left: 8px;">${speedometer.pairingName}</span>` : '';
     item.innerHTML = `
       <div class="list-item-info">
         <span class="list-item-name">${trackName}${pairingNameDisplay}</span>
@@ -3760,20 +3795,13 @@ function displayANTDevices(devices) {
 function updateSpeedometerDataInternal(deviceId, antData) {
   const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
   if (speedometer) {
-    // 센서 데이터를 받으면 연결됨 상태로 업데이트
-    if (!speedometer.connected) {
-      speedometer.connected = true;
-      if(typeof updateSpeedometerConnectionStatus === 'function') {
-        updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
-      }
-    } else {
-      // 이미 연결된 상태이지만 상태를 다시 확인하여 업데이트
-      if(typeof updateSpeedometerConnectionStatus === 'function') {
-        updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
-      }
+    // 센서 데이터를 받으면 연결됨 상태로 업데이트 (초록색)
+    speedometer.lastPacketTime = Date.now();
+    speedometer.connected = true;
+    if(typeof updateSpeedometerConnectionStatus === 'function') {
+      updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
     }
     if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
-    speedometer.lastPacketTime = Date.now();
   }
 }
 
@@ -3832,6 +3860,47 @@ function stopRaceDataSaving() {
   if (window.rollerRaceState.dataSaveTimer) {
     clearInterval(window.rollerRaceState.dataSaveTimer);
     window.rollerRaceState.dataSaveTimer = null;
+  }
+}
+
+/**
+ * 센서 연결 상태 주기적 체크 시작 (1초마다)
+ */
+function startConnectionStatusCheck() {
+  // 기존 타이머가 있으면 정리
+  if (window.rollerRaceState.connectionStatusCheckTimer) {
+    clearInterval(window.rollerRaceState.connectionStatusCheckTimer);
+    window.rollerRaceState.connectionStatusCheckTimer = null;
+  }
+  
+  // 1초마다 체크
+  window.rollerRaceState.connectionStatusCheckTimer = setInterval(() => {
+    const now = Date.now();
+    window.rollerRaceState.speedometers.forEach(speedometer => {
+      if (speedometer.deviceId) {
+        const timeSinceLastPacket = now - speedometer.lastPacketTime;
+        
+        // 30초 이상 데이터 없으면 주황색으로 변경
+        if (timeSinceLastPacket > 30000) {
+          if (speedometer.connected) {
+            speedometer.connected = false;
+            if(typeof updateSpeedometerConnectionStatus === 'function') {
+              updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
+            }
+          }
+        }
+      }
+    });
+  }, 1000);
+}
+
+/**
+ * 센서 연결 상태 주기적 체크 정지
+ */
+function stopConnectionStatusCheck() {
+  if (window.rollerRaceState.connectionStatusCheckTimer) {
+    clearInterval(window.rollerRaceState.connectionStatusCheckTimer);
+    window.rollerRaceState.connectionStatusCheckTimer = null;
   }
 }
 
