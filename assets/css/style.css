@@ -9556,12 +9556,9 @@ button[aria-disabled="true"] {
   min-height: fit-content; /* 높이 최소화 */
 }
 
-.list-item-info {
+.list-item-track-number {
   display: flex;
-  flex-direction: row;
   align-items: center;
-  gap: 12px;
-  justify-content: flex-start;
   flex: 0 0 auto; /* 고정 너비 */
   min-width: 0;
 }
@@ -9577,11 +9574,11 @@ button[aria-disabled="true"] {
   flex: 0 0 auto;
 }
 
-.list-item-pairing-name {
-  font-weight: 500;
-  color: #00ff88;
-  white-space: nowrap;
-  flex: 0 0 auto;
+.list-item-id-section {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto; /* 고정 너비 */
+  min-width: 0;
 }
 
 .list-item-id {
