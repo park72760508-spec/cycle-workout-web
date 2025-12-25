@@ -4260,7 +4260,7 @@ function generateRaceReportPDF() {
     const reportHTML = `
       <div style="font-family: 'Pretendard', 'Noto Sans KR', sans-serif; padding: 20px; background: white; color: #333;">
         <h1 style="text-align: center; font-size: 24px; margin-bottom: 20px; color: #2563eb;">
-          Stelvio Indoor Grand Prix - 경기 결과 리포트
+          Stelvio AI Indoor Race - 경기 결과 리포트
         </h1>
         
         <div style="margin-bottom: 20px; font-size: 14px;">
