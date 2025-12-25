@@ -2115,24 +2115,21 @@
         <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
         <span class="race-title-text">Stelvio Indoor Grand Prix</span>
       </h1>
-      <div class="race-controls">
-        <button class="btn btn-success btn-large" id="btnStartRace" onclick="startRaceWithCountdown()">
-          <img src="assets/img/play.png" alt="시작" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
-          시작
+      <div class="dashboard-header-right">
+        <button class="btn btn-secondary btn-sm" onclick="showScreen('connectionScreen')" style="margin-right: 12px;">
+          <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          뒤로
         </button>
-        <button class="btn btn-warning btn-large" id="btnPauseRace" onclick="pauseRace()" disabled>
-          <img src="assets/img/pause.png" alt="일시정지" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
-          일시정지
+        <button class="btn btn-primary btn-sm" onclick="showAddSpeedometerModal()" style="margin-right: 12px;">
+          <img src="assets/img/add.png" alt="추가" class="btn-icon-image" style="width: 16px; height: 16px; margin-right: 4px; vertical-align: middle;" />
+          수신기 활성화
         </button>
-        <button class="btn btn-danger btn-large" id="btnStopRace" onclick="stopRace()" disabled>
-          <img src="assets/img/stop.png" alt="종료" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
-          종료
-        </button>
+        <div class="race-controls">
+          <button class="enhanced-control-btn play" id="btnStartRace" onclick="startRaceWithCountdown()" aria-label="시작"></button>
+          <button class="enhanced-control-btn pause" id="btnPauseRace" onclick="pauseRace()" disabled aria-label="일시정지"></button>
+          <button class="enhanced-control-btn stop" id="btnStopRace" onclick="stopRace()" disabled aria-label="종료"></button>
+        </div>
       </div>
-      <button class="btn btn-secondary" onclick="showScreen('connectionScreen')">
-        <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-        뒤로
-      </button>
     </div>
 
     <!-- 전광판 스타일 통계 (대회 전광판) -->
@@ -2202,11 +2199,6 @@
             설정
           </button>
         </div>
-        
-        <button class="btn btn-primary btn-sm" onclick="showAddSpeedometerModal()">
-          <img src="assets/img/add.png" alt="추가" class="btn-icon-image" style="width: 16px; height: 16px; margin-right: 4px; vertical-align: middle;" />
-          수신기 활성화
-        </button>
       </div>
       
       <div class="speedometer-list" id="speedometerList">
