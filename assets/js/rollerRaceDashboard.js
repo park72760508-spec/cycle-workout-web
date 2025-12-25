@@ -1505,17 +1505,16 @@ function showAddSpeedometerModal() {
   
   // USB 수신기 상태 확인
   checkANTUSBStatus().then(() => {
-    // USB 수신기가 연결되어 있으면 자동으로 검색 시작
+    // USB 수신기가 연결되어 있으면 안내 메시지 표시
     if (window.antState.usbDevice && window.antState.usbDevice.opened) {
-      console.log('[ANT+] 모달 열림 - 자동 검색 시작');
-      // 약간의 지연 후 자동 검색 시작 (UI 업데이트 대기)
-      setTimeout(() => {
-        searchANTDevices();
-      }, 500);
+      console.log('[ANT+] 모달 열림 - USB 수신기 연결됨');
+      if (deviceList) {
+        deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기가 활성화되어 있습니다.<br><small>"디바이스 검색" 버튼을 클릭하여 속도계를 검색하세요.</small></div>';
+      }
     } else {
       // USB 수신기가 연결되지 않은 경우 안내 메시지
       if (deviceList) {
-        deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기를 먼저 연결해주세요.<br><small>위의 "USB 수신기 연결" 버튼을 클릭하세요.</small></div>';
+        deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
       }
     }
   });
@@ -1530,17 +1529,16 @@ function showAddSpeedometerModal() {
 }
 
 /**
- * ANT+ 디바이스 검색
- * 사용자 제스처 컨텍스트를 유지하기 위해 requestDevice를 즉시 호출
+ * ANT+ 수신기 활성화 (USB 수신기 연결)
  */
-async function searchANTDevices() {
-  const btn = document.getElementById('btnSearchANTDevices');
-  if(btn) btn.disabled = true;
+async function activateANTReceiver() {
+  const refreshBtn = document.getElementById('btnRefreshUSBStatus');
+  if(refreshBtn) refreshBtn.disabled = true;
   
   const listEl = document.getElementById('antDeviceList');
   if(listEl) {
     listEl.classList.remove('hidden');
-    listEl.innerHTML = '<div style="padding:20px;text-align:center">USB 연결 확인 중...</div>';
+    listEl.innerHTML = '<div style="padding:20px;text-align:center">USB 수신기 연결 중...</div>';
   }
 
   // USB가 없으면 연결 시도
@@ -1549,20 +1547,58 @@ async function searchANTDevices() {
       // 사용자 액션(클릭) 내에서 실행되어야 함
       const device = await requestANTUSBDevice();
       await connectANTUSBStickWithDevice(Promise.resolve(device));
+      if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:green;font-weight:bold">USB 수신기 연결 완료!</div>';
     } catch(e) {
       if(listEl) listEl.innerHTML = `<div style="color:red;padding:10px">USB 연결 실패: ${e.message}</div>`;
-      if(btn) btn.disabled = false;
+      if(refreshBtn) refreshBtn.disabled = false;
       return;
     }
   } else {
     // 이미 연결되어 있다면 스캔 모드 확실히 켜기
     await startContinuousScan();
+    if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:green;font-weight:bold">USB 수신기 활성화 완료!</div>';
+  }
+  
+  // USB 상태 업데이트
+  await checkANTUSBStatus();
+  
+  if(refreshBtn) refreshBtn.disabled = false;
+}
+
+/**
+ * 속도계 디바이스 검색 (USB 수신기가 이미 활성화되어 있어야 함)
+ */
+async function searchSpeedometerDevices() {
+  const btn = document.getElementById('btnSearchANTDevices');
+  if(btn) btn.disabled = true;
+  
+  const listEl = document.getElementById('antDeviceList');
+  if(listEl) {
+    listEl.classList.remove('hidden');
   }
 
-  if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">센서 검색 중...<br>바퀴를 굴려주세요!</div>';
+  // USB 수신기가 연결되어 있는지 확인
+  if (!window.antState.usbDevice || !window.antState.usbDevice.opened) {
+    if(listEl) listEl.innerHTML = '<div style="color:red;padding:10px">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
+    if(btn) btn.disabled = false;
+    return;
+  }
+
+  // 스캔 모드 확실히 켜기
+  await startContinuousScan();
+
+  if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">속도계 센서 검색 중...<br>바퀴를 굴려주세요!</div>';
   window.antState.foundDevices = []; // 목록 초기화
   
   if(btn) btn.disabled = false;
+}
+
+/**
+ * ANT+ 디바이스 검색 (기존 함수 - 호환성 유지)
+ * @deprecated searchSpeedometerDevices() 사용 권장
+ */
+async function searchANTDevices() {
+  return searchSpeedometerDevices();
 }
 
 /**
