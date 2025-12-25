@@ -120,6 +120,9 @@ function initRollerRaceDashboard() {
   // 타겟 설정 로드
   loadTargetSettings();
   
+  // 수신기 활성화 버튼 상태 초기화
+  updateReceiverButtonStatus();
+  
   // 타이머 초기화
   window.rollerRaceTimer = null;
   
@@ -1420,6 +1423,9 @@ function saveSpeedometerPairing() {
             updateSpeedometerConnectionStatus(targetId, true, 'ready');
         }
         
+        // 수신기 활성화 버튼 상태 업데이트 (페어링 완료 시)
+        updateReceiverButtonStatus();
+        
         // 약간의 지연 후 다시 한 번 이름 및 연결 상태 업데이트 (DOM 업데이트 보장)
         setTimeout(() => {
             updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
@@ -1979,34 +1985,21 @@ function updateSpeedometerListUI() {
 /**
  * 속도계 추가 모달 표시
  */
-function showAddSpeedometerModal() {
+async function showAddSpeedometerModal() {
   const modal = document.getElementById('addSpeedometerModal');
   if (modal) {
     modal.classList.remove('hidden');
   }
   
-  // 디바이스 목록 초기화
+  // 디바이스 목록 초기화 및 표시
   const deviceList = document.getElementById('antDeviceList');
   if (deviceList) {
     deviceList.classList.remove('hidden'); // 목록 영역 표시
-    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기 연결 확인 중...</div>';
+    deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기 연결 중...</div>';
   }
   
-  // USB 수신기 상태 확인
-  checkANTUSBStatus().then(() => {
-    // USB 수신기가 연결되어 있으면 안내 메시지 표시
-    if (window.antState.usbDevice && window.antState.usbDevice.opened) {
-      console.log('[ANT+] 모달 열림 - USB 수신기 연결됨');
-      if (deviceList) {
-        deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기가 활성화되어 있습니다.<br><small>"디바이스 검색" 버튼을 클릭하여 속도계를 검색하세요.</small></div>';
-      }
-    } else {
-      // USB 수신기가 연결되지 않은 경우 안내 메시지
-      if (deviceList) {
-        deviceList.innerHTML = '<div style="padding: 16px; text-align: center; color: #666;">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
-      }
-    }
-  });
+  // 모달을 열면서 바로 수신기 활성화 시도
+  await activateANTReceiver();
   
   // 주기적으로 상태 확인 (5초마다)
   if (window.antUSBStatusInterval) {
@@ -2050,6 +2043,9 @@ async function activateANTReceiver() {
   
   // USB 상태 업데이트
   await checkANTUSBStatus();
+  
+  // 수신기 활성화 버튼 상태 업데이트
+  updateReceiverButtonStatus();
   
   if(refreshBtn) refreshBtn.disabled = false;
 }
@@ -3258,6 +3254,7 @@ async function checkANTUSBStatus() {
           updateANTUSBStatusUI('connected', 'USB 수신기 연결됨', deviceInfo);
           if (refreshButton) refreshButton.disabled = false;
           if (connectButton) connectButton.style.display = 'none';
+          updateReceiverButtonStatus(); // 수신기 활성화 버튼 상태 업데이트
           return;
         }
       } catch (error) {
@@ -3343,6 +3340,7 @@ async function checkANTUSBStatus() {
               updateANTUSBStatusUI('connected', `${connectedDeviceInfo.productName} 연결됨`, connectedDeviceInfo);
               if (connectButton) connectButton.style.display = 'none';
               if (refreshButton) refreshButton.disabled = false;
+              updateReceiverButtonStatus(); // 수신기 활성화 버튼 상태 업데이트
               return; // 성공적으로 연결되었으므로 종료
             } else {
               console.warn('[ANT+ USB 상태 확인] 자동 연결 실패: connectedDevice가 null');
@@ -4435,8 +4433,40 @@ function formatTime(seconds) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-
-
+/**
+ * 수신기 활성화 버튼 상태 업데이트
+ * - 활성화 전: 빨강색 원
+ * - 페어링 완료: 연두색 원 + 체크마크
+ */
+function updateReceiverButtonStatus() {
+  const indicator = document.getElementById('receiverStatusIndicator');
+  if (!indicator) return;
+  
+  // USB 수신기가 활성화되어 있고, 페어링된 속도계가 있는지 확인
+  const isReceiverActive = window.antState.usbDevice && window.antState.usbDevice.opened;
+  const hasPairedSpeedometer = window.rollerRaceState.speedometers.some(
+    s => s.id >= 1 && s.id <= 10 && s.deviceId && s.deviceId.trim() !== ''
+  );
+  
+  if (isReceiverActive && hasPairedSpeedometer) {
+    // 페어링 완료: 연두색 원 + 체크마크
+    indicator.style.background = '#28a745'; // 연두색
+    indicator.innerHTML = '✓';
+    indicator.style.color = 'white';
+    indicator.style.fontSize = '10px';
+    indicator.style.lineHeight = '12px';
+    indicator.style.textAlign = 'center';
+    indicator.style.fontWeight = 'bold';
+  } else if (isReceiverActive) {
+    // 활성화만 됨: 연두색 원 (체크마크 없음)
+    indicator.style.background = '#28a745'; // 연두색
+    indicator.innerHTML = '';
+  } else {
+    // 활성화 전: 빨강색 원
+    indicator.style.background = '#dc3545'; // 빨강색
+    indicator.innerHTML = '';
+  }
+}
 
 
 
