@@ -990,42 +990,53 @@ function saveSpeedometerPairing() {
 /**
  * [수정] 스캔 모드 대신 일반 채널 열기 테스트
  */
+// =========================================================
+// [수정 3] 연속 스캔 모드 진입 (안정성 강화)
+// =========================================================
+
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  console.log('[ANT+] 스캔 설정 시작 (Standard Search Test)...');
+  
+  console.log('[ANT+] T2028 스캔 모드 설정 시작 (Slow Init)...');
+  window.antState.isScanning = true;
 
   try {
-    // 1. Reset
+    // 1. Reset (초기화)
     await sendANTMessage(0x4A, [0x00]);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 1000)); // 리셋은 1초 대기
 
-    // 2. Network Key
+    // 2. Network Key (가장 중요)
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 500)); // 500ms로 늘림
 
     // 3. Assign Channel 0
     await sendANTMessage(0x42, [0x00, 0x00]); 
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 500));
 
-    // 4. Channel ID (Wildcard) -> 모든 장치 검색
+    // 4. Channel ID (Wildcard - 모든 장치 수신)
     await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 500));
 
-    // 5. Frequency 57
+    // 5. Frequency 57 (2457MHz)
     await sendANTMessage(0x45, [0x00, 57]);
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 500));
 
-    // 6. LibConfig (이 부분은 테스트를 위해 잠시 뺍니다)
-    // await sendANTMessage(0x6E, [0x00, 0xE0]); 
-    // await new Promise(r => setTimeout(r, 200));
+    // 6. LibConfig (ID 정보 포함 요청 - 필수)
+    await sendANTMessage(0x6E, [0x00, 0xE0]); 
+    await new Promise(r => setTimeout(r, 500));
 
-    // 7. [핵심 변경] Rx Scan Mode(0x5B) 대신 Open Channel(0x4B) 사용
-    // 이 명령은 가장 기본적인 검색 명령입니다. 이게 되면 하드웨어는 정상입니다.
-    console.log('[ANT+] 일반 검색 명령(0x4B) 전송');
-    await sendANTMessage(0x4B, [0x00]); 
+    // 7. Rx Scan Mode (0x5B) - 15대 연결을 위해 필수
+    console.log('[ANT+] Rx Scan Mode(0x5B) 명령 전송');
+    await sendANTMessage(0x5B, [0x00]); 
     
+    // 수신 확인을 위해 메시지 리스너가 켜져 있는지 확인
+    if (!window.antMessageListener) {
+        startANTMessageListener();
+    }
+
   } catch (e) {
-    console.error('설정 실패:', e);
+    console.error('[ANT+] 스캔 설정 실패:', e);
+    window.antState.isScanning = false;
   }
 }
 
@@ -1871,115 +1882,85 @@ async function startANTMessageListener() {
 /**
  * 수신 데이터 파싱 (버퍼링 처리)
  */
+// =========================================================
+// [수정 1] 데이터 버퍼링 및 파싱 로직 (Tacx 호환성 강화)
+// =========================================================
+
 let packetBuffer = new Uint8Array(0);
 
+/**
+ * USB로부터 들어온 Raw 데이터를 처리하는 함수
+ */
 function processIncomingData(newData) {
-  // 기존 버퍼와 새 데이터 합치기
-  const temp = new Uint8Array(packetBuffer.length + newData.length);
-  temp.set(packetBuffer);
-  temp.set(newData, packetBuffer.length);
-  packetBuffer = temp;
+  // 1. 기존 버퍼에 새 데이터 병합
+  const combinedBuffer = new Uint8Array(packetBuffer.length + newData.length);
+  combinedBuffer.set(packetBuffer);
+  combinedBuffer.set(newData, packetBuffer.length);
+  packetBuffer = combinedBuffer;
 
-  // 패킷 처리 루프
-  while (packetBuffer.length >= 4) { // 최소 패킷 길이 (Sync+Len+MsgID+Chk)
-    // Sync Byte(0xA4) 찾기
+  // 2. 패킷 파싱 루프
+  while (packetBuffer.length >= 4) {
+    // Sync Byte (0xA4) 찾기
     const syncIndex = packetBuffer.indexOf(0xA4);
-    if (syncIndex === -1) {
-      packetBuffer = new Uint8Array(0); // Sync 없으면 버림
-      break;
-    }
     
-    // Sync 이전 데이터 버림
+    if (syncIndex === -1) {
+      // Sync가 없으면 잘못된 데이터이므로 버림 (단, 마지막 일부는 남길 수도 있으나 여기선 초기화)
+      // 데이터 유입이 끊기지 않게 0으로 초기화하지 않고 대기
+      break; 
+    }
+
+    // Sync 바이트 앞의 쓰레기 데이터 제거
     if (syncIndex > 0) {
       packetBuffer = packetBuffer.slice(syncIndex);
       continue;
     }
 
-    const length = packetBuffer[1]; // Data Length (MsgID 포함 안된 경우도 있음, Spec: N bytes data)
-    // 전체 패킷 길이 = Sync(1) + Len(1) + MsgID(1) + Payload(Length-1) + Checksum(1)
-    // Standard: [A4] [Len] [MsgID] [Data 0...N-1] [Checksum]
-    // Total bytes = 1 + 1 + 1 + Len + 1 = 4 + Len. 
-    // BUT usually Len includes MsgID in some docs, but standard ANT is: Len = size of data block (MsgID + Payload).
-    // Let's assume Len = MsgID(1) + Payload. So Total = 1(Sync)+1(Len)+Len(Data)+1(Chk) = 3+Len.
-    
-    const totalPacketSize = length + 4; // Sync(1) + Len(1) + MsgID(1) + Payload(Len-1) + Chk(1)
-    
+    // 데이터 길이 확인 (패킷 구조: Sync(1) + Len(1) + MsgID(1) + Payload(Len-1) + Chk(1))
+    // 표준 드라이버 계산식: TotalLength = LengthByte + 4
+    const lengthByte = packetBuffer[1];
+    const totalPacketSize = lengthByte + 4;
+
+    // 버퍼에 아직 전체 패킷이 다 안 들어왔으면 대기
     if (packetBuffer.length < totalPacketSize) {
-      break; // 데이터 더 필요함
+      break;
     }
 
-    // 패킷 추출
+    // 3. 온전한 패킷 한 개 추출
     const packet = packetBuffer.slice(0, totalPacketSize);
-    packetBuffer = packetBuffer.slice(totalPacketSize);
+    packetBuffer = packetBuffer.slice(totalPacketSize); // 처리한 부분 제거
 
-    // 메시지 처리
-    const msgId = packet[2];
-    const payload = packet.slice(3, totalPacketSize - 1);
-    
-    if (msgId === 0x4E) { // Broadcast Data
-      handleBroadcastData(payload);
-    } else {
-      // 기존 handleANTMessage 호출 (다른 메시지 타입 처리)
-      handleANTMessage({ messageId: msgId, data: payload });
-    }
+    // 4. 패킷 처리 핸들러로 전달
+    parseAndHandlePacket(packet);
   }
 }
 
 /**
- * ANT+ 메시지 처리
+ * 추출된 단일 패킷을 분석하고 처리하는 함수
  */
-function handleANTMessage(message) {
-  const { messageId, data } = message;
-  
-  // 디버깅: 스캔 중인 경우 중요한 메시지만 로그
-  if (window.antState.isScanning) {
-    // Channel ID Response는 항상 로그 출력
-    if (messageId === 0x51) {
-      console.log('[ANT+ 메시지] Channel ID Response 수신:', {
-        messageId: '0x' + messageId.toString(16).toUpperCase(),
-        dataLength: data.length,
-        data: Array.from(data).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '),
-        decimal: Array.from(data).join(', ')
-      });
-    } else if (messageId === 0x4E || messageId === 0x43) {
-      // Broadcast Data와 Channel Event도 로그 출력
-      if (!window.antState.lastMessageLog || Date.now() - window.antState.lastMessageLog > 2000) {
-        console.log('[ANT+ 메시지] 수신:', {
-          messageId: '0x' + messageId.toString(16).toUpperCase(),
-          dataLength: data.length,
-          data: Array.from(data.slice(0, 8)).map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
-        });
-        window.antState.lastMessageLog = Date.now();
-      }
+function parseAndHandlePacket(packet) {
+  const msgId = packet[2];
+  const payload = packet.slice(3, packet.length - 1); // MsgID 다음부터 Checksum 전까지
+
+  // [핵심] Tacx T2028 Wrapper (0xAE) 해제 로직
+  // 구조: [A4][Len][AE][02][A4(InnerSync)]...
+  if (msgId === 0xAE) {
+    // Tacx 패킷은 payload[0]이 0x02이고, payload[1]이 내부 패킷의 Sync(0xA4)임
+    if (payload.length > 1 && payload[1] === 0xA4) {
+      // console.log('[ANT+] Tacx 포장지(0xAE) 해제 -> 내부 데이터 처리');
+      
+      // 포장지(헤더 2바이트)를 벗겨내고 내부 데이터를 다시 버퍼 처리기에 넣음
+      // payload.slice(1)은 InnerSync(0xA4)부터 시작하는 진짜 데이터
+      const innerData = payload.slice(1);
+      
+      // 재귀적으로 처리하지 않고, 별도 함수로 내부 패킷만 즉시 파싱 시도 (버퍼 꼬임 방지)
+      // 여기서는 간단히 processIncomingData를 재호출하여 큐에 넣는 방식 사용
+      processIncomingData(innerData);
+      return;
     }
   }
-  
-  switch (messageId) {
-    case 0x43: // Channel Event
-      handleChannelEvent(data);
-      break;
-    case 0x4E: // Broadcast Data
-      handleBroadcastData(data);
-      break;
-    case 0x4D: // Acknowledged Data (또는 Request Message 응답)
-      // Request Message (0x4D)는 Channel ID 요청에 대한 응답일 수 있음
-      // 하지만 실제 Channel ID Response는 0x51 메시지 ID를 가짐
-      handleAcknowledgedData(data);
-      break;
-    case 0x51: // Channel ID Response
-      handleChannelIDResponse(data);
-      break;
-    case 0xAE: // Capabilities
-      // Capabilities 메시지는 무시 (스틱 정보만 제공)
-      // 로그는 최소화 (이미 receiveANTMessage에서 처리)
-      break;
-    default:
-      // 기타 메시지 무시
-      if (window.antState.isScanning && (messageId === 0x46 || messageId === 0x47)) {
-        console.log('[ANT+] 기타 메시지 수신:', '0x' + messageId.toString(16).toUpperCase());
-      }
-      break;
-  }
+
+  // 일반 메시지 처리
+  handleANTMessage({ messageId: msgId, data: payload });
 }
 
 /**
@@ -2107,39 +2088,35 @@ function processBuffer(newData) {
 /**
  * [신규] ANT+ 메시지 처리기 (Wrapper 해제 기능 포함)
  */
-function handleANTMessage(pkt) {
-  const msgId = pkt[2];
-  const payload = pkt.slice(3, pkt.length - 1);
+// =========================================================
+// [수정 2] 메시지 분배 및 로그 최적화
+// =========================================================
 
-  // 1. [핵심] Tacx T2028 Wrapper (0xAE) 감지 및 해제
-  // Tacx T2028은 모든 데이터를 0xAE 메시지 안에 담아서 보냄
-  // 구조: [A4][09][AE][02][A4(InnerSync)]...
-  if (msgId === 0xAE) {
-      // payload[0]은 상태값(02), payload[1]이 실제 패킷의 Sync(0xA4)인지 확인
-      if (payload.length > 1 && payload[1] === 0xA4) {
-          console.log('[ANT+] Tacx Wrapper(0xAE) 해제 -> 내부 패킷 처리');
-          
-          // 내부 패킷만 추출 (Wrapper 헤더 1바이트 제외)
-          const innerData = payload.slice(1);
-          
-          // 추출한 내부 데이터를 다시 버퍼 처리기에 넣어 파싱 (재귀 처리)
-          processBuffer(innerData); 
-      }
-      return; 
+function handleANTMessage(message) {
+  const { messageId, data } = message;
+
+  // 디버깅: 중요한 메시지만 로그 출력 (도배 방지)
+  if (messageId === 0x4E) { // 센서 데이터
+     // console.log('[ANT+] 센서 데이터(0x4E) 수신!'); 
+     handleBroadcastData(data);
+     return;
   }
 
-  // 2. Broadcast Data (센서 데이터)
-  if (msgId === 0x4E) {
-      handleBroadcastData(payload);
-  }
-  
-  // 3. Response / Channel Event (명령어 응답 확인용)
-  if (msgId === 0x40) {
-      if (payload[2] === 0x00) {
-          // console.log('[ANT+] 명령 성공 (NO_ERROR)');
-      } else {
-          console.warn('[ANT+] 명령 실패/이벤트 코드:', payload[2].toString(16));
+  switch (messageId) {
+    case 0x43: // Channel Event (검색 타임아웃 등)
+      // 스캔 중에는 타임아웃 이벤트가 발생하지 않아야 정상 (0x5B 모드 시)
+      // console.log('[ANT+] 채널 이벤트:', data);
+      break;
+      
+    case 0x51: // Channel ID Response
+      handleChannelIDResponse(data);
+      break;
+      
+    case 0x40: // Command Response (명령어에 대한 응답)
+      if (data[2] !== 0x00) {
+        console.warn('[ANT+] 명령 실패 코드:', data[2].toString(16));
       }
+      break;
   }
 }
 
@@ -3457,6 +3434,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
