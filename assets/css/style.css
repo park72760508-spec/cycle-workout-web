@@ -9547,11 +9547,10 @@ button[aria-disabled="true"] {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: rgba(255, 140, 0, 0.15); /* 주황색 배경 */
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
-  border: 1px solid rgba(255, 140, 0, 0.3);
-  width: 70%; /* 크기 70%로 축소 */
-  margin: 0 auto; /* 중앙 정렬 */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
   min-width: 0;
 }
 
