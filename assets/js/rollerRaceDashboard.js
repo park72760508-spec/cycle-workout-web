@@ -2060,16 +2060,18 @@ function updateSpeedometerListUI() {
 /**
  * 모든 경기장 트랙의 너비를 동일하게 맞춤 (가장 작은 넓이 기준)
  * 각 항목의 사용 가능한 공간을 측정하여 경기장 트랙이 차지할 수 있는 최대 공간 계산
+ * 가장 짧은 트랙의 오른쪽 끝에 맞춰 모든 트랙을 정렬
  */
 function normalizeTrackWidths() {
   const listItems = document.querySelectorAll('.speedometer-list-item');
   if (listItems.length === 0) return;
   
   let minTrackWidth = Infinity;
+  let minTrackIndex = -1;
   const trackContainers = [];
-  const availableWidths = [];
+  const itemData = []; // 각 항목의 정보 저장
   
-  // 1단계: 각 항목의 사용 가능한 트랙 너비 계산
+  // 1단계: 각 항목의 사용 가능한 트랙 너비 계산 및 데이터 수집
   listItems.forEach((item, index) => {
     const infoEl = item.querySelector('.list-item-info');
     const actionsEl = item.querySelector('.list-item-actions');
@@ -2097,17 +2099,37 @@ function normalizeTrackWidths() {
     // 항목의 전체 너비와 패딩, 간격 계산
     const itemWidth = item.offsetWidth;
     const itemStyle = getComputedStyle(item);
-    const itemPadding = parseFloat(itemStyle.paddingLeft) + parseFloat(itemStyle.paddingRight);
+    const itemPaddingLeft = parseFloat(itemStyle.paddingLeft);
+    const itemPaddingRight = parseFloat(itemStyle.paddingRight);
     const itemGap = parseFloat(itemStyle.gap) || 12;
     
     // 정보 영역 + 버튼 영역 + 간격들을 제외한 트랙이 사용할 수 있는 공간
     // (간격: info와 track 사이, track과 actions 사이)
-    const availableWidth = itemWidth - itemPadding - infoWidth - actionsWidth - (itemGap * 2);
-    availableWidths[index] = availableWidth;
+    const availableWidth = itemWidth - itemPaddingLeft - itemPaddingRight - infoWidth - actionsWidth - (itemGap * 2);
     
+    // 가장 짧은 트랙 찾기
     if (availableWidth < minTrackWidth && availableWidth > 0) {
       minTrackWidth = availableWidth;
+      minTrackIndex = index;
     }
+    
+    // 항목 데이터 저장
+    itemData[index] = {
+      item,
+      infoEl,
+      actionsEl,
+      trackEl,
+      infoWidth,
+      actionsWidth,
+      itemWidth,
+      itemPaddingLeft,
+      itemPaddingRight,
+      itemGap,
+      availableWidth,
+      originalTrackWidth,
+      originalTrackFlex,
+      originalTrackDisplay
+    };
     
     trackContainers[index] = trackEl;
     
@@ -2117,23 +2139,63 @@ function normalizeTrackWidths() {
     trackEl.style.display = originalTrackDisplay || '';
   });
   
-  // 2단계: 모든 트랙을 가장 작은 너비로 설정 (우측 정렬 유지)
-  if (minTrackWidth !== Infinity && minTrackWidth > 0) {
+  // 2단계: 모든 트랙을 가장 작은 너비로 설정하고 오른쪽 끝 정렬
+  if (minTrackWidth !== Infinity && minTrackWidth > 0 && minTrackIndex >= 0) {
     // 최소 너비에서 약간의 여유 공간 제거 (여백 최소화)
     const finalWidth = Math.max(minTrackWidth - 2, 100); // 최소 100px 보장
     
-    trackContainers.forEach(trackEl => {
-      if (trackEl) {
-        trackEl.style.width = finalWidth + 'px';
-        trackEl.style.marginLeft = 'auto'; // 우측 정렬 유지
-        trackEl.style.marginRight = '0';
-        trackEl.style.flexShrink = '0'; // 축소 방지
-        trackEl.style.flexGrow = '0'; // 확대 방지
-        trackEl.style.display = ''; // 원래 display 복원
-      }
+    // 가장 짧은 트랙이 있는 항목의 데이터
+    const minItemData = itemData[minTrackIndex];
+    
+    // 부모 컨테이너 찾기
+    const parentContainer = listItems[0]?.parentElement;
+    if (!parentContainer) return;
+    
+    const parentRect = parentContainer.getBoundingClientRect();
+    
+    // 가장 짧은 트랙이 있는 항목의 트랙 오른쪽 끝 위치 계산 (부모 컨테이너 기준)
+    const minItemRect = minItemData.item.getBoundingClientRect();
+    const minItemRightEdge = minItemRect.right - parentRect.left; // 부모 컨테이너 기준 상대 위치
+    const referenceTrackRightEdge = minItemRightEdge - minItemData.itemPaddingRight - minItemData.actionsWidth - minItemData.itemGap;
+    
+    // 3단계: 모든 트랙을 동일한 너비로 설정하고 오른쪽 끝 정렬
+    listItems.forEach((item, index) => {
+      const data = itemData[index];
+      if (!data || !data.trackEl) return;
+      
+      // 각 항목의 오른쪽 끝 위치 (부모 컨테이너 기준)
+      const itemRect = item.getBoundingClientRect();
+      const itemRightEdge = itemRect.right - parentRect.left;
+      
+      // 트랙의 오른쪽 끝 위치는 기준 위치로 고정
+      const trackRightEdge = referenceTrackRightEdge;
+      
+      // 트랙의 왼쪽 시작 위치 = 트랙 오른쪽 끝 - 트랙 너비
+      const trackLeftEdge = trackRightEdge - finalWidth;
+      
+      // 항목의 왼쪽 끝 위치 (부모 컨테이너 기준)
+      const itemLeftEdge = itemRect.left - parentRect.left;
+      
+      // 정보 영역의 오른쪽 끝 위치 (부모 컨테이너 기준)
+      const infoRightEdge = itemLeftEdge + data.itemPaddingLeft + data.infoWidth + data.itemGap;
+      
+      // 트랙의 왼쪽 시작 위치가 정보 영역 오른쪽 끝보다 왼쪽에 있으면 조정
+      const actualTrackLeft = Math.max(trackLeftEdge, infoRightEdge);
+      const actualTrackWidth = Math.min(finalWidth, trackRightEdge - actualTrackLeft);
+      
+      // marginLeft 계산 (정보 영역 오른쪽 끝에서 트랙 왼쪽 시작까지의 거리)
+      const marginLeft = actualTrackLeft - infoRightEdge;
+      
+      // 트랙 스타일 적용
+      data.trackEl.style.width = actualTrackWidth + 'px';
+      data.trackEl.style.marginLeft = marginLeft + 'px';
+      data.trackEl.style.marginRight = '0';
+      data.trackEl.style.flexShrink = '0';
+      data.trackEl.style.flexGrow = '0';
+      data.trackEl.style.display = '';
     });
     
-    console.log('[경기장 트랙] 모든 트랙 너비 통일:', finalWidth + 'px', '(사용 가능 공간:', minTrackWidth + 'px)');
+    console.log('[경기장 트랙] 모든 트랙 너비 통일:', finalWidth + 'px', '(사용 가능 공간:', minTrackWidth + 'px)', '기준 항목:', minTrackIndex + 1, '오른쪽 끝 위치:', referenceTrackRightEdge + 'px');
   }
 }
 
