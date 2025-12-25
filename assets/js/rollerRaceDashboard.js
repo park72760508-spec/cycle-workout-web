@@ -984,45 +984,49 @@ function saveSpeedometerPairing() {
  * [핵심] 연속 스캔 모드 시작 (15개 이상 동시 수신)
  * Reset(0x4A) 명령을 제거하여 연결 끊김 방지
  */
+/**
+ * [수정됨] 스캔 모드 진입 (안전한 초기화)
+ */
 async function startContinuousScan() {
-  if (window.antState.isScanning) return; 
   if (!window.antState.usbDevice) return;
-
-  console.log('[ANT+] 스캔 모드 진입 시도...');
-  window.antState.isScanning = true;
+  console.log('[ANT+] 스캔 설정 시작...');
 
   try {
-    // 1. 네트워크 키 설정 (ANT+ Public Key)
+    // 1. Reset (0x4A) - Tacx가 꼬였을 때를 대비해 리셋 시도
+    await sendANTMessage(0x4A, [0x00]);
+    await new Promise(r => setTimeout(r, 1000)); // 리셋 후 1초 대기 (필수)
+
+    // 2. Capabilities Request (0x4D, 0x54) - 장치가 살아있는지 확인하는 노크
+    // 콘솔에 [RX Raw] A4 ... 로 응답이 오는지 확인하세요.
+    await sendANTMessage(0x4D, [0x00, 0x54]); 
+    await new Promise(r => setTimeout(r, 200));
+
+    // 3. Network Key
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 2. 채널 할당 (0번 채널)
+    // 4. Assign Channel 0 (Type 0x00: Receive)
     await sendANTMessage(0x42, [0x00, 0x00]); 
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 3. 채널 ID 설정 (Wildcard)
+    // 5. Channel ID (Wildcard)
     await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 4. 주파수 설정 (2457MHz)
+    // 6. Frequency 57
     await sendANTMessage(0x45, [0x00, 57]);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 5. [필수] LibConfig (Device ID를 패킷 뒤에 붙여오도록 설정)
-    console.log('[ANT+] LibConfig 설정 전송');
-    await sendANTMessage(0x6E, [0x00, 0xE0]); // 0xE0 = DeviceID 포함 요청
-    await new Promise(r => setTimeout(r, 50));
-    
-    // 6. Rx Scan Mode 오픈
-    console.log('[ANT+] Rx Scan Mode(0x5B) 명령 전송');
-    await sendANTMessage(0x5B, [0x00]);
-    
-    // 수신 루프 시작
-    startANTMessageListener();
+    // 7. LibConfig (Device ID 포함)
+    await sendANTMessage(0x6E, [0x00, 0xE0]); 
+    await new Promise(r => setTimeout(r, 200));
 
+    // 8. Open Rx Scan Mode (0x5B)
+    console.log('[ANT+] Rx Scan Mode 명령(0x5B) 전송');
+    await sendANTMessage(0x5B, [0x00]); 
+    
   } catch (e) {
-    console.error('[ANT+] 스캔 모드 설정 실패:', e);
-    window.antState.isScanning = false;
+    console.error('스캔 설정 실패:', e);
   }
 }
 
@@ -1448,6 +1452,9 @@ function requestANTUSBDevice() {
 /**
  * USB 연결 설정 (엔드포인트 탐색 강화)
  */
+/**
+ * [수정됨] USB 연결 및 즉시 수신 시작
+ */
 async function connectANTUSBStickWithDevice(devicePromise) {
   try {
     const device = await devicePromise;
@@ -1455,35 +1462,33 @@ async function connectANTUSBStickWithDevice(devicePromise) {
     await device.selectConfiguration(1);
     await device.claimInterface(0);
 
-    // [중요] Tacx T2028 등 구형 칩셋은 Interrupt 전송을 주로 사용함
-    // Bulk를 먼저 찾지 말고, Interrupt와 Bulk를 모두 찾되 Interrupt 우선 고려
     const endpoints = device.configuration.interfaces[0].alternate.endpoints;
     
-    // IN(수신): Interrupt 우선, 없으면 Bulk
-    let inEndpoint = endpoints.find(e => e.direction === 'in' && e.type === 'interrupt');
-    if (!inEndpoint) inEndpoint = endpoints.find(e => e.direction === 'in' && e.type === 'bulk');
+    // Tacx T2028 최적화: IN(Interrupt/Bulk), OUT(Bulk/Interrupt)
+    let inEndpoint = endpoints.find(e => e.direction === 'in' && e.type === 'interrupt') 
+                  || endpoints.find(e => e.direction === 'in' && e.type === 'bulk');
+    let outEndpoint = endpoints.find(e => e.direction === 'out' && e.type === 'bulk')
+                   || endpoints.find(e => e.direction === 'out' && e.type === 'interrupt');
 
-    // OUT(송신): Bulk 우선, 없으면 Interrupt
-    let outEndpoint = endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
-    if (!outEndpoint) outEndpoint = endpoints.find(e => e.direction === 'out' && e.type === 'interrupt');
-
-    if (!inEndpoint || !outEndpoint) {
-      throw new Error('ANT+ 통신 엔드포인트를 찾을 수 없습니다.');
-    }
+    if (!inEndpoint || !outEndpoint) throw new Error('ANT+ 엔드포인트를 찾을 수 없습니다.');
 
     window.antState.usbDevice = device;
     window.antState.inEndpoint = inEndpoint.endpointNumber;
     window.antState.outEndpoint = outEndpoint.endpointNumber;
     
-    console.log(`[ANT+] USB 연결 성공 (IN: ${inEndpoint.endpointNumber}, OUT: ${outEndpoint.endpointNumber})`);
+    console.log(`[ANT+] USB 연결 성공 (IN:${inEndpoint.endpointNumber} OUT:${outEndpoint.endpointNumber})`);
     
-    // 연결 즉시 스캔 모드 진입 (경기/검색 모두 커버)
-    await startContinuousScan();
+    // [핵심 변경] 명령 보내기 전에 '듣기'부터 시작 (응답 누락 방지)
+    window.antState.isScanning = true; // 리스너 동작 허용
+    startANTMessageListener(); 
+    
+    // 잠시 대기 후 스캔 모드 진입
+    setTimeout(() => startContinuousScan(), 500);
+    
     checkANTUSBStatus();
-    
     return device;
   } catch (error) {
-    console.error('[ANT+ 연결 오류]', error);
+    console.error('[ANT+ 연결 실패]', error);
     if(typeof showToast === 'function') showToast('USB 연결 실패: ' + error.message);
     throw error;
   }
@@ -1827,29 +1832,40 @@ async function scanANTDevices() {
 /**
  * 메시지 수신 루프 (고속 데이터 처리용 개선)
  */
+/**
+ * [수정됨] 메시지 수신부 (Raw 데이터 디버깅 추가)
+ */
 async function startANTMessageListener() {
   if (!window.antState.usbDevice || !window.antState.isScanning) return;
 
   try {
-    // 64바이트(일반적인 최대 패킷) 읽기
+    // 64바이트 읽기 시도
     const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 64);
     
     if (result.data && result.data.byteLength > 0) {
       const data = new Uint8Array(result.data.buffer);
-      processIncomingData(data);
+      
+      // [디버깅용] 들어오는 모든 데이터를 콘솔에 출력
+      // 예: 0xA4 0x03 0x40 0x00 ...
+      console.log('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
+      
+      processBuffer(data);
     }
   } catch (error) {
-    if (error.name === 'NetworkError' || error.name === 'NotFoundError') {
-      console.error('[ANT+] USB 연결 끊김');
-      window.antState.isScanning = false;
-      updateANTUSBStatusUI('error', 'USB 연결 끊김', null);
-      return; 
+    // 타임아웃이나 장치 분리 에러가 아니면 로그 출력
+    if (error.name !== 'NetworkError' && error.name !== 'NotFoundError') {
+        // console.warn('RX Error:', error); // 너무 잦은 에러는 무시
+    } else {
+        console.error('[ANT+] USB 끊김 감지');
+        window.antState.isScanning = false;
+        updateANTUSBStatusUI('error', 'USB 연결 끊김', null);
+        return;
     }
   }
   
-  // 다음 패킷 즉시 대기
+  // 끊기지 않고 계속 대기
   if (window.antState.isScanning) {
-    setTimeout(startANTMessageListener, 0); 
+     setTimeout(startANTMessageListener, 0);
   }
 }
 
@@ -3314,6 +3330,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
