@@ -173,7 +173,7 @@ function createSpeedometerElement(speedometer) {
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px !important; color: #333 !important; font-weight: 500 !important; flex: 0 0 auto !important; text-align: left !important; min-width: 80px !important; order: 1 !important;">${speedometer.pairingName || ''}</span>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important;">${speedometer.name}</span>
+      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important;">트랙${speedometer.id}</span>
       <div class="connection-status-center" id="status-${speedometer.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
