@@ -9544,12 +9544,15 @@ button[aria-disabled="true"] {
 
 .speedometer-list-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 140, 0, 0.15); /* 주황색 배경 */
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  width: 70%; /* 크기 70%로 축소 */
+  margin: 0 auto; /* 중앙 정렬 */
+  min-width: 0;
 }
 
 .list-item-info {
@@ -9557,6 +9560,7 @@ button[aria-disabled="true"] {
   flex-direction: column;
   gap: 4px;
   justify-content: center; /* 수직 중앙 정렬 */
+  width: 100%;
 }
 
 .list-item-name {
@@ -9576,6 +9580,8 @@ button[aria-disabled="true"] {
 .list-item-actions {
   display: flex;
   gap: 8px;
+  width: 100%;
+  justify-content: flex-end;
 }
 
 /* 경기 제어 버튼 */
