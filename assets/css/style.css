@@ -9259,11 +9259,16 @@ button[aria-disabled="true"] {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  justify-content: center; /* 수직 중앙 정렬 */
 }
 
 .list-item-name {
   font-weight: 600;
-  color: #fff;
+  color: #00ff88; /* 전광판 경과 시간과 동일한 네온 그린 색상 */
+  text-shadow: 
+    0 0 10px rgba(0, 255, 136, 0.8),
+    0 0 20px rgba(0, 255, 136, 0.6),
+    0 0 30px rgba(0, 255, 136, 0.4);
 }
 
 .list-item-id {
