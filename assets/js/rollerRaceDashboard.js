@@ -1008,12 +1008,12 @@ async function startContinuousScan() {
     await sendANTMessage(0x45, [0x00, 57]);
     await new Promise(r => setTimeout(r, 50));
 
-    // 5. [중요] LibConfig 설정 (Device ID를 패킷 뒤에 붙여오도록 설정)
-    // 0xE0 = DeviceID(0x80) + RSSI(0x40) + Timestamp(0x20)
-    await sendANTMessage(0x6E, [0x00, 0xE0]); 
+    // 5. [필수] LibConfig (Device ID를 패킷 뒤에 붙여오도록 설정)
+    console.log('[ANT+] LibConfig 설정 전송');
+    await sendANTMessage(0x6E, [0x00, 0xE0]); // 0xE0 = DeviceID 포함 요청
     await new Promise(r => setTimeout(r, 50));
-
-    // 6. Rx Scan Mode 오픈 (0x5B)
+    
+    // 6. Rx Scan Mode 오픈
     console.log('[ANT+] Rx Scan Mode(0x5B) 명령 전송');
     await sendANTMessage(0x5B, [0x00]);
     
@@ -2055,43 +2055,63 @@ function getChannelEventName(code) {
 /**
  * [수정됨] 브로드캐스트 데이터 처리 (센서 검색 및 업데이트)
  */
+/**
+ * [수정됨] 브로드캐스트 데이터 처리 (디버깅 강화)
+ */
 function handleBroadcastData(payload) {
-  // payload: [Channel, Data0..7, (Flag), (ExtData...)]
+  // 1. 데이터 수신 여부 확인용 로그 (데이터가 들어오면 콘솔에 찍힘)
+  // console.log('[ANT+] 데이터 수신:', payload.length, 'bytes'); 
+
+  // 최소 길이 체크 (9바이트: 채널번호 1 + 데이터 8)
   if (payload.length < 9) return;
 
-  const channel = payload[0];
-  const antData = payload.slice(1, 9); // 순수 데이터 8바이트
-  
-  // Extended Data 파싱 (LibConfig 0xE0 설정 시)
-  // 구조: [Ch, D0..D7, Flag, DeviceID(2), DeviceType(1), TransType(1), ...]
-  // Flag 바이트 위치: 인덱스 9
+  const antData = payload.slice(1, 9); // 순수 센서 데이터 8바이트
+  let deviceId = 0;
+  let deviceType = 0;
+
+  // 2. Extended Data(ID 정보)가 있는 경우 (13바이트 이상)
   if (payload.length >= 13) {
     const flag = payload[9];
-    let offset = 10;
-    
-    // Device ID가 있는지 Flag 확인 (0x80 bit)
-    if (flag & 0x80) {
-      const deviceId = (payload[offset + 1] << 8) | payload[offset];
-      const deviceType = payload[offset + 2];
-      const transType = payload[offset + 3];
-      
-      // 1. 디바이스 검색 중이면 목록에 추가
-      const modal = document.getElementById('addSpeedometerModal');
-      if (modal && !modal.classList.contains('hidden')) {
-        addFoundDeviceToUI(deviceId, deviceType);
-      }
+    if (flag & 0x80) { // Device ID Flag 확인
+      deviceId = (payload[11] << 8) | payload[10];
+      deviceType = payload[12];
+    }
+  } 
+  
+  // 3. [핵심 수정] ID 정보가 없더라도(구형 스틱 등) 0번 ID로라도 처리 시도
+  // 만약 payload가 9바이트라면 deviceId는 0이 됩니다.
+  // 이 경우 '검색'은 안 되더라도 데이터가 들어오는지 확인할 수 있습니다.
+  
+  if (deviceId === 0 && payload.length < 13) {
+      // ID를 못 읽었을 때 경고 로그
+      // console.warn('[ANT+] ID 정보 없음 (LibConfig 설정 필요)');
+      return; // ID가 없으면 누구 데이터인지 모르므로 리턴 (또는 테스트시 주석 처리)
+  }
 
-      // 2. 등록된 속도계 데이터 업데이트
-      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
-      if (speedometer) {
-        if (!speedometer.connected) {
-          speedometer.connected = true;
+  // 4. UI 및 데이터 업데이트
+  const modal = document.getElementById('addSpeedometerModal');
+  
+  // 검색 모달이 열려있다면 목록에 추가
+  if (modal && !modal.classList.contains('hidden')) {
+    if (typeof addFoundDeviceToUI === 'function') {
+        addFoundDeviceToUI(deviceId, deviceType);
+    }
+  }
+
+  // 등록된 속도계 데이터 업데이트
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
+  if (speedometer) {
+    if (!speedometer.connected) {
+      speedometer.connected = true;
+      if (typeof updateSpeedometerConnectionStatus === 'function') {
           updateSpeedometerConnectionStatus(speedometer.id, true);
-        }
-        processSpeedCadenceData(speedometer.deviceId, antData);
-        speedometer.lastPacketTime = Date.now();
       }
     }
+    // 속도 계산
+    if (typeof processSpeedCadenceData === 'function') {
+        processSpeedCadenceData(speedometer.deviceId, antData);
+    }
+    speedometer.lastPacketTime = Date.now();
   }
 }
 
@@ -3294,6 +3314,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
