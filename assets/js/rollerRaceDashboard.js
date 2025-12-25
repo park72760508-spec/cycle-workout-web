@@ -48,7 +48,9 @@ window.rollerRaceState = {
   },
   rankings: [], // 순위 정보
   rankDisplayStartIndex: 0, // 전광판 순위 표시 시작 인덱스
-  rankDisplayTimer: null // 순위 표시 순환 타이머
+  rankDisplayTimer: null, // 순위 표시 순환 타이머
+  raceDataHistory: [], // 경기 중 데이터 히스토리 (주기적 저장)
+  dataSaveTimer: null // 데이터 저장 타이머
 };
 
 // ANT+ 통신 관련 전역 상태
@@ -782,6 +784,8 @@ function startRace() {
     const now = Date.now();
     window.rollerRaceState.pausedTime += now - window.rollerRaceState.pauseStartTime;
     window.rollerRaceState.raceState = 'running';
+    // 데이터 저장 재개
+    startRaceDataSaving();
   } else {
     // 새 경기 시작
     window.rollerRaceState.startTime = Date.now();
@@ -819,6 +823,9 @@ function startRace() {
   window.rollerRaceTimer = setInterval(() => {
     updateElapsedTime();
   }, 1000);
+  
+  // 경기 데이터 저장 시작 (5초마다 저장)
+  startRaceDataSaving();
   
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
@@ -865,13 +872,16 @@ function pauseRace() {
     window.rollerRaceTimer = null;
   }
   
+  // 데이터 저장 일시정지 (데이터는 유지)
+  stopRaceDataSaving();
+  
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
 
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
-  
+
   // 전광판 순위 순환 정지
   stopRankDisplayRotation();
 
@@ -894,6 +904,9 @@ function stopRace() {
     window.rollerRaceTimer = null;
   }
   
+  // 데이터 저장 정지
+  stopRaceDataSaving();
+  
   // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
@@ -912,9 +925,12 @@ function stopRace() {
   // 첫 번째 순위부터 다시 표시 (애니메이션 없이)
   window.rollerRaceState.rankDisplayStartIndex = 0;
   updateRankDisplay(false);
+  
+  // 경기 종료 리포트 생성 (PDF)
+  generateRaceReportPDF();
 
   if (typeof showToast === 'function') {
-    showToast('경기가 종료되었습니다.');
+    showToast('경기가 종료되었습니다. 리포트가 생성되었습니다.');
   }
 }
 
@@ -1019,11 +1035,21 @@ function saveSpeedometerPairing() {
         // 페어링 이름을 별도로 저장 (deviceId 옆에 표시용)
         speedometer.pairingName = pairingName;
         
-        // ID 변경 시 초기화
+        // ID 변경 시 (센서 교체 시)
         if (speedometer.deviceId != newDeviceId) {
-            speedometer.deviceId = newDeviceId;
-            speedometer.connected = false; 
-            updateSpeedometerConnectionStatus(targetId, false);
+            // 경기 중인 경우: 기존 데이터 유지 (거리, 속도 등은 트랙에 연결되므로 유지)
+            if (window.rollerRaceState.raceState === 'running' || window.rollerRaceState.raceState === 'paused') {
+                // 기존 데이터는 유지하고 deviceId만 변경
+                speedometer.deviceId = newDeviceId;
+                speedometer.connected = false; 
+                updateSpeedometerConnectionStatus(targetId, false);
+                console.log(`[경기 중 센서 교체] 트랙${targetId}: 기존 데이터 유지, 새 센서 ID: ${newDeviceId}`);
+            } else {
+                // 경기 중이 아닌 경우: 기존처럼 초기화
+                speedometer.deviceId = newDeviceId;
+                speedometer.connected = false; 
+                updateSpeedometerConnectionStatus(targetId, false);
+            }
         }
         
         // 저장 및 UI 갱신
@@ -3616,6 +3642,170 @@ window.selectANTDevice = function(deviceId, deviceName) {
   }
   if (typeof showToast === 'function') showToast(`${deviceId} 선택됨`);
 };
+
+/**
+ * 경기 데이터 저장 시작 (5초마다 저장)
+ */
+function startRaceDataSaving() {
+  // 기존 타이머가 있으면 정리
+  if (window.rollerRaceState.dataSaveTimer) {
+    clearInterval(window.rollerRaceState.dataSaveTimer);
+    window.rollerRaceState.dataSaveTimer = null;
+  }
+  
+  // 즉시 한 번 저장
+  saveRaceDataSnapshot();
+  
+  // 5초마다 저장
+  window.rollerRaceState.dataSaveTimer = setInterval(() => {
+    if (window.rollerRaceState.raceState === 'running') {
+      saveRaceDataSnapshot();
+    }
+  }, 5000);
+}
+
+/**
+ * 경기 데이터 저장 정지
+ */
+function stopRaceDataSaving() {
+  if (window.rollerRaceState.dataSaveTimer) {
+    clearInterval(window.rollerRaceState.dataSaveTimer);
+    window.rollerRaceState.dataSaveTimer = null;
+  }
+}
+
+/**
+ * 경기 데이터 스냅샷 저장
+ */
+function saveRaceDataSnapshot() {
+  const timestamp = Date.now();
+  const elapsedTime = window.rollerRaceState.totalElapsedTime || 0;
+  
+  const snapshot = {
+    timestamp: timestamp,
+    elapsedTime: elapsedTime,
+    speedometers: window.rollerRaceState.speedometers.map(s => ({
+      id: s.id,
+      name: s.name,
+      pairingName: s.pairingName,
+      deviceId: s.deviceId,
+      connected: s.connected,
+      totalDistance: s.totalDistance,
+      currentSpeed: s.currentSpeed,
+      maxSpeed: s.maxSpeed,
+      averageSpeed: s.averageSpeed,
+      totalRevolutions: s.totalRevolutions
+    }))
+  };
+  
+  window.rollerRaceState.raceDataHistory.push(snapshot);
+  
+  // localStorage에 저장 (최근 100개만 유지)
+  if (window.rollerRaceState.raceDataHistory.length > 100) {
+    window.rollerRaceState.raceDataHistory.shift();
+  }
+  
+  try {
+    localStorage.setItem('rollerRaceDataHistory', JSON.stringify(window.rollerRaceState.raceDataHistory));
+  } catch (error) {
+    console.error('[경기 데이터 저장 오류]', error);
+  }
+}
+
+/**
+ * 경기 종료 리포트 PDF 생성
+ */
+function generateRaceReportPDF() {
+  try {
+    // jsPDF가 로드되어 있는지 확인
+    if (typeof window.jspdf === 'undefined' && typeof jsPDF === 'undefined') {
+      console.error('[PDF 생성] jsPDF가 로드되지 않았습니다.');
+      if (typeof showToast === 'function') {
+        showToast('PDF 생성 라이브러리를 불러올 수 없습니다.', 'error');
+      }
+      return;
+    }
+    
+    const { jsPDF } = window.jspdf || window;
+    const doc = new jsPDF();
+    
+    // 제목
+    doc.setFontSize(20);
+    doc.text('실내 평로라 대회 결과 리포트', 105, 20, { align: 'center' });
+    
+    // 경기 정보
+    doc.setFontSize(12);
+    const raceDate = new Date().toLocaleString('ko-KR');
+    doc.text(`경기 일시: ${raceDate}`, 20, 35);
+    
+    const elapsedTime = window.rollerRaceState.totalElapsedTime || 0;
+    const hours = Math.floor(elapsedTime / 3600);
+    const minutes = Math.floor((elapsedTime % 3600) / 60);
+    const seconds = elapsedTime % 60;
+    const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    doc.text(`경기 시간: ${timeStr}`, 20, 42);
+    
+    // 순위별 데이터 정렬
+    const sorted = [...window.rollerRaceState.speedometers]
+      .filter(s => s.totalDistance > 0)
+      .sort((a, b) => b.totalDistance - a.totalDistance);
+    
+    // 테이블 헤더
+    let yPos = 55;
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.text('순위', 20, yPos);
+    doc.text('트랙', 35, yPos);
+    doc.text('이름', 55, yPos);
+    doc.text('이동거리(km)', 90, yPos);
+    doc.text('평균속도(km/h)', 130, yPos);
+    doc.text('최고속도(km/h)', 170, yPos);
+    
+    yPos += 8;
+    doc.setFont(undefined, 'normal');
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, yPos - 3, 190, yPos - 3);
+    
+    // 순위별 데이터 출력 (1~10위)
+    sorted.slice(0, 10).forEach((speedometer, index) => {
+      const rank = index + 1;
+      const trackName = `트랙${speedometer.id}`;
+      const name = speedometer.pairingName || '-';
+      const distance = speedometer.totalDistance.toFixed(2);
+      const avgSpeed = speedometer.averageSpeed > 0 ? speedometer.averageSpeed.toFixed(1) : '0.0';
+      const maxSpeed = speedometer.maxSpeed > 0 ? speedometer.maxSpeed.toFixed(1) : '0.0';
+      
+      doc.text(rank.toString(), 20, yPos);
+      doc.text(trackName, 35, yPos);
+      doc.text(name, 55, yPos);
+      doc.text(distance, 90, yPos);
+      doc.text(avgSpeed, 130, yPos);
+      doc.text(maxSpeed, 170, yPos);
+      
+      yPos += 7;
+      
+      // 페이지 넘김 (한 페이지에 최대 20개)
+      if (yPos > 270 && index < sorted.length - 1) {
+        doc.addPage();
+        yPos = 20;
+      }
+    });
+    
+    // 파일명 생성
+    const fileName = `경기결과_${new Date().toISOString().slice(0, 10).replace(/-/g, '')}_${Date.now()}.pdf`;
+    
+    // PDF 저장
+    doc.save(fileName);
+    
+    console.log('[PDF 리포트] 생성 완료:', fileName);
+    
+  } catch (error) {
+    console.error('[PDF 리포트 생성 오류]', error);
+    if (typeof showToast === 'function') {
+      showToast('PDF 리포트 생성 중 오류가 발생했습니다.', 'error');
+    }
+  }
+}
 
 
 
