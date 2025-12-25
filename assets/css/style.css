@@ -8697,10 +8697,86 @@ button[aria-disabled="true"] {
 }
 
 .dashboard-header h1 {
-  color: #fff;
-  font-size: 28px;
-  margin: 0;
+  position: relative;
 }
+
+/* 레이스 타이틀 애니메이션 */
+.race-title-animated {
+  font-family: 'Arial Black', 'Impact', 'Franklin Gothic Bold', 'Bebas Neue', sans-serif;
+  font-weight: 900;
+  font-size: 36px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(255, 255, 255, 0.6),
+    0 0 30px rgba(255, 255, 255, 0.4),
+    0 0 40px rgba(255, 255, 255, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.5);
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  margin: 0;
+  padding: 10px 20px;
+}
+
+/* 네온 스위프 효과 (좌에서 우로 이동) */
+.race-title-animated::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.3) 30%, 
+    rgba(255, 255, 255, 0.8) 50%, 
+    rgba(255, 255, 255, 0.3) 70%, 
+    transparent 100%
+  );
+  animation: neonSweep 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes neonSweep {
+  0% {
+    left: -100%;
+  }
+  50% {
+    left: 100%;
+  }
+  100% {
+    left: -100%;
+  }
+}
+
+/* 추가 글로우 펄스 효과 */
+.race-title-animated {
+  animation: glowPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes glowPulse {
+  0% {
+    text-shadow: 
+      0 0 10px rgba(255, 255, 255, 0.8),
+      0 0 20px rgba(255, 255, 255, 0.6),
+      0 0 30px rgba(255, 255, 255, 0.4),
+      0 0 40px rgba(255, 255, 255, 0.2),
+      0 4px 8px rgba(0, 0, 0, 0.5);
+  }
+  100% {
+    text-shadow: 
+      0 0 15px rgba(255, 255, 255, 1),
+      0 0 30px rgba(255, 255, 255, 0.8),
+      0 0 45px rgba(255, 255, 255, 0.6),
+      0 0 60px rgba(255, 255, 255, 0.4),
+      0 4px 8px rgba(0, 0, 0, 0.5);
+  }
+}
+
 
 /* 전체 통계 */
 /* 전광판 스타일 (대회 전광판) */
