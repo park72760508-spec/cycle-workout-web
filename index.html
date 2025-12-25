@@ -2111,7 +2111,10 @@
   <!-- ========== 실내 평로라 대회 대시보드 화면 ========== -->
   <div id="rollerRaceDashboardScreen" class="screen">
     <div class="dashboard-header">
-      <h1 class="race-title-animated">🏁 Stelvio Indoor Grand Prix</h1>
+      <h1 class="race-title-animated">
+        <img src="assets/img/stelvio.png" alt="Stelvio" class="race-title-icon" />
+        <span class="race-title-text">Stelvio Indoor Grand Prix</span>
+      </h1>
       <div class="race-controls">
         <button class="btn btn-success btn-large" id="btnStartRace" onclick="startRace()">
           <img src="assets/img/play.png" alt="시작" class="btn-icon-image" style="width: 24px; height: 24px; margin-right: 8px; vertical-align: middle;" />
@@ -2202,7 +2205,7 @@
         
         <button class="btn btn-primary btn-sm" onclick="showAddSpeedometerModal()">
           <img src="assets/img/add.png" alt="추가" class="btn-icon-image" style="width: 16px; height: 16px; margin-right: 4px; vertical-align: middle;" />
-          속도계 추가
+          수신기 활성화
         </button>
       </div>
       
@@ -2305,8 +2308,4 @@
   
   <!-- SheetJS for Excel file reading -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  
-  <!-- 평로라 대회 대시보드 스크립트 -->
-  <script src="assets/js/rollerRaceDashboard.js"></script>
-</body>
-</html>
+ 
