@@ -752,8 +752,15 @@ function toggleTargetDistance() {
   const enabled = document.getElementById('targetDistanceEnabled');
   const controls = document.getElementById('targetDistanceControls');
   if (enabled && controls) {
-    controls.style.opacity = enabled.checked ? '1' : '0.5';
-    controls.style.pointerEvents = enabled.checked ? 'auto' : 'none';
+    if (enabled.checked) {
+      controls.style.opacity = '1';
+      controls.style.pointerEvents = 'auto';
+      controls.querySelectorAll('input, select').forEach(el => el.disabled = false);
+    } else {
+      controls.style.opacity = '0.4';
+      controls.style.pointerEvents = 'none';
+      controls.querySelectorAll('input, select').forEach(el => el.disabled = true);
+    }
   }
 }
 
@@ -761,8 +768,15 @@ function toggleTargetTime() {
   const enabled = document.getElementById('targetTimeEnabled');
   const controls = document.getElementById('targetTimeControls');
   if (enabled && controls) {
-    controls.style.opacity = enabled.checked ? '1' : '0.5';
-    controls.style.pointerEvents = enabled.checked ? 'auto' : 'none';
+    if (enabled.checked) {
+      controls.style.opacity = '1';
+      controls.style.pointerEvents = 'auto';
+      controls.querySelectorAll('input').forEach(el => el.disabled = false);
+    } else {
+      controls.style.opacity = '0.4';
+      controls.style.pointerEvents = 'none';
+      controls.querySelectorAll('input').forEach(el => el.disabled = true);
+    }
   }
 }
 
