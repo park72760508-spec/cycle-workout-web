@@ -2056,6 +2056,134 @@ function getChannelEventName(code) {
   return eventNames[code] || 'UNKNOWN';
 }
 
+
+
+// ==========================================
+// [수정됨] 패킷 버퍼 처리 및 래퍼(Wrapper) 해제 로직
+// ==========================================
+
+let rxBuf = new Uint8Array(0);
+
+function processBuffer(newData) {
+  // 1. 기존 버퍼에 새 데이터 추가
+  const tmp = new Uint8Array(rxBuf.length + newData.length);
+  tmp.set(rxBuf);
+  tmp.set(newData, rxBuf.length);
+  rxBuf = tmp;
+
+  // 2. 패킷 파싱 루프
+  while (rxBuf.length >= 4) {
+    // Sync Byte (0xA4) 찾기
+    const syncIndex = rxBuf.indexOf(0xA4);
+    if (syncIndex === -1) {
+      rxBuf = new Uint8Array(0); // Sync 없으면 버림
+      break;
+    }
+    
+    // Sync 이전의 쓰레기 데이터 제거
+    if (syncIndex > 0) {
+      rxBuf = rxBuf.slice(syncIndex);
+      continue;
+    }
+
+    const len = rxBuf[1];
+    const totalLen = len + 4; // Sync(1)+Len(1)+MsgID(1)+Payload(Len)+Chk(1) -> Standard: Len includes MsgID? No.
+    // ANT Protocol: Total = 1(Sync) + 1(Len) + Len(Data) + 1(Checksum) = Len + 3 ??
+    // 통상적인 드라이버 구현: Total = Length + 4 바이트 (Length 바이트 값이 N일 때)
+    
+    if (rxBuf.length < totalLen) {
+        break; // 데이터가 다 안 옴 -> 대기
+    }
+
+    // 패킷 추출
+    const pkt = rxBuf.slice(0, totalLen);
+    rxBuf = rxBuf.slice(totalLen);
+    
+    // [중요] 추출한 패킷 처리 핸들러 호출
+    handleANTMessage(pkt);
+  }
+}
+
+/**
+ * [신규] ANT+ 메시지 처리기 (Wrapper 해제 기능 포함)
+ */
+function handleANTMessage(pkt) {
+  const msgId = pkt[2];
+  const payload = pkt.slice(3, pkt.length - 1);
+
+  // 1. [핵심] Tacx T2028 Wrapper (0xAE) 감지 및 해제
+  // Tacx T2028은 모든 데이터를 0xAE 메시지 안에 담아서 보냄
+  // 구조: [A4][09][AE][02][A4(InnerSync)]...
+  if (msgId === 0xAE) {
+      // payload[0]은 상태값(02), payload[1]이 실제 패킷의 Sync(0xA4)인지 확인
+      if (payload.length > 1 && payload[1] === 0xA4) {
+          console.log('[ANT+] Tacx Wrapper(0xAE) 해제 -> 내부 패킷 처리');
+          
+          // 내부 패킷만 추출 (Wrapper 헤더 1바이트 제외)
+          const innerData = payload.slice(1);
+          
+          // 추출한 내부 데이터를 다시 버퍼 처리기에 넣어 파싱 (재귀 처리)
+          processBuffer(innerData); 
+      }
+      return; 
+  }
+
+  // 2. Broadcast Data (센서 데이터)
+  if (msgId === 0x4E) {
+      handleBroadcastData(payload);
+  }
+  
+  // 3. Response / Channel Event (명령어 응답 확인용)
+  if (msgId === 0x40) {
+      if (payload[2] === 0x00) {
+          // console.log('[ANT+] 명령 성공 (NO_ERROR)');
+      } else {
+          console.warn('[ANT+] 명령 실패/이벤트 코드:', payload[2].toString(16));
+      }
+  }
+}
+
+/**
+ * [기존 함수 유지] 데이터 처리 및 UI 업데이트
+ */
+function handleBroadcastData(payload) {
+  // console.log('[ANT+] 센서 데이터 수신:', payload); // 디버깅용
+
+  if (payload.length < 9) return;
+  const antData = payload.slice(1, 9);
+  
+  // Extended Data (ID 포함) 처리
+  if (payload.length >= 13) {
+    const flag = payload[9];
+    if (flag & 0x80) { 
+      const devId = (payload[11] << 8) | payload[10];
+      const devType = payload[12];
+      
+      // UI 목록 추가
+      const modal = document.getElementById('addSpeedometerModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        if (typeof addFoundDeviceToUI === 'function') addFoundDeviceToUI(devId, devType);
+      }
+
+      // 속도계 데이터 업데이트
+      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == devId);
+      if (speedometer) {
+        if (!speedometer.connected) {
+          speedometer.connected = true;
+          if(typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
+        }
+        if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
+        speedometer.lastPacketTime = Date.now();
+      }
+    }
+  }
+}
+
+
+
+
+
+
 /**
  * 브로드캐스트 데이터 처리 (스캔 중 발견된 디바이스)
  */
@@ -3329,6 +3457,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
