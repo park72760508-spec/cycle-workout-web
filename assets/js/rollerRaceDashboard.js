@@ -1983,7 +1983,279 @@ function updateSpeedometerListUI() {
 }
 
 /**
- * 속도계 추가 모달 표시
+ * 수신기 선택 모달 표시
+ */
+async function showReceiverSelectionModal() {
+  const modal = document.getElementById('receiverSelectionModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+  
+  // 디바이스 목록 초기화
+  const deviceList = document.getElementById('receiverSelectionDeviceList');
+  if (deviceList) {
+    deviceList.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">USB 수신기 연결 중...</div>';
+  }
+  
+  // USB 상태 확인
+  await checkANTUSBStatusForSelection();
+  
+  // 모달을 열면서 바로 수신기 활성화 시도
+  await activateReceiverFromSelection();
+  
+  // 주기적으로 상태 확인 (5초마다)
+  if (window.antUSBStatusInterval) {
+    clearInterval(window.antUSBStatusInterval);
+  }
+  window.antUSBStatusInterval = setInterval(() => {
+    checkANTUSBStatusForSelection();
+  }, 5000);
+}
+
+/**
+ * 수신기 선택 모달 닫기
+ */
+function closeReceiverSelectionModal() {
+  const modal = document.getElementById('receiverSelectionModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  
+  // 주기적 상태 확인 중지
+  if (window.antUSBStatusInterval) {
+    clearInterval(window.antUSBStatusInterval);
+    window.antUSBStatusInterval = null;
+  }
+}
+
+/**
+ * 수신기 선택 화면에서 수신기 활성화
+ */
+async function activateReceiverFromSelection() {
+  const activateBtn = document.getElementById('btnReceiverSelectionActivate');
+  if(activateBtn) activateBtn.disabled = true;
+  
+  const listEl = document.getElementById('receiverSelectionDeviceList');
+  if(listEl) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center">USB 수신기 연결 중...</div>';
+  }
+
+  // USB가 없으면 연결 시도
+  if (!window.antState.usbDevice) {
+    try {
+      const device = await requestANTUSBDevice();
+      await connectANTUSBStickWithDevice(Promise.resolve(device));
+      if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:green;font-weight:bold">USB 수신기 연결 완료!<br><small>디바이스 검색 버튼을 클릭하세요.</small></div>';
+    } catch(e) {
+      if(listEl) listEl.innerHTML = `<div style="color:red;padding:10px">USB 연결 실패: ${e.message}</div>`;
+      if(activateBtn) activateBtn.disabled = false;
+      return;
+    }
+  } else {
+    // 이미 연결되어 있다면 스캔 모드 확실히 켜기
+    await startContinuousScan();
+    if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:green;font-weight:bold">USB 수신기 활성화 완료!<br><small>디바이스 검색 버튼을 클릭하세요.</small></div>';
+  }
+  
+  // USB 상태 업데이트
+  await checkANTUSBStatusForSelection();
+  
+  // 수신기 활성화 버튼 상태 업데이트
+  updateReceiverButtonStatus();
+  
+  if(activateBtn) activateBtn.disabled = false;
+}
+
+/**
+ * 수신기 선택 화면에서 디바이스 검색
+ */
+async function searchSpeedometerDevicesForSelection() {
+  const btn = document.getElementById('btnReceiverSelectionSearch');
+  if(btn) btn.disabled = true;
+  
+  const listEl = document.getElementById('receiverSelectionDeviceList');
+  if(listEl) {
+    listEl.classList.remove('hidden');
+  }
+
+  // USB 수신기가 연결되어 있는지 확인
+  if (!window.antState.usbDevice || !window.antState.usbDevice.opened) {
+    if(listEl) listEl.innerHTML = '<div style="color:red;padding:10px">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
+    if(btn) btn.disabled = false;
+    return;
+  }
+
+  // 스캔 모드 확실히 켜기
+  await startContinuousScan();
+
+  if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">속도계 센서 검색 중...<br>바퀴를 굴려주세요!</div>';
+  window.antState.foundDevices = []; // 목록 초기화
+  
+  // 검색 버튼 텍스트 변경
+  const searchButtonText = document.getElementById('receiverSelectionSearchButtonText');
+  if(searchButtonText) searchButtonText.textContent = '검색 중...';
+  
+  // 10초 후 검색 중지
+  setTimeout(() => {
+    if(btn) btn.disabled = false;
+    if(searchButtonText) searchButtonText.textContent = '디바이스 검색';
+    
+    if(window.antState.foundDevices.length === 0) {
+      if(listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#666">검색된 디바이스가 없습니다.<br><small>바퀴를 굴려주시고 다시 검색해주세요.</small></div>';
+    } else {
+      // 검색된 디바이스 목록 표시
+      displayANTDevicesForSelection(window.antState.foundDevices);
+    }
+  }, 10000);
+}
+
+/**
+ * 수신기 선택 화면에 디바이스 목록 표시
+ */
+function displayANTDevicesForSelection(devices) {
+  const list = document.getElementById('receiverSelectionDeviceList');
+  if (!list) return;
+
+  if (devices.length === 0) {
+    list.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">검색된 디바이스가 없습니다.</div>';
+    return;
+  }
+  
+  let html = '<div style="display:flex;flex-direction:column;gap:8px;">';
+  devices.forEach(d => {
+    // 이미 다른 트랙에 지정된 디바이스인지 확인 (트랙1~10만 체크)
+    const existingSpeedometer = window.rollerRaceState.speedometers.find(
+      s => s.id >= 1 && s.id <= 10 && s.deviceId == d.deviceNumber && s.deviceId
+    );
+    
+    const isAssigned = !!existingSpeedometer;
+    const assignedTrack = existingSpeedometer ? `트랙${existingSpeedometer.id}` : '';
+    
+    html += `
+      <div style="padding:12px; border:1px solid ${isAssigned ? '#ccc' : '#007bff'}; background:${isAssigned ? '#f5f5f5' : '#eef6fc'}; border-radius:5px; cursor:${isAssigned ? 'not-allowed' : 'pointer'}; display:flex; justify-content:space-between; align-items:center; opacity:${isAssigned ? '0.6' : '1'};"
+           onclick="${isAssigned ? '' : `selectReceiverDevice('${d.deviceNumber}', '${d.name}')`}">
+        <div style="flex: 1;">
+            <div style="font-weight:bold; color:${isAssigned ? '#999' : '#0056b3'}; margin-bottom: 4px;">
+              ${d.name}
+              ${isAssigned ? ` <span style="color:#dc3545; font-size:11px;">(이미 ${assignedTrack}에 지정됨)</span>` : ''}
+            </div>
+            <div style="font-size:12px; color:${isAssigned ? '#999' : '#555'};">ID: ${d.deviceNumber}</div>
+        </div>
+        <button style="background:${isAssigned ? '#ccc' : '#007bff'}; color:white; border:none; padding:6px 12px; border-radius:3px; cursor:${isAssigned ? 'not-allowed' : 'pointer'}; font-size:12px;" ${isAssigned ? 'disabled' : ''}>${isAssigned ? '사용중' : '선택'}</button>
+      </div>
+    `;
+  });
+  html += '</div>';
+  list.innerHTML = html;
+}
+
+/**
+ * 수신기 선택 화면에서 디바이스 선택
+ */
+window.selectReceiverDevice = function(deviceId, deviceName) {
+  // 선택한 디바이스를 전역 변수에 저장
+  window.selectedReceiverDevice = {
+    deviceId: deviceId,
+    deviceName: deviceName
+  };
+  
+  // 모달 닫기
+  closeReceiverSelectionModal();
+  
+  // 토스트 메시지 표시
+  if (typeof showToast === 'function') {
+    showToast(`수신기 선택 완료: ${deviceName} (ID: ${deviceId})`);
+  }
+  
+  // 수신기 활성화 버튼 상태 업데이트
+  updateReceiverButtonStatus();
+  
+  console.log('[수신기 선택]', { deviceId, deviceName });
+};
+
+/**
+ * 수신기 선택 화면용 USB 상태 확인
+ */
+async function checkANTUSBStatusForSelection() {
+  const statusIcon = document.getElementById('receiverSelectionUSBStatusIcon');
+  const statusText = document.getElementById('receiverSelectionUSBStatusText');
+  const activateButton = document.getElementById('btnReceiverSelectionActivate');
+  const connectButton = document.getElementById('btnReceiverSelectionConnectUSB');
+  
+  if (!statusIcon || !statusText) return;
+  
+  if (activateButton) activateButton.disabled = true;
+  if (connectButton) connectButton.disabled = true;
+  
+  try {
+    if (window.antState.usbDevice) {
+      try {
+        if (window.antState.usbDevice.opened) {
+          const deviceInfo = {
+            vendorId: '0x' + window.antState.usbDevice.vendorId.toString(16).toUpperCase(),
+            productId: '0x' + window.antState.usbDevice.productId.toString(16).toUpperCase(),
+            manufacturerName: window.antState.usbDevice.manufacturerName || '알 수 없음',
+            productName: window.antState.usbDevice.productName || 'ANT+ USB 수신기'
+          };
+          statusIcon.style.background = '#28a745';
+          statusText.textContent = 'USB 수신기 연결됨';
+          if (activateButton) activateButton.disabled = false;
+          if (connectButton) connectButton.style.display = 'none';
+          return;
+        }
+      } catch (error) {
+        window.antState.usbDevice = null;
+      }
+    }
+    
+    if (!navigator.usb) {
+      statusIcon.style.background = '#dc3545';
+      statusText.textContent = 'Web USB API를 지원하지 않습니다 (Chrome/Edge 필요)';
+      if (connectButton) connectButton.style.display = 'none';
+      return;
+    }
+    
+    if (typeof navigator.usb.getDevices === 'function') {
+      const devices = await navigator.usb.getDevices();
+      const antDevices = devices.filter(device => {
+        const vid = device.vendorId;
+        return vid === 0x0FCF || vid === 0x1004;
+      });
+      
+      if (antDevices.length > 0) {
+        const device = antDevices[0];
+        let isOpened = false;
+        try {
+          isOpened = device.opened;
+        } catch (e) {
+          isOpened = false;
+        }
+        
+        if (isOpened) {
+          window.antState.usbDevice = device;
+          statusIcon.style.background = '#28a745';
+          statusText.textContent = `${device.productName || 'ANT+ USB 수신기'} 연결됨`;
+          if (activateButton) activateButton.disabled = false;
+          if (connectButton) connectButton.style.display = 'none';
+          return;
+        }
+      }
+    }
+    
+    statusIcon.style.background = '#ffc107';
+    statusText.textContent = 'USB 수신기를 연결해주세요';
+    if (connectButton) connectButton.style.display = 'inline-block';
+    if (activateButton) activateButton.disabled = false;
+  } catch (error) {
+    console.error('[ANT+ USB 상태 확인 오류]', error);
+    statusIcon.style.background = '#dc3545';
+    statusText.textContent = '상태 확인 중 오류 발생';
+    if (activateButton) activateButton.disabled = false;
+  }
+}
+
+/**
+ * 속도계 추가 모달 표시 (기존 함수 유지 - 페어링 화면용)
  */
 async function showAddSpeedometerModal() {
   const modal = document.getElementById('addSpeedometerModal');
