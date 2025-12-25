@@ -9024,7 +9024,7 @@ button[aria-disabled="true"] {
   font-size: 14px;
   font-weight: 600;
   color: #ffffff !important;
-  background: #2563eb !important;
+  background: rgba(0, 212, 170, 0.5) !important; /* 투명도 50% 민트색 */
   padding: 6px 12px !important;
   border-radius: 8px !important;
   display: inline-block !important;
