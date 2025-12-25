@@ -9544,22 +9544,26 @@ button[aria-disabled="true"] {
 
 .speedometer-list-item {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px; /* 높이 최소화: 상하 8px */
   background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   width: 100%;
   min-width: 0;
+  min-height: fit-content; /* 높이 최소화 */
 }
 
 .list-item-info {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  justify-content: center; /* 수직 중앙 정렬 */
-  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-start;
+  flex: 0 0 auto; /* 고정 너비 */
+  min-width: 0;
 }
 
 .list-item-name {
@@ -9569,18 +9573,30 @@ button[aria-disabled="true"] {
     0 0 10px rgba(0, 255, 136, 0.8),
     0 0 20px rgba(0, 255, 136, 0.6),
     0 0 30px rgba(0, 255, 136, 0.4);
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.list-item-pairing-name {
+  font-weight: 500;
+  color: #00ff88;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .list-item-id {
   font-size: 12px;
   color: #94a3b8;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .list-item-actions {
   display: flex;
   gap: 8px;
-  width: 100%;
+  flex: 0 0 auto; /* 고정 너비 */
   justify-content: flex-end;
+  margin-left: auto; /* 오른쪽 정렬 */
 }
 
 /* 경기 제어 버튼 */
