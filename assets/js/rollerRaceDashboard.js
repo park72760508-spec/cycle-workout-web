@@ -2059,47 +2059,81 @@ function updateSpeedometerListUI() {
 
 /**
  * 모든 경기장 트랙의 너비를 동일하게 맞춤 (가장 작은 넓이 기준)
+ * 각 항목의 사용 가능한 공간을 측정하여 경기장 트랙이 차지할 수 있는 최대 공간 계산
  */
 function normalizeTrackWidths() {
-  const trackContainers = document.querySelectorAll('.straight-track-container');
-  if (trackContainers.length === 0) return;
+  const listItems = document.querySelectorAll('.speedometer-list-item');
+  if (listItems.length === 0) return;
   
-  // 모든 트랙의 실제 너비를 측정하여 가장 작은 값 찾기
-  let minWidth = Infinity;
-  const originalWidths = [];
+  let minTrackWidth = Infinity;
+  const trackContainers = [];
+  const availableWidths = [];
   
-  // 1단계: 모든 트랙의 실제 너비 측정
-  trackContainers.forEach((container, index) => {
-    const originalWidth = container.style.width;
-    originalWidths[index] = originalWidth;
+  // 1단계: 각 항목의 사용 가능한 트랙 너비 계산
+  listItems.forEach((item, index) => {
+    const infoEl = item.querySelector('.list-item-info');
+    const actionsEl = item.querySelector('.list-item-actions');
+    const trackEl = item.querySelector('.straight-track-container');
     
-    // 임시로 auto로 설정하여 실제 콘텐츠 너비 측정
-    container.style.width = 'auto';
-    container.style.minWidth = '0';
-    container.style.maxWidth = 'none';
+    if (!infoEl || !actionsEl || !trackEl) return;
+    
+    // 현재 트랙 스타일 저장
+    const originalTrackWidth = trackEl.style.width;
+    const originalTrackFlex = trackEl.style.flex;
+    const originalTrackDisplay = trackEl.style.display;
+    
+    // 트랙을 임시로 숨겨서 다른 요소들의 실제 너비 측정
+    trackEl.style.display = 'none';
     
     // 강제로 리플로우 발생
-    void container.offsetWidth;
+    void item.offsetWidth;
     
-    const width = container.offsetWidth;
+    // 정보 영역 너비 측정
+    const infoWidth = infoEl.offsetWidth;
     
-    if (width < minWidth && width > 0) {
-      minWidth = width;
+    // 버튼 영역 너비 측정
+    const actionsWidth = actionsEl.offsetWidth;
+    
+    // 항목의 전체 너비와 패딩, 간격 계산
+    const itemWidth = item.offsetWidth;
+    const itemStyle = getComputedStyle(item);
+    const itemPadding = parseFloat(itemStyle.paddingLeft) + parseFloat(itemStyle.paddingRight);
+    const itemGap = parseFloat(itemStyle.gap) || 12;
+    
+    // 정보 영역 + 버튼 영역 + 간격들을 제외한 트랙이 사용할 수 있는 공간
+    // (간격: info와 track 사이, track과 actions 사이)
+    const availableWidth = itemWidth - itemPadding - infoWidth - actionsWidth - (itemGap * 2);
+    availableWidths[index] = availableWidth;
+    
+    if (availableWidth < minTrackWidth && availableWidth > 0) {
+      minTrackWidth = availableWidth;
     }
+    
+    trackContainers[index] = trackEl;
+    
+    // 원래 스타일 복원
+    trackEl.style.width = originalTrackWidth;
+    trackEl.style.flex = originalTrackFlex;
+    trackEl.style.display = originalTrackDisplay || '';
   });
   
   // 2단계: 모든 트랙을 가장 작은 너비로 설정 (우측 정렬 유지)
-  if (minWidth !== Infinity && minWidth > 0) {
-    trackContainers.forEach(container => {
-      container.style.width = minWidth + 'px';
-      container.style.marginLeft = 'auto'; // 우측 정렬 유지
-      container.style.marginRight = '0';
+  if (minTrackWidth !== Infinity && minTrackWidth > 0) {
+    // 최소 너비에서 약간의 여유 공간 제거 (여백 최소화)
+    const finalWidth = Math.max(minTrackWidth - 2, 100); // 최소 100px 보장
+    
+    trackContainers.forEach(trackEl => {
+      if (trackEl) {
+        trackEl.style.width = finalWidth + 'px';
+        trackEl.style.marginLeft = 'auto'; // 우측 정렬 유지
+        trackEl.style.marginRight = '0';
+        trackEl.style.flexShrink = '0'; // 축소 방지
+        trackEl.style.flexGrow = '0'; // 확대 방지
+        trackEl.style.display = ''; // 원래 display 복원
+      }
     });
-  } else {
-    // 측정 실패 시 원래 너비 복원
-    trackContainers.forEach((container, index) => {
-      container.style.width = originalWidths[index] || '70%';
-    });
+    
+    console.log('[경기장 트랙] 모든 트랙 너비 통일:', finalWidth + 'px', '(사용 가능 공간:', minTrackWidth + 'px)');
   }
 }
 
