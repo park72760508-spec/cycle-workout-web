@@ -2008,8 +2008,8 @@ function updateSpeedometerListUI() {
           <span class="track-name-text">${pairingName || ''}</span>
         </div>
         <svg class="straight-track-svg" viewBox="0 0 900 40" preserveAspectRatio="xMidYMid meet">
-          <!-- 트랙 배경 (잔디 느낌) - 점선 트랙 30% 확장 -->
-          <rect x="0" y="0" width="892.675" height="40" fill="#2d5016" opacity="0.2"/>
+          <!-- 트랙 배경 (잔디 느낌) - 우측 끝까지 채움 -->
+          <rect x="0" y="0" width="900" height="40" fill="#2d5016" opacity="0.2"/>
           
           <!-- 트랙 레인 (10개 레인) -->
           ${generateTrackLanes()}
@@ -2017,8 +2017,8 @@ function updateSpeedometerListUI() {
           <!-- 시작선 (좌측) -->
           <line x1="35" y1="0" x2="35" y2="40" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
           
-          <!-- 종료선 (우측) - 점선 트랙 30% 확장 -->
-          <line x1="892.675" y1="0" x2="892.675" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
+          <!-- 종료선 (우측) - 우측 10%만 남기고 확장 -->
+          <line x1="810" y1="0" x2="810" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
           
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
@@ -2036,7 +2036,7 @@ function updateSpeedometerListUI() {
           </g>
           
           <!-- 순위 표시 (트랙 상단 중앙) -->
-          <text x="463.8375" y="10" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
+          <text x="422.5" y="10" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
         </svg>
       </div>
       <!-- 페어링 버튼 -->
@@ -2219,8 +2219,8 @@ function generateTrackLanes() {
   
   for (let i = 0; i < 10; i++) {
     const y = i * laneWidth;
-    // 레인 구분선 (좌측 시작 35, 점선 트랙 30% 확장: 694.75 → 892.675)
-    lanes += `<line x1="35" y1="${y}" x2="892.675" y2="${y}" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="7,3" opacity="0.4"/>`;
+    // 레인 구분선 (좌측 시작 35, 우측 10%만 남기고 확장: 892.675 → 810)
+    lanes += `<line x1="35" y1="${y}" x2="810" y2="${y}" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="7,3" opacity="0.4"/>`;
   }
   
   return lanes;
@@ -2271,9 +2271,9 @@ function updateStraightTrackMascot(speedometerId, progress) {
   const mascotEl = document.getElementById(`straight-mascot-${speedometerId}`);
   if (!mascotEl) return;
   
-  // 직선 트랙: 시작선(35)에서 종료선(892.675)까지 (점선 트랙 30% 확장)
+  // 직선 트랙: 시작선(35)에서 종료선(810)까지 (우측 10%만 남기고 확장)
   const startX = 35;
-  const endX = 892.675;
+  const endX = 810;
   const trackLength = endX - startX;
   const x = startX + (trackLength * progress);
   const y = 20; // 트랙 중앙 (높이 50% 축소: 40 → 20)
