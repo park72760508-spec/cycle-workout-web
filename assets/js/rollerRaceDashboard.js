@@ -1000,17 +1000,20 @@ function saveSpeedometerPairing() {
 /**
  * [수정됨] Tacx T2028 전용 연속 스캔 모드 설정
  */
+/**
+ * [재확인] 안정적인 스캔 모드 설정
+ */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  console.log('[ANT+] Tacx T2028 스캔 가동 시작...');
+  console.log('[ANT+] Tacx T2028 스캔 가동 (Padding Fix)...');
   window.antState.isScanning = true;
 
   try {
-    // 1. Reset (초기화)
+    // 1. Reset
     await sendANTMessage(0x4A, [0x00]);
     await new Promise(r => setTimeout(r, 1000));
 
-    // 2. Network Key (필수)
+    // 2. Network Key
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
     await new Promise(r => setTimeout(r, 300));
 
@@ -1022,33 +1025,27 @@ async function startContinuousScan() {
     await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
     await new Promise(r => setTimeout(r, 300));
 
-    // 5. [추가] Search Timeout (무한대 설정: 0xFF)
-    // 이 설정이 없으면 채널이 열렸다가 금방 닫힐 수 있습니다.
+    // 5. Search Timeout (무한대)
     await sendANTMessage(0x44, [0x00, 0xFF]); 
     await new Promise(r => setTimeout(r, 300));
 
-    // 6. Frequency 57 (2457MHz)
+    // 6. Frequency 57
     await sendANTMessage(0x45, [0x00, 57]);
     await new Promise(r => setTimeout(r, 300));
 
-    // 7. LibConfig (ID 정보 표시)
-    // T2028은 이 설정이 있어야만 누구 데이터인지 알려줍니다.
+    // 7. LibConfig (ID 정보)
     await sendANTMessage(0x6E, [0x00, 0xE0]); 
     await new Promise(r => setTimeout(r, 300));
 
-    // 8. Open Rx Scan Mode (0x5B)
-    // 다시 0x5B로 돌아갑니다. T2028은 이 모드에서 성능이 가장 좋습니다.
-    console.log('[ANT+] Rx Scan Mode(0x5B) 명령 전송');
-    await sendANTMessage(0x5B, [0x00]); 
+    // 8. Open Channel (0x4B)
+    // T2028은 0x5B보다 0x4B가 안정적일 수 있습니다. (패딩이 해결되면 0x5B도 될 수 있음)
+    console.log('[ANT+] 채널 열기(0x4B) 전송');
+    await sendANTMessage(0x4B, [0x00]); 
     
-    // 리스너가 혹시 꺼져있다면 켜기
-    if (!window.antMessageListener) {
-        startANTMessageListener();
-    }
+    if (!window.antMessageListener) startANTMessageListener();
 
   } catch (e) {
-    console.error('[ANT+] 설정 실패:', e);
-    window.antState.isScanning = false;
+    console.error('설정 실패:', e);
   }
 }
 
@@ -3462,6 +3459,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
