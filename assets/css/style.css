@@ -8798,17 +8798,18 @@ button[aria-disabled="true"] {
 }
 
 .scoreboard-label {
-  font-size: 28px; /* 40% 증가: 20px * 1.4 = 28px */
+  font-size: 14px; /* 50% 축소: 28px * 0.5 = 14px */
   font-weight: 600;
   color: #00d4aa;
   text-transform: uppercase;
   letter-spacing: 2px;
   margin-bottom: 11px; /* 70% of 16px */
   text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 기본 폰트 */
 }
 
 .scoreboard-value {
-  font-size: 40px; /* 20% 감소: 50px * 0.8 = 40px */
+  font-size: 80px; /* 2배 확대: 40px * 2 = 80px */
   font-weight: 900;
   color: #ffffff;
   line-height: 1.2;
@@ -8816,17 +8817,17 @@ button[aria-disabled="true"] {
     0 0 20px rgba(0, 212, 170, 0.8),
     0 4px 8px rgba(0, 0, 0, 0.5),
     2px 2px 4px rgba(0, 0, 0, 0.8);
-  font-family: 'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace; /* digital-number와 동일한 폰트 */
-  letter-spacing: 4px; /* digital-number와 동일한 letter-spacing */
+  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
+  letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
 }
 
 .scoreboard-unit {
-  font-size: 20px; /* 20% 감소: 25px * 0.8 = 20px */
+  font-size: 40px; /* 2배 확대: 20px * 2 = 40px */
   font-weight: 900;
   color: #00ff88; /* digital-number와 동일한 색상 */
   margin-left: 6px; /* 70% of 8px */
-  font-family: 'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace; /* digital-number와 동일한 폰트 */
-  letter-spacing: 4px; /* digital-number와 동일한 letter-spacing */
+  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
+  letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
   text-shadow: 
     0 0 10px rgba(0, 255, 136, 0.8),
     0 0 20px rgba(0, 255, 136, 0.6),
@@ -8835,9 +8836,9 @@ button[aria-disabled="true"] {
 
 /* 디지털 숫자 스타일 (전광판용) */
 .digital-number {
-  font-family: 'Courier New', 'Consolas', 'Monaco', 'Lucida Console', monospace;
+  font-family: "Pretendard", "Noto Sans KR", sans-serif; /* 라벨과 동일한 폰트 */
   font-weight: 900;
-  letter-spacing: 4px;
+  letter-spacing: 2px; /* 라벨과 동일한 letter-spacing */
   display: inline-block;
   color: #00ff88;
   text-shadow: 
@@ -9522,16 +9523,16 @@ button[aria-disabled="true"] {
   }
   
   .scoreboard-label {
-    font-size: 19.6px; /* 40% 증가: 14px * 1.4 = 19.6px (반응형) */
+    font-size: 7px; /* 50% 축소: 14px * 0.5 = 7px (반응형) */
     margin-bottom: 8px; /* 70% of 12px */
   }
   
   .scoreboard-value {
-    font-size: 32px; /* 20% 감소: 40px * 0.8 = 32px (반응형) */
+    font-size: 64px; /* 2배 확대: 80px * 0.8 = 64px (반응형) */
   }
   
   .scoreboard-unit {
-    font-size: 16px; /* 20% 감소: 20px * 0.8 = 16px (반응형) */
+    font-size: 32px; /* 2배 확대: 40px * 0.8 = 32px (반응형) */
   }
   
   .rank-item {
