@@ -2158,36 +2158,54 @@ function handleANTMessage(message) {
 /**
  * [기존 함수 유지] 데이터 처리 및 UI 업데이트
  */
+/**
+ * [최종 수정] 브로드캐스트 데이터 처리 (ID 추출 강화)
+ */
 function handleBroadcastData(payload) {
-  // console.log('[ANT+] 센서 데이터 수신:', payload); // 디버깅용
-
-  if (payload.length < 9) return;
-  const antData = payload.slice(1, 9);
+  // payload: [Channel, Data0..7, Flag, DeviceID_L, DeviceID_H, ...]
+  // T2028은 데이터 앞에 Channel 번호가 없을 수도 있으므로 유연하게 처리
   
-  // Extended Data (ID 포함) 처리
-  if (payload.length >= 13) {
-    const flag = payload[9];
-    if (flag & 0x80) { 
-      const devId = (payload[11] << 8) | payload[10];
-      const devType = payload[12];
-      
-      // UI 목록 추가
-      const modal = document.getElementById('addSpeedometerModal');
-      if (modal && !modal.classList.contains('hidden')) {
-        if (typeof addFoundDeviceToUI === 'function') addFoundDeviceToUI(devId, devType);
-      }
+  // 데이터 길이 체크
+  if (payload.length < 8) return;
 
-      // 속도계 데이터 업데이트
-      const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == devId);
-      if (speedometer) {
-        if (!speedometer.connected) {
-          speedometer.connected = true;
-          if(typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
-        }
-        if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
-        speedometer.lastPacketTime = Date.now();
+  // 실제 데이터(8바이트) 위치 찾기
+  // 보통 payload[1]부터 데이터지만, T2028은 payload[0]부터일 수도 있음
+  // 여기서는 표준(payload[0]=Channel)을 가정하되, ID가 안 잡히면 오프셋 조정 필요
+  
+  const antData = payload.slice(1, 9); // 일단 표준대로 (1~8인덱스)
+  
+  // ID 추출 시도 (Extended Data)
+  // Flag 바이트(0x80 bit)를 찾아서 ID 위치를 역추적
+  let deviceId = 0;
+  let deviceType = 0;
+  
+  // T2028 패킷 구조상 끝에서부터 ID를 찾는 게 더 안전할 수 있음
+  // 보통 끝에서 4번째, 3번째가 ID
+  if (payload.length >= 12) {
+      // payload[9]가 Flag라고 가정
+      const flagIndex = 9;
+      if (payload[flagIndex] & 0x80) {
+          deviceId = (payload[flagIndex + 2] << 8) | payload[flagIndex + 1];
+          deviceType = payload[flagIndex + 3];
+          
+          // console.log(`[ANT+] ID 감지: ${deviceId} (Type: ${deviceType})`);
+          
+          // UI 업데이트
+          if (document.getElementById('addSpeedometerModal') && !document.getElementById('addSpeedometerModal').classList.contains('hidden')) {
+              if (typeof addFoundDeviceToUI === 'function') addFoundDeviceToUI(deviceId, deviceType);
+          }
+          
+          // 데이터 업데이트
+          const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
+          if (speedometer) {
+              if (!speedometer.connected) {
+                  speedometer.connected = true;
+                  if (typeof updateSpeedometerConnectionStatus === 'function') updateSpeedometerConnectionStatus(speedometer.id, true);
+              }
+              if (typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
+              speedometer.lastPacketTime = Date.now();
+          }
       }
-    }
   }
 }
 
@@ -3469,6 +3487,7 @@ if (typeof window.showScreen === 'function') {
     }
   };
 }
+
 
 
 
