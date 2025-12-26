@@ -244,11 +244,11 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
+        <!-- 바늘 경로 표시 (눈금별 추적선, 바늘 아래에 그려짐) -->
+        <g id="needle-path-${speedometer.id}" class="speedometer-needle-path"></g>
+        
         <!-- 바늘 중심 원 (고정) -->
         <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
-        
-        <!-- 바늘 경로 표시 (바늘 왼쪽에 선 그리기) -->
-        <g id="needle-path-${speedometer.id}" class="speedometer-needle-path"></g>
         
         <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
         <!-- 바늘은 원의 위쪽 가장자리에서 시작하여 원 안에 보이지 않게 함 -->
@@ -404,7 +404,7 @@ function generateSpeedometerLabels() {
  * 바늘 각도 계산: 270도 + 180도*(속도/120)
  * 속도 0 → 270도 (초기 위치), 속도 60 → 360도(0도), 속도 120 → 450도(90도)
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
- * 60km/h 경계를 넘어갈 때 반대로 돌아가지 않도록 최단 경로 계산
+ * 60km/h 경계를 넘어갈 때 반대로 돌아가지 않도록 연속적인 각도 추적
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
@@ -416,48 +416,70 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // speed = 0 → angle = 270도 (초기 위치)
   // speed = 60 → angle = 270 + 90 = 360도 (0도)
   // speed = 120 → angle = 270 + 180 = 450도 (90도)
-  const rawTargetAngle = 270 + 180 * (speed / maxSpeed);
+  const targetAngle = 270 + 180 * (speed / maxSpeed);
   
-  // 이전 각도 가져오기 (없으면 현재 계산된 각도 사용)
+  // 이전 각도 가져오기 (연속적인 각도 값 유지)
   let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
   
   if (previousAngle === undefined) {
-    // 첫 번째 업데이트인 경우, 정규화된 각도로 초기화
-    previousAngle = rawTargetAngle >= 360 ? rawTargetAngle - 360 : rawTargetAngle;
+    // 첫 번째 업데이트인 경우, 목표 각도로 초기화
+    previousAngle = targetAngle;
     window.rollerRaceState.needleAngles[speedometerId] = previousAngle;
   }
   
-  // 정규화된 각도 계산 (0~360도 범위)
-  const normalizedTarget = rawTargetAngle >= 360 ? rawTargetAngle - 360 : rawTargetAngle;
-  const normalizedPrevious = previousAngle >= 360 ? previousAngle - 360 : previousAngle;
+  // 이전 속도 가져오기 (속도 변화 방향 판단용)
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
+  const previousSpeed = speedometer?.previousSpeed ?? speed;
+  speedometer.previousSpeed = speed;
   
-  // 최단 경로 계산 (360도 경계를 넘어갈 때 반대로 돌아가지 않도록)
+  // 속도 변화 방향에 따라 각도 변화 방향 결정
+  // 속도가 증가하면 각도도 증가, 속도가 감소하면 각도도 감소
+  const speedDiff = speed - previousSpeed;
+  
+  // 이전 각도와 목표 각도를 정규화하여 비교
+  const normalizedPrevious = previousAngle >= 360 ? previousAngle - 360 : (previousAngle < 0 ? previousAngle + 360 : previousAngle);
+  const normalizedTarget = targetAngle >= 360 ? targetAngle - 360 : (targetAngle < 0 ? targetAngle + 360 : targetAngle);
+  
+  // 각도 차이 계산
   let angleDiff = normalizedTarget - normalizedPrevious;
   
-  // 180도 이상 차이나면 반대 방향으로 가는 것이 더 짧음
-  if (angleDiff > 180) {
-    angleDiff -= 360;
-  } else if (angleDiff < -180) {
-    angleDiff += 360;
+  // 180도 이상 차이나는 경우 처리
+  if (Math.abs(angleDiff) > 180) {
+    // 속도 변화 방향에 따라 각도 변화 방향 결정
+    if (speedDiff > 0) {
+      // 속도 증가: 각도 증가 방향 (양수)
+      if (angleDiff < 0) angleDiff += 360;
+    } else if (speedDiff < 0) {
+      // 속도 감소: 각도 감소 방향 (음수)
+      if (angleDiff > 0) angleDiff -= 360;
+    } else {
+      // 속도 변화 없음: 최단 경로 선택
+      if (angleDiff > 180) {
+        angleDiff -= 360;
+      } else if (angleDiff < -180) {
+        angleDiff += 360;
+      }
+    }
   }
   
-  // 이전 각도에서 최단 경로로 이동한 새로운 각도 계산
+  // 이전 각도에서 연속적으로 이동한 새로운 각도 계산
   let newAngle = normalizedPrevious + angleDiff;
   
-  // 각도를 0~360도 범위로 정규화
-  while (newAngle >= 360) newAngle -= 360;
-  while (newAngle < 0) newAngle += 360;
+  // 각도를 0~360도 범위로 정규화 (표시용)
+  let displayAngle = newAngle;
+  while (displayAngle >= 360) displayAngle -= 360;
+  while (displayAngle < 0) displayAngle += 360;
   
-  // 이전 각도 저장 (연속성을 위해 정규화된 값 저장)
-  window.rollerRaceState.needleAngles[speedometerId] = newAngle;
+  // 이전 각도 저장 (정규화된 값으로 저장)
+  window.rollerRaceState.needleAngles[speedometerId] = displayAngle;
   
-  // 바늘 경로 업데이트 (왼쪽에 선 그리기, 오른쪽에 선 삭제)
-  updateSpeedometerNeedlePath(speedometerId, newAngle);
+  // 바늘 경로 업데이트 (눈금별 추적선)
+  updateSpeedometerNeedlePath(speedometerId, speed);
   
   // 부드러운 애니메이션을 위해 transition 적용
   // 그룹이 이미 translate(100, 140)로 이동되어 있으므로, 바늘은 원점(0,0) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
-  needle.setAttribute('transform', `rotate(${newAngle})`);
+  needle.setAttribute('transform', `rotate(${displayAngle})`);
 }
 
 /**
