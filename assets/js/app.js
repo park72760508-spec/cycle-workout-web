@@ -3607,7 +3607,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const info = safeGetElement("iosInfo");
     if (info) info.classList.remove("hidden");
 
-    ["btnConnectPM","btnConnectTrainer","btnConnectHR","btnConnectANT"].forEach(id => {
+    // iOS에서 블루투스 기기 연결 버튼들은 비활성화하지만, Indoor race 버튼(btnConnectANT)은 활성화
+    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
       const el = safeGetElement(id);
       if (el) {
         el.classList.add("is-disabled");
