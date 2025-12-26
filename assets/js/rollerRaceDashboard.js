@@ -534,7 +534,18 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     // 바늘 각도 계산 공식 사용 (바늘과 동일한 공식)
     // 0~60km/h: 270도 + 180도 × (현재속도/120)
     // 60km/h 초과: 180도 × (현재속도/120) - 90도
-    const angle = calculateNeedleAngle(tickSpeed);
+    let angle = calculateNeedleAngle(tickSpeed);
+    
+    // SVG rotate와 Math.cos/sin의 각도 기준 차이 보정
+    // 바늘이 rotate(270)으로 위쪽을 가리키는데, Math.cos/sin(270)도 위쪽을 가리키므로
+    // 각도는 그대로 사용해야 하지만, 실제로는 90도 차이가 있음
+    // 바늘이 실제로 270도 위치에 있다면, Math.cos/sin을 사용할 때는 90도를 더해야 함
+    // (270 + 90 = 360 = 0도, 하지만 실제로는 270도 위치에 맞춰야 함)
+    // 반대로 90도를 빼면 180도가 되므로, 실제로는 90도를 더해야 함
+    angle = angle + 90;
+    while (angle < 0) angle += 360;
+    while (angle >= 360) angle -= 360;
+    
     const rad = (angle * Math.PI) / 180;
     
     // 눈금 길이 결정 (20km/h 간격은 긴 눈금, 나머지는 짧은 눈금)
