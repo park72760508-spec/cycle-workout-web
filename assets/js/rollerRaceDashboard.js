@@ -54,7 +54,8 @@ window.rollerRaceState = {
   raceDataHistory: [], // 경기 중 데이터 히스토리 (주기적 저장)
   dataSaveTimer: null, // 데이터 저장 타이머
   connectionStatusCheckTimer: null, // 연결 상태 체크 타이머
-  needleAngles: {} // 각 속도계의 이전 바늘 각도 (속도계 ID -> 각도)
+  needleAngles: {}, // 각 속도계의 이전 바늘 각도 (속도계 ID -> 각도)
+  maxReachedAngles: {} // 각 속도계의 최대 도달 각도 (속도계 ID -> 각도)
 };
 
 // ANT+ 통신 관련 전역 상태
@@ -246,6 +247,9 @@ function createSpeedometerElement(speedometer) {
         
         <!-- 바늘 중심 원 (고정) -->
         <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
+        
+        <!-- 바늘 경로 표시 (지나간 자리) -->
+        <g id="needle-path-${speedometer.id}" class="speedometer-needle-path"></g>
         
         <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
         <!-- 바늘은 원의 위쪽 가장자리에서 시작하여 원 안에 보이지 않게 함 -->
@@ -448,10 +452,100 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // 이전 각도 저장 (연속성을 위해 정규화된 값 저장)
   window.rollerRaceState.needleAngles[speedometerId] = newAngle;
   
+  // 최대 도달 각도 업데이트 및 경로 표시
+  updateSpeedometerNeedlePath(speedometerId, newAngle);
+  
   // 부드러운 애니메이션을 위해 transition 적용
   // 그룹이 이미 translate(100, 140)로 이동되어 있으므로, 바늘은 원점(0,0) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
   needle.setAttribute('transform', `rotate(${newAngle})`);
+}
+
+/**
+ * 속도계 바늘 경로 업데이트 (지나간 자리에 민트 투명선 표시)
+ * 속도가 떨어지면 바늘이 지나가면서 선이 삭제됨
+ */
+function updateSpeedometerNeedlePath(speedometerId, currentAngle) {
+  const pathGroup = document.getElementById(`needle-path-${speedometerId}`);
+  if (!pathGroup) return;
+  
+  const centerX = 100;
+  const centerY = 140;
+  const radius = 80;
+  const innerRadius = 70; // 안쪽 눈금 시작점 (radius - 10)
+  
+  // 정규화된 현재 각도 (0~360도)
+  const normalizedCurrent = currentAngle >= 360 ? currentAngle - 360 : currentAngle;
+  
+  // 최대 도달 각도 가져오기
+  let maxReachedAngle = window.rollerRaceState.maxReachedAngles[speedometerId];
+  
+  if (maxReachedAngle === undefined) {
+    // 첫 업데이트: 현재 각도를 최대 각도로 설정
+    maxReachedAngle = normalizedCurrent;
+    window.rollerRaceState.maxReachedAngles[speedometerId] = maxReachedAngle;
+  } else {
+    // 정규화된 최대 각도
+    const normalizedMax = maxReachedAngle >= 360 ? maxReachedAngle - 360 : maxReachedAngle;
+    
+    // 현재 각도가 최대 각도보다 크면 업데이트 (진행 방향으로만)
+    if (normalizedCurrent > normalizedMax) {
+      maxReachedAngle = normalizedCurrent;
+      window.rollerRaceState.maxReachedAngles[speedometerId] = maxReachedAngle;
+    }
+    // 속도가 떨어지면 (normalizedCurrent < normalizedMax) 최대 각도는 유지하되, 표시는 현재 각도까지만
+  }
+  
+  // 정규화된 최대 각도
+  const normalizedMax = maxReachedAngle >= 360 ? maxReachedAngle - 360 : maxReachedAngle;
+  
+  // 표시할 각도 범위: 270도(0km/h)부터 현재 각도와 최대 각도 중 작은 값까지
+  const displayEndAngle = normalizedCurrent < normalizedMax ? normalizedCurrent : normalizedMax;
+  
+  // 기존 경로 제거
+  pathGroup.innerHTML = '';
+  
+  // 270도(0km/h)부터 표시할 끝 각도까지 선 그리기
+  const startAngle = 270; // 0km/h 시작 각도
+  
+  // 각도가 증가하는 방향으로 선 그리기 (0.5도 간격)
+  if (displayEndAngle >= startAngle) {
+    // 일반적인 경우: startAngle부터 displayEndAngle까지
+    for (let angle = startAngle; angle <= displayEndAngle; angle += 0.5) {
+      drawPathLine(pathGroup, centerX, centerY, innerRadius, radius, angle);
+    }
+  } else {
+    // 360도를 넘어가는 경우: startAngle부터 360도까지, 0도부터 displayEndAngle까지
+    for (let angle = startAngle; angle <= 360; angle += 0.5) {
+      drawPathLine(pathGroup, centerX, centerY, innerRadius, radius, angle);
+    }
+    for (let angle = 0; angle <= displayEndAngle; angle += 0.5) {
+      drawPathLine(pathGroup, centerX, centerY, innerRadius, radius, angle);
+    }
+  }
+}
+
+/**
+ * 경로 선 그리기 (안쪽 눈금부터 바깥쪽까지)
+ */
+function drawPathLine(pathGroup, centerX, centerY, innerRadius, outerRadius, angle) {
+  const rad = (angle * Math.PI) / 180;
+  
+  const x1 = centerX + innerRadius * Math.cos(rad);
+  const y1 = centerY + innerRadius * Math.sin(rad);
+  const x2 = centerX + outerRadius * Math.cos(rad);
+  const y2 = centerY + outerRadius * Math.sin(rad);
+  
+  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
+  line.setAttribute('stroke', 'rgba(0, 255, 200, 0.3)'); // 민트 투명색
+  line.setAttribute('stroke-width', '0.5');
+  line.setAttribute('stroke-linecap', 'round');
+  
+  pathGroup.appendChild(line);
 }
 
 /**
@@ -1239,15 +1333,22 @@ function startRace() {
       s.finishTime = null;
     });
     
-    // 모든 속도계의 바늘 각도 초기화 (속도 0 → 270도)
+    // 모든 속도계의 바늘 각도 및 경로 초기화 (속도 0 → 270도)
     window.rollerRaceState.needleAngles = {};
+    window.rollerRaceState.maxReachedAngles = {};
     window.rollerRaceState.speedometers.forEach(s => {
       window.rollerRaceState.needleAngles[s.id] = 270;
+      window.rollerRaceState.maxReachedAngles[s.id] = 270;
       // 바늘을 초기 위치(270도)로 설정
       const needle = document.getElementById(`needle-${s.id}`);
       if (needle) {
         needle.style.transition = 'none'; // 초기화 시 애니메이션 없음
         needle.setAttribute('transform', 'rotate(270)');
+      }
+      // 경로 초기화
+      const pathGroup = document.getElementById(`needle-path-${s.id}`);
+      if (pathGroup) {
+        pathGroup.innerHTML = '';
       }
     });
     
