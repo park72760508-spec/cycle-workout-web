@@ -5855,61 +5855,81 @@ function updateReceiverButtonStatus() {
  * [수정본] Speed/Cadence 데이터 처리
  * 중복 데이터 리셋 버그 수정 및 데이터 페이지 필터링 추가
  */
+/**
+ * 개선된 Speed/Cadence 데이터 처리 로직
+ * 고속 회전 및 급격한 가속 시에도 즉각적인 반응성을 보장합니다.
+ */
 function processSpeedCadenceData(deviceId, data) {
   if (data.length < 8) return;
 
+  // ANT+ 규격: 4-5번 바이트는 이벤트 시간(1/1024초), 6-7번 바이트는 누적 회전수
   const eventTime = (data[5] << 8) | data[4];
   const revolutions = (data[7] << 8) | data[6];
 
   const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
   if (!speedometer) return;
 
-  // 수신 시간은 데이터가 올 때마다 무조건 업데이트 (연결 끊김 방지)
-  speedometer.lastPacketTime = Date.now();
+  const now = Date.now();
+  speedometer.lastPacketTime = now; // 패킷 수신 시간 갱신 (연결 유지용)
 
-  // [중요] 이벤트 시간이 변하지 않았으면 (바퀴가 멈췄거나 중복 데이터) 계산 생략
+  // 1. 초기 상태 처리 (페어링 직후 첫 데이터)
+  if (speedometer.lastEventTime === 0 || speedometer.lastEventTime === undefined) {
+    speedometer.lastRevolutions = revolutions;
+    speedometer.lastEventTime = eventTime;
+    speedometer.lastEventUpdate = now;
+    speedometer.isReady = true; // 계산 준비 완료 플래그
+    console.log(`[트랙${speedometer.id}] 센서 동기화 완료. 다음 패킷부터 속도 출력.`);
+    return;
+  }
+
+  // 2. 이벤트 시간 변화 확인
+  // 고속 회전 시에도 eventTime이 변하지 않았다면 센서가 아직 새로운 회전을 감지 못한 것임
   if (speedometer.lastEventTime === eventTime) {
-    // 3초 이상 이벤트 시간이 변하지 않으면 정지로 판단하고 속도만 0으로 업데이트
-    if (Date.now() - speedometer.lastEventUpdate > 3000) {
+    // 2초 이상 데이터가 고정되어 있다면 멈춘 것으로 간주
+    if (now - speedometer.lastEventUpdate > 2000) {
       updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
     }
     return;
   }
 
-  // 초기값 설정
-  if (speedometer.lastEventTime === 0) {
-    speedometer.lastRevolutions = revolutions;
-    speedometer.lastEventTime = eventTime;
-    speedometer.lastEventUpdate = Date.now();
-    return;
-  }
-
-  // 변화량 계산
+  // 3. 회전수 및 시간 차이 계산 (16비트 롤오버 처리 포함)
   let revDiff = revolutions - speedometer.lastRevolutions;
-  if (revDiff < 0) revDiff += 65536;
+  if (revDiff < 0) revDiff += 65536; // 65535 다음 0으로 돌아가는 경우 대응
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  if (timeDiff > 0 && revDiff >= 0) {
+  // 4. 속도 계산 (물리 공식 적용)
+  if (timeDiff > 0 && revDiff > 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
-    const distM = (revDiff * wheelSpec.circumference) / 1000;
-    const timeS = timeDiff / 1024;
-    const speed = (revDiff > 0) ? (distM / timeS) * 3.6 : 0;
-
-    if (speed < 200) {
-      if (window.rollerRaceState.raceState === 'running') {
-        speedometer.totalDistance += (distM / 1000);
-      }
-      updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
-      speedometer.connected = true;
-      speedometer.lastEventUpdate = Date.now(); // 실제 바퀴가 돌았을 때의 시간 업데이트
-    }
     
-    speedometer.lastRevolutions = revolutions;
-    speedometer.lastEventTime = eventTime;
+    // 이동 거리(m) = 회전수 차이 * 바퀴 둘레(mm) / 1000
+    const distanceMeters = (revDiff * wheelSpec.circumference) / 1000;
+    // 경과 시간(s) = 시간 차이 / 1024
+    const timeSeconds = timeDiff / 1024;
+    
+    // 속도(km/h) 계산 공식
+    // $$Speed (km/h) = \frac{Distance (m)}{Time (s)} \times 3.6$$
+    const speed = (distanceMeters / timeSeconds) * 3.6;
+
+    // 고속 주행(예: 120km/h 이하) 데이터만 유효값으로 처리
+    if (speed < 150) {
+      if (window.rollerRaceState.raceState === 'running') {
+        speedometer.totalDistance += (distanceMeters / 1000);
+      }
+      
+      // UI 및 바늘 업데이트 호출
+      updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
+      
+      // 마지막 유효 이벤트 정보 저장
+      speedometer.lastRevolutions = revolutions;
+      speedometer.lastEventTime = eventTime;
+      speedometer.lastEventUpdate = now;
+      speedometer.connected = true;
+    }
   }
 }
+
 
 
 
