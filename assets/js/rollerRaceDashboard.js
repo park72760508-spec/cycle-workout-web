@@ -2022,6 +2022,17 @@ function updateSpeedometerListUI() {
         <div class="track-name-inside">
           <span class="track-name-text">${pairingName || ''}</span>
         </div>
+        <!-- 속도 및 이동거리 표시 (주황색 블럭 안 오른쪽 끝) -->
+        <div class="track-stats-inside">
+          <div class="track-stats-item">
+            <span class="track-stat-value" id="straight-speed-text-${speedometer.id}">0</span>
+            <span class="track-stat-unit">km/h</span>
+          </div>
+          <div class="track-stats-item">
+            <span class="track-stat-value" id="straight-distance-text-${speedometer.id}">0.00</span>
+            <span class="track-stat-unit">km</span>
+          </div>
+        </div>
         <svg class="straight-track-svg" viewBox="0 0 900 40" preserveAspectRatio="xMidYMid meet">
           <!-- 트랙 배경 (잔디 느낌) - 우측 끝까지 채움 -->
           <rect x="0" y="0" width="900" height="40" fill="#2d5016" opacity="0.2"/>
@@ -2052,20 +2063,6 @@ function updateSpeedometerListUI() {
           
           <!-- 순위 표시 (트랙 상단 중앙) -->
           <text x="422.5" y="10" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
-          
-          <!-- 현재 속도 및 이동거리 표시 (주황색 블럭 오른쪽 끝) -->
-          <g id="straight-track-stats-${speedometer.id}" transform="translate(890, 0)">
-            <!-- 현재 속도 -->
-            <text x="0" y="15" text-anchor="end" fill="#ffffff" font-size="11" font-weight="600" id="straight-speed-text-${speedometer.id}">
-              <tspan fill="#ffffff">0</tspan>
-              <tspan fill="#999999" font-size="3.3" font-weight="300">km/h</tspan>
-            </text>
-            <!-- 이동거리 -->
-            <text x="0" y="28" text-anchor="end" fill="#ffffff" font-size="11" font-weight="600" id="straight-distance-text-${speedometer.id}">
-              <tspan fill="#ffffff">0.00</tspan>
-              <tspan fill="#999999" font-size="3.3" font-weight="300">km</tspan>
-            </text>
-          </g>
         </svg>
       </div>
       <!-- 페어링 버튼 -->
@@ -2327,13 +2324,13 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   const distanceTextEl = document.getElementById(`straight-distance-text-${speedometerId}`);
   
   if (speedTextEl) {
-    // 현재 속도 표시 (숫자 + 단위)
-    speedTextEl.innerHTML = `<tspan fill="#ffffff">${speed.toFixed(1)}</tspan><tspan fill="#999999" font-size="3.3" font-weight="300">km/h</tspan>`;
+    // 현재 속도 표시 (숫자만, 단위는 별도 span)
+    speedTextEl.textContent = speed.toFixed(1);
   }
   
   if (distanceTextEl) {
-    // 이동거리 표시 (숫자 + 단위)
-    distanceTextEl.innerHTML = `<tspan fill="#ffffff">${distance.toFixed(2)}</tspan><tspan fill="#999999" font-size="3.3" font-weight="300">km</tspan>`;
+    // 이동거리 표시 (숫자만, 단위는 별도 span)
+    distanceTextEl.textContent = distance.toFixed(2);
   }
 }
 
