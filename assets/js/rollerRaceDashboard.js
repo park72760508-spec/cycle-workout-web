@@ -994,6 +994,21 @@ function checkRaceEndConditions() {
         .reduce((sum, s) => sum + s.totalDistance, 0);
       
       if (totalDistance >= settings.targetDistance) {
+        const elapsed = window.rollerRaceState.totalElapsedTime || 0;
+        
+        // 통합 거리 달성 시 1등 선수의 finishTime 저장 (1등이 결승선 통과)
+        const sortedByDistance = window.rollerRaceState.speedometers
+          .filter(s => s.deviceId && s.connected)
+          .sort((a, b) => b.totalDistance - a.totalDistance);
+        
+        if (sortedByDistance.length > 0) {
+          const firstPlace = sortedByDistance[0];
+          if (firstPlace.finishTime === null) {
+            firstPlace.finishTime = elapsed;
+            console.log(`[결승점 도달] 1등 트랙${firstPlace.id} (${firstPlace.pairingName || firstPlace.name}): ${elapsed}초`);
+          }
+        }
+        
         shouldEnd = true;
         endReason = `통합 거리 달성: ${totalDistance.toFixed(2)}km >= ${settings.targetDistance}km`;
         console.log(`[경기 종료] ${endReason}`);
@@ -1004,6 +1019,16 @@ function checkRaceEndConditions() {
         .filter(s => s.deviceId && s.connected);
       
       if (connectedSpeedometers.length > 0) {
+        const elapsed = window.rollerRaceState.totalElapsedTime || 0;
+        
+        // 각 속도계가 목표 거리에 도달했을 때 finishTime 저장
+        connectedSpeedometers.forEach(s => {
+          if (s.totalDistance >= settings.targetDistance && s.finishTime === null) {
+            s.finishTime = elapsed;
+            console.log(`[결승점 도달] 트랙${s.id} (${s.pairingName || s.name}): ${elapsed}초`);
+          }
+        });
+        
         // 모든 연결된 속도계가 목표 거리에 도달했는지 확인
         const allReached = connectedSpeedometers.every(s => s.totalDistance >= settings.targetDistance);
         
@@ -1176,6 +1201,11 @@ function startRace() {
     window.rollerRaceState.pausedTime = 0;
     window.rollerRaceState.raceState = 'running';
     window.rollerRaceState.totalElapsedTime = 0;
+    
+    // 모든 속도계의 finishTime 초기화
+    window.rollerRaceState.speedometers.forEach(s => {
+      s.finishTime = null;
+    });
     
     // 모든 속도계 거리 및 회전수 초기화
     window.rollerRaceState.speedometers.forEach(s => {
@@ -5441,7 +5471,18 @@ function generateRaceReportPDF() {
               const distance = speedometer.totalDistance.toFixed(2);
               const avgSpeed = speedometer.averageSpeed > 0 ? speedometer.averageSpeed.toFixed(1) : '0.0';
               const maxSpeed = speedometer.maxSpeed > 0 ? speedometer.maxSpeed.toFixed(1) : '0.0';
-              const elapsedTime = formatTime(window.rollerRaceState.totalElapsedTime || 0);
+              
+              // 거리 경기 시: 결승점 도달 시간 사용, 없으면 전체 경과 시간 사용
+              // 시간 경기 시: 전체 경과 시간 사용
+              const settings = window.rollerRaceState.raceSettings || {};
+              let elapsedTime;
+              if (settings.endByDistance && speedometer.finishTime !== null && speedometer.finishTime !== undefined) {
+                // 거리 경기이고 결승점 도달 시간이 있으면 사용
+                elapsedTime = formatTime(speedometer.finishTime);
+              } else {
+                // 시간 경기이거나 결승점 도달 시간이 없으면 전체 경과 시간 사용
+                elapsedTime = formatTime(window.rollerRaceState.totalElapsedTime || 0);
+              }
               
               return `
                 <tr style="background: ${index % 2 === 0 ? '#f9f9f9' : 'white'};">
