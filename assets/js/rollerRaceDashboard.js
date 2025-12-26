@@ -2111,7 +2111,7 @@ function updateSpeedometerListUI() {
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
             <!-- 자전거 프레임 -->
-            <circle cx="0" cy="0" r="7" fill="#ff6b6b" opacity="0.9"/>
+            <circle cx="0" cy="0" r="7" fill="${getMascotColor(speedometer.id)}" opacity="0.9"/>
             <circle cx="0" cy="0" r="4" fill="#ffffff"/>
             <!-- 자전거 바퀴 -->
             <circle cx="-10" cy="7" r="5" fill="#333" opacity="0.7"/>
@@ -2294,6 +2294,26 @@ function normalizeTrackWidths() {
     
     console.log('[경기장 트랙] 모든 트랙 너비 통일:', finalWidth + 'px', '(사용 가능 공간:', minTrackWidth + 'px)', '기준 항목:', minTrackIndex + 1, '오른쪽 끝 위치:', referenceTrackRightEdge + 'px');
   }
+}
+
+/**
+ * 트랙 번호에 따른 마스코트 색상 반환
+ * 옵션1: 밝고 채도 높은 색상 (어두운 녹색 배경에서 잘 보임)
+ */
+function getMascotColor(trackNumber) {
+  const colors = {
+    1: '#FF4444',  // 빨강
+    2: '#4A90E2',  // 파랑
+    3: '#FFD700',  // 노랑
+    4: '#9B59B6',  // 보라
+    5: '#FF8C00',  // 주황
+    6: '#00CED1',  // 청록
+    7: '#FF69B4',  // 분홍
+    8: '#7FFF00',  // 연두
+    9: '#D2691E',  // 갈색
+    10: '#00BFFF'  // 하늘색
+  };
+  return colors[trackNumber] || '#FF4444'; // 기본값: 빨강
 }
 
 /**
