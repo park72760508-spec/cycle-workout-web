@@ -1139,6 +1139,9 @@ function startRace() {
       updateStraightTrackStats(s.id, 0, 0);
     });
     
+    // 마스코트 위치 초기화 (Lerp를 위한 현재 위치 저장소 초기화)
+    window.rollerRaceState.mascotPositions = {};
+    
     // 초기 시간 표시
     const elapsedTimeEl = document.getElementById('elapsedTime');
     const scoreboardTimeEl = document.getElementById('scoreboardTime');
@@ -2257,6 +2260,7 @@ function generateTrackLanes() {
 
 /**
  * 모든 직선 트랙 마스코트 위치 업데이트
+ * 경기 타입에 따라 다른 로직 적용
  */
 function updateAllStraightTrackMascots() {
   if (window.rollerRaceState.raceState !== 'running') {
@@ -2267,44 +2271,167 @@ function updateAllStraightTrackMascots() {
     return;
   }
   
-  // 누적거리 기준으로 정렬
-  const sorted = [...window.rollerRaceState.speedometers]
-    .filter(s => s.connected && s.totalDistance > 0)
+  const settings = window.rollerRaceState.raceSettings;
+  const connectedSpeedometers = window.rollerRaceState.speedometers
+    .filter(s => s.connected && s.totalDistance > 0);
+  
+  if (connectedSpeedometers.length === 0) {
+    // 연결된 속도계가 없으면 모든 마스코트를 시작 위치로
+    window.rollerRaceState.speedometers.forEach(speedometer => {
+      updateStraightTrackMascot(speedometer.id, 0);
+    });
+    return;
+  }
+  
+  // 누적거리 기준으로 정렬 (1등 찾기)
+  const sorted = [...connectedSpeedometers]
     .sort((a, b) => b.totalDistance - a.totalDistance);
   
-  if (sorted.length === 0) return;
+  const firstPlaceDistance = sorted[0].totalDistance;
   
-  const maxDistance = sorted[0].totalDistance;
-  
-  sorted.forEach((speedometer) => {
-    if (maxDistance > 0) {
-      // 100m = 0.1km 기준으로 진행률 계산
+  // 경기 타입에 따른 진행 위치 계산
+  if (settings.distanceMode === 'total') {
+    // 3. 통합 경기 방식
+    const totalDistance = window.rollerRaceState.speedometers
+      .reduce((sum, s) => sum + s.totalDistance, 0);
+    const targetDistance = settings.targetDistance || 500; // 기본값 500km
+    
+    // 0 나누기 방지
+    if (firstPlaceDistance === 0 || targetDistance === 0) {
+      window.rollerRaceState.speedometers.forEach(speedometer => {
+        updateStraightTrackMascot(speedometer.id, 0);
+      });
+      return;
+    }
+    
+    // 게임 진행률
+    const gameProgress = Math.min(totalDistance / targetDistance, 1.0);
+    
+    // 각 속도계의 위치 계산
+    window.rollerRaceState.speedometers.forEach(speedometer => {
+      if (!speedometer.connected || speedometer.totalDistance === 0) {
+        updateStraightTrackMascot(speedometer.id, 0);
+        return;
+      }
+      
+      // 상대적 성과 비율
+      const relativePerformance = speedometer.totalDistance / firstPlaceDistance;
+      
+      // 최종 위치: P = (전체 누적 거리/목표 거리) × (해당 팀 이동거리/1등 팀 이동거리)
+      const progress = Math.min(gameProgress * relativePerformance, 1.0);
+      
+      updateStraightTrackMascot(speedometer.id, progress);
+    });
+    
+  } else if (settings.distanceMode === 'individual') {
+    // 개인 경기 방식
+    if (settings.endByDistance && settings.targetDistance > 0) {
+      // 1. 개인, 거리 타겟인 경우
+      const targetDistance = settings.targetDistance;
+      
+      window.rollerRaceState.speedometers.forEach(speedometer => {
+        if (!speedometer.connected || speedometer.totalDistance === 0) {
+          updateStraightTrackMascot(speedometer.id, 0);
+          return;
+        }
+        
+        // 마스코트 진행 위치 = 이동거리 / 총거리
+        const progress = Math.min(speedometer.totalDistance / targetDistance, 1.0);
+        updateStraightTrackMascot(speedometer.id, progress);
+      });
+      
+    } else if (settings.endByTime && settings.targetTime > 0) {
+      // 2. 개인, 시간 타겟인 경우
+      const targetTime = settings.targetTime; // 초 단위
+      const elapsedTime = window.rollerRaceState.totalElapsedTime || 0;
+      
+      // 0 나누기 방지
+      if (firstPlaceDistance === 0 || targetTime === 0) {
+        window.rollerRaceState.speedometers.forEach(speedometer => {
+          updateStraightTrackMascot(speedometer.id, 0);
+        });
+        return;
+      }
+      
+      // 1등 선수 위치 기준 (경과시간 / 경기 시간)
+      const firstPlaceProgress = Math.min(elapsedTime / targetTime, 1.0);
+      
+      window.rollerRaceState.speedometers.forEach(speedometer => {
+        if (!speedometer.connected || speedometer.totalDistance === 0) {
+          updateStraightTrackMascot(speedometer.id, 0);
+          return;
+        }
+        
+        // 나머지 선수 위치 = 1등 위치 × (다른 선수 이동거리 / 1등 선수 이동거리)
+        const relativeProgress = speedometer.totalDistance / firstPlaceDistance;
+        const progress = Math.min(firstPlaceProgress * relativeProgress, 1.0);
+        
+        updateStraightTrackMascot(speedometer.id, progress);
+      });
+      
+    } else {
+      // 기본값: 거리 기반 (100m = 0.1km 기준)
+      sorted.forEach((speedometer) => {
+        const progress = Math.min((speedometer.totalDistance / 0.1) % 1.0, 1.0);
+        updateStraightTrackMascot(speedometer.id, progress);
+      });
+      
+      // 연결되지 않았거나 거리가 0인 속도계는 시작 위치로
+      window.rollerRaceState.speedometers.forEach(speedometer => {
+        if (!speedometer.connected || speedometer.totalDistance === 0) {
+          updateStraightTrackMascot(speedometer.id, 0);
+        }
+      });
+    }
+  } else {
+    // 기본값: 거리 기반 (100m = 0.1km 기준)
+    sorted.forEach((speedometer) => {
       const progress = Math.min((speedometer.totalDistance / 0.1) % 1.0, 1.0);
       updateStraightTrackMascot(speedometer.id, progress);
-    }
-  });
-  
-  // 연결되지 않았거나 거리가 0인 속도계는 시작 위치로
-  window.rollerRaceState.speedometers.forEach(speedometer => {
-    if (!speedometer.connected || speedometer.totalDistance === 0) {
-      updateStraightTrackMascot(speedometer.id, 0);
-    }
-  });
+    });
+    
+    // 연결되지 않았거나 거리가 0인 속도계는 시작 위치로
+    window.rollerRaceState.speedometers.forEach(speedometer => {
+      if (!speedometer.connected || speedometer.totalDistance === 0) {
+        updateStraightTrackMascot(speedometer.id, 0);
+      }
+    });
+  }
 }
 
 /**
  * 직선 트랙 마스코트 위치 업데이트
+ * Lerp(선형 보간)를 사용하여 부드러운 이동 구현
  */
-function updateStraightTrackMascot(speedometerId, progress) {
-  // progress: 0.0 ~ 1.0 (0m ~ 100m 진행률)
+function updateStraightTrackMascot(speedometerId, targetProgress) {
+  // targetProgress: 0.0 ~ 1.0 (목표 진행률)
   const mascotEl = document.getElementById(`straight-mascot-${speedometerId}`);
   if (!mascotEl) return;
+  
+  // 현재 위치 저장 (첫 호출 시 초기화)
+  if (!window.rollerRaceState.mascotPositions) {
+    window.rollerRaceState.mascotPositions = {};
+  }
+  
+  // 현재 위치 가져오기 (없으면 목표 위치로 초기화)
+  let currentProgress = window.rollerRaceState.mascotPositions[speedometerId];
+  if (currentProgress === undefined) {
+    currentProgress = targetProgress;
+  }
+  
+  // Lerp(선형 보간): 부드러운 이동을 위해 현재 위치에서 목표 위치로 점진적으로 이동
+  // Lerp(current, target, factor) = current + (target - current) * factor
+  const lerpFactor = 0.15; // 0.15 = 15%씩 이동 (값이 작을수록 더 부드럽지만 느림)
+  currentProgress = currentProgress + (targetProgress - currentProgress) * lerpFactor;
+  
+  // 위치 저장
+  window.rollerRaceState.mascotPositions[speedometerId] = currentProgress;
   
   // 직선 트랙: 시작선(35)에서 종료선(810)까지 (우측 10%만 남기고 확장)
   const startX = 35;
   const endX = 810;
   const trackLength = endX - startX;
-  const x = startX + (trackLength * progress);
+  const x = startX + (trackLength * currentProgress);
   const y = 20; // 트랙 중앙 (높이 50% 축소: 40 → 20)
   
   mascotEl.classList.add('moving');
