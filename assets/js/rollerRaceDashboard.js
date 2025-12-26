@@ -5435,9 +5435,40 @@ function generateRaceReportPDF() {
     const { jsPDF } = window.jspdf || window;
     
     // 순위별 데이터 정렬
-    const sorted = [...window.rollerRaceState.speedometers]
-      .filter(s => s.totalDistance > 0)
-      .sort((a, b) => b.totalDistance - a.totalDistance);
+    const settings = window.rollerRaceState.raceSettings || {};
+    let sorted;
+    
+    if (settings.endByDistance) {
+      // 거리 경기: 경과시간(finishTime)이 작을수록 선순위
+      sorted = [...window.rollerRaceState.speedometers]
+        .filter(s => s.totalDistance > 0)
+        .sort((a, b) => {
+          // finishTime이 있는 경우: 작을수록 선순위
+          const aTime = a.finishTime !== null && a.finishTime !== undefined ? a.finishTime : Infinity;
+          const bTime = b.finishTime !== null && b.finishTime !== undefined ? b.finishTime : Infinity;
+          
+          if (aTime !== Infinity && bTime !== Infinity) {
+            return aTime - bTime; // 오름차순 (작을수록 선순위)
+          } else if (aTime !== Infinity) {
+            return -1; // a가 finishTime이 있으면 선순위
+          } else if (bTime !== Infinity) {
+            return 1; // b가 finishTime이 있으면 선순위
+          } else {
+            // 둘 다 finishTime이 없으면 거리로 정렬 (큰 거리가 선순위)
+            return b.totalDistance - a.totalDistance;
+          }
+        });
+    } else if (settings.endByTime) {
+      // 시간 경기: 이동거리가 클수록 선순위
+      sorted = [...window.rollerRaceState.speedometers]
+        .filter(s => s.totalDistance > 0)
+        .sort((a, b) => b.totalDistance - a.totalDistance);
+    } else {
+      // 기본값: 이동거리로 정렬
+      sorted = [...window.rollerRaceState.speedometers]
+        .filter(s => s.totalDistance > 0)
+        .sort((a, b) => b.totalDistance - a.totalDistance);
+    }
     
     // HTML 테이블 생성 (한글 폰트 문제 해결을 위해 HTML로 생성 후 이미지 변환)
     const reportHTML = `
@@ -5474,7 +5505,6 @@ function generateRaceReportPDF() {
               
               // 거리 경기 시: 결승점 도달 시간 사용, 없으면 전체 경과 시간 사용
               // 시간 경기 시: 전체 경과 시간 사용
-              const settings = window.rollerRaceState.raceSettings || {};
               let elapsedTime;
               if (settings.endByDistance && speedometer.finishTime !== null && speedometer.finishTime !== undefined) {
                 // 거리 경기이고 결승점 도달 시간이 있으면 사용
