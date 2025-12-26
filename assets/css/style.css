@@ -8869,10 +8869,6 @@ button[aria-disabled="true"] {
   position: relative;
   display: inline-block;
   color: #ff0000;
-  text-shadow: 
-    0 0 3px rgba(255, 255, 255, 0.9),
-    0 0 6px rgba(255, 255, 255, 0.7),
-    0 0 9px rgba(255, 255, 255, 0.5);
 }
 
 /* 글로우 펄스 효과 */
