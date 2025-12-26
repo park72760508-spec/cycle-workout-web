@@ -5810,21 +5810,27 @@ function updateReceiverButtonStatus() {
   
   if (isReceiverActive && hasPairedSpeedometer) {
     // 페어링 완료: 연두색 원 + 체크마크
-    indicator.style.background = '#28a745'; // 연두색
+    indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), #28a745 60%)';
     indicator.innerHTML = '✓';
     indicator.style.color = 'white';
     indicator.style.fontSize = '10px';
     indicator.style.lineHeight = '12px';
     indicator.style.textAlign = 'center';
     indicator.style.fontWeight = 'bold';
+    indicator.classList.add('led-active');
+    indicator.classList.remove('led-inactive');
   } else if (isReceiverActive) {
     // 활성화만 됨: 연두색 원 (체크마크 없음)
-    indicator.style.background = '#28a745'; // 연두색
+    indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), #28a745 60%)';
     indicator.innerHTML = '';
+    indicator.classList.add('led-active');
+    indicator.classList.remove('led-inactive');
   } else {
-    // 활성화 전: 빨강색 원
-    indicator.style.background = '#dc3545'; // 빨강색
+    // 활성화 전: 빨강색 원 (LED 효과)
+    indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), #dc3545 60%)';
     indicator.innerHTML = '';
+    indicator.classList.add('led-inactive');
+    indicator.classList.remove('led-active');
   }
 }
 
