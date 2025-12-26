@@ -406,7 +406,7 @@ function generateSpeedometerLabels() {
  * 속도 0 → 270도 (초기 위치), 속도 60 → 360도(0도), 속도 120 → 450도(90도)
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
  * 60km/h 경계를 넘어갈 때 반대로 돌아가지 않도록 연속적인 각도 추적
- */
+
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
@@ -476,6 +476,52 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // 바늘 행적선 업데이트
   updateSpeedometerNeedlePath(speedometerId, speed);
 }
+ */
+
+
+
+
+/**
+ * 속도계 바늘 업데이트 (부드러운 애니메이션 최적화)
+ * 60km/h 경계값을 부드럽게 넘어가도록 설계되었습니다.
+ */
+function updateSpeedometerNeedle(speedometerId, speed) {
+  const needle = document.getElementById(`needle-${speedometerId}`);
+  if (!needle) return;
+  
+  // 1. 목표 각도 계산 (기존 공식 유지)
+  const targetAngle = calculateNeedleAngle(speed);
+  
+  // 2. 이전 각도 상태 가져오기
+  let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
+  
+  if (previousAngle === undefined) {
+    previousAngle = targetAngle;
+    window.rollerRaceState.needleAngles[speedometerId] = targetAngle;
+  }
+
+  // 3. 최단 경로 회전 계산 (360도 회전 방지)
+  // 바늘이 0도와 360도 사이를 지나갈 때 반대로 한 바퀴 도는 현상을 방지합니다.
+  let diff = targetAngle - (previousAngle % 360);
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  
+  const finalAngle = previousAngle + diff;
+  window.rollerRaceState.needleAngles[speedometerId] = finalAngle;
+
+  // 4. 애니메이션 속성 적용
+  // cubic-bezier(0.25, 0.1, 0.25, 1)는 실제 기계 바늘처럼 처음에 빠르고 끝에 부드럽게 멈춥니다.
+  // 0.4초는 ANT+ 센서 데이터 수신 주기(0.25s) 사이를 자연스럽게 이어줍니다.
+  needle.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)'; 
+  needle.setAttribute('transform', `rotate(${finalAngle})`);
+  
+  // 5. 바늘 행적선 업데이트
+  // 바늘의 이동 속도에 맞춰 행적선도 함께 업데이트합니다.
+  updateSpeedometerNeedlePath(speedometerId, speed);
+}
+
+
+
 
 /**
  * 속도에 따른 바늘 각도 계산 (공통 함수)
@@ -5864,6 +5910,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastEventTime = eventTime;
   }
 }
+
 
 
 
