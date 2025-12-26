@@ -8868,13 +8868,11 @@ button[aria-disabled="true"] {
 .race-title-text {
   position: relative;
   display: inline-block;
-  color: #ffffff;
+  color: #ff0000;
   text-shadow: 
-    0 0 10px rgba(255, 255, 255, 0.8),
-    0 0 20px rgba(255, 255, 255, 0.6),
-    0 0 30px rgba(255, 255, 255, 0.4),
-    0 0 40px rgba(255, 255, 255, 0.2);
-  animation: glowPulse 2s ease-in-out infinite alternate;
+    0 0 3px rgba(255, 255, 255, 0.9),
+    0 0 6px rgba(255, 255, 255, 0.7),
+    0 0 9px rgba(255, 255, 255, 0.5);
 }
 
 /* 글로우 펄스 효과 */
