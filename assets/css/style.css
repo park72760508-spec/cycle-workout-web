@@ -9759,4 +9759,18 @@ button[aria-disabled="true"] {
   }
 }
 
+/* 마스코트 색깔띠 원 깜빡임 애니메이션 */
+.mascot-color-ring.blinking {
+  animation: mascot-blink 0.6s ease-in-out infinite;
+}
+
+@keyframes mascot-blink {
+  0%, 100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
 
