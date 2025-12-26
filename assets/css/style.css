@@ -9611,6 +9611,39 @@ button[aria-disabled="true"] {
     0 0 30px rgba(0, 255, 136, 0.4);
 }
 
+/* 주황색 블럭 안에 속도 및 이동거리 표시 (오른쪽 끝) */
+.track-stats-inside {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.track-stats-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.track-stat-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.track-stat-unit {
+  font-size: 11px; /* 숫자와 동일한 폰트 크기 */
+  font-weight: 300; /* 얇게 */
+  color: #ffffff; /* 흰색 */
+}
+
 .list-item-actions {
   display: flex;
   gap: 8px;
