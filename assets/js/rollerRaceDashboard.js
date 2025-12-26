@@ -146,6 +146,15 @@ function initRollerRaceDashboard() {
     .sort((a, b) => b.totalDistance - a.totalDistance);
   updateScoreboardRankings(sorted, false);
   updateRankDisplay(false);
+  
+  // 화면 크기 변경 시 트랙 너비 재조정 (반응형 처리)
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      normalizeTrackWidths();
+    }, 150); // 디바운싱: 150ms 후 실행
+  });
 }
 
 /**
