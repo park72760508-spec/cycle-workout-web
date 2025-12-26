@@ -247,6 +247,10 @@ function createSpeedometerElement(speedometer) {
         <!-- 바늘 중심 원 (고정) -->
         <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         
+        <!-- 바늘 행적선 (바늘 밑에 위치) -->
+        <g id="needle-path-${speedometer.id}" class="speedometer-needle-path" transform="translate(100, 140)">
+        </g>
+        
         <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
         <!-- 바늘은 원의 위쪽 가장자리에서 시작하여 원 안에 보이지 않게 함 -->
         <g class="speedometer-needle" transform="translate(100, 140)">
@@ -488,6 +492,74 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // 그룹이 이미 translate(100, 140)로 이동되어 있으므로, 바늘은 원점(0,0) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
   needle.setAttribute('transform', `rotate(${displayAngle})`);
+  
+  // 바늘 행적선 업데이트
+  updateSpeedometerNeedlePath(speedometerId, speed);
+}
+
+/**
+ * 속도계 바늘 행적선 업데이트
+ * 눈금 위치(5km/h 간격)에서만 반지름 실선을 그림
+ * 속도가 감소하면 현재 속도보다 높은 지점의 선은 삭제
+ */
+function updateSpeedometerNeedlePath(speedometerId, speed) {
+  const pathGroup = document.getElementById(`needle-path-${speedometerId}`);
+  if (!pathGroup) return;
+  
+  const maxSpeed = 120;
+  const centerX = 0; // transform으로 이미 이동되어 있음
+  const centerY = 0; // transform으로 이미 이동되어 있음
+  const radius = 80; // 속도계 반지름
+  const innerRadius = radius - 10; // 눈금 안쪽 반지름 (70)
+  const tickLengthShort = 7; // 짧은 눈금 길이
+  const tickLengthLong = 14; // 긴 눈금 길이 (20km/h 간격)
+  
+  // 현재 속도에 도달한 눈금까지만 표시 (5km/h 간격)
+  const currentTickSpeed = Math.floor(speed / 5) * 5; // 현재 속도보다 작거나 같은 최대 눈금
+  const maxTickSpeed = Math.min(currentTickSpeed, maxSpeed);
+  
+  // 기존 행적선 모두 제거
+  pathGroup.innerHTML = '';
+  
+  // 0부터 현재 눈금까지 행적선 그리기
+  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
+    // 각도 계산 (바늘 각도 계산 공식과 동일)
+    let angle;
+    if (tickSpeed <= 60) {
+      angle = 270 + 180 * (tickSpeed / maxSpeed);
+    } else {
+      angle = 180 * (tickSpeed / maxSpeed) - 90;
+    }
+    
+    // 각도를 0~360도 범위로 정규화
+    while (angle >= 360) angle -= 360;
+    while (angle < 0) angle += 360;
+    
+    const rad = (angle * Math.PI) / 180;
+    
+    // 눈금 길이 결정 (20km/h 간격은 긴 눈금, 나머지는 짧은 눈금)
+    const isMajor = tickSpeed % 20 === 0;
+    const tickLength = isMajor ? tickLengthLong : tickLengthShort;
+    const outerRadius = innerRadius + tickLength; // 행적선 끝 반지름 (눈금 바깥쪽 끝)
+    
+    // 반지름 실선 그리기 (중심에서 눈금 바깥쪽 끝까지)
+    const x1 = centerX;
+    const y1 = centerY;
+    const x2 = centerX + outerRadius * Math.cos(rad);
+    const y2 = centerY + outerRadius * Math.sin(rad);
+    
+    // 투명 민트색 얇은 실선
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', y2);
+    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); // 투명 민트색
+    line.setAttribute('stroke-width', '1');
+    line.setAttribute('stroke-linecap', 'round');
+    
+    pathGroup.appendChild(line);
+  }
 }
 
 
@@ -1285,6 +1357,11 @@ function startRace() {
       if (needle) {
         needle.style.transition = 'none'; // 초기화 시 애니메이션 없음
         needle.setAttribute('transform', 'rotate(270)');
+      }
+      // 행적선 초기화
+      const pathGroup = document.getElementById(`needle-path-${s.id}`);
+      if (pathGroup) {
+        pathGroup.innerHTML = '';
       }
     });
     
