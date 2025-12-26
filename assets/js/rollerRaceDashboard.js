@@ -53,7 +53,8 @@ window.rollerRaceState = {
   rankDisplayTimer: null, // 순위 표시 순환 타이머
   raceDataHistory: [], // 경기 중 데이터 히스토리 (주기적 저장)
   dataSaveTimer: null, // 데이터 저장 타이머
-  connectionStatusCheckTimer: null // 연결 상태 체크 타이머
+  connectionStatusCheckTimer: null, // 연결 상태 체크 타이머
+  needleAngles: {} // 각 속도계의 이전 바늘 각도 (속도계 ID -> 각도)
 };
 
 // ANT+ 통신 관련 전역 상태
@@ -400,6 +401,7 @@ function generateSpeedometerLabels() {
  * 바늘 각도 계산: 270도 + 180도*(속도/120)
  * 속도 0 → 270도 (초기 위치), 속도 60 → 360도(0도), 속도 120 → 450도(90도)
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
+ * 60km/h 경계를 넘어갈 때 반대로 돌아가지 않도록 최단 경로 계산
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
@@ -411,15 +413,45 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // speed = 0 → angle = 270도 (초기 위치)
   // speed = 60 → angle = 270 + 90 = 360도 (0도)
   // speed = 120 → angle = 270 + 180 = 450도 (90도)
-  let angle = 270 + 180 * (speed / maxSpeed);
+  const rawTargetAngle = 270 + 180 * (speed / maxSpeed);
   
-  // 360도 이상인 경우 정규화 (450도 → 90도)
-  if (angle >= 360) angle = angle - 360;
+  // 이전 각도 가져오기 (없으면 현재 계산된 각도 사용)
+  let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
+  
+  if (previousAngle === undefined) {
+    // 첫 번째 업데이트인 경우, 정규화된 각도로 초기화
+    previousAngle = rawTargetAngle >= 360 ? rawTargetAngle - 360 : rawTargetAngle;
+    window.rollerRaceState.needleAngles[speedometerId] = previousAngle;
+  }
+  
+  // 정규화된 각도 계산 (0~360도 범위)
+  const normalizedTarget = rawTargetAngle >= 360 ? rawTargetAngle - 360 : rawTargetAngle;
+  const normalizedPrevious = previousAngle >= 360 ? previousAngle - 360 : previousAngle;
+  
+  // 최단 경로 계산 (360도 경계를 넘어갈 때 반대로 돌아가지 않도록)
+  let angleDiff = normalizedTarget - normalizedPrevious;
+  
+  // 180도 이상 차이나면 반대 방향으로 가는 것이 더 짧음
+  if (angleDiff > 180) {
+    angleDiff -= 360;
+  } else if (angleDiff < -180) {
+    angleDiff += 360;
+  }
+  
+  // 이전 각도에서 최단 경로로 이동한 새로운 각도 계산
+  let newAngle = normalizedPrevious + angleDiff;
+  
+  // 각도를 0~360도 범위로 정규화
+  while (newAngle >= 360) newAngle -= 360;
+  while (newAngle < 0) newAngle += 360;
+  
+  // 이전 각도 저장 (연속성을 위해 정규화된 값 저장)
+  window.rollerRaceState.needleAngles[speedometerId] = newAngle;
   
   // 부드러운 애니메이션을 위해 transition 적용
   // 그룹이 이미 translate(100, 140)로 이동되어 있으므로, 바늘은 원점(0,0) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
-  needle.setAttribute('transform', `rotate(${angle})`);
+  needle.setAttribute('transform', `rotate(${newAngle})`);
 }
 
 /**
@@ -1205,6 +1237,18 @@ function startRace() {
     // 모든 속도계의 finishTime 초기화
     window.rollerRaceState.speedometers.forEach(s => {
       s.finishTime = null;
+    });
+    
+    // 모든 속도계의 바늘 각도 초기화 (속도 0 → 270도)
+    window.rollerRaceState.needleAngles = {};
+    window.rollerRaceState.speedometers.forEach(s => {
+      window.rollerRaceState.needleAngles[s.id] = 270;
+      // 바늘을 초기 위치(270도)로 설정
+      const needle = document.getElementById(`needle-${s.id}`);
+      if (needle) {
+        needle.style.transition = 'none'; // 초기화 시 애니메이션 없음
+        needle.setAttribute('transform', 'rotate(270)');
+      }
     });
     
     // 모든 속도계 거리 및 회전수 초기화
