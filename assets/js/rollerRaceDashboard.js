@@ -561,7 +561,8 @@ function updateScoreboardRankings(sorted, updateDisplay = false) {
       if (sorted.length > 0 && sorted[targetIndex]) {
         const speedometer = sorted[targetIndex];
         const rank = targetIndex + 1;
-        if (nameEl) nameEl.textContent = speedometer.name;
+        // 페어링 이름을 우선 사용, 없으면 기본 이름 사용
+        if (nameEl) nameEl.textContent = speedometer.pairingName || speedometer.name || '-';
         if (distanceEl) distanceEl.textContent = speedometer.totalDistance.toFixed(2) + 'km';
         if (numberEl) {
           if (rank >= 1 && rank <= 10) {
