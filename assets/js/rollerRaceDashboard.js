@@ -2090,14 +2090,11 @@ function updateSpeedometerListUI() {
             <!-- 자전거 프레임 -->
             <circle cx="0" cy="0" r="7" fill="${getMascotColor(speedometer.id)}" opacity="0.9"/>
             <circle cx="0" cy="0" r="4" fill="#ffffff"/>
-            <!-- 자전거 바퀴 -->
-            <circle cx="-10" cy="7" r="5" fill="#333" opacity="0.7"/>
-            <circle cx="10" cy="7" r="5" fill="#333" opacity="0.7"/>
           </g>
           
           <!-- 순위 표시 (둥근 네모 상자, 트랙 수직 중앙) -->
           <g id="straight-rank-group-${speedometer.id}" opacity="0">
-            <rect x="405" y="8" width="35" height="24" rx="6" ry="6" fill="rgba(0, 212, 170, 0.5)" stroke="rgba(0, 212, 170, 0.8)" stroke-width="1"/>
+            <rect x="405" y="8" width="35" height="24" rx="6" ry="6" fill="rgba(0, 212, 170, 1)" stroke="rgba(0, 212, 170, 0.8)" stroke-width="1"/>
             <text x="422.5" y="20" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
           </g>
         </svg>
