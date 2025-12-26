@@ -509,64 +509,60 @@ function calculateNeedleAngle(speed) {
  * 눈금 위치(5km/h 간격)에서만 반지름 실선을 그림
  * 속도가 감소하면 현재 속도보다 높은 지점의 선은 삭제
  */
+/**
+ * 속도계 바늘 행적선 업데이트 (수정본)
+ * 바늘의 각도 계산 공식과 Math.cos/sin 좌표계를 정확히 일치시킴
+ */
 function updateSpeedometerNeedlePath(speedometerId, speed) {
   const pathGroup = document.getElementById(`needle-path-${speedometerId}`);
   if (!pathGroup) return;
   
   const maxSpeed = 120;
-  const centerX = 0; // transform으로 이미 이동되어 있음
-  const centerY = 0; // transform으로 이미 이동되어 있음
-  const radius = 80; // 속도계 반지름
-  const innerRadius = radius - 10; // 눈금 안쪽 반지름 (70)
-  const tickLengthShort = 7; // 짧은 눈금 길이
-  const tickLengthLong = 14; // 긴 눈금 길이 (20km/h 간격)
-  const centerCircleRadius = 7; // 바늘 중심 원의 반지름
+  const centerX = 0; // transform(100, 140)으로 이미 이동됨
+  const centerY = 0; 
+  const radius = 80; 
+  const innerRadius = radius - 10; 
+  const tickLengthShort = 7; 
+  const tickLengthLong = 14; 
+  const centerCircleRadius = 7; 
   
-  // 현재 속도에 도달한 눈금까지만 표시 (5km/h 간격)
-  const currentTickSpeed = Math.floor(speed / 5) * 5; // 현재 속도보다 작거나 같은 최대 눈금
+  // 현재 속도까지의 5km/h 단위 눈금 계산
+  const currentTickSpeed = Math.floor(speed / 5) * 5;
   const maxTickSpeed = Math.min(currentTickSpeed, maxSpeed);
   
-  // 기존 행적선 모두 제거
   pathGroup.innerHTML = '';
   
-  // 0부터 현재 눈금까지 행적선 그리기
   for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
-    // 바늘 각도 계산 공식 사용 (바늘과 동일한 공식)
-    // 0~60km/h: 270도 + 180도 × (현재속도/120)
-    // 60km/h 초과: 180도 × (현재속도/120) - 90도
-    let angle = calculateNeedleAngle(tickSpeed);
+    // 1. 바늘과 동일한 각도 계산
+    let needleAngle = calculateNeedleAngle(tickSpeed);
     
-    // SVG rotate와 Math.cos/sin의 각도 기준 차이 보정:
-    // - 바늘이 rotate(270)으로 위쪽을 가리키는데, Math.cos/sin(270)은 아래쪽을 가리킴
-    // - 현재 행적선이 180도 위치에 표시되고 있음 (270도보다 90도 뒤쳐짐)
-    // - 270도 위치에 맞추려면 90도를 더해야 함
-    angle = angle + 90;
-    while (angle < 0) angle += 360;
-    while (angle >= 360) angle -= 360;
+    // 2. 좌표계 보정 (핵심 수정 부분)
+    // SVG rotate(0)은 '위쪽'을 가리키지만, Math.cos(0)은 '오른쪽'을 가리킵니다.
+    // 바늘 각도에서 90도를 빼야 Math 좌표계와 일치하게 됩니다.
+    let mathAngle = needleAngle - 90; 
     
-    const rad = (angle * Math.PI) / 180;
+    const rad = (mathAngle * Math.PI) / 180;
     
-    // 눈금 길이 결정 (20km/h 간격은 긴 눈금, 나머지는 짧은 눈금)
+    // 3. 선의 길이 결정 (20km 단위는 길게)
     const isMajor = tickSpeed % 20 === 0;
     const tickLength = isMajor ? tickLengthLong : tickLengthShort;
-    const outerRadius = innerRadius + tickLength; // 행적선 끝 반지름 (눈금 바깥쪽 끝)
+    const outerRadius = innerRadius + tickLength;
     
-    // 반지름 실선 그리기 (바늘 중심 원의 바깥쪽에서 시작하여 눈금 바깥쪽 끝까지)
-    // 시작점: 중심 원의 반지름 이후 (원 안에 보이지 않게)
-    const startRadius = centerCircleRadius + 1; // 원의 바깥쪽에서 시작 (약간의 여유)
+    // 4. 좌표 계산
+    const startRadius = centerCircleRadius + 1;
     const x1 = centerX + startRadius * Math.cos(rad);
     const y1 = centerY + startRadius * Math.sin(rad);
     const x2 = centerX + outerRadius * Math.cos(rad);
     const y2 = centerY + outerRadius * Math.sin(rad);
     
-    // 투명 민트색 얇은 실선
+    // 5. SVG Line 생성 및 추가
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1);
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
-    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); // 투명 민트색
-    line.setAttribute('stroke-width', '1');
+    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); // 민트색 반투명
+    line.setAttribute('stroke-width', '1.2');
     line.setAttribute('stroke-linecap', 'round');
     
     pathGroup.appendChild(line);
@@ -5868,6 +5864,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastEventTime = eventTime;
   }
 }
+
 
 
 
