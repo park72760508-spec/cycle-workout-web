@@ -5266,26 +5266,25 @@ function stopRaceDataSaving() {
  * 센서 연결 상태 주기적 체크 시작 (1초마다)
  */
 function startConnectionStatusCheck() {
-  // 기존 타이머가 있으면 정리
   if (window.rollerRaceState.connectionStatusCheckTimer) {
     clearInterval(window.rollerRaceState.connectionStatusCheckTimer);
-    window.rollerRaceState.connectionStatusCheckTimer = null;
   }
   
-  // 1초마다 체크
   window.rollerRaceState.connectionStatusCheckTimer = setInterval(() => {
     const now = Date.now();
     window.rollerRaceState.speedometers.forEach(speedometer => {
       if (speedometer.deviceId) {
+        // 1. 데이터 자체가 안 오는 경우 (배터리 부족, 거리 멀어짐)
         const timeSinceLastPacket = now - speedometer.lastPacketTime;
-        
-        // 30초 이상 데이터 없으면 주황색으로 변경
-        if (timeSinceLastPacket > 30000) {
-          if (speedometer.connected) {
-            speedometer.connected = false;
-            if(typeof updateSpeedometerConnectionStatus === 'function') {
-              updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
-            }
+        if (timeSinceLastPacket > 5000) { // 5초간 무응답 시 연결 끊김
+          updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
+          updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+        } 
+        // 2. 데이터는 오는데 바퀴가 안 도는 경우 (정지 상태)
+        else {
+          const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
+          if (timeSinceLastEvent > 2000) { // 2초간 바퀴 회전 이벤트 없으면 0km/h
+            updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
           }
         }
       }
@@ -5538,71 +5537,59 @@ function updateReceiverButtonStatus() {
  * 중복 데이터 리셋 버그 수정 및 데이터 페이지 필터링 추가
  */
 function processSpeedCadenceData(deviceId, data) {
-  // 데이터 길이 확인
   if (data.length < 8) return;
 
-  // ANT+ Speed 센서 데이터 추출 (Byte 4-5: 시간, Byte 6-7: 회전수)
   const eventTime = (data[5] << 8) | data[4];
   const revolutions = (data[7] << 8) | data[6];
 
   const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
   if (!speedometer) return;
 
-  // [중요] 이전 데이터와 완전히 동일하면 계산을 건너뜀 (0으로 리셋하지 않음)
-  if (speedometer.lastEventTime === eventTime && speedometer.lastRevolutions === revolutions) {
-    speedometer.lastPacketTime = Date.now(); // 수신 시간만 업데이트
+  // 수신 시간은 데이터가 올 때마다 무조건 업데이트 (연결 끊김 방지)
+  speedometer.lastPacketTime = Date.now();
+
+  // [중요] 이벤트 시간이 변하지 않았으면 (바퀴가 멈췄거나 중복 데이터) 계산 생략
+  if (speedometer.lastEventTime === eventTime) {
+    // 3초 이상 이벤트 시간이 변하지 않으면 정지로 판단하고 속도만 0으로 업데이트
+    if (Date.now() - speedometer.lastEventUpdate > 3000) {
+      updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+    }
     return;
   }
 
-  // 초기값 설정 (첫 데이터 수신 시)
-  if (speedometer.lastPacketTime === 0 || (speedometer.lastRevolutions === 0 && speedometer.lastEventTime === 0)) {
+  // 초기값 설정
+  if (speedometer.lastEventTime === 0) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastPacketTime = Date.now();
+    speedometer.lastEventUpdate = Date.now();
     return;
   }
 
-  // 변화량 계산 (Overflow 65535 처리)
+  // 변화량 계산
   let revDiff = revolutions - speedometer.lastRevolutions;
   if (revDiff < 0) revDiff += 65536;
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  // 수신 시간 업데이트
-  speedometer.lastPacketTime = Date.now();
-
-  // 실제 바퀴 회전 이벤트가 발생했을 때만 속도 계산
   if (timeDiff > 0 && revDiff >= 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
-    const circumference = wheelSpec.circumference; // mm
-    
-    // 속도 계산 로직
-    const distM = (revDiff * circumference) / 1000;
+    const distM = (revDiff * wheelSpec.circumference) / 1000;
     const timeS = timeDiff / 1024;
     const speed = (revDiff > 0) ? (distM / timeS) * 3.6 : 0;
 
-    // 비정상 수치(노이즈) 필터링
     if (speed < 200) {
       if (window.rollerRaceState.raceState === 'running') {
         speedometer.totalDistance += (distM / 1000);
-        speedometer.totalRevolutions += revDiff;
       }
-      
-      // UI 업데이트 호출
       updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
-      
-      // 연결 상태 활성화
-      if (!speedometer.connected) {
-        speedometer.connected = true;
-        updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
-      }
+      speedometer.connected = true;
+      speedometer.lastEventUpdate = Date.now(); // 실제 바퀴가 돌았을 때의 시간 업데이트
     }
     
-    // 마지막 값 저장
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-  } 
-  // else 구문 삭제: 데이터가 중복되었다고 해서 속도를 0으로 만들면 안 됨
+  }
 }
+
 
