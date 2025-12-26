@@ -2100,8 +2100,8 @@ function updateSpeedometerListUI() {
             <circle cx="10" cy="7" r="5" fill="#333" opacity="0.7"/>
           </g>
           
-          <!-- 순위 표시 (트랙 상단 중앙) -->
-          <text x="422.5" y="10" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
+          <!-- 순위 표시 (트랙 수직 중앙) -->
+          <text x="422.5" y="20" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0" dominant-baseline="middle">-</text>
         </svg>
       </div>
       <!-- 페어링 버튼 -->
