@@ -1457,21 +1457,15 @@ function startRace() {
  * 경기 일시정지
  */
 function pauseRace() {
-  if (window.rollerRaceState.raceState !== 'running') {
-    console.warn('[경기 일시정지] 경기가 실행 중이 아닙니다. 현재 상태:', window.rollerRaceState.raceState);
-    return;
-  }
-  
-  console.log('[경기 일시정지]');
-  
-  window.rollerRaceState.raceState = 'paused';
-  window.rollerRaceState.pauseStartTime = Date.now();
-  
-  // 타이머 정지
-  if (window.rollerRaceTimer) {
-    clearInterval(window.rollerRaceTimer);
-    window.rollerRaceTimer = null;
-  }
+  if (window.rollerRaceState.raceState !== 'running') return;
+    
+    window.rollerRaceState.raceState = 'paused';
+    window.rollerRaceState.pauseStartTime = Date.now();
+    
+    if (window.rollerRaceTimer) {
+      clearInterval(window.rollerRaceTimer);
+      window.rollerRaceTimer = null;
+    }
   
   // 데이터 저장 일시정지 (데이터는 유지)
   stopRaceDataSaving();
@@ -1501,6 +1495,10 @@ function pauseRace() {
 /**
  * 경기 종료
  */
+/**
+ * 경기 종료
+ * 종료 후에도 바퀴 정지 감지가 작동하도록 상태 체크 정지 로직을 제거했습니다.
+ */
 function stopRace() {
   console.log('[경기 종료]');
   
@@ -1512,7 +1510,7 @@ function stopRace() {
   
   window.rollerRaceState.raceState = 'finished';
   
-  // 타이머 정지
+  // 경기 타이머(경과 시간) 정지
   if (window.rollerRaceTimer) {
     clearInterval(window.rollerRaceTimer);
     window.rollerRaceTimer = null;
@@ -1521,8 +1519,8 @@ function stopRace() {
   // 데이터 저장 정지
   stopRaceDataSaving();
   
-  // 연결 상태 체크 정지
-  stopConnectionStatusCheck();
+  // [핵심 수정] 아래 코드를 삭제하거나 주석 처리하여 종료 후에도 정지 감지가 작동하게 합니다.
+  // stopConnectionStatusCheck(); 
   
   // 화면 잠금 해제
   releaseWakeLock();
@@ -1536,22 +1534,18 @@ function stopRace() {
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
   if (btnStop) btnStop.disabled = true;
-  if (btnBack) btnBack.disabled = false; // 경기 종료 시 뒤로가기 버튼 활성화
+  if (btnBack) btnBack.disabled = false; // 경기 종료 시 뒤로가기 활성화
 
-  // 최종 순위 표시
+  // 최종 순위 및 마스코트 위치 업데이트
   updateRankings();
-  
-  // 모든 마스코트 위치 업데이트 (최종 위치)
   updateAllStraightTrackMascots();
   
-  // 전광판 순위 순환 정지
+  // 전광판 순위 순환 정지 및 초기화
   stopRankDisplayRotation();
-  
-  // 첫 번째 순위부터 다시 표시 (애니메이션 없이)
   window.rollerRaceState.rankDisplayStartIndex = 0;
   updateRankDisplay(false);
   
-  // 경기 종료 리포트 생성 (PDF)
+  // 경기 종료 리포트 생성
   generateRaceReportPDF();
 
   if (typeof showToast === 'function') {
@@ -5900,6 +5894,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.connected = true;
   }
 }
+
 
 
 
