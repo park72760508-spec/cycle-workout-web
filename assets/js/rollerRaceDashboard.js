@@ -409,11 +409,26 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   
   const maxSpeed = 120;
   
-  // 바늘 각도 계산: 270도 + 180도*(속도/120)
-  // speed = 0 → angle = 270도 (초기 위치)
-  // speed = 60 → angle = 270 + 90 = 360도 (0도)
-  // speed = 120 → angle = 270 + 180 = 450도 (90도)
-  const targetAngle = 270 + 180 * (speed / maxSpeed);
+  // 바늘 각도 계산 (구간별 공식)
+  // 1. 0~60km/h: 270도 + 180도*(현재속도/120)
+  // 2. 60km/h 초과: 180도*(현재속도/120) - 90도
+  // 이 로직으로 60km/h 경계에서 연속성이 보장됨
+  let targetAngle;
+  if (speed <= 60) {
+    // 0~60km/h: 270도 + 180도*(속도/120)
+    // speed = 0 → angle = 270도
+    // speed = 60 → angle = 270 + 90 = 360도 (0도)
+    targetAngle = 270 + 180 * (speed / maxSpeed);
+  } else {
+    // 60km/h 초과: 180도*(속도/120) - 90도
+    // speed = 60.01 → angle = 180*(60.01/120) - 90 = 0.015도
+    // speed = 120 → angle = 180 - 90 = 90도
+    targetAngle = 180 * (speed / maxSpeed) - 90;
+  }
+  
+  // 각도를 0~360도 범위로 정규화
+  while (targetAngle >= 360) targetAngle -= 360;
+  while (targetAngle < 0) targetAngle += 360;
   
   // 이전 각도 가져오기 (연속적인 각도 값 유지)
   let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
@@ -430,24 +445,23 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   speedometer.previousSpeed = speed;
   
   // 속도 변화 방향에 따라 각도 변화 방향 결정
-  // 속도가 증가하면 각도도 증가, 속도가 감소하면 각도도 감소
   const speedDiff = speed - previousSpeed;
   
-  // 이전 각도와 목표 각도를 정규화하여 비교
-  const normalizedPrevious = previousAngle >= 360 ? previousAngle - 360 : (previousAngle < 0 ? previousAngle + 360 : previousAngle);
-  const normalizedTarget = targetAngle >= 360 ? targetAngle - 360 : (targetAngle < 0 ? targetAngle + 360 : targetAngle);
+  // 이전 각도 정규화
+  let normalizedPrevious = previousAngle;
+  while (normalizedPrevious >= 360) normalizedPrevious -= 360;
+  while (normalizedPrevious < 0) normalizedPrevious += 360;
   
   // 각도 차이 계산
-  let angleDiff = normalizedTarget - normalizedPrevious;
+  let angleDiff = targetAngle - normalizedPrevious;
   
-  // 180도 이상 차이나는 경우 처리
+  // 180도 이상 차이나는 경우 최단 경로 선택
   if (Math.abs(angleDiff) > 180) {
-    // 속도 변화 방향에 따라 각도 변화 방향 결정
     if (speedDiff > 0) {
-      // 속도 증가: 각도 증가 방향 (양수)
+      // 속도 증가: 각도 증가 방향
       if (angleDiff < 0) angleDiff += 360;
     } else if (speedDiff < 0) {
-      // 속도 감소: 각도 감소 방향 (음수)
+      // 속도 감소: 각도 감소 방향
       if (angleDiff > 0) angleDiff -= 360;
     } else {
       // 속도 변화 없음: 최단 경로 선택
