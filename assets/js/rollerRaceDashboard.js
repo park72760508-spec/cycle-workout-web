@@ -2208,10 +2208,10 @@ function updateSpeedometerListUI() {
             <circle cx="0" cy="0" r="4" fill="#ffffff"/>
           </g>
           
-          <!-- 순위 표시 (출발선 옆 녹색 바탕) -->
+          <!-- 순위 표시 (출발선 왼쪽 녹색 바탕) -->
           <g id="straight-rank-group-${speedometer.id}" opacity="0">
-            <rect x="40" y="9" width="30" height="22" rx="11" ry="11" fill="#2d5016" stroke="rgba(255, 255, 255, 0.8)" stroke-width="1.5"/>
-            <text x="55" y="22" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
+            <rect x="2" y="9" width="30" height="22" rx="11" ry="11" fill="#2d5016" stroke="rgba(255, 255, 255, 0.8)" stroke-width="1.5"/>
+            <text x="17" y="22" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
           </g>
         </svg>
       </div>
