@@ -446,6 +446,9 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(1);
   if (distanceValueEl) distanceValueEl.textContent = distance.toFixed(2);
   
+  // 직선 트랙 내 속도 및 거리 표시 업데이트
+  updateStraightTrackStats(speedometerId, speed, distance);
+  
   // 바늘 업데이트 (속도가 0이어도 즉시 반영)
   updateSpeedometerNeedle(speedometerId, speed);
   
@@ -1131,6 +1134,9 @@ function startRace() {
       s.speedSum = 0;
       s.speedCount = 0;
       s.lastRevolutions = 0;
+      
+      // 직선 트랙 내 속도 및 거리 표시 초기화
+      updateStraightTrackStats(s.id, 0, 0);
     });
     
     // 초기 시간 표시
@@ -2046,6 +2052,20 @@ function updateSpeedometerListUI() {
           
           <!-- 순위 표시 (트랙 상단 중앙) -->
           <text x="422.5" y="10" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0">-</text>
+          
+          <!-- 현재 속도 및 이동거리 표시 (우측 끝) -->
+          <g id="straight-track-stats-${speedometer.id}" transform="translate(810, 0)">
+            <!-- 현재 속도 -->
+            <text x="0" y="15" text-anchor="end" fill="#ffffff" font-size="11" font-weight="600" id="straight-speed-text-${speedometer.id}">
+              <tspan fill="#ffffff">0</tspan>
+              <tspan fill="#999999" font-size="3.3" font-weight="300">km/h</tspan>
+            </text>
+            <!-- 이동거리 -->
+            <text x="0" y="28" text-anchor="end" fill="#ffffff" font-size="11" font-weight="600" id="straight-distance-text-${speedometer.id}">
+              <tspan fill="#ffffff">0.00</tspan>
+              <tspan fill="#999999" font-size="3.3" font-weight="300">km</tspan>
+            </text>
+          </g>
         </svg>
       </div>
       <!-- 페어링 버튼 -->
@@ -2059,6 +2079,9 @@ function updateSpeedometerListUI() {
       </div>
     `;
     listEl.appendChild(item);
+    
+    // 초기 속도 및 거리 표시 설정
+    updateStraightTrackStats(speedometer.id, speedometer.currentSpeed || 0, speedometer.totalDistance || 0);
   }
   
   // 초기 마스코트 위치 설정
@@ -2294,6 +2317,24 @@ function updateStraightTrackMascot(speedometerId, progress) {
   setTimeout(() => {
     mascotEl.classList.remove('moving');
   }, 500);
+}
+
+/**
+ * 직선 트랙 내 속도 및 거리 표시 업데이트
+ */
+function updateStraightTrackStats(speedometerId, speed, distance) {
+  const speedTextEl = document.getElementById(`straight-speed-text-${speedometerId}`);
+  const distanceTextEl = document.getElementById(`straight-distance-text-${speedometerId}`);
+  
+  if (speedTextEl) {
+    // 현재 속도 표시 (숫자 + 단위)
+    speedTextEl.innerHTML = `<tspan fill="#ffffff">${speed.toFixed(1)}</tspan><tspan fill="#999999" font-size="3.3" font-weight="300">km/h</tspan>`;
+  }
+  
+  if (distanceTextEl) {
+    // 이동거리 표시 (숫자 + 단위)
+    distanceTextEl.innerHTML = `<tspan fill="#ffffff">${distance.toFixed(2)}</tspan><tspan fill="#999999" font-size="3.3" font-weight="300">km</tspan>`;
+  }
 }
 
 /**
