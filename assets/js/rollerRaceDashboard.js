@@ -1379,15 +1379,11 @@ function startRace() {
   
   console.log('[경기 시작]');
   
-  // 일시정지 상태에서 재개
   if (window.rollerRaceState.raceState === 'paused') {
     const now = Date.now();
     window.rollerRaceState.pausedTime += now - window.rollerRaceState.pauseStartTime;
     window.rollerRaceState.raceState = 'running';
-    // 데이터 저장 재개
     startRaceDataSaving();
-    
-    // 연결 상태 체크 재개
     startConnectionStatusCheck();
   } else {
     // 새 경기 시작
@@ -1396,29 +1392,23 @@ function startRace() {
     window.rollerRaceState.raceState = 'running';
     window.rollerRaceState.totalElapsedTime = 0;
     
-    // 모든 속도계의 finishTime 초기화
     window.rollerRaceState.speedometers.forEach(s => {
       s.finishTime = null;
     });
     
-    // 모든 속도계의 바늘 각도 및 경로 초기화 (속도 0 → 270도)
     window.rollerRaceState.needleAngles = {};
     window.rollerRaceState.speedometers.forEach(s => {
       window.rollerRaceState.needleAngles[s.id] = 270;
-      // 바늘을 초기 위치(270도)로 설정
       const needle = document.getElementById(`needle-${s.id}`);
       if (needle) {
-        needle.style.transition = 'none'; // 초기화 시 애니메이션 없음
+        needle.style.transition = 'none';
         needle.setAttribute('transform', 'rotate(270)');
       }
-      // 행적선 초기화
       const pathGroup = document.getElementById(`needle-path-${s.id}`);
-      if (pathGroup) {
-        pathGroup.innerHTML = '';
-      }
+      if (pathGroup) pathGroup.innerHTML = '';
     });
     
-    // 모든 속도계 거리 및 회전수 초기화
+    // 데이터 초기화 및 동기화 플래그 설정
     window.rollerRaceState.speedometers.forEach(s => {
       s.totalDistance = 0;
       s.totalRevolutions = 0;
@@ -1427,77 +1417,53 @@ function startRace() {
       s.averageSpeed = 0;
       s.speedSum = 0;
       s.speedCount = 0;
-      s.lastRevolutions = 0;
       
-      // 직선 트랙 내 속도 및 거리 표시 초기화
+      // [수정 핵심] lastRevolutions를 0으로 리셋하지 않고 동기화 플래그 부여
+      // 이렇게 해야 센서의 현재 누적값을 경기 시작점으로 인식합니다.
+      s.needsSync = true; 
+      s.lastEventTime = 0; 
+      
       updateStraightTrackStats(s.id, 0, 0);
     });
     
-    // 마스코트 위치 초기화 (Lerp를 위한 현재 위치 저장소 초기화)
     window.rollerRaceState.mascotPositions = {};
-    
-    // 초기 시간 표시
     const elapsedTimeEl = document.getElementById('elapsedTime');
     const scoreboardTimeEl = document.getElementById('scoreboardTime');
     if (elapsedTimeEl) elapsedTimeEl.textContent = '00:00:00';
     if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
     
-    // 모든 마스코트를 시작 위치로 초기화
     updateAllStraightTrackMascots();
   }
   
-  // 기존 타이머가 있으면 정리
   if (window.rollerRaceTimer) {
     clearInterval(window.rollerRaceTimer);
     window.rollerRaceTimer = null;
   }
   
-  // 타이머 시작 (즉시 시작)
-  updateElapsedTime(); // 즉시 한 번 실행
-  window.rollerRaceTimer = setInterval(() => {
-    updateElapsedTime();
-  }, 1000);
+  updateElapsedTime();
+  window.rollerRaceTimer = setInterval(() => { updateElapsedTime(); }, 1000);
   
-  // 경기 데이터 저장 시작 (5초마다 저장)
   startRaceDataSaving();
-  
-  // 센서 연결 상태 주기적 체크 시작 (1초마다)
   startConnectionStatusCheck();
   
-  // 버튼 상태 업데이트
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
   const btnStop = document.getElementById('btnStopRace');
   const btnBack = document.getElementById('btnBackFromRollerRace');
 
-  if (btnStart) btnStart.disabled = true; // 시작 버튼 비활성화
+  if (btnStart) btnStart.disabled = true;
   if (btnPause) btnPause.disabled = false;
   if (btnStop) btnStop.disabled = false;
-  if (btnBack) btnBack.disabled = true; // 뒤로가기 버튼 비활성화
+  if (btnBack) btnBack.disabled = true;
 
-  // ==========================================
-  // [추가된 코드] 경기 시작 시 연속 스캔 모드 활성화
-  // ==========================================
   if (window.antState.usbDevice) {
-    // 함수가 정의되어 있는지 확인 후 실행 (안전장치)
-    if (typeof startContinuousScan === 'function') {
-        startContinuousScan();
-    }
+    if (typeof startContinuousScan === 'function') startContinuousScan();
   }
-  // ==========================================
   
-  // 전광판 순위 순환 시작
   startRankDisplayRotation();
-  
-  // 연결 상태 체크 타이머 시작
-  startConnectionStatusCheck();
-  
-  // 화면 잠금 활성화 (절전 모드 방지)
   activateWakeLock();
 
-  if (typeof showToast === 'function') {
-    showToast('경기가 시작되었습니다!');
-  }
+  if (typeof showToast === 'function') showToast('경기가 시작되었습니다!');
 }
 
 /**
@@ -5862,73 +5828,56 @@ function updateReceiverButtonStatus() {
 function processSpeedCadenceData(deviceId, data) {
   if (data.length < 8) return;
 
-  // ANT+ 규격: 4-5번 바이트는 이벤트 시간(1/1024초), 6-7번 바이트는 누적 회전수
   const eventTime = (data[5] << 8) | data[4];
   const revolutions = (data[7] << 8) | data[6];
 
   const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
   if (!speedometer) return;
 
-  const now = Date.now();
-  speedometer.lastPacketTime = now; // 패킷 수신 시간 갱신 (연결 유지용)
-
-  // 1. 초기 상태 처리 (페어링 직후 첫 데이터)
-  if (speedometer.lastEventTime === 0 || speedometer.lastEventTime === undefined) {
+  // [수정] 경기 시작 후 첫 패킷이거나 수동 동기화가 필요한 경우
+  if (speedometer.needsSync || speedometer.lastEventTime === 0) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastEventUpdate = now;
-    speedometer.isReady = true; // 계산 준비 완료 플래그
-    console.log(`[트랙${speedometer.id}] 센서 동기화 완료. 다음 패킷부터 속도 출력.`);
+    speedometer.lastEventUpdate = Date.now();
+    speedometer.needsSync = false;
+    console.log(`[트랙${speedometer.id}] 경기 시작 기준점 동기화 완료: ${revolutions}`);
     return;
   }
 
-  // 2. 이벤트 시간 변화 확인
-  // 고속 회전 시에도 eventTime이 변하지 않았다면 센서가 아직 새로운 회전을 감지 못한 것임
-  if (speedometer.lastEventTime === eventTime) {
-    // 2초 이상 데이터가 고정되어 있다면 멈춘 것으로 간주
-    if (now - speedometer.lastEventUpdate > 2000) {
-      updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
-    }
-    return;
-  }
-
-  // 3. 회전수 및 시간 차이 계산 (16비트 롤오버 처리 포함)
+  // 차이 계산
   let revDiff = revolutions - speedometer.lastRevolutions;
-  if (revDiff < 0) revDiff += 65536; // 65535 다음 0으로 돌아가는 경우 대응
+  if (revDiff < 0) revDiff += 65536;
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  // 4. 속도 계산 (물리 공식 적용)
-  if (timeDiff > 0 && revDiff > 0) {
+  if (timeDiff > 0 && revDiff >= 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
-    
-    // 이동 거리(m) = 회전수 차이 * 바퀴 둘레(mm) / 1000
-    const distanceMeters = (revDiff * wheelSpec.circumference) / 1000;
-    // 경과 시간(s) = 시간 차이 / 1024
-    const timeSeconds = timeDiff / 1024;
-    
-    // 속도(km/h) 계산 공식
-    // $$Speed (km/h) = \frac{Distance (m)}{Time (s)} \times 3.6$$
-    const speed = (distanceMeters / timeSeconds) * 3.6;
+    const distM = (revDiff * wheelSpec.circumference) / 1000;
+    const timeS = timeDiff / 1024;
+    const speed = (distM / timeS) * 3.6;
 
-    // 고속 주행(예: 120km/h 이하) 데이터만 유효값으로 처리
-    if (speed < 150) {
-      if (window.rollerRaceState.raceState === 'running') {
-        speedometer.totalDistance += (distanceMeters / 1000);
-      }
-      
-      // UI 및 바늘 업데이트 호출
-      updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
-      
-      // 마지막 유효 이벤트 정보 저장
+    // [핵심 수정] 속도가 너무 빠르면 데이터를 버리되, 
+    // 현재의 누적 값(revolutions)은 기준점으로 저장해야 다음 계산이 정상화됩니다.
+    if (speed > 150) {
+      console.warn(`[트랙${speedometer.id}] 비정상 속도 감지(${speed.toFixed(1)}km/h). 기준점 재설정.`);
       speedometer.lastRevolutions = revolutions;
       speedometer.lastEventTime = eventTime;
-      speedometer.lastEventUpdate = now;
-      speedometer.connected = true;
+      return; 
     }
+
+    if (window.rollerRaceState.raceState === 'running') {
+      speedometer.totalDistance += (distM / 1000);
+    }
+    
+    updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
+    
+    speedometer.lastRevolutions = revolutions;
+    speedometer.lastEventTime = eventTime;
+    speedometer.lastEventUpdate = Date.now();
   }
 }
+
 
 
 
