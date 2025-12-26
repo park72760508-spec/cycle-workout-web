@@ -411,28 +411,8 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
-  const maxSpeed = 120;
-  
-  // 바늘 각도 계산 (구간별 공식)
-  // 1. 0~60km/h: 270도 + 180도*(현재속도/120)
-  // 2. 60km/h 초과: 180도*(현재속도/120) - 90도
-  // 이 로직으로 60km/h 경계에서 연속성이 보장됨
-  let targetAngle;
-  if (speed <= 60) {
-    // 0~60km/h: 270도 + 180도*(속도/120)
-    // speed = 0 → angle = 270도
-    // speed = 60 → angle = 270 + 90 = 360도 (0도)
-    targetAngle = 270 + 180 * (speed / maxSpeed);
-  } else {
-    // 60km/h 초과: 180도*(속도/120) - 90도
-    // speed = 60.01 → angle = 180*(60.01/120) - 90 = 0.015도
-    // speed = 120 → angle = 180 - 90 = 90도
-    targetAngle = 180 * (speed / maxSpeed) - 90;
-  }
-  
-  // 각도를 0~360도 범위로 정규화
-  while (targetAngle >= 360) targetAngle -= 360;
-  while (targetAngle < 0) targetAngle += 360;
+  // 바늘 각도 계산 (공통 함수 사용)
+  const targetAngle = calculateNeedleAngle(speed);
   
   // 이전 각도 가져오기 (연속적인 각도 값 유지)
   let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
@@ -498,6 +478,33 @@ function updateSpeedometerNeedle(speedometerId, speed) {
 }
 
 /**
+ * 속도에 따른 바늘 각도 계산 (공통 함수)
+ * 0~60km/h: 270도 + 180도 × (현재속도/120)
+ * 60km/h 초과: 180도 × (현재속도/120) - 90도
+ */
+function calculateNeedleAngle(speed) {
+  const maxSpeed = 120;
+  let angle;
+  if (speed <= 60) {
+    // 0~60km/h: 270도 + 180도 × (속도/120)
+    // speed = 0 → angle = 270도
+    // speed = 60 → angle = 270 + 90 = 360도 (0도)
+    angle = 270 + 180 * (speed / maxSpeed);
+  } else {
+    // 60km/h 초과: 180도 × (속도/120) - 90도
+    // speed = 60.01 → angle = 180*(60.01/120) - 90 = 0.015도
+    // speed = 120 → angle = 180 - 90 = 90도
+    angle = 180 * (speed / maxSpeed) - 90;
+  }
+  
+  // 각도를 0~360도 범위로 정규화
+  while (angle >= 360) angle -= 360;
+  while (angle < 0) angle += 360;
+  
+  return angle;
+}
+
+/**
  * 속도계 바늘 행적선 업데이트
  * 눈금 위치(5km/h 간격)에서만 반지름 실선을 그림
  * 속도가 감소하면 현재 속도보다 높은 지점의 선은 삭제
@@ -513,6 +520,7 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
   const innerRadius = radius - 10; // 눈금 안쪽 반지름 (70)
   const tickLengthShort = 7; // 짧은 눈금 길이
   const tickLengthLong = 14; // 긴 눈금 길이 (20km/h 간격)
+  const centerCircleRadius = 7; // 바늘 중심 원의 반지름
   
   // 현재 속도에 도달한 눈금까지만 표시 (5km/h 간격)
   const currentTickSpeed = Math.floor(speed / 5) * 5; // 현재 속도보다 작거나 같은 최대 눈금
@@ -523,18 +531,8 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
   
   // 0부터 현재 눈금까지 행적선 그리기
   for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
-    // 각도 계산 (바늘 각도 계산 공식과 동일)
-    let angle;
-    if (tickSpeed <= 60) {
-      angle = 270 + 180 * (tickSpeed / maxSpeed);
-    } else {
-      angle = 180 * (tickSpeed / maxSpeed) - 90;
-    }
-    
-    // 각도를 0~360도 범위로 정규화
-    while (angle >= 360) angle -= 360;
-    while (angle < 0) angle += 360;
-    
+    // 바늘 각도 계산 공식 사용 (속도 0일 때 270도에서 시작)
+    const angle = calculateNeedleAngle(tickSpeed);
     const rad = (angle * Math.PI) / 180;
     
     // 눈금 길이 결정 (20km/h 간격은 긴 눈금, 나머지는 짧은 눈금)
@@ -542,9 +540,11 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     const tickLength = isMajor ? tickLengthLong : tickLengthShort;
     const outerRadius = innerRadius + tickLength; // 행적선 끝 반지름 (눈금 바깥쪽 끝)
     
-    // 반지름 실선 그리기 (중심에서 눈금 바깥쪽 끝까지)
-    const x1 = centerX;
-    const y1 = centerY;
+    // 반지름 실선 그리기 (바늘 중심 원의 바깥쪽에서 시작하여 눈금 바깥쪽 끝까지)
+    // 시작점: 중심 원의 반지름 이후 (원 안에 보이지 않게)
+    const startRadius = centerCircleRadius + 1; // 원의 바깥쪽에서 시작 (약간의 여유)
+    const x1 = centerX + startRadius * Math.cos(rad);
+    const y1 = centerY + startRadius * Math.sin(rad);
     const x2 = centerX + outerRadius * Math.cos(rad);
     const y2 = centerY + outerRadius * Math.sin(rad);
     
