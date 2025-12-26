@@ -105,31 +105,25 @@ class SpeedometerData {
 /**
  * 대시보드 초기화
  */
+/**
+ * 대시보드 초기화
+ * 센서 연결 즉시 정지 감지가 작동하도록 타이머 로직을 전면에 배치했습니다.
+ */
 function initRollerRaceDashboard() {
   console.log('[평로라 대회] 대시보드 초기화');
   
-  // 저장된 속도계 목록 로드
+  // 저장된 데이터 및 설정 로드
   loadSpeedometerList();
-  
-  // 속도계 그리드 생성
   createSpeedometerGrid();
-  
-  // 속도계 목록 UI 업데이트
   updateSpeedometerListUI();
-  
-  // 경기 설정 로드
   loadRaceSettings();
-  
-  // 타겟 설정 로드
   loadTargetSettings();
   
-  // 수신기 활성화 버튼 상태 초기화
+  // 수신기 및 UI 상태 초기화
   updateReceiverButtonStatus();
-  
-  // 타이머 초기화
   window.rollerRaceTimer = null;
   
-  // 전광판 초기화
+  // 전광판 초기값 설정
   const scoreboardTimeEl = document.getElementById('scoreboardTime');
   const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
   const scoreboardRidersEl = document.getElementById('scoreboardRiders');
@@ -137,18 +131,9 @@ function initRollerRaceDashboard() {
   if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = '0.0';
   if (scoreboardRidersEl) scoreboardRidersEl.textContent = '0';
   
-  // 순위 표시 초기화
+  // 순위 표시 초기화 및 타겟 설정 업데이트
   window.rollerRaceState.rankDisplayStartIndex = 0;
   stopRankDisplayRotation();
-  
-  // 초기 순위 표시 (고정된 상자 생성)
-  const sorted = [...window.rollerRaceState.speedometers]
-    .filter(s => s.connected && s.totalDistance > 0)
-    .sort((a, b) => b.totalDistance - a.totalDistance);
-  updateScoreboardRankings(sorted, false);
-  updateRankDisplay(false);
-  
-  // 타겟 설정 표시 업데이트
   updateTargetSettingsDisplay();
   
   // 버튼 초기 상태 설정
@@ -160,15 +145,17 @@ function initRollerRaceDashboard() {
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
   if (btnStop) btnStop.disabled = true;
-  if (btnBack) btnBack.disabled = false; // 초기 상태: 뒤로가기 버튼 활성화
-  
-  // 화면 크기 변경 시 트랙 너비 재조정 (반응형 처리)
+  if (btnBack) btnBack.disabled = false;
+
+  // [핵심 수정] 경기 시작 전이라도 센서가 인식되면 정지를 감지할 수 있도록 타이머 즉시 시작
+  startConnectionStatusCheck(); 
+
+  // 화면 잠금 활성화 및 리사이즈 이벤트 등록
+  activateWakeLock();
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      normalizeTrackWidths();
-    }, 150); // 디바운싱: 150ms 후 실행
+    resizeTimeout = setTimeout(() => { normalizeTrackWidths(); }, 150);
   });
 }
 
@@ -5512,6 +5499,9 @@ function stopRaceDataSaving() {
 /**
  * 센서 연결 및 주행 상태 주기적 체크 (정지 감지 강화)
  */
+/**
+ * 센서 연결 및 정지 상태 주기적 체크 (대기 중 정지 감지 포함)
+ */
 function startConnectionStatusCheck() {
   if (window.rollerRaceState.connectionStatusCheckTimer) {
     clearInterval(window.rollerRaceState.connectionStatusCheckTimer);
@@ -5520,22 +5510,24 @@ function startConnectionStatusCheck() {
   window.rollerRaceState.connectionStatusCheckTimer = setInterval(() => {
     const now = Date.now();
     window.rollerRaceState.speedometers.forEach(speedometer => {
+      // 센서 ID가 설정된 경우에만 체크
       if (speedometer.deviceId) {
-        // 1. 신호 자체가 완전히 끊긴 경우 (5초 기준)
+        // 마지막 데이터 수신 시간 확인 (신호 단절 체크)
         const timeSinceLastPacket = now - (speedometer.lastPacketTime || 0);
+        
         if (timeSinceLastPacket > 5000) { 
+          // 5초간 패킷이 전혀 없으면 '미연결' 처리 및 속도 0
           updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
           updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
         } 
-        // 2. 신호는 오고 있으나 바퀴 회전 이벤트가 없는 경우 (정지 상태)
         else {
+          // 신호는 오고 있으나 실제 바퀴 회전(Event)이 없는 경우 (정지 체크)
           const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
-          // 마지막 회전 이벤트로부터 2초 이상 경과 시 즉시 0km/h 처리
-          if (timeSinceLastEvent > 2000) { 
-            if (speedometer.currentSpeed > 0) {
-              console.log(`[트랙${speedometer.id}] 회전 멈춤 감지 -> 속도 0 리셋`);
-              updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
-            }
+          
+          // 마지막 회전 이벤트로부터 2초 이상 지났는데 속도가 0이 아니라면
+          if (timeSinceLastEvent > 2000 && speedometer.currentSpeed > 0) {
+            console.log(`[트랙${speedometer.id}] 정지 감지 - 속도 0 리셋`);
+            updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
           }
         }
       }
@@ -5836,11 +5828,14 @@ function updateReceiverButtonStatus() {
  * [통합 개선본] Speed/Cadence 데이터 처리 모듈
  * 고속 주행 대응, 경기 시작 동기화, 정지 감지 로직이 모두 포함되었습니다.
  */
+/**
+ * 통합 Speed/Cadence 데이터 처리 모듈
+ * 고속 주행 인식 + 경기 시작 동기화 + 정지 시 즉시 0 리셋 로직 통합
+ */
 function processSpeedCadenceData(deviceId, data) {
   if (data.length < 8) return;
 
-  // 1. ANT+ 데이터 추출 (시간 및 누적 회전수)
-  // 4-5번 바이트: 이벤트 시간 (1/1024초 단위), 6-7번 바이트: 누적 회전수
+  // 데이터 추출 (이벤트 시간 및 누적 회전수)
   const eventTime = (data[5] << 8) | data[4];
   const revolutions = (data[7] << 8) | data[6];
 
@@ -5848,71 +5843,64 @@ function processSpeedCadenceData(deviceId, data) {
   if (!speedometer) return;
 
   const now = Date.now();
-  // 패킷 수신 시간은 데이터가 올 때마다 무조건 업데이트 (연결 상태 유지용)
+  // 데이터 수신 시간 갱신 (신호 단절 여부 판단용)
   speedometer.lastPacketTime = now;
 
-  // 2. 초기 동기화 처리 (경기 시작 버튼 클릭 직후 또는 페어링 직후)
-  // s.needsSync 플래그는 startRace()에서 설정됩니다.
+  // 1. 초기 동기화 (경기 시작 직후 또는 첫 페어링 시)
   if (speedometer.needsSync || speedometer.lastEventTime === 0 || speedometer.lastEventTime === undefined) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
     speedometer.needsSync = false;
-    console.log(`[트랙${speedometer.id}] 기준점 동기화 완료 (현재 누적 회전수: ${revolutions})`);
     return;
   }
 
-  // 3. 바퀴 회전 여부 확인
-  // 이벤트 시간이 변하지 않았다면 바퀴가 굴러가지 않은 것입니다.
+  // 2. 바퀴 회전 여부 판별
+  // 이벤트 시간이 이전과 같다면 바퀴가 회전하지 않은 것입니다.
   if (speedometer.lastEventTime === eventTime) {
-    // 여기서 lastEventUpdate를 갱신하지 않아야 startConnectionStatusCheck에서 정지를 감지할 수 있습니다.
+    // 여기서 return만 하고 lastEventUpdate를 갱신하지 않아야 감시 타이머가 정지를 인식합니다.
     return;
   }
 
-  // 4. 변화량 계산 (16비트 롤오버/리셋 대응)
-  // revolutions와 eventTime은 0~65535 범위를 돌기 때문에 음수가 나오면 65536을 더해줍니다.
+  // 3. 변화량 계산 (16비트 롤오버 대응)
   let revDiff = revolutions - speedometer.lastRevolutions;
   if (revDiff < 0) revDiff += 65536;
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  // 5. 물리량 계산 및 유효성 검사
+  // 4. 속도 계산 및 유효성 검사
   if (timeDiff > 0 && revDiff > 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
-    
-    // 이동 거리(m) = 회전수 차이 * 바퀴 둘레(mm) / 1000
     const distM = (revDiff * wheelSpec.circumference) / 1000;
-    // 경과 시간(s) = 시간 차이 / 1024
     const timeS = timeDiff / 1024;
-    // 속도(km/h) = (거리 / 시간) * 3.6
+    
+    // 속도 계산 공식: $$Speed = \frac{Distance}{Time} \times 3.6$$
     const speed = (distM / timeS) * 3.6;
 
-    // [고속 회전 대응] 비정상적인 속도(예: 경기 시작 직후 튀는 값) 발생 시 
-    // 데이터를 버리되 현재 위치를 새로운 기준점으로 삼아 다음 패킷을 준비합니다.
+    // 비정상적인 고속(150km/h 초과) 데이터 처리
     if (speed > 150) {
-      console.warn(`[트랙${speedometer.id}] 비정상 속도 감지(${speed.toFixed(1)}km/h). 기준점 재설정.`);
+      console.warn(`[트랙${speedometer.id}] 과속 감지. 기준점 리셋.`);
       speedometer.lastRevolutions = revolutions;
       speedometer.lastEventTime = eventTime;
       return; 
     }
 
-    // 6. 상태 업데이트
-    // 경기 진행 중(running)일 때만 누적 거리를 계산합니다.
+    // 5. 데이터 반영 및 기준점 업데이트
     if (window.rollerRaceState.raceState === 'running') {
       speedometer.totalDistance += (distM / 1000);
     }
     
-    // UI 표시 및 바늘 애니메이션 업데이트 호출
     updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
     
-    // 다음 계산을 위해 현재 값을 저장
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastEventUpdate = now; // 실제 회전이 발생한 이 시각을 기준으로 정지 여부를 판단합니다.
+    // 실제 회전이 발생한 이 시점을 '마지막 활동 시간'으로 기록
+    speedometer.lastEventUpdate = now; 
     speedometer.connected = true;
   }
 }
+
 
 
 
