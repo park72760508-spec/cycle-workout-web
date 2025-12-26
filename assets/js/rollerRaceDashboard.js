@@ -531,7 +531,9 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
   
   // 0부터 현재 눈금까지 행적선 그리기
   for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
-    // 바늘 각도 계산 공식 사용 (속도 0일 때 270도에서 시작)
+    // 바늘 각도 계산 공식 사용 (바늘과 동일한 공식)
+    // 0~60km/h: 270도 + 180도 × (현재속도/120)
+    // 60km/h 초과: 180도 × (현재속도/120) - 90도
     const angle = calculateNeedleAngle(tickSpeed);
     const rad = (angle * Math.PI) / 180;
     
