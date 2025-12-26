@@ -9599,10 +9599,10 @@ button[aria-disabled="true"] {
 }
 
 .track-name-text {
-  font-weight: 500;
+  font-weight: 600; /* 트랙번호와 동일한 폰트 굵기 */
   color: #00ff88;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: inherit; /* 트랙번호와 동일한 폰트 크기 */
   text-shadow: 
     0 0 10px rgba(0, 255, 136, 0.8),
     0 0 20px rgba(0, 255, 136, 0.6),
