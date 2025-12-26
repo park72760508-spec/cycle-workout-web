@@ -9601,6 +9601,18 @@ button[aria-disabled="true"] {
 }
 
 .track-name-text {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  text-shadow: 
+    0 0 4px rgba(255, 255, 255, 0.8),
+    0 0 8px rgba(255, 255, 255, 0.6),
+    0 0 12px rgba(255, 255, 255, 0.4),
+    0 0 16px rgba(255, 255, 255, 0.3),
+    0 0 20px rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
   font-weight: 600; /* 트랙번호와 동일한 폰트 굵기 */
   color: #00ff88;
   white-space: nowrap;
