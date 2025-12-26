@@ -536,16 +536,11 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     // 60km/h 초과: 180도 × (현재속도/120) - 90도
     let angle = calculateNeedleAngle(tickSpeed);
     
-    // SVG rotate와 Math.cos/sin의 각도 기준 차이 분석:
-    // - SVG rotate: 시계 방향 (0도 = 오른쪽, 90도 = 아래쪽, 180도 = 왼쪽, 270도 = 위쪽)
-    // - Math.cos/sin: 표준 수학 좌표계 (0도 = 오른쪽, 90도 = 위쪽, 180도 = 왼쪽, 270도 = 아래쪽)
-    // - 차이: Math.cos/sin은 반시계 방향이므로, SVG rotate와 180도 차이
+    // SVG rotate와 Math.cos/sin의 각도 기준 차이 보정:
     // - 바늘이 rotate(270)으로 위쪽을 가리키는데, Math.cos/sin(270)은 아래쪽을 가리킴
-    // - 따라서 Math.cos/sin을 사용할 때는 180도를 더해야 위쪽을 가리킴
-    // - 바늘이 실제로 270도 위치에 있다면, Math.cos/sin(270 + 180) = Math.cos/sin(450) = Math.cos/sin(90)을 사용
-    // - 90도는 위쪽을 가리키므로, 180도를 더해야 함
-    // - 현재 90도 위치에 표시되고 있으므로, 180도를 더하면 270도 위치에 맞춤
-    angle = angle + 180;
+    // - 현재 행적선이 180도 위치에 표시되고 있음 (270도보다 90도 뒤쳐짐)
+    // - 270도 위치에 맞추려면 90도를 더해야 함
+    angle = angle + 90;
     while (angle < 0) angle += 360;
     while (angle >= 360) angle -= 360;
     
