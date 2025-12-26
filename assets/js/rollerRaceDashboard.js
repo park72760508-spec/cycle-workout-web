@@ -689,6 +689,20 @@ function updateRankings() {
     
     // 직선 트랙 순위 업데이트
     updateStraightTrackRank(speedometer.id, rank);
+    
+    // 거리 격차 계산 및 업데이트 (앞 순위와의 거리 차이)
+    if (index > 0) {
+      // 앞 순위(더 앞에 있는 선수)와의 거리 차이 계산
+      const aheadRank = index; // 앞 순위 (0-based index이므로 rank-1)
+      const aheadDistance = sorted[index - 1].totalDistance; // km
+      const currentDistance = speedometer.totalDistance; // km
+      const gapKm = aheadDistance - currentDistance; // km
+      const gapMeters = gapKm * 1000; // m로 변환
+      updateStraightTrackGap(speedometer.id, aheadRank, gapMeters);
+    } else {
+      // 1등은 격차 표시 안 함
+      updateStraightTrackGap(speedometer.id, null, null);
+    }
   });
   
   // 연결되지 않았거나 거리가 0인 속도계는 순위 표시 안 함
@@ -700,6 +714,8 @@ function updateRankings() {
       }
       // 직선 트랙 순위 숨김
       updateStraightTrackRank(speedometer.id, null);
+      // 거리 격차 숨김
+      updateStraightTrackGap(speedometer.id, null, null);
       // 마스코트를 시작 위치로
       updateStraightTrackMascot(speedometer.id, 0);
     }
@@ -2199,6 +2215,16 @@ function updateSpeedometerListUI() {
           <!-- 종료선 (우측) - viewBox 끝까지 -->
           <line x1="900" y1="0" x2="900" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
           
+          <!-- 거리 격차 표시 (결승선 우측) -->
+          <g id="straight-gap-group-${speedometer.id}" opacity="0">
+            <text x="910" y="22" text-anchor="start" fill="#ffffff" font-size="9" font-weight="400" id="straight-gap-text-${speedometer.id}" dominant-baseline="middle">
+              <tspan id="straight-gap-rank-${speedometer.id}">1</tspan>
+              <tspan>위와의 격차 : </tspan>
+              <tspan id="straight-gap-value-${speedometer.id}" font-weight="500">0</tspan>
+              <tspan id="straight-gap-unit-${speedometer.id}" font-weight="300">m</tspan>
+            </text>
+          </g>
+          
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
             <!-- 펄스 효과용 빨간색 원 (깜빡임 끝에 퍼지는 효과) -->
@@ -2784,6 +2810,28 @@ function updateStraightTrackRank(speedometerId, rank) {
     rankTextEl.style.fill = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
   } else {
     rankGroupEl.style.opacity = '0';
+  }
+}
+
+/**
+ * 직선 트랙 거리 격차 업데이트 (앞 순위와의 거리 차이)
+ */
+function updateStraightTrackGap(speedometerId, aheadRank, gapMeters) {
+  const gapGroupEl = document.getElementById(`straight-gap-group-${speedometerId}`);
+  const gapRankEl = document.getElementById(`straight-gap-rank-${speedometerId}`);
+  const gapValueEl = document.getElementById(`straight-gap-value-${speedometerId}`);
+  
+  if (!gapGroupEl || !gapRankEl || !gapValueEl) return;
+  
+  if (aheadRank !== null && aheadRank !== undefined && gapMeters !== null && gapMeters !== undefined && gapMeters > 0) {
+    // 앞 순위 표시
+    gapRankEl.textContent = aheadRank;
+    // 미터 단위로 표시 (소수점 없이 정수로)
+    gapValueEl.textContent = Math.round(gapMeters);
+    gapGroupEl.style.opacity = '1';
+  } else {
+    // 1등이거나 격차가 없으면 숨김
+    gapGroupEl.style.opacity = '0';
   }
 }
 
