@@ -8988,6 +8988,8 @@ button[aria-disabled="true"] {
   overflow: hidden;
   min-height: 32px;
   height: 32px;
+  width: 70%; /* 30% 축소 (100% → 70%) */
+  margin: 0 auto; /* 중앙 정렬 */
 }
 
 /* 순위 항목 내부 컨텐츠 (스크롤되는 부분) */
