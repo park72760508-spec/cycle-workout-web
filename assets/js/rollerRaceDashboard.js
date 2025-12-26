@@ -244,9 +244,6 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 경로 표시 (눈금별 추적선, 바늘 아래에 그려짐) -->
-        <g id="needle-path-${speedometer.id}" class="speedometer-needle-path"></g>
-        
         <!-- 바늘 중심 원 (고정) -->
         <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         
@@ -473,78 +470,12 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // 이전 각도 저장 (정규화된 값으로 저장)
   window.rollerRaceState.needleAngles[speedometerId] = displayAngle;
   
-  // 바늘 경로 업데이트 (눈금별 추적선)
-  updateSpeedometerNeedlePath(speedometerId, speed);
-  
   // 부드러운 애니메이션을 위해 transition 적용
   // 그룹이 이미 translate(100, 140)로 이동되어 있으므로, 바늘은 원점(0,0) 기준으로 회전
   needle.style.transition = 'transform 0.3s ease-out';
   needle.setAttribute('transform', `rotate(${displayAngle})`);
 }
 
-/**
- * 속도계 바늘 경로 업데이트
- * 바늘 기준 왼쪽: 270도(0km/h)부터 현재 각도까지 선 그리기
- * 바늘 기준 오른쪽: 현재 각도부터 90도(120km/h)까지 선 삭제
- */
-function updateSpeedometerNeedlePath(speedometerId, currentAngle) {
-  const pathGroup = document.getElementById(`needle-path-${speedometerId}`);
-  if (!pathGroup) return;
-  
-  const centerX = 100;
-  const centerY = 140;
-  const radius = 80;
-  const innerRadius = 0; // 원 중심부터 시작
-  
-  // 정규화된 현재 각도 (0~360도)
-  const normalizedCurrent = currentAngle >= 360 ? currentAngle - 360 : currentAngle;
-  
-  // 기존 경로 제거
-  pathGroup.innerHTML = '';
-  
-  // 바늘 기준 왼쪽: 270도(0km/h)부터 현재 각도까지 선 그리기
-  const startAngle = 270; // 0km/h 시작 각도
-  const endAngle = normalizedCurrent;
-  
-  // 각도가 증가하는 방향으로 선 그리기 (0.5도 간격)
-  if (endAngle >= startAngle) {
-    // 일반적인 경우: startAngle부터 endAngle까지
-    for (let angle = startAngle; angle <= endAngle; angle += 0.5) {
-      drawPathLine(pathGroup, centerX, centerY, innerRadius, radius, angle);
-    }
-  } else {
-    // 360도를 넘어가는 경우: startAngle부터 360도까지, 0도부터 endAngle까지
-    for (let angle = startAngle; angle <= 360; angle += 0.5) {
-      drawPathLine(pathGroup, centerX, centerY, innerRadius, radius, angle);
-    }
-    for (let angle = 0; angle <= endAngle; angle += 0.5) {
-      drawPathLine(pathGroup, centerX, centerY, innerRadius, radius, angle);
-    }
-  }
-}
-
-/**
- * 경로 선 그리기 (원 중심부터 바깥쪽까지)
- */
-function drawPathLine(pathGroup, centerX, centerY, innerRadius, outerRadius, angle) {
-  const rad = (angle * Math.PI) / 180;
-  
-  const x1 = centerX + innerRadius * Math.cos(rad);
-  const y1 = centerY + innerRadius * Math.sin(rad);
-  const x2 = centerX + outerRadius * Math.cos(rad);
-  const y2 = centerY + outerRadius * Math.sin(rad);
-  
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line.setAttribute('x1', x1);
-  line.setAttribute('y1', y1);
-  line.setAttribute('x2', x2);
-  line.setAttribute('y2', y2);
-  line.setAttribute('stroke', 'rgba(0, 255, 200, 0.3)'); // 민트 투명색
-  line.setAttribute('stroke-width', '0.5');
-  line.setAttribute('stroke-linecap', 'round');
-  
-  pathGroup.appendChild(line);
-}
 
 /**
  * 속도계 데이터 업데이트
@@ -1340,11 +1271,6 @@ function startRace() {
       if (needle) {
         needle.style.transition = 'none'; // 초기화 시 애니메이션 없음
         needle.setAttribute('transform', 'rotate(270)');
-      }
-      // 경로 초기화
-      const pathGroup = document.getElementById(`needle-path-${s.id}`);
-      if (pathGroup) {
-        pathGroup.innerHTML = '';
       }
     });
     
