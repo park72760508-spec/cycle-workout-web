@@ -2094,8 +2094,8 @@ function updateSpeedometerListUI() {
           
           <!-- 순위 표시 (둥근 네모 상자, 트랙 수직 중앙) -->
           <g id="straight-rank-group-${speedometer.id}" opacity="0">
-            <rect x="405" y="8" width="35" height="24" rx="6" ry="6" fill="rgba(0, 212, 170, 1)" stroke="rgba(0, 212, 170, 0.8)" stroke-width="1"/>
-            <text x="422.5" y="20" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
+            <rect x="405" y="9" width="30" height="22" rx="11" ry="11" fill="#1a1a1a" stroke="rgba(0, 212, 170, 0.8)" stroke-width="1"/>
+            <text x="420" y="22" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
           </g>
         </svg>
       </div>
