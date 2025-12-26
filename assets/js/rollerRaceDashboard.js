@@ -2413,7 +2413,7 @@ function updateAllStraightTrackMascots() {
       return;
     }
     
-    // 게임 진행률
+    // 게임 진행률 (정확한 비율 계산)
     const gameProgress = Math.min(totalDistance / targetDistance, 1.0);
     
     // 각 속도계의 위치 계산
@@ -2423,8 +2423,10 @@ function updateAllStraightTrackMascots() {
         return;
       }
       
-      // 상대적 성과 비율
-      const relativePerformance = speedometer.totalDistance / firstPlaceDistance;
+      // 상대적 성과 비율 (0 나누기 방지)
+      const relativePerformance = firstPlaceDistance > 0 
+        ? speedometer.totalDistance / firstPlaceDistance 
+        : 0;
       
       // 최종 위치: P = (전체 누적 거리/목표 거리) × (해당 팀 이동거리/1등 팀 이동거리)
       const progress = Math.min(gameProgress * relativePerformance, 1.0);
@@ -2438,19 +2440,26 @@ function updateAllStraightTrackMascots() {
       // 1. 개인, 거리 타겟인 경우
       const targetDistance = settings.targetDistance;
       
+      if (targetDistance <= 0) {
+        // 목표 거리가 0이면 모든 마스코트를 시작 위치로
+        window.rollerRaceState.speedometers.forEach(speedometer => {
+          updateStraightTrackMascot(speedometer.id, 0);
+        });
+        return;
+      }
+      
       window.rollerRaceState.speedometers.forEach(speedometer => {
         if (!speedometer.connected || speedometer.totalDistance === 0) {
           updateStraightTrackMascot(speedometer.id, 0);
           return;
         }
         
-        // 마스코트 진행 위치 = 이동거리 / 총거리
-        const rawProgress = speedometer.totalDistance / targetDistance;
-        const progress = Math.min(rawProgress, 1.0);
+        // 마스코트 진행 위치 = 이동거리 / 총거리 (정확한 비율 계산)
+        const progress = Math.min(speedometer.totalDistance / targetDistance, 1.0);
         
-        // 디버깅: 목표 거리 달성 시 확인
-        if (speedometer.totalDistance >= targetDistance && progress < 0.99) {
-          console.warn(`[마스코트 위치] 트랙${speedometer.id}: 거리=${speedometer.totalDistance.toFixed(3)}km, 목표=${targetDistance}km, progress=${progress.toFixed(3)}`);
+        // 디버깅: 진행 상황 로그 (주요 지점에서만)
+        if (speedometer.id === 1 && (Math.abs(progress % 0.1) < 0.01 || progress >= 0.99)) {
+          console.log(`[마스코트 위치] 트랙${speedometer.id}: 거리=${speedometer.totalDistance.toFixed(3)}km, 목표=${targetDistance}km, progress=${(progress * 100).toFixed(1)}%`);
         }
         
         updateStraightTrackMascot(speedometer.id, progress);
@@ -2469,7 +2478,7 @@ function updateAllStraightTrackMascots() {
         return;
       }
       
-      // 1등 선수 위치 기준 (경과시간 / 경기 시간)
+      // 1등 선수 위치 기준 (경과시간 / 경기 시간) - 정확한 비율 계산
       const firstPlaceProgress = Math.min(elapsedTime / targetTime, 1.0);
       
       window.rollerRaceState.speedometers.forEach(speedometer => {
@@ -2479,7 +2488,10 @@ function updateAllStraightTrackMascots() {
         }
         
         // 나머지 선수 위치 = 1등 위치 × (다른 선수 이동거리 / 1등 선수 이동거리)
-        const relativeProgress = speedometer.totalDistance / firstPlaceDistance;
+        // 0 나누기 방지
+        const relativeProgress = firstPlaceDistance > 0 
+          ? speedometer.totalDistance / firstPlaceDistance 
+          : 0;
         const progress = Math.min(firstPlaceProgress * relativeProgress, 1.0);
         
         updateStraightTrackMascot(speedometer.id, progress);
@@ -2538,15 +2550,38 @@ function updateStraightTrackMascot(speedometerId, targetProgress, forceImmediate
     currentProgress = targetProgress;
   }
   
-  // 강제 즉시 이동 또는 목표 거리 달성 시 즉시 이동
-  if (forceImmediate || targetProgress >= 1.0) {
-    // 목표 거리 달성 또는 경기 종료: 즉시 목표 위치로 이동
+  // 강제 즉시 이동 (경기 종료 시에만)
+  if (forceImmediate) {
     currentProgress = targetProgress;
   } else {
     // Lerp(선형 보간): 부드러운 이동을 위해 현재 위치에서 목표 위치로 점진적으로 이동
+    // 목표에 가까울수록 더 빠르게 반응하도록 동적 factor 사용
+    const distance = Math.abs(targetProgress - currentProgress);
+    
+    // 거리 차이에 따라 동적으로 Lerp factor 조정
+    // 목표에 가까울수록 더 빠르게 반응하여 정확한 위치 추적
+    let lerpFactor;
+    if (targetProgress >= 0.95) {
+      // 목표에 매우 가까울 때: 매우 빠르게 반응 (0.7 ~ 0.9)
+      lerpFactor = 0.7 + (targetProgress - 0.95) * 4; // 0.95일 때 0.7, 1.0일 때 0.9
+    } else if (targetProgress >= 0.8) {
+      // 목표에 가까울 때: 빠르게 반응 (0.6 ~ 0.7)
+      lerpFactor = 0.6 + (targetProgress - 0.8) * 0.5; // 0.8일 때 0.6, 0.95일 때 0.675
+    } else if (distance > 0.05) {
+      // 거리 차이가 클 때: 빠르게 이동 (0.5)
+      lerpFactor = 0.5;
+    } else {
+      // 거리 차이가 작을 때: 빠르게 이동 (0.4) - 부드럽지만 빠르게
+      lerpFactor = 0.4;
+    }
+    
     // Lerp(current, target, factor) = current + (target - current) * factor
-    const lerpFactor = 0.15; // 0.15 = 15%씩 이동 (값이 작을수록 더 부드럽지만 느림)
     currentProgress = currentProgress + (targetProgress - currentProgress) * lerpFactor;
+    
+    // 목표에 매우 가까우면(0.01 이하 차이) 즉시 목표 위치로 (더 빠른 수렴)
+    if (Math.abs(targetProgress - currentProgress) < 0.01) {
+      currentProgress = targetProgress;
+    }
   }
   
   // 위치 저장
