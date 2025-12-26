@@ -150,6 +150,17 @@ function initRollerRaceDashboard() {
   // 타겟 설정 표시 업데이트
   updateTargetSettingsDisplay();
   
+  // 버튼 초기 상태 설정
+  const btnStart = document.getElementById('btnStartRace');
+  const btnPause = document.getElementById('btnPauseRace');
+  const btnStop = document.getElementById('btnStopRace');
+  const btnBack = document.getElementById('btnBackFromRollerRace');
+  
+  if (btnStart) btnStart.disabled = false;
+  if (btnPause) btnPause.disabled = true;
+  if (btnStop) btnStop.disabled = true;
+  if (btnBack) btnBack.disabled = false; // 초기 상태: 뒤로가기 버튼 활성화
+  
   // 화면 크기 변경 시 트랙 너비 재조정 (반응형 처리)
   let resizeTimeout;
   window.addEventListener('resize', () => {
@@ -1216,10 +1227,12 @@ function startRace() {
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
   const btnStop = document.getElementById('btnStopRace');
+  const btnBack = document.getElementById('btnBackFromRollerRace');
 
-  if (btnStart) btnStart.disabled = true;
+  if (btnStart) btnStart.disabled = true; // 시작 버튼 비활성화
   if (btnPause) btnPause.disabled = false;
   if (btnStop) btnStop.disabled = false;
+  if (btnBack) btnBack.disabled = true; // 뒤로가기 버튼 비활성화
 
   // ==========================================
   // [추가된 코드] 경기 시작 시 연속 스캔 모드 활성화
@@ -1276,10 +1289,12 @@ function pauseRace() {
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
   const btnStop = document.getElementById('btnStopRace');
+  const btnBack = document.getElementById('btnBackFromRollerRace');
 
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
   if (btnStop) btnStop.disabled = false; // 종료 버튼은 일시정지 중에도 활성화
+  // 뒤로가기 버튼은 경기 진행 중이므로 비활성화 유지
 
   // 전광판 순위 순환 정지
   stopRankDisplayRotation();
@@ -1322,10 +1337,12 @@ function stopRace() {
   const btnStart = document.getElementById('btnStartRace');
   const btnPause = document.getElementById('btnPauseRace');
   const btnStop = document.getElementById('btnStopRace');
+  const btnBack = document.getElementById('btnBackFromRollerRace');
 
   if (btnStart) btnStart.disabled = false;
   if (btnPause) btnPause.disabled = true;
   if (btnStop) btnStop.disabled = true;
+  if (btnBack) btnBack.disabled = false; // 경기 종료 시 뒤로가기 버튼 활성화
 
   // 최종 순위 표시
   updateRankings();
