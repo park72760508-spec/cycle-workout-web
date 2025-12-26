@@ -5509,6 +5509,9 @@ function stopRaceDataSaving() {
 /**
  * 센서 연결 상태 주기적 체크 시작 (1초마다)
  */
+/**
+ * 센서 연결 및 주행 상태 주기적 체크 (정지 감지 강화)
+ */
 function startConnectionStatusCheck() {
   if (window.rollerRaceState.connectionStatusCheckTimer) {
     clearInterval(window.rollerRaceState.connectionStatusCheckTimer);
@@ -5518,17 +5521,21 @@ function startConnectionStatusCheck() {
     const now = Date.now();
     window.rollerRaceState.speedometers.forEach(speedometer => {
       if (speedometer.deviceId) {
-        // 1. 데이터 자체가 안 오는 경우 (배터리 부족, 거리 멀어짐)
-        const timeSinceLastPacket = now - speedometer.lastPacketTime;
-        if (timeSinceLastPacket > 5000) { // 5초간 무응답 시 연결 끊김
+        // 1. 신호 자체가 완전히 끊긴 경우 (5초 기준)
+        const timeSinceLastPacket = now - (speedometer.lastPacketTime || 0);
+        if (timeSinceLastPacket > 5000) { 
           updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
           updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
         } 
-        // 2. 데이터는 오는데 바퀴가 안 도는 경우 (정지 상태)
+        // 2. 신호는 오고 있으나 바퀴 회전 이벤트가 없는 경우 (정지 상태)
         else {
           const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
-          if (timeSinceLastEvent > 2000) { // 2초간 바퀴 회전 이벤트 없으면 0km/h
-            updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+          // 마지막 회전 이벤트로부터 2초 이상 경과 시 즉시 0km/h 처리
+          if (timeSinceLastEvent > 2000) { 
+            if (speedometer.currentSpeed > 0) {
+              console.log(`[트랙${speedometer.id}] 회전 멈춤 감지 -> 속도 0 리셋`);
+              updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+            }
           }
         }
       }
@@ -5825,40 +5832,64 @@ function updateReceiverButtonStatus() {
  * 개선된 Speed/Cadence 데이터 처리 로직
  * 고속 회전 및 급격한 가속 시에도 즉각적인 반응성을 보장합니다.
  */
+/**
+ * [통합 개선본] Speed/Cadence 데이터 처리 모듈
+ * 고속 주행 대응, 경기 시작 동기화, 정지 감지 로직이 모두 포함되었습니다.
+ */
 function processSpeedCadenceData(deviceId, data) {
   if (data.length < 8) return;
 
+  // 1. ANT+ 데이터 추출 (시간 및 누적 회전수)
+  // 4-5번 바이트: 이벤트 시간 (1/1024초 단위), 6-7번 바이트: 누적 회전수
   const eventTime = (data[5] << 8) | data[4];
   const revolutions = (data[7] << 8) | data[6];
 
   const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
   if (!speedometer) return;
 
-  // [수정] 경기 시작 후 첫 패킷이거나 수동 동기화가 필요한 경우
-  if (speedometer.needsSync || speedometer.lastEventTime === 0) {
+  const now = Date.now();
+  // 패킷 수신 시간은 데이터가 올 때마다 무조건 업데이트 (연결 상태 유지용)
+  speedometer.lastPacketTime = now;
+
+  // 2. 초기 동기화 처리 (경기 시작 버튼 클릭 직후 또는 페어링 직후)
+  // s.needsSync 플래그는 startRace()에서 설정됩니다.
+  if (speedometer.needsSync || speedometer.lastEventTime === 0 || speedometer.lastEventTime === undefined) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastEventUpdate = Date.now();
+    speedometer.lastEventUpdate = now;
     speedometer.needsSync = false;
-    console.log(`[트랙${speedometer.id}] 경기 시작 기준점 동기화 완료: ${revolutions}`);
+    console.log(`[트랙${speedometer.id}] 기준점 동기화 완료 (현재 누적 회전수: ${revolutions})`);
     return;
   }
 
-  // 차이 계산
+  // 3. 바퀴 회전 여부 확인
+  // 이벤트 시간이 변하지 않았다면 바퀴가 굴러가지 않은 것입니다.
+  if (speedometer.lastEventTime === eventTime) {
+    // 여기서 lastEventUpdate를 갱신하지 않아야 startConnectionStatusCheck에서 정지를 감지할 수 있습니다.
+    return;
+  }
+
+  // 4. 변화량 계산 (16비트 롤오버/리셋 대응)
+  // revolutions와 eventTime은 0~65535 범위를 돌기 때문에 음수가 나오면 65536을 더해줍니다.
   let revDiff = revolutions - speedometer.lastRevolutions;
   if (revDiff < 0) revDiff += 65536;
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  if (timeDiff > 0 && revDiff >= 0) {
+  // 5. 물리량 계산 및 유효성 검사
+  if (timeDiff > 0 && revDiff > 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+    
+    // 이동 거리(m) = 회전수 차이 * 바퀴 둘레(mm) / 1000
     const distM = (revDiff * wheelSpec.circumference) / 1000;
+    // 경과 시간(s) = 시간 차이 / 1024
     const timeS = timeDiff / 1024;
+    // 속도(km/h) = (거리 / 시간) * 3.6
     const speed = (distM / timeS) * 3.6;
 
-    // [핵심 수정] 속도가 너무 빠르면 데이터를 버리되, 
-    // 현재의 누적 값(revolutions)은 기준점으로 저장해야 다음 계산이 정상화됩니다.
+    // [고속 회전 대응] 비정상적인 속도(예: 경기 시작 직후 튀는 값) 발생 시 
+    // 데이터를 버리되 현재 위치를 새로운 기준점으로 삼아 다음 패킷을 준비합니다.
     if (speed > 150) {
       console.warn(`[트랙${speedometer.id}] 비정상 속도 감지(${speed.toFixed(1)}km/h). 기준점 재설정.`);
       speedometer.lastRevolutions = revolutions;
@@ -5866,17 +5897,23 @@ function processSpeedCadenceData(deviceId, data) {
       return; 
     }
 
+    // 6. 상태 업데이트
+    // 경기 진행 중(running)일 때만 누적 거리를 계산합니다.
     if (window.rollerRaceState.raceState === 'running') {
       speedometer.totalDistance += (distM / 1000);
     }
     
+    // UI 표시 및 바늘 애니메이션 업데이트 호출
     updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
     
+    // 다음 계산을 위해 현재 값을 저장
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastEventUpdate = Date.now();
+    speedometer.lastEventUpdate = now; // 실제 회전이 발생한 이 시각을 기준으로 정지 여부를 판단합니다.
+    speedometer.connected = true;
   }
 }
+
 
 
 
