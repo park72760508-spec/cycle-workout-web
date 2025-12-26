@@ -9761,7 +9761,7 @@ button[aria-disabled="true"] {
 
 /* 마스코트 색깔띠 원 깜빡임 애니메이션 */
 .mascot-color-ring.blinking {
-  animation: mascot-blink 0.6s ease-in-out infinite;
+  animation: mascot-blink 1.5s ease-in-out infinite;
 }
 
 @keyframes mascot-blink {
@@ -9770,6 +9770,24 @@ button[aria-disabled="true"] {
   }
   50% {
     opacity: 0.3;
+  }
+}
+
+/* 마스코트 펄스 효과 (빨간색 원 퍼지는 효과) */
+.mascot-pulse-ring.blinking {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mascot-pulse 1.5s ease-out infinite;
+}
+
+@keyframes mascot-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
   }
 }
 
