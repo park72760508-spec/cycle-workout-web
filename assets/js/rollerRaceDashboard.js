@@ -1590,53 +1590,46 @@ function saveSpeedometerPairing() {
  */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
-  console.log('[ANT+] Tacx T2028 스캔 가동 (Parameter Fix)...');
+  
+  // [수정] 이미 스캔 중이면 다시 실행하지 않음 (리셋 방지)
+  if (window.antState.isScanningActive) {
+    console.log('[ANT+] 이미 스캔이 활성화되어 있어 초기화를 건너뜁니다.');
+    return;
+  }
+  
+  console.log('[ANT+] Tacx T2028 스캔 가동 (안정화 모드)...');
   window.antState.isScanning = true;
+  window.antState.isScanningActive = true; // 스캔 상태 플래그 설정
 
   try {
-    // 1. Reset
+    // 1. Reset (최초 1회만 수행)
     await sendANTMessage(0x4A, [0x00]);
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 500));
 
     // 2. Network Key
     await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 3. Assign Channel 0 [중요 수정]
-    // 기존: [0x00, 0x00] -> 2바이트 (에러 원인)
-    // 수정: [0x00, 0x00, 0x00] -> 3바이트 (채널0, 타입0, 네트워크0)
+    // 3. Assign Channel 0 (스캔 전 전용 채널 설정)
     await sendANTMessage(0x42, [0x00, 0x00, 0x00]); 
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 4. Channel ID (Wildcard) [수정]
-    // 기존 6바이트에서 표준 5바이트로 수정 (채널, 디바이스ID_L, 디바이스ID_H, 타입, 전송타입)
-    await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00]);
-    await new Promise(r => setTimeout(r, 300));
-
-    // 5. Search Timeout (무한대)
-    await sendANTMessage(0x44, [0x00, 0xFF]); 
-    await new Promise(r => setTimeout(r, 300));
-
-    // 6. Frequency 57
-    await sendANTMessage(0x45, [0x00, 57]);
-    await new Promise(r => setTimeout(r, 300));
-
-    // 7. LibConfig
+    // 4. LibConfig (Extended Data 활성화 - ID 수신 필수)
     await sendANTMessage(0x6E, [0x00, 0xE0]); 
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 200));
 
-    // 8. Open Channel (0x4B)
-    // 모든 설정이 완료되었으므로 이제 채널을 엽니다.
-    console.log('[ANT+] 채널 열기(0x4B) 전송');
-    await sendANTMessage(0x4B, [0x00]); 
+    // 5. Open Rx Scan Mode (0x5B) - 0x4B 대신 사용
+    console.log('[ANT+] Rx Scan Mode(0x5B) 활성화');
+    await sendANTMessage(0x5B, [0x00]); 
     
-    if (!window.antMessageListener) {
+    if (!window.antMessageListenerActive) {
+        window.antMessageListenerActive = true;
         startANTMessageListener();
     }
 
   } catch (e) {
-    console.error('[ANT+] 설정 실패:', e);
-    window.antState.isScanning = false;
+    console.error('[ANT+] 스캔 설정 실패:', e);
+    window.antState.isScanningActive = false;
   }
 }
 
@@ -3818,30 +3811,59 @@ function processBuffer(newData) {
 // [수정 2] 메시지 분배 및 로그 최적화
 // =========================================================
 
-function handleANTMessage(message) {
-  const { messageId, data } = message;
-
-  // 디버깅: 중요한 메시지만 로그 출력 (도배 방지)
-  if (messageId === 0x4E) { // 센서 데이터
-     // console.log('[ANT+] 센서 데이터(0x4E) 수신!'); 
-     handleBroadcastData(data);
-     return;
+/**
+ * [최종 통합본] ANT+ 메시지 처리기
+ * Tacx T2028 Wrapper 해제 로직 + 표준 메시지 처리 통합
+ */
+function handleANTMessage(packet) {
+  // 1. 패킷이 객체 형태인 경우와 배열 형태인 경우 모두 대응
+  let messageId, data;
+  
+  if (packet instanceof Uint8Array || Array.isArray(packet)) {
+    // 배열(Raw 패킷)로 들어온 경우
+    messageId = packet[2];
+    data = packet.slice(3, packet.length - 1);
+  } else {
+    // 이미 파싱된 객체로 들어온 경우
+    messageId = packet.messageId;
+    data = packet.data;
   }
 
+  // 2. [핵심] Tacx T2028 특유의 0xAE Wrapper 해제 로직
+  // 0xAE 패킷 내부에 진짜 0xA4(ANT+ 시작바이트)가 숨어있는지 확인합니다.
+  if (messageId === 0xAE && data.length > 1 && data[1] === 0xA4) {
+      // 포장지를 벗기고 내부의 진짜 ANT+ 데이터를 재처리합니다.
+      if (typeof processMasterBuffer === 'function') {
+          processMasterBuffer(data.slice(1)); 
+      }
+      return; // 재처리로 넘겼으므로 현재 함수는 종료
+  }
+
+  // 3. 표준 메시지 처리 (사용자의 기존 로직 통합)
   switch (messageId) {
-    case 0x43: // Channel Event (검색 타임아웃 등)
-      // 스캔 중에는 타임아웃 이벤트가 발생하지 않아야 정상 (0x5B 모드 시)
-      // console.log('[ANT+] 채널 이벤트:', data);
+    case 0x4E: // 브로드캐스트 데이터 (센서 데이터)
+      handleBroadcastData(data);
       break;
       
-    case 0x51: // Channel ID Response
-      handleChannelIDResponse(data);
+    case 0x51: // Channel ID Response (센서 발견 정보)
+      if (typeof handleChannelIDResponse === 'function') {
+          handleChannelIDResponse(data);
+      }
       break;
       
-    case 0x40: // Command Response (명령어에 대한 응답)
-      if (data[2] !== 0x00) {
+    case 0x43: // Channel Event (검색 상태 등)
+      // 필요한 경우 로그 활성화
+      // console.log('[ANT+] 채널 이벤트 수신:', data);
+      break;
+      
+    case 0x40: // Command Response (명령어 응답)
+      if (data && data[2] !== 0x00) {
         console.warn('[ANT+] 명령 실패 코드:', data[2].toString(16));
       }
+      break;
+      
+    default:
+      // 기타 알려지지 않은 메시지 처리
       break;
   }
 }
@@ -5591,5 +5613,6 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastEventTime = eventTime;
   }
 }
+
 
 
