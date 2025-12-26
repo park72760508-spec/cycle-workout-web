@@ -358,11 +358,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* ANT+ 연결 버튼 특정 스타일 */
 #connectionScreen #btnConnectANT {
-  background-image: url('assets/img/indoor.png');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%), url('assets/img/indoor.png');
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(37, 99, 235, 0.5) 100%), url('/assets/img/indoor.png');
   background-size: cover, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;
@@ -371,7 +367,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen #btnConnectANT:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%), url('assets/img/indoor.png');
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.5) 0%, rgba(37, 99, 235, 0.6) 100%), url('/assets/img/indoor.png');
   background-size: cover, cover;
   background-position: center, center;
   background-repeat: no-repeat, no-repeat;
