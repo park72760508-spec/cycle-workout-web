@@ -2021,8 +2021,11 @@ function updateSpeedometerListUI() {
             <circle cx="10" cy="7" r="5" fill="#333" opacity="0.7"/>
           </g>
           
-          <!-- 순위 표시 (트랙 수직 중앙) -->
-          <text x="422.5" y="20" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" opacity="0" dominant-baseline="middle">-</text>
+          <!-- 순위 표시 (둥근 네모 상자, 트랙 수직 중앙) -->
+          <g id="straight-rank-group-${speedometer.id}" opacity="0">
+            <rect x="405" y="8" width="35" height="24" rx="6" ry="6" fill="rgba(0, 212, 170, 0.5)" stroke="rgba(0, 212, 170, 0.8)" stroke-width="1"/>
+            <text x="422.5" y="20" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
+          </g>
         </svg>
       </div>
       <!-- 페어링 버튼 -->
@@ -2566,15 +2569,17 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
  * 직선 트랙 순위 업데이트
  */
 function updateStraightTrackRank(speedometerId, rank) {
+  const rankGroupEl = document.getElementById(`straight-rank-group-${speedometerId}`);
   const rankTextEl = document.getElementById(`straight-rank-text-${speedometerId}`);
-  if (!rankTextEl) return;
+  if (!rankGroupEl || !rankTextEl) return;
   
   if (rank && rank > 0) {
     rankTextEl.textContent = `${rank}위`;
-    rankTextEl.style.opacity = '1';
+    rankGroupEl.style.opacity = '1';
+    // 순위별 텍스트 색상 (상자 배경색은 트랙번호 라벨과 동일하게 유지)
     rankTextEl.style.fill = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
   } else {
-    rankTextEl.style.opacity = '0';
+    rankGroupEl.style.opacity = '0';
   }
 }
 
