@@ -2202,7 +2202,7 @@ function updateSpeedometerListUI() {
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
             <!-- 자전거 프레임 -->
-            <circle cx="0" cy="0" r="7" fill="${getMascotColor(speedometer.id)}" opacity="0.9"/>
+            <circle cx="0" cy="0" r="7" class="mascot-color-ring" id="mascot-color-ring-${speedometer.id}" fill="${getMascotColor(speedometer.id)}" opacity="0.9"/>
             <circle cx="0" cy="0" r="4" fill="#ffffff"/>
           </g>
           
@@ -2747,6 +2747,16 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   if (distanceTextEl) {
     // 이동거리 표시 (숫자만, 단위는 별도 span)
     distanceTextEl.textContent = distance.toFixed(2);
+  }
+  
+  // 속도값이 인지되면 마스코트 색깔띠 원에 깜빡임 효과 적용
+  const mascotRingEl = document.getElementById(`mascot-color-ring-${speedometerId}`);
+  if (mascotRingEl) {
+    if (speed > 0) {
+      mascotRingEl.classList.add('blinking');
+    } else {
+      mascotRingEl.classList.remove('blinking');
+    }
   }
 }
 
