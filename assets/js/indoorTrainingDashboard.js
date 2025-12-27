@@ -194,8 +194,8 @@ function createPowerMeterElement(powerMeter) {
               font-size="10" 
               font-weight="500">FTP [%]</text>
         
-        <!-- X 100 표기 (1과 바늘 끝 원의 중간 지점) -->
-        <text x="100" y="91" 
+        <!-- X 100 표기 (반지름 중간 위치) -->
+        <text x="100" y="100" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#d3d3d3" 
