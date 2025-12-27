@@ -193,6 +193,15 @@ function createPowerMeterElement(powerMeter) {
               fill="#ffffff" 
               font-size="10" 
               font-weight="500">FTP X 100[%]</text>
+        
+        <!-- 현재 파워값 -->
+        <text x="100" y="170" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#ffffff" 
+              font-size="43.2" 
+              font-weight="700"
+              id="current-power-value-${powerMeter.id}">-</text>
       </svg>
     </div>
     <div class="speedometer-info disconnected">
@@ -434,12 +443,22 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
   const segmentPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
   const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
   const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
+  const currentPowerEl = document.getElementById(`current-power-value-${powerMeterId}`);
   
   if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
   if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
   if (segmentPowerEl) segmentPowerEl.textContent = Math.round(powerMeter.segmentPower);
   if (heartRateEl) heartRateEl.textContent = Math.round(heartRate) || 0;
   if (cadenceEl) cadenceEl.textContent = Math.round(cadence) || 0;
+  
+  // 현재 파워값 업데이트 (값이 없으면 "-" 표시)
+  if (currentPowerEl) {
+    if (power && power > 0) {
+      currentPowerEl.textContent = Math.round(power);
+    } else {
+      currentPowerEl.textContent = '-';
+    }
+  }
   
   // 바늘 업데이트
   updatePowerMeterNeedle(powerMeterId, power);
