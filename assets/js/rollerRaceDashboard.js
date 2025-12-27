@@ -596,11 +596,11 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     if (tickSpeed > 80) {
       // 80km/h 초과: 투명 빨강색선
       strokeColor = 'rgba(255, 0, 0, 0.4)';
-    } else if (tickSpeed > 60) {
-      // 60km/h 초과 ~ 80km/h: 투명 주황색선
+    } else if (tickSpeed > 40) {
+      // 40km/h 초과 ~ 80km/h: 투명 주황색선
       strokeColor = 'rgba(255, 165, 0, 0.4)';
     } else {
-      // 60km/h 이하: 민트색 반투명 (기존 색상 유지)
+      // 40km/h 이하: 민트색 반투명 (기존 색상 유지)
       strokeColor = 'rgba(0, 255, 200, 0.4)';
     }
     
