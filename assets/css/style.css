@@ -9226,9 +9226,17 @@ button[aria-disabled="true"] {
 
 .speed-stat-row {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   justify-content: flex-start;
+}
+
+.speed-stat-value-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  line-height: 1;
 }
 
 .speed-stat-label {
@@ -9249,6 +9257,13 @@ button[aria-disabled="true"] {
   font-weight: 700;
   color: #000000;
   text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
+  line-height: 1;
+}
+
+.speed-unit-top {
+  font-size: 21.6px; /* 숫자와 같은 크기 */
+  font-weight: 500;
+  color: #000000;
   line-height: 1;
 }
 
@@ -9299,17 +9314,11 @@ button[aria-disabled="true"] {
 }
 
 /* 단위 표시 (위 첨자, 폰트 크기 30%) */
-.speed-unit-sup,
 .distance-unit-sup {
   font-size: 30%;
   color: #000000; /* 검정색 */
   font-weight: 300;
   line-height: 0;
-}
-
-/* 최대/평균속도 단위 (21.6px의 40% = 8.64px, 20% 확대 반영) */
-.speed-stat-row .speed-unit-sup {
-  font-size: 8.64px; /* 21.6px * 0.4 */
 }
 
 /* 거리 단위 (21.6px의 40% = 8.64px, 20% 확대 반영) */
