@@ -9261,8 +9261,8 @@ button[aria-disabled="true"] {
 }
 
 .speed-unit-top {
-  font-size: 21.6px; /* 숫자와 같은 크기 */
-  font-weight: 500;
+  font-size: 8.64px; /* 21.6px * 0.4 (이전 단위 크기) */
+  font-weight: 300;
   color: #000000;
   line-height: 1;
 }
