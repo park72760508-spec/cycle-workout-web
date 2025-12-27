@@ -5460,6 +5460,19 @@ function startConnectionStatusCheck() {
   // 주기를 1000ms -> 200ms로 변경 (반응성 강화)
   window.rollerRaceState.connectionStatusCheckTimer = setInterval(() => {
     const now = Date.now();
+    
+    // 수신기 연결 상태 체크 및 업데이트
+    const isReceiverActive = window.antState.usbDevice && window.antState.usbDevice.opened;
+    const previousStatus = window.rollerRaceState.lastReceiverStatus;
+    const currentStatus = isReceiverActive 
+      ? (window.rollerRaceState.speedometers.some(s => s.id >= 1 && s.id <= 10 && s.deviceId && s.deviceId.trim() !== '') ? 'active-paired' : 'active') 
+      : 'inactive';
+    
+    // 수신기 연결 상태가 변경되었으면 버튼 상태 업데이트
+    if (previousStatus !== currentStatus) {
+      updateReceiverButtonStatus();
+    }
+    
     window.rollerRaceState.speedometers.forEach(speedometer => {
       if (!speedometer.deviceId) return;
 
@@ -5745,8 +5758,13 @@ function formatTime(seconds) {
 /**
  * 수신기 활성화 버튼 상태 업데이트
  * - 활성화 전: 빨강색 원
+ * - 활성화만 됨: 연두색 원 (체크마크 없음)
  * - 페어링 완료: 연두색 원 + 체크마크
+ * - 연결 끊김: 빨강색 원 (LED 효과)
  */
+// 이전 수신기 연결 상태 저장 (상태 변화 감지용)
+window.rollerRaceState.lastReceiverStatus = null;
+
 function updateReceiverButtonStatus() {
   const indicator = document.getElementById('receiverStatusIndicator');
   if (!indicator) return;
@@ -5756,6 +5774,15 @@ function updateReceiverButtonStatus() {
   const hasPairedSpeedometer = window.rollerRaceState.speedometers.some(
     s => s.id >= 1 && s.id <= 10 && s.deviceId && s.deviceId.trim() !== ''
   );
+  
+  // 현재 상태를 문자열로 표현 (상태 변화 감지용)
+  const currentStatus = isReceiverActive 
+    ? (hasPairedSpeedometer ? 'active-paired' : 'active') 
+    : 'inactive';
+  
+  // 상태가 변경되었는지 확인
+  const statusChanged = window.rollerRaceState.lastReceiverStatus !== currentStatus;
+  window.rollerRaceState.lastReceiverStatus = currentStatus;
   
   if (isReceiverActive && hasPairedSpeedometer) {
     // 페어링 완료: 연두색 원 + 체크마크
@@ -5775,11 +5802,21 @@ function updateReceiverButtonStatus() {
     indicator.classList.add('led-active');
     indicator.classList.remove('led-inactive');
   } else {
-    // 활성화 전: 빨강색 원 (LED 효과)
+    // 활성화 전 또는 연결 끊김: 빨강색 원 (LED 효과)
     indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), #dc3545 60%)';
     indicator.innerHTML = '';
     indicator.classList.add('led-inactive');
     indicator.classList.remove('led-active');
+  }
+  
+  // 상태 변화 로그 (디버깅용)
+  if (statusChanged) {
+    console.log('[수신기 상태 변경]', currentStatus, {
+      isReceiverActive,
+      hasPairedSpeedometer,
+      usbDevice: window.antState.usbDevice ? '존재' : '없음',
+      opened: window.antState.usbDevice?.opened || false
+    });
   }
 }
 
