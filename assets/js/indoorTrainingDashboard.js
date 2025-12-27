@@ -242,10 +242,12 @@ function createPowerMeterElement(powerMeter) {
 }
 
 /**
- * 파워계 눈금 생성 (FTP 기반)
- * 속도 0 → 0 또는 0%
- * 속도 60 → FTP 100% 또는 FTP 값
- * 속도 120 → FTP 200% 또는 FTP*2 값
+ * 파워계 눈금 생성 (Indoor Race 속도계와 동일한 스타일)
+ * 0~120 위치, 5 간격으로 모든 눈금 표시
+ * 20단위는 긴 눈금, 나머지는 짧은 눈금
+ * 원 중심으로 180도 회전
+ * 하단 왼쪽(180도) = 0, 위쪽(90도) = 60, 하단 오른쪽(0도) = 120
+ * 원지름의 1/4만큼 아래로 이동
  */
 function updatePowerMeterTicks(powerMeterId) {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
@@ -266,45 +268,54 @@ function updatePowerMeterTicks(powerMeterId) {
   labelsEl.innerHTML = '';
   
   const centerX = 100;
-  const centerY = 140;
+  const centerY = 140; // 원의 중심 (원지름의 1/4만큼 아래로 이동: 100 + 40 = 140)
   const radius = 80;
+  const maxPos = 120;
   
-  // 0~120 (속도 눈금 위치)를 파워값으로 변환
-  for (let speedPos = 0; speedPos <= 120; speedPos += 5) {
-    // 속도 위치를 파워값으로 변환
-    let powerValue;
-    if (speedPos <= 60) {
-      // 0~60: 0 ~ centerPower
-      powerValue = (speedPos / 60) * centerPower;
-    } else {
-      // 60~120: centerPower ~ maxPower
-      powerValue = centerPower + ((speedPos - 60) / 60) * (maxPower - centerPower);
-    }
-    
-    // 각도 계산 (속도계와 동일)
-    let angle = 180 - (speedPos / 120) * 180;
-    angle = angle + 180;
+  // 0~120, 5 간격으로 모든 눈금 표시 (Indoor Race와 동일)
+  // 하단 왼쪽(180도, 0)에서 시작해서 위쪽(90도, 60)를 거쳐 하단 오른쪽(0도, 120)까지
+  for (let pos = 0; pos <= maxPos; pos += 5) {
+    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
+    // pos = 0 → 180도 (하단 왼쪽), pos = 60 → 90도 (위쪽), pos = 120 → 0도 (하단 오른쪽)
+    // 180도 회전: 각도에 180도 추가
+    let angle = 180 - (pos / maxPos) * 180;
+    angle = angle + 180; // 원 중심으로 180도 회전
     
     const rad = (angle * Math.PI) / 180;
     
-    // 눈금 그리기
-    const innerRadius = radius - 10;
-    const isMajor = speedPos % 20 === 0;
-    const tickLength = isMajor ? 14 : 7;
+    // 반원의 곡선 부분에 눈금 표시 (자동차 속도계 스타일)
+    // 눈금은 반원의 곡선을 따라 안쪽에서 바깥쪽으로
+    const innerRadius = radius - 10; // 안쪽 시작점
     const x1 = centerX + innerRadius * Math.cos(rad);
     const y1 = centerY + innerRadius * Math.sin(rad);
+    
+    // 주요 눈금 (20 간격)은 길게, 나머지는 짧게
+    const isMajor = pos % 20 === 0;
+    const tickLength = isMajor ? 14 : 7;
     const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
     const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
     
+    // 흰색 눈금 (자동차 속도계 스타일)
     ticksEl.innerHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
                     stroke="#ffffff" 
                     stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
     
-    // 주요 눈금에만 숫자 표시
+    // 주요 눈금에만 숫자 표시 (파워값으로 변환)
     if (isMajor) {
-      const labelRadius = radius + 20;
-      const labelX = centerX + labelRadius * Math.cos(rad);
-      const labelY = centerY + labelRadius * Math.sin(rad);
+      // 위치를 파워값으로 변환
+      let powerValue;
+      if (pos <= 60) {
+        // 0~60: 0 ~ centerPower
+        powerValue = (pos / 60) * centerPower;
+      } else {
+        // 60~120: centerPower ~ maxPower
+        powerValue = centerPower + ((pos - 60) / 60) * (maxPower - centerPower);
+      }
+      
+      // 반원 바깥쪽에 배치, 숫자가 닿지 않도록 간격 유지 (자동차 속도계 스타일)
+      const labelRadius = radius + 18;
+      const x = centerX + labelRadius * Math.cos(rad);
+      const y = centerY + labelRadius * Math.sin(rad);
       
       let displayValue;
       if (useFTPValue) {
@@ -313,12 +324,13 @@ function updatePowerMeterTicks(powerMeterId) {
         displayValue = Math.round((powerValue / ftp) * 100) + '%';
       }
       
-      labelsEl.innerHTML += `<text x="${labelX}" y="${labelY}" 
-                          text-anchor="middle" 
-                          dominant-baseline="middle"
-                          fill="#ffffff" 
-                          font-size="12" 
-                          font-weight="500">${displayValue}</text>`;
+      // 흰색 숫자 (자동차 속도계 스타일)
+      labelsEl.innerHTML += `<text x="${x}" y="${y}" 
+                     text-anchor="middle" 
+                     dominant-baseline="middle"
+                     fill="#ffffff" 
+                     font-size="15" 
+                     font-weight="700">${displayValue}</text>`;
     }
   }
 }
