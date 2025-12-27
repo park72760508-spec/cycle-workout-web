@@ -2275,6 +2275,88 @@ button[aria-disabled="true"] {
   touch-action: manipulation;
 }
 
+/* ========== Indoor 모드 선택 모달 스타일 ========== */
+#indoorModeSelectionModal .btn-device {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 20px;
+  min-height: 160px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+  overflow: visible;
+  color: #2563eb;
+  width: 100%;
+}
+
+#indoorModeSelectionModal .btn-device::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+#indoorModeSelectionModal .btn-device:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
+  border-color: rgba(59, 130, 246, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+#indoorModeSelectionModal .btn-device:hover::before {
+  opacity: 1;
+}
+
+#indoorModeSelectionModal .btn-device:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
+}
+
+#indoorModeSelectionModal .btn-device .device-btn-icon {
+  order: 1 !important;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  transition: transform 0.3s ease, filter 0.3s ease;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+#indoorModeSelectionModal .btn-device:hover .device-btn-icon {
+  transform: scale(1.1);
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
+}
+
+#indoorModeSelectionModal .btn-device span {
+  order: -1 !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: #2563eb !important;
+  text-align: center !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8) !important;
+  line-height: 1.4 !important;
+  width: 100% !important;
+  display: block !important;
+  margin-bottom: 0 !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
 /* ANT+ 디바이스 검색 목록 스타일 */
 .ant-device-list {
   max-height: 200px;
