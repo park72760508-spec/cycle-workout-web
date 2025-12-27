@@ -1197,3 +1197,84 @@ function renderPairingDeviceList(targetType) {
   console.log(`[UI 업데이트] ${listId}에 ${devices.length}개의 장치 표시 중`);
 }
 
+
+/**
+ * [최종 패치] ANT+ 데이터와 index.html UI 강제 연결 로직
+ */
+
+// 1. 데이터 수신 및 분류 엔진 (ANT+ 0x4E 메시지 분석)
+window.parseIndoorSensorPayload = function(payload) {
+    if (payload.length < 13) return;
+    
+    // 로그에 찍힌 24 78 (0x78) 등 장치 정보 추출
+    const idLow = payload[10];
+    const idHigh = payload[11];
+    const deviceType = payload[12]; // 0x78: 심박계, 0x0B: 파워미터, 0x11: FE-C
+    const transType = payload[13];
+    const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+
+    // 장치 발견 시 목록 업데이트 호출
+    updateIndoorPairingUI(deviceId, deviceType);
+    
+    // 실시간 데이터 처리 (실행 중인 경우)
+    if (window.indoorTrainingState.trainingState === 'running') {
+        processLiveTrainingData(deviceId, deviceType, payload);
+    }
+};
+
+// 2. index.html의 ID들과 직접 연동하여 리스트 생성
+function updateIndoorPairingUI(deviceId, deviceType) {
+    // 중복 체크
+    if (window.antState.foundDevices.find(d => d.id === deviceId)) return;
+
+    let typeName = '';
+    let listId = '';
+    
+    // 장치 타입별 매핑 (index.html ID 기준)
+    if (deviceType === 0x78) {
+        typeName = '심박계';
+        listId = 'heartRateDeviceList'; //
+    } else if (deviceType === 0x0B) {
+        typeName = '파워미터';
+        listId = 'powerMeterDeviceList'; //
+    } else if (deviceType === 0x11 || deviceType === 0x10) {
+        typeName = '스마트로라';
+        listId = 'trainerDeviceList'; //
+    }
+
+    if (!listId) return;
+
+    // foundDevices 배열에 추가
+    window.antState.foundDevices.push({ id: deviceId, type: typeName, deviceType: deviceType });
+
+    // UI 리스트 업데이트
+    const listEl = document.getElementById(listId);
+    if (listEl) {
+        // 기존 '검색 중' 메시지 제거 후 리스트 렌더링
+        const devices = window.antState.foundDevices.filter(d => d.deviceType === deviceType);
+        listEl.innerHTML = devices.map(d => `
+            <div class="device-item" onclick="selectIndoorDevice('${d.id}', '${listId}')" 
+                 style="padding:10px; border-bottom:1px solid #ddd; cursor:pointer; display:flex; justify-content:space-between;">
+                <span><strong>${d.type}</strong> (ID: ${d.id})</span>
+                <button class="btn btn-xs btn-primary">선택</button>
+            </div>
+        `).join('');
+    }
+}
+
+// 3. 리스트 클릭 시 입력창(ID 필드)에 자동 삽입
+window.selectIndoorDevice = function(deviceId, listId) {
+    let inputId = '';
+    // 리스트 ID에 따라 타겟 입력 필드 결정
+    if (listId === 'heartRateDeviceList') inputId = 'heartRateDeviceId'; //
+    else if (listId === 'powerMeterDeviceList') inputId = 'powerMeterDeviceId'; //
+    else if (listId === 'trainerDeviceList') inputId = 'trainerDeviceId'; //
+
+    const inputEl = document.getElementById(inputId);
+    if (inputEl) {
+        inputEl.value = deviceId;
+        inputEl.style.backgroundColor = '#d4edda';
+        setTimeout(() => inputEl.style.backgroundColor = '', 500);
+        if (typeof showToast === 'function') showToast(`${deviceId} 장치가 선택되었습니다.`);
+    }
+};
