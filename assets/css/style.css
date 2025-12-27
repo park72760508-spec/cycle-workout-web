@@ -9297,19 +9297,18 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-/* 우측: 거리 */
+/* 우측: 현재속도 */
 .distance-display-right {
   display: flex;
-  align-items: baseline;
-  gap: 4px;
-  flex: 1;
+  align-items: center;
   justify-content: flex-end;
+  flex: 1;
 }
 
 .distance-value {
   font-weight: 700;
   color: #ff0000; /* 빨강색 숫자 */
-  font-size: 21.6px; /* 18px * 1.2 (20% 확대) */
+  font-size: 25.92px; /* 21.6px * 1.2 (20% 확대) */
   line-height: 1;
 }
 
@@ -9321,9 +9320,9 @@ button[aria-disabled="true"] {
   line-height: 0;
 }
 
-/* 거리 단위 (21.6px의 40% = 8.64px, 20% 확대 반영) */
-.distance-display-right .distance-unit-sup {
-  font-size: 8.64px; /* 21.6px * 0.4 */
+/* 우측 현재속도 단위 (25.92px의 30% = 7.776px) */
+.distance-display-right .speed-unit-bottom {
+  font-size: 7.776px; /* 25.92px * 0.3 */
 }
 
 .speedometer-footer {
