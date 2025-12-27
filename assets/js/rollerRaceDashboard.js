@@ -99,6 +99,8 @@ class SpeedometerData {
     this.speedHistory = []; // 최근 속도 기록 (그래프용)
     this.speedSum = 0; // 평균 속도 계산용
     this.speedCount = 0; // 평균 속도 계산용
+    this.filteredSpeed = 0; // [추가] 가민 스타일 필터링 속도
+    this.lastDecelerationCheck = Date.now(); // [추가] 감속 체크 시간    
   }
 }
 
@@ -5568,32 +5570,39 @@ function startConnectionStatusCheck() {
     clearInterval(window.rollerRaceState.connectionStatusCheckTimer);
   }
   
+  // 주기를 1000ms -> 200ms로 변경 (반응성 강화)
   window.rollerRaceState.connectionStatusCheckTimer = setInterval(() => {
     const now = Date.now();
     window.rollerRaceState.speedometers.forEach(speedometer => {
-      // 센서 ID가 설정된 경우에만 체크
-      if (speedometer.deviceId) {
-        // 마지막 데이터 수신 시간 확인 (신호 단절 체크)
-        const timeSinceLastPacket = now - (speedometer.lastPacketTime || 0);
+      if (!speedometer.deviceId) return;
+
+      // 1. 패킷 단절 체크 (5초간 무응답 시)
+      const timeSinceLastPacket = now - (speedometer.lastPacketTime || 0);
+      if (timeSinceLastPacket > 5000) {
+        updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
+        updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+        return;
+      }
+
+      // 2. [솔루션 1 적용] 가변 감속 예측 로직
+      if (speedometer.currentSpeed > 0) {
+        const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+        const circumferenceM = wheelSpec.circumference / 1000;
         
-        if (timeSinceLastPacket > 5000) { 
-          // 5초간 패킷이 전혀 없으면 '미연결' 처리 및 속도 0
-          updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
-          updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
-        } 
-        else {
-          // 신호는 오고 있으나 실제 바퀴 회전(Event)이 없는 경우 (정지 체크)
-          const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
+        // 현재 속도에서 1회전에 걸려야 할 예상 시간
+        const expectedInterval = (circumferenceM / (speedometer.currentSpeed / 3.6)) * 1000;
+        const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
+
+        // 예상 시간보다 1.5배 지연되면 즉시 감속 시작
+        if (timeSinceLastEvent > Math.max(expectedInterval * 1.5, 800)) {
+          let predictedSpeed = speedometer.currentSpeed * 0.7; // 30%씩 감속
+          if (predictedSpeed < 1.0) predictedSpeed = 0;
           
-          // 마지막 회전 이벤트로부터 2초 이상 지났는데 속도가 0이 아니라면
-          if (timeSinceLastEvent > 2000 && speedometer.currentSpeed > 0) {
-            console.log(`[트랙${speedometer.id}] 정지 감지 - 속도 0 리셋`);
-            updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
-          }
+          updateSpeedometerData(speedometer.id, predictedSpeed, speedometer.totalDistance);
         }
       }
     });
-  }, 1000);
+  }, 200); // 0.2초마다 정밀 감시
 }
 
 /**
@@ -5957,6 +5966,16 @@ function processSpeedCadenceData(deviceId, data) {
     if (window.rollerRaceState.raceState === 'running') {
       speedometer.totalDistance += (distM / 1000);
     }
+
+    // ... 기존 속도 계산 로직 이후 ...
+    const rawSpeed = (distM / timeS) * 3.6;
+    
+    // [솔루션 2 적용] EMA 필터로 속도 보정
+    const alpha = 0.7; // 반응성 조절 (0.1~0.9)
+    speedometer.filteredSpeed = (alpha * rawSpeed) + ((1 - alpha) * speedometer.filteredSpeed);
+    
+    // UI 업데이트 시 rawSpeed 대신 filteredSpeed 사용
+    // updateSpeedometerData(speedometer.id, speedometer.filteredSpeed, speedometer.totalDistance);
     
     updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
     
@@ -5967,6 +5986,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.connected = true;
   }
 }
+
 
 
 
