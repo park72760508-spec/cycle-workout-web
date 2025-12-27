@@ -832,6 +832,9 @@ async function searchUserByPhoneForPairing() {
         const user = authResult.user;
         const wkg = user.ftp && user.weight ? (user.ftp / user.weight).toFixed(1) : '-';
         
+        // 사용자 정보를 전역에 임시 저장 (선택 시 사용)
+        window._searchedUserForPairing = user;
+        
         resultEl.innerHTML = `
           <div class="user-card-compact" style="padding: 16px; border: 2px solid #007bff; border-radius: 8px; background: #f0f7ff; cursor: pointer;" onclick="selectSearchedUserForPowerMeter(${user.id})">
             <div class="user-info">
@@ -901,13 +904,36 @@ async function selectSearchedUserForPowerMeter(userId) {
   if (!powerMeter) return;
   
   try {
-    // 사용자 정보 로드
-    const loadUsersFunc = window.loadUsers || (typeof loadUsers === 'function' ? loadUsers : null);
-    if (loadUsersFunc) {
-      const users = await loadUsersFunc();
-      const user = users.find(u => u.id === userId);
-      
-      if (user) {
+    // 사용자 정보 가져오기
+    let user = null;
+    
+    // 방법 1: 검색 결과에서 임시 저장된 사용자 정보 사용 (가장 빠름)
+    if (window._searchedUserForPairing && String(window._searchedUserForPairing.id) === String(userId)) {
+      user = window._searchedUserForPairing;
+    }
+    
+    // 방법 2: apiGetUsers 함수 사용
+    if (!user && typeof apiGetUsers === 'function') {
+      const result = await apiGetUsers();
+      if (result && result.success && Array.isArray(result.items)) {
+        user = result.items.find(u => String(u.id) === String(userId));
+      }
+    }
+    
+    // 방법 3: apiGetUsers가 없으면 window.apiGetUsers 시도
+    if (!user && typeof window.apiGetUsers === 'function') {
+      const result = await window.apiGetUsers();
+      if (result && result.success && Array.isArray(result.items)) {
+        user = result.items.find(u => String(u.id) === String(userId));
+      }
+    }
+    
+    // 방법 4: dbUsers에서 직접 찾기 (app.js에서 사용하는 방식)
+    if (!user && window.dbUsers && Array.isArray(window.dbUsers)) {
+      user = window.dbUsers.find(u => String(u.id) === String(userId));
+    }
+    
+    if (user) {
         // 파워계에 사용자 정보 저장
         powerMeter.userId = userId;
         powerMeter.userFTP = user.ftp;
