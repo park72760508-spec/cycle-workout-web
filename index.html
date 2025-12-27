@@ -2136,49 +2136,37 @@
 <script src="assets/js/app.js"></script>  
 
   
-  <!-- ========== Indoor Race/Training 선택 화면 ========== -->
-  <div id="indoorModeSelectionScreen" class="screen">
-    <div class="header">
-      <h1><img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" style="width: 48px; height: 48px; vertical-align: middle; margin-right: 8px;" /> Indoor 모드 선택</h1>
-      <p class="subtitle">원하는 모드를 선택하세요</p>
-    </div>
-    
-    <div class="card" style="max-width: 800px; margin: 40px auto;">
-      <div class="training-modes" style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
-        <!-- Indoor Race 카드 -->
-        <div class="training-mode-card individual-training" style="flex: 1; min-width: 300px; cursor: pointer;" onclick="showScreen('rollerRaceDashboardScreen')">
-          <div class="mode-icon">
-            <img src="assets/img/personals.png" alt="Indoor Race" style="width: 64px; height: 64px;" />
-          </div>
-          <h4>Indoor Race</h4>
-          <p>실내 평로라 대회 모드</p>
-          <ul class="mode-features">
-            <li>속도계 기반 경기</li>
-            <li>실시간 순위 표시</li>
-            <li>거리/시간 목표 설정</li>
-          </ul>
-        </div>
+  <!-- ========== Indoor Race/Training 선택 모달 ========== -->
+  <div id="indoorModeSelectionModal" class="modal hidden" onclick="if(event.target === this) closeIndoorModeSelectionModal()">
+    <div class="modal-content" style="max-width: 600px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <img src="assets/img/STELVIO AI.png" alt="Stelvio" style="width: 32px; height: 32px; vertical-align: middle;" />
+          Indoor 모드 선택
+        </h3>
+        <button class="modal-close" onclick="closeIndoorModeSelectionModal()">✖</button>
+      </div>
+      
+      <div class="modal-body">
+        <p style="text-align: center; color: #666; margin-bottom: 24px;">원하는 모드를 선택하세요</p>
         
-        <!-- Indoor Training 카드 -->
-        <div class="training-mode-card group-training" style="flex: 1; min-width: 300px; cursor: pointer;" onclick="showScreen('indoorTrainingDashboardScreen')">
-          <div class="mode-icon">
-            <img src="assets/img/personal.png" alt="Indoor Training" style="width: 64px; height: 64px;" />
-          </div>
-          <h4>Indoor Training</h4>
-          <p>실내 훈련 모드</p>
-          <ul class="mode-features">
-            <li>파워계 기반 훈련</li>
-            <li>워크아웃 실행</li>
-            <li>세그먼트별 파워 관리</li>
-          </ul>
+        <div class="grid-2 gap-10" style="margin-bottom: 20px;">
+          <!-- Indoor Race 버튼 -->
+          <button class="btn btn-device" id="btnIndoorRace" onclick="selectIndoorMode('race')">
+            <img src="assets/img/personals.png" alt="Indoor Race" class="device-btn-icon" />
+            <span>Indoor Race</span>
+          </button>
+          
+          <!-- Indoor Training 버튼 -->
+          <button class="btn btn-device" id="btnIndoorTraining" onclick="selectIndoorMode('training')">
+            <img src="assets/img/personal.png" alt="Indoor Training" class="device-btn-icon" />
+            <span>Indoor Training</span>
+          </button>
         </div>
       </div>
       
-      <div class="btn-row mt-30" style="justify-content: center;">
-        <button class="btn btn-secondary btn-default-style btn-with-icon" onclick="showScreen('connectionScreen')">
-          <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-          뒤로
-        </button>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeIndoorModeSelectionModal()">취소</button>
       </div>
     </div>
   </div>
@@ -2500,7 +2488,7 @@
         </h3>
         
         <div class="list-header-actions">
-          <button class="btn btn-secondary btn-sm" id="btnBackFromTraining" onclick="showScreen('indoorModeSelectionScreen')">
+          <button class="btn btn-secondary btn-sm" id="btnBackFromTraining" onclick="showScreen('connectionScreen')">
             <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
             뒤로
           </button>
