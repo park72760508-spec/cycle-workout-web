@@ -9445,6 +9445,15 @@ button[aria-disabled="true"] {
   font-size: 7.776px; /* 25.92px * 0.3 */
 }
 
+/* 인라인 단위 표시 (값 옆에 표시) */
+.speed-unit-inline {
+  font-size: 12px;
+  color: #666666;
+  font-weight: 500;
+  margin-left: 4px;
+  vertical-align: baseline;
+}
+
 .speedometer-footer {
   display: flex;
   justify-content: space-between;
