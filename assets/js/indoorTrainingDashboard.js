@@ -99,12 +99,20 @@ function handleIndoorAntMessage(packet) {
   const msgId = packet[2];
   const payload = packet.slice(3, packet.length - 1);
 
-  // Tacx T2028 Wrapper 해제 로직 포함
+  // 1. Tacx Wrapper 해제
   if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
       window.processBuffer(payload.slice(1));
       return;
   }
-  if (msgId === 0x4E) parseIndoorSensorPayload(payload);
+
+  // 2. 센서 데이터(0x4E) 처리
+  if (msgId === 0x4E) {
+      // 현재 화면이 인도어 트레이닝 화면일 때만 리스트 갱신 명령 수행
+      const currentScreen = window.currentScreenId || ''; 
+      if (currentScreen.includes('indoorTraining')) {
+          parseIndoorSensorPayload(payload);
+      }
+  }
 }
 
 
@@ -1148,5 +1156,44 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
       updatePowerMeterData(pm.id, power, pm.heartRate, antData[3]);
     }
   });
+}
+
+
+/**
+ * 검색된 장치를 인도어 트레이닝 페어링 모달 리스트에 표시
+ */
+function renderPairingDeviceList(targetType) {
+  // 장치 타입에 따른 리스트 ID 매핑
+  const listMap = {
+    0x78: 'heartRateDeviceList',   // 심박계
+    0x0B: 'powerMeterDeviceList',  // 파워미터
+    0x11: 'trainerDeviceList'      // 스마트로라
+  };
+
+  const listId = listMap[targetType];
+  const listEl = document.getElementById(listId);
+  if (!listEl) return;
+
+  // 해당 타입의 장치만 필터링
+  const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
+  
+  if (devices.length === 0) {
+    listEl.innerHTML = '<div class="no-device">검색된 장치가 없습니다.</div>';
+    return;
+  }
+
+  // 리스트 그리기
+  listEl.innerHTML = devices.map(d => `
+    <div class="ant-device-item" onclick="selectDeviceForInput('${d.id}', '${targetType}')">
+      <div class="device-info">
+        <span class="device-type-label">${d.type}</span>
+        <span class="device-id">ID: ${d.id}</span>
+      </div>
+      <button class="btn-select">선택</button>
+    </div>
+  `).join('');
+  
+  // 콘솔 확인용
+  console.log(`[UI 업데이트] ${listId}에 ${devices.length}개의 장치 표시 중`);
 }
 
