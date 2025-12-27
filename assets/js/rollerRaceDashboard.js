@@ -279,17 +279,17 @@ function createSpeedometerElement(speedometer) {
           <sup class="speed-unit-sup">km/h</sup>
         </div>
       </div>
-      <!-- 중앙: 현재속도 (단위는 하단에 표시) -->
+      <!-- 중앙: 거리 (단위는 하단에 표시) -->
       <div class="speed-display-center">
         <div class="speed-value-wrapper">
-          <span class="speed-value" id="speed-value-${speedometer.id}">0</span>
-          <div class="speed-unit-bottom">km/h</div>
+          <span class="speed-value" id="distance-value-${speedometer.id}">0.0</span>
+          <div class="speed-unit-bottom">km</div>
         </div>
       </div>
-      <!-- 우측: 거리 -->
+      <!-- 우측: 현재속도 -->
       <div class="distance-display-right">
-        <span class="distance-value" id="distance-value-${speedometer.id}">0.0</span>
-        <sup class="distance-unit-sup">km</sup>
+        <span class="distance-value" id="speed-value-${speedometer.id}">0</span>
+        <sup class="distance-unit-sup">km/h</sup>
       </div>
     </div>
   `;
@@ -644,18 +644,22 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   }
   
   // UI 업데이트 (속도가 0이어도 즉시 반영)
-  const speedValueEl = document.getElementById(`speed-value-${speedometerId}`);
+  // 중앙: 거리, 우측: 속도로 변경됨
+  const speedValueEl = document.getElementById(`speed-value-${speedometerId}`); // 우측에 표시
   const maxSpeedValueEl = document.getElementById(`max-speed-value-${speedometerId}`);
   const avgSpeedValueEl = document.getElementById(`avg-speed-value-${speedometerId}`);
-  const distanceValueEl = document.getElementById(`distance-value-${speedometerId}`);
+  const distanceValueEl = document.getElementById(`distance-value-${speedometerId}`); // 중앙에 표시
   
   if (speedValueEl) {
-    // 속도가 0이어도 즉시 "0.0"으로 표시
+    // 우측에 속도 표시 (속도가 0이어도 즉시 "0.0"으로 표시)
     speedValueEl.textContent = speed.toFixed(1);
   }
   if (maxSpeedValueEl) maxSpeedValueEl.textContent = speedometer.maxSpeed.toFixed(1);
   if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(1);
-  if (distanceValueEl) distanceValueEl.textContent = distance.toFixed(2);
+  if (distanceValueEl) {
+    // 중앙에 거리 표시
+    distanceValueEl.textContent = distance.toFixed(2);
+  }
   
   // 직선 트랙 내 속도 및 거리 표시 업데이트
   updateStraightTrackStats(speedometerId, speed, distance);
