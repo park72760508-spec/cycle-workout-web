@@ -220,7 +220,10 @@ function createPowerMeterElement(powerMeter) {
   
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
-      <span class="speedometer-pairing-name" id="pairing-name-${powerMeter.id}" style="font-size: 12px !important; color: #ffffff !important; font-weight: 500 !important; flex: 0 0 auto !important; text-align: left !important; min-width: 80px !important; order: 1 !important; cursor: pointer;" onclick="openPowerMeterSettings(${powerMeter.id})">${powerMeter.pairingName || ''}</span>
+      <div style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; flex: 0 0 auto !important; min-width: 100px !important; order: 1 !important;">
+        <span class="speedometer-user-name" id="user-name-${powerMeter.id}" style="font-size: 13px !important; color: #ffffff !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important; display: ${powerMeter.userName ? 'block' : 'none'} !important;">${powerMeter.userName || ''}</span>
+        <span class="speedometer-pairing-name" id="pairing-name-${powerMeter.id}" style="font-size: 11px !important; color: #ffffff !important; font-weight: 400 !important; text-align: left !important; opacity: 0.8 !important; cursor: pointer;" onclick="openPowerMeterSettings(${powerMeter.id})">${powerMeter.pairingName || ''}</span>
+      </div>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; background: rgba(0, 212, 170, 0.5) !important; color: #ffffff !important; padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important; cursor: pointer;" onclick="openPowerMeterSettings(${powerMeter.id})">트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
@@ -912,6 +915,13 @@ async function selectSearchedUserForPowerMeter(userId) {
         powerMeter.userWeight = user.weight;
         powerMeter.userContact = user.contact;
         
+        // 사용자명 UI 업데이트 (트랙번호 라인 좌측)
+        const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
+        if (userNameEl) {
+          userNameEl.textContent = user.name;
+          userNameEl.style.display = 'block';
+        }
+        
         // FTP 기반 눈금 업데이트
         updatePowerMeterTicks(powerMeterId);
         
@@ -1048,6 +1058,15 @@ function selectUserForPowerMeter(userId) {
         powerMeter.userId = userId;
         powerMeter.userFTP = user.ftp;
         powerMeter.userName = user.name;
+        powerMeter.userWeight = user.weight;
+        powerMeter.userContact = user.contact;
+        
+        // 사용자명 UI 업데이트 (트랙번호 라인 좌측)
+        const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
+        if (userNameEl) {
+          userNameEl.textContent = user.name;
+          userNameEl.style.display = 'block';
+        }
         
         // FTP 기반 눈금 업데이트
         updatePowerMeterTicks(powerMeterId);
