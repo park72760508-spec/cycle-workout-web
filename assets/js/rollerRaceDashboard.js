@@ -269,16 +269,16 @@ function createSpeedometerElement(speedometer) {
       <!-- 좌측: 최대속도, 평균속도 (2줄) -->
       <div class="speed-display-left">
         <div class="speed-stat-row speed-stat-max">
-          <div class="speed-stat-value-wrapper">
+          <span class="speed-stat-value" id="max-speed-value-${speedometer.id}">0.00</span>
+          <div class="speed-stat-label-wrapper">
             <span class="speed-stat-label">최대</span>
-            <span class="speed-stat-value" id="max-speed-value-${speedometer.id}">0</span>
             <span class="speed-unit-bottom">km/h</span>
           </div>
         </div>
         <div class="speed-stat-row speed-stat-avg">
-          <div class="speed-stat-value-wrapper">
+          <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}">0.00</span>
+          <div class="speed-stat-label-wrapper">
             <span class="speed-stat-label">평균</span>
-            <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}">0</span>
             <span class="speed-unit-bottom">km/h</span>
           </div>
         </div>
@@ -660,8 +660,8 @@ function updateSpeedometerData(speedometerId, speed, distance) {
     // 우측에 속도 표시 (속도가 0이어도 즉시 "0.0"으로 표시)
     speedValueEl.textContent = speed.toFixed(1);
   }
-  if (maxSpeedValueEl) maxSpeedValueEl.textContent = speedometer.maxSpeed.toFixed(1);
-  if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(1);
+  if (maxSpeedValueEl) maxSpeedValueEl.textContent = speedometer.maxSpeed.toFixed(2);
+  if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(2);
   if (distanceValueEl) {
     // 중앙에 거리 표시
     distanceValueEl.textContent = distance.toFixed(2);
