@@ -561,13 +561,14 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
   const tickLengthLong = 14; 
   const centerCircleRadius = 7; 
   
-  // 현재 속도까지의 5km/h 단위 눈금 계산
-  const currentTickSpeed = Math.floor(speed / 5) * 5;
+  // 현재 속도까지의 2.5km/h 단위 눈금 계산 (기존 5km/h의 1/2 간격)
+  const tickInterval = 2.5;
+  const currentTickSpeed = Math.floor(speed / tickInterval) * tickInterval;
   const maxTickSpeed = Math.min(currentTickSpeed, maxSpeed);
   
   pathGroup.innerHTML = '';
   
-  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
+  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += tickInterval) {
     // 1. 바늘과 동일한 각도 계산
     let needleAngle = calculateNeedleAngle(tickSpeed);
     
@@ -590,13 +591,26 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     const x2 = centerX + outerRadius * Math.cos(rad);
     const y2 = centerY + outerRadius * Math.sin(rad);
     
-    // 5. SVG Line 생성 및 추가
+    // 5. 속도 구간에 따른 색상 결정
+    let strokeColor;
+    if (tickSpeed > 80) {
+      // 80km/h 초과: 투명 빨강색선
+      strokeColor = 'rgba(255, 0, 0, 0.4)';
+    } else if (tickSpeed > 60) {
+      // 60km/h 초과 ~ 80km/h: 투명 주황색선
+      strokeColor = 'rgba(255, 165, 0, 0.4)';
+    } else {
+      // 60km/h 이하: 민트색 반투명 (기존 색상 유지)
+      strokeColor = 'rgba(0, 255, 200, 0.4)';
+    }
+    
+    // 6. SVG Line 생성 및 추가
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1);
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
-    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); // 민트색 반투명
+    line.setAttribute('stroke', strokeColor);
     line.setAttribute('stroke-width', '1.2');
     line.setAttribute('stroke-linecap', 'round');
     
