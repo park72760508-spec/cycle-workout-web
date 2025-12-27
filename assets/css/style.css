@@ -9237,11 +9237,13 @@ button[aria-disabled="true"] {
   align-items: flex-end;
   gap: 2px;
   line-height: 1;
+  position: relative;
 }
 
 .speed-stat-label {
-  font-size: 12px;
+  font-size: 8.64px; /* 위첨자 크기 (21.6px * 0.4) */
   font-weight: 500;
+  line-height: 1;
 }
 
 .speed-stat-max .speed-stat-label {
@@ -9260,8 +9262,8 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-.speed-unit-top {
-  font-size: 8.64px; /* 21.6px * 0.4 (이전 단위 크기) */
+.speed-unit-bottom {
+  font-size: 8.64px; /* 21.6px * 0.4 (아래 첨자 크기) */
   font-weight: 300;
   color: #000000;
   line-height: 1;
