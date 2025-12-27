@@ -549,7 +549,10 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
   if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
   if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
   if (segmentPowerEl) segmentPowerEl.textContent = Math.round(powerMeter.segmentPower);
-  if (heartRateEl) heartRateEl.textContent = Math.round(heartRate) || 0;
+  if (heartRateEl) {
+    const hrValue = Math.round(heartRate || powerMeter.heartRate || 0);
+    heartRateEl.textContent = hrValue;
+  }
   if (cadenceEl) cadenceEl.textContent = Math.round(cadence) || 0;
   
   // 현재 파워값 업데이트 (값이 없으면 "-" 표시)
@@ -1232,7 +1235,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
     if (pm.heartRateDeviceId == deviceId && deviceType === 0x78) {
       pm.heartRate = antData[7];
       const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
-      if (hrEl) hrEl.textContent = pm.heartRate;
+      if (hrEl) hrEl.textContent = Math.round(pm.heartRate) || 0;
     }
     // 파워 데이터 업데이트
     if ((pm.deviceId == deviceId || pm.trainerDeviceId == deviceId) && (deviceType === 0x0B || deviceType === 0x11)) {
