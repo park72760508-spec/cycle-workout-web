@@ -9259,7 +9259,7 @@ button[aria-disabled="true"] {
 .speed-stat-value {
   font-size: 25.92px; /* 현재 속도와 동일 (21.6px * 1.2) */
   font-weight: 700;
-  color: #000000;
+  color: #555555; /* 약간 톤다운된 검정색 */
   text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
   line-height: 1;
 }
@@ -9311,7 +9311,7 @@ button[aria-disabled="true"] {
 
 .distance-value {
   font-weight: 700;
-  color: #ff0000; /* 빨강색 숫자 */
+  color: #006400; /* 진녹색 (현재 속도) */
   font-size: 25.92px; /* 21.6px * 1.2 (20% 확대) */
   line-height: 1;
 }
