@@ -2501,6 +2501,123 @@
     </div>
   </div>
 
+  <!-- ========== Indoor Training 파워계 페어링 모달 ========== -->
+  <div id="powerMeterPairingModal" class="modal hidden" onclick="if(event.target === this) closePowerMeterPairingModal()">
+    <div class="modal-content" style="max-width: 600px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="powerMeterPairingModalTitle">파워계 페어링</h3>
+        <button class="modal-close" onclick="closePowerMeterPairingModal()">✖</button>
+      </div>
+      <div class="modal-body">
+        <!-- 메뉴 탭 -->
+        <div class="pairing-menu-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb;">
+          <button class="pairing-tab-btn active" onclick="showPairingTab('user')" id="tab-user">사용자 선택</button>
+          <button class="pairing-tab-btn" onclick="showPairingTab('trainer')" id="tab-trainer">스마트로라 페어링</button>
+          <button class="pairing-tab-btn" onclick="showPairingTab('power')" id="tab-power">파워메터 페어링</button>
+          <button class="pairing-tab-btn" onclick="showPairingTab('heart')" id="tab-heart">심박계 페어링</button>
+        </div>
+        
+        <!-- 사용자 선택 탭 -->
+        <div id="pairing-tab-user" class="pairing-tab-content">
+          <div id="powerMeterUserList" class="user-list-compact">
+            <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
+          </div>
+        </div>
+        
+        <!-- 스마트로라 페어링 탭 -->
+        <div id="pairing-tab-trainer" class="pairing-tab-content hidden">
+          <div class="form-group">
+            <label>스마트로라 이름</label>
+            <input type="text" id="trainerPairingName" placeholder="예: 스마트로라 1">
+          </div>
+          <div class="form-group">
+            <label>ANT+ 디바이스 선택</label>
+            <!-- USB 수신기 연결 상태 표시 -->
+            <div id="trainerAntUSBStatus" style="margin-bottom: 8px; padding: 8px; border-radius: 4px; background: #f0f0f0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="trainerAntUSBStatusIcon" style="width: 12px; height: 12px; border-radius: 50%; background: #999; display: inline-block; flex-shrink: 0;"></span>
+              <span id="trainerAntUSBStatusText" style="font-size: 12px; color: #666; flex: 1; min-width: 200px;">USB 수신기 상태 확인 중...</span>
+              <div style="display: flex; gap: 4px; margin-left: auto;">
+                <button type="button" id="btnTrainerConnectUSB" onclick="connectUSBStickDirectly()" style="display: none; padding: 4px 8px; font-size: 11px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">USB 수신기 연결</button>
+                <button type="button" id="btnTrainerRefreshUSB" onclick="activateANTReceiver()" style="padding: 4px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">활성화</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button type="button" class="btn btn-primary" id="btnSearchTrainerDevices" onclick="searchTrainerDevices()" style="flex: 0 0 auto;">
+                <span id="trainerSearchButtonText">디바이스 검색</span>
+              </button>
+              <input type="text" id="trainerDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+            </div>
+            <div id="trainerDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
+              <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
+            </div>
+          </div>
+        </div>
+        
+        <!-- 파워메터 페어링 탭 -->
+        <div id="pairing-tab-power" class="pairing-tab-content hidden">
+          <div class="form-group">
+            <label>파워메터 이름</label>
+            <input type="text" id="powerMeterPairingName" placeholder="예: 파워메터 1">
+          </div>
+          <div class="form-group">
+            <label>ANT+ 디바이스 선택</label>
+            <!-- USB 수신기 연결 상태 표시 -->
+            <div id="powerAntUSBStatus" style="margin-bottom: 8px; padding: 8px; border-radius: 4px; background: #f0f0f0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="powerAntUSBStatusIcon" style="width: 12px; height: 12px; border-radius: 50%; background: #999; display: inline-block; flex-shrink: 0;"></span>
+              <span id="powerAntUSBStatusText" style="font-size: 12px; color: #666; flex: 1; min-width: 200px;">USB 수신기 상태 확인 중...</span>
+              <div style="display: flex; gap: 4px; margin-left: auto;">
+                <button type="button" id="btnPowerConnectUSB" onclick="connectUSBStickDirectly()" style="display: none; padding: 4px 8px; font-size: 11px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">USB 수신기 연결</button>
+                <button type="button" id="btnPowerRefreshUSB" onclick="activateANTReceiver()" style="padding: 4px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">활성화</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button type="button" class="btn btn-primary" id="btnSearchPowerDevices" onclick="searchPowerMeterDevices()" style="flex: 0 0 auto;">
+                <span id="powerSearchButtonText">디바이스 검색</span>
+              </button>
+              <input type="text" id="powerMeterDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+            </div>
+            <div id="powerMeterDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
+              <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
+            </div>
+          </div>
+        </div>
+        
+        <!-- 심박계 페어링 탭 -->
+        <div id="pairing-tab-heart" class="pairing-tab-content hidden">
+          <div class="form-group">
+            <label>심박계 이름</label>
+            <input type="text" id="heartRatePairingName" placeholder="예: 심박계 1">
+          </div>
+          <div class="form-group">
+            <label>ANT+ 디바이스 선택</label>
+            <!-- USB 수신기 연결 상태 표시 -->
+            <div id="heartAntUSBStatus" style="margin-bottom: 8px; padding: 8px; border-radius: 4px; background: #f0f0f0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <span id="heartAntUSBStatusIcon" style="width: 12px; height: 12px; border-radius: 50%; background: #999; display: inline-block; flex-shrink: 0;"></span>
+              <span id="heartAntUSBStatusText" style="font-size: 12px; color: #666; flex: 1; min-width: 200px;">USB 수신기 상태 확인 중...</span>
+              <div style="display: flex; gap: 4px; margin-left: auto;">
+                <button type="button" id="btnHeartConnectUSB" onclick="connectUSBStickDirectly()" style="display: none; padding: 4px 8px; font-size: 11px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">USB 수신기 연결</button>
+                <button type="button" id="btnHeartRefreshUSB" onclick="activateANTReceiver()" style="padding: 4px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">활성화</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button type="button" class="btn btn-primary" id="btnSearchHeartDevices" onclick="searchHeartRateDevices()" style="flex: 0 0 auto;">
+                <span id="heartSearchButtonText">디바이스 검색</span>
+              </button>
+              <input type="text" id="heartRateDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+            </div>
+            <div id="heartRateDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
+              <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-success" onclick="savePowerMeterPairing()">저장</button>
+        <button class="btn btn-secondary" onclick="closePowerMeterPairingModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 평로라 대회 대시보드 스크립트 -->
   <script src="assets/js/rollerRaceDashboard.js"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
