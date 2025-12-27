@@ -202,8 +202,8 @@ function createPowerMeterElement(powerMeter) {
               font-size="10" 
               font-weight="500">X 100</text>
         
-        <!-- 현재 파워값 -->
-        <text x="100" y="170" 
+        <!-- 현재 파워값 (FTP 표기와 하단의 중간 위치) -->
+        <text x="100" y="177.5" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
