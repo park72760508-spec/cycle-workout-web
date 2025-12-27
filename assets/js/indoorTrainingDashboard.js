@@ -1207,8 +1207,19 @@ function parseIndoorSensorPayload(payload) {
   // 장치 목록 업데이트
   updateFoundDevicesList(deviceId, deviceType);
 
-  // 실시간 데이터 반영 (훈련 중일 때)
-  if (window.indoorTrainingState.trainingState === 'running') {
+  // 실시간 데이터 반영 (훈련 중이거나 페어링된 장치의 경우)
+  // 페어링된 장치는 훈련 시작 전에도 데이터를 받을 수 있도록
+  const isPairedDevice = window.indoorTrainingState.powerMeters.some(pm => {
+    const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
+    const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
+    const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
+    const receivedDeviceId = String(deviceId);
+    
+    return (deviceType === 0x78 && pmHeartRateDeviceId === receivedDeviceId) ||
+           ((deviceType === 0x0B || deviceType === 0x11) && (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId));
+  });
+  
+  if (window.indoorTrainingState.trainingState === 'running' || isPairedDevice) {
     processLiveTrainingData(deviceId, deviceType, payload);
   }
 }
@@ -1230,16 +1241,57 @@ function updateFoundDevicesList(deviceId, deviceType) {
 // 심박수(BPM) 및 파워 데이터 실시간 UI 반영
 function processLiveTrainingData(deviceId, deviceType, payload) {
   const antData = payload.slice(1, 9);
+  
+  // 디버깅: 심박계 데이터 수신 확인
+  if (deviceType === 0x78) {
+    console.log(`[심박계 데이터 수신] DeviceId: ${deviceId}, Payload:`, Array.from(payload).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+    console.log(`[심박계 데이터] antData:`, Array.from(antData).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+  }
+  
   window.indoorTrainingState.powerMeters.forEach(pm => {
-    // 심박수 업데이트 (로그 분석 결과 반영)
-    if (pm.heartRateDeviceId == deviceId && deviceType === 0x78) {
-      pm.heartRate = antData[7];
-      const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
-      if (hrEl) hrEl.textContent = Math.round(pm.heartRate) || 0;
+    // 심박수 업데이트
+    // deviceId 타입 변환 (문자열/숫자 모두 처리)
+    const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
+    const receivedDeviceId = String(deviceId);
+    
+    if (pmHeartRateDeviceId === receivedDeviceId && deviceType === 0x78) {
+      // ANT+ Heart Rate Monitor 데이터 포맷:
+      // Page 0: [Page, Heart Rate Event Time (2 bytes), Heart Rate Count, Heart Rate (1 byte), Operating Time (2 bytes), Battery Status, Reserved]
+      // 일반적으로 Heart Rate는 antData[3]에 있음
+      // 하지만 payload 구조에 따라 다를 수 있으므로 여러 위치 확인
+      let heartRate = 0;
+      
+      // antData[3]이 일반적인 위치 (Page 0 기준)
+      if (antData.length > 3 && antData[3] > 0 && antData[3] < 255) {
+        heartRate = antData[3];
+      } else if (antData.length > 7 && antData[7] > 0 && antData[7] < 255) {
+        // 대체 위치
+        heartRate = antData[7];
+      } else if (antData.length > 2 && antData[2] > 0 && antData[2] < 255) {
+        // 다른 가능한 위치
+        heartRate = antData[2];
+      }
+      
+      if (heartRate > 0) {
+        pm.heartRate = heartRate;
+        const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
+        if (hrEl) {
+          hrEl.textContent = Math.round(heartRate);
+          console.log(`[심박계 업데이트] 파워계 ${pm.id}: ${heartRate} bpm`);
+        }
+        
+        // 파워 데이터가 업데이트될 때도 심박계 값이 유지되도록
+        // updatePowerMeterData 호출 시 현재 심박계 값 전달
+      }
     }
+    
     // 파워 데이터 업데이트
-    if ((pm.deviceId == deviceId || pm.trainerDeviceId == deviceId) && (deviceType === 0x0B || deviceType === 0x11)) {
+    const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
+    const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
+    
+    if ((pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId) && (deviceType === 0x0B || deviceType === 0x11)) {
       const power = (antData[5] << 8) | antData[4];
+      // 현재 심박계 값도 함께 전달
       updatePowerMeterData(pm.id, power, pm.heartRate, antData[3]);
     }
   });
@@ -1290,8 +1342,18 @@ window.parseIndoorSensorPayload = function(payload) {
     // 장치 발견 시 목록 업데이트 호출
     updateIndoorPairingUI(deviceId, deviceType);
     
-    // 실시간 데이터 처리 (실행 중인 경우)
-    if (window.indoorTrainingState.trainingState === 'running') {
+    // 실시간 데이터 처리 (훈련 중이거나 페어링된 장치의 경우)
+    const isPairedDevice = window.indoorTrainingState.powerMeters.some(pm => {
+        const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
+        const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
+        const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
+        const receivedDeviceId = String(deviceId);
+        
+        return (deviceType === 0x78 && pmHeartRateDeviceId === receivedDeviceId) ||
+               ((deviceType === 0x0B || deviceType === 0x11) && (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId));
+    });
+    
+    if (window.indoorTrainingState.trainingState === 'running' || isPairedDevice) {
         processLiveTrainingData(deviceId, deviceType, payload);
     }
 };
