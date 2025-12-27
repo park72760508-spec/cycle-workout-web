@@ -288,9 +288,9 @@ function generatePowerMeterTicks(powerMeterId) {
 }
 
 /**
- * 파워계 라벨 생성 (0% ~ 100% ~ 200% 고정 표시)
+ * 파워계 라벨 생성 (주요 눈금에만 숫자 표시)
  * pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
- * 0% ~ 100% ~ 200% 사이를 균등하게 분할하여 표시
+ * 주요 눈금(20 간격)에만 숫자 표시: pos=0, 20, 40, 60, 80, 100, 120
  * 원 중심으로 180도 회전
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
  * 하단 왼쪽(180도, pos=0) = 200%, 위쪽(90도, pos=60) = 100%, 하단 오른쪽(0도, pos=120) = 0%
@@ -306,14 +306,13 @@ function generatePowerMeterLabels(powerMeterId) {
   const radius = 80;
   const maxPos = 120;
   
-  // 0% ~ 100% ~ 200% 사이를 균등하게 분할 (20% 간격)
-  // 0%, 20%, 40%, 60%, 80%, 100%, 120%, 140%, 160%, 180%, 200%
-  const percentages = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
+  // 주요 눈금 위치만 표시 (20 간격: 0, 20, 40, 60, 80, 100, 120)
+  const majorPositions = [0, 20, 40, 60, 80, 100, 120];
   
-  percentages.forEach(percent => {
+  majorPositions.forEach(pos => {
     // pos와 퍼센트의 관계: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
-    // pos = 120 - (percent / 200) * 120
-    const pos = 120 - (percent / 200) * 120;
+    // percent = (120 - pos) / 120 * 200
+    const percent = Math.round((120 - pos) / 120 * 200);
     
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
     // pos = 0 → 180도 (하단 왼쪽), pos = 60 → 90도 (위쪽), pos = 120 → 0도 (하단 오른쪽)
