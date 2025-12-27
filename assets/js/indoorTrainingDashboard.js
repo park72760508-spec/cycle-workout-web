@@ -68,9 +68,6 @@ class PowerMeterData {
 function initIndoorTrainingDashboard() {
   console.log('[Indoor Training] 대시보드 초기화');
   
-  // 워크아웃 목록 로드
-  loadWorkoutListForTraining();
-  
   // 파워계 그리드 생성
   createPowerMeterGrid();
   
@@ -161,12 +158,14 @@ function createPowerMeterElement(powerMeter) {
         <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
               fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
-        <!-- 파워 눈금 (동적 생성) -->
-        <g class="speedometer-ticks" id="power-ticks-${powerMeter.id}">
+        <!-- 파워 눈금 (0~120 위치) -->
+        <g class="speedometer-ticks">
+          ${generatePowerMeterTicks(powerMeter.id)}
         </g>
         
-        <!-- 파워 숫자 (동적 생성) -->
-        <g class="speedometer-labels" id="power-labels-${powerMeter.id}">
+        <!-- 파워 숫자 (반원 바깥쪽, 20단위만) -->
+        <g class="speedometer-labels">
+          ${generatePowerMeterLabels(powerMeter.id)}
         </g>
         
         <!-- 바늘 중심 원 -->
@@ -235,9 +234,6 @@ function createPowerMeterElement(powerMeter) {
     </div>
   `;
   
-  // 파워 눈금 생성
-  updatePowerMeterTicks(powerMeter.id);
-  
   return container;
 }
 
@@ -249,24 +245,11 @@ function createPowerMeterElement(powerMeter) {
  * 하단 왼쪽(180도) = 0, 위쪽(90도) = 60, 하단 오른쪽(0도) = 120
  * 원지름의 1/4만큼 아래로 이동
  */
-function updatePowerMeterTicks(powerMeterId) {
+function generatePowerMeterTicks(powerMeterId) {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
-  if (!powerMeter) return;
+  if (!powerMeter) return '';
   
-  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 250;
-  const useFTPValue = powerMeter.userFTP || window.indoorTrainingState.userFTPSet;
-  
-  const maxPower = useFTPValue ? ftp * 2 : 200; // FTP*2 또는 200%
-  const centerPower = useFTPValue ? ftp : 100; // FTP 또는 100%
-  
-  const ticksEl = document.getElementById(`power-ticks-${powerMeterId}`);
-  const labelsEl = document.getElementById(`power-labels-${powerMeterId}`);
-  
-  if (!ticksEl || !labelsEl) return;
-  
-  ticksEl.innerHTML = '';
-  labelsEl.innerHTML = '';
-  
+  let ticks = '';
   const centerX = 100;
   const centerY = 140; // 원의 중심 (원지름의 1/4만큼 아래로 이동: 100 + 40 = 140)
   const radius = 80;
@@ -296,43 +279,82 @@ function updatePowerMeterTicks(powerMeterId) {
     const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
     
     // 흰색 눈금 (자동차 속도계 스타일)
-    ticksEl.innerHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
+    ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
                     stroke="#ffffff" 
                     stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
+  }
+  
+  return ticks;
+}
+
+/**
+ * 파워계 라벨 생성 (Indoor Race 속도계와 동일한 스타일)
+ * 0~120 위치, 20단위만 표시
+ * 원 중심으로 180도 회전
+ * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
+ * 하단 왼쪽(180도) = 0, 위쪽(90도) = 60, 하단 오른쪽(0도) = 120
+ * 원지름의 1/4만큼 아래로 이동
+ */
+function generatePowerMeterLabels(powerMeterId) {
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return '';
+  
+  let labels = '';
+  const centerX = 100;
+  const centerY = 140; // 원의 중심 (원지름의 1/4만큼 아래로 이동: 100 + 40 = 140)
+  const radius = 80;
+  const maxPos = 120;
+  
+  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 250;
+  const useFTPValue = powerMeter.userFTP || window.indoorTrainingState.userFTPSet;
+  
+  const maxPower = useFTPValue ? ftp * 2 : 200; // FTP*2 또는 200%
+  const centerPower = useFTPValue ? ftp : 100; // FTP 또는 100%
+  
+  // 주요 위치 표시 (0, 20, 40, 60, 80, 100, 120) - 20단위만
+  const positions = [0, 20, 40, 60, 80, 100, 120];
+  
+  positions.forEach(pos => {
+    // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
+    // pos = 0 → 180도 (하단 왼쪽), pos = 60 → 90도 (위쪽), pos = 120 → 0도 (하단 오른쪽)
+    // 180도 회전: 각도에 180도 추가
+    let angle = 180 - (pos / maxPos) * 180;
+    angle = angle + 180; // 원 중심으로 180도 회전
     
-    // 주요 눈금에만 숫자 표시 (파워값으로 변환)
-    if (isMajor) {
-      // 위치를 파워값으로 변환
-      let powerValue;
-      if (pos <= 60) {
-        // 0~60: 0 ~ centerPower
-        powerValue = (pos / 60) * centerPower;
-      } else {
-        // 60~120: centerPower ~ maxPower
-        powerValue = centerPower + ((pos - 60) / 60) * (maxPower - centerPower);
-      }
-      
-      // 반원 바깥쪽에 배치, 숫자가 닿지 않도록 간격 유지 (자동차 속도계 스타일)
-      const labelRadius = radius + 18;
-      const x = centerX + labelRadius * Math.cos(rad);
-      const y = centerY + labelRadius * Math.sin(rad);
-      
-      let displayValue;
-      if (useFTPValue) {
-        displayValue = Math.round(powerValue);
-      } else {
-        displayValue = Math.round((powerValue / ftp) * 100) + '%';
-      }
-      
-      // 흰색 숫자 (자동차 속도계 스타일)
-      labelsEl.innerHTML += `<text x="${x}" y="${y}" 
+    const rad = (angle * Math.PI) / 180;
+    
+    // 위치를 파워값으로 변환
+    let powerValue;
+    if (pos <= 60) {
+      // 0~60: 0 ~ centerPower
+      powerValue = (pos / 60) * centerPower;
+    } else {
+      // 60~120: centerPower ~ maxPower
+      powerValue = centerPower + ((pos - 60) / 60) * (maxPower - centerPower);
+    }
+    
+    // 반원 바깥쪽에 배치, 숫자가 닿지 않도록 간격 유지 (자동차 속도계 스타일)
+    const labelRadius = radius + 18;
+    const x = centerX + labelRadius * Math.cos(rad);
+    const y = centerY + labelRadius * Math.sin(rad);
+    
+    let displayValue;
+    if (useFTPValue) {
+      displayValue = Math.round(powerValue);
+    } else {
+      displayValue = Math.round((powerValue / ftp) * 100) + '%';
+    }
+    
+    // 흰색 숫자 (자동차 속도계 스타일)
+    labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
                      fill="#ffffff" 
                      font-size="15" 
                      font-weight="700">${displayValue}</text>`;
-    }
-  }
+  });
+  
+  return labels;
 }
 
 /**
