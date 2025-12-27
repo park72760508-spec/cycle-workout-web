@@ -501,7 +501,7 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // 4. 애니메이션 속성 적용
   // cubic-bezier(0.25, 0.1, 0.25, 1)는 실제 기계 바늘처럼 처음에 빠르고 끝에 부드럽게 멈춥니다.
   // 0.4초는 ANT+ 센서 데이터 수신 주기(0.25s) 사이를 자연스럽게 이어줍니다.
-  needle.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)'; 
+  needle.style.transition = 'transform 0.25s cubic-bezier(0.1, 0, 0.3, 1)';
   needle.setAttribute('transform', `rotate(${finalAngle})`);
   
   // 5. 바늘 행적선 업데이트
@@ -5594,11 +5594,16 @@ function startConnectionStatusCheck() {
         const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
 
         // 예상 시간보다 1.5배 지연되면 즉시 감속 시작
+        // [보완] 지수적 감쇠 처리 (바늘이 스르륵 멈추도록)
         if (timeSinceLastEvent > Math.max(expectedInterval * 1.5, 800)) {
-          let predictedSpeed = speedometer.currentSpeed * 0.7; // 30%씩 감속
-          if (predictedSpeed < 1.0) predictedSpeed = 0;
-          
-          updateSpeedometerData(speedometer.id, predictedSpeed, speedometer.totalDistance);
+            // 200ms마다 고정 비율이 아닌, 경과 시간에 따른 자연스러운 감속
+            const decayFactor = Math.pow(0.5, (now - speedometer.lastDecelerationCheck) / 300); // 300ms마다 반감
+            let predictedSpeed = speedometer.currentSpeed * decayFactor;
+            
+            if (predictedSpeed < 1.0) predictedSpeed = 0;
+            
+            updateSpeedometerData(speedometer.id, predictedSpeed, speedometer.totalDistance);
+            speedometer.lastDecelerationCheck = now; // 시간 기준점 갱신
         }
       }
     });
@@ -5927,7 +5932,6 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
     speedometer.needsSync = false;
-    // 초기 동기화 시 filteredSpeed도 0으로 초기화되어 있어야 함 (constructor에서 수행 권장)
     return;
   }
 
@@ -5958,14 +5962,18 @@ function processSpeedCadenceData(deviceId, data) {
       return; 
     }
 
-    // 5. [솔루션 2 적용] EMA 필터로 속도 보정
-    const alpha = 0.7; // 반응성 조절 (숫자가 낮을수록 더 부드럽고, 높을수록 즉각적임)
-    
-    // 이전에 값이 없었다면 현재 속도로 초기화하여 NaN 방지
+    // 5. [가민 스타일 개선] 가변 알파(Adaptive Alpha) 필터 로직
+    // 이전에 값이 없었다면 현재 속도로 초기화
     if (speedometer.filteredSpeed === undefined || speedometer.filteredSpeed === 0) {
       speedometer.filteredSpeed = rawSpeed;
     } else {
-      speedometer.filteredSpeed = (alpha * rawSpeed) + ((1 - alpha) * speedometer.filteredSpeed);
+      /**
+       * 가변 알파 설정:
+       * - 가속 중(raw > filtered): 0.9 (반응성 극대화, 바늘이 실제 속도를 빠르게 추적)
+       * - 감속/유지 중: 0.5 (부드러움 극대화, 센서 노이즈로 인한 바늘 떨림 방지)
+       */
+      const dynamicAlpha = rawSpeed > speedometer.filteredSpeed ? 0.9 : 0.5;
+      speedometer.filteredSpeed = (dynamicAlpha * rawSpeed) + ((1 - dynamicAlpha) * speedometer.filteredSpeed);
     }
 
     // 경기 중일 때 거리 누적
@@ -5973,7 +5981,7 @@ function processSpeedCadenceData(deviceId, data) {
       speedometer.totalDistance += (distM / 1000);
     }
 
-    // 6. UI 업데이트 (반드시 filteredSpeed를 사용!)
+    // 6. UI 업데이트 (보정된 filteredSpeed 사용)
     updateSpeedometerData(speedometer.id, speedometer.filteredSpeed, speedometer.totalDistance);
     
     // 기준점 업데이트
@@ -5983,6 +5991,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.connected = true;
   }
 }
+
 
 
 
