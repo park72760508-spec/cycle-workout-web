@@ -677,28 +677,89 @@ function openPowerMeterSettings(powerMeterId) {
     const trackName = `트랙${powerMeterId}`;
     modalTitle.textContent = `${trackName} 페어링`;
     
+    // 저장된 페어링 정보 표시
+    updatePairingModalWithSavedData(powerMeter);
+    
     // 첫 번째 탭(사용자 선택)으로 초기화
     showPairingTab('user');
-    
-    // 전화번호 입력 필드 초기화 및 포커스
-    const phoneInput = document.getElementById('pairingPhoneNumber');
-    const resultEl = document.getElementById('pairingUserSearchResult');
-    if (phoneInput) {
-      phoneInput.value = '';
-      setTimeout(() => phoneInput.focus(), 100);
-    }
-    if (resultEl) {
-      resultEl.innerHTML = '';
-    }
-    
-    // 사용자 목록 로드 (더 이상 사용하지 않지만 호환성을 위해)
-    loadUsersForPairing();
     
     // USB 상태 확인 및 업데이트
     updatePairingModalUSBStatus();
     
     // 모달 표시
     modal.classList.remove('hidden');
+  }
+}
+
+/**
+ * 저장된 페어링 정보를 모달에 표시
+ */
+function updatePairingModalWithSavedData(powerMeter) {
+  // 사용자 정보 표시
+  if (powerMeter.userId && powerMeter.userName) {
+    const resultEl = document.getElementById('pairingUserSearchResult');
+    if (resultEl) {
+      const wkg = powerMeter.userFTP && powerMeter.userWeight ? (powerMeter.userFTP / powerMeter.userWeight).toFixed(1) : '-';
+      resultEl.innerHTML = `
+        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div>
+              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.userName}</div>
+              <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: #155724;">
+                <span><strong>FTP:</strong> ${powerMeter.userFTP || '-'}W</span>
+                <span><strong>체중:</strong> ${powerMeter.userWeight || '-'}kg</span>
+                <span><strong>W/kg:</strong> ${wkg}</span>
+              </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="clearSelectedUser()" style="white-space: nowrap;">선택 해제</button>
+          </div>
+        </div>
+      `;
+    }
+  } else {
+    const resultEl = document.getElementById('pairingUserSearchResult');
+    if (resultEl) {
+      resultEl.innerHTML = '';
+    }
+  }
+  
+  // 스마트로라 정보 표시
+  if (powerMeter.trainerDeviceId) {
+    const trainerNameEl = document.getElementById('trainerPairingName');
+    const trainerDeviceIdEl = document.getElementById('trainerDeviceId');
+    const btnClearTrainer = document.getElementById('btnClearTrainer');
+    if (trainerNameEl) trainerNameEl.value = powerMeter.trainerName || '';
+    if (trainerDeviceIdEl) trainerDeviceIdEl.value = powerMeter.trainerDeviceId || '';
+    if (btnClearTrainer) btnClearTrainer.style.display = 'block';
+  } else {
+    const btnClearTrainer = document.getElementById('btnClearTrainer');
+    if (btnClearTrainer) btnClearTrainer.style.display = 'none';
+  }
+  
+  // 파워메터 정보 표시
+  if (powerMeter.deviceId) {
+    const powerNameEl = document.getElementById('powerMeterPairingName');
+    const powerDeviceIdEl = document.getElementById('powerMeterDeviceId');
+    const btnClearPower = document.getElementById('btnClearPower');
+    if (powerNameEl) powerNameEl.value = powerMeter.pairingName || '';
+    if (powerDeviceIdEl) powerDeviceIdEl.value = powerMeter.deviceId || '';
+    if (btnClearPower) btnClearPower.style.display = 'block';
+  } else {
+    const btnClearPower = document.getElementById('btnClearPower');
+    if (btnClearPower) btnClearPower.style.display = 'none';
+  }
+  
+  // 심박계 정보 표시
+  if (powerMeter.heartRateDeviceId) {
+    const heartNameEl = document.getElementById('heartRatePairingName');
+    const heartDeviceIdEl = document.getElementById('heartRateDeviceId');
+    const btnClearHeart = document.getElementById('btnClearHeart');
+    if (heartNameEl) heartNameEl.value = powerMeter.heartRateName || '';
+    if (heartDeviceIdEl) heartDeviceIdEl.value = powerMeter.heartRateDeviceId || '';
+    if (btnClearHeart) btnClearHeart.style.display = 'block';
+  } else {
+    const btnClearHeart = document.getElementById('btnClearHeart');
+    if (btnClearHeart) btnClearHeart.style.display = 'none';
   }
 }
 
@@ -832,11 +893,32 @@ async function searchUserByPhoneForPairing() {
         const user = authResult.user;
         const wkg = user.ftp && user.weight ? (user.ftp / user.weight).toFixed(1) : '-';
         
+        // 중복 체크: 다른 트랙에서 이미 사용 중인지 확인
+        const powerMeterId = window.currentTargetPowerMeterId;
+        const isAlreadyPaired = window.indoorTrainingState.powerMeters.some(pm => 
+          pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(user.id)
+        );
+        
         // 사용자 정보를 전역에 임시 저장 (선택 시 사용)
         window._searchedUserForPairing = user;
         
+        let selectButton = '';
+        let warningMessage = '';
+        
+        if (isAlreadyPaired) {
+          // 이미 다른 트랙에서 사용 중
+          const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => 
+            pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(user.id)
+          );
+          warningMessage = `<div style="padding: 8px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 12px; color: #856404; font-size: 12px;">⚠️ 이 사용자는 이미 트랙${pairedTrack?.id || '?'}에서 사용 중입니다.</div>`;
+          selectButton = `<button class="btn btn-secondary" style="width: 100%;" disabled>이미 사용 중</button>`;
+        } else {
+          selectButton = `<button class="btn btn-primary" style="width: 100%;" onclick="event.stopPropagation(); selectSearchedUserForPowerMeter(${user.id})">선택</button>`;
+        }
+        
         resultEl.innerHTML = `
-          <div class="user-card-compact" style="padding: 16px; border: 2px solid #007bff; border-radius: 8px; background: #f0f7ff; cursor: pointer;" onclick="selectSearchedUserForPowerMeter(${user.id})">
+          <div class="user-card-compact" style="padding: 16px; border: 2px solid #007bff; border-radius: 8px; background: #f0f7ff;">
+            ${warningMessage}
             <div class="user-info">
               <div class="user-name" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">${user.name || '-'}</div>
               <div class="user-stats-compact" style="display: flex; gap: 16px; flex-wrap: wrap;">
@@ -847,13 +929,17 @@ async function searchUserByPhoneForPairing() {
               </div>
             </div>
             <div style="margin-top: 12px; text-align: center;">
-              <button class="btn btn-primary" style="width: 100%;" onclick="event.stopPropagation(); selectSearchedUserForPowerMeter(${user.id})">선택</button>
+              ${selectButton}
             </div>
           </div>
         `;
         
         if (typeof showToast === 'function') {
-          showToast('사용자를 찾았습니다. 선택해주세요.');
+          if (isAlreadyPaired) {
+            showToast('이 사용자는 이미 다른 트랙에서 사용 중입니다.');
+          } else {
+            showToast('사용자를 찾았습니다. 선택해주세요.');
+          }
         }
       } else {
         // 사용자를 찾을 수 없음
@@ -934,6 +1020,21 @@ async function selectSearchedUserForPowerMeter(userId) {
     }
     
     if (user) {
+        // 중복 체크: 다른 트랙에서 이미 사용 중인지 확인
+        const isAlreadyPaired = window.indoorTrainingState.powerMeters.some(pm => 
+          pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(userId)
+        );
+        
+        if (isAlreadyPaired) {
+          const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => 
+            pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(userId)
+          );
+          if (typeof showToast === 'function') {
+            showToast(`이 사용자는 이미 트랙${pairedTrack?.id || '?'}에서 사용 중입니다.`);
+          }
+          return;
+        }
+        
         // 파워계에 사용자 정보 저장
         powerMeter.userId = userId;
         powerMeter.userFTP = user.ftp;
@@ -1019,10 +1120,120 @@ function formatPhoneNumberInput(input) {
   input.value = value;
 }
 
+/**
+ * 선택된 사용자 해제
+ */
+function clearSelectedUser() {
+  const powerMeterId = window.currentTargetPowerMeterId;
+  if (!powerMeterId) return;
+  
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  // 사용자 정보 제거
+  powerMeter.userId = null;
+  powerMeter.userFTP = null;
+  powerMeter.userName = null;
+  powerMeter.userWeight = null;
+  powerMeter.userContact = null;
+  
+  // UI 업데이트
+  const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
+  if (userNameEl) {
+    userNameEl.style.display = 'none';
+  }
+  
+  // 모달 내 검색 결과 영역 초기화
+  const resultEl = document.getElementById('pairingUserSearchResult');
+  if (resultEl) {
+    resultEl.innerHTML = '';
+  }
+  
+  // FTP 기반 눈금 업데이트 (기본값으로)
+  updatePowerMeterTicks(powerMeterId);
+  
+  if (typeof showToast === 'function') {
+    showToast('사용자 선택이 해제되었습니다.');
+  }
+}
+
+/**
+ * 페어링된 기기 해제
+ */
+function clearPairedDevice(deviceType) {
+  const powerMeterId = window.currentTargetPowerMeterId;
+  if (!powerMeterId) return;
+  
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  if (deviceType === 'trainer') {
+    powerMeter.trainerName = null;
+    powerMeter.trainerDeviceId = null;
+    const trainerNameEl = document.getElementById('trainerPairingName');
+    const trainerDeviceIdEl = document.getElementById('trainerDeviceId');
+    const btnClearTrainer = document.getElementById('btnClearTrainer');
+    if (trainerNameEl) trainerNameEl.value = '';
+    if (trainerDeviceIdEl) trainerDeviceIdEl.value = '';
+    if (btnClearTrainer) btnClearTrainer.style.display = 'none';
+    if (typeof showToast === 'function') {
+      showToast('스마트로라 페어링이 해제되었습니다.');
+    }
+  } else if (deviceType === 'power') {
+    powerMeter.pairingName = null;
+    powerMeter.deviceId = null;
+    const powerNameEl = document.getElementById('powerMeterPairingName');
+    const powerDeviceIdEl = document.getElementById('powerMeterDeviceId');
+    const btnClearPower = document.getElementById('btnClearPower');
+    if (powerNameEl) powerNameEl.value = '';
+    if (powerDeviceIdEl) powerDeviceIdEl.value = '';
+    if (btnClearPower) btnClearPower.style.display = 'none';
+    if (typeof showToast === 'function') {
+      showToast('파워메터 페어링이 해제되었습니다.');
+    }
+  } else if (deviceType === 'heart') {
+    powerMeter.heartRateName = null;
+    powerMeter.heartRateDeviceId = null;
+    const heartNameEl = document.getElementById('heartRatePairingName');
+    const heartDeviceIdEl = document.getElementById('heartRateDeviceId');
+    const btnClearHeart = document.getElementById('btnClearHeart');
+    if (heartNameEl) heartNameEl.value = '';
+    if (heartDeviceIdEl) heartDeviceIdEl.value = '';
+    if (btnClearHeart) btnClearHeart.style.display = 'none';
+    if (typeof showToast === 'function') {
+      showToast('심박계 페어링이 해제되었습니다.');
+    }
+  }
+}
+
+/**
+ * 디바이스 ID 중복 체크
+ */
+function isDeviceAlreadyPaired(deviceId, deviceType, excludePowerMeterId) {
+  if (!deviceId) return false;
+  
+  return window.indoorTrainingState.powerMeters.some(pm => {
+    if (pm.id === excludePowerMeterId) return false;
+    
+    if (deviceType === 'trainer' && pm.trainerDeviceId && String(pm.trainerDeviceId) === String(deviceId)) {
+      return true;
+    }
+    if (deviceType === 'power' && pm.deviceId && String(pm.deviceId) === String(deviceId)) {
+      return true;
+    }
+    if (deviceType === 'heart' && pm.heartRateDeviceId && String(pm.heartRateDeviceId) === String(deviceId)) {
+      return true;
+    }
+    return false;
+  });
+}
+
 // 전역 함수로 등록
 window.searchUserByPhoneForPairing = searchUserByPhoneForPairing;
 window.selectSearchedUserForPowerMeter = selectSearchedUserForPowerMeter;
 window.formatPhoneNumberInput = formatPhoneNumberInput;
+window.clearSelectedUser = clearSelectedUser;
+window.clearPairedDevice = clearPairedDevice;
 
 /**
  * 페어링용 사용자 목록 렌더링
@@ -1319,23 +1530,42 @@ function renderPairingDeviceList(targetType) {
   const listEl = document.getElementById(listId);
   if (!listEl) return;
 
+  const powerMeterId = window.currentTargetPowerMeterId;
+  let deviceType = '';
+  if (targetType === 0x78) deviceType = 'heart';
+  else if (targetType === 0x0B) deviceType = 'power';
+  else if (targetType === 0x11 || targetType === 0x10) deviceType = 'trainer';
+
   // window.antState.foundDevices에서 해당 타입 기기만 추출
   const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
   
   if (devices.length > 0) {
     // 검색 중 메시지 대신 기기 목록으로 교체
-    listEl.innerHTML = devices.map(d => `
-      <div class="ant-device-item" onclick="selectDeviceForInput('${d.id}', '${targetType}')" 
-           style="padding:12px; border:1px solid #007bff; background:#f0f7ff; border-radius:8px; margin-bottom:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;">
-        <div style="display:flex; flex-direction:column;">
-          <span style="font-weight:bold; color:#0056b3; font-size:14px;">심박계 (ID: ${d.id})</span>
-          <span style="font-size:11px; color:#28a745;">신호 감지됨</span>
+    listEl.innerHTML = devices.map(d => {
+      const isPaired = isDeviceAlreadyPaired(d.id, deviceType, powerMeterId);
+      const pairedTrack = isPaired ? window.indoorTrainingState.powerMeters.find(pm => {
+        if (pm.id === powerMeterId) return false;
+        if (deviceType === 'trainer' && pm.trainerDeviceId && String(pm.trainerDeviceId) === String(d.id)) return true;
+        if (deviceType === 'power' && pm.deviceId && String(pm.deviceId) === String(d.id)) return true;
+        if (deviceType === 'heart' && pm.heartRateDeviceId && String(pm.heartRateDeviceId) === String(d.id)) return true;
+        return false;
+      }) : null;
+      
+      const deviceName = (targetType === 0x78) ? '심박계' : (targetType === 0x0B) ? '파워미터' : '스마트로라';
+      
+      return `
+        <div class="ant-device-item" ${!isPaired ? `onclick="selectDeviceForInput('${d.id}', '${targetType}')"` : ''}
+             style="padding:12px; border:1px solid ${isPaired ? '#dc3545' : '#007bff'}; background:${isPaired ? '#f8d7da' : '#f0f7ff'}; border-radius:8px; margin-bottom:8px; ${!isPaired ? 'cursor:pointer;' : ''} display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;">
+          <div style="display:flex; flex-direction:column;">
+            <span style="font-weight:bold; color:${isPaired ? '#721c24' : '#0056b3'}; font-size:14px;">${deviceName} (ID: ${d.id})</span>
+            ${isPaired ? `<span style="font-size:11px; color:#dc3545;">⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중</span>` : '<span style="font-size:11px; color:#28a745;">신호 감지됨</span>'}
+          </div>
+          <button class="btn btn-sm ${isPaired ? 'btn-secondary' : 'btn-primary'}" style="pointer-events:none;" ${isPaired ? 'disabled' : ''}>${isPaired ? '사용 중' : '선택'}</button>
         </div>
-        <button class="btn btn-sm btn-primary" style="pointer-events:none;">선택</button>
-      </div>
-    `).join('');
+      `;
+    }).join('');
     
-    console.log(`[UI] ${devices.length}개의 심박계 리스트 출력 완료`);
+    console.log(`[UI] ${devices.length}개의 ${deviceType} 리스트 출력 완료`);
   }
 }
 
@@ -1652,11 +1882,39 @@ function updateIndoorPairingUI(deviceId, deviceType) {
 
 // 3. 리스트 클릭 시 입력창(ID 필드)에 자동 삽입
 window.selectIndoorDevice = function(deviceId, listId) {
+    const powerMeterId = window.currentTargetPowerMeterId;
+    if (!powerMeterId) return;
+    
     let inputId = '';
+    let deviceType = '';
+    
     // 리스트 ID에 따라 타겟 입력 필드 결정
-    if (listId === 'heartRateDeviceList') inputId = 'heartRateDeviceId'; //
-    else if (listId === 'powerMeterDeviceList') inputId = 'powerMeterDeviceId'; //
-    else if (listId === 'trainerDeviceList') inputId = 'trainerDeviceId'; //
+    if (listId === 'heartRateDeviceList') {
+        inputId = 'heartRateDeviceId';
+        deviceType = 'heart';
+    } else if (listId === 'powerMeterDeviceList') {
+        inputId = 'powerMeterDeviceId';
+        deviceType = 'power';
+    } else if (listId === 'trainerDeviceList') {
+        inputId = 'trainerDeviceId';
+        deviceType = 'trainer';
+    }
+
+    // 중복 체크
+    if (isDeviceAlreadyPaired(deviceId, deviceType, powerMeterId)) {
+        const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => {
+            if (pm.id === powerMeterId) return false;
+            if (deviceType === 'trainer' && pm.trainerDeviceId && String(pm.trainerDeviceId) === String(deviceId)) return true;
+            if (deviceType === 'power' && pm.deviceId && String(pm.deviceId) === String(deviceId)) return true;
+            if (deviceType === 'heart' && pm.heartRateDeviceId && String(pm.heartRateDeviceId) === String(deviceId)) return true;
+            return false;
+        });
+        
+        if (typeof showToast === 'function') {
+            showToast(`이 디바이스는 이미 트랙${pairedTrack?.id || '?'}에서 사용 중입니다.`);
+        }
+        return;
+    }
 
     const inputEl = document.getElementById(inputId);
     if (inputEl) {
