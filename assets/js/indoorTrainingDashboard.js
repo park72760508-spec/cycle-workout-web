@@ -115,7 +115,25 @@ function handleIndoorAntMessage(packet) {
   }
 }
 
+/**
+ * 1. 통합 데이터 라우팅 엔진 (충돌 방지 및 강제 연결)
+ * 이 함수가 rollerRaceDashboard.js의 로그 출력부와 indoor UI를 연결합니다.
+ */
+window.handleIndoorAntMessage = function(packet) {
+  const msgId = packet[2];
+  const payload = packet.slice(3, packet.length - 1);
 
+  // Tacx T2028 Wrapper(0xAE) 해제
+  if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
+      if (typeof window.processBuffer === 'function') window.processBuffer(payload.slice(1));
+      return;
+  }
+
+  // 브로드캐스트 데이터(0x4E) 처리
+  if (msgId === 0x4E) {
+      parseIndoorSensorPayload(payload);
+  }
+};
 
 
 
@@ -985,33 +1003,85 @@ async function searchPowerMeterDevices() {
 /**
  * 심박계 디바이스 검색
  */
+/**
+ * 심박계 디바이스 검색 버튼 동작 보완 버전
+ */
 async function searchHeartRateDevices() {
   const btn = document.getElementById('btnSearchHeartDevices');
-  if (btn) btn.disabled = true;
-  
   const listEl = document.getElementById('heartRateDeviceList');
+  
+  // 1. 버튼 비활성화 및 리스트 노출
+  if (btn) btn.disabled = true;
   if (listEl) {
     listEl.classList.remove('hidden');
+    // 초기 메시지 설정
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">심박계 검색 중...<br><span style="font-weight:normal; font-size:12px; color:#666;">심박계를 착용하고 잠시 기다려주세요!</span></div>';
   }
   
-  // USB 수신기가 연결되어 있는지 확인
+  // 2. USB 수신기가 연결되어 있는지 확인
   if (!window.antState || !window.antState.usbDevice || !window.antState.usbDevice.opened) {
-    if (listEl) listEl.innerHTML = '<div style="color:red;padding:10px">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
+    if (listEl) {
+      listEl.innerHTML = `
+        <div style="color:red;padding:15px;text-align:center;border:1px dashed red;border-radius:8px;">
+          <strong>USB 수신기가 비활성 상태입니다.</strong><br>
+          <small>위의 [활성화] 버튼을 먼저 클릭하여 USB 연결을 완료해주세요.</small>
+        </div>`;
+    }
     if (btn) btn.disabled = false;
     return;
   }
-  
-  // 스캔 모드 확실히 켜기
-  if (typeof startContinuousScan === 'function') {
-    await startContinuousScan();
+
+  // 3. [보완 핵심] 이미 발견된 심박계가 있다면 즉시 UI에 렌더링
+  // 수신기가 이미 켜져 있다면, foundDevices에 데이터가 있을 수 있으므로 먼저 보여줍니다.
+  if (window.antState.foundDevices && window.antState.foundDevices.length > 0) {
+    console.log("[검색] 기존 발견된 기기 목록 로드 시도");
+    renderPairingDeviceList(0x78); // 0x78 = 심박계 장치 타입
   }
-  
-  if (listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">심박계 검색 중...<br>심박계를 착용해주세요!</div>';
-  if (window.antState) {
-    window.antState.foundDevices = []; // 목록 초기화
+
+  // 4. 스캔 모드 확실히 가동 (이미 켜져 있어도 안전하게 재호출)
+  try {
+    if (typeof startContinuousScan === 'function') {
+      await startContinuousScan();
+      console.log("[ANT+] Continuous Scan Mode 활성화 완료");
+    }
+  } catch (error) {
+    console.error("[ANT+] 스캔 모드 가동 실패:", error);
+    if (listEl) listEl.innerHTML += '<div style="color:red; font-size:11px;">수신기 명령 전송 실패</div>';
   }
-  
+
+  // 5. 버튼 복구
   if (btn) btn.disabled = false;
+}
+
+/**
+ * [함께 필요한 도우미 함수] 특정 타입의 기기 리스트를 UI에 그리는 함수
+ * @param {number} targetType - 0x78(심박계), 0x0B(파워미터) 등
+ */
+function renderPairingDeviceList(targetType) {
+  const listId = (targetType === 0x78) ? 'heartRateDeviceList' : 
+                 (targetType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
+  
+  const listEl = document.getElementById(listId);
+  if (!listEl) return;
+
+  // window.antState.foundDevices에서 해당 타입 기기만 추출
+  const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
+  
+  if (devices.length > 0) {
+    // 검색 중 메시지 대신 기기 목록으로 교체
+    listEl.innerHTML = devices.map(d => `
+      <div class="ant-device-item" onclick="selectDeviceForInput('${d.id}', '${targetType}')" 
+           style="padding:12px; border:1px solid #007bff; background:#f0f7ff; border-radius:8px; margin-bottom:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;">
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-weight:bold; color:#0056b3; font-size:14px;">심박계 (ID: ${d.id})</span>
+          <span style="font-size:11px; color:#28a745;">신호 감지됨</span>
+        </div>
+        <button class="btn btn-sm btn-primary" style="pointer-events:none;">선택</button>
+      </div>
+    `).join('');
+    
+    console.log(`[UI] ${devices.length}개의 심박계 리스트 출력 완료`);
+  }
 }
 
 /**
@@ -1122,22 +1192,36 @@ if (typeof showScreen === 'function') {
 
 function parseIndoorSensorPayload(payload) {
   if (payload.length < 13) return;
-  const idLow = payload[10], idHigh = payload[11], deviceType = payload[12], transType = payload[13];
+  
+  const idLow = payload[10];
+  const idHigh = payload[11];
+  const deviceType = payload[12]; // 0x78: 심박계, 0x0B: 파워미터, 0x11: FE-C
+  const transType = payload[13];
+  
+  // ID 계산 (로그의 9297 등 정상 추출)
   const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-  // 장치 검색 목록 업데이트
+  // 장치 목록 업데이트
   updateFoundDevicesList(deviceId, deviceType);
 
-  // 실시간 훈련 데이터(심박수, 파워 등) 처리
-  processLiveTrainingData(deviceId, deviceType, payload);
+  // 실시간 데이터 반영 (훈련 중일 때)
+  if (window.indoorTrainingState.trainingState === 'running') {
+    processLiveTrainingData(deviceId, deviceType, payload);
+  }
 }
 
 function updateFoundDevicesList(deviceId, deviceType) {
-  if (!window.antState.foundDevices.find(d => d.id === deviceId)) {
-    let typeName = deviceType === 0x78 ? '심박계' : (deviceType === 0x0B ? '파워미터' : '트레이너');
-    window.antState.foundDevices.push({ id: deviceId, type: typeName, deviceType: deviceType });
-    renderPairingDeviceList(deviceType);
+  let existing = window.antState.foundDevices.find(d => d.id === deviceId);
+  
+  if (!existing) {
+    let typeName = (deviceType === 0x78) ? '심박계' : (deviceType === 0x0B ? '파워미터' : '스마트로라');
+    existing = { id: deviceId, type: typeName, deviceType: deviceType };
+    window.antState.foundDevices.push(existing);
+    console.log(`[신규 장치 발견] ${typeName} ID: ${deviceId}`);
   }
+
+  // [보완] 기존에 발견된 장치라도 현재 페어링 모달이 열려있다면 UI를 강제로 다시 그림
+  renderPairingDeviceList(deviceType);
 }
 
 // 심박수(BPM) 및 파워 데이터 실시간 UI 반영
@@ -1163,38 +1247,25 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
  * 검색된 장치를 인도어 트레이닝 페어링 모달 리스트에 표시
  */
 function renderPairingDeviceList(targetType) {
-  // 장치 타입에 따른 리스트 ID 매핑
-  const listMap = {
-    0x78: 'heartRateDeviceList',   // 심박계
-    0x0B: 'powerMeterDeviceList',  // 파워미터
-    0x11: 'trainerDeviceList'      // 스마트로라
-  };
-
-  const listId = listMap[targetType];
+  const listId = (targetType === 0x78) ? 'heartRateDeviceList' : 
+                 (targetType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
+  
   const listEl = document.getElementById(listId);
   if (!listEl) return;
 
-  // 해당 타입의 장치만 필터링
   const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
   
-  if (devices.length === 0) {
-    listEl.innerHTML = '<div class="no-device">검색된 장치가 없습니다.</div>';
-    return;
-  }
-
-  // 리스트 그리기
-  listEl.innerHTML = devices.map(d => `
-    <div class="ant-device-item" onclick="selectDeviceForInput('${d.id}', '${targetType}')">
-      <div class="device-info">
-        <span class="device-type-label">${d.type}</span>
-        <span class="device-id">ID: ${d.id}</span>
+  // 리스트가 비어있지 않다면 즉시 렌더링
+  if (devices.length > 0) {
+    listEl.innerHTML = devices.map(d => `
+      <div class="ant-device-item" onclick="selectDeviceForInput('${d.id}', '${targetType}')" 
+           style="padding:10px; border:1px solid #007bff; background:#f0f7ff; border-radius:6px; margin-bottom:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+        <div style="font-weight:600; color:#0056b3;">${d.type} (ID: ${d.id})</div>
+        <button class="btn btn-sm btn-primary">선택</button>
       </div>
-      <button class="btn-select">선택</button>
-    </div>
-  `).join('');
-  
-  // 콘솔 확인용
-  console.log(`[UI 업데이트] ${listId}에 ${devices.length}개의 장치 표시 중`);
+    `).join('');
+    listEl.classList.remove('hidden');
+  }
 }
 
 
@@ -1278,3 +1349,4 @@ window.selectIndoorDevice = function(deviceId, listId) {
         if (typeof showToast === 'function') showToast(`${deviceId} 장치가 선택되었습니다.`);
     }
 };
+
