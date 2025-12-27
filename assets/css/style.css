@@ -9231,28 +9231,23 @@ button[aria-disabled="true"] {
   justify-content: flex-start;
 }
 
-.speed-stat-value-wrapper {
+.speed-stat-label-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 2px;
   line-height: 1;
-  position: relative;
+  justify-content: center;
 }
 
 .speed-stat-label {
   font-size: 8.64px; /* 위첨자 크기 (21.6px * 0.4) */
   font-weight: 500;
   line-height: 1;
+  color: #666666; /* 회색 */
 }
 
-.speed-stat-max .speed-stat-label {
-  color: #ff0000; /* Max: 빨강색 */
-}
-
-.speed-stat-avg .speed-stat-label {
-  color: #2563eb; /* Avg: 파랑색 */
-}
+/* 라벨 색상은 .speed-stat-label에서 통일 */
 
 .speed-stat-value {
   font-size: 21.6px; /* 18px * 1.2 (20% 확대) */
@@ -9262,10 +9257,10 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-.speed-unit-bottom {
+.speed-stat-label-wrapper .speed-unit-bottom {
   font-size: 8.64px; /* 21.6px * 0.4 (아래 첨자 크기) */
   font-weight: 300;
-  color: #000000;
+  color: #666666; /* 회색 */
   line-height: 1;
 }
 
