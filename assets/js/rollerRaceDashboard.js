@@ -269,17 +269,17 @@ function createSpeedometerElement(speedometer) {
       <!-- 좌측: 최대속도, 평균속도 (2줄) -->
       <div class="speed-display-left">
         <div class="speed-stat-row speed-stat-max">
-          <span class="speed-stat-label">최대</span>
           <div class="speed-stat-value-wrapper">
-            <span class="speed-unit-top">km/h</span>
+            <span class="speed-stat-label">최대</span>
             <span class="speed-stat-value" id="max-speed-value-${speedometer.id}">0</span>
+            <span class="speed-unit-bottom">km/h</span>
           </div>
         </div>
         <div class="speed-stat-row speed-stat-avg">
-          <span class="speed-stat-label">평균</span>
           <div class="speed-stat-value-wrapper">
-            <span class="speed-unit-top">km/h</span>
+            <span class="speed-stat-label">평균</span>
             <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}">0</span>
+            <span class="speed-unit-bottom">km/h</span>
           </div>
         </div>
       </div>
