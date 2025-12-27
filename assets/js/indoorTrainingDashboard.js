@@ -310,9 +310,9 @@ function generatePowerMeterLabels(powerMeterId) {
   const majorPositions = [0, 20, 40, 60, 80, 100, 120];
   
   majorPositions.forEach(pos => {
-    // pos와 퍼센트의 관계: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
+    // pos와 퍼센트의 관계: pos=120 → 0, pos=60 → 100, pos=0 → 200
     // percent = (120 - pos) / 120 * 200
-    const percent = Math.round((120 - pos) / 120 * 200);
+    const percent = (120 - pos) / 120 * 200;
     
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
     // pos = 0 → 180도 (하단 왼쪽), pos = 60 → 90도 (위쪽), pos = 120 → 0도 (하단 오른쪽)
@@ -327,8 +327,8 @@ function generatePowerMeterLabels(powerMeterId) {
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    // 퍼센트 값 표시
-    const displayValue = percent + '%';
+    // 소수점 이하 1자리 표기 형식
+    const displayValue = percent.toFixed(1);
     
     // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
