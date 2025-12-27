@@ -288,11 +288,12 @@ function generatePowerMeterTicks(powerMeterId) {
 }
 
 /**
- * 파워계 라벨 생성 (Indoor Race 속도계와 동일한 스타일)
- * 0~120 위치, 20단위만 표시
+ * 파워계 라벨 생성 (0% ~ 100% ~ 200% 고정 표시)
+ * pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
+ * 0% ~ 100% ~ 200% 사이를 균등하게 분할하여 표시
  * 원 중심으로 180도 회전
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
- * 하단 왼쪽(180도) = 0, 위쪽(90도) = 60, 하단 오른쪽(0도) = 120
+ * 하단 왼쪽(180도, pos=0) = 200%, 위쪽(90도, pos=60) = 100%, 하단 오른쪽(0도, pos=120) = 0%
  * 원지름의 1/4만큼 아래로 이동
  */
 function generatePowerMeterLabels(powerMeterId) {
@@ -305,16 +306,15 @@ function generatePowerMeterLabels(powerMeterId) {
   const radius = 80;
   const maxPos = 120;
   
-  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 250;
-  const useFTPValue = powerMeter.userFTP || window.indoorTrainingState.userFTPSet;
+  // 0% ~ 100% ~ 200% 사이를 균등하게 분할 (20% 간격)
+  // 0%, 20%, 40%, 60%, 80%, 100%, 120%, 140%, 160%, 180%, 200%
+  const percentages = [0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200];
   
-  const maxPower = useFTPValue ? ftp * 2 : 200; // FTP*2 또는 200%
-  const centerPower = useFTPValue ? ftp : 100; // FTP 또는 100%
-  
-  // 주요 위치 표시 (0, 20, 40, 60, 80, 100, 120) - 20단위만
-  const positions = [0, 20, 40, 60, 80, 100, 120];
-  
-  positions.forEach(pos => {
+  percentages.forEach(percent => {
+    // pos와 퍼센트의 관계: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
+    // pos = 120 - (percent / 200) * 120
+    const pos = 120 - (percent / 200) * 120;
+    
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
     // pos = 0 → 180도 (하단 왼쪽), pos = 60 → 90도 (위쪽), pos = 120 → 0도 (하단 오른쪽)
     // 180도 회전: 각도에 180도 추가
@@ -323,27 +323,13 @@ function generatePowerMeterLabels(powerMeterId) {
     
     const rad = (angle * Math.PI) / 180;
     
-    // 위치를 파워값으로 변환
-    let powerValue;
-    if (pos <= 60) {
-      // 0~60: 0 ~ centerPower
-      powerValue = (pos / 60) * centerPower;
-    } else {
-      // 60~120: centerPower ~ maxPower
-      powerValue = centerPower + ((pos - 60) / 60) * (maxPower - centerPower);
-    }
-    
     // 반원 바깥쪽에 배치, 숫자가 닿지 않도록 간격 유지 (자동차 속도계 스타일)
     const labelRadius = radius + 18;
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    let displayValue;
-    if (useFTPValue) {
-      displayValue = Math.round(powerValue);
-    } else {
-      displayValue = Math.round((powerValue / ftp) * 100) + '%';
-    }
+    // 퍼센트 값 표시
+    const displayValue = percent + '%';
     
     // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
@@ -358,25 +344,22 @@ function generatePowerMeterLabels(powerMeterId) {
 }
 
 /**
- * 파워계 바늘 업데이트
+ * 파워계 바늘 업데이트 (0% ~ 100% ~ 200% 기준)
+ * 실제 파워값을 FTP 기준 퍼센트로 변환하여 바늘 위치 결정
  */
 function updatePowerMeterNeedle(powerMeterId, power) {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
   
   const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 250;
-  const useFTPValue = powerMeter.userFTP || window.indoorTrainingState.userFTPSet;
-  const maxPower = useFTPValue ? ftp * 2 : 200;
-  const centerPower = useFTPValue ? ftp : 100;
   
-  // 파워값을 속도 위치(0-120)로 변환
-  let speedPos;
-  if (power <= centerPower) {
-    speedPos = (power / centerPower) * 60;
-  } else {
-    speedPos = 60 + ((power - centerPower) / (maxPower - centerPower)) * 60;
-  }
-  speedPos = Math.max(0, Math.min(120, speedPos));
+  // 실제 파워값을 FTP 기준 퍼센트로 변환 (0% ~ 200%)
+  const percent = (power / ftp) * 100;
+  const clampedPercent = Math.max(0, Math.min(200, percent));
+  
+  // 퍼센트를 pos로 변환: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
+  // pos = 120 - (percent / 200) * 120
+  const speedPos = 120 - (clampedPercent / 200) * 120;
   
   // 각도 계산
   let angle = 180 - (speedPos / 120) * 180;
