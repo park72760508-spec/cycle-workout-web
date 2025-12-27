@@ -8693,6 +8693,14 @@ button[aria-disabled="true"] {
   overflow-y: auto;
 }
 
+/* ========== Indoor Training 대시보드 화면 ========== */
+#indoorTrainingDashboardScreen {
+  background: #0a0e27;
+  color: #fff;
+  padding: 20px;
+  overflow-y: auto;
+}
+
 .dashboard-header {
   display: flex;
   justify-content: flex-start;
@@ -8727,7 +8735,8 @@ button[aria-disabled="true"] {
 }
 
 /* 대시보드용 enhanced-control-btn 스타일 */
-#rollerRaceDashboardScreen .enhanced-control-btn {
+#rollerRaceDashboardScreen .enhanced-control-btn,
+#indoorTrainingDashboardScreen .enhanced-control-btn {
   display: flex !important;
   width: 64px;
   height: 64px;
@@ -8745,7 +8754,8 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn:hover:not(:disabled) {
+#rollerRaceDashboardScreen .enhanced-control-btn:hover:not(:disabled),
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 
@@ -8753,17 +8763,20 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn:active:not(:disabled) {
+#rollerRaceDashboardScreen .enhanced-control-btn:active:not(:disabled),
+#indoorTrainingDashboardScreen .enhanced-control-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn:disabled {
+#rollerRaceDashboardScreen .enhanced-control-btn:disabled,
+#indoorTrainingDashboardScreen .enhanced-control-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* 재생 아이콘 */
-#rollerRaceDashboardScreen .enhanced-control-btn.play::before {
+#rollerRaceDashboardScreen .enhanced-control-btn.play::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn.play::before {
   content: '';
   width: 0;
   height: 0;
@@ -8773,7 +8786,8 @@ button[aria-disabled="true"] {
   margin-left: 3px;
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
+#rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled),
+#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
   border-color: #22c55e;
   box-shadow: 
     0 8px 25px rgba(34, 197, 94, 0.3),
@@ -8781,7 +8795,8 @@ button[aria-disabled="true"] {
 }
 
 /* 일시정지 아이콘 */
-#rollerRaceDashboardScreen .enhanced-control-btn.pause::before {
+#rollerRaceDashboardScreen .enhanced-control-btn.pause::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause::before {
   content: "";
   width: 4px;
   height: 22px;
@@ -8794,7 +8809,8 @@ button[aria-disabled="true"] {
   color: #fbbf24;
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
+#rollerRaceDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled),
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
   border-color: #fbbf24;
   box-shadow: 
     0 8px 25px rgba(251, 191, 36, 0.3),
@@ -8802,7 +8818,8 @@ button[aria-disabled="true"] {
 }
 
 /* 정지 아이콘 */
-#rollerRaceDashboardScreen .enhanced-control-btn.stop::before {
+#rollerRaceDashboardScreen .enhanced-control-btn.stop::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop::before {
   content: '';
   width: 18px;
   height: 18px;
@@ -8810,7 +8827,8 @@ button[aria-disabled="true"] {
   border-radius: 3px;
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
+#rollerRaceDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled),
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
   border-color: #ef4444;
   box-shadow: 
     0 8px 25px rgba(239, 68, 68, 0.3),
