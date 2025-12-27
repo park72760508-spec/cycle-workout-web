@@ -9244,13 +9244,20 @@ button[aria-disabled="true"] {
   font-size: 8.64px; /* 위첨자 크기 (21.6px * 0.4) */
   font-weight: 500;
   line-height: 1;
-  color: #666666; /* 회색 */
+}
+
+.speed-stat-max .speed-stat-label {
+  color: #ff0000; /* 최대: 빨강색 */
+}
+
+.speed-stat-avg .speed-stat-label {
+  color: #2563eb; /* 평균: 파랑색 */
 }
 
 /* 라벨 색상은 .speed-stat-label에서 통일 */
 
 .speed-stat-value {
-  font-size: 21.6px; /* 18px * 1.2 (20% 확대) */
+  font-size: 25.92px; /* 현재 속도와 동일 (21.6px * 1.2) */
   font-weight: 700;
   color: #000000;
   text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.3);
