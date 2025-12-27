@@ -677,7 +677,18 @@ function openPowerMeterSettings(powerMeterId) {
     // 첫 번째 탭(사용자 선택)으로 초기화
     showPairingTab('user');
     
-    // 사용자 목록 로드
+    // 전화번호 입력 필드 초기화 및 포커스
+    const phoneInput = document.getElementById('pairingPhoneNumber');
+    const resultEl = document.getElementById('pairingUserSearchResult');
+    if (phoneInput) {
+      phoneInput.value = '';
+      setTimeout(() => phoneInput.focus(), 100);
+    }
+    if (resultEl) {
+      resultEl.innerHTML = '';
+    }
+    
+    // 사용자 목록 로드 (더 이상 사용하지 않지만 호환성을 위해)
     loadUsersForPairing();
     
     // USB 상태 확인 및 업데이트
@@ -756,30 +767,232 @@ function showPairingTab(tabName) {
   
   if (tabBtn) tabBtn.classList.add('active');
   if (tabContent) tabContent.classList.remove('hidden');
+  
+  // 사용자 선택 탭인 경우 전화번호 입력 필드에 포커스
+  if (tabName === 'user') {
+    setTimeout(() => {
+      const phoneInput = document.getElementById('pairingPhoneNumber');
+      if (phoneInput) {
+        phoneInput.focus();
+      }
+    }, 100);
+  }
 }
 
 /**
- * 페어링용 사용자 목록 로드
+ * 페어링용 사용자 목록 로드 (더 이상 사용하지 않음 - 전화번호 검색 방식으로 변경)
  */
 async function loadUsersForPairing() {
+  // 전화번호 검색 방식으로 변경되었으므로 이 함수는 더 이상 사용하지 않음
+  // 하지만 호환성을 위해 유지
   const userListEl = document.getElementById('powerMeterUserList');
-  if (!userListEl) return;
+  if (userListEl) {
+    userListEl.style.display = 'none';
+  }
+}
+
+/**
+ * 전화번호로 사용자 검색 (페어링용)
+ */
+async function searchUserByPhoneForPairing() {
+  const phoneInput = document.getElementById('pairingPhoneNumber');
+  const resultEl = document.getElementById('pairingUserSearchResult');
+  const searchBtn = document.getElementById('btnSearchUserByPhone');
+  
+  if (!phoneInput || !resultEl) return;
+  
+  const phoneNumber = phoneInput.value.trim();
+  
+  if (!phoneNumber) {
+    if (typeof showToast === 'function') {
+      showToast('전화번호를 입력해주세요.');
+    }
+    return;
+  }
+  
+  // 검색 버튼 비활성화
+  if (searchBtn) {
+    searchBtn.disabled = true;
+    searchBtn.textContent = '검색 중...';
+  }
+  
+  // 결과 영역 초기화
+  resultEl.innerHTML = '<div class="loading-spinner">사용자를 검색하는 중...</div>';
   
   try {
-    const loadUsersFunc = window.loadUsers || (typeof loadUsers === 'function' ? loadUsers : null);
-    if (loadUsersFunc) {
-      const users = await loadUsersFunc();
-      renderUsersForPairing(users);
+    // authenticatePhoneWithDB 함수 사용
+    if (typeof authenticatePhoneWithDB === 'function') {
+      const authResult = await authenticatePhoneWithDB(phoneNumber);
+      
+      if (authResult.success && authResult.user) {
+        // 사용자 찾음 - 선택 가능하도록 표시
+        const user = authResult.user;
+        const wkg = user.ftp && user.weight ? (user.ftp / user.weight).toFixed(1) : '-';
+        
+        resultEl.innerHTML = `
+          <div class="user-card-compact" style="padding: 16px; border: 2px solid #007bff; border-radius: 8px; background: #f0f7ff; cursor: pointer;" onclick="selectSearchedUserForPowerMeter(${user.id})">
+            <div class="user-info">
+              <div class="user-name" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">${user.name || '-'}</div>
+              <div class="user-stats-compact" style="display: flex; gap: 16px; flex-wrap: wrap;">
+                <span style="font-size: 14px;"><strong>FTP:</strong> ${user.ftp || '-'}W</span>
+                <span style="font-size: 14px;"><strong>체중:</strong> ${user.weight || '-'}kg</span>
+                <span style="font-size: 14px;"><strong>W/kg:</strong> ${wkg}</span>
+                <span style="font-size: 14px;"><strong>전화번호:</strong> ${user.contact || phoneNumber}</span>
+              </div>
+            </div>
+            <div style="margin-top: 12px; text-align: center;">
+              <button class="btn btn-primary" style="width: 100%;" onclick="event.stopPropagation(); selectSearchedUserForPowerMeter(${user.id})">선택</button>
+            </div>
+          </div>
+        `;
+        
+        if (typeof showToast === 'function') {
+          showToast('사용자를 찾았습니다. 선택해주세요.');
+        }
+      } else {
+        // 사용자를 찾을 수 없음
+        resultEl.innerHTML = `
+          <div style="padding: 20px; text-align: center; color: #dc3545; border: 1px solid #dc3545; border-radius: 8px; background: #f8d7da;">
+            <p style="margin: 0 0 12px 0; font-weight: 600;">${authResult.message || '사용자를 찾을 수 없습니다.'}</p>
+            <p style="margin: 0; font-size: 12px; color: #721c24;">등록되지 않은 전화번호입니다.</p>
+          </div>
+        `;
+      }
     } else {
-      userListEl.innerHTML = '<div class="loading-spinner">사용자 목록을 불러오는 중...</div>';
+      // authenticatePhoneWithDB 함수가 없는 경우 대체 방법
+      resultEl.innerHTML = `
+        <div style="padding: 20px; text-align: center; color: #dc3545;">
+          인증 함수를 찾을 수 없습니다. 앱을 새로고침해주세요.
+        </div>
+      `;
     }
   } catch (error) {
-    console.error('[Indoor Training] 사용자 목록 로드 오류:', error);
-    if (userListEl) {
-      userListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">사용자 목록을 불러올 수 없습니다.</div>';
+    console.error('[Indoor Training] 사용자 검색 오류:', error);
+    resultEl.innerHTML = `
+      <div style="padding: 20px; text-align: center; color: #dc3545;">
+        검색 중 오류가 발생했습니다: ${error.message}
+      </div>
+    `;
+  } finally {
+    // 검색 버튼 복구
+    if (searchBtn) {
+      searchBtn.disabled = false;
+      searchBtn.textContent = '검색';
     }
   }
 }
+
+/**
+ * 검색된 사용자를 파워계에 선택
+ */
+async function selectSearchedUserForPowerMeter(userId) {
+  const powerMeterId = window.currentTargetPowerMeterId;
+  if (!powerMeterId) {
+    if (typeof showToast === 'function') {
+      showToast('파워계를 선택해주세요.');
+    }
+    return;
+  }
+  
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  try {
+    // 사용자 정보 로드
+    const loadUsersFunc = window.loadUsers || (typeof loadUsers === 'function' ? loadUsers : null);
+    if (loadUsersFunc) {
+      const users = await loadUsersFunc();
+      const user = users.find(u => u.id === userId);
+      
+      if (user) {
+        // 파워계에 사용자 정보 저장
+        powerMeter.userId = userId;
+        powerMeter.userFTP = user.ftp;
+        powerMeter.userName = user.name;
+        powerMeter.userWeight = user.weight;
+        powerMeter.userContact = user.contact;
+        
+        // FTP 기반 눈금 업데이트
+        updatePowerMeterTicks(powerMeterId);
+        
+        // 현재 사용자로 설정 (훈련 자료에 활용)
+        window.currentUser = {
+          id: user.id,
+          name: user.name,
+          contact: user.contact,
+          ftp: user.ftp,
+          weight: user.weight,
+          grade: user.grade || '2',
+          challenge: user.challenge || 'Fitness',
+          expiry_date: user.expiry_date || ''
+        };
+        window.authUser = window.currentUser; // 인증 사용자로도 설정
+        
+        // 사용자 정보 UI 업데이트 (훈련 화면 등에서 사용)
+        if (typeof renderUserInfo === 'function') {
+          renderUserInfo();
+        }
+        
+        // UI 업데이트
+        const resultEl = document.getElementById('pairingUserSearchResult');
+        if (resultEl) {
+          resultEl.innerHTML = `
+            <div style="padding: 16px; text-align: center; color: #28a745; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
+              <p style="margin: 0; font-weight: 600; font-size: 16px;">✅ ${user.name}님이 선택되었습니다.</p>
+              <p style="margin: 8px 0 0 0; font-size: 12px;">이 사용자 정보가 훈련 자료에 활용됩니다.</p>
+            </div>
+          `;
+        }
+        
+        if (typeof showToast === 'function') {
+          showToast(`${user.name}님이 선택되었습니다. 훈련 자료에 활용됩니다.`);
+        }
+        
+        console.log('[Indoor Training] 사용자 선택 완료:', {
+          powerMeterId,
+          userId,
+          userName: user.name,
+          userFTP: user.ftp,
+          userWeight: user.weight
+        });
+      } else {
+        if (typeof showToast === 'function') {
+          showToast('사용자 정보를 찾을 수 없습니다.');
+        }
+      }
+    } else {
+      // loadUsers 함수가 없는 경우, 검색 결과에서 직접 사용
+      // 이 경우는 authenticatePhoneWithDB에서 반환된 user 정보를 저장해야 함
+      if (typeof showToast === 'function') {
+        showToast('사용자 정보를 불러올 수 없습니다.');
+      }
+    }
+  } catch (error) {
+    console.error('[Indoor Training] 사용자 선택 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('사용자 선택 중 오류가 발생했습니다.');
+    }
+  }
+}
+
+/**
+ * 전화번호 입력 시 자동 포맷팅
+ */
+function formatPhoneNumberInput(input) {
+  let value = input.value.replace(/\D/g, ''); // 숫자만 남기기
+  
+  // 11자리 숫자인 경우 하이픈 추가
+  if (value.length === 11 && value.startsWith('010')) {
+    value = value.slice(0, 3) + '-' + value.slice(3, 7) + '-' + value.slice(7, 11);
+  }
+  
+  input.value = value;
+}
+
+// 전역 함수로 등록
+window.searchUserByPhoneForPairing = searchUserByPhoneForPairing;
+window.selectSearchedUserForPowerMeter = selectSearchedUserForPowerMeter;
+window.formatPhoneNumberInput = formatPhoneNumberInput;
 
 /**
  * 페어링용 사용자 목록 렌더링
@@ -1437,4 +1650,5 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
