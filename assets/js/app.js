@@ -4243,13 +4243,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       
-      // ANT+ 연결 버튼 클릭 시 Indoor 모드 선택 화면으로 전환
-      if (typeof showScreen === 'function') {
-        showScreen('indoorModeSelectionScreen');
+      // ANT+ 연결 버튼 클릭 시 Indoor 모드 선택 모달 열기
+      if (typeof showIndoorModeSelectionModal === 'function') {
+        showIndoorModeSelectionModal();
       } else {
-        console.warn("showScreen function not found!");
+        console.warn("showIndoorModeSelectionModal function not found!");
         if (typeof showToast === "function") {
-          showToast("화면 전환 함수를 찾을 수 없습니다.");
+          showToast("모달 열기 함수를 찾을 수 없습니다.");
         }
       }
       
@@ -4264,6 +4264,34 @@ document.addEventListener("DOMContentLoaded", () => {
       // }
     });
   }
+
+  // ========== Indoor 모드 선택 모달 함수 ==========
+  window.showIndoorModeSelectionModal = function() {
+    const modal = document.getElementById('indoorModeSelectionModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  };
+
+  window.closeIndoorModeSelectionModal = function() {
+    const modal = document.getElementById('indoorModeSelectionModal');
+    if (modal) {
+      modal.classList.add('hidden');
+    }
+  };
+
+  window.selectIndoorMode = function(mode) {
+    closeIndoorModeSelectionModal();
+    if (mode === 'race') {
+      if (typeof showScreen === 'function') {
+        showScreen('rollerRaceDashboardScreen');
+      }
+    } else if (mode === 'training') {
+      if (typeof showScreen === 'function') {
+        showScreen('indoorTrainingDashboardScreen');
+      }
+    }
+  };
 
   // 다른 파워소스 우선순위도 같이 표기
   function updateDevicesList() {
