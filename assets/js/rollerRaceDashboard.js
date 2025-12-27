@@ -292,8 +292,10 @@ function createSpeedometerElement(speedometer) {
       </div>
       <!-- 우측: 현재속도 -->
       <div class="distance-display-right">
-        <span class="distance-value" id="speed-value-${speedometer.id}">0</span>
-        <sup class="distance-unit-sup">km/h</sup>
+        <div class="speed-value-wrapper">
+          <span class="distance-value" id="speed-value-${speedometer.id}">0</span>
+          <div class="speed-unit-bottom">km/h</div>
+        </div>
       </div>
     </div>
   `;
