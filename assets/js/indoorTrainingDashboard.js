@@ -991,16 +991,10 @@ async function selectSearchedUserForPowerMeter(userId) {
           userFTP: user.ftp,
           userWeight: user.weight
         });
-      } else {
-        if (typeof showToast === 'function') {
-          showToast('사용자 정보를 찾을 수 없습니다.');
-        }
-      }
     } else {
-      // loadUsers 함수가 없는 경우, 검색 결과에서 직접 사용
-      // 이 경우는 authenticatePhoneWithDB에서 반환된 user 정보를 저장해야 함
+      // 사용자 정보를 찾을 수 없는 경우
       if (typeof showToast === 'function') {
-        showToast('사용자 정보를 불러올 수 없습니다.');
+        showToast('사용자 정보를 찾을 수 없습니다.');
       }
     }
   } catch (error) {
