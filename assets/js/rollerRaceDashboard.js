@@ -5919,24 +5919,20 @@ function processSpeedCadenceData(deviceId, data) {
   if (!speedometer) return;
 
   const now = Date.now();
-  // 데이터 수신 시간 갱신 (신호 단절 여부 판단용)
   speedometer.lastPacketTime = now;
 
-  // 1. 초기 동기화 (경기 시작 직후 또는 첫 페어링 시)
+  // 1. 초기 동기화
   if (speedometer.needsSync || speedometer.lastEventTime === 0 || speedometer.lastEventTime === undefined) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
     speedometer.needsSync = false;
+    // 초기 동기화 시 filteredSpeed도 0으로 초기화되어 있어야 함 (constructor에서 수행 권장)
     return;
   }
 
   // 2. 바퀴 회전 여부 판별
-  // 이벤트 시간이 이전과 같다면 바퀴가 회전하지 않은 것입니다.
-  if (speedometer.lastEventTime === eventTime) {
-    // 여기서 return만 하고 lastEventUpdate를 갱신하지 않아야 감시 타이머가 정지를 인식합니다.
-    return;
-  }
+  if (speedometer.lastEventTime === eventTime) return;
 
   // 3. 변화량 계산 (16비트 롤오버 대응)
   let revDiff = revolutions - speedometer.lastRevolutions;
@@ -5945,47 +5941,49 @@ function processSpeedCadenceData(deviceId, data) {
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  // 4. 속도 계산 및 유효성 검사
+  // 4. 속도 계산 및 필터 적용
   if (timeDiff > 0 && revDiff > 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
     const distM = (revDiff * wheelSpec.circumference) / 1000;
     const timeS = timeDiff / 1024;
     
-    // 속도 계산 공식: $$Speed = \frac{Distance}{Time} \times 3.6$$
-    const speed = (distM / timeS) * 3.6;
+    // 원본 속도 계산 (rawSpeed)
+    const rawSpeed = (distM / timeS) * 3.6;
 
-    // 비정상적인 고속(150km/h 초과) 데이터 처리
-    if (speed > 150) {
+    // 비정상적인 고속 데이터 처리
+    if (rawSpeed > 150) {
       console.warn(`[트랙${speedometer.id}] 과속 감지. 기준점 리셋.`);
       speedometer.lastRevolutions = revolutions;
       speedometer.lastEventTime = eventTime;
       return; 
     }
 
-    // 5. 데이터 반영 및 기준점 업데이트
+    // 5. [솔루션 2 적용] EMA 필터로 속도 보정
+    const alpha = 0.7; // 반응성 조절 (숫자가 낮을수록 더 부드럽고, 높을수록 즉각적임)
+    
+    // 이전에 값이 없었다면 현재 속도로 초기화하여 NaN 방지
+    if (speedometer.filteredSpeed === undefined || speedometer.filteredSpeed === 0) {
+      speedometer.filteredSpeed = rawSpeed;
+    } else {
+      speedometer.filteredSpeed = (alpha * rawSpeed) + ((1 - alpha) * speedometer.filteredSpeed);
+    }
+
+    // 경기 중일 때 거리 누적
     if (window.rollerRaceState.raceState === 'running') {
       speedometer.totalDistance += (distM / 1000);
     }
 
-    // ... 기존 속도 계산 로직 이후 ...
-    const rawSpeed = (distM / timeS) * 3.6;
+    // 6. UI 업데이트 (반드시 filteredSpeed를 사용!)
+    updateSpeedometerData(speedometer.id, speedometer.filteredSpeed, speedometer.totalDistance);
     
-    // [솔루션 2 적용] EMA 필터로 속도 보정
-    const alpha = 0.7; // 반응성 조절 (0.1~0.9)
-    speedometer.filteredSpeed = (alpha * rawSpeed) + ((1 - alpha) * speedometer.filteredSpeed);
-    
-    // UI 업데이트 시 rawSpeed 대신 filteredSpeed 사용
-    // updateSpeedometerData(speedometer.id, speedometer.filteredSpeed, speedometer.totalDistance);
-    
-    updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
-    
+    // 기준점 업데이트
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    // 실제 회전이 발생한 이 시점을 '마지막 활동 시간'으로 기록
     speedometer.lastEventUpdate = now; 
     speedometer.connected = true;
   }
 }
+
 
 
 
