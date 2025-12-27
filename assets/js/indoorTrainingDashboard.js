@@ -387,6 +387,24 @@ function generatePowerMeterLabels(powerMeterId) {
 }
 
 /**
+ * 파워계 눈금 업데이트 (FTP 변경 시)
+ */
+function updatePowerMeterTicks(powerMeterId) {
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  // 눈금과 라벨 요소 찾기
+  const ticksEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-ticks`);
+  const labelsEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-labels`);
+  
+  if (!ticksEl || !labelsEl) return;
+  
+  // 눈금 재생성
+  ticksEl.innerHTML = generatePowerMeterTicks(powerMeterId);
+  labelsEl.innerHTML = generatePowerMeterLabels(powerMeterId);
+}
+
+/**
  * 파워계 바늘 업데이트 (0% ~ 100% ~ 200% 기준)
  * 실제 파워값을 FTP 기준 퍼센트로 변환하여 바늘 위치 결정
  */
@@ -559,13 +577,384 @@ function loadUserFTP() {
 /**
  * 파워계 설정 모달 열기
  */
+/**
+ * 파워계 설정 모달 열기
+ */
 function openPowerMeterSettings(powerMeterId) {
-  // TODO: 사용자 선택, 스마트로라/파워미터, 심박계 설정 및 페어링 화면 구현
   console.log('[Indoor Training] 파워계 설정 열기:', powerMeterId);
-  // 임시로 알림 표시
-  if (typeof showToast === 'function') {
-    showToast('파워계 설정 기능은 준비 중입니다.');
+  
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  // 현재 타겟 파워계 ID 저장
+  window.currentTargetPowerMeterId = powerMeterId;
+  
+  const modal = document.getElementById('powerMeterPairingModal');
+  const modalTitle = document.getElementById('powerMeterPairingModalTitle');
+  
+  if (modal && modalTitle) {
+    const trackName = `트랙${powerMeterId}`;
+    modalTitle.textContent = `${trackName} 페어링`;
+    
+    // 첫 번째 탭(사용자 선택)으로 초기화
+    showPairingTab('user');
+    
+    // 사용자 목록 로드
+    loadUsersForPairing();
+    
+    // USB 상태 확인 및 업데이트
+    updatePairingModalUSBStatus();
+    
+    // 모달 표시
+    modal.classList.remove('hidden');
   }
+}
+
+/**
+ * 페어링 모달의 USB 상태 업데이트
+ */
+async function updatePairingModalUSBStatus() {
+  // 각 탭의 USB 상태 업데이트
+  const statusIds = [
+    { status: 'trainerAntUSBStatus', icon: 'trainerAntUSBStatusIcon', text: 'trainerAntUSBStatusText' },
+    { status: 'powerAntUSBStatus', icon: 'powerAntUSBStatusIcon', text: 'powerAntUSBStatusText' },
+    { status: 'heartAntUSBStatus', icon: 'heartAntUSBStatusIcon', text: 'heartAntUSBStatusText' }
+  ];
+  
+  const isConnected = window.antState && window.antState.usbDevice && window.antState.usbDevice.opened;
+  
+  statusIds.forEach(({ status, icon, text }) => {
+    const statusEl = document.getElementById(status);
+    const iconEl = document.getElementById(icon);
+    const textEl = document.getElementById(text);
+    
+    if (statusEl && iconEl && textEl) {
+      if (isConnected) {
+        iconEl.style.background = '#28a745';
+        textEl.textContent = 'USB 수신기 연결됨';
+      } else {
+        iconEl.style.background = '#999';
+        textEl.textContent = 'USB 수신기 미연결';
+      }
+    }
+  });
+  
+  // USB 상태 확인 함수가 있으면 호출
+  if (typeof checkANTUSBStatus === 'function') {
+    await checkANTUSBStatus();
+    // 상태 업데이트 후 다시 UI 업데이트
+    setTimeout(updatePairingModalUSBStatus, 500);
+  }
+}
+
+/**
+ * 파워계 페어링 모달 닫기
+ */
+function closePowerMeterPairingModal() {
+  const modal = document.getElementById('powerMeterPairingModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  window.currentTargetPowerMeterId = null;
+}
+
+/**
+ * 페어링 탭 전환
+ */
+function showPairingTab(tabName) {
+  // 모든 탭 버튼 비활성화
+  document.querySelectorAll('.pairing-tab-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // 모든 탭 컨텐츠 숨김
+  document.querySelectorAll('.pairing-tab-content').forEach(content => {
+    content.classList.add('hidden');
+  });
+  
+  // 선택된 탭 활성화
+  const tabBtn = document.getElementById(`tab-${tabName}`);
+  const tabContent = document.getElementById(`pairing-tab-${tabName}`);
+  
+  if (tabBtn) tabBtn.classList.add('active');
+  if (tabContent) tabContent.classList.remove('hidden');
+}
+
+/**
+ * 페어링용 사용자 목록 로드
+ */
+async function loadUsersForPairing() {
+  const userListEl = document.getElementById('powerMeterUserList');
+  if (!userListEl) return;
+  
+  try {
+    const loadUsersFunc = window.loadUsers || (typeof loadUsers === 'function' ? loadUsers : null);
+    if (loadUsersFunc) {
+      const users = await loadUsersFunc();
+      renderUsersForPairing(users);
+    } else {
+      userListEl.innerHTML = '<div class="loading-spinner">사용자 목록을 불러오는 중...</div>';
+    }
+  } catch (error) {
+    console.error('[Indoor Training] 사용자 목록 로드 오류:', error);
+    if (userListEl) {
+      userListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">사용자 목록을 불러올 수 없습니다.</div>';
+    }
+  }
+}
+
+/**
+ * 페어링용 사용자 목록 렌더링
+ */
+function renderUsersForPairing(users) {
+  const userListEl = document.getElementById('powerMeterUserList');
+  if (!userListEl) return;
+  
+  if (!users || users.length === 0) {
+    userListEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">등록된 사용자가 없습니다.</div>';
+    return;
+  }
+  
+  const currentUserId = window.currentUser?.id;
+  
+  userListEl.innerHTML = users.map(user => {
+    const isSelected = user.id === currentUserId;
+    const wkg = user.ftp && user.weight ? (user.ftp / user.weight).toFixed(1) : '-';
+    
+    return `
+      <div class="user-card-compact ${isSelected ? 'selected' : ''}" onclick="selectUserForPowerMeter(${user.id})">
+        <div class="user-info">
+          <div class="user-name">${user.name || '-'}</div>
+          <div class="user-stats-compact">
+            <span>FTP: ${user.ftp || '-'}W</span>
+            <span>체중: ${user.weight || '-'}kg</span>
+            <span>W/kg: ${wkg}</span>
+          </div>
+        </div>
+        ${isSelected ? '<span class="selected-badge">선택됨</span>' : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * 파워계에 사용자 선택
+ */
+function selectUserForPowerMeter(userId) {
+  const powerMeterId = window.currentTargetPowerMeterId;
+  if (!powerMeterId) return;
+  
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  // 사용자 정보 로드
+  const loadUsersFunc = window.loadUsers || (typeof loadUsers === 'function' ? loadUsers : null);
+  if (loadUsersFunc) {
+    loadUsersFunc().then(users => {
+      const user = users.find(u => u.id === userId);
+      if (user) {
+        // 파워계에 사용자 정보 저장
+        powerMeter.userId = userId;
+        powerMeter.userFTP = user.ftp;
+        powerMeter.userName = user.name;
+        
+        // FTP 기반 눈금 업데이트
+        updatePowerMeterTicks(powerMeterId);
+        
+        // UI 업데이트
+        renderUsersForPairing(users);
+        
+        if (typeof showToast === 'function') {
+          showToast(`${user.name}이(가) 선택되었습니다.`);
+        }
+      }
+    }).catch(error => {
+      console.error('[Indoor Training] 사용자 정보 로드 오류:', error);
+    });
+  }
+}
+
+/**
+ * 페어링 저장
+ */
+function savePowerMeterPairing() {
+  const powerMeterId = window.currentTargetPowerMeterId;
+  if (!powerMeterId) {
+    if (typeof showToast === 'function') {
+      showToast('파워계를 선택해주세요.');
+    }
+    return;
+  }
+  
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  // 현재 활성화된 탭에 따라 저장
+  const activeTab = document.querySelector('.pairing-tab-btn.active');
+  if (!activeTab) return;
+  
+  const tabName = activeTab.id.replace('tab-', '');
+  
+  if (tabName === 'user') {
+    // 사용자 선택은 이미 저장됨
+    closePowerMeterPairingModal();
+    if (typeof showToast === 'function') {
+      showToast('사용자가 선택되었습니다.');
+    }
+  } else if (tabName === 'trainer') {
+    // 스마트로라 페어링 저장
+    const name = document.getElementById('trainerPairingName')?.value.trim() || '';
+    const deviceId = document.getElementById('trainerDeviceId')?.value.trim() || '';
+    
+    if (!deviceId) {
+      if (typeof showToast === 'function') {
+        showToast('디바이스 ID를 입력해주세요.');
+      }
+      return;
+    }
+    
+    powerMeter.trainerName = name;
+    powerMeter.trainerDeviceId = deviceId;
+    
+    closePowerMeterPairingModal();
+    if (typeof showToast === 'function') {
+      showToast('스마트로라가 페어링되었습니다.');
+    }
+  } else if (tabName === 'power') {
+    // 파워메터 페어링 저장
+    const name = document.getElementById('powerMeterPairingName')?.value.trim() || '';
+    const deviceId = document.getElementById('powerMeterDeviceId')?.value.trim() || '';
+    
+    if (!deviceId) {
+      if (typeof showToast === 'function') {
+        showToast('디바이스 ID를 입력해주세요.');
+      }
+      return;
+    }
+    
+    powerMeter.pairingName = name;
+    powerMeter.deviceId = deviceId;
+    
+    closePowerMeterPairingModal();
+    if (typeof showToast === 'function') {
+      showToast('파워메터가 페어링되었습니다.');
+    }
+  } else if (tabName === 'heart') {
+    // 심박계 페어링 저장
+    const name = document.getElementById('heartRatePairingName')?.value.trim() || '';
+    const deviceId = document.getElementById('heartRateDeviceId')?.value.trim() || '';
+    
+    if (!deviceId) {
+      if (typeof showToast === 'function') {
+        showToast('디바이스 ID를 입력해주세요.');
+      }
+      return;
+    }
+    
+    powerMeter.heartRateName = name;
+    powerMeter.heartRateDeviceId = deviceId;
+    
+    closePowerMeterPairingModal();
+    if (typeof showToast === 'function') {
+      showToast('심박계가 페어링되었습니다.');
+    }
+  }
+}
+
+/**
+ * 스마트로라 디바이스 검색
+ */
+async function searchTrainerDevices() {
+  const btn = document.getElementById('btnSearchTrainerDevices');
+  if (btn) btn.disabled = true;
+  
+  const listEl = document.getElementById('trainerDeviceList');
+  if (listEl) {
+    listEl.classList.remove('hidden');
+  }
+  
+  // USB 수신기가 연결되어 있는지 확인
+  if (!window.antState || !window.antState.usbDevice || !window.antState.usbDevice.opened) {
+    if (listEl) listEl.innerHTML = '<div style="color:red;padding:10px">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
+    if (btn) btn.disabled = false;
+    return;
+  }
+  
+  // 스캔 모드 확실히 켜기
+  if (typeof startContinuousScan === 'function') {
+    await startContinuousScan();
+  }
+  
+  if (listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">스마트로라 검색 중...<br>바퀴를 굴려주세요!</div>';
+  if (window.antState) {
+    window.antState.foundDevices = []; // 목록 초기화
+  }
+  
+  if (btn) btn.disabled = false;
+}
+
+/**
+ * 파워메터 디바이스 검색
+ */
+async function searchPowerMeterDevices() {
+  const btn = document.getElementById('btnSearchPowerDevices');
+  if (btn) btn.disabled = true;
+  
+  const listEl = document.getElementById('powerMeterDeviceList');
+  if (listEl) {
+    listEl.classList.remove('hidden');
+  }
+  
+  // USB 수신기가 연결되어 있는지 확인
+  if (!window.antState || !window.antState.usbDevice || !window.antState.usbDevice.opened) {
+    if (listEl) listEl.innerHTML = '<div style="color:red;padding:10px">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
+    if (btn) btn.disabled = false;
+    return;
+  }
+  
+  // 스캔 모드 확실히 켜기
+  if (typeof startContinuousScan === 'function') {
+    await startContinuousScan();
+  }
+  
+  if (listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">파워메터 검색 중...<br>페달을 돌려주세요!</div>';
+  if (window.antState) {
+    window.antState.foundDevices = []; // 목록 초기화
+  }
+  
+  if (btn) btn.disabled = false;
+}
+
+/**
+ * 심박계 디바이스 검색
+ */
+async function searchHeartRateDevices() {
+  const btn = document.getElementById('btnSearchHeartDevices');
+  if (btn) btn.disabled = true;
+  
+  const listEl = document.getElementById('heartRateDeviceList');
+  if (listEl) {
+    listEl.classList.remove('hidden');
+  }
+  
+  // USB 수신기가 연결되어 있는지 확인
+  if (!window.antState || !window.antState.usbDevice || !window.antState.usbDevice.opened) {
+    if (listEl) listEl.innerHTML = '<div style="color:red;padding:10px">USB 수신기를 먼저 활성화해주세요.<br><small>위의 "활성화" 버튼을 클릭하세요.</small></div>';
+    if (btn) btn.disabled = false;
+    return;
+  }
+  
+  // 스캔 모드 확실히 켜기
+  if (typeof startContinuousScan === 'function') {
+    await startContinuousScan();
+  }
+  
+  if (listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">심박계 검색 중...<br>심박계를 착용해주세요!</div>';
+  if (window.antState) {
+    window.antState.foundDevices = []; // 목록 초기화
+  }
+  
+  if (btn) btn.disabled = false;
 }
 
 /**
