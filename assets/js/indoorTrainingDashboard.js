@@ -1353,3 +1353,26 @@ window.selectIndoorDevice = function(deviceId, listId) {
     }
 };
 
+// 4. selectDeviceForInput 함수 (targetType 기반)
+window.selectDeviceForInput = function(deviceId, targetType) {
+    // targetType을 숫자로 변환 (문자열일 수도 있음)
+    const type = typeof targetType === 'string' ? parseInt(targetType, 10) : targetType;
+    
+    // targetType을 listId로 변환
+    let listId = '';
+    if (type === 0x78 || type === 120) { // 0x78 = 120 (심박계)
+        listId = 'heartRateDeviceList';
+    } else if (type === 0x0B || type === 11) { // 0x0B = 11 (파워미터)
+        listId = 'powerMeterDeviceList';
+    } else if (type === 0x11 || type === 17 || type === 0x10 || type === 16) { // 스마트로라
+        listId = 'trainerDeviceList';
+    }
+    
+    // selectIndoorDevice 함수 호출
+    if (listId) {
+        window.selectIndoorDevice(deviceId, listId);
+    } else {
+        console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
+    }
+};
+
