@@ -186,27 +186,27 @@ function createPowerMeterElement(powerMeter) {
                 transform="rotate(270)"/>
         </g>
         
-        <!-- watt 라벨 -->
+        <!-- FTP 라벨 -->
         <text x="100" y="155" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
               font-size="10" 
-              font-weight="500">watt</text>
+              font-weight="500">FTP</text>
       </svg>
     </div>
     <div class="speedometer-info disconnected">
       <!-- 좌측: 최대파워, 평균파워 -->
       <div class="speed-display-left">
         <div class="speed-stat-row speed-stat-max">
-          <span class="speed-stat-value" id="max-power-value-${powerMeter.id}">0.0</span>
+          <span class="speed-stat-value" id="max-power-value-${powerMeter.id}">0</span>
           <div class="speed-stat-label-wrapper">
             <span class="speed-stat-label">최대</span>
             <span class="speed-unit-bottom">W</span>
           </div>
         </div>
         <div class="speed-stat-row speed-stat-avg">
-          <span class="speed-stat-value" id="avg-power-value-${powerMeter.id}">0.0</span>
+          <span class="speed-stat-value" id="avg-power-value-${powerMeter.id}">0</span>
           <div class="speed-stat-label-wrapper">
             <span class="speed-stat-label">평균</span>
             <span class="speed-unit-bottom">W</span>
@@ -216,19 +216,19 @@ function createPowerMeterElement(powerMeter) {
       <!-- 중앙: 세그먼트파워 -->
       <div class="speed-display-center">
         <div class="speed-value-wrapper">
-          <span class="speed-value" id="segment-power-value-${powerMeter.id}">0.0</span>
+          <span class="speed-value" id="segment-power-value-${powerMeter.id}">0</span>
           <div class="speed-unit-bottom">W</div>
         </div>
       </div>
-      <!-- 우측: 심박, 케이던스 -->
+      <!-- 우측: 심박, 케이던스 (2줄로 표기) -->
       <div class="distance-display-right">
         <div class="speed-value-wrapper">
           <span class="distance-value" id="heart-rate-value-${powerMeter.id}">0</span>
-          <div class="speed-unit-bottom">BPM</div>
+          <span class="speed-unit-inline">BPM</span>
         </div>
         <div class="speed-value-wrapper" style="margin-top: 8px;">
           <span class="distance-value" id="cadence-value-${powerMeter.id}">0</span>
-          <div class="speed-unit-bottom">RPM</div>
+          <span class="speed-unit-inline">RPM</span>
         </div>
       </div>
     </div>
@@ -435,11 +435,11 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
   const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
   const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
   
-  if (maxPowerEl) maxPowerEl.textContent = powerMeter.maxPower.toFixed(1);
-  if (avgPowerEl) avgPowerEl.textContent = powerMeter.averagePower.toFixed(1);
-  if (segmentPowerEl) segmentPowerEl.textContent = powerMeter.segmentPower.toFixed(1);
-  if (heartRateEl) heartRateEl.textContent = heartRate || 0;
-  if (cadenceEl) cadenceEl.textContent = cadence || 0;
+  if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
+  if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
+  if (segmentPowerEl) segmentPowerEl.textContent = Math.round(powerMeter.segmentPower);
+  if (heartRateEl) heartRateEl.textContent = Math.round(heartRate) || 0;
+  if (cadenceEl) cadenceEl.textContent = Math.round(cadence) || 0;
   
   // 바늘 업데이트
   updatePowerMeterNeedle(powerMeterId, power);
