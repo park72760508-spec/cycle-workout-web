@@ -9420,9 +9420,11 @@ button[aria-disabled="true"] {
 /* 우측: 현재속도 */
 .distance-display-right {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
   flex: 1;
+  gap: 4px;
 }
 
 .distance-value {
@@ -9452,6 +9454,23 @@ button[aria-disabled="true"] {
   font-weight: 500;
   margin-left: 4px;
   vertical-align: baseline;
+}
+
+/* 심박수, 케이던스 행 스타일 (우측 정렬) */
+.heart-rate-row,
+.cadence-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* 작고 얇은 단위 폰트 (bpm, rpm) */
+.speed-unit-small {
+  font-size: 10px;
+  color: #666666;
+  font-weight: 300;
+  line-height: 1;
 }
 
 .speedometer-footer {
