@@ -2519,8 +2519,22 @@
         
         <!-- 사용자 선택 탭 -->
         <div id="pairing-tab-user" class="pairing-tab-content">
-          <div id="powerMeterUserList" class="user-list-compact">
-            <div class="loading-spinner">사용자 목록을 불러오는 중...</div>
+          <div class="form-group">
+            <label>전화번호로 사용자 검색</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+              <input type="text" id="pairingPhoneNumber" placeholder="예: 01040179020" style="flex: 1;" maxlength="13" 
+                     onkeypress="if(event.key==='Enter') searchUserByPhoneForPairing()"
+                     oninput="formatPhoneNumberInput(this)">
+              <button type="button" class="btn btn-primary" onclick="searchUserByPhoneForPairing()" id="btnSearchUserByPhone">
+                검색
+              </button>
+            </div>
+            <div id="pairingUserSearchResult" style="margin-top: 12px;">
+              <!-- 검색 결과가 여기에 표시됩니다 -->
+            </div>
+          </div>
+          <div id="powerMeterUserList" class="user-list-compact" style="display: none;">
+            <!-- 기존 사용자 목록 (숨김 처리) -->
           </div>
         </div>
         
