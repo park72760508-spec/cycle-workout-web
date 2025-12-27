@@ -192,7 +192,7 @@ function createPowerMeterElement(powerMeter) {
               dominant-baseline="middle"
               fill="#ffffff" 
               font-size="10" 
-              font-weight="500">FTP</text>
+              font-weight="500">FTP X 100[%]</text>
       </svg>
     </div>
     <div class="speedometer-info disconnected">
@@ -217,18 +217,18 @@ function createPowerMeterElement(powerMeter) {
       <div class="speed-display-center">
         <div class="speed-value-wrapper">
           <span class="speed-value" id="segment-power-value-${powerMeter.id}">0</span>
-          <div class="speed-unit-bottom">W</div>
+          <div class="speed-unit-bottom">랩파워[W]</div>
         </div>
       </div>
       <!-- 우측: 심박, 케이던스 (2줄로 표기) -->
       <div class="distance-display-right">
-        <div class="speed-value-wrapper">
+        <div class="heart-rate-row">
           <span class="distance-value" id="heart-rate-value-${powerMeter.id}">0</span>
-          <span class="speed-unit-inline">BPM</span>
+          <span class="speed-unit-small">bpm</span>
         </div>
-        <div class="speed-value-wrapper" style="margin-top: 8px;">
+        <div class="cadence-row">
           <span class="distance-value" id="cadence-value-${powerMeter.id}">0</span>
-          <span class="speed-unit-inline">RPM</span>
+          <span class="speed-unit-small">rpm</span>
         </div>
       </div>
     </div>
