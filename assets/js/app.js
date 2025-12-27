@@ -4243,9 +4243,9 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       
-      // ANT+ 연결 버튼 클릭 시 평로라 대회 대시보드로 전환
+      // ANT+ 연결 버튼 클릭 시 Indoor 모드 선택 화면으로 전환
       if (typeof showScreen === 'function') {
-        showScreen('rollerRaceDashboardScreen');
+        showScreen('indoorModeSelectionScreen');
       } else {
         console.warn("showScreen function not found!");
         if (typeof showToast === "function") {
