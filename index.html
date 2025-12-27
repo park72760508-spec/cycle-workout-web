@@ -2560,6 +2560,7 @@
                 <span id="trainerSearchButtonText">디바이스 검색</span>
               </button>
               <input type="text" id="trainerDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+              <button type="button" class="btn btn-danger" id="btnClearTrainer" onclick="clearPairedDevice('trainer')" style="flex: 0 0 auto; display: none;">해제</button>
             </div>
             <div id="trainerDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
               <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
@@ -2589,6 +2590,7 @@
                 <span id="powerSearchButtonText">디바이스 검색</span>
               </button>
               <input type="text" id="powerMeterDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+              <button type="button" class="btn btn-danger" id="btnClearPower" onclick="clearPairedDevice('power')" style="flex: 0 0 auto; display: none;">해제</button>
             </div>
             <div id="powerMeterDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
               <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
@@ -2618,6 +2620,7 @@
                 <span id="heartSearchButtonText">디바이스 검색</span>
               </button>
               <input type="text" id="heartRateDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+              <button type="button" class="btn btn-danger" id="btnClearHeart" onclick="clearPairedDevice('heart')" style="flex: 0 0 auto; display: none;">해제</button>
             </div>
             <div id="heartRateDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
               <!-- 검색된 디바이스 목록이 여기에 표시됩니다 -->
