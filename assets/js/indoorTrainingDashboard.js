@@ -19,7 +19,8 @@ window.indoorTrainingState = {
   userFTP: null, // 사용자 FTP 값
   userFTPSet: false, // FTP 값이 설정되었는지 여부
   wakeLock: null,
-  needleAngles: {} // 각 파워계의 이전 바늘 각도
+  rxBuffer: new Uint8Array(0), // ANT+ 데이터 버퍼 추가
+  needleAngles: {} // 바늘 각도 저장용 추가
 };
 
 // ANT+ 통신 관련 전역 상태 (rollerRaceDashboard와 공유)
@@ -61,6 +62,54 @@ class PowerMeterData {
     this.userFTP = null; // 사용자 FTP 값
   }
 }
+
+
+// [삽입 위치: initIndoorTrainingDashboard 함수 바로 위]
+
+// ANT+ 데이터 버퍼 및 메시지 라우팅 엔진
+window.processBuffer = function(newData) {
+  const combined = new Uint8Array(window.indoorTrainingState.rxBuffer.length + newData.length);
+  combined.set(window.indoorTrainingState.rxBuffer);
+  combined.set(newData, window.indoorTrainingState.rxBuffer.length);
+  window.indoorTrainingState.rxBuffer = combined;
+
+  while (window.indoorTrainingState.rxBuffer.length >= 4) {
+    const syncIndex = window.indoorTrainingState.rxBuffer.indexOf(0xA4);
+    if (syncIndex === -1) {
+      if (window.indoorTrainingState.rxBuffer.length > 256) window.indoorTrainingState.rxBuffer = new Uint8Array(0);
+      break;
+    }
+    if (syncIndex > 0) {
+      window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(syncIndex);
+      continue;
+    }
+
+    const length = window.indoorTrainingState.rxBuffer[1];
+    const totalLen = length + 4;
+    if (window.indoorTrainingState.rxBuffer.length < totalLen) break;
+
+    const packet = window.indoorTrainingState.rxBuffer.slice(0, totalLen);
+    window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(totalLen);
+
+    handleIndoorAntMessage(packet);
+  }
+};
+
+function handleIndoorAntMessage(packet) {
+  const msgId = packet[2];
+  const payload = packet.slice(3, packet.length - 1);
+
+  // Tacx T2028 Wrapper 해제 로직 포함
+  if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
+      window.processBuffer(payload.slice(1));
+      return;
+  }
+  if (msgId === 0x4E) parseIndoorSensorPayload(payload);
+}
+
+
+
+
 
 /**
  * Indoor Training 대시보드 초기화
@@ -1057,5 +1106,47 @@ if (typeof showScreen === 'function') {
       }, 100);
     }
   };
+}
+
+
+
+// [삽입 위치: 파일 맨 마지막]
+
+function parseIndoorSensorPayload(payload) {
+  if (payload.length < 13) return;
+  const idLow = payload[10], idHigh = payload[11], deviceType = payload[12], transType = payload[13];
+  const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+
+  // 장치 검색 목록 업데이트
+  updateFoundDevicesList(deviceId, deviceType);
+
+  // 실시간 훈련 데이터(심박수, 파워 등) 처리
+  processLiveTrainingData(deviceId, deviceType, payload);
+}
+
+function updateFoundDevicesList(deviceId, deviceType) {
+  if (!window.antState.foundDevices.find(d => d.id === deviceId)) {
+    let typeName = deviceType === 0x78 ? '심박계' : (deviceType === 0x0B ? '파워미터' : '트레이너');
+    window.antState.foundDevices.push({ id: deviceId, type: typeName, deviceType: deviceType });
+    renderPairingDeviceList(deviceType);
+  }
+}
+
+// 심박수(BPM) 및 파워 데이터 실시간 UI 반영
+function processLiveTrainingData(deviceId, deviceType, payload) {
+  const antData = payload.slice(1, 9);
+  window.indoorTrainingState.powerMeters.forEach(pm => {
+    // 심박수 업데이트 (로그 분석 결과 반영)
+    if (pm.heartRateDeviceId == deviceId && deviceType === 0x78) {
+      pm.heartRate = antData[7];
+      const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
+      if (hrEl) hrEl.textContent = pm.heartRate;
+    }
+    // 파워 데이터 업데이트
+    if ((pm.deviceId == deviceId || pm.trainerDeviceId == deviceId) && (deviceType === 0x0B || deviceType === 0x11)) {
+      const power = (antData[5] << 8) | antData[4];
+      updatePowerMeterData(pm.id, power, pm.heartRate, antData[3]);
+    }
+  });
 }
 
