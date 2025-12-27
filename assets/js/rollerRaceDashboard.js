@@ -3012,7 +3012,7 @@ async function checkUSBActivationStatus() {
     }
     
     statusIcon.style.background = '#ffc107';
-    statusText.textContent = 'USB 수신기를 연결해주세요';
+    statusText.textContent = 'Ant USBStick2 수신기를 연결해주세요';
     if (connectButton) connectButton.style.display = 'inline-block';
     if (activateButton) activateButton.disabled = false;
   } catch (error) {
@@ -3284,7 +3284,7 @@ async function checkANTUSBStatusForSelection() {
     }
     
     statusIcon.style.background = '#ffc107';
-    statusText.textContent = 'USB 수신기를 연결해주세요';
+    statusText.textContent = 'Ant USBStick2 수신기를 연결해주세요';
     if (connectButton) connectButton.style.display = 'inline-block';
     if (activateButton) activateButton.disabled = false;
   } catch (error) {
