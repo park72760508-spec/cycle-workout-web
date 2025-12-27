@@ -327,8 +327,35 @@ function generatePowerMeterLabels(powerMeterId) {
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    // 소수점 이하 1자리 표기 형식
-    const displayValue = percent.toFixed(1);
+    // 0~200 범위를 0~2 범위로 변환 (100으로 나눔)
+    const value = percent / 100;
+    
+    // 표기 형식: 정수는 소수점 없이, 소수는 적절한 자릿수로 표시
+    let displayValue;
+    if (Math.abs(value - Math.round(value)) < 0.01) {
+      // 정수인 경우 (0, 1, 2)
+      displayValue = Math.round(value).toString();
+    } else {
+      // 소수인 경우
+      // 0.3, 0.7, 1.3, 1.7 등은 소수점 1자리
+      // 0.67은 소수점 2자리
+      const rounded = Math.round(value * 100) / 100; // 소수점 2자리로 반올림
+      const oneDecimal = Math.round(rounded * 10) / 10;
+      
+      if (Math.abs(rounded - oneDecimal) < 0.01) {
+        // 소수점 1자리로 표현 가능한 경우
+        displayValue = oneDecimal.toFixed(1);
+        // 불필요한 0 제거 (예: 1.0 → 1)
+        if (oneDecimal === Math.round(oneDecimal)) {
+          displayValue = Math.round(oneDecimal).toString();
+        }
+      } else {
+        // 소수점 2자리 필요 (0.67)
+        displayValue = rounded.toFixed(2);
+        // 불필요한 0 제거 (예: 0.70 → 0.7)
+        displayValue = parseFloat(displayValue).toString();
+      }
+    }
     
     // 흰색 숫자 (자동차 속도계 스타일)
     labels += `<text x="${x}" y="${y}" 
