@@ -192,7 +192,15 @@ function createPowerMeterElement(powerMeter) {
               dominant-baseline="middle"
               fill="#ffffff" 
               font-size="10" 
-              font-weight="500">FTP X 100[%]</text>
+              font-weight="500">FTP [%]</text>
+        
+        <!-- X 100 표기 (1과 바늘 끝 원의 중간 지점) -->
+        <text x="100" y="91" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#d3d3d3" 
+              font-size="10" 
+              font-weight="500">X 100</text>
         
         <!-- 현재 파워값 -->
         <text x="100" y="170" 
