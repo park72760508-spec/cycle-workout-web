@@ -9473,6 +9473,105 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
+/* ========== Indoor Training 페어링 모달 스타일 ========== */
+.pairing-menu-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.pairing-tab-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.pairing-tab-btn:hover {
+  color: #2e74e8;
+  background: rgba(46, 116, 232, 0.05);
+}
+
+.pairing-tab-btn.active {
+  color: #2e74e8;
+  border-bottom-color: #2e74e8;
+  font-weight: 600;
+}
+
+.pairing-tab-content {
+  min-height: 300px;
+}
+
+.pairing-tab-content.hidden {
+  display: none;
+}
+
+/* 페어링용 사용자 목록 (컴팩트) */
+.user-list-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.user-card-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.user-card-compact:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-color: #2e74e8;
+}
+
+.user-card-compact.selected {
+  border-color: #2e74e8;
+  background: rgba(46, 116, 232, 0.05);
+}
+
+.user-info {
+  flex: 1;
+}
+
+.user-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.user-stats-compact {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.selected-badge {
+  padding: 4px 12px;
+  background: #2e74e8;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .speedometer-footer {
   display: flex;
   justify-content: space-between;
