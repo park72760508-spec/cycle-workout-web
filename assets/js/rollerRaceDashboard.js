@@ -5438,10 +5438,11 @@ function handleBroadcastData(payload) {
     if (!payload || payload.length < 15) return;
 
     // 1. 장치 ID 정밀 추출 (로그 바이트 순서 반영)
-    const idLow = payload[10];
-    const idHigh = payload[11];
-    const deviceType = payload[12]; // 0x7B (속도&케이던스)
-    const transType = payload[14]; 
+    // 로그 패턴: [Data 0-7] [ID Low:9] [ID High:10] [Type:11] [X:12] [Trans:13]
+    const idLow = payload[9];
+    const idHigh = payload[10];
+    const deviceType = payload[11]; // 0x7B (속도&케이던스)
+    const transType = payload[13]; 
 
     // ANT+ 확장 ID 계산 (67536 생성 공식)
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
@@ -5462,10 +5463,10 @@ function handleBroadcastData(payload) {
 
         if (trackIndex === -1) return; // 등록되지 않은 장치는 무시
 
-        // 3. 속도 계산 데이터 추출 (로그: payload[5..8])
+        // 3. 속도 계산 데이터 추출 (로그 분석: payload[4] ~ payload[7])
         let speed = 0;
-        const currentEventTime = payload[5] | (payload[6] << 8);
-        const currentRevCount = payload[7] | (payload[8] << 8);
+        const currentEventTime = payload[4] | (payload[5] << 8); // CE 56
+        const currentRevCount = payload[6] | (payload[7] << 8);  // 82 D2
 
         if (!window.lastAntData) window.lastAntData = {};
         const key = `track_${trackIndex}`;
@@ -6241,7 +6242,7 @@ function updateSpeedometer(trackId, speed) {
     const speedText = document.getElementById(`speed-text-${trackId}`);
     if (speedText) {
         speedText.textContent = speed.toFixed(1);
-        speedText.style.fill = "#ffffff"; // 숫자가 잘 보이도록 흰색 강제
+        speedText.style.fill = "#ffffff"; // 흰색 강제
         speedText.style.visibility = "visible";
         speedText.style.display = "block";
     }
@@ -6253,9 +6254,9 @@ function updateSpeedometer(trackId, speed) {
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
         const angle = -90 + (ratio * 180); // -90도(0km/h) ~ 90도(60km/h)
 
-        // [핵심] rotate 속성에 중심점 (100, 140)을 포함하여 위치 이탈 방지
+        // rotate 속성에 중심점 (100, 140)을 포함하여 위치 이탈 방지
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
-        needle.style.stroke = "#ff0000"; // 중심 원과 동일한 빨간색
+        needle.style.stroke = "#ff4757"; 
         needle.style.visibility = "visible";
     }
 }
@@ -6270,7 +6271,7 @@ if (window.antDevice) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
             // 모든 ANT+ 데이터를 통합 처리 함수로 전달
-            handleBroadcastData(payload);
+            handleBroadcastData(payload.slice(4)); // 헤더 제외한 데이터만 전달
         }
     };
 }
@@ -6284,3 +6285,4 @@ window.addEventListener('load', () => {
         });
     }, 1000);
 });
+
