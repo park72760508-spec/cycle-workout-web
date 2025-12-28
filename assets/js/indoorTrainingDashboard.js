@@ -107,11 +107,8 @@ function handleIndoorAntMessage(packet) {
 
   // 2. 센서 데이터(0x4E) 처리
   if (msgId === 0x4E) {
-      // 현재 화면이 인도어 트레이닝 화면일 때만 리스트 갱신 명령 수행
-      const currentScreen = window.currentScreenId || ''; 
-      if (currentScreen.includes('indoorTraining')) {
-          parseIndoorSensorPayload(payload);
-      }
+      // parseIndoorSensorPayload 내부에서 화면 확인을 수행하므로 항상 호출
+      parseIndoorSensorPayload(payload);
   }
 }
 
@@ -1939,20 +1936,25 @@ function parseIndoorSensorPayload(payload) {
     if (payload.length < 13) return;
   }
   
-  // ID 추출 위치 확인 (20바이트 확장 패킷 기준: payload[13], payload[14], payload[17])
+  // ID 추출 위치 확인
+  // 로그 분석: A4 14 4E 00 00 FF FF FF CF 91 9B 68 E0 51 24 78 01 10 00 68 00 77 53 1C
+  // payload[10]=0x51 (idLow), payload[11]=0x24 (idHigh), payload[12]=0x78 (deviceType), payload[13]=0x01 (transType)
   let idLow, idHigh, deviceType, transType;
-  if (payload.length >= 18) {
-    // 확장 패킷 (20바이트): payload[13]=idLow, payload[14]=idHigh, payload[15]=deviceType, payload[17]=transType
-    idLow = payload[13];
-    idHigh = payload[14];
-    deviceType = payload[15];
-    transType = payload[17];
-  } else {
-    // 구형 패킷 (13바이트): payload[10]=idLow, payload[11]=idHigh, payload[12]=deviceType, payload[13]=transType
+  if (payload.length >= 14) {
+    // 표준 위치: payload[10]=idLow, payload[11]=idHigh, payload[12]=deviceType, payload[13]=transType
     idLow = payload[10];
     idHigh = payload[11];
     deviceType = payload[12];
     transType = payload[13];
+  } else if (payload.length >= 13) {
+    // 최소 길이: payload[10]=idLow, payload[11]=idHigh, payload[12]=deviceType
+    idLow = payload[10];
+    idHigh = payload[11];
+    deviceType = payload[12];
+    transType = payload.length > 13 ? payload[13] : 0;
+  } else {
+    console.log('[Training] parseIndoorSensorPayload: payload가 ID 추출에 필요한 길이보다 짧음', payload.length);
+    return;
   }
   
   // ID 계산 (로그의 9297 등 정상 추출)
@@ -1974,8 +1976,13 @@ function parseIndoorSensorPayload(payload) {
            ((deviceType === 0x0B || deviceType === 0x11) && (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId));
   });
   
+  console.log(`[Training] parseIndoorSensorPayload: isPairedDevice=${isPairedDevice}, trainingState=${window.indoorTrainingState.trainingState}`);
+  
   if (window.indoorTrainingState.trainingState === 'running' || isPairedDevice) {
+    console.log(`[Training] processLiveTrainingData 호출: deviceId=${deviceId}, deviceType=0x${deviceType.toString(16)}`);
     processLiveTrainingData(deviceId, deviceType, payload);
+  } else {
+    console.log(`[Training] 데이터 처리 건너뜀: 페어링 안됨, 훈련 중 아님`);
   }
 }
 
@@ -2016,14 +2023,25 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
         if ((deviceType === 0x78 || deviceType === 0x7D) && pmHeartRateDeviceId === receivedDeviceId) {
             // ANT+ Heart Rate Profile: 대부분의 페이지에서 Byte 7이 Computed Heart Rate임
             const heartRate = antData[7];
+            console.log(`[Training] 심박계 데이터 수신: deviceId=${receivedDeviceId}, heartRate=${heartRate}, pm.id=${pm.id}`);
             if (heartRate > 0 && heartRate < 255) {
                 pm.heartRate = heartRate;
                 const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
-                if (hrEl) hrEl.textContent = Math.round(heartRate);
+                if (hrEl) {
+                    hrEl.textContent = Math.round(heartRate);
+                    console.log(`[Training] 심박수 UI 업데이트: pm.id=${pm.id}, heartRate=${heartRate}`);
+                } else {
+                    console.warn(`[Training] 심박수 UI 요소를 찾을 수 없음: heart-rate-value-${pm.id}`);
+                }
                 
                 // 파워미터 데이터도 함께 업데이트 (심박수 변경 시)
                 updatePowerMeterData(pm.id, pm.currentPower, heartRate, pm.cadence);
+            } else {
+                console.log(`[Training] 심박수 값이 유효하지 않음: ${heartRate}`);
             }
+        } else if ((deviceType === 0x78 || deviceType === 0x7D)) {
+            // 심박계이지만 페어링되지 않은 경우
+            console.log(`[Training] 심박계 데이터 수신 (페어링 안됨): deviceId=${receivedDeviceId}, deviceType=0x${deviceType.toString(16)}, pmHeartRateDeviceId=${pmHeartRateDeviceId}`);
         }
 
         // 2. 파워미터/스마트로라 처리 (0x0B, 0x11)
