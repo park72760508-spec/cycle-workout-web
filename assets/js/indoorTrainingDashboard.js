@@ -163,18 +163,12 @@ window.handleIndoorAntMessage = function(packet) {
 
   // 브로드캐스트 데이터(0x4E) 처리
   if (msgId === 0x4E) {
-      console.log(`[Training] window.handleIndoorAntMessage: 0x4E 메시지 처리, parseIndoorSensorPayload 호출`);
-      console.log(`[Training] window.handleIndoorAntMessage: parseIndoorSensorPayload 타입=${typeof parseIndoorSensorPayload}, window.parseIndoorSensorPayload 타입=${typeof window.parseIndoorSensorPayload}`);
+      console.log(`[Training] window.handleIndoorAntMessage: 0x4E 메시지 처리, window.parseIndoorSensorPayload 호출`);
       try {
-          // 로컬 함수를 먼저 시도
-          if (typeof parseIndoorSensorPayload === 'function') {
-              console.log('[Training] window.handleIndoorAntMessage: 로컬 parseIndoorSensorPayload 호출');
-              parseIndoorSensorPayload(payload);
-          } else if (typeof window.parseIndoorSensorPayload === 'function') {
-              console.log('[Training] window.handleIndoorAntMessage: window.parseIndoorSensorPayload 호출');
+          if (typeof window.parseIndoorSensorPayload === 'function') {
               window.parseIndoorSensorPayload(payload);
           } else {
-              console.error('[Training] window.handleIndoorAntMessage: parseIndoorSensorPayload 함수를 찾을 수 없습니다!');
+              console.error('[Training] window.handleIndoorAntMessage: window.parseIndoorSensorPayload 함수를 찾을 수 없습니다!');
           }
       } catch (e) {
           console.error('[Training] window.handleIndoorAntMessage: parseIndoorSensorPayload 호출 에러:', e, e.stack);
@@ -2178,16 +2172,9 @@ function renderPairingDeviceList(targetType) {
  * [통합 ANT+ 데이터 라우터]
  * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
  */
-// window.parseIndoorSensorPayload는 로컬 함수 parseIndoorSensorPayload를 사용하도록 변경
-// 이 함수는 이제 사용되지 않음 (로컬 함수가 우선적으로 사용됨)
-window.parseIndoorSensorPayload = function(payload) {
-    // 로컬 함수 parseIndoorSensorPayload로 위임
-    if (typeof parseIndoorSensorPayload === 'function') {
-        parseIndoorSensorPayload(payload);
-    } else {
-        console.error('[Training] window.parseIndoorSensorPayload: 로컬 parseIndoorSensorPayload 함수를 찾을 수 없습니다!');
-    }
-};
+// 로컬 함수 parseIndoorSensorPayload를 window 객체에 직접 할당
+// 이렇게 하면 무한 재귀를 방지할 수 있습니다.
+window.parseIndoorSensorPayload = parseIndoorSensorPayload;
 
 /**
  * [초기 로딩 시 바늘 위치 강제 설정]
