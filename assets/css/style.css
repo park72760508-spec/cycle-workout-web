@@ -10178,3 +10178,21 @@ button[aria-disabled="true"] {
 .speedometer-needle line {
     transform: rotate(180deg);
 }
+
+
+/* [공통] 속도계 및 파워계 바늘 스타일 고정 */
+.speedometer-needle line {
+    stroke: #ff4757 !important; /* 선명한 빨간색 */
+    stroke-width: 4px !important;
+    stroke-linecap: round !important;
+    display: block !important;
+    visibility: visible !important;
+    /* CSS 회전축은 보조용으로 설정 (실제 회전은 JS에서 처리) */
+    transform-origin: 100px 140px; 
+}
+
+/* 게이지 컨테이너가 숨겨져 있지 않은지 확인 */
+.speedometer-container, .power-gauge-container {
+    overflow: visible !important;
+}
+
