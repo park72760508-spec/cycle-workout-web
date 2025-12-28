@@ -751,6 +751,11 @@ function updateRankings() {
   updateScoreboardRankings(sorted, false);
 }
 
+
+
+
+
+
 /**
  * 전광판 순위 목록 생성 및 업데이트
  * @param {Array} sorted - 정렬된 속도계 목록
@@ -5991,6 +5996,34 @@ window.addEventListener('load', window.initializeGauges);
 
 
 
+/**
+ * [신규 추가] 속도계 바늘 회전 및 텍스트 업데이트 로직
+ * trackId: 0, 1, 2, 3 (트랙 번호)
+ * speed: 계산된 속도값
+ */
+function updateSpeedometer(trackId, speed) {
+    // HTML 요소 찾기 (needle-0, needle-1 등)
+    const needle = document.getElementById(`needle-${trackId}`);
+    const speedText = document.getElementById(`speed-text-${trackId}`);
+    
+    // 1. 숫자 텍스트 업데이트
+    if (speedText) {
+        speedText.textContent = speed.toFixed(1);
+    }
+
+    // 2. 바늘 회전 업데이트
+    if (needle) {
+        // 0~60km/h 범위를 180도(0) ~ 360도(Max)에 매핑
+        const maxSpeed = 60;
+        const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
+        const angle = 180 + (ratio * 180);
+
+        // SVG rotate 속성 적용 (중심점 100, 140)
+        needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        needle.style.visibility = 'visible';
+        needle.style.display = 'block';
+    }
+}
 
 
 
