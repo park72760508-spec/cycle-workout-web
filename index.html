@@ -2443,9 +2443,9 @@
         <span class="race-title-text">Indoor Training</span>
       </h1>
       <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
-        <select id="workoutSelectTraining" class="form-control" style="min-width: 200px;">
-          <option value="">워크아웃 선택...</option>
-        </select>
+        <button class="btn btn-primary btn-default-style btn-with-icon" id="btnSelectWorkoutTraining" onclick="openWorkoutSelectionModal()" style="padding: 8px 16px;">
+          <img src="assets/img/selection.png" alt="워크아웃 선택" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 워크아웃 선택
+        </button>
         <div class="race-controls" style="flex-shrink: 0;">
           <button class="enhanced-control-btn play" id="btnStartTraining" onclick="startTrainingWithCountdown()" aria-label="시작"></button>
           <button class="enhanced-control-btn pause" id="btnPauseTraining" onclick="pauseTraining()" disabled aria-label="일시정지"></button>
@@ -2473,6 +2473,12 @@
           <canvas id="trainingSegmentGraphCanvas"></canvas>
         </div>
       </div>
+      <!-- 우측 세그먼트 그래프 영역 -->
+      <div class="scoreboard-item" id="selectedWorkoutSegmentGraphContainer" style="display: none;">
+        <div class="scoreboard-segment-graph-container">
+          <canvas id="selectedWorkoutSegmentGraphCanvas"></canvas>
+        </div>
+      </div>
     </div>
 
     <!-- 파워계 그리드 (5개씩 2줄) -->
@@ -2497,6 +2503,37 @@
             수신기 활성화
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Indoor Training 워크아웃 선택 모달 ========== -->
+  <div id="workoutSelectionModal" class="modal hidden" onclick="if(event.target === this) closeWorkoutSelectionModal()">
+    <div class="modal-content" style="max-width: 900px;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3>워크아웃 선택</h3>
+        <button class="modal-close" onclick="closeWorkoutSelectionModal()">✖</button>
+      </div>
+      <div class="modal-body">
+        <div style="max-height: 500px; overflow-y: auto; margin-bottom: 20px;">
+          <table class="workout-selection-table" style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="width: 60px; text-align: center; padding: 12px; background: rgba(255,255,255,0.03); border-bottom: 2px solid #e5e7eb;">순번</th>
+                <th style="text-align: left; padding: 12px; background: rgba(255,255,255,0.03); border-bottom: 2px solid #e5e7eb;">워크아웃명</th>
+                <th style="width: 120px; text-align: center; padding: 12px; background: rgba(255,255,255,0.03); border-bottom: 2px solid #e5e7eb;">카테고리</th>
+                <th style="width: 100px; text-align: center; padding: 12px; background: rgba(255,255,255,0.03); border-bottom: 2px solid #e5e7eb;">시간</th>
+                <th style="width: 100px; text-align: center; padding: 12px; background: rgba(255,255,255,0.03); border-bottom: 2px solid #e5e7eb;">선택</th>
+              </tr>
+            </thead>
+            <tbody id="workoutSelectionTableBody">
+              <!-- 워크아웃 목록이 여기에 동적으로 추가됩니다 -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeWorkoutSelectionModal()">닫기</button>
       </div>
     </div>
   </div>
