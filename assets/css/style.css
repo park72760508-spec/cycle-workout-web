@@ -9034,8 +9034,9 @@ button[aria-disabled="true"] {
 .scoreboard-display {
   display: flex;
   gap: 40px;
-  margin-bottom: 30px;
-  padding: 20px 29px; /* 70% of 28px 42px (현재 높이의 70%) */
+  margin-bottom: 0;
+  margin-top: 0;
+  padding: 0 29px; /* 위, 아래 여백 제거 (좌우만 유지) */
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4),
