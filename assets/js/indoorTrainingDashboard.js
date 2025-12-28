@@ -91,24 +91,36 @@ window.processBuffer = function(newData) {
     const packet = window.indoorTrainingState.rxBuffer.slice(0, totalLen);
     window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(totalLen);
 
+    console.log(`[Training] processBuffer: 패킷 추출 완료, packet.length=${packet.length}, msgId=0x${packet[2]?.toString(16)}`);
     handleIndoorAntMessage(packet);
   }
 };
 
 function handleIndoorAntMessage(packet) {
+  if (!packet || packet.length < 4) {
+    console.warn('[Training] handleIndoorAntMessage: 패킷이 너무 짧음', packet?.length);
+    return;
+  }
+  
   const msgId = packet[2];
   const payload = packet.slice(3, packet.length - 1);
+  
+  console.log(`[Training] handleIndoorAntMessage: msgId=0x${msgId.toString(16)}, payload.length=${payload.length}, packet.length=${packet.length}`);
 
   // 1. Tacx Wrapper 해제
   if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
+      console.log('[Training] handleIndoorAntMessage: Tacx Wrapper 해제');
       window.processBuffer(payload.slice(1));
       return;
   }
 
   // 2. 센서 데이터(0x4E) 처리
   if (msgId === 0x4E) {
+      console.log(`[Training] handleIndoorAntMessage: 0x4E 메시지 처리, parseIndoorSensorPayload 호출`);
       // parseIndoorSensorPayload 내부에서 화면 확인을 수행하므로 항상 호출
       parseIndoorSensorPayload(payload);
+  } else {
+      console.log(`[Training] handleIndoorAntMessage: 알 수 없는 msgId=0x${msgId.toString(16)}`);
   }
 }
 
