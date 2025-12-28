@@ -2061,28 +2061,31 @@ function renderPairingDeviceList(targetType) {
  * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
  */
 window.parseIndoorSensorPayload = function(payload) {
-    if (!payload || payload.length < 13) return;
+    if (!payload || payload.length < 18) return; // 최소 길이 체크 수정
 
-    const deviceType = payload[12];
-
-    // 1. 레이스 관련 (0x79, 0x7B) -> 레이스 로직으로 토스
-    if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x7A) {
-        if (typeof window.processRaceData === 'function') {
-            window.processRaceData(payload);
-        }
-        // 레이스 대시보드가 활성화된 상태라면 여기서 중단
-        const raceDB = document.getElementById('race-dashboard');
-        if (raceDB && raceDB.style.display !== 'none') return;
+    // 현재 화면이 Indoor Training인지 확인
+    const currentScreen = window.currentScreen || '';
+    const isTrainingScreen = currentScreen === 'indoorTrainingDashboardScreen' || 
+                             document.getElementById('powerMeterGrid') !== null;
+    
+    if (!isTrainingScreen) {
+        // Training 화면이 아니면 처리하지 않음 (Race 화면에서 handleBroadcastData가 처리)
+        return;
     }
 
-    // 2. 트레이닝 관련 (0x78, 0x0B, 0x11)
-    const idLow = payload[10];
-    const idHigh = payload[11];
-    const transType = payload[13];
+    // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
+    const idLow = payload[13];
+    const idHigh = payload[14];
+    const deviceType = payload[15];
+    const transType = payload[17];
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
-    if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
+    // 트레이닝 관련 장치 타입: 0x0B (파워), 0x11 (심박), 0x78 (구형 속도계도 Training에서 사용 가능)
+    // 단, Race 관련 타입(0x79, 0x7A, 0x7B)은 Race 화면에서만 처리하도록
+    if (deviceType === 0x0B || deviceType === 0x11 || deviceType === 0x78) {
+        if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
+        if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
+    }
 };
 
 /**
