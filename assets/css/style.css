@@ -10164,19 +10164,19 @@ button[aria-disabled="true"] {
    - 중복된 스타일을 제거하고 하나로 통합함
    ========================================================================== */
 /* [최종 통합] 모든 바늘 스타일: 레이스 및 트레이닝 공통 */
-.speedometer-needle line, 
 line[id^="needle-"] {
-    stroke: #ff4757 !important;
+    stroke: #ff4757 !important; /* 바늘 빨간색 */
     stroke-width: 4px !important;
     stroke-linecap: round !important;
-    /* CSS transform-origin은 SVG 내부 좌표와 일치해야 함 */
-    transform-origin: 100px 140px !important;
-    transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
     visibility: visible !important;
     display: block !important;
+    /* CSS 회전축을 제거하여 JS의 setAttribute('transform')이 우선하도록 함 */
+    transform-origin: none !important; 
+    transition: transform 0.4s ease-out;
 }
 
-/* 게이지 컨테이너에서 바늘이 잘리지 않도록 */
-.speedometer-container svg, .power-gauge-container svg {
+/* 게이지가 화면 밖으로 나가지 않게 함 */
+.speedometer-container {
     overflow: visible !important;
+    position: relative;
 }
