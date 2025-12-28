@@ -540,25 +540,25 @@ function initializeNeedles() {
 
 // 기존 updatePowerMeterNeedle 함수 보강 (null 체크 및 초기값)
 function updatePowerMeterNeedle(powerMeterId, power) {
-  const needleEl = document.getElementById(`needle-${powerMeterId}`);
-  if (!needleEl) return;
+    const needleEl = document.getElementById(`needle-${powerMeterId}`);
+    if (!needleEl) return;
 
-  const ftp = window.indoorTrainingState.userFTP || 200;
-  const maxPower = ftp * 2;
-  
-  let ratio = (power || 0) / maxPower;
-  if (ratio > 1) ratio = 1;
-  if (ratio < 0) ratio = 0;
+    const ftp = window.indoorTrainingState.userFTP || 200;
+    const maxPower = ftp * 2;
+    
+    // 파워가 없거나 초기 상태면 0으로 처리
+    const currentPower = (power === undefined || power === null) ? 0 : power;
+    let ratio = currentPower / maxPower;
+    if (ratio > 1) ratio = 1;
+    if (ratio < 0) ratio = 0;
 
-  // 0W일 때 180도(왼쪽 끝)에서 시작
-  const startAngle = 180;
-  const range = 180;
-  const targetAngle = startAngle + (ratio * range);
+    const startAngle = 180; // 0W 위치
+    const range = 180;
+    const targetAngle = startAngle + (ratio * range);
 
-  // 인라인 스타일로 즉시 적용하여 초기 가시성 확보
-  needleEl.style.display = "block"; 
-  needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`); 
-  // 위 100, 140은 SVG의 회전 중심축 좌표입니다. (디자인에 따라 조정 필요)
+    // transform 속성을 명확히 지정 (회전 중심점 100, 140 포함)
+    needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`);
+    needleEl.style.visibility = 'visible'; // 강제 표시
 }
 
 /**
@@ -2051,31 +2051,39 @@ function renderPairingDeviceList(targetType) {
  */
 
 // 1. 데이터 수신 및 분류 엔진 (ANT+ 0x4E 메시지 분석)
+// 1. 데이터 수신 및 통합 라우팅 엔진
 window.parseIndoorSensorPayload = function(payload) {
     if (payload.length < 13) return;
-    
-    // 로그에 찍힌 24 78 (0x78) 등 장치 정보 추출
+
     const idLow = payload[10];
     const idHigh = payload[11];
-    const deviceType = payload[12]; // 0x78: 심박계, 0x0B: 파워미터, 0x11: FE-C
+    const deviceType = payload[12]; 
     const transType = payload[13];
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    // 장치 발견 시 목록 업데이트 호출
+    // [A] Race 관련: 속도계 및 케이던스 센서 데이터 (0x79, 0x7B, 0x7A)
+    // 기존 rollerRaceDashboard.js의 속도계 처리 함수가 있다면 호출해줍니다.
+    if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x7A) {
+        if (typeof window.handleRaceSpeedData === 'function') {
+            window.handleRaceSpeedData(deviceId, deviceType, payload);
+        }
+    }
+
+    // [B] Training 관련 UI 업데이트 (장치 검색 리스트)
     updateIndoorPairingUI(deviceId, deviceType);
-    
-    // 실시간 데이터 처리 (훈련 중이거나 페어링된 장치의 경우)
-    const isPairedDevice = window.indoorTrainingState.powerMeters.some(pm => {
-        const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
-        const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
-        const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
-        const receivedDeviceId = String(deviceId);
+
+    // [C] 실시간 데이터 처리 (심박/파워)
+    const isPairedPowerDevice = window.indoorTrainingState.powerMeters.some(pm => {
+        const pmHR = String(pm.heartRateDeviceId);
+        const pmPower = String(pm.deviceId);
+        const pmTrainer = String(pm.trainerDeviceId);
+        const receivedId = String(deviceId);
         
-        return (deviceType === 0x78 && pmHeartRateDeviceId === receivedDeviceId) ||
-               ((deviceType === 0x0B || deviceType === 0x11) && (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId));
+        return (deviceType === 0x78 && pmHR === receivedId) ||
+               ((deviceType === 0x0B || deviceType === 0x11) && (pmPower === receivedId || pmTrainer === receivedId));
     });
-    
-    if (window.indoorTrainingState.trainingState === 'running' || isPairedDevice) {
+
+    if (window.indoorTrainingState.trainingState === 'running' || isPairedPowerDevice) {
         processLiveTrainingData(deviceId, deviceType, payload);
     }
 };
@@ -2187,6 +2195,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
