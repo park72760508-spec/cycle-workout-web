@@ -5435,65 +5435,101 @@ function routeANTMessage(packet) {
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
 // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
 function handleBroadcastData(payload) {
-    if (!payload || payload.length < 18) return;
+    // 1. 유효성 검사 (20바이트 패킷 기준)
+    if (!payload || payload.length < 14) return;
 
-    // 1. 장치 ID 정밀 추출 (사용자 로그 바이트 순서 반영)
-    // 로그 패턴: [4-11:Data] [12:ID_L] [13:ID_H] [14:Type] [15:Trans] [16:X] [17:Ext]
-    const idLow = payload[12];
-    const idHigh = payload[13];
-    const deviceType = payload[14]; // 0x07 (속도계)
-    const transType = payload[17]; 
+    // 2. 장치 ID 추출 (로그 분석 결과: 20바이트 페이로드 기준)
+    // payload[0]: 채널번호
+    // payload[1~8]: 데이터 (속도/케이던스 정보는 여기에 있음)
+    // payload[9]: 확장 플래그
+    // payload[10]: Device ID Low (D0)
+    // payload[11]: Device ID High (07)
+    // payload[12]: Device Type (7B)
+    // payload[13]: Trans Type (15 -> 상위 니블 1)
+    
+    const idLow = payload[10];
+    const idHigh = payload[11];
+    const deviceType = payload[12];
+    const transType = payload[13];
 
-    // ANT+ 확장 ID 계산 (67536 생성 공식)
+    // ANT+ ID 계산 (TransType 상위 4비트 + ID High + ID Low)
+    // 예: 0x10 + 0x07 + 0xD0 = 0x107D0 = 67536
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+    
+    // 디버깅: ID가 제대로 나오는지 콘솔에서 확인 가능
+    // console.log(`[ANT+ 수신] ID: ${deviceId}, Type: 0x${deviceType.toString(16)}`);
 
-    // 2. 장치 필터링 (속도 관련 장치 대응)
-    // 로그상의 deviceType 0x07 혹은 표준 0x79, 0x7B 대응
-    if (deviceType === 0x07 || deviceType === 0x79 || deviceType === 0x7B) {
+    // 3. 장치 필터링 (속도계 0x79, 0x7B)
+    if (deviceType === 0x79 || deviceType === 0x7B) {
         let trackIndex = -1;
 
-        // 설정된 트랙 정보에서 해당 장치 ID 찾기
-        if (window.raceState && window.raceState.tracks) {
-            trackIndex = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
+        // 페어링된 트랙 찾기
+        if (window.rollerRaceState && window.rollerRaceState.speedometers) {
+            trackIndex = window.rollerRaceState.speedometers.findIndex(s => String(s.deviceId) === String(deviceId));
         }
 
-        // [트랙 2 특수 대응] 테스트 중인 ID 67536을 트랙 2(인덱스 1)로 강제 연결 보장
+        // [트랙 2 강제 매핑] 테스트용: 67536은 무조건 트랙2(ID:2)로 연결
         if (deviceId === 67536) {
-            trackIndex = 1; 
+            // rollerRaceState.speedometers는 0번부터 시작하므로 ID가 2인 속도계를 찾아야 함
+            trackIndex = window.rollerRaceState.speedometers.findIndex(s => s.id === 2);
         }
 
-        if (trackIndex === -1) return; // 등록되지 않은 장치는 무시
+        if (trackIndex === -1) return; // 매핑된 트랙 없음
 
-        // 3. 속도 계산 데이터 추출 (로그 분석 결과에 따른 인덱스 조정)
-        // Time: payload[8..9], Revs: payload[10..11]
-        const currentEventTime = payload[8] | (payload[9] << 8);
-        const currentRevCount = payload[10] | (payload[11] << 8);
+        const speedometer = window.rollerRaceState.speedometers[trackIndex];
+        
+        // 4. 속도 계산 데이터 추출 (인덱스 수정: 5,6,7,8번 사용)
+        // payload[5-6]: Event Time, payload[7-8]: Revolution Count
+        const currentEventTime = payload[5] | (payload[6] << 8);
+        const currentRevCount = payload[7] | (payload[8] << 8);
 
-        if (!window.lastAntData) window.lastAntData = {};
-        const key = `track_${trackIndex}`;
-
-        if (!window.lastAntData[key]) {
-            window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
-            updateSpeedometer(trackIndex, 0);
+        // 초기화 또는 데이터 갱신
+        if (speedometer.lastEventTime === undefined || speedometer.lastEventTime === 0) {
+            speedometer.lastEventTime = currentEventTime;
+            speedometer.lastRevolutions = currentRevCount;
+            speedometer.lastPacketTime = Date.now();
+            // 초기 0 표시
+            updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
             return;
         }
 
-        const prevData = window.lastAntData[key];
-        let revDiff = currentRevCount - prevData.rev;
-        let timeDiff = currentEventTime - prevData.time;
+        // 패킷 갱신 시간 기록
+        speedometer.lastPacketTime = Date.now();
+
+        // 데이터 변화 없음 (정지 상태)
+        if (currentEventTime === speedometer.lastEventTime) return;
+
+        // 변화량 계산 (롤오버 처리)
+        let revDiff = currentRevCount - speedometer.lastRevolutions;
+        let timeDiff = currentEventTime - speedometer.lastEventTime;
 
         if (revDiff < 0) revDiff += 65536;
         if (timeDiff < 0) timeDiff += 65536;
 
         if (timeDiff > 0 && revDiff > 0) {
-            const wheelCircumference = 2.096; // 700x23c
-            const speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
+            const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+            // 속도 계산: (회전수 * 둘레 / 1000) / (시간 / 1024) * 3.6
+            const speed = ((revDiff * wheelSpec.circumference) / 1000) / (timeDiff / 1024) * 3.6;
             
-            // UI 업데이트 실행
-            updateSpeedometer(trackIndex, Math.min(speed, 100));
+            // 거리 누적 (경기 중일 때만)
+            if (window.rollerRaceState.raceState === 'running') {
+                 const distKm = (revDiff * wheelSpec.circumference) / 1000000;
+                 speedometer.totalDistance += distKm;
+            }
+
+            // 비정상 값 필터링 (150km/h 이상은 무시)
+            if (speed < 150) {
+                // UI 업데이트
+                updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
+            }
         }
+
+        // 상태 저장
+        speedometer.lastEventTime = currentEventTime;
+        speedometer.lastRevolutions = currentRevCount;
         
-        window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
+        // 연결 상태 표시 갱신 (초록불)
+        updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
     }
 }
 
@@ -6277,27 +6313,41 @@ function updateSpeedometer(trackId, speed) {
 // ANT+ 수신 이벤트 최종 통합
 // ---------------------------------------------------------
 if (window.antDevice) {
-    window.antDevice.onMessage = function(payload) {
-        const msgId = payload[2];
+    window.antDevice.onMessage = function(packet) {
+        // packet은 객체 {messageId, data} 형태일 수도 있고 Uint8Array일 수도 있음
+        let msgId, payload;
+        
+        if (packet.messageId) {
+             msgId = packet.messageId;
+             payload = packet.data;
+        } else if (packet instanceof Uint8Array || Array.isArray(packet)) {
+             msgId = packet[2];
+             payload = packet.slice(3, packet.length - 1);
+        }
+
+        // 0x4E (Broadcast Data) 처리
         if (msgId === 0x4E) {
-            // Training 대시보드가 정의되어 있으면 우선 호출, 아니면 레이스 직접 처리
             if (typeof window.parseIndoorSensorPayload === 'function') {
+                // 트레이닝 대시보드가 있으면 그쪽으로 먼저 보냄 (통합 처리)
                 window.parseIndoorSensorPayload(payload);
             } else {
-                window.processRaceData(payload);
+                // 없으면 레이스 대시보드에서 직접 처리
+                handleBroadcastData(payload);
             }
         }
     };
 }
-// 페이지 로딩 시 모든 바늘을 0점(-90도)으로 정렬
 
+// 초기 로딩 시 바늘 0점 정렬
 window.addEventListener('load', () => {
     setTimeout(() => {
-        document.querySelectorAll('line[id^="needle-"]').forEach(n => {
+        const needles = document.querySelectorAll('line[id^="needle-"]');
+        needles.forEach(n => {
             n.setAttribute('transform', 'rotate(-90, 100, 140)');
         });
-    }, 1000);
+    }, 1500);
 });
+
 
 
 
