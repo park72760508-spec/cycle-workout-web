@@ -5264,9 +5264,34 @@ function routeANTMessage(packet) {
   }
 
   // 센서 데이터 (0x4E) 처리
-  if (msgId === 0x4E) {
-      handleBroadcastData(payload);
-  }
+  /**
+   * [수정본] 모든 ANT+ 데이터를 받아서 분류하는 마스터 핸들러
+   */
+  window.parseIndoorSensorPayload = function(payload) {
+      if (!payload || payload.length < 13) return;
+  
+      const deviceType = payload[12];
+  
+      // [중요] 속도계 데이터가 들어오면 레이스 로직(위에서 만든 함수)으로 즉시 전달
+      if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x7A) {
+          if (typeof window.processRaceData === 'function') {
+              window.processRaceData(payload);
+          }
+          // 레이스 중일 때는 여기서 중단하여 트레이닝 로직과 섞이지 않게 함
+          const isRaceMode = document.getElementById('race-dashboard')?.style.display !== 'none';
+          if (isRaceMode) return;
+      }
+  
+      // 트레이닝(파워/심박) 로직 계속 실행
+      const idLow = payload[10];
+      const idHigh = payload[11];
+      const transType = payload[13];
+      const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+  
+      updateIndoorPairingUI(deviceId, deviceType);
+      processLiveTrainingData(deviceId, deviceType, payload);
+  };
+  
 }
 
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
@@ -5925,6 +5950,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.connected = true;
   }
 }
+
 
 
 
