@@ -422,18 +422,36 @@ function generatePowerMeterLabels(powerMeterId) {
     
     if (useFTPValue) {
       // FTP 값이 있는 경우: 특정 배수 적용
+      // pos=120 → 0×FTP, pos=100 → 0.33×FTP, pos=80 → 0.67×FTP, 
+      // pos=60 → 1×FTP (주황색), pos=40 → 1.33×FTP, pos=20 → 1.167×FTP, pos=0 → 2×FTP
       let multiplier;
-      if (pos === 120) multiplier = 0.33;
-      else if (pos === 100) multiplier = 0.67;
-      else if (pos === 80) multiplier = 1;
-      else if (pos === 60) multiplier = 1.33;
-      else if (pos === 40) multiplier = 1.167;
-      else if (pos === 20) multiplier = 2;
+      let isOneFTP = false; // 1×FTP 여부
+      
+      if (pos === 120) multiplier = 0;
+      else if (pos === 100) multiplier = 0.33;
+      else if (pos === 80) multiplier = 0.67;
+      else if (pos === 60) {
+        multiplier = 1;
+        isOneFTP = true;
+      }
+      else if (pos === 40) multiplier = 1.33;
+      else if (pos === 20) multiplier = 1.167;
       else if (pos === 0) multiplier = 2;
       else multiplier = 1;
       
       // FTP 값에 배수를 곱한 값을 정수로 표시
       displayValue = Math.round(ftp * multiplier).toString();
+      
+      // 1×FTP는 주황색으로 표기, 나머지는 흰색
+      const textColor = isOneFTP ? '#ff8c00' : '#ffffff';
+      
+      labels += `<text x="${x}" y="${y}" 
+                     text-anchor="middle" 
+                     dominant-baseline="middle"
+                     fill="${textColor}" 
+                     font-size="15" 
+                     font-weight="700">${displayValue}</text>`;
+      return; // 이 부분에서는 return하여 아래 코드 실행 방지
     } else {
       // FTP 값이 없는 경우: 기존 방식 (퍼센트)
       // pos와 퍼센트의 관계: pos=120 → 0, pos=60 → 100, pos=0 → 200
@@ -461,7 +479,7 @@ function generatePowerMeterLabels(powerMeterId) {
       }
     }
     
-    // 흰색 숫자 (자동차 속도계 스타일)
+    // 흰색 숫자 (자동차 속도계 스타일) - FTP 값이 없을 때만 실행됨
     labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
                      dominant-baseline="middle"
@@ -507,48 +525,52 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   
   if (useFTPValue) {
     // FTP 값이 있는 경우: 눈금 매핑 사용
-    // 눈금: pos=120 → FTP*0.33, pos=100 → FTP*0.67, pos=80 → FTP*1, 
-    //       pos=60 → FTP*1.33, pos=40 → FTP*1.167, pos=20 → FTP*2, pos=0 → FTP*2
-    // 주의: pos=40(1.167)과 pos=60(1.33)은 역순이므로 비선형 매핑 필요
+    // 눈금: pos=120 → FTP*0, pos=100 → FTP*0.33, pos=80 → FTP*0.67, 
+    //       pos=60 → FTP*1, pos=40 → FTP*1.33, pos=20 → FTP*1.167, pos=0 → FTP*2
+    // 주의: pos=20(1.167)과 pos=40(1.33)은 역순이므로 비선형 매핑 필요
     const maxPower = ftp * 2;
     const clampedPower = Math.max(0, Math.min(maxPower, power));
     
     // 눈금 값 계산 (pos 순서대로)
     const markers = [
-      { pos: 120, value: ftp * 0.33 },   // 가장 왼쪽
-      { pos: 100, value: ftp * 0.67 },
-      { pos: 80, value: ftp * 1 },
-      { pos: 60, value: ftp * 1.33 },    // 더 큰 값
-      { pos: 40, value: ftp * 1.167 },   // 더 작은 값 (역순)
-      { pos: 20, value: ftp * 2 },
-      { pos: 0, value: ftp * 2 }          // 가장 오른쪽
+      { pos: 120, value: ftp * 0 },      // 가장 왼쪽 (0×FTP)
+      { pos: 100, value: ftp * 0.33 },
+      { pos: 80, value: ftp * 0.67 },
+      { pos: 60, value: ftp * 1 },       // 1×FTP
+      { pos: 40, value: ftp * 1.33 },    // 더 큰 값
+      { pos: 20, value: ftp * 1.167 },   // 더 작은 값 (역순)
+      { pos: 0, value: ftp * 2 }          // 가장 오른쪽 (2×FTP)
     ];
     
     // 각 구간별로 보간 계산
     if (clampedPower <= markers[0].value) {
-      // 0 ~ FTP*0.33: pos 120에서 시작
-      speedPos = 120 - (clampedPower / markers[0].value) * 20;
+      // 0 ~ 0: pos 120 고정
+      speedPos = 120;
     } else if (clampedPower <= markers[1].value) {
-      // FTP*0.33 ~ FTP*0.67: pos 120 ~ 100
+      // FTP*0 ~ FTP*0.33: pos 120 ~ 100
       const ratio = (clampedPower - markers[0].value) / (markers[1].value - markers[0].value);
       speedPos = 120 - ratio * 20;
     } else if (clampedPower <= markers[2].value) {
-      // FTP*0.67 ~ FTP*1: pos 100 ~ 80
+      // FTP*0.33 ~ FTP*0.67: pos 100 ~ 80
       const ratio = (clampedPower - markers[1].value) / (markers[2].value - markers[1].value);
       speedPos = 100 - ratio * 20;
     } else if (clampedPower <= markers[3].value) {
-      // FTP*1 ~ FTP*1.33: pos 80 ~ 60
+      // FTP*0.67 ~ FTP*1: pos 80 ~ 60
       const ratio = (clampedPower - markers[2].value) / (markers[3].value - markers[2].value);
       speedPos = 80 - ratio * 20;
     } else if (clampedPower <= markers[4].value) {
-      // FTP*1.33 ~ FTP*1.167: pos 60 ~ 40 (역순, 값이 감소)
-      // 하지만 pos는 증가해야 하므로 역방향 처리
-      const ratio = (markers[3].value - clampedPower) / (markers[3].value - markers[4].value);
-      speedPos = 60 + ratio * 20;
+      // FTP*1 ~ FTP*1.33: pos 60 ~ 40
+      const ratio = (clampedPower - markers[3].value) / (markers[4].value - markers[3].value);
+      speedPos = 60 - ratio * 20;
+    } else if (clampedPower <= markers[5].value) {
+      // FTP*1.33 ~ FTP*1.167: pos 40 ~ 20 (역순, 값이 감소하지만 pos는 증가)
+      // 역방향 처리
+      const ratio = (markers[4].value - clampedPower) / (markers[4].value - markers[5].value);
+      speedPos = 40 + ratio * 20;
     } else {
-      // FTP*1.167 ~ FTP*2: pos 40 ~ 0
-      const ratio = (clampedPower - markers[4].value) / (markers[6].value - markers[4].value);
-      speedPos = 40 - ratio * 40;
+      // FTP*1.167 ~ FTP*2: pos 20 ~ 0
+      const ratio = (clampedPower - markers[5].value) / (markers[6].value - markers[5].value);
+      speedPos = 20 - ratio * 20;
     }
   } else {
     // FTP 값이 없는 경우: 기존 방식 (퍼센트)
