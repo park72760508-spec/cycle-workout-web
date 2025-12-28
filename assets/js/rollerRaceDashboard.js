@@ -5295,19 +5295,24 @@ window.processRaceData = function(payload) {
     if (deviceType === 0x79 || deviceType === 0x7B) {
         let trackIndex = -1;
 
-        // 현재 페어링된 트랙에서 이 deviceId(67536)를 가진 트랙 찾기
-        if (window.raceState && window.raceState.tracks) {
-            trackIndex = window.raceState.tracks.findIndex(t => 
-                String(t.deviceId) === String(deviceId)
+        // 현재 페어링된 속도계에서 이 deviceId를 가진 트랙 찾기
+        if (window.rollerRaceState && window.rollerRaceState.speedometers) {
+            trackIndex = window.rollerRaceState.speedometers.findIndex(s => 
+                String(s.deviceId) === String(deviceId)
             );
         }
 
         // [트랙 2 특수 대응] 만약 페어링 설정이 꼬여있을 경우를 대비한 강제 매핑
-        if (deviceId === 67536) {
-            trackIndex = 1; // 인덱스 1 = 트랙 2 (백만킬로)
+        // deviceId 67536은 트랙 2(인덱스 1)로 매핑
+        if (deviceId === 67536 && trackIndex === -1) {
+            trackIndex = 1; // 인덱스 1 = 트랙 2
         }
 
-        if (trackIndex === -1) return; // 등록되지 않은 장치는 처리 중단
+        if (trackIndex === -1) {
+            // 등록되지 않은 장치는 처리 중단 (디버깅용 로그)
+            console.log(`[Race] 등록되지 않은 장치: ID=${deviceId}, Type=0x${deviceType.toString(16)}`);
+            return;
+        }
 
         // 3. 실데이터(antData) 영역 추출 (인덱스 4~11)
         const antData = payload.slice(4, 12);
@@ -5353,17 +5358,19 @@ function handleBroadcastData(payload) {
   const antData = payload.slice(1, 9); 
   
   // Extended Data (ID 정보) 확인
-  if (payload.length >= 13) {
+  // 로그 분석 결과: ID는 payload[13], payload[14]에 있고, transType은 payload[17]에 있음
+  if (payload.length >= 18) {
     const flag = payload[9];
     
     // 0x80 비트가 있거나, 길이가 충분하면 ID가 있다고 가정
     if ((flag & 0x80) || payload.length > 12) { 
-      const idLow = payload[10];
-      const idHigh = payload[11];
-      const deviceType = payload[12]; // 0x78(구형속도), 0x7B(신형속도) 등
-      const transType = payload[13];
+      // 정확한 ID 위치: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
+      const idLow = payload[13];
+      const idHigh = payload[14];
+      const deviceType = payload[15]; // 0x78(구형속도), 0x7B(신형속도) 등
+      const transType = payload[17];
       
-      // ID 계산
+      // ID 계산: ((transType & 0xF0) << 12) | (idHigh << 8) | idLow
       const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
       
       // [디버그] 센서 감지 로그
@@ -6042,23 +6049,42 @@ window.addEventListener('load', window.initializeGauges);
  * [신규] 속도계 바늘 회전 및 텍스트 업데이트
  */
 function updateSpeedometer(trackId, speed) {
-    // 텍스트 ID는 1-based 일 수 있으므로 두 가지 경우 모두 체크
-    const speedText = document.getElementById(`speed-text-${trackId}`) || 
-                      document.getElementById(`speed-text-${trackId + 1}`);
-    const needle = document.getElementById(`needle-${trackId}`);
+    // trackId는 배열 인덱스 (0-based)
+    // 실제 속도계 ID는 trackId + 1일 수 있으므로 두 가지 경우 모두 체크
+    const speedometerId = trackId + 1; // 배열 인덱스를 속도계 ID로 변환
+    
+    // 속도 표시 요소 찾기 (직선 트랙 내 속도 표시)
+    const speedText = document.getElementById(`straight-speed-text-${speedometerId}`);
+    
+    // 바늘 요소 찾기
+    const needle = document.getElementById(`needle-${trackId}`) || 
+                   document.getElementById(`needle-${speedometerId}`);
     
     // 1. 숫자 업데이트
     if (speedText) {
         speedText.textContent = speed.toFixed(1);
-        speedText.style.fill = "#ffffff"; // 흰색 강제
+        // fill 속성은 SVG text 요소에만 적용되므로, 일반 요소인 경우 style.color 사용
+        if (speedText.tagName === 'text') {
+            speedText.setAttribute('fill', '#ffffff');
+        } else {
+            speedText.style.color = '#ffffff';
+        }
     }
 
-    // 2. 바늘 회전 (이미 잘 작동하는 각도 유지)
+    // 2. 바늘 회전
     if (needle) {
         const maxSpeed = 60;
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
-        const angle = -90 + (ratio * 180);
+        const angle = -90 + (ratio * 180); // -90도(0km/h) ~ 90도(60km/h)
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        needle.style.visibility = 'visible';
+    }
+    
+    // 3. updateSpeedometerData 함수도 호출하여 전체 UI 업데이트
+    if (window.rollerRaceState && window.rollerRaceState.speedometers[trackId]) {
+        const speedometer = window.rollerRaceState.speedometers[trackId];
+        // 거리는 기존 값 유지
+        updateSpeedometerData(speedometerId, speed, speedometer.totalDistance || 0);
     }
 }
 
