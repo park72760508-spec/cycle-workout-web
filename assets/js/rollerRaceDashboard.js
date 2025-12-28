@@ -5282,7 +5282,7 @@ window.processRaceData = function(payload) {
     if (!payload || payload.length < 18) return;
 
     // 1. 장치 ID 정밀 추출 (로그 데이터 바이트 순서 반영)
-    // 0D E2 C0 CE E0 D0 07 7B 15 10 ... 형식에서 67536(0x0107D0) 추출
+    // A4 14 4E 00 85 01 FF FF E6 4A 84 CF E0 D0 07 7B 15 10 ... 형식에서 67536(0x0107D0) 추출
     const idLow = payload[13];
     const idHigh = payload[14];
     const transType = payload[17]; 
@@ -5290,6 +5290,9 @@ window.processRaceData = function(payload) {
 
     // 실제 계산식: (transType의 상위비트) + idHigh + idLow
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+
+    // 디버깅 로그 추가
+    console.log(`[Race] processRaceData 호출: deviceId=${deviceId}, deviceType=0x${deviceType.toString(16)}, payload.length=${payload.length}`);
 
     // 2. 장치 타입 필터링 (0x79:속도, 0x7B:통합센서)
     if (deviceType === 0x79 || deviceType === 0x7B) {
@@ -5300,12 +5303,18 @@ window.processRaceData = function(payload) {
             trackIndex = window.rollerRaceState.speedometers.findIndex(s => 
                 String(s.deviceId) === String(deviceId)
             );
+            console.log(`[Race] findIndex 결과: trackIndex=${trackIndex}, speedometers.length=${window.rollerRaceState.speedometers.length}`);
+            // speedometers 배열의 deviceId 확인
+            window.rollerRaceState.speedometers.forEach((s, idx) => {
+                console.log(`[Race] speedometers[${idx}]: id=${s.id}, deviceId=${s.deviceId}`);
+            });
         }
 
         // [트랙 2 특수 대응] 만약 페어링 설정이 꼬여있을 경우를 대비한 강제 매핑
         // deviceId 67536은 트랙 2(인덱스 1)로 매핑
         if (deviceId === 67536 && trackIndex === -1) {
             trackIndex = 1; // 인덱스 1 = 트랙 2
+            console.log(`[Race] deviceId 67536 강제 매핑: trackIndex=${trackIndex}`);
         }
 
         if (trackIndex === -1) {
@@ -5326,6 +5335,7 @@ window.processRaceData = function(payload) {
 
         if (!window.lastAntData[key]) {
             window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
+            console.log(`[Race] 초기 데이터 저장: trackIndex=${trackIndex}, time=${currentEventTime}, rev=${currentRevCount}`);
             updateSpeedometer(trackIndex, 0);
             return;
         }
@@ -5342,11 +5352,17 @@ window.processRaceData = function(payload) {
             speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
             if (speed > 100) speed = 0; // 튀는 값 방지
             
+            console.log(`[Race] 속도 계산: trackIndex=${trackIndex}, speed=${speed.toFixed(2)}, revDiff=${revDiff}, timeDiff=${timeDiff}`);
+            
             // UI 업데이트 함수 호출
             updateSpeedometer(trackIndex, speed);
+        } else {
+            console.log(`[Race] 속도 계산 불가: trackIndex=${trackIndex}, revDiff=${revDiff}, timeDiff=${timeDiff}`);
         }
         
         window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
+    } else {
+        console.log(`[Race] 장치 타입 불일치: deviceType=0x${deviceType.toString(16)} (필요: 0x79 또는 0x7B)`);
     }
 };
   
@@ -6050,25 +6066,40 @@ window.addEventListener('load', window.initializeGauges);
  */
 function updateSpeedometer(trackId, speed) {
     // trackId는 배열 인덱스 (0-based)
-    // 실제 속도계 ID는 trackId + 1일 수 있으므로 두 가지 경우 모두 체크
-    const speedometerId = trackId + 1; // 배열 인덱스를 속도계 ID로 변환
+    // speedometers 배열에서 실제 speedometer 객체를 가져와서 id 확인
+    let speedometer = null;
+    let speedometerId = null;
+    
+    if (window.rollerRaceState && window.rollerRaceState.speedometers && window.rollerRaceState.speedometers[trackId]) {
+        speedometer = window.rollerRaceState.speedometers[trackId];
+        speedometerId = speedometer.id;
+    } else {
+        // fallback: trackId + 1로 변환
+        speedometerId = trackId + 1;
+        console.warn(`[Race] updateSpeedometer: speedometers[${trackId}]를 찾을 수 없음, speedometerId=${speedometerId}로 fallback`);
+    }
+    
+    console.log(`[Race] updateSpeedometer: trackId=${trackId}, speedometerId=${speedometerId}, speed=${speed.toFixed(2)}`);
     
     // 속도 표시 요소 찾기 (직선 트랙 내 속도 표시)
     const speedText = document.getElementById(`straight-speed-text-${speedometerId}`);
     
-    // 바늘 요소 찾기
-    const needle = document.getElementById(`needle-${trackId}`) || 
-                   document.getElementById(`needle-${speedometerId}`);
+    // 바늘 요소 찾기 (두 가지 ID 모두 시도)
+    const needle = document.getElementById(`needle-${speedometerId}`) || 
+                   document.getElementById(`needle-${trackId}`);
     
     // 1. 숫자 업데이트
     if (speedText) {
         speedText.textContent = speed.toFixed(1);
         // fill 속성은 SVG text 요소에만 적용되므로, 일반 요소인 경우 style.color 사용
-        if (speedText.tagName === 'text') {
+        if (speedText.tagName === 'text' || speedText.tagName === 'TEXT') {
             speedText.setAttribute('fill', '#ffffff');
         } else {
             speedText.style.color = '#ffffff';
         }
+        console.log(`[Race] 속도 텍스트 업데이트: speedText.id=${speedText.id}, value=${speed.toFixed(1)}`);
+    } else {
+        console.warn(`[Race] 속도 텍스트 요소를 찾을 수 없음: straight-speed-text-${speedometerId}`);
     }
 
     // 2. 바늘 회전
@@ -6078,11 +6109,13 @@ function updateSpeedometer(trackId, speed) {
         const angle = -90 + (ratio * 180); // -90도(0km/h) ~ 90도(60km/h)
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
         needle.style.visibility = 'visible';
+        console.log(`[Race] 바늘 업데이트: needle.id=${needle.id}, angle=${angle.toFixed(2)}`);
+    } else {
+        console.warn(`[Race] 바늘 요소를 찾을 수 없음: needle-${speedometerId} 또는 needle-${trackId}`);
     }
     
     // 3. updateSpeedometerData 함수도 호출하여 전체 UI 업데이트
-    if (window.rollerRaceState && window.rollerRaceState.speedometers[trackId]) {
-        const speedometer = window.rollerRaceState.speedometers[trackId];
+    if (speedometer && speedometerId) {
         // 거리는 기존 값 유지
         updateSpeedometerData(speedometerId, speed, speedometer.totalDistance || 0);
     }
@@ -6093,10 +6126,20 @@ if (window.antDevice) {
     window.antDevice.onMessage = function(payload) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
-            // 마스터 핸들러(indoorTrainingDashboard.js)에 전달
-            if (typeof window.parseIndoorSensorPayload === 'function') {
+            // 현재 화면이 레이스 대시보드인지 확인 (여러 방법으로 체크)
+            const currentScreen = window.currentScreen || '';
+            const isRaceScreen = currentScreen === 'rollerRaceDashboardScreen' || 
+                                 document.getElementById('speedometerGrid') !== null ||
+                                 (window.rollerRaceState && window.rollerRaceState.speedometers);
+            
+            if (isRaceScreen) {
+                // 레이스 모드: processRaceData 직접 호출
+                window.processRaceData(payload);
+            } else if (typeof window.parseIndoorSensorPayload === 'function') {
+                // 트레이닝 모드: parseIndoorSensorPayload 호출
                 window.parseIndoorSensorPayload(payload);
             } else {
+                // fallback: processRaceData 호출
                 window.processRaceData(payload);
             }
         }
@@ -6121,9 +6164,20 @@ if (window.antDevice) {
     window.antDevice.onMessage = function(payload) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
-            if (typeof window.parseIndoorSensorPayload === 'function') {
+            // 현재 화면이 레이스 대시보드인지 확인 (여러 방법으로 체크)
+            const currentScreen = window.currentScreen || '';
+            const isRaceScreen = currentScreen === 'rollerRaceDashboardScreen' || 
+                                 document.getElementById('speedometerGrid') !== null ||
+                                 (window.rollerRaceState && window.rollerRaceState.speedometers);
+            
+            if (isRaceScreen) {
+                // 레이스 모드: processRaceData 직접 호출
+                window.processRaceData(payload);
+            } else if (typeof window.parseIndoorSensorPayload === 'function') {
+                // 트레이닝 모드: parseIndoorSensorPayload 호출
                 window.parseIndoorSensorPayload(payload);
             } else {
+                // fallback: processRaceData 호출
                 window.processRaceData(payload);
             }
         }
