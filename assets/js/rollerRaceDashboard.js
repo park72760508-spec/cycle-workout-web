@@ -6181,46 +6181,42 @@ window.addEventListener('load', window.initializeGauges);
  */
 
 // 1. 외부(Training)에서 호출할 수 있도록 함수명 표준화
+/**
+ * [최종 정밀 수정] ANT+ 속도 데이터 엔진 (24바이트 확장 패킷 대응)
+ * 로그 분석 결과: ID 67536(0x107D0) 및 속도 데이터를 정확한 바이트 주소에서 추출합니다.
+ */
 window.processRaceData = function(payload) {
-    // 로그 데이터가 24바이트인 경우와 13바이트인 경우 모두 대응하기 위한 전처리
-    let data;
-    if (payload[0] === 0xA4) {
-        data = payload.slice(4); // 헤더(4바이트) 제거
-    } else {
-        data = payload;
-    }
+    // 24바이트 확장 패킷임을 확인 (A4 14... 형식이므로 최소 18바이트 이상 필요)
+    if (!payload || payload.length < 18) return;
 
-    if (!data || data.length < 13) return;
+    // 1. 장치 ID 정밀 추출 (사용자 로그 바이트 주소: D0:13, 07:14, 10:17)
+    const idLow = payload[13];
+    const idHigh = payload[14];
+    const transType = payload[17]; 
+    const deviceType = payload[15]; // 0x7B (속도/케이던스 통합)
 
-    // 2. 장치 ID 정밀 추출 (로그 데이터 분석 기반)
-    // 인덱스: 8:E0, 9:D0, 10:07, 11:7B, 13:10
-    const idLow = data[13];
-    const idHigh = data[14];
-    const deviceType = data[15]; // 0x7B (Speed/Cadence)
-    const transType = data[17]; 
-
-    // ANT+ 3바이트 확장 ID 계산 (0x107D0 = 67536)
+    // ANT+ 3바이트 확장 ID 계산 공식 (정확히 67536 생성)
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    // 3. 레이스 트랙 매핑 로직
-    if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x07) {
+    // 2. 장치 필터링 및 트랙 매핑
+    if (deviceType === 0x79 || deviceType === 0x7B) {
         let trackIndex = -1;
 
+        // 현재 설정된 트랙 정보에서 해당 장치 ID 찾기
         if (window.raceState && window.raceState.tracks) {
             trackIndex = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
         }
 
-        // [트랙 2 강제 매핑] 설정 오류 대비 테스트 코드
+        // [트랙 2 강제 매핑] 로그 확인 결과 ID 67536은 트랙 2(Index 1) 전용임
         if (deviceId === 67536) {
-            trackIndex = 1; // 1번 인덱스 = 트랙 2 (백만킬로)
+            trackIndex = 1; 
         }
 
-        if (trackIndex === -1) return; // 페어링되지 않은 장치는 무시
+        if (trackIndex === -1) return; // 미등록 장치 무시
 
-        // 4. 속도 계산 데이터 추출 (로그 분석 기반 인덱스 교정)
-        // Time: data[4..5], Revs: data[6..7]
-        const currentEventTime = data[4] | (data[5] << 8);
-        const currentRevCount = data[6] | (data[7] << 8);
+        // 3. 속도 계산 데이터 정밀 추출 (로그 주소: Time:8-9, Rev:10-11)
+        const currentEventTime = payload[8] | (payload[9] << 8);  // CE 56 -> 22222
+        const currentRevCount = payload[10] | (payload[11] << 8); // 82 D2 -> 53890
 
         if (!window.lastAntData) window.lastAntData = {};
         const key = `track_${trackIndex}`;
@@ -6235,14 +6231,15 @@ window.processRaceData = function(payload) {
         let revDiff = currentRevCount - prevData.rev;
         let timeDiff = currentEventTime - prevData.time;
 
+        // 16비트 롤오버 처리
         if (revDiff < 0) revDiff += 65536;
         if (timeDiff < 0) timeDiff += 65536;
 
         if (timeDiff > 0 && revDiff > 0) {
-            const wheelCircumference = 2.096; // 700x23c 표준
+            const wheelCircumference = 2.096; // 700x23c
             const speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
             
-            // UI 업데이트 실행 (숫자와 바늘)
+            // 실제 UI 업데이트 실행
             updateSpeedometer(trackIndex, Math.min(speed, 100));
         }
         
@@ -6251,37 +6248,39 @@ window.processRaceData = function(payload) {
 };
 
 /**
- * 속도계 및 바늘 업데이트 (좌표계 보정 버전)
+ * [가시성 개선] 속도계 UI 업데이트 (숫자 + 바늘)
  */
 function updateSpeedometer(trackId, speed) {
+    // 1. 숫자 텍스트 (ID: speed-text-0, speed-text-1 ...)
     const speedText = document.getElementById(`speed-text-${trackId}`);
-    const needle = document.getElementById(`needle-${trackId}`);
-    
-    // 1. 숫자 업데이트
     if (speedText) {
         speedText.textContent = speed.toFixed(1);
-        speedText.style.fill = "#ffffff"; // 가독성 확보
+        speedText.style.fill = "#ffffff"; // 흰색 강제
+        speedText.style.visibility = "visible";
     }
 
-    // 2. 바늘 업데이트
+    // 2. 바늘 회전 (이미 잘 반영된 좌표계 사용)
+    const needle = document.getElementById(`needle-${trackId}`);
     if (needle) {
         const maxSpeed = 60;
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
-        const angle = -90 + (ratio * 180); // -90도(0) ~ 90도(Max)
-
-        // [치명적 오류 수정] rotate 속성에 회전 중심점 (100, 140)을 명시적으로 부여
+        const angle = -90 + (ratio * 180); // -90도 ~ 90도
+        
+        // 중심점(100, 140)을 속성으로 강제 부여하여 CSS 간섭 차단
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        needle.style.stroke = "#ff4757";
         needle.style.visibility = "visible";
-        needle.style.stroke = "#ff4757"; // 바늘 색상 고정
     }
 }
 
-// ANT+ 메시지 리스너 (중복 방지 및 통합)
+// ---------------------------------------------------------
+// ANT+ 수신 이벤트 최종 통합
+// ---------------------------------------------------------
 if (window.antDevice) {
     window.antDevice.onMessage = function(payload) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
-            // Training 대시보드가 활성화되어 있는지 확인
+            // Training 대시보드가 정의되어 있으면 우선 호출, 아니면 레이스 직접 처리
             if (typeof window.parseIndoorSensorPayload === 'function') {
                 window.parseIndoorSensorPayload(payload);
             } else {
@@ -6299,6 +6298,7 @@ window.addEventListener('load', () => {
         });
     }, 1000);
 });
+
 
 
 
