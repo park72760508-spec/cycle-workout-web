@@ -66,36 +66,7 @@ class PowerMeterData {
 
 // [삽입 위치: initIndoorTrainingDashboard 함수 바로 위]
 
-// ANT+ 데이터 버퍼 및 메시지 라우팅 엔진
-window.processBuffer = function(newData) {
-  const combined = new Uint8Array(window.indoorTrainingState.rxBuffer.length + newData.length);
-  combined.set(window.indoorTrainingState.rxBuffer);
-  combined.set(newData, window.indoorTrainingState.rxBuffer.length);
-  window.indoorTrainingState.rxBuffer = combined;
-
-  while (window.indoorTrainingState.rxBuffer.length >= 4) {
-    const syncIndex = window.indoorTrainingState.rxBuffer.indexOf(0xA4);
-    if (syncIndex === -1) {
-      if (window.indoorTrainingState.rxBuffer.length > 256) window.indoorTrainingState.rxBuffer = new Uint8Array(0);
-      break;
-    }
-    if (syncIndex > 0) {
-      window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(syncIndex);
-      continue;
-    }
-
-    const length = window.indoorTrainingState.rxBuffer[1];
-    const totalLen = length + 4;
-    if (window.indoorTrainingState.rxBuffer.length < totalLen) break;
-
-    const packet = window.indoorTrainingState.rxBuffer.slice(0, totalLen);
-    window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(totalLen);
-
-    console.log(`[Training] processBuffer: 패킷 추출 완료, packet.length=${packet.length}, msgId=0x${packet[2]?.toString(16)}`);
-    handleIndoorAntMessage(packet);
-  }
-};
-
+// ANT+ 메시지 처리 함수 (processBuffer보다 먼저 정의)
 function handleIndoorAntMessage(packet) {
   if (!packet || packet.length < 4) {
     console.warn('[Training] handleIndoorAntMessage: 패킷이 너무 짧음', packet?.length);
@@ -124,9 +95,49 @@ function handleIndoorAntMessage(packet) {
   }
 }
 
+// ANT+ 데이터 버퍼 및 메시지 라우팅 엔진
+window.processBuffer = function(newData) {
+  const combined = new Uint8Array(window.indoorTrainingState.rxBuffer.length + newData.length);
+  combined.set(window.indoorTrainingState.rxBuffer);
+  combined.set(newData, window.indoorTrainingState.rxBuffer.length);
+  window.indoorTrainingState.rxBuffer = combined;
+
+  while (window.indoorTrainingState.rxBuffer.length >= 4) {
+    const syncIndex = window.indoorTrainingState.rxBuffer.indexOf(0xA4);
+    if (syncIndex === -1) {
+      if (window.indoorTrainingState.rxBuffer.length > 256) window.indoorTrainingState.rxBuffer = new Uint8Array(0);
+      break;
+    }
+    if (syncIndex > 0) {
+      window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(syncIndex);
+      continue;
+    }
+
+    const length = window.indoorTrainingState.rxBuffer[1];
+    const totalLen = length + 4;
+    if (window.indoorTrainingState.rxBuffer.length < totalLen) break;
+
+    const packet = window.indoorTrainingState.rxBuffer.slice(0, totalLen);
+    window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(totalLen);
+
+    console.log(`[Training] processBuffer: 패킷 추출 완료, packet.length=${packet.length}, msgId=0x${packet[2]?.toString(16)}`);
+    console.log(`[Training] processBuffer: handleIndoorAntMessage 타입 확인=${typeof handleIndoorAntMessage}`);
+    try {
+      if (typeof handleIndoorAntMessage === 'function') {
+        handleIndoorAntMessage(packet);
+      } else {
+        console.error('[Training] processBuffer: handleIndoorAntMessage 함수를 찾을 수 없습니다!');
+      }
+    } catch (e) {
+      console.error('[Training] processBuffer: handleIndoorAntMessage 호출 에러:', e);
+    }
+  }
+};
+
 /**
  * 1. 통합 데이터 라우팅 엔진 (충돌 방지 및 강제 연결)
  * 이 함수가 rollerRaceDashboard.js의 로그 출력부와 indoor UI를 연결합니다.
+ * (window.handleIndoorAntMessage는 별도로 유지)
  */
 window.handleIndoorAntMessage = function(packet) {
   const msgId = packet[2];
