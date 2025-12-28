@@ -2275,6 +2275,45 @@ button[aria-disabled="true"] {
   touch-action: manipulation;
 }
 
+/* 워크아웃 선택 테이블 스타일 */
+.workout-selection-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.workout-selection-table thead {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.workout-selection-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #1f2937;
+  border-bottom: 2px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.workout-selection-table tbody tr {
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s ease;
+}
+
+.workout-selection-table tbody tr:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.workout-selection-table td {
+  padding: 12px;
+  color: #374151;
+}
+
+.workout-selection-table .btn-sm {
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
 /* ========== Indoor 모드 선택 모달 스타일 ========== */
 #indoorModeSelectionModal .btn-device {
   position: relative;
@@ -9335,7 +9374,8 @@ button[aria-disabled="true"] {
 }
 
 .speedometer-info.connected {
-    background: #90EE90; /* 연두색 배경 (연결됨 상태) */
+  background: rgba(255, 255, 255, 0.3) !important; /* 흰색 배경 (투명도 30%) */
+  /* 텍스트 색상은 변경하지 않음 (기존 색상 유지) */
 }
 
 .speedometer-info.disconnected {
