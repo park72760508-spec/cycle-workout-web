@@ -3957,33 +3957,39 @@ function getChannelEventName(code) {
 let rxBuf = new Uint8Array(0);
 
 function processBuffer(newData) {
+  console.log(`[Race] processBuffer 호출: newData.length=${newData?.length}, rxBuf.length=${rxBuf?.length}`);
+  
   // 1. 기존 버퍼에 새 데이터 추가
   const tmp = new Uint8Array(rxBuf.length + newData.length);
   tmp.set(rxBuf);
   tmp.set(newData, rxBuf.length);
   rxBuf = tmp;
 
+  let processedCount = 0;
   // 2. 패킷 파싱 루프
   while (rxBuf.length >= 4) {
     // Sync Byte (0xA4) 찾기
     const syncIndex = rxBuf.indexOf(0xA4);
     if (syncIndex === -1) {
-      rxBuf = new Uint8Array(0); // Sync 없으면 버림
+      if (rxBuf.length > 256) {
+        console.warn('[Race] processBuffer: Sync 바이트를 찾을 수 없어 버퍼 초기화');
+        rxBuf = new Uint8Array(0); // Sync 없으면 버림
+      }
       break;
     }
     
     // Sync 이전의 쓰레기 데이터 제거
     if (syncIndex > 0) {
+      console.log(`[Race] processBuffer: Sync 바이트 앞부분 ${syncIndex}바이트 제거`);
       rxBuf = rxBuf.slice(syncIndex);
       continue;
     }
 
     const len = rxBuf[1];
-    const totalLen = len + 4; // Sync(1)+Len(1)+MsgID(1)+Payload(Len)+Chk(1) -> Standard: Len includes MsgID? No.
-    // ANT Protocol: Total = 1(Sync) + 1(Len) + Len(Data) + 1(Checksum) = Len + 3 ??
-    // 통상적인 드라이버 구현: Total = Length + 4 바이트 (Length 바이트 값이 N일 때)
+    const totalLen = len + 4; // Sync(1)+Len(1)+MsgID(1)+Payload(Len)+Chk(1)
     
     if (rxBuf.length < totalLen) {
+        // console.log(`[Race] processBuffer: 패킷 대기 중: 현재=${rxBuf.length}, 필요=${totalLen}`);
         break; // 데이터가 다 안 옴 -> 대기
     }
 
@@ -3991,8 +3997,20 @@ function processBuffer(newData) {
     const pkt = rxBuf.slice(0, totalLen);
     rxBuf = rxBuf.slice(totalLen);
     
+    processedCount++;
+    const msgId = pkt[2];
+    console.log(`[Race] processBuffer: 패킷 추출 (${processedCount}번째), msgId=0x${msgId?.toString(16)}, packet.length=${pkt.length}`);
+    
     // [중요] 추출한 패킷 처리 핸들러 호출
-    handleANTMessage(pkt);
+    if (typeof handleANTMessage === 'function') {
+      handleANTMessage(pkt);
+    } else {
+      console.error('[Race] processBuffer: handleANTMessage 함수가 정의되지 않았습니다!');
+    }
+  }
+  
+  if (processedCount > 0) {
+    console.log(`[Race] processBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${rxBuf.length}바이트`);
   }
 }
 
@@ -4016,26 +4034,27 @@ function processBuffer(newData) {
  * Tacx Wrapper 해제 및 표준 메시지 분배를 하나로 관리
  */
 function handleANTMessage(packet) {
-  // routeANTMessage로 직접 전달 (Race 로직 처리)
-  if (typeof routeANTMessage === 'function') {
-    console.log('[Race] handleANTMessage -> routeANTMessage 호출');
-    routeANTMessage(packet);
-    return;
-  }
+  console.log('[Race] handleANTMessage 호출됨, packet.length=', packet?.length);
   
+  // 패킷 형태 확인 및 messageId 추출
   let messageId, data;
-  
-  // 패킷 형태(Raw 배열 또는 객체)에 따라 데이터 추출
   if (packet instanceof Uint8Array || Array.isArray(packet)) {
+    if (packet.length < 3) {
+      console.warn('[Race] handleANTMessage: 패킷이 너무 짧음', packet.length);
+      return;
+    }
     messageId = packet[2];
     data = packet.slice(3, packet.length - 1);
   } else {
     messageId = packet.messageId;
     data = packet.data;
   }
+  
+  console.log(`[Race] handleANTMessage: messageId=0x${messageId?.toString(16)}, data.length=${data?.length}`);
 
   // 1. Tacx T2028 전용 포장지(0xAE) 처리
-  if (messageId === 0xAE && data.length > 1 && data[1] === 0xA4) {
+  if (messageId === 0xAE && data && data.length > 1 && data[1] === 0xA4) {
+      console.log('[Race] Tacx Wrapper 감지, 내부 데이터 재처리');
       // 포장지를 벗기고 내부의 진짜 ANT+ 데이터를 다시 처리 루프에 넣음
       if (typeof processBuffer === 'function') {
           processBuffer(data.slice(1)); 
@@ -4045,13 +4064,24 @@ function handleANTMessage(packet) {
       return;
   }
 
-  // 2. 표준 ANT+ 메시지 분배
-  // routeANTMessage가 이미 호출되었으므로, 여기서는 routeANTMessage가 처리하지 않는 메시지만 처리
+  // 2. Broadcast Data (0x4E) 처리 - routeANTMessage로 전달
+  if (messageId === 0x4E) {
+    console.log('[Race] Broadcast Data (0x4E) 감지, routeANTMessage 호출');
+    if (typeof routeANTMessage === 'function') {
+      routeANTMessage(packet);
+    } else {
+      console.error('[Race] routeANTMessage 함수가 정의되지 않았습니다!');
+      // fallback: handleBroadcastData 직접 호출
+      if (typeof handleBroadcastData === 'function') {
+        console.log('[Race] fallback: handleBroadcastData 직접 호출');
+        handleBroadcastData(data);
+      }
+    }
+    return;
+  }
+
+  // 3. 기타 메시지 처리
   switch (messageId) {
-    case 0x4E: // 센서 데이터 (Broadcast Data) - routeANTMessage에서 이미 처리됨
-      // routeANTMessage가 이미 handleBroadcastData를 호출하므로 여기서는 처리하지 않음
-      break;
-      
     case 0x51: // Channel ID Response (센서 발견 정보)
       if (typeof handleChannelIDResponse === 'function') {
           handleChannelIDResponse(data);
@@ -4065,6 +4095,10 @@ function handleANTMessage(packet) {
             console.warn(`[ANT+] 명령(${data[1].toString(16)}) 실패 코드: ${data[2].toString(16)}`);
         }
       }
+      break;
+      
+    default:
+      console.log(`[Race] handleANTMessage: 처리되지 않은 메시지 ID: 0x${messageId?.toString(16)}`);
       break;
   }
 }
