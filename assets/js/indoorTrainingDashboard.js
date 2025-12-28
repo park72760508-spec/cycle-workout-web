@@ -525,80 +525,40 @@ function updatePowerMeterTicks(powerMeterId) {
  * FTP 값이 있으면: 실제 파워값을 FTP 기준 눈금에 맞게 변환
  * FTP 값이 없으면: 실제 파워값을 퍼센트로 변환 (0% ~ 200%)
  */
+/**
+ * 파워계 바늘 업데이트 (Indoor Race 속도계 로직 적용)
+ * 최대값: 사용자 FTP의 2배
+ * 각도: 180도(0W) ~ 360도(Max)
+ */
 function updatePowerMeterNeedle(powerMeterId, power) {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
   
-  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 250;
-  const useFTPValue = !!(powerMeter.userFTP || window.indoorTrainingState.userFTP);
+  // 1. 기준 FTP 값 가져오기 (없으면 기본값 200W)
+  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 200;
+  const maxPower = ftp * 2; // 게이지의 끝점
   
-  let speedPos;
+  // 2. 파워 비율 계산 (0 ~ 1.0)
+  let ratio = power / maxPower;
+  if (ratio > 1) ratio = 1; // 최대값 초과 시 고정
+  if (ratio < 0) ratio = 0;
   
-  if (useFTPValue) {
-    // FTP 값이 있는 경우: 눈금 매핑 사용
-    // 눈금: pos=120 → FTP*0, pos=100 → FTP*0.33, pos=80 → FTP*0.67, 
-    //       pos=60 → FTP*1, pos=40 → FTP*1.33, pos=20 → FTP*1.67, pos=0 → FTP*2
-    const maxPower = ftp * 2;
-    const clampedPower = Math.max(0, Math.min(maxPower, power));
-    
-    // 눈금 값 계산 (pos 순서대로)
-    const markers = [
-      { pos: 120, value: ftp * 0 },      // 가장 왼쪽 (0×FTP)
-      { pos: 100, value: ftp * 0.33 },
-      { pos: 80, value: ftp * 0.67 },
-      { pos: 60, value: ftp * 1 },       // 1×FTP
-      { pos: 40, value: ftp * 1.33 },
-      { pos: 20, value: ftp * 1.67 },
-      { pos: 0, value: ftp * 2 }          // 가장 오른쪽 (2×FTP)
-    ];
-    
-    // 각 구간별로 보간 계산
-    if (clampedPower <= markers[0].value) {
-      // 0 ~ 0: pos 120 고정
-      speedPos = 120;
-    } else if (clampedPower <= markers[1].value) {
-      // FTP*0 ~ FTP*0.33: pos 120 ~ 100
-      const ratio = (clampedPower - markers[0].value) / (markers[1].value - markers[0].value);
-      speedPos = 120 - ratio * 20;
-    } else if (clampedPower <= markers[2].value) {
-      // FTP*0.33 ~ FTP*0.67: pos 100 ~ 80
-      const ratio = (clampedPower - markers[1].value) / (markers[2].value - markers[1].value);
-      speedPos = 100 - ratio * 20;
-    } else if (clampedPower <= markers[3].value) {
-      // FTP*0.67 ~ FTP*1: pos 80 ~ 60
-      const ratio = (clampedPower - markers[2].value) / (markers[3].value - markers[2].value);
-      speedPos = 80 - ratio * 20;
-    } else if (clampedPower <= markers[4].value) {
-      // FTP*1 ~ FTP*1.33: pos 60 ~ 40
-      const ratio = (clampedPower - markers[3].value) / (markers[4].value - markers[3].value);
-      speedPos = 60 - ratio * 20;
-    } else if (clampedPower <= markers[5].value) {
-      // FTP*1.33 ~ FTP*1.67: pos 40 ~ 20
-      const ratio = (clampedPower - markers[4].value) / (markers[5].value - markers[4].value);
-      speedPos = 40 - ratio * 20;
-    } else {
-      // FTP*1.67 ~ FTP*2: pos 20 ~ 0
-      const ratio = (clampedPower - markers[5].value) / (markers[6].value - markers[5].value);
-      speedPos = 20 - ratio * 20;
-    }
-  } else {
-    // FTP 값이 없는 경우: 기존 방식 (퍼센트)
-    const percent = (power / ftp) * 100;
-    const clampedPercent = Math.max(0, Math.min(200, percent));
-    
-    // 퍼센트를 pos로 변환: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
-    speedPos = 120 - (clampedPercent / 200) * 120;
-  }
+  /**
+   * 3. 각도 매핑 (Indoor Race 스타일)
+   * 시작(0W): 180도 (하단 왼쪽)
+   * 종료(Max): 360도 (하단 오른쪽)
+   * 범위: 180도 (반원)
+   */
+  const startAngle = 180;
+  const range = 180;
+  const targetAngle = startAngle + (ratio * range);
   
-  speedPos = Math.max(0, Math.min(120, speedPos));
-  
-  // 각도 계산
-  let angle = 180 - (speedPos / 120) * 180;
-  angle = angle + 180;
-  
+  // 4. SVG 바늘 엘리먼트에 적용
   const needleEl = document.getElementById(`needle-${powerMeterId}`);
   if (needleEl) {
-    needleEl.setAttribute('transform', `rotate(${angle})`);
+    // rotate(각도, 중심X, 중심Y) - SVG 내에서 직접 회전
+    // 현재 코드 구조상 transform-origin이 이미 잡혀있으므로 rotate(각도)만 전달
+    needleEl.setAttribute('transform', `rotate(${targetAngle})`);
   }
 }
 
@@ -2228,6 +2188,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
