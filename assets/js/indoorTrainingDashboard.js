@@ -2657,21 +2657,39 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
     ctx.stroke();
     
-    // Y축 FTP % 값 표기 (0%, 50%, 100%, 150%, 200%)
-    const yAxisLabels = [0, 50, 100, 150, 200];
+    // Y축 FTP % 값 표기 (0%, 50%, FTP(100%), 150%, 200%)
+    const yAxisLabels = [
+        { value: 0, label: '0%' },
+        { value: 50, label: '50%' },
+        { value: 100, label: 'FTP' },
+        { value: 150, label: '150%' },
+        { value: 200, label: '200%' }
+    ];
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = '9px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     
-    yAxisLabels.forEach(ftpPercent => {
+    yAxisLabels.forEach(({ value: ftpPercent, label }) => {
         // FTP %에 따른 Y 위치 계산 (200%를 최대값으로)
         const maxFtpPercent = 200;
         const yRatio = ftpPercent / maxFtpPercent;
         const y = padding.top + chartHeight - (yRatio * chartHeight);
         
         // 라벨 위치 (축 왼쪽)
-        ctx.fillText(`${ftpPercent}%`, padding.left - 8, y);
+        ctx.fillText(label, padding.left - 8, y);
+        
+        // FTP(100%) 라인에 주황색 점선 가이드 라인 표기
+        if (ftpPercent === 100) {
+            ctx.strokeStyle = 'rgba(255, 165, 0, 0.6)'; // 주황색
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]); // 점선
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(padding.left + chartWidth, y);
+            ctx.stroke();
+            ctx.setLineDash([]); // 점선 해제
+        }
         
         // 눈금선 (선택적)
         if (ftpPercent > 0 && ftpPercent < maxFtpPercent) {
@@ -2716,23 +2734,50 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         // 현재 세그먼트인지 확인
         const isCurrent = index === currentSegmentIndex;
         
+        // 세그먼트 타입에 따른 색상 결정
+        const segmentType = seg.segment_type || 'interval';
+        let segmentColor;
+        let segmentStrokeColor;
+        
+        // 휴식: 흰색
+        if (segmentType === 'rest') {
+            segmentColor = 'rgba(255, 255, 255, 0.6)';
+            segmentStrokeColor = 'rgba(255, 255, 255, 0.8)';
+        }
+        // 100% 이상: 빨강
+        else if (ftpPercent >= 100) {
+            segmentColor = isCurrent ? 'rgba(255, 0, 0, 0.8)' : 'rgba(255, 0, 0, 0.5)';
+            segmentStrokeColor = 'rgba(255, 0, 0, 1)';
+        }
+        // 80% 이상 ~ 100% 미만: 주황
+        else if (ftpPercent >= 80) {
+            segmentColor = isCurrent ? 'rgba(255, 165, 0, 0.8)' : 'rgba(255, 165, 0, 0.5)';
+            segmentStrokeColor = 'rgba(255, 165, 0, 1)';
+        }
+        // 워밍업, 쿨다운 등: 민트색 (현재 적용된 색)
+        else {
+            segmentColor = isCurrent ? 'rgba(0, 212, 170, 0.8)' : 'rgba(0, 212, 170, 0.4)';
+            segmentStrokeColor = isCurrent ? 'rgba(0, 212, 170, 1)' : 'rgba(255, 255, 255, 0.3)';
+        }
+        
         // 세그먼트 사각형 그리기
-        ctx.fillStyle = isCurrent ? 'rgba(0, 212, 170, 0.8)' : 'rgba(0, 212, 170, 0.4)';
+        ctx.fillStyle = segmentColor;
         ctx.fillRect(x, y, segWidth, powerHeight);
         
         // 세그먼트 경계선
-        ctx.strokeStyle = isCurrent ? 'rgba(0, 212, 170, 1)' : 'rgba(255, 255, 255, 0.3)';
+        ctx.strokeStyle = segmentStrokeColor;
         ctx.lineWidth = isCurrent ? 2 : 1;
         ctx.strokeRect(x, y, segWidth, powerHeight);
         
         currentTime += segDuration;
     });
     
-    // 축 라벨 (작은 폰트)
+    // X축 라벨: 워크아웃 운동시간 (단위:분)
+    const totalMinutes = Math.round(totalSeconds / 60);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.font = 'bold 9px sans-serif';
+    ctx.font = '9px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('시간', padding.left + chartWidth / 2, graphHeight - 5);
+    ctx.fillText(`운동시간: ${totalMinutes}분`, padding.left + chartWidth / 2, graphHeight - 5);
 }
 
 
