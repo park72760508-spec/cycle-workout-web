@@ -319,7 +319,8 @@ function createPowerMeterElement(powerMeter) {
                 stroke="#ff4757"
                 stroke-width="4"
                 stroke-linecap="round"
-                transform="rotate(-90, 100, 140)"/>
+                transform="rotate(270)"
+            />
         </g>
         
         <!-- W 라벨 -->
@@ -2360,6 +2361,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
