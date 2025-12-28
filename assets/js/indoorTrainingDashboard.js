@@ -1515,6 +1515,10 @@ function savePowerMeterPairing() {
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
     
+    // 바늘 위치 유지 (현재 파워값으로 업데이트)
+    const currentPower = powerMeter.currentPower || 0;
+    updatePowerMeterNeedle(powerMeterId, currentPower);
+    
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('사용자가 선택되었습니다.');
@@ -1539,6 +1543,10 @@ function savePowerMeterPairing() {
     
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
+    
+    // 바늘 위치 유지 (현재 파워값으로 업데이트)
+    const currentPower = powerMeter.currentPower || 0;
+    updatePowerMeterNeedle(powerMeterId, currentPower);
     
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
@@ -1565,6 +1573,10 @@ function savePowerMeterPairing() {
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
     
+    // 바늘 위치 유지 (현재 파워값으로 업데이트)
+    const currentPower = powerMeter.currentPower || 0;
+    updatePowerMeterNeedle(powerMeterId, currentPower);
+    
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('파워메터가 페어링되었습니다.');
@@ -1589,6 +1601,10 @@ function savePowerMeterPairing() {
     
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
+    
+    // 바늘 위치 유지 (현재 파워값으로 업데이트)
+    const currentPower = powerMeter.currentPower || 0;
+    updatePowerMeterNeedle(powerMeterId, currentPower);
     
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
