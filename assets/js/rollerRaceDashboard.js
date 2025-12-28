@@ -5258,41 +5258,48 @@ function processMasterBuffer(newData) {
 
 // 2. 메시지 라우팅 (Wrapper 해제 및 데이터 분배)
 function routeANTMessage(packet) {
+  if (!packet || packet.length < 4) {
+    console.warn('[Race] routeANTMessage: 패킷이 너무 짧음', packet?.length);
+    return;
+  }
+  
   const msgId = packet[2];
   const payload = packet.slice(3, packet.length - 1);
+  
+  console.log(`[Race] routeANTMessage: msgId=0x${msgId.toString(16)}, payload.length=${payload.length}, packet.length=${packet.length}`);
 
   // Tacx Wrapper (0xAE) 해제
   if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
-      // console.log('[ANT+] Wrapper 해제');
+      console.log('[Race] Wrapper 해제');
       processMasterBuffer(payload.slice(1)); // 내부 데이터 재처리
       return;
   }
 
   // 센서 데이터 (0x4E) 처리
-  /**
-   * [수정본] 모든 ANT+ 데이터를 받아서 분류하는 마스터 핸들러
-   */
-/**
- * ANT+ 데이터를 트랙별로 배분하고 속도를 계산하는 엔진
- */
-/**
- * [통합 수정본] 레이스용 속도 데이터 처리 엔진
- */
-// processRaceData는 제거 - 이전 방식(handleBroadcastData -> processSpeedCadenceData) 사용
-  
+  if (msgId === 0x4E) {
+      console.log(`[Race] Broadcast Data (0x4E) 처리: payload.length=${payload.length}`);
+      handleBroadcastData(payload);
+  } else {
+      console.log(`[Race] 알 수 없는 메시지 ID: 0x${msgId.toString(16)}`);
+  }
 }
 
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
 // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
 function handleBroadcastData(payload) {
-  if (payload.length < 9) return;
+  if (!payload || payload.length < 9) {
+    console.warn('[Race] handleBroadcastData: payload가 너무 짧음', payload?.length);
+    return;
+  }
   
   // 현재 화면 확인: Indoor Training 화면에서는 parseIndoorSensorPayload가 처리
   const currentScreen = window.currentScreen || '';
   const isTrainingScreen = currentScreen === 'indoorTrainingDashboardScreen' || 
-                           document.getElementById('powerMeterGrid') !== null;
+                           (document.getElementById('powerMeterGrid') && document.getElementById('powerMeterGrid').offsetParent !== null);
   
-  // ANT+ 데이터 추출 (인덱스 1~8)
+  // ANT+ 데이터 추출 (인덱스 1~8, 실제로는 payload[0]부터 시작하므로 인덱스 조정 필요)
+  // payload는 이미 routeANTMessage에서 packet.slice(3, packet.length - 1)로 추출됨
+  // 따라서 payload[0] = channel, payload[1~8] = ANT+ data
   const antData = payload.slice(1, 9); 
   
   // Extended Data (ID 정보) 확인 - 최소 길이 18바이트 필요
@@ -5311,16 +5318,20 @@ function handleBroadcastData(payload) {
       // ID 계산: ((transType & 0xF0) << 12) | (idHigh << 8) | idLow
       const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
       
+      console.log(`[Race] handleBroadcastData: deviceId=${extendedId}, deviceType=0x${deviceType.toString(16)}, isTrainingScreen=${isTrainingScreen}, payload.length=${payload.length}`);
+      
       // 장치 타입별 라우팅
       // Race 관련 (속도계): 0x78, 0x79, 0x7A, 0x7B
       if (deviceType === 0x78 || deviceType === 0x79 || deviceType === 0x7A || deviceType === 0x7B) {
         // Race 화면이 활성화되어 있고, Training 화면이 아닐 때만 처리
         if (!isTrainingScreen) {
           // 목록 추가 및 데이터 업데이트
+          console.log(`[Race] 속도계 데이터 처리: deviceId=${extendedId}, antData.length=${antData.length}`);
           addFoundDeviceToUI(extendedId, deviceType);
           updateSpeedometerDataInternal(extendedId, antData);
         } else {
           // Training 화면에서는 parseIndoorSensorPayload가 처리하도록 전달
+          console.log(`[Race] Training 화면 활성화 - parseIndoorSensorPayload로 전달`);
           if (typeof window.parseIndoorSensorPayload === 'function') {
             window.parseIndoorSensorPayload(payload);
           }
@@ -5331,7 +5342,11 @@ function handleBroadcastData(payload) {
           window.parseIndoorSensorPayload(payload);
         }
       }
+    } else {
+      console.warn(`[Race] handleBroadcastData: Extended flag 조건 불만족. flag=0x${flag.toString(16)}, payload.length=${payload.length}`);
     }
+  } else {
+    console.warn(`[Race] handleBroadcastData: payload 길이 부족. payload.length=${payload.length}, 필요: 18`);
   }
 }
 
@@ -5420,15 +5435,26 @@ function displayANTDevices(devices) {
 
 // 6. 내부 데이터 업데이트 헬퍼
 function updateSpeedometerDataInternal(deviceId, antData) {
-  const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
+  console.log(`[Race] updateSpeedometerDataInternal: deviceId=${deviceId}, antData.length=${antData?.length}`);
+  
+  const speedometer = window.rollerRaceState.speedometers.find(s => String(s.deviceId) === String(deviceId));
   if (speedometer) {
+    console.log(`[Race] 속도계 찾음: 트랙${speedometer.id}, deviceId=${speedometer.deviceId}`);
     // 센서 데이터를 받으면 연결됨 상태로 업데이트 (초록색)
     speedometer.lastPacketTime = Date.now();
     speedometer.connected = true;
     if(typeof updateSpeedometerConnectionStatus === 'function') {
       updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
     }
-    if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
+    if(typeof processSpeedCadenceData === 'function') {
+      console.log(`[Race] processSpeedCadenceData 호출: deviceId=${speedometer.deviceId}`);
+      processSpeedCadenceData(speedometer.deviceId, antData);
+    } else {
+      console.warn('[Race] processSpeedCadenceData 함수가 없습니다!');
+    }
+  } else {
+    console.warn(`[Race] deviceId ${deviceId}에 해당하는 속도계를 찾을 수 없습니다.`);
+    console.log('[Race] 현재 등록된 속도계:', window.rollerRaceState.speedometers.map(s => ({id: s.id, deviceId: s.deviceId})));
   }
 }
 
