@@ -3741,7 +3741,24 @@ async function startANTMessageListener() {
       // 예: 0xA4 0x03 0x40 0x00 ...
       console.log('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
       
-      processBuffer(data);
+      // processBuffer를 통해 processMasterBuffer 호출
+      if (typeof processBuffer === 'function') {
+        processBuffer(data);
+      } else if (typeof processMasterBuffer === 'function') {
+        processMasterBuffer(data);
+      } else if (typeof window.processBuffer === 'function') {
+        window.processBuffer(data);
+      } else if (typeof window.processMasterBuffer === 'function') {
+        window.processMasterBuffer(data);
+      } else {
+        console.warn('[Race] processBuffer 함수를 찾을 수 없습니다!');
+      }
+      
+      // window.antDevice.onMessage도 호출 (이중 처리 방지를 위해 조건부)
+      if (window.antDevice && typeof window.antDevice.onMessage === 'function') {
+        // processMasterBuffer가 이미 처리하므로 여기서는 호출하지 않음
+        // 대신 processMasterBuffer 내부에서 routeANTMessage가 호출됨
+      }
     }
   } catch (error) {
     // 타임아웃이나 장치 분리 에러가 아니면 로그 출력
@@ -3999,6 +4016,13 @@ function processBuffer(newData) {
  * Tacx Wrapper 해제 및 표준 메시지 분배를 하나로 관리
  */
 function handleANTMessage(packet) {
+  // routeANTMessage로 직접 전달 (Race 로직 처리)
+  if (typeof routeANTMessage === 'function') {
+    console.log('[Race] handleANTMessage -> routeANTMessage 호출');
+    routeANTMessage(packet);
+    return;
+  }
+  
   let messageId, data;
   
   // 패킷 형태(Raw 배열 또는 객체)에 따라 데이터 추출
@@ -4015,14 +4039,17 @@ function handleANTMessage(packet) {
       // 포장지를 벗기고 내부의 진짜 ANT+ 데이터를 다시 처리 루프에 넣음
       if (typeof processBuffer === 'function') {
           processBuffer(data.slice(1)); 
+      } else if (typeof processMasterBuffer === 'function') {
+          processMasterBuffer(data.slice(1));
       }
       return;
   }
 
   // 2. 표준 ANT+ 메시지 분배
+  // routeANTMessage가 이미 호출되었으므로, 여기서는 routeANTMessage가 처리하지 않는 메시지만 처리
   switch (messageId) {
-    case 0x4E: // 센서 데이터 (Broadcast Data)
-      handleBroadcastData(data);
+    case 0x4E: // 센서 데이터 (Broadcast Data) - routeANTMessage에서 이미 처리됨
+      // routeANTMessage가 이미 handleBroadcastData를 호출하므로 여기서는 처리하지 않음
       break;
       
     case 0x51: // Channel ID Response (센서 발견 정보)
@@ -5225,19 +5252,28 @@ window.processBuffer = processMasterBuffer;
 window.processIncomingData = processMasterBuffer;
 
 function processMasterBuffer(newData) {
+  if (!newData || newData.length === 0) return;
+  
+  console.log(`[Race] processMasterBuffer 호출: newData.length=${newData.length}, masterRxBuffer.length=${masterRxBuffer.length}`);
+  
   // 버퍼 병합
   const combined = new Uint8Array(masterRxBuffer.length + newData.length);
   combined.set(masterRxBuffer);
   combined.set(newData, masterRxBuffer.length);
   masterRxBuffer = combined;
 
+  let processedCount = 0;
   while (masterRxBuffer.length >= 4) {
     const syncIndex = masterRxBuffer.indexOf(0xA4);
     if (syncIndex === -1) {
-      if (masterRxBuffer.length > 256) masterRxBuffer = new Uint8Array(0); // 너무 쌓이면 비움
+      if (masterRxBuffer.length > 256) {
+        console.warn('[Race] Sync 바이트를 찾을 수 없어 버퍼 초기화');
+        masterRxBuffer = new Uint8Array(0); // 너무 쌓이면 비움
+      }
       break;
     }
     if (syncIndex > 0) {
+      console.log(`[Race] Sync 바이트 앞부분 ${syncIndex}바이트 제거`);
       masterRxBuffer = masterRxBuffer.slice(syncIndex); // Sync 앞부분 제거
       continue;
     }
@@ -5245,14 +5281,24 @@ function processMasterBuffer(newData) {
     const length = masterRxBuffer[1];
     const totalLen = length + 4; // ANT+ 패킷 길이 계산
 
-    if (masterRxBuffer.length < totalLen) break; // 데이터 대기
+    if (masterRxBuffer.length < totalLen) {
+      // console.log(`[Race] 패킷 대기 중: 현재=${masterRxBuffer.length}, 필요=${totalLen}`);
+      break; // 데이터 대기
+    }
 
     // 패킷 추출
     const packet = masterRxBuffer.slice(0, totalLen);
     masterRxBuffer = masterRxBuffer.slice(totalLen);
+    
+    processedCount++;
+    console.log(`[Race] 패킷 추출: msgId=0x${packet[2]?.toString(16)}, packet.length=${packet.length}, 처리된 패킷 수=${processedCount}`);
 
     // [핵심] 메시지 처리기로 전달
     routeANTMessage(packet);
+  }
+  
+  if (processedCount > 0) {
+    console.log(`[Race] processMasterBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${masterRxBuffer.length}바이트`);
   }
 }
 
