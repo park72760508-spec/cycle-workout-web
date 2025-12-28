@@ -9335,8 +9335,9 @@ button[aria-disabled="true"] {
 }
 
 .speedometer-info.connected {
-  background: rgba(255, 255, 255, 0.3) !important; /* 흰색 배경 (투명도 30%) */
-  /* 텍스트 색상은 변경하지 않음 (기존 색상 유지) */
+    background: rgba(0, 212, 170, 0.15) !important; /* 연두색 배경 */
+    border: 1px solid rgba(0, 212, 170, 0.4) !important; /* 테두리 */
+    transition: all 0.3s ease;
 }
 
 .speedometer-info.disconnected {
