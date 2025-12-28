@@ -5435,20 +5435,21 @@ function routeANTMessage(packet) {
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
 // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
 function handleBroadcastData(payload) {
-    if (!payload || payload.length < 15) return;
+    if (!payload || payload.length < 18) return;
 
-    // 1. 장치 ID 정밀 추출 (로그 바이트 순서 반영)
-    // 로그 패턴: [Data 0-7] [ID Low:9] [ID High:10] [Type:11] [X:12] [Trans:13]
-    const idLow = payload[9];
-    const idHigh = payload[10];
-    const deviceType = payload[11]; // 0x7B (속도&케이던스)
-    const transType = payload[13]; 
+    // 1. 장치 ID 정밀 추출 (사용자 로그 바이트 순서 반영)
+    // 로그 패턴: [4-11:Data] [12:ID_L] [13:ID_H] [14:Type] [15:Trans] [16:X] [17:Ext]
+    const idLow = payload[12];
+    const idHigh = payload[13];
+    const deviceType = payload[14]; // 0x07 (속도계)
+    const transType = payload[17]; 
 
     // ANT+ 확장 ID 계산 (67536 생성 공식)
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    // 2. 장치 필터링 (속도 관련 장치 0x79, 0x7B)
-    if (deviceType === 0x79 || deviceType === 0x7B) {
+    // 2. 장치 필터링 (속도 관련 장치 대응)
+    // 로그상의 deviceType 0x07 혹은 표준 0x79, 0x7B 대응
+    if (deviceType === 0x07 || deviceType === 0x79 || deviceType === 0x7B) {
         let trackIndex = -1;
 
         // 설정된 트랙 정보에서 해당 장치 ID 찾기
@@ -5456,17 +5457,17 @@ function handleBroadcastData(payload) {
             trackIndex = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
         }
 
-        // [트랙 2 강제 매핑] 테스트 중인 ID 67536을 트랙 2(인덱스 1)로 강제 연결
+        // [트랙 2 특수 대응] 테스트 중인 ID 67536을 트랙 2(인덱스 1)로 강제 연결 보장
         if (deviceId === 67536) {
             trackIndex = 1; 
         }
 
         if (trackIndex === -1) return; // 등록되지 않은 장치는 무시
 
-        // 3. 속도 계산 데이터 추출 (로그 분석: payload[4] ~ payload[7])
-        let speed = 0;
-        const currentEventTime = payload[4] | (payload[5] << 8); // CE 56
-        const currentRevCount = payload[6] | (payload[7] << 8);  // 82 D2
+        // 3. 속도 계산 데이터 추출 (로그 분석 결과에 따른 인덱스 조정)
+        // Time: payload[8..9], Revs: payload[10..11]
+        const currentEventTime = payload[8] | (payload[9] << 8);
+        const currentRevCount = payload[10] | (payload[11] << 8);
 
         if (!window.lastAntData) window.lastAntData = {};
         const key = `track_${trackIndex}`;
@@ -5486,11 +5487,10 @@ function handleBroadcastData(payload) {
 
         if (timeDiff > 0 && revDiff > 0) {
             const wheelCircumference = 2.096; // 700x23c
-            speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
-            if (speed > 100) speed = 0;
+            const speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
             
-            // UI 업데이트
-            updateSpeedometer(trackIndex, speed);
+            // UI 업데이트 실행
+            updateSpeedometer(trackIndex, Math.min(speed, 100));
         }
         
         window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
@@ -6237,6 +6237,9 @@ window.processRaceData = function(payload) {
 /**
  * [통합] 속도계 UI 업데이트 함수
  */
+/**
+ * [최종 수정] 속도계 UI 업데이트 (숫자 표시 및 바늘 좌표 고정)
+ */
 function updateSpeedometer(trackId, speed) {
     // 1. 숫자 텍스트 업데이트 (ID: speed-text-0, speed-text-1 ...)
     const speedText = document.getElementById(`speed-text-${trackId}`);
@@ -6254,28 +6257,27 @@ function updateSpeedometer(trackId, speed) {
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
         const angle = -90 + (ratio * 180); // -90도(0km/h) ~ 90도(60km/h)
 
-        // rotate 속성에 중심점 (100, 140)을 포함하여 위치 이탈 방지
+        // [핵심] rotate 속성에 중심점 (100, 140)을 포함하여 위치 이탈 방지
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
         needle.style.stroke = "#ff4757"; 
         needle.style.visibility = "visible";
     }
 }
 
-
-
-// ---------------------------------------------------------
-// ANT+ 수신 이벤트 연결 (파일의 최하단)
-// ---------------------------------------------------------
+// ANT+ 메시지 리스너 연결 (파일의 최하단)
 if (window.antDevice) {
     window.antDevice.onMessage = function(payload) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
-            // 모든 ANT+ 데이터를 통합 처리 함수로 전달
-            handleBroadcastData(payload.slice(4)); // 헤더 제외한 데이터만 전달
+            // Training 대시보드와 데이터 공유 및 통합 처리
+            if (typeof window.parseIndoorSensorPayload === 'function') {
+                window.parseIndoorSensorPayload(payload);
+            } else {
+                handleBroadcastData(payload);
+            }
         }
     };
 }
-
 // 페이지 로딩 시 모든 바늘을 0점(-90도)으로 정렬
 window.addEventListener('load', () => {
     setTimeout(() => {
@@ -6285,4 +6287,5 @@ window.addEventListener('load', () => {
         });
     }, 1000);
 });
+
 
