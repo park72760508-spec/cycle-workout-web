@@ -10149,21 +10149,6 @@ button[aria-disabled="true"] {
   }
 }
 
-/* 모든 속도계/파워계 바늘 공통 적용 */
-.speedometer-needle line, 
-#speedometer-svg line[id^="needle-"], 
-.power-gauge-container line[id^="needle-"] {
-    display: block !important;
-    visibility: visible !important;
-    stroke: #ff4757 !important; /* 빨간색 강제 적용 */
-    stroke-width: 4;
-    stroke-linecap: round;
-    
-    /* 회전 중심축을 SVG의 아래 중앙(100, 140)으로 고정 */
-    transform-origin: 100px 140px;
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 
 
 
@@ -10178,35 +10163,25 @@ button[aria-disabled="true"] {
    [통합] 속도계 및 파워계 바늘(Needle) 디자인 로직
    - 중복된 스타일을 제거하고 하나로 통합함
    ========================================================================== */
+/* [최종 통합] 모든 바늘 스타일: 레이스 및 트레이닝 공통 */
 .speedometer-needle line, 
 line[id^="needle-"] {
-    /* 1. 외형 설정 */
-    stroke: #ff4757 !important; /* 바늘 색상: 선명한 빨강 */
+    stroke: #ff4757 !important; /* 빨간색 바늘 */
     stroke-width: 4px !important;
     stroke-linecap: round !important;
-    
-    /* 2. 가시성 및 레이어 */
     display: block !important;
     visibility: visible !important;
-    z-index: 10;
     
-    /* 3. 회전 중심축 설정 (가장 중요)
-       SVG 좌표계 (100, 140) 지점을 기준으로 회전하도록 고정 */
-    transform-origin: 100px 140px !important;
+    /* 회전 중심축을 SVG 내부의 정확한 지점으로 고정 */
+    transform-origin: 100px 140px !important; 
     
-    /* 4. 애니메이션 효과
-       0.5초 동안 부드러운 가속도(cubic-bezier)를 가지고 움직임 */
+    /* 초기 상태: 0km/h일 때 왼쪽 끝(-90도)을 가리킴 */
+    transform: rotate(-90deg); 
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* 게이지 컨테이너에서 바늘이 잘리지 않도록 설정 */
-.speedometer-container, 
-.power-gauge-container, 
-svg {
+/* 게이지가 트랙 아래나 레이어 뒤로 숨지 않도록 설정 */
+.speedometer-container, .power-gauge-container {
+    z-index: 100;
     overflow: visible !important;
-}
-
-/* 초기 상태: 데이터 수신 전 바늘을 0 위치(왼쪽 끝 180도)에 대기 */
-.speedometer-needle line {
-    transform: rotate(180deg);
 }
