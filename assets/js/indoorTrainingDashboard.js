@@ -543,22 +543,17 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
     if (!needleEl) return;
 
-    const ftp = window.indoorTrainingState.userFTP || 200;
+    const ftp = window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2;
-    
-    // 파워가 없거나 초기 상태면 0으로 처리
-    const currentPower = (power === undefined || power === null) ? 0 : power;
-    let ratio = currentPower / maxPower;
-    if (ratio > 1) ratio = 1;
-    if (ratio < 0) ratio = 0;
+    const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
 
-    const startAngle = 180; // 0W 위치
+    const startAngle = 180;
     const range = 180;
     const targetAngle = startAngle + (ratio * range);
 
-    // transform 속성을 명확히 지정 (회전 중심점 100, 140 포함)
+    // SVG 속성을 직접 수정 (가장 확실한 방법)
     needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`);
-    needleEl.style.visibility = 'visible'; // 강제 표시
+    needleEl.style.visibility = 'visible';
 }
 
 /**
@@ -2057,36 +2052,28 @@ function renderPairingDeviceList(targetType) {
  * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
  */
 window.parseIndoorSensorPayload = function(payload) {
-    if (payload.length < 13) return;
+    if (!payload || payload.length < 13) return;
 
+    const deviceType = payload[12];
+
+    // 1. 레이스 관련 (0x79, 0x7B) -> 레이스 로직으로 토스
+    if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x7A) {
+        if (typeof window.processRaceData === 'function') {
+            window.processRaceData(payload);
+        }
+        // 레이스 대시보드가 활성화된 상태라면 여기서 중단
+        const raceDB = document.getElementById('race-dashboard');
+        if (raceDB && raceDB.style.display !== 'none') return;
+    }
+
+    // 2. 트레이닝 관련 (0x78, 0x0B, 0x11)
     const idLow = payload[10];
     const idHigh = payload[11];
-    const deviceType = payload[12]; 
     const transType = payload[13];
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    // 1. Indoor Race 관련: 속도계(0x79), 케이던스(0x7A), 속도/케이던스(0x7B)
-    if (deviceType === 0x79 || deviceType === 0x7A || deviceType === 0x7B) {
-        // rollerRaceDashboard.js에 정의된 기존 함수 호출
-        if (typeof window.processRaceData === 'function') {
-            window.processRaceData(deviceId, deviceType, payload);
-        }
-        return; // 레이스 데이터 처리 후 종료
-    }
-
-    // 2. Indoor Training 관련: 심박계(0x78), 파워미터(0x0B), 스마트로라(0x11)
-    updateIndoorPairingUI(deviceId, deviceType); // 장치 검색 리스트 업데이트
-
-    const isPaired = window.indoorTrainingState.powerMeters.some(pm => {
-        const receivedId = String(deviceId);
-        return (deviceType === 0x78 && String(pm.heartRateDeviceId) === receivedId) ||
-               ((deviceType === 0x0B || deviceType === 0x11) && 
-                (String(pm.deviceId) === receivedId || String(pm.trainerDeviceId) === receivedId));
-    });
-
-    if (window.indoorTrainingState.trainingState === 'running' || isPaired) {
-        processLiveTrainingData(deviceId, deviceType, payload);
-    }
+    if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
+    if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
 };
 
 /**
@@ -2223,6 +2210,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
