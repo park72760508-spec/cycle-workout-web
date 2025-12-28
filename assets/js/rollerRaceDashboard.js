@@ -3750,8 +3750,13 @@ async function startANTMessageListener() {
       console.log('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
       
       if (typeof processBuffer === 'function') {
-        console.log('[Race] processBuffer 함수 호출 시도');
-        processBuffer(data);
+        console.log('[Race] processBuffer 함수 호출 시도, data.length=', data.length, 'data type:', typeof data, 'is Uint8Array:', data instanceof Uint8Array);
+        try {
+          processBuffer(data);
+          console.log('[Race] processBuffer 함수 호출 완료');
+        } catch (e) {
+          console.error('[Race] processBuffer 함수 호출 에러:', e);
+        }
       } else if (typeof processIncomingData === 'function') {
         console.log('[Race] processIncomingData 함수 호출 시도');
         processIncomingData(data);
@@ -3998,13 +4003,21 @@ function getChannelEventName(code) {
 let rxBuf = new Uint8Array(0);
 
 function processBuffer(newData) {
-  console.log(`[Race] processBuffer 호출: newData.length=${newData?.length}, rxBuf.length=${rxBuf?.length}`);
-  
-  // 1. 기존 버퍼에 새 데이터 추가
-  const tmp = new Uint8Array(rxBuf.length + newData.length);
-  tmp.set(rxBuf);
-  tmp.set(newData, rxBuf.length);
-  rxBuf = tmp;
+  try {
+    if (!newData || !(newData instanceof Uint8Array)) {
+      console.error('[Race] processBuffer: 유효하지 않은 데이터:', newData);
+      return;
+    }
+    
+    console.log(`[Race] processBuffer 호출: newData.length=${newData.length}, rxBuf.length=${rxBuf?.length || 0}`);
+    
+    // 1. 기존 버퍼에 새 데이터 추가
+    const tmp = new Uint8Array((rxBuf?.length || 0) + newData.length);
+    if (rxBuf && rxBuf.length > 0) {
+      tmp.set(rxBuf);
+    }
+    tmp.set(newData, rxBuf?.length || 0);
+    rxBuf = tmp;
 
   let processedCount = 0;
   // 2. 패킷 파싱 루프
@@ -4050,8 +4063,12 @@ function processBuffer(newData) {
     }
   }
   
-  if (processedCount > 0) {
-    console.log(`[Race] processBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${rxBuf.length}바이트`);
+    if (processedCount > 0) {
+      console.log(`[Race] processBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${rxBuf.length}바이트`);
+    }
+  } catch (error) {
+    console.error('[Race] processBuffer 에러:', error);
+    console.error('[Race] processBuffer 에러 스택:', error.stack);
   }
 }
 
