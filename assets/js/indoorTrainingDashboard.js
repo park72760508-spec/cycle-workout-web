@@ -313,14 +313,13 @@ function createPowerMeterElement(powerMeter) {
         
         <!-- 바늘 -->
         <g class="speedometer-needle" transform="translate(100, 140)">
-          <line id="needle-${powerMeter.id}"
-                x1="0" y1="-7"
-                x2="0" y2="-80"
-                stroke="#ff4757"
-                stroke-width="4"
+          <line id="needle-${powerMeter.id}" 
+                x1="0" y1="-7" 
+                x2="0" y2="-80" 
+                stroke="#ff0000" 
+                stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(270)"
-            />
+                transform="rotate(270)"/>
         </g>
         
         <!-- W 라벨 -->
@@ -599,35 +598,37 @@ function initializeNeedles() {
   });
 }
 
-// [수정 전]
-// needleEl.setAttribute('transform', `rotate(${angle})`);
-
-// [수정 후] (중심점 100, 140 추가)
+// 기존 updatePowerMeterNeedle 함수 보강 (null 체크 및 초기값)
 function updatePowerMeterNeedle(powerMeterId, power) {
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
-    if (!needleEl) return;
+    if (!needleEl) {
+        console.warn(`[PowerMeter] updatePowerMeterNeedle: 바늘 요소를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
+        return;
+    }
 
     const ftp = window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2;
     const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
 
-    // -90도(0W) ~ 90도(Max)
+    // 파워계도 속도계와 동일한 각도 체계 적용 (-90도 ~ 90도)
     const angle = -90 + (ratio * 180);
 
-    // [핵심 수정] 100, 140은 SVG 게이지의 정중앙 좌표입니다.
-    // 이 좌표가 없으면 바늘이 엉뚱한 곳을 기준으로 회전하여 사라집니다.
-    //needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+    // 부모 그룹이 translate(100, 140)을 하므로, rotate(angle)만 하면 됩니다
     needleEl.setAttribute('transform', `rotate(${angle})`);
     needleEl.style.visibility = 'visible';
+    
+    console.log(`[PowerMeter] updatePowerMeterNeedle: powerMeterId=${powerMeterId}, power=${power}, angle=${angle}, transform=${needleEl.getAttribute('transform')}, visibility=${needleEl.style.visibility}`);
 }
 
 // 페이지 로딩 완료 후 모든 바늘 0점으로 초기화
 window.addEventListener('load', () => {
     setTimeout(() => {
         // 모든 바늘(needle-0, needle-1, needle-...)을 찾아서 -90도(0점)로 설정
+        // 주의: 이 코드는 초기 로딩 시에만 실행되어야 하며, selectIndoorDevice 후에는 실행되지 않아야 함
         const allNeedles = document.querySelectorAll('line[id^="needle-"]');
         allNeedles.forEach(n => {
-            n.setAttribute('transform', 'rotate(-90, 100, 140)');
+            // 부모 그룹이 translate(100, 140)을 하므로, rotate(-90)만 하면 됩니다
+            n.setAttribute('transform', 'rotate(-90)');
         });
     }, 1500); // 레이스 트랙 생성 시간을 고려하여 충분히 대기
 });
@@ -725,10 +726,11 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     }
 
     // 바늘 각도 애니메이션 적용
+    // 부모 그룹이 translate(100, 140)을 하므로 rotate(angle)만 하면 됩니다
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
     if (needleEl) {
-        // updatePowerMeterNeedle과 완전히 동일한 방식 사용
-        needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        // updatePowerMeterNeedle과 완전히 동일한 방식 사용 (rotate(angle)만)
+        needleEl.setAttribute('transform', `rotate(${angle})`);
         needleEl.style.visibility = 'visible';
     }
 }
@@ -2331,12 +2333,17 @@ window.selectIndoorDevice = function(deviceId, listId) {
         if (typeof showToast === 'function') showToast(`${deviceId} 장치가 선택되었습니다.`);
     }
     
-    // 바늘 위치 유지 (현재 파워값으로 업데이트)
-    const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
-    if (powerMeter && typeof updatePowerMeterNeedle === 'function') {
-        const currentPower = powerMeter.currentPower || 0;
-        updatePowerMeterNeedle(powerMeterId, currentPower);
-    }
+    // 바늘 위치 유지 (다른 코드 실행 후 마지막에 실행되도록 setTimeout 사용)
+    setTimeout(() => {
+        const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+        if (powerMeter && typeof updatePowerMeterNeedle === 'function') {
+            const currentPower = powerMeter.currentPower || 0;
+            console.log(`[PowerMeter] selectIndoorDevice: 바늘 위치 유지 시도, powerMeterId=${powerMeterId}, currentPower=${currentPower}`);
+            updatePowerMeterNeedle(powerMeterId, currentPower);
+        } else {
+            console.warn(`[PowerMeter] selectIndoorDevice: 바늘 위치 유지 실패, powerMeter=${!!powerMeter}, updatePowerMeterNeedle=${typeof updatePowerMeterNeedle}`);
+        }
+    }, 50); // 약간의 지연을 주어 다른 코드가 실행된 후 실행
 };
 
 // 4. selectDeviceForInput 함수 (targetType 기반)
@@ -2361,9 +2368,6 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
-
-
-
 
 
 
