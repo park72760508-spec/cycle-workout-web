@@ -5281,24 +5281,18 @@ function routeANTMessage(packet) {
 window.processRaceData = function(payload) {
     if (!payload || payload.length < 13) return;
 
-    const antData = payload.slice(1, 9);
     const deviceId = ((payload[13] & 0xF0) << 12) | (payload[11] << 8) | payload[10];
     const deviceType = payload[12];
+    const antData = payload.slice(1, 9);
 
-    // 속도계(0x79) 또는 속도/케이던스(0x7B) 센서
     if (deviceType === 0x79 || deviceType === 0x7B) {
-        // 장치 ID로 해당 트랙 번호(0~3) 찾기
+        // [중요] 현재 레이스에 참여 중인 트랙에서 해당 장치 ID 찾기
         let trackId = -1;
         if (window.raceState && window.raceState.tracks) {
-            for (let i = 0; i < window.raceState.tracks.length; i++) {
-                if (String(window.raceState.tracks[i].deviceId) === String(deviceId)) {
-                    trackId = i;
-                    break;
-                }
-            }
+            trackId = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
         }
 
-        if (trackId === -1) return; // 페어링 안 된 장치 무시
+        if (trackId === -1) return; // 등록되지 않은 장치는 무시
 
         let speed = 0;
         const currentEventTime = antData[4] | (antData[5] << 8);
@@ -5307,7 +5301,7 @@ window.processRaceData = function(payload) {
         if (!window.lastAntData) window.lastAntData = {};
         if (!window.lastAntData[deviceId]) {
             window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
-            updateSpeedometer(trackId, 0); 
+            updateSpeedometer(trackId, 0);
             return;
         }
 
@@ -5319,7 +5313,7 @@ window.processRaceData = function(payload) {
         if (timeDiff < 0) timeDiff += 65536;
 
         if (timeDiff > 0 && revDiff > 0) {
-            const wheelCircumference = 2.096; 
+            const wheelCircumference = 2.096; // 700x23c 기준
             speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
             if (speed > 100) speed = 0;
             updateSpeedometer(trackId, speed);
@@ -6029,22 +6023,25 @@ function updateSpeedometer(trackId, speed) {
     const speedText = document.getElementById(`speed-text-${trackId}`);
     
     if (speedText) speedText.textContent = speed.toFixed(1);
+    
     if (needle) {
-        const maxSpeed = 60;
+        const maxSpeed = 60; // 최대 시속
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
-        const angle = 180 + (ratio * 180); // 180도 ~ 360도
-        // 중심점(100, 140)을 기준으로 회전
+        
+        // -90도(0km/h)에서 시작하여 180도 범위를 움직임 (최대 90도)
+        const angle = -90 + (ratio * 180);
+        
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
         needle.style.visibility = 'visible';
     }
 }
 
-// 장치 메시지 수신부 통합 호출
+// 장치 메시지 이벤트 연결
 if (window.antDevice) {
     window.antDevice.onMessage = function(payload) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
-            // Training 대시보드에서 정의한 통합 핸들러 호출
+            // Training 대시보드가 정의한 통합 핸들러가 있으면 호출, 없으면 직접 처리
             if (typeof window.parseIndoorSensorPayload === 'function') {
                 window.parseIndoorSensorPayload(payload);
             } else {
@@ -6067,6 +6064,7 @@ window.addEventListener('load', () => {
         pNeedles.forEach(pn => pn.setAttribute('transform', 'rotate(180, 100, 140)'));
     }, 1000);
 });
+
 
 
 
