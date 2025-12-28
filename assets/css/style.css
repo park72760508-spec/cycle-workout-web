@@ -9465,12 +9465,23 @@ button[aria-disabled="true"] {
   gap: 4px;
 }
 
+/* 숫자 값 끝자리 수직 정렬을 위한 스타일 */
+.heart-rate-row .distance-value,
+.cadence-row .distance-value {
+  display: inline-block;
+  text-align: right;
+  min-width: 45px; /* 최소 너비 설정으로 끝자리 위치 고정 (3자리 숫자까지 고려) */
+  font-variant-numeric: tabular-nums; /* 숫자 폭 통일 (모든 숫자가 같은 너비) */
+  box-sizing: border-box;
+}
+
 /* 작고 얇은 단위 폰트 (bpm, rpm) */
 .speed-unit-small {
   font-size: 10px;
   color: #666666;
   font-weight: 300;
   line-height: 1;
+  vertical-align: baseline;
 }
 
 /* ========== Indoor Training 페어링 모달 스타일 ========== */
