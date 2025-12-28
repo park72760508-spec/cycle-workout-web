@@ -511,8 +511,18 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   needle.setAttribute('transform', `rotate(${finalAngle})`);
   
   // 5. 바늘 행적선 업데이트
-  // 바늘의 이동 속도에 맞춰 행적선도 함께 업데이트합니다.
-  updateSpeedometerNeedlePath(speedometerId, speed);
+  // 바늘의 현재 실제 각도(previousAngle)를 기준으로 궤적선을 그려서
+  // 급격한 속도 증가 시 바늘이 목표 위치에 도달하기 전에 궤적선이 먼저 그려지는 문제 방지
+  const currentNeedleSpeed = calculateSpeedFromAngle(previousAngle);
+  updateSpeedometerNeedlePath(speedometerId, currentNeedleSpeed);
+  
+  // 6. 바늘 애니메이션 완료 후 목표 속도까지 궤적선 업데이트
+  // 바늘이 목표 위치에 도달하면 궤적선도 목표 속도까지 그려지도록 함
+  const animationDuration = 400; // 0.4초 = 400ms
+  setTimeout(() => {
+    // 애니메이션 완료 후 목표 속도까지 궤적선 업데이트
+    updateSpeedometerNeedlePath(speedometerId, speed);
+  }, animationDuration);
 }
 
 
@@ -543,6 +553,52 @@ function calculateNeedleAngle(speed) {
   while (angle < 0) angle += 360;
   
   return angle;
+}
+
+/**
+ * 바늘 각도에서 속도로 역변환 (궤적선 동기화용)
+ * 각도 → 속도 변환
+ * 
+ * calculateNeedleAngle의 역함수:
+ * - 0~60km/h: angle = 270 + 180 * (speed / 120) → speed = (angle - 270) * 120 / 180
+ * - 60~120km/h: angle = 180 * (speed / 120) - 90 → speed = (angle + 90) * 120 / 180
+ */
+function calculateSpeedFromAngle(angle) {
+  const maxSpeed = 120;
+  
+  // 각도를 0~360도 범위로 정규화
+  let normalizedAngle = angle;
+  while (normalizedAngle >= 360) normalizedAngle -= 360;
+  while (normalizedAngle < 0) normalizedAngle += 360;
+  
+  let speed;
+  
+  // 각도 범위에 따른 속도 계산
+  if (normalizedAngle >= 270) {
+    // 270~360도: 0~60km/h 구간
+    // angle = 270 → speed = 0
+    // angle = 360(0) → speed = 60 (하지만 360도는 0도로 정규화되므로 별도 처리)
+    speed = ((normalizedAngle - 270) / 180) * maxSpeed;
+  } else if (normalizedAngle >= 0 && normalizedAngle < 90) {
+    // 0~90도: 60~120km/h 구간
+    // angle = 0 → speed = (0 + 90) * 120 / 180 = 60
+    // angle = 90 → speed = (90 + 90) * 120 / 180 = 120
+    speed = ((normalizedAngle + 90) / 180) * maxSpeed;
+  } else {
+    // 90~270도 범위는 속도계 범위 밖 (이론적으로 발생하지 않아야 함)
+    // 안전장치: 가장 가까운 경계값 사용
+    if (normalizedAngle >= 90 && normalizedAngle < 180) {
+      speed = maxSpeed; // 120km/h (90도에 해당)
+    } else {
+      speed = 60; // 60km/h (270도에 해당)
+    }
+  }
+  
+  // 속도 범위 제한
+  if (speed < 0) speed = 0;
+  if (speed > maxSpeed) speed = maxSpeed;
+  
+  return speed;
 }
 
 /**
@@ -2833,6 +2889,17 @@ async function activateUSBReceiverFromModal() {
   updateReceiverButtonStatus();
   
   if(activateBtn) activateBtn.disabled = false;
+  
+  // 활성화 완료 후 USB 수신기 선택 목록 화면 표시 (연결 상태와 관계없이 표시)
+  // 현재 모달 닫기
+  closeUSBReceiverActivationModal();
+  
+  // 약간의 지연 후 선택 목록 화면 표시
+  setTimeout(() => {
+    if(typeof showReceiverSelectionModal === 'function') {
+      showReceiverSelectionModal();
+    }
+  }, 300);
 }
 
 /**
