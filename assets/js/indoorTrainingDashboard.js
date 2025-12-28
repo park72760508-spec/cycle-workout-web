@@ -2060,32 +2060,32 @@ function renderPairingDeviceList(targetType) {
  * [통합 ANT+ 데이터 라우터]
  * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
  */
+// 약 2130라인 부근의 함수를 아래 내용으로 교체
 window.parseIndoorSensorPayload = function(payload) {
-    if (!payload || payload.length < 18) return; // 최소 길이 체크 수정
+    if (!payload || payload.length < 13) return;
 
-    // 현재 화면이 Indoor Training인지 확인
-    const currentScreen = window.currentScreen || '';
-    const isTrainingScreen = currentScreen === 'indoorTrainingDashboardScreen' || 
-                             document.getElementById('powerMeterGrid') !== null;
-    
-    if (!isTrainingScreen) {
-        // Training 화면이 아니면 처리하지 않음 (Race 화면에서 handleBroadcastData가 처리)
-        return;
+    // 장치 타입 추출 (로그의 15번 바이트 또는 12번 바이트)
+    const deviceType = payload[15] || payload[12];
+
+    // 1. Indoor Race 관련: 속도계(0x79), 속도/케이던스(0x7B)
+    if (deviceType === 0x79 || deviceType === 0x7B) {
+        if (typeof window.processRaceData === 'function') {
+            window.processRaceData(payload); // 레이스 엔진 호출
+        }
+        // 레이스 화면이 켜져 있으면 여기서 중단 (간섭 방지)
+        const raceDashboard = document.getElementById('race-dashboard');
+        if (raceDashboard && raceDashboard.style.display !== 'none') return;
     }
 
-    // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
+    // 2. Indoor Training 관련: 심박(0x78), 파워(0x0B), 스마트로라(0x11)
+    // ID 계산 (TransType 포함한 정밀 계산)
     const idLow = payload[13];
     const idHigh = payload[14];
-    const deviceType = payload[15];
     const transType = payload[17];
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    // 트레이닝 관련 장치 타입: 0x0B (파워), 0x11 (심박), 0x78 (구형 속도계도 Training에서 사용 가능)
-    // 단, Race 관련 타입(0x79, 0x7A, 0x7B)은 Race 화면에서만 처리하도록
-    if (deviceType === 0x0B || deviceType === 0x11 || deviceType === 0x78) {
-        if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
-        if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
-    }
+    if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
+    if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
 };
 
 /**
@@ -2222,6 +2222,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
