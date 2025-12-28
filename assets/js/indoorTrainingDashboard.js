@@ -322,18 +322,14 @@ function createPowerMeterElement(powerMeter) {
                 transform="rotate(270)"/>
         </g>
         
-        <!-- W 라벨 -->
-        <text x="100" y="155" 
-              text-anchor="middle" 
-              dominant-baseline="middle"
-              fill="#ffffff" 
-              font-size="10" 
-              font-weight="500">W</text>
       </svg>
     </div>
-    <!-- 현재 파워값 (속도계 블럭 맨 아래) -->
-    <div class="current-power-display-bottom">
-      <span id="current-power-value-${powerMeter.id}" style="color: #ffffff; font-size: 43.2px; font-weight: 700; line-height: 1.2;">-</span>
+    <!-- 현재 파워값 (바늘 중심 아래, W 단위 아래) -->
+    <div class="current-power-display-bottom" style="text-align: center; padding: 8px 0; background: rgba(0, 0, 0, 0.7); border-radius: 0;">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+        <span id="current-power-value-${powerMeter.id}" style="color: #ffffff; font-size: 43.2px; font-weight: 700; line-height: 1.2;">-</span>
+        <span style="color: #ffffff; font-size: 10px; font-weight: 500;">W</span>
+      </div>
     </div>
     <div class="speedometer-info disconnected">
       <!-- 좌측: 최대파워, 평균파워 -->
@@ -2436,8 +2432,8 @@ async function loadWorkoutsForSelection() {
         
         // 워크아웃 목록 렌더링
         tbody.innerHTML = validWorkouts.map((workout, index) => {
-            // author 항목 사용
-            const author = workout.author || '-';
+            // 카테고리 항목 사용 (category 필드가 있으면 사용, 없으면 author 사용)
+            const category = workout.category || workout.author || '-';
             
             // 시간은 세그먼트 총합으로 계산
             let duration = '-';
@@ -2450,7 +2446,7 @@ async function loadWorkoutsForSelection() {
                 <tr style="border-bottom: 1px solid #e5e7eb;">
                     <td style="text-align: center; padding: 12px;">${index + 1}</td>
                     <td style="padding: 12px;">${escapeHtml(workout.title || '-')}</td>
-                    <td style="text-align: center; padding: 12px;">${escapeHtml(author)}</td>
+                    <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
                     <td style="text-align: center; padding: 12px;">${duration}</td>
                     <td style="text-align: center; padding: 12px;">
                         <button class="btn btn-primary btn-sm" onclick="selectWorkoutForTraining('${workout.id}')" style="padding: 6px 16px;">선택</button>
@@ -2480,22 +2476,47 @@ function escapeHtml(text) {
  */
 async function selectWorkoutForTraining(workoutId) {
     try {
-        // 워크아웃 상세 정보 로드
-        const workoutResult = typeof apiGetWorkout === 'function' ? await apiGetWorkout(workoutId) : null;
+        console.log('[Training] 워크아웃 선택 시도:', workoutId);
         
-        if (!workoutResult || !workoutResult.success || !workoutResult.workout) {
+        // apiGetWorkout 함수 확인
+        if (typeof apiGetWorkout !== 'function') {
+            console.error('[Training] apiGetWorkout 함수를 찾을 수 없습니다.');
             if (typeof showToast === 'function') {
-                showToast('워크아웃 정보를 불러올 수 없습니다.', 'error');
+                showToast('워크아웃 정보를 불러올 수 없습니다. (apiGetWorkout 함수 없음)', 'error');
             }
             return;
         }
         
-        const workout = workoutResult.workout;
+        // 워크아웃 상세 정보 로드
+        const workoutResult = await apiGetWorkout(workoutId);
         
-        // 세그먼트 정보가 없으면 로드 시도
-        if (!workout.segments || workout.segments.length === 0) {
-            console.log('[Training] 워크아웃에 세그먼트 정보가 없습니다. 세그먼트를 로드합니다.');
-            // 세그먼트 로드는 별도로 필요할 수 있음 (현재는 apiGetWorkout에 포함되어 있다고 가정)
+        console.log('[Training] 워크아웃 로드 결과:', workoutResult);
+        
+        if (!workoutResult) {
+            console.error('[Training] workoutResult가 null입니다.');
+            if (typeof showToast === 'function') {
+                showToast('워크아웃 정보를 불러올 수 없습니다. (응답 없음)', 'error');
+            }
+            return;
+        }
+        
+        if (!workoutResult.success) {
+            console.error('[Training] 워크아웃 로드 실패:', workoutResult.error);
+            if (typeof showToast === 'function') {
+                showToast(`워크아웃 정보를 불러올 수 없습니다: ${workoutResult.error || '알 수 없는 오류'}`, 'error');
+            }
+            return;
+        }
+        
+        // Code.gs의 getWorkout은 'item' 필드로 반환함
+        const workout = workoutResult.workout || workoutResult.item;
+        
+        if (!workout) {
+            console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
+            if (typeof showToast === 'function') {
+                showToast('워크아웃 정보를 불러올 수 없습니다. (데이터 없음)', 'error');
+            }
+            return;
         }
         
         console.log('[Training] 선택된 워크아웃:', {
@@ -2514,13 +2535,13 @@ async function selectWorkoutForTraining(workoutId) {
         displayWorkoutSegmentGraph(workout);
         
         if (typeof showToast === 'function') {
-            showToast(`"${workout.title}" 워크아웃이 선택되었습니다.`, 'success');
+            showToast(`"${workout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
         }
         
     } catch (error) {
-        console.error('[Training] 워크아웃 선택 오류:', error);
+        console.error('[Training] 워크아웃 선택 오류:', error, error.stack);
         if (typeof showToast === 'function') {
-            showToast('워크아웃 선택 중 오류가 발생했습니다.', 'error');
+            showToast(`워크아웃 선택 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`, 'error');
         }
     }
 }
@@ -2625,6 +2646,34 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     ctx.moveTo(padding.left, padding.top + chartHeight);
     ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
     ctx.stroke();
+    
+    // Y축 FTP % 값 표기 (0%, 50%, 100%, 150%, 200%)
+    const yAxisLabels = [0, 50, 100, 150, 200];
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    
+    yAxisLabels.forEach(ftpPercent => {
+        // FTP %에 따른 Y 위치 계산 (200%를 최대값으로)
+        const maxFtpPercent = 200;
+        const yRatio = ftpPercent / maxFtpPercent;
+        const y = padding.top + chartHeight - (yRatio * chartHeight);
+        
+        // 라벨 위치 (축 왼쪽)
+        ctx.fillText(`${ftpPercent}%`, padding.left - 8, y);
+        
+        // 눈금선 (선택적)
+        if (ftpPercent > 0 && ftpPercent < maxFtpPercent) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(padding.left - 3, y);
+            ctx.lineTo(padding.left, y);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 원래 색상 복원
+        }
+    });
     
     // 세그먼트 그리기
     let currentTime = 0;
