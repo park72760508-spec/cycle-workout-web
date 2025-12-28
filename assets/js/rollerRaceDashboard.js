@@ -6291,14 +6291,13 @@ if (window.antDevice) {
     };
 }
 // 페이지 로딩 시 모든 바늘을 0점(-90도)으로 정렬
+
 window.addEventListener('load', () => {
     setTimeout(() => {
-        const needles = document.querySelectorAll('line[id^="needle-"]');
-        needles.forEach(n => {
+        document.querySelectorAll('line[id^="needle-"]').forEach(n => {
             n.setAttribute('transform', 'rotate(-90, 100, 140)');
         });
     }, 1000);
 });
-
 
 
