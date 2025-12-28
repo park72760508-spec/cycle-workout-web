@@ -9310,19 +9310,9 @@ button[aria-disabled="true"] {
     stroke-linecap: round;
 }
 
-/* style.css 하단에 추가 */
-.speedometer-needle line {
-    /* 초기 0 지점(180도) 설정 */
-    transform: rotate(180deg);
-    transform-origin: 100px 140px; 
-    transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* 약간의 탄성 효과 */
-    visibility: visible !important;
-}
 
-/* 레이스 속도계와 트레이닝 파워계의 클래스가 충돌하지 않도록 확인 */
-.power-gauge-container .speedometer-needle line {
-    stroke: #ff4757; /* 파워계 바늘은 빨간색 계열로 구분 */
-}
+
+
 
 
 /* 현재 파워 숫자 텍스트 애니메이션 (선택사항)
@@ -10174,25 +10164,49 @@ button[aria-disabled="true"] {
     transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 초기 상태 (데이터 없을 때) */
-.speedometer-needle line {
-    transform: rotate(180deg);
-}
 
 
-/* [공통] 속도계 및 파워계 바늘 스타일 고정 */
-.speedometer-needle line {
-    stroke: #ff4757 !important; /* 선명한 빨간색 */
-    stroke-width: 4px !important;
-    stroke-linecap: round !important;
-    display: block !important;
-    visibility: visible !important;
-    /* CSS 회전축은 보조용으로 설정 (실제 회전은 JS에서 처리) */
-    transform-origin: 100px 140px; 
-}
+
 
 /* 게이지 컨테이너가 숨겨져 있지 않은지 확인 */
 .speedometer-container, .power-gauge-container {
     overflow: visible !important;
 }
 
+
+/* ==========================================================================
+   [통합] 속도계 및 파워계 바늘(Needle) 디자인 로직
+   - 중복된 스타일을 제거하고 하나로 통합함
+   ========================================================================== */
+.speedometer-needle line, 
+line[id^="needle-"] {
+    /* 1. 외형 설정 */
+    stroke: #ff4757 !important; /* 바늘 색상: 선명한 빨강 */
+    stroke-width: 4px !important;
+    stroke-linecap: round !important;
+    
+    /* 2. 가시성 및 레이어 */
+    display: block !important;
+    visibility: visible !important;
+    z-index: 10;
+    
+    /* 3. 회전 중심축 설정 (가장 중요)
+       SVG 좌표계 (100, 140) 지점을 기준으로 회전하도록 고정 */
+    transform-origin: 100px 140px !important;
+    
+    /* 4. 애니메이션 효과
+       0.5초 동안 부드러운 가속도(cubic-bezier)를 가지고 움직임 */
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* 게이지 컨테이너에서 바늘이 잘리지 않도록 설정 */
+.speedometer-container, 
+.power-gauge-container, 
+svg {
+    overflow: visible !important;
+}
+
+/* 초기 상태: 데이터 수신 전 바늘을 0 위치(왼쪽 끝 180도)에 대기 */
+.speedometer-needle line {
+    transform: rotate(180deg);
+}
