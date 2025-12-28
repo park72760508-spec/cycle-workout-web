@@ -9304,10 +9304,19 @@ button[aria-disabled="true"] {
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.3));
 }
 
+
+
+/* 파워계 바늘 부드러운 애니메이션 효과 추가 */
 .speedometer-needle line {
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
-  transition: transform 0.3s ease-out;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    transform-origin: center bottom; /* SVG 내부 회전 축 고정 */
 }
+
+/* 현재 파워 숫자 텍스트 애니메이션 (선택사항) */
+[id^="current-power-value-"] {
+    transition: color 0.3s ease;
+}
+
 
 /* 속도계 정보 */
 .speedometer-info {
