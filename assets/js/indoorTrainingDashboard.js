@@ -2787,7 +2787,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = '12.6px sans-serif'; // 18px의 70% (12.6px)
     ctx.textAlign = 'center';
-    ctx.fillText(`운동시간: ${totalMinutes}분`, padding.left + chartWidth / 2, graphHeight - 5);
+    ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, graphHeight - 5);
 }
 
 
