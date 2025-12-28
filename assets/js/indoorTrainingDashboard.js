@@ -653,25 +653,41 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
   // 바늘 업데이트
   updatePowerMeterNeedle(powerMeterId, power);
   
-  // 연결 상태 업데이트: 페어링된 기기에서 값이 수신되면 연결 상태로 변경
-  // 조건: 파워값은 0이고 심박값이 수신될 때
+  // 연결 상태 업데이트: 사용자 또는 기기 페어링이 있고 데이터가 수신되면 연결 상태로 변경
   const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
   const statusEl = document.getElementById(`status-${powerMeterId}`);
   const statusDotEl = statusEl?.querySelector('.status-dot');
   const statusTextEl = statusEl?.querySelector('.status-text');
   
-  // 페어링된 기기인지 확인 (deviceId, trainerDeviceId, heartRateDeviceId 중 하나라도 있으면 페어링됨)
-  const isPaired = !!(powerMeter.deviceId || powerMeter.trainerDeviceId || powerMeter.heartRateDeviceId);
+  // 사용자 페어링 확인
+  const hasUser = !!(powerMeter.userId);
   
-  // 조건: 파워값은 0이고 심박값이 수신될 때 연결 상태로 변경
-  if (isPaired && power === 0 && heartRate > 0) {
+  // 기기 페어링 확인 (deviceId, trainerDeviceId, heartRateDeviceId 중 하나라도 있으면 페어링됨)
+  const hasDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId || powerMeter.heartRateDeviceId);
+  
+  // 사용자 또는 기기 페어링이 1개 이상 있을 때
+  const isPaired = hasUser || hasDevice;
+  
+  // 데이터가 수신되었는지 확인
+  const hasData = power > 0 || heartRate > 0 || cadence > 0;
+  
+  // 조건: 페어링이 있고 데이터가 수신되면 연결 상태로 변경
+  if (isPaired && hasData) {
     powerMeter.connected = true;
     
     if (infoEl) {
-      infoEl.classList.remove('disconnected');
-      infoEl.classList.add('connected');
+      // 파워값은 0이고 심박값이 수신될 때만 배경색 변경
+      if (power === 0 && heartRate > 0) {
+        infoEl.classList.remove('disconnected');
+        infoEl.classList.add('connected');
+      } else if (power > 0 || cadence > 0) {
+        // 파워값이 있거나 케이던스가 있으면 일반 연결 상태
+        infoEl.classList.remove('disconnected');
+        infoEl.classList.add('connected');
+      }
     }
     
+    // 상태 표시 업데이트: 항상 "연결됨"으로 표시
     if (statusDotEl) {
       statusDotEl.classList.remove('disconnected');
       statusDotEl.classList.add('connected');
@@ -680,22 +696,22 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     if (statusTextEl) {
       statusTextEl.textContent = '연결됨';
     }
-  } else if (isPaired && (power > 0 || cadence > 0)) {
-    // 파워값이 있거나 케이던스가 있으면 일반 연결 상태 (기존 로직)
-    powerMeter.connected = true;
+  } else {
+    // 페어링이 없거나 데이터가 수신되지 않으면 미연결 상태
+    powerMeter.connected = false;
     
     if (infoEl) {
-      infoEl.classList.remove('disconnected');
-      infoEl.classList.add('connected');
+      infoEl.classList.remove('connected');
+      infoEl.classList.add('disconnected');
     }
     
     if (statusDotEl) {
-      statusDotEl.classList.remove('disconnected');
-      statusDotEl.classList.add('connected');
+      statusDotEl.classList.remove('connected');
+      statusDotEl.classList.add('disconnected');
     }
     
     if (statusTextEl) {
-      statusTextEl.textContent = '연결됨';
+      statusTextEl.textContent = '미연결';
     }
   }
 }
