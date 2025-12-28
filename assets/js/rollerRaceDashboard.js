@@ -5272,6 +5272,9 @@ function routeANTMessage(packet) {
   /**
    * [수정본] 모든 ANT+ 데이터를 받아서 분류하는 마스터 핸들러
    */
+/**
+ * ANT+ 데이터를 트랙별로 배분하고 속도를 계산하는 엔진
+ */
   window.processRaceData = function(payload) {
       if (!payload || payload.length < 13) return;
   
@@ -5279,10 +5282,19 @@ function routeANTMessage(packet) {
       const deviceId = ((payload[13] & 0xF0) << 12) | (payload[11] << 8) | payload[10];
       const deviceType = payload[12];
   
+      // 속도계(0x79) 또는 속도/케이던스(0x7B) 센서
       if (deviceType === 0x79 || deviceType === 0x7B) {
-          // [중요] 장치 ID로 해당 트랙 번호(0~3)를 찾습니다.
-          const trackId = window.findTrackByDeviceId ? window.findTrackByDeviceId(deviceId) : -1;
-          if (trackId === -1) return; // 페어링되지 않은 장치는 무시
+          // [중요] 등록된 장치 목록에서 이 장치가 몇 번 트랙인지 찾습니다.
+          // 기존에 작성하신 findTrackByDeviceId 혹은 유사한 로직을 활용합니다.
+          let trackId = -1;
+          for (let i = 0; i < window.raceState.tracks.length; i++) {
+              if (String(window.raceState.tracks[i].deviceId) === String(deviceId)) {
+                  trackId = i;
+                  break;
+              }
+          }
+  
+          if (trackId === -1) return; // 페어링 안 된 장치는 무시
   
           let speed = 0;
           const currentEventTime = antData[4] | (antData[5] << 8);
@@ -5291,7 +5303,7 @@ function routeANTMessage(packet) {
           if (!window.lastAntData) window.lastAntData = {};
           if (!window.lastAntData[deviceId]) {
               window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
-              updateSpeedometer(trackId, 0); // 0으로 초기화
+              updateSpeedometer(trackId, 0); // 초기 0점 조절
               return;
           }
   
@@ -5303,10 +5315,12 @@ function routeANTMessage(packet) {
           if (timeDiff < 0) timeDiff += 65536;
   
           if (timeDiff > 0 && revDiff > 0) {
-              const wheelCircumference = 2.096;
+              const wheelCircumference = 2.096; 
               speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
               if (speed > 100) speed = 0;
-              updateSpeedometer(trackId, speed); // 트랙 ID로 호출
+              
+              // 드디어 위에서 만든 함수를 호출합니다!
+              updateSpeedometer(trackId, speed);
           }
           window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
       }
@@ -6024,6 +6038,7 @@ function updateSpeedometer(trackId, speed) {
         needle.style.display = 'block';
     }
 }
+
 
 
 
