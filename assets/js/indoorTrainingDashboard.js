@@ -2679,16 +2679,26 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         // 라벨 위치 (축 왼쪽)
         ctx.fillText(label, padding.left - 8, y);
         
-        // FTP(100%) 라인에 주황색 점선 가이드 라인 표기
+        // FTP(100%) 라인에 주황색 작은 점선 가이드 라인 표기
         if (ftpPercent === 100) {
             ctx.strokeStyle = 'rgba(255, 165, 0, 0.6)'; // 주황색
             ctx.lineWidth = 1;
-            ctx.setLineDash([5, 5]); // 점선
+            ctx.setLineDash([2, 3]); // 더 작은 점선 (2px 점, 3px 간격)
             ctx.beginPath();
             ctx.moveTo(padding.left, y);
             ctx.lineTo(padding.left + chartWidth, y);
             ctx.stroke();
             ctx.setLineDash([]); // 점선 해제
+        }
+        // 50% 라인에 얇은 흰색 실선 가이드 라인 표기
+        else if (ftpPercent === 50) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 흰색
+            ctx.lineWidth = 0.5;
+            ctx.setLineDash([]); // 실선
+            ctx.beginPath();
+            ctx.moveTo(padding.left, y);
+            ctx.lineTo(padding.left + chartWidth, y);
+            ctx.stroke();
         }
         
         // 눈금선 (선택적)
@@ -2775,7 +2785,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     // X축 라벨: 워크아웃 운동시간 (단위:분)
     const totalMinutes = Math.round(totalSeconds / 60);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.font = '9px sans-serif';
+    ctx.font = '18px sans-serif'; // 9px에서 18px로 2배 확대
     ctx.textAlign = 'center';
     ctx.fillText(`운동시간: ${totalMinutes}분`, padding.left + chartWidth / 2, graphHeight - 5);
 }
