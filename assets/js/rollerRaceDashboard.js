@@ -507,7 +507,7 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   // 4. 애니메이션 속성 적용
   // cubic-bezier(0.25, 0.1, 0.25, 1)는 실제 기계 바늘처럼 처음에 빠르고 끝에 부드럽게 멈춥니다.
   // 0.4초는 ANT+ 센서 데이터 수신 주기(0.25s) 사이를 자연스럽게 이어줍니다.
-  needle.style.transition = 'transform 0.25s cubic-bezier(0.1, 0, 0.3, 1)';
+  needle.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
   needle.setAttribute('transform', `rotate(${finalAngle})`);
   
   // 5. 바늘 행적선 업데이트
@@ -567,14 +567,13 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
   const tickLengthLong = 14; 
   const centerCircleRadius = 7; 
   
-  // 현재 속도까지의 2.5km/h 단위 눈금 계산 (기존 5km/h의 1/2 간격)
-  const tickInterval = 2.5;
-  const currentTickSpeed = Math.floor(speed / tickInterval) * tickInterval;
+  // 현재 속도까지의 5km/h 단위 눈금 계산
+  const currentTickSpeed = Math.floor(speed / 5) * 5;
   const maxTickSpeed = Math.min(currentTickSpeed, maxSpeed);
   
   pathGroup.innerHTML = '';
   
-  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += tickInterval) {
+  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
     // 1. 바늘과 동일한 각도 계산
     let needleAngle = calculateNeedleAngle(tickSpeed);
     
@@ -597,26 +596,13 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     const x2 = centerX + outerRadius * Math.cos(rad);
     const y2 = centerY + outerRadius * Math.sin(rad);
     
-    // 5. 속도 구간에 따른 색상 결정
-    let strokeColor;
-    if (tickSpeed > 80) {
-      // 80km/h 초과: 투명 빨강색선
-      strokeColor = 'rgba(255, 0, 0, 0.4)';
-    } else if (tickSpeed > 40) {
-      // 40km/h 초과 ~ 80km/h: 투명 주황색선
-      strokeColor = 'rgba(255, 165, 0, 0.4)';
-    } else {
-      // 40km/h 이하: 민트색 반투명 (기존 색상 유지)
-      strokeColor = 'rgba(0, 255, 200, 0.4)';
-    }
-    
-    // 6. SVG Line 생성 및 추가
+    // 5. SVG Line 생성 및 추가
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1);
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
-    line.setAttribute('stroke', strokeColor);
+    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); // 민트색 반투명
     line.setAttribute('stroke-width', '1.2');
     line.setAttribute('stroke-linecap', 'round');
     
@@ -5433,104 +5419,30 @@ function routeANTMessage(packet) {
 }
 
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
-// ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
+// OLD 버전과 동일하게 processSpeedCadenceData를 통해 가민 필터 적용
 function handleBroadcastData(payload) {
-    // 1. 유효성 검사 (20바이트 패킷 기준)
-    if (!payload || payload.length < 14) return;
-
-    // 2. 장치 ID 추출 (로그 분석 결과: 20바이트 페이로드 기준)
-    // payload[0]: 채널번호
-    // payload[1~8]: 데이터 (속도/케이던스 정보는 여기에 있음)
-    // payload[9]: 확장 플래그
-    // payload[10]: Device ID Low (D0)
-    // payload[11]: Device ID High (07)
-    // payload[12]: Device Type (7B)
-    // payload[13]: Trans Type (15 -> 상위 니블 1)
+  if (payload.length < 9) return;
+  const antData = payload.slice(1, 9); 
+  
+  // Extended Data (ID 정보) 확인
+  if (payload.length >= 13) {
+    const flag = payload[9];
     
-    const idLow = payload[10];
-    const idHigh = payload[11];
-    const deviceType = payload[12];
-    const transType = payload[13];
-
-    // ANT+ ID 계산 (TransType 상위 4비트 + ID High + ID Low)
-    // 예: 0x10 + 0x07 + 0xD0 = 0x107D0 = 67536
-    const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
-    
-    // 디버깅: ID가 제대로 나오는지 콘솔에서 확인 가능
-    // console.log(`[ANT+ 수신] ID: ${deviceId}, Type: 0x${deviceType.toString(16)}`);
-
-    // 3. 장치 필터링 (속도계 0x79, 0x7B)
-    if (deviceType === 0x79 || deviceType === 0x7B) {
-        let trackIndex = -1;
-
-        // 페어링된 트랙 찾기
-        if (window.rollerRaceState && window.rollerRaceState.speedometers) {
-            trackIndex = window.rollerRaceState.speedometers.findIndex(s => String(s.deviceId) === String(deviceId));
-        }
-
-        // [트랙 2 강제 매핑] 테스트용: 67536은 무조건 트랙2(ID:2)로 연결
-        if (deviceId === 67536) {
-            // rollerRaceState.speedometers는 0번부터 시작하므로 ID가 2인 속도계를 찾아야 함
-            trackIndex = window.rollerRaceState.speedometers.findIndex(s => s.id === 2);
-        }
-
-        if (trackIndex === -1) return; // 매핑된 트랙 없음
-
-        const speedometer = window.rollerRaceState.speedometers[trackIndex];
-        
-        // 4. 속도 계산 데이터 추출 (인덱스 수정: 5,6,7,8번 사용)
-        // payload[5-6]: Event Time, payload[7-8]: Revolution Count
-        const currentEventTime = payload[5] | (payload[6] << 8);
-        const currentRevCount = payload[7] | (payload[8] << 8);
-
-        // 초기화 또는 데이터 갱신
-        if (speedometer.lastEventTime === undefined || speedometer.lastEventTime === 0) {
-            speedometer.lastEventTime = currentEventTime;
-            speedometer.lastRevolutions = currentRevCount;
-            speedometer.lastPacketTime = Date.now();
-            // 초기 0 표시
-            updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
-            return;
-        }
-
-        // 패킷 갱신 시간 기록
-        speedometer.lastPacketTime = Date.now();
-
-        // 데이터 변화 없음 (정지 상태)
-        if (currentEventTime === speedometer.lastEventTime) return;
-
-        // 변화량 계산 (롤오버 처리)
-        let revDiff = currentRevCount - speedometer.lastRevolutions;
-        let timeDiff = currentEventTime - speedometer.lastEventTime;
-
-        if (revDiff < 0) revDiff += 65536;
-        if (timeDiff < 0) timeDiff += 65536;
-
-        if (timeDiff > 0 && revDiff > 0) {
-            const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
-            // 속도 계산: (회전수 * 둘레 / 1000) / (시간 / 1024) * 3.6
-            const speed = ((revDiff * wheelSpec.circumference) / 1000) / (timeDiff / 1024) * 3.6;
-            
-            // 거리 누적 (경기 중일 때만)
-            if (window.rollerRaceState.raceState === 'running') {
-                 const distKm = (revDiff * wheelSpec.circumference) / 1000000;
-                 speedometer.totalDistance += distKm;
-            }
-
-            // 비정상 값 필터링 (150km/h 이상은 무시)
-            if (speed < 150) {
-                // UI 업데이트
-                updateSpeedometerData(speedometer.id, speed, speedometer.totalDistance);
-            }
-        }
-
-        // 상태 저장
-        speedometer.lastEventTime = currentEventTime;
-        speedometer.lastRevolutions = currentRevCount;
-        
-        // 연결 상태 표시 갱신 (초록불)
-        updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
+    // 0x80 비트가 있거나, 길이가 충분하면 ID가 있다고 가정
+    if ((flag & 0x80) || payload.length > 12) { 
+      const idLow = payload[10];
+      const idHigh = payload[11];
+      const deviceType = payload[12]; // 0x78(구형속도), 0x7B(신형속도) 등
+      const transType = payload[13];
+      
+      // ID 계산
+      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+      
+      // 목록 추가 및 데이터 업데이트 (processSpeedCadenceData를 통해 가민 필터 적용)
+      addFoundDeviceToUI(extendedId, deviceType);
+      updateSpeedometerDataInternal(extendedId, antData);
     }
+  }
 }
 
 // 4. 화면 목록에 강제 추가 (필터 완화)
@@ -5618,26 +5530,15 @@ function displayANTDevices(devices) {
 
 // 6. 내부 데이터 업데이트 헬퍼
 function updateSpeedometerDataInternal(deviceId, antData) {
-  console.log(`[Race] updateSpeedometerDataInternal: deviceId=${deviceId}, antData.length=${antData?.length}`);
-  
-  const speedometer = window.rollerRaceState.speedometers.find(s => String(s.deviceId) === String(deviceId));
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.deviceId == deviceId);
   if (speedometer) {
-    console.log(`[Race] 속도계 찾음: 트랙${speedometer.id}, deviceId=${speedometer.deviceId}`);
     // 센서 데이터를 받으면 연결됨 상태로 업데이트 (초록색)
     speedometer.lastPacketTime = Date.now();
     speedometer.connected = true;
     if(typeof updateSpeedometerConnectionStatus === 'function') {
       updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
     }
-    if(typeof processSpeedCadenceData === 'function') {
-      console.log(`[Race] processSpeedCadenceData 호출: deviceId=${speedometer.deviceId}`);
-      processSpeedCadenceData(speedometer.deviceId, antData);
-    } else {
-      console.warn('[Race] processSpeedCadenceData 함수가 없습니다!');
-    }
-  } else {
-    console.warn(`[Race] deviceId ${deviceId}에 해당하는 속도계를 찾을 수 없습니다.`);
-    console.log('[Race] 현재 등록된 속도계:', window.rollerRaceState.speedometers.map(s => ({id: s.id, deviceId: s.deviceId})));
+    if(typeof processSpeedCadenceData === 'function') processSpeedCadenceData(speedometer.deviceId, antData);
   }
 }
 
