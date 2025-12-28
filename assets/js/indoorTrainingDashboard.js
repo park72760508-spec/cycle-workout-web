@@ -380,7 +380,7 @@ function generatePowerMeterTicks(powerMeterId) {
 
 /**
  * 파워계 라벨 생성 (주요 눈금에만 숫자 표시)
- * 사용자 FTP 값이 있으면: pos=120 → FTP*0.33, pos=100 → FTP*0.67, pos=80 → FTP*1, pos=60 → FTP*1.33, pos=40 → FTP*1.167, pos=20 → FTP*2, pos=0 → FTP*2
+ * 사용자 FTP 값이 있으면: pos=120 → FTP*0, pos=100 → FTP*0.33, pos=80 → FTP*0.67, pos=60 → FTP*1, pos=40 → FTP*1.33, pos=20 → FTP*1.67, pos=0 → FTP*2
  * 사용자 FTP 값이 없으면: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
  * 주요 눈금(20 간격)에만 숫자 표시: pos=0, 20, 40, 60, 80, 100, 120
  * 원 중심으로 180도 회전
@@ -423,7 +423,7 @@ function generatePowerMeterLabels(powerMeterId) {
     if (useFTPValue) {
       // FTP 값이 있는 경우: 특정 배수 적용
       // pos=120 → 0×FTP, pos=100 → 0.33×FTP, pos=80 → 0.67×FTP, 
-      // pos=60 → 1×FTP (주황색), pos=40 → 1.33×FTP, pos=20 → 1.167×FTP, pos=0 → 2×FTP
+      // pos=60 → 1×FTP (주황색), pos=40 → 1.33×FTP, pos=20 → 1.67×FTP, pos=0 → 2×FTP
       let multiplier;
       let isOneFTP = false; // 1×FTP 여부
       
@@ -435,7 +435,7 @@ function generatePowerMeterLabels(powerMeterId) {
         isOneFTP = true;
       }
       else if (pos === 40) multiplier = 1.33;
-      else if (pos === 20) multiplier = 1.167;
+      else if (pos === 20) multiplier = 1.67;
       else if (pos === 0) multiplier = 2;
       else multiplier = 1;
       
@@ -526,8 +526,7 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   if (useFTPValue) {
     // FTP 값이 있는 경우: 눈금 매핑 사용
     // 눈금: pos=120 → FTP*0, pos=100 → FTP*0.33, pos=80 → FTP*0.67, 
-    //       pos=60 → FTP*1, pos=40 → FTP*1.33, pos=20 → FTP*1.167, pos=0 → FTP*2
-    // 주의: pos=20(1.167)과 pos=40(1.33)은 역순이므로 비선형 매핑 필요
+    //       pos=60 → FTP*1, pos=40 → FTP*1.33, pos=20 → FTP*1.67, pos=0 → FTP*2
     const maxPower = ftp * 2;
     const clampedPower = Math.max(0, Math.min(maxPower, power));
     
@@ -537,8 +536,8 @@ function updatePowerMeterNeedle(powerMeterId, power) {
       { pos: 100, value: ftp * 0.33 },
       { pos: 80, value: ftp * 0.67 },
       { pos: 60, value: ftp * 1 },       // 1×FTP
-      { pos: 40, value: ftp * 1.33 },    // 더 큰 값
-      { pos: 20, value: ftp * 1.167 },   // 더 작은 값 (역순)
+      { pos: 40, value: ftp * 1.33 },
+      { pos: 20, value: ftp * 1.67 },
       { pos: 0, value: ftp * 2 }          // 가장 오른쪽 (2×FTP)
     ];
     
@@ -563,12 +562,11 @@ function updatePowerMeterNeedle(powerMeterId, power) {
       const ratio = (clampedPower - markers[3].value) / (markers[4].value - markers[3].value);
       speedPos = 60 - ratio * 20;
     } else if (clampedPower <= markers[5].value) {
-      // FTP*1.33 ~ FTP*1.167: pos 40 ~ 20 (역순, 값이 감소하지만 pos는 증가)
-      // 역방향 처리
-      const ratio = (markers[4].value - clampedPower) / (markers[4].value - markers[5].value);
-      speedPos = 40 + ratio * 20;
+      // FTP*1.33 ~ FTP*1.67: pos 40 ~ 20
+      const ratio = (clampedPower - markers[4].value) / (markers[5].value - markers[4].value);
+      speedPos = 40 - ratio * 20;
     } else {
-      // FTP*1.167 ~ FTP*2: pos 20 ~ 0
+      // FTP*1.67 ~ FTP*2: pos 20 ~ 0
       const ratio = (clampedPower - markers[5].value) / (markers[6].value - markers[5].value);
       speedPos = 20 - ratio * 20;
     }
