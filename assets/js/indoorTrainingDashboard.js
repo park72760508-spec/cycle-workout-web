@@ -68,6 +68,8 @@ class PowerMeterData {
 
 // ANT+ 메시지 처리 함수 (processBuffer보다 먼저 정의)
 function handleIndoorAntMessage(packet) {
+  console.log('[Training] handleIndoorAntMessage: 함수 호출됨', packet?.length, packet);
+  
   if (!packet || packet.length < 4) {
     console.warn('[Training] handleIndoorAntMessage: 패킷이 너무 짧음', packet?.length);
     return;
@@ -121,10 +123,15 @@ window.processBuffer = function(newData) {
     window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(totalLen);
 
     console.log(`[Training] processBuffer: 패킷 추출 완료, packet.length=${packet.length}, msgId=0x${packet[2]?.toString(16)}`);
-    console.log(`[Training] processBuffer: handleIndoorAntMessage 타입 확인=${typeof handleIndoorAntMessage}`);
+    console.log(`[Training] processBuffer: handleIndoorAntMessage 타입 확인=${typeof handleIndoorAntMessage}, window.handleIndoorAntMessage=${typeof window.handleIndoorAntMessage}`);
     try {
+      // 로컬 함수를 먼저 시도하고, 없으면 window 객체의 함수를 시도
       if (typeof handleIndoorAntMessage === 'function') {
+        console.log('[Training] processBuffer: 로컬 handleIndoorAntMessage 호출');
         handleIndoorAntMessage(packet);
+      } else if (typeof window.handleIndoorAntMessage === 'function') {
+        console.log('[Training] processBuffer: window.handleIndoorAntMessage 호출');
+        window.handleIndoorAntMessage(packet);
       } else {
         console.error('[Training] processBuffer: handleIndoorAntMessage 함수를 찾을 수 없습니다!');
       }
