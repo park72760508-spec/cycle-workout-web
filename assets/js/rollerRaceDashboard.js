@@ -3749,8 +3749,17 @@ async function startANTMessageListener() {
       console.log('[Race] typeof window.processBuffer:', typeof window.processBuffer);
       console.log('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
       
-      if (typeof processBuffer === 'function') {
-        console.log('[Race] processBuffer 함수 호출 시도, data.length=', data.length, 'data type:', typeof data, 'is Uint8Array:', data instanceof Uint8Array);
+      // processMasterBuffer를 우선적으로 호출 (routeANTMessage를 직접 호출)
+      if (typeof processMasterBuffer === 'function') {
+        console.log('[Race] processMasterBuffer 함수 호출 시도, data.length=', data.length);
+        try {
+          processMasterBuffer(data);
+          console.log('[Race] processMasterBuffer 함수 호출 완료');
+        } catch (e) {
+          console.error('[Race] processMasterBuffer 함수 호출 에러:', e);
+        }
+      } else if (typeof processBuffer === 'function') {
+        console.log('[Race] processBuffer 함수 호출 시도, data.length=', data.length);
         try {
           processBuffer(data);
           console.log('[Race] processBuffer 함수 호출 완료');
@@ -3759,10 +3768,11 @@ async function startANTMessageListener() {
         }
       } else if (typeof processIncomingData === 'function') {
         console.log('[Race] processIncomingData 함수 호출 시도');
-        processIncomingData(data);
-      } else if (typeof processMasterBuffer === 'function') {
-        console.log('[Race] processMasterBuffer 함수 호출 시도');
-        processMasterBuffer(data);
+        try {
+          processIncomingData(data);
+        } catch (e) {
+          console.error('[Race] processIncomingData 함수 호출 에러:', e);
+        }
       } else if (typeof window.processBuffer === 'function') {
         console.log('[Race] window.processBuffer 함수 호출 시도');
         window.processBuffer(data);
