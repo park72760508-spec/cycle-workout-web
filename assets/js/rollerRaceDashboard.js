@@ -3820,60 +3820,74 @@ async function startANTMessageListener() {
       // 예: 0xA4 0x03 0x40 0x00 ...
       console.log('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
       
-      // processBuffer를 통해 processMasterBuffer 호출
-      console.log('[Race] startANTMessageListener: 함수 확인 시작');
-      console.log('[Race] typeof processBuffer:', typeof processBuffer);
-      console.log('[Race] typeof processIncomingData:', typeof processIncomingData);
-      console.log('[Race] typeof processMasterBuffer:', typeof processMasterBuffer);
-      console.log('[Race] typeof window.processBuffer:', typeof window.processBuffer);
-      console.log('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
+      // 현재 화면 확인 (Race 모드와 Training 모드 분리)
+      const currentScreen = document.querySelector('.screen.active');
+      const isRaceScreen = currentScreen && currentScreen.id === 'rollerRaceDashboardScreen';
+      const isTrainingScreen = currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen';
       
-      // processMasterBuffer를 우선적으로 호출 (routeANTMessage를 직접 호출)
-      if (typeof processMasterBuffer === 'function') {
-        console.log('[Race] processMasterBuffer 함수 호출 시도, data.length=', data.length);
+      // Training 화면일 때는 Training의 processBuffer 사용 (Race와 독립적으로 구동)
+      if (isTrainingScreen && typeof window.processBuffer === 'function') {
+        console.log('[Training] window.processBuffer 함수 호출, data.length=', data.length);
         try {
-          processMasterBuffer(data);
-          console.log('[Race] processMasterBuffer 함수 호출 완료');
+          window.processBuffer(data);
         } catch (e) {
-          console.error('[Race] processMasterBuffer 함수 호출 에러:', e);
+          console.error('[Training] window.processBuffer 함수 호출 에러:', e);
         }
-      } else if (typeof processBuffer === 'function') {
-        console.log('[Race] processBuffer 함수 호출 시도, data.length=', data.length);
-        try {
-          processBuffer(data);
-          console.log('[Race] processBuffer 함수 호출 완료');
-        } catch (e) {
-          console.error('[Race] processBuffer 함수 호출 에러:', e);
-        }
-      } else if (typeof processIncomingData === 'function') {
-        console.log('[Race] processIncomingData 함수 호출 시도');
-        try {
-          processIncomingData(data);
-        } catch (e) {
-          console.error('[Race] processIncomingData 함수 호출 에러:', e);
-        }
-      } else if (typeof window.processBuffer === 'function') {
-        console.log('[Race] window.processBuffer 함수 호출 시도');
-        window.processBuffer(data);
-      } else if (typeof window.processIncomingData === 'function') {
-        console.log('[Race] window.processIncomingData 함수 호출 시도');
-        window.processIncomingData(data);
-      } else if (typeof window.processMasterBuffer === 'function') {
-        console.log('[Race] window.processMasterBuffer 함수 호출 시도');
-        window.processMasterBuffer(data);
-      } else {
-        console.error('[Race] processBuffer, processIncomingData, processMasterBuffer 함수를 모두 찾을 수 없습니다!');
-        // 직접 패킷 처리 시도
-        console.log('[Race] 직접 패킷 처리 시도');
-        if (data.length >= 4 && data[0] === 0xA4) {
-          const msgId = data[2];
-          if (msgId === 0x4E) {
-            const payload = data.slice(3, data.length - 1);
-            console.log('[Race] 직접 handleBroadcastData 호출 시도, payload.length=', payload.length);
-            if (typeof handleBroadcastData === 'function') {
-              handleBroadcastData(payload);
-            } else {
-              console.error('[Race] handleBroadcastData 함수도 찾을 수 없습니다!');
+        // Training 모드에서는 Race 처리를 하지 않고 바로 반환
+        setTimeout(startANTMessageListener, 10);
+        return;
+      }
+      
+      // Race 화면일 때는 Race의 processMasterBuffer 사용
+      if (isRaceScreen) {
+        console.log('[Race] startANTMessageListener: 함수 확인 시작');
+        console.log('[Race] typeof processBuffer:', typeof processBuffer);
+        console.log('[Race] typeof processIncomingData:', typeof processIncomingData);
+        console.log('[Race] typeof processMasterBuffer:', typeof processMasterBuffer);
+        console.log('[Race] typeof window.processBuffer:', typeof window.processBuffer);
+        console.log('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
+        
+        // processMasterBuffer를 우선적으로 호출 (routeANTMessage를 직접 호출)
+        if (typeof processMasterBuffer === 'function') {
+          console.log('[Race] processMasterBuffer 함수 호출 시도, data.length=', data.length);
+          try {
+            processMasterBuffer(data);
+            console.log('[Race] processMasterBuffer 함수 호출 완료');
+          } catch (e) {
+            console.error('[Race] processMasterBuffer 함수 호출 에러:', e);
+          }
+        } else if (typeof processBuffer === 'function') {
+          console.log('[Race] processBuffer 함수 호출 시도, data.length=', data.length);
+          try {
+            processBuffer(data);
+            console.log('[Race] processBuffer 함수 호출 완료');
+          } catch (e) {
+            console.error('[Race] processBuffer 함수 호출 에러:', e);
+          }
+        } else if (typeof processIncomingData === 'function') {
+          console.log('[Race] processIncomingData 함수 호출 시도');
+          try {
+            processIncomingData(data);
+          } catch (e) {
+            console.error('[Race] processIncomingData 함수 호출 에러:', e);
+          }
+        } else if (typeof window.processMasterBuffer === 'function') {
+          console.log('[Race] window.processMasterBuffer 함수 호출 시도');
+          window.processMasterBuffer(data);
+        } else {
+          console.error('[Race] processBuffer, processIncomingData, processMasterBuffer 함수를 모두 찾을 수 없습니다!');
+          // 직접 패킷 처리 시도
+          console.log('[Race] 직접 패킷 처리 시도');
+          if (data.length >= 4 && data[0] === 0xA4) {
+            const msgId = data[2];
+            if (msgId === 0x4E) {
+              const payload = data.slice(3, data.length - 1);
+              console.log('[Race] 직접 handleBroadcastData 호출 시도, payload.length=', payload.length);
+              if (typeof handleBroadcastData === 'function') {
+                handleBroadcastData(payload);
+              } else {
+                console.error('[Race] handleBroadcastData 함수도 찾을 수 없습니다!');
+              }
             }
           }
         }
@@ -5505,7 +5519,17 @@ function routeANTMessage(packet) {
   // 센서 데이터 (0x4E) 처리
   if (msgId === 0x4E) {
       console.log(`[Race] Broadcast Data (0x4E) 처리: payload.length=${payload.length}`);
-      handleBroadcastData(payload);
+      
+      // 현재 화면 확인 (Training 화면이면 Training의 parseIndoorSensorPayload 호출)
+      const currentScreen = document.querySelector('.screen.active');
+      const isTrainingScreen = currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen';
+      if (isTrainingScreen && typeof window.parseIndoorSensorPayload === 'function') {
+        // Training 화면에서는 Training의 parseIndoorSensorPayload 호출 (Race와 독립적으로 구동)
+        window.parseIndoorSensorPayload(payload);
+      } else {
+        // Race 화면에서는 Race의 handleBroadcastData 호출
+        handleBroadcastData(payload);
+      }
   } else {
       console.log(`[Race] 알 수 없는 메시지 ID: 0x${msgId.toString(16)}`);
   }
@@ -5513,8 +5537,18 @@ function routeANTMessage(packet) {
 
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
 // OLD 버전과 동일하게 processSpeedCadenceData를 통해 가민 필터 적용
+// Training 모드의 심박계 데이터는 처리하지 않도록 Race 모드에서만 동작
 function handleBroadcastData(payload) {
   if (payload.length < 9) return;
+  
+  // 현재 화면 확인 (Training 화면이면 처리하지 않음)
+  const currentScreen = document.querySelector('.screen.active');
+  const isTrainingScreen = currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen';
+  if (isTrainingScreen) {
+    // Training 화면에서는 Training의 parseIndoorSensorPayload가 처리하도록 함
+    return;
+  }
+  
   const antData = payload.slice(1, 9); 
   
   // Extended Data (ID 정보) 확인
@@ -5525,15 +5559,19 @@ function handleBroadcastData(payload) {
     if ((flag & 0x80) || payload.length > 12) { 
       const idLow = payload[10];
       const idHigh = payload[11];
-      const deviceType = payload[12]; // 0x78(구형속도), 0x7B(신형속도) 등
+      const deviceType = payload[12]; // 0x78(구형속도), 0x7B(신형속도), 0x7D(심박계) 등
       const transType = payload[13];
       
       // ID 계산
       const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
       
-      // 목록 추가 및 데이터 업데이트 (processSpeedCadenceData를 통해 가민 필터 적용)
-      addFoundDeviceToUI(extendedId, deviceType);
-      updateSpeedometerDataInternal(extendedId, antData);
+      // Race 모드에서만 속도계(0x79, 0x7A, 0x7B, 0x78) 처리
+      // 심박계(0x7D)는 Training 모드에서만 처리
+      if (deviceType === 0x79 || deviceType === 0x7A || deviceType === 0x7B || deviceType === 0x78) {
+        // 목록 추가 및 데이터 업데이트 (processSpeedCadenceData를 통해 가민 필터 적용)
+        addFoundDeviceToUI(extendedId, deviceType);
+        updateSpeedometerDataInternal(extendedId, antData);
+      }
     }
   }
 }

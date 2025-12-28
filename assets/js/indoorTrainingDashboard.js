@@ -1925,12 +1925,35 @@ if (typeof showScreen === 'function') {
 // [삽입 위치: 파일 맨 마지막]
 
 function parseIndoorSensorPayload(payload) {
-  if (payload.length < 13) return;
+  // 현재 화면 확인 (Training 화면일 때만 처리)
+  const currentScreen = document.querySelector('.screen.active');
+  const isTrainingScreen = currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen';
+  if (!isTrainingScreen) {
+    // Training 화면이 아니면 처리하지 않음
+    return;
+  }
   
-  const idLow = payload[10];
-  const idHigh = payload[11];
-  const deviceType = payload[12]; // 0x78: 심박계, 0x0B: 파워미터, 0x11: FE-C
-  const transType = payload[13];
+  // 페이로드 길이 체크 (20바이트 확장 패킷 기준)
+  if (payload.length < 18) {
+    // 구형 13바이트 패킷도 지원
+    if (payload.length < 13) return;
+  }
+  
+  // ID 추출 위치 확인 (20바이트 확장 패킷 기준: payload[13], payload[14], payload[17])
+  let idLow, idHigh, deviceType, transType;
+  if (payload.length >= 18) {
+    // 확장 패킷 (20바이트): payload[13]=idLow, payload[14]=idHigh, payload[15]=deviceType, payload[17]=transType
+    idLow = payload[13];
+    idHigh = payload[14];
+    deviceType = payload[15];
+    transType = payload[17];
+  } else {
+    // 구형 패킷 (13바이트): payload[10]=idLow, payload[11]=idHigh, payload[12]=deviceType, payload[13]=transType
+    idLow = payload[10];
+    idHigh = payload[11];
+    deviceType = payload[12];
+    transType = payload[13];
+  }
   
   // ID 계산 (로그의 9297 등 정상 추출)
   const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
@@ -1940,13 +1963,14 @@ function parseIndoorSensorPayload(payload) {
 
   // 실시간 데이터 반영 (훈련 중이거나 페어링된 장치의 경우)
   // 페어링된 장치는 훈련 시작 전에도 데이터를 받을 수 있도록
+  // 심박계 타입: 0x78 (구형), 0x7D (신형)
   const isPairedDevice = window.indoorTrainingState.powerMeters.some(pm => {
     const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
     const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
     const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
     const receivedDeviceId = String(deviceId);
     
-    return (deviceType === 0x78 && pmHeartRateDeviceId === receivedDeviceId) ||
+    return ((deviceType === 0x78 || deviceType === 0x7D) && pmHeartRateDeviceId === receivedDeviceId) ||
            ((deviceType === 0x0B || deviceType === 0x11) && (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId));
   });
   
@@ -1959,12 +1983,19 @@ function updateFoundDevicesList(deviceId, deviceType) {
   let existing = window.antState.foundDevices.find(d => d.id === deviceId);
   
   if (!existing) {
-    let typeName = (deviceType === 0x78) ? '심박계' : (deviceType === 0x0B ? '파워미터' : '스마트로라');
+    let typeName;
+    if (deviceType === 0x78 || deviceType === 0x7D) {
+      typeName = '심박계';
+    } else if (deviceType === 0x0B || deviceType === 0x11) {
+      typeName = deviceType === 0x0B ? '파워미터' : '스마트로라';
+    } else {
+      typeName = '알 수 없음';
+    }
     existing = { id: deviceId, type: typeName, deviceType: deviceType };
     window.antState.foundDevices.push(existing);
-    console.log(`[신규 장치 발견] ${typeName} ID: ${deviceId}`);
+    console.log(`[Training] 신규 장치 발견: ${typeName} ID: ${deviceId}`);
   }
-
+  
   // [보완] 기존에 발견된 장치라도 현재 페어링 모달이 열려있다면 UI를 강제로 다시 그림
   renderPairingDeviceList(deviceType);
 }
@@ -1981,14 +2012,17 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
         const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
         const receivedDeviceId = String(deviceId);
 
-        // 1. 심박계 처리 (0x78)
-        if (deviceType === 0x78 && pmHeartRateDeviceId === receivedDeviceId) {
+        // 1. 심박계 처리 (0x78: 구형, 0x7D: 신형)
+        if ((deviceType === 0x78 || deviceType === 0x7D) && pmHeartRateDeviceId === receivedDeviceId) {
             // ANT+ Heart Rate Profile: 대부분의 페이지에서 Byte 7이 Computed Heart Rate임
             const heartRate = antData[7];
             if (heartRate > 0 && heartRate < 255) {
                 pm.heartRate = heartRate;
                 const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
                 if (hrEl) hrEl.textContent = Math.round(heartRate);
+                
+                // 파워미터 데이터도 함께 업데이트 (심박수 변경 시)
+                updatePowerMeterData(pm.id, pm.currentPower, heartRate, pm.cadence);
             }
         }
 
@@ -2060,32 +2094,32 @@ function renderPairingDeviceList(targetType) {
  * [통합 ANT+ 데이터 라우터]
  * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
  */
-// 약 2130라인 부근의 함수를 아래 내용으로 교체
 window.parseIndoorSensorPayload = function(payload) {
-    if (!payload || payload.length < 13) return;
+    if (!payload || payload.length < 18) return; // 최소 길이 체크 수정
 
-    // 장치 타입 추출 (로그의 15번 바이트 또는 12번 바이트)
-    const deviceType = payload[15] || payload[12];
-
-    // 1. Indoor Race 관련: 속도계(0x79), 속도/케이던스(0x7B)
-    if (deviceType === 0x79 || deviceType === 0x7B) {
-        if (typeof window.processRaceData === 'function') {
-            window.processRaceData(payload); // 레이스 엔진 호출
-        }
-        // 레이스 화면이 켜져 있으면 여기서 중단 (간섭 방지)
-        const raceDashboard = document.getElementById('race-dashboard');
-        if (raceDashboard && raceDashboard.style.display !== 'none') return;
+    // 현재 화면이 Indoor Training인지 확인
+    const currentScreen = window.currentScreen || '';
+    const isTrainingScreen = currentScreen === 'indoorTrainingDashboardScreen' || 
+                             document.getElementById('powerMeterGrid') !== null;
+    
+    if (!isTrainingScreen) {
+        // Training 화면이 아니면 처리하지 않음 (Race 화면에서 handleBroadcastData가 처리)
+        return;
     }
 
-    // 2. Indoor Training 관련: 심박(0x78), 파워(0x0B), 스마트로라(0x11)
-    // ID 계산 (TransType 포함한 정밀 계산)
+    // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
     const idLow = payload[13];
     const idHigh = payload[14];
+    const deviceType = payload[15];
     const transType = payload[17];
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
-    if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
+    // 트레이닝 관련 장치 타입: 0x0B (파워), 0x11 (스마트로라), 0x78 (구형 심박계), 0x7D (신형 심박계)
+    // 단, Race 관련 타입(0x79, 0x7A, 0x7B)은 Race 화면에서만 처리하도록
+    if (deviceType === 0x0B || deviceType === 0x11 || deviceType === 0x78 || deviceType === 0x7D) {
+        if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
+        if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
+    }
 };
 
 /**
@@ -2222,7 +2256,6 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
-
 
 
 
