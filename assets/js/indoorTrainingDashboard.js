@@ -530,36 +530,35 @@ function updatePowerMeterTicks(powerMeterId) {
  * 최대값: 사용자 FTP의 2배
  * 각도: 180도(0W) ~ 360도(Max)
  */
+// 파워미터 카드 HTML을 생성한 직후 또는 목록을 그릴 때 호출
+function initializeNeedles() {
+  window.indoorTrainingState.powerMeters.forEach(pm => {
+    // 초기 로딩 시 0W 기준으로 바늘 위치 설정 (180도)
+    updatePowerMeterNeedle(pm.id, 0);
+  });
+}
+
+// 기존 updatePowerMeterNeedle 함수 보강 (null 체크 및 초기값)
 function updatePowerMeterNeedle(powerMeterId, power) {
-  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
-  if (!powerMeter) return;
+  const needleEl = document.getElementById(`needle-${powerMeterId}`);
+  if (!needleEl) return;
+
+  const ftp = window.indoorTrainingState.userFTP || 200;
+  const maxPower = ftp * 2;
   
-  // 1. 기준 FTP 값 가져오기 (없으면 기본값 200W)
-  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 200;
-  const maxPower = ftp * 2; // 게이지의 끝점
-  
-  // 2. 파워 비율 계산 (0 ~ 1.0)
-  let ratio = power / maxPower;
-  if (ratio > 1) ratio = 1; // 최대값 초과 시 고정
+  let ratio = (power || 0) / maxPower;
+  if (ratio > 1) ratio = 1;
   if (ratio < 0) ratio = 0;
-  
-  /**
-   * 3. 각도 매핑 (Indoor Race 스타일)
-   * 시작(0W): 180도 (하단 왼쪽)
-   * 종료(Max): 360도 (하단 오른쪽)
-   * 범위: 180도 (반원)
-   */
+
+  // 0W일 때 180도(왼쪽 끝)에서 시작
   const startAngle = 180;
   const range = 180;
   const targetAngle = startAngle + (ratio * range);
-  
-  // 4. SVG 바늘 엘리먼트에 적용
-  const needleEl = document.getElementById(`needle-${powerMeterId}`);
-  if (needleEl) {
-    // rotate(각도, 중심X, 중심Y) - SVG 내에서 직접 회전
-    // 현재 코드 구조상 transform-origin이 이미 잡혀있으므로 rotate(각도)만 전달
-    needleEl.setAttribute('transform', `rotate(${targetAngle})`);
-  }
+
+  // 인라인 스타일로 즉시 적용하여 초기 가시성 확보
+  needleEl.style.display = "block"; 
+  needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`); 
+  // 위 100, 140은 SVG의 회전 중심축 좌표입니다. (디자인에 따라 조정 필요)
 }
 
 /**
@@ -2188,6 +2187,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
