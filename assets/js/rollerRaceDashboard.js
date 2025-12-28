@@ -5435,67 +5435,65 @@ function routeANTMessage(packet) {
 // 3. 데이터 해석 및 ID 추출 (구형 센서 0x78 완벽 지원)
 // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
 function handleBroadcastData(payload) {
-  if (!payload || payload.length < 9) {
-    console.warn('[Race] handleBroadcastData: payload가 너무 짧음', payload?.length);
-    return;
-  }
-  
-  // 현재 화면 확인: Indoor Training 화면에서는 parseIndoorSensorPayload가 처리
-  const currentScreen = window.currentScreen || '';
-  const isTrainingScreen = currentScreen === 'indoorTrainingDashboardScreen' || 
-                           (document.getElementById('powerMeterGrid') && document.getElementById('powerMeterGrid').offsetParent !== null);
-  
-  // ANT+ 데이터 추출 (인덱스 1~8, 실제로는 payload[0]부터 시작하므로 인덱스 조정 필요)
-  // payload는 이미 routeANTMessage에서 packet.slice(3, packet.length - 1)로 추출됨
-  // 따라서 payload[0] = channel, payload[1~8] = ANT+ data
-  const antData = payload.slice(1, 9); 
-  
-  // Extended Data (ID 정보) 확인 - 최소 길이 18바이트 필요
-  if (payload.length >= 18) {
-    const flag = payload[9];
-    
-    // 0x80 비트가 있거나, 길이가 충분하면 ID가 있다고 가정
-    if ((flag & 0x80) || payload.length > 12) { 
-      // 정확한 ID 위치 (로그 분석 결과 반영): 
-      // payload[13] (idLow), payload[14] (idHigh), payload[15] (deviceType), payload[17] (transType)
-      const idLow = payload[13];
-      const idHigh = payload[14];
-      const deviceType = payload[15]; // 0x78(구형속도), 0x7B(신형속도), 0x79(속도), 0x0B(파워), 0x11(심박) 등
-      const transType = payload[17];
-      
-      // ID 계산: ((transType & 0xF0) << 12) | (idHigh << 8) | idLow
-      const extendedId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
-      
-      console.log(`[Race] handleBroadcastData: deviceId=${extendedId}, deviceType=0x${deviceType.toString(16)}, isTrainingScreen=${isTrainingScreen}, payload.length=${payload.length}`);
-      
-      // 장치 타입별 라우팅
-      // Race 관련 (속도계): 0x78, 0x79, 0x7A, 0x7B
-      if (deviceType === 0x78 || deviceType === 0x79 || deviceType === 0x7A || deviceType === 0x7B) {
-        // Race 화면이 활성화되어 있고, Training 화면이 아닐 때만 처리
-        if (!isTrainingScreen) {
-          // 목록 추가 및 데이터 업데이트
-          console.log(`[Race] 속도계 데이터 처리: deviceId=${extendedId}, antData.length=${antData.length}`);
-          addFoundDeviceToUI(extendedId, deviceType);
-          updateSpeedometerDataInternal(extendedId, antData);
-        } else {
-          // Training 화면에서는 parseIndoorSensorPayload가 처리하도록 전달
-          console.log(`[Race] Training 화면 활성화 - parseIndoorSensorPayload로 전달`);
-          if (typeof window.parseIndoorSensorPayload === 'function') {
-            window.parseIndoorSensorPayload(payload);
-          }
+    if (!payload || payload.length < 15) return;
+
+    // 1. 장치 ID 정밀 추출 (로그 바이트 순서 반영)
+    const idLow = payload[10];
+    const idHigh = payload[11];
+    const deviceType = payload[12]; // 0x7B (속도&케이던스)
+    const transType = payload[14]; 
+
+    // ANT+ 확장 ID 계산 (67536 생성 공식)
+    const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+
+    // 2. 장치 필터링 (속도 관련 장치 0x79, 0x7B)
+    if (deviceType === 0x79 || deviceType === 0x7B) {
+        let trackIndex = -1;
+
+        // 설정된 트랙 정보에서 해당 장치 ID 찾기
+        if (window.raceState && window.raceState.tracks) {
+            trackIndex = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
         }
-      } else {
-        // Training 관련 (파워, 심박 등): Indoor Training 화면에서만 처리
-        if (isTrainingScreen && typeof window.parseIndoorSensorPayload === 'function') {
-          window.parseIndoorSensorPayload(payload);
+
+        // [트랙 2 강제 매핑] 테스트 중인 ID 67536을 트랙 2(인덱스 1)로 강제 연결
+        if (deviceId === 67536) {
+            trackIndex = 1; 
         }
-      }
-    } else {
-      console.warn(`[Race] handleBroadcastData: Extended flag 조건 불만족. flag=0x${flag.toString(16)}, payload.length=${payload.length}`);
+
+        if (trackIndex === -1) return; // 등록되지 않은 장치는 무시
+
+        // 3. 속도 계산 데이터 추출 (로그: payload[5..8])
+        let speed = 0;
+        const currentEventTime = payload[5] | (payload[6] << 8);
+        const currentRevCount = payload[7] | (payload[8] << 8);
+
+        if (!window.lastAntData) window.lastAntData = {};
+        const key = `track_${trackIndex}`;
+
+        if (!window.lastAntData[key]) {
+            window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
+            updateSpeedometer(trackIndex, 0);
+            return;
+        }
+
+        const prevData = window.lastAntData[key];
+        let revDiff = currentRevCount - prevData.rev;
+        let timeDiff = currentEventTime - prevData.time;
+
+        if (revDiff < 0) revDiff += 65536;
+        if (timeDiff < 0) timeDiff += 65536;
+
+        if (timeDiff > 0 && revDiff > 0) {
+            const wheelCircumference = 2.096; // 700x23c
+            speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
+            if (speed > 100) speed = 0;
+            
+            // UI 업데이트
+            updateSpeedometer(trackIndex, speed);
+        }
+        
+        window.lastAntData[key] = { time: currentEventTime, rev: currentRevCount };
     }
-  } else {
-    console.warn(`[Race] handleBroadcastData: payload 길이 부족. payload.length=${payload.length}, 필요: 18`);
-  }
 }
 
 // 4. 화면 목록에 강제 추가 (필터 완화)
@@ -6239,35 +6237,50 @@ window.processRaceData = function(payload) {
  * [통합] 속도계 UI 업데이트 함수
  */
 function updateSpeedometer(trackId, speed) {
+    // 1. 숫자 텍스트 업데이트 (ID: speed-text-0, speed-text-1 ...)
     const speedText = document.getElementById(`speed-text-${trackId}`);
-    const needle = document.getElementById(`needle-${trackId}`);
-    
-    // 1. 숫자 업데이트
     if (speedText) {
         speedText.textContent = speed.toFixed(1);
-        speedText.style.fill = "#ffffff"; 
+        speedText.style.fill = "#ffffff"; // 숫자가 잘 보이도록 흰색 강제
+        speedText.style.visibility = "visible";
+        speedText.style.display = "block";
     }
 
-    // 2. 바늘 업데이트 (-90도 ~ 90도 범위)
+    // 2. 바늘 회전 업데이트
+    const needle = document.getElementById(`needle-${trackId}`);
     if (needle) {
         const maxSpeed = 60;
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
-        const angle = -90 + (ratio * 180);
+        const angle = -90 + (ratio * 180); // -90도(0km/h) ~ 90도(60km/h)
+
+        // [핵심] rotate 속성에 중심점 (100, 140)을 포함하여 위치 이탈 방지
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        needle.style.stroke = "#ff0000"; // 중심 원과 동일한 빨간색
+        needle.style.visibility = "visible";
     }
 }
 
-// ANT+ 메시지 리스너 (기존 수신부 유지)
+
+
+// ---------------------------------------------------------
+// ANT+ 수신 이벤트 연결 (파일의 최하단)
+// ---------------------------------------------------------
 if (window.antDevice) {
     window.antDevice.onMessage = function(payload) {
         const msgId = payload[2];
         if (msgId === 0x4E) {
-            // Training 핸들러가 있으면 먼저 보내고, 없으면 직접 처리
-            if (typeof window.parseIndoorSensorPayload === 'function') {
-                window.parseIndoorSensorPayload(payload);
-            } else {
-                window.processRaceData(payload);
-            }
+            // 모든 ANT+ 데이터를 통합 처리 함수로 전달
+            handleBroadcastData(payload);
         }
     };
 }
+
+// 페이지 로딩 시 모든 바늘을 0점(-90도)으로 정렬
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        const needles = document.querySelectorAll('line[id^="needle-"]');
+        needles.forEach(n => {
+            n.setAttribute('transform', 'rotate(-90, 100, 140)');
+        });
+    }, 1000);
+});
