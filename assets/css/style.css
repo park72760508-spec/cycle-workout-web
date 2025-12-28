@@ -10159,6 +10159,10 @@ button[aria-disabled="true"] {
 }
 
 
+
+
+
+
 /* ==========================================================================
    [통합] 속도계 및 파워계 바늘(Needle) 디자인 로직
    - 중복된 스타일을 제거하고 하나로 통합함
@@ -10179,4 +10183,10 @@ line[id^="needle-"] {
 .speedometer-container {
     overflow: visible !important;
     position: relative;
+}
+
+/* 선과 원의 경계를 더 매끄럽게 처리 */
+.speedometer-needle line, 
+.speedometer-needle circle {
+    shape-rendering: geometricPrecision;
 }
