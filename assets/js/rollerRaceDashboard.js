@@ -567,13 +567,16 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
   const tickLengthLong = 14; 
   const centerCircleRadius = 7; 
   
-  // 현재 속도까지의 5km/h 단위 눈금 계산
-  const currentTickSpeed = Math.floor(speed / 5) * 5;
+  // 현재 속도까지의 2.5km/h 단위 눈금 계산 (기존 5km/h의 1/2 간격)
+  const tickInterval = 2.5;
+  const currentTickSpeed = Math.floor(speed / tickInterval) * tickInterval;
   const maxTickSpeed = Math.min(currentTickSpeed, maxSpeed);
   
+  // 모든 기존 궤적 삭제 (감속 시 바늘이 지나간 부분 제거)
   pathGroup.innerHTML = '';
   
-  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
+  // 현재 속도까지만 궤적 표시 (바늘이 지나간 부분은 자동으로 제거됨)
+  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += tickInterval) {
     // 1. 바늘과 동일한 각도 계산
     let needleAngle = calculateNeedleAngle(tickSpeed);
     
@@ -584,8 +587,8 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     
     const rad = (mathAngle * Math.PI) / 180;
     
-    // 3. 선의 길이 결정 (20km 단위는 길게)
-    const isMajor = tickSpeed % 20 === 0;
+    // 3. 선의 길이 결정 (10km 단위는 길게, 2.5km/h 간격에 맞춤)
+    const isMajor = tickSpeed % 10 === 0;
     const tickLength = isMajor ? tickLengthLong : tickLengthShort;
     const outerRadius = innerRadius + tickLength;
     
