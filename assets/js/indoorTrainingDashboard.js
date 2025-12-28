@@ -660,83 +660,53 @@ function updateAllPowerMeterConnectionStatuses() {
 /**
  * 파워계 데이터 업데이트
  */
+/**
+ * 파워미터 데이터 업데이트 및 UI(바늘 포함) 반영
+ */
 function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
-  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
-  if (!powerMeter) return;
-  
-  powerMeter.currentPower = power;
-  powerMeter.heartRate = heartRate;
-  powerMeter.cadence = cadence;
-  powerMeter.lastUpdateTime = Date.now();
-  
-  // 최대 파워 업데이트
-  if (power > powerMeter.maxPower) {
-    powerMeter.maxPower = power;
-  }
-  
-  // 평균 파워 계산
-  if (power > 0) {
-    powerMeter.powerSum += power;
-    powerMeter.powerCount += 1;
-    powerMeter.averagePower = powerMeter.powerSum / powerMeter.powerCount;
-  }
-  
-  // 세그먼트 평균 파워 계산
-  if (window.indoorTrainingState.trainingState === 'running') {
-    powerMeter.segmentPowerSum += power;
-    powerMeter.segmentPowerCount += 1;
-    powerMeter.segmentPower = powerMeter.segmentPowerSum / powerMeter.segmentPowerCount;
-  }
-  
-  // UI 업데이트
-  const maxPowerEl = document.getElementById(`max-power-value-${powerMeterId}`);
-  const avgPowerEl = document.getElementById(`avg-power-value-${powerMeterId}`);
-  const segmentPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
-  const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
-  const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
-  const currentPowerEl = document.getElementById(`current-power-value-${powerMeterId}`);
-  
-  if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
-  if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
-  if (segmentPowerEl) segmentPowerEl.textContent = Math.round(powerMeter.segmentPower);
-  if (heartRateEl) {
-    const hrValue = Math.round(heartRate || powerMeter.heartRate || 0);
-    heartRateEl.textContent = hrValue;
-  }
-  if (cadenceEl) cadenceEl.textContent = Math.round(cadence) || 0;
-  
-  // 현재 파워값 업데이트 (값이 없으면 "-" 표시)
-  if (currentPowerEl) {
-    if (power && power > 0) {
-      currentPowerEl.textContent = Math.round(power);
-    } else {
-      currentPowerEl.textContent = '-';
+    const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+    if (!powerMeter) return;
+
+    // 1. 데이터 저장
+    powerMeter.currentPower = power;
+    powerMeter.heartRate = heartRate;
+    powerMeter.cadence = cadence;
+    powerMeter.lastUpdateTime = Date.now();
+
+    // 2. 바늘(Needle) 각도 계산 로직
+    // 사용자 FTP 값을 가져옴 (설정 안 되어 있으면 기본값 200W 사용)
+    const userFTP = window.indoorTrainingState.userFTP || 200;
+    const maxGaugePower = userFTP * 2; // 게이지 최대치는 FTP의 2배
+    
+    // 각도 범위 설정 (-120도 ~ 120도, 총 240도 Arc)
+    const minAngle = -120;
+    const maxAngle = 120;
+    const angleRange = maxAngle - minAngle;
+
+    // 파워 비율 계산 (0 ~ 1.0 사이로 제한)
+    let powerRatio = power / maxGaugePower;
+    if (powerRatio > 1) powerRatio = 1;
+    if (powerRatio < 0) powerRatio = 0;
+
+    // 최종 각도 산출
+    const targetAngle = minAngle + (powerRatio * angleRange);
+
+    // 3. UI 업데이트
+    // 숫자 값 업데이트
+    const currentPowerEl = document.getElementById(`current-power-value-${powerMeterId}`);
+    if (currentPowerEl) {
+        currentPowerEl.textContent = Math.round(power);
     }
-  }
-  
-  // 바늘 업데이트
-  updatePowerMeterNeedle(powerMeterId, power);
-  
-  // 정보 표시창 배경색 업데이트 (파워값 0이고 심박값 수신 시)
-  const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
-  
-  // 조건 확인
-  const hasUser = !!(powerMeter.userId);
-  const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
-  const hasPowerDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId);
-  const hasData = power > 0 || heartRate > 0 || cadence > 0;
-  
-  // 정보 표시창 배경색 업데이트 (파워값 0이고 심박값 수신 시만)
-  if (infoEl && hasUser && hasReceiver && hasPowerDevice && power === 0 && heartRate > 0) {
-    infoEl.classList.remove('disconnected', 'ready');
-    infoEl.classList.add('connected');
-  } else if (infoEl && hasUser && hasReceiver && hasPowerDevice && (power > 0 || cadence > 0)) {
-    infoEl.classList.remove('disconnected', 'ready');
-    infoEl.classList.add('connected');
-  }
-  
-  // 연결 상태 업데이트
-  updatePowerMeterConnectionStatus(powerMeterId);
+
+    // 바늘 각도 애니메이션 적용
+    const needleEl = document.getElementById(`needle-${powerMeterId}`);
+    if (needleEl) {
+        // transition을 CSS에 미리 넣어두면 부드럽게 움직입니다.
+        needleEl.style.transform = `rotate(${targetAngle}deg)`;
+    }
+
+    // (기타 평균 파워, 최대 파워 등 기존 로직 유지...)
+    updateOtherPowerUI(powerMeter, powerMeterId);
 }
 
 /**
@@ -2258,6 +2228,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
