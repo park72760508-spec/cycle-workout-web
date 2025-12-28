@@ -9360,6 +9360,21 @@ button[aria-disabled="true"] {
 }
 */
 
+/* 현재 파워값 표시 (속도계 블럭 맨 아래) */
+.current-power-display-bottom {
+  text-align: center;
+  padding: 8px 0;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 0;
+}
+
+.current-power-display-bottom span {
+  color: #ffffff;
+  font-size: 43.2px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
 /* 속도계 정보 */
 .speedometer-info {
   display: flex;
