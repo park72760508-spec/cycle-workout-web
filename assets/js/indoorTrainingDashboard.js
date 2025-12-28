@@ -1960,18 +1960,30 @@ if (typeof showScreen === 'function') {
 // [삽입 위치: 파일 맨 마지막]
 
 function parseIndoorSensorPayload(payload) {
+  console.log('[Training] parseIndoorSensorPayload: 함수 호출됨, payload.length=', payload.length);
+  
   // 현재 화면 확인 (Training 화면일 때만 처리)
   const currentScreen = document.querySelector('.screen.active');
   const isTrainingScreen = currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen';
+  console.log('[Training] parseIndoorSensorPayload: 화면 확인', {
+    currentScreen: currentScreen?.id,
+    isTrainingScreen: isTrainingScreen,
+    powerMeterGrid: !!document.getElementById('powerMeterGrid')
+  });
+  
   if (!isTrainingScreen) {
     // Training 화면이 아니면 처리하지 않음
+    console.log('[Training] parseIndoorSensorPayload: Training 화면이 아니므로 처리하지 않음');
     return;
   }
   
   // 페이로드 길이 체크 (20바이트 확장 패킷 기준)
   if (payload.length < 18) {
     // 구형 13바이트 패킷도 지원
-    if (payload.length < 13) return;
+    if (payload.length < 13) {
+      console.log('[Training] parseIndoorSensorPayload: payload가 너무 짧음', payload.length);
+      return;
+    }
   }
   
   // ID 추출 위치 확인
@@ -1997,6 +2009,8 @@ function parseIndoorSensorPayload(payload) {
   
   // ID 계산 (로그의 9297 등 정상 추출)
   const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
+  
+  console.log(`[Training] parseIndoorSensorPayload: deviceId=${deviceId}, deviceType=0x${deviceType.toString(16)}, payload.length=${payload.length}`);
 
   // 장치 목록 업데이트
   updateFoundDevicesList(deviceId, deviceType);
@@ -2014,7 +2028,7 @@ function parseIndoorSensorPayload(payload) {
            ((deviceType === 0x0B || deviceType === 0x11) && (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId));
   });
   
-  console.log(`[Training] parseIndoorSensorPayload: isPairedDevice=${isPairedDevice}, trainingState=${window.indoorTrainingState.trainingState}`);
+  console.log(`[Training] parseIndoorSensorPayload: isPairedDevice=${isPairedDevice}, trainingState=${window.indoorTrainingState.trainingState}, powerMeters.length=${window.indoorTrainingState.powerMeters.length}`);
   
   if (window.indoorTrainingState.trainingState === 'running' || isPairedDevice) {
     console.log(`[Training] processLiveTrainingData 호출: deviceId=${deviceId}, deviceType=0x${deviceType.toString(16)}`);
