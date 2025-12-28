@@ -3793,6 +3793,8 @@ async function startANTMessageListener() {
 let packetBuffer = new Uint8Array(0);
 
 function processIncomingData(newData) {
+  console.log(`[Race] processIncomingData 호출: newData.length=${newData?.length}, packetBuffer.length=${packetBuffer?.length}`);
+  
   const combined = new Uint8Array(packetBuffer.length + newData.length);
   combined.set(packetBuffer);
   combined.set(newData, packetBuffer.length);
@@ -3841,7 +3843,8 @@ function processIncomingData(newData) {
     }
 
     // 일반 메시지 처리
-    handleANTMessage({ messageId: packet[2], data: packet.slice(3, totalLen - 1) });
+    // 패킷을 Uint8Array 형태로 전달하여 handleANTMessage에서 일관되게 처리
+    handleANTMessage(packet);
   }
 }
 
@@ -3871,7 +3874,14 @@ function parseAndHandlePacket(packet) {
   }
 
   // 일반 메시지 처리
-  handleANTMessage({ messageId: msgId, data: payload });
+  // 패킷을 Uint8Array 형태로 전달하여 handleANTMessage에서 일관되게 처리
+  // 원본 패킷이 필요하므로 packet을 그대로 전달
+  if (packet instanceof Uint8Array || Array.isArray(packet)) {
+    handleANTMessage(packet);
+  } else {
+    // 객체 형태인 경우 Uint8Array로 변환 불가능하므로 원래 방식 사용
+    handleANTMessage({ messageId: msgId, data: payload });
+  }
 }
 
 /**
