@@ -2295,6 +2295,13 @@ window.selectIndoorDevice = function(deviceId, listId) {
         setTimeout(() => inputEl.style.backgroundColor = '', 500);
         if (typeof showToast === 'function') showToast(`${deviceId} 장치가 선택되었습니다.`);
     }
+    
+    // 바늘 위치 유지 (현재 파워값으로 업데이트)
+    const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+    if (powerMeter && typeof updatePowerMeterNeedle === 'function') {
+        const currentPower = powerMeter.currentPower || 0;
+        updatePowerMeterNeedle(powerMeterId, currentPower);
+    }
 };
 
 // 4. selectDeviceForInput 함수 (targetType 기반)
