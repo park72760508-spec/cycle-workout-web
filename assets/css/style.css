@@ -10159,4 +10159,22 @@ button[aria-disabled="true"] {
   }
 }
 
+/* 모든 속도계/파워계 바늘 공통 적용 */
+.speedometer-needle line, 
+#speedometer-svg line[id^="needle-"], 
+.power-gauge-container line[id^="needle-"] {
+    display: block !important;
+    visibility: visible !important;
+    stroke: #ff4757 !important; /* 빨간색 강제 적용 */
+    stroke-width: 4;
+    stroke-linecap: round;
+    
+    /* 회전 중심축을 SVG의 아래 중앙(100, 140)으로 고정 */
+    transform-origin: 100px 140px;
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
+/* 초기 상태 (데이터 없을 때) */
+.speedometer-needle line {
+    transform: rotate(180deg);
+}
