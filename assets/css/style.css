@@ -10166,22 +10166,17 @@ button[aria-disabled="true"] {
 /* [최종 통합] 모든 바늘 스타일: 레이스 및 트레이닝 공통 */
 .speedometer-needle line, 
 line[id^="needle-"] {
-    stroke: #ff4757 !important; /* 빨간색 바늘 */
+    stroke: #ff4757 !important;
     stroke-width: 4px !important;
     stroke-linecap: round !important;
-    display: block !important;
+    /* CSS transform-origin은 SVG 내부 좌표와 일치해야 함 */
+    transform-origin: 100px 140px !important;
+    transition: transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
     visibility: visible !important;
-    
-    /* 회전 중심축을 SVG 내부의 정확한 지점으로 고정 */
-    transform-origin: 100px 140px !important; 
-    
-    /* 초기 상태: 0km/h일 때 왼쪽 끝(-90도)을 가리킴 */
-    transform: rotate(-90deg); 
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: block !important;
 }
 
-/* 게이지가 트랙 아래나 레이어 뒤로 숨지 않도록 설정 */
-.speedometer-container, .power-gauge-container {
-    z-index: 100;
+/* 게이지 컨테이너에서 바늘이 잘리지 않도록 */
+.speedometer-container svg, .power-gauge-container svg {
     overflow: visible !important;
 }
