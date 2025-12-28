@@ -146,6 +146,9 @@ function initIndoorTrainingDashboard() {
   // 파워계 그리드 생성
   createPowerMeterGrid();
   
+  // 저장된 페어링 정보 로드
+  loadPowerMeterPairings();
+  
   // 전광판 초기화
   updateScoreboard();
   
@@ -198,6 +201,7 @@ function createPowerMeterGrid() {
   if (!gridEl) return;
   
   gridEl.innerHTML = '';
+  window.indoorTrainingState.powerMeters = []; // 초기화
   
   // 10개 파워계 생성
   for (let i = 1; i <= 10; i++) {
@@ -264,21 +268,13 @@ function createPowerMeterElement(powerMeter) {
                 transform="rotate(270)"/>
         </g>
         
-        <!-- FTP 라벨 -->
+        <!-- W 라벨 -->
         <text x="100" y="155" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
               font-size="10" 
-              font-weight="500">FTP [%]</text>
-        
-        <!-- X 100 표기 (반지름 중간 위치) -->
-        <text x="100" y="100" 
-              text-anchor="middle" 
-              dominant-baseline="middle"
-              fill="#d3d3d3" 
-              font-size="10" 
-              font-weight="500">X 100</text>
+              font-weight="500">W</text>
         
         <!-- 현재 파워값 (FTP 표기와 하단의 중간 위치) -->
         <text x="100" y="177.5" 
@@ -384,11 +380,11 @@ function generatePowerMeterTicks(powerMeterId) {
 
 /**
  * 파워계 라벨 생성 (주요 눈금에만 숫자 표시)
- * pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
+ * 사용자 FTP 값이 있으면: pos=120 → FTP*0.33, pos=100 → FTP*0.67, pos=80 → FTP*1, pos=60 → FTP*1.33, pos=40 → FTP*1.167, pos=20 → FTP*2, pos=0 → FTP*2
+ * 사용자 FTP 값이 없으면: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
  * 주요 눈금(20 간격)에만 숫자 표시: pos=0, 20, 40, 60, 80, 100, 120
  * 원 중심으로 180도 회전
  * 반원의 둘레에 숫자가 닿지 않도록 약간의 간격 유지
- * 하단 왼쪽(180도, pos=0) = 200%, 위쪽(90도, pos=60) = 100%, 하단 오른쪽(0도, pos=120) = 0%
  * 원지름의 1/4만큼 아래로 이동
  */
 function generatePowerMeterLabels(powerMeterId) {
@@ -401,14 +397,14 @@ function generatePowerMeterLabels(powerMeterId) {
   const radius = 80;
   const maxPos = 120;
   
+  // FTP 값 확인
+  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || null;
+  const useFTPValue = !!ftp;
+  
   // 주요 눈금 위치만 표시 (20 간격: 0, 20, 40, 60, 80, 100, 120)
   const majorPositions = [0, 20, 40, 60, 80, 100, 120];
   
   majorPositions.forEach(pos => {
-    // pos와 퍼센트의 관계: pos=120 → 0, pos=60 → 100, pos=0 → 200
-    // percent = (120 - pos) / 120 * 200
-    const percent = (120 - pos) / 120 * 200;
-    
     // 각도 계산: 180도에서 시작해서 90도를 거쳐 0도로, 그 다음 180도 회전
     // pos = 0 → 180도 (하단 왼쪽), pos = 60 → 90도 (위쪽), pos = 120 → 0도 (하단 오른쪽)
     // 180도 회전: 각도에 180도 추가
@@ -422,33 +418,46 @@ function generatePowerMeterLabels(powerMeterId) {
     const x = centerX + labelRadius * Math.cos(rad);
     const y = centerY + labelRadius * Math.sin(rad);
     
-    // 0~200 범위를 0~2 범위로 변환 (100으로 나눔)
-    const value = percent / 100;
-    
-    // 표기 형식: 정수는 소수점 없이, 소수는 적절한 자릿수로 표시
     let displayValue;
-    if (Math.abs(value - Math.round(value)) < 0.01) {
-      // 정수인 경우 (0, 1, 2)
-      displayValue = Math.round(value).toString();
-    } else {
-      // 소수인 경우
-      // 0.3, 0.7, 1.3, 1.7 등은 소수점 1자리
-      // 0.67은 소수점 2자리
-      const rounded = Math.round(value * 100) / 100; // 소수점 2자리로 반올림
-      const oneDecimal = Math.round(rounded * 10) / 10;
+    
+    if (useFTPValue) {
+      // FTP 값이 있는 경우: 특정 배수 적용
+      let multiplier;
+      if (pos === 120) multiplier = 0.33;
+      else if (pos === 100) multiplier = 0.67;
+      else if (pos === 80) multiplier = 1;
+      else if (pos === 60) multiplier = 1.33;
+      else if (pos === 40) multiplier = 1.167;
+      else if (pos === 20) multiplier = 2;
+      else if (pos === 0) multiplier = 2;
+      else multiplier = 1;
       
-      if (Math.abs(rounded - oneDecimal) < 0.01) {
-        // 소수점 1자리로 표현 가능한 경우
-        displayValue = oneDecimal.toFixed(1);
-        // 불필요한 0 제거 (예: 1.0 → 1)
-        if (oneDecimal === Math.round(oneDecimal)) {
-          displayValue = Math.round(oneDecimal).toString();
-        }
+      // FTP 값에 배수를 곱한 값을 정수로 표시
+      displayValue = Math.round(ftp * multiplier).toString();
+    } else {
+      // FTP 값이 없는 경우: 기존 방식 (퍼센트)
+      // pos와 퍼센트의 관계: pos=120 → 0, pos=60 → 100, pos=0 → 200
+      const percent = (120 - pos) / 120 * 200;
+      const value = percent / 100;
+      
+      // 표기 형식: 정수는 소수점 없이, 소수는 적절한 자릿수로 표시
+      if (Math.abs(value - Math.round(value)) < 0.01) {
+        // 정수인 경우 (0, 1, 2)
+        displayValue = Math.round(value).toString();
       } else {
-        // 소수점 2자리 필요 (0.67)
-        displayValue = rounded.toFixed(2);
-        // 불필요한 0 제거 (예: 0.70 → 0.7)
-        displayValue = parseFloat(displayValue).toString();
+        // 소수인 경우
+        const rounded = Math.round(value * 100) / 100;
+        const oneDecimal = Math.round(rounded * 10) / 10;
+        
+        if (Math.abs(rounded - oneDecimal) < 0.01) {
+          displayValue = oneDecimal.toFixed(1);
+          if (oneDecimal === Math.round(oneDecimal)) {
+            displayValue = Math.round(oneDecimal).toString();
+          }
+        } else {
+          displayValue = rounded.toFixed(2);
+          displayValue = parseFloat(displayValue).toString();
+        }
       }
     }
     
@@ -483,22 +492,74 @@ function updatePowerMeterTicks(powerMeterId) {
 }
 
 /**
- * 파워계 바늘 업데이트 (0% ~ 100% ~ 200% 기준)
- * 실제 파워값을 FTP 기준 퍼센트로 변환하여 바늘 위치 결정
+ * 파워계 바늘 업데이트
+ * FTP 값이 있으면: 실제 파워값을 FTP 기준 눈금에 맞게 변환
+ * FTP 값이 없으면: 실제 파워값을 퍼센트로 변환 (0% ~ 200%)
  */
 function updatePowerMeterNeedle(powerMeterId, power) {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
   
   const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 250;
+  const useFTPValue = !!(powerMeter.userFTP || window.indoorTrainingState.userFTP);
   
-  // 실제 파워값을 FTP 기준 퍼센트로 변환 (0% ~ 200%)
-  const percent = (power / ftp) * 100;
-  const clampedPercent = Math.max(0, Math.min(200, percent));
+  let speedPos;
   
-  // 퍼센트를 pos로 변환: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
-  // pos = 120 - (percent / 200) * 120
-  const speedPos = 120 - (clampedPercent / 200) * 120;
+  if (useFTPValue) {
+    // FTP 값이 있는 경우: 눈금 매핑 사용
+    // 눈금: pos=120 → FTP*0.33, pos=100 → FTP*0.67, pos=80 → FTP*1, 
+    //       pos=60 → FTP*1.33, pos=40 → FTP*1.167, pos=20 → FTP*2, pos=0 → FTP*2
+    // 주의: pos=40(1.167)과 pos=60(1.33)은 역순이므로 비선형 매핑 필요
+    const maxPower = ftp * 2;
+    const clampedPower = Math.max(0, Math.min(maxPower, power));
+    
+    // 눈금 값 계산 (pos 순서대로)
+    const markers = [
+      { pos: 120, value: ftp * 0.33 },   // 가장 왼쪽
+      { pos: 100, value: ftp * 0.67 },
+      { pos: 80, value: ftp * 1 },
+      { pos: 60, value: ftp * 1.33 },    // 더 큰 값
+      { pos: 40, value: ftp * 1.167 },   // 더 작은 값 (역순)
+      { pos: 20, value: ftp * 2 },
+      { pos: 0, value: ftp * 2 }          // 가장 오른쪽
+    ];
+    
+    // 각 구간별로 보간 계산
+    if (clampedPower <= markers[0].value) {
+      // 0 ~ FTP*0.33: pos 120에서 시작
+      speedPos = 120 - (clampedPower / markers[0].value) * 20;
+    } else if (clampedPower <= markers[1].value) {
+      // FTP*0.33 ~ FTP*0.67: pos 120 ~ 100
+      const ratio = (clampedPower - markers[0].value) / (markers[1].value - markers[0].value);
+      speedPos = 120 - ratio * 20;
+    } else if (clampedPower <= markers[2].value) {
+      // FTP*0.67 ~ FTP*1: pos 100 ~ 80
+      const ratio = (clampedPower - markers[1].value) / (markers[2].value - markers[1].value);
+      speedPos = 100 - ratio * 20;
+    } else if (clampedPower <= markers[3].value) {
+      // FTP*1 ~ FTP*1.33: pos 80 ~ 60
+      const ratio = (clampedPower - markers[2].value) / (markers[3].value - markers[2].value);
+      speedPos = 80 - ratio * 20;
+    } else if (clampedPower <= markers[4].value) {
+      // FTP*1.33 ~ FTP*1.167: pos 60 ~ 40 (역순, 값이 감소)
+      // 하지만 pos는 증가해야 하므로 역방향 처리
+      const ratio = (markers[3].value - clampedPower) / (markers[3].value - markers[4].value);
+      speedPos = 60 + ratio * 20;
+    } else {
+      // FTP*1.167 ~ FTP*2: pos 40 ~ 0
+      const ratio = (clampedPower - markers[4].value) / (markers[6].value - markers[4].value);
+      speedPos = 40 - ratio * 40;
+    }
+  } else {
+    // FTP 값이 없는 경우: 기존 방식 (퍼센트)
+    const percent = (power / ftp) * 100;
+    const clampedPercent = Math.max(0, Math.min(200, percent));
+    
+    // 퍼센트를 pos로 변환: pos=120 → 0%, pos=60 → 100%, pos=0 → 200%
+    speedPos = 120 - (clampedPercent / 200) * 120;
+  }
+  
+  speedPos = Math.max(0, Math.min(120, speedPos));
   
   // 각도 계산
   let angle = 180 - (speedPos / 120) * 180;
@@ -1070,6 +1131,9 @@ async function selectSearchedUserForPowerMeter(userId) {
           renderUserInfo();
         }
         
+        // 저장
+        saveAllPowerMeterPairingsToStorage();
+        
         // UI 업데이트
         const resultEl = document.getElementById('pairingUserSearchResult');
         if (resultEl) {
@@ -1149,8 +1213,11 @@ function clearSelectedUser() {
     resultEl.innerHTML = '';
   }
   
-  // FTP 기반 눈금 업데이트 (기본값으로)
+  // FTP 기반 눈금 업데이트 (기본값으로 복귀)
   updatePowerMeterTicks(powerMeterId);
+  
+  // 저장
+  saveAllPowerMeterPairingsToStorage();
   
   if (typeof showToast === 'function') {
     showToast('사용자 선택이 해제되었습니다.');
@@ -1176,6 +1243,10 @@ function clearPairedDevice(deviceType) {
     if (trainerNameEl) trainerNameEl.value = '';
     if (trainerDeviceIdEl) trainerDeviceIdEl.value = '';
     if (btnClearTrainer) btnClearTrainer.style.display = 'none';
+    
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
+    
     if (typeof showToast === 'function') {
       showToast('스마트로라 페어링이 해제되었습니다.');
     }
@@ -1188,6 +1259,10 @@ function clearPairedDevice(deviceType) {
     if (powerNameEl) powerNameEl.value = '';
     if (powerDeviceIdEl) powerDeviceIdEl.value = '';
     if (btnClearPower) btnClearPower.style.display = 'none';
+    
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
+    
     if (typeof showToast === 'function') {
       showToast('파워메터 페어링이 해제되었습니다.');
     }
@@ -1200,6 +1275,10 @@ function clearPairedDevice(deviceType) {
     if (heartNameEl) heartNameEl.value = '';
     if (heartDeviceIdEl) heartDeviceIdEl.value = '';
     if (btnClearHeart) btnClearHeart.style.display = 'none';
+    
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
+    
     if (typeof showToast === 'function') {
       showToast('심박계 페어링이 해제되었습니다.');
     }
@@ -1338,6 +1417,10 @@ function savePowerMeterPairing() {
   
   if (tabName === 'user') {
     // 사용자 선택은 이미 저장됨
+    // 눈금 업데이트
+    updatePowerMeterTicks(powerMeterId);
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('사용자가 선택되었습니다.');
@@ -1357,6 +1440,8 @@ function savePowerMeterPairing() {
     powerMeter.trainerName = name;
     powerMeter.trainerDeviceId = deviceId;
     
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('스마트로라가 페어링되었습니다.');
@@ -1376,6 +1461,8 @@ function savePowerMeterPairing() {
     powerMeter.pairingName = name;
     powerMeter.deviceId = deviceId;
     
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('파워메터가 페어링되었습니다.');
@@ -1395,10 +1482,101 @@ function savePowerMeterPairing() {
     powerMeter.heartRateName = name;
     powerMeter.heartRateDeviceId = deviceId;
     
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('심박계가 페어링되었습니다.');
     }
+  }
+}
+
+/**
+ * 모든 파워계 페어링 정보를 localStorage에 저장
+ */
+function saveAllPowerMeterPairingsToStorage() {
+  try {
+    const pairings = window.indoorTrainingState.powerMeters.map(pm => ({
+      id: pm.id,
+      userId: pm.userId,
+      userName: pm.userName,
+      userFTP: pm.userFTP,
+      userWeight: pm.userWeight,
+      userContact: pm.userContact,
+      trainerName: pm.trainerName,
+      trainerDeviceId: pm.trainerDeviceId,
+      pairingName: pm.pairingName,
+      deviceId: pm.deviceId,
+      heartRateName: pm.heartRateName,
+      heartRateDeviceId: pm.heartRateDeviceId
+    }));
+    localStorage.setItem('indoorTrainingPowerMeterPairings', JSON.stringify(pairings));
+    console.log('[Indoor Training] 페어링 정보 저장 완료');
+  } catch (error) {
+    console.error('[Indoor Training] 페어링 정보 저장 실패:', error);
+  }
+}
+
+/**
+ * localStorage에서 파워계 페어링 정보 로드
+ */
+function loadPowerMeterPairings() {
+  try {
+    const stored = localStorage.getItem('indoorTrainingPowerMeterPairings');
+    if (!stored) return;
+    
+    const pairings = JSON.parse(stored);
+    if (!Array.isArray(pairings)) return;
+    
+    pairings.forEach(pairing => {
+      const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === pairing.id);
+      if (powerMeter) {
+        // 페어링 정보 복원
+        powerMeter.userId = pairing.userId || null;
+        powerMeter.userName = pairing.userName || null;
+        powerMeter.userFTP = pairing.userFTP || null;
+        powerMeter.userWeight = pairing.userWeight || null;
+        powerMeter.userContact = pairing.userContact || null;
+        powerMeter.trainerName = pairing.trainerName || null;
+        powerMeter.trainerDeviceId = pairing.trainerDeviceId || null;
+        powerMeter.pairingName = pairing.pairingName || null;
+        powerMeter.deviceId = pairing.deviceId || null;
+        powerMeter.heartRateName = pairing.heartRateName || null;
+        powerMeter.heartRateDeviceId = pairing.heartRateDeviceId || null;
+        
+        // UI 업데이트
+        updatePowerMeterUIFromPairing(powerMeter);
+        
+        // FTP 기반 눈금 업데이트
+        updatePowerMeterTicks(powerMeter.id);
+      }
+    });
+    
+    console.log('[Indoor Training] 페어링 정보 로드 완료');
+  } catch (error) {
+    console.error('[Indoor Training] 페어링 정보 로드 실패:', error);
+  }
+}
+
+/**
+ * 페어링 정보로부터 UI 업데이트
+ */
+function updatePowerMeterUIFromPairing(powerMeter) {
+  // 사용자 이름 표시
+  const userNameEl = document.getElementById(`user-name-${powerMeter.id}`);
+  if (userNameEl) {
+    if (powerMeter.userName) {
+      userNameEl.textContent = powerMeter.userName;
+      userNameEl.style.display = 'block';
+    } else {
+      userNameEl.style.display = 'none';
+    }
+  }
+  
+  // 페어링 이름 표시
+  const pairingNameEl = document.getElementById(`pairing-name-${powerMeter.id}`);
+  if (pairingNameEl) {
+    pairingNameEl.textContent = powerMeter.pairingName || '';
   }
 }
 
