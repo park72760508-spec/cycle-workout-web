@@ -684,17 +684,19 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const userFTP = window.indoorTrainingState.userFTP || 200;
     const maxGaugePower = userFTP * 2; // 게이지 최대치는 FTP의 2배
     
-    // 각도 범위 설정 (-120도 ~ 120도, 총 240도 Arc)
-    const minAngle = -120;
-    const maxAngle = 120;
-    const angleRange = maxAngle - minAngle;
+    // 각도 범위 설정 (-90도 = 위쪽/0W, 90도 = 아래쪽/최대값)
+    // updatePowerMeterNeedle 함수와 동일한 각도 체계 사용
+    const minAngle = -90;  // 파워 0W일 때 위쪽
+    const maxAngle = 90;   // 최대 파워일 때 아래쪽
+    const angleRange = maxAngle - minAngle; // 180도
 
     // 파워 비율 계산 (0 ~ 1.0 사이로 제한)
     let powerRatio = power / maxGaugePower;
     if (powerRatio > 1) powerRatio = 1;
     if (powerRatio < 0) powerRatio = 0;
 
-    // 최종 각도 산출
+    // 최종 각도 산출 (-90도에서 시작해서 90도까지 이동)
+    // powerRatio가 0이면 -90도, 1이면 90도
     const targetAngle = minAngle + (powerRatio * angleRange);
 
     // 3. UI 업데이트
@@ -707,12 +709,9 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     // 바늘 각도 애니메이션 적용
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
     if (needleEl) {
-        // transition을 CSS에 미리 넣어두면 부드럽게 움직입니다.
-        needleEl.style.transform = `rotate(${targetAngle}deg)`;
+        // updatePowerMeterNeedle과 동일한 방식 사용
+        needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`);
     }
-
-    // (기타 평균 파워, 최대 파워 등 기존 로직 유지...)
-    updateOtherPowerUI(powerMeter, powerMeterId);
 }
 
 /**
