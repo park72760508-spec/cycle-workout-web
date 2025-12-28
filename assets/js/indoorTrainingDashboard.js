@@ -2052,6 +2052,10 @@ function renderPairingDeviceList(targetType) {
 
 // 1. 데이터 수신 및 분류 엔진 (ANT+ 0x4E 메시지 분석)
 // 1. 데이터 수신 및 통합 라우팅 엔진
+/**
+ * [통합 ANT+ 데이터 라우터]
+ * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
+ */
 window.parseIndoorSensorPayload = function(payload) {
     if (payload.length < 13) return;
 
@@ -2061,32 +2065,56 @@ window.parseIndoorSensorPayload = function(payload) {
     const transType = payload[13];
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
-    // [A] Race 관련: 속도계 및 케이던스 센서 데이터 (0x79, 0x7B, 0x7A)
-    // 기존 rollerRaceDashboard.js의 속도계 처리 함수가 있다면 호출해줍니다.
-    if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x7A) {
-        if (typeof window.handleRaceSpeedData === 'function') {
-            window.handleRaceSpeedData(deviceId, deviceType, payload);
+    // 1. Indoor Race 관련: 속도계(0x79), 케이던스(0x7A), 속도/케이던스(0x7B)
+    if (deviceType === 0x79 || deviceType === 0x7A || deviceType === 0x7B) {
+        // rollerRaceDashboard.js에 정의된 기존 함수 호출
+        if (typeof window.processRaceData === 'function') {
+            window.processRaceData(deviceId, deviceType, payload);
         }
+        return; // 레이스 데이터 처리 후 종료
     }
 
-    // [B] Training 관련 UI 업데이트 (장치 검색 리스트)
-    updateIndoorPairingUI(deviceId, deviceType);
+    // 2. Indoor Training 관련: 심박계(0x78), 파워미터(0x0B), 스마트로라(0x11)
+    updateIndoorPairingUI(deviceId, deviceType); // 장치 검색 리스트 업데이트
 
-    // [C] 실시간 데이터 처리 (심박/파워)
-    const isPairedPowerDevice = window.indoorTrainingState.powerMeters.some(pm => {
-        const pmHR = String(pm.heartRateDeviceId);
-        const pmPower = String(pm.deviceId);
-        const pmTrainer = String(pm.trainerDeviceId);
+    const isPaired = window.indoorTrainingState.powerMeters.some(pm => {
         const receivedId = String(deviceId);
-        
-        return (deviceType === 0x78 && pmHR === receivedId) ||
-               ((deviceType === 0x0B || deviceType === 0x11) && (pmPower === receivedId || pmTrainer === receivedId));
+        return (deviceType === 0x78 && String(pm.heartRateDeviceId) === receivedId) ||
+               ((deviceType === 0x0B || deviceType === 0x11) && 
+                (String(pm.deviceId) === receivedId || String(pm.trainerDeviceId) === receivedId));
     });
 
-    if (window.indoorTrainingState.trainingState === 'running' || isPairedPowerDevice) {
+    if (window.indoorTrainingState.trainingState === 'running' || isPaired) {
         processLiveTrainingData(deviceId, deviceType, payload);
     }
 };
+
+/**
+ * [초기 로딩 시 바늘 위치 강제 설정]
+ * 페이지 로드 직후 모든 바늘을 0(180도) 위치로 보냅니다.
+ */
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        // 레이스 바늘 초기화 (0~3번 트랙)
+        for (let i = 0; i < 4; i++) {
+            const needle = document.getElementById(`needle-${i}`);
+            if (needle) {
+                needle.setAttribute('transform', 'rotate(180, 100, 140)');
+                needle.style.visibility = 'visible';
+            }
+        }
+        // 트레이닝 바늘 초기화
+        if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
+            window.indoorTrainingState.powerMeters.forEach(pm => {
+                const pNeedle = document.getElementById(`needle-${pm.id}`);
+                if (pNeedle) {
+                    pNeedle.setAttribute('transform', 'rotate(180, 100, 140)');
+                    pNeedle.style.visibility = 'visible';
+                }
+            });
+        }
+    }, 1000); // UI 렌더링 대기
+});
 
 // 2. index.html의 ID들과 직접 연동하여 리스트 생성
 function updateIndoorPairingUI(deviceId, deviceType) {
@@ -2195,6 +2223,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
