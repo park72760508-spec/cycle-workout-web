@@ -9310,24 +9310,26 @@ button[aria-disabled="true"] {
     stroke-linecap: round;
 }
 
+/* style.css 하단에 추가 */
 .speedometer-needle line {
-    /* 초기 위치를 왼쪽 0 지점(180도)으로 강제 고정 */
+    /* 초기 0 지점(180도) 설정 */
     transform: rotate(180deg);
-    
-    /* 회전 중심축: 바늘의 아래쪽 끝 (SVG 기준 100, 140 위치가 되도록) */
     transform-origin: 100px 140px; 
-    
-    /* 부드러운 움직임 */
-    transition: transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+    transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); /* 약간의 탄성 효과 */
+    visibility: visible !important;
+}
+
+/* 레이스 속도계와 트레이닝 파워계의 클래스가 충돌하지 않도록 확인 */
+.power-gauge-container .speedometer-needle line {
+    stroke: #ff4757; /* 파워계 바늘은 빨간색 계열로 구분 */
 }
 
 
-
-/* 현재 파워 숫자 텍스트 애니메이션 (선택사항) */
+/* 현재 파워 숫자 텍스트 애니메이션 (선택사항)
 [id^="current-power-value-"] {
     transition: color 0.3s ease;
 }
-
+*/
 
 /* 속도계 정보 */
 .speedometer-info {
