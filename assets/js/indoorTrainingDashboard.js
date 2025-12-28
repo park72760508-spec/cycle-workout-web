@@ -652,6 +652,52 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
   
   // 바늘 업데이트
   updatePowerMeterNeedle(powerMeterId, power);
+  
+  // 연결 상태 업데이트: 페어링된 기기에서 값이 수신되면 연결 상태로 변경
+  // 조건: 파워값은 0이고 심박값이 수신될 때
+  const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
+  const statusEl = document.getElementById(`status-${powerMeterId}`);
+  const statusDotEl = statusEl?.querySelector('.status-dot');
+  const statusTextEl = statusEl?.querySelector('.status-text');
+  
+  // 페어링된 기기인지 확인 (deviceId, trainerDeviceId, heartRateDeviceId 중 하나라도 있으면 페어링됨)
+  const isPaired = !!(powerMeter.deviceId || powerMeter.trainerDeviceId || powerMeter.heartRateDeviceId);
+  
+  // 조건: 파워값은 0이고 심박값이 수신될 때 연결 상태로 변경
+  if (isPaired && power === 0 && heartRate > 0) {
+    powerMeter.connected = true;
+    
+    if (infoEl) {
+      infoEl.classList.remove('disconnected');
+      infoEl.classList.add('connected');
+    }
+    
+    if (statusDotEl) {
+      statusDotEl.classList.remove('disconnected');
+      statusDotEl.classList.add('connected');
+    }
+    
+    if (statusTextEl) {
+      statusTextEl.textContent = '연결됨';
+    }
+  } else if (isPaired && (power > 0 || cadence > 0)) {
+    // 파워값이 있거나 케이던스가 있으면 일반 연결 상태 (기존 로직)
+    powerMeter.connected = true;
+    
+    if (infoEl) {
+      infoEl.classList.remove('disconnected');
+      infoEl.classList.add('connected');
+    }
+    
+    if (statusDotEl) {
+      statusDotEl.classList.remove('disconnected');
+      statusDotEl.classList.add('connected');
+    }
+    
+    if (statusTextEl) {
+      statusTextEl.textContent = '연결됨';
+    }
+  }
 }
 
 /**
