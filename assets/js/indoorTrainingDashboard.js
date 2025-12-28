@@ -329,16 +329,11 @@ function createPowerMeterElement(powerMeter) {
               fill="#ffffff" 
               font-size="10" 
               font-weight="500">W</text>
-        
-        <!-- 현재 파워값 (W 아래쪽으로 최대한 내린 위치) -->
-        <text x="100" y="195" 
-              text-anchor="middle" 
-              dominant-baseline="text-after-edge"
-              fill="#ffffff" 
-              font-size="43.2" 
-              font-weight="700"
-              id="current-power-value-${powerMeter.id}">-</text>
       </svg>
+    </div>
+    <!-- 현재 파워값 (속도계 블럭 맨 아래) -->
+    <div class="current-power-display-bottom">
+      <span id="current-power-value-${powerMeter.id}" style="color: #ffffff; font-size: 43.2px; font-weight: 700; line-height: 1.2;">-</span>
     </div>
     <div class="speedometer-info disconnected">
       <!-- 좌측: 최대파워, 평균파워 -->
@@ -2441,10 +2436,10 @@ async function loadWorkoutsForSelection() {
         
         // 워크아웃 목록 렌더링
         tbody.innerHTML = validWorkouts.map((workout, index) => {
-            // 카테고리는 description에서 추출하거나 기본값 사용
-            const category = workout.category || workout.description || '-';
+            // author 항목 사용
+            const author = workout.author || '-';
             
-            // 시간은 세그먼트 총합으로 계산 (간단하게 description이나 기본값 사용)
+            // 시간은 세그먼트 총합으로 계산
             let duration = '-';
             if (workout.total_seconds) {
                 const minutes = Math.floor(workout.total_seconds / 60);
@@ -2455,7 +2450,7 @@ async function loadWorkoutsForSelection() {
                 <tr style="border-bottom: 1px solid #e5e7eb;">
                     <td style="text-align: center; padding: 12px;">${index + 1}</td>
                     <td style="padding: 12px;">${escapeHtml(workout.title || '-')}</td>
-                    <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
+                    <td style="text-align: center; padding: 12px;">${escapeHtml(author)}</td>
                     <td style="text-align: center; padding: 12px;">${duration}</td>
                     <td style="text-align: center; padding: 12px;">
                         <button class="btn btn-primary btn-sm" onclick="selectWorkoutForTraining('${workout.id}')" style="padding: 6px 16px;">선택</button>
@@ -2497,6 +2492,18 @@ async function selectWorkoutForTraining(workoutId) {
         
         const workout = workoutResult.workout;
         
+        // 세그먼트 정보가 없으면 로드 시도
+        if (!workout.segments || workout.segments.length === 0) {
+            console.log('[Training] 워크아웃에 세그먼트 정보가 없습니다. 세그먼트를 로드합니다.');
+            // 세그먼트 로드는 별도로 필요할 수 있음 (현재는 apiGetWorkout에 포함되어 있다고 가정)
+        }
+        
+        console.log('[Training] 선택된 워크아웃:', {
+            id: workout.id,
+            title: workout.title,
+            segmentsCount: workout.segments ? workout.segments.length : 0
+        });
+        
         // 선택된 워크아웃 저장
         window.indoorTrainingState.currentWorkout = workout;
         
@@ -2533,14 +2540,140 @@ function displayWorkoutSegmentGraph(workout) {
     
     container.style.display = 'block';
     
-    // 세그먼트 그래프 그리기 (drawSegmentGraph 함수 사용)
+    // 세그먼트 그래프 그리기 (전광판 크기에 맞춤)
     setTimeout(() => {
-        if (typeof drawSegmentGraph === 'function') {
+        const canvas = document.getElementById('selectedWorkoutSegmentGraphCanvas');
+        if (!canvas) return;
+        
+        // 전광판 컨테이너 크기 확인
+        const scoreboardContainer = container.closest('.scoreboard-display');
+        if (!scoreboardContainer) return;
+        
+        const containerRect = container.getBoundingClientRect();
+        const maxWidth = containerRect.width || 300; // 기본값 300px
+        const maxHeight = containerRect.height || 120; // 기본값 120px (scoreboard-segment-graph-container의 min-height)
+        
+        // 세그먼트 그래프를 전광판 크기에 맞춰 그리기
+        if (typeof drawSegmentGraphForScoreboard === 'function') {
+            drawSegmentGraphForScoreboard(workout.segments, -1, 'selectedWorkoutSegmentGraphCanvas', maxWidth, maxHeight);
+        } else if (typeof drawSegmentGraph === 'function') {
+            // 기본 drawSegmentGraph 함수 사용하되, canvas 크기를 제한
             drawSegmentGraph(workout.segments, -1, 'selectedWorkoutSegmentGraphCanvas');
+            
+            // Canvas 크기를 전광판에 맞게 조정
+            canvas.style.maxWidth = `${maxWidth}px`;
+            canvas.style.maxHeight = `${maxHeight}px`;
+            canvas.style.width = '100%';
+            canvas.style.height = 'auto';
         } else {
             console.warn('[Training] drawSegmentGraph 함수를 찾을 수 없습니다.');
         }
     }, 100);
+}
+
+/**
+ * 전광판용 세그먼트 그래프 그리기 (크기 제한 적용)
+ */
+function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canvasId = 'selectedWorkoutSegmentGraphCanvas', maxWidth = 300, maxHeight = 120) {
+    if (!segments || segments.length === 0) return;
+    
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    // 사용자 FTP 가져오기
+    const ftp = Number(window.currentUser?.ftp) || 200;
+    
+    // 총 시간 계산
+    const totalSeconds = segments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+    if (totalSeconds <= 0) return;
+    
+    // 그래프 크기 설정 (전광판 크기에 맞춤)
+    const padding = { top: 10, right: 15, bottom: 25, left: 35 };
+    const availableWidth = maxWidth - padding.left - padding.right;
+    const availableHeight = maxHeight - padding.top - padding.bottom;
+    
+    const graphWidth = Math.max(availableWidth, 200); // 최소 200px
+    const graphHeight = Math.max(availableHeight, 80); // 최소 80px
+    const chartWidth = graphWidth - padding.left - padding.right;
+    const chartHeight = graphHeight - padding.top - padding.bottom;
+    
+    // Canvas 크기 설정
+    canvas.width = graphWidth;
+    canvas.height = graphHeight;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.maxWidth = `${maxWidth}px`;
+    canvas.style.maxHeight = `${maxHeight}px`;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // 배경 투명하게
+    ctx.clearRect(0, 0, graphWidth, graphHeight);
+    
+    // 축 그리기 (전광판용 밝은 색상)
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 1;
+    
+    // 세로축 (파워)
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top);
+    ctx.lineTo(padding.left, padding.top + chartHeight);
+    ctx.stroke();
+    
+    // 가로축 (시간)
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top + chartHeight);
+    ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+    ctx.stroke();
+    
+    // 세그먼트 그리기
+    let currentTime = 0;
+    segments.forEach((seg, index) => {
+        const segDuration = seg.duration_sec || 0;
+        if (segDuration <= 0) return;
+        
+        const segWidth = (segDuration / totalSeconds) * chartWidth;
+        const x = padding.left + (currentTime / totalSeconds) * chartWidth;
+        
+        // 세그먼트 FTP 비율 계산 (간단 버전)
+        let ftpPercent = 100;
+        if (seg.target_type === 'ftp_pct') {
+            ftpPercent = Number(seg.target_value) || 100;
+        } else if (seg.target_type === 'dual') {
+            const targetValue = String(seg.target_value || '100');
+            const parts = targetValue.split('/');
+            if (parts.length > 0) {
+                const ftpPart = parts[0].trim().replace('%', '');
+                ftpPercent = Number(ftpPart) || 100;
+            }
+        }
+        
+        // 파워 높이 계산 (FTP의 2배를 최대값으로)
+        const maxPower = ftp * 2;
+        const targetPower = (ftp * ftpPercent) / 100;
+        const powerHeight = (targetPower / maxPower) * chartHeight;
+        const y = padding.top + chartHeight - powerHeight;
+        
+        // 현재 세그먼트인지 확인
+        const isCurrent = index === currentSegmentIndex;
+        
+        // 세그먼트 사각형 그리기
+        ctx.fillStyle = isCurrent ? 'rgba(0, 212, 170, 0.8)' : 'rgba(0, 212, 170, 0.4)';
+        ctx.fillRect(x, y, segWidth, powerHeight);
+        
+        // 세그먼트 경계선
+        ctx.strokeStyle = isCurrent ? 'rgba(0, 212, 170, 1)' : 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = isCurrent ? 2 : 1;
+        ctx.strokeRect(x, y, segWidth, powerHeight);
+        
+        currentTime += segDuration;
+    });
+    
+    // 축 라벨 (작은 폰트)
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('시간', padding.left + chartWidth / 2, graphHeight - 5);
 }
 
 
