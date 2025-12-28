@@ -9335,9 +9335,7 @@ button[aria-disabled="true"] {
 }
 
 .speedometer-info.connected {
-    background: rgba(0, 212, 170, 0.15) !important; /* 연두색 배경 */
-    border: 1px solid rgba(0, 212, 170, 0.4) !important; /* 테두리 */
-    transition: all 0.3s ease;
+    background: #90EE90; /* 연두색 배경 (연결됨 상태) */
 }
 
 .speedometer-info.disconnected {
