@@ -5267,29 +5267,44 @@ function routeANTMessage(packet) {
   /**
    * [수정본] 모든 ANT+ 데이터를 받아서 분류하는 마스터 핸들러
    */
-  window.parseIndoorSensorPayload = function(payload) {
+  window.processRaceData = function(payload) {
       if (!payload || payload.length < 13) return;
   
+      const antData = payload.slice(1, 9);
+      const deviceId = ((payload[13] & 0xF0) << 12) | (payload[11] << 8) | payload[10];
       const deviceType = payload[12];
   
-      // [중요] 속도계 데이터가 들어오면 레이스 로직(위에서 만든 함수)으로 즉시 전달
-      if (deviceType === 0x79 || deviceType === 0x7B || deviceType === 0x7A) {
-          if (typeof window.processRaceData === 'function') {
-              window.processRaceData(payload);
+      if (deviceType === 0x79 || deviceType === 0x7B) {
+          // [중요] 장치 ID로 해당 트랙 번호(0~3)를 찾습니다.
+          const trackId = window.findTrackByDeviceId ? window.findTrackByDeviceId(deviceId) : -1;
+          if (trackId === -1) return; // 페어링되지 않은 장치는 무시
+  
+          let speed = 0;
+          const currentEventTime = antData[4] | (antData[5] << 8);
+          const currentRevCount = antData[6] | (antData[7] << 8);
+  
+          if (!window.lastAntData) window.lastAntData = {};
+          if (!window.lastAntData[deviceId]) {
+              window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
+              updateSpeedometer(trackId, 0); // 0으로 초기화
+              return;
           }
-          // 레이스 중일 때는 여기서 중단하여 트레이닝 로직과 섞이지 않게 함
-          const isRaceMode = document.getElementById('race-dashboard')?.style.display !== 'none';
-          if (isRaceMode) return;
+  
+          const prevData = window.lastAntData[deviceId];
+          let revDiff = currentRevCount - prevData.rev;
+          let timeDiff = currentEventTime - prevData.time;
+  
+          if (revDiff < 0) revDiff += 65536;
+          if (timeDiff < 0) timeDiff += 65536;
+  
+          if (timeDiff > 0 && revDiff > 0) {
+              const wheelCircumference = 2.096;
+              speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
+              if (speed > 100) speed = 0;
+              updateSpeedometer(trackId, speed); // 트랙 ID로 호출
+          }
+          window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
       }
-  
-      // 트레이닝(파워/심박) 로직 계속 실행
-      const idLow = payload[10];
-      const idHigh = payload[11];
-      const transType = payload[13];
-      const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
-  
-      updateIndoorPairingUI(deviceId, deviceType);
-      processLiveTrainingData(deviceId, deviceType, payload);
   };
   
 }
@@ -5951,6 +5966,26 @@ function processSpeedCadenceData(deviceId, data) {
   }
 }
 
+/**
+ * 대시보드 전환 시 모든 바늘을 강제로 0위치에 렌더링
+ */
+window.initializeGauges = function() {
+    // 레이스 바늘 초기화
+    for (let i = 0; i < 4; i++) {
+        const n = document.getElementById(`needle-${i}`);
+        if (n) n.setAttribute('transform', 'rotate(180, 100, 140)');
+    }
+    // 트레이닝 바늘 초기화
+    if (window.indoorTrainingState?.powerMeters) {
+        window.indoorTrainingState.powerMeters.forEach(pm => {
+            const n = document.getElementById(`needle-${pm.id}`);
+            if (n) n.setAttribute('transform', 'rotate(180, 100, 140)');
+        });
+    }
+};
+
+// 페이지 로드 시 및 대시보드 버튼 클릭 시 실행되도록 연결
+window.addEventListener('load', window.initializeGauges);
 
 
 
