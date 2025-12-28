@@ -6194,10 +6194,10 @@ window.processRaceData = function(payload) {
 
     // 2. 장치 ID 정밀 추출 (로그 데이터 분석 기반)
     // 인덱스: 8:E0, 9:D0, 10:07, 11:7B, 13:10
-    const idLow = data[9];
-    const idHigh = data[10];
-    const deviceType = data[11]; // 0x7B (Speed/Cadence)
-    const transType = data[13]; 
+    const idLow = data[13];
+    const idHigh = data[14];
+    const deviceType = data[15]; // 0x7B (Speed/Cadence)
+    const transType = data[17]; 
 
     // ANT+ 3바이트 확장 ID 계산 (0x107D0 = 67536)
     const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
@@ -6299,5 +6299,6 @@ window.addEventListener('load', () => {
         });
     }, 1000);
 });
+
 
 
