@@ -322,14 +322,24 @@ function createPowerMeterElement(powerMeter) {
                 transform="rotate(270)"/>
         </g>
         
+        <!-- 현재 파워값 (바늘 원 아래) -->
+        <text x="100" y="165" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#ffffff" 
+              font-size="43.2" 
+              font-weight="700"
+              id="current-power-value-${powerMeter.id}">-</text>
+        
+        <!-- 단위 W (현재 파워값 아래) -->
+        <text x="100" y="180" 
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#ffffff" 
+              font-size="10" 
+              font-weight="500">W</text>
+        
       </svg>
-    </div>
-    <!-- 현재 파워값 (바늘 중심 아래, W 단위 아래) -->
-    <div class="current-power-display-bottom" style="text-align: center; padding: 8px 0; background: rgba(0, 0, 0, 0.7); border-radius: 0;">
-      <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-        <span id="current-power-value-${powerMeter.id}" style="color: #ffffff; font-size: 43.2px; font-weight: 700; line-height: 1.2;">-</span>
-        <span style="color: #ffffff; font-size: 10px; font-weight: 500;">W</span>
-      </div>
     </div>
     <div class="speedometer-info disconnected">
       <!-- 좌측: 최대파워, 평균파워 -->
