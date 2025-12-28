@@ -330,8 +330,8 @@ function createPowerMeterElement(powerMeter) {
               font-size="10" 
               font-weight="500">W</text>
         
-        <!-- 현재 파워값 (FTP 표기와 하단의 중간 위치) -->
-        <text x="100" y="177.5" 
+        <!-- 현재 파워값 (W 아래쪽으로 최대한 내린 위치) -->
+        <text x="100" y="195" 
               text-anchor="middle" 
               dominant-baseline="text-after-edge"
               fill="#ffffff" 
@@ -2381,8 +2381,167 @@ window.selectDeviceForInput = function(deviceId, targetType) {
     }
 };
 
+/**
+ * 워크아웃 선택 모달 열기
+ */
+async function openWorkoutSelectionModal() {
+    const modal = document.getElementById('workoutSelectionModal');
+    if (!modal) {
+        console.error('[Training] 워크아웃 선택 모달을 찾을 수 없습니다.');
+        return;
+    }
+    
+    modal.classList.remove('hidden');
+    
+    // 워크아웃 목록 로드
+    await loadWorkoutsForSelection();
+}
 
+/**
+ * 워크아웃 선택 모달 닫기
+ */
+function closeWorkoutSelectionModal() {
+    const modal = document.getElementById('workoutSelectionModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
 
+/**
+ * 워크아웃 선택 모달용 워크아웃 목록 로드
+ */
+async function loadWorkoutsForSelection() {
+    const tbody = document.getElementById('workoutSelectionTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">워크아웃 목록을 불러오는 중...</td></tr>';
+    
+    try {
+        // apiGetWorkouts 함수 사용 (workoutManager.js에 있음)
+        const result = typeof apiGetWorkouts === 'function' ? await apiGetWorkouts() : null;
+        
+        if (!result || !result.success) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc2626;">워크아웃 목록을 불러올 수 없습니다.</td></tr>';
+            return;
+        }
+        
+        const workouts = result.items || [];
+        const validWorkouts = workouts.filter(w => {
+            // validateWorkoutData 함수가 있으면 사용
+            if (typeof validateWorkoutData === 'function') {
+                return validateWorkoutData(w);
+            }
+            return w && w.id && w.title;
+        });
+        
+        if (validWorkouts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
+            return;
+        }
+        
+        // 워크아웃 목록 렌더링
+        tbody.innerHTML = validWorkouts.map((workout, index) => {
+            // 카테고리는 description에서 추출하거나 기본값 사용
+            const category = workout.category || workout.description || '-';
+            
+            // 시간은 세그먼트 총합으로 계산 (간단하게 description이나 기본값 사용)
+            let duration = '-';
+            if (workout.total_seconds) {
+                const minutes = Math.floor(workout.total_seconds / 60);
+                duration = `${minutes}분`;
+            }
+            
+            return `
+                <tr style="border-bottom: 1px solid #e5e7eb;">
+                    <td style="text-align: center; padding: 12px;">${index + 1}</td>
+                    <td style="padding: 12px;">${escapeHtml(workout.title || '-')}</td>
+                    <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
+                    <td style="text-align: center; padding: 12px;">${duration}</td>
+                    <td style="text-align: center; padding: 12px;">
+                        <button class="btn btn-primary btn-sm" onclick="selectWorkoutForTraining('${workout.id}')" style="padding: 6px 16px;">선택</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        console.error('[Training] 워크아웃 목록 로드 오류:', error);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc2626;">오류가 발생했습니다.</td></tr>';
+    }
+}
+
+/**
+ * HTML 이스케이프 함수
+ */
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+/**
+ * 워크아웃 선택 처리
+ */
+async function selectWorkoutForTraining(workoutId) {
+    try {
+        // 워크아웃 상세 정보 로드
+        const workoutResult = typeof apiGetWorkout === 'function' ? await apiGetWorkout(workoutId) : null;
+        
+        if (!workoutResult || !workoutResult.success || !workoutResult.workout) {
+            if (typeof showToast === 'function') {
+                showToast('워크아웃 정보를 불러올 수 없습니다.', 'error');
+            }
+            return;
+        }
+        
+        const workout = workoutResult.workout;
+        
+        // 선택된 워크아웃 저장
+        window.indoorTrainingState.currentWorkout = workout;
+        
+        // 모달 닫기
+        closeWorkoutSelectionModal();
+        
+        // 전광판 우측에 세그먼트 그래프 표시
+        displayWorkoutSegmentGraph(workout);
+        
+        if (typeof showToast === 'function') {
+            showToast(`"${workout.title}" 워크아웃이 선택되었습니다.`, 'success');
+        }
+        
+    } catch (error) {
+        console.error('[Training] 워크아웃 선택 오류:', error);
+        if (typeof showToast === 'function') {
+            showToast('워크아웃 선택 중 오류가 발생했습니다.', 'error');
+        }
+    }
+}
+
+/**
+ * 전광판 우측에 워크아웃 세그먼트 그래프 표시
+ */
+function displayWorkoutSegmentGraph(workout) {
+    const container = document.getElementById('selectedWorkoutSegmentGraphContainer');
+    if (!container) return;
+    
+    // 세그먼트가 있는 경우에만 표시
+    if (!workout.segments || workout.segments.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    container.style.display = 'block';
+    
+    // 세그먼트 그래프 그리기 (drawSegmentGraph 함수 사용)
+    setTimeout(() => {
+        if (typeof drawSegmentGraph === 'function') {
+            drawSegmentGraph(workout.segments, -1, 'selectedWorkoutSegmentGraphCanvas');
+        } else {
+            console.warn('[Training] drawSegmentGraph 함수를 찾을 수 없습니다.');
+        }
+    }, 100);
+}
 
 
 
