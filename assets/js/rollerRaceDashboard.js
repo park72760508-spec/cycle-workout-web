@@ -2914,10 +2914,10 @@ async function activateUSBReceiverFromModal() {
   // 현재 모달 닫기
   closeUSBReceiverActivationModal();
   
-  // 약간의 지연 후 선택 목록 화면 표시
+  // 약간의 지연 후 선택 목록 화면 표시 (이미 활성화되었으므로 skipActivation=true)
   setTimeout(() => {
     if(typeof showReceiverSelectionModal === 'function') {
-      showReceiverSelectionModal();
+      showReceiverSelectionModal(true); // 이미 활성화되었으므로 활성화 시도 건너뜀
     }
   }, 300);
 }
@@ -3005,8 +3005,9 @@ async function checkUSBActivationStatus() {
 
 /**
  * 수신기 선택 모달 표시
+ * @param {boolean} skipActivation - true이면 활성화 시도를 건너뜀 (이미 활성화된 경우)
  */
-async function showReceiverSelectionModal() {
+async function showReceiverSelectionModal(skipActivation = false) {
   const modal = document.getElementById('receiverSelectionModal');
   if (modal) {
     modal.classList.remove('hidden');
@@ -3021,8 +3022,10 @@ async function showReceiverSelectionModal() {
   // USB 상태 확인
   await checkANTUSBStatusForSelection();
   
-  // 모달을 열면서 바로 수신기 활성화 시도
-  await activateReceiverFromSelection();
+  // 모달을 열면서 바로 수신기 활성화 시도 (skipActivation이 false인 경우만)
+  if (!skipActivation) {
+    await activateReceiverFromSelection();
+  }
   
   // 주기적으로 상태 확인 (5초마다)
   if (window.antUSBStatusInterval) {
