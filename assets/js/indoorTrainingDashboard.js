@@ -2037,62 +2037,57 @@ function updateFoundDevicesList(deviceId, deviceType) {
 }
 
 // 심박수(BPM) 및 파워 데이터 실시간 UI 반영
+// 심박수(BPM) 및 파워 데이터 실시간 UI 반영 (수정본)
 function processLiveTrainingData(deviceId, deviceType, payload) {
-  const antData = payload.slice(1, 9);
-  
-  // 디버깅: 심박계 데이터 수신 확인
-  if (deviceType === 0x78) {
-    console.log(`[심박계 데이터 수신] DeviceId: ${deviceId}, Payload:`, Array.from(payload).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
-    console.log(`[심박계 데이터] antData:`, Array.from(antData).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
-  }
-  
-  window.indoorTrainingState.powerMeters.forEach(pm => {
-    // 심박수 업데이트
-    // deviceId 타입 변환 (문자열/숫자 모두 처리)
-    const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
-    const receivedDeviceId = String(deviceId);
-    
-    if (pmHeartRateDeviceId === receivedDeviceId && deviceType === 0x78) {
-      // ANT+ Heart Rate Monitor 데이터 포맷:
-      // Page 0: [Page, Heart Rate Event Time (2 bytes), Heart Rate Count, Heart Rate (1 byte), Operating Time (2 bytes), Battery Status, Reserved]
-      // 일반적으로 Heart Rate는 antData[3]에 있음
-      // 하지만 payload 구조에 따라 다를 수 있으므로 여러 위치 확인
-      let heartRate = 0;
-      
-      // antData[3]이 일반적인 위치 (Page 0 기준)
-      if (antData.length > 3 && antData[3] > 0 && antData[3] < 255) {
-        heartRate = antData[3];
-      } else if (antData.length > 7 && antData[7] > 0 && antData[7] < 255) {
-        // 대체 위치
-        heartRate = antData[7];
-      } else if (antData.length > 2 && antData[2] > 0 && antData[2] < 255) {
-        // 다른 가능한 위치
-        heartRate = antData[2];
-      }
-      
-      if (heartRate > 0) {
-        pm.heartRate = heartRate;
-        const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
-        if (hrEl) {
-          hrEl.textContent = Math.round(heartRate);
-          console.log(`[심박계 업데이트] 파워계 ${pm.id}: ${heartRate} bpm`);
+    const antData = payload.slice(1, 9);
+    const pageNum = antData[0] & 0x7F; // 토글 비트 제외한 페이지 번호
+
+    window.indoorTrainingState.powerMeters.forEach(pm => {
+        const pmHeartRateDeviceId = pm.heartRateDeviceId ? String(pm.heartRateDeviceId) : null;
+        const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
+        const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
+        const receivedDeviceId = String(deviceId);
+
+        // 1. 심박계 처리 (0x78)
+        if (deviceType === 0x78 && pmHeartRateDeviceId === receivedDeviceId) {
+            // ANT+ Heart Rate Profile: 대부분의 페이지에서 Byte 7이 Computed Heart Rate임
+            const heartRate = antData[7];
+            if (heartRate > 0 && heartRate < 255) {
+                pm.heartRate = heartRate;
+                const hrEl = document.getElementById(`heart-rate-value-${pm.id}`);
+                if (hrEl) hrEl.textContent = Math.round(heartRate);
+            }
         }
-        
-        // 파워 데이터가 업데이트될 때도 심박계 값이 유지되도록
-        // updatePowerMeterData 호출 시 현재 심박계 값 전달
-      }
-    }
-    
-    // 파워 데이터 업데이트
-    const pmDeviceId = pm.deviceId ? String(pm.deviceId) : null;
-    const pmTrainerDeviceId = pm.trainerDeviceId ? String(pm.trainerDeviceId) : null;
-    
-    if ((pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId) && (deviceType === 0x0B || deviceType === 0x11)) {
-      const power = (antData[5] << 8) | antData[4];
-      // 현재 심박계 값도 함께 전달
-      updatePowerMeterData(pm.id, power, pm.heartRate, antData[3]);
-    }
-  });
+
+        // 2. 파워미터/스마트로라 처리 (0x0B, 0x11)
+        if ((deviceType === 0x0B || deviceType === 0x11) && 
+            (pmDeviceId === receivedDeviceId || pmTrainerDeviceId === receivedDeviceId)) {
+            
+            let power = -1;
+            let cadence = -1;
+
+            // 데이터 페이지 분석 (ANT+ Bike Power Profile)
+            if (pageNum === 0x10) { // Standard Power Only Page (시마노 포함 대부분의 파워미터)
+                // Byte 3: Instantaneous Cadence
+                // Byte 6-7: Instantaneous Power (LSB-MSB)
+                cadence = antData[3];
+                power = antData[6] | (antData[7] << 8);
+            } else if (pageNum === 0x12) { // Crank Torque Frequency Page
+                cadence = antData[3];
+            } else if (pageNum === 0x13) { // Torque Effectiveness
+                cadence = antData[3];
+            }
+
+            // 유효한 파워 또는 케이던스 데이터가 수신된 경우에만 UI 업데이트
+            if (power !== -1 || (cadence !== -1 && cadence !== 255)) {
+                const finalPower = (power !== -1) ? power : (pm.currentPower || 0);
+                const finalCadence = (cadence !== -1 && cadence !== 255) ? cadence : (pm.cadence || 0);
+                
+                // 전역 상태 업데이트 및 UI 반영
+                updatePowerMeterData(pm.id, finalPower, pm.heartRate, finalCadence);
+            }
+        }
+    });
 }
 
 
@@ -2263,5 +2258,6 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
