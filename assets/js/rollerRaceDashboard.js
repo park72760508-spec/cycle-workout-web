@@ -480,40 +480,39 @@ function updateSpeedometerNeedle(speedometerId, speed) {
  * 속도계 바늘 업데이트 (부드러운 애니메이션 최적화)
  * 60km/h 경계값을 부드럽게 넘어가도록 설계되었습니다.
  */
-function updateSpeedometerNeedle(trackId, speed) {
-  const needle = document.getElementById(`needle-${trackId}`);
+function updateSpeedometerNeedle(speedometerId, speed) {
+  const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
-  // 1. 목표 각도 계산
+  // 1. 목표 각도 계산 (기존 공식 유지)
   const targetAngle = calculateNeedleAngle(speed);
   
-  // 2. 이전 각도 상태 관리 (부드러운 회전을 위해)
-  if (!window.rollerRaceState) window.rollerRaceState = {};
-  if (!window.rollerRaceState.needleAngles) window.rollerRaceState.needleAngles = {};
-  
-  let previousAngle = window.rollerRaceState.needleAngles[trackId];
+  // 2. 이전 각도 상태 가져오기
+  let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
   
   if (previousAngle === undefined) {
     previousAngle = targetAngle;
-    window.rollerRaceState.needleAngles[trackId] = targetAngle;
+    window.rollerRaceState.needleAngles[speedometerId] = targetAngle;
   }
 
-  // 3. 최단 경로 계산 (360도 경계에서 휙 돌아가는 현상 방지)
+  // 3. 최단 경로 회전 계산 (360도 회전 방지)
+  // 바늘이 0도와 360도 사이를 지나갈 때 반대로 한 바퀴 도는 현상을 방지합니다.
   let diff = targetAngle - (previousAngle % 360);
   if (diff > 180) diff -= 360;
   if (diff < -180) diff += 360;
   
   const finalAngle = previousAngle + diff;
-  window.rollerRaceState.needleAngles[trackId] = finalAngle;
+  window.rollerRaceState.needleAngles[speedometerId] = finalAngle;
 
-  // 4. 애니메이션 적용 (OLD 설정: 0.4s cubic-bezier)
-  needle.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)'; 
+  // 4. 애니메이션 속성 적용
+  // cubic-bezier(0.25, 0.1, 0.25, 1)는 실제 기계 바늘처럼 처음에 빠르고 끝에 부드럽게 멈춥니다.
+  // 0.4초는 ANT+ 센서 데이터 수신 주기(0.25s) 사이를 자연스럽게 이어줍니다.
+  needle.style.transition = 'transform 0.25s cubic-bezier(0.1, 0, 0.3, 1)';
+  needle.setAttribute('transform', `rotate(${finalAngle})`);
   
-  // [중요] rotate(각도, 중심X, 중심Y) - 현재 좌표계(100, 140)에 맞춤
-  needle.setAttribute('transform', `rotate(${finalAngle}, 100, 140)`);
-  
-  // 5. 궤적(Trail) 그리기
-  updateSpeedometerNeedlePath(trackId, speed);
+  // 5. 바늘 행적선 업데이트
+  // 바늘의 이동 속도에 맞춰 행적선도 함께 업데이트합니다.
+  updateSpeedometerNeedlePath(speedometerId, speed);
 }
 
 
@@ -525,18 +524,21 @@ function updateSpeedometerNeedle(trackId, speed) {
  * 60km/h 초과: 180도 × (현재속도/120) - 90도
  */
 function calculateNeedleAngle(speed) {
-  const maxSpeed = 120; // OLD 기준 최대 속도
+  const maxSpeed = 120;
   let angle;
-  
   if (speed <= 60) {
-    // 0~60km/h 구간
+    // 0~60km/h: 270도 + 180도 × (속도/120)
+    // speed = 0 → angle = 270도
+    // speed = 60 → angle = 270 + 90 = 360도 (0도)
     angle = 270 + 180 * (speed / maxSpeed);
   } else {
-    // 60km/h 초과 구간
+    // 60km/h 초과: 180도 × (속도/120) - 90도
+    // speed = 60.01 → angle = 180*(60.01/120) - 90 = 0.015도
+    // speed = 120 → angle = 180 - 90 = 90도
     angle = 180 * (speed / maxSpeed) - 90;
   }
   
-  // 각도 정규화
+  // 각도를 0~360도 범위로 정규화
   while (angle >= 360) angle -= 360;
   while (angle < 0) angle += 360;
   
@@ -552,54 +554,69 @@ function calculateNeedleAngle(speed) {
  * 속도계 바늘 행적선 업데이트 (수정본)
  * 바늘의 각도 계산 공식과 Math.cos/sin 좌표계를 정확히 일치시킴
  */
-function updateSpeedometerNeedlePath(trackId, speed) {
-  const pathGroup = document.getElementById(`needle-path-${trackId}`);
+function updateSpeedometerNeedlePath(speedometerId, speed) {
+  const pathGroup = document.getElementById(`needle-path-${speedometerId}`);
   if (!pathGroup) return;
   
-  // 설정값 (OLD 파일 기준)
   const maxSpeed = 120;
-  const centerX = 100; // 현재 좌표계에 맞춰 수정됨
-  const centerY = 140; 
+  const centerX = 0; // transform(100, 140)으로 이미 이동됨
+  const centerY = 0; 
   const radius = 80; 
   const innerRadius = radius - 10; 
   const tickLengthShort = 7; 
   const tickLengthLong = 14; 
   const centerCircleRadius = 7; 
   
-  // 5km/h 단위로 눈금 계산
-  const currentTickSpeed = Math.floor(speed / 5) * 5;
+  // 현재 속도까지의 2.5km/h 단위 눈금 계산 (기존 5km/h의 1/2 간격)
+  const tickInterval = 2.5;
+  const currentTickSpeed = Math.floor(speed / tickInterval) * tickInterval;
   const maxTickSpeed = Math.min(currentTickSpeed, maxSpeed);
   
-  pathGroup.innerHTML = ''; // 기존 궤적 지우기
+  pathGroup.innerHTML = '';
   
-  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += 5) {
-    // 각도 계산
+  for (let tickSpeed = 0; tickSpeed <= maxTickSpeed; tickSpeed += tickInterval) {
+    // 1. 바늘과 동일한 각도 계산
     let needleAngle = calculateNeedleAngle(tickSpeed);
     
-    // 수학적 각도로 변환 (SVG rotate와 Math.* 좌표계 차이 보정)
+    // 2. 좌표계 보정 (핵심 수정 부분)
+    // SVG rotate(0)은 '위쪽'을 가리키지만, Math.cos(0)은 '오른쪽'을 가리킵니다.
+    // 바늘 각도에서 90도를 빼야 Math 좌표계와 일치하게 됩니다.
     let mathAngle = needleAngle - 90; 
+    
     const rad = (mathAngle * Math.PI) / 180;
     
-    // 눈금 길이 (20km 단위는 길게)
+    // 3. 선의 길이 결정 (20km 단위는 길게)
     const isMajor = tickSpeed % 20 === 0;
     const tickLength = isMajor ? tickLengthLong : tickLengthShort;
     const outerRadius = innerRadius + tickLength;
     
-    // 좌표 계산
+    // 4. 좌표 계산
     const startRadius = centerCircleRadius + 1;
     const x1 = centerX + startRadius * Math.cos(rad);
     const y1 = centerY + startRadius * Math.sin(rad);
     const x2 = centerX + outerRadius * Math.cos(rad);
     const y2 = centerY + outerRadius * Math.sin(rad);
     
-    // 선(Line) 생성
+    // 5. 속도 구간에 따른 색상 결정
+    let strokeColor;
+    if (tickSpeed > 80) {
+      // 80km/h 초과: 투명 빨강색선
+      strokeColor = 'rgba(255, 0, 0, 0.4)';
+    } else if (tickSpeed > 40) {
+      // 40km/h 초과 ~ 80km/h: 투명 주황색선
+      strokeColor = 'rgba(255, 165, 0, 0.4)';
+    } else {
+      // 40km/h 이하: 민트색 반투명 (기존 색상 유지)
+      strokeColor = 'rgba(0, 255, 200, 0.4)';
+    }
+    
+    // 6. SVG Line 생성 및 추가
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', x1);
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
-    // 궤적 색상 (민트색 반투명)
-    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); 
+    line.setAttribute('stroke', strokeColor);
     line.setAttribute('stroke-width', '1.2');
     line.setAttribute('stroke-linecap', 'round');
     
@@ -6270,16 +6287,26 @@ window.processRaceData = function(payload) {
  * [가시성 개선] 속도계 UI 업데이트 (숫자 + 바늘)
  */
 function updateSpeedometer(trackId, speed) {
+    // 1. 숫자 텍스트 (ID: speed-text-0, speed-text-1 ...)
     const speedText = document.getElementById(`speed-text-${trackId}`);
-    
-    // 1. 숫자 업데이트
     if (speedText) {
         speedText.textContent = speed.toFixed(1);
-        speedText.style.fill = "#ffffff"; 
+        speedText.style.fill = "#ffffff"; // 흰색 강제
+        speedText.style.visibility = "visible";
     }
 
-    // 2. OLD 바늘 로직 호출
-    updateSpeedometerNeedle(trackId, speed);
+    // 2. 바늘 회전 (이미 잘 반영된 좌표계 사용)
+    const needle = document.getElementById(`needle-${trackId}`);
+    if (needle) {
+        const maxSpeed = 60;
+        const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
+        const angle = -90 + (ratio * 180); // -90도 ~ 90도
+        
+        // 중심점(100, 140)을 속성으로 강제 부여하여 CSS 간섭 차단
+        needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        needle.style.stroke = "#ff4757";
+        needle.style.visibility = "visible";
+    }
 }
 
 // ---------------------------------------------------------
@@ -6320,7 +6347,6 @@ window.addEventListener('load', () => {
         });
     }, 1500);
 });
-
 
 
 
