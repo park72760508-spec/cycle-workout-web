@@ -313,13 +313,13 @@ function createPowerMeterElement(powerMeter) {
         
         <!-- 바늘 -->
         <g class="speedometer-needle" transform="translate(100, 140)">
-          <line id="needle-${powerMeter.id}" 
-                x1="0" y1="-7" 
-                x2="0" y2="-80" 
-                stroke="#ff0000" 
-                stroke-width="3" 
+          <line id="needle-${powerMeter.id}"
+                x1="0" y1="-7"
+                x2="0" y2="-80"
+                stroke="#ff4757"
+                stroke-width="4"
                 stroke-linecap="round"
-                transform="rotate(270)"/>
+                transform="rotate(-90, 100, 140)"/>
         </g>
         
         <!-- W 라벨 -->
@@ -598,7 +598,10 @@ function initializeNeedles() {
   });
 }
 
-// 기존 updatePowerMeterNeedle 함수 보강 (null 체크 및 초기값)
+// [수정 전]
+// needleEl.setAttribute('transform', `rotate(${angle})`);
+
+// [수정 후] (중심점 100, 140 추가)
 function updatePowerMeterNeedle(powerMeterId, power) {
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
     if (!needleEl) return;
@@ -607,11 +610,13 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     const maxPower = ftp * 2;
     const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
 
-    // 파워계도 속도계와 동일한 각도 체계 적용 (-90도 ~ 90도)
+    // -90도(0W) ~ 90도(Max)
     const angle = -90 + (ratio * 180);
 
-    // 부모 그룹이 translate(100, 140)을 하므로, rotate(angle)만 하면 됩니다
-    needleEl.setAttribute('transform', `rotate(${angle})`);
+    // [핵심 수정] 100, 140은 SVG 게이지의 정중앙 좌표입니다.
+    // 이 좌표가 없으면 바늘이 엉뚱한 곳을 기준으로 회전하여 사라집니다.
+    needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+    
     needleEl.style.visibility = 'visible';
 }
 
@@ -2355,6 +2360,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
