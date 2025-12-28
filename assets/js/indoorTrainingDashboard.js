@@ -157,6 +157,17 @@ function initIndoorTrainingDashboard() {
   
   // 사용자 FTP 로드
   loadUserFTP();
+  
+  // 모든 파워계의 연결 상태 업데이트
+  updateAllPowerMeterConnectionStatuses();
+  
+  // 수신기 상태 변경 시 연결 상태 업데이트 (주기적으로 확인)
+  if (window.indoorTrainingState.statusCheckInterval) {
+    clearInterval(window.indoorTrainingState.statusCheckInterval);
+  }
+  window.indoorTrainingState.statusCheckInterval = setInterval(() => {
+    updateAllPowerMeterConnectionStatuses();
+  }, 1000); // 1초마다 확인
 }
 
 /**
@@ -592,6 +603,61 @@ function updatePowerMeterNeedle(powerMeterId, power) {
 }
 
 /**
+ * 파워계 연결 상태 업데이트 (데이터 수신과 무관하게 상태만 업데이트)
+ */
+function updatePowerMeterConnectionStatus(powerMeterId) {
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  const statusEl = document.getElementById(`status-${powerMeterId}`);
+  const statusDotEl = statusEl?.querySelector('.status-dot');
+  const statusTextEl = statusEl?.querySelector('.status-text');
+  
+  // 조건 확인
+  const hasUser = !!(powerMeter.userId);
+  const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
+  const hasPowerDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId);
+  const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
+  
+  let statusClass = 'disconnected';
+  let statusText = '미연결';
+  
+  // 연결 상태 판단
+  if (hasUser && hasReceiver && hasPowerDevice && hasData) {
+    statusClass = 'connected';
+    statusText = '연결됨';
+    powerMeter.connected = true;
+  } else if (hasUser && hasReceiver) {
+    statusClass = 'ready';
+    statusText = '준비됨';
+    powerMeter.connected = false;
+  } else {
+    statusClass = 'disconnected';
+    statusText = '미연결';
+    powerMeter.connected = false;
+  }
+  
+  // 상태 표시 업데이트
+  if (statusDotEl) {
+    statusDotEl.classList.remove('disconnected', 'ready', 'connected');
+    statusDotEl.classList.add(statusClass);
+  }
+  
+  if (statusTextEl) {
+    statusTextEl.textContent = statusText;
+  }
+}
+
+/**
+ * 모든 파워계의 연결 상태 업데이트
+ */
+function updateAllPowerMeterConnectionStatuses() {
+  window.indoorTrainingState.powerMeters.forEach(pm => {
+    updatePowerMeterConnectionStatus(pm.id);
+  });
+}
+
+/**
  * 파워계 데이터 업데이트
  */
 function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
@@ -651,67 +717,26 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
   // 바늘 업데이트
   updatePowerMeterNeedle(powerMeterId, power);
   
-  // 연결 상태 업데이트: 사용자 또는 기기 페어링이 있고 데이터가 수신되면 연결 상태로 변경
+  // 정보 표시창 배경색 업데이트 (파워값 0이고 심박값 수신 시)
   const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
-  const statusEl = document.getElementById(`status-${powerMeterId}`);
-  const statusDotEl = statusEl?.querySelector('.status-dot');
-  const statusTextEl = statusEl?.querySelector('.status-text');
   
-  // 사용자 페어링 확인
+  // 조건 확인
   const hasUser = !!(powerMeter.userId);
-  
-  // 기기 페어링 확인 (deviceId, trainerDeviceId, heartRateDeviceId 중 하나라도 있으면 페어링됨)
-  const hasDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId || powerMeter.heartRateDeviceId);
-  
-  // 사용자 또는 기기 페어링이 1개 이상 있을 때
-  const isPaired = hasUser || hasDevice;
-  
-  // 데이터가 수신되었는지 확인
+  const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
+  const hasPowerDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId);
   const hasData = power > 0 || heartRate > 0 || cadence > 0;
   
-  // 조건: 페어링이 있고 데이터가 수신되면 연결 상태로 변경
-  if (isPaired && hasData) {
-    powerMeter.connected = true;
-    
-    if (infoEl) {
-      // 파워값은 0이고 심박값이 수신될 때만 배경색 변경
-      if (power === 0 && heartRate > 0) {
-        infoEl.classList.remove('disconnected');
-        infoEl.classList.add('connected');
-      } else if (power > 0 || cadence > 0) {
-        // 파워값이 있거나 케이던스가 있으면 일반 연결 상태
-        infoEl.classList.remove('disconnected');
-        infoEl.classList.add('connected');
-      }
-    }
-    
-    // 상태 표시 업데이트: 항상 "연결됨"으로 표시
-    if (statusDotEl) {
-      statusDotEl.classList.remove('disconnected');
-      statusDotEl.classList.add('connected');
-    }
-    
-    if (statusTextEl) {
-      statusTextEl.textContent = '연결됨';
-    }
-  } else {
-    // 페어링이 없거나 데이터가 수신되지 않으면 미연결 상태
-    powerMeter.connected = false;
-    
-    if (infoEl) {
-      infoEl.classList.remove('connected');
-      infoEl.classList.add('disconnected');
-    }
-    
-    if (statusDotEl) {
-      statusDotEl.classList.remove('connected');
-      statusDotEl.classList.add('disconnected');
-    }
-    
-    if (statusTextEl) {
-      statusTextEl.textContent = '미연결';
-    }
+  // 정보 표시창 배경색 업데이트 (파워값 0이고 심박값 수신 시만)
+  if (infoEl && hasUser && hasReceiver && hasPowerDevice && power === 0 && heartRate > 0) {
+    infoEl.classList.remove('disconnected', 'ready');
+    infoEl.classList.add('connected');
+  } else if (infoEl && hasUser && hasReceiver && hasPowerDevice && (power > 0 || cadence > 0)) {
+    infoEl.classList.remove('disconnected', 'ready');
+    infoEl.classList.add('connected');
   }
+  
+  // 연결 상태 업데이트
+  updatePowerMeterConnectionStatus(powerMeterId);
 }
 
 /**
@@ -1298,6 +1323,9 @@ function clearSelectedUser() {
   // FTP 기반 눈금 업데이트 (기본값으로 복귀)
   updatePowerMeterTicks(powerMeterId);
   
+  // 연결 상태 업데이트
+  updatePowerMeterConnectionStatus(powerMeterId);
+  
   // 저장
   saveAllPowerMeterPairingsToStorage();
   
@@ -1329,6 +1357,9 @@ function clearPairedDevice(deviceType) {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
+    
     if (typeof showToast === 'function') {
       showToast('스마트로라 페어링이 해제되었습니다.');
     }
@@ -1345,6 +1376,9 @@ function clearPairedDevice(deviceType) {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
+    
     if (typeof showToast === 'function') {
       showToast('파워메터 페어링이 해제되었습니다.');
     }
@@ -1360,6 +1394,9 @@ function clearPairedDevice(deviceType) {
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
     
     if (typeof showToast === 'function') {
       showToast('심박계 페어링이 해제되었습니다.');
@@ -1503,6 +1540,10 @@ function savePowerMeterPairing() {
     updatePowerMeterTicks(powerMeterId);
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
+    
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('사용자가 선택되었습니다.');
@@ -1524,6 +1565,10 @@ function savePowerMeterPairing() {
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
+    
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('스마트로라가 페어링되었습니다.');
@@ -1545,6 +1590,10 @@ function savePowerMeterPairing() {
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
+    
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('파워메터가 페어링되었습니다.');
@@ -1566,6 +1615,10 @@ function savePowerMeterPairing() {
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 연결 상태 업데이트
+    updatePowerMeterConnectionStatus(powerMeterId);
+    
     closePowerMeterPairingModal();
     if (typeof showToast === 'function') {
       showToast('심박계가 페어링되었습니다.');
@@ -1631,6 +1684,9 @@ function loadPowerMeterPairings() {
         
         // FTP 기반 눈금 업데이트
         updatePowerMeterTicks(powerMeter.id);
+        
+        // 연결 상태 업데이트
+        updatePowerMeterConnectionStatus(powerMeter.id);
       }
     });
     
