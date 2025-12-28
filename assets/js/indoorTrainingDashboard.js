@@ -123,20 +123,16 @@ window.processBuffer = function(newData) {
     window.indoorTrainingState.rxBuffer = window.indoorTrainingState.rxBuffer.slice(totalLen);
 
     console.log(`[Training] processBuffer: 패킷 추출 완료, packet.length=${packet.length}, msgId=0x${packet[2]?.toString(16)}`);
-    console.log(`[Training] processBuffer: handleIndoorAntMessage 타입 확인=${typeof handleIndoorAntMessage}, window.handleIndoorAntMessage=${typeof window.handleIndoorAntMessage}`);
+    
     try {
-      // 로컬 함수를 먼저 시도하고, 없으면 window 객체의 함수를 시도
-      if (typeof handleIndoorAntMessage === 'function') {
-        console.log('[Training] processBuffer: 로컬 handleIndoorAntMessage 호출');
-        handleIndoorAntMessage(packet);
-      } else if (typeof window.handleIndoorAntMessage === 'function') {
-        console.log('[Training] processBuffer: window.handleIndoorAntMessage 호출');
+      // window.handleIndoorAntMessage를 직접 호출 (안정성을 위해)
+      if (typeof window.handleIndoorAntMessage === 'function') {
         window.handleIndoorAntMessage(packet);
       } else {
-        console.error('[Training] processBuffer: handleIndoorAntMessage 함수를 찾을 수 없습니다!');
+        console.error('[Training] processBuffer: window.handleIndoorAntMessage 함수를 찾을 수 없습니다!');
       }
     } catch (e) {
-      console.error('[Training] processBuffer: handleIndoorAntMessage 호출 에러:', e);
+      console.error('[Training] processBuffer: handleIndoorAntMessage 호출 에러:', e, e.stack);
     }
   }
 };
@@ -144,21 +140,33 @@ window.processBuffer = function(newData) {
 /**
  * 1. 통합 데이터 라우팅 엔진 (충돌 방지 및 강제 연결)
  * 이 함수가 rollerRaceDashboard.js의 로그 출력부와 indoor UI를 연결합니다.
- * (window.handleIndoorAntMessage는 별도로 유지)
  */
 window.handleIndoorAntMessage = function(packet) {
+  console.log('[Training] window.handleIndoorAntMessage: 함수 호출됨', packet?.length);
+  
+  if (!packet || packet.length < 4) {
+    console.warn('[Training] window.handleIndoorAntMessage: 패킷이 너무 짧음', packet?.length);
+    return;
+  }
+  
   const msgId = packet[2];
   const payload = packet.slice(3, packet.length - 1);
+  
+  console.log(`[Training] window.handleIndoorAntMessage: msgId=0x${msgId.toString(16)}, payload.length=${payload.length}, packet.length=${packet.length}`);
 
   // Tacx T2028 Wrapper(0xAE) 해제
   if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
+      console.log('[Training] window.handleIndoorAntMessage: Tacx Wrapper 해제');
       if (typeof window.processBuffer === 'function') window.processBuffer(payload.slice(1));
       return;
   }
 
   // 브로드캐스트 데이터(0x4E) 처리
   if (msgId === 0x4E) {
+      console.log(`[Training] window.handleIndoorAntMessage: 0x4E 메시지 처리, parseIndoorSensorPayload 호출`);
       parseIndoorSensorPayload(payload);
+  } else {
+      console.log(`[Training] window.handleIndoorAntMessage: 알 수 없는 msgId=0x${msgId.toString(16)}`);
   }
 };
 
