@@ -2785,7 +2785,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     // X축 라벨: 워크아웃 운동시간 (단위:분)
     const totalMinutes = Math.round(totalSeconds / 60);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.font = '18px sans-serif'; // 9px에서 18px로 2배 확대
+    ctx.font = '12.6px sans-serif'; // 18px의 70% (12.6px)
     ctx.textAlign = 'center';
     ctx.fillText(`운동시간: ${totalMinutes}분`, padding.left + chartWidth / 2, graphHeight - 5);
 }
