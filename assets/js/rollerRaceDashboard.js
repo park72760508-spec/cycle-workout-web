@@ -3742,16 +3742,47 @@ async function startANTMessageListener() {
       console.log('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
       
       // processBuffer를 통해 processMasterBuffer 호출
+      console.log('[Race] startANTMessageListener: 함수 확인 시작');
+      console.log('[Race] typeof processBuffer:', typeof processBuffer);
+      console.log('[Race] typeof processIncomingData:', typeof processIncomingData);
+      console.log('[Race] typeof processMasterBuffer:', typeof processMasterBuffer);
+      console.log('[Race] typeof window.processBuffer:', typeof window.processBuffer);
+      console.log('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
+      
       if (typeof processBuffer === 'function') {
+        console.log('[Race] processBuffer 함수 호출 시도');
         processBuffer(data);
+      } else if (typeof processIncomingData === 'function') {
+        console.log('[Race] processIncomingData 함수 호출 시도');
+        processIncomingData(data);
       } else if (typeof processMasterBuffer === 'function') {
+        console.log('[Race] processMasterBuffer 함수 호출 시도');
         processMasterBuffer(data);
       } else if (typeof window.processBuffer === 'function') {
+        console.log('[Race] window.processBuffer 함수 호출 시도');
         window.processBuffer(data);
+      } else if (typeof window.processIncomingData === 'function') {
+        console.log('[Race] window.processIncomingData 함수 호출 시도');
+        window.processIncomingData(data);
       } else if (typeof window.processMasterBuffer === 'function') {
+        console.log('[Race] window.processMasterBuffer 함수 호출 시도');
         window.processMasterBuffer(data);
       } else {
-        console.warn('[Race] processBuffer 함수를 찾을 수 없습니다!');
+        console.error('[Race] processBuffer, processIncomingData, processMasterBuffer 함수를 모두 찾을 수 없습니다!');
+        // 직접 패킷 처리 시도
+        console.log('[Race] 직접 패킷 처리 시도');
+        if (data.length >= 4 && data[0] === 0xA4) {
+          const msgId = data[2];
+          if (msgId === 0x4E) {
+            const payload = data.slice(3, data.length - 1);
+            console.log('[Race] 직접 handleBroadcastData 호출 시도, payload.length=', payload.length);
+            if (typeof handleBroadcastData === 'function') {
+              handleBroadcastData(payload);
+            } else {
+              console.error('[Race] handleBroadcastData 함수도 찾을 수 없습니다!');
+            }
+          }
+        }
       }
       
       // window.antDevice.onMessage도 호출 (이중 처리 방지를 위해 조건부)
