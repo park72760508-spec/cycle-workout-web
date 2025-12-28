@@ -547,14 +547,23 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     const maxPower = ftp * 2;
     const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
 
-    const startAngle = 180;
-    const range = 180;
-    const targetAngle = startAngle + (ratio * range);
+    // 파워계도 속도계와 동일한 각도 체계 적용 (-90도 ~ 90도)
+    const angle = -90 + (ratio * 180);
 
-    // SVG 속성을 직접 수정 (가장 확실한 방법)
-    needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`);
+    needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
     needleEl.style.visibility = 'visible';
 }
+
+// 페이지 로딩 완료 후 모든 바늘 0점으로 초기화
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        // 모든 바늘(needle-0, needle-1, needle-...)을 찾아서 -90도(0점)로 설정
+        const allNeedles = document.querySelectorAll('line[id^="needle-"]');
+        allNeedles.forEach(n => {
+            n.setAttribute('transform', 'rotate(-90, 100, 140)');
+        });
+    }, 1500); // 레이스 트랙 생성 시간을 고려하여 충분히 대기
+});
 
 /**
  * 파워계 연결 상태 업데이트 (데이터 수신과 무관하게 상태만 업데이트)
@@ -2210,6 +2219,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
