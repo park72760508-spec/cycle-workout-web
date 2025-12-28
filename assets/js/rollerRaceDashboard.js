@@ -100,7 +100,8 @@ class SpeedometerData {
     this.speedSum = 0; // 평균 속도 계산용
     this.speedCount = 0; // 평균 속도 계산용
     this.filteredSpeed = 0; // [추가] 가민 스타일 필터링 속도
-    this.lastDecelerationCheck = Date.now(); // [추가] 감속 체크 시간    
+    this.lastDecelerationCheck = Date.now(); // [추가] 감속 체크 시간
+    this.previousSpeed = 0; // [추가] 이전 속도 (궤적선 동기화용)
   }
 }
 
@@ -511,18 +512,37 @@ function updateSpeedometerNeedle(speedometerId, speed) {
   needle.setAttribute('transform', `rotate(${finalAngle})`);
   
   // 5. 바늘 행적선 업데이트
-  // 바늘의 현재 실제 각도(previousAngle)를 기준으로 궤적선을 그려서
-  // 급격한 속도 증가 시 바늘이 목표 위치에 도달하기 전에 궤적선이 먼저 그려지는 문제 방지
-  const currentNeedleSpeed = calculateSpeedFromAngle(previousAngle);
-  updateSpeedometerNeedlePath(speedometerId, currentNeedleSpeed);
+  // 속도 변화 방향에 따라 궤적선 업데이트 전략이 달라집니다:
+  // - 감속 시: 목표 속도를 기준으로 즉시 궤적 업데이트 (바늘이 지나간 부분 즉시 삭제)
+  // - 증가 시: 이전 각도를 기준으로 궤적 업데이트 + 애니메이션 완료 후 목표 속도까지 업데이트
+  const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
+  const previousSpeed = speedometer?.previousSpeed ?? 0;
+  const isAccelerating = speed > previousSpeed;
+  const isDecelerating = speed < previousSpeed;
   
-  // 6. 바늘 애니메이션 완료 후 목표 속도까지 궤적선 업데이트
-  // 바늘이 목표 위치에 도달하면 궤적선도 목표 속도까지 그려지도록 함
-  const animationDuration = 400; // 0.4초 = 400ms
-  setTimeout(() => {
-    // 애니메이션 완료 후 목표 속도까지 궤적선 업데이트
+  if (isDecelerating) {
+    // 감속 시: 목표 속도를 기준으로 즉시 궤적 업데이트 (바늘이 지나간 부분 즉시 삭제)
     updateSpeedometerNeedlePath(speedometerId, speed);
-  }, animationDuration);
+  } else if (isAccelerating) {
+    // 증가 시: 바늘의 현재 실제 각도(previousAngle)를 기준으로 궤적선을 즉시 업데이트
+    // 급격한 속도 증가 시 바늘이 목표 위치에 도달하기 전에 궤적선이 먼저 그려지는 문제 방지
+    const currentNeedleSpeed = calculateSpeedFromAngle(previousAngle);
+    updateSpeedometerNeedlePath(speedometerId, currentNeedleSpeed);
+    
+    // 바늘 애니메이션 완료 후 목표 속도까지 궤적선 업데이트
+    const animationDuration = 400; // 0.4초 = 400ms
+    setTimeout(() => {
+      updateSpeedometerNeedlePath(speedometerId, speed);
+    }, animationDuration);
+  } else {
+    // 속도 변화 없음: 현재 속도 기준으로 업데이트
+    updateSpeedometerNeedlePath(speedometerId, speed);
+  }
+  
+  // 속도 저장 (다음 비교용)
+  if (speedometer) {
+    speedometer.previousSpeed = speed;
+  }
 }
 
 
