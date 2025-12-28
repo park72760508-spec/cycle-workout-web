@@ -616,8 +616,8 @@ function updatePowerMeterNeedle(powerMeterId, power) {
 
     // [핵심 수정] 100, 140은 SVG 게이지의 정중앙 좌표입니다.
     // 이 좌표가 없으면 바늘이 엉뚱한 곳을 기준으로 회전하여 사라집니다.
-    needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
-    
+    //needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+    needleEl.setAttribute('transform', `rotate(${angle})`);
     needleEl.style.visibility = 'visible';
 }
 
@@ -2361,6 +2361,7 @@ window.selectDeviceForInput = function(deviceId, targetType) {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
 };
+
 
 
 
