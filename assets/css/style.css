@@ -9305,12 +9305,23 @@ button[aria-disabled="true"] {
 }
 
 
-
-/* 파워계 바늘 부드러운 애니메이션 효과 추가 */
-.speedometer-needle line {
-    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    transform-origin: center bottom; /* SVG 내부 회전 축 고정 */
+.speedometer-needle {
+    display: block !important; /* 항상 보이도록 설정 */
+    stroke-linecap: round;
 }
+
+.speedometer-needle line {
+    /* 초기 위치를 왼쪽 0 지점(180도)으로 강제 고정 */
+    transform: rotate(180deg);
+    
+    /* 회전 중심축: 바늘의 아래쪽 끝 (SVG 기준 100, 140 위치가 되도록) */
+    transform-origin: 100px 140px; 
+    
+    /* 부드러운 움직임 */
+    transition: transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1.0);
+}
+
+
 
 /* 현재 파워 숫자 텍스트 애니메이션 (선택사항) */
 [id^="current-power-value-"] {
