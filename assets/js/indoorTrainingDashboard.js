@@ -164,7 +164,21 @@ window.handleIndoorAntMessage = function(packet) {
   // 브로드캐스트 데이터(0x4E) 처리
   if (msgId === 0x4E) {
       console.log(`[Training] window.handleIndoorAntMessage: 0x4E 메시지 처리, parseIndoorSensorPayload 호출`);
-      parseIndoorSensorPayload(payload);
+      console.log(`[Training] window.handleIndoorAntMessage: parseIndoorSensorPayload 타입=${typeof parseIndoorSensorPayload}, window.parseIndoorSensorPayload 타입=${typeof window.parseIndoorSensorPayload}`);
+      try {
+          // 로컬 함수를 먼저 시도
+          if (typeof parseIndoorSensorPayload === 'function') {
+              console.log('[Training] window.handleIndoorAntMessage: 로컬 parseIndoorSensorPayload 호출');
+              parseIndoorSensorPayload(payload);
+          } else if (typeof window.parseIndoorSensorPayload === 'function') {
+              console.log('[Training] window.handleIndoorAntMessage: window.parseIndoorSensorPayload 호출');
+              window.parseIndoorSensorPayload(payload);
+          } else {
+              console.error('[Training] window.handleIndoorAntMessage: parseIndoorSensorPayload 함수를 찾을 수 없습니다!');
+          }
+      } catch (e) {
+          console.error('[Training] window.handleIndoorAntMessage: parseIndoorSensorPayload 호출 에러:', e, e.stack);
+      }
   } else {
       console.log(`[Training] window.handleIndoorAntMessage: 알 수 없는 msgId=0x${msgId.toString(16)}`);
   }
@@ -2164,31 +2178,14 @@ function renderPairingDeviceList(targetType) {
  * [통합 ANT+ 데이터 라우터]
  * Indoor Race(속도계)와 Indoor Training(파워/심박) 데이터를 모두 처리합니다.
  */
+// window.parseIndoorSensorPayload는 로컬 함수 parseIndoorSensorPayload를 사용하도록 변경
+// 이 함수는 이제 사용되지 않음 (로컬 함수가 우선적으로 사용됨)
 window.parseIndoorSensorPayload = function(payload) {
-    if (!payload || payload.length < 18) return; // 최소 길이 체크 수정
-
-    // 현재 화면이 Indoor Training인지 확인
-    const currentScreen = window.currentScreen || '';
-    const isTrainingScreen = currentScreen === 'indoorTrainingDashboardScreen' || 
-                             document.getElementById('powerMeterGrid') !== null;
-    
-    if (!isTrainingScreen) {
-        // Training 화면이 아니면 처리하지 않음 (Race 화면에서 handleBroadcastData가 처리)
-        return;
-    }
-
-    // ID 추출 위치 수정: payload[13] (idLow), payload[14] (idHigh), payload[17] (transType)
-    const idLow = payload[13];
-    const idHigh = payload[14];
-    const deviceType = payload[15];
-    const transType = payload[17];
-    const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
-
-    // 트레이닝 관련 장치 타입: 0x0B (파워), 0x11 (스마트로라), 0x78 (구형 심박계), 0x7D (신형 심박계)
-    // 단, Race 관련 타입(0x79, 0x7A, 0x7B)은 Race 화면에서만 처리하도록
-    if (deviceType === 0x0B || deviceType === 0x11 || deviceType === 0x78 || deviceType === 0x7D) {
-        if (typeof updateIndoorPairingUI === 'function') updateIndoorPairingUI(deviceId, deviceType);
-        if (typeof processLiveTrainingData === 'function') processLiveTrainingData(deviceId, deviceType, payload);
+    // 로컬 함수 parseIndoorSensorPayload로 위임
+    if (typeof parseIndoorSensorPayload === 'function') {
+        parseIndoorSensorPayload(payload);
+    } else {
+        console.error('[Training] window.parseIndoorSensorPayload: 로컬 parseIndoorSensorPayload 함수를 찾을 수 없습니다!');
     }
 };
 
