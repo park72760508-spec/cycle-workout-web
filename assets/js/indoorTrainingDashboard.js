@@ -725,6 +725,18 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         currentPowerEl.textContent = Math.round(power);
     }
 
+    // 케이던스 값 업데이트
+    const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
+    if (cadenceEl) {
+        cadenceEl.textContent = Math.round(cadence);
+    }
+
+    // 심박수 값 업데이트 (이미 processLiveTrainingData에서 업데이트되지만, 여기서도 업데이트)
+    const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
+    if (heartRateEl && heartRate > 0) {
+        heartRateEl.textContent = Math.round(heartRate);
+    }
+
     // 바늘 각도 애니메이션 적용
     // 부모 그룹이 translate(100, 140)을 하므로 rotate(angle)만 하면 됩니다
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
