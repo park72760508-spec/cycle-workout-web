@@ -5275,56 +5275,58 @@ function routeANTMessage(packet) {
 /**
  * ANT+ 데이터를 트랙별로 배분하고 속도를 계산하는 엔진
  */
-  window.processRaceData = function(payload) {
-      if (!payload || payload.length < 13) return;
-  
-      const antData = payload.slice(1, 9);
-      const deviceId = ((payload[13] & 0xF0) << 12) | (payload[11] << 8) | payload[10];
-      const deviceType = payload[12];
-  
-      // 속도계(0x79) 또는 속도/케이던스(0x7B) 센서
-      if (deviceType === 0x79 || deviceType === 0x7B) {
-          // [중요] 등록된 장치 목록에서 이 장치가 몇 번 트랙인지 찾습니다.
-          // 기존에 작성하신 findTrackByDeviceId 혹은 유사한 로직을 활용합니다.
-          let trackId = -1;
-          for (let i = 0; i < window.raceState.tracks.length; i++) {
-              if (String(window.raceState.tracks[i].deviceId) === String(deviceId)) {
-                  trackId = i;
-                  break;
-              }
-          }
-  
-          if (trackId === -1) return; // 페어링 안 된 장치는 무시
-  
-          let speed = 0;
-          const currentEventTime = antData[4] | (antData[5] << 8);
-          const currentRevCount = antData[6] | (antData[7] << 8);
-  
-          if (!window.lastAntData) window.lastAntData = {};
-          if (!window.lastAntData[deviceId]) {
-              window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
-              updateSpeedometer(trackId, 0); // 초기 0점 조절
-              return;
-          }
-  
-          const prevData = window.lastAntData[deviceId];
-          let revDiff = currentRevCount - prevData.rev;
-          let timeDiff = currentEventTime - prevData.time;
-  
-          if (revDiff < 0) revDiff += 65536;
-          if (timeDiff < 0) timeDiff += 65536;
-  
-          if (timeDiff > 0 && revDiff > 0) {
-              const wheelCircumference = 2.096; 
-              speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
-              if (speed > 100) speed = 0;
-              
-              // 드디어 위에서 만든 함수를 호출합니다!
-              updateSpeedometer(trackId, speed);
-          }
-          window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
-      }
-  };
+/**
+ * [통합 수정본] 레이스용 속도 데이터 처리 엔진
+ */
+window.processRaceData = function(payload) {
+    if (!payload || payload.length < 13) return;
+
+    const antData = payload.slice(1, 9);
+    const deviceId = ((payload[13] & 0xF0) << 12) | (payload[11] << 8) | payload[10];
+    const deviceType = payload[12];
+
+    // 속도계(0x79) 또는 속도/케이던스(0x7B) 센서
+    if (deviceType === 0x79 || deviceType === 0x7B) {
+        // 장치 ID로 해당 트랙 번호(0~3) 찾기
+        let trackId = -1;
+        if (window.raceState && window.raceState.tracks) {
+            for (let i = 0; i < window.raceState.tracks.length; i++) {
+                if (String(window.raceState.tracks[i].deviceId) === String(deviceId)) {
+                    trackId = i;
+                    break;
+                }
+            }
+        }
+
+        if (trackId === -1) return; // 페어링 안 된 장치 무시
+
+        let speed = 0;
+        const currentEventTime = antData[4] | (antData[5] << 8);
+        const currentRevCount = antData[6] | (antData[7] << 8);
+
+        if (!window.lastAntData) window.lastAntData = {};
+        if (!window.lastAntData[deviceId]) {
+            window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
+            updateSpeedometer(trackId, 0); 
+            return;
+        }
+
+        const prevData = window.lastAntData[deviceId];
+        let revDiff = currentRevCount - prevData.rev;
+        let timeDiff = currentEventTime - prevData.time;
+
+        if (revDiff < 0) revDiff += 65536;
+        if (timeDiff < 0) timeDiff += 65536;
+
+        if (timeDiff > 0 && revDiff > 0) {
+            const wheelCircumference = 2.096; 
+            speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
+            if (speed > 100) speed = 0;
+            updateSpeedometer(trackId, speed);
+        }
+        window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
+    }
+};
   
 }
 
@@ -6015,29 +6017,57 @@ window.addEventListener('load', window.initializeGauges);
  * trackId: 0, 1, 2, 3 (트랙 번호)
  * speed: 계산된 속도값
  */
+
+
+
+
+/**
+ * [신규] 속도계 바늘 회전 및 텍스트 업데이트
+ */
 function updateSpeedometer(trackId, speed) {
-    // HTML 요소 찾기 (needle-0, needle-1 등)
     const needle = document.getElementById(`needle-${trackId}`);
     const speedText = document.getElementById(`speed-text-${trackId}`);
     
-    // 1. 숫자 텍스트 업데이트
-    if (speedText) {
-        speedText.textContent = speed.toFixed(1);
-    }
-
-    // 2. 바늘 회전 업데이트
+    if (speedText) speedText.textContent = speed.toFixed(1);
     if (needle) {
-        // 0~60km/h 범위를 180도(0) ~ 360도(Max)에 매핑
         const maxSpeed = 60;
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
-        const angle = 180 + (ratio * 180);
-
-        // SVG rotate 속성 적용 (중심점 100, 140)
+        const angle = 180 + (ratio * 180); // 180도 ~ 360도
+        // 중심점(100, 140)을 기준으로 회전
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
         needle.style.visibility = 'visible';
-        needle.style.display = 'block';
     }
 }
+
+// 장치 메시지 수신부 통합 호출
+if (window.antDevice) {
+    window.antDevice.onMessage = function(payload) {
+        const msgId = payload[2];
+        if (msgId === 0x4E) {
+            // Training 대시보드에서 정의한 통합 핸들러 호출
+            if (typeof window.parseIndoorSensorPayload === 'function') {
+                window.parseIndoorSensorPayload(payload);
+            } else {
+                window.processRaceData(payload);
+            }
+        }
+    };
+}
+
+// 초기 로딩 시 모든 바늘(레이스+트레이닝) 0점으로 정렬
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        // 레이스 바늘 (0~3)
+        for (let i = 0; i < 4; i++) {
+            const n = document.getElementById(`needle-${i}`);
+            if (n) n.setAttribute('transform', 'rotate(180, 100, 140)');
+        }
+        // 트레이닝 바늘
+        const pNeedles = document.querySelectorAll('.power-gauge-container line[id^="needle-"]');
+        pNeedles.forEach(pn => pn.setAttribute('transform', 'rotate(180, 100, 140)'));
+    }, 1000);
+});
+
 
 
 
