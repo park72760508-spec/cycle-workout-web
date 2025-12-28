@@ -6109,7 +6109,7 @@ window.addEventListener('load', () => {
         const needles = document.querySelectorAll('line[id^="needle-"]');
         needles.forEach(n => {
             n.setAttribute('transform', 'rotate(-90, 100, 140)');
-            n.style.stroke = "#ff4757"; // 빨간색 강제 적용
+            n.style.stroke = "#ff0000"; // 중심 원과 동일한 색상 (#ff0000)
         });
     }, 1000);
 });
