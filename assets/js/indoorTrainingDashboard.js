@@ -558,9 +558,26 @@ function updatePowerMeterTicks(powerMeterId) {
   
   if (!ticksEl || !labelsEl) return;
   
+  // 현재 바늘 각도 저장 (바늘 위치 유지)
+  const needleEl = document.getElementById(`needle-${powerMeterId}`);
+  let savedTransform = null;
+  if (needleEl) {
+    savedTransform = needleEl.getAttribute('transform');
+  }
+  
   // 눈금 재생성
   ticksEl.innerHTML = generatePowerMeterTicks(powerMeterId);
   labelsEl.innerHTML = generatePowerMeterLabels(powerMeterId);
+  
+  // 바늘 위치 복원 (현재 파워값으로 업데이트)
+  if (needleEl && typeof updatePowerMeterNeedle === 'function') {
+    const currentPower = powerMeter.currentPower || 0;
+    updatePowerMeterNeedle(powerMeterId, currentPower);
+  } else if (needleEl && savedTransform) {
+    // updatePowerMeterNeedle 함수가 없으면 저장된 transform 복원
+    needleEl.setAttribute('transform', savedTransform);
+    needleEl.style.visibility = 'visible';
+  }
 }
 
 /**
@@ -824,6 +841,12 @@ function openPowerMeterSettings(powerMeterId) {
     
     // USB 상태 확인 및 업데이트
     updatePairingModalUSBStatus();
+    
+    // 바늘 위치 유지 (현재 파워값으로 업데이트)
+    const currentPower = powerMeter.currentPower || 0;
+    if (typeof updatePowerMeterNeedle === 'function') {
+        updatePowerMeterNeedle(powerMeterId, currentPower);
+    }
     
     // 모달 표시
     modal.classList.remove('hidden');
@@ -1674,6 +1697,12 @@ function loadPowerMeterPairings() {
         
         // 연결 상태 업데이트
         updatePowerMeterConnectionStatus(powerMeter.id);
+        
+        // 바늘 위치 유지 (현재 파워값으로 업데이트)
+        const currentPower = powerMeter.currentPower || 0;
+        if (typeof updatePowerMeterNeedle === 'function') {
+            updatePowerMeterNeedle(powerMeter.id, currentPower);
+        }
       }
     });
     
