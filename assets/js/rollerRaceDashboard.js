@@ -5281,27 +5281,38 @@ function routeANTMessage(packet) {
 window.processRaceData = function(payload) {
     if (!payload || payload.length < 13) return;
 
-    const deviceId = ((payload[13] & 0xF0) << 12) | (payload[11] << 8) | payload[10];
+    // 1. 장치 정보 추출 (로그 분석 결과에 맞춘 정확한 ID 계산)
+    const idLow = payload[10];
+    const idHigh = payload[11];
     const deviceType = payload[12];
-    const antData = payload.slice(1, 9);
+    const transType = payload[13];
+    const deviceId = ((transType & 0xF0) << 12) | (idHigh << 8) | idLow;
 
+    // 2. 속도 관련 장치 (0x79, 0x7B) 필터링
     if (deviceType === 0x79 || deviceType === 0x7B) {
-        // [중요] 현재 레이스에 참여 중인 트랙에서 해당 장치 ID 찾기
-        let trackId = -1;
+        // [수정] 등록된 트랙 중 이 장치 ID를 가진 트랙 찾기
+        let trackIndex = -1;
         if (window.raceState && window.raceState.tracks) {
-            trackId = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
+            trackIndex = window.raceState.tracks.findIndex(t => String(t.deviceId) === String(deviceId));
         }
 
-        if (trackId === -1) return; // 등록되지 않은 장치는 무시
+        // 만약 못 찾았다면, 현재 활성화된 트랙 중 장치 ID가 없는 트랙에 임시 할당 (테스트용)
+        if (trackIndex === -1) {
+            // console.warn(`[ANT+] 미등록 장치 수신 ID: ${deviceId}. 페어링을 확인하세요.`);
+            return; 
+        }
 
+        const antData = payload.slice(1, 9);
         let speed = 0;
+        
+        // ANT+ Speed & Cadence (0x7B) 및 Speed Only (0x79) 공통 속도 계산
         const currentEventTime = antData[4] | (antData[5] << 8);
         const currentRevCount = antData[6] | (antData[7] << 8);
 
         if (!window.lastAntData) window.lastAntData = {};
         if (!window.lastAntData[deviceId]) {
             window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
-            updateSpeedometer(trackId, 0);
+            updateSpeedometer(trackIndex, 0);
             return;
         }
 
@@ -5313,11 +5324,14 @@ window.processRaceData = function(payload) {
         if (timeDiff < 0) timeDiff += 65536;
 
         if (timeDiff > 0 && revDiff > 0) {
-            const wheelCircumference = 2.096; // 700x23c 기준
+            const wheelCircumference = 2.096; // 바퀴 둘레 (700x23c)
             speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
-            if (speed > 100) speed = 0;
-            updateSpeedometer(trackId, speed);
+            if (speed > 100) speed = 0; // 튀는 값 방지
+            
+            // 실제 UI 업데이트 (트랙 인덱스 기준)
+            updateSpeedometer(trackIndex, speed);
         }
+        
         window.lastAntData[deviceId] = { time: currentEventTime, rev: currentRevCount };
     }
 };
@@ -6019,22 +6033,43 @@ window.addEventListener('load', window.initializeGauges);
  * [신규] 속도계 바늘 회전 및 텍스트 업데이트
  */
 function updateSpeedometer(trackId, speed) {
+    // 트랙 ID는 0, 1, 2... 순서
     const needle = document.getElementById(`needle-${trackId}`);
     const speedText = document.getElementById(`speed-text-${trackId}`);
     
-    if (speedText) speedText.textContent = speed.toFixed(1);
-    
+    // 1. 속도 숫자 텍스트 표시
+    if (speedText) {
+        speedText.textContent = speed.toFixed(1);
+    }
+
+    // 2. 바늘 회전 (좌표계 정밀 교정)
     if (needle) {
-        const maxSpeed = 60; // 최대 시속
+        const maxSpeed = 60;
         const ratio = Math.min(Math.max(speed / maxSpeed, 0), 1);
         
-        // -90도(0km/h)에서 시작하여 180도 범위를 움직임 (최대 90도)
+        // 시작 각도 -90도 (0km/h, 수평 왼쪽)
+        // 종료 각도 +90도 (60km/h, 수평 오른쪽)
         const angle = -90 + (ratio * 180);
-        
+
+        // SVG 속성으로 직접 제어 (CSS 간섭 배제)
         needle.setAttribute('transform', `rotate(${angle}, 100, 140)`);
         needle.style.visibility = 'visible';
+        needle.style.display = 'block';
     }
 }
+
+// 초기화: 페이지 로드 시 모든 바늘을 0 위치(-90도)로 고정
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        const needles = document.querySelectorAll('line[id^="needle-"]');
+        needles.forEach(n => {
+            n.setAttribute('transform', 'rotate(-90, 100, 140)');
+            n.style.stroke = "#ff4757"; // 빨간색 강제 적용
+        });
+    }, 1000);
+});
+
+
 
 // 장치 메시지 이벤트 연결
 if (window.antDevice) {
@@ -6051,19 +6086,6 @@ if (window.antDevice) {
     };
 }
 
-// 초기 로딩 시 모든 바늘(레이스+트레이닝) 0점으로 정렬
-window.addEventListener('load', () => {
-    setTimeout(() => {
-        // 레이스 바늘 (0~3)
-        for (let i = 0; i < 4; i++) {
-            const n = document.getElementById(`needle-${i}`);
-            if (n) n.setAttribute('transform', 'rotate(180, 100, 140)');
-        }
-        // 트레이닝 바늘
-        const pNeedles = document.querySelectorAll('.power-gauge-container line[id^="needle-"]');
-        pNeedles.forEach(pn => pn.setAttribute('transform', 'rotate(180, 100, 140)'));
-    }, 1000);
-});
 
 
 
