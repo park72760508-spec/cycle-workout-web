@@ -593,7 +593,8 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     // 파워계도 속도계와 동일한 각도 체계 적용 (-90도 ~ 90도)
     const angle = -90 + (ratio * 180);
 
-    needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+    // 부모 그룹이 translate(100, 140)을 하므로, rotate(angle)만 하면 됩니다
+    needleEl.setAttribute('transform', `rotate(${angle})`);
     needleEl.style.visibility = 'visible';
 }
 
@@ -684,20 +685,14 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const userFTP = window.indoorTrainingState.userFTP || 200;
     const maxGaugePower = userFTP * 2; // 게이지 최대치는 FTP의 2배
     
-    // 각도 범위 설정 (-90도 = 위쪽/0W, 90도 = 아래쪽/최대값)
-    // updatePowerMeterNeedle 함수와 동일한 각도 체계 사용
-    const minAngle = -90;  // 파워 0W일 때 위쪽
-    const maxAngle = 90;   // 최대 파워일 때 아래쪽
-    const angleRange = maxAngle - minAngle; // 180도
-
     // 파워 비율 계산 (0 ~ 1.0 사이로 제한)
     let powerRatio = power / maxGaugePower;
     if (powerRatio > 1) powerRatio = 1;
     if (powerRatio < 0) powerRatio = 0;
 
-    // 최종 각도 산출 (-90도에서 시작해서 90도까지 이동)
-    // powerRatio가 0이면 -90도, 1이면 90도
-    const targetAngle = minAngle + (powerRatio * angleRange);
+    // 각도 계산 (updatePowerMeterNeedle 함수와 동일한 방식)
+    // -90도 = 위쪽/0W, 90도 = 아래쪽/최대값
+    const angle = -90 + (powerRatio * 180);
 
     // 3. UI 업데이트
     // 숫자 값 업데이트
@@ -709,8 +704,9 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     // 바늘 각도 애니메이션 적용
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
     if (needleEl) {
-        // updatePowerMeterNeedle과 동일한 방식 사용
-        needleEl.setAttribute('transform', `rotate(${targetAngle}, 100, 140)`);
+        // updatePowerMeterNeedle과 완전히 동일한 방식 사용
+        needleEl.setAttribute('transform', `rotate(${angle}, 100, 140)`);
+        needleEl.style.visibility = 'visible';
     }
 }
 
@@ -2189,13 +2185,11 @@ window.addEventListener('DOMContentLoaded', () => {
                 needle.style.visibility = 'visible';
             }
         }
-        // 트레이닝 바늘 초기화
+        // 트레이닝 바늘 초기화 (updatePowerMeterNeedle 함수 사용)
         if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
             window.indoorTrainingState.powerMeters.forEach(pm => {
-                const pNeedle = document.getElementById(`needle-${pm.id}`);
-                if (pNeedle) {
-                    pNeedle.setAttribute('transform', 'rotate(180, 100, 140)');
-                    pNeedle.style.visibility = 'visible';
+                if (typeof updatePowerMeterNeedle === 'function') {
+                    updatePowerMeterNeedle(pm.id, 0);
                 }
             });
         }
