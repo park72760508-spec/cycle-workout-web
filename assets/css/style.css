@@ -9391,7 +9391,7 @@ button[aria-disabled="true"] {
 }
 
 .speedometer-info.connected {
-  background: rgba(255, 255, 255, 0.3) !important; /* 흰색 배경 (투명도 30%) */
+  background: #90EE90 !important; /* 연두색 배경 (페어링 인식 시) */
   /* 텍스트 색상은 변경하지 않음 (기존 색상 유지) */
 }
 
