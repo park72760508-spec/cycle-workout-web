@@ -322,8 +322,8 @@ function createPowerMeterElement(powerMeter) {
                 transform="rotate(270)"/>
         </g>
         
-        <!-- 현재 파워값 (바늘 원 아래) -->
-        <text x="100" y="165" 
+        <!-- 현재 파워값 (속도계 하단) -->
+        <text x="100" y="188" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
@@ -332,7 +332,7 @@ function createPowerMeterElement(powerMeter) {
               id="current-power-value-${powerMeter.id}">-</text>
         
         <!-- 단위 W (현재 파워값 아래) -->
-        <text x="100" y="180" 
+        <text x="100" y="195" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
