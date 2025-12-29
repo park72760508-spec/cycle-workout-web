@@ -2926,7 +2926,35 @@ async function openWorkoutSelectionModal() {
         return;
     }
     
+    // 워크아웃 선택 버튼 클릭 애니메이션
+    const selectBtn = document.getElementById('btnSelectWorkoutTraining');
+    if (selectBtn) {
+        selectBtn.style.transform = 'scale(0.95)';
+        selectBtn.style.transition = 'transform 0.1s ease';
+        setTimeout(() => {
+            if (selectBtn) {
+                selectBtn.style.transform = 'scale(1)';
+            }
+        }, 100);
+    }
+    
+    // 모달 표시
     modal.classList.remove('hidden');
+    
+    // 로딩 상태 표시
+    const tbody = document.getElementById('workoutSelectionTableBody');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 40px;">
+                    <div class="loading-spinner" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
+                        <div class="spinner" style="width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.2); border-top: 4px solid #00d4aa; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <p style="color: #ffffff; font-size: 14px; margin: 0;">워크아웃 목록을 불러오는 중...</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
     
     // 워크아웃 목록 로드
     await loadWorkoutsForSelection();
@@ -2949,7 +2977,8 @@ async function loadWorkoutsForSelection() {
     const tbody = document.getElementById('workoutSelectionTableBody');
     if (!tbody) return;
     
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">워크아웃 목록을 불러오는 중...</td></tr>';
+    // 로딩 상태는 이미 openWorkoutSelectionModal에서 표시됨
+    // 여기서는 로딩 상태 유지
     
     try {
         // apiGetWorkouts 함수 사용 (workoutManager.js에 있음)
@@ -2993,7 +3022,16 @@ async function loadWorkoutsForSelection() {
                     <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
                     <td style="text-align: center; padding: 12px;">${duration}</td>
                     <td style="text-align: center; padding: 12px;">
-                        <button class="btn btn-primary btn-sm" onclick="selectWorkoutForTraining('${workout.id}')" style="padding: 6px 16px;">선택</button>
+                        <button class="btn btn-primary btn-sm workout-select-btn" 
+                                onclick="selectWorkoutForTraining('${workout.id}')" 
+                                data-workout-id="${workout.id}"
+                                style="padding: 6px 16px; transition: all 0.3s ease; position: relative; overflow: hidden;">
+                            <span class="btn-text">선택</span>
+                            <span class="btn-loading" style="display: none;">
+                                <span style="display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
+                                로딩...
+                            </span>
+                        </button>
                     </td>
                 </tr>
             `;
@@ -3022,9 +3060,35 @@ async function selectWorkoutForTraining(workoutId) {
     try {
         console.log('[Training] 워크아웃 선택 시도:', workoutId);
         
+        // 선택 버튼 애니메이션 시작
+        const selectButtons = document.querySelectorAll(`.workout-select-btn[data-workout-id="${workoutId}"]`);
+        selectButtons.forEach(btn => {
+            const btnText = btn.querySelector('.btn-text');
+            const btnLoading = btn.querySelector('.btn-loading');
+            if (btnText && btnLoading) {
+                btnText.style.display = 'none';
+                btnLoading.style.display = 'inline';
+                btn.disabled = true;
+                btn.style.opacity = '0.7';
+                btn.style.cursor = 'not-allowed';
+            }
+        });
+        
         // apiGetWorkout 함수 확인
         if (typeof apiGetWorkout !== 'function') {
             console.error('[Training] apiGetWorkout 함수를 찾을 수 없습니다.');
+            // 버튼 상태 복원
+            selectButtons.forEach(btn => {
+                const btnText = btn.querySelector('.btn-text');
+                const btnLoading = btn.querySelector('.btn-loading');
+                if (btnText && btnLoading) {
+                    btnText.style.display = 'inline';
+                    btnLoading.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            });
             if (typeof showToast === 'function') {
                 showToast('워크아웃 정보를 불러올 수 없습니다. (apiGetWorkout 함수 없음)', 'error');
             }
@@ -3038,6 +3102,18 @@ async function selectWorkoutForTraining(workoutId) {
         
         if (!workoutResult) {
             console.error('[Training] workoutResult가 null입니다.');
+            // 버튼 상태 복원
+            selectButtons.forEach(btn => {
+                const btnText = btn.querySelector('.btn-text');
+                const btnLoading = btn.querySelector('.btn-loading');
+                if (btnText && btnLoading) {
+                    btnText.style.display = 'inline';
+                    btnLoading.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            });
             if (typeof showToast === 'function') {
                 showToast('워크아웃 정보를 불러올 수 없습니다. (응답 없음)', 'error');
             }
@@ -3046,6 +3122,18 @@ async function selectWorkoutForTraining(workoutId) {
         
         if (!workoutResult.success) {
             console.error('[Training] 워크아웃 로드 실패:', workoutResult.error);
+            // 버튼 상태 복원
+            selectButtons.forEach(btn => {
+                const btnText = btn.querySelector('.btn-text');
+                const btnLoading = btn.querySelector('.btn-loading');
+                if (btnText && btnLoading) {
+                    btnText.style.display = 'inline';
+                    btnLoading.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            });
             if (typeof showToast === 'function') {
                 showToast(`워크아웃 정보를 불러올 수 없습니다: ${workoutResult.error || '알 수 없는 오류'}`, 'error');
             }
@@ -3057,6 +3145,18 @@ async function selectWorkoutForTraining(workoutId) {
         
         if (!workout) {
             console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
+            // 버튼 상태 복원
+            selectButtons.forEach(btn => {
+                const btnText = btn.querySelector('.btn-text');
+                const btnLoading = btn.querySelector('.btn-loading');
+                if (btnText && btnLoading) {
+                    btnText.style.display = 'inline';
+                    btnLoading.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            });
             if (typeof showToast === 'function') {
                 showToast('워크아웃 정보를 불러올 수 없습니다. (데이터 없음)', 'error');
             }
@@ -3084,6 +3184,19 @@ async function selectWorkoutForTraining(workoutId) {
         
     } catch (error) {
         console.error('[Training] 워크아웃 선택 오류:', error, error.stack);
+        // 버튼 상태 복원
+        const selectButtons = document.querySelectorAll(`.workout-select-btn[data-workout-id="${workoutId}"]`);
+        selectButtons.forEach(btn => {
+            const btnText = btn.querySelector('.btn-text');
+            const btnLoading = btn.querySelector('.btn-loading');
+            if (btnText && btnLoading) {
+                btnText.style.display = 'inline';
+                btnLoading.style.display = 'none';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            }
+        });
         if (typeof showToast === 'function') {
             showToast(`워크아웃 선택 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`, 'error');
         }
