@@ -331,8 +331,8 @@ function createPowerMeterElement(powerMeter) {
               font-weight="700"
               id="current-power-value-${powerMeter.id}">-</text>
         
-        <!-- 단위 W (현재 파워값 아래) -->
-        <text x="100" y="195" 
+        <!-- 단위 W (바늘 중심 원 아래와 현재 파워값 위의 중간) -->
+        <text x="100" y="157" 
               text-anchor="middle" 
               dominant-baseline="middle"
               fill="#ffffff" 
