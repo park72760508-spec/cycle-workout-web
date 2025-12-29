@@ -699,10 +699,21 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
     if (!powerMeter) return;
 
-    // 1. 데이터 저장
-    powerMeter.currentPower = power;
+    // 1. 데이터 저장 (파워값이 유효한 범위 내에서만 저장)
+    // 파워값이 2000W를 초과하면 이전 값 유지 (튀는 값 방지)
+    if (power >= 0 && power <= 2000) {
+        powerMeter.currentPower = power;
+    } else if (power > 2000) {
+        console.warn(`[Training] 비정상적인 파워값 무시: ${power}W (이전 값 유지: ${powerMeter.currentPower}W)`);
+        // 이전 값 유지
+    }
+    
+    // 케이던스는 0~254 범위에서만 저장
+    if (cadence >= 0 && cadence <= 254) {
+        powerMeter.cadence = cadence;
+    }
+    
     powerMeter.heartRate = heartRate;
-    powerMeter.cadence = cadence;
     powerMeter.lastUpdateTime = Date.now();
 
     // 2. 바늘(Needle) 각도 계산 로직
@@ -710,8 +721,11 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const userFTP = window.indoorTrainingState.userFTP || 200;
     const maxGaugePower = userFTP * 2; // 게이지 최대치는 FTP의 2배
     
+    // 파워값이 유효한 범위 내에서만 사용 (2000W 초과는 무시)
+    const validPower = (power >= 0 && power <= 2000) ? power : powerMeter.currentPower;
+    
     // 파워 비율 계산 (0 ~ 1.0 사이로 제한)
-    let powerRatio = power / maxGaugePower;
+    let powerRatio = validPower / maxGaugePower;
     if (powerRatio > 1) powerRatio = 1;
     if (powerRatio < 0) powerRatio = 0;
 
@@ -720,21 +734,30 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const angle = -90 + (powerRatio * 180);
 
     // 3. UI 업데이트
-    // 숫자 값 업데이트
+    // 숫자 값 업데이트 (유효한 파워값만 표시)
     const currentPowerEl = document.getElementById(`current-power-value-${powerMeterId}`);
     if (currentPowerEl) {
-        currentPowerEl.textContent = Math.round(power);
+        const displayPower = (power >= 0 && power <= 2000) ? power : powerMeter.currentPower;
+        currentPowerEl.textContent = Math.round(displayPower);
     }
 
     // 케이던스 값 업데이트 (0 값도 표시)
     const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
     if (cadenceEl) {
         // cadence가 숫자가 아니거나 음수면 0으로 처리
-        const cadenceValue = (typeof cadence === 'number' && cadence >= 0) ? Math.round(cadence) : 0;
+        const cadenceValue = (typeof cadence === 'number' && cadence >= 0 && cadence <= 254) ? Math.round(cadence) : 0;
+        // 항상 표시되도록 강제 업데이트 (0도 표시)
         cadenceEl.textContent = cadenceValue.toString();
-        console.log(`[Training] 케이던스 UI 업데이트: pm.id=${powerMeterId}, cadence=${cadenceValue} (input: ${cadence})`);
+        cadenceEl.style.display = ''; // 숨겨져 있을 수 있으므로 강제로 표시
+        console.log(`[Training] 케이던스 UI 업데이트: pm.id=${powerMeterId}, cadence=${cadenceValue} (input: ${cadence}), element=${cadenceEl ? 'found' : 'not found'}`);
     } else {
-        console.warn(`[Training] 케이던스 UI 요소를 찾을 수 없음: cadence-value-${powerMeterId}`);
+        console.warn(`[Training] 케이던스 UI 요소를 찾을 수 없음: cadence-value-${powerMeterId}, powerMeterId=${powerMeterId}`);
+        // 디버깅을 위해 DOM 구조 확인
+        const container = document.getElementById(`power-meter-${powerMeterId}`);
+        if (container) {
+            const allCadenceEls = container.querySelectorAll('[id*="cadence"]');
+            console.warn(`[Training] 케이던스 관련 요소들:`, Array.from(allCadenceEls).map(el => el.id));
+        }
     }
 
     // 심박수 값 업데이트 (이미 processLiveTrainingData에서 업데이트되지만, 여기서도 업데이트)
@@ -2181,15 +2204,36 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
 
             // 데이터 페이지 분석 (ANT+ Bike Power Profile)
             if (pageNum === 0x10) { // Standard Power Only Page (시마노 포함 대부분의 파워미터)
+                // ANT+ Bike Power Profile Page 0x10 구조:
+                // Byte 0: Page Number (0x10)
+                // Byte 1: Event Count
+                // Byte 2: Pedal Power Balance (optional)
                 // Byte 3: Instantaneous Cadence (0-254, 255=invalid)
-                // Byte 6-7: Instantaneous Power (LSB-MSB)
-                if (antData.length > 3 && antData[3] !== 255) {
-                    cadence = antData[3]; // 0도 유효한 값 (페달 안 밟는 상태)
+                // Byte 4-5: Accumulated Power (optional, 누적값)
+                // Byte 6-7: Instantaneous Power (LSB-MSB, 0-65535W)
+                
+                // 케이던스 추출 (Byte 3, 0도 유효)
+                if (antData.length > 3) {
+                    const rawCadence = antData[3];
+                    if (rawCadence !== 255) {
+                        cadence = rawCadence; // 0도 유효한 값 (페달 안 밟는 상태)
+                    }
                 }
+                
+                // 파워 추출 (Byte 6-7, LSB-MSB)
                 if (antData.length > 7) {
-                    power = antData[6] | (antData[7] << 8);
+                    const powerLSB = antData[6];
+                    const powerMSB = antData[7];
+                    const rawPower = powerLSB | (powerMSB << 8);
+                    
+                    // 파워값 유효성 검사 (0-2000W 범위로 제한하여 튀는 값 방지)
+                    if (rawPower >= 0 && rawPower <= 2000) {
+                        power = rawPower;
+                    } else {
+                        console.warn(`[Training] Page 0x10: 비정상적인 파워값 무시 (${rawPower}W), LSB=0x${powerLSB.toString(16)}, MSB=0x${powerMSB.toString(16)}`);
+                    }
                 }
-                console.log(`[Training] Page 0x10 파싱: power=${power}, cadence=${cadence} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'})`);
+                console.log(`[Training] Page 0x10 파싱: power=${power}, cadence=${cadence} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'}, powerBytes=[${antData.length > 6 ? '0x' + antData[6].toString(16) : 'N/A'}, ${antData.length > 7 ? '0x' + antData[7].toString(16) : 'N/A'}])`);
             } else if (pageNum === 0x12) { // Crank Torque Frequency Page
                 if (antData.length > 3 && antData[3] !== 255) {
                     cadence = antData[3]; // 0도 유효한 값
@@ -2207,9 +2251,14 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 // 파워값도 확인 (일부 스마트로라는 여기에 파워값 포함)
                 if (antData.length > 7) {
-                    const possiblePower = antData[6] | (antData[7] << 8);
-                    if (possiblePower >= 0 && possiblePower < 2000) {
+                    const powerLSB = antData[6];
+                    const powerMSB = antData[7];
+                    const possiblePower = powerLSB | (powerMSB << 8);
+                    // 파워값 유효성 검사 (0-2000W 범위로 제한)
+                    if (possiblePower >= 0 && possiblePower <= 2000) {
                         power = possiblePower;
+                    } else {
+                        console.warn(`[Training] Page 0x01: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
                 }
                 console.log(`[Training] Page 0x01 파싱: power=${power}, cadence=${cadence} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'})`);
@@ -2227,9 +2276,14 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 if (antData.length > 7) {
                     // Accumulated Power는 누적값이므로 Instantaneous Power를 계산해야 함
                     // 하지만 일부 스마트로라는 여기에 Instantaneous Power를 직접 보냄
-                    const possiblePower = antData[6] | (antData[7] << 8);
-                    if (possiblePower >= 0 && possiblePower < 2000) {
+                    const powerLSB = antData[6];
+                    const powerMSB = antData[7];
+                    const possiblePower = powerLSB | (powerMSB << 8);
+                    // 파워값 유효성 검사 (0-2000W 범위로 제한)
+                    if (possiblePower >= 0 && possiblePower <= 2000) {
                         power = possiblePower;
+                    } else {
+                        console.warn(`[Training] Page 0x19: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
                 }
                 console.log(`[Training] Page 0x19 (Trainer Data) 파싱: power=${power}, cadence=${cadence} (raw: cadenceHalf=${antData.length > 5 ? (antData[4] | (antData[5] << 8)) : 'N/A'})`);
@@ -2239,9 +2293,14 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     cadence = antData[3]; // 0도 유효한 값
                 }
                 if (antData.length > 7) {
-                    const possiblePower = antData[6] | (antData[7] << 8);
-                    if (possiblePower >= 0 && possiblePower < 2000) {
+                    const powerLSB = antData[6];
+                    const powerMSB = antData[7];
+                    const possiblePower = powerLSB | (powerMSB << 8);
+                    // 파워값 유효성 검사 (0-2000W 범위로 제한)
+                    if (possiblePower >= 0 && possiblePower <= 2000) {
                         power = possiblePower;
+                    } else {
+                        console.warn(`[Training] Page 0x01: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
                 }
                 console.log(`[Training] Page 0x${pageNum.toString(16)} 파싱: power=${power}, cadence=${cadence} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'})`);
@@ -2254,10 +2313,15 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 // 알 수 없는 페이지에서도 Byte 6-7에 파워값이 있을 수 있음 (스마트로라)
                 if (deviceType === 0x11 && antData.length > 7) {
-                    const possiblePower = antData[6] | (antData[7] << 8);
-                    if (possiblePower >= 0 && possiblePower < 2000) {
+                    const powerLSB = antData[6];
+                    const powerMSB = antData[7];
+                    const possiblePower = powerLSB | (powerMSB << 8);
+                    // 파워값 유효성 검사 (0-2000W 범위로 제한)
+                    if (possiblePower >= 0 && possiblePower <= 2000) {
                         power = possiblePower;
                         console.log(`[Training] 알 수 없는 페이지에서 파워 추출 (스마트로라): power=${power}`);
+                    } else {
+                        console.warn(`[Training] 알 수 없는 페이지: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
                 }
             }
@@ -2265,16 +2329,19 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             // 유효한 파워 또는 케이던스 데이터가 수신된 경우에만 UI 업데이트
             // 케이던스는 0~254 범위에서 유효 (255는 무효값, 0은 정지 상태이므로 유효)
             const isValidCadence = (cadence !== -1 && cadence !== 255 && cadence >= 0 && cadence <= 254);
-            const isValidPower = (power !== -1 && power >= 0 && power < 2000);
+            // 파워는 0~2000W 범위에서만 유효 (2000W 초과는 비정상값으로 간주)
+            const isValidPower = (power !== -1 && power >= 0 && power <= 2000);
             
             // 케이던스가 유효하면 항상 업데이트 (0도 유효한 값)
             // 파워가 유효하면 업데이트, 유효하지 않으면 이전 값 유지
-            const finalPower = isValidPower ? power : (pm.currentPower || 0);
+            const finalPower = isValidPower ? power : (pm.currentPower !== undefined ? pm.currentPower : 0);
+            // 케이던스는 유효하면 업데이트, 유효하지 않으면 이전 값 유지 (없으면 0)
             const finalCadence = isValidCadence ? cadence : (pm.cadence !== undefined ? pm.cadence : 0);
             
             // 케이던스 또는 파워 중 하나라도 유효하면 업데이트
+            // 케이던스가 0이어도 유효한 값이므로 항상 업데이트
             if (isValidPower || isValidCadence) {
-                console.log(`[Training] 파워미터 데이터 업데이트: pm.id=${pm.id}, power=${finalPower} (valid: ${isValidPower}), cadence=${finalCadence} (valid: ${isValidCadence}), heartRate=${pm.heartRate}`);
+                console.log(`[Training] 파워미터 데이터 업데이트: pm.id=${pm.id}, power=${finalPower} (valid: ${isValidPower}, raw: ${power}), cadence=${finalCadence} (valid: ${isValidCadence}, raw: ${cadence}), heartRate=${pm.heartRate}`);
                 
                 // 전역 상태 업데이트 및 UI 반영
                 updatePowerMeterData(pm.id, finalPower, pm.heartRate, finalCadence);
