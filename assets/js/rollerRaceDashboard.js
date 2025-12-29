@@ -99,9 +99,19 @@ class SpeedometerData {
     this.speedHistory = []; // 최근 속도 기록 (그래프용)
     this.speedSum = 0; // 평균 속도 계산용
     this.speedCount = 0; // 평균 속도 계산용
-    this.filteredSpeed = 0; // [추가] 가민 스타일 필터링 속도
-    this.lastDecelerationCheck = Date.now(); // [추가] 감속 체크 시간
-    this.previousSpeed = 0; // [추가] 이전 속도 (궤적선 동기화용)
+    this.filteredSpeed = 0; // [가민 스타일] 필터링 속도
+    this.lastDecelerationCheck = Date.now(); // [가민 스타일] 감속 체크 시간
+    this.previousSpeed = 0; // [가민 스타일] 이전 속도 (궤적선 동기화용)
+    
+    // 가민 스타일: 고급 속도 계산 및 바늘 애니메이션
+    this.speedHistorySmoothed = []; // 스무딩된 속도 히스토리 (최근 5개)
+    this.lastSpeedUpdateTime = null; // 마지막 속도 업데이트 시간
+    this.acceleration = 0; // 가속도 (km/h/s)
+    this.lastAcceleration = 0; // 이전 가속도
+    this.needleTargetAngle = null; // 바늘 목표 각도
+    this.needleCurrentAngle = null; // 바늘 현재 각도
+    this.needleVelocity = 0; // 바늘 각속도 (도/초)
+    this.lastNeedleUpdateTime = null; // 마지막 바늘 업데이트 시간
   }
 }
 
@@ -478,71 +488,142 @@ function updateSpeedometerNeedle(speedometerId, speed) {
 
 
 /**
- * 속도계 바늘 업데이트 (부드러운 애니메이션 최적화)
- * 60km/h 경계값을 부드럽게 넘어가도록 설계되었습니다.
+ * 가민 스타일: 속도계 바늘 업데이트 (최고 수준 애니메이션)
+ * - 물리 기반 애니메이션 (관성 및 감쇠)
+ * - 가속도 기반 동적 애니메이션 속도
+ * - 부드러운 전환 (cubic-bezier 최적화)
+ * - 60km/h 경계값 부드럽게 처리
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
   const needle = document.getElementById(`needle-${speedometerId}`);
   if (!needle) return;
   
-  // 1. 목표 각도 계산 (기존 공식 유지)
-  const targetAngle = calculateNeedleAngle(speed);
-  
-  // 2. 이전 각도 상태 가져오기
-  let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
-  
-  if (previousAngle === undefined) {
-    previousAngle = targetAngle;
-    window.rollerRaceState.needleAngles[speedometerId] = targetAngle;
-  }
-
-  // 3. 최단 경로 회전 계산 (360도 회전 방지)
-  // 바늘이 0도와 360도 사이를 지나갈 때 반대로 한 바퀴 도는 현상을 방지합니다.
-  let diff = targetAngle - (previousAngle % 360);
-  if (diff > 180) diff -= 360;
-  if (diff < -180) diff += 360;
-  
-  const finalAngle = previousAngle + diff;
-  window.rollerRaceState.needleAngles[speedometerId] = finalAngle;
-
-  // 4. 애니메이션 속성 적용
-  // cubic-bezier(0.25, 0.1, 0.25, 1)는 실제 기계 바늘처럼 처음에 빠르고 끝에 부드럽게 멈춥니다.
-  // 0.4초는 ANT+ 센서 데이터 수신 주기(0.25s) 사이를 자연스럽게 이어줍니다.
-  needle.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1)';
-  needle.setAttribute('transform', `rotate(${finalAngle})`);
-  
-  // 5. 바늘 행적선 업데이트
-  // 속도 변화 방향에 따라 궤적선 업데이트 전략이 달라집니다:
-  // - 감속 시: 목표 속도를 기준으로 즉시 궤적 업데이트 (바늘이 지나간 부분 즉시 삭제)
-  // - 증가 시: 이전 각도를 기준으로 궤적 업데이트 + 애니메이션 완료 후 목표 속도까지 업데이트
   const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
-  const previousSpeed = speedometer?.previousSpeed ?? 0;
+  if (!speedometer) return;
+  
+  const now = Date.now();
+  
+  // 1. 목표 각도 계산
+  const targetAngle = calculateNeedleAngle(speed);
+  speedometer.needleTargetAngle = targetAngle;
+  
+  // 2. 현재 각도 상태 가져오기
+  let currentAngle = window.rollerRaceState.needleAngles[speedometerId];
+  if (currentAngle === undefined) {
+    currentAngle = targetAngle;
+    window.rollerRaceState.needleAngles[speedometerId] = currentAngle;
+    speedometer.needleCurrentAngle = currentAngle;
+    speedometer.needleVelocity = 0;
+    speedometer.lastNeedleUpdateTime = now;
+  }
+  
+  speedometer.needleCurrentAngle = currentAngle;
+  
+  // 3. 가민 스타일: 최단 경로 회전 계산 (360도 회전 방지)
+  let normalizedCurrent = currentAngle % 360;
+  if (normalizedCurrent < 0) normalizedCurrent += 360;
+  
+  let normalizedTarget = targetAngle % 360;
+  if (normalizedTarget < 0) normalizedTarget += 360;
+  
+  let angleDiff = normalizedTarget - normalizedCurrent;
+  
+  // 최단 경로 선택
+  if (angleDiff > 180) {
+    angleDiff -= 360;
+  } else if (angleDiff < -180) {
+    angleDiff += 360;
+  }
+  
+  // 4. 가민 스타일: 물리 기반 애니메이션 (관성 및 감쇠)
+  const timeSinceLastUpdate = (now - (speedometer.lastNeedleUpdateTime || now)) / 1000.0; // 초 단위
+  const maxTimeDiff = 0.1; // 최대 100ms 간격
+  
+  if (timeSinceLastUpdate > 0 && timeSinceLastUpdate < maxTimeDiff) {
+    // 각속도 계산 (도/초)
+    const targetVelocity = angleDiff / timeSinceLastUpdate;
+    
+    // 가민 스타일: 감쇠 적용 (관성 효과)
+    const damping = 0.85; // 감쇠 계수
+    speedometer.needleVelocity = (speedometer.needleVelocity * damping) + (targetVelocity * (1 - damping));
+    
+    // 속도 제한 (너무 빠른 움직임 방지)
+    const maxVelocity = 720; // 도/초 (2회전/초)
+    if (Math.abs(speedometer.needleVelocity) > maxVelocity) {
+      speedometer.needleVelocity = speedometer.needleVelocity > 0 ? maxVelocity : -maxVelocity;
+    }
+    
+    // 각도 업데이트
+    const angleChange = speedometer.needleVelocity * timeSinceLastUpdate;
+    currentAngle += angleChange;
+    
+    // 목표 각도에 가까워지면 감쇠 증가
+    const remainingDiff = normalizedTarget - (currentAngle % 360);
+    if (Math.abs(remainingDiff) < 5) {
+      speedometer.needleVelocity *= 0.7; // 더 빠른 감쇠
+    }
+  } else {
+    // 시간 간격이 너무 크면 즉시 목표 각도로 이동
+    currentAngle = targetAngle;
+    speedometer.needleVelocity = 0;
+  }
+  
+  // 5. 가민 스타일: 동적 애니메이션 속도 (속도 변화량 기반)
+  const previousSpeed = speedometer.previousSpeed ?? 0;
+  const speedChange = Math.abs(speed - previousSpeed);
+  
+  let animationDuration;
+  let easingFunction;
+  
+  if (speedChange > 10) {
+    // 급격한 속도 변화: 빠른 애니메이션
+    animationDuration = 0.25; // 250ms
+    easingFunction = 'cubic-bezier(0.4, 0.0, 0.2, 1)'; // 빠른 시작, 빠른 끝
+  } else if (speedChange > 5) {
+    // 중간 속도 변화: 보통 애니메이션
+    animationDuration = 0.35; // 350ms
+    easingFunction = 'cubic-bezier(0.25, 0.1, 0.25, 1)'; // 부드러운 전환
+  } else {
+    // 완만한 속도 변화: 느린 애니메이션
+    animationDuration = 0.45; // 450ms
+    easingFunction = 'cubic-bezier(0.2, 0.0, 0.2, 1)'; // 매우 부드러운 전환
+  }
+  
+  // 6. 각도 정규화 및 저장
+  while (currentAngle >= 360) currentAngle -= 360;
+  while (currentAngle < 0) currentAngle += 360;
+  
+  window.rollerRaceState.needleAngles[speedometerId] = currentAngle;
+  speedometer.needleCurrentAngle = currentAngle;
+  speedometer.lastNeedleUpdateTime = now;
+  
+  // 7. 가민 스타일: 부드러운 애니메이션 적용
+  needle.style.transition = `transform ${animationDuration}s ${easingFunction}`;
+  needle.setAttribute('transform', `rotate(${currentAngle})`);
+  
+  // 8. 가민 스타일: 바늘 궤적선 업데이트 (속도 변화 방향 기반)
   const isAccelerating = speed > previousSpeed;
   const isDecelerating = speed < previousSpeed;
   
   if (isDecelerating) {
-    // 감속 시: 목표 속도를 기준으로 즉시 궤적 업데이트 (바늘이 지나간 부분 즉시 삭제)
+    // 감속 시: 목표 속도를 기준으로 즉시 궤적 업데이트
     updateSpeedometerNeedlePath(speedometerId, speed);
   } else if (isAccelerating) {
-    // 증가 시: 바늘의 현재 실제 각도(previousAngle)를 기준으로 궤적선을 즉시 업데이트
-    // 급격한 속도 증가 시 바늘이 목표 위치에 도달하기 전에 궤적선이 먼저 그려지는 문제 방지
-    const currentNeedleSpeed = calculateSpeedFromAngle(previousAngle);
+    // 가속 시: 현재 각도 기준으로 궤적 업데이트
+    const currentNeedleSpeed = calculateSpeedFromAngle(currentAngle);
     updateSpeedometerNeedlePath(speedometerId, currentNeedleSpeed);
     
-    // 바늘 애니메이션 완료 후 목표 속도까지 궤적선 업데이트
-    const animationDuration = 400; // 0.4초 = 400ms
+    // 애니메이션 완료 후 목표 속도까지 궤적 업데이트
     setTimeout(() => {
       updateSpeedometerNeedlePath(speedometerId, speed);
-    }, animationDuration);
+    }, animationDuration * 1000);
   } else {
     // 속도 변화 없음: 현재 속도 기준으로 업데이트
     updateSpeedometerNeedlePath(speedometerId, speed);
   }
   
-  // 속도 저장 (다음 비교용)
-  if (speedometer) {
-    speedometer.previousSpeed = speed;
-  }
+  // 9. 속도 저장 (다음 비교용)
+  speedometer.previousSpeed = speed;
 }
 
 
@@ -6125,6 +6206,13 @@ function updateReceiverButtonStatus() {
  * 통합 Speed/Cadence 데이터 처리 모듈
  * 고속 주행 인식 + 경기 시작 동기화 + 정지 시 즉시 0 리셋 로직 통합
  */
+/**
+ * 가민 스타일: ANT+ 속도/케이던스 데이터 처리 (최고 수준 최적화)
+ * - 정밀한 시간 기반 속도 계산
+ * - 적응형 스무딩 알고리즘
+ * - 가속도 기반 필터링
+ * - 데이터 유효성 검사 강화
+ */
 function processSpeedCadenceData(deviceId, data) {
   if (data.length < 8) return;
 
@@ -6138,54 +6226,125 @@ function processSpeedCadenceData(deviceId, data) {
   const now = Date.now();
   speedometer.lastPacketTime = now;
 
-  // 1. 초기 동기화
+  // 1. 초기 동기화 (가민 스타일: 더 엄격한 검증)
   if (speedometer.needsSync || speedometer.lastEventTime === 0 || speedometer.lastEventTime === undefined) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
+    speedometer.lastSpeedUpdateTime = now;
     speedometer.needsSync = false;
+    speedometer.filteredSpeed = 0;
+    speedometer.speedHistorySmoothed = [];
     return;
   }
 
-  // 2. 바퀴 회전 여부 판별
+  // 2. 바퀴 회전 여부 판별 (가민 스타일: 동일 이벤트 시간 무시)
   if (speedometer.lastEventTime === eventTime) return;
 
-  // 3. 변화량 계산 (16비트 롤오버 대응)
+  // 3. 변화량 계산 (16비트 롤오버 대응, 가민 스타일)
   let revDiff = revolutions - speedometer.lastRevolutions;
   if (revDiff < 0) revDiff += 65536;
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
 
-  // 4. 속도 계산 및 필터 적용
+  // 가민 스타일: 최소 시간 간격 검증 (너무 짧은 간격은 노이즈로 간주)
+  const minTimeDiff = 16; // 약 15.6ms (1/1024초 단위)
+  if (timeDiff < minTimeDiff) {
+    // 너무 짧은 간격이면 이전 값 유지
+    return;
+  }
+
+  // 4. 속도 계산 및 필터 적용 (가민 스타일: 정밀 계산)
   if (timeDiff > 0 && revDiff > 0) {
     const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
     const distM = (revDiff * wheelSpec.circumference) / 1000;
     const timeS = timeDiff / 1024;
     
-    // 원본 속도 계산 (rawSpeed)
+    // 원본 속도 계산 (rawSpeed, 가민 스타일: 정밀도 향상)
     const rawSpeed = (distM / timeS) * 3.6;
 
-    // 비정상적인 고속 데이터 처리
+    // 가민 스타일: 비정상적인 고속 데이터 처리 (150km/h 초과)
     if (rawSpeed > 150) {
-      console.warn(`[트랙${speedometer.id}] 과속 감지. 기준점 리셋.`);
+      console.warn(`[트랙${speedometer.id}] 과속 감지 (${rawSpeed.toFixed(1)}km/h). 기준점 리셋.`);
       speedometer.lastRevolutions = revolutions;
       speedometer.lastEventTime = eventTime;
+      speedometer.filteredSpeed = 0;
+      speedometer.speedHistorySmoothed = [];
       return; 
     }
 
-    // 5. [가민 스타일 개선] 가변 알파(Adaptive Alpha) 필터 로직
-    // 이전에 값이 없었다면 현재 속도로 초기화
+    // 가민 스타일: 최소 속도 검증 (0.1km/h 미만은 0으로 처리)
+    const validatedSpeed = rawSpeed < 0.1 ? 0 : rawSpeed;
+
+    // 5. 가민 스타일: 적응형 스무딩 알고리즘 (가속도 기반)
+    let finalSpeed = validatedSpeed;
+    
     if (speedometer.filteredSpeed === undefined || speedometer.filteredSpeed === 0) {
-      speedometer.filteredSpeed = rawSpeed;
+      // 초기값 설정
+      speedometer.filteredSpeed = validatedSpeed;
+      finalSpeed = validatedSpeed;
     } else {
-      /**
-       * 가변 알파 설정:
-       * - 가속 중(raw > filtered): 0.9 (반응성 극대화, 바늘이 실제 속도를 빠르게 추적)
-       * - 감속/유지 중: 0.5 (부드러움 극대화, 센서 노이즈로 인한 바늘 떨림 방지)
-       */
-      const dynamicAlpha = rawSpeed > speedometer.filteredSpeed ? 0.9 : 0.5;
-      speedometer.filteredSpeed = (dynamicAlpha * rawSpeed) + ((1 - dynamicAlpha) * speedometer.filteredSpeed);
+      // 가민 스타일: 가속도 계산
+      let timeSinceLastUpdate = (now - (speedometer.lastSpeedUpdateTime || now)) / 1000.0; // 초 단위
+      if (timeSinceLastUpdate > 0 && timeSinceLastUpdate < 2.0) {
+        const speedDiff = validatedSpeed - speedometer.filteredSpeed;
+        speedometer.acceleration = speedDiff / timeSinceLastUpdate; // km/h/s
+      } else {
+        timeSinceLastUpdate = 0.25; // 기본값 0.25초
+      }
+      
+      // 가민 스타일: 가속도 기반 적응형 알파
+      let adaptiveAlpha;
+      const absAcceleration = Math.abs(speedometer.acceleration);
+      
+      if (validatedSpeed > speedometer.filteredSpeed) {
+        // 가속 중: 가속도가 클수록 더 빠른 반응
+        if (absAcceleration > 20) {
+          adaptiveAlpha = 0.95; // 급가속: 매우 빠른 반응
+        } else if (absAcceleration > 10) {
+          adaptiveAlpha = 0.85; // 중가속: 빠른 반응
+        } else {
+          adaptiveAlpha = 0.75; // 완만한 가속: 보통 반응
+        }
+      } else if (validatedSpeed < speedometer.filteredSpeed) {
+        // 감속 중: 부드러운 감속
+        if (absAcceleration > 20) {
+          adaptiveAlpha = 0.6; // 급감속: 빠른 반응
+        } else if (absAcceleration > 10) {
+          adaptiveAlpha = 0.5; // 중감속: 보통 반응
+        } else {
+          adaptiveAlpha = 0.4; // 완만한 감속: 부드러운 반응
+        }
+      } else {
+        // 속도 유지: 부드러운 유지
+        adaptiveAlpha = 0.3;
+      }
+      
+      // 가민 스타일: 지수 이동 평균 (EMA) 필터
+      speedometer.filteredSpeed = (adaptiveAlpha * validatedSpeed) + ((1 - adaptiveAlpha) * speedometer.filteredSpeed);
+      finalSpeed = speedometer.filteredSpeed;
+      
+      // 가민 스타일: 스무딩 히스토리 업데이트 (최근 5개 값 평균)
+      speedometer.speedHistorySmoothed.push(finalSpeed);
+      if (speedometer.speedHistorySmoothed.length > 5) {
+        speedometer.speedHistorySmoothed.shift();
+      }
+      
+      // 최종 속도는 히스토리 평균 사용 (더 부드러운 표시)
+      if (speedometer.speedHistorySmoothed.length >= 3) {
+        const sum = speedometer.speedHistorySmoothed.reduce((a, b) => a + b, 0);
+        finalSpeed = sum / speedometer.speedHistorySmoothed.length;
+      }
+    }
+
+    // 가민 스타일: 속도 변화율 제한 (급격한 변화 방지)
+    const maxSpeedChange = 30; // km/h/s
+    const speedChange = Math.abs(finalSpeed - speedometer.previousSpeed);
+    const timeDiffSeconds = timeSinceLastUpdate || 0.25; // 기본값 0.25초
+    if (speedChange / timeDiffSeconds > maxSpeedChange) {
+      // 급격한 변화는 이전 값과의 중간값 사용
+      finalSpeed = (finalSpeed + speedometer.previousSpeed) / 2;
     }
 
     // 경기 중일 때 거리 누적
@@ -6193,14 +6352,34 @@ function processSpeedCadenceData(deviceId, data) {
       speedometer.totalDistance += (distM / 1000);
     }
 
-    // 6. UI 업데이트 (보정된 filteredSpeed 사용)
-    updateSpeedometerData(speedometer.id, speedometer.filteredSpeed, speedometer.totalDistance);
+    // 6. UI 업데이트 (가민 스타일: 최종 필터링된 속도 사용)
+    updateSpeedometerData(speedometer.id, finalSpeed, speedometer.totalDistance);
     
     // 기준점 업데이트
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
-    speedometer.lastEventUpdate = now; 
+    speedometer.lastEventUpdate = now;
+    speedometer.lastSpeedUpdateTime = now;
+    speedometer.lastAcceleration = speedometer.acceleration;
+    speedometer.previousSpeed = finalSpeed;
     speedometer.connected = true;
+  } else if (timeDiff > 0 && revDiff === 0) {
+    // 가민 스타일: 정지 상태 감지 (회전 없음, 시간만 경과)
+    const timeS = timeDiff / 1024;
+    if (timeS > 2.0) { // 2초 이상 회전 없음
+      // 점진적 감속
+      const decayFactor = Math.pow(0.5, timeS / 1.0); // 1초마다 반감
+      const decayedSpeed = speedometer.filteredSpeed * decayFactor;
+      if (decayedSpeed < 0.5) {
+        speedometer.filteredSpeed = 0;
+        updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+      } else {
+        speedometer.filteredSpeed = decayedSpeed;
+        updateSpeedometerData(speedometer.id, decayedSpeed, speedometer.totalDistance);
+      }
+      speedometer.lastEventTime = eventTime;
+      speedometer.lastEventUpdate = now;
+    }
   }
 }
 
