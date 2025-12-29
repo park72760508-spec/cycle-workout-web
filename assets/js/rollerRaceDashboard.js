@@ -6247,6 +6247,12 @@ function processSpeedCadenceData(deviceId, data) {
 
   let timeDiff = eventTime - speedometer.lastEventTime;
   if (timeDiff < 0) timeDiff += 65536;
+  
+  // 가민 스타일: timeSinceLastUpdate 변수를 함수 상단에서 선언 (스코프 문제 해결)
+  let timeSinceLastUpdate = (now - (speedometer.lastSpeedUpdateTime || now)) / 1000.0; // 초 단위
+  if (timeSinceLastUpdate <= 0 || timeSinceLastUpdate >= 2.0) {
+    timeSinceLastUpdate = 0.25; // 기본값 0.25초
+  }
 
   // 가민 스타일: 최소 시간 간격 검증 (너무 짧은 간격은 노이즈로 간주)
   const minTimeDiff = 16; // 약 15.6ms (1/1024초 단위)
@@ -6278,6 +6284,7 @@ function processSpeedCadenceData(deviceId, data) {
     const validatedSpeed = rawSpeed < 0.1 ? 0 : rawSpeed;
 
     // 5. 가민 스타일: 적응형 스무딩 알고리즘 (가속도 기반)
+    // timeSinceLastUpdate는 이미 함수 상단에서 선언됨
     let finalSpeed = validatedSpeed;
     
     if (speedometer.filteredSpeed === undefined || speedometer.filteredSpeed === 0) {
@@ -6286,12 +6293,11 @@ function processSpeedCadenceData(deviceId, data) {
       finalSpeed = validatedSpeed;
     } else {
       // 가민 스타일: 가속도 계산
-      let timeSinceLastUpdate = (now - (speedometer.lastSpeedUpdateTime || now)) / 1000.0; // 초 단위
       if (timeSinceLastUpdate > 0 && timeSinceLastUpdate < 2.0) {
         const speedDiff = validatedSpeed - speedometer.filteredSpeed;
         speedometer.acceleration = speedDiff / timeSinceLastUpdate; // km/h/s
       } else {
-        timeSinceLastUpdate = 0.25; // 기본값 0.25초
+        speedometer.acceleration = 0;
       }
       
       // 가민 스타일: 가속도 기반 적응형 알파
@@ -6341,7 +6347,7 @@ function processSpeedCadenceData(deviceId, data) {
     // 가민 스타일: 속도 변화율 제한 (급격한 변화 방지)
     const maxSpeedChange = 30; // km/h/s
     const speedChange = Math.abs(finalSpeed - speedometer.previousSpeed);
-    const timeDiffSeconds = timeSinceLastUpdate || 0.25; // 기본값 0.25초
+    const timeDiffSeconds = timeSinceLastUpdate; // 이미 초기화된 변수 사용
     if (speedChange / timeDiffSeconds > maxSpeedChange) {
       // 급격한 변화는 이전 값과의 중간값 사용
       finalSpeed = (finalSpeed + speedometer.previousSpeed) / 2;
