@@ -69,6 +69,14 @@ class PowerMeterData {
     this.lastPowerTime = null; // 마지막 파워 수신 시간
     this.cadenceHistory = []; // 케이던스 히스토리 (스무딩용)
     this.powerHistorySmoothed = []; // 파워 히스토리 (스무딩용)
+    
+    // 가민 스타일: 고급 파워 필터링 (최고 수준)
+    this.powerRawHistory = []; // 원시 파워 히스토리 (최근 10개, outlier detection용)
+    this.powerMedianHistory = []; // 중앙값 필터 히스토리 (최근 5개)
+    this.powerFiltered = 0; // 최종 필터링된 파워값
+    this.powerChangeRate = 0; // 파워 변화율 (W/s)
+    this.lastPowerChangeTime = null; // 마지막 파워 변화 시간
+    this.outlierRejectionCount = 0; // 이상치 거부 횟수 (연속)
   }
 }
 
@@ -708,10 +716,12 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
     if (!powerMeter) return;
 
-    // 1. 데이터 저장 (파워값이 유효한 범위 내에서만 저장)
-    // 파워값이 2000W를 초과하면 이전 값 유지 (튀는 값 방지)
+    // 1. 데이터 저장 (가민 스타일: 필터링된 값 저장)
+    // 파워값이 유효한 범위 내에서만 저장
     if (power >= 0 && power <= 2000) {
         powerMeter.currentPower = power;
+        // 가민 스타일: 필터링된 값도 업데이트
+        powerMeter.powerFiltered = power;
     } else if (power > 2000) {
         console.warn(`[Training] 비정상적인 파워값 무시: ${power}W (이전 값 유지: ${powerMeter.currentPower}W)`);
         // 이전 값 유지
@@ -2229,7 +2239,8 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const eventDiff = (eventCount - pm.lastEventCount + 256) % 256;
                     if (eventDiff === 0 && currentTime - pm.lastPowerTime < 1000) {
                         // 동일한 이벤트 카운트이면 중복 데이터로 간주 (1초 이내)
-                        console.log(`[Training] Page 0x10: 중복 이벤트 카운트 무시 (${eventCount})`);
+                        // 하지만 파워값은 계속 처리 (누적 파워 계산을 위해)
+                        console.log(`[Training] Page 0x10: 중복 이벤트 카운트 감지 (${eventCount}), 파워값은 계속 처리`);
                     }
                 }
                 
@@ -2242,7 +2253,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     }
                 }
                 
-                // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (더 정확)
+                // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (더 정확, 이상치 감지 강화)
                 let calculatedPower = -1;
                 if (antData.length > 5) {
                     const accumulatedPowerLSB = antData[4];
@@ -2255,9 +2266,25 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         const timeDiff = (currentTime - pm.lastAccumulatedPowerTime) / 1000.0; // 초 단위
                         if (timeDiff > 0 && timeDiff < 2.0) { // 2초 이내의 데이터만 유효
                             const powerDiff = accumulatedPowerW - pm.lastAccumulatedPower;
-                            calculatedPower = Math.round(powerDiff / timeDiff);
-                            // 계산된 파워가 유효 범위 내인지 확인
-                            if (calculatedPower < 0 || calculatedPower > 2000) {
+                            const rawCalculatedPower = powerDiff / timeDiff;
+                            
+                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증
+                            const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                            const calculatedPowerDiff = Math.abs(rawCalculatedPower - previousFilteredPower);
+                            const maxAllowedChangeFromAccumulated = 200; // 누적 파워 기반 계산값의 최대 변화량
+                            
+                            // 계산된 파워가 유효 범위 내이고, 이전 값과의 차이가 합리적인 범위 내인지 확인
+                            if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
+                                if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
+                                    // 정상 범위 내: 반올림하여 사용
+                                    calculatedPower = Math.round(rawCalculatedPower);
+                                } else {
+                                    // 이상치: 이전 값과의 중간값 사용
+                                    const limitedPower = (rawCalculatedPower + previousFilteredPower) / 2;
+                                    calculatedPower = Math.round(limitedPower);
+                                    console.warn(`[Training] 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${calculatedPowerDiff.toFixed(1)}W - 제한 적용: ${calculatedPower}W`);
+                                }
+                            } else {
                                 calculatedPower = -1;
                             }
                         }
@@ -2275,11 +2302,24 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     
                     // 가민 스타일: 파워값 유효성 검사 (0-2000W 범위)
                     if (rawPower >= 0 && rawPower <= 2000) {
-                        instantaneousPower = rawPower;
+                        // 가민 스타일: 순간 파워도 이전 값과 비교하여 이상치 검증
+                        const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                        const instantPowerDiff = Math.abs(rawPower - previousFilteredPower);
+                        const maxAllowedChangeFromInstant = 150; // 순간 파워의 최대 변화량
+                        
+                        if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
+                            instantaneousPower = rawPower;
+                        } else {
+                            // 이상치: 이전 값과의 중간값 사용
+                            const limitedPower = (rawPower + previousFilteredPower) / 2;
+                            instantaneousPower = Math.round(limitedPower);
+                            console.warn(`[Training] 순간 파워 이상치 감지: raw=${rawPower}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${instantPowerDiff.toFixed(1)}W - 제한 적용: ${instantaneousPower}W`);
+                        }
                     }
                 }
                 
                 // 가민 스타일: 누적 파워로 계산한 값이 있으면 우선 사용, 없으면 순간 파워 사용
+                // 누적 파워 기반 계산이 더 정확하므로 우선순위가 높음
                 if (calculatedPower >= 0) {
                     power = calculatedPower;
                 } else if (instantaneousPower >= 0) {
@@ -2362,10 +2402,21 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const powerLSB = antData[6];
                     const powerMSB = antData[7];
                     const possiblePower = powerLSB | (powerMSB << 8);
-                    // 가민 스타일: 파워값 유효성 검사 (0-2000W 범위)
+                    // 가민 스타일: 파워값 유효성 검사 및 이상치 감지
                     if (possiblePower >= 0 && possiblePower <= 2000) {
-                        power = possiblePower;
-                        pm.lastPowerTime = currentTime;
+                        const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                        const instantPowerDiff = Math.abs(possiblePower - previousFilteredPower);
+                        const maxAllowedChangeFromInstant = 150;
+                        
+                        if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
+                            power = possiblePower;
+                            pm.lastPowerTime = currentTime;
+                        } else {
+                            const limitedPower = (possiblePower + previousFilteredPower) / 2;
+                            power = Math.round(limitedPower);
+                            console.warn(`[Training] Page 0x01: 순간 파워 이상치 감지: raw=${possiblePower}W, limited=${power}W`);
+                            pm.lastPowerTime = currentTime;
+                        }
                     } else {
                         console.warn(`[Training] Page 0x01: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
@@ -2392,7 +2443,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     }
                 }
                 
-                // 가민 스타일: 누적 파워를 이용한 순간 파워 계산
+                // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (이상치 감지 강화)
                 let calculatedPower = -1;
                 if (antData.length > 5) {
                     const accumulatedPowerLSB = antData[4];
@@ -2404,8 +2455,22 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         const timeDiff = (currentTime - pm.lastAccumulatedPowerTime) / 1000.0;
                         if (timeDiff > 0 && timeDiff < 2.0) {
                             const powerDiff = accumulatedPowerW - pm.lastAccumulatedPower;
-                            calculatedPower = Math.round(powerDiff / timeDiff);
-                            if (calculatedPower < 0 || calculatedPower > 2000) {
+                            const rawCalculatedPower = powerDiff / timeDiff;
+                            
+                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증
+                            const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                            const calculatedPowerDiff = Math.abs(rawCalculatedPower - previousFilteredPower);
+                            const maxAllowedChangeFromAccumulated = 200;
+                            
+                            if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
+                                if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
+                                    calculatedPower = Math.round(rawCalculatedPower);
+                                } else {
+                                    const limitedPower = (rawCalculatedPower + previousFilteredPower) / 2;
+                                    calculatedPower = Math.round(limitedPower);
+                                    console.warn(`[Training] Page 0x19: 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, limited=${calculatedPower}W`);
+                                }
+                            } else {
                                 calculatedPower = -1;
                             }
                         }
@@ -2421,7 +2486,18 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const powerMSB = antData[7];
                     const possiblePower = powerLSB | (powerMSB << 8);
                     if (possiblePower >= 0 && possiblePower <= 2000) {
-                        instantaneousPower = possiblePower;
+                        // 가민 스타일: 순간 파워도 이상치 검증
+                        const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                        const instantPowerDiff = Math.abs(possiblePower - previousFilteredPower);
+                        const maxAllowedChangeFromInstant = 150;
+                        
+                        if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
+                            instantaneousPower = possiblePower;
+                        } else {
+                            const limitedPower = (possiblePower + previousFilteredPower) / 2;
+                            instantaneousPower = Math.round(limitedPower);
+                            console.warn(`[Training] Page 0x19: 순간 파워 이상치 감지: raw=${possiblePower}W, limited=${instantaneousPower}W`);
+                        }
                     }
                 }
                 
@@ -2454,11 +2530,21 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const powerLSB = antData[6];
                     const powerMSB = antData[7];
                     const possiblePower = powerLSB | (powerMSB << 8);
-                    // 파워값 유효성 검사 (0-2000W 범위로 제한)
+                    // 가민 스타일: 파워값 유효성 검사 및 이상치 감지
                     if (possiblePower >= 0 && possiblePower <= 2000) {
-                        power = possiblePower;
+                        const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                        const instantPowerDiff = Math.abs(possiblePower - previousFilteredPower);
+                        const maxAllowedChangeFromInstant = 150;
+                        
+                        if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
+                            power = possiblePower;
+                        } else {
+                            const limitedPower = (possiblePower + previousFilteredPower) / 2;
+                            power = Math.round(limitedPower);
+                            console.warn(`[Training] Page 0x${pageNum.toString(16)}: 순간 파워 이상치 감지: raw=${possiblePower}W, limited=${power}W`);
+                        }
                     } else {
-                        console.warn(`[Training] Page 0x01: 비정상적인 파워값 무시 (${possiblePower}W)`);
+                        console.warn(`[Training] Page 0x${pageNum.toString(16)}: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
                 }
                 console.log(`[Training] Page 0x${pageNum.toString(16)} 파싱: power=${power}, cadence=${cadence} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'})`);
@@ -2474,17 +2560,27 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const powerLSB = antData[6];
                     const powerMSB = antData[7];
                     const possiblePower = powerLSB | (powerMSB << 8);
-                    // 파워값 유효성 검사 (0-2000W 범위로 제한)
+                    // 가민 스타일: 파워값 유효성 검사 및 이상치 감지
                     if (possiblePower >= 0 && possiblePower <= 2000) {
-                        power = possiblePower;
-                        console.log(`[Training] 알 수 없는 페이지에서 파워 추출 (스마트로라): power=${power}`);
+                        const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                        const instantPowerDiff = Math.abs(possiblePower - previousFilteredPower);
+                        const maxAllowedChangeFromInstant = 150;
+                        
+                        if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
+                            power = possiblePower;
+                            console.log(`[Training] 알 수 없는 페이지에서 파워 추출 (스마트로라): power=${power}`);
+                        } else {
+                            const limitedPower = (possiblePower + previousFilteredPower) / 2;
+                            power = Math.round(limitedPower);
+                            console.warn(`[Training] 알 수 없는 페이지: 순간 파워 이상치 감지: raw=${possiblePower}W, limited=${power}W`);
+                        }
                     } else {
                         console.warn(`[Training] 알 수 없는 페이지: 비정상적인 파워값 무시 (${possiblePower}W)`);
                     }
                 }
             }
 
-            // 가민 스타일: 데이터 유효성 검사 및 스무딩
+            // 가민 스타일: 데이터 유효성 검사 및 고급 필터링 (최고 수준)
             // 케이던스는 0~254 범위에서 유효 (255는 무효값, 0은 정지 상태이므로 유효)
             const isValidCadence = (cadence !== -1 && cadence !== 255 && cadence >= 0 && cadence <= 254);
             // 파워는 0~2000W 범위에서만 유효 (2000W 초과는 비정상값으로 간주)
@@ -2504,22 +2600,114 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
             }
             
-            // 가민 스타일: 파워 스무딩 (최근 3개 값의 평균, 단 0W는 제외)
+            // 가민 스타일: 고급 파워 필터링 (최고 수준 - 이상치 감지, 중앙값 필터, 다단계 스무딩)
             let finalPower = isValidPower ? power : (pm.currentPower !== undefined ? pm.currentPower : 0);
+            
             if (isValidPower && power > 0) {
-                pm.powerHistorySmoothed.push(power);
-                if (pm.powerHistorySmoothed.length > 3) {
-                    pm.powerHistorySmoothed.shift(); // 오래된 값 제거
+                // 1단계: Outlier Detection (이상치 감지 및 제거)
+                const previousPower = pm.powerFiltered || pm.currentPower || 0;
+                const powerDiff = Math.abs(power - previousPower);
+                const maxAllowedChange = 150; // 가민 스타일: 최대 허용 변화량 (W)
+                
+                // 이전 값이 있고, 변화량이 너무 크면 이상치로 간주
+                if (previousPower > 0 && powerDiff > maxAllowedChange) {
+                    // 연속 이상치 거부 횟수 증가
+                    pm.outlierRejectionCount = (pm.outlierRejectionCount || 0) + 1;
+                    
+                    // 연속 3회 이상 이상치가 감지되면 이전 값 유지
+                    if (pm.outlierRejectionCount >= 3) {
+                        console.warn(`[Training] 파워 이상치 연속 감지 (${pm.outlierRejectionCount}회): raw=${power}W, previous=${previousPower}W, diff=${powerDiff}W - 이전 값 유지`);
+                        finalPower = previousPower;
+                        // 히스토리는 업데이트하지 않음
+                    } else {
+                        console.warn(`[Training] 파워 이상치 감지 (${pm.outlierRejectionCount}회): raw=${power}W, previous=${previousPower}W, diff=${powerDiff}W - 필터링 시도`);
+                        // 이상치이지만 히스토리에 추가 (다음 단계에서 필터링)
+                        pm.powerRawHistory.push(power);
+                        pm.outlierRejectionCount = 0; // 히스토리에 추가했으므로 리셋
+                    }
+                } else {
+                    // 정상 값: 원시 히스토리에 추가
+                    pm.powerRawHistory.push(power);
+                    pm.outlierRejectionCount = 0; // 정상 값이므로 리셋
                 }
-                // 최근 값들의 평균 계산 (가민 스타일)
-                if (pm.powerHistorySmoothed.length > 0) {
-                    const sum = pm.powerHistorySmoothed.reduce((a, b) => a + b, 0);
-                    finalPower = Math.round(sum / pm.powerHistorySmoothed.length);
+                
+                // 히스토리 크기 제한 (최근 10개)
+                if (pm.powerRawHistory.length > 10) {
+                    pm.powerRawHistory.shift();
                 }
+                
+                // 2단계: Median Filter (중앙값 필터 - 노이즈 제거에 효과적)
+                if (pm.powerRawHistory.length >= 5) {
+                    // 최근 5개 값의 중앙값 계산
+                    const recentValues = pm.powerRawHistory.slice(-5).slice().sort((a, b) => a - b);
+                    const medianPower = recentValues[Math.floor(recentValues.length / 2)];
+                    
+                    pm.powerMedianHistory.push(medianPower);
+                    if (pm.powerMedianHistory.length > 5) {
+                        pm.powerMedianHistory.shift();
+                    }
+                    
+                    // 3단계: Exponential Moving Average (EMA) - 가민 스타일 적응형 스무딩
+                    if (pm.powerMedianHistory.length >= 3) {
+                        // 최근 3개 중앙값의 평균
+                        const medianSum = pm.powerMedianHistory.slice(-3).reduce((a, b) => a + b, 0);
+                        const medianAvg = medianSum / 3;
+                        
+                        // 가민 스타일: 적응형 알파 계수 (변화량에 따라 조정)
+                        const changeFromPrevious = Math.abs(medianAvg - previousPower);
+                        let adaptiveAlpha;
+                        
+                        if (changeFromPrevious > 50) {
+                            // 급격한 변화: 빠른 반응 (0.7)
+                            adaptiveAlpha = 0.7;
+                        } else if (changeFromPrevious > 20) {
+                            // 중간 변화: 보통 반응 (0.5)
+                            adaptiveAlpha = 0.5;
+                        } else {
+                            // 완만한 변화: 부드러운 반응 (0.3)
+                            adaptiveAlpha = 0.3;
+                        }
+                        
+                        // EMA 필터 적용
+                        if (pm.powerFiltered === 0 || pm.powerFiltered === undefined) {
+                            pm.powerFiltered = medianAvg;
+                        } else {
+                            pm.powerFiltered = (adaptiveAlpha * medianAvg) + ((1 - adaptiveAlpha) * pm.powerFiltered);
+                        }
+                        
+                        finalPower = Math.round(pm.powerFiltered);
+                    } else {
+                        // 중앙값 히스토리가 부족하면 중앙값 직접 사용
+                        finalPower = Math.round(medianPower);
+                        pm.powerFiltered = medianPower;
+                    }
+                } else {
+                    // 원시 히스토리가 부족하면 원시 값 사용 (초기 단계)
+                    finalPower = power;
+                    pm.powerFiltered = power;
+                }
+                
+                // 4단계: 파워 변화율 제한 (가민 스타일: 급격한 변화 방지)
+                const timeSinceLastChange = pm.lastPowerChangeTime ? (currentTime - pm.lastPowerChangeTime) / 1000.0 : 0.25;
+                const powerChangeRate = Math.abs(finalPower - previousPower) / Math.max(timeSinceLastChange, 0.1);
+                const maxChangeRate = 200; // W/s (가민 스타일: 최대 변화율)
+                
+                if (powerChangeRate > maxChangeRate && previousPower > 0) {
+                    // 변화율이 너무 크면 이전 값과의 중간값 사용
+                    const limitedPower = (finalPower + previousPower) / 2;
+                    console.warn(`[Training] 파워 변화율 제한: rate=${powerChangeRate.toFixed(1)}W/s, raw=${finalPower}W, limited=${limitedPower.toFixed(1)}W`);
+                    finalPower = Math.round(limitedPower);
+                    pm.powerFiltered = limitedPower;
+                }
+                
+                pm.lastPowerChangeTime = currentTime;
             } else if (isValidPower && power === 0) {
                 // 0W는 즉시 반영 (스무딩 없음)
                 finalPower = 0;
-                pm.powerHistorySmoothed = []; // 히스토리 초기화
+                pm.powerFiltered = 0;
+                pm.powerRawHistory = []; // 히스토리 초기화
+                pm.powerMedianHistory = [];
+                pm.outlierRejectionCount = 0;
             }
             
             // 가민 스타일: 타임스탬프 기반 데이터 유효성 검사
@@ -2531,7 +2719,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             
             // 케이던스 또는 파워 중 하나라도 유효하면 업데이트
             if (powerValid || cadenceValid) {
-                console.log(`[Training] 파워미터 데이터 업데이트 (가민 스타일): pm.id=${pm.id}, power=${finalPower} (valid: ${powerValid}, raw: ${power}, smoothed), cadence=${finalCadence} (valid: ${cadenceValid}, raw: ${cadence}, smoothed), heartRate=${pm.heartRate}`);
+                console.log(`[Training] 파워미터 데이터 업데이트 (가민 고급 필터): pm.id=${pm.id}, power=${finalPower} (valid: ${powerValid}, raw: ${power}, filtered: ${pm.powerFiltered}), cadence=${finalCadence} (valid: ${cadenceValid}, raw: ${cadence}), heartRate=${pm.heartRate}`);
                 
                 // 전역 상태 업데이트 및 UI 반영
                 updatePowerMeterData(pm.id, finalPower, pm.heartRate, finalCadence);
