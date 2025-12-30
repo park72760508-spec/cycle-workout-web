@@ -702,11 +702,23 @@ function updatePowerMeterNeedle(powerMeterId, power) {
 
 /**
  * 파워미터 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적)
+ * 연결됨 상태에서 워크아웃 실행 시에만 표시
  */
 function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
     const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
     if (!trailContainer) {
         console.warn(`[PowerMeter] updatePowerMeterTrail: 궤적 컨테이너를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
+        return;
+    }
+
+    // 연결됨 상태이고 워크아웃 실행 중일 때만 궤적 표시
+    const isConnected = powerMeter.connected;
+    const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
+    const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
+    
+    if (!isConnected || !isTrainingRunning || !hasWorkout) {
+        // 조건을 만족하지 않으면 궤적 제거
+        trailContainer.innerHTML = '';
         return;
     }
 
@@ -743,7 +755,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     // 목표 파워 저장
     powerMeter.targetPower = targetPower;
     
-    // 궤적 히스토리 업데이트 (각도 저장)
+    // 궤적 히스토리 업데이트 (각도 저장) - 워크아웃 실행 중일 때만
     if (powerMeter.lastTrailAngle !== null && powerMeter.lastTrailAngle !== currentAngle) {
         // 각도가 변경된 경우에만 히스토리에 추가
         powerMeter.powerTrailHistory.push({
@@ -877,21 +889,34 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   const hasUser = !!(powerMeter.userId);
   const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
   const hasPowerDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId);
+  const hasHeartRateDevice = !!(powerMeter.heartRateDeviceId);
+  const hasAnyDevice = hasPowerDevice || hasHeartRateDevice; // 파워메터/스마트로라/심박계 중 하나라도 있으면
   const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
   
   let statusClass = 'disconnected';
   let statusText = '미연결';
   
-  // 연결 상태 판단
-  if (hasUser && hasReceiver && hasPowerDevice && hasData) {
-    statusClass = 'connected';
-    statusText = '연결됨';
-    powerMeter.connected = true;
-  } else if (hasUser && hasReceiver) {
-    statusClass = 'ready';
-    statusText = '준비됨';
+  // 연결 상태 판단 (새로운 로직)
+  if (!hasUser) {
+    // 사용자 미지정
+    statusClass = 'disconnected';
+    statusText = '미연결';
     powerMeter.connected = false;
+  } else if (hasUser && hasAnyDevice) {
+    // 사용자 지정 + 파워미터/스마트로라/심박계 정보 저장된 상태
+    if (hasReceiver && hasData) {
+      // 수신기 연결 + 데이터 수신 중
+      statusClass = 'connected';
+      statusText = '연결됨';
+      powerMeter.connected = true;
+    } else {
+      // 디바이스 정보는 있지만 수신기 미연결 또는 데이터 미수신
+      statusClass = 'ready';
+      statusText = '준비됨';
+      powerMeter.connected = false;
+    }
   } else {
+    // 사용자 지정만 되어 있고 디바이스 정보 없음
     statusClass = 'disconnected';
     statusText = '미연결';
     powerMeter.connected = false;
@@ -905,6 +930,26 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   
   if (statusTextEl) {
     statusTextEl.textContent = statusText;
+  }
+  
+  // 속도계 모양 아래 파워 정보창 색상 업데이트
+  const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
+  if (infoEl) {
+    // 파워메터/스마트로라/심박계 중 1개 이상 페어링되어 데이터가 수신되면 초록색
+    // 연결이 모두 끊기면 주황색
+    if (hasData && (hasPowerDevice || hasHeartRateDevice)) {
+      // 데이터 수신 중: 초록색
+      infoEl.classList.remove('disconnected', 'warning');
+      infoEl.classList.add('connected');
+    } else if (hasAnyDevice) {
+      // 디바이스는 페어링되어 있지만 데이터 미수신: 주황색
+      infoEl.classList.remove('disconnected', 'connected');
+      infoEl.classList.add('warning');
+    } else {
+      // 디바이스 미페어링: 기본 색상
+      infoEl.classList.remove('connected', 'warning');
+      infoEl.classList.add('disconnected');
+    }
   }
 }
 
@@ -1004,6 +1049,9 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         needleEl.setAttribute('transform', `rotate(${angle})`);
         needleEl.style.visibility = 'visible';
     }
+    
+    // 연결 상태 업데이트 (데이터 수신 상태 반영)
+    updatePowerMeterConnectionStatus(powerMeterId);
 }
 
 /**
