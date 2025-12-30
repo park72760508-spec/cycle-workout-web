@@ -2514,37 +2514,62 @@ function startTrainingTimer() {
       }
       
       // 세그먼트 시간이 지나면 다음 세그먼트로 이동
-      if (segmentElapsed >= segmentDuration && currentIndex < segments.length - 1) {
-        window.indoorTrainingState.currentSegmentIndex = currentIndex + 1;
-        window.indoorTrainingState.segmentStartTime = Date.now();
-        window.indoorTrainingState.segmentElapsedTime = 0;
-        window.indoorTrainingState.segmentCountdownActive = false;
-        
-        // 세그먼트 변경 시 모든 파워미터의 궤적 히스토리 초기화 (연결된 파워미터만)
-        window.indoorTrainingState.powerMeters.forEach(pm => {
-            if (pm.connected) {
-                pm.powerTrailHistory = [];
-                pm.lastTrailAngle = null;
-                // 궤적 컨테이너 초기화 후 목표 파워 궤적 다시 표시
-                const trailContainer = document.getElementById(`needle-path-${pm.id}`);
-                if (trailContainer) {
-                    trailContainer.innerHTML = '';
-                }
-                // 새로운 세그먼트의 목표 파워 궤적 표시를 위해 업데이트
-                const currentPower = pm.currentPower || 0;
-                const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
-                const maxPower = ftp * 2;
-                const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
-                const angle = -90 + (ratio * 180);
-                updatePowerMeterTrail(pm.id, currentPower, angle, pm);
-            }
-        });
-        // 카운트다운 모달 제거
-        const existingModal = document.getElementById('segmentCountdownModal');
-        if (existingModal) {
-          document.body.removeChild(existingModal);
+      if (segmentElapsed >= segmentDuration) {
+        // 모든 세그먼트가 끝났는지 확인
+        if (currentIndex >= segments.length - 1) {
+          // 모든 세그먼트 완료: 워크아웃 종료
+          window.indoorTrainingState.trainingState = 'finished';
+          window.indoorTrainingState.segmentCountdownActive = false;
+          
+          // 카운트다운 모달 제거
+          const existingModal = document.getElementById('segmentCountdownModal');
+          if (existingModal) {
+            document.body.removeChild(existingModal);
+          }
+          
+          // 버튼 상태 업데이트
+          const pauseBtn = document.getElementById('btnPauseTraining');
+          const stopBtn = document.getElementById('btnStopTraining');
+          if (pauseBtn) pauseBtn.disabled = true;
+          if (stopBtn) stopBtn.disabled = false;
+          
+          console.log(`[Training] 워크아웃 완료: 모든 세그먼트 종료 (총 ${segments.length}개 세그먼트)`);
+          
+          // 경과시간 업데이트 중지 (타이머 중지)
+          return; // setTimeout을 실행하지 않아서 타이머 중지
+        } else {
+          // 다음 세그먼트로 이동
+          window.indoorTrainingState.currentSegmentIndex = currentIndex + 1;
+          window.indoorTrainingState.segmentStartTime = Date.now();
+          window.indoorTrainingState.segmentElapsedTime = 0;
+          window.indoorTrainingState.segmentCountdownActive = false;
+          
+          // 세그먼트 변경 시 모든 파워미터의 궤적 히스토리 초기화 (연결된 파워미터만)
+          window.indoorTrainingState.powerMeters.forEach(pm => {
+              if (pm.connected) {
+                  pm.powerTrailHistory = [];
+                  pm.lastTrailAngle = null;
+                  // 궤적 컨테이너 초기화 후 목표 파워 궤적 다시 표시
+                  const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+                  if (trailContainer) {
+                      trailContainer.innerHTML = '';
+                  }
+                  // 새로운 세그먼트의 목표 파워 궤적 표시를 위해 업데이트
+                  const currentPower = pm.currentPower || 0;
+                  const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
+                  const maxPower = ftp * 2;
+                  const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+                  const angle = -90 + (ratio * 180);
+                  updatePowerMeterTrail(pm.id, currentPower, angle, pm);
+              }
+          });
+          // 카운트다운 모달 제거
+          const existingModal = document.getElementById('segmentCountdownModal');
+          if (existingModal) {
+            document.body.removeChild(existingModal);
+          }
+          console.log(`[Training] 세그먼트 전환: ${currentIndex} → ${currentIndex + 1}`);
         }
-        console.log(`[Training] 세그먼트 전환: ${currentIndex} → ${currentIndex + 1}`);
       }
     }
   }
@@ -2556,7 +2581,10 @@ function startTrainingTimer() {
     displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
   }
   
-  setTimeout(startTrainingTimer, 1000);
+  // 워크아웃이 실행 중일 때만 타이머 계속 실행
+  if (window.indoorTrainingState.trainingState === 'running') {
+    setTimeout(startTrainingTimer, 1000);
+  }
 }
 
 /**
