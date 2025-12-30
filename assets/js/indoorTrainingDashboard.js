@@ -725,14 +725,14 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2;
     
-    // 현재 세그먼트 목표 파워 계산
+    // 현재 세그먼트 목표 파워 및 FTP 비율 계산
     let targetPower = 0;
+    let ftpPercent = 100;
     if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
         const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
         const currentSegment = window.indoorTrainingState.currentWorkout.segments[currentSegmentIndex];
         if (currentSegment) {
             const targetValue = currentSegment.target_value || currentSegment.target || '100';
-            let ftpPercent = 100;
             
             if (typeof targetValue === 'string' && targetValue.includes('/')) {
                 const parts = targetValue.split('/');
@@ -748,9 +748,12 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         }
     }
     
-    // 목표 파워 각도 계산
-    const targetRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
-    const targetAngle = -90 + (targetRatio * 180);
+    // FTP 비율에 따른 목표 각도 계산 (FTP 비율을 직접 반영)
+    // FTP 0% = -90도 (시작점), FTP 200% = 90도 (끝점)
+    // FTP 100% = 0도 (중간점)
+    const maxFtpPercent = 200; // 최대 FTP 비율 (속도계 최대값)
+    const ftpRatio = Math.min(Math.max(ftpPercent / maxFtpPercent, 0), 1); // 0~1 범위로 정규화
+    const targetAngle = -90 + (ftpRatio * 180); // -90도부터 90도까지
     
     // 목표 파워 저장
     powerMeter.targetPower = targetPower;
