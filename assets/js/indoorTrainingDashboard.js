@@ -3482,9 +3482,20 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
         const scoreboardContainer = container.closest('.scoreboard-display');
         if (!scoreboardContainer) return;
         
+        // 전광판의 초기 높이를 저장 (세그먼트 그래프가 높이에 영향을 주지 않도록)
+        if (!scoreboardContainer.dataset.initialHeight) {
+            // 세그먼트 그래프를 숨긴 상태에서 초기 높이 측정
+            const originalDisplay = container.style.display;
+            container.style.display = 'none';
+            const initialRect = scoreboardContainer.getBoundingClientRect();
+            scoreboardContainer.dataset.initialHeight = initialRect.height.toString();
+            container.style.display = originalDisplay;
+        }
+        
         const scoreboardRect = scoreboardContainer.getBoundingClientRect();
         const scoreboardWidth = scoreboardRect.width;
-        const scoreboardHeight = scoreboardRect.height;
+        // 초기 높이를 사용하여 세그먼트 그래프가 전광판 높이에 영향을 주지 않도록 함
+        const scoreboardHeight = parseFloat(scoreboardContainer.dataset.initialHeight) || scoreboardRect.height;
         
         // 좌측 경과시간 영역 크기 확인
         const elapsedTimeItem = scoreboardContainer.querySelector('.scoreboard-item:first-child');
@@ -3522,6 +3533,8 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
         container.style.maxHeight = `${maxHeight}px`;
         container.style.overflow = 'hidden'; // 넘치는 내용 숨김
         container.style.flexShrink = '0'; // 축소 방지
+        container.style.flexGrow = '0'; // 확장 방지
+        container.style.alignSelf = 'stretch'; // 전광판 높이에 맞춤
         
         // 내부 그래프 컨테이너도 높이 제한
         const graphContainer = container.querySelector('.scoreboard-segment-graph-container');
@@ -3529,6 +3542,7 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
             graphContainer.style.height = `${maxHeight}px`;
             graphContainer.style.maxHeight = `${maxHeight}px`;
             graphContainer.style.overflow = 'hidden';
+            graphContainer.style.flexShrink = '0'; // 축소 방지
         }
         
         // 세그먼트 그래프를 전광판 크기에 맞춰 그리기 (현재 세그먼트 인덱스 전달)
@@ -3775,7 +3789,9 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         ctx.fillRect(x, y, segWidth, powerHeight);
         
         // 현재 세그먼트에 흰색 네온 효과 추가 (훈련 화면과 동일한 방식)
-        if (isCurrent && currentSegmentIndex >= 0) {
+        // 시작 버튼 클릭 후에만 네온 효과 적용 (trainingState === 'running')
+        const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
+        if (isCurrent && currentSegmentIndex >= 0 && isTrainingRunning) {
             // 세그먼트 진행률 계산 (0~1)
             let segmentProgress = 0;
             if (window.indoorTrainingState && window.indoorTrainingState.segmentElapsedTime !== undefined) {
