@@ -1979,7 +1979,8 @@ function renderPairingDeviceList(targetType) {
           }
           const statusSpan = item.querySelector('.device-status');
           if (statusSpan) {
-            statusSpan.innerHTML = `<span style="font-size:11px; color:#dc3545;">⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중</span>`;
+            const trackId = pairedTrack?.id || '?';
+            statusSpan.innerHTML = `<span style="font-size:11px; color:#dc3545;">⚠️ 트랙${trackId}에서 사용 중</span>`;
           }
         } else {
           item.style.borderColor = '#007bff';
@@ -2027,10 +2028,14 @@ function renderPairingDeviceList(targetType) {
         };
       }
       
+      // 중첩 템플릿 리터럴 문제 해결: 내부 템플릿을 변수로 분리
+      const statusText = isPaired ? `⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중` : '신호 감지됨';
+      const statusColor = isPaired ? '#dc3545' : '#28a745';
+      
       item.innerHTML = `
         <div style="display:flex; flex-direction:column;">
           <span style="font-weight:bold; color:${isPaired ? '#721c24' : '#0056b3'}; font-size:14px;">${deviceName} (ID: ${d.id})</span>
-          <span class="device-status" style="font-size:11px; color:${isPaired ? '#dc3545' : '#28a745';">${isPaired ? `⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중` : '신호 감지됨'}</span>
+          <span class="device-status" style="font-size:11px; color:${statusColor};">${statusText}</span>
         </div>
         <button class="btn btn-sm ${isPaired ? 'btn-secondary' : 'btn-primary'}" ${isPaired ? 'disabled' : ''} style="pointer-events:none;">${isPaired ? '사용 중' : '선택'}</button>
       `;
