@@ -2149,17 +2149,37 @@ function startTrainingWithCountdown() {
   
   // 카운트다운 시작 (5, 4, 3, 2, 1, GO!!)
   let count = 5;
-  const countdownInterval = setInterval(() => {
+  
+  // 초기 표시 및 첫 번째 삐 소리
+  countdownText.textContent = count.toString();
+  if (typeof playBeep === 'function') {
+    playBeep(880, 120, 0.25);
+  }
+  
+  const countdownInterval = setInterval(async () => {
+    count--;
+    
     if (count > 0) {
+      // 4, 3, 2, 1초일 때 - 일반 삐 소리
       countdownText.textContent = count.toString();
       countdownText.style.animation = 'none';
       setTimeout(() => {
         countdownText.style.animation = 'countdownPulse 0.5s ease-out';
       }, 10);
-      count--;
+      if (typeof playBeep === 'function') {
+        playBeep(880, 120, 0.25);
+      }
     } else if (count === 0) {
+      // GO!!일 때 - 강조 삐 소리
       countdownText.textContent = 'GO!!';
       countdownText.style.animation = 'countdownPulse 0.5s ease-out';
+      if (typeof playBeep === 'function') {
+        try {
+          await playBeep(1500, 700, 0.35, 'square');
+        } catch (e) {
+          console.warn('Failed to play beep:', e);
+        }
+      }
       count--;
     } else {
       clearInterval(countdownInterval);
@@ -2333,6 +2353,12 @@ function showSegmentCountdown(remainingSeconds) {
   
   // 카운트다운 업데이트
   let count = Math.ceil(remainingSeconds);
+  
+  // 초기 표시 및 첫 번째 삐 소리
+  if (typeof playBeep === 'function') {
+    playBeep(880, 120, 0.25);
+  }
+  
   const countdownInterval = setInterval(() => {
     const currentRemaining = calculateSegmentRemainingTime();
     const newCount = Math.ceil(currentRemaining);
@@ -2344,6 +2370,10 @@ function showSegmentCountdown(remainingSeconds) {
       setTimeout(() => {
         countdownText.style.animation = 'countdownPulse 0.3s ease-out';
       }, 10);
+      // 카운트다운 소리 재생
+      if (typeof playBeep === 'function') {
+        playBeep(880, 120, 0.25);
+      }
     } else if (newCount <= 0 || newCount > 5) {
       clearInterval(countdownInterval);
       if (countdownModal.parentNode) {
