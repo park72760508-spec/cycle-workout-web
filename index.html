@@ -2456,10 +2456,10 @@
 
     <!-- 전광판 스타일 통계 (훈련 전광판) -->
     <div class="scoreboard-display">
-      <div class="scoreboard-item" style="align-items: flex-start; text-align: left; flex: 0 0 auto; position: relative;">
-        <div class="scoreboard-value" style="position: relative;">
+      <div class="scoreboard-item" style="align-items: flex-start; text-align: left; flex: 0 0 auto; display: flex; flex-direction: row; align-items: center; gap: 10px;">
+        <div class="scoreboard-label" style="margin: 0; white-space: nowrap;">경과시간</div>
+        <div class="scoreboard-value" style="margin: 0;">
           <span id="trainingElapsedTime" class="digital-number">00:00:00</span>
-          <div class="scoreboard-label" style="position: absolute; left: 0; top: 50%; transform: translateY(-50%); margin: 0; white-space: nowrap;">경과시간</div>
         </div>
       </div>
       <div class="scoreboard-item" id="lapCountdownItem" style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center;">
