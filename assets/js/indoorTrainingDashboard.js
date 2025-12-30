@@ -3545,27 +3545,62 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
     ctx.stroke();
     
-    // Y축 FTP % 값 표기 (0%, 50%, FTP(100%), 150%, 200%)
+    // Y축 FTP % 값 표기 (0, 0.5, FTP, 1.5, 2)
     const yAxisLabels = [
-        { value: 0, label: '0%' },
-        { value: 50, label: '50%' },
-        { value: 100, label: 'FTP' },
-        { value: 150, label: '150%' },
-        { value: 200, label: '200%' }
+        { value: 0, label: '0', isFTP: false },
+        { value: 50, label: '0.5', isFTP: false },
+        { value: 100, label: 'FTP', isFTP: true },
+        { value: 150, label: '1.5', isFTP: false },
+        { value: 200, label: '2', isFTP: false }
     ];
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = '9px sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     
-    yAxisLabels.forEach(({ value: ftpPercent, label }) => {
+    yAxisLabels.forEach(({ value: ftpPercent, label, isFTP }) => {
         // FTP %에 따른 Y 위치 계산 (200%를 최대값으로)
         const maxFtpPercent = 200;
         const yRatio = ftpPercent / maxFtpPercent;
         const y = padding.top + chartHeight - (yRatio * chartHeight);
         
-        // 라벨 위치 (축 왼쪽)
-        ctx.fillText(label, padding.left - 8, y);
+        // FTP 라벨은 둥근네모상자(투명 주황색 바탕)로 표기
+        if (isFTP) {
+            // 텍스트 크기 측정
+            ctx.font = '9px sans-serif';
+            const textMetrics = ctx.measureText(label);
+            const textWidth = textMetrics.width;
+            const textHeight = 12; // 폰트 크기 기준 높이
+            const paddingX = 6;
+            const paddingY = 3;
+            const boxWidth = textWidth + paddingX * 2;
+            const boxHeight = textHeight + paddingY * 2;
+            const boxX = padding.left - 8 - boxWidth;
+            const boxY = y - boxHeight / 2;
+            
+            // 둥근네모상자 그리기 (투명 주황색 바탕)
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.3)'; // 투명 주황색
+            ctx.beginPath();
+            const radius = 4;
+            ctx.moveTo(boxX + radius, boxY);
+            ctx.lineTo(boxX + boxWidth - radius, boxY);
+            ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+            ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+            ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+            ctx.lineTo(boxX + radius, boxY + boxHeight);
+            ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+            ctx.lineTo(boxX, boxY + radius);
+            ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 텍스트 그리기
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fillText(label, padding.left - 8, y);
+        } else {
+            // 일반 라벨 (0, 0.5, 1.5, 2)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText(label, padding.left - 8, y);
+        }
         
         // FTP(100%) 라인에 주황색 작은 점선 가이드 라인 표기
         if (ftpPercent === 100) {
@@ -3600,6 +3635,14 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 원래 색상 복원
         }
     });
+    
+    // Y축 라벨 아래에 "X 100%" 표기
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = '7px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    const x100LabelY = padding.top + chartHeight + 5; // X축 아래 5px
+    ctx.fillText('X 100%', padding.left - 8, x100LabelY);
     
     // 세그먼트 그리기
     let currentTime = 0;
