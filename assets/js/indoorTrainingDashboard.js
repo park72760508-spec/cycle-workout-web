@@ -3497,25 +3497,11 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
         // 초기 높이를 사용하여 세그먼트 그래프가 전광판 높이에 영향을 주지 않도록 함
         const scoreboardHeight = parseFloat(scoreboardContainer.dataset.initialHeight) || scoreboardRect.height;
         
-        // 좌측 경과시간 영역 크기 확인
-        const elapsedTimeItem = scoreboardContainer.querySelector('.scoreboard-item:first-child');
-        const elapsedTimeRect = elapsedTimeItem ? elapsedTimeItem.getBoundingClientRect() : null;
-        const elapsedTimeWidth = elapsedTimeRect ? elapsedTimeRect.width : 150; // 기본값 150px
-        
-        // 중앙 랩카운트다운 영역 크기 확인
-        const lapCountdownItem = document.getElementById('lapCountdownItem');
-        const lapCountdownRect = lapCountdownItem ? lapCountdownItem.getBoundingClientRect() : null;
-        const lapCountdownWidth = lapCountdownRect ? lapCountdownRect.width : 200; // 기본값 200px
-        const lapCountdownLeft = lapCountdownRect ? lapCountdownRect.left - scoreboardRect.left : scoreboardWidth / 2;
-        const lapCountdownRight = lapCountdownLeft + lapCountdownWidth;
-        
-        // 우측 세그먼트 그래프가 사용할 수 있는 최대 너비 계산
-        // 랩카운트다운의 오른쪽 끝에서 전광판 오른쪽 끝까지의 거리
-        // 랩카운트다운 폰트 길이에 영향을 미치지 않도록 충분한 여백 확보
-        const marginFromCountdown = 30; // 랩카운트다운과의 최소 여백
+        // 세그먼트 그래프 크기: 전광판 가로 길이의 1/3 범위에서 최대로 채우기
+        const targetWidthRatio = 1 / 3; // 전광판 가로 길이의 1/3
         const marginFromRight = 20; // 전광판 오른쪽 끝과의 여백
-        const availableWidth = scoreboardWidth - lapCountdownRight - marginFromCountdown - marginFromRight;
-        const maxWidth = Math.max(250, availableWidth); // 최소 250px (더 크게)
+        const calculatedMaxWidth = scoreboardWidth * targetWidthRatio - marginFromRight;
+        const maxWidth = Math.max(250, calculatedMaxWidth); // 최소 250px 보장
         
         // 전광판 높이를 넘지 않는 최대 높이 계산
         // 전광판 높이에 영향을 주지 않는 범위에서 최대한 크게
