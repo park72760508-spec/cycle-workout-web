@@ -212,9 +212,6 @@ function initIndoorTrainingDashboard() {
   // 전광판 초기화
   updateScoreboard();
   
-  // 세그먼트 그래프 초기화
-  initSegmentGraph();
-  
   // 사용자 FTP 로드
   loadUserFTP();
   
@@ -838,35 +835,20 @@ function calculateSegmentRemainingTime() {
 }
 
 /**
- * 세그먼트 그래프 초기화
+ * 세그먼트 그래프 초기화 (사용 안 함 - 가운데 그래프 삭제됨)
  */
 function initSegmentGraph() {
-  const canvas = document.getElementById('trainingSegmentGraphCanvas');
-  if (!canvas) return;
-  
-  // 캔버스 크기 설정
-  canvas.width = canvas.offsetWidth || 400;
-  canvas.height = canvas.offsetHeight || 100;
-  
-  // 그래프 그리기
-  drawSegmentGraph();
+  // 가운데 세그먼트 그래프는 완전히 삭제되었으므로 아무 작업도 하지 않음
+  return;
 }
 
 /**
- * 세그먼트 그래프 그리기 (훈련 화면과 동일한 형식)
- * workoutManager.js의 drawSegmentGraph 함수 사용
+ * 세그먼트 그래프 그리기 (사용 안 함 - 가운데 그래프 제거됨)
+ * 우측 그래프만 사용하므로 이 함수는 호출하지 않음
  */
 function drawTrainingSegmentGraph() {
-  if (!window.indoorTrainingState.currentWorkout) return;
-  
-  const segments = window.indoorTrainingState.currentWorkout.segments || [];
-  if (segments.length === 0) return;
-  
-  // workoutManager.js의 drawSegmentGraph 함수 사용
-  if (typeof drawSegmentGraph === 'function') {
-    const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex;
-    drawSegmentGraph(segments, currentSegmentIndex, 'trainingSegmentGraphCanvas');
-  }
+  // 가운데 세그먼트 그래프는 사용하지 않음 (우측 그래프만 사용)
+  return;
 }
 
 /**
@@ -2142,7 +2124,32 @@ function startTrainingTimer() {
   }
   
   updateScoreboard();
-  drawTrainingSegmentGraph();
+  
+  // 세그먼트 전환 체크 (세그먼트 시간이 지나면 다음 세그먼트로 이동)
+  if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
+    const segments = window.indoorTrainingState.currentWorkout.segments;
+    const currentIndex = window.indoorTrainingState.currentSegmentIndex;
+    const currentSegment = segments[currentIndex];
+    
+    if (currentSegment) {
+      const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
+      const segmentElapsed = window.indoorTrainingState.segmentElapsedTime;
+      
+      // 세그먼트 시간이 지나면 다음 세그먼트로 이동
+      if (segmentElapsed >= segmentDuration && currentIndex < segments.length - 1) {
+        window.indoorTrainingState.currentSegmentIndex = currentIndex + 1;
+        window.indoorTrainingState.segmentStartTime = Date.now();
+        window.indoorTrainingState.segmentElapsedTime = 0;
+        console.log(`[Training] 세그먼트 전환: ${currentIndex} → ${currentIndex + 1}`);
+      }
+    }
+  }
+  
+  // 우측 세그먼트 그래프 업데이트 (현재 세그먼트 강조)
+  if (window.indoorTrainingState.currentWorkout) {
+    const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex;
+    displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
+  }
   
   setTimeout(startTrainingTimer, 1000);
 }
@@ -3365,7 +3372,7 @@ async function selectWorkoutForTraining(workoutId) {
         closeWorkoutSelectionModal();
         
         // 전광판 우측에 세그먼트 그래프 표시
-        displayWorkoutSegmentGraph(workout);
+        displayWorkoutSegmentGraph(workout, -1); // 워크아웃 선택 시에는 현재 세그먼트 없음
         
         if (typeof showToast === 'function') {
             showToast(`"${workout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
@@ -3394,8 +3401,10 @@ async function selectWorkoutForTraining(workoutId) {
 
 /**
  * 전광판 우측에 워크아웃 세그먼트 그래프 표시
+ * @param {Object} workout - 워크아웃 객체
+ * @param {number} currentSegmentIndex - 현재 세그먼트 인덱스 (-1이면 선택 안됨)
  */
-function displayWorkoutSegmentGraph(workout) {
+function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
     const container = document.getElementById('selectedWorkoutSegmentGraphContainer');
     if (!container) return;
     
@@ -3420,12 +3429,12 @@ function displayWorkoutSegmentGraph(workout) {
         const maxWidth = containerRect.width || 300; // 기본값 300px
         const maxHeight = containerRect.height || 120; // 기본값 120px (scoreboard-segment-graph-container의 min-height)
         
-        // 세그먼트 그래프를 전광판 크기에 맞춰 그리기
+        // 세그먼트 그래프를 전광판 크기에 맞춰 그리기 (현재 세그먼트 인덱스 전달)
         if (typeof drawSegmentGraphForScoreboard === 'function') {
-            drawSegmentGraphForScoreboard(workout.segments, -1, 'selectedWorkoutSegmentGraphCanvas', maxWidth, maxHeight);
+            drawSegmentGraphForScoreboard(workout.segments, currentSegmentIndex, 'selectedWorkoutSegmentGraphCanvas', maxWidth, maxHeight);
         } else if (typeof drawSegmentGraph === 'function') {
             // 기본 drawSegmentGraph 함수 사용하되, canvas 크기를 제한
-            drawSegmentGraph(workout.segments, -1, 'selectedWorkoutSegmentGraphCanvas');
+            drawSegmentGraph(workout.segments, currentSegmentIndex, 'selectedWorkoutSegmentGraphCanvas');
             
             // Canvas 크기를 전광판에 맞게 조정
             canvas.style.maxWidth = `${maxWidth}px`;
@@ -3610,10 +3619,59 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         ctx.fillStyle = segmentColor;
         ctx.fillRect(x, y, segWidth, powerHeight);
         
-        // 세그먼트 경계선
-        ctx.strokeStyle = segmentStrokeColor;
-        ctx.lineWidth = isCurrent ? 2 : 1;
-        ctx.strokeRect(x, y, segWidth, powerHeight);
+        // 현재 세그먼트에 흰색 네온 효과 추가 (훈련 화면과 동일한 방식)
+        if (isCurrent && currentSegmentIndex >= 0) {
+            // 세그먼트 진행률 계산 (0~1)
+            let segmentProgress = 0;
+            if (window.indoorTrainingState && window.indoorTrainingState.segmentElapsedTime !== undefined) {
+                const segmentDuration = segDuration || 0;
+                if (segmentDuration > 0) {
+                    segmentProgress = Math.min(1, Math.max(0, window.indoorTrainingState.segmentElapsedTime / segmentDuration));
+                }
+            }
+            
+            // 진행된 부분의 너비 계산
+            const progressWidth = segWidth * segmentProgress;
+            
+            // 전체 세그먼트 경계선 (흰색 네온 효과)
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(x, y, segWidth, powerHeight);
+            
+            // 진행된 부분에 더 강한 흰색 네온 효과 (훈련 화면의 progress-fill 네온 효과와 동일)
+            if (progressWidth > 0) {
+                // 진행된 부분의 사각형 그리기 (흰색 네온 글로우)
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(x, y, progressWidth, powerHeight);
+                
+                // 진행된 부분의 경계선 (더 강한 네온 효과)
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, progressWidth, powerHeight);
+            }
+            
+            // 내부 흰색 네온 효과 (전체 세그먼트)
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x + 1, y + 1, segWidth - 2, powerHeight - 2);
+            
+            // 그림자 효과 리셋
+            ctx.shadowBlur = 0;
+            ctx.shadowColor = 'transparent';
+        } else {
+            // 일반 세그먼트 경계선
+            ctx.strokeStyle = segmentStrokeColor;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, segWidth, powerHeight);
+        }
         
         currentTime += segDuration;
     });
