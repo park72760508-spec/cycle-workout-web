@@ -723,7 +723,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     }
 
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
-    const maxPower = ftp * 2;
+    const maxPower = ftp * 2; // 바늘 각도 계산과 동일한 maxPower 사용
     
     // 현재 세그먼트 목표 파워 및 FTP 비율 계산
     let targetPower = 0;
@@ -748,13 +748,13 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         }
     }
     
-    // FTP 비율에 따른 목표 각도 계산 (FTP 비율을 직접 반영)
-    // FTP 0% = -90도 (바늘의 시작 위치), FTP 200% = 90도 (끝점)
-    // FTP 100% = 0도 (중간점)
-    // -90도에서 시작하여 90도 방향으로 FTP 비율만큼 표시
-    const maxFtpPercent = 200; // 최대 FTP 비율 (속도계 최대값)
-    const ftpRatio = Math.min(Math.max(ftpPercent / maxFtpPercent, 0), 1); // 0~1 범위로 정규화
-    const targetAngle = -90 + (ftpRatio * 180); // -90도부터 90도까지 (FTP 비율에 따라)
+    // FTP 비율에 따른 목표 각도 계산 (바늘 각도 계산과 동일한 로직 사용)
+    // 바늘 각도: angle = -90 + (power / maxPower) * 180
+    // 목표 파워: targetPower = (ftp * ftpPercent) / 100
+    // 목표 각도: targetAngle = -90 + (targetPower / maxPower) * 180
+    // 이렇게 하면 바늘이 targetPower일 때의 각도와 정확히 일치함
+    const targetPowerRatio = Math.min(Math.max(targetPower / maxPower, 0), 1); // 0~1 범위로 정규화
+    const targetAngle = -90 + (targetPowerRatio * 180); // -90도부터 90도까지 (바늘 각도 계산과 동일)
     
     // 목표 파워 저장
     powerMeter.targetPower = targetPower;
