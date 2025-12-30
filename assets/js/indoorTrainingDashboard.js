@@ -2878,9 +2878,13 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     }
                 }
                 
-                // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (더 정확, 이상치 감지 강화)
-                // Quarq 파워메터는 누적 파워를 정확하게 제공하므로 이를 우선 사용
+                // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (시마노 파워메터 안정화)
+                // 시마노 파워메터: 케이던스가 0이거나 매우 낮으면 파워도 0으로 처리
                 let calculatedPower = -1;
+                
+                // 시마노 파워메터 안정화: 케이던스가 5 RPM 이하이면 파워를 0으로 처리
+                const isPedalingStopped = (cadence !== -1 && cadence <= 5);
+                
                 if (antData.length > 5) {
                     const accumulatedPowerLSB = antData[4];
                     const accumulatedPowerMSB = antData[5];
@@ -2898,37 +2902,51 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         if (timeDiff >= minTimeDiff && timeDiff < maxTimeDiff) {
                             const powerDiff = accumulatedPowerW - pm.lastAccumulatedPower;
                             
-                            // 가민 스타일: 누적 파워 차이가 음수면 오버플로우로 간주 (65536 * 0.25 = 16384W 오버플로우)
-                            let actualPowerDiff = powerDiff;
-                            if (powerDiff < 0) {
-                                // 오버플로우 처리: 16384W (65536 * 0.25)를 더함
-                                actualPowerDiff = powerDiff + 16384.0;
-                                console.log(`[Training] Page 0x10: 누적 파워 오버플로우 감지, 보정: ${powerDiff.toFixed(2)}W → ${actualPowerDiff.toFixed(2)}W`);
-                            }
-                            
-                            const rawCalculatedPower = actualPowerDiff / timeDiff;
-                            
-                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증 (더 관대한 임계값)
-                            const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
-                            const calculatedPowerDiff = Math.abs(rawCalculatedPower - previousFilteredPower);
-                            // Quarq 파워메터를 위해 최대 변화량을 250W로 증가 (급격한 변화 허용)
-                            const maxAllowedChangeFromAccumulated = 250; // 누적 파워 기반 계산값의 최대 변화량
-                            
-                            // 계산된 파워가 유효 범위 내이고, 이전 값과의 차이가 합리적인 범위 내인지 확인
-                            if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
-                                if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
-                                    // 정상 범위 내: 반올림하여 사용
-                                    calculatedPower = Math.round(rawCalculatedPower);
-                                    console.log(`[Training] Page 0x10: 누적 파워 기반 계산 (Quarq/시마노/스램/SRM 호환): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W, timeDiff: ${timeDiff.toFixed(3)}s)`);
-                                } else {
-                                    // 이상치: 이전 값과의 중간값 사용 (더 부드러운 전환)
-                                    const smoothingFactor = 0.6; // 60% 새 값, 40% 이전 값
-                                    const limitedPower = (smoothingFactor * rawCalculatedPower) + ((1 - smoothingFactor) * previousFilteredPower);
-                                    calculatedPower = Math.round(limitedPower);
-                                    console.warn(`[Training] 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${calculatedPowerDiff.toFixed(1)}W - 스무딩 적용: ${calculatedPower}W`);
-                                }
+                            // 시마노 파워메터 안정화: 페달이 멈춘 상태에서는 파워를 0으로 처리
+                            if (isPedalingStopped) {
+                                calculatedPower = 0;
+                                // 누적 파워도 현재 값으로 업데이트 (변화 없음)
+                                pm.lastAccumulatedPower = accumulatedPowerW;
+                                pm.lastAccumulatedPowerTime = currentTime;
+                                console.log(`[Training] Page 0x10: 페달 정지 감지 (케이던스: ${cadence} RPM), 파워 0으로 처리`);
                             } else {
-                                calculatedPower = -1;
+                                // 가민 스타일: 누적 파워 차이가 음수면 오버플로우로 간주 (65536 * 0.25 = 16384W 오버플로우)
+                                // 단, 케이던스가 정상 범위일 때만 오버플로우로 간주
+                                let actualPowerDiff = powerDiff;
+                                if (powerDiff < 0 && cadence > 10) {
+                                    // 오버플로우 처리: 16384W (65536 * 0.25)를 더함 (케이던스가 정상일 때만)
+                                    actualPowerDiff = powerDiff + 16384.0;
+                                    console.log(`[Training] Page 0x10: 누적 파워 오버플로우 감지, 보정: ${powerDiff.toFixed(2)}W → ${actualPowerDiff.toFixed(2)}W`);
+                                } else if (powerDiff < 0 && cadence <= 10) {
+                                    // 케이던스가 낮은 상태에서 음수 차이는 페달 정지로 간주
+                                    actualPowerDiff = 0;
+                                    console.log(`[Training] Page 0x10: 낮은 케이던스에서 음수 파워 차이 감지, 페달 정지로 간주: ${powerDiff.toFixed(2)}W`);
+                                }
+                                
+                                const rawCalculatedPower = actualPowerDiff / timeDiff;
+                                
+                                // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증
+                                const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                                const calculatedPowerDiff = Math.abs(rawCalculatedPower - previousFilteredPower);
+                                // 시마노 파워메터를 위해 최대 변화량을 200W로 설정 (안정성 우선)
+                                const maxAllowedChangeFromAccumulated = 200; // 누적 파워 기반 계산값의 최대 변화량
+                                
+                                // 계산된 파워가 유효 범위 내이고, 이전 값과의 차이가 합리적인 범위 내인지 확인
+                                if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
+                                    if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
+                                        // 정상 범위 내: 반올림하여 사용
+                                        calculatedPower = Math.round(rawCalculatedPower);
+                                        console.log(`[Training] Page 0x10: 누적 파워 기반 계산 (시마노 안정화): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W, timeDiff: ${timeDiff.toFixed(3)}s, cadence: ${cadence} RPM)`);
+                                    } else {
+                                        // 이상치: 이전 값과의 중간값 사용 (더 부드러운 전환)
+                                        const smoothingFactor = 0.5; // 50% 새 값, 50% 이전 값 (안정성 강화)
+                                        const limitedPower = (smoothingFactor * rawCalculatedPower) + ((1 - smoothingFactor) * previousFilteredPower);
+                                        calculatedPower = Math.round(limitedPower);
+                                        console.warn(`[Training] 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${calculatedPowerDiff.toFixed(1)}W - 스무딩 적용: ${calculatedPower}W`);
+                                    }
+                                } else {
+                                    calculatedPower = -1;
+                                }
                             }
                         } else if (timeDiff < minTimeDiff) {
                             // 시간 차이가 너무 짧으면 이전 값 유지 (노이즈 제거)
@@ -2949,35 +2967,44 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 
                 // 순간 파워 추출 (Byte 6-7, LSB-MSB)
-                // Quarq 파워메터는 순간 파워도 제공하지만, 누적 파워 기반 계산이 더 정확
+                // 시마노 파워메터 안정화: 케이던스가 0이거나 매우 낮으면 순간 파워도 0으로 처리
                 let instantaneousPower = -1;
                 if (antData.length > 7) {
                     const powerLSB = antData[6];
                     const powerMSB = antData[7];
                     const rawPower = powerLSB | (powerMSB << 8);
                     
-                    // 가민 스타일: 파워값 유효성 검사 (0-2000W 범위)
-                    if (rawPower >= 0 && rawPower <= 2000) {
-                        // 가민 스타일: 순간 파워도 이전 값과 비교하여 이상치 검증
-                        const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
-                        const instantPowerDiff = Math.abs(rawPower - previousFilteredPower);
-                        const maxAllowedChangeFromInstant = 150; // 순간 파워의 최대 변화량
-                        
-                        if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
-                            instantaneousPower = rawPower;
-                            console.log(`[Training] Page 0x10: 순간 파워 추출 (Quarq/시마노 호환): ${instantaneousPower}W`);
-                        } else {
-                            // 이상치: 이전 값과의 중간값 사용
-                            const limitedPower = (rawPower + previousFilteredPower) / 2;
-                            instantaneousPower = Math.round(limitedPower);
-                            console.warn(`[Training] 순간 파워 이상치 감지: raw=${rawPower}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${instantPowerDiff.toFixed(1)}W - 제한 적용: ${instantaneousPower}W`);
+                    // 시마노 파워메터 안정화: 페달이 멈춘 상태에서는 순간 파워도 0으로 처리
+                    if (isPedalingStopped) {
+                        instantaneousPower = 0;
+                        console.log(`[Training] Page 0x10: 페달 정지 감지, 순간 파워 0으로 처리 (raw: ${rawPower}W, cadence: ${cadence} RPM)`);
+                    } else {
+                        // 가민 스타일: 파워값 유효성 검사 (0-2000W 범위)
+                        if (rawPower >= 0 && rawPower <= 2000) {
+                            // 가민 스타일: 순간 파워도 이전 값과 비교하여 이상치 검증
+                            const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                            const instantPowerDiff = Math.abs(rawPower - previousFilteredPower);
+                            const maxAllowedChangeFromInstant = 150; // 순간 파워의 최대 변화량
+                            
+                            if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
+                                instantaneousPower = rawPower;
+                                console.log(`[Training] Page 0x10: 순간 파워 추출 (시마노 안정화): ${instantaneousPower}W (cadence: ${cadence} RPM)`);
+                            } else {
+                                // 이상치: 이전 값과의 중간값 사용
+                                const limitedPower = (rawPower + previousFilteredPower) / 2;
+                                instantaneousPower = Math.round(limitedPower);
+                                console.warn(`[Training] 순간 파워 이상치 감지: raw=${rawPower}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${instantPowerDiff.toFixed(1)}W - 제한 적용: ${instantaneousPower}W`);
+                            }
                         }
                     }
                 }
                 
                 // 가민 스타일: 누적 파워로 계산한 값이 있으면 우선 사용, 없으면 순간 파워 사용
-                // Quarq 파워메터는 누적 파워 기반 계산이 더 정확하므로 우선순위가 높음
-                if (calculatedPower >= 0) {
+                // 시마노 파워메터: 페달 정지 시 0으로 처리 우선
+                if (isPedalingStopped) {
+                    power = 0;
+                    console.log(`[Training] Page 0x10: 최종 파워 (페달 정지): ${power}W (cadence: ${cadence} RPM)`);
+                } else if (calculatedPower >= 0) {
                     power = calculatedPower;
                     console.log(`[Training] Page 0x10: 최종 파워 (누적 기반): ${power}W`);
                 } else if (instantaneousPower >= 0) {
