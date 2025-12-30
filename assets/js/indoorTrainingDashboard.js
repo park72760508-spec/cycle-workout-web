@@ -1939,9 +1939,70 @@ function renderPairingDeviceList(targetType) {
   // window.antState.foundDevices에서 해당 타입 기기만 추출
   const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
   
+  // 스크롤 위치 저장
+  const scrollTop = listEl.scrollTop;
+  
   if (devices.length > 0) {
-    // 검색 중 메시지 대신 기기 목록으로 교체
-    listEl.innerHTML = devices.map(d => {
+    // 기존 아이템들을 data-device-id로 추적
+    const existingItems = Array.from(listEl.querySelectorAll('.ant-device-item'));
+    const existingIds = new Set(existingItems.map(item => item.getAttribute('data-device-id')));
+    const newDevices = devices.filter(d => !existingIds.has(String(d.id)));
+    
+    // 기존 아이템 업데이트 (페어링 상태 변경 등)
+    existingItems.forEach(item => {
+      const deviceId = item.getAttribute('data-device-id');
+      const device = devices.find(d => String(d.id) === deviceId);
+      if (device) {
+        const isPaired = isDeviceAlreadyPaired(device.id, deviceType, powerMeterId);
+        const pairedTrack = isPaired ? window.indoorTrainingState.powerMeters.find(pm => {
+          if (pm.id === powerMeterId) return false;
+          if (deviceType === 'trainer' && pm.trainerDeviceId && String(pm.trainerDeviceId) === String(device.id)) return true;
+          if (deviceType === 'power' && pm.deviceId && String(pm.deviceId) === String(device.id)) return true;
+          if (deviceType === 'heart' && pm.heartRateDeviceId && String(pm.heartRateDeviceId) === String(device.id)) return true;
+          return false;
+        }) : null;
+        
+        const deviceName = (targetType === 0x78) ? '심박계' : (targetType === 0x0B) ? '파워미터' : '스마트로라';
+        
+        // 상태에 따라 스타일 업데이트
+        if (isPaired) {
+          item.style.borderColor = '#dc3545';
+          item.style.backgroundColor = '#f8d7da';
+          item.style.cursor = 'not-allowed';
+          item.style.opacity = '0.6';
+          item.onclick = null; // 클릭 이벤트 제거
+          const btn = item.querySelector('button');
+          if (btn) {
+            btn.className = 'btn btn-sm btn-secondary';
+            btn.disabled = true;
+            btn.textContent = '사용 중';
+          }
+          const statusSpan = item.querySelector('.device-status');
+          if (statusSpan) {
+            statusSpan.innerHTML = `<span style="font-size:11px; color:#dc3545;">⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중</span>`;
+          }
+        } else {
+          item.style.borderColor = '#007bff';
+          item.style.backgroundColor = '#f0f7ff';
+          item.style.cursor = 'pointer';
+          item.style.opacity = '1';
+          item.onclick = () => selectDeviceForInput(device.id, targetType);
+          const btn = item.querySelector('button');
+          if (btn) {
+            btn.className = 'btn btn-sm btn-primary';
+            btn.disabled = false;
+            btn.textContent = '선택';
+          }
+          const statusSpan = item.querySelector('.device-status');
+          if (statusSpan) {
+            statusSpan.innerHTML = '<span style="font-size:11px; color:#28a745;">신호 감지됨</span>';
+          }
+        }
+      }
+    });
+    
+    // 새 디바이스만 추가 (깜빡임 최소화)
+    newDevices.forEach(d => {
       const isPaired = isDeviceAlreadyPaired(d.id, deviceType, powerMeterId);
       const pairedTrack = isPaired ? window.indoorTrainingState.powerMeters.find(pm => {
         if (pm.id === powerMeterId) return false;
@@ -1953,19 +2014,43 @@ function renderPairingDeviceList(targetType) {
       
       const deviceName = (targetType === 0x78) ? '심박계' : (targetType === 0x0B) ? '파워미터' : '스마트로라';
       
-      return `
-        <div class="ant-device-item" ${!isPaired ? `onclick="selectDeviceForInput('${d.id}', '${targetType}')"` : ''}
-             style="padding:12px; border:1px solid ${isPaired ? '#dc3545' : '#007bff'}; background:${isPaired ? '#f8d7da' : '#f0f7ff'}; border-radius:8px; margin-bottom:8px; ${!isPaired ? 'cursor:pointer;' : ''} display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;">
-          <div style="display:flex; flex-direction:column;">
-            <span style="font-weight:bold; color:${isPaired ? '#721c24' : '#0056b3'}; font-size:14px;">${deviceName} (ID: ${d.id})</span>
-            ${isPaired ? `<span style="font-size:11px; color:#dc3545;">⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중</span>` : '<span style="font-size:11px; color:#28a745;">신호 감지됨</span>'}
-          </div>
-          <button class="btn btn-sm ${isPaired ? 'btn-secondary' : 'btn-primary'}" style="pointer-events:none;" ${isPaired ? 'disabled' : ''}>${isPaired ? '사용 중' : '선택'}</button>
+      const item = document.createElement('div');
+      item.className = 'ant-device-item';
+      item.setAttribute('data-device-id', d.id);
+      item.style.cssText = `padding:12px; border:1px solid ${isPaired ? '#dc3545' : '#007bff'}; background:${isPaired ? '#f8d7da' : '#f0f7ff'}; border-radius:8px; margin-bottom:8px; ${!isPaired ? 'cursor:pointer;' : 'cursor:not-allowed; opacity:0.6;'} display:flex; justify-content:space-between; align-items:center; transition: background 0.2s;`;
+      
+      if (!isPaired) {
+        item.onclick = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          selectDeviceForInput(d.id, targetType, e);
+        };
+      }
+      
+      item.innerHTML = `
+        <div style="display:flex; flex-direction:column;">
+          <span style="font-weight:bold; color:${isPaired ? '#721c24' : '#0056b3'}; font-size:14px;">${deviceName} (ID: ${d.id})</span>
+          <span class="device-status" style="font-size:11px; color:${isPaired ? '#dc3545' : '#28a745';">${isPaired ? `⚠️ 트랙${pairedTrack?.id || '?'}에서 사용 중` : '신호 감지됨'}</span>
         </div>
+        <button class="btn btn-sm ${isPaired ? 'btn-secondary' : 'btn-primary'}" ${isPaired ? 'disabled' : ''} style="pointer-events:none;">${isPaired ? '사용 중' : '선택'}</button>
       `;
-    }).join('');
+      
+      listEl.appendChild(item);
+    });
     
-    console.log(`[UI] ${devices.length}개의 ${deviceType} 리스트 출력 완료`);
+    // 스크롤 위치 복원
+    if (scrollTop > 0) {
+      listEl.scrollTop = scrollTop;
+    }
+    
+    listEl.classList.remove('hidden');
+    
+    if (newDevices.length > 0) {
+      console.log(`[UI] ${newDevices.length}개의 새로운 ${deviceType} 디바이스 추가, 총 ${devices.length}개`);
+    }
+  } else if (listEl.children.length === 0) {
+    // 디바이스가 없고 리스트도 비어있으면 숨김
+    listEl.classList.add('hidden');
   }
 }
 
@@ -2169,10 +2254,40 @@ function updateFoundDevicesList(deviceId, deviceType) {
     existing = { id: deviceId, type: typeName, deviceType: deviceType };
     window.antState.foundDevices.push(existing);
     console.log(`[Training] 신규 장치 발견: ${typeName} ID: ${deviceId}`);
+    
+    // 새 디바이스 발견 시에만 UI 업데이트 (디바운싱 적용)
+    if (window._deviceListUpdateTimer) {
+      clearTimeout(window._deviceListUpdateTimer);
+    }
+    window._deviceListUpdateTimer = setTimeout(() => {
+      renderPairingDeviceList(deviceType);
+      window._deviceListUpdateTimer = null;
+    }, 300); // 300ms 디바운싱으로 깜빡임 최소화
+  } else {
+    // 기존 디바이스는 페어링 상태만 확인하여 필요시 업데이트
+    const listId = (deviceType === 0x78) ? 'heartRateDeviceList' : 
+                   (deviceType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
+    const listEl = document.getElementById(listId);
+    if (listEl) {
+      const item = listEl.querySelector(`[data-device-id="${deviceId}"]`);
+      if (item) {
+        // 기존 아이템이 있으면 상태만 업데이트 (전체 리렌더링 방지)
+        const powerMeterId = window.currentTargetPowerMeterId;
+        let deviceTypeStr = '';
+        if (deviceType === 0x78) deviceTypeStr = 'heart';
+        else if (deviceType === 0x0B) deviceTypeStr = 'power';
+        else if (deviceType === 0x11 || deviceType === 0x10) deviceTypeStr = 'trainer';
+        
+        const isPaired = isDeviceAlreadyPaired(deviceId, deviceTypeStr, powerMeterId);
+        const currentIsPaired = item.style.opacity === '0.6';
+        
+        // 페어링 상태가 변경된 경우에만 업데이트
+        if (isPaired !== currentIsPaired) {
+          renderPairingDeviceList(deviceType);
+        }
+      }
+    }
   }
-  
-  // [보완] 기존에 발견된 장치라도 현재 페어링 모달이 열려있다면 UI를 강제로 다시 그림
-  renderPairingDeviceList(deviceType);
 }
 
 // 심박수(BPM) 및 파워 데이터 실시간 UI 반영
@@ -2223,7 +2338,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             console.log(`[Training] 파워미터/스마트로라 데이터 수신: deviceId=${receivedDeviceId}, deviceType=0x${deviceType.toString(16)}, pageNum=0x${pageNum.toString(16)}, antData=[${Array.from(antData).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ')}]`);
 
             // 가민 스타일: 데이터 페이지 분석 (ANT+ Bike Power Profile 표준 준수)
-            if (pageNum === 0x10) { // Standard Power Only Page (시마노 포함 대부분의 파워미터)
+            if (pageNum === 0x10) { // Standard Power Only Page (시마노, Quarq 포함 대부분의 파워미터)
                 // ANT+ Bike Power Profile Page 0x10 구조 (가민 표준):
                 // Byte 0: Page Number (0x10) + Toggle Bit
                 // Byte 1: Event Count (0-255, 순환)
@@ -2245,15 +2360,18 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 
                 // 케이던스 추출 (Byte 3, 가민 스타일: 255만 무효, 0은 유효)
+                // Quarq 파워메터도 동일한 형식 사용
                 if (antData.length > 3) {
                     const rawCadence = antData[3];
-                    if (rawCadence !== 255) {
+                    if (rawCadence !== 255 && rawCadence <= 254) {
                         cadence = rawCadence; // 0도 유효한 값 (페달 안 밟는 상태)
                         pm.lastCadenceTime = currentTime;
+                        console.log(`[Training] Page 0x10: 케이던스 추출 (Quarq/시마노 호환): ${cadence} RPM`);
                     }
                 }
                 
                 // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (더 정확, 이상치 감지 강화)
+                // Quarq 파워메터는 누적 파워를 정확하게 제공하므로 이를 우선 사용
                 let calculatedPower = -1;
                 if (antData.length > 5) {
                     const accumulatedPowerLSB = antData[4];
@@ -2278,6 +2396,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                                 if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
                                     // 정상 범위 내: 반올림하여 사용
                                     calculatedPower = Math.round(rawCalculatedPower);
+                                    console.log(`[Training] Page 0x10: 누적 파워 기반 계산 (Quarq/시마노 호환): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W)`);
                                 } else {
                                     // 이상치: 이전 값과의 중간값 사용
                                     const limitedPower = (rawCalculatedPower + previousFilteredPower) / 2;
@@ -2287,13 +2406,21 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                             } else {
                                 calculatedPower = -1;
                             }
+                        } else if (timeDiff >= 2.0) {
+                            // 시간 차이가 너무 크면 누적 파워 초기화 (연결 끊김 등)
+                            console.warn(`[Training] Page 0x10: 누적 파워 시간 차이 너무 큼 (${timeDiff.toFixed(2)}s), 초기화`);
+                            pm.lastAccumulatedPower = accumulatedPowerW;
+                            pm.lastAccumulatedPowerTime = currentTime;
                         }
+                    } else {
+                        // 첫 번째 데이터: 누적 파워 초기화
+                        pm.lastAccumulatedPower = accumulatedPowerW;
+                        pm.lastAccumulatedPowerTime = currentTime;
                     }
-                    pm.lastAccumulatedPower = accumulatedPowerW;
-                    pm.lastAccumulatedPowerTime = currentTime;
                 }
                 
                 // 순간 파워 추출 (Byte 6-7, LSB-MSB)
+                // Quarq 파워메터는 순간 파워도 제공하지만, 누적 파워 기반 계산이 더 정확
                 let instantaneousPower = -1;
                 if (antData.length > 7) {
                     const powerLSB = antData[6];
@@ -2309,6 +2436,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         
                         if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
                             instantaneousPower = rawPower;
+                            console.log(`[Training] Page 0x10: 순간 파워 추출 (Quarq/시마노 호환): ${instantaneousPower}W`);
                         } else {
                             // 이상치: 이전 값과의 중간값 사용
                             const limitedPower = (rawPower + previousFilteredPower) / 2;
@@ -2319,11 +2447,13 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 
                 // 가민 스타일: 누적 파워로 계산한 값이 있으면 우선 사용, 없으면 순간 파워 사용
-                // 누적 파워 기반 계산이 더 정확하므로 우선순위가 높음
+                // Quarq 파워메터는 누적 파워 기반 계산이 더 정확하므로 우선순위가 높음
                 if (calculatedPower >= 0) {
                     power = calculatedPower;
+                    console.log(`[Training] Page 0x10: 최종 파워 (누적 기반): ${power}W`);
                 } else if (instantaneousPower >= 0) {
                     power = instantaneousPower;
+                    console.log(`[Training] Page 0x10: 최종 파워 (순간 기반): ${power}W`);
                 }
                 
                 // 이벤트 카운트 업데이트
@@ -2435,15 +2565,20 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 // Byte 6-7: Instantaneous Power (LSB-MSB, 0-65535W)
                 
                 // 가민 스타일: 케이던스 추출 (Byte 3, 0.5 rpm 단위)
+                // 스마트로라는 0.5 rpm 단위로 케이던스를 제공하므로 정확하게 변환
                 if (antData.length > 3) {
                     const cadenceHalf = antData[3];
                     if (cadenceHalf !== 0xFF && cadenceHalf <= 254) {
                         cadence = Math.round(cadenceHalf * 0.5); // 0.5 rpm units, 0도 유효
                         pm.lastCadenceTime = currentTime;
+                        console.log(`[Training] Page 0x19: 케이던스 추출 (스마트로라): ${cadence} RPM (raw: ${cadenceHalf} * 0.5)`);
+                    } else if (cadenceHalf === 0xFF) {
+                        console.log(`[Training] Page 0x19: 케이던스 무효값 (0xFF)`);
                     }
                 }
                 
                 // 가민 스타일: 누적 파워를 이용한 순간 파워 계산 (이상치 감지 강화)
+                // 스마트로라는 누적 파워를 정확하게 제공하므로 이를 우선 사용
                 let calculatedPower = -1;
                 if (antData.length > 5) {
                     const accumulatedPowerLSB = antData[4];
@@ -2465,6 +2600,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                             if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
                                 if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
                                     calculatedPower = Math.round(rawCalculatedPower);
+                                    console.log(`[Training] Page 0x19: 누적 파워 기반 계산 (스마트로라): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W)`);
                                 } else {
                                     const limitedPower = (rawCalculatedPower + previousFilteredPower) / 2;
                                     calculatedPower = Math.round(limitedPower);
@@ -2473,13 +2609,21 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                             } else {
                                 calculatedPower = -1;
                             }
+                        } else if (timeDiff >= 2.0) {
+                            // 시간 차이가 너무 크면 누적 파워 초기화 (연결 끊김 등)
+                            console.warn(`[Training] Page 0x19: 누적 파워 시간 차이 너무 큼 (${timeDiff.toFixed(2)}s), 초기화`);
+                            pm.lastAccumulatedPower = accumulatedPowerW;
+                            pm.lastAccumulatedPowerTime = currentTime;
                         }
+                    } else {
+                        // 첫 번째 데이터: 누적 파워 초기화
+                        pm.lastAccumulatedPower = accumulatedPowerW;
+                        pm.lastAccumulatedPowerTime = currentTime;
                     }
-                    pm.lastAccumulatedPower = accumulatedPowerW;
-                    pm.lastAccumulatedPowerTime = currentTime;
                 }
                 
                 // 순간 파워 추출 (Byte 6-7)
+                // 스마트로라는 순간 파워도 제공하지만, 누적 파워 기반 계산이 더 정확
                 let instantaneousPower = -1;
                 if (antData.length > 7) {
                     const powerLSB = antData[6];
@@ -2493,6 +2637,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         
                         if (previousFilteredPower === 0 || instantPowerDiff <= maxAllowedChangeFromInstant) {
                             instantaneousPower = possiblePower;
+                            console.log(`[Training] Page 0x19: 순간 파워 추출 (스마트로라): ${instantaneousPower}W`);
                         } else {
                             const limitedPower = (possiblePower + previousFilteredPower) / 2;
                             instantaneousPower = Math.round(limitedPower);
@@ -2502,10 +2647,13 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 
                 // 가민 스타일: 누적 파워로 계산한 값 우선 사용
+                // 스마트로라는 누적 파워 기반 계산이 더 정확하므로 우선순위가 높음
                 if (calculatedPower >= 0) {
                     power = calculatedPower;
+                    console.log(`[Training] Page 0x19: 최종 파워 (누적 기반): ${power}W`);
                 } else if (instantaneousPower >= 0) {
                     power = instantaneousPower;
+                    console.log(`[Training] Page 0x19: 최종 파워 (순간 기반): ${power}W`);
                 }
                 
                 if (power >= 0) {
@@ -2734,27 +2882,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
 /**
  * 검색된 장치를 인도어 트레이닝 페어링 모달 리스트에 표시
  */
-function renderPairingDeviceList(targetType) {
-  const listId = (targetType === 0x78) ? 'heartRateDeviceList' : 
-                 (targetType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
-  
-  const listEl = document.getElementById(listId);
-  if (!listEl) return;
-
-  const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
-  
-  // 리스트가 비어있지 않다면 즉시 렌더링
-  if (devices.length > 0) {
-    listEl.innerHTML = devices.map(d => `
-      <div class="ant-device-item" onclick="selectDeviceForInput('${d.id}', '${targetType}')" 
-           style="padding:10px; border:1px solid #007bff; background:#f0f7ff; border-radius:6px; margin-bottom:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
-        <div style="font-weight:600; color:#0056b3;">${d.type} (ID: ${d.id})</div>
-        <button class="btn btn-sm btn-primary">선택</button>
-      </div>
-    `).join('');
-    listEl.classList.remove('hidden');
-  }
-}
+// 이 함수는 위에서 이미 수정되었으므로 중복 제거
 
 
 /**
@@ -2839,7 +2967,16 @@ function updateIndoorPairingUI(deviceId, deviceType) {
 // 3. 리스트 클릭 시 입력창(ID 필드)에 자동 삽입
 window.selectIndoorDevice = function(deviceId, listId) {
     const powerMeterId = window.currentTargetPowerMeterId;
-    if (!powerMeterId) return;
+    if (!powerMeterId) {
+        console.warn('[selectIndoorDevice] powerMeterId가 없습니다.');
+        if (typeof showToast === 'function') {
+            showToast('먼저 트랙을 선택해주세요.');
+        }
+        return;
+    }
+    
+    // deviceId를 문자열로 변환하여 일관성 유지
+    deviceId = String(deviceId);
     
     let inputId = '';
     let deviceType = '';
@@ -2854,15 +2991,18 @@ window.selectIndoorDevice = function(deviceId, listId) {
     } else if (listId === 'trainerDeviceList') {
         inputId = 'trainerDeviceId';
         deviceType = 'trainer';
+    } else {
+        console.error('[selectIndoorDevice] 알 수 없는 listId:', listId);
+        return;
     }
 
     // 중복 체크
     if (isDeviceAlreadyPaired(deviceId, deviceType, powerMeterId)) {
         const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => {
             if (pm.id === powerMeterId) return false;
-            if (deviceType === 'trainer' && pm.trainerDeviceId && String(pm.trainerDeviceId) === String(deviceId)) return true;
-            if (deviceType === 'power' && pm.deviceId && String(pm.deviceId) === String(deviceId)) return true;
-            if (deviceType === 'heart' && pm.heartRateDeviceId && String(pm.heartRateDeviceId) === String(deviceId)) return true;
+            if (deviceType === 'trainer' && pm.trainerDeviceId && String(pm.trainerDeviceId) === deviceId) return true;
+            if (deviceType === 'power' && pm.deviceId && String(pm.deviceId) === deviceId) return true;
+            if (deviceType === 'heart' && pm.heartRateDeviceId && String(pm.heartRateDeviceId) === deviceId) return true;
             return false;
         });
         
@@ -2872,12 +3012,47 @@ window.selectIndoorDevice = function(deviceId, listId) {
         return;
     }
 
+    // 입력 필드에 값 설정
     const inputEl = document.getElementById(inputId);
     if (inputEl) {
         inputEl.value = deviceId;
         inputEl.style.backgroundColor = '#d4edda';
-        setTimeout(() => inputEl.style.backgroundColor = '', 500);
-        if (typeof showToast === 'function') showToast(`${deviceId} 장치가 선택되었습니다.`);
+        setTimeout(() => {
+            inputEl.style.backgroundColor = '';
+        }, 500);
+        
+        // 이벤트 트리거하여 저장 로직 실행
+        const changeEvent = new Event('change', { bubbles: true });
+        inputEl.dispatchEvent(changeEvent);
+        
+        if (typeof showToast === 'function') {
+            showToast(`✅ ${deviceId} 장치가 선택되었습니다.`);
+        }
+        
+        // 리스트에서 선택된 디바이스 표시 업데이트
+        const listEl = document.getElementById(listId);
+        if (listEl) {
+            const item = listEl.querySelector(`[data-device-id="${deviceId}"]`);
+            if (item) {
+                item.style.borderColor = '#28a745';
+                item.style.backgroundColor = '#d4edda';
+                const btn = item.querySelector('button');
+                if (btn) {
+                    btn.className = 'btn btn-sm btn-success';
+                    btn.textContent = '선택됨';
+                    btn.disabled = true;
+                }
+                const statusSpan = item.querySelector('.device-status');
+                if (statusSpan) {
+                    statusSpan.innerHTML = '<span style="font-size:11px; color:#28a745;">✓ 선택됨</span>';
+                }
+            }
+        }
+    } else {
+        console.error(`[selectIndoorDevice] 입력 필드를 찾을 수 없습니다: ${inputId}`);
+        if (typeof showToast === 'function') {
+            showToast('입력 필드를 찾을 수 없습니다.');
+        }
     }
     
     // 바늘 위치 유지 (다른 코드 실행 후 마지막에 실행되도록 setTimeout 사용)
@@ -2890,11 +3065,17 @@ window.selectIndoorDevice = function(deviceId, listId) {
         } else {
             console.warn(`[PowerMeter] selectIndoorDevice: 바늘 위치 유지 실패, powerMeter=${!!powerMeter}, updatePowerMeterNeedle=${typeof updatePowerMeterNeedle}`);
         }
-    }, 50); // 약간의 지연을 주어 다른 코드가 실행된 후 실행
+    }, 50);
 };
 
 // 4. selectDeviceForInput 함수 (targetType 기반)
-window.selectDeviceForInput = function(deviceId, targetType) {
+window.selectDeviceForInput = function(deviceId, targetType, event) {
+    // 이벤트 전파 방지
+    if (event && typeof event.stopPropagation === 'function') {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    
     // targetType을 숫자로 변환 (문자열일 수도 있음)
     const type = typeof targetType === 'string' ? parseInt(targetType, 10) : targetType;
     
@@ -2910,7 +3091,10 @@ window.selectDeviceForInput = function(deviceId, targetType) {
     
     // selectIndoorDevice 함수 호출
     if (listId) {
-        window.selectIndoorDevice(deviceId, listId);
+        // 약간의 지연을 주어 클릭 이벤트가 완전히 처리되도록 함
+        setTimeout(() => {
+            window.selectIndoorDevice(deviceId, listId);
+        }, 10);
     } else {
         console.error('[selectDeviceForInput] 알 수 없는 장치 타입:', targetType, '(숫자:', type, ')');
     }
