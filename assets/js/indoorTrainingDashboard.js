@@ -3508,16 +3508,28 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
         
         // 전광판 높이를 넘지 않는 최대 높이 계산
         // 전광판 높이에 영향을 주지 않는 범위에서 최대한 크게
+        // 전광판의 실제 높이를 절대 넘지 않도록 엄격하게 제한
         const marginFromTop = 10; // 상단 여백
         const marginFromBottom = 10; // 하단 여백
         const availableHeight = scoreboardHeight - marginFromTop - marginFromBottom;
-        const maxHeight = Math.max(120, Math.min(availableHeight, 250)); // 최소 120px, 최대 250px
+        // 전광판 높이를 절대 넘지 않도록 제한 (최소 120px, 최대는 전광판 높이를 넘지 않음)
+        const maxHeight = Math.max(120, Math.min(availableHeight, scoreboardHeight - 20)); // 최소 120px, 최대는 전광판 높이 - 20px
         
-        // 컨테이너 크기 설정
+        // 컨테이너 크기 설정 (전광판 높이를 절대 넘지 않도록)
         container.style.width = `${maxWidth}px`;
         container.style.maxWidth = `${maxWidth}px`;
         container.style.height = `${maxHeight}px`;
         container.style.maxHeight = `${maxHeight}px`;
+        container.style.overflow = 'hidden'; // 넘치는 내용 숨김
+        container.style.flexShrink = '0'; // 축소 방지
+        
+        // 내부 그래프 컨테이너도 높이 제한
+        const graphContainer = container.querySelector('.scoreboard-segment-graph-container');
+        if (graphContainer) {
+            graphContainer.style.height = `${maxHeight}px`;
+            graphContainer.style.maxHeight = `${maxHeight}px`;
+            graphContainer.style.overflow = 'hidden';
+        }
         
         // 세그먼트 그래프를 전광판 크기에 맞춰 그리기 (현재 세그먼트 인덱스 전달)
         if (typeof drawSegmentGraphForScoreboard === 'function') {
@@ -3553,23 +3565,25 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const totalSeconds = segments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
     if (totalSeconds <= 0) return;
     
-    // 그래프 크기 설정 (전광판 크기에 맞춤)
+    // 그래프 크기 설정 (전광판 크기에 맞춤 - 높이를 절대 넘지 않도록)
     const padding = { top: 10, right: 15, bottom: 25, left: 35 };
     const availableWidth = maxWidth - padding.left - padding.right;
     const availableHeight = maxHeight - padding.top - padding.bottom;
     
+    // 전광판 높이를 절대 넘지 않도록 엄격하게 제한
     const graphWidth = Math.max(availableWidth, 200); // 최소 200px
-    const graphHeight = Math.max(availableHeight, 80); // 최소 80px
+    const graphHeight = Math.min(Math.max(availableHeight, 80), maxHeight - padding.top - padding.bottom); // 최소 80px, 최대는 maxHeight를 넘지 않음
     const chartWidth = graphWidth - padding.left - padding.right;
     const chartHeight = graphHeight - padding.top - padding.bottom;
     
-    // Canvas 크기 설정
+    // Canvas 크기 설정 (전광판 높이를 절대 넘지 않도록)
     canvas.width = graphWidth;
     canvas.height = graphHeight;
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     canvas.style.maxWidth = `${maxWidth}px`;
     canvas.style.maxHeight = `${maxHeight}px`;
+    canvas.style.objectFit = 'contain'; // 비율 유지하며 컨테이너에 맞춤
     
     const ctx = canvas.getContext('2d');
     
