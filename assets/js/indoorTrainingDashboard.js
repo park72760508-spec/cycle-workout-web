@@ -2278,10 +2278,10 @@ function startTrainingTimer() {
       const segmentElapsed = window.indoorTrainingState.segmentElapsedTime;
       const remaining = segmentDuration - segmentElapsed;
       
-      // 세그먼트 종료 6초 전부터 5초 카운트다운 애니메이션 표시
-      if (remaining <= 6 && remaining > 0 && !window.indoorTrainingState.segmentCountdownActive) {
+      // 세그먼트 종료 6초 전에 5초 카운트다운 시작
+      if (remaining <= 6 && remaining > 1 && !window.indoorTrainingState.segmentCountdownActive) {
         window.indoorTrainingState.segmentCountdownActive = true;
-        showSegmentCountdown(remaining);
+        showSegmentCountdown(5); // 5초 카운트다운 시작
       }
       
       // 세그먼트 시간이 지나면 다음 세그먼트로 이동
@@ -2311,9 +2311,9 @@ function startTrainingTimer() {
 }
 
 /**
- * 세그먼트 종료 카운트다운 애니메이션 표시
+ * 세그먼트 종료 카운트다운 애니메이션 표시 (5초 카운트다운)
  */
-function showSegmentCountdown(remainingSeconds) {
+function showSegmentCountdown(startCount) {
   // 기존 카운트다운 모달이 있으면 제거
   const existingModal = document.getElementById('segmentCountdownModal');
   if (existingModal) {
@@ -2346,25 +2346,24 @@ function showSegmentCountdown(remainingSeconds) {
     text-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
     animation: countdownPulse 0.3s ease-out;
   `;
-  countdownText.textContent = Math.ceil(remainingSeconds).toString();
   
   countdownModal.appendChild(countdownText);
   document.body.appendChild(countdownModal);
   
-  // 카운트다운 업데이트
-  let count = Math.ceil(remainingSeconds);
+  // 5초 카운트다운 시작 (5, 4, 3, 2, 1)
+  let count = startCount || 5;
   
   // 초기 표시 및 첫 번째 삐 소리
+  countdownText.textContent = count.toString();
   if (typeof playBeep === 'function') {
     playBeep(880, 120, 0.25);
   }
   
   const countdownInterval = setInterval(() => {
-    const currentRemaining = calculateSegmentRemainingTime();
-    const newCount = Math.ceil(currentRemaining);
+    count--;
     
-    if (newCount !== count && newCount > 0 && newCount <= 5) {
-      count = newCount;
+    if (count > 0) {
+      // 4, 3, 2, 1초일 때 - 일반 삐 소리
       countdownText.textContent = count.toString();
       countdownText.style.animation = 'none';
       setTimeout(() => {
@@ -2374,7 +2373,8 @@ function showSegmentCountdown(remainingSeconds) {
       if (typeof playBeep === 'function') {
         playBeep(880, 120, 0.25);
       }
-    } else if (newCount <= 0 || newCount > 5) {
+    } else {
+      // 카운트다운 종료
       clearInterval(countdownInterval);
       if (countdownModal.parentNode) {
         countdownModal.style.animation = 'countdownFadeOut 0.3s ease-out';
@@ -2386,7 +2386,7 @@ function showSegmentCountdown(remainingSeconds) {
       }
       window.indoorTrainingState.segmentCountdownActive = false;
     }
-  }, 100);
+  }, 1000); // 1초마다 업데이트
 }
 
 // 화면 전환 시 초기화
