@@ -340,6 +340,9 @@ function createPowerMeterGrid() {
 /**
  * 파워계 요소 생성
  */
+/**
+ * 파워계 요소 생성
+ */
 function createPowerMeterElement(powerMeter) {
   const container = document.createElement('div');
   container.className = 'speedometer-container';
@@ -360,28 +363,30 @@ function createPowerMeterElement(powerMeter) {
     </div>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
-        <!-- 아래쪽 반원 배경 -->
         <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
               fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
-        <!-- 파워 눈금 (0~120 위치) -->
         <g class="speedometer-ticks">
           ${generatePowerMeterTicks(powerMeter.id)}
         </g>
         
-        <!-- 파워 숫자 (반원 바깥쪽, 20단위만) -->
         <g class="speedometer-labels">
           ${generatePowerMeterLabels(powerMeter.id)}
         </g>
         
-        <!-- 바늘 중심 원 -->
+        <text x="100" y="100" 
+              id="target-power-value-${powerMeter.id}"
+              text-anchor="middle" 
+              dominant-baseline="middle"
+              fill="#ff8c00" 
+              font-size="20" 
+              font-weight="700"></text>
+
         <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         
-        <!-- 바늘 행적선 -->
         <g id="needle-path-${powerMeter.id}" class="speedometer-needle-path" transform="translate(100, 140)">
         </g>
         
-        <!-- 바늘 -->
         <g class="speedometer-needle" transform="translate(100, 140)">
           <line id="needle-${powerMeter.id}" 
                 x1="0" y1="-7" 
@@ -392,7 +397,6 @@ function createPowerMeterElement(powerMeter) {
                 transform="rotate(270)"/>
         </g>
         
-        <!-- 현재 파워값 (속도계 하단) -->
         <text x="100" y="188" 
               text-anchor="middle" 
               dominant-baseline="middle"
@@ -401,7 +405,6 @@ function createPowerMeterElement(powerMeter) {
               font-weight="700"
               id="current-power-value-${powerMeter.id}">-</text>
         
-        <!-- 단위 W (바늘 중심 원 아래와 현재 파워값 위의 중간) -->
         <text x="100" y="157" 
               text-anchor="middle" 
               dominant-baseline="middle"
@@ -412,7 +415,6 @@ function createPowerMeterElement(powerMeter) {
       </svg>
     </div>
     <div class="speedometer-info disconnected">
-      <!-- 좌측: 최대파워, 평균파워 -->
       <div class="speed-display-left">
         <div class="speed-stat-row speed-stat-max">
           <span class="speed-stat-value" id="max-power-value-${powerMeter.id}">0</span>
@@ -429,14 +431,12 @@ function createPowerMeterElement(powerMeter) {
           </div>
         </div>
       </div>
-      <!-- 중앙: 세그먼트파워 -->
       <div class="speed-display-center">
         <div class="speed-value-wrapper">
           <span class="speed-value" id="segment-power-value-${powerMeter.id}">0</span>
           <div class="speed-unit-bottom">랩파워[W]</div>
         </div>
       </div>
-      <!-- 우측: 심박, 케이던스 (2줄로 표기) -->
       <div class="distance-display-right">
         <div class="heart-rate-row">
           <span class="distance-value" id="heart-rate-value-${powerMeter.id}">0</span>
@@ -704,10 +704,16 @@ function updatePowerMeterNeedle(powerMeterId, power) {
  * 파워미터 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적)
  * 연결됨 상태에서 워크아웃 실행 시에만 표시
  */
+/**
+ * 파워미터 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적)
+ * 연결됨 상태에서 워크아웃 실행 시에만 표시
+ */
 function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
     const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
+    // [추가됨] 목표 파워 텍스트 요소 가져오기
+    const targetTextEl = document.getElementById(`target-power-value-${powerMeterId}`);
+    
     if (!trailContainer) {
-        console.warn(`[PowerMeter] updatePowerMeterTrail: 궤적 컨테이너를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
         return;
     }
 
@@ -719,11 +725,13 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     if (!isConnected || !isTrainingRunning || !hasWorkout) {
         // 조건을 만족하지 않으면 궤적 제거
         trailContainer.innerHTML = '';
+        // [추가됨] 훈련 중이 아니면 텍스트 지우기
+        if (targetTextEl) targetTextEl.textContent = '';
         return;
     }
 
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
-    const maxPower = ftp * 2; // 바늘 각도 계산과 동일한 maxPower 사용
+    const maxPower = ftp * 2; 
     
     // 현재 세그먼트 목표 파워 및 FTP 비율 계산
     let targetPower = 0;
@@ -748,34 +756,33 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         }
     }
     
-    // FTP 비율에 따른 목표 각도 계산 (바늘 각도 계산과 동일한 로직 사용)
-    // 바늘 각도: angle = -90 + (power / maxPower) * 180
-    // 목표 파워: targetPower = (ftp * ftpPercent) / 100
-    // 목표 각도: targetAngle = -90 + (targetPower / maxPower) * 180
-    // 이렇게 하면 바늘이 targetPower일 때의 각도와 정확히 일치함
-    const targetPowerRatio = Math.min(Math.max(targetPower / maxPower, 0), 1); // 0~1 범위로 정규화
-    const targetAngle = -90 + (targetPowerRatio * 180); // -90도부터 90도까지 (바늘 각도 계산과 동일)
+    // [추가됨] 목표 파워 텍스트 업데이트 (소수점 반올림)
+    if (targetTextEl) {
+        targetTextEl.textContent = Math.round(targetPower);
+    }
+    
+    // FTP 비율에 따른 목표 각도 계산
+    const targetPowerRatio = Math.min(Math.max(targetPower / maxPower, 0), 1); 
+    const targetAngle = -90 + (targetPowerRatio * 180); 
     
     // 목표 파워 저장
     powerMeter.targetPower = targetPower;
     
-    // 궤적 히스토리 업데이트 (각도 저장) - 워크아웃 실행 중일 때만
+    // 궤적 히스토리 업데이트 (각도 저장)
     if (powerMeter.lastTrailAngle !== null && powerMeter.lastTrailAngle !== currentAngle) {
-        // 각도가 변경된 경우에만 히스토리에 추가
         powerMeter.powerTrailHistory.push({
             angle: currentAngle,
             power: currentPower,
             timestamp: Date.now()
         });
         
-        // 최근 100개만 유지
         if (powerMeter.powerTrailHistory.length > 100) {
             powerMeter.powerTrailHistory.shift();
         }
     }
     powerMeter.lastTrailAngle = currentAngle;
     
-    // 궤적 그리기
+    // 궤적 그리기 (이전에 수정해드린 좌표계 보정 버전 함수를 사용)
     drawPowerMeterTrail(trailContainer, targetAngle, currentAngle, powerMeter.powerTrailHistory, targetPower, currentPower);
 }
 
@@ -4507,6 +4514,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const xLabelY = padding.top + chartHeight - (yRatio * chartHeight);
     ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xLabelY);
 }
+
 
 
 
