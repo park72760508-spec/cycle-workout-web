@@ -20,7 +20,9 @@ window.indoorTrainingState = {
   userFTPSet: false, // FTP 값이 설정되었는지 여부
   wakeLock: null,
   rxBuffer: new Uint8Array(0), // ANT+ 데이터 버퍼 추가
-  needleAngles: {} // 바늘 각도 저장용 추가
+  needleAngles: {}, // 바늘 각도 저장용 추가
+  resizeHandler: null, // 리사이즈 이벤트 핸들러
+  scoreboardResizeObserver: null // 전광판 컨테이너 ResizeObserver
 };
 
 // ANT+ 통신 관련 전역 상태 (rollerRaceDashboard와 공유)
@@ -225,6 +227,51 @@ function initIndoorTrainingDashboard() {
   window.indoorTrainingState.statusCheckInterval = setInterval(() => {
     updateAllPowerMeterConnectionStatuses();
   }, 1000); // 1초마다 확인
+  
+  // 화면 크기 변경 시 세그먼트 그래프 크기 재조정
+  let resizeTimeout;
+  const handleResize = () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+      // 현재 워크아웃이 있고 세그먼트 그래프가 표시 중이면 크기 재조정
+      if (window.indoorTrainingState.currentWorkout) {
+        const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
+        displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
+      }
+    }, 250); // 디바운싱: 250ms 지연
+  };
+  
+  // 기존 리사이즈 리스너 제거 (중복 방지)
+  if (window.indoorTrainingState.resizeHandler) {
+    window.removeEventListener('resize', window.indoorTrainingState.resizeHandler);
+  }
+  
+  // 리사이즈 이벤트 리스너 등록
+  window.indoorTrainingState.resizeHandler = handleResize;
+  window.addEventListener('resize', handleResize);
+  
+  // ResizeObserver를 사용하여 전광판 컨테이너 크기 변경 감지 (더 정확함)
+  const scoreboardDisplay = document.querySelector('#indoorTrainingDashboardScreen .scoreboard-display');
+  if (scoreboardDisplay && window.ResizeObserver) {
+    // 기존 ResizeObserver 제거 (중복 방지)
+    if (window.indoorTrainingState.scoreboardResizeObserver) {
+      window.indoorTrainingState.scoreboardResizeObserver.disconnect();
+    }
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        // 현재 워크아웃이 있고 세그먼트 그래프가 표시 중이면 크기 재조정
+        if (window.indoorTrainingState.currentWorkout) {
+          const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
+          displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
+        }
+      }, 250); // 디바운싱: 250ms 지연
+    });
+    
+    resizeObserver.observe(scoreboardDisplay);
+    window.indoorTrainingState.scoreboardResizeObserver = resizeObserver;
+  }
 }
 
 /**
@@ -3563,7 +3610,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         const yRatio = ftpPercent / maxFtpPercent;
         const y = padding.top + chartHeight - (yRatio * chartHeight);
         
-        // FTP 라벨은 둥근네모상자(투명 주황색 바탕)로 표기
+        // FTP 라벨은 둥근네모상자(투명 주황색 바탕)로 표기 - 가운데 정렬
         if (isFTP) {
             // 텍스트 크기 측정
             ctx.font = '9px sans-serif';
@@ -3593,9 +3640,17 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
             ctx.closePath();
             ctx.fill();
             
-            // 텍스트 그리기
+            // 텍스트 그리기 - 상자 안에 가운데 정렬
             ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-            ctx.fillText(label, padding.left - 8, y);
+            ctx.textAlign = 'center'; // 가운데 정렬
+            ctx.textBaseline = 'middle'; // 수직 가운데 정렬
+            const textX = boxX + boxWidth / 2; // 상자의 가로 중앙
+            const textY = boxY + boxHeight / 2; // 상자의 세로 중앙
+            ctx.fillText(label, textX, textY);
+            
+            // textAlign과 textBaseline을 원래대로 복원 (다른 라벨에 영향 방지)
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
         } else {
             // 일반 라벨 (0, 0.5, 1.5, 2)
             ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
@@ -3762,12 +3817,15 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         currentTime += segDuration;
     });
     
-    // X축 라벨: 워크아웃 운동시간 (단위:분)
+    // X축 라벨: 워크아웃 운동시간 (단위:분) - X축 바로 밑에 위치
     const totalMinutes = Math.round(totalSeconds / 60);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = '12.6px sans-serif'; // 18px의 70% (12.6px)
     ctx.textAlign = 'center';
-    ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, graphHeight - 5);
+    ctx.textBaseline = 'top'; // 텍스트 기준선을 상단으로 설정
+    // X축 위치(padding.top + chartHeight) 바로 밑에 표시 (2px 여백)
+    const xAxisY = padding.top + chartHeight;
+    ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xAxisY + 2);
 }
 
 
