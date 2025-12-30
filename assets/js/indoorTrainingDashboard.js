@@ -2119,7 +2119,7 @@ function startTrainingWithCountdown() {
   
   const countdownText = document.createElement('div');
   countdownText.style.cssText = `
-    font-size: 120px;
+    font-size: 600px;
     font-weight: 900;
     color: #00d4aa;
     text-shadow: 0 0 30px rgba(0, 212, 170, 0.8);
@@ -2340,7 +2340,7 @@ function showSegmentCountdown(remainingSeconds) {
   
   const countdownText = document.createElement('div');
   countdownText.style.cssText = `
-    font-size: 100px;
+    font-size: 500px;
     font-weight: 900;
     color: #ff6b6b;
     text-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
