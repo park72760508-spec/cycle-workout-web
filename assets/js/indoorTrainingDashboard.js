@@ -2416,6 +2416,21 @@ function startTraining() {
   window.indoorTrainingState.segmentStartTime = Date.now();
   window.indoorTrainingState.segmentElapsedTime = 0;
   
+  // 워크아웃 시작 시 모든 파워미터의 궤적 초기화 및 목표 파워 궤적 표시
+  window.indoorTrainingState.powerMeters.forEach(pm => {
+    pm.powerTrailHistory = [];
+    pm.lastTrailAngle = null;
+    // 연결된 파워미터의 경우 목표 파워 궤적 표시를 위해 업데이트
+    if (pm.connected) {
+      const currentPower = pm.currentPower || 0;
+      const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
+      const maxPower = ftp * 2;
+      const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+      const angle = -90 + (ratio * 180);
+      updatePowerMeterTrail(pm.id, currentPower, angle, pm);
+    }
+  });
+  
   // 버튼 상태 업데이트
   const startBtn = document.getElementById('btnStartTraining');
   const pauseBtn = document.getElementById('btnPauseTraining');
@@ -2505,14 +2520,23 @@ function startTrainingTimer() {
         window.indoorTrainingState.segmentElapsedTime = 0;
         window.indoorTrainingState.segmentCountdownActive = false;
         
-        // 세그먼트 변경 시 모든 파워미터의 궤적 히스토리 초기화
+        // 세그먼트 변경 시 모든 파워미터의 궤적 히스토리 초기화 (연결된 파워미터만)
         window.indoorTrainingState.powerMeters.forEach(pm => {
-            pm.powerTrailHistory = [];
-            pm.lastTrailAngle = null;
-            // 궤적 컨테이너 초기화
-            const trailContainer = document.getElementById(`needle-path-${pm.id}`);
-            if (trailContainer) {
-                trailContainer.innerHTML = '';
+            if (pm.connected) {
+                pm.powerTrailHistory = [];
+                pm.lastTrailAngle = null;
+                // 궤적 컨테이너 초기화 후 목표 파워 궤적 다시 표시
+                const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+                if (trailContainer) {
+                    trailContainer.innerHTML = '';
+                }
+                // 새로운 세그먼트의 목표 파워 궤적 표시를 위해 업데이트
+                const currentPower = pm.currentPower || 0;
+                const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
+                const maxPower = ftp * 2;
+                const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+                const angle = -90 + (ratio * 180);
+                updatePowerMeterTrail(pm.id, currentPower, angle, pm);
             }
         });
         // 카운트다운 모달 제거
