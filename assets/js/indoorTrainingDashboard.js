@@ -846,7 +846,7 @@ function updateScoreboard() {
   // 경과시간
   const elapsedEl = document.getElementById('trainingElapsedTime');
   if (elapsedEl) {
-    const elapsed = window.indoorTrainingState.totalElapsedTime;
+    const elapsed = Math.max(0, window.indoorTrainingState.totalElapsedTime || 0); // 음수 방지
     const hours = Math.floor(elapsed / 3600);
     const minutes = Math.floor((elapsed % 3600) / 60);
     const seconds = Math.floor(elapsed % 60);
@@ -2199,13 +2199,11 @@ function startTrainingTimer() {
     }
   }
   
-  // 우측 세그먼트 그래프 업데이트 (현재 세그먼트 강조, 크기 재계산)
+  // 우측 세그먼트 그래프 업데이트 (현재 세그먼트 강조, 크기 재계산, 애니메이션)
   if (window.indoorTrainingState.currentWorkout) {
     const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex;
-    // 크기 재계산을 위해 약간의 지연 후 업데이트
-    setTimeout(() => {
-      displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
-    }, 50);
+    // 애니메이션을 위해 매 프레임마다 업데이트 (네온 효과 애니메이션)
+    displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
   }
   
   setTimeout(startTrainingTimer, 1000);
@@ -3565,8 +3563,8 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const totalSeconds = segments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
     if (totalSeconds <= 0) return;
     
-    // 그래프 크기 설정 (전광판 크기에 맞춤 - 높이를 절대 넘지 않도록)
-    const padding = { top: 10, right: 15, bottom: 25, left: 35 };
+    // 그래프 크기 설정 (전광판 크기에 맞춤 - 상하 여백 최소화하여 확대)
+    const padding = { top: 5, right: 15, bottom: 5, left: 35 }; // 상하 여백 최소화 (5px)
     const availableWidth = maxWidth - padding.left - padding.right;
     const availableHeight = maxHeight - padding.top - padding.bottom;
     
@@ -3790,34 +3788,39 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
             // 진행된 부분의 너비 계산
             const progressWidth = segWidth * segmentProgress;
             
-            // 전체 세그먼트 경계선 (흰색 네온 효과)
-            ctx.shadowBlur = 8;
-            ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-            ctx.lineWidth = 3;
+            // 밝기 애니메이션 효과 (0.5초 주기로 밝았다 어두워졌다)
+            const animationTime = Date.now() / 500; // 500ms 주기
+            const brightness = 0.5 + 0.5 * Math.sin(animationTime); // 0.5 ~ 1.0 사이 진동
+            const neonOpacity = 0.4 + 0.4 * brightness; // 0.4 ~ 0.8 사이 진동
+            
+            // 전체 세그먼트 경계선 (흰색 네온 효과 - 얇은 테두리, 애니메이션)
+            ctx.shadowBlur = 6 + 4 * brightness; // 6 ~ 10 사이 진동
+            ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity})`;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + 0.3 * brightness})`; // 0.6 ~ 0.9 사이 진동
+            ctx.lineWidth = 1.5; // 얇은 테두리
             ctx.strokeRect(x, y, segWidth, powerHeight);
             
             // 진행된 부분에 더 강한 흰색 네온 효과 (훈련 화면의 progress-fill 네온 효과와 동일)
             if (progressWidth > 0) {
                 // 진행된 부분의 사각형 그리기 (흰색 네온 글로우)
-                ctx.shadowBlur = 12;
-                ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.shadowBlur = 8 + 4 * brightness; // 8 ~ 12 사이 진동
+                ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity * 0.8})`;
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + 0.2 * brightness})`; // 0.2 ~ 0.4 사이 진동
                 ctx.fillRect(x, y, progressWidth, powerHeight);
                 
                 // 진행된 부분의 경계선 (더 강한 네온 효과)
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = 'rgba(255, 255, 255, 0.95)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
-                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10 + 5 * brightness; // 10 ~ 15 사이 진동
+                ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity})`;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 + 0.3 * brightness})`; // 0.7 ~ 1.0 사이 진동
+                ctx.lineWidth = 1.5; // 얇은 테두리
                 ctx.strokeRect(x, y, progressWidth, powerHeight);
             }
             
             // 내부 흰색 네온 효과 (전체 세그먼트)
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = 'rgba(255, 255, 255, 0.6)';
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.lineWidth = 2;
+            ctx.shadowBlur = 6 + 4 * brightness; // 6 ~ 10 사이 진동
+            ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity * 0.7})`;
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 + 0.2 * brightness})`; // 0.5 ~ 0.7 사이 진동
+            ctx.lineWidth = 1; // 얇은 테두리
             ctx.strokeRect(x + 1, y + 1, segWidth - 2, powerHeight - 2);
             
             // 그림자 효과 리셋
