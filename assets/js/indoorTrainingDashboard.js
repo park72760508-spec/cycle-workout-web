@@ -2076,6 +2076,13 @@ function startTraining() {
   if (pauseBtn) pauseBtn.disabled = false;
   if (stopBtn) stopBtn.disabled = false;
   
+  // 우측 세그먼트 그래프 업데이트 (시작 시 현재 세그먼트 인덱스 0으로 표시, 크기 재계산)
+  if (window.indoorTrainingState.currentWorkout) {
+    setTimeout(() => {
+      displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, 0);
+    }, 100);
+  }
+  
   // 타이머 시작
   startTrainingTimer();
 }
@@ -2145,10 +2152,13 @@ function startTrainingTimer() {
     }
   }
   
-  // 우측 세그먼트 그래프 업데이트 (현재 세그먼트 강조)
+  // 우측 세그먼트 그래프 업데이트 (현재 세그먼트 강조, 크기 재계산)
   if (window.indoorTrainingState.currentWorkout) {
     const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex;
-    displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
+    // 크기 재계산을 위해 약간의 지연 후 업데이트
+    setTimeout(() => {
+      displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
+    }, 50);
   }
   
   setTimeout(startTrainingTimer, 1000);
@@ -3416,7 +3426,7 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
     
     container.style.display = 'block';
     
-    // 세그먼트 그래프 그리기 (전광판 크기에 맞춤)
+    // 세그먼트 그래프 그리기 (전광판 크기에 맞춤 - 랩카운트다운과 겹치지 않는 최대 크기)
     setTimeout(() => {
         const canvas = document.getElementById('selectedWorkoutSegmentGraphCanvas');
         if (!canvas) return;
@@ -3425,9 +3435,42 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
         const scoreboardContainer = container.closest('.scoreboard-display');
         if (!scoreboardContainer) return;
         
-        const containerRect = container.getBoundingClientRect();
-        const maxWidth = containerRect.width || 300; // 기본값 300px
-        const maxHeight = containerRect.height || 120; // 기본값 120px (scoreboard-segment-graph-container의 min-height)
+        const scoreboardRect = scoreboardContainer.getBoundingClientRect();
+        const scoreboardWidth = scoreboardRect.width;
+        const scoreboardHeight = scoreboardRect.height;
+        
+        // 좌측 경과시간 영역 크기 확인
+        const elapsedTimeItem = scoreboardContainer.querySelector('.scoreboard-item:first-child');
+        const elapsedTimeRect = elapsedTimeItem ? elapsedTimeItem.getBoundingClientRect() : null;
+        const elapsedTimeWidth = elapsedTimeRect ? elapsedTimeRect.width : 150; // 기본값 150px
+        
+        // 중앙 랩카운트다운 영역 크기 확인
+        const lapCountdownItem = document.getElementById('lapCountdownItem');
+        const lapCountdownRect = lapCountdownItem ? lapCountdownItem.getBoundingClientRect() : null;
+        const lapCountdownWidth = lapCountdownRect ? lapCountdownRect.width : 200; // 기본값 200px
+        const lapCountdownLeft = lapCountdownRect ? lapCountdownRect.left - scoreboardRect.left : scoreboardWidth / 2;
+        const lapCountdownRight = lapCountdownLeft + lapCountdownWidth;
+        
+        // 우측 세그먼트 그래프가 사용할 수 있는 최대 너비 계산
+        // 랩카운트다운의 오른쪽 끝에서 전광판 오른쪽 끝까지의 거리
+        // 랩카운트다운 폰트 길이에 영향을 미치지 않도록 충분한 여백 확보
+        const marginFromCountdown = 30; // 랩카운트다운과의 최소 여백
+        const marginFromRight = 20; // 전광판 오른쪽 끝과의 여백
+        const availableWidth = scoreboardWidth - lapCountdownRight - marginFromCountdown - marginFromRight;
+        const maxWidth = Math.max(250, availableWidth); // 최소 250px (더 크게)
+        
+        // 전광판 높이를 넘지 않는 최대 높이 계산
+        // 전광판 높이에 영향을 주지 않는 범위에서 최대한 크게
+        const marginFromTop = 10; // 상단 여백
+        const marginFromBottom = 10; // 하단 여백
+        const availableHeight = scoreboardHeight - marginFromTop - marginFromBottom;
+        const maxHeight = Math.max(120, Math.min(availableHeight, 250)); // 최소 120px, 최대 250px
+        
+        // 컨테이너 크기 설정
+        container.style.width = `${maxWidth}px`;
+        container.style.maxWidth = `${maxWidth}px`;
+        container.style.height = `${maxHeight}px`;
+        container.style.maxHeight = `${maxHeight}px`;
         
         // 세그먼트 그래프를 전광판 크기에 맞춰 그리기 (현재 세그먼트 인덱스 전달)
         if (typeof drawSegmentGraphForScoreboard === 'function') {
