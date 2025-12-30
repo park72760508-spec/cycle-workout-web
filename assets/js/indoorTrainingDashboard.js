@@ -22,7 +22,8 @@ window.indoorTrainingState = {
   rxBuffer: new Uint8Array(0), // ANT+ 데이터 버퍼 추가
   needleAngles: {}, // 바늘 각도 저장용 추가
   resizeHandler: null, // 리사이즈 이벤트 핸들러
-  scoreboardResizeObserver: null // 전광판 컨테이너 ResizeObserver
+  scoreboardResizeObserver: null, // 전광판 컨테이너 ResizeObserver
+  segmentCountdownActive: false // 세그먼트 카운트다운 활성화 여부
 };
 
 // ANT+ 통신 관련 전역 상태 (rollerRaceDashboard와 공유)
@@ -2099,9 +2100,76 @@ function startTrainingWithCountdown() {
     return;
   }
   
-  // 카운트다운 후 시작
-  // TODO: 카운트다운 구현
-  startTraining();
+  // 카운트다운 모달 생성 및 표시
+  const countdownModal = document.createElement('div');
+  countdownModal.id = 'trainingCountdownModal';
+  countdownModal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  `;
+  
+  const countdownText = document.createElement('div');
+  countdownText.style.cssText = `
+    font-size: 120px;
+    font-weight: 900;
+    color: #00d4aa;
+    text-shadow: 0 0 30px rgba(0, 212, 170, 0.8);
+    animation: countdownPulse 0.5s ease-out;
+  `;
+  
+  // CSS 애니메이션 추가
+  if (!document.getElementById('countdownAnimationStyle')) {
+    const style = document.createElement('style');
+    style.id = 'countdownAnimationStyle';
+    style.textContent = `
+      @keyframes countdownPulse {
+        0% { transform: scale(0.5); opacity: 0; }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes countdownFadeOut {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(1.5); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  countdownModal.appendChild(countdownText);
+  document.body.appendChild(countdownModal);
+  
+  // 카운트다운 시작 (5, 4, 3, 2, 1, GO!!)
+  let count = 5;
+  const countdownInterval = setInterval(() => {
+    if (count > 0) {
+      countdownText.textContent = count.toString();
+      countdownText.style.animation = 'none';
+      setTimeout(() => {
+        countdownText.style.animation = 'countdownPulse 0.5s ease-out';
+      }, 10);
+      count--;
+    } else if (count === 0) {
+      countdownText.textContent = 'GO!!';
+      countdownText.style.animation = 'countdownPulse 0.5s ease-out';
+      count--;
+    } else {
+      clearInterval(countdownInterval);
+      countdownText.style.animation = 'countdownFadeOut 0.3s ease-out';
+      setTimeout(() => {
+        document.body.removeChild(countdownModal);
+        startTraining();
+      }, 300);
+    }
+  }, 1000);
 }
 
 /**
@@ -2188,12 +2256,25 @@ function startTrainingTimer() {
     if (currentSegment) {
       const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
       const segmentElapsed = window.indoorTrainingState.segmentElapsedTime;
+      const remaining = segmentDuration - segmentElapsed;
+      
+      // 세그먼트 종료 6초 전부터 5초 카운트다운 애니메이션 표시
+      if (remaining <= 6 && remaining > 0 && !window.indoorTrainingState.segmentCountdownActive) {
+        window.indoorTrainingState.segmentCountdownActive = true;
+        showSegmentCountdown(remaining);
+      }
       
       // 세그먼트 시간이 지나면 다음 세그먼트로 이동
       if (segmentElapsed >= segmentDuration && currentIndex < segments.length - 1) {
         window.indoorTrainingState.currentSegmentIndex = currentIndex + 1;
         window.indoorTrainingState.segmentStartTime = Date.now();
         window.indoorTrainingState.segmentElapsedTime = 0;
+        window.indoorTrainingState.segmentCountdownActive = false;
+        // 카운트다운 모달 제거
+        const existingModal = document.getElementById('segmentCountdownModal');
+        if (existingModal) {
+          document.body.removeChild(existingModal);
+        }
         console.log(`[Training] 세그먼트 전환: ${currentIndex} → ${currentIndex + 1}`);
       }
     }
@@ -2207,6 +2288,75 @@ function startTrainingTimer() {
   }
   
   setTimeout(startTrainingTimer, 1000);
+}
+
+/**
+ * 세그먼트 종료 카운트다운 애니메이션 표시
+ */
+function showSegmentCountdown(remainingSeconds) {
+  // 기존 카운트다운 모달이 있으면 제거
+  const existingModal = document.getElementById('segmentCountdownModal');
+  if (existingModal) {
+    document.body.removeChild(existingModal);
+  }
+  
+  // 카운트다운 모달 생성 및 표시
+  const countdownModal = document.createElement('div');
+  countdownModal.id = 'segmentCountdownModal';
+  countdownModal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    font-family: "Pretendard", "Noto Sans KR", sans-serif;
+    pointer-events: none;
+  `;
+  
+  const countdownText = document.createElement('div');
+  countdownText.style.cssText = `
+    font-size: 100px;
+    font-weight: 900;
+    color: #ff6b6b;
+    text-shadow: 0 0 30px rgba(255, 107, 107, 0.8);
+    animation: countdownPulse 0.3s ease-out;
+  `;
+  countdownText.textContent = Math.ceil(remainingSeconds).toString();
+  
+  countdownModal.appendChild(countdownText);
+  document.body.appendChild(countdownModal);
+  
+  // 카운트다운 업데이트
+  let count = Math.ceil(remainingSeconds);
+  const countdownInterval = setInterval(() => {
+    const currentRemaining = calculateSegmentRemainingTime();
+    const newCount = Math.ceil(currentRemaining);
+    
+    if (newCount !== count && newCount > 0 && newCount <= 5) {
+      count = newCount;
+      countdownText.textContent = count.toString();
+      countdownText.style.animation = 'none';
+      setTimeout(() => {
+        countdownText.style.animation = 'countdownPulse 0.3s ease-out';
+      }, 10);
+    } else if (newCount <= 0 || newCount > 5) {
+      clearInterval(countdownInterval);
+      if (countdownModal.parentNode) {
+        countdownModal.style.animation = 'countdownFadeOut 0.3s ease-out';
+        setTimeout(() => {
+          if (countdownModal.parentNode) {
+            document.body.removeChild(countdownModal);
+          }
+        }, 300);
+      }
+      window.indoorTrainingState.segmentCountdownActive = false;
+    }
+  }, 100);
 }
 
 // 화면 전환 시 초기화
