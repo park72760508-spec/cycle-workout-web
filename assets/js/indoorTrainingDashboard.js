@@ -71,6 +71,11 @@ class PowerMeterData {
     this.lastCadenceTime = null; // 마지막 케이던스 수신 시간
     this.lastPowerTime = null; // 마지막 파워 수신 시간
     this.cadenceHistory = []; // 케이던스 히스토리 (스무딩용)
+    this.powerRawHistory = []; // 원시 파워 히스토리 (필터링용)
+    this.powerMedianHistory = []; // 중앙값 필터 히스토리
+    this.powerFiltered = null; // 필터링된 파워값
+    this.outlierRejectionCount = 0; // 연속 이상치 거부 횟수
+    this.emaAlpha = 0.3; // EMA 알파 값 (0.3 = 최근 값에 30% 가중치)
     this.powerHistorySmoothed = []; // 파워 히스토리 (스무딩용)
     
     // 가민 스타일: 고급 파워 필터링 (최고 수준)
@@ -2628,32 +2633,52 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const accumulatedPowerW = accumulatedPower * 0.25;
                     
                     if (pm.lastAccumulatedPower !== null && pm.lastAccumulatedPowerTime !== null) {
-                        const timeDiff = (currentTime - pm.lastAccumulatedPowerTime) / 1000.0; // 초 단위
-                        if (timeDiff > 0 && timeDiff < 2.0) { // 2초 이내의 데이터만 유효
+                        const timeDiff = (currentTime - pm.lastAccumulatedPowerTime) / 1000.0; // 초 단위 (밀리초 정밀도)
+                        
+                        // 가민 스타일: 최소 시간 간격 설정 (너무 짧은 간격은 노이즈로 간주)
+                        const minTimeDiff = 0.05; // 50ms 최소 간격 (20Hz 최대 업데이트율)
+                        const maxTimeDiff = 2.0; // 2초 최대 간격
+                        
+                        if (timeDiff >= minTimeDiff && timeDiff < maxTimeDiff) {
                             const powerDiff = accumulatedPowerW - pm.lastAccumulatedPower;
-                            const rawCalculatedPower = powerDiff / timeDiff;
                             
-                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증
+                            // 가민 스타일: 누적 파워 차이가 음수면 오버플로우로 간주 (65536 * 0.25 = 16384W 오버플로우)
+                            let actualPowerDiff = powerDiff;
+                            if (powerDiff < 0) {
+                                // 오버플로우 처리: 16384W (65536 * 0.25)를 더함
+                                actualPowerDiff = powerDiff + 16384.0;
+                                console.log(`[Training] Page 0x10: 누적 파워 오버플로우 감지, 보정: ${powerDiff.toFixed(2)}W → ${actualPowerDiff.toFixed(2)}W`);
+                            }
+                            
+                            const rawCalculatedPower = actualPowerDiff / timeDiff;
+                            
+                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증 (더 관대한 임계값)
                             const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
                             const calculatedPowerDiff = Math.abs(rawCalculatedPower - previousFilteredPower);
-                            const maxAllowedChangeFromAccumulated = 200; // 누적 파워 기반 계산값의 최대 변화량
+                            // Quarq 파워메터를 위해 최대 변화량을 250W로 증가 (급격한 변화 허용)
+                            const maxAllowedChangeFromAccumulated = 250; // 누적 파워 기반 계산값의 최대 변화량
                             
                             // 계산된 파워가 유효 범위 내이고, 이전 값과의 차이가 합리적인 범위 내인지 확인
                             if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
                                 if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
                                     // 정상 범위 내: 반올림하여 사용
                                     calculatedPower = Math.round(rawCalculatedPower);
-                                    console.log(`[Training] Page 0x10: 누적 파워 기반 계산 (Quarq/시마노 호환): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W)`);
+                                    console.log(`[Training] Page 0x10: 누적 파워 기반 계산 (Quarq/시마노/스램/SRM 호환): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W, timeDiff: ${timeDiff.toFixed(3)}s)`);
                                 } else {
-                                    // 이상치: 이전 값과의 중간값 사용
-                                    const limitedPower = (rawCalculatedPower + previousFilteredPower) / 2;
+                                    // 이상치: 이전 값과의 중간값 사용 (더 부드러운 전환)
+                                    const smoothingFactor = 0.6; // 60% 새 값, 40% 이전 값
+                                    const limitedPower = (smoothingFactor * rawCalculatedPower) + ((1 - smoothingFactor) * previousFilteredPower);
                                     calculatedPower = Math.round(limitedPower);
-                                    console.warn(`[Training] 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${calculatedPowerDiff.toFixed(1)}W - 제한 적용: ${calculatedPower}W`);
+                                    console.warn(`[Training] 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${calculatedPowerDiff.toFixed(1)}W - 스무딩 적용: ${calculatedPower}W`);
                                 }
                             } else {
                                 calculatedPower = -1;
                             }
-                        } else if (timeDiff >= 2.0) {
+                        } else if (timeDiff < minTimeDiff) {
+                            // 시간 차이가 너무 짧으면 이전 값 유지 (노이즈 제거)
+                            console.log(`[Training] Page 0x10: 시간 차이 너무 짧음 (${timeDiff.toFixed(3)}s < ${minTimeDiff}s), 이전 값 유지`);
+                            calculatedPower = -1; // 이전 값 유지
+                        } else if (timeDiff >= maxTimeDiff) {
                             // 시간 차이가 너무 크면 누적 파워 초기화 (연결 끊김 등)
                             console.warn(`[Training] Page 0x10: 누적 파워 시간 차이 너무 큼 (${timeDiff.toFixed(2)}s), 초기화`);
                             pm.lastAccumulatedPower = accumulatedPowerW;
@@ -2663,6 +2688,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         // 첫 번째 데이터: 누적 파워 초기화
                         pm.lastAccumulatedPower = accumulatedPowerW;
                         pm.lastAccumulatedPowerTime = currentTime;
+                        console.log(`[Training] Page 0x10: 누적 파워 초기화: ${accumulatedPowerW.toFixed(2)}W`);
                     }
                 }
                 
@@ -2712,12 +2738,49 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
                 
                 console.log(`[Training] Page 0x10 파싱: power=${power} (calc: ${calculatedPower}, inst: ${instantaneousPower}), cadence=${cadence}, eventCount=${eventCount} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'})`);
-            } else if (pageNum === 0x11) { // Standard Wheel Torque Page (가민 추가)
+            } else if (pageNum === 0x11) { // Standard Wheel Torque Page (휠 기반 파워메터 지원 강화)
                 // Byte 1: Event Count
-                // Byte 2-3: Wheel Torque (0.01 Nm)
-                // Byte 4-5: Wheel Period (0.0001 s)
-                // Byte 6-7: Accumulated Wheel Ticks
+                // Byte 2-3: Wheel Torque (0.01 Nm, LSB-MSB)
+                // Byte 4-5: Wheel Period (0.0001 s, LSB-MSB)
+                // Byte 6-7: Accumulated Wheel Ticks (LSB-MSB)
                 // 이 페이지는 주로 휠 기반 파워미터에서 사용
+                
+                // 가민 스타일: 토크와 주기로부터 파워 계산 (휠 기반 파워메터)
+                if (antData.length > 5) {
+                    const torqueLSB = antData[2];
+                    const torqueMSB = antData[3];
+                    const torque = (torqueLSB | (torqueMSB << 8)) * 0.01; // Nm
+                    
+                    const periodLSB = antData[4];
+                    const periodMSB = antData[5];
+                    const period = (periodLSB | (periodMSB << 8)) * 0.0001; // 초
+                    
+                    // 파워 계산: Power (W) = Torque (Nm) * Angular Velocity (rad/s)
+                    if (period > 0 && period < 10.0) { // 유효한 주기 범위
+                        const angularVelocity = (2 * Math.PI) / period; // rad/s
+                        const calculatedPowerFromTorque = torque * angularVelocity;
+                        
+                        // 가민 스타일: 계산된 파워값 유효성 검사
+                        if (calculatedPowerFromTorque >= 0 && calculatedPowerFromTorque <= 2000) {
+                            const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                            const powerDiff = Math.abs(calculatedPowerFromTorque - previousFilteredPower);
+                            const maxAllowedChange = 250;
+                            
+                            if (previousFilteredPower === 0 || powerDiff <= maxAllowedChange) {
+                                power = Math.round(calculatedPowerFromTorque);
+                                pm.lastPowerTime = currentTime;
+                                console.log(`[Training] Page 0x11: 토크 기반 파워 계산 (휠 기반): ${power}W (torque: ${torque.toFixed(2)}Nm, period: ${period.toFixed(4)}s)`);
+                            } else {
+                                const smoothingFactor = 0.6;
+                                const limitedPower = (smoothingFactor * calculatedPowerFromTorque) + ((1 - smoothingFactor) * previousFilteredPower);
+                                power = Math.round(limitedPower);
+                                pm.lastPowerTime = currentTime;
+                                console.warn(`[Training] Page 0x11: 토크 기반 파워 이상치 감지: raw=${calculatedPowerFromTorque.toFixed(1)}W, limited=${power}W`);
+                            }
+                        }
+                    }
+                }
+                
                 const eventCount = antData.length > 1 ? antData[1] : null;
                 if (eventCount !== null && pm.lastEventCount !== null) {
                     const eventDiff = (eventCount - pm.lastEventCount + 256) % 256;
@@ -2728,22 +2791,75 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 if (eventCount !== null) {
                     pm.lastEventCount = eventCount;
                 }
-                console.log(`[Training] Page 0x11 (Wheel Torque) 파싱: eventCount=${eventCount}`);
-            } else if (pageNum === 0x12) { // Standard Crank Torque Page (가민 개선)
+                console.log(`[Training] Page 0x11 (Wheel Torque) 파싱: power=${power}, eventCount=${eventCount}`);
+            } else if (pageNum === 0x12) { // Standard Crank Torque Page (스램, SRM, 페달형 파워메터 지원 강화)
                 // Byte 1: Event Count
-                // Byte 2-3: Crank Torque (0.01 Nm)
-                // Byte 4-5: Crank Period (0.0001 s)
-                // Byte 6-7: Accumulated Crank Ticks
-                // Byte 3에 케이던스가 있을 수 있음 (일부 제조사)
-                if (antData.length > 3 && antData[3] !== 255) {
+                // Byte 2-3: Crank Torque (0.01 Nm, LSB-MSB)
+                // Byte 4-5: Crank Period (0.0001 s, LSB-MSB)
+                // Byte 6-7: Accumulated Crank Ticks (LSB-MSB)
+                
+                // 가민 스타일: 토크와 주기로부터 파워 계산 (스램, SRM, 페달형 파워메터)
+                if (antData.length > 5) {
+                    const torqueLSB = antData[2];
+                    const torqueMSB = antData[3];
+                    const torque = (torqueLSB | (torqueMSB << 8)) * 0.01; // Nm
+                    
+                    const periodLSB = antData[4];
+                    const periodMSB = antData[5];
+                    const period = (periodLSB | (periodMSB << 8)) * 0.0001; // 초
+                    
+                    // 파워 계산: Power (W) = Torque (Nm) * Angular Velocity (rad/s)
+                    // Angular Velocity = 2π / Period (초)
+                    if (period > 0 && period < 10.0) { // 유효한 주기 범위 (0.1초 ~ 10초)
+                        const angularVelocity = (2 * Math.PI) / period; // rad/s
+                        const calculatedPowerFromTorque = torque * angularVelocity;
+                        
+                        // 가민 스타일: 계산된 파워값 유효성 검사
+                        if (calculatedPowerFromTorque >= 0 && calculatedPowerFromTorque <= 2000) {
+                            const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
+                            const powerDiff = Math.abs(calculatedPowerFromTorque - previousFilteredPower);
+                            const maxAllowedChange = 250; // 스램, SRM은 급격한 변화 가능
+                            
+                            if (previousFilteredPower === 0 || powerDiff <= maxAllowedChange) {
+                                power = Math.round(calculatedPowerFromTorque);
+                                pm.lastPowerTime = currentTime;
+                                console.log(`[Training] Page 0x12: 토크 기반 파워 계산 (스램/SRM/페달형): ${power}W (torque: ${torque.toFixed(2)}Nm, period: ${period.toFixed(4)}s)`);
+                            } else {
+                                // 이상치: 스무딩 적용
+                                const smoothingFactor = 0.6;
+                                const limitedPower = (smoothingFactor * calculatedPowerFromTorque) + ((1 - smoothingFactor) * previousFilteredPower);
+                                power = Math.round(limitedPower);
+                                pm.lastPowerTime = currentTime;
+                                console.warn(`[Training] Page 0x12: 토크 기반 파워 이상치 감지: raw=${calculatedPowerFromTorque.toFixed(1)}W, limited=${power}W`);
+                            }
+                        }
+                    }
+                }
+                
+                // 케이던스 추출 (Byte 3 또는 주기로부터 계산)
+                if (antData.length > 3 && antData[3] !== 255 && antData[3] <= 254) {
                     cadence = antData[3]; // 0도 유효한 값
                     pm.lastCadenceTime = currentTime;
+                } else if (antData.length > 5) {
+                    // 주기로부터 케이던스 계산 (60초 / period)
+                    const periodLSB = antData[4];
+                    const periodMSB = antData[5];
+                    const period = (periodLSB | (periodMSB << 8)) * 0.0001; // 초
+                    if (period > 0 && period < 10.0) {
+                        const calculatedCadence = Math.round(60.0 / period);
+                        if (calculatedCadence >= 0 && calculatedCadence <= 254) {
+                            cadence = calculatedCadence;
+                            pm.lastCadenceTime = currentTime;
+                            console.log(`[Training] Page 0x12: 주기 기반 케이던스 계산: ${cadence} RPM (period: ${period.toFixed(4)}s)`);
+                        }
+                    }
                 }
+                
                 const eventCount = antData.length > 1 ? antData[1] : null;
                 if (eventCount !== null) {
                     pm.lastEventCount = eventCount;
                 }
-                console.log(`[Training] Page 0x12 (Crank Torque) 파싱: cadence=${cadence}, eventCount=${eventCount} (raw: antData[3]=${antData.length > 3 ? antData[3] : 'N/A'})`);
+                console.log(`[Training] Page 0x12 (Crank Torque) 파싱: power=${power}, cadence=${cadence}, eventCount=${eventCount}`);
             } else if (pageNum === 0x13) { // Torque Effectiveness and Pedal Smoothness (가민 개선)
                 // Byte 1: Event Count
                 // Byte 2: Left Torque Effectiveness (0-100%)
@@ -2834,30 +2950,52 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     const accumulatedPowerW = accumulatedPower * 0.25; // 0.25W 단위
                     
                     if (pm.lastAccumulatedPower !== null && pm.lastAccumulatedPowerTime !== null) {
-                        const timeDiff = (currentTime - pm.lastAccumulatedPowerTime) / 1000.0;
-                        if (timeDiff > 0 && timeDiff < 2.0) {
+                        const timeDiff = (currentTime - pm.lastAccumulatedPowerTime) / 1000.0; // 초 단위 (밀리초 정밀도)
+                        
+                        // 가민 스타일: 최소 시간 간격 설정 (너무 짧은 간격은 노이즈로 간주)
+                        const minTimeDiff = 0.05; // 50ms 최소 간격 (20Hz 최대 업데이트율)
+                        const maxTimeDiff = 2.0; // 2초 최대 간격
+                        
+                        if (timeDiff >= minTimeDiff && timeDiff < maxTimeDiff) {
                             const powerDiff = accumulatedPowerW - pm.lastAccumulatedPower;
-                            const rawCalculatedPower = powerDiff / timeDiff;
                             
-                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증
+                            // 가민 스타일: 누적 파워 차이가 음수면 오버플로우로 간주
+                            let actualPowerDiff = powerDiff;
+                            if (powerDiff < 0) {
+                                // 오버플로우 처리: 16384W (65536 * 0.25)를 더함
+                                actualPowerDiff = powerDiff + 16384.0;
+                                console.log(`[Training] Page 0x19: 누적 파워 오버플로우 감지, 보정: ${powerDiff.toFixed(2)}W → ${actualPowerDiff.toFixed(2)}W`);
+                            }
+                            
+                            const rawCalculatedPower = actualPowerDiff / timeDiff;
+                            
+                            // 가민 스타일: 누적 파워 기반 계산값도 이상치 검증 (스마트로라용)
                             const previousFilteredPower = pm.powerFiltered || pm.currentPower || 0;
                             const calculatedPowerDiff = Math.abs(rawCalculatedPower - previousFilteredPower);
-                            const maxAllowedChangeFromAccumulated = 200;
+                            // 스마트로라(사이클옵스, 탁스, 와후)를 위해 최대 변화량을 250W로 증가
+                            const maxAllowedChangeFromAccumulated = 250;
                             
+                            // 계산된 파워가 유효 범위 내이고, 이전 값과의 차이가 합리적인 범위 내인지 확인
                             if (rawCalculatedPower >= 0 && rawCalculatedPower <= 2000) {
                                 if (previousFilteredPower === 0 || calculatedPowerDiff <= maxAllowedChangeFromAccumulated) {
+                                    // 정상 범위 내: 반올림하여 사용
                                     calculatedPower = Math.round(rawCalculatedPower);
-                                    console.log(`[Training] Page 0x19: 누적 파워 기반 계산 (스마트로라): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W)`);
+                                    console.log(`[Training] Page 0x19: 누적 파워 기반 계산 (사이클옵스/탁스/와후 스마트로라): ${calculatedPower}W (raw: ${rawCalculatedPower.toFixed(1)}W, timeDiff: ${timeDiff.toFixed(3)}s)`);
                                 } else {
-                                    const limitedPower = (rawCalculatedPower + previousFilteredPower) / 2;
+                                    // 이상치: 이전 값과의 중간값 사용 (더 부드러운 전환)
+                                    const smoothingFactor = 0.6; // 60% 새 값, 40% 이전 값
+                                    const limitedPower = (smoothingFactor * rawCalculatedPower) + ((1 - smoothingFactor) * previousFilteredPower);
                                     calculatedPower = Math.round(limitedPower);
-                                    console.warn(`[Training] Page 0x19: 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, limited=${calculatedPower}W`);
+                                    console.warn(`[Training] Page 0x19: 누적 파워 기반 계산값 이상치 감지: raw=${rawCalculatedPower.toFixed(1)}W, previous=${previousFilteredPower.toFixed(1)}W, diff=${calculatedPowerDiff.toFixed(1)}W - 스무딩 적용: ${calculatedPower}W`);
                                 }
                             } else {
                                 calculatedPower = -1;
                             }
-                        } else if (timeDiff >= 2.0) {
-                            // 시간 차이가 너무 크면 누적 파워 초기화 (연결 끊김 등)
+                        } else if (timeDiff < minTimeDiff) {
+                            // 시간 차이가 너무 짧으면 이전 값 유지 (노이즈 제거)
+                            console.log(`[Training] Page 0x19: 시간 차이 너무 짧음 (${timeDiff.toFixed(3)}s < ${minTimeDiff}s), 이전 값 유지`);
+                            calculatedPower = -1; // 이전 값 유지
+                        } else if (timeDiff >= maxTimeDiff) {
                             console.warn(`[Training] Page 0x19: 누적 파워 시간 차이 너무 큼 (${timeDiff.toFixed(2)}s), 초기화`);
                             pm.lastAccumulatedPower = accumulatedPowerW;
                             pm.lastAccumulatedPowerTime = currentTime;
@@ -2866,6 +3004,7 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                         // 첫 번째 데이터: 누적 파워 초기화
                         pm.lastAccumulatedPower = accumulatedPowerW;
                         pm.lastAccumulatedPowerTime = currentTime;
+                        console.log(`[Training] Page 0x19: 누적 파워 초기화: ${accumulatedPowerW.toFixed(2)}W`);
                     }
                 }
                 
@@ -2999,10 +3138,11 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             let finalPower = isValidPower ? power : (pm.currentPower !== undefined ? pm.currentPower : 0);
             
             if (isValidPower && power > 0) {
-                // 1단계: Outlier Detection (이상치 감지 및 제거)
+                // 1단계: Outlier Detection (이상치 감지 및 제거) - 드롭 최소화
                 const previousPower = pm.powerFiltered || pm.currentPower || 0;
                 const powerDiff = Math.abs(power - previousPower);
-                const maxAllowedChange = 150; // 가민 스타일: 최대 허용 변화량 (W)
+                // Quarq, 스램, SRM, 스마트로라를 위해 최대 허용 변화량을 250W로 증가
+                const maxAllowedChange = 250; // 가민 스타일: 최대 허용 변화량 (W) - 급격한 변화 허용
                 
                 // 이전 값이 있고, 변화량이 너무 크면 이상치로 간주
                 if (previousPower > 0 && powerDiff > maxAllowedChange) {
@@ -3082,10 +3222,11 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                     pm.powerFiltered = power;
                 }
                 
-                // 4단계: 파워 변화율 제한 (가민 스타일: 급격한 변화 방지)
+                // 4단계: 파워 변화율 제한 (가민 스타일: 급격한 변화 방지, 드롭 최소화)
                 const timeSinceLastChange = pm.lastPowerChangeTime ? (currentTime - pm.lastPowerChangeTime) / 1000.0 : 0.25;
                 const powerChangeRate = Math.abs(finalPower - previousPower) / Math.max(timeSinceLastChange, 0.1);
-                const maxChangeRate = 200; // W/s (가민 스타일: 최대 변화율)
+                // Quarq, 스램, SRM, 스마트로라를 위해 최대 변화율을 300W/s로 증가 (드롭 최소화)
+                const maxChangeRate = 300; // W/s (가민 스타일: 최대 변화율 - 드롭 최소화)
                 
                 if (powerChangeRate > maxChangeRate && previousPower > 0) {
                     // 변화율이 너무 크면 이전 값과의 중간값 사용
@@ -3105,12 +3246,12 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 pm.outlierRejectionCount = 0;
             }
             
-            // 가민 스타일: 타임스탬프 기반 데이터 유효성 검사
-            // 케이던스는 5초 이내, 파워는 2초 이내 데이터만 유효
+            // 가민 스타일: 타임스탬프 기반 데이터 유효성 검사 (드롭 최소화)
+            // 케이던스는 5초 이내, 파워는 3초 이내 데이터만 유효 (드롭 방지를 위해 여유 시간 증가)
             const cadenceValid = isValidCadence && 
                 (pm.lastCadenceTime === null || (currentTime - pm.lastCadenceTime) < 5000);
             const powerValid = isValidPower && 
-                (pm.lastPowerTime === null || (currentTime - pm.lastPowerTime) < 2000);
+                (pm.lastPowerTime === null || (currentTime - pm.lastPowerTime) < 3000); // 2초 → 3초로 증가 (드롭 최소화)
             
             // 케이던스 또는 파워 중 하나라도 유효하면 업데이트
             if (powerValid || cadenceValid) {
