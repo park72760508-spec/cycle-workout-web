@@ -3836,15 +3836,18 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         currentTime += segDuration;
     });
     
-    // X축 라벨: 워크아웃 운동시간 (단위:분) - X축 바로 밑에 위치
+    // X축 라벨: 워크아웃 운동시간 (단위:분) - Y축 라벨의 1.5와 2 사이 높이에 위치
     const totalMinutes = Math.round(totalSeconds / 60);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
     ctx.font = '12.6px sans-serif'; // 18px의 70% (12.6px)
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top'; // 텍스트 기준선을 상단으로 설정
-    // X축 위치(padding.top + chartHeight) 바로 밑에 표시 (2px 여백)
-    const xAxisY = padding.top + chartHeight;
-    ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xAxisY + 2);
+    ctx.textBaseline = 'middle'; // 텍스트 기준선을 중앙으로 설정
+    // Y축 라벨 1.5(150%)와 2(200%) 사이 높이 계산 (약 175% 위치)
+    const maxFtpPercent = 200;
+    const targetFtpPercent = 175; // 1.5와 2 사이 (1.75)
+    const yRatio = targetFtpPercent / maxFtpPercent; // 0.875
+    const xLabelY = padding.top + chartHeight - (yRatio * chartHeight);
+    ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xLabelY);
 }
 
 
