@@ -9057,6 +9057,7 @@ button[aria-disabled="true"] {
   align-items: center;
   justify-content: center;
   min-height: 120px;
+  max-height: 250px; /* 전광판 높이에 영향을 주지 않는 최대 높이 */
 }
 
 .scoreboard-segment-graph-container canvas {
