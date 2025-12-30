@@ -9048,6 +9048,9 @@ button[aria-disabled="true"] {
   justify-content: flex-start;
   align-items: center;
   position: relative;
+  min-height: fit-content; /* 내용에 맞춤 */
+  max-height: none; /* 최대 높이 제한 없음 (자식 요소가 높이에 영향을 주지 않도록) */
+  overflow: visible; /* 넘치는 내용 표시 */
 }
 
 .scoreboard-segment-graph-container {
