@@ -2536,7 +2536,7 @@ function showSegmentCountdown(startCount) {
     playBeep(880, 120, 0.25);
   }
   
-  const countdownInterval = setInterval(() => {
+  const countdownInterval = setInterval(async () => {
     count--;
     
     if (count > 0) {
@@ -2550,8 +2550,20 @@ function showSegmentCountdown(startCount) {
       if (typeof playBeep === 'function') {
         playBeep(880, 120, 0.25);
       }
+    } else if (count === 0) {
+      // 0초일 때 - 시작 카운트다운 GO!!와 같은 소리
+      countdownText.textContent = '0';
+      countdownText.style.animation = 'countdownPulse 0.5s ease-out';
+      if (typeof playBeep === 'function') {
+        try {
+          await playBeep(1500, 700, 0.35, 'square');
+        } catch (e) {
+          console.warn('Failed to play beep:', e);
+        }
+      }
+      count--;
     } else {
-      // 카운트다운 종료
+      // 카운트다운 종료 (0초 이후)
       clearInterval(countdownInterval);
       if (countdownModal.parentNode) {
         countdownModal.style.animation = 'countdownFadeOut 0.3s ease-out';
