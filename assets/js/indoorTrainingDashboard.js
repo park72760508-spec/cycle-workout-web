@@ -76,6 +76,9 @@ class PowerMeterData {
     this.powerFiltered = null; // 필터링된 파워값
     this.outlierRejectionCount = 0; // 연속 이상치 거부 횟수
     this.emaAlpha = 0.3; // EMA 알파 값 (0.3 = 최근 값에 30% 가중치)
+    this.targetPower = 0; // 목표 파워값 (세그먼트)
+    this.powerTrailHistory = []; // 파워 궤적 히스토리 (각도 배열)
+    this.lastTrailAngle = null; // 마지막 궤적 각도
     this.powerHistorySmoothed = []; // 파워 히스토리 (스무딩용)
     
     // 가민 스타일: 고급 파워 필터링 (최고 수준)
@@ -674,7 +677,13 @@ function updatePowerMeterNeedle(powerMeterId, power) {
         return;
     }
 
-    const ftp = window.indoorTrainingState?.userFTP || 200;
+    const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+    if (!powerMeter) {
+        console.warn(`[PowerMeter] updatePowerMeterNeedle: 파워미터를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
+        return;
+    }
+
+    const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2;
     const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
 
@@ -685,7 +694,159 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     needleEl.setAttribute('transform', `rotate(${angle})`);
     needleEl.style.visibility = 'visible';
     
+    // 바늘 궤적 업데이트
+    updatePowerMeterTrail(powerMeterId, power, angle, powerMeter);
+    
     console.log(`[PowerMeter] updatePowerMeterNeedle: powerMeterId=${powerMeterId}, power=${power}, angle=${angle}, transform=${needleEl.getAttribute('transform')}, visibility=${needleEl.style.visibility}`);
+}
+
+/**
+ * 파워미터 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적)
+ */
+function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
+    const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
+    if (!trailContainer) {
+        console.warn(`[PowerMeter] updatePowerMeterTrail: 궤적 컨테이너를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
+        return;
+    }
+
+    const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
+    const maxPower = ftp * 2;
+    
+    // 현재 세그먼트 목표 파워 계산
+    let targetPower = 0;
+    if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
+        const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
+        const currentSegment = window.indoorTrainingState.currentWorkout.segments[currentSegmentIndex];
+        if (currentSegment) {
+            const targetValue = currentSegment.target_value || currentSegment.target || '100';
+            let ftpPercent = 100;
+            
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/');
+                if (parts.length > 0) {
+                    const ftpPart = parts[0].trim().replace('%', '');
+                    ftpPercent = Number(ftpPart) || 100;
+                }
+            } else if (typeof targetValue === 'number') {
+                ftpPercent = targetValue;
+            }
+            
+            targetPower = (ftp * ftpPercent) / 100;
+        }
+    }
+    
+    // 목표 파워 각도 계산
+    const targetRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+    const targetAngle = -90 + (targetRatio * 180);
+    
+    // 목표 파워 저장
+    powerMeter.targetPower = targetPower;
+    
+    // 궤적 히스토리 업데이트 (각도 저장)
+    if (powerMeter.lastTrailAngle !== null && powerMeter.lastTrailAngle !== currentAngle) {
+        // 각도가 변경된 경우에만 히스토리에 추가
+        powerMeter.powerTrailHistory.push({
+            angle: currentAngle,
+            power: currentPower,
+            timestamp: Date.now()
+        });
+        
+        // 최근 100개만 유지
+        if (powerMeter.powerTrailHistory.length > 100) {
+            powerMeter.powerTrailHistory.shift();
+        }
+    }
+    powerMeter.lastTrailAngle = currentAngle;
+    
+    // 궤적 그리기
+    drawPowerMeterTrail(trailContainer, targetAngle, currentAngle, powerMeter.powerTrailHistory, targetPower, currentPower);
+}
+
+/**
+ * 파워미터 바늘 궤적 그리기 (SVG path 사용)
+ */
+function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory, targetPower, currentPower) {
+    // 기존 궤적 제거
+    container.innerHTML = '';
+    
+    const centerX = 0; // translate(100, 140)이 적용되어 있으므로 상대 좌표는 0, 0
+    const centerY = 0;
+    const radius = 80; // 반원 반지름
+    
+    // 1. 목표 파워 궤적 (투명 주황색) - 시작점(-90도)부터 목표 각도까지
+    if (targetPower > 0) {
+        const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const startAngle = -90;
+        const endAngle = targetAngle;
+        
+        // SVG arc 경로 생성 (A rx ry x-axis-rotation large-arc-flag sweep-flag x y)
+        const startX = centerX + radius * Math.cos((startAngle * Math.PI) / 180);
+        const startY = centerY + radius * Math.sin((startAngle * Math.PI) / 180);
+        const endX = centerX + radius * Math.cos((endAngle * Math.PI) / 180);
+        const endY = centerY + radius * Math.sin((endAngle * Math.PI) / 180);
+        
+        const largeArcFlag = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
+        const sweepFlag = endAngle > startAngle ? 1 : 0;
+        
+        const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+        targetPath.setAttribute('d', pathData);
+        targetPath.setAttribute('fill', 'none');
+        targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 투명 주황색
+        targetPath.setAttribute('stroke-width', '2');
+        targetPath.setAttribute('stroke-linecap', 'round');
+        container.appendChild(targetPath);
+    }
+    
+    // 2. 실제 파워 궤적 (투명 민트색 또는 주황색) - 히스토리 기반
+    // 히스토리와 현재 각도를 합쳐서 전체 궤적 그리기
+    const allPoints = [...trailHistory];
+    if (trailHistory.length > 0) {
+        const lastPoint = trailHistory[trailHistory.length - 1];
+        if (Math.abs(lastPoint.angle - currentAngle) > 0.1) { // 각도가 다르면 추가
+            allPoints.push({
+                angle: currentAngle,
+                power: currentPower,
+                timestamp: Date.now()
+            });
+        }
+    } else if (currentPower > 0) {
+        // 히스토리가 없으면 현재 점만 추가
+        allPoints.push({
+            angle: currentAngle,
+            power: currentPower,
+            timestamp: Date.now()
+        });
+    }
+    
+    // 각 구간별로 색상을 결정하여 그리기
+    for (let i = 1; i < allPoints.length; i++) {
+        const prevPoint = allPoints[i - 1];
+        const currentPoint = allPoints[i];
+        
+        const prevAngle = prevPoint.angle;
+        const currentPointAngle = currentPoint.angle;
+        
+        const prevX = centerX + radius * Math.cos((prevAngle * Math.PI) / 180);
+        const prevY = centerY + radius * Math.sin((prevAngle * Math.PI) / 180);
+        const currentX = centerX + radius * Math.cos((currentPointAngle * Math.PI) / 180);
+        const currentY = centerY + radius * Math.sin((currentPointAngle * Math.PI) / 180);
+        
+        // 목표 파워보다 낮으면 주황색, 높거나 같으면 민트색
+        const isBelowTarget = currentPoint.power < targetPower;
+        const color = isBelowTarget ? 'rgba(255, 165, 0, 0.6)' : 'rgba(0, 212, 170, 0.6)';
+        
+        const segmentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const largeArcFlag = Math.abs(currentPointAngle - prevAngle) > 180 ? 1 : 0;
+        const sweepFlag = currentPointAngle > prevAngle ? 1 : 0;
+        const segmentPathData = `M ${prevX} ${prevY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${currentX} ${currentY}`;
+        segmentPath.setAttribute('d', segmentPathData);
+        segmentPath.setAttribute('fill', 'none');
+        segmentPath.setAttribute('stroke', color);
+        segmentPath.setAttribute('stroke-width', '2');
+        segmentPath.setAttribute('stroke-linecap', 'round');
+        container.appendChild(segmentPath);
+    }
 }
 
 // 페이지 로딩 완료 후 모든 바늘 0점으로 초기화
@@ -2295,6 +2456,17 @@ function startTrainingTimer() {
         window.indoorTrainingState.segmentStartTime = Date.now();
         window.indoorTrainingState.segmentElapsedTime = 0;
         window.indoorTrainingState.segmentCountdownActive = false;
+        
+        // 세그먼트 변경 시 모든 파워미터의 궤적 히스토리 초기화
+        window.indoorTrainingState.powerMeters.forEach(pm => {
+            pm.powerTrailHistory = [];
+            pm.lastTrailAngle = null;
+            // 궤적 컨테이너 초기화
+            const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+            if (trailContainer) {
+                trailContainer.innerHTML = '';
+            }
+        });
         // 카운트다운 모달 제거
         const existingModal = document.getElementById('segmentCountdownModal');
         if (existingModal) {
