@@ -789,10 +789,14 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
     const centerY = 0;
     const radius = 80; // 반원 반지름
     
-    // 1. 목표 파워 궤적 (투명 주황색) - 시작점(-90도)부터 목표 각도까지
+    // 바늘이 0일 때의 각도 계산 (updatePowerMeterNeedle과 동일한 로직)
+    // power = 0일 때: ratio = 0, angle = -90 + (0 * 180) = -90도
+    const zeroPowerAngle = -90;
+    
+    // 1. 목표 파워 궤적 (투명 주황색) - 바늘의 0 시작 위치부터 목표 각도까지
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const startAngle = -90;
+        const startAngle = zeroPowerAngle; // 바늘의 0 시작 위치와 동일
         const endAngle = targetAngle;
         
         // SVG arc 경로 생성 (A rx ry x-axis-rotation large-arc-flag sweep-flag x y)
