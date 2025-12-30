@@ -568,7 +568,7 @@ function generatePowerMeterLabels(powerMeterId) {
       displayValue = Math.round(ftp * multiplier).toString();
       
       // 1×FTP는 주황색으로 표기, 나머지는 흰색
-      const textColor = isOneFTP ? '#ff8c00' : '#ffffff';
+      const textColor = isOneFTP ? '#00d4aa' : '#ffffff';
       
       labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
@@ -4514,6 +4514,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const xLabelY = padding.top + chartHeight - (yRatio * chartHeight);
     ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xLabelY);
 }
+
 
 
 
