@@ -749,11 +749,12 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     }
     
     // FTP 비율에 따른 목표 각도 계산 (FTP 비율을 직접 반영)
-    // FTP 0% = -90도 (시작점), FTP 200% = 90도 (끝점)
+    // FTP 0% = -90도 (바늘의 시작 위치), FTP 200% = 90도 (끝점)
     // FTP 100% = 0도 (중간점)
+    // -90도에서 시작하여 90도 방향으로 FTP 비율만큼 표시
     const maxFtpPercent = 200; // 최대 FTP 비율 (속도계 최대값)
     const ftpRatio = Math.min(Math.max(ftpPercent / maxFtpPercent, 0), 1); // 0~1 범위로 정규화
-    const targetAngle = -90 + (ftpRatio * 180); // -90도부터 90도까지
+    const targetAngle = -90 + (ftpRatio * 180); // -90도부터 90도까지 (FTP 비율에 따라)
     
     // 목표 파워 저장
     powerMeter.targetPower = targetPower;
@@ -793,11 +794,11 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
     // power = 0일 때: ratio = 0, angle = -90 + (0 * 180) = -90도
     const zeroPowerAngle = -90;
     
-    // 1. 목표 파워 궤적 (투명 주황색) - 바늘의 0 시작 위치부터 목표 각도까지
+    // 1. 목표 파워 궤적 (투명 주황색) - 바늘의 시작 위치(-90도)에서 FTP 비율만큼 90도 방향으로 표시
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const startAngle = zeroPowerAngle; // 바늘의 0 시작 위치와 동일
-        const endAngle = targetAngle;
+        const startAngle = zeroPowerAngle; // -90도: 바늘의 시작 위치와 동일
+        const endAngle = targetAngle; // FTP 비율에 따라 계산된 목표 각도 (-90도 ~ 90도)
         
         // SVG arc 경로 생성 (A rx ry x-axis-rotation large-arc-flag sweep-flag x y)
         const startX = centerX + radius * Math.cos((startAngle * Math.PI) / 180);
