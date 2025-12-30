@@ -9407,24 +9407,19 @@ button[aria-disabled="true"] {
 }
 
 .speedometer-info.connected {
-  background: rgba(0, 212, 170, 0.15) !important; /* 초록색 배경 (데이터 수신 중) */
-  border: 1px solid rgba(0, 212, 170, 0.4) !important;
+  background: #90EE90 !important; /* 연두색 배경 (연결됨, 투명도 없음) */
+  border: 1px solid #90EE90 !important;
   /* 텍스트 색상은 변경하지 않음 (기존 색상 유지) */
 }
 
 .speedometer-info.warning {
-  background: rgba(255, 165, 0, 0.15) !important; /* 주황색 배경 (디바이스 페어링되었지만 데이터 미수신) */
-  border: 1px solid rgba(255, 165, 0, 0.4) !important;
+  background: #ff8c00 !important; /* 주황색 배경 (연결됨 이외 상황, 투명도 없음) */
+  border: 1px solid #ff8c00 !important;
 }
 
 .speedometer-info.disconnected {
-  background: rgba(255, 140, 0, 0.15) !important; /* 주황색 배경 (미연결 상태) */
-  border: 1px solid rgba(255, 140, 0, 0.4) !important;
-}
-
-
-.speedometer-info.disconnected {
-  background: #ff8c00; /* 주황색 배경 (미연결 상태) */
+  background: #ff8c00 !important; /* 주황색 배경 (연결됨 이외 상황, 투명도 없음) */
+  border: 1px solid #ff8c00 !important;
 }
 
 /* 좌측: 최대속도, 평균속도 */
