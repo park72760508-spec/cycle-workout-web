@@ -938,20 +938,21 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   // 속도계 모양 아래 파워 정보창 색상 업데이트
   const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
   if (infoEl) {
-    // 파워메터/스마트로라/심박계 중 1개 이상 페어링되어 데이터가 수신되면 초록색
-    // 연결이 모두 끊기면 주황색
-    if (hasData && (hasPowerDevice || hasHeartRateDevice)) {
-      // 데이터 수신 중: 초록색
+    // 연결됨 상태(statusClass === 'connected')일 때만 연두색, 그 외는 주황색
+    if (statusClass === 'connected') {
+      // 연결됨: 연두색 (투명도 없음)
       infoEl.classList.remove('disconnected', 'warning');
       infoEl.classList.add('connected');
-    } else if (hasAnyDevice) {
-      // 디바이스는 페어링되어 있지만 데이터 미수신: 주황색
-      infoEl.classList.remove('disconnected', 'connected');
-      infoEl.classList.add('warning');
     } else {
-      // 디바이스 미페어링: 기본 색상
-      infoEl.classList.remove('connected', 'warning');
-      infoEl.classList.add('disconnected');
+      // 연결됨 이외 상황: 주황색 (투명도 없음)
+      infoEl.classList.remove('connected');
+      if (hasAnyDevice) {
+        infoEl.classList.remove('disconnected');
+        infoEl.classList.add('warning');
+      } else {
+        infoEl.classList.remove('warning');
+        infoEl.classList.add('disconnected');
+      }
     }
   }
 }
