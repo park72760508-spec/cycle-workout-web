@@ -782,6 +782,10 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
 /**
  * 파워미터 바늘 궤적 그리기 (SVG path 사용)
  */
+/**
+ * 파워미터 바늘 궤적 그리기 (SVG path 사용)
+ * [수정] 좌표계 보정 추가 (Needle 각도 -> SVG 좌표 각도 변환)
+ */
 function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory, targetPower, currentPower) {
     // 기존 궤적 제거
     container.innerHTML = '';
@@ -790,21 +794,30 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
     const centerY = 0;
     const radius = 80; // 반원 반지름
     
-    // 바늘이 0일 때의 각도 계산 (updatePowerMeterNeedle과 동일한 로직)
-    // power = 0일 때: ratio = 0, angle = -90 + (0 * 180) = -90도
+    // 바늘이 0일 때의 각도 계산
     const zeroPowerAngle = -90;
     
-    // 1. 목표 파워 궤적 (투명 주황색) - 바늘의 시작 위치(-90도)에서 FTP 비율만큼 90도 방향으로 표시
+    // [중요] 좌표 변환을 위한 오프셋 설정
+    // Needle: -90(좌) ~ 0(상) ~ 90(우)
+    // SVG Math: 180(좌) ~ 270(상) ~ 360/0(우)
+    // 따라서 Needle 각도에 270도를 더해야 SVG 좌표계와 일치함
+    const angleOffset = 270;
+    
+    // 1. 목표 파워 궤적 (투명 주황색)
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const startAngle = zeroPowerAngle; // -90도: 바늘의 시작 위치와 동일
-        const endAngle = targetAngle; // FTP 비율에 따라 계산된 목표 각도 (-90도 ~ 90도)
+        const startAngle = zeroPowerAngle; 
+        const endAngle = targetAngle; 
         
-        // SVG arc 경로 생성 (A rx ry x-axis-rotation large-arc-flag sweep-flag x y)
-        const startX = centerX + radius * Math.cos((startAngle * Math.PI) / 180);
-        const startY = centerY + radius * Math.sin((startAngle * Math.PI) / 180);
-        const endX = centerX + radius * Math.cos((endAngle * Math.PI) / 180);
-        const endY = centerY + radius * Math.sin((endAngle * Math.PI) / 180);
+        // 각도에 오프셋 적용하여 라디안 변환
+        const startRad = ((startAngle + angleOffset) * Math.PI) / 180;
+        const endRad = ((endAngle + angleOffset) * Math.PI) / 180;
+        
+        // 좌표 계산
+        const startX = centerX + radius * Math.cos(startRad);
+        const startY = centerY + radius * Math.sin(startRad);
+        const endX = centerX + radius * Math.cos(endRad);
+        const endY = centerY + radius * Math.sin(endRad);
         
         const largeArcFlag = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
         const sweepFlag = endAngle > startAngle ? 1 : 0;
@@ -813,17 +826,18 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
         targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 투명 주황색
-        targetPath.setAttribute('stroke-width', '2');
-        targetPath.setAttribute('stroke-linecap', 'round');
+        targetPath.setAttribute('stroke-width', '4'); // 잘 보이도록 두께 조정
+        targetPath.setAttribute('stroke-linecap', 'butt'); // 끝부분 처리
         container.appendChild(targetPath);
     }
     
     // 2. 실제 파워 궤적 (투명 민트색 또는 주황색) - 히스토리 기반
-    // 히스토리와 현재 각도를 합쳐서 전체 궤적 그리기
     const allPoints = [...trailHistory];
+    
+    // 현재 점 추가 로직 (이전과 동일)
     if (trailHistory.length > 0) {
         const lastPoint = trailHistory[trailHistory.length - 1];
-        if (Math.abs(lastPoint.angle - currentAngle) > 0.1) { // 각도가 다르면 추가
+        if (Math.abs(lastPoint.angle - currentAngle) > 0.1) {
             allPoints.push({
                 angle: currentAngle,
                 power: currentPower,
@@ -831,7 +845,6 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
             });
         }
     } else if (currentPower > 0) {
-        // 히스토리가 없으면 현재 점만 추가
         allPoints.push({
             angle: currentAngle,
             power: currentPower,
@@ -839,7 +852,7 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         });
     }
     
-    // 각 구간별로 색상을 결정하여 그리기
+    // 궤적 그리기 (오프셋 적용)
     for (let i = 1; i < allPoints.length; i++) {
         const prevPoint = allPoints[i - 1];
         const currentPoint = allPoints[i];
@@ -847,24 +860,28 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         const prevAngle = prevPoint.angle;
         const currentPointAngle = currentPoint.angle;
         
-        const prevX = centerX + radius * Math.cos((prevAngle * Math.PI) / 180);
-        const prevY = centerY + radius * Math.sin((prevAngle * Math.PI) / 180);
-        const currentX = centerX + radius * Math.cos((currentPointAngle * Math.PI) / 180);
-        const currentY = centerY + radius * Math.sin((currentPointAngle * Math.PI) / 180);
+        // 좌표 변환 시 오프셋 적용
+        const prevRad = ((prevAngle + angleOffset) * Math.PI) / 180;
+        const currRad = ((currentPointAngle + angleOffset) * Math.PI) / 180;
         
-        // 목표 파워보다 낮으면 주황색, 높거나 같으면 민트색
+        const prevX = centerX + radius * Math.cos(prevRad);
+        const prevY = centerY + radius * Math.sin(prevRad);
+        const currentX = centerX + radius * Math.cos(currRad);
+        const currentY = centerY + radius * Math.sin(currRad);
+        
         const isBelowTarget = currentPoint.power < targetPower;
         const color = isBelowTarget ? 'rgba(255, 165, 0, 0.6)' : 'rgba(0, 212, 170, 0.6)';
         
         const segmentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const largeArcFlag = Math.abs(currentPointAngle - prevAngle) > 180 ? 1 : 0;
         const sweepFlag = currentPointAngle > prevAngle ? 1 : 0;
+        
         const segmentPathData = `M ${prevX} ${prevY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${currentX} ${currentY}`;
         segmentPath.setAttribute('d', segmentPathData);
         segmentPath.setAttribute('fill', 'none');
         segmentPath.setAttribute('stroke', color);
-        segmentPath.setAttribute('stroke-width', '2');
-        segmentPath.setAttribute('stroke-linecap', 'round');
+        segmentPath.setAttribute('stroke-width', '4'); // 두께 조정
+        segmentPath.setAttribute('stroke-linecap', 'butt');
         container.appendChild(segmentPath);
     }
 }
@@ -4490,6 +4507,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const xLabelY = padding.top + chartHeight - (yRatio * chartHeight);
     ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xLabelY);
 }
+
 
 
 
