@@ -2272,6 +2272,7 @@ button[aria-disabled="true"] {
   cursor: pointer;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
+  user-select: none;
   touch-action: manipulation;
 }
 
@@ -4657,6 +4658,7 @@ button[aria-disabled="true"] {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  color: transparent;
 }
 
 .auth-form-header h3 {
@@ -8117,6 +8119,7 @@ button[aria-disabled="true"] {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  color: transparent;
   text-shadow: 0 0 40px rgba(255, 255, 255, 0.3);
   animation: glow 2s ease-in-out infinite alternate;
   margin-bottom: 10px;
