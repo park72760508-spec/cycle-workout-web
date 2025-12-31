@@ -694,10 +694,11 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === powerMeterId);
     if (!powerMeter) return;
     
+    // FTP 기반 최대 파워 계산 (기본 200W 기준, FTP의 200%가 맥스)
     const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 200;
     const maxPower = ftp * 2;
     
-    // 바늘 각도 계산
+    // 바늘 각도 계산 (-90도 ~ 90도)
     const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
     const angle = -90 + (ratio * 180);
     
@@ -705,10 +706,12 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     const textEl = document.getElementById(`power-value-${powerMeterId}`);
     
     if (needleEl) {
-        // [중요] 바늘과 궤적의 시차(Lag)를 없애기 위해 Transition 제거
+        // [중요] 바늘과 궤적의 시차(Lag)를 없애기 위해 CSS Transition 제거
+        // 바늘이 데이터 변동에 따라 즉시 이동하므로 궤적선과 오차가 사라집니다.
         needleEl.style.transition = 'none'; 
         needleEl.setAttribute('transform', `rotate(${angle})`);
         
+        // 연결 상태에 따른 가시성 처리
         if (!powerMeter.connected) {
              needleEl.style.visibility = 'hidden';
         } else {
@@ -716,15 +719,21 @@ function updatePowerMeterNeedle(powerMeterId, power) {
         }
     }
     
+    // 텍스트 업데이트
     if (textEl) {
         textEl.textContent = Math.round(power);
     }
     
+    // 이전 파워값 저장
     powerMeter.previousPower = power;
     
     // 궤적 업데이트 호출
     updatePowerMeterTrail(powerMeterId, power, angle, powerMeter);
 }
+
+
+
+
 /**
  * 바늘 각도에서 파워값으로 역변환 (궤적선 동기화용)
  */
@@ -737,8 +746,8 @@ function calculatePowerFromAngle(angle, maxPower) {
 
 /**
  * 파워미터 바늘 궤적 업데이트
- * - [수정] 훈련 시작 전(Idle)이어도 궤적을 그리도록 조건 완화
- * - [수정] 훈련 상태(isTrainingRunning)를 그리기 함수에 전달
+ * - [수정] 훈련 시작 전(Idle)이어도 궤적을 그리도록 로직 변경
+ * - [수정] 훈련 상태(isTrainingRunning)를 그리기 함수에 전달하여 색상 결정
  */
 function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
     const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
@@ -753,21 +762,19 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         return;
     }
 
-    // 훈련 상태 확인
+    // 훈련 상태 확인 (Idle, Running 등)
     const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
-    // 워크아웃 존재 여부 (시작 안 했어도 로딩은 되어 있을 수 있음)
-    const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
-
+    
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2; 
     
-    // 2. 목표 파워 계산
+    // 2. 목표 파워 계산 (워크아웃 정보가 있을 때만)
     let targetPower = 0;
     let ftpPercent = 0;
+    const hasWorkout = window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments;
     
-    if (hasWorkout && window.indoorTrainingState.currentWorkout.segments) {
+    if (hasWorkout) {
         const segments = window.indoorTrainingState.currentWorkout.segments;
-        // 인덱스 안전 접근
         const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
         const currentSegment = segments[currentSegmentIndex] || segments[0]; 
         
@@ -791,9 +798,8 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         }
     }
     
-    // 목표 파워 텍스트 업데이트
+    // 목표 파워 텍스트 업데이트 (목표가 있을 때만 표시)
     if (targetTextEl) {
-        // 목표 파워가 있고 0보다 클 때만 표시
         targetTextEl.textContent = targetPower > 0 ? Math.round(targetPower) : '';
     }
     
@@ -807,7 +813,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     powerMeter.targetPower = targetPower;
     const segmentPower = powerMeter.segmentPower || 0;
 
-    // 3. 그리기 함수 호출 (isTrainingRunning 전달 추가)
+    // 3. 그리기 함수 호출 (isTrainingRunning 상태 전달)
     drawPowerMeterTrail(
         trailContainer, 
         targetAngle, 
@@ -815,18 +821,18 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         currentPower, 
         segmentPower,
         maxPower,
-        isTrainingRunning // [추가] 훈련 상태 전달
+        isTrainingRunning // [중요] 색상 결정을 위해 전달
     );
 }
 
 /**
  * 파워미터 바늘 궤적 그리기 (SVG)
  * - [수정] 훈련 시작 전(isTrainingRunning == false)이면 민트색 고정
- * - [기존] 훈련 중이면 달성률(98.5%)에 따라 색상 변화
- * - 값(Value) 기반 루프로 바늘 움직임과 즉각 동기화
+ * - [기존] 훈련 중이면 달성률(98.5%)에 따라 색상 변화 (민트/주황)
+ * - 값(Value) 기반 루프로 바늘 움직임과 즉각 동기화 (생성/삭제)
  */
 function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, segmentPower, maxPower, isTrainingRunning) {
-    // 1. 캔버스 초기화 (잔상 제거)
+    // 1. 매 프레임 캔버스 초기화 (이전 잔상 완벽 제거)
     container.innerHTML = '';
     
     const centerX = 0; 
@@ -841,7 +847,7 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, 
     const startAngleNeedle = -90; 
 
     // =========================================================
-    // A. 목표 파워 원둘레선 (목표가 있을 때만 표시)
+    // A. 목표 파워 원둘레선 (목표가 있고 0보다 클 때만 표시)
     // =========================================================
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -866,8 +872,9 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, 
         
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
-        targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 진한 주황
+        targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 진한 주황색 (투명도 0.6)
         targetPath.setAttribute('stroke-width', tickLengthShort);
+        targetPath.setAttribute('stroke-linecap', 'butt');
         
         container.appendChild(targetPath);
     }
@@ -879,19 +886,19 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, 
     // 기본 색상: 주황색
     let trailColor = 'rgba(255, 165, 0, 0.4)'; 
 
-    // [수정] 색상 결정 로직
+    // [색상 결정 로직]
     if (!isTrainingRunning) {
-        // 1. 워크아웃 시작 전(대기 상태): 무조건 민트색
+        // 상황 1. 워크아웃 시작 전(대기 상태): 무조건 민트색
         trailColor = 'rgba(0, 212, 170, 0.4)'; 
     } else if (targetPower > 0) {
-        // 2. 훈련 중: 달성률 98.5% 이상이면 민트, 아니면 주황
+        // 상황 2. 훈련 중: 달성률 98.5% 이상이면 민트, 미만이면 주황
         const achievementRatio = (segmentPower / targetPower) * 100;
         if (achievementRatio >= 98.5) {
             trailColor = 'rgba(0, 212, 170, 0.4)';
         }
     }
 
-    // 3. 스케일 및 루프 설정
+    // 스케일 설정 (0~120)
     const maxScalePos = 120; 
     const tickInterval = 2.5; 
     
@@ -901,7 +908,8 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, 
         currentScalePos = (currentPower / maxPower) * maxScalePos;
     }
     
-    // [핵심] 현재 파워 위치까지만 루프 실행 (초과분 자동 삭제 효과)
+    // [핵심 로직] 현재 파워 위치까지만 루프 실행
+    // currentScalePos를 넘는 구간은 for문이 돌지 않으므로 자동으로 삭제됨
     const limitPos = Math.min(currentScalePos, maxScalePos);
 
     for (let pos = 0; pos <= limitPos; pos += tickInterval) {
@@ -4305,6 +4313,7 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
+
 
 
 
