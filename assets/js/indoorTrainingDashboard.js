@@ -2286,6 +2286,34 @@ function renderPairingDeviceList(targetType) {
   // window.antState.foundDevices에서 해당 타입 기기만 추출
   const devices = window.antState.foundDevices.filter(d => d.deviceType === targetType);
   
+  // 다른 리스트에서 잘못 표시된 동일 디바이스 제거 (안전장치)
+  // 파워미터 리스트를 렌더링할 때는 스마트로라 리스트에서 같은 ID 제거
+  if (targetType === 0x0B) {
+    const trainerListEl = document.getElementById('trainerDeviceList');
+    if (trainerListEl) {
+      devices.forEach(device => {
+        const wrongItem = trainerListEl.querySelector(`[data-device-id="${device.id}"]`);
+        if (wrongItem) {
+          console.log(`[Training] 파워미터 리스트 렌더링: 스마트로라 리스트에서 잘못 표시된 디바이스 제거 (ID: ${device.id})`);
+          wrongItem.remove();
+        }
+      });
+    }
+  }
+  // 스마트로라 리스트를 렌더링할 때는 파워미터 리스트에서 같은 ID 제거
+  else if (targetType === 0x11 || targetType === 0x10) {
+    const powerListEl = document.getElementById('powerMeterDeviceList');
+    if (powerListEl) {
+      devices.forEach(device => {
+        const wrongItem = powerListEl.querySelector(`[data-device-id="${device.id}"]`);
+        if (wrongItem) {
+          console.log(`[Training] 스마트로라 리스트 렌더링: 파워미터 리스트에서 잘못 표시된 디바이스 제거 (ID: ${device.id})`);
+          wrongItem.remove();
+        }
+      });
+    }
+  }
+  
   // 스크롤 위치 저장
   const scrollTop = listEl.scrollTop;
   
@@ -3072,7 +3100,69 @@ function updateFoundDevicesList(deviceId, deviceType) {
       window._deviceListUpdateTimer = null;
     }, 300); // 300ms 디바운싱으로 깜빡임 최소화
   } else {
-    // 기존 디바이스는 페어링 상태만 확인하여 필요시 업데이트
+    // 기존 디바이스가 있지만 deviceType이 다른 경우 업데이트 필요
+    // 특히 스마트로라(0x11)와 파워미터(0x0B) 구분이 중요
+    const oldDeviceType = existing.deviceType;
+    const deviceTypeChanged = oldDeviceType !== deviceType;
+    
+    // deviceType이 변경된 경우 (예: 0x0B -> 0x11 또는 그 반대)
+    if (deviceTypeChanged) {
+      // 스마트로라(0x11)가 파워미터(0x0B)보다 우선순위가 높음
+      // 같은 디바이스가 두 타입으로 보일 수 있지만, 0x11이 더 정확한 타입
+      if (deviceType === 0x11 && oldDeviceType === 0x0B) {
+        // 파워미터로 등록된 것을 스마트로라로 변경
+        existing.deviceType = deviceType;
+        existing.type = '스마트로라';
+        console.log(`[Training] 장치 타입 업데이트: ID ${deviceId} 파워미터(0x0B) -> 스마트로라(0x11)`);
+        
+        // 기존 파워미터 리스트에서 제거하고 스마트로라 리스트에 추가
+        const oldListEl = document.getElementById('powerMeterDeviceList');
+        if (oldListEl) {
+          const oldItem = oldListEl.querySelector(`[data-device-id="${deviceId}"]`);
+          if (oldItem) {
+            oldItem.remove();
+          }
+        }
+        
+        // 두 리스트 모두 업데이트
+        if (window._deviceListUpdateTimer) {
+          clearTimeout(window._deviceListUpdateTimer);
+        }
+        window._deviceListUpdateTimer = setTimeout(() => {
+          renderPairingDeviceList(0x0B); // 파워미터 리스트 업데이트 (제거)
+          renderPairingDeviceList(0x11); // 스마트로라 리스트 업데이트 (추가)
+          window._deviceListUpdateTimer = null;
+        }, 300);
+        return;
+      } else if (deviceType === 0x0B && oldDeviceType === 0x11) {
+        // 스마트로라로 등록된 것을 파워미터로 변경 (덜 일반적이지만 처리)
+        existing.deviceType = deviceType;
+        existing.type = '파워미터';
+        console.log(`[Training] 장치 타입 업데이트: ID ${deviceId} 스마트로라(0x11) -> 파워미터(0x0B)`);
+        
+        // 기존 스마트로라 리스트에서 제거하고 파워미터 리스트에 추가
+        const oldListEl = document.getElementById('trainerDeviceList');
+        if (oldListEl) {
+          const oldItem = oldListEl.querySelector(`[data-device-id="${deviceId}"]`);
+          if (oldItem) {
+            oldItem.remove();
+          }
+        }
+        
+        // 두 리스트 모두 업데이트
+        if (window._deviceListUpdateTimer) {
+          clearTimeout(window._deviceListUpdateTimer);
+        }
+        window._deviceListUpdateTimer = setTimeout(() => {
+          renderPairingDeviceList(0x11); // 스마트로라 리스트 업데이트 (제거)
+          renderPairingDeviceList(0x0B); // 파워미터 리스트 업데이트 (추가)
+          window._deviceListUpdateTimer = null;
+        }, 300);
+        return;
+      }
+    }
+    
+    // deviceType이 변경되지 않았거나 다른 타입 변경인 경우 기존 로직 유지
     const listId = (deviceType === 0x78) ? 'heartRateDeviceList' : 
                    (deviceType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
     const listEl = document.getElementById(listId);
