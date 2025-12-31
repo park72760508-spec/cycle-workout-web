@@ -4320,6 +4320,121 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
 
 
 
+/**
+ * =================================================================
+ * [ADD-ON] Firebase 실시간 데이터 동기화 모듈 (방장 -> 클라우드)
+ * 기존 로직에 영향을 주지 않고 데이터를 1초마다 업로드합니다.
+ * =================================================================
+ */
+
+// 1. 업로드 쓰로틀링 변수 (1초에 한번만 전송)
+let _lastFbUploadTime = 0;
+const _FB_UPLOAD_INTERVAL = 1000; 
+
+// 2. updatePowerMeterData 함수 래핑 (기존 함수 실행 후 업로드 로직 추가)
+// 기존 함수를 백업합니다.
+const _originalUpdatePowerMeterData = window.updatePowerMeterData;
+
+// 함수 덮어쓰기
+window.updatePowerMeterData = function(powerMeterId, power, heartRate, cadence) {
+    // A. 원래 기능 실행 (화면 표시, 바늘 돌리기 등)
+    if (typeof _originalUpdatePowerMeterData === 'function') {
+        _originalUpdatePowerMeterData(powerMeterId, power, heartRate, cadence);
+    }
+
+    // B. Firebase 업로드 로직 (방장 PC 부하 방지를 위해 1초 간격 제한)
+    const now = Date.now();
+    if (now - _lastFbUploadTime > _FB_UPLOAD_INTERVAL) {
+        uploadToFirebase();
+        _lastFbUploadTime = now;
+    }
+};
+
+// 3. 실제 업로드 함수
+function uploadToFirebase() {
+    if (typeof db === 'undefined') return; // Firebase 미설정 시 패스
+
+    const state = window.indoorTrainingState;
+    const updates = {};
+
+    // (1) 17명 사용자 데이터 일괄 패키징
+    state.powerMeters.forEach(pm => {
+        if (pm.connected) {
+            updates[`sessions/${SESSION_ID}/users/${pm.id}`] = {
+                power: Math.round(pm.currentPower || 0),
+                cadence: Math.round(pm.cadence || 0),
+                hr: Math.round(pm.heartRate || 0),
+                
+                // 통계 데이터도 전송 (개인 화면 표시용)
+                maxPower: Math.round(pm.maxPower || 0),
+                avgPower: Math.round(pm.averagePower || 0),
+                segmentPower: Math.round(pm.segmentPower || 0),
+                
+                // 목표 파워 (현재 훈련중이라면)
+                targetPower: Math.round(pm.targetPower || 0),
+                
+                name: pm.userName || `User ${pm.id}`,
+                lastUpdate: firebase.database.ServerValue.TIMESTAMP
+            };
+        }
+    });
+
+    // (2) 훈련 상태 정보 (타이머 동기화용)
+    updates[`sessions/${SESSION_ID}/status`] = {
+        state: state.trainingState, // 'idle', 'running', 'paused'
+        startTime: state.startTime,
+        pausedTime: state.pausedTime || 0,
+        segmentIndex: state.currentSegmentIndex,
+        elapsedTime: state.totalElapsedTime, // 방장 기준 경과시간
+        segmentElapsedTime: state.segmentElapsedTime
+    };
+
+    // (3) 워크아웃 정보 (변경되었을 때만 보내면 좋지만 단순화를 위해 매번 체크)
+    // 실제로는 데이터양이 크므로 startTraining에서 한 번만 보내는 게 정석이지만 안전하게 구현
+    
+    // (4) 전송 실행
+    if (Object.keys(updates).length > 0) {
+        db.ref().update(updates).catch(e => console.warn("FB Upload Error:", e));
+    }
+}
+
+// 4. 상태 변경 함수들도 래핑 (시작/정지 즉시 반영을 위해)
+const _originalStartTraining = window.startTraining;
+window.startTraining = function() {
+    _originalStartTraining();
+    // 워크아웃 전체 정보 업로드 (그래프 그리기용)
+    if (window.indoorTrainingState.currentWorkout && typeof db !== 'undefined') {
+        db.ref(`sessions/${SESSION_ID}/workoutPlan`).set(window.indoorTrainingState.currentWorkout.segments);
+    }
+    uploadToFirebase(); // 즉시 전송
+};
+
+const _originalPauseTraining = window.pauseTraining;
+window.pauseTraining = function() {
+    _originalPauseTraining();
+    uploadToFirebase();
+};
+
+const _originalResumeTraining = window.resumeTraining;
+window.resumeTraining = function() {
+    _originalResumeTraining();
+    uploadToFirebase();
+};
+
+const _originalStopTraining = window.stopTraining;
+window.stopTraining = function() {
+    _originalStopTraining();
+    // 종료 상태 전송
+    if (typeof db !== 'undefined') {
+        db.ref(`sessions/${SESSION_ID}/status`).update({ state: 'idle' });
+    }
+};
+
+const _originalSkipSegment = window.skipSegment;
+window.skipSegment = function() {
+    _originalSkipSegment();
+    uploadToFirebase();
+};
 
 
 
