@@ -349,13 +349,30 @@ function createPowerMeterElement(powerMeter) {
   container.id = `power-meter-${powerMeter.id}`;
   container.dataset.powerMeterId = powerMeter.id;
   
+  // 현재 사용자의 grade 확인
+  const viewerGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : 
+                      (window.currentUser?.grade ? String(window.currentUser.grade) : '2');
+  const isGrade2 = viewerGrade === '2';
+  const isTrack1 = powerMeter.id === 1;
+  const isTrackDisabled = isGrade2 && !isTrack1; // grade=2이고 트랙1이 아니면 비활성화
+  
+  // 트랙 버튼 스타일 및 클릭 이벤트 설정
+  const trackButtonStyle = isTrackDisabled 
+    ? 'background: rgba(100, 100, 100, 0.5) !important; color: #999999 !important; cursor: not-allowed !important; opacity: 0.5 !important;'
+    : 'background: rgba(0, 212, 170, 0.5) !important; color: #ffffff !important; cursor: pointer !important;';
+  const trackButtonOnclick = isTrackDisabled ? '' : `onclick="openPowerMeterSettings(${powerMeter.id})"`;
+  const pairingNameOnclick = isTrackDisabled ? '' : `onclick="openPowerMeterSettings(${powerMeter.id})"`;
+  const pairingNameStyle = isTrackDisabled 
+    ? 'font-size: 11px !important; color: #999999 !important; font-weight: 400 !important; text-align: left !important; opacity: 0.5 !important; cursor: not-allowed !important;'
+    : 'font-size: 11px !important; color: #ffffff !important; font-weight: 400 !important; text-align: left !important; opacity: 0.8 !important; cursor: pointer !important;';
+  
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <div style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; flex: 0 0 auto !important; min-width: 100px !important; order: 1 !important;">
         <span class="speedometer-user-name" id="user-name-${powerMeter.id}" style="font-size: 13px !important; color: #ffffff !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important; display: ${powerMeter.userName ? 'block' : 'none'} !important;">${powerMeter.userName || ''}</span>
-        <span class="speedometer-pairing-name" id="pairing-name-${powerMeter.id}" style="font-size: 11px !important; color: #ffffff !important; font-weight: 400 !important; text-align: left !important; opacity: 0.8 !important; cursor: pointer;" onclick="openPowerMeterSettings(${powerMeter.id})">${powerMeter.pairingName || ''}</span>
+        <span class="speedometer-pairing-name" id="pairing-name-${powerMeter.id}" style="${pairingNameStyle}" ${pairingNameOnclick}>${powerMeter.pairingName || ''}</span>
       </div>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; background: rgba(0, 212, 170, 0.5) !important; color: #ffffff !important; padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important; cursor: pointer;" onclick="openPowerMeterSettings(${powerMeter.id})">트랙${powerMeter.id}</span>
+      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;" ${trackButtonOnclick}>트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
@@ -1170,6 +1187,19 @@ function loadUserFTP() {
  */
 function openPowerMeterSettings(powerMeterId) {
   console.log('[Indoor Training] 파워계 설정 열기:', powerMeterId);
+  
+  // grade=2 사용자는 트랙1만 사용 가능
+  const viewerGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : 
+                      (window.currentUser?.grade ? String(window.currentUser.grade) : '2');
+  const isGrade2 = viewerGrade === '2';
+  const isTrack1 = powerMeterId === 1;
+  
+  if (isGrade2 && !isTrack1) {
+    if (typeof showToast === 'function') {
+      showToast('일반 사용자는 트랙1만 사용할 수 있습니다.');
+    }
+    return;
+  }
   
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
