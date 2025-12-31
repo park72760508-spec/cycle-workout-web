@@ -47,6 +47,9 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         // 랩타임 카운트다운 업데이트
         updateLapTime(status);
         
+        // TARGET 파워 업데이트 (세그먼트 변경 시)
+        updateTargetPower();
+        
         // 세그먼트 그래프 업데이트
         if (window.currentWorkout && window.currentWorkout.segments) {
             updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
@@ -74,16 +77,19 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
 function updateDashboard(data) {
     // 1. 텍스트 업데이트
     const power = data.power || 0;
-    const target = data.targetPower || 0;
     
     document.getElementById('ui-current-power').innerText = power;
     document.getElementById('ui-current-power').style.fill = '#fff';
     
-    document.getElementById('ui-target-power').innerText = target > 0 ? target : '-';
+    // TARGET 파워는 세그먼트 정보에서 계산
+    updateTargetPower();
     
     document.getElementById('ui-cadence').innerText = data.cadence || 0;
     document.getElementById('ui-hr').innerText = data.hr || 0;
-    document.getElementById('ui-lap-power').innerText = data.segmentPower || 0;
+    
+    // 랩파워 표시 (세그먼트 평균 파워)
+    const lapPower = data.segmentPower || data.avgPower || 0;
+    document.getElementById('ui-lap-power').innerText = Math.round(lapPower);
 
     // 2. 게이지 바늘 회전
     // FTP를 알 수 없으므로 300W를 풀 스케일(100%)로 가정하거나, 
@@ -178,6 +184,67 @@ function updateLapTime(status) {
     } else {
         lapTimeEl.innerText = '00:00';
         lapTimeEl.style.fill = '#00d4aa';
+    }
+}
+
+// TARGET 파워 업데이트 함수 (세그먼트 목표값 계산)
+function updateTargetPower() {
+    const targetPowerEl = document.getElementById('ui-target-power');
+    if (!targetPowerEl) return;
+    
+    if (window.currentWorkout && window.currentWorkout.segments && currentSegmentIndex >= 0) {
+        const seg = window.currentWorkout.segments[currentSegmentIndex];
+        if (seg) {
+            // FTP 값 가져오기 (기본값 200W)
+            const ftp = 200; // 개인 대시보드에서는 FTP를 알 수 없으므로 기본값 사용
+            
+            // 세그먼트 목표 파워 계산
+            let targetPower = 0;
+            
+            // target_type에 따라 계산
+            const targetType = seg.target_type || 'ftp_pct';
+            const targetValue = seg.target_value;
+            
+            if (targetType === 'ftp_pct') {
+                const ftpPercent = Number(targetValue) || 100;
+                targetPower = Math.round(ftp * (ftpPercent / 100));
+            } else if (targetType === 'dual') {
+                // dual 타입: "100/120" 형식 파싱
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                    const parts = targetValue.split('/').map(s => s.trim());
+                    if (parts.length >= 1) {
+                        const ftpPercent = Number(parts[0]) || 100;
+                        targetPower = Math.round(ftp * (ftpPercent / 100));
+                    }
+                } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+                    const ftpPercent = Number(targetValue[0]) || 100;
+                    targetPower = Math.round(ftp * (ftpPercent / 100));
+                } else {
+                    // 숫자로 저장된 경우 처리
+                    const numValue = Number(targetValue);
+                    if (numValue > 1000 && numValue < 1000000) {
+                        const str = String(numValue);
+                        if (str.length >= 4) {
+                            const ftpPart = str.slice(0, -3);
+                            const ftpPercent = Number(ftpPart) || 100;
+                            targetPower = Math.round(ftp * (ftpPercent / 100));
+                        }
+                    } else {
+                        const ftpPercent = numValue <= 1000 ? numValue : 100;
+                        targetPower = Math.round(ftp * (ftpPercent / 100));
+                    }
+                }
+            } else if (targetType === 'cadence_rpm') {
+                // RPM만 있는 경우 파워는 0
+                targetPower = 0;
+            }
+            
+            targetPowerEl.innerText = targetPower > 0 ? targetPower : '-';
+        } else {
+            targetPowerEl.innerText = '-';
+        }
+    } else {
+        targetPowerEl.innerText = '-';
     }
 }
 
