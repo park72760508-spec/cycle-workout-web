@@ -712,34 +712,12 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     needleEl.setAttribute('transform', `rotate(${angle})`);
     needleEl.style.visibility = 'visible';
     
-    // 이전 파워값 가져오기
+    // 이전 파워값 저장 (가속/감속 감지용)
     const previousPower = powerMeter.previousPower || 0;
-    
-    // 가민 스타일: 바늘 궤적선 업데이트 (파워 변화 방향 기반)
-    const isAccelerating = power > previousPower;
-    const isDecelerating = power < previousPower;
-    
-    if (isDecelerating) {
-        // 감속 시: 목표 파워를 기준으로 즉시 궤적 업데이트
-        updatePowerMeterNeedlePath(powerMeterId, power, powerMeter);
-    } else if (isAccelerating) {
-        // 가속 시: 현재 각도 기준으로 궤적 업데이트
-        const currentNeedlePower = calculatePowerFromAngle(angle, maxPower);
-        updatePowerMeterNeedlePath(powerMeterId, currentNeedlePower, powerMeter);
-        
-        // 애니메이션 완료 후 목표 파워까지 궤적 업데이트
-        setTimeout(() => {
-            updatePowerMeterNeedlePath(powerMeterId, power, powerMeter);
-        }, 100);
-    } else {
-        // 파워 변화 없음: 현재 파워 기준으로 업데이트
-        updatePowerMeterNeedlePath(powerMeterId, power, powerMeter);
-    }
-    
-    // 이전 파워값 저장
     powerMeter.previousPower = power;
     
-    // 바늘 궤적 업데이트 (기존 목표 파워 및 실제 파워 궤적)
+    // 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적 + 바늘이 지나간 경로 눈금 선)
+    // drawPowerMeterTrail 함수 내부에서 바늘이 지나간 경로를 눈금 위치에 반지름 선으로 표시
     updatePowerMeterTrail(powerMeterId, power, angle, powerMeter);
     
     console.log(`[PowerMeter] updatePowerMeterNeedle: powerMeterId=${powerMeterId}, power=${power}, angle=${angle}, transform=${needleEl.getAttribute('transform')}, visibility=${needleEl.style.visibility}`);
@@ -838,7 +816,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     powerMeter.lastTrailAngle = currentAngle;
     
     // 궤적 그리기 (이전에 수정해드린 좌표계 보정 버전 함수를 사용)
-    drawPowerMeterTrail(trailContainer, targetAngle, currentAngle, powerMeter.powerTrailHistory, targetPower, currentPower);
+    drawPowerMeterTrail(trailContainer, targetAngle, currentAngle, powerMeter.powerTrailHistory, targetPower, currentPower, powerMeter);
 }
 
 /**
@@ -848,7 +826,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
  * 파워미터 바늘 궤적 그리기 (SVG path 사용)
  * [수정] 좌표계 보정 추가 (Needle 각도 -> SVG 좌표 각도 변환)
  */
-function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory, targetPower, currentPower) {
+function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory, targetPower, currentPower, powerMeter) {
     // 기존 궤적 제거
     container.innerHTML = '';
     
@@ -865,7 +843,11 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
     // 따라서 Needle 각도에 270도를 더해야 SVG 좌표계와 일치함
     const angleOffset = 270;
     
-    // 1. 목표 파워 궤적 (투명 주황색)
+    // FTP 및 maxPower 계산
+    const ftp = powerMeter?.userFTP || window.indoorTrainingState?.userFTP || 200;
+    const maxPower = ftp * 2;
+    
+    // 1. 목표 파워 궤적 (투명 주황색) - 원둘레 호
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const startAngle = zeroPowerAngle; 
@@ -888,15 +870,15 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
         targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 투명 주황색
-        targetPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께로 변경
+        targetPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
         targetPath.setAttribute('stroke-linecap', 'butt'); // 끝부분 처리
         container.appendChild(targetPath);
     }
     
-    // 2. 실제 파워 궤적 (투명 민트색 또는 주황색) - 히스토리 기반
+    // 2. 실제 파워 궤적 (투명 민트색 또는 주황색) - 히스토리 기반 원둘레 호
     const allPoints = [...trailHistory];
     
-    // 현재 점 추가 로직 (이전과 동일)
+    // 현재 점 추가 로직
     if (trailHistory.length > 0) {
         const lastPoint = trailHistory[trailHistory.length - 1];
         if (Math.abs(lastPoint.angle - currentAngle) > 0.1) {
@@ -914,7 +896,7 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         });
     }
     
-    // 궤적 그리기 (오프셋 적용)
+    // 궤적 그리기 (오프셋 적용) - 원둘레 호
     for (let i = 1; i < allPoints.length; i++) {
         const prevPoint = allPoints[i - 1];
         const currentPoint = allPoints[i];
@@ -931,8 +913,16 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         const currentX = centerX + radius * Math.cos(currRad);
         const currentY = centerY + radius * Math.sin(currRad);
         
-        const isBelowTarget = currentPoint.power < targetPower;
-        const color = isBelowTarget ? 'rgba(255, 165, 0, 0.6)' : 'rgba(0, 212, 170, 0.6)';
+        // 색상 결정: 세그먼트 목표 파워값 대비 립파워값 비교 (98.5% 기준)
+        let color = 'rgba(255, 165, 0, 0.6)'; // 기본 주황색
+        if (targetPower > 0) {
+            const powerRatio = (currentPoint.power / targetPower) * 100; // 목표 대비 비율 (%)
+            if (powerRatio >= 98.5) {
+                color = 'rgba(0, 212, 170, 0.6)'; // 민트색 (98.5% 이상)
+            } else {
+                color = 'rgba(255, 165, 0, 0.6)'; // 주황색 (98.5% 미만)
+            }
+        }
         
         const segmentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const largeArcFlag = Math.abs(currentPointAngle - prevAngle) > 180 ? 1 : 0;
@@ -942,76 +932,24 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         segmentPath.setAttribute('d', segmentPathData);
         segmentPath.setAttribute('fill', 'none');
         segmentPath.setAttribute('stroke', color);
-        segmentPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께로 변경
+        segmentPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
         segmentPath.setAttribute('stroke-linecap', 'butt');
         container.appendChild(segmentPath);
     }
-}
-
-/**
- * 파워미터 바늘 행적선 업데이트 (Indoor Race 로직 참고)
- * 눈금 위치(2.5 간격)에서만 반지름 실선을 그림
- * 파워가 감소하면 현재 파워보다 높은 지점의 선은 삭제
- * 색상: 세그먼트 목표 파워값 대비 립파워값이 98.5% 이상이면 민트색, 미만이면 주황색
- */
-function updatePowerMeterNeedlePath(powerMeterId, power, powerMeter) {
-    const pathGroup = document.getElementById(`needle-path-${powerMeterId}`);
-    if (!pathGroup) return;
     
-    // 연결됨 상태이고 워크아웃 실행 중일 때만 궤적 표시
-    const isConnected = powerMeter.connected;
-    const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
-    const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
-    
-    if (!isConnected || !isTrainingRunning || !hasWorkout) {
-        // 조건을 만족하지 않으면 궤적 제거
-        pathGroup.innerHTML = '';
-        return;
-    }
-    
-    const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
-    const maxPower = ftp * 2;
-    const centerX = 0; // transform(100, 140)으로 이미 이동됨
-    const centerY = 0;
-    const radius = 80;
+    // 3. 바늘이 지나간 경로를 눈금 위치에 반지름 선으로 표시 (Indoor Race 로직 참고)
+    // 현재 파워값을 기준으로 눈금 위치에 선을 그림
     const innerRadius = radius - 10;
     const tickLengthShort = 7; // 작은 눈금 높이
     const tickLengthLong = 14;
     const centerCircleRadius = 7;
     
-    // 현재 세그먼트 목표 파워 계산
-    let targetPower = 0;
-    if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
-        const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
-        const currentSegment = window.indoorTrainingState.currentWorkout.segments[currentSegmentIndex];
-        if (currentSegment) {
-            const targetValue = currentSegment.target_value || currentSegment.target || '100';
-            let ftpPercent = 100;
-            
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/');
-                if (parts.length > 0) {
-                    const ftpPart = parts[0].trim().replace('%', '');
-                    ftpPercent = Number(ftpPart) || 100;
-                }
-            } else if (typeof targetValue === 'number') {
-                ftpPercent = targetValue;
-            }
-            
-            targetPower = (ftp * ftpPercent) / 100;
-        }
-    }
-    
     // 눈금 간격: 5의 1/2 = 2.5 (눈금의 1/2 간격)
-    // 파워값을 눈금 위치(0~120)로 변환: power / maxPower * 120
     const maxPos = 120;
     const tickInterval = 2.5; // 눈금의 1/2 간격
-    const currentPos = (power / maxPower) * maxPos;
+    const currentPos = (currentPower / maxPower) * maxPos;
     const currentTickPos = Math.floor(currentPos / tickInterval) * tickInterval;
     const maxTickPos = Math.min(currentTickPos, maxPos);
-    
-    // 모든 기존 궤적 삭제 (감속 시 바늘이 지나간 부분 제거)
-    pathGroup.innerHTML = '';
     
     // 현재 파워까지만 궤적 표시 (바늘이 지나간 부분은 자동으로 제거됨)
     for (let tickPos = 0; tickPos <= maxTickPos; tickPos += tickInterval) {
@@ -1023,8 +961,6 @@ function updatePowerMeterNeedlePath(powerMeterId, power, powerMeter) {
         let needleAngle = -90 + (tickRatio * 180);
         
         // 2. 좌표계 보정 (SVG rotate와 Math.cos/sin 좌표계 일치)
-        // SVG rotate(0)은 '위쪽'을 가리키지만, Math.cos(0)은 '오른쪽'을 가리킵니다.
-        // 바늘 각도에서 90도를 빼야 Math 좌표계와 일치하게 됩니다.
         let mathAngle = needleAngle - 90;
         
         const rad = (mathAngle * Math.PI) / 180;
@@ -1041,7 +977,7 @@ function updatePowerMeterNeedlePath(powerMeterId, power, powerMeter) {
         const x2 = centerX + outerRadius * Math.cos(rad);
         const y2 = centerY + outerRadius * Math.sin(rad);
         
-        // 5. 색상 결정: 세그먼트 목표 파워값 대비 립파워값 비교
+        // 5. 색상 결정: 세그먼트 목표 파워값 대비 립파워값 비교 (98.5% 기준)
         let color = 'rgba(255, 165, 0, 0.4)'; // 기본 주황색
         if (targetPower > 0) {
             const powerRatio = (tickPower / targetPower) * 100; // 목표 대비 비율 (%)
@@ -1062,9 +998,10 @@ function updatePowerMeterNeedlePath(powerMeterId, power, powerMeter) {
         line.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
         line.setAttribute('stroke-linecap', 'round');
         
-        pathGroup.appendChild(line);
+        container.appendChild(line);
     }
 }
+
 
 // 페이지 로딩 완료 후 모든 바늘 0점으로 초기화
 window.addEventListener('load', () => {
