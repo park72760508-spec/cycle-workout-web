@@ -903,66 +903,43 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
 }
 
 /**
- * [정밀 구현] 파워미터 궤적(Radial Lines) 그리기 로직
- * - Indoor Race 스타일의 방사형 눈금 궤적 생성
- * - 색상 로직: 
- * 1. 훈련 전(Idle): 무조건 미트색 (준비 상태)
- * 2. 훈련 중(Running): 랩파워/목표파워 >= 0.985 ? 미트색 : 주황색
+ * 파워미터 바늘 궤적 그리기 (SVG)
+ * 1. 목표 파워 원둘레선: 진한 투명 주황색 (두께 = 작은 눈금 높이)
+ * 2. 바늘 궤적선: 98.5% 달성률 기준 민트/주황 분기
+ * 3. 동작 방식: 바늘 위치(Value)에 따라 즉시 생성/삭제 (잔상 없음)
  */
 function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, segmentPower, maxPower, isTrainingRunning) {
-    // 1. 캔버스 초기화 (이전 프레임 잔상 제거)
+    // [핵심] 매 프레임 초기화로 잔상 완벽 제거
     container.innerHTML = '';
     
-    // SVG 좌표 및 설정 (Indoor Race 속도계 규격)
     const centerX = 0; 
     const centerY = 0;
-    const innerRadius = 70; // 눈금 시작 반지름 (radius 80 - 10)
-    const tickLengthShort = 7; 
+    const radius = 80; 
+    const innerRadius = radius - 10; // 70
+    const tickLengthShort = 7;       // 작은 눈금 높이
     const tickLengthLong = 14; 
-    const centerCircleRadius = 7; // 바늘 중심축 반지름
+    const centerCircleRadius = 7; 
     
-    // =========================================================
-    // A. 색상 결정 로직 (요청사항 반영)
-    // =========================================================
-    // 기본값: 미트색 (대기 중이거나 목표가 없을 때 긍정적 표시)
-    let trailColor = 'rgba(0, 212, 170, 0.6)'; // Mint
-
-    if (isTrainingRunning && targetPower > 0) {
-        // 훈련 중이고 목표가 있는 경우: 달성률 체크
-        // 0으로 나누기 방지
-        const ratio = targetPower > 0 ? (segmentPower / targetPower) : 0;
-        
-        if (ratio >= 0.985) {
-            // 98.5% 이상: 미트색 (성공)
-            trailColor = 'rgba(0, 212, 170, 0.6)'; 
-        } else {
-            // 98.5% 미만: 주황색 (미달)
-            trailColor = 'rgba(255, 165, 0, 0.6)'; 
-        }
-    } else if (isTrainingRunning && targetPower <= 0) {
-        // 훈련 중이지만 목표가 없는 구간(프리라이딩 등): 미트색 유지
-        trailColor = 'rgba(0, 212, 170, 0.6)';
-    } else {
-        // 훈련 전(Idle): 미트색 (Ready 상태)
-        // 만약 대기 중에 주황색을 원하시면 아래 코드를 주석 해제하세요.
-        // trailColor = 'rgba(255, 165, 0, 0.5)'; 
-        trailColor = 'rgba(0, 212, 170, 0.6)';
-    }
+    const angleOffset = 270;
+    const startAngleNeedle = -90; 
 
     // =========================================================
-    // B. 목표 파워 표시 (Target Arc) - 훈련 중일 때만
+    // A. 목표 파워 궤적 (원둘레 호)
+    // - 색상: 진한 투명 주황색 (rgba 255, 165, 0, 0.6)
+    // - 두께: 작은 눈금 높이 (7px)
     // =========================================================
-    if (isTrainingRunning && targetPower > 0) {
+    if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const angleOffset = 270;
-        const startAng = -90; // 0점 (왼쪽)
-        const endAng = targetAngle; // 목표 지점
+        
+        const startAng = startAngleNeedle;
+        const endAng = targetAngle;
         
         const startRad = ((startAng + angleOffset) * Math.PI) / 180;
         const endRad = ((endAng + angleOffset) * Math.PI) / 180;
         
-        // 눈금보다 약간 바깥쪽에 표시
-        const arcRadius = innerRadius + tickLengthShort + 2;
+        // [수정] 호가 눈금의 중앙을 지나도록 반지름 조정
+        // 눈금 범위: 70 ~ 77. 중앙: 73.5
+        const arcRadius = innerRadius + (tickLengthShort / 2);
         
         const startX = centerX + arcRadius * Math.cos(startRad);
         const startY = centerY + arcRadius * Math.sin(startRad);
@@ -976,63 +953,82 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, 
         
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
-        targetPath.setAttribute('stroke', 'rgba(255, 140, 0, 0.8)'); // 진한 주황색 (목표선)
-        targetPath.setAttribute('stroke-width', '3');
+        // [요청 반영] 진한 투명 주황색
+        targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); 
+        // [요청 반영] 두께는 작은 눈금 높이(7px)
+        targetPath.setAttribute('stroke-width', tickLengthShort); 
         targetPath.setAttribute('stroke-linecap', 'butt');
-        targetPath.style.opacity = '0.7';
         
         container.appendChild(targetPath);
     }
 
     // =========================================================
-    // C. 실제 파워 궤적 (Radial Lines) 생성
+    // B. 바늘 궤적선 (Radial Lines)
+    // - 색상: 98.5% 기준 민트/주황 (단, 시작 전에는 무조건 민트)
+    // - 로직: 현재 파워값까지만 루프를 돌아 자동 삭제 효과 구현
     // =========================================================
-    const maxScalePos = 120; // 게이지 전체 눈금 수 (0~120)
-    const tickInterval = 2.5; // 궤적 선 간격 (촘촘하게)
+    
+    // 기본 색상: 투명 주황색
+    let trailColor = 'rgba(255, 165, 0, 0.4)'; 
+
+    if (!isTrainingRunning) {
+        // 1. 워크아웃 시작 전(Idle): 무조건 투명 민트색
+        trailColor = 'rgba(0, 212, 170, 0.4)'; 
+    } else if (targetPower > 0) {
+        // 2. 훈련 중: 달성률 확인
+        const achievementRatio = (segmentPower / targetPower) * 100;
+        if (achievementRatio >= 98.5) {
+            trailColor = 'rgba(0, 212, 170, 0.4)'; // 98.5% 이상: 투명 민트
+        } else {
+            trailColor = 'rgba(255, 165, 0, 0.4)'; // 98.5% 미만: 투명 주황
+        }
+    } else {
+        // 3. 훈련 중이지만 목표가 없는 경우 (자유 주행): 민트색 (성공으로 간주)
+        trailColor = 'rgba(0, 212, 170, 0.4)';
+    }
+
+    // 스케일 설정 (0 ~ 120)
+    const maxScalePos = 120; 
+    const tickInterval = 2.5; // 눈금 1/2 간격
     
     // 현재 파워를 스케일(0~120)로 변환
     let currentScalePos = 0;
     if (maxPower > 0) {
-        // 파워가 최대치를 넘어가도 궤적은 끝까지만 그려지도록 제한
-        const ratio = Math.min(currentPower / maxPower, 1.0);
-        currentScalePos = ratio * maxScalePos;
+        currentScalePos = (currentPower / maxPower) * maxScalePos;
     }
     
-    // 0부터 현재 바늘 위치까지 루프를 돌며 선(Line) 생성
-    for (let pos = 0; pos <= currentScalePos; pos += tickInterval) {
-        // 위치 비율 (0.0 ~ 1.0)
+    // [핵심 로직] 현재 파워 위치까지만 루프 실행
+    // currentScalePos를 넘는 구간은 for문이 돌지 않으므로 자동으로 삭제됨
+    const limitPos = Math.min(currentScalePos, maxScalePos);
+
+    for (let pos = 0; pos <= limitPos; pos += tickInterval) {
+        // 위치 -> 각도 변환
         const ratio = pos / maxScalePos;
-        
-        // 각도 계산 (-90도 ~ 90도)
-        // SVG 좌표계 변환을 위해 +270도 오프셋 적용 (12시 방향 기준)
         const needleAngle = -90 + (ratio * 180);
+        
+        // SVG 좌표계 변환
         const mathAngle = needleAngle + 270;
         const rad = (mathAngle * Math.PI) / 180;
         
-        // 20단위마다 긴 눈금, 그 외는 짧은 눈금 (시각적 리듬감)
-        const isMajor = (pos % 20 === 0);
+        // 20단위마다 긴 눈금
+        const isMajor = (Math.abs(pos % 20) < 0.01);
+        const tickLen = isMajor ? tickLengthLong : tickLengthShort;
         
-        // 궤적 디자인: 바늘 중심축 근처에서 시작하여 눈금 끝까지 뻗어나가는 방사형 선
-        // 중심축에서 약간 떨어진 곳(centerCircleRadius + 여유분)부터 시작
+        const outerRadius = innerRadius + tickLen;
         const startR = centerCircleRadius + 2; 
-        
-        // 끝점 계산: 일반 눈금보다 약간 더 길게 그려서 꽉 찬 느낌 제공
-        const currentTickLen = isMajor ? tickLengthLong : tickLengthShort;
-        const endR = innerRadius + currentTickLen; 
         
         const x1 = centerX + startR * Math.cos(rad);
         const y1 = centerY + startR * Math.sin(rad);
-        const x2 = centerX + endR * Math.cos(rad);
-        const y2 = centerY + endR * Math.sin(rad);
+        const x2 = centerX + outerRadius * Math.cos(rad);
+        const y2 = centerY + outerRadius * Math.sin(rad);
         
-        // SVG 라인 생성
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', x1);
         line.setAttribute('y1', y1);
         line.setAttribute('x2', x2);
         line.setAttribute('y2', y2);
-        line.setAttribute('stroke', trailColor); // 결정된 색상 적용
-        line.setAttribute('stroke-width', isMajor ? '2.0' : '1.5'); // 주요 눈금은 약간 두껍게
+        line.setAttribute('stroke', trailColor);
+        line.setAttribute('stroke-width', '1.5');
         line.setAttribute('stroke-linecap', 'round');
         
         container.appendChild(line);
@@ -4449,6 +4445,7 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
+
 
 
 
