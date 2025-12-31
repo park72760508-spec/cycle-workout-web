@@ -3344,8 +3344,11 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             if (pageNum === 0x10) {
                 const eventCount = antData[1];
                 
-                // 케이던스 추출 (Byte 3)
-                if (antData[3] !== 255) rawCadence = antData[3];
+                // 케이던스 추출 (Byte 3) - 유효성 검사 강화
+                // 0xFF는 무효값, 0-200 RPM 범위만 유효
+                if (antData[3] !== 0xFF && antData[3] >= 0 && antData[3] <= 200) {
+                    rawCadence = antData[3];
+                }
 
                 // [핵심 로직] 누적 파워(Accumulated Power) 기반 연산
                 // 패킷이 유실되어도 평균 파워를 정확히 계산함
@@ -3406,9 +3409,9 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 // 스마트로라는 Page 0x19의 신뢰도가 가장 높음
                 const eventCount = antData[1]; // Byte 1 (일부 로라는 다를 수 있음, 표준 준수)
                 
-                // 케이던스 유효성 확인 (Byte 3)
-                // 깃발(Flag) 처리 등이 복잡하므로 0xFF가 아니면 사용
-                if (antData[3] !== 0xFF) {
+                // 케이던스 유효성 확인 (Byte 3) - 강화된 검증
+                // 0xFF는 무효값, 0-200 RPM 범위만 유효 (비현실적인 값 필터링)
+                if (antData[3] !== 0xFF && antData[3] >= 0 && antData[3] <= 200) {
                      // 0x19 페이지의 케이던스는 제조사마다 해석이 다를 수 있으나 보통 그대로 사용
                      rawCadence = antData[3];
                 }
@@ -3429,28 +3432,84 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
 
             // A. 이상치 제거 (Outlier Rejection)
             // 물리적으로 불가능한 수치 (2500W 이상) 제거
-            if (rawPower > 2500) rawPower = pm.currentPower || 0;
+            if (rawPower > 2500) {
+                rawPower = pm.currentPower || 0;
+            }
+            
+            // 케이던스가 0이거나 매우 낮을 때 파워도 0으로 강제 설정
+            if ((pm.cadence === 0 || pm.cadence <= 5) && rawPower > 0) {
+                rawPower = 0;
+            }
 
-            // B. 케이던스 스무딩 (중앙값 필터)
-            if (rawCadence !== -1 && rawCadence < 254) {
-                pm.dataBuffer.cadenceHistory.push(rawCadence);
-                if (pm.dataBuffer.cadenceHistory.length > 5) pm.dataBuffer.cadenceHistory.shift();
+            // B. 케이던스 스무딩 및 유효성 검사 (중앙값 필터)
+            if (rawCadence !== -1 && rawCadence >= 0 && rawCadence <= 200) {
+                // 이전 케이던스와 비교하여 급격한 변화 필터링 (50 RPM 이상 변화는 무시)
+                const prevCadence = pm.cadence || 0;
+                const cadenceDiff = Math.abs(rawCadence - prevCadence);
                 
-                // 최근 5개 중 중앙값 사용 (노이즈 제거)
-                const sortedCadence = [...pm.dataBuffer.cadenceHistory].sort((a,b) => a-b);
-                const medianCadence = sortedCadence[Math.floor(sortedCadence.length/2)];
-                pm.cadence = medianCadence;
+                // 급격한 변화가 아니거나, 이전 값이 0이거나 비현실적인 경우에만 추가
+                if (cadenceDiff <= 50 || prevCadence === 0 || prevCadence > 200) {
+                    pm.dataBuffer.cadenceHistory.push(rawCadence);
+                    if (pm.dataBuffer.cadenceHistory.length > 5) pm.dataBuffer.cadenceHistory.shift();
+                    
+                    // 최근 5개 중 중앙값 사용 (노이즈 제거)
+                    const sortedCadence = [...pm.dataBuffer.cadenceHistory].sort((a,b) => a-b);
+                    const medianCadence = sortedCadence[Math.floor(sortedCadence.length/2)];
+                    
+                    // 중앙값도 유효 범위 내인지 확인 (이중 검증)
+                    if (medianCadence >= 0 && medianCadence <= 200) {
+                        // 중앙값과 이전 값의 차이도 확인 (급격한 변화 방지)
+                        const medianDiff = Math.abs(medianCadence - prevCadence);
+                        if (medianDiff <= 50 || prevCadence === 0 || prevCadence > 200) {
+                            pm.cadence = medianCadence;
+                        } else {
+                            // 급격한 변화면 이전 값 유지
+                            // 단, 이전 값이 비현실적이면 0으로 설정
+                            if (prevCadence > 200 || prevCadence < 0) {
+                                pm.cadence = 0;
+                            }
+                        }
+                    } else {
+                        // 비현실적인 값이면 이전 값 유지 또는 0으로 설정
+                        if (pm.cadence > 200 || pm.cadence < 0) {
+                            pm.cadence = 0;
+                        }
+                    }
+                } else {
+                    // 급격한 변화는 무시하고 이전 값 유지
+                    // 단, 이전 값이 비현실적이면 0으로 설정
+                    if (prevCadence > 200 || prevCadence < 0) {
+                        pm.cadence = 0;
+                    }
+                }
+            } else if (rawCadence === -1) {
+                // 케이던스 데이터가 없으면 이전 값 유지 (0으로 즉시 변경하지 않음)
+                // 단, 이전 값이 비현실적이면 0으로 설정
+                if (pm.cadence > 200 || pm.cadence < 0) {
+                    pm.cadence = 0;
+                }
+            } else {
+                // 무효한 케이던스 값 (범위 밖)이면 0으로 설정
+                pm.cadence = 0;
             }
 
             // C. 제로 컷 (Zero Handling)
-            // 케이던스가 0이면 파워도 즉시 0으로 수렴해야 함 (코스팅 시 잔상 제거)
-            if (pm.cadence === 0) {
+            // 케이던스가 0이거나 매우 낮으면(5 RPM 이하) 파워도 즉시 0으로 수렴해야 함 (코스팅 시 잔상 제거)
+            if (pm.cadence === 0 || pm.cadence <= 5) {
                 pm.dataBuffer.powerHistory = []; // 히스토리 초기화
                 rawPower = 0;
+                // 케이던스 히스토리도 초기화하여 잘못된 값이 누적되지 않도록
+                pm.dataBuffer.cadenceHistory = [];
             }
 
             // D. 3초 이동 평균 (3-Second Moving Average) - 파워
             if (rawPower !== -1) {
+                // 케이던스가 0이거나 매우 낮으면 파워도 0으로 강제 설정
+                if (pm.cadence === 0 || pm.cadence <= 5) {
+                    rawPower = 0;
+                    pm.dataBuffer.powerHistory = []; // 히스토리 초기화
+                }
+                
                 pm.dataBuffer.powerHistory.push(rawPower);
                 // 1초에 약 4번 데이터 수신 -> 3초면 약 12개
                 if (pm.dataBuffer.powerHistory.length > 12) pm.dataBuffer.powerHistory.shift();
@@ -3458,8 +3517,17 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 const sum = pm.dataBuffer.powerHistory.reduce((a, b) => a + b, 0);
                 const avgPower = sum / pm.dataBuffer.powerHistory.length;
                 
-                // 최종 UI 표시용 파워
-                pm.currentPower = avgPower;
+                // 최종 UI 표시용 파워 (케이던스가 0이면 파워도 0)
+                if (pm.cadence === 0 || pm.cadence <= 5) {
+                    pm.currentPower = 0;
+                } else {
+                    pm.currentPower = Math.max(0, Math.round(avgPower)); // 음수 방지 및 반올림
+                }
+            } else {
+                // 파워 데이터가 없고 케이던스가 0이면 파워도 0
+                if (pm.cadence === 0 || pm.cadence <= 5) {
+                    pm.currentPower = 0;
+                }
             }
             
             // 데이터 수신 시간 갱신 (연결 끊김 감지용)
