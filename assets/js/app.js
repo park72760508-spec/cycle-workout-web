@@ -2682,39 +2682,28 @@ if (!window.showScreen) {
           updateDeviceButtonImages();
         }
         
-        // ANT+ 버튼 활성화/비활성화 상태 업데이트
+        // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
         setTimeout(() => {
           const btnANT = safeGetElement("btnConnectANT");
           if (btnANT) {
-            // 현재 사용자 grade 확인
-            let viewerGrade = '2'; // 기본값
-            try {
-              const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-              const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-              const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
-              viewerGrade = String(mergedViewer?.grade || '2');
-            } catch (e) {
-              console.warn('사용자 grade 확인 실패:', e);
-            }
-            
-            // grade=1 또는 grade=3만 활성화
-            const isANTEnabled = (viewerGrade === '1' || viewerGrade === '3');
-            
-            if (!isANTEnabled) {
-              btnANT.disabled = true;
-              btnANT.classList.add('is-disabled');
-              btnANT.setAttribute('aria-disabled', 'true');
-              btnANT.title = 'ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다';
-              btnANT.style.opacity = '0.5';
-              btnANT.style.cursor = 'not-allowed';
-            } else {
-              btnANT.disabled = false;
-              btnANT.classList.remove('is-disabled');
-              btnANT.removeAttribute('aria-disabled');
-              btnANT.title = 'ANT+ 기기 연결';
-              btnANT.style.opacity = '1';
-              btnANT.style.cursor = 'pointer';
-            }
+            // 모든 등급 사용자 사용 가능
+            btnANT.disabled = false;
+            btnANT.classList.remove('is-disabled');
+            btnANT.removeAttribute('aria-disabled');
+            btnANT.title = 'ANT+ 기기 연결';
+            btnANT.style.opacity = '1';
+            btnANT.style.cursor = 'pointer';
+          }
+          
+          // Indoor Race 버튼 등급 제한 해제 (모든 등급 사용 가능)
+          const btnIndoorRace = safeGetElement('btnIndoorRace');
+          if (btnIndoorRace) {
+            btnIndoorRace.disabled = false;
+            btnIndoorRace.classList.remove('is-disabled');
+            btnIndoorRace.removeAttribute('aria-disabled');
+            btnIndoorRace.style.opacity = '1';
+            btnIndoorRace.style.cursor = 'pointer';
+            btnIndoorRace.title = '';
           }
         }, 100);
         }
@@ -4138,37 +4127,15 @@ document.addEventListener("DOMContentLoaded", () => {
     ANT: !!btnANT
   });
   
-  // ANT+ 버튼 활성화/비활성화 (grade=1 또는 grade=3만 활성화)
+  // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
   if (btnANT) {
-    // 현재 사용자 grade 확인
-    let viewerGrade = '2'; // 기본값
-    try {
-      const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-      const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
-      viewerGrade = String(mergedViewer?.grade || '2');
-    } catch (e) {
-      console.warn('사용자 grade 확인 실패:', e);
-    }
-    
-    // grade=1 또는 grade=3만 활성화
-    const isANTEnabled = (viewerGrade === '1' || viewerGrade === '3');
-    
-    if (!isANTEnabled) {
-      btnANT.disabled = true;
-      btnANT.classList.add('is-disabled');
-      btnANT.setAttribute('aria-disabled', 'true');
-      btnANT.title = 'ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다';
-      btnANT.style.opacity = '0.5';
-      btnANT.style.cursor = 'not-allowed';
-    } else {
-      btnANT.disabled = false;
-      btnANT.classList.remove('is-disabled');
-      btnANT.removeAttribute('aria-disabled');
-      btnANT.title = 'ANT+ 기기 연결';
-      btnANT.style.opacity = '1';
-      btnANT.style.cursor = 'pointer';
-    }
+    // 모든 등급 사용자 사용 가능
+    btnANT.disabled = false;
+    btnANT.classList.remove('is-disabled');
+    btnANT.removeAttribute('aria-disabled');
+    btnANT.title = 'ANT+ 기기 연결';
+    btnANT.style.opacity = '1';
+    btnANT.style.cursor = 'pointer';
   }
   
   // 심박계 버튼
@@ -4225,25 +4192,7 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       console.log("ANT+ button clicked!");
       
-      // grade 체크 (추가 보안)
-      let viewerGrade = '2';
-      try {
-        const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-        const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-        const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
-        viewerGrade = String(mergedViewer?.grade || '2');
-      } catch (e) {
-        console.warn('사용자 grade 확인 실패:', e);
-      }
-      
-      if (viewerGrade !== '1' && viewerGrade !== '3') {
-        if (typeof showToast === "function") {
-          showToast("ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다.");
-        }
-        return;
-      }
-      
-      // ANT+ 연결 버튼 클릭 시 Indoor 모드 선택 모달 열기
+      // ANT+ 연결 버튼 클릭 시 Indoor 모드 선택 모달 열기 (모든 사용자 사용 가능)
       if (typeof showIndoorModeSelectionModal === 'function') {
         showIndoorModeSelectionModal();
       } else {
@@ -4270,6 +4219,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const modal = document.getElementById('indoorModeSelectionModal');
     if (modal) {
       modal.classList.remove('hidden');
+      
+      // Indoor Race 버튼 등급 제한 해제 (모든 등급 사용 가능)
+      const btnIndoorRace = document.getElementById('btnIndoorRace');
+      if (btnIndoorRace) {
+        btnIndoorRace.disabled = false;
+        btnIndoorRace.classList.remove('is-disabled');
+        btnIndoorRace.removeAttribute('aria-disabled');
+        btnIndoorRace.style.opacity = '1';
+        btnIndoorRace.style.cursor = 'pointer';
+        btnIndoorRace.title = '';
+      }
     }
   };
 
@@ -5156,39 +5116,17 @@ function initializeCurrentScreen(screenId) {
       
     case 'connectionScreen':
       console.log('기기 연결 화면 초기화');
-      // ANT+ 버튼 활성화/비활성화 상태 업데이트
+      // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
       setTimeout(() => {
         const btnANT = safeGetElement("btnConnectANT");
         if (btnANT) {
-          // 현재 사용자 grade 확인
-          let viewerGrade = '2'; // 기본값
-          try {
-            const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-            const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-            const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
-            viewerGrade = String(mergedViewer?.grade || '2');
-          } catch (e) {
-            console.warn('사용자 grade 확인 실패:', e);
-          }
-          
-          // grade=1 또는 grade=3만 활성화
-          const isANTEnabled = (viewerGrade === '1' || viewerGrade === '3');
-          
-          if (!isANTEnabled) {
-            btnANT.disabled = true;
-            btnANT.classList.add('is-disabled');
-            btnANT.setAttribute('aria-disabled', 'true');
-            btnANT.title = 'ANT+ 연결은 관리자 또는 특정 등급 사용자만 사용할 수 있습니다';
-            btnANT.style.opacity = '0.5';
-            btnANT.style.cursor = 'not-allowed';
-          } else {
-            btnANT.disabled = false;
-            btnANT.classList.remove('is-disabled');
-            btnANT.removeAttribute('aria-disabled');
-            btnANT.title = 'ANT+ 기기 연결';
-            btnANT.style.opacity = '1';
-            btnANT.style.cursor = 'pointer';
-          }
+          // 모든 등급 사용자 사용 가능
+          btnANT.disabled = false;
+          btnANT.classList.remove('is-disabled');
+          btnANT.removeAttribute('aria-disabled');
+          btnANT.title = 'ANT+ 기기 연결';
+          btnANT.style.opacity = '1';
+          btnANT.style.cursor = 'pointer';
         }
       }, 100);
       break;
