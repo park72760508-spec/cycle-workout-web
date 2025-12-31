@@ -128,18 +128,21 @@ const JSONP_TIMEOUT = 60000; // 60초 타임아웃
 // 필수 설정 확인 및 초기화
 function initializeWorkoutManager() {
   if (!window.GAS_URL) {
-    console.error('GAS_URL이 설정되지 않았습니다.');
+    // GAS_URL이 없어도 경고만 출력하고 계속 진행 (개인 대시보드 등에서 세그먼트 그래프만 필요한 경우)
+    console.warn('GAS_URL이 설정되지 않았습니다. 워크아웃 저장/로드 기능은 사용할 수 없습니다.');
     console.log('CONFIG:', window.CONFIG);
     window.GAS_URL = window.CONFIG?.GAS_WEB_APP_URL || '';
     
     if (!window.GAS_URL) {
-      console.error('CONFIG에서도 GAS_URL을 찾을 수 없습니다.');
+      console.warn('CONFIG에서도 GAS_URL을 찾을 수 없습니다. 세그먼트 그래프 표시 기능만 사용 가능합니다.');
       window.GAS_URL = '';
-      return;
+      // GAS_URL이 없어도 계속 진행 (drawSegmentGraph 등은 GAS_URL이 필요 없음)
+    } else {
+      console.log('GAS_URL 설정됨:', window.GAS_URL);
     }
+  } else {
+    console.log('GAS_URL 설정됨:', window.GAS_URL);
   }
-  
-  console.log('GAS_URL 설정됨:', window.GAS_URL);
   
   if (typeof window.showToast !== 'function') {
     window.showToast = function(message) {
