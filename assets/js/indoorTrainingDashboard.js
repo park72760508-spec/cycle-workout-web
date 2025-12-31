@@ -734,9 +734,8 @@ function calculatePowerFromAngle(angle, maxPower) {
 }
 
 /**
- * [수정됨] 파워미터 바늘 궤적 업데이트
- * - Indoor Race 로직 이식: 매 프레임 초기화 후 재그리기 방식
- * - 데이터(segmentPower)가 없는 초기 상태 예외 처리 강화
+ * [최종수정] 파워미터 바늘 궤적 업데이트
+ * - Race 로직 이식: 파워 값(Value) 기반으로 루프 제어하여 바늘과 완벽 동기화
  */
 function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
     const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
@@ -744,12 +743,12 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     
     if (!trailContainer) return;
 
-    // 1. 상태 체크: 연결됨 + 워크아웃 실행 중 + 워크아웃 데이터 존재
+    // 1. 상태 체크 (연결됨 + 훈련중 + 워크아웃존재)
     const isConnected = powerMeter.connected;
     const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
     const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
     
-    // 조건 불만족 시 궤적 및 텍스트 초기화 후 종료
+    // 조건 불만족 시 초기화 후 리턴
     if (!isConnected || !isTrainingRunning || !hasWorkout) {
         trailContainer.innerHTML = '';
         if (targetTextEl) targetTextEl.textContent = '';
@@ -759,20 +758,20 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2; 
     
-    // 2. 목표 파워(Target Power) 계산
+    // 2. 목표 파워 계산
     let targetPower = 0;
     let ftpPercent = 100;
     
     if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
         const segments = window.indoorTrainingState.currentWorkout.segments;
-        // 인덱스 안전 접근 (첫 로딩 시 undefined 방지)
+        // 인덱스 안전 접근
         const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
         const currentSegment = segments[currentSegmentIndex] || segments[0]; 
         
         if (currentSegment) {
             const targetValue = currentSegment.target_value || currentSegment.target || '100';
             
-            // "150%" 또는 "200W", "100/120" 등 다양한 포맷 파싱
+            // 포맷 파싱 ("150%", "200W", "100/120" 등)
             if (typeof targetValue === 'string') {
                 if (targetValue.includes('/')) {
                     const parts = targetValue.split('/');
@@ -804,29 +803,30 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     
     powerMeter.targetPower = targetPower;
     
-    // [중요] 랩파워(segmentPower) 안전 처리 (undefined일 경우 0)
+    // 랩파워 안전 처리 (없으면 0)
     const segmentPower = powerMeter.segmentPower || 0;
 
-    // 4. 그리기 함수 호출 (현재 바늘 각도를 기준으로 그림)
+    // 그리기 함수 호출
     drawPowerMeterTrail(
         trailContainer, 
         targetAngle, 
         targetPower, 
-        currentAngle, // 현재 바늘의 실제 각도
-        segmentPower
+        currentPower, 
+        segmentPower,
+        maxPower
     );
 }
 
 /**
- * [수정됨] 파워미터 바늘 궤적 그리기 (SVG)
- * - Race 로직 적용: innerHTML=''로 잔상 제거 후 현재 위치까지만 라인 생성
- * - 좌표계: Needle(-90~90) -> SVG Math(180~360) 변환 적용
+ * [최종수정] 파워미터 바늘 궤적 그리기 (SVG)
+ * - Race 대시보드 로직 적용: innerHTML 초기화 + Value 기반 루프 제한
+ * - 바늘이 움직이는 즉시 궤적 생성/삭제 (잔상 없음)
  */
-function drawPowerMeterTrail(container, targetAngle, targetPower, currentAngle, segmentPower) {
-    // [핵심 1] Race 로직과 동일하게 기존 궤적을 모두 지움 (잔상 방지)
+function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, segmentPower, maxPower) {
+    // 1. 매 프레임 캔버스 초기화 (잔상 제거의 핵심)
     container.innerHTML = '';
     
-    const centerX = 0; // translate(100, 140) 기준
+    const centerX = 0; 
     const centerY = 0;
     const radius = 80; 
     const innerRadius = radius - 10; 
@@ -834,12 +834,12 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentAngle, 
     const tickLengthLong = 14; 
     const centerCircleRadius = 7; 
     
-    // SVG 좌표계 변환 오프셋 (Needle -90도 = SVG Math 180도)
+    // SVG 좌표계 변환용 (Needle -90도 -> SVG 180도)
     const angleOffset = 270;
     const startAngleNeedle = -90; 
 
     // =========================================================
-    // 1. 목표 파워 궤적 (진한 투명 주황색 원둘레 호)
+    // A. 목표 파워 원둘레선 (진한 투명 주황색)
     // =========================================================
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -850,7 +850,7 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentAngle, 
         const startRad = ((startAng + angleOffset) * Math.PI) / 180;
         const endRad = ((endAng + angleOffset) * Math.PI) / 180;
         
-        // 눈금 높이만큼 두께를 가지므로, 반지름을 눈금 중간으로 설정
+        // 눈금 중간 위치에 호를 그림
         const arcRadius = innerRadius + (tickLengthShort / 2);
         
         const startX = centerX + arcRadius * Math.cos(startRad);
@@ -865,7 +865,7 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentAngle, 
         
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
-        // 요청하신 대로 더 진하게 (0.3 -> 0.6)
+        // 요청: 투명도 0.6으로 진하게
         targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); 
         targetPath.setAttribute('stroke-width', tickLengthShort);
         targetPath.setAttribute('stroke-linecap', 'butt');
@@ -874,47 +874,46 @@ function drawPowerMeterTrail(container, targetAngle, targetPower, currentAngle, 
     }
 
     // =========================================================
-    // 2. 실제 파워 궤적 (방사형 눈금 선 - Race 로직 적용)
+    // B. 실제 파워 궤적 (Race 스타일: 값 기반 루프)
     // =========================================================
     
-    // 색상 결정: 랩파워 / 목표파워 >= 98.5% -> 민트, 아니면 주황
+    // 1. 색상 결정 (98.5% 기준)
     let trailColor = 'rgba(255, 165, 0, 0.4)'; // 기본 주황
     if (targetPower > 0) {
         const achievementRatio = (segmentPower / targetPower) * 100;
         if (achievementRatio >= 98.5) {
-            trailColor = 'rgba(0, 212, 170, 0.4)'; // 민트 (성공)
+            trailColor = 'rgba(0, 212, 170, 0.4)'; // 민트
         }
     }
 
-    // 전체 스케일 정의 (Training 게이지: 0 ~ 120 기준)
+    // 2. 스케일 설정 (0 ~ 120)
     const maxScalePos = 120; 
     const tickInterval = 2.5; // 눈금 1/2 간격
     
-    // [핵심 2] Race 로직: 0부터 루프를 돌면서 '현재 바늘 각도'를 넘으면 즉시 중단
-    // 파워값 변환보다 각도를 직접 비교하는 것이 시각적으로 가장 정확함
-    for (let pos = 0; pos <= maxScalePos; pos += tickInterval) {
-        // 현재 눈금(pos)의 바늘 좌표계 각도 계산 (-90 ~ 90)
-        const ratio = pos / maxScalePos;
-        const tickNeedleAngle = -90 + (ratio * 180);
-        
-        // [중요] 만약 눈금의 각도가 현재 바늘 각도(currentAngle)보다 크면 그리기 중단
-        // 아주 미세한 부동소수점 오차 허용 (0.01도)
-        if (tickNeedleAngle > currentAngle + 0.01) {
-            break; // Loop 탈출 -> 즉시 삭제 효과
-        }
+    // 3. 현재 파워를 스케일 위치(0~120)로 변환
+    let currentScalePos = 0;
+    if (maxPower > 0) {
+        currentScalePos = (currentPower / maxPower) * maxScalePos;
+    }
+    
+    // [핵심] 루프의 한계점을 '현재 파워 위치'로 설정
+    // 이렇게 하면 현재 파워보다 높은 위치의 선은 아예 생성되지 않음 (자동 삭제 효과)
+    const limitPos = Math.min(currentScalePos, maxScalePos);
 
-        // --- 여기서부터는 바늘보다 같거나 작은 위치이므로 그림 ---
+    for (let pos = 0; pos <= limitPos; pos += tickInterval) {
+        // 위치 -> 각도 변환 (-90 ~ 90)
+        const ratio = pos / maxScalePos;
+        const needleAngle = -90 + (ratio * 180);
         
-        // SVG 좌표계 각도 변환 (Math.cos/sin용)
-        const mathAngle = tickNeedleAngle + 270;
+        // SVG 좌표계 각도 변환 (180 ~ 360)
+        const mathAngle = needleAngle + 270;
         const rad = (mathAngle * Math.PI) / 180;
         
-        // 20단위마다 긴 눈금
+        // 20단위마다 긴 눈금 (소수점 오차 방지)
         const isMajor = (Math.abs(pos % 20) < 0.01);
         const tickLen = isMajor ? tickLengthLong : tickLengthShort;
         
         const outerRadius = innerRadius + tickLen;
-        // 중심 원(반지름 7)보다 약간 밖에서 시작
         const startR = centerCircleRadius + 2; 
         
         const x1 = centerX + startR * Math.cos(rad);
@@ -4305,6 +4304,7 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
+
 
 
 
