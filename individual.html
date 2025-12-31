@@ -97,18 +97,23 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 15vh; /* 블럭 높이 설정 */
+            height: 20vh; /* 블럭 높이 증가 */
+            min-height: 150px; /* 최소 높이 보장 */
         }
         .segment-graph-container {
             width: 100%;
             max-width: 600px;
-            height: 120%; /* 블럭 높이의 80%에서 50% 확장: 80% * 1.5 = 120% */
+            height: 100%; /* 부모 컨테이너 높이에 맞춤 */
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .segment-graph-container canvas {
             width: 100%;
             height: 100%;
             display: block;
+            object-fit: contain; /* 비율 유지하며 컨테이너에 맞춤 */
         }
     </style>
 </head>
