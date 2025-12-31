@@ -1001,22 +1001,38 @@ function updateAllPowerMeterConnectionStatuses() {
 /**
  * 파워미터 데이터 업데이트 및 UI(바늘 포함) 반영
  */
+/**
+ * 파워미터 데이터 업데이트 및 UI(바늘 포함) 반영
+ */
 function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
     if (!powerMeter) return;
 
-    // 1. 데이터 저장 (가민 스타일: 필터링된 값 저장)
-    // 파워값이 유효한 범위 내에서만 저장
+    // 1. 데이터 저장 (유효 범위 체크)
     if (power >= 0 && power <= 2000) {
         powerMeter.currentPower = power;
-        // 가민 스타일: 필터링된 값도 업데이트
         powerMeter.powerFiltered = power;
-    } else if (power > 2000) {
-        console.warn(`[Training] 비정상적인 파워값 무시: ${power}W (이전 값 유지: ${powerMeter.currentPower}W)`);
-        // 이전 값 유지
+        
+        // [추가됨] 워크아웃 실행 중('running')일 때만 통계 집계
+        if (window.indoorTrainingState.trainingState === 'running') {
+            // A. 최대 파워 갱신
+            if (power > powerMeter.maxPower) {
+                powerMeter.maxPower = power;
+            }
+            
+            // B. 워크아웃 전체 평균 파워 (단순 평균)
+            // 0W도 포함해서 평균을 내야 정확함 (코스팅 등 고려)
+            powerMeter.powerSum += power;
+            powerMeter.powerCount++;
+            powerMeter.averagePower = Math.round(powerMeter.powerSum / powerMeter.powerCount);
+            
+            // C. 세그먼트 평균 파워
+            powerMeter.segmentPowerSum += power;
+            powerMeter.segmentPowerCount++;
+            powerMeter.segmentPower = Math.round(powerMeter.segmentPowerSum / powerMeter.segmentPowerCount);
+        }
     }
     
-    // 케이던스는 0~254 범위에서만 저장
     if (cadence >= 0 && cadence <= 254) {
         powerMeter.cadence = cadence;
     }
@@ -1024,66 +1040,56 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     powerMeter.heartRate = heartRate;
     powerMeter.lastUpdateTime = Date.now();
 
-    // 2. 바늘(Needle) 각도 계산 로직
-    // 사용자 FTP 값을 가져옴 (설정 안 되어 있으면 기본값 200W 사용)
-    const userFTP = window.indoorTrainingState.userFTP || 200;
-    const maxGaugePower = userFTP * 2; // 게이지 최대치는 FTP의 2배
-    
-    // 파워값이 유효한 범위 내에서만 사용 (2000W 초과는 무시)
+    // 2. 바늘(Needle) 각도 계산
+    const userFTP = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
+    const maxGaugePower = userFTP * 2;
     const validPower = (power >= 0 && power <= 2000) ? power : powerMeter.currentPower;
     
-    // 파워 비율 계산 (0 ~ 1.0 사이로 제한)
     let powerRatio = validPower / maxGaugePower;
     if (powerRatio > 1) powerRatio = 1;
     if (powerRatio < 0) powerRatio = 0;
 
-    // 각도 계산 (updatePowerMeterNeedle 함수와 동일한 방식)
-    // -90도 = 위쪽/0W, 90도 = 아래쪽/최대값
     const angle = -90 + (powerRatio * 180);
 
     // 3. UI 업데이트
-    // 숫자 값 업데이트 (유효한 파워값만 표시)
+    // 현재 파워값
     const currentPowerEl = document.getElementById(`current-power-value-${powerMeterId}`);
     if (currentPowerEl) {
         const displayPower = (power >= 0 && power <= 2000) ? power : powerMeter.currentPower;
         currentPowerEl.textContent = Math.round(displayPower);
     }
+    
+    // [추가됨] 통계 값 UI 업데이트 (최대, 평균, 세그먼트)
+    const maxPowerEl = document.getElementById(`max-power-value-${powerMeterId}`);
+    const avgPowerEl = document.getElementById(`avg-power-value-${powerMeterId}`);
+    const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
+    
+    if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
+    if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
+    if (segPowerEl) segPowerEl.textContent = Math.round(powerMeter.segmentPower);
 
-    // 케이던스 값 업데이트 (0 값도 표시)
+    // 케이던스
     const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
     if (cadenceEl) {
-        // cadence가 숫자가 아니거나 음수면 0으로 처리
         const cadenceValue = (typeof cadence === 'number' && cadence >= 0 && cadence <= 254) ? Math.round(cadence) : 0;
-        // 항상 표시되도록 강제 업데이트 (0도 표시)
         cadenceEl.textContent = cadenceValue.toString();
-        cadenceEl.style.display = ''; // 숨겨져 있을 수 있으므로 강제로 표시
-        console.log(`[Training] 케이던스 UI 업데이트: pm.id=${powerMeterId}, cadence=${cadenceValue} (input: ${cadence}), element=${cadenceEl ? 'found' : 'not found'}`);
-    } else {
-        console.warn(`[Training] 케이던스 UI 요소를 찾을 수 없음: cadence-value-${powerMeterId}, powerMeterId=${powerMeterId}`);
-        // 디버깅을 위해 DOM 구조 확인
-        const container = document.getElementById(`power-meter-${powerMeterId}`);
-        if (container) {
-            const allCadenceEls = container.querySelectorAll('[id*="cadence"]');
-            console.warn(`[Training] 케이던스 관련 요소들:`, Array.from(allCadenceEls).map(el => el.id));
-        }
+        cadenceEl.style.display = '';
     }
 
-    // 심박수 값 업데이트 (이미 processLiveTrainingData에서 업데이트되지만, 여기서도 업데이트)
+    // 심박수
     const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
     if (heartRateEl && heartRate > 0) {
         heartRateEl.textContent = Math.round(heartRate);
     }
 
-    // 바늘 각도 애니메이션 적용
-    // 부모 그룹이 translate(100, 140)을 하므로 rotate(angle)만 하면 됩니다
+    // 바늘 애니메이션
     const needleEl = document.getElementById(`needle-${powerMeterId}`);
     if (needleEl) {
-        // updatePowerMeterNeedle과 완전히 동일한 방식 사용 (rotate(angle)만)
         needleEl.setAttribute('transform', `rotate(${angle})`);
         needleEl.style.visibility = 'visible';
     }
     
-    // 연결 상태 업데이트 (데이터 수신 상태 반영)
+    // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
 }
 
@@ -2442,6 +2448,9 @@ function startTrainingWithCountdown() {
 /**
  * 훈련 시작
  */
+/**
+ * 훈련 시작
+ */
 function startTraining() {
   window.indoorTrainingState.trainingState = 'running';
   window.indoorTrainingState.startTime = Date.now();
@@ -2449,10 +2458,29 @@ function startTraining() {
   window.indoorTrainingState.segmentStartTime = Date.now();
   window.indoorTrainingState.segmentElapsedTime = 0;
   
-  // 워크아웃 시작 시 모든 파워미터의 궤적 초기화 및 목표 파워 궤적 표시
+  // 워크아웃 시작 시 모든 파워미터의 궤적 및 통계 데이터 초기화
   window.indoorTrainingState.powerMeters.forEach(pm => {
+    // 1. 궤적 초기화
     pm.powerTrailHistory = [];
     pm.lastTrailAngle = null;
+    
+    // 2. [추가됨] 통계 데이터 초기화 (최대, 평균, 세그먼트)
+    pm.maxPower = 0;
+    pm.powerSum = 0;
+    pm.powerCount = 0;
+    pm.averagePower = 0;
+    pm.segmentPowerSum = 0;
+    pm.segmentPowerCount = 0;
+    pm.segmentPower = 0;
+    
+    // 3. UI 초기화 (0으로 표시)
+    const maxEl = document.getElementById(`max-power-value-${pm.id}`);
+    const avgEl = document.getElementById(`avg-power-value-${pm.id}`);
+    const segEl = document.getElementById(`segment-power-value-${pm.id}`);
+    if (maxEl) maxEl.textContent = '0';
+    if (avgEl) avgEl.textContent = '0';
+    if (segEl) segEl.textContent = '0';
+
     // 연결된 파워미터의 경우 목표 파워 궤적 표시를 위해 업데이트
     if (pm.connected) {
       const currentPower = pm.currentPower || 0;
@@ -2473,7 +2501,7 @@ function startTraining() {
   if (pauseBtn) pauseBtn.disabled = false;
   if (stopBtn) stopBtn.disabled = false;
   
-  // 우측 세그먼트 그래프 업데이트 (시작 시 현재 세그먼트 인덱스 0으로 표시, 크기 재계산)
+  // 우측 세그먼트 그래프 업데이트
   if (window.indoorTrainingState.currentWorkout) {
     setTimeout(() => {
       displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, 0);
@@ -2513,6 +2541,9 @@ function stopTraining() {
 /**
  * 훈련 타이머 시작
  */
+/**
+ * 훈련 타이머 및 세그먼트 관리
+ */
 function startTrainingTimer() {
   if (window.indoorTrainingState.trainingState !== 'running') return;
   
@@ -2529,7 +2560,7 @@ function startTrainingTimer() {
   
   updateScoreboard();
   
-  // 세그먼트 전환 체크 (세그먼트 시간이 지나면 다음 세그먼트로 이동)
+  // 세그먼트 전환 체크
   if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
     const segments = window.indoorTrainingState.currentWorkout.segments;
     const currentIndex = window.indoorTrainingState.currentSegmentIndex;
@@ -2540,36 +2571,29 @@ function startTrainingTimer() {
       const segmentElapsed = window.indoorTrainingState.segmentElapsedTime;
       const remaining = segmentDuration - segmentElapsed;
       
-      // 세그먼트 종료 6초 전에 5초 카운트다운 시작
+      // 세그먼트 종료 6초 전에 5초 카운트다운
       if (remaining <= 6 && remaining > 1 && !window.indoorTrainingState.segmentCountdownActive) {
         window.indoorTrainingState.segmentCountdownActive = true;
-        showSegmentCountdown(5); // 5초 카운트다운 시작
+        showSegmentCountdown(5);
       }
       
       // 세그먼트 시간이 지나면 다음 세그먼트로 이동
       if (segmentElapsed >= segmentDuration) {
-        // 모든 세그먼트가 끝났는지 확인
         if (currentIndex >= segments.length - 1) {
-          // 모든 세그먼트 완료: 워크아웃 종료
+          // 워크아웃 종료
           window.indoorTrainingState.trainingState = 'finished';
           window.indoorTrainingState.segmentCountdownActive = false;
           
-          // 카운트다운 모달 제거
           const existingModal = document.getElementById('segmentCountdownModal');
-          if (existingModal) {
-            document.body.removeChild(existingModal);
-          }
+          if (existingModal) document.body.removeChild(existingModal);
           
-          // 버튼 상태 업데이트
           const pauseBtn = document.getElementById('btnPauseTraining');
           const stopBtn = document.getElementById('btnStopTraining');
           if (pauseBtn) pauseBtn.disabled = true;
           if (stopBtn) stopBtn.disabled = false;
           
-          console.log(`[Training] 워크아웃 완료: 모든 세그먼트 종료 (총 ${segments.length}개 세그먼트)`);
-          
-          // 경과시간 업데이트 중지 (타이머 중지)
-          return; // setTimeout을 실행하지 않아서 타이머 중지
+          console.log(`[Training] 워크아웃 완료`);
+          return;
         } else {
           // 다음 세그먼트로 이동
           window.indoorTrainingState.currentSegmentIndex = currentIndex + 1;
@@ -2577,17 +2601,24 @@ function startTrainingTimer() {
           window.indoorTrainingState.segmentElapsedTime = 0;
           window.indoorTrainingState.segmentCountdownActive = false;
           
-          // 세그먼트 변경 시 모든 파워미터의 궤적 히스토리 초기화 (연결된 파워미터만)
+          // [추가됨] 세그먼트 변경 시 데이터 초기화
           window.indoorTrainingState.powerMeters.forEach(pm => {
               if (pm.connected) {
+                  // 궤적 초기화
                   pm.powerTrailHistory = [];
                   pm.lastTrailAngle = null;
-                  // 궤적 컨테이너 초기화 후 목표 파워 궤적 다시 표시
                   const trailContainer = document.getElementById(`needle-path-${pm.id}`);
-                  if (trailContainer) {
-                      trailContainer.innerHTML = '';
-                  }
-                  // 새로운 세그먼트의 목표 파워 궤적 표시를 위해 업데이트
+                  if (trailContainer) trailContainer.innerHTML = '';
+                  
+                  // [중요] 세그먼트 평균 파워 통계 리셋
+                  pm.segmentPowerSum = 0;
+                  pm.segmentPowerCount = 0;
+                  pm.segmentPower = 0;
+                  // UI 리셋 (선택 사항 - 바로 0으로 보여줄지, 데이터 들어올때까지 유지할지)
+                  // const segEl = document.getElementById(`segment-power-value-${pm.id}`);
+                  // if (segEl) segEl.textContent = '0';
+
+                  // 목표 파워 궤적 업데이트
                   const currentPower = pm.currentPower || 0;
                   const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
                   const maxPower = ftp * 2;
@@ -2596,25 +2627,19 @@ function startTrainingTimer() {
                   updatePowerMeterTrail(pm.id, currentPower, angle, pm);
               }
           });
-          // 카운트다운 모달 제거
+          
           const existingModal = document.getElementById('segmentCountdownModal');
-          if (existingModal) {
-            document.body.removeChild(existingModal);
-          }
-          console.log(`[Training] 세그먼트 전환: ${currentIndex} → ${currentIndex + 1}`);
+          if (existingModal) document.body.removeChild(existingModal);
         }
       }
     }
   }
   
-  // 우측 세그먼트 그래프 업데이트 (현재 세그먼트 강조, 크기 재계산, 애니메이션)
   if (window.indoorTrainingState.currentWorkout) {
     const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex;
-    // 애니메이션을 위해 매 프레임마다 업데이트 (네온 효과 애니메이션)
     displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, currentSegmentIndex);
   }
   
-  // 워크아웃이 실행 중일 때만 타이머 계속 실행
   if (window.indoorTrainingState.trainingState === 'running') {
     setTimeout(startTrainingTimer, 1000);
   }
@@ -3956,6 +3981,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const xLabelY = padding.top + chartHeight - (yRatio * chartHeight);
     ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xLabelY);
 }
+
 
 
 
