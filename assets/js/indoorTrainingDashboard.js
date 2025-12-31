@@ -80,6 +80,7 @@ class PowerMeterData {
     this.powerTrailHistory = []; // 파워 궤적 히스토리 (각도 배열)
     this.lastTrailAngle = null; // 마지막 궤적 각도
     this.powerHistorySmoothed = []; // 파워 히스토리 (스무딩용)
+    this.previousPower = 0; // [가민 스타일] 이전 파워값 (궤적선 동기화용)
     
     // 가민 스타일: 고급 파워 필터링 (최고 수준)
     this.powerRawHistory = []; // 원시 파워 히스토리 (최근 10개, outlier detection용)
@@ -711,10 +712,47 @@ function updatePowerMeterNeedle(powerMeterId, power) {
     needleEl.setAttribute('transform', `rotate(${angle})`);
     needleEl.style.visibility = 'visible';
     
-    // 바늘 궤적 업데이트
+    // 이전 파워값 가져오기
+    const previousPower = powerMeter.previousPower || 0;
+    
+    // 가민 스타일: 바늘 궤적선 업데이트 (파워 변화 방향 기반)
+    const isAccelerating = power > previousPower;
+    const isDecelerating = power < previousPower;
+    
+    if (isDecelerating) {
+        // 감속 시: 목표 파워를 기준으로 즉시 궤적 업데이트
+        updatePowerMeterNeedlePath(powerMeterId, power, powerMeter);
+    } else if (isAccelerating) {
+        // 가속 시: 현재 각도 기준으로 궤적 업데이트
+        const currentNeedlePower = calculatePowerFromAngle(angle, maxPower);
+        updatePowerMeterNeedlePath(powerMeterId, currentNeedlePower, powerMeter);
+        
+        // 애니메이션 완료 후 목표 파워까지 궤적 업데이트
+        setTimeout(() => {
+            updatePowerMeterNeedlePath(powerMeterId, power, powerMeter);
+        }, 100);
+    } else {
+        // 파워 변화 없음: 현재 파워 기준으로 업데이트
+        updatePowerMeterNeedlePath(powerMeterId, power, powerMeter);
+    }
+    
+    // 이전 파워값 저장
+    powerMeter.previousPower = power;
+    
+    // 바늘 궤적 업데이트 (기존 목표 파워 및 실제 파워 궤적)
     updatePowerMeterTrail(powerMeterId, power, angle, powerMeter);
     
     console.log(`[PowerMeter] updatePowerMeterNeedle: powerMeterId=${powerMeterId}, power=${power}, angle=${angle}, transform=${needleEl.getAttribute('transform')}, visibility=${needleEl.style.visibility}`);
+}
+
+/**
+ * 바늘 각도에서 파워값으로 역변환 (궤적선 동기화용)
+ */
+function calculatePowerFromAngle(angle, maxPower) {
+    // 각도: -90도 ~ 90도
+    // ratio: 0 ~ 1
+    const ratio = (angle + 90) / 180;
+    return ratio * maxPower;
 }
 
 /**
@@ -850,7 +888,7 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
         targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 투명 주황색
-        targetPath.setAttribute('stroke-width', '4'); // 잘 보이도록 두께 조정
+        targetPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께로 변경
         targetPath.setAttribute('stroke-linecap', 'butt'); // 끝부분 처리
         container.appendChild(targetPath);
     }
@@ -904,9 +942,127 @@ function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory,
         segmentPath.setAttribute('d', segmentPathData);
         segmentPath.setAttribute('fill', 'none');
         segmentPath.setAttribute('stroke', color);
-        segmentPath.setAttribute('stroke-width', '4'); // 두께 조정
+        segmentPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께로 변경
         segmentPath.setAttribute('stroke-linecap', 'butt');
         container.appendChild(segmentPath);
+    }
+}
+
+/**
+ * 파워미터 바늘 행적선 업데이트 (Indoor Race 로직 참고)
+ * 눈금 위치(2.5 간격)에서만 반지름 실선을 그림
+ * 파워가 감소하면 현재 파워보다 높은 지점의 선은 삭제
+ * 색상: 세그먼트 목표 파워값 대비 립파워값이 98.5% 이상이면 민트색, 미만이면 주황색
+ */
+function updatePowerMeterNeedlePath(powerMeterId, power, powerMeter) {
+    const pathGroup = document.getElementById(`needle-path-${powerMeterId}`);
+    if (!pathGroup) return;
+    
+    // 연결됨 상태이고 워크아웃 실행 중일 때만 궤적 표시
+    const isConnected = powerMeter.connected;
+    const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
+    const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
+    
+    if (!isConnected || !isTrainingRunning || !hasWorkout) {
+        // 조건을 만족하지 않으면 궤적 제거
+        pathGroup.innerHTML = '';
+        return;
+    }
+    
+    const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
+    const maxPower = ftp * 2;
+    const centerX = 0; // transform(100, 140)으로 이미 이동됨
+    const centerY = 0;
+    const radius = 80;
+    const innerRadius = radius - 10;
+    const tickLengthShort = 7; // 작은 눈금 높이
+    const tickLengthLong = 14;
+    const centerCircleRadius = 7;
+    
+    // 현재 세그먼트 목표 파워 계산
+    let targetPower = 0;
+    if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
+        const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
+        const currentSegment = window.indoorTrainingState.currentWorkout.segments[currentSegmentIndex];
+        if (currentSegment) {
+            const targetValue = currentSegment.target_value || currentSegment.target || '100';
+            let ftpPercent = 100;
+            
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/');
+                if (parts.length > 0) {
+                    const ftpPart = parts[0].trim().replace('%', '');
+                    ftpPercent = Number(ftpPart) || 100;
+                }
+            } else if (typeof targetValue === 'number') {
+                ftpPercent = targetValue;
+            }
+            
+            targetPower = (ftp * ftpPercent) / 100;
+        }
+    }
+    
+    // 눈금 간격: 5의 1/2 = 2.5 (눈금의 1/2 간격)
+    // 파워값을 눈금 위치(0~120)로 변환: power / maxPower * 120
+    const maxPos = 120;
+    const tickInterval = 2.5; // 눈금의 1/2 간격
+    const currentPos = (power / maxPower) * maxPos;
+    const currentTickPos = Math.floor(currentPos / tickInterval) * tickInterval;
+    const maxTickPos = Math.min(currentTickPos, maxPos);
+    
+    // 모든 기존 궤적 삭제 (감속 시 바늘이 지나간 부분 제거)
+    pathGroup.innerHTML = '';
+    
+    // 현재 파워까지만 궤적 표시 (바늘이 지나간 부분은 자동으로 제거됨)
+    for (let tickPos = 0; tickPos <= maxTickPos; tickPos += tickInterval) {
+        // 눈금 위치를 파워값으로 역변환
+        const tickPower = (tickPos / maxPos) * maxPower;
+        
+        // 1. 바늘과 동일한 각도 계산
+        const tickRatio = tickPos / maxPos;
+        let needleAngle = -90 + (tickRatio * 180);
+        
+        // 2. 좌표계 보정 (SVG rotate와 Math.cos/sin 좌표계 일치)
+        // SVG rotate(0)은 '위쪽'을 가리키지만, Math.cos(0)은 '오른쪽'을 가리킵니다.
+        // 바늘 각도에서 90도를 빼야 Math 좌표계와 일치하게 됩니다.
+        let mathAngle = needleAngle - 90;
+        
+        const rad = (mathAngle * Math.PI) / 180;
+        
+        // 3. 선의 길이 결정 (20 단위는 길게, 2.5 간격에 맞춤)
+        const isMajor = tickPos % 20 === 0;
+        const tickLength = isMajor ? tickLengthLong : tickLengthShort;
+        const outerRadius = innerRadius + tickLength;
+        
+        // 4. 좌표 계산
+        const startRadius = centerCircleRadius + 1;
+        const x1 = centerX + startRadius * Math.cos(rad);
+        const y1 = centerY + startRadius * Math.sin(rad);
+        const x2 = centerX + outerRadius * Math.cos(rad);
+        const y2 = centerY + outerRadius * Math.sin(rad);
+        
+        // 5. 색상 결정: 세그먼트 목표 파워값 대비 립파워값 비교
+        let color = 'rgba(255, 165, 0, 0.4)'; // 기본 주황색
+        if (targetPower > 0) {
+            const powerRatio = (tickPower / targetPower) * 100; // 목표 대비 비율 (%)
+            if (powerRatio >= 98.5) {
+                color = 'rgba(0, 212, 170, 0.4)'; // 민트색 (98.5% 이상)
+            } else {
+                color = 'rgba(255, 165, 0, 0.4)'; // 주황색 (98.5% 미만)
+            }
+        }
+        
+        // 6. SVG Line 생성 및 추가
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        line.setAttribute('stroke', color);
+        line.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
+        line.setAttribute('stroke-linecap', 'round');
+        
+        pathGroup.appendChild(line);
     }
 }
 
