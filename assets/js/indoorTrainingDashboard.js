@@ -546,8 +546,9 @@ function generatePowerMeterLabels(powerMeterId) {
   const radius = 80;
   const maxPos = 120;
   
-  // FTP 값 확인
-  const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || null;
+  // FTP 값 확인: 해당 트랙의 FTP 값만 사용 (다른 트랙의 FTP 값 사용하지 않음)
+  // 미연결 상태일 때는 0, 0.33, 0.67, 1, 1.33, 1.67, 2로 표시되어야 함
+  const ftp = powerMeter.userFTP || null;
   const useFTPValue = !!ftp;
   
   // 주요 눈금 위치만 표시 (20 간격: 0, 20, 40, 60, 80, 100, 120)
@@ -1079,6 +1080,7 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
     powerMeter.connected = false;
   } else if (hasUser && hasAnyDevice) {
     // 사용자 지정 + 파워미터/스마트로라/심박계 정보 저장된 상태
+    // "준비됨" 상태는 hasData 체크 없이 표시 (화면 재접속 시에도 올바르게 표시)
     if (hasReceiver && hasData) {
       // 수신기 연결 + 데이터 수신 중
       statusClass = 'connected';
@@ -1086,6 +1088,7 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
       powerMeter.connected = true;
     } else {
       // 디바이스 정보는 있지만 수신기 미연결 또는 데이터 미수신
+      // 화면 재접속 시에도 "준비됨"으로 표시되어야 함
       statusClass = 'ready';
       statusText = '준비됨';
       powerMeter.connected = false;
