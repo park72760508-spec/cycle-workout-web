@@ -613,10 +613,19 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const totalSeconds = segments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
   if (totalSeconds <= 0) return;
   
-  // 그래프 크기 설정
-  const graphHeight = 300; // 세로축 높이 (파워)
-  const graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
-  const padding = { top: 20, right: 40, bottom: 50, left: 70 };
+  // 그래프 크기 설정 (개인 대시보드용으로 작은 크기)
+  let graphHeight, graphWidth, padding;
+  if (canvasId === 'individualSegmentGraph') {
+    // 개인 대시보드용: 작은 크기
+    graphHeight = 100; // 세로축 높이 (파워)
+    graphWidth = Math.max(400, Math.min(600, totalSeconds * 2)); // 가로축 너비 (시간에 비례, 최소 400px, 최대 600px)
+    padding = { top: 10, right: 20, bottom: 25, left: 35 };
+  } else {
+    // 기본 크기
+    graphHeight = 300; // 세로축 높이 (파워)
+    graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
+    padding = { top: 20, right: 40, bottom: 50, left: 70 };
+  }
   const chartWidth = graphWidth - padding.left - padding.right;
   const chartHeight = graphHeight - padding.top - padding.bottom;
   
@@ -630,8 +639,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const ctx = canvas.getContext('2d');
   
   // 배경 그리기
-  if (canvasId === 'trainingSegmentGraph') {
-    // 훈련 화면용: 검정 투명 배경
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+    // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(0, 0, graphWidth, graphHeight);
   } else {
@@ -651,8 +660,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 축 그리기 (부드러운 색상)
   ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
-  if (canvasId === 'trainingSegmentGraph') {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면: 밝은 색상
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
   } else {
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
   }
@@ -691,9 +700,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     window._segmentGraphChartWidth = chartWidth;
     window._segmentGraphTotalSeconds = totalSeconds;
   }
-  if (canvasId === 'trainingSegmentGraph') {
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.5)';
-    ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면: 더 밝은 노란색
+    ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면 및 개인 대시보드: 더 밝은 노란색
   } else {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
     ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)'; // 훈련 준비 화면
@@ -718,8 +727,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const labelX = padding.left - 10 - labelWidth;
   const labelY = ftpY - labelHeight / 2;
   
-  if (canvasId === 'trainingSegmentGraph') {
-    // 훈련 화면: 밝은 배경과 텍스트
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+    // 훈련 화면 및 개인 대시보드: 밝은 배경과 텍스트
     ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
     ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
     ctx.fillStyle = '#fbbf24'; // 밝은 노란색
@@ -729,7 +738,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
     ctx.fillStyle = '#f59e0b';
   }
-  ctx.font = 'bold 12px sans-serif';
+  // 개인 대시보드용 폰트 크기 조정
+  const ftpLabelFontSize = (canvasId === 'individualSegmentGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
+  ctx.font = ftpLabelFontSize;
   ctx.textAlign = 'right';
   ctx.fillText(labelText, padding.left - 10, ftpY + 4);
   
@@ -740,8 +751,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
     
     // 격자선 (부드러운 색상)
-    if (canvasId === 'trainingSegmentGraph') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면: 밝은 색상
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
     } else {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'; // 훈련 준비 화면: 어두운 색상
     }
@@ -754,8 +765,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.setLineDash([]);
     
     // 눈금 표시
-    if (canvasId === 'trainingSegmentGraph') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면: 밝은 색상
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
     } else {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // 훈련 준비 화면: 어두운 색상
     }
@@ -766,12 +777,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.stroke();
     
     // 파워 값 표시
-    if (canvasId === 'trainingSegmentGraph') {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
     } else {
       ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
     }
-    ctx.font = '11px sans-serif';
+    const powerFontSize = (canvasId === 'individualSegmentGraph') ? '8px sans-serif' : '11px sans-serif';
+    ctx.font = powerFontSize;
     ctx.textAlign = 'right';
     ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
   }
@@ -916,8 +928,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const x = padding.left + (time / totalSeconds) * chartWidth;
     
     // 눈금선
-    if (canvasId === 'trainingSegmentGraph') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면: 밝은 색상
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
     } else {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
     }
@@ -930,34 +942,42 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 시간 표시
     const minutes = Math.floor(time / 60);
     const seconds = Math.floor(time % 60);
-    if (canvasId === 'trainingSegmentGraph') {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면: 밝은 색상
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
     } else {
       ctx.fillStyle = '#6b7280'; // 훈련 준비 화면: 어두운 색상
     }
-    ctx.font = '10px sans-serif';
+    const timeFontSize = (canvasId === 'individualSegmentGraph') ? '8px sans-serif' : '10px sans-serif';
+    const timeLabelY = (canvasId === 'individualSegmentGraph') ? padding.top + chartHeight + 12 : padding.top + chartHeight + 18;
+    ctx.font = timeFontSize;
     ctx.textAlign = 'center';
     ctx.fillText(
       `${minutes}:${seconds.toString().padStart(2, '0')}`,
       x,
-      padding.top + chartHeight + 18
+      timeLabelY
     );
   }
   
   // 축 라벨
-  if (canvasId === 'trainingSegmentGraph') {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
   } else {
     ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
   }
-  ctx.font = 'bold 12px sans-serif';
+  const axisLabelFontSize = (canvasId === 'individualSegmentGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
+  const axisLabelY = (canvasId === 'individualSegmentGraph') ? graphHeight - 5 : graphHeight - 10;
+  ctx.font = axisLabelFontSize;
   ctx.textAlign = 'center';
-  ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, graphHeight - 10);
+  ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, axisLabelY);
   
   // 진행율 표시 제거됨 (버튼 위에 표시하지 않음)
   
+  // 세로축 라벨 (파워)
+  const verticalLabelFontSize = (canvasId === 'individualSegmentGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
+  ctx.font = verticalLabelFontSize;
   ctx.save();
-  ctx.translate(15, padding.top + chartHeight / 2);
+  const verticalLabelX = (canvasId === 'individualSegmentGraph') ? 10 : 15;
+  ctx.translate(verticalLabelX, padding.top + chartHeight / 2);
   ctx.rotate(-Math.PI / 2);
   ctx.fillText('파워 (W)', 0, 0);
   ctx.restore();

@@ -31,16 +31,36 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
 });
 
 // 3. 훈련 상태 구독 (타이머, 세그먼트 정보)
+let currentSegmentIndex = -1;
 db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
         updateTimer(status);
         
         // 세그먼트 정보 표시
-        const segIdx = status.segmentIndex + 1; // 0부터 시작하므로 +1
+        currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+        const segIdx = currentSegmentIndex + 1; // 0부터 시작하므로 +1
         document.getElementById('segment-info').innerText = status.state === 'running' 
             ? `Segment ${segIdx}` 
             : (status.state === 'paused' ? '일시정지' : '대기 중');
+        
+        // 세그먼트 그래프 업데이트
+        if (window.currentWorkout && window.currentWorkout.segments) {
+            updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+        }
+    }
+});
+
+// 4. 워크아웃 정보 구독 (세그먼트 그래프 표시용)
+db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
+    const segments = snapshot.val();
+    if (segments && Array.isArray(segments) && segments.length > 0) {
+        // 워크아웃 객체 생성
+        window.currentWorkout = {
+            segments: segments
+        };
+        // 세그먼트 그래프 그리기
+        updateSegmentGraph(segments, currentSegmentIndex);
     }
 });
 
@@ -100,4 +120,19 @@ function formatTime(seconds) {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+}
+
+// 세그먼트 그래프 업데이트 함수
+function updateSegmentGraph(segments, currentSegmentIndex = -1) {
+    if (!segments || segments.length === 0) return;
+    
+    // workoutManager.js의 drawSegmentGraph 함수 사용
+    if (typeof drawSegmentGraph === 'function') {
+        // 개인 대시보드용으로 작은 크기로 조정
+        setTimeout(() => {
+            drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph');
+        }, 100);
+    } else {
+        console.warn('[Individual] drawSegmentGraph 함수를 찾을 수 없습니다.');
+    }
 }
