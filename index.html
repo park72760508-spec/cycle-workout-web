@@ -2423,7 +2423,8 @@
           ANT USBStick2 수신기를 연결하세요.
         </div>
       </div>
-      <div class="modal-footer">
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" id="btnUSBActivationDeactivate" onclick="deactivateUSBReceiver()" style="display: none; padding: 6px 12px; font-size: 12px; background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; white-space: nowrap;">강제 비활성화</button>
         <button class="btn btn-secondary" onclick="closeUSBReceiverActivationModal()">닫기</button>
       </div>
     </div>
@@ -2671,11 +2672,5 @@
   <script src="assets/js/rollerRaceDashboard.js"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-
-<script src="assets/js/firebaseConfig.js"></script>
-  
 </body>
 </html>
