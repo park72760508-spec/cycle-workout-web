@@ -77,6 +77,9 @@ class PowerMeterData {
     this.outlierRejectionCount = 0; // 연속 이상치 거부 횟수
     this.emaAlpha = 0.3; // EMA 알파 값 (0.3 = 최근 값에 30% 가중치)
     this.targetPower = 0; // 목표 파워값 (세그먼트)
+// [추가] 애니메이션용 현재 표시 파워 (부드러운 움직임 담당)
+    this.displayPower = 0; 
+    this.lastDrawnTickCount = -1; // 궤적 그리기 최적화용
     this.powerTrailHistory = []; // 파워 궤적 히스토리 (각도 배열)
     this.lastTrailAngle = null; // 마지막 궤적 각도
     this.powerHistorySmoothed = []; // 파워 히스토리 (스무딩용)
@@ -281,6 +284,9 @@ function initIndoorTrainingDashboard() {
     
     resizeObserver.observe(scoreboardDisplay);
     window.indoorTrainingState.scoreboardResizeObserver = resizeObserver;
+    // [추가] 부드러운 바늘 움직임을 위한 애니메이션 루프 시작
+      startGaugeAnimationLoop();
+    
   }
 }
 
@@ -688,48 +694,118 @@ function initializeNeedles() {
 }
 
 /**
- * 파워미터 바늘 및 텍스트 업데이트 (메인 루프에서 호출)
+ * [수정됨] 데이터 수신 시 호출되는 함수
+ * - 바늘/궤적 제어권은 애니메이션 루프로 넘기고, 여기서는 텍스트 값만 즉시 갱신
  */
 function updatePowerMeterNeedle(powerMeterId, power) {
     const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === powerMeterId);
     if (!powerMeter) return;
     
-    // FTP 기반 최대 파워 계산 (기본 200W 기준, FTP의 200%가 맥스)
-    const ftp = powerMeter.userFTP || window.indoorTrainingState.userFTP || 200;
-    const maxPower = ftp * 2;
-    
-    // 바늘 각도 계산 (-90도 ~ 90도)
-    const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
-    const angle = -90 + (ratio * 180);
-    
-    const needleEl = document.getElementById(`needle-${powerMeterId}`);
-    const textEl = document.getElementById(`power-value-${powerMeterId}`);
-    
-    if (needleEl) {
-        // [중요] 바늘과 궤적의 시차(Lag)를 없애기 위해 CSS Transition 제거
-        // 바늘이 데이터 변동에 따라 즉시 이동하므로 궤적선과 오차가 사라집니다.
-        needleEl.style.transition = 'none'; 
-        needleEl.setAttribute('transform', `rotate(${angle})`);
-        
-        // 연결 상태에 따른 가시성 처리
-        if (!powerMeter.connected) {
-             needleEl.style.visibility = 'hidden';
-        } else {
-             needleEl.style.visibility = 'visible';
-        }
-    }
-    
-    // 텍스트 업데이트
+    // 텍스트는 즉각 반응해야 하므로 여기서 바로 업데이트
+    const textEl = document.getElementById(`current-power-value-${powerMeterId}`);
     if (textEl) {
         textEl.textContent = Math.round(power);
     }
     
-    // 이전 파워값 저장
+    // 이전 파워값 저장 (로직 유지용)
     powerMeter.previousPower = power;
     
-    // 궤적 업데이트 호출
-    updatePowerMeterTrail(powerMeterId, power, angle, powerMeter);
+    // 주의: 여기서 updatePowerMeterTrail이나 setAttribute('transform')을 호출하지 않습니다.
+    // 그 역할은 startGaugeAnimationLoop가 수행합니다.
 }
+
+
+/**
+ * [현존 최고 로직] 게이지 애니메이션 루프 (60FPS 보간 이동)
+ * - 바늘은 매 프레임 부드럽게 이동 (Lerp 적용)
+ * - 궤적은 눈금 개수가 변할 때만 다시 그려 성능 최적화
+ */
+function startGaugeAnimationLoop() {
+    const loop = () => {
+        // 훈련 상태나 파워미터 목록이 없으면 루프만 유지
+        if (!window.indoorTrainingState || !window.indoorTrainingState.powerMeters) {
+            requestAnimationFrame(loop);
+            return;
+        }
+
+        window.indoorTrainingState.powerMeters.forEach(pm => {
+            if (!pm.connected) return;
+
+            // 1. 목표값(currentPower)과 현재표시값(displayPower)의 차이 계산
+            // 목표값은 updatePowerMeterData에서 갱신됨
+            const target = pm.currentPower || 0;
+            const current = pm.displayPower || 0;
+            const diff = target - current;
+
+            // 2. 보간(Interpolation) 적용: 거리가 멀면 빠르게, 가까우면 천천히 (감속 효과)
+            // 0.15는 반응속도 계수 (높을수록 빠름, 낮을수록 부드러움. 0.1~0.2 추천)
+            if (Math.abs(diff) > 0.1) {
+                pm.displayPower = current + diff * 0.15;
+            } else {
+                pm.displayPower = target; // 차이가 미세하면 목표값으로 고정 (떨림 방지)
+            }
+
+            // 3. 바늘 각도 계산 및 업데이트 (매 프레임 실행)
+            const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
+            const maxPower = ftp * 2;
+            let ratio = Math.min(Math.max(pm.displayPower / maxPower, 0), 1);
+            const angle = -90 + (ratio * 180);
+
+            const needleEl = document.getElementById(`needle-${pm.id}`);
+            if (needleEl) {
+                // CSS Transition 간섭 제거하고 직접 제어
+                needleEl.style.transition = 'none'; 
+                needleEl.setAttribute('transform', `rotate(${angle})`);
+            }
+
+            // 4. 궤적(Radial Lines) 업데이트 (최적화 적용)
+            // 매 프레임 그리면 성능 저하되므로, 눈금(Tick) 개수가 바뀔 때만 그리기 함수 호출
+            // updatePowerMeterTrail 내부에서 displayPower를 사용하여 그립니다.
+            updatePowerMeterTrailOptimized(pm.id, pm.displayPower, angle, pm);
+        });
+
+        requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+}
+
+/**
+ * [최적화] 궤적 업데이트 (변경된 경우에만 그리기)
+ */
+function updatePowerMeterTrailOptimized(powerMeterId, displayPower, currentAngle, powerMeter) {
+    // 기존 updatePowerMeterTrail 로직을 활용하되, 그리기 빈도 제어
+    const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
+    const maxPower = ftp * 2;
+    
+    // 현재 파워를 스케일(0~120)로 변환했을 때의 눈금 위치
+    const maxScalePos = 120;
+    const tickInterval = 2.5;
+    
+    let currentScalePos = 0;
+    if (maxPower > 0) {
+        currentScalePos = Math.min(displayPower / maxPower, 1.0) * maxScalePos;
+    }
+    
+    // 현재 그려져야 할 눈금의 개수 (정수형)
+    const tickCount = Math.floor(currentScalePos / tickInterval);
+    
+    // 훈련 상태가 변경되었거나, 눈금 개수가 달라졌을 때만 다시 그리기 (성능 보호)
+    // 단, 목표 파워 궤적(Target Arc)이 변경될 수 있으므로 워크아웃 중에는 조금 더 자주 갱신 가능
+    const isTrainingRunning = window.indoorTrainingState.trainingState === 'running';
+    
+    // 상태가 변했거나 눈금 개수가 다르면 그리기 수행
+    if (powerMeter.lastDrawnTickCount !== tickCount || 
+        powerMeter.lastTrainingState !== isTrainingRunning) {
+        
+        // 기존 함수 호출 (이제 displayPower를 기반으로 그려짐)
+        updatePowerMeterTrail(powerMeterId, displayPower, currentAngle, powerMeter);
+        
+        // 상태 저장
+        powerMeter.lastDrawnTickCount = tickCount;
+        powerMeter.lastTrainingState = isTrainingRunning;
+    }
+}
+
 
 
 
@@ -4373,6 +4449,7 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
+
 
 
 
