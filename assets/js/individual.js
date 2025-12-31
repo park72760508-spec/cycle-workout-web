@@ -125,7 +125,7 @@ function formatTime(seconds) {
     return `${m}:${s}`;
 }
 
-// 랩타임 카운트다운 업데이트 함수
+// 랩타임 카운트다운 업데이트 함수 (현재 진행중인 세그먼트의 카운트다운 시간)
 function updateLapTime(status) {
     const lapTimeEl = document.getElementById('ui-lap-time');
     if (!lapTimeEl) return;
@@ -138,15 +138,24 @@ function updateLapTime(status) {
             // 세그먼트 지속 시간 계산
             const segDuration = seg.duration_sec || seg.duration || 0;
             
-            // 세그먼트 경과 시간 계산 (status에서 가져오거나 계산)
-            // status.segmentElapsedTime이 있으면 사용, 없으면 경과 시간으로 계산
-            let segElapsed = 0;
-            if (status.segmentElapsedTime !== undefined) {
-                segElapsed = status.segmentElapsedTime;
-            } else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
-                segElapsed = status.elapsedTime - status.segmentStartTime;
-            } else {
-                // 대략적인 계산: 전체 경과 시간에서 이전 세그먼트들의 시간을 빼기
+            // 세그먼트 남은 시간 계산 (우선순위: status.segmentRemainingTime > 직접 계산)
+            let remaining = 0;
+            
+            // 1순위: Firebase status에서 직접 제공되는 segmentRemainingTime 사용
+            if (status.segmentRemainingTime !== undefined) {
+                remaining = Math.max(0, Math.floor(status.segmentRemainingTime));
+            }
+            // 2순위: segmentElapsedTime이 있으면 사용
+            else if (status.segmentElapsedTime !== undefined) {
+                remaining = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
+            }
+            // 3순위: elapsedTime과 segmentStartTime으로 계산
+            else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
+                const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
+                remaining = Math.max(0, segDuration - segElapsed);
+            }
+            // 4순위: 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
+            else {
                 let prevSegmentsTime = 0;
                 for (let i = 0; i < segIndex; i++) {
                     const prevSeg = window.currentWorkout.segments[i];
@@ -154,13 +163,14 @@ function updateLapTime(status) {
                         prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
                     }
                 }
-                segElapsed = Math.max(0, (status.elapsedTime || 0) - prevSegmentsTime);
+                const segElapsed = Math.max(0, (status.elapsedTime || 0) - prevSegmentsTime);
+                remaining = Math.max(0, segDuration - segElapsed);
             }
             
-            // 남은 시간 계산
-            const remaining = Math.max(0, segDuration - segElapsed);
+            // 카운트다운 시간 표시
             lapTimeEl.innerText = formatTime(remaining);
-            lapTimeEl.style.fill = remaining <= 10 ? '#ff4444' : '#00d4aa'; // 10초 이하면 빨간색
+            // 10초 이하면 빨간색, 그 외는 청록색
+            lapTimeEl.style.fill = remaining <= 10 ? '#ff4444' : '#00d4aa';
         } else {
             lapTimeEl.innerText = '00:00';
             lapTimeEl.style.fill = '#00d4aa';
