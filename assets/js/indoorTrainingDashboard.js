@@ -3157,6 +3157,7 @@ function parseIndoorSensorPayload(payload) {
 
 /**
  * [수정됨] 장치 목록 업데이트 (스마트로라 우선순위 고정 로직 적용)
+ * 스마트로라(0x11)가 파워미터(0x0B)로 강등되는 것을 방지합니다.
  */
 function updateFoundDevicesList(deviceId, deviceType) {
   let existing = window.antState.foundDevices.find(d => d.id === deviceId);
@@ -3189,8 +3190,6 @@ function updateFoundDevicesList(deviceId, deviceType) {
     // [핵심] 스마트로라(0x11)는 파워미터(0x0B)보다 상위 호환입니다.
     // 이미 스마트로라로 인식된 장비가 파워미터 신호를 보내면 무시합니다. (타입 변경 금지)
     if (oldDeviceType === 0x11 && deviceType === 0x0B) {
-      // 스마트로라 상태 유지. 아무것도 하지 않음.
-      // 로그 남발을 막기 위해 로그도 생략 가능
       return; 
     }
 
@@ -3200,39 +3199,22 @@ function updateFoundDevicesList(deviceId, deviceType) {
       existing.type = '스마트로라';
       console.log(`[Training] 장치 업그레이드: ID ${deviceId} 파워미터 -> 스마트로라(0x11) 고정`);
       
-      // UI 리스트 이동 처리
+      // UI 리스트 갱신
       const oldListEl = document.getElementById('powerMeterDeviceList');
       if (oldListEl) {
         const oldItem = oldListEl.querySelector(`[data-device-id="${deviceId}"]`);
         if (oldItem) oldItem.remove();
       }
-      
-      // 리스트 갱신
       setTimeout(() => { renderPairingDeviceList(0x0B); }, 500);
       setTimeout(() => { renderPairingDeviceList(0x11); }, 500);
-    }
-    
-    // 그 외 같은 타입이거나 심박계인 경우, UI 상태 업데이트 (페어링 여부 등)
-    if (oldDeviceType === deviceType) {
-        // 기존 로직 유지
-        const listId = (deviceType === 0x78) ? 'heartRateDeviceList' : 
-                       (deviceType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
-        const listEl = document.getElementById(listId);
-        if (listEl) {
-             // 필요 시 UI 갱신 로직 (생략 - 기존과 동일)
-        }
     }
   }
 }
 
 
 /**
- * [The Best Logic] ANT+ 파워/케이던스/심박 데이터 처리 프로세서
- * 가민/와후급의 안정성 확보: 누적 파워 연산 + 3초 이동 평균 + 이상치 제거
- */
-
-/**
- * [최적화됨] ANT+ 데이터 처리 프로세서 (노이즈 제거 및 안정화)
+ * [최적화됨] ANT+ 데이터 처리 프로세서 (케이던스 오류 수정 패치 포함)
+ * - 스마트로라의 일반 정보(0x10) 페이지를 케이던스 데이터로 오인하는 버그 수정
  */
 function processLiveTrainingData(deviceId, deviceType, payload) {
     const antData = payload.slice(1, 9);
@@ -3254,21 +3236,16 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             }
         }
 
-        // 2. 파워/케이던스 처리 (스마트로라 우선)
-        // 스마트로라로 페어링했는데 파워미터 신호(0x0B)가 들어오면, 보통은 무시하거나 보조용으로만 씁니다.
-        // 여기서는 deviceId가 일치하면 처리하되, 로직을 강화합니다.
+        // 2. 파워/케이던스 처리
         if ( (pmDeviceId === receivedDeviceId && deviceType === 0x0B) || 
              (pmTrainerDeviceId === receivedDeviceId && deviceType === 0x11) ) {
 
             // 버퍼 초기화
             if (!pm.dataBuffer) {
                 pm.dataBuffer = {
-                    prevAccumulatedPower: 0,
-                    prevEventCount: -1,
-                    prevTimestamp: Date.now(),
                     powerHistory: [],    
                     cadenceHistory: [],  
-                    zeroCount: 0 
+                    prevTimestamp: Date.now()
                 };
             }
 
@@ -3276,87 +3253,64 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
             let rawPower = -1;
             let rawCadence = -1;
             
-            // [A] 스마트로라 전용 데이터 (Page 0x19 - Trainer Data) -> 가장 신뢰도 높음
+            // =================================================================
+            // [A] 스마트로라 (FE-C) 전용 데이터 (Page 0x19)
+            // =================================================================
             if (deviceType === 0x11 && pageNum === 0x19) {
-                 // 스마트로라는 순간 파워를 직접 줍니다. 누적 계산 불필요.
-                 const instantPower = ((antData[6] & 0x0F) << 8) | antData[5]; // Power LSB, MSB (위치 주의: 보통 byte 5,6)
-                 // * CycleOps/Standard: Byte 5=Instant Power LSB, Byte 6 (nibble)=MSB
-                 // 로그 분석: E0 76 D9 11 05 10 00 68 00 [23 72 33] -> Byte 5,6 위치 확인 필요
-                 // 일반적인 ANT+ FE-C Page 25:
-                 // Byte 0: 0x19
-                 // Byte 1: Event Count
+                 // FE-C Page 25: Trainer Data (가장 정확한 소스)
                  // Byte 2: Instant Cadence
-                 // Byte 3: Accumulated Power LSB
-                 // Byte 4: Accumulated Power MSB
-                 // Byte 5: Instant Power LSB  <-- 여기
+                 // Byte 5: Instant Power LSB
                  // Byte 6: Instant Power MSB (bits 0-3) & Trainer Status
                  
-                 // 사용자의 로그: A4 14 4E 00 19 ...
-                 // Payload[0]=0x19 (Page)
-                 // Standard FE-C definition:
-                 // Byte 1: Event Update Count
-                 // Byte 2: Instant Cadence
-                 // Byte 3: Accum Power LSB
-                 // Byte 4: Accum Power MSB
-                 // Byte 5: Instant Power LSB (bits 0-7)
-                 // Byte 6: Instant Power MSB (bits 0-3) + Flags
-                 
-                 rawCadence = antData[2]; // Byte 2
+                 rawCadence = antData[2]; // 정확한 케이던스 위치
                  const pLSB = antData[5];
                  const pMSB = antData[6] & 0x0F;
                  rawPower = (pMSB << 8) | pLSB;
             }
 
-            // [B] 표준 파워미터 데이터 (Page 0x10)
-            else if (pageNum === 0x10) {
-                const eventCount = antData[1];
-                rawCadence = antData[3];
-                const accumulatedPower = (antData[5] << 8) | antData[4];
-                const instantPower = (antData[7] << 8) | antData[6]; // Balance가 아닐 경우 Instant Power
-
-                // 누적 파워 계산 (스마트로라가 아닐 때, 혹은 보조용)
-                // 하지만 CycleOps는 Page 0x10에서도 Instant Power가 꽤 정확합니다.
-                // 복잡한 누적 계산보다 Instant Power를 우선 사용하고, 튀는 값만 잡습니다.
+            // =================================================================
+            // [B] 표준 파워미터 데이터 (Page 0x10) - *수정됨*
+            // =================================================================
+            // [중요] deviceType이 0x0B(파워미터)일 때만 이 페이지를 파워/케이던스로 해석해야 함
+            // 스마트로라(0x11)도 0x10번 페이지를 보내지만, 내용은 '장비 정보'이므로 읽으면 안 됨 (226 오류의 원인)
+            else if (deviceType === 0x0B && pageNum === 0x10) {
+                rawCadence = antData[3]; // 파워미터의 케이던스 위치
+                const instantPower = (antData[7] << 8) | antData[6]; 
                 rawPower = instantPower; 
             }
+            
+            // [참고] 스마트로라(0x11)가 보내는 0x10 페이지는 무시됨 -> rawCadence = -1 유지 -> 이전 값 보존
 
             // -----------------------------------------------------------
-            // [C] 필터링 및 안정화 로직 (The Best Logic)
+            // [C] 필터링 및 안정화 로직
             // -----------------------------------------------------------
 
             // 1. 유효성 검사 (Garbage Reject)
-            if (rawPower > 3000) rawPower = pm.currentPower || 0; // 3000W 이상 무시
-            if (rawCadence > 250) rawCadence = pm.cadence || 0;   // 250rpm 이상 무시
+            if (rawPower > 3000) rawPower = pm.currentPower || 0; 
+            if (rawCadence > 250) rawCadence = pm.cadence || 0; // 255(0xFF) 등 잘못된 값 방어
 
             // 2. 케이던스 안정화 (Median Filter)
-            if (rawCadence >= 0) {
+            if (rawCadence >= 0) { // 유효한 데이터가 들어왔을 때만 갱신
                 pm.dataBuffer.cadenceHistory.push(rawCadence);
                 if (pm.dataBuffer.cadenceHistory.length > 5) pm.dataBuffer.cadenceHistory.shift();
                 
-                // 최근 5개 값의 중앙값 사용 (튀는 값 제거)
+                // 튀는 값 제거를 위한 중앙값 필터
                 const sorted = [...pm.dataBuffer.cadenceHistory].sort((a,b) => a-b);
                 const medianCadence = sorted[Math.floor(sorted.length / 2)];
-                
-                // 중앙값이 0이면 즉시 0, 아니면 부드럽게 갱신
                 pm.cadence = medianCadence;
             }
 
-            // 3. 파워 안정화 (Zero-Cut & Smoothing)
+            // 3. 파워 안정화 (Zero-Cut)
             if (rawPower !== -1) {
-                // [Zero-Cut] 케이던스가 0이거나 매우 낮으면 파워도 0으로 강제 (코스팅 중 춤추는 값 방지)
+                // [Zero-Cut] 케이던스가 10 미만이면(멈춤) 파워도 0으로 강제
                 if (pm.cadence < 10) { 
-                    // 스마트로라의 경우 멈춰도 잔여 스핀다운 때문에 파워가 남을 수 있음.
-                    // 10rpm 미만이면 확실히 멈추는 중이므로 파워 0 처리
                     rawPower = 0;
-                    pm.dataBuffer.powerHistory = []; // 히스토리 리셋 (다시 밟을 때 즉각 반응)
+                    pm.dataBuffer.powerHistory = []; 
                 }
 
-                // [Moving Average] 파워 스무딩 (최근 3~4개 평균)
-                // 너무 길면 반응이 느리고, 너무 짧으면 튐. 4개가 적당.
                 if (rawPower > 0) {
                     pm.dataBuffer.powerHistory.push(rawPower);
                     if (pm.dataBuffer.powerHistory.length > 4) pm.dataBuffer.powerHistory.shift();
-                    
                     const sum = pm.dataBuffer.powerHistory.reduce((a,b) => a+b, 0);
                     pm.currentPower = Math.round(sum / pm.dataBuffer.powerHistory.length);
                 } else {
@@ -3364,10 +3318,8 @@ function processLiveTrainingData(deviceId, deviceType, payload) {
                 }
             }
 
-            // 4. 데이터 타임스탬프 갱신
+            // 4. 데이터 타임스탬프 갱신 및 UI 업데이트
             pm.lastUpdateTime = now;
-
-            // 5. UI 업데이트
             updatePowerMeterData(pm.id, pm.currentPower, pm.heartRate, pm.cadence);
         }
     });
@@ -4421,6 +4373,7 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
+
 
 
 
