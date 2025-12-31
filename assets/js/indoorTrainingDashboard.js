@@ -2446,8 +2446,23 @@ function startTrainingWithCountdown() {
 }
 
 /**
- * 훈련 시작
+ * 시작/일시정지 토글
  */
+function toggleStartPauseTraining() {
+  const state = window.indoorTrainingState.trainingState;
+  
+  if (state === 'idle' || state === 'finished') {
+    // 시작
+    startTrainingWithCountdown();
+  } else if (state === 'running') {
+    // 일시정지
+    pauseTraining();
+  } else if (state === 'paused') {
+    // 재개
+    resumeTraining();
+  }
+}
+
 /**
  * 훈련 시작
  */
@@ -2493,13 +2508,7 @@ function startTraining() {
   });
   
   // 버튼 상태 업데이트
-  const startBtn = document.getElementById('btnStartTraining');
-  const pauseBtn = document.getElementById('btnPauseTraining');
-  const stopBtn = document.getElementById('btnStopTraining');
-  
-  if (startBtn) startBtn.disabled = true;
-  if (pauseBtn) pauseBtn.disabled = false;
-  if (stopBtn) stopBtn.disabled = false;
+  updateTrainingButtons();
   
   // 우측 세그먼트 그래프 업데이트
   if (window.indoorTrainingState.currentWorkout) {
@@ -2519,8 +2528,28 @@ function pauseTraining() {
   window.indoorTrainingState.trainingState = 'paused';
   window.indoorTrainingState.pausedTime = Date.now();
   
-  const pauseBtn = document.getElementById('btnPauseTraining');
-  if (pauseBtn) pauseBtn.disabled = true;
+  // 버튼 상태 업데이트
+  updateTrainingButtons();
+}
+
+/**
+ * 훈련 재개
+ */
+function resumeTraining() {
+  if (window.indoorTrainingState.pausedTime) {
+    const pausedDuration = Date.now() - window.indoorTrainingState.pausedTime;
+    window.indoorTrainingState.startTime += pausedDuration;
+    window.indoorTrainingState.segmentStartTime += pausedDuration;
+    window.indoorTrainingState.pausedTime = 0;
+  }
+  
+  window.indoorTrainingState.trainingState = 'running';
+  
+  // 버튼 상태 업데이트
+  updateTrainingButtons();
+  
+  // 타이머 재개
+  startTrainingTimer();
 }
 
 /**
@@ -2528,14 +2557,137 @@ function pauseTraining() {
  */
 function stopTraining() {
   window.indoorTrainingState.trainingState = 'idle';
+  window.indoorTrainingState.startTime = null;
+  window.indoorTrainingState.pausedTime = 0;
+  window.indoorTrainingState.totalElapsedTime = 0;
+  window.indoorTrainingState.currentSegmentIndex = 0;
+  window.indoorTrainingState.segmentStartTime = null;
+  window.indoorTrainingState.segmentElapsedTime = 0;
+  window.indoorTrainingState.segmentCountdownActive = false;
   
-  const startBtn = document.getElementById('btnStartTraining');
-  const pauseBtn = document.getElementById('btnPauseTraining');
+  // 카운트다운 모달 제거
+  const existingModal = document.getElementById('segmentCountdownModal');
+  if (existingModal) document.body.removeChild(existingModal);
+  
+  // 버튼 상태 업데이트
+  updateTrainingButtons();
+}
+
+/**
+ * 세그먼트 건너뛰기 (훈련화면과 동일한 로직)
+ */
+function skipCurrentSegmentTraining() {
+  try {
+    const w = window.indoorTrainingState.currentWorkout;
+    if (!w || !w.segments) {
+      if (typeof showToast === 'function') {
+        showToast('워크아웃 또는 세그먼트가 없습니다.');
+      }
+      return;
+    }
+    
+    // 활성 카운트다운 정지
+    if (window.indoorTrainingState.segmentCountdownActive) {
+      const existingModal = document.getElementById('segmentCountdownModal');
+      if (existingModal) document.body.removeChild(existingModal);
+      window.indoorTrainingState.segmentCountdownActive = false;
+    }
+    
+    const currentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
+    
+    // 다음 세그먼트로 이동
+    const newIndex = Math.min(w.segments.length - 1, currentIndex + 1);
+    
+    if (newIndex === currentIndex) {
+      // 마지막 세그먼트이면 건너뛰기 불가
+      if (typeof showToast === 'function') {
+        showToast('마지막 세그먼트입니다.');
+      }
+      return;
+    }
+    
+    // 세그먼트 변경
+    window.indoorTrainingState.currentSegmentIndex = newIndex;
+    window.indoorTrainingState.segmentStartTime = Date.now();
+    window.indoorTrainingState.segmentElapsedTime = 0;
+    
+    // 세그먼트 변경 시 데이터 초기화
+    window.indoorTrainingState.powerMeters.forEach(pm => {
+      if (pm.connected) {
+        // 궤적 초기화
+        pm.powerTrailHistory = [];
+        pm.lastTrailAngle = null;
+        const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+        if (trailContainer) trailContainer.innerHTML = '';
+        
+        // 세그먼트 평균 파워 통계 리셋
+        pm.segmentPowerSum = 0;
+        pm.segmentPowerCount = 0;
+        pm.segmentPower = 0;
+        
+        // 목표 파워 궤적 업데이트
+        const currentPower = pm.currentPower || 0;
+        const ftp = pm.userFTP || window.indoorTrainingState?.userFTP || 200;
+        const maxPower = ftp * 2;
+        const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+        const angle = -90 + (ratio * 180);
+        updatePowerMeterTrail(pm.id, currentPower, angle, pm);
+      }
+    });
+    
+    // 세그먼트 그래프 업데이트
+    if (window.indoorTrainingState.currentWorkout) {
+      displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, newIndex);
+    }
+    
+    console.log(`[Training] 세그먼트 건너뛰기: ${newIndex + 1}번째 세그먼트로 이동`);
+    
+    if (typeof showToast === 'function') {
+      showToast(`세그먼트 ${newIndex + 1}로 건너뛰기`);
+    }
+    
+  } catch (error) {
+    console.error('Error in skipCurrentSegmentTraining:', error);
+  }
+}
+
+/**
+ * 버튼 상태 업데이트
+ */
+function updateTrainingButtons() {
+  const state = window.indoorTrainingState.trainingState;
+  const startPauseBtn = document.getElementById('btnStartPauseTraining');
+  const skipBtn = document.getElementById('btnSkipSegmentTraining');
   const stopBtn = document.getElementById('btnStopTraining');
   
-  if (startBtn) startBtn.disabled = false;
-  if (pauseBtn) pauseBtn.disabled = true;
-  if (stopBtn) stopBtn.disabled = true;
+  if (startPauseBtn) {
+    if (state === 'idle' || state === 'finished') {
+      // 시작 버튼
+      startPauseBtn.className = 'enhanced-control-btn play';
+      startPauseBtn.disabled = false;
+      startPauseBtn.setAttribute('aria-label', '시작');
+    } else if (state === 'running') {
+      // 일시정지 버튼
+      startPauseBtn.className = 'enhanced-control-btn pause';
+      startPauseBtn.disabled = false;
+      startPauseBtn.setAttribute('aria-label', '일시정지');
+    } else if (state === 'paused') {
+      // 재개 버튼
+      startPauseBtn.className = 'enhanced-control-btn play';
+      startPauseBtn.disabled = false;
+      startPauseBtn.setAttribute('aria-label', '재개');
+    }
+  }
+  
+  if (skipBtn) {
+    // 건너뛰기는 실행 중일 때만 활성화
+    skipBtn.disabled = (state !== 'running');
+  }
+  
+  if (stopBtn) {
+    // 종료는 실행 중이거나 일시정지 상태일 때만 활성화
+    stopBtn.disabled = (state !== 'running' && state !== 'paused');
+  }
 }
 
 /**
@@ -2587,10 +2739,8 @@ function startTrainingTimer() {
           const existingModal = document.getElementById('segmentCountdownModal');
           if (existingModal) document.body.removeChild(existingModal);
           
-          const pauseBtn = document.getElementById('btnPauseTraining');
-          const stopBtn = document.getElementById('btnStopTraining');
-          if (pauseBtn) pauseBtn.disabled = true;
-          if (stopBtn) stopBtn.disabled = false;
+          // 버튼 상태 업데이트
+          updateTrainingButtons();
           
           console.log(`[Training] 워크아웃 완료`);
           return;
