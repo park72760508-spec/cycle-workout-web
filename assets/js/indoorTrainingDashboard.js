@@ -687,7 +687,41 @@ function initializeNeedles() {
   });
 }
 
-function updatePowerMeterNeedle(powerMeterId, power)
+// 기존 updatePowerMeterNeedle 함수 보강 (null 체크 및 초기값)
+function updatePowerMeterNeedle(powerMeterId, power) {
+    const needleEl = document.getElementById(`needle-${powerMeterId}`);
+    if (!needleEl) {
+        console.warn(`[PowerMeter] updatePowerMeterNeedle: 바늘 요소를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
+        return;
+    }
+
+    const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+    if (!powerMeter) {
+        console.warn(`[PowerMeter] updatePowerMeterNeedle: 파워미터를 찾을 수 없음 (powerMeterId=${powerMeterId})`);
+        return;
+    }
+
+    const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
+    const maxPower = ftp * 2;
+    const ratio = Math.min(Math.max((power || 0) / maxPower, 0), 1);
+
+    // 파워계도 속도계와 동일한 각도 체계 적용 (-90도 ~ 90도)
+    const angle = -90 + (ratio * 180);
+
+    // 부모 그룹이 translate(100, 140)을 하므로, rotate(angle)만 하면 됩니다
+    needleEl.setAttribute('transform', `rotate(${angle})`);
+    needleEl.style.visibility = 'visible';
+    
+    // 이전 파워값 저장 (가속/감속 감지용)
+    const previousPower = powerMeter.previousPower || 0;
+    powerMeter.previousPower = power;
+    
+    // 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적 + 바늘이 지나간 경로 눈금 선)
+    // drawPowerMeterTrail 함수 내부에서 바늘이 지나간 경로를 눈금 위치에 반지름 선으로 표시
+    updatePowerMeterTrail(powerMeterId, power, angle, powerMeter);
+    
+    console.log(`[PowerMeter] updatePowerMeterNeedle: powerMeterId=${powerMeterId}, power=${power}, angle=${angle}, transform=${needleEl.getAttribute('transform')}, visibility=${needleEl.style.visibility}`);
+}
 
 /**
  * 바늘 각도에서 파워값으로 역변환 (궤적선 동기화용)
@@ -700,9 +734,8 @@ function calculatePowerFromAngle(angle, maxPower) {
 }
 
 /**
- * 파워미터 바늘 궤적 업데이트
- * - 조건 완화: 훈련 중이 아니어도(대기 중) 바늘이 움직이면 궤적 표시
- * - 첫 세그먼트 등에서 데이터가 늦게 로드되어도 안전하게 처리
+ * [최종수정] 파워미터 바늘 궤적 업데이트
+ * - Race 로직 이식: 파워 값(Value) 기반으로 루프 제어하여 바늘과 완벽 동기화
  */
 function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
     const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
@@ -710,9 +743,13 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     
     if (!trailContainer) return;
 
-    // 1. 기본 상태 체크 (연결 여부만 확인)
-    // 훈련 중(running)이 아니더라도 궤적을 그려 반응성 확보
-    if (!powerMeter.connected) {
+    // 1. 상태 체크 (연결됨 + 훈련중 + 워크아웃존재)
+    const isConnected = powerMeter.connected;
+    const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
+    const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
+    
+    // 조건 불만족 시 초기화 후 리턴
+    if (!isConnected || !isTrainingRunning || !hasWorkout) {
         trailContainer.innerHTML = '';
         if (targetTextEl) targetTextEl.textContent = '';
         return;
@@ -721,19 +758,20 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2; 
     
-    // 2. 목표 파워 계산 (워크아웃이 있을 때만 유효)
+    // 2. 목표 파워 계산
     let targetPower = 0;
-    let ftpPercent = 0;
-    const hasWorkout = window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments;
+    let ftpPercent = 100;
     
-    if (hasWorkout) {
+    if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
         const segments = window.indoorTrainingState.currentWorkout.segments;
+        // 인덱스 안전 접근
         const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
         const currentSegment = segments[currentSegmentIndex] || segments[0]; 
         
         if (currentSegment) {
             const targetValue = currentSegment.target_value || currentSegment.target || '100';
             
+            // 포맷 파싱 ("150%", "200W", "100/120" 등)
             if (typeof targetValue === 'string') {
                 if (targetValue.includes('/')) {
                     const parts = targetValue.split('/');
@@ -751,12 +789,12 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         }
     }
     
-    // 목표 파워 텍스트 (없으면 숨김 or 0)
+    // 목표 파워 텍스트 업데이트
     if (targetTextEl) {
-        targetTextEl.textContent = targetPower > 0 ? Math.round(targetPower) : '';
+        targetTextEl.textContent = Math.round(targetPower);
     }
     
-    // 목표 각도 계산
+    // 3. 목표 각도 계산 (-90 ~ 90도 범위)
     let targetPowerRatio = 0;
     if (maxPower > 0) {
         targetPowerRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
@@ -764,10 +802,11 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     const targetAngle = -90 + (targetPowerRatio * 180); 
     
     powerMeter.targetPower = targetPower;
+    
+    // 랩파워 안전 처리 (없으면 0)
     const segmentPower = powerMeter.segmentPower || 0;
 
-    // 3. 그리기 함수 호출
-    // (이전 코드의 drawPowerMeterTrail 함수는 로직이 정확하므로 그대로 사용)
+    // 그리기 함수 호출
     drawPowerMeterTrail(
         trailContainer, 
         targetAngle, 
@@ -4265,7 +4304,6 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
-
 
 
 
