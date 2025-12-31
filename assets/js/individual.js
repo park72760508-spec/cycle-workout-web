@@ -44,6 +44,9 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             ? `Segment ${segIdx}` 
             : (status.state === 'paused' ? '일시정지' : '대기 중');
         
+        // 랩타임 카운트다운 업데이트
+        updateLapTime(status);
+        
         // 세그먼트 그래프 업데이트
         if (window.currentWorkout && window.currentWorkout.segments) {
             updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
@@ -120,6 +123,52 @@ function formatTime(seconds) {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+}
+
+// 랩타임 카운트다운 업데이트 함수
+function updateLapTime(status) {
+    const lapTimeEl = document.getElementById('ui-lap-time');
+    if (!lapTimeEl) return;
+    
+    if (status.state === 'running' && window.currentWorkout && window.currentWorkout.segments) {
+        const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+        const seg = window.currentWorkout.segments[segIndex];
+        
+        if (seg) {
+            // 세그먼트 지속 시간 계산
+            const segDuration = seg.duration_sec || seg.duration || 0;
+            
+            // 세그먼트 경과 시간 계산 (status에서 가져오거나 계산)
+            // status.segmentElapsedTime이 있으면 사용, 없으면 경과 시간으로 계산
+            let segElapsed = 0;
+            if (status.segmentElapsedTime !== undefined) {
+                segElapsed = status.segmentElapsedTime;
+            } else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
+                segElapsed = status.elapsedTime - status.segmentStartTime;
+            } else {
+                // 대략적인 계산: 전체 경과 시간에서 이전 세그먼트들의 시간을 빼기
+                let prevSegmentsTime = 0;
+                for (let i = 0; i < segIndex; i++) {
+                    const prevSeg = window.currentWorkout.segments[i];
+                    if (prevSeg) {
+                        prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
+                    }
+                }
+                segElapsed = Math.max(0, (status.elapsedTime || 0) - prevSegmentsTime);
+            }
+            
+            // 남은 시간 계산
+            const remaining = Math.max(0, segDuration - segElapsed);
+            lapTimeEl.innerText = formatTime(remaining);
+            lapTimeEl.style.fill = remaining <= 10 ? '#ff4444' : '#00d4aa'; // 10초 이하면 빨간색
+        } else {
+            lapTimeEl.innerText = '00:00';
+            lapTimeEl.style.fill = '#00d4aa';
+        }
+    } else {
+        lapTimeEl.innerText = '00:00';
+        lapTimeEl.style.fill = '#00d4aa';
+    }
 }
 
 // 세그먼트 그래프 업데이트 함수
