@@ -1467,6 +1467,11 @@ async function updatePairingModalUSBStatus() {
     // 상태 업데이트 후 다시 UI 업데이트
     setTimeout(updatePairingModalUSBStatus, 500);
   }
+  
+  // 수신기 활성화 버튼 상태 업데이트 (표시등)
+  if (typeof updateReceiverButtonStatus === 'function') {
+    updateReceiverButtonStatus();
+  }
 }
 
 /**

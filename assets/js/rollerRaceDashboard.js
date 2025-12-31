@@ -2931,6 +2931,74 @@ function closeUSBReceiverActivationModal() {
 }
 
 /**
+ * USB 수신기 강제 비활성화
+ */
+async function deactivateUSBReceiver() {
+  const deactivateButton = document.getElementById('btnUSBActivationDeactivate');
+  const messageEl = document.getElementById('usbActivationMessage');
+  const statusIcon = document.getElementById('usbActivationStatusIcon');
+  const statusText = document.getElementById('usbActivationStatusText');
+  
+  if (deactivateButton) deactivateButton.disabled = true;
+  
+  if (messageEl) {
+    messageEl.textContent = 'USB 수신기 비활성화 중...';
+    messageEl.style.background = '#fff3cd';
+    messageEl.style.color = '#856404';
+  }
+  
+  try {
+    // USB 수신기 연결 해제
+    if (window.antState && window.antState.usbDevice) {
+      try {
+        if (window.antState.usbDevice.opened) {
+          await window.antState.usbDevice.close();
+        }
+      } catch (error) {
+        console.warn('USB 수신기 닫기 오류:', error);
+      }
+      window.antState.usbDevice = null;
+    }
+    
+    // 상태 업데이트
+    if (statusIcon) {
+      statusIcon.style.background = '#999';
+    }
+    if (statusText) {
+      statusText.textContent = 'USB 수신기 비활성화됨';
+    }
+    if (messageEl) {
+      messageEl.textContent = 'USB 수신기가 비활성화되었습니다.';
+      messageEl.style.background = '#d4edda';
+      messageEl.style.color = '#155724';
+    }
+    
+    // 강제 비활성화 버튼 숨김
+    if (deactivateButton) {
+      deactivateButton.style.display = 'none';
+    }
+    
+    // 수신기 활성화 버튼 상태 업데이트
+    updateReceiverButtonStatus();
+    
+    // USB 상태 확인 함수가 있으면 호출
+    if (typeof checkUSBActivationStatus === 'function') {
+      await checkUSBActivationStatus();
+    }
+    
+  } catch (error) {
+    console.error('USB 수신기 비활성화 오류:', error);
+    if (messageEl) {
+      messageEl.textContent = `비활성화 실패: ${error.message}`;
+      messageEl.style.background = '#f8d7da';
+      messageEl.style.color = '#721c24';
+    }
+  } finally {
+    if (deactivateButton) deactivateButton.disabled = false;
+  }
+}
+
+/**
  * USB 수신기 활성화 모달에서 활성화 버튼 클릭
  */
 async function activateUSBReceiverFromModal() {
@@ -2991,16 +3059,8 @@ async function activateUSBReceiverFromModal() {
   
   if(activateBtn) activateBtn.disabled = false;
   
-  // 활성화 완료 후 USB 수신기 선택 목록 화면 표시 (연결 상태와 관계없이 표시)
-  // 현재 모달 닫기
+  // 활성화 완료 후 모달 닫기 (선택 목록 화면은 표시하지 않음)
   closeUSBReceiverActivationModal();
-  
-  // 약간의 지연 후 선택 목록 화면 표시 (이미 활성화되었으므로 skipActivation=true)
-  setTimeout(() => {
-    if(typeof showReceiverSelectionModal === 'function') {
-      showReceiverSelectionModal(true); // 이미 활성화되었으므로 활성화 시도 건너뜀
-    }
-  }, 300);
 }
 
 /**
@@ -3011,6 +3071,7 @@ async function checkUSBActivationStatus() {
   const statusText = document.getElementById('usbActivationStatusText');
   const activateButton = document.getElementById('btnUSBActivationActivate');
   const connectButton = document.getElementById('btnUSBActivationConnect');
+  const deactivateButton = document.getElementById('btnUSBActivationDeactivate');
   
   if (!statusIcon || !statusText) return;
   
@@ -3031,11 +3092,20 @@ async function checkUSBActivationStatus() {
           statusText.textContent = 'USB 수신기 연결됨';
           if (activateButton) activateButton.disabled = false;
           if (connectButton) connectButton.style.display = 'none';
+          // 강제 비활성화 버튼 표시
+          if (deactivateButton) {
+            deactivateButton.style.display = 'inline-block';
+          }
           return;
         }
       } catch (error) {
         window.antState.usbDevice = null;
       }
+    }
+    
+    // USB 수신기가 연결되지 않은 경우 강제 비활성화 버튼 숨김
+    if (deactivateButton) {
+      deactivateButton.style.display = 'none';
     }
     
     if (!navigator.usb) {
@@ -3067,6 +3137,10 @@ async function checkUSBActivationStatus() {
           statusText.textContent = `${device.productName || 'ANT+ USB 수신기'} 연결됨`;
           if (activateButton) activateButton.disabled = false;
           if (connectButton) connectButton.style.display = 'none';
+          // 강제 비활성화 버튼 표시
+          if (deactivateButton) {
+            deactivateButton.style.display = 'inline-block';
+          }
           return;
         }
       }
@@ -3081,6 +3155,10 @@ async function checkUSBActivationStatus() {
     statusIcon.style.background = '#dc3545';
     statusText.textContent = '상태 확인 중 오류 발생';
     if (activateButton) activateButton.disabled = false;
+    // 오류 발생 시에도 강제 비활성화 버튼 숨김
+    if (deactivateButton) {
+      deactivateButton.style.display = 'none';
+    }
   }
 }
 
@@ -6135,35 +6213,74 @@ function formatTime(seconds) {
 window.rollerRaceState.lastReceiverStatus = null;
 
 function updateReceiverButtonStatus() {
+  // Indoor Race 화면의 표시등
   const indicator = document.getElementById('receiverStatusIndicator');
-  if (!indicator) return;
+  // Indoor Training 화면의 표시등
+  const indicatorTraining = document.getElementById('receiverStatusIndicatorTraining');
   
-  // USB 수신기가 활성화되어 있고, 페어링된 속도계가 있는지 확인
+  // USB 수신기가 활성화되어 있는지 확인
   const isReceiverActive = window.antState.usbDevice && window.antState.usbDevice.opened;
-  const hasPairedSpeedometer = window.rollerRaceState.speedometers.some(
-    s => s.id >= 1 && s.id <= 10 && s.deviceId && s.deviceId.trim() !== ''
-  );
   
-  // 현재 상태를 문자열로 표현 (상태 변화 감지용)
-  const currentStatus = isReceiverActive 
-    ? (hasPairedSpeedometer ? 'active-paired' : 'active') 
-    : 'inactive';
+  // Indoor Race 화면 업데이트
+  if (indicator) {
+    // USB 수신기가 활성화되어 있고, 페어링된 속도계가 있는지 확인
+    const hasPairedSpeedometer = window.rollerRaceState && window.rollerRaceState.speedometers && window.rollerRaceState.speedometers.some(
+      s => s.id >= 1 && s.id <= 10 && s.deviceId && s.deviceId.trim() !== ''
+    );
+    
+    // 현재 상태를 문자열로 표현 (상태 변화 감지용)
+    const currentStatus = isReceiverActive 
+      ? (hasPairedSpeedometer ? 'active-paired' : 'active') 
+      : 'inactive';
+    
+    // 상태가 변경되었는지 확인
+    const statusChanged = window.rollerRaceState && window.rollerRaceState.lastReceiverStatus !== currentStatus;
+    if (window.rollerRaceState) {
+      window.rollerRaceState.lastReceiverStatus = currentStatus;
+    }
+    
+    if (isReceiverActive && hasPairedSpeedometer) {
+      // 페어링 완료: 연두색 원 + 체크마크
+      indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), #28a745 60%)';
+      indicator.innerHTML = '✓';
+      indicator.style.color = 'white';
+      indicator.style.fontSize = '10px';
+      indicator.style.lineHeight = '12px';
+      indicator.style.textAlign = 'center';
+      indicator.style.fontWeight = 'bold';
+      indicator.classList.add('led-active');
+      indicator.classList.remove('led-inactive');
+    } else if (isReceiverActive) {
+      // 활성화됨: 초록색 표시등
+      indicator.style.background = '#28a745';
+      indicator.innerHTML = '';
+      indicator.classList.add('led-active');
+      indicator.classList.remove('led-inactive');
+    } else {
+      // 비활성화: 빨간색 표시등
+      indicator.style.background = '#dc3545';
+      indicator.innerHTML = '';
+      indicator.classList.add('led-inactive');
+      indicator.classList.remove('led-active');
+    }
+  }
   
-  // 상태가 변경되었는지 확인
-  const statusChanged = window.rollerRaceState.lastReceiverStatus !== currentStatus;
-  window.rollerRaceState.lastReceiverStatus = currentStatus;
-  
-  if (isReceiverActive && hasPairedSpeedometer) {
-    // 페어링 완료: 연두색 원 + 체크마크
-    indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), #28a745 60%)';
-    indicator.innerHTML = '✓';
-    indicator.style.color = 'white';
-    indicator.style.fontSize = '10px';
-    indicator.style.lineHeight = '12px';
-    indicator.style.textAlign = 'center';
-    indicator.style.fontWeight = 'bold';
-    indicator.classList.add('led-active');
-    indicator.classList.remove('led-inactive');
+  // Indoor Training 화면 업데이트
+  if (indicatorTraining) {
+    if (isReceiverActive) {
+      // 활성화됨: 초록색 표시등
+      indicatorTraining.style.background = '#28a745';
+      indicatorTraining.innerHTML = '';
+      indicatorTraining.classList.add('led-active');
+      indicatorTraining.classList.remove('led-inactive');
+    } else {
+      // 비활성화: 빨간색 표시등
+      indicatorTraining.style.background = '#dc3545';
+      indicatorTraining.innerHTML = '';
+      indicatorTraining.classList.add('led-inactive');
+      indicatorTraining.classList.remove('led-active');
+    }
+  }
   } else if (isReceiverActive) {
     // 활성화만 됨: 연두색 원 (체크마크 없음)
     indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), #28a745 60%)';
