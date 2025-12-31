@@ -8959,6 +8959,37 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
+/* 건너뛰기 아이콘 */
+#rollerRaceDashboardScreen .enhanced-control-btn.skip::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 12px solid #3b82f6;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  margin-right: 2px;
+}
+
+#rollerRaceDashboardScreen .enhanced-control-btn.skip::after,
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 12px solid #3b82f6;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  margin-left: -2px;
+}
+
+#rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled),
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled) {
+  border-color: #3b82f6;
+  box-shadow: 
+    0 8px 25px rgba(59, 130, 246, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
 /* 중복 정의 제거 - 상단 정의 사용 */
 
 .dashboard-header h1 {
