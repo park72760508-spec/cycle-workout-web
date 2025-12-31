@@ -2314,8 +2314,9 @@ function renderPairingDeviceList(targetType) {
     }
   }
   
-  // 스크롤 위치 저장
+  // 스크롤 위치 저장 (업데이트 전)
   const scrollTop = listEl.scrollTop;
+  const wasScrolled = scrollTop > 0;
   
   if (devices.length > 0) {
     // 기존 아이템들을 data-device-id로 추적
@@ -2323,11 +2324,51 @@ function renderPairingDeviceList(targetType) {
     const existingIds = new Set(existingItems.map(item => item.getAttribute('data-device-id')));
     const newDevices = devices.filter(d => !existingIds.has(String(d.id)));
     
+    // 리스트에 있지만 현재 필터링된 devices에 없는 디바이스 처리
+    // 주의: deviceType 필터링 때문에 devices 배열에 없을 수 있지만, foundDevices에는 있을 수 있음
+    existingItems.forEach(item => {
+      const deviceId = parseInt(item.getAttribute('data-device-id'));
+      const device = devices.find(d => d.id === deviceId);
+      
+      if (!device) {
+        // 현재 필터링된 devices에 없음
+        // foundDevices에 있는지 확인 (deviceType이 다를 수 있음)
+        const foundDevice = window.antState.foundDevices.find(d => d.id === deviceId);
+        
+        if (foundDevice) {
+          // foundDevices에 있으면 deviceType이 다른 것일 수 있음
+          // 이 경우 제거하지 않음 (다른 리스트로 이동했을 수 있음)
+          // 단, 현재 타입과 다른 타입이면 제거 (이미 다른 리스트로 이동했을 것)
+          if (foundDevice.deviceType !== targetType) {
+            // deviceType이 다르면 제거 (다른 리스트에 표시되어야 함)
+            item.remove();
+          }
+          // deviceType이 같으면 유지 (일시적으로 필터에서 제외되었을 수 있음)
+        } else {
+          // foundDevices에도 없음 - 신호가 끊긴 것으로 간주
+          // 하지만 페어링된 경우는 유지
+          const powerMeterId = window.currentTargetPowerMeterId;
+          let deviceTypeStr = '';
+          if (targetType === 0x78) deviceTypeStr = 'heart';
+          else if (targetType === 0x0B) deviceTypeStr = 'power';
+          else if (targetType === 0x11 || targetType === 0x10) deviceTypeStr = 'trainer';
+          
+          const isPaired = isDeviceAlreadyPaired(deviceId, deviceTypeStr, powerMeterId);
+          if (!isPaired) {
+            // 페어링되지 않은 디바이스만 제거
+            // 하지만 너무 빠르게 제거하지 않기 위해 타임아웃 체크는 하지 않음
+            // (foundDevices에 없으면 이미 신호가 끊긴 것으로 확실함)
+            item.remove();
+          }
+        }
+      }
+    });
+    
     // 기존 아이템 업데이트 (페어링 상태 변경 등)
     existingItems.forEach(item => {
       const deviceId = item.getAttribute('data-device-id');
       const device = devices.find(d => String(d.id) === deviceId);
-      if (device) {
+      if (device && item.parentNode) { // item이 아직 DOM에 있는 경우만
         const isPaired = isDeviceAlreadyPaired(device.id, deviceType, powerMeterId);
         const pairedTrack = isPaired ? window.indoorTrainingState.powerMeters.find(pm => {
           if (pm.id === powerMeterId) return false;
@@ -2418,9 +2459,12 @@ function renderPairingDeviceList(targetType) {
       listEl.appendChild(item);
     });
     
-    // 스크롤 위치 복원
-    if (scrollTop > 0) {
-      listEl.scrollTop = scrollTop;
+    // 스크롤 위치 복원 (안정적으로)
+    // requestAnimationFrame을 사용하여 DOM 업데이트 후 스크롤 복원
+    if (wasScrolled) {
+      requestAnimationFrame(() => {
+        listEl.scrollTop = scrollTop;
+      });
     }
     
     listEl.classList.remove('hidden');
@@ -2428,9 +2472,25 @@ function renderPairingDeviceList(targetType) {
     if (newDevices.length > 0) {
       console.log(`[UI] ${newDevices.length}개의 새로운 ${deviceType} 디바이스 추가, 총 ${devices.length}개`);
     }
-  } else if (listEl.children.length === 0) {
-    // 디바이스가 없고 리스트도 비어있으면 숨김
-    listEl.classList.add('hidden');
+  } else {
+    // 디바이스가 없을 때
+    // 페어링된 디바이스가 있는지 확인
+    const existingItems = Array.from(listEl.querySelectorAll('.ant-device-item'));
+    const hasPairedDevices = existingItems.some(item => {
+      const deviceId = item.getAttribute('data-device-id');
+      const powerMeterId = window.currentTargetPowerMeterId;
+      let deviceTypeStr = '';
+      if (targetType === 0x78) deviceTypeStr = 'heart';
+      else if (targetType === 0x0B) deviceTypeStr = 'power';
+      else if (targetType === 0x11 || targetType === 0x10) deviceTypeStr = 'trainer';
+      
+      return isDeviceAlreadyPaired(parseInt(deviceId), deviceTypeStr, powerMeterId);
+    });
+    
+    if (listEl.children.length === 0 && !hasPairedDevices) {
+      // 디바이스가 없고 리스트도 비어있고 페어링된 디바이스도 없으면 숨김
+      listEl.classList.add('hidden');
+    }
   }
 }
 
@@ -3087,19 +3147,23 @@ function updateFoundDevicesList(deviceId, deviceType) {
     } else {
       typeName = '알 수 없음';
     }
-    existing = { id: deviceId, type: typeName, deviceType: deviceType };
+    existing = { id: deviceId, type: typeName, deviceType: deviceType, lastSeen: Date.now() };
     window.antState.foundDevices.push(existing);
     console.log(`[Training] 신규 장치 발견: ${typeName} ID: ${deviceId}`);
     
     // 새 디바이스 발견 시에만 UI 업데이트 (디바운싱 적용)
-    if (window._deviceListUpdateTimer) {
-      clearTimeout(window._deviceListUpdateTimer);
+    // 타입별로 별도의 타이머 사용하여 충돌 방지
+    const timerKey = `_deviceListUpdateTimer_${deviceType}`;
+    if (window[timerKey]) {
+      clearTimeout(window[timerKey]);
     }
-    window._deviceListUpdateTimer = setTimeout(() => {
+    window[timerKey] = setTimeout(() => {
       renderPairingDeviceList(deviceType);
-      window._deviceListUpdateTimer = null;
-    }, 300); // 300ms 디바운싱으로 깜빡임 최소화
+      window[timerKey] = null;
+    }, 800); // 800ms 디바운싱으로 깜빡임 최소화
   } else {
+    // 기존 디바이스의 lastSeen 업데이트
+    existing.lastSeen = Date.now();
     // 기존 디바이스가 있지만 deviceType이 다른 경우 업데이트 필요
     // 특히 스마트로라(0x11)와 파워미터(0x0B) 구분이 중요
     const oldDeviceType = existing.deviceType;
@@ -3124,15 +3188,19 @@ function updateFoundDevicesList(deviceId, deviceType) {
           }
         }
         
-        // 두 리스트 모두 업데이트
-        if (window._deviceListUpdateTimer) {
-          clearTimeout(window._deviceListUpdateTimer);
-        }
-        window._deviceListUpdateTimer = setTimeout(() => {
+        // 두 리스트 모두 업데이트 (디바운싱 적용)
+        const timerKey1 = '_deviceListUpdateTimer_0x0B';
+        const timerKey2 = '_deviceListUpdateTimer_0x11';
+        if (window[timerKey1]) clearTimeout(window[timerKey1]);
+        if (window[timerKey2]) clearTimeout(window[timerKey2]);
+        window[timerKey1] = setTimeout(() => {
           renderPairingDeviceList(0x0B); // 파워미터 리스트 업데이트 (제거)
+          window[timerKey1] = null;
+        }, 800);
+        window[timerKey2] = setTimeout(() => {
           renderPairingDeviceList(0x11); // 스마트로라 리스트 업데이트 (추가)
-          window._deviceListUpdateTimer = null;
-        }, 300);
+          window[timerKey2] = null;
+        }, 800);
         return;
       } else if (deviceType === 0x0B && oldDeviceType === 0x11) {
         // 스마트로라로 등록된 것을 파워미터로 변경 (덜 일반적이지만 처리)
@@ -3149,20 +3217,26 @@ function updateFoundDevicesList(deviceId, deviceType) {
           }
         }
         
-        // 두 리스트 모두 업데이트
-        if (window._deviceListUpdateTimer) {
-          clearTimeout(window._deviceListUpdateTimer);
-        }
-        window._deviceListUpdateTimer = setTimeout(() => {
+        // 두 리스트 모두 업데이트 (디바운싱 적용)
+        const timerKey1 = '_deviceListUpdateTimer_0x11';
+        const timerKey2 = '_deviceListUpdateTimer_0x0B';
+        if (window[timerKey1]) clearTimeout(window[timerKey1]);
+        if (window[timerKey2]) clearTimeout(window[timerKey2]);
+        window[timerKey1] = setTimeout(() => {
           renderPairingDeviceList(0x11); // 스마트로라 리스트 업데이트 (제거)
+          window[timerKey1] = null;
+        }, 800);
+        window[timerKey2] = setTimeout(() => {
           renderPairingDeviceList(0x0B); // 파워미터 리스트 업데이트 (추가)
-          window._deviceListUpdateTimer = null;
-        }, 300);
+          window[timerKey2] = null;
+        }, 800);
         return;
       }
     }
     
-    // deviceType이 변경되지 않았거나 다른 타입 변경인 경우 기존 로직 유지
+    // deviceType이 변경되지 않았거나 다른 타입 변경인 경우
+    // 기존 디바이스는 UI 업데이트를 최소화 (디바운싱 적용)
+    // 페어링 상태 변경 등 중요한 변경사항만 업데이트
     const listId = (deviceType === 0x78) ? 'heartRateDeviceList' : 
                    (deviceType === 0x0B) ? 'powerMeterDeviceList' : 'trainerDeviceList';
     const listEl = document.getElementById(listId);
@@ -3179,10 +3253,28 @@ function updateFoundDevicesList(deviceId, deviceType) {
         const isPaired = isDeviceAlreadyPaired(deviceId, deviceTypeStr, powerMeterId);
         const currentIsPaired = item.style.opacity === '0.6';
         
-        // 페어링 상태가 변경된 경우에만 업데이트
+        // 페어링 상태가 변경된 경우에만 업데이트 (디바운싱 적용)
         if (isPaired !== currentIsPaired) {
-          renderPairingDeviceList(deviceType);
+          const timerKey = `_deviceListUpdateTimer_${deviceType}`;
+          if (window[timerKey]) {
+            clearTimeout(window[timerKey]);
+          }
+          window[timerKey] = setTimeout(() => {
+            renderPairingDeviceList(deviceType);
+            window[timerKey] = null;
+          }, 500);
         }
+        // 페어링 상태가 변경되지 않았으면 UI 업데이트하지 않음 (깜빡임 방지)
+      } else {
+        // 리스트에 아이템이 없으면 추가 (디바운싱 적용)
+        const timerKey = `_deviceListUpdateTimer_${deviceType}`;
+        if (window[timerKey]) {
+          clearTimeout(window[timerKey]);
+        }
+        window[timerKey] = setTimeout(() => {
+          renderPairingDeviceList(deviceType);
+          window[timerKey] = null;
+        }, 800);
       }
     }
   }
