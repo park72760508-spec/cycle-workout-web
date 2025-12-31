@@ -6263,6 +6263,16 @@ function updateReceiverButtonStatus() {
       indicator.classList.add('led-inactive');
       indicator.classList.remove('led-active');
     }
+    
+    // 상태 변화 로그 (디버깅용)
+    if (statusChanged) {
+      console.log('[수신기 상태 변경]', currentStatus, {
+        isReceiverActive,
+        hasPairedSpeedometer,
+        usbDevice: window.antState.usbDevice ? '존재' : '없음',
+        opened: window.antState.usbDevice?.opened || false
+      });
+    }
   }
   
   // Indoor Training 화면 업데이트
@@ -6280,29 +6290,6 @@ function updateReceiverButtonStatus() {
       indicatorTraining.classList.add('led-inactive');
       indicatorTraining.classList.remove('led-active');
     }
-  }
-  } else if (isReceiverActive) {
-    // 활성화만 됨: 연두색 원 (체크마크 없음)
-    indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5), #28a745 60%)';
-    indicator.innerHTML = '';
-    indicator.classList.add('led-active');
-    indicator.classList.remove('led-inactive');
-  } else {
-    // 활성화 전 또는 연결 끊김: 빨강색 원 (LED 효과)
-    indicator.style.background = 'radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.4), #dc3545 60%)';
-    indicator.innerHTML = '';
-    indicator.classList.add('led-inactive');
-    indicator.classList.remove('led-active');
-  }
-  
-  // 상태 변화 로그 (디버깅용)
-  if (statusChanged) {
-    console.log('[수신기 상태 변경]', currentStatus, {
-      isReceiverActive,
-      hasPairedSpeedometer,
-      usbDevice: window.antState.usbDevice ? '존재' : '없음',
-      opened: window.antState.usbDevice?.opened || false
-    });
   }
 }
 
