@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>개인 훈련 대시보드</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="assets/js/firebaseConfig.js"></script>
+
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Pretendard', sans-serif;
+            margin: 0;
+            overflow: hidden; /* 스크롤 방지 */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* 상단 헤더 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #1e1e1e;
+            border-bottom: 1px solid #333;
+        }
+        .bike-badge {
+            background-color: #00d4aa;
+            color: #000;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            color: #fff;
+        }
+
+        /* 메인 콘텐츠 (게이지 영역) */
+        .main-content {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 속도계 컨테이너 */
+        .gauge-container {
+            width: 90vw;
+            max-width: 500px;
+            aspect-ratio: 1/1;
+            position: relative;
+        }
+
+        /* 통계 정보 (하단) */
+        .stats-footer {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            background-color: #1e1e1e;
+            padding: 15px 0;
+            border-top: 1px solid #333;
+        }
+        .stat-box {
+            text-align: center;
+            border-right: 1px solid #333;
+        }
+        .stat-box:last-child { border-right: none; }
+        .stat-label { font-size: 0.8em; color: #888; margin-bottom: 5px; }
+        .stat-value { font-size: 1.8em; font-weight: bold; }
+        .unit { font-size: 0.5em; color: #aaa; }
+
+        /* 색상 클래스 */
+        .c-power { color: #fff; }
+        .c-cadence { color: #00d4aa; }
+        .c-hr { color: #ff4444; }
+        .c-target { color: #ff8c00; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div id="bike-id-display" class="bike-badge">Bike ?</div>
+        <div id="segment-info" style="font-size:0.9em; color:#ccc;">준비 중</div>
+        <div id="main-timer" class="timer">00:00</div>
+    </div>
+
+    <div class="main-content">
+        <div class="gauge-container">
+            <svg viewBox="0 0 200 160" style="width:100%; height:100%;">
+                <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+                
+                <text x="100" y="50" text-anchor="middle" fill="#888" font-size="12">TARGET</text>
+                <text id="ui-target-power" x="100" y="75" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+                
+                <text x="100" y="115" text-anchor="middle" fill="#aaa" font-size="12">WATTS</text>
+                <text id="ui-current-power" x="100" y="150" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+
+                <g id="gauge-needle" transform="translate(100, 140) rotate(-90)">
+                    <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="0" cy="0" r="6" fill="#fff"/>
+                </g>
+            </svg>
+        </div>
+    </div>
+
+    <div class="stats-footer">
+        <div class="stat-box">
+            <div class="stat-label">CADENCE</div>
+            <div class="stat-value c-cadence"><span id="ui-cadence">0</span><span class="unit">rpm</span></div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">HEART RATE</div>
+            <div class="stat-value c-hr"><span id="ui-hr">0</span><span class="unit">bpm</span></div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">LAP AVG</div>
+            <div class="stat-value c-target"><span id="ui-lap-power">0</span><span class="unit">w</span></div>
+        </div>
+    </div>
+
+    <script src="assets/js/individual.js"></script>
+</body>
+</html>
