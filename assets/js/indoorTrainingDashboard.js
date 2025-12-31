@@ -741,14 +741,15 @@ function calculatePowerFromAngle(angle, maxPower) {
  * 파워미터 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적)
  * 연결됨 상태에서 워크아웃 실행 시에만 표시
  */
+/**
+ * 파워미터 바늘 궤적 업데이트 (목표 파워 및 실제 파워 궤적)
+ * 연결됨 상태에서 워크아웃 실행 시에만 표시
+ */
 function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
     const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
-    // [추가됨] 목표 파워 텍스트 요소 가져오기
     const targetTextEl = document.getElementById(`target-power-value-${powerMeterId}`);
     
-    if (!trailContainer) {
-        return;
-    }
+    if (!trailContainer) return;
 
     // 연결됨 상태이고 워크아웃 실행 중일 때만 궤적 표시
     const isConnected = powerMeter.connected;
@@ -756,9 +757,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     const hasWorkout = !!(window.indoorTrainingState.currentWorkout);
     
     if (!isConnected || !isTrainingRunning || !hasWorkout) {
-        // 조건을 만족하지 않으면 궤적 제거
         trailContainer.innerHTML = '';
-        // [추가됨] 훈련 중이 아니면 텍스트 지우기
         if (targetTextEl) targetTextEl.textContent = '';
         return;
     }
@@ -766,7 +765,7 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
     const maxPower = ftp * 2; 
     
-    // 현재 세그먼트 목표 파워 및 FTP 비율 계산
+    // 현재 세그먼트 목표 파워 계산
     let targetPower = 0;
     let ftpPercent = 100;
     if (window.indoorTrainingState.currentWorkout && window.indoorTrainingState.currentWorkout.segments) {
@@ -789,34 +788,26 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         }
     }
     
-    // [추가됨] 목표 파워 텍스트 업데이트 (소수점 반올림)
+    // 목표 파워 텍스트 업데이트
     if (targetTextEl) {
         targetTextEl.textContent = Math.round(targetPower);
     }
     
-    // FTP 비율에 따른 목표 각도 계산
+    // FTP 비율에 따른 목표 각도 계산 (-90 ~ 90도 범위)
     const targetPowerRatio = Math.min(Math.max(targetPower / maxPower, 0), 1); 
     const targetAngle = -90 + (targetPowerRatio * 180); 
     
-    // 목표 파워 저장
     powerMeter.targetPower = targetPower;
     
-    // 궤적 히스토리 업데이트 (각도 저장)
-    if (powerMeter.lastTrailAngle !== null && powerMeter.lastTrailAngle !== currentAngle) {
-        powerMeter.powerTrailHistory.push({
-            angle: currentAngle,
-            power: currentPower,
-            timestamp: Date.now()
-        });
-        
-        if (powerMeter.powerTrailHistory.length > 100) {
-            powerMeter.powerTrailHistory.shift();
-        }
-    }
-    powerMeter.lastTrailAngle = currentAngle;
-    
-    // 궤적 그리기 (이전에 수정해드린 좌표계 보정 버전 함수를 사용)
-    drawPowerMeterTrail(trailContainer, targetAngle, currentAngle, powerMeter.powerTrailHistory, targetPower, currentPower, powerMeter);
+    // [수정] 궤적 그리기 함수 호출 (segmentPower 전달 추가)
+    drawPowerMeterTrail(
+        trailContainer, 
+        targetAngle, 
+        targetPower, 
+        currentPower, 
+        powerMeter.segmentPower || 0, // 랩파워 전달
+        maxPower
+    );
 }
 
 /**
@@ -826,176 +817,124 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
  * 파워미터 바늘 궤적 그리기 (SVG path 사용)
  * [수정] 좌표계 보정 추가 (Needle 각도 -> SVG 좌표 각도 변환)
  */
-function drawPowerMeterTrail(container, targetAngle, currentAngle, trailHistory, targetPower, currentPower, powerMeter) {
-    // 기존 궤적 제거
+/**
+ * 파워미터 바늘 궤적 그리기 (SVG)
+ * 1. 목표 파워까지 투명 주황색 원둘레 호 표시 (두께: 작은 눈금 높이)
+ * 2. 현재 파워까지 방사형 눈금 선 표시 (색상: 랩파워 달성률 98.5% 기준 민트/주황)
+ */
+function drawPowerMeterTrail(container, targetAngle, targetPower, currentPower, segmentPower, maxPower) {
     container.innerHTML = '';
     
-    const centerX = 0; // translate(100, 140)이 적용되어 있으므로 상대 좌표는 0, 0
+    const centerX = 0; // translate(100, 140) 기준
     const centerY = 0;
     const radius = 80; // 반원 반지름
+    const innerRadius = radius - 10; 
+    const tickLengthShort = 7; 
+    const tickLengthLong = 14; 
+    const centerCircleRadius = 7; 
     
-    // 바늘이 0일 때의 각도 계산
-    const zeroPowerAngle = -90;
-    
-    // [중요] 좌표 변환을 위한 오프셋 설정
+    // 각도 상수로 변환 (SVG 좌표계 보정용)
     // Needle: -90(좌) ~ 0(상) ~ 90(우)
-    // SVG Math: 180(좌) ~ 270(상) ~ 360/0(우)
-    // 따라서 Needle 각도에 270도를 더해야 SVG 좌표계와 일치함
+    // SVG Math: 0이 우측(3시). 따라서 -90도(9시)는 Math 180도(PI)
+    // 변환 공식: MathAngle = NeedleAngle + 270 (또는 -90)
     const angleOffset = 270;
-    
-    // FTP 및 maxPower 계산
-    const ftp = powerMeter?.userFTP || window.indoorTrainingState?.userFTP || 200;
-    const maxPower = ftp * 2;
-    
-    // 1. 목표 파워 궤적 (투명 주황색) - 원둘레 호
+    const startAngleNeedle = -90; // 0W 위치
+
+    // =========================================================
+    // 1. 목표 파워 궤적 (투명 주황색 원둘레 호)
+    // =========================================================
     if (targetPower > 0) {
         const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const startAngle = zeroPowerAngle; 
-        const endAngle = targetAngle; 
         
-        // 각도에 오프셋 적용하여 라디안 변환
-        const startRad = ((startAngle + angleOffset) * Math.PI) / 180;
-        const endRad = ((endAngle + angleOffset) * Math.PI) / 180;
+        // 시작 각도와 끝 각도 (Needle 기준)
+        const startAng = startAngleNeedle;
+        const endAng = targetAngle;
         
-        // 좌표 계산
-        const startX = centerX + radius * Math.cos(startRad);
-        const startY = centerY + radius * Math.sin(startRad);
-        const endX = centerX + radius * Math.cos(endRad);
-        const endY = centerY + radius * Math.sin(endRad);
+        // 라디안 변환 (SVG 좌표계로 보정)
+        const startRad = ((startAng + angleOffset) * Math.PI) / 180;
+        const endRad = ((endAng + angleOffset) * Math.PI) / 180;
         
-        const largeArcFlag = Math.abs(endAngle - startAngle) > 180 ? 1 : 0;
-        const sweepFlag = endAngle > startAngle ? 1 : 0;
+        // 호를 그릴 반지름 (눈금의 중간 위치에 오도록 조정)
+        // 눈금은 innerRadius(70) ~ innerRadius+7(77) 사이에 위치
+        // 호의 두께가 7이므로, 중심 반지름은 70 + 3.5 = 73.5
+        const arcRadius = innerRadius + (tickLengthShort / 2);
         
-        const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+        // 시작점과 끝점 좌표 계산
+        const startX = centerX + arcRadius * Math.cos(startRad);
+        const startY = centerY + arcRadius * Math.sin(startRad);
+        const endX = centerX + arcRadius * Math.cos(endRad);
+        const endY = centerY + arcRadius * Math.sin(endRad);
+        
+        // Arc 플래그 설정
+        const largeArcFlag = Math.abs(endAng - startAng) > 180 ? 1 : 0;
+        const sweepFlag = endAng > startAng ? 1 : 0;
+        
+        const pathData = `M ${startX} ${startY} A ${arcRadius} ${arcRadius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+        
         targetPath.setAttribute('d', pathData);
         targetPath.setAttribute('fill', 'none');
-        targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); // 투명 주황색
-        targetPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
-        targetPath.setAttribute('stroke-linecap', 'butt'); // 끝부분 처리
+        targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.3)'); // 투명 주황색
+        targetPath.setAttribute('stroke-width', tickLengthShort); // 작은 눈금 높이만큼 두껍게
+        targetPath.setAttribute('stroke-linecap', 'butt');
+        
         container.appendChild(targetPath);
     }
+
+    // =========================================================
+    // 2. 실제 파워 궤적 (방사형 눈금 선)
+    // =========================================================
     
-    // 2. 실제 파워 궤적 (투명 민트색 또는 주황색) - 히스토리 기반 원둘레 호
-    const allPoints = [...trailHistory];
-    
-    // 현재 점 추가 로직
-    if (trailHistory.length > 0) {
-        const lastPoint = trailHistory[trailHistory.length - 1];
-        if (Math.abs(lastPoint.angle - currentAngle) > 0.1) {
-            allPoints.push({
-                angle: currentAngle,
-                power: currentPower,
-                timestamp: Date.now()
-            });
+    // 색상 결정: 랩파워(segmentPower) / 목표파워(targetPower) >= 98.5%
+    let trailColor = 'rgba(255, 165, 0, 0.4)'; // 기본 주황색
+    if (targetPower > 0 && segmentPower > 0) {
+        const achievementRatio = (segmentPower / targetPower) * 100;
+        if (achievementRatio >= 98.5) {
+            trailColor = 'rgba(0, 212, 170, 0.4)'; // 민트색 (성공)
         }
-    } else if (currentPower > 0) {
-        allPoints.push({
-            angle: currentAngle,
-            power: currentPower,
-            timestamp: Date.now()
-        });
     }
+
+    // 눈금 간격 설정 (0~120 스케일 기준 2.5 간격 = Race와 동일한 밀도)
+    const maxScalePos = 120; // 게이지 전체 스케일
+    const tickInterval = 2.5; 
     
-    // 궤적 그리기 (오프셋 적용) - 원둘레 호
-    for (let i = 1; i < allPoints.length; i++) {
-        const prevPoint = allPoints[i - 1];
-        const currentPoint = allPoints[i];
-        
-        const prevAngle = prevPoint.angle;
-        const currentPointAngle = currentPoint.angle;
-        
-        // 좌표 변환 시 오프셋 적용
-        const prevRad = ((prevAngle + angleOffset) * Math.PI) / 180;
-        const currRad = ((currentPointAngle + angleOffset) * Math.PI) / 180;
-        
-        const prevX = centerX + radius * Math.cos(prevRad);
-        const prevY = centerY + radius * Math.sin(prevRad);
-        const currentX = centerX + radius * Math.cos(currRad);
-        const currentY = centerY + radius * Math.sin(currRad);
-        
-        // 색상 결정: 세그먼트 목표 파워값 대비 립파워값 비교 (98.5% 기준)
-        let color = 'rgba(255, 165, 0, 0.6)'; // 기본 주황색
-        if (targetPower > 0) {
-            const powerRatio = (currentPoint.power / targetPower) * 100; // 목표 대비 비율 (%)
-            if (powerRatio >= 98.5) {
-                color = 'rgba(0, 212, 170, 0.6)'; // 민트색 (98.5% 이상)
-            } else {
-                color = 'rgba(255, 165, 0, 0.6)'; // 주황색 (98.5% 미만)
-            }
-        }
-        
-        const segmentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const largeArcFlag = Math.abs(currentPointAngle - prevAngle) > 180 ? 1 : 0;
-        const sweepFlag = currentPointAngle > prevAngle ? 1 : 0;
-        
-        const segmentPathData = `M ${prevX} ${prevY} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${currentX} ${currentY}`;
-        segmentPath.setAttribute('d', segmentPathData);
-        segmentPath.setAttribute('fill', 'none');
-        segmentPath.setAttribute('stroke', color);
-        segmentPath.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
-        segmentPath.setAttribute('stroke-linecap', 'butt');
-        container.appendChild(segmentPath);
-    }
+    // 현재 파워를 스케일(0~120)로 변환
+    const currentScalePos = (currentPower / maxPower) * maxScalePos;
     
-    // 3. 바늘이 지나간 경로를 눈금 위치에 반지름 선으로 표시 (Indoor Race 로직 참고)
-    // 현재 파워값을 기준으로 눈금 위치에 선을 그림
-    const innerRadius = radius - 10;
-    const tickLengthShort = 7; // 작은 눈금 높이
-    const tickLengthLong = 14;
-    const centerCircleRadius = 7;
-    
-    // 눈금 간격: 5의 1/2 = 2.5 (눈금의 1/2 간격)
-    const maxPos = 120;
-    const tickInterval = 2.5; // 눈금의 1/2 간격
-    const currentPos = (currentPower / maxPower) * maxPos;
-    const currentTickPos = Math.floor(currentPos / tickInterval) * tickInterval;
-    const maxTickPos = Math.min(currentTickPos, maxPos);
-    
-    // 현재 파워까지만 궤적 표시 (바늘이 지나간 부분은 자동으로 제거됨)
-    for (let tickPos = 0; tickPos <= maxTickPos; tickPos += tickInterval) {
-        // 눈금 위치를 파워값으로 역변환
-        const tickPower = (tickPos / maxPos) * maxPower;
+    // 스케일에 맞춰 루프 (현재 파워까지만 그림 -> 감속 시 자동 제거 효과)
+    const maxTickLimit = Math.min(currentScalePos, maxScalePos);
+
+    for (let pos = 0; pos <= maxTickLimit; pos += tickInterval) {
+        // 현재 pos를 각도로 변환
+        // 0 -> -90도, 120 -> 90도
+        const ratio = pos / maxScalePos;
+        const needleAngle = -90 + (ratio * 180);
         
-        // 1. 바늘과 동일한 각도 계산
-        const tickRatio = tickPos / maxPos;
-        let needleAngle = -90 + (tickRatio * 180);
-        
-        // 2. 좌표계 보정 (SVG rotate와 Math.cos/sin 좌표계 일치)
-        let mathAngle = needleAngle - 90;
-        
+        // SVG 좌표계 각도
+        const mathAngle = needleAngle + 270;
         const rad = (mathAngle * Math.PI) / 180;
         
-        // 3. 선의 길이 결정 (20 단위는 길게, 2.5 간격에 맞춤)
-        const isMajor = tickPos % 20 === 0;
-        const tickLength = isMajor ? tickLengthLong : tickLengthShort;
-        const outerRadius = innerRadius + tickLength;
+        // 선의 길이 결정 (20단위는 길게, 나머지는 짧게)
+        // pos가 2.5 단위이므로 정수 20으로 나누어 떨어지는지 확인 필요
+        const isMajor = (pos % 20 === 0);
+        const tickLen = isMajor ? tickLengthLong : tickLengthShort;
         
-        // 4. 좌표 계산
-        const startRadius = centerCircleRadius + 1;
-        const x1 = centerX + startRadius * Math.cos(rad);
-        const y1 = centerY + startRadius * Math.sin(rad);
+        const outerRadius = innerRadius + tickLen;
+        
+        // 좌표 계산 (중심원 밖에서 시작)
+        const startR = centerCircleRadius + 2; // 중심원보다 약간 밖
+        
+        const x1 = centerX + startR * Math.cos(rad);
+        const y1 = centerY + startR * Math.sin(rad);
         const x2 = centerX + outerRadius * Math.cos(rad);
         const y2 = centerY + outerRadius * Math.sin(rad);
         
-        // 5. 색상 결정: 세그먼트 목표 파워값 대비 립파워값 비교 (98.5% 기준)
-        let color = 'rgba(255, 165, 0, 0.4)'; // 기본 주황색
-        if (targetPower > 0) {
-            const powerRatio = (tickPower / targetPower) * 100; // 목표 대비 비율 (%)
-            if (powerRatio >= 98.5) {
-                color = 'rgba(0, 212, 170, 0.4)'; // 민트색 (98.5% 이상)
-            } else {
-                color = 'rgba(255, 165, 0, 0.4)'; // 주황색 (98.5% 미만)
-            }
-        }
-        
-        // 6. SVG Line 생성 및 추가
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', x1);
         line.setAttribute('y1', y1);
         line.setAttribute('x2', x2);
         line.setAttribute('y2', y2);
-        line.setAttribute('stroke', color);
-        line.setAttribute('stroke-width', '1.5'); // 작은 눈금의 높이 두께
+        line.setAttribute('stroke', trailColor);
+        line.setAttribute('stroke-width', '1.5');
         line.setAttribute('stroke-linecap', 'round');
         
         container.appendChild(line);
@@ -4372,6 +4311,7 @@ window.skipSegment = function() {
     _originalSkipSegment();
     uploadToFirebase();
 };
+
 
 
 
