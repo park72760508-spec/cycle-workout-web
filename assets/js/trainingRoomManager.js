@@ -78,9 +78,18 @@ function renderTrainingRoomList(rooms) {
   const listContainer = document.getElementById('trainingRoomList');
   if (!listContainer) return;
 
+  // 사용자 목록 가져오기 (window.users 또는 window.userProfiles)
+  const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
+    
+    // user_id로 코치 이름 찾기
+    const userId = room.user_id || room.userId;
+    const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
+    const coachName = coach ? coach.name : '';
+    
     return `
       <div class="training-room-card ${isSelected ? 'selected' : ''}" 
            data-room-id="${room.id}" 
@@ -96,7 +105,7 @@ function renderTrainingRoomList(rooms) {
             ` : ''}
           </div>
           <p style="margin: 0; color: #666; font-size: 0.9em;">
-            ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
+            ${coachName ? `Coach: ${escapeHtml(coachName)}` : ''}
           </p>
         </div>
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
@@ -555,9 +564,18 @@ function renderTrainingRoomListForModal(rooms) {
   const listContainer = document.getElementById('trainingRoomModalList');
   if (!listContainer) return;
 
+  // 사용자 목록 가져오기 (window.users 또는 window.userProfiles)
+  const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
+    
+    // user_id로 코치 이름 찾기
+    const userId = room.user_id || room.userId;
+    const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
+    const coachName = coach ? coach.name : '';
+    
     return `
       <div class="training-room-card ${isSelected ? 'selected' : ''}" 
            data-room-id="${room.id}" 
@@ -573,7 +591,7 @@ function renderTrainingRoomListForModal(rooms) {
             ` : ''}
           </div>
           <p style="margin: 0; color: #666; font-size: 0.85em;">
-            ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
+            ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}${coachName ? ` · Coach: ${escapeHtml(coachName)}` : ''}
           </p>
         </div>
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
