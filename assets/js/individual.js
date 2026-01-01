@@ -828,10 +828,13 @@ function updateTargetPowerArc() {
     // 목표 파워 비율 계산 (0 ~ 1)
     const ratio = Math.min(Math.max(targetPower / maxPower, 0), 1);
     
-    // 각도 계산: 180도(왼쪽 상단)에서 시작하여 270도를 거쳐 360도(0도, 오른쪽 상단)까지
-    // ratio = 0 → 180도, ratio = 1 → 0도(360도)
+    // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
+    // ratio = 0 → 180도 (원호 없음)
+    // ratio = 0.5 → 225도 (45도 범위, FTP × 0.5)
+    // ratio = 1.0 → 270도 (90도 범위, FTP × 1.0)
+    // ratio = 2.0 → 360도 (180도 범위, FTP × 2.0)
     const startAngle = 180;
-    const endAngle = 180 - (ratio * 180);
+    const endAngle = 180 + (ratio * 180);
     
     // SVG 원호 경로 생성
     const centerX = 100;
@@ -848,10 +851,13 @@ function updateTargetPowerArc() {
     const endY = centerY + radius * Math.sin(endRad);
     
     // 원호가 큰지 작은지 판단 (180도 이상이면 large-arc-flag = 1)
-    const largeArcFlag = ratio > 0.5 ? 1 : 0;
+    // 각도가 180도에서 360도로 증가하므로, 180도 이상이면 큰 원호
+    const angleDiff = endAngle - startAngle;
+    const largeArcFlag = angleDiff > 180 ? 1 : 0;
     
     // SVG path 생성
-    const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${endX} ${endY}`;
+    // sweep-flag = 1: 시계 반대 방향 (각도 증가 방향: 180도 → 270도 → 360도)
+    const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
     
     // 목표 파워 원호 요소 가져오기 또는 생성
     let targetArc = document.getElementById('gauge-target-arc');
