@@ -28,11 +28,22 @@
         /* 상단 헤더 */
         .header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
             padding: 10px 20px;
             background-color: #1e1e1e;
             border-bottom: 1px solid #333;
+        }
+        .header > div:nth-child(1) {
+            flex: 0 0 35%;
+            text-align: left;
+        }
+        .header > div:nth-child(2) {
+            flex: 0 0 30%;
+            text-align: center;
+        }
+        .header > div:nth-child(3) {
+            flex: 0 0 35%;
+            text-align: right;
         }
         .bike-badge {
             background-color: #00d4aa;
@@ -97,10 +108,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            /* 변경 전: height: 20vh; min-height: 150px; */
-            /* 변경 후: 현재 높이의 50% 확대 (20vh * 1.5 = 30vh, 150px * 1.5 = 225px) */
-            height: 30vh; /* 블럭 높이 50% 증가: 20vh → 30vh */
-            min-height: 225px; /* 최소 높이 50% 증가: 150px → 225px */
+            height: 20vh; /* 블럭 높이 */
+            min-height: 150px; /* 최소 높이 보장 */
             position: relative; /* 자식 요소의 height: 90% 기준점 설정 */
         }
         .segment-graph-container {
@@ -125,7 +134,7 @@
     <div class="header">
         <div id="bike-id-display" class="bike-badge">Bike ?</div>
         <div id="segment-info" style="font-size:0.9em; color:#ccc;">준비 중</div>
-        <div id="main-timer" class="timer">00:00</div>
+        <div id="main-timer" class="timer">00:00:00</div>
     </div>
 
     <div class="segment-graph-section">
