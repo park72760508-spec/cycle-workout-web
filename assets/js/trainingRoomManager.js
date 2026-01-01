@@ -434,16 +434,22 @@ async function renderPlayerList() {
     }
   }
 
+  // Training Room id를 room 파라미터로 전달 (firebaseConfig.js에서 SESSION_ID로 사용)
+  const roomId = currentSelectedTrainingRoom ? currentSelectedTrainingRoom.id : null;
+  
+  // roomId를 컨테이너에 data attribute로 저장 (버튼 클릭 시 사용)
+  if (playerListContent && roomId) {
+    playerListContent.setAttribute('data-room-id', String(roomId));
+  }
+
   playerListContent.innerHTML = tracks.map(track => {
     const hasUser = track.userId && track.userName;
-    // Training Room id를 room 파라미터로 전달 (firebaseConfig.js에서 SESSION_ID로 사용)
-    const roomId = currentSelectedTrainingRoom ? currentSelectedTrainingRoom.id : null;
     const dashboardUrl = roomId 
       ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
       : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
 
     return `
-      <div class="player-track-item" data-track-number="${track.trackNumber}">
+      <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
         <div class="player-track-number">
           트랙${track.trackNumber}
         </div>
@@ -453,14 +459,14 @@ async function renderPlayerList() {
         <div class="player-track-action">
           <button 
             class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
-            onclick="assignUserToTrack(${track.trackNumber}, '${escapeHtml(track.userId || '')}')"
+            onclick="assignUserToTrack(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}')"
             title="사용자 할당/변경">
             <span>${hasUser ? '변경' : '할당'}</span>
           </button>
           ${hasUser ? `
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
-              onclick="removeUserFromTrack(${track.trackNumber})"
+              onclick="removeUserFromTrack(${track.trackNumber}, '${roomId || ''}')"
               title="사용자 제거">
               <span>제거</span>
             </button>
@@ -906,13 +912,34 @@ function escapeHtml(text) {
 /**
  * 트랙에 사용자 할당
  */
-async function assignUserToTrack(trackNumber, currentUserId) {
-  if (!currentSelectedTrainingRoom || !currentSelectedTrainingRoom.id) {
+async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
+  // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
+  let roomId = roomIdParam;
+  
+  if (!roomId) {
+    // 파라미터로 전달되지 않았으면 전역 변수 확인
+    roomId = (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) 
+      ? currentSelectedTrainingRoom.id 
+      : (window.currentTrainingRoomId || null);
+  }
+  
+  if (!roomId) {
+    // data attribute에서 가져오기 시도
+    const playerListContent = document.getElementById('playerListContent');
+    if (playerListContent) {
+      roomId = playerListContent.getAttribute('data-room-id');
+    }
+  }
+  
+  if (!roomId) {
     if (typeof showToast === 'function') {
       showToast('Training Room을 먼저 선택해주세요.', 'error');
     }
+    console.error('[assignUserToTrack] roomId를 찾을 수 없습니다.');
     return;
   }
+  
+  roomId = String(roomId);
 
   // 사용자 목록 가져오기
   let users = [];
@@ -970,7 +997,7 @@ async function assignUserToTrack(trackNumber, currentUserId) {
   const userListHtml = users.map(user => `
     <div class="user-select-item" 
          style="padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: ${currentUserId === String(user.id) ? '#e3f2fd' : '#fff'};"
-         onclick="selectUserForTrack(${trackNumber}, ${user.id}, '${escapeHtml(user.name || '')}')">
+         onclick="selectUserForTrack(${trackNumber}, ${user.id}, '${escapeHtml(user.name || '')}', '${roomId}')">
       <div style="font-weight: bold; margin-bottom: 4px;">${escapeHtml(user.name || '이름 없음')}</div>
       <div style="font-size: 0.9em; color: #666;">FTP: ${user.ftp || '-'}W | 체중: ${user.weight || '-'}kg</div>
     </div>
@@ -1004,20 +1031,39 @@ async function assignUserToTrack(trackNumber, currentUserId) {
 /**
  * 트랙에서 사용자 제거
  */
-async function removeUserFromTrack(trackNumber) {
-  if (!currentSelectedTrainingRoom || !currentSelectedTrainingRoom.id) {
+async function removeUserFromTrack(trackNumber, roomIdParam) {
+  // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
+  let roomId = roomIdParam;
+  
+  if (!roomId) {
+    roomId = (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) 
+      ? currentSelectedTrainingRoom.id 
+      : (window.currentTrainingRoomId || null);
+  }
+  
+  if (!roomId) {
+    const playerListContent = document.getElementById('playerListContent');
+    if (playerListContent) {
+      roomId = playerListContent.getAttribute('data-room-id');
+    }
+  }
+  
+  if (!roomId) {
     if (typeof showToast === 'function') {
       showToast('Training Room을 먼저 선택해주세요.', 'error');
     }
+    console.error('[removeUserFromTrack] roomId를 찾을 수 없습니다.');
     return;
   }
+  
+  roomId = String(roomId);
 
   if (!confirm(`트랙${trackNumber}에서 사용자를 제거하시겠습니까?`)) {
     return;
   }
 
   try {
-    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${currentSelectedTrainingRoom.id}&trackNumber=${trackNumber}&userId=`;
+    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${roomId}&trackNumber=${trackNumber}&userId=`;
     const response = await fetch(url);
     const result = await response.json();
 
@@ -1043,16 +1089,35 @@ async function removeUserFromTrack(trackNumber) {
 /**
  * 트랙에 선택된 사용자 할당 실행
  */
-async function selectUserForTrack(trackNumber, userId, userName) {
-  if (!currentSelectedTrainingRoom || !currentSelectedTrainingRoom.id) {
+async function selectUserForTrack(trackNumber, userId, userName, roomIdParam) {
+  // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
+  let roomId = roomIdParam;
+  
+  if (!roomId) {
+    roomId = (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) 
+      ? currentSelectedTrainingRoom.id 
+      : (window.currentTrainingRoomId || null);
+  }
+  
+  if (!roomId) {
+    const playerListContent = document.getElementById('playerListContent');
+    if (playerListContent) {
+      roomId = playerListContent.getAttribute('data-room-id');
+    }
+  }
+  
+  if (!roomId) {
     if (typeof showToast === 'function') {
       showToast('Training Room을 먼저 선택해주세요.', 'error');
     }
+    console.error('[selectUserForTrack] roomId를 찾을 수 없습니다.');
     return;
   }
+  
+  roomId = String(roomId);
 
   try {
-    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${currentSelectedTrainingRoom.id}&trackNumber=${trackNumber}&userId=${userId}`;
+    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${roomId}&trackNumber=${trackNumber}&userId=${userId}`;
     const response = await fetch(url);
     const result = await response.json();
 
