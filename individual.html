@@ -103,8 +103,8 @@
             display: flex;
             justify-content: center;
             align-items: stretch; /* 자식 요소를 섹션 높이에 맞춤 */
-            flex: 0.5 0.5 0; /* flex-grow: 0.5, flex-shrink: 0.5 (기존의 50%로 축소) */
-            min-height: 100px; /* 최소 높이 보장 (50% 축소) */
+            flex: 0.4 0.4 0; /* flex-grow: 0.4, flex-shrink: 0.4 (20% 축소: 0.5 * 0.8 = 0.4) */
+            min-height: 80px; /* 최소 높이 보장 (20% 축소: 100px * 0.8 = 80px) */
             position: relative;
             overflow: hidden; /* 넘치는 내용 숨김 */
         }
@@ -112,13 +112,13 @@
         /* 모바일 환경 최적화 */
         @media (max-height: 800px) {
             .segment-graph-section {
-                min-height: 90px; /* 작은 화면에서도 적절한 높이 (50% 축소) */
+                min-height: 72px; /* 작은 화면에서도 적절한 높이 (20% 축소: 90px * 0.8 = 72px) */
             }
         }
         
         @media (max-height: 600px) {
             .segment-graph-section {
-                min-height: 75px; /* 매우 작은 화면 대응 (50% 축소) */
+                min-height: 60px; /* 매우 작은 화면 대응 (20% 축소: 75px * 0.8 = 60px) */
             }
         }
         
@@ -206,8 +206,8 @@
                 <g id="gauge-labels"></g>
                 
                 <!-- 랩카운트다운 (속도계 상단) -->
-                <text x="100" y="30" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
-                <text id="ui-lap-time" x="100" y="50" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
+                <text x="100" y="-10" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
+                <text id="ui-lap-time" x="100" y="20" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
                 
                 <text x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
                 <text id="ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
