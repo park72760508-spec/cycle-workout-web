@@ -209,6 +209,7 @@ function updateDashboard(data) {
     }
 
     // 2. 게이지 바늘 회전 (동일한 power 값 사용)
+    // 위쪽 반원에 맞춰 0도(오른쪽) ~ 180도(왼쪽)로 회전
     // FTP를 알 수 없으므로 300W를 풀 스케일(100%)로 가정하거나, 
     // 방장이 maxPower를 보내주면 더 좋음. 여기선 400W 기준.
     const maxGauge = 400; 
@@ -216,8 +217,10 @@ function updateDashboard(data) {
     if (ratio > 1) ratio = 1;
     if (ratio < 0) ratio = 0;
     
-    // -90도(왼쪽) ~ 90도(오른쪽)
-    const angle = -90 + (ratio * 180);
+    // 0도(오른쪽 상단) ~ 180도(왼쪽 상단) - 위쪽 반원
+    // 바늘은 기본적으로 위쪽을 향하도록 rotate(-90)이 적용되어 있으므로
+    // 90도(위쪽)에서 시작하여 -90도(왼쪽) ~ 90도(오른쪽) 범위로 회전
+    const angle = 90 - (ratio * 180); // 90도에서 시작하여 180도 범위 회전 (-90도 ~ 90도)
     
     const needle = document.getElementById('gauge-needle');
     if (needle) {
@@ -566,16 +569,16 @@ function generateGaugeTicks() {
     let ticksHTML = '';
     
     // 주눈금: 0, 1, 2, 3, 4, 5, 6 (총 7개)
-    // 각도: 180도(왼쪽 하단, 0)에서 0도(오른쪽 하단, 6)까지 180도 범위
+    // 각도: 위쪽 반원에 그리기 위해 0도(오른쪽 상단, 0)에서 180도(왼쪽 상단, 6)까지 180도 범위
     // 주눈금 간격: 180도 / 6 = 30도
     
     // 모든 눈금 생성 (주눈금 + 보조눈금)
     for (let i = 0; i <= 24; i++) { // 0~24 (주눈금 7개 + 보조눈금 18개 = 총 25개)
         const isMajor = i % 4 === 0; // 4 간격마다 주눈금 (0, 4, 8, 12, 16, 20, 24)
         
-        // 각도 계산: 180도에서 시작하여 0도까지
-        // i=0 → 180도 (왼쪽 하단), i=24 → 0도 (오른쪽 하단)
-        const angle = 180 - (i / 24) * 180;
+        // 각도 계산: 0도에서 시작하여 180도까지 (위쪽 반원)
+        // i=0 → 0도 (오른쪽 상단), i=24 → 180도 (왼쪽 상단)
+        const angle = 0 + (i / 24) * 180;
         const rad = (angle * Math.PI) / 180;
         
         // 눈금 위치 계산
@@ -618,9 +621,9 @@ function generateGaugeLabels() {
     
     // 주눈금 레이블 생성 (7개)
     multipliers.forEach((item, i) => {
-        // 각도 계산: 180도에서 0도까지
-        // i=0 → 180도, i=6 → 0도
-        const angle = 180 - (i / 6) * 180;
+        // 각도 계산: 0도에서 180도까지 (위쪽 반원)
+        // i=0 → 0도 (오른쪽 상단), i=6 → 180도 (왼쪽 상단)
+        const angle = 0 + (i / 6) * 180;
         const rad = (angle * Math.PI) / 180;
         
         // 레이블 위치 계산
