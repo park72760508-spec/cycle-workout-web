@@ -4233,14 +4233,14 @@ document.addEventListener("DOMContentLoaded", () => {
   window.selectIndoorMode = function(mode) {
     closeIndoorModeSelectionModal();
     if (mode === 'race') {
-      // INDOOR RACE 선택 시 Training Room 화면으로 이동
+      // INDOOR RACE 선택 시 rollerRaceDashboardScreen으로 이동
       if (typeof showScreen === 'function') {
-        showScreen('trainingRoomScreen');
+        showScreen('rollerRaceDashboardScreen');
       }
-      // Training Room 화면 초기화
-      if (typeof initializeTrainingRoomScreen === 'function') {
+      // rollerRaceDashboard 초기화 (showScreen에서 자동으로 호출되지만 명시적으로 호출)
+      if (typeof initRollerRaceDashboard === 'function') {
         setTimeout(() => {
-          initializeTrainingRoomScreen();
+          initRollerRaceDashboard();
         }, 100);
       }
     } else if (mode === 'training') {
