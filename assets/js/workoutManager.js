@@ -1028,23 +1028,34 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.restore();
   }
   
-  // 개인 대시보드: 그래프 상단 중간에 민트색 둥근네모 상자에 워크아웃 총시간 표기
+  // 개인 대시보드: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
   if (canvasId === 'individualSegmentGraph') {
     const totalMinutes = Math.round(totalSeconds / 60);
     const totalTimeText = `${totalMinutes}m`;
     
+    // Y축 120%와 150% 중간 위치 계산 (135%)
+    const targetFtpPercent = 135; // 120%와 150%의 중간
+    const targetPower = ftp * (targetFtpPercent / 100); // FTP의 135%
+    const targetY = padding.top + chartHeight - (chartHeight * (targetPower / maxTargetPower));
+    
+    // 크기와 폰트 30% 증가
+    const baseFontSize = 12;
+    const baseBoxHeight = 24;
+    const baseBoxPadding = 8;
+    const fontSize = Math.round(baseFontSize * 1.3); // 30% 증가: 15.6px → 16px
+    const boxHeight = Math.round(baseBoxHeight * 1.3); // 30% 증가: 31.2px → 31px
+    const boxPadding = Math.round(baseBoxPadding * 1.3); // 30% 증가: 10.4px → 10px
+    
     // 텍스트 크기 측정
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = `bold ${fontSize}px sans-serif`;
     const textMetrics = ctx.measureText(totalTimeText);
     const textWidth = textMetrics.width;
-    const boxPadding = 8;
     const boxWidth = textWidth + boxPadding * 2;
-    const boxHeight = 24;
     const boxX = padding.left + chartWidth / 2 - boxWidth / 2; // 그래프 중간
-    const boxY = padding.top - boxHeight / 2; // 그래프 상단 중간
+    const boxY = targetY - boxHeight / 2; // Y축 135% 위치 (120%와 150% 중간)
     
     // 민트색 둥근네모 상자 그리기
-    const borderRadius = 6;
+    const borderRadius = Math.round(6 * 1.3); // 30% 증가: 7.8px → 8px
     ctx.fillStyle = 'rgba(0, 212, 170, 0.9)'; // 민트색 (#00d4aa)
     ctx.beginPath();
     ctx.moveTo(boxX + borderRadius, boxY);
@@ -1061,10 +1072,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // 텍스트 표시
     ctx.fillStyle = '#fff'; // 흰색 텍스트
-    ctx.font = 'bold 12px sans-serif';
+    ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(totalTimeText, padding.left + chartWidth / 2, padding.top);
+    ctx.fillText(totalTimeText, padding.left + chartWidth / 2, targetY);
   }
 }
 
