@@ -133,9 +133,9 @@
         }
         .segment-graph-container canvas {
             width: 100% !important;
-            height: 100% !important; /* 강제로 100% 높이 설정 */
+            height: 100% !important; /* 컨테이너 높이에 맞춤 */
             display: block;
-            object-fit: contain; /* 비율 유지하며 컨테이너에 맞춤 */
+            /* object-fit 제거: Canvas의 실제 픽셀 크기를 조정하므로 불필요 */
         }
 
         /* 5초 카운트다운 오버레이 */
