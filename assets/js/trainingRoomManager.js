@@ -80,52 +80,76 @@ function renderTrainingRoomList(rooms) {
 
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
+    const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
     return `
-      <div class="training-room-card" 
+      <div class="training-room-card ${isSelected ? 'selected' : ''}" 
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
            onclick="selectTrainingRoom('${room.id}')"
-           style="padding: 20px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative;">
-        ${hasPassword ? `
-          <div style="position: absolute; top: 10px; right: 10px;">
-            <img src="assets/img/lock.png" alt="비밀번호" style="width: 20px; height: 20px; opacity: 0.6;" />
+           style="padding: 20px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative; display: flex; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;">
+            <h3 style="margin: 0; color: #333; font-size: 1.2em; flex: 1;">${escapeHtml(room.title)}</h3>
+            ${hasPassword ? `
+              <img src="assets/img/lock.png" alt="비밀번호" style="width: 18px; height: 18px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
+            ` : ''}
           </div>
-        ` : ''}
-        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 1.2em;">${escapeHtml(room.title)}</h3>
-        <p style="margin: 0; color: #666; font-size: 0.9em;">
-          ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
-        </p>
+          <p style="margin: 0; color: #666; font-size: 0.9em;">
+            ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
+          </p>
+        </div>
+        ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
   }).join('');
 
-  // CSS 스타일 추가 (hover 효과)
-  const style = document.createElement('style');
-  style.textContent = `
-    .training-room-card:hover {
-      border-color: #667eea !important;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-      transform: translateY(-2px);
-    }
-    .training-room-card.selected {
-      border-color: #667eea !important;
-      background: #f0f4ff !important;
-    }
-  `;
-  if (!document.getElementById('trainingRoomCardStyle')) {
+  // CSS 스타일 추가 (일별 워크아웃 지정 화면과 동일한 선택 효과)
+  // trainingRoomCardStyle이 이미 존재하면 업데이트, 없으면 추가
+  let style = document.getElementById('trainingRoomCardStyle');
+  if (!style) {
+    style = document.createElement('style');
     style.id = 'trainingRoomCardStyle';
     document.head.appendChild(style);
   }
+  style.textContent = `
+    .training-room-card:hover {
+      border-color: #2e74e8 !important;
+      box-shadow: 0 4px 12px rgba(46, 116, 232, 0.15);
+      transform: translateY(-2px);
+    }
+    .training-room-card.selected {
+      border-color: #2e74e8 !important;
+      background: #e8f2ff !important;
+      box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1) !important;
+    }
+    .training-room-check {
+      width: 24px;
+      height: 24px;
+      background: #2e74e8;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-left: 8px;
+    }
+  `;
 }
 
 /**
  * Training Room 선택
  */
 async function selectTrainingRoom(roomId) {
-  const room = trainingRoomList.find(r => r.id === roomId);
+  // roomId를 숫자로 변환 (문자열로 전달될 수 있음)
+  const roomIdNum = typeof roomId === 'string' ? parseInt(roomId, 10) : roomId;
+  const room = trainingRoomList.find(r => r.id == roomIdNum || String(r.id) === String(roomIdNum));
   if (!room) {
-    console.error('[Training Room] 선택한 방을 찾을 수 없습니다:', roomId);
+    console.error('[Training Room] 선택한 방을 찾을 수 없습니다:', roomId, '타입:', typeof roomId, '변환:', roomIdNum);
+    console.error('[Training Room] 현재 목록:', trainingRoomList.map(r => ({ id: r.id, type: typeof r.id })));
     return;
   }
 
@@ -146,11 +170,25 @@ async function selectTrainingRoom(roomId) {
   // 선택된 Training Room 저장
   currentSelectedTrainingRoom = room;
 
-  // 선택된 카드 하이라이트
+  // 선택된 카드 하이라이트 (체크마크 추가/제거)
   document.querySelectorAll('.training-room-card').forEach(card => {
     card.classList.remove('selected');
+    
+    // 기존 체크마크 제거
+    const existingCheck = card.querySelector('.training-room-check');
+    if (existingCheck) {
+      existingCheck.remove();
+    }
+    
+    // 선택된 카드에 체크마크 추가
     if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
       card.classList.add('selected');
+      if (!card.querySelector('.training-room-check')) {
+        const checkMark = document.createElement('div');
+        checkMark.className = 'training-room-check';
+        checkMark.textContent = '✓';
+        card.appendChild(checkMark);
+      }
     }
   });
 
@@ -519,43 +557,64 @@ function renderTrainingRoomListForModal(rooms) {
 
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
+    const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
     return `
-      <div class="training-room-card" 
+      <div class="training-room-card ${isSelected ? 'selected' : ''}" 
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
            onclick="selectTrainingRoomForModal('${room.id}')"
-           style="padding: 16px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative;">
-        ${hasPassword ? `
-          <div style="position: absolute; top: 10px; right: 10px;">
-            <img src="assets/img/lock.png" alt="비밀번호" style="width: 18px; height: 18px; opacity: 0.6;" />
+           style="padding: 16px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative; display: flex; align-items: flex-start; gap: 12px;">
+        <div style="flex: 1; min-width: 0;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px;">
+            <h3 style="margin: 0; color: #333; font-size: 1.1em; flex: 1;">${escapeHtml(room.title)}</h3>
+            ${hasPassword ? `
+              <img src="assets/img/lock.png" alt="비밀번호" style="width: 16px; height: 16px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
+            ` : ''}
           </div>
-        ` : ''}
-        <h3 style="margin: 0 0 8px 0; color: #333; font-size: 1.1em;">${escapeHtml(room.title)}</h3>
-        <p style="margin: 0; color: #666; font-size: 0.85em;">
-          ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
-        </p>
+          <p style="margin: 0; color: #666; font-size: 0.85em;">
+            ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
+          </p>
+        </div>
+        ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
   }).join('');
 
-  // CSS 스타일 추가 (hover 효과)
-  const style = document.createElement('style');
-  style.textContent = `
-    .training-room-card:hover {
-      border-color: #667eea !important;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-      transform: translateY(-2px);
-    }
-    .training-room-card.selected {
-      border-color: #667eea !important;
-      background: #f0f4ff !important;
-    }
-  `;
-  if (!document.getElementById('trainingRoomCardStyle')) {
+  // CSS 스타일 추가 (일별 워크아웃 지정 화면과 동일한 선택 효과)
+  // trainingRoomCardStyle이 이미 존재하면 업데이트, 없으면 추가
+  let style = document.getElementById('trainingRoomCardStyle');
+  if (!style) {
+    style = document.createElement('style');
     style.id = 'trainingRoomCardStyle';
     document.head.appendChild(style);
   }
+  style.textContent = `
+    .training-room-card:hover {
+      border-color: #2e74e8 !important;
+      box-shadow: 0 4px 12px rgba(46, 116, 232, 0.15);
+      transform: translateY(-2px);
+    }
+    .training-room-card.selected {
+      border-color: #2e74e8 !important;
+      background: #e8f2ff !important;
+      box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1) !important;
+    }
+    .training-room-check {
+      width: 24px;
+      height: 24px;
+      background: #2e74e8;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      flex-shrink: 0;
+      margin-left: 8px;
+    }
+  `;
 }
 
 /**
@@ -614,13 +673,27 @@ async function selectTrainingRoomForModal(roomId) {
 
   // 선택된 Training Room 저장 (비밀번호 확인 완료 또는 비밀번호 없음)
 
-  // 선택된 카드 하이라이트
+  // 선택된 카드 하이라이트 (체크마크 추가/제거)
   const modalListContainer = document.getElementById('trainingRoomModalList');
   if (modalListContainer) {
     modalListContainer.querySelectorAll('.training-room-card').forEach(card => {
       card.classList.remove('selected');
+      
+      // 기존 체크마크 제거
+      const existingCheck = card.querySelector('.training-room-check');
+      if (existingCheck) {
+        existingCheck.remove();
+      }
+      
+      // 선택된 카드에 체크마크 추가
       if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
         card.classList.add('selected');
+        if (!card.querySelector('.training-room-check')) {
+          const checkMark = document.createElement('div');
+          checkMark.className = 'training-room-check';
+          checkMark.textContent = '✓';
+          card.appendChild(checkMark);
+        }
       }
     });
   }
