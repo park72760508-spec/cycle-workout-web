@@ -9,6 +9,7 @@ let trainingRoomList = [];
 
 /**
  * Training Room 목록 로드
+ * id, user_id, title, password 정보를 가져옴
  */
 async function loadTrainingRooms() {
   const listContainer = document.getElementById('trainingRoomList');
@@ -27,6 +28,7 @@ async function loadTrainingRooms() {
 
   try {
     // 구글시트에서 TrainingSchedules 목록 가져오기
+    // 응답 데이터: { id, user_id, title, password, ... }
     const url = `${window.GAS_URL}?action=listTrainingSchedules`;
     const response = await fetch(url);
     const result = await response.json();
@@ -36,6 +38,17 @@ async function loadTrainingRooms() {
     }
 
     trainingRoomList = result.items || [];
+    
+    // 데이터 구조 확인 (디버깅용)
+    if (trainingRoomList.length > 0) {
+      console.log('[Training Room] 로드된 Room 데이터 구조:', trainingRoomList[0]);
+      console.log('[Training Room] 각 Room 정보:', trainingRoomList.map(room => ({
+        id: room.id,
+        user_id: room.user_id || room.userId,
+        title: room.title,
+        hasPassword: !!(room.password && String(room.password).trim() !== '')
+      })));
+    }
     
     if (trainingRoomList.length === 0) {
       listContainer.innerHTML = `
@@ -430,6 +443,7 @@ function initializeTrainingRoomModal() {
 
 /**
  * 모달용 Training Room 목록 로드
+ * id, user_id, title, password 정보를 가져옴
  */
 async function loadTrainingRoomsForModal() {
   const listContainer = document.getElementById('trainingRoomModalList');
@@ -448,6 +462,7 @@ async function loadTrainingRoomsForModal() {
 
   try {
     // 구글시트에서 TrainingSchedules 목록 가져오기
+    // 응답 데이터: { id, user_id, title, password, ... }
     const url = `${window.GAS_URL}?action=listTrainingSchedules`;
     const response = await fetch(url);
     const result = await response.json();
@@ -457,6 +472,17 @@ async function loadTrainingRoomsForModal() {
     }
 
     trainingRoomList = result.items || [];
+    
+    // 데이터 구조 확인 (디버깅용)
+    if (trainingRoomList.length > 0) {
+      console.log('[Training Room Modal] 로드된 Room 데이터 구조:', trainingRoomList[0]);
+      console.log('[Training Room Modal] 각 Room 정보:', trainingRoomList.map(room => ({
+        id: room.id,
+        user_id: room.user_id || room.userId,
+        title: room.title,
+        hasPassword: !!(room.password && String(room.password).trim() !== '')
+      })));
+    }
     
     if (trainingRoomList.length === 0) {
       listContainer.innerHTML = `
@@ -529,6 +555,9 @@ function renderTrainingRoomListForModal(rooms) {
 
 /**
  * 모달에서 Training Room 선택
+ * Room 목록 선택 시 비밀번호 유무에 따라:
+ * - 비밀번호 설정 Room: 비밀번호 확인 팝업창 뜨고 비밀번호 확인
+ * - 비밀번호 확인 성공 > Player 버튼, Coach 버튼(grade=1,3) 활성화
  */
 async function selectTrainingRoomForModal(roomId) {
   const room = trainingRoomList.find(r => r.id === roomId);
@@ -537,27 +566,44 @@ async function selectTrainingRoomForModal(roomId) {
     return;
   }
 
-  // 비밀번호 확인 (grade=1 관리자는 제외)
+  console.log('[Training Room Modal] 선택한 Room 정보:', {
+    id: room.id,
+    user_id: room.user_id || room.userId,
+    title: room.title,
+    hasPassword: !!(room.password && String(room.password).trim() !== '')
+  });
+
+  // 사용자 등급 확인 (grade=1 관리자, grade=3 코치)
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
   const isAdmin = userGrade === '1' || userGrade === 1;
+  const isCoach = userGrade === '3' || userGrade === 3;
 
+  // 비밀번호 유무 확인
   const hasPassword = room.password && String(room.password).trim() !== '';
   
   // 비밀번호 확인을 위해 임시로 room 저장
   const previousRoom = currentSelectedTrainingRoom;
   currentSelectedTrainingRoom = room;
   
+  // 비밀번호가 있는 경우: 비밀번호 확인 팝업창 표시 (관리자는 제외)
   if (hasPassword && !isAdmin) {
+    console.log('[Training Room Modal] 비밀번호 확인 필요');
     // 비밀번호 확인 모달 표시
     const passwordCorrect = await showTrainingRoomPasswordModal(room.title);
     if (!passwordCorrect) {
       // 비밀번호가 틀리면 이전 상태로 복원
+      console.log('[Training Room Modal] 비밀번호 확인 실패');
       currentSelectedTrainingRoom = previousRoom;
       return;
     }
+    console.log('[Training Room Modal] 비밀번호 확인 성공');
+  } else if (hasPassword && isAdmin) {
+    console.log('[Training Room Modal] 관리자는 비밀번호 확인 생략');
+  } else {
+    console.log('[Training Room Modal] 비밀번호가 없는 Room');
   }
 
-  // 선택된 Training Room 저장 (이미 설정되어 있음)
+  // 선택된 Training Room 저장 (비밀번호 확인 완료 또는 비밀번호 없음)
 
   // 선택된 카드 하이라이트
   const modalListContainer = document.getElementById('trainingRoomModalList');
@@ -581,8 +627,10 @@ async function selectTrainingRoomForModal(roomId) {
     selectedSection.style.display = 'block';
   }
 
-  // Player/Coach 버튼 활성화 (grade=1 or 3일 때)
-  const canAccess = isAdmin || userGrade === '3' || userGrade === 3;
+  // 비밀번호 확인 성공 후 Player/Coach 버튼 활성화 (grade=1 or 3일 때)
+  const canAccess = isAdmin || isCoach;
+  console.log('[Training Room Modal] 버튼 활성화:', { canAccess, isAdmin, isCoach, userGrade });
+  
   if (btnPlayer) {
     btnPlayer.disabled = !canAccess;
     if (canAccess) {
