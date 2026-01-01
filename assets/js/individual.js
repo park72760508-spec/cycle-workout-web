@@ -14,6 +14,7 @@ while (!myBikeId) {
     }
 }
 
+// 초기 표시 (나중에 사용자 이름으로 업데이트됨)
 document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
 
 // 2. Firebase 데이터 구독 (내 자전거 데이터)
@@ -22,13 +23,33 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
     const data = snapshot.val();
     
     if (data) {
+        // 사용자 이름 업데이트
+        updateUserName(data);
         updateDashboard(data);
     } else {
         // 데이터가 없으면 (연결 안됨)
         document.getElementById('ui-current-power').innerText = '-';
         document.getElementById('ui-current-power').style.fill = '#555';
+        // 기본값으로 Bike 번호 표시
+        document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
     }
 });
+
+// 사용자 이름 업데이트 함수
+function updateUserName(data) {
+    const bikeIdDisplay = document.getElementById('bike-id-display');
+    if (!bikeIdDisplay) return;
+    
+    // 사용자 이름 추출 (여러 필드명 지원)
+    const userName = data.name || data.userName || data.participantName || data.user_name || data.participant_name || null;
+    
+    if (userName) {
+        bikeIdDisplay.innerText = userName;
+    } else {
+        // 이름이 없으면 Bike 번호 표시
+        bikeIdDisplay.innerText = `Bike ${myBikeId}`;
+    }
+}
 
 // 3. 훈련 상태 구독 (타이머, 세그먼트 정보)
 let currentSegmentIndex = -1;
