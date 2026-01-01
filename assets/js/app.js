@@ -4192,25 +4192,15 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       console.log("ANT+ button clicked!");
       
-      // ANT+ 연결 버튼 클릭 시 Indoor 모드 선택 모달 열기 (모든 사용자 사용 가능)
-      if (typeof showIndoorModeSelectionModal === 'function') {
-        showIndoorModeSelectionModal();
+      // ANT+ 연결 버튼 클릭 시 Training Room 모달 열기
+      if (typeof showTrainingRoomModal === 'function') {
+        showTrainingRoomModal();
       } else {
-        console.warn("showIndoorModeSelectionModal function not found!");
+        console.warn("showTrainingRoomModal function not found!");
         if (typeof showToast === "function") {
-          showToast("모달 열기 함수를 찾을 수 없습니다.");
+          showToast("Training Room 모달 열기 함수를 찾을 수 없습니다.");
         }
       }
-      
-      // 기존 ANT+ 연결 로직은 대시보드에서 처리
-      // if (window.connectANT) {
-      //   await window.connectANT();
-      // } else {
-      //   console.warn("connectANT function not found!");
-      //   if (typeof showToast === "function") {
-      //     showToast("ANT+ 연결 함수를 찾을 수 없습니다.");
-      //   }
-      // }
     });
   }
 

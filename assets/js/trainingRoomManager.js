@@ -367,6 +367,283 @@ function openCoachMode() {
   }
 }
 
+// ========== Training Room 모달 관련 함수 ==========
+
+/**
+ * Training Room 모달 열기
+ */
+async function showTrainingRoomModal() {
+  const modal = document.getElementById('trainingRoomModal');
+  if (!modal) {
+    console.error('[Training Room Modal] 모달 요소를 찾을 수 없습니다.');
+    return;
+  }
+
+  // 모달 표시
+  modal.classList.remove('hidden');
+
+  // 모달 초기화
+  initializeTrainingRoomModal();
+
+  // Training Room 목록 로드
+  await loadTrainingRoomsForModal();
+}
+
+/**
+ * Training Room 모달 닫기
+ */
+function closeTrainingRoomModal() {
+  const modal = document.getElementById('trainingRoomModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  
+  // 모달 초기화
+  initializeTrainingRoomModal();
+}
+
+/**
+ * Training Room 모달 초기화
+ */
+function initializeTrainingRoomModal() {
+  // 선택된 Training Room 정보 초기화
+  currentSelectedTrainingRoom = null;
+  const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+  if (selectedSection) {
+    selectedSection.style.display = 'none';
+  }
+
+  // 버튼 비활성화
+  const btnPlayer = document.getElementById('btnPlayerModal');
+  const btnCoach = document.getElementById('btnCoachModal');
+  if (btnPlayer) {
+    btnPlayer.disabled = true;
+    btnPlayer.style.opacity = '0.5';
+    btnPlayer.style.cursor = 'not-allowed';
+  }
+  if (btnCoach) {
+    btnCoach.disabled = true;
+    btnCoach.style.opacity = '0.5';
+    btnCoach.style.cursor = 'not-allowed';
+  }
+}
+
+/**
+ * 모달용 Training Room 목록 로드
+ */
+async function loadTrainingRoomsForModal() {
+  const listContainer = document.getElementById('trainingRoomModalList');
+  if (!listContainer) {
+    console.error('[Training Room Modal] 목록 컨테이너를 찾을 수 없습니다.');
+    return;
+  }
+
+  // 로딩 표시
+  listContainer.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 20px;"></div>
+      <p style="color: #666;">Training Room 목록을 불러오는 중...</p>
+    </div>
+  `;
+
+  try {
+    // 구글시트에서 TrainingSchedules 목록 가져오기
+    const url = `${window.GAS_URL}?action=listTrainingSchedules`;
+    const response = await fetch(url);
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Training Room 목록을 불러오는데 실패했습니다');
+    }
+
+    trainingRoomList = result.items || [];
+    
+    if (trainingRoomList.length === 0) {
+      listContainer.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <p style="color: #666;">등록된 Training Room이 없습니다.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // 목록 렌더링
+    renderTrainingRoomListForModal(trainingRoomList);
+  } catch (error) {
+    console.error('[Training Room Modal] 목록 로드 오류:', error);
+    listContainer.innerHTML = `
+      <div style="text-align: center; padding: 40px;">
+        <p style="color: #dc3545;">오류: ${error.message}</p>
+      </div>
+    `;
+  }
+}
+
+/**
+ * 모달용 Training Room 목록 렌더링
+ */
+function renderTrainingRoomListForModal(rooms) {
+  const listContainer = document.getElementById('trainingRoomModalList');
+  if (!listContainer) return;
+
+  listContainer.innerHTML = rooms.map((room, index) => {
+    const hasPassword = room.password && String(room.password).trim() !== '';
+    return `
+      <div class="training-room-card" 
+           data-room-id="${room.id}" 
+           data-room-title="${escapeHtml(room.title)}"
+           data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
+           onclick="selectTrainingRoomForModal('${room.id}')"
+           style="padding: 16px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative;">
+        ${hasPassword ? `
+          <div style="position: absolute; top: 10px; right: 10px;">
+            <img src="assets/img/lock.png" alt="비밀번호" style="width: 18px; height: 18px; opacity: 0.6;" />
+          </div>
+        ` : ''}
+        <h3 style="margin: 0 0 8px 0; color: #333; font-size: 1.1em;">${escapeHtml(room.title)}</h3>
+        <p style="margin: 0; color: #666; font-size: 0.85em;">
+          ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}
+        </p>
+      </div>
+    `;
+  }).join('');
+
+  // CSS 스타일 추가 (hover 효과)
+  const style = document.createElement('style');
+  style.textContent = `
+    .training-room-card:hover {
+      border-color: #667eea !important;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+      transform: translateY(-2px);
+    }
+    .training-room-card.selected {
+      border-color: #667eea !important;
+      background: #f0f4ff !important;
+    }
+  `;
+  if (!document.getElementById('trainingRoomCardStyle')) {
+    style.id = 'trainingRoomCardStyle';
+    document.head.appendChild(style);
+  }
+}
+
+/**
+ * 모달에서 Training Room 선택
+ */
+async function selectTrainingRoomForModal(roomId) {
+  const room = trainingRoomList.find(r => r.id === roomId);
+  if (!room) {
+    console.error('[Training Room Modal] 선택한 방을 찾을 수 없습니다:', roomId);
+    return;
+  }
+
+  // 비밀번호 확인 (grade=1 관리자는 제외)
+  const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
+  const isAdmin = userGrade === '1' || userGrade === 1;
+
+  const hasPassword = room.password && String(room.password).trim() !== '';
+  
+  // 비밀번호 확인을 위해 임시로 room 저장
+  const previousRoom = currentSelectedTrainingRoom;
+  currentSelectedTrainingRoom = room;
+  
+  if (hasPassword && !isAdmin) {
+    // 비밀번호 확인 모달 표시
+    const passwordCorrect = await showTrainingRoomPasswordModal(room.title);
+    if (!passwordCorrect) {
+      // 비밀번호가 틀리면 이전 상태로 복원
+      currentSelectedTrainingRoom = previousRoom;
+      return;
+    }
+  }
+
+  // 선택된 Training Room 저장 (이미 설정되어 있음)
+
+  // 선택된 카드 하이라이트
+  const modalListContainer = document.getElementById('trainingRoomModalList');
+  if (modalListContainer) {
+    modalListContainer.querySelectorAll('.training-room-card').forEach(card => {
+      card.classList.remove('selected');
+      if (card.dataset.roomId === roomId) {
+        card.classList.add('selected');
+      }
+    });
+  }
+
+  // 선택된 Training Room 정보 표시
+  const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+  const selectedTitle = document.getElementById('selectedTrainingRoomModalTitle');
+  const btnPlayer = document.getElementById('btnPlayerModal');
+  const btnCoach = document.getElementById('btnCoachModal');
+
+  if (selectedSection && selectedTitle) {
+    selectedTitle.textContent = room.title;
+    selectedSection.style.display = 'block';
+  }
+
+  // Player/Coach 버튼 활성화 (grade=1 or 3일 때)
+  const canAccess = isAdmin || userGrade === '3' || userGrade === 3;
+  if (btnPlayer) {
+    btnPlayer.disabled = !canAccess;
+    if (canAccess) {
+      btnPlayer.style.opacity = '1';
+      btnPlayer.style.cursor = 'pointer';
+    } else {
+      btnPlayer.style.opacity = '0.5';
+      btnPlayer.style.cursor = 'not-allowed';
+    }
+  }
+  if (btnCoach) {
+    btnCoach.disabled = !canAccess;
+    if (canAccess) {
+      btnCoach.style.opacity = '1';
+      btnCoach.style.cursor = 'pointer';
+    } else {
+      btnCoach.style.opacity = '0.5';
+      btnCoach.style.cursor = 'not-allowed';
+    }
+  }
+}
+
+/**
+ * 모달에서 Player List 화면 열기
+ */
+function openPlayerListFromModal() {
+  if (!currentSelectedTrainingRoom) {
+    showToast('Training Room을 먼저 선택해주세요.', 'error');
+    return;
+  }
+
+  // 모달 닫기
+  closeTrainingRoomModal();
+
+  // Player List 화면으로 이동
+  if (typeof showScreen === 'function') {
+    showScreen('playerListScreen');
+  }
+
+  // Player List 렌더링
+  renderPlayerList();
+}
+
+/**
+ * 모달에서 Coach 모드 열기 (Indoor 모드 선택 화면으로 이동)
+ */
+function openCoachModeFromModal() {
+  if (!currentSelectedTrainingRoom) {
+    showToast('Training Room을 먼저 선택해주세요.', 'error');
+    return;
+  }
+
+  // 모달 닫기
+  closeTrainingRoomModal();
+
+  // Indoor 모드 선택 화면으로 이동
+  if (typeof showIndoorModeSelectionModal === 'function') {
+    showIndoorModeSelectionModal();
+  }
+}
+
 /**
  * Training Room 화면 초기화
  */
@@ -413,5 +690,11 @@ if (typeof window !== 'undefined') {
   window.openCoachMode = openCoachMode;
   window.initializeTrainingRoomScreen = initializeTrainingRoomScreen;
   window.showTrainingRoomPasswordModal = showTrainingRoomPasswordModal;
+  // 모달 관련 함수
+  window.showTrainingRoomModal = showTrainingRoomModal;
+  window.closeTrainingRoomModal = closeTrainingRoomModal;
+  window.selectTrainingRoomForModal = selectTrainingRoomForModal;
+  window.openPlayerListFromModal = openPlayerListFromModal;
+  window.openCoachModeFromModal = openCoachModeFromModal;
 }
 
