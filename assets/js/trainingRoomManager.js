@@ -443,7 +443,7 @@ async function renderPlayerList() {
       : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
 
     return `
-      <div class="player-track-item">
+      <div class="player-track-item" data-track-number="${track.trackNumber}">
         <div class="player-track-number">
           트랙${track.trackNumber}
         </div>
@@ -451,6 +451,20 @@ async function renderPlayerList() {
           ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
         </div>
         <div class="player-track-action">
+          <button 
+            class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+            onclick="assignUserToTrack(${track.trackNumber}, '${escapeHtml(track.userId || '')}')"
+            title="사용자 할당/변경">
+            <span>${hasUser ? '변경' : '할당'}</span>
+          </button>
+          ${hasUser ? `
+            <button 
+              class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
+              onclick="removeUserFromTrack(${track.trackNumber})"
+              title="사용자 제거">
+              <span>제거</span>
+            </button>
+          ` : ''}
           <a href="${dashboardUrl}" 
              target="_blank"
              class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser ? 'disabled' : ''}"
@@ -889,6 +903,190 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+/**
+ * 트랙에 사용자 할당
+ */
+async function assignUserToTrack(trackNumber, currentUserId) {
+  if (!currentSelectedTrainingRoom || !currentSelectedTrainingRoom.id) {
+    if (typeof showToast === 'function') {
+      showToast('Training Room을 먼저 선택해주세요.', 'error');
+    }
+    return;
+  }
+
+  // 사용자 목록 가져오기
+  let users = [];
+  try {
+    if (typeof apiGetUsers === 'function') {
+      const result = await apiGetUsers();
+      if (result && result.success && result.items) {
+        users = result.items;
+      }
+    } else if (Array.isArray(window.users)) {
+      users = window.users;
+    } else {
+      // 사용자 목록이 없으면 로드 시도
+      if (typeof loadUsers === 'function') {
+        await loadUsers();
+        users = Array.isArray(window.users) ? window.users : [];
+      }
+    }
+  } catch (error) {
+    console.error('[assignUserToTrack] 사용자 목록 로드 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('사용자 목록을 불러올 수 없습니다.', 'error');
+    }
+    return;
+  }
+
+  if (users.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast('등록된 사용자가 없습니다.', 'error');
+    }
+    return;
+  }
+
+  // 사용자 선택 모달 생성
+  const modalId = 'trackUserSelectModal';
+  let modal = document.getElementById(modalId);
+  
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = modalId;
+    modal.className = 'modal';
+    modal.style.position = 'fixed';
+    modal.style.zIndex = '10000';
+    modal.style.left = '0';
+    modal.style.top = '0';
+    modal.style.width = '100%';
+    modal.style.height = '100%';
+    modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    modal.style.display = 'flex';
+    modal.style.alignItems = 'center';
+    modal.style.justifyContent = 'center';
+    document.body.appendChild(modal);
+  }
+
+  const userListHtml = users.map(user => `
+    <div class="user-select-item" 
+         style="padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: ${currentUserId === String(user.id) ? '#e3f2fd' : '#fff'};"
+         onclick="selectUserForTrack(${trackNumber}, ${user.id}, '${escapeHtml(user.name || '')}')">
+      <div style="font-weight: bold; margin-bottom: 4px;">${escapeHtml(user.name || '이름 없음')}</div>
+      <div style="font-size: 0.9em; color: #666;">FTP: ${user.ftp || '-'}W | 체중: ${user.weight || '-'}kg</div>
+    </div>
+  `).join('');
+
+  modal.innerHTML = `
+    <div style="background: white; padding: 24px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+      <h2 style="margin: 0 0 20px 0; font-size: 1.5em;">트랙${trackNumber} 사용자 할당</h2>
+      <div style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+        ${userListHtml}
+      </div>
+      <div style="text-align: right;">
+        <button onclick="closeTrackUserSelectModal()" 
+                style="padding: 8px 16px; background: #ccc; border: none; border-radius: 4px; cursor: pointer;">
+          취소
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.style.display = 'flex';
+  
+  // 모달 외부 클릭 시 닫기
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      closeTrackUserSelectModal();
+    }
+  };
+}
+
+/**
+ * 트랙에서 사용자 제거
+ */
+async function removeUserFromTrack(trackNumber) {
+  if (!currentSelectedTrainingRoom || !currentSelectedTrainingRoom.id) {
+    if (typeof showToast === 'function') {
+      showToast('Training Room을 먼저 선택해주세요.', 'error');
+    }
+    return;
+  }
+
+  if (!confirm(`트랙${trackNumber}에서 사용자를 제거하시겠습니까?`)) {
+    return;
+  }
+
+  try {
+    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${currentSelectedTrainingRoom.id}&trackNumber=${trackNumber}&userId=`;
+    const response = await fetch(url);
+    const result = await response.json();
+
+    if (result.success) {
+      if (typeof showToast === 'function') {
+        showToast('사용자가 제거되었습니다.', 'success');
+      }
+      // Player List 다시 로드
+      await renderPlayerList();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('사용자 제거 실패: ' + (result.error || 'Unknown error'), 'error');
+      }
+    }
+  } catch (error) {
+    console.error('[removeUserFromTrack] 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('사용자 제거 중 오류가 발생했습니다.', 'error');
+    }
+  }
+}
+
+/**
+ * 트랙에 선택된 사용자 할당 실행
+ */
+async function selectUserForTrack(trackNumber, userId, userName) {
+  if (!currentSelectedTrainingRoom || !currentSelectedTrainingRoom.id) {
+    if (typeof showToast === 'function') {
+      showToast('Training Room을 먼저 선택해주세요.', 'error');
+    }
+    return;
+  }
+
+  try {
+    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${currentSelectedTrainingRoom.id}&trackNumber=${trackNumber}&userId=${userId}`;
+    const response = await fetch(url);
+    const result = await response.json();
+
+    if (result.success) {
+      if (typeof showToast === 'function') {
+        showToast(`트랙${trackNumber}에 ${userName}이(가) 할당되었습니다.`, 'success');
+      }
+      // 모달 닫기
+      closeTrackUserSelectModal();
+      // Player List 다시 로드
+      await renderPlayerList();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast('사용자 할당 실패: ' + (result.error || 'Unknown error'), 'error');
+      }
+    }
+  } catch (error) {
+    console.error('[selectUserForTrack] 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('사용자 할당 중 오류가 발생했습니다.', 'error');
+    }
+  }
+}
+
+/**
+ * 사용자 선택 모달 닫기
+ */
+function closeTrackUserSelectModal() {
+  const modal = document.getElementById('trackUserSelectModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
 // 전역 함수 노출
 if (typeof window !== 'undefined') {
   window.loadTrainingRooms = loadTrainingRooms;
@@ -903,5 +1101,10 @@ if (typeof window !== 'undefined') {
   window.selectTrainingRoomForModal = selectTrainingRoomForModal;
   window.openPlayerListFromModal = openPlayerListFromModal;
   window.openCoachModeFromModal = openCoachModeFromModal;
+  // 트랙 사용자 할당 관련 함수
+  window.assignUserToTrack = assignUserToTrack;
+  window.removeUserFromTrack = removeUserFromTrack;
+  window.selectUserForTrack = selectUserForTrack;
+  window.closeTrackUserSelectModal = closeTrackUserSelectModal;
 }
 
