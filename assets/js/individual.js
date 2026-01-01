@@ -135,20 +135,29 @@ function updateTimer(status) {
     if (status.state === 'running') {
         // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확)
         const totalSeconds = status.elapsedTime || 0;
-        timerEl.innerText = formatTime(totalSeconds);
+        timerEl.innerText = formatHMS(totalSeconds); // hh:mm:ss 형식
         timerEl.style.color = '#00d4aa'; // 실행중 색상
     } else if (status.state === 'paused') {
         timerEl.style.color = '#ffaa00'; // 일시정지 색상
     } else {
-        timerEl.innerText = "00:00";
+        timerEl.innerText = "00:00:00";
         timerEl.style.color = '#fff';
     }
 }
 
+// 시간 포맷: 초 → "mm:ss"
 function formatTime(seconds) {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+}
+
+// 시간 포맷: 초 → "hh:mm:ss"
+function formatHMS(totalSeconds) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = Math.floor(totalSeconds % 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 // 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
