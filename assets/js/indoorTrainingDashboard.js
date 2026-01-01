@@ -2193,6 +2193,41 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // Firebase에 사용자 정보 저장 (Player List와 동일한 구조)
+    if (powerMeter.userName && typeof db !== 'undefined') {
+      const sessionId = getSessionId();
+      
+      if (sessionId) {
+        // Player List 화면과 동일한 데이터 구조로 저장
+        const userData = {
+          userId: String(powerMeter.userId || ''),
+          name: powerMeter.userName || '',
+          userName: powerMeter.userName || '',
+          participantName: powerMeter.userName || '',
+          ftp: powerMeter.userFTP || 0,
+          weight: powerMeter.userWeight || 0
+        };
+        
+        // Firebase에 저장
+        db.ref(`sessions/${sessionId}/users/${powerMeterId}`).set(userData)
+          .then(() => {
+            console.log(`[Firebase] 페어링 저장: 트랙 ${powerMeterId}에 사용자 정보 저장 완료:`, {
+              roomId: sessionId,
+              trackNumber: powerMeterId,
+              userId: userData.userId,
+              userName: userData.userName,
+              ftp: userData.ftp,
+              weight: userData.weight
+            });
+          })
+          .catch(error => {
+            console.error(`[Firebase] 페어링 저장: 사용자 정보 저장 실패:`, error);
+          });
+      } else {
+        console.warn('[Firebase] 페어링 저장: SESSION_ID를 찾을 수 없어 사용자 정보를 저장할 수 없습니다.');
+      }
+    }
+    
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
     
