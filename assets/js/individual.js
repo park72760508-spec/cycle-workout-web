@@ -26,17 +26,42 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
     const data = snapshot.val();
     
     if (data) {
-        // 사용자 FTP 값 업데이트 (여러 필드명 지원)
+        // 사용자 FTP 값 업데이트 (여러 필드명 및 경로 지원)
         console.log('[Firebase] 사용자 데이터:', JSON.stringify(data, null, 2));
+        console.log('[Firebase] 사용자 데이터 키 목록:', Object.keys(data || {}));
         
-        if (data.ftp !== undefined && data.ftp !== null) {
-            userFTP = Number(data.ftp) || 200;
-            console.log('[Firebase] 사용자 FTP 값 (ftp 필드):', userFTP);
-        } else if (data.FTP !== undefined && data.FTP !== null) {
-            userFTP = Number(data.FTP) || 200;
-            console.log('[Firebase] 사용자 FTP 값 (FTP 필드):', userFTP);
+        // FTP 값 추출 시도 (여러 가능한 필드명 및 경로 확인)
+        let foundFTP = null;
+        
+        // 1순위: 직접 필드 (다양한 대소문자 조합)
+        if (data.ftp !== undefined && data.ftp !== null && data.ftp !== '') {
+            foundFTP = Number(data.ftp);
+        } else if (data.FTP !== undefined && data.FTP !== null && data.FTP !== '') {
+            foundFTP = Number(data.FTP);
+        } else if (data.userFTP !== undefined && data.userFTP !== null && data.userFTP !== '') {
+            foundFTP = Number(data.userFTP);
+        } else if (data.userFtp !== undefined && data.userFtp !== null && data.userFtp !== '') {
+            foundFTP = Number(data.userFtp);
+        }
+        // 2순위: 중첩 객체 내 FTP (participant, user 등의 객체 내부)
+        else if (data.participant && data.participant.ftp !== undefined && data.participant.ftp !== null) {
+            foundFTP = Number(data.participant.ftp);
+        } else if (data.participant && data.participant.FTP !== undefined && data.participant.FTP !== null) {
+            foundFTP = Number(data.participant.FTP);
+        } else if (data.user && data.user.ftp !== undefined && data.user.ftp !== null) {
+            foundFTP = Number(data.user.ftp);
+        } else if (data.user && data.user.FTP !== undefined && data.user.FTP !== null) {
+            foundFTP = Number(data.user.FTP);
+        }
+        
+        // FTP 값이 유효한지 확인 (0보다 큰 값)
+        if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
+            userFTP = foundFTP;
+            console.log('[Firebase] 사용자 FTP 값 성공적으로 추출:', userFTP, 'W');
         } else {
-            console.warn('[Firebase] FTP 값이 데이터에 없습니다. 기본값 200 사용');
+            console.warn('[Firebase] FTP 값을 찾을 수 없습니다. 기본값 200 사용');
+            console.warn('[Firebase] 추출 시도한 값:', foundFTP);
+            // 기본값은 그대로 유지 (이미 200으로 설정됨)
         }
         
         // 사용자 이름 업데이트
