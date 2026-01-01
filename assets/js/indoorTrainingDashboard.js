@@ -1714,10 +1714,16 @@ async function selectSearchedUserForPowerMeter(userId) {
         
         // 파워계에 사용자 정보 저장
         powerMeter.userId = userId;
-        powerMeter.userFTP = user.ftp;
+        powerMeter.userFTP = user.ftp || null; // FTP 값 저장 (null 체크)
         powerMeter.userName = user.name;
         powerMeter.userWeight = user.weight;
         powerMeter.userContact = user.contact;
+        
+        console.log(`[Indoor Training] 파워미터 ${powerMeterId}에 사용자 할당:`, {
+          userId: userId,
+          userName: user.name,
+          userFTP: powerMeter.userFTP
+        });
         
         // 사용자명 UI 업데이트 (트랙번호 라인 좌측)
         const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
@@ -1749,6 +1755,26 @@ async function selectSearchedUserForPowerMeter(userId) {
         
         // 저장
         saveAllPowerMeterPairingsToStorage();
+        
+        // Firebase에 즉시 FTP 값 전송 (사용자 할당 시 바로 반영)
+        if (typeof db !== 'undefined' && typeof SESSION_ID !== 'undefined') {
+          const userData = {
+            name: powerMeter.userName || `User ${powerMeterId}`,
+            ftp: powerMeter.userFTP || null,
+            lastUpdate: firebase.database.ServerValue.TIMESTAMP
+          };
+          
+          // FTP 값이 있으면 전송
+          if (powerMeter.userFTP !== null && powerMeter.userFTP !== undefined && powerMeter.userFTP > 0) {
+            db.ref(`sessions/${SESSION_ID}/users/${powerMeterId}`).update(userData)
+              .then(() => {
+                console.log(`[Firebase] 파워미터 ${powerMeterId} FTP 값 즉시 전송: ${powerMeter.userFTP}W`);
+              })
+              .catch(error => {
+                console.warn(`[Firebase] FTP 값 전송 실패:`, error);
+              });
+          }
+        }
         
         // UI 업데이트
         const resultEl = document.getElementById('pairingUserSearchResult');
@@ -2716,6 +2742,150 @@ function toggleStartPauseTraining() {
 }
 
 /**
+ * 화면 보호기 및 절전모드 해제 (Screen Wake Lock)
+ */
+window.indoorTrainingWakeLock = {
+  wakeLock: null,
+  fallbackVideo: null,
+  
+  async acquire() {
+    // 1순위: Screen Wake Lock API 사용 (최신 브라우저)
+    if ('wakeLock' in navigator) {
+      try {
+        if (this.wakeLock) return; // 이미 활성화되어 있으면 재요청하지 않음
+        
+        this.wakeLock = await navigator.wakeLock.request('screen');
+        console.log('[Indoor Training] Screen Wake Lock 활성화됨');
+        
+        // 시스템이 임의로 해제했을 때 자동 재획득
+        this.wakeLock.addEventListener('release', () => {
+          console.log('[Indoor Training] Screen Wake Lock이 시스템에 의해 해제됨');
+          this.wakeLock = null;
+          // 훈련 중이면 자동 재획득
+          if (window.indoorTrainingState?.trainingState === 'running') {
+            setTimeout(() => this.acquire(), 100);
+          }
+        });
+      } catch (err) {
+        console.warn('[Indoor Training] Screen Wake Lock API 실패:', err);
+        this.wakeLock = null;
+        // Fallback으로 비디오 트릭 사용
+        this.acquireFallback();
+      }
+    } else {
+      // Wake Lock API 미지원 시 Fallback 사용
+      console.log('[Indoor Training] Screen Wake Lock API 미지원, Fallback 사용');
+      this.acquireFallback();
+    }
+  },
+  
+  acquireFallback() {
+    // 2순위: 비디오 트릭 (iOS 및 구형 브라우저용)
+    try {
+      if (this.fallbackVideo) return; // 이미 활성화되어 있으면 재생성하지 않음
+      
+      const video = document.createElement('video');
+      video.id = 'indoorTrainingWakeLockVideo';
+      video.playsInline = true;
+      video.autoplay = true;
+      video.muted = true;
+      video.loop = true;
+      video.style.cssText = 'position:absolute; top:-9999px; left:-9999px; opacity:0; width:1px; height:1px; pointer-events:none;';
+      
+      // 투명한 비디오 스트림 생성 (Canvas + MediaStream)
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      const stream = canvas.captureStream(1); // 1fps로 충분
+      
+      video.srcObject = stream;
+      document.body.appendChild(video);
+      
+      // 주기적으로 캔버스 업데이트 (화면이 꺼지지 않도록)
+      const updateInterval = setInterval(() => {
+        if (ctx && window.indoorTrainingState?.trainingState === 'running') {
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, 1, 1);
+        } else {
+          clearInterval(updateInterval);
+        }
+      }, 1000);
+      
+      this.fallbackVideo = { video, updateInterval };
+      console.log('[Indoor Training] Fallback 화면 잠금 방지 활성화됨');
+    } catch (err) {
+      console.warn('[Indoor Training] Fallback 화면 잠금 방지 실패:', err);
+    }
+  },
+  
+  async release() {
+    // Screen Wake Lock 해제
+    if (this.wakeLock) {
+      try {
+        await this.wakeLock.release();
+        console.log('[Indoor Training] Screen Wake Lock 해제됨');
+      } catch (err) {
+        console.warn('[Indoor Training] Screen Wake Lock 해제 실패:', err);
+      }
+      this.wakeLock = null;
+    }
+    
+    // Fallback 비디오 제거
+    if (this.fallbackVideo) {
+      try {
+        if (this.fallbackVideo.updateInterval) {
+          clearInterval(this.fallbackVideo.updateInterval);
+        }
+        if (this.fallbackVideo.video) {
+          this.fallbackVideo.video.pause();
+          this.fallbackVideo.video.srcObject = null;
+          if (this.fallbackVideo.video.parentNode) {
+            this.fallbackVideo.video.parentNode.removeChild(this.fallbackVideo.video);
+          }
+        }
+        console.log('[Indoor Training] Fallback 화면 잠금 방지 해제됨');
+      } catch (err) {
+        console.warn('[Indoor Training] Fallback 해제 실패:', err);
+      }
+      this.fallbackVideo = null;
+    }
+  }
+};
+
+// 페이지 가시성 변경 시 자동 재획득
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && 
+      window.indoorTrainingState?.trainingState === 'running' &&
+      window.indoorTrainingWakeLock) {
+    // 훈련 중이고 페이지가 다시 보이면 Wake Lock 재획득
+    setTimeout(() => {
+      window.indoorTrainingWakeLock.acquire();
+    }, 100);
+  }
+});
+
+// 페이지 포커스 시 재획득
+window.addEventListener('focus', () => {
+  if (window.indoorTrainingState?.trainingState === 'running' &&
+      window.indoorTrainingWakeLock) {
+    setTimeout(() => {
+      window.indoorTrainingWakeLock.acquire();
+    }, 100);
+  }
+});
+
+// 사용자 상호작용 시 재획득 (터치, 클릭 등)
+['touchstart', 'click', 'pointerdown'].forEach(eventType => {
+  document.addEventListener(eventType, () => {
+    if (window.indoorTrainingState?.trainingState === 'running' &&
+        window.indoorTrainingWakeLock && !window.indoorTrainingWakeLock.wakeLock) {
+      window.indoorTrainingWakeLock.acquire();
+    }
+  }, { once: true, passive: true });
+});
+
+/**
  * 훈련 시작
  */
 function startTraining() {
@@ -2724,6 +2894,11 @@ function startTraining() {
   window.indoorTrainingState.currentSegmentIndex = 0;
   window.indoorTrainingState.segmentStartTime = Date.now();
   window.indoorTrainingState.segmentElapsedTime = 0;
+  
+  // 화면 보호기 및 절전모드 해제
+  if (window.indoorTrainingWakeLock) {
+    window.indoorTrainingWakeLock.acquire();
+  }
   
   // 워크아웃 시작 시 모든 파워미터의 궤적 및 통계 데이터 초기화
   window.indoorTrainingState.powerMeters.forEach(pm => {
@@ -2816,6 +2991,11 @@ function stopTraining() {
   window.indoorTrainingState.segmentStartTime = null;
   window.indoorTrainingState.segmentElapsedTime = 0;
   window.indoorTrainingState.segmentCountdownActive = false;
+  
+  // 화면 보호기 및 절전모드 해제
+  if (window.indoorTrainingWakeLock) {
+    window.indoorTrainingWakeLock.release();
+  }
   
   // 카운트다운 모달 제거
   const existingModal = document.getElementById('segmentCountdownModal');
@@ -2987,6 +3167,11 @@ function startTrainingTimer() {
           // 워크아웃 종료
           window.indoorTrainingState.trainingState = 'finished';
           window.indoorTrainingState.segmentCountdownActive = false;
+          
+          // 화면 보호기 및 절전모드 해제
+          if (window.indoorTrainingWakeLock) {
+            window.indoorTrainingWakeLock.release();
+          }
           
           const existingModal = document.getElementById('segmentCountdownModal');
           if (existingModal) document.body.removeChild(existingModal);
@@ -4396,9 +4581,15 @@ function uploadToFirebase() {
             };
             
             // FTP 값 추가 (사용자 FTP 값이 있으면 전송)
-            if (pm.userFTP !== null && pm.userFTP !== undefined && pm.userFTP > 0) {
+            // userFTP가 null이 아니고, undefined가 아니며, 0보다 큰 경우에만 전송
+            if (pm.userFTP !== null && pm.userFTP !== undefined && !isNaN(pm.userFTP) && pm.userFTP > 0) {
                 userData.ftp = Math.round(pm.userFTP);
-                console.log(`[Firebase Upload] 파워미터 ${pm.id} FTP 값 추가: ${userData.ftp}W`);
+                console.log(`[Firebase Upload] 파워미터 ${pm.id} FTP 값 추가: ${userData.ftp}W (userFTP: ${pm.userFTP})`);
+            } else {
+                // FTP 값이 없는 경우 로그 출력 (디버깅용)
+                if (pm.connected && pm.userId) {
+                    console.warn(`[Firebase Upload] 파워미터 ${pm.id} FTP 값 없음: userFTP=${pm.userFTP}, userId=${pm.userId}`);
+                }
             }
             
             updates[`sessions/${SESSION_ID}/users/${pm.id}`] = userData;

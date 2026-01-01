@@ -60,22 +60,30 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         // 1순위: 직접 필드 (다양한 대소문자 조합)
         if (data.ftp !== undefined && data.ftp !== null && data.ftp !== '') {
             foundFTP = Number(data.ftp);
+            console.log('[Firebase] FTP 값 발견 (data.ftp):', foundFTP);
         } else if (data.FTP !== undefined && data.FTP !== null && data.FTP !== '') {
             foundFTP = Number(data.FTP);
+            console.log('[Firebase] FTP 값 발견 (data.FTP):', foundFTP);
         } else if (data.userFTP !== undefined && data.userFTP !== null && data.userFTP !== '') {
             foundFTP = Number(data.userFTP);
+            console.log('[Firebase] FTP 값 발견 (data.userFTP):', foundFTP);
         } else if (data.userFtp !== undefined && data.userFtp !== null && data.userFtp !== '') {
             foundFTP = Number(data.userFtp);
+            console.log('[Firebase] FTP 값 발견 (data.userFtp):', foundFTP);
         }
         // 2순위: 중첩 객체 내 FTP (participant, user 등의 객체 내부)
         else if (data.participant && data.participant.ftp !== undefined && data.participant.ftp !== null) {
             foundFTP = Number(data.participant.ftp);
+            console.log('[Firebase] FTP 값 발견 (data.participant.ftp):', foundFTP);
         } else if (data.participant && data.participant.FTP !== undefined && data.participant.FTP !== null) {
             foundFTP = Number(data.participant.FTP);
+            console.log('[Firebase] FTP 값 발견 (data.participant.FTP):', foundFTP);
         } else if (data.user && data.user.ftp !== undefined && data.user.ftp !== null) {
             foundFTP = Number(data.user.ftp);
+            console.log('[Firebase] FTP 값 발견 (data.user.ftp):', foundFTP);
         } else if (data.user && data.user.FTP !== undefined && data.user.FTP !== null) {
             foundFTP = Number(data.user.FTP);
+            console.log('[Firebase] FTP 값 발견 (data.user.FTP):', foundFTP);
         }
         
         // FTP 값이 유효한지 확인 (0보다 큰 값)
@@ -89,6 +97,8 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         } else {
             console.warn('[Firebase] FTP 값을 찾을 수 없습니다. 기본값 200 사용');
             console.warn('[Firebase] 추출 시도한 값:', foundFTP);
+            console.warn('[Firebase] 데이터 키 목록:', Object.keys(data || {}));
+            console.warn('[Firebase] 전체 데이터:', JSON.stringify(data, null, 2));
             // 기본값은 그대로 유지 (이미 200으로 설정됨)
         }
         
