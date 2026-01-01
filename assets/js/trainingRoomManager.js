@@ -411,10 +411,27 @@ async function renderPlayerList() {
     });
   }
 
-  // Training Room의 트랙별 사용자 정보 가져오기
+  // Training Room id 가져오기 (여러 경로에서 확인)
+  let roomId = null;
   if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
+    roomId = currentSelectedTrainingRoom.id;
+  } else if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
+    roomId = String(window.currentTrainingRoomId);
+  } else if (typeof localStorage !== 'undefined') {
     try {
-      const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${currentSelectedTrainingRoom.id}`;
+      const storedRoomId = localStorage.getItem('currentTrainingRoomId');
+      if (storedRoomId) {
+        roomId = storedRoomId;
+      }
+    } catch (e) {
+      console.warn('[Player List] localStorage 접근 실패:', e);
+    }
+  }
+
+  // Training Room의 트랙별 사용자 정보 가져오기
+  if (roomId) {
+    try {
+      const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
       const response = await fetch(url);
       const result = await response.json();
       
@@ -435,10 +452,12 @@ async function renderPlayerList() {
       console.error('[Player List] 트랙 정보 로드 오류:', error);
       // 오류가 발생해도 빈 상태로 표시 계속
     }
+  } else {
+    console.warn('[Player List] room id를 찾을 수 없어 트랙 정보를 로드할 수 없습니다.');
   }
 
   // Training Room id를 room 파라미터로 전달 (firebaseConfig.js에서 SESSION_ID로 사용)
-  const roomId = currentSelectedTrainingRoom ? currentSelectedTrainingRoom.id : null;
+  roomId = roomId || null;
   
   // roomId를 컨테이너에 data attribute로 저장 (버튼 클릭 시 사용)
   if (playerListContent && roomId) {
