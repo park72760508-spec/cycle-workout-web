@@ -82,6 +82,10 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
             userFTP = foundFTP;
             console.log('[Firebase] 사용자 FTP 값 성공적으로 추출:', userFTP, 'W');
+            // 속도계 레이블 업데이트 (FTP 값이 변경되었으므로)
+            if (typeof updateGaugeTicksAndLabels === 'function') {
+                updateGaugeTicksAndLabels();
+            }
         } else {
             console.warn('[Firebase] FTP 값을 찾을 수 없습니다. 기본값 200 사용');
             console.warn('[Firebase] 추출 시도한 값:', foundFTP);
@@ -520,4 +524,112 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
     } else {
         console.warn('[Individual] drawSegmentGraph 함수를 찾을 수 없습니다.');
     }
+}
+
+// 속도계 눈금 생성 함수 (Indoor Training 스타일)
+function generateGaugeTicks() {
+    const centerX = 100;
+    const centerY = 140;
+    const radius = 80;
+    const innerRadius = radius - 10; // 눈금 안쪽 시작점
+    
+    let ticksHTML = '';
+    
+    // 주눈금: 0, 1, 2, 3, 4, 5, 6 (총 7개)
+    // 각도: 180도(왼쪽 하단, 0)에서 0도(오른쪽 하단, 6)까지 180도 범위
+    // 주눈금 간격: 180도 / 6 = 30도
+    
+    // 모든 눈금 생성 (주눈금 + 보조눈금)
+    for (let i = 0; i <= 24; i++) { // 0~24 (주눈금 7개 + 보조눈금 18개 = 총 25개)
+        const isMajor = i % 4 === 0; // 4 간격마다 주눈금 (0, 4, 8, 12, 16, 20, 24)
+        
+        // 각도 계산: 180도에서 시작하여 0도까지
+        // i=0 → 180도 (왼쪽 하단), i=24 → 0도 (오른쪽 하단)
+        const angle = 180 - (i / 24) * 180;
+        const rad = (angle * Math.PI) / 180;
+        
+        // 눈금 위치 계산
+        const x1 = centerX + innerRadius * Math.cos(rad);
+        const y1 = centerY + innerRadius * Math.sin(rad);
+        
+        // 주눈금은 길게, 보조눈금은 짧게
+        const tickLength = isMajor ? 14 : 7;
+        const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
+        const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
+        
+        // 흰색 눈금
+        ticksHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
+                            stroke="#ffffff" 
+                            stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
+    }
+    
+    return ticksHTML;
+}
+
+// 속도계 레이블 생성 함수 (Indoor Training 스타일)
+function generateGaugeLabels() {
+    const centerX = 100;
+    const centerY = 140;
+    const radius = 80;
+    const labelRadius = radius + 18; // 레이블 위치 (원 바깥쪽)
+    
+    let labelsHTML = '';
+    
+    // FTP 배수 정의
+    const multipliers = [
+        { index: 0, mult: 0, color: '#ffffff' },
+        { index: 1, mult: 0.33, color: '#ffffff' },
+        { index: 2, mult: 0.67, color: '#ffffff' },
+        { index: 3, mult: 1, color: '#00d4aa' }, // 민트색
+        { index: 4, mult: 1.33, color: '#ffffff' },
+        { index: 5, mult: 1.67, color: '#ffffff' },
+        { index: 6, mult: 2, color: '#ffffff' }
+    ];
+    
+    // 주눈금 레이블 생성 (7개)
+    multipliers.forEach((item, i) => {
+        // 각도 계산: 180도에서 0도까지
+        // i=0 → 180도, i=6 → 0도
+        const angle = 180 - (i / 6) * 180;
+        const rad = (angle * Math.PI) / 180;
+        
+        // 레이블 위치 계산
+        const x = centerX + labelRadius * Math.cos(rad);
+        const y = centerY + labelRadius * Math.sin(rad);
+        
+        // FTP 값을 곱한 값 계산 (정수만 표기)
+        const value = Math.round(userFTP * item.mult);
+        
+        // 레이블 생성 (정수값만 표기)
+        labelsHTML += `<text x="${x}" y="${y}" 
+                             text-anchor="middle" 
+                             dominant-baseline="middle"
+                             fill="${item.color}" 
+                             font-size="10" 
+                             font-weight="600">${value}</text>`;
+    });
+    
+    return labelsHTML;
+}
+
+// 속도계 눈금 및 레이블 업데이트 함수
+function updateGaugeTicksAndLabels() {
+    const ticksGroup = document.getElementById('gauge-ticks');
+    const labelsGroup = document.getElementById('gauge-labels');
+    
+    if (ticksGroup) {
+        ticksGroup.innerHTML = generateGaugeTicks();
+    }
+    
+    if (labelsGroup) {
+        labelsGroup.innerHTML = generateGaugeLabels();
+    }
+}
+
+// 초기 속도계 눈금 및 레이블 생성
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', updateGaugeTicksAndLabels);
+} else {
+    // DOM이 이미 로드되었으면 바로 실행
+    updateGaugeTicksAndLabels();
 }
