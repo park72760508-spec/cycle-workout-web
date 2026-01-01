@@ -149,7 +149,7 @@ async function selectTrainingRoom(roomId) {
   // 선택된 카드 하이라이트
   document.querySelectorAll('.training-room-card').forEach(card => {
     card.classList.remove('selected');
-    if (card.dataset.roomId === roomId) {
+    if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
       card.classList.add('selected');
     }
   });
@@ -165,11 +165,16 @@ async function selectTrainingRoom(roomId) {
     selectedSection.style.display = 'block';
   }
 
-  // Player/Coach 버튼 활성화 (grade=1 or 3일 때)
-  const canAccess = isAdmin || userGrade === '3' || userGrade === 3;
+  // Player/Coach 버튼 활성화
+  // Player 버튼: grade=1,2,3 활성화
+  // Coach 버튼: grade=1,3만 활성화
+  const userGradeNum = typeof userGrade === 'string' ? parseInt(userGrade, 10) : userGrade;
+  const canAccessPlayer = userGradeNum === 1 || userGradeNum === 2 || userGradeNum === 3;
+  const canAccessCoach = userGradeNum === 1 || userGradeNum === 3;
+  
   if (btnPlayer) {
-    btnPlayer.disabled = !canAccess;
-    if (canAccess) {
+    btnPlayer.disabled = !canAccessPlayer;
+    if (canAccessPlayer) {
       btnPlayer.style.opacity = '1';
       btnPlayer.style.cursor = 'pointer';
     } else {
@@ -178,8 +183,8 @@ async function selectTrainingRoom(roomId) {
     }
   }
   if (btnCoach) {
-    btnCoach.disabled = !canAccess;
-    if (canAccess) {
+    btnCoach.disabled = !canAccessCoach;
+    if (canAccessCoach) {
       btnCoach.style.opacity = '1';
       btnCoach.style.cursor = 'pointer';
     } else {
@@ -556,13 +561,17 @@ function renderTrainingRoomListForModal(rooms) {
 /**
  * 모달에서 Training Room 선택
  * Room 목록 선택 시 비밀번호 유무에 따라:
+ * - 비밀번호 없는 Training Room: 체크되고 Player(grade=1,2,3), Coach(grade=1,3) 버튼 활성화
  * - 비밀번호 설정 Room: 비밀번호 확인 팝업창 뜨고 비밀번호 확인
- * - 비밀번호 확인 성공 > Player 버튼, Coach 버튼(grade=1,3) 활성화
+ * - 비밀번호 확인 성공 > Player(grade=1,2,3), Coach(grade=1,3) 버튼 활성화
  */
 async function selectTrainingRoomForModal(roomId) {
-  const room = trainingRoomList.find(r => r.id === roomId);
+  // roomId를 숫자로 변환 (문자열로 전달될 수 있음)
+  const roomIdNum = typeof roomId === 'string' ? parseInt(roomId, 10) : roomId;
+  const room = trainingRoomList.find(r => r.id == roomIdNum || String(r.id) === String(roomIdNum));
   if (!room) {
-    console.error('[Training Room Modal] 선택한 방을 찾을 수 없습니다:', roomId);
+    console.error('[Training Room Modal] 선택한 방을 찾을 수 없습니다:', roomId, '타입:', typeof roomId, '변환:', roomIdNum);
+    console.error('[Training Room Modal] 현재 목록:', trainingRoomList.map(r => ({ id: r.id, type: typeof r.id })));
     return;
   }
 
@@ -610,7 +619,7 @@ async function selectTrainingRoomForModal(roomId) {
   if (modalListContainer) {
     modalListContainer.querySelectorAll('.training-room-card').forEach(card => {
       card.classList.remove('selected');
-      if (card.dataset.roomId === roomId) {
+      if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
         card.classList.add('selected');
       }
     });
@@ -627,13 +636,25 @@ async function selectTrainingRoomForModal(roomId) {
     selectedSection.style.display = 'block';
   }
 
-  // 비밀번호 확인 성공 후 Player/Coach 버튼 활성화 (grade=1 or 3일 때)
-  const canAccess = isAdmin || isCoach;
-  console.log('[Training Room Modal] 버튼 활성화:', { canAccess, isAdmin, isCoach, userGrade });
+  // 비밀번호 확인 성공 후 버튼 활성화
+  // Player 버튼: grade=1,2,3 활성화
+  // Coach 버튼: grade=1,3만 활성화
+  const userGradeNum = typeof userGrade === 'string' ? parseInt(userGrade, 10) : userGrade;
+  const canAccessPlayer = userGradeNum === 1 || userGradeNum === 2 || userGradeNum === 3;
+  const canAccessCoach = userGradeNum === 1 || userGradeNum === 3;
+  
+  console.log('[Training Room Modal] 버튼 활성화:', { 
+    userGrade, 
+    userGradeNum,
+    canAccessPlayer, 
+    canAccessCoach, 
+    isAdmin, 
+    isCoach 
+  });
   
   if (btnPlayer) {
-    btnPlayer.disabled = !canAccess;
-    if (canAccess) {
+    btnPlayer.disabled = !canAccessPlayer;
+    if (canAccessPlayer) {
       btnPlayer.style.opacity = '1';
       btnPlayer.style.cursor = 'pointer';
     } else {
@@ -642,8 +663,8 @@ async function selectTrainingRoomForModal(roomId) {
     }
   }
   if (btnCoach) {
-    btnCoach.disabled = !canAccess;
-    if (canAccess) {
+    btnCoach.disabled = !canAccessCoach;
+    if (canAccessCoach) {
       btnCoach.style.opacity = '1';
       btnCoach.style.cursor = 'pointer';
     } else {
