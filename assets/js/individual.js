@@ -517,10 +517,40 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
     
     // workoutManager.js의 drawSegmentGraph 함수 사용
     if (typeof drawSegmentGraph === 'function') {
-        // 개인 대시보드용으로 작은 크기로 조정
-        setTimeout(() => {
+        // 컨테이너 크기가 확정된 후 그래프 그리기
+        const drawGraph = () => {
+            const canvas = document.getElementById('individualSegmentGraph');
+            if (!canvas) {
+                console.warn('[updateSegmentGraph] Canvas 요소를 찾을 수 없습니다.');
+                return;
+            }
+            
+            const container = canvas.parentElement;
+            if (!container) {
+                console.warn('[updateSegmentGraph] 컨테이너 요소를 찾을 수 없습니다.');
+                return;
+            }
+            
+            // 컨테이너가 실제 높이를 가지도록 대기
+            if (container.clientHeight === 0) {
+                // 컨테이너가 아직 준비되지 않았으면 다시 시도
+                setTimeout(drawGraph, 50);
+                return;
+            }
+            
+            // 그래프 그리기
             drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph');
-        }, 100);
+        };
+        
+        // DOM이 준비될 때까지 대기 후 그리기
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                setTimeout(drawGraph, 150);
+            });
+        } else {
+            // DOM이 이미 로드되었으면 바로 실행 (약간의 지연으로 레이아웃 안정화)
+            setTimeout(drawGraph, 150);
+        }
     } else {
         console.warn('[Individual] drawSegmentGraph 함수를 찾을 수 없습니다.');
     }

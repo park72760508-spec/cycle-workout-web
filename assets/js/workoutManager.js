@@ -619,10 +619,29 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 그래프 크기 설정 (개인 대시보드용으로 작은 크기)
   let graphHeight, graphWidth, padding;
   if (canvasId === 'individualSegmentGraph') {
-    // 개인 대시보드용: 작은 크기
-    graphHeight = 100; // 세로축 높이 (파워)
+    // 개인 대시보드용: 컨테이너 높이에 맞춰 동적으로 설정
+    const container = canvas.parentElement;
+    let containerHeight = 100; // 기본값
+    
+    if (container) {
+      // 컨테이너의 실제 높이 측정 (여러 시도로 정확도 향상)
+      containerHeight = container.clientHeight || container.offsetHeight || 100;
+      
+      // 만약 높이가 0이면 부모 요소에서 측정 시도
+      if (containerHeight === 0 && container.parentElement) {
+        containerHeight = container.parentElement.clientHeight || 100;
+      }
+    }
+    
+    // 컨테이너 높이를 활용 (최소 100px, 최대 400px로 제한하여 적절한 크기 유지)
+    graphHeight = Math.max(100, Math.min(400, containerHeight));
     graphWidth = Math.max(400, Math.min(600, totalSeconds * 2)); // 가로축 너비 (시간에 비례, 최소 400px, 최대 600px)
-    padding = { top: 10, right: 20, bottom: 25, left: 35 };
+    padding = { 
+      top: Math.max(8, Math.floor(graphHeight * 0.08)), // 높이에 비례한 패딩
+      right: 20, 
+      bottom: Math.max(20, Math.floor(graphHeight * 0.12)), 
+      left: 35 
+    };
   } else {
     // 기본 크기
     graphHeight = 300; // 세로축 높이 (파워)
@@ -632,11 +651,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const chartWidth = graphWidth - padding.left - padding.right;
   const chartHeight = graphHeight - padding.top - padding.bottom;
   
-  // Canvas 크기 설정
+  // Canvas 실제 픽셀 크기 설정 (그래프가 이 크기로 그려짐)
   canvas.width = graphWidth;
   canvas.height = graphHeight;
+  
+  // CSS 크기 설정 (컨테이너에 맞춤)
   canvas.style.width = '100%';
-  canvas.style.height = 'auto';
+  canvas.style.height = '100%';
   canvas.style.maxWidth = '100%';
   
   const ctx = canvas.getContext('2d');
