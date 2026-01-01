@@ -4597,7 +4597,7 @@ function uploadToFirebase() {
     });
 
     // (2) 훈련 상태 정보 (타이머 동기화용)
-    updates[`sessions/${SESSION_ID}/status`] = {
+    const statusUpdate = {
         state: state.trainingState, // 'idle', 'running', 'paused'
         startTime: state.startTime,
         pausedTime: state.pausedTime || 0,
@@ -4605,6 +4605,23 @@ function uploadToFirebase() {
         elapsedTime: state.totalElapsedTime, // 방장 기준 경과시간
         segmentElapsedTime: state.segmentElapsedTime
     };
+    
+    // 현재 세그먼트 정보 추가 (개인 대시보드 표시용)
+    if (state.currentWorkout && state.currentWorkout.segments && 
+        state.currentSegmentIndex >= 0 && 
+        state.currentSegmentIndex < state.currentWorkout.segments.length) {
+        const currentSegment = state.currentWorkout.segments[state.currentSegmentIndex];
+        if (currentSegment) {
+            statusUpdate.segmentTargetType = currentSegment.target_type || 'ftp_pct';
+            statusUpdate.segmentTargetValue = currentSegment.target_value;
+            // 세그먼트 이름도 있으면 추가
+            if (currentSegment.name) {
+                statusUpdate.segmentName = currentSegment.name;
+            }
+        }
+    }
+    
+    updates[`sessions/${SESSION_ID}/status`] = statusUpdate;
 
     // (3) 워크아웃 정보 (변경되었을 때만 보내면 좋지만 단순화를 위해 매번 체크)
     // 실제로는 데이터양이 크므로 startTraining에서 한 번만 보내는 게 정석이지만 안전하게 구현

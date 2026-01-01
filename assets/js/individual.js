@@ -149,10 +149,18 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         
         // 세그먼트 정보 표시
         currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
-        const segIdx = currentSegmentIndex + 1; // 0부터 시작하므로 +1
-        document.getElementById('segment-info').innerText = status.state === 'running' 
-            ? `Segment ${segIdx}` 
-            : (status.state === 'paused' ? '일시정지' : '대기 중');
+        const segmentInfoEl = document.getElementById('segment-info');
+        if (segmentInfoEl) {
+            if (status.state === 'running' && status.segmentTargetType && status.segmentTargetValue !== undefined) {
+                // 세그먼트 내용 표시 (예: FTP 60%)
+                const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
+                segmentInfoEl.innerText = segmentText;
+            } else if (status.state === 'paused') {
+                segmentInfoEl.innerText = '일시정지';
+            } else {
+                segmentInfoEl.innerText = '대기 중';
+            }
+        }
         
         // 랩타임 카운트다운 업데이트
         updateLapTime(status);
@@ -533,6 +541,54 @@ function updateTargetPower() {
     // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
     if (typeof updateTargetPowerArc === 'function') {
         updateTargetPowerArc();
+    }
+}
+
+/**
+ * 세그먼트 정보를 표시 형식으로 변환 (예: FTP 60%, RPM 90 등)
+ */
+function formatSegmentInfo(targetType, targetValue) {
+    if (!targetType || targetValue === undefined || targetValue === null) {
+        return '준비 중';
+    }
+    
+    // target_type에 따라 표시 형식 결정
+    if (targetType === 'ftp_pct') {
+        // FTP 퍼센트: "FTP 60%"
+        const percent = Number(targetValue) || 100;
+        return `FTP ${percent}%`;
+    } else if (targetType === 'dual') {
+        // Dual 타입: "100/120" 형식에서 앞의 값 사용
+        let ftpPercent = 100;
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+            const parts = targetValue.split('/').map(s => s.trim());
+            if (parts.length >= 1) {
+                ftpPercent = Number(parts[0].replace('%', '')) || 100;
+            }
+        } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+            ftpPercent = Number(targetValue[0]) || 100;
+        } else if (typeof targetValue === 'number') {
+            // 숫자로 저장된 경우 처리
+            const numValue = targetValue;
+            if (numValue > 1000 && numValue < 1000000) {
+                const str = String(numValue);
+                if (str.length >= 4) {
+                    const ftpPart = str.slice(0, -3);
+                    ftpPercent = Number(ftpPart) || 100;
+                }
+            } else {
+                ftpPercent = numValue <= 1000 ? numValue : 100;
+            }
+        }
+        return `FTP ${ftpPercent}%`;
+    } else if (targetType === 'cadence_rpm') {
+        // RPM: "RPM 90"
+        const rpm = Number(targetValue) || 0;
+        return `RPM ${rpm}`;
+    } else {
+        // 알 수 없는 타입: 기본값 표시
+        const segIdx = (currentSegmentIndex >= 0 ? currentSegmentIndex + 1 : 1);
+        return `Segment ${segIdx}`;
     }
 }
 
