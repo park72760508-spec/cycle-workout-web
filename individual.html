@@ -104,7 +104,7 @@
 
         /* 세그먼트 그래프 컨테이너 */
         .segment-graph-section {
-            padding: 10px 20px;
+            padding: 5px 20px; /* 상하 패딩 10px → 5px로 줄임 */
             background-color: #1a1a1a;
             border-bottom: 1px solid #333;
             display: flex;
@@ -112,7 +112,7 @@
             align-items: center;
             height: 20vh; /* 블럭 높이 */
             min-height: 150px; /* 최소 높이 보장 */
-            position: relative; /* 자식 요소의 height: 90% 기준점 설정 */
+            position: relative;
         }
         .segment-graph-container {
             width: 100%;
@@ -125,7 +125,7 @@
         }
         .segment-graph-container canvas {
             width: 100%;
-            height: 90%; /* 세그먼트 그래프 블럭(.segment-graph-container) 높이의 90% */
+            height: 100%; /* 세그먼트 그래프 블럭(.segment-graph-container) 높이의 100%로 확대 */
             display: block;
             object-fit: contain; /* 비율 유지하며 컨테이너에 맞춤 */
         }
