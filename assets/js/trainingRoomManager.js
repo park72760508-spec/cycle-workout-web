@@ -449,8 +449,8 @@ async function renderPlayerList() {
             if (track) {
               track.userId = apiTrack.userId || null;
               track.userName = apiTrack.userName || null;
-              if (track.userId && track.userName) {
-                console.log(`[Player List] 트랙 ${trackNumber} 업데이트: ${track.userName} (ID: ${track.userId})`);
+              if (track.userName) {
+                console.log(`[Player List] 트랙 ${trackNumber} 업데이트: ${track.userName}${track.userId ? ` (ID: ${track.userId})` : ' (ID: 없음)'}`);
               }
             }
           }
@@ -479,7 +479,8 @@ async function renderPlayerList() {
   }
 
   playerListContent.innerHTML = tracks.map(track => {
-    const hasUser = track.userId && track.userName;
+    // userName이 있으면 사용자가 할당된 것으로 판단 (userId가 null이어도 표시 가능)
+    const hasUser = !!track.userName;
     const dashboardUrl = roomId 
       ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
       : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
