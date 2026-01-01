@@ -4243,8 +4243,15 @@ document.addEventListener("DOMContentLoaded", () => {
   window.selectIndoorMode = function(mode) {
     closeIndoorModeSelectionModal();
     if (mode === 'race') {
+      // INDOOR RACE 선택 시 Training Room 화면으로 이동
       if (typeof showScreen === 'function') {
-        showScreen('rollerRaceDashboardScreen');
+        showScreen('trainingRoomScreen');
+      }
+      // Training Room 화면 초기화
+      if (typeof initializeTrainingRoomScreen === 'function') {
+        setTimeout(() => {
+          initializeTrainingRoomScreen();
+        }, 100);
       }
     } else if (mode === 'training') {
       if (typeof showScreen === 'function') {
