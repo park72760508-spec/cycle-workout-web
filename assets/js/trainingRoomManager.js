@@ -355,7 +355,7 @@ async function showTrainingRoomPasswordModal(roomTitle) {
 /**
  * Player List 화면 열기
  */
-function openPlayerList() {
+async function openPlayerList() {
   if (!currentSelectedTrainingRoom) {
     showToast('Training Room을 먼저 선택해주세요.', 'error');
     return;
@@ -367,17 +367,25 @@ function openPlayerList() {
   }
 
   // Player List 렌더링
-  renderPlayerList();
+  await renderPlayerList();
 }
 
 /**
  * Player List 렌더링 (트랙1~10)
  */
-function renderPlayerList() {
+async function renderPlayerList() {
   const playerListContent = document.getElementById('playerListContent');
   if (!playerListContent) return;
 
-  // 트랙1~10 생성
+  // 로딩 표시
+  playerListContent.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 20px;"></div>
+      <p style="color: #666;">트랙 정보를 불러오는 중...</p>
+    </div>
+  `;
+
+  // 트랙1~10 초기화
   const tracks = [];
   for (let i = 1; i <= 10; i++) {
     tracks.push({
@@ -387,8 +395,31 @@ function renderPlayerList() {
     });
   }
 
-  // TODO: Firebase에서 현재 참여자 목록 가져오기
-  // 현재는 빈 상태로 표시
+  // Training Room의 트랙별 사용자 정보 가져오기
+  if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
+    try {
+      const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${currentSelectedTrainingRoom.id}`;
+      const response = await fetch(url);
+      const result = await response.json();
+      
+      if (result.success && result.tracks && Array.isArray(result.tracks)) {
+        // 트랙 정보 업데이트
+        result.tracks.forEach(apiTrack => {
+          const trackNumber = parseInt(apiTrack.trackNumber, 10);
+          if (!isNaN(trackNumber) && trackNumber >= 1 && trackNumber <= 10) {
+            const track = tracks[trackNumber - 1];
+            if (track) {
+              track.userId = apiTrack.userId || null;
+              track.userName = apiTrack.userName || null;
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Player List] 트랙 정보 로드 오류:', error);
+      // 오류가 발생해도 빈 상태로 표시 계속
+    }
+  }
 
   playerListContent.innerHTML = tracks.map(track => {
     const hasUser = track.userId && track.userName;
@@ -771,7 +802,7 @@ async function selectTrainingRoomForModal(roomId) {
 /**
  * 모달에서 Player List 화면 열기
  */
-function openPlayerListFromModal() {
+async function openPlayerListFromModal() {
   if (!currentSelectedTrainingRoom) {
     showToast('Training Room을 먼저 선택해주세요.', 'error');
     return;
@@ -786,7 +817,7 @@ function openPlayerListFromModal() {
   }
 
   // Player List 렌더링
-  renderPlayerList();
+  await renderPlayerList();
 }
 
 /**
