@@ -76,26 +76,46 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
 
 function updateDashboard(data) {
     // 1. 텍스트 업데이트
-    const power = data.power || 0;
+    // 파워값 가져오기 (다양한 필드명 지원)
+    const power = Number(data.power || data.currentPower || data.watts || data.currentPowerW || 0);
+    const powerValue = Math.round(power); // 정수로 변환
     
-    document.getElementById('ui-current-power').innerText = power;
-    document.getElementById('ui-current-power').style.fill = '#fff';
+    // SVG text 요소는 textContent 사용 (innerText보다 안정적)
+    const powerEl = document.getElementById('ui-current-power');
+    if (powerEl) {
+        powerEl.textContent = powerValue;
+        powerEl.setAttribute('fill', '#fff');
+    }
     
     // TARGET 파워는 세그먼트 정보에서 계산
     updateTargetPower();
     
-    document.getElementById('ui-cadence').innerText = data.cadence || 0;
-    document.getElementById('ui-hr').innerText = data.hr || 0;
+    // CADENCE 표시
+    const cadence = Number(data.cadence || data.rpm || 0);
+    const cadenceEl = document.getElementById('ui-cadence');
+    if (cadenceEl) {
+        cadenceEl.textContent = Math.round(cadence);
+    }
+    
+    // HEART RATE 표시
+    const hr = Number(data.hr || data.heartRate || data.bpm || 0);
+    const hrEl = document.getElementById('ui-hr');
+    if (hrEl) {
+        hrEl.textContent = Math.round(hr);
+    }
     
     // 랩파워 표시 (세그먼트 평균 파워)
-    const lapPower = data.segmentPower || data.avgPower || 0;
-    document.getElementById('ui-lap-power').innerText = Math.round(lapPower);
+    const lapPower = Number(data.segmentPower || data.avgPower || data.segmentAvgPower || data.averagePower || 0);
+    const lapPowerEl = document.getElementById('ui-lap-power');
+    if (lapPowerEl) {
+        lapPowerEl.textContent = Math.round(lapPower);
+    }
 
-    // 2. 게이지 바늘 회전
+    // 2. 게이지 바늘 회전 (동일한 power 값 사용)
     // FTP를 알 수 없으므로 300W를 풀 스케일(100%)로 가정하거나, 
     // 방장이 maxPower를 보내주면 더 좋음. 여기선 400W 기준.
     const maxGauge = 400; 
-    let ratio = power / maxGauge;
+    let ratio = powerValue / maxGauge;
     if (ratio > 1) ratio = 1;
     if (ratio < 0) ratio = 0;
     
