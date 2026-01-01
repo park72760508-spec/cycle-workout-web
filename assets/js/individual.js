@@ -131,36 +131,45 @@ function formatTime(seconds) {
     return `${m}:${s}`;
 }
 
-// 랩타임 카운트다운 업데이트 함수 (현재 진행중인 세그먼트의 카운트다운 시간)
+// 랩카운트다운 업데이트 함수 (Indoor Training의 랩카운트다운 값 표시)
 function updateLapTime(status) {
     const lapTimeEl = document.getElementById('ui-lap-time');
     if (!lapTimeEl) return;
     
-    if (status.state === 'running' && window.currentWorkout && window.currentWorkout.segments) {
+    // Indoor Training의 랩카운트다운 값 우선 사용
+    // Firebase status에서 countdownRemainingSec 또는 segmentRemainingTime 확인
+    let countdownValue = null;
+    
+    // 1순위: countdownRemainingSec (훈련 시작 전 카운트다운)
+    if (status.countdownRemainingSec !== undefined && status.countdownRemainingSec !== null) {
+        countdownValue = Math.max(0, Math.floor(status.countdownRemainingSec));
+    }
+    // 2순위: segmentRemainingTime (세그먼트 남은 시간)
+    else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null) {
+        countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
+    }
+    // 3순위: segmentRemainingSec (다른 필드명일 수 있음)
+    else if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null) {
+        countdownValue = Math.max(0, Math.floor(status.segmentRemainingSec));
+    }
+    // 4순위: 세그먼트 정보로 직접 계산
+    else if (status.state === 'running' && window.currentWorkout && window.currentWorkout.segments) {
         const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
         const seg = window.currentWorkout.segments[segIndex];
         
         if (seg) {
-            // 세그먼트 지속 시간 계산
             const segDuration = seg.duration_sec || seg.duration || 0;
             
-            // 세그먼트 남은 시간 계산 (우선순위: status.segmentRemainingTime > 직접 계산)
-            let remaining = 0;
-            
-            // 1순위: Firebase status에서 직접 제공되는 segmentRemainingTime 사용
-            if (status.segmentRemainingTime !== undefined) {
-                remaining = Math.max(0, Math.floor(status.segmentRemainingTime));
+            // segmentElapsedTime이 있으면 사용
+            if (status.segmentElapsedTime !== undefined) {
+                countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
             }
-            // 2순위: segmentElapsedTime이 있으면 사용
-            else if (status.segmentElapsedTime !== undefined) {
-                remaining = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
-            }
-            // 3순위: elapsedTime과 segmentStartTime으로 계산
+            // elapsedTime과 segmentStartTime으로 계산
             else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
                 const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
-                remaining = Math.max(0, segDuration - segElapsed);
+                countdownValue = Math.max(0, segDuration - segElapsed);
             }
-            // 4순위: 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
+            // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
             else {
                 let prevSegmentsTime = 0;
                 for (let i = 0; i < segIndex; i++) {
@@ -170,17 +179,16 @@ function updateLapTime(status) {
                     }
                 }
                 const segElapsed = Math.max(0, (status.elapsedTime || 0) - prevSegmentsTime);
-                remaining = Math.max(0, segDuration - segElapsed);
+                countdownValue = Math.max(0, segDuration - segElapsed);
             }
-            
-            // 카운트다운 시간 표시
-            lapTimeEl.innerText = formatTime(remaining);
-            // 10초 이하면 빨간색, 그 외는 청록색
-            lapTimeEl.style.fill = remaining <= 10 ? '#ff4444' : '#00d4aa';
-        } else {
-            lapTimeEl.innerText = '00:00';
-            lapTimeEl.style.fill = '#00d4aa';
         }
+    }
+    
+    // 카운트다운 값 표시
+    if (countdownValue !== null && countdownValue >= 0) {
+        lapTimeEl.innerText = formatTime(countdownValue);
+        // 10초 이하면 빨간색, 그 외는 청록색
+        lapTimeEl.style.fill = countdownValue <= 10 ? '#ff4444' : '#00d4aa';
     } else {
         lapTimeEl.innerText = '00:00';
         lapTimeEl.style.fill = '#00d4aa';
