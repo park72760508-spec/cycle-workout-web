@@ -380,6 +380,29 @@ function updateLapTime(status) {
 
 // 5초 카운트다운 오버레이 처리 함수
 function handleSegmentCountdown(countdownValue, status) {
+    // 시작 카운트다운인지 세그먼트 카운트다운인지 구분
+    const isStartCountdown = status.state === 'countdown' || 
+                             (status.countdownRemainingSec !== undefined && 
+                              status.countdownRemainingSec !== null && 
+                              status.countdownRemainingSec >= 0 && 
+                              status.state !== 'running');
+    
+    // 시작 카운트다운 처리 (5, 4, 3, 2, 1, GO!!)
+    if (isStartCountdown && countdownValue !== null && countdownValue >= 0) {
+        // 5초 이상이면 오버레이 표시하지 않음 (Firebase 동기화 지연 고려)
+        if (countdownValue <= 5) {
+            // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
+            if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+                lastCountdownValue = countdownValue;
+                // 0일 때는 "GO!!" 표시
+                const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
+                showSegmentCountdown(displayValue);
+            }
+        }
+        return;
+    }
+    
+    // 세그먼트 카운트다운 처리 (기존 로직)
     // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
     if (countdownValue === null || countdownValue > 5) {
         if (segmentCountdownActive) {
@@ -416,8 +439,17 @@ function showSegmentCountdown(value) {
     overlay.classList.remove('hidden');
     overlay.style.display = 'flex';
     
-    // 숫자 업데이트
+    // 숫자 또는 "GO!!" 업데이트
     numEl.textContent = String(value);
+    
+    // "GO!!"일 때 스타일 조정
+    if (value === 'GO!!') {
+        numEl.style.fontSize = '150px'; // GO!!는 조금 작게
+        numEl.style.color = '#00d4aa'; // 민트색
+    } else {
+        numEl.style.fontSize = '200px'; // 기본 크기
+        numEl.style.color = '#fff'; // 흰색
+    }
     
     // 애니메이션 효과를 위해 클래스 재적용 (강제 리플로우)
     numEl.style.animation = 'none';
@@ -427,11 +459,11 @@ function showSegmentCountdown(value) {
     
     segmentCountdownActive = true;
     
-    // 0초일 때 0.5초 후 오버레이 숨김
-    if (value === 0) {
+    // 0 또는 "GO!!"일 때 0.8초 후 오버레이 숨김 (GO!!는 조금 더 길게 표시)
+    if (value === 0 || value === 'GO!!') {
         setTimeout(() => {
             stopSegmentCountdown();
-        }, 500);
+        }, 800);
     }
 }
 

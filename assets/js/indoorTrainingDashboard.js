@@ -2631,6 +2631,33 @@ function startTrainingWithCountdown() {
     return;
   }
   
+  // Firebase에 시작 카운트다운 상태 전송 (개인 대시보드 동기화용)
+  if (typeof db !== 'undefined' && typeof SESSION_ID !== 'undefined') {
+    let countdown = 5;
+    // Firebase에 카운트다운 시작 신호 전송
+    db.ref(`sessions/${SESSION_ID}/status`).update({
+      countdownRemainingSec: countdown,
+      state: 'countdown' // 카운트다운 중임을 표시
+    }).catch(e => console.warn('[Indoor Training] 카운트다운 상태 전송 실패:', e));
+    
+    // 카운트다운 진행 중 Firebase 업데이트
+    const countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown >= 0) {
+        db.ref(`sessions/${SESSION_ID}/status`).update({
+          countdownRemainingSec: countdown
+        }).catch(e => console.warn('[Indoor Training] 카운트다운 상태 업데이트 실패:', e));
+      } else {
+        clearInterval(countdownInterval);
+        // 카운트다운 종료 후 running 상태로 변경
+        db.ref(`sessions/${SESSION_ID}/status`).update({
+          countdownRemainingSec: null,
+          state: 'running'
+        }).catch(e => console.warn('[Indoor Training] 훈련 시작 상태 전송 실패:', e));
+      }
+    }, 1000);
+  }
+  
   // 카운트다운 모달 생성 및 표시
   const countdownModal = document.createElement('div');
   countdownModal.id = 'trainingCountdownModal';
