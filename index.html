@@ -2135,6 +2135,8 @@
 <script src="assets/js/groupTrainingManager_part2.js"></script>
 <!-- 훈련 스케줄 모듈 (다른 JS 파일들과 동일한 위치) -->
 <script src="assets/js/scheduleManager.js"></script>
+<!-- Training Room 모듈 -->
+<script src="assets/js/trainingRoomManager.js"></script>
 <script src="assets/js/app.js"></script>  
 
   
@@ -2543,6 +2545,69 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeWorkoutSelectionModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Training Room 선택 화면 ========== -->
+  <div id="trainingRoomScreen" class="screen">
+    <div class="dashboard-header">
+      <h1 class="race-title-animated" style="flex: 1; text-align: center;">
+        <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
+        <span class="race-title-text">Training Room</span>
+      </h1>
+      <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
+        <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnBackFromTrainingRoom" onclick="showScreen('connectionScreen')">
+          <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          뒤로
+        </button>
+      </div>
+    </div>
+
+    <div class="training-room-container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
+      <!-- Training Room 목록 -->
+      <div class="training-room-list-section" style="margin-bottom: 30px;">
+        <h2 style="margin-bottom: 20px; color: #333; font-size: 1.5em;">Training Room 선택</h2>
+        <div id="trainingRoomList" class="training-room-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+          <!-- Training Room 목록이 여기에 동적으로 추가됩니다 -->
+        </div>
+      </div>
+
+      <!-- 선택된 Training Room 정보 및 버튼 -->
+      <div id="selectedTrainingRoomSection" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+        <h3 id="selectedTrainingRoomTitle" style="margin-bottom: 20px; color: #333;"></h3>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button class="btn btn-primary btn-default-style btn-with-icon" id="btnPlayer" onclick="openPlayerList()" disabled>
+            <img src="assets/img/personals.png" alt="Player" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            Player
+          </button>
+          <button class="btn btn-success btn-default-style btn-with-icon" id="btnCoach" onclick="openCoachMode()" disabled>
+            <img src="assets/img/personal.png" alt="Coach" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            Coach
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Player List 화면 ========== -->
+  <div id="playerListScreen" class="screen">
+    <div class="dashboard-header">
+      <h1 class="race-title-animated" style="flex: 1; text-align: center;">
+        <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
+        <span class="race-title-text">Player List</span>
+      </h1>
+      <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
+        <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnBackFromPlayerList" onclick="showScreen('trainingRoomScreen')">
+          <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          뒤로
+        </button>
+      </div>
+    </div>
+
+    <div class="player-list-container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
+      <div id="playerListContent" class="player-list-content">
+        <!-- 트랙1~10이 여기에 동적으로 추가됩니다 -->
       </div>
     </div>
   </div>
