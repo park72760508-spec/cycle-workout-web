@@ -103,8 +103,8 @@
             display: flex;
             justify-content: center;
             align-items: stretch; /* 자식 요소를 섹션 높이에 맞춤 */
-            flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 (가용 공간을 균등하게 분배) */
-            min-height: 200px; /* 모바일에서도 충분한 최소 높이 보장 */
+            flex: 0.5 0.5 0; /* flex-grow: 0.5, flex-shrink: 0.5 (기존의 50%로 축소) */
+            min-height: 100px; /* 최소 높이 보장 (50% 축소) */
             position: relative;
             overflow: hidden; /* 넘치는 내용 숨김 */
         }
@@ -112,13 +112,13 @@
         /* 모바일 환경 최적화 */
         @media (max-height: 800px) {
             .segment-graph-section {
-                min-height: 180px; /* 작은 화면에서도 적절한 높이 */
+                min-height: 90px; /* 작은 화면에서도 적절한 높이 (50% 축소) */
             }
         }
         
         @media (max-height: 600px) {
             .segment-graph-section {
-                min-height: 150px; /* 매우 작은 화면 대응 */
+                min-height: 75px; /* 매우 작은 화면 대응 (50% 축소) */
             }
         }
         
