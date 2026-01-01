@@ -131,57 +131,63 @@ function formatTime(seconds) {
     return `${m}:${s}`;
 }
 
-// 랩카운트다운 업데이트 함수 (Indoor Training의 랩카운트다운 값 표시)
+// 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
 function updateLapTime(status) {
     const lapTimeEl = document.getElementById('ui-lap-time');
     if (!lapTimeEl) return;
     
-    // Indoor Training의 랩카운트다운 값 우선 사용
-    // Firebase status에서 countdownRemainingSec 또는 segmentRemainingTime 확인
+    // 훈련방의 세그먼트 남은 시간 값 사용 (5,4,3,2,1,0 카운트다운과는 별개)
     let countdownValue = null;
     
-    // 1순위: countdownRemainingSec (훈련 시작 전 카운트다운)
-    if (status.countdownRemainingSec !== undefined && status.countdownRemainingSec !== null) {
-        countdownValue = Math.max(0, Math.floor(status.countdownRemainingSec));
-    }
-    // 2순위: segmentRemainingTime (세그먼트 남은 시간)
-    else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null) {
-        countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
-    }
-    // 3순위: segmentRemainingSec (다른 필드명일 수 있음)
-    else if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null) {
-        countdownValue = Math.max(0, Math.floor(status.segmentRemainingSec));
-    }
-    // 4순위: 세그먼트 정보로 직접 계산
-    else if (status.state === 'running' && window.currentWorkout && window.currentWorkout.segments) {
-        const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
-        const seg = window.currentWorkout.segments[segIndex];
-        
-        if (seg) {
-            const segDuration = seg.duration_sec || seg.duration || 0;
+    // 훈련 중일 때: 세그먼트 남은 시간 우선 사용
+    if (status.state === 'running') {
+        // 1순위: segmentRemainingSec (훈련방에서 계산된 세그먼트 남은 시간)
+        if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null && Number.isFinite(status.segmentRemainingSec)) {
+            countdownValue = Math.max(0, Math.floor(status.segmentRemainingSec));
+        }
+        // 2순위: segmentRemainingTime (다른 필드명)
+        else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(status.segmentRemainingTime)) {
+            countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
+        }
+        // 3순위: 세그먼트 정보로 직접 계산
+        else if (window.currentWorkout && window.currentWorkout.segments) {
+            const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+            const seg = window.currentWorkout.segments[segIndex];
             
-            // segmentElapsedTime이 있으면 사용
-            if (status.segmentElapsedTime !== undefined) {
-                countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
-            }
-            // elapsedTime과 segmentStartTime으로 계산
-            else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
-                const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
-                countdownValue = Math.max(0, segDuration - segElapsed);
-            }
-            // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
-            else {
-                let prevSegmentsTime = 0;
-                for (let i = 0; i < segIndex; i++) {
-                    const prevSeg = window.currentWorkout.segments[i];
-                    if (prevSeg) {
-                        prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
-                    }
+            if (seg) {
+                const segDuration = seg.duration_sec || seg.duration || 0;
+                
+                // segmentElapsedSec가 있으면 사용
+                if (status.segmentElapsedSec !== undefined && Number.isFinite(status.segmentElapsedSec)) {
+                    countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedSec));
                 }
-                const segElapsed = Math.max(0, (status.elapsedTime || 0) - prevSegmentsTime);
-                countdownValue = Math.max(0, segDuration - segElapsed);
+                // segmentElapsedTime이 있으면 사용
+                else if (status.segmentElapsedTime !== undefined && Number.isFinite(status.segmentElapsedTime)) {
+                    countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
+                }
+                // elapsedTime과 segmentStartTime으로 계산
+                else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
+                    const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
+                    countdownValue = Math.max(0, segDuration - segElapsed);
+                }
+                // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
+                else if (status.elapsedTime !== undefined) {
+                    let prevSegmentsTime = 0;
+                    for (let i = 0; i < segIndex; i++) {
+                        const prevSeg = window.currentWorkout.segments[i];
+                        if (prevSeg) {
+                            prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
+                        }
+                    }
+                    const segElapsed = Math.max(0, status.elapsedTime - prevSegmentsTime);
+                    countdownValue = Math.max(0, segDuration - segElapsed);
+                }
             }
         }
+    }
+    // 훈련 시작 전: countdownRemainingSec (전체 훈련 시작 카운트다운)
+    else if (status.countdownRemainingSec !== undefined && status.countdownRemainingSec !== null && Number.isFinite(status.countdownRemainingSec)) {
+        countdownValue = Math.max(0, Math.floor(status.countdownRemainingSec));
     }
     
     // 카운트다운 값 표시
