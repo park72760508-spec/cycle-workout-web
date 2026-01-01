@@ -1300,6 +1300,44 @@ async function checkFirebaseRawData(roomId) {
   }
 }
 
+/**
+ * Player List 새로고침
+ */
+async function refreshPlayerList() {
+  console.log('[Player List] 새로고침 시작');
+  
+  // 새로고침 버튼 비활성화 및 로딩 표시
+  const refreshBtn = document.getElementById('btnRefreshPlayerList');
+  if (refreshBtn) {
+    refreshBtn.disabled = true;
+    const originalContent = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle; animation: spin 1s linear infinite;" /> 새로고침 중...';
+    
+    try {
+      // Player List 다시 렌더링
+      await renderPlayerList();
+      
+      if (typeof showToast === 'function') {
+        showToast('리스트가 새로고침되었습니다.', 'success');
+      }
+    } catch (error) {
+      console.error('[Player List] 새로고침 오류:', error);
+      if (typeof showToast === 'function') {
+        showToast('리스트 새로고침 중 오류가 발생했습니다.', 'error');
+      }
+    } finally {
+      // 버튼 복원
+      if (refreshBtn) {
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = originalContent;
+      }
+    }
+  } else {
+    // 버튼이 없어도 새로고침은 실행
+    await renderPlayerList();
+  }
+}
+
 // 전역 함수 노출
 if (typeof window !== 'undefined') {
   window.loadTrainingRooms = loadTrainingRooms;
@@ -1319,6 +1357,8 @@ if (typeof window !== 'undefined') {
   window.removeUserFromTrack = removeUserFromTrack;
   window.selectUserForTrack = selectUserForTrack;
   window.closeTrackUserSelectModal = closeTrackUserSelectModal;
+  // Player List 새로고침 함수
+  window.refreshPlayerList = refreshPlayerList;
   // 디버깅 함수
   window.checkFirebaseTrackUsers = checkFirebaseTrackUsers;
   window.checkFirebaseRawData = checkFirebaseRawData;
