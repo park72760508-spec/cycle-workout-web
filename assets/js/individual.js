@@ -804,7 +804,9 @@ function startGaugeAnimationLoop() {
 }
 
 /**
- * 속도계 원호에 목표 파워값만큼 투명 주황색으로 채우기
+ * 속도계 원호에 목표 파워값만큼 채우기 (세그먼트 달성도에 따라 색상 변경)
+ * - LAP AVG 파워값 / 목표 파워값 비율이 0.985 이상이면 투명 민트색
+ * - 미만이면 투명 주황색
  */
 function updateTargetPowerArc() {
     // 목표 파워값 가져오기
@@ -820,6 +822,18 @@ function updateTargetPowerArc() {
         }
         return;
     }
+    
+    // LAP AVG 파워값 가져오기
+    const lapPowerEl = document.getElementById('ui-lap-power');
+    const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
+    
+    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워)
+    const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
+    
+    // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
+    const arcColor = achievementRatio >= 0.985 
+        ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
+        : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
     
     // FTP 기반으로 최대 파워 계산
     const maxPower = userFTP * 2;
@@ -868,7 +882,6 @@ function updateTargetPowerArc() {
             targetArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             targetArc.id = 'gauge-target-arc';
             targetArc.setAttribute('fill', 'none');
-            targetArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.5)'); // 투명 주황색
             targetArc.setAttribute('stroke-width', '12');
             targetArc.setAttribute('stroke-linecap', 'round');
             // 원호 배경 뒤에, 눈금 앞에 배치
@@ -883,7 +896,13 @@ function updateTargetPowerArc() {
         }
     }
     
-    // 원호 경로 업데이트
+    // 원호 경로 및 색상 업데이트
     targetArc.setAttribute('d', pathData);
+    targetArc.setAttribute('stroke', arcColor);
     targetArc.style.display = 'block';
+    
+    // 디버깅 로그 (선택사항)
+    if (achievementRatio > 0) {
+        console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}`);
+    }
 }
