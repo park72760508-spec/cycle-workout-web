@@ -4378,7 +4378,7 @@ function uploadToFirebase() {
     // (1) 17명 사용자 데이터 일괄 패키징
     state.powerMeters.forEach(pm => {
         if (pm.connected) {
-            updates[`sessions/${SESSION_ID}/users/${pm.id}`] = {
+            const userData = {
                 power: Math.round(pm.currentPower || 0),
                 cadence: Math.round(pm.cadence || 0),
                 hr: Math.round(pm.heartRate || 0),
@@ -4394,6 +4394,14 @@ function uploadToFirebase() {
                 name: pm.userName || `User ${pm.id}`,
                 lastUpdate: firebase.database.ServerValue.TIMESTAMP
             };
+            
+            // FTP 값 추가 (사용자 FTP 값이 있으면 전송)
+            if (pm.userFTP !== null && pm.userFTP !== undefined && pm.userFTP > 0) {
+                userData.ftp = Math.round(pm.userFTP);
+                console.log(`[Firebase Upload] 파워미터 ${pm.id} FTP 값 추가: ${userData.ftp}W`);
+            }
+            
+            updates[`sessions/${SESSION_ID}/users/${pm.id}`] = userData;
         }
     });
 
