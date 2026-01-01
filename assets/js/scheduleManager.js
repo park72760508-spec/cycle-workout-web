@@ -702,7 +702,9 @@ async function openScheduleDays(scheduleId, event) {
       currentSchedule = result.item;
       
       // 패스워드 확인
-      if (result.item.password && result.item.password.trim() !== '') {
+      // password가 문자열이 아닐 수 있으므로 안전하게 처리
+      const password = result.item.password != null ? String(result.item.password) : '';
+      if (password && password.trim() !== '') {
         const passwordCorrect = await showPasswordModal(result.item.title);
         if (!passwordCorrect) {
           // 버튼 복원
@@ -1460,7 +1462,9 @@ async function openScheduleCalendar(scheduleId, event) {
       currentSchedule = result.item;
       
       // 패스워드 확인
-      if (result.item.password && result.item.password.trim() !== '') {
+      // password가 문자열이 아닐 수 있으므로 안전하게 처리
+      const password = result.item.password != null ? String(result.item.password) : '';
+      if (password && password.trim() !== '') {
         const passwordCorrect = await showPasswordModal(result.item.title);
         if (!passwordCorrect) {
           // 버튼 복원
