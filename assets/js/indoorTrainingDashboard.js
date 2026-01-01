@@ -215,8 +215,54 @@ window.handleIndoorAntMessage = function(packet) {
 /**
  * Indoor Training 대시보드 초기화
  */
+// SESSION_ID를 가져오는 헬퍼 함수 (Training Room 선택 시 저장된 room id 사용)
+function getSessionId() {
+  // 우선순위: 1) window.SESSION_ID 2) window.currentTrainingRoomId 3) localStorage 4) SESSION_ID 상수 5) 기본값
+  if (typeof window !== 'undefined' && window.SESSION_ID) {
+    return window.SESSION_ID;
+  }
+  
+  if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
+    const roomId = String(window.currentTrainingRoomId);
+    if (typeof window !== 'undefined') {
+      window.SESSION_ID = roomId;
+    }
+    console.log('[Indoor Training] 전역 변수에서 room id 가져옴:', roomId);
+    return roomId;
+  }
+  
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const storedRoomId = localStorage.getItem('currentTrainingRoomId');
+      if (storedRoomId) {
+        if (typeof window !== 'undefined') {
+          window.SESSION_ID = storedRoomId;
+        }
+        console.log('[Indoor Training] localStorage에서 room id 가져옴:', storedRoomId);
+        return storedRoomId;
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage 접근 실패:', e);
+    }
+  }
+  
+  // SESSION_ID 상수 사용
+  if (typeof SESSION_ID !== 'undefined') {
+    return SESSION_ID;
+  }
+  
+  // 기본값
+  return 'session_room_1';
+}
+
 function initIndoorTrainingDashboard() {
   console.log('[Indoor Training] 대시보드 초기화');
+  
+  // SESSION_ID 확인 및 로그
+  const sessionId = getSessionId();
+  console.log('[Indoor Training] 현재 SESSION_ID:', sessionId);
+  console.log('[Indoor Training] window.SESSION_ID:', window.SESSION_ID);
+  console.log('[Indoor Training] window.currentTrainingRoomId:', window.currentTrainingRoomId);
   
   // 파워계 그리드 생성
   createPowerMeterGrid();
@@ -2632,10 +2678,11 @@ function startTrainingWithCountdown() {
   }
   
   // Firebase에 시작 카운트다운 상태 전송 (개인 대시보드 동기화용)
-  if (typeof db !== 'undefined' && typeof SESSION_ID !== 'undefined') {
+  if (typeof db !== 'undefined') {
+    const sessionId = getSessionId();
     let countdown = 5;
     // Firebase에 카운트다운 시작 신호 전송
-    db.ref(`sessions/${SESSION_ID}/status`).update({
+    db.ref(`sessions/${sessionId}/status`).update({
       countdownRemainingSec: countdown,
       state: 'countdown' // 카운트다운 중임을 표시
     }).catch(e => console.warn('[Indoor Training] 카운트다운 상태 전송 실패:', e));
@@ -2644,13 +2691,13 @@ function startTrainingWithCountdown() {
     const countdownInterval = setInterval(() => {
       countdown--;
       if (countdown >= 0) {
-        db.ref(`sessions/${SESSION_ID}/status`).update({
+        db.ref(`sessions/${sessionId}/status`).update({
           countdownRemainingSec: countdown
         }).catch(e => console.warn('[Indoor Training] 카운트다운 상태 업데이트 실패:', e));
       } else {
         clearInterval(countdownInterval);
         // 카운트다운 종료 후 running 상태로 변경
-        db.ref(`sessions/${SESSION_ID}/status`).update({
+        db.ref(`sessions/${sessionId}/status`).update({
           countdownRemainingSec: null,
           state: 'running'
         }).catch(e => console.warn('[Indoor Training] 훈련 시작 상태 전송 실패:', e));
@@ -4583,6 +4630,44 @@ window.updatePowerMeterData = function(powerMeterId, power, heartRate, cadence) 
 // 3. 실제 업로드 함수
 function uploadToFirebase() {
     if (typeof db === 'undefined') return; // Firebase 미설정 시 패스
+    
+    // SESSION_ID 확인 및 업데이트 (Training Room 선택 시 저장된 room id 사용)
+    let sessionId = null;
+    if (typeof SESSION_ID !== 'undefined') {
+        sessionId = SESSION_ID;
+    } else if (typeof window !== 'undefined' && window.SESSION_ID) {
+        sessionId = window.SESSION_ID;
+    }
+    
+    // 전역 변수나 localStorage에서 room id 확인
+    if (!sessionId || sessionId === 'session_room_1') {
+        if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
+            sessionId = String(window.currentTrainingRoomId);
+            console.log('[Firebase Upload] 전역 변수에서 room id 사용:', sessionId);
+        } else if (typeof localStorage !== 'undefined') {
+            try {
+                const storedRoomId = localStorage.getItem('currentTrainingRoomId');
+                if (storedRoomId) {
+                    sessionId = storedRoomId;
+                    console.log('[Firebase Upload] localStorage에서 room id 사용:', sessionId);
+                }
+            } catch (e) {
+                console.warn('[Firebase Upload] localStorage 접근 실패:', e);
+            }
+        }
+    }
+    
+    // SESSION_ID가 여전히 없으면 기본값 사용
+    if (!sessionId) {
+        sessionId = 'session_room_1';
+    }
+    
+    console.log(`[Firebase Upload] 사용할 SESSION_ID: ${sessionId}`);
+    
+    // window.SESSION_ID 업데이트
+    if (typeof window !== 'undefined') {
+        window.SESSION_ID = sessionId;
+    }
 
     const state = window.indoorTrainingState;
     const updates = {};
@@ -4619,7 +4704,7 @@ function uploadToFirebase() {
                 }
             }
             
-            updates[`sessions/${SESSION_ID}/users/${pm.id}`] = userData;
+            updates[`sessions/${sessionId}/users/${pm.id}`] = userData;
         }
     });
 
@@ -4648,7 +4733,7 @@ function uploadToFirebase() {
         }
     }
     
-    updates[`sessions/${SESSION_ID}/status`] = statusUpdate;
+    updates[`sessions/${sessionId}/status`] = statusUpdate;
 
     // (3) 워크아웃 정보 (변경되었을 때만 보내면 좋지만 단순화를 위해 매번 체크)
     // 실제로는 데이터양이 크므로 startTraining에서 한 번만 보내는 게 정석이지만 안전하게 구현
@@ -4687,7 +4772,8 @@ window.stopTraining = function() {
     _originalStopTraining();
     // 종료 상태 전송
     if (typeof db !== 'undefined') {
-        db.ref(`sessions/${SESSION_ID}/status`).update({ state: 'idle' });
+        const sessionId = getSessionId();
+        db.ref(`sessions/${sessionId}/status`).update({ state: 'idle' });
     }
 };
 

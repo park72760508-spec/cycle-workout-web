@@ -32,14 +32,40 @@ try {
     console.error("🔥 Firebase 연결 실패! (인터넷 연결이나 키 값을 확인하세요)", e);
 }
 
-// 3. 세션 ID (Training Room ID를 URL 파라미터에서 가져옴)
-// URL 파라미터에서 'room' 값을 찾아서 SESSION_ID로 사용
+// 3. 세션 ID (Training Room ID를 URL 파라미터 또는 전역 변수에서 가져옴)
+// 우선순위: 1) URL 파라미터 2) 전역 변수 (window.currentTrainingRoomId) 3) localStorage 4) 기본값
 const urlParams = new URLSearchParams(window.location.search);
 let SESSION_ID = urlParams.get('room');
 
-// 만약 주소에 방 ID가 없다면 기본값 사용
-if (!SESSION_ID) {
-    SESSION_ID = 'session_room_1';
+// URL에 room 파라미터가 없으면 전역 변수에서 확인
+if (!SESSION_ID && typeof window !== 'undefined' && window.currentTrainingRoomId) {
+    SESSION_ID = String(window.currentTrainingRoomId);
+    console.log("🔥 [Firebase Config] URL에 room 파라미터가 없어 전역 변수에서 가져옴:", SESSION_ID);
 }
 
-console.log("현재 접속된 그룹방 (SESSION_ID):", SESSION_ID);
+// 전역 변수에도 없으면 localStorage에서 확인
+if (!SESSION_ID && typeof localStorage !== 'undefined') {
+    try {
+        const storedRoomId = localStorage.getItem('currentTrainingRoomId');
+        if (storedRoomId) {
+            SESSION_ID = storedRoomId;
+            console.log("🔥 [Firebase Config] localStorage에서 가져옴:", SESSION_ID);
+        }
+    } catch (e) {
+        console.warn("🔥 [Firebase Config] localStorage 접근 실패:", e);
+    }
+}
+
+// 모든 방법으로 가져올 수 없으면 기본값 사용
+if (!SESSION_ID) {
+    SESSION_ID = 'session_room_1';
+    console.log("🔥 [Firebase Config] 기본값 사용:", SESSION_ID);
+}
+
+// SESSION_ID를 window 객체에 저장 (다른 파일에서 접근 가능하도록)
+window.SESSION_ID = SESSION_ID;
+
+console.log("🔥 [Firebase Config] 최종 SESSION_ID:", SESSION_ID);
+console.log("🔥 [Firebase Config] URL 파라미터:", window.location.search);
+console.log("🔥 [Firebase Config] 전역 변수 currentTrainingRoomId:", window.currentTrainingRoomId);
+console.log("🔥 [Firebase Config] window.SESSION_ID:", window.SESSION_ID);

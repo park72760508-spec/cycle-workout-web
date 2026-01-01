@@ -178,6 +178,19 @@ async function selectTrainingRoom(roomId) {
 
   // 선택된 Training Room 저장
   currentSelectedTrainingRoom = room;
+  
+  // 전역 변수 및 localStorage에 room id 저장 (Firebase Config에서 사용)
+  if (typeof window !== 'undefined') {
+    window.currentTrainingRoomId = String(room.id);
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem('currentTrainingRoomId', String(room.id));
+    } catch (e) {
+      console.warn('[Training Room] localStorage 저장 실패:', e);
+    }
+  }
+  console.log('[Training Room] Room ID 저장됨:', room.id);
 
   // 선택된 카드 하이라이트 (체크마크 추가/제거)
   document.querySelectorAll('.training-room-card').forEach(card => {
