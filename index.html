@@ -2186,6 +2186,48 @@
     </div>
   </div>
 
+  <!-- ========== Training Room 선택 모달 (Ant+ 버튼 클릭 시 표시) ========== -->
+  <div id="trainingRoomModal" class="modal hidden" onclick="if(event.target === this) closeTrainingRoomModal()">
+    <div class="modal-content" style="max-width: 600px; max-height: 90vh;" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 style="display: flex; align-items: center; gap: 8px;">
+          <img src="assets/img/STELVIO AI.png" alt="Stelvio" style="width: 32px; height: 32px; vertical-align: middle;" />
+          Training Room
+        </h3>
+        <button class="modal-close" onclick="closeTrainingRoomModal()">✖</button>
+      </div>
+      
+      <div class="modal-body" style="max-height: calc(90vh - 180px); overflow-y: auto;">
+        <!-- Training Room 목록 -->
+        <div class="training-room-list-section" style="margin-bottom: 30px;">
+          <h2 style="margin-bottom: 20px; color: #333; font-size: 1.3em;">Training Room 선택</h2>
+          <div id="trainingRoomModalList" class="training-room-list" style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+            <!-- Training Room 목록이 여기에 동적으로 추가됩니다 -->
+          </div>
+        </div>
+
+        <!-- 선택된 Training Room 정보 및 버튼 -->
+        <div id="selectedTrainingRoomModalSection" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+          <h3 id="selectedTrainingRoomModalTitle" style="margin-bottom: 20px; color: #333; font-size: 1.1em;"></h3>
+          <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-default-style btn-with-icon" id="btnPlayerModal" onclick="openPlayerListFromModal()" disabled>
+              <img src="assets/img/personals.png" alt="Player" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              Player
+            </button>
+            <button class="btn btn-success btn-default-style btn-with-icon" id="btnCoachModal" onclick="openCoachModeFromModal()" disabled>
+              <img src="assets/img/personal.png" alt="Coach" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              Coach
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeTrainingRoomModal()">취소</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ========== 실내 평로라 대회 대시보드 화면 ========== -->
   <div id="rollerRaceDashboardScreen" class="screen">
     <div class="dashboard-header">
