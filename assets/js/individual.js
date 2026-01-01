@@ -20,6 +20,9 @@ document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
 // 사용자 FTP 값 저장 (전역 변수)
 let userFTP = 200; // 기본값 200W
 
+// Firebase에서 받은 목표 파워 값 저장 (전역 변수)
+let firebaseTargetPower = null;
+
 // 2. Firebase 데이터 구독 (내 자전거 데이터)
 // SESSION_ID는 firebaseConfig.js에 정의됨
 db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
@@ -30,7 +33,28 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         console.log('[Firebase] 사용자 데이터:', JSON.stringify(data, null, 2));
         console.log('[Firebase] 사용자 데이터 키 목록:', Object.keys(data || {}));
         
-        // FTP 값 추출 시도 (여러 가능한 필드명 및 경로 확인)
+        // targetPower 값 확인 (Firebase에서 계산된 목표 파워 값 우선 사용)
+        if (data.targetPower !== undefined && data.targetPower !== null && data.targetPower !== '') {
+            const targetPowerValue = Number(data.targetPower);
+            if (!isNaN(targetPowerValue) && targetPowerValue >= 0) {
+                firebaseTargetPower = targetPowerValue;
+                console.log('[Firebase] 목표 파워 값 (targetPower):', firebaseTargetPower, 'W');
+            }
+        } else if (data.target_power !== undefined && data.target_power !== null && data.target_power !== '') {
+            const targetPowerValue = Number(data.target_power);
+            if (!isNaN(targetPowerValue) && targetPowerValue >= 0) {
+                firebaseTargetPower = targetPowerValue;
+                console.log('[Firebase] 목표 파워 값 (target_power):', firebaseTargetPower, 'W');
+            }
+        } else if (data.segmentTargetPowerW !== undefined && data.segmentTargetPowerW !== null && data.segmentTargetPowerW !== '') {
+            const targetPowerValue = Number(data.segmentTargetPowerW);
+            if (!isNaN(targetPowerValue) && targetPowerValue >= 0) {
+                firebaseTargetPower = targetPowerValue;
+                console.log('[Firebase] 목표 파워 값 (segmentTargetPowerW):', firebaseTargetPower, 'W');
+            }
+        }
+        
+        // FTP 값 추출 시도 (targetPower가 없을 때 계산용으로 사용)
         let foundFTP = null;
         
         // 1순위: 직접 필드 (다양한 대소문자 조합)
@@ -68,7 +92,7 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         updateUserName(data);
         updateDashboard(data);
         
-        // TARGET 파워도 업데이트 (FTP 값이 변경되었으므로)
+        // TARGET 파워도 업데이트
         updateTargetPower();
     } else {
         // 데이터가 없으면 (연결 안됨)
@@ -76,6 +100,8 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         document.getElementById('ui-current-power').style.fill = '#555';
         // 기본값으로 Bike 번호 표시
         document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
+        // Firebase targetPower도 초기화
+        firebaseTargetPower = null;
     }
 });
 
@@ -384,7 +410,7 @@ function stopSegmentCountdown() {
     lastCountdownValue = null;
 }
 
-// TARGET 파워 업데이트 함수 (세그먼트 목표값 계산)
+// TARGET 파워 업데이트 함수 (Firebase에서 계산된 값 우선 사용)
 function updateTargetPower() {
     const targetPowerEl = document.getElementById('ui-target-power');
     if (!targetPowerEl) {
@@ -392,6 +418,15 @@ function updateTargetPower() {
         return;
     }
     
+    // 1순위: Firebase에서 받은 targetPower 값 사용 (서버에서 계산된 값)
+    if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower >= 0) {
+        console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
+        targetPowerEl.textContent = String(Math.round(firebaseTargetPower));
+        targetPowerEl.setAttribute('fill', '#ff8c00');
+        return;
+    }
+    
+    // 2순위: 세그먼트 데이터로 계산 (Firebase targetPower가 없을 때만)
     // 워크아웃 데이터 확인
     if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
         console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
@@ -426,6 +461,7 @@ function updateTargetPower() {
     const targetType = seg.target_type || 'ftp_pct';
     const targetValue = seg.target_value;
     
+    console.log('[updateTargetPower] 세그먼트 데이터로 계산 (Firebase targetPower 없음)');
     console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex);
     console.log('[updateTargetPower] target_type:', targetType, 'target_value:', targetValue, '타입:', typeof targetValue);
     console.log('[updateTargetPower] 사용자 FTP 값:', ftp);
