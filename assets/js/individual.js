@@ -19,6 +19,7 @@ document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
 
 // 사용자 FTP 값 저장 (전역 변수)
 let userFTP = 200; // 기본값 200W
+window.userFTP = userFTP; // workoutManager.js에서 접근 가능하도록 전역 노출
 
 // Firebase에서 받은 목표 파워 값 저장 (전역 변수)
 let firebaseTargetPower = null;
@@ -94,6 +95,7 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
         // FTP 값이 유효한지 확인 (0보다 큰 값)
         if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
             userFTP = foundFTP;
+            window.userFTP = userFTP; // workoutManager.js에서 접근 가능하도록 전역 노출
             console.log('[Firebase] 사용자 FTP 값 성공적으로 추출:', userFTP, 'W');
             // 속도계 레이블 업데이트 (FTP 값이 변경되었으므로)
             if (typeof updateGaugeTicksAndLabels === 'function') {

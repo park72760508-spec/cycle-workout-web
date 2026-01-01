@@ -610,7 +610,14 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   if (!canvas) return;
   
   // 사용자 FTP 가져오기
-  const ftp = Number(window.currentUser?.ftp) || 200;
+  // 개인 대시보드의 경우 individual.js의 userFTP 변수 사용
+  let ftp = 200;
+  if (canvasId === 'individualSegmentGraph') {
+    // individual.js에서 전역 변수로 설정된 userFTP 사용
+    ftp = Number(window.userFTP) || Number(window.currentUser?.ftp) || 200;
+  } else {
+    ftp = Number(window.currentUser?.ftp) || 200;
+  }
   
   // 총 시간 계산
   const totalSeconds = segments.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
@@ -800,16 +807,31 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineTo(padding.left, y);
     ctx.stroke();
     
-    // 파워 값 표시
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
+    // 파워 값 표시 (개인 대시보드의 경우 FTP 기준 값으로 표시)
+    if (canvasId === 'individualSegmentGraph') {
+      // 개인 대시보드: FTP 기준 백분율로 표시 (예: 50%, 100%, 150%)
+      const ftpPercent = Math.round((power / ftp) * 100);
+      if (canvasId === 'individualSegmentGraph') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 개인 대시보드: 밝은 색상
+      } else {
+        ctx.fillStyle = '#374151';
+      }
+      const powerFontSize = '8px sans-serif';
+      ctx.font = powerFontSize;
+      ctx.textAlign = 'right';
+      ctx.fillText(`${ftpPercent}%`, padding.left - 10, y + 4);
     } else {
-      ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
+      // 기존 로직 (다른 화면)
+      if (canvasId === 'trainingSegmentGraph') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
+      } else {
+        ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
+      }
+      const powerFontSize = '11px sans-serif';
+      ctx.font = powerFontSize;
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
     }
-    const powerFontSize = (canvasId === 'individualSegmentGraph') ? '8px sans-serif' : '11px sans-serif';
-    ctx.font = powerFontSize;
-    ctx.textAlign = 'right';
-    ctx.fillText(Math.round(power) + 'W', padding.left - 10, y + 4);
   }
   
   // 세그먼트 막대 그리기
@@ -982,29 +1004,68 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     );
   }
   
-  // 축 라벨
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
-  } else {
-    ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
+  // 축 라벨 (개인 대시보드는 제거)
+  if (canvasId !== 'individualSegmentGraph') {
+    // 개인 대시보드가 아닌 경우에만 축 라벨 표시
+    if (canvasId === 'trainingSegmentGraph') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
+    } else {
+      ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
+    }
+    const axisLabelFontSize = 'bold 12px sans-serif';
+    const axisLabelY = graphHeight - 10;
+    ctx.font = axisLabelFontSize;
+    ctx.textAlign = 'center';
+    ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, axisLabelY);
+    
+    // 세로축 라벨 (파워)
+    const verticalLabelFontSize = 'bold 12px sans-serif';
+    ctx.font = verticalLabelFontSize;
+    ctx.save();
+    ctx.translate(15, padding.top + chartHeight / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('파워 (W)', 0, 0);
+    ctx.restore();
   }
-  const axisLabelFontSize = (canvasId === 'individualSegmentGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
-  const axisLabelY = (canvasId === 'individualSegmentGraph') ? graphHeight - 5 : graphHeight - 10;
-  ctx.font = axisLabelFontSize;
-  ctx.textAlign = 'center';
-  ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, axisLabelY);
   
-  // 진행율 표시 제거됨 (버튼 위에 표시하지 않음)
-  
-  // 세로축 라벨 (파워)
-  const verticalLabelFontSize = (canvasId === 'individualSegmentGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
-  ctx.font = verticalLabelFontSize;
-  ctx.save();
-  const verticalLabelX = (canvasId === 'individualSegmentGraph') ? 10 : 15;
-  ctx.translate(verticalLabelX, padding.top + chartHeight / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('파워 (W)', 0, 0);
-  ctx.restore();
+  // 개인 대시보드: 그래프 상단 중간에 민트색 둥근네모 상자에 워크아웃 총시간 표기
+  if (canvasId === 'individualSegmentGraph') {
+    const totalMinutes = Math.round(totalSeconds / 60);
+    const totalTimeText = `${totalMinutes}m`;
+    
+    // 텍스트 크기 측정
+    ctx.font = 'bold 12px sans-serif';
+    const textMetrics = ctx.measureText(totalTimeText);
+    const textWidth = textMetrics.width;
+    const boxPadding = 8;
+    const boxWidth = textWidth + boxPadding * 2;
+    const boxHeight = 24;
+    const boxX = padding.left + chartWidth / 2 - boxWidth / 2; // 그래프 중간
+    const boxY = padding.top - boxHeight / 2; // 그래프 상단 중간
+    
+    // 민트색 둥근네모 상자 그리기
+    const borderRadius = 6;
+    ctx.fillStyle = 'rgba(0, 212, 170, 0.9)'; // 민트색 (#00d4aa)
+    ctx.beginPath();
+    ctx.moveTo(boxX + borderRadius, boxY);
+    ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + borderRadius);
+    ctx.lineTo(boxX + boxWidth, boxY + boxHeight - borderRadius);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - borderRadius, boxY + boxHeight);
+    ctx.lineTo(boxX + borderRadius, boxY + boxHeight);
+    ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - borderRadius);
+    ctx.lineTo(boxX, boxY + borderRadius);
+    ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
+    ctx.closePath();
+    ctx.fill();
+    
+    // 텍스트 표시
+    ctx.fillStyle = '#fff'; // 흰색 텍스트
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(totalTimeText, padding.left + chartWidth / 2, padding.top);
+  }
 }
 
 /**
