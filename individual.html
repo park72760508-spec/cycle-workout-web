@@ -35,6 +35,15 @@
             padding: 10px 20px;
             background-color: #1e1e1e;
             border-bottom: 1px solid #333;
+            position: relative; /* 세그먼트 정보 절대 위치 기준 */
+        }
+        
+        /* 세그먼트 정보 중앙 정렬 */
+        #segment-info {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
         }
         .bike-badge {
             background-color: #00d4aa;
@@ -123,12 +132,12 @@
         }
         
         .segment-graph-container {
-            width: 100%;
+            width: 98%; /* 그래프 블럭의 98% 너비 */
             max-width: 600px;
-            height: 100% !important; /* 강제로 100% 높이 설정 */
+            height: 98% !important; /* 그래프 블럭의 98% 높이 */
             position: relative;
             display: flex;
-            align-items: stretch; /* Canvas를 컨테이너 높이에 맞춤 */
+            align-items: center; /* Canvas를 컨테이너 중앙에 배치 */
             justify-content: center;
         }
         .segment-graph-container canvas {
