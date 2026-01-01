@@ -23,6 +23,11 @@ let userFTP = 200; // 기본값 200W
 // Firebase에서 받은 목표 파워 값 저장 (전역 변수)
 let firebaseTargetPower = null;
 
+// 가민 스타일 부드러운 바늘 움직임을 위한 변수
+let currentPowerValue = 0; // Firebase에서 받은 실제 파워값
+let displayPower = 0; // 화면에 표시되는 부드러운 파워값 (보간 적용)
+let gaugeAnimationFrameId = null; // 애니메이션 루프 ID
+
 // 2. Firebase 데이터 구독 (내 자전거 데이터)
 // SESSION_ID는 firebaseConfig.js에 정의됨
 db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
@@ -187,7 +192,11 @@ function updateDashboard(data) {
     const power = Number(data.power || data.currentPower || data.watts || data.currentPowerW || 0);
     const powerValue = Math.round(power); // 정수로 변환
     
+    // 현재 파워값을 전역 변수에 저장 (바늘 애니메이션 루프에서 사용)
+    currentPowerValue = powerValue;
+    
     // SVG text 요소는 textContent 사용 (innerText보다 안정적)
+    // 텍스트는 즉시 업데이트 (바늘은 애니메이션 루프에서 부드럽게 이동)
     const powerEl = document.getElementById('ui-current-power');
     if (powerEl) {
         powerEl.textContent = powerValue;
@@ -217,26 +226,8 @@ function updateDashboard(data) {
     if (lapPowerEl) {
         lapPowerEl.textContent = Math.round(lapPower);
     }
-
-    // 2. 게이지 바늘 회전 (동일한 power 값 사용)
-    // 위쪽 반원에 맞춰 -90도(왼쪽 상단) ~ 90도(오른쪽 상단)로 회전
-    // FTP를 알 수 없으므로 300W를 풀 스케일(100%)로 가정하거나, 
-    // 방장이 maxPower를 보내주면 더 좋음. 여기선 400W 기준.
-    const maxGauge = 400; 
-    let ratio = powerValue / maxGauge;
-    if (ratio > 1) ratio = 1;
-    if (ratio < 0) ratio = 0;
     
-    // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
-    // 바늘은 기본적으로 rotate(-90)이 적용되어 있으므로
-    // -90도에서 시작하여 90도까지 회전 (-90도 ~ 90도)
-    const angle = -90 + (ratio * 180); // -90도에서 시작하여 180도 범위 회전 (-90도 ~ 90도)
-    
-    const needle = document.getElementById('gauge-needle');
-    if (needle) {
-        // 부드러운 움직임을 위해 CSS transition 사용 가능 (여기선 JS로 직접 제어)
-        needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
-    }
+    // 바늘 움직임은 startGaugeAnimationLoop에서 처리 (가민 스타일 부드러운 움직임)
 }
 
 function updateTimer(status) {
@@ -440,6 +431,10 @@ function updateTargetPower() {
         console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
         targetPowerEl.textContent = String(Math.round(firebaseTargetPower));
         targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 업데이트
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
         return;
     }
     
@@ -449,6 +444,10 @@ function updateTargetPower() {
         console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 숨김
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
         return;
     }
     
@@ -457,6 +456,10 @@ function updateTargetPower() {
         console.warn('[updateTargetPower] 유효하지 않은 세그먼트 인덱스:', currentSegmentIndex, '세그먼트 개수:', window.currentWorkout.segments.length);
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 숨김
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
         return;
     }
     
@@ -465,6 +468,10 @@ function updateTargetPower() {
         console.warn('[updateTargetPower] 세그먼트 데이터가 없습니다. 인덱스:', currentSegmentIndex);
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 숨김
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
         return;
     }
     
@@ -522,6 +529,11 @@ function updateTargetPower() {
     console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
     targetPowerEl.textContent = targetPower > 0 ? String(targetPower) : '0';
     targetPowerEl.setAttribute('fill', '#ff8c00');
+    
+    // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
+    if (typeof updateTargetPowerArc === 'function') {
+        updateTargetPowerArc();
+    }
 }
 
 // 세그먼트 그래프 업데이트 함수
@@ -676,8 +688,140 @@ function updateGaugeTicksAndLabels() {
 
 // 초기 속도계 눈금 및 레이블 생성
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', updateGaugeTicksAndLabels);
+    document.addEventListener('DOMContentLoaded', () => {
+        updateGaugeTicksAndLabels();
+        startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+    });
 } else {
     // DOM이 이미 로드되었으면 바로 실행
     updateGaugeTicksAndLabels();
+    startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+}
+
+/**
+ * [가민 스타일] 게이지 애니메이션 루프 (60FPS 보간 이동)
+ * - 바늘은 매 프레임 부드럽게 이동 (Lerp 적용)
+ * - Indoor Training의 바늘 움직임 로직과 동일
+ */
+function startGaugeAnimationLoop() {
+    // 이미 실행 중이면 중복 실행 방지
+    if (gaugeAnimationFrameId !== null) return;
+    
+    const loop = () => {
+        // 1. 목표값(currentPowerValue)과 현재표시값(displayPower)의 차이 계산
+        const target = currentPowerValue || 0;
+        const current = displayPower || 0;
+        const diff = target - current;
+        
+        // 2. 보간(Interpolation) 적용: 거리가 멀면 빠르게, 가까우면 천천히 (감속 효과)
+        // 0.15는 반응속도 계수 (높을수록 빠름, 낮을수록 부드러움. 0.1~0.2 추천)
+        if (Math.abs(diff) > 0.1) {
+            displayPower = current + diff * 0.15;
+        } else {
+            displayPower = target; // 차이가 미세하면 목표값으로 고정 (떨림 방지)
+        }
+        
+        // 3. 바늘 각도 계산 및 업데이트 (매 프레임 실행)
+        // FTP 기반으로 최대 파워 계산 (FTP × 2)
+        const maxPower = userFTP * 2;
+        let ratio = Math.min(Math.max(displayPower / maxPower, 0), 1);
+        
+        // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
+        const angle = -90 + (ratio * 180);
+        
+        const needle = document.getElementById('gauge-needle');
+        if (needle) {
+            // CSS Transition 간섭 제거하고 직접 제어
+            needle.style.transition = 'none';
+            needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
+        }
+        
+        // 4. 목표 파워 원호 업데이트
+        updateTargetPowerArc();
+        
+        // 다음 프레임 요청
+        gaugeAnimationFrameId = requestAnimationFrame(loop);
+    };
+    
+    // 루프 시작
+    gaugeAnimationFrameId = requestAnimationFrame(loop);
+}
+
+/**
+ * 속도계 원호에 목표 파워값만큼 투명 주황색으로 채우기
+ */
+function updateTargetPowerArc() {
+    // 목표 파워값 가져오기
+    const targetPowerEl = document.getElementById('ui-target-power');
+    if (!targetPowerEl) return;
+    
+    const targetPower = Number(targetPowerEl.textContent) || 0;
+    if (targetPower <= 0) {
+        // 목표 파워가 없으면 원호 숨김
+        const targetArc = document.getElementById('gauge-target-arc');
+        if (targetArc) {
+            targetArc.style.display = 'none';
+        }
+        return;
+    }
+    
+    // FTP 기반으로 최대 파워 계산
+    const maxPower = userFTP * 2;
+    if (maxPower <= 0) return;
+    
+    // 목표 파워 비율 계산 (0 ~ 1)
+    const ratio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+    
+    // 각도 계산: 180도(왼쪽 상단)에서 시작하여 270도를 거쳐 360도(0도, 오른쪽 상단)까지
+    // ratio = 0 → 180도, ratio = 1 → 0도(360도)
+    const startAngle = 180;
+    const endAngle = 180 - (ratio * 180);
+    
+    // SVG 원호 경로 생성
+    const centerX = 100;
+    const centerY = 140;
+    const radius = 80;
+    
+    // 원호 시작점과 끝점 계산
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    
+    const startX = centerX + radius * Math.cos(startRad);
+    const startY = centerY + radius * Math.sin(startRad);
+    const endX = centerX + radius * Math.cos(endRad);
+    const endY = centerY + radius * Math.sin(endRad);
+    
+    // 원호가 큰지 작은지 판단 (180도 이상이면 large-arc-flag = 1)
+    const largeArcFlag = ratio > 0.5 ? 1 : 0;
+    
+    // SVG path 생성
+    const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${endX} ${endY}`;
+    
+    // 목표 파워 원호 요소 가져오기 또는 생성
+    let targetArc = document.getElementById('gauge-target-arc');
+    if (!targetArc) {
+        // SVG에 원호 요소 추가
+        const svg = document.querySelector('.gauge-container svg');
+        if (svg) {
+            targetArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            targetArc.id = 'gauge-target-arc';
+            targetArc.setAttribute('fill', 'none');
+            targetArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.5)'); // 투명 주황색
+            targetArc.setAttribute('stroke-width', '12');
+            targetArc.setAttribute('stroke-linecap', 'round');
+            // 원호 배경 뒤에, 눈금 앞에 배치
+            const arcBg = svg.querySelector('path[d*="M 20 140"]');
+            if (arcBg && arcBg.nextSibling) {
+                svg.insertBefore(targetArc, arcBg.nextSibling);
+            } else {
+                svg.insertBefore(targetArc, svg.firstChild.nextSibling);
+            }
+        } else {
+            return;
+        }
+    }
+    
+    // 원호 경로 업데이트
+    targetArc.setAttribute('d', pathData);
+    targetArc.style.display = 'block';
 }
