@@ -392,8 +392,11 @@ function renderPlayerList() {
 
   playerListContent.innerHTML = tracks.map(track => {
     const hasUser = track.userId && track.userName;
-    const roomCode = currentSelectedTrainingRoom ? `sk_${currentSelectedTrainingRoom.id}` : 'default';
-    const dashboardUrl = `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomCode}`;
+    // Training Room id를 room 파라미터로 전달 (firebaseConfig.js에서 SESSION_ID로 사용)
+    const roomId = currentSelectedTrainingRoom ? currentSelectedTrainingRoom.id : null;
+    const dashboardUrl = roomId 
+      ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
+      : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
 
     return `
       <div class="player-track-item">

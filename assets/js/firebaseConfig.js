@@ -32,5 +32,14 @@ try {
     console.error("🔥 Firebase 연결 실패! (인터넷 연결이나 키 값을 확인하세요)", e);
 }
 
-// 3. 고정 세션 ID (방 이름)
-const SESSION_ID = 'session_room_1';
+// 3. 세션 ID (Training Room ID를 URL 파라미터에서 가져옴)
+// URL 파라미터에서 'room' 값을 찾아서 SESSION_ID로 사용
+const urlParams = new URLSearchParams(window.location.search);
+let SESSION_ID = urlParams.get('room');
+
+// 만약 주소에 방 ID가 없다면 기본값 사용
+if (!SESSION_ID) {
+    SESSION_ID = 'session_room_1';
+}
+
+console.log("현재 접속된 그룹방 (SESSION_ID):", SESSION_ID);
