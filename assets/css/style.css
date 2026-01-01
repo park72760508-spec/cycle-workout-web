@@ -10300,3 +10300,203 @@ line[id^="needle-"] {
 .speedometer-needle circle {
     shape-rendering: geometricPrecision;
 }
+
+/* ========== Player List 화면 (모바일/태블릿 최적화) ========== */
+#playerListScreen {
+  background: #f6f8fa;
+  padding: 0;
+}
+
+#playerListScreen .dashboard-header {
+  background: white;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 0;
+}
+
+.player-list-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px;
+  background: #f6f8fa;
+  min-height: calc(100vh - 80px);
+}
+
+.player-list-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.player-track-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.player-track-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.player-track-number {
+  flex: 0 0 80px;
+  text-align: center;
+  font-weight: bold;
+  color: #667eea;
+  font-size: 1.2em;
+}
+
+.player-track-name {
+  flex: 1;
+  font-size: 1em;
+  word-break: break-word;
+}
+
+.player-track-name.has-user {
+  color: #333;
+  font-weight: 500;
+}
+
+.player-track-name.no-user {
+  color: #999;
+  font-style: italic;
+}
+
+.player-track-action {
+  flex-shrink: 0;
+}
+
+.player-enter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 14px;
+  min-height: 44px; /* 터치 친화적인 최소 높이 */
+  white-space: nowrap;
+}
+
+.player-enter-btn.disabled,
+.player-enter-btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.player-enter-btn .btn-icon-image {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+
+/* 모바일 최적화 (480px 이하) */
+@media (max-width: 480px) {
+  #playerListScreen .dashboard-header {
+    padding: 12px 16px;
+  }
+
+  #playerListScreen .dashboard-header h1 {
+    font-size: 1.3em;
+  }
+
+  .player-list-container {
+    padding: 12px;
+  }
+
+  .player-track-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .player-track-number {
+    flex: none;
+    text-align: left;
+    font-size: 1.1em;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .player-track-name {
+    font-size: 0.95em;
+    padding: 8px 0;
+  }
+
+  .player-track-action {
+    width: 100%;
+  }
+
+  .player-enter-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+    font-size: 15px;
+    min-height: 48px;
+  }
+
+  .race-title-text {
+    font-size: 0.85em;
+  }
+
+  .race-title-icon {
+    height: 1em;
+  }
+}
+
+/* 태블릿 최적화 (481px ~ 768px) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .player-list-container {
+    padding: 16px;
+  }
+
+  .player-track-item {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .player-track-number {
+    flex: 0 0 70px;
+    font-size: 1.1em;
+  }
+
+  .player-track-name {
+    font-size: 0.95em;
+  }
+
+  .player-enter-btn {
+    padding: 10px 14px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+}
+
+/* 작은 태블릿/큰 모바일 (481px ~ 640px) */
+@media (min-width: 481px) and (max-width: 640px) {
+  .player-track-item {
+    flex-wrap: wrap;
+  }
+
+  .player-track-number {
+    flex: 0 0 100%;
+    text-align: left;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .player-track-name {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .player-track-action {
+    flex: 0 0 auto;
+  }
+}
