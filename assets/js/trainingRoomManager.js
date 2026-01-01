@@ -182,6 +182,9 @@ async function selectTrainingRoom(roomId) {
   // 전역 변수 및 localStorage에 room id 저장 (Firebase Config에서 사용)
   if (typeof window !== 'undefined') {
     window.currentTrainingRoomId = String(room.id);
+    // Firebase Config의 SESSION_ID도 업데이트
+    window.SESSION_ID = String(room.id);
+    console.log('[Training Room] window.SESSION_ID 업데이트:', window.SESSION_ID);
   }
   if (typeof localStorage !== 'undefined') {
     try {
@@ -757,6 +760,21 @@ async function selectTrainingRoomForModal(roomId) {
   }
 
   // 선택된 Training Room 저장 (비밀번호 확인 완료 또는 비밀번호 없음)
+  // 전역 변수 및 localStorage에 room id 저장 (Firebase Config에서 사용)
+  if (typeof window !== 'undefined') {
+    window.currentTrainingRoomId = String(room.id);
+    // Firebase Config의 SESSION_ID도 업데이트
+    window.SESSION_ID = String(room.id);
+    console.log('[Training Room Modal] window.SESSION_ID 업데이트:', window.SESSION_ID);
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem('currentTrainingRoomId', String(room.id));
+    } catch (e) {
+      console.warn('[Training Room Modal] localStorage 저장 실패:', e);
+    }
+  }
+  console.log('[Training Room Modal] Room ID 저장됨:', room.id);
 
   // 선택된 카드 하이라이트 (체크마크 추가/제거)
   const modalListContainer = document.getElementById('trainingRoomModalList');
