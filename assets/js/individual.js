@@ -17,15 +17,34 @@ while (!myBikeId) {
 // 초기 표시 (나중에 사용자 이름으로 업데이트됨)
 document.getElementById('bike-id-display').innerText = `Bike ${myBikeId}`;
 
+// 사용자 FTP 값 저장 (전역 변수)
+let userFTP = 200; // 기본값 200W
+
 // 2. Firebase 데이터 구독 (내 자전거 데이터)
 // SESSION_ID는 firebaseConfig.js에 정의됨
 db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
     const data = snapshot.val();
     
     if (data) {
+        // 사용자 FTP 값 업데이트 (여러 필드명 지원)
+        console.log('[Firebase] 사용자 데이터:', JSON.stringify(data, null, 2));
+        
+        if (data.ftp !== undefined && data.ftp !== null) {
+            userFTP = Number(data.ftp) || 200;
+            console.log('[Firebase] 사용자 FTP 값 (ftp 필드):', userFTP);
+        } else if (data.FTP !== undefined && data.FTP !== null) {
+            userFTP = Number(data.FTP) || 200;
+            console.log('[Firebase] 사용자 FTP 값 (FTP 필드):', userFTP);
+        } else {
+            console.warn('[Firebase] FTP 값이 데이터에 없습니다. 기본값 200 사용');
+        }
+        
         // 사용자 이름 업데이트
         updateUserName(data);
         updateDashboard(data);
+        
+        // TARGET 파워도 업데이트 (FTP 값이 변경되었으므로)
+        updateTargetPower();
     } else {
         // 데이터가 없으면 (연결 안됨)
         document.getElementById('ui-current-power').innerText = '-';
@@ -372,8 +391,8 @@ function updateTargetPower() {
         return;
     }
     
-    // FTP 값 가져오기 (기본값 200W)
-    const ftp = 200; // 개인 대시보드에서는 FTP를 알 수 없으므로 기본값 사용
+    // FTP 값 사용 (Firebase에서 가져온 사용자 FTP 값)
+    const ftp = userFTP;
     
     // 세그먼트 목표 파워 계산
     let targetPower = 0;
@@ -382,11 +401,14 @@ function updateTargetPower() {
     const targetType = seg.target_type || 'ftp_pct';
     const targetValue = seg.target_value;
     
-    console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex, 'target_type:', targetType, 'target_value:', targetValue);
+    console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex);
+    console.log('[updateTargetPower] target_type:', targetType, 'target_value:', targetValue, '타입:', typeof targetValue);
+    console.log('[updateTargetPower] 사용자 FTP 값:', ftp);
     
     if (targetType === 'ftp_pct') {
         const ftpPercent = Number(targetValue) || 100;
         targetPower = Math.round(ftp * (ftpPercent / 100));
+        console.log('[updateTargetPower] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
     } else if (targetType === 'dual') {
         // dual 타입: "100/120" 형식 파싱
         if (typeof targetValue === 'string' && targetValue.includes('/')) {
@@ -418,7 +440,8 @@ function updateTargetPower() {
         targetPower = 0;
     }
     
-    console.log('[updateTargetPower] 계산된 목표 파워:', targetPower);
+    console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
+    console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
     targetPowerEl.textContent = targetPower > 0 ? String(targetPower) : '0';
     targetPowerEl.setAttribute('fill', '#ff8c00');
 }
