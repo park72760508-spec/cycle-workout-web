@@ -4239,6 +4239,22 @@ async function selectWorkoutForTraining(workoutId) {
         // 선택된 워크아웃 저장
         window.indoorTrainingState.currentWorkout = workout;
         
+        // Firebase에 workoutPlan 저장 (개인 대시보드 세그먼트 그래프 표시용)
+        if (workout.segments && workout.segments.length > 0 && typeof db !== 'undefined') {
+            const sessionId = getSessionId();
+            if (sessionId) {
+                db.ref(`sessions/${sessionId}/workoutPlan`).set(workout.segments)
+                    .then(() => {
+                        console.log('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
+                    })
+                    .catch(error => {
+                        console.error('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 실패:', error);
+                    });
+            } else {
+                console.warn('[Indoor Training] SESSION_ID를 찾을 수 없어 workoutPlan을 저장할 수 없습니다.');
+            }
+        }
+        
         // 모달 닫기
         closeWorkoutSelectionModal();
         
@@ -4821,7 +4837,18 @@ window.startTraining = function() {
     _originalStartTraining();
     // 워크아웃 전체 정보 업로드 (그래프 그리기용)
     if (window.indoorTrainingState.currentWorkout && typeof db !== 'undefined') {
-        db.ref(`sessions/${SESSION_ID}/workoutPlan`).set(window.indoorTrainingState.currentWorkout.segments);
+        const sessionId = getSessionId();
+        if (sessionId) {
+            db.ref(`sessions/${sessionId}/workoutPlan`).set(window.indoorTrainingState.currentWorkout.segments)
+                .then(() => {
+                    console.log('[Indoor Training] workoutPlan Firebase 저장 완료:', sessionId);
+                })
+                .catch(error => {
+                    console.error('[Indoor Training] workoutPlan Firebase 저장 실패:', error);
+                });
+        } else {
+            console.warn('[Indoor Training] SESSION_ID를 찾을 수 없어 workoutPlan을 저장할 수 없습니다.');
+        }
     }
     uploadToFirebase(); // 즉시 전송
 };

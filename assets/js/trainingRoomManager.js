@@ -430,12 +430,17 @@ async function renderPlayerList() {
 
   // Training Room의 트랙별 사용자 정보 가져오기
   if (roomId) {
+    console.log('[Player List] 트랙 정보 로드 시작, roomId:', roomId);
     try {
       const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
+      console.log('[Player List] API 호출 URL:', url);
       const response = await fetch(url);
       const result = await response.json();
       
+      console.log('[Player List] API 응답:', result);
+      
       if (result.success && result.tracks && Array.isArray(result.tracks)) {
+        console.log('[Player List] 트랙 데이터 수:', result.tracks.length);
         // 트랙 정보 업데이트
         result.tracks.forEach(apiTrack => {
           const trackNumber = parseInt(apiTrack.trackNumber, 10);
@@ -444,9 +449,15 @@ async function renderPlayerList() {
             if (track) {
               track.userId = apiTrack.userId || null;
               track.userName = apiTrack.userName || null;
+              if (track.userId && track.userName) {
+                console.log(`[Player List] 트랙 ${trackNumber} 업데이트: ${track.userName} (ID: ${track.userId})`);
+              }
             }
           }
         });
+        console.log('[Player List] 트랙 정보 업데이트 완료');
+      } else {
+        console.warn('[Player List] API 응답이 예상과 다릅니다:', result);
       }
     } catch (error) {
       console.error('[Player List] 트랙 정보 로드 오류:', error);
@@ -454,6 +465,9 @@ async function renderPlayerList() {
     }
   } else {
     console.warn('[Player List] room id를 찾을 수 없어 트랙 정보를 로드할 수 없습니다.');
+    console.log('[Player List] currentSelectedTrainingRoom:', currentSelectedTrainingRoom);
+    console.log('[Player List] window.currentTrainingRoomId:', window.currentTrainingRoomId);
+    console.log('[Player List] localStorage currentTrainingRoomId:', localStorage.getItem('currentTrainingRoomId'));
   }
 
   // Training Room id를 room 파라미터로 전달 (firebaseConfig.js에서 SESSION_ID로 사용)
@@ -1189,6 +1203,102 @@ function closeTrackUserSelectModal() {
   }
 }
 
+/**
+ * Firebase에 저장된 트랙별 사용자 정보 확인 (디버깅용)
+ * 브라우저 콘솔에서 checkFirebaseTrackUsers(roomId) 호출 가능
+ */
+async function checkFirebaseTrackUsers(roomId) {
+  if (!roomId) {
+    // roomId가 없으면 현재 선택된 room id 사용
+    roomId = currentSelectedTrainingRoom?.id 
+      || window.currentTrainingRoomId 
+      || localStorage.getItem('currentTrainingRoomId')
+      || window.SESSION_ID;
+  }
+  
+  if (!roomId) {
+    console.error('[Firebase 확인] room id를 찾을 수 없습니다.');
+    console.log('사용법: checkFirebaseTrackUsers("room_id_값")');
+    return;
+  }
+  
+  console.log(`[Firebase 확인] Room ID: ${roomId}`);
+  console.log(`[Firebase 확인] Firebase URL: https://stelvio-ai-default-rtdb.firebaseio.com/sessions/${roomId}/users.json`);
+  
+  try {
+    const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log('[Firebase 확인] ✅ 데이터 조회 성공');
+      console.log('[Firebase 확인] 트랙별 사용자 정보:', result.tracks);
+      
+      // 상세 정보 출력
+      const tracksWithUsers = result.tracks.filter(t => t.userId && t.userName);
+      if (tracksWithUsers.length > 0) {
+        console.log('[Firebase 확인] 할당된 트랙:');
+        tracksWithUsers.forEach(track => {
+          console.log(`  트랙${track.trackNumber}: ${track.userName} (ID: ${track.userId})`);
+        });
+      } else {
+        console.log('[Firebase 확인] ⚠️ 할당된 사용자가 없습니다.');
+      }
+      
+      return result;
+    } else {
+      console.error('[Firebase 확인] ❌ 데이터 조회 실패:', result.error);
+      return result;
+    }
+  } catch (error) {
+    console.error('[Firebase 확인] ❌ 오류 발생:', error);
+    return { success: false, error: error.toString() };
+  }
+}
+
+/**
+ * Firebase에 직접 접근하여 원시 데이터 확인 (디버깅용)
+ * 브라우저 콘솔에서 checkFirebaseRawData(roomId) 호출 가능
+ */
+async function checkFirebaseRawData(roomId) {
+  if (!roomId) {
+    roomId = currentSelectedTrainingRoom?.id 
+      || window.currentTrainingRoomId 
+      || localStorage.getItem('currentTrainingRoomId')
+      || window.SESSION_ID;
+  }
+  
+  if (!roomId) {
+    console.error('[Firebase 원시 데이터 확인] room id를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const firebaseUrl = `https://stelvio-ai-default-rtdb.firebaseio.com/sessions/${roomId}/users.json`;
+  console.log(`[Firebase 원시 데이터 확인] URL: ${firebaseUrl}`);
+  
+  try {
+    const response = await fetch(firebaseUrl);
+    const data = await response.json();
+    
+    console.log('[Firebase 원시 데이터 확인] ✅ 원시 데이터:', data);
+    
+    if (data) {
+      console.log('[Firebase 원시 데이터 확인] 트랙별 상세 정보:');
+      Object.keys(data).forEach(trackNumber => {
+        const trackData = data[trackNumber];
+        console.log(`  트랙 ${trackNumber}:`, trackData);
+      });
+    } else {
+      console.log('[Firebase 원시 데이터 확인] ⚠️ 데이터가 없습니다.');
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('[Firebase 원시 데이터 확인] ❌ 오류 발생:', error);
+    return null;
+  }
+}
+
 // 전역 함수 노출
 if (typeof window !== 'undefined') {
   window.loadTrainingRooms = loadTrainingRooms;
@@ -1208,5 +1318,8 @@ if (typeof window !== 'undefined') {
   window.removeUserFromTrack = removeUserFromTrack;
   window.selectUserForTrack = selectUserForTrack;
   window.closeTrackUserSelectModal = closeTrackUserSelectModal;
+  // 디버깅 함수
+  window.checkFirebaseTrackUsers = checkFirebaseTrackUsers;
+  window.checkFirebaseRawData = checkFirebaseRawData;
 }
 
