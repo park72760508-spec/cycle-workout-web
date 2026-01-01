@@ -1802,23 +1802,40 @@ async function selectSearchedUserForPowerMeter(userId) {
         // 저장
         saveAllPowerMeterPairingsToStorage();
         
-        // Firebase에 즉시 FTP 값 전송 (사용자 할당 시 바로 반영)
-        if (typeof db !== 'undefined' && typeof SESSION_ID !== 'undefined') {
-          const userData = {
-            name: powerMeter.userName || `User ${powerMeterId}`,
-            ftp: powerMeter.userFTP || null,
-            lastUpdate: firebase.database.ServerValue.TIMESTAMP
-          };
+        // Firebase에 사용자 정보 저장 (Player List와 동일한 구조)
+        // sessions/{roomId}/users/{trackNumber} 경로에 저장
+        if (typeof db !== 'undefined') {
+          // SESSION_ID 가져오기 (Training Room id)
+          const sessionId = getSessionId();
           
-          // FTP 값이 있으면 전송
-          if (powerMeter.userFTP !== null && powerMeter.userFTP !== undefined && powerMeter.userFTP > 0) {
-            db.ref(`sessions/${SESSION_ID}/users/${powerMeterId}`).update(userData)
+          if (sessionId) {
+            // Player List 화면과 동일한 데이터 구조로 저장
+            const userData = {
+              userId: String(powerMeter.userId || ''),
+              name: powerMeter.userName || '',
+              userName: powerMeter.userName || '',
+              participantName: powerMeter.userName || '',
+              ftp: powerMeter.userFTP || 0,
+              weight: powerMeter.userWeight || 0
+            };
+            
+            // Firebase에 저장 (set을 사용하여 전체 데이터 교체)
+            db.ref(`sessions/${sessionId}/users/${powerMeterId}`).set(userData)
               .then(() => {
-                console.log(`[Firebase] 파워미터 ${powerMeterId} FTP 값 즉시 전송: ${powerMeter.userFTP}W`);
+                console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료:`, {
+                  roomId: sessionId,
+                  trackNumber: powerMeterId,
+                  userId: userData.userId,
+                  userName: userData.userName,
+                  ftp: userData.ftp,
+                  weight: userData.weight
+                });
               })
               .catch(error => {
-                console.warn(`[Firebase] FTP 값 전송 실패:`, error);
+                console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
               });
+          } else {
+            console.warn('[Firebase] SESSION_ID를 찾을 수 없어 사용자 정보를 저장할 수 없습니다.');
           }
         }
         
@@ -1909,6 +1926,24 @@ function clearSelectedUser() {
   
   // 저장
   saveAllPowerMeterPairingsToStorage();
+  
+  // Firebase에서 사용자 정보 삭제
+  if (typeof db !== 'undefined') {
+    const sessionId = getSessionId();
+    
+    if (sessionId) {
+      db.ref(`sessions/${sessionId}/users/${powerMeterId}`).remove()
+        .then(() => {
+          console.log(`[Firebase] 트랙 ${powerMeterId}에서 사용자 정보 삭제 완료:`, {
+            roomId: sessionId,
+            trackNumber: powerMeterId
+          });
+        })
+        .catch(error => {
+          console.error(`[Firebase] 사용자 정보 삭제 실패:`, error);
+        });
+    }
+  }
   
   if (typeof showToast === 'function') {
     showToast('사용자 선택이 해제되었습니다.');
@@ -2080,6 +2115,42 @@ function selectUserForPowerMeter(userId) {
         
         // FTP 기반 눈금 업데이트
         updatePowerMeterTicks(powerMeterId);
+        
+        // 저장
+        saveAllPowerMeterPairingsToStorage();
+        
+        // Firebase에 사용자 정보 저장 (Player List와 동일한 구조)
+        if (typeof db !== 'undefined') {
+          const sessionId = getSessionId();
+          
+          if (sessionId) {
+            // Player List 화면과 동일한 데이터 구조로 저장
+            const userData = {
+              userId: String(powerMeter.userId || ''),
+              name: powerMeter.userName || '',
+              userName: powerMeter.userName || '',
+              participantName: powerMeter.userName || '',
+              ftp: powerMeter.userFTP || 0,
+              weight: powerMeter.userWeight || 0
+            };
+            
+            // Firebase에 저장
+            db.ref(`sessions/${sessionId}/users/${powerMeterId}`).set(userData)
+              .then(() => {
+                console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료:`, {
+                  roomId: sessionId,
+                  trackNumber: powerMeterId,
+                  userId: userData.userId,
+                  userName: userData.userName,
+                  ftp: userData.ftp,
+                  weight: userData.weight
+                });
+              })
+              .catch(error => {
+                console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
+              });
+          }
+        }
         
         // UI 업데이트
         renderUsersForPairing(users);
