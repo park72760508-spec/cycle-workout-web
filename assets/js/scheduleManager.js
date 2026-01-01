@@ -2197,8 +2197,12 @@ async function showPasswordModal(scheduleTitle) {
       // 여기서는 실제 패스워드 확인은 서버에서 받은 값과 비교
       // 실제로는 서버에서 확인해야 하지만, 여기서는 간단히 처리
       // 실제 패스워드는 currentSchedule.password에 저장되어 있음
-      const correctPassword = (currentSchedule && currentSchedule.password) || '';
+      // 저장된 비밀번호가 숫자일 수 있으므로 문자열로 변환하여 비교
+      const correctPassword = (currentSchedule && currentSchedule.password != null) 
+        ? String(currentSchedule.password).trim() 
+        : '';
       
+      // 입력된 비밀번호와 저장된 비밀번호를 모두 문자열로 변환하여 비교
       if (enteredPassword === correctPassword) {
         modal.remove();
         resolve(true);
