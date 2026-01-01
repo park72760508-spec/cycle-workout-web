@@ -117,7 +117,7 @@
         .segment-graph-container {
             width: 100%;
             max-width: 600px;
-            height: 90%; /* 외각 진한 그레이색 바탕화면(.segment-graph-section) 높이의 90% */
+            height: 100%; /* 외각 진한 그레이색 바탕화면(.segment-graph-section) 높이의 100% */
             position: relative;
             display: flex;
             align-items: center;
@@ -125,7 +125,7 @@
         }
         .segment-graph-container canvas {
             width: 100%;
-            height: 100%;
+            height: 90%; /* 세그먼트 그래프 블럭(.segment-graph-container) 높이의 90% */
             display: block;
             object-fit: contain; /* 비율 유지하며 컨테이너에 맞춤 */
         }
