@@ -162,6 +162,11 @@ function formatHMS(totalSeconds) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+// 5초 카운트다운 상태 관리
+let segmentCountdownActive = false;
+let segmentCountdownTimer = null;
+let lastCountdownValue = null;
+
 // 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
 function updateLapTime(status) {
     const lapTimeEl = document.getElementById('ui-lap-time');
@@ -221,15 +226,97 @@ function updateLapTime(status) {
         countdownValue = Math.max(0, Math.floor(status.countdownRemainingSec));
     }
     
+    // 세그먼트 카운트다운 시간 로그 출력
+    if (countdownValue !== null && countdownValue >= 0) {
+        console.log('[updateLapTime] 세그먼트 카운트다운 시간:', countdownValue, '초');
+    }
+    
     // 카운트다운 값 표시
     if (countdownValue !== null && countdownValue >= 0) {
-        lapTimeEl.innerText = formatTime(countdownValue);
+        lapTimeEl.textContent = formatTime(countdownValue);
         // 10초 이하면 빨간색, 그 외는 청록색
-        lapTimeEl.style.fill = countdownValue <= 10 ? '#ff4444' : '#00d4aa';
+        lapTimeEl.setAttribute('fill', countdownValue <= 10 ? '#ff4444' : '#00d4aa');
     } else {
-        lapTimeEl.innerText = '00:00';
-        lapTimeEl.style.fill = '#00d4aa';
+        lapTimeEl.textContent = '00:00';
+        lapTimeEl.setAttribute('fill', '#00d4aa');
     }
+    
+    // 5초 카운트다운 오버레이 처리
+    handleSegmentCountdown(countdownValue, status);
+}
+
+// 5초 카운트다운 오버레이 처리 함수
+function handleSegmentCountdown(countdownValue, status) {
+    // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
+    if (countdownValue === null || countdownValue > 5) {
+        if (segmentCountdownActive) {
+            stopSegmentCountdown();
+        }
+        lastCountdownValue = null;
+        return;
+    }
+    
+    // 5초 이하일 때만 오버레이 표시
+    if (countdownValue <= 5 && countdownValue >= 0) {
+        // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
+        if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+            lastCountdownValue = countdownValue;
+            showSegmentCountdown(countdownValue);
+        }
+    } else if (countdownValue < 0) {
+        // 0 미만이면 오버레이 숨김
+        if (segmentCountdownActive) {
+            stopSegmentCountdown();
+        }
+        lastCountdownValue = null;
+    }
+}
+
+// 세그먼트 카운트다운 오버레이 표시
+function showSegmentCountdown(value) {
+    const overlay = document.getElementById('countdownOverlay');
+    const numEl = document.getElementById('countdownNumber');
+    
+    if (!overlay || !numEl) return;
+    
+    // 오버레이 표시
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+    
+    // 숫자 업데이트
+    numEl.textContent = String(value);
+    
+    // 애니메이션 효과를 위해 클래스 재적용 (강제 리플로우)
+    numEl.style.animation = 'none';
+    setTimeout(() => {
+        numEl.style.animation = '';
+    }, 10);
+    
+    segmentCountdownActive = true;
+    
+    // 0초일 때 0.5초 후 오버레이 숨김
+    if (value === 0) {
+        setTimeout(() => {
+            stopSegmentCountdown();
+        }, 500);
+    }
+}
+
+// 세그먼트 카운트다운 오버레이 숨김
+function stopSegmentCountdown() {
+    const overlay = document.getElementById('countdownOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+    }
+    
+    if (segmentCountdownTimer) {
+        clearInterval(segmentCountdownTimer);
+        segmentCountdownTimer = null;
+    }
+    
+    segmentCountdownActive = false;
+    lastCountdownValue = null;
 }
 
 // TARGET 파워 업데이트 함수 (세그먼트 목표값 계산)
