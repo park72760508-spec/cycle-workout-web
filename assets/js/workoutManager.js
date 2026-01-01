@@ -1071,7 +1071,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fill();
     
     // 텍스트 표시
-    ctx.fillStyle = '#fff'; // 흰색 텍스트
+    ctx.fillStyle = '#000'; // 검정색 텍스트
     ctx.font = `bold ${fontSize}px sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
