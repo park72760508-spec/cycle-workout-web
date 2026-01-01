@@ -349,20 +349,20 @@ function renderPlayerList() {
     const dashboardUrl = `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomCode}`;
 
     return `
-      <div class="player-track-item" style="display: flex; align-items: center; gap: 16px; padding: 16px; margin-bottom: 12px; background: white; border: 2px solid #e0e0e0; border-radius: 12px;">
-        <div style="flex: 0 0 80px; text-align: center; font-weight: bold; color: #667eea; font-size: 1.2em;">
+      <div class="player-track-item">
+        <div class="player-track-number">
           트랙${track.trackNumber}
         </div>
-        <div style="flex: 1; color: ${hasUser ? '#333' : '#999'};">
+        <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
           ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
         </div>
-        <div>
+        <div class="player-track-action">
           <a href="${dashboardUrl}" 
              target="_blank"
-             class="btn btn-primary btn-default-style btn-with-icon ${!hasUser ? 'disabled' : ''}"
-             style="${!hasUser ? 'opacity: 0.5; cursor: not-allowed; pointer-events: none;' : ''}">
-            <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            Enter
+             class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser ? 'disabled' : ''}"
+             ${!hasUser ? 'aria-disabled="true" tabindex="-1"' : ''}>
+            <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
+            <span>Enter</span>
           </a>
         </div>
       </div>
