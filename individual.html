@@ -99,11 +99,12 @@
             align-items: center;
             height: 20vh; /* 블럭 높이 증가 */
             min-height: 150px; /* 최소 높이 보장 */
+            position: relative; /* 자식 요소의 height: 90% 기준점 설정 */
         }
         .segment-graph-container {
             width: 100%;
             max-width: 600px;
-            height: 90%; /* Canvas 높이의 90%까지 확대 */
+            height: 90%; /* 외각 진한 그레이색 바탕화면(.segment-graph-section) 높이의 90% */
             position: relative;
             display: flex;
             align-items: center;
