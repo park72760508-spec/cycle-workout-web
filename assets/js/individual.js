@@ -151,10 +151,31 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
         const segmentInfoEl = document.getElementById('segment-info');
         if (segmentInfoEl) {
-            if (status.state === 'running' && status.segmentTargetType && status.segmentTargetValue !== undefined) {
-                // 세그먼트 내용 표시 (예: FTP 60%)
-                const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
-                segmentInfoEl.innerText = segmentText;
+            if (status.state === 'running') {
+                // 현재 세그먼트 정보 가져오기
+                const currentSegment = getCurrentSegment();
+                if (currentSegment) {
+                    // 세그먼트 이름과 목표 값을 조합하여 표시
+                    const segmentName = currentSegment.name || '';
+                    const targetText = formatSegmentInfo(
+                        status.segmentTargetType || currentSegment.target_type,
+                        status.segmentTargetValue !== undefined ? status.segmentTargetValue : currentSegment.target_value
+                    );
+                    
+                    // 세그먼트 이름이 있으면 "세그먼트 이름(목표 값)" 형식, 없으면 "목표 값"만 표시
+                    const segmentText = segmentName 
+                        ? `${segmentName}(${targetText})`
+                        : targetText;
+                    segmentInfoEl.innerText = segmentText;
+                } else {
+                    // 세그먼트 정보가 없으면 Firebase status에서 받은 정보로 표시
+                    if (status.segmentTargetType && status.segmentTargetValue !== undefined) {
+                        const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
+                        segmentInfoEl.innerText = segmentText;
+                    } else {
+                        segmentInfoEl.innerText = '준비 중';
+                    }
+                }
             } else if (status.state === 'paused') {
                 segmentInfoEl.innerText = '일시정지';
             } else {
@@ -164,6 +185,11 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         
         // 랩타임 카운트다운 업데이트
         updateLapTime(status);
+        
+        // 현재 세그먼트 정보 확인 및 로그 출력 (디버깅용)
+        if (status.state === 'running') {
+            logCurrentSegmentInfo();
+        }
         
         // TARGET 파워 업데이트 (세그먼트 변경 시)
         updateTargetPower();
@@ -459,21 +485,10 @@ function updateTargetPower() {
         return;
     }
     
-    // 현재 세그먼트 인덱스 확인
-    if (currentSegmentIndex < 0 || currentSegmentIndex >= window.currentWorkout.segments.length) {
-        console.warn('[updateTargetPower] 유효하지 않은 세그먼트 인덱스:', currentSegmentIndex, '세그먼트 개수:', window.currentWorkout.segments.length);
-        targetPowerEl.textContent = '0';
-        targetPowerEl.setAttribute('fill', '#ff8c00');
-        // 목표 파워 원호 숨김
-        if (typeof updateTargetPowerArc === 'function') {
-            updateTargetPowerArc();
-        }
-        return;
-    }
-    
-    const seg = window.currentWorkout.segments[currentSegmentIndex];
+    // 현재 세그먼트 정보 가져오기 (헬퍼 함수 사용)
+    const seg = getCurrentSegment();
     if (!seg) {
-        console.warn('[updateTargetPower] 세그먼트 데이터가 없습니다. 인덱스:', currentSegmentIndex);
+        console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다.');
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
         // 목표 파워 원호 숨김
@@ -589,6 +604,57 @@ function formatSegmentInfo(targetType, targetValue) {
         // 알 수 없는 타입: 기본값 표시
         const segIdx = (currentSegmentIndex >= 0 ? currentSegmentIndex + 1 : 1);
         return `Segment ${segIdx}`;
+    }
+}
+
+/**
+ * 현재 진행 중인 세그먼트 정보 가져오기
+ * @returns {Object|null} 현재 세그먼트 객체 또는 null
+ */
+function getCurrentSegment() {
+    // 세그먼트 인덱스 확인
+    if (currentSegmentIndex < 0) {
+        console.log('[getCurrentSegment] 현재 세그먼트 인덱스가 유효하지 않음:', currentSegmentIndex);
+        return null;
+    }
+    
+    // 워크아웃 데이터 확인
+    if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+        console.log('[getCurrentSegment] 워크아웃 데이터가 없음');
+        return null;
+    }
+    
+    // 세그먼트 인덱스 범위 확인
+    if (currentSegmentIndex >= window.currentWorkout.segments.length) {
+        console.warn('[getCurrentSegment] 세그먼트 인덱스가 범위를 벗어남:', currentSegmentIndex, '세그먼트 개수:', window.currentWorkout.segments.length);
+        return null;
+    }
+    
+    const segment = window.currentWorkout.segments[currentSegmentIndex];
+    if (!segment) {
+        console.warn('[getCurrentSegment] 세그먼트 데이터가 없음. 인덱스:', currentSegmentIndex);
+        return null;
+    }
+    
+    return segment;
+}
+
+/**
+ * 현재 세그먼트 정보를 로그로 출력 (디버깅용)
+ */
+function logCurrentSegmentInfo() {
+    const segment = getCurrentSegment();
+    if (segment) {
+        console.log('[현재 세그먼트 정보]', {
+            index: currentSegmentIndex,
+            target_type: segment.target_type,
+            target_value: segment.target_value,
+            duration_sec: segment.duration_sec || segment.duration,
+            segment_type: segment.segment_type,
+            name: segment.name
+        });
+    } else {
+        console.log('[현재 세그먼트 정보] 세그먼트를 찾을 수 없음');
     }
 }
 
