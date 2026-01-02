@@ -2678,12 +2678,12 @@
         <!-- 사용자 선택 탭 -->
         <div id="pairing-tab-user" class="pairing-tab-content">
           <div class="form-group">
-            <label>전화번호로 사용자 검색</label>
+            <label>이름으로 사용자 검색</label>
             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-              <input type="text" id="pairingPhoneNumber" placeholder="예: 01040179020" style="flex: 1;" maxlength="13" 
-                     onkeypress="if(event.key==='Enter') searchUserByPhoneForPairing()"
-                     oninput="formatPhoneNumberInput(this)">
-              <button type="button" class="btn btn-primary" onclick="searchUserByPhoneForPairing()" id="btnSearchUserByPhone">
+              <input type="text" id="pairingUserNameSearch" placeholder="이름을 입력하세요" style="flex: 1;" 
+                     onkeypress="if(event.key==='Enter') searchUserByNameForPairing()"
+                     oninput="filterUsersByNameForPairing()">
+              <button type="button" class="btn btn-primary" onclick="searchUserByNameForPairing()" id="btnSearchUserByName">
                 검색
               </button>
             </div>
