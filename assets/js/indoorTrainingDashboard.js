@@ -2074,6 +2074,192 @@ window.clearSelectedUser = clearSelectedUser;
 window.clearPairedDevice = clearPairedDevice;
 
 /**
+ * Firebase에서 트랙별 사용자 정보를 가져와 Indoor Training 화면의 트랙에 업데이트
+ * - 선택된 워크아웃 유지
+ * - 훈련 진행 중일 때 훈련 상태 유지
+ * - 훈련 도중 입장하는 사용자 반영을 위해 기존 훈련 사항들 유지
+ * - 기존 페어링 정보(deviceId, trainerDeviceId 등)는 유지하고 사용자 정보만 업데이트
+ */
+async function updateTracksFromFirebase() {
+  const btn = document.getElementById('btnUpdateTracksFromFirebase');
+  const originalText = btn ? btn.innerHTML : '';
+  
+  // 버튼 상태 업데이트
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<img src="assets/img/reload.png" alt="업데이트 중" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 업데이트 중...';
+  }
+  
+  try {
+    // 현재 SESSION_ID (Training Room ID) 가져오기
+    const sessionId = getSessionId();
+    
+    if (!sessionId) {
+      if (typeof showToast === 'function') {
+        showToast('Training Room ID를 찾을 수 없습니다.', 'error');
+      }
+      return;
+    }
+    
+    console.log('[Indoor Training] Firebase에서 트랙 정보 업데이트 시작, roomId:', sessionId);
+    
+    // Firebase에서 트랙별 사용자 정보 가져오기
+    const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${sessionId}`;
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || '트랙 정보를 가져오는데 실패했습니다');
+    }
+    
+    const tracks = result.tracks || [];
+    console.log('[Indoor Training] Firebase에서 가져온 트랙 정보:', tracks);
+    
+    // 사용자 목록 가져오기 (FTP, weight 등 상세 정보를 위해)
+    let users = [];
+    try {
+      if (typeof apiGetUsers === 'function') {
+        const usersResult = await apiGetUsers();
+        if (usersResult && usersResult.success && usersResult.items) {
+          users = usersResult.items;
+        }
+      } else if (typeof window.apiGetUsers === 'function') {
+        const usersResult = await window.apiGetUsers();
+        if (usersResult && usersResult.success && usersResult.items) {
+          users = usersResult.items;
+        }
+      }
+    } catch (userError) {
+      console.warn('[Indoor Training] 사용자 목록 로드 실패 (트랙 업데이트):', userError);
+    }
+    
+    // 각 트랙에 사용자 정보 업데이트
+    let updatedCount = 0;
+    
+    tracks.forEach(track => {
+      const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === track.trackNumber);
+      
+      if (!powerMeter) {
+        console.warn(`[Indoor Training] 트랙 ${track.trackNumber}의 파워미터를 찾을 수 없습니다.`);
+        return;
+      }
+      
+      // 사용자 정보가 있는 경우
+      if (track.userId && track.userName) {
+        // 사용자 상세 정보 찾기
+        const user = users.find(u => String(u.id) === String(track.userId));
+        
+        // 파워미터에 사용자 정보 업데이트 (기존 페어링 정보는 유지)
+        powerMeter.userId = track.userId;
+        powerMeter.userName = track.userName;
+        
+        if (user) {
+          powerMeter.userFTP = user.ftp || null;
+          powerMeter.userWeight = user.weight || null;
+          powerMeter.userContact = user.contact || null;
+        } else {
+          // 사용자 상세 정보가 없으면 기본값 유지 또는 null
+          if (!powerMeter.userFTP) powerMeter.userFTP = null;
+          if (!powerMeter.userWeight) powerMeter.userWeight = null;
+        }
+        
+        // UI 업데이트 (사용자 이름 표시)
+        const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
+        if (userNameEl) {
+          userNameEl.textContent = track.userName;
+          userNameEl.style.display = 'block';
+        }
+        
+        // FTP 기반 눈금 업데이트
+        updatePowerMeterTicks(track.trackNumber);
+        
+        updatedCount++;
+        
+        console.log(`[Indoor Training] 트랙 ${track.trackNumber} 업데이트:`, {
+          userId: powerMeter.userId,
+          userName: powerMeter.userName,
+          userFTP: powerMeter.userFTP
+        });
+      } else {
+        // 사용자 정보가 없는 경우 (Player List에서 제거된 경우)
+        // 하지만 기존 페어링 정보(deviceId, trainerDeviceId 등)는 유지
+        // 사용자 정보만 제거
+        powerMeter.userId = null;
+        powerMeter.userName = null;
+        powerMeter.userFTP = null;
+        powerMeter.userWeight = null;
+        powerMeter.userContact = null;
+        
+        // UI 업데이트 (사용자 이름 숨김)
+        const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
+        if (userNameEl) {
+          userNameEl.textContent = '';
+          userNameEl.style.display = 'none';
+        }
+        
+        // FTP 기반 눈금 업데이트 (기본값으로)
+        updatePowerMeterTicks(track.trackNumber);
+        
+        console.log(`[Indoor Training] 트랙 ${track.trackNumber} 사용자 정보 제거됨`);
+      }
+      
+      // 연결 상태 업데이트
+      updatePowerMeterConnectionStatus(track.trackNumber);
+    });
+    
+    // 페어링 정보 저장 (localStorage)
+    saveAllPowerMeterPairingsToStorage();
+    
+    // Firebase에도 동기화 (각 트랙의 사용자 정보를 Firebase에 저장)
+    if (typeof db !== 'undefined') {
+      tracks.forEach(track => {
+        const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === track.trackNumber);
+        
+        if (powerMeter && powerMeter.userId) {
+          const userData = {
+            userId: String(powerMeter.userId),
+            name: powerMeter.userName || '',
+            userName: powerMeter.userName || '',
+            participantName: powerMeter.userName || '',
+            ftp: powerMeter.userFTP || 0,
+            weight: powerMeter.userWeight || 0
+          };
+          
+          db.ref(`sessions/${sessionId}/users/${track.trackNumber}`).set(userData)
+            .then(() => {
+              console.log(`[Indoor Training] Firebase 동기화 완료: 트랙 ${track.trackNumber}`);
+            })
+            .catch(error => {
+              console.error(`[Indoor Training] Firebase 동기화 실패: 트랙 ${track.trackNumber}`, error);
+            });
+        }
+      });
+    }
+    
+    if (typeof showToast === 'function') {
+      showToast(`트랙 정보가 업데이트되었습니다. (${updatedCount}개 트랙)`, 'success');
+    }
+    
+    console.log('[Indoor Training] 트랙 정보 업데이트 완료');
+    
+  } catch (error) {
+    console.error('[Indoor Training] 트랙 정보 업데이트 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('트랙 정보 업데이트 실패: ' + (error.message || 'Unknown error'), 'error');
+    }
+  } finally {
+    // 버튼 상태 복구
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+    }
+  }
+}
+
+// 전역 함수로 등록
+window.updateTracksFromFirebase = updateTracksFromFirebase;
+
+/**
  * 페어링용 사용자 목록 렌더링
  */
 function renderUsersForPairing(users) {
