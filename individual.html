@@ -194,6 +194,180 @@
                 opacity: 1;
             }
         }
+
+        /* 훈련 결과 팝업 스타일 */
+        .training-result-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .training-result-modal.hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .training-result-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        .result-background-logo {
+            max-width: 400px;
+            max-height: 400px;
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            opacity: 0.08;
+            filter: blur(1px);
+        }
+
+        .training-result-content {
+            position: relative;
+            background: rgba(30, 30, 30, 0.95);
+            border: 2px solid #00d4aa;
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+            animation: slideUp 0.4s ease-out;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .result-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .result-title {
+            font-size: 2em;
+            font-weight: bold;
+            color: #00d4aa;
+            margin: 0 0 8px 0;
+            text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+        }
+
+        .result-subtitle {
+            font-size: 1.1em;
+            color: #ffffff;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .result-stat-item {
+            background: rgba(0, 212, 170, 0.1);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .result-stat-label {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .result-stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #00d4aa;
+            text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);
+        }
+
+        .result-close-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
+        }
+
+        .result-close-btn:hover {
+            background: linear-gradient(135deg, #00e8c2 0%, #00d4aa 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 212, 170, 0.6);
+        }
+
+        .result-close-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
+        }
+
+        /* 모바일 반응형 */
+        @media (max-width: 480px) {
+            .training-result-content {
+                padding: 24px;
+                max-width: 95%;
+            }
+
+            .result-title {
+                font-size: 1.6em;
+            }
+
+            .result-stats {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .result-stat-value {
+                font-size: 1.5em;
+            }
+
+            .result-background-logo {
+                max-width: 250px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -258,6 +432,42 @@
     <!-- 5초 카운트다운 오버레이 -->
     <div id="countdownOverlay" class="countdown-overlay hidden">
         <div class="countdown-number" id="countdownNumber">5</div>
+    </div>
+
+    <!-- 훈련 결과 팝업 -->
+    <div id="trainingResultModal" class="training-result-modal hidden">
+        <div class="training-result-background">
+            <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" />
+        </div>
+        <div class="training-result-content">
+            <div class="result-header">
+                <h2 class="result-title">수고하셨습니다</h2>
+                <p class="result-subtitle">훈련 결과가 저장되었습니다</p>
+            </div>
+            <div class="result-stats">
+                <div class="result-stat-item">
+                    <div class="result-stat-label">훈련 시간</div>
+                    <div class="result-stat-value" id="result-duration">0분</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">평균 파워</div>
+                    <div class="result-stat-value" id="result-avg-power">0W</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">NP</div>
+                    <div class="result-stat-value" id="result-np">0W</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">TSS</div>
+                    <div class="result-stat-value" id="result-tss">0</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">평균 심박수</div>
+                    <div class="result-stat-value" id="result-hr-avg">0bpm</div>
+                </div>
+            </div>
+            <button class="result-close-btn" onclick="closeTrainingResultModal()">확인</button>
+        </div>
     </div>
 
     <script src="assets/js/workoutManager.js"></script>
