@@ -652,15 +652,15 @@ async function renderPlayerList() {
             <button 
               class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
               onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
-              title="훈련 참가/변경">
-              <span>${hasUser ? '변경' : '참가'}</span>
+              title="훈련 신청/변경">
+              <span>${hasUser ? '변경' : '신청'}</span>
             </button>
           ` : `
             <button 
               class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
               disabled
-              title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 참가/변경'}">
-              <span>${hasUser ? '변경' : '참가'}</span>
+              title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 신청/변경'}">
+              <span>${hasUser ? '변경' : '신청'}</span>
             </button>
           `}
           ${hasUser && canModify ? `
