@@ -587,13 +587,48 @@ async function renderPlayerList() {
     console.error('[Player List] 현재 사용자 정보 확인 오류:', e);
   }
 
+  // grade=2 사용자가 본인 계정으로 참가된 트랙이 있는지 확인
+  let hasMyTrack = false;
+  if (!isAdmin && currentUserId) {
+    hasMyTrack = tracks.some(track => {
+      const trackUserId = track.userId ? String(track.userId) : null;
+      return trackUserId && trackUserId === currentUserId;
+    });
+  }
+
   playerListContent.innerHTML = tracks.map(track => {
     // userName이 있으면 사용자가 할당된 것으로 판단 (userId가 null이어도 표시 가능)
     const hasUser = !!track.userName;
     
-    // 권한 체크: grade=2 사용자는 본인이 할당한 트랙만 변경/제거 가능
+    // 권한 체크 로직
     const trackUserId = track.userId ? String(track.userId) : null;
-    const canModify = isAdmin || (trackUserId && currentUserId && trackUserId === currentUserId);
+    let canModify = false;
+    let canParticipate = false;
+    
+    if (isAdmin) {
+      // 관리자는 모든 트랙에 대해 변경/삭제/Enter 가능
+      canModify = true;
+      canParticipate = true;
+    } else if (userGrade === '2' || userGrade === 2) {
+      // grade=2 사용자
+      if (trackUserId && trackUserId === currentUserId) {
+        // 본인 계정으로 참가된 트랙: 변경/삭제/Enter 가능
+        canModify = true;
+        canParticipate = true;
+      } else if (!hasUser && !hasMyTrack) {
+        // 사용자 없음 트랙이고, 본인 계정으로 참가된 트랙이 없으면: 참가 버튼만 활성화
+        canParticipate = true;
+        canModify = false;
+      } else {
+        // 그 외의 경우: 비활성화
+        canModify = false;
+        canParticipate = false;
+      }
+    } else {
+      // grade=1,3 사용자는 모든 트랙에 대해 변경/삭제/Enter 가능
+      canModify = true;
+      canParticipate = true;
+    }
     
     const dashboardUrl = roomId 
       ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
@@ -613,7 +648,7 @@ async function renderPlayerList() {
           ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
         </div>
         <div class="player-track-action">
-          ${canModify ? `
+          ${canModify || canParticipate ? `
             <button 
               class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
               onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
@@ -646,7 +681,8 @@ async function renderPlayerList() {
           <a href="${dashboardUrl}" 
              target="_blank"
              class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
-             ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}>
+             ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
+             title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
             <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
             <span>Enter</span>
           </a>
