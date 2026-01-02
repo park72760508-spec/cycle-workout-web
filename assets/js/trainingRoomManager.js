@@ -1821,7 +1821,6 @@ if (typeof window !== 'undefined') {
   // 트랙 사용자 할당 관련 함수
   window.assignUserToTrack = assignUserToTrack;
   window.assignUserToTrackWithAnimation = assignUserToTrackWithAnimation;
-  window.removeUserFromTrack = removeUserFromTrack;
   window.removeUserFromTrackWithAnimation = removeUserFromTrackWithAnimation;
   window.selectUserForTrack = selectUserForTrack;
   window.selectUserForTrackWithAnimation = selectUserForTrackWithAnimation;
