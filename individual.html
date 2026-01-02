@@ -12,6 +12,14 @@
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
     <script src="assets/js/firebaseConfig.js"></script>
+    
+    <!-- Google Apps Script URL 설정 -->
+    <script>
+        window.CONFIG = {
+            GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec"
+        };
+        window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
+    </script>
 
     <style>
         body {
@@ -253,6 +261,7 @@
     </div>
 
     <script src="assets/js/workoutManager.js"></script>
+    <script src="assets/js/resultManager.js"></script>
     
     <!-- 화면 잠금 방지 스크립트 -->
     <script>
