@@ -1197,6 +1197,18 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
         infoEl.classList.add('disconnected');
       }
     }
+    
+    // 정보표시창 색상 변경 시 랩파워 색상도 업데이트
+    const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
+    if (segPowerEl) {
+      if (infoEl.classList.contains('connected')) {
+        // 정보표시창이 초록색일 때: 오렌지색
+        segPowerEl.style.color = '#fb923c'; // 오렌지색
+      } else {
+        // 정보표시창이 주황색이거나 연결 안됨일 때: 검정색 유지
+        segPowerEl.style.color = '#000000'; // 검정색
+      }
+    }
   }
 }
 
@@ -1280,7 +1292,19 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     
     if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
     if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
-    if (segPowerEl) segPowerEl.textContent = Math.round(powerMeter.segmentPower);
+    if (segPowerEl) {
+        segPowerEl.textContent = Math.round(powerMeter.segmentPower);
+        
+        // 랩파워 색상 설정: 정보표시창이 초록색(connected)일 때만 오렌지색, 주황색(warning)이면 검정색 유지
+        const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
+        if (infoEl && infoEl.classList.contains('connected')) {
+            // 정보표시창이 초록색일 때: 오렌지색
+            segPowerEl.style.color = '#fb923c'; // 오렌지색
+        } else {
+            // 정보표시창이 주황색이거나 연결 안됨일 때: 검정색 유지
+            segPowerEl.style.color = '#000000'; // 검정색
+        }
+    }
 
     // 케이던스
     const cadenceEl = document.getElementById(`cadence-value-${powerMeterId}`);
@@ -1290,10 +1314,13 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         cadenceEl.style.display = '';
     }
 
-    // 심박수
+    // 심박수 (빨강색으로 표시)
     const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
     if (heartRateEl && heartRate > 0) {
         heartRateEl.textContent = Math.round(heartRate);
+        heartRateEl.style.color = '#ef4444'; // 빨강색
+    } else if (heartRateEl) {
+        heartRateEl.style.color = ''; // 기본 색상으로 복원
     }
 
     // 바늘 애니메이션
@@ -3770,7 +3797,16 @@ function startTraining() {
     const segEl = document.getElementById(`segment-power-value-${pm.id}`);
     if (maxEl) maxEl.textContent = '0';
     if (avgEl) avgEl.textContent = '0';
-    if (segEl) segEl.textContent = '0';
+    if (segEl) {
+        segEl.textContent = '0';
+        // 랩파워 색상 설정: 정보표시창이 초록색(connected)일 때만 오렌지색, 주황색(warning)이면 검정색 유지
+        const infoEl = document.querySelector(`#power-meter-${pm.id} .speedometer-info`);
+        if (infoEl && infoEl.classList.contains('connected')) {
+            segEl.style.color = '#fb923c'; // 오렌지색
+        } else {
+            segEl.style.color = '#000000'; // 검정색
+        }
+    }
 
     // 연결된 파워미터의 경우 목표 파워 궤적 표시를 위해 업데이트
     if (pm.connected) {
