@@ -1892,22 +1892,40 @@ async function selectSearchedUserForPowerMeter(userId) {
               equipment: powerMeter.equipment || '' // 장비 정보 추가
             };
             
-            // Firebase에 저장 (set을 사용하여 전체 데이터 교체)
-            db.ref(`sessions/${sessionId}/users/${powerMeterId}`).set(userData)
-              .then(() => {
-                console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료:`, {
-                  roomId: sessionId,
-                  trackNumber: powerMeterId,
-                  userId: userData.userId,
-                  userName: userData.userName,
-                  ftp: userData.ftp,
-                  weight: userData.weight,
-                  equipment: userData.equipment
-                });
-              })
-              .catch(error => {
-                console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
+            // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
+            const userRef = db.ref(`sessions/${sessionId}/users/${powerMeterId}`);
+            userRef.once('value').then(snapshot => {
+              const existingData = snapshot.val() || {};
+              
+              // 필수 유지값과 새 데이터 병합 (필수값 우선 보존)
+              const mergedData = {
+                ...existingData, // 기존 데이터 보존 (워크아웃 진행 중 데이터 포함)
+                ...userData,    // 새 필수값으로 업데이트
+                // 워크아웃 진행 중 데이터는 유지 (있는 경우)
+                power: existingData.power !== undefined ? existingData.power : userData.power,
+                cadence: existingData.cadence !== undefined ? existingData.cadence : userData.cadence,
+                hr: existingData.hr !== undefined ? existingData.hr : userData.hr,
+                maxPower: existingData.maxPower !== undefined ? existingData.maxPower : userData.maxPower,
+                avgPower: existingData.avgPower !== undefined ? existingData.avgPower : userData.avgPower,
+                segmentPower: existingData.segmentPower !== undefined ? existingData.segmentPower : userData.segmentPower,
+                targetPower: existingData.targetPower !== undefined ? existingData.targetPower : userData.targetPower,
+                lastUpdate: existingData.lastUpdate || firebase.database.ServerValue.TIMESTAMP
+              };
+              
+              return userRef.set(mergedData);
+            }).then(() => {
+              console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료 (필수값 보존):`, {
+                roomId: sessionId,
+                trackNumber: powerMeterId,
+                userId: userData.userId,
+                userName: userData.userName,
+                ftp: userData.ftp,
+                weight: userData.weight,
+                equipment: userData.equipment
               });
+            }).catch(error => {
+              console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
+            });
           } else {
             console.warn('[Firebase] SESSION_ID를 찾을 수 없어 사용자 정보를 저장할 수 없습니다.');
           }
@@ -2287,13 +2305,39 @@ async function updateTracksFromFirebase() {
             weight: powerMeter.userWeight || 0
           };
           
-          db.ref(`sessions/${sessionId}/users/${track.trackNumber}`).set(userData)
-            .then(() => {
-              console.log(`[Indoor Training] Firebase 동기화 완료: 트랙 ${track.trackNumber}`);
-            })
-            .catch(error => {
-              console.error(`[Indoor Training] Firebase 동기화 실패: 트랙 ${track.trackNumber}`, error);
+          // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
+          const userRef = db.ref(`sessions/${sessionId}/users/${track.trackNumber}`);
+          userRef.once('value').then(snapshot => {
+            const existingData = snapshot.val() || {};
+            
+            // 필수 유지값과 새 데이터 병합 (필수값 우선 보존)
+            const mergedData = {
+              ...existingData, // 기존 데이터 보존 (워크아웃 진행 중 데이터 포함)
+              ...userData,    // 새 필수값으로 업데이트
+              // 워크아웃 진행 중 데이터는 유지 (있는 경우)
+              power: existingData.power !== undefined ? existingData.power : undefined,
+              cadence: existingData.cadence !== undefined ? existingData.cadence : undefined,
+              hr: existingData.hr !== undefined ? existingData.hr : undefined,
+              maxPower: existingData.maxPower !== undefined ? existingData.maxPower : undefined,
+              avgPower: existingData.avgPower !== undefined ? existingData.avgPower : undefined,
+              segmentPower: existingData.segmentPower !== undefined ? existingData.segmentPower : undefined,
+              targetPower: existingData.targetPower !== undefined ? existingData.targetPower : undefined,
+              lastUpdate: existingData.lastUpdate || firebase.database.ServerValue.TIMESTAMP
+            };
+            
+            // undefined 값 제거
+            Object.keys(mergedData).forEach(key => {
+              if (mergedData[key] === undefined) {
+                delete mergedData[key];
+              }
             });
+            
+            return userRef.set(mergedData);
+          }).then(() => {
+            console.log(`[Indoor Training] Firebase 동기화 완료 (필수값 보존): 트랙 ${track.trackNumber}`);
+          }).catch(error => {
+            console.error(`[Indoor Training] Firebase 동기화 실패: 트랙 ${track.trackNumber}`, error);
+          });
         }
       });
     }
@@ -2403,24 +2447,51 @@ function selectUserForPowerMeter(userId) {
               userName: powerMeter.userName || '',
               participantName: powerMeter.userName || '',
               ftp: powerMeter.userFTP || 0,
-              weight: powerMeter.userWeight || 0
+              weight: powerMeter.userWeight || 0,
+              equipment: powerMeter.equipment || '' // 장비 정보 추가
             };
             
-            // Firebase에 저장
-            db.ref(`sessions/${sessionId}/users/${powerMeterId}`).set(userData)
-              .then(() => {
-                console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료:`, {
-                  roomId: sessionId,
-                  trackNumber: powerMeterId,
-                  userId: userData.userId,
-                  userName: userData.userName,
-                  ftp: userData.ftp,
-                  weight: userData.weight
-                });
-              })
-              .catch(error => {
-                console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
+            // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
+            const userRef = db.ref(`sessions/${sessionId}/users/${powerMeterId}`);
+            userRef.once('value').then(snapshot => {
+              const existingData = snapshot.val() || {};
+              
+              // 필수 유지값과 새 데이터 병합 (필수값 우선 보존)
+              const mergedData = {
+                ...existingData, // 기존 데이터 보존 (워크아웃 진행 중 데이터 포함)
+                ...userData,    // 새 필수값으로 업데이트
+                // 워크아웃 진행 중 데이터는 유지 (있는 경우)
+                power: existingData.power !== undefined ? existingData.power : undefined,
+                cadence: existingData.cadence !== undefined ? existingData.cadence : undefined,
+                hr: existingData.hr !== undefined ? existingData.hr : undefined,
+                maxPower: existingData.maxPower !== undefined ? existingData.maxPower : undefined,
+                avgPower: existingData.avgPower !== undefined ? existingData.avgPower : undefined,
+                segmentPower: existingData.segmentPower !== undefined ? existingData.segmentPower : undefined,
+                targetPower: existingData.targetPower !== undefined ? existingData.targetPower : undefined,
+                lastUpdate: existingData.lastUpdate || firebase.database.ServerValue.TIMESTAMP
+              };
+              
+              // undefined 값 제거
+              Object.keys(mergedData).forEach(key => {
+                if (mergedData[key] === undefined) {
+                  delete mergedData[key];
+                }
               });
+              
+              return userRef.set(mergedData);
+            }).then(() => {
+              console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료 (필수값 보존):`, {
+                roomId: sessionId,
+                trackNumber: powerMeterId,
+                userId: userData.userId,
+                userName: userData.userName,
+                ftp: userData.ftp,
+                weight: userData.weight,
+                equipment: userData.equipment
+              });
+            }).catch(error => {
+              console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
+            });
           }
         }
         
@@ -2487,22 +2558,47 @@ function savePowerMeterPairing() {
           equipment: powerMeter.equipment || '' // 장비 정보 추가
         };
         
-        // Firebase에 저장
-        db.ref(`sessions/${sessionId}/users/${powerMeterId}`).set(userData)
-          .then(() => {
-            console.log(`[Firebase] 페어링 저장: 트랙 ${powerMeterId}에 사용자 정보 저장 완료:`, {
-              roomId: sessionId,
-              trackNumber: powerMeterId,
-              userId: userData.userId,
-              userName: userData.userName,
-              ftp: userData.ftp,
-              weight: userData.weight,
-              equipment: userData.equipment
-            });
-          })
-          .catch(error => {
-            console.error(`[Firebase] 페어링 저장: 사용자 정보 저장 실패:`, error);
+        // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
+        const userRef = db.ref(`sessions/${sessionId}/users/${powerMeterId}`);
+        userRef.once('value').then(snapshot => {
+          const existingData = snapshot.val() || {};
+          
+          // 필수 유지값과 새 데이터 병합 (필수값 우선 보존)
+          const mergedData = {
+            ...existingData, // 기존 데이터 보존 (워크아웃 진행 중 데이터 포함)
+            ...userData,    // 새 필수값으로 업데이트
+            // 워크아웃 진행 중 데이터는 유지 (있는 경우)
+            power: existingData.power !== undefined ? existingData.power : undefined,
+            cadence: existingData.cadence !== undefined ? existingData.cadence : undefined,
+            hr: existingData.hr !== undefined ? existingData.hr : undefined,
+            maxPower: existingData.maxPower !== undefined ? existingData.maxPower : undefined,
+            avgPower: existingData.avgPower !== undefined ? existingData.avgPower : undefined,
+            segmentPower: existingData.segmentPower !== undefined ? existingData.segmentPower : undefined,
+            targetPower: existingData.targetPower !== undefined ? existingData.targetPower : undefined,
+            lastUpdate: existingData.lastUpdate || firebase.database.ServerValue.TIMESTAMP
+          };
+          
+          // undefined 값 제거
+          Object.keys(mergedData).forEach(key => {
+            if (mergedData[key] === undefined) {
+              delete mergedData[key];
+            }
           });
+          
+          return userRef.set(mergedData);
+        }).then(() => {
+          console.log(`[Firebase] 페어링 저장: 트랙 ${powerMeterId}에 사용자 정보 저장 완료 (필수값 보존):`, {
+            roomId: sessionId,
+            trackNumber: powerMeterId,
+            userId: userData.userId,
+            userName: userData.userName,
+            ftp: userData.ftp,
+            weight: userData.weight,
+            equipment: userData.equipment
+          });
+        }).catch(error => {
+          console.error(`[Firebase] 페어링 저장: 사용자 정보 저장 실패:`, error);
+        });
       } else {
         console.warn('[Firebase] 페어링 저장: SESSION_ID를 찾을 수 없어 사용자 정보를 저장할 수 없습니다.');
       }
@@ -5075,37 +5171,40 @@ function uploadToFirebase() {
     const updates = {};
 
     // (1) 17명 사용자 데이터 일괄 패키징
+    // 필수 유지값: userId, userName, ftp, weight, equipment
+    // 워크아웃 시작 시 추가 항목: avgPower, cadence, hr, lastUpdate, maxPower, power, segmentPower, targetPower
     state.powerMeters.forEach(pm => {
         if (pm.connected) {
+            // 필수 유지값 포함 (powerMeter 객체에서 가져오기)
             const userData = {
+                // 필수 유지값 (powerMeter에 있으면 포함)
+                userId: pm.userId ? String(pm.userId) : undefined,
+                userName: pm.userName || undefined,
+                name: pm.userName || `User ${pm.id}`,
+                participantName: pm.userName || undefined,
+                ftp: pm.userFTP ? Math.round(pm.userFTP) : undefined,
+                weight: pm.userWeight || undefined,
+                equipment: pm.equipment || undefined,
+                // 워크아웃 시작 시 추가 항목
                 power: Math.round(pm.currentPower || 0),
                 cadence: Math.round(pm.cadence || 0),
                 hr: Math.round(pm.heartRate || 0),
-                
-                // 통계 데이터도 전송 (개인 화면 표시용)
                 maxPower: Math.round(pm.maxPower || 0),
                 avgPower: Math.round(pm.averagePower || 0),
                 segmentPower: Math.round(pm.segmentPower || 0),
-                
-                // 목표 파워 (현재 훈련중이라면)
                 targetPower: Math.round(pm.targetPower || 0),
-                
-                name: pm.userName || `User ${pm.id}`,
                 lastUpdate: firebase.database.ServerValue.TIMESTAMP
             };
             
-            // FTP 값 추가 (사용자 FTP 값이 있으면 전송)
-            // userFTP가 null이 아니고, undefined가 아니며, 0보다 큰 경우에만 전송
-            if (pm.userFTP !== null && pm.userFTP !== undefined && !isNaN(pm.userFTP) && pm.userFTP > 0) {
-                userData.ftp = Math.round(pm.userFTP);
-                console.log(`[Firebase Upload] 파워미터 ${pm.id} FTP 값 추가: ${userData.ftp}W (userFTP: ${pm.userFTP})`);
-            } else {
-                // FTP 값이 없는 경우 로그 출력 (디버깅용)
-                if (pm.connected && pm.userId) {
-                    console.warn(`[Firebase Upload] 파워미터 ${pm.id} FTP 값 없음: userFTP=${pm.userFTP}, userId=${pm.userId}`);
+            // undefined 값 제거 (Firebase update는 undefined를 null로 변환하므로 제거)
+            Object.keys(userData).forEach(key => {
+                if (userData[key] === undefined) {
+                    delete userData[key];
                 }
-            }
+            });
             
+            // update()를 사용하여 기존 데이터는 유지하고 지정된 필드만 업데이트
+            // 필수값이 powerMeter에 있으면 업데이트하고, 없으면 기존 값 유지
             updates[`sessions/${sessionId}/users/${pm.id}`] = userData;
         }
     });
