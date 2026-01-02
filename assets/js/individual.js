@@ -24,6 +24,9 @@ window.userFTP = userFTP; // workoutManager.js에서 접근 가능하도록 전�
 // Firebase에서 받은 목표 파워 값 저장 (전역 변수)
 let firebaseTargetPower = null;
 
+// 개인 훈련 대시보드 강도 조절 변수
+let individualIntensityAdjustment = 1.0; // 기본값: 1.0 (100%)
+
 // 가민 스타일 부드러운 바늘 움직임을 위한 변수
 let currentPowerValue = 0; // Firebase에서 받은 실제 파워값
 let displayPower = 0; // 화면에 표시되는 부드러운 파워값 (보간 적용)
@@ -734,8 +737,11 @@ function updateTargetPower() {
     
     // 1순위: Firebase에서 받은 targetPower 값 사용 (서버에서 계산된 값)
     if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower >= 0) {
+        // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
+        const adjustedTargetPower = Math.round(firebaseTargetPower * individualIntensityAdjustment);
         console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
-        targetPowerEl.textContent = String(Math.round(firebaseTargetPower));
+        console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
+        targetPowerEl.textContent = String(adjustedTargetPower);
         targetPowerEl.setAttribute('fill', '#ff8c00');
         // 목표 파워 원호 업데이트
         if (typeof updateTargetPowerArc === 'function') {
@@ -820,9 +826,13 @@ function updateTargetPower() {
         targetPower = 0;
     }
     
+    // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
+    const adjustedTargetPower = Math.round(targetPower * individualIntensityAdjustment);
+    
     console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
+    console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
     console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
-    targetPowerEl.textContent = targetPower > 0 ? String(targetPower) : '0';
+    targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
     targetPowerEl.setAttribute('fill', '#ff8c00');
     
     // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
@@ -1114,6 +1124,8 @@ function updateGaugeTicksAndLabels() {
 // 초기 속도계 눈금 및 레이블 생성
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+        // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
+        initializeIndividualIntensitySlider();
         updateGaugeTicksAndLabels();
         startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
     });
