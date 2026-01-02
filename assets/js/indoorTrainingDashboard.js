@@ -3939,27 +3939,32 @@ function updateTrainingButtons() {
       startPauseBtn.className = 'enhanced-control-btn play';
       startPauseBtn.disabled = false;
       startPauseBtn.setAttribute('aria-label', '시작');
+      startPauseBtn.setAttribute('title', '시작');
     } else if (state === 'running') {
       // 일시정지 버튼
       startPauseBtn.className = 'enhanced-control-btn pause';
       startPauseBtn.disabled = false;
       startPauseBtn.setAttribute('aria-label', '일시정지');
+      startPauseBtn.setAttribute('title', '일시정지');
     } else if (state === 'paused') {
       // 재개 버튼
       startPauseBtn.className = 'enhanced-control-btn play';
       startPauseBtn.disabled = false;
       startPauseBtn.setAttribute('aria-label', '재개');
+      startPauseBtn.setAttribute('title', '재개');
     }
   }
   
   if (skipBtn) {
     // 건너뛰기는 실행 중일 때만 활성화
     skipBtn.disabled = (state !== 'running');
+    skipBtn.setAttribute('title', '건너뛰기');
   }
   
   if (stopBtn) {
     // 종료는 실행 중이거나 일시정지 상태일 때만 활성화
     stopBtn.disabled = (state !== 'running' && state !== 'paused');
+    stopBtn.setAttribute('title', '종료');
   }
 }
 
