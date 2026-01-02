@@ -1098,20 +1098,27 @@ function showTrainingResultModal(status = null) {
     tss = Math.max(0, Math.round(tss * 100) / 100);
     np = Math.max(0, Math.round(np * 10) / 10);
     
+    // 칼로리 계산 (평균 파워 * 시간(초) * 3.6 / 4184)
+    // 또는 더 간단한 공식: 평균 파워(W) * 시간(분) * 0.0143
+    const avgPower = stats.avgPower || 0;
+    const calories = Math.round(avgPower * duration_min * 0.0143);
+    
     // 결과값 표시
     const durationEl = document.getElementById('result-duration');
     const avgPowerEl = document.getElementById('result-avg-power');
     const npEl = document.getElementById('result-np');
     const tssEl = document.getElementById('result-tss');
     const hrAvgEl = document.getElementById('result-hr-avg');
+    const caloriesEl = document.getElementById('result-calories');
     
     if (durationEl) durationEl.textContent = `${duration_min}분`;
     if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
     if (npEl) npEl.textContent = `${np}W`;
     if (tssEl) tssEl.textContent = `${tss}`;
     if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
+    if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
     
-    console.log('[showTrainingResultModal] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR });
+    console.log('[showTrainingResultModal] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories });
     
     // 모달 표시
     modal.classList.remove('hidden');
