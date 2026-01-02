@@ -2500,13 +2500,13 @@
         <span class="race-title-text">Indoor Training</span>
       </h1>
       <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
-        <button class="btn btn-primary btn-default-style btn-with-icon" id="btnSelectWorkoutTraining" onclick="openWorkoutSelectionModal()" style="padding: 8px 16px;">
-          <img src="assets/img/selection.png" alt="워크아웃 선택" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 워크아웃 선택
+        <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutTraining" onclick="openWorkoutSelectionModal()" title="워크아웃 선택">
+          <img src="assets/img/selection.png" alt="워크아웃 선택" style="width: 24px; height: 24px; object-fit: contain;">
         </button>
         <div class="race-controls" style="flex-shrink: 0;">
-          <button class="enhanced-control-btn play" id="btnStartPauseTraining" onclick="toggleStartPauseTraining()" aria-label="시작/일시정지"></button>
-          <button class="enhanced-control-btn skip" id="btnSkipSegmentTraining" onclick="skipCurrentSegmentTraining()" disabled aria-label="건너뛰기"></button>
-          <button class="enhanced-control-btn stop" id="btnStopTraining" onclick="stopTraining()" disabled aria-label="종료"></button>
+          <button class="enhanced-control-btn play" id="btnStartPauseTraining" onclick="toggleStartPauseTraining()" title="시작"></button>
+          <button class="enhanced-control-btn skip" id="btnSkipSegmentTraining" onclick="skipCurrentSegmentTraining()" disabled title="건너뛰기"></button>
+          <button class="enhanced-control-btn stop" id="btnStopTraining" onclick="stopTraining()" disabled title="종료"></button>
         </div>
       </div>
     </div>
@@ -2562,15 +2562,12 @@
       </div>
       
       <!-- 환경 설정 블럭 -->
-      <div class="settings-block" style="margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e5e7eb;">
+      <div class="settings-block" style="margin-top: 20px; padding: 16px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e5e7eb;">
         <div class="form-group" style="margin-bottom: 0;">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: #333;">
-            <input type="checkbox" id="autoClearUsersOnWorkoutEnd" style="width: 18px; height: 18px; cursor: pointer; accent-color: #00d4aa;">
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14px; font-weight: 500; color: #333; margin: 0;">
+            <input type="checkbox" id="autoClearUsersOnWorkoutEnd" style="width: 20px; height: 20px; cursor: pointer; accent-color: #00d4aa; flex-shrink: 0;">
             <span>워크아웃 종료 시 사용자 자동 퇴실</span>
           </label>
-          <small style="display: block; margin-top: 8px; color: #666; font-size: 12px;">
-            체크 시 워크아웃 종료 후 모든 트랙의 사용자 선택과 심박계가 자동으로 해제됩니다. (스마트로라, 파워메터 기기 등록은 유지됩니다)
-          </small>
         </div>
       </div>
     </div>
