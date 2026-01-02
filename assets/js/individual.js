@@ -159,6 +159,63 @@ let currentUserIdForSession = null; // 세션에 사용할 사용자 ID
 let lastWorkoutId = null; // 마지막 워크아웃 ID
 window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
 
+/**
+ * Workout ID를 가져오는 헬퍼 함수 (비동기)
+ * @returns {Promise<string|null>} workoutId 또는 null
+ */
+async function getWorkoutId() {
+    // 1순위: window.currentWorkout.id (가장 빠름)
+    if (window.currentWorkout?.id) {
+        return window.currentWorkout.id;
+    }
+    
+    // 2순위: lastWorkoutId (로컬 변수)
+    if (lastWorkoutId) {
+        return lastWorkoutId;
+    }
+    
+    // 3순위: Firebase에서 직접 가져오기
+    try {
+        const snapshot = await db.ref(`sessions/${SESSION_ID}/workoutId`).once('value');
+        const workoutId = snapshot.val();
+        if (workoutId) {
+            // 가져온 값 저장
+            if (!window.currentWorkout) {
+                window.currentWorkout = {};
+            }
+            window.currentWorkout.id = workoutId;
+            lastWorkoutId = workoutId;
+            return workoutId;
+        }
+    } catch (error) {
+        console.error('[getWorkoutId] Firebase에서 workoutId 가져오기 실패:', error);
+    }
+    
+    return null;
+}
+
+/**
+ * Workout ID를 동기적으로 가져오는 함수 (이미 로드된 경우)
+ * @returns {string|null} workoutId 또는 null
+ */
+function getWorkoutIdSync() {
+    // 1순위: window.currentWorkout.id
+    if (window.currentWorkout?.id) {
+        return window.currentWorkout.id;
+    }
+    
+    // 2순위: lastWorkoutId
+    if (lastWorkoutId) {
+        return lastWorkoutId;
+    }
+    
+    return null;
+}
+
+// 전역으로 노출 (다른 스크립트에서도 사용 가능)
+window.getWorkoutId = getWorkoutId;
+window.getWorkoutIdSync = getWorkoutIdSync;
+
 db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
