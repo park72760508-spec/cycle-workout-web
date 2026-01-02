@@ -556,6 +556,8 @@ function formatHMS(totalSeconds) {
 let segmentCountdownActive = false;
 let segmentCountdownTimer = null;
 let lastCountdownValue = null;
+let startCountdownActive = false; // 시작 카운트다운 활성 상태
+let goDisplayTime = null; // GO!! 표시 시작 시간
 
 // Beep 사운드 (Web Audio)
 let __beepCtx = null;
@@ -719,6 +721,8 @@ function handleSegmentCountdown(countdownValue, status) {
     
     // 시작 카운트다운 처리 (5, 4, 3, 2, 1, GO!!)
     if (isStartCountdown && countdownValue !== null && countdownValue >= 0) {
+        startCountdownActive = true; // 시작 카운트다운 활성화
+        
         // 5초 이상이면 오버레이 표시하지 않음 (Firebase 동기화 지연 고려)
         if (countdownValue <= 5) {
             // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
@@ -727,15 +731,41 @@ function handleSegmentCountdown(countdownValue, status) {
                 // 0일 때는 "GO!!" 표시
                 const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
                 showSegmentCountdown(displayValue);
+                
+                // GO!! 표시 시 시간 기록
+                if (displayValue === 'GO!!') {
+                    goDisplayTime = Date.now();
+                }
             }
         }
+        return; // 시작 카운트다운 중에는 세그먼트 카운트다운 로직 실행하지 않음
+    }
+    
+    // GO!! 표시 후 1초 이내에는 오버레이 유지 (시작 카운트다운 종료 후 보호)
+    if (goDisplayTime !== null) {
+        const elapsedSinceGo = Date.now() - goDisplayTime;
+        if (elapsedSinceGo < 1000) { // GO!! 표시 후 1초 이내
+            // 오버레이가 표시되어 있는지 확인하고 유지
+            const overlay = document.getElementById('countdownOverlay');
+            if (overlay && !overlay.classList.contains('hidden')) {
+                return; // 오버레이 유지
+            }
+        } else {
+            // 1초 경과 후 GO!! 표시 시간 초기화
+            goDisplayTime = null;
+            startCountdownActive = false;
+        }
+    }
+    
+    // 시작 카운트다운이 활성화되어 있으면 세그먼트 카운트다운 로직 실행하지 않음
+    if (startCountdownActive) {
         return;
     }
     
     // 세그먼트 카운트다운 처리 (기존 로직)
     // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
     if (countdownValue === null || countdownValue > 5) {
-        if (segmentCountdownActive) {
+        if (segmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -750,8 +780,8 @@ function handleSegmentCountdown(countdownValue, status) {
             showSegmentCountdown(countdownValue);
         }
     } else if (countdownValue < 0) {
-        // 0 미만이면 오버레이 숨김
-        if (segmentCountdownActive) {
+        // 0 미만이면 오버레이 숨김 (시작 카운트다운이 아닐 때만)
+        if (segmentCountdownActive && !startCountdownActive) {
             stopSegmentCountdown();
         }
         lastCountdownValue = null;
@@ -765,9 +795,11 @@ function showSegmentCountdown(value) {
     
     if (!overlay || !numEl) return;
     
-    // 오버레이 표시
+    // 오버레이 표시 (강제로 표시)
     overlay.classList.remove('hidden');
     overlay.style.display = 'flex';
+    overlay.style.visibility = 'visible';
+    overlay.style.opacity = '1';
     
     // 숫자 또는 "GO!!" 업데이트
     numEl.textContent = String(value);
@@ -776,6 +808,7 @@ function showSegmentCountdown(value) {
     if (value === 'GO!!') {
         numEl.style.fontSize = '150px'; // GO!!는 조금 작게
         numEl.style.color = '#00d4aa'; // 민트색
+        goDisplayTime = Date.now(); // GO!! 표시 시간 기록
     } else {
         numEl.style.fontSize = '200px'; // 기본 크기
         numEl.style.color = '#fff'; // 흰색
@@ -802,29 +835,59 @@ function showSegmentCountdown(value) {
     
     segmentCountdownActive = true;
     
-    // 0 또는 "GO!!"일 때 0.8초 후 오버레이 숨김 (GO!!는 조금 더 길게 표시)
+    // 0 또는 "GO!!"일 때 1초 후 오버레이 숨김 (GO!!는 더 길게 표시)
     if (value === 0 || value === 'GO!!') {
-        setTimeout(() => {
-            stopSegmentCountdown();
-        }, 800);
+        // 기존 타이머가 있으면 제거
+        if (segmentCountdownTimer) {
+            clearTimeout(segmentCountdownTimer);
+        }
+        segmentCountdownTimer = setTimeout(() => {
+            // GO!! 표시 후 1초가 지났는지 확인
+            if (goDisplayTime !== null) {
+                const elapsedSinceGo = Date.now() - goDisplayTime;
+                if (elapsedSinceGo >= 1000) {
+                    stopSegmentCountdown();
+                    goDisplayTime = null;
+                    startCountdownActive = false;
+                } else {
+                    // 아직 1초가 안 지났으면 추가 대기
+                    const remainingTime = 1000 - elapsedSinceGo;
+                    segmentCountdownTimer = setTimeout(() => {
+                        stopSegmentCountdown();
+                        goDisplayTime = null;
+                        startCountdownActive = false;
+                    }, remainingTime);
+                }
+            } else {
+                stopSegmentCountdown();
+            }
+        }, 1000); // 1초로 증가
     }
 }
 
 // 세그먼트 카운트다운 오버레이 숨김
 function stopSegmentCountdown() {
+    // 시작 카운트다운 중이거나 GO!! 표시 후 1초가 안 지났으면 숨기지 않음
+    if (startCountdownActive || (goDisplayTime !== null && (Date.now() - goDisplayTime) < 1000)) {
+        return;
+    }
+    
     const overlay = document.getElementById('countdownOverlay');
     if (overlay) {
         overlay.classList.add('hidden');
         overlay.style.display = 'none';
+        overlay.style.visibility = 'hidden';
     }
     
     if (segmentCountdownTimer) {
-        clearInterval(segmentCountdownTimer);
+        clearTimeout(segmentCountdownTimer);
         segmentCountdownTimer = null;
     }
     
     segmentCountdownActive = false;
     lastCountdownValue = null;
+    startCountdownActive = false;
+    goDisplayTime = null;
 }
 
 // TARGET 파워 업데이트 함수 (Firebase에서 계산된 값 우선 사용)
