@@ -5356,37 +5356,52 @@ function uploadToFirebase() {
     // 워크아웃 시작 시 추가 항목: avgPower, cadence, hr, lastUpdate, maxPower, power, segmentPower, targetPower
     state.powerMeters.forEach(pm => {
         if (pm.connected) {
-            // 필수 유지값 포함 (powerMeter 객체에서 가져오기)
-            const userData = {
-                // 필수 유지값 (powerMeter에 있으면 포함)
-                userId: pm.userId ? String(pm.userId) : undefined,
-                userName: pm.userName || undefined,
-                name: pm.userName || `User ${pm.id}`,
-                participantName: pm.userName || undefined,
-                ftp: pm.userFTP ? Math.round(pm.userFTP) : undefined,
-                weight: pm.userWeight || undefined,
-                equipment: pm.equipment || undefined,
-                // 워크아웃 시작 시 추가 항목
-                power: Math.round(pm.currentPower || 0),
-                cadence: Math.round(pm.cadence || 0),
-                hr: Math.round(pm.heartRate || 0),
-                maxPower: Math.round(pm.maxPower || 0),
-                avgPower: Math.round(pm.averagePower || 0),
-                segmentPower: Math.round(pm.segmentPower || 0),
-                targetPower: Math.round(pm.targetPower || 0),
-                lastUpdate: firebase.database.ServerValue.TIMESTAMP
-            };
+            // Firebase에서 기존 데이터를 먼저 읽어서 필수 필드 보존
+            const userRef = db.ref(`sessions/${sessionId}/users/${pm.id}`);
             
-            // undefined 값 제거 (Firebase update는 undefined를 null로 변환하므로 제거)
-            Object.keys(userData).forEach(key => {
-                if (userData[key] === undefined) {
-                    delete userData[key];
-                }
+            // 비동기 처리를 위해 Promise 사용 (각 사용자별로 개별 업데이트)
+            userRef.once('value').then(snapshot => {
+                const existingData = snapshot.val() || {};
+                
+                // 필수 유지값 포함 (powerMeter 객체에서 가져오기, 없으면 기존 값 유지)
+                const userData = {
+                    // 필수 유지값 (powerMeter에 있으면 업데이트, 없으면 기존 값 유지)
+                    userId: pm.userId ? String(pm.userId) : (existingData.userId || undefined),
+                    userName: pm.userName || existingData.userName || undefined,
+                    name: pm.userName || existingData.name || `User ${pm.id}`,
+                    participantName: pm.userName || existingData.participantName || undefined,
+                    ftp: pm.userFTP ? Math.round(pm.userFTP) : (existingData.ftp !== undefined ? existingData.ftp : undefined),
+                    weight: pm.userWeight || existingData.weight || undefined,
+                    equipment: pm.equipment || existingData.equipment || undefined, // equipment 필드 보존 (기존 값 우선)
+                    // 워크아웃 시작 시 추가 항목
+                    power: Math.round(pm.currentPower || 0),
+                    cadence: Math.round(pm.cadence || 0),
+                    hr: Math.round(pm.heartRate || 0),
+                    maxPower: Math.round(pm.maxPower || 0),
+                    avgPower: Math.round(pm.averagePower || 0),
+                    segmentPower: Math.round(pm.segmentPower || 0),
+                    targetPower: Math.round(pm.targetPower || 0),
+                    lastUpdate: firebase.database.ServerValue.TIMESTAMP
+                };
+                
+                // undefined 값 제거 (Firebase update는 undefined를 null로 변환하므로 제거)
+                Object.keys(userData).forEach(key => {
+                    if (userData[key] === undefined) {
+                        delete userData[key];
+                    }
+                });
+                
+                // update()를 사용하여 기존 데이터는 유지하고 지정된 필드만 업데이트
+                return userRef.update(userData);
+            }).then(() => {
+                console.log(`[Firebase Upload] 트랙 ${pm.id} 사용자 데이터 업데이트 완료 (equipment 보존):`, {
+                    equipment: pm.equipment || '기존 값 유지',
+                    userId: pm.userId,
+                    userName: pm.userName
+                });
+            }).catch(error => {
+                console.error(`[Firebase Upload] 트랙 ${pm.id} 사용자 데이터 업데이트 실패:`, error);
             });
-            
-            // update()를 사용하여 기존 데이터는 유지하고 지정된 필드만 업데이트
-            // 필수값이 powerMeter에 있으면 업데이트하고, 없으면 기존 값 유지
-            updates[`sessions/${sessionId}/users/${pm.id}`] = userData;
         }
     });
 
