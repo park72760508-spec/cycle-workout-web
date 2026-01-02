@@ -2162,6 +2162,140 @@ function clearSelectedUser() {
 }
 
 /**
+ * 모든 트랙의 사용자 선택 및 심박계 해제 (스마트로라, 파워메터는 유지)
+ */
+function clearAllUsersAndHeartRateDevices() {
+  console.log('[Indoor Training] 워크아웃 종료 시 사용자 자동 퇴실 실행');
+  
+  const state = window.indoorTrainingState;
+  if (!state || !state.powerMeters) {
+    console.warn('[Indoor Training] powerMeters가 없습니다.');
+    return;
+  }
+  
+  // 모든 트랙(1~10)에 대해 처리
+  state.powerMeters.forEach(pm => {
+    // 사용자 정보 제거
+    if (pm.userId || pm.userName) {
+      pm.userId = null;
+      pm.userFTP = null;
+      pm.userName = null;
+      pm.userWeight = null;
+      pm.userContact = null;
+      pm.equipment = null;
+      
+      // UI 업데이트
+      const userNameEl = document.getElementById(`user-name-${pm.id}`);
+      if (userNameEl) {
+        userNameEl.style.display = 'none';
+      }
+      
+      console.log(`[Indoor Training] 트랙 ${pm.id} 사용자 정보 제거`);
+    }
+    
+    // 심박계 해제 (스마트로라, 파워메터는 유지)
+    if (pm.heartRateDeviceId) {
+      pm.heartRateName = null;
+      pm.heartRateDeviceId = null;
+      
+      // UI 업데이트
+      const heartSelectedCard = document.getElementById('heartSelectedDeviceCard');
+      if (heartSelectedCard && window.currentTargetPowerMeterId === pm.id) {
+        heartSelectedCard.style.display = 'none';
+        heartSelectedCard.innerHTML = '';
+      }
+      
+      const heartNameEl = document.getElementById('heartRatePairingName');
+      const heartDeviceIdEl = document.getElementById('heartRateDeviceId');
+      const btnClearHeart = document.getElementById('btnClearHeart');
+      if (heartNameEl) heartNameEl.value = '';
+      if (heartDeviceIdEl) heartDeviceIdEl.value = '';
+      if (btnClearHeart) btnClearHeart.style.display = 'none';
+      
+      console.log(`[Indoor Training] 트랙 ${pm.id} 심박계 해제`);
+    }
+  });
+  
+  // 선택된 사용자 카드 숨김 (모달이 열려있을 경우)
+  const selectedUserCard = document.getElementById('pairingSelectedUserCard');
+  if (selectedUserCard) {
+    selectedUserCard.style.display = 'none';
+    selectedUserCard.innerHTML = '';
+  }
+  
+  // 장비 정보 입력 필드 비우기
+  const equipmentInput = document.getElementById('pairingEquipmentInput');
+  if (equipmentInput) {
+    equipmentInput.value = '';
+  }
+  
+  // Firebase에서 사용자 정보 및 심박계 정보 삭제 (스마트로라, 파워메터는 유지)
+  if (typeof db !== 'undefined') {
+    const sessionId = getSessionId();
+    
+    if (sessionId) {
+      state.powerMeters.forEach(pm => {
+        const userRef = db.ref(`sessions/${sessionId}/users/${pm.id}`);
+        
+        // Firebase에서 기존 데이터 읽기
+        userRef.once('value').then(snapshot => {
+          const existingData = snapshot.val() || {};
+          
+          // 사용자 정보와 심박계 정보만 제거, 스마트로라와 파워메터는 유지
+          const updatedData = {
+            ...existingData,
+            userId: null,
+            userName: null,
+            name: null,
+            participantName: null,
+            ftp: null,
+            weight: null,
+            equipment: null,
+            heartRateDeviceId: null,
+            heartRateName: null,
+            // 스마트로라와 파워메터는 유지
+            trainerDeviceId: existingData.trainerDeviceId || null,
+            trainerName: existingData.trainerName || null,
+            deviceId: existingData.deviceId || null,
+            pairingName: existingData.pairingName || null
+          };
+          
+          // null 값 제거
+          Object.keys(updatedData).forEach(key => {
+            if (updatedData[key] === null) {
+              delete updatedData[key];
+            }
+          });
+          
+          return userRef.update(updatedData);
+        }).then(() => {
+          console.log(`[Firebase] 트랙 ${pm.id} 사용자 및 심박계 정보 제거 완료`);
+        }).catch(error => {
+          console.error(`[Firebase] 트랙 ${pm.id} 정보 업데이트 실패:`, error);
+        });
+      });
+    }
+  }
+  
+  // 페어링 모달이 열려있으면 업데이트
+  if (window.currentTargetPowerMeterId) {
+    const currentPowerMeter = state.powerMeters.find(p => p.id === window.currentTargetPowerMeterId);
+    if (currentPowerMeter && typeof updatePairingModalWithSavedData === 'function') {
+      updatePairingModalWithSavedData(currentPowerMeter);
+    }
+  }
+  
+  // 로컬 스토리지에 저장
+  saveAllPowerMeterPairingsToStorage();
+  
+  if (typeof showToast === 'function') {
+    showToast('모든 트랙의 사용자 선택과 심박계가 해제되었습니다.');
+  }
+  
+  console.log('[Indoor Training] 사용자 자동 퇴실 완료');
+}
+
+/**
  * 페어링된 기기 해제
  */
 function clearPairedDevice(deviceType) {
@@ -3702,6 +3836,12 @@ function stopTraining() {
   const existingModal = document.getElementById('segmentCountdownModal');
   if (existingModal) document.body.removeChild(existingModal);
   
+  // 워크아웃 종료 시 사용자 자동 퇴실 체크
+  const autoClearCheckbox = document.getElementById('autoClearUsersOnWorkoutEnd');
+  if (autoClearCheckbox && autoClearCheckbox.checked) {
+    clearAllUsersAndHeartRateDevices();
+  }
+  
   // 버튼 상태 업데이트
   updateTrainingButtons();
 }
@@ -3876,6 +4016,12 @@ function startTrainingTimer() {
           
           const existingModal = document.getElementById('segmentCountdownModal');
           if (existingModal) document.body.removeChild(existingModal);
+          
+          // 워크아웃 종료 시 사용자 자동 퇴실 체크
+          const autoClearCheckbox = document.getElementById('autoClearUsersOnWorkoutEnd');
+          if (autoClearCheckbox && autoClearCheckbox.checked) {
+            clearAllUsersAndHeartRateDevices();
+          }
           
           // 버튼 상태 업데이트
           updateTrainingButtons();
