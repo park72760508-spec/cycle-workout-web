@@ -224,7 +224,21 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     if (status) {
         // 훈련 상태 변화 감지 및 세션 관리
         const currentState = status.state || 'idle';
+        const previousState = window.currentTrainingState;
         window.currentTrainingState = currentState; // 전역 변수에 저장
+        
+        // 화면 잠금 방지 제어 (훈련 진행 중에만 활성화)
+        if (typeof window.wakeLockControl !== 'undefined') {
+            if (currentState === 'running' && previousState !== 'running') {
+                // 훈련 시작: 화면 잠금 방지 활성화
+                console.log('[개인 훈련] 훈련 시작 - 화면 잠금 방지 활성화');
+                window.wakeLockControl.request();
+            } else if ((currentState === 'idle' || currentState === 'paused' || currentState === 'ended') && previousState === 'running') {
+                // 훈련 종료/일시정지: 화면 잠금 방지 해제
+                console.log('[개인 훈련] 훈련 종료/일시정지 - 화면 잠금 방지 해제');
+                window.wakeLockControl.release();
+            }
+        }
         
         // 훈련 시작 감지 (idle/paused -> running)
         if (previousTrainingState !== 'running' && currentState === 'running') {
