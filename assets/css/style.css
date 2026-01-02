@@ -10314,6 +10314,11 @@ line[id^="needle-"] {
   margin-bottom: 0;
 }
 
+/* 훈련 참가 화면 로고 50% 확대 */
+#playerListScreen .race-title-icon {
+  height: calc(1.3 * 1em * 1.5); /* 기본 크기의 1.5배 (50% 확대) */
+}
+
 .player-list-container {
   max-width: 1000px;
   margin: 0 auto;
@@ -10462,6 +10467,11 @@ line[id^="needle-"] {
 
   .race-title-icon {
     height: 1em;
+  }
+
+  /* 훈련 참가 화면 로고 모바일에서도 50% 확대 */
+  #playerListScreen .race-title-icon {
+    height: calc(1em * 1.5); /* 기본 크기의 1.5배 (50% 확대) */
   }
 }
 
