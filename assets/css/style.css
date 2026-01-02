@@ -8990,6 +8990,96 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
+/* 워크아웃 선택 버튼 스타일 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select {
+  border-color: rgba(0, 212, 170, 0.3);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select img {
+  filter: brightness(0) invert(1);
+  opacity: 0.9;
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select:hover {
+  border-color: rgba(0, 212, 170, 0.6);
+  box-shadow: 
+    0 8px 25px rgba(0, 212, 170, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select:hover img {
+  opacity: 1;
+}
+
+/* 버튼 툴팁 스타일 */
+#indoorTrainingDashboardScreen .enhanced-control-btn[title] {
+  position: relative;
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn[title]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.85);
+  z-index: 1001;
+  pointer-events: none;
+}
+
+/* 환경 설정 체크박스 스타일 */
+#indoorTrainingDashboardScreen .settings-block {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+#indoorTrainingDashboardScreen .settings-block label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+}
+
+#indoorTrainingDashboardScreen .settings-block input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #00d4aa;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+
+#indoorTrainingDashboardScreen .settings-block input[type="checkbox"]:hover {
+  transform: scale(1.05);
+  transition: transform 0.2s ease;
+}
+
 /* 중복 정의 제거 - 상단 정의 사용 */
 
 .dashboard-header h1 {
