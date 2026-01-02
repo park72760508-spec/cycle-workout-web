@@ -543,6 +543,79 @@ let segmentCountdownActive = false;
 let segmentCountdownTimer = null;
 let lastCountdownValue = null;
 
+// Beep 사운드 (Web Audio)
+let __beepCtx = null;
+
+// 오디오 컨텍스트 초기화 함수
+async function ensureBeepContext() {
+    try {
+        if (!window.AudioContext && !window.webkitAudioContext) {
+            console.warn('[개인 훈련] Web Audio API not supported');
+            return false;
+        }
+
+        if (!__beepCtx) {
+            __beepCtx = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('[개인 훈련] New audio context created');
+        }
+        
+        if (__beepCtx.state === "suspended") {
+            await __beepCtx.resume();
+            console.log('[개인 훈련] Audio context resumed');
+        }
+        
+        return __beepCtx.state === "running";
+        
+    } catch (error) {
+        console.error('[개인 훈련] Audio context initialization failed:', error);
+        __beepCtx = null;
+        return false;
+    }
+}
+
+// 벨소리 재생 함수
+async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine") {
+    try {
+        console.log(`[개인 훈련] Beep 재생 시도: ${freq}Hz, ${durationMs}ms, ${volume} 볼륨, ${type} 타입`);
+        
+        const contextReady = await ensureBeepContext();
+        if (!contextReady) {
+            console.warn('[개인 훈련] Audio context not available for beep');
+            return;
+        }
+
+        const osc = __beepCtx.createOscillator();
+        const gain = __beepCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.value = volume;
+
+        osc.connect(gain);
+        gain.connect(__beepCtx.destination);
+
+        const now = __beepCtx.currentTime;
+        
+        // 볼륨 페이드 아웃 설정
+        gain.gain.setValueAtTime(volume, now);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+
+        // 오실레이터 시작 및 정지
+        osc.start(now);
+        osc.stop(now + durationMs / 1000);
+        
+        console.log(`[개인 훈련] Beep 재생 성공: ${freq}Hz`);
+        
+        // Promise로 재생 완료 시점 반환
+        return new Promise(resolve => {
+            setTimeout(resolve, durationMs);
+        });
+        
+    } catch (error) {
+        console.error('[개인 훈련] Beep 재생 실패:', error);
+    }
+}
+
 // 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
 function updateLapTime(status) {
     const lapTimeEl = document.getElementById('ui-lap-time');
@@ -699,6 +772,19 @@ function showSegmentCountdown(value) {
     setTimeout(() => {
         numEl.style.animation = '';
     }, 10);
+    
+    // 벨소리 재생
+    if (value === 'GO!!' || value === 0) {
+        // GO!! 또는 0일 때: 강조 벨소리 (높은 주파수, 긴 지속시간)
+        playBeep(1500, 700, 0.35, "square").catch(err => {
+            console.warn('[개인 훈련] 벨소리 재생 실패:', err);
+        });
+    } else if (typeof value === 'number' && value > 0 && value <= 5) {
+        // 1~5초일 때: 일반 벨소리
+        playBeep(880, 120, 0.25, "sine").catch(err => {
+            console.warn('[개인 훈련] 벨소리 재생 실패:', err);
+        });
+    }
     
     segmentCountdownActive = true;
     
