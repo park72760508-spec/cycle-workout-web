@@ -1512,6 +1512,7 @@ function updatePairingModalWithSavedData(powerMeter) {
   }
   
   // 스마트로라 정보 표시
+  const trainerSelectedCard = document.getElementById('trainerSelectedDeviceCard');
   if (powerMeter.trainerDeviceId) {
     const trainerNameEl = document.getElementById('trainerPairingName');
     const trainerDeviceIdEl = document.getElementById('trainerDeviceId');
@@ -1519,12 +1520,35 @@ function updatePairingModalWithSavedData(powerMeter) {
     if (trainerNameEl) trainerNameEl.value = powerMeter.trainerName || '';
     if (trainerDeviceIdEl) trainerDeviceIdEl.value = powerMeter.trainerDeviceId || '';
     if (btnClearTrainer) btnClearTrainer.style.display = 'block';
+    
+    // 페어링된 스마트로라 카드 표시 (사용자 선택 카드와 동일한 스타일)
+    if (trainerSelectedCard) {
+      trainerSelectedCard.innerHTML = `
+        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.trainerName || '스마트로라'}</div>
+              <div style="font-size: 14px; color: #155724;">
+                <span><strong>디바이스 ID:</strong> ${powerMeter.trainerDeviceId || '-'}</span>
+              </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="clearPairedDevice('trainer')" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
+          </div>
+        </div>
+      `;
+      trainerSelectedCard.style.display = 'block';
+    }
   } else {
     const btnClearTrainer = document.getElementById('btnClearTrainer');
     if (btnClearTrainer) btnClearTrainer.style.display = 'none';
+    if (trainerSelectedCard) {
+      trainerSelectedCard.style.display = 'none';
+      trainerSelectedCard.innerHTML = '';
+    }
   }
   
   // 파워메터 정보 표시
+  const powerSelectedCard = document.getElementById('powerSelectedDeviceCard');
   if (powerMeter.deviceId) {
     const powerNameEl = document.getElementById('powerMeterPairingName');
     const powerDeviceIdEl = document.getElementById('powerMeterDeviceId');
@@ -1532,12 +1556,35 @@ function updatePairingModalWithSavedData(powerMeter) {
     if (powerNameEl) powerNameEl.value = powerMeter.pairingName || '';
     if (powerDeviceIdEl) powerDeviceIdEl.value = powerMeter.deviceId || '';
     if (btnClearPower) btnClearPower.style.display = 'block';
+    
+    // 페어링된 파워메터 카드 표시 (사용자 선택 카드와 동일한 스타일)
+    if (powerSelectedCard) {
+      powerSelectedCard.innerHTML = `
+        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.pairingName || '파워메터'}</div>
+              <div style="font-size: 14px; color: #155724;">
+                <span><strong>디바이스 ID:</strong> ${powerMeter.deviceId || '-'}</span>
+              </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="clearPairedDevice('power')" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
+          </div>
+        </div>
+      `;
+      powerSelectedCard.style.display = 'block';
+    }
   } else {
     const btnClearPower = document.getElementById('btnClearPower');
     if (btnClearPower) btnClearPower.style.display = 'none';
+    if (powerSelectedCard) {
+      powerSelectedCard.style.display = 'none';
+      powerSelectedCard.innerHTML = '';
+    }
   }
   
   // 심박계 정보 표시
+  const heartSelectedCard = document.getElementById('heartSelectedDeviceCard');
   if (powerMeter.heartRateDeviceId) {
     const heartNameEl = document.getElementById('heartRatePairingName');
     const heartDeviceIdEl = document.getElementById('heartRateDeviceId');
@@ -1545,9 +1592,31 @@ function updatePairingModalWithSavedData(powerMeter) {
     if (heartNameEl) heartNameEl.value = powerMeter.heartRateName || '';
     if (heartDeviceIdEl) heartDeviceIdEl.value = powerMeter.heartRateDeviceId || '';
     if (btnClearHeart) btnClearHeart.style.display = 'block';
+    
+    // 페어링된 심박계 카드 표시 (사용자 선택 카드와 동일한 스타일)
+    if (heartSelectedCard) {
+      heartSelectedCard.innerHTML = `
+        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
+              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.heartRateName || '심박계'}</div>
+              <div style="font-size: 14px; color: #155724;">
+                <span><strong>디바이스 ID:</strong> ${powerMeter.heartRateDeviceId || '-'}</span>
+              </div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="clearPairedDevice('heart')" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
+          </div>
+        </div>
+      `;
+      heartSelectedCard.style.display = 'block';
+    }
   } else {
     const btnClearHeart = document.getElementById('btnClearHeart');
     if (btnClearHeart) btnClearHeart.style.display = 'none';
+    if (heartSelectedCard) {
+      heartSelectedCard.style.display = 'none';
+      heartSelectedCard.innerHTML = '';
+    }
   }
 }
 
@@ -2105,6 +2174,13 @@ function clearPairedDevice(deviceType) {
   if (deviceType === 'trainer') {
     powerMeter.trainerName = null;
     powerMeter.trainerDeviceId = null;
+    
+    // 페어링된 스마트로라 카드 숨김
+    const trainerSelectedCard = document.getElementById('trainerSelectedDeviceCard');
+    if (trainerSelectedCard) {
+      trainerSelectedCard.style.display = 'none';
+      trainerSelectedCard.innerHTML = '';
+    }
     const trainerNameEl = document.getElementById('trainerPairingName');
     const trainerDeviceIdEl = document.getElementById('trainerDeviceId');
     const btnClearTrainer = document.getElementById('btnClearTrainer');
@@ -2124,6 +2200,14 @@ function clearPairedDevice(deviceType) {
   } else if (deviceType === 'power') {
     powerMeter.pairingName = null;
     powerMeter.deviceId = null;
+    
+    // 페어링된 파워메터 카드 숨김
+    const powerSelectedCard = document.getElementById('powerSelectedDeviceCard');
+    if (powerSelectedCard) {
+      powerSelectedCard.style.display = 'none';
+      powerSelectedCard.innerHTML = '';
+    }
+    
     const powerNameEl = document.getElementById('powerMeterPairingName');
     const powerDeviceIdEl = document.getElementById('powerMeterDeviceId');
     const btnClearPower = document.getElementById('btnClearPower');
@@ -2143,6 +2227,14 @@ function clearPairedDevice(deviceType) {
   } else if (deviceType === 'heart') {
     powerMeter.heartRateName = null;
     powerMeter.heartRateDeviceId = null;
+    
+    // 페어링된 심박계 카드 숨김
+    const heartSelectedCard = document.getElementById('heartSelectedDeviceCard');
+    if (heartSelectedCard) {
+      heartSelectedCard.style.display = 'none';
+      heartSelectedCard.innerHTML = '';
+    }
+    
     const heartNameEl = document.getElementById('heartRatePairingName');
     const heartDeviceIdEl = document.getElementById('heartRateDeviceId');
     const btnClearHeart = document.getElementById('btnClearHeart');
@@ -2160,6 +2252,9 @@ function clearPairedDevice(deviceType) {
       showToast('심박계 페어링이 해제되었습니다.');
     }
   }
+  
+  // 모달에 저장된 데이터 다시 업데이트 (페어링된 기기 카드가 업데이트되도록)
+  updatePairingModalWithSavedData(powerMeter);
 }
 
 /**
@@ -2674,6 +2769,9 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
+    updatePairingModalWithSavedData(powerMeter);
+    
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
     
@@ -2703,6 +2801,9 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
+    updatePairingModalWithSavedData(powerMeter);
+    
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
     
@@ -2731,6 +2832,9 @@ function savePowerMeterPairing() {
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
+    updatePairingModalWithSavedData(powerMeter);
     
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
@@ -4359,6 +4463,42 @@ window.selectIndoorDevice = function(deviceId, listId) {
         // 이벤트 트리거하여 저장 로직 실행
         const changeEvent = new Event('change', { bubbles: true });
         inputEl.dispatchEvent(changeEvent);
+        
+        // powerMeter 객체에 디바이스 정보 저장
+        const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+        if (powerMeter) {
+            if (deviceType === 'trainer') {
+                powerMeter.trainerDeviceId = deviceId;
+                const nameInput = document.getElementById('trainerPairingName');
+                if (nameInput && !nameInput.value.trim()) {
+                    powerMeter.trainerName = '스마트로라';
+                } else if (nameInput) {
+                    powerMeter.trainerName = nameInput.value.trim();
+                }
+            } else if (deviceType === 'power') {
+                powerMeter.deviceId = deviceId;
+                const nameInput = document.getElementById('powerMeterPairingName');
+                if (nameInput && !nameInput.value.trim()) {
+                    powerMeter.pairingName = '파워메터';
+                } else if (nameInput) {
+                    powerMeter.pairingName = nameInput.value.trim();
+                }
+            } else if (deviceType === 'heart') {
+                powerMeter.heartRateDeviceId = deviceId;
+                const nameInput = document.getElementById('heartRatePairingName');
+                if (nameInput && !nameInput.value.trim()) {
+                    powerMeter.heartRateName = '심박계';
+                } else if (nameInput) {
+                    powerMeter.heartRateName = nameInput.value.trim();
+                }
+            }
+            
+            // 저장
+            saveAllPowerMeterPairingsToStorage();
+            
+            // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
+            updatePairingModalWithSavedData(powerMeter);
+        }
         
         if (typeof showToast === 'function') {
             showToast(`✅ ${deviceId} 장치가 선택되었습니다.`);
