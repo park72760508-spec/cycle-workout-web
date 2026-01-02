@@ -200,7 +200,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     window.trainingResults.endSession();
                 }
                 
-                // 훈련 결과 저장
+                // 훈련 결과 저장 및 팝업 표시
                 if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
                     const extra = {
                         workoutId: lastWorkoutId || window.currentWorkout?.id || null,
@@ -211,10 +211,17 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     window.trainingResults.saveTrainingResult(extra)
                         .then((result) => {
                             console.log('[Individual] 훈련 결과 저장 완료:', result);
+                            // 결과 팝업 표시
+                            showTrainingResultModal();
                         })
                         .catch((error) => {
                             console.error('[Individual] 훈련 결과 저장 실패:', error);
+                            // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
+                            showTrainingResultModal();
                         });
+                } else {
+                    // trainingResults가 없어도 팝업 표시
+                    showTrainingResultModal();
                 }
             }
         }
@@ -998,6 +1005,101 @@ function startGaugeAnimationLoop() {
     // 루프 시작
     gaugeAnimationFrameId = requestAnimationFrame(loop);
 }
+
+/**
+ * 훈련 결과 팝업 표시
+ */
+function showTrainingResultModal() {
+    const modal = document.getElementById('trainingResultModal');
+    if (!modal) {
+        console.warn('[Individual] 훈련 결과 모달을 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 결과값 계산
+    const sessionData = window.trainingResults?.getCurrentSessionData?.();
+    if (!sessionData) {
+        console.warn('[Individual] 세션 데이터를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 통계 계산
+    const stats = window.trainingResults?.calculateSessionStats?.() || {};
+    
+    // 훈련 시간 계산
+    const startTime = sessionData.startTime ? new Date(sessionData.startTime) : null;
+    const endTime = sessionData.endTime ? new Date(sessionData.endTime) : new Date();
+    const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+    const duration_min = Math.floor(totalSeconds / 60);
+    
+    // TSS 및 NP 계산 (resultManager.js와 동일한 로직)
+    let tss = 0;
+    let np = 0;
+    
+    // trainingMetrics가 있으면 사용
+    if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+        const elapsedSec = window.trainingMetrics.elapsedSec;
+        const np4sum = window.trainingMetrics.np4sum || 0;
+        const count = window.trainingMetrics.count || 1;
+        
+        if (count > 0 && np4sum > 0) {
+            np = Math.pow(np4sum / count, 0.25);
+            const userFtp = window.currentUser?.ftp || userFTP || 200;
+            const IF = userFtp > 0 ? (np / userFtp) : 0;
+            tss = (elapsedSec / 3600) * (IF * IF) * 100;
+        }
+    }
+    
+    // trainingMetrics가 없으면 대체 계산
+    if (!tss || tss === 0) {
+        const userFtp = window.currentUser?.ftp || userFTP || 200;
+        
+        // NP가 없으면 평균 파워 * 1.05로 근사
+        if (!np || np === 0) {
+            np = Math.round((stats.avgPower || 0) * 1.05);
+        }
+        
+        // IF 계산
+        const IF = userFtp > 0 ? (np / userFtp) : 0;
+        
+        // TSS 계산
+        tss = (totalSeconds / 3600) * (IF * IF) * 100;
+    }
+    
+    // 값 반올림
+    tss = Math.round(tss * 100) / 100;
+    np = Math.round(np * 10) / 10;
+    
+    // 결과값 표시
+    const durationEl = document.getElementById('result-duration');
+    const avgPowerEl = document.getElementById('result-avg-power');
+    const npEl = document.getElementById('result-np');
+    const tssEl = document.getElementById('result-tss');
+    const hrAvgEl = document.getElementById('result-hr-avg');
+    
+    if (durationEl) durationEl.textContent = `${duration_min}분`;
+    if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
+    if (npEl) npEl.textContent = `${np}W`;
+    if (tssEl) tssEl.textContent = `${tss}`;
+    if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
+    
+    // 모달 표시
+    modal.classList.remove('hidden');
+}
+
+/**
+ * 훈련 결과 팝업 닫기
+ */
+function closeTrainingResultModal() {
+    const modal = document.getElementById('trainingResultModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+// 전역 함수로 노출
+window.showTrainingResultModal = showTrainingResultModal;
+window.closeTrainingResultModal = closeTrainingResultModal;
 
 /**
  * 속도계 원호에 목표 파워값만큼 채우기 (세그먼트 달성도에 따라 색상 변경)
