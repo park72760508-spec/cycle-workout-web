@@ -1198,16 +1198,11 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
       }
     }
     
-    // 정보표시창 색상 변경 시 랩파워 색상도 업데이트
+    // 정보표시창 색상 변경 시 랩파워 색상도 업데이트 (항상 검정색)
     const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
     if (segPowerEl) {
-      if (infoEl.classList.contains('connected')) {
-        // 정보표시창이 초록색일 때: 오렌지색
-        segPowerEl.style.color = '#fb923c'; // 오렌지색
-      } else {
-        // 정보표시창이 주황색이거나 연결 안됨일 때: 검정색 유지
-        segPowerEl.style.color = '#000000'; // 검정색
-      }
+      // 랩파워는 항상 검정색
+      segPowerEl.style.color = '#000000'; // 검정색
     }
   }
 }
@@ -1295,15 +1290,8 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     if (segPowerEl) {
         segPowerEl.textContent = Math.round(powerMeter.segmentPower);
         
-        // 랩파워 색상 설정: 정보표시창이 초록색(connected)일 때만 오렌지색, 주황색(warning)이면 검정색 유지
-        const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
-        if (infoEl && infoEl.classList.contains('connected')) {
-            // 정보표시창이 초록색일 때: 오렌지색
-            segPowerEl.style.color = '#fb923c'; // 오렌지색
-        } else {
-            // 정보표시창이 주황색이거나 연결 안됨일 때: 검정색 유지
-            segPowerEl.style.color = '#000000'; // 검정색
-        }
+        // 랩파워 색상 설정: 항상 검정색
+        segPowerEl.style.color = '#000000'; // 검정색
     }
 
     // 케이던스
@@ -1314,11 +1302,11 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         cadenceEl.style.display = '';
     }
 
-    // 심박수 (빨강색으로 표시)
+    // 심박수 (찐녹색으로 표시)
     const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
     if (heartRateEl && heartRate > 0) {
         heartRateEl.textContent = Math.round(heartRate);
-        heartRateEl.style.color = '#ef4444'; // 빨강색
+        heartRateEl.style.color = '#006400'; // 찐녹색
     } else if (heartRateEl) {
         heartRateEl.style.color = ''; // 기본 색상으로 복원
     }
@@ -3799,13 +3787,8 @@ function startTraining() {
     if (avgEl) avgEl.textContent = '0';
     if (segEl) {
         segEl.textContent = '0';
-        // 랩파워 색상 설정: 정보표시창이 초록색(connected)일 때만 오렌지색, 주황색(warning)이면 검정색 유지
-        const infoEl = document.querySelector(`#power-meter-${pm.id} .speedometer-info`);
-        if (infoEl && infoEl.classList.contains('connected')) {
-            segEl.style.color = '#fb923c'; // 오렌지색
-        } else {
-            segEl.style.color = '#000000'; // 검정색
-        }
+        // 랩파워 색상 설정: 항상 검정색
+        segEl.style.color = '#000000'; // 검정색
     }
 
     // 연결된 파워미터의 경우 목표 파워 궤적 표시를 위해 업데이트
