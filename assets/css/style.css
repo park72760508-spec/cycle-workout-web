@@ -8888,6 +8888,31 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
+/* 호버 시 아이콘 위치 고정 (버튼이 위로 이동해도 아이콘은 고정) */
+#rollerRaceDashboardScreen .enhanced-control-btn:hover:not(:disabled)::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::before,
+#rollerRaceDashboardScreen .enhanced-control-btn:hover:not(:disabled)::after,
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::after {
+  transform: translate(-50%, -50%) translateY(2px); /* 버튼이 위로 2px 이동한 만큼 아이콘을 아래로 2px 이동하여 위치 고정 */
+}
+
+/* 재생 아이콘은 이미 transform이 적용되어 있으므로 조정 */
+#rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled)::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled)::before {
+  transform: translate(-50%, -50%) translateY(2px);
+}
+
+/* 건너뛰기 아이콘도 조정 */
+#rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::before {
+  transform: translateY(-50%) translateY(2px);
+}
+
+#rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::after,
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::after {
+  transform: translateY(-50%) translateY(2px);
+}
+
 #rollerRaceDashboardScreen .enhanced-control-btn:active:not(:disabled),
 #indoorTrainingDashboardScreen .enhanced-control-btn:active:not(:disabled) {
   transform: translateY(0);
