@@ -610,36 +610,36 @@ async function renderPlayerList() {
             <button 
               class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
               onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
-              title="사용자 할당/변경">
-              <span>${hasUser ? '변경' : '할당'}</span>
+              title="훈련 참가/변경">
+              <span>${hasUser ? '변경' : '참가'}</span>
             </button>
           ` : `
             <button 
               class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
               disabled
-              title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '사용자 할당/변경'}">
-              <span>${hasUser ? '변경' : '할당'}</span>
+              title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 참가/변경'}">
+              <span>${hasUser ? '변경' : '참가'}</span>
             </button>
           `}
           ${hasUser && canModify ? `
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
               onclick="removeUserFromTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
-              title="사용자 제거">
-              <span>제거</span>
+              title="훈련 참가 취소">
+              <span>취소</span>
             </button>
           ` : hasUser && !canModify ? `
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
               disabled
-              title="본인이 할당한 트랙만 제거 가능합니다">
-              <span>제거</span>
+              title="본인이 할당한 트랙만 취소 가능합니다">
+              <span>취소</span>
             </button>
           ` : ''}
           <a href="${dashboardUrl}" 
              target="_blank"
-             class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser ? 'disabled' : ''}"
-             ${!hasUser ? 'aria-disabled="true" tabindex="-1"' : ''}>
+             class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
+             ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}>
             <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
             <span>Enter</span>
           </a>
