@@ -8930,10 +8930,22 @@ button[aria-disabled="true"] {
   margin-left: 0; /* transform으로 중앙 정렬하므로 margin 제거 */
 }
 
-/* Indoor Training 대시보드 재생 아이콘 고정 (움직임 방지) */
+/* Indoor Training 대시보드 재생 아이콘 고정 (움직임 방지 및 호버 효과 제거) */
 #indoorTrainingDashboardScreen .enhanced-control-btn.play::before {
   transition: none !important;
   transform: translate(-50%, -50%) !important; /* 항상 고정된 위치 */
+}
+
+/* Indoor Training 대시보드 재생 아이콘 호버 시 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled)::before {
+  border-left-color: #22c55e !important; /* 색상 고정 */
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  transform: translate(-50%, -50%) !important; /* 위치 고정 */
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 1 !important; /* 투명도 고정 */
+  filter: none !important; /* 필터 효과 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
@@ -8968,10 +8980,21 @@ button[aria-disabled="true"] {
   max-width: calc(100% - 8px); /* 버튼 경계 내부에 유지 */
 }
 
-/* Indoor Training 대시보드 일시정지 아이콘 고정 (움직임 방지) */
+/* Indoor Training 대시보드 일시정지 아이콘 고정 (움직임 방지 및 호버 효과 제거) */
 #indoorTrainingDashboardScreen .enhanced-control-btn.pause::before {
   transition: none !important;
   transform: translate(-50%, -50%) !important; /* 항상 고정된 위치 */
+}
+
+/* Indoor Training 대시보드 일시정지 아이콘 호버 시 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled)::before {
+  color: #fbbf24 !important; /* 색상 고정 */
+  width: 4px !important;
+  height: 22px !important;
+  transform: translate(-50%, -50%) !important; /* 위치 고정 */
+  box-shadow: -5px 0 0 0 currentColor, 5px 0 0 0 currentColor !important; /* box-shadow 고정 */
+  opacity: 1 !important; /* 투명도 고정 */
+  filter: none !important; /* 필터 효과 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
@@ -9003,10 +9026,20 @@ button[aria-disabled="true"] {
   transform: translate(-50%, -50%);
 }
 
-/* Indoor Training 대시보드 정지 아이콘 고정 (움직임 방지) */
+/* Indoor Training 대시보드 정지 아이콘 고정 (움직임 방지 및 호버 효과 제거) */
 #indoorTrainingDashboardScreen .enhanced-control-btn.stop::before {
   transition: none !important;
   transform: translate(-50%, -50%) !important; /* 항상 고정된 위치 */
+}
+
+/* Indoor Training 대시보드 정지 아이콘 호버 시 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled)::before {
+  background: #ef4444 !important; /* 색상 고정 */
+  width: 18px !important;
+  height: 18px !important;
+  transform: translate(-50%, -50%) !important; /* 위치 고정 */
+  opacity: 1 !important; /* 투명도 고정 */
+  filter: none !important; /* 필터 효과 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
@@ -9055,7 +9088,7 @@ button[aria-disabled="true"] {
   margin-left: 0; /* transform으로 위치 조정하므로 margin 제거 */
 }
 
-/* Indoor Training 대시보드 건너뛰기 아이콘 고정 (움직임 방지) */
+/* Indoor Training 대시보드 건너뛰기 아이콘 고정 (움직임 방지 및 호버 효과 제거) */
 #indoorTrainingDashboardScreen .enhanced-control-btn.skip::before {
   transition: none !important;
   transform: translateY(-50%) !important; /* 항상 고정된 위치 */
@@ -9064,6 +9097,29 @@ button[aria-disabled="true"] {
 #indoorTrainingDashboardScreen .enhanced-control-btn.skip::after {
   transition: none !important;
   transform: translateY(-50%) !important; /* 항상 고정된 위치 */
+}
+
+/* Indoor Training 대시보드 건너뛰기 아이콘 호버 시 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::before {
+  border-left-color: #3b82f6 !important; /* 색상 고정 */
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  transform: translateY(-50%) !important; /* 위치 고정 */
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 1 !important; /* 투명도 고정 */
+  filter: none !important; /* 필터 효과 제거 */
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::after {
+  border-left-color: #3b82f6 !important; /* 색상 고정 */
+  border-top-color: transparent !important;
+  border-bottom-color: transparent !important;
+  transform: translateY(-50%) !important; /* 위치 고정 */
+  width: 0 !important;
+  height: 0 !important;
+  opacity: 1 !important; /* 투명도 고정 */
+  filter: none !important; /* 필터 효과 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled) {
