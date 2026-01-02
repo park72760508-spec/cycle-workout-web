@@ -343,16 +343,20 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
         
         // 워크아웃 ID 가져오기 (Firebase에서 확인)
         // workoutPlan이 업데이트될 때 workoutId도 함께 확인하여 저장
-        db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
-            const workoutId = workoutIdSnapshot.val();
-            if (workoutId) {
-                window.currentWorkout.id = workoutId;
-                lastWorkoutId = workoutId;
-                console.log('[Individual] workoutPlan 업데이트 시 workoutId 확인:', workoutId);
-            } else {
-                console.warn('[Individual] workoutPlan은 있지만 workoutId를 찾을 수 없습니다.');
+        // 헬퍼 함수를 사용하여 workoutId 가져오기
+        (async () => {
+            try {
+                const workoutId = await getWorkoutId();
+                if (workoutId) {
+                    console.log('[Individual] workoutPlan 업데이트 시 workoutId 확인:', workoutId);
+                } else {
+                    // workoutId가 없어도 경고만 출력 (나중에 로드될 수 있음)
+                    console.log('[Individual] workoutPlan은 있지만 workoutId를 아직 찾을 수 없습니다. (나중에 로드될 수 있음)');
+                }
+            } catch (error) {
+                console.warn('[Individual] workoutId 가져오기 실패:', error);
             }
-        });
+        })();
         
         // 세그먼트 그래프 그리기
         updateSegmentGraph(segments, currentSegmentIndex);

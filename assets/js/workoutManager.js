@@ -603,7 +603,7 @@ function createSegmentGraph(segments) {
  * @param {number} currentSegmentIndex - 현재 진행 중인 세그먼트 인덱스 (옵션)
  * @param {string} canvasId - Canvas ID (기본값: 'segmentPreviewGraph')
  */
-function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmentPreviewGraph') {
+function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmentPreviewGraph', elapsedTime = null) {
   if (!segments || segments.length === 0) return;
   
   const canvas = document.getElementById(canvasId);
@@ -1007,7 +1007,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 개인 대시보드 마스코트 그리기
   if (canvasId === 'individualSegmentGraph') {
     // 경과시간 가져오기 (함수 파라미터 또는 전역 변수)
-    const currentElapsedTime = elapsedTime !== null ? elapsedTime : (window.lastElapsedTime || 0);
+    // elapsedTime이 undefined인 경우를 대비하여 명시적으로 확인
+    const currentElapsedTime = (elapsedTime !== null && elapsedTime !== undefined) ? elapsedTime : (window.lastElapsedTime || 0);
     
     // 경과시간/총시간 비율 계산
     const progressRatio = totalSeconds > 0 ? Math.min(1, Math.max(0, currentElapsedTime / totalSeconds)) : 0;
