@@ -8873,6 +8873,7 @@ button[aria-disabled="true"] {
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden; /* 아이콘이 원 밖으로 이탈하지 않도록 */
   box-shadow: 
     0 4px 12px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -8908,6 +8909,11 @@ button[aria-disabled="true"] {
   border-top: 10px solid transparent;
   border-bottom: 10px solid transparent;
   margin-left: 3px;
+  position: absolute; /* 원 밖으로 이탈하지 않도록 absolute positioning */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  margin-left: 0; /* transform으로 중앙 정렬하므로 margin 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled),
@@ -8931,6 +8937,8 @@ button[aria-disabled="true"] {
   box-shadow: -5px 0 0 0 currentColor, 5px 0 0 0 currentColor;
   border-radius: 2px;
   color: #fbbf24;
+  /* 원 밖으로 이탈하지 않도록 box-shadow 크기 조정 */
+  max-width: calc(100% - 8px); /* 버튼 경계 내부에 유지 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled),
@@ -8949,6 +8957,10 @@ button[aria-disabled="true"] {
   height: 18px;
   background: #ef4444;
   border-radius: 3px;
+  position: absolute; /* 원 밖으로 이탈하지 않도록 absolute positioning */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled),
@@ -8968,7 +8980,11 @@ button[aria-disabled="true"] {
   border-left: 12px solid #3b82f6;
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
-  margin-right: 2px;
+  position: absolute; /* 원 밖으로 이탈하지 않도록 absolute positioning */
+  left: calc(50% - 8px); /* 첫 번째 화살표 위치 */
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 0; /* transform으로 위치 조정하므로 margin 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.skip::after,
@@ -8979,7 +8995,11 @@ button[aria-disabled="true"] {
   border-left: 12px solid #3b82f6;
   border-top: 8px solid transparent;
   border-bottom: 8px solid transparent;
-  margin-left: -2px;
+  position: absolute; /* 원 밖으로 이탈하지 않도록 absolute positioning */
+  left: calc(50% + 4px); /* 두 번째 화살표 위치 */
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0; /* transform으로 위치 조정하므로 margin 제거 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled),
