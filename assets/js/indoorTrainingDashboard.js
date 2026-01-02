@@ -3565,7 +3565,21 @@ function toggleStartPauseTraining() {
   const state = window.indoorTrainingState.trainingState;
   
   if (state === 'idle' || state === 'finished') {
-    // 시작
+    // 시작 전 수신기 상태 확인
+    const isReceiverActive = window.antState && window.antState.usbDevice && window.antState.usbDevice.opened;
+    
+    if (!isReceiverActive) {
+      // 수신기가 비활성화 상태면 메시지 표시하고 동작 중단
+      if (typeof showToast === 'function') {
+        showToast('수신기를 먼저 활성화 하세요');
+      } else {
+        console.warn('[Indoor Training] 수신기가 비활성화 상태입니다. 수신기를 먼저 활성화해주세요.');
+        alert('수신기를 먼저 활성화 하세요');
+      }
+      return;
+    }
+    
+    // 수신기가 활성화된 상태에서만 시작
     startTrainingWithCountdown();
   } else if (state === 'running') {
     // 일시정지
