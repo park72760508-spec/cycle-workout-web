@@ -52,23 +52,78 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
                 firebaseTargetPower = targetPowerValue;
                 console.log('[Firebase] 목표 파워 값 (target_power):', firebaseTargetPower, 'W');
             }
+        } else if (data.segmentTargetPowerW !== undefined && data.segmentTargetPowerW !== null && data.segmentTargetPowerW !== '') {
+            const targetPowerValue = Number(data.segmentTargetPowerW);
+            if (!isNaN(targetPowerValue) && targetPowerValue >= 0) {
+                firebaseTargetPower = targetPowerValue;
+                console.log('[Firebase] 목표 파워 값 (segmentTargetPowerW):', firebaseTargetPower, 'W');
+            }
         }
         
-        // FTP 값 업데이트 (여러 필드명 지원)
+        // FTP 값 추출 시도 (targetPower가 없을 때 계산용으로 사용)
+        let foundFTP = null;
+        
+        // 1순위: 직접 필드 (다양한 대소문자 조합)
         if (data.ftp !== undefined && data.ftp !== null && data.ftp !== '') {
-            const ftpValue = Number(data.ftp);
-            if (!isNaN(ftpValue) && ftpValue > 0) {
-                userFTP = ftpValue;
-                window.userFTP = ftpValue; // 전역 변수 업데이트
-                console.log('[Firebase] FTP 값 업데이트:', userFTP, 'W');
+            foundFTP = Number(data.ftp);
+            console.log('[Firebase] FTP 값 발견 (data.ftp):', foundFTP);
+        } else if (data.FTP !== undefined && data.FTP !== null && data.FTP !== '') {
+            foundFTP = Number(data.FTP);
+            console.log('[Firebase] FTP 값 발견 (data.FTP):', foundFTP);
+        } else if (data.userFTP !== undefined && data.userFTP !== null && data.userFTP !== '') {
+            foundFTP = Number(data.userFTP);
+            console.log('[Firebase] FTP 값 발견 (data.userFTP):', foundFTP);
+        } else if (data.userFtp !== undefined && data.userFtp !== null && data.userFtp !== '') {
+            foundFTP = Number(data.userFtp);
+            console.log('[Firebase] FTP 값 발견 (data.userFtp):', foundFTP);
+        }
+        // 2순위: 중첩 객체 내 FTP (participant, user 등의 객체 내부)
+        else if (data.participant && data.participant.ftp !== undefined && data.participant.ftp !== null) {
+            foundFTP = Number(data.participant.ftp);
+            console.log('[Firebase] FTP 값 발견 (data.participant.ftp):', foundFTP);
+        } else if (data.participant && data.participant.FTP !== undefined && data.participant.FTP !== null) {
+            foundFTP = Number(data.participant.FTP);
+            console.log('[Firebase] FTP 값 발견 (data.participant.FTP):', foundFTP);
+        } else if (data.user && data.user.ftp !== undefined && data.user.ftp !== null) {
+            foundFTP = Number(data.user.ftp);
+            console.log('[Firebase] FTP 값 발견 (data.user.ftp):', foundFTP);
+        } else if (data.user && data.user.FTP !== undefined && data.user.FTP !== null) {
+            foundFTP = Number(data.user.FTP);
+            console.log('[Firebase] FTP 값 발견 (data.user.FTP):', foundFTP);
+        }
+        
+        // FTP 값이 유효한지 확인 (0보다 큰 값)
+        if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
+            userFTP = foundFTP;
+            window.userFTP = userFTP; // workoutManager.js에서 접근 가능하도록 전역 노출
+            console.log('[Firebase] 사용자 FTP 값 성공적으로 추출:', userFTP, 'W');
+            // 속도계 레이블 업데이트 (FTP 값이 변경되었으므로)
+            if (typeof updateGaugeTicksAndLabels === 'function') {
+                updateGaugeTicksAndLabels();
             }
+        } else {
+            console.warn('[Firebase] FTP 값을 찾을 수 없습니다. 기본값 200 사용');
+            console.warn('[Firebase] 추출 시도한 값:', foundFTP);
+            console.warn('[Firebase] 데이터 키 목록:', Object.keys(data || {}));
+            console.warn('[Firebase] 전체 데이터:', JSON.stringify(data, null, 2));
+            // 기본값은 그대로 유지 (이미 200으로 설정됨)
+        }
+        
+        // 사용자 ID 저장 (세션 관리용)
+        if (data.userId) {
+            currentUserIdForSession = String(data.userId);
+        }
+        
+        // 사용자 ID 저장 (세션 관리용)
+        if (data.userId) {
+            currentUserIdForSession = String(data.userId);
         }
         
         // 사용자 이름 업데이트
         updateUserName(data);
         updateDashboard(data);
         
-        // TARGET 파워 업데이트
+        // TARGET 파워도 업데이트
         updateTargetPower();
     } else {
         // 데이터가 없으면 (연결 안됨)
@@ -86,18 +141,11 @@ function updateUserName(data) {
     const bikeIdDisplay = document.getElementById('bike-id-display');
     if (!bikeIdDisplay) return;
     
-    // 여러 필드명 지원: userName, name, participantName
-    const userName = data.userName || data.name || data.participantName || null;
+    // 사용자 이름 추출 (여러 필드명 지원)
+    const userName = data.name || data.userName || data.participantName || data.user_name || data.participant_name || null;
     
     if (userName) {
         bikeIdDisplay.innerText = userName;
-        
-        // 사용자 ID도 저장 (세션 관리용)
-        const userId = data.userId || data.id || null;
-        if (userId) {
-            currentUserIdForSession = userId;
-            console.log('[Individual] 사용자 ID 저장:', currentUserIdForSession);
-        }
     } else {
         // 이름이 없으면 Bike 번호 표시
         bikeIdDisplay.innerText = `Bike ${myBikeId}`;
@@ -110,63 +158,6 @@ let previousTrainingState = null; // 이전 훈련 상태 추적
 let currentUserIdForSession = null; // 세션에 사용할 사용자 ID
 let lastWorkoutId = null; // 마지막 워크아웃 ID
 window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
-
-/**
- * Workout ID를 가져오는 헬퍼 함수
- * @returns {Promise<string|null>} workoutId 또는 null
- */
-async function getWorkoutId() {
-    // 1순위: window.currentWorkout.id (가장 빠름)
-    if (window.currentWorkout?.id) {
-        return window.currentWorkout.id;
-    }
-    
-    // 2순위: lastWorkoutId (로컬 변수)
-    if (lastWorkoutId) {
-        return lastWorkoutId;
-    }
-    
-    // 3순위: Firebase에서 직접 가져오기
-    try {
-        const snapshot = await db.ref(`sessions/${SESSION_ID}/workoutId`).once('value');
-        const workoutId = snapshot.val();
-        if (workoutId) {
-            // 가져온 값 저장
-            if (!window.currentWorkout) {
-                window.currentWorkout = {};
-            }
-            window.currentWorkout.id = workoutId;
-            lastWorkoutId = workoutId;
-            return workoutId;
-        }
-    } catch (error) {
-        console.error('[getWorkoutId] Firebase에서 workoutId 가져오기 실패:', error);
-    }
-    
-    return null;
-}
-
-/**
- * Workout ID를 동기적으로 가져오는 함수 (이미 로드된 경우)
- * @returns {string|null} workoutId 또는 null
- */
-function getWorkoutIdSync() {
-    // 1순위: window.currentWorkout.id
-    if (window.currentWorkout?.id) {
-        return window.currentWorkout.id;
-    }
-    
-    // 2순위: lastWorkoutId
-    if (lastWorkoutId) {
-        return lastWorkoutId;
-    }
-    
-    return null;
-}
-
-// 전역으로 노출 (다른 스크립트에서도 사용 가능)
-window.getWorkoutId = getWorkoutId;
-window.getWorkoutIdSync = getWorkoutIdSync;
 
 db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
@@ -219,61 +210,62 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 
                 // 훈련 결과 저장 및 팝업 표시
                 if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
-                    // 워크아웃 ID 가져오기 (헬퍼 함수 사용)
-                    (async () => {
-                        try {
-                            // 헬퍼 함수를 사용하여 workoutId 가져오기 (Firebase에서도 확인)
-                            const workoutId = await getWorkoutId();
-                            
-                            const extra = {
-                                workoutId: workoutId,
-                                workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                                userId: currentUserIdForSession,
-                                elapsedTime: status.elapsedTime || window.lastElapsedTime || null // elapsedTime 전달
-                            };
-                            
-                            console.log('[Individual] 훈련 결과 저장 시도, workoutId:', extra.workoutId, {
-                                workoutIdFromHelper: workoutId,
-                                lastWorkoutId,
-                                currentWorkoutId: window.currentWorkout?.id,
-                                workoutName: extra.workoutName
-                            });
-                            
-                            window.trainingResults.saveTrainingResult(extra)
-                                .then((result) => {
-                                    console.log('[Individual] 훈련 결과 저장 완료:', result);
-                                    // 결과 팝업 표시
-                                    showTrainingResultModal(status);
-                                })
-                                .catch((error) => {
-                                    console.error('[Individual] 훈련 결과 저장 실패:', error);
-                                    // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
-                                    showTrainingResultModal(status);
-                                });
-                        } catch (error) {
-                            console.error('[Individual] workoutId 가져오기 실패:', error);
-                            // workoutId 가져오기 실패해도 저장 시도 (동기 함수로 재시도)
-                            const fallbackWorkoutId = getWorkoutIdSync();
-                            const extra = {
-                                workoutId: fallbackWorkoutId,
-                                workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                                userId: currentUserIdForSession,
-                                elapsedTime: status.elapsedTime || window.lastElapsedTime || null
-                            };
-                            
-                            console.log('[Individual] workoutId 가져오기 실패 후 동기 함수로 재시도, workoutId:', extra.workoutId);
-                            
-                            window.trainingResults.saveTrainingResult(extra)
-                                .then((result) => {
-                                    console.log('[Individual] 훈련 결과 저장 완료 (workoutId 가져오기 실패 후):', result);
-                                    showTrainingResultModal(status);
-                                })
-                                .catch((error) => {
-                                    console.error('[Individual] 훈련 결과 저장 실패:', error);
-                                    showTrainingResultModal(status);
-                                });
+                    // 워크아웃 ID 최종 확인 (Firebase에서 다시 한 번 확인)
+                    db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
+                        const finalWorkoutId = workoutIdSnapshot.val();
+                        if (finalWorkoutId) {
+                            if (!window.currentWorkout) {
+                                window.currentWorkout = {};
+                            }
+                            window.currentWorkout.id = finalWorkoutId;
+                            lastWorkoutId = finalWorkoutId;
                         }
-                    })();
+                        
+                        const extra = {
+                            workoutId: finalWorkoutId || lastWorkoutId || window.currentWorkout?.id || null,
+                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                            userId: currentUserIdForSession,
+                            elapsedTime: status.elapsedTime || window.lastElapsedTime || null // elapsedTime 전달
+                        };
+                        
+                        console.log('[Individual] 훈련 결과 저장 시도, workoutId:', extra.workoutId, {
+                            finalWorkoutId,
+                            lastWorkoutId,
+                            currentWorkoutId: window.currentWorkout?.id,
+                            workoutName: extra.workoutName
+                        });
+                        
+                        window.trainingResults.saveTrainingResult(extra)
+                            .then((result) => {
+                                console.log('[Individual] 훈련 결과 저장 완료:', result);
+                                // 결과 팝업 표시
+                                showTrainingResultModal(status);
+                            })
+                            .catch((error) => {
+                                console.error('[Individual] 훈련 결과 저장 실패:', error);
+                                // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
+                                showTrainingResultModal(status);
+                            });
+                    }).catch((error) => {
+                        console.error('[Individual] workoutId 조회 실패:', error);
+                        // workoutId 조회 실패해도 저장 시도
+                        const extra = {
+                            workoutId: lastWorkoutId || window.currentWorkout?.id || null,
+                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                            userId: currentUserIdForSession,
+                            elapsedTime: status.elapsedTime || window.lastElapsedTime || null
+                        };
+                        
+                        window.trainingResults.saveTrainingResult(extra)
+                            .then((result) => {
+                                console.log('[Individual] 훈련 결과 저장 완료 (workoutId 조회 실패 후):', result);
+                                showTrainingResultModal(status);
+                            })
+                            .catch((error) => {
+                                console.error('[Individual] 훈련 결과 저장 실패:', error);
+                                showTrainingResultModal(status);
+                            });
+                    });
                 } else {
                     // trainingResults가 없어도 팝업 표시
                     showTrainingResultModal(status);
@@ -390,7 +382,47 @@ function updateDashboard(data) {
         powerEl.setAttribute('fill', '#fff');
     }
     
-    // 2. 바늘 움직임은 startGaugeAnimationLoop에서 처리 (가민 스타일 부드러운 움직임)
+    // TARGET 파워는 세그먼트 정보에서 계산
+    updateTargetPower();
+    
+    // CADENCE 표시
+    const cadence = Number(data.cadence || data.rpm || 0);
+    const cadenceEl = document.getElementById('ui-cadence');
+    if (cadenceEl) {
+        cadenceEl.textContent = Math.round(cadence);
+    }
+    
+    // HEART RATE 표시
+    const hr = Number(data.hr || data.heartRate || data.bpm || 0);
+    const hrEl = document.getElementById('ui-hr');
+    if (hrEl) {
+        hrEl.textContent = Math.round(hr);
+    }
+    
+    // 랩파워 표시 (세그먼트 평균 파워)
+    const lapPower = Number(data.segmentPower || data.avgPower || data.segmentAvgPower || data.averagePower || 0);
+    const lapPowerEl = document.getElementById('ui-lap-power');
+    if (lapPowerEl) {
+        lapPowerEl.textContent = Math.round(lapPower);
+    }
+    
+    // 실시간 데이터를 resultManager에 기록 (훈련 진행 중일 때만)
+    if (window.trainingResults && typeof window.trainingResults.appendStreamSample === 'function') {
+        // 파워 데이터 기록
+        if (powerValue > 0) {
+            window.trainingResults.appendStreamSample('power', powerValue);
+        }
+        // 심박수 데이터 기록
+        if (hr > 0) {
+            window.trainingResults.appendStreamSample('hr', hr);
+        }
+        // 케이던스 데이터 기록
+        if (cadence > 0) {
+            window.trainingResults.appendStreamSample('cadence', cadence);
+        }
+    }
+    
+    // 바늘 움직임은 startGaugeAnimationLoop에서 처리 (가민 스타일 부드러운 움직임)
 }
 
 function updateTimer(status) {
@@ -444,40 +476,60 @@ function formatHMS(totalSeconds) {
 
 // 5초 카운트다운 상태 관리
 let segmentCountdownActive = false;
+let segmentCountdownTimer = null;
+let lastCountdownValue = null;
 
+// 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
 function updateLapTime(status) {
-    const lapTimeEl = document.getElementById('lap-time');
+    const lapTimeEl = document.getElementById('ui-lap-time');
     if (!lapTimeEl) return;
     
-    // 세그먼트 카운트다운 시간 계산
+    // 훈련방의 세그먼트 남은 시간 값 사용 (5,4,3,2,1,0 카운트다운과는 별개)
     let countdownValue = null;
     
-    if (status.state === 'running' && window.currentWorkout && window.currentWorkout.segments) {
-        const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
-        if (segIndex >= 0 && segIndex < window.currentWorkout.segments.length) {
+    // 훈련 중일 때: 세그먼트 남은 시간 우선 사용
+    if (status.state === 'running') {
+        // 1순위: segmentRemainingSec (훈련방에서 계산된 세그먼트 남은 시간)
+        if (status.segmentRemainingSec !== undefined && status.segmentRemainingSec !== null && Number.isFinite(status.segmentRemainingSec)) {
+            countdownValue = Math.max(0, Math.floor(status.segmentRemainingSec));
+        }
+        // 2순위: segmentRemainingTime (다른 필드명)
+        else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(status.segmentRemainingTime)) {
+            countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
+        }
+        // 3순위: 세그먼트 정보로 직접 계산
+        else if (window.currentWorkout && window.currentWorkout.segments) {
+            const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
             const seg = window.currentWorkout.segments[segIndex];
-            const segDuration = seg.duration_sec || seg.duration || 0;
             
-            // segmentElapsedTime이 있으면 우선 사용
-            if (status.segmentElapsedTime !== undefined && status.segmentElapsedTime !== null) {
-                countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
-            }
-            // elapsedTime과 segmentStartTime으로 계산
-            else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
-                const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
-                countdownValue = Math.max(0, segDuration - segElapsed);
-            }
-            // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
-            else if (status.elapsedTime !== undefined) {
-                let prevSegmentsTime = 0;
-                for (let i = 0; i < segIndex; i++) {
-                    const prevSeg = window.currentWorkout.segments[i];
-                    if (prevSeg) {
-                        prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
-                    }
+            if (seg) {
+                const segDuration = seg.duration_sec || seg.duration || 0;
+                
+                // segmentElapsedSec가 있으면 사용
+                if (status.segmentElapsedSec !== undefined && Number.isFinite(status.segmentElapsedSec)) {
+                    countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedSec));
                 }
-                const segElapsed = Math.max(0, status.elapsedTime - prevSegmentsTime);
-                countdownValue = Math.max(0, segDuration - segElapsed);
+                // segmentElapsedTime이 있으면 사용
+                else if (status.segmentElapsedTime !== undefined && Number.isFinite(status.segmentElapsedTime)) {
+                    countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedTime));
+                }
+                // elapsedTime과 segmentStartTime으로 계산
+                else if (status.elapsedTime !== undefined && status.segmentStartTime !== undefined) {
+                    const segElapsed = Math.max(0, status.elapsedTime - status.segmentStartTime);
+                    countdownValue = Math.max(0, segDuration - segElapsed);
+                }
+                // 전체 경과 시간에서 이전 세그먼트들의 시간을 빼서 계산
+                else if (status.elapsedTime !== undefined) {
+                    let prevSegmentsTime = 0;
+                    for (let i = 0; i < segIndex; i++) {
+                        const prevSeg = window.currentWorkout.segments[i];
+                        if (prevSeg) {
+                            prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
+                        }
+                    }
+                    const segElapsed = Math.max(0, status.elapsedTime - prevSegmentsTime);
+                    countdownValue = Math.max(0, segDuration - segElapsed);
+                }
             }
         }
     }
@@ -491,161 +543,311 @@ function updateLapTime(status) {
         console.log('[updateLapTime] 세그먼트 카운트다운 시간:', countdownValue, '초');
     }
     
-    // 카운트다운 표시
+    // 카운트다운 값 표시
     if (countdownValue !== null && countdownValue >= 0) {
-        // 5초 이하일 때만 카운트다운 표시
+        lapTimeEl.textContent = formatTime(countdownValue);
+        // 10초 이하면 빨간색, 그 외는 청록색
+        lapTimeEl.setAttribute('fill', countdownValue <= 10 ? '#ff4444' : '#00d4aa');
+    } else {
+        lapTimeEl.textContent = '00:00';
+        lapTimeEl.setAttribute('fill', '#00d4aa');
+    }
+    
+    // 5초 카운트다운 오버레이 처리
+    handleSegmentCountdown(countdownValue, status);
+}
+
+// 5초 카운트다운 오버레이 처리 함수
+function handleSegmentCountdown(countdownValue, status) {
+    // 시작 카운트다운인지 세그먼트 카운트다운인지 구분
+    const isStartCountdown = status.state === 'countdown' || 
+                             (status.countdownRemainingSec !== undefined && 
+                              status.countdownRemainingSec !== null && 
+                              status.countdownRemainingSec >= 0 && 
+                              status.state !== 'running');
+    
+    // 시작 카운트다운 처리 (5, 4, 3, 2, 1, GO!!)
+    if (isStartCountdown && countdownValue !== null && countdownValue >= 0) {
+        // 5초 이상이면 오버레이 표시하지 않음 (Firebase 동기화 지연 고려)
         if (countdownValue <= 5) {
-            lapTimeEl.innerText = countdownValue.toString();
-            lapTimeEl.style.color = '#ffaa00'; // 주황색
-            lapTimeEl.style.fontSize = '48px'; // 큰 글씨
-            lapTimeEl.style.fontWeight = 'bold';
-            segmentCountdownActive = true;
-        } else {
-            // 5초 초과일 때는 일반 랩타임 표시
-            const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
-            if (segIndex >= 0 && window.currentWorkout && window.currentWorkout.segments) {
-                const seg = window.currentWorkout.segments[segIndex];
-                const segDuration = seg.duration_sec || seg.duration || 0;
-                
-                // 세그먼트 경과 시간 계산
-                let segElapsed = 0;
-                if (status.segmentElapsedTime !== undefined && status.segmentElapsedTime !== null) {
-                    segElapsed = Math.floor(status.segmentElapsedTime);
-                } else if (status.elapsedTime !== undefined) {
-                    let prevSegmentsTime = 0;
-                    for (let i = 0; i < segIndex; i++) {
-                        const prevSeg = window.currentWorkout.segments[i];
-                        if (prevSeg) {
-                            prevSegmentsTime += (prevSeg.duration_sec || prevSeg.duration || 0);
-                        }
-                    }
-                    segElapsed = Math.max(0, status.elapsedTime - prevSegmentsTime);
-                }
-                
-                lapTimeEl.innerText = formatTime(segElapsed);
-                lapTimeEl.style.color = '#00d4aa'; // 민트색
-                lapTimeEl.style.fontSize = '32px'; // 일반 크기
-                lapTimeEl.style.fontWeight = 'normal';
-                segmentCountdownActive = false;
-            } else {
-                lapTimeEl.innerText = '00:00';
-                lapTimeEl.style.color = '#fff';
-                lapTimeEl.style.fontSize = '32px';
-                lapTimeEl.style.fontWeight = 'normal';
-                segmentCountdownActive = false;
+            // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
+            if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+                lastCountdownValue = countdownValue;
+                // 0일 때는 "GO!!" 표시
+                const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
+                showSegmentCountdown(displayValue);
             }
-        }
-    } else {
-        lapTimeEl.innerText = '00:00';
-        lapTimeEl.style.color = '#fff';
-        lapTimeEl.style.fontSize = '32px';
-        lapTimeEl.style.fontWeight = 'normal';
-        segmentCountdownActive = false;
-    }
-}
-
-// 현재 세그먼트 가져오기
-function getCurrentSegment() {
-    if (!window.currentWorkout || !window.currentWorkout.segments) {
-        return null;
-    }
-    
-    if (currentSegmentIndex < 0 || currentSegmentIndex >= window.currentWorkout.segments.length) {
-        return null;
-    }
-    
-    return window.currentWorkout.segments[currentSegmentIndex];
-}
-
-// 세그먼트 정보 포맷팅
-function formatSegmentInfo(targetType, targetValue) {
-    if (!targetType || targetValue === undefined || targetValue === null) {
-        return '';
-    }
-    
-    if (targetType === 'ftp_pct') {
-        return `${targetValue}% FTP`;
-    } else if (targetType === 'cadence_rpm') {
-        return `${targetValue} RPM`;
-    } else if (targetType === 'dual') {
-        // dual 타입: "100/120" 형식
-        if (typeof targetValue === 'string' && targetValue.includes('/')) {
-            const parts = targetValue.split('/');
-            return `${parts[0]}% FTP / ${parts[1]} RPM`;
-        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-            return `${targetValue[0]}% FTP / ${targetValue[1]} RPM`;
-        } else {
-            return `${targetValue}`;
-        }
-    } else {
-        return `${targetValue}`;
-    }
-}
-
-// TARGET 파워 업데이트
-function updateTargetPower() {
-    // Firebase에서 받은 targetPower 우선 사용
-    if (firebaseTargetPower !== null && firebaseTargetPower !== undefined) {
-        const targetPowerEl = document.getElementById('ui-target-power');
-        if (targetPowerEl) {
-            targetPowerEl.textContent = Math.round(firebaseTargetPower);
-            targetPowerEl.setAttribute('fill', '#ffaa00'); // 주황색
         }
         return;
     }
     
-    // Firebase targetPower가 없으면 현재 세그먼트에서 계산
-    const currentSegment = getCurrentSegment();
-    if (currentSegment) {
-        const targetType = currentSegment.target_type || 'ftp_pct';
-        let targetValue = currentSegment.target_value;
-        
-        let targetPower = 0;
-        
-        if (targetType === 'ftp_pct') {
-            // FTP 백분율로 계산
-            targetPower = userFTP * (targetValue / 100);
-        } else if (targetType === 'dual') {
-            // dual 타입: "100/120" 형식에서 첫 번째 값 사용
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
-                const ftpPercent = Number(parts[0]) || 100;
-                targetPower = userFTP * (ftpPercent / 100);
-            } else if (Array.isArray(targetValue) && targetValue.length > 0) {
-                const ftpPercent = Number(targetValue[0]) || 100;
-                targetPower = userFTP * (ftpPercent / 100);
-            } else {
-                // 숫자로 저장된 경우 (예: 100120)
-                const numValue = Number(targetValue);
-                if (numValue > 1000 && numValue < 1000000) {
-                    const str = String(numValue);
-                    if (str.length >= 4) {
-                        const ftpPart = str.slice(0, -3);
-                        const ftpPercent = Number(ftpPart) || 100;
-                        targetPower = userFTP * (ftpPercent / 100);
-                    }
-                } else {
-                    targetPower = userFTP * (numValue <= 1000 ? numValue / 100 : 1);
-                }
-            }
-        } else if (targetType === 'cadence_rpm') {
-            // RPM만 있는 경우 파워는 0 (또는 기본값)
-            targetPower = 0;
+    // 세그먼트 카운트다운 처리 (기존 로직)
+    // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
+    if (countdownValue === null || countdownValue > 5) {
+        if (segmentCountdownActive) {
+            stopSegmentCountdown();
         }
-        
-        const targetPowerEl = document.getElementById('ui-target-power');
-        if (targetPowerEl) {
-            targetPowerEl.textContent = Math.round(targetPower);
-            targetPowerEl.setAttribute('fill', '#ffaa00'); // 주황색
-        }
-    } else {
-        // 세그먼트가 없으면 기본값
-        const targetPowerEl = document.getElementById('ui-target-power');
-        if (targetPowerEl) {
-            targetPowerEl.textContent = '0';
-            targetPowerEl.setAttribute('fill', '#555');
-        }
+        lastCountdownValue = null;
+        return;
     }
+    
+    // 5초 이하일 때만 오버레이 표시
+    if (countdownValue <= 5 && countdownValue >= 0) {
+        // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
+        if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
+            lastCountdownValue = countdownValue;
+            showSegmentCountdown(countdownValue);
+        }
+    } else if (countdownValue < 0) {
+        // 0 미만이면 오버레이 숨김
+        if (segmentCountdownActive) {
+            stopSegmentCountdown();
+        }
+        lastCountdownValue = null;
+    }
+}
+
+// 세그먼트 카운트다운 오버레이 표시
+function showSegmentCountdown(value) {
+    const overlay = document.getElementById('countdownOverlay');
+    const numEl = document.getElementById('countdownNumber');
+    
+    if (!overlay || !numEl) return;
+    
+    // 오버레이 표시
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+    
+    // 숫자 또는 "GO!!" 업데이트
+    numEl.textContent = String(value);
+    
+    // "GO!!"일 때 스타일 조정
+    if (value === 'GO!!') {
+        numEl.style.fontSize = '150px'; // GO!!는 조금 작게
+        numEl.style.color = '#00d4aa'; // 민트색
+    } else {
+        numEl.style.fontSize = '200px'; // 기본 크기
+        numEl.style.color = '#fff'; // 흰색
+    }
+    
+    // 애니메이션 효과를 위해 클래스 재적용 (강제 리플로우)
+    numEl.style.animation = 'none';
+    setTimeout(() => {
+        numEl.style.animation = '';
+    }, 10);
+    
+    segmentCountdownActive = true;
+    
+    // 0 또는 "GO!!"일 때 0.8초 후 오버레이 숨김 (GO!!는 조금 더 길게 표시)
+    if (value === 0 || value === 'GO!!') {
+        setTimeout(() => {
+            stopSegmentCountdown();
+        }, 800);
+    }
+}
+
+// 세그먼트 카운트다운 오버레이 숨김
+function stopSegmentCountdown() {
+    const overlay = document.getElementById('countdownOverlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+    }
+    
+    if (segmentCountdownTimer) {
+        clearInterval(segmentCountdownTimer);
+        segmentCountdownTimer = null;
+    }
+    
+    segmentCountdownActive = false;
+    lastCountdownValue = null;
+}
+
+// TARGET 파워 업데이트 함수 (Firebase에서 계산된 값 우선 사용)
+function updateTargetPower() {
+    const targetPowerEl = document.getElementById('ui-target-power');
+    if (!targetPowerEl) {
+        console.warn('[updateTargetPower] ui-target-power 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 1순위: Firebase에서 받은 targetPower 값 사용 (서버에서 계산된 값)
+    if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower >= 0) {
+        console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
+        targetPowerEl.textContent = String(Math.round(firebaseTargetPower));
+        targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 업데이트
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
+        return;
+    }
+    
+    // 2순위: 세그먼트 데이터로 계산 (Firebase targetPower가 없을 때만)
+    // 워크아웃 데이터 확인
+    if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+        console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
+        targetPowerEl.textContent = '0';
+        targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 숨김
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
+        return;
+    }
+    
+    // 현재 세그먼트 정보 가져오기 (헬퍼 함수 사용)
+    const seg = getCurrentSegment();
+    if (!seg) {
+        console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다.');
+        targetPowerEl.textContent = '0';
+        targetPowerEl.setAttribute('fill', '#ff8c00');
+        // 목표 파워 원호 숨김
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
+        return;
+    }
+    
+    // FTP 값 사용 (Firebase에서 가져온 사용자 FTP 값)
+    const ftp = userFTP;
+    
+    // 세그먼트 목표 파워 계산
+    let targetPower = 0;
+    
+    // target_type에 따라 계산
+    const targetType = seg.target_type || 'ftp_pct';
+    const targetValue = seg.target_value;
+    
+    console.log('[updateTargetPower] 세그먼트 데이터로 계산 (Firebase targetPower 없음)');
+    console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex);
+    console.log('[updateTargetPower] target_type:', targetType, 'target_value:', targetValue, '타입:', typeof targetValue);
+    console.log('[updateTargetPower] 사용자 FTP 값:', ftp);
+    
+    if (targetType === 'ftp_pct') {
+        const ftpPercent = Number(targetValue) || 100;
+        targetPower = Math.round(ftp * (ftpPercent / 100));
+        console.log('[updateTargetPower] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
+    } else if (targetType === 'dual') {
+        // dual 타입: "100/120" 형식 파싱
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+            const parts = targetValue.split('/').map(s => s.trim());
+            if (parts.length >= 1) {
+                const ftpPercent = Number(parts[0]) || 100;
+                targetPower = Math.round(ftp * (ftpPercent / 100));
+            }
+        } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+            const ftpPercent = Number(targetValue[0]) || 100;
+            targetPower = Math.round(ftp * (ftpPercent / 100));
+        } else {
+            // 숫자로 저장된 경우 처리
+            const numValue = Number(targetValue);
+            if (numValue > 1000 && numValue < 1000000) {
+                const str = String(numValue);
+                if (str.length >= 4) {
+                    const ftpPart = str.slice(0, -3);
+                    const ftpPercent = Number(ftpPart) || 100;
+                    targetPower = Math.round(ftp * (ftpPercent / 100));
+                }
+            } else {
+                const ftpPercent = numValue <= 1000 ? numValue : 100;
+                targetPower = Math.round(ftp * (ftpPercent / 100));
+            }
+        }
+    } else if (targetType === 'cadence_rpm') {
+        // RPM만 있는 경우 파워는 0
+        targetPower = 0;
+    }
+    
+    console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
+    console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
+    targetPowerEl.textContent = targetPower > 0 ? String(targetPower) : '0';
+    targetPowerEl.setAttribute('fill', '#ff8c00');
+    
+    // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
+    if (typeof updateTargetPowerArc === 'function') {
+        updateTargetPowerArc();
+    }
+}
+
+/**
+ * 세그먼트 정보를 표시 형식으로 변환 (예: FTP 60%, RPM 90 등)
+ */
+function formatSegmentInfo(targetType, targetValue) {
+    if (!targetType || targetValue === undefined || targetValue === null) {
+        return '준비 중';
+    }
+    
+    // target_type에 따라 표시 형식 결정
+    if (targetType === 'ftp_pct') {
+        // FTP 퍼센트: "FTP 60%"
+        const percent = Number(targetValue) || 100;
+        return `FTP ${percent}%`;
+    } else if (targetType === 'dual') {
+        // Dual 타입: "100/120" 형식에서 앞의 값 사용
+        let ftpPercent = 100;
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+            const parts = targetValue.split('/').map(s => s.trim());
+            if (parts.length >= 1) {
+                ftpPercent = Number(parts[0].replace('%', '')) || 100;
+            }
+        } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+            ftpPercent = Number(targetValue[0]) || 100;
+        } else if (typeof targetValue === 'number') {
+            // 숫자로 저장된 경우 처리
+            const numValue = targetValue;
+            if (numValue > 1000 && numValue < 1000000) {
+                const str = String(numValue);
+                if (str.length >= 4) {
+                    const ftpPart = str.slice(0, -3);
+                    ftpPercent = Number(ftpPart) || 100;
+                }
+            } else {
+                ftpPercent = numValue <= 1000 ? numValue : 100;
+            }
+        }
+        return `FTP ${ftpPercent}%`;
+    } else if (targetType === 'cadence_rpm') {
+        // RPM: "RPM 90"
+        const rpm = Number(targetValue) || 0;
+        return `RPM ${rpm}`;
+    } else {
+        // 알 수 없는 타입: 기본값 표시
+        const segIdx = (currentSegmentIndex >= 0 ? currentSegmentIndex + 1 : 1);
+        return `Segment ${segIdx}`;
+    }
+}
+
+/**
+ * 현재 진행 중인 세그먼트 정보 가져오기
+ * @returns {Object|null} 현재 세그먼트 객체 또는 null
+ */
+function getCurrentSegment() {
+    // 세그먼트 인덱스 확인
+    if (currentSegmentIndex < 0) {
+        console.log('[getCurrentSegment] 현재 세그먼트 인덱스가 유효하지 않음:', currentSegmentIndex);
+        return null;
+    }
+    
+    // 워크아웃 데이터 확인
+    if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+        console.log('[getCurrentSegment] 워크아웃 데이터가 없음');
+        return null;
+    }
+    
+    // 세그먼트 인덱스 범위 확인
+    if (currentSegmentIndex >= window.currentWorkout.segments.length) {
+        console.warn('[getCurrentSegment] 세그먼트 인덱스가 범위를 벗어남:', currentSegmentIndex, '세그먼트 개수:', window.currentWorkout.segments.length);
+        return null;
+    }
+    
+    const segment = window.currentWorkout.segments[currentSegmentIndex];
+    if (!segment) {
+        console.warn('[getCurrentSegment] 세그먼트 데이터가 없음. 인덱스:', currentSegmentIndex);
+        return null;
+    }
+    
+    return segment;
 }
 
 /**
@@ -748,62 +950,158 @@ function generateGaugeTicks() {
     const centerX = 100;
     const centerY = 140;
     const radius = 80;
+    const innerRadius = radius - 10; // 눈금 안쪽 시작점
     
-    const ticks = [];
-    const labels = [];
+    let ticksHTML = '';
     
-    // 0부터 1000까지 100 단위로 눈금 생성
-    for (let i = 0; i <= 10; i++) {
-        const value = i * 100;
-        const angle = Math.PI - (i * Math.PI / 10); // 0도부터 180도까지
+    // 주눈금: 0, 1, 2, 3, 4, 5, 6 (총 7개)
+    // 각도: 180도(왼쪽 상단, 0)에서 270도(위쪽)를 거쳐 360도(0도, 오른쪽 상단, 6)까지 180도 범위
+    // 주눈금 간격: 180도 / 6 = 30도
+    
+    // 모든 눈금 생성 (주눈금 + 보조눈금)
+    for (let i = 0; i <= 24; i++) { // 0~24 (주눈금 7개 + 보조눈금 18개 = 총 25개)
+        const isMajor = i % 4 === 0; // 4 간격마다 주눈금 (0, 4, 8, 12, 16, 20, 24)
         
-        const x1 = centerX + radius * Math.cos(angle);
-        const y1 = centerY - radius * Math.sin(angle);
-        const x2 = centerX + (radius - 8) * Math.cos(angle);
-        const y2 = centerY - (radius - 8) * Math.sin(angle);
+        // 각도 계산: 180도에서 시작하여 270도를 거쳐 360도(0도)까지 (위쪽 반원)
+        // i=0 → 180도 (왼쪽 상단), i=12 → 270도 (위쪽), i=24 → 360도(0도) (오른쪽 상단)
+        // 180도에서 시작하여 270도를 거쳐 360도(0도)로 가는 경로 (총 180도 범위)
+        // 각도가 증가하는 방향: 180 → 270 → 360(0)
+        let angle = 180 + (i / 24) * 180; // 180도에서 시작하여 360도까지
+        if (angle >= 360) angle = angle % 360; // 360도는 0도로 변환
+        const rad = (angle * Math.PI) / 180;
         
-        ticks.push({ x1, y1, x2, y2, value });
+        // 눈금 위치 계산
+        const x1 = centerX + innerRadius * Math.cos(rad);
+        const y1 = centerY + innerRadius * Math.sin(rad);
         
-        // 라벨 위치 (눈금보다 약간 더 안쪽)
-        const labelX = centerX + (radius - 20) * Math.cos(angle);
-        const labelY = centerY - (radius - 20) * Math.sin(angle);
-        labels.push({ x: labelX, y: labelY, value });
+        // 주눈금은 길게, 보조눈금은 짧게
+        const tickLength = isMajor ? 14 : 7;
+        const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
+        const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
+        
+        // 흰색 눈금
+        ticksHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
+                            stroke="#ffffff" 
+                            stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
     }
     
-    return { ticks, labels };
+    return ticksHTML;
 }
 
-// 속도계 초기화 및 애니메이션 루프
-function startGaugeAnimationLoop() {
-    // 기존 애니메이션 루프가 있으면 중지
-    if (gaugeAnimationFrameId) {
-        cancelAnimationFrame(gaugeAnimationFrameId);
+// 속도계 레이블 생성 함수 (Indoor Training 스타일)
+function generateGaugeLabels() {
+    const centerX = 100;
+    const centerY = 140;
+    const radius = 80;
+    const labelRadius = radius + 18; // 레이블 위치 (원 바깥쪽)
+    
+    let labelsHTML = '';
+    
+    // FTP 배수 정의
+    const multipliers = [
+        { index: 0, mult: 0, color: '#ffffff' },
+        { index: 1, mult: 0.33, color: '#ffffff' },
+        { index: 2, mult: 0.67, color: '#ffffff' },
+        { index: 3, mult: 1, color: '#00d4aa' }, // 민트색
+        { index: 4, mult: 1.33, color: '#ffffff' },
+        { index: 5, mult: 1.67, color: '#ffffff' },
+        { index: 6, mult: 2, color: '#ffffff' }
+    ];
+    
+    // 주눈금 레이블 생성 (7개)
+    multipliers.forEach((item, i) => {
+        // 각도 계산: 180도에서 270도를 거쳐 360도(0도)까지 (위쪽 반원)
+        // i=0 → 180도 (왼쪽 상단), i=3 → 270도 (위쪽), i=6 → 360도(0도) (오른쪽 상단)
+        // 각도가 증가하는 방향: 180 → 270 → 360(0)
+        let angle = 180 + (i / 6) * 180; // 180도에서 시작하여 360도까지
+        if (angle >= 360) angle = angle % 360; // 360도는 0도로 변환
+        const rad = (angle * Math.PI) / 180;
+        
+        // 레이블 위치 계산
+        const x = centerX + labelRadius * Math.cos(rad);
+        const y = centerY + labelRadius * Math.sin(rad);
+        
+        // FTP 값을 곱한 값 계산 (정수만 표기)
+        const value = Math.round(userFTP * item.mult);
+        
+        // 레이블 생성 (정수값만 표기)
+        labelsHTML += `<text x="${x}" y="${y}" 
+                             text-anchor="middle" 
+                             dominant-baseline="middle"
+                             fill="${item.color}" 
+                             font-size="10" 
+                             font-weight="600">${value}</text>`;
+    });
+    
+    return labelsHTML;
+}
+
+// 속도계 눈금 및 레이블 업데이트 함수
+function updateGaugeTicksAndLabels() {
+    const ticksGroup = document.getElementById('gauge-ticks');
+    const labelsGroup = document.getElementById('gauge-labels');
+    
+    if (ticksGroup) {
+        ticksGroup.innerHTML = generateGaugeTicks();
     }
     
+    if (labelsGroup) {
+        labelsGroup.innerHTML = generateGaugeLabels();
+    }
+}
+
+// 초기 속도계 눈금 및 레이블 생성
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        updateGaugeTicksAndLabels();
+        startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+    });
+} else {
+    // DOM이 이미 로드되었으면 바로 실행
+    updateGaugeTicksAndLabels();
+    startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+}
+
+/**
+ * [가민 스타일] 게이지 애니메이션 루프 (60FPS 보간 이동)
+ * - 바늘은 매 프레임 부드럽게 이동 (Lerp 적용)
+ * - Indoor Training의 바늘 움직임 로직과 동일
+ */
+function startGaugeAnimationLoop() {
+    // 이미 실행 중이면 중복 실행 방지
+    if (gaugeAnimationFrameId !== null) return;
+    
     const loop = () => {
-        // 현재 파워값과 표시 파워값 사이의 보간 (가민 스타일 부드러운 움직임)
-        const diff = currentPowerValue - displayPower;
-        const step = diff * 0.15; // 15%씩 이동 (값이 클수록 더 빠르게)
-        displayPower += step;
+        // 1. 목표값(currentPowerValue)과 현재표시값(displayPower)의 차이 계산
+        const target = currentPowerValue || 0;
+        const current = displayPower || 0;
+        const diff = target - current;
         
-        // 바늘 각도 계산 (0W = 180도, 1000W = 0도)
-        const maxPower = 1000;
-        const normalizedPower = Math.min(Math.max(displayPower, 0), maxPower);
-        const angle = Math.PI - (normalizedPower / maxPower) * Math.PI;
+        // 2. 보간(Interpolation) 적용: 거리가 멀면 빠르게, 가까우면 천천히 (감속 효과)
+        // 0.15는 반응속도 계수 (높을수록 빠름, 낮을수록 부드러움. 0.1~0.2 추천)
+        if (Math.abs(diff) > 0.1) {
+            displayPower = current + diff * 0.15;
+        } else {
+            displayPower = target; // 차이가 미세하면 목표값으로 고정 (떨림 방지)
+        }
         
-        // 바늘 끝점 계산
-        const centerX = 100;
-        const centerY = 140;
-        const needleLength = 60;
-        const needleX = centerX + needleLength * Math.cos(angle);
-        const needleY = centerY - needleLength * Math.sin(angle);
+        // 3. 바늘 각도 계산 및 업데이트 (매 프레임 실행)
+        // FTP 기반으로 최대 파워 계산 (FTP × 2)
+        const maxPower = userFTP * 2;
+        let ratio = Math.min(Math.max(displayPower / maxPower, 0), 1);
         
-        // SVG 바늘 업데이트
+        // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
+        const angle = -90 + (ratio * 180);
+        
         const needle = document.getElementById('gauge-needle');
         if (needle) {
-            needle.setAttribute('x2', needleX);
-            needle.setAttribute('y2', needleY);
+            // CSS Transition 간섭 제거하고 직접 제어
+            needle.style.transition = 'none';
+            needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
         }
+        
+        // 4. 목표 파워 원호 업데이트
+        updateTargetPowerArc();
         
         // 다음 프레임 요청
         gaugeAnimationFrameId = requestAnimationFrame(loop);
@@ -824,11 +1122,12 @@ function showTrainingResultModal(status = null) {
         return;
     }
     
-    // 모달 표시
-    modal.classList.remove('hidden');
-    
-    // 세션 데이터 가져오기
-    const sessionData = window.trainingResults?.getCurrentSessionData?.() || {};
+    // 결과값 계산
+    const sessionData = window.trainingResults?.getCurrentSessionData?.();
+    if (!sessionData) {
+        console.warn('[Individual] 세션 데이터를 찾을 수 없습니다.');
+        return;
+    }
     
     // 통계 계산
     const stats = window.trainingResults?.calculateSessionStats?.() || {};
@@ -860,14 +1159,19 @@ function showTrainingResultModal(status = null) {
     let tss = 0;
     let np = 0;
     
-    // trainingMetrics가 있으면 우선 사용
-    if (window.trainingMetrics && window.trainingMetrics.tss !== undefined && window.trainingMetrics.tss !== null) {
-        tss = window.trainingMetrics.tss;
-        console.log('[showTrainingResultModal] trainingMetrics.tss 사용:', tss);
-    }
-    if (window.trainingMetrics && window.trainingMetrics.np !== undefined && window.trainingMetrics.np !== null) {
-        np = window.trainingMetrics.np;
-        console.log('[showTrainingResultModal] trainingMetrics.np 사용:', np);
+    // trainingMetrics가 있으면 사용 (가장 정확)
+    if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+        const elapsedSec = window.trainingMetrics.elapsedSec;
+        const np4sum = window.trainingMetrics.np4sum || 0;
+        const count = window.trainingMetrics.count || 1;
+        
+        if (count > 0 && np4sum > 0) {
+            np = Math.pow(np4sum / count, 0.25);
+            const userFtp = window.currentUser?.ftp || userFTP || 200;
+            const IF = userFtp > 0 ? (np / userFtp) : 0;
+            tss = (elapsedSec / 3600) * (IF * IF) * 100;
+            console.log('[showTrainingResultModal] TSS 계산 (trainingMetrics):', { elapsedSec, np, IF, tss, userFtp });
+        }
     }
     
     // trainingMetrics가 없으면 대체 계산 (elapsedTime 또는 totalSeconds 사용)
@@ -876,9 +1180,10 @@ function showTrainingResultModal(status = null) {
         
         // NP가 없으면 평균 파워 * 1.05로 근사
         if (!np || np === 0) {
-            np = (stats.avgPower || 0) * 1.05;
+            np = Math.round((stats.avgPower || 0) * 1.05);
         }
         
+        // IF 계산
         const IF = userFtp > 0 ? (np / userFtp) : 0;
         
         // TSS 계산: elapsedTime 우선 사용, 없으면 totalSeconds 사용
@@ -891,43 +1196,146 @@ function showTrainingResultModal(status = null) {
     tss = Math.max(0, Math.round(tss * 100) / 100);
     np = Math.max(0, Math.round(np * 10) / 10);
     
-    // 칼로리 계산 (평균 파워 * 시간(분) * 0.0143)
-    const calories = Math.round((stats.avgPower || 0) * duration_min * 0.0143);
+    // 칼로리 계산 (평균 파워 * 시간(초) * 3.6 / 4184)
+    // 또는 더 간단한 공식: 평균 파워(W) * 시간(분) * 0.0143
+    const avgPower = stats.avgPower || 0;
+    const calories = Math.round(avgPower * duration_min * 0.0143);
     
-    // UI 업데이트
-    const resultDuration = document.getElementById('result-duration');
-    const resultAvgPower = document.getElementById('result-avg-power');
-    const resultNP = document.getElementById('result-np');
-    const resultTSS = document.getElementById('result-tss');
-    const resultHr = document.getElementById('result-hr');
-    const resultCalories = document.getElementById('result-calories');
+    // 결과값 표시
+    const durationEl = document.getElementById('result-duration');
+    const avgPowerEl = document.getElementById('result-avg-power');
+    const npEl = document.getElementById('result-np');
+    const tssEl = document.getElementById('result-tss');
+    const hrAvgEl = document.getElementById('result-hr-avg');
+    const caloriesEl = document.getElementById('result-calories');
     
-    if (resultDuration) {
-        const hours = Math.floor(duration_min / 60);
-        const minutes = duration_min % 60;
-        resultDuration.textContent = hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
-    }
+    if (durationEl) durationEl.textContent = `${duration_min}분`;
+    if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
+    if (npEl) npEl.textContent = `${np}W`;
+    if (tssEl) tssEl.textContent = `${tss}`;
+    if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
+    if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
     
-    if (resultAvgPower) {
-        resultAvgPower.textContent = Math.round(stats.avgPower || 0);
-    }
+    console.log('[showTrainingResultModal] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories });
     
-    if (resultNP) {
-        resultNP.textContent = np.toFixed(1);
-    }
-    
-    if (resultTSS) {
-        resultTSS.textContent = tss.toFixed(2);
-    }
-    
-    if (resultHr) {
-        resultHr.textContent = Math.round(stats.avgHr || 0);
-    }
-    
-    if (resultCalories) {
-        resultCalories.textContent = calories;
+    // 모달 표시
+    modal.classList.remove('hidden');
+}
+
+/**
+ * 훈련 결과 팝업 닫기
+ */
+function closeTrainingResultModal() {
+    const modal = document.getElementById('trainingResultModal');
+    if (modal) {
+        modal.classList.add('hidden');
     }
 }
 
-// 속도계 애니메이션 시작
-startGaugeAnimationLoop();
+// 전역 함수로 노출
+window.showTrainingResultModal = showTrainingResultModal;
+window.closeTrainingResultModal = closeTrainingResultModal;
+
+/**
+ * 속도계 원호에 목표 파워값만큼 채우기 (세그먼트 달성도에 따라 색상 변경)
+ * - LAP AVG 파워값 / 목표 파워값 비율이 0.985 이상이면 투명 민트색
+ * - 미만이면 투명 주황색
+ */
+function updateTargetPowerArc() {
+    // 목표 파워값 가져오기
+    const targetPowerEl = document.getElementById('ui-target-power');
+    if (!targetPowerEl) return;
+    
+    const targetPower = Number(targetPowerEl.textContent) || 0;
+    if (targetPower <= 0) {
+        // 목표 파워가 없으면 원호 숨김
+        const targetArc = document.getElementById('gauge-target-arc');
+        if (targetArc) {
+            targetArc.style.display = 'none';
+        }
+        return;
+    }
+    
+    // LAP AVG 파워값 가져오기
+    const lapPowerEl = document.getElementById('ui-lap-power');
+    const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
+    
+    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워)
+    const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
+    
+    // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
+    const arcColor = achievementRatio >= 0.985 
+        ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
+        : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+    
+    // FTP 기반으로 최대 파워 계산
+    const maxPower = userFTP * 2;
+    if (maxPower <= 0) return;
+    
+    // 목표 파워 비율 계산 (0 ~ 1)
+    const ratio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+    
+    // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
+    // ratio = 0 → 180도 (원호 없음)
+    // ratio = 0.5 → 225도 (45도 범위, FTP × 0.5)
+    // ratio = 1.0 → 270도 (90도 범위, FTP × 1.0)
+    // ratio = 2.0 → 360도 (180도 범위, FTP × 2.0)
+    const startAngle = 180;
+    const endAngle = 180 + (ratio * 180);
+    
+    // SVG 원호 경로 생성
+    const centerX = 100;
+    const centerY = 140;
+    const radius = 80;
+    
+    // 원호 시작점과 끝점 계산
+    const startRad = (startAngle * Math.PI) / 180;
+    const endRad = (endAngle * Math.PI) / 180;
+    
+    const startX = centerX + radius * Math.cos(startRad);
+    const startY = centerY + radius * Math.sin(startRad);
+    const endX = centerX + radius * Math.cos(endRad);
+    const endY = centerY + radius * Math.sin(endRad);
+    
+    // 원호가 큰지 작은지 판단 (180도 이상이면 large-arc-flag = 1)
+    // 각도가 180도에서 360도로 증가하므로, 180도 이상이면 큰 원호
+    const angleDiff = endAngle - startAngle;
+    const largeArcFlag = angleDiff > 180 ? 1 : 0;
+    
+    // SVG path 생성
+    // sweep-flag = 1: 시계 반대 방향 (각도 증가 방향: 180도 → 270도 → 360도)
+    const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+    
+    // 목표 파워 원호 요소 가져오기 또는 생성
+    let targetArc = document.getElementById('gauge-target-arc');
+    if (!targetArc) {
+        // SVG에 원호 요소 추가
+        const svg = document.querySelector('.gauge-container svg');
+        if (svg) {
+            targetArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            targetArc.id = 'gauge-target-arc';
+            targetArc.setAttribute('fill', 'none');
+            targetArc.setAttribute('stroke-width', '12');
+            targetArc.setAttribute('stroke-linecap', 'round');
+            // 원호 배경 뒤에, 눈금 앞에 배치
+            const arcBg = svg.querySelector('path[d*="M 20 140"]');
+            if (arcBg && arcBg.nextSibling) {
+                svg.insertBefore(targetArc, arcBg.nextSibling);
+            } else {
+                svg.insertBefore(targetArc, svg.firstChild.nextSibling);
+            }
+        } else {
+            return;
+        }
+    }
+    
+    // 원호 경로 및 색상 업데이트
+    targetArc.setAttribute('d', pathData);
+    targetArc.setAttribute('stroke', arcColor);
+    targetArc.style.display = 'block';
+    
+    // 디버깅 로그 (선택사항)
+    if (achievementRatio > 0) {
+        console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}`);
+    }
+}
