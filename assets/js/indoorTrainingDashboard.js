@@ -406,9 +406,30 @@ function createPowerMeterElement(powerMeter) {
   // 현재 사용자의 grade 확인
   const viewerGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : 
                       (window.currentUser?.grade ? String(window.currentUser.grade) : '2');
-  const isGrade2 = viewerGrade === '2';
+  const isGrade1 = viewerGrade === '1' || viewerGrade === 1;
+  const isGrade2 = viewerGrade === '2' || viewerGrade === 2;
+  const isGrade3 = viewerGrade === '3' || viewerGrade === 3;
   const isTrack1 = powerMeter.id === 1;
+  
+  // 권한 체크: grade=1,3은 모든 트랙 활성화, grade=2는 트랙1만 활성화
   const isTrackDisabled = isGrade2 && !isTrack1; // grade=2이고 트랙1이 아니면 비활성화
+  
+  // 디버깅 로그 (처음 생성 시에만)
+  if (powerMeter.id === 1) {
+    console.log('[Indoor Training] 트랙 버튼 권한 확인:', {
+      viewerGrade: viewerGrade,
+      isGrade1: isGrade1,
+      isGrade2: isGrade2,
+      isGrade3: isGrade3,
+      trackNumber: powerMeter.id,
+      isTrackDisabled: isTrackDisabled,
+      currentUser: window.currentUser ? {
+        id: window.currentUser.id,
+        name: window.currentUser.name,
+        grade: window.currentUser.grade
+      } : null
+    });
+  }
   
   // 트랙 버튼 스타일 및 클릭 이벤트 설정
   const trackButtonStyle = isTrackDisabled 
@@ -1364,18 +1385,38 @@ function loadUserFTP() {
 function openPowerMeterSettings(powerMeterId) {
   console.log('[Indoor Training] 파워계 설정 열기:', powerMeterId);
   
-  // grade=2 사용자는 트랙1만 사용 가능
+  // 권한 체크: grade=1,3은 모든 트랙 사용 가능, grade=2는 트랙1만 사용 가능
   const viewerGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : 
                       (window.currentUser?.grade ? String(window.currentUser.grade) : '2');
-  const isGrade2 = viewerGrade === '2';
+  const isGrade1 = viewerGrade === '1' || viewerGrade === 1;
+  const isGrade2 = viewerGrade === '2' || viewerGrade === 2;
+  const isGrade3 = viewerGrade === '3' || viewerGrade === 3;
   const isTrack1 = powerMeterId === 1;
   
+  console.log('[Indoor Training] 트랙 버튼 클릭 권한 확인:', {
+    viewerGrade: viewerGrade,
+    isGrade1: isGrade1,
+    isGrade2: isGrade2,
+    isGrade3: isGrade3,
+    trackNumber: powerMeterId,
+    isTrack1: isTrack1,
+    currentUser: window.currentUser ? {
+      id: window.currentUser.id,
+      name: window.currentUser.name,
+      grade: window.currentUser.grade
+    } : null
+  });
+  
+  // grade=2 사용자는 트랙1만 사용 가능
   if (isGrade2 && !isTrack1) {
     if (typeof showToast === 'function') {
-      showToast('일반 사용자는 트랙1만 사용할 수 있습니다.');
+      showToast('일반 사용자(grade=2)는 트랙1만 사용할 수 있습니다.');
     }
+    console.warn('[Indoor Training] 권한 없음: grade=2 사용자는 트랙1만 사용 가능');
     return;
   }
+  
+  // grade=1,3은 모든 트랙 사용 가능 (추가 체크 없음)
   
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
