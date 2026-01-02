@@ -1073,7 +1073,7 @@ function generateGaugeLabels() {
         { index: 0, mult: 0, color: '#ffffff' },
         { index: 1, mult: 0.33, color: '#ffffff' },
         { index: 2, mult: 0.67, color: '#ffffff' },
-        { index: 3, mult: 1, color: '#00d4aa' }, // 민트색
+        { index: 3, mult: 1, color: '#ef4444' }, // 빨강색
         { index: 4, mult: 1.33, color: '#ffffff' },
         { index: 5, mult: 1.67, color: '#ffffff' },
         { index: 6, mult: 2, color: '#ffffff' }

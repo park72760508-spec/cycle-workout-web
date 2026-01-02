@@ -641,7 +641,7 @@ function generatePowerMeterLabels(powerMeterId) {
     if (useFTPValue) {
       // FTP 값이 있는 경우: 특정 배수 적용
       // pos=120 → 0×FTP, pos=100 → 0.33×FTP, pos=80 → 0.67×FTP, 
-      // pos=60 → 1×FTP (주황색), pos=40 → 1.33×FTP, pos=20 → 1.67×FTP, pos=0 → 2×FTP
+      // pos=60 → 1×FTP (빨강색), pos=40 → 1.33×FTP, pos=20 → 1.67×FTP, pos=0 → 2×FTP
       let multiplier;
       let isOneFTP = false; // 1×FTP 여부
       
@@ -660,8 +660,8 @@ function generatePowerMeterLabels(powerMeterId) {
       // FTP 값에 배수를 곱한 값을 정수로 표시
       displayValue = Math.round(ftp * multiplier).toString();
       
-      // 1×FTP는 주황색으로 표기, 나머지는 흰색
-      const textColor = isOneFTP ? '#00d4aa' : '#ffffff';
+      // 1×FTP는 빨강색으로 표기, 나머지는 흰색
+      const textColor = isOneFTP ? '#ef4444' : '#ffffff';
       
       labels += `<text x="${x}" y="${y}" 
                      text-anchor="middle" 
