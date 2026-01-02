@@ -200,28 +200,35 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     window.trainingResults.endSession();
                 }
                 
+                // elapsedTime을 전역 변수에 저장 (저장 시 사용)
+                if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
+                    window.lastElapsedTime = status.elapsedTime;
+                    console.log('[Individual] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
+                }
+                
                 // 훈련 결과 저장 및 팝업 표시
                 if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
                     const extra = {
                         workoutId: lastWorkoutId || window.currentWorkout?.id || null,
                         workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                        userId: currentUserIdForSession
+                        userId: currentUserIdForSession,
+                        elapsedTime: status.elapsedTime || window.lastElapsedTime || null // elapsedTime 전달
                     };
                     
                     window.trainingResults.saveTrainingResult(extra)
                         .then((result) => {
                             console.log('[Individual] 훈련 결과 저장 완료:', result);
                             // 결과 팝업 표시
-                            showTrainingResultModal();
+                            showTrainingResultModal(status);
                         })
                         .catch((error) => {
                             console.error('[Individual] 훈련 결과 저장 실패:', error);
                             // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
-                            showTrainingResultModal();
+                            showTrainingResultModal(status);
                         });
                 } else {
                     // trainingResults가 없어도 팝업 표시
-                    showTrainingResultModal();
+                    showTrainingResultModal(status);
                 }
             }
         }
@@ -1008,8 +1015,9 @@ function startGaugeAnimationLoop() {
 
 /**
  * 훈련 결과 팝업 표시
+ * @param {Object} status - Firebase status 객체 (elapsedTime 포함)
  */
-function showTrainingResultModal() {
+function showTrainingResultModal(status = null) {
     const modal = document.getElementById('trainingResultModal');
     if (!modal) {
         console.warn('[Individual] 훈련 결과 모달을 찾을 수 없습니다.');
@@ -1026,17 +1034,34 @@ function showTrainingResultModal() {
     // 통계 계산
     const stats = window.trainingResults?.calculateSessionStats?.() || {};
     
-    // 훈련 시간 계산
-    const startTime = sessionData.startTime ? new Date(sessionData.startTime) : null;
-    const endTime = sessionData.endTime ? new Date(sessionData.endTime) : new Date();
-    const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
-    const duration_min = Math.floor(totalSeconds / 60);
+    // 훈련 시간 계산 - status.elapsedTime 우선 사용 (세그먼트 그래프 상단 시간값)
+    let totalSeconds = 0;
+    let duration_min = 0;
+    
+    if (status && status.elapsedTime !== undefined && status.elapsedTime !== null) {
+        // Firebase에서 받은 elapsedTime 사용 (가장 정확)
+        totalSeconds = Math.max(0, Math.floor(status.elapsedTime));
+        duration_min = Math.floor(totalSeconds / 60);
+        console.log('[showTrainingResultModal] elapsedTime 사용:', { elapsedTime: status.elapsedTime, totalSeconds, duration_min });
+    } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
+        // 전역 변수에 저장된 elapsedTime 사용
+        totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
+        duration_min = Math.floor(totalSeconds / 60);
+        console.log('[showTrainingResultModal] lastElapsedTime 사용:', { lastElapsedTime: window.lastElapsedTime, totalSeconds, duration_min });
+    } else {
+        // 대체: startTime과 endTime으로 계산
+        const startTime = sessionData.startTime ? new Date(sessionData.startTime) : null;
+        const endTime = sessionData.endTime ? new Date(sessionData.endTime) : new Date();
+        totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+        duration_min = Math.floor(totalSeconds / 60);
+        console.log('[showTrainingResultModal] startTime/endTime 사용:', { startTime, endTime, totalSeconds, duration_min });
+    }
     
     // TSS 및 NP 계산 (resultManager.js와 동일한 로직)
     let tss = 0;
     let np = 0;
     
-    // trainingMetrics가 있으면 사용
+    // trainingMetrics가 있으면 사용 (가장 정확)
     if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
         const elapsedSec = window.trainingMetrics.elapsedSec;
         const np4sum = window.trainingMetrics.np4sum || 0;
@@ -1047,10 +1072,11 @@ function showTrainingResultModal() {
             const userFtp = window.currentUser?.ftp || userFTP || 200;
             const IF = userFtp > 0 ? (np / userFtp) : 0;
             tss = (elapsedSec / 3600) * (IF * IF) * 100;
+            console.log('[showTrainingResultModal] TSS 계산 (trainingMetrics):', { elapsedSec, np, IF, tss, userFtp });
         }
     }
     
-    // trainingMetrics가 없으면 대체 계산
+    // trainingMetrics가 없으면 대체 계산 (elapsedTime 또는 totalSeconds 사용)
     if (!tss || tss === 0) {
         const userFtp = window.currentUser?.ftp || userFTP || 200;
         
@@ -1062,13 +1088,15 @@ function showTrainingResultModal() {
         // IF 계산
         const IF = userFtp > 0 ? (np / userFtp) : 0;
         
-        // TSS 계산
-        tss = (totalSeconds / 3600) * (IF * IF) * 100;
+        // TSS 계산: elapsedTime 우선 사용, 없으면 totalSeconds 사용
+        const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
+        tss = (timeForTss / 3600) * (IF * IF) * 100;
+        console.log('[showTrainingResultModal] TSS 계산 (대체):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
     }
     
-    // 값 반올림
-    tss = Math.round(tss * 100) / 100;
-    np = Math.round(np * 10) / 10;
+    // 값 반올림 및 최소값 보장
+    tss = Math.max(0, Math.round(tss * 100) / 100);
+    np = Math.max(0, Math.round(np * 10) / 10);
     
     // 결과값 표시
     const durationEl = document.getElementById('result-duration');
@@ -1082,6 +1110,8 @@ function showTrainingResultModal() {
     if (npEl) npEl.textContent = `${np}W`;
     if (tssEl) tssEl.textContent = `${tss}`;
     if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
+    
+    console.log('[showTrainingResultModal] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR });
     
     // 모달 표시
     modal.classList.remove('hidden');

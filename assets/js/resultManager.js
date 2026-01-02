@@ -206,34 +206,53 @@ async function saveTrainingResult(extra = {}) {
        // 세션 통계 계산
        const stats = calculateSessionStats();
        
-       // 훈련 시간 계산 (초 단위) - startTime과 endTime이 모두 있어야 함
-       const startTime = trainingResult.startTime ? new Date(trainingResult.startTime) : null;
-       const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : null;
+       // 훈련 시간 계산 (초 단위)
+       // 1순위: extra.elapsedTime 사용 (Firebase에서 받은 실제 경과 시간 - 세그먼트 그래프 상단 시간값)
+       // 2순위: window.lastElapsedTime 사용 (전역 변수에 저장된 값)
+       // 3순위: startTime과 endTime으로 계산
+       let totalSeconds = 0;
+       let duration_min = 0;
        
-       // startTime이 없으면 현재 시간에서 추정 (powerData의 첫 번째 시간 사용)
-       let actualStartTime = startTime;
-       if (!actualStartTime && trainingResult.powerData && trainingResult.powerData.length > 0) {
-         const firstPowerData = trainingResult.powerData[0];
-         if (firstPowerData && firstPowerData.t) {
-           actualStartTime = new Date(firstPowerData.t);
-           console.log('[saveTrainingResult] startTime 복구:', actualStartTime);
+       if (extra.elapsedTime !== undefined && extra.elapsedTime !== null) {
+         // Firebase에서 받은 elapsedTime 사용 (가장 정확)
+         totalSeconds = Math.max(0, Math.floor(extra.elapsedTime));
+         duration_min = Math.floor(totalSeconds / 60);
+         console.log('[saveTrainingResult] elapsedTime 사용 (extra):', { elapsedTime: extra.elapsedTime, totalSeconds, duration_min });
+       } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
+         // 전역 변수에 저장된 elapsedTime 사용
+         totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
+         duration_min = Math.floor(totalSeconds / 60);
+         console.log('[saveTrainingResult] elapsedTime 사용 (window.lastElapsedTime):', { lastElapsedTime: window.lastElapsedTime, totalSeconds, duration_min });
+       } else {
+         // 대체: startTime과 endTime으로 계산
+         const startTime = trainingResult.startTime ? new Date(trainingResult.startTime) : null;
+         const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : null;
+         
+         // startTime이 없으면 powerData의 첫 번째 시간 사용
+         let actualStartTime = startTime;
+         if (!actualStartTime && trainingResult.powerData && trainingResult.powerData.length > 0) {
+           const firstPowerData = trainingResult.powerData[0];
+           if (firstPowerData && firstPowerData.t) {
+             actualStartTime = new Date(firstPowerData.t);
+             console.log('[saveTrainingResult] startTime 복구 (powerData):', actualStartTime);
+           }
          }
+         
+         // endTime이 없으면 현재 시간 사용
+         const actualEndTime = endTime || new Date();
+         
+         // 훈련 시간 계산
+         totalSeconds = actualStartTime ? Math.floor((actualEndTime - actualStartTime) / 1000) : 0;
+         duration_min = Math.max(0, Math.floor(totalSeconds / 60));
+         
+         console.log('[saveTrainingResult] 훈련 시간 계산 (startTime/endTime):', {
+           startTime: actualStartTime,
+           endTime: actualEndTime,
+           totalSeconds: totalSeconds,
+           duration_min: duration_min,
+           powerDataLength: trainingResult.powerData?.length || 0
+         });
        }
-       
-       // endTime이 없으면 현재 시간 사용
-       const actualEndTime = endTime || new Date();
-       
-       // 훈련 시간 계산
-       const totalSeconds = actualStartTime ? Math.floor((actualEndTime - actualStartTime) / 1000) : 0;
-       const duration_min = Math.max(0, Math.floor(totalSeconds / 60));
-       
-       console.log('[saveTrainingResult] 훈련 시간 계산:', {
-         startTime: actualStartTime,
-         endTime: actualEndTime,
-         totalSeconds: totalSeconds,
-         duration_min: duration_min,
-         powerDataLength: trainingResult.powerData?.length || 0
-       });
        
        // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
        let tss = trainingResult.tss || 0;
@@ -255,7 +274,7 @@ async function saveTrainingResult(extra = {}) {
            
            // TSS 계산: (시간(시간) * IF^2 * 100)
            tss = (elapsedSec / 3600) * (IF * IF) * 100;
-           console.log('[saveTrainingResult] TSS 계산 (trainingMetrics 사용):', { elapsedSec, np, IF, tss });
+           console.log('[saveTrainingResult] TSS 계산 (trainingMetrics 사용):', { elapsedSec, np, IF, tss, userFtp });
          }
        }
        
@@ -272,10 +291,31 @@ async function saveTrainingResult(extra = {}) {
          const IF = userFtp > 0 ? (np / userFtp) : 0;
          
          // TSS 계산: (시간(시간) * IF^2 * 100)
-         // totalSeconds가 0이면 duration_min을 사용
+         // totalSeconds가 계산된 값 사용 (elapsedTime 우선)
          const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
          tss = (timeForTss / 3600) * (IF * IF) * 100;
-         console.log('[saveTrainingResult] TSS 계산 (대체 계산):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
+         console.log('[saveTrainingResult] TSS 계산 (대체 계산):', { 
+           totalSeconds, 
+           duration_min, 
+           timeForTss, 
+           np, 
+           IF, 
+           tss, 
+           userFtp, 
+           avgPower: stats.avgPower,
+           powerDataCount: trainingResult.powerData?.length || 0
+         });
+       }
+       
+       // TSS가 여전히 0이면 경고
+       if (tss === 0 && totalSeconds > 0) {
+         console.warn('[saveTrainingResult] ⚠️ TSS가 0입니다. 계산값 확인 필요:', {
+           totalSeconds,
+           duration_min,
+           np,
+           avgPower: stats.avgPower,
+           userFtp: window.currentUser?.ftp || 200
+         });
        }
        
        // 값 반올림
@@ -310,8 +350,18 @@ async function saveTrainingResult(extra = {}) {
          startTime: trainingResult.startTime,
          endTime: trainingResult.endTime,
          powerDataCount: trainingResult.powerData?.length || 0,
-         hrDataCount: trainingResult.hrData?.length || 0
+         hrDataCount: trainingResult.hrData?.length || 0,
+         elapsedTime: extra.elapsedTime,
+         lastElapsedTime: window.lastElapsedTime
        });
+       
+       // GAS_URL 확인
+       const gasUrl = ensureBaseUrl();
+       if (!gasUrl) {
+         console.error('[saveTrainingResult] ❌ GAS_URL이 설정되지 않았습니다.');
+         throw new Error('GAS_URL is not set');
+       }
+       console.log('[saveTrainingResult] GAS_URL 확인:', gasUrl);
        
        // scheduleDayId가 null인 경우 빈 문자열로 전송 (Code.gs에서 null로 처리)
        const scheduleDayIdParam = scheduleDayId ? encodeURIComponent(scheduleDayId) : '';
@@ -320,8 +370,8 @@ async function saveTrainingResult(extra = {}) {
        const urlParams = {
          action: 'saveScheduleResult',
          scheduleDayId: scheduleDayIdParam,
-         userId: scheduleResultData.userId || '',
-         actualWorkoutId: scheduleResultData.actualWorkoutId || '',
+         userId: String(scheduleResultData.userId || ''),
+         actualWorkoutId: String(scheduleResultData.actualWorkoutId || ''),
          status: scheduleResultData.status,
          duration_min: scheduleResultData.duration_min,
          avg_power: scheduleResultData.avg_power,
@@ -333,12 +383,30 @@ async function saveTrainingResult(extra = {}) {
        
        console.log('[saveTrainingResult] URL 파라미터:', urlParams);
        
-       const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${scheduleDayIdParam}&userId=${encodeURIComponent(urlParams.userId)}&actualWorkoutId=${encodeURIComponent(urlParams.actualWorkoutId)}&status=${encodeURIComponent(urlParams.status)}&duration_min=${urlParams.duration_min}&avg_power=${urlParams.avg_power}&np=${urlParams.np}&tss=${urlParams.tss}&hr_avg=${urlParams.hr_avg}&rpe=${urlParams.rpe}`;
+       // URL 생성 (모든 파라미터 인코딩)
+       const scheduleUrl = `${gasUrl}?action=saveScheduleResult&scheduleDayId=${scheduleDayIdParam}&userId=${encodeURIComponent(urlParams.userId)}&actualWorkoutId=${encodeURIComponent(urlParams.actualWorkoutId)}&status=${encodeURIComponent(urlParams.status)}&duration_min=${urlParams.duration_min}&avg_power=${urlParams.avg_power}&np=${urlParams.np}&tss=${urlParams.tss}&hr_avg=${urlParams.hr_avg}&rpe=${urlParams.rpe}`;
        
        console.log('[saveTrainingResult] 저장 URL:', scheduleUrl);
+       console.log('[saveTrainingResult] 저장 데이터 상세:', {
+         duration_min: urlParams.duration_min,
+         avg_power: urlParams.avg_power,
+         np: urlParams.np,
+         tss: urlParams.tss,
+         hr_avg: urlParams.hr_avg,
+         userId: urlParams.userId,
+         actualWorkoutId: urlParams.actualWorkoutId
+       });
        
        try {
-         const scheduleResponse = await fetch(scheduleUrl);
+         console.log('[saveTrainingResult] fetch 요청 시작...');
+         const scheduleResponse = await fetch(scheduleUrl, {
+           method: 'GET',
+           headers: {
+             'Accept': 'application/json'
+           }
+         });
+         
+         console.log('[saveTrainingResult] fetch 응답 상태:', scheduleResponse.status, scheduleResponse.statusText);
          
          if (!scheduleResponse.ok) {
            const errorText = await scheduleResponse.text();
@@ -346,7 +414,17 @@ async function saveTrainingResult(extra = {}) {
            throw new Error(`HTTP ${scheduleResponse.status}: ${errorText}`);
          }
          
-         const scheduleResult = await scheduleResponse.json();
+         const responseText = await scheduleResponse.text();
+         console.log('[saveTrainingResult] 응답 텍스트:', responseText);
+         
+         let scheduleResult;
+         try {
+           scheduleResult = JSON.parse(responseText);
+         } catch (parseError) {
+           console.error('[saveTrainingResult] JSON 파싱 오류:', parseError, '응답:', responseText);
+           throw new Error(`JSON 파싱 실패: ${responseText}`);
+         }
+         
          console.log('[saveTrainingResult] 서버 응답:', scheduleResult);
          
          if (scheduleResult.success) {
@@ -361,6 +439,7 @@ async function saveTrainingResult(extra = {}) {
          }
        } catch (fetchError) {
          console.error('[saveTrainingResult] ❌ fetch 오류:', fetchError);
+         console.error('[saveTrainingResult] 오류 스택:', fetchError.stack);
          throw fetchError;
        }
      } catch (scheduleError) {
