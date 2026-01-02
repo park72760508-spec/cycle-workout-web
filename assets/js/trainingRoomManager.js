@@ -105,7 +105,7 @@ function renderTrainingRoomList(rooms) {
             ` : ''}
           </div>
           <p style="margin: 0; color: #666; font-size: 0.9em;">
-            ${coachName ? `Coach: ${escapeHtml(coachName)}` : ''}
+            ${coachName ? `Coach : ${escapeHtml(coachName)}님` : ''}
           </p>
         </div>
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
@@ -716,7 +716,7 @@ function renderTrainingRoomListForModal(rooms) {
             ` : ''}
           </div>
           <p style="margin: 0; color: #666; font-size: 0.85em;">
-            ${room.totalWeeks ? `${room.totalWeeks}주 프로그램` : 'Training Room'}${coachName ? ` · Coach: ${escapeHtml(coachName)}` : ''}
+            ${coachName ? `Coach : ${escapeHtml(coachName)}님` : ''}
           </p>
         </div>
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
