@@ -597,10 +597,15 @@ async function renderPlayerList() {
       ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
       : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
 
+    // 장비 정보가 있으면 트랙 번호에 함께 표시
+    const trackNumberDisplay = track.equipment 
+      ? `트랙${track.trackNumber}(${escapeHtml(track.equipment)})`
+      : `트랙${track.trackNumber}`;
+    
     return `
       <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
         <div class="player-track-number">
-          트랙${track.trackNumber}
+          ${trackNumberDisplay}
         </div>
         <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
           ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}

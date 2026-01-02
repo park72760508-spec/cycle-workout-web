@@ -63,6 +63,7 @@ class PowerMeterData {
     this.segmentPowerCount = 0;
     this.userId = null; // 연결된 사용자 ID
     this.userFTP = null; // 사용자 FTP 값
+    this.equipment = null; // 장비 정보 (시마노11단, 디스크 전용 등)
     
     // 가민 스타일: 이벤트 카운트 및 누적 파워 추적
     this.lastEventCount = null; // 마지막 이벤트 카운트
@@ -1443,6 +1444,12 @@ function updatePairingModalWithSavedData(powerMeter) {
     if (resultEl) {
       resultEl.innerHTML = '';
     }
+    
+    // 장비 정보 입력 필드에 값 설정
+    const equipmentInput = document.getElementById('pairingEquipmentInput');
+    if (equipmentInput) {
+      equipmentInput.value = powerMeter.equipment || '';
+    }
   } else {
     // 선택된 사용자가 없으면 카드 숨김
     if (selectedUserCard) {
@@ -1454,6 +1461,12 @@ function updatePairingModalWithSavedData(powerMeter) {
     const resultEl = document.getElementById('pairingUserSearchResult');
     if (resultEl) {
       resultEl.innerHTML = '';
+    }
+    
+    // 장비 정보 입력 필드 비우기
+    const equipmentInput = document.getElementById('pairingEquipmentInput');
+    if (equipmentInput) {
+      equipmentInput.value = '';
     }
   }
   
@@ -1811,17 +1824,23 @@ async function selectSearchedUserForPowerMeter(userId) {
           return;
         }
         
+        // 장비 정보 읽기
+        const equipmentInput = document.getElementById('pairingEquipmentInput');
+        const equipment = equipmentInput ? equipmentInput.value.trim() : '';
+        
         // 파워계에 사용자 정보 저장
         powerMeter.userId = userId;
         powerMeter.userFTP = user.ftp || null; // FTP 값 저장 (null 체크)
         powerMeter.userName = user.name;
         powerMeter.userWeight = user.weight;
         powerMeter.userContact = user.contact;
+        powerMeter.equipment = equipment || null; // 장비 정보 저장
         
         console.log(`[Indoor Training] 파워미터 ${powerMeterId}에 사용자 할당:`, {
           userId: userId,
           userName: user.name,
-          userFTP: powerMeter.userFTP
+          userFTP: powerMeter.userFTP,
+          equipment: powerMeter.equipment
         });
         
         // 사용자명 UI 업데이트 (트랙번호 라인 좌측)
@@ -1869,7 +1888,8 @@ async function selectSearchedUserForPowerMeter(userId) {
               userName: powerMeter.userName || '',
               participantName: powerMeter.userName || '',
               ftp: powerMeter.userFTP || 0,
-              weight: powerMeter.userWeight || 0
+              weight: powerMeter.userWeight || 0,
+              equipment: powerMeter.equipment || '' // 장비 정보 추가
             };
             
             // Firebase에 저장 (set을 사용하여 전체 데이터 교체)
@@ -1881,7 +1901,8 @@ async function selectSearchedUserForPowerMeter(userId) {
                   userId: userData.userId,
                   userName: userData.userName,
                   ftp: userData.ftp,
-                  weight: userData.weight
+                  weight: userData.weight,
+                  equipment: userData.equipment
                 });
               })
               .catch(error => {
@@ -1956,6 +1977,7 @@ function clearSelectedUser() {
   powerMeter.userName = null;
   powerMeter.userWeight = null;
   powerMeter.userContact = null;
+  powerMeter.equipment = null; // 장비 정보도 제거
   
   // UI 업데이트
   const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
@@ -2190,6 +2212,7 @@ async function updateTracksFromFirebase() {
         // 파워미터에 사용자 정보 업데이트 (기존 페어링 정보는 유지)
         powerMeter.userId = track.userId;
         powerMeter.userName = track.userName;
+        powerMeter.equipment = track.equipment || null; // 장비 정보 업데이트
         
         if (user) {
           powerMeter.userFTP = user.ftp || null;
@@ -2227,6 +2250,7 @@ async function updateTracksFromFirebase() {
         powerMeter.userFTP = null;
         powerMeter.userWeight = null;
         powerMeter.userContact = null;
+        powerMeter.equipment = null; // 장비 정보도 제거
         
         // UI 업데이트 (사용자 이름 숨김)
         const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
@@ -2435,6 +2459,12 @@ function savePowerMeterPairing() {
   const tabName = activeTab.id.replace('tab-', '');
   
   if (tabName === 'user') {
+    // 장비 정보 읽기 및 저장
+    const equipmentInput = document.getElementById('pairingEquipmentInput');
+    if (equipmentInput) {
+      powerMeter.equipment = equipmentInput.value.trim() || null;
+    }
+    
     // 사용자 선택은 이미 저장됨
     // 눈금 업데이트
     updatePowerMeterTicks(powerMeterId);
@@ -2453,7 +2483,8 @@ function savePowerMeterPairing() {
           userName: powerMeter.userName || '',
           participantName: powerMeter.userName || '',
           ftp: powerMeter.userFTP || 0,
-          weight: powerMeter.userWeight || 0
+          weight: powerMeter.userWeight || 0,
+          equipment: powerMeter.equipment || '' // 장비 정보 추가
         };
         
         // Firebase에 저장
@@ -2465,7 +2496,8 @@ function savePowerMeterPairing() {
               userId: userData.userId,
               userName: userData.userName,
               ftp: userData.ftp,
-              weight: userData.weight
+              weight: userData.weight,
+              equipment: userData.equipment
             });
           })
           .catch(error => {
