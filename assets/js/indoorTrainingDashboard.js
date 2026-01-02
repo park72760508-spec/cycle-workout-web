@@ -1555,12 +1555,16 @@ function showPairingTab(tabName) {
   if (tabBtn) tabBtn.classList.add('active');
   if (tabContent) tabContent.classList.remove('hidden');
   
-  // 사용자 선택 탭인 경우 전화번호 입력 필드에 포커스
+  // 사용자 선택 탭인 경우 이름 검색 입력 필드에 포커스
   if (tabName === 'user') {
     setTimeout(() => {
-      const phoneInput = document.getElementById('pairingPhoneNumber');
-      if (phoneInput) {
-        phoneInput.focus();
+      const nameInput = document.getElementById('pairingUserNameSearch');
+      if (nameInput) {
+        nameInput.focus();
+        // 초기 로드 시 전체 사용자 목록 표시
+        if (typeof filterUsersByNameForPairing === 'function') {
+          filterUsersByNameForPairing();
+        }
       }
     }, 100);
   }
@@ -1579,122 +1583,141 @@ async function loadUsersForPairing() {
 }
 
 /**
- * 전화번호로 사용자 검색 (페어링용)
+ * 이름으로 사용자 검색 (페어링용)
  */
-async function searchUserByPhoneForPairing() {
-  const phoneInput = document.getElementById('pairingPhoneNumber');
+async function searchUserByNameForPairing() {
+  const nameInput = document.getElementById('pairingUserNameSearch');
   const resultEl = document.getElementById('pairingUserSearchResult');
-  const searchBtn = document.getElementById('btnSearchUserByPhone');
+  const searchBtn = document.getElementById('btnSearchUserByName');
   
-  if (!phoneInput || !resultEl) return;
+  if (!nameInput || !resultEl) return;
   
-  const phoneNumber = phoneInput.value.trim();
+  const searchName = nameInput.value.trim();
   
-  if (!phoneNumber) {
-    if (typeof showToast === 'function') {
-      showToast('전화번호를 입력해주세요.');
-    }
+  if (!searchName) {
+    // 이름이 없으면 필터링된 목록 표시 (전체 목록)
+    filterUsersByNameForPairing();
     return;
   }
   
-  // 검색 버튼 비활성화
+  // 검색 버튼 비활성화 및 애니메이션
   if (searchBtn) {
     searchBtn.disabled = true;
+    const originalText = searchBtn.textContent;
     searchBtn.textContent = '검색 중...';
+    searchBtn.style.opacity = '0.7';
+    searchBtn.style.transform = 'scale(0.95)';
+    
+    setTimeout(() => {
+      searchBtn.disabled = false;
+      searchBtn.textContent = originalText;
+      searchBtn.style.opacity = '1';
+      searchBtn.style.transform = 'scale(1)';
+    }, 300);
   }
   
-  // 결과 영역 초기화
-  resultEl.innerHTML = '<div class="loading-spinner">사용자를 검색하는 중...</div>';
+  // 결과 영역에 필터링된 사용자 목록 표시
+  filterUsersByNameForPairing();
+}
+
+/**
+ * 이름으로 사용자 필터링 (페어링용)
+ */
+async function filterUsersByNameForPairing() {
+  const nameInput = document.getElementById('pairingUserNameSearch');
+  const resultEl = document.getElementById('pairingUserSearchResult');
   
+  if (!nameInput || !resultEl) return;
+  
+  const searchTerm = nameInput.value.trim().toLowerCase();
+  
+  // 사용자 목록 가져오기
+  let allUsers = [];
   try {
-    // authenticatePhoneWithDB 함수 사용
-    if (typeof authenticatePhoneWithDB === 'function') {
-      const authResult = await authenticatePhoneWithDB(phoneNumber);
-      
-      if (authResult.success && authResult.user) {
-        // 사용자 찾음 - 선택 가능하도록 표시
-        const user = authResult.user;
-        const wkg = user.ftp && user.weight ? (user.ftp / user.weight).toFixed(1) : '-';
-        
-        // 중복 체크: 다른 트랙에서 이미 사용 중인지 확인
-        const powerMeterId = window.currentTargetPowerMeterId;
-        const isAlreadyPaired = window.indoorTrainingState.powerMeters.some(pm => 
-          pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(user.id)
-        );
-        
-        // 사용자 정보를 전역에 임시 저장 (선택 시 사용)
-        window._searchedUserForPairing = user;
-        
-        let selectButton = '';
-        let warningMessage = '';
-        
-        if (isAlreadyPaired) {
-          // 이미 다른 트랙에서 사용 중
-          const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => 
-            pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(user.id)
-          );
-          warningMessage = `<div style="padding: 8px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 12px; color: #856404; font-size: 12px;">⚠️ 이 사용자는 이미 트랙${pairedTrack?.id || '?'}에서 사용 중입니다.</div>`;
-          selectButton = `<button class="btn btn-secondary" style="width: 100%;" disabled>이미 사용 중</button>`;
-        } else {
-          selectButton = `<button class="btn btn-primary" style="width: 100%;" onclick="event.stopPropagation(); selectSearchedUserForPowerMeter(${user.id})">선택</button>`;
-        }
-        
-        resultEl.innerHTML = `
-          <div class="user-card-compact" style="padding: 16px; border: 2px solid #007bff; border-radius: 8px; background: #f0f7ff;">
-            ${warningMessage}
-            <div class="user-info">
-              <div class="user-name" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">${user.name || '-'}</div>
-              <div class="user-stats-compact" style="display: flex; gap: 16px; flex-wrap: wrap;">
-                <span style="font-size: 14px;"><strong>FTP:</strong> ${user.ftp || '-'}W</span>
-                <span style="font-size: 14px;"><strong>체중:</strong> ${user.weight || '-'}kg</span>
-                <span style="font-size: 14px;"><strong>W/kg:</strong> ${wkg}</span>
-                <span style="font-size: 14px;"><strong>전화번호:</strong> ${user.contact || phoneNumber}</span>
-              </div>
-            </div>
-            <div style="margin-top: 12px; text-align: center;">
-              ${selectButton}
-            </div>
-          </div>
-        `;
-        
-        if (typeof showToast === 'function') {
-          if (isAlreadyPaired) {
-            showToast('이 사용자는 이미 다른 트랙에서 사용 중입니다.');
-          } else {
-            showToast('사용자를 찾았습니다. 선택해주세요.');
-          }
-        }
-      } else {
-        // 사용자를 찾을 수 없음
-        resultEl.innerHTML = `
-          <div style="padding: 20px; text-align: center; color: #dc3545; border: 1px solid #dc3545; border-radius: 8px; background: #f8d7da;">
-            <p style="margin: 0 0 12px 0; font-weight: 600;">${authResult.message || '사용자를 찾을 수 없습니다.'}</p>
-            <p style="margin: 0; font-size: 12px; color: #721c24;">등록되지 않은 전화번호입니다.</p>
-          </div>
-        `;
+    if (typeof apiGetUsers === 'function') {
+      const result = await apiGetUsers();
+      if (result && result.success && result.items) {
+        allUsers = result.items;
       }
-    } else {
-      // authenticatePhoneWithDB 함수가 없는 경우 대체 방법
-      resultEl.innerHTML = `
-        <div style="padding: 20px; text-align: center; color: #dc3545;">
-          인증 함수를 찾을 수 없습니다. 앱을 새로고침해주세요.
-        </div>
-      `;
+    } else if (typeof window.apiGetUsers === 'function') {
+      const result = await window.apiGetUsers();
+      if (result && result.success && result.items) {
+        allUsers = result.items;
+      }
+    } else if (Array.isArray(window.users)) {
+      allUsers = window.users;
     }
   } catch (error) {
-    console.error('[Indoor Training] 사용자 검색 오류:', error);
+    console.error('[Indoor Training] 사용자 목록 로드 오류:', error);
+    resultEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc3545;">사용자 목록을 불러올 수 없습니다.</div>';
+    return;
+  }
+  
+  if (allUsers.length === 0) {
+    resultEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">등록된 사용자가 없습니다.</div>';
+    return;
+  }
+  
+  // 이름으로 필터링
+  let filteredUsers = allUsers;
+  if (searchTerm) {
+    filteredUsers = allUsers.filter(user => {
+      const name = (user.name || '').toLowerCase();
+      return name.includes(searchTerm);
+    });
+  }
+  
+  if (filteredUsers.length === 0) {
     resultEl.innerHTML = `
-      <div style="padding: 20px; text-align: center; color: #dc3545;">
-        검색 중 오류가 발생했습니다: ${error.message}
+      <div style="padding: 20px; text-align: center; color: #999; border: 1px solid #ddd; border-radius: 8px;">
+        <p style="margin: 0;">검색 결과가 없습니다.</p>
       </div>
     `;
-  } finally {
-    // 검색 버튼 복구
-    if (searchBtn) {
-      searchBtn.disabled = false;
-      searchBtn.textContent = '검색';
-    }
+    return;
   }
+  
+  // 필터링된 사용자 목록 표시
+  const powerMeterId = window.currentTargetPowerMeterId;
+  const userListHtml = filteredUsers.map(user => {
+    const wkg = user.ftp && user.weight ? (user.ftp / user.weight).toFixed(1) : '-';
+    
+    // 중복 체크: 다른 트랙에서 이미 사용 중인지 확인
+    const isAlreadyPaired = window.indoorTrainingState.powerMeters.some(pm => 
+      pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(user.id)
+    );
+    
+    let warningMessage = '';
+    let selectButton = '';
+    
+    if (isAlreadyPaired) {
+      const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => 
+        pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(user.id)
+      );
+      warningMessage = `<div style="padding: 8px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 12px; color: #856404; font-size: 12px;">⚠️ 이 사용자는 이미 트랙${pairedTrack?.id || '?'}에서 사용 중입니다.</div>`;
+      selectButton = `<button class="btn btn-secondary" style="width: 100%;" disabled>이미 사용 중</button>`;
+    } else {
+      selectButton = `<button class="btn btn-primary" style="width: 100%;" onclick="event.stopPropagation(); selectSearchedUserForPowerMeter(${user.id})">선택</button>`;
+    }
+    
+    return `
+      <div class="user-card-compact" style="padding: 16px; margin-bottom: 12px; border: 2px solid #007bff; border-radius: 8px; background: #f0f7ff;">
+        ${warningMessage}
+        <div class="user-info">
+          <div class="user-name" style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">${user.name || '-'}</div>
+          <div class="user-stats-compact" style="display: flex; gap: 16px; flex-wrap: wrap;">
+            <span style="font-size: 14px;"><strong>FTP:</strong> ${user.ftp || '-'}W</span>
+            <span style="font-size: 14px;"><strong>체중:</strong> ${user.weight || '-'}kg</span>
+            <span style="font-size: 14px;"><strong>W/kg:</strong> ${wkg}</span>
+          </div>
+        </div>
+        <div style="margin-top: 12px; text-align: center;">
+          ${selectButton}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  resultEl.innerHTML = `<div style="max-height: 400px; overflow-y: auto;">${userListHtml}</div>`;
 }
 
 /**
@@ -2043,7 +2066,8 @@ function isDeviceAlreadyPaired(deviceId, deviceType, excludePowerMeterId) {
 }
 
 // 전역 함수로 등록
-window.searchUserByPhoneForPairing = searchUserByPhoneForPairing;
+window.searchUserByNameForPairing = searchUserByNameForPairing;
+window.filterUsersByNameForPairing = filterUsersByNameForPairing;
 window.selectSearchedUserForPowerMeter = selectSearchedUserForPowerMeter;
 window.formatPhoneNumberInput = formatPhoneNumberInput;
 window.clearSelectedUser = clearSelectedUser;
