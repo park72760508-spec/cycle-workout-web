@@ -10524,3 +10524,27 @@ line[id^="needle-"] {
     flex: 0 0 auto;
   }
 }
+
+/* ========== Training Room 목록 스크롤바 스타일 ========== */
+.training-room-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.1);
+}
+
+.training-room-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.training-room-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.training-room-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 170, 0.5);
+  border-radius: 4px;
+}
+
+.training-room-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 170, 0.7);
+}
