@@ -10371,6 +10371,10 @@ line[id^="needle-"] {
 
 .player-track-action {
   flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 .player-enter-btn {
@@ -10432,14 +10436,24 @@ line[id^="needle-"] {
 
   .player-track-action {
     width: 100%;
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  
+  .player-track-action .btn,
+  .player-track-action .player-enter-btn {
+    flex: 0 0 auto;
+    min-width: fit-content;
+    font-size: 13px;
+    padding: 8px 12px;
+    white-space: nowrap;
   }
 
   .player-enter-btn {
-    width: 100%;
     justify-content: center;
-    padding: 12px 16px;
-    font-size: 15px;
-    min-height: 48px;
+    min-height: 44px;
   }
 
   .race-title-text {
