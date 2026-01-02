@@ -59,8 +59,8 @@ async function loadTrainingRooms() {
       return;
     }
 
-    // 목록 렌더링
-    renderTrainingRoomList(trainingRoomList);
+    // 목록 렌더링 (async 함수이므로 await 사용)
+    await renderTrainingRoomList(trainingRoomList);
   } catch (error) {
     console.error('[Training Room] 목록 로드 오류:', error);
     listContainer.innerHTML = `
@@ -74,12 +74,26 @@ async function loadTrainingRooms() {
 /**
  * Training Room 목록 렌더링
  */
-function renderTrainingRoomList(rooms) {
+async function renderTrainingRoomList(rooms) {
   const listContainer = document.getElementById('trainingRoomList');
   if (!listContainer) return;
 
-  // 사용자 목록 가져오기 (window.users 또는 window.userProfiles)
-  const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+  // 사용자 목록 가져오기 (window.users, window.userProfiles, 또는 API 호출)
+  let users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+  
+  // 사용자 목록이 없으면 API로 가져오기
+  if (users.length === 0 && typeof apiGetUsers === 'function') {
+    try {
+      const result = await apiGetUsers();
+      if (result && result.success && result.items) {
+        users = result.items;
+        // 전역 변수에도 저장
+        window.users = users;
+      }
+    } catch (error) {
+      console.warn('[Training Room] 사용자 목록 로드 실패:', error);
+    }
+  }
 
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
@@ -87,8 +101,13 @@ function renderTrainingRoomList(rooms) {
     
     // user_id로 코치 이름 찾기
     const userId = room.user_id || room.userId;
-    const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
+    const coach = userId && users.length > 0 ? users.find(u => String(u.id) === String(userId)) : null;
     const coachName = coach ? coach.name : '';
+    
+    // 디버깅 로그 (개발용)
+    if (userId && !coachName) {
+      console.log(`[Training Room] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+    }
     
     return `
       <div class="training-room-card ${isSelected ? 'selected' : ''}" 
@@ -229,20 +248,45 @@ async function selectTrainingRoom(roomId) {
     
     // Coach 정보 표시 (user_id 활용)
     if (selectedCoach) {
-      // 사용자 목록 가져오기 (window.users 또는 window.userProfiles)
-      const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+      // 사용자 목록 가져오기 (window.users, window.userProfiles, 또는 API 호출)
+      let users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
       
-      // user_id로 코치 이름 찾기
-      const userId = room.user_id || room.userId;
-      const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
-      const coachName = coach ? coach.name : '';
-      
-      if (coachName) {
-        selectedCoach.textContent = `Coach : ${coachName}님`;
-        selectedCoach.style.display = 'block';
+      // 사용자 목록이 없으면 API로 가져오기 (비동기 처리)
+      if (users.length === 0 && typeof apiGetUsers === 'function') {
+        apiGetUsers().then(result => {
+          if (result && result.success && result.items) {
+            users = result.items;
+            window.users = users;
+            
+            // user_id로 코치 이름 찾기
+            const userId = room.user_id || room.userId;
+            const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
+            const coachName = coach ? coach.name : '';
+            
+            if (coachName) {
+              selectedCoach.textContent = `Coach : ${coachName}님`;
+              selectedCoach.style.display = 'block';
+            } else {
+              selectedCoach.textContent = '';
+              selectedCoach.style.display = 'none';
+            }
+          }
+        }).catch(error => {
+          console.warn('[Training Room] 사용자 목록 로드 실패:', error);
+        });
       } else {
-        selectedCoach.textContent = '';
-        selectedCoach.style.display = 'none';
+        // 사용자 목록이 이미 있는 경우
+        const userId = room.user_id || room.userId;
+        const coach = userId && users.length > 0 ? users.find(u => String(u.id) === String(userId)) : null;
+        const coachName = coach ? coach.name : '';
+        
+        if (coachName) {
+          selectedCoach.textContent = `Coach : ${coachName}님`;
+          selectedCoach.style.display = 'block';
+        } else {
+          selectedCoach.textContent = '';
+          selectedCoach.style.display = 'none';
+        }
       }
     }
     
@@ -685,12 +729,26 @@ async function loadTrainingRoomsForModal() {
 /**
  * 모달용 Training Room 목록 렌더링
  */
-function renderTrainingRoomListForModal(rooms) {
+async function renderTrainingRoomListForModal(rooms) {
   const listContainer = document.getElementById('trainingRoomModalList');
   if (!listContainer) return;
 
-  // 사용자 목록 가져오기 (window.users 또는 window.userProfiles)
-  const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+  // 사용자 목록 가져오기 (window.users, window.userProfiles, 또는 API 호출)
+  let users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+  
+  // 사용자 목록이 없으면 API로 가져오기
+  if (users.length === 0 && typeof apiGetUsers === 'function') {
+    try {
+      const result = await apiGetUsers();
+      if (result && result.success && result.items) {
+        users = result.items;
+        // 전역 변수에도 저장
+        window.users = users;
+      }
+    } catch (error) {
+      console.warn('[Training Room Modal] 사용자 목록 로드 실패:', error);
+    }
+  }
 
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
@@ -698,8 +756,13 @@ function renderTrainingRoomListForModal(rooms) {
     
     // user_id로 코치 이름 찾기
     const userId = room.user_id || room.userId;
-    const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
+    const coach = userId && users.length > 0 ? users.find(u => String(u.id) === String(userId)) : null;
     const coachName = coach ? coach.name : '';
+    
+    // 디버깅 로그 (개발용)
+    if (userId && !coachName) {
+      console.log(`[Training Room Modal] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+    }
     
     return `
       <div class="training-room-card ${isSelected ? 'selected' : ''}" 
