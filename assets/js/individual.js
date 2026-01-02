@@ -1412,3 +1412,119 @@ function updateTargetPowerArc() {
         console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}`);
     }
 }
+
+/**
+ * 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
+ */
+function initializeIndividualIntensitySlider() {
+    const slider = document.getElementById('individualIntensityAdjustmentSlider');
+    const valueDisplay = document.getElementById('individualIntensityAdjustmentValue');
+    
+    if (!slider || !valueDisplay) {
+        console.warn('[개인 훈련] 강도 조절 슬라이더 요소를 찾을 수 없습니다');
+        return;
+    }
+    
+    // 초기값 설정: 로컬 스토리지에서 불러오기
+    let currentAdjustment = individualIntensityAdjustment;
+    
+    try {
+        const saved = localStorage.getItem('individualIntensityAdjustment');
+        if (saved) {
+            currentAdjustment = parseFloat(saved);
+            individualIntensityAdjustment = currentAdjustment;
+        } else {
+            currentAdjustment = 1.0;
+            individualIntensityAdjustment = 1.0;
+        }
+    } catch (e) {
+        currentAdjustment = 1.0;
+        individualIntensityAdjustment = 1.0;
+    }
+    
+    // 조정 계수를 슬라이더 값으로 변환 (0.95 → -5, 1.0 → 0, 1.05 → +5)
+    const sliderValue = Math.round((currentAdjustment - 1.0) * 100);
+    // 슬라이더 범위는 -5 ~ +5이므로 클램프
+    const clampedValue = Math.max(-5, Math.min(5, sliderValue));
+    
+    console.log('[개인 훈련] 강도 조절 초기값 설정:', {
+        adjustment: currentAdjustment,
+        sliderValue: sliderValue,
+        clampedValue: clampedValue
+    });
+    
+    slider.value = clampedValue;
+    updateIndividualIntensityDisplay(clampedValue);
+    
+    // 초기화 시에도 목표 파워 업데이트
+    updateTargetPower();
+    
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newSlider = slider.cloneNode(true);
+    slider.parentNode.replaceChild(newSlider, slider);
+    
+    // 슬라이더 이벤트 리스너 (input: 실시간 반영)
+    newSlider.addEventListener('input', function(e) {
+        const value = parseInt(e.target.value, 10);
+        if (!isNaN(value)) {
+            // 실시간으로 목표 파워와 표시 값 업데이트
+            updateIndividualIntensityAdjustment(value);
+        }
+    });
+    
+    // 슬라이더 변경 완료 시 (마우스 떼거나 터치 종료) - 로컬 스토리지 저장
+    newSlider.addEventListener('change', function(e) {
+        const value = parseInt(e.target.value, 10);
+        if (!isNaN(value)) {
+            updateIndividualIntensityAdjustment(value);
+            // 로컬 스토리지에 저장
+            localStorage.setItem('individualIntensityAdjustment', String(individualIntensityAdjustment));
+            console.log('[개인 훈련] 강도 조절 로컬 스토리지에 저장:', individualIntensityAdjustment);
+        }
+    });
+}
+
+/**
+ * 개인 훈련 대시보드 강도 조절 업데이트
+ */
+function updateIndividualIntensityAdjustment(sliderValue) {
+    // 슬라이더 값(-5 ~ +5)을 조정 계수로 변환 (0.95 ~ 1.05)
+    const adjustment = 1.0 + (sliderValue / 100);
+    individualIntensityAdjustment = adjustment;
+    
+    console.log('[개인 훈련] 강도 조절 값 변경:', {
+        sliderValue: sliderValue,
+        adjustment: adjustment,
+        percentage: (adjustment * 100).toFixed(1) + '%'
+    });
+    
+    // 1. 표시 업데이트 (강도 조절 % 표시) - 즉시 반영
+    updateIndividualIntensityDisplay(sliderValue);
+    
+    // 2. 목표 파워 실시간 업데이트
+    updateTargetPower();
+}
+
+/**
+ * 개인 훈련 대시보드 강도 조절 표시 업데이트
+ */
+function updateIndividualIntensityDisplay(sliderValue) {
+    const valueDisplay = document.getElementById('individualIntensityAdjustmentValue');
+    if (valueDisplay) {
+        const sign = sliderValue >= 0 ? '+' : '';
+        valueDisplay.textContent = `${sign}${sliderValue}%`;
+        
+        // 색상 변경 (음수: 파란색, 0: 회색, 양수: 빨간색)
+        if (sliderValue < 0) {
+            valueDisplay.style.color = '#3b82f6'; // 파란색
+        } else if (sliderValue > 0) {
+            valueDisplay.style.color = '#ef4444'; // 빨간색
+        } else {
+            valueDisplay.style.color = '#9ca3af'; // 회색
+        }
+        
+        console.log('[개인 훈련] 강도 조절 표시 업데이트:', `${sign}${sliderValue}%`);
+    } else {
+        console.warn('[개인 훈련] individualIntensityAdjustmentValue 요소를 찾을 수 없습니다');
+    }
+}
