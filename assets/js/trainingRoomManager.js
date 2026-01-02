@@ -568,9 +568,31 @@ async function renderPlayerList() {
     playerListContent.setAttribute('data-room-id', String(roomId));
   }
 
+  // 현재 사용자 정보 확인 (권한 체크용)
+  let currentUser = null;
+  let currentUserId = null;
+  let userGrade = '2';
+  let isAdmin = false;
+  
+  try {
+    currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (currentUser && currentUser.id != null) {
+      currentUserId = String(currentUser.id);
+    }
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+    isAdmin = userGrade === '1' || userGrade === 1;
+  } catch (e) {
+    console.error('[Player List] 현재 사용자 정보 확인 오류:', e);
+  }
+
   playerListContent.innerHTML = tracks.map(track => {
     // userName이 있으면 사용자가 할당된 것으로 판단 (userId가 null이어도 표시 가능)
     const hasUser = !!track.userName;
+    
+    // 권한 체크: grade=2 사용자는 본인이 할당한 트랙만 변경/제거 가능
+    const trackUserId = track.userId ? String(track.userId) : null;
+    const canModify = isAdmin || (trackUserId && currentUserId && trackUserId === currentUserId);
+    
     const dashboardUrl = roomId 
       ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
       : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
@@ -584,17 +606,33 @@ async function renderPlayerList() {
           ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
         </div>
         <div class="player-track-action">
-          <button 
-            class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
-            onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
-            title="사용자 할당/변경">
-            <span>${hasUser ? '변경' : '할당'}</span>
-          </button>
-          ${hasUser ? `
+          ${canModify ? `
+            <button 
+              class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+              onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
+              title="사용자 할당/변경">
+              <span>${hasUser ? '변경' : '할당'}</span>
+            </button>
+          ` : `
+            <button 
+              class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+              disabled
+              title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '사용자 할당/변경'}">
+              <span>${hasUser ? '변경' : '할당'}</span>
+            </button>
+          `}
+          ${hasUser && canModify ? `
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
               onclick="removeUserFromTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
               title="사용자 제거">
+              <span>제거</span>
+            </button>
+          ` : hasUser && !canModify ? `
+            <button 
+              class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
+              disabled
+              title="본인이 할당한 트랙만 제거 가능합니다">
               <span>제거</span>
             </button>
           ` : ''}
@@ -1096,7 +1134,75 @@ function escapeHtml(text) {
  * 트랙에 사용자 할당 (애니메이션 효과 포함)
  */
 async function assignUserToTrackWithAnimation(trackNumber, currentUserId, roomIdParam, event) {
+  // 버튼이 비활성화되어 있으면 실행하지 않음 (UI 레벨 권한 체크)
   const button = event?.target?.closest('button.player-assign-btn');
+  if (button && button.disabled) {
+    return;
+  }
+  
+  // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
+  let roomId = roomIdParam;
+  
+  if (!roomId) {
+    roomId = (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) 
+      ? currentSelectedTrainingRoom.id 
+      : (window.currentTrainingRoomId || null);
+  }
+  
+  if (!roomId) {
+    const playerListContent = document.getElementById('playerListContent');
+    if (playerListContent) {
+      roomId = playerListContent.getAttribute('data-room-id');
+    }
+  }
+  
+  if (roomId) {
+    roomId = String(roomId);
+    
+    // 권한 체크: 트랙에 할당된 사용자 정보 확인 (기존 사용자가 있는 경우만)
+    if (currentUserId) {
+      try {
+        const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.success && result.tracks && Array.isArray(result.tracks)) {
+          const track = result.tracks.find(t => parseInt(t.trackNumber, 10) === trackNumber);
+          
+          if (track && track.userId) {
+            // 현재 사용자 정보 확인
+            let currentUser = null;
+            let currentUserIdCheck = null;
+            let userGrade = '2';
+            let isAdmin = false;
+            
+            try {
+              currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+              if (currentUser && currentUser.id != null) {
+                currentUserIdCheck = String(currentUser.id);
+              }
+              userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+              isAdmin = userGrade === '1' || userGrade === 1;
+              
+              // grade=2 사용자는 본인이 할당한 트랙만 변경 가능
+              if (!isAdmin && String(track.userId) !== currentUserIdCheck) {
+                if (typeof showToast === 'function') {
+                  showToast('본인이 할당한 트랙만 변경할 수 있습니다.', 'error');
+                }
+                return;
+              }
+            } catch (e) {
+              console.error('[assignUserToTrackWithAnimation] 권한 체크 오류:', e);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[assignUserToTrackWithAnimation] 트랙 정보 확인 오류:', error);
+        // 오류가 발생해도 계속 진행 (권한 체크 실패 시에도 관리자는 진행 가능하도록)
+      }
+    }
+  }
+  
   const originalText = button ? button.querySelector('span')?.textContent : '';
   const originalDisabled = button ? button.disabled : false;
   
@@ -1357,10 +1463,6 @@ async function selectUserForTrackWithAnimation(trackNumber, userId, userName, ro
  * 트랙에서 사용자 제거 (애니메이션 효과 포함)
  */
 async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event) {
-  const button = event?.target?.closest('button.player-remove-btn');
-  const originalText = button ? button.querySelector('span')?.textContent : '';
-  const originalDisabled = button ? button.disabled : false;
-  
   // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
   let roomId = roomIdParam;
   
@@ -1386,10 +1488,55 @@ async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event)
   }
   
   roomId = String(roomId);
+  
+  // 권한 체크: 트랙에 할당된 사용자 정보 확인
+  try {
+    const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (result.success && result.tracks && Array.isArray(result.tracks)) {
+      const track = result.tracks.find(t => parseInt(t.trackNumber, 10) === trackNumber);
+      
+      if (track && track.userId) {
+        // 현재 사용자 정보 확인
+        let currentUser = null;
+        let currentUserIdCheck = null;
+        let userGrade = '2';
+        let isAdmin = false;
+        
+        try {
+          currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+          if (currentUser && currentUser.id != null) {
+            currentUserIdCheck = String(currentUser.id);
+          }
+          userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+          isAdmin = userGrade === '1' || userGrade === 1;
+          
+          // grade=2 사용자는 본인이 할당한 트랙만 제거 가능
+          if (!isAdmin && String(track.userId) !== currentUserIdCheck) {
+            if (typeof showToast === 'function') {
+              showToast('본인이 할당한 트랙만 제거할 수 있습니다.', 'error');
+            }
+            return;
+          }
+        } catch (e) {
+          console.error('[removeUserFromTrackWithAnimation] 권한 체크 오류:', e);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[removeUserFromTrackWithAnimation] 트랙 정보 확인 오류:', error);
+    // 오류가 발생해도 계속 진행 (권한 체크 실패 시에도 관리자는 진행 가능하도록)
+  }
 
   if (!confirm(`트랙${trackNumber}에서 사용자를 제거하시겠습니까?`)) {
     return;
   }
+  
+  const button = event?.target?.closest('button.player-remove-btn');
+  const originalText = button ? button.querySelector('span')?.textContent : '';
+  const originalDisabled = button ? button.disabled : false;
   
   // 버튼 애니메이션 효과
   if (button) {
