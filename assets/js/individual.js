@@ -109,6 +109,16 @@ db.ref(`sessions/${SESSION_ID}/users/${myBikeId}`).on('value', (snapshot) => {
             // 기본값은 그대로 유지 (이미 200으로 설정됨)
         }
         
+        // 사용자 ID 저장 (세션 관리용)
+        if (data.userId) {
+            currentUserIdForSession = String(data.userId);
+        }
+        
+        // 사용자 ID 저장 (세션 관리용)
+        if (data.userId) {
+            currentUserIdForSession = String(data.userId);
+        }
+        
         // 사용자 이름 업데이트
         updateUserName(data);
         updateDashboard(data);
@@ -144,9 +154,73 @@ function updateUserName(data) {
 
 // 3. 훈련 상태 구독 (타이머, 세그먼트 정보)
 let currentSegmentIndex = -1;
+let previousTrainingState = null; // 이전 훈련 상태 추적
+let currentUserIdForSession = null; // 세션에 사용할 사용자 ID
+let lastWorkoutId = null; // 마지막 워크아웃 ID
+
 db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
+        // 훈련 상태 변화 감지 및 세션 관리
+        const currentState = status.state || 'idle';
+        
+        // 훈련 시작 감지 (idle/paused -> running)
+        if (previousTrainingState !== 'running' && currentState === 'running') {
+            // 워크아웃 ID 가져오기 (Firebase에서 또는 window.currentWorkout에서)
+            db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
+                const workoutId = workoutIdSnapshot.val();
+                if (workoutId) {
+                    if (!window.currentWorkout) {
+                        window.currentWorkout = {};
+                    }
+                    window.currentWorkout.id = workoutId;
+                    lastWorkoutId = workoutId;
+                }
+                
+                // 세션 시작 (사용자 ID는 이미 currentUserIdForSession에 저장됨)
+                if (window.trainingResults && typeof window.trainingResults.startSession === 'function' && currentUserIdForSession) {
+                    window.trainingResults.startSession(currentUserIdForSession);
+                    console.log('[Individual] 훈련 세션 시작:', { userId: currentUserIdForSession, workoutId: lastWorkoutId || window.currentWorkout?.id });
+                } else if (!currentUserIdForSession) {
+                    console.warn('[Individual] 사용자 ID가 없어 세션을 시작할 수 없습니다.');
+                }
+            });
+        }
+        
+        // 훈련 종료 감지 (running -> finished/stopped/idle 또는 모든 세그먼트 완료)
+        if (previousTrainingState === 'running' && (currentState === 'finished' || currentState === 'stopped' || currentState === 'idle')) {
+            // 또는 모든 세그먼트가 완료되었는지 확인
+            const totalSegments = window.currentWorkout?.segments?.length || 0;
+            const lastSegmentIndex = totalSegments > 0 ? totalSegments - 1 : -1;
+            const isAllSegmentsComplete = (status.segmentIndex !== undefined && status.segmentIndex >= lastSegmentIndex) || currentState === 'finished';
+            
+            if (isAllSegmentsComplete || currentState === 'finished' || currentState === 'stopped') {
+                // 세션 종료 처리
+                if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
+                    window.trainingResults.endSession();
+                }
+                
+                // 훈련 결과 저장
+                if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
+                    const extra = {
+                        workoutId: lastWorkoutId || window.currentWorkout?.id || null,
+                        workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                        userId: currentUserIdForSession
+                    };
+                    
+                    window.trainingResults.saveTrainingResult(extra)
+                        .then((result) => {
+                            console.log('[Individual] 훈련 결과 저장 완료:', result);
+                        })
+                        .catch((error) => {
+                            console.error('[Individual] 훈련 결과 저장 실패:', error);
+                        });
+                }
+            }
+        }
+        
+        previousTrainingState = currentState;
+        
         updateTimer(status);
         
         // 세그먼트 정보 표시
@@ -208,9 +282,15 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
     const segments = snapshot.val();
     if (segments && Array.isArray(segments) && segments.length > 0) {
         // 워크아웃 객체 생성
-        window.currentWorkout = {
-            segments: segments
-        };
+        if (!window.currentWorkout) {
+            window.currentWorkout = {};
+        }
+        window.currentWorkout.segments = segments;
+        
+        // 워크아웃 ID 가져오기 (Firebase의 다른 경로에서, 필요시)
+        // 일반적으로 workoutPlan이 로드되면 이미 워크아웃이 선택된 상태이므로
+        // workoutId는 세션 시작 시 저장된 값을 사용
+        
         // 세그먼트 그래프 그리기
         updateSegmentGraph(segments, currentSegmentIndex);
         // TARGET 파워 업데이트 (워크아웃 정보 로드 시)
@@ -261,6 +341,22 @@ function updateDashboard(data) {
     const lapPowerEl = document.getElementById('ui-lap-power');
     if (lapPowerEl) {
         lapPowerEl.textContent = Math.round(lapPower);
+    }
+    
+    // 실시간 데이터를 resultManager에 기록 (훈련 진행 중일 때만)
+    if (window.trainingResults && typeof window.trainingResults.appendStreamSample === 'function') {
+        // 파워 데이터 기록
+        if (powerValue > 0) {
+            window.trainingResults.appendStreamSample('power', powerValue);
+        }
+        // 심박수 데이터 기록
+        if (hr > 0) {
+            window.trainingResults.appendStreamSample('hr', hr);
+        }
+        // 케이던스 데이터 기록
+        if (cadence > 0) {
+            window.trainingResults.appendStreamSample('cadence', cadence);
+        }
     }
     
     // 바늘 움직임은 startGaugeAnimationLoop에서 처리 (가민 스타일 부드러운 움직임)
