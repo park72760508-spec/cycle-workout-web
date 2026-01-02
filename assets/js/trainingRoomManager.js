@@ -145,7 +145,7 @@ function renderTrainingRoomList(rooms, users = []) {
           <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;">
             <h3 style="margin: 0; color: #333; font-size: 1.2em; flex: 1;">${escapeHtml(room.title)}</h3>
             ${hasPassword ? `
-              <img src="assets/img/lock.png" alt="비밀번호" style="width: 18px; height: 18px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
+              <img src="assets/img/lock.png" alt="비밀번호" style="width: 45px; height: 45px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
             ` : ''}
           </div>
           <p style="margin: 0; color: #666; font-size: 0.9em;">
@@ -822,7 +822,7 @@ function renderTrainingRoomListForModal(rooms, users = []) {
           <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px;">
             <h3 style="margin: 0; color: #333; font-size: 1.1em; flex: 1;">${escapeHtml(room.title)}</h3>
             ${hasPassword ? `
-              <img src="assets/img/lock.png" alt="비밀번호" style="width: 16px; height: 16px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
+              <img src="assets/img/lock.png" alt="비밀번호" style="width: 40px; height: 40px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
             ` : ''}
           </div>
           <p style="margin: 0; color: #666; font-size: 0.85em;">
