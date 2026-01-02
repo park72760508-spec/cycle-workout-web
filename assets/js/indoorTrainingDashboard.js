@@ -1413,15 +1413,17 @@ function openPowerMeterSettings(powerMeterId) {
  * 저장된 페어링 정보를 모달에 표시
  */
 function updatePairingModalWithSavedData(powerMeter) {
-  // 사용자 정보 표시
+  // 선택된 사용자 카드 영역 업데이트
+  const selectedUserCard = document.getElementById('pairingSelectedUserCard');
+  
   if (powerMeter.userId && powerMeter.userName) {
-    const resultEl = document.getElementById('pairingUserSearchResult');
-    if (resultEl) {
+    // 선택된 사용자가 있으면 카드 표시
+    if (selectedUserCard) {
       const wkg = powerMeter.userFTP && powerMeter.userWeight ? (powerMeter.userFTP / powerMeter.userWeight).toFixed(1) : '-';
-      resultEl.innerHTML = `
+      selectedUserCard.innerHTML = `
         <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="flex: 1;">
               <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.userName}</div>
               <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: #155724;">
                 <span><strong>FTP:</strong> ${powerMeter.userFTP || '-'}W</span>
@@ -1429,12 +1431,26 @@ function updatePairingModalWithSavedData(powerMeter) {
                 <span><strong>W/kg:</strong> ${wkg}</span>
               </div>
             </div>
-            <button class="btn btn-danger btn-sm" onclick="clearSelectedUser()" style="white-space: nowrap;">선택 해제</button>
+            <button class="btn btn-danger btn-sm" onclick="clearSelectedUser()" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
           </div>
         </div>
       `;
+      selectedUserCard.style.display = 'block';
+    }
+    
+    // 검색 결과 영역은 비워둠
+    const resultEl = document.getElementById('pairingUserSearchResult');
+    if (resultEl) {
+      resultEl.innerHTML = '';
     }
   } else {
+    // 선택된 사용자가 없으면 카드 숨김
+    if (selectedUserCard) {
+      selectedUserCard.style.display = 'none';
+      selectedUserCard.innerHTML = '';
+    }
+    
+    // 검색 결과 영역도 비움
     const resultEl = document.getElementById('pairingUserSearchResult');
     if (resultEl) {
       resultEl.innerHTML = '';
@@ -1560,11 +1576,21 @@ function showPairingTab(tabName) {
     setTimeout(() => {
       const nameInput = document.getElementById('pairingUserNameSearch');
       const resultEl = document.getElementById('pairingUserSearchResult');
+      const powerMeterId = window.currentTargetPowerMeterId;
+      
       if (nameInput) {
         nameInput.focus();
         // 초기 로드 시 검색어가 없으면 목록을 비워둠 (검색 후에만 표시)
         if (resultEl && !nameInput.value.trim()) {
           resultEl.innerHTML = '';
+        }
+      }
+      
+      // 선택된 사용자 카드 업데이트
+      if (powerMeterId) {
+        const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+        if (powerMeter) {
+          updatePairingModalWithSavedData(powerMeter);
         }
       }
     }, 100);
@@ -1866,15 +1892,13 @@ async function selectSearchedUserForPowerMeter(userId) {
           }
         }
         
-        // UI 업데이트
+        // 선택된 사용자 카드 업데이트
+        updatePairingModalWithSavedData(powerMeter);
+        
+        // 검색 결과 영역은 비워둠 (선택된 사용자 카드에 표시됨)
         const resultEl = document.getElementById('pairingUserSearchResult');
         if (resultEl) {
-          resultEl.innerHTML = `
-            <div style="padding: 16px; text-align: center; color: #28a745; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
-              <p style="margin: 0; font-weight: 600; font-size: 16px;">✅ ${user.name}님이 선택되었습니다.</p>
-              <p style="margin: 8px 0 0 0; font-size: 12px;">이 사용자 정보가 훈련 자료에 활용됩니다.</p>
-            </div>
-          `;
+          resultEl.innerHTML = '';
         }
         
         if (typeof showToast === 'function') {
@@ -1939,11 +1963,21 @@ function clearSelectedUser() {
     userNameEl.style.display = 'none';
   }
   
+  // 선택된 사용자 카드 숨김
+  const selectedUserCard = document.getElementById('pairingSelectedUserCard');
+  if (selectedUserCard) {
+    selectedUserCard.style.display = 'none';
+    selectedUserCard.innerHTML = '';
+  }
+  
   // 모달 내 검색 결과 영역 초기화
   const resultEl = document.getElementById('pairingUserSearchResult');
   if (resultEl) {
     resultEl.innerHTML = '';
   }
+  
+  // 모달에 저장된 데이터 다시 업데이트 (선택된 사용자 카드가 비워지도록)
+  updatePairingModalWithSavedData(powerMeter);
   
   // FTP 기반 눈금 업데이트 (기본값으로 복귀)
   updatePowerMeterTicks(powerMeterId);
