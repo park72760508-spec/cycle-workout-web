@@ -586,14 +586,14 @@ async function renderPlayerList() {
         <div class="player-track-action">
           <button 
             class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
-            onclick="assignUserToTrack(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}')"
+            onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
             title="사용자 할당/변경">
             <span>${hasUser ? '변경' : '할당'}</span>
           </button>
           ${hasUser ? `
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
-              onclick="removeUserFromTrack(${track.trackNumber}, '${roomId || ''}')"
+              onclick="removeUserFromTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
               title="사용자 제거">
               <span>제거</span>
             </button>
@@ -1093,6 +1093,44 @@ function escapeHtml(text) {
 }
 
 /**
+ * 트랙에 사용자 할당 (애니메이션 효과 포함)
+ */
+async function assignUserToTrackWithAnimation(trackNumber, currentUserId, roomIdParam, event) {
+  const button = event?.target?.closest('button.player-assign-btn');
+  const originalText = button ? button.querySelector('span')?.textContent : '';
+  const originalDisabled = button ? button.disabled : false;
+  
+  // 버튼 애니메이션 효과
+  if (button) {
+    button.disabled = true;
+    button.style.transition = 'all 0.2s ease';
+    button.style.transform = 'scale(0.95)';
+    button.style.opacity = '0.7';
+    const span = button.querySelector('span');
+    if (span) {
+      span.textContent = '처리 중...';
+    }
+  }
+  
+  try {
+    await assignUserToTrack(trackNumber, currentUserId, roomIdParam);
+  } finally {
+    // 버튼 상태 복원
+    if (button) {
+      setTimeout(() => {
+        button.disabled = originalDisabled;
+        button.style.transform = 'scale(1)';
+        button.style.opacity = '1';
+        const span = button.querySelector('span');
+        if (span && originalText) {
+          span.textContent = originalText;
+        }
+      }, 300);
+    }
+  }
+}
+
+/**
  * 트랙에 사용자 할당
  */
 async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
@@ -1196,7 +1234,7 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
       
       <!-- 사용자 목록 컨테이너 -->
       <div id="trackUserListContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
-        ${renderUserListForTrackSelection(users, trackNumber, roomId, currentUserId)}
+        <!-- 검색 후에만 사용자 목록이 표시됩니다 -->
       </div>
       
       <div style="text-align: right;">
@@ -1259,23 +1297,26 @@ function filterUsersForTrackSelection(trackNumber, roomId) {
   const searchTerm = searchInput.value.trim().toLowerCase();
   const allUsers = window._allUsersForTrackSelection || [];
   
+  // 검색어가 없으면 목록을 비워둠 (검색 후에만 표시)
+  if (!searchTerm) {
+    listContainer.innerHTML = '';
+    return;
+  }
+  
   // 현재 선택된 사용자 ID 가져오기 (필요시)
   const currentUserId = null; // 필요시 구현
   
-  let filteredUsers = allUsers;
-  
-  if (searchTerm) {
-    filteredUsers = allUsers.filter(user => {
-      const name = (user.name || '').toLowerCase();
-      return name.includes(searchTerm);
-    });
-  }
+  // 검색어로 필터링
+  const filteredUsers = allUsers.filter(user => {
+    const name = (user.name || '').toLowerCase();
+    return name.includes(searchTerm);
+  });
   
   // 필터링된 목록 렌더링
-  listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, currentUserId);
-  
-  if (filteredUsers.length === 0 && searchTerm) {
+  if (filteredUsers.length === 0) {
     listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">검색 결과가 없습니다.</div>';
+  } else {
+    listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, currentUserId);
   }
 }
 
@@ -1297,6 +1338,12 @@ async function selectUserForTrackWithAnimation(trackNumber, userId, userName, ro
     clickedElement.style.opacity = '0.7';
     
     setTimeout(async () => {
+      // 진행 중 상태 표시
+      clickedElement.style.transform = 'scale(0.98)';
+      clickedElement.style.opacity = '0.9';
+      clickedElement.style.background = '#e3f2fd';
+      clickedElement.style.cursor = 'wait';
+      
       // 실제 선택 로직 실행
       await selectUserForTrack(trackNumber, userId, userName, roomId);
     }, 150);
@@ -1307,9 +1354,13 @@ async function selectUserForTrackWithAnimation(trackNumber, userId, userName, ro
 }
 
 /**
- * 트랙에서 사용자 제거
+ * 트랙에서 사용자 제거 (애니메이션 효과 포함)
  */
-async function removeUserFromTrack(trackNumber, roomIdParam) {
+async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event) {
+  const button = event?.target?.closest('button.player-remove-btn');
+  const originalText = button ? button.querySelector('span')?.textContent : '';
+  const originalDisabled = button ? button.disabled : false;
+  
   // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
   let roomId = roomIdParam;
   
@@ -1339,6 +1390,43 @@ async function removeUserFromTrack(trackNumber, roomIdParam) {
   if (!confirm(`트랙${trackNumber}에서 사용자를 제거하시겠습니까?`)) {
     return;
   }
+  
+  // 버튼 애니메이션 효과
+  if (button) {
+    button.disabled = true;
+    button.style.transition = 'all 0.2s ease';
+    button.style.transform = 'scale(0.95)';
+    button.style.opacity = '0.7';
+    const span = button.querySelector('span');
+    if (span) {
+      span.textContent = '처리 중...';
+    }
+  }
+  
+  try {
+    // removeUserFromTrack 함수 호출 (roomId만 전달)
+    await removeUserFromTrackInternal(trackNumber, roomId);
+  } finally {
+    // 버튼 상태 복원
+    if (button) {
+      setTimeout(() => {
+        button.disabled = originalDisabled;
+        button.style.transform = 'scale(1)';
+        button.style.opacity = '1';
+        const span = button.querySelector('span');
+        if (span && originalText) {
+          span.textContent = originalText;
+        }
+      }, 300);
+    }
+  }
+}
+
+/**
+ * 트랙에서 사용자 제거 (내부 함수 - roomId만 받음)
+ */
+async function removeUserFromTrackInternal(trackNumber, roomId) {
+  roomId = String(roomId);
 
   try {
     const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${roomId}&trackNumber=${trackNumber}&userId=`;
@@ -1580,7 +1668,9 @@ if (typeof window !== 'undefined') {
   window.openCoachModeFromModal = openCoachModeFromModal;
   // 트랙 사용자 할당 관련 함수
   window.assignUserToTrack = assignUserToTrack;
+  window.assignUserToTrackWithAnimation = assignUserToTrackWithAnimation;
   window.removeUserFromTrack = removeUserFromTrack;
+  window.removeUserFromTrackWithAnimation = removeUserFromTrackWithAnimation;
   window.selectUserForTrack = selectUserForTrack;
   window.selectUserForTrackWithAnimation = selectUserForTrackWithAnimation;
   window.filterUsersForTrackSelection = filterUsersForTrackSelection;
