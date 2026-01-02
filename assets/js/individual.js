@@ -208,24 +208,62 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 
                 // 훈련 결과 저장 및 팝업 표시
                 if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
-                    const extra = {
-                        workoutId: lastWorkoutId || window.currentWorkout?.id || null,
-                        workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                        userId: currentUserIdForSession,
-                        elapsedTime: status.elapsedTime || window.lastElapsedTime || null // elapsedTime 전달
-                    };
-                    
-                    window.trainingResults.saveTrainingResult(extra)
-                        .then((result) => {
-                            console.log('[Individual] 훈련 결과 저장 완료:', result);
-                            // 결과 팝업 표시
-                            showTrainingResultModal(status);
-                        })
-                        .catch((error) => {
-                            console.error('[Individual] 훈련 결과 저장 실패:', error);
-                            // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
-                            showTrainingResultModal(status);
+                    // 워크아웃 ID 최종 확인 (Firebase에서 다시 한 번 확인)
+                    db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
+                        const finalWorkoutId = workoutIdSnapshot.val();
+                        if (finalWorkoutId) {
+                            if (!window.currentWorkout) {
+                                window.currentWorkout = {};
+                            }
+                            window.currentWorkout.id = finalWorkoutId;
+                            lastWorkoutId = finalWorkoutId;
+                        }
+                        
+                        const extra = {
+                            workoutId: finalWorkoutId || lastWorkoutId || window.currentWorkout?.id || null,
+                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                            userId: currentUserIdForSession,
+                            elapsedTime: status.elapsedTime || window.lastElapsedTime || null // elapsedTime 전달
+                        };
+                        
+                        console.log('[Individual] 훈련 결과 저장 시도, workoutId:', extra.workoutId, {
+                            finalWorkoutId,
+                            lastWorkoutId,
+                            currentWorkoutId: window.currentWorkout?.id,
+                            workoutName: extra.workoutName
                         });
+                        
+                        window.trainingResults.saveTrainingResult(extra)
+                            .then((result) => {
+                                console.log('[Individual] 훈련 결과 저장 완료:', result);
+                                // 결과 팝업 표시
+                                showTrainingResultModal(status);
+                            })
+                            .catch((error) => {
+                                console.error('[Individual] 훈련 결과 저장 실패:', error);
+                                // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
+                                showTrainingResultModal(status);
+                            });
+                    }).catch((error) => {
+                        console.error('[Individual] workoutId 조회 실패:', error);
+                        // workoutId 조회 실패해도 저장 시도
+                        const extra = {
+                            workoutId: lastWorkoutId || window.currentWorkout?.id || null,
+                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                            userId: currentUserIdForSession,
+                            elapsedTime: status.elapsedTime || window.lastElapsedTime || null
+                        };
+                        
+                        window.trainingResults.saveTrainingResult(extra)
+                            .then((result) => {
+                                console.log('[Individual] 훈련 결과 저장 완료 (workoutId 조회 실패 후):', result);
+                                showTrainingResultModal(status);
+                            })
+                            .catch((error) => {
+                                console.error('[Individual] 훈련 결과 저장 실패:', error);
+                                showTrainingResultModal(status);
+                            });
+                    });
                 } else {
                     // trainingResults가 없어도 팝업 표시
                     showTrainingResultModal(status);
@@ -301,9 +339,18 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
         }
         window.currentWorkout.segments = segments;
         
-        // 워크아웃 ID 가져오기 (Firebase의 다른 경로에서, 필요시)
-        // 일반적으로 workoutPlan이 로드되면 이미 워크아웃이 선택된 상태이므로
-        // workoutId는 세션 시작 시 저장된 값을 사용
+        // 워크아웃 ID 가져오기 (Firebase에서 확인)
+        // workoutPlan이 업데이트될 때 workoutId도 함께 확인하여 저장
+        db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
+            const workoutId = workoutIdSnapshot.val();
+            if (workoutId) {
+                window.currentWorkout.id = workoutId;
+                lastWorkoutId = workoutId;
+                console.log('[Individual] workoutPlan 업데이트 시 workoutId 확인:', workoutId);
+            } else {
+                console.warn('[Individual] workoutPlan은 있지만 workoutId를 찾을 수 없습니다.');
+            }
+        });
         
         // 세그먼트 그래프 그리기
         updateSegmentGraph(segments, currentSegmentIndex);

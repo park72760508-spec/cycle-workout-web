@@ -332,10 +332,13 @@ async function saveTrainingResult(extra = {}) {
        // schedule_day_id: 스케줄 훈련이면 window.currentScheduleDayId, 일반 훈련이면 null
        const scheduleDayId = window.currentScheduleDayId || null;
        
+       // actual_workout_id 우선순위: trainingResult.workoutId > extra.workoutId > window.currentWorkout?.id
+       const actualWorkoutId = trainingResult.workoutId || extra.workoutId || window.currentWorkout?.id || null;
+       
        const scheduleResultData = {
          scheduleDayId: scheduleDayId,
          userId: currentUserId,
-         actualWorkoutId: trainingResult.workoutId || extra.workoutId || null,
+         actualWorkoutId: actualWorkoutId,
          status: 'completed',
          duration_min: duration_min,
          avg_power: stats.avgPower || 0,
@@ -346,6 +349,12 @@ async function saveTrainingResult(extra = {}) {
        };
        
        console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
+       console.log('[saveTrainingResult] actual_workout_id 확인:', {
+         trainingResultWorkoutId: trainingResult.workoutId,
+         extraWorkoutId: extra.workoutId,
+         currentWorkoutId: window.currentWorkout?.id,
+         finalActualWorkoutId: actualWorkoutId
+       });
        console.log('[saveTrainingResult] 세션 데이터 확인:', {
          startTime: trainingResult.startTime,
          endTime: trainingResult.endTime,
