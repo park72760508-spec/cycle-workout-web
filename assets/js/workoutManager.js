@@ -1125,13 +1125,18 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const boxHeight = Math.round(baseBoxHeight * 1.3); // 30% 증가: 31.2px → 31px
     const boxPadding = Math.round(baseBoxPadding * 1.3); // 30% 증가: 10.4px → 10px
     
+    // 위아래 여백 30% 감소
+    const currentVerticalPadding = (boxHeight - fontSize) / 2; // 현재 위아래 여백
+    const newVerticalPadding = currentVerticalPadding * 0.7; // 30% 감소
+    const adjustedBoxHeight = fontSize + (newVerticalPadding * 2); // 조정된 상자 높이
+    
     // 텍스트 크기 측정
     ctx.font = `bold ${fontSize}px sans-serif`;
     const textMetrics = ctx.measureText(totalTimeText);
     const textWidth = textMetrics.width;
     const boxWidth = textWidth + boxPadding * 2;
     const boxX = padding.left + chartWidth / 2 - boxWidth / 2; // 그래프 중간
-    const boxY = targetY - boxHeight / 2; // Y축 135% 위치 (120%와 150% 중간)
+    const boxY = targetY - adjustedBoxHeight / 2; // Y축 135% 위치 (120%와 150% 중간)
     
     // 민트색 둥근네모 상자 그리기
     const borderRadius = Math.round(6 * 1.3); // 30% 증가: 7.8px → 8px
@@ -1140,10 +1145,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.moveTo(boxX + borderRadius, boxY);
     ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
     ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + borderRadius);
-    ctx.lineTo(boxX + boxWidth, boxY + boxHeight - borderRadius);
-    ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - borderRadius, boxY + boxHeight);
-    ctx.lineTo(boxX + borderRadius, boxY + boxHeight);
-    ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - borderRadius);
+    ctx.lineTo(boxX + boxWidth, boxY + adjustedBoxHeight - borderRadius);
+    ctx.quadraticCurveTo(boxX + boxWidth, boxY + adjustedBoxHeight, boxX + boxWidth - borderRadius, boxY + adjustedBoxHeight);
+    ctx.lineTo(boxX + borderRadius, boxY + adjustedBoxHeight);
+    ctx.quadraticCurveTo(boxX, boxY + adjustedBoxHeight, boxX, boxY + adjustedBoxHeight - borderRadius);
     ctx.lineTo(boxX, boxY + borderRadius);
     ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
     ctx.closePath();
