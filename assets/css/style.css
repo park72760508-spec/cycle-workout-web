@@ -8879,6 +8879,12 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
+/* Indoor Training 대시보드 버튼 아이콘 transition 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn::after {
+  transition: none !important;
+}
+
 #rollerRaceDashboardScreen .enhanced-control-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   border-color: rgba(255, 255, 255, 0.4);
@@ -8924,6 +8930,12 @@ button[aria-disabled="true"] {
   margin-left: 0; /* transform으로 중앙 정렬하므로 margin 제거 */
 }
 
+/* Indoor Training 대시보드 재생 아이콘 고정 (움직임 방지) */
+#indoorTrainingDashboardScreen .enhanced-control-btn.play::before {
+  transition: none !important;
+  transform: translate(-50%, -50%) !important; /* 항상 고정된 위치 */
+}
+
 #rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
   border-color: #22c55e;
   box-shadow: 
@@ -8956,6 +8968,12 @@ button[aria-disabled="true"] {
   max-width: calc(100% - 8px); /* 버튼 경계 내부에 유지 */
 }
 
+/* Indoor Training 대시보드 일시정지 아이콘 고정 (움직임 방지) */
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause::before {
+  transition: none !important;
+  transform: translate(-50%, -50%) !important; /* 항상 고정된 위치 */
+}
+
 #rollerRaceDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
   border-color: #fbbf24;
   box-shadow: 
@@ -8983,6 +9001,12 @@ button[aria-disabled="true"] {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+/* Indoor Training 대시보드 정지 아이콘 고정 (움직임 방지) */
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop::before {
+  transition: none !important;
+  transform: translate(-50%, -50%) !important; /* 항상 고정된 위치 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
@@ -9029,6 +9053,17 @@ button[aria-disabled="true"] {
   top: 50%;
   transform: translateY(-50%);
   margin-left: 0; /* transform으로 위치 조정하므로 margin 제거 */
+}
+
+/* Indoor Training 대시보드 건너뛰기 아이콘 고정 (움직임 방지) */
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip::before {
+  transition: none !important;
+  transform: translateY(-50%) !important; /* 항상 고정된 위치 */
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip::after {
+  transition: none !important;
+  transform: translateY(-50%) !important; /* 항상 고정된 위치 */
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled) {
