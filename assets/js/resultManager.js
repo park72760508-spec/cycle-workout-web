@@ -206,11 +206,34 @@ async function saveTrainingResult(extra = {}) {
        // 세션 통계 계산
        const stats = calculateSessionStats();
        
-       // 훈련 시간 계산 (초 단위)
+       // 훈련 시간 계산 (초 단위) - startTime과 endTime이 모두 있어야 함
        const startTime = trainingResult.startTime ? new Date(trainingResult.startTime) : null;
-       const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : new Date();
-       const totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
-       const duration_min = Math.floor(totalSeconds / 60);
+       const endTime = trainingResult.endTime ? new Date(trainingResult.endTime) : null;
+       
+       // startTime이 없으면 현재 시간에서 추정 (powerData의 첫 번째 시간 사용)
+       let actualStartTime = startTime;
+       if (!actualStartTime && trainingResult.powerData && trainingResult.powerData.length > 0) {
+         const firstPowerData = trainingResult.powerData[0];
+         if (firstPowerData && firstPowerData.t) {
+           actualStartTime = new Date(firstPowerData.t);
+           console.log('[saveTrainingResult] startTime 복구:', actualStartTime);
+         }
+       }
+       
+       // endTime이 없으면 현재 시간 사용
+       const actualEndTime = endTime || new Date();
+       
+       // 훈련 시간 계산
+       const totalSeconds = actualStartTime ? Math.floor((actualEndTime - actualStartTime) / 1000) : 0;
+       const duration_min = Math.max(0, Math.floor(totalSeconds / 60));
+       
+       console.log('[saveTrainingResult] 훈련 시간 계산:', {
+         startTime: actualStartTime,
+         endTime: actualEndTime,
+         totalSeconds: totalSeconds,
+         duration_min: duration_min,
+         powerDataLength: trainingResult.powerData?.length || 0
+       });
        
        // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
        let tss = trainingResult.tss || 0;
@@ -232,6 +255,7 @@ async function saveTrainingResult(extra = {}) {
            
            // TSS 계산: (시간(시간) * IF^2 * 100)
            tss = (elapsedSec / 3600) * (IF * IF) * 100;
+           console.log('[saveTrainingResult] TSS 계산 (trainingMetrics 사용):', { elapsedSec, np, IF, tss });
          }
        }
        
@@ -248,12 +272,19 @@ async function saveTrainingResult(extra = {}) {
          const IF = userFtp > 0 ? (np / userFtp) : 0;
          
          // TSS 계산: (시간(시간) * IF^2 * 100)
-         tss = (totalSeconds / 3600) * (IF * IF) * 100;
+         // totalSeconds가 0이면 duration_min을 사용
+         const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
+         tss = (timeForTss / 3600) * (IF * IF) * 100;
+         console.log('[saveTrainingResult] TSS 계산 (대체 계산):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
        }
        
        // 값 반올림
        tss = Math.round(tss * 100) / 100;
        np = Math.round(np * 10) / 10;
+       
+       // 최소값 보장 (0보다 작으면 0)
+       tss = Math.max(0, tss);
+       np = Math.max(0, np);
        
        // 현재 사용자 ID 가져오기
        const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
@@ -275,23 +306,62 @@ async function saveTrainingResult(extra = {}) {
        };
        
        console.log('[saveTrainingResult] 📅 스케줄 결과 저장 시도:', scheduleResultData);
+       console.log('[saveTrainingResult] 세션 데이터 확인:', {
+         startTime: trainingResult.startTime,
+         endTime: trainingResult.endTime,
+         powerDataCount: trainingResult.powerData?.length || 0,
+         hrDataCount: trainingResult.hrData?.length || 0
+       });
        
        // scheduleDayId가 null인 경우 빈 문자열로 전송 (Code.gs에서 null로 처리)
        const scheduleDayIdParam = scheduleDayId ? encodeURIComponent(scheduleDayId) : '';
        
-       const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${scheduleDayIdParam}&userId=${scheduleResultData.userId || ''}&actualWorkoutId=${scheduleResultData.actualWorkoutId || ''}&status=${scheduleResultData.status}&duration_min=${scheduleResultData.duration_min}&avg_power=${scheduleResultData.avg_power}&np=${scheduleResultData.np}&tss=${scheduleResultData.tss}&hr_avg=${scheduleResultData.hr_avg}&rpe=${scheduleResultData.rpe}`;
+       // URL 파라미터 검증 및 로깅
+       const urlParams = {
+         action: 'saveScheduleResult',
+         scheduleDayId: scheduleDayIdParam,
+         userId: scheduleResultData.userId || '',
+         actualWorkoutId: scheduleResultData.actualWorkoutId || '',
+         status: scheduleResultData.status,
+         duration_min: scheduleResultData.duration_min,
+         avg_power: scheduleResultData.avg_power,
+         np: scheduleResultData.np,
+         tss: scheduleResultData.tss,
+         hr_avg: scheduleResultData.hr_avg,
+         rpe: scheduleResultData.rpe
+       };
        
-       const scheduleResponse = await fetch(scheduleUrl);
-       const scheduleResult = await scheduleResponse.json();
+       console.log('[saveTrainingResult] URL 파라미터:', urlParams);
        
-       if (scheduleResult.success) {
-         console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공');
-         // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
-         if (window.currentScheduleDayId) {
-           window.currentScheduleDayId = null;
+       const scheduleUrl = `${ensureBaseUrl()}?action=saveScheduleResult&scheduleDayId=${scheduleDayIdParam}&userId=${encodeURIComponent(urlParams.userId)}&actualWorkoutId=${encodeURIComponent(urlParams.actualWorkoutId)}&status=${encodeURIComponent(urlParams.status)}&duration_min=${urlParams.duration_min}&avg_power=${urlParams.avg_power}&np=${urlParams.np}&tss=${urlParams.tss}&hr_avg=${urlParams.hr_avg}&rpe=${urlParams.rpe}`;
+       
+       console.log('[saveTrainingResult] 저장 URL:', scheduleUrl);
+       
+       try {
+         const scheduleResponse = await fetch(scheduleUrl);
+         
+         if (!scheduleResponse.ok) {
+           const errorText = await scheduleResponse.text();
+           console.error('[saveTrainingResult] HTTP 오류:', scheduleResponse.status, errorText);
+           throw new Error(`HTTP ${scheduleResponse.status}: ${errorText}`);
          }
-       } else {
-         console.warn('[saveTrainingResult] ⚠️ 스케줄 결과 저장 실패:', scheduleResult.error);
+         
+         const scheduleResult = await scheduleResponse.json();
+         console.log('[saveTrainingResult] 서버 응답:', scheduleResult);
+         
+         if (scheduleResult.success) {
+           console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공, ID:', scheduleResult.id);
+           // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
+           if (window.currentScheduleDayId) {
+             window.currentScheduleDayId = null;
+           }
+         } else {
+           console.error('[saveTrainingResult] ⚠️ 스케줄 결과 저장 실패:', scheduleResult.error);
+           throw new Error(scheduleResult.error || 'Unknown error');
+         }
+       } catch (fetchError) {
+         console.error('[saveTrainingResult] ❌ fetch 오류:', fetchError);
+         throw fetchError;
        }
      } catch (scheduleError) {
        console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
@@ -631,14 +701,33 @@ async function saveTrainingResult(extra = {}) {
 
   function calculateSessionStats() {
     const session = state.currentTrainingSession;
-    if (!session || !session.powerData?.length) {
+    
+    // startTime과 endTime으로 시간 계산 (powerData가 없어도 가능)
+    const startTime = session.startTime ? new Date(session.startTime) : null;
+    const endTime = session.endTime ? new Date(session.endTime) : null;
+    
+    // powerData가 없으면 startTime의 첫 번째 데이터 시간 사용
+    let actualStartTime = startTime;
+    if (!actualStartTime && session.powerData && session.powerData.length > 0) {
+      const firstPowerData = session.powerData[0];
+      if (firstPowerData && firstPowerData.t) {
+        actualStartTime = new Date(firstPowerData.t);
+      }
+    }
+    
+    const actualEndTime = endTime || new Date();
+    const totalMinutes = actualStartTime ? (actualEndTime - actualStartTime) / (1000 * 60) : 0;
+    
+    // powerData가 없으면 기본값 반환 (하지만 시간은 계산)
+    if (!session || !session.powerData || session.powerData.length === 0) {
+      console.warn('[calculateSessionStats] powerData가 없습니다. 기본값 반환.');
       return {
         avgPower: 0,
         maxPower: 0,
         avgHR: 0,
         calories: 0,
         achievement: 0,
-        totalTime: 0
+        totalTime: Math.max(0, Math.round(totalMinutes))
       };
     }
 
@@ -650,9 +739,6 @@ async function saveTrainingResult(extra = {}) {
     const avgHR = hrValues.length ? Math.round(avg(hrValues)) : 0;
     
     // 칼로리 계산 (간단한 공식: 평균파워 * 시간(분) * 0.06)
-    const startTime = session.startTime ? new Date(session.startTime) : null;
-    const endTime = session.endTime ? new Date(session.endTime) : new Date();
-    const totalMinutes = startTime ? (endTime - startTime) / (1000 * 60) : 0;
     const calories = Math.round(avgPower * totalMinutes * 0.06);
     
     // 달성도 계산 (세그먼트별 목표 대비 실제 파워 비율의 평균)
@@ -667,13 +753,24 @@ async function saveTrainingResult(extra = {}) {
       totalAchievement = achievements.length ? Math.round(avg(achievements)) : 0;
     }
 
+    console.log('[calculateSessionStats] 계산 결과:', {
+      avgPower,
+      maxPower,
+      avgHR,
+      calories,
+      achievement: totalAchievement,
+      totalTime: Math.round(totalMinutes),
+      powerDataCount: session.powerData.length,
+      hrDataCount: session.hrData?.length || 0
+    });
+
     return {
       avgPower,
       maxPower,
       avgHR,
       calories,
       achievement: totalAchievement,
-      totalTime: Math.round(totalMinutes)
+      totalTime: Math.max(0, Math.round(totalMinutes))
     };
   }
 
