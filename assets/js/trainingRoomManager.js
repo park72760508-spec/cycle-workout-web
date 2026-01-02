@@ -59,8 +59,32 @@ async function loadTrainingRooms() {
       return;
     }
 
-    // 목록 렌더링 (async 함수이므로 await 사용)
-    await renderTrainingRoomList(trainingRoomList);
+    // 사용자 목록 가져오기 (Users 테이블에서)
+    let users = [];
+    try {
+      if (typeof window.apiGetUsers === 'function') {
+        const usersResult = await window.apiGetUsers();
+        if (usersResult && usersResult.success && usersResult.items) {
+          users = usersResult.items;
+          window.users = users; // 전역 변수에 저장
+          console.log('[Training Room] 사용자 목록 로드 성공:', users.length, '명');
+        }
+      } else if (typeof apiGetUsers === 'function') {
+        const usersResult = await apiGetUsers();
+        if (usersResult && usersResult.success && usersResult.items) {
+          users = usersResult.items;
+          window.users = users; // 전역 변수에 저장
+          console.log('[Training Room] 사용자 목록 로드 성공:', users.length, '명');
+        }
+      } else {
+        console.warn('[Training Room] apiGetUsers 함수를 찾을 수 없습니다.');
+      }
+    } catch (userError) {
+      console.error('[Training Room] 사용자 목록 로드 오류:', userError);
+    }
+
+    // 목록 렌더링 (사용자 목록과 함께)
+    renderTrainingRoomList(trainingRoomList, users);
   } catch (error) {
     console.error('[Training Room] 목록 로드 오류:', error);
     listContainer.innerHTML = `
@@ -73,40 +97,41 @@ async function loadTrainingRooms() {
 
 /**
  * Training Room 목록 렌더링
+ * @param {Array} rooms - Training Room 목록
+ * @param {Array} users - 사용자 목록 (옵션)
  */
-async function renderTrainingRoomList(rooms) {
+function renderTrainingRoomList(rooms, users = []) {
   const listContainer = document.getElementById('trainingRoomList');
   if (!listContainer) return;
 
-  // 사용자 목록 가져오기 (window.users, window.userProfiles, 또는 API 호출)
-  let users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
-  
-  // 사용자 목록이 없으면 API로 가져오기
-  if (users.length === 0 && typeof apiGetUsers === 'function') {
-    try {
-      const result = await apiGetUsers();
-      if (result && result.success && result.items) {
-        users = result.items;
-        // 전역 변수에도 저장
-        window.users = users;
-      }
-    } catch (error) {
-      console.warn('[Training Room] 사용자 목록 로드 실패:', error);
-    }
+  // 사용자 목록이 파라미터로 전달되지 않았으면 전역 변수에서 가져오기
+  if (!users || users.length === 0) {
+    users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
   }
 
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
     
-    // user_id로 코치 이름 찾기
+    // user_id로 코치 이름 찾기 (Users 테이블의 id와 매칭)
     const userId = room.user_id || room.userId;
-    const coach = userId && users.length > 0 ? users.find(u => String(u.id) === String(userId)) : null;
-    const coachName = coach ? coach.name : '';
+    let coachName = '';
     
-    // 디버깅 로그 (개발용)
-    if (userId && !coachName) {
-      console.log(`[Training Room] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+    if (userId && users.length > 0) {
+      const coach = users.find(u => {
+        const userIdStr = String(userId);
+        const userStr = String(u.id || '');
+        return userIdStr === userStr;
+      });
+      coachName = coach ? (coach.name || '') : '';
+      
+      // 디버깅 로그
+      if (!coachName && userId) {
+        console.log(`[Training Room] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+        if (users.length > 0) {
+          console.log('[Training Room] 사용자 ID 목록:', users.map(u => u.id).slice(0, 5));
+        }
+      }
     }
     
     return `
@@ -714,8 +739,32 @@ async function loadTrainingRoomsForModal() {
       return;
     }
 
-    // 목록 렌더링
-    renderTrainingRoomListForModal(trainingRoomList);
+    // 사용자 목록 가져오기 (Users 테이블에서)
+    let users = [];
+    try {
+      if (typeof window.apiGetUsers === 'function') {
+        const usersResult = await window.apiGetUsers();
+        if (usersResult && usersResult.success && usersResult.items) {
+          users = usersResult.items;
+          window.users = users; // 전역 변수에 저장
+          console.log('[Training Room Modal] 사용자 목록 로드 성공:', users.length, '명');
+        }
+      } else if (typeof apiGetUsers === 'function') {
+        const usersResult = await apiGetUsers();
+        if (usersResult && usersResult.success && usersResult.items) {
+          users = usersResult.items;
+          window.users = users; // 전역 변수에 저장
+          console.log('[Training Room Modal] 사용자 목록 로드 성공:', users.length, '명');
+        }
+      } else {
+        console.warn('[Training Room Modal] apiGetUsers 함수를 찾을 수 없습니다.');
+      }
+    } catch (userError) {
+      console.error('[Training Room Modal] 사용자 목록 로드 오류:', userError);
+    }
+
+    // 목록 렌더링 (사용자 목록과 함께)
+    renderTrainingRoomListForModal(trainingRoomList, users);
   } catch (error) {
     console.error('[Training Room Modal] 목록 로드 오류:', error);
     listContainer.innerHTML = `
@@ -728,40 +777,38 @@ async function loadTrainingRoomsForModal() {
 
 /**
  * 모달용 Training Room 목록 렌더링
+ * @param {Array} rooms - Training Room 목록
+ * @param {Array} users - 사용자 목록 (옵션)
  */
-async function renderTrainingRoomListForModal(rooms) {
+function renderTrainingRoomListForModal(rooms, users = []) {
   const listContainer = document.getElementById('trainingRoomModalList');
   if (!listContainer) return;
 
-  // 사용자 목록 가져오기 (window.users, window.userProfiles, 또는 API 호출)
-  let users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
-  
-  // 사용자 목록이 없으면 API로 가져오기
-  if (users.length === 0 && typeof apiGetUsers === 'function') {
-    try {
-      const result = await apiGetUsers();
-      if (result && result.success && result.items) {
-        users = result.items;
-        // 전역 변수에도 저장
-        window.users = users;
-      }
-    } catch (error) {
-      console.warn('[Training Room Modal] 사용자 목록 로드 실패:', error);
-    }
+  // 사용자 목록이 파라미터로 전달되지 않았으면 전역 변수에서 가져오기
+  if (!users || users.length === 0) {
+    users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
   }
 
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
     
-    // user_id로 코치 이름 찾기
+    // user_id로 코치 이름 찾기 (Users 테이블의 id와 매칭)
     const userId = room.user_id || room.userId;
-    const coach = userId && users.length > 0 ? users.find(u => String(u.id) === String(userId)) : null;
-    const coachName = coach ? coach.name : '';
+    let coachName = '';
     
-    // 디버깅 로그 (개발용)
-    if (userId && !coachName) {
-      console.log(`[Training Room Modal] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+    if (userId && users.length > 0) {
+      const coach = users.find(u => {
+        const userIdStr = String(userId);
+        const userStr = String(u.id || '');
+        return userIdStr === userStr;
+      });
+      coachName = coach ? (coach.name || '') : '';
+      
+      // 디버깅 로그
+      if (!coachName && userId) {
+        console.log(`[Training Room Modal] Coach를 찾을 수 없음 - user_id: ${userId}, users 배열 길이: ${users.length}`);
+      }
     }
     
     return `
