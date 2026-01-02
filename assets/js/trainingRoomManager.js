@@ -497,7 +497,8 @@ async function renderPlayerList() {
     tracks.push({
       trackNumber: i,
       userId: null,
-      userName: null
+      userName: null,
+      equipment: null // 장비 정보 필드 추가
     });
   }
 
@@ -539,8 +540,9 @@ async function renderPlayerList() {
             if (track) {
               track.userId = apiTrack.userId || null;
               track.userName = apiTrack.userName || null;
+              track.equipment = apiTrack.equipment || null; // 장비 정보 추가
               if (track.userName) {
-                console.log(`[Player List] 트랙 ${trackNumber} 업데이트: ${track.userName}${track.userId ? ` (ID: ${track.userId})` : ' (ID: 없음)'}`);
+                console.log(`[Player List] 트랙 ${trackNumber} 업데이트: ${track.userName}${track.userId ? ` (ID: ${track.userId})` : ' (ID: 없음)'}${track.equipment ? ` [장비: ${track.equipment}]` : ''}`);
               }
             }
           }
