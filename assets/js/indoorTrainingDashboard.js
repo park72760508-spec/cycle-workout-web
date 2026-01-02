@@ -1559,11 +1559,12 @@ function showPairingTab(tabName) {
   if (tabName === 'user') {
     setTimeout(() => {
       const nameInput = document.getElementById('pairingUserNameSearch');
+      const resultEl = document.getElementById('pairingUserSearchResult');
       if (nameInput) {
         nameInput.focus();
-        // 초기 로드 시 전체 사용자 목록 표시
-        if (typeof filterUsersByNameForPairing === 'function') {
-          filterUsersByNameForPairing();
+        // 초기 로드 시 검색어가 없으면 목록을 비워둠 (검색 후에만 표시)
+        if (resultEl && !nameInput.value.trim()) {
+          resultEl.innerHTML = '';
         }
       }
     }, 100);
@@ -1595,8 +1596,8 @@ async function searchUserByNameForPairing() {
   const searchName = nameInput.value.trim();
   
   if (!searchName) {
-    // 이름이 없으면 필터링된 목록 표시 (전체 목록)
-    filterUsersByNameForPairing();
+    // 이름이 없으면 목록 비우기 (검색 후에만 표시)
+    resultEl.innerHTML = '';
     return;
   }
   
@@ -1658,14 +1659,17 @@ async function filterUsersByNameForPairing() {
     return;
   }
   
-  // 이름으로 필터링
-  let filteredUsers = allUsers;
-  if (searchTerm) {
-    filteredUsers = allUsers.filter(user => {
-      const name = (user.name || '').toLowerCase();
-      return name.includes(searchTerm);
-    });
+  // 검색어가 없으면 목록을 비워둠 (검색 후에만 표시)
+  if (!searchTerm) {
+    resultEl.innerHTML = '';
+    return;
   }
+  
+  // 이름으로 필터링
+  let filteredUsers = allUsers.filter(user => {
+    const name = (user.name || '').toLowerCase();
+    return name.includes(searchTerm);
+  });
   
   if (filteredUsers.length === 0) {
     resultEl.innerHTML = `
