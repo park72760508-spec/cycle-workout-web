@@ -1017,32 +1017,48 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const mascotX = padding.left + (progressRatio * chartWidth);
     const mascotY = padding.top + chartHeight; // X축 라인 Y 위치
     
-    // 마스코트 크기 (X축 폰트 크기의 2배)
+    // 마스코트 크기 (X축 폰트 크기의 2배에서 50% 축소)
     const timeFontSize = 8; // individualSegmentGraph의 timeFontSize
-    const mascotSize = timeFontSize * 2; // 16px
+    const mascotSize = timeFontSize * 2 * 0.5; // 8px (50% 축소)
     const mascotRadius = mascotSize / 2;
     
-    // 펄스 애니메이션 효과
-    const pulsePhase = (Date.now() / 1000) % 2; // 2초 주기
-    const pulseIntensity = 0.5 + 0.5 * Math.sin(pulsePhase * Math.PI);
-    const pulseScale = 1 + (pulseIntensity * 0.3); // 1.0 ~ 1.3 배율
+    // 펄스 애니메이션 효과 (원 테두리에서 퍼져나가는 효과)
+    const currentTime = Date.now() / 1000;
+    const pulseDuration = 1.5; // 펄스 한 사이클 시간 (초)
+    const pulsePhase = currentTime % pulseDuration;
+    const normalizedPhase = pulsePhase / pulseDuration; // 0 ~ 1
     
     // 마스코트 그리기
     ctx.save();
     
-    // 펄스 효과 (외부 빨간색 원)
-    ctx.beginPath();
-    ctx.arc(mascotX, mascotY, mascotRadius * pulseScale, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(239, 68, 68, ${0.3 * pulseIntensity})`;
-    ctx.fill();
+    // 원 테두리에서 퍼져나가는 흰색 펄스 효과 (여러 개의 원)
+    const pulseCount = 3; // 동시에 표시될 펄스 원의 개수
+    for (let i = 0; i < pulseCount; i++) {
+      const pulseOffset = (i / pulseCount) * pulseDuration;
+      const pulseTime = (pulsePhase + pulseOffset) % pulseDuration;
+      const pulseNormalized = pulseTime / pulseDuration;
+      
+      // 펄스가 퍼져나가는 크기 (원 테두리에서 시작하여 점점 커짐)
+      const pulseRadius = mascotRadius + (pulseNormalized * mascotRadius * 2); // 원 테두리에서 3배까지 확장
+      
+      // 펄스 투명도 (시작할 때는 불투명, 끝날 때는 투명)
+      const pulseAlpha = 1 - pulseNormalized;
+      
+      // 흰색 펄스 원 그리기
+      ctx.beginPath();
+      ctx.arc(mascotX, mascotY, pulseRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.8})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     
     // 네온 빛 효과 (흰색 외곽)
     ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-    ctx.shadowBlur = 8 + (4 * pulseIntensity);
+    ctx.shadowBlur = 6;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     
-    // 흰색 네온 외곽 원
+    // 흰색 네온 외곽 원 (메인 테두리)
     ctx.beginPath();
     ctx.arc(mascotX, mascotY, mascotRadius, 0, Math.PI * 2);
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
@@ -1050,7 +1066,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.stroke();
     
     // 내부 네온 효과 (더 강한)
-    ctx.shadowBlur = 12 + (6 * pulseIntensity);
+    ctx.shadowBlur = 8;
     ctx.lineWidth = 1.5;
     ctx.stroke();
     
@@ -1062,12 +1078,6 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.beginPath();
     ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
     ctx.fillStyle = '#ef4444'; // 빨간색
-    ctx.fill();
-    
-    // 빨간색 펄스 효과 (내부)
-    ctx.beginPath();
-    ctx.arc(mascotX, mascotY, mascotRadius * 0.85 * pulseScale, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(239, 68, 68, ${0.4 * pulseIntensity})`;
     ctx.fill();
     
     ctx.restore();
