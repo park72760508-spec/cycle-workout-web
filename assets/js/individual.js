@@ -157,12 +157,14 @@ let currentSegmentIndex = -1;
 let previousTrainingState = null; // 이전 훈련 상태 추적
 let currentUserIdForSession = null; // 세션에 사용할 사용자 ID
 let lastWorkoutId = null; // 마지막 워크아웃 ID
+window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
 
 db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
         // 훈련 상태 변화 감지 및 세션 관리
         const currentState = status.state || 'idle';
+        window.currentTrainingState = currentState; // 전역 변수에 저장
         
         // 훈련 시작 감지 (idle/paused -> running)
         if (previousTrainingState !== 'running' && currentState === 'running') {
@@ -431,11 +433,29 @@ function updateTimer(status) {
         const totalSeconds = status.elapsedTime || 0;
         timerEl.innerText = formatHMS(totalSeconds); // hh:mm:ss 형식
         timerEl.style.color = '#00d4aa'; // 실행중 색상
+        
+        // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
+        if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
+            window.lastElapsedTime = status.elapsedTime;
+        }
+        
+        // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트)
+        if (window.currentWorkout && window.currentWorkout.segments) {
+            const currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+            updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+        }
     } else if (status.state === 'paused') {
         timerEl.style.color = '#ffaa00'; // 일시정지 색상
     } else {
         timerEl.innerText = "00:00:00";
         timerEl.style.color = '#fff';
+        
+        // 훈련이 종료되거나 시작 전이면 마스코트를 0 위치로
+        if (window.currentWorkout && window.currentWorkout.segments) {
+            window.lastElapsedTime = 0;
+            const currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+            updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+        }
     }
 }
 
@@ -850,6 +870,8 @@ function logCurrentSegmentInfo() {
 }
 
 // 세그먼트 그래프 업데이트 함수
+let mascotAnimationInterval = null; // 마스코트 애니메이션 인터벌
+
 function updateSegmentGraph(segments, currentSegmentIndex = -1) {
     if (!segments || segments.length === 0) return;
     
@@ -876,8 +898,9 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
                 return;
             }
             
-            // 그래프 그리기
-            drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph');
+            // 그래프 그리기 (경과시간 전달)
+            const elapsedTime = window.lastElapsedTime || 0;
+            drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
         };
         
         // DOM이 준비될 때까지 대기 후 그리기
@@ -888,6 +911,34 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
         } else {
             // DOM이 이미 로드되었으면 바로 실행 (약간의 지연으로 레이아웃 안정화)
             setTimeout(drawGraph, 150);
+        }
+        
+        // 마스코트 펄스 애니메이션을 위한 주기적 그래프 재그리기 (훈련 중일 때만)
+        if (window.currentTrainingState === 'running') {
+            // 기존 인터벌이 있으면 제거
+            if (mascotAnimationInterval) {
+                clearInterval(mascotAnimationInterval);
+            }
+            
+            // 100ms마다 그래프를 다시 그려서 펄스 애니메이션 효과
+            mascotAnimationInterval = setInterval(() => {
+                if (window.currentWorkout && window.currentWorkout.segments && window.currentTrainingState === 'running') {
+                    const elapsedTime = window.lastElapsedTime || 0;
+                    drawSegmentGraph(window.currentWorkout.segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
+                } else {
+                    // 훈련이 종료되면 애니메이션 중지
+                    if (mascotAnimationInterval) {
+                        clearInterval(mascotAnimationInterval);
+                        mascotAnimationInterval = null;
+                    }
+                }
+            }, 100);
+        } else {
+            // 훈련이 실행 중이 아니면 애니메이션 중지
+            if (mascotAnimationInterval) {
+                clearInterval(mascotAnimationInterval);
+                mascotAnimationInterval = null;
+            }
         }
     } else {
         console.warn('[Individual] drawSegmentGraph 함수를 찾을 수 없습니다.');

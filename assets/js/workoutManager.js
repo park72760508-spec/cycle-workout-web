@@ -1004,6 +1004,74 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     );
   }
   
+  // 개인 대시보드 마스코트 그리기
+  if (canvasId === 'individualSegmentGraph') {
+    // 경과시간 가져오기 (함수 파라미터 또는 전역 변수)
+    const currentElapsedTime = elapsedTime !== null ? elapsedTime : (window.lastElapsedTime || 0);
+    
+    // 경과시간/총시간 비율 계산
+    const progressRatio = totalSeconds > 0 ? Math.min(1, Math.max(0, currentElapsedTime / totalSeconds)) : 0;
+    
+    // 마스코트 X 위치 계산 (X축 라인 중앙)
+    const mascotX = padding.left + (progressRatio * chartWidth);
+    const mascotY = padding.top + chartHeight; // X축 라인 Y 위치
+    
+    // 마스코트 크기 (X축 폰트 크기의 2배)
+    const timeFontSize = 8; // individualSegmentGraph의 timeFontSize
+    const mascotSize = timeFontSize * 2; // 16px
+    const mascotRadius = mascotSize / 2;
+    
+    // 펄스 애니메이션 효과
+    const pulsePhase = (Date.now() / 1000) % 2; // 2초 주기
+    const pulseIntensity = 0.5 + 0.5 * Math.sin(pulsePhase * Math.PI);
+    const pulseScale = 1 + (pulseIntensity * 0.3); // 1.0 ~ 1.3 배율
+    
+    // 마스코트 그리기
+    ctx.save();
+    
+    // 펄스 효과 (외부 빨간색 원)
+    ctx.beginPath();
+    ctx.arc(mascotX, mascotY, mascotRadius * pulseScale, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(239, 68, 68, ${0.3 * pulseIntensity})`;
+    ctx.fill();
+    
+    // 네온 빛 효과 (흰색 외곽)
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
+    ctx.shadowBlur = 8 + (4 * pulseIntensity);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    // 흰색 네온 외곽 원
+    ctx.beginPath();
+    ctx.arc(mascotX, mascotY, mascotRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // 내부 네온 효과 (더 강한)
+    ctx.shadowBlur = 12 + (6 * pulseIntensity);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    
+    // 그림자 초기화
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    
+    // 메인 빨간색 원
+    ctx.beginPath();
+    ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
+    ctx.fillStyle = '#ef4444'; // 빨간색
+    ctx.fill();
+    
+    // 빨간색 펄스 효과 (내부)
+    ctx.beginPath();
+    ctx.arc(mascotX, mascotY, mascotRadius * 0.85 * pulseScale, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(239, 68, 68, ${0.4 * pulseIntensity})`;
+    ctx.fill();
+    
+    ctx.restore();
+  }
+  
   // 축 라벨 (개인 대시보드는 제거)
   if (canvasId !== 'individualSegmentGraph') {
     // 개인 대시보드가 아닌 경우에만 축 라벨 표시
