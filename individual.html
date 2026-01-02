@@ -669,6 +669,13 @@
                 // 이미 생성되어 있으면 재생성하지 않음
                 if (wakeLockVideo) return;
                 
+                // 훈련 진행 중일 때만 비디오 트릭 활성화
+                const isTrainingRunning = window.currentTrainingState === 'running';
+                if (!isTrainingRunning) {
+                    console.log('[Video Wake Lock] 훈련 진행 중이 아니므로 비디오 트릭 비활성화');
+                    return;
+                }
+                
                 // Canvas로 최소 크기의 비디오 스트림 생성
                 const canvas = document.createElement('canvas');
                 canvas.width = 2;
@@ -743,30 +750,38 @@
             }
         }
         
-        // 페이지 가시성 변경 시 재요청
+        // 페이지 가시성 변경 시 재요청 (훈련 진행 중일 때만)
         document.addEventListener('visibilitychange', async () => {
             if (document.visibilityState === 'visible') {
-                // 페이지가 다시 보이면 Wake Lock 재요청
-                if (wakeLockSupported && !wakeLock) {
-                    await requestWakeLock();
-                }
-                // 비디오 트릭도 재시작
-                if (wakeLockVideo && wakeLockVideo.paused) {
-                    wakeLockVideo.play().catch(err => {
-                        console.warn('[Video Wake Lock] 재시작 실패:', err);
-                    });
+                // 훈련 진행 중일 때만 Wake Lock 재요청
+                const isTrainingRunning = window.currentTrainingState === 'running';
+                if (isTrainingRunning) {
+                    // 페이지가 다시 보이면 Wake Lock 재요청
+                    if (wakeLockSupported && !wakeLock) {
+                        await requestWakeLock();
+                    }
+                    // 비디오 트릭도 재시작
+                    if (wakeLockVideo && wakeLockVideo.paused) {
+                        wakeLockVideo.play().catch(err => {
+                            console.warn('[Video Wake Lock] 재시작 실패:', err);
+                        });
+                    }
                 }
             }
         });
         
-        // 페이지 로드 시 화면 잠금 방지 시작
+        // 페이지 로드 시 화면 잠금 방지 시작 (훈련 진행 중일 때만)
         document.addEventListener('DOMContentLoaded', () => {
             // 사용자 상호작용 후에만 활성화 (브라우저 정책)
             const activateWakeLock = () => {
-                requestWakeLock();
+                // 훈련 진행 중일 때만 활성화
+                const isTrainingRunning = window.currentTrainingState === 'running';
+                if (isTrainingRunning) {
+                    requestWakeLock();
+                }
             };
             
-            // 첫 터치/클릭 시 활성화
+            // 첫 터치/클릭 시 활성화 (훈련 진행 중일 때만)
             document.addEventListener('touchstart', activateWakeLock, { once: true, passive: true });
             document.addEventListener('click', activateWakeLock, { once: true });
             document.addEventListener('pointerdown', activateWakeLock, { once: true, passive: true });
