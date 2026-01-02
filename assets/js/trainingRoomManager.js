@@ -220,11 +220,32 @@ async function selectTrainingRoom(roomId) {
   // 선택된 Training Room 정보 표시
   const selectedSection = document.getElementById('selectedTrainingRoomSection');
   const selectedTitle = document.getElementById('selectedTrainingRoomTitle');
+  const selectedCoach = document.getElementById('selectedTrainingRoomCoach');
   const btnPlayer = document.getElementById('btnPlayer');
   const btnCoach = document.getElementById('btnCoach');
 
   if (selectedSection && selectedTitle) {
     selectedTitle.textContent = room.title;
+    
+    // Coach 정보 표시 (user_id 활용)
+    if (selectedCoach) {
+      // 사용자 목록 가져오기 (window.users 또는 window.userProfiles)
+      const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+      
+      // user_id로 코치 이름 찾기
+      const userId = room.user_id || room.userId;
+      const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
+      const coachName = coach ? coach.name : '';
+      
+      if (coachName) {
+        selectedCoach.textContent = `Coach : ${coachName}님`;
+        selectedCoach.style.display = 'block';
+      } else {
+        selectedCoach.textContent = '';
+        selectedCoach.style.display = 'none';
+      }
+    }
+    
     selectedSection.style.display = 'block';
   }
 
