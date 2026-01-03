@@ -498,7 +498,10 @@ async function renderPlayerList() {
       trackNumber: i,
       userId: null,
       userName: null,
-      equipment: null // 장비 정보 필드 추가
+      weight: null,
+      ftp: null,
+      gear: null,
+      brake: null
     });
   }
 
@@ -519,69 +522,69 @@ async function renderPlayerList() {
     }
   }
 
-  // Training Room의 트랙별 사용자 정보 가져오기
+  // Training Room의 트랙별 사용자 정보 및 디바이스 정보 가져오기
   if (roomId) {
     console.log('[Player List] 트랙 정보 로드 시작, roomId:', roomId);
     try {
-      const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
-      console.log('[Player List] API 호출 URL:', url);
-      const response = await fetch(url);
-      const result = await response.json();
-      
-      console.log('[Player List] API 응답 전체:', JSON.stringify(result, null, 2));
-      console.log('[Player List] API 응답 success:', result.success);
-      console.log('[Player List] API 응답 tracks:', result.tracks);
-      console.log('[Player List] API 응답 tracks 타입:', Array.isArray(result.tracks) ? 'Array' : typeof result.tracks);
-      
-      if (result.success && result.tracks && Array.isArray(result.tracks)) {
-        console.log('[Player List] 트랙 데이터 수:', result.tracks.length);
-        console.log('[Player List] 트랙 데이터 상세:', result.tracks);
+      // 1. 사용자 정보 가져오기 (API 또는 Firebase 직접)
+      if (typeof db !== 'undefined') {
+        // Firebase에서 직접 가져오기
+        const sessionId = roomId;
+        
+        // users 정보 가져오기
+        const usersRef = db.ref(`sessions/${sessionId}/users`);
+        const usersSnapshot = await usersRef.once('value');
+        const usersData = usersSnapshot.val() || {};
+        
+        // devices 정보 가져오기
+        const devicesRef = db.ref(`sessions/${sessionId}/devices`);
+        const devicesSnapshot = await devicesRef.once('value');
+        const devicesData = devicesSnapshot.val() || {};
+        
+        console.log('[Player List] Firebase users 데이터:', usersData);
+        console.log('[Player List] Firebase devices 데이터:', devicesData);
         
         // 트랙 정보 업데이트
-        result.tracks.forEach((apiTrack, index) => {
-          console.log(`[Player List] Processing track ${index + 1}:`, apiTrack);
-          const trackNumber = parseInt(apiTrack.trackNumber, 10);
-          console.log(`[Player List] Track ${index + 1} - trackNumber: ${apiTrack.trackNumber}, parsed: ${trackNumber}`);
+        for (let i = 1; i <= 10; i++) {
+          const track = tracks[i - 1];
+          const userData = usersData[i];
+          const deviceData = devicesData[i];
           
-          if (!isNaN(trackNumber) && trackNumber >= 1 && trackNumber <= 10) {
-            const track = tracks[trackNumber - 1];
-            if (track) {
-              const beforeUserId = track.userId;
-              const beforeUserName = track.userName;
-              const beforeEquipment = track.equipment;
-              
-              track.userId = apiTrack.userId || null;
-              track.userName = apiTrack.userName || null;
-              track.equipment = apiTrack.equipment || null; // 장비 정보 추가
-              
-              console.log(`[Player List] 트랙 ${trackNumber} 업데이트:`, {
-                before: { userId: beforeUserId, userName: beforeUserName, equipment: beforeEquipment },
-                after: { userId: track.userId, userName: track.userName, equipment: track.equipment },
-                apiTrack: apiTrack
-              });
-              
-              if (track.userName) {
-                console.log(`[Player List] ✅ 트랙 ${trackNumber} 사용자: ${track.userName}${track.userId ? ` (ID: ${track.userId})` : ' (ID: 없음)'}${track.equipment ? ` [장비: ${track.equipment}]` : ''}`);
-              } else {
-                console.log(`[Player List] ⚠️ 트랙 ${trackNumber} - 사용자 이름이 없음 (userId: ${track.userId}, apiTrack:`, apiTrack, ')');
-              }
-            } else {
-              console.error(`[Player List] ❌ 트랙 ${trackNumber}에 해당하는 tracks 배열 요소를 찾을 수 없음`);
-            }
-          } else {
-            console.warn(`[Player List] ⚠️ 트랙 번호가 유효하지 않음: ${apiTrack.trackNumber} (parsed: ${trackNumber})`);
+          if (userData) {
+            track.userId = userData.userId || null;
+            track.userName = userData.userName || null;
+            track.weight = userData.weight || null;
+            track.ftp = userData.ftp || null;
           }
-        });
-        console.log('[Player List] 트랙 정보 업데이트 완료. 최종 tracks 배열:', tracks);
+          
+          if (deviceData) {
+            track.gear = deviceData['Gear'] || deviceData.Gear || null;
+            track.brake = deviceData['Brake'] || deviceData.Brake || null;
+          }
+        }
       } else {
-        console.error('[Player List] ❌ API 응답이 예상과 다릅니다:', {
-          success: result.success,
-          hasTracks: !!result.tracks,
-          tracksIsArray: Array.isArray(result.tracks),
-          tracksType: typeof result.tracks,
-          tracksValue: result.tracks,
-          fullResult: result
-        });
+        // API로 가져오기 (기존 방식)
+        const url = `${window.GAS_URL}?action=getTrainingRoomUsers&roomId=${roomId}`;
+        console.log('[Player List] API 호출 URL:', url);
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (result.success && result.tracks && Array.isArray(result.tracks)) {
+          result.tracks.forEach((apiTrack) => {
+            const trackNumber = parseInt(apiTrack.trackNumber, 10);
+            if (!isNaN(trackNumber) && trackNumber >= 1 && trackNumber <= 10) {
+              const track = tracks[trackNumber - 1];
+              if (track) {
+                track.userId = apiTrack.userId || null;
+                track.userName = apiTrack.userName || null;
+                track.weight = apiTrack.weight || null;
+                track.ftp = apiTrack.ftp || null;
+                track.gear = apiTrack.gear || null;
+                track.brake = apiTrack.brake || null;
+              }
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('[Player List] ❌ 트랙 정보 로드 오류:', error);
@@ -590,9 +593,6 @@ async function renderPlayerList() {
     }
   } else {
     console.warn('[Player List] ⚠️ room id를 찾을 수 없어 트랙 정보를 로드할 수 없습니다.');
-    console.log('[Player List] currentSelectedTrainingRoom:', currentSelectedTrainingRoom);
-    console.log('[Player List] window.currentTrainingRoomId:', window.currentTrainingRoomId);
-    console.log('[Player List] localStorage currentTrainingRoomId:', localStorage.getItem('currentTrainingRoomId'));
   }
 
   // Training Room id를 room 파라미터로 전달 (firebaseConfig.js에서 SESSION_ID로 사용)
@@ -638,18 +638,18 @@ async function renderPlayerList() {
     let canModify = false;
     let canParticipate = false;
     
-    if (isAdmin) {
-      // 관리자는 모든 트랙에 대해 변경/삭제/Enter 가능
+    if (isAdmin || userGrade === '1' || userGrade === 1 || userGrade === '3' || userGrade === 3) {
+      // grade=1,3 사용자는 모든 트랙에 대해 변경/삭제/Enter 가능
       canModify = true;
       canParticipate = true;
     } else if (userGrade === '2' || userGrade === 2) {
       // grade=2 사용자
       if (trackUserId && trackUserId === currentUserId) {
-        // 본인 계정으로 참가된 트랙: 변경/삭제/Enter 가능
+        // 본인 계정으로 참가된 트랙: 변경/취소/입장 버튼 활성화
         canModify = true;
         canParticipate = true;
       } else if (!hasUser && !hasMyTrack) {
-        // 사용자 없음 트랙이고, 본인 계정으로 참가된 트랙이 없으면: 참가 버튼만 활성화
+        // 사용자 없음 트랙이고, 본인 계정으로 참가된 트랙이 없으면: 신청 버튼만 활성화
         canParticipate = true;
         canModify = false;
       } else {
@@ -657,25 +657,38 @@ async function renderPlayerList() {
         canModify = false;
         canParticipate = false;
       }
-    } else {
-      // grade=1,3 사용자는 모든 트랙에 대해 변경/삭제/Enter 가능
-      canModify = true;
-      canParticipate = true;
     }
     
     const dashboardUrl = roomId 
       ? `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}&room=${roomId}`
       : `https://stelvio.ai.kr/individual.html?bike=${track.trackNumber}`;
 
-    // 장비 정보가 있으면 트랙 번호에 함께 표시
-    const trackNumberDisplay = track.equipment 
-      ? `트랙${track.trackNumber}(${escapeHtml(track.equipment)})`
-      : `트랙${track.trackNumber}`;
+    // Gear/Brake 아이콘 생성
+    let gearIcon = '';
+    let brakeIcon = '';
+    
+    if (track.gear) {
+      if (track.gear === '11단' || track.gear === '11') {
+        gearIcon = '<img src="assets/img/g11.png" alt="11단" style="width: 24px; height: 24px; margin-right: 4px; vertical-align: middle;" />';
+      } else if (track.gear === '12단' || track.gear === '12') {
+        gearIcon = '<img src="assets/img/g12.png" alt="12단" style="width: 24px; height: 24px; margin-right: 4px; vertical-align: middle;" />';
+      }
+    }
+    
+    if (track.brake) {
+      if (track.brake === '디스크' || track.brake === 'Disc') {
+        brakeIcon = '<img src="assets/img/d.png" alt="디스크" style="width: 24px; height: 24px; margin-left: 4px; vertical-align: middle;" />';
+      } else if (track.brake === '림' || track.brake === 'Rim') {
+        brakeIcon = '<img src="assets/img/r.png" alt="림" style="width: 24px; height: 24px; margin-left: 4px; vertical-align: middle;" />';
+      }
+    }
     
     return `
       <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
-        <div class="player-track-number">
-          ${trackNumberDisplay}
+        <div class="player-track-number" style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+          트랙${track.trackNumber}
+          ${gearIcon}
+          ${brakeIcon}
         </div>
         <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
           ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
@@ -1401,32 +1414,123 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
   window._allUsersForTrackSelection = users;
 
   modal.innerHTML = `
-    <div style="background: white; padding: 24px; border-radius: 8px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-      <h2 style="margin: 0 0 20px 0; font-size: 1.5em;">트랙${trackNumber} 사용자 할당</h2>
+    <div style="background: white; padding: 24px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+      <h2 style="margin: 0 0 20px 0; font-size: 1.5em;">트랙${trackNumber} 훈련 신청</h2>
       
       <!-- 이름 검색 입력 필드 -->
       <div style="margin-bottom: 20px;">
         <label style="display: block; margin-bottom: 8px; font-weight: 500;">이름 검색</label>
-        <input type="text" 
-               id="trackUserSearchInput" 
-               placeholder="이름을 입력하세요" 
-               style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
-               oninput="filterUsersForTrackSelection(${trackNumber}, '${roomId}')">
+        <div style="display: flex; gap: 8px;">
+          <input type="text" 
+                 id="trackUserSearchInput" 
+                 placeholder="이름을 입력하세요" 
+                 style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                 onkeypress="if(event.key==='Enter') searchUsersForTrackSelection(${trackNumber}, '${roomId}')">
+          <button onclick="searchUsersForTrackSelection(${trackNumber}, '${roomId}')" 
+                  id="btnSearchUsersForTrack"
+                  style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+            검색
+          </button>
+        </div>
       </div>
       
       <!-- 사용자 목록 컨테이너 -->
-      <div id="trackUserListContainer" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+      <div id="trackUserListContainer" style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
         <!-- 검색 후에만 사용자 목록이 표시됩니다 -->
       </div>
       
-      <div style="text-align: right;">
+      <!-- 선택된 사용자 표시 -->
+      <div id="selectedUserForTrack" style="display: none; margin-bottom: 20px; padding: 12px; background: #e3f2fd; border-radius: 4px; border: 2px solid #2196F3;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: bold; margin-bottom: 4px;">선택된 사용자: <span id="selectedUserNameForTrack"></span></div>
+            <div style="font-size: 0.9em; color: #666;">FTP: <span id="selectedUserFTPForTrack"></span>W | 체중: <span id="selectedUserWeightForTrack"></span>kg</div>
+          </div>
+          <span style="color: #2196F3; font-size: 24px;">✓</span>
+        </div>
+      </div>
+      
+      <!-- 디바이스 입력 필드 -->
+      <div id="deviceInputSection" style="display: none; margin-bottom: 20px;">
+        <h3 style="margin: 0 0 16px 0; font-size: 1.1em; color: #333;">디바이스 정보 입력</h3>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">스마트로라 ID</label>
+          <input type="text" 
+                 id="trackTrainerDeviceId" 
+                 placeholder="가민에 표시되는 ID값 입력" 
+                 style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                 inputmode="numeric"
+                 pattern="[0-9]*"
+                 oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">파워메터 ID</label>
+          <input type="text" 
+                 id="trackPowerMeterDeviceId" 
+                 placeholder="가민에 표시되는 ID값 입력" 
+                 style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                 inputmode="numeric"
+                 pattern="[0-9]*"
+                 oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 500;">심박계 ID</label>
+          <input type="text" 
+                 id="trackHeartRateDeviceId" 
+                 placeholder="가민에 표시되는 ID값 입력" 
+                 style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;"
+                 inputmode="numeric"
+                 pattern="[0-9]*"
+                 oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Gear</label>
+            <select id="trackGearSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <option value="">선택하세요</option>
+              <option value="11단">11단</option>
+              <option value="12단">12단</option>
+            </select>
+          </div>
+          
+          <div>
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Brake</label>
+            <select id="trackBrakeSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+              <option value="">선택하세요</option>
+              <option value="디스크">디스크</option>
+              <option value="림">림</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
         <button onclick="closeTrackUserSelectModal()" 
-                style="padding: 8px 16px; background: #ccc; border: none; border-radius: 4px; cursor: pointer;">
+                style="padding: 10px 20px; background: #ccc; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
           취소
+        </button>
+        <button onclick="saveTrackApplication(${trackNumber}, '${roomId}')" 
+                id="btnSaveTrackApplication"
+                style="display: none; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+          저장
         </button>
       </div>
     </div>
   `;
+  
+  // 전역 변수에 현재 트랙 정보 저장
+  window._currentTrackApplication = {
+    trackNumber: trackNumber,
+    roomId: roomId,
+    selectedUserId: null,
+    selectedUserName: null,
+    selectedUserFTP: null,
+    selectedUserWeight: null
+  };
 
   modal.style.display = 'flex';
   
@@ -1454,84 +1558,146 @@ function renderUserListForTrackSelection(users, trackNumber, roomId, currentUser
     return '<div style="padding: 20px; text-align: center; color: #999;">등록된 사용자가 없습니다.</div>';
   }
   
-  return users.map(user => `
-    <div class="user-select-item" 
-         data-user-id="${user.id}"
-         style="padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: ${currentUserId === String(user.id) ? '#e3f2fd' : '#fff'}; transition: all 0.2s ease;"
-         onmouseover="this.style.background='${currentUserId === String(user.id) ? '#d1ecf1' : '#f5f5f5'}'; this.style.transform='translateX(4px)';"
-         onmouseout="this.style.background='${currentUserId === String(user.id) ? '#e3f2fd' : '#fff'}'; this.style.transform='translateX(0)';"
-         onclick="selectUserForTrackWithAnimation(${trackNumber}, ${user.id}, '${escapeHtml(user.name || '')}', '${roomId}', event)">
-      <div style="font-weight: bold; margin-bottom: 4px;">${escapeHtml(user.name || '이름 없음')}</div>
-      <div style="font-size: 0.9em; color: #666;">FTP: ${user.ftp || '-'}W | 체중: ${user.weight || '-'}kg</div>
-    </div>
-  `).join('');
+  return users.map(user => {
+    const isSelected = window._currentTrackApplication && window._currentTrackApplication.selectedUserId === String(user.id);
+    return `
+      <div class="user-select-item" 
+           data-user-id="${user.id}"
+           style="padding: 12px; margin: 8px 0; border: 2px solid ${isSelected ? '#2196F3' : '#ddd'}; border-radius: 4px; cursor: pointer; background: ${isSelected ? '#e3f2fd' : '#fff'}; transition: all 0.2s ease; position: relative;"
+           onmouseover="if (!${isSelected}) { this.style.background='#f5f5f5'; this.style.transform='translateX(4px)'; }"
+           onmouseout="if (!${isSelected}) { this.style.background='#fff'; this.style.transform='translateX(0)'; }"
+           onclick="selectUserForTrackSelection(${trackNumber}, ${user.id}, '${escapeHtml(user.name || '')}', ${user.ftp || 0}, ${user.weight || 0}, '${roomId}', event)">
+        <div style="font-weight: bold; margin-bottom: 4px;">${escapeHtml(user.name || '이름 없음')}</div>
+        <div style="font-size: 0.9em; color: #666;">FTP: ${user.ftp || '-'}W | 체중: ${user.weight || '-'}kg</div>
+        ${isSelected ? '<div style="position: absolute; top: 8px; right: 8px; color: #2196F3; font-size: 20px; font-weight: bold;">✓</div>' : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 /**
- * 트랙 사용자 검색 필터링
+ * 트랙 사용자 검색 (검색 버튼 클릭 시에만 실행)
  */
-function filterUsersForTrackSelection(trackNumber, roomId) {
+async function searchUsersForTrackSelection(trackNumber, roomId) {
   const searchInput = document.getElementById('trackUserSearchInput');
   const listContainer = document.getElementById('trackUserListContainer');
+  const searchBtn = document.getElementById('btnSearchUsersForTrack');
   
   if (!searchInput || !listContainer) return;
   
-  const searchTerm = searchInput.value.trim().toLowerCase();
+  const searchTerm = searchInput.value.trim();
   const allUsers = window._allUsersForTrackSelection || [];
   
-  // 검색어가 없으면 목록을 비워둠 (검색 후에만 표시)
+  // 검색어가 없으면 목록을 비워둠
   if (!searchTerm) {
-    listContainer.innerHTML = '';
+    listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">검색어를 입력하세요.</div>';
     return;
   }
   
-  // 현재 선택된 사용자 ID 가져오기 (필요시)
-  const currentUserId = null; // 필요시 구현
+  // 검색 버튼 비활성화 및 로딩 표시
+  if (searchBtn) {
+    searchBtn.disabled = true;
+    const originalText = searchBtn.textContent;
+    searchBtn.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite;">⏳</span> 검색 중...';
+    
+    // CSS 애니메이션 추가 (이미 있으면 무시)
+    if (!document.getElementById('searchLoadingStyle')) {
+      const style = document.createElement('style');
+      style.id = 'searchLoadingStyle';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // 결과 영역에 로딩 표시
+    listContainer.innerHTML = `
+      <div style="padding: 40px; text-align: center; color: #10b981;">
+        <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 12px;"></div>
+        <p style="margin: 0; font-size: 14px;">사용자 검색 중...</p>
+      </div>
+    `;
+  }
   
-  // 검색어로 필터링
-  const filteredUsers = allUsers.filter(user => {
-    const name = (user.name || '').toLowerCase();
-    return name.includes(searchTerm);
-  });
-  
-  // 필터링된 목록 렌더링
-  if (filteredUsers.length === 0) {
-    listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">검색 결과가 없습니다.</div>';
-  } else {
-    listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, currentUserId);
+  try {
+    // 검색어로 필터링
+    const filteredUsers = allUsers.filter(user => {
+      const name = (user.name || '').toLowerCase();
+      return name.includes(searchTerm.toLowerCase());
+    });
+    
+    // 필터링된 목록 렌더링
+    if (filteredUsers.length === 0) {
+      listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">검색 결과가 없습니다.</div>';
+    } else {
+      listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, null);
+    }
+  } catch (error) {
+    console.error('[searchUsersForTrackSelection] 검색 오류:', error);
+    listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc3545;">검색 중 오류가 발생했습니다.</div>';
+  } finally {
+    // 검색 버튼 복원
+    if (searchBtn) {
+      searchBtn.disabled = false;
+      searchBtn.textContent = '검색';
+    }
   }
 }
 
 /**
- * 트랙 사용자 선택 (애니메이션 효과 포함)
+ * 트랙 사용자 선택 (체크 표시만, 자동 저장 안 함)
  */
-async function selectUserForTrackWithAnimation(trackNumber, userId, userName, roomId, event) {
-  let clickedElement = null;
+function selectUserForTrackSelection(trackNumber, userId, userName, userFTP, userWeight, roomId, event) {
+  // 선택된 사용자 정보 저장
+  window._currentTrackApplication = {
+    trackNumber: trackNumber,
+    roomId: roomId,
+    selectedUserId: String(userId),
+    selectedUserName: userName,
+    selectedUserFTP: userFTP,
+    selectedUserWeight: userWeight
+  };
   
-  // 이벤트 객체에서 클릭된 요소 찾기
-  if (event && event.target) {
-    clickedElement = event.target.closest('.user-select-item');
+  // 선택된 사용자 표시 영역 업데이트
+  const selectedUserDiv = document.getElementById('selectedUserForTrack');
+  const selectedUserNameSpan = document.getElementById('selectedUserNameForTrack');
+  const selectedUserFTPSpan = document.getElementById('selectedUserFTPForTrack');
+  const selectedUserWeightSpan = document.getElementById('selectedUserWeightForTrack');
+  const deviceInputSection = document.getElementById('deviceInputSection');
+  const saveBtn = document.getElementById('btnSaveTrackApplication');
+  
+  if (selectedUserDiv && selectedUserNameSpan && selectedUserFTPSpan && selectedUserWeightSpan) {
+    selectedUserNameSpan.textContent = userName;
+    selectedUserFTPSpan.textContent = userFTP || '-';
+    selectedUserWeightSpan.textContent = userWeight || '-';
+    selectedUserDiv.style.display = 'block';
   }
   
-  if (clickedElement) {
-    // 애니메이션 효과
-    clickedElement.style.transition = 'all 0.2s ease';
-    clickedElement.style.transform = 'scale(0.95)';
-    clickedElement.style.opacity = '0.7';
-    
-    setTimeout(async () => {
-      // 진행 중 상태 표시
-      clickedElement.style.transform = 'scale(0.98)';
-      clickedElement.style.opacity = '0.9';
-      clickedElement.style.background = '#e3f2fd';
-      clickedElement.style.cursor = 'wait';
-      
-      // 실제 선택 로직 실행
-      await selectUserForTrack(trackNumber, userId, userName, roomId);
-    }, 150);
-  } else {
-    // 애니메이션 없이 바로 실행
-    await selectUserForTrack(trackNumber, userId, userName, roomId);
+  if (deviceInputSection) {
+    deviceInputSection.style.display = 'block';
+  }
+  
+  if (saveBtn) {
+    saveBtn.style.display = 'block';
+  }
+  
+  // 사용자 목록 다시 렌더링 (체크 표시 업데이트)
+  const searchInput = document.getElementById('trackUserSearchInput');
+  const searchTerm = searchInput ? searchInput.value.trim() : '';
+  const allUsers = window._allUsersForTrackSelection || [];
+  
+  if (searchTerm) {
+    const filteredUsers = allUsers.filter(user => {
+      const name = (user.name || '').toLowerCase();
+      return name.includes(searchTerm.toLowerCase());
+    });
+    const listContainer = document.getElementById('trackUserListContainer');
+    if (listContainer) {
+      listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, null);
+    }
   }
 }
 
@@ -1676,12 +1842,20 @@ async function removeUserFromTrackInternal(trackNumber, roomId) {
 }
 
 /**
- * 트랙에 선택된 사용자 할당 실행
+ * 트랙 신청 저장 (Firebase에 users와 devices 정보 저장)
  */
-async function selectUserForTrack(trackNumber, userId, userName, roomIdParam) {
-  // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
-  let roomId = roomIdParam;
+async function saveTrackApplication(trackNumber, roomIdParam) {
+  const appData = window._currentTrackApplication;
   
+  if (!appData || !appData.selectedUserId) {
+    if (typeof showToast === 'function') {
+      showToast('사용자를 먼저 선택해주세요.', 'error');
+    }
+    return;
+  }
+  
+  // roomId 확인
+  let roomId = roomIdParam || appData.roomId;
   if (!roomId) {
     roomId = (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) 
       ? currentSelectedTrainingRoom.id 
@@ -1689,44 +1863,88 @@ async function selectUserForTrack(trackNumber, userId, userName, roomIdParam) {
   }
   
   if (!roomId) {
-    const playerListContent = document.getElementById('playerListContent');
-    if (playerListContent) {
-      roomId = playerListContent.getAttribute('data-room-id');
-    }
-  }
-  
-  if (!roomId) {
     if (typeof showToast === 'function') {
       showToast('Training Room을 먼저 선택해주세요.', 'error');
     }
-    console.error('[selectUserForTrack] roomId를 찾을 수 없습니다.');
     return;
   }
   
   roomId = String(roomId);
-
+  
+  // 디바이스 정보 읽기
+  const trainerDeviceId = document.getElementById('trackTrainerDeviceId')?.value?.trim() || '';
+  const powerMeterDeviceId = document.getElementById('trackPowerMeterDeviceId')?.value?.trim() || '';
+  const heartRateDeviceId = document.getElementById('trackHeartRateDeviceId')?.value?.trim() || '';
+  const gear = document.getElementById('trackGearSelect')?.value || '';
+  const brake = document.getElementById('trackBrakeSelect')?.value || '';
+  
+  // 저장 버튼 비활성화 및 로딩 표시
+  const saveBtn = document.getElementById('btnSaveTrackApplication');
+  const originalText = saveBtn ? saveBtn.textContent : '';
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite;">⏳</span> 저장 중...';
+    saveBtn.style.opacity = '0.7';
+    saveBtn.style.cursor = 'not-allowed';
+  }
+  
   try {
-    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${roomId}&trackNumber=${trackNumber}&userId=${userId}`;
-    const response = await fetch(url);
-    const result = await response.json();
-
-    if (result.success) {
+    // Firebase에 저장
+    if (typeof db !== 'undefined') {
+      const sessionId = roomId;
+      
+      // 1. users 정보 저장
+      const userData = {
+        userId: appData.selectedUserId,
+        userName: appData.selectedUserName,
+        weight: appData.selectedUserWeight || null,
+        ftp: appData.selectedUserFTP || null
+      };
+      
+      const userRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
+      await userRef.set(userData);
+      console.log('[saveTrackApplication] 사용자 정보 저장 완료:', userData);
+      
+      // 2. devices 정보 저장
+      const deviceData = {
+        'Smart Trainer id': trainerDeviceId || null,
+        'Power Meter id': powerMeterDeviceId || null,
+        'Heart Rate id': heartRateDeviceId || null,
+        'Gear': gear || null,
+        'Brake': brake || null
+      };
+      
+      const deviceRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
+      await deviceRef.set(deviceData);
+      console.log('[saveTrackApplication] 디바이스 정보 저장 완료:', deviceData);
+      
       if (typeof showToast === 'function') {
-        showToast(`트랙${trackNumber}에 ${userName}이(가) 할당되었습니다.`, 'success');
+        showToast(`트랙${trackNumber} 신청이 완료되었습니다.`, 'success');
       }
+      
       // 모달 닫기
       closeTrackUserSelectModal();
+      
       // Player List 다시 로드
       await renderPlayerList();
     } else {
-      if (typeof showToast === 'function') {
-        showToast('사용자 할당 실패: ' + (result.error || 'Unknown error'), 'error');
-      }
+      throw new Error('Firebase가 초기화되지 않았습니다.');
     }
   } catch (error) {
-    console.error('[selectUserForTrack] 오류:', error);
+    console.error('[saveTrackApplication] 저장 오류:', error);
     if (typeof showToast === 'function') {
-      showToast('사용자 할당 중 오류가 발생했습니다.', 'error');
+      showToast('저장 중 오류가 발생했습니다: ' + error.message, 'error');
+    }
+  } finally {
+    // 저장 버튼 복원
+    if (saveBtn) {
+      setTimeout(() => {
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText;
+        saveBtn.style.opacity = '1';
+        saveBtn.style.cursor = 'pointer';
+      }, 500);
     }
   }
 }
@@ -1896,6 +2114,9 @@ if (typeof window !== 'undefined') {
   window.selectUserForTrack = selectUserForTrack;
   window.selectUserForTrackWithAnimation = selectUserForTrackWithAnimation;
   window.filterUsersForTrackSelection = filterUsersForTrackSelection;
+  window.searchUsersForTrackSelection = searchUsersForTrackSelection;
+  window.selectUserForTrackSelection = selectUserForTrackSelection;
+  window.saveTrackApplication = saveTrackApplication;
   window.closeTrackUserSelectModal = closeTrackUserSelectModal;
   // Player List 새로고침 함수
   window.refreshPlayerList = refreshPlayerList;
