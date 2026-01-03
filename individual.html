@@ -630,10 +630,15 @@
         let videoWakeLockInterval = null;
         const wakeLockSupported = 'wakeLock' in navigator;
         
-        // iOS 및 크롬 브라우저 감지
+        // iOS, 안드로이드 및 크롬 브라우저 감지
         function isIOS() {
             const ua = navigator.userAgent || '';
             return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        
+        function isAndroid() {
+            const ua = navigator.userAgent || '';
+            return /Android/.test(ua);
         }
         
         function isChrome() {
@@ -641,11 +646,17 @@
             return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
         }
         
+        // 모바일 크롬 브라우저 감지 (iOS 또는 안드로이드)
+        function isMobileChrome() {
+            return (isIOS() || isAndroid()) && isChrome();
+        }
+        
         // Wake Lock API 사용
         async function requestWakeLock() {
-            // iOS 크롬에서는 비디오 트릭을 우선 사용 (더 안정적)
-            if (isIOS() && isChrome()) {
-                console.log('[Screen Wake Lock] iOS Chrome 감지 - 비디오 트릭 사용');
+            // 모바일 크롬(iOS/안드로이드)에서는 비디오 트릭을 우선 사용 (더 안정적)
+            if (isMobileChrome()) {
+                const deviceType = isIOS() ? 'iOS' : 'Android';
+                console.log(`[Screen Wake Lock] ${deviceType} Chrome 감지 - 비디오 트릭 사용`);
                 if (!wakeLockVideo) {
                     startVideoWakeLock();
                 }
@@ -670,8 +681,8 @@
                         }
                     });
                     
-                    // iOS에서는 Wake Lock이 성공해도 비디오 트릭도 함께 사용 (이중 보장)
-                    if (isIOS() && !wakeLockVideo) {
+                    // 모바일(iOS/안드로이드)에서는 Wake Lock이 성공해도 비디오 트릭도 함께 사용 (이중 보장)
+                    if ((isIOS() || isAndroid()) && !wakeLockVideo) {
                         startVideoWakeLock();
                     }
                 } catch (err) {
@@ -750,8 +761,8 @@
                 // 초기 재생 시도
                 playVideo();
                 
-                // iOS에서는 주기적으로 비디오 재생 상태 확인 및 재시작 (크롬 대응)
-                if (isIOS()) {
+                // 모바일(iOS/안드로이드)에서는 주기적으로 비디오 재생 상태 확인 및 재시작 (크롬 대응)
+                if (isIOS() || isAndroid()) {
                     if (videoWakeLockInterval) {
                         clearInterval(videoWakeLockInterval);
                     }
