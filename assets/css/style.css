@@ -10679,7 +10679,7 @@ line[id^="needle-"] {
   height: 24px;
   border-radius: 50%;
   background: #333333;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
