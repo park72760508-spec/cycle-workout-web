@@ -10561,6 +10561,7 @@ line[id^="needle-"] {
   padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
   margin-bottom: 0;
+  justify-content: center;
 }
 
 /* 훈련 참가 화면 로고 50% 확대 */
