@@ -714,7 +714,7 @@ async function renderPlayerList() {
       }
     }
     
-    // 디바이스 아이콘 생성 (심박계, 스마트로라, 파워메터, 기어, 브레이크는 원형 배경 포함)
+    // 디바이스 아이콘 생성 (심박계, 스마트로라, 파워메터는 원형 배경 포함, 기어/브레이크는 원형 배경 없음)
     const deviceIcons = [];
     if (track.heartRateId || track.heartRateDeviceId) {
       deviceIcons.push('<span class="device-badge-circle" title="심박계"><img src="assets/img/bpm_g.png" alt="심박계" class="device-icon" /></span>');
@@ -726,10 +726,10 @@ async function renderPlayerList() {
       deviceIcons.push('<span class="device-badge-circle" title="파워메터"><img src="assets/img/power_g.png" alt="파워메터" class="device-icon" /></span>');
     }
     if (gearIcon) {
-      deviceIcons.push(`<span class="device-badge-circle" title="기어">${gearIcon}</span>`);
+      deviceIcons.push(`<span class="device-icon-plain" title="기어">${gearIcon}</span>`);
     }
     if (brakeIcon) {
-      deviceIcons.push(`<span class="device-badge-circle" title="브레이크">${brakeIcon}</span>`);
+      deviceIcons.push(`<span class="device-icon-plain" title="브레이크">${brakeIcon}</span>`);
     }
     const deviceIconsHtml = deviceIcons.length > 0 ? deviceIcons.join('') : '';
     
