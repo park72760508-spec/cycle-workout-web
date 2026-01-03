@@ -488,10 +488,26 @@ function createPowerMeterElement(powerMeter) {
     ? 'font-size: 11px !important; color: #999999 !important; font-weight: 400 !important; text-align: left !important; opacity: 0.5 !important; cursor: not-allowed !important;'
     : 'font-size: 11px !important; color: #ffffff !important; font-weight: 400 !important; text-align: left !important; opacity: 0.8 !important; cursor: pointer !important;';
   
+  // 디바이스 아이콘 생성
+  const deviceIcons = [];
+  if (powerMeter.trainerDeviceId) {
+    deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+  }
+  if (powerMeter.deviceId || powerMeter.powerMeterDeviceId) {
+    deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+  }
+  if (powerMeter.heartRateDeviceId) {
+    deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+  }
+  const deviceIconsHtml = deviceIcons.join('');
+  
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <div style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; flex: 0 0 auto !important; min-width: 100px !important; order: 1 !important;">
-        <span class="speedometer-user-name" id="user-name-${powerMeter.id}" style="font-size: 13px !important; color: #ffffff !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important; display: ${powerMeter.userName ? 'block' : 'none'} !important;">${powerMeter.userName || ''}</span>
+        <div style="display: ${powerMeter.userName ? 'flex' : 'none'} !important; align-items: center !important; flex-wrap: wrap !important;">
+          <span class="speedometer-user-name" id="user-name-${powerMeter.id}" style="font-size: 13px !important; color: #ffffff !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important;">${powerMeter.userName || ''}</span>
+          <span id="device-icons-${powerMeter.id}" style="display: inline-flex !important; align-items: center !important; margin-left: 4px !important;">${deviceIconsHtml}</span>
+        </div>
         <span class="speedometer-pairing-name" id="pairing-name-${powerMeter.id}" style="${pairingNameStyle}" ${pairingNameOnclick}>${powerMeter.pairingName || ''}</span>
       </div>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;" ${trackButtonOnclick}>트랙${powerMeter.id}</span>
@@ -2303,8 +2319,11 @@ function clearSelectedUser() {
   // UI 업데이트
   const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
   if (userNameEl) {
-    userNameEl.style.display = 'none';
+    userNameEl.parentElement.style.display = 'none';
   }
+  
+  // 디바이스 아이콘 업데이트
+  updateDeviceIcons(powerMeterId);
   
   // 선택된 사용자 카드 숨김
   const selectedUserCard = document.getElementById('pairingSelectedUserCard');
@@ -2381,8 +2400,11 @@ function clearAllUsersAndHeartRateDevices() {
       // UI 업데이트
       const userNameEl = document.getElementById(`user-name-${pm.id}`);
       if (userNameEl) {
-        userNameEl.style.display = 'none';
+        userNameEl.parentElement.style.display = 'none';
       }
+      
+      // 디바이스 아이콘 업데이트
+      updateDeviceIcons(pm.id);
       
       console.log(`[Indoor Training] 트랙 ${pm.id} 사용자 정보 제거`);
     }
@@ -2391,6 +2413,9 @@ function clearAllUsersAndHeartRateDevices() {
     if (pm.heartRateDeviceId) {
       pm.heartRateName = null;
       pm.heartRateDeviceId = null;
+      
+      // 디바이스 아이콘 업데이트
+      updateDeviceIcons(pm.id);
       
       // UI 업데이트
       const heartSelectedCard = document.getElementById('heartSelectedDeviceCard');
@@ -2760,8 +2785,11 @@ async function updateTracksFromFirebase() {
         const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
         if (userNameEl) {
           userNameEl.textContent = powerMeter.userName;
-          userNameEl.style.display = 'block';
+          userNameEl.parentElement.style.display = 'flex';
         }
+        
+        // 디바이스 아이콘 업데이트
+        updateDeviceIcons(track.trackNumber);
         
         // FTP 기반 눈금 업데이트
         updatePowerMeterTicks(track.trackNumber);
@@ -2791,8 +2819,11 @@ async function updateTracksFromFirebase() {
         const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
         if (userNameEl) {
           userNameEl.textContent = track.userName;
-          userNameEl.style.display = 'block';
+          userNameEl.parentElement.style.display = 'flex';
         }
+        
+        // 디바이스 아이콘 업데이트
+        updateDeviceIcons(track.trackNumber);
         
         updatePowerMeterTicks(track.trackNumber);
         updatedCount++;
@@ -3041,6 +3072,37 @@ function selectUserForPowerMeter(userId) {
 }
 
 /**
+ * 디바이스 아이콘 업데이트
+ */
+function updateDeviceIcons(powerMeterId) {
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  const deviceIconsContainer = document.getElementById(`device-icons-${powerMeterId}`);
+  if (!deviceIconsContainer) return;
+  
+  // 디바이스 아이콘 생성
+  const deviceIcons = [];
+  if (powerMeter.trainerDeviceId) {
+    deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+  }
+  if (powerMeter.deviceId || powerMeter.powerMeterDeviceId) {
+    deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+  }
+  if (powerMeter.heartRateDeviceId) {
+    deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+  }
+  
+  deviceIconsContainer.innerHTML = deviceIcons.join('');
+  
+  // 사용자명이 있으면 아이콘 컨테이너도 표시
+  const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
+  if (userNameEl && powerMeter.userName) {
+    userNameEl.parentElement.style.display = 'flex';
+  }
+}
+
+/**
  * 페어링 저장
  */
 function savePowerMeterPairing() {
@@ -3168,6 +3230,9 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // 디바이스 아이콘 업데이트
+    updateDeviceIcons(powerMeterId);
+    
     // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
     updatePairingModalWithSavedData(powerMeter);
     
@@ -3193,6 +3258,9 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
+    // 디바이스 아이콘 업데이트
+    updateDeviceIcons(powerMeterId);
+    
     // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
     updatePairingModalWithSavedData(powerMeter);
     
@@ -3217,6 +3285,9 @@ function savePowerMeterPairing() {
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
+    
+    // 디바이스 아이콘 업데이트
+    updateDeviceIcons(powerMeterId);
     
     // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
     updatePairingModalWithSavedData(powerMeter);
