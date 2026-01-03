@@ -785,52 +785,108 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.fillText(labelText, padding.left - 10, ftpY + 4);
   
   // 세로축 눈금 (파워)
-  const powerSteps = 5;
-  for (let i = 0; i <= powerSteps; i++) {
-    const power = (maxTargetPower * i) / powerSteps;
-    const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
+  if (canvasId === 'individualSegmentGraph') {
+    // 개인 대시보드: 특정 FTP 백분율 값들 표시 (0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5)
+    const ftpPercentValues = [0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5];
     
-    // 격자선 (부드러운 색상)
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
-    } else {
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'; // 훈련 준비 화면: 어두운 색상
-    }
-    ctx.lineWidth = 1;
-    ctx.setLineDash([2, 4]);
-    ctx.beginPath();
-    ctx.moveTo(padding.left, y);
-    ctx.lineTo(padding.left + chartWidth, y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    
-    // 눈금 표시
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
-    } else {
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // 훈련 준비 화면: 어두운 색상
-    }
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(padding.left - 5, y);
-    ctx.lineTo(padding.left, y);
-    ctx.stroke();
-    
-    // 파워 값 표시 (개인 대시보드의 경우 FTP 기준 값으로 표시)
-    if (canvasId === 'individualSegmentGraph') {
-      // 개인 대시보드: FTP 기준 백분율로 표시 (예: 50%, 100%, 150%)
-      const ftpPercent = Math.round((power / ftp) * 100);
-      if (canvasId === 'individualSegmentGraph') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 개인 대시보드: 밝은 색상
-      } else {
-        ctx.fillStyle = '#374151';
+    ftpPercentValues.forEach(ftpRatio => {
+      const power = ftp * ftpRatio;
+      // maxTargetPower를 넘지 않는 경우만 표시
+      if (power <= maxTargetPower) {
+        const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
+        
+        // 격자선
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // 눈금 표시
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left - 5, y);
+        ctx.lineTo(padding.left, y);
+        ctx.stroke();
+        
+        // 라벨 표시
+        if (ftpRatio === 1.0) {
+          // FTP 값: 둥근 상자에 파워값만 표시 (바탕 민트, 폰트 검정)
+          const powerText = Math.round(ftp).toString();
+          const metrics = ctx.measureText(powerText);
+          const boxWidth = metrics.width + 12;
+          const boxHeight = 18;
+          const boxX = padding.left - 10 - boxWidth;
+          const boxY = y - boxHeight / 2;
+          
+          // 민트색 둥근 상자 그리기
+          const borderRadius = 6;
+          ctx.fillStyle = '#10b981'; // 민트색
+          ctx.beginPath();
+          ctx.moveTo(boxX + borderRadius, boxY);
+          ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
+          ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + borderRadius);
+          ctx.lineTo(boxX + boxWidth, boxY + boxHeight - borderRadius);
+          ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - borderRadius, boxY + boxHeight);
+          ctx.lineTo(boxX + borderRadius, boxY + boxHeight);
+          ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - borderRadius);
+          ctx.lineTo(boxX, boxY + borderRadius);
+          ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
+          ctx.closePath();
+          ctx.fill();
+          
+          // 검정색 폰트로 파워값 표시
+          ctx.fillStyle = '#000000'; // 검정색
+          ctx.font = 'bold 9px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(powerText, boxX + boxWidth / 2, boxY + boxHeight / 2 + 3);
+        } else {
+          // 일반 라벨: 소수점 형식 (0, 0.3, 0.6, 0.9, 1.2, 1.5)
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.font = '8px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.fillText(ftpRatio.toString(), padding.left - 10, y + 4);
+        }
       }
-      const powerFontSize = '8px sans-serif';
-      ctx.font = powerFontSize;
-      ctx.textAlign = 'right';
-      ctx.fillText(`${ftpPercent}%`, padding.left - 10, y + 4);
-    } else {
-      // 기존 로직 (다른 화면)
+    });
+  } else {
+    // 기존 로직 (다른 화면)
+    const powerSteps = 5;
+    for (let i = 0; i <= powerSteps; i++) {
+      const power = (maxTargetPower * i) / powerSteps;
+      const y = padding.top + chartHeight - (chartHeight * (power / maxTargetPower));
+      
+      // 격자선 (부드러운 색상)
+      if (canvasId === 'trainingSegmentGraph') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면: 밝은 색상
+      } else {
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'; // 훈련 준비 화면: 어두운 색상
+      }
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(padding.left + chartWidth, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // 눈금 표시
+      if (canvasId === 'trainingSegmentGraph') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면: 밝은 색상
+      } else {
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // 훈련 준비 화면: 어두운 색상
+      }
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padding.left - 5, y);
+      ctx.lineTo(padding.left, y);
+      ctx.stroke();
+      
+      // 파워 값 표시
       if (canvasId === 'trainingSegmentGraph') {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
       } else {
