@@ -10704,6 +10704,26 @@ line[id^="needle-"] {
   display: block;
 }
 
+.player-track-devices-right .device-icon-plain {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-track-devices-right .device-icon-plain .device-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+}
+
+.player-track-devices-right .device-icon-plain img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+}
+
 .player-track-action {
   display: flex;
   gap: 8px;
