@@ -558,8 +558,19 @@ async function renderPlayerList() {
           }
           
           if (deviceData) {
-            track.gear = deviceData['Gear'] || deviceData.Gear || null;
-            track.brake = deviceData['Brake'] || deviceData.Brake || null;
+            // Gear (여러 필드명 시도)
+            track.gear = deviceData['Gear'] || 
+                        deviceData.Gear || 
+                        deviceData.gear || 
+                        deviceData['gear'] ||
+                        null;
+            
+            // Brake (여러 필드명 시도)
+            track.brake = deviceData['Brake'] || 
+                         deviceData.Brake || 
+                         deviceData.brake || 
+                         deviceData['brake'] ||
+                         null;
           }
         }
       } else {
@@ -1601,31 +1612,69 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
     
     // 디바이스 정보가 있으면 입력 필드에 값 채우기
     if (currentDeviceData) {
+      console.log('[assignUserToTrack] 디바이스 데이터:', currentDeviceData);
+      
       const trainerDeviceIdInput = document.getElementById('trackTrainerDeviceId');
       const powerMeterDeviceIdInput = document.getElementById('trackPowerMeterDeviceId');
       const heartRateDeviceIdInput = document.getElementById('trackHeartRateDeviceId');
       const gearSelect = document.getElementById('trackGearSelect');
       const brakeSelect = document.getElementById('trackBrakeSelect');
       
+      // 스마트로라 ID (여러 필드명 시도)
       if (trainerDeviceIdInput) {
-        trainerDeviceIdInput.value = currentDeviceData['Smart Trainer id'] || currentDeviceData['Smart Trainer id'] || '';
+        trainerDeviceIdInput.value = currentDeviceData['Smart Trainer id'] || 
+                                     currentDeviceData['smartTrainerId'] || 
+                                     currentDeviceData.smartTrainerId || 
+                                     currentDeviceData.trainerId || 
+                                     '';
       }
       
+      // 파워메터 ID (여러 필드명 시도)
       if (powerMeterDeviceIdInput) {
-        powerMeterDeviceIdInput.value = currentDeviceData['Power Meter id'] || currentDeviceData['Power Meter id'] || '';
+        powerMeterDeviceIdInput.value = currentDeviceData['Power Meter id'] || 
+                                        currentDeviceData['Power Meter Id'] ||
+                                        currentDeviceData.powerMeterId || 
+                                        currentDeviceData['powerMeterId'] ||
+                                        currentDeviceData.powerMeter || 
+                                        '';
       }
       
+      // 심박계 ID (여러 필드명 시도)
       if (heartRateDeviceIdInput) {
-        heartRateDeviceIdInput.value = currentDeviceData['Heart Rate id'] || currentDeviceData['Heart Rate id'] || '';
+        heartRateDeviceIdInput.value = currentDeviceData['Heart Rate id'] || 
+                                       currentDeviceData['Heart Rate Id'] ||
+                                       currentDeviceData.heartRateId || 
+                                       currentDeviceData['heartRateId'] ||
+                                       currentDeviceData.heartRate || 
+                                       '';
       }
       
+      // Gear (여러 필드명 시도)
       if (gearSelect) {
-        gearSelect.value = currentDeviceData['Gear'] || currentDeviceData.Gear || '';
+        gearSelect.value = currentDeviceData['Gear'] || 
+                           currentDeviceData.Gear || 
+                           currentDeviceData.gear || 
+                           currentDeviceData['gear'] ||
+                           '';
       }
       
+      // Brake (여러 필드명 시도)
       if (brakeSelect) {
-        brakeSelect.value = currentDeviceData['Brake'] || currentDeviceData.Brake || '';
+        brakeSelect.value = currentDeviceData['Brake'] || 
+                           currentDeviceData.Brake || 
+                           currentDeviceData.brake || 
+                           currentDeviceData['brake'] ||
+                           '';
       }
+      
+      console.log('[assignUserToTrack] 디바이스 필드 값 설정 완료:', {
+        powerMeter: powerMeterDeviceIdInput?.value,
+        heartRate: heartRateDeviceIdInput?.value,
+        gear: gearSelect?.value,
+        brake: brakeSelect?.value
+      });
+    } else {
+      console.log('[assignUserToTrack] 디바이스 데이터가 없습니다.');
     }
   }, 100);
 
