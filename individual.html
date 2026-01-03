@@ -627,10 +627,31 @@
         // 화면 잠금 방지 (Screen Wake Lock API)
         let wakeLock = null;
         let wakeLockVideo = null;
+        let videoWakeLockInterval = null;
         const wakeLockSupported = 'wakeLock' in navigator;
+        
+        // iOS 및 크롬 브라우저 감지
+        function isIOS() {
+            const ua = navigator.userAgent || '';
+            return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        
+        function isChrome() {
+            const ua = navigator.userAgent || '';
+            return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
+        }
         
         // Wake Lock API 사용
         async function requestWakeLock() {
+            // iOS 크롬에서는 비디오 트릭을 우선 사용 (더 안정적)
+            if (isIOS() && isChrome()) {
+                console.log('[Screen Wake Lock] iOS Chrome 감지 - 비디오 트릭 사용');
+                if (!wakeLockVideo) {
+                    startVideoWakeLock();
+                }
+                return;
+            }
+            
             if (wakeLockSupported) {
                 try {
                     // 이미 활성화되어 있으면 재요청하지 않음
@@ -648,6 +669,11 @@
                             requestWakeLock();
                         }
                     });
+                    
+                    // iOS에서는 Wake Lock이 성공해도 비디오 트릭도 함께 사용 (이중 보장)
+                    if (isIOS() && !wakeLockVideo) {
+                        startVideoWakeLock();
+                    }
                 } catch (err) {
                     console.warn('[Screen Wake Lock] 활성화 실패:', err);
                     // Wake Lock이 실패하면 비디오 트릭 사용
@@ -684,8 +710,8 @@
                 ctx.fillStyle = '#000';
                 ctx.fillRect(0, 0, 2, 2);
                 
-                // Canvas를 MediaStream으로 변환
-                const stream = canvas.captureStream(1); // 1 FPS로 충분
+                // Canvas를 MediaStream으로 변환 (iOS 크롬 대응을 위해 30fps 사용)
+                const stream = canvas.captureStream(30);
                 
                 // 투명한 비디오 요소 생성
                 wakeLockVideo = document.createElement('video');
@@ -693,6 +719,7 @@
                 wakeLockVideo.setAttribute('muted', '');
                 wakeLockVideo.setAttribute('loop', '');
                 wakeLockVideo.setAttribute('webkit-playsinline', '');
+                wakeLockVideo.setAttribute('autoplay', '');
                 wakeLockVideo.style.position = 'fixed';
                 wakeLockVideo.style.top = '0';
                 wakeLockVideo.style.left = '0';
@@ -706,14 +733,34 @@
                 wakeLockVideo.srcObject = stream;
                 document.body.appendChild(wakeLockVideo);
                 
-                // 비디오 재생
-                const playPromise = wakeLockVideo.play();
-                if (playPromise !== undefined) {
-                    playPromise.then(() => {
-                        console.log('[Video Wake Lock] 화면 잠금 방지 활성화 (비디오 트릭)');
-                    }).catch(err => {
-                        console.warn('[Video Wake Lock] 재생 실패:', err);
-                    });
+                // 비디오 재생 함수 (재시도 로직 포함)
+                const playVideo = () => {
+                    const playPromise = wakeLockVideo.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            console.log('[Video Wake Lock] 화면 잠금 방지 활성화 (비디오 트릭)');
+                        }).catch(err => {
+                            console.warn('[Video Wake Lock] 재생 실패, 재시도:', err);
+                            // 재생 실패 시 잠시 후 재시도
+                            setTimeout(playVideo, 1000);
+                        });
+                    }
+                };
+                
+                // 초기 재생 시도
+                playVideo();
+                
+                // iOS에서는 주기적으로 비디오 재생 상태 확인 및 재시작 (크롬 대응)
+                if (isIOS()) {
+                    if (videoWakeLockInterval) {
+                        clearInterval(videoWakeLockInterval);
+                    }
+                    videoWakeLockInterval = setInterval(() => {
+                        if (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended)) {
+                            console.log('[Video Wake Lock] 비디오가 일시정지됨, 재시작');
+                            playVideo();
+                        }
+                    }, 5000); // 5초마다 확인
                 }
             } catch (err) {
                 console.warn('[Video Wake Lock] 초기화 실패:', err);
@@ -730,6 +777,12 @@
                     console.warn('[Screen Wake Lock] 해제 실패:', err);
                     wakeLock = null;
                 });
+            }
+            
+            // 비디오 트릭 주기적 확인 중지
+            if (videoWakeLockInterval !== null) {
+                clearInterval(videoWakeLockInterval);
+                videoWakeLockInterval = null;
             }
             
             if (wakeLockVideo !== null) {
