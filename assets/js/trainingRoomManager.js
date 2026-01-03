@@ -528,35 +528,68 @@ async function renderPlayerList() {
       const response = await fetch(url);
       const result = await response.json();
       
-      console.log('[Player List] API 응답:', result);
+      console.log('[Player List] API 응답 전체:', JSON.stringify(result, null, 2));
+      console.log('[Player List] API 응답 success:', result.success);
+      console.log('[Player List] API 응답 tracks:', result.tracks);
+      console.log('[Player List] API 응답 tracks 타입:', Array.isArray(result.tracks) ? 'Array' : typeof result.tracks);
       
       if (result.success && result.tracks && Array.isArray(result.tracks)) {
         console.log('[Player List] 트랙 데이터 수:', result.tracks.length);
+        console.log('[Player List] 트랙 데이터 상세:', result.tracks);
+        
         // 트랙 정보 업데이트
-        result.tracks.forEach(apiTrack => {
+        result.tracks.forEach((apiTrack, index) => {
+          console.log(`[Player List] Processing track ${index + 1}:`, apiTrack);
           const trackNumber = parseInt(apiTrack.trackNumber, 10);
+          console.log(`[Player List] Track ${index + 1} - trackNumber: ${apiTrack.trackNumber}, parsed: ${trackNumber}`);
+          
           if (!isNaN(trackNumber) && trackNumber >= 1 && trackNumber <= 10) {
             const track = tracks[trackNumber - 1];
             if (track) {
+              const beforeUserId = track.userId;
+              const beforeUserName = track.userName;
+              const beforeEquipment = track.equipment;
+              
               track.userId = apiTrack.userId || null;
               track.userName = apiTrack.userName || null;
               track.equipment = apiTrack.equipment || null; // 장비 정보 추가
+              
+              console.log(`[Player List] 트랙 ${trackNumber} 업데이트:`, {
+                before: { userId: beforeUserId, userName: beforeUserName, equipment: beforeEquipment },
+                after: { userId: track.userId, userName: track.userName, equipment: track.equipment },
+                apiTrack: apiTrack
+              });
+              
               if (track.userName) {
-                console.log(`[Player List] 트랙 ${trackNumber} 업데이트: ${track.userName}${track.userId ? ` (ID: ${track.userId})` : ' (ID: 없음)'}${track.equipment ? ` [장비: ${track.equipment}]` : ''}`);
+                console.log(`[Player List] ✅ 트랙 ${trackNumber} 사용자: ${track.userName}${track.userId ? ` (ID: ${track.userId})` : ' (ID: 없음)'}${track.equipment ? ` [장비: ${track.equipment}]` : ''}`);
+              } else {
+                console.log(`[Player List] ⚠️ 트랙 ${trackNumber} - 사용자 이름이 없음 (userId: ${track.userId}, apiTrack:`, apiTrack, ')');
               }
+            } else {
+              console.error(`[Player List] ❌ 트랙 ${trackNumber}에 해당하는 tracks 배열 요소를 찾을 수 없음`);
             }
+          } else {
+            console.warn(`[Player List] ⚠️ 트랙 번호가 유효하지 않음: ${apiTrack.trackNumber} (parsed: ${trackNumber})`);
           }
         });
-        console.log('[Player List] 트랙 정보 업데이트 완료');
+        console.log('[Player List] 트랙 정보 업데이트 완료. 최종 tracks 배열:', tracks);
       } else {
-        console.warn('[Player List] API 응답이 예상과 다릅니다:', result);
+        console.error('[Player List] ❌ API 응답이 예상과 다릅니다:', {
+          success: result.success,
+          hasTracks: !!result.tracks,
+          tracksIsArray: Array.isArray(result.tracks),
+          tracksType: typeof result.tracks,
+          tracksValue: result.tracks,
+          fullResult: result
+        });
       }
     } catch (error) {
-      console.error('[Player List] 트랙 정보 로드 오류:', error);
+      console.error('[Player List] ❌ 트랙 정보 로드 오류:', error);
+      console.error('[Player List] 오류 스택:', error.stack);
       // 오류가 발생해도 빈 상태로 표시 계속
     }
   } else {
-    console.warn('[Player List] room id를 찾을 수 없어 트랙 정보를 로드할 수 없습니다.');
+    console.warn('[Player List] ⚠️ room id를 찾을 수 없어 트랙 정보를 로드할 수 없습니다.');
     console.log('[Player List] currentSelectedTrainingRoom:', currentSelectedTrainingRoom);
     console.log('[Player List] window.currentTrainingRoomId:', window.currentTrainingRoomId);
     console.log('[Player List] localStorage currentTrainingRoomId:', localStorage.getItem('currentTrainingRoomId'));
