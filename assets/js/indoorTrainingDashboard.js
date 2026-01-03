@@ -63,7 +63,8 @@ class PowerMeterData {
     this.segmentPowerCount = 0;
     this.userId = null; // 연결된 사용자 ID
     this.userFTP = null; // 사용자 FTP 값
-    this.equipment = null; // 장비 정보 (시마노11단, 디스크 전용 등)
+    this.gear = null; // Gear 정보 (11단, 12단)
+    this.brake = null; // Brake 정보 (디스크, 림)
     
     // 가민 스타일: 이벤트 카운트 및 누적 파워 추적
     this.lastEventCount = null; // 마지막 이벤트 카운트
@@ -1501,10 +1502,14 @@ function updatePairingModalWithSavedData(powerMeter) {
       resultEl.innerHTML = '';
     }
     
-    // 장비 정보 입력 필드에 값 설정
-    const equipmentInput = document.getElementById('pairingEquipmentInput');
-    if (equipmentInput) {
-      equipmentInput.value = powerMeter.equipment || '';
+    // Gear, Brake 선택 필드에 값 설정
+    const gearSelect = document.getElementById('pairingGearSelect');
+    const brakeSelect = document.getElementById('pairingBrakeSelect');
+    if (gearSelect) {
+      gearSelect.value = powerMeter.gear || '';
+    }
+    if (brakeSelect) {
+      brakeSelect.value = powerMeter.brake || '';
     }
   } else {
     // 선택된 사용자가 없으면 카드 숨김
@@ -1519,10 +1524,14 @@ function updatePairingModalWithSavedData(powerMeter) {
       resultEl.innerHTML = '';
     }
     
-    // 장비 정보 입력 필드 비우기
-    const equipmentInput = document.getElementById('pairingEquipmentInput');
-    if (equipmentInput) {
-      equipmentInput.value = '';
+    // Gear, Brake 선택 필드 비우기
+    const gearSelect = document.getElementById('pairingGearSelect');
+    const brakeSelect = document.getElementById('pairingBrakeSelect');
+    if (gearSelect) {
+      gearSelect.value = '';
+    }
+    if (brakeSelect) {
+      brakeSelect.value = '';
     }
   }
   
@@ -1949,9 +1958,11 @@ async function selectSearchedUserForPowerMeter(userId) {
           return;
         }
         
-        // 장비 정보 읽기
-        const equipmentInput = document.getElementById('pairingEquipmentInput');
-        const equipment = equipmentInput ? equipmentInput.value.trim() : '';
+        // Gear, Brake 정보 읽기
+        const gearSelect = document.getElementById('pairingGearSelect');
+        const brakeSelect = document.getElementById('pairingBrakeSelect');
+        const gear = gearSelect ? gearSelect.value : '';
+        const brake = brakeSelect ? brakeSelect.value : '';
         
         // 파워계에 사용자 정보 저장
         powerMeter.userId = userId;
@@ -1959,13 +1970,15 @@ async function selectSearchedUserForPowerMeter(userId) {
         powerMeter.userName = user.name;
         powerMeter.userWeight = user.weight;
         powerMeter.userContact = user.contact;
-        powerMeter.equipment = equipment || null; // 장비 정보 저장
+        powerMeter.gear = gear || null; // Gear 정보 저장
+        powerMeter.brake = brake || null; // Brake 정보 저장
         
         console.log(`[Indoor Training] 파워미터 ${powerMeterId}에 사용자 할당:`, {
           userId: userId,
           userName: user.name,
           userFTP: powerMeter.userFTP,
-          equipment: powerMeter.equipment
+          gear: powerMeter.gear,
+          brake: powerMeter.brake
         });
         
         // 사용자명 UI 업데이트 (트랙번호 라인 좌측)
@@ -2009,15 +2022,12 @@ async function selectSearchedUserForPowerMeter(userId) {
             // Player List 화면과 동일한 데이터 구조로 저장
             const userData = {
               userId: String(powerMeter.userId || ''),
-              name: powerMeter.userName || '',
               userName: powerMeter.userName || '',
-              participantName: powerMeter.userName || '',
-              ftp: powerMeter.userFTP || 0,
               weight: powerMeter.userWeight || 0,
-              equipment: powerMeter.equipment || '' // 장비 정보 추가
+              ftp: powerMeter.userFTP || 0
             };
             
-            // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
+            // Firebase Users에 저장
             const userRef = db.ref(`sessions/${sessionId}/users/${powerMeterId}`);
             userRef.once('value').then(snapshot => {
               const existingData = snapshot.val() || {};
@@ -2027,29 +2037,28 @@ async function selectSearchedUserForPowerMeter(userId) {
                 ...existingData, // 기존 데이터 보존 (워크아웃 진행 중 데이터 포함)
                 ...userData,    // 새 필수값으로 업데이트
                 // 워크아웃 진행 중 데이터는 유지 (있는 경우)
-                power: existingData.power !== undefined ? existingData.power : userData.power,
-                cadence: existingData.cadence !== undefined ? existingData.cadence : userData.cadence,
-                hr: existingData.hr !== undefined ? existingData.hr : userData.hr,
-                maxPower: existingData.maxPower !== undefined ? existingData.maxPower : userData.maxPower,
-                avgPower: existingData.avgPower !== undefined ? existingData.avgPower : userData.avgPower,
-                segmentPower: existingData.segmentPower !== undefined ? existingData.segmentPower : userData.segmentPower,
-                targetPower: existingData.targetPower !== undefined ? existingData.targetPower : userData.targetPower,
+                power: existingData.power !== undefined ? existingData.power : undefined,
+                cadence: existingData.cadence !== undefined ? existingData.cadence : undefined,
+                hr: existingData.hr !== undefined ? existingData.hr : undefined,
+                maxPower: existingData.maxPower !== undefined ? existingData.maxPower : undefined,
+                avgPower: existingData.avgPower !== undefined ? existingData.avgPower : undefined,
+                segmentPower: existingData.segmentPower !== undefined ? existingData.segmentPower : undefined,
+                targetPower: existingData.targetPower !== undefined ? existingData.targetPower : undefined,
                 lastUpdate: existingData.lastUpdate || firebase.database.ServerValue.TIMESTAMP
               };
               
+              // undefined 값 제거
+              Object.keys(mergedData).forEach(key => {
+                if (mergedData[key] === undefined) {
+                  delete mergedData[key];
+                }
+              });
+              
               return userRef.set(mergedData);
             }).then(() => {
-              console.log(`[Firebase] 트랙 ${powerMeterId}에 사용자 정보 저장 완료 (필수값 보존):`, {
-                roomId: sessionId,
-                trackNumber: powerMeterId,
-                userId: userData.userId,
-                userName: userData.userName,
-                ftp: userData.ftp,
-                weight: userData.weight,
-                equipment: userData.equipment
-              });
+              console.log(`[Firebase] Users 저장 완료: 트랙 ${powerMeterId}`, userData);
             }).catch(error => {
-              console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
+              console.error(`[Firebase] Users 저장 실패:`, error);
             });
           } else {
             console.warn('[Firebase] SESSION_ID를 찾을 수 없어 사용자 정보를 저장할 수 없습니다.');
@@ -2197,7 +2206,8 @@ function clearAllUsersAndHeartRateDevices() {
       pm.userName = null;
       pm.userWeight = null;
       pm.userContact = null;
-      pm.equipment = null;
+      pm.gear = null;
+      pm.brake = null;
       
       // UI 업데이트
       const userNameEl = document.getElementById(`user-name-${pm.id}`);
@@ -2239,9 +2249,13 @@ function clearAllUsersAndHeartRateDevices() {
   }
   
   // 장비 정보 입력 필드 비우기
-  const equipmentInput = document.getElementById('pairingEquipmentInput');
-  if (equipmentInput) {
-    equipmentInput.value = '';
+  const gearSelect = document.getElementById('pairingGearSelect');
+  const brakeSelect = document.getElementById('pairingBrakeSelect');
+  if (gearSelect) {
+    gearSelect.value = '';
+  }
+  if (brakeSelect) {
+    brakeSelect.value = '';
   }
   
   // Firebase에서 사용자 정보 및 심박계 정보 삭제 (스마트로라, 파워메터는 유지)
@@ -2265,7 +2279,8 @@ function clearAllUsersAndHeartRateDevices() {
             participantName: null,
             ftp: null,
             weight: null,
-            equipment: null,
+            gear: null,
+            brake: null,
             heartRateDeviceId: null,
             heartRateName: null,
             // 스마트로라와 파워메터는 유지
@@ -2496,7 +2511,33 @@ async function updateTracksFromFirebase() {
       console.warn('[Indoor Training] 사용자 목록 로드 실패 (트랙 업데이트):', userError);
     }
     
-    // 각 트랙에 사용자 정보 업데이트
+    // Firebase에서 Device 정보 가져오기
+    let deviceData = {};
+    if (typeof db !== 'undefined' && sessionId) {
+      try {
+        const deviceRef = db.ref(`sessions/${sessionId}/devices`);
+        const deviceSnapshot = await deviceRef.once('value');
+        deviceData = deviceSnapshot.val() || {};
+        console.log('[Indoor Training] Firebase Device 정보 로드:', deviceData);
+      } catch (error) {
+        console.warn('[Indoor Training] Firebase Device 정보 로드 실패:', error);
+      }
+    }
+    
+    // Firebase에서 Users 정보 가져오기 (기존 tracks 데이터와 병합)
+    let usersData = {};
+    if (typeof db !== 'undefined' && sessionId) {
+      try {
+        const usersRef = db.ref(`sessions/${sessionId}/users`);
+        const usersSnapshot = await usersRef.once('value');
+        usersData = usersSnapshot.val() || {};
+        console.log('[Indoor Training] Firebase Users 정보 로드:', usersData);
+      } catch (error) {
+        console.warn('[Indoor Training] Firebase Users 정보 로드 실패:', error);
+      }
+    }
+    
+    // 각 트랙에 사용자 정보 및 디바이스 정보 업데이트
     let updatedCount = 0;
     
     tracks.forEach(track => {
@@ -2507,30 +2548,49 @@ async function updateTracksFromFirebase() {
         return;
       }
       
-      // 사용자 정보가 있는 경우
-      if (track.userId && track.userName) {
-        // 사용자 상세 정보 찾기
-        const user = users.find(u => String(u.id) === String(track.userId));
+      // Firebase Device 정보 업데이트 (트랙번호별)
+      const trackDeviceData = deviceData[track.trackNumber];
+      if (trackDeviceData) {
+        powerMeter.trainerDeviceId = trackDeviceData.smartTrainerId || null;
+        powerMeter.deviceId = trackDeviceData.powerMeterId || null;
+        powerMeter.heartRateDeviceId = trackDeviceData.heartRateId || null;
+        powerMeter.gear = trackDeviceData.gear || null;
+        powerMeter.brake = trackDeviceData.brake || null;
         
-        // 파워미터에 사용자 정보 업데이트 (기존 페어링 정보는 유지)
-        powerMeter.userId = track.userId;
-        powerMeter.userName = track.userName;
-        powerMeter.equipment = track.equipment || null; // 장비 정보 업데이트
+        // 디바이스 이름도 업데이트 (있는 경우)
+        if (trackDeviceData.smartTrainerId) {
+          powerMeter.trainerName = `스마트로라 (ID: ${trackDeviceData.smartTrainerId})`;
+        }
+        if (trackDeviceData.powerMeterId) {
+          powerMeter.pairingName = `파워메터 (ID: ${trackDeviceData.powerMeterId})`;
+        }
+        if (trackDeviceData.heartRateId) {
+          powerMeter.heartRateName = `심박계 (ID: ${trackDeviceData.heartRateId})`;
+        }
+        
+        console.log(`[Indoor Training] 트랙 ${track.trackNumber} Device 정보 업데이트:`, trackDeviceData);
+      }
+      
+      // Firebase Users 정보 업데이트 (트랙번호별, tracks 데이터와 병합)
+      const trackUserData = usersData[track.trackNumber];
+      if (trackUserData && trackUserData.userId && trackUserData.userName) {
+        // 사용자 상세 정보 찾기
+        const user = users.find(u => String(u.id) === String(trackUserData.userId));
+        
+        // 파워미터에 사용자 정보 저장 (Firebase Users 데이터 우선)
+        powerMeter.userId = trackUserData.userId;
+        powerMeter.userName = trackUserData.userName || track.userName;
+        powerMeter.userWeight = trackUserData.weight || (user ? user.weight : null);
+        powerMeter.userFTP = trackUserData.ftp || (user ? user.ftp : null);
         
         if (user) {
-          powerMeter.userFTP = user.ftp || null;
-          powerMeter.userWeight = user.weight || null;
           powerMeter.userContact = user.contact || null;
-        } else {
-          // 사용자 상세 정보가 없으면 기본값 유지 또는 null
-          if (!powerMeter.userFTP) powerMeter.userFTP = null;
-          if (!powerMeter.userWeight) powerMeter.userWeight = null;
         }
         
         // UI 업데이트 (사용자 이름 표시)
         const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
         if (userNameEl) {
-          userNameEl.textContent = track.userName;
+          userNameEl.textContent = powerMeter.userName;
           userNameEl.style.display = 'block';
         }
         
@@ -2542,30 +2602,46 @@ async function updateTracksFromFirebase() {
         console.log(`[Indoor Training] 트랙 ${track.trackNumber} 업데이트:`, {
           userId: powerMeter.userId,
           userName: powerMeter.userName,
-          userFTP: powerMeter.userFTP
+          userFTP: powerMeter.userFTP,
+          gear: powerMeter.gear,
+          brake: powerMeter.brake
         });
+      } else if (track.userId && track.userName) {
+        // Firebase Users에 없지만 tracks에 있는 경우 (기존 로직 유지)
+        const user = users.find(u => String(u.id) === String(track.userId));
+        
+        powerMeter.userId = track.userId;
+        powerMeter.userName = track.userName;
+        
+        if (user) {
+          powerMeter.userFTP = user.ftp || null;
+          powerMeter.userWeight = user.weight || null;
+          powerMeter.userContact = user.contact || null;
+        }
+        
+        const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
+        if (userNameEl) {
+          userNameEl.textContent = track.userName;
+          userNameEl.style.display = 'block';
+        }
+        
+        updatePowerMeterTicks(track.trackNumber);
+        updatedCount++;
       } else {
-        // 사용자 정보가 없는 경우 (Player List에서 제거된 경우)
-        // 하지만 기존 페어링 정보(deviceId, trainerDeviceId 등)는 유지
-        // 사용자 정보만 제거
+        // 사용자 정보가 없는 경우
         powerMeter.userId = null;
         powerMeter.userName = null;
         powerMeter.userFTP = null;
         powerMeter.userWeight = null;
         powerMeter.userContact = null;
-        powerMeter.equipment = null; // 장비 정보도 제거
         
-        // UI 업데이트 (사용자 이름 숨김)
         const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
         if (userNameEl) {
           userNameEl.textContent = '';
           userNameEl.style.display = 'none';
         }
         
-        // FTP 기반 눈금 업데이트 (기본값으로)
         updatePowerMeterTicks(track.trackNumber);
-        
-        console.log(`[Indoor Training] 트랙 ${track.trackNumber} 사용자 정보 제거됨`);
       }
       
       // 연결 상태 업데이트
@@ -2733,7 +2809,8 @@ function selectUserForPowerMeter(userId) {
               participantName: powerMeter.userName || '',
               ftp: powerMeter.userFTP || 0,
               weight: powerMeter.userWeight || 0,
-              equipment: powerMeter.equipment || '' // 장비 정보 추가
+              gear: powerMeter.gear || null, // Gear 정보
+              brake: powerMeter.brake || null // Brake 정보
             };
             
             // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
@@ -2772,7 +2849,8 @@ function selectUserForPowerMeter(userId) {
                 userName: userData.userName,
                 ftp: userData.ftp,
                 weight: userData.weight,
-                equipment: userData.equipment
+                gear: powerMeter.gear || null,
+                brake: powerMeter.brake || null
               });
             }).catch(error => {
               console.error(`[Firebase] 사용자 정보 저장 실패:`, error);
@@ -2814,45 +2892,55 @@ function savePowerMeterPairing() {
   
   const tabName = activeTab.id.replace('tab-', '');
   
-  if (tabName === 'user') {
-    // 장비 정보 읽기 및 저장
-    const equipmentInput = document.getElementById('pairingEquipmentInput');
-    if (equipmentInput) {
-      powerMeter.equipment = equipmentInput.value.trim() || null;
-    }
+  // Gear, Brake 읽기 및 저장
+  const gearSelect = document.getElementById('pairingGearSelect');
+  const brakeSelect = document.getElementById('pairingBrakeSelect');
+  if (gearSelect) {
+    powerMeter.gear = gearSelect.value || null;
+  }
+  if (brakeSelect) {
+    powerMeter.brake = brakeSelect.value || null;
+  }
+  
+  // Firebase DB에 저장
+  if (typeof db !== 'undefined') {
+    const sessionId = getSessionId();
     
-    // 사용자 선택은 이미 저장됨
-    // 눈금 업데이트
-    updatePowerMeterTicks(powerMeterId);
-    // 저장
-    saveAllPowerMeterPairingsToStorage();
-    
-    // Firebase에 사용자 정보 저장 (Player List와 동일한 구조)
-    if (powerMeter.userName && typeof db !== 'undefined') {
-      const sessionId = getSessionId();
+    if (sessionId) {
+      // Device 정보 저장 (트랙번호별)
+      const deviceData = {
+        smartTrainerId: powerMeter.trainerDeviceId || null,
+        powerMeterId: powerMeter.deviceId || null,
+        heartRateId: powerMeter.heartRateDeviceId || null,
+        gear: powerMeter.gear || null,
+        brake: powerMeter.brake || null
+      };
       
-      if (sessionId) {
-        // Player List 화면과 동일한 데이터 구조로 저장
+      const deviceRef = db.ref(`sessions/${sessionId}/devices/${powerMeterId}`);
+      deviceRef.set(deviceData).then(() => {
+        console.log(`[Firebase] Device 저장 완료: 트랙 ${powerMeterId}`, deviceData);
+      }).catch(error => {
+        console.error(`[Firebase] Device 저장 실패:`, error);
+      });
+      
+      // Users 정보 저장 (트랙번호별)
+      if (powerMeter.userId && powerMeter.userName) {
         const userData = {
           userId: String(powerMeter.userId || ''),
-          name: powerMeter.userName || '',
           userName: powerMeter.userName || '',
-          participantName: powerMeter.userName || '',
-          ftp: powerMeter.userFTP || 0,
           weight: powerMeter.userWeight || 0,
-          equipment: powerMeter.equipment || '' // 장비 정보 추가
+          ftp: powerMeter.userFTP || 0
         };
         
-        // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
         const userRef = db.ref(`sessions/${sessionId}/users/${powerMeterId}`);
         userRef.once('value').then(snapshot => {
           const existingData = snapshot.val() || {};
           
-          // 필수 유지값과 새 데이터 병합 (필수값 우선 보존)
+          // 기존 데이터 보존하면서 사용자 정보 업데이트
           const mergedData = {
-            ...existingData, // 기존 데이터 보존 (워크아웃 진행 중 데이터 포함)
-            ...userData,    // 새 필수값으로 업데이트
-            // 워크아웃 진행 중 데이터는 유지 (있는 경우)
+            ...existingData,
+            ...userData,
+            // 워크아웃 진행 중 데이터는 유지
             power: existingData.power !== undefined ? existingData.power : undefined,
             cadence: existingData.cadence !== undefined ? existingData.cadence : undefined,
             hr: existingData.hr !== undefined ? existingData.hr : undefined,
@@ -2872,22 +2960,22 @@ function savePowerMeterPairing() {
           
           return userRef.set(mergedData);
         }).then(() => {
-          console.log(`[Firebase] 페어링 저장: 트랙 ${powerMeterId}에 사용자 정보 저장 완료 (필수값 보존):`, {
-            roomId: sessionId,
-            trackNumber: powerMeterId,
-            userId: userData.userId,
-            userName: userData.userName,
-            ftp: userData.ftp,
-            weight: userData.weight,
-            equipment: userData.equipment
-          });
+          console.log(`[Firebase] Users 저장 완료: 트랙 ${powerMeterId}`, userData);
         }).catch(error => {
-          console.error(`[Firebase] 페어링 저장: 사용자 정보 저장 실패:`, error);
+          console.error(`[Firebase] Users 저장 실패:`, error);
         });
-      } else {
-        console.warn('[Firebase] 페어링 저장: SESSION_ID를 찾을 수 없어 사용자 정보를 저장할 수 없습니다.');
       }
+    } else {
+      console.warn('[Firebase] SESSION_ID를 찾을 수 없어 페어링 정보를 저장할 수 없습니다.');
     }
+  }
+  
+  if (tabName === 'user') {
+    // 사용자 선택은 이미 저장됨
+    // 눈금 업데이트
+    updatePowerMeterTicks(powerMeterId);
+    // 저장
+    saveAllPowerMeterPairingsToStorage();
     
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
@@ -2904,13 +2992,6 @@ function savePowerMeterPairing() {
     // 스마트로라 페어링 저장
     const name = document.getElementById('trainerPairingName')?.value.trim() || '';
     const deviceId = document.getElementById('trainerDeviceId')?.value.trim() || '';
-    
-    if (!deviceId) {
-      if (typeof showToast === 'function') {
-        showToast('디바이스 ID를 입력해주세요.');
-      }
-      return;
-    }
     
     powerMeter.trainerName = name;
     powerMeter.trainerDeviceId = deviceId;
@@ -2937,13 +3018,6 @@ function savePowerMeterPairing() {
     const name = document.getElementById('powerMeterPairingName')?.value.trim() || '';
     const deviceId = document.getElementById('powerMeterDeviceId')?.value.trim() || '';
     
-    if (!deviceId) {
-      if (typeof showToast === 'function') {
-        showToast('디바이스 ID를 입력해주세요.');
-      }
-      return;
-    }
-    
     powerMeter.pairingName = name;
     powerMeter.deviceId = deviceId;
     
@@ -2968,13 +3042,6 @@ function savePowerMeterPairing() {
     // 심박계 페어링 저장
     const name = document.getElementById('heartRatePairingName')?.value.trim() || '';
     const deviceId = document.getElementById('heartRateDeviceId')?.value.trim() || '';
-    
-    if (!deviceId) {
-      if (typeof showToast === 'function') {
-        showToast('디바이스 ID를 입력해주세요.');
-      }
-      return;
-    }
     
     powerMeter.heartRateName = name;
     powerMeter.heartRateDeviceId = deviceId;
@@ -3266,6 +3333,14 @@ function renderPairingDeviceList(targetType) {
   const scrollTop = listEl.scrollTop;
   const wasScrolled = scrollTop > 0;
   
+  // 디바이스 검색 창 초기값 빈값으로 설정
+  const deviceIdInput = (targetType === 0x78) ? document.getElementById('heartRateDeviceId') :
+                        (targetType === 0x0B) ? document.getElementById('powerMeterDeviceId') :
+                        document.getElementById('trainerDeviceId');
+  if (deviceIdInput && !deviceIdInput.value) {
+    deviceIdInput.value = '';
+  }
+  
   if (devices.length > 0) {
     // 기존 아이템들을 data-device-id로 추적
     const existingItems = Array.from(listEl.querySelectorAll('.ant-device-item'));
@@ -3421,8 +3496,7 @@ function renderPairingDeviceList(targetType) {
       console.log(`[UI] ${newDevices.length}개의 새로운 ${deviceType} 디바이스 추가, 총 ${devices.length}개`);
     }
   } else {
-    // 디바이스가 없을 때
-    // 페어링된 디바이스가 있는지 확인
+    // 디바이스가 없을 때: "연결된 디바이스가 없음" 메시지 표시
     const existingItems = Array.from(listEl.querySelectorAll('.ant-device-item'));
     const hasPairedDevices = existingItems.some(item => {
       const deviceId = item.getAttribute('data-device-id');
@@ -3436,8 +3510,9 @@ function renderPairingDeviceList(targetType) {
     });
     
     if (listEl.children.length === 0 && !hasPairedDevices) {
-      // 디바이스가 없고 리스트도 비어있고 페어링된 디바이스도 없으면 숨김
-      listEl.classList.add('hidden');
+      // 디바이스가 없고 리스트도 비어있고 페어링된 디바이스도 없으면 메시지 표시
+      listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #999; border: 1px solid #ddd; border-radius: 8px;">연결된 디바이스가 없음</div>';
+      listEl.classList.remove('hidden');
     }
   }
 }
@@ -5570,7 +5645,8 @@ function uploadToFirebase() {
                     participantName: pm.userName || existingData.participantName || undefined,
                     ftp: pm.userFTP ? Math.round(pm.userFTP) : (existingData.ftp !== undefined ? existingData.ftp : undefined),
                     weight: pm.userWeight || existingData.weight || undefined,
-                    equipment: pm.equipment || existingData.equipment || undefined, // equipment 필드 보존 (기존 값 우선)
+                    gear: pm.gear || existingData.gear || undefined, // gear 필드 보존 (기존 값 우선)
+                    brake: pm.brake || existingData.brake || undefined, // brake 필드 보존 (기존 값 우선)
                     // 워크아웃 시작 시 추가 항목
                     power: Math.round(pm.currentPower || 0),
                     cadence: Math.round(pm.cadence || 0),
@@ -5593,7 +5669,8 @@ function uploadToFirebase() {
                 return userRef.update(userData);
             }).then(() => {
                 console.log(`[Firebase Upload] 트랙 ${pm.id} 사용자 데이터 업데이트 완료 (equipment 보존):`, {
-                    equipment: pm.equipment || '기존 값 유지',
+                    gear: pm.gear || '기존 값 유지',
+                    brake: pm.brake || '기존 값 유지',
                     userId: pm.userId,
                     userName: pm.userName
                 });
