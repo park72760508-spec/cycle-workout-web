@@ -2687,8 +2687,7 @@
             <label>이름으로 사용자 검색</label>
             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
               <input type="text" id="pairingUserNameSearch" placeholder="이름을 입력하세요" style="flex: 1;" 
-                     onkeypress="if(event.key==='Enter') searchUserByNameForPairing()"
-                     oninput="filterUsersByNameForPairing()">
+                     onkeypress="if(event.key==='Enter') searchUserByNameForPairing()">
               <button type="button" class="btn btn-primary" onclick="searchUserByNameForPairing()" id="btnSearchUserByName">
                 검색
               </button>
@@ -2700,11 +2699,23 @@
             <div id="pairingUserSearchResult" style="margin-top: 12px;">
               <!-- 검색 결과가 여기에 표시됩니다 -->
             </div>
-            <!-- 장비 정보 입력 필드 -->
+            <!-- Gear 선택 -->
             <div class="form-group" style="margin-top: 20px;">
-              <label>장비정보 입력(시마노11단, 디스크 전용 등)</label>
-              <input type="text" id="pairingEquipmentInput" placeholder="예: 시마노11단, 디스크 전용" 
-                     style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+              <label>Gear</label>
+              <select id="pairingGearSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                <option value="">선택하세요</option>
+                <option value="11단">11단</option>
+                <option value="12단">12단</option>
+              </select>
+            </div>
+            <!-- Brake 선택 -->
+            <div class="form-group" style="margin-top: 12px;">
+              <label>Brake</label>
+              <select id="pairingBrakeSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+                <option value="">선택하세요</option>
+                <option value="디스크">디스크</option>
+                <option value="림">림</option>
+              </select>
             </div>
           </div>
           <div id="powerMeterUserList" class="user-list-compact" style="display: none;">
@@ -2733,7 +2744,7 @@
               <button type="button" class="btn btn-primary" id="btnSearchTrainerDevices" onclick="searchTrainerDevices()" style="flex: 0 0 auto;">
                 <span id="trainerSearchButtonText">디바이스 검색</span>
               </button>
-              <input type="text" id="trainerDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+              <input type="text" id="trainerDeviceId" placeholder="" style="flex: 1;">
               <button type="button" class="btn btn-danger" id="btnClearTrainer" onclick="clearPairedDevice('trainer')" style="flex: 0 0 auto; display: none;">해제</button>
             </div>
             <div id="trainerDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
@@ -2767,7 +2778,7 @@
               <button type="button" class="btn btn-primary" id="btnSearchPowerDevices" onclick="searchPowerMeterDevices()" style="flex: 0 0 auto;">
                 <span id="powerSearchButtonText">디바이스 검색</span>
               </button>
-              <input type="text" id="powerMeterDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+              <input type="text" id="powerMeterDeviceId" placeholder="" style="flex: 1;">
               <button type="button" class="btn btn-danger" id="btnClearPower" onclick="clearPairedDevice('power')" style="flex: 0 0 auto; display: none;">해제</button>
             </div>
             <div id="powerMeterDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
@@ -2801,7 +2812,7 @@
               <button type="button" class="btn btn-primary" id="btnSearchHeartDevices" onclick="searchHeartRateDevices()" style="flex: 0 0 auto;">
                 <span id="heartSearchButtonText">디바이스 검색</span>
               </button>
-              <input type="text" id="heartRateDeviceId" placeholder="검색 후 선택하거나 수동 입력" style="flex: 1;">
+              <input type="text" id="heartRateDeviceId" placeholder="" style="flex: 1;">
               <button type="button" class="btn btn-danger" id="btnClearHeart" onclick="clearPairedDevice('heart')" style="flex: 0 0 auto; display: none;">해제</button>
             </div>
             <div id="heartRateDeviceList" class="ant-device-list hidden" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; background: #f9f9f9;">
