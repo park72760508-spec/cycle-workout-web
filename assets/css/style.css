@@ -10584,13 +10584,14 @@ line[id^="needle-"] {
 
 .player-track-item {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
+  align-items: stretch;
+  gap: 12px;
+  padding: 12px;
   background: white;
   border: 2px solid #e0e0e0;
   border-radius: 12px;
   transition: all 0.3s ease;
+  min-height: 80px;
 }
 
 .player-track-item:hover {
@@ -10599,18 +10600,43 @@ line[id^="needle-"] {
   transform: translateY(-2px);
 }
 
-.player-track-number {
-  flex: 0 0 80px;
+.player-track-number-fixed {
+  flex: 0 0 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-right: 2px solid #e5e7eb;
+  padding-right: 12px;
+}
+
+.player-track-number-header {
   text-align: center;
   font-weight: bold;
   color: #667eea;
-  font-size: 1.2em;
+  font-size: 1.1em;
+  line-height: 1.2;
+}
+
+.player-track-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.player-track-user-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
 }
 
 .player-track-name {
-  flex: 1;
   font-size: 1em;
   word-break: break-word;
+  line-height: 1.4;
 }
 
 .player-track-name.has-user {
@@ -10623,12 +10649,35 @@ line[id^="needle-"] {
   font-style: italic;
 }
 
+.player-track-devices {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.player-track-devices .device-icon {
+  height: 20px;
+  width: auto;
+  object-fit: contain;
+}
+
 .player-track-action {
-  flex-shrink: 0;
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: stretch;
   flex-wrap: nowrap;
+  min-height: 44px;
+}
+
+.player-track-action .btn,
+.player-track-action .player-enter-btn {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .player-enter-btn {
@@ -10654,7 +10703,7 @@ line[id^="needle-"] {
   margin-right: 0;
 }
 
-/* 모바일 최적화 (480px 이하) */
+/* 모바일 최적화 (480px 이하) - 휴대폰 세로 화면 기준 */
 @media (max-width: 480px) {
   #playerListScreen .dashboard-header {
     padding: 12px 16px;
@@ -10671,21 +10720,44 @@ line[id^="needle-"] {
   .player-track-item {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
-    padding: 16px;
+    gap: 0;
+    padding: 12px;
+    min-height: auto;
   }
 
-  .player-track-number {
+  .player-track-number-fixed {
     flex: none;
-    text-align: left;
-    font-size: 1.1em;
+    width: 100%;
+    border-right: none;
+    border-bottom: 2px solid #e5e7eb;
+    padding-right: 0;
     padding-bottom: 8px;
-    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 12px;
+  }
+
+  .player-track-number-header {
+    text-align: center;
+    font-size: 1.1em;
+  }
+
+  .player-track-content {
+    gap: 12px;
+  }
+
+  .player-track-user-section {
+    gap: 8px;
   }
 
   .player-track-name {
     font-size: 0.95em;
-    padding: 8px 0;
+  }
+
+  .player-track-devices {
+    gap: 6px;
+  }
+
+  .player-track-devices .device-icon {
+    height: 18px;
   }
 
   .player-track-action {
@@ -10693,13 +10765,13 @@ line[id^="needle-"] {
     display: flex;
     gap: 6px;
     flex-wrap: nowrap;
-    overflow-x: auto;
+    min-height: 44px;
   }
   
   .player-track-action .btn,
   .player-track-action .player-enter-btn {
-    flex: 0 0 auto;
-    min-width: fit-content;
+    flex: 1;
+    min-height: 44px;
     font-size: 13px;
     padding: 8px 12px;
     white-space: nowrap;
@@ -10707,7 +10779,6 @@ line[id^="needle-"] {
 
   .player-enter-btn {
     justify-content: center;
-    min-height: 44px;
   }
 
   .race-title-text {
@@ -10735,8 +10806,11 @@ line[id^="needle-"] {
     padding: 14px;
   }
 
-  .player-track-number {
+  .player-track-number-fixed {
     flex: 0 0 70px;
+  }
+
+  .player-track-number-header {
     font-size: 1.1em;
   }
 
@@ -10744,33 +10818,39 @@ line[id^="needle-"] {
     font-size: 0.95em;
   }
 
-  .player-enter-btn {
-    padding: 10px 14px;
-    font-size: 14px;
+  .player-track-action .btn,
+  .player-track-action .player-enter-btn {
     min-height: 44px;
+    font-size: 14px;
   }
 }
 
 /* 작은 태블릿/큰 모바일 (481px ~ 640px) */
 @media (min-width: 481px) and (max-width: 640px) {
   .player-track-item {
-    flex-wrap: wrap;
+    flex-direction: column;
   }
 
-  .player-track-number {
-    flex: 0 0 100%;
-    text-align: left;
+  .player-track-number-fixed {
+    flex: none;
+    width: 100%;
+    border-right: none;
+    border-bottom: 2px solid #e5e7eb;
+    padding-right: 0;
     padding-bottom: 8px;
-    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 12px;
   }
 
-  .player-track-name {
-    flex: 1;
-    min-width: 0;
+  .player-track-number-header {
+    text-align: center;
+  }
+
+  .player-track-content {
+    width: 100%;
   }
 
   .player-track-action {
-    flex: 0 0 auto;
+    width: 100%;
   }
 }
 
