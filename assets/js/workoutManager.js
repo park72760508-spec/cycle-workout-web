@@ -857,26 +857,27 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const isCooldown = segType === 'cooldown';
     const isInterval = segType === 'interval';
     
-    // 색상 결정
+    // 색상 결정 (FTP 백분율 기준)
+    const ftpPercentValue = (targetPower / ftp) * 100;
     let color;
-    if (isRest) {
-      // 휴식: 연한 투명 회색
-      color = 'rgba(156, 163, 175, 0.4)';
+    if (ftpPercentValue < 60) {
+      // 휴식(FTP 60% 미만): #A7D7C5, 소프트 민트색
+      color = 'rgba(167, 215, 197, 0.8)';
       // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
       barHeight = Math.max(barHeight, 3);
       y = padding.top + chartHeight - barHeight;
     } else if (targetPower >= ftp) {
-      // FTP 초과: 빨강 (투명도 적용)
-      color = 'rgba(239, 68, 68, 0.6)';
+      // 고강도 인터벌(FTP 100% 이상): #2E7D32, 딥 포레스트 그린
+      color = 'rgba(46, 125, 50, 0.8)';
     } else if (targetPower >= ftp * 0.8) {
-      // FTP 80% 이상 100% 미만: 주황 (투명도 적용)
-      color = 'rgba(249, 115, 22, 0.6)';
-    } else if (isInterval || isWarmup || isCooldown) {
-      // FTP 80% 미만 (인터벌, 워밍업, 쿨다운): 녹색 (투명도 적용)
-      color = 'rgba(34, 197, 94, 0.6)';
+      // 인터벌(FTP 80% 이상 ~ <100%): #66BB6A, 스탠다드 그린
+      color = 'rgba(102, 187, 106, 0.8)';
+    } else if (ftpPercentValue >= 60) {
+      // 워밍업/쿨다운 (FTP 60% 이상 < 80%): 민트색
+      color = 'rgba(16, 185, 129, 0.8)';
     } else {
-      // 기본: 녹색 (투명도 적용)
-      color = 'rgba(34, 197, 94, 0.6)';
+      // 기본: 민트색
+      color = 'rgba(16, 185, 129, 0.8)';
     }
     
     // 막대 그리기 (부드러운 그라데이션)
