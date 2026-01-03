@@ -714,16 +714,16 @@ async function renderPlayerList() {
       }
     }
     
-    // 디바이스 아이콘 생성 (심박계, 스마트로라, 파워메터는 원형 배경 포함, 기어/브레이크는 원형 배경 없음)
+    // 디바이스 아이콘 생성 (심박계, 스마트로라, 파워메터는 배경색만 적용, 기어/브레이크는 배경 없음)
     const deviceIcons = [];
     if (track.heartRateId || track.heartRateDeviceId) {
-      deviceIcons.push('<span class="device-badge-circle" title="심박계"><img src="assets/img/bpm_g.png" alt="심박계" class="device-icon" /></span>');
+      deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" class="device-icon-with-bg" title="심박계" />');
     }
     if (track.smartTrainerId || track.trainerDeviceId) {
-      deviceIcons.push('<span class="device-badge-circle" title="스마트트레이너"><img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon" /></span>');
+      deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon-with-bg" title="스마트트레이너" />');
     }
     if (track.powerMeterId || track.deviceId) {
-      deviceIcons.push('<span class="device-badge-circle" title="파워메터"><img src="assets/img/power_g.png" alt="파워메터" class="device-icon" /></span>');
+      deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" class="device-icon-with-bg" title="파워메터" />');
     }
     if (gearIcon) {
       deviceIcons.push(`<span class="device-icon-plain" title="기어">${gearIcon}</span>`);
