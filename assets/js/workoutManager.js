@@ -731,18 +731,27 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     window._segmentGraphChartWidth = chartWidth;
     window._segmentGraphTotalSeconds = totalSeconds;
   }
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+  if (canvasId === 'individualSegmentGraph') {
+    // 개인 대시보드: 흰색 얇은 실선, 투명도 50%
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]); // 실선
+  } else if (canvasId === 'trainingSegmentGraph') {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.5)';
-    ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면 및 개인 대시보드: 더 밝은 노란색
+    ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면: 더 밝은 노란색
+    ctx.shadowBlur = 4;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 4]); // 점선
   } else {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
     ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)'; // 훈련 준비 화면
+    ctx.shadowBlur = 4;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 4]); // 점선
   }
-  ctx.shadowBlur = 4;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
-  ctx.lineWidth = 2.5;
-  ctx.setLineDash([6, 4]);
   ctx.beginPath();
   ctx.moveTo(padding.left, ftpY);
   ctx.lineTo(padding.left + chartWidth, ftpY);
@@ -971,41 +980,43 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     currentTime += duration;
   });
   
-  // 가로축 시간 표시
-  const timeSteps = Math.min(10, Math.max(5, Math.floor(totalSeconds / 60))); // 1분 단위 또는 최대 10개
-  for (let i = 0; i <= timeSteps; i++) {
-    const time = (totalSeconds * i) / timeSteps;
-    const x = padding.left + (time / totalSeconds) * chartWidth;
-    
-    // 눈금선
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
-    } else {
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
+  // 가로축 시간 표시 (개인 대시보드는 제거)
+  if (canvasId !== 'individualSegmentGraph') {
+    const timeSteps = Math.min(10, Math.max(5, Math.floor(totalSeconds / 60))); // 1분 단위 또는 최대 10개
+    for (let i = 0; i <= timeSteps; i++) {
+      const time = (totalSeconds * i) / timeSteps;
+      const x = padding.left + (time / totalSeconds) * chartWidth;
+      
+      // 눈금선
+      if (canvasId === 'trainingSegmentGraph') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면: 밝은 색상
+      } else {
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
+      }
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, padding.top + chartHeight);
+      ctx.lineTo(x, padding.top + chartHeight + 5);
+      ctx.stroke();
+      
+      // 시간 표시
+      const minutes = Math.floor(time / 60);
+      const seconds = Math.floor(time % 60);
+      if (canvasId === 'trainingSegmentGraph') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면: 밝은 색상
+      } else {
+        ctx.fillStyle = '#6b7280'; // 훈련 준비 화면: 어두운 색상
+      }
+      const timeFontSize = '10px sans-serif';
+      const timeLabelY = padding.top + chartHeight + 18;
+      ctx.font = timeFontSize;
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        `${minutes}:${seconds.toString().padStart(2, '0')}`,
+        x,
+        timeLabelY
+      );
     }
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x, padding.top + chartHeight);
-    ctx.lineTo(x, padding.top + chartHeight + 5);
-    ctx.stroke();
-    
-    // 시간 표시
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
-    } else {
-      ctx.fillStyle = '#6b7280'; // 훈련 준비 화면: 어두운 색상
-    }
-    const timeFontSize = (canvasId === 'individualSegmentGraph') ? '8px sans-serif' : '10px sans-serif';
-    const timeLabelY = (canvasId === 'individualSegmentGraph') ? padding.top + chartHeight + 12 : padding.top + chartHeight + 18;
-    ctx.font = timeFontSize;
-    ctx.textAlign = 'center';
-    ctx.fillText(
-      `${minutes}:${seconds.toString().padStart(2, '0')}`,
-      x,
-      timeLabelY
-    );
   }
   
   // 개인 대시보드 마스코트 그리기
