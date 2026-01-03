@@ -10628,8 +10628,10 @@ line[id^="needle-"] {
 
 .player-track-user-section {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   flex: 1;
 }
 
@@ -10637,6 +10639,7 @@ line[id^="needle-"] {
   font-size: 1em;
   word-break: break-word;
   line-height: 1.4;
+  flex: 1;
 }
 
 .player-track-name.has-user {
@@ -10660,6 +10663,45 @@ line[id^="needle-"] {
   height: 20px;
   width: auto;
   object-fit: contain;
+}
+
+.player-track-devices-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.player-track-devices-right .device-badge-circle {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #333333;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.player-track-devices-right .device-badge-circle:hover {
+  transform: scale(1.08);
+}
+
+.player-track-devices-right .device-badge-circle .device-icon {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
+}
+
+.player-track-devices-right .device-badge-circle img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  display: block;
 }
 
 .player-track-action {
@@ -10745,7 +10787,10 @@ line[id^="needle-"] {
   }
 
   .player-track-user-section {
-    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
   }
 
   .player-track-name {
