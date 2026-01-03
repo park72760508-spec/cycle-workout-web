@@ -519,7 +519,7 @@ function createPowerMeterElement(powerMeter) {
           <span class="speedometer-user-name" id="user-name-${powerMeter.id}" style="font-size: 13px !important; color: #ffffff !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important;">${powerMeter.userName || ''}</span>
           <span id="device-icons-${powerMeter.id}" style="display: inline-flex !important; align-items: center !important; margin-left: 4px !important;">${deviceIconsHtml}</span>
         </div>
-        <span class="speedometer-pairing-name" id="pairing-name-${powerMeter.id}" style="${pairingNameStyle}" ${pairingNameOnclick}>${powerMeter.pairingName || ''}</span>
+        <!-- pairing-name 요소 제거: 디바이스 아이콘으로 대체됨 -->
       </div>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;" ${trackButtonOnclick}>트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
@@ -2762,16 +2762,8 @@ async function updateTracksFromFirebase() {
         powerMeter.gear = trackDeviceData.gear || null;
         powerMeter.brake = trackDeviceData.brake || null;
         
-        // 디바이스 이름도 업데이트 (있는 경우)
-        if (trackDeviceData.smartTrainerId) {
-          powerMeter.trainerName = `스마트로라 (ID: ${trackDeviceData.smartTrainerId})`;
-        }
-        if (trackDeviceData.powerMeterId) {
-          powerMeter.pairingName = `파워메터 (ID: ${trackDeviceData.powerMeterId})`;
-        }
-        if (trackDeviceData.heartRateId) {
-          powerMeter.heartRateName = `심박계 (ID: ${trackDeviceData.heartRateId})`;
-        }
+        // 디바이스 이름 업데이트 제거: 디바이스 아이콘으로 대체됨
+        // pairingName은 더 이상 화면에 표시하지 않음
         
         console.log(`[Indoor Training] 트랙 ${track.trackNumber} Device 정보 업데이트:`, trackDeviceData);
       }
@@ -3408,11 +3400,7 @@ function updatePowerMeterUIFromPairing(powerMeter) {
     }
   }
   
-  // 페어링 이름 표시
-  const pairingNameEl = document.getElementById(`pairing-name-${powerMeter.id}`);
-  if (pairingNameEl) {
-    pairingNameEl.textContent = powerMeter.pairingName || '';
-  }
+  // pairing-name 요소는 제거됨 (디바이스 아이콘으로 대체)
 }
 
 /**
