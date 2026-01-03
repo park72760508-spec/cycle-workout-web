@@ -747,6 +747,16 @@ async function renderPlayerList() {
       </div>
     `;
   }).join('');
+  
+  // 일괄 퇴실 버튼 표시 여부 (grade=1,3만 표시)
+  const btnClearAllTracks = document.getElementById('btnClearAllTracks');
+  if (btnClearAllTracks) {
+    if (isAdmin || userGrade === '3' || userGrade === 3) {
+      btnClearAllTracks.style.display = 'inline-flex';
+    } else {
+      btnClearAllTracks.style.display = 'none';
+    }
+  }
 }
 
 /**
@@ -1424,6 +1434,24 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
   // 모든 사용자 목록을 전역 변수에 저장 (검색 필터링용)
   window._allUsersForTrackSelection = users;
 
+  // 사용자 grade 확인
+  let userGrade = '2';
+  let isAdmin = false;
+  let isCoach = false;
+  
+  try {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+    isAdmin = userGrade === '1' || userGrade === 1;
+    isCoach = userGrade === '3' || userGrade === 3;
+  } catch (e) {
+    console.error('[assignUserToTrack] 사용자 grade 확인 오류:', e);
+  }
+  
+  // grade=2 사용자는 사용자와 심박계만 변경 가능
+  const isGrade2 = userGrade === '2' || userGrade === 2;
+  const canModifyDevices = isAdmin || isCoach; // grade=1,3만 디바이스 변경 가능
+  
   // Firebase에서 현재 트랙의 정보 가져오기
   let currentUserData = null;
   let currentDeviceData = null;
@@ -1445,7 +1473,9 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
       console.log('[assignUserToTrack] 현재 트랙 정보:', {
         trackNumber: trackNumber,
         userData: currentUserData,
-        deviceData: currentDeviceData
+        deviceData: currentDeviceData,
+        userGrade: userGrade,
+        canModifyDevices: canModifyDevices
       });
     } catch (error) {
       console.error('[assignUserToTrack] Firebase 정보 로드 오류:', error);
@@ -1493,6 +1523,7 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
       <div id="deviceInputSection" style="display: none; margin-bottom: 20px;">
         <h3 style="margin: 0 0 16px 0; font-size: 1.1em; color: #333;">디바이스 정보 입력</h3>
         
+        ${canModifyDevices ? `
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">스마트로라 ID</label>
           <input type="text" 
@@ -1514,6 +1545,12 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
                  pattern="[0-9]*"
                  oninput="this.value = this.value.replace(/[^0-9]/g, '')">
         </div>
+        ` : `
+        <div style="margin-bottom: 16px; display: none;">
+          <input type="text" id="trackTrainerDeviceId" style="display: none;">
+          <input type="text" id="trackPowerMeterDeviceId" style="display: none;">
+        </div>
+        `}
         
         <div style="margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">심박계 ID</label>
@@ -1526,6 +1563,7 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
                  oninput="this.value = this.value.replace(/[^0-9]/g, '')">
         </div>
         
+        ${canModifyDevices ? `
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
           <div>
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Gear</label>
@@ -1545,9 +1583,22 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
             </select>
           </div>
         </div>
+        ` : `
+        <div style="display: none;">
+          <select id="trackGearSelect" style="display: none;"><option value=""></option></select>
+          <select id="trackBrakeSelect" style="display: none;"><option value=""></option></select>
+        </div>
+        `}
       </div>
       
       <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        ${canModifyDevices ? `
+        <button onclick="resetTrackApplication(${trackNumber}, '${roomId}')" 
+                id="btnResetTrackApplication"
+                style="padding: 10px 20px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+          초기화
+        </button>
+        ` : ''}
         <button onclick="saveTrackApplication(${trackNumber}, '${roomId}')" 
                 id="btnSaveTrackApplication"
                 style="display: none; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
@@ -1976,25 +2027,57 @@ async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event)
 
 /**
  * 트랙에서 사용자 제거 (내부 함수 - roomId만 받음)
+ * grade=2: 사용자와 심박계만 삭제
+ * grade=1,3: 모든 데이터 삭제
  */
 async function removeUserFromTrackInternal(trackNumber, roomId) {
   roomId = String(roomId);
+  
+  // grade 확인
+  let userGrade = '2';
+  try {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+  } catch (e) {
+    console.error('[removeUserFromTrack] grade 확인 오류:', e);
+  }
+  
+  const isAdmin = userGrade === '1' || userGrade === 1 || userGrade === '3' || userGrade === 3;
 
   try {
-    const url = `${window.GAS_URL}?action=updateTrainingRoomUser&roomId=${roomId}&trackNumber=${trackNumber}&userId=`;
-    const response = await fetch(url);
-    const result = await response.json();
-
-    if (result.success) {
+    if (typeof db !== 'undefined') {
+      const sessionId = roomId;
+      
+      if (isAdmin) {
+        // grade=1,3: 모든 데이터 삭제
+        await db.ref(`sessions/${sessionId}/users/${trackNumber}`).remove();
+        await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).remove();
+        console.log(`[removeUserFromTrack] 트랙 ${trackNumber} 모든 데이터 삭제 완료`);
+      } else {
+        // grade=2: 사용자와 심박계만 삭제 (스마트로라, 파워메터, gear, brake는 유지)
+        await db.ref(`sessions/${sessionId}/users/${trackNumber}`).remove();
+        
+        // devices에서 심박계만 삭제
+        const deviceRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
+        const deviceSnapshot = await deviceRef.once('value');
+        const deviceData = deviceSnapshot.val();
+        
+        if (deviceData) {
+          await deviceRef.update({
+            heartRateId: null
+          });
+          console.log(`[removeUserFromTrack] 트랙 ${trackNumber} 사용자 및 심박계만 삭제 완료`);
+        }
+      }
+      
       if (typeof showToast === 'function') {
         showToast('사용자가 제거되었습니다.', 'success');
       }
+      
       // Player List 다시 로드
       await renderPlayerList();
     } else {
-      if (typeof showToast === 'function') {
-        showToast('사용자 제거 실패: ' + (result.error || 'Unknown error'), 'error');
-      }
+      throw new Error('Firebase가 초기화되지 않았습니다.');
     }
   } catch (error) {
     console.error('[removeUserFromTrack] 오류:', error);
@@ -2219,6 +2302,164 @@ async function checkFirebaseRawData(roomId) {
 }
 
 /**
+ * 일괄 퇴실 (모든 트랙의 사용자 및 심박계 삭제, grade=1,3만 사용 가능)
+ */
+async function clearAllTracksData() {
+  // grade 확인
+  let userGrade = '2';
+  try {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+  } catch (e) {
+    console.error('[clearAllTracksData] grade 확인 오류:', e);
+  }
+  
+  const isAdmin = userGrade === '1' || userGrade === 1 || userGrade === '3' || userGrade === 3;
+  
+  if (!isAdmin) {
+    if (typeof showToast === 'function') {
+      showToast('관리자만 일괄 퇴실을 수행할 수 있습니다.', 'error');
+    }
+    return;
+  }
+  
+  if (!confirm('모든 트랙의 사용자와 심박계 정보를 삭제하시겠습니까?\n(스마트로라, 파워메터, Gear, Brake는 유지됩니다)')) {
+    return;
+  }
+  
+  // roomId 가져오기
+  let roomId = null;
+  if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
+    roomId = currentSelectedTrainingRoom.id;
+  } else if (window.currentTrainingRoomId) {
+    roomId = window.currentTrainingRoomId;
+  }
+  
+  if (!roomId) {
+    if (typeof showToast === 'function') {
+      showToast('Training Room을 먼저 선택해주세요.', 'error');
+    }
+    return;
+  }
+  
+  roomId = String(roomId);
+  
+  try {
+    if (typeof db !== 'undefined') {
+      const sessionId = roomId;
+      
+      // 모든 트랙(1~10) 처리
+      const promises = [];
+      for (let i = 1; i <= 10; i++) {
+        // users 삭제
+        promises.push(db.ref(`sessions/${sessionId}/users/${i}`).remove());
+        
+        // devices에서 심박계만 삭제
+        promises.push(
+          db.ref(`sessions/${sessionId}/devices/${i}`).once('value').then(snapshot => {
+            const deviceData = snapshot.val();
+            if (deviceData) {
+              return db.ref(`sessions/${sessionId}/devices/${i}`).update({
+                heartRateId: null
+              });
+            }
+          })
+        );
+      }
+      
+      await Promise.all(promises);
+      
+      if (typeof showToast === 'function') {
+        showToast('모든 트랙의 사용자 및 심박계가 삭제되었습니다.', 'success');
+      }
+      
+      // Player List 다시 로드
+      await renderPlayerList();
+    } else {
+      throw new Error('Firebase가 초기화되지 않았습니다.');
+    }
+  } catch (error) {
+    console.error('[clearAllTracksData] 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('일괄 퇴실 중 오류가 발생했습니다.', 'error');
+    }
+  }
+}
+
+/**
+ * 트랙 초기화 (해당 트랙의 모든 데이터 삭제, grade=1,3만 사용 가능)
+ */
+async function resetTrackApplication(trackNumber, roomIdParam) {
+  // grade 확인
+  let userGrade = '2';
+  try {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+  } catch (e) {
+    console.error('[resetTrackApplication] grade 확인 오류:', e);
+  }
+  
+  const isAdmin = userGrade === '1' || userGrade === 1 || userGrade === '3' || userGrade === 3;
+  
+  if (!isAdmin) {
+    if (typeof showToast === 'function') {
+      showToast('관리자만 초기화를 수행할 수 있습니다.', 'error');
+    }
+    return;
+  }
+  
+  if (!confirm(`트랙${trackNumber}의 모든 사용자 및 디바이스 정보를 삭제하시겠습니까?`)) {
+    return;
+  }
+  
+  // roomId 확인
+  let roomId = roomIdParam;
+  if (!roomId) {
+    roomId = (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) 
+      ? currentSelectedTrainingRoom.id 
+      : (window.currentTrainingRoomId || null);
+  }
+  
+  if (!roomId) {
+    if (typeof showToast === 'function') {
+      showToast('Training Room을 먼저 선택해주세요.', 'error');
+    }
+    return;
+  }
+  
+  roomId = String(roomId);
+  
+  try {
+    if (typeof db !== 'undefined') {
+      const sessionId = roomId;
+      
+      // 사용자 및 디바이스 정보 모두 삭제
+      await db.ref(`sessions/${sessionId}/users/${trackNumber}`).remove();
+      await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).remove();
+      
+      console.log(`[resetTrackApplication] 트랙 ${trackNumber} 초기화 완료`);
+      
+      if (typeof showToast === 'function') {
+        showToast(`트랙${trackNumber}이(가) 초기화되었습니다.`, 'success');
+      }
+      
+      // 모달 닫기
+      closeTrackUserSelectModal();
+      
+      // Player List 다시 로드
+      await renderPlayerList();
+    } else {
+      throw new Error('Firebase가 초기화되지 않았습니다.');
+    }
+  } catch (error) {
+    console.error('[resetTrackApplication] 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('초기화 중 오류가 발생했습니다.', 'error');
+    }
+  }
+}
+
+/**
  * Player List 새로고침
  */
 async function refreshPlayerList() {
@@ -2280,6 +2521,10 @@ if (typeof window !== 'undefined') {
   window.closeTrackUserSelectModal = closeTrackUserSelectModal;
   // Player List 새로고침 함수
   window.refreshPlayerList = refreshPlayerList;
+  // 일괄 퇴실 함수
+  window.clearAllTracksData = clearAllTracksData;
+  // 트랙 초기화 함수
+  window.resetTrackApplication = resetTrackApplication;
   // 디버깅 함수
   window.checkFirebaseTrackUsers = checkFirebaseTrackUsers;
   window.checkFirebaseRawData = checkFirebaseRawData;
