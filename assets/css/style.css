@@ -555,11 +555,15 @@ button[aria-disabled="true"] {
 .profile-exit-container {
   margin-top: 24px;
   padding-top: 20px;
+  padding-bottom: 20px;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   text-align: center;
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+  z-index: 1000;
+  pointer-events: auto;
 }
 
 .profile-exit-container .btn-exit-inline {
@@ -575,6 +579,11 @@ button[aria-disabled="true"] {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
+  z-index: 1001;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: rgba(239, 68, 68, 0.2);
+  touch-action: manipulation;
 }
 
 .profile-exit-container .btn-exit-inline:hover {
@@ -935,6 +944,9 @@ button[aria-disabled="true"] {
   --card-bg:#fff; --card-border:#e5e7eb;
   --text-strong:#111827; --text:#374151; --text-muted:#6b7280;
   --brand:#2e74e8; --accent-ok:#22c55e;
+  position: relative;
+  min-height: 100vh;
+  padding-bottom: 100px; /* 나가기 버튼을 위한 여백 */
 }
 /* 훈련 등급 범례 컨테이너 */
 .challenge-legend-container {
