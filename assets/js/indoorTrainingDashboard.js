@@ -336,6 +336,17 @@ function initIndoorTrainingDashboard() {
       startGaugeAnimationLoop();
     
   }
+  
+  // Firebase에서 트랙 정보 자동 업데이트 (화면 로딩 시)
+  // 약간의 지연을 두어 DOM이 완전히 렌더링된 후 실행
+  setTimeout(() => {
+    if (typeof updateTracksFromFirebase === 'function') {
+      console.log('[Indoor Training] 화면 로딩 시 Firebase에서 트랙 정보 자동 업데이트 시작');
+      updateTracksFromFirebase().catch(error => {
+        console.error('[Indoor Training] 화면 로딩 시 트랙 정보 업데이트 실패:', error);
+      });
+    }
+  }, 500); // 500ms 지연
 }
 
 /**
