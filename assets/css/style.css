@@ -10674,34 +10674,19 @@ line[id^="needle-"] {
   flex-shrink: 0;
 }
 
-.player-track-devices-right .device-badge-circle {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+.player-track-devices-right .device-icon-with-bg {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: inline-block;
   background: #333333;
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
   transition: transform 0.2s ease;
 }
 
-.player-track-devices-right .device-badge-circle:hover {
+.player-track-devices-right .device-icon-with-bg:hover {
   transform: scale(1.08);
-}
-
-.player-track-devices-right .device-badge-circle .device-icon {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  display: block;
-}
-
-.player-track-devices-right .device-badge-circle img {
-  width: 16px;
-  height: 16px;
-  object-fit: contain;
-  display: block;
 }
 
 .player-track-devices-right .device-icon-plain {
