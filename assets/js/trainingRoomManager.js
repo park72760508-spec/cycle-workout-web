@@ -1548,14 +1548,14 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
       </div>
       
       <div style="display: flex; gap: 8px; justify-content: flex-end;">
-        <button onclick="closeTrackUserSelectModal()" 
-                style="padding: 10px 20px; background: #ccc; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
-          취소
-        </button>
         <button onclick="saveTrackApplication(${trackNumber}, '${roomId}')" 
                 id="btnSaveTrackApplication"
                 style="display: none; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
           저장
+        </button>
+        <button onclick="closeTrackUserSelectModal()" 
+                style="padding: 10px 20px; background: #ccc; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+          취소
         </button>
       </div>
     </div>
@@ -1598,10 +1598,10 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
         saveBtn.style.display = 'block';
       }
       
-      // 현재 선택된 사용자 이름을 검색 입력 필드에 채우고 자동 검색
+      // 현재 선택된 사용자 이름을 검색 입력 필드에 채우고 자동 검색 (선택된 사용자는 제외)
       if (searchInput && currentUserData.userName) {
         searchInput.value = currentUserData.userName;
-        // 자동으로 검색 실행
+        // 자동으로 검색 실행 (현재 선택된 사용자는 검색 결과에서 제외됨)
         setTimeout(() => {
           if (typeof searchUsersForTrackSelection === 'function') {
             searchUsersForTrackSelection(trackNumber, roomId);
@@ -1775,11 +1775,19 @@ async function searchUsersForTrackSelection(trackNumber, roomId) {
       return name.includes(searchTerm.toLowerCase());
     });
     
+    // 현재 선택된 사용자 ID 가져오기
+    const currentSelectedUserId = window._currentTrackApplication?.selectedUserId ? String(window._currentTrackApplication.selectedUserId) : null;
+    
+    // 현재 선택된 사용자를 제외한 목록 필터링
+    const usersToShow = currentSelectedUserId 
+      ? filteredUsers.filter(user => String(user.id) !== currentSelectedUserId)
+      : filteredUsers;
+    
     // 필터링된 목록 렌더링
-    if (filteredUsers.length === 0) {
+    if (usersToShow.length === 0) {
       listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">검색 결과가 없습니다.</div>';
     } else {
-      listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, null);
+      listContainer.innerHTML = renderUserListForTrackSelection(usersToShow, trackNumber, roomId, null);
     }
   } catch (error) {
     console.error('[searchUsersForTrackSelection] 검색 오류:', error);
@@ -1830,7 +1838,7 @@ function selectUserForTrackSelection(trackNumber, userId, userName, userFTP, use
     saveBtn.style.display = 'block';
   }
   
-  // 사용자 목록 다시 렌더링 (체크 표시 업데이트)
+  // 사용자 목록 다시 렌더링 (체크 표시 업데이트 및 현재 선택된 사용자 제외)
   const searchInput = document.getElementById('trackUserSearchInput');
   const searchTerm = searchInput ? searchInput.value.trim() : '';
   const allUsers = window._allUsersForTrackSelection || [];
@@ -1840,9 +1848,18 @@ function selectUserForTrackSelection(trackNumber, userId, userName, userFTP, use
       const name = (user.name || '').toLowerCase();
       return name.includes(searchTerm.toLowerCase());
     });
+    
+    // 현재 선택된 사용자를 제외
+    const currentSelectedUserId = String(userId);
+    const usersToShow = filteredUsers.filter(user => String(user.id) !== currentSelectedUserId);
+    
     const listContainer = document.getElementById('trackUserListContainer');
     if (listContainer) {
-      listContainer.innerHTML = renderUserListForTrackSelection(filteredUsers, trackNumber, roomId, null);
+      if (usersToShow.length === 0) {
+        listContainer.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">검색 결과가 없습니다.</div>';
+      } else {
+        listContainer.innerHTML = renderUserListForTrackSelection(usersToShow, trackNumber, roomId, null);
+      }
     }
   }
 }
