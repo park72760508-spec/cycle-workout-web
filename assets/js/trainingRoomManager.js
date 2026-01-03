@@ -714,22 +714,22 @@ async function renderPlayerList() {
       }
     }
     
-    // 디바이스 아이콘 생성
+    // 디바이스 아이콘 생성 (심박계, 스마트로라, 파워메터, 기어, 브레이크는 원형 배경 포함)
     const deviceIcons = [];
+    if (track.heartRateId || track.heartRateDeviceId) {
+      deviceIcons.push('<span class="device-badge-circle" title="심박계"><img src="assets/img/bpm_g.png" alt="심박계" class="device-icon" /></span>');
+    }
     if (track.smartTrainerId || track.trainerDeviceId) {
-      deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon" />');
+      deviceIcons.push('<span class="device-badge-circle" title="스마트트레이너"><img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon" /></span>');
     }
     if (track.powerMeterId || track.deviceId) {
-      deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" class="device-icon" />');
-    }
-    if (track.heartRateId || track.heartRateDeviceId) {
-      deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" class="device-icon" />');
+      deviceIcons.push('<span class="device-badge-circle" title="파워메터"><img src="assets/img/power_g.png" alt="파워메터" class="device-icon" /></span>');
     }
     if (gearIcon) {
-      deviceIcons.push(gearIcon);
+      deviceIcons.push(`<span class="device-badge-circle" title="기어">${gearIcon}</span>`);
     }
     if (brakeIcon) {
-      deviceIcons.push(brakeIcon);
+      deviceIcons.push(`<span class="device-badge-circle" title="브레이크">${brakeIcon}</span>`);
     }
     const deviceIconsHtml = deviceIcons.length > 0 ? deviceIcons.join('') : '';
     
@@ -745,7 +745,7 @@ async function renderPlayerList() {
             <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
               ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
             </div>
-            ${deviceIconsHtml ? `<div class="player-track-devices">${deviceIconsHtml}</div>` : ''}
+            ${deviceIconsHtml ? `<div class="player-track-devices-right">${deviceIconsHtml}</div>` : ''}
           </div>
           <div class="player-track-action">
             ${canModify || canParticipate ? `
