@@ -2646,7 +2646,14 @@
         <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
         <span class="race-title-text">훈련 참가</span>
       </h1>
-      <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
+    </div>
+
+    <div class="player-list-container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
+      <div id="playerListContent" class="player-list-content">
+        <!-- 트랙1~10이 여기에 동적으로 추가됩니다 -->
+      </div>
+      <!-- 트랙 목록 아래 버튼들 -->
+      <div class="player-list-actions" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
         <button class="btn btn-danger btn-default-style btn-with-icon" id="btnClearAllTracks" onclick="clearAllTracksData()" title="일괄 퇴실" style="display: none;">
           <img src="assets/img/delete.png" alt="일괄 퇴실" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
           일괄 퇴실
@@ -2659,12 +2666,6 @@
           <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
           뒤로
         </button>
-      </div>
-    </div>
-
-    <div class="player-list-container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
-      <div id="playerListContent" class="player-list-content">
-        <!-- 트랙1~10이 여기에 동적으로 추가됩니다 -->
       </div>
     </div>
   </div>
