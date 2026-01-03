@@ -3142,12 +3142,17 @@ function savePowerMeterPairing() {
     powerMeter.brake = brakeSelect.value || null;
   }
   
-  // Firebase DB에 저장
-  if (typeof db !== 'undefined') {
-    const sessionId = getSessionId();
-    
-    if (sessionId) {
-      // Device 정보 저장 (트랙번호별)
+  // Firebase DB에 저장하는 공통 함수
+  const saveToFirebase = () => {
+    if (typeof db !== 'undefined') {
+      const sessionId = getSessionId();
+      
+      if (!sessionId) {
+        console.warn('[Firebase] SESSION_ID를 찾을 수 없어 페어링 정보를 저장할 수 없습니다.');
+        return;
+      }
+      
+      // Device 정보 저장 (트랙번호별) - 모든 탭에서 저장
       const deviceData = {
         smartTrainerId: powerMeter.trainerDeviceId || null,
         powerMeterId: powerMeter.deviceId || null,
@@ -3163,7 +3168,7 @@ function savePowerMeterPairing() {
         console.error(`[Firebase] Device 저장 실패:`, error);
       });
       
-      // Users 정보 저장 (트랙번호별)
+      // Users 정보 저장 (트랙번호별) - 사용자 정보가 있을 때만 저장
       if (powerMeter.userId && powerMeter.userName) {
         const userData = {
           userId: String(powerMeter.userId || ''),
@@ -3205,13 +3210,14 @@ function savePowerMeterPairing() {
           console.error(`[Firebase] Users 저장 실패:`, error);
         });
       }
-    } else {
-      console.warn('[Firebase] SESSION_ID를 찾을 수 없어 페어링 정보를 저장할 수 없습니다.');
     }
-  }
+  };
   
   if (tabName === 'user') {
-    // 사용자 선택은 이미 저장됨
+    // 사용자 선택은 이미 selectSearchedUserForPowerMeter에서 저장됨
+    // devices 정보만 업데이트 (gear, brake 변경 시)
+    saveToFirebase();
+    
     // 눈금 업데이트
     updatePowerMeterTicks(powerMeterId);
     // 저장
@@ -3235,6 +3241,9 @@ function savePowerMeterPairing() {
     
     powerMeter.trainerName = name;
     powerMeter.trainerDeviceId = deviceId;
+    
+    // Firebase에 저장 (devices 정보 업데이트)
+    saveToFirebase();
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
@@ -3264,6 +3273,9 @@ function savePowerMeterPairing() {
     powerMeter.pairingName = name;
     powerMeter.deviceId = deviceId;
     
+    // Firebase에 저장 (devices 정보 업데이트)
+    saveToFirebase();
+    
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
@@ -3291,6 +3303,9 @@ function savePowerMeterPairing() {
     
     powerMeter.heartRateName = name;
     powerMeter.heartRateDeviceId = deviceId;
+    
+    // Firebase에 저장 (devices 정보 업데이트)
+    saveToFirebase();
     
     // 저장
     saveAllPowerMeterPairingsToStorage();
