@@ -2770,42 +2770,48 @@ async function updateTracksFromFirebase() {
       
       // Firebase Users 정보 업데이트 (트랙번호별, tracks 데이터와 병합)
       const trackUserData = usersData[track.trackNumber];
-      if (trackUserData && trackUserData.userId && trackUserData.userName) {
-        // 사용자 상세 정보 찾기
-        const user = users.find(u => String(u.id) === String(trackUserData.userId));
+      if (trackUserData && trackUserData.userId) {
+        // 사용자 이름 확인 (userName, name, participantName 순서로 확인)
+        const userName = trackUserData.userName || trackUserData.name || trackUserData.participantName || track.userName;
         
-        // 파워미터에 사용자 정보 저장 (Firebase Users 데이터 우선)
-        powerMeter.userId = trackUserData.userId;
-        powerMeter.userName = trackUserData.userName || track.userName;
-        powerMeter.userWeight = trackUserData.weight || (user ? user.weight : null);
-        powerMeter.userFTP = trackUserData.ftp || (user ? user.ftp : null);
-        
-        if (user) {
-          powerMeter.userContact = user.contact || null;
+        if (userName) {
+          // 사용자 상세 정보 찾기
+          const user = users.find(u => String(u.id) === String(trackUserData.userId));
+          
+          // 파워미터에 사용자 정보 저장 (Firebase Users 데이터 우선)
+          powerMeter.userId = trackUserData.userId;
+          powerMeter.userName = userName;
+          powerMeter.userWeight = trackUserData.weight || (user ? user.weight : null);
+          powerMeter.userFTP = trackUserData.ftp || (user ? user.ftp : null);
+          
+          if (user) {
+            powerMeter.userContact = user.contact || null;
+          }
+          
+          // UI 업데이트 (사용자 이름 표시)
+          const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
+          if (userNameEl) {
+            userNameEl.textContent = powerMeter.userName;
+            userNameEl.parentElement.style.display = 'flex';
+          }
+          
+          // 디바이스 아이콘 업데이트
+          updateDeviceIcons(track.trackNumber);
+          
+          // FTP 기반 눈금 업데이트
+          updatePowerMeterTicks(track.trackNumber);
+          
+          updatedCount++;
+          
+          console.log(`[Indoor Training] 트랙 ${track.trackNumber} 업데이트:`, {
+            userId: powerMeter.userId,
+            userName: powerMeter.userName,
+            userFTP: powerMeter.userFTP,
+            weight: powerMeter.userWeight,
+            gear: powerMeter.gear,
+            brake: powerMeter.brake
+          });
         }
-        
-        // UI 업데이트 (사용자 이름 표시)
-        const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
-        if (userNameEl) {
-          userNameEl.textContent = powerMeter.userName;
-          userNameEl.parentElement.style.display = 'flex';
-        }
-        
-        // 디바이스 아이콘 업데이트
-        updateDeviceIcons(track.trackNumber);
-        
-        // FTP 기반 눈금 업데이트
-        updatePowerMeterTicks(track.trackNumber);
-        
-        updatedCount++;
-        
-        console.log(`[Indoor Training] 트랙 ${track.trackNumber} 업데이트:`, {
-          userId: powerMeter.userId,
-          userName: powerMeter.userName,
-          userFTP: powerMeter.userFTP,
-          gear: powerMeter.gear,
-          brake: powerMeter.brake
-        });
       } else if (track.userId && track.userName) {
         // Firebase Users에 없지만 tracks에 있는 경우 (기존 로직 유지)
         const user = users.find(u => String(u.id) === String(track.userId));
