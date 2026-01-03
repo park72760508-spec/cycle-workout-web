@@ -724,15 +724,15 @@ async function renderPlayerList() {
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
               onclick="removeUserFromTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
-              title="훈련 참가 취소">
-              <span>취소</span>
+              title="훈련 참가 퇴실">
+              <span>퇴실</span>
             </button>
           ` : hasUser && !canModify ? `
             <button 
               class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
               disabled
-              title="본인이 할당한 트랙만 취소 가능합니다">
-              <span>취소</span>
+              title="본인이 할당한 트랙만 퇴실 가능합니다">
+              <span>퇴실</span>
             </button>
           ` : ''}
           <a href="${dashboardUrl}" 
