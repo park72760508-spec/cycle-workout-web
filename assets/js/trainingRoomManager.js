@@ -571,6 +571,23 @@ async function renderPlayerList() {
                          deviceData['Brake'] || 
                          deviceData.Brake || 
                          null;
+            
+            // 디바이스 ID 정보
+            track.smartTrainerId = deviceData.smartTrainerId || 
+                                  deviceData['smartTrainerId'] ||
+                                  deviceData['Smart Trainer id'] || 
+                                  deviceData.trainerDeviceId || 
+                                  null;
+            track.powerMeterId = deviceData.powerMeterId || 
+                                deviceData['powerMeterId'] ||
+                                deviceData['Power Meter id'] || 
+                                deviceData.deviceId || 
+                                null;
+            track.heartRateId = deviceData.heartRateId || 
+                               deviceData['heartRateId'] ||
+                               deviceData['Heart Rate id'] || 
+                               deviceData.heartRateDeviceId || 
+                               null;
           }
         }
       } else {
@@ -592,6 +609,9 @@ async function renderPlayerList() {
                 track.ftp = apiTrack.ftp || null;
                 track.gear = apiTrack.gear || null;
                 track.brake = apiTrack.brake || null;
+                track.smartTrainerId = apiTrack.smartTrainerId || apiTrack.trainerDeviceId || null;
+                track.powerMeterId = apiTrack.powerMeterId || apiTrack.deviceId || null;
+                track.heartRateId = apiTrack.heartRateId || apiTrack.heartRateDeviceId || null;
               }
             }
           });
@@ -680,69 +700,93 @@ async function renderPlayerList() {
     
     if (track.gear) {
       if (track.gear === '11단' || track.gear === '11') {
-        gearIcon = '<img src="assets/img/g11.png" alt="11단" style="width: 24px; height: 24px; margin-right: 4px; vertical-align: middle;" />';
+        gearIcon = '<img src="assets/img/g11.png" alt="11단" class="device-icon" />';
       } else if (track.gear === '12단' || track.gear === '12') {
-        gearIcon = '<img src="assets/img/g12.png" alt="12단" style="width: 24px; height: 24px; margin-right: 4px; vertical-align: middle;" />';
+        gearIcon = '<img src="assets/img/g12.png" alt="12단" class="device-icon" />';
       }
     }
     
     if (track.brake) {
       if (track.brake === '디스크' || track.brake === 'Disc') {
-        brakeIcon = '<img src="assets/img/d.png" alt="디스크" style="width: 24px; height: 24px; margin-left: 4px; vertical-align: middle;" />';
+        brakeIcon = '<img src="assets/img/d.png" alt="디스크" class="device-icon" />';
       } else if (track.brake === '림' || track.brake === 'Rim') {
-        brakeIcon = '<img src="assets/img/r.png" alt="림" style="width: 24px; height: 24px; margin-left: 4px; vertical-align: middle;" />';
+        brakeIcon = '<img src="assets/img/r.png" alt="림" class="device-icon" />';
       }
     }
     
+    // 디바이스 아이콘 생성
+    const deviceIcons = [];
+    if (track.smartTrainerId || track.trainerDeviceId) {
+      deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon" />');
+    }
+    if (track.powerMeterId || track.deviceId) {
+      deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" class="device-icon" />');
+    }
+    if (track.heartRateId || track.heartRateDeviceId) {
+      deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" class="device-icon" />');
+    }
+    if (gearIcon) {
+      deviceIcons.push(gearIcon);
+    }
+    if (brakeIcon) {
+      deviceIcons.push(brakeIcon);
+    }
+    const deviceIconsHtml = deviceIcons.length > 0 ? deviceIcons.join('') : '';
+    
     return `
       <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
-        <div class="player-track-number" style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-          트랙${track.trackNumber}
-          ${gearIcon}
-          ${brakeIcon}
+        <div class="player-track-number-fixed">
+          <div class="player-track-number-header">
+            트랙${track.trackNumber}
+          </div>
         </div>
-        <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
-          ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
-        </div>
-        <div class="player-track-action">
-          ${canModify || canParticipate ? `
-            <button 
-              class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
-              onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
-              title="훈련 신청/변경">
-              <span>${hasUser ? '변경' : '신청'}</span>
-            </button>
-          ` : `
-            <button 
-              class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
-              disabled
-              title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 신청/변경'}">
-              <span>${hasUser ? '변경' : '신청'}</span>
-            </button>
-          `}
-          ${hasUser && canModify ? `
-            <button 
-              class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
-              onclick="removeUserFromTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
-              title="훈련 참가 퇴실">
-              <span>퇴실</span>
-            </button>
-          ` : hasUser && !canModify ? `
-            <button 
-              class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
-              disabled
-              title="본인이 할당한 트랙만 퇴실 가능합니다">
-              <span>퇴실</span>
-            </button>
-          ` : ''}
-          <a href="${dashboardUrl}" 
-             target="_blank"
-             class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
-             ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
-             title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
-            <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
-            <span>Enter</span>
-          </a>
+        <div class="player-track-content">
+          <div class="player-track-user-section">
+            <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
+              ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
+            </div>
+            ${deviceIconsHtml ? `<div class="player-track-devices">${deviceIconsHtml}</div>` : ''}
+          </div>
+          <div class="player-track-action">
+            ${canModify || canParticipate ? `
+              <button 
+                class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+                onclick="assignUserToTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
+                title="훈련 신청/변경">
+                <span>${hasUser ? '변경' : '신청'}</span>
+              </button>
+            ` : `
+              <button 
+                class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+                disabled
+                title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 신청/변경'}">
+                <span>${hasUser ? '변경' : '신청'}</span>
+              </button>
+            `}
+            ${hasUser && canModify ? `
+              <button 
+                class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
+                onclick="removeUserFromTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
+                title="훈련 참가 퇴실">
+                <span>퇴실</span>
+              </button>
+            ` : hasUser && !canModify ? `
+              <button 
+                class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
+                disabled
+                title="본인이 할당한 트랙만 퇴실 가능합니다">
+                <span>퇴실</span>
+              </button>
+            ` : ''}
+            <a href="${dashboardUrl}" 
+               target="_blank"
+               class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
+               ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
+               title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
+              <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
+              <span>Enter</span>
+            </a>
+          </div>
         </div>
       </div>
     `;
