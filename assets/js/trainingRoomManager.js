@@ -558,18 +558,18 @@ async function renderPlayerList() {
           }
           
           if (deviceData) {
-            // Gear (여러 필드명 시도)
-            track.gear = deviceData['Gear'] || 
-                        deviceData.Gear || 
-                        deviceData.gear || 
+            // Gear (새 필드명 우선, 기존 필드명 호환)
+            track.gear = deviceData.gear || 
                         deviceData['gear'] ||
+                        deviceData['Gear'] || 
+                        deviceData.Gear || 
                         null;
             
-            // Brake (여러 필드명 시도)
-            track.brake = deviceData['Brake'] || 
-                         deviceData.Brake || 
-                         deviceData.brake || 
+            // Brake (새 필드명 우선, 기존 필드명 호환)
+            track.brake = deviceData.brake || 
                          deviceData['brake'] ||
+                         deviceData['Brake'] || 
+                         deviceData.Brake || 
                          null;
           }
         }
@@ -1620,50 +1620,50 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
       const gearSelect = document.getElementById('trackGearSelect');
       const brakeSelect = document.getElementById('trackBrakeSelect');
       
-      // 스마트로라 ID (여러 필드명 시도)
+      // 스마트로라 ID (새 필드명 우선, 기존 필드명 호환)
       if (trainerDeviceIdInput) {
-        trainerDeviceIdInput.value = currentDeviceData['Smart Trainer id'] || 
+        trainerDeviceIdInput.value = currentDeviceData.smartTrainerId || 
                                      currentDeviceData['smartTrainerId'] || 
-                                     currentDeviceData.smartTrainerId || 
+                                     currentDeviceData['Smart Trainer id'] || 
                                      currentDeviceData.trainerId || 
                                      '';
       }
       
-      // 파워메터 ID (여러 필드명 시도)
+      // 파워메터 ID (새 필드명 우선, 기존 필드명 호환)
       if (powerMeterDeviceIdInput) {
-        powerMeterDeviceIdInput.value = currentDeviceData['Power Meter id'] || 
-                                        currentDeviceData['Power Meter Id'] ||
-                                        currentDeviceData.powerMeterId || 
+        powerMeterDeviceIdInput.value = currentDeviceData.powerMeterId || 
                                         currentDeviceData['powerMeterId'] ||
+                                        currentDeviceData['Power Meter id'] || 
+                                        currentDeviceData['Power Meter Id'] ||
                                         currentDeviceData.powerMeter || 
                                         '';
       }
       
-      // 심박계 ID (여러 필드명 시도)
+      // 심박계 ID (새 필드명 우선, 기존 필드명 호환)
       if (heartRateDeviceIdInput) {
-        heartRateDeviceIdInput.value = currentDeviceData['Heart Rate id'] || 
-                                       currentDeviceData['Heart Rate Id'] ||
-                                       currentDeviceData.heartRateId || 
+        heartRateDeviceIdInput.value = currentDeviceData.heartRateId || 
                                        currentDeviceData['heartRateId'] ||
+                                       currentDeviceData['Heart Rate id'] || 
+                                       currentDeviceData['Heart Rate Id'] ||
                                        currentDeviceData.heartRate || 
                                        '';
       }
       
-      // Gear (여러 필드명 시도)
+      // Gear (새 필드명 우선, 기존 필드명 호환)
       if (gearSelect) {
-        gearSelect.value = currentDeviceData['Gear'] || 
-                           currentDeviceData.Gear || 
-                           currentDeviceData.gear || 
+        gearSelect.value = currentDeviceData.gear || 
                            currentDeviceData['gear'] ||
+                           currentDeviceData['Gear'] || 
+                           currentDeviceData.Gear || 
                            '';
       }
       
-      // Brake (여러 필드명 시도)
+      // Brake (새 필드명 우선, 기존 필드명 호환)
       if (brakeSelect) {
-        brakeSelect.value = currentDeviceData['Brake'] || 
-                           currentDeviceData.Brake || 
-                           currentDeviceData.brake || 
+        brakeSelect.value = currentDeviceData.brake || 
                            currentDeviceData['brake'] ||
+                           currentDeviceData['Brake'] || 
+                           currentDeviceData.Brake || 
                            '';
       }
       
@@ -2071,11 +2071,11 @@ async function saveTrackApplication(trackNumber, roomIdParam) {
       
       // 2. devices 정보 저장
       const deviceData = {
-        'Smart Trainer id': trainerDeviceId || null,
-        'Power Meter id': powerMeterDeviceId || null,
-        'Heart Rate id': heartRateDeviceId || null,
-        'Gear': gear || null,
-        'Brake': brake || null
+        smartTrainerId: trainerDeviceId || null,
+        powerMeterId: powerMeterDeviceId || null,
+        heartRateId: heartRateDeviceId || null,
+        gear: gear || null,
+        brake: brake || null
       };
       
       const deviceRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
