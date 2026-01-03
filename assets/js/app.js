@@ -2413,12 +2413,15 @@ function startSegmentLoop() {
         } else if (segmentCountdownActive) {
           // 진행 중이면 숫자 업데이트만(내부 타이머 없음)
           CountdownDisplay.render(n);
-          if (n > 0) playBeep(880, 120, 0.25);
+          // 4, 3, 2, 1초일 때 벨소리 재생
+          if (n > 0) {
+            playBeep(880, 120, 0.25);
+          }
         }
       
-        // 0은 "세그먼트 종료 1초 전"에 표시 + 강조음, 그리고 오버레이 닫기 예약
+        // 0은 "세그먼트 종료 1초 전"에 표시 + 강조 벨소리, 그리고 오버레이 닫기 예약
         if (n === 0) {
-          // 강조음 (조금 더 강한 톤)
+          // 강조 벨소리 (조금 더 강한 톤)
           playBeep(1500, 700, 0.35, "square");
           // 오버레이는 약간의 여유를 두고 닫기
           CountdownDisplay.finish(800);
@@ -2681,6 +2684,17 @@ if (!window.showScreen) {
         if (typeof updateDeviceButtonImages === "function") {
           updateDeviceButtonImages();
         }
+        
+        // "다음 단계로" 버튼 활성화
+        setTimeout(() => {
+          const btnToProfile = safeGetElement("btnToProfile");
+          if (btnToProfile) {
+            btnToProfile.disabled = false;
+            btnToProfile.removeAttribute('aria-disabled');
+            btnToProfile.style.opacity = '1';
+            btnToProfile.style.cursor = 'pointer';
+          }
+        }, 100);
         
         // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
         setTimeout(() => {
