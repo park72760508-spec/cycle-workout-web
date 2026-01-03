@@ -404,9 +404,54 @@ function createPowerMeterElement(powerMeter) {
   container.id = `power-meter-${powerMeter.id}`;
   container.dataset.powerMeterId = powerMeter.id;
   
-  // 현재 사용자의 grade 확인
-  const viewerGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : 
-                      (window.currentUser?.grade ? String(window.currentUser.grade) : '2');
+  // 현재 사용자의 grade 확인 (openPowerMeterSettings와 동일한 로직)
+  let viewerGrade = '2'; // 기본값
+  let gradeSource = 'default';
+  
+  // 1) getViewerGrade 함수 사용
+  if (typeof getViewerGrade === 'function') {
+    try {
+      viewerGrade = String(getViewerGrade());
+      gradeSource = 'getViewerGrade';
+    } catch (e) {
+      console.warn('[Indoor Training] getViewerGrade() 호출 실패:', e);
+    }
+  }
+  
+  // 2) getViewerGrade가 실패했거나 없으면 window.currentUser 확인
+  if (viewerGrade === '2' && window.currentUser) {
+    if (window.currentUser.grade != null) {
+      viewerGrade = String(window.currentUser.grade);
+      gradeSource = 'window.currentUser';
+    }
+  }
+  
+  // 3) window.currentUser에도 없으면 localStorage 확인
+  if (viewerGrade === '2') {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (storedUser && storedUser.grade != null) {
+        viewerGrade = String(storedUser.grade);
+        gradeSource = 'localStorage.currentUser';
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage.currentUser 파싱 실패:', e);
+    }
+  }
+  
+  // 4) authUser도 확인
+  if (viewerGrade === '2') {
+    try {
+      const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+      if (authUser && authUser.grade != null) {
+        viewerGrade = String(authUser.grade);
+        gradeSource = 'localStorage.authUser';
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage.authUser 파싱 실패:', e);
+    }
+  }
+  
   const isGrade1 = viewerGrade === '1' || viewerGrade === 1;
   const isGrade2 = viewerGrade === '2' || viewerGrade === 2;
   const isGrade3 = viewerGrade === '3' || viewerGrade === 3;
@@ -419,6 +464,7 @@ function createPowerMeterElement(powerMeter) {
   if (powerMeter.id === 1) {
     console.log('[Indoor Training] 트랙 버튼 권한 확인:', {
       viewerGrade: viewerGrade,
+      gradeSource: gradeSource,
       isGrade1: isGrade1,
       isGrade2: isGrade2,
       isGrade3: isGrade3,
@@ -1402,8 +1448,54 @@ function openPowerMeterSettings(powerMeterId) {
   console.log('[Indoor Training] 파워계 설정 열기:', powerMeterId);
   
   // 권한 체크: grade=1,3은 모든 트랙 사용 가능, grade=2는 트랙1만 사용 가능
-  const viewerGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : 
-                      (window.currentUser?.grade ? String(window.currentUser.grade) : '2');
+  // getViewerGrade 함수가 있으면 사용, 없으면 window.currentUser나 localStorage에서 가져오기
+  let viewerGrade = '2'; // 기본값
+  let gradeSource = 'default';
+  
+  // 1) getViewerGrade 함수 사용
+  if (typeof getViewerGrade === 'function') {
+    try {
+      viewerGrade = String(getViewerGrade());
+      gradeSource = 'getViewerGrade';
+    } catch (e) {
+      console.warn('[Indoor Training] getViewerGrade() 호출 실패:', e);
+    }
+  }
+  
+  // 2) getViewerGrade가 실패했거나 없으면 window.currentUser 확인
+  if (viewerGrade === '2' && window.currentUser) {
+    if (window.currentUser.grade != null) {
+      viewerGrade = String(window.currentUser.grade);
+      gradeSource = 'window.currentUser';
+    }
+  }
+  
+  // 3) window.currentUser에도 없으면 localStorage 확인
+  if (viewerGrade === '2') {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (storedUser && storedUser.grade != null) {
+        viewerGrade = String(storedUser.grade);
+        gradeSource = 'localStorage.currentUser';
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage.currentUser 파싱 실패:', e);
+    }
+  }
+  
+  // 4) authUser도 확인
+  if (viewerGrade === '2') {
+    try {
+      const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+      if (authUser && authUser.grade != null) {
+        viewerGrade = String(authUser.grade);
+        gradeSource = 'localStorage.authUser';
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage.authUser 파싱 실패:', e);
+    }
+  }
+  
   const isGrade1 = viewerGrade === '1' || viewerGrade === 1;
   const isGrade2 = viewerGrade === '2' || viewerGrade === 2;
   const isGrade3 = viewerGrade === '3' || viewerGrade === 3;
@@ -1411,6 +1503,7 @@ function openPowerMeterSettings(powerMeterId) {
   
   console.log('[Indoor Training] 트랙 버튼 클릭 권한 확인:', {
     viewerGrade: viewerGrade,
+    gradeSource: gradeSource,
     isGrade1: isGrade1,
     isGrade2: isGrade2,
     isGrade3: isGrade3,
@@ -1420,7 +1513,19 @@ function openPowerMeterSettings(powerMeterId) {
       id: window.currentUser.id,
       name: window.currentUser.name,
       grade: window.currentUser.grade
-    } : null
+    } : null,
+    localStorage_currentUser: (() => {
+      try {
+        const u = JSON.parse(localStorage.getItem('currentUser') || 'null');
+        return u ? { id: u.id, name: u.name, grade: u.grade } : null;
+      } catch (e) { return null; }
+    })(),
+    localStorage_authUser: (() => {
+      try {
+        const u = JSON.parse(localStorage.getItem('authUser') || 'null');
+        return u ? { id: u.id, name: u.name, grade: u.grade } : null;
+      } catch (e) { return null; }
+    })()
   });
   
   // grade=2 사용자는 트랙1만 사용 가능
@@ -1428,7 +1533,11 @@ function openPowerMeterSettings(powerMeterId) {
     if (typeof showToast === 'function') {
       showToast('일반 사용자(grade=2)는 트랙1만 사용할 수 있습니다.');
     }
-    console.warn('[Indoor Training] 권한 없음: grade=2 사용자는 트랙1만 사용 가능');
+    console.warn('[Indoor Training] 권한 없음: grade=2 사용자는 트랙1만 사용 가능', {
+      viewerGrade: viewerGrade,
+      gradeSource: gradeSource,
+      trackNumber: powerMeterId
+    });
     return;
   }
   
@@ -1701,6 +1810,28 @@ function closePowerMeterPairingModal() {
  * 페어링 탭 전환
  */
 function showPairingTab(tabName) {
+  const powerMeterId = window.currentTargetPowerMeterId;
+  const powerMeter = powerMeterId ? window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId) : null;
+  
+  // 탭 전환 전에 현재 Gear, Brake 값 저장
+  const gearSelect = document.getElementById('pairingGearSelect');
+  const brakeSelect = document.getElementById('pairingBrakeSelect');
+  let savedGear = null;
+  let savedBrake = null;
+  
+  if (gearSelect && gearSelect.value) {
+    savedGear = gearSelect.value;
+  }
+  if (brakeSelect && brakeSelect.value) {
+    savedBrake = brakeSelect.value;
+  }
+  
+  // powerMeter 객체에 저장 (다른 탭에서도 유지)
+  if (powerMeter) {
+    if (savedGear) powerMeter.gear = savedGear;
+    if (savedBrake) powerMeter.brake = savedBrake;
+  }
+  
   // 모든 탭 버튼 비활성화
   document.querySelectorAll('.pairing-tab-btn').forEach(btn => {
     btn.classList.remove('active');
@@ -1723,7 +1854,6 @@ function showPairingTab(tabName) {
     setTimeout(() => {
       const nameInput = document.getElementById('pairingUserNameSearch');
       const resultEl = document.getElementById('pairingUserSearchResult');
-      const powerMeterId = window.currentTargetPowerMeterId;
       
       if (nameInput) {
         nameInput.focus();
@@ -1733,11 +1863,23 @@ function showPairingTab(tabName) {
         }
       }
       
-      // 선택된 사용자 카드 업데이트
-      if (powerMeterId) {
-        const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
-        if (powerMeter) {
-          updatePairingModalWithSavedData(powerMeter);
+      // 선택된 사용자 카드 업데이트 (Gear, Brake 값 포함)
+      if (powerMeter) {
+        updatePairingModalWithSavedData(powerMeter);
+      }
+    }, 100);
+  } else {
+    // 다른 탭으로 이동할 때도 Gear, Brake 값 복원
+    setTimeout(() => {
+      if (powerMeter) {
+        const gearSelectAfter = document.getElementById('pairingGearSelect');
+        const brakeSelectAfter = document.getElementById('pairingBrakeSelect');
+        
+        if (gearSelectAfter && powerMeter.gear) {
+          gearSelectAfter.value = powerMeter.gear;
+        }
+        if (brakeSelectAfter && powerMeter.brake) {
+          brakeSelectAfter.value = powerMeter.brake;
         }
       }
     }, 100);
@@ -1775,23 +1917,50 @@ async function searchUserByNameForPairing() {
   }
   
   // 검색 버튼 비활성화 및 애니메이션
+  const originalText = searchBtn ? searchBtn.textContent : '';
   if (searchBtn) {
     searchBtn.disabled = true;
-    const originalText = searchBtn.textContent;
-    searchBtn.textContent = '검색 중...';
+    searchBtn.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite;">⏳</span> 검색 중...';
     searchBtn.style.opacity = '0.7';
-    searchBtn.style.transform = 'scale(0.95)';
-    
-    setTimeout(() => {
+    searchBtn.style.cursor = 'not-allowed';
+  }
+  
+  // 결과 영역에 로딩 표시
+  resultEl.innerHTML = `
+    <div style="padding: 40px; text-align: center; color: #10b981;">
+      <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 12px;"></div>
+      <p style="margin: 0; font-size: 14px;">사용자 검색 중...</p>
+    </div>
+  `;
+  
+  // CSS 애니메이션 추가 (이미 있으면 무시)
+  if (!document.getElementById('searchLoadingStyle')) {
+    const style = document.createElement('style');
+    style.id = 'searchLoadingStyle';
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  try {
+    // 결과 영역에 필터링된 사용자 목록 표시
+    await filterUsersByNameForPairing();
+  } catch (error) {
+    console.error('[Indoor Training] 사용자 검색 오류:', error);
+    resultEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #dc3545;">검색 중 오류가 발생했습니다.</div>';
+  } finally {
+    // 검색 버튼 복원
+    if (searchBtn) {
       searchBtn.disabled = false;
       searchBtn.textContent = originalText;
       searchBtn.style.opacity = '1';
-      searchBtn.style.transform = 'scale(1)';
-    }, 300);
+      searchBtn.style.cursor = 'pointer';
+    }
   }
-  
-  // 결과 영역에 필터링된 사용자 목록 표시
-  filterUsersByNameForPairing();
 }
 
 /**
