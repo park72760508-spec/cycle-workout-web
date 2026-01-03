@@ -1053,28 +1053,6 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.stroke();
     }
     
-    // 네온 빛 효과 (흰색 외곽)
-    ctx.shadowColor = 'rgba(255, 255, 255, 0.9)';
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    
-    // 흰색 네온 외곽 원 (메인 테두리)
-    ctx.beginPath();
-    ctx.arc(mascotX, mascotY, mascotRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    
-    // 내부 네온 효과 (더 강한)
-    ctx.shadowBlur = 8;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    
-    // 그림자 초기화
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    
     // 메인 빨간색 원
     ctx.beginPath();
     ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
