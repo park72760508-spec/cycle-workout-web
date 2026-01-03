@@ -5884,13 +5884,23 @@ function updateParticipantsList() {
         isCurrentSegment ? 'segment-active' : ''
       ].filter(Boolean).join(' ');
 
+      // 기어와 브레이크 이미지 추가 (향후 구현을 위한 준비)
+      const gearBrakeIcons = `
+        <span class="device-badge" title="기어">
+          <img src="assets/img/gear.png" alt="기어" onerror="this.onerror=null; this.style.display='none';" />
+        </span>
+        <span class="device-badge" title="브레이크">
+          <img src="assets/img/brake.png" alt="브레이크" onerror="this.onerror=null; this.style.display='none';" />
+        </span>
+      `;
+
       return `
         <tr class="${rowClasses}">
           <td>${rowNumber}</td>
           <td class="participant-name-cell">
             <span class="participant-name-text">${escapeHtml(p.name)}${isMe ? ' (나)' : ''}</span>
+            <span class="device-icons-right">${deviceStatusIcons}${gearBrakeIcons}</span>
           </td>
-          <td>${deviceStatusIcons}</td>
           <td>${fmt(targetPower, '<span>W</span>')}</td>
           <td>${fmt(avgPower, '<span>W</span>')}</td>
           <td>${fmt(currentPower, '<span>W</span>')}</td>
@@ -5918,7 +5928,6 @@ function updateParticipantsList() {
             <tr>
               <th>순번</th>
               <th>사용자명</th>
-              <th>기기 연결</th>
               <th>목표값</th>
               <th>랩파워</th>
               <th>현재파워</th>
@@ -6291,6 +6300,17 @@ function renderWaitingHeaderSegmentTable() {
               ${tableRows || '<tr><td colspan="5" class="empty-segment">등록된 세그먼트가 없습니다.</td></tr>'}
             </tbody>
           </table>
+        </div>
+        <div class="workout-table-actions">
+          <button class="btn btn-secondary btn-sm" onclick="if(typeof kickAllParticipants === 'function') kickAllParticipants(); else alert('일괄 퇴실 기능을 사용할 수 없습니다.');">
+            일괄 퇴실
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="if(typeof updateRoomStatus === 'function') updateRoomStatus(); else if(typeof refreshRoomList === 'function') refreshRoomList(); else location.reload();">
+            새로고침
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="if(typeof showScreen === 'function') showScreen('groupRoomScreen'); else history.back();">
+            뒤로
+          </button>
         </div>
       </div>
     `;
