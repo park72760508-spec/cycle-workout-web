@@ -2208,8 +2208,6 @@ if (typeof window !== 'undefined') {
   window.assignUserToTrack = assignUserToTrack;
   window.assignUserToTrackWithAnimation = assignUserToTrackWithAnimation;
   window.removeUserFromTrackWithAnimation = removeUserFromTrackWithAnimation;
-  window.selectUserForTrack = selectUserForTrack;
-  window.selectUserForTrackWithAnimation = selectUserForTrackWithAnimation;
   window.filterUsersForTrackSelection = filterUsersForTrackSelection;
   window.searchUsersForTrackSelection = searchUsersForTrackSelection;
   window.selectUserForTrackSelection = selectUserForTrackSelection;
