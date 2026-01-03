@@ -1413,6 +1413,34 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
   // 모든 사용자 목록을 전역 변수에 저장 (검색 필터링용)
   window._allUsersForTrackSelection = users;
 
+  // Firebase에서 현재 트랙의 정보 가져오기
+  let currentUserData = null;
+  let currentDeviceData = null;
+  
+  if (typeof db !== 'undefined') {
+    try {
+      const sessionId = roomId;
+      
+      // users 정보 가져오기
+      const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
+      const usersSnapshot = await usersRef.once('value');
+      currentUserData = usersSnapshot.val();
+      
+      // devices 정보 가져오기
+      const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
+      const devicesSnapshot = await devicesRef.once('value');
+      currentDeviceData = devicesSnapshot.val();
+      
+      console.log('[assignUserToTrack] 현재 트랙 정보:', {
+        trackNumber: trackNumber,
+        userData: currentUserData,
+        deviceData: currentDeviceData
+      });
+    } catch (error) {
+      console.error('[assignUserToTrack] Firebase 정보 로드 오류:', error);
+    }
+  }
+
   modal.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
       <h2 style="margin: 0 0 20px 0; font-size: 1.5em;">트랙${trackNumber} 훈련 신청</h2>
@@ -1522,15 +1550,84 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
     </div>
   `;
   
-  // 전역 변수에 현재 트랙 정보 저장
+  // 전역 변수에 현재 트랙 정보 저장 (기존 정보가 있으면 사용)
   window._currentTrackApplication = {
     trackNumber: trackNumber,
     roomId: roomId,
-    selectedUserId: null,
-    selectedUserName: null,
-    selectedUserFTP: null,
-    selectedUserWeight: null
+    selectedUserId: currentUserData?.userId || null,
+    selectedUserName: currentUserData?.userName || null,
+    selectedUserFTP: currentUserData?.ftp || null,
+    selectedUserWeight: currentUserData?.weight || null
   };
+  
+  // 모달이 생성된 후 현재 정보로 필드 채우기
+  setTimeout(() => {
+    // 사용자 정보가 있으면 선택된 사용자로 표시
+    if (currentUserData && currentUserData.userId) {
+      const selectedUserDiv = document.getElementById('selectedUserForTrack');
+      const selectedUserNameSpan = document.getElementById('selectedUserNameForTrack');
+      const selectedUserFTPSpan = document.getElementById('selectedUserFTPForTrack');
+      const selectedUserWeightSpan = document.getElementById('selectedUserWeightForTrack');
+      const deviceInputSection = document.getElementById('deviceInputSection');
+      const saveBtn = document.getElementById('btnSaveTrackApplication');
+      const searchInput = document.getElementById('trackUserSearchInput');
+      
+      if (selectedUserDiv && selectedUserNameSpan && selectedUserFTPSpan && selectedUserWeightSpan) {
+        selectedUserNameSpan.textContent = currentUserData.userName || '';
+        selectedUserFTPSpan.textContent = currentUserData.ftp || '-';
+        selectedUserWeightSpan.textContent = currentUserData.weight || '-';
+        selectedUserDiv.style.display = 'block';
+      }
+      
+      if (deviceInputSection) {
+        deviceInputSection.style.display = 'block';
+      }
+      
+      if (saveBtn) {
+        saveBtn.style.display = 'block';
+      }
+      
+      // 현재 선택된 사용자 이름을 검색 입력 필드에 채우고 자동 검색
+      if (searchInput && currentUserData.userName) {
+        searchInput.value = currentUserData.userName;
+        // 자동으로 검색 실행
+        setTimeout(() => {
+          if (typeof searchUsersForTrackSelection === 'function') {
+            searchUsersForTrackSelection(trackNumber, roomId);
+          }
+        }, 200);
+      }
+    }
+    
+    // 디바이스 정보가 있으면 입력 필드에 값 채우기
+    if (currentDeviceData) {
+      const trainerDeviceIdInput = document.getElementById('trackTrainerDeviceId');
+      const powerMeterDeviceIdInput = document.getElementById('trackPowerMeterDeviceId');
+      const heartRateDeviceIdInput = document.getElementById('trackHeartRateDeviceId');
+      const gearSelect = document.getElementById('trackGearSelect');
+      const brakeSelect = document.getElementById('trackBrakeSelect');
+      
+      if (trainerDeviceIdInput) {
+        trainerDeviceIdInput.value = currentDeviceData['Smart Trainer id'] || currentDeviceData['Smart Trainer id'] || '';
+      }
+      
+      if (powerMeterDeviceIdInput) {
+        powerMeterDeviceIdInput.value = currentDeviceData['Power Meter id'] || currentDeviceData['Power Meter id'] || '';
+      }
+      
+      if (heartRateDeviceIdInput) {
+        heartRateDeviceIdInput.value = currentDeviceData['Heart Rate id'] || currentDeviceData['Heart Rate id'] || '';
+      }
+      
+      if (gearSelect) {
+        gearSelect.value = currentDeviceData['Gear'] || currentDeviceData.Gear || '';
+      }
+      
+      if (brakeSelect) {
+        brakeSelect.value = currentDeviceData['Brake'] || currentDeviceData.Brake || '';
+      }
+    }
+  }, 100);
 
   modal.style.display = 'flex';
   
