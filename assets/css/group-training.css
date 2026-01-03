@@ -654,26 +654,12 @@
   font-weight: 700;
   color: #fff;
   white-space: nowrap;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .participant-name-cell .participant-name-text {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
-}
-
-.participant-name-cell .device-icons-right {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  flex-shrink: 0;
 }
 
 .ble-icons {
@@ -1042,16 +1028,6 @@
   position: relative;
   /* 스크롤바 깜빡임 방지: 스크롤바 공간을 항상 예약 */
   scrollbar-gutter: stable;
-}
-
-.workout-table-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  align-items: center;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .workout-table {
