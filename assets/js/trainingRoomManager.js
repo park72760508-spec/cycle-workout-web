@@ -183,8 +183,8 @@ async function selectTrainingRoom(roomId) {
   const hasPassword = room.password && String(room.password).trim() !== '';
   
   if (hasPassword && !isAdmin) {
-    // 비밀번호 확인 모달 표시
-    const passwordCorrect = await showTrainingRoomPasswordModal(room.title);
+    // 비밀번호 확인 모달 표시 (room 객체 전달)
+    const passwordCorrect = await showTrainingRoomPasswordModal(room.title, room);
     if (!passwordCorrect) {
       return; // 비밀번호가 틀리면 중단
     }
@@ -295,14 +295,24 @@ async function selectTrainingRoom(roomId) {
 
 /**
  * Training Room 비밀번호 확인 모달
+ * @param {string} roomTitle - Training Room 제목
+ * @param {object} room - Training Room 객체 (비밀번호 포함)
  */
-async function showTrainingRoomPasswordModal(roomTitle) {
+async function showTrainingRoomPasswordModal(roomTitle, room = null) {
   return new Promise((resolve) => {
     // 기존 모달이 있으면 제거
     const existingModal = document.getElementById('trainingRoomPasswordModal');
     if (existingModal) {
       existingModal.remove();
     }
+
+    // room 객체가 전달되지 않으면 currentSelectedTrainingRoom 사용
+    const targetRoom = room || currentSelectedTrainingRoom;
+    
+    // 비밀번호 가져오기 (숫자/문자 모두 문자열로 변환)
+    const correctPassword = targetRoom && targetRoom.password != null
+      ? String(targetRoom.password).trim()
+      : '';
 
     // 모달 생성
     const modal = document.createElement('div');
@@ -354,7 +364,9 @@ async function showTrainingRoomPasswordModal(roomTitle) {
 
     // 확인 버튼
     const handleConfirm = () => {
-      const enteredPassword = passwordInput.value.trim();
+      // 입력된 비밀번호를 문자열로 변환하고 공백 제거
+      const enteredPassword = String(passwordInput.value || '').trim();
+      
       if (!enteredPassword) {
         errorDiv.textContent = '비밀번호를 입력해주세요.';
         errorDiv.style.display = 'block';
@@ -362,11 +374,14 @@ async function showTrainingRoomPasswordModal(roomTitle) {
         return;
       }
 
-      // 저장된 비밀번호와 비교 (문자열로 변환하여 비교)
-      const correctPassword = currentSelectedTrainingRoom && currentSelectedTrainingRoom.password != null
-        ? String(currentSelectedTrainingRoom.password).trim()
-        : '';
+      // 디버깅 로그 (개발 환경에서만)
+      if (typeof console !== 'undefined' && console.log) {
+        console.log('[비밀번호 확인] 입력값:', enteredPassword, '타입:', typeof enteredPassword);
+        console.log('[비밀번호 확인] 저장값:', correctPassword, '타입:', typeof correctPassword);
+        console.log('[비밀번호 확인] 비교 결과:', enteredPassword === correctPassword);
+      }
 
+      // 저장된 비밀번호와 비교 (양쪽 모두 문자열로 변환하여 비교)
       if (enteredPassword === correctPassword) {
         modal.remove();
         resolve(true);
@@ -1017,8 +1032,8 @@ async function selectTrainingRoomForModal(roomId) {
   // 비밀번호가 있는 경우: 비밀번호 확인 팝업창 표시 (관리자는 제외)
   if (hasPassword && !isAdmin) {
     console.log('[Training Room Modal] 비밀번호 확인 필요');
-    // 비밀번호 확인 모달 표시
-    const passwordCorrect = await showTrainingRoomPasswordModal(room.title);
+    // 비밀번호 확인 모달 표시 (room 객체 전달)
+    const passwordCorrect = await showTrainingRoomPasswordModal(room.title, room);
     if (!passwordCorrect) {
       // 비밀번호가 틀리면 이전 상태로 복원
       console.log('[Training Room Modal] 비밀번호 확인 실패');
