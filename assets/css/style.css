@@ -1731,7 +1731,8 @@ button[aria-disabled="true"] {
   display: none !important; /* 기본적으로 숨김 */
 }
 
-#trainingScreen .training-controls {
+#trainingScreen .training-controls,
+#indoorTrainingDashboardScreen .training-controls {
   display: flex !important;
   justify-content: center;
   align-items: center;
