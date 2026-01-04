@@ -216,9 +216,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   display: none;
 }
 
-/* 베이스캠프 Status Bar */
+/* 베이스캠프 Status Bar - 민트색 */
 .basecamp-status-bar {
-  color: rgba(22, 163, 74, 0.9) !important;
+  color: #00D4AA !important;
   font-weight: 600;
   text-align: center;
   font-size: 18px;
