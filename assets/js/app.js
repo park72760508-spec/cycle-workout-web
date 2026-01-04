@@ -2835,16 +2835,25 @@ function updateSegmentGraphMascot() {
     return;
   }
   
-  // 현재 경과 시간 가져오기
-  const elapsedSec = window.trainingState?.elapsedSec || 0;
-  
   // 컨테이너와 Canvas의 실제 크기 가져오기
   const containerRect = container.getBoundingClientRect();
   const canvasRect = canvas.getBoundingClientRect();
+  
+  // 로딩 중 체크: 컨테이너나 Canvas 크기가 0이거나 아직 렌더링되지 않았으면 숨김
+  if (containerRect.width === 0 || containerRect.height === 0 || 
+      canvasRect.width === 0 || canvasRect.height === 0) {
+    mascotLayer.style.display = 'none';
+    return;
+  }
+  
   const scaleX = canvasRect.width / canvas.width;
   const scaleY = canvasRect.height / canvas.height;
   
+  // 현재 경과 시간 가져오기
+  const elapsedSec = window.trainingState?.elapsedSec || 0;
+  
   // 마스코트 레이어를 컨테이너 전체 크기로 설정 (검정 바탕 그래프를 둘러싼 다크 레이어 블럭)
+  // 로딩 완료 후에만 표시
   mascotLayer.style.display = 'block';
   mascotLayer.style.position = 'absolute';
   mascotLayer.style.left = '0';
