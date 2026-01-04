@@ -9843,6 +9843,16 @@ button[aria-disabled="true"] {
   position: relative;
 }
 
+.speedometer-user-name {
+  transition: all 0.2s ease;
+}
+
+.speedometer-user-name:hover {
+  background: rgba(0, 212, 170, 1) !important;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
+}
+
 .speedometer-name {
   font-size: 14px;
   font-weight: 600;
