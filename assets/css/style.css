@@ -154,18 +154,98 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1000 !important;
 }
 
-/* basecampScreen 특별 처리 - connectionScreen과 동일한 스타일 */
+/* basecampScreen 특별 처리 - 투명 녹색톤 디자인 */
+#basecampScreen {
+  position: relative;
+  overflow: hidden;
+}
+
 #basecampScreen.active {
   display: flex !important;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 50%, rgba(16, 185, 129, 0.15) 100%);
   background-attachment: fixed;
   padding: 20px;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+}
+
+/* 베이스캠프 배경 이미지 */
+.basecamp-background-image {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('assets/img/b(00).png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.4;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* 베이스캠프 카드 스타일 */
+.basecamp-card {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  box-shadow: 0 25px 80px rgba(34, 197, 94, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+/* 베이스캠프 컨테이너 z-index 조정 */
+#basecampScreen .connection-main-container {
+  position: relative;
+  z-index: 1;
+}
+
+#basecampScreen .connection-form-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* 베이스캠프 헤더 숨김 (배경 이미지로 대체) */
+.basecamp-header {
+  display: none;
+}
+
+/* 베이스캠프 Status Bar */
+.basecamp-status-bar {
+  color: rgba(22, 163, 74, 0.9) !important;
+  font-weight: 600;
+  text-align: center;
+  font-size: 18px;
+}
+
+/* 베이스캠프 버튼 스타일 - 녹색톤 */
+.basecamp-btn {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 100%) !important;
+  border: 2px solid rgba(34, 197, 94, 0.3) !important;
+  color: #15803d !important;
+}
+
+.basecamp-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(22, 163, 74, 0.3) 100%) !important;
+  border-color: rgba(34, 197, 94, 0.5) !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+}
+
+.basecamp-btn span {
+  color: #15803d !important;
+}
+
+/* 베이스캠프 푸터 */
+.basecamp-footer {
+  text-align: center;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(34, 197, 94, 0.2);
 }
 
 /* 컴팩트한 블럭 구조 (사용자 인증 화면과 유사) */
