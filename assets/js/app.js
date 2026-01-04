@@ -2746,6 +2746,18 @@ if (!window.showScreen) {
         }, 100);
       }
 
+      // Training Room 화면: 훈련방 목록 자동 로딩
+      if (id === 'trainingRoomScreen') {
+        console.log('Loading training rooms for training room screen.');
+        setTimeout(() => {
+          if (typeof loadTrainingRooms === 'function') {
+            loadTrainingRooms();
+          } else {
+            console.error('loadTrainingRooms function not available');
+          }
+        }, 200);
+      }
+
       // 훈련 준비 화면: 그룹 훈련 카드 상태 업데이트
       // 훈련 화면으로 전환 시 ERG 모드 UI 초기화
       if (id === 'trainingScreen') {
