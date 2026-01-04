@@ -10789,6 +10789,28 @@ line[id^="needle-"] {
   white-space: nowrap;
 }
 
+/* Player List 화면의 활성화된 Enter 버튼 - 민트색 톤 */
+#playerListScreen .player-enter-btn:not(.disabled):not([aria-disabled="true"]) {
+  background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%) !important;
+  border-color: #00d4aa !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.3) !important;
+  transition: all 0.3s ease;
+}
+
+#playerListScreen .player-enter-btn:not(.disabled):not([aria-disabled="true"]):hover {
+  background: linear-gradient(135deg, #00e5b8 0%, #00d4aa 100%) !important;
+  border-color: #00e5b8 !important;
+  box-shadow: 0 6px 16px rgba(0, 212, 170, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+#playerListScreen .player-enter-btn:not(.disabled):not([aria-disabled="true"]):active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.3) !important;
+}
+
+/* 비활성화 버튼 - 현재 디자인 유지 */
 .player-enter-btn.disabled,
 .player-enter-btn[aria-disabled="true"] {
   opacity: 0.5;
