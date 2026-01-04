@@ -1288,27 +1288,34 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   // 디바이스 아이콘 표시/숨김 처리
   if (deviceIconsEl) {
     if (statusClass === 'ready' || statusClass === 'connected') {
-      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (상태에 따라 다른 이미지 사용)
+      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (데이터 수신 상태에 따라 개별적으로)
       deviceIconsEl.style.display = 'inline-flex';
-      updateDeviceIcons(powerMeterId, statusClass);
+      updateDeviceIconsWithDataStatus(powerMeterId);
     } else {
       // 미연결 상태: 디바이스 아이콘 숨김
       deviceIconsEl.style.display = 'none';
     }
   }
   
-  // 속도계 모양 아래 파워 정보창 색상 제거 (주황색/녹색등 제거)
+  // 속도계 하단 정보창 배경색 업데이트 (데이터 수신 여부에 따라)
   const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
   if (infoEl) {
-    // 모든 색상 클래스 제거 (기본 스타일만 유지)
-    infoEl.classList.remove('connected', 'warning', 'disconnected');
-    
-    // 정보표시창 색상 변경 시 랩파워 색상도 업데이트 (항상 검정색)
-    const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
-    if (segPowerEl) {
-      // 랩파워는 항상 검정색
-      segPowerEl.style.color = '#000000'; // 검정색
+    // 데이터 수신 여부 확인
+    const hasDataReceived = (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
+    if (hasDataReceived) {
+      // 데이터 수신 중: 연두색
+      infoEl.style.backgroundColor = '#90EE90'; // 연두색
+    } else {
+      // 데이터 수신 없음: 주황색
+      infoEl.style.backgroundColor = '#FFA500'; // 주황색
     }
+  }
+  
+  // 랩파워 색상 업데이트
+  const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
+  if (segPowerEl) {
+    // 랩파워는 항상 검정색
+    segPowerEl.style.color = '#000000'; // 검정색
   }
 }
 
@@ -1409,11 +1416,15 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
 
     // 심박수 (찐녹색으로 표시)
     const heartRateEl = document.getElementById(`heart-rate-value-${powerMeterId}`);
-    if (heartRateEl && heartRate > 0) {
-        heartRateEl.textContent = Math.round(heartRate);
-        heartRateEl.style.color = '#006400'; // 찐녹색
-    } else if (heartRateEl) {
-        heartRateEl.style.color = ''; // 기본 색상으로 복원
+    if (heartRateEl) {
+        if (heartRate > 0) {
+            heartRateEl.textContent = Math.round(heartRate);
+            heartRateEl.style.color = '#006400'; // 찐녹색
+        } else {
+            // 데이터 수신 없으면 0으로 표시
+            heartRateEl.textContent = '0';
+            heartRateEl.style.color = ''; // 기본 색상으로 복원
+        }
     }
 
     // 바늘 애니메이션
@@ -1423,8 +1434,26 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         needleEl.style.visibility = 'visible';
     }
     
+    // 데이터 수신 여부 확인 (파워, 심박수, 케이던스 중 하나라도 수신되면)
+    const hasDataReceived = (power > 0 || heartRate > 0 || cadence > 0);
+    
+    // 속도계 하단 정보창 배경색 변경
+    const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
+    if (infoEl) {
+        if (hasDataReceived) {
+            // 데이터 수신 중: 연두색
+            infoEl.style.backgroundColor = '#90EE90'; // 연두색
+        } else {
+            // 데이터 수신 없음: 주황색
+            infoEl.style.backgroundColor = '#FFA500'; // 주황색
+        }
+    }
+    
     // 연결 상태 업데이트
     updatePowerMeterConnectionStatus(powerMeterId);
+    
+    // 디바이스 아이콘 개별 상태 업데이트
+    updateDeviceIconsWithDataStatus(powerMeterId);
 }
 
 /**
@@ -3140,6 +3169,46 @@ function updateDeviceIcons(powerMeterId, statusClass = 'connected') {
   if (userNameEl && powerMeter.userName) {
     userNameEl.parentElement.style.display = 'flex';
   }
+}
+
+/**
+ * 디바이스 아이콘을 데이터 수신 상태에 따라 개별적으로 업데이트
+ */
+function updateDeviceIconsWithDataStatus(powerMeterId) {
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  const deviceIconsContainer = document.getElementById(`device-icons-${powerMeterId}`);
+  if (!deviceIconsContainer) return;
+  
+  // 각 디바이스별 데이터 수신 여부 확인
+  // 스마트로라/파워메터: 파워 데이터 수신 여부
+  const hasPowerData = powerMeter.currentPower > 0;
+  // 심박계: 심박수 데이터 수신 여부
+  const hasHeartRateData = powerMeter.heartRate > 0;
+  
+  // 디바이스 아이콘 생성 (개별 상태에 따라)
+  const deviceIcons = [];
+  
+  // 스마트로라 아이콘
+  if (powerMeter.trainerDeviceId) {
+    const trainerSuffix = hasPowerData ? '_g.png' : '_i.png';
+    deviceIcons.push(`<img src="assets/img/trainer${trainerSuffix}" alt="스마트트레이너" style="height: 16px; width: auto; vertical-align: middle;" />`);
+  }
+  
+  // 파워메터 아이콘
+  if (powerMeter.deviceId || powerMeter.powerMeterDeviceId) {
+    const powerSuffix = hasPowerData ? '_g.png' : '_i.png';
+    deviceIcons.push(`<img src="assets/img/power${powerSuffix}" alt="파워메터" style="height: 16px; width: auto; vertical-align: middle;" />`);
+  }
+  
+  // 심박계 아이콘
+  if (powerMeter.heartRateDeviceId) {
+    const bpmSuffix = hasHeartRateData ? '_g.png' : '_i.png';
+    deviceIcons.push(`<img src="assets/img/bpm${bpmSuffix}" alt="심박계" style="height: 16px; width: auto; vertical-align: middle;" />`);
+  }
+  
+  deviceIconsContainer.innerHTML = deviceIcons.join('');
 }
 
 /**
