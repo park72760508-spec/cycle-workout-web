@@ -2503,6 +2503,12 @@
         <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutTraining" onclick="openWorkoutSelectionModal()" title="워크아웃 선택">
           <img src="assets/img/workout.png" alt="워크아웃 선택" style="width: 24px; height: 24px; object-fit: contain;">
         </button>
+        <!-- 컨트롤 버튼 (상단 배치) -->
+        <div class="race-controls" style="flex-shrink: 0; display: flex; gap: 12px;">
+          <button id="btnSkipSegmentTraining" class="enhanced-control-btn skip" aria-label="구간 건너뛰기" title="건너뛰기"></button>
+          <button id="btnTogglePauseTraining" class="enhanced-control-btn play" aria-label="일시정지/재생" title="시작"></button>
+          <button id="btnStopTrainingIndoor" class="enhanced-control-btn stop" aria-label="훈련 종료" title="종료"></button>
+        </div>
       </div>
     </div>
 
@@ -2559,13 +2565,6 @@
           </label>
         </div>
       </div>
-    </div>
-    
-    <!-- 컨트롤 버튼 (개인 훈련 화면과 동일) -->
-    <div class="training-controls">
-      <button id="btnSkipSegmentTraining" class="enhanced-control-btn skip" aria-label="구간 건너뛰기"></button>
-      <button id="btnTogglePauseTraining" class="enhanced-control-btn pause" aria-label="일시정지/재생"></button>
-      <button id="btnStopTrainingIndoor" class="enhanced-control-btn stop" aria-label="훈련 종료"></button>
     </div>
   </div>
 
