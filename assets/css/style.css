@@ -180,7 +180,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   left: 0;
   width: 100%;
   height: 100%;
-  background-image: url('assets/img/b(00).png');
+  background-image: url('https://stelvio.ai.kr/assets/img/b(00).png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -257,19 +257,19 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 각 버튼별 배경 이미지 */
 .basecamp-btn-indoor {
-  background-image: url('assets/img/b(01).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(01).png') !important;
 }
 
 .basecamp-btn-solo {
-  background-image: url('assets/img/b(02).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(02).png') !important;
 }
 
 .basecamp-btn-profile {
-  background-image: url('assets/img/b(03).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
 }
 
 .basecamp-btn-premium {
-  background-image: url('assets/img/STELVIO AI.png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/STELVIO AI.png') !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
