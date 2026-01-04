@@ -2480,8 +2480,6 @@ function clearAllUsersAndHeartRateDevices() {
             ...existingData,
             userId: null,
             userName: null,
-            name: null,
-            participantName: null,
             ftp: null,
             weight: null,
             gear: null,
@@ -2771,8 +2769,8 @@ async function updateTracksFromFirebase() {
       // Firebase Users 정보 업데이트 (트랙번호별, tracks 데이터와 병합)
       const trackUserData = usersData[track.trackNumber];
       if (trackUserData && trackUserData.userId) {
-        // 사용자 이름 확인 (userName, name, participantName 순서로 확인)
-        const userName = trackUserData.userName || trackUserData.name || trackUserData.participantName || track.userName;
+        // 사용자 이름 확인 (userName만 사용)
+        const userName = trackUserData.userName || track.userName;
         
         if (userName) {
           // 사용자 상세 정보 찾기
@@ -2868,9 +2866,7 @@ async function updateTracksFromFirebase() {
         if (powerMeter && powerMeter.userId) {
           const userData = {
             userId: String(powerMeter.userId),
-            name: powerMeter.userName || '',
             userName: powerMeter.userName || '',
-            participantName: powerMeter.userName || '',
             ftp: powerMeter.userFTP || 0,
             weight: powerMeter.userWeight || 0
           };
@@ -2904,7 +2900,10 @@ async function updateTracksFromFirebase() {
             
             return userRef.set(mergedData);
           }).then(() => {
-            console.log(`[Indoor Training] Firebase 동기화 완료 (필수값 보존): 트랙 ${track.trackNumber}`);
+            console.log(`[Indoor Training] Firebase 동기화 완료 (필수값 보존): 트랙 ${track.trackNumber}`, {
+              userId: powerMeter.userId,
+              userName: powerMeter.userName
+            });
           }).catch(error => {
             console.error(`[Indoor Training] Firebase 동기화 실패: 트랙 ${track.trackNumber}`, error);
           });
@@ -3013,9 +3012,7 @@ function selectUserForPowerMeter(userId) {
             // Player List 화면과 동일한 데이터 구조로 저장
             const userData = {
               userId: String(powerMeter.userId || ''),
-              name: powerMeter.userName || '',
               userName: powerMeter.userName || '',
-              participantName: powerMeter.userName || '',
               ftp: powerMeter.userFTP || 0,
               weight: powerMeter.userWeight || 0,
               gear: powerMeter.gear || null, // Gear 정보
@@ -5901,8 +5898,6 @@ function uploadToFirebase() {
                     // 필수 유지값 (powerMeter에 있으면 업데이트, 없으면 기존 값 유지)
                     userId: pm.userId ? String(pm.userId) : (existingData.userId || undefined),
                     userName: pm.userName || existingData.userName || undefined,
-                    name: pm.userName || existingData.name || `User ${pm.id}`,
-                    participantName: pm.userName || existingData.participantName || undefined,
                     ftp: pm.userFTP ? Math.round(pm.userFTP) : (existingData.ftp !== undefined ? existingData.ftp : undefined),
                     weight: pm.userWeight || existingData.weight || undefined,
                     gear: pm.gear || existingData.gear || undefined, // gear 필드 보존 (기존 값 우선)

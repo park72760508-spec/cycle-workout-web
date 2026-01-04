@@ -144,8 +144,8 @@ function updateUserName(data) {
     const bikeIdDisplay = document.getElementById('bike-id-display');
     if (!bikeIdDisplay) return;
     
-    // 사용자 이름 추출 (여러 필드명 지원)
-    const userName = data.name || data.userName || data.participantName || data.user_name || data.participant_name || null;
+    // 사용자 이름 추출 (userName만 사용)
+    const userName = data.userName || null;
     
     if (userName) {
         bikeIdDisplay.innerText = userName;
