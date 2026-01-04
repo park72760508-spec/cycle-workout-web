@@ -165,7 +165,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, rgba(0, 112, 74, 0.85) 0%, rgba(0, 96, 64, 0.9) 50%, rgba(0, 112, 74, 0.85) 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
   opacity: 1 !important;
