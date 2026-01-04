@@ -1186,8 +1186,7 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   if (!powerMeter) return;
   
   const statusEl = document.getElementById(`status-${powerMeterId}`);
-  const statusDotEl = statusEl?.querySelector('.status-dot');
-  const statusTextEl = statusEl?.querySelector('.status-text');
+  const statusTextEl = document.getElementById(`status-text-${powerMeterId}`);
   
   // 조건 확인
   const hasUser = !!(powerMeter.userId);
