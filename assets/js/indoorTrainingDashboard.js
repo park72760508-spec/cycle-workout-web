@@ -1251,9 +1251,9 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   // 디바이스 아이콘 표시/숨김 처리
   if (deviceIconsEl) {
     if (statusClass === 'ready' || statusClass === 'connected') {
-      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시
+      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (상태에 따라 다른 이미지 사용)
       deviceIconsEl.style.display = 'inline-flex';
-      updateDeviceIcons(powerMeterId);
+      updateDeviceIcons(powerMeterId, statusClass);
     } else {
       // 미연결 상태: 디바이스 아이콘 숨김
       deviceIconsEl.style.display = 'none';
@@ -2327,8 +2327,8 @@ function clearSelectedUser() {
     userNameEl.parentElement.style.display = 'none';
   }
   
-  // 디바이스 아이콘 업데이트
-  updateDeviceIcons(powerMeterId);
+  // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
+  updatePowerMeterConnectionStatus(powerMeterId);
   
   // 선택된 사용자 카드 숨김
   const selectedUserCard = document.getElementById('pairingSelectedUserCard');
@@ -2408,8 +2408,8 @@ function clearAllUsersAndHeartRateDevices() {
         userNameEl.parentElement.style.display = 'none';
       }
       
-      // 디바이스 아이콘 업데이트
-      updateDeviceIcons(pm.id);
+      // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
+      updatePowerMeterConnectionStatus(pm.id);
       
       console.log(`[Indoor Training] 트랙 ${pm.id} 사용자 정보 제거`);
     }
@@ -2419,8 +2419,8 @@ function clearAllUsersAndHeartRateDevices() {
       pm.heartRateName = null;
       pm.heartRateDeviceId = null;
       
-      // 디바이스 아이콘 업데이트
-      updateDeviceIcons(pm.id);
+      // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
+      updatePowerMeterConnectionStatus(pm.id);
       
       // UI 업데이트
       const heartSelectedCard = document.getElementById('heartSelectedDeviceCard');
@@ -2787,8 +2787,8 @@ async function updateTracksFromFirebase() {
             userNameEl.parentElement.style.display = 'flex';
           }
           
-          // 디바이스 아이콘 업데이트
-          updateDeviceIcons(track.trackNumber);
+          // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
+          updatePowerMeterConnectionStatus(track.trackNumber);
           
           // FTP 기반 눈금 업데이트
           updatePowerMeterTicks(track.trackNumber);
@@ -2823,8 +2823,8 @@ async function updateTracksFromFirebase() {
           userNameEl.parentElement.style.display = 'flex';
         }
         
-        // 디바이스 아이콘 업데이트
-        updateDeviceIcons(track.trackNumber);
+        // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
+        updatePowerMeterConnectionStatus(track.trackNumber);
         
         updatePowerMeterTicks(track.trackNumber);
         updatedCount++;
@@ -3074,23 +3074,26 @@ function selectUserForPowerMeter(userId) {
 /**
  * 디바이스 아이콘 업데이트
  */
-function updateDeviceIcons(powerMeterId) {
+function updateDeviceIcons(powerMeterId, statusClass = 'connected') {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
   
   const deviceIconsContainer = document.getElementById(`device-icons-${powerMeterId}`);
   if (!deviceIconsContainer) return;
   
+  // 상태에 따라 이미지 선택: 준비됨(ready) = 비활성화 이미지(_i.png), 연결됨(connected) = 활성화 이미지(_g.png)
+  const imageSuffix = statusClass === 'ready' ? '_i.png' : '_g.png';
+  
   // 디바이스 아이콘 생성 (우측 연결 상태 영역용)
   const deviceIcons = [];
   if (powerMeter.trainerDeviceId) {
-    deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" style="height: 16px; width: auto; vertical-align: middle;" />');
+    deviceIcons.push(`<img src="assets/img/trainer${imageSuffix}" alt="스마트트레이너" style="height: 16px; width: auto; vertical-align: middle;" />`);
   }
   if (powerMeter.deviceId || powerMeter.powerMeterDeviceId) {
-    deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" style="height: 16px; width: auto; vertical-align: middle;" />');
+    deviceIcons.push(`<img src="assets/img/power${imageSuffix}" alt="파워메터" style="height: 16px; width: auto; vertical-align: middle;" />`);
   }
   if (powerMeter.heartRateDeviceId) {
-    deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" style="height: 16px; width: auto; vertical-align: middle;" />');
+    deviceIcons.push(`<img src="assets/img/bpm${imageSuffix}" alt="심박계" style="height: 16px; width: auto; vertical-align: middle;" />`);
   }
   
   deviceIconsContainer.innerHTML = deviceIcons.join('');
@@ -3239,13 +3242,10 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
-    // 디바이스 아이콘 업데이트
-    updateDeviceIcons(powerMeterId);
-    
     // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
     updatePairingModalWithSavedData(powerMeter);
     
-    // 연결 상태 업데이트
+    // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
     updatePowerMeterConnectionStatus(powerMeterId);
     
     // 바늘 위치 유지 (현재 파워값으로 업데이트)
@@ -3270,13 +3270,10 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
-    // 디바이스 아이콘 업데이트
-    updateDeviceIcons(powerMeterId);
-    
     // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
     updatePairingModalWithSavedData(powerMeter);
     
-    // 연결 상태 업데이트
+    // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
     updatePowerMeterConnectionStatus(powerMeterId);
     
     // 바늘 위치 유지 (현재 파워값으로 업데이트)
@@ -3301,13 +3298,10 @@ function savePowerMeterPairing() {
     // 저장
     saveAllPowerMeterPairingsToStorage();
     
-    // 디바이스 아이콘 업데이트
-    updateDeviceIcons(powerMeterId);
-    
     // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
     updatePairingModalWithSavedData(powerMeter);
     
-    // 연결 상태 업데이트
+    // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
     updatePowerMeterConnectionStatus(powerMeterId);
     
     // 바늘 위치 유지 (현재 파워값으로 업데이트)
