@@ -359,6 +359,10 @@ function initIndoorTrainingDashboard() {
     const newBtnTogglePause = document.getElementById('btnTogglePauseTraining');
     if (newBtnTogglePause) {
       newBtnTogglePause.addEventListener('click', toggleStartPauseTraining);
+      // 초기 상태를 시작 버튼(play)으로 설정
+      newBtnTogglePause.className = 'enhanced-control-btn play';
+      newBtnTogglePause.setAttribute('aria-label', '시작');
+      newBtnTogglePause.setAttribute('title', '시작');
     }
   }
   
@@ -377,6 +381,9 @@ function initIndoorTrainingDashboard() {
       newBtnStop.addEventListener('click', stopTraining);
     }
   }
+  
+  // 초기 버튼 상태 업데이트
+  updateTrainingButtons();
 }
 
 /**
