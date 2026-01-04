@@ -223,21 +223,71 @@ h1,h2,h3,h4 { font-weight: 600; }
   font-size: 18px;
 }
 
-/* 베이스캠프 버튼 스타일 - 녹색톤 */
+/* 베이스캠프 버튼 스타일 - 녹색톤 + 배경 이미지 */
 .basecamp-btn {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.2) 100%) !important;
   border: 2px solid rgba(34, 197, 94, 0.3) !important;
   color: #15803d !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
 }
 
-.basecamp-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.25) 0%, rgba(22, 163, 74, 0.3) 100%) !important;
-  border-color: rgba(34, 197, 94, 0.5) !important;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3) !important;
+/* 배경 이미지 위에 녹색톤 오버레이 */
+.basecamp-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.4) 100%);
+  z-index: 0;
+  transition: opacity 0.3s ease;
 }
 
 .basecamp-btn span {
-  color: #15803d !important;
+  color: #fff !important;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-weight: 700;
+}
+
+/* 각 버튼별 배경 이미지 */
+.basecamp-btn-indoor {
+  background-image: url('assets/img/b(01).png') !important;
+}
+
+.basecamp-btn-solo {
+  background-image: url('assets/img/b(02).png') !important;
+}
+
+.basecamp-btn-profile {
+  background-image: url('assets/img/b(03).png') !important;
+}
+
+.basecamp-btn-premium {
+  background-image: url('assets/img/STELVIO AI.png') !important;
+}
+
+.basecamp-btn:hover:not(:disabled) {
+  border-color: rgba(34, 197, 94, 0.6) !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4) !important;
+}
+
+.basecamp-btn:hover:not(:disabled)::before {
+  opacity: 0.5;
+}
+
+/* 비활성화된 버튼 */
+.basecamp-btn:disabled {
+  opacity: 0.6;
+}
+
+.basecamp-btn:disabled::before {
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.4) 0%, rgba(107, 114, 128, 0.5) 100%);
 }
 
 /* 베이스캠프 푸터 */
