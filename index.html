@@ -718,7 +718,7 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="showScreen('connectionScreen')">
                 <span>SOLO TRAINING</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-profile" id="btnBasecampProfile" onclick="showScreen('profileScreen')">
+              <button class="btn btn-device basecamp-btn basecamp-btn-profile" id="btnBasecampProfile" onclick="showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); }">
                 <span>USER PROFILE</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-premium" id="btnBasecampPremium" disabled>
@@ -834,11 +834,11 @@
 
 
     
-  <!-- ✅ 나가기 버튼 -->
+  <!-- ✅ 뒤로 가기 버튼 -->
   <div class="profile-exit-container">
-    <button class="btn btn-exit-inline" onclick="refreshPage()" aria-label="나가기">
-      <img class="btn-exit-icon" src="assets/img/exit.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-      <span>나가기</span>
+    <button class="btn btn-exit-inline" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
+      <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+      <span>뒤로 가기</span>
     </button>
   </div>
     
