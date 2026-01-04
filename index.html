@@ -698,36 +698,41 @@
 
   <!-- 베이스캠프 화면 -->
   <div id="basecampScreen" class="screen">
+    <!-- 배경 이미지 -->
+    <div class="basecamp-background-image"></div>
+    
     <div class="connection-main-container">
       <div class="connection-form-container">
-        <div class="connection-form-card">
-          <div class="connection-header">
-            <h1><img src="assets/img/STELVIO AI.png" alt="STELVIO AI" style="width: 48px; height: 48px; vertical-align: middle; margin-right: 8px;" /> STELVIO AI BASECAMP</h1>
-            <p class="subtitle">STELVIO AI에 오신것을 환영합니다.</p>
+        <div class="connection-form-card basecamp-card">
+          <div class="connection-header basecamp-header">
+            <!-- 제목 이미지 배경으로 처리 -->
           </div>
 
-          <div class="connection-device-section">
-            <h3 class="mb-15"><img src="assets/img/wifi.png" alt="무선 기기 페어링" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" /><img src="assets/img/antlogo.gif" alt="ANT+" style="width: 20px; height: 20px; vertical-align: middle; margin-right: 6px;" /> 무선 기기 페어링</h3>
+          <div class="connection-device-section basecamp-device-section">
+            <h3 class="mb-15 basecamp-status-bar">🟢 Choose Your Path</h3>
             <div class="grid-2 gap-10 mb-15">
-              <button class="btn btn-device" id="btnBasecampIndoor" onclick="showScreen('trainingRoomScreen')">
+              <button class="btn btn-device basecamp-btn" id="btnBasecampIndoor" onclick="showScreen('trainingRoomScreen')">
+                <img src="assets/img/b(01).png" alt="INDOOR TRAINING" class="device-btn-icon" />
                 <span>INDOOR TRAINING</span>
               </button>
-              <button class="btn btn-device" id="btnBasecampSolo" onclick="showScreen('connectionScreen')">
+              <button class="btn btn-device basecamp-btn" id="btnBasecampSolo" onclick="showScreen('connectionScreen')">
+                <img src="assets/img/b(02).png" alt="SOLO TRAINING" class="device-btn-icon" />
                 <span>SOLO TRAINING</span>
               </button>
-              <button class="btn btn-device" id="btnBasecampProfile" onclick="showScreen('profileScreen')">
+              <button class="btn btn-device basecamp-btn" id="btnBasecampProfile" onclick="showScreen('profileScreen')">
+                <img src="assets/img/b(03).png" alt="USER PROFILE" class="device-btn-icon" />
                 <span>USER PROFILE</span>
               </button>
-              <button class="btn btn-device" id="btnBasecampPremium" disabled>
-                <img src="assets/img/STELVIO AI.png" alt="PREMIUM" class="device-btn-icon" />
+              <button class="btn btn-device basecamp-btn" id="btnBasecampPremium" disabled>
+                <img src="assets/img/b(03).png" alt="PREMIUM" class="device-btn-icon" />
                 <span>PREMIUM</span>
               </button>
             </div>
           </div>
 
           <!-- 하단 시스템 문의 문구 -->
-          <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(0, 0, 0, 0.1);">
-            <p style="font-size: 12px; color: #667eea; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <div class="basecamp-footer">
+            <p style="font-size: 12px; color: rgba(34, 197, 94, 0.8); margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;">
               <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
               시스템 문의 : stelvio.ai.kr@gmail.com
             </p>
