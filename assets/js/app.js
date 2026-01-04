@@ -5816,9 +5816,9 @@ async function authenticatePhone() {
           //   console.warn('⚠️ profileScreen 요소가 없어 connectionScreen으로 대체 진입합니다.');
           // }
 
-          // === [옵션 B] 현재 구조 유지: connectionScreen으로 이동 ===
-          const connectionScreen = document.getElementById('connectionScreen');
-          const target = connectionScreen; // 기본 타겟
+          // === 베이스캠프 화면으로 이동 ===
+          const basecampScreen = document.getElementById('basecampScreen');
+          const target = basecampScreen || document.getElementById('connectionScreen'); // 베이스캠프 우선, 없으면 connectionScreen
           
           if (target) {
             target.classList.add('active');
@@ -6232,16 +6232,26 @@ async function handleNewUserRegistered(userData) {
                  screen.style.display = 'none';
                });
                
-               // connectionScreen 강제 표시
-               const connectionScreen = document.getElementById('connectionScreen');
-               if (connectionScreen) {
-                 connectionScreen.classList.add('active');
-                 connectionScreen.style.display = 'block';
-                 connectionScreen.style.opacity = '1';
-                 connectionScreen.style.visibility = 'visible';
-                 console.log('✅ connectionScreen 표시 완료');
+               // basecampScreen 강제 표시
+               const basecampScreen = document.getElementById('basecampScreen');
+               if (basecampScreen) {
+                 basecampScreen.classList.add('active');
+                 basecampScreen.style.display = 'block';
+                 basecampScreen.style.opacity = '1';
+                 basecampScreen.style.visibility = 'visible';
+                 console.log('✅ basecampScreen 표시 완료');
                } else {
-                 console.error('❌ connectionScreen을 찾을 수 없습니다');
+                 console.error('❌ basecampScreen을 찾을 수 없습니다');
+                 // 대체: connectionScreen으로 이동
+                 const connectionScreen = document.getElementById('connectionScreen');
+                 if (connectionScreen) {
+                   connectionScreen.classList.add('active');
+                   connectionScreen.style.display = 'block';
+                   connectionScreen.style.opacity = '1';
+                   connectionScreen.style.visibility = 'visible';
+                   console.log('✅ connectionScreen 표시 완료 (대체)');
+                 } else {
+                   console.error('❌ connectionScreen도 찾을 수 없습니다');
                  // 대체 화면 표시
                  const allScreens = document.querySelectorAll('[id*="Screen"], [id*="screen"]');
                  if (allScreens.length > 0) {
@@ -6309,14 +6319,23 @@ window.addEventListener('load', () => {
     //   if (typeof loadUsers === 'function') loadUsers(); // grade=1 전체/이름순, 그 외 본인만
     // }
 
-    // (B안) 지금 구조 유지: 기기 연결 화면부터
+    // 베이스캠프 화면으로 이동
     hideAllScreens();
-    const connectionScreen = document.getElementById('connectionScreen');
-    if (connectionScreen) {
-      connectionScreen.classList.add('active');
-      connectionScreen.style.display = 'block';
-      connectionScreen.style.opacity = '1';
-      connectionScreen.style.visibility = 'visible';
+    const basecampScreen = document.getElementById('basecampScreen');
+    if (basecampScreen) {
+      basecampScreen.classList.add('active');
+      basecampScreen.style.display = 'block';
+      basecampScreen.style.opacity = '1';
+      basecampScreen.style.visibility = 'visible';
+    } else {
+      // 대체: connectionScreen으로 이동
+      const connectionScreen = document.getElementById('connectionScreen');
+      if (connectionScreen) {
+        connectionScreen.classList.add('active');
+        connectionScreen.style.display = 'block';
+        connectionScreen.style.opacity = '1';
+        connectionScreen.style.visibility = 'visible';
+      }
     }
   } else {
     // 인증 정보 없으면 인증 화면으로
