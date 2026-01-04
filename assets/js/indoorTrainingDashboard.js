@@ -347,6 +347,36 @@ function initIndoorTrainingDashboard() {
       });
     }
   }, 500); // 500ms 지연
+  
+  // 개인 훈련 화면의 버튼에 Indoor Training 함수 연결
+  const btnTogglePauseTraining = document.getElementById('btnTogglePauseTraining');
+  const btnSkipSegmentTraining = document.getElementById('btnSkipSegmentTraining');
+  const btnStopTrainingIndoor = document.getElementById('btnStopTrainingIndoor');
+  
+  if (btnTogglePauseTraining) {
+    // 기존 이벤트 리스너 제거 후 새로 연결
+    btnTogglePauseTraining.replaceWith(btnTogglePauseTraining.cloneNode(true));
+    const newBtnTogglePause = document.getElementById('btnTogglePauseTraining');
+    if (newBtnTogglePause) {
+      newBtnTogglePause.addEventListener('click', toggleStartPauseTraining);
+    }
+  }
+  
+  if (btnSkipSegmentTraining) {
+    btnSkipSegmentTraining.replaceWith(btnSkipSegmentTraining.cloneNode(true));
+    const newBtnSkip = document.getElementById('btnSkipSegmentTraining');
+    if (newBtnSkip) {
+      newBtnSkip.addEventListener('click', skipCurrentSegmentTraining);
+    }
+  }
+  
+  if (btnStopTrainingIndoor) {
+    btnStopTrainingIndoor.replaceWith(btnStopTrainingIndoor.cloneNode(true));
+    const newBtnStop = document.getElementById('btnStopTrainingIndoor');
+    if (newBtnStop) {
+      newBtnStop.addEventListener('click', stopTraining);
+    }
+  }
 }
 
 /**
@@ -4282,9 +4312,10 @@ function skipCurrentSegmentTraining() {
  */
 function updateTrainingButtons() {
   const state = window.indoorTrainingState.trainingState;
-  const startPauseBtn = document.getElementById('btnStartPauseTraining');
+  // 개인 훈련 화면의 버튼 사용
+  const startPauseBtn = document.getElementById('btnTogglePauseTraining');
   const skipBtn = document.getElementById('btnSkipSegmentTraining');
-  const stopBtn = document.getElementById('btnStopTraining');
+  const stopBtn = document.getElementById('btnStopTrainingIndoor');
   
   if (startPauseBtn) {
     if (state === 'idle' || state === 'finished') {
