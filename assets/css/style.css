@@ -553,26 +553,29 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* ANT+ 연결 버튼 특정 스타일 */
 #connectionScreen #btnConnectANT {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  background-image: url('assets/img/STELVIO AI.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   border: 2px solid rgba(59, 130, 246, 0.3);
   color: #2563eb;
   cursor: default;
   pointer-events: none;
+  position: relative;
+  overflow: hidden;
 }
 
-#connectionScreen #btnConnectANT:hover {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
-  border-color: rgba(59, 130, 246, 0.3);
-  transform: none;
-  box-shadow: none;
-}
-
-#connectionScreen #btnConnectANT:hover::before {
-  opacity: 0;
-}
-
-#connectionScreen #btnConnectANT:active {
-  transform: none;
-  box-shadow: none;
+/* 배경 이미지 위에 오버레이 (희미하게 보이게) */
+#connectionScreen #btnConnectANT::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(37, 99, 235, 0.4) 100%);
+  z-index: 0;
+  transition: opacity 0.3s ease;
 }
 
 #connectionScreen #btnConnectANT .device-btn-icon {
@@ -581,6 +584,28 @@ h1,h2,h3,h4 { font-weight: 600; }
   object-fit: contain;
   display: block;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+#connectionScreen #btnConnectANT:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
+  background-image: url('assets/img/STELVIO AI.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-color: rgba(59, 130, 246, 0.3);
+  transform: none;
+  box-shadow: none;
+}
+
+#connectionScreen #btnConnectANT:hover::before {
+  opacity: 0.5;
+}
+
+#connectionScreen #btnConnectANT:active {
+  transform: none;
+  box-shadow: none;
 }
 
 #connectionScreen #btnConnectANT:hover .device-btn-icon {
