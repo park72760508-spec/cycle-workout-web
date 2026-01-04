@@ -553,7 +553,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* ANT+ 연결 버튼 특정 스타일 */
 #connectionScreen #btnConnectANT {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
-  background-image: url('assets/img/STELVIO AI.png');
+  background-image: url('https://stelvio.ai.kr/assets/img/STELVIO AI.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -590,7 +590,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 #connectionScreen #btnConnectANT:hover {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.2) 100%);
-  background-image: url('assets/img/STELVIO AI.png');
+  background-image: url('https://stelvio.ai.kr/assets/img/STELVIO AI.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
