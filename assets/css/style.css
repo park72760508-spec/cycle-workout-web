@@ -8873,8 +8873,7 @@ button[aria-disabled="true"] {
 }
 
 /* 대시보드용 enhanced-control-btn 스타일 */
-#rollerRaceDashboardScreen .enhanced-control-btn,
-#indoorTrainingDashboardScreen .enhanced-control-btn {
+#rollerRaceDashboardScreen .enhanced-control-btn {
   display: flex !important;
   width: 64px;
   height: 64px;
@@ -8893,6 +8892,26 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
+/* Indoor Training 화면 버튼 - 애니메이션 및 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn {
+  display: flex !important;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: none !important; /* 애니메이션 제거 */
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
 /* Indoor Training 대시보드 버튼 아이콘 (개인 훈련 화면과 동일한 transition 사용) */
 
 #rollerRaceDashboardScreen .enhanced-control-btn:hover:not(:disabled) {
@@ -8903,26 +8922,40 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Indoor Training 대시보드 버튼 호버 효과 (개인 훈련 화면과 동일) */
+/* Indoor Training 대시보드 버튼 호버 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.4);
+  transform: none !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
   box-shadow: 
-    0 8px 25px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
-#rollerRaceDashboardScreen .enhanced-control-btn:active:not(:disabled),
-#indoorTrainingDashboardScreen .enhanced-control-btn:active:not(:disabled) {
+/* 호버 시 아이콘 크기 및 위치 변경 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::before,
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::after {
+  transform: inherit !important;
+  width: inherit !important;
+  height: inherit !important;
+  left: inherit !important;
+  top: inherit !important;
+  transition: none !important;
+}
+
+#rollerRaceDashboardScreen .enhanced-control-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 
-/* Indoor Training 대시보드 버튼 active 효과 (개인 훈련 화면과 동일) */
+/* Indoor Training 대시보드 버튼 active 효과 제거 */
+#indoorTrainingDashboardScreen .enhanced-control-btn:active:not(:disabled) {
+  transform: none !important;
+}
+
+/* Indoor Training 대시보드 버튼 active 클래스 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn.active {
   box-shadow: 
-    0 0 20px currentColor,
     0 4px 12px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn:disabled,
@@ -8953,7 +8986,8 @@ button[aria-disabled="true"] {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) !important;
+  transition: none !important;
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
@@ -8963,12 +8997,24 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Indoor Training 대시보드 재생 버튼 호버 효과 (개인 훈련 화면과 동일) */
+/* Indoor Training 대시보드 재생 버튼 호버 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
-  border-color: #22c55e;
+  border-color: rgba(255, 255, 255, 0.2) !important;
   box-shadow: 
-    0 8px 25px rgba(34, 197, 94, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 호버 시 재생 아이콘 크기 및 위치 고정 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled)::before {
+  transform: translate(-50%, -50%) !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-left-width: 16px !important;
+  border-top-width: 10px !important;
+  border-bottom-width: 10px !important;
+  left: 50% !important;
+  top: 50% !important;
 }
 
 /* 일시정지 아이콘 */
@@ -8993,7 +9039,8 @@ button[aria-disabled="true"] {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) !important;
+  transition: none !important;
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
@@ -9003,12 +9050,21 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Indoor Training 대시보드 일시정지 버튼 호버 효과 (개인 훈련 화면과 동일) */
+/* Indoor Training 대시보드 일시정지 버튼 호버 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
-  border-color: #fbbf24;
+  border-color: rgba(255, 255, 255, 0.2) !important;
   box-shadow: 
-    0 8px 25px rgba(251, 191, 36, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 호버 시 일시정지 아이콘 크기 및 위치 고정 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled)::before {
+  transform: translate(-50%, -50%) !important;
+  width: 4px !important;
+  height: 22px !important;
+  left: 50% !important;
+  top: 50% !important;
 }
 
 /* 정지 아이콘 */
@@ -9030,7 +9086,8 @@ button[aria-disabled="true"] {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) !important;
+  transition: none !important;
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
@@ -9040,12 +9097,21 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Indoor Training 대시보드 정지 버튼 호버 효과 (개인 훈련 화면과 동일) */
+/* Indoor Training 대시보드 정지 버튼 호버 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
-  border-color: #ef4444;
+  border-color: rgba(255, 255, 255, 0.2) !important;
   box-shadow: 
-    0 8px 25px rgba(239, 68, 68, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 호버 시 정지 아이콘 크기 및 위치 고정 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled)::before {
+  transform: translate(-50%, -50%) !important;
+  width: 18px !important;
+  height: 18px !important;
+  left: 50% !important;
+  top: 50% !important;
 }
 
 /* 건너뛰기 아이콘 */
@@ -9084,14 +9150,16 @@ button[aria-disabled="true"] {
   position: absolute;
   left: calc(50% - 8px);
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) !important;
+  transition: none !important;
 }
 
 #indoorTrainingDashboardScreen .enhanced-control-btn.skip::after {
   position: absolute;
   left: calc(50% + 4px);
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(-50%) !important;
+  transition: none !important;
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled) {
@@ -9101,12 +9169,35 @@ button[aria-disabled="true"] {
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Indoor Training 대시보드 건너뛰기 버튼 호버 효과 (개인 훈련 화면과 동일) */
+/* Indoor Training 대시보드 건너뛰기 버튼 호버 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled) {
-  border-color: #3b82f6;
+  border-color: rgba(255, 255, 255, 0.2) !important;
   box-shadow: 
-    0 8px 25px rgba(59, 130, 246, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+/* 호버 시 건너뛰기 아이콘 크기 및 위치 고정 */
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::before {
+  transform: translateY(-50%) !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-left-width: 12px !important;
+  border-top-width: 8px !important;
+  border-bottom-width: 8px !important;
+  left: calc(50% - 8px) !important;
+  top: 50% !important;
+}
+
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::after {
+  transform: translateY(-50%) !important;
+  width: 0 !important;
+  height: 0 !important;
+  border-left-width: 12px !important;
+  border-top-width: 8px !important;
+  border-bottom-width: 8px !important;
+  left: calc(50% + 4px) !important;
+  top: 50% !important;
 }
 
 /* 워크아웃 선택 버튼 스타일 */
