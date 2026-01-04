@@ -499,32 +499,18 @@ function createPowerMeterElement(powerMeter) {
     ? 'font-size: 11px !important; color: #999999 !important; font-weight: 400 !important; text-align: left !important; opacity: 0.5 !important; cursor: not-allowed !important;'
     : 'font-size: 11px !important; color: #ffffff !important; font-weight: 400 !important; text-align: left !important; opacity: 0.8 !important; cursor: pointer !important;';
   
-  // 디바이스 아이콘 생성
-  const deviceIcons = [];
-  if (powerMeter.trainerDeviceId) {
-    deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
-  }
-  if (powerMeter.deviceId || powerMeter.powerMeterDeviceId) {
-    deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
-  }
-  if (powerMeter.heartRateDeviceId) {
-    deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
-  }
-  const deviceIconsHtml = deviceIcons.join('');
-  
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <div style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; flex: 0 0 auto !important; min-width: 100px !important; order: 1 !important;">
         <div style="display: ${powerMeter.userName ? 'flex' : 'none'} !important; align-items: center !important; flex-wrap: wrap !important;">
           <span class="speedometer-user-name" id="user-name-${powerMeter.id}" style="font-size: 13px !important; color: #ffffff !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important;">${powerMeter.userName || ''}</span>
-          <span id="device-icons-${powerMeter.id}" style="display: inline-flex !important; align-items: center !important; margin-left: 4px !important;">${deviceIconsHtml}</span>
         </div>
-        <!-- pairing-name 요소 제거: 디바이스 아이콘으로 대체됨 -->
       </div>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;" ${trackButtonOnclick}>트랙${powerMeter.id}</span>
-      <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
-        <span class="status-dot disconnected"></span>
-        <span class="status-text">미연결</span>
+      <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important; align-items: center !important; gap: 6px !important;">
+        <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
+        <span class="status-dot disconnected" id="status-dot-${powerMeter.id}" style="display: none !important;"></span>
+        <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
       </div>
     </div>
     <div class="speedometer-dial">
@@ -1243,34 +1229,43 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   }
   
   // 상태 표시 업데이트
-  if (statusDotEl) {
-    statusDotEl.classList.remove('disconnected', 'ready', 'connected');
-    statusDotEl.classList.add(statusClass);
-  }
+  const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
+  const statusDotEl = document.getElementById(`status-dot-${powerMeterId}`);
   
   if (statusTextEl) {
     statusTextEl.textContent = statusText;
   }
   
-  // 속도계 모양 아래 파워 정보창 색상 업데이트
+  // 상태 점 표시/숨김 처리
+  if (statusDotEl) {
+    if (statusClass === 'disconnected') {
+      // 미연결 상태: 빨간 원 표시
+      statusDotEl.style.display = 'inline-block';
+      statusDotEl.classList.remove('ready', 'connected');
+      statusDotEl.classList.add('disconnected');
+    } else {
+      // 준비됨 또는 연결됨 상태: 점 숨김
+      statusDotEl.style.display = 'none';
+    }
+  }
+  
+  // 디바이스 아이콘 표시/숨김 처리
+  if (deviceIconsEl) {
+    if (statusClass === 'ready' || statusClass === 'connected') {
+      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시
+      deviceIconsEl.style.display = 'inline-flex';
+      updateDeviceIcons(powerMeterId);
+    } else {
+      // 미연결 상태: 디바이스 아이콘 숨김
+      deviceIconsEl.style.display = 'none';
+    }
+  }
+  
+  // 속도계 모양 아래 파워 정보창 색상 제거 (주황색/녹색등 제거)
   const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
   if (infoEl) {
-    // 연결됨 상태(statusClass === 'connected')일 때만 연두색, 그 외는 주황색
-    if (statusClass === 'connected') {
-      // 연결됨: 연두색 (투명도 없음)
-      infoEl.classList.remove('disconnected', 'warning');
-      infoEl.classList.add('connected');
-    } else {
-      // 연결됨 이외 상황: 주황색 (투명도 없음)
-      infoEl.classList.remove('connected');
-      if (hasAnyDevice) {
-        infoEl.classList.remove('disconnected');
-        infoEl.classList.add('warning');
-      } else {
-        infoEl.classList.remove('warning');
-        infoEl.classList.add('disconnected');
-      }
-    }
+    // 모든 색상 클래스 제거 (기본 스타일만 유지)
+    infoEl.classList.remove('connected', 'warning', 'disconnected');
     
     // 정보표시창 색상 변경 시 랩파워 색상도 업데이트 (항상 검정색)
     const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
@@ -3087,21 +3082,21 @@ function updateDeviceIcons(powerMeterId) {
   const deviceIconsContainer = document.getElementById(`device-icons-${powerMeterId}`);
   if (!deviceIconsContainer) return;
   
-  // 디바이스 아이콘 생성
+  // 디바이스 아이콘 생성 (우측 연결 상태 영역용)
   const deviceIcons = [];
   if (powerMeter.trainerDeviceId) {
-    deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+    deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" style="height: 16px; width: auto; vertical-align: middle;" />');
   }
   if (powerMeter.deviceId || powerMeter.powerMeterDeviceId) {
-    deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+    deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" style="height: 16px; width: auto; vertical-align: middle;" />');
   }
   if (powerMeter.heartRateDeviceId) {
-    deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" style="height: 13px; width: auto; margin-left: 4px; vertical-align: middle;" />');
+    deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" style="height: 16px; width: auto; vertical-align: middle;" />');
   }
   
   deviceIconsContainer.innerHTML = deviceIcons.join('');
   
-  // 사용자명이 있으면 아이콘 컨테이너도 표시
+  // 사용자명이 있으면 사용자명 컨테이너 표시
   const userNameEl = document.getElementById(`user-name-${powerMeterId}`);
   if (userNameEl && powerMeter.userName) {
     userNameEl.parentElement.style.display = 'flex';
