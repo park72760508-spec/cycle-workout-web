@@ -2646,14 +2646,6 @@
         <span class="race-title-text">Training Room</span>
       </h1>
     </div>
-    <div class="training-room-header-divider"></div>
-    <div class="training-room-back-button-container">
-      <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnBackFromTrainingRoom" onclick="showScreen('connectionScreen')">
-        <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-        뒤로
-      </button>
-    </div>
-
     <div class="training-room-container" style="max-width: 1000px; margin: 0 auto; padding: 20px;">
       <!-- Training Room 목록 -->
       <div class="training-room-list-section" style="margin-bottom: 30px;">
@@ -2662,20 +2654,13 @@
         </div>
       </div>
 
-      <!-- 선택된 Training Room 정보 및 버튼 -->
-      <div id="selectedTrainingRoomSection" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
-        <h3 id="selectedTrainingRoomTitle" style="margin-bottom: 10px; color: #333;"></h3>
-        <p id="selectedTrainingRoomCoach" style="margin-bottom: 20px; color: #666; font-size: 0.95em;"></p>
-        <div style="display: flex; gap: 12px; justify-content: center;">
-          <button class="btn btn-primary btn-default-style btn-with-icon" id="btnPlayer" onclick="openPlayerList()" disabled>
-            <img src="assets/img/personals.png" alt="Player" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            Player
-          </button>
-          <button class="btn btn-success btn-default-style btn-with-icon" id="btnCoach" onclick="openCoachMode()" disabled>
-            <img src="assets/img/personal.png" alt="Coach" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            Coach
-          </button>
-        </div>
+      <!-- 구분선 및 뒤로 버튼 -->
+      <div class="training-room-list-divider"></div>
+      <div class="training-room-back-button-container">
+        <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnBackFromTrainingRoom" onclick="showScreen('connectionScreen')">
+          <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          뒤로
+        </button>
       </div>
     </div>
   </div>
