@@ -209,7 +209,7 @@ async function selectTrainingRoom(roomId) {
   }
   console.log('[Training Room] Room ID 저장됨:', room.id);
 
-  // 선택된 카드 하이라이트 (체크마크 추가/제거)
+  // 모든 카드에서 선택 상태 및 버튼 제거
   document.querySelectorAll('.training-room-card').forEach(card => {
     card.classList.remove('selected');
     
@@ -219,100 +219,76 @@ async function selectTrainingRoom(roomId) {
       existingCheck.remove();
     }
     
-    // 선택된 카드에 체크마크 추가
-    if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
-      card.classList.add('selected');
-      if (!card.querySelector('.training-room-check')) {
-        const checkMark = document.createElement('div');
-        checkMark.className = 'training-room-check';
-        checkMark.textContent = '✓';
-        card.appendChild(checkMark);
-      }
+    // 기존 버튼 제거
+    const existingButtons = card.querySelector('.training-room-action-buttons');
+    if (existingButtons) {
+      existingButtons.remove();
     }
   });
-
-  // 선택된 Training Room 정보 표시
-  const selectedSection = document.getElementById('selectedTrainingRoomSection');
-  const selectedTitle = document.getElementById('selectedTrainingRoomTitle');
-  const selectedCoach = document.getElementById('selectedTrainingRoomCoach');
-  const btnPlayer = document.getElementById('btnPlayer');
-  const btnCoach = document.getElementById('btnCoach');
-
-  if (selectedSection && selectedTitle) {
-    selectedTitle.textContent = room.title;
+  
+  // 선택된 카드에 체크마크 및 버튼 추가
+  const selectedCard = document.querySelector(`.training-room-card[data-room-id="${roomIdNum}"]`);
+  if (selectedCard) {
+    selectedCard.classList.add('selected');
     
-    // Coach 정보 표시 (user_id 활용)
-    if (selectedCoach) {
-      // 사용자 목록 가져오기 (window.users, window.userProfiles, 또는 API 호출)
-      let users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+    // 체크마크 추가
+    if (!selectedCard.querySelector('.training-room-check')) {
+      const checkMark = document.createElement('div');
+      checkMark.className = 'training-room-check';
+      checkMark.textContent = '✓';
+      selectedCard.appendChild(checkMark);
+    }
+    
+    // 버튼 추가
+    const contentDiv = selectedCard.querySelector('.training-room-content');
+    if (contentDiv && !contentDiv.querySelector('.training-room-action-buttons')) {
+      // 사용자 등급 확인
+      const userGradeNum = typeof userGrade === 'string' ? parseInt(userGrade, 10) : userGrade;
+      const canAccessPlayer = userGradeNum === 1 || userGradeNum === 2 || userGradeNum === 3;
+      const canAccessCoach = userGradeNum === 1 || userGradeNum === 3;
       
-      // 사용자 목록이 없으면 API로 가져오기 (비동기 처리)
-      if (users.length === 0 && typeof apiGetUsers === 'function') {
-        apiGetUsers().then(result => {
-          if (result && result.success && result.items) {
-            users = result.items;
-            window.users = users;
-            
-            // user_id로 코치 이름 찾기
-            const userId = room.user_id || room.userId;
-            const coach = userId ? users.find(u => String(u.id) === String(userId)) : null;
-            const coachName = coach ? coach.name : '';
-            
-            if (coachName) {
-              selectedCoach.textContent = `Coach : ${coachName}님`;
-              selectedCoach.style.display = 'block';
-            } else {
-              selectedCoach.textContent = '';
-              selectedCoach.style.display = 'none';
-            }
-          }
-        }).catch(error => {
-          console.warn('[Training Room] 사용자 목록 로드 실패:', error);
-        });
-      } else {
-        // 사용자 목록이 이미 있는 경우
-        const userId = room.user_id || room.userId;
-        const coach = userId && users.length > 0 ? users.find(u => String(u.id) === String(userId)) : null;
-        const coachName = coach ? coach.name : '';
-        
-        if (coachName) {
-          selectedCoach.textContent = `Coach : ${coachName}님`;
-          selectedCoach.style.display = 'block';
+      const buttonsDiv = document.createElement('div');
+      buttonsDiv.className = 'training-room-action-buttons';
+      buttonsDiv.innerHTML = `
+        <button class="btn btn-primary btn-default-style btn-with-icon training-room-btn-player ${!canAccessPlayer ? 'disabled' : ''}" 
+                data-room-id="${room.id}" 
+                onclick="event.stopPropagation(); openPlayerList();"
+                ${!canAccessPlayer ? 'disabled' : ''}>
+          <img src="assets/img/personals.png" alt="Player" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          Player
+        </button>
+        <button class="btn btn-success btn-default-style btn-with-icon training-room-btn-coach ${!canAccessCoach ? 'disabled' : ''}" 
+                data-room-id="${room.id}" 
+                onclick="event.stopPropagation(); openCoachMode();"
+                ${!canAccessCoach ? 'disabled' : ''}>
+          <img src="assets/img/personal.png" alt="Coach" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+          Coach
+        </button>
+      `;
+      contentDiv.appendChild(buttonsDiv);
+      
+      // 버튼 스타일 적용
+      const btnPlayer = buttonsDiv.querySelector('.training-room-btn-player');
+      const btnCoach = buttonsDiv.querySelector('.training-room-btn-coach');
+      
+      if (btnPlayer) {
+        if (!canAccessPlayer) {
+          btnPlayer.style.opacity = '0.5';
+          btnPlayer.style.cursor = 'not-allowed';
         } else {
-          selectedCoach.textContent = '';
-          selectedCoach.style.display = 'none';
+          btnPlayer.style.opacity = '1';
+          btnPlayer.style.cursor = 'pointer';
         }
       }
-    }
-    
-    selectedSection.style.display = 'block';
-  }
-
-  // Player/Coach 버튼 활성화
-  // Player 버튼: grade=1,2,3 활성화
-  // Coach 버튼: grade=1,3만 활성화
-  const userGradeNum = typeof userGrade === 'string' ? parseInt(userGrade, 10) : userGrade;
-  const canAccessPlayer = userGradeNum === 1 || userGradeNum === 2 || userGradeNum === 3;
-  const canAccessCoach = userGradeNum === 1 || userGradeNum === 3;
-  
-  if (btnPlayer) {
-    btnPlayer.disabled = !canAccessPlayer;
-    if (canAccessPlayer) {
-      btnPlayer.style.opacity = '1';
-      btnPlayer.style.cursor = 'pointer';
-    } else {
-      btnPlayer.style.opacity = '0.5';
-      btnPlayer.style.cursor = 'not-allowed';
-    }
-  }
-  if (btnCoach) {
-    btnCoach.disabled = !canAccessCoach;
-    if (canAccessCoach) {
-      btnCoach.style.opacity = '1';
-      btnCoach.style.cursor = 'pointer';
-    } else {
-      btnCoach.style.opacity = '0.5';
-      btnCoach.style.cursor = 'not-allowed';
+      if (btnCoach) {
+        if (!canAccessCoach) {
+          btnCoach.style.opacity = '0.5';
+          btnCoach.style.cursor = 'not-allowed';
+        } else {
+          btnCoach.style.opacity = '1';
+          btnCoach.style.cursor = 'pointer';
+        }
+      }
     }
   }
 }
@@ -1195,24 +1171,21 @@ function initializeTrainingRoomScreen() {
 
   // 선택된 Training Room 정보 초기화
   currentSelectedTrainingRoom = null;
-  const selectedSection = document.getElementById('selectedTrainingRoomSection');
-  if (selectedSection) {
-    selectedSection.style.display = 'none';
-  }
-
-  // 버튼 비활성화
-  const btnPlayer = document.getElementById('btnPlayer');
-  const btnCoach = document.getElementById('btnCoach');
-  if (btnPlayer) {
-    btnPlayer.disabled = true;
-    btnPlayer.style.opacity = '0.5';
-    btnPlayer.style.cursor = 'not-allowed';
-  }
-  if (btnCoach) {
-    btnCoach.disabled = true;
-    btnCoach.style.opacity = '0.5';
-    btnCoach.style.cursor = 'not-allowed';
-  }
+  
+  // 모든 카드에서 선택 상태 및 버튼 제거
+  setTimeout(() => {
+    document.querySelectorAll('.training-room-card').forEach(card => {
+      card.classList.remove('selected');
+      const existingCheck = card.querySelector('.training-room-check');
+      if (existingCheck) {
+        existingCheck.remove();
+      }
+      const existingButtons = card.querySelector('.training-room-action-buttons');
+      if (existingButtons) {
+        existingButtons.remove();
+      }
+    });
+  }, 100);
 }
 
 /**
