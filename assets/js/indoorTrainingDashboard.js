@@ -1435,7 +1435,12 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     }
     
     // 데이터 수신 여부 확인 (파워, 심박수, 케이던스 중 하나라도 수신되면)
-    const hasDataReceived = (power > 0 || heartRate > 0 || cadence > 0);
+    // 현재 업데이트되는 값과 저장된 값을 모두 확인하여 정확한 상태 판단
+    const hasDataReceived = (power > 0 || heartRate > 0 || cadence > 0) || 
+                           (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
+    
+    // 디버깅 로그 (필요시 주석 해제)
+    // console.log(`[배경색 업데이트] ID: ${powerMeterId}, power: ${power}, heartRate: ${heartRate}, cadence: ${cadence}, hasData: ${hasDataReceived}`);
     
     // 속도계 하단 정보창 배경색 변경
     const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
