@@ -154,6 +154,20 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1000 !important;
 }
 
+/* basecampScreen 특별 처리 - connectionScreen과 동일한 스타일 */
+#basecampScreen.active {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  padding: 20px;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
+}
+
 /* 컴팩트한 블럭 구조 (사용자 인증 화면과 유사) */
 .connection-main-container {
   max-width: 500px;
@@ -293,7 +307,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* 블루투스 기기 연결 버튼 스타일 - 연결 전: 반투명 파랑색 계열 */
-#connectionScreen .btn-device {
+#connectionScreen .btn-device,
+#basecampScreen .btn-device {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -309,9 +324,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   transition: all 0.3s ease;
   overflow: visible;
   color: #2563eb;
+  cursor: pointer;
 }
 
-#connectionScreen .btn-device::before {
+#connectionScreen .btn-device::before,
+#basecampScreen .btn-device::before {
   content: '';
   position: absolute;
   top: 0;
@@ -324,24 +341,29 @@ h1,h2,h3,h4 { font-weight: 600; }
   pointer-events: none;
 }
 
-#connectionScreen .btn-device:hover {
+#connectionScreen .btn-device:hover:not(:disabled),
+#basecampScreen .btn-device:hover:not(:disabled) {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
   border-color: rgba(59, 130, 246, 0.4);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
 }
 
-#connectionScreen .btn-device:hover::before {
+#connectionScreen .btn-device:hover:not(:disabled)::before,
+#basecampScreen .btn-device:hover:not(:disabled)::before {
   opacity: 1;
 }
 
-#connectionScreen .btn-device:active {
+#connectionScreen .btn-device:active:not(:disabled),
+#basecampScreen .btn-device:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
 
 #connectionScreen .btn-device.is-disabled,
-#connectionScreen .btn-device:disabled {
+#connectionScreen .btn-device:disabled,
+#basecampScreen .btn-device.is-disabled,
+#basecampScreen .btn-device:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
@@ -350,7 +372,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device.is-disabled:hover,
-#connectionScreen .btn-device:disabled:hover {
+#connectionScreen .btn-device:disabled:hover,
+#basecampScreen .btn-device.is-disabled:hover,
+#basecampScreen .btn-device:disabled:hover {
   transform: none;
   box-shadow: none;
   border-color: rgba(156, 163, 175, 0.3);
@@ -410,7 +434,8 @@ h1,h2,h3,h4 { font-weight: 600; }
   transform: translateY(-2px);
 }
 
-#connectionScreen .btn-device .device-btn-icon {
+#connectionScreen .btn-device .device-btn-icon,
+#basecampScreen .btn-device .device-btn-icon {
   order: 1 !important; /* span 아래에 표시 */
   width: 72px;
   height: 72px;
@@ -423,13 +448,15 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-self: center;
 }
 
-#connectionScreen .btn-device:hover .device-btn-icon {
+#connectionScreen .btn-device:hover:not(:disabled) .device-btn-icon,
+#basecampScreen .btn-device:hover:not(:disabled) .device-btn-icon {
   transform: scale(1.1);
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.15));
 }
 
 /* 기기 연결 버튼의 span - 이미지 위에 표시되도록 order 설정 */
-#connectionScreen .btn-device span {
+#connectionScreen .btn-device span,
+#basecampScreen .btn-device span {
   order: -1 !important; /* 이미지 위에 표시 */
   font-size: 18px !important;
   font-weight: 700 !important;
