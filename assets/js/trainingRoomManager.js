@@ -139,58 +139,28 @@ function renderTrainingRoomList(rooms, users = []) {
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
-           onclick="selectTrainingRoom('${room.id}')"
-           style="padding: 20px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative; display: flex; align-items: flex-start; gap: 12px;">
-        <div style="flex: 1; min-width: 0;">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px;">
-            <h3 style="margin: 0; color: #333; font-size: 1.2em; flex: 1;">${escapeHtml(room.title)}</h3>
+           onclick="selectTrainingRoom('${room.id}')">
+        <div class="training-room-content">
+          <div class="training-room-name-section">
+            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}">
+              ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
+            </div>
             ${hasPassword ? `
-              <img src="assets/img/lock.png" alt="비밀번호" style="width: 45px; height: 45px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
+              <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
             ` : ''}
           </div>
-          <p style="margin: 0; color: #666; font-size: 0.9em;">
-            ${coachName ? `Coach : ${escapeHtml(coachName)}님` : ''}
-          </p>
+          <div class="training-room-coach-section">
+            <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
+              ${coachName ? `코치: ${escapeHtml(coachName)}` : '코치 없음'}
+            </div>
+          </div>
         </div>
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
   }).join('');
 
-  // CSS 스타일 추가 (일별 워크아웃 지정 화면과 동일한 선택 효과)
-  // trainingRoomCardStyle이 이미 존재하면 업데이트, 없으면 추가
-  let style = document.getElementById('trainingRoomCardStyle');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'trainingRoomCardStyle';
-    document.head.appendChild(style);
-  }
-  style.textContent = `
-    .training-room-card:hover {
-      border-color: #2e74e8 !important;
-      box-shadow: 0 4px 12px rgba(46, 116, 232, 0.15);
-      transform: translateY(-2px);
-    }
-    .training-room-card.selected {
-      border-color: #2e74e8 !important;
-      background: #e8f2ff !important;
-      box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1) !important;
-    }
-    .training-room-check {
-      width: 24px;
-      height: 24px;
-      background: #2e74e8;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: bold;
-      flex-shrink: 0;
-      margin-left: 8px;
-    }
-  `;
+  // CSS는 style.css에 정의되어 있음 (동적 스타일 추가 불필요)
 }
 
 /**
@@ -1008,58 +978,28 @@ function renderTrainingRoomListForModal(rooms, users = []) {
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
-           onclick="selectTrainingRoomForModal('${room.id}')"
-           style="padding: 16px; background: white; border: 2px solid #e0e0e0; border-radius: 12px; cursor: pointer; transition: all 0.3s ease; position: relative; display: flex; align-items: flex-start; gap: 12px;">
-        <div style="flex: 1; min-width: 0;">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px;">
-            <h3 style="margin: 0; color: #333; font-size: 1.1em; flex: 1;">${escapeHtml(room.title)}</h3>
+           onclick="selectTrainingRoomForModal('${room.id}')">
+        <div class="training-room-content">
+          <div class="training-room-name-section">
+            <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}">
+              ${room.title ? escapeHtml(room.title) : '훈련방 이름 없음'}
+            </div>
             ${hasPassword ? `
-              <img src="assets/img/lock.png" alt="비밀번호" style="width: 40px; height: 40px; opacity: 0.6; margin-left: 8px; flex-shrink: 0;" />
+              <img src="assets/img/lock.png" alt="비밀번호" class="training-room-lock-icon" />
             ` : ''}
           </div>
-          <p style="margin: 0; color: #666; font-size: 0.85em;">
-            ${coachName ? `Coach : ${escapeHtml(coachName)}님` : ''}
-          </p>
+          <div class="training-room-coach-section">
+            <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
+              ${coachName ? `코치: ${escapeHtml(coachName)}` : '코치 없음'}
+            </div>
+          </div>
         </div>
         ${isSelected ? '<div class="training-room-check">✓</div>' : ''}
       </div>
     `;
   }).join('');
 
-  // CSS 스타일 추가 (일별 워크아웃 지정 화면과 동일한 선택 효과)
-  // trainingRoomCardStyle이 이미 존재하면 업데이트, 없으면 추가
-  let style = document.getElementById('trainingRoomCardStyle');
-  if (!style) {
-    style = document.createElement('style');
-    style.id = 'trainingRoomCardStyle';
-    document.head.appendChild(style);
-  }
-  style.textContent = `
-    .training-room-card:hover {
-      border-color: #2e74e8 !important;
-      box-shadow: 0 4px 12px rgba(46, 116, 232, 0.15);
-      transform: translateY(-2px);
-    }
-    .training-room-card.selected {
-      border-color: #2e74e8 !important;
-      background: #e8f2ff !important;
-      box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1) !important;
-    }
-    .training-room-check {
-      width: 24px;
-      height: 24px;
-      background: #2e74e8;
-      color: white;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      font-weight: bold;
-      flex-shrink: 0;
-      margin-left: 8px;
-    }
-  `;
+  // CSS는 style.css에 정의되어 있음 (동적 스타일 추가 불필요)
 }
 
 /**
