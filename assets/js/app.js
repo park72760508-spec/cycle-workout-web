@@ -2696,17 +2696,17 @@ if (!window.showScreen) {
           }
         }, 100);
         
-        // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
+        // ANT+ 버튼 비활성화 (클릭 기능 제거)
         setTimeout(() => {
           const btnANT = safeGetElement("btnConnectANT");
           if (btnANT) {
-            // 모든 등급 사용자 사용 가능
-            btnANT.disabled = false;
-            btnANT.classList.remove('is-disabled');
-            btnANT.removeAttribute('aria-disabled');
-            btnANT.title = 'ANT+ 기기 연결';
-            btnANT.style.opacity = '1';
-            btnANT.style.cursor = 'pointer';
+            btnANT.disabled = true;
+            btnANT.classList.add('is-disabled');
+            btnANT.setAttribute('aria-disabled', 'true');
+            btnANT.title = '';
+            btnANT.style.opacity = '0.6';
+            btnANT.style.cursor = 'default';
+            btnANT.style.pointerEvents = 'none';
           }
           
           // Indoor Race 버튼 등급 제한 해제 (모든 등급 사용 가능)
@@ -4150,15 +4150,15 @@ document.addEventListener("DOMContentLoaded", () => {
     ANT: !!btnANT
   });
   
-  // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
+  // ANT+ 버튼 비활성화 (클릭 기능 제거)
   if (btnANT) {
-    // 모든 등급 사용자 사용 가능
-    btnANT.disabled = false;
-    btnANT.classList.remove('is-disabled');
-    btnANT.removeAttribute('aria-disabled');
-    btnANT.title = 'ANT+ 기기 연결';
-    btnANT.style.opacity = '1';
-    btnANT.style.cursor = 'pointer';
+    btnANT.disabled = true;
+    btnANT.classList.add('is-disabled');
+    btnANT.setAttribute('aria-disabled', 'true');
+    btnANT.title = '';
+    btnANT.style.opacity = '0.6';
+    btnANT.style.cursor = 'default';
+    btnANT.style.pointerEvents = 'none';
   }
   
   // 심박계 버튼
@@ -4209,23 +4209,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   
-  // ANT+ 버튼
-  if (btnANT) {
-    btnANT.addEventListener("click", async (e) => {
-      e.preventDefault();
-      console.log("ANT+ button clicked!");
-      
-      // ANT+ 연결 버튼 클릭 시 Training Room 모달 열기
-      if (typeof showTrainingRoomModal === 'function') {
-        showTrainingRoomModal();
-      } else {
-        console.warn("showTrainingRoomModal function not found!");
-        if (typeof showToast === "function") {
-          showToast("Training Room 모달 열기 함수를 찾을 수 없습니다.");
-        }
-      }
-    });
-  }
+  // ANT+ 버튼 - 클릭 이벤트 제거 (비활성화)
+  // 클릭 기능 제거됨
 
   // ========== Indoor 모드 선택 모달 함수 ==========
   window.showIndoorModeSelectionModal = function() {
@@ -5136,17 +5121,17 @@ function initializeCurrentScreen(screenId) {
       
     case 'connectionScreen':
       console.log('기기 연결 화면 초기화');
-      // ANT+ 버튼 활성화 (모든 사용자 사용 가능)
+      // ANT+ 버튼 비활성화 (클릭 기능 제거)
       setTimeout(() => {
         const btnANT = safeGetElement("btnConnectANT");
         if (btnANT) {
-          // 모든 등급 사용자 사용 가능
-          btnANT.disabled = false;
-          btnANT.classList.remove('is-disabled');
-          btnANT.removeAttribute('aria-disabled');
-          btnANT.title = 'ANT+ 기기 연결';
-          btnANT.style.opacity = '1';
-          btnANT.style.cursor = 'pointer';
+          btnANT.disabled = true;
+          btnANT.classList.add('is-disabled');
+          btnANT.setAttribute('aria-disabled', 'true');
+          btnANT.title = '';
+          btnANT.style.opacity = '0.6';
+          btnANT.style.cursor = 'default';
+          btnANT.style.pointerEvents = 'none';
         }
       }, 100);
       break;
