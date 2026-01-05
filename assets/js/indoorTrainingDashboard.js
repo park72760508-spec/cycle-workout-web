@@ -541,9 +541,7 @@ function createPowerMeterElement(powerMeter) {
       <div style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; flex: 0 0 auto !important; min-width: 100px !important; order: 1 !important;">
         <div style="display: ${powerMeter.userName ? 'flex' : 'none'} !important; align-items: center !important; flex-wrap: wrap !important;">
           <span class="speedometer-user-name" id="user-name-${powerMeter.id}" 
-                style="font-size: 13px !important; color: #000000 !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important; background: rgba(0, 212, 170, 0.8) !important; padding: 4px 10px !important; border-radius: 6px !important; cursor: pointer !important; transition: all 0.2s ease !important;"
-                onclick="if (typeof showScreen === 'function') { showScreen('playerListScreen'); if (typeof renderPlayerList === 'function') { setTimeout(() => renderPlayerList(), 200); } }"
-                title="훈련 참가 화면으로 이동">${powerMeter.userName || ''}</span>
+                style="font-size: 13px !important; color: #000000 !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important; background: rgba(0, 212, 170, 0.8) !important; padding: 4px 10px !important; border-radius: 6px !important; cursor: default !important; transition: all 0.2s ease !important;">${powerMeter.userName || ''}</span>
         </div>
       </div>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;" ${trackButtonOnclick}>트랙${powerMeter.id}</span>

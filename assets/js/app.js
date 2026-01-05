@@ -3506,8 +3506,8 @@ function renderUserInfo() {
       challengeImage = 'red.png';
     }
 
-    // 이미지와 텍스트를 함께 표시
-    box.innerHTML = `<img src="assets/img/${challengeImage}" alt="" class="training-user-challenge-icon"> ${cleanName} · FTP ${ftpDisp}W · ${wkgDisp} W/kg`;
+    // 이미지와 텍스트를 함께 표시 (사용자 이름에 훈련 참가 화면으로 이동하는 클릭 이벤트 추가)
+    box.innerHTML = `<img src="assets/img/${challengeImage}" alt="" class="training-user-challenge-icon"> <span class="training-user-name-clickable" style="cursor: pointer; text-decoration: underline;" onclick="if (typeof showScreen === 'function') { showScreen('groupRoomScreen'); if (typeof selectRole === 'function') { setTimeout(() => selectRole('participant'), 200); } }" title="훈련 참가 화면으로 이동">${cleanName}</span> · FTP ${ftpDisp}W · ${wkgDisp} W/kg`;
 
     // ★ 사용자 판넬 네온은 "한 번만" 적용 (동적 갱신 안 함)
     if (typeof updateUserPanelNeonByWkg === "function") {
