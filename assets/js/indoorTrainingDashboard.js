@@ -1437,10 +1437,10 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         needleEl.style.visibility = 'visible';
     }
     
-    // 데이터 수신 여부 확인 (파워, 심박수, 케이던스 중 하나라도 수신되면)
-    // 현재 업데이트되는 값과 저장된 값을 모두 확인하여 정확한 상태 판단
-    const hasDataReceived = (power > 0 || heartRate > 0 || cadence > 0) || 
-                           (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
+    // 데이터 수신 여부 확인 (현재 파워값과 심박계값만으로 판단)
+    // 파워값이 0보다 크거나 심박수가 0보다 크면 데이터 수신 중으로 판단
+    const hasDataReceived = (power > 0 || heartRate > 0) || 
+                           (powerMeter.currentPower > 0 || powerMeter.heartRate > 0);
     
     // 디버깅 로그 (필요시 주석 해제)
     // console.log(`[배경색 업데이트] ID: ${powerMeterId}, power: ${power}, heartRate: ${heartRate}, cadence: ${cadence}, hasData: ${hasDataReceived}`);
@@ -1451,9 +1451,13 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         if (hasDataReceived) {
             // 데이터 수신 중: 연두색
             infoEl.style.backgroundColor = '#90EE90'; // 연두색
+            infoEl.classList.remove('disconnected');
+            infoEl.classList.add('connected');
         } else {
             // 데이터 수신 없음: 주황색
             infoEl.style.backgroundColor = '#FFA500'; // 주황색
+            infoEl.classList.remove('connected');
+            infoEl.classList.add('disconnected');
         }
     }
     
