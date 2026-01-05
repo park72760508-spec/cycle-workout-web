@@ -2868,7 +2868,20 @@ async function updateTracksFromFirebase() {
           const userNameEl = document.getElementById(`user-name-${trackNumber}`);
           if (userNameEl) {
             userNameEl.textContent = powerMeter.userName;
-            userNameEl.parentElement.style.display = 'flex';
+            userNameEl.style.display = 'block'; // 명시적으로 표시
+            
+            // 부모 요소도 표시 (인라인 스타일의 !important를 덮어쓰기 위해 setProperty 사용)
+            if (userNameEl.parentElement) {
+              userNameEl.parentElement.style.setProperty('display', 'flex', 'important');
+            }
+            
+            console.log(`[Indoor Training] 트랙 ${trackNumber} UI 업데이트 완료: 사용자 이름 표시됨`, {
+              userName: powerMeter.userName,
+              elementFound: true,
+              parentDisplay: userNameEl.parentElement ? userNameEl.parentElement.style.display : 'no parent'
+            });
+          } else {
+            console.warn(`[Indoor Training] 트랙 ${trackNumber} UI 업데이트 실패: user-name-${trackNumber} 요소를 찾을 수 없습니다`);
           }
           
           // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
