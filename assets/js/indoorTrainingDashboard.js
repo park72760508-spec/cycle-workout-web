@@ -2813,18 +2813,28 @@ async function updateTracksFromFirebase() {
     }
     
     // 각 트랙에 사용자 정보 및 디바이스 정보 업데이트
+    // 트랙1부터 끝까지 순차적으로 처리
     let updatedCount = 0;
     
-    tracks.forEach(track => {
-      const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === track.trackNumber);
+    // 모든 트랙 번호를 가져와서 숫자 순서로 정렬
+    const allTrackNumbers = window.indoorTrainingState.powerMeters
+      .map(pm => parseInt(pm.id))
+      .filter(id => !isNaN(id))
+      .sort((a, b) => a - b);
+    
+    console.log('[Indoor Training] 트랙 순차 업데이트 시작, 트랙 번호:', allTrackNumbers);
+    
+    // 트랙1부터 끝까지 순차적으로 처리
+    for (const trackNumber of allTrackNumbers) {
+      const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === trackNumber);
       
       if (!powerMeter) {
-        console.warn(`[Indoor Training] 트랙 ${track.trackNumber}의 파워미터를 찾을 수 없습니다.`);
-        return;
+        console.warn(`[Indoor Training] 트랙 ${trackNumber}의 파워미터를 찾을 수 없습니다.`);
+        continue;
       }
       
-      // Firebase Device 정보 업데이트 (트랙번호별)
-      const trackDeviceData = deviceData[track.trackNumber];
+      // Firebase Device 정보 업데이트 (트랙번호별) - DB 우선
+      const trackDeviceData = deviceData[trackNumber];
       if (trackDeviceData) {
         powerMeter.trainerDeviceId = trackDeviceData.smartTrainerId || null;
         powerMeter.deviceId = trackDeviceData.powerMeterId || null;
@@ -2832,23 +2842,21 @@ async function updateTracksFromFirebase() {
         powerMeter.gear = trackDeviceData.gear || null;
         powerMeter.brake = trackDeviceData.brake || null;
         
-        // 디바이스 이름 업데이트 제거: 디바이스 아이콘으로 대체됨
-        // pairingName은 더 이상 화면에 표시하지 않음
-        
-        console.log(`[Indoor Training] 트랙 ${track.trackNumber} Device 정보 업데이트:`, trackDeviceData);
+        console.log(`[Indoor Training] 트랙 ${trackNumber} Device 정보 업데이트 (DB):`, trackDeviceData);
       }
       
-      // Firebase Users 정보 업데이트 (트랙번호별, tracks 데이터와 병합)
-      const trackUserData = usersData[track.trackNumber];
+      // Firebase Users 정보 업데이트 - DB 우선 적용
+      const trackUserData = usersData[trackNumber];
+      
       if (trackUserData && trackUserData.userId) {
-        // 사용자 이름 확인 (userName만 사용)
-        const userName = trackUserData.userName || track.userName;
+        // DB에 사용자 정보가 있는 경우: DB 값으로 업데이트
+        const userName = trackUserData.userName || '';
         
         if (userName) {
           // 사용자 상세 정보 찾기
           const user = users.find(u => String(u.id) === String(trackUserData.userId));
           
-          // 파워미터에 사용자 정보 저장 (Firebase Users 데이터 우선)
+          // 파워미터에 사용자 정보 저장 (Firebase DB 데이터 우선)
           powerMeter.userId = trackUserData.userId;
           powerMeter.userName = userName;
           powerMeter.userWeight = trackUserData.weight || (user ? user.weight : null);
@@ -2859,81 +2867,64 @@ async function updateTracksFromFirebase() {
           }
           
           // UI 업데이트 (사용자 이름 표시)
-          const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
+          const userNameEl = document.getElementById(`user-name-${trackNumber}`);
           if (userNameEl) {
             userNameEl.textContent = powerMeter.userName;
             userNameEl.parentElement.style.display = 'flex';
           }
           
           // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
-          updatePowerMeterConnectionStatus(track.trackNumber);
+          updatePowerMeterConnectionStatus(trackNumber);
           
           // FTP 기반 눈금 업데이트
-          updatePowerMeterTicks(track.trackNumber);
+          updatePowerMeterTicks(trackNumber);
           
           updatedCount++;
           
-          console.log(`[Indoor Training] 트랙 ${track.trackNumber} 업데이트:`, {
+          console.log(`[Indoor Training] 트랙 ${trackNumber} 사용자 정보 업데이트 (DB):`, {
             userId: powerMeter.userId,
             userName: powerMeter.userName,
             userFTP: powerMeter.userFTP,
-            weight: powerMeter.userWeight,
-            gear: powerMeter.gear,
-            brake: powerMeter.brake
+            weight: powerMeter.userWeight
           });
         }
-      } else if (track.userId && track.userName) {
-        // Firebase Users에 없지만 tracks에 있는 경우 (기존 로직 유지)
-        const user = users.find(u => String(u.id) === String(track.userId));
-        
-        powerMeter.userId = track.userId;
-        powerMeter.userName = track.userName;
-        
-        if (user) {
-          powerMeter.userFTP = user.ftp || null;
-          powerMeter.userWeight = user.weight || null;
-          powerMeter.userContact = user.contact || null;
-        }
-        
-        const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
-        if (userNameEl) {
-          userNameEl.textContent = track.userName;
-          userNameEl.parentElement.style.display = 'flex';
-        }
-        
-        // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
-        updatePowerMeterConnectionStatus(track.trackNumber);
-        
-        updatePowerMeterTicks(track.trackNumber);
-        updatedCount++;
       } else {
-        // 사용자 정보가 없는 경우
-        powerMeter.userId = null;
-        powerMeter.userName = null;
-        powerMeter.userFTP = null;
-        powerMeter.userWeight = null;
-        powerMeter.userContact = null;
-        
-        const userNameEl = document.getElementById(`user-name-${track.trackNumber}`);
-        if (userNameEl) {
-          userNameEl.textContent = '';
-          userNameEl.style.display = 'none';
+        // DB에 사용자 정보가 없는 경우: 트랙에 정보가 있으면 초기화
+        if (powerMeter.userId || powerMeter.userName) {
+          console.log(`[Indoor Training] 트랙 ${trackNumber} 사용자 정보 초기화 (DB에 없음)`);
+          
+          powerMeter.userId = null;
+          powerMeter.userName = null;
+          powerMeter.userFTP = null;
+          powerMeter.userWeight = null;
+          powerMeter.userContact = null;
+          
+          const userNameEl = document.getElementById(`user-name-${trackNumber}`);
+          if (userNameEl) {
+            userNameEl.textContent = '';
+            userNameEl.style.display = 'none';
+          }
+          
+          // 연결 상태 업데이트
+          updatePowerMeterConnectionStatus(trackNumber);
+          
+          // FTP 기반 눈금 업데이트
+          updatePowerMeterTicks(trackNumber);
         }
-        
-        updatePowerMeterTicks(track.trackNumber);
       }
       
-      // 연결 상태 업데이트
-      updatePowerMeterConnectionStatus(track.trackNumber);
-    });
+      // 연결 상태 업데이트 (모든 경우에)
+      updatePowerMeterConnectionStatus(trackNumber);
+    }
     
     // 페어링 정보 저장 (localStorage)
     saveAllPowerMeterPairingsToStorage();
     
-    // Firebase에도 동기화 (각 트랙의 사용자 정보를 Firebase에 저장)
+    // Firebase에도 동기화 (각 트랙의 사용자 정보를 Firebase에 저장) - 순차 처리
     if (typeof db !== 'undefined') {
-      tracks.forEach(track => {
-        const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === track.trackNumber);
+      // 트랙1부터 끝까지 순차적으로 Firebase 동기화
+      for (const trackNumber of allTrackNumbers) {
+        const powerMeter = window.indoorTrainingState.powerMeters.find(pm => pm.id === trackNumber);
         
         if (powerMeter && powerMeter.userId) {
           const userData = {
@@ -2944,7 +2935,7 @@ async function updateTracksFromFirebase() {
           };
           
           // Firebase에 저장 (update를 사용하여 기존 데이터 보존)
-          const userRef = db.ref(`sessions/${sessionId}/users/${track.trackNumber}`);
+          const userRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
           userRef.once('value').then(snapshot => {
             const existingData = snapshot.val() || {};
             
@@ -2972,15 +2963,45 @@ async function updateTracksFromFirebase() {
             
             return userRef.set(mergedData);
           }).then(() => {
-            console.log(`[Indoor Training] Firebase 동기화 완료 (필수값 보존): 트랙 ${track.trackNumber}`, {
+            console.log(`[Indoor Training] Firebase 동기화 완료 (필수값 보존): 트랙 ${trackNumber}`, {
               userId: powerMeter.userId,
               userName: powerMeter.userName
             });
           }).catch(error => {
-            console.error(`[Indoor Training] Firebase 동기화 실패: 트랙 ${track.trackNumber}`, error);
+            console.error(`[Indoor Training] Firebase 동기화 실패: 트랙 ${trackNumber}`, error);
+          });
+        } else if (powerMeter && !powerMeter.userId) {
+          // 사용자 정보가 없는 경우 Firebase에서도 제거하지 않음 (워크아웃 진행 중 데이터 보존)
+          // 단, 사용자 정보만 null로 설정
+          const userRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
+          userRef.once('value').then(snapshot => {
+            const existingData = snapshot.val() || {};
+            
+            // 사용자 정보만 제거하고 나머지 데이터는 보존
+            if (existingData.userId || existingData.userName) {
+              const updatedData = {
+                ...existingData,
+                userId: null,
+                userName: null,
+                ftp: null,
+                weight: null,
+                lastUpdate: firebase.database.ServerValue.TIMESTAMP
+              };
+              
+              // null 값 제거하지 않고 유지 (명시적으로 null로 설정)
+              return userRef.update({
+                userId: null,
+                userName: null,
+                ftp: null,
+                weight: null,
+                lastUpdate: firebase.database.ServerValue.TIMESTAMP
+              });
+            }
+          }).catch(error => {
+            console.error(`[Indoor Training] Firebase 사용자 정보 초기화 실패: 트랙 ${trackNumber}`, error);
           });
         }
-      });
+      }
     }
     
     if (typeof showToast === 'function') {
