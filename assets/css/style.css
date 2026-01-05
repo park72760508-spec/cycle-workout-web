@@ -230,7 +230,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn {
   border: 2px solid rgba(135, 206, 235, 0.6) !important; /* 하늘색 톤 */
   color: #15803d !important;
-  background-color: rgba(135, 206, 235, 0.4) !important; /* 약한 하늘색 바탕 (투명도 증가) */
+  background-color: rgba(135, 206, 235, 0.4) !important; /* 약한 하늘색 바탕 (투명도 증가) - 배경 이미지 아래에 표시 */
+  background-image: none !important; /* 개별 버튼에서 background-image 설정 */
   background-size: cover !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
@@ -244,7 +245,8 @@ h1,h2,h3,h4 { font-weight: 600; }
   min-height: 160px !important; /* 버튼 높이 통일 */
 }
 
-/* 배경 이미지 위에 녹색톤 오버레이 */
+/* 배경 이미지 위에 하늘색 톤 오버레이 (녹색톤 제거) */
+#basecampScreen .btn-device.basecamp-btn::before,
 .basecamp-btn::before {
   content: '';
   position: absolute;
@@ -252,9 +254,10 @@ h1,h2,h3,h4 { font-weight: 600; }
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.3) 0%, rgba(22, 163, 74, 0.4) 100%);
+  background: rgba(135, 206, 235, 0.1) !important; /* 하늘색 톤 오버레이 (매우 약하게) */
   z-index: 0;
   transition: opacity 0.3s ease;
+  pointer-events: none;
 }
 
 .basecamp-btn span {
@@ -292,18 +295,21 @@ h1,h2,h3,h4 { font-weight: 600; }
   opacity: 0 !important;
 }
 
-/* 각 버튼별 배경 이미지 */
+/* 각 버튼별 배경 이미지 - 하늘색 배경 위에 표시 */
 .basecamp-btn-indoor {
   background-image: url('https://stelvio.ai.kr/assets/img/b(01).png') !important;
+  background-color: rgba(135, 206, 235, 0.4) !important; /* 하늘색 바탕 유지 */
 }
 
 .basecamp-btn-solo {
   background-image: url('https://stelvio.ai.kr/assets/img/b(02).png') !important;
+  background-color: rgba(135, 206, 235, 0.4) !important; /* 하늘색 바탕 유지 */
 }
 
 /* USER PROFILE 버튼 - 이미지를 여백 없이 꽉 차게 */
 .basecamp-btn-profile {
   background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
+  background-color: rgba(135, 206, 235, 0.4) !important; /* 하늘색 바탕 유지 */
   background-size: 100% 100% !important; /* 여백 없이 꽉 차게 */
   background-position: center center !important;
   background-repeat: no-repeat !important;
@@ -316,10 +322,11 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn:hover:not(:disabled) {
   border-color: rgba(135, 206, 235, 0.9) !important; /* 하늘색 톤 강조 */
   box-shadow: 0 4px 12px rgba(135, 206, 235, 0.4) !important;
+  background-color: rgba(135, 206, 235, 0.5) !important; /* hover 시 하늘색 강조 */
 }
 
 .basecamp-btn:hover:not(:disabled)::before {
-  opacity: 0.5;
+  opacity: 0.2; /* 오버레이를 더 투명하게 */
 }
 
 /* 비활성화된 버튼 */
@@ -491,7 +498,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 블루투스 기기 연결 버튼 스타일 - 연결 전: 반투명 파랑색 계열 */
 #connectionScreen .btn-device,
-#basecampScreen .btn-device {
+#basecampScreen .btn-device:not(.basecamp-btn) {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -511,7 +518,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device::before,
-#basecampScreen .btn-device::before {
+#basecampScreen .btn-device:not(.basecamp-btn)::before {
   content: '';
   position: absolute;
   top: 0;
@@ -525,7 +532,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device:hover:not(:disabled),
-#basecampScreen .btn-device:hover:not(:disabled) {
+#basecampScreen .btn-device:not(.basecamp-btn):hover:not(:disabled) {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.25) 100%);
   border-color: rgba(59, 130, 246, 0.4);
   transform: translateY(-2px);
@@ -533,20 +540,27 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #connectionScreen .btn-device:hover:not(:disabled)::before,
-#basecampScreen .btn-device:hover:not(:disabled)::before {
+#basecampScreen .btn-device:not(.basecamp-btn):hover:not(:disabled)::before {
   opacity: 1;
 }
 
 #connectionScreen .btn-device:active:not(:disabled),
-#basecampScreen .btn-device:active:not(:disabled) {
+#basecampScreen .btn-device:not(.basecamp-btn):active:not(:disabled) {
   transform: translateY(0);
   box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
 }
 
+/* 베이스캠프 버튼 active 상태 */
+#basecampScreen .btn-device.basecamp-btn:active:not(:disabled),
+.basecamp-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(135, 206, 235, 0.3);
+}
+
 #connectionScreen .btn-device.is-disabled,
 #connectionScreen .btn-device:disabled,
-#basecampScreen .btn-device.is-disabled,
-#basecampScreen .btn-device:disabled {
+#basecampScreen .btn-device:not(.basecamp-btn).is-disabled,
+#basecampScreen .btn-device:not(.basecamp-btn):disabled {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
@@ -554,13 +568,35 @@ h1,h2,h3,h4 { font-weight: 600; }
   border-color: rgba(156, 163, 175, 0.3);
 }
 
+/* 베이스캠프 버튼 disabled 상태 - 하늘색 유지 */
+#basecampScreen .btn-device.basecamp-btn.is-disabled,
+#basecampScreen .btn-device.basecamp-btn:disabled,
+.basecamp-btn.is-disabled,
+.basecamp-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+  background-color: rgba(135, 206, 235, 0.3) !important; /* 하늘색 유지 */
+  border-color: rgba(135, 206, 235, 0.4) !important;
+}
+
 #connectionScreen .btn-device.is-disabled:hover,
 #connectionScreen .btn-device:disabled:hover,
-#basecampScreen .btn-device.is-disabled:hover,
-#basecampScreen .btn-device:disabled:hover {
+#basecampScreen .btn-device:not(.basecamp-btn).is-disabled:hover,
+#basecampScreen .btn-device:not(.basecamp-btn):disabled:hover {
   transform: none;
   box-shadow: none;
   border-color: rgba(156, 163, 175, 0.3);
+}
+
+/* 베이스캠프 버튼 disabled hover 상태 */
+#basecampScreen .btn-device.basecamp-btn.is-disabled:hover,
+#basecampScreen .btn-device.basecamp-btn:disabled:hover,
+.basecamp-btn.is-disabled:hover,
+.basecamp-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(135, 206, 235, 0.4) !important;
 }
 
 /* ANT+ 연결 버튼 특정 스타일 - 배경 이미지 포함, 흐릿하고 부드러운 느낌 */
