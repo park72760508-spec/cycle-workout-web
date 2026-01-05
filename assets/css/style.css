@@ -312,27 +312,34 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* 각 버튼별 배경 이미지 - 배경색 위에 표시 */
+/* INDOOR TRAINING, SOLO TRAINING, USER PROFILE 버튼 - 이미지 크기 70%로 축소 */
+#basecampScreen .btn-device.basecamp-btn-indoor,
+#basecampScreen .basecamp-btn-indoor,
 .basecamp-btn-indoor {
   background-image: url('https://stelvio.ai.kr/assets/img/b(01).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
-  background-size: 70% !important; /* 이미지 크기 70%로 축소 */
+  background-size: 70% 70% !important; /* 이미지 크기 70%로 축소 (가로 70%, 세로 70%) */
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
+#basecampScreen .btn-device.basecamp-btn-solo,
+#basecampScreen .basecamp-btn-solo,
 .basecamp-btn-solo {
   background-image: url('https://stelvio.ai.kr/assets/img/b(02).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
-  background-size: 70% !important; /* 이미지 크기 70%로 축소 */
+  background-size: 70% 70% !important; /* 이미지 크기 70%로 축소 (가로 70%, 세로 70%) */
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
 /* USER PROFILE 버튼 - 이미지 크기 70%로 축소 */
+#basecampScreen .btn-device.basecamp-btn-profile,
+#basecampScreen .basecamp-btn-profile,
 .basecamp-btn-profile {
   background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
-  background-size: 70% !important; /* 이미지 크기 70%로 축소 */
+  background-size: 70% 70% !important; /* 이미지 크기 70%로 축소 (가로 70%, 세로 70%) */
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
