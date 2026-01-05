@@ -230,7 +230,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn {
   border: 2px solid rgba(135, 206, 235, 0.6) !important; /* 하늘색 톤 */
   color: #15803d !important;
-  background-color: rgba(135, 206, 235, 0.2) !important; /* 투명 하늘색 바탕 */
+  background-color: rgba(135, 206, 235, 0.4) !important; /* 약한 하늘색 바탕 (투명도 증가) */
   background-size: cover !important;
   background-position: center !important;
   background-repeat: no-repeat !important;
