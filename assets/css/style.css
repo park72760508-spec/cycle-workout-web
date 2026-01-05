@@ -11286,21 +11286,56 @@ line[id^="needle-"] {
 }
 
 /* ========== Training Room 화면 헤더 및 뒤로 버튼 스타일 ========== */
+/* trainingRoomScreen 특별 처리 - 베이스캠프 화면과 동일한 구조 */
 #trainingRoomScreen {
-  overflow-y: auto;
-  overflow-x: hidden;
+  position: relative;
+  overflow: hidden;
 }
 
-#trainingRoomScreen .dashboard-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: white;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 0;
+#trainingRoomScreen.active {
+  display: flex !important;
+  align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  padding: 20px;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
+}
+
+/* Training Room 화면 배경 이미지 - 베이스캠프와 동일 */
+#trainingRoomScreen .basecamp-background-image {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(00).png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.15;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(2px);
+}
+
+/* Training Room 화면 컨테이너 z-index 조정 */
+#trainingRoomScreen .connection-main-container {
+  position: relative;
+  z-index: 1;
+}
+
+#trainingRoomScreen .connection-form-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* Training Room 화면 헤더 숨김 (베이스캠프와 동일) */
+#trainingRoomScreen .basecamp-header {
+  display: none;
 }
 
 /* 훈련방 목록 화면 로고 확대 */
