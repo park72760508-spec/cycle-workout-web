@@ -244,7 +244,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   min-height: 160px !important; /* 버튼 높이 통일 */
 }
 
-/* 배경 이미지 위에 오버레이 제거 (이미지가 배경 위에 표시되도록) */
+/* 배경 이미지 위에 오버레이 - INDOOR TRAINING, SOLO TRAINING, USER PROFILE에 하늘색 톤 적용 */
 #basecampScreen .btn-device.basecamp-btn::before,
 .basecamp-btn::before {
   content: '';
@@ -253,16 +253,27 @@ h1,h2,h3,h4 { font-weight: 600; }
   left: 0;
   right: 0;
   bottom: 0;
-  background: transparent !important; /* 오버레이 제거하여 이미지가 배경 위에 표시 */
+  background: transparent !important;
   z-index: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
 }
 
+/* INDOOR TRAINING, SOLO TRAINING, USER PROFILE 버튼에 하늘색 톤 오버레이 적용 */
+#basecampScreen .btn-device.basecamp-btn-indoor::before,
+#basecampScreen .btn-device.basecamp-btn-solo::before,
+#basecampScreen .btn-device.basecamp-btn-profile::before,
+.basecamp-btn-indoor::before,
+.basecamp-btn-solo::before,
+.basecamp-btn-profile::before {
+  background: rgba(135, 206, 235, 0.3) !important; /* 투명한 하늘색 톤 오버레이 */
+  z-index: 1; /* 이미지 위에 표시 */
+}
+
 .basecamp-btn span {
   color: #fff !important;
   position: relative;
-  z-index: 1;
+  z-index: 2; /* 오버레이 위에 표시 */
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   font-weight: 700;
   margin-top: auto !important; /* 하단에 배치 */
