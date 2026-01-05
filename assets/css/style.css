@@ -341,7 +341,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 .basecamp-btn-premium {
   background-image: url('https://stelvio.ai.kr/assets/img/STELVIO AI.png') !important;
-  background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼 배경색 */
+  background-color: transparent !important; /* 배경색 제거 */
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
