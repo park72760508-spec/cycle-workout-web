@@ -216,13 +216,21 @@ h1,h2,h3,h4 { font-weight: 600; }
   display: none;
 }
 
-/* 베이스캠프 Status Bar - 진녹색 (굵고 큰 폰트) */
+/* 베이스캠프 Status Bar - 검정색 (굵고 큰 폰트) */
 .basecamp-status-bar {
-  color: #006400 !important;
+  color: #000000 !important;
   font-weight: 900 !important;
   text-align: center;
   font-size: 24px !important;
   letter-spacing: 0.5px;
+}
+
+/* 베이스캠프 Choose Your Path 블럭 바탕색 - 흰색 */
+.basecamp-device-section {
+  background-color: #ffffff !important;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 20px;
 }
 
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
