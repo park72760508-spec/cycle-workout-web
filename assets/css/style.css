@@ -315,7 +315,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn-indoor {
   background-image: url('https://stelvio.ai.kr/assets/img/b(01).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
-  background-size: cover !important;
+  background-size: 70% !important; /* 이미지 크기 70%로 축소 */
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
@@ -323,16 +323,16 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn-solo {
   background-image: url('https://stelvio.ai.kr/assets/img/b(02).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
-  background-size: cover !important;
+  background-size: 70% !important; /* 이미지 크기 70%로 축소 */
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
-/* USER PROFILE 버튼 - 이미지를 여백 없이 꽉 차게 */
+/* USER PROFILE 버튼 - 이미지 크기 70%로 축소 */
 .basecamp-btn-profile {
   background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important; /* PREMIUM 버튼과 동일한 배경색 */
-  background-size: 100% 100% !important; /* 여백 없이 꽉 차게 */
+  background-size: 70% !important; /* 이미지 크기 70%로 축소 */
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
