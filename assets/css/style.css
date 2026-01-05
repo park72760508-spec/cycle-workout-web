@@ -216,6 +216,33 @@ h1,h2,h3,h4 { font-weight: 600; }
   display: none;
 }
 
+/* 베이스캠프 대표 이미지 컨테이너 */
+.basecamp-logo-image-container {
+  width: 100%;
+  margin-bottom: 2px; /* 최대한 좁은 간격 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 베이스캠프 대표 이미지 - Choose Your Path 블럭 높이의 1/4, 폭은 동일 */
+.basecamp-logo-image {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+/* Choose Your Path 블럭 높이 기준으로 이미지 높이 계산 */
+.basecamp-device-section .basecamp-logo-image-container {
+  height: calc((24px + 15px) / 4); /* basecamp-status-bar font-size(24px) + mb-15(15px)의 1/4 */
+}
+
+.basecamp-device-section .basecamp-logo-image {
+  height: calc((24px + 15px) / 4);
+  object-fit: cover;
+}
+
 /* 베이스캠프 Status Bar - 진녹색 (굵고 큰 폰트) */
 .basecamp-status-bar {
   color: #006400 !important;
@@ -223,6 +250,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   text-align: center;
   font-size: 24px !important;
   letter-spacing: 0.5px;
+  margin-top: 2px; /* 최대한 좁은 간격 */
 }
 
 /* 베이스캠프 버튼 스타일 - 녹색톤 + 배경 이미지 */
@@ -257,7 +285,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   font-weight: 700;
 }
 
-/* 좌상, 우상, 좌하 버튼 텍스트 - 흰색 (그림자 효과 완전 제거, 최우선 적용) */
+/* 좌상, 우상, 좌하 버튼 텍스트 - 진한 녹색 (그림자 효과 완전 제거, 최우선 적용) */
 #basecampScreen .btn-device.basecamp-btn-indoor span,
 #basecampScreen .btn-device.basecamp-btn-solo span,
 #basecampScreen .btn-device.basecamp-btn-profile span,
@@ -267,7 +295,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn-indoor span,
 .basecamp-btn-solo span,
 .basecamp-btn-profile span {
-  color: #ffffff !important;
+  color: #006400 !important;
   text-shadow: none !important;
   -webkit-text-shadow: none !important;
   font-weight: 600 !important;
