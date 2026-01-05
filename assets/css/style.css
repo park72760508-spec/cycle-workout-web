@@ -287,7 +287,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-top: auto !important; /* 하단에 배치 */
 }
 
-/* 좌상, 우상, 좌하 버튼 텍스트 - Navy (그림자 효과 완전 제거, 최우선 적용) */
+/* 좌상, 우상, 좌하 버튼 텍스트 숨김 (최우선 적용) */
 #basecampScreen .btn-device.basecamp-btn-indoor span,
 #basecampScreen .btn-device.basecamp-btn-solo span,
 #basecampScreen .btn-device.basecamp-btn-profile span,
@@ -297,11 +297,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn-indoor span,
 .basecamp-btn-solo span,
 .basecamp-btn-profile span {
-  color: #000080 !important;
-  text-shadow: none !important;
-  -webkit-text-shadow: none !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.5px !important;
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 /* PREMIUM 버튼 텍스트 숨김 (최우선 적용) */
