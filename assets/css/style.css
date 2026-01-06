@@ -11551,15 +11551,34 @@ line[id^="needle-"] {
 }
 
 /* 인증된 카드는 클릭 비활성화 */
+/* 인증된 Training Room 카드 클릭 완전 차단 (최고 수준 방어) */
 .training-room-card.authenticated,
-.training-room-card.verified-room {
+.training-room-card.verified-room,
+.training-room-card[data-is-authenticated="true"] {
   cursor: default !important;
   pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
 }
 
+/* 인증된 카드의 버튼만 클릭 가능 */
+.training-room-card.authenticated button,
+.training-room-card.verified-room button,
+.training-room-card[data-is-authenticated="true"] button,
+.training-room-card.authenticated .btn,
+.training-room-card.verified-room .btn,
+.training-room-card[data-is-authenticated="true"] .btn {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* 인증된 카드의 내용 영역은 클릭 불가 (버튼 제외) */
 .training-room-card.authenticated .training-room-content,
-.training-room-card.verified-room .training-room-content {
-  pointer-events: auto;
+.training-room-card.verified-room .training-room-content,
+.training-room-card[data-is-authenticated="true"] .training-room-content {
+  pointer-events: none !important;
 }
 
 /* 선택된 Training Room 섹션 영역 클릭 차단 (버튼 제외) */
