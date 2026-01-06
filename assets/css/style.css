@@ -11424,13 +11424,31 @@ line[id^="needle-"] {
 }
 
 /* 인증된 카드는 클릭 비활성화 */
-.training-room-card.authenticated {
+.training-room-card.authenticated,
+.training-room-card.verified-room {
   cursor: default !important;
+  pointer-events: none !important;
+}
+
+.training-room-card.authenticated .training-room-content,
+.training-room-card.verified-room .training-room-content {
+  pointer-events: auto;
+}
+
+/* 선택된 Training Room 섹션 영역 클릭 차단 (버튼 제외) */
+#selectedTrainingRoomModalSection {
+  position: relative;
+}
+
+#selectedTrainingRoomModalSection > *:not(button):not(.btn) {
   pointer-events: none;
 }
 
-.training-room-card.authenticated .training-room-content {
-  pointer-events: auto;
+#selectedTrainingRoomModalSection button,
+#selectedTrainingRoomModalSection .btn {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
 }
 
 .training-room-content {
