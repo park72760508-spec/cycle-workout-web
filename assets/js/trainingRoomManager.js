@@ -1605,11 +1605,11 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
   let userGrade = '2';
   let isAdmin = false;
   let isCoach = false;
-  let currentUserId = null;
+  let loggedInUserId = null; // 함수 파라미터 currentUserId와 구분하기 위해 다른 이름 사용
   
   try {
     const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    currentUserId = currentUser?.id ? String(currentUser.id) : null;
+    loggedInUserId = currentUser?.id ? String(currentUser.id) : null;
     userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
     isAdmin = userGrade === '1' || userGrade === 1;
     isCoach = userGrade === '3' || userGrade === 3;
@@ -1621,11 +1621,11 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
   const isGrade2 = userGrade === '2' || userGrade === 2;
   
   // [일반 사용자 제한] grade=2 사용자는 본인 계정만 사용 가능
-  if (isGrade2 && currentUserId) {
+  if (isGrade2 && loggedInUserId) {
     // grade=2 사용자는 본인 계정만 필터링
-    users = users.filter(user => String(user.id) === currentUserId);
+    users = users.filter(user => String(user.id) === loggedInUserId);
     console.log('[assignUserToTrack] 일반 사용자 제한: 본인 계정만 표시', {
-      currentUserId: currentUserId,
+      loggedInUserId: loggedInUserId,
       filteredCount: users.length
     });
   }
