@@ -946,9 +946,21 @@ function renderTrainingRoomListForModal(rooms, users = []) {
     users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
   }
 
+  // 사용자 등급 확인 (인증 상태 체크용)
+  const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
+  const isAdmin = userGrade === '1' || userGrade === 1;
+
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
+    const roomIdStr = String(room.id);
+    
+    // 이미 선택되고 인증된 카드인지 확인
+    const isAuthenticated = isSelected && (
+      !hasPassword || 
+      isAdmin || 
+      authenticatedTrainingRooms.has(roomIdStr)
+    );
     
     // user_id로 코치 이름 찾기 (Users 테이블의 id와 매칭)
     const userId = room.user_id || room.userId;
@@ -968,12 +980,18 @@ function renderTrainingRoomListForModal(rooms, users = []) {
       }
     }
     
+    // 이미 선택되고 인증된 카드는 onclick 제거 (재선택 방지)
+    const onClickAttr = isAuthenticated 
+      ? '' 
+      : `onclick="selectTrainingRoomForModal('${room.id}')"`;
+    
     return `
-      <div class="training-room-card ${isSelected ? 'selected' : ''}" 
+      <div class="training-room-card ${isSelected ? 'selected' : ''} ${isAuthenticated ? 'authenticated' : ''}" 
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
-           onclick="selectTrainingRoomForModal('${room.id}')">
+           ${onClickAttr}
+           style="${isAuthenticated ? 'cursor: default;' : 'cursor: pointer;'}">
         <div class="training-room-content">
           <div class="training-room-name-section">
             <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}">
@@ -1014,14 +1032,15 @@ async function selectTrainingRoomForModal(roomId) {
     return;
   }
 
-  // 이미 선택된 Training Room을 다시 클릭한 경우 처리
+  // 사용자 등급 확인
+  const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
+  const isAdmin = userGrade === '1' || userGrade === 1;
+  const hasPassword = room.password && String(room.password).trim() !== '';
   const roomIdStr = String(room.id);
+
+  // 이미 선택된 Training Room을 다시 클릭한 경우 처리
   if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id) {
     // 이미 선택된 Room이고 인증된 경우, 재인증 없이 바로 리턴
-    const hasPassword = room.password && String(room.password).trim() !== '';
-    const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
-    const isAdmin = userGrade === '1' || userGrade === 1;
-    
     if (hasPassword && !isAdmin) {
       if (authenticatedTrainingRooms.has(roomIdStr)) {
         console.log('[Training Room Modal] 이미 선택되고 인증된 Training Room입니다. 재선택 무시');
@@ -1032,21 +1051,23 @@ async function selectTrainingRoomForModal(roomId) {
       return;
     }
   }
+  
+  // 이미 인증된 다른 Room을 클릭한 경우도 체크 (혹시 모를 경우 대비)
+  if (hasPassword && !isAdmin && authenticatedTrainingRooms.has(roomIdStr)) {
+    // 인증은 되어 있지만 아직 선택되지 않은 Room인 경우, 바로 선택 처리
+    console.log('[Training Room Modal] 이미 인증된 Training Room입니다. 바로 선택 처리');
+  }
 
   console.log('[Training Room Modal] 선택한 Room 정보:', {
     id: room.id,
     user_id: room.user_id || room.userId,
     title: room.title,
-    hasPassword: !!(room.password && String(room.password).trim() !== '')
+    hasPassword: !!(room.password && String(room.password).trim() !== ''),
+    isAlreadyAuthenticated: authenticatedTrainingRooms.has(roomIdStr)
   });
 
   // 사용자 등급 확인 (grade=1 관리자, grade=3 코치)
-  const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
-  const isAdmin = userGrade === '1' || userGrade === 1;
   const isCoach = userGrade === '3' || userGrade === 3;
-
-  // 비밀번호 유무 확인
-  const hasPassword = room.password && String(room.password).trim() !== '';
   
   // 비밀번호 확인을 위해 임시로 room 저장
   const previousRoom = currentSelectedTrainingRoom;
@@ -1065,6 +1086,9 @@ async function selectTrainingRoomForModal(roomId) {
         // 비밀번호가 틀리면 이전 상태로 복원
         console.log('[Training Room Modal] 비밀번호 확인 실패');
         currentSelectedTrainingRoom = previousRoom;
+        // 카드 목록 다시 렌더링하여 onclick 복원
+        const users = Array.isArray(window.users) ? window.users : (Array.isArray(window.userProfiles) ? window.userProfiles : []);
+        renderTrainingRoomListForModal(trainingRoomList, users);
         return;
       }
       // 비밀번호 확인 성공 시 인증된 Room 목록에 추가
@@ -1094,11 +1118,13 @@ async function selectTrainingRoomForModal(roomId) {
   }
   console.log('[Training Room Modal] Room ID 저장됨:', room.id);
 
-  // 선택된 카드 하이라이트 (체크마크 추가/제거)
+  // 선택된 카드 하이라이트 및 onclick 제거 (재선택 방지)
   const modalListContainer = document.getElementById('trainingRoomModalList');
   if (modalListContainer) {
+    const isAuthenticated = !hasPassword || isAdmin || authenticatedTrainingRooms.has(roomIdStr);
+    
     modalListContainer.querySelectorAll('.training-room-card').forEach(card => {
-      card.classList.remove('selected');
+      card.classList.remove('selected', 'authenticated');
       
       // 기존 체크마크 제거
       const existingCheck = card.querySelector('.training-room-check');
@@ -1106,9 +1132,16 @@ async function selectTrainingRoomForModal(roomId) {
         existingCheck.remove();
       }
       
-      // 선택된 카드에 체크마크 추가
+      // 선택된 카드 처리
       if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
         card.classList.add('selected');
+        if (isAuthenticated) {
+          card.classList.add('authenticated');
+          // 이미 인증된 카드는 onclick 제거하여 재선택 방지
+          card.removeAttribute('onclick');
+          card.style.cursor = 'default';
+        }
+        
         if (!card.querySelector('.training-room-check')) {
           const checkMark = document.createElement('div');
           checkMark.className = 'training-room-check';
