@@ -4503,7 +4503,13 @@ function updateTrainingMetrics() {
     const NP = Math.pow(trainingMetrics.np4sum / trainingMetrics.count, 0.25);
     const IF = ftp ? (NP / ftp) : 0;
     const TSS = (trainingMetrics.elapsedSec / 3600) * (IF * IF) * 100;
-    const kcal = trainingMetrics.joules / 1000;
+    
+    // 사이클링 운동 변환 (인체 효율 적용)
+    // 1 kJ (Work) ≈ 1 kcal (Burned)
+    // trainingMetrics.joules는 총 일(Work)을 줄(J) 단위로 나타낸 것
+    // 1 kJ = 1000 J이므로, kJ로 변환 후 kcal로 환산
+    const totalWorkKJ = trainingMetrics.joules / 1000; // J → kJ 변환
+    const kcal = totalWorkKJ; // 1 kJ (Work) ≈ 1 kcal (Burned)
     
     // 엘리트/PRO 선수 확인
     const userChallenge = String(window.currentUser?.challenge || '').trim();

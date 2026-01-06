@@ -826,8 +826,21 @@ async function saveTrainingResult(extra = {}) {
     const maxPower = powerValues.length ? Math.max(...powerValues) : 0;
     const avgHR = hrValues.length ? Math.round(avg(hrValues)) : 0;
     
-    // 칼로리 계산 (간단한 공식: 평균파워 * 시간(분) * 0.06)
-    const calories = Math.round(avgPower * totalMinutes * 0.06);
+    // 칼로리 계산: 훈련화면과 동일한 로직 적용
+    // 사이클링 운동 변환 (인체 효율 적용): 1 kJ (Work) ≈ 1 kcal (Burned)
+    // powerData의 각 샘플은 1초마다 기록된 파워(W) 값
+    // 총 일(Work) = 모든 파워 값의 합 (J = W * s)
+    let totalJoules = 0;
+    if (session.powerData && session.powerData.length > 0) {
+      // 각 샘플은 1초 간격으로 기록되었다고 가정
+      // 파워(W) * 시간(s) = 일(J)
+      // 1초마다 기록되므로 각 샘플의 파워 값이 곧 1초 동안의 일(J)을 나타냄
+      totalJoules = session.powerData.reduce((sum, data) => sum + (data.v || 0), 0);
+    }
+    
+    // 1 kJ = 1000 J이므로, kJ로 변환 후 kcal로 환산
+    const totalWorkKJ = totalJoules / 1000; // J → kJ 변환
+    const calories = Math.round(totalWorkKJ); // 1 kJ (Work) ≈ 1 kcal (Burned)
     
     // 달성도 계산 (세그먼트별 목표 대비 실제 파워 비율의 평균)
     let totalAchievement = 0;
