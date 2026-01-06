@@ -745,6 +745,7 @@ async function renderPlayerList() {
                target="_blank"
                class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
                ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
+               onclick="handlePlayerEnterClick(event, ${track.trackNumber}, '${roomId || ''}')"
                title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
               <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
               <span>Enter</span>
@@ -2229,12 +2230,18 @@ async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event)
   const originalText = button ? button.querySelector('span')?.textContent : '';
   const originalDisabled = button ? button.disabled : false;
   
-  // 버튼 애니메이션 효과
+  // 버튼 즉시 클릭 애니메이션 효과
   if (button) {
+    // 즉시 피드백: 클릭 애니메이션 클래스 추가
+    button.classList.add('clicking');
+    setTimeout(() => {
+      button.classList.remove('clicking');
+    }, 300);
+    
+    // 로딩 상태 표시
+    button.classList.add('loading');
     button.disabled = true;
-    button.style.transition = 'all 0.2s ease';
-    button.style.transform = 'scale(0.95)';
-    button.style.opacity = '0.7';
+    
     const span = button.querySelector('span');
     if (span) {
       span.textContent = '처리 중...';
@@ -2248,9 +2255,10 @@ async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event)
     // 버튼 상태 복원
     if (button) {
       setTimeout(() => {
+        button.classList.remove('loading', 'clicking');
         button.disabled = originalDisabled;
-        button.style.transform = 'scale(1)';
-        button.style.opacity = '1';
+        button.style.transform = '';
+        button.style.opacity = '';
         const span = button.querySelector('span');
         if (span && originalText) {
           span.textContent = originalText;
@@ -2763,5 +2771,31 @@ if (typeof window !== 'undefined') {
   // 디버깅 함수
   window.checkFirebaseTrackUsers = checkFirebaseTrackUsers;
   window.checkFirebaseRawData = checkFirebaseRawData;
+  // 입장 버튼 클릭 핸들러
+  window.handlePlayerEnterClick = handlePlayerEnterClick;
+}
+
+/**
+ * 입장 버튼 클릭 핸들러 (애니메이션 적용)
+ */
+function handlePlayerEnterClick(event, trackNumber, roomId) {
+  const button = event?.target?.closest('a.player-enter-btn');
+  
+  // 비활성화된 버튼은 클릭 무시
+  if (button && (button.classList.contains('disabled') || button.getAttribute('aria-disabled') === 'true')) {
+    event.preventDefault();
+    return;
+  }
+  
+  // 즉시 클릭 애니메이션 효과
+  if (button) {
+    button.classList.add('clicking');
+    setTimeout(() => {
+      button.classList.remove('clicking');
+    }, 300);
+  }
+  
+  // href로 이동하는 것은 브라우저가 처리하도록 허용
+  // 애니메이션은 클릭 시 즉시 표시됨
 }
 
