@@ -1017,40 +1017,72 @@ function renderTrainingRoomListForModal(rooms, users = []) {
     `;
   }).join('');
 
-  // 이벤트 위임으로 클릭 이벤트 처리 (Module 1: Guard Clause 적용)
+  // 이벤트 위임으로 클릭 이벤트 처리 (완전한 방어 로직)
   const clickHandler = (e) => {
-    // 클릭된 요소가 카드 또는 그 자식인지 확인
-    let card = e.target.closest('.training-room-card');
-    if (!card) return;
+    // [중요] 디버깅: 클릭 이벤트 추적
+    console.log('[Training Room Modal] 클릭 이벤트 발생:', {
+      target: e.target,
+      targetTag: e.target.tagName,
+      targetClass: e.target.className,
+      targetId: e.target.id,
+      currentTarget: e.currentTarget
+    });
 
-    // [Module 1 - Fix Logic] 이미 인증이 완료된 방인지 확인 (verified-room 클래스 체크)
-    if (card.classList.contains('verified-room') || card.classList.contains('authenticated')) {
+    // 1단계: 선택된 Training Room 섹션 영역 클릭 차단
+    const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+    if (selectedSection && (selectedSection.contains(e.target) || e.target === selectedSection)) {
+      // 버튼 클릭은 허용
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button') || 
+          e.target.id === 'btnPlayerModal' || e.target.id === 'btnCoachModal' ||
+          e.target.closest('#btnPlayerModal') || e.target.closest('#btnCoachModal')) {
+        console.log('[Training Room Modal] 버튼 클릭 허용');
+        return; // 버튼 클릭은 정상 처리
+      }
+      // 버튼이 아닌 영역 클릭 차단
+      console.log('[Training Room Modal] 선택된 섹션 여백 클릭 차단');
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    // 2단계: 클릭된 요소가 카드 또는 그 자식인지 확인
+    let card = e.target.closest('.training-room-card');
+    if (!card) {
+      console.log('[Training Room Modal] 카드가 아닌 영역 클릭, 무시');
+      return;
+    }
+
+    // 3단계: 이미 인증이 완료된 방인지 확인 (다중 체크)
+    const isVerified = card.classList.contains('verified-room') || 
+                      card.classList.contains('authenticated') ||
+                      card.dataset.isAuthenticated === 'true';
+    
+    if (isVerified) {
       // 클릭된 타겟이 Player/Coach 버튼인지 확인
-      // 버튼 클릭은 정상 동작해야 하므로 return 하지 않음 (버튼 자체 핸들러로 위임)
       if (e.target.tagName === 'BUTTON' || e.target.closest('button') || 
           e.target.closest('#btnPlayerModal') || e.target.closest('#btnCoachModal')) {
-        // 버튼 클릭은 정상 처리되도록 허용
-        return;
+        console.log('[Training Room Modal] 인증된 방의 버튼 클릭 허용');
+        return; // 버튼 클릭은 정상 처리
       }
 
-      // 버튼이 아닌 '여백'을 클릭했다면 아무것도 하지 않고 함수 종료
-      console.log('[Training Room Modal] 이미 인증된 방입니다. 비밀번호 재확인을 건너뜁니다.');
+      // 버튼이 아닌 '여백'을 클릭했다면 완전히 차단
+      console.log('[Training Room Modal] 이미 인증된 방의 여백 클릭 차단:', {
+        roomId: card.dataset.roomId,
+        hasVerifiedClass: card.classList.contains('verified-room'),
+        hasAuthenticatedClass: card.classList.contains('authenticated'),
+        isAuthenticatedAttr: card.dataset.isAuthenticated
+      });
       e.preventDefault();
       e.stopPropagation();
+      e.stopImmediatePropagation();
       return;
     }
 
-    // 인증된 카드는 클릭 무시 (추가 체크)
-    const isAuthenticated = card.dataset.isAuthenticated === 'true';
-    if (isAuthenticated) {
-      console.log('[Training Room Modal] 인증된 카드 클릭 무시:', card.dataset.roomId);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
+    // 4단계: 인증되지 않은 카드만 선택 처리
     const roomId = card.dataset.roomId;
     if (roomId) {
+      console.log('[Training Room Modal] 인증되지 않은 카드 클릭, 선택 처리:', roomId);
       selectTrainingRoomForModal(roomId);
     }
   };
@@ -1172,7 +1204,7 @@ async function selectTrainingRoomForModal(roomId) {
     const isAuthenticated = !hasPassword || isAdmin || authenticatedTrainingRooms.has(roomIdStr);
     
     modalListContainer.querySelectorAll('.training-room-card').forEach(card => {
-      card.classList.remove('selected', 'authenticated');
+      card.classList.remove('selected', 'authenticated', 'verified-room');
       
       // 기존 체크마크 제거
       const existingCheck = card.querySelector('.training-room-check');
@@ -1195,7 +1227,12 @@ async function selectTrainingRoomForModal(roomId) {
           // onclick 프로퍼티도 제거
           card.onclick = null;
           
-          console.log('[Training Room Modal] 인증 완료: verified-room 상태 적용됨');
+          console.log('[Training Room Modal] 인증 완료: verified-room 상태 적용됨', {
+            roomId: roomIdStr,
+            hasVerifiedClass: card.classList.contains('verified-room'),
+            hasAuthenticatedClass: card.classList.contains('authenticated'),
+            isAuthenticatedAttr: card.dataset.isAuthenticated
+          });
         }
         
         if (!card.querySelector('.training-room-check')) {
@@ -1206,6 +1243,35 @@ async function selectTrainingRoomForModal(roomId) {
         }
       }
     });
+  }
+
+  // [추가 방어] 선택된 Training Room 섹션 영역에 클릭 이벤트 차단 추가
+  const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+  if (selectedSection) {
+    // 기존 핸들러 제거 (중복 방지)
+    const existingSectionHandler = selectedSection._clickBlockHandler;
+    if (existingSectionHandler) {
+      selectedSection.removeEventListener('click', existingSectionHandler, true);
+    }
+
+    // 새로운 핸들러 추가 (캡처 단계에서 차단)
+    const sectionClickHandler = (e) => {
+      // 버튼 클릭은 허용
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button') || 
+          e.target.id === 'btnPlayerModal' || e.target.id === 'btnCoachModal' ||
+          e.target.closest('#btnPlayerModal') || e.target.closest('#btnCoachModal')) {
+        return; // 버튼 클릭은 정상 처리
+      }
+      
+      // 버튼이 아닌 영역 클릭 차단
+      console.log('[Training Room Modal] 선택된 섹션 여백 클릭 차단 (섹션 핸들러)');
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+    
+    selectedSection.addEventListener('click', sectionClickHandler, true); // 캡처 단계
+    selectedSection._clickBlockHandler = sectionClickHandler;
   }
 
   // 선택된 Training Room 정보 표시
