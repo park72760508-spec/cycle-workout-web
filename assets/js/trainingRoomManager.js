@@ -986,9 +986,12 @@ function renderTrainingRoomListForModal(rooms, users = []) {
       }
     }
     
+    // [Module 2] 인증된 카드에는 verified-room 클래스도 추가
+    const verifiedClass = isAuthenticated ? 'verified-room authenticated' : '';
+    
     // onclick 속성 제거 - 이벤트 위임 사용
     return `
-      <div class="training-room-card ${isSelected ? 'selected' : ''} ${isAuthenticated ? 'authenticated' : ''}" 
+      <div class="training-room-card ${isSelected ? 'selected' : ''} ${verifiedClass}" 
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
@@ -1014,13 +1017,30 @@ function renderTrainingRoomListForModal(rooms, users = []) {
     `;
   }).join('');
 
-  // 이벤트 위임으로 클릭 이벤트 처리
+  // 이벤트 위임으로 클릭 이벤트 처리 (Module 1: Guard Clause 적용)
   const clickHandler = (e) => {
     // 클릭된 요소가 카드 또는 그 자식인지 확인
     let card = e.target.closest('.training-room-card');
     if (!card) return;
 
-    // 인증된 카드는 클릭 무시
+    // [Module 1 - Fix Logic] 이미 인증이 완료된 방인지 확인 (verified-room 클래스 체크)
+    if (card.classList.contains('verified-room') || card.classList.contains('authenticated')) {
+      // 클릭된 타겟이 Player/Coach 버튼인지 확인
+      // 버튼 클릭은 정상 동작해야 하므로 return 하지 않음 (버튼 자체 핸들러로 위임)
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button') || 
+          e.target.closest('#btnPlayerModal') || e.target.closest('#btnCoachModal')) {
+        // 버튼 클릭은 정상 처리되도록 허용
+        return;
+      }
+
+      // 버튼이 아닌 '여백'을 클릭했다면 아무것도 하지 않고 함수 종료
+      console.log('[Training Room Modal] 이미 인증된 방입니다. 비밀번호 재확인을 건너뜁니다.');
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    // 인증된 카드는 클릭 무시 (추가 체크)
     const isAuthenticated = card.dataset.isAuthenticated === 'true';
     if (isAuthenticated) {
       console.log('[Training Room Modal] 인증된 카드 클릭 무시:', card.dataset.roomId);
@@ -1164,14 +1184,18 @@ async function selectTrainingRoomForModal(roomId) {
       if (card.dataset.roomId == roomIdNum || card.dataset.roomId === String(roomIdNum)) {
         card.classList.add('selected');
         if (isAuthenticated) {
-          card.classList.add('authenticated');
+          // [Module 2 - Fix Logic] 인증 완료 시 verified-room 클래스 추가
+          card.classList.add('authenticated', 'verified-room');
           // 인증된 카드는 data-is-authenticated 속성 업데이트하여 클릭 차단
           card.dataset.isAuthenticated = 'true';
+          // [UI UX 개선] 인증된 방은 클릭 가능한 느낌(포인터) 제거 (버튼만 포인터 유지)
           card.style.cursor = 'default';
           // onclick 속성 제거 (혹시 모를 경우 대비)
           card.removeAttribute('onclick');
           // onclick 프로퍼티도 제거
           card.onclick = null;
+          
+          console.log('[Training Room Modal] 인증 완료: verified-room 상태 적용됨');
         }
         
         if (!card.querySelector('.training-room-check')) {
@@ -1236,7 +1260,14 @@ async function selectTrainingRoomForModal(roomId) {
 /**
  * 모달에서 Player List 화면 열기
  */
-async function openPlayerListFromModal() {
+async function openPlayerListFromModal(event) {
+  // [Module 3 - Fix Logic] 이벤트 전파 중단 (필수)
+  // 버튼 클릭이 부모(훈련방 리스트)로 전달되어 클릭 핸들러를 건드리는 것을 원천 차단
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
   if (!currentSelectedTrainingRoom) {
     showToast('Training Room을 먼저 선택해주세요.', 'error');
     return;
@@ -1257,7 +1288,14 @@ async function openPlayerListFromModal() {
 /**
  * 모달에서 Coach 모드 열기 (Indoor 모드 선택 화면으로 이동)
  */
-function openCoachModeFromModal() {
+function openCoachModeFromModal(event) {
+  // [Module 3 - Fix Logic] 이벤트 전파 중단 (필수)
+  // 버튼 클릭이 부모(훈련방 리스트)로 전달되어 클릭 핸들러를 건드리는 것을 원천 차단
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
   if (!currentSelectedTrainingRoom) {
     showToast('Training Room을 먼저 선택해주세요.', 'error');
     return;
