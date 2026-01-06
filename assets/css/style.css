@@ -4906,7 +4906,6 @@ button[aria-disabled="true"] {
   #basecampScreen .basecamp-btn-profile {
     background-position: center calc(50% - 20%) !important; /* 상단으로 1/5 높이만큼 이동 */
   }
-  } 
   .auth-title-image {
     margin-bottom: 24px;
   }
