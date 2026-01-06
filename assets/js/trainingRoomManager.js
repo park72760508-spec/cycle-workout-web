@@ -1014,6 +1014,25 @@ async function selectTrainingRoomForModal(roomId) {
     return;
   }
 
+  // 이미 선택된 Training Room을 다시 클릭한 경우 처리
+  const roomIdStr = String(room.id);
+  if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id) {
+    // 이미 선택된 Room이고 인증된 경우, 재인증 없이 바로 리턴
+    const hasPassword = room.password && String(room.password).trim() !== '';
+    const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
+    const isAdmin = userGrade === '1' || userGrade === 1;
+    
+    if (hasPassword && !isAdmin) {
+      if (authenticatedTrainingRooms.has(roomIdStr)) {
+        console.log('[Training Room Modal] 이미 선택되고 인증된 Training Room입니다. 재선택 무시');
+        return;
+      }
+    } else {
+      console.log('[Training Room Modal] 이미 선택된 Training Room입니다. 재선택 무시');
+      return;
+    }
+  }
+
   console.log('[Training Room Modal] 선택한 Room 정보:', {
     id: room.id,
     user_id: room.user_id || room.userId,
@@ -1035,7 +1054,6 @@ async function selectTrainingRoomForModal(roomId) {
   
   // 비밀번호가 있는 경우: 비밀번호 확인 팝업창 표시 (관리자는 제외, 이미 인증된 경우 제외)
   if (hasPassword && !isAdmin) {
-    const roomIdStr = String(room.id);
     // 이미 인증된 Training Room인지 확인
     if (authenticatedTrainingRooms.has(roomIdStr)) {
       console.log('[Training Room Modal] 이미 인증된 Training Room입니다. 재인증 생략');
@@ -1051,7 +1069,7 @@ async function selectTrainingRoomForModal(roomId) {
       }
       // 비밀번호 확인 성공 시 인증된 Room 목록에 추가
       authenticatedTrainingRooms.add(roomIdStr);
-      console.log('[Training Room Modal] 비밀번호 확인 성공, 인증 상태 저장');
+      console.log('[Training Room Modal] 비밀번호 확인 성공, 인증 상태 저장:', roomIdStr);
     }
   } else if (hasPassword && isAdmin) {
     console.log('[Training Room Modal] 관리자는 비밀번호 확인 생략');
