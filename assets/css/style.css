@@ -11440,6 +11440,16 @@ line[id^="needle-"] {
   box-shadow: 0 0 0 2px rgba(46, 116, 232, 0.1) !important;
 }
 
+/* 인증된 카드는 클릭 비활성화 */
+.training-room-card.authenticated {
+  cursor: default !important;
+  pointer-events: none;
+}
+
+.training-room-card.authenticated .training-room-content {
+  pointer-events: auto;
+}
+
 .training-room-content {
   flex: 1;
   display: flex;
