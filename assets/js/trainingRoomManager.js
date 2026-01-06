@@ -950,6 +950,12 @@ function renderTrainingRoomListForModal(rooms, users = []) {
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
   const isAdmin = userGrade === '1' || userGrade === 1;
 
+  // 기존 이벤트 리스너 제거 (중복 방지)
+  const existingHandler = listContainer._trainingRoomClickHandler;
+  if (existingHandler) {
+    listContainer.removeEventListener('click', existingHandler);
+  }
+
   listContainer.innerHTML = rooms.map((room, index) => {
     const hasPassword = room.password && String(room.password).trim() !== '';
     const isSelected = currentSelectedTrainingRoom && currentSelectedTrainingRoom.id == room.id;
@@ -980,17 +986,13 @@ function renderTrainingRoomListForModal(rooms, users = []) {
       }
     }
     
-    // 이미 선택되고 인증된 카드는 onclick 제거 (재선택 방지)
-    const onClickAttr = isAuthenticated 
-      ? '' 
-      : `onclick="selectTrainingRoomForModal('${room.id}')"`;
-    
+    // onclick 속성 제거 - 이벤트 위임 사용
     return `
       <div class="training-room-card ${isSelected ? 'selected' : ''} ${isAuthenticated ? 'authenticated' : ''}" 
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
-           ${onClickAttr}
+           data-is-authenticated="${isAuthenticated ? 'true' : 'false'}"
            style="${isAuthenticated ? 'cursor: default;' : 'cursor: pointer;'}">
         <div class="training-room-content">
           <div class="training-room-name-section">
@@ -1011,6 +1013,32 @@ function renderTrainingRoomListForModal(rooms, users = []) {
       </div>
     `;
   }).join('');
+
+  // 이벤트 위임으로 클릭 이벤트 처리
+  const clickHandler = (e) => {
+    // 클릭된 요소가 카드 또는 그 자식인지 확인
+    let card = e.target.closest('.training-room-card');
+    if (!card) return;
+
+    // 인증된 카드는 클릭 무시
+    const isAuthenticated = card.dataset.isAuthenticated === 'true';
+    if (isAuthenticated) {
+      console.log('[Training Room Modal] 인증된 카드 클릭 무시:', card.dataset.roomId);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    const roomId = card.dataset.roomId;
+    if (roomId) {
+      selectTrainingRoomForModal(roomId);
+    }
+  };
+
+  // 이벤트 리스너 추가
+  listContainer.addEventListener('click', clickHandler);
+  // 나중에 제거하기 위해 참조 저장
+  listContainer._trainingRoomClickHandler = clickHandler;
 
   // CSS는 style.css에 정의되어 있음 (동적 스타일 추가 불필요)
 }
@@ -1118,7 +1146,7 @@ async function selectTrainingRoomForModal(roomId) {
   }
   console.log('[Training Room Modal] Room ID 저장됨:', room.id);
 
-  // 선택된 카드 하이라이트 및 onclick 제거 (재선택 방지)
+  // 선택된 카드 하이라이트 및 인증 상태 업데이트 (재선택 방지)
   const modalListContainer = document.getElementById('trainingRoomModalList');
   if (modalListContainer) {
     const isAuthenticated = !hasPassword || isAdmin || authenticatedTrainingRooms.has(roomIdStr);
@@ -1137,9 +1165,13 @@ async function selectTrainingRoomForModal(roomId) {
         card.classList.add('selected');
         if (isAuthenticated) {
           card.classList.add('authenticated');
-          // 이미 인증된 카드는 onclick 제거하여 재선택 방지
-          card.removeAttribute('onclick');
+          // 인증된 카드는 data-is-authenticated 속성 업데이트하여 클릭 차단
+          card.dataset.isAuthenticated = 'true';
           card.style.cursor = 'default';
+          // onclick 속성 제거 (혹시 모를 경우 대비)
+          card.removeAttribute('onclick');
+          // onclick 프로퍼티도 제거
+          card.onclick = null;
         }
         
         if (!card.querySelector('.training-room-check')) {
