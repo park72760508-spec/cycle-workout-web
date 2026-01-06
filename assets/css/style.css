@@ -514,31 +514,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* 훈련 참가 화면의 뒤로 버튼도 동일한 스타일 적용 */
-.player-list-actions .btn-exit-inline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 20px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 8px;
-  color: #dc2626;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.player-list-actions .btn-exit-inline:hover {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
-}
-
-.player-list-actions .btn-exit-inline:active {
-  transform: translateY(0);
-}
+/* player-list-actions는 connection-exit-container로 변경됨 - 아래 connection-exit-container 스타일 참조 */
 
 #connectionScreen .header,
 #connectionScreen .card,
@@ -10929,33 +10905,47 @@ line[id^="needle-"] {
 }
 
 /* ========== Player List 화면 (모바일/태블릿 최적화) ========== */
-#playerListScreen {
-  background: #f6f8fa;
-  padding: 0;
+/* 훈련 참가 화면을 Training Room 화면 구조로 변경 */
+#playerListScreen.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 197, 253, 0.08) 100%);
+  padding: 20px;
+  z-index: 1;
+  position: relative;
+  min-height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-#playerListScreen .dashboard-header {
-  position: sticky;
+/* 훈련 참가 화면 배경 이미지 */
+#playerListScreen .basecamp-background-image {
+  position: fixed;
   top: 0;
-  z-index: 100;
-  background: white;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 0;
-  justify-content: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('assets/img/bc(01).png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.15;
+  z-index: 0;
+  pointer-events: none;
 }
 
-/* 훈련 참가 화면 제목 폰트 확대 */
-#playerListScreen .dashboard-header h1.race-title-animated {
-  font-size: 2em; /* 기본 폰트 크기 확대 */
+/* 훈련 참가 화면 컨테이너 z-index 조정 */
+#playerListScreen .connection-main-container {
+  position: relative;
+  z-index: 1;
 }
 
-/* 훈련 참가 화면 로고 확대 (폰트 크기에 맞춰) */
-#playerListScreen .race-title-icon {
-  height: calc(2em * 1.3); /* 폰트 크기의 1.3배 */
+#playerListScreen .connection-form-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* 훈련 참가 화면 헤더 숨김 (베이스캠프와 동일) */
+#playerListScreen .basecamp-header {
+  display: none;
 }
 
 .player-list-container {
@@ -10970,6 +10960,7 @@ line[id^="needle-"] {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  margin-bottom: 20px;
 }
 
 .player-track-item {
@@ -11185,14 +11176,9 @@ line[id^="needle-"] {
 
 /* 모바일 최적화 (480px 이하) - 휴대폰 세로 화면 기준 */
 @media (max-width: 480px) {
-  #playerListScreen .dashboard-header {
-    padding: 12px 16px;
-    position: sticky;
-    top: 0;
-  }
-
-  #playerListScreen .dashboard-header h1 {
-    font-size: 1.8em; /* 모바일에서도 충분히 크게 */
+  /* 훈련 참가 화면 모바일 최적화 */
+  #playerListScreen.active {
+    padding: 12px;
   }
 
   .player-list-container {
@@ -11275,9 +11261,6 @@ line[id^="needle-"] {
   }
 
   /* 훈련 참가 화면 로고 모바일에서도 폰트 크기에 맞춰 확대 */
-  #playerListScreen .race-title-icon {
-    height: calc(1.8em * 1.3); /* 모바일 폰트 크기의 1.3배 */
-  }
 }
 
 /* 태블릿 최적화 (481px ~ 768px) */
