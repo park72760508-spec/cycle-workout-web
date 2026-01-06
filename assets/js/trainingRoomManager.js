@@ -1601,16 +1601,15 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
     document.body.appendChild(modal);
   }
 
-  // 모든 사용자 목록을 전역 변수에 저장 (검색 필터링용)
-  window._allUsersForTrackSelection = users;
-
   // 사용자 grade 확인
   let userGrade = '2';
   let isAdmin = false;
   let isCoach = false;
+  let currentUserId = null;
   
   try {
     const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    currentUserId = currentUser?.id ? String(currentUser.id) : null;
     userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
     isAdmin = userGrade === '1' || userGrade === 1;
     isCoach = userGrade === '3' || userGrade === 3;
@@ -1620,7 +1619,22 @@ async function assignUserToTrack(trackNumber, currentUserId, roomIdParam) {
   
   // grade=2 사용자는 사용자와 심박계만 변경 가능
   const isGrade2 = userGrade === '2' || userGrade === 2;
-  const canModifyDevices = isAdmin || isCoach; // grade=1,3만 디바이스 변경 가능
+  
+  // [일반 사용자 제한] grade=2 사용자는 본인 계정만 사용 가능
+  if (isGrade2 && currentUserId) {
+    // grade=2 사용자는 본인 계정만 필터링
+    users = users.filter(user => String(user.id) === currentUserId);
+    console.log('[assignUserToTrack] 일반 사용자 제한: 본인 계정만 표시', {
+      currentUserId: currentUserId,
+      filteredCount: users.length
+    });
+  }
+
+  // 모든 사용자 목록을 전역 변수에 저장 (검색 필터링용)
+  window._allUsersForTrackSelection = users;
+
+  // [일반 사용자 디바이스 입력 활성화] grade=2 사용자도 디바이스 정보 입력 가능
+  const canModifyDevices = isAdmin || isCoach || isGrade2; // grade=1,3,2 모두 디바이스 입력 가능
   
   // Firebase에서 현재 트랙의 정보 가져오기
   let currentUserData = null;
@@ -1953,7 +1967,30 @@ async function searchUsersForTrackSelection(trackNumber, roomId) {
   if (!searchInput || !listContainer) return;
   
   const searchTerm = searchInput.value.trim();
-  const allUsers = window._allUsersForTrackSelection || [];
+  let allUsers = window._allUsersForTrackSelection || [];
+  
+  // [일반 사용자 제한] grade=2 사용자는 본인 계정만 검색 가능
+  let currentUserId = null;
+  let userGrade = '2';
+  let isGrade2 = false;
+  
+  try {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    currentUserId = currentUser?.id ? String(currentUser.id) : null;
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+    isGrade2 = userGrade === '2' || userGrade === 2;
+  } catch (e) {
+    console.error('[searchUsersForTrackSelection] 사용자 정보 확인 오류:', e);
+  }
+
+  if (isGrade2 && currentUserId) {
+    // grade=2 사용자는 본인 계정만 필터링
+    allUsers = allUsers.filter(user => String(user.id) === currentUserId);
+    console.log('[searchUsersForTrackSelection] 일반 사용자 제한: 본인 계정만 검색', {
+      currentUserId: currentUserId,
+      filteredCount: allUsers.length
+    });
+  }
   
   // 검색어가 없으면 목록을 비워둠
   if (!searchTerm) {
@@ -2026,6 +2063,34 @@ async function searchUsersForTrackSelection(trackNumber, roomId) {
  * 트랙 사용자 선택 (체크 표시만, 자동 저장 안 함)
  */
 function selectUserForTrackSelection(trackNumber, userId, userName, userFTP, userWeight, roomId, event) {
+  // [일반 사용자 제한] grade=2 사용자는 본인 계정만 선택 가능
+  let currentUserId = null;
+  let userGrade = '2';
+  let isGrade2 = false;
+  
+  try {
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    currentUserId = currentUser?.id ? String(currentUser.id) : null;
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+    isGrade2 = userGrade === '2' || userGrade === 2;
+  } catch (e) {
+    console.error('[selectUserForTrackSelection] 사용자 정보 확인 오류:', e);
+  }
+
+  if (isGrade2 && currentUserId) {
+    // grade=2 사용자는 본인 계정만 선택 가능
+    if (String(userId) !== currentUserId) {
+      if (typeof showToast === 'function') {
+        showToast('본인 계정만 선택할 수 있습니다.', 'error');
+      }
+      console.log('[selectUserForTrackSelection] 일반 사용자 제한: 본인 계정만 선택 가능', {
+        selectedUserId: userId,
+        currentUserId: currentUserId
+      });
+      return;
+    }
+  }
+
   // 선택된 사용자 정보 저장
   window._currentTrackApplication = {
     trackNumber: trackNumber,
