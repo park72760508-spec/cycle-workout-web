@@ -1245,8 +1245,13 @@ async function selectTrainingRoomForModal(roomId) {
     });
   }
 
-  // [추가 방어] 선택된 Training Room 섹션 영역에 클릭 이벤트 차단 추가
+  // 선택된 Training Room 정보 표시
   const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+  const selectedTitle = document.getElementById('selectedTrainingRoomModalTitle');
+  const btnPlayer = document.getElementById('btnPlayerModal');
+  const btnCoach = document.getElementById('btnCoachModal');
+
+  // [추가 방어] 선택된 Training Room 섹션 영역에 클릭 이벤트 차단 추가
   if (selectedSection) {
     // 기존 핸들러 제거 (중복 방지)
     const existingSectionHandler = selectedSection._clickBlockHandler;
@@ -1273,12 +1278,6 @@ async function selectTrainingRoomForModal(roomId) {
     selectedSection.addEventListener('click', sectionClickHandler, true); // 캡처 단계
     selectedSection._clickBlockHandler = sectionClickHandler;
   }
-
-  // 선택된 Training Room 정보 표시
-  const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
-  const selectedTitle = document.getElementById('selectedTrainingRoomModalTitle');
-  const btnPlayer = document.getElementById('btnPlayerModal');
-  const btnCoach = document.getElementById('btnCoachModal');
 
   if (selectedSection && selectedTitle) {
     selectedTitle.textContent = room.title;
