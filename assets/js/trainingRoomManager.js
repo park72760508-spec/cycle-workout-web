@@ -153,7 +153,7 @@ function renderTrainingRoomList(rooms, users = []) {
           </div>
           <div class="training-room-coach-section">
             <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
-              ${coachName ? `코치: ${escapeHtml(coachName)}` : '코치 없음'}
+              ${coachName ? `Manager: ${escapeHtml(coachName)}` : '코치 없음'}
             </div>
           </div>
         </div>
@@ -1008,7 +1008,7 @@ function renderTrainingRoomListForModal(rooms, users = []) {
           </div>
           <div class="training-room-coach-section">
             <div class="training-room-coach ${coachName ? 'has-coach' : 'no-coach'}">
-              ${coachName ? `코치: ${escapeHtml(coachName)}` : '코치 없음'}
+              ${coachName ? `Manager: ${escapeHtml(coachName)}` : '코치 없음'}
             </div>
           </div>
         </div>
