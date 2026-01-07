@@ -1082,8 +1082,19 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const targetType = seg.target_type || 'ftp_pct';
     if ((targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph') {
       const targetRpm = getSegmentRpmForPreview(seg);
-      // 디버깅: cadence_rpm 타입일 때 로그 출력
-      if (targetType === 'cadence_rpm') {
+      
+      // 디버깅: dual 타입일 때 로그 출력
+      if (targetType === 'dual') {
+        const ftpPercent = getSegmentFtpPercentForPreview(seg);
+        console.log('[drawSegmentGraph] dual 세그먼트:', {
+          targetType,
+          targetValue: seg.target_value,
+          extractedFtpPercent: ftpPercent,
+          extractedRpm: targetRpm,
+          maxRpm,
+          canvasId
+        });
+      } else if (targetType === 'cadence_rpm') {
         console.log('[drawSegmentGraph] cadence_rpm 세그먼트:', {
           targetType,
           targetValue: seg.target_value,
@@ -1092,6 +1103,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           canvasId
         });
       }
+      
       if (targetRpm > 0 && maxRpm > 0) {
         // RPM 값에 해당하는 Y 위치 계산
         const rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
@@ -1112,6 +1124,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         ctx.textAlign = 'center';
         const labelY = rpmY - 5; // 점선 위에 표시
         ctx.fillText(`${Math.round(targetRpm)}`, x + barWidth / 2, labelY);
+      } else if (targetType === 'dual' && targetRpm === 0) {
+        console.warn('[drawSegmentGraph] dual 세그먼트에서 RPM 값 추출 실패:', {
+          targetValue: seg.target_value,
+          targetType: seg.target_type,
+          seg
+        });
       } else if (targetType === 'cadence_rpm' && targetRpm === 0) {
         console.warn('[drawSegmentGraph] cadence_rpm 세그먼트에서 RPM 값 추출 실패:', seg);
       }
@@ -1355,23 +1373,57 @@ function getSegmentFtpPercentForPreview(seg) {
   if (targetType === 'ftp_pct') {
     return Number(seg.target_value) || 100;
   } else if (targetType === 'dual') {
+    // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
     const targetValue = seg.target_value;
     if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
-      return Number(parts[0]) || 100;
+      const parts = targetValue.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      if (parts.length >= 2) {
+        const ftpPercent = Number(parts[0]);
+        if (!isNaN(ftpPercent) && ftpPercent > 0) {
+          return ftpPercent;
+        }
+      } else if (parts.length === 1) {
+        // 슬래시는 있지만 값이 하나만 있는 경우
+        const ftpPercent = Number(parts[0]);
+        if (!isNaN(ftpPercent) && ftpPercent > 0) {
+          return ftpPercent;
+        }
+      }
+      console.warn('[getSegmentFtpPercentForPreview] dual 타입에서 FTP % 추출 실패:', {
+        targetValue,
+        parts
+      });
+      return 100;
     } else if (Array.isArray(targetValue) && targetValue.length > 0) {
-      return Number(targetValue[0]) || 100;
+      const ftpPercent = Number(targetValue[0]);
+      if (!isNaN(ftpPercent) && ftpPercent > 0) {
+        return ftpPercent;
+      }
+      return 100;
     } else {
-      // 숫자로 저장된 경우 (예: 100120)
+      // 숫자로 저장된 경우 (예: 85100 → 85/100)
       const numValue = Number(targetValue);
       if (numValue > 1000 && numValue < 1000000) {
         const str = String(numValue);
         if (str.length >= 4) {
+          // 앞부분을 FTP%로 추정 (예: 85100 → 85/100)
           const ftpPart = str.slice(0, -3);
-          return Number(ftpPart) || 100;
+          const ftpPercent = Number(ftpPart);
+          if (!isNaN(ftpPercent) && ftpPercent > 0) {
+            return ftpPercent;
+          }
         }
       }
-      return numValue <= 1000 ? numValue : 100;
+      // 1000 이하인 경우 FTP%로 간주
+      if (numValue > 0 && numValue <= 1000) {
+        return numValue;
+      }
+      console.warn('[getSegmentFtpPercentForPreview] dual 타입에서 FTP % 추출 실패 (숫자 형식):', {
+        targetValue,
+        numValue,
+        type: typeof targetValue
+      });
+      return 100;
     }
   } else if (targetType === 'cadence_rpm') {
     return 0; // RPM만 있는 경우 파워는 0
@@ -1405,22 +1457,47 @@ function getSegmentRpmForPreview(seg) {
     }
     return rpm || 0;
   } else if (targetType === 'dual') {
-    // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+    // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
     if (typeof targetValue === 'string' && targetValue.includes('/')) {
-      const parts = targetValue.split('/').map(s => s.trim());
-      return Number(parts[1]) || 0;
+      const parts = targetValue.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      if (parts.length >= 2) {
+        const rpm = Number(parts[1]);
+        if (!isNaN(rpm) && rpm > 0) {
+          return rpm;
+        }
+      }
+      // 슬래시는 있지만 값이 하나만 있는 경우
+      console.warn('[getSegmentRpmForPreview] dual 타입에서 RPM 값 추출 실패:', {
+        targetValue,
+        parts,
+        extracted: parts.length >= 2 ? Number(parts[1]) : null
+      });
+      return 0;
     } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-      return Number(targetValue[1]) || 0;
+      const rpm = Number(targetValue[1]);
+      if (!isNaN(rpm) && rpm > 0) {
+        return rpm;
+      }
+      return 0;
     } else {
-      // 숫자로 저장된 경우 (예: 100120)
+      // 숫자로 저장된 경우 (예: 85100 → 85/100)
       const numValue = Number(targetValue);
       if (numValue > 1000 && numValue < 1000000) {
         const str = String(numValue);
         if (str.length >= 4) {
+          // 마지막 3자리를 RPM으로 추정 (예: 85100 → 85/100)
           const rpmPart = str.slice(-3);
-          return Number(rpmPart) || 0;
+          const rpm = Number(rpmPart);
+          if (!isNaN(rpm) && rpm > 0) {
+            return rpm;
+          }
         }
       }
+      console.warn('[getSegmentRpmForPreview] dual 타입에서 RPM 값 추출 실패 (숫자 형식):', {
+        targetValue,
+        numValue,
+        type: typeof targetValue
+      });
       return 0;
     }
   }
