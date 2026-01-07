@@ -1537,6 +1537,114 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
         needleEl.style.visibility = 'visible';
     }
     
+    // 목표 파워/RPM 텍스트 업데이트 (updatePowerMeterTrail과 동일한 로직)
+    // 개인훈련 대시보드(individual.html)는 ui-target-power ID 사용
+    const individualTargetEl = document.getElementById('ui-target-power');
+    const targetTextEl = document.getElementById(`target-power-value-${powerMeterId}`);
+    const targetElToUpdate = individualTargetEl || targetTextEl;
+    
+    // 개인훈련 대시보드 TARGET 라벨 텍스트 요소 찾기
+    const targetLabelEl = document.getElementById('ui-target-label');
+    
+    if (targetElToUpdate) {
+        const targetType = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0]?.target_type || 'ftp_pct';
+        const currentSegment = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0];
+        const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
+        
+        // FTP 및 목표 파워 계산
+        const ftp = powerMeter.userFTP || window.indoorTrainingState?.userFTP || 200;
+        let targetPower = 0;
+        
+        if (isTrainingRunning && currentSegment) {
+            const targetValue = currentSegment.target_value || currentSegment.target || '100';
+            let ftpPercent = 100;
+            let targetRpm = 0;
+            
+            if (targetType === 'cadence_rpm') {
+                targetRpm = Number(targetValue) || 0;
+                targetPower = 0; // RPM만 있는 경우 파워는 0
+            } else if (targetType === 'dual') {
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                    const parts = targetValue.split('/').map(s => s.trim());
+                    ftpPercent = Number(parts[0].replace('%', '')) || 100;
+                    targetRpm = Number(parts[1]) || 0;
+                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                    ftpPercent = Number(targetValue[0]) || 100;
+                    targetRpm = Number(targetValue[1]) || 0;
+                }
+                targetPower = (ftp * ftpPercent) / 100;
+            } else {
+                if (typeof targetValue === 'string') {
+                    if (targetValue.includes('/')) {
+                        ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+                    } else {
+                        ftpPercent = Number(targetValue.replace('%', '')) || 100;
+                    }
+                } else if (typeof targetValue === 'number') {
+                    ftpPercent = targetValue;
+                }
+                targetPower = (ftp * ftpPercent) / 100;
+            }
+            
+            if (targetType === 'dual' || targetType === 'cadence_rpm') {
+                // dual 또는 cadence_rpm: 목표 RPM 값 표시 (빨강색)
+                if (targetRpm > 0) {
+                    // RPM 값 표시 (빨강색)
+                    targetElToUpdate.textContent = Math.round(targetRpm);
+                    targetElToUpdate.setAttribute('fill', '#ef4444'); // SVG fill 속성으로 빨강색
+                    
+                    // TARGET 라벨 텍스트를 RPM 값으로 변경 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = Math.round(targetRpm).toString();
+                        targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+                    }
+                } else {
+                    // RPM 값이 없으면 원래대로 복원
+                    if (targetPower > 0) {
+                        targetElToUpdate.textContent = Math.round(targetPower);
+                    } else {
+                        targetElToUpdate.textContent = '';
+                    }
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                    
+                    // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = 'TARGET';
+                        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                    }
+                }
+            } else {
+                // ftp_pct 타입: 목표 파워 표시 (원래 색상)
+                if (targetPower > 0) {
+                    targetElToUpdate.textContent = Math.round(targetPower);
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                } else {
+                    targetElToUpdate.textContent = '';
+                }
+                
+                // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+                if (targetLabelEl && individualTargetEl) {
+                    targetLabelEl.textContent = 'TARGET';
+                    targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                }
+            }
+        } else {
+            // 훈련 중이 아니면 원래대로 복원
+            if (targetPower > 0) {
+                targetElToUpdate.textContent = Math.round(targetPower);
+            } else {
+                targetElToUpdate.textContent = '';
+            }
+            targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+            
+            // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+            if (targetLabelEl && individualTargetEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            }
+        }
+    }
+    
     // 데이터 수신 여부 확인 (현재 파워값과 심박계값만으로 판단)
     // 파워값이 0보다 크거나 심박수가 0보다 크면 데이터 수신 중으로 판단
     const hasDataReceived = (power > 0 || heartRate > 0) || 
@@ -4489,6 +4597,24 @@ function skipCurrentSegmentTraining() {
     window.indoorTrainingState.segmentStartTime = Date.now();
     window.indoorTrainingState.segmentElapsedTime = 0;
     
+    // 건너뛴 세그먼트들의 누적 시간 계산하여 totalElapsedTime에 반영
+    if (currentIndex < newIndex) {
+      let skippedTime = 0;
+      for (let i = currentIndex; i < newIndex; i++) {
+        const seg = w.segments[i];
+        if (seg) {
+          const duration = seg.duration_sec || seg.duration || 0;
+          skippedTime += duration;
+        }
+      }
+      
+      // totalElapsedTime에 건너뛴 시간 추가
+      window.indoorTrainingState.totalElapsedTime = (window.indoorTrainingState.totalElapsedTime || 0) + skippedTime;
+      
+      // 마스코트 위치 업데이트를 위한 window.lastElapsedTime에도 반영
+      window.lastElapsedTime = window.indoorTrainingState.totalElapsedTime;
+    }
+    
     // 세그먼트 변경 시 데이터 초기화
     window.indoorTrainingState.powerMeters.forEach(pm => {
       if (pm.connected) {
@@ -4516,6 +4642,13 @@ function skipCurrentSegmentTraining() {
     // 세그먼트 그래프 업데이트
     if (window.indoorTrainingState.currentWorkout) {
       displayWorkoutSegmentGraph(window.indoorTrainingState.currentWorkout, newIndex);
+      
+      // 마스코트 위치 업데이트를 위해 그래프를 다시 그리기 (elapsedTime 전달)
+      if (typeof drawSegmentGraph === 'function') {
+        const segments = window.indoorTrainingState.currentWorkout.segments;
+        const elapsedTime = window.indoorTrainingState.totalElapsedTime || 0;
+        drawSegmentGraph(segments, newIndex, 'individualSegmentGraph', elapsedTime);
+      }
     }
     
     console.log(`[Training] 세그먼트 건너뛰기: ${newIndex + 1}번째 세그먼트로 이동`);
