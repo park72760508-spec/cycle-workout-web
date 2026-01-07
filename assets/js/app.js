@@ -7207,7 +7207,7 @@ ${pastSummary}
           throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
         }
         
-        // 우선순위 정렬: 2.5 Pro -> 1.5 Pro -> 2.5 Flash -> 기타
+        // 우선순위 정렬: 2.5 Flash -> 2.0 Flash Exp -> 2.5 Pro -> 기타 (속도 우선)
         const prioritizedModels = [];
         const primaryModel = supportedModels.find(m => m.shortName === PRIMARY_MODEL);
         const secondaryModel = supportedModels.find(m => m.shortName === SECONDARY_MODEL);
@@ -9276,10 +9276,10 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
     };
     const conditionAdjustment = conditionMap[todayCondition] || 0.98;
     
-    // 3. 최근 운동 이력 조회 (최근 14일)
+    // 3. 최근 운동 이력 조회 (최근 30일 - 1개월)
     const today = new Date(date);
     const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 14);
+    startDate.setDate(startDate.getDate() - 30); // 30일 전부터
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = date;
     
@@ -9302,7 +9302,12 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
       const result = await response.json();
       
       if (result?.success && Array.isArray(result.items)) {
-        recentHistory = result.items.slice(0, 10); // 최근 10개만
+        // 최근 30일 이력을 모두 사용 (정확도 향상을 위해)
+        recentHistory = result.items.sort((a, b) => {
+          const dateA = new Date(a.completed_at || 0);
+          const dateB = new Date(b.completed_at || 0);
+          return dateB - dateA; // 최신순 정렬
+        });
       }
     } catch (error) {
       console.warn('최근 운동 이력 조회 실패:', error);
@@ -9360,9 +9365,12 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
       console.warn('워크아웃 목록 조회 실패:', error);
     }
     
-    // 5. 워크아웃 상세 정보 조회 (세그먼트 포함)
+    // 5. 워크아웃 상세 정보 조회 (세그먼트 포함) - 병렬 처리로 최적화
     const workoutDetails = [];
-    for (const workout of availableWorkouts.slice(0, 20)) { // 최대 20개만
+    const workoutIds = availableWorkouts.slice(0, 15).map(w => w.id); // 최대 15개로 제한하여 시간 단축
+    
+    // 병렬 처리로 모든 워크아웃 상세 정보를 동시에 조회
+    const workoutDetailPromises = workoutIds.map(async (workoutId) => {
       try {
         const ensureBaseUrl = () => {
           const base = window.GAS_URL;
@@ -9373,27 +9381,58 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
         const baseUrl = ensureBaseUrl();
         const params = new URLSearchParams({
           action: 'getWorkout',
-          id: workout.id
+          id: workoutId
         });
         const response = await fetch(`${baseUrl}?${params.toString()}`);
         const result = await response.json();
         
         if (result?.success && result.item) {
-          workoutDetails.push(result.item);
+          return result.item;
         }
+        return null;
       } catch (error) {
-        console.warn(`워크아웃 ${workout.id} 상세 조회 실패:`, error);
+        console.warn(`워크아웃 ${workoutId} 상세 조회 실패:`, error);
+        return null;
       }
-    }
+    });
+    
+    // 모든 요청을 병렬로 실행하고 결과 수집
+    const workoutDetailResults = await Promise.all(workoutDetailPromises);
+    workoutDetails.push(...workoutDetailResults.filter(w => w !== null));
     
     // 6. Gemini API에 전달할 프롬프트 생성
+    // 훈련 이력 분석을 위한 상세 정보 포함
     const historySummary = recentHistory.map(h => ({
       date: h.completed_at ? new Date(h.completed_at).toISOString().split('T')[0] : '',
       workout: h.workout_name || '알 수 없음',
       duration: h.duration_min || 0,
-      avgPower: h.avg_power || 0,
-      tss: h.tss || 0
+      avgPower: Math.round(h.avg_power || 0),
+      np: Math.round(h.np || h.avg_power || 0),
+      tss: Math.round(h.tss || 0),
+      hrAvg: Math.round(h.hr_avg || 0),
+      ftpPercent: ftp > 0 ? Math.round((h.avg_power || 0) / ftp * 100) : 0
     }));
+    
+    // 훈련 패턴 분석 데이터 계산
+    const totalSessions = historySummary.length;
+    const totalTSS = historySummary.reduce((sum, h) => sum + h.tss, 0);
+    const avgTSS = totalSessions > 0 ? Math.round(totalTSS / totalSessions) : 0;
+    const weeklyTSS = Math.round(totalTSS / 4.3); // 30일 기준 주간 평균
+    const avgDuration = totalSessions > 0 ? Math.round(historySummary.reduce((sum, h) => sum + h.duration, 0) / totalSessions) : 0;
+    const avgPower = totalSessions > 0 ? Math.round(historySummary.reduce((sum, h) => sum + h.avgPower, 0) / totalSessions) : 0;
+    
+    // 최근 7일 이력 (단기 패턴)
+    const last7Days = historySummary.filter(h => {
+      const hDate = new Date(h.date);
+      const daysDiff = (today - hDate) / (1000 * 60 * 60 * 24);
+      return daysDiff <= 7;
+    });
+    const last7DaysTSS = last7Days.reduce((sum, h) => sum + h.tss, 0);
+    const last7DaysSessions = last7Days.length;
+    
+    // 고강도 훈련 비율 (TSS > 50 또는 평균 파워 > FTP의 90%)
+    const highIntensitySessions = historySummary.filter(h => h.tss > 50 || h.ftpPercent > 90).length;
+    const highIntensityRatio = totalSessions > 0 ? Math.round(highIntensitySessions / totalSessions * 100) : 0;
     
     const workoutsSummary = workoutDetails.map(w => ({
       id: w.id,
@@ -9410,11 +9449,12 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
       }))
     }));
     
-    // 프롬프트 생성 (워크아웃 정보는 최대 15개로 제한하여 토큰 수 감소)
-    const limitedWorkouts = workoutsSummary.slice(0, 15);
-    const limitedHistory = historySummary.slice(0, 7);
+    // 프롬프트 생성 (워크아웃 정보는 최대 10개로 제한, 이력은 모두 사용)
+    const limitedWorkouts = workoutsSummary.slice(0, 10);
+    // 이력은 모두 사용하여 정확한 분석 (최대 30개)
+    const limitedHistory = historySummary.slice(0, 30);
     
-    const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 추천해주세요.
+    const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 실질적으로 추천해주세요. 형식적인 추천이 아닌, 실제 훈련에 바로 적용할 수 있는 구체적이고 실용적인 추천을 해주세요.
 
 **사용자 정보:**
 - FTP: ${ftp}W
@@ -9423,20 +9463,49 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
 - 운동 목적: ${challenge} (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
 
-**최근 운동 이력 (최근 ${limitedHistory.length}회):**
+**과거 훈련 이력 분석 (최근 30일, 총 ${totalSessions}회):**
 ${JSON.stringify(limitedHistory, null, 2)}
+
+**훈련 패턴 분석:**
+- 총 훈련 횟수: ${totalSessions}회 (30일간)
+- 평균 훈련 시간: ${avgDuration}분
+- 평균 파워: ${avgPower}W (FTP 대비 ${ftp > 0 ? ((avgPower / ftp) * 100).toFixed(1) : 0}%)
+- 평균 TSS: ${avgTSS}점
+- 주간 평균 TSS: ${weeklyTSS}점
+- 최근 7일 훈련: ${last7DaysSessions}회, 총 TSS: ${last7DaysTSS}점
+- 고강도 훈련 비율: ${highIntensityRatio}% (TSS > 50 또는 파워 > FTP 90%)
+- 훈련 빈도: ${totalSessions > 0 ? (totalSessions / 30).toFixed(1) : 0}회/일
 
 **사용 가능한 워크아웃 목록 (${limitedWorkouts.length}개):**
 ${JSON.stringify(limitedWorkouts.map(w => ({
   id: w.id,
   title: w.title,
-  author: w.author,
   totalSeconds: w.totalSeconds,
-  segmentCount: w.segments?.length || 0
+  segmentCount: w.segments?.length || 0,
+  // 세그먼트 정보는 간소화 (타입과 목표만)
+  segments: (w.segments || []).slice(0, 5).map(s => ({
+    type: s.type,
+    duration: s.duration,
+    targetType: s.targetType,
+    targetValue: s.targetValue
+  }))
 })), null, 2)}
 
-**분석 요청사항:**
-1. 사용자의 운동 목적(${challenge})과 최근 운동 이력을 분석하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 선정하세요.
+**실질적인 분석 요청사항:**
+1. **훈련 부하 분석**: 
+   - 최근 7일 TSS(${last7DaysTSS}점)와 주간 평균 TSS(${weeklyTSS}점)를 비교하여 과훈련 위험도를 평가하세요.
+   - 고강도 훈련 비율(${highIntensityRatio}%)을 고려하여 회복 필요 여부를 판단하세요.
+   - 훈련 빈도(${(totalSessions / 30).toFixed(1)}회/일)를 분석하여 적절한 훈련 간격을 제안하세요.
+
+2. **훈련 패턴 분석**:
+   - 최근 30일 훈련 이력을 분석하여 훈련 강도 추세를 파악하세요 (증가/감소/유지).
+   - 평균 파워(${avgPower}W, FTP 대비 ${ftp > 0 ? ((avgPower / ftp) * 100).toFixed(1) : 0}%)를 기준으로 현재 체력 수준을 평가하세요.
+   - 훈련 일정의 공백이나 연속 훈련 패턴을 확인하여 오늘의 적절한 강도를 결정하세요.
+
+3. **카테고리 선정**:
+   - 위 분석을 바탕으로 사용자의 운동 목적(${challenge})과 현재 상태를 종합하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 실질적으로 선정하세요.
+   - 단순히 목적만 고려하지 말고, 실제 훈련 부하와 회복 상태를 우선 고려하세요.
+   - 과훈련 위험이 있으면 Recovery, 충분한 회복이 있었다면 적절한 강도 훈련을 추천하세요.
 ${challenge === 'Elite' ? `
 **엘리트 선수(학생 선수) 특별 지침:**
 - 엘리트 선수용으로 작성된 고강도 워크아웃을 우선 추천하세요.
@@ -9459,8 +9528,14 @@ ${challenge === 'PRO' ? `
 - 프로 선수의 높은 훈련 소화 능력을 고려하여 강도가 높은 워크아웃을 추천하세요.
 - 경기 일정과 시즌을 고려한 훈련 계획을 제안하세요.
 ` : ''}
-2. 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 목적에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
-3. 각 추천 워크아웃에 대해 추천 이유를 간단히 설명하세요.
+4. **워크아웃 추천**:
+   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 목적에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
+   - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
+     * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, 목적 달성 관점)
+     * 예상 TSS와 훈련 강도
+     * 이 워크아웃을 수행했을 때의 기대 효과
+     * 주의사항이나 조정이 필요한 부분
+   - 형식적인 설명이 아닌, 실제로 훈련할 때 참고할 수 있는 구체적인 가이드를 제공하세요.
 
 다음 JSON 형식으로 응답해주세요:
 {
@@ -9488,13 +9563,13 @@ ${challenge === 'PRO' ? `
 중요: 반드시 유효한 JSON 형식으로만 응답하고, 다른 설명이나 마크다운 없이 순수 JSON만 제공해주세요.`;
 
     // 7. Gemini API 호출
-    // 모델 우선순위 설정 (최고 분석 능력 기준)
-    // 1순위: Gemini 2.5 Pro - 최고 성능, 복잡한 분석 작업에 최적화, 2M 토큰 컨텍스트
-    // 2순위: Gemini 1.5 Pro - 강력한 분석 능력, 안정적
-    // 3순위: Gemini 2.5 Flash - 빠른 응답, 효율적
-    const PRIMARY_MODEL = 'gemini-2.5-pro';
-    const SECONDARY_MODEL = 'gemini-1.5-pro';
-    const TERTIARY_MODEL = 'gemini-2.5-flash';
+    // 모델 우선순위 설정 (속도 우선 - 워크아웃 추천은 빠른 응답이 중요)
+    // 1순위: Gemini 2.5 Flash - 빠른 응답, 효율적 (워크아웃 추천에 최적)
+    // 2순위: Gemini 2.0-flash-exp - 빠른 응답
+    // 3순위: Gemini 2.5 Pro - 정확도가 필요한 경우
+    const PRIMARY_MODEL = 'gemini-2.5-flash';
+    const SECONDARY_MODEL = 'gemini-2.0-flash-exp';
+    const TERTIARY_MODEL = 'gemini-2.5-pro';
     
     let modelName = localStorage.getItem('geminiModelName');
     let apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
@@ -9526,7 +9601,7 @@ ${challenge === 'PRO' ? `
           throw new Error('generateContent를 지원하는 Gemini 모델을 찾을 수 없습니다.');
         }
         
-        // 우선순위 정렬: 2.5 Pro -> 1.5 Pro -> 2.5 Flash -> 기타
+        // 우선순위 정렬: 2.5 Flash -> 2.0 Flash Exp -> 2.5 Pro -> 기타 (속도 우선)
         const prioritizedModels = [];
         const primaryModel = supportedModels.find(m => m.shortName === PRIMARY_MODEL);
         const secondaryModel = supportedModels.find(m => m.shortName === SECONDARY_MODEL);
@@ -9556,11 +9631,11 @@ ${challenge === 'PRO' ? `
     try {
       availableModelsList = await getAvailableModels();
       
-      // 1순위 모델(2.5 Pro)로 초기화
+      // 1순위 모델(2.5 Flash)로 초기화 (속도 우선)
       const primaryModelExists = availableModelsList.find(m => m.shortName === PRIMARY_MODEL);
       if (primaryModelExists) {
         modelName = PRIMARY_MODEL;
-        console.log(`1순위 모델 설정: ${modelName}`);
+        console.log(`1순위 모델 설정 (속도 우선): ${modelName}`);
       } else {
         // 1순위 모델이 없으면 2순위 모델 시도
         const secondaryModelExists = availableModelsList.find(m => m.shortName === SECONDARY_MODEL);
@@ -9712,6 +9787,9 @@ ${challenge === 'PRO' ? `
       throw lastError || new Error('API 호출에 실패했습니다.');
     };
     
+    // 토큰 제한 설정 (분석 로직과 동일하게)
+    const MAX_OUTPUT_TOKENS = 4096; // 워크아웃 추천은 간단한 JSON 응답이므로 4096으로 충분
+    
     // API 호출 (재시도 포함)
     let data;
     try {
@@ -9720,7 +9798,13 @@ ${challenge === 'PRO' ? `
           parts: [{
             text: prompt
           }]
-        }]
+        }],
+        generationConfig: {
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          temperature: 0.7,
+          topP: 0.8,
+          topK: 40
+        }
       });
     } catch (apiError) {
       // API 호출 실패 시 사용자에게 재시도 옵션 제공
