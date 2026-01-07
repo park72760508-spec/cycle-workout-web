@@ -9761,8 +9761,63 @@ ${challenge === 'PRO' ? `
             throw new Error(errorMessage);
           }
           
-          // 성공한 경우 응답 반환
-          return await response.json();
+          // 성공한 경우 응답 파싱 및 검증
+          const responseData = await response.json();
+          
+          // 응답 데이터 검증
+          if (!responseData || !responseData.candidates || !Array.isArray(responseData.candidates) || responseData.candidates.length === 0) {
+            throw new Error('API 응답에 candidates가 없습니다.');
+          }
+          
+          const candidate = responseData.candidates[0];
+          if (!candidate || !candidate.content) {
+            throw new Error('API 응답에 content가 없습니다.');
+          }
+          
+          if (!candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+            throw new Error('API 응답에 parts가 없습니다.');
+          }
+          
+          if (!candidate.content.parts[0] || !candidate.content.parts[0].text) {
+            throw new Error('API 응답에 text가 없습니다.');
+          }
+          
+          // 응답 완전성 검증 (finishReason 체크)
+          const finishReason = candidate.finishReason || candidate.finish_reason;
+          const responseText = candidate.content.parts[0].text;
+          
+          // MAX_TOKENS인 경우 부분 응답이라도 처리 시도
+          if (finishReason === 'MAX_TOKENS') {
+            console.warn('응답이 토큰 제한에 도달했습니다. 부분 응답을 처리합니다. finishReason:', finishReason);
+            // JSON이 완전한지 확인
+            const jsonStart = responseText.indexOf('{');
+            const jsonEnd = responseText.lastIndexOf('}');
+            if (jsonStart !== -1 && jsonEnd !== -1) {
+              const jsonText = responseText.substring(jsonStart, jsonEnd + 1);
+              const openBraces = (jsonText.match(/{/g) || []).length;
+              const closeBraces = (jsonText.match(/}/g) || []).length;
+              // JSON이 완전하면 부분 응답이라도 허용
+              if (openBraces === closeBraces && responseText.length >= 200) {
+                console.log('MAX_TOKENS이지만 JSON이 완전합니다. 부분 응답을 허용합니다.');
+                // 부분 응답 허용 - 계속 진행
+              } else {
+                // JSON이 불완전하면 재시도
+                console.warn('MAX_TOKENS이고 JSON이 불완전합니다. 재시도합니다.');
+                throw new Error(`API 응답이 토큰 제한에 도달했습니다. finishReason: ${finishReason}`);
+              }
+            } else if (responseText.length >= 200) {
+              // JSON이 없지만 텍스트가 충분히 길면 허용
+              console.log('MAX_TOKENS이지만 응답 텍스트가 충분합니다. 부분 응답을 허용합니다.');
+              // 부분 응답 허용 - 계속 진행
+            } else {
+              throw new Error(`API 응답이 토큰 제한에 도달했고 응답이 너무 짧습니다. finishReason: ${finishReason}`);
+            }
+          } else if (finishReason && finishReason !== 'STOP' && finishReason !== 'END_OF_TURN') {
+            console.warn('응답이 불완전합니다. finishReason:', finishReason);
+            throw new Error(`API 응답이 불완전합니다. finishReason: ${finishReason}`);
+          }
+          
+          return responseData;
           
         } catch (error) {
           lastError = error;
@@ -9788,7 +9843,7 @@ ${challenge === 'PRO' ? `
     };
     
     // 토큰 제한 설정 (분석 로직과 동일하게)
-    const MAX_OUTPUT_TOKENS = 4096; // 워크아웃 추천은 간단한 JSON 응답이므로 4096으로 충분
+    const MAX_OUTPUT_TOKENS = 8192; // 상세한 분석 요청으로 인해 응답이 길어질 수 있으므로 8192로 증가
     
     // API 호출 (재시도 포함)
     let data;
@@ -9813,15 +9868,86 @@ ${challenge === 'PRO' ? `
     
     const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // JSON 파싱
-    let recommendationData;
-    try {
-      // 마크다운 코드 블록 제거
-      const cleanedText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      recommendationData = JSON.parse(cleanedText);
-    } catch (parseError) {
-      console.error('JSON 파싱 오류:', parseError, responseText);
-      throw new Error('AI 응답을 파싱할 수 없습니다.');
+    if (!responseText || typeof responseText !== 'string') {
+      console.error('API 응답 데이터:', JSON.stringify(data, null, 2));
+      throw new Error('API 응답에 유효한 텍스트가 없습니다. 응답 구조를 확인하세요.');
+    }
+    
+    // 강화된 JSON 파싱 및 복구 함수 (훈련 분석 로직과 동일)
+    const parseAndRecoverJSON = (text) => {
+      if (!text || typeof text !== 'string') {
+        return null;
+      }
+      
+      // 1단계: 마크다운 코드 블록 제거
+      let cleanedText = text
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/g, '')
+        .trim();
+      
+      // 2단계: JSON 객체 시작/끝 찾기
+      const jsonStart = cleanedText.indexOf('{');
+      const jsonEnd = cleanedText.lastIndexOf('}');
+      
+      if (jsonStart === -1) {
+        console.warn('JSON 시작 문자({)를 찾을 수 없습니다.');
+        return null;
+      }
+      
+      if (jsonEnd === -1 || jsonEnd <= jsonStart) {
+        console.warn('JSON 종료 문자(})를 찾을 수 없거나 잘못된 위치입니다.');
+        // 불완전한 JSON 복구 시도
+        cleanedText = cleanedText.substring(jsonStart);
+        // 마지막 불완전한 속성 제거 시도
+        cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
+        cleanedText = cleanedText.replace(/,\s*$/, '');
+        cleanedText += '}';
+      } else {
+        cleanedText = cleanedText.substring(jsonStart, jsonEnd + 1);
+      }
+      
+      // 3단계: JSON 파싱 시도
+      try {
+        return JSON.parse(cleanedText);
+      } catch (parseError) {
+        console.warn('JSON 파싱 실패, 복구 시도 중...', parseError.message);
+        
+        // 4단계: 복구 시도 - 불완전한 문자열 제거
+        // 마지막 불완전한 문자열 속성 제거
+        cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*"[^"]*$/, '');
+        cleanedText = cleanedText.replace(/,\s*"[^"]*":\s*[^,}]*$/, '');
+        
+        // 중괄호 균형 확인 및 복구
+        const openBraces = (cleanedText.match(/{/g) || []).length;
+        const closeBraces = (cleanedText.match(/}/g) || []).length;
+        
+        if (openBraces > closeBraces) {
+          // 닫는 중괄호 추가
+          cleanedText += '}'.repeat(openBraces - closeBraces);
+        }
+        
+        // 5단계: 다시 파싱 시도
+        try {
+          return JSON.parse(cleanedText);
+        } catch (secondError) {
+          console.error('JSON 복구 실패:', secondError);
+          return null;
+        }
+      }
+    };
+    
+    // JSON 파싱 및 복구
+    let recommendationData = parseAndRecoverJSON(responseText);
+    
+    if (!recommendationData) {
+      console.error('JSON 파싱 및 복구 실패. 원본 응답:', responseText);
+      throw new Error('AI 응답을 파싱할 수 없습니다. 응답이 불완전하거나 형식이 올바르지 않습니다.');
+    }
+    
+    // 필수 필드 검증
+    if (!recommendationData.selectedCategory || !recommendationData.recommendations || !Array.isArray(recommendationData.recommendations)) {
+      console.error('필수 필드가 누락되었습니다:', recommendationData);
+      throw new Error('AI 응답에 필수 정보가 누락되었습니다.');
     }
     
     // 8. 추천 워크아웃 표시
