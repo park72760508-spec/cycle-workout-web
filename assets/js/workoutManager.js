@@ -1248,61 +1248,62 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.textAlign = 'center';
     ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, axisLabelY);
     
-  // 세로축 라벨 (파워 - 왼쪽)
-  const verticalLabelFontSize = 'bold 12px sans-serif';
-  ctx.font = verticalLabelFontSize;
-  ctx.save();
-  ctx.translate(15, padding.top + chartHeight / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('파워 (W)', 0, 0);
-  ctx.restore();
-  
-  // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만)
-  if (canvasId === 'trainingSegmentGraph') {
-    // 오른쪽 Y축 그리기
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padding.left + chartWidth, padding.top);
-    ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
-    ctx.stroke();
-    
+    // 세로축 라벨 (파워 - 왼쪽)
+    const verticalLabelFontSize = 'bold 12px sans-serif';
     ctx.font = verticalLabelFontSize;
     ctx.save();
-    ctx.translate(padding.left + chartWidth + 15, padding.top + chartHeight / 2);
+    ctx.translate(15, padding.top + chartHeight / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText('RPM', 0, 0);
+    ctx.fillText('파워 (W)', 0, 0);
     ctx.restore();
     
-    // 오른쪽 Y축 눈금 (RPM)
-    const rpmSteps = 6; // 0, 20, 40, 60, 80, 100, 120 (또는 maxRpm까지)
-    for (let i = 0; i <= rpmSteps; i++) {
-      const rpm = (maxRpm * i) / rpmSteps;
-      const y = padding.top + chartHeight - (chartHeight * (rpm / maxRpm));
-      
-      // 격자선 (점선)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 4]);
-      ctx.beginPath();
-      ctx.moveTo(padding.left, y);
-      ctx.lineTo(padding.left + chartWidth, y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      
-      // 오른쪽 눈금 표시
+    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만)
+    if (canvasId === 'trainingSegmentGraph') {
+      // 오른쪽 Y축 그리기
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(padding.left + chartWidth, y);
-      ctx.lineTo(padding.left + chartWidth + 5, y);
+      ctx.moveTo(padding.left + chartWidth, padding.top);
+      ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
       ctx.stroke();
       
-      // RPM 값 표시 (오른쪽)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = '11px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.fillText(Math.round(rpm).toString(), padding.left + chartWidth + 10, y + 4);
+      ctx.font = verticalLabelFontSize;
+      ctx.save();
+      ctx.translate(padding.left + chartWidth + 15, padding.top + chartHeight / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('RPM', 0, 0);
+      ctx.restore();
+      
+      // 오른쪽 Y축 눈금 (RPM)
+      const rpmSteps = 6; // 0, 20, 40, 60, 80, 100, 120 (또는 maxRpm까지)
+      for (let i = 0; i <= rpmSteps; i++) {
+        const rpm = (maxRpm * i) / rpmSteps;
+        const y = padding.top + chartHeight - (chartHeight * (rpm / maxRpm));
+        
+        // 격자선 (점선)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // 오른쪽 눈금 표시
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left + chartWidth, y);
+        ctx.lineTo(padding.left + chartWidth + 5, y);
+        ctx.stroke();
+        
+        // RPM 값 표시 (오른쪽)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(Math.round(rpm).toString(), padding.left + chartWidth + 10, y + 4);
+      }
     }
   }
   
