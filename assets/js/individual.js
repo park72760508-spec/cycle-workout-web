@@ -916,7 +916,10 @@ function updateTargetPower() {
     // 2순위: 세그먼트 데이터로 계산 (Firebase targetPower가 없을 때만)
     // 워크아웃 데이터 확인
     if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
-        console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
+        // 경고 메시지는 디버깅 모드에서만 출력 (조용히 처리)
+        if (window.DEBUG_MODE) {
+            console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
+        }
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
         // 목표 파워 원호 숨김

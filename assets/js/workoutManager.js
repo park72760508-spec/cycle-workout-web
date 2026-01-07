@@ -729,12 +729,31 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   let maxRpm = 120;
   segments.forEach(seg => {
     const rpm = getSegmentRpmForPreview(seg);
-    if (rpm > maxRpm) {
+    if (rpm > 0 && rpm > maxRpm) {
       maxRpm = Math.ceil(rpm / 10) * 10; // 10 단위로 올림
     }
   });
   // 최소 120, 최대 200으로 제한
   maxRpm = Math.max(120, Math.min(200, maxRpm));
+  
+  // 디버깅: RPM 값이 있는 세그먼트 확인
+  if (canvasId === 'trainingSegmentGraph') {
+    const rpmSegments = segments.filter(seg => {
+      const targetType = seg.target_type || 'ftp_pct';
+      return (targetType === 'dual' || targetType === 'cadence_rpm');
+    });
+    if (rpmSegments.length > 0) {
+      console.log('[drawSegmentGraph] RPM 세그먼트 발견:', {
+        count: rpmSegments.length,
+        maxRpm,
+        segments: rpmSegments.map(seg => ({
+          targetType: seg.target_type,
+          targetValue: seg.target_value,
+          rpm: getSegmentRpmForPreview(seg)
+        }))
+      });
+    }
+  }
   
   // FTP 가이드 라인 (부드러운 색상)
   const ftpPower = ftp;
@@ -1063,7 +1082,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const targetType = seg.target_type || 'ftp_pct';
     if ((targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph') {
       const targetRpm = getSegmentRpmForPreview(seg);
-      if (targetRpm > 0) {
+      // 디버깅: cadence_rpm 타입일 때 로그 출력
+      if (targetType === 'cadence_rpm') {
+        console.log('[drawSegmentGraph] cadence_rpm 세그먼트:', {
+          targetType,
+          targetValue: seg.target_value,
+          extractedRpm: targetRpm,
+          maxRpm,
+          canvasId
+        });
+      }
+      if (targetRpm > 0 && maxRpm > 0) {
         // RPM 값에 해당하는 Y 위치 계산
         const rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
         
@@ -1083,6 +1112,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         ctx.textAlign = 'center';
         const labelY = rpmY - 5; // 점선 위에 표시
         ctx.fillText(`${Math.round(targetRpm)}`, x + barWidth / 2, labelY);
+      } else if (targetType === 'cadence_rpm' && targetRpm === 0) {
+        console.warn('[drawSegmentGraph] cadence_rpm 세그먼트에서 RPM 값 추출 실패:', seg);
       }
     }
     
@@ -1256,7 +1287,6 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.fillText(Math.round(rpm).toString(), padding.left + chartWidth + 10, y + 4);
     }
   }
-  }
   
   // 개인 대시보드: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
   if (canvasId === 'individualSegmentGraph') {
@@ -1363,7 +1393,17 @@ function getSegmentRpmForPreview(seg) {
   
   if (targetType === 'cadence_rpm') {
     // cadence_rpm 타입: target_value가 RPM 값
-    return Number(targetValue) || 0;
+    const rpm = Number(targetValue);
+    // 디버깅: cadence_rpm 타입일 때 로그 출력
+    if (isNaN(rpm) || rpm === 0) {
+      console.warn('[getSegmentRpmForPreview] cadence_rpm 타입에서 RPM 값 추출 실패:', {
+        targetType,
+        targetValue,
+        type: typeof targetValue,
+        parsed: rpm
+      });
+    }
+    return rpm || 0;
   } else if (targetType === 'dual') {
     // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
     if (typeof targetValue === 'string' && targetValue.includes('/')) {
