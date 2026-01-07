@@ -1181,7 +1181,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         // 빨강색 점선 그리기 (세그먼트 막대 넓이만큼)
         ctx.strokeStyle = '#ef4444'; // 빨강색
         ctx.lineWidth = 2; // 선명한 두께
-        ctx.setLineDash([5, 5]); // 점선 패턴
+        ctx.setLineDash([3, 2]); // 점선 패턴 (더 촘촘하게)
         ctx.beginPath();
         ctx.moveTo(x, rpmY);
         ctx.lineTo(x + barWidth, rpmY);
