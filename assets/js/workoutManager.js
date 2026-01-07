@@ -653,8 +653,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 기본 크기
     graphHeight = 300; // 세로축 높이 (파워)
     graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
-    // trainingSegmentGraph일 때는 오른쪽에 RPM Y축을 위한 여백 추가
-    if (canvasId === 'trainingSegmentGraph') {
+    // trainingSegmentGraph 또는 individualSegmentGraph일 때는 오른쪽에 RPM Y축을 위한 여백 추가
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
       padding = { top: 20, right: 60, bottom: 50, left: 70 }; // 오른쪽 패딩 증가
     } else {
       padding = { top: 20, right: 40, bottom: 50, left: 70 };
@@ -737,7 +737,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   maxRpm = Math.max(120, Math.min(200, maxRpm));
   
   // 디버깅: RPM 값이 있는 세그먼트 확인
-  if (canvasId === 'trainingSegmentGraph') {
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
     console.log('[drawSegmentGraph] 전체 세그먼트 분석 시작:', {
       totalSegments: segments.length,
       canvasId
@@ -825,7 +825,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // FTP 라벨 (부드러운 배경)
   // trainingSegmentGraph일 때는 RPM 값도 함께 표시
   let labelText = `FTP ${ftp}W`;
-  if (canvasId === 'trainingSegmentGraph') {
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
     // 세그먼트 중 RPM 값이 있는 경우 기본 RPM 값 표시 (가장 많이 사용되는 값 또는 평균)
     const rpmValues = segments.map(seg => getSegmentRpmForPreview(seg)).filter(rpm => rpm > 0);
     if (rpmValues.length > 0) {
@@ -1121,7 +1121,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const targetType = seg.target_type || 'ftp_pct';
     
     // 디버깅: 모든 세그먼트의 targetType 확인
-    if (canvasId === 'trainingSegmentGraph') {
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
       console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} targetType 확인:`, {
         index: index + 1,
         targetType,
@@ -1132,7 +1132,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       });
     }
     
-    if ((targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph') {
+    if ((targetType === 'dual' || targetType === 'cadence_rpm') && (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph')) {
       console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 시작:`, {
         index: index + 1,
         targetType,
@@ -1327,8 +1327,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fillText('파워 (W)', 0, 0);
     ctx.restore();
     
-    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만)
-    if (canvasId === 'trainingSegmentGraph') {
+    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph 또는 individualSegmentGraph일 때)
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
       // 오른쪽 Y축 그리기
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 2;
