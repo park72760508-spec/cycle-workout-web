@@ -4426,39 +4426,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (!btn) return;
 
   btn.addEventListener("click", () => {
-    // 1) 화면 전환
-    if (typeof window.showScreen === "function") {
-      window.showScreen("profileScreen");
+    // 컨디션별 강도 보정 모달 열기
+    if (typeof window.showRPEModal === "function") {
+      window.showRPEModal();
+    } else if (typeof showRPEModal === "function") {
+      showRPEModal();
+    } else {
+      console.warn("[btnToProfile] showRPEModal 함수를 찾을 수 없습니다.");
     }
-
-    // 2) 사용자 목록 렌더
-    if (typeof window.loadUsers === "function") {
-      // userManager.js의 전역 loadUsers가 있으면 이걸로 불러오기(권장)
-      window.loadUsers();
-      return;
-    }
-
-    // 대체 렌더러 1: renderUserList가 있다면 사용
-    if (typeof window.renderUserList === "function") {
-      window.renderUserList();
-      return;
-    }
-
-    // 대체 렌더러 2: renderProfiles만 있을 때 컨테이너를 명시적으로 찾아 전달
-    if (typeof window.renderProfiles === "function") {
-      const root =
-        safeGetElement("profilesContainer") ||
-        document.querySelector("[data-profiles]");
-      if (root) {
-        // users 데이터를 내부에서 읽는 구현이라면 첫 인자는 생략 가능
-        window.renderProfiles(undefined, root);
-        return;
-      }
-    }
-
-    console.warn(
-      "[btnToProfile] 프로필 렌더러(loadUsers/renderUserList/renderProfiles)가 없습니다."
-    );
   });
 })();
 
