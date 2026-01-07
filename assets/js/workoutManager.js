@@ -1344,35 +1344,68 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.fillText('RPM', 0, 0);
       ctx.restore();
       
+      // 세그먼트에서 사용되는 RPM 값들 추출 (빨강색 표시 기준값 찾기)
+      const segmentRpmValues = segments.map(seg => getSegmentRpmForPreview(seg)).filter(rpm => rpm > 0);
+      const targetRpmForHighlight = segmentRpmValues.length > 0 ? segmentRpmValues[0] : 90; // 첫 번째 RPM 값 또는 기본값 90
+      
       // 오른쪽 Y축 눈금 (RPM)
       const rpmSteps = 6; // 0, 20, 40, 60, 80, 100, 120 (또는 maxRpm까지)
       for (let i = 0; i <= rpmSteps; i++) {
         const rpm = (maxRpm * i) / rpmSteps;
+        const roundedRpm = Math.round(rpm);
         const y = padding.top + chartHeight - (chartHeight * (rpm / maxRpm));
         
-        // 격자선 (점선)
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 4]);
-        ctx.beginPath();
-        ctx.moveTo(padding.left, y);
-        ctx.lineTo(padding.left + chartWidth, y);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        // 특정 RPM 값(예: 90)이 세그먼트에 있으면 빨강색으로 강조 표시
+        const isTargetRpm = Math.abs(roundedRpm - targetRpmForHighlight) < 1; // 1 이내 차이면 같은 값으로 간주
         
-        // 오른쪽 눈금 표시
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(padding.left + chartWidth, y);
-        ctx.lineTo(padding.left + chartWidth + 5, y);
-        ctx.stroke();
-        
-        // RPM 값 표시 (오른쪽)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.font = '11px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(Math.round(rpm).toString(), padding.left + chartWidth + 10, y + 4);
+        if (isTargetRpm && canvasId === 'individualSegmentGraph') {
+          // 빨강색 실선 (개인훈련 대시보드만)
+          ctx.strokeStyle = '#ef4444'; // 빨강색
+          ctx.lineWidth = 2;
+          ctx.setLineDash([]); // 실선
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(padding.left + chartWidth, y);
+          ctx.stroke();
+          
+          // 오른쪽 눈금 표시 (빨강색)
+          ctx.strokeStyle = '#ef4444'; // 빨강색
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(padding.left + chartWidth, y);
+          ctx.lineTo(padding.left + chartWidth + 5, y);
+          ctx.stroke();
+          
+          // RPM 값 표시 (빨강색)
+          ctx.fillStyle = '#ef4444'; // 빨강색
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(roundedRpm.toString(), padding.left + chartWidth + 10, y + 4);
+        } else {
+          // 일반 격자선 (점선)
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 4]);
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(padding.left + chartWidth, y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          
+          // 오른쪽 눈금 표시
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(padding.left + chartWidth, y);
+          ctx.lineTo(padding.left + chartWidth + 5, y);
+          ctx.stroke();
+          
+          // RPM 값 표시 (오른쪽)
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.font = '11px sans-serif';
+          ctx.textAlign = 'left';
+          ctx.fillText(roundedRpm.toString(), padding.left + chartWidth + 10, y + 4);
+        }
       }
     }
   }
