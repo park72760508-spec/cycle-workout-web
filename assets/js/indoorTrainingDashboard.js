@@ -1064,7 +1064,14 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
     }
     
     // 목표 파워/RPM 텍스트 업데이트
-    if (targetTextEl) {
+    // 개인훈련 대시보드(individual.html)는 ui-target-power ID 사용
+    const individualTargetEl = document.getElementById('ui-target-power');
+    const targetElToUpdate = individualTargetEl || targetTextEl;
+    
+    // 개인훈련 대시보드 TARGET 라벨 텍스트 요소 찾기
+    const targetLabelEl = document.getElementById('ui-target-label');
+    
+    if (targetElToUpdate) {
         const targetType = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0]?.target_type || 'ftp_pct';
         const currentSegment = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0];
         
@@ -1086,24 +1093,59 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
                 }
                 
                 if (targetRpm > 0) {
-                    targetTextEl.textContent = Math.round(targetRpm);
-                    targetTextEl.setAttribute('fill', '#ef4444'); // SVG fill 속성으로 빨강색
+                    // RPM 값 표시 (빨강색)
+                    targetElToUpdate.textContent = Math.round(targetRpm);
+                    targetElToUpdate.setAttribute('fill', '#ef4444'); // SVG fill 속성으로 빨강색
+                    
+                    // TARGET 라벨 텍스트를 RPM 값으로 변경 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = Math.round(targetRpm).toString();
+                        targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+                    }
                 } else {
-                    targetTextEl.textContent = '';
-                    targetTextEl.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                    // RPM 값이 없으면 원래대로 복원
+                    if (targetPower > 0) {
+                        targetElToUpdate.textContent = Math.round(targetPower);
+                    } else {
+                        targetElToUpdate.textContent = '';
+                    }
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                    
+                    // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = 'TARGET';
+                        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                    }
                 }
             } else {
                 // ftp_pct 타입: 목표 파워 표시 (원래 색상)
                 if (targetPower > 0) {
-                    targetTextEl.textContent = Math.round(targetPower);
-                    targetTextEl.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                    targetElToUpdate.textContent = Math.round(targetPower);
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
                 } else {
-                    targetTextEl.textContent = '';
+                    targetElToUpdate.textContent = '';
+                }
+                
+                // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+                if (targetLabelEl && individualTargetEl) {
+                    targetLabelEl.textContent = 'TARGET';
+                    targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
                 }
             }
         } else {
-            targetTextEl.textContent = '';
-            targetTextEl.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+            // 훈련 중이 아니면 원래대로 복원
+            if (targetPower > 0) {
+                targetElToUpdate.textContent = Math.round(targetPower);
+            } else {
+                targetElToUpdate.textContent = '';
+            }
+            targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+            
+            // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+            if (targetLabelEl && individualTargetEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            }
         }
     }
     
