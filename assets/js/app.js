@@ -6978,7 +6978,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
   const MAX_RETRIES_PER_MODEL = 3; // 모델당 최대 재시도 횟수
   
   // 토큰 제한 설정 (안정적인 응답을 위해 제한)
-  const MAX_OUTPUT_TOKENS = 4096; // 최대 출력 토큰 수 (응답 크기 제한) - 완전한 분석을 위해 증가
+  const MAX_OUTPUT_TOKENS = 8192; // 최대 출력 토큰 수 (응답 크기 제한) - 완전한 분석을 위해 증가 (4096 -> 8192)
   const MAX_INPUT_TOKENS = 8192; // 최대 입력 토큰 수 (프롬프트 크기 제한) - 과거 데이터 포함으로 증가
   
   try {
@@ -7568,13 +7568,41 @@ ${pastSummary}
         
         // 응답 완전성 검증 (finishReason 체크)
         const finishReason = candidate.finishReason || candidate.finish_reason;
-        if (finishReason && finishReason !== 'STOP' && finishReason !== 'END_OF_TURN') {
+        const responseText = candidate.content.parts[0].text;
+        
+        // MAX_TOKENS인 경우 부분 응답이라도 처리 시도
+        if (finishReason === 'MAX_TOKENS') {
+          console.warn('응답이 토큰 제한에 도달했습니다. 부분 응답을 처리합니다. finishReason:', finishReason);
+          // JSON이 완전한지 확인
+          const jsonStart = responseText.indexOf('{');
+          const jsonEnd = responseText.lastIndexOf('}');
+          if (jsonStart !== -1 && jsonEnd !== -1) {
+            const jsonText = responseText.substring(jsonStart, jsonEnd + 1);
+            const openBraces = (jsonText.match(/{/g) || []).length;
+            const closeBraces = (jsonText.match(/}/g) || []).length;
+            // JSON이 완전하면 부분 응답이라도 허용
+            if (openBraces === closeBraces && responseText.length >= 200) {
+              console.log('MAX_TOKENS이지만 JSON이 완전합니다. 부분 응답을 허용합니다.');
+              // 부분 응답 허용 - 계속 진행
+            } else {
+              // JSON이 불완전하면 토큰 제한 증가 후 재시도
+              console.warn('MAX_TOKENS이고 JSON이 불완전합니다. 토큰 제한 증가 후 재시도합니다.');
+              throw new Error(`API 응답이 토큰 제한에 도달했습니다. finishReason: ${finishReason}`);
+            }
+          } else if (responseText.length >= 200) {
+            // JSON이 없지만 텍스트가 충분히 길면 허용
+            console.log('MAX_TOKENS이지만 응답 텍스트가 충분합니다. 부분 응답을 허용합니다.');
+            // 부분 응답 허용 - 계속 진행
+          } else {
+            throw new Error(`API 응답이 토큰 제한에 도달했고 응답이 너무 짧습니다. finishReason: ${finishReason}`);
+          }
+        } else if (finishReason && finishReason !== 'STOP' && finishReason !== 'END_OF_TURN') {
           console.warn('응답이 불완전합니다. finishReason:', finishReason);
           throw new Error(`API 응답이 불완전합니다. finishReason: ${finishReason}`);
         }
         
         // 텍스트가 완전한지 확인 (최소 길이 체크)
-        const responseText = candidate.content.parts[0].text;
+        // responseText는 위에서 이미 추출됨
         if (responseText.length < 50) {
           console.warn('응답 텍스트가 너무 짧습니다:', responseText);
           throw new Error('API 응답이 불완전합니다. 응답이 중간에 잘렸을 수 있습니다.');
