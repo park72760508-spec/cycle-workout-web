@@ -738,6 +738,23 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 디버깅: RPM 값이 있는 세그먼트 확인
   if (canvasId === 'trainingSegmentGraph') {
+    console.log('[drawSegmentGraph] 전체 세그먼트 분석 시작:', {
+      totalSegments: segments.length,
+      canvasId
+    });
+    
+    // 모든 세그먼트의 target_type 확인
+    segments.forEach((seg, index) => {
+      const targetType = seg.target_type || 'ftp_pct';
+      const targetValue = seg.target_value;
+      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1}:`, {
+        targetType,
+        targetValue,
+        type: typeof targetValue,
+        segment: seg
+      });
+    });
+    
     const rpmSegments = segments.filter(seg => {
       const targetType = seg.target_type || 'ftp_pct';
       return (targetType === 'dual' || targetType === 'cadence_rpm');
@@ -746,12 +763,23 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       console.log('[drawSegmentGraph] RPM 세그먼트 발견:', {
         count: rpmSegments.length,
         maxRpm,
-        segments: rpmSegments.map(seg => ({
-          targetType: seg.target_type,
-          targetValue: seg.target_value,
-          rpm: getSegmentRpmForPreview(seg)
-        }))
+        segments: rpmSegments.map((seg, idx) => {
+          const originalIndex = segments.indexOf(seg);
+          return {
+            originalIndex: originalIndex + 1,
+            targetType: seg.target_type,
+            targetValue: seg.target_value,
+            rpm: getSegmentRpmForPreview(seg),
+            fullSegment: seg
+          };
+        })
       });
+    } else {
+      console.warn('[drawSegmentGraph] RPM 세그먼트를 찾을 수 없습니다. 모든 세그먼트:', segments.map((seg, idx) => ({
+        index: idx + 1,
+        targetType: seg.target_type,
+        targetValue: seg.target_value
+      })));
     }
   }
   
@@ -950,6 +978,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const duration = seg.duration_sec || 0;
     if (duration <= 0) return;
     
+    // 디버깅: 각 세그먼트 정보 출력 (trainingSegmentGraph일 때만)
+    if (canvasId === 'trainingSegmentGraph') {
+      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} 처리 시작:`, {
+        index: index + 1,
+        targetType: seg.target_type,
+        targetValue: seg.target_value,
+        duration,
+        segment: seg
+      });
+    }
+    
     // 세그먼트 타겟 파워 계산
     const ftpPercent = getSegmentFtpPercentForPreview(seg);
     const targetPower = ftp * (ftpPercent / 100);
@@ -1080,31 +1119,62 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // dual 또는 cadence_rpm 타입일 때 RPM 점선 표시
     const targetType = seg.target_type || 'ftp_pct';
+    
+    // 디버깅: 모든 세그먼트의 targetType 확인
+    if (canvasId === 'trainingSegmentGraph') {
+      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} targetType 확인:`, {
+        index: index + 1,
+        targetType,
+        isDual: targetType === 'dual',
+        isCadenceRpm: targetType === 'cadence_rpm',
+        condition: (targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph',
+        canvasId
+      });
+    }
+    
     if ((targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph') {
+      console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 시작:`, {
+        index: index + 1,
+        targetType,
+        targetValue: seg.target_value
+      });
+      
       const targetRpm = getSegmentRpmForPreview(seg);
       
       // 디버깅: dual 타입일 때 로그 출력
       if (targetType === 'dual') {
         const ftpPercent = getSegmentFtpPercentForPreview(seg);
-        console.log('[drawSegmentGraph] dual 세그먼트:', {
+        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} dual 세그먼트:`, {
+          index: index + 1,
           targetType,
           targetValue: seg.target_value,
           extractedFtpPercent: ftpPercent,
           extractedRpm: targetRpm,
           maxRpm,
-          canvasId
+          canvasId,
+          willDraw: targetRpm > 0 && maxRpm > 0
         });
       } else if (targetType === 'cadence_rpm') {
-        console.log('[drawSegmentGraph] cadence_rpm 세그먼트:', {
+        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} cadence_rpm 세그먼트:`, {
+          index: index + 1,
           targetType,
           targetValue: seg.target_value,
           extractedRpm: targetRpm,
           maxRpm,
-          canvasId
+          canvasId,
+          willDraw: targetRpm > 0 && maxRpm > 0
         });
       }
       
       if (targetRpm > 0 && maxRpm > 0) {
+        console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 실행:`, {
+          index: index + 1,
+          targetRpm,
+          maxRpm,
+          rpmY: padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm)),
+          x,
+          barWidth
+        });
         // RPM 값에 해당하는 Y 위치 계산
         const rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
         
@@ -1439,14 +1509,30 @@ function getSegmentFtpPercentForPreview(seg) {
  * @returns {number} RPM 값 (없으면 0)
  */
 function getSegmentRpmForPreview(seg) {
-  if (!seg) return 0;
+  if (!seg) {
+    console.warn('[getSegmentRpmForPreview] 세그먼트가 없습니다');
+    return 0;
+  }
   
   const targetType = seg.target_type || 'ftp_pct';
   const targetValue = seg.target_value;
   
+  console.log('[getSegmentRpmForPreview] 호출:', {
+    targetType,
+    targetValue,
+    type: typeof targetValue,
+    fullSegment: seg
+  });
+  
   if (targetType === 'cadence_rpm') {
     // cadence_rpm 타입: target_value가 RPM 값
     const rpm = Number(targetValue);
+    console.log('[getSegmentRpmForPreview] cadence_rpm 처리:', {
+      targetValue,
+      parsed: rpm,
+      isNaN: isNaN(rpm),
+      result: rpm || 0
+    });
     // 디버깅: cadence_rpm 타입일 때 로그 출력
     if (isNaN(rpm) || rpm === 0) {
       console.warn('[getSegmentRpmForPreview] cadence_rpm 타입에서 RPM 값 추출 실패:', {
@@ -1459,10 +1545,29 @@ function getSegmentRpmForPreview(seg) {
     return rpm || 0;
   } else if (targetType === 'dual') {
     // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+    console.log('[getSegmentRpmForPreview] dual 타입 처리 시작:', {
+      targetValue,
+      type: typeof targetValue,
+      isString: typeof targetValue === 'string',
+      includesSlash: typeof targetValue === 'string' && targetValue.includes('/')
+    });
+    
     if (typeof targetValue === 'string' && targetValue.includes('/')) {
       const parts = targetValue.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      console.log('[getSegmentRpmForPreview] dual 문자열 분리:', {
+        original: targetValue,
+        parts,
+        partsLength: parts.length
+      });
+      
       if (parts.length >= 2) {
         const rpm = Number(parts[1]);
+        console.log('[getSegmentRpmForPreview] dual RPM 추출:', {
+          parts,
+          rpmPart: parts[1],
+          parsed: rpm,
+          isValid: !isNaN(rpm) && rpm > 0
+        });
         if (!isNaN(rpm) && rpm > 0) {
           return rpm;
         }

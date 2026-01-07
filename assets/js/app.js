@@ -3057,9 +3057,26 @@ window.updateTrainingDisplay = function () {
     }
   }
 
-  // ftp_pct / dual일 때만 목표 파워 텍스트를 덮어쓴다 (cadence_rpm은 RPM 표시를 유지)
-  if (t && (targetType === 'ftp_pct' || targetType === 'dual')) {
-    t.textContent = String(Math.round(targetPower));
+  // 속도계 TARGET 텍스트 업데이트
+  if (t) {
+    if (targetType === 'dual' || targetType === 'cadence_rpm') {
+      // dual 또는 cadence_rpm: 목표 RPM 값 표시 (빨강색)
+      if (targetRpm > 0) {
+        t.textContent = String(Math.round(targetRpm));
+        t.style.color = '#ef4444'; // 빨강색
+      } else {
+        t.textContent = '';
+        t.style.color = ''; // 원래 색상으로 복원
+      }
+    } else {
+      // ftp_pct 타입: 목표 파워 표시 (원래 색상)
+      if (targetPower > 0) {
+        t.textContent = String(Math.round(targetPower));
+        t.style.color = ''; // 원래 색상으로 복원
+      } else {
+        t.textContent = '';
+      }
+    }
   }
 
   if (h) {
