@@ -653,7 +653,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 기본 크기
     graphHeight = 300; // 세로축 높이 (파워)
     graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
-    padding = { top: 20, right: 40, bottom: 50, left: 70 };
+    // trainingSegmentGraph일 때는 오른쪽에 RPM Y축을 위한 여백 추가
+    if (canvasId === 'trainingSegmentGraph') {
+      padding = { top: 20, right: 60, bottom: 50, left: 70 }; // 오른쪽 패딩 증가
+    } else {
+      padding = { top: 20, right: 40, bottom: 50, left: 70 };
+    }
   }
   const chartWidth = graphWidth - padding.left - padding.right;
   const chartHeight = graphHeight - padding.top - padding.bottom;
@@ -720,6 +725,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     }
   });
   
+  // 최대 RPM 계산 (세그먼트 중 최대값, 기본값 120)
+  let maxRpm = 120;
+  segments.forEach(seg => {
+    const rpm = getSegmentRpmForPreview(seg);
+    if (rpm > maxRpm) {
+      maxRpm = Math.ceil(rpm / 10) * 10; // 10 단위로 올림
+    }
+  });
+  // 최소 120, 최대 200으로 제한
+  maxRpm = Math.max(120, Math.min(200, maxRpm));
+  
   // FTP 가이드 라인 (부드러운 색상)
   const ftpPower = ftp;
   const ftpY = padding.top + chartHeight - (chartHeight * (ftpPower / maxTargetPower));
@@ -760,7 +776,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.shadowColor = 'transparent';
   
   // FTP 라벨 (부드러운 배경)
-  const labelText = `FTP ${ftp}W`;
+  // trainingSegmentGraph일 때는 RPM 값도 함께 표시
+  let labelText = `FTP ${ftp}W`;
+  if (canvasId === 'trainingSegmentGraph') {
+    // 세그먼트 중 RPM 값이 있는 경우 기본 RPM 값 표시 (가장 많이 사용되는 값 또는 평균)
+    const rpmValues = segments.map(seg => getSegmentRpmForPreview(seg)).filter(rpm => rpm > 0);
+    if (rpmValues.length > 0) {
+      // 가장 많이 사용되는 RPM 값 또는 평균값 사용
+      const avgRpm = Math.round(rpmValues.reduce((sum, rpm) => sum + rpm, 0) / rpmValues.length);
+      labelText = `FTP ${ftp}W RPM${avgRpm}`;
+    }
+  }
   const metrics = ctx.measureText(labelText);
   const labelWidth = metrics.width + 8;
   const labelHeight = 18;
@@ -1033,6 +1059,33 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // 세그먼트 라벨 제거 (가로축에는 시간 표시만 남김)
     
+    // dual 또는 cadence_rpm 타입일 때 RPM 점선 표시
+    const targetType = seg.target_type || 'ftp_pct';
+    if ((targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph') {
+      const targetRpm = getSegmentRpmForPreview(seg);
+      if (targetRpm > 0) {
+        // RPM 값에 해당하는 Y 위치 계산
+        const rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
+        
+        // 빨강색 점선 그리기 (세그먼트 막대 넓이만큼)
+        ctx.strokeStyle = '#ef4444'; // 빨강색
+        ctx.lineWidth = 2; // 선명한 두께
+        ctx.setLineDash([5, 5]); // 점선 패턴
+        ctx.beginPath();
+        ctx.moveTo(x, rpmY);
+        ctx.lineTo(x + barWidth, rpmY);
+        ctx.stroke();
+        ctx.setLineDash([]); // 점선 해제
+        
+        // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단)
+        ctx.fillStyle = '#ef4444'; // 빨강색
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        const labelY = rpmY - 5; // 점선 위에 표시
+        ctx.fillText(`${Math.round(targetRpm)}`, x + barWidth / 2, labelY);
+      }
+    }
+    
     currentTime += duration;
   });
   
@@ -1146,14 +1199,63 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.textAlign = 'center';
     ctx.fillText('시간 (분:초)', padding.left + chartWidth / 2, axisLabelY);
     
-    // 세로축 라벨 (파워)
-    const verticalLabelFontSize = 'bold 12px sans-serif';
+  // 세로축 라벨 (파워 - 왼쪽)
+  const verticalLabelFontSize = 'bold 12px sans-serif';
+  ctx.font = verticalLabelFontSize;
+  ctx.save();
+  ctx.translate(15, padding.top + chartHeight / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('파워 (W)', 0, 0);
+  ctx.restore();
+  
+  // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만)
+  if (canvasId === 'trainingSegmentGraph') {
+    // 오른쪽 Y축 그리기
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding.left + chartWidth, padding.top);
+    ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+    ctx.stroke();
+    
     ctx.font = verticalLabelFontSize;
     ctx.save();
-    ctx.translate(15, padding.top + chartHeight / 2);
+    ctx.translate(padding.left + chartWidth + 15, padding.top + chartHeight / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText('파워 (W)', 0, 0);
+    ctx.fillText('RPM', 0, 0);
     ctx.restore();
+    
+    // 오른쪽 Y축 눈금 (RPM)
+    const rpmSteps = 6; // 0, 20, 40, 60, 80, 100, 120 (또는 maxRpm까지)
+    for (let i = 0; i <= rpmSteps; i++) {
+      const rpm = (maxRpm * i) / rpmSteps;
+      const y = padding.top + chartHeight - (chartHeight * (rpm / maxRpm));
+      
+      // 격자선 (점선)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padding.left, y);
+      ctx.lineTo(padding.left + chartWidth, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      
+      // 오른쪽 눈금 표시
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(padding.left + chartWidth, y);
+      ctx.lineTo(padding.left + chartWidth + 5, y);
+      ctx.stroke();
+      
+      // RPM 값 표시 (오른쪽)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(Math.round(rpm).toString(), padding.left + chartWidth + 10, y + 4);
+    }
+  }
   }
   
   // 개인 대시보드: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
@@ -1246,6 +1348,44 @@ function getSegmentFtpPercentForPreview(seg) {
   }
   
   return 100;
+}
+
+/**
+ * 세그먼트에서 RPM 값 추출
+ * @param {Object} seg - 세그먼트 객체
+ * @returns {number} RPM 값 (없으면 0)
+ */
+function getSegmentRpmForPreview(seg) {
+  if (!seg) return 0;
+  
+  const targetType = seg.target_type || 'ftp_pct';
+  const targetValue = seg.target_value;
+  
+  if (targetType === 'cadence_rpm') {
+    // cadence_rpm 타입: target_value가 RPM 값
+    return Number(targetValue) || 0;
+  } else if (targetType === 'dual') {
+    // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      return Number(parts[1]) || 0;
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      return Number(targetValue[1]) || 0;
+    } else {
+      // 숫자로 저장된 경우 (예: 100120)
+      const numValue = Number(targetValue);
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const rpmPart = str.slice(-3);
+          return Number(rpmPart) || 0;
+        }
+      }
+      return 0;
+    }
+  }
+  
+  return 0;
 }
 
 /**

@@ -1020,31 +1020,91 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         const currentSegmentIndex = window.indoorTrainingState.currentSegmentIndex || 0;
         const currentSegment = segments[currentSegmentIndex] || segments[0]; 
         
-        // 목표 파워 계산
+        // 목표 파워 및 RPM 계산
         if (currentSegment) {
+            const targetType = currentSegment.target_type || 'ftp_pct';
             let ftpPercent = 100; // 기본값
+            let targetRpm = 0;
             const targetValue = currentSegment.target_value || currentSegment.target || '100';
             
-            if (typeof targetValue === 'string') {
-                if (targetValue.includes('/')) {
-                    // "100/120" 등의 형식일 경우 앞의 값 사용
-                    ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+            if (targetType === 'cadence_rpm') {
+                // cadence_rpm 타입: target_value가 RPM 값
+                targetRpm = Number(targetValue) || 0;
+                targetPower = 0; // RPM만 있는 경우 파워는 0
+            } else if (targetType === 'dual') {
+                // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                    const parts = targetValue.split('/').map(s => s.trim());
+                    ftpPercent = Number(parts[0].replace('%', '')) || 100;
+                    targetRpm = Number(parts[1]) || 0;
+                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                    ftpPercent = Number(targetValue[0]) || 100;
+                    targetRpm = Number(targetValue[1]) || 0;
                 } else {
-                    ftpPercent = Number(targetValue.replace('%', '')) || 100;
+                    ftpPercent = Number(targetValue) || 100;
                 }
-            } else if (typeof targetValue === 'number') {
-                ftpPercent = targetValue;
+                targetPower = (ftp * ftpPercent) / 100;
+            } else {
+                // ftp_pct 타입
+                if (typeof targetValue === 'string') {
+                    if (targetValue.includes('/')) {
+                        ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+                    } else {
+                        ftpPercent = Number(targetValue.replace('%', '')) || 100;
+                    }
+                } else if (typeof targetValue === 'number') {
+                    ftpPercent = targetValue;
+                }
+                targetPower = (ftp * ftpPercent) / 100;
             }
-            targetPower = (ftp * ftpPercent) / 100;
         }
         
         // 현재 랩파워 (Segment Average Power) 가져오기
         segmentPower = powerMeter.segmentPower || 0;
     }
     
-    // 목표 파워 텍스트 업데이트 (목표가 있을 때만 표시)
+    // 목표 파워/RPM 텍스트 업데이트
     if (targetTextEl) {
-        targetTextEl.textContent = (isTrainingRunning && targetPower > 0) ? Math.round(targetPower) : '';
+        const targetType = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0]?.target_type || 'ftp_pct';
+        const currentSegment = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0];
+        
+        if (isTrainingRunning && currentSegment) {
+            if (targetType === 'dual' || targetType === 'cadence_rpm') {
+                // dual 또는 cadence_rpm: 목표 RPM 값 표시 (빨강색)
+                const targetValue = currentSegment.target_value || currentSegment.target || '0';
+                let targetRpm = 0;
+                
+                if (targetType === 'cadence_rpm') {
+                    targetRpm = Number(targetValue) || 0;
+                } else if (targetType === 'dual') {
+                    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                        const parts = targetValue.split('/').map(s => s.trim());
+                        targetRpm = Number(parts[1]) || 0;
+                    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                        targetRpm = Number(targetValue[1]) || 0;
+                    }
+                }
+                
+                if (targetRpm > 0) {
+                    targetTextEl.textContent = Math.round(targetRpm);
+                    targetTextEl.setAttribute('fill', '#ef4444'); // SVG fill 속성으로 빨강색
+                } else {
+                    targetTextEl.textContent = '';
+                    targetTextEl.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                }
+            } else {
+                // ftp_pct 타입: 목표 파워 표시 (원래 색상)
+                if (targetPower > 0) {
+                    targetTextEl.textContent = Math.round(targetPower);
+                    targetTextEl.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                } else {
+                    targetTextEl.textContent = '';
+                }
+            }
+        } else {
+            targetTextEl.textContent = '';
+            targetTextEl.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+        }
     }
     
     // 목표 각도 계산 (주황색 아크 표시용)
