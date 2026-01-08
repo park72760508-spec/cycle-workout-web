@@ -1239,19 +1239,18 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
         }
         
-        // 빨강색 점선 그리기 (세그먼트 막대 넓이만큼)
-        ctx.strokeStyle = '#ef4444'; // 빨강색
+        // 빨강색 실선 그리기 (세그먼트 막대 넓이만큼)
+        ctx.strokeStyle = '#FF4D4D'; // 밝은 레드
         ctx.lineWidth = 2; // 선명한 두께
-        ctx.setLineDash([3, 2]); // 점선 패턴 (더 촘촘하게)
+        ctx.setLineDash([]); // 실선 (점선 해제)
         ctx.beginPath();
         ctx.moveTo(x, rpmY);
         ctx.lineTo(x + barWidth, rpmY);
         ctx.stroke();
-        ctx.setLineDash([]); // 점선 해제
         
         // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단)
-        ctx.fillStyle = '#ef4444'; // 빨강색
-        ctx.font = '10px sans-serif';
+        ctx.fillStyle = '#FF3B30'; // 숫자 색상
+        ctx.font = 'bold 10px sans-serif'; // Medium 이상 두께
         ctx.textAlign = 'center';
         const labelY = rpmY - 5; // 점선 위에 표시
         ctx.fillText(`${Math.round(targetRpm)}`, x + barWidth / 2, labelY);

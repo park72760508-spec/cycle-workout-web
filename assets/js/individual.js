@@ -904,8 +904,46 @@ function updateTargetPower() {
         const adjustedTargetPower = Math.round(firebaseTargetPower * individualIntensityAdjustment);
         console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
         console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
-        targetPowerEl.textContent = String(adjustedTargetPower);
-        targetPowerEl.setAttribute('fill', '#ff8c00');
+        
+        // TARGET 라벨 업데이트 로직 (Firebase 값 사용 시)
+        const targetLabelEl = document.getElementById('ui-target-label');
+        const seg = getCurrentSegment();
+        const targetType = seg?.target_type || 'ftp_pct';
+        
+        if ((targetType === 'dual' || targetType === 'cadence_rpm') && targetLabelEl) {
+            const targetValue = seg?.target_value || seg?.target || '0';
+            let targetRpm = 0;
+            if (targetType === 'cadence_rpm') {
+                targetRpm = Number(targetValue) || 0;
+            } else if (targetType === 'dual') {
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                    const parts = targetValue.split('/').map(s => s.trim());
+                    targetRpm = Number(parts[1]) || 0;
+                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                    targetRpm = Number(targetValue[1]) || 0;
+                }
+            }
+            
+            if (targetRpm > 0) {
+                targetLabelEl.textContent = Math.round(targetRpm).toString();
+                targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+                targetPowerEl.textContent = '';
+                targetPowerEl.setAttribute('fill', '#ef4444');
+            } else {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888');
+                targetPowerEl.textContent = String(adjustedTargetPower);
+                targetPowerEl.setAttribute('fill', '#ff8c00');
+            }
+        } else {
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888');
+            }
+            targetPowerEl.textContent = String(adjustedTargetPower);
+            targetPowerEl.setAttribute('fill', '#ff8c00');
+        }
+        
         // 목표 파워 원호 업데이트
         if (typeof updateTargetPowerArc === 'function') {
             updateTargetPowerArc();
@@ -920,6 +958,11 @@ function updateTargetPower() {
         if (window.DEBUG_MODE) {
             console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
         }
+        const targetLabelEl = document.getElementById('ui-target-label');
+        if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888');
+        }
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
         // 목표 파워 원호 숨김
@@ -933,6 +976,11 @@ function updateTargetPower() {
     const seg = getCurrentSegment();
     if (!seg) {
         console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다.');
+        const targetLabelEl = document.getElementById('ui-target-label');
+        if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888');
+        }
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
         // 목표 파워 원호 숨김
@@ -998,8 +1046,49 @@ function updateTargetPower() {
     console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
     console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
     console.log('[updateTargetPower] 계산 상세: FTP =', ftp, ', target_type =', targetType, ', target_value =', targetValue);
-    targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
-    targetPowerEl.setAttribute('fill', '#ff8c00');
+    
+    // TARGET 라벨 업데이트 로직
+    const targetLabelEl = document.getElementById('ui-target-label');
+    
+    if (targetType === 'dual' || targetType === 'cadence_rpm') {
+        // dual 또는 cadence_rpm: RPM 값 표시 (빨강색)
+        let targetRpm = 0;
+        if (targetType === 'cadence_rpm') {
+            targetRpm = Number(targetValue) || 0;
+        } else if (targetType === 'dual') {
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                targetRpm = Number(parts[1]) || 0;
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                targetRpm = Number(targetValue[1]) || 0;
+            }
+        }
+        
+        if (targetRpm > 0 && targetLabelEl) {
+            targetLabelEl.textContent = Math.round(targetRpm).toString();
+            targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+        } else if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+        }
+        
+        // targetPowerEl은 RPM 값이 있으면 빈 값으로, 없으면 파워 값 표시
+        if (targetRpm > 0) {
+            targetPowerEl.textContent = '';
+            targetPowerEl.setAttribute('fill', '#ef4444');
+        } else {
+            targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+            targetPowerEl.setAttribute('fill', '#ff8c00');
+        }
+    } else {
+        // ftp_pct: TARGET 라벨 표시 (원래 색상)
+        if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+        }
+        targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+        targetPowerEl.setAttribute('fill', '#ff8c00');
+    }
     
     // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
     if (typeof updateTargetPowerArc === 'function') {
