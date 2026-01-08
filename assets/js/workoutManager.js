@@ -705,10 +705,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 기본 크기
     graphHeight = 300; // 세로축 높이 (파워)
     graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
-    // trainingSegmentGraph일 때는 개인훈련 대시보드와 동일하게 설정 (FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음)
+    // trainingSegmentGraph일 때는 오른쪽에 RPM Y축을 위한 여백 추가 (Indoor Training: 우측 Y축 표시)
     // individualSegmentGraph는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
-      padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드 및 Indoor Training: 오른쪽 패딩 기본값
+    if (canvasId === 'trainingSegmentGraph') {
+      padding = { top: 20, right: 60, bottom: 50, left: 70 }; // Indoor Training: 오른쪽 패딩 증가 (Y축 표시용)
+    } else if (canvasId === 'individualSegmentGraph') {
+      padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드: 오른쪽 패딩 기본값
     } else {
       padding = { top: 20, right: 40, bottom: 50, left: 70 };
     }
@@ -1437,9 +1439,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fillText('파워 (W)', 0, 0);
     ctx.restore();
     
-    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만)
-    // 개인훈련 대시보드 및 Indoor Training(individualSegmentGraph, trainingSegmentGraph)는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 제거
-    if (false) { // 오른쪽 Y축 제거 (개인훈련 대시보드와 동일하게)
+    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만 표시)
+    // Indoor Training은 우측 Y축을 유지하면서 케이던스 기준값(90 RPM)을 표시
+    // 개인훈련 대시보드(individualSegmentGraph)는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음
+    if (canvasId === 'trainingSegmentGraph') {
       // 오른쪽 Y축 그리기
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 2;
@@ -1455,22 +1458,30 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.fillText('RPM', 0, 0);
       ctx.restore();
       
-      // 세그먼트에서 사용되는 RPM 값들 추출 (빨강색 표시 기준값 찾기)
+      // 세그먼트에서 사용되는 RPM 값들 추출 (케이던스 기준값 90 RPM 강조 표시용)
       const segmentRpmValues = segments.map(seg => getSegmentRpmForPreview(seg)).filter(rpm => rpm > 0);
-      const targetRpmForHighlight = segmentRpmValues.length > 0 ? segmentRpmValues[0] : 90; // 첫 번째 RPM 값 또는 기본값 90
+      // 개인 훈련 대시보드 로직: 90 RPM을 기준값으로 강조 표시 (FTP 100% = 90 RPM 1:1 매칭)
+      const targetRpmForHighlight = 90; // 항상 90 RPM을 기준값으로 표시
       
-      // 오른쪽 Y축 눈금 (RPM)
-      const rpmSteps = 6; // 0, 20, 40, 60, 80, 100, 120 (또는 maxRpm까지)
-      for (let i = 0; i <= rpmSteps; i++) {
-        const rpm = (maxRpm * i) / rpmSteps;
+      // 오른쪽 Y축 눈금 (RPM) - FTP 100% = 90 RPM 1:1 매칭 기준으로 표시
+      // FTP %를 RPM으로 변환: RPM = (FTP% / 100) * 90
+      const ftpPercentValues = [0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5]; // 개인 훈련 대시보드와 동일한 FTP 백분율
+      
+      ftpPercentValues.forEach(ftpRatio => {
+        // FTP %를 RPM으로 변환 (90 RPM = FTP 100%)
+        const rpm = ftpRatio * 90;
         const roundedRpm = Math.round(rpm);
-        const y = padding.top + chartHeight - (chartHeight * (rpm / maxRpm));
         
-        // 특정 RPM 값(예: 90)이 세그먼트에 있으면 빨강색으로 강조 표시
-        const isTargetRpm = Math.abs(roundedRpm - targetRpmForHighlight) < 1; // 1 이내 차이면 같은 값으로 간주
+        // RPM을 Y 위치로 변환 (FTP % 기반으로 계산)
+        const rpmFtpPercent = (rpm / 90) * 100; // RPM을 FTP %로 변환
+        const rpmPower = ftp * (rpmFtpPercent / 100); // FTP %를 파워로 변환
+        const y = padding.top + chartHeight - (chartHeight * (rpmPower / maxTargetPower));
         
-        if (isTargetRpm && (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph')) {
-          // 빨강색 실선 (개인훈련 대시보드 및 Indoor Training)
+        // 90 RPM(ftpRatio === 1.0)인 경우 빨강색으로 강조 표시
+        const isTargetRpm = Math.abs(roundedRpm - targetRpmForHighlight) < 1; // 90 RPM인 경우
+        
+        if (isTargetRpm) {
+          // 빨강색 실선 (케이던스 기준값 90 RPM 강조)
           ctx.strokeStyle = '#ef4444'; // 빨강색
           ctx.lineWidth = 2;
           ctx.setLineDash([]); // 실선
@@ -1487,13 +1498,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           ctx.lineTo(padding.left + chartWidth + 5, y);
           ctx.stroke();
           
-          // RPM 값 표시 (빨강색)
+          // RPM 값 표시 (빨강색, 굵게)
           ctx.fillStyle = '#ef4444'; // 빨강색
           ctx.font = 'bold 11px sans-serif';
           ctx.textAlign = 'left';
           ctx.fillText(roundedRpm.toString(), padding.left + chartWidth + 10, y + 4);
         } else {
-          // 일반 격자선 (점선)
+          // 일반 격자선 (점선) - FTP 기준선과 일치하도록
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
           ctx.lineWidth = 1;
           ctx.setLineDash([2, 4]);
@@ -1517,7 +1528,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           ctx.textAlign = 'left';
           ctx.fillText(roundedRpm.toString(), padding.left + chartWidth + 10, y + 4);
         }
-      }
+      });
     }
   }
   
@@ -1641,7 +1652,11 @@ function getSegmentFtpPercentForPreview(seg) {
       return 100;
     }
   } else if (targetType === 'cadence_rpm') {
-    return 0; // RPM만 있는 경우 파워는 0
+    // cadence_rpm 타입: RPM 값을 FTP %로 변환 (개인 훈련 대시보드 로직 적용)
+    // RPM_scaled = (RPM_real / 90) * 100 (FTP 100% = 90 RPM 1:1 매칭)
+    const rpmValue = Number(seg.target_value) || 90;
+    const rpmFtpPercent = (rpmValue / 90) * 100;
+    return Math.min(200, Math.max(0, rpmFtpPercent)); // 최대 200%로 제한
   } else if (targetType === 'ftp_pctz') {
     // ftp_pctz 타입: "56/75" 형식 (하한, 상한) - 평균값 사용
     const targetValue = seg.target_value;
