@@ -1153,18 +1153,31 @@
           </div>
         </div>
         <div class="form-group hidden" id="targetFtpZoneGroup">
+          <div class="form-group">
+            <label>Zone 영역 *</label>
+            <select id="segmentFtpZone" onchange="updateFtpZoneValues()">
+              <option value="">Zone 선택</option>
+              <option value="1">Zone1 (40-55%)</option>
+              <option value="2">Zone2 (56-75%)</option>
+              <option value="3">Zone3 (76-90%)</option>
+              <option value="4">Zone4 (91-105%)</option>
+              <option value="5">Zone5 (106-120%)</option>
+              <option value="6">Zone6 (121-150%)</option>
+              <option value="7">Zone7 (151-300%)</option>
+            </select>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label>목표 하한 FTP% *</label>
               <div class="intensity-input">
-                <input type="number" id="segmentFtpZoneMin" min="30" max="200" value="60" />
+                <input type="number" id="segmentFtpZoneMin" min="30" max="300" value="60" />
                 <span class="input-suffix">% FTP</span>
               </div>
             </div>
             <div class="form-group">
               <label>목표 상한 FTP% *</label>
               <div class="intensity-input">
-                <input type="number" id="segmentFtpZoneMax" min="30" max="200" value="75" />
+                <input type="number" id="segmentFtpZoneMax" min="30" max="300" value="75" />
                 <span class="input-suffix">% FTP</span>
               </div>
             </div>
