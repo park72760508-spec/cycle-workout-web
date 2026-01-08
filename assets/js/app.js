@@ -9149,6 +9149,7 @@ window.handleAIWorkoutRecommendation = handleAIWorkoutRecommendation;
 function showWorkoutRecommendationModal() {
   const modal = document.getElementById('workoutRecommendationModal');
   if (modal) {
+    modal.classList.remove('hidden');
     modal.style.display = 'flex';
     document.getElementById('workoutRecommendationContent').innerHTML = `
       <div class="ai-loading-container">
@@ -9223,6 +9224,7 @@ function closeWorkoutRecommendationModal() {
   const modal = document.getElementById('workoutRecommendationModal');
   if (modal) {
     modal.style.display = 'none';
+    modal.classList.add('hidden');
   }
 }
 
@@ -10004,17 +10006,17 @@ ${challenge === 'PRO' ? `
           </ul>
         </div>
         <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
-          <button class="btn btn-primary" onclick="
+          <button class="result-close-btn" onclick="
             const fakeEvent = { stopPropagation: () => {}, isRetry: true };
             handleAIWorkoutRecommendation(fakeEvent, '${todayStr}');
-          ">🔄 다시 시도</button>
-          <button class="btn btn-secondary" onclick="closeWorkoutRecommendationModal()">닫기</button>
+          " style="min-width: 120px;">🔄 다시 시도</button>
+          <button class="result-close-btn result-close-btn-cancel" onclick="closeWorkoutRecommendationModal()" style="min-width: 120px;">닫기</button>
         </div>
       `;
     } else {
       errorHtml += `
         <div style="margin-top: 20px; display: flex; gap: 12px; justify-content: center;">
-          <button class="btn btn-secondary" onclick="closeWorkoutRecommendationModal()">닫기</button>
+          <button class="result-close-btn result-close-btn-cancel" onclick="closeWorkoutRecommendationModal()" style="min-width: 120px;">닫기</button>
         </div>
       `;
     }
@@ -10041,14 +10043,23 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   
   let html = `
     <div class="workout-recommendation-container">
-      <div class="recommendation-header">
-        <h3>🤖 AI 추천 워크아웃</h3>
-        <p class="recommendation-date">날짜: ${date}</p>
+      <div class="result-stats" style="margin-bottom: 20px;">
+        <div class="result-stat-item">
+          <div class="result-stat-label">선정 카테고리</div>
+          <div class="result-stat-value">${selectedCategory}</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">추천 개수</div>
+          <div class="result-stat-value">${recommendations.length}개</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">날짜</div>
+          <div class="result-stat-value">${date}</div>
+        </div>
       </div>
       
-      <div class="category-info">
-        <h4>선정된 카테고리: <span class="category-name">${selectedCategory}</span></h4>
-        <p class="category-reason">${categoryReason}</p>
+      <div class="category-info" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+        <p class="category-reason" style="color: #ffffff; font-size: 0.9em; line-height: 1.6; margin: 0;">${categoryReason}</p>
       </div>
       
       <div class="recommendations-list">
@@ -10069,21 +10080,23 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     const rankBadge = ['🥇', '🥈', '🥉'][index] || `${rec.rank}위`;
     
     html += `
-      <div class="recommendation-item" data-workout-id="${workout.id}">
-        <div class="recommendation-rank">${rankBadge}</div>
-        <div class="recommendation-content">
-          <h4 class="workout-title">${workout.title || '워크아웃'}</h4>
-          <div class="workout-meta">
-            <span class="workout-category">${workout.author || '카테고리 없음'}</span>
-            <span class="workout-duration">${totalMinutes}분</span>
+      <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <div class="recommendation-rank" style="font-size: 2em; flex-shrink: 0;">${rankBadge}</div>
+          <div class="recommendation-content" style="flex: 1;">
+            <h4 class="workout-title" style="color: #00d4aa; font-size: 1.1em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">${workout.title || '워크아웃'}</h4>
+            <div class="workout-meta" style="display: flex; gap: 12px; margin-bottom: 8px; font-size: 0.85em; color: #aaa;">
+              <span class="workout-category">${workout.author || '카테고리 없음'}</span>
+              <span class="workout-duration">${totalMinutes}분</span>
+            </div>
+            <p class="recommendation-reason" style="color: #ffffff; font-size: 0.9em; line-height: 1.5; margin: 0 0 8px 0;">${rec.reason || '추천 이유 없음'}</p>
+            ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.85em; line-height: 1.4; margin: 0;">${workout.description}</p>` : ''}
           </div>
-          <p class="recommendation-reason">${rec.reason || '추천 이유 없음'}</p>
-          ${workout.description ? `<p class="workout-description">${workout.description}</p>` : ''}
-        </div>
-        <div class="recommendation-action">
-          <button class="btn btn-primary" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}">
-            선택
-          </button>
+          <div class="recommendation-action" style="flex-shrink: 0;">
+            <button class="result-close-btn" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}" style="min-width: 80px; padding: 10px 16px; font-size: 0.9em;">
+              선택
+            </button>
+          </div>
         </div>
       </div>
     `;
