@@ -2090,45 +2090,31 @@
   </div>
 
   <!-- AI 추천 확인 팝업 -->
-  <div id="aiRecommendationConfirmModal" class="modal-overlay ai-confirm-modal" style="display: none;" onclick="if(event.target === this) closeAIRecommendationConfirmModal();">
-    <div class="modal-content ai-confirm-modal-content" onclick="event.stopPropagation();">
-      <div class="modal-header ai-confirm-header">
-        <div class="ai-confirm-icon-wrapper">
-          <div class="ai-confirm-icon">
-            <div class="ai-confirm-pulse"></div>
-            <div class="ai-confirm-brain">🤖</div>
-          </div>
-        </div>
-        <h2 class="ai-confirm-title">AI 최적 훈련 추천</h2>
-        <button class="modal-close ai-confirm-close" onclick="closeAIRecommendationConfirmModal()">&times;</button>
+  <div id="aiRecommendationConfirmModal" class="training-result-modal" style="display: none;" onclick="if(event.target === this) closeAIRecommendationConfirmModal();">
+    <div class="training-result-background">
+      <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" />
+    </div>
+    <div class="training-result-content" onclick="event.stopPropagation();">
+      <div class="result-header">
+        <h2 class="result-title">AI 최적 훈련 추천</h2>
+        <p class="result-subtitle">AI가 분석한 최적의 훈련을 추천할까요?</p>
       </div>
-      <div class="modal-body ai-confirm-body">
-        <p class="ai-confirm-message">AI가 분석한 최적의 훈련을 추천할까요?</p>
-        <div class="ai-confirm-features">
-          <div class="ai-feature-item">
-            <span class="ai-feature-icon">📊</span>
-            <span class="ai-feature-text">훈련 이력 분석</span>
-          </div>
-          <div class="ai-feature-item">
-            <span class="ai-feature-icon">🎯</span>
-            <span class="ai-feature-text">개인 맞춤 추천</span>
-          </div>
-          <div class="ai-feature-item">
-            <span class="ai-feature-icon">⚡</span>
-            <span class="ai-feature-text">최적 워크아웃 선정</span>
-          </div>
+      <div class="result-stats">
+        <div class="result-stat-item">
+          <div class="result-stat-label">훈련 이력 분석</div>
+          <div class="result-stat-value">📊</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">개인 맞춤 추천</div>
+          <div class="result-stat-value">🎯</div>
+        </div>
+        <div class="result-stat-item">
+          <div class="result-stat-label">최적 워크아웃 선정</div>
+          <div class="result-stat-value">⚡</div>
         </div>
       </div>
-      <div class="modal-footer ai-confirm-footer">
-        <button class="btn btn-success btn-default-style btn-with-icon ai-confirm-btn-yes" onclick="confirmAIRecommendation()">
-          <img src="assets/img/ai.gif" alt="확인" class="btn-icon-image" style="height: 2.4em; width: auto; margin-right: 6px; vertical-align: middle;" />
-          확인
-        </button>
-        <button class="btn btn-secondary btn-default-style btn-with-icon ai-confirm-btn-no" onclick="closeAIRecommendationConfirmModal()">
-          <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-          취소
-        </button>
-      </div>
+      <button class="result-close-btn" onclick="confirmAIRecommendation()">확인</button>
+      <button class="result-close-btn result-close-btn-cancel" onclick="closeAIRecommendationConfirmModal()">취소</button>
     </div>
   </div>
 
