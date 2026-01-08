@@ -3850,22 +3850,50 @@ function showEditSegmentModal(index) {
   } else if (targetType === 'ftp_pctz') {
     // ftp_pctz 타입: "60, 75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
+    const segmentFtpZone = safeGetElement('segmentFtpZone');
+    let minValue = 60;
+    let maxValue = 75;
+    
     if (typeof targetValue === 'string' && targetValue.includes(',')) {
       const parts = targetValue.split(',').map(s => s.trim());
       if (parts.length >= 2) {
-        if (segmentFtpZoneMin) segmentFtpZoneMin.value = parts[0] || 60;
-        if (segmentFtpZoneMax) segmentFtpZoneMax.value = parts[1] || 75;
+        minValue = parseInt(parts[0]) || 60;
+        maxValue = parseInt(parts[1]) || 75;
       } else {
-        if (segmentFtpZoneMin) segmentFtpZoneMin.value = parts[0] || 60;
-        if (segmentFtpZoneMax) segmentFtpZoneMax.value = 75;
+        minValue = parseInt(parts[0]) || 60;
+        maxValue = 75;
       }
     } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-      if (segmentFtpZoneMin) segmentFtpZoneMin.value = targetValue[0] || 60;
-      if (segmentFtpZoneMax) segmentFtpZoneMax.value = targetValue[1] || 75;
-    } else {
-      // 기본값 설정
-      if (segmentFtpZoneMin) segmentFtpZoneMin.value = 60;
-      if (segmentFtpZoneMax) segmentFtpZoneMax.value = 75;
+      minValue = parseInt(targetValue[0]) || 60;
+      maxValue = parseInt(targetValue[1]) || 75;
+    }
+    
+    // 하한/상한 값 설정
+    if (segmentFtpZoneMin) segmentFtpZoneMin.value = minValue;
+    if (segmentFtpZoneMax) segmentFtpZoneMax.value = maxValue;
+    
+    // Zone 자동 선택 (하한/상한 값에 맞는 Zone 찾기)
+    if (segmentFtpZone) {
+      const zoneValues = {
+        '1': { min: 40, max: 55 },
+        '2': { min: 56, max: 75 },
+        '3': { min: 76, max: 90 },
+        '4': { min: 91, max: 105 },
+        '5': { min: 106, max: 120 },
+        '6': { min: 121, max: 150 },
+        '7': { min: 151, max: 300 }
+      };
+      
+      // 정확히 일치하는 Zone 찾기
+      let matchedZone = '';
+      for (const [zone, values] of Object.entries(zoneValues)) {
+        if (minValue === values.min && maxValue === values.max) {
+          matchedZone = zone;
+          break;
+        }
+      }
+      
+      segmentFtpZone.value = matchedZone || '';
     }
   } else {
     // ftp_pct 또는 cadence_rpm 타입
@@ -3944,40 +3972,16 @@ function updateTargetTypeFields() {
     if (targetValueGroup) targetValueGroup.style.display = 'none';
     if (targetFtpZoneGroup) {
       targetFtpZoneGroup.classList.remove('hidden');
+      const segmentFtpZone = safeGetElement('segmentFtpZone');
       if (segmentFtpZoneMin) {
         segmentFtpZoneMin.min = '30';
-        segmentFtpZoneMin.max = '200';
-        if (!segmentFtpZoneMin.value || segmentFtpZoneMin.value < 30) {
-          segmentFtpZoneMin.value = '60';
-        }
+        segmentFtpZoneMin.max = '300';
       }
       if (segmentFtpZoneMax) {
         segmentFtpZoneMax.min = '30';
-        segmentFtpZoneMax.max = '200';
-        if (!segmentFtpZoneMax.value || segmentFtpZoneMax.value < 30) {
-          segmentFtpZoneMax.value = '75';
-        }
-        // 상한 값이 변경될 때 하한 값 검증
-        if (segmentFtpZoneMax && segmentFtpZoneMin) {
-          segmentFtpZoneMax.addEventListener('input', function() {
-            const minVal = parseInt(segmentFtpZoneMin.value) || 30;
-            const maxVal = parseInt(segmentFtpZoneMax.value) || 75;
-            if (maxVal < minVal) {
-              segmentFtpZoneMax.value = minVal;
-            }
-          });
-        }
-        // 하한 값이 변경될 때 상한 값 검증
-        if (segmentFtpZoneMin && segmentFtpZoneMax) {
-          segmentFtpZoneMin.addEventListener('input', function() {
-            const minVal = parseInt(segmentFtpZoneMin.value) || 30;
-            const maxVal = parseInt(segmentFtpZoneMax.value) || 75;
-            if (minVal > maxVal) {
-              segmentFtpZoneMin.value = maxVal;
-            }
-          });
-        }
+        segmentFtpZoneMax.max = '300';
       }
+      // Zone 콤보박스가 비어있으면 기본값 설정하지 않음 (사용자가 선택하도록)
     }
     if (targetRpmGroup) targetRpmGroup.classList.add('hidden');
     
@@ -4626,6 +4630,36 @@ window.closeSegmentModal = closeSegmentModal;
 window.deleteCurrentSegment = deleteCurrentSegment;
 window.toggleRampSettings = toggleRampSettings;
 window.updateTargetTypeFields = updateTargetTypeFields;
+
+// Zone 선택 시 하한/상한 FTP% 값 자동 입력
+function updateFtpZoneValues() {
+  const segmentFtpZone = safeGetElement('segmentFtpZone');
+  const segmentFtpZoneMin = safeGetElement('segmentFtpZoneMin');
+  const segmentFtpZoneMax = safeGetElement('segmentFtpZoneMax');
+  
+  if (!segmentFtpZone || !segmentFtpZoneMin || !segmentFtpZoneMax) return;
+  
+  const zoneValue = segmentFtpZone.value;
+  
+  // Zone별 하한/상한 값 매핑
+  const zoneValues = {
+    '1': { min: 40, max: 55 },
+    '2': { min: 56, max: 75 },
+    '3': { min: 76, max: 90 },
+    '4': { min: 91, max: 105 },
+    '5': { min: 106, max: 120 },
+    '6': { min: 121, max: 150 },
+    '7': { min: 151, max: 300 }
+  };
+  
+  if (zoneValue && zoneValues[zoneValue]) {
+    const values = zoneValues[zoneValue];
+    segmentFtpZoneMin.value = values.min;
+    segmentFtpZoneMax.value = values.max;
+  }
+}
+
+window.updateFtpZoneValues = updateFtpZoneValues;
 window.renderSegments = renderSegments;
 window.updateSegmentSummary = updateSegmentSummary;
 window.changeSegmentPage = changeSegmentPage;
