@@ -705,12 +705,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 기본 크기
     graphHeight = 300; // 세로축 높이 (파워)
     graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
-    // trainingSegmentGraph일 때는 오른쪽에 RPM Y축을 위한 여백 추가
+    // trainingSegmentGraph일 때는 개인훈련 대시보드와 동일하게 설정 (FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음)
     // individualSegmentGraph는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음
-    if (canvasId === 'trainingSegmentGraph') {
-      padding = { top: 20, right: 60, bottom: 50, left: 70 }; // 오른쪽 패딩 증가
-    } else if (canvasId === 'individualSegmentGraph') {
-      padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드는 오른쪽 패딩 기본값
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph') {
+      padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드 및 Indoor Training: 오른쪽 패딩 기본값
     } else {
       padding = { top: 20, right: 40, bottom: 50, left: 70 };
     }
@@ -959,8 +957,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.fillText(labelText, padding.left - 10, ftpY + 4);
   
   // 세로축 눈금 (파워)
-  if (canvasId === 'individualSegmentGraph') {
-    // 개인 대시보드: 특정 FTP 백분율 값들 표시 (0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5)
+  if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph') {
+    // 개인 대시보드 및 Indoor Training: 특정 FTP 백분율 값들 표시 (0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5)
     const ftpPercentValues = [0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5];
     
     ftpPercentValues.forEach(ftpRatio => {
@@ -1277,9 +1275,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           barWidth
         });
         // RPM 값에 해당하는 Y 위치 계산
-        // 개인훈련 대시보드: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
+        // 개인훈련 대시보드 및 Indoor Training: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
         let rpmY;
-        if (canvasId === 'individualSegmentGraph') {
+        if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph') {
           // RPM_scaled = (RPM_real / 90) * 100
           const rpmScaled = (targetRpm / 90) * 100; // FTP %로 변환
           const rpmFtpPercent = Math.min(200, Math.max(0, rpmScaled)); // 최대 200%로 제한
@@ -1287,7 +1285,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           const rpmPower = ftp * (rpmFtpPercent / 100);
           rpmY = padding.top + chartHeight - (chartHeight * (rpmPower / maxTargetPower));
         } else {
-          // trainingSegmentGraph: 기존 로직 유지
+          // 기타 화면: 기존 로직 유지
           rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
         }
         
@@ -1440,8 +1438,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.restore();
     
     // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만)
-    // 개인훈련 대시보드(individualSegmentGraph)는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 제거
-    if (canvasId === 'trainingSegmentGraph') {
+    // 개인훈련 대시보드 및 Indoor Training(individualSegmentGraph, trainingSegmentGraph)는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 제거
+    if (false) { // 오른쪽 Y축 제거 (개인훈련 대시보드와 동일하게)
       // 오른쪽 Y축 그리기
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 2;
