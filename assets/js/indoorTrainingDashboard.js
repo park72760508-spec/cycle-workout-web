@@ -6131,6 +6131,71 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const x100LabelY = padding.top + chartHeight + 5; // X축 아래 5px
     ctx.fillText('X 100%', padding.left - 8, x100LabelY);
     
+    // 최대 파워 계산 (세그먼트 중 최대값의 1.2배 또는 FTP의 1.5배 중 큰 값)
+    let maxTargetPower = ftp * 1.5;
+    segments.forEach(seg => {
+        // workoutManager.js의 getSegmentFtpPercentForPreview 함수와 동일한 로직 사용
+        let segFtpPercent = 100;
+        const targetType = seg.target_type || 'ftp_pct';
+        
+        if (targetType === 'ftp_pct') {
+            segFtpPercent = Number(seg.target_value) || 100;
+        } else if (targetType === 'dual') {
+            const targetValue = seg.target_value;
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    segFtpPercent = Number(parts[0]) || 100;
+                } else if (parts.length === 1) {
+                    segFtpPercent = Number(parts[0]) || 100;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+                segFtpPercent = Number(targetValue[0]) || 100;
+            } else {
+                segFtpPercent = 100;
+            }
+        } else if (targetType === 'cadence_rpm') {
+            // cadence_rpm: RPM 값을 FTP %로 변환 (FTP 100% = 90 RPM 1:1 매칭)
+            const rpmValue = Number(seg.target_value) || 90;
+            const rpmFtpPercent = (rpmValue / 90) * 100;
+            segFtpPercent = Math.min(200, Math.max(0, rpmFtpPercent));
+        } else if (targetType === 'ftp_pctz') {
+            // ftp_pctz: 평균값 사용 (하한+상한)/2
+            const targetValue = seg.target_value;
+            let minPercent = 60;
+            let maxPercent = 75;
+            
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                } else {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = 75;
+                }
+            } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+                const parts = targetValue.split(',').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                } else {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = 75;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                minPercent = Number(targetValue[0]) || 60;
+                maxPercent = Number(targetValue[1]) || 75;
+            }
+            segFtpPercent = (minPercent + maxPercent) / 2;
+        }
+        
+        const targetPower = ftp * (segFtpPercent / 100);
+        if (targetPower > maxTargetPower) {
+            maxTargetPower = targetPower * 1.1;
+        }
+    });
+    
     // 세그먼트 그리기
     let currentTime = 0;
     segments.forEach((seg, index) => {
@@ -6140,23 +6205,65 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         const segWidth = (segDuration / totalSeconds) * chartWidth;
         const x = padding.left + (currentTime / totalSeconds) * chartWidth;
         
-        // 세그먼트 FTP 비율 계산 (간단 버전)
+        // 세그먼트 FTP 비율 계산 (workoutManager.js의 getSegmentFtpPercentForPreview와 동일한 로직)
         let ftpPercent = 100;
-        if (seg.target_type === 'ftp_pct') {
+        const targetType = seg.target_type || 'ftp_pct';
+        
+        if (targetType === 'ftp_pct') {
             ftpPercent = Number(seg.target_value) || 100;
-        } else if (seg.target_type === 'dual') {
-            const targetValue = String(seg.target_value || '100');
-            const parts = targetValue.split('/');
-            if (parts.length > 0) {
-                const ftpPart = parts[0].trim().replace('%', '');
-                ftpPercent = Number(ftpPart) || 100;
+        } else if (targetType === 'dual') {
+            const targetValue = seg.target_value;
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    ftpPercent = Number(parts[0]) || 100;
+                } else if (parts.length === 1) {
+                    ftpPercent = Number(parts[0]) || 100;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+                ftpPercent = Number(targetValue[0]) || 100;
+            } else {
+                ftpPercent = 100;
             }
+        } else if (targetType === 'cadence_rpm') {
+            // cadence_rpm: RPM 값을 FTP %로 변환 (FTP 100% = 90 RPM 1:1 매칭)
+            const rpmValue = Number(seg.target_value) || 90;
+            const rpmFtpPercent = (rpmValue / 90) * 100;
+            ftpPercent = Math.min(200, Math.max(0, rpmFtpPercent));
+        } else if (targetType === 'ftp_pctz') {
+            // ftp_pctz: 평균값 사용 (하한+상한)/2
+            const targetValue = seg.target_value;
+            let minPercent = 60;
+            let maxPercent = 75;
+            
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                } else {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = 75;
+                }
+            } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+                const parts = targetValue.split(',').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                } else {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = 75;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                minPercent = Number(targetValue[0]) || 60;
+                maxPercent = Number(targetValue[1]) || 75;
+            }
+            ftpPercent = (minPercent + maxPercent) / 2;
         }
         
-        // 파워 높이 계산 (FTP의 2배를 최대값으로)
-        const maxPower = ftp * 2;
-        const targetPower = (ftp * ftpPercent) / 100;
-        const powerHeight = (targetPower / maxPower) * chartHeight;
+        // 파워 높이 계산 (maxTargetPower 기준)
+        const targetPower = ftp * (ftpPercent / 100);
+        const powerHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
         const y = padding.top + chartHeight - powerHeight;
         
         // 현재 세그먼트인지 확인
@@ -6251,6 +6358,52 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
             ctx.strokeStyle = segmentStrokeColor;
             ctx.lineWidth = 1;
             ctx.strokeRect(x, y, segWidth, powerHeight);
+        }
+        
+        // dual 또는 cadence_rpm 타입일 때 RPM 가이드라인 표시 (개인 훈련 대시보드 로직 적용)
+        // targetType은 위에서 이미 선언됨
+        if (targetType === 'dual' || targetType === 'cadence_rpm') {
+            // workoutManager.js의 getSegmentRpmForPreview 함수와 동일한 로직으로 RPM 값 추출
+            let targetRpm = 0;
+            
+            if (targetType === 'cadence_rpm') {
+                targetRpm = Number(seg.target_value) || 0;
+            } else if (targetType === 'dual') {
+                const targetValue = seg.target_value;
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                    const parts = targetValue.split('/').map(s => s.trim());
+                    if (parts.length >= 2) {
+                        targetRpm = Number(parts[1]) || 0;
+                    }
+                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                    targetRpm = Number(targetValue[1]) || 0;
+                }
+            }
+            
+            if (targetRpm > 0) {
+                // RPM 값을 FTP %로 변환하여 Y 위치 계산 (FTP 100% = 90 RPM 1:1 매칭)
+                // RPM_scaled = (RPM_real / 90) * 100
+                const rpmScaled = (targetRpm / 90) * 100;
+                const rpmFtpPercent = Math.min(200, Math.max(0, rpmScaled));
+                const rpmPower = ftp * (rpmFtpPercent / 100);
+                const rpmY = padding.top + chartHeight - (chartHeight * (rpmPower / maxTargetPower));
+                
+                // 빨강색 실선 그리기 (세그먼트 막대 넓이만큼)
+                ctx.strokeStyle = '#FF4D4D';
+                ctx.lineWidth = 1.5; // 전광판용으로 약간 얇게
+                ctx.setLineDash([]);
+                ctx.beginPath();
+                ctx.moveTo(x, rpmY);
+                ctx.lineTo(x + segWidth, rpmY);
+                ctx.stroke();
+                
+                // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단, 전광판용으로 작은 폰트)
+                ctx.fillStyle = '#FF3B30';
+                ctx.font = 'bold 8px sans-serif'; // 전광판용으로 작은 폰트
+                ctx.textAlign = 'center';
+                const labelY = rpmY - 3; // 세그먼트 막대 위에 표시
+                ctx.fillText(`${Math.round(targetRpm)}`, x + segWidth / 2, labelY);
+            }
         }
         
         currentTime += segDuration;
