@@ -911,6 +911,31 @@ function updateTargetPower() {
         const seg = getCurrentSegment();
         const targetType = seg?.target_type || 'ftp_pct';
         
+        // ftp_pctz 타입인 경우 상한값 저장
+        if (targetType === 'ftp_pctz' && seg?.target_value) {
+            const targetValue = seg.target_value;
+            let minPercent = 60;
+            let maxPercent = 75;
+            
+            if (typeof targetValue === 'string' && targetValue.includes(',')) {
+                const parts = targetValue.split(',').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                minPercent = Number(targetValue[0]) || 60;
+                maxPercent = Number(targetValue[1]) || 75;
+            }
+            
+            const ftp = userFTP || window.currentUser?.ftp || 200;
+            window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
+            window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100));
+        } else {
+            window.currentSegmentMaxPower = null;
+            window.currentSegmentMinPower = null;
+        }
+        
         if (targetType === 'dual') {
             // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
             const targetValue = seg?.target_value || seg?.target || '0';
@@ -966,6 +991,17 @@ function updateTargetPower() {
                 targetPowerEl.textContent = '0';
                 targetPowerEl.setAttribute('fill', '#ff8c00');
             }
+        } else if (targetType === 'ftp_pctz') {
+            // ftp_pctz 타입: TARGET 라벨 표시, 목표 파워값(주황색) - 하한값 표시
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888');
+            }
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            targetPowerEl.textContent = String(adjustedTargetPower);
+            targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
         } else {
             // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
             if (targetLabelEl) {
@@ -1081,6 +1117,32 @@ function updateTargetPower() {
     } else if (targetType === 'cadence_rpm') {
         // RPM만 있는 경우 파워는 0
         targetPower = 0;
+    } else if (targetType === 'ftp_pctz') {
+        // ftp_pctz 타입: "60, 75" 형식 (하한, 상한)
+        let minPercent = 60;
+        let maxPercent = 75;
+        
+        if (typeof targetValue === 'string' && targetValue.includes(',')) {
+            const parts = targetValue.split(',').map(s => s.trim());
+            if (parts.length >= 2) {
+                minPercent = Number(parts[0]) || 60;
+                maxPercent = Number(parts[1]) || 75;
+            } else {
+                minPercent = Number(parts[0]) || 60;
+                maxPercent = 75;
+            }
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+            minPercent = Number(targetValue[0]) || 60;
+            maxPercent = Number(targetValue[1]) || 75;
+        }
+        
+        // 하한값을 목표 파워값으로 사용
+        targetPower = Math.round(ftp * (minPercent / 100));
+        console.log('[updateTargetPower] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
+        
+        // 상한값을 전역 변수에 저장 (updateTargetPowerArc에서 사용)
+        window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
+        window.currentSegmentMinPower = targetPower;
     }
     
     // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
@@ -1151,6 +1213,17 @@ function updateTargetPower() {
             targetPowerEl.textContent = '0';
             targetPowerEl.setAttribute('fill', '#ff8c00');
         }
+    } else if (targetType === 'ftp_pctz') {
+        // ftp_pctz 타입: TARGET 라벨 표시, 목표 파워값(주황색) - 하한값 표시
+        if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+        }
+        if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
+        }
+        targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+        targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
     } else {
         // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
         if (targetLabelEl) {
@@ -1655,6 +1728,11 @@ function updateTargetPowerArc() {
         if (targetArc) {
             targetArc.style.display = 'none';
         }
+        // 상한 원호도 숨김
+        const maxArc = document.getElementById('gauge-max-arc');
+        if (maxArc) {
+            maxArc.style.display = 'none';
+        }
         return;
     }
     
@@ -1662,7 +1740,7 @@ function updateTargetPowerArc() {
     const lapPowerEl = document.getElementById('ui-lap-power');
     const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
     
-    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워)
+    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워) - 하한값 기준
     const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
     
     // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
@@ -1674,41 +1752,37 @@ function updateTargetPowerArc() {
     const maxPower = userFTP * 2;
     if (maxPower <= 0) return;
     
-    // 목표 파워 비율 계산 (0 ~ 1)
-    const ratio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+    // 현재 세그먼트 정보 가져오기
+    const seg = getCurrentSegment();
+    const targetType = seg?.target_type || 'ftp_pct';
+    const isFtpPctz = targetType === 'ftp_pctz';
+    
+    // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
+    const minRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
     
     // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
-    // ratio = 0 → 180도 (원호 없음)
-    // ratio = 0.5 → 225도 (45도 범위, FTP × 0.5)
-    // ratio = 1.0 → 270도 (90도 범위, FTP × 1.0)
-    // ratio = 2.0 → 360도 (180도 범위, FTP × 2.0)
     const startAngle = 180;
-    const endAngle = 180 + (ratio * 180);
+    let minEndAngle = 180 + (minRatio * 180);
     
     // SVG 원호 경로 생성
     const centerX = 100;
     const centerY = 140;
     const radius = 80;
     
-    // 원호 시작점과 끝점 계산
+    // 하한값 원호 경로 생성
     const startRad = (startAngle * Math.PI) / 180;
-    const endRad = (endAngle * Math.PI) / 180;
+    const minEndRad = (minEndAngle * Math.PI) / 180;
     
     const startX = centerX + radius * Math.cos(startRad);
     const startY = centerY + radius * Math.sin(startRad);
-    const endX = centerX + radius * Math.cos(endRad);
-    const endY = centerY + radius * Math.sin(endRad);
+    const minEndX = centerX + radius * Math.cos(minEndRad);
+    const minEndY = centerY + radius * Math.sin(minEndRad);
     
-    // 원호가 큰지 작은지 판단 (180도 이상이면 large-arc-flag = 1)
-    // 각도가 180도에서 360도로 증가하므로, 180도 이상이면 큰 원호
-    const angleDiff = endAngle - startAngle;
-    const largeArcFlag = angleDiff > 180 ? 1 : 0;
+    const minAngleDiff = minEndAngle - startAngle;
+    const minLargeArcFlag = minAngleDiff > 180 ? 1 : 0;
+    const minPathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${minLargeArcFlag} 1 ${minEndX} ${minEndY}`;
     
-    // SVG path 생성
-    // sweep-flag = 1: 시계 반대 방향 (각도 증가 방향: 180도 → 270도 → 360도)
-    const pathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
-    
-    // 목표 파워 원호 요소 가져오기 또는 생성
+    // 목표 파워 원호 요소 가져오기 또는 생성 (하한값)
     let targetArc = document.getElementById('gauge-target-arc');
     if (!targetArc) {
         // SVG에 원호 요소 추가
@@ -1731,14 +1805,60 @@ function updateTargetPowerArc() {
         }
     }
     
-    // 원호 경로 및 색상 업데이트
-    targetArc.setAttribute('d', pathData);
+    // 하한값 원호 경로 및 색상 업데이트
+    targetArc.setAttribute('d', minPathData);
     targetArc.setAttribute('stroke', arcColor);
     targetArc.style.display = 'block';
     
+    // ftp_pctz 타입인 경우 상한값 원호 추가
+    if (isFtpPctz && window.currentSegmentMaxPower && window.currentSegmentMaxPower > targetPower) {
+        const maxPowerValue = window.currentSegmentMaxPower;
+        const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
+        const maxEndAngle = 180 + (maxRatio * 180);
+        const maxEndRad = (maxEndAngle * Math.PI) / 180;
+        const maxEndX = centerX + radius * Math.cos(maxEndRad);
+        const maxEndY = centerY + radius * Math.sin(maxEndRad);
+        
+        const maxAngleDiff = maxEndAngle - minEndAngle;
+        const maxLargeArcFlag = maxAngleDiff > 180 ? 1 : 0;
+        const maxPathData = `M ${minEndX} ${minEndY} A ${radius} ${radius} 0 ${maxLargeArcFlag} 1 ${maxEndX} ${maxEndY}`;
+        
+        // 상한값 원호 요소 가져오기 또는 생성
+        let maxArc = document.getElementById('gauge-max-arc');
+        if (!maxArc) {
+            const svg = document.querySelector('.gauge-container svg');
+            if (svg) {
+                maxArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                maxArc.id = 'gauge-max-arc';
+                maxArc.setAttribute('fill', 'none');
+                maxArc.setAttribute('stroke-width', '12');
+                maxArc.setAttribute('stroke-linecap', 'round');
+                // 하한값 원호 다음에 배치
+                if (targetArc && targetArc.nextSibling) {
+                    svg.insertBefore(maxArc, targetArc.nextSibling);
+                } else {
+                    svg.appendChild(maxArc);
+                }
+            } else {
+                return;
+            }
+        }
+        
+        // 상한값 원호 경로 및 색상 업데이트 (투명도 낮춘 주황색)
+        maxArc.setAttribute('d', maxPathData);
+        maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)'); // 더 투명한 주황색
+        maxArc.style.display = 'block';
+    } else {
+        // ftp_pctz가 아니거나 상한값이 없으면 상한 원호 숨김
+        const maxArc = document.getElementById('gauge-max-arc');
+        if (maxArc) {
+            maxArc.style.display = 'none';
+        }
+    }
+    
     // 디버깅 로그 (선택사항)
     if (achievementRatio > 0) {
-        console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}`);
+        console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${window.currentSegmentMaxPower}W` : ''}`);
     }
 }
 
