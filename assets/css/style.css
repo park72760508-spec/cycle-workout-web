@@ -2782,6 +2782,30 @@ button[aria-disabled="true"] {
   font-weight: 500;
 }
 
+/* 체크박스 라벨 스타일 - 체크박스와 텍스트를 같은 라인에 배치 */
+.checkbox-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  cursor: pointer !important;
+  margin-bottom: 0 !important;
+  font-size: 0.9em !important;
+  color: #555 !important;
+  padding: 4px 0 !important;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: auto !important;
+  margin: 0 !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+}
+
+.checkbox-label span {
+  flex: 1 !important;
+  line-height: 1.4 !important;
+}
+
 .ramp-settings {
   margin-top: 12px;
   padding: 16px;
