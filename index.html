@@ -1137,6 +1137,7 @@
           <label>목표 강도 카테고리 *</label>
           <select id="segmentTargetType" required onchange="updateTargetTypeFields()">
             <option value="ftp_pct">% FTP</option>
+            <option value="ftp_pctz">%FTP Zone</option>
             <option value="cadence_rpm">rpm</option>
             <option value="dual">%FTP, rpm</option>
           </select>
@@ -1149,6 +1150,24 @@
           <div class="intensity-input">
             <input type="number" id="segmentIntensity" min="30" max="200" value="100" />
             <span class="input-suffix" id="targetValueSuffix">% FTP</span>
+          </div>
+        </div>
+        <div class="form-group hidden" id="targetFtpZoneGroup">
+          <div class="form-row">
+            <div class="form-group">
+              <label>목표 하한 FTP% *</label>
+              <div class="intensity-input">
+                <input type="number" id="segmentFtpZoneMin" min="30" max="200" value="60" />
+                <span class="input-suffix">% FTP</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>목표 상한 FTP% *</label>
+              <div class="intensity-input">
+                <input type="number" id="segmentFtpZoneMax" min="30" max="200" value="75" />
+                <span class="input-suffix">% FTP</span>
+              </div>
+            </div>
           </div>
         </div>
         <div class="form-group hidden" id="targetRpmGroup">
