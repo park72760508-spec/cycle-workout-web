@@ -804,11 +804,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'trainingSegmentGraph') {
-    ctx.shadowColor = 'rgba(234, 179, 8, 0.5)';
-    ctx.strokeStyle = 'rgba(234, 179, 8, 0.9)'; // 훈련 화면: 더 밝은 노란색
-    ctx.shadowBlur = 4;
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 4]); // 점선
+    // Indoor Training: 흰색 얇은 실선
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // 흰색, 투명도 50%
+    ctx.lineWidth = 1; // 얇은 선
+    ctx.setLineDash([]); // 실선
   } else {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
     ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)'; // 훈련 준비 화면
@@ -825,8 +825,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.setLineDash([]);
   ctx.shadowColor = 'transparent';
   
-  // 개인훈련 대시보드: FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시
-  if (canvasId === 'individualSegmentGraph') {
+  // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드 및 Indoor Training)
+  if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph') {
     const rpm90Text = '90';
     ctx.font = 'bold 10px sans-serif';
     const textMetrics = ctx.measureText(rpm90Text);
@@ -1419,8 +1419,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         // 특정 RPM 값(예: 90)이 세그먼트에 있으면 빨강색으로 강조 표시
         const isTargetRpm = Math.abs(roundedRpm - targetRpmForHighlight) < 1; // 1 이내 차이면 같은 값으로 간주
         
-        if (isTargetRpm && canvasId === 'individualSegmentGraph') {
-          // 빨강색 실선 (개인훈련 대시보드만)
+        if (isTargetRpm && (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph')) {
+          // 빨강색 실선 (개인훈련 대시보드 및 Indoor Training)
           ctx.strokeStyle = '#ef4444'; // 빨강색
           ctx.lineWidth = 2;
           ctx.setLineDash([]); // 실선
