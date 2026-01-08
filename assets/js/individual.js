@@ -907,41 +907,76 @@ function updateTargetPower() {
         
         // TARGET 라벨 업데이트 로직 (Firebase 값 사용 시)
         const targetLabelEl = document.getElementById('ui-target-label');
+        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
         const seg = getCurrentSegment();
         const targetType = seg?.target_type || 'ftp_pct';
         
-        if ((targetType === 'dual' || targetType === 'cadence_rpm') && targetLabelEl) {
+        if (targetType === 'dual') {
+            // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
             const targetValue = seg?.target_value || seg?.target || '0';
             let targetRpm = 0;
-            if (targetType === 'cadence_rpm') {
-                targetRpm = Number(targetValue) || 0;
-            } else if (targetType === 'dual') {
-                if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                    const parts = targetValue.split('/').map(s => s.trim());
-                    targetRpm = Number(parts[1]) || 0;
-                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-                    targetRpm = Number(targetValue[1]) || 0;
-                }
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                targetRpm = Number(parts[1]) || 0;
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                targetRpm = Number(targetValue[1]) || 0;
             }
             
-            if (targetRpm > 0) {
+            if (targetRpm > 0 && targetLabelEl) {
                 targetLabelEl.textContent = Math.round(targetRpm).toString();
                 targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
-                targetPowerEl.textContent = '';
-                targetPowerEl.setAttribute('fill', '#ef4444');
+                if (targetRpmUnitEl) {
+                    targetRpmUnitEl.style.display = '';
+                    targetRpmUnitEl.setAttribute('fill', '#888'); // 그레이
+                }
             } else {
-                targetLabelEl.textContent = 'TARGET';
-                targetLabelEl.setAttribute('fill', '#888');
-                targetPowerEl.textContent = String(adjustedTargetPower);
+                if (targetLabelEl) {
+                    targetLabelEl.textContent = 'TARGET';
+                    targetLabelEl.setAttribute('fill', '#888');
+                }
+                if (targetRpmUnitEl) {
+                    targetRpmUnitEl.style.display = 'none';
+                }
+            }
+            targetPowerEl.textContent = String(adjustedTargetPower);
+            targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+        } else if (targetType === 'cadence_rpm') {
+            // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시, 색상 #ef4444 (빨강색), TARGET 라벨을 'CADENCE'로 변경
+            const targetValue = seg?.target_value || seg?.target || '0';
+            const targetRpm = Number(targetValue) || 0;
+            
+            if (targetRpm > 0) {
+                if (targetLabelEl) {
+                    targetLabelEl.textContent = 'CADENCE';
+                    targetLabelEl.setAttribute('fill', '#888');
+                }
+                if (targetRpmUnitEl) {
+                    targetRpmUnitEl.style.display = 'none';
+                }
+                targetPowerEl.textContent = Math.round(targetRpm).toString();
+                targetPowerEl.setAttribute('fill', '#ef4444'); // 빨강색
+            } else {
+                if (targetLabelEl) {
+                    targetLabelEl.textContent = 'TARGET';
+                    targetLabelEl.setAttribute('fill', '#888');
+                }
+                if (targetRpmUnitEl) {
+                    targetRpmUnitEl.style.display = 'none';
+                }
+                targetPowerEl.textContent = '0';
                 targetPowerEl.setAttribute('fill', '#ff8c00');
             }
         } else {
+            // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
                 targetLabelEl.setAttribute('fill', '#888');
             }
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
             targetPowerEl.textContent = String(adjustedTargetPower);
-            targetPowerEl.setAttribute('fill', '#ff8c00');
+            targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
         }
         
         // 목표 파워 원호 업데이트
@@ -959,9 +994,13 @@ function updateTargetPower() {
             console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
         }
         const targetLabelEl = document.getElementById('ui-target-label');
+        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
+        }
+        if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
         }
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
@@ -977,9 +1016,13 @@ function updateTargetPower() {
     if (!seg) {
         console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다.');
         const targetLabelEl = document.getElementById('ui-target-label');
+        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888');
+        }
+        if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
         }
         targetPowerEl.textContent = '0';
         targetPowerEl.setAttribute('fill', '#ff8c00');
@@ -1049,45 +1092,76 @@ function updateTargetPower() {
     
     // TARGET 라벨 업데이트 로직
     const targetLabelEl = document.getElementById('ui-target-label');
+    const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
     
-    if (targetType === 'dual' || targetType === 'cadence_rpm') {
-        // dual 또는 cadence_rpm: RPM 값 표시 (빨강색)
+    if (targetType === 'dual') {
+        // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
         let targetRpm = 0;
-        if (targetType === 'cadence_rpm') {
-            targetRpm = Number(targetValue) || 0;
-        } else if (targetType === 'dual') {
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
-                targetRpm = Number(parts[1]) || 0;
-            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-                targetRpm = Number(targetValue[1]) || 0;
-            }
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+            const parts = targetValue.split('/').map(s => s.trim());
+            targetRpm = Number(parts[1]) || 0;
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+            targetRpm = Number(targetValue[1]) || 0;
         }
         
         if (targetRpm > 0 && targetLabelEl) {
             targetLabelEl.textContent = Math.round(targetRpm).toString();
             targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+            // RPM 단위 표시
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = '';
+                targetRpmUnitEl.setAttribute('fill', '#888'); // 그레이
+            }
         } else if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
         }
         
-        // targetPowerEl은 RPM 값이 있으면 빈 값으로, 없으면 파워 값 표시
+        // targetPowerEl은 파워 값 표시 (dual이므로 파워도 있음)
+        targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+        targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+    } else if (targetType === 'cadence_rpm') {
+        // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시, 색상 #ef4444 (빨강색), TARGET 라벨을 'CADENCE'로 변경
+        const targetRpm = Number(targetValue) || 0;
+        
         if (targetRpm > 0) {
-            targetPowerEl.textContent = '';
-            targetPowerEl.setAttribute('fill', '#ef4444');
+            // TARGET 라벨을 CADENCE로 변경
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'CADENCE';
+                targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            }
+            // RPM 단위 숨김
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            // 목표 파워값 자리에 RPM 값 표시
+            targetPowerEl.textContent = Math.round(targetRpm).toString();
+            targetPowerEl.setAttribute('fill', '#ef4444'); // 빨강색
         } else {
-            targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888');
+            }
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            targetPowerEl.textContent = '0';
             targetPowerEl.setAttribute('fill', '#ff8c00');
         }
     } else {
-        // ftp_pct: TARGET 라벨 표시 (원래 색상)
+        // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
         if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
         }
+        if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
+        }
         targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
-        targetPowerEl.setAttribute('fill', '#ff8c00');
+        targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
     }
     
     // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)

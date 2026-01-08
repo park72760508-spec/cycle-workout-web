@@ -1076,32 +1076,36 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
         const currentSegment = window.indoorTrainingState?.currentWorkout?.segments?.[window.indoorTrainingState?.currentSegmentIndex || 0];
         
         if (isTrainingRunning && currentSegment) {
-            if (targetType === 'dual' || targetType === 'cadence_rpm') {
-                // dual 또는 cadence_rpm: 목표 RPM 값 표시 (빨강색)
+            if (targetType === 'dual') {
+                // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
                 const targetValue = currentSegment.target_value || currentSegment.target || '0';
                 let targetRpm = 0;
-                
-                if (targetType === 'cadence_rpm') {
-                    targetRpm = Number(targetValue) || 0;
-                } else if (targetType === 'dual') {
-                    if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                        const parts = targetValue.split('/').map(s => s.trim());
-                        targetRpm = Number(parts[1]) || 0;
-                    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-                        targetRpm = Number(targetValue[1]) || 0;
-                    }
+                if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                    const parts = targetValue.split('/').map(s => s.trim());
+                    targetRpm = Number(parts[1]) || 0;
+                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                    targetRpm = Number(targetValue[1]) || 0;
                 }
                 
                 if (targetRpm > 0) {
-                    // RPM 값 표시 (빨강색)
-                    targetElToUpdate.textContent = Math.round(targetRpm);
-                    targetElToUpdate.setAttribute('fill', '#ef4444'); // SVG fill 속성으로 빨강색
-                    
-                    // TARGET 라벨 텍스트를 RPM 값으로 변경 (개인훈련 대시보드만)
+                    // TARGET 라벨에 RPM 값 표시 (개인훈련 대시보드만)
                     if (targetLabelEl && individualTargetEl) {
                         targetLabelEl.textContent = Math.round(targetRpm).toString();
                         targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+                        // RPM 단위 표시
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = '';
+                            targetRpmUnitEl.setAttribute('fill', '#888'); // 그레이
+                        }
                     }
+                    // 목표 파워 표시 (dual이므로 파워도 있음)
+                    if (targetPower > 0) {
+                        targetElToUpdate.textContent = Math.round(targetPower);
+                    } else {
+                        targetElToUpdate.textContent = '';
+                    }
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 주황색
                 } else {
                     // RPM 값이 없으면 원래대로 복원
                     if (targetPower > 0) {
@@ -1115,10 +1119,47 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
                     if (targetLabelEl && individualTargetEl) {
                         targetLabelEl.textContent = 'TARGET';
                         targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = 'none';
+                        }
+                    }
+                }
+            } else if (targetType === 'cadence_rpm') {
+                // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시, 색상 #ef4444 (빨강색), TARGET 라벨을 'CADENCE'로 변경
+                const targetValue = currentSegment.target_value || currentSegment.target || '0';
+                const targetRpm = Number(targetValue) || 0;
+                
+                if (targetRpm > 0) {
+                    // TARGET 라벨을 CADENCE로 변경 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = 'CADENCE';
+                        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = 'none';
+                        }
+                    }
+                    // 목표 파워값 자리에 RPM 값 표시
+                    targetElToUpdate.textContent = Math.round(targetRpm);
+                    targetElToUpdate.setAttribute('fill', '#ef4444'); // 빨강색
+                } else {
+                    // RPM 값이 없으면 원래대로 복원
+                    targetElToUpdate.textContent = '';
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                    
+                    // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = 'TARGET';
+                        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = 'none';
+                        }
                     }
                 }
             } else {
-                // ftp_pct 타입: 목표 파워 표시 (원래 색상)
+                // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
                 if (targetPower > 0) {
                     targetElToUpdate.textContent = Math.round(targetPower);
                     targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
@@ -1130,6 +1171,10 @@ function updatePowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMe
                 if (targetLabelEl && individualTargetEl) {
                     targetLabelEl.textContent = 'TARGET';
                     targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                    const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                    if (targetRpmUnitEl) {
+                        targetRpmUnitEl.style.display = 'none';
+                    }
                 }
             }
         } else {
@@ -1586,18 +1631,27 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
                 targetPower = (ftp * ftpPercent) / 100;
             }
             
-            if (targetType === 'dual' || targetType === 'cadence_rpm') {
-                // dual 또는 cadence_rpm: 목표 RPM 값 표시 (빨강색)
+            if (targetType === 'dual') {
+                // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
                 if (targetRpm > 0) {
-                    // RPM 값 표시 (빨강색)
-                    targetElToUpdate.textContent = Math.round(targetRpm);
-                    targetElToUpdate.setAttribute('fill', '#ef4444'); // SVG fill 속성으로 빨강색
-                    
-                    // TARGET 라벨 텍스트를 RPM 값으로 변경 (개인훈련 대시보드만)
+                    // TARGET 라벨에 RPM 값 표시 (개인훈련 대시보드만)
                     if (targetLabelEl && individualTargetEl) {
                         targetLabelEl.textContent = Math.round(targetRpm).toString();
                         targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+                        // RPM 단위 표시
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = '';
+                            targetRpmUnitEl.setAttribute('fill', '#888'); // 그레이
+                        }
                     }
+                    // 목표 파워 표시 (dual이므로 파워도 있음)
+                    if (targetPower > 0) {
+                        targetElToUpdate.textContent = Math.round(targetPower);
+                    } else {
+                        targetElToUpdate.textContent = '';
+                    }
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 주황색
                 } else {
                     // RPM 값이 없으면 원래대로 복원
                     if (targetPower > 0) {
@@ -1611,10 +1665,44 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
                     if (targetLabelEl && individualTargetEl) {
                         targetLabelEl.textContent = 'TARGET';
                         targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = 'none';
+                        }
+                    }
+                }
+            } else if (targetType === 'cadence_rpm') {
+                // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시, 색상 #ef4444 (빨강색), TARGET 라벨을 'CADENCE'로 변경
+                if (targetRpm > 0) {
+                    // TARGET 라벨을 CADENCE로 변경 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = 'CADENCE';
+                        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = 'none';
+                        }
+                    }
+                    // 목표 파워값 자리에 RPM 값 표시
+                    targetElToUpdate.textContent = Math.round(targetRpm);
+                    targetElToUpdate.setAttribute('fill', '#ef4444'); // 빨강색
+                } else {
+                    // RPM 값이 없으면 원래대로 복원
+                    targetElToUpdate.textContent = '';
+                    targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
+                    
+                    // TARGET 라벨 텍스트 복원 (개인훈련 대시보드만)
+                    if (targetLabelEl && individualTargetEl) {
+                        targetLabelEl.textContent = 'TARGET';
+                        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                        if (targetRpmUnitEl) {
+                            targetRpmUnitEl.style.display = 'none';
+                        }
                     }
                 }
             } else {
-                // ftp_pct 타입: 목표 파워 표시 (원래 색상)
+                // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
                 if (targetPower > 0) {
                     targetElToUpdate.textContent = Math.round(targetPower);
                     targetElToUpdate.setAttribute('fill', '#ff8c00'); // 원래 색상으로 복원
@@ -1626,6 +1714,10 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
                 if (targetLabelEl && individualTargetEl) {
                     targetLabelEl.textContent = 'TARGET';
                     targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+                    const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+                    if (targetRpmUnitEl) {
+                        targetRpmUnitEl.style.display = 'none';
+                    }
                 }
             }
         } else {
