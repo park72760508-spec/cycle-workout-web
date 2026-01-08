@@ -3237,6 +3237,12 @@ async function saveWorkout() {
     return;
   }
 
+  if (!author) {
+    window.showToast('카테고리를 선택해주세요.');
+    authorEl.focus();
+    return;
+  }
+
   if (saveBtn) {
     saveBtn.disabled = true;
     saveBtn.classList.add('btn-saving', 'saving-state');
@@ -3476,6 +3482,11 @@ async function performWorkoutUpdate() {
 
   if (!title) {
     window.showToast('제목을 입력해주세요.');
+    return;
+  }
+
+  if (!author) {
+    window.showToast('카테고리를 선택해주세요.');
     return;
   }
 
