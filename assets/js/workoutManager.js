@@ -444,12 +444,22 @@ function createSingleSegmentPreview(segment) {
     const ftpValue = Number(segment.target_value) || 0;
     targetDisplay = `${ftpValue}% FTP`;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
     let minPercent = 60;
     let maxPercent = 75;
     
-    if (typeof targetValue === 'string' && targetValue.includes(',')) {
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      // 기존 형식(쉼표)도 지원 (하위 호환성)
       const parts = targetValue.split(',').map(s => s.trim());
       if (parts.length >= 2) {
         minPercent = Number(parts[0]) || 60;
@@ -1634,6 +1644,38 @@ function getSegmentFtpPercentForPreview(seg) {
     }
   } else if (targetType === 'cadence_rpm') {
     return 0; // RPM만 있는 경우 파워는 0
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: "56/75" 형식 (하한, 상한) - 평균값 사용
+    const targetValue = seg.target_value;
+    let minPercent = 60;
+    let maxPercent = 75;
+    
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      // 기존 형식(쉼표)도 지원 (하위 호환성)
+      const parts = targetValue.split(',').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      minPercent = Number(targetValue[0]) || 60;
+      maxPercent = Number(targetValue[1]) || 75;
+    }
+    
+    // 평균값 반환 (막대 높이 계산용)
+    return (minPercent + maxPercent) / 2;
   }
   
   return 100;
@@ -2157,8 +2199,8 @@ async function apiCreateWorkoutWithSegments(workoutData) {
          // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
          targetValue = String(targetValue || '100/90');
        } else if (targetType === 'ftp_pctz') {
-         // ftp_pctz 타입: target_value는 "60, 75" 형식의 문자열로 저장 (하한, 상한)
-         targetValue = String(targetValue || '60, 75');
+         // ftp_pctz 타입: target_value는 "56/75" 형식의 문자열로 저장 (하한, 상한)
+         targetValue = String(targetValue || '60/75');
        } else if (targetType === 'cadence_rpm') {
          // cadence_rpm 타입: 숫자로 저장 (50-200 범위)
          targetValue = Math.max(50, Math.min(200, Number(targetValue) || 90));
@@ -3766,12 +3808,22 @@ function createSegmentCard(segment, index) {
       ? `${ftpValue}% → ${segment.ramp_to_value}%`
       : `${ftpValue}% FTP`;
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
     let minPercent = 60;
     let maxPercent = 75;
     
-    if (typeof targetValue === 'string' && targetValue.includes(',')) {
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      // 기존 형식(쉼표)도 지원 (하위 호환성)
       const parts = targetValue.split(',').map(s => s.trim());
       if (parts.length >= 2) {
         minPercent = Number(parts[0]) || 60;
@@ -4005,13 +4057,23 @@ function showEditSegmentModal(index) {
       }
     }
   } else if (targetType === 'ftp_pctz') {
-    // ftp_pctz 타입: "60, 75" 형식 (하한, 상한)
+    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
     const targetValue = segment.target_value;
     const segmentFtpZone = safeGetElement('segmentFtpZone');
     let minValue = 60;
     let maxValue = 75;
     
-    if (typeof targetValue === 'string' && targetValue.includes(',')) {
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        minValue = parseInt(parts[0]) || 60;
+        maxValue = parseInt(parts[1]) || 75;
+      } else {
+        minValue = parseInt(parts[0]) || 60;
+        maxValue = 75;
+      }
+    } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      // 기존 형식(쉼표)도 지원 (하위 호환성)
       const parts = targetValue.split(',').map(s => s.trim());
       if (parts.length >= 2) {
         minValue = parseInt(parts[0]) || 60;
@@ -4251,8 +4313,8 @@ function saveSegment() {
       window.showToast('목표 하한 FTP%는 상한 FTP%보다 클 수 없습니다.');
       return;
     }
-    // ftp_pctz 타입: "60, 75" 형식으로 저장 (하한, 상한)
-    targetValue = `${ftpZoneMin}, ${ftpZoneMax}`;
+    // ftp_pctz 타입: "56/75" 형식으로 저장 (하한, 상한)
+    targetValue = `${ftpZoneMin}/${ftpZoneMax}`;
   } else if (targetType === 'cadence_rpm') {
     if (intensity < 50 || intensity > 200) {
       window.showToast('목표 RPM은 50-200 범위여야 합니다.');
@@ -4632,8 +4694,8 @@ function saveRepeatSegment() {
       window.showToast('목표 하한 FTP%는 상한 FTP%보다 클 수 없습니다.');
       return;
     }
-    // ftp_pctz 타입: "60, 75" 형식으로 저장 (하한, 상한)
-    targetValue = `${ftpZoneMin}, ${ftpZoneMax}`;
+    // ftp_pctz 타입: "56/75" 형식으로 저장 (하한, 상한)
+    targetValue = `${ftpZoneMin}/${ftpZoneMax}`;
   } else if (targetType === 'cadence_rpm') {
     if (intensity < 50 || intensity > 200) {
       window.showToast('목표 RPM은 50-200 범위여야 합니다.');

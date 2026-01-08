@@ -917,7 +917,14 @@ function updateTargetPower() {
             let minPercent = 60;
             let maxPercent = 75;
             
-            if (typeof targetValue === 'string' && targetValue.includes(',')) {
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                }
+            } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+                // 기존 형식(쉼표)도 지원 (하위 호환성)
                 const parts = targetValue.split(',').map(s => s.trim());
                 if (parts.length >= 2) {
                     minPercent = Number(parts[0]) || 60;
@@ -1118,11 +1125,21 @@ function updateTargetPower() {
         // RPM만 있는 경우 파워는 0
         targetPower = 0;
     } else if (targetType === 'ftp_pctz') {
-        // ftp_pctz 타입: "60, 75" 형식 (하한, 상한)
+        // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
         let minPercent = 60;
         let maxPercent = 75;
         
-        if (typeof targetValue === 'string' && targetValue.includes(',')) {
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+            const parts = targetValue.split('/').map(s => s.trim());
+            if (parts.length >= 2) {
+                minPercent = Number(parts[0]) || 60;
+                maxPercent = Number(parts[1]) || 75;
+            } else {
+                minPercent = Number(parts[0]) || 60;
+                maxPercent = 75;
+            }
+        } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+            // 기존 형식(쉼표)도 지원 (하위 호환성)
             const parts = targetValue.split(',').map(s => s.trim());
             if (parts.length >= 2) {
                 minPercent = Number(parts[0]) || 60;
