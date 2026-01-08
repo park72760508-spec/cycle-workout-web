@@ -443,6 +443,27 @@ function createSingleSegmentPreview(segment) {
   if (targetType === 'ftp_pct') {
     const ftpValue = Number(segment.target_value) || 0;
     targetDisplay = `${ftpValue}% FTP`;
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+    const targetValue = segment.target_value;
+    let minPercent = 60;
+    let maxPercent = 75;
+    
+    if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      const parts = targetValue.split(',').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      minPercent = Number(targetValue[0]) || 60;
+      maxPercent = Number(targetValue[1]) || 75;
+    }
+    
+    targetDisplay = `${minPercent}% FTP, ${maxPercent}% FTP`;
   } else if (targetType === 'cadence_rpm') {
     const rpmValue = Number(segment.target_value) || 0;
     targetDisplay = `${rpmValue} rpm`;
@@ -512,6 +533,27 @@ function createGroupedSegmentPreview(groupedItem) {
     if (targetType === 'ftp_pct') {
       const ftpValue = Number(segment.target_value) || 0;
       targetDisplay = `FTP ${ftpValue}%`;
+    } else if (targetType === 'ftp_pctz') {
+      // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+      const targetValue = segment.target_value;
+      let minPercent = 60;
+      let maxPercent = 75;
+      
+      if (typeof targetValue === 'string' && targetValue.includes(',')) {
+        const parts = targetValue.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = 75;
+        }
+      } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+        minPercent = Number(targetValue[0]) || 60;
+        maxPercent = Number(targetValue[1]) || 75;
+      }
+      
+      targetDisplay = `FTP ${minPercent}%, ${maxPercent}%`;
     } else if (targetType === 'cadence_rpm') {
       const rpmValue = Number(segment.target_value) || 0;
       targetDisplay = `${rpmValue} rpm`;
@@ -1760,11 +1802,58 @@ function createSingleTrainingSegment(segment, isCurrent) {
   const segmentTypeClass = getSegmentTypeClass(segment.segment_type);
   const currentClass = isCurrent ? 'current-segment' : '';
   
+  // target_type에 따라 표시 형식 변경
+  const targetType = segment.target_type || 'ftp_pct';
+  let ftpDisplay = '';
+  if (targetType === 'ftp_pct') {
+    ftpDisplay = `FTP ${Number(segment.target_value) || 0}%`;
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+    const targetValue = segment.target_value;
+    let minPercent = 60;
+    let maxPercent = 75;
+    
+    if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      const parts = targetValue.split(',').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      minPercent = Number(targetValue[0]) || 60;
+      maxPercent = Number(targetValue[1]) || 75;
+    }
+    
+    ftpDisplay = `FTP ${minPercent}%, ${maxPercent}%`;
+  } else if (targetType === 'cadence_rpm') {
+    ftpDisplay = `${Number(segment.target_value) || 0} rpm`;
+  } else if (targetType === 'dual') {
+    // dual 타입: "100/120" 형식 파싱
+    const targetValue = segment.target_value;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        ftpDisplay = `FTP ${parts[0]}% / ${parts[1]} rpm`;
+      } else {
+        ftpDisplay = `FTP ${parts[0]}%`;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      ftpDisplay = `FTP ${targetValue[0]}% / ${targetValue[1]} rpm`;
+    } else {
+      ftpDisplay = `FTP ${Number(targetValue) || 100}%`;
+    }
+  } else {
+    ftpDisplay = `FTP ${Number(segment.target_value) || 0}%`;
+  }
+  
   return `
     <div class="training-segment ${segmentTypeClass} ${currentClass}">
       <div class="segment-label">${escapeHtml(segment.label)}</div>
       <div class="segment-stats">
-        <span class="ftp-value">FTP ${segment.target_value}%</span>
+        <span class="ftp-value">${ftpDisplay}</span>
         <span class="duration">${duration}</span>
       </div>
     </div>
@@ -1782,7 +1871,54 @@ function createGroupedTrainingSegment(groupedItem, isCurrent, groupProgress) {
     const seconds = (segment.duration_sec || 0) % 60;
     const duration = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes}분`;
     
-    return `<div class="pattern-item">FTP ${segment.target_value}% ${duration}</div>`;
+    // target_type에 따라 표시 형식 변경
+    const targetType = segment.target_type || 'ftp_pct';
+    let ftpDisplay = '';
+    if (targetType === 'ftp_pct') {
+      ftpDisplay = `FTP ${Number(segment.target_value) || 0}%`;
+    } else if (targetType === 'ftp_pctz') {
+      // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+      const targetValue = segment.target_value;
+      let minPercent = 60;
+      let maxPercent = 75;
+      
+      if (typeof targetValue === 'string' && targetValue.includes(',')) {
+        const parts = targetValue.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = 75;
+        }
+      } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+        minPercent = Number(targetValue[0]) || 60;
+        maxPercent = Number(targetValue[1]) || 75;
+      }
+      
+      ftpDisplay = `FTP ${minPercent}%, ${maxPercent}%`;
+    } else if (targetType === 'cadence_rpm') {
+      ftpDisplay = `${Number(segment.target_value) || 0} rpm`;
+    } else if (targetType === 'dual') {
+      // dual 타입: "100/120" 형식 파싱
+      const targetValue = segment.target_value;
+      if (typeof targetValue === 'string' && targetValue.includes('/')) {
+        const parts = targetValue.split('/').map(s => s.trim());
+        if (parts.length >= 2) {
+          ftpDisplay = `FTP ${parts[0]}% / ${parts[1]} rpm`;
+        } else {
+          ftpDisplay = `FTP ${parts[0]}%`;
+        }
+      } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+        ftpDisplay = `FTP ${targetValue[0]}% / ${targetValue[1]} rpm`;
+      } else {
+        ftpDisplay = `FTP ${Number(targetValue) || 100}%`;
+      }
+    } else {
+      ftpDisplay = `FTP ${Number(segment.target_value) || 0}%`;
+    }
+    
+    return `<div class="pattern-item">${ftpDisplay} ${duration}</div>`;
   }).join('');
   
   const mainSegmentTypeClass = getSegmentTypeClass(pattern[0].segment_type);
@@ -3629,6 +3765,27 @@ function createSegmentCard(segment, index) {
     intensityText = segment.ramp !== 'none' 
       ? `${ftpValue}% → ${segment.ramp_to_value}%`
       : `${ftpValue}% FTP`;
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: "56, 75" 형식 (하한, 상한)
+    const targetValue = segment.target_value;
+    let minPercent = 60;
+    let maxPercent = 75;
+    
+    if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      const parts = targetValue.split(',').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      minPercent = Number(targetValue[0]) || 60;
+      maxPercent = Number(targetValue[1]) || 75;
+    }
+    
+    intensityText = `${minPercent}% FTP, ${maxPercent}% FTP`;
   } else if (targetType === 'cadence_rpm') {
     const rpmValue = Number(segment.target_value) || 0;
     intensityText = `${rpmValue} rpm`;
