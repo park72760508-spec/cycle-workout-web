@@ -8701,343 +8701,216 @@ button[aria-disabled="true"] {
 }
 
 /* ========== AI 추천 확인 팝업 ========== */
-.ai-confirm-modal {
-  backdrop-filter: blur(8px);
-  animation: aiModalFadeIn 0.3s ease-out;
-}
-
-@keyframes aiModalFadeIn {
-  from {
-    opacity: 0;
-    backdrop-filter: blur(0px);
-  }
-  to {
-    opacity: 1;
-    backdrop-filter: blur(8px);
-  }
-}
-
-.ai-confirm-modal-content {
-  background: rgba(34, 197, 94, 0.15);
-  backdrop-filter: blur(20px);
-  border: 2px solid rgba(34, 197, 94, 0.3);
-  border-radius: 20px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 
-    0 20px 60px rgba(34, 197, 94, 0.3),
-    0 0 40px rgba(34, 197, 94, 0.2),
-    inset 0 0 20px rgba(34, 197, 94, 0.1);
-  animation: aiModalSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.ai-confirm-modal-content::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(34, 197, 94, 0.1) 0%, transparent 70%);
-  animation: aiModalGlow 3s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes aiModalSlideIn {
-  from {
-    transform: translateY(-30px) scale(0.9);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes aiModalGlow {
-  0%, 100% {
-    transform: translate(0, 0) rotate(0deg);
-    opacity: 0.3;
-  }
-  50% {
-    transform: translate(20px, 20px) rotate(180deg);
-    opacity: 0.6;
-  }
-}
-
-.ai-confirm-header {
-  padding: 30px 24px 20px;
-  border-bottom: 1px solid rgba(34, 197, 94, 0.2);
-  text-align: center;
-  position: relative;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.3) 100%);
-  backdrop-filter: blur(10px);
-  z-index: 1;
-}
-
-.ai-confirm-icon-wrapper {
-  margin-bottom: 16px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.ai-confirm-icon {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ai-confirm-pulse {
-  position: absolute;
+/* AI 최적 훈련 추천 확인 화면 - 개인훈련 대시보드 결과 팝업 디자인 적용 */
+#aiRecommendationConfirmModal.training-result-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  background: rgba(34, 197, 94, 0.3);
-  animation: aiPulseRing 2s ease-out infinite;
-}
-
-@keyframes aiPulseRing {
-  0% {
-    transform: scale(0.8);
-    opacity: 1;
-  }
-  100% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-}
-
-.ai-confirm-brain {
-  position: relative;
-  font-size: 48px;
-  z-index: 1;
-  filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.6));
-  animation: aiBrainFloat 3s ease-in-out infinite;
-}
-
-@keyframes aiBrainFloat {
-  0%, 100% {
-    transform: translateY(0) rotate(0deg);
-  }
-  50% {
-    transform: translateY(-10px) rotate(5deg);
-  }
-}
-
-.ai-confirm-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 700;
-  color: #1f2937;
-  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.5);
-  letter-spacing: -0.5px;
-  position: relative;
-  z-index: 1;
-}
-
-.ai-confirm-close {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: rgba(255, 255, 255, 0.9);
-  color: #374151;
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  z-index: 10;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-out;
 }
 
-.ai-confirm-close:hover {
-  background: rgba(255, 255, 255, 1);
-  color: #111827;
-  transform: rotate(90deg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 20px rgba(34, 197, 94, 0.3);
+#aiRecommendationConfirmModal.training-result-modal[style*="display: none"] {
+  display: none !important;
 }
 
-.ai-confirm-body {
-  padding: 30px 24px;
-  text-align: center;
-  position: relative;
-  z-index: 1;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(5px);
-}
-
-.ai-confirm-message {
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 24px;
-  line-height: 1.6;
-  position: relative;
-  z-index: 1;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
-}
-
-.ai-confirm-features {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  margin-top: 20px;
-}
-
-.ai-feature-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-  transition: all 0.3s ease;
-  min-width: 100px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  position: relative;
-  z-index: 1;
-}
-
-.ai-feature-item:hover {
-  background: rgba(255, 255, 255, 0.95);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3), 0 2px 8px rgba(0, 0, 0, 0.1);
-  border-color: rgba(34, 197, 94, 0.5);
-}
-
-.ai-feature-icon {
-  font-size: 24px;
-  filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.4));
-}
-
-.ai-feature-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: #374151;
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
-  position: relative;
-  z-index: 1;
-}
-
-.ai-confirm-footer {
-  padding: 20px 24px 24px;
-  border-top: 1px solid rgba(34, 197, 94, 0.2);
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.3) 0%, rgba(255, 255, 255, 0.25) 100%);
-  backdrop-filter: blur(10px);
-  position: relative;
-  z-index: 1;
-}
-
-.ai-confirm-btn-yes,
-.ai-confirm-btn-no {
-  min-width: 120px;
-  padding: 12px 24px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.ai-confirm-btn-yes {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: white;
-  border: 2px solid rgba(34, 197, 94, 0.3);
-  box-shadow: 
-    0 4px 12px rgba(34, 197, 94, 0.3),
-    0 0 20px rgba(34, 197, 94, 0.2);
-}
-
-.ai-confirm-btn-yes::before {
-  content: '';
+#aiRecommendationConfirmModal .training-result-background {
   position: absolute;
   top: 0;
-  left: -100%;
+  left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  transition: left 0.5s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.1;
 }
 
-.ai-confirm-btn-yes:hover::before {
-  left: 100%;
+#aiRecommendationConfirmModal .result-background-logo {
+  max-width: 400px;
+  max-height: 400px;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0.08;
+  filter: blur(1px);
 }
 
-.ai-confirm-btn-yes:hover {
-  transform: translateY(-2px);
-  box-shadow: 
-    0 6px 20px rgba(34, 197, 94, 0.4),
-    0 0 30px rgba(34, 197, 94, 0.3);
-}
-
-.ai-confirm-btn-yes:active {
-  transform: translateY(0);
-}
-
-.ai-confirm-btn-no {
-  background: rgba(255, 255, 255, 0.8);
-  color: #6b7280;
-  border: 2px solid rgba(107, 114, 128, 0.2);
+#aiRecommendationConfirmModal .training-result-content {
+  position: relative;
+  background: rgba(30, 30, 30, 0.95);
+  border: 2px solid #00d4aa;
+  border-radius: 12px;
+  padding: 16px 20px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+  animation: slideUp 0.4s ease-out;
   backdrop-filter: blur(10px);
 }
 
-.ai-confirm-btn-no:hover {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(107, 114, 128, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-/* 반응형 */
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+#aiRecommendationConfirmModal .result-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+#aiRecommendationConfirmModal .result-title {
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #00d4aa;
+  margin: 0 0 4px 0;
+  text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+}
+
+#aiRecommendationConfirmModal .result-subtitle {
+  font-size: 0.9em;
+  color: #ffffff;
+  margin: 0;
+  opacity: 0.9;
+}
+
+#aiRecommendationConfirmModal .result-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+#aiRecommendationConfirmModal .result-stat-item {
+  background: rgba(0, 212, 170, 0.1);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+}
+
+#aiRecommendationConfirmModal .result-stat-label {
+  font-size: 0.7em;
+  color: #aaa;
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+
+#aiRecommendationConfirmModal .result-stat-value {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #00d4aa;
+  text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);
+}
+
+#aiRecommendationConfirmModal .result-close-btn {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%);
+  border: none;
+  border-radius: 8px;
+  color: #000;
+  font-size: 1em;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
+}
+
+#aiRecommendationConfirmModal .result-close-btn:hover {
+  background: linear-gradient(135deg, #00e8c2 0%, #00d4aa 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 212, 170, 0.6);
+}
+
+#aiRecommendationConfirmModal .result-close-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
+}
+
+#aiRecommendationConfirmModal .result-close-btn-cancel {
+  margin-top: 8px;
+  background: rgba(107, 114, 128, 0.3) !important;
+  border: 1px solid rgba(107, 114, 128, 0.5) !important;
+  color: #ffffff;
+}
+
+#aiRecommendationConfirmModal .result-close-btn-cancel:hover {
+  background: rgba(107, 114, 128, 0.5) !important;
+  border-color: rgba(107, 114, 128, 0.7) !important;
+}
+
+/* 모바일 반응형 */
 @media (max-width: 480px) {
-  .ai-confirm-modal-content {
-    width: 95%;
-    max-width: none;
+  #aiRecommendationConfirmModal .training-result-content {
+    padding: 12px 16px;
+    max-width: 95%;
+    max-height: 95vh;
   }
-  
-  .ai-confirm-title {
-    font-size: 20px;
+
+  #aiRecommendationConfirmModal .result-header {
+    margin-bottom: 12px;
   }
-  
-  .ai-confirm-message {
-    font-size: 16px;
+
+  #aiRecommendationConfirmModal .result-title {
+    font-size: 1.3em;
+    margin-bottom: 2px;
   }
-  
-  .ai-confirm-features {
-    flex-direction: column;
-    gap: 12px;
+
+  #aiRecommendationConfirmModal .result-subtitle {
+    font-size: 0.85em;
   }
-  
-  .ai-feature-item {
-    width: 100%;
+
+  #aiRecommendationConfirmModal .result-stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
   }
-  
-  .ai-confirm-footer {
-    flex-direction: column;
+
+  #aiRecommendationConfirmModal .result-stat-item {
+    padding: 6px 8px;
   }
-  
-  .ai-confirm-btn-yes,
-  .ai-confirm-btn-no {
-    width: 100%;
+
+  #aiRecommendationConfirmModal .result-stat-label {
+    font-size: 0.7em;
+    margin-bottom: 3px;
+  }
+
+  #aiRecommendationConfirmModal .result-stat-value {
+    font-size: 1.1em;
+  }
+
+  #aiRecommendationConfirmModal .result-close-btn {
+    padding: 10px;
+    font-size: 0.95em;
+  }
+
+  #aiRecommendationConfirmModal .result-background-logo {
+    max-width: 200px;
   }
 }
 
