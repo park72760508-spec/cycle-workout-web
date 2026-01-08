@@ -3258,9 +3258,21 @@ async function saveWorkout() {
       if (targetType === 'dual') {
         // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
         targetValue = String(targetValue || '100/90');
+      } else if (targetType === 'ftp_pctz') {
+        // ftp_pctz 타입: target_value는 "50/70" 형식의 문자열로 저장 (하한, 상한)
+        // 이미 "50/70" 형식이면 그대로 사용, 아니면 문자열로 변환
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+          targetValue = targetValue; // 이미 올바른 형식
+        } else {
+          // 숫자나 다른 형식이면 기본값 사용
+          targetValue = String(targetValue || '60/75');
+        }
+      } else if (targetType === 'cadence_rpm') {
+        // cadence_rpm 타입: 숫자로 저장
+        targetValue = Number(targetValue) || 90;
       } else {
-        // ftp_pct 또는 cadence_rpm 타입: 숫자로 저장
-        targetValue = Number(targetValue) || (targetType === 'cadence_rpm' ? 90 : 100);
+        // ftp_pct 타입: 숫자로 저장
+        targetValue = Number(targetValue) || 100;
       }
       
       return {
