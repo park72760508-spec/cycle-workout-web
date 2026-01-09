@@ -1026,8 +1026,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           const metrics = ctx.measureText(powerText);
           const boxWidth = metrics.width + 12;
           const boxHeight = 18;
-          const boxX = padding.left - 10 - boxWidth;
-          const boxY = y - boxHeight / 2;
+          // Y축 오른쪽 바로 옆에 배치 (FTP 가이드 실선에 상자가 중앙에 걸치게)
+          const boxX = padding.left + 10; // Y축 오른쪽 바로 옆
+          const boxY = y - boxHeight / 2; // FTP 가이드 실선 중앙에 걸치게
           
           // 민트색 둥근 상자 그리기
           const borderRadius = 6;
