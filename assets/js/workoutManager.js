@@ -1373,20 +1373,50 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       // 시간 표시
       const minutes = Math.floor(time / 60);
       const seconds = Math.floor(time % 60);
+      const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면: 밝은 색상
+        // Indoor Training 화면: 민트색 둥근 박스에 검정색 텍스트
+        const timeFontSize = 10;
+        ctx.font = `bold ${timeFontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(timeText);
+        const textWidth = textMetrics.width;
+        const boxPadding = 6;
+        const boxHeight = 20;
+        const boxWidth = textWidth + boxPadding * 2;
+        const boxX = x - boxWidth / 2;
+        const boxY = padding.top + chartHeight + 10;
+        const borderRadius = 4;
+        
+        // 민트색 둥근 박스 그리기
+        ctx.fillStyle = 'rgba(0, 212, 170, 0.9)'; // 민트색 (#00d4aa)
+        ctx.beginPath();
+        ctx.moveTo(boxX + borderRadius, boxY);
+        ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
+        ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + borderRadius);
+        ctx.lineTo(boxX + boxWidth, boxY + boxHeight - borderRadius);
+        ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - borderRadius, boxY + boxHeight);
+        ctx.lineTo(boxX + borderRadius, boxY + boxHeight);
+        ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - borderRadius);
+        ctx.lineTo(boxX, boxY + borderRadius);
+        ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 검정색 텍스트 표시
+        ctx.fillStyle = '#000000'; // 검정색 텍스트 (시인성 향상)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(timeText, x, boxY + boxHeight / 2);
       } else {
-        ctx.fillStyle = '#6b7280'; // 훈련 준비 화면: 어두운 색상
+        // 훈련 준비 화면: 기존 스타일 유지
+        ctx.fillStyle = '#6b7280'; // 어두운 색상
+        const timeFontSize = '10px sans-serif';
+        const timeLabelY = padding.top + chartHeight + 18;
+        ctx.font = timeFontSize;
+        ctx.textAlign = 'center';
+        ctx.fillText(timeText, x, timeLabelY);
       }
-      const timeFontSize = '10px sans-serif';
-      const timeLabelY = padding.top + chartHeight + 18;
-      ctx.font = timeFontSize;
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        `${minutes}:${seconds.toString().padStart(2, '0')}`,
-        x,
-        timeLabelY
-      );
     }
   }
   
