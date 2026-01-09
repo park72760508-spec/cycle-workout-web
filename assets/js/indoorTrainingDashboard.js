@@ -6131,73 +6131,10 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const x100LabelY = padding.top + chartHeight + 5; // X축 아래 5px
     ctx.fillText('X 100%', padding.left - 8, x100LabelY);
     
-    // 최대 파워 계산 (세그먼트 중 최대값의 1.2배 또는 FTP의 1.5배 중 큰 값)
-    let maxTargetPower = ftp * 1.5;
-    segments.forEach(seg => {
-        // workoutManager.js의 getSegmentFtpPercentForPreview 함수와 동일한 로직 사용
-        let segFtpPercent = 100;
-        const targetType = seg.target_type || 'ftp_pct';
-        
-        if (targetType === 'ftp_pct') {
-            segFtpPercent = Number(seg.target_value) || 100;
-        } else if (targetType === 'dual') {
-            const targetValue = seg.target_value;
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
-                if (parts.length >= 2) {
-                    segFtpPercent = Number(parts[0]) || 100;
-                } else if (parts.length === 1) {
-                    segFtpPercent = Number(parts[0]) || 100;
-                }
-            } else if (Array.isArray(targetValue) && targetValue.length > 0) {
-                segFtpPercent = Number(targetValue[0]) || 100;
-            } else {
-                segFtpPercent = 100;
-            }
-        } else if (targetType === 'cadence_rpm') {
-            // cadence_rpm: RPM 값을 FTP %로 변환 (FTP 100% = 90 RPM 1:1 매칭)
-            const rpmValue = Number(seg.target_value) || 90;
-            const rpmFtpPercent = (rpmValue / 90) * 100;
-            segFtpPercent = Math.min(200, Math.max(0, rpmFtpPercent));
-        } else if (targetType === 'ftp_pctz') {
-            // ftp_pctz: 평균값 사용 (하한+상한)/2
-            const targetValue = seg.target_value;
-            let minPercent = 60;
-            let maxPercent = 75;
-            
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
-                if (parts.length >= 2) {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = Number(parts[1]) || 75;
-                } else {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = 75;
-                }
-            } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
-                const parts = targetValue.split(',').map(s => s.trim());
-                if (parts.length >= 2) {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = Number(parts[1]) || 75;
-                } else {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = 75;
-                }
-            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-                minPercent = Number(targetValue[0]) || 60;
-                maxPercent = Number(targetValue[1]) || 75;
-            }
-            segFtpPercent = (minPercent + maxPercent) / 2;
-        }
-        
-        const targetPower = ftp * (segFtpPercent / 100);
-        if (targetPower > maxTargetPower) {
-            maxTargetPower = targetPower * 1.1;
-        }
-    });
-    
     // 세그먼트 그리기
     let currentTime = 0;
+    const maxTargetPower = ftp * 2; // FTP의 2배를 최대값으로
+    
     segments.forEach((seg, index) => {
         const segDuration = seg.duration_sec || 0;
         if (segDuration <= 0) return;
@@ -6205,203 +6142,169 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         const segWidth = (segDuration / totalSeconds) * chartWidth;
         const x = padding.left + (currentTime / totalSeconds) * chartWidth;
         
-        // 세그먼트 FTP 비율 계산 (workoutManager.js의 getSegmentFtpPercentForPreview와 동일한 로직)
-        let ftpPercent = 100;
+        // 세그먼트 타입 확인
         const targetType = seg.target_type || 'ftp_pct';
         
-        if (targetType === 'ftp_pct') {
-            ftpPercent = Number(seg.target_value) || 100;
-        } else if (targetType === 'dual') {
-            const targetValue = seg.target_value;
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
-                if (parts.length >= 2) {
-                    ftpPercent = Number(parts[0]) || 100;
-                } else if (parts.length === 1) {
-                    ftpPercent = Number(parts[0]) || 100;
+        // 세그먼트 FTP 비율 계산 (getSegmentFtpPercentForPreview 함수 사용)
+        let ftpPercent = 100;
+        if (typeof getSegmentFtpPercentForPreview === 'function') {
+            ftpPercent = getSegmentFtpPercentForPreview(seg);
+        } else {
+            // fallback 로직
+            if (targetType === 'ftp_pct') {
+                ftpPercent = Number(seg.target_value) || 100;
+            } else if (targetType === 'dual') {
+                const targetValue = String(seg.target_value || '100');
+                const parts = targetValue.split('/');
+                if (parts.length > 0) {
+                    const ftpPart = parts[0].trim().replace('%', '');
+                    ftpPercent = Number(ftpPart) || 100;
                 }
-            } else if (Array.isArray(targetValue) && targetValue.length > 0) {
-                ftpPercent = Number(targetValue[0]) || 100;
-            } else {
-                ftpPercent = 100;
             }
-        } else if (targetType === 'cadence_rpm') {
-            // cadence_rpm: RPM 값을 FTP %로 변환 (FTP 100% = 90 RPM 1:1 매칭)
-            const rpmValue = Number(seg.target_value) || 90;
-            const rpmFtpPercent = (rpmValue / 90) * 100;
-            ftpPercent = Math.min(200, Math.max(0, rpmFtpPercent));
-        } else if (targetType === 'ftp_pctz') {
-            // ftp_pctz: 평균값 사용 (하한+상한)/2
-            const targetValue = seg.target_value;
-            let minPercent = 60;
-            let maxPercent = 75;
-            
-            if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                const parts = targetValue.split('/').map(s => s.trim());
-                if (parts.length >= 2) {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = Number(parts[1]) || 75;
-                } else {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = 75;
-                }
-            } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
-                const parts = targetValue.split(',').map(s => s.trim());
-                if (parts.length >= 2) {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = Number(parts[1]) || 75;
-                } else {
-                    minPercent = Number(parts[0]) || 60;
-                    maxPercent = 75;
-                }
-            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-                minPercent = Number(targetValue[0]) || 60;
-                maxPercent = Number(targetValue[1]) || 75;
-            }
-            ftpPercent = (minPercent + maxPercent) / 2;
         }
         
-        // 파워 높이 계산 (maxTargetPower 기준)
-        const targetPower = ftp * (ftpPercent / 100);
-        const powerHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+        // 세그먼트별 막대 높이 계산
+        let powerHeight;
+        if (targetType === 'cadence_rpm') {
+            // cadence_rpm: 파워값이 없으므로 막대 높이는 0
+            powerHeight = 0;
+        } else if (targetType === 'dual' || targetType === 'ftp_pct' || targetType === 'ftp_pctz') {
+            // dual, ftp_pct, ftp_pctz: FTP % 값의 비율에 따라 막대 높이 적용
+            const targetPower = (ftp * ftpPercent) / 100;
+            powerHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+        } else {
+            // 기타: 기본 로직
+            const targetPower = (ftp * ftpPercent) / 100;
+            powerHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+        }
+        
         const y = padding.top + chartHeight - powerHeight;
         
         // 현재 세그먼트인지 확인
         const isCurrent = index === currentSegmentIndex;
         
-        // 세그먼트 타입에 따른 색상 결정
-        const segmentType = seg.segment_type || 'interval';
-        let segmentColor;
-        let segmentStrokeColor;
-        
-        // 휴식: 흰색
-        if (segmentType === 'rest') {
-            segmentColor = 'rgba(255, 255, 255, 0.6)';
-            segmentStrokeColor = 'rgba(255, 255, 255, 0.8)';
-        }
-        // 100% 이상: 빨강
-        else if (ftpPercent >= 100) {
-            segmentColor = isCurrent ? 'rgba(255, 0, 0, 0.8)' : 'rgba(255, 0, 0, 0.5)';
-            segmentStrokeColor = 'rgba(255, 0, 0, 1)';
-        }
-        // 80% 이상 ~ 100% 미만: 주황
-        else if (ftpPercent >= 80) {
-            segmentColor = isCurrent ? 'rgba(255, 165, 0, 0.8)' : 'rgba(255, 165, 0, 0.5)';
-            segmentStrokeColor = 'rgba(255, 165, 0, 1)';
-        }
-        // 워밍업, 쿨다운 등: 민트색 (현재 적용된 색)
-        else {
-            segmentColor = isCurrent ? 'rgba(0, 212, 170, 0.8)' : 'rgba(0, 212, 170, 0.4)';
-            segmentStrokeColor = isCurrent ? 'rgba(0, 212, 170, 1)' : 'rgba(255, 255, 255, 0.3)';
-        }
-        
-        // 세그먼트 사각형 그리기
-        ctx.fillStyle = segmentColor;
-        ctx.fillRect(x, y, segWidth, powerHeight);
-        
-        // 현재 세그먼트에 흰색 네온 효과 추가 (훈련 화면과 동일한 방식)
-        // 시작 버튼 클릭 후에만 네온 효과 적용 (trainingState === 'running')
-        const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
-        if (isCurrent && currentSegmentIndex >= 0 && isTrainingRunning) {
-            // 세그먼트 진행률 계산 (0~1)
-            let segmentProgress = 0;
-            if (window.indoorTrainingState && window.indoorTrainingState.segmentElapsedTime !== undefined) {
-                const segmentDuration = segDuration || 0;
-                if (segmentDuration > 0) {
-                    segmentProgress = Math.min(1, Math.max(0, window.indoorTrainingState.segmentElapsedTime / segmentDuration));
-                }
+        // cadence_rpm 타입일 때는 막대를 그리지 않음 (높이가 0)
+        if (targetType !== 'cadence_rpm' && powerHeight > 0) {
+            // 세그먼트 타입에 따른 색상 결정
+            const segmentType = seg.segment_type || 'interval';
+            let segmentColor;
+            let segmentStrokeColor;
+            
+            // 휴식: 흰색
+            if (segmentType === 'rest') {
+                segmentColor = 'rgba(255, 255, 255, 0.6)';
+                segmentStrokeColor = 'rgba(255, 255, 255, 0.8)';
+            }
+            // 100% 이상: 빨강
+            else if (ftpPercent >= 100) {
+                segmentColor = isCurrent ? 'rgba(255, 0, 0, 0.8)' : 'rgba(255, 0, 0, 0.5)';
+                segmentStrokeColor = 'rgba(255, 0, 0, 1)';
+            }
+            // 80% 이상 ~ 100% 미만: 주황
+            else if (ftpPercent >= 80) {
+                segmentColor = isCurrent ? 'rgba(255, 165, 0, 0.8)' : 'rgba(255, 165, 0, 0.5)';
+                segmentStrokeColor = 'rgba(255, 165, 0, 1)';
+            }
+            // 워밍업, 쿨다운 등: 민트색 (현재 적용된 색)
+            else {
+                segmentColor = isCurrent ? 'rgba(0, 212, 170, 0.8)' : 'rgba(0, 212, 170, 0.4)';
+                segmentStrokeColor = isCurrent ? 'rgba(0, 212, 170, 1)' : 'rgba(255, 255, 255, 0.3)';
             }
             
-            // 진행된 부분의 너비 계산
-            const progressWidth = segWidth * segmentProgress;
-            
-            // 밝기 애니메이션 효과 (0.5초 주기로 밝았다 어두워졌다)
-            const animationTime = Date.now() / 500; // 500ms 주기
-            const brightness = 0.5 + 0.5 * Math.sin(animationTime); // 0.5 ~ 1.0 사이 진동
-            const neonOpacity = 0.4 + 0.4 * brightness; // 0.4 ~ 0.8 사이 진동
-            
-            // 전체 세그먼트 경계선 (흰색 네온 효과 - 얇은 테두리, 애니메이션)
-            ctx.shadowBlur = 6 + 4 * brightness; // 6 ~ 10 사이 진동
-            ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity})`;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + 0.3 * brightness})`; // 0.6 ~ 0.9 사이 진동
-            ctx.lineWidth = 1.5; // 얇은 테두리
-            ctx.strokeRect(x, y, segWidth, powerHeight);
-            
-            // 진행된 부분에 더 강한 흰색 네온 효과 (훈련 화면의 progress-fill 네온 효과와 동일)
-            if (progressWidth > 0) {
-                // 진행된 부분의 사각형 그리기 (흰색 네온 글로우)
-                ctx.shadowBlur = 8 + 4 * brightness; // 8 ~ 12 사이 진동
-                ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity * 0.8})`;
-                ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + 0.2 * brightness})`; // 0.2 ~ 0.4 사이 진동
-                ctx.fillRect(x, y, progressWidth, powerHeight);
-                
-                // 진행된 부분의 경계선 (더 강한 네온 효과)
-                ctx.shadowBlur = 10 + 5 * brightness; // 10 ~ 15 사이 진동
-                ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity})`;
-                ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 + 0.3 * brightness})`; // 0.7 ~ 1.0 사이 진동
-                ctx.lineWidth = 1.5; // 얇은 테두리
-                ctx.strokeRect(x, y, progressWidth, powerHeight);
-            }
-            
-            // 내부 흰색 네온 효과 (전체 세그먼트)
-            ctx.shadowBlur = 6 + 4 * brightness; // 6 ~ 10 사이 진동
-            ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity * 0.7})`;
-            ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 + 0.2 * brightness})`; // 0.5 ~ 0.7 사이 진동
-            ctx.lineWidth = 1; // 얇은 테두리
-            ctx.strokeRect(x + 1, y + 1, segWidth - 2, powerHeight - 2);
-            
-            // 그림자 효과 리셋
-            ctx.shadowBlur = 0;
-            ctx.shadowColor = 'transparent';
-        } else {
-            // 일반 세그먼트 경계선
-            ctx.strokeStyle = segmentStrokeColor;
-            ctx.lineWidth = 1;
-            ctx.strokeRect(x, y, segWidth, powerHeight);
-        }
+            // 세그먼트 사각형 그리기
+            ctx.fillStyle = segmentColor;
+            ctx.fillRect(x, y, segWidth, powerHeight);
         
-        // dual 또는 cadence_rpm 타입일 때 RPM 가이드라인 표시 (개인 훈련 대시보드 로직 적용)
-        // targetType은 위에서 이미 선언됨
-        if (targetType === 'dual' || targetType === 'cadence_rpm') {
-            // workoutManager.js의 getSegmentRpmForPreview 함수와 동일한 로직으로 RPM 값 추출
-            let targetRpm = 0;
-            
-            if (targetType === 'cadence_rpm') {
-                targetRpm = Number(seg.target_value) || 0;
-            } else if (targetType === 'dual') {
-                const targetValue = seg.target_value;
-                if (typeof targetValue === 'string' && targetValue.includes('/')) {
-                    const parts = targetValue.split('/').map(s => s.trim());
-                    if (parts.length >= 2) {
-                        targetRpm = Number(parts[1]) || 0;
+            // 현재 세그먼트에 흰색 네온 효과 추가 (훈련 화면과 동일한 방식)
+            // 시작 버튼 클릭 후에만 네온 효과 적용 (trainingState === 'running')
+            const isTrainingRunning = window.indoorTrainingState && window.indoorTrainingState.trainingState === 'running';
+            if (isCurrent && currentSegmentIndex >= 0 && isTrainingRunning) {
+                // 세그먼트 진행률 계산 (0~1)
+                let segmentProgress = 0;
+                if (window.indoorTrainingState && window.indoorTrainingState.segmentElapsedTime !== undefined) {
+                    const segmentDuration = segDuration || 0;
+                    if (segmentDuration > 0) {
+                        segmentProgress = Math.min(1, Math.max(0, window.indoorTrainingState.segmentElapsedTime / segmentDuration));
                     }
-                } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-                    targetRpm = Number(targetValue[1]) || 0;
                 }
+                
+                // 진행된 부분의 너비 계산
+                const progressWidth = segWidth * segmentProgress;
+                
+                // 밝기 애니메이션 효과 (0.5초 주기로 밝았다 어두워졌다)
+                const animationTime = Date.now() / 500; // 500ms 주기
+                const brightness = 0.5 + 0.5 * Math.sin(animationTime); // 0.5 ~ 1.0 사이 진동
+                const neonOpacity = 0.4 + 0.4 * brightness; // 0.4 ~ 0.8 사이 진동
+                
+                // 전체 세그먼트 경계선 (흰색 네온 효과 - 얇은 테두리, 애니메이션)
+                ctx.shadowBlur = 6 + 4 * brightness; // 6 ~ 10 사이 진동
+                ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity})`;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + 0.3 * brightness})`; // 0.6 ~ 0.9 사이 진동
+                ctx.lineWidth = 1.5; // 얇은 테두리
+                ctx.strokeRect(x, y, segWidth, powerHeight);
+                
+                // 진행된 부분에 더 강한 흰색 네온 효과 (훈련 화면의 progress-fill 네온 효과와 동일)
+                if (progressWidth > 0) {
+                    // 진행된 부분의 사각형 그리기 (흰색 네온 글로우)
+                    ctx.shadowBlur = 8 + 4 * brightness; // 8 ~ 12 사이 진동
+                    ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity * 0.8})`;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + 0.2 * brightness})`; // 0.2 ~ 0.4 사이 진동
+                    ctx.fillRect(x, y, progressWidth, powerHeight);
+                    
+                    // 진행된 부분의 경계선 (더 강한 네온 효과)
+                    ctx.shadowBlur = 10 + 5 * brightness; // 10 ~ 15 사이 진동
+                    ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity})`;
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 + 0.3 * brightness})`; // 0.7 ~ 1.0 사이 진동
+                    ctx.lineWidth = 1.5; // 얇은 테두리
+                    ctx.strokeRect(x, y, progressWidth, powerHeight);
+                }
+                
+                // 내부 흰색 네온 효과 (전체 세그먼트)
+                ctx.shadowBlur = 6 + 4 * brightness; // 6 ~ 10 사이 진동
+                ctx.shadowColor = `rgba(255, 255, 255, ${neonOpacity * 0.7})`;
+                ctx.strokeStyle = `rgba(255, 255, 255, ${0.5 + 0.2 * brightness})`; // 0.5 ~ 0.7 사이 진동
+                ctx.lineWidth = 1; // 얇은 테두리
+                ctx.strokeRect(x + 1, y + 1, segWidth - 2, powerHeight - 2);
+                
+                // 그림자 효과 리셋
+                ctx.shadowBlur = 0;
+                ctx.shadowColor = 'transparent';
+            } else {
+                // 일반 세그먼트 경계선
+                ctx.strokeStyle = segmentStrokeColor;
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, segWidth, powerHeight);
             }
+        }
+        
+        // dual 또는 cadence_rpm 타입일 때 RPM 값 표시 (기준값 90을 기준으로 위 아래에 바로 표시)
+        if ((targetType === 'dual' || targetType === 'cadence_rpm') && typeof getSegmentRpmForPreview === 'function') {
+            const targetRpm = getSegmentRpmForPreview(seg);
             
             if (targetRpm > 0) {
-                // RPM 값을 FTP %로 변환하여 Y 위치 계산 (FTP 100% = 90 RPM 1:1 매칭)
                 // RPM_scaled = (RPM_real / 90) * 100
-                const rpmScaled = (targetRpm / 90) * 100;
-                const rpmFtpPercent = Math.min(200, Math.max(0, rpmScaled));
+                // 기준값 90을 기준으로 위 아래에 바로 표시
+                const rpmScaled = (targetRpm / 90) * 100; // FTP %로 변환
+                const rpmFtpPercent = Math.min(200, Math.max(0, rpmScaled)); // 최대 200%로 제한
+                // FTP %를 Y 위치로 변환 (maxTargetPower 기준)
                 const rpmPower = ftp * (rpmFtpPercent / 100);
                 const rpmY = padding.top + chartHeight - (chartHeight * (rpmPower / maxTargetPower));
                 
                 // 빨강색 실선 그리기 (세그먼트 막대 넓이만큼)
-                ctx.strokeStyle = '#FF4D4D';
-                ctx.lineWidth = 1.5; // 전광판용으로 약간 얇게
-                ctx.setLineDash([]);
+                ctx.strokeStyle = '#FF4D4D'; // 밝은 레드
+                ctx.lineWidth = 2; // 선명한 두께
+                ctx.setLineDash([]); // 실선 (점선 해제)
                 ctx.beginPath();
                 ctx.moveTo(x, rpmY);
                 ctx.lineTo(x + segWidth, rpmY);
                 ctx.stroke();
                 
-                // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단, 전광판용으로 작은 폰트)
-                ctx.fillStyle = '#FF3B30';
-                ctx.font = 'bold 8px sans-serif'; // 전광판용으로 작은 폰트
+                // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단)
+                ctx.fillStyle = '#FF3B30'; // 숫자 색상
+                ctx.font = 'bold 9px sans-serif'; // 볼드 폰트 (전광판용 작은 크기)
                 ctx.textAlign = 'center';
-                const labelY = rpmY - 3; // 세그먼트 막대 위에 표시
+                ctx.textBaseline = 'bottom';
+                const labelY = rpmY - 3; // 선 위에 표시
                 ctx.fillText(`${Math.round(targetRpm)}`, x + segWidth / 2, labelY);
             }
         }

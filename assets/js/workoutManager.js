@@ -1683,11 +1683,9 @@ function getSegmentFtpPercentForPreview(seg) {
       return 100;
     }
   } else if (targetType === 'cadence_rpm') {
-    // cadence_rpm 타입: RPM 값을 FTP %로 변환 (개인 훈련 대시보드 로직 적용)
-    // RPM_scaled = (RPM_real / 90) * 100 (FTP 100% = 90 RPM 1:1 매칭)
-    const rpmValue = Number(seg.target_value) || 90;
-    const rpmFtpPercent = (rpmValue / 90) * 100;
-    return Math.min(200, Math.max(0, rpmFtpPercent)); // 최대 200%로 제한
+    // cadence_rpm 타입: 파워값이 없으므로 막대 높이는 0
+    // RPM 값은 별도로 표시되므로 FTP %는 0 반환
+    return 0;
   } else if (targetType === 'ftp_pctz') {
     // ftp_pctz 타입: "56/75" 형식 (하한, 상한) - 평균값 사용
     const targetValue = seg.target_value;
