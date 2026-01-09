@@ -6089,16 +6089,57 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
             ctx.fillText(label, padding.left - 8, y);
         }
         
-        // FTP(100%) 라인에 주황색 작은 점선 가이드 라인 표기
+        // FTP(100%) 라인에 흰색 점선 가이드 라인 표기
         if (ftpPercent === 100) {
-            ctx.strokeStyle = 'rgba(255, 165, 0, 0.6)'; // 주황색
+            const ftpY = y; // FTP 100% Y 위치 저장
+            
+            // 흰색 점선 가이드 라인
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // 흰색, 투명도 50%
             ctx.lineWidth = 1;
-            ctx.setLineDash([2, 3]); // 더 작은 점선 (2px 점, 3px 간격)
+            ctx.setLineDash([4, 3]); // 점선 (4px 점, 3px 간격)
             ctx.beginPath();
-            ctx.moveTo(padding.left, y);
-            ctx.lineTo(padding.left + chartWidth, y);
+            ctx.moveTo(padding.left, ftpY);
+            ctx.lineTo(padding.left + chartWidth, ftpY);
             ctx.stroke();
             ctx.setLineDash([]); // 점선 해제
+            
+            // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 둥근 상자 표시
+            const rpm90Text = '90';
+            ctx.font = 'bold 9px sans-serif'; // 전광판용 작은 크기
+            const textMetrics = ctx.measureText(rpm90Text);
+            const textWidth = textMetrics.width;
+            const textHeight = 10;
+            const boxPadding = 3;
+            const boxWidth = textWidth + boxPadding * 2;
+            const boxHeight = textHeight + boxPadding * 2;
+            const boxX = padding.left + chartWidth - boxWidth - 1; // 오른쪽 끝에서 약간 여백
+            const boxY = ftpY - boxHeight / 2; // 점선 중앙에 배치
+            
+            // 빨강색 바탕 둥근 상자 그리기
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // 빨강색 바탕
+            ctx.beginPath();
+            const radius = 3;
+            ctx.moveTo(boxX + radius, boxY);
+            ctx.lineTo(boxX + boxWidth - radius, boxY);
+            ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+            ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+            ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+            ctx.lineTo(boxX + radius, boxY + boxHeight);
+            ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+            ctx.lineTo(boxX, boxY + radius);
+            ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+            ctx.closePath();
+            ctx.fill();
+            
+            // 흰색 텍스트 표시
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
+            
+            // 원래 설정 복원
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
         }
         // 50% 라인에 얇은 흰색 실선 가이드 라인 표기
         else if (ftpPercent === 50) {
@@ -6311,6 +6352,57 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         
         currentTime += segDuration;
     });
+    
+    // 가로축 시간 눈금 표시 (민트색 둥근 박스에 검정색 텍스트)
+    const timeSteps = Math.min(8, Math.max(4, Math.floor(totalSeconds / 60))); // 전광판용: 최대 8개
+    for (let i = 0; i <= timeSteps; i++) {
+        const time = (totalSeconds * i) / timeSteps;
+        const x = padding.left + (time / totalSeconds) * chartWidth;
+        
+        // 눈금선
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, padding.top + chartHeight);
+        ctx.lineTo(x, padding.top + chartHeight + 4);
+        ctx.stroke();
+        
+        // 시간 표시 (민트색 둥근 박스에 검정색 텍스트)
+        const minutes = Math.floor(time / 60);
+        const seconds = Math.floor(time % 60);
+        const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        const timeFontSize = 8; // 전광판용 작은 크기
+        ctx.font = `bold ${timeFontSize}px sans-serif`;
+        const textMetrics = ctx.measureText(timeText);
+        const textWidth = textMetrics.width;
+        const boxPadding = 4;
+        const boxHeight = 16;
+        const boxWidth = textWidth + boxPadding * 2;
+        const boxX = x - boxWidth / 2;
+        const boxY = padding.top + chartHeight + 6;
+        const borderRadius = 3;
+        
+        // 민트색 둥근 박스 그리기
+        ctx.fillStyle = 'rgba(0, 212, 170, 0.9)'; // 민트색 (#00d4aa)
+        ctx.beginPath();
+        ctx.moveTo(boxX + borderRadius, boxY);
+        ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
+        ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + borderRadius);
+        ctx.lineTo(boxX + boxWidth, boxY + boxHeight - borderRadius);
+        ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - borderRadius, boxY + boxHeight);
+        ctx.lineTo(boxX + borderRadius, boxY + boxHeight);
+        ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - borderRadius);
+        ctx.lineTo(boxX, boxY + borderRadius);
+        ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 검정색 텍스트 표시
+        ctx.fillStyle = '#000000'; // 검정색 텍스트 (시인성 향상)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(timeText, x, boxY + boxHeight / 2);
+    }
     
     // X축 라벨: 워크아웃 운동시간 (단위:분) - Y축 라벨의 1.5와 2 사이 높이에 위치
     const totalMinutes = Math.round(totalSeconds / 60);
