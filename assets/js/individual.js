@@ -944,7 +944,7 @@ function updateTargetPower() {
         }
         
         if (targetType === 'dual') {
-            // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
+            // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
             const targetValue = seg?.target_value || seg?.target || '0';
             let targetRpm = 0;
             if (typeof targetValue === 'string' && targetValue.includes('/')) {
@@ -955,16 +955,33 @@ function updateTargetPower() {
             }
             
             if (targetRpm > 0 && targetLabelEl) {
-                targetLabelEl.textContent = Math.round(targetRpm).toString();
-                targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
+                // 기존 내용 삭제
+                targetLabelEl.textContent = '';
+                targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
+                targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
+                targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+                
+                // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
+                const rpmNumber = Math.round(targetRpm);
+                const tspanNumber = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                tspanNumber.setAttribute('fill', '#ef4444'); // 빨강색
+                tspanNumber.textContent = rpmNumber.toString();
+                targetLabelEl.appendChild(tspanNumber);
+                
+                const tspanUnit = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                tspanUnit.setAttribute('fill', '#888'); // 그레이
+                tspanUnit.textContent = ' RPM';
+                targetLabelEl.appendChild(tspanUnit);
+                
+                // RPM 단위 요소는 숨김 처리
                 if (targetRpmUnitEl) {
-                    targetRpmUnitEl.style.display = '';
-                    targetRpmUnitEl.setAttribute('fill', '#888'); // 그레이
+                    targetRpmUnitEl.style.display = 'none';
                 }
             } else {
                 if (targetLabelEl) {
                     targetLabelEl.textContent = 'TARGET';
                     targetLabelEl.setAttribute('fill', '#888');
+                    targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
                 }
                 if (targetRpmUnitEl) {
                     targetRpmUnitEl.style.display = 'none';
@@ -1174,7 +1191,7 @@ function updateTargetPower() {
     const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
     
     if (targetType === 'dual') {
-        // dual 타입: TARGET 라벨에 RPM 값 표시, 색상 #ef4444 (빨강색), 뒤에 RPM (그레이) 단위 추가
+        // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
         let targetRpm = 0;
         if (typeof targetValue === 'string' && targetValue.includes('/')) {
             const parts = targetValue.split('/').map(s => s.trim());
@@ -1184,16 +1201,32 @@ function updateTargetPower() {
         }
         
         if (targetRpm > 0 && targetLabelEl) {
-            targetLabelEl.textContent = Math.round(targetRpm).toString();
-            targetLabelEl.setAttribute('fill', '#ef4444'); // 빨강색
-            // RPM 단위 표시
+            // 기존 내용 삭제
+            targetLabelEl.textContent = '';
+            targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
+            targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
+            targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+            
+            // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
+            const rpmNumber = Math.round(targetRpm);
+            const tspanNumber = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+            tspanNumber.setAttribute('fill', '#ef4444'); // 빨강색
+            tspanNumber.textContent = rpmNumber.toString();
+            targetLabelEl.appendChild(tspanNumber);
+            
+            const tspanUnit = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+            tspanUnit.setAttribute('fill', '#888'); // 그레이
+            tspanUnit.textContent = ' RPM';
+            targetLabelEl.appendChild(tspanUnit);
+            
+            // RPM 단위 요소는 숨김 처리
             if (targetRpmUnitEl) {
-                targetRpmUnitEl.style.display = '';
-                targetRpmUnitEl.setAttribute('fill', '#888'); // 그레이
+                targetRpmUnitEl.style.display = 'none';
             }
         } else if (targetLabelEl) {
             targetLabelEl.textContent = 'TARGET';
             targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+            targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
             if (targetRpmUnitEl) {
                 targetRpmUnitEl.style.display = 'none';
             }
