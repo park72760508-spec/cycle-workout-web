@@ -3288,8 +3288,11 @@ async function selectWorkout(workoutId) {
 // 워크아웃 폼 관리
 // ==========================================================
 
-function showAddWorkoutForm(clearForm = true) {
+async function showAddWorkoutForm(clearForm = true) {
   window.showScreen('workoutBuilderScreen');
+  
+  // TrainingSchedules 목록 로드 및 상태 콤보박스에 추가
+  await loadTrainingSchedulesForWorkoutForm();
   
   if (clearForm) {
     const titleEl = safeGetElement('wbTitle');
@@ -3311,6 +3314,58 @@ function showAddWorkoutForm(clearForm = true) {
     if (typeof updateSegmentSummary === 'function') {
       updateSegmentSummary();
     }
+  }
+}
+
+/**
+ * 워크아웃 작성 화면용 TrainingSchedules 목록 로드
+ * 구글 시트의 TrainingSchedules > title 리스트를 가져와서 상태 콤보박스에 추가
+ */
+async function loadTrainingSchedulesForWorkoutForm() {
+  const statusEl = safeGetElement('wbStatus');
+  if (!statusEl) {
+    console.warn('[loadTrainingSchedulesForWorkoutForm] wbStatus 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  try {
+    // 기본 옵션 유지: "보이기 (공개)"
+    const baseOption = '<option value="보이기">보이기 (공개)</option>';
+    
+    // TrainingSchedules 목록 가져오기
+    const url = `${window.GAS_URL}?action=listTrainingSchedules`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(result.error || 'TrainingSchedules 목록을 불러오는데 실패했습니다');
+    }
+    
+    // 상태 콤보박스 업데이트
+    let optionsHtml = baseOption;
+    
+    if (result.items && result.items.length > 0) {
+      // TrainingSchedules의 title 목록 추가 (중복 제거)
+      const uniqueTitles = [...new Set(result.items.map(schedule => schedule.title).filter(title => title && title.trim() !== ''))];
+      
+      uniqueTitles.forEach(title => {
+        optionsHtml += `<option value="${escapeHtml(title)}">${escapeHtml(title)}</option>`;
+      });
+    }
+    
+    statusEl.innerHTML = optionsHtml;
+    
+    console.log(`[loadTrainingSchedulesForWorkoutForm] ${result.items?.length || 0}개의 스케줄 목록을 로드했습니다.`);
+    
+  } catch (error) {
+    console.error('[loadTrainingSchedulesForWorkoutForm] 오류:', error);
+    // 오류 발생 시 기본 옵션만 유지
+    statusEl.innerHTML = baseOption;
   }
 }
 
@@ -3489,10 +3544,10 @@ async function editWorkout(workoutId) {
     currentEditWorkoutId = workoutId;
     console.log('Edit mode activated for workout:', workoutId);
     
-    // 워크아웃 빌더 화면으로 이동 (폼 초기화 안함)
-    showAddWorkoutForm(false);
+    // 워크아웃 빌더 화면으로 이동 (폼 초기화 안함, TrainingSchedules 목록 로드)
+    await showAddWorkoutForm(false);
     
-    // 기본 정보 채우기
+    // 기본 정보 채우기 (TrainingSchedules 목록 로드 완료 후)
     const titleEl = safeGetElement('wbTitle');
     const descEl = safeGetElement('wbDesc');
     const authorEl = safeGetElement('wbAuthor');
@@ -3502,7 +3557,13 @@ async function editWorkout(workoutId) {
     if (titleEl) titleEl.value = workout.title || '';
     if (descEl) descEl.value = workout.description || '';
     if (authorEl) authorEl.value = workout.author || '';
-    if (statusEl) statusEl.value = workout.status || '보이기';
+    // TrainingSchedules 목록이 로드된 후 상태 값 설정
+    if (statusEl) {
+      // 로드된 옵션 중에서 일치하는 값이 있으면 선택, 없으면 "보이기"로 설정
+      const savedStatus = workout.status || '보이기';
+      const hasOption = Array.from(statusEl.options).some(opt => opt.value === savedStatus);
+      statusEl.value = hasOption ? savedStatus : '보이기';
+    }
     if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
     
     // 🔥 핵심 추가: 세그먼트 데이터 로드
