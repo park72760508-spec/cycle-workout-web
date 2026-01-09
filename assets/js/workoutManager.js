@@ -705,13 +705,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 기본 크기
     graphHeight = 300; // 세로축 높이 (파워)
     graphWidth = Math.max(800, Math.min(1200, totalSeconds * 3)); // 가로축 너비 (시간에 비례, 최소 800px, 최대 1200px)
-    // trainingSegmentGraph일 때는 오른쪽에 RPM Y축을 위한 여백 추가 (Indoor Training: 우측 Y축 표시)
-    // selectedWorkoutSegmentGraphCanvas는 전광판용이므로 오른쪽 Y축 없음 (크기 제약)
+    // trainingSegmentGraph 또는 selectedWorkoutSegmentGraphCanvas일 때는 오른쪽에 RPM Y축을 위한 여백 추가 (Indoor Training: 우측 Y축 표시)
     // individualSegmentGraph는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음
-    if (canvasId === 'trainingSegmentGraph') {
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
       padding = { top: 20, right: 60, bottom: 50, left: 70 }; // Indoor Training: 오른쪽 패딩 증가 (Y축 표시용)
-    } else if (canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-      padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드 및 전광판용: 오른쪽 패딩 기본값
+    } else if (canvasId === 'individualSegmentGraph') {
+      padding = { top: 20, right: 40, bottom: 50, left: 70 }; // 개인훈련 대시보드: 오른쪽 패딩 기본값
     } else {
       padding = { top: 20, right: 40, bottom: 50, left: 70 };
     }
@@ -732,7 +731,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 배경 그리기
   if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    // 훈련 화면용, 개인 대시보드용, 전광판용: 검정 투명 배경
+    // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(0, 0, graphWidth, graphHeight);
   } else {
@@ -753,7 +752,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 축 그리기 (부드러운 색상)
   ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
   if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면, 개인 대시보드, 전광판용: 밝은 색상
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
   } else {
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
   }
@@ -844,7 +843,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const ftpY = padding.top + chartHeight - (chartHeight * (ftpPower / maxTargetPower));
   
   // FTP Y 위치를 전역 변수로 저장 (마스코트 위치 계산용)
-  if (canvasId === 'trainingSegmentGraph') {
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     window._segmentGraphFtpY = ftpY;
     window._segmentGraphPadding = padding;
     window._segmentGraphChartWidth = chartWidth;
@@ -857,7 +856,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    // Indoor Training 및 전광판용: 흰색 얇은 실선
+    // Indoor Training: 흰색 얇은 실선
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // 흰색, 투명도 50%
     ctx.lineWidth = 1; // 얇은 선
@@ -878,7 +877,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.setLineDash([]);
   ctx.shadowColor = 'transparent';
   
-  // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드, Indoor Training, 전광판용)
+  // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드 및 Indoor Training)
   if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     const rpm90Text = '90';
     ctx.font = 'bold 10px sans-serif';
@@ -917,7 +916,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   }
   
   // FTP 라벨 (부드러운 배경)
-  // trainingSegmentGraph, selectedWorkoutSegmentGraphCanvas일 때는 RPM 값도 함께 표시
+  // trainingSegmentGraph일 때는 RPM 값도 함께 표시
   let labelText = `FTP ${ftp}W`;
   if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // 세그먼트 중 RPM 값이 있는 경우 기본 RPM 값 표시 (가장 많이 사용되는 값 또는 평균)
@@ -935,17 +934,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const labelY = ftpY - labelHeight / 2;
   
   if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    // 훈련 화면, 개인 대시보드, 전광판용: 밝은 배경과 텍스트
+    // 훈련 화면 및 개인 대시보드: 밝은 배경과 텍스트
     if (canvasId === 'individualSegmentGraph') {
       // 개인훈련 대시보드: 빨강색 바탕
       ctx.fillStyle = 'rgba(239, 68, 68, 0.8)'; // 빨강색 바탕
       ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
       ctx.fillStyle = '#ffffff'; // 흰색 텍스트
-    } else if (canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-      // 전광판용: 노란색 바탕 (Indoor Training과 동일)
-      ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
-      ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
-      ctx.fillStyle = '#fbbf24'; // 밝은 노란색
     } else {
       // 훈련 화면: 기존 노란색 바탕
       ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
@@ -966,7 +960,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 세로축 눈금 (파워)
   if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    // 개인 대시보드, Indoor Training, 전광판용: 특정 FTP 백분율 값들 표시 (0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5)
+    // 개인 대시보드 및 Indoor Training: 특정 FTP 백분율 값들 표시 (0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5)
     const ftpPercentValues = [0, 0.3, 0.6, 0.9, 1.0, 1.2, 1.5];
     
     ftpPercentValues.forEach(ftpRatio => {
@@ -1042,7 +1036,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       
       // 격자선 (부드러운 색상)
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면 및 전광판용: 밝은 색상
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면: 밝은 색상
       } else {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'; // 훈련 준비 화면: 어두운 색상
       }
@@ -1056,7 +1050,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       
       // 눈금 표시
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 전광판용: 밝은 색상
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면: 밝은 색상
       } else {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'; // 훈련 준비 화면: 어두운 색상
       }
@@ -1068,7 +1062,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       
       // 파워 값 표시
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면 및 전광판용: 밝은 색상
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
       } else {
         ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
       }
@@ -1086,7 +1080,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     if (duration <= 0) return;
     
     // 디버깅: 각 세그먼트 정보 출력 (trainingSegmentGraph일 때만)
-    if (canvasId === 'trainingSegmentGraph') {
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
       console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} 처리 시작:`, {
         index: index + 1,
         targetType: seg.target_type,
@@ -1234,7 +1228,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         targetType,
         isDual: targetType === 'dual',
         isCadenceRpm: targetType === 'cadence_rpm',
-        condition: (targetType === 'dual' || targetType === 'cadence_rpm') && canvasId === 'trainingSegmentGraph',
+        condition: (targetType === 'dual' || targetType === 'cadence_rpm') && (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas'),
         canvasId
       });
     }
@@ -1283,7 +1277,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           barWidth
         });
         // RPM 값에 해당하는 Y 위치 계산
-        // 개인훈련 대시보드, Indoor Training, 전광판용: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
+        // 개인훈련 대시보드 및 Indoor Training: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
         let rpmY;
         if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
           // RPM_scaled = (RPM_real / 90) * 100
@@ -1335,7 +1329,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       
       // 눈금선
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면 및 전광판용: 밝은 색상
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // 훈련 화면: 밝은 색상
       } else {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)'; // 훈련 준비 화면: 어두운 색상
       }
@@ -1349,7 +1343,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       const minutes = Math.floor(time / 60);
       const seconds = Math.floor(time % 60);
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면 및 전광판용: 밝은 색상
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; // 훈련 화면: 밝은 색상
       } else {
         ctx.fillStyle = '#6b7280'; // 훈련 준비 화면: 어두운 색상
       }
@@ -1426,7 +1420,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   if (canvasId !== 'individualSegmentGraph') {
     // 개인 대시보드가 아닌 경우에만 축 라벨 표시
     if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면 및 전광판용: 밝은 색상
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 훈련 화면: 밝은 색상
     } else {
       ctx.fillStyle = '#374151'; // 훈련 준비 화면: 어두운 색상
     }
@@ -1445,10 +1439,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.fillText('파워 (W)', 0, 0);
     ctx.restore();
     
-    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph일 때만 표시)
+    // 세로축 라벨 (RPM - 오른쪽, trainingSegmentGraph 또는 selectedWorkoutSegmentGraphCanvas일 때만 표시)
     // Indoor Training은 우측 Y축을 유지하면서 케이던스 기준값(90 RPM)을 표시
     // 개인훈련 대시보드(individualSegmentGraph)는 FTP 100% = 90 RPM 1:1 매칭이므로 오른쪽 Y축 없음
-    if (canvasId === 'trainingSegmentGraph') {
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
       // 오른쪽 Y축 그리기
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
       ctx.lineWidth = 2;
@@ -1728,18 +1722,19 @@ function getSegmentRpmForPreview(seg) {
       targetValue,
       parsed: rpm,
       isNaN: isNaN(rpm),
-      result: rpm || 0
+      result: isNaN(rpm) ? 0 : rpm
     });
     // 디버깅: cadence_rpm 타입일 때 로그 출력
-    if (isNaN(rpm) || rpm === 0) {
+    if (isNaN(rpm) || rpm <= 0) {
       console.warn('[getSegmentRpmForPreview] cadence_rpm 타입에서 RPM 값 추출 실패:', {
         targetType,
         targetValue,
         type: typeof targetValue,
         parsed: rpm
       });
+      return 0;
     }
-    return rpm || 0;
+    return rpm;
   } else if (targetType === 'dual') {
     // dual 타입: target_value는 "85/100" 형식 (앞값: ftp%, 뒤값: rpm) 또는 배열 [ftp%, rpm]
     console.log('[getSegmentRpmForPreview] dual 타입 처리 시작:', {
