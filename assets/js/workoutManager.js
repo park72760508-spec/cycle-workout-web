@@ -968,10 +968,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // 훈련 화면 및 개인 대시보드: 밝은 배경과 텍스트
     if (canvasId === 'individualSegmentGraph') {
-      // 개인훈련 대시보드: 빨강색 바탕
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)'; // 빨강색 바탕
-      ctx.fillRect(labelX, labelY, labelWidth, labelHeight);
-      ctx.fillStyle = '#ffffff'; // 흰색 텍스트
+      // 개인훈련 대시보드: 빨강색 네모 상자 제거, 텍스트만 표시
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 흰색 텍스트 (배경 없음)
     } else {
       // 훈련 화면: 기존 노란색 바탕
       ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
@@ -988,7 +986,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const ftpLabelFontSize = (canvasId === 'individualSegmentGraph') ? 'bold 8px sans-serif' : 'bold 12px sans-serif';
   ctx.font = ftpLabelFontSize;
   ctx.textAlign = 'right';
-  ctx.fillText(labelText, padding.left - 10, ftpY + 4);
+  // 개인훈련 대시보드에서는 FTP 라벨 텍스트 표시하지 않음
+  if (canvasId !== 'individualSegmentGraph') {
+    ctx.fillText(labelText, padding.left - 10, ftpY + 4);
+  }
   
   // 세로축 눈금 (파워)
   if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
