@@ -720,8 +720,8 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-profile" id="btnBasecampProfile" onclick="showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); }">
                 <span>USER PROFILE</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-premium" id="btnBasecampPremium" disabled>
-                <span>PREMIUM</span>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="showScreen('myCareerScreen')">
+                <span>MY CAREER</span>
               </button>
             </div>
           </div>
@@ -732,6 +732,65 @@
               <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
               시스템 문의 : stelvio.ai.kr@gmail.com
             </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MY CAREER 화면 -->
+  <div id="myCareerScreen" class="screen">
+    <!-- 배경 이미지 -->
+    <div class="basecamp-background-image"></div>
+    
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card">
+          <div class="connection-header basecamp-header">
+            <!-- 제목 이미지 배경으로 처리 -->
+          </div>
+
+          <div class="connection-device-section basecamp-device-section">
+            <h3 class="mb-15 basecamp-status-bar">Manage Your Career</h3>
+            <div class="grid-2 gap-10 mb-15">
+              <!-- 1줄: 훈련 스케줄, 훈련 일지 -->
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-schedule" id="btnCareerSchedule" onclick="if (typeof showScreen === 'function') { showScreen('scheduleListScreen'); if (typeof loadTrainingSchedules === 'function') { setTimeout(() => loadTrainingSchedules(), 200); } }">
+                <span>훈련 스케줄</span>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-journal" id="btnCareerJournal" onclick="if (typeof showScreen === 'function') { showScreen('trainingJournalScreen'); }">
+                <span>훈련 일지</span>
+              </button>
+              <!-- 2줄: 워크아웃, 사용자 정보 -->
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-workout" id="btnCareerWorkout" onclick="if (typeof showScreen === 'function') { showScreen('workoutScreen'); if (typeof loadWorkouts === 'function') { setTimeout(() => loadWorkouts(), 200); } }">
+                <span>워크아웃</span>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-profile" id="btnCareerProfile" onclick="if (typeof showScreen === 'function') { showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); } }">
+                <span>사용자 정보</span>
+              </button>
+              <!-- 3줄: 구독하기, STELVIO 로고 -->
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-subscribe" id="btnCareerSubscribe" onclick="alert('구독하기 기능은 준비 중입니다.');">
+                <span>구독하기</span>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-logo" id="btnCareerLogo" onclick="if (typeof showScreen === 'function') { showScreen('basecampScreen'); }">
+                <span>STELVIO</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 하단 시스템 문의 문구 -->
+          <div class="basecamp-footer">
+            <p>
+              <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
+              시스템 문의 : stelvio.ai.kr@gmail.com
+            </p>
+          </div>
+
+          <!-- 뒤로 가기 버튼 -->
+          <div style="text-align: center; margin-top: 20px;">
+            <button class="btn btn-exit-inline" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
+              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              <span>뒤로 가기</span>
+            </button>
           </div>
         </div>
       </div>
