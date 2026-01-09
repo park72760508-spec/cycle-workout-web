@@ -631,23 +631,22 @@ function updateSpeedometerNeedle(speedometerId, speed) {
 
 /**
  * 속도에 따른 바늘 각도 계산 (공통 함수)
- * 0~60km/h: 270도 + 180도 × (현재속도/120)
- * 60km/h 초과: 180도 × (현재속도/120) - 90도
+ * 수정: 60km/h 경계에서 연속성을 보장하기 위해 단일 공식 사용
+ * 속도계 범위: 0~120km/h → 360도(0도, 0km/h) ~ 180도(120km/h)
+ * 눈금 생성 로직과 일치: angle = 180 - (speed / maxSpeed) * 180 + 180
+ * 단일 공식: angle = 360 - (speed / maxSpeed) * 180
+ * - speed = 0 → angle = 360도 = 0도 (하단 왼쪽)
+ * - speed = 60 → angle = 360 - 90 = 270도 (위쪽)
+ * - speed = 120 → angle = 360 - 180 = 180도 (하단 오른쪽)
  */
 function calculateNeedleAngle(speed) {
   const maxSpeed = 120;
-  let angle;
-  if (speed <= 60) {
-    // 0~60km/h: 270도 + 180도 × (속도/120)
-    // speed = 0 → angle = 270도
-    // speed = 60 → angle = 270 + 90 = 360도 (0도)
-    angle = 270 + 180 * (speed / maxSpeed);
-  } else {
-    // 60km/h 초과: 180도 × (속도/120) - 90도
-    // speed = 60.01 → angle = 180*(60.01/120) - 90 = 0.015도
-    // speed = 120 → angle = 180 - 90 = 90도
-    angle = 180 * (speed / maxSpeed) - 90;
-  }
+  
+  // 단일 공식으로 연속성 보장 (눈금 생성 로직과 일치)
+  // speed = 0 → angle = 360도 (정규화하면 0도)
+  // speed = 60 → angle = 270도
+  // speed = 120 → angle = 180도
+  let angle = 360 - (speed / maxSpeed) * 180;
   
   // 각도를 0~360도 범위로 정규화
   while (angle >= 360) angle -= 360;
@@ -661,8 +660,12 @@ function calculateNeedleAngle(speed) {
  * 각도 → 속도 변환
  * 
  * calculateNeedleAngle의 역함수:
- * - 0~60km/h: angle = 270 + 180 * (speed / 120) → speed = (angle - 270) * 120 / 180
- * - 60~120km/h: angle = 180 * (speed / 120) - 90 → speed = (angle + 90) * 120 / 180
+ * angle = 360 - (speed / 120) * 180
+ * → speed = (360 - angle) * 120 / 180 = (360 - angle) * 2/3
+ * 
+ * - angle = 360(0도) → speed = 0
+ * - angle = 270도 → speed = 60
+ * - angle = 180도 → speed = 120
  */
 function calculateSpeedFromAngle(angle) {
   const maxSpeed = 120;
@@ -672,28 +675,9 @@ function calculateSpeedFromAngle(angle) {
   while (normalizedAngle >= 360) normalizedAngle -= 360;
   while (normalizedAngle < 0) normalizedAngle += 360;
   
-  let speed;
-  
-  // 각도 범위에 따른 속도 계산
-  if (normalizedAngle >= 270) {
-    // 270~360도: 0~60km/h 구간
-    // angle = 270 → speed = 0
-    // angle = 360(0) → speed = 60 (하지만 360도는 0도로 정규화되므로 별도 처리)
-    speed = ((normalizedAngle - 270) / 180) * maxSpeed;
-  } else if (normalizedAngle >= 0 && normalizedAngle < 90) {
-    // 0~90도: 60~120km/h 구간
-    // angle = 0 → speed = (0 + 90) * 120 / 180 = 60
-    // angle = 90 → speed = (90 + 90) * 120 / 180 = 120
-    speed = ((normalizedAngle + 90) / 180) * maxSpeed;
-  } else {
-    // 90~270도 범위는 속도계 범위 밖 (이론적으로 발생하지 않아야 함)
-    // 안전장치: 가장 가까운 경계값 사용
-    if (normalizedAngle >= 90 && normalizedAngle < 180) {
-      speed = maxSpeed; // 120km/h (90도에 해당)
-    } else {
-      speed = 60; // 60km/h (270도에 해당)
-    }
-  }
+  // 단일 역함수 공식 사용 (연속성 보장)
+  // speed = (360 - angle) * maxSpeed / 180
+  let speed = ((360 - normalizedAngle) / 180) * maxSpeed;
   
   // 속도 범위 제한
   if (speed < 0) speed = 0;
