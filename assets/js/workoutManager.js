@@ -856,11 +856,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    // Indoor Training: 흰색 얇은 실선
+    // Indoor Training: 흰색 얇은 점선
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // 흰색, 투명도 50%
     ctx.lineWidth = 1; // 얇은 선
-    ctx.setLineDash([]); // 실선
+    ctx.setLineDash([4, 3]); // 점선 (4px 점, 3px 간격)
   } else {
     ctx.shadowColor = 'rgba(234, 179, 8, 0.3)';
     ctx.strokeStyle = 'rgba(234, 179, 8, 0.7)'; // 훈련 준비 화면
@@ -887,32 +887,64 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const boxPadding = 4;
     const boxWidth = textWidth + boxPadding * 2;
     const boxHeight = textHeight + boxPadding * 2;
-    const boxX = padding.left + chartWidth - boxWidth - 2; // 오른쪽 끝에서 약간 여백
-    const boxY = ftpY - boxHeight / 2;
     
-    // 빨강색 바탕 상자 그리기
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // 빨강색 바탕
-    ctx.beginPath();
-    const radius = 3;
-    ctx.moveTo(boxX + radius, boxY);
-    ctx.lineTo(boxX + boxWidth - radius, boxY);
-    ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
-    ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
-    ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
-    ctx.lineTo(boxX + radius, boxY + boxHeight);
-    ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
-    ctx.lineTo(boxX, boxY + radius);
-    ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
-    ctx.closePath();
-    ctx.fill();
-    
-    // 흰색 텍스트 표시
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
-    ctx.textAlign = 'right'; // 원래 정렬 복원
-    ctx.textBaseline = 'alphabetic'; // 원래 기준선 복원
+    // Indoor Training 화면: 점선 오른쪽 끝에 배치
+    if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
+      const boxX = padding.left + chartWidth - boxWidth - 2; // 오른쪽 끝에서 약간 여백
+      const boxY = ftpY - boxHeight / 2; // 점선 중앙에 배치 (ftpY가 점선의 Y 위치)
+      
+      // 빨강색 바탕 둥근 상자 그리기
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // 빨강색 바탕
+      ctx.beginPath();
+      const radius = 3;
+      ctx.moveTo(boxX + radius, boxY);
+      ctx.lineTo(boxX + boxWidth - radius, boxY);
+      ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+      ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+      ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+      ctx.lineTo(boxX + radius, boxY + boxHeight);
+      ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+      ctx.lineTo(boxX, boxY + radius);
+      ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+      ctx.closePath();
+      ctx.fill();
+      
+      // 흰색 텍스트 표시
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
+      ctx.textAlign = 'right'; // 원래 정렬 복원
+      ctx.textBaseline = 'alphabetic'; // 원래 기준선 복원
+    } else {
+      // 개인훈련 대시보드: 기존 로직 유지
+      const boxX = padding.left + chartWidth - boxWidth - 2;
+      const boxY = ftpY - boxHeight / 2;
+      
+      // 빨강색 바탕 상자 그리기
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+      ctx.beginPath();
+      const radius = 3;
+      ctx.moveTo(boxX + radius, boxY);
+      ctx.lineTo(boxX + boxWidth - radius, boxY);
+      ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
+      ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
+      ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
+      ctx.lineTo(boxX + radius, boxY + boxHeight);
+      ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
+      ctx.lineTo(boxX, boxY + radius);
+      ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
+      ctx.closePath();
+      ctx.fill();
+      
+      // 흰색 텍스트 표시
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'alphabetic';
+    }
   }
   
   // FTP 라벨 (부드러운 배경)
