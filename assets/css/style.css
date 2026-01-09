@@ -311,6 +311,43 @@ h1,h2,h3,h4 { font-weight: 600; }
   opacity: 0 !important;
 }
 
+/* 베이스캠프 화면의 MY CAREER 버튼 스타일 (이미지 없이 텍스트만 표시) */
+#basecampScreen .btn-device.basecamp-btn-career,
+#basecampScreen .basecamp-btn-career {
+  background-image: none !important;
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+#basecampScreen .btn-device.basecamp-btn-career::before,
+#basecampScreen .basecamp-btn-career::before {
+  background: transparent !important;
+}
+
+#basecampScreen .btn-device.basecamp-btn-career span,
+#basecampScreen .basecamp-btn-career span {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: #15803d !important;
+  text-shadow: none !important;
+}
+
+/* MY CAREER 화면 내부 버튼 텍스트 표시 스타일 */
+#myCareerScreen .basecamp-btn-career span {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: #fff !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7) !important;
+  font-weight: 700 !important;
+  font-size: 16px !important;
+}
+
+/* MY CAREER 화면 내부 버튼 오버레이 조정 (텍스트 가독성 향상) */
+#myCareerScreen .basecamp-btn-career::before {
+  background: rgba(135, 206, 235, 0.4) !important; /* 약간 더 진한 오버레이로 텍스트 가독성 향상 */
+}
+
 /* 각 버튼별 배경 이미지 - 배경색 위에 표시 */
 /* INDOOR TRAINING, SOLO TRAINING, USER PROFILE 버튼 - 이미지 크기 85%로 축소 (원본 비율 유지) */
 #basecampScreen .btn-device.basecamp-btn-indoor,
@@ -350,6 +387,141 @@ h1,h2,h3,h4 { font-weight: 600; }
   background-size: cover !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
+}
+
+/* MY CAREER 버튼 스타일 (베이스캠프 버튼과 동일한 구조) */
+#basecampScreen .btn-device.basecamp-btn-career,
+.basecamp-btn-career {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  color: #15803d !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  position: relative;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  padding-bottom: 12px !important;
+  min-height: 160px !important;
+}
+
+#basecampScreen .btn-device.basecamp-btn-career::before,
+.basecamp-btn-career::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(135, 206, 235, 0.3) !important;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.basecamp-btn-career span {
+  color: #fff !important;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  font-weight: 700;
+  margin-top: auto !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.basecamp-btn-career:hover:not(:disabled) {
+  border-color: rgba(135, 206, 235, 0.9) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(135, 206, 235, 0.4);
+}
+
+/* MY CAREER 화면 스타일 (베이스캠프와 동일) */
+#myCareerScreen {
+  position: relative;
+  overflow: hidden;
+}
+
+#myCareerScreen.active {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  padding: 20px;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
+}
+
+#myCareerScreen .connection-main-container {
+  position: relative;
+  z-index: 1;
+}
+
+#myCareerScreen .connection-form-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
+.basecamp-btn-career-schedule {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(04).png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 85% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+.basecamp-btn-career-journal {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 85% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+.basecamp-btn-career-workout {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(06).png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 85% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+.basecamp-btn-career-profile {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(07).png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 85% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+.basecamp-btn-career-subscribe {
+  background-image: url('https://stelvio.ai.kr/assets/img/b(08).png') !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-size: 85% !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+.basecamp-btn-career-logo {
+  background-image: url('https://stelvio.ai.kr/assets/img/STELVIO AI.png') !important;
+  background-color: transparent !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+.basecamp-btn-career-logo span {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
 }
 
 .basecamp-btn:hover:not(:disabled) {
