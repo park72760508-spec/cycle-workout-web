@@ -1807,6 +1807,19 @@ function updateTargetPowerArc() {
     const targetType = seg?.target_type || 'ftp_pct';
     const isFtpPctz = targetType === 'ftp_pctz';
     
+    // cadence_rpm 타입인 경우: 파워값이 없으므로 원호 표시하지 않음
+    if (targetType === 'cadence_rpm') {
+        const targetArc = document.getElementById('gauge-target-arc');
+        if (targetArc) {
+            targetArc.style.display = 'none';
+        }
+        const maxArc = document.getElementById('gauge-max-arc');
+        if (maxArc) {
+            maxArc.style.display = 'none';
+        }
+        return;
+    }
+    
     // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
     const minRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
     
