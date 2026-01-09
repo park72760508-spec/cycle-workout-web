@@ -1090,6 +1090,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       });
     }
     
+    // 세그먼트 타입 확인 (target_type)
+    const targetType = seg.target_type || 'ftp_pct';
+    
     // 세그먼트 타겟 파워 계산
     const ftpPercent = getSegmentFtpPercentForPreview(seg);
     const targetPower = ftp * (ftpPercent / 100);
@@ -1097,89 +1100,78 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // 막대 위치 및 크기
     const x = padding.left + (currentTime / totalSeconds) * chartWidth;
     const barWidth = (duration / totalSeconds) * chartWidth;
-    let barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight); // 최소 2px 높이 (let으로 변경)
+    
+    // 세그먼트별 막대 높이 계산
+    let barHeight;
+    if (targetType === 'cadence_rpm') {
+      // cadence_rpm: 파워값이 없으므로 막대 높이는 0
+      barHeight = 0;
+    } else if (targetType === 'dual') {
+      // dual: FTP % 값의 비율에 따라 막대 높이 적용
+      barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+    } else if (targetType === 'ftp_pct') {
+      // ftp_pct: 오른쪽 Y축의 비율에 따라 높이 비율 적용
+      barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+    } else if (targetType === 'ftp_pctz') {
+      // ftp_pctz: 평균값으로 계산 (기존 로직 유지)
+      barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+    } else {
+      // 기타: 기본 로직
+      barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+    }
+    
     let y = padding.top + chartHeight - barHeight;
     
-    // 세그먼트 타입 확인
+    // 세그먼트 타입 확인 (segment_type)
     const segType = (seg.segment_type || '').toLowerCase();
     const isRest = segType === 'rest';
     const isWarmup = segType === 'warmup';
     const isCooldown = segType === 'cooldown';
     const isInterval = segType === 'interval';
     
-    // 색상 결정 (FTP 백분율 기준)
-    const ftpPercentValue = (targetPower / ftp) * 100;
-    let color;
-    if (ftpPercentValue < 50) {
-      // 휴식 (FTP 50% 미만): 흰색, 투명도 50%
-      color = 'rgba(255, 255, 255, 0.5)';
-      // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
-      barHeight = Math.max(barHeight, 3);
-      y = padding.top + chartHeight - barHeight;
-    } else if (ftpPercentValue < 60) {
-      // 워밍업/쿨다운 (FTP 50% 이상 < 60%): 민트색, 투명도 80%
-      color = 'rgba(16, 185, 129, 0.8)';
-    } else if (targetPower >= ftp) {
-      // 고강도 인터벌 (FTP 100% 이상): 민트색, 투명도 20%
-      color = 'rgba(16, 185, 129, 0.2)';
-    } else if (targetPower >= ftp * 0.8) {
-      // 인터벌 (FTP 80% 이상 ~ <100%): 민트색, 투명도 40%
-      color = 'rgba(16, 185, 129, 0.4)';
-    } else if (ftpPercentValue >= 60) {
-      // 저강도 인터벌 (FTP 60% 이상 < 80%): 민트색, 투명도 60%
-      color = 'rgba(16, 185, 129, 0.6)';
-    } else {
-      // 기본: 민트색, 투명도 60%
-      color = 'rgba(16, 185, 129, 0.6)';
-    }
-    
-    // 막대 그리기 (부드러운 그라데이션)
-    const barGradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-    const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
-    const r = parseInt(baseColor[0]);
-    const g = parseInt(baseColor[1]);
-    const b = parseInt(baseColor[2]);
-    const a = parseFloat(baseColor[3]);
-    
-    barGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a})`);
-    barGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
-    
-    ctx.fillStyle = barGradient;
-    
-    // 둥근 모서리를 위한 경로 생성
-    const radius = Math.min(4, barWidth / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + radius, y);
-    ctx.lineTo(x + barWidth - radius, y);
-    ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-    ctx.lineTo(x + barWidth, y + barHeight);
-    ctx.lineTo(x, y + barHeight);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.closePath();
-    ctx.fill();
-    
-    // 막대 테두리 (부드러운 색상)
-    ctx.shadowColor = 'transparent';
-    
-    // 현재 진행 중인 세그먼트인지 확인
-    const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
-    
-    if (isCurrentSegment) {
-      // 현재 세그먼트: 흰색 네온 애니메이션 효과
-      const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
-      const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
-      const whiteColor = `rgba(255, 255, 255, ${0.6 + 0.4 * neonIntensity})`; // 흰색
+    // cadence_rpm 타입일 때는 막대를 그리지 않음 (높이가 0)
+    if (targetType !== 'cadence_rpm' && barHeight > 0) {
+      // 색상 결정 (FTP 백분율 기준)
+      const ftpPercentValue = (targetPower / ftp) * 100;
+      let color;
+      if (ftpPercentValue < 50) {
+        // 휴식 (FTP 50% 미만): 흰색, 투명도 50%
+        color = 'rgba(255, 255, 255, 0.5)';
+        // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
+        barHeight = Math.max(barHeight, 3);
+        y = padding.top + chartHeight - barHeight;
+      } else if (ftpPercentValue < 60) {
+        // 워밍업/쿨다운 (FTP 50% 이상 < 60%): 민트색, 투명도 80%
+        color = 'rgba(16, 185, 129, 0.8)';
+      } else if (targetPower >= ftp) {
+        // 고강도 인터벌 (FTP 100% 이상): 민트색, 투명도 20%
+        color = 'rgba(16, 185, 129, 0.2)';
+      } else if (targetPower >= ftp * 0.8) {
+        // 인터벌 (FTP 80% 이상 ~ <100%): 민트색, 투명도 40%
+        color = 'rgba(16, 185, 129, 0.4)';
+      } else if (ftpPercentValue >= 60) {
+        // 저강도 인터벌 (FTP 60% 이상 < 80%): 민트색, 투명도 60%
+        color = 'rgba(16, 185, 129, 0.6)';
+      } else {
+        // 기본: 민트색, 투명도 60%
+        color = 'rgba(16, 185, 129, 0.6)';
+      }
       
-      // 네온 효과를 위한 여러 레이어
-      ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-      ctx.shadowBlur = 10 * neonIntensity;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-      ctx.strokeStyle = whiteColor;
-      ctx.lineWidth = 3;
+      // 막대 그리기 (부드러운 그라데이션)
+      const barGradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+      const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
+      const r = parseInt(baseColor[0]);
+      const g = parseInt(baseColor[1]);
+      const b = parseInt(baseColor[2]);
+      const a = parseFloat(baseColor[3]);
       
-      // 외곽 네온 효과
+      barGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a})`);
+      barGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
+      
+      ctx.fillStyle = barGradient;
+      
+      // 둥근 모서리를 위한 경로 생성
+      const radius = Math.min(4, barWidth / 2);
       ctx.beginPath();
       ctx.moveTo(x + radius, y);
       ctx.lineTo(x + barWidth - radius, y);
@@ -1189,37 +1181,69 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.lineTo(x, y + radius);
       ctx.quadraticCurveTo(x, y, x + radius, y);
       ctx.closePath();
-      ctx.stroke();
+      ctx.fill();
       
-      // 내부 네온 효과 (더 강한)
-      ctx.shadowBlur = 15 * neonIntensity;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      
-      // 그림자 초기화
+      // 막대 테두리 (부드러운 색상)
       ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-    } else {
-      // 일반 세그먼트: 기본 테두리
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
-      ctx.lineWidth = 1;
       
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + barWidth - radius, y);
-      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-      ctx.lineTo(x + barWidth, y + barHeight);
-      ctx.lineTo(x, y + barHeight);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
-      ctx.stroke();
+      // 현재 진행 중인 세그먼트인지 확인
+      const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
+      
+      if (isCurrentSegment) {
+        // 현재 세그먼트: 흰색 네온 애니메이션 효과
+        const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
+        const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
+        const whiteColor = `rgba(255, 255, 255, ${0.6 + 0.4 * neonIntensity})`; // 흰색
+        
+        // 네온 효과를 위한 여러 레이어
+        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+        ctx.shadowBlur = 10 * neonIntensity;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = whiteColor;
+        ctx.lineWidth = 3;
+        
+        // 외곽 네온 효과
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+        ctx.lineTo(x + barWidth, y + barHeight);
+        ctx.lineTo(x, y + barHeight);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.stroke();
+        
+        // 내부 네온 효과 (더 강한)
+        ctx.shadowBlur = 15 * neonIntensity;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // 그림자 초기화
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+      } else {
+        // 일반 세그먼트: 기본 테두리
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+        ctx.lineTo(x + barWidth, y + barHeight);
+        ctx.lineTo(x, y + barHeight);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.stroke();
+      }
     }
     
     // 세그먼트 라벨 제거 (가로축에는 시간 표시만 남김)
     
     // dual 또는 cadence_rpm 타입일 때 RPM 점선 표시
-    const targetType = seg.target_type || 'ftp_pct';
     
     // 디버깅: 모든 세그먼트의 targetType 확인
     if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
@@ -1267,12 +1291,18 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         });
       }
       
-      if (targetRpm > 0 && maxRpm > 0) {
+      // Indoor Training 및 개인훈련 대시보드: 스케일링 공식 사용하므로 maxRpm 불필요
+      // 기타 화면: maxRpm 필요
+      const shouldDrawRpm = (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') 
+        ? targetRpm > 0 
+        : (targetRpm > 0 && maxRpm > 0);
+      
+      if (shouldDrawRpm) {
         console.log(`[drawSegmentGraph] 세그먼트 ${index + 1} RPM 점선 그리기 실행:`, {
           index: index + 1,
           targetRpm,
           maxRpm,
-          rpmY: padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm)),
+          canvasId,
           x,
           barWidth
         });
@@ -1281,6 +1311,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         let rpmY;
         if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
           // RPM_scaled = (RPM_real / 90) * 100
+          // 기준값 90을 기준으로 위 아래에 바로 표시
           const rpmScaled = (targetRpm / 90) * 100; // FTP %로 변환
           const rpmFtpPercent = Math.min(200, Math.max(0, rpmScaled)); // 최대 200%로 제한
           // FTP %를 Y 위치로 변환 (maxTargetPower 기준)
