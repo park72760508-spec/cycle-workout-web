@@ -10388,20 +10388,20 @@ function isIOSDevice() {
   const platform = navigator.platform || '';
   
   // iOS 기기 감지 (Safari, Chrome, Firefox 등 모든 iOS 브라우저)
-  const isIOS = /iPad|iPhone|iPod/.test(ua) || 
-                (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const detectedIOS = /iPad|iPhone|iPod/.test(ua) || 
+                      (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   
   // iOS Chrome 감지 (CriOS는 iOS Chrome의 User Agent 식별자)
-  const isIOSChrome = /CriOS/i.test(ua) || (/Chrome/i.test(ua) && isIOS);
+  const isIOSChrome = /CriOS/i.test(ua) || (/Chrome/i.test(ua) && detectedIOS);
   
-  if (isIOS) {
+  if (detectedIOS) {
     const browserType = isIOSChrome ? 'Chrome' : 
                        /Safari/i.test(ua) && !/CriOS/i.test(ua) ? 'Safari' : 
                        /Firefox/i.test(ua) ? 'Firefox' : '기타';
     console.log(`📱 iOS 기기 감지: ${browserType} 브라우저`);
   }
   
-  return isIOS;
+  return detectedIOS;
 }
 
 // iOS용 사운드 효과 (Type A: Tick) - 1200Hz, sine, 0.05s
@@ -10799,6 +10799,9 @@ function enhanceBackButton(buttonId) {
     return; // 이미 처리됨
   }
   
+  // iOS 감지 (함수 시작 부분에서 선언)
+  const isIOSBackButton = isIOSDevice();
+  
   // 마커 속성 추가
   button.setAttribute('data-back-button-enhanced', 'true');
   button.setAttribute('data-haptic-applied', 'true'); // 범용 함수에서 제외
@@ -10864,9 +10867,6 @@ function enhanceBackButton(buttonId) {
     return false;
   };
   
-  // iOS 감지
-  const isIOS = isIOSDevice();
-  
   // 피드백 함수 (iOS: 사운드, 기타: 진동)
   // iOS에서는 사용자 이벤트에서 직접 호출되어야 함
   const triggerFeedback = function(e) {
@@ -10910,8 +10910,8 @@ function enhanceBackButton(buttonId) {
   // 터치 영역 확대를 위한 CSS 클래스 추가
   button.classList.add('enhanced-back-button-improved');
   
-  const isIOS = isIOSDevice();
-  const feedbackType = isIOS ? '사운드 (Type A: Tick)' : '진동';
+  // 피드백 타입 로그
+  const feedbackType = isIOSBackButton ? '사운드 (Type A: Tick)' : '진동';
   console.log(`✅ ${buttonId} 버튼 개선 완료 (피드백: ${feedbackType}, 클릭 인식 강화)`);
 }
 
