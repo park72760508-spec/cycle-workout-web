@@ -5821,6 +5821,17 @@ async function filterRoomWorkouts() {
         return;
     }
     
+    // 버튼 클릭 애니메이션 (시각적 피드백)
+    if (btnRoomWKO) {
+        btnRoomWKO.style.transform = 'scale(0.95)';
+        btnRoomWKO.style.transition = 'transform 0.1s ease';
+        setTimeout(() => {
+            if (btnRoomWKO) {
+                btnRoomWKO.style.transform = 'scale(1)';
+            }
+        }, 100);
+    }
+    
     // 버튼 로딩 애니메이션 시작
     if (btnRoomWKO) {
         btnRoomWKO.disabled = true;
@@ -6033,7 +6044,250 @@ async function filterRoomWorkouts() {
     }
 }
 
+/**
+ * All WKO 버튼: grade=3일 때 공개 + Room WKO 리스트, grade=1일 때 모두 표시
+ */
+async function filterAllWorkouts() {
+    const btnAllWKO = document.getElementById('btnAllWKO');
+    const tbody = document.getElementById('workoutSelectionTableBody');
+    
+    if (!tbody) {
+        console.error('[Indoor Training] workoutSelectionTableBody 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 버튼 클릭 애니메이션 (시각적 피드백)
+    if (btnAllWKO) {
+        btnAllWKO.style.transform = 'scale(0.95)';
+        btnAllWKO.style.transition = 'transform 0.1s ease';
+        setTimeout(() => {
+            if (btnAllWKO) {
+                btnAllWKO.style.transform = 'scale(1)';
+            }
+        }, 100);
+    }
+    
+    // 버튼 로딩 애니메이션 시작
+    if (btnAllWKO) {
+        btnAllWKO.disabled = true;
+        btnAllWKO.style.opacity = '0.7';
+        btnAllWKO.style.cursor = 'not-allowed';
+        const btnText = btnAllWKO.querySelector('span');
+        if (btnText) {
+            btnText.innerHTML = '<span style="display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(22, 163, 74, 0.3); border-top: 2px solid #16a34a; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px;"></span> 필터링 중...';
+        }
+    }
+    
+    try {
+        // grade 확인
+        let grade = '2';
+        try {
+            if (typeof getViewerGrade === 'function') {
+                grade = String(getViewerGrade());
+            } else {
+                const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+                const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+                if (viewer && viewer.grade != null) {
+                    grade = String(viewer.grade);
+                } else if (authUser && authUser.grade != null) {
+                    grade = String(authUser.grade);
+                }
+            }
+        } catch (e) {
+            console.warn('[Indoor Training] grade 확인 실패:', e);
+            grade = '2';
+        }
+        
+        // 전역 변수에서 워크아웃 목록 가져오기 (없으면 다시 로드)
+        let normalizedWorkouts = window.currentNormalizedWorkouts;
+        if (!normalizedWorkouts || normalizedWorkouts.length === 0) {
+            const result = typeof apiGetWorkouts === 'function' ? await apiGetWorkouts() : null;
+            if (result && result.success) {
+                const workouts = result.items || [];
+                normalizedWorkouts = workouts
+                    .filter(w => {
+                        if (typeof validateWorkoutData === 'function') {
+                            return validateWorkoutData(w);
+                        }
+                        return w && w.id && w.title;
+                    })
+                    .map(w => {
+                        if (typeof normalizeWorkoutData === 'function') {
+                            return normalizeWorkoutData(w);
+                        }
+                        return w;
+                    });
+                // 전역 변수에 저장
+                window.currentNormalizedWorkouts = normalizedWorkouts;
+            } else {
+                // 버튼 상태 복원
+                if (btnAllWKO) {
+                    btnAllWKO.disabled = false;
+                    btnAllWKO.style.opacity = '1';
+                    btnAllWKO.style.cursor = 'pointer';
+                    const btnText = btnAllWKO.querySelector('span');
+                    if (btnText) {
+                        btnText.textContent = 'All WKO';
+                    }
+                }
+                
+                if (typeof showToast === 'function') {
+                    showToast('워크아웃 목록을 불러올 수 없습니다.', 'error');
+                }
+                return;
+            }
+        }
+        
+        let filteredWorkouts = [];
+        
+        // grade=1: 모든 워크아웃 표시
+        if (grade === '1') {
+            filteredWorkouts = normalizedWorkouts;
+            console.log('[Indoor Training] All WKO 필터링 (grade=1): 모든 워크아웃 표시', {
+                totalWorkouts: filteredWorkouts.length
+            });
+        }
+        // grade=3: 공개 워크아웃 + Room WKO 리스트
+        else if (grade === '3') {
+            // 현재 선택된 Training Room 이름 가져오기
+            let currentTrainingRoomName = null;
+            
+            // 1순위: window.currentTrainingRoomName
+            if (typeof window !== 'undefined' && window.currentTrainingRoomName) {
+                currentTrainingRoomName = String(window.currentTrainingRoomName).trim();
+            }
+            // 2순위: localStorage에서 이름 가져오기
+            else if (typeof localStorage !== 'undefined') {
+                try {
+                    const savedName = localStorage.getItem('currentTrainingRoomName');
+                    if (savedName) {
+                        currentTrainingRoomName = String(savedName).trim();
+                    }
+                } catch (e) {
+                    console.warn('[Indoor Training] localStorage 접근 실패:', e);
+                }
+            }
+            // 3순위: window.SESSION_ID로 Training Room 목록에서 찾기
+            if (!currentTrainingRoomName) {
+                const roomId = window.SESSION_ID || window.currentTrainingRoomId || null;
+                if (roomId && typeof window.GAS_URL !== 'undefined' && window.GAS_URL) {
+                    try {
+                        const response = await fetch(`${window.GAS_URL}?action=listTrainingRooms`);
+                        if (response.ok) {
+                            const roomListResult = await response.json();
+                            if (roomListResult && roomListResult.success && Array.isArray(roomListResult.items)) {
+                                const selectedRoom = roomListResult.items.find(room => 
+                                    String(room.id) === String(roomId) || String(room.Id) === String(roomId)
+                                );
+                                if (selectedRoom) {
+                                    currentTrainingRoomName = (selectedRoom.name || 
+                                                           selectedRoom.title || 
+                                                           selectedRoom.Name || 
+                                                           selectedRoom.roomName || '').trim();
+                                }
+                            }
+                        }
+                    } catch (fetchError) {
+                        console.warn('[Indoor Training] Training Room 목록 가져오기 실패:', fetchError);
+                    }
+                }
+            }
+            
+            const roomNameTrimmed = currentTrainingRoomName ? String(currentTrainingRoomName).trim() : null;
+            
+            // 필터링: 공개 워크아웃(status='보이기') 또는 status가 Training Room 이름과 동일한 경우만 표시
+            filteredWorkouts = normalizedWorkouts.filter(workout => {
+                const workoutStatus = String(workout.status || '').trim();
+                const isPublic = workoutStatus === '보이기';
+                
+                // 공개 워크아웃이면 표시
+                if (isPublic) {
+                    return true;
+                }
+                
+                // Training Room 이름이 있고, status가 Training Room 이름과 동일하면 표시
+                if (roomNameTrimmed && workoutStatus === roomNameTrimmed) {
+                    return true;
+                }
+                
+                // 그 외의 경우는 표시하지 않음
+                return false;
+            });
+            
+            console.log('[Indoor Training] All WKO 필터링 (grade=3): 공개 + Room WKO 리스트', {
+                grade: grade,
+                currentTrainingRoomName: currentTrainingRoomName,
+                roomNameTrimmed: roomNameTrimmed,
+                totalWorkouts: normalizedWorkouts.length,
+                filteredWorkouts: filteredWorkouts.length,
+                filteredWorkoutStatuses: filteredWorkouts.map(w => ({ id: w.id, title: w.title, status: w.status }))
+            });
+        }
+        // grade=2: 공개 워크아웃만 표시
+        else {
+            filteredWorkouts = normalizedWorkouts.filter(workout => {
+                const workoutStatus = String(workout.status || '').trim();
+                return workoutStatus === '보이기';
+            });
+            console.log('[Indoor Training] All WKO 필터링 (grade=2): 공개 워크아웃만 표시', {
+                totalWorkouts: normalizedWorkouts.length,
+                filteredWorkouts: filteredWorkouts.length
+            });
+        }
+        
+        // 필터링된 결과 저장
+        window.currentFilteredWorkouts = filteredWorkouts;
+        
+        // 테이블 렌더링
+        renderWorkoutSelectionTable(filteredWorkouts);
+        
+        // 버튼 상태 복원
+        if (btnAllWKO) {
+            btnAllWKO.disabled = false;
+            btnAllWKO.style.opacity = '1';
+            btnAllWKO.style.cursor = 'pointer';
+            const btnText = btnAllWKO.querySelector('span');
+            if (btnText) {
+                btnText.textContent = 'All WKO';
+            }
+        }
+        
+        if (typeof showToast === 'function') {
+            if (filteredWorkouts.length > 0) {
+                if (grade === '1') {
+                    showToast(`전체 워크아웃 ${filteredWorkouts.length}개를 표시합니다.`, 'success');
+                } else if (grade === '3') {
+                    showToast(`공개 및 Room 전용 워크아웃 ${filteredWorkouts.length}개를 표시합니다.`, 'success');
+                } else {
+                    showToast(`공개 워크아웃 ${filteredWorkouts.length}개를 표시합니다.`, 'success');
+                }
+            } else {
+                showToast('표시할 워크아웃이 없습니다.', 'info');
+            }
+        }
+        
+    } catch (error) {
+        console.error('[Indoor Training] All WKO 필터링 오류:', error);
+        
+        // 버튼 상태 복원
+        if (btnAllWKO) {
+            btnAllWKO.disabled = false;
+            btnAllWKO.style.opacity = '1';
+            btnAllWKO.style.cursor = 'pointer';
+            const btnText = btnAllWKO.querySelector('span');
+            if (btnText) {
+                btnText.textContent = 'All WKO';
+            }
+        }
+        
+        if (typeof showToast === 'function') {
+            showToast('워크아웃 필터링 중 오류가 발생했습니다.', 'error');
+        }
+    }
+}
+
 // 전역 함수로 노출
+window.filterAllWorkouts = filterAllWorkouts;
 window.filterRoomWorkouts = filterRoomWorkouts;
 window.renderWorkoutSelectionTable = renderWorkoutSelectionTable;
 
