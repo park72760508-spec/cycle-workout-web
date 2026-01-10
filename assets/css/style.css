@@ -762,6 +762,15 @@ h1,h2,h3,h4 { font-weight: 600; }
   min-width: 120px !important;
 }
 
+/* 무선 기기 연결 화면과 Join Session 화면의 뒤로 가기 버튼은 원래 사이즈 유지 */
+#connectionScreen .connection-exit-container .btn-exit-inline,
+#playerListScreen .connection-exit-container .btn-exit-inline {
+  padding: 10px 20px !important;
+  min-height: 44px !important;
+  min-width: 44px !important;
+  font-size: 14px !important;
+}
+
 /* 개선된 뒤로 가기 버튼 (클릭 인식 강화) */
 .enhanced-back-button-improved {
   /* 터치 영역 최대 확대 */
@@ -793,7 +802,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 모바일에서 터치 영역 더 확대 */
 @media (max-width: 768px) {
-  .connection-exit-container .btn-exit-inline,
+  /* enhanced-back-button 클래스가 있는 버튼만 확대 (무선 기기 연결, Join Session 제외) */
   .enhanced-back-button {
     padding: 14px 28px !important;
     min-height: 50px !important;
@@ -806,6 +815,15 @@ h1,h2,h3,h4 { font-weight: 600; }
     min-height: 60px !important;
     min-width: 160px !important;
     font-size: 16px !important;
+  }
+  
+  /* 무선 기기 연결 화면과 Join Session 화면의 뒤로 가기 버튼은 원래 사이즈 유지 */
+  #connectionScreen .connection-exit-container .btn-exit-inline,
+  #playerListScreen .connection-exit-container .btn-exit-inline {
+    padding: 10px 20px !important;
+    min-height: 44px !important;
+    min-width: auto !important;
+    font-size: 14px !important;
   }
 }
 
