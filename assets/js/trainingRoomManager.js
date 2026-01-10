@@ -224,16 +224,21 @@ async function selectTrainingRoom(roomId) {
   // 선택된 Training Room 저장
   currentSelectedTrainingRoom = room;
   
-  // 전역 변수 및 localStorage에 room id 저장 (Firebase Config에서 사용)
+  // 전역 변수 및 localStorage에 room id와 이름 저장 (Firebase Config에서 사용)
   if (typeof window !== 'undefined') {
     window.currentTrainingRoomId = String(room.id);
+    window.currentTrainingRoomName = room.name || room.title || room.Name || room.roomName || null;
     // Firebase Config의 SESSION_ID도 업데이트
     window.SESSION_ID = String(room.id);
     console.log('[Training Room] window.SESSION_ID 업데이트:', window.SESSION_ID);
+    console.log('[Training Room] window.currentTrainingRoomName 저장:', window.currentTrainingRoomName);
   }
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem('currentTrainingRoomId', String(room.id));
+      if (room.name || room.title || room.Name || room.roomName) {
+        localStorage.setItem('currentTrainingRoomName', room.name || room.title || room.Name || room.roomName);
+      }
     } catch (e) {
       console.warn('[Training Room] localStorage 저장 실패:', e);
     }
@@ -1318,16 +1323,21 @@ async function selectTrainingRoomForModal(roomId) {
   }
 
   // 선택된 Training Room 저장 (비밀번호 확인 완료 또는 비밀번호 없음)
-  // 전역 변수 및 localStorage에 room id 저장 (Firebase Config에서 사용)
+  // 전역 변수 및 localStorage에 room id와 이름 저장 (Firebase Config에서 사용)
   if (typeof window !== 'undefined') {
     window.currentTrainingRoomId = String(room.id);
+    window.currentTrainingRoomName = room.name || room.title || room.Name || room.roomName || null;
     // Firebase Config의 SESSION_ID도 업데이트
     window.SESSION_ID = String(room.id);
     console.log('[Training Room Modal] window.SESSION_ID 업데이트:', window.SESSION_ID);
+    console.log('[Training Room Modal] window.currentTrainingRoomName 저장:', window.currentTrainingRoomName);
   }
   if (typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem('currentTrainingRoomId', String(room.id));
+      if (room.name || room.title || room.Name || room.roomName) {
+        localStorage.setItem('currentTrainingRoomName', room.name || room.title || room.Name || room.roomName);
+      }
     } catch (e) {
       console.warn('[Training Room Modal] localStorage 저장 실패:', e);
     }

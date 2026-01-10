@@ -5813,18 +5813,58 @@ function renderWorkoutSelectionTable(workouts) {
  * Room WKO 버튼: Training Room 이름과 status가 일치하는 워크아웃만 필터링
  */
 async function filterRoomWorkouts() {
+    const btnRoomWKO = document.getElementById('btnRoomWKO');
     const tbody = document.getElementById('workoutSelectionTableBody');
+    
     if (!tbody) {
         console.error('[Indoor Training] workoutSelectionTableBody 요소를 찾을 수 없습니다.');
         return;
     }
     
+    // 버튼 로딩 애니메이션 시작
+    if (btnRoomWKO) {
+        btnRoomWKO.disabled = true;
+        btnRoomWKO.style.opacity = '0.7';
+        btnRoomWKO.style.cursor = 'not-allowed';
+        const btnText = btnRoomWKO.querySelector('span');
+        if (btnText) {
+            btnText.innerHTML = '<span style="display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(22, 163, 74, 0.3); border-top: 2px solid #16a34a; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px;"></span> 필터링 중...';
+        }
+    }
+    
     try {
-        // 현재 선택된 Training Room 이름 가져오기
+        // 현재 선택된 Training Room 이름 가져오기 (여러 경로 확인)
         let currentTrainingRoomName = null;
-        try {
-            if (typeof window !== 'undefined' && window.SESSION_ID) {
-                const roomId = String(window.SESSION_ID);
+        let roomId = null;
+        
+        // 1순위: window.currentTrainingRoomName (trainingRoomManager.js에서 저장됨)
+        if (typeof window !== 'undefined' && window.currentTrainingRoomName) {
+            currentTrainingRoomName = String(window.currentTrainingRoomName).trim();
+            roomId = window.SESSION_ID || window.currentTrainingRoomId || null;
+            console.log('[Indoor Training] window.currentTrainingRoomName에서 이름 가져옴:', currentTrainingRoomName);
+        }
+        
+        // 2순위: localStorage에서 이름 가져오기
+        if (!currentTrainingRoomName && typeof localStorage !== 'undefined') {
+            try {
+                const savedName = localStorage.getItem('currentTrainingRoomName');
+                if (savedName) {
+                    currentTrainingRoomName = String(savedName).trim();
+                    roomId = localStorage.getItem('currentTrainingRoomId');
+                    console.log('[Indoor Training] localStorage에서 Training Room 이름 가져옴:', currentTrainingRoomName);
+                }
+            } catch (e) {
+                console.warn('[Indoor Training] localStorage 접근 실패:', e);
+            }
+        }
+        
+        // 3순위: window.SESSION_ID 또는 window.currentTrainingRoomId로 Training Room 목록에서 찾기
+        if (!currentTrainingRoomName) {
+            roomId = window.SESSION_ID || window.currentTrainingRoomId || null;
+            
+            if (roomId) {
+                roomId = String(roomId);
+                console.log('[Indoor Training] SESSION_ID로 Training Room 찾기 시도:', roomId);
                 
                 // Training Room 목록 API 호출
                 if (typeof window.GAS_URL !== 'undefined' && window.GAS_URL) {
@@ -5834,13 +5874,27 @@ async function filterRoomWorkouts() {
                             const roomListResult = await response.json();
                             if (roomListResult && roomListResult.success && Array.isArray(roomListResult.items)) {
                                 const selectedRoom = roomListResult.items.find(room => 
-                                    String(room.id) === roomId || String(room.Id) === roomId
+                                    String(room.id) === roomId || 
+                                    String(room.Id) === roomId ||
+                                    String(room.id) === String(roomId)
                                 );
                                 if (selectedRoom) {
-                                    currentTrainingRoomName = selectedRoom.name || 
+                                    currentTrainingRoomName = (selectedRoom.name || 
                                                            selectedRoom.title || 
                                                            selectedRoom.Name || 
-                                                           selectedRoom.roomName || null;
+                                                           selectedRoom.roomName || '').trim();
+                                    // 찾은 이름을 전역 변수와 localStorage에 저장
+                                    if (typeof window !== 'undefined') {
+                                        window.currentTrainingRoomName = currentTrainingRoomName;
+                                    }
+                                    if (typeof localStorage !== 'undefined') {
+                                        try {
+                                            localStorage.setItem('currentTrainingRoomName', currentTrainingRoomName);
+                                        } catch (e) {
+                                            console.warn('[Indoor Training] localStorage 이름 저장 실패:', e);
+                                        }
+                                    }
+                                    console.log('[Indoor Training] API에서 Training Room 이름 가져옴:', currentTrainingRoomName);
                                 }
                             }
                         }
@@ -5849,15 +5903,32 @@ async function filterRoomWorkouts() {
                     }
                 }
             }
-        } catch (e) {
-            console.warn('[Indoor Training] Training Room 이름 가져오기 실패:', e);
         }
         
+        console.log('[Indoor Training] Training Room 정보 확인:', {
+            currentTrainingRoomName: currentTrainingRoomName,
+            roomId: roomId,
+            SESSION_ID: window.SESSION_ID,
+            currentTrainingRoomId: window.currentTrainingRoomId,
+            hasCurrentSelectedTrainingRoom: typeof currentSelectedTrainingRoom !== 'undefined'
+        });
+        
         if (!currentTrainingRoomName) {
+            // 버튼 상태 복원
+            if (btnRoomWKO) {
+                btnRoomWKO.disabled = false;
+                btnRoomWKO.style.opacity = '1';
+                btnRoomWKO.style.cursor = 'pointer';
+                const btnText = btnRoomWKO.querySelector('span');
+                if (btnText) {
+                    btnText.textContent = 'Room WKO';
+                }
+            }
+            
             if (typeof showToast === 'function') {
-                showToast('Training Room이 선택되지 않았습니다. 먼저 Training Room을 선택해주세요.', 'warning');
+                showToast('Training Room 정보를 찾을 수 없습니다. Training Room을 먼저 선택해주세요.', 'warning');
             } else {
-                alert('Training Room이 선택되지 않았습니다. 먼저 Training Room을 선택해주세요.');
+                alert('Training Room 정보를 찾을 수 없습니다. Training Room을 먼저 선택해주세요.');
             }
             return;
         }
@@ -5881,7 +5952,20 @@ async function filterRoomWorkouts() {
                         }
                         return w;
                     });
+                // 전역 변수에 저장
+                window.currentNormalizedWorkouts = normalizedWorkouts;
             } else {
+                // 버튼 상태 복원
+                if (btnRoomWKO) {
+                    btnRoomWKO.disabled = false;
+                    btnRoomWKO.style.opacity = '1';
+                    btnRoomWKO.style.cursor = 'pointer';
+                    const btnText = btnRoomWKO.querySelector('span');
+                    if (btnText) {
+                        btnText.textContent = 'Room WKO';
+                    }
+                }
+                
                 if (typeof showToast === 'function') {
                     showToast('워크아웃 목록을 불러올 수 없습니다.', 'error');
                 }
@@ -5890,10 +5974,10 @@ async function filterRoomWorkouts() {
         }
         
         // Training Room 이름과 status가 일치하는 워크아웃만 필터링
+        const roomNameTrimmed = String(currentTrainingRoomName).trim();
         const roomWorkouts = normalizedWorkouts.filter(workout => {
             const workoutStatus = String(workout.status || '').trim();
-            const roomName = String(currentTrainingRoomName).trim();
-            return workoutStatus === roomName;
+            return workoutStatus === roomNameTrimmed;
         });
         
         // 필터링된 결과 저장
@@ -5904,17 +5988,45 @@ async function filterRoomWorkouts() {
         
         console.log('[Indoor Training] Room WKO 필터링 결과:', {
             currentTrainingRoomName: currentTrainingRoomName,
+            roomNameTrimmed: roomNameTrimmed,
             totalWorkouts: normalizedWorkouts.length,
             filteredWorkouts: roomWorkouts.length,
             filteredWorkoutStatuses: roomWorkouts.map(w => ({ id: w.id, title: w.title, status: w.status }))
         });
         
+        // 버튼 상태 복원
+        if (btnRoomWKO) {
+            btnRoomWKO.disabled = false;
+            btnRoomWKO.style.opacity = '1';
+            btnRoomWKO.style.cursor = 'pointer';
+            const btnText = btnRoomWKO.querySelector('span');
+            if (btnText) {
+                btnText.textContent = 'Room WKO';
+            }
+        }
+        
         if (typeof showToast === 'function') {
-            showToast(`Training Room 전용 워크아웃 ${roomWorkouts.length}개를 찾았습니다.`, 'info');
+            if (roomWorkouts.length > 0) {
+                showToast(`Training Room 전용 워크아웃 ${roomWorkouts.length}개를 찾았습니다.`, 'success');
+            } else {
+                showToast(`Training Room 이름 "${roomNameTrimmed}"과 일치하는 워크아웃을 찾을 수 없습니다.`, 'info');
+            }
         }
         
     } catch (error) {
         console.error('[Indoor Training] Room WKO 필터링 오류:', error);
+        
+        // 버튼 상태 복원
+        if (btnRoomWKO) {
+            btnRoomWKO.disabled = false;
+            btnRoomWKO.style.opacity = '1';
+            btnRoomWKO.style.cursor = 'pointer';
+            const btnText = btnRoomWKO.querySelector('span');
+            if (btnText) {
+                btnText.textContent = 'Room WKO';
+            }
+        }
+        
         if (typeof showToast === 'function') {
             showToast('워크아웃 필터링 중 오류가 발생했습니다.', 'error');
         }
