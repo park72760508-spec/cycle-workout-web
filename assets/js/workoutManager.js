@@ -2903,10 +2903,10 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
       const safeDescription = String(workout.description || '');
       
       const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
-      // status가 '보이기'인 경우만 공개로 간주, 그 외는 모두 비공개
+      // status 처리: '보이기'인 경우만 공개로 간주, 그 외의 모든 경우(null, undefined, 빈 문자열, '숨기기', 기타 값)는 비공개로 표시
       const workoutStatus = String(workout.status || '').trim();
       const isPublic = workoutStatus === '보이기';
-      // 비공개 워크아웃은 붉은 둥근 상자로 표시
+      // status가 '보이기'가 아니면 모두 비공개로 표시
       const statusBadge = isPublic ? 
         '<span class="status-badge visible">공개</span>' : 
         '<span class="status-badge hidden private">비공개</span>';
