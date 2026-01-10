@@ -4473,6 +4473,16 @@ document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => {
     initEnhancedBackButtons();
     initBasecampButtons();
+    
+    // 모든 버튼에 진동 피드백 적용
+    if (typeof window.applyHapticFeedbackToAllButtons === 'function') {
+      window.applyHapticFeedbackToAllButtons();
+    }
+    
+    // 동적으로 추가되는 버튼에도 적용
+    if (typeof window.setupHapticObserver === 'function') {
+      window.setupHapticObserver();
+    }
   }, 100);
   
   // 베이스캠프 화면 이미지 버튼 4개에 진동 피드백 적용
@@ -10647,3 +10657,100 @@ window.triggerHapticFeedback = triggerHapticFeedback;
 window.playClickSound = playClickSound;
 window.enhanceButtonForTouch = enhanceButtonForTouch;
 window.createEnhancedButtonHandler = createEnhancedButtonHandler;
+
+/* ==========================================================
+   모든 버튼에 진동 피드백 자동 적용
+   전화번호 숫자 클릭과 동일한 진동 피드백을 모든 버튼에 적용
+========================================================== */
+
+// 버튼에 진동 피드백을 추가하는 함수
+function addHapticFeedbackToButton(button) {
+  if (!button || button.hasAttribute('data-haptic-applied')) {
+    return; // 이미 적용되었거나 버튼이 없으면 스킵
+  }
+  
+  // 마커 속성 추가 (중복 적용 방지)
+  button.setAttribute('data-haptic-applied', 'true');
+  
+  // 터치 이벤트 추가
+  button.addEventListener('touchstart', function(e) {
+    if (typeof window.triggerHapticFeedback === 'function') {
+      window.triggerHapticFeedback([10]);
+    }
+  }, { passive: true });
+  
+  // 클릭 이벤트에도 추가 (데스크톱 호환성)
+  button.addEventListener('click', function(e) {
+    if (typeof window.triggerHapticFeedback === 'function') {
+      window.triggerHapticFeedback([10]);
+    }
+  }, { passive: true });
+}
+
+// 모든 버튼에 진동 피드백 적용
+function applyHapticFeedbackToAllButtons() {
+  // 모든 button 요소 찾기
+  const allButtons = document.querySelectorAll('button');
+  
+  allButtons.forEach(button => {
+    // 특정 버튼은 제외 (이미 개별적으로 처리된 버튼들)
+    const buttonId = button.id || '';
+    const buttonClass = button.className || '';
+    
+    // 제외할 버튼들 (이미 개별 처리된 버튼)
+    const excludedIds = [
+      'btnBackFromUserManual',
+      'btnBackFromMyCareer',
+      'btnBasecampIndoor',
+      'btnBasecampSolo',
+      'btnBasecampCareer',
+      'btnBasecampManual'
+    ];
+    
+    // 제외 조건 확인
+    if (excludedIds.includes(buttonId)) {
+      return; // 이미 처리된 버튼은 스킵
+    }
+    
+    // 버튼에 진동 피드백 적용
+    addHapticFeedbackToButton(button);
+  });
+  
+  console.log(`✅ 모든 버튼에 진동 피드백 적용 완료 (총 ${allButtons.length}개 버튼)`);
+}
+
+// MutationObserver를 사용하여 동적으로 추가되는 버튼에도 적용
+function setupHapticObserver() {
+  const observer = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType === 1) { // Element node
+          // 추가된 노드가 버튼인 경우
+          if (node.tagName === 'BUTTON') {
+            addHapticFeedbackToButton(node);
+          }
+          // 추가된 노드 내부의 버튼들도 확인
+          const buttons = node.querySelectorAll && node.querySelectorAll('button');
+          if (buttons) {
+            buttons.forEach(button => {
+              addHapticFeedbackToButton(button);
+            });
+          }
+        }
+      });
+    });
+  });
+  
+  // body 전체를 관찰
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+  
+  console.log('✅ 동적 버튼 감지 Observer 설정 완료');
+}
+
+// 전역 함수로 등록
+window.addHapticFeedbackToButton = addHapticFeedbackToButton;
+window.applyHapticFeedbackToAllButtons = applyHapticFeedbackToAllButtons;
+window.setupHapticObserver = setupHapticObserver;
