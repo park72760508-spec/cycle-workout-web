@@ -10913,16 +10913,32 @@ function enhanceBackButton(buttonId) {
   const handleClick = function(e) {
     // 중복 실행 방지
     if (isProcessing) {
-      e.preventDefault();
-      e.stopPropagation();
+      // passive 이벤트에서 preventDefault 호출 시도 방지
+      try {
+        if (e.cancelable !== false) {
+          e.preventDefault();
+        }
+        e.stopPropagation();
+      } catch (err) {
+        // passive 이벤트 리스너 오류 무시
+        console.warn('⚠️ preventDefault 호출 실패 (passive 이벤트):', err);
+      }
       return false;
     }
     
     isProcessing = true;
     
-    e.preventDefault();
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    // passive 이벤트에서 preventDefault 호출 시도 방지
+    try {
+      if (e.cancelable !== false) {
+        e.preventDefault();
+      }
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    } catch (err) {
+      // passive 이벤트 리스너 오류 무시 (정상 동작)
+      // console.warn('⚠️ preventDefault 호출 실패 (passive 이벤트):', err);
+    }
     
     // 피드백은 이미 touchstart/pointerdown에서 호출되었으므로 여기서는 호출하지 않음
     // 중복 재생 방지를 위해 제거
@@ -10997,6 +11013,7 @@ function enhanceBackButton(buttonId) {
   }, { passive: true });
   
   // 포인터 이벤트 (터치가 아닐 때만)
+  // iOS에서는 passive: false 필수 (AudioContext 활성화를 위해)
   button.addEventListener('pointerdown', function(e) {
     if (e.pointerType === 'touch') {
       // 터치 타입은 touchstart에서 이미 처리됨, 클릭만 처리
@@ -11006,7 +11023,7 @@ function enhanceBackButton(buttonId) {
       triggerFeedback(e);
       handleClick(e);
     }
-  }, { passive: passiveOption, capture: false });
+  }, { passive: false, capture: false }); // passive: false로 통일 (iOS 필수)
   
   // 클릭 이벤트 (데스크톱 호환)
   button.addEventListener('click', function(e) {
