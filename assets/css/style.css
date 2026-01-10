@@ -523,41 +523,41 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
 .basecamp-btn-career-schedule {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(04).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 85% !important;
+  background-size: 95% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
 .basecamp-btn-career-journal {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(06).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 85% !important;
+  background-size: 95% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
 .basecamp-btn-career-workout {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(06).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(07).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 85% !important;
+  background-size: 95% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
 .basecamp-btn-career-profile {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(07).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(08).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 85% !important;
+  background-size: 95% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
 
 .basecamp-btn-career-subscribe {
-  background-image: url('https://stelvio.ai.kr/assets/img/b(08).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(09).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
-  background-size: 85% !important;
+  background-size: 95% !important;
   background-position: center center !important;
   background-repeat: no-repeat !important;
 }
