@@ -4442,7 +4442,18 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log('🔧 버튼 피드백 초기화 시작...');
   console.log(`   - iOS 기기: ${isIOS ? '예 (사운드 효과 사용)' : '아니오 (진동 효과 사용)'}`);
   if (isIOS) {
+    const ua = navigator.userAgent || '';
+    const browserType = /CriOS/i.test(ua) ? 'Chrome' : 
+                       /Safari/i.test(ua) && !/CriOS/i.test(ua) ? 'Safari' : 
+                       /Firefox/i.test(ua) ? 'Firefox' : '기타';
+    console.log(`   - iOS 브라우저: ${browserType}`);
     console.log(`   - iOS 사운드: Type A (Tick) - 1200Hz, sine, 0.05s`);
+    console.log(`   - AudioContext 지원: ${(window.AudioContext || window.webkitAudioContext) ? '예' : '아니오'}`);
+    // iOS AudioContext 사전 초기화 (사용자 이벤트에서 활성화됨)
+    // Safari 및 Chrome 모두 동일하게 처리
+    if (typeof window.initIOSAudioContext === 'function') {
+      window.initIOSAudioContext();
+    }
   } else {
     console.log(`   - Vibration API 지원: ${'vibrate' in navigator ? '예' : '아니오'}`);
   }
@@ -10371,72 +10382,134 @@ window.confirmAIRecommendation = confirmAIRecommendation;
    모바일에서 버튼 클릭 반응성 향상
 ========================================================== */
 
-// iOS 감지 함수
+// iOS 감지 함수 (Safari, Chrome, 기타 iOS 브라우저 모두 포함)
 function isIOSDevice() {
-  const ua = navigator.userAgent || navigator.vendor || window.opera;
-  return /iPad|iPhone|iPod/.test(ua) || 
-         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const platform = navigator.platform || '';
+  
+  // iOS 기기 감지 (Safari, Chrome, Firefox 등 모든 iOS 브라우저)
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || 
+                (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  
+  // iOS Chrome 감지 (CriOS는 iOS Chrome의 User Agent 식별자)
+  const isIOSChrome = /CriOS/i.test(ua) || (/Chrome/i.test(ua) && isIOS);
+  
+  if (isIOS) {
+    const browserType = isIOSChrome ? 'Chrome' : 
+                       /Safari/i.test(ua) && !/CriOS/i.test(ua) ? 'Safari' : 
+                       /Firefox/i.test(ua) ? 'Firefox' : '기타';
+    console.log(`📱 iOS 기기 감지: ${browserType} 브라우저`);
+  }
+  
+  return isIOS;
 }
 
 // iOS용 사운드 효과 (Type A: Tick) - 1200Hz, sine, 0.05s
 let iosAudioContext = null;
+let iosAudioContextInitialized = false;
 
 function initIOSAudioContext() {
   if (!iosAudioContext) {
     try {
-      iosAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // iOS Safari 및 Chrome 모두 webkitAudioContext 또는 AudioContext 사용
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        console.warn('⚠️ iOS AudioContext를 지원하지 않습니다.');
+        return false;
+      }
+      
+      iosAudioContext = new AudioContextClass();
+      const ua = navigator.userAgent || '';
+      const browserType = /CriOS/i.test(ua) ? 'Chrome' : 'Safari/기타';
+      console.log(`✅ iOS ${browserType} AudioContext 생성 성공, 상태:`, iosAudioContext.state);
+      iosAudioContextInitialized = true;
+      return true;
     } catch (e) {
-      console.warn('iOS AudioContext 생성 실패:', e);
+      console.error('❌ iOS AudioContext 생성 실패:', e);
       return false;
     }
   }
   return true;
 }
 
-function playIOSSound(frequency = 1200, type = 'sine', duration = 0.05) {
-  if (!initIOSAudioContext() || !iosAudioContext) {
-    return false;
-  }
-  
+// iOS 사운드 재생 함수 (Safari 및 Chrome 모두 지원)
+async function playIOSSound(frequency = 1200, type = 'sine', duration = 0.05) {
   try {
-    // 오디오 컨텍스트가 정지 상태면 다시 시작 (브라우저 정책 대응)
-    if (iosAudioContext.state === 'suspended') {
-      iosAudioContext.resume().catch(err => {
-        console.warn('AudioContext 재개 실패:', err);
-      });
+    // AudioContext 초기화
+    if (!initIOSAudioContext() || !iosAudioContext) {
+      console.warn('⚠️ iOS AudioContext 초기화 실패');
+      return false;
     }
     
+    // iOS Safari 및 Chrome에서는 AudioContext가 suspended 상태로 시작됨
+    // 사용자 이벤트에서 호출되므로 resume()이 필요함
+    if (iosAudioContext.state === 'suspended') {
+      try {
+        await iosAudioContext.resume();
+        const ua = navigator.userAgent || '';
+        const browserType = /CriOS/i.test(ua) ? 'Chrome' : 'Safari/기타';
+        console.log(`✅ iOS ${browserType} AudioContext 재개 성공, 상태:`, iosAudioContext.state);
+      } catch (resumeError) {
+        console.error('❌ iOS AudioContext 재개 실패:', resumeError);
+        // 재개 실패해도 시도해봄
+      }
+    }
+    
+    // AudioContext가 running 상태인지 확인
+    if (iosAudioContext.state !== 'running') {
+      console.warn('⚠️ iOS AudioContext 상태가 running이 아님:', iosAudioContext.state);
+      // 그래도 시도해봄 (일부 브라우저에서는 작동할 수 있음)
+    }
+    
+    // 오실레이터 생성
     const oscillator = iosAudioContext.createOscillator();
     const gainNode = iosAudioContext.createGain();
     
+    // 파형 및 주파수 설정
     oscillator.type = type; // sine 파형
     oscillator.frequency.setValueAtTime(frequency, iosAudioContext.currentTime); // 1200Hz
     
     // 볼륨 조절 (소리가 틱! 하고 끊기지 않고 부드럽게 사라지게 함)
-    gainNode.gain.setValueAtTime(0.1, iosAudioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.00001, iosAudioContext.currentTime + duration);
+    const currentTime = iosAudioContext.currentTime;
+    gainNode.gain.setValueAtTime(0.1, currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, currentTime + duration);
     
+    // 연결
     oscillator.connect(gainNode);
     gainNode.connect(iosAudioContext.destination);
     
-    oscillator.start();
-    oscillator.stop(iosAudioContext.currentTime + duration);
+    // 재생
+    oscillator.start(currentTime);
+    oscillator.stop(currentTime + duration);
     
+    const ua = navigator.userAgent || '';
+    const browserType = /CriOS/i.test(ua) ? 'Chrome' : 'Safari/기타';
+    console.log(`✅ iOS ${browserType} 사운드 재생 성공:`, { frequency, type, duration });
     return true;
+    
   } catch (e) {
-    console.warn('iOS 사운드 재생 실패:', e);
+    console.error('❌ iOS 사운드 재생 실패:', e);
+    console.error('   - 오류 상세:', e.message, e.stack);
     return false;
   }
 }
 
-// 진동 피드백 (Vibration API) - iOS에서는 사운드 효과 사용
+// 진동 피드백 (Vibration API) - iOS에서는 사운드 효과 사용 (Safari 및 Chrome 모두)
 function triggerHapticFeedback(pattern = [10]) {
   try {
     const isIOS = isIOSDevice();
     
-    // iOS에서는 진동 대신 사운드 효과 사용
+    // iOS에서는 진동 대신 사운드 효과 사용 (Safari, Chrome, 기타 iOS 브라우저 모두)
     if (isIOS) {
-      return playIOSSound(1200, 'sine', 0.05); // Type A (Tick)
+      // 비동기 함수이지만 즉시 실행 (await 없이)
+      // 사용자 이벤트에서 호출되므로 문제없음
+      // iOS Safari 및 Chrome 모두 동일하게 처리
+      playIOSSound(1200, 'sine', 0.05).catch(err => {
+        const ua = navigator.userAgent || '';
+        const browserType = /CriOS/i.test(ua) ? 'Chrome' : 'Safari/기타';
+        console.error(`❌ iOS ${browserType} 사운드 재생 오류:`, err);
+      });
+      return true; // 비동기이지만 성공으로 간주
     }
     
     // 안드로이드 및 기타 기기에서는 진동 사용
@@ -10447,7 +10520,7 @@ function triggerHapticFeedback(pattern = [10]) {
     
     return false;
   } catch (e) {
-    console.warn('피드백 실패:', e);
+    console.error('❌ 피드백 실패:', e);
     return false;
   }
 }
@@ -10595,6 +10668,7 @@ window.enhanceButtonForTouch = enhanceButtonForTouch;
 window.createEnhancedButtonHandler = createEnhancedButtonHandler;
 window.isIOSDevice = isIOSDevice;
 window.playIOSSound = playIOSSound;
+window.initIOSAudioContext = initIOSAudioContext;
 
 /* ==========================================================
    모든 버튼에 진동 피드백 자동 적용
@@ -10621,28 +10695,35 @@ function addHapticFeedbackToButton(button) {
   const passiveOption = isIOS ? false : true;
   
   // 피드백 함수 (iOS: 사운드, 기타: 진동)
-  const triggerFeedback = function() {
+  // iOS에서는 사용자 이벤트에서 직접 호출되어야 함
+  const triggerFeedback = function(e) {
+    // iOS에서는 이벤트 객체가 필요할 수 있음
     if (typeof window.triggerHapticFeedback === 'function') {
+      // 즉시 호출 (사용자 이벤트 컨텍스트에서 실행)
       window.triggerHapticFeedback([10]);
+    } else {
+      console.warn('⚠️ triggerHapticFeedback 함수를 찾을 수 없습니다.');
     }
   };
   
   // 터치 이벤트 추가 (iOS에서는 passive: false 필수)
+  // iOS Safari에서는 touchstart에서 직접 호출해야 AudioContext가 작동함
   button.addEventListener('touchstart', function(e) {
-    triggerFeedback();
-  }, { passive: passiveOption });
+    // iOS에서는 이벤트에서 직접 호출
+    triggerFeedback(e);
+  }, { passive: false, capture: false });
   
   // 포인터 이벤트 추가 (iOS Safari 지원)
   button.addEventListener('pointerdown', function(e) {
     if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
-      triggerFeedback();
+      triggerFeedback(e);
     }
-  }, { passive: passiveOption });
+  }, { passive: false, capture: false });
   
-  // 클릭 이벤트에도 추가 (데스크톱 호환성)
+  // 클릭 이벤트에도 추가 (데스크톱 호환성 및 iOS 백업)
   button.addEventListener('click', function(e) {
-    triggerFeedback();
-  }, { passive: true });
+    triggerFeedback(e);
+  }, { passive: true, capture: false });
 }
 
 // 모든 버튼에 진동 피드백 적용
@@ -10666,7 +10747,6 @@ function applyHapticFeedbackToAllButtons() {
     appliedCount++;
   });
   
-  const isIOS = isIOSDevice();
   console.log(`✅ 모든 버튼에 피드백 적용 완료`);
   console.log(`   - 피드백 타입: ${isIOS ? '사운드 (Type A: Tick)' : '진동'}`);
   console.log(`   - 총 버튼: ${allButtons.length}개`);
@@ -10749,6 +10829,7 @@ function enhanceBackButton(buttonId) {
     
     // 피드백 (iOS: 사운드, 기타: 진동)
     // 이미 touchstart/pointerdown에서 호출되지만 백업으로도 호출
+    // iOS에서는 사용자 이벤트 컨텍스트에서 호출되어야 함
     if (typeof window.triggerHapticFeedback === 'function') {
       window.triggerHapticFeedback([10]);
     }
@@ -10787,33 +10868,37 @@ function enhanceBackButton(buttonId) {
   const isIOS = isIOSDevice();
   
   // 피드백 함수 (iOS: 사운드, 기타: 진동)
-  const triggerFeedback = function() {
+  // iOS에서는 사용자 이벤트에서 직접 호출되어야 함
+  const triggerFeedback = function(e) {
+    // iOS에서는 이벤트 객체가 필요할 수 있음
     if (typeof window.triggerHapticFeedback === 'function') {
+      // 즉시 호출 (사용자 이벤트 컨텍스트에서 실행)
       window.triggerHapticFeedback([10]);
     }
   };
   
-  // 터치 이벤트 (우선순위 최고, capture 사용, iOS에서는 passive: false 필수)
+  // 터치 이벤트 (우선순위 최고, iOS에서는 passive: false 필수)
+  // iOS Safari에서는 touchstart에서 직접 호출해야 AudioContext가 작동함
   button.addEventListener('touchstart', function(e) {
     // iOS에서는 사운드, 기타는 진동
-    triggerFeedback();
+    triggerFeedback(e);
     handleClick(e);
-  }, { passive: false, capture: true });
+  }, { passive: false, capture: false });
   
   // 포인터 이벤트 (터치/마우스 모두 지원)
   button.addEventListener('pointerdown', function(e) {
     if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
-      triggerFeedback();
+      triggerFeedback(e);
       handleClick(e);
     }
-  }, { passive: false, capture: true });
+  }, { passive: false, capture: false });
   
-  // 클릭 이벤트 (데스크톱 호환, capture 사용)
+  // 클릭 이벤트 (데스크톱 호환 및 iOS 백업)
   button.addEventListener('click', function(e) {
     // 백업으로 피드백 제공
-    triggerFeedback();
+    triggerFeedback(e);
     handleClick(e);
-  }, { passive: false, capture: true });
+  }, { passive: false, capture: false });
   
   // 마우스 다운 이벤트 (추가 보완)
   button.addEventListener('mousedown', function(e) {
