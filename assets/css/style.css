@@ -314,7 +314,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 베이스캠프 화면의 MY CAREER 버튼 스타일 (좌하 버튼) */
 #basecampScreen .btn-device.basecamp-btn-career,
 #basecampScreen .basecamp-btn-career {
-  background-image: url('assets/img/b(03).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(03).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 85% !important;
   background-position: center center !important;
@@ -336,7 +336,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 베이스캠프 화면의 사용자 메뉴얼 버튼 스타일 (우하 버튼) */
 #basecampScreen .btn-device.basecamp-btn-manual,
 #basecampScreen .basecamp-btn-manual {
-  background-image: url('assets/img/b(04).png') !important;
+  background-image: url('https://stelvio.ai.kr/assets/img/b(04).png') !important;
   background-color: rgba(255, 255, 255, 0.1) !important;
   background-size: 85% !important;
   background-position: center center !important;
