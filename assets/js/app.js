@@ -4439,9 +4439,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // 초기화 실행 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
   setTimeout(() => {
     const isIOS = typeof window.isIOSDevice === 'function' ? window.isIOSDevice() : false;
-    console.log('🔧 버튼 진동 피드백 초기화 시작...');
-    console.log(`   - iOS 기기: ${isIOS ? '예' : '아니오'}`);
+  console.log('🔧 버튼 피드백 초기화 시작...');
+  console.log(`   - iOS 기기: ${isIOS ? '예 (사운드 효과 사용)' : '아니오 (진동 효과 사용)'}`);
+  if (isIOS) {
+    console.log(`   - iOS 사운드: Type A (Tick) - 1200Hz, sine, 0.05s`);
+  } else {
     console.log(`   - Vibration API 지원: ${'vibrate' in navigator ? '예' : '아니오'}`);
+  }
     
     // 뒤로 가기 버튼 개선 (소리 효과 제거, 클릭 인식 강화) - 먼저 처리
     if (typeof window.enhanceBackButton === 'function') {
@@ -4465,7 +4469,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn('⚠️ setupHapticObserver 함수를 찾을 수 없습니다.');
     }
     
-    console.log('✅ 버튼 진동 피드백 초기화 완료');
+    console.log('✅ 버튼 피드백 초기화 완료');
   }, 100);
   
   // 화면 전환 시에도 뒤로 가기 버튼 개선 적용 (동적 화면 대응)
@@ -10374,31 +10378,76 @@ function isIOSDevice() {
          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
-// 진동 피드백 (Vibration API) - iOS 호환성 개선
+// iOS용 사운드 효과 (Type A: Tick) - 1200Hz, sine, 0.05s
+let iosAudioContext = null;
+
+function initIOSAudioContext() {
+  if (!iosAudioContext) {
+    try {
+      iosAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('iOS AudioContext 생성 실패:', e);
+      return false;
+    }
+  }
+  return true;
+}
+
+function playIOSSound(frequency = 1200, type = 'sine', duration = 0.05) {
+  if (!initIOSAudioContext() || !iosAudioContext) {
+    return false;
+  }
+  
+  try {
+    // 오디오 컨텍스트가 정지 상태면 다시 시작 (브라우저 정책 대응)
+    if (iosAudioContext.state === 'suspended') {
+      iosAudioContext.resume().catch(err => {
+        console.warn('AudioContext 재개 실패:', err);
+      });
+    }
+    
+    const oscillator = iosAudioContext.createOscillator();
+    const gainNode = iosAudioContext.createGain();
+    
+    oscillator.type = type; // sine 파형
+    oscillator.frequency.setValueAtTime(frequency, iosAudioContext.currentTime); // 1200Hz
+    
+    // 볼륨 조절 (소리가 틱! 하고 끊기지 않고 부드럽게 사라지게 함)
+    gainNode.gain.setValueAtTime(0.1, iosAudioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.00001, iosAudioContext.currentTime + duration);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(iosAudioContext.destination);
+    
+    oscillator.start();
+    oscillator.stop(iosAudioContext.currentTime + duration);
+    
+    return true;
+  } catch (e) {
+    console.warn('iOS 사운드 재생 실패:', e);
+    return false;
+  }
+}
+
+// 진동 피드백 (Vibration API) - iOS에서는 사운드 효과 사용
 function triggerHapticFeedback(pattern = [10]) {
   try {
     const isIOS = isIOSDevice();
     
-    // iOS와 안드로이드 모두 지원
-    if ('vibrate' in navigator) {
-      // iOS에서는 짧은 진동 패턴이 더 잘 작동함
-      const vibrationPattern = isIOS ? [10] : pattern;
-      const result = navigator.vibrate(vibrationPattern);
-      
-      // 디버깅 (개발 환경에서만)
-      if (isIOS && !result) {
-        console.warn('⚠️ iOS 진동 호출 실패 - 터치 이벤트에서 직접 호출 필요');
-      }
-      
-      return result;
-    } else {
-      if (isIOS) {
-        console.warn('⚠️ iOS에서 Vibration API를 지원하지 않습니다.');
-      }
-      return false;
+    // iOS에서는 진동 대신 사운드 효과 사용
+    if (isIOS) {
+      return playIOSSound(1200, 'sine', 0.05); // Type A (Tick)
     }
+    
+    // 안드로이드 및 기타 기기에서는 진동 사용
+    if ('vibrate' in navigator) {
+      const result = navigator.vibrate(pattern);
+      return result;
+    }
+    
+    return false;
   } catch (e) {
-    console.warn('진동 피드백 실패:', e);
+    console.warn('피드백 실패:', e);
     return false;
   }
 }
@@ -10545,13 +10594,14 @@ window.playClickSound = playClickSound;
 window.enhanceButtonForTouch = enhanceButtonForTouch;
 window.createEnhancedButtonHandler = createEnhancedButtonHandler;
 window.isIOSDevice = isIOSDevice;
+window.playIOSSound = playIOSSound;
 
 /* ==========================================================
    모든 버튼에 진동 피드백 자동 적용
    전화번호 숫자 클릭과 동일한 진동 피드백을 모든 버튼에 적용
 ========================================================== */
 
-// 버튼에 진동 피드백을 추가하는 함수 (iOS 호환성 개선)
+// 버튼에 피드백을 추가하는 함수 (iOS: 사운드, 기타: 진동)
 function addHapticFeedbackToButton(button) {
   if (!button || button.hasAttribute('data-haptic-applied')) {
     return; // 이미 적용되었거나 버튼이 없으면 스킵
@@ -10566,33 +10616,32 @@ function addHapticFeedbackToButton(button) {
   // 마커 속성 추가 (중복 적용 방지)
   button.setAttribute('data-haptic-applied', 'true');
   
-  // iOS에서는 passive: false로 설정해야 진동이 작동함
   const isIOS = isIOSDevice();
+  // iOS에서는 passive: false로 설정해야 사운드가 작동함
   const passiveOption = isIOS ? false : true;
   
-  // 터치 이벤트 추가 (iOS에서는 passive: false 필수)
-  button.addEventListener('touchstart', function(e) {
-    // iOS에서는 터치 이벤트에서 직접 진동 호출해야 함
+  // 피드백 함수 (iOS: 사운드, 기타: 진동)
+  const triggerFeedback = function() {
     if (typeof window.triggerHapticFeedback === 'function') {
       window.triggerHapticFeedback([10]);
     }
+  };
+  
+  // 터치 이벤트 추가 (iOS에서는 passive: false 필수)
+  button.addEventListener('touchstart', function(e) {
+    triggerFeedback();
   }, { passive: passiveOption });
   
   // 포인터 이벤트 추가 (iOS Safari 지원)
   button.addEventListener('pointerdown', function(e) {
-    if (e.pointerType === 'touch') {
-      if (typeof window.triggerHapticFeedback === 'function') {
-        window.triggerHapticFeedback([10]);
-      }
+    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+      triggerFeedback();
     }
   }, { passive: passiveOption });
   
   // 클릭 이벤트에도 추가 (데스크톱 호환성)
   button.addEventListener('click', function(e) {
-    // iOS에서는 클릭 이벤트에서도 진동 호출
-    if (typeof window.triggerHapticFeedback === 'function') {
-      window.triggerHapticFeedback([10]);
-    }
+    triggerFeedback();
   }, { passive: true });
 }
 
@@ -10617,7 +10666,9 @@ function applyHapticFeedbackToAllButtons() {
     appliedCount++;
   });
   
-  console.log(`✅ 모든 버튼에 진동 피드백 적용 완료`);
+  const isIOS = isIOSDevice();
+  console.log(`✅ 모든 버튼에 피드백 적용 완료`);
+  console.log(`   - 피드백 타입: ${isIOS ? '사운드 (Type A: Tick)' : '진동'}`);
   console.log(`   - 총 버튼: ${allButtons.length}개`);
   console.log(`   - 적용됨: ${appliedCount}개`);
   console.log(`   - 건너뜀: ${skippedCount}개`);
@@ -10696,10 +10747,9 @@ function enhanceBackButton(buttonId) {
     e.stopPropagation();
     e.stopImmediatePropagation();
     
-    // 진동 피드백만 (소리 효과 제거)
-    // iOS에서는 터치 이벤트에서 직접 호출되므로 여기서는 중복 방지
-    // (이미 touchstart/pointerdown에서 호출됨)
-    if (!isIOSDevice() && typeof window.triggerHapticFeedback === 'function') {
+    // 피드백 (iOS: 사운드, 기타: 진동)
+    // 이미 touchstart/pointerdown에서 호출되지만 백업으로도 호출
+    if (typeof window.triggerHapticFeedback === 'function') {
       window.triggerHapticFeedback([10]);
     }
     
@@ -10736,32 +10786,32 @@ function enhanceBackButton(buttonId) {
   // iOS 감지
   const isIOS = isIOSDevice();
   
-  // 터치 이벤트 (우선순위 최고, capture 사용, iOS에서는 passive: false 필수)
-  button.addEventListener('touchstart', function(e) {
-    // iOS에서는 터치 이벤트에서 직접 진동 호출
-    if (isIOS && typeof window.triggerHapticFeedback === 'function') {
+  // 피드백 함수 (iOS: 사운드, 기타: 진동)
+  const triggerFeedback = function() {
+    if (typeof window.triggerHapticFeedback === 'function') {
       window.triggerHapticFeedback([10]);
     }
+  };
+  
+  // 터치 이벤트 (우선순위 최고, capture 사용, iOS에서는 passive: false 필수)
+  button.addEventListener('touchstart', function(e) {
+    // iOS에서는 사운드, 기타는 진동
+    triggerFeedback();
     handleClick(e);
   }, { passive: false, capture: true });
   
   // 포인터 이벤트 (터치/마우스 모두 지원)
   button.addEventListener('pointerdown', function(e) {
     if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
-      // iOS에서는 포인터 이벤트에서도 진동 호출
-      if (isIOS && e.pointerType === 'touch' && typeof window.triggerHapticFeedback === 'function') {
-        window.triggerHapticFeedback([10]);
-      }
+      triggerFeedback();
       handleClick(e);
     }
   }, { passive: false, capture: true });
   
   // 클릭 이벤트 (데스크톱 호환, capture 사용)
   button.addEventListener('click', function(e) {
-    // iOS에서는 클릭 이벤트에서도 진동 호출 (백업)
-    if (isIOS && typeof window.triggerHapticFeedback === 'function') {
-      window.triggerHapticFeedback([10]);
-    }
+    // 백업으로 피드백 제공
+    triggerFeedback();
     handleClick(e);
   }, { passive: false, capture: true });
   
@@ -10775,7 +10825,9 @@ function enhanceBackButton(buttonId) {
   // 터치 영역 확대를 위한 CSS 클래스 추가
   button.classList.add('enhanced-back-button-improved');
   
-  console.log(`✅ ${buttonId} 버튼 개선 완료 (소리 효과 제거, 클릭 인식 강화)`);
+  const isIOS = isIOSDevice();
+  const feedbackType = isIOS ? '사운드 (Type A: Tick)' : '진동';
+  console.log(`✅ ${buttonId} 버튼 개선 완료 (피드백: ${feedbackType}, 클릭 인식 강화)`);
 }
 
 // 전역 함수로 등록
