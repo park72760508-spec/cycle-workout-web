@@ -2779,7 +2779,14 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeWorkoutSelectionModal()">닫기</button>
+        <div class="connection-exit-container" style="justify-content: center; gap: 12px;">
+          <button class="btn btn-next-inline" id="btnRoomWKO" onclick="filterRoomWorkouts()" style="display: inline-flex; align-items: center; justify-content: center;">
+            <span>Room WKO</span>
+          </button>
+          <button class="btn btn-exit-inline" onclick="closeWorkoutSelectionModal()" style="display: inline-flex; align-items: center; justify-content: center;">
+            <span>닫기</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
