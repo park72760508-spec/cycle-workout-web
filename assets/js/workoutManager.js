@@ -75,11 +75,12 @@ function validateWorkoutData(workout) {
 }
 
 function normalizeWorkoutData(workout) {
-  // status 처리: '보이기' 또는 '숨기기' 값이 있으면 그대로 사용, 없으면 기본값 '보이기'
+  // status 처리: 원본 값을 그대로 유지 (null/undefined/빈 문자열만 기본값 '보이기' 사용)
   let status = '보이기';
   if (workout.status !== null && workout.status !== undefined && workout.status !== '') {
     const statusStr = String(workout.status).trim();
-    if (statusStr === '보이기' || statusStr === '숨기기') {
+    // 공백이 아닌 경우 원본 값 유지 (TrainingSchedules의 title 값 등도 그대로 유지)
+    if (statusStr !== '') {
       status = statusStr;
     }
   }

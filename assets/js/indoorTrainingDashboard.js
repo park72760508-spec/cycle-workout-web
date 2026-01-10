@@ -5639,13 +5639,124 @@ async function loadWorkoutsForSelection() {
             return w && w.id && w.title;
         });
         
-        if (validWorkouts.length === 0) {
+        // 정규화: normalizeWorkoutData 함수 사용 (원본 status 값 유지)
+        const normalizedWorkouts = validWorkouts.map(w => {
+            if (typeof normalizeWorkoutData === 'function') {
+                return normalizeWorkoutData(w);
+            }
+            return w;
+        });
+        
+        // grade=3 부관리자 필터링: 공개 워크아웃 또는 status가 Training Room 이름과 동일한 경우만 표시
+        let grade = '2';
+        try {
+            if (typeof getViewerGrade === 'function') {
+                grade = String(getViewerGrade());
+            } else {
+                const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+                const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+                if (viewer && viewer.grade != null) {
+                    grade = String(viewer.grade);
+                } else if (authUser && authUser.grade != null) {
+                    grade = String(authUser.grade);
+                }
+            }
+        } catch (e) {
+            console.warn('[Indoor Training] grade 확인 실패:', e);
+            grade = '2';
+        }
+        
+        let filteredWorkouts = normalizedWorkouts;
+        
+        // grade=3 부관리자의 경우 필터링 적용
+        if (grade === '3') {
+            // 현재 선택된 Training Room 이름 가져오기
+            let currentTrainingRoomName = null;
+            try {
+                if (typeof window !== 'undefined' && window.SESSION_ID) {
+                    // SESSION_ID를 사용하여 Training Room 정보 가져오기
+                    const roomId = String(window.SESSION_ID);
+                    
+                    // Training Room 목록 API 호출
+                    if (typeof window.GAS_URL !== 'undefined' && window.GAS_URL) {
+                        try {
+                            const response = await fetch(`${window.GAS_URL}?action=listTrainingRooms`);
+                            if (response.ok) {
+                                const roomListResult = await response.json();
+                                if (roomListResult && roomListResult.success && Array.isArray(roomListResult.items)) {
+                                    const selectedRoom = roomListResult.items.find(room => 
+                                        String(room.id) === roomId || String(room.Id) === roomId
+                                    );
+                                    if (selectedRoom) {
+                                        currentTrainingRoomName = selectedRoom.name || 
+                                                               selectedRoom.title || 
+                                                               selectedRoom.Name || 
+                                                               selectedRoom.roomName || null;
+                                    }
+                                }
+                            }
+                        } catch (fetchError) {
+                            console.warn('[Indoor Training] Training Room 목록 가져오기 실패:', fetchError);
+                        }
+                    }
+                    
+                    // 전역 변수에서 확인 (trainingRoomManager.js에서 설정됨)
+                    if (!currentTrainingRoomName && typeof currentSelectedTrainingRoom !== 'undefined' && currentSelectedTrainingRoom) {
+                        if (String(currentSelectedTrainingRoom.id) === roomId || String(currentSelectedTrainingRoom.Id) === roomId) {
+                            currentTrainingRoomName = currentSelectedTrainingRoom.name || 
+                                                     currentSelectedTrainingRoom.title || 
+                                                     currentSelectedTrainingRoom.Name || null;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('[Indoor Training] Training Room 이름 가져오기 실패:', e);
+            }
+            
+            // 필터링: 공개 워크아웃(status='보이기') 또는 status가 Training Room 이름과 동일한 경우만 표시
+            filteredWorkouts = normalizedWorkouts.filter(workout => {
+                const workoutStatus = String(workout.status || '').trim();
+                const isPublic = workoutStatus === '보이기';
+                
+                // 공개 워크아웃이면 표시
+                if (isPublic) {
+                    return true;
+                }
+                
+                // Training Room 이름이 있고, status가 Training Room 이름과 동일하면 표시
+                if (currentTrainingRoomName && workoutStatus === String(currentTrainingRoomName).trim()) {
+                    return true;
+                }
+                
+                // 그 외의 경우는 표시하지 않음
+                return false;
+            });
+            
+            console.log('[Indoor Training] grade=3 부관리자 필터링 결과:', {
+                grade: grade,
+                currentTrainingRoomName: currentTrainingRoomName,
+                totalWorkouts: normalizedWorkouts.length,
+                filteredWorkouts: filteredWorkouts.length,
+                filteredWorkoutStatuses: filteredWorkouts.map(w => ({ id: w.id, title: w.title, status: w.status }))
+            });
+        } else if (grade === '1') {
+            // grade=1 관리자는 모든 워크아웃 표시
+            filteredWorkouts = normalizedWorkouts;
+        } else {
+            // grade=2 일반 사용자는 공개 워크아웃만 표시
+            filteredWorkouts = normalizedWorkouts.filter(workout => {
+                const workoutStatus = String(workout.status || '').trim();
+                return workoutStatus === '보이기';
+            });
+        }
+        
+        if (filteredWorkouts.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
             return;
         }
         
-        // 워크아웃 목록 렌더링
-        tbody.innerHTML = validWorkouts.map((workout, index) => {
+        // 워크아웃 목록 렌더링 (filteredWorkouts 사용)
+        tbody.innerHTML = filteredWorkouts.map((workout, index) => {
             // 카테고리 항목 사용 (category 필드가 있으면 사용, 없으면 author 사용)
             const category = workout.category || workout.author || '-';
             
