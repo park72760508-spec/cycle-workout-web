@@ -2809,7 +2809,29 @@ button[aria-disabled="true"] {
   border-top: 1px solid #e5e7eb;
   display: flex;
   gap: 15px;
-  justify-content: flex-end;
+  justify-content: center;
+}
+
+/* 워크아웃 선택 모달 푸터의 connection-exit-container 스타일 */
+#workoutSelectionModal .modal-footer {
+  justify-content: center;
+}
+
+#workoutSelectionModal .modal-footer .connection-exit-container {
+  width: 100%;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border-top: none;
+}
+
+/* 워크아웃 선택 모달의 버튼 스타일 (connection-exit-container 내부 버튼) */
+#workoutSelectionModal .modal-footer .connection-exit-container .btn-next-inline,
+#workoutSelectionModal .modal-footer .connection-exit-container .btn-exit-inline {
+  min-height: auto;
+  min-width: auto;
+  padding: 10px 20px;
+  font-size: 14px;
 }
 
 .modal-footer .btn {
