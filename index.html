@@ -717,11 +717,11 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="showScreen('connectionScreen')">
                 <span>SOLO TRAINING</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-profile" id="btnBasecampProfile" onclick="showScreen('profileScreen'); if (typeof window.loadUsers === 'function') { setTimeout(() => window.loadUsers(), 200); }">
-                <span>USER PROFILE</span>
-              </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="showScreen('myCareerScreen')">
                 <span>MY CAREER</span>
+              </button>
+              <button class="btn btn-device basecamp-btn basecamp-btn-manual" id="btnBasecampManual" onclick="showScreen('userManualScreen')">
+                <span>사용자 메뉴얼</span>
               </button>
             </div>
           </div>
@@ -732,6 +732,79 @@
               <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
               시스템 문의 : stelvio.ai.kr@gmail.com
             </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 사용자 메뉴얼 화면 -->
+  <div id="userManualScreen" class="screen">
+    <!-- 배경 이미지 -->
+    <div class="basecamp-background-image"></div>
+    
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card">
+          <div class="connection-header basecamp-header">
+            <!-- 제목 이미지 배경으로 처리 -->
+          </div>
+
+          <div class="connection-device-section basecamp-device-section">
+            <h3 class="mb-15 basecamp-status-bar">사용자 메뉴얼</h3>
+            <div style="padding: 20px; text-align: left; color: #333; line-height: 1.8;">
+              <h4 style="color: #15803d; margin-bottom: 15px; font-size: 18px;">📖 사용 가이드</h4>
+              <div style="margin-bottom: 25px;">
+                <h5 style="color: #667eea; margin-bottom: 10px; font-size: 16px;">1. 기본 사용법</h5>
+                <p style="margin-bottom: 10px; font-size: 14px;">
+                  • <strong>INDOOR TRAINING</strong>: 그룹 실내 훈련에 참여할 수 있습니다.<br>
+                  • <strong>SOLO TRAINING</strong>: 개인 훈련을 시작할 수 있습니다.<br>
+                  • <strong>MY CAREER</strong>: 훈련 스케줄, 일지, 워크아웃 등을 관리할 수 있습니다.
+                </p>
+              </div>
+              
+              <div style="margin-bottom: 25px;">
+                <h5 style="color: #667eea; margin-bottom: 10px; font-size: 16px;">2. MY CAREER 메뉴</h5>
+                <p style="margin-bottom: 10px; font-size: 14px;">
+                  • <strong>훈련 스케줄</strong>: 주간/월간 훈련 계획을 수립하고 관리합니다.<br>
+                  • <strong>훈련 일지</strong>: 훈련 기록과 성과를 확인합니다.<br>
+                  • <strong>워크아웃</strong>: 훈련 프로그램을 선택하거나 생성합니다.<br>
+                  • <strong>사용자 정보</strong>: 프로필과 설정을 관리합니다.
+                </p>
+              </div>
+              
+              <div style="margin-bottom: 25px;">
+                <h5 style="color: #667eea; margin-bottom: 10px; font-size: 16px;">3. 훈련 시작하기</h5>
+                <p style="margin-bottom: 10px; font-size: 14px;">
+                  • ANT+ 센서(파워미터, 심박계, 케이던스)를 연결하세요.<br>
+                  • 훈련할 워크아웃을 선택하세요.<br>
+                  • 훈련 중 실시간 데이터를 확인하며 목표를 달성하세요.
+                </p>
+              </div>
+              
+              <div style="margin-bottom: 25px;">
+                <h5 style="color: #667eea; margin-bottom: 10px; font-size: 16px;">4. 문의사항</h5>
+                <p style="margin-bottom: 10px; font-size: 14px;">
+                  시스템 문의: <a href="mailto:stelvio.ai.kr@gmail.com" style="color: #667eea; text-decoration: underline;">stelvio.ai.kr@gmail.com</a>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 하단 시스템 문의 문구 -->
+          <div class="basecamp-footer">
+            <p>
+              <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
+              시스템 문의 : stelvio.ai.kr@gmail.com
+            </p>
+          </div>
+
+          <!-- 뒤로 가기 버튼 -->
+          <div style="text-align: center; margin-top: 20px;">
+            <button class="btn btn-exit-inline" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
+              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              <span>뒤로 가기</span>
+            </button>
           </div>
         </div>
       </div>
