@@ -4436,45 +4436,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (isIOS()) enableIOSMode();
   
-  // 뒤로 가기 버튼 터치 개선 초기화
-  function initEnhancedBackButtons() {
-    // 사용자 메뉴얼 화면의 뒤로 가기 버튼
-    const btnBackFromUserManual = document.getElementById('btnBackFromUserManual');
-    if (btnBackFromUserManual && typeof window.enhanceButtonForTouch === 'function') {
-      window.enhanceButtonForTouch(btnBackFromUserManual, function() {
-        if (typeof showScreen === 'function') {
-          showScreen('basecampScreen');
-        }
-      }, {
-        debounceDelay: 300,
-        enableHaptic: true,
-        enableSound: true
-      });
-      console.log('✅ 사용자 메뉴얼 뒤로 가기 버튼 개선 적용 완료');
-    }
-    
-    // MY CAREER 화면의 뒤로 가기 버튼
-    const btnBackFromMyCareer = document.getElementById('btnBackFromMyCareer');
-    if (btnBackFromMyCareer && typeof window.enhanceButtonForTouch === 'function') {
-      window.enhanceButtonForTouch(btnBackFromMyCareer, function() {
-        if (typeof showScreen === 'function') {
-          showScreen('basecampScreen');
-        }
-      }, {
-        debounceDelay: 300,
-        enableHaptic: true,
-        enableSound: true
-      });
-      console.log('✅ MY CAREER 뒤로 가기 버튼 개선 적용 완료');
-    }
-  }
-  
   // 초기화 실행 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
   setTimeout(() => {
-    initEnhancedBackButtons();
-    initBasecampButtons();
-    
-    // 모든 버튼에 진동 피드백 적용
+    // 모든 버튼에 진동 피드백 적용 (개별 처리된 버튼 포함)
     if (typeof window.applyHapticFeedbackToAllButtons === 'function') {
       window.applyHapticFeedbackToAllButtons();
     }
@@ -4484,159 +4448,6 @@ document.addEventListener("DOMContentLoaded", () => {
       window.setupHapticObserver();
     }
   }, 100);
-  
-  // 베이스캠프 화면 이미지 버튼 4개에 진동 피드백 적용
-  function initBasecampButtons() {
-    // 1. INDOOR TRAINING 버튼
-    const btnIndoor = document.getElementById('btnBasecampIndoor');
-    if (btnIndoor) {
-      const originalOnClick = btnIndoor.onclick;
-      btnIndoor.onclick = null;
-      btnIndoor.removeAttribute('onclick');
-      
-      btnIndoor.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('trainingRoomScreen');
-            if (typeof loadTrainingRooms === 'function') {
-              setTimeout(() => loadTrainingRooms(), 200);
-            }
-          }
-        }
-      }, { passive: false });
-      
-      btnIndoor.addEventListener('click', function(e) {
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('trainingRoomScreen');
-            if (typeof loadTrainingRooms === 'function') {
-              setTimeout(() => loadTrainingRooms(), 200);
-            }
-          }
-        }
-      });
-      console.log('✅ INDOOR TRAINING 버튼 진동 피드백 적용 완료');
-    }
-    
-    // 2. SOLO TRAINING 버튼
-    const btnSolo = document.getElementById('btnBasecampSolo');
-    if (btnSolo) {
-      const originalOnClick = btnSolo.onclick;
-      btnSolo.onclick = null;
-      btnSolo.removeAttribute('onclick');
-      
-      btnSolo.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('connectionScreen');
-          }
-        }
-      }, { passive: false });
-      
-      btnSolo.addEventListener('click', function(e) {
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('connectionScreen');
-          }
-        }
-      });
-      console.log('✅ SOLO TRAINING 버튼 진동 피드백 적용 완료');
-    }
-    
-    // 3. MY CAREER 버튼
-    const btnCareer = document.getElementById('btnBasecampCareer');
-    if (btnCareer) {
-      const originalOnClick = btnCareer.onclick;
-      btnCareer.onclick = null;
-      btnCareer.removeAttribute('onclick');
-      
-      btnCareer.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('myCareerScreen');
-          }
-        }
-      }, { passive: false });
-      
-      btnCareer.addEventListener('click', function(e) {
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('myCareerScreen');
-          }
-        }
-      });
-      console.log('✅ MY CAREER 버튼 진동 피드백 적용 완료');
-    }
-    
-    // 4. 사용자 메뉴얼 버튼
-    const btnManual = document.getElementById('btnBasecampManual');
-    if (btnManual) {
-      const originalOnClick = btnManual.onclick;
-      btnManual.onclick = null;
-      btnManual.removeAttribute('onclick');
-      
-      btnManual.addEventListener('touchstart', function(e) {
-        e.preventDefault();
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('userManualScreen');
-          }
-        }
-      }, { passive: false });
-      
-      btnManual.addEventListener('click', function(e) {
-        if (typeof window.triggerHapticFeedback === 'function') {
-          window.triggerHapticFeedback([10]);
-        }
-        if (originalOnClick) {
-          originalOnClick.call(this, e);
-        } else {
-          if (typeof showScreen === 'function') {
-            showScreen('userManualScreen');
-          }
-        }
-      });
-      console.log('✅ 사용자 메뉴얼 버튼 진동 피드백 적용 완료');
-    }
-  }
 });
 
 // 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
@@ -10693,26 +10504,8 @@ function applyHapticFeedbackToAllButtons() {
   const allButtons = document.querySelectorAll('button');
   
   allButtons.forEach(button => {
-    // 특정 버튼은 제외 (이미 개별적으로 처리된 버튼들)
-    const buttonId = button.id || '';
-    const buttonClass = button.className || '';
-    
-    // 제외할 버튼들 (이미 개별 처리된 버튼)
-    const excludedIds = [
-      'btnBackFromUserManual',
-      'btnBackFromMyCareer',
-      'btnBasecampIndoor',
-      'btnBasecampSolo',
-      'btnBasecampCareer',
-      'btnBasecampManual'
-    ];
-    
-    // 제외 조건 확인
-    if (excludedIds.includes(buttonId)) {
-      return; // 이미 처리된 버튼은 스킵
-    }
-    
-    // 버튼에 진동 피드백 적용
+    // 모든 버튼에 일관되게 적용 (개별 처리된 버튼도 포함)
+    // data-haptic-applied 속성으로 중복 적용 방지
     addHapticFeedbackToButton(button);
   });
   
