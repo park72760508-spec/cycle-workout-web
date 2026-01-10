@@ -4435,6 +4435,44 @@ document.addEventListener("DOMContentLoaded", () => {
   console.log("App initialization complete!");
 
   if (isIOS()) enableIOSMode();
+  
+  // 뒤로 가기 버튼 터치 개선 초기화
+  function initEnhancedBackButtons() {
+    // 사용자 메뉴얼 화면의 뒤로 가기 버튼
+    const btnBackFromUserManual = document.getElementById('btnBackFromUserManual');
+    if (btnBackFromUserManual && typeof window.enhanceButtonForTouch === 'function') {
+      window.enhanceButtonForTouch(btnBackFromUserManual, function() {
+        if (typeof showScreen === 'function') {
+          showScreen('basecampScreen');
+        }
+      }, {
+        debounceDelay: 300,
+        enableHaptic: true,
+        enableSound: true
+      });
+      console.log('✅ 사용자 메뉴얼 뒤로 가기 버튼 개선 적용 완료');
+    }
+    
+    // MY CAREER 화면의 뒤로 가기 버튼
+    const btnBackFromMyCareer = document.getElementById('btnBackFromMyCareer');
+    if (btnBackFromMyCareer && typeof window.enhanceButtonForTouch === 'function') {
+      window.enhanceButtonForTouch(btnBackFromMyCareer, function() {
+        if (typeof showScreen === 'function') {
+          showScreen('basecampScreen');
+        }
+      }, {
+        debounceDelay: 300,
+        enableHaptic: true,
+        enableSound: true
+      });
+      console.log('✅ MY CAREER 뒤로 가기 버튼 개선 적용 완료');
+    }
+  }
+  
+  // 초기화 실행 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
+  setTimeout(() => {
+    initEnhancedBackButtons();
+  }, 100);
 });
 
 // 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
@@ -10086,16 +10124,16 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
           <div class="recommendation-content" style="flex: 1;">
             <h4 class="workout-title" style="color: #00d4aa; font-size: 1.1em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">${workout.title || '워크아웃'}</h4>
             <div class="workout-meta" style="display: flex; gap: 12px; margin-bottom: 8px; font-size: 0.85em; color: #aaa;">
-              <span class="workout-category">${workout.author || '카테고리 없음'}</span>
-              <span class="workout-duration">${totalMinutes}분</span>
-            </div>
+            <span class="workout-category">${workout.author || '카테고리 없음'}</span>
+            <span class="workout-duration">${totalMinutes}분</span>
+          </div>
             <p class="recommendation-reason" style="color: #ffffff; font-size: 0.9em; line-height: 1.5; margin: 0 0 8px 0;">${rec.reason || '추천 이유 없음'}</p>
             ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.85em; line-height: 1.4; margin: 0;">${workout.description}</p>` : ''}
-          </div>
+        </div>
           <div class="recommendation-action" style="flex-shrink: 0;">
             <button class="result-close-btn" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}" style="min-width: 80px; padding: 10px 16px; font-size: 0.9em;">
-              선택
-            </button>
+            선택
+          </button>
           </div>
         </div>
       </div>
@@ -10297,3 +10335,161 @@ window.exportAnalysisReport = exportAnalysisReport;
 window.showAIRecommendationConfirmModal = showAIRecommendationConfirmModal;
 window.closeAIRecommendationConfirmModal = closeAIRecommendationConfirmModal;
 window.confirmAIRecommendation = confirmAIRecommendation;
+
+/* ==========================================================
+   터치 이벤트 및 피드백 개선 유틸리티
+   모바일에서 버튼 클릭 반응성 향상
+========================================================== */
+
+// 진동 피드백 (Vibration API)
+function triggerHapticFeedback(pattern = [10]) {
+  if ('vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern);
+    } catch (e) {
+      console.warn('진동 피드백 실패:', e);
+    }
+  }
+}
+
+// 클릭음 피드백 (Web Audio API)
+let audioContext = null;
+let clickSoundBuffer = null;
+
+function initClickSound() {
+  if (!audioContext) {
+    try {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.warn('AudioContext 생성 실패:', e);
+      return false;
+    }
+  }
+  
+  // 간단한 클릭음 생성 (200Hz, 50ms)
+  if (!clickSoundBuffer) {
+    try {
+      const sampleRate = audioContext.sampleRate;
+      const duration = 0.05; // 50ms
+      const frequency = 200; // 200Hz
+      const frameCount = sampleRate * duration;
+      const buffer = audioContext.createBuffer(1, frameCount, sampleRate);
+      const channelData = buffer.getChannelData(0);
+      
+      for (let i = 0; i < frameCount; i++) {
+        channelData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 
+                         (1 - i / frameCount); // 감쇠
+      }
+      
+      clickSoundBuffer = buffer;
+    } catch (e) {
+      console.warn('클릭음 생성 실패:', e);
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function playClickSound() {
+  if (!initClickSound() || !clickSoundBuffer || !audioContext) {
+    return;
+  }
+  
+  try {
+    const source = audioContext.createBufferSource();
+    source.buffer = clickSoundBuffer;
+    source.connect(audioContext.destination);
+    source.start(0);
+  } catch (e) {
+    console.warn('클릭음 재생 실패:', e);
+  }
+}
+
+// 터치 이벤트 핸들러 (중복 클릭 방지 포함)
+function createEnhancedButtonHandler(callback, options = {}) {
+  let isProcessing = false;
+  let lastClickTime = 0;
+  const debounceDelay = options.debounceDelay || 300; // 기본 300ms
+  const enableHaptic = options.enableHaptic !== false; // 기본 true
+  const enableSound = options.enableSound !== false; // 기본 true
+  
+  return function(event) {
+    // 중복 클릭 방지
+    const now = Date.now();
+    if (isProcessing || (now - lastClickTime < debounceDelay)) {
+      event.preventDefault();
+      event.stopPropagation();
+      return false;
+    }
+    
+    isProcessing = true;
+    lastClickTime = now;
+    
+    // 피드백 제공
+    if (enableHaptic) {
+      triggerHapticFeedback([10]);
+    }
+    if (enableSound) {
+      playClickSound();
+    }
+    
+    // 버튼 시각적 피드백
+    const button = event.currentTarget;
+    if (button) {
+      button.classList.add('button-pressed');
+      setTimeout(() => {
+        button.classList.remove('button-pressed');
+      }, 150);
+    }
+    
+    // 콜백 실행
+    try {
+      if (typeof callback === 'function') {
+        callback(event);
+      }
+    } catch (error) {
+      console.error('버튼 핸들러 오류:', error);
+    } finally {
+      // 처리 완료 후 약간의 지연을 두고 플래그 해제
+      setTimeout(() => {
+        isProcessing = false;
+      }, debounceDelay);
+    }
+    
+    return false;
+  };
+}
+
+// 터치 이벤트 바인딩 함수
+function enhanceButtonForTouch(button, callback, options = {}) {
+  if (!button) return;
+  
+  const handler = createEnhancedButtonHandler(callback, options);
+  
+  // 기존 onclick 제거하고 새로운 핸들러 추가
+  button.onclick = null;
+  button.removeAttribute('onclick');
+  
+  // 터치 이벤트와 클릭 이벤트 모두 처리
+  button.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    handler(e);
+  }, { passive: false });
+  
+  button.addEventListener('click', handler);
+  
+  // 포인터 이벤트도 지원 (더 나은 크로스 플랫폼 지원)
+  button.addEventListener('pointerdown', function(e) {
+    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+      e.preventDefault();
+      handler(e);
+    }
+  }, { passive: false });
+}
+
+// 전역 함수로 등록
+window.triggerHapticFeedback = triggerHapticFeedback;
+window.playClickSound = playClickSound;
+window.enhanceButtonForTouch = enhanceButtonForTouch;
+window.createEnhancedButtonHandler = createEnhancedButtonHandler;
