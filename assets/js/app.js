@@ -4472,7 +4472,161 @@ document.addEventListener("DOMContentLoaded", () => {
   // 초기화 실행 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
   setTimeout(() => {
     initEnhancedBackButtons();
+    initBasecampButtons();
   }, 100);
+  
+  // 베이스캠프 화면 이미지 버튼 4개에 진동 피드백 적용
+  function initBasecampButtons() {
+    // 1. INDOOR TRAINING 버튼
+    const btnIndoor = document.getElementById('btnBasecampIndoor');
+    if (btnIndoor) {
+      const originalOnClick = btnIndoor.onclick;
+      btnIndoor.onclick = null;
+      btnIndoor.removeAttribute('onclick');
+      
+      btnIndoor.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('trainingRoomScreen');
+            if (typeof loadTrainingRooms === 'function') {
+              setTimeout(() => loadTrainingRooms(), 200);
+            }
+          }
+        }
+      }, { passive: false });
+      
+      btnIndoor.addEventListener('click', function(e) {
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('trainingRoomScreen');
+            if (typeof loadTrainingRooms === 'function') {
+              setTimeout(() => loadTrainingRooms(), 200);
+            }
+          }
+        }
+      });
+      console.log('✅ INDOOR TRAINING 버튼 진동 피드백 적용 완료');
+    }
+    
+    // 2. SOLO TRAINING 버튼
+    const btnSolo = document.getElementById('btnBasecampSolo');
+    if (btnSolo) {
+      const originalOnClick = btnSolo.onclick;
+      btnSolo.onclick = null;
+      btnSolo.removeAttribute('onclick');
+      
+      btnSolo.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('connectionScreen');
+          }
+        }
+      }, { passive: false });
+      
+      btnSolo.addEventListener('click', function(e) {
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('connectionScreen');
+          }
+        }
+      });
+      console.log('✅ SOLO TRAINING 버튼 진동 피드백 적용 완료');
+    }
+    
+    // 3. MY CAREER 버튼
+    const btnCareer = document.getElementById('btnBasecampCareer');
+    if (btnCareer) {
+      const originalOnClick = btnCareer.onclick;
+      btnCareer.onclick = null;
+      btnCareer.removeAttribute('onclick');
+      
+      btnCareer.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('myCareerScreen');
+          }
+        }
+      }, { passive: false });
+      
+      btnCareer.addEventListener('click', function(e) {
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('myCareerScreen');
+          }
+        }
+      });
+      console.log('✅ MY CAREER 버튼 진동 피드백 적용 완료');
+    }
+    
+    // 4. 사용자 메뉴얼 버튼
+    const btnManual = document.getElementById('btnBasecampManual');
+    if (btnManual) {
+      const originalOnClick = btnManual.onclick;
+      btnManual.onclick = null;
+      btnManual.removeAttribute('onclick');
+      
+      btnManual.addEventListener('touchstart', function(e) {
+        e.preventDefault();
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('userManualScreen');
+          }
+        }
+      }, { passive: false });
+      
+      btnManual.addEventListener('click', function(e) {
+        if (typeof window.triggerHapticFeedback === 'function') {
+          window.triggerHapticFeedback([10]);
+        }
+        if (originalOnClick) {
+          originalOnClick.call(this, e);
+        } else {
+          if (typeof showScreen === 'function') {
+            showScreen('userManualScreen');
+          }
+        }
+      });
+      console.log('✅ 사용자 메뉴얼 버튼 진동 피드백 적용 완료');
+    }
+  }
 });
 
 // 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
