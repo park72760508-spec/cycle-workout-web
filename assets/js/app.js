@@ -10407,6 +10407,8 @@ function isIOSDevice() {
 // iOS용 사운드 효과 (Type A: Tick) - 1200Hz, sine, 0.05s
 let iosAudioContext = null;
 let iosAudioContextInitialized = false;
+let isSoundPlaying = false; // 사운드 재생 중 플래그 (중복 방지)
+let lastSoundTime = 0; // 마지막 사운드 재생 시간
 
 function initIOSAudioContext() {
   if (!iosAudioContext) {
@@ -10432,12 +10434,23 @@ function initIOSAudioContext() {
   return true;
 }
 
-// iOS 사운드 재생 함수 (Safari 및 Chrome 모두 지원)
+// iOS 사운드 재생 함수 (Safari 및 Chrome 모두 지원, 중복 재생 방지)
 async function playIOSSound(frequency = 1200, type = 'sine', duration = 0.05) {
+  // 중복 재생 방지: 100ms 이내 재생 방지
+  const now = Date.now();
+  if (isSoundPlaying || (now - lastSoundTime < 100)) {
+    return false; // 이미 재생 중이거나 최근에 재생했으면 스킵
+  }
+  
   try {
+    // 사운드 재생 플래그 설정
+    isSoundPlaying = true;
+    lastSoundTime = now;
+    
     // AudioContext 초기화
     if (!initIOSAudioContext() || !iosAudioContext) {
       console.warn('⚠️ iOS AudioContext 초기화 실패');
+      isSoundPlaying = false;
       return false;
     }
     
@@ -10482,14 +10495,16 @@ async function playIOSSound(frequency = 1200, type = 'sine', duration = 0.05) {
     oscillator.start(currentTime);
     oscillator.stop(currentTime + duration);
     
-    const ua = navigator.userAgent || '';
-    const browserType = /CriOS/i.test(ua) ? 'Chrome' : 'Safari/기타';
-    console.log(`✅ iOS ${browserType} 사운드 재생 성공:`, { frequency, type, duration });
+    // 사운드 재생 완료 후 플래그 해제 (duration + 여유시간)
+    setTimeout(() => {
+      isSoundPlaying = false;
+    }, (duration * 1000) + 50); // 50ms 여유
+    
     return true;
     
   } catch (e) {
     console.error('❌ iOS 사운드 재생 실패:', e);
-    console.error('   - 오류 상세:', e.message, e.stack);
+    isSoundPlaying = false;
     return false;
   }
 }
@@ -10695,8 +10710,20 @@ function addHapticFeedbackToButton(button) {
   const passiveOption = isIOS ? false : true;
   
   // 피드백 함수 (iOS: 사운드, 기타: 진동)
-  // iOS에서는 사용자 이벤트에서 직접 호출되어야 함
+  // 중복 재생 방지를 위한 플래그
+  let feedbackTriggered = false;
+  let lastFeedbackTime = 0;
+  
   const triggerFeedback = function(e) {
+    // 중복 방지: 100ms 이내 재생 방지
+    const now = Date.now();
+    if (feedbackTriggered || (now - lastFeedbackTime < 100)) {
+      return; // 이미 트리거되었거나 최근에 트리거되었으면 스킵
+    }
+    
+    feedbackTriggered = true;
+    lastFeedbackTime = now;
+    
     // iOS에서는 이벤트 객체가 필요할 수 있음
     if (typeof window.triggerHapticFeedback === 'function') {
       // 즉시 호출 (사용자 이벤트 컨텍스트에서 실행)
@@ -10704,25 +10731,38 @@ function addHapticFeedbackToButton(button) {
     } else {
       console.warn('⚠️ triggerHapticFeedback 함수를 찾을 수 없습니다.');
     }
+    
+    // 플래그 해제 (100ms 후)
+    setTimeout(() => {
+      feedbackTriggered = false;
+    }, 100);
   };
   
   // 터치 이벤트 추가 (iOS에서는 passive: false 필수)
   // iOS Safari에서는 touchstart에서 직접 호출해야 AudioContext가 작동함
+  // touchstart에서만 피드백 호출 (우선순위 최고)
   button.addEventListener('touchstart', function(e) {
     // iOS에서는 이벤트에서 직접 호출
     triggerFeedback(e);
   }, { passive: false, capture: false });
   
   // 포인터 이벤트 추가 (iOS Safari 지원)
+  // touchstart와 중복될 수 있으므로 터치 타입일 때는 스킵
   button.addEventListener('pointerdown', function(e) {
-    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+    // 터치가 아닐 때만 피드백 (마우스 등)
+    if (e.pointerType === 'mouse') {
       triggerFeedback(e);
     }
+    // 터치 타입은 touchstart에서 이미 처리됨
   }, { passive: false, capture: false });
   
-  // 클릭 이벤트에도 추가 (데스크톱 호환성 및 iOS 백업)
+  // 클릭 이벤트에도 추가 (데스크톱 호환성)
+  // 터치 이벤트와 중복될 수 있으므로 데스크톱에서만
   button.addEventListener('click', function(e) {
-    triggerFeedback(e);
+    // 터치 이벤트가 아닐 때만 피드백 (데스크톱)
+    if (!('ontouchstart' in window) || e.isTrusted === false) {
+      triggerFeedback(e);
+    }
   }, { passive: true, capture: false });
 }
 
@@ -10830,12 +10870,8 @@ function enhanceBackButton(buttonId) {
     e.stopPropagation();
     e.stopImmediatePropagation();
     
-    // 피드백 (iOS: 사운드, 기타: 진동)
-    // 이미 touchstart/pointerdown에서 호출되지만 백업으로도 호출
-    // iOS에서는 사용자 이벤트 컨텍스트에서 호출되어야 함
-    if (typeof window.triggerHapticFeedback === 'function') {
-      window.triggerHapticFeedback([10]);
-    }
+    // 피드백은 이미 touchstart/pointerdown에서 호출되었으므로 여기서는 호출하지 않음
+    // 중복 재생 방지를 위해 제거
     
     // 원래 기능 실행
     try {
@@ -10868,17 +10904,35 @@ function enhanceBackButton(buttonId) {
   };
   
   // 피드백 함수 (iOS: 사운드, 기타: 진동)
-  // iOS에서는 사용자 이벤트에서 직접 호출되어야 함
+  // 중복 재생 방지를 위한 플래그
+  let feedbackTriggered = false;
+  let lastFeedbackTime = 0;
+  
   const triggerFeedback = function(e) {
+    // 중복 방지: 100ms 이내 재생 방지
+    const now = Date.now();
+    if (feedbackTriggered || (now - lastFeedbackTime < 100)) {
+      return; // 이미 트리거되었거나 최근에 트리거되었으면 스킵
+    }
+    
+    feedbackTriggered = true;
+    lastFeedbackTime = now;
+    
     // iOS에서는 이벤트 객체가 필요할 수 있음
     if (typeof window.triggerHapticFeedback === 'function') {
       // 즉시 호출 (사용자 이벤트 컨텍스트에서 실행)
       window.triggerHapticFeedback([10]);
     }
+    
+    // 플래그 해제 (100ms 후)
+    setTimeout(() => {
+      feedbackTriggered = false;
+    }, 100);
   };
   
   // 터치 이벤트 (우선순위 최고, iOS에서는 passive: false 필수)
   // iOS Safari에서는 touchstart에서 직접 호출해야 AudioContext가 작동함
+  // touchstart에서만 피드백 호출 (우선순위 최고)
   button.addEventListener('touchstart', function(e) {
     // iOS에서는 사운드, 기타는 진동
     triggerFeedback(e);
@@ -10886,17 +10940,26 @@ function enhanceBackButton(buttonId) {
   }, { passive: false, capture: false });
   
   // 포인터 이벤트 (터치/마우스 모두 지원)
+  // touchstart와 중복될 수 있으므로 터치 타입일 때는 피드백 스킵
   button.addEventListener('pointerdown', function(e) {
-    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+    if (e.pointerType === 'touch') {
+      // 터치 타입은 touchstart에서 이미 처리됨, 피드백 없이 클릭만 처리
+      handleClick(e);
+    } else if (e.pointerType === 'mouse') {
+      // 마우스 타입만 피드백
       triggerFeedback(e);
       handleClick(e);
     }
   }, { passive: false, capture: false });
   
-  // 클릭 이벤트 (데스크톱 호환 및 iOS 백업)
+  // 클릭 이벤트 (데스크톱 호환)
+  // 터치 이벤트와 중복될 수 있으므로 데스크톱에서만 피드백
   button.addEventListener('click', function(e) {
-    // 백업으로 피드백 제공
-    triggerFeedback(e);
+    // 터치 이벤트가 아닐 때만 피드백 (데스크톱)
+    // 또는 터치 이벤트가 이미 처리되지 않았을 때만
+    if (!('ontouchstart' in window) || !feedbackTriggered) {
+      triggerFeedback(e);
+    }
     handleClick(e);
   }, { passive: false, capture: false });
   
