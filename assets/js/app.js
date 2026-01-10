@@ -4438,7 +4438,13 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // 초기화 실행 (약간의 지연을 두어 DOM이 완전히 로드된 후 실행)
   setTimeout(() => {
-    // 모든 버튼에 진동 피드백 적용 (개별 처리된 버튼 포함)
+    // 뒤로 가기 버튼 개선 (소리 효과 제거, 클릭 인식 강화) - 먼저 처리
+    if (typeof window.enhanceBackButton === 'function') {
+      window.enhanceBackButton('btnBackFromUserManual');
+      window.enhanceBackButton('btnBackFromMyCareer');
+    }
+    
+    // 모든 버튼에 진동 피드백 적용 (뒤로 가기 버튼은 제외됨)
     if (typeof window.applyHapticFeedbackToAllButtons === 'function') {
       window.applyHapticFeedbackToAllButtons();
     }
@@ -4448,6 +4454,38 @@ document.addEventListener("DOMContentLoaded", () => {
       window.setupHapticObserver();
     }
   }, 100);
+  
+  // 화면 전환 시에도 뒤로 가기 버튼 개선 적용 (동적 화면 대응)
+  // MutationObserver를 사용하여 화면이 표시될 때마다 확인
+  const backButtonObserver = new MutationObserver(function(mutations) {
+    mutations.forEach(function(mutation) {
+      mutation.addedNodes.forEach(function(node) {
+        if (node.nodeType === 1) { // Element node
+          // 추가된 노드가 뒤로 가기 버튼인 경우
+          if (node.id === 'btnBackFromUserManual' || node.id === 'btnBackFromMyCareer') {
+            if (typeof window.enhanceBackButton === 'function') {
+              window.enhanceBackButton(node.id);
+            }
+          }
+          // 추가된 노드 내부의 뒤로 가기 버튼도 확인
+          const backButtons = node.querySelectorAll && node.querySelectorAll('#btnBackFromUserManual, #btnBackFromMyCareer');
+          if (backButtons) {
+            backButtons.forEach(button => {
+              if (typeof window.enhanceBackButton === 'function') {
+                window.enhanceBackButton(button.id);
+              }
+            });
+          }
+        }
+      });
+    });
+  });
+  
+  // body 전체를 관찰
+  backButtonObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
 });
 
 // 프로필 화면 이동 & 목록 로드: 단일 핸들러(안전)
@@ -10480,6 +10518,12 @@ function addHapticFeedbackToButton(button) {
     return; // 이미 적용되었거나 버튼이 없으면 스킵
   }
   
+  // 뒤로 가기 버튼은 별도 처리되므로 제외
+  const buttonId = button.id || '';
+  if (buttonId === 'btnBackFromUserManual' || buttonId === 'btnBackFromMyCareer') {
+    return; // 뒤로 가기 버튼은 enhanceBackButton에서 처리
+  }
+  
   // 마커 속성 추가 (중복 적용 방지)
   button.setAttribute('data-haptic-applied', 'true');
   
@@ -10543,7 +10587,112 @@ function setupHapticObserver() {
   console.log('✅ 동적 버튼 감지 Observer 설정 완료');
 }
 
+// 뒤로 가기 버튼 전용 개선 함수 (소리 효과 제거, 클릭 인식 강화)
+function enhanceBackButton(buttonId) {
+  const button = document.getElementById(buttonId);
+  if (!button) {
+    console.warn(`⚠️ ${buttonId} 버튼을 찾을 수 없습니다.`);
+    return;
+  }
+  
+  // 이미 처리되었는지 확인
+  if (button.hasAttribute('data-back-button-enhanced')) {
+    return; // 이미 처리됨
+  }
+  
+  // 마커 속성 추가
+  button.setAttribute('data-back-button-enhanced', 'true');
+  button.setAttribute('data-haptic-applied', 'true'); // 범용 함수에서 제외
+  
+  // 기존 onclick 핸들러 저장
+  const originalOnClick = button.onclick;
+  const originalOnClickAttr = button.getAttribute('onclick');
+  
+  // onclick 속성 제거
+  button.onclick = null;
+  button.removeAttribute('onclick');
+  
+  // 클릭 처리 함수
+  let isProcessing = false;
+  const handleClick = function(e) {
+    // 중복 실행 방지
+    if (isProcessing) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+    
+    isProcessing = true;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    
+    // 진동 피드백만 (소리 효과 제거)
+    if (typeof window.triggerHapticFeedback === 'function') {
+      window.triggerHapticFeedback([10]);
+    }
+    
+    // 원래 기능 실행
+    try {
+      if (originalOnClick) {
+        originalOnClick.call(button, e);
+      } else if (originalOnClickAttr) {
+        // eval 대신 Function 생성자 사용 (더 안전)
+        const func = new Function('event', originalOnClickAttr.replace(/^onclick\s*=\s*["']?|["']?$/g, ''));
+        func.call(button, e);
+      } else {
+        // 기본 동작: basecampScreen으로 이동
+        if (typeof showScreen === 'function') {
+          showScreen('basecampScreen');
+        }
+      }
+    } catch (err) {
+      console.error('뒤로 가기 버튼 실행 오류:', err);
+      // 오류 발생 시에도 기본 동작 실행
+      if (typeof showScreen === 'function') {
+        showScreen('basecampScreen');
+      }
+    }
+    
+    // 처리 완료 후 플래그 해제 (300ms 후)
+    setTimeout(() => {
+      isProcessing = false;
+    }, 300);
+    
+    return false;
+  };
+  
+  // 터치 이벤트 (우선순위 최고, capture 사용)
+  button.addEventListener('touchstart', function(e) {
+    handleClick(e);
+  }, { passive: false, capture: true });
+  
+  // 포인터 이벤트 (터치/마우스 모두 지원)
+  button.addEventListener('pointerdown', function(e) {
+    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
+      handleClick(e);
+    }
+  }, { passive: false, capture: true });
+  
+  // 클릭 이벤트 (데스크톱 호환, capture 사용)
+  button.addEventListener('click', handleClick, { passive: false, capture: true });
+  
+  // 마우스 다운 이벤트 (추가 보완)
+  button.addEventListener('mousedown', function(e) {
+    if (e.button === 0) { // 왼쪽 버튼만
+      handleClick(e);
+    }
+  }, { passive: false, capture: true });
+  
+  // 터치 영역 확대를 위한 CSS 클래스 추가
+  button.classList.add('enhanced-back-button-improved');
+  
+  console.log(`✅ ${buttonId} 버튼 개선 완료 (소리 효과 제거, 클릭 인식 강화)`);
+}
+
 // 전역 함수로 등록
 window.addHapticFeedbackToButton = addHapticFeedbackToButton;
 window.applyHapticFeedbackToAllButtons = applyHapticFeedbackToAllButtons;
 window.setupHapticObserver = setupHapticObserver;
+window.enhanceBackButton = enhanceBackButton;
