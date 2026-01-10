@@ -5750,50 +5750,180 @@ async function loadWorkoutsForSelection() {
             });
         }
         
-        if (filteredWorkouts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
-            return;
-        }
+        // 필터링된 워크아웃 목록을 전역 변수에 저장 (Room WKO 버튼에서 사용)
+        window.currentFilteredWorkouts = filteredWorkouts;
+        window.currentNormalizedWorkouts = normalizedWorkouts;
         
         // 워크아웃 목록 렌더링 (filteredWorkouts 사용)
-        tbody.innerHTML = filteredWorkouts.map((workout, index) => {
-            // 카테고리 항목 사용 (category 필드가 있으면 사용, 없으면 author 사용)
-            const category = workout.category || workout.author || '-';
-            
-            // 시간은 세그먼트 총합으로 계산
-            let duration = '-';
-            if (workout.total_seconds) {
-                const minutes = Math.floor(workout.total_seconds / 60);
-                duration = `${minutes}분`;
-            }
-            
-            return `
-                <tr style="border-bottom: 1px solid #e5e7eb;">
-                    <td style="text-align: center; padding: 12px;">${index + 1}</td>
-                    <td style="padding: 12px;">${escapeHtml(workout.title || '-')}</td>
-                    <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
-                    <td style="text-align: center; padding: 12px;">${duration}</td>
-                    <td style="text-align: center; padding: 12px;">
-                        <button class="btn btn-primary btn-sm workout-select-btn" 
-                                onclick="selectWorkoutForTraining('${workout.id}')" 
-                                data-workout-id="${workout.id}"
-                                style="padding: 6px 16px; transition: all 0.3s ease; position: relative; overflow: hidden;">
-                            <span class="btn-text">선택</span>
-                            <span class="btn-loading" style="display: none;">
-                                <span style="display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
-                                로딩...
-                            </span>
-                        </button>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        renderWorkoutSelectionTable(filteredWorkouts);
         
     } catch (error) {
         console.error('[Training] 워크아웃 목록 로드 오류:', error);
         tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc2626;">오류가 발생했습니다.</td></tr>';
     }
 }
+
+/**
+ * 워크아웃 선택 테이블 렌더링 (재사용 함수)
+ */
+function renderWorkoutSelectionTable(workouts) {
+    const tbody = document.getElementById('workoutSelectionTableBody');
+    if (!tbody) return;
+    
+    if (!workouts || workouts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = workouts.map((workout, index) => {
+        // 카테고리 항목 사용 (category 필드가 있으면 사용, 없으면 author 사용)
+        const category = workout.category || workout.author || '-';
+        
+        // 시간은 세그먼트 총합으로 계산
+        let duration = '-';
+        if (workout.total_seconds) {
+            const minutes = Math.floor(workout.total_seconds / 60);
+            duration = `${minutes}분`;
+        }
+        
+        return `
+            <tr style="border-bottom: 1px solid #e5e7eb;">
+                <td style="text-align: center; padding: 12px;">${index + 1}</td>
+                <td style="padding: 12px;">${escapeHtml(workout.title || '-')}</td>
+                <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
+                <td style="text-align: center; padding: 12px;">${duration}</td>
+                <td style="text-align: center; padding: 12px;">
+                    <button class="btn btn-primary btn-sm workout-select-btn" 
+                            onclick="selectWorkoutForTraining('${workout.id}')" 
+                            data-workout-id="${workout.id}"
+                            style="padding: 6px 16px; transition: all 0.3s ease; position: relative; overflow: hidden;">
+                        <span class="btn-text">선택</span>
+                        <span class="btn-loading" style="display: none;">
+                            <span style="display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
+                            로딩...
+                        </span>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Room WKO 버튼: Training Room 이름과 status가 일치하는 워크아웃만 필터링
+ */
+async function filterRoomWorkouts() {
+    const tbody = document.getElementById('workoutSelectionTableBody');
+    if (!tbody) {
+        console.error('[Indoor Training] workoutSelectionTableBody 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    try {
+        // 현재 선택된 Training Room 이름 가져오기
+        let currentTrainingRoomName = null;
+        try {
+            if (typeof window !== 'undefined' && window.SESSION_ID) {
+                const roomId = String(window.SESSION_ID);
+                
+                // Training Room 목록 API 호출
+                if (typeof window.GAS_URL !== 'undefined' && window.GAS_URL) {
+                    try {
+                        const response = await fetch(`${window.GAS_URL}?action=listTrainingRooms`);
+                        if (response.ok) {
+                            const roomListResult = await response.json();
+                            if (roomListResult && roomListResult.success && Array.isArray(roomListResult.items)) {
+                                const selectedRoom = roomListResult.items.find(room => 
+                                    String(room.id) === roomId || String(room.Id) === roomId
+                                );
+                                if (selectedRoom) {
+                                    currentTrainingRoomName = selectedRoom.name || 
+                                                           selectedRoom.title || 
+                                                           selectedRoom.Name || 
+                                                           selectedRoom.roomName || null;
+                                }
+                            }
+                        }
+                    } catch (fetchError) {
+                        console.warn('[Indoor Training] Training Room 목록 가져오기 실패:', fetchError);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[Indoor Training] Training Room 이름 가져오기 실패:', e);
+        }
+        
+        if (!currentTrainingRoomName) {
+            if (typeof showToast === 'function') {
+                showToast('Training Room이 선택되지 않았습니다. 먼저 Training Room을 선택해주세요.', 'warning');
+            } else {
+                alert('Training Room이 선택되지 않았습니다. 먼저 Training Room을 선택해주세요.');
+            }
+            return;
+        }
+        
+        // 전역 변수에서 워크아웃 목록 가져오기 (없으면 다시 로드)
+        let normalizedWorkouts = window.currentNormalizedWorkouts;
+        if (!normalizedWorkouts || normalizedWorkouts.length === 0) {
+            const result = typeof apiGetWorkouts === 'function' ? await apiGetWorkouts() : null;
+            if (result && result.success) {
+                const workouts = result.items || [];
+                normalizedWorkouts = workouts
+                    .filter(w => {
+                        if (typeof validateWorkoutData === 'function') {
+                            return validateWorkoutData(w);
+                        }
+                        return w && w.id && w.title;
+                    })
+                    .map(w => {
+                        if (typeof normalizeWorkoutData === 'function') {
+                            return normalizeWorkoutData(w);
+                        }
+                        return w;
+                    });
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('워크아웃 목록을 불러올 수 없습니다.', 'error');
+                }
+                return;
+            }
+        }
+        
+        // Training Room 이름과 status가 일치하는 워크아웃만 필터링
+        const roomWorkouts = normalizedWorkouts.filter(workout => {
+            const workoutStatus = String(workout.status || '').trim();
+            const roomName = String(currentTrainingRoomName).trim();
+            return workoutStatus === roomName;
+        });
+        
+        // 필터링된 결과 저장
+        window.currentFilteredWorkouts = roomWorkouts;
+        
+        // 테이블 렌더링
+        renderWorkoutSelectionTable(roomWorkouts);
+        
+        console.log('[Indoor Training] Room WKO 필터링 결과:', {
+            currentTrainingRoomName: currentTrainingRoomName,
+            totalWorkouts: normalizedWorkouts.length,
+            filteredWorkouts: roomWorkouts.length,
+            filteredWorkoutStatuses: roomWorkouts.map(w => ({ id: w.id, title: w.title, status: w.status }))
+        });
+        
+        if (typeof showToast === 'function') {
+            showToast(`Training Room 전용 워크아웃 ${roomWorkouts.length}개를 찾았습니다.`, 'info');
+        }
+        
+    } catch (error) {
+        console.error('[Indoor Training] Room WKO 필터링 오류:', error);
+        if (typeof showToast === 'function') {
+            showToast('워크아웃 필터링 중 오류가 발생했습니다.', 'error');
+        }
+    }
+}
+
+// 전역 함수로 노출
+window.filterRoomWorkouts = filterRoomWorkouts;
+window.renderWorkoutSelectionTable = renderWorkoutSelectionTable;
 
 /**
  * HTML 이스케이프 함수
