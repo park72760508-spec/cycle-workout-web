@@ -762,6 +762,35 @@ h1,h2,h3,h4 { font-weight: 600; }
   min-width: 120px !important;
 }
 
+/* 개선된 뒤로 가기 버튼 (클릭 인식 강화) */
+.enhanced-back-button-improved {
+  /* 터치 영역 최대 확대 */
+  padding: 16px 32px !important;
+  min-height: 56px !important;
+  min-width: 150px !important;
+  /* 터치 반응성 향상 */
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: rgba(239, 68, 68, 0.3) !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  /* 클릭 영역 확대를 위한 추가 공간 */
+  position: relative !important;
+  z-index: 10 !important;
+  /* 포인터 이벤트 최적화 */
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* 개선된 뒤로 가기 버튼 호버/액티브 상태 */
+.enhanced-back-button-improved:active,
+.enhanced-back-button-improved:focus {
+  transform: scale(0.95) !important;
+  background: rgba(239, 68, 68, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4) !important;
+  outline: 2px solid rgba(239, 68, 68, 0.5) !important;
+  outline-offset: 2px !important;
+}
+
 /* 모바일에서 터치 영역 더 확대 */
 @media (max-width: 768px) {
   .connection-exit-container .btn-exit-inline,
@@ -770,6 +799,13 @@ h1,h2,h3,h4 { font-weight: 600; }
     min-height: 50px !important;
     min-width: 140px !important;
     font-size: 15px !important;
+  }
+  
+  .enhanced-back-button-improved {
+    padding: 18px 36px !important;
+    min-height: 60px !important;
+    min-width: 160px !important;
+    font-size: 16px !important;
   }
 }
 
