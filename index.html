@@ -1100,26 +1100,35 @@
       <p class="subtitle" id="scheduleDaysSubtitle">각 훈련일에 워크아웃을 지정하세요</p>
     </div>
     
-    <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap: wrap;">
-      <button class="btn btn-secondary btn-refresh" onclick="loadScheduleDays()"><img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
-      <button class="btn btn-success btn-with-icon" onclick="saveScheduleDays()"><img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
-      <button class="btn btn-default-style btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/left-arrow.png" alt="목록으로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 목록으로</button>
-      <div style="display: flex; gap: 8px; align-items: center; margin-left: auto;">
-        <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary btn-default-style" style="padding: 6px 12px; text-decoration: none; display: inline-block;">
-          📥 샘플파일 다운로드
-        </a>
-        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelUpload(event)" />
-        <button type="button" class="btn btn-secondary btn-default-style" onclick="document.getElementById('excelFileInput').click()" style="padding: 6px 12px;">
-          📁 파일 선택
-        </button>
-        <button type="button" class="btn btn-primary btn-default-style btn-with-icon" onclick="applyExcelWorkout()" style="padding: 6px 12px;">
-          <img src="assets/img/execution.png" alt="적용" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 적용
-        </button>
-      </div>
-    </div>
-    
     <div id="scheduleDaysList" class="schedule-days-list">
       <div class="loading-spinner">일별 계획을 불러오는 중...</div>
+    </div>
+    
+    <!-- 하단 버튼 블럭 (목록과 구분) -->
+    <div class="connection-exit-container" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(0, 0, 0, 0.08);">
+      <!-- 좌측: 목록으로, 저장 -->
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <button class="btn btn-exit-inline" onclick="showScreen('scheduleListScreen')" aria-label="목록으로" title="목록으로">
+          <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="목록으로" style="width: 21px; height: 21px;" />
+        </button>
+        <button class="btn btn-success btn-with-icon" onclick="saveScheduleDays()" aria-label="저장" title="저장">
+          <img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px;" />
+        </button>
+      </div>
+      
+      <!-- 우측: 샘플파일 다운로드, 파일선택, 적용 -->
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleExcelUpload(event)" />
+        <a href="assets/data/sample.xlsx" download="sample.xlsx" class="btn btn-secondary btn-default-style" style="padding: 10px; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px;" aria-label="샘플파일 다운로드" title="샘플파일 다운로드">
+          <img src="assets/img/download.png" alt="샘플파일 다운로드" class="btn-icon-image" style="width: 21px; height: 21px;" />
+        </a>
+        <button type="button" class="btn btn-secondary btn-default-style" onclick="document.getElementById('excelFileInput').click()" style="padding: 10px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;" aria-label="파일 선택" title="파일 선택">
+          <img src="assets/img/file.png" alt="파일 선택" class="btn-icon-image" style="width: 21px; height: 21px;" />
+        </button>
+        <button type="button" class="btn btn-primary btn-default-style btn-with-icon" onclick="applyExcelWorkout()" style="padding: 10px; min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;" aria-label="적용" title="적용">
+          <img src="assets/img/execution.png" alt="적용" class="btn-icon-image" style="width: 21px; height: 21px;" />
+        </button>
+      </div>
     </div>
   </div>
 
