@@ -3826,6 +3826,7 @@ function updateWorkoutPreview() {
   const nameEl = safeGetElement('previewWorkoutName');
   const durationEl = safeGetElement('previewDuration');
   const intensityEl = safeGetElement('previewIntensity');
+  const expectedIntensityEl = safeGetElement('previewExpectedIntensity');
   const tssEl = safeGetElement('previewTSS');
 
   if (nameEl) nameEl.textContent = workout.title || '워크아웃';
@@ -3852,6 +3853,8 @@ function updateWorkoutPreview() {
   }
   
   if (intensityEl) intensityEl.textContent = `${avgIntensity}%`;
+  // 예상 강도는 평균 강도와 동일하게 계산
+  if (expectedIntensityEl) expectedIntensityEl.textContent = `${avgIntensity}%`;
 
    // === TSS (NP 근사 기반) ===
    const T = totalDuration; // 총 지속시간(초)
