@@ -2675,9 +2675,26 @@ if (!window.showScreen) {
       // 2) 대상 화면만 표시
       const el = safeGetElement(id);
       if (el) {
-        el.style.display = "block";
+        // 모바일 대시보드 화면은 flex로 표시
+        if (id === 'mobileDashboardScreen') {
+          el.style.display = "flex";
+        } else {
+          el.style.display = "block";
+        }
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
+        
+        // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
+        if (id === 'mobileDashboardScreen') {
+          document.querySelectorAll(".screen").forEach(s => {
+            if (s.id !== 'mobileDashboardScreen' && s.id !== 'splashScreen') {
+              s.style.display = "none";
+              s.style.visibility = "hidden";
+              s.style.opacity = "0";
+              s.classList.remove("active");
+            }
+          });
+        }
         
       // 연결 화면이 표시될 때 버튼 이미지 업데이트 및 ANT+ 버튼 활성화 상태 확인
       if (id === "connectionScreen") {
@@ -2774,6 +2791,15 @@ if (!window.showScreen) {
             window.updateGroupTrainingCardStatus();
           }
         }, 200);
+      }
+      
+      // 모바일 대시보드 화면 전환 시 초기화
+      if (id === 'mobileDashboardScreen') {
+        setTimeout(() => {
+          if (typeof startMobileDashboard === 'function') {
+            startMobileDashboard();
+          }
+        }, 100);
       }
 
       // 훈련 스케줄 목록 화면: initializeCurrentScreen에서 처리하므로 여기서는 제거
@@ -10579,20 +10605,69 @@ async function startMobileDashboard() {
   console.log('[Mobile Dashboard] 모바일 대시보드 시작');
   
   try {
-    // 현재 사용자 정보 표시
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    // 사용자 정보 가져오기
+    let currentUser = window.currentUser || null;
+    if (!currentUser) {
+      try {
+        const storedUser = localStorage.getItem('currentUser');
+        if (storedUser) {
+          currentUser = JSON.parse(storedUser);
+        }
+      } catch (e) {
+        console.warn('[Mobile Dashboard] 사용자 정보 파싱 실패:', e);
+      }
+    }
+    
+    // 사용자 정보가 없으면 API에서 가져오기 시도
+    if (!currentUser || !currentUser.ftp) {
+      try {
+        if (typeof apiGetUsers === 'function') {
+          const result = await apiGetUsers();
+          if (result && result.success && result.items && result.items.length > 0) {
+            // 현재 선택된 사용자 찾기
+            const selectedUserId = currentUser?.id || localStorage.getItem('selectedUserId');
+            if (selectedUserId) {
+              currentUser = result.items.find(u => String(u.id) === String(selectedUserId)) || result.items[0];
+            } else {
+              currentUser = result.items[0];
+            }
+            
+            // 전역 변수에 저장
+            window.currentUser = currentUser;
+            try {
+              localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            } catch (e) {
+              console.warn('[Mobile Dashboard] 사용자 정보 저장 실패:', e);
+            }
+          }
+        }
+      } catch (error) {
+        console.warn('[Mobile Dashboard] API에서 사용자 정보 가져오기 실패:', error);
+      }
+    }
+    
+    // 사용자 이름 표시
     const bikeIdDisplay = safeGetElement('mobile-bike-id-display');
-    if (bikeIdDisplay && currentUser && currentUser.name) {
-      bikeIdDisplay.textContent = currentUser.name;
-    } else if (bikeIdDisplay) {
-      bikeIdDisplay.textContent = 'Bike ?';
+    if (bikeIdDisplay) {
+      if (currentUser && currentUser.name) {
+        bikeIdDisplay.textContent = currentUser.name;
+      } else {
+        bikeIdDisplay.textContent = 'Bike ?';
+      }
     }
     
     // FTP 값 초기화 (사용자 정보에서)
-    mobileUserFTP = window.userFTP || currentUser?.ftp || 200;
+    mobileUserFTP = currentUser?.ftp || window.userFTP || 200;
     window.mobileUserFTP = mobileUserFTP;
+    window.userFTP = mobileUserFTP; // 전역 변수에도 저장
     
-    // 속도계 초기화 (눈금, 레이블, 바늘 애니메이션)
+    console.log('[Mobile Dashboard] 사용자 정보:', {
+      name: currentUser?.name,
+      ftp: mobileUserFTP,
+      weight: currentUser?.weight
+    });
+    
+    // 속도계 초기화 (눈금, 레이블, 바늘 애니메이션) - FTP 값 반영
     initializeMobileGauge();
     
     // 워크아웃이 선택되어 있으면 세그먼트 그래프 그리기
@@ -10811,6 +10886,9 @@ function generateMobileGaugeLabels() {
   
   let labelsHTML = '';
   
+  // FTP 값 확인 (최신 값 사용)
+  const ftp = mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
+  
   // FTP 배수 정의
   const multipliers = [
     { index: 0, mult: 0, color: '#ffffff' },
@@ -10834,7 +10912,7 @@ function generateMobileGaugeLabels() {
     const y = centerY + labelRadius * Math.sin(rad);
     
     // FTP 값을 곱한 값 계산 (정수만 표기)
-    const value = Math.round(mobileUserFTP * item.mult);
+    const value = Math.round(ftp * item.mult);
     
     // 레이블 생성 (정수값만 표기)
     labelsHTML += `<text x="${x}" y="${y}" 
@@ -10860,9 +10938,13 @@ function initializeMobileGauge() {
     return;
   }
   
-  // FTP 값 가져오기
-  mobileUserFTP = window.userFTP || window.currentUser?.ftp || 200;
-  window.mobileUserFTP = mobileUserFTP; // 전역 변수로도 저장
+  // FTP 값 가져오기 (최신 값으로 업데이트)
+  const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+  mobileUserFTP = currentUser?.ftp || window.userFTP || window.mobileUserFTP || 200;
+  window.mobileUserFTP = mobileUserFTP;
+  window.userFTP = mobileUserFTP; // 전역 변수에도 저장
+  
+  console.log('[Mobile Dashboard] 속도계 초기화 - FTP:', mobileUserFTP);
   
   // 눈금 및 레이블 생성
   ticksGroup.innerHTML = generateMobileGaugeTicks();
@@ -10904,8 +10986,9 @@ function startMobileGaugeAnimationLoop() {
     
     // 3. 바늘 각도 계산 및 업데이트 (매 프레임 실행)
     // FTP 기반으로 최대 파워 계산 (FTP × 2)
-    const maxPower = mobileUserFTP * 2;
-    if (maxPower > 0) {
+    const ftp = mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
+    const maxPower = ftp * 2;
+    if (maxPower > 0 && !isNaN(maxPower) && isFinite(maxPower)) {
       let ratio = Math.min(Math.max(mobileDisplayPower / maxPower, 0), 1);
       
       // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
@@ -10953,7 +11036,9 @@ function updateMobileTargetPower() {
   else if (window.currentWorkout && window.currentWorkout.segments && window.trainingState && window.trainingState.segIndex !== undefined) {
     const currentSegment = window.currentWorkout.segments[window.trainingState.segIndex];
     if (currentSegment) {
-      const userFTP = mobileUserFTP || window.userFTP || window.currentUser?.ftp || 200;
+      // FTP 값 가져오기 (최신 값 사용)
+      const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      const userFTP = currentUser?.ftp || mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
       const targetType = currentSegment.target_type || 'ftp_pct';
       const targetValue = Number(currentSegment.target_value) || 0;
       
