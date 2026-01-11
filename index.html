@@ -1130,15 +1130,16 @@
       <p class="subtitle" id="calendarSubtitle">나의 훈련 일정과 결과를 확인하세요</p>
     </div>
     
-    <div class="card" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <button class="btn btn-secondary btn-refresh" onclick="loadScheduleCalendar()"><img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 새로고침</button>
-      <button class="btn btn-primary btn-with-icon" id="btnStartTodayTraining" style="display:none;"><img src="assets/img/business.png" alt="훈련 시작" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 오늘 훈련 시작</button>
-      <button class="btn btn-default-style btn-with-icon" onclick="showScreen('scheduleListScreen')"><img src="assets/img/left-arrow.png" alt="목록으로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 목록으로</button>
-      <button class="btn btn-default-style btn-with-icon" onclick="showScreen('trainingJournalScreen')"><img src="assets/img/calendar_n.gif" alt="훈련일지" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 훈련일지</button>
-    </div>
-    
     <div id="scheduleCalendar" class="training-calendar">
       <div class="loading-spinner">캘린더를 불러오는 중...</div>
+    </div>
+    
+    <!-- 하단 버튼 블럭 (캘린더와 구분) -->
+    <div class="connection-exit-container" style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(0, 0, 0, 0.08);">
+      <button class="btn btn-exit-inline" onclick="showScreen('scheduleListScreen')" aria-label="뒤로 가기">
+        <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+        <span>뒤로 가기</span>
+      </button>
     </div>
   </div>
 
