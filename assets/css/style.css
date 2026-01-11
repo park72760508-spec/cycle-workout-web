@@ -494,6 +494,21 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 
+/* 사용자 메뉴얼 화면 하단 여백 최소화 */
+#userManualScreen .connection-form-card {
+  padding-bottom: 20px !important; /* 기본 40px에서 20px로 축소 */
+}
+
+#userManualScreen .connection-device-section {
+  margin-bottom: 0 !important; /* 기본 20px 제거 */
+}
+
+#userManualScreen .connection-exit-container {
+  margin-top: 0 !important; /* 기본 24px 제거 */
+  padding-top: 10px !important; /* 기본 20px에서 10px로 축소 */
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 /* MY CAREER 화면 스타일 (베이스캠프와 동일) */
 #myCareerScreen {
   position: relative;
