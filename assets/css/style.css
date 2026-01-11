@@ -663,6 +663,20 @@ h1,h2,h3,h4 { font-weight: 600; }
   padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
 }
 
+/* 훈련 캘린더 화면 하단 버튼 영역 안전거리 확보 */
+#scheduleCalendarScreen .connection-exit-container {
+  margin-top: 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
 /* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
 .basecamp-btn-career-schedule {
   background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
