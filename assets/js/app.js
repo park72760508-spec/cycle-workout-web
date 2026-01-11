@@ -5179,38 +5179,8 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
-// showScreen 함수가 이미 정의되어 있으면 덮어쓰지 않음
-if (!window.showScreen || typeof window.showScreen !== 'function') {
-  window.showScreen = function(screenId) {
-    console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
-    
-    // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
-    if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
-      screenId = 'authScreen';
-    }
-    
-    // 모든 화면 숨기기 (스플래시 화면 제외)
-    document.querySelectorAll('.screen').forEach(screen => {
-      if (screen.id !== 'splashScreen') {
-      screen.classList.remove('active');
-      screen.style.display = 'none';
-      screen.style.opacity = '0';
-      screen.style.visibility = 'hidden';
-      }
-    });
-    
-    // 선택된 화면만 표시
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-      targetScreen.style.display = 'block';
-      targetScreen.classList.add('active');
-      targetScreen.style.opacity = '1';
-      targetScreen.style.visibility = 'visible';
-      
-      initializeCurrentScreen(screenId);
-    }
-  };
-}
+// showScreen 함수가 이미 정의되어 있으면 덮어쓰지 않음 (중복 정의 방지)
+// 첫 번째 showScreen 함수(2630번 라인)가 이미 정의되어 있으므로 여기서는 정의하지 않음
 
 // 화면별 초기화 함수
 function initializeCurrentScreen(screenId) {
