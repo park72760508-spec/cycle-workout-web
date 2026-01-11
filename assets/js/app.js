@@ -10393,45 +10393,47 @@ window.confirmAIRecommendation = confirmAIRecommendation;
 // iOS 감지 함수 (Safari, Chrome, 기타 iOS 브라우저 모두 포함)
 
 
-
 /* ==========================================================
-   [NEW] SoundController for iOS & Android (통합 모듈)
-   기존의 isIOSDevice, playTickSound, triggerHapticFeedback 등을 모두 대체함
+   [FINAL SYSTEM] Sound, Haptic & Navigation Controller
+   (iOS Audio Unlock + Android Haptic + BackButton Support)
 ========================================================== */
 
-// 1. 기기 감지 (단순화)
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
+// 1. 기기 감지 유틸리티
+const DeviceUtils = {
+  isIOS: function() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  },
+  isAndroid: function() {
+    return /Android/.test(navigator.userAgent);
+  }
+};
 
-// 2. 사운드 컨트롤러 (iOS 오디오 잠금 해제 기능 포함)
+// 2. 사운드 컨트롤러 (iOS 오디오 정책 우회 및 재생)
 const SoundController = {
   ctx: null,
   isUnlocked: false,
 
-  // 오디오 컨텍스트 초기화
+  // 초기화 및 오디오 엔진 준비
   init: function() {
     if (!this.ctx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (AudioContextClass) {
         this.ctx = new AudioContextClass();
-        console.log('[SoundController] AudioContext Created');
       }
     }
     this.setupUnlock();
   },
 
-  // [핵심] 사용자가 화면을 터치하는 순간 오디오 엔진을 깨움
+  // [핵심] 첫 터치 시 오디오 엔진 강제 활성화 (Silent Unlock)
   setupUnlock: function() {
     if (this.isUnlocked) return;
-
+    
     const unlockHandler = () => {
       if (!this.ctx) this.init();
-      
       if (this.ctx && this.ctx.state !== 'running') {
         this.ctx.resume().then(() => {
-          // 빈 소리를 재생하여 iOS 오디오 엔진을 강제로 활성화
+          // 빈 버퍼 재생으로 엔진 깨우기
           const buffer = this.ctx.createBuffer(1, 1, 22050);
           const source = this.ctx.createBufferSource();
           source.buffer = buffer;
@@ -10441,19 +10443,18 @@ const SoundController = {
           this.isUnlocked = true;
           console.log('[SoundController] iOS Audio Unlocked 🔓');
           
-          // 리스너 해제 (한 번만 실행하면 됨)
           document.removeEventListener('touchstart', unlockHandler);
           document.removeEventListener('click', unlockHandler);
-        }).catch(e => console.error(e));
+        }).catch(e => console.warn(e));
       }
     };
-
+    
     document.addEventListener('touchstart', unlockHandler, { capture: true, once: true });
     document.addEventListener('click', unlockHandler, { capture: true, once: true });
   },
 
-  // 실제 '틱' 소리 재생
-  playTick: function(freq = 1200) {
+  // '틱' 소리 재생
+  playTick: function() {
     if (!this.ctx) this.init();
     if (this.ctx.state !== 'running') this.ctx.resume().catch(()=>{});
 
@@ -10463,11 +10464,10 @@ const SoundController = {
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, t);
+      osc.frequency.setValueAtTime(1200, t);
       
-      // 짧고 경쾌한 엔벨로프 (틱!)
-      gain.gain.setValueAtTime(0.0, t);
-      gain.gain.linearRampToValueAtTime(0.3, t + 0.001);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.3, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
 
       osc.connect(gain);
@@ -10475,416 +10475,134 @@ const SoundController = {
 
       osc.start(t);
       osc.stop(t + 0.06);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   }
 };
 
-// 3. 통합 트리거 함수 (외부에서 이 함수만 호출하면 됨)
+// 3. 통합 트리거 함수 (어디서든 호출 가능)
 window.triggerHapticFeedback = function() {
-  // iOS는 진동 API를 막았으므로 소리로 대체
-  if (isIOS()) {
-    SoundController.playTick(1200); 
-    return;
-  }
-
+  // iOS는 소리
+  if (DeviceUtils.isIOS()) {
+    SoundController.playTick();
+  } 
   // 안드로이드는 진동
-  if (navigator.vibrate) {
-    navigator.vibrate(10); 
+  else if (navigator.vibrate) {
+    navigator.vibrate(10);
   }
 };
 
-// 앱 로드 시 컨트롤러 초기화
-document.addEventListener('DOMContentLoaded', () => {
-  SoundController.init();
-});
+// 4. 일반 버튼 자동 적용 로직
+function addHapticToElement(el) {
+  if (el.dataset.hapticApplied === 'true' || el.disabled) return;
+  el.dataset.hapticApplied = 'true';
 
-
-
-
-// 터치 이벤트 핸들러 (중복 클릭 방지 포함)
-function createEnhancedButtonHandler(callback, options = {}) {
-  let isProcessing = false;
-  let lastClickTime = 0;
-  const debounceDelay = options.debounceDelay || 300; // 기본 300ms
-  const enableHaptic = options.enableHaptic !== false; // 기본 true
-  const enableSound = options.enableSound !== false; // 기본 true
-  
-  return function(event) {
-    // 중복 클릭 방지
+  let lastTrigger = 0;
+  const handleInteract = () => {
     const now = Date.now();
-    if (isProcessing || (now - lastClickTime < debounceDelay)) {
-      event.preventDefault();
-      event.stopPropagation();
-      return false;
-    }
-    
-    isProcessing = true;
-    lastClickTime = now;
-    
-    // 피드백 제공
-    if (enableHaptic) {
-      triggerHapticFeedback([10]);
-    }
-    if (enableSound) {
-      playClickSound();
-    }
-    
-    // 버튼 시각적 피드백
-    const button = event.currentTarget;
-    if (button) {
-      button.classList.add('button-pressed');
-      setTimeout(() => {
-        button.classList.remove('button-pressed');
-      }, 150);
-    }
-    
-    // 콜백 실행
-    try {
-      if (typeof callback === 'function') {
-        callback(event);
-      }
-    } catch (error) {
-      console.error('버튼 핸들러 오류:', error);
-    } finally {
-      // 처리 완료 후 약간의 지연을 두고 플래그 해제
-      setTimeout(() => {
-        isProcessing = false;
-      }, debounceDelay);
-    }
-    
-    return false;
-  };
-}
-
-// 터치 이벤트 바인딩 함수
-function enhanceButtonForTouch(button, callback, options = {}) {
-  if (!button) return;
-  
-  const handler = createEnhancedButtonHandler(callback, options);
-  
-  // 기존 onclick 제거하고 새로운 핸들러 추가
-  button.onclick = null;
-  button.removeAttribute('onclick');
-  
-  // 터치 이벤트와 클릭 이벤트 모두 처리
-  button.addEventListener('touchstart', function(e) {
-    e.preventDefault();
-    handler(e);
-  }, { passive: false });
-  
-  button.addEventListener('click', handler);
-  
-  // 포인터 이벤트도 지원 (더 나은 크로스 플랫폼 지원)
-  button.addEventListener('pointerdown', function(e) {
-    if (e.pointerType === 'touch' || e.pointerType === 'mouse') {
-      e.preventDefault();
-      handler(e);
-    }
-  }, { passive: false });
-}
-
-// 전역 함수로 등록
-window.triggerHapticFeedback = triggerHapticFeedback;
-window.playClickSound = playClickSound;
-window.enhanceButtonForTouch = enhanceButtonForTouch;
-window.createEnhancedButtonHandler = createEnhancedButtonHandler;
-window.isIOSDevice = isIOSDevice;
-window.isAndroidTablet = isAndroidTablet;
-window.shouldUseSound = shouldUseSound;
-window.playTickSound = playTickSound;
-window.initAudioContext = initAudioContext;
-
-/* ==========================================================
-   모든 버튼에 진동 피드백 자동 적용
-   전화번호 숫자 클릭과 동일한 진동 피드백을 모든 버튼에 적용
-========================================================== */
-
-/* ==========================================================
-   [IMPROVED] Button Binder
-   모든 버튼에 반응형 피드백 적용
-========================================================== */
-function addHapticFeedbackToButton(button) {
-  if (!button || button.dataset.hapticApplied === 'true') return;
-  
-  button.dataset.hapticApplied = 'true';
-
-  // 피드백 실행 (디바운싱: 50ms 이내 중복 방지)
-  let lastTime = 0;
-  const trigger = (e) => {
-    const now = Date.now();
-    if (now - lastTime < 50) return;
-    lastTime = now;
-
-    // 통합 트리거 호출
+    if (now - lastTrigger < 50) return;
+    lastTrigger = now;
     window.triggerHapticFeedback();
   };
 
-  // iOS: touchstart에서 즉시 반응해야 지연이 없음
-  button.addEventListener('touchstart', (e) => {
-    // 버튼이 비활성화 상태면 소리 안 나게 처리
-    if(!button.disabled) trigger(e);
-  }, { passive: true });
-
-  // Desktop/Android Mouse: 클릭 시 반응
-  button.addEventListener('mousedown', (e) => {
-    if(!button.disabled && !('ontouchstart' in window)) trigger(e);
+  // 반응 속도를 위해 touchstart 사용
+  el.addEventListener('touchstart', handleInteract, { passive: true });
+  el.addEventListener('mousedown', (e) => {
+    if (!('ontouchstart' in window)) handleInteract(e);
   }, { passive: true });
 }
 
-// 전체 적용 함수 (기존 유지하되 내부 로직은 위 함수 사용)
-function applyHapticFeedbackToAllButtons() {
-  document.querySelectorAll('button, .btn, [role="button"]').forEach(btn => {
-    addHapticFeedbackToButton(btn);
-  });
-}
+// 5. [중요] 뒤로 가기 버튼 전용 함수 (리팩토링됨)
+// 기존 로직(화면 이동)을 유지하면서 새로운 사운드 시스템 적용
+window.enhanceBackButton = function(buttonId) {
+  const button = document.getElementById(buttonId);
+  if (!button) return;
 
-// 동적 요소 감시 (MutationObserver) - 그대로 유지하거나 아래 코드로 갱신
-const observer = new MutationObserver((mutations) => {
-  mutations.forEach((mutation) => {
-    mutation.addedNodes.forEach((node) => {
-      if (node.nodeType === 1) {
-        if (node.matches('button, .btn')) addHapticFeedbackToButton(node);
-        node.querySelectorAll('button, .btn').forEach(addHapticFeedbackToButton);
+  // 중복 적용 방지
+  if (button.dataset.backButtonEnhanced === 'true') return;
+  button.dataset.backButtonEnhanced = 'true';
+  button.dataset.hapticApplied = 'true'; // 일반 로직 중복 방지
+
+  // 기존 onclick 이벤트 저장
+  const originalOnClick = button.onclick;
+  const originalOnClickAttr = button.getAttribute('onclick');
+  
+  // 기존 이벤트 제거 (새 로직으로 덮어쓰기 위해)
+  button.onclick = null;
+  button.removeAttribute('onclick');
+
+  // 새로운 핸들러
+  const handleBackAction = (e) => {
+    // 1. 햅틱/사운드 피드백 실행
+    window.triggerHapticFeedback();
+
+    // 2. 기존 네비게이션 로직 실행
+    // 10ms 딜레이를 주어 소리가 먼저 처리되도록 함
+    setTimeout(() => {
+      if (originalOnClick) {
+        originalOnClick.call(button, e);
+      } else if (originalOnClickAttr) {
+        // 인라인 onclick 속성 실행
+        try {
+          new Function('event', originalOnClickAttr).call(button, e);
+        } catch(err) { console.warn(err); }
+      } else {
+        // 기본값: 베이스캠프 화면으로 이동
+        if (typeof showScreen === 'function') {
+          showScreen('basecampScreen');
+        }
       }
-    });
-  });
-});
-observer.observe(document.body, { childList: true, subtree: true });
+    }, 10);
+  };
 
-// 모든 버튼에 진동 피드백 적용
-function applyHapticFeedbackToAllButtons() {
-  // 모든 button 요소 찾기
-  const allButtons = document.querySelectorAll('button');
-  
-  let appliedCount = 0;
-  let skippedCount = 0;
-  
-  allButtons.forEach(button => {
-    if (button.hasAttribute('data-haptic-applied')) {
-      skippedCount++;
-      return;
-    }
-    
-    // 모든 버튼에 일관되게 적용 (개별 처리된 버튼도 포함)
-    // data-haptic-applied 속성으로 중복 적용 방지
-    addHapticFeedbackToButton(button);
-    appliedCount++;
+  // 터치 및 클릭 이벤트 바인딩
+  button.addEventListener('touchstart', (e) => {
+    e.preventDefault(); // 더블 클릭 방지
+    handleBackAction(e);
+  }, { passive: false });
+
+  button.addEventListener('click', (e) => {
+    // 터치 기기가 아닐 때만 클릭 동작
+    if (!('ontouchstart' in window)) handleBackAction(e);
   });
   
-  const useSound = shouldUseSound();
-  const deviceType = isIOSDevice() ? 'iOS' : isAndroidTablet() ? 'Android 태블릿' : '안드로이드 폰/기타';
-  console.log(`✅ 모든 버튼에 피드백 적용 완료`);
-  console.log(`   - 피드백 타입: ${useSound ? '사운드 (Type A: Tick)' : '진동'}`);
-  console.log(`   - 기기 타입: ${deviceType}`);
-  console.log(`   - 총 버튼: ${allButtons.length}개`);
-  console.log(`   - 적용됨: ${appliedCount}개`);
-  console.log(`   - 건너뜀: ${skippedCount}개`);
-}
+  console.log(`✅ 뒤로가기 버튼(${buttonId}) 업그레이드 완료`);
+};
 
-// MutationObserver를 사용하여 동적으로 추가되는 버튼에도 적용
-function setupHapticObserver() {
-  const observer = new MutationObserver(function(mutations) {
-    mutations.forEach(function(mutation) {
-      mutation.addedNodes.forEach(function(node) {
-        if (node.nodeType === 1) { // Element node
-          // 추가된 노드가 버튼인 경우
-          if (node.tagName === 'BUTTON') {
-            addHapticFeedbackToButton(node);
-          }
-          // 추가된 노드 내부의 버튼들도 확인
-          const buttons = node.querySelectorAll && node.querySelectorAll('button');
-          if (buttons) {
-            buttons.forEach(button => {
-              addHapticFeedbackToButton(button);
-            });
-          }
+// 6. 시스템 초기화 및 감시
+function initHapticSystem() {
+  SoundController.init();
+
+  // 기존 버튼들 적용
+  document.querySelectorAll('button, .btn, .clickable').forEach(addHapticToElement);
+
+  // 동적 버튼 감시 (MutationObserver)
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === 1) {
+          if (node.matches('button, .btn')) addHapticToElement(node);
+          node.querySelectorAll('button, .btn').forEach(addHapticToElement);
         }
       });
     });
   });
   
-  // body 전체를 관찰
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
-  
-  console.log('✅ 동적 버튼 감지 Observer 설정 완료');
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// 뒤로 가기 버튼 전용 개선 함수 (소리 효과 제거, 클릭 인식 강화)
-function enhanceBackButton(buttonId) {
-  const button = document.getElementById(buttonId);
-  if (!button) {
-    console.warn(`⚠️ ${buttonId} 버튼을 찾을 수 없습니다.`);
-    return;
-  }
-  
-  // 이미 처리되었는지 확인
-  if (button.hasAttribute('data-back-button-enhanced')) {
-    return; // 이미 처리됨
-  }
-  
-  // 사운드 사용 여부 확인 (함수 시작 부분에서 선언)
-  const useSoundBackButton = shouldUseSound();
-  
-  // 마커 속성 추가
-  button.setAttribute('data-back-button-enhanced', 'true');
-  button.setAttribute('data-haptic-applied', 'true'); // 범용 함수에서 제외
-  
-  // 기존 onclick 핸들러 저장
-  const originalOnClick = button.onclick;
-  const originalOnClickAttr = button.getAttribute('onclick');
-  
-  // onclick 속성 제거
-  button.onclick = null;
-  button.removeAttribute('onclick');
-  
-  // 클릭 처리 함수
-  let isProcessing = false;
-  const handleClick = function(e) {
-    // 중복 실행 방지
-    if (isProcessing) {
-      // passive 이벤트에서 preventDefault 호출 시도 방지
-      try {
-        if (e.cancelable !== false) {
-          e.preventDefault();
-        }
-        e.stopPropagation();
-      } catch (err) {
-        // passive 이벤트 리스너 오류 무시
-        console.warn('⚠️ preventDefault 호출 실패 (passive 이벤트):', err);
-      }
-      return false;
-    }
-    
-    isProcessing = true;
-    
-    // passive 이벤트에서 preventDefault 호출 시도 방지
-    try {
-      if (e.cancelable !== false) {
-        e.preventDefault();
-      }
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-    } catch (err) {
-      // passive 이벤트 리스너 오류 무시 (정상 동작)
-      // console.warn('⚠️ preventDefault 호출 실패 (passive 이벤트):', err);
-    }
-    
-    // 피드백은 이미 touchstart/pointerdown에서 호출되었으므로 여기서는 호출하지 않음
-    // 중복 재생 방지를 위해 제거
-    
-    // 원래 기능 실행
-    try {
-      if (originalOnClick) {
-        originalOnClick.call(button, e);
-      } else if (originalOnClickAttr) {
-        // eval 대신 Function 생성자 사용 (더 안전)
-        const func = new Function('event', originalOnClickAttr.replace(/^onclick\s*=\s*["']?|["']?$/g, ''));
-        func.call(button, e);
-      } else {
-        // 기본 동작: basecampScreen으로 이동
-        if (typeof showScreen === 'function') {
-          showScreen('basecampScreen');
-        }
-      }
-    } catch (err) {
-      console.error('뒤로 가기 버튼 실행 오류:', err);
-      // 오류 발생 시에도 기본 동작 실행
-      if (typeof showScreen === 'function') {
-        showScreen('basecampScreen');
-      }
-    }
-    
-    // 처리 완료 후 플래그 해제 (300ms 후)
-    setTimeout(() => {
-      isProcessing = false;
-    }, 300);
-    
-    return false;
-  };
-  
-  // 피드백 함수 (중복 재생 방지)
-  let lastFeedbackTime = 0;
-  let touchStarted = false; // 터치 시작 여부
-  
-  const triggerFeedback = function(e) {
-    // 중복 방지: 80ms 이내 재생 방지
-    const now = Date.now();
-    if (now - lastFeedbackTime < 80) {
-      return; // 최근에 트리거되었으면 스킵
-    }
-    
-    lastFeedbackTime = now;
-    
-    // 피드백 호출
-    if (typeof window.triggerHapticFeedback === 'function') {
-      window.triggerHapticFeedback([10]);
-    }
-  };
-  
-  const useSound = shouldUseSound();
-  const passiveOption = useSound ? false : true;
-  
-  // 터치 이벤트 (우선순위 최고)
-  // iOS에서는 touchstart에서 직접 호출해야 AudioContext가 작동함
-  // passive: false로 설정 (iOS 필수)
-  button.addEventListener('touchstart', function(e) {
-    touchStarted = true;
-    // iOS에서는 사용자 이벤트 컨텍스트에서 직접 호출
-    triggerFeedback(e);
-    handleClick(e);
-  }, { passive: false, capture: false }); // iOS에서는 passive: false 필수
-  
-  // 터치 종료 시 플래그 리셋
-  button.addEventListener('touchend', function(e) {
-    setTimeout(() => {
-      touchStarted = false;
-    }, 100);
-  }, { passive: true });
-  
-  // 포인터 이벤트 (터치가 아닐 때만)
-  // iOS에서는 passive: false 필수 (AudioContext 활성화를 위해)
-  button.addEventListener('pointerdown', function(e) {
-    if (e.pointerType === 'touch') {
-      // 터치 타입은 touchstart에서 이미 처리됨, 클릭만 처리
-      handleClick(e);
-    } else if (e.pointerType === 'mouse' && !touchStarted) {
-      // 마우스 타입이고 터치가 시작되지 않았을 때만 피드백
-      triggerFeedback(e);
-      handleClick(e);
-    }
-  }, { passive: false, capture: false }); // passive: false로 통일 (iOS 필수)
-  
-  // 클릭 이벤트 (데스크톱 호환)
-  button.addEventListener('click', function(e) {
-    // 터치 이벤트가 아니고, 터치가 시작되지 않았을 때만 피드백 (데스크톱)
-    if (!('ontouchstart' in window) && !touchStarted) {
-      triggerFeedback(e);
-    }
-    handleClick(e);
-  }, { passive: false, capture: false });
-  
-  // 마우스 다운 이벤트 (추가 보완)
-  button.addEventListener('mousedown', function(e) {
-    if (e.button === 0) { // 왼쪽 버튼만
-      handleClick(e);
-    }
-  }, { passive: false, capture: true });
-  
-  // 터치 영역 확대를 위한 CSS 클래스 추가
-  button.classList.add('enhanced-back-button-improved');
-  
-  // 피드백 타입 로그
-  const feedbackType = useSoundBackButton ? '사운드 (Type A: Tick)' : '진동';
-  console.log(`✅ ${buttonId} 버튼 개선 완료 (피드백: ${feedbackType}, 클릭 인식 강화)`);
+// 실행
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initHapticSystem);
+} else {
+  initHapticSystem();
 }
 
-// 전역 함수로 등록
-window.addHapticFeedbackToButton = addHapticFeedbackToButton;
-window.applyHapticFeedbackToAllButtons = applyHapticFeedbackToAllButtons;
-window.setupHapticObserver = setupHapticObserver;
-window.enhanceBackButton = enhanceBackButton;
+// 하위 호환성 유지 (에러 방지용 더미 함수들)
+window.isIOSDevice = DeviceUtils.isIOS;
+window.shouldUseSound = () => true;
+window.playClickSound = window.triggerHapticFeedback;
+window.playTickSound = window.triggerHapticFeedback;
+window.addHapticFeedbackToButton = addHapticToElement;
+window.applyHapticFeedbackToAllButtons = () => {}; 
+window.setupHapticObserver = () => {};
+
