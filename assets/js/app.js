@@ -2737,7 +2737,21 @@ if (!window.showScreen) {
             btnIndoorRace.title = '';
           }
         }, 100);
-        }
+      }
+      
+      // Indoor Training 대시보드 화면 초기화
+      if (id === 'indoorTrainingDashboardScreen') {
+        setTimeout(() => {
+          if (typeof window.initIndoorTrainingDashboard === 'function') {
+            window.initIndoorTrainingDashboard();
+          } else if (typeof initIndoorTrainingDashboard === 'function') {
+            initIndoorTrainingDashboard();
+          } else {
+            console.warn('[Indoor Training] initIndoorTrainingDashboard 함수를 찾을 수 없습니다.');
+          }
+        }, 100);
+      }
+      
       } else {
         console.error(`Screen element '${id}' not found`);
         return;
@@ -8998,6 +9012,8 @@ function showRPEModal() {
   const modal = document.getElementById('rpeConditionModal');
   if (modal) {
     modal.style.display = 'flex';
+    modal.style.visibility = 'visible';
+    modal.style.opacity = '1';
     // 기존 선택 해제
     document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
       btn.classList.remove('selected');

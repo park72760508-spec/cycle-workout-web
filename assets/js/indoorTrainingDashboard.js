@@ -257,7 +257,8 @@ function getSessionId() {
   return 'session_room_1';
 }
 
-function initIndoorTrainingDashboard() {
+// 전역 함수로 노출
+window.initIndoorTrainingDashboard = function initIndoorTrainingDashboard() {
   console.log('[Indoor Training] 대시보드 초기화');
   
   // SESSION_ID 확인 및 로그
