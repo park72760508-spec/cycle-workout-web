@@ -10394,8 +10394,9 @@ window.confirmAIRecommendation = confirmAIRecommendation;
 
 
 /* ==========================================================
-   [FINAL SYSTEM] Sound, Haptic & Navigation Controller
-   (iOS Audio Unlock + Android Haptic + BackButton Support)
+   [FINAL SYSTEM v2.2] Sound, Haptic & Navigation Controller
+   - Android: 소리 + 진동 동시 지원 (태블릿 호환성 확보)
+   - iOS: 소리 톤 다운 (1200Hz -> 600Hz, 볼륨 축소)
 ========================================================== */
 
 // 1. 기기 감지 유틸리티
@@ -10433,7 +10434,6 @@ const SoundController = {
       if (!this.ctx) this.init();
       if (this.ctx && this.ctx.state !== 'running') {
         this.ctx.resume().then(() => {
-          // 빈 버퍼 재생으로 엔진 깨우기
           const buffer = this.ctx.createBuffer(1, 1, 22050);
           const source = this.ctx.createBufferSource();
           source.buffer = buffer;
@@ -10441,7 +10441,7 @@ const SoundController = {
           source.start(0);
           
           this.isUnlocked = true;
-          console.log('[SoundController] iOS Audio Unlocked 🔓');
+          // console.log('[SoundController] iOS Audio Unlocked 🔓');
           
           document.removeEventListener('touchstart', unlockHandler);
           document.removeEventListener('click', unlockHandler);
@@ -10453,8 +10453,10 @@ const SoundController = {
     document.addEventListener('click', unlockHandler, { capture: true, once: true });
   },
 
-  // '틱' 소리 재생
-  playTick: function() {
+  // '틱' 소리 재생 (파라미터로 톤/볼륨 조절 가능)
+  // freq: 주파수(Hz) - 낮을수록 저음 (기본 600Hz로 변경하여 부드럽게)
+  // vol: 볼륨(0.0~1.0) - 기본 0.15로 낮춤
+  playTick: function(freq = 600, vol = 0.15) {
     if (!this.ctx) this.init();
     if (this.ctx.state !== 'running') this.ctx.resume().catch(()=>{});
 
@@ -10464,11 +10466,12 @@ const SoundController = {
       const gain = this.ctx.createGain();
 
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(1200, t);
+      osc.frequency.setValueAtTime(freq, t);
       
+      // 부드러운 엔벨로프 (Pop 소리 느낌)
       gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(0.3, t + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      gain.gain.linearRampToValueAtTime(vol, t + 0.005); // Attack
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05); // Decay
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
@@ -10479,15 +10482,16 @@ const SoundController = {
   }
 };
 
-// 3. 통합 트리거 함수 (어디서든 호출 가능)
+// 3. 통합 트리거 함수 (수정됨: 모든 기기에서 소리 재생)
 window.triggerHapticFeedback = function() {
-  // iOS는 소리
-  if (DeviceUtils.isIOS()) {
-    SoundController.playTick();
-  } 
-  // 안드로이드는 진동
-  else if (navigator.vibrate) {
-    navigator.vibrate(10);
+  // A. 소리 재생 (iOS, Android, PC 모두 실행)
+  // 600Hz = 부드러운 나무 두드리는 소리 (기존 1200Hz보다 훨씬 낮고 조용함)
+  SoundController.playTick(600, 0.15); 
+
+  // B. 진동 재생 (지원하는 안드로이드 기기만 추가 실행)
+  // 태블릿 등 진동 모터가 없는 기기는 이 부분이 무시되고 소리만 남
+  if (navigator.vibrate) {
+    try { navigator.vibrate(10); } catch(e) {}
   }
 };
 
@@ -10511,42 +10515,32 @@ function addHapticToElement(el) {
   }, { passive: true });
 }
 
-// 5. [중요] 뒤로 가기 버튼 전용 함수 (리팩토링됨)
-// 기존 로직(화면 이동)을 유지하면서 새로운 사운드 시스템 적용
+// 5. [중요] 뒤로 가기 버튼 전용 함수
 window.enhanceBackButton = function(buttonId) {
   const button = document.getElementById(buttonId);
   if (!button) return;
 
-  // 중복 적용 방지
   if (button.dataset.backButtonEnhanced === 'true') return;
   button.dataset.backButtonEnhanced = 'true';
-  button.dataset.hapticApplied = 'true'; // 일반 로직 중복 방지
+  button.dataset.hapticApplied = 'true';
 
-  // 기존 onclick 이벤트 저장
   const originalOnClick = button.onclick;
   const originalOnClickAttr = button.getAttribute('onclick');
   
-  // 기존 이벤트 제거 (새 로직으로 덮어쓰기 위해)
   button.onclick = null;
   button.removeAttribute('onclick');
 
-  // 새로운 핸들러
   const handleBackAction = (e) => {
-    // 1. 햅틱/사운드 피드백 실행
     window.triggerHapticFeedback();
 
-    // 2. 기존 네비게이션 로직 실행
-    // 10ms 딜레이를 주어 소리가 먼저 처리되도록 함
     setTimeout(() => {
       if (originalOnClick) {
         originalOnClick.call(button, e);
       } else if (originalOnClickAttr) {
-        // 인라인 onclick 속성 실행
         try {
           new Function('event', originalOnClickAttr).call(button, e);
         } catch(err) { console.warn(err); }
       } else {
-        // 기본값: 베이스캠프 화면으로 이동
         if (typeof showScreen === 'function') {
           showScreen('basecampScreen');
         }
@@ -10554,14 +10548,12 @@ window.enhanceBackButton = function(buttonId) {
     }, 10);
   };
 
-  // 터치 및 클릭 이벤트 바인딩
   button.addEventListener('touchstart', (e) => {
-    e.preventDefault(); // 더블 클릭 방지
+    e.preventDefault(); 
     handleBackAction(e);
   }, { passive: false });
 
   button.addEventListener('click', (e) => {
-    // 터치 기기가 아닐 때만 클릭 동작
     if (!('ontouchstart' in window)) handleBackAction(e);
   });
   
@@ -10572,10 +10564,8 @@ window.enhanceBackButton = function(buttonId) {
 function initHapticSystem() {
   SoundController.init();
 
-  // 기존 버튼들 적용
   document.querySelectorAll('button, .btn, .clickable').forEach(addHapticToElement);
 
-  // 동적 버튼 감시 (MutationObserver)
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
@@ -10597,7 +10587,7 @@ if (document.readyState === 'loading') {
   initHapticSystem();
 }
 
-// 하위 호환성 유지 (에러 방지용 더미 함수들)
+// 하위 호환성 유지
 window.isIOSDevice = DeviceUtils.isIOS;
 window.shouldUseSound = () => true;
 window.playClickSound = window.triggerHapticFeedback;
@@ -10605,4 +10595,3 @@ window.playTickSound = window.triggerHapticFeedback;
 window.addHapticFeedbackToButton = addHapticToElement;
 window.applyHapticFeedbackToAllButtons = () => {}; 
 window.setupHapticObserver = () => {};
-
