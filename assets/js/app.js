@@ -11002,6 +11002,11 @@ function startMobileGaugeAnimationLoop() {
       }
     }
     
+    // 4. 목표 파워 원호 업데이트 (개인훈련 대시보드와 동일)
+    if (typeof updateMobileTargetPowerArc === 'function') {
+      updateMobileTargetPowerArc();
+    }
+    
     // 다음 프레임 요청
     mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
   };
@@ -11038,6 +11043,141 @@ function getMobileCurrentSegment() {
   }
   
   return window.currentWorkout.segments[currentSegmentIndex];
+}
+
+/**
+ * 모바일 속도계 원호에 목표 파워값만큼 채우기 (세그먼트 달성도에 따라 색상 변경)
+ * 개인훈련 대시보드의 updateTargetPowerArc와 동일한 로직
+ * - LAP AVG 파워값 / 목표 파워값 비율이 0.985 이상이면 투명 민트색
+ * - 미만이면 투명 주황색
+ */
+function updateMobileTargetPowerArc() {
+  // 목표 파워값 가져오기
+  const targetPowerEl = safeGetElement('mobile-ui-target-power');
+  if (!targetPowerEl) return;
+  
+  const targetPower = Number(targetPowerEl.textContent) || 0;
+  if (targetPower <= 0) {
+    // 목표 파워가 없으면 원호 숨김
+    const targetArc = safeGetElement('mobile-gauge-target-arc');
+    if (targetArc) {
+      targetArc.style.display = 'none';
+    }
+    // 상한 원호도 숨김
+    const maxArc = safeGetElement('mobile-gauge-max-arc');
+    if (maxArc) {
+      maxArc.style.display = 'none';
+    }
+    return;
+  }
+  
+  // LAP AVG 파워값 가져오기
+  const lapPowerEl = safeGetElement('mobile-ui-lap-power');
+  const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
+  
+  // 세그먼트 달성도 계산 (LAP AVG / 목표 파워) - 하한값 기준
+  const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
+  
+  // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
+  const arcColor = achievementRatio >= 0.985 
+    ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
+    : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+  
+  // FTP 기반으로 최대 파워 계산
+  const ftp = mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
+  const maxPower = ftp * 2;
+  if (maxPower <= 0) return;
+  
+  // 현재 세그먼트 정보 가져오기
+  const seg = getMobileCurrentSegment();
+  const targetType = seg?.target_type || 'ftp_pct';
+  const isFtpPctz = targetType === 'ftp_pctz';
+  
+  // cadence_rpm 타입인 경우: 파워값이 없으므로 원호 표시하지 않음
+  if (targetType === 'cadence_rpm') {
+    const targetArc = safeGetElement('mobile-gauge-target-arc');
+    if (targetArc) {
+      targetArc.style.display = 'none';
+    }
+    const maxArc = safeGetElement('mobile-gauge-max-arc');
+    if (maxArc) {
+      maxArc.style.display = 'none';
+    }
+    return;
+  }
+  
+  // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
+  const minRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+  
+  // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
+  const startAngle = 180;
+  let minEndAngle = 180 + (minRatio * 180);
+  
+  // SVG 원호 경로 생성
+  const centerX = 100;
+  const centerY = 140;
+  const radius = 80;
+  
+  // 하한값 원호 경로 생성
+  const startRad = (startAngle * Math.PI) / 180;
+  const minEndRad = (minEndAngle * Math.PI) / 180;
+  
+  const startX = centerX + radius * Math.cos(startRad);
+  const startY = centerY + radius * Math.sin(startRad);
+  const minEndX = centerX + radius * Math.cos(minEndRad);
+  const minEndY = centerY + radius * Math.sin(minEndRad);
+  
+  const minAngleDiff = minEndAngle - startAngle;
+  const minLargeArcFlag = minAngleDiff > 180 ? 1 : 0;
+  const minPathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${minLargeArcFlag} 1 ${minEndX} ${minEndY}`;
+  
+  // 목표 파워 원호 요소 가져오기 (하한값)
+  const targetArc = safeGetElement('mobile-gauge-target-arc');
+  if (!targetArc) {
+    console.warn('[Mobile Dashboard] mobile-gauge-target-arc 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 하한값 원호 경로 및 색상 업데이트
+  targetArc.setAttribute('d', minPathData);
+  targetArc.setAttribute('stroke', arcColor);
+  targetArc.style.display = 'block';
+  
+  // ftp_pctz 타입인 경우 상한값 원호 추가
+  if (isFtpPctz && window.currentSegmentMaxPower && window.currentSegmentMaxPower > targetPower) {
+    const maxPowerValue = window.currentSegmentMaxPower;
+    const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
+    const maxEndAngle = 180 + (maxRatio * 180);
+    const maxEndRad = (maxEndAngle * Math.PI) / 180;
+    const maxEndX = centerX + radius * Math.cos(maxEndRad);
+    const maxEndY = centerY + radius * Math.sin(maxEndRad);
+    
+    const maxAngleDiff = maxEndAngle - minEndAngle;
+    const maxLargeArcFlag = maxAngleDiff > 180 ? 1 : 0;
+    const maxPathData = `M ${minEndX} ${minEndY} A ${radius} ${radius} 0 ${maxLargeArcFlag} 1 ${maxEndX} ${maxEndY}`;
+    
+    // 상한값 원호 요소 가져오기
+    const maxArc = safeGetElement('mobile-gauge-max-arc');
+    if (!maxArc) {
+      console.warn('[Mobile Dashboard] mobile-gauge-max-arc 요소를 찾을 수 없습니다.');
+    } else {
+      // 상한값 원호 경로 및 색상 업데이트 (투명도 낮춘 주황색)
+      maxArc.setAttribute('d', maxPathData);
+      maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)'); // 더 투명한 주황색
+      maxArc.style.display = 'block';
+    }
+  } else {
+    // ftp_pctz가 아니거나 상한값이 없으면 상한 원호 숨김
+    const maxArc = safeGetElement('mobile-gauge-max-arc');
+    if (maxArc) {
+      maxArc.style.display = 'none';
+    }
+  }
+  
+  // 디버깅 로그 (선택사항)
+  if (achievementRatio > 0) {
+    console.log(`[Mobile Dashboard] updateMobileTargetPowerArc 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${window.currentSegmentMaxPower}W` : ''}`);
+  }
 }
 
 /**
@@ -11193,6 +11333,11 @@ function updateMobileTargetPower() {
         }
         targetPowerEl.textContent = String(adjustedTargetPower);
         targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+      }
+      
+      // 목표 파워 원호 업데이트
+      if (typeof updateMobileTargetPowerArc === 'function') {
+        updateMobileTargetPowerArc();
       }
       
       return;
@@ -11425,6 +11570,11 @@ function updateMobileTargetPower() {
     }
     targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
     targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+  }
+  
+  // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
+  if (typeof updateMobileTargetPowerArc === 'function') {
+    updateMobileTargetPowerArc();
   }
 }
 
