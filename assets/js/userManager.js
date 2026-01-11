@@ -208,27 +208,84 @@ if (typeof window !== 'undefined') {
 
 
 
+// 삼성 안드로이드폰 감지 함수
+function isSamsungAndroid() {
+  const ua = navigator.userAgent || '';
+  return /Android/i.test(ua) && /Samsung/i.test(ua) && !/Tablet/i.test(ua);
+}
+
 // JSONP 방식 API 호출 헬퍼 함수
-// JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선
+// JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선 + 삼성 안드로이드폰 대응
 function jsonpRequest(url, params = {}) {
   return new Promise((resolve, reject) => {
+    // URL이 HTTPS인지 확인 (Mixed Content 방지)
+    if (url && !url.startsWith('https://') && !url.startsWith('http://localhost')) {
+      console.error('❌ Mixed Content 차단: HTTPS 사이트에서 HTTP API 호출 불가');
+      reject(new Error('Mixed Content: HTTPS 사이트에서는 HTTPS API만 사용 가능합니다.'));
+      return;
+    }
+    
+    // URL이 상대 경로인 경우 현재 프로토콜 사용
+    let finalBaseUrl = url;
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      finalBaseUrl = window.location.protocol + '//' + window.location.host + (url.startsWith('/') ? '' : '/') + url;
+    }
+    
     const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
     const script = document.createElement('script');
+    let isResolved = false;
+    let timeoutId = null;
+    
+    // 삼성 안드로이드폰에서는 타임아웃을 더 길게 설정
+    const timeoutDuration = isSamsungAndroid() ? 15000 : 10000;
     
     window[callbackName] = function(data) {
+      if (isResolved) return;
+      isResolved = true;
+      
       console.log('JSONP response received:', data);
       delete window[callbackName];
-      document.body.removeChild(script);
-      resolve(data);
-    };
-    
-    script.onerror = function() {
-      console.error('JSONP script loading failed');
-      delete window[callbackName];
+      
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
       if (document.body.contains(script)) {
         document.body.removeChild(script);
       }
-      reject(new Error('JSONP request failed'));
+      resolve(data);
+    };
+    
+    script.onerror = function(error) {
+      if (isResolved) return;
+      isResolved = true;
+      
+      console.error('JSONP script loading failed:', error);
+      console.error('Request URL:', finalBaseUrl);
+      
+      // 삼성 안드로이드폰에서의 특별한 에러 메시지
+      if (isSamsungAndroid()) {
+        console.warn('⚠️ 삼성 안드로이드폰에서 JSONP 요청 실패 - Mixed Content 또는 보안 정책 차단 가능');
+      }
+      
+      delete window[callbackName];
+      
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+      
+      // 삼성 안드로이드폰에서의 더 구체적인 에러 메시지
+      const errorMessage = isSamsungAndroid() 
+        ? '네트워크 요청이 차단되었습니다. 삼성 인터넷 브라우저의 보안 설정을 확인하거나 다른 브라우저(Chrome)를 사용해보세요.'
+        : 'JSONP request failed';
+      
+      reject(new Error(errorMessage));
     };
     
     // URL 파라미터 구성 - encodeURIComponent 사용으로 개선
@@ -241,14 +298,22 @@ function jsonpRequest(url, params = {}) {
     });
     urlParams.set('callback', callbackName);
     
-    const finalUrl = `${url}?${urlParams.toString()}`;
+    const finalUrl = `${finalBaseUrl}?${urlParams.toString()}`;
     console.log('JSONP request URL:', finalUrl);
     
-    script.src = finalUrl;
-    document.body.appendChild(script);
+    // 삼성 안드로이드폰에서의 추가 로깅
+    if (isSamsungAndroid()) {
+      console.log('📱 삼성 안드로이드폰 감지 - 타임아웃:', timeoutDuration + 'ms');
+    }
     
-    setTimeout(() => {
-      if (window[callbackName]) {
+    script.src = finalUrl;
+    script.async = true;
+    script.defer = false;
+    
+    // 스크립트 로드 전에 타임아웃 설정
+    timeoutId = setTimeout(() => {
+      if (window[callbackName] && !isResolved) {
+        isResolved = true;
         console.warn('JSONP request timeout');
         delete window[callbackName];
         if (document.body.contains(script)) {
@@ -256,7 +321,10 @@ function jsonpRequest(url, params = {}) {
         }
         reject(new Error('JSONP request timeout'));
       }
-    }, 10000);
+    }, timeoutDuration);
+    
+    // 스크립트를 body에 추가
+    document.body.appendChild(script);
   });
 }
 

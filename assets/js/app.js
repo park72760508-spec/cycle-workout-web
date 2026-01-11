@@ -5778,6 +5778,15 @@ async function syncUsersFromDB() {
     try {
       console.log('🔄 DB에서 사용자 목록 동기화 중...');
 
+      // GAS_URL이 HTTPS인지 확인
+      const gasUrl = window.GAS_URL || GAS_URL;
+      if (gasUrl && !gasUrl.startsWith('https://')) {
+        console.error('❌ Mixed Content 차단: GAS_URL이 HTTPS가 아닙니다:', gasUrl);
+        console.error('   HTTPS 사이트에서는 HTTPS API만 사용 가능합니다.');
+        isDBConnected = false;
+        return false;
+      }
+
       if (typeof apiGetUsers !== 'function') {
         console.warn('apiGetUsers 함수를 찾을 수 없습니다. userManager.js가 로드되었는지 확인하세요.');
         return false;
@@ -5800,6 +5809,18 @@ async function syncUsersFromDB() {
       }
     } catch (error) {
       console.error('❌ DB 동기화 오류:', error);
+      console.error('   에러 상세:', error.message);
+      
+      // 삼성 안드로이드폰에서의 특별한 처리
+      const ua = navigator.userAgent || '';
+      if (/Android/i.test(ua) && /Samsung/i.test(ua) && !/Tablet/i.test(ua)) {
+        console.warn('⚠️ 삼성 안드로이드폰에서 DB 동기화 실패');
+        console.warn('   가능한 원인:');
+        console.warn('   1. Mixed Content 차단 (HTTPS → HTTP 호출)');
+        console.warn('   2. 삼성 인터넷 브라우저의 보안 정책');
+        console.warn('   해결 방법: Chrome 브라우저 사용 또는 GAS_URL이 HTTPS인지 확인');
+      }
+      
       isDBConnected = false;
       return false;
     } finally {
@@ -5833,6 +5854,28 @@ async function authenticatePhone() {
   authStatus.className = 'auth-status';
   
   try {
+    // DB 연결 상태 확인 및 필요시 동기화
+    if (!isDBConnected || !dbUsers || dbUsers.length === 0) {
+      console.log('🔄 DB 동기화 필요 - 사용자 목록 가져오는 중...');
+      authStatus.textContent = '📡 데이터베이스 연결 중...';
+      
+      const syncSuccess = await syncUsersFromDB();
+      
+      if (!syncSuccess) {
+        // 삼성 안드로이드폰에서의 특별한 메시지
+        const ua = navigator.userAgent || '';
+        const isSamsungAndroid = /Android/i.test(ua) && /Samsung/i.test(ua) && !/Tablet/i.test(ua);
+        
+        authStatus.textContent = isSamsungAndroid 
+          ? '⚠️ 네트워크 오류: Chrome 브라우저를 사용하거나 잠시 후 다시 시도해주세요.'
+          : '⚠️ DB 연결이 필요합니다. 잠시 후 다시 시도해주세요.';
+        authStatus.className = 'auth-status error';
+        authBtn.disabled = false;
+        authBtn.textContent = '인증하기';
+        return;
+      }
+    }
+    
     // DB에서 전화번호 인증
     const authResult = await authenticatePhoneWithDB(currentPhoneNumber);
     
