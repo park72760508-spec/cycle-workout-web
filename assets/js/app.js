@@ -9086,12 +9086,9 @@ function confirmRPESelection() {
   // 모달 닫기
   closeRPEModal();
   
-  // 훈련 스케줄 화면으로 이동
+  // 훈련 준비 화면으로 이동
   if (typeof showScreen === 'function') {
-    showScreen('scheduleListScreen');
-    if (typeof loadTrainingSchedules === 'function') {
-      loadTrainingSchedules();
-    }
+    showScreen('trainingReadyScreen');
   }
   
   const conditionNames = {
