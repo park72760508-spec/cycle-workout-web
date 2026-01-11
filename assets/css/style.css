@@ -104,6 +104,23 @@ h1,h2,h3,h4 { font-weight: 600; }
 .btn-success { background: #28a745; }
 .btn-row { display: flex; justify-content: center; gap: 10px; }
 
+/* 훈련 스케줄 작성 화면 하단 버튼 영역 안전거리 확보 */
+#scheduleCreateScreen .btn-row {
+  margin-top: 24px !important;
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
+/* 훈련 스케줄 작성 화면 카드 하단 여백 조정 */
+#scheduleCreateScreen .card {
+  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
+}
+
 /* btn-device는 공통 버튼 스타일을 오버라이드 - 제거: 나중에 정의된 스타일이 적용되도록 */
 
 /* 폼 공통 */
