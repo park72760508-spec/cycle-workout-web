@@ -9999,6 +9999,13 @@ button[aria-disabled="true"] {
   overflow-y: auto;
 }
 
+/* Indoor Training 대시보드 화면 활성화 시 표시 */
+#indoorTrainingDashboardScreen.active {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
 .dashboard-header {
   display: flex;
   justify-content: flex-start;
