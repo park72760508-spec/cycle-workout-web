@@ -4306,17 +4306,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ========== Indoor 모드 선택 모달 함수 ==========
   window.showIndoorModeSelectionModal = function() {
-    console.log('[Indoor Mode Modal] 모달 열기 시도');
     const modal = document.getElementById('indoorModeSelectionModal');
     if (modal) {
-      // 모달 완전히 표시
       modal.classList.remove('hidden');
-      modal.style.display = 'flex';
-      modal.style.visibility = 'visible';
-      modal.style.opacity = '1';
-      modal.style.pointerEvents = 'auto';
-      modal.style.zIndex = '99999';
-      console.log('[Indoor Mode Modal] 모달 열기 완료 - display:', modal.style.display, 'visibility:', modal.style.visibility, 'z-index:', modal.style.zIndex);
       
       // Indoor Race 버튼 등급 제한 해제 (모든 등급 사용 가능)
       const btnIndoorRace = document.getElementById('btnIndoorRace');
@@ -4328,83 +4320,34 @@ document.addEventListener("DOMContentLoaded", () => {
         btnIndoorRace.style.cursor = 'pointer';
         btnIndoorRace.title = '';
       }
-      
-      // Indoor Training 버튼도 활성화 확인
-      const btnIndoorTraining = document.getElementById('btnIndoorTraining');
-      if (btnIndoorTraining) {
-        console.log('[Indoor Mode Modal] Indoor Training 버튼 확인:', btnIndoorTraining);
-        console.log('[Indoor Mode Modal] 버튼 onclick:', btnIndoorTraining.getAttribute('onclick'));
-      }
-    } else {
-      console.error('[Indoor Mode Modal] 모달 요소를 찾을 수 없습니다');
     }
   };
 
   window.closeIndoorModeSelectionModal = function() {
-    console.log('[Indoor Mode Modal] 모달 닫기 시도');
     const modal = document.getElementById('indoorModeSelectionModal');
     if (modal) {
       modal.classList.add('hidden');
-      modal.style.display = 'none';
-      modal.style.visibility = 'hidden';
-      modal.style.opacity = '0';
-      modal.style.pointerEvents = 'none';
-      modal.style.zIndex = '-1';
-      console.log('[Indoor Mode Modal] 모달 닫기 완료');
     }
   };
 
   window.selectIndoorMode = function(mode) {
-    console.log('[Indoor Mode] 모드 선택:', mode);
-    console.log('[Indoor Mode] showScreen 함수 존재 여부:', typeof showScreen === 'function');
-    console.log('[Indoor Mode] window.showScreen 함수 존재 여부:', typeof window.showScreen === 'function');
-    
-    // 모달 먼저 닫기
     closeIndoorModeSelectionModal();
-    
-    // 모달이 완전히 닫힐 때까지 약간의 지연 후 화면 전환
-    setTimeout(() => {
-      if (mode === 'race') {
-        // INDOOR RACE 선택 시 rollerRaceDashboardScreen으로 이동
-        console.log('[Indoor Mode] INDOOR RACE 화면으로 전환');
-        const showScreenFunc = window.showScreen || showScreen;
-        if (typeof showScreenFunc === 'function') {
-          showScreenFunc('rollerRaceDashboardScreen');
-        } else {
-          console.error('[Indoor Mode] showScreen 함수를 찾을 수 없습니다');
-        }
-        // rollerRaceDashboard 초기화 (showScreen에서 자동으로 호출되지만 명시적으로 호출)
-        if (typeof initRollerRaceDashboard === 'function') {
-          setTimeout(() => {
-            initRollerRaceDashboard();
-          }, 100);
-        }
-      } else if (mode === 'training') {
-        // INDOOR TRAINING 선택 시 indoorTrainingDashboardScreen으로 이동
-        console.log('[Indoor Mode] INDOOR TRAINING 화면으로 전환 시도');
-        const showScreenFunc = window.showScreen || showScreen;
-        if (typeof showScreenFunc === 'function') {
-          console.log('[Indoor Mode] showScreen 함수 호출:', 'indoorTrainingDashboardScreen');
-          showScreenFunc('indoorTrainingDashboardScreen');
-          
-          // 화면 전환 확인
-          setTimeout(() => {
-            const targetScreen = document.getElementById('indoorTrainingDashboardScreen');
-            if (targetScreen) {
-              const computedStyle = window.getComputedStyle(targetScreen);
-              console.log('[Indoor Mode] 화면 전환 확인 - display:', computedStyle.display, 'visibility:', computedStyle.visibility, 'opacity:', computedStyle.opacity);
-              console.log('[Indoor Mode] active 클래스:', targetScreen.classList.contains('active'));
-            } else {
-              console.error('[Indoor Mode] indoorTrainingDashboardScreen 요소를 찾을 수 없습니다');
-            }
-          }, 200);
-        } else {
-          console.error('[Indoor Mode] showScreen 함수를 찾을 수 없습니다');
-        }
-      } else {
-        console.warn('[Indoor Mode] 알 수 없는 모드:', mode);
+    if (mode === 'race') {
+      // INDOOR RACE 선택 시 rollerRaceDashboardScreen으로 이동
+      if (typeof showScreen === 'function') {
+        showScreen('rollerRaceDashboardScreen');
       }
-    }, 100);
+      // rollerRaceDashboard 초기화 (showScreen에서 자동으로 호출되지만 명시적으로 호출)
+      if (typeof initRollerRaceDashboard === 'function') {
+        setTimeout(() => {
+          initRollerRaceDashboard();
+        }, 100);
+      }
+    } else if (mode === 'training') {
+      if (typeof showScreen === 'function') {
+        showScreen('indoorTrainingDashboardScreen');
+      }
+    }
   };
 
   // 다른 파워소스 우선순위도 같이 표기
