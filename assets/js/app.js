@@ -10567,6 +10567,349 @@ window.selectWorkoutForTrainingReady = selectWorkoutForTrainingReady;
 window.updateTrainingReadyScreenWithWorkout = updateTrainingReadyScreenWithWorkout;
 
 /* ==========================================================
+   모바일 대시보드 화면 기능
+   individual.html과 동일한 화면 및 블루투스 데이터 표시
+========================================================== */
+
+/**
+ * 모바일 대시보드 화면 시작
+ * individual.html과 동일한 화면 구조 및 블루투스 데이터 표시
+ */
+async function startMobileDashboard() {
+  console.log('[Mobile Dashboard] 모바일 대시보드 시작');
+  
+  try {
+    // 현재 사용자 정보 표시
+    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    const bikeIdDisplay = safeGetElement('mobile-bike-id-display');
+    if (bikeIdDisplay && currentUser && currentUser.name) {
+      bikeIdDisplay.textContent = currentUser.name;
+    } else if (bikeIdDisplay) {
+      bikeIdDisplay.textContent = 'Bike ?';
+    }
+    
+    // 워크아웃이 선택되어 있으면 세그먼트 그래프 그리기
+    if (window.currentWorkout && window.currentWorkout.segments && window.currentWorkout.segments.length > 0) {
+      const canvas = safeGetElement('mobileIndividualSegmentGraph');
+      if (canvas && typeof drawSegmentGraph === 'function') {
+        setTimeout(() => {
+          drawSegmentGraph(window.currentWorkout.segments, -1, 'mobileIndividualSegmentGraph', null);
+        }, 100);
+      }
+    }
+    
+    // 블루투스 데이터 업데이트 시작
+    startMobileDashboardDataUpdate();
+    
+    // 타이머 업데이트 시작
+    startMobileDashboardTimer();
+    
+    // 속도계 초기화
+    initializeMobileGauge();
+    
+    // 목표값 조절 슬라이더 이벤트 리스너
+    const intensitySlider = safeGetElement('mobileIndividualIntensityAdjustmentSlider');
+    if (intensitySlider) {
+      intensitySlider.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        const valueEl = safeGetElement('mobileIndividualIntensityAdjustmentValue');
+        if (valueEl) {
+          valueEl.textContent = value > 0 ? `+${value}%` : `${value}%`;
+        }
+        window.mobileIntensityAdjustment = 1.0 + (value / 100);
+        updateMobileTargetPower();
+      });
+    }
+    
+    console.log('[Mobile Dashboard] 모바일 대시보드 초기화 완료');
+  } catch (error) {
+    console.error('[Mobile Dashboard] 초기화 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('모바일 대시보드 초기화 중 오류가 발생했습니다', 'error');
+    }
+  }
+}
+
+/**
+ * 모바일 대시보드 블루투스 데이터 업데이트
+ * window.liveData에서 데이터를 읽어서 화면에 표시
+ */
+function startMobileDashboardDataUpdate() {
+  // 블루투스 데이터 업데이트 루프
+  function updateMobileDashboardData() {
+    if (document.getElementById('mobileDashboardScreen') && 
+        (document.getElementById('mobileDashboardScreen').classList.contains('active') || 
+         window.getComputedStyle(document.getElementById('mobileDashboardScreen')).display !== 'none')) {
+      
+      // window.liveData에서 데이터 읽기
+      const liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+      
+      // 현재 파워 표시
+      const powerValue = Math.round(liveData.power || 0);
+      const powerEl = safeGetElement('mobile-ui-current-power');
+      if (powerEl) {
+        powerEl.textContent = powerValue;
+      }
+      
+      // 속도계 바늘 업데이트
+      updateMobileGaugeNeedle(powerValue);
+      
+      // 케이던스 표시
+      const cadence = Math.round(liveData.cadence || 0);
+      const cadenceEl = safeGetElement('mobile-ui-cadence');
+      if (cadenceEl) {
+        cadenceEl.textContent = cadence;
+      }
+      
+      // 심박수 표시
+      const hr = Math.round(liveData.heartRate || 0);
+      const hrEl = safeGetElement('mobile-ui-hr');
+      if (hrEl) {
+        hrEl.textContent = hr;
+      }
+      
+      // 목표 파워 업데이트
+      updateMobileTargetPower();
+    }
+  }
+  
+  // 100ms마다 업데이트 (블루투스 데이터는 빠르게 업데이트됨)
+  if (window.mobileDashboardUpdateInterval) {
+    clearInterval(window.mobileDashboardUpdateInterval);
+  }
+  window.mobileDashboardUpdateInterval = setInterval(updateMobileDashboardData, 100);
+  
+  // 즉시 한 번 실행
+  updateMobileDashboardData();
+}
+
+/**
+ * 모바일 대시보드 타이머 업데이트
+ */
+function startMobileDashboardTimer() {
+  function updateMobileTimer() {
+    if (document.getElementById('mobileDashboardScreen') && 
+        (document.getElementById('mobileDashboardScreen').classList.contains('active') || 
+         window.getComputedStyle(document.getElementById('mobileDashboardScreen')).display !== 'none')) {
+      
+      // 훈련 상태에서 경과 시간 가져오기
+      const trainingState = window.trainingState || {};
+      const elapsedSec = trainingState.elapsedSec || 0;
+      
+      // 시간 포맷팅 (HH:MM:SS)
+      const hours = Math.floor(elapsedSec / 3600);
+      const minutes = Math.floor((elapsedSec % 3600) / 60);
+      const seconds = Math.floor(elapsedSec % 60);
+      const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      
+      const timerEl = safeGetElement('mobile-main-timer');
+      if (timerEl) {
+        timerEl.textContent = timeString;
+      }
+      
+      // 랩 카운트다운 업데이트 (세그먼트 남은 시간)
+      if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
+        const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
+        if (currentSegment) {
+          const segmentDuration = Number(currentSegment.duration_sec) || 0;
+          const segmentElapsed = trainingState.segElapsedSec || 0;
+          const remaining = Math.max(0, segmentDuration - segmentElapsed);
+          
+          const lapMinutes = Math.floor(remaining / 60);
+          const lapSeconds = Math.floor(remaining % 60);
+          const lapTimeString = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
+          
+          const lapTimeEl = safeGetElement('mobile-ui-lap-time');
+          if (lapTimeEl) {
+            lapTimeEl.textContent = lapTimeString;
+          }
+        }
+      }
+    }
+  }
+  
+  // 1초마다 업데이트
+  if (window.mobileDashboardTimerInterval) {
+    clearInterval(window.mobileDashboardTimerInterval);
+  }
+  window.mobileDashboardTimerInterval = setInterval(updateMobileTimer, 1000);
+  
+  // 즉시 한 번 실행
+  updateMobileTimer();
+}
+
+/**
+ * 모바일 속도계 초기화
+ */
+function initializeMobileGauge() {
+  // 속도계 눈금 및 레이블 생성 (individual.js의 updateGaugeTicksAndLabels 참고)
+  const svg = document.querySelector('#mobileDashboardScreen svg');
+  if (!svg) return;
+  
+  const ticksGroup = safeGetElement('mobile-gauge-ticks');
+  const labelsGroup = safeGetElement('mobile-gauge-labels');
+  
+  if (!ticksGroup || !labelsGroup) return;
+  
+  // 기존 눈금 및 레이블 제거
+  ticksGroup.innerHTML = '';
+  labelsGroup.innerHTML = '';
+  
+  // FTP 값 가져오기
+  const userFTP = window.userFTP || window.currentUser?.ftp || 200;
+  const maxPower = userFTP * 1.5; // 최대 파워 (FTP의 150%)
+  
+  // 눈금 생성 (0부터 maxPower까지)
+  for (let i = 0; i <= 10; i++) {
+    const power = (maxPower / 10) * i;
+    const angle = -90 + (180 / 10) * i;
+    const radian = (angle * Math.PI) / 180;
+    
+    const x1 = 100 + 80 * Math.cos(radian);
+    const y1 = 140 + 80 * Math.sin(radian);
+    const x2 = 100 + 90 * Math.cos(radian);
+    const y2 = 140 + 90 * Math.sin(radian);
+    
+    // 눈금선
+    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    tick.setAttribute('x1', x1);
+    tick.setAttribute('y1', y1);
+    tick.setAttribute('x2', x2);
+    tick.setAttribute('y2', y2);
+    tick.setAttribute('stroke', '#666');
+    tick.setAttribute('stroke-width', '1');
+    ticksGroup.appendChild(tick);
+    
+    // 레이블 (5의 배수만)
+    if (i % 2 === 0) {
+      const labelX = 100 + 100 * Math.cos(radian);
+      const labelY = 140 + 100 * Math.sin(radian);
+      
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', labelX);
+      label.setAttribute('y', labelY);
+      label.setAttribute('text-anchor', 'middle');
+      label.setAttribute('fill', '#aaa');
+      label.setAttribute('font-size', '6');
+      label.textContent = Math.round(power);
+      labelsGroup.appendChild(label);
+    }
+  }
+}
+
+/**
+ * 모바일 속도계 바늘 업데이트
+ */
+function updateMobileGaugeNeedle(power) {
+  const needle = safeGetElement('mobile-gauge-needle');
+  if (!needle) return;
+  
+  // FTP 값 가져오기
+  const userFTP = window.userFTP || window.currentUser?.ftp || 200;
+  const maxPower = userFTP * 1.5; // 최대 파워 (FTP의 150%)
+  
+  // 각도 계산 (-90도부터 90도까지, 180도 범위)
+  const normalizedPower = Math.max(0, Math.min(power, maxPower));
+  const angle = -90 + (normalizedPower / maxPower) * 180;
+  
+  // 바늘 회전
+  needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
+}
+
+/**
+ * 모바일 목표 파워 업데이트
+ */
+function updateMobileTargetPower() {
+  const targetPowerEl = safeGetElement('mobile-ui-target-power');
+  if (!targetPowerEl) return;
+  
+  // 목표 파워 계산
+  let targetPower = 0;
+  
+  // 1순위: window.liveData.targetPower
+  if (window.liveData && window.liveData.targetPower) {
+    targetPower = window.liveData.targetPower;
+  }
+  // 2순위: 현재 세그먼트의 목표 파워
+  else if (window.currentWorkout && window.currentWorkout.segments && window.trainingState && window.trainingState.segIndex !== undefined) {
+    const currentSegment = window.currentWorkout.segments[window.trainingState.segIndex];
+    if (currentSegment) {
+      const userFTP = window.userFTP || window.currentUser?.ftp || 200;
+      const targetType = currentSegment.target_type || 'ftp_pct';
+      const targetValue = Number(currentSegment.target_value) || 0;
+      
+      if (targetType === 'ftp_pct' || targetType === 'ftp_pctz') {
+        targetPower = Math.round(userFTP * (targetValue / 100));
+      } else if (targetType === 'cadence_rpm') {
+        targetPower = 0; // RPM 타입은 파워 목표 없음
+      } else {
+        targetPower = targetValue;
+      }
+    }
+  }
+  
+  // 강도 조절 적용
+  const intensityAdjustment = window.mobileIntensityAdjustment || 1.0;
+  targetPower = Math.round(targetPower * intensityAdjustment);
+  
+  // 목표 파워 표시
+  targetPowerEl.textContent = targetPower;
+  
+  // 랩 평균 파워 업데이트 (세그먼트 평균 파워)
+  const lapPowerEl = safeGetElement('mobile-ui-lap-power');
+  if (lapPowerEl && window.liveData && window.liveData.segmentAvgPower) {
+    lapPowerEl.textContent = Math.round(window.liveData.segmentAvgPower);
+  }
+}
+
+/**
+ * 모바일 훈련 결과 모달 닫기
+ */
+function closeMobileTrainingResultModal() {
+  const modal = safeGetElement('mobileTrainingResultModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+/**
+ * 모바일 대시보드 화면 정리 (화면 닫힐 때 호출)
+ */
+function cleanupMobileDashboard() {
+  // 인터벌 정리
+  if (window.mobileDashboardUpdateInterval) {
+    clearInterval(window.mobileDashboardUpdateInterval);
+    window.mobileDashboardUpdateInterval = null;
+  }
+  if (window.mobileDashboardTimerInterval) {
+    clearInterval(window.mobileDashboardTimerInterval);
+    window.mobileDashboardTimerInterval = null;
+  }
+  console.log('[Mobile Dashboard] 정리 완료');
+}
+
+// 화면 전환 시 정리
+if (typeof showScreen === 'function') {
+  const originalShowScreen = window.showScreen;
+  window.showScreen = function(id, skipHistory) {
+    // 모바일 대시보드 화면에서 나갈 때 정리
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    if (mobileScreen && (mobileScreen.classList.contains('active') || window.getComputedStyle(mobileScreen).display !== 'none')) {
+      if (id !== 'mobileDashboardScreen') {
+        cleanupMobileDashboard();
+      }
+    }
+    // 원래 showScreen 함수 호출
+    return originalShowScreen.call(this, id, skipHistory);
+  };
+}
+
+// 전역 함수로 등록
+window.startMobileDashboard = startMobileDashboard;
+window.closeMobileTrainingResultModal = closeMobileTrainingResultModal;
+window.cleanupMobileDashboard = cleanupMobileDashboard;
+
+/* ==========================================================
    터치 이벤트 및 피드백 개선 유틸리티
    모바일에서 버튼 클릭 반응성 향상
 ========================================================== */
