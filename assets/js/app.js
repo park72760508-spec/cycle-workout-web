@@ -2672,6 +2672,12 @@ if (!window.showScreen) {
         }
       });
       
+      // 모든 모달 닫기 (화면 전환 시 모달이 남아있지 않도록)
+      document.querySelectorAll(".modal").forEach(modal => {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      });
+      
       // 2) 대상 화면만 표시
       const el = safeGetElement(id);
       if (el) {
@@ -2739,6 +2745,15 @@ if (!window.showScreen) {
         }, 100);
       }
       
+      // 베이스캠프 화면 활성화 시 모든 모달 닫기
+      if (id === 'basecampScreen') {
+        // 모든 모달 닫기
+        document.querySelectorAll(".modal").forEach(modal => {
+          modal.classList.add('hidden');
+          modal.style.display = 'none';
+        });
+      }
+      
       // Indoor Training 대시보드 화면 초기화
       if (id === 'indoorTrainingDashboardScreen') {
         setTimeout(() => {
@@ -2750,6 +2765,15 @@ if (!window.showScreen) {
             console.warn('[Indoor Training] initIndoorTrainingDashboard 함수를 찾을 수 없습니다.');
           }
         }, 100);
+      }
+      
+      // connectionScreen, myCareerScreen 활성화 시 모든 모달 닫기
+      if (id === 'connectionScreen' || id === 'myCareerScreen') {
+        // 모든 모달 닫기
+        document.querySelectorAll(".modal").forEach(modal => {
+          modal.classList.add('hidden');
+          modal.style.display = 'none';
+        });
       }
       
       } else {
@@ -4248,9 +4272,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ========== Indoor 모드 선택 모달 함수 ==========
   window.showIndoorModeSelectionModal = function() {
+    console.log('[Indoor Mode Modal] 모달 열기 시도');
     const modal = document.getElementById('indoorModeSelectionModal');
     if (modal) {
       modal.classList.remove('hidden');
+      modal.style.display = 'flex'; // 모달이 제대로 표시되도록
+      console.log('[Indoor Mode Modal] 모달 열기 완료');
       
       // Indoor Race 버튼 등급 제한 해제 (모든 등급 사용 가능)
       const btnIndoorRace = document.getElementById('btnIndoorRace');
@@ -4262,13 +4289,18 @@ document.addEventListener("DOMContentLoaded", () => {
         btnIndoorRace.style.cursor = 'pointer';
         btnIndoorRace.title = '';
       }
+    } else {
+      console.error('[Indoor Mode Modal] 모달 요소를 찾을 수 없습니다');
     }
   };
 
   window.closeIndoorModeSelectionModal = function() {
+    console.log('[Indoor Mode Modal] 모달 닫기 시도');
     const modal = document.getElementById('indoorModeSelectionModal');
     if (modal) {
       modal.classList.add('hidden');
+      modal.style.display = 'none'; // 모달이 완전히 숨겨지도록
+      console.log('[Indoor Mode Modal] 모달 닫기 완료');
     }
   };
 
