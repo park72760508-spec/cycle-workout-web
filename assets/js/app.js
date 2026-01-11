@@ -10498,8 +10498,8 @@ const SoundController = {
 // 3. 통합 트리거 함수 (설정 적용)
 window.triggerHapticFeedback = function() {
   // ▼▼▼ '0'번 키패드 소리 적용 (941Hz + 1336Hz 믹스) ▼▼▼
-  SoundController.playDTMF(941, 1336, 0.25); 
-
+  //SoundController.playDTMF(941, 1336, 0.25); 
+  SoundController.playDTMF(450, 450, 0.05);
   // 안드로이드 진동 (지원 기기만)
   if (navigator.vibrate) {
     try { navigator.vibrate(10); } catch(e) {}
