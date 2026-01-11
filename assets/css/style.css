@@ -12730,6 +12730,121 @@ line[id^="needle-"] {
   z-index: 1;
 }
 
+/* 모바일 대시보드 제어 버튼 (속도계 아래 중앙 배치) */
+.mobile-control-buttons {
+  position: absolute;
+  bottom: -50px; /* 속도계 아래로 배치 */
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: auto;
+  width: auto;
+  max-width: 100%;
+}
+
+.mobile-control-btn {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6), 
+              0 0 12px rgba(255, 255, 255, 0.4),
+              inset 0 0 6px rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  flex-shrink: 0;
+}
+
+.mobile-control-btn:hover {
+  border-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 
+              0 0 16px rgba(255, 255, 255, 0.6),
+              inset 0 0 8px rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.mobile-control-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5), 
+              0 0 8px rgba(255, 255, 255, 0.3),
+              inset 0 0 4px rgba(255, 255, 255, 0.15);
+}
+
+.mobile-control-btn img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  transition: all 0.2s ease;
+  pointer-events: none; /* 이미지 클릭 방지 */
+}
+
+.mobile-control-btn:hover img {
+  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+}
+
+/* 모바일 대시보드 속도계 컨테이너 높이 조정 (버튼 공간 확보, 화면 높이 증가 방지) */
+.mobile-gauge-container {
+  position: relative;
+  padding-bottom: 55px; /* 버튼 공간 확보 (속도계 내부 여백) */
+  box-sizing: border-box;
+}
+
+/* 화면 높이 제한 시 버튼 크기 조정 */
+@media (max-height: 800px) {
+  .mobile-control-btn {
+    width: 34px;
+    height: 34px;
+  }
+  
+  .mobile-control-btn img {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .mobile-control-buttons {
+    gap: 8px;
+    bottom: -45px;
+  }
+  
+  .mobile-gauge-container {
+    padding-bottom: 45px;
+  }
+}
+
+@media (max-height: 600px) {
+  .mobile-control-btn {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .mobile-control-btn img {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .mobile-control-buttons {
+    gap: 6px;
+    bottom: -38px;
+  }
+  
+  .mobile-gauge-container {
+    padding-bottom: 38px;
+  }
+}
+
 /* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
 .mobile-segment-graph-section {
   padding: 0 20px; /* 상하 패딩 제거, 좌우 패딩만 유지 */
