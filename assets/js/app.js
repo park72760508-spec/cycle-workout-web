@@ -2673,16 +2673,21 @@ if (!window.showScreen) {
       });
       
       // 모든 모달 닫기 (화면 전환 시 모달이 남아있지 않도록)
-      document.querySelectorAll(".modal").forEach(modal => {
+      // .modal과 .modal-overlay 클래스를 가진 모든 모달 닫기
+      document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
         modal.classList.add('hidden');
         modal.style.display = 'none';
+        modal.style.visibility = 'hidden';
+        modal.style.opacity = '0';
+        modal.style.pointerEvents = 'none';
+        modal.style.zIndex = '-1';
       });
       
       // 2) 대상 화면만 표시
       const el = safeGetElement(id);
       if (el) {
-        // 모바일 대시보드 화면은 flex로 표시
-        if (id === 'mobileDashboardScreen') {
+        // 특정 화면은 flex로 표시
+        if (id === 'mobileDashboardScreen' || id === 'basecampScreen' || id === 'connectionScreen' || id === 'myCareerScreen') {
           el.style.display = "flex";
         } else {
           el.style.display = "block";
@@ -2745,17 +2750,35 @@ if (!window.showScreen) {
         }, 100);
       }
       
-      // 베이스캠프 화면 활성화 시 모든 모달 닫기
+      // 베이스캠프 화면 활성화 시 모든 모달 닫기 및 화면 정리
       if (id === 'basecampScreen') {
-        // 모든 모달 닫기
-        document.querySelectorAll(".modal").forEach(modal => {
+        // 모든 모달 닫기 (.modal과 .modal-overlay 모두)
+        document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
           modal.classList.add('hidden');
           modal.style.display = 'none';
+          modal.style.visibility = 'hidden';
+          modal.style.opacity = '0';
+          modal.style.pointerEvents = 'none';
+          modal.style.zIndex = '-1';
         });
+        // 베이스캠프 화면이 최상위에 표시되도록 z-index 설정
+        if (el) {
+          el.style.zIndex = '1000';
+          el.style.position = 'relative';
+        }
       }
       
       // Indoor Training 대시보드 화면 초기화
       if (id === 'indoorTrainingDashboardScreen') {
+        // 모든 모달 닫기 (.modal과 .modal-overlay 모두)
+        document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
+          modal.classList.add('hidden');
+          modal.style.display = 'none';
+          modal.style.visibility = 'hidden';
+          modal.style.opacity = '0';
+          modal.style.pointerEvents = 'none';
+          modal.style.zIndex = '-1';
+        });
         setTimeout(() => {
           if (typeof window.initIndoorTrainingDashboard === 'function') {
             window.initIndoorTrainingDashboard();
@@ -2769,11 +2792,20 @@ if (!window.showScreen) {
       
       // connectionScreen, myCareerScreen 활성화 시 모든 모달 닫기
       if (id === 'connectionScreen' || id === 'myCareerScreen') {
-        // 모든 모달 닫기
-        document.querySelectorAll(".modal").forEach(modal => {
+        // 모든 모달 닫기 (.modal과 .modal-overlay 모두)
+        document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
           modal.classList.add('hidden');
           modal.style.display = 'none';
+          modal.style.visibility = 'hidden';
+          modal.style.opacity = '0';
+          modal.style.pointerEvents = 'none';
+          modal.style.zIndex = '-1';
         });
+        // 화면이 최상위에 표시되도록 z-index 설정
+        if (el) {
+          el.style.zIndex = '1000';
+          el.style.position = 'relative';
+        }
       }
       
       } else {
@@ -4299,29 +4331,44 @@ document.addEventListener("DOMContentLoaded", () => {
     const modal = document.getElementById('indoorModeSelectionModal');
     if (modal) {
       modal.classList.add('hidden');
-      modal.style.display = 'none'; // 모달이 완전히 숨겨지도록
+      modal.style.display = 'none';
+      modal.style.visibility = 'hidden';
+      modal.style.opacity = '0';
+      modal.style.pointerEvents = 'none';
+      modal.style.zIndex = '-1';
       console.log('[Indoor Mode Modal] 모달 닫기 완료');
     }
   };
 
   window.selectIndoorMode = function(mode) {
+    console.log('[Indoor Mode] 모드 선택:', mode);
+    // 모달 먼저 닫기
     closeIndoorModeSelectionModal();
-    if (mode === 'race') {
-      // INDOOR RACE 선택 시 rollerRaceDashboardScreen으로 이동
-      if (typeof showScreen === 'function') {
-        showScreen('rollerRaceDashboardScreen');
+    
+    // 모달이 완전히 닫힐 때까지 약간의 지연 후 화면 전환
+    setTimeout(() => {
+      if (mode === 'race') {
+        // INDOOR RACE 선택 시 rollerRaceDashboardScreen으로 이동
+        console.log('[Indoor Mode] INDOOR RACE 화면으로 전환');
+        if (typeof showScreen === 'function') {
+          showScreen('rollerRaceDashboardScreen');
+        }
+        // rollerRaceDashboard 초기화 (showScreen에서 자동으로 호출되지만 명시적으로 호출)
+        if (typeof initRollerRaceDashboard === 'function') {
+          setTimeout(() => {
+            initRollerRaceDashboard();
+          }, 100);
+        }
+      } else if (mode === 'training') {
+        // INDOOR TRAINING 선택 시 indoorTrainingDashboardScreen으로 이동
+        console.log('[Indoor Mode] INDOOR TRAINING 화면으로 전환');
+        if (typeof showScreen === 'function') {
+          showScreen('indoorTrainingDashboardScreen');
+        }
+      } else {
+        console.warn('[Indoor Mode] 알 수 없는 모드:', mode);
       }
-      // rollerRaceDashboard 초기화 (showScreen에서 자동으로 호출되지만 명시적으로 호출)
-      if (typeof initRollerRaceDashboard === 'function') {
-        setTimeout(() => {
-          initRollerRaceDashboard();
-        }, 100);
-      }
-    } else if (mode === 'training') {
-      if (typeof showScreen === 'function') {
-        showScreen('indoorTrainingDashboardScreen');
-      }
-    }
+    }, 100);
   };
 
   // 다른 파워소스 우선순위도 같이 표기
@@ -9055,9 +9102,16 @@ function showRPEModal() {
 }
 
 function closeRPEModal() {
+  console.log('[RPE Modal] 모달 닫기 시도');
   const modal = document.getElementById('rpeConditionModal');
   if (modal) {
     modal.style.display = 'none';
+    modal.style.visibility = 'hidden';
+    modal.style.opacity = '0';
+    modal.style.pointerEvents = 'none';
+    modal.style.zIndex = '-1';
+    modal.classList.add('hidden');
+    console.log('[RPE Modal] 모달 닫기 완료');
   }
 }
 
