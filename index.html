@@ -1404,77 +1404,61 @@
   
  <!-- 5) 훈련 준비 화면 -->
   <div id="trainingReadyScreen" class="screen">
-    <div class="header">
-      <h1>🎯 훈련 준비</h1>
-      <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
-    </div>
-
-    <div class="workout-preview">
-      <h2 id="previewWorkoutName">워크아웃</h2>
-      <div class="preview-stats">
-        <div><strong id="previewDuration">0분</strong><br /><span class="muted">총 시간</span></div>
-        <div><strong id="previewIntensity">0%</strong><br /><span class="muted">평균 강도</span></div>
-        <div><strong id="previewTSS">0</strong><br /><span class="muted">예상 TSS</span></div>
-      </div>
-      <div class="segment-preview" id="segmentPreview"></div>
-    </div>
-
-    <div class="training-ready">
-      <div class="training-mode-selection">
-        <div class="mb-30">
-          <h3 class="mb-15">훈련 방식 선택</h3>
-          <p class="muted">개인 훈련 또는 그룹 훈련을 선택하세요</p>
-        </div>
-        
-        <div class="training-modes">
-          <!-- 개인 훈련 카드 -->
-          <div class="training-mode-card individual-training">
-            <div class="mode-icon">
-              <img src="assets/img/personal.png" alt="개인 훈련" />
-            </div>
-            <h4>개인 훈련</h4>
-            <p>혼자서 집중해서 훈련하세요</p>
-            <ul class="mode-features">
-              <li>개인 맞춤 페이스</li>
-              <li>자유로운 일시정지</li>
-              <li>개별 목표 설정</li>
-            </ul>
-            <button class="btn btn-success btn-default-style" id="btnStartTraining">
-              개인 훈련 시작
-            </button>
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card">
+          <div class="connection-header">
+            <h1><img src="assets/img/train.png" alt="훈련 준비" style="width: 48px; height: 48px; vertical-align: middle; margin-right: 8px;" /> 훈련 준비</h1>
+            <p class="subtitle">선택한 워크아웃을 확인하고 시작하세요</p>
           </div>
-          
-          <!-- 그룹 훈련 카드 -->
-          <div class="training-mode-card group-training">
-            <div class="mode-icon">
-              <img src="assets/img/personals.png" alt="그룹 훈련" />
+
+          <!-- 워크아웃 정보 섹션 -->
+          <div class="connection-device-section">
+            <h3 class="mb-15" id="previewWorkoutName">워크아웃</h3>
+            <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+              <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
+                <strong id="previewDuration" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0분</strong>
+                <span style="font-size: 13px; color: #666;">총 시간</span>
+              </div>
+              <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
+                <strong id="previewIntensity" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0%</strong>
+                <span style="font-size: 13px; color: #666;">평균 강도</span>
+              </div>
+              <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
+                <strong id="previewExpectedIntensity" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0%</strong>
+                <span style="font-size: 13px; color: #666;">예상 강도</span>
+              </div>
             </div>
-            <h4>그룹 훈련</h4>
-            <p>다른 사람들과 함께 훈련하세요</p>
-            <ul class="mode-features">
-              <li>실시간 동기화</li>
-              <li>관리자 음성 코칭</li>
-              <li>함께하는 동기부여</li>
-            </ul>
-            <button class="btn btn-primary btn-default-style" id="btnGroupTraining">
-              그룹 훈련 참가
+            <!-- 세그먼트 그래프 -->
+            <div class="segment-preview" id="segmentPreview" style="min-height: 200px; margin-bottom: 20px;"></div>
+          </div>
+
+          <!-- Select Dashboard 섹션 -->
+          <div class="connection-device-section">
+            <h3 class="mb-15">Select Dashboard</h3>
+            <div class="grid-2 gap-10 mb-15">
+              <!-- 좌측: 개인 훈련 화면 -->
+              <button class="btn btn-device" id="btnStartTraining" onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
+                <img src="assets/img/laptop.png" alt="개인 훈련" class="device-btn-icon" />
+                <span>개인 훈련</span>
+              </button>
+              <!-- 우측: 모바일 대시보드 화면 -->
+              <button class="btn btn-device" id="btnMobileDashboard" onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
+                <img src="assets/img/mobile.png" alt="모바일 대시보드" class="device-btn-icon" />
+                <span>모바일 대시보드</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 하단 버튼 -->
+          <div class="connection-exit-container">
+            <button class="btn btn-exit-inline" id="btnBackToWorkouts" onclick="showScreen('workoutScreen')" aria-label="뒤로 가기">
+              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              <span>뒤로 가기</span>
             </button>
           </div>
         </div>
-        
-        <!-- 기존 하단 버튼들 -->
-        <div class="btn-row center mt-30">
-          <button class="btn btn-secondary btn-default-style btn-with-icon" id="btnBackToWorkouts">
-            <img src="assets/img/left-arrow.png" alt="이전 화면" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 이전 화면
-          </button>
-          <button class="btn btn-danger btn-default-style btn-with-icon" onclick="refreshPage()">
-            <img src="assets/img/exit.png" alt="나가기" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 나가기
-          </button>
-        </div>
       </div>
-
-
-      
     </div>
   </div>
 
@@ -1681,6 +1665,165 @@
   </div>
   
 </div>
+
+  <!-- ========== 모바일 대시보드 화면 ========== -->
+  <div id="mobileDashboardScreen" class="screen">
+    <!-- 1. 최상단: 사용자 정보 -->
+    <div class="enhanced-training-user-info" id="mobileDashboardUserPanel">
+      <div id="mobileDashboardUserInfo"></div>
+    </div>
+
+    <!-- 2. 두번째: 경과 시간 및 다음 세그먼트 정보 -->
+    <div class="enhanced-training-time-info">
+      <div class="enhanced-time-elapsed">
+        <span class="enhanced-time-label">경과시간</span>
+        <span class="enhanced-time-value" id="mobileDashboardElapsedTime">00:00</span>
+        <span class="enhanced-time-percent">(<span id="mobileDashboardElapsedPercent">0</span>%)</span>
+      </div>
+      <div class="enhanced-next-segment-info">
+        <span class="enhanced-next-label">다음 세그먼트</span>
+        <span class="enhanced-next-value" id="mobileDashboardNextSegment">인터벌 FTP 140%</span>
+      </div>
+    </div>
+
+    <!-- 3. 메인 메트릭 영역 (3열 그리드) -->
+    <div class="enhanced-metrics-grid">
+      <!-- 왼쪽: TSS & 칼로리 -->
+      <div class="enhanced-metric-panel enhanced-left-panel">
+        <div class="enhanced-panel-header">훈련 데이터</div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">TSS</div>
+          <div class="enhanced-metric-value" id="mobileDashboardTssValue">0.0</div>
+          <div class="enhanced-metric-unit"></div>
+        </div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">칼로리</div>
+          <div class="enhanced-metric-value" id="mobileDashboardKcalValue">0</div>
+          <div class="enhanced-metric-unit">kcal</div>
+        </div>
+        <!-- 파워 스파크라인 -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <span>파워</span>
+            <span class="chart-stats" id="mobileDashboardPowerHeaderStats"></span>
+          </div>
+          <div class="chart-body">
+            <canvas id="mobileDashboardPowerChart" width="200" height="100"></canvas>
+          </div>
+          <div class="chart-time-labels">
+            <span id="mobileDashboardPowerTimeStart">00:00</span>
+            <span id="mobileDashboardPowerTimeMid">00:00</span>
+            <span id="mobileDashboardPowerTimeEnd">00:00</span>
+          </div>
+        </div>   
+      </div>
+
+      <!-- 중앙: 메인 파워 디스플레이 -->
+      <div class="enhanced-metric-panel enhanced-center-panel enhanced-main-power-display">
+        <!-- 카운트다운 시간 (더 크게) -->
+        <div class="enhanced-segment-countdown">
+          <span class="enhanced-countdown-label">세그먼트 남은시간</span>
+          <span class="enhanced-countdown-value" id="mobileDashboardSegmentTime">05:00</span>
+        </div>
+
+        <!-- 목표 파워와 세그먼트 평균 파워 같은 라인 -->
+        <div class="enhanced-power-targets-row">
+          <div class="enhanced-target-power-section">
+            <div class="enhanced-target-label" id="mobileDashboardTargetLabel">목표 파워</div>
+            <div class="enhanced-target-value" id="mobileDashboardTargetPowerValue">250</div>
+            <div class="enhanced-target-unit" id="mobileDashboardTargetUnit">W</div>
+            <!-- RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
+            <div class="enhanced-target-rpm" id="mobileDashboardTargetRpmSection" style="display: none;">
+              <span class="enhanced-target-rpm-value" id="mobileDashboardTargetRpmValue">90</span>
+              <span class="enhanced-target-rpm-unit">rpm</span>
+            </div>
+          </div>
+          <div class="enhanced-segment-avg-power">
+            <span class="enhanced-avg-label">세그먼트 평균</span>
+            <span class="enhanced-avg-value" id="mobileDashboardAvgSegmentPowerValue">242</span>
+            <span class="enhanced-avg-unit" id="mobileDashboardAvgSegmentPowerUnit">W</span>
+            <!-- 세그먼트 평균 RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
+            <span class="enhanced-avg-rpm" id="mobileDashboardAvgSegmentRpmSection" style="display: none;">
+              (<span class="enhanced-avg-rpm-value" id="mobileDashboardAvgSegmentRpmValue">88</span>
+              <span class="enhanced-avg-rpm-unit">rpm</span>)
+            </span>
+          </div>
+        </div>
+
+        <!-- 현재 파워 (가장 크게) -->
+        <div class="enhanced-current-power-section">
+          <div class="enhanced-current-power-value" id="mobileDashboardCurrentPowerValue">245</div>
+          <div class="enhanced-current-power-unit" id="mobileDashboardCurrentPowerUnit">WATTS</div>
+          <!-- 현재 RPM 표시용 (cadence_rpm, dual 타입일 때 표시) -->
+          <div class="enhanced-current-rpm" id="mobileDashboardCurrentRpmSection" style="display: none;">
+            (<span class="enhanced-current-rpm-value" id="mobileDashboardCurrentRpmValue">85</span>
+            <span class="enhanced-current-rpm-unit">rpm</span>)
+          </div>
+        </div>
+
+        <!-- 달성도 프로그레스 바 -->
+        <div class="enhanced-power-progress">
+          <div class="enhanced-power-progress-bar" id="mobileDashboardPowerProgressBar"></div>
+          <div class="enhanced-progress-labels">
+            <span>달성도: <span id="mobileDashboardAchievementValueBar">98</span>%</span>
+          </div>
+        </div>
+
+        <!-- 현재 세그먼트 이름 -->
+        <div class="enhanced-current-segment-name" id="mobileDashboardCurrentSegmentName">메인셋 - FTP 105%</div>
+
+        <!-- 세그먼트 그래프 -->
+        <div class="training-segment-graph-container">
+          <div class="segment-graph-container" id="mobileDashboardSegmentGraphContainer">
+            <canvas id="mobileDashboardSegmentGraph"></canvas>
+            <!-- 마스코트 레이어 (FTP 라인 위에서 이동) -->
+            <div id="mobileDashboardSegmentGraphMascotLayer" class="segment-graph-mascot-layer">
+              <img id="mobileDashboardSegmentGraphMascot" src="assets/img/cyclist.gif" alt="mascot" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 오른쪽: 심박수 & 케이던스 -->
+      <div class="enhanced-metric-panel enhanced-right-panel">
+        <div class="enhanced-panel-header">생체 데이터</div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">심박수</div>
+          <div class="enhanced-metric-value enhanced-heart-rate" id="mobileDashboardHeartRateValue">145</div>
+          <div class="enhanced-metric-unit">BPM</div>
+        </div>
+        <div class="enhanced-metric-item">
+          <div class="enhanced-metric-label">케이던스</div>
+          <div class="enhanced-metric-value enhanced-cadence" id="mobileDashboardCadenceValue">-</div>
+          <div class="enhanced-metric-unit">RPM</div>
+        </div>
+        
+        <!-- 심박수 스파크라인 -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <span>심박</span>
+            <span class="chart-stats" id="mobileDashboardHrHeaderStats"></span>
+          </div>
+          <div class="chart-body">
+            <canvas id="mobileDashboardHrChart" width="200" height="100"></canvas>
+          </div>
+          <div class="chart-time-labels">
+            <span id="mobileDashboardHrTimeStart">00:00</span>
+            <span id="mobileDashboardHrTimeMid">00:00</span>
+            <span id="mobileDashboardHrTimeEnd">00:00</span>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+
+    <!-- 4. 컨트롤 버튼 (하단 중앙 배치) -->
+    <div class="training-controls">
+      <button id="mobileDashboardBtnSkipSegment" class="enhanced-control-btn skip" aria-label="구간 건너뛰기"></button>
+      <button id="mobileDashboardBtnTogglePause" class="enhanced-control-btn pause" aria-label="일시정지/재생"></button>
+      <button id="mobileDashboardBtnStopTraining" class="enhanced-control-btn stop" aria-label="훈련 종료"></button>
+    </div>
+  </div>
 
   <!-- ========== 그룹 훈련 관련 화면들 ========== -->
   
