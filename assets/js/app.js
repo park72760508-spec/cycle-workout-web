@@ -3648,15 +3648,33 @@ document.addEventListener("DOMContentLoaded", () => {
     const info = safeGetElement("iosInfo");
     if (info) info.classList.remove("hidden");
 
-    // iOS에서 블루투스 기기 연결 버튼들은 비활성화하지만, Indoor race 버튼(btnConnectANT)은 활성화
-    ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
-      const el = safeGetElement(id);
-      if (el) {
-        el.classList.add("is-disabled");
-        el.setAttribute("aria-disabled","true");
-        el.title = "iOS Safari에서는 블루투스 연결이 지원되지 않습니다";
+    // 블루투스 미지원 브라우저 확인 (navigator.bluetooth가 없으면 미지원)
+    if (!navigator.bluetooth) {
+      // 블루투스 미지원 브라우저(Safari, PC 구형 브라우저 등)인 경우
+      ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+        const el = safeGetElement(id);
+        if (el) {
+          el.classList.add("is-disabled");
+          el.setAttribute("aria-disabled","true");
+          el.title = "블루투스 미지원 브라우저입니다. Bluefy 앱을 사용하세요";
+        }
+      });
+
+      // iOS 기기이면서 블루투스 미지원인 경우 안내 메시지
+      if (isIOS()) {
+        console.log("iOS 기기에서 블루투스 미지원 브라우저 감지 - Bluefy 앱 사용 권장");
       }
-    });
+    } else {
+      // 블루투스 지원 브라우저 (Chrome, Bluefy 등) - 버튼 활성화
+      ["btnConnectPM","btnConnectTrainer","btnConnectHR"].forEach(id => {
+        const el = safeGetElement(id);
+        if (el) {
+          el.classList.remove("is-disabled");
+          el.removeAttribute("aria-disabled");
+          el.title = "";
+        }
+      });
+    }
 
     // null 체크 강화
     const btn = safeGetElement("btnIosContinue");
