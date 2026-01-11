@@ -5179,35 +5179,38 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
-window.showScreen = function(screenId) {
-  console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
-  
-  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
-  if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
-    screenId = 'authScreen';
-  }
-  
-  // 모든 화면 숨기기 (스플래시 화면 제외)
-  document.querySelectorAll('.screen').forEach(screen => {
-    if (screen.id !== 'splashScreen') {
-    screen.classList.remove('active');
-    screen.style.display = 'none';
-    screen.style.opacity = '0';
-    screen.style.visibility = 'hidden';
-    }
-  });
-  
-  // 선택된 화면만 표시
-  const targetScreen = document.getElementById(screenId);
-  if (targetScreen) {
-    targetScreen.style.display = 'block';
-    targetScreen.classList.add('active');
-    targetScreen.style.opacity = '1';
-    targetScreen.style.visibility = 'visible';
+// showScreen 함수가 이미 정의되어 있으면 덮어쓰지 않음
+if (!window.showScreen || typeof window.showScreen !== 'function') {
+  window.showScreen = function(screenId) {
+    console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
     
-    initializeCurrentScreen(screenId);
-  }
-};
+    // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
+    if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
+      screenId = 'authScreen';
+    }
+    
+    // 모든 화면 숨기기 (스플래시 화면 제외)
+    document.querySelectorAll('.screen').forEach(screen => {
+      if (screen.id !== 'splashScreen') {
+      screen.classList.remove('active');
+      screen.style.display = 'none';
+      screen.style.opacity = '0';
+      screen.style.visibility = 'hidden';
+      }
+    });
+    
+    // 선택된 화면만 표시
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+      targetScreen.style.display = 'block';
+      targetScreen.classList.add('active');
+      targetScreen.style.opacity = '1';
+      targetScreen.style.visibility = 'visible';
+      
+      initializeCurrentScreen(screenId);
+    }
+  };
+}
 
 // 화면별 초기화 함수
 function initializeCurrentScreen(screenId) {
@@ -5271,6 +5274,20 @@ function initializeCurrentScreen(screenId) {
       } else {
         console.warn('loadTrainingJournalCalendar function not available');
       }
+      break;
+      
+    case 'indoorTrainingDashboardScreen':
+      // Indoor Training 대시보드 화면 초기화
+      console.log('Indoor Training 대시보드 화면 초기화');
+      setTimeout(() => {
+        if (typeof window.initIndoorTrainingDashboard === 'function') {
+          window.initIndoorTrainingDashboard();
+        } else if (typeof initIndoorTrainingDashboard === 'function') {
+          initIndoorTrainingDashboard();
+        } else {
+          console.warn('[Indoor Training] initIndoorTrainingDashboard 함수를 찾을 수 없습니다.');
+        }
+      }, 100);
       break;
       
     default:
