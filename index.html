@@ -1671,56 +1671,130 @@
 </div>
 
   <!-- ========== 모바일 대시보드 화면 ========== -->
-  <div id="mobileDashboardScreen" class="screen">
-    <!-- 1. 최상단: 사용자 정보 -->
-    <div class="enhanced-training-user-info" id="mobileDashboardUserPanel">
-      <div id="mobileDashboardUserInfo"></div>
+  <div id="mobileDashboardScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Pretendard', sans-serif; margin: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh;">
+    <!-- 헤더 (individual.html과 동일) -->
+    <div class="mobile-dashboard-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background-color: #1e1e1e; border-bottom: 1px solid #333; position: relative;">
+      <div id="mobile-bike-id-display" class="mobile-bike-badge" style="background-color: #00d4aa; color: #000; padding: 5px 12px; border-radius: 15px; font-weight: bold; font-size: 1.1em; display: inline-block;">Bike ?</div>
+      <div id="mobile-segment-info" style="position: absolute; left: 50%; transform: translateX(-50%); text-align: center; font-size: 0.9em; color: #ccc;">준비 중</div>
+      <div id="mobile-main-timer" class="mobile-timer" style="font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
     </div>
 
-    <!-- 2. 두번째: 경과 시간 및 다음 세그먼트 정보 -->
-    <div class="enhanced-training-time-info">
-      <div class="enhanced-time-elapsed">
-        <span class="enhanced-time-label">경과시간</span>
-        <span class="enhanced-time-value" id="mobileDashboardElapsedTime">00:00</span>
-        <span class="enhanced-time-percent">(<span id="mobileDashboardElapsedPercent">0</span>%)</span>
-      </div>
-      <div class="enhanced-next-segment-info">
-        <span class="enhanced-next-label">다음 세그먼트</span>
-        <span class="enhanced-next-value" id="mobileDashboardNextSegment">인터벌 FTP 140%</span>
+    <!-- 세그먼트 그래프 섹션 -->
+    <div class="mobile-segment-graph-section" style="padding: 0 20px; background-color: #1a1a1a; border-bottom: 1px solid #333; display: flex; justify-content: center; align-items: center; flex: 0.4 0.4 0; min-height: 80px; position: relative; overflow: hidden;">
+      <div class="mobile-segment-graph-container" style="width: 98%; max-width: 600px; height: 95% !important; position: relative; display: flex; align-items: center; justify-content: center;">
+        <canvas id="mobileIndividualSegmentGraph"></canvas>
       </div>
     </div>
 
-    <!-- 3. 메인 메트릭 영역 (3열 그리드) -->
-    <div class="enhanced-metrics-grid">
-      <!-- 왼쪽: TSS & 칼로리 -->
-      <div class="enhanced-metric-panel enhanced-left-panel">
-        <div class="enhanced-panel-header">훈련 데이터</div>
-        <div class="enhanced-metric-item">
-          <div class="enhanced-metric-label">TSS</div>
-          <div class="enhanced-metric-value" id="mobileDashboardTssValue">0.0</div>
-          <div class="enhanced-metric-unit"></div>
-        </div>
-        <div class="enhanced-metric-item">
-          <div class="enhanced-metric-label">칼로리</div>
-          <div class="enhanced-metric-value" id="mobileDashboardKcalValue">0</div>
-          <div class="enhanced-metric-unit">kcal</div>
-        </div>
-        <!-- 파워 스파크라인 -->
-        <div class="chart-card">
-          <div class="chart-header">
-            <span>파워</span>
-            <span class="chart-stats" id="mobileDashboardPowerHeaderStats"></span>
-          </div>
-          <div class="chart-body">
-            <canvas id="mobileDashboardPowerChart" width="200" height="100"></canvas>
-          </div>
-          <div class="chart-time-labels">
-            <span id="mobileDashboardPowerTimeStart">00:00</span>
-            <span id="mobileDashboardPowerTimeMid">00:00</span>
-            <span id="mobileDashboardPowerTimeEnd">00:00</span>
-          </div>
-        </div>   
+    <!-- 메인 콘텐츠 (속도계) -->
+    <div class="mobile-main-content" style="flex: 1 1 0; display: flex; justify-content: center; align-items: center; position: relative; min-height: 0; overflow: hidden;">
+      <div class="mobile-gauge-container" style="width: 90vw; max-width: 500px; aspect-ratio: 1/1; position: relative;">
+        <svg viewBox="0 0 200 220" style="width:100%; height:100%;">
+          <!-- 원호 배경 -->
+          <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+          
+          <!-- 눈금 그룹 (JavaScript로 동적 생성) -->
+          <g id="mobile-gauge-ticks"></g>
+          
+          <!-- 레이블 그룹 (JavaScript로 동적 생성) -->
+          <g id="mobile-gauge-labels"></g>
+          
+          <!-- 랩카운트다운 (속도계 상단) -->
+          <text x="100" y="0" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
+          <text id="mobile-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
+          
+          <text id="mobile-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
+          <text id="mobile-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
+          <text id="mobile-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+          
+          <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+          <text id="mobile-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+
+          <g id="mobile-gauge-needle" transform="translate(100, 140) rotate(-90)">
+            <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="0" cy="0" r="6" fill="#fff"/>
+          </g>
+        </svg>
       </div>
+    </div>
+
+    <!-- 통계 푸터 -->
+    <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 15px 0; border-top: 1px solid #333;">
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">CADENCE</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="mobile-ui-cadence">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">rpm</span></div>
+      </div>
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">LAP AVG</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="mobile-ui-lap-power">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">w</span></div>
+      </div>
+      <div class="mobile-stat-box" style="text-align: center;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 5px;">HEART RATE</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="mobile-ui-hr">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">bpm</span></div>
+      </div>
+    </div>
+
+    <!-- 목표값 조절 슬라이드 바 -->
+    <div class="mobile-individual-intensity-adjustment-container" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 20px; background: rgba(26, 29, 41, 0.6); border-top: 1px solid #333;">
+      <div class="mobile-individual-intensity-adjustment-label" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">
+        <span>목표값 조절</span>
+        <span class="mobile-individual-intensity-adjustment-value" id="mobileIndividualIntensityAdjustmentValue" style="font-size: 16px; font-weight: 700; color: #9ca3af; min-width: 45px; text-align: center;">0%</span>
+      </div>
+      <div class="mobile-individual-intensity-adjustment-slider-wrapper" style="display: flex; align-items: center; gap: 10px; width: 100%; max-width: 400px;">
+        <span class="mobile-individual-intensity-adjustment-min" style="font-size: 11px; color: #64748b; min-width: 35px; text-align: center;">-5%</span>
+        <input type="range" id="mobileIndividualIntensityAdjustmentSlider" 
+               min="-5" max="5" step="1" value="0" 
+               class="mobile-individual-intensity-adjustment-slider" 
+               style="flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); outline: none; -webkit-appearance: none; appearance: none; cursor: pointer;">
+        <span class="mobile-individual-intensity-adjustment-max" style="font-size: 11px; color: #64748b; min-width: 35px; text-align: center;">+5%</span>
+      </div>
+    </div>
+
+    <!-- 5초 카운트다운 오버레이 -->
+    <div id="mobileCountdownOverlay" class="mobile-countdown-overlay hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.85); display: flex; justify-content: center; align-items: center; z-index: 10000; transition: opacity 0.3s ease;">
+      <div class="mobile-countdown-number" id="mobileCountdownNumber" style="font-size: 200px; font-weight: bold; color: #fff; text-shadow: 0 0 30px rgba(255, 255, 255, 0.5), 0 0 60px rgba(255, 255, 255, 0.3); animation: countdownPulse 0.8s ease-out; user-select: none;">5</div>
+    </div>
+
+    <!-- 훈련 결과 팝업 -->
+    <div id="mobileTrainingResultModal" class="mobile-training-result-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease-out;">
+      <div class="mobile-training-result-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.1;">
+        <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="mobile-result-background-logo" style="max-width: 400px; max-height: 400px; width: 100%; height: auto; object-fit: contain; opacity: 0.08; filter: blur(1px);" />
+      </div>
+      <div class="mobile-training-result-content" style="position: relative; background: rgba(30, 30, 30, 0.95); border: 2px solid #00d4aa; border-radius: 12px; padding: 16px 20px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3); animation: slideUp 0.4s ease-out; backdrop-filter: blur(10px);">
+        <div class="mobile-result-header" style="text-align: center; margin-bottom: 16px;">
+          <h2 class="mobile-result-title" style="font-size: 1.5em; font-weight: bold; color: #00d4aa; margin: 0 0 4px 0; text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);">수고하셨습니다</h2>
+          <p class="mobile-result-subtitle" style="font-size: 0.9em; color: #ffffff; margin: 0; opacity: 0.9;">훈련 결과가 저장되었습니다</p>
+        </div>
+        <div class="mobile-result-stats" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+          <div class="mobile-result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">훈련 시간</div>
+            <div class="mobile-result-stat-value" id="mobile-result-duration" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0분</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">평균 파워</div>
+            <div class="mobile-result-stat-value" id="mobile-result-avg-power" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0W</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">NP</div>
+            <div class="mobile-result-stat-value" id="mobile-result-np" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0W</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">TSS</div>
+            <div class="mobile-result-stat-value" id="mobile-result-tss" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">평균 심박수</div>
+            <div class="mobile-result-stat-value" id="mobile-result-hr-avg" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0bpm</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">칼로리</div>
+            <div class="mobile-result-stat-value" id="mobile-result-calories" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0kcal</div>
+          </div>
+        </div>
+        <button class="mobile-result-close-btn" onclick="closeMobileTrainingResultModal()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px; color: #000; font-size: 1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);">확인</button>
+      </div>
+    </div>
+  </div>
 
       <!-- 중앙: 메인 파워 디스플레이 -->
       <div class="enhanced-metric-panel enhanced-center-panel enhanced-main-power-display">
