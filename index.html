@@ -1693,6 +1693,12 @@
           <!-- 원호 배경 -->
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
           
+          <!-- 목표 파워 원호 (하한값) - 원호 배경 뒤에, 눈금 앞에 배치 -->
+          <path id="mobile-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+          
+          <!-- 목표 파워 원호 (상한값, ftp_pctz 타입용) - 하한값 원호 다음에 배치 -->
+          <path id="mobile-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+          
           <!-- 눈금 그룹 (JavaScript로 동적 생성) -->
           <g id="mobile-gauge-ticks"></g>
           
