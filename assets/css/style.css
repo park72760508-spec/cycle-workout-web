@@ -494,9 +494,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 
-/* 사용자 메뉴얼 화면 하단 여백 최소화 */
+/* 사용자 메뉴얼 화면 하단 버튼 영역 안전거리 확보 */
 #userManualScreen .connection-form-card {
-  padding-bottom: 20px !important; /* 기본 40px에서 20px로 축소 */
+  padding-bottom: 40px !important; /* 기본 20px -> 40px로 증가 */
 }
 
 #userManualScreen .connection-device-section {
@@ -504,9 +504,30 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 #userManualScreen .connection-exit-container {
-  margin-top: 0 !important; /* 기본 24px 제거 */
-  padding-top: 0 !important; /* 기본 20px에서 0으로 제거 */
+  margin-top: 0 !important;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
+/* 훈련 스케줄 화면 하단 버튼 영역 안전거리 확보 */
+#scheduleListScreen .connection-exit-container {
+  margin-top: 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
 }
 
 /* MY CAREER 화면 스타일 (베이스캠프와 동일) */
