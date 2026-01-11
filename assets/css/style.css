@@ -677,6 +677,52 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 50;
 }
 
+/* 일별 워크아웃 지정 화면 하단 버튼 영역 안전거리 확보 */
+#scheduleDaysScreen .connection-exit-container {
+  margin-top: 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+  
+  /* 좌우 버튼 그룹 배치 */
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+}
+
+/* 일별 워크아웃 지정 화면 하단 버튼 - 이미지만 표시 */
+#scheduleDaysScreen .connection-exit-container .btn,
+#scheduleDaysScreen .connection-exit-container a.btn {
+  padding: 10px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+
+/* 이미지 중앙 정렬 */
+#scheduleDaysScreen .connection-exit-container .btn img,
+#scheduleDaysScreen .connection-exit-container a.btn img {
+  display: block !important;
+  margin: 0 auto !important;
+  object-fit: contain !important;
+}
+
+#scheduleDaysScreen .connection-exit-container .btn span,
+#scheduleDaysScreen .connection-exit-container a.btn span {
+  display: none !important;
+}
+
 /* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
 .basecamp-btn-career-schedule {
   background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
