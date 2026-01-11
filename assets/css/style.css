@@ -538,6 +538,25 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 
+/* Manage Your Career 화면 하단 여백 최소화 */
+#myCareerScreen .connection-form-card {
+  padding-bottom: 20px !important; /* 기본 40px에서 20px로 축소 */
+}
+
+#myCareerScreen .connection-device-section {
+  margin-bottom: 0 !important; /* 기본 20px 제거 */
+}
+
+#myCareerScreen .connection-device-section .grid-2.mb-15 {
+  margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
+}
+
+#myCareerScreen .connection-exit-container {
+  margin-top: 0 !important; /* 기본 24px 제거 */
+  padding-top: 10px !important; /* 기본 20px에서 10px로 축소 */
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 /* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
 .basecamp-btn-career-schedule {
   background-image: url('https://stelvio.ai.kr/assets/img/b(05).png') !important;
