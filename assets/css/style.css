@@ -2128,6 +2128,21 @@ button[aria-disabled="true"] {
 .builder-actions * { pointer-events: auto; }
 
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
+/* 훈련 준비 화면을 무선 기기 연결 화면과 같은 디자인으로 변경 */
+#trainingReadyScreen.active {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-attachment: fixed;
+  padding: 20px;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1000 !important;
+}
+
+/* 기존 workout-preview 스타일은 connection-device-section으로 대체됨 */
 .workout-preview {
   background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(10px);
