@@ -10394,9 +10394,9 @@ window.confirmAIRecommendation = confirmAIRecommendation;
 
 
 /* ==========================================================
-   [FINAL SYSTEM v2.2] Sound, Haptic & Navigation Controller
-   - Android: 소리 + 진동 동시 지원 (태블릿 호환성 확보)
-   - iOS: 소리 톤 다운 (1200Hz -> 600Hz, 볼륨 축소)
+   [FINAL SYSTEM v2.3] Sound, Haptic & Navigation Controller
+   - DTMF (듀얼 톤) 기능 추가: 실제 전화기 키패드 소리 구현
+   - Android/iOS 모두 작동
 ========================================================== */
 
 // 1. 기기 감지 유틸리티
@@ -10410,12 +10410,11 @@ const DeviceUtils = {
   }
 };
 
-// 2. 사운드 컨트롤러 (iOS 오디오 정책 우회 및 재생)
+// 2. 사운드 컨트롤러 (싱글 톤 + 듀얼 톤 지원)
 const SoundController = {
   ctx: null,
   isUnlocked: false,
 
-  // 초기화 및 오디오 엔진 준비
   init: function() {
     if (!this.ctx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -10426,10 +10425,8 @@ const SoundController = {
     this.setupUnlock();
   },
 
-  // [핵심] 첫 터치 시 오디오 엔진 강제 활성화 (Silent Unlock)
   setupUnlock: function() {
     if (this.isUnlocked) return;
-    
     const unlockHandler = () => {
       if (!this.ctx) this.init();
       if (this.ctx && this.ctx.state !== 'running') {
@@ -10439,57 +10436,71 @@ const SoundController = {
           source.buffer = buffer;
           source.connect(this.ctx.destination);
           source.start(0);
-          
           this.isUnlocked = true;
-          // console.log('[SoundController] iOS Audio Unlocked 🔓');
-          
           document.removeEventListener('touchstart', unlockHandler);
           document.removeEventListener('click', unlockHandler);
         }).catch(e => console.warn(e));
       }
     };
-    
     document.addEventListener('touchstart', unlockHandler, { capture: true, once: true });
     document.addEventListener('click', unlockHandler, { capture: true, once: true });
   },
 
-  // '틱' 소리 재생 (파라미터로 톤/볼륨 조절 가능)
-  // freq: 주파수(Hz) - 낮을수록 저음 (기본 600Hz로 변경하여 부드럽게)
-  // vol: 볼륨(0.0~1.0) - 기본 0.15로 낮춤
+  // [기존] 싱글 틱 소리
   playTick: function(freq = 600, vol = 0.15) {
+    this._playSound(freq, null, vol);
+  },
+
+  // [신규] 듀얼 톤 (DTMF) 재생 함수
+  // freq1: 저음, freq2: 고음
+  playDTMF: function(freq1, freq2, vol = 0.25) {
+    this._playSound(freq1, freq2, vol);
+  },
+
+  // 내부 소리 재생 로직 (통합)
+  _playSound: function(freq1, freq2, vol) {
     if (!this.ctx) this.init();
     if (this.ctx.state !== 'running') this.ctx.resume().catch(()=>{});
 
     try {
       const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, t);
       
-      // 부드러운 엔벨로프 (Pop 소리 느낌)
+      // 메인 볼륨 설정
       gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(vol, t + 0.005); // Attack
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05); // Decay
+      gain.gain.linearRampToValueAtTime(vol, t + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1); // 약간 더 길게 (100ms)
 
-      osc.connect(gain);
       gain.connect(this.ctx.destination);
 
-      osc.start(t);
-      osc.stop(t + 0.06);
+      // 첫 번째 주파수 (저음)
+      const osc1 = this.ctx.createOscillator();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(freq1, t);
+      osc1.connect(gain);
+      osc1.start(t);
+      osc1.stop(t + 0.11);
+
+      // 두 번째 주파수 (고음) - DTMF일 때만 생성
+      if (freq2) {
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(freq2, t);
+        osc2.connect(gain);
+        osc2.start(t);
+        osc2.stop(t + 0.11);
+      }
+
     } catch (e) {}
   }
 };
 
-// 3. 통합 트리거 함수 (수정됨: 모든 기기에서 소리 재생)
+// 3. 통합 트리거 함수 (설정 적용)
 window.triggerHapticFeedback = function() {
-  // A. 소리 재생 (iOS, Android, PC 모두 실행)
-  // 600Hz = 부드러운 나무 두드리는 소리 (기존 1200Hz보다 훨씬 낮고 조용함)
-  SoundController.playTick(1200, 0.01); 
+  // ▼▼▼ '0'번 키패드 소리 적용 (941Hz + 1336Hz 믹스) ▼▼▼
+  SoundController.playDTMF(941, 1336, 0.25); 
 
-  // B. 진동 재생 (지원하는 안드로이드 기기만 추가 실행)
-  // 태블릿 등 진동 모터가 없는 기기는 이 부분이 무시되고 소리만 남
+  // 안드로이드 진동 (지원 기기만)
   if (navigator.vibrate) {
     try { navigator.vibrate(10); } catch(e) {}
   }
@@ -10508,14 +10519,13 @@ function addHapticToElement(el) {
     window.triggerHapticFeedback();
   };
 
-  // 반응 속도를 위해 touchstart 사용
   el.addEventListener('touchstart', handleInteract, { passive: true });
   el.addEventListener('mousedown', (e) => {
     if (!('ontouchstart' in window)) handleInteract(e);
   }, { passive: true });
 }
 
-// 5. [중요] 뒤로 가기 버튼 전용 함수
+// 5. 뒤로 가기 버튼 전용 함수
 window.enhanceBackButton = function(buttonId) {
   const button = document.getElementById(buttonId);
   if (!button) return;
@@ -10532,40 +10542,25 @@ window.enhanceBackButton = function(buttonId) {
 
   const handleBackAction = (e) => {
     window.triggerHapticFeedback();
-
     setTimeout(() => {
       if (originalOnClick) {
         originalOnClick.call(button, e);
       } else if (originalOnClickAttr) {
-        try {
-          new Function('event', originalOnClickAttr).call(button, e);
-        } catch(err) { console.warn(err); }
+        try { new Function('event', originalOnClickAttr).call(button, e); } catch(err) {}
       } else {
-        if (typeof showScreen === 'function') {
-          showScreen('basecampScreen');
-        }
+        if (typeof showScreen === 'function') showScreen('basecampScreen');
       }
     }, 10);
   };
 
-  button.addEventListener('touchstart', (e) => {
-    e.preventDefault(); 
-    handleBackAction(e);
-  }, { passive: false });
-
-  button.addEventListener('click', (e) => {
-    if (!('ontouchstart' in window)) handleBackAction(e);
-  });
-  
-  console.log(`✅ 뒤로가기 버튼(${buttonId}) 업그레이드 완료`);
+  button.addEventListener('touchstart', (e) => { e.preventDefault(); handleBackAction(e); }, { passive: false });
+  button.addEventListener('click', (e) => { if (!('ontouchstart' in window)) handleBackAction(e); });
 };
 
-// 6. 시스템 초기화 및 감시
+// 6. 시스템 초기화
 function initHapticSystem() {
   SoundController.init();
-
   document.querySelectorAll('button, .btn, .clickable').forEach(addHapticToElement);
-
   const observer = new MutationObserver((mutations) => {
     mutations.forEach((mutation) => {
       mutation.addedNodes.forEach((node) => {
@@ -10576,18 +10571,15 @@ function initHapticSystem() {
       });
     });
   });
-  
   observer.observe(document.body, { childList: true, subtree: true });
 }
 
-// 실행
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initHapticSystem);
 } else {
   initHapticSystem();
 }
 
-// 하위 호환성 유지
 window.isIOSDevice = DeviceUtils.isIOS;
 window.shouldUseSound = () => true;
 window.playClickSound = window.triggerHapticFeedback;
