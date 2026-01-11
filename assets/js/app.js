@@ -11019,59 +11019,412 @@ function updateMobileGaugeNeedle(power) {
 }
 
 /**
- * 모바일 목표 파워 업데이트
+ * 모바일 현재 세그먼트 정보 가져오기 (개인훈련 대시보드의 getCurrentSegment와 동일)
+ */
+function getMobileCurrentSegment() {
+  const trainingState = window.trainingState || {};
+  const currentSegmentIndex = trainingState.segIndex !== undefined ? trainingState.segIndex : -1;
+  
+  if (currentSegmentIndex < 0) {
+    return null;
+  }
+  
+  if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+    return null;
+  }
+  
+  if (currentSegmentIndex >= window.currentWorkout.segments.length) {
+    return null;
+  }
+  
+  return window.currentWorkout.segments[currentSegmentIndex];
+}
+
+/**
+ * 모바일 목표 파워 업데이트 (개인훈련 대시보드의 updateTargetPower와 동일한 로직)
  */
 function updateMobileTargetPower() {
   const targetPowerEl = safeGetElement('mobile-ui-target-power');
-  if (!targetPowerEl) return;
-  
-  // 목표 파워 계산
-  let targetPower = 0;
+  if (!targetPowerEl) {
+    console.warn('[Mobile Dashboard] mobile-ui-target-power 요소를 찾을 수 없습니다.');
+    return;
+  }
   
   // 1순위: window.liveData.targetPower (블루투스/훈련 화면에서 계산된 값)
-  if (window.liveData && window.liveData.targetPower && window.liveData.targetPower > 0) {
-    targetPower = Number(window.liveData.targetPower);
-  }
-  // 2순위: 현재 세그먼트의 목표 파워
-  else if (window.currentWorkout && window.currentWorkout.segments && window.trainingState && window.trainingState.segIndex !== undefined) {
-    const currentSegment = window.currentWorkout.segments[window.trainingState.segIndex];
-    if (currentSegment) {
-      // FTP 값 가져오기 (최신 값 사용)
-      const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      const userFTP = currentUser?.ftp || mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
-      const targetType = currentSegment.target_type || 'ftp_pct';
-      const targetValue = Number(currentSegment.target_value) || 0;
+  if (window.liveData && window.liveData.targetPower !== undefined && window.liveData.targetPower !== null && window.liveData.targetPower > 0) {
+    const firebaseTargetPower = Number(window.liveData.targetPower);
+    if (!isNaN(firebaseTargetPower)) {
+      // 강도 조절 비율 적용
+      const intensityAdjustment = window.mobileIntensityAdjustment || 1.0;
+      const adjustedTargetPower = Math.round(firebaseTargetPower * intensityAdjustment);
       
-      if (targetType === 'ftp_pct' || targetType === 'ftp_pctz') {
-        targetPower = Math.round(userFTP * (targetValue / 100));
-      } else if (targetType === 'cadence_rpm') {
-        targetPower = 0; // RPM 타입은 파워 목표 없음
-      } else if (targetType === 'dual') {
-        // dual 타입: "100/120" 형식에서 앞의 값 사용
-        if (typeof currentSegment.target_value === 'string' && currentSegment.target_value.includes('/')) {
-          const parts = currentSegment.target_value.split('/').map(s => s.trim());
-          if (parts.length >= 1) {
-            const ftpPercent = Number(parts[0]) || 100;
-            targetPower = Math.round(userFTP * (ftpPercent / 100));
+      console.log('[Mobile Dashboard] window.liveData.targetPower 값 사용:', firebaseTargetPower, 'W');
+      console.log('[Mobile Dashboard] 강도 조절 적용:', intensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
+      
+      // TARGET 라벨 업데이트 로직 (Firebase 값 사용 시)
+      const targetLabelEl = safeGetElement('mobile-ui-target-label');
+      const targetRpmUnitEl = safeGetElement('mobile-ui-target-rpm-unit');
+      const seg = getMobileCurrentSegment();
+      const targetType = seg?.target_type || 'ftp_pct';
+      
+      // ftp_pctz 타입인 경우 상한값 저장
+      if (targetType === 'ftp_pctz' && seg?.target_value) {
+        const targetValue = seg.target_value;
+        let minPercent = 60;
+        let maxPercent = 75;
+        
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+          const parts = targetValue.split('/').map(s => s.trim());
+          if (parts.length >= 2) {
+            minPercent = Number(parts[0]) || 60;
+            maxPercent = Number(parts[1]) || 75;
+          }
+        } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+          const parts = targetValue.split(',').map(s => s.trim());
+          if (parts.length >= 2) {
+            minPercent = Number(parts[0]) || 60;
+            maxPercent = Number(parts[1]) || 75;
+          }
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+          minPercent = Number(targetValue[0]) || 60;
+          maxPercent = Number(targetValue[1]) || 75;
+        }
+        
+        const ftp = mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
+        window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
+        window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100));
+      } else {
+        window.currentSegmentMaxPower = null;
+        window.currentSegmentMinPower = null;
+      }
+      
+      // target_type에 따른 TARGET 라벨 및 값 업데이트
+      if (targetType === 'dual') {
+        // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
+        const targetValue = seg?.target_value || seg?.target || '0';
+        let targetRpm = 0;
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+          const parts = targetValue.split('/').map(s => s.trim());
+          targetRpm = Number(parts[1]) || 0;
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+          targetRpm = Number(targetValue[1]) || 0;
+        }
+        
+        if (targetRpm > 0 && targetLabelEl) {
+          // 기존 내용 삭제
+          targetLabelEl.textContent = '';
+          targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
+          targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
+          targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+          
+          // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
+          const rpmNumber = Math.round(targetRpm);
+          const tspanNumber = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+          tspanNumber.setAttribute('fill', '#ef4444'); // 빨강색
+          tspanNumber.textContent = rpmNumber.toString();
+          targetLabelEl.appendChild(tspanNumber);
+          
+          const tspanUnit = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+          tspanUnit.setAttribute('fill', '#888'); // 그레이
+          tspanUnit.textContent = ' RPM';
+          targetLabelEl.appendChild(tspanUnit);
+          
+          // RPM 단위 요소는 숨김 처리
+          if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
           }
         } else {
-          targetPower = targetValue;
+          if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888');
+            targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
+          }
+          if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
+          }
         }
+        targetPowerEl.textContent = String(adjustedTargetPower);
+        targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+      } else if (targetType === 'cadence_rpm') {
+        // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시, 색상 #ef4444 (빨강색), TARGET 라벨을 'CADENCE'로 변경
+        const targetValue = seg?.target_value || seg?.target || '0';
+        const targetRpm = Number(targetValue) || 0;
+        
+        if (targetRpm > 0) {
+          if (targetLabelEl) {
+            targetLabelEl.textContent = 'CADENCE';
+            targetLabelEl.setAttribute('fill', '#888');
+          }
+          if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
+          }
+          targetPowerEl.textContent = Math.round(targetRpm).toString();
+          targetPowerEl.setAttribute('fill', '#ef4444'); // 빨강색
+        } else {
+          if (targetLabelEl) {
+            targetLabelEl.textContent = 'TARGET';
+            targetLabelEl.setAttribute('fill', '#888');
+          }
+          if (targetRpmUnitEl) {
+            targetRpmUnitEl.style.display = 'none';
+          }
+          targetPowerEl.textContent = '0';
+          targetPowerEl.setAttribute('fill', '#ff8c00');
+        }
+      } else if (targetType === 'ftp_pctz') {
+        // ftp_pctz 타입: TARGET 라벨 표시, 목표 파워값(주황색) - 하한값 표시
+        if (targetLabelEl) {
+          targetLabelEl.textContent = 'TARGET';
+          targetLabelEl.setAttribute('fill', '#888');
+        }
+        if (targetRpmUnitEl) {
+          targetRpmUnitEl.style.display = 'none';
+        }
+        targetPowerEl.textContent = String(adjustedTargetPower);
+        targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
       } else {
-        targetPower = targetValue;
+        // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
+        if (targetLabelEl) {
+          targetLabelEl.textContent = 'TARGET';
+          targetLabelEl.setAttribute('fill', '#888');
+        }
+        if (targetRpmUnitEl) {
+          targetRpmUnitEl.style.display = 'none';
+        }
+        targetPowerEl.textContent = String(adjustedTargetPower);
+        targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
       }
+      
+      return;
     }
   }
   
-  // 강도 조절 적용
-  const intensityAdjustment = window.mobileIntensityAdjustment || 1.0;
-  targetPower = Math.round(targetPower * intensityAdjustment);
-  
-  // 목표 파워 표시
-  if (targetPower > 0) {
-    targetPowerEl.textContent = targetPower;
-  } else {
+  // 2순위: 세그먼트 데이터로 계산 (window.liveData.targetPower가 없을 때만)
+  // 워크아웃 데이터 확인
+  if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+    const targetLabelEl = safeGetElement('mobile-ui-target-label');
+    const targetRpmUnitEl = safeGetElement('mobile-ui-target-rpm-unit');
+    if (targetLabelEl) {
+      targetLabelEl.textContent = 'TARGET';
+      targetLabelEl.setAttribute('fill', '#888');
+    }
+    if (targetRpmUnitEl) {
+      targetRpmUnitEl.style.display = 'none';
+    }
     targetPowerEl.textContent = '0';
+    targetPowerEl.setAttribute('fill', '#ff8c00');
+    return;
+  }
+  
+  // 현재 세그먼트 정보 가져오기
+  const seg = getMobileCurrentSegment();
+  if (!seg) {
+    const targetLabelEl = safeGetElement('mobile-ui-target-label');
+    const targetRpmUnitEl = safeGetElement('mobile-ui-target-rpm-unit');
+    if (targetLabelEl) {
+      targetLabelEl.textContent = 'TARGET';
+      targetLabelEl.setAttribute('fill', '#888');
+    }
+    if (targetRpmUnitEl) {
+      targetRpmUnitEl.style.display = 'none';
+    }
+    targetPowerEl.textContent = '0';
+    targetPowerEl.setAttribute('fill', '#ff8c00');
+    return;
+  }
+  
+  // FTP 값 사용
+  const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+  const ftp = currentUser?.ftp || mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
+  
+  // 세그먼트 목표 파워 계산
+  let targetPower = 0;
+  
+  // target_type에 따라 계산
+  const targetType = seg.target_type || 'ftp_pct';
+  const targetValue = seg.target_value;
+  
+  console.log('[Mobile Dashboard] 세그먼트 데이터로 계산 (window.liveData.targetPower 없음)');
+  console.log('[Mobile Dashboard] target_type:', targetType, 'target_value:', targetValue, '타입:', typeof targetValue);
+  console.log('[Mobile Dashboard] 사용자 FTP 값:', ftp);
+  
+  if (targetType === 'ftp_pct') {
+    const ftpPercent = Number(targetValue) || 100;
+    targetPower = Math.round(ftp * (ftpPercent / 100));
+    console.log('[Mobile Dashboard] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
+  } else if (targetType === 'dual') {
+    // dual 타입: "100/120" 형식 파싱
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 1) {
+        const ftpPercent = Number(parts[0]) || 100;
+        targetPower = Math.round(ftp * (ftpPercent / 100));
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+      const ftpPercent = Number(targetValue[0]) || 100;
+      targetPower = Math.round(ftp * (ftpPercent / 100));
+    } else {
+      // 숫자로 저장된 경우 처리
+      const numValue = Number(targetValue);
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const ftpPart = str.slice(0, -3);
+          const ftpPercent = Number(ftpPart) || 100;
+          targetPower = Math.round(ftp * (ftpPercent / 100));
+        }
+      } else {
+        const ftpPercent = numValue <= 1000 ? numValue : 100;
+        targetPower = Math.round(ftp * (ftpPercent / 100));
+      }
+    }
+  } else if (targetType === 'cadence_rpm') {
+    // RPM만 있는 경우 파워는 0
+    targetPower = 0;
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: "56/75" 형식 (하한, 상한)
+    let minPercent = 60;
+    let maxPercent = 75;
+    
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+      // 기존 형식(쉼표)도 지원 (하위 호환성)
+      const parts = targetValue.split(',').map(s => s.trim());
+      if (parts.length >= 2) {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = Number(parts[1]) || 75;
+      } else {
+        minPercent = Number(parts[0]) || 60;
+        maxPercent = 75;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      minPercent = Number(targetValue[0]) || 60;
+      maxPercent = Number(targetValue[1]) || 75;
+    }
+    
+    // 하한값을 목표 파워값으로 사용
+    targetPower = Math.round(ftp * (minPercent / 100));
+    console.log('[Mobile Dashboard] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
+    
+    // 상한값을 전역 변수에 저장
+    window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
+    window.currentSegmentMinPower = targetPower;
+  }
+  
+  // 강도 조절 비율 적용
+  const intensityAdjustment = window.mobileIntensityAdjustment || 1.0;
+  const adjustedTargetPower = Math.round(targetPower * intensityAdjustment);
+  
+  console.log('[Mobile Dashboard] 최종 계산된 목표 파워:', targetPower, 'W');
+  console.log('[Mobile Dashboard] 강도 조절 적용:', intensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
+  
+  // TARGET 라벨 업데이트 로직
+  const targetLabelEl = safeGetElement('mobile-ui-target-label');
+  const targetRpmUnitEl = safeGetElement('mobile-ui-target-rpm-unit');
+  
+  if (targetType === 'dual') {
+    // dual 타입: TARGET 라벨에 RPM 값과 단위를 1줄에 표시, 숫자는 빨강색, 단위는 그레이
+    let targetRpm = 0;
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      targetRpm = Number(parts[1]) || 0;
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      targetRpm = Number(targetValue[1]) || 0;
+    }
+    
+    if (targetRpm > 0 && targetLabelEl) {
+      // 기존 내용 삭제
+      targetLabelEl.textContent = '';
+      targetLabelEl.setAttribute('fill', '#ef4444'); // 기본 색상 빨강색
+      targetLabelEl.setAttribute('font-size', '10'); // 속도계 눈금 폰트 크기와 동일
+      targetLabelEl.setAttribute('y', '90'); // 위치 동일하게 유지
+      
+      // 숫자는 빨강색, RPM 단위는 그레이로 1줄에 표시
+      const rpmNumber = Math.round(targetRpm);
+      const tspanNumber = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspanNumber.setAttribute('fill', '#ef4444'); // 빨강색
+      tspanNumber.textContent = rpmNumber.toString();
+      targetLabelEl.appendChild(tspanNumber);
+      
+      const tspanUnit = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspanUnit.setAttribute('fill', '#888'); // 그레이
+      tspanUnit.textContent = ' RPM';
+      targetLabelEl.appendChild(tspanUnit);
+      
+      // RPM 단위 요소는 숨김 처리
+      if (targetRpmUnitEl) {
+        targetRpmUnitEl.style.display = 'none';
+      }
+    } else if (targetLabelEl) {
+      targetLabelEl.textContent = 'TARGET';
+      targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+      targetLabelEl.setAttribute('font-size', '6'); // 원래 폰트 크기로 복원
+      if (targetRpmUnitEl) {
+        targetRpmUnitEl.style.display = 'none';
+      }
+    }
+    
+    // targetPowerEl은 파워 값 표시 (dual이므로 파워도 있음)
+    targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+    targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+  } else if (targetType === 'cadence_rpm') {
+    // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시, 색상 #ef4444 (빨강색), TARGET 라벨을 'CADENCE'로 변경
+    const targetRpm = Number(targetValue) || 0;
+    
+    if (targetRpm > 0) {
+      // TARGET 라벨을 CADENCE로 변경
+      if (targetLabelEl) {
+        targetLabelEl.textContent = 'CADENCE';
+        targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+      }
+      // RPM 단위 숨김
+      if (targetRpmUnitEl) {
+        targetRpmUnitEl.style.display = 'none';
+      }
+      // 목표 파워값 자리에 RPM 값 표시
+      targetPowerEl.textContent = Math.round(targetRpm).toString();
+      targetPowerEl.setAttribute('fill', '#ef4444'); // 빨강색
+    } else {
+      if (targetLabelEl) {
+        targetLabelEl.textContent = 'TARGET';
+        targetLabelEl.setAttribute('fill', '#888');
+      }
+      if (targetRpmUnitEl) {
+        targetRpmUnitEl.style.display = 'none';
+      }
+      targetPowerEl.textContent = '0';
+      targetPowerEl.setAttribute('fill', '#ff8c00');
+    }
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: TARGET 라벨 표시, 목표 파워값(주황색) - 하한값 표시
+    if (targetLabelEl) {
+      targetLabelEl.textContent = 'TARGET';
+      targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+    }
+    if (targetRpmUnitEl) {
+      targetRpmUnitEl.style.display = 'none';
+    }
+    targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+    targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+  } else {
+    // ftp_pct 타입: TARGET 라벨 표시, 목표 파워값(주황색) 원래 색상으로 되돌림
+    if (targetLabelEl) {
+      targetLabelEl.textContent = 'TARGET';
+      targetLabelEl.setAttribute('fill', '#888'); // 원래 색상
+    }
+    if (targetRpmUnitEl) {
+      targetRpmUnitEl.style.display = 'none';
+    }
+    targetPowerEl.textContent = adjustedTargetPower > 0 ? String(adjustedTargetPower) : '0';
+    targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
   }
 }
 
