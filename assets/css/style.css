@@ -12730,6 +12730,50 @@ line[id^="needle-"] {
   z-index: 1;
 }
 
+/* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
+.mobile-segment-graph-section {
+  padding: 0 20px; /* 상하 패딩 제거, 좌우 패딩만 유지 */
+  background-color: #1a1a1a;
+  border-bottom: 1px solid #333;
+  display: flex;
+  justify-content: center;
+  align-items: center; /* 그래프를 세로 중앙에 배치 */
+  flex: 0.4 0.4 0; /* flex-grow: 0.4, flex-shrink: 0.4 (20% 축소: 0.5 * 0.8 = 0.4) */
+  min-height: 80px; /* 최소 높이 보장 (20% 축소: 100px * 0.8 = 80px) */
+  position: relative;
+  overflow: hidden; /* 넘치는 내용 숨김 */
+}
+
+/* 모바일 환경 최적화 */
+@media (max-height: 800px) {
+  .mobile-segment-graph-section {
+    min-height: 72px; /* 작은 화면에서도 적절한 높이 (20% 축소: 90px * 0.8 = 72px) */
+  }
+}
+
+@media (max-height: 600px) {
+  .mobile-segment-graph-section {
+    min-height: 60px; /* 매우 작은 화면 대응 (20% 축소: 75px * 0.8 = 60px) */
+  }
+}
+
+.mobile-segment-graph-container {
+  width: 98%; /* 그래프 블럭의 98% 너비 */
+  max-width: 600px;
+  height: 95% !important; /* 그래프 블럭의 95% 높이 */
+  position: relative;
+  display: flex;
+  align-items: center; /* Canvas를 컨테이너 중앙에 배치 */
+  justify-content: center;
+}
+
+.mobile-segment-graph-container canvas {
+  width: 100% !important;
+  height: 100% !important; /* 컨테이너 높이에 맞춤 */
+  display: block;
+  /* object-fit 제거: Canvas의 실제 픽셀 크기를 조정하므로 불필요 */
+}
+
 /* 모바일 대시보드 카운트다운 오버레이 */
 .mobile-countdown-overlay.hidden {
   display: none;
