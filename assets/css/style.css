@@ -503,6 +503,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 0 !important; /* 기본 20px 제거 */
 }
 
+/* ========== 하단 버튼 영역 Safe Area 적용 (모든 화면) ========== */
+
+/* 사용자 메뉴얼 화면 하단 버튼 영역 안전거리 확보 */
 #userManualScreen .connection-exit-container {
   margin-top: 0 !important;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
@@ -559,9 +562,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 1;
 }
 
-/* Manage Your Career 화면 하단 여백 최소화 */
+/* Manage Your Career 화면 하단 여백 조정 */
 #myCareerScreen .connection-form-card {
-  padding-bottom: 20px !important; /* 기본 40px에서 20px로 축소 */
+  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
 }
 
 #myCareerScreen .connection-device-section {
@@ -572,10 +575,75 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 0 !important; /* mb-15 클래스의 margin-bottom 제거 */
 }
 
+/* Manage Your Career 화면 하단 버튼 영역 안전거리 확보 */
 #myCareerScreen .connection-exit-container {
-  margin-top: 0 !important; /* 기본 24px 제거 */
-  padding-top: 10px !important; /* 기본 20px에서 10px로 축소 */
+  margin-top: 0 !important;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
+/* 무선 기기 연결 화면 하단 버튼 영역 안전거리 확보 */
+#connectionScreen .connection-exit-container {
+  margin-top: 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
+/* 무선 기기 연결 화면 카드 하단 여백 조정 */
+#connectionScreen .connection-form-card {
+  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
+}
+
+/* Training Room 화면 하단 버튼 영역 안전거리 확보 */
+#trainingRoomScreen .connection-exit-container {
+  margin-top: 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
+/* Training Room 화면 카드 하단 여백 조정 */
+#trainingRoomScreen .connection-form-card {
+  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
+}
+
+/* Join Session 화면 하단 버튼 영역 안전거리 확보 */
+#playerListScreen .connection-exit-container {
+  margin-top: 24px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  
+  /* 터치 간섭을 피하기 위해 충분한 여백과 Safe Area 적용 */
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
+/* Join Session 화면 카드 하단 여백 조정 */
+#playerListScreen .connection-form-card {
+  padding-bottom: 40px !important; /* Safe Area를 위한 여백 확보 */
 }
 
 /* MY CAREER 각 버튼별 배경 이미지 및 스타일 */
@@ -5749,7 +5817,10 @@ button[aria-disabled="true"] {
 }
 
 /* 훈련 스케줄 작성 화면의 날짜 입력 필드 (비밀번호 입력 필드와 동일한 규격) */
-#scheduleCreateScreen input[type="date"] {
+/* 훈련 스케줄 작성/수정 화면의 날짜 입력 필드 (비밀번호 입력 필드와 동일한 규격) */
+#scheduleCreateScreen input[type="date"],
+#scheduleCreateScreen .form-row .form-group input[type="date"],
+#scheduleCreateScreen #scheduleStartDate {
   width: 100% !important;
   padding: 12px 14px !important;
   border: 2px solid #e2e8f0 !important;
@@ -5759,6 +5830,40 @@ button[aria-disabled="true"] {
   box-sizing: border-box !important;
   max-width: 100% !important;
   min-width: 0 !important;
+  /* 모바일 브라우저 기본 스타일 오버라이드 */
+  -webkit-appearance: none !important;
+  -moz-appearance: textfield !important;
+  appearance: none !important;
+  /* iOS Safari에서 날짜 입력 필드 크기 고정 */
+  min-height: 44px !important;
+  height: auto !important;
+}
+
+/* 모바일에서 날짜 입력 필드 추가 보정 */
+@media (max-width: 768px) {
+  #scheduleCreateScreen input[type="date"],
+  #scheduleCreateScreen .form-row .form-group input[type="date"],
+  #scheduleCreateScreen #scheduleStartDate {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    /* iOS Safari에서 날짜 입력 필드가 넘치지 않도록 */
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  /* form-row 내부의 form-group이 동일한 너비를 가지도록 */
+  #scheduleCreateScreen .form-row .form-group {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+  }
+  
+  #scheduleCreateScreen .form-row .form-group input[type="date"],
+  #scheduleCreateScreen .form-row .form-group input[type="password"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 }
 
 .form-group input:focus,
