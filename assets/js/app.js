@@ -10996,6 +10996,21 @@ function initializeMobileGauge() {
   
   // 바늘 애니메이션 루프 시작
   startMobileGaugeAnimationLoop();
+  
+  // 제어 버튼 초기화
+  initializeMobileControlButtons();
+  
+  // 일시정지 상태 변경 감지를 위한 인터벌 (0.5초마다 체크)
+  if (window.mobilePauseCheckInterval) {
+    clearInterval(window.mobilePauseCheckInterval);
+  }
+  window.mobilePauseCheckInterval = setInterval(() => {
+    if (typeof updateMobilePauseButtonIcon === 'function') {
+      updateMobilePauseButtonIcon();
+    }
+  }, 500);
+  
+  console.log('[Mobile Dashboard] 초기화 완료');
 }
 
 /**
@@ -11652,7 +11667,85 @@ function cleanupMobileDashboard() {
     mobileGaugeAnimationFrameId = null;
   }
   
+  // 일시정지 상태 체크 인터벌 정리
+  if (window.mobilePauseCheckInterval) {
+    clearInterval(window.mobilePauseCheckInterval);
+    window.mobilePauseCheckInterval = null;
+  }
+  
   console.log('[Mobile Dashboard] 정리 완료');
+}
+
+/**
+ * 모바일 대시보드 제어 버튼 초기화
+ */
+function initializeMobileControlButtons() {
+  // 건너뛰기 버튼
+  const skipBtn = safeGetElement('mobile-btn-skip');
+  if (skipBtn) {
+    skipBtn.addEventListener('click', () => {
+      if (typeof skipCurrentSegment === 'function') {
+        skipCurrentSegment();
+      } else {
+        console.warn('[Mobile Dashboard] skipCurrentSegment 함수를 찾을 수 없습니다.');
+      }
+    });
+  }
+  
+  // 시작/일시정지 토글 버튼
+  const pauseToggleBtn = safeGetElement('mobile-btn-pause-toggle');
+  const pauseIcon = safeGetElement('mobile-btn-pause-icon');
+  if (pauseToggleBtn) {
+    pauseToggleBtn.addEventListener('click', () => {
+      if (typeof togglePause === 'function') {
+        togglePause();
+        // 아이콘 업데이트
+        updateMobilePauseButtonIcon();
+      } else {
+        console.warn('[Mobile Dashboard] togglePause 함수를 찾을 수 없습니다.');
+      }
+    });
+    
+    // 초기 아이콘 설정
+    updateMobilePauseButtonIcon();
+  }
+  
+  // 종료 버튼
+  const stopBtn = safeGetElement('mobile-btn-stop');
+  if (stopBtn) {
+    stopBtn.addEventListener('click', () => {
+      const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
+      if (!ok) return;
+      
+      // 확인: 종료 처리
+      if (typeof stopSegmentLoop === 'function') {
+        stopSegmentLoop();
+      } else {
+        console.warn('[Mobile Dashboard] stopSegmentLoop 함수를 찾을 수 없습니다.');
+      }
+      
+      // 결과 화면 표시 및 화면 전환은 stopSegmentLoop 내부에서 처리됨
+    });
+  }
+  
+  console.log('[Mobile Dashboard] 제어 버튼 초기화 완료');
+}
+
+/**
+ * 모바일 대시보드 일시정지 버튼 아이콘 업데이트
+ */
+function updateMobilePauseButtonIcon() {
+  const pauseIcon = safeGetElement('mobile-btn-pause-icon');
+  if (!pauseIcon) return;
+  
+  const isPaused = window.trainingState?.paused || false;
+  if (isPaused) {
+    pauseIcon.src = 'assets/img/play0.png';
+    pauseIcon.alt = '시작';
+  } else {
+    pauseIcon.src = 'assets/img/pause0.png';
+    pauseIcon.alt = '일시정지';
+  }
 }
 
 // 화면 전환 시 정리
