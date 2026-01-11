@@ -280,20 +280,20 @@ function renderScheduleList(schedules) {
         </div>
         
         <div class="schedule-actions">
-          <button class="btn btn-primary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)">
-            <img src="assets/img/business.png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 캘린더 보기
+          <button class="btn btn-primary btn-sm btn-default-style" onclick="event.stopPropagation(); openScheduleCalendar('${schedule.id}', event)" title="캘린더 보기">
+            <img src="assets/img/t(01).png" alt="캘린더" class="btn-icon-image" style="width: 21px; height: 21px;" />
           </button>
           ${canEdit ? `
-          <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); editTrainingSchedule('${schedule.id}', event)">
-            <img src="assets/img/modify.png" alt="수정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 수정
+          <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); editTrainingSchedule('${schedule.id}', event)" title="수정">
+            <img src="assets/img/t(02).png" alt="수정" class="btn-icon-image" style="width: 21px; height: 21px;" />
           </button>
           ` : ''}
-          <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-            <img src="assets/img/check.png" alt="일별 지정" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 일별 지정
+          <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); openScheduleDays('${schedule.id}', event)" ${!canEdit ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} title="일별 지정">
+            <img src="assets/img/t(03).png" alt="일별 지정" class="btn-icon-image" style="width: 21px; height: 21px;" />
           </button>
           ${canDelete ? `
-          <button class="btn btn-danger btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" style="margin-left: 4px;">
-            <img src="assets/img/delete.png" alt="삭제" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 삭제
+          <button class="btn btn-danger btn-sm btn-default-style btn-with-icon" onclick="event.stopPropagation(); deleteTrainingSchedule('${schedule.id}', '${(schedule.title || '무제목').replace(/'/g, "&#39;")}')" title="삭제">
+            <img src="assets/img/t(04).png" alt="삭제" class="btn-icon-image" style="width: 21px; height: 21px;" />
           </button>
           ` : ''}
         </div>
