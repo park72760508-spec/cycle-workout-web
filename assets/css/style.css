@@ -3146,7 +3146,10 @@ button[aria-disabled="true"] {
 }
 
 .modal.hidden {
-  display: none;
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 .modal-content {
