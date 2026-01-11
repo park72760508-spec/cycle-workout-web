@@ -5724,6 +5724,20 @@ button[aria-disabled="true"] {
   background: rgba(255, 255, 255, 0.9);
   transition: all 0.3s ease;
   font-family: inherit;
+  box-sizing: border-box; /* 패딩과 보더를 width에 포함 */
+}
+
+/* 훈련 스케줄 작성 화면의 날짜 입력 필드 (비밀번호 입력 필드와 동일한 규격) */
+#scheduleCreateScreen input[type="date"] {
+  width: 100% !important;
+  padding: 12px 14px !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 
 .form-group input:focus,
