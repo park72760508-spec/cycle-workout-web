@@ -6453,7 +6453,22 @@ async function selectWorkoutForTraining(workoutId) {
         // 모달 닫기
         closeWorkoutSelectionModal();
         
-        // 전광판 우측에 세그먼트 그래프 표시
+        // 훈련 준비 화면에서 호출된 경우 콜백 실행
+        if (window._trainingReadyWorkoutSelectionCallback && typeof window._trainingReadyWorkoutSelectionCallback === 'function') {
+            try {
+                // workout 객체를 직접 전달
+                await window._trainingReadyWorkoutSelectionCallback(workout);
+                // 콜백 실행 후 정리
+                delete window._trainingReadyWorkoutSelectionCallback;
+                return; // 훈련 준비 화면 콜백이 실행되면 여기서 종료
+            } catch (error) {
+                console.error('[Training] 훈련 준비 화면 콜백 실행 오류:', error);
+                // 오류 발생 시에도 콜백 정리
+                delete window._trainingReadyWorkoutSelectionCallback;
+            }
+        }
+        
+        // 전광판 우측에 세그먼트 그래프 표시 (Indoor Training 화면인 경우)
         displayWorkoutSegmentGraph(workout, -1); // 워크아웃 선택 시에는 현재 세그먼트 없음
         
         if (typeof showToast === 'function') {

@@ -4031,70 +4031,17 @@ document.addEventListener("DOMContentLoaded", () => {
     btnStartTraining.addEventListener("click", () => startWithCountdown(5));
   }
 
-  // 그룹 훈련 버튼 이벤트 핸들러 추가
-  const btnGroupTraining = safeGetElement("btnGroupTraining");
-  if (btnGroupTraining) {
-    btnGroupTraining.addEventListener("click", async () => {
-      // 버튼 눌림 효과
-      try {
-        btnGroupTraining.style.transition = 'transform 0.15s ease';
-        btnGroupTraining.style.transform = 'scale(0.96)';
-        setTimeout(() => {
-          btnGroupTraining.style.transform = 'scale(1)';
-        }, 160);
-      } catch (_) {}
-
-      // 접속중 스피너 표시
-      let spinner;
-      try {
-        // 이미 스피너가 없는 경우에만 추가
-        if (!btnGroupTraining.querySelector('.btn-inline-spinner')) {
-          spinner = document.createElement('span');
-          spinner.className = 'btn-inline-spinner';
-          spinner.setAttribute('aria-hidden', 'true');
-          spinner.style.display = 'inline-block';
-          spinner.style.width = '16px';
-          spinner.style.height = '16px';
-          spinner.style.marginLeft = '8px';
-          spinner.style.border = '2px solid rgba(255,255,255,0.35)';
-          spinner.style.borderTopColor = '#fff';
-          spinner.style.borderRadius = '50%';
-          spinner.style.verticalAlign = 'middle';
-          spinner.style.animation = 'spinBtn 0.8s linear infinite';
-
-          // 키프레임 주입(중복 방지)
-          if (!document.getElementById('btnSpinnerKeyframes')) {
-            const style = document.createElement('style');
-            style.id = 'btnSpinnerKeyframes';
-            style.textContent = '@keyframes spinBtn { to { transform: rotate(360deg); } }';
-            document.head.appendChild(style);
-          }
-
-          btnGroupTraining.appendChild(spinner);
+  // 워크아웃 선택 버튼 이벤트 핸들러 (훈련 준비 화면용)
+  const btnSelectWorkoutForTraining = safeGetElement("btnSelectWorkoutForTraining");
+  if (btnSelectWorkoutForTraining) {
+    btnSelectWorkoutForTraining.addEventListener("click", () => {
+      if (typeof openWorkoutSelectionForTrainingReady === 'function') {
+        openWorkoutSelectionForTrainingReady();
+      } else {
+        console.warn('openWorkoutSelectionForTrainingReady function not found');
+        if (typeof showToast === 'function') {
+          showToast('워크아웃 선택 기능을 찾을 수 없습니다', 'error');
         }
-        // 중복 클릭 방지
-        btnGroupTraining.disabled = true;
-        btnGroupTraining.style.pointerEvents = 'none';
-        btnGroupTraining.dataset.loading = 'true';
-      } catch (_) {}
-
-      console.log('Group training button clicked');
-      try {
-        if (typeof selectTrainingMode === 'function') {
-          await selectTrainingMode('group');
-        } else {
-          console.warn('selectTrainingMode function not found');
-          showToast('그룹 훈련 기능을 찾을 수 없습니다', 'error');
-        }
-      } finally {
-        // 접속 완료/실패 시 스피너 제거 및 버튼 복구
-        try {
-          const sp = btnGroupTraining.querySelector('.btn-inline-spinner');
-          if (sp) sp.remove();
-          btnGroupTraining.disabled = false;
-          btnGroupTraining.style.pointerEvents = '';
-          delete btnGroupTraining.dataset.loading;
-        } catch (_) {}
       }
     });
   }
@@ -10442,6 +10389,182 @@ window.exportAnalysisReport = exportAnalysisReport;
 window.showAIRecommendationConfirmModal = showAIRecommendationConfirmModal;
 window.closeAIRecommendationConfirmModal = closeAIRecommendationConfirmModal;
 window.confirmAIRecommendation = confirmAIRecommendation;
+
+/* ==========================================================
+   훈련 준비 화면 워크아웃 선택 기능
+   Indoor Training 워크아웃 선택 모달을 사용하여 워크아웃 선택
+========================================================== */
+
+/**
+ * 훈련 준비 화면에서 워크아웃 선택 모달 열기
+ */
+async function openWorkoutSelectionForTrainingReady() {
+  try {
+    // Indoor Training 워크아웃 선택 모달 열기
+    if (typeof openWorkoutSelectionModal === 'function') {
+      // 모달이 열릴 때 선택 콜백 설정
+      window._trainingReadyWorkoutSelectionCallback = selectWorkoutForTrainingReady;
+      await openWorkoutSelectionModal();
+    } else {
+      console.error('[Training Ready] openWorkoutSelectionModal 함수를 찾을 수 없습니다.');
+      if (typeof showToast === 'function') {
+        showToast('워크아웃 선택 기능을 사용할 수 없습니다', 'error');
+      }
+    }
+  } catch (error) {
+    console.error('[Training Ready] 워크아웃 선택 모달 열기 오류:', error);
+    if (typeof showToast === 'function') {
+      showToast('워크아웃 선택 모달을 열 수 없습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+    }
+  }
+}
+
+/**
+ * 훈련 준비 화면에서 워크아웃 선택 시 호출되는 함수
+ * workout 객체를 직접 받아서 처리
+ */
+async function selectWorkoutForTrainingReady(workout) {
+  try {
+    if (!workout) {
+      console.error('[Training Ready] workout 데이터가 없습니다.');
+      if (typeof showToast === 'function') {
+        showToast('워크아웃 정보를 불러올 수 없습니다. (데이터 없음)', 'error');
+      }
+      return;
+    }
+    
+    console.log('[Training Ready] 선택된 워크아웃:', {
+      id: workout.id,
+      title: workout.title,
+      segmentsCount: workout.segments ? workout.segments.length : 0
+    });
+    
+    // 워크아웃 데이터 정규화
+    const normalizedWorkout = {
+      id: workout.id,
+      title: String(workout.title || '제목 없음'),
+      description: String(workout.description || ''),
+      author: String(workout.author || '미상'),
+      status: String(workout.status || '보이기'),
+      total_seconds: Number(workout.total_seconds) || 0,
+      publish_date: workout.publish_date || null,
+      segments: Array.isArray(workout.segments) ? workout.segments : []
+    };
+    
+    // 전역 워크아웃 데이터 설정
+    window.currentWorkout = normalizedWorkout;
+    
+    // localStorage에 저장
+    try {
+      localStorage.setItem('currentWorkout', JSON.stringify(normalizedWorkout));
+      console.log('[Training Ready] Workout saved to localStorage');
+    } catch (e) {
+      console.warn('[Training Ready] 로컬 스토리지 저장 실패:', e);
+    }
+    
+    // 훈련 준비 화면 업데이트
+    updateTrainingReadyScreenWithWorkout(normalizedWorkout);
+    
+    if (typeof showToast === 'function') {
+      showToast(`"${normalizedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
+    }
+    
+  } catch (error) {
+    console.error('[Training Ready] 워크아웃 선택 오류:', error, error.stack);
+    if (typeof showToast === 'function') {
+      showToast(`워크아웃 선택 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`, 'error');
+    }
+  }
+}
+
+/**
+ * 훈련 준비 화면에 워크아웃 정보 표시 및 세그먼트 그래프 그리기
+ */
+function updateTrainingReadyScreenWithWorkout(workout) {
+  if (!workout) {
+    console.warn('[Training Ready] 워크아웃 데이터가 없습니다.');
+    return;
+  }
+  
+  // 워크아웃 이름 표시
+  const nameEl = safeGetElement('previewWorkoutName');
+  if (nameEl) {
+    nameEl.textContent = workout.title || '워크아웃';
+  }
+  
+  // 총 시간 계산 및 표시
+  const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
+  const durationEl = safeGetElement('previewDuration');
+  if (durationEl) {
+    durationEl.textContent = `${totalMinutes}분`;
+  }
+  
+  // 평균 강도 계산
+  let avgIntensity = 0;
+  let totalDuration = 0;
+  
+  if (workout.segments && Array.isArray(workout.segments) && workout.segments.length > 0) {
+    let weightedSum = 0;
+    
+    workout.segments.forEach(segment => {
+      const duration = Number(segment.duration_sec) || 0;
+      const intensity = Number(segment.target_value) || 0;
+      weightedSum += (duration * intensity);
+      totalDuration += duration;
+    });
+    
+    if (totalDuration > 0) {
+      avgIntensity = Math.round(weightedSum / totalDuration);
+    }
+  }
+  
+  // 평균 강도 표시
+  const intensityEl = safeGetElement('previewIntensity');
+  if (intensityEl) {
+    intensityEl.textContent = `${avgIntensity}%`;
+  }
+  
+  // 예상 강도 표시 (평균 강도와 동일)
+  const expectedIntensityEl = safeGetElement('previewExpectedIntensity');
+  if (expectedIntensityEl) {
+    expectedIntensityEl.textContent = `${avgIntensity}%`;
+  }
+  
+  // 세그먼트 그래프 그리기
+  if (workout.segments && workout.segments.length > 0) {
+    const segmentPreview = safeGetElement('segmentPreview');
+    if (segmentPreview) {
+      // 기존 캔버스 제거
+      segmentPreview.innerHTML = '';
+      
+      // 캔버스 생성
+      const canvas = document.createElement('canvas');
+      canvas.id = 'segmentPreviewGraph';
+      canvas.style.width = '100%';
+      canvas.style.height = 'auto';
+      segmentPreview.appendChild(canvas);
+      
+      // 세그먼트 그래프 그리기
+      if (typeof drawSegmentGraph === 'function') {
+        setTimeout(() => {
+          drawSegmentGraph(workout.segments, -1, 'segmentPreviewGraph', null);
+        }, 100);
+      } else {
+        console.warn('[Training Ready] drawSegmentGraph 함수를 찾을 수 없습니다.');
+      }
+    }
+  } else {
+    const segmentPreview = safeGetElement('segmentPreview');
+    if (segmentPreview) {
+      segmentPreview.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">세그먼트가 없습니다.</p>';
+    }
+  }
+}
+
+// 전역 함수로 등록
+window.openWorkoutSelectionForTrainingReady = openWorkoutSelectionForTrainingReady;
+window.selectWorkoutForTrainingReady = selectWorkoutForTrainingReady;
+window.updateTrainingReadyScreenWithWorkout = updateTrainingReadyScreenWithWorkout;
 
 /* ==========================================================
    터치 이벤트 및 피드백 개선 유틸리티
