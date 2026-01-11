@@ -10588,6 +10588,13 @@ async function startMobileDashboard() {
       bikeIdDisplay.textContent = 'Bike ?';
     }
     
+    // FTP 값 초기화 (사용자 정보에서)
+    mobileUserFTP = window.userFTP || currentUser?.ftp || 200;
+    window.mobileUserFTP = mobileUserFTP;
+    
+    // 속도계 초기화 (눈금, 레이블, 바늘 애니메이션)
+    initializeMobileGauge();
+    
     // 워크아웃이 선택되어 있으면 세그먼트 그래프 그리기
     if (window.currentWorkout && window.currentWorkout.segments && window.currentWorkout.segments.length > 0) {
       const canvas = safeGetElement('mobileIndividualSegmentGraph');
@@ -10604,21 +10611,23 @@ async function startMobileDashboard() {
     // 타이머 업데이트 시작
     startMobileDashboardTimer();
     
-    // 속도계 초기화
-    initializeMobileGauge();
-    
     // 목표값 조절 슬라이더 이벤트 리스너
     const intensitySlider = safeGetElement('mobileIndividualIntensityAdjustmentSlider');
     if (intensitySlider) {
-      intensitySlider.addEventListener('input', (e) => {
-        const value = parseFloat(e.target.value);
-        const valueEl = safeGetElement('mobileIndividualIntensityAdjustmentValue');
-        if (valueEl) {
-          valueEl.textContent = value > 0 ? `+${value}%` : `${value}%`;
-        }
-        window.mobileIntensityAdjustment = 1.0 + (value / 100);
-        updateMobileTargetPower();
-      });
+      // 기존 이벤트 리스너 제거 후 추가 (중복 방지)
+      intensitySlider.replaceWith(intensitySlider.cloneNode(true));
+      const newSlider = safeGetElement('mobileIndividualIntensityAdjustmentSlider');
+      if (newSlider) {
+        newSlider.addEventListener('input', (e) => {
+          const value = parseFloat(e.target.value);
+          const valueEl = safeGetElement('mobileIndividualIntensityAdjustmentValue');
+          if (valueEl) {
+            valueEl.textContent = value > 0 ? `+${value}%` : `${value}%`;
+          }
+          window.mobileIntensityAdjustment = 1.0 + (value / 100);
+          updateMobileTargetPower();
+        });
+      }
     }
     
     console.log('[Mobile Dashboard] 모바일 대시보드 초기화 완료');
@@ -10637,40 +10646,49 @@ async function startMobileDashboard() {
 function startMobileDashboardDataUpdate() {
   // 블루투스 데이터 업데이트 루프
   function updateMobileDashboardData() {
-    if (document.getElementById('mobileDashboardScreen') && 
-        (document.getElementById('mobileDashboardScreen').classList.contains('active') || 
-         window.getComputedStyle(document.getElementById('mobileDashboardScreen')).display !== 'none')) {
-      
-      // window.liveData에서 데이터 읽기
-      const liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
-      
-      // 현재 파워 표시
-      const powerValue = Math.round(liveData.power || 0);
-      const powerEl = safeGetElement('mobile-ui-current-power');
-      if (powerEl) {
-        powerEl.textContent = powerValue;
-      }
-      
-      // 속도계 바늘 업데이트
-      updateMobileGaugeNeedle(powerValue);
-      
-      // 케이던스 표시
-      const cadence = Math.round(liveData.cadence || 0);
-      const cadenceEl = safeGetElement('mobile-ui-cadence');
-      if (cadenceEl) {
-        cadenceEl.textContent = cadence;
-      }
-      
-      // 심박수 표시
-      const hr = Math.round(liveData.heartRate || 0);
-      const hrEl = safeGetElement('mobile-ui-hr');
-      if (hrEl) {
-        hrEl.textContent = hr;
-      }
-      
-      // 목표 파워 업데이트
-      updateMobileTargetPower();
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    if (!mobileScreen || 
+        (!mobileScreen.classList.contains('active') && 
+         window.getComputedStyle(mobileScreen).display === 'none')) {
+      return;
     }
+    
+    // window.liveData에서 데이터 읽기
+    const liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    
+    // 현재 파워 표시 (블루투스 데이터)
+    const powerValue = Math.round(liveData.power || 0);
+    const powerEl = safeGetElement('mobile-ui-current-power');
+    if (powerEl) {
+      powerEl.textContent = powerValue;
+    }
+    
+    // 속도계 바늘 업데이트 (애니메이션 루프에서 부드럽게 이동)
+    updateMobileGaugeNeedle(powerValue);
+    
+    // 케이던스 표시 (블루투스 데이터)
+    const cadence = Math.round(liveData.cadence || 0);
+    const cadenceEl = safeGetElement('mobile-ui-cadence');
+    if (cadenceEl) {
+      cadenceEl.textContent = cadence;
+    }
+    
+    // 심박수 표시 (블루투스 데이터)
+    const hr = Math.round(liveData.heartRate || 0);
+    const hrEl = safeGetElement('mobile-ui-hr');
+    if (hrEl) {
+      hrEl.textContent = hr;
+    }
+    
+    // 랩 평균 파워 표시 (블루투스 데이터에서 segmentAvgPower 사용)
+    const lapPowerEl = safeGetElement('mobile-ui-lap-power');
+    if (lapPowerEl) {
+      const segmentAvgPower = Math.round(liveData.segmentAvgPower || liveData.avgPower || 0);
+      lapPowerEl.textContent = segmentAvgPower;
+    }
+    
+    // 목표 파워 업데이트
+    updateMobileTargetPower();
   }
   
   // 100ms마다 업데이트 (블루투스 데이터는 빠르게 업데이트됨)
@@ -10738,82 +10756,183 @@ function startMobileDashboardTimer() {
   updateMobileTimer();
 }
 
+// 모바일 대시보드 속도계 관련 변수
+let mobileCurrentPowerValue = 0; // 블루투스에서 받은 실제 파워값
+let mobileDisplayPower = 0; // 화면에 표시되는 부드러운 파워값 (보간 적용)
+let mobileGaugeAnimationFrameId = null; // 애니메이션 루프 ID
+let mobileUserFTP = 200; // 사용자 FTP 값
+
+/**
+ * 모바일 속도계 눈금 생성 함수 (individual.js의 generateGaugeTicks 참고)
+ */
+function generateMobileGaugeTicks() {
+  const centerX = 100;
+  const centerY = 140;
+  const radius = 80;
+  const innerRadius = radius - 10; // 눈금 안쪽 시작점
+  
+  let ticksHTML = '';
+  
+  // 모든 눈금 생성 (주눈금 + 보조눈금)
+  for (let i = 0; i <= 24; i++) { // 0~24 (주눈금 7개 + 보조눈금 18개 = 총 25개)
+    const isMajor = i % 4 === 0; // 4 간격마다 주눈금 (0, 4, 8, 12, 16, 20, 24)
+    
+    // 각도 계산: 180도에서 시작하여 270도를 거쳐 360도(0도)까지 (위쪽 반원)
+    let angle = 180 + (i / 24) * 180; // 180도에서 시작하여 360도까지
+    if (angle >= 360) angle = angle % 360; // 360도는 0도로 변환
+    const rad = (angle * Math.PI) / 180;
+    
+    // 눈금 위치 계산
+    const x1 = centerX + innerRadius * Math.cos(rad);
+    const y1 = centerY + innerRadius * Math.sin(rad);
+    
+    // 주눈금은 길게, 보조눈금은 짧게
+    const tickLength = isMajor ? 14 : 7;
+    const x2 = centerX + (innerRadius + tickLength) * Math.cos(rad);
+    const y2 = centerY + (innerRadius + tickLength) * Math.sin(rad);
+    
+    // 흰색 눈금
+    ticksHTML += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" 
+                        stroke="#ffffff" 
+                        stroke-width="${isMajor ? 2.5 : 1.5}"/>`;
+  }
+  
+  return ticksHTML;
+}
+
+/**
+ * 모바일 속도계 레이블 생성 함수 (individual.js의 generateGaugeLabels 참고)
+ */
+function generateMobileGaugeLabels() {
+  const centerX = 100;
+  const centerY = 140;
+  const radius = 80;
+  const labelRadius = radius + 18; // 레이블 위치 (원 바깥쪽)
+  
+  let labelsHTML = '';
+  
+  // FTP 배수 정의
+  const multipliers = [
+    { index: 0, mult: 0, color: '#ffffff' },
+    { index: 1, mult: 0.33, color: '#ffffff' },
+    { index: 2, mult: 0.67, color: '#ffffff' },
+    { index: 3, mult: 1, color: '#ef4444' }, // 빨강색 (FTP)
+    { index: 4, mult: 1.33, color: '#ffffff' },
+    { index: 5, mult: 1.67, color: '#ffffff' },
+    { index: 6, mult: 2, color: '#ffffff' }
+  ];
+  
+  // 주눈금 레이블 생성 (7개)
+  multipliers.forEach((item, i) => {
+    // 각도 계산: 180도에서 270도를 거쳐 360도(0도)까지 (위쪽 반원)
+    let angle = 180 + (i / 6) * 180; // 180도에서 시작하여 360도까지
+    if (angle >= 360) angle = angle % 360; // 360도는 0도로 변환
+    const rad = (angle * Math.PI) / 180;
+    
+    // 레이블 위치 계산
+    const x = centerX + labelRadius * Math.cos(rad);
+    const y = centerY + labelRadius * Math.sin(rad);
+    
+    // FTP 값을 곱한 값 계산 (정수만 표기)
+    const value = Math.round(mobileUserFTP * item.mult);
+    
+    // 레이블 생성 (정수값만 표기)
+    labelsHTML += `<text x="${x}" y="${y}" 
+                         text-anchor="middle" 
+                         dominant-baseline="middle"
+                         fill="${item.color}" 
+                         font-size="10" 
+                         font-weight="600">${value}</text>`;
+  });
+  
+  return labelsHTML;
+}
+
 /**
  * 모바일 속도계 초기화
  */
 function initializeMobileGauge() {
-  // 속도계 눈금 및 레이블 생성 (individual.js의 updateGaugeTicksAndLabels 참고)
-  const svg = document.querySelector('#mobileDashboardScreen svg');
-  if (!svg) return;
-  
   const ticksGroup = safeGetElement('mobile-gauge-ticks');
   const labelsGroup = safeGetElement('mobile-gauge-labels');
   
-  if (!ticksGroup || !labelsGroup) return;
-  
-  // 기존 눈금 및 레이블 제거
-  ticksGroup.innerHTML = '';
-  labelsGroup.innerHTML = '';
+  if (!ticksGroup || !labelsGroup) {
+    console.warn('[Mobile Dashboard] 속도계 그룹 요소를 찾을 수 없습니다.');
+    return;
+  }
   
   // FTP 값 가져오기
-  const userFTP = window.userFTP || window.currentUser?.ftp || 200;
-  const maxPower = userFTP * 1.5; // 최대 파워 (FTP의 150%)
+  mobileUserFTP = window.userFTP || window.currentUser?.ftp || 200;
+  window.mobileUserFTP = mobileUserFTP; // 전역 변수로도 저장
   
-  // 눈금 생성 (0부터 maxPower까지)
-  for (let i = 0; i <= 10; i++) {
-    const power = (maxPower / 10) * i;
-    const angle = -90 + (180 / 10) * i;
-    const radian = (angle * Math.PI) / 180;
-    
-    const x1 = 100 + 80 * Math.cos(radian);
-    const y1 = 140 + 80 * Math.sin(radian);
-    const x2 = 100 + 90 * Math.cos(radian);
-    const y2 = 140 + 90 * Math.sin(radian);
-    
-    // 눈금선
-    const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    tick.setAttribute('x1', x1);
-    tick.setAttribute('y1', y1);
-    tick.setAttribute('x2', x2);
-    tick.setAttribute('y2', y2);
-    tick.setAttribute('stroke', '#666');
-    tick.setAttribute('stroke-width', '1');
-    ticksGroup.appendChild(tick);
-    
-    // 레이블 (5의 배수만)
-    if (i % 2 === 0) {
-      const labelX = 100 + 100 * Math.cos(radian);
-      const labelY = 140 + 100 * Math.sin(radian);
-      
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      label.setAttribute('x', labelX);
-      label.setAttribute('y', labelY);
-      label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('fill', '#aaa');
-      label.setAttribute('font-size', '6');
-      label.textContent = Math.round(power);
-      labelsGroup.appendChild(label);
-    }
-  }
+  // 눈금 및 레이블 생성
+  ticksGroup.innerHTML = generateMobileGaugeTicks();
+  labelsGroup.innerHTML = generateMobileGaugeLabels();
+  
+  // 바늘 애니메이션 루프 시작
+  startMobileGaugeAnimationLoop();
 }
 
 /**
- * 모바일 속도계 바늘 업데이트
+ * 모바일 속도계 바늘 애니메이션 루프 (individual.js의 startGaugeAnimationLoop 참고)
+ */
+function startMobileGaugeAnimationLoop() {
+  // 이미 실행 중이면 중복 실행 방지
+  if (mobileGaugeAnimationFrameId !== null) return;
+  
+  const loop = () => {
+    // 모바일 대시보드 화면이 활성화되어 있는지 확인
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    if (!mobileScreen || 
+        (!mobileScreen.classList.contains('active') && 
+         window.getComputedStyle(mobileScreen).display === 'none')) {
+      // 화면이 비활성화되면 루프 중지
+      mobileGaugeAnimationFrameId = null;
+      return;
+    }
+    
+    // 1. 목표값(mobileCurrentPowerValue)과 현재표시값(mobileDisplayPower)의 차이 계산
+    const target = mobileCurrentPowerValue || 0;
+    const current = mobileDisplayPower || 0;
+    const diff = target - current;
+    
+    // 2. 보간(Interpolation) 적용: 거리가 멀면 빠르게, 가까우면 천천히 (감속 효과)
+    if (Math.abs(diff) > 0.1) {
+      mobileDisplayPower = current + diff * 0.15;
+    } else {
+      mobileDisplayPower = target; // 차이가 미세하면 목표값으로 고정 (떨림 방지)
+    }
+    
+    // 3. 바늘 각도 계산 및 업데이트 (매 프레임 실행)
+    // FTP 기반으로 최대 파워 계산 (FTP × 2)
+    const maxPower = mobileUserFTP * 2;
+    if (maxPower > 0) {
+      let ratio = Math.min(Math.max(mobileDisplayPower / maxPower, 0), 1);
+      
+      // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
+      const angle = -90 + (ratio * 180);
+      
+      const needle = safeGetElement('mobile-gauge-needle');
+      if (needle && !isNaN(angle) && isFinite(angle)) {
+        // CSS Transition 간섭 제거하고 직접 제어
+        needle.style.transition = 'none';
+        needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
+      }
+    }
+    
+    // 다음 프레임 요청
+    mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
+  };
+  
+  // 루프 시작
+  mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
+}
+
+/**
+ * 모바일 속도계 바늘 업데이트 (블루투스 데이터에서 호출)
  */
 function updateMobileGaugeNeedle(power) {
-  const needle = safeGetElement('mobile-gauge-needle');
-  if (!needle) return;
-  
-  // FTP 값 가져오기
-  const userFTP = window.userFTP || window.currentUser?.ftp || 200;
-  const maxPower = userFTP * 1.5; // 최대 파워 (FTP의 150%)
-  
-  // 각도 계산 (-90도부터 90도까지, 180도 범위)
-  const normalizedPower = Math.max(0, Math.min(power, maxPower));
-  const angle = -90 + (normalizedPower / maxPower) * 180;
-  
-  // 바늘 회전
-  needle.setAttribute('transform', `translate(100, 140) rotate(${angle})`);
+  // 실제 파워값 저장 (애니메이션 루프에서 부드럽게 이동)
+  mobileCurrentPowerValue = Math.max(0, Number(power) || 0);
 }
 
 /**
@@ -10826,15 +10945,15 @@ function updateMobileTargetPower() {
   // 목표 파워 계산
   let targetPower = 0;
   
-  // 1순위: window.liveData.targetPower
-  if (window.liveData && window.liveData.targetPower) {
-    targetPower = window.liveData.targetPower;
+  // 1순위: window.liveData.targetPower (블루투스/훈련 화면에서 계산된 값)
+  if (window.liveData && window.liveData.targetPower && window.liveData.targetPower > 0) {
+    targetPower = Number(window.liveData.targetPower);
   }
   // 2순위: 현재 세그먼트의 목표 파워
   else if (window.currentWorkout && window.currentWorkout.segments && window.trainingState && window.trainingState.segIndex !== undefined) {
     const currentSegment = window.currentWorkout.segments[window.trainingState.segIndex];
     if (currentSegment) {
-      const userFTP = window.userFTP || window.currentUser?.ftp || 200;
+      const userFTP = mobileUserFTP || window.userFTP || window.currentUser?.ftp || 200;
       const targetType = currentSegment.target_type || 'ftp_pct';
       const targetValue = Number(currentSegment.target_value) || 0;
       
@@ -10842,6 +10961,17 @@ function updateMobileTargetPower() {
         targetPower = Math.round(userFTP * (targetValue / 100));
       } else if (targetType === 'cadence_rpm') {
         targetPower = 0; // RPM 타입은 파워 목표 없음
+      } else if (targetType === 'dual') {
+        // dual 타입: "100/120" 형식에서 앞의 값 사용
+        if (typeof currentSegment.target_value === 'string' && currentSegment.target_value.includes('/')) {
+          const parts = currentSegment.target_value.split('/').map(s => s.trim());
+          if (parts.length >= 1) {
+            const ftpPercent = Number(parts[0]) || 100;
+            targetPower = Math.round(userFTP * (ftpPercent / 100));
+          }
+        } else {
+          targetPower = targetValue;
+        }
       } else {
         targetPower = targetValue;
       }
@@ -10853,12 +10983,10 @@ function updateMobileTargetPower() {
   targetPower = Math.round(targetPower * intensityAdjustment);
   
   // 목표 파워 표시
-  targetPowerEl.textContent = targetPower;
-  
-  // 랩 평균 파워 업데이트 (세그먼트 평균 파워)
-  const lapPowerEl = safeGetElement('mobile-ui-lap-power');
-  if (lapPowerEl && window.liveData && window.liveData.segmentAvgPower) {
-    lapPowerEl.textContent = Math.round(window.liveData.segmentAvgPower);
+  if (targetPower > 0) {
+    targetPowerEl.textContent = targetPower;
+  } else {
+    targetPowerEl.textContent = '0';
   }
 }
 
@@ -10885,6 +11013,13 @@ function cleanupMobileDashboard() {
     clearInterval(window.mobileDashboardTimerInterval);
     window.mobileDashboardTimerInterval = null;
   }
+  
+  // 애니메이션 프레임 정리
+  if (mobileGaugeAnimationFrameId !== null) {
+    cancelAnimationFrame(mobileGaugeAnimationFrameId);
+    mobileGaugeAnimationFrameId = null;
+  }
+  
   console.log('[Mobile Dashboard] 정리 완료');
 }
 
