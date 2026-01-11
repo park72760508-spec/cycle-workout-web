@@ -10525,7 +10525,7 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     durationEl.textContent = `${totalMinutes}분`;
   }
   
-  // 평균 강도 계산
+  // 평균 강도 계산 (세그먼트 타입별 FTP% 추출)
   let avgIntensity = 0;
   let totalDuration = 0;
   
@@ -10534,8 +10534,11 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     
     workout.segments.forEach(segment => {
       const duration = Number(segment.duration_sec) || 0;
-      const intensity = Number(segment.target_value) || 0;
-      weightedSum += (duration * intensity);
+      // getSegmentFtpPercent 함수를 사용하여 세그먼트 타입별 FTP% 추출
+      const ftpPercent = typeof getSegmentFtpPercent === 'function' 
+        ? getSegmentFtpPercent(segment)
+        : (Number(segment.target_value) || 0);
+      weightedSum += (duration * ftpPercent);
       totalDuration += duration;
     });
     
@@ -10554,6 +10557,47 @@ function updateTrainingReadyScreenWithWorkout(workout) {
   const expectedIntensityEl = safeGetElement('previewExpectedIntensity');
   if (expectedIntensityEl) {
     expectedIntensityEl.textContent = `${avgIntensity}%`;
+  }
+  
+  // 예상 TSS 계산 (NP 근사 기반, workoutManager.js의 로직 참고)
+  let estimatedTSS = 0;
+  if (totalDuration > 0 && workout.segments && Array.isArray(workout.segments) && workout.segments.length > 0) {
+    const T = totalDuration; // 총 지속시간(초)
+    let sumI4t = 0;
+    
+    workout.segments.forEach(seg => {
+      const t = Number(seg.duration_sec) || 0;
+      if (t <= 0) return;
+      
+      // 세그먼트 타입별 FTP% 추출
+      const ftpPercent = typeof getSegmentFtpPercent === 'function'
+        ? getSegmentFtpPercent(seg)
+        : (Number(seg.target_value) || 100);
+      
+      // FTP%를 비율로 변환 (0~1)
+      let I1 = ftpPercent / 100;
+      
+      // 램프가 있으면 끝 강도 보정
+      if (seg.ramp && seg.ramp !== 'none' && seg.ramp_to_value != null) {
+        const I2 = (Number(seg.ramp_to_value) || ftpPercent) / 100;
+        // 선형 램프 구간의 I^4 평균 근사: (I1^4 + I2^4)/2
+        const i4avg = (Math.pow(I1, 4) + Math.pow(I2, 4)) / 2;
+        sumI4t += i4avg * t;
+      } else {
+        sumI4t += Math.pow(I1, 4) * t;
+      }
+    });
+    
+    // IF (Intensity Factor) 계산: (sumI4t / T)^0.25
+    const IF = T > 0 ? Math.pow(sumI4t / T, 0.25) : 0;
+    // TSS 계산: (시간(시간) × IF^2 × 100)
+    estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
+  }
+  
+  // 예상 TSS 표시 (있는 경우에만)
+  const tssEl = safeGetElement('previewTSS');
+  if (tssEl) {
+    tssEl.textContent = String(estimatedTSS);
   }
   
   // 세그먼트 그래프 그리기
