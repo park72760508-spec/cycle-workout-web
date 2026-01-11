@@ -1448,13 +1448,6 @@
                 <span>모바일 대시보드</span>
               </button>
             </div>
-            <div class="grid-2 gap-10 mb-15">
-              <!-- 그룹 훈련 버튼 -->
-              <button class="btn btn-device" id="btnGroupTraining">
-                <img src="assets/img/train.png" alt="그룹 훈련" class="device-btn-icon" />
-                <span>그룹 훈련</span>
-              </button>
-            </div>
           </div>
 
           <!-- 하단 버튼 -->
@@ -1462,6 +1455,10 @@
             <button class="btn btn-exit-inline" id="btnBackToWorkouts" onclick="showScreen('workoutScreen')" aria-label="뒤로 가기">
               <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
               <span>뒤로 가기</span>
+            </button>
+            <button class="btn btn-primary btn-with-icon" id="btnSelectWorkoutForTraining" onclick="openWorkoutSelectionForTrainingReady()" aria-label="워크아웃 선택">
+              <img src="assets/img/workout.png" alt="워크아웃" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              <span>워크아웃</span>
             </button>
           </div>
         </div>
