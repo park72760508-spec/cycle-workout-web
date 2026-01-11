@@ -3143,6 +3143,7 @@ button[aria-disabled="true"] {
   align-items: center;
   justify-content: center;
   z-index: 99999;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .modal.hidden {
@@ -9294,6 +9295,15 @@ button[aria-disabled="true"] {
   justify-content: center;
   z-index: 10000;
   backdrop-filter: blur(4px);
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.modal-overlay.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
 }
 
 #rpeConditionModal .modal-content,
