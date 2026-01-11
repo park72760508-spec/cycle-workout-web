@@ -12730,17 +12730,20 @@ line[id^="needle-"] {
   z-index: 1;
 }
 
-/* 모바일 대시보드 제어 버튼 (현재 파워와 통계 푸터 중간 배치) */
+/* 모바일 대시보드 제어 버튼 (현재 파워 아래, 연한 주황색 라인 위치에 배치) */
 .mobile-control-buttons {
+  position: absolute;
+  bottom: 10px; /* 속도계 SVG 하단에서 위로 10px (현재 파워 y=200 바로 아래 위치) */
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   gap: calc(38px * 1.2); /* 버튼 크기의 1/5씩 더 넓게 (38px * 0.2 = 7.6px, 총 38px * 1.2 = 45.6px) */
   align-items: center;
   justify-content: center;
   z-index: 10;
   pointer-events: auto;
-  width: 100%;
+  width: auto;
   max-width: 100%;
-  padding: 20px 0; /* 상하 여백으로 현재 파워와 통계 푸터 중간 배치 */
   flex-shrink: 0;
 }
 
@@ -12797,7 +12800,7 @@ line[id^="needle-"] {
 .mobile-gauge-container {
   position: relative;
   box-sizing: border-box;
-  flex-shrink: 0;
+  padding-bottom: 50px; /* 버튼 공간 확보 (현재 파워 아래 위치) */
 }
 
 /* 화면 높이 제한 시 버튼 크기 조정 */
@@ -12814,7 +12817,11 @@ line[id^="needle-"] {
   
   .mobile-control-buttons {
     gap: calc(34px * 1.2); /* 34px * 1.2 = 40.8px */
-    padding: 15px 0;
+    bottom: 8px;
+  }
+  
+  .mobile-gauge-container {
+    padding-bottom: 45px;
   }
 }
 
@@ -12831,7 +12838,11 @@ line[id^="needle-"] {
   
   .mobile-control-buttons {
     gap: calc(30px * 1.2); /* 30px * 1.2 = 36px */
-    padding: 12px 0;
+    bottom: 6px;
+  }
+  
+  .mobile-gauge-container {
+    padding-bottom: 40px;
   }
 }
 
