@@ -2193,8 +2193,10 @@ button[aria-disabled="true"] {
 
 #trainingReadyScreen .btn-device .device-btn-icon {
   order: 1 !important;
-  width: 72px;
-  height: 72px;
+  width: 90px;
+  height: 90px;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   display: block;
   margin: 0 auto;
@@ -12687,4 +12689,115 @@ line[id^="needle-"] {
 
 .training-room-list::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 212, 170, 0.7);
+}
+
+/* ========== 모바일 대시보드 화면 스타일 (individual.html과 동일) ========== */
+#mobileDashboardScreen {
+  background-color: #121212;
+  color: #ffffff;
+  font-family: 'Pretendard', sans-serif;
+  margin: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh; /* 모바일 브라우저 주소창 고려 */
+  min-height: -webkit-fill-available; /* iOS Safari 대응 */
+}
+
+/* 모바일 대시보드 카운트다운 오버레이 */
+.mobile-countdown-overlay.hidden {
+  display: none;
+}
+
+@keyframes countdownPulse {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 모바일 대시보드 훈련 결과 모달 */
+.mobile-training-result-modal.hidden {
+  display: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(30px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* 모바일 대시보드 슬라이더 스타일 */
+.mobile-individual-intensity-adjustment-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6600 100%);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(255, 140, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.mobile-individual-intensity-adjustment-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 8px rgba(255, 140, 0, 0.6);
+}
+
+.mobile-individual-intensity-adjustment-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ff8c00 0%, #ff6600 100%);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 6px rgba(255, 140, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.mobile-individual-intensity-adjustment-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 8px rgba(255, 140, 0, 0.6);
+}
+
+.mobile-individual-intensity-adjustment-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 모바일 대시보드 결과 모달 버튼 호버 효과 */
+.mobile-result-close-btn:hover {
+  background: linear-gradient(135deg, #00e8c2 0%, #00d4aa 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 212, 170, 0.6);
+}
+
+.mobile-result-close-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
 }
