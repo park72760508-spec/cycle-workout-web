@@ -1342,16 +1342,27 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           barWidth
         });
         // RPM 값에 해당하는 Y 위치 계산
-        // 개인훈련 대시보드 및 Indoor Training: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
+        // 개인훈련 대시보드 및 모바일 대시보드, Indoor Training: FTP 100% = 90 RPM 1:1 매칭 스케일링 공식 적용
         let rpmY;
-        if (canvasId === 'individualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
+        if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
           // RPM_scaled = (RPM_real / 90) * 100
           // 기준값 90을 기준으로 위 아래에 바로 표시
+          // 예: 110 RPM → FTP 122% 높이 (110/90*100 = 122.2%)
+          // 예: 60 RPM → FTP 66% 높이 (60/90*100 = 66.7%)
           const rpmScaled = (targetRpm / 90) * 100; // FTP %로 변환
           const rpmFtpPercent = Math.min(200, Math.max(0, rpmScaled)); // 최대 200%로 제한
           // FTP %를 Y 위치로 변환 (maxTargetPower 기준)
           const rpmPower = ftp * (rpmFtpPercent / 100);
           rpmY = padding.top + chartHeight - (chartHeight * (rpmPower / maxTargetPower));
+          
+          console.log(`[drawSegmentGraph] RPM 스케일링 적용 (${canvasId}):`, {
+            targetRpm,
+            rpmScaled,
+            rpmFtpPercent: `${rpmFtpPercent.toFixed(1)}%`,
+            rpmPower: `${rpmPower.toFixed(0)}W`,
+            ftp,
+            maxTargetPower
+          });
         } else {
           // 기타 화면: 기존 로직 유지
           rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
