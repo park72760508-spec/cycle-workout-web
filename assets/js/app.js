@@ -10486,7 +10486,7 @@ const SoundController = {
 window.triggerHapticFeedback = function() {
   // A. 소리 재생 (iOS, Android, PC 모두 실행)
   // 600Hz = 부드러운 나무 두드리는 소리 (기존 1200Hz보다 훨씬 낮고 조용함)
-  SoundController.playTick(600, 0.15); 
+  SoundController.playTick(1200, 0.01); 
 
   // B. 진동 재생 (지원하는 안드로이드 기기만 추가 실행)
   // 태블릿 등 진동 모터가 없는 기기는 이 부분이 무시되고 소리만 남
