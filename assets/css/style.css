@@ -505,7 +505,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 #userManualScreen .connection-exit-container {
   margin-top: 0 !important; /* 기본 24px 제거 */
-  padding-top: 10px !important; /* 기본 20px에서 10px로 축소 */
+  padding-top: 0 !important; /* 기본 20px에서 0으로 제거 */
   border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
