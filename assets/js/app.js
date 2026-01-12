@@ -2672,30 +2672,17 @@ if (!window.showScreen) {
         }
       });
       
-      // 모든 모달 닫기 (화면 전환 시 모달이 남아있지 않도록)
-      // .modal과 .modal-overlay 클래스를 가진 모든 모달 닫기
-      document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
-        modal.style.visibility = 'hidden';
-        modal.style.opacity = '0';
-        modal.style.pointerEvents = 'none';
-        modal.style.zIndex = '-1';
-      });
-      
       // 2) 대상 화면만 표시
       const el = safeGetElement(id);
       if (el) {
-        // 특정 화면은 flex로 표시
-        if (id === 'mobileDashboardScreen' || id === 'basecampScreen' || id === 'connectionScreen' || id === 'myCareerScreen') {
+        // 모바일 대시보드 화면은 flex로 표시
+        if (id === 'mobileDashboardScreen') {
           el.style.display = "flex";
         } else {
           el.style.display = "block";
         }
         el.classList.add("active");
-        el.style.visibility = "visible";
-        el.style.opacity = "1";
-        console.log(`Successfully switched to: ${id} - display: ${el.style.display}, visibility: ${el.style.visibility}`);
+        console.log(`Successfully switched to: ${id}`);
         
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
         if (id === 'mobileDashboardScreen') {
@@ -2750,66 +2737,7 @@ if (!window.showScreen) {
             btnIndoorRace.title = '';
           }
         }, 100);
-      }
-      
-      // 베이스캠프 화면 활성화 시 모든 모달 닫기 및 화면 정리
-      if (id === 'basecampScreen') {
-        // 모든 모달 닫기 (.modal과 .modal-overlay 모두)
-        document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
-          modal.classList.add('hidden');
-          modal.style.display = 'none';
-          modal.style.visibility = 'hidden';
-          modal.style.opacity = '0';
-          modal.style.pointerEvents = 'none';
-          modal.style.zIndex = '-1';
-        });
-        // 베이스캠프 화면이 최상위에 표시되도록 z-index 설정
-        if (el) {
-          el.style.zIndex = '1000';
-          el.style.position = 'relative';
         }
-      }
-      
-      // Indoor Training 대시보드 화면 초기화
-      if (id === 'indoorTrainingDashboardScreen') {
-        // 모든 모달 닫기 (.modal과 .modal-overlay 모두)
-        document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
-          modal.classList.add('hidden');
-          modal.style.display = 'none';
-          modal.style.visibility = 'hidden';
-          modal.style.opacity = '0';
-          modal.style.pointerEvents = 'none';
-          modal.style.zIndex = '-1';
-        });
-        setTimeout(() => {
-          if (typeof window.initIndoorTrainingDashboard === 'function') {
-            window.initIndoorTrainingDashboard();
-          } else if (typeof initIndoorTrainingDashboard === 'function') {
-            initIndoorTrainingDashboard();
-          } else {
-            console.warn('[Indoor Training] initIndoorTrainingDashboard 함수를 찾을 수 없습니다.');
-          }
-        }, 100);
-      }
-      
-      // connectionScreen, myCareerScreen 활성화 시 모든 모달 닫기
-      if (id === 'connectionScreen' || id === 'myCareerScreen') {
-        // 모든 모달 닫기 (.modal과 .modal-overlay 모두)
-        document.querySelectorAll(".modal, .modal-overlay").forEach(modal => {
-          modal.classList.add('hidden');
-          modal.style.display = 'none';
-          modal.style.visibility = 'hidden';
-          modal.style.opacity = '0';
-          modal.style.pointerEvents = 'none';
-          modal.style.zIndex = '-1';
-        });
-        // 화면이 최상위에 표시되도록 z-index 설정
-        if (el) {
-          el.style.zIndex = '1000';
-          el.style.position = 'relative';
-        }
-      }
-      
       } else {
         console.error(`Screen element '${id}' not found`);
         return;
@@ -3309,9 +3237,6 @@ window.updateTrainingDisplay = function () {
         console.warn('chart render skipped:', e);
       }
 
-      // ▼▼▼ 이 줄을 함수 닫는 중괄호 } 직전에 추가하세요 ▼▼▼
-      if (typeof updateCustomButtonState === 'function') updateCustomButtonState();
-   
 };
 
 // 그래프 하단 시간 표시 업데이트 함수
@@ -5240,8 +5165,35 @@ if (typeof window.originalShowScreen === 'undefined') {
   };
 }
 
-// showScreen 함수가 이미 정의되어 있으면 덮어쓰지 않음 (중복 정의 방지)
-// 첫 번째 showScreen 함수(2630번 라인)가 이미 정의되어 있으므로 여기서는 정의하지 않음
+window.showScreen = function(screenId) {
+  console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
+  
+  // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
+  if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
+    screenId = 'authScreen';
+  }
+  
+  // 모든 화면 숨기기 (스플래시 화면 제외)
+  document.querySelectorAll('.screen').forEach(screen => {
+    if (screen.id !== 'splashScreen') {
+    screen.classList.remove('active');
+    screen.style.display = 'none';
+    screen.style.opacity = '0';
+    screen.style.visibility = 'hidden';
+    }
+  });
+  
+  // 선택된 화면만 표시
+  const targetScreen = document.getElementById(screenId);
+  if (targetScreen) {
+    targetScreen.style.display = 'block';
+    targetScreen.classList.add('active');
+    targetScreen.style.opacity = '1';
+    targetScreen.style.visibility = 'visible';
+    
+    initializeCurrentScreen(screenId);
+  }
+};
 
 // 화면별 초기화 함수
 function initializeCurrentScreen(screenId) {
@@ -5305,20 +5257,6 @@ function initializeCurrentScreen(screenId) {
       } else {
         console.warn('loadTrainingJournalCalendar function not available');
       }
-      break;
-      
-    case 'indoorTrainingDashboardScreen':
-      // Indoor Training 대시보드 화면 초기화
-      console.log('Indoor Training 대시보드 화면 초기화');
-      setTimeout(() => {
-        if (typeof window.initIndoorTrainingDashboard === 'function') {
-          window.initIndoorTrainingDashboard();
-        } else if (typeof initIndoorTrainingDashboard === 'function') {
-          initIndoorTrainingDashboard();
-        } else {
-          console.warn('[Indoor Training] initIndoorTrainingDashboard 함수를 찾을 수 없습니다.');
-        }
-      }, 100);
       break;
       
     default:
@@ -9060,8 +8998,6 @@ function showRPEModal() {
   const modal = document.getElementById('rpeConditionModal');
   if (modal) {
     modal.style.display = 'flex';
-    modal.style.visibility = 'visible';
-    modal.style.opacity = '1';
     // 기존 선택 해제
     document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
       btn.classList.remove('selected');
@@ -9084,16 +9020,9 @@ function showRPEModal() {
 }
 
 function closeRPEModal() {
-  console.log('[RPE Modal] 모달 닫기 시도');
   const modal = document.getElementById('rpeConditionModal');
   if (modal) {
     modal.style.display = 'none';
-    modal.style.visibility = 'hidden';
-    modal.style.opacity = '0';
-    modal.style.pointerEvents = 'none';
-    modal.style.zIndex = '-1';
-    modal.classList.add('hidden');
-    console.log('[RPE Modal] 모달 닫기 완료');
   }
 }
 
@@ -11067,21 +10996,6 @@ function initializeMobileGauge() {
   
   // 바늘 애니메이션 루프 시작
   startMobileGaugeAnimationLoop();
-  
-  // 제어 버튼 초기화
-  initializeMobileControlButtons();
-  
-  // 일시정지 상태 변경 감지를 위한 인터벌 (0.5초마다 체크)
-  if (window.mobilePauseCheckInterval) {
-    clearInterval(window.mobilePauseCheckInterval);
-  }
-  window.mobilePauseCheckInterval = setInterval(() => {
-    if (typeof updateMobilePauseButtonIcon === 'function') {
-      updateMobilePauseButtonIcon();
-    }
-  }, 500);
-  
-  console.log('[Mobile Dashboard] 초기화 완료');
 }
 
 /**
@@ -11738,90 +11652,7 @@ function cleanupMobileDashboard() {
     mobileGaugeAnimationFrameId = null;
   }
   
-  // 일시정지 상태 체크 인터벌 정리
-  if (window.mobilePauseCheckInterval) {
-    clearInterval(window.mobilePauseCheckInterval);
-    window.mobilePauseCheckInterval = null;
-  }
-  
   console.log('[Mobile Dashboard] 정리 완료');
-}
-
-/**
- * 모바일 대시보드 제어 버튼 초기화
- */
-function initializeMobileControlButtons() {
-  // 건너뛰기 버튼
-  const skipBtn = safeGetElement('mobile-btn-skip');
-  if (skipBtn) {
-    skipBtn.addEventListener('click', () => {
-      if (typeof skipCurrentSegment === 'function') {
-        skipCurrentSegment();
-      } else {
-        console.warn('[Mobile Dashboard] skipCurrentSegment 함수를 찾을 수 없습니다.');
-      }
-    });
-  }
-  
-  // 시작/일시정지 토글 버튼
-  const pauseToggleBtn = safeGetElement('mobile-btn-pause-toggle');
-  const pauseIcon = safeGetElement('mobile-btn-pause-icon');
-  if (pauseToggleBtn) {
-    pauseToggleBtn.addEventListener('click', () => {
-      if (typeof togglePause === 'function') {
-        togglePause();
-        // 아이콘 업데이트
-        updateMobilePauseButtonIcon();
-      } else {
-        console.warn('[Mobile Dashboard] togglePause 함수를 찾을 수 없습니다.');
-      }
-    });
-    
-    // 초기 아이콘 설정: 화면 처음 로딩 시 play0.png 표시
-    if (pauseIcon) {
-      pauseIcon.src = 'assets/img/play0.png';
-      pauseIcon.alt = '시작';
-    }
-    // 이후 상태에 따라 업데이트
-    updateMobilePauseButtonIcon();
-  }
-  
-  // 종료 버튼
-  const stopBtn = safeGetElement('mobile-btn-stop');
-  if (stopBtn) {
-    stopBtn.addEventListener('click', () => {
-      const ok = window.confirm("정말 종료하시겠습니까?\n진행 중인 훈련이 종료됩니다.");
-      if (!ok) return;
-      
-      // 확인: 종료 처리
-      if (typeof stopSegmentLoop === 'function') {
-        stopSegmentLoop();
-      } else {
-        console.warn('[Mobile Dashboard] stopSegmentLoop 함수를 찾을 수 없습니다.');
-      }
-      
-      // 결과 화면 표시 및 화면 전환은 stopSegmentLoop 내부에서 처리됨
-    });
-  }
-  
-  console.log('[Mobile Dashboard] 제어 버튼 초기화 완료');
-}
-
-/**
- * 모바일 대시보드 일시정지 버튼 아이콘 업데이트
- */
-function updateMobilePauseButtonIcon() {
-  const pauseIcon = safeGetElement('mobile-btn-pause-icon');
-  if (!pauseIcon) return;
-  
-  const isPaused = window.trainingState?.paused || false;
-  if (isPaused) {
-    pauseIcon.src = 'assets/img/play0.png';
-    pauseIcon.alt = '시작';
-  } else {
-    pauseIcon.src = 'assets/img/pause0.png';
-    pauseIcon.alt = '일시정지';
-  }
 }
 
 // 화면 전환 시 정리
@@ -12047,122 +11878,3 @@ window.playTickSound = window.triggerHapticFeedback;
 window.addHapticFeedbackToButton = addHapticToElement;
 window.applyHapticFeedbackToAllButtons = () => {}; 
 window.setupHapticObserver = () => {};
-
-
-/* ==========================================================
-   [FIX] 베이스캠프 버튼 복구 및 커스텀 컨트롤 UI 추가
-========================================================== */
-
-// 1. 베이스캠프 및 주요 화면 이동 버튼 기능 복구 (사라진 이벤트 리스너 재등록)
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('✅ UI 이벤트 리스너 복구 시작');
-
-  // 베이스캠프 -> 화면 이동 버튼들
-  const btnMap = {
-    'btn-indoor': 'connectionScreen', // INDOOR TRAINING
-    'btn-solo': 'workoutScreen',      // SOLO TRAINING
-    'btn-profile': 'profileScreen',   // USER PROFILE
-    'btn-career': 'myCareerScreen',   // MY CAREER
-    'btn-manual': 'userManualScreen'  // MANUAL
-  };
-
-  // 버튼 ID나 클래스를 찾아 클릭 이벤트 연결
-  Object.keys(btnMap).forEach(btnClass => {
-    // basecamp-btn이면서 해당 클래스를 가진 요소 찾기
-    const btns = document.querySelectorAll(`.basecamp-btn-${btnClass.replace('btn-', '')}, .btn-device.${btnClass}`);
-    btns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const targetScreen = btnMap[btnClass];
-        console.log(`이동: ${targetScreen}`);
-        if (typeof showScreen === 'function') {
-          showScreen(targetScreen);
-        } else {
-          console.error('showScreen 함수를 찾을 수 없습니다.');
-        }
-      });
-    });
-  });
-  
-  // 초기 실행 시 컨트롤 컨테이너 생성
-  createCustomControlContainer();
-});
-
-
-// 2. 커스텀 컨트롤 버튼(건너뛰기, 토글, 종료) 생성 및 관리 함수
-function createCustomControlContainer() {
-  // 이미 있으면 삭제 후 재생성 (중복 방지)
-  const existing = document.getElementById('customControls');
-  if (existing) existing.remove();
-
-  // 훈련 화면(trainingScreen) 찾기
-  const screen = document.getElementById('trainingScreen');
-  if (!screen) return;
-
-  const container = document.createElement('div');
-  container.id = 'customControls';
-  container.className = 'custom-control-container';
-  
-  // HTML 구조 생성 (건너뛰기 - 재생/일시정지 - 종료)
-  container.innerHTML = `
-    <img src="assets/img/next0.png" id="btnCustomSkip" class="custom-control-btn" alt="Skip">
-    
-    <img src="assets/img/play0.png" id="btnCustomToggle" class="custom-control-btn" alt="Play/Pause">
-    
-    <img src="assets/img/stop0.png" id="btnCustomStop" class="custom-control-btn" alt="Stop">
-  `;
-
-  screen.appendChild(container);
-
-  // --- 이벤트 연결 ---
-  
-  // 1) 건너뛰기
-  document.getElementById('btnCustomSkip').addEventListener('click', () => {
-    if (typeof skipCurrentSegment === 'function') skipCurrentSegment();
-  });
-
-  // 2) 재생/일시정지 토글
-  const toggleBtn = document.getElementById('btnCustomToggle');
-  toggleBtn.addEventListener('click', () => {
-    // 현재 상태 확인 (paused 변수 또는 trainingState 사용)
-    const isPaused = window.trainingState ? window.trainingState.paused : false;
-    
-    if (typeof togglePause === 'function') {
-      togglePause(); // 실제 기능 수행
-    } else if (typeof setPaused === 'function') {
-      setPaused(!isPaused);
-    }
-
-    // 이미지 교체 로직 (현재 상태의 반대로 이미지 변경)
-    // 클릭 시점에 paused가 true였으면 -> 이제 재생됨 -> pause 버튼 보여주기
-    // 클릭 시점에 paused가 false였으면 -> 이제 멈춤 -> play 버튼 보여주기
-    // *화면 로딩 시 play0.png가 보이고, 훈련이 시작되면 pause0.png로 바뀌어야 자연스럽습니다.
-    // 여기서는 단순 클릭 토글만 구현합니다. 상태 동기화는 아래 updateCustomButtonState에서 처리.
-  });
-
-  // 3) 종료
-  document.getElementById('btnCustomStop').addEventListener('click', () => {
-    if (confirm('훈련을 종료하시겠습니까?')) {
-      if (typeof saveTrainingResultAtEnd === 'function') saveTrainingResultAtEnd();
-      if (typeof showScreen === 'function') showScreen('resultScreen');
-    }
-  });
-}
-
-// 3. 훈련 상태에 따라 버튼 이미지 동기화 (updateTrainingDisplay 함수 내에서 호출 권장)
-function updateCustomButtonState() {
-  const toggleBtn = document.getElementById('btnCustomToggle');
-  if (!toggleBtn || !window.trainingState) return;
-
-  if (window.trainingState.paused) {
-    // 일시정지 상태면 -> 다시 시작할 수 있게 'Play' 이미지 표시
-    toggleBtn.src = 'assets/img/play0.png';
-  } else {
-    // 훈련 중이면 -> 멈출 수 있게 'Pause' 이미지 표시
-    toggleBtn.src = 'assets/img/pause0.png';
-  }
-}
-
-/* ========================================================== */
-
-
