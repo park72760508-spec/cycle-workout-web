@@ -2658,14 +2658,33 @@ function startSegmentLoop() {
      if (typeof setPaused === "function") setPaused(false);
      if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
    
-     // ✅ await 없이 순차 실행(저장 → 초기화 → 요약 → 화면 전환)
-     Promise.resolve()
-       .then(() => window.saveTrainingResultAtEnd?.())
-       .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
-       .then(() => window.trainingResults?.initializeResultScreen?.())
-       .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
-       .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
-       .then(() => { if (typeof showScreen === "function") showScreen("trainingJournalScreen"); });
+     // 모바일 대시보드가 활성화된 경우 결과 모달 표시 (훈련일지로 이동하지 않음)
+     const mobileScreen = document.getElementById('mobileDashboardScreen');
+     if (mobileScreen && 
+         (mobileScreen.classList.contains('active') || 
+          window.getComputedStyle(mobileScreen).display !== 'none')) {
+       // ✅ await 없이 순차 실행(저장 → 초기화 → 결과 모달 표시)
+       Promise.resolve()
+         .then(() => window.saveTrainingResultAtEnd?.())
+         .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+         .then(() => window.trainingResults?.initializeResultScreen?.())
+         .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+         .then(() => { 
+           // 모바일 대시보드 결과 모달 표시
+           if (typeof showMobileTrainingResultModal === 'function') {
+             showMobileTrainingResultModal();
+           }
+         });
+     } else {
+       // 기존 화면(개인훈련 대시보드 등)의 경우 훈련일지로 이동
+       Promise.resolve()
+         .then(() => window.saveTrainingResultAtEnd?.())
+         .catch((e) => { console.warn('[result] saveTrainingResultAtEnd error', e); })
+         .then(() => window.trainingResults?.initializeResultScreen?.())
+         .catch((e) => { console.warn('[result] initializeResultScreen error', e); })
+         .then(() => { try { window.renderCurrentSessionSummary?.(); } catch (e) { console.warn(e); } })
+         .then(() => { if (typeof showScreen === "function") showScreen("trainingJournalScreen"); });
+     }
    
      return;
    }
@@ -11877,6 +11896,118 @@ function updateMobileTargetPower() {
 /**
  * 모바일 훈련 결과 모달 닫기
  */
+// 모바일 훈련 결과 모달 표시 함수 (개인훈련 대시보드와 동일한 로직)
+function showMobileTrainingResultModal(status = null) {
+  const modal = safeGetElement('mobileTrainingResultModal');
+  if (!modal) {
+    console.warn('[Mobile Dashboard] 훈련 결과 모달을 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 결과값 계산
+  const sessionData = window.trainingResults?.getCurrentSessionData?.();
+  if (!sessionData) {
+    console.warn('[Mobile Dashboard] 세션 데이터를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 통계 계산
+  const stats = window.trainingResults?.calculateSessionStats?.() || {};
+  
+  // 훈련 시간 계산 - status.elapsedTime 우선 사용 (세그먼트 그래프 상단 시간값)
+  let totalSeconds = 0;
+  let duration_min = 0;
+  
+  if (status && status.elapsedTime !== undefined && status.elapsedTime !== null) {
+    // Firebase에서 받은 elapsedTime 사용 (가장 정확)
+    totalSeconds = Math.max(0, Math.floor(status.elapsedTime));
+    duration_min = Math.floor(totalSeconds / 60);
+    console.log('[Mobile Dashboard] elapsedTime 사용:', { elapsedTime: status.elapsedTime, totalSeconds, duration_min });
+  } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
+    // 전역 변수에 저장된 elapsedTime 사용
+    totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
+    duration_min = Math.floor(totalSeconds / 60);
+    console.log('[Mobile Dashboard] lastElapsedTime 사용:', { lastElapsedTime: window.lastElapsedTime, totalSeconds, duration_min });
+  } else if (window.trainingState && window.trainingState.elapsedSec !== undefined) {
+    // trainingState의 elapsedSec 사용
+    totalSeconds = Math.max(0, Math.floor(window.trainingState.elapsedSec));
+    duration_min = Math.floor(totalSeconds / 60);
+    console.log('[Mobile Dashboard] trainingState.elapsedSec 사용:', { elapsedSec: window.trainingState.elapsedSec, totalSeconds, duration_min });
+  } else {
+    // 대체: startTime과 endTime으로 계산
+    const startTime = sessionData.startTime ? new Date(sessionData.startTime) : null;
+    const endTime = sessionData.endTime ? new Date(sessionData.endTime) : new Date();
+    totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+    duration_min = Math.floor(totalSeconds / 60);
+    console.log('[Mobile Dashboard] startTime/endTime 사용:', { startTime, endTime, totalSeconds, duration_min });
+  }
+  
+  // TSS 및 NP 계산 (resultManager.js와 동일한 로직)
+  let tss = 0;
+  let np = 0;
+  
+  // trainingMetrics가 있으면 사용 (가장 정확)
+  if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+    const elapsedSec = window.trainingMetrics.elapsedSec;
+    const np4sum = window.trainingMetrics.np4sum || 0;
+    const count = window.trainingMetrics.count || 1;
+    
+    if (count > 0 && np4sum > 0) {
+      np = Math.pow(np4sum / count, 0.25);
+      const userFtp = window.currentUser?.ftp || window.userFTP || window.mobileUserFTP || 200;
+      const IF = userFtp > 0 ? (np / userFtp) : 0;
+      tss = (elapsedSec / 3600) * (IF * IF) * 100;
+      console.log('[Mobile Dashboard] TSS 계산 (trainingMetrics):', { elapsedSec, np, IF, tss, userFtp });
+    }
+  }
+  
+  // trainingMetrics가 없으면 대체 계산 (elapsedTime 또는 totalSeconds 사용)
+  if (!tss || tss === 0) {
+    const userFtp = window.currentUser?.ftp || window.userFTP || window.mobileUserFTP || 200;
+    
+    // NP가 없으면 평균 파워 * 1.05로 근사
+    if (!np || np === 0) {
+      np = Math.round((stats.avgPower || 0) * 1.05);
+    }
+    
+    // IF 계산
+    const IF = userFtp > 0 ? (np / userFtp) : 0;
+    
+    // TSS 계산: elapsedTime 우선 사용, 없으면 totalSeconds 사용
+    const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
+    tss = (timeForTss / 3600) * (IF * IF) * 100;
+    console.log('[Mobile Dashboard] TSS 계산 (대체):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
+  }
+  
+  // 값 반올림 및 최소값 보장
+  tss = Math.max(0, Math.round(tss * 100) / 100);
+  np = Math.max(0, Math.round(np * 10) / 10);
+  
+  // 칼로리 계산 (평균 파워 * 시간(분) * 0.0143)
+  const avgPower = stats.avgPower || 0;
+  const calories = Math.round(avgPower * duration_min * 0.0143);
+  
+  // 결과값 표시
+  const durationEl = safeGetElement('mobile-result-duration', { silent: true });
+  const avgPowerEl = safeGetElement('mobile-result-avg-power', { silent: true });
+  const npEl = safeGetElement('mobile-result-np', { silent: true });
+  const tssEl = safeGetElement('mobile-result-tss', { silent: true });
+  const hrAvgEl = safeGetElement('mobile-result-hr-avg', { silent: true });
+  const caloriesEl = safeGetElement('mobile-result-calories', { silent: true });
+  
+  if (durationEl) durationEl.textContent = `${duration_min}분`;
+  if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
+  if (npEl) npEl.textContent = `${np}W`;
+  if (tssEl) tssEl.textContent = `${tss}`;
+  if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
+  if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
+  
+  console.log('[Mobile Dashboard] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories });
+  
+  // 모달 표시
+  modal.classList.remove('hidden');
+}
+
 function closeMobileTrainingResultModal() {
   const modal = safeGetElement('mobileTrainingResultModal');
   if (modal) {
@@ -11925,6 +12056,7 @@ if (typeof showScreen === 'function') {
 
 // 전역 함수로 등록
 window.startMobileDashboard = startMobileDashboard;
+window.showMobileTrainingResultModal = showMobileTrainingResultModal;
 window.closeMobileTrainingResultModal = closeMobileTrainingResultModal;
 window.cleanupMobileDashboard = cleanupMobileDashboard;
 
@@ -12318,6 +12450,9 @@ function handleMobileToggle() {
   
   // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 5초 카운트다운 후 시작 처리
   if (!ts || !ts.timerId) {
+    // 시작 버튼 클릭 시 즉시 일시정지 버튼으로 변경 (토글 기능)
+    if(btnImg) btnImg.src = 'assets/img/pause0.png';
+    
     // 5초 카운트다운 후 워크아웃 시작
     startMobileWorkoutWithCountdown(5);
     return;
