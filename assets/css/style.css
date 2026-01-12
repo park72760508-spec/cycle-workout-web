@@ -12919,3 +12919,48 @@ line[id^="needle-"] {
 }
 
 
+/* ==========================================================
+   [모바일 대시보드 전용 스타일 추가]
+   - 속도계 컨테이너 및 버튼 네온 효과 정의
+========================================================== */
+
+/* 속도계 컨테이너 (HTML 인라인 스타일 보조) */
+.mobile-gauge-container {
+  /* index.html의 인라인 스타일이 우선되지만, 
+     혹시 모를 상황을 대비해 CSS에서도 정의 */
+  width: 90vw;
+  max-width: 500px;
+  aspect-ratio: 200 / 270; /* 중요: SVG 비율과 일치 */
+  position: relative;
+  margin: 0 auto;
+}
+
+/* 버튼 네온 스타일 (작은 버튼용) */
+.svg-neon-circle {
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) 
+          drop-shadow(0 0 5px rgba(255, 255, 255, 0.4));
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+/* 버튼 호버/터치 시 네온 강조 */
+.svg-btn-group:hover .svg-neon-circle {
+  stroke-width: 1.5px;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 1)) 
+          drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+}
+
+/* 버튼 그룹 인터랙션 */
+.svg-btn-group {
+  cursor: pointer;
+}
+.svg-btn-group:active {
+  transform: scale(0.95); /* 클릭 시 살짝 작아짐 */
+  transform-origin: center;
+}
+
+/* 아이콘 이미지 클릭 통과 */
+.svg-btn-icon {
+  pointer-events: none;
+}
+
