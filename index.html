@@ -1688,8 +1688,8 @@
 
     <!-- 메인 콘텐츠 (속도계) -->
     <div class="mobile-main-content" style="flex: 1 1 0; display: flex; justify-content: center; align-items: center; position: relative; min-height: 0; overflow: hidden;">
-      <div class="mobile-gauge-container" style="width: 90vw; max-width: 500px; aspect-ratio: 200/270; position: relative; margin: 0 auto;">
-        <svg viewBox="0 0 200 270" style="width:100%; height:100%;">
+      <div class="mobile-gauge-container" style="width: 90vw; max-width: 500px; aspect-ratio: 230/260; position: relative; margin: 0 auto;">
+        <svg viewBox="-15 0 230 260" style="width:100%; height:100%;">
           
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
           <path id="mobile-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
@@ -1704,7 +1704,7 @@
           <text id="mobile-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
           <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
           
-          <text id="mobile-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+          <text id="mobile-ui-current-power" x="100" y="195" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
         
           <g id="mobile-gauge-needle" transform="translate(100, 140) rotate(-90)">
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
@@ -1714,18 +1714,18 @@
           <g id="svgControlPanel">
             
             <g class="svg-btn-group" onclick="handleMobileStop()">
-              <circle class="svg-neon-circle" cx="60" cy="240" r="13" fill="#000" stroke="#fff" stroke-width="1" />
-              <image class="svg-btn-icon" x="52" y="232" width="16" height="16" href="assets/img/stop0.png" />
+              <circle class="svg-neon-circle" cx="60" cy="215" r="14" fill="#ffffff" stroke="#ccc" stroke-width="1" />
+              <image class="svg-btn-icon" x="52" y="207" width="16" height="16" href="assets/img/stop0.png" />
             </g>
         
             <g class="svg-btn-group" onclick="handleMobileToggle()">
-              <circle class="svg-neon-circle" cx="100" cy="240" r="13" fill="#000" stroke="#fff" stroke-width="1" />
-              <image id="imgMobileToggle" class="svg-btn-icon" x="92" y="232" width="16" height="16" href="assets/img/play0.png" />
+              <circle class="svg-neon-circle" cx="100" cy="215" r="14" fill="#ffffff" stroke="#ccc" stroke-width="1" />
+              <image id="imgMobileToggle" class="svg-btn-icon" x="92" y="207" width="16" height="16" href="assets/img/play0.png" />
             </g>
         
             <g class="svg-btn-group" onclick="handleMobileSkip()">
-              <circle class="svg-neon-circle" cx="140" cy="240" r="13" fill="#000" stroke="#fff" stroke-width="1" />
-              <image class="svg-btn-icon" x="132" y="232" width="16" height="16" href="assets/img/next0.png" />
+              <circle class="svg-neon-circle" cx="140" cy="215" r="14" fill="#ffffff" stroke="#ccc" stroke-width="1" />
+              <image class="svg-btn-icon" x="132" y="207" width="16" height="16" href="assets/img/next0.png" />
             </g>
           </g>
         
