@@ -1931,14 +1931,14 @@ function updateSegmentBarTick(){
        window.getComputedStyle(mobileScreen).display !== 'none')) {
     if (typeof drawSegmentGraph === 'function' && w.segments && w.segments.length > 0) {
       const now = Date.now();
-      if (!window._lastMobileGraphUpdate || (now - window._lastMobileGraphUpdate) > 100) {
+      // 마스코트 펄스 애니메이션을 위해 더 자주 업데이트 (약 50ms마다)
+      if (!window._lastMobileGraphUpdate || (now - window._lastMobileGraphUpdate) > 50) {
         window._lastMobileGraphUpdate = now;
-        // 개인훈련 대시보드와 동일하게 elapsedTime 전달
+        // 개인훈련 대시보드와 동일하게 elapsedTime 전달 (경과시간에 따른 마스코트 이동)
         const elapsedTime = window.trainingState?.elapsedSec || 0;
+        // 경과시간을 전역 변수에 저장 (drawSegmentGraph에서 사용)
+        window.lastElapsedTime = elapsedTime;
         drawSegmentGraph(w.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
-        
-        // 모바일 대시보드 마스코트는 Canvas에 직접 그려지므로 별도 업데이트 불필요
-        // drawSegmentGraph 함수에서 펄스 애니메이션과 함께 그려짐
       }
     }
   }
@@ -2424,31 +2424,53 @@ function startSegmentLoop() {
 
   // 1초마다 실행되는 메인 루프
   window.trainingState.timerId = setInterval(() => {
-    if (window.trainingState.paused) {
+    const ts = window.trainingState;
+    if (!ts) {
+      console.error('[Timer] trainingState가 없습니다!');
+      return;
+    }
+    
+    if (ts.paused) {
       return; // 일시정지 중이면 스킵
     }
 
    // === 시간 진행(벽시계 기반) ===
-   const ts = window.trainingState;
    const nowMs = Date.now();
+   
+   // workoutStartMs가 설정되지 않았으면 현재 시간으로 설정
+   if (!ts.workoutStartMs) {
+     console.warn('[Timer] workoutStartMs가 없어서 현재 시간으로 설정합니다.');
+     ts.workoutStartMs = nowMs;
+     ts.pauseAccumMs = 0;
+     ts.pausedAtMs = null;
+   }
+   
    // 일시정지 누적 반영: pauseAccumMs + (일시정지 중이라면 지금까지 경과)
    const pausedMs = ts.pauseAccumMs + (ts.pausedAtMs ? (nowMs - ts.pausedAtMs) : 0);
    // 시작시각/일시정지 보정으로 경과초를 직접 계산
    const newElapsedSec = Math.floor((nowMs - ts.workoutStartMs - pausedMs) / 1000);
    
-   // 같은 초에 중복 처리 방지(선택)
-   //if (newElapsedSec === ts.elapsedSec) {
-     // 같은 초면 UI만 가볍게 유지하고 빠져도 OK
-     // updateSegmentBarTick?.();
-     //return;
-   //}
-   ts.elapsedSec = newElapsedSec;
+   // 음수 방지
+   if (newElapsedSec < 0) {
+     console.warn('[Timer] 경과 시간이 음수입니다. workoutStartMs를 재설정합니다.');
+     ts.workoutStartMs = nowMs;
+     ts.pauseAccumMs = 0;
+     ts.elapsedSec = 0;
+   } else {
+     ts.elapsedSec = newElapsedSec;
+   }
    
    // 현재 세그 경과초 = 전체경과초 - 해당 세그 누적시작초
    const cumStart = getCumulativeStartSec(ts.segIndex);
    ts.segElapsedSec = Math.max(0, ts.elapsedSec - cumStart);
    
    // 이후 로직은 기존과 동일하게 진행 (currentSegIndex/segDur/segRemaining 계산 등)
+   const w = window.currentWorkout;
+   if (!w || !w.segments) {
+     console.error('[Timer] 워크아웃 또는 세그먼트가 없습니다.');
+     return;
+   }
+   
    const currentSegIndex = ts.segIndex;
    const currentSeg = w.segments[currentSegIndex];
    if (!currentSeg) {
@@ -2560,6 +2582,42 @@ function startSegmentLoop() {
     
     // 그래프 하단 시간 표시 업데이트
     if (typeof updateChartTimeLabels === "function") updateChartTimeLabels();
+    
+    // 모바일 대시보드 타이머 업데이트 (경과시간, 세그먼트 타이머)
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    if (mobileScreen && 
+        (mobileScreen.classList.contains('active') || 
+         window.getComputedStyle(mobileScreen).display !== 'none')) {
+      // 경과시간 표시 업데이트
+      const elapsedSec = window.trainingState?.elapsedSec || 0;
+      const hours = Math.floor(elapsedSec / 3600);
+      const minutes = Math.floor((elapsedSec % 3600) / 60);
+      const seconds = Math.floor(elapsedSec % 60);
+      const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      const timerEl = safeGetElement('mobile-main-timer');
+      if (timerEl) {
+        timerEl.textContent = timeString;
+      }
+      
+      // 세그먼트 타이머 (LAP COUNTDOWN) 업데이트 - 민트색 표시
+      if (w && w.segments && window.trainingState?.segIndex !== undefined) {
+        const currentSegment = w.segments[window.trainingState.segIndex];
+        if (currentSegment) {
+          const segmentDuration = Number(currentSegment.duration_sec) || Number(currentSegment.duration) || 0;
+          const segmentElapsed = window.trainingState.segElapsedSec || 0;
+          const remaining = Math.max(0, segmentDuration - segmentElapsed);
+          
+          const lapMinutes = Math.floor(remaining / 60);
+          const lapSeconds = Math.floor(remaining % 60);
+          const lapTimeString = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
+          
+          const lapTimeEl = safeGetElement('mobile-ui-lap-time');
+          if (lapTimeEl) {
+            lapTimeEl.textContent = lapTimeString;
+          }
+        }
+      }
+    }
 
     // 전체 종료 판단
    // 전체 종료 판단
