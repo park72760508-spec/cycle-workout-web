@@ -12878,65 +12878,44 @@ line[id^="needle-"] {
    - 흰색 네온 효과 및 1/2 간격 적용
 ========================================================== */
 
-/* 컨트롤 패널 컨테이너 (절대 위치) */
 /* ==========================================================
-   [SVG 내부 컨트롤 버튼 스타일]
-   - SVG 내부 요소에 대한 인터랙션 정의
+   [SVG 내부 컨트롤 버튼 스타일 - 네온 버전]
 ========================================================== */
 
-/* 버튼 그룹 (원 + 이미지) */
+/* 버튼 그룹 인터랙션 */
 .svg-btn-group {
   cursor: pointer;
-  transition: opacity 0.2s ease, transform 0.1s;
+  transition: transform 0.1s ease;
 }
 
-/* 호버/터치 시 효과 */
-.svg-btn-group:hover {
-  opacity: 0.9;
-}
-
+/* 클릭 시 살짝 작아지는 효과 */
 .svg-btn-group:active {
-  /* 클릭 시 살짝 작아지는 효과 (중심축 기준 스케일링은 SVG에서 복잡하므로 투명도로 피드백) */
-  opacity: 0.7;
+  transform: scale(0.95);
+  transform-origin: center; /* 중심축 기준 축소 */
 }
 
-/* 참고: SVG 내부의 <circle> fill="white" 속성이 
-  이전에 요청하신 '투명 배경 흰색 채움' 역할을 수행합니다.
-*/
-
-/* 이미지 버튼 공통 스타일 */
-.mobile-ctrl-img {
-  width: 60px;
-  height: 60px;
-  cursor: pointer;
-  border-radius: 50%; /* 원형 모양 유지 */
-  
-  background: #ffffff; /* 배경 흰색 채움 */
-  
-  /* [수정됨] 두꺼운 네온 효과 제거 및 얇은 실선 적용 */
-  border: 1px solid #fff; /* 2px -> 1px로 변경하여 얇은 실선 적용 */
-  box-shadow: none; /* 네온 효과(그림자) 제거 */
-  /* 만약 너무 평면적으로 보인다면, 아래 주석을 해제하여 아주 살짝 입체감을 줄 수 있습니다. */
-  /* box-shadow: 0 2px 4px rgba(0,0,0,0.2); */
-  
-  transition: all 0.2s ease;
-  padding: 10px; /* 내부 아이콘 여백 */
-  box-sizing: border-box;
+/* 검은색 원 + 흰색 실선 + 네온 효과 */
+.svg-neon-circle {
+  /* 네온 효과: 흰색 그림자를 번지게 하여 빛나는 느낌 연출 */
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8)) 
+          drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+  transition: all 0.3s ease;
 }
 
-/* 터치/클릭 시 효과 */
-.mobile-ctrl-img:active {
-  transform: scale(0.95); /* 눌리는 깊이감 약간 줄임 */
-  background: #e0e0e0; /* 클릭 시 배경 약간 어둡게 */
-  box-shadow: none; /* 클릭 시에도 네온 효과 없음 */
+/* 터치/호버 시 네온 효과 강해짐 */
+.svg-btn-group:hover .svg-neon-circle {
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 1)) 
+          drop-shadow(0 0 12px rgba(255, 255, 255, 0.6));
 }
 
-
-/* 이미지 래퍼 (정렬 보조) */
-.mobile-btn-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* 아이콘 이미지 스타일 보정 */
+.svg-btn-icon {
+  pointer-events: none; /* 클릭 이벤트가 원(circle)에서 발생하도록 */
+  
+  /* [중요] 만약 기존 아이콘(png)이 검은색이라서 안 보인다면 
+     아래 주석을 해제하여 흰색으로 반전시키세요. */
+  /* filter: brightness(0) invert(1); */
 }
 
 
