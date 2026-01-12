@@ -3309,6 +3309,9 @@ window.updateTrainingDisplay = function () {
         console.warn('chart render skipped:', e);
       }
 
+      // ▼▼▼ 이 줄을 함수 닫는 중괄호 } 직전에 추가하세요 ▼▼▼
+      if (typeof updateCustomButtonState === 'function') updateCustomButtonState();
+   
 };
 
 // 그래프 하단 시간 표시 업데이트 함수
@@ -12044,3 +12047,122 @@ window.playTickSound = window.triggerHapticFeedback;
 window.addHapticFeedbackToButton = addHapticToElement;
 window.applyHapticFeedbackToAllButtons = () => {}; 
 window.setupHapticObserver = () => {};
+
+
+/* ==========================================================
+   [FIX] 베이스캠프 버튼 복구 및 커스텀 컨트롤 UI 추가
+========================================================== */
+
+// 1. 베이스캠프 및 주요 화면 이동 버튼 기능 복구 (사라진 이벤트 리스너 재등록)
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('✅ UI 이벤트 리스너 복구 시작');
+
+  // 베이스캠프 -> 화면 이동 버튼들
+  const btnMap = {
+    'btn-indoor': 'connectionScreen', // INDOOR TRAINING
+    'btn-solo': 'workoutScreen',      // SOLO TRAINING
+    'btn-profile': 'profileScreen',   // USER PROFILE
+    'btn-career': 'myCareerScreen',   // MY CAREER
+    'btn-manual': 'userManualScreen'  // MANUAL
+  };
+
+  // 버튼 ID나 클래스를 찾아 클릭 이벤트 연결
+  Object.keys(btnMap).forEach(btnClass => {
+    // basecamp-btn이면서 해당 클래스를 가진 요소 찾기
+    const btns = document.querySelectorAll(`.basecamp-btn-${btnClass.replace('btn-', '')}, .btn-device.${btnClass}`);
+    btns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetScreen = btnMap[btnClass];
+        console.log(`이동: ${targetScreen}`);
+        if (typeof showScreen === 'function') {
+          showScreen(targetScreen);
+        } else {
+          console.error('showScreen 함수를 찾을 수 없습니다.');
+        }
+      });
+    });
+  });
+  
+  // 초기 실행 시 컨트롤 컨테이너 생성
+  createCustomControlContainer();
+});
+
+
+// 2. 커스텀 컨트롤 버튼(건너뛰기, 토글, 종료) 생성 및 관리 함수
+function createCustomControlContainer() {
+  // 이미 있으면 삭제 후 재생성 (중복 방지)
+  const existing = document.getElementById('customControls');
+  if (existing) existing.remove();
+
+  // 훈련 화면(trainingScreen) 찾기
+  const screen = document.getElementById('trainingScreen');
+  if (!screen) return;
+
+  const container = document.createElement('div');
+  container.id = 'customControls';
+  container.className = 'custom-control-container';
+  
+  // HTML 구조 생성 (건너뛰기 - 재생/일시정지 - 종료)
+  container.innerHTML = `
+    <img src="assets/img/next0.png" id="btnCustomSkip" class="custom-control-btn" alt="Skip">
+    
+    <img src="assets/img/play0.png" id="btnCustomToggle" class="custom-control-btn" alt="Play/Pause">
+    
+    <img src="assets/img/stop0.png" id="btnCustomStop" class="custom-control-btn" alt="Stop">
+  `;
+
+  screen.appendChild(container);
+
+  // --- 이벤트 연결 ---
+  
+  // 1) 건너뛰기
+  document.getElementById('btnCustomSkip').addEventListener('click', () => {
+    if (typeof skipCurrentSegment === 'function') skipCurrentSegment();
+  });
+
+  // 2) 재생/일시정지 토글
+  const toggleBtn = document.getElementById('btnCustomToggle');
+  toggleBtn.addEventListener('click', () => {
+    // 현재 상태 확인 (paused 변수 또는 trainingState 사용)
+    const isPaused = window.trainingState ? window.trainingState.paused : false;
+    
+    if (typeof togglePause === 'function') {
+      togglePause(); // 실제 기능 수행
+    } else if (typeof setPaused === 'function') {
+      setPaused(!isPaused);
+    }
+
+    // 이미지 교체 로직 (현재 상태의 반대로 이미지 변경)
+    // 클릭 시점에 paused가 true였으면 -> 이제 재생됨 -> pause 버튼 보여주기
+    // 클릭 시점에 paused가 false였으면 -> 이제 멈춤 -> play 버튼 보여주기
+    // *화면 로딩 시 play0.png가 보이고, 훈련이 시작되면 pause0.png로 바뀌어야 자연스럽습니다.
+    // 여기서는 단순 클릭 토글만 구현합니다. 상태 동기화는 아래 updateCustomButtonState에서 처리.
+  });
+
+  // 3) 종료
+  document.getElementById('btnCustomStop').addEventListener('click', () => {
+    if (confirm('훈련을 종료하시겠습니까?')) {
+      if (typeof saveTrainingResultAtEnd === 'function') saveTrainingResultAtEnd();
+      if (typeof showScreen === 'function') showScreen('resultScreen');
+    }
+  });
+}
+
+// 3. 훈련 상태에 따라 버튼 이미지 동기화 (updateTrainingDisplay 함수 내에서 호출 권장)
+function updateCustomButtonState() {
+  const toggleBtn = document.getElementById('btnCustomToggle');
+  if (!toggleBtn || !window.trainingState) return;
+
+  if (window.trainingState.paused) {
+    // 일시정지 상태면 -> 다시 시작할 수 있게 'Play' 이미지 표시
+    toggleBtn.src = 'assets/img/play0.png';
+  } else {
+    // 훈련 중이면 -> 멈출 수 있게 'Pause' 이미지 표시
+    toggleBtn.src = 'assets/img/pause0.png';
+  }
+}
+
+/* ========================================================== */
+
+
