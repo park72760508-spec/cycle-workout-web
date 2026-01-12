@@ -11878,3 +11878,102 @@ window.playTickSound = window.triggerHapticFeedback;
 window.addHapticFeedbackToButton = addHapticToElement;
 window.applyHapticFeedbackToAllButtons = () => {}; 
 window.setupHapticObserver = () => {};
+
+
+/* ==========================================================
+   [모바일 대시보드 컨트롤 로직]
+   - 건너뛰기, 토글(시작/일시정지), 종료 기능 구현
+   - 상태에 따른 이미지 스와핑 (play0.png <-> pause0.png)
+========================================================== */
+
+/**
+ * 1. 시작/일시정지 토글 핸들러
+ * - 화면 로딩 시 play0.png (대기 상태)
+ * - 클릭 시: 실행 중이면 일시정지(play0.png), 정지 중이면 재개(pause0.png)
+ */
+function handleMobileToggle() {
+  const btnImg = document.getElementById('imgMobileToggle');
+  const ts = window.trainingState;
+  
+  // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 시작 처리
+  if (!ts || !ts.timerId) {
+    if (typeof startWorkoutTraining === 'function') {
+      startWorkoutTraining();
+      // 시작했으므로 '일시정지' 할 수 있는 버튼으로 변경
+      if(btnImg) btnImg.src = 'assets/img/pause0.png';
+    }
+    return;
+  }
+
+  // 현재 일시정지 상태 확인
+  const isCurrentlyPaused = ts.paused;
+
+  if (isCurrentlyPaused) {
+    // [현재 일시정지 상태] -> 재개(Resume)
+    if (typeof setPaused === 'function') setPaused(false);
+    if(btnImg) btnImg.src = 'assets/img/pause0.png'; // 움직이는 상태이므로 멈춤 아이콘 표시
+  } else {
+    // [현재 실행 상태] -> 일시정지(Pause)
+    if (typeof setPaused === 'function') setPaused(true);
+    if(btnImg) btnImg.src = 'assets/img/play0.png'; // 멈췄으므로 재생 아이콘 표시
+  }
+}
+
+/**
+ * 2. 건너뛰기 핸들러
+ */
+function handleMobileSkip() {
+  // 기존 앱 로직의 세그먼트 스킵 함수 호출
+  if (typeof skipCurrentSegment === 'function') {
+    skipCurrentSegment();
+    
+    // 버튼 클릭 피드백 (진동 등)
+    if (navigator.vibrate) navigator.vibrate(50);
+  } else {
+    console.warn('skipCurrentSegment 함수를 찾을 수 없습니다.');
+  }
+}
+
+/**
+ * 3. 종료 핸들러
+ */
+function handleMobileStop() {
+  if (confirm('훈련을 종료하시겠습니까?')) {
+    // 기존 앱 로직의 루프 정지 함수 호출
+    if (typeof stopSegmentLoop === 'function') {
+      stopSegmentLoop();
+    }
+    
+    // 훈련 종료 후 초기 상태(Play 버튼)로 복구
+    const btnImg = document.getElementById('imgMobileToggle');
+    if(btnImg) btnImg.src = 'assets/img/play0.png';
+  }
+}
+
+// [상태 동기화] 외부 요인(자동 일시정지 등)으로 상태 변경 시 버튼 이미지 동기화
+// app.js의 updateTrainingDisplay 또는 updateTimeUI 내부에서 호출 권장
+function syncMobileToggleIcon() {
+  const btnImg = document.getElementById('imgMobileToggle');
+  if (!btnImg || !window.trainingState) return;
+
+  // 타이머가 돌고 있고, 일시정지 상태가 아니면 -> pause0.png (멈출 수 있음)
+  // 그 외(일시정지 중이거나 훈련 전) -> play0.png (시작/재개 할 수 있음)
+  const isRunning = window.trainingState.timerId !== null;
+  const isPaused = window.trainingState.paused;
+
+  if (isRunning && !isPaused) {
+    if (!btnImg.src.includes('pause0.png')) btnImg.src = 'assets/img/pause0.png';
+  } else {
+    if (!btnImg.src.includes('play0.png')) btnImg.src = 'assets/img/play0.png';
+  }
+}
+
+// 훈련 상태 업데이트 루프에 동기화 함수 등록 (안전 장치)
+if (typeof window.updateTimeUI === 'function') {
+  const originalUpdateTimeUI = window.updateTimeUI;
+  window.updateTimeUI = function() {
+    originalUpdateTimeUI();
+    syncMobileToggleIcon(); // UI 갱신 시 버튼 상태도 동기화
+  };
+}
+
