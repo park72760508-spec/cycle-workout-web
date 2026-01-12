@@ -1716,6 +1716,21 @@
           <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
           <text id="mobile-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
 
+          <!-- 건너뛰기/시작(일시정지)/종료 -->
+          <div id="mobileControlPanel" class="mobile-control-panel">
+            <div class="mobile-btn-wrapper">
+              <img src="assets/img/next0.png" id="imgMobileSkip" class="mobile-ctrl-img" alt="건너뛰기" onclick="handleMobileSkip()">
+            </div>
+          
+            <div class="mobile-btn-wrapper">
+              <img src="assets/img/play0.png" id="imgMobileToggle" class="mobile-ctrl-img" alt="시작/일시정지" onclick="handleMobileToggle()">
+            </div>
+          
+            <div class="mobile-btn-wrapper">
+              <img src="assets/img/stop0.png" id="imgMobileStop" class="mobile-ctrl-img" alt="종료" onclick="handleMobileStop()">
+            </div>
+          </div>
+          
           <g id="mobile-gauge-needle" transform="translate(100, 140) rotate(-90)">
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
             <circle cx="0" cy="0" r="6" fill="#fff"/>
