@@ -2415,14 +2415,17 @@ function startSegmentLoop() {
     buildSegmentBar();
   }
 
-  console.log('타이머 시작', '총 시간:', window.trainingState.totalSec, '초');
+  console.log('[Timer] 타이머 시작', '총 시간:', window.trainingState.totalSec, '초');
+  console.log('[Timer] workoutStartMs 설정:', window.trainingState.workoutStartMs);
 
   // 기존 타이머 정리
   if (window.trainingState.timerId) {
+    console.log('[Timer] 기존 타이머 정리:', window.trainingState.timerId);
     clearInterval(window.trainingState.timerId);
   }
 
   // 1초마다 실행되는 메인 루프
+  console.log('[Timer] setInterval 시작 전...');
   window.trainingState.timerId = setInterval(() => {
     const ts = window.trainingState;
     if (!ts) {
@@ -2431,6 +2434,7 @@ function startSegmentLoop() {
     }
     
     if (ts.paused) {
+      console.log('[Timer] 일시정지 중이므로 스킵');
       return; // 일시정지 중이면 스킵
     }
 
@@ -2459,6 +2463,9 @@ function startSegmentLoop() {
    } else {
      ts.elapsedSec = newElapsedSec;
    }
+   
+   // 시간 경과 로그 (매 초마다)
+   console.log(`[Timer] 시간 경과: ${ts.elapsedSec}초, 세그먼트: ${ts.segIndex}, 세그 경과: ${ts.segElapsedSec}초, workoutStartMs: ${ts.workoutStartMs}, nowMs: ${nowMs}, 차이: ${nowMs - ts.workoutStartMs}ms`);
    
    // 현재 세그 경과초 = 전체경과초 - 해당 세그 누적시작초
    const cumStart = getCumulativeStartSec(ts.segIndex);
@@ -12138,17 +12145,24 @@ function startMobileWorkout() {
   // startSegmentLoop 내부에서 buildSegmentBar와 applySegmentTarget를 호출하므로 여기서는 호출하지 않음
   if (typeof startSegmentLoop === "function") {
     try {
+      console.log('[Mobile Dashboard] startSegmentLoop 호출 전...');
+      console.log('[Mobile Dashboard] trainingState:', window.trainingState);
       startSegmentLoop();
       console.log('[Mobile Dashboard] Segment loop started, timerId:', window.trainingState?.timerId);
       
       // 타이머가 제대로 시작되었는지 확인
       if (!window.trainingState.timerId) {
-        console.error('[Mobile Dashboard] Timer not started!');
+        console.error('[Mobile Dashboard] Timer not started! trainingState:', window.trainingState);
       } else {
-        console.log('[Mobile Dashboard] Timer started successfully, will update every 1 second');
+        console.log('[Mobile Dashboard] Timer started successfully, timerId:', window.trainingState.timerId, 'will update every 1 second');
+        // 즉시 한 번 실행해서 타이머가 동작하는지 확인
+        setTimeout(() => {
+          console.log('[Mobile Dashboard] 1초 후 확인 - timerId:', window.trainingState?.timerId, 'elapsedSec:', window.trainingState?.elapsedSec);
+        }, 1000);
       }
     } catch (e) {
-      console.error('Failed to start segment loop:', e);
+      console.error('[Mobile Dashboard] Failed to start segment loop:', e);
+      console.error('[Mobile Dashboard] Error stack:', e.stack);
     }
   } else {
     console.error('[Mobile Dashboard] startSegmentLoop function not found');
