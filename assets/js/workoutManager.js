@@ -850,6 +850,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     window._segmentGraphChartWidth = chartWidth;
     window._segmentGraphTotalSeconds = totalSeconds;
   }
+  // 모바일 대시보드용 전역 변수도 설정 (마스코트 위치 계산용)
+  if (canvasId === 'mobileIndividualSegmentGraph') {
+    window._segmentGraphFtpY = ftpY;
+    window._segmentGraphPadding = padding;
+    window._segmentGraphChartWidth = chartWidth;
+    window._segmentGraphTotalSeconds = totalSeconds;
+  }
   if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') {
     // 개인 대시보드 및 모바일 대시보드, 훈련 준비 화면: 흰색 얇은 실선, 투명도 50%
     ctx.shadowColor = 'transparent';

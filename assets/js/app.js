@@ -1936,6 +1936,11 @@ function updateSegmentBarTick(){
         // 개인훈련 대시보드와 동일하게 elapsedTime 전달
         const elapsedTime = window.trainingState?.elapsedSec || 0;
         drawSegmentGraph(w.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
+        
+        // 모바일 대시보드 마스코트 위치 업데이트
+        if (typeof updateMobileSegmentGraphMascot === 'function') {
+          updateMobileSegmentGraphMascot();
+        }
       }
     }
   }
@@ -3060,6 +3065,97 @@ function updateSegmentGraphMascot() {
   //   containerHeight: containerHeight.toFixed(1),
   //   mascotHeight: mascotHeight.toFixed(1)
   // });
+}
+
+/**
+ * 모바일 대시보드 세그먼트 그래프 위에서 마스코트 위치 업데이트 (FTP 라인 위)
+ * 화면 크기 변경 시 자동으로 재계산됨
+ */
+function updateMobileSegmentGraphMascot() {
+  const mascotLayer = document.getElementById('mobileSegmentGraphMascotLayer');
+  const mascot = document.getElementById('mobileSegmentGraphMascot');
+  const canvas = document.getElementById('mobileIndividualSegmentGraph');
+  const container = document.querySelector('#mobileDashboardScreen .mobile-segment-graph-container');
+  
+  if (!mascotLayer || !mascot || !canvas || !container) return;
+  
+  // 세그먼트 그래프 정보 확인 (workoutManager.js에서 설정된 전역 변수 사용)
+  // mobileIndividualSegmentGraph는 individualSegmentGraph와 동일한 방식으로 처리
+  const ftpY = window._segmentGraphFtpY;
+  const padding = window._segmentGraphPadding;
+  const chartWidth = window._segmentGraphChartWidth;
+  const totalSeconds = window._segmentGraphTotalSeconds;
+  
+  if (!ftpY || !padding || !chartWidth || !totalSeconds) {
+    // 그래프 정보가 없으면 숨김
+    mascotLayer.style.display = 'none';
+    return;
+  }
+  
+  // 컨테이너와 Canvas의 실제 크기 가져오기
+  const containerRect = container.getBoundingClientRect();
+  const canvasRect = canvas.getBoundingClientRect();
+  
+  // 로딩 중 체크: 컨테이너나 Canvas 크기가 0이거나 아직 렌더링되지 않았으면 숨김
+  if (containerRect.width === 0 || containerRect.height === 0 || 
+      canvasRect.width === 0 || canvasRect.height === 0) {
+    mascotLayer.style.display = 'none';
+    return;
+  }
+  
+  const scaleX = canvasRect.width / canvas.width;
+  const scaleY = canvasRect.height / canvas.height;
+  
+  // 현재 경과 시간 가져오기
+  const elapsedSec = window.trainingState?.elapsedSec || 0;
+  
+  // 마스코트 레이어를 컨테이너 전체 크기로 설정
+  mascotLayer.style.display = 'block';
+  mascotLayer.style.position = 'absolute';
+  mascotLayer.style.left = '0';
+  mascotLayer.style.top = '0';
+  mascotLayer.style.width = containerRect.width + 'px';
+  mascotLayer.style.height = containerRect.height + 'px';
+  mascotLayer.style.pointerEvents = 'none';
+  
+  // 마스코트 크기 (높이만 90%로 조정)
+  const baseMascotHeight = 40; // 기본 높이
+  const mascotHeight = baseMascotHeight * 0.9; // 90%로 조정
+  const mascotWidth = mascotHeight; // 정사각형 가정 (필요시 조정)
+  
+  // 컨테이너 padding (CSS에서 설정된 값 사용, 없으면 20px 기본값)
+  const containerPadding = 20;
+  
+  // 시간 표시 위치 계산 (0:00과 마지막 시간의 중심 위치)
+  // Canvas 내부 좌표를 컨테이너 좌표로 변환 (scaleX 적용)
+  const startTimeX = containerPadding + (padding.left * scaleX); // 0:00 시간 표시 중심 (컨테이너 기준)
+  const endTimeX = containerPadding + ((padding.left + chartWidth) * scaleX); // 마지막 시간 표시 중심 (컨테이너 기준)
+  
+  // 마스코트 이동 범위: 시작점(0:00 시간 중앙) ~ 종료점(마지막 시간 중앙)
+  const startX = startTimeX; // 시작점: 0:00 시간 문자 중앙
+  const endX = endTimeX; // 종료점: 마지막 시간 문자 중앙
+  
+  // X 위치 계산 (경과 시간에 비례) - 시작점과 종료점 사이를 경과 시간 비율로 이동
+  const progressRatio = Math.min(1, Math.max(0, elapsedSec / totalSeconds));
+  const xPosition = startX + (progressRatio * (endX - startX));
+  
+  // Y 위치: 컨테이너의 하단 라인에 마스코트가 위치하도록
+  const containerHeight = containerRect.height; // 컨테이너 실제 높이
+  const yPosition = containerHeight - 2; // 컨테이너 하단에서 2px 위로 조정하여 스크롤바 방지
+  
+  // X 위치도 컨테이너 내부에 완전히 포함되도록 제한
+  const minX = mascotWidth / 2; // 마스코트 중심이 컨테이너 왼쪽 경계를 넘지 않도록
+  const maxX = containerRect.width - (mascotWidth / 2); // 마스코트 중심이 컨테이너 오른쪽 경계를 넘지 않도록
+  const clampedXPosition = Math.max(minX, Math.min(maxX, xPosition));
+  
+  // 마스코트 이미지 위치 설정
+  mascot.style.position = 'absolute';
+  mascot.style.left = clampedXPosition + 'px';
+  mascot.style.top = yPosition + 'px';
+  mascot.style.width = mascotWidth + 'px';
+  mascot.style.height = mascotHeight + 'px';
+  mascot.style.transform = 'translate(-50%, -100%)'; // X는 중심 정렬, Y는 하단 기준
+  mascot.style.zIndex = '10';
 }
 
 
@@ -10821,9 +10917,29 @@ async function startMobileDashboard() {
       if (canvas && typeof drawSegmentGraph === 'function') {
         setTimeout(() => {
           drawSegmentGraph(window.currentWorkout.segments, -1, 'mobileIndividualSegmentGraph', null);
+          // 마스코트 위치 초기화
+          if (typeof updateMobileSegmentGraphMascot === 'function') {
+            updateMobileSegmentGraphMascot();
+          }
         }, 100);
       }
     }
+    
+    // 화면 크기 변경 시 마스코트 위치 재계산
+    if (window.mobileDashboardResizeHandler) {
+      window.removeEventListener('resize', window.mobileDashboardResizeHandler);
+    }
+    window.mobileDashboardResizeHandler = () => {
+      const mobileScreen = document.getElementById('mobileDashboardScreen');
+      if (mobileScreen && 
+          (mobileScreen.classList.contains('active') || 
+           window.getComputedStyle(mobileScreen).display !== 'none')) {
+        if (typeof updateMobileSegmentGraphMascot === 'function') {
+          updateMobileSegmentGraphMascot();
+        }
+      }
+    };
+    window.addEventListener('resize', window.mobileDashboardResizeHandler);
     
     // 블루투스 데이터 업데이트 시작
     startMobileDashboardDataUpdate();
@@ -12072,6 +12188,13 @@ function startMobileWorkout() {
 
   // 모바일 대시보드 UI 초기 업데이트
   updateMobileDashboardUI();
+  
+  // 마스코트 위치 초기화
+  setTimeout(() => {
+    if (typeof updateMobileSegmentGraphMascot === 'function') {
+      updateMobileSegmentGraphMascot();
+    }
+  }, 200);
 
   // 버튼 상태 업데이트
   const btnImg = document.getElementById('imgMobileToggle');
