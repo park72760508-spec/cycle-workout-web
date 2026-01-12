@@ -1689,54 +1689,47 @@
     <!-- 메인 콘텐츠 (속도계) -->
     <div class="mobile-main-content" style="flex: 1 1 0; display: flex; justify-content: center; align-items: center; position: relative; min-height: 0; overflow: hidden;">
       <div class="mobile-gauge-container" style="width: 90vw; max-width: 500px; aspect-ratio: 1/1; position: relative;">
-        <svg viewBox="0 0 200 220" style="width:100%; height:100%;">
-          <!-- 원호 배경 -->
+        <svg viewBox="0 0 200 290" style="width:100%; height:100%;">
+          
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
-          
-          <!-- 목표 파워 원호 (하한값) - 원호 배경 뒤에, 눈금 앞에 배치 -->
           <path id="mobile-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
-          
-          <!-- 목표 파워 원호 (상한값, ftp_pctz 타입용) - 하한값 원호 다음에 배치 -->
           <path id="mobile-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
-          
-          <!-- 눈금 그룹 (JavaScript로 동적 생성) -->
           <g id="mobile-gauge-ticks"></g>
-          
-          <!-- 레이블 그룹 (JavaScript로 동적 생성) -->
           <g id="mobile-gauge-labels"></g>
           
-          <!-- 랩카운트다운 (속도계 상단) -->
           <text x="100" y="0" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
           <text id="mobile-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
-          
           <text id="mobile-ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
           <text id="mobile-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
           <text id="mobile-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
-          
           <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
-          <text id="mobile-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
           
+          <text id="mobile-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+        
           <g id="mobile-gauge-needle" transform="translate(100, 140) rotate(-90)">
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
             <circle cx="0" cy="0" r="6" fill="#fff"/>
           </g>
-
+        
+          <g id="svgControlPanel" transform="translate(0, 10)">
+            
+            <g class="svg-btn-group" onclick="handleMobileStop()">
+              <circle cx="50" cy="245" r="20" fill="white" stroke="#333" stroke-width="1" />
+              <image x="35" y="230" width="30" height="30" href="assets/img/stop0.png" />
+            </g>
+        
+            <g class="svg-btn-group" onclick="handleMobileToggle()">
+              <circle cx="100" cy="245" r="25" fill="white" stroke="#333" stroke-width="1" />
+              <image id="imgMobileToggle" x="80" y="225" width="40" height="40" href="assets/img/play0.png" />
+            </g>
+        
+            <g class="svg-btn-group" onclick="handleMobileSkip()">
+              <circle cx="150" cy="245" r="20" fill="white" stroke="#333" stroke-width="1" />
+              <image x="135" y="230" width="30" height="30" href="assets/img/next0.png" />
+            </g>
+          </g>
+        
         </svg>
-
-        <!-- 건너뛰기/시작(일시정지)/정지 버튼 -->
-        <div id="mobileControlPanel" class="mobile-control-panel">
-          <div class="mobile-btn-wrapper">
-            <img src="assets/img/next0.png" id="imgMobileSkip" class="mobile-ctrl-img" alt="건너뛰기" onclick="handleMobileSkip()">
-          </div>
-        
-          <div class="mobile-btn-wrapper">
-            <img src="assets/img/play0.png" id="imgMobileToggle" class="mobile-ctrl-img" alt="시작/일시정지" onclick="handleMobileToggle()">
-          </div>
-        
-          <div class="mobile-btn-wrapper">
-            <img src="assets/img/stop0.png" id="imgMobileStop" class="mobile-ctrl-img" alt="종료" onclick="handleMobileStop()">
-          </div>
-        </div>
         
       </div>
     </div>
