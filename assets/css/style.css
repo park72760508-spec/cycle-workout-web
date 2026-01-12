@@ -12879,19 +12879,30 @@ line[id^="needle-"] {
 ========================================================== */
 
 /* 컨트롤 패널 컨테이너 (절대 위치) */
-.mobile-control-panel {
-  position: absolute;
-  top: 280px; /* 요청하신 y=280 위치 */
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* 이미지 너비(60px 가정)의 1/2인 30px 간격 */
-  gap: 30px; 
-  z-index: 2000; /* 다른 요소보다 위에 표시 */
-  pointer-events: auto;
+/* ==========================================================
+   [SVG 내부 컨트롤 버튼 스타일]
+   - SVG 내부 요소에 대한 인터랙션 정의
+========================================================== */
+
+/* 버튼 그룹 (원 + 이미지) */
+.svg-btn-group {
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.1s;
 }
+
+/* 호버/터치 시 효과 */
+.svg-btn-group:hover {
+  opacity: 0.9;
+}
+
+.svg-btn-group:active {
+  /* 클릭 시 살짝 작아지는 효과 (중심축 기준 스케일링은 SVG에서 복잡하므로 투명도로 피드백) */
+  opacity: 0.7;
+}
+
+/* 참고: SVG 내부의 <circle> fill="white" 속성이 
+  이전에 요청하신 '투명 배경 흰색 채움' 역할을 수행합니다.
+*/
 
 /* 이미지 버튼 공통 스타일 */
 .mobile-ctrl-img {
