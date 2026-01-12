@@ -3143,14 +3143,10 @@ button[aria-disabled="true"] {
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .modal.hidden {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
+  display: none;
 }
 
 .modal-content {
@@ -9295,15 +9291,6 @@ button[aria-disabled="true"] {
   justify-content: center;
   z-index: 10000;
   backdrop-filter: blur(4px);
-  transition: opacity 0.3s ease, visibility 0.3s ease;
-}
-
-.modal-overlay.hidden {
-  display: none !important;
-  visibility: hidden !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-  z-index: -1 !important;
 }
 
 #rpeConditionModal .modal-content,
@@ -10010,13 +9997,6 @@ button[aria-disabled="true"] {
   color: #fff;
   padding: 20px;
   overflow-y: auto;
-}
-
-/* Indoor Training 대시보드 화면 활성화 시 표시 */
-#indoorTrainingDashboardScreen.active {
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
 }
 
 .dashboard-header {
@@ -12748,122 +12728,6 @@ line[id^="needle-"] {
 #mobileDashboardScreen > * {
   position: relative;
   z-index: 1;
-}
-
-/* 모바일 대시보드 제어 버튼 (현재 파워 아래, 연한 주황색 라인 위치에 배치) */
-.mobile-control-buttons {
-  position: absolute;
-  bottom: 10px; /* 속도계 SVG 하단에서 위로 10px (현재 파워 y=200 바로 아래 위치) */
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: calc(38px * 1.2); /* 버튼 크기의 1/5씩 더 넓게 (38px * 0.2 = 7.6px, 총 38px * 1.2 = 45.6px) */
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  pointer-events: auto;
-  width: auto;
-  max-width: 100%;
-  flex-shrink: 0;
-}
-
-.mobile-control-btn {
-  width: 38px;
-  height: 38px;
-  padding: 0;
-  background: rgba(0, 0, 0, 0.3);
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6), 
-              0 0 12px rgba(255, 255, 255, 0.4),
-              inset 0 0 6px rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  flex-shrink: 0;
-}
-
-.mobile-control-btn:hover {
-  border-color: rgba(255, 255, 255, 1);
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 
-              0 0 16px rgba(255, 255, 255, 0.6),
-              inset 0 0 8px rgba(255, 255, 255, 0.3);
-  transform: scale(1.1);
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.mobile-control-btn:active {
-  transform: scale(0.95);
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5), 
-              0 0 8px rgba(255, 255, 255, 0.3),
-              inset 0 0 4px rgba(255, 255, 255, 0.15);
-}
-
-.mobile-control-btn img {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
-  transition: all 0.2s ease;
-  pointer-events: none; /* 이미지 클릭 방지 */
-}
-
-.mobile-control-btn:hover img {
-  filter: brightness(0) invert(1) drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
-}
-
-/* 모바일 대시보드 속도계 컨테이너 */
-.mobile-gauge-container {
-  position: relative;
-  box-sizing: border-box;
-  padding-bottom: 50px; /* 버튼 공간 확보 (현재 파워 아래 위치) */
-}
-
-/* 화면 높이 제한 시 버튼 크기 조정 */
-@media (max-height: 800px) {
-  .mobile-control-btn {
-    width: 34px;
-    height: 34px;
-  }
-  
-  .mobile-control-btn img {
-    width: 18px;
-    height: 18px;
-  }
-  
-  .mobile-control-buttons {
-    gap: calc(34px * 1.2); /* 34px * 1.2 = 40.8px */
-    bottom: 8px;
-  }
-  
-  .mobile-gauge-container {
-    padding-bottom: 45px;
-  }
-}
-
-@media (max-height: 600px) {
-  .mobile-control-btn {
-    width: 30px;
-    height: 30px;
-  }
-  
-  .mobile-control-btn img {
-    width: 16px;
-    height: 16px;
-  }
-  
-  .mobile-control-buttons {
-    gap: calc(30px * 1.2); /* 30px * 1.2 = 36px */
-    bottom: 6px;
-  }
-  
-  .mobile-gauge-container {
-    padding-bottom: 40px;
-  }
 }
 
 /* 모바일 대시보드 세그먼트 그래프 섹션 (individual.html과 동일) */
