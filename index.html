@@ -1681,8 +1681,12 @@
 
     <!-- 세그먼트 그래프 섹션 -->
     <div class="mobile-segment-graph-section">
-      <div class="mobile-segment-graph-container">
+      <div class="mobile-segment-graph-container" style="position: relative;">
         <canvas id="mobileIndividualSegmentGraph"></canvas>
+        <!-- 마스코트 레이어 (FTP 라인 위에서 이동) -->
+        <div id="mobileSegmentGraphMascotLayer" class="segment-graph-mascot-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;">
+          <img id="mobileSegmentGraphMascot" src="assets/img/cyclist.gif" alt="mascot" style="position: absolute; width: 40px; height: 40px; transform: translate(-50%, -100%);" />
+        </div>
       </div>
     </div>
 
