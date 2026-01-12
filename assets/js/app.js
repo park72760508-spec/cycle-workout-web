@@ -156,7 +156,7 @@ window.userPanelNeonMode = 'static';  // 'static' 고정 (동적 계산 끔)
  *  - 2번째 인자를 boolean으로 넘기던 기존 코드도 그대로 허용(뒤로호환)
  */
 function safeGetElement(id, opts) {
-  let required = false, quiet = false;
+  let required = false, quiet = false, silent = false;
 
   // 뒤로호환: safeGetElement(id, true/false) 형태 지원
   if (typeof opts === 'boolean') {
@@ -164,6 +164,12 @@ function safeGetElement(id, opts) {
   } else if (opts && typeof opts === 'object') {
     required = !!opts.required;
     quiet   = !!opts.quiet;
+    silent  = !!opts.silent; // silent 옵션 추가
+  }
+  
+  // silent가 true면 quiet도 true로 설정
+  if (silent) {
+    quiet = true;
   }
 
   const el = document.getElementById(id);
@@ -1185,7 +1191,19 @@ function getSegmentFtpPercent(seg) {
     return Math.round(seg.target * 100);
   }
   
-  console.warn('FTP 백분율을 찾을 수 없습니다:', seg);
+  // 4순위: target_value가 문자열이고 숫자로 변환 가능한 경우
+  if (seg.target_value != null) {
+    const numValue = Number(seg.target_value);
+    if (!isNaN(numValue) && numValue > 0 && numValue <= 200) {
+      // 200 이하는 FTP%로 간주
+      return Math.round(numValue);
+    }
+  }
+  
+  // 경고는 디버그 모드에서만 출력 (너무 많은 경고 방지)
+  if (window.DEBUG_MODE) {
+    console.warn('FTP 백분율을 찾을 수 없습니다:', seg);
+  }
   return 100; // 기본값
 }
 
@@ -2658,7 +2676,15 @@ function startSegmentLoop() {
    // 세그먼트 경계 통과 → 다음 세그먼트로 전환
    // 중복 전환 방지를 위해 이전 세그먼트 인덱스를 추적
    const prevSegIndex = ts._lastProcessedSegIndex ?? currentSegIndex;
-   if (window.trainingState.segElapsedSec >= segDur && prevSegIndex === currentSegIndex) {
+   
+   // 세그먼트 전환 조건: 세그먼트 경과 시간이 세그먼트 지속 시간을 초과했고, 아직 전환되지 않은 경우
+   // 또는 누적 경과 시간이 세그먼트 종료 시각을 초과한 경우
+   const segEndAtSec = getCumulativeStartSec(currentSegIndex) + segDur;
+   const shouldTransition = (ts.segElapsedSec >= segDur || ts.elapsedSec >= segEndAtSec) && prevSegIndex === currentSegIndex;
+   
+   console.log(`[Segment Transition] currentSegIndex: ${currentSegIndex}, segElapsedSec: ${ts.segElapsedSec}, segDur: ${segDur}, elapsedSec: ${ts.elapsedSec}, segEndAtSec: ${segEndAtSec}, shouldTransition: ${shouldTransition}`);
+   
+   if (shouldTransition) {
      // (변경) 소리와 전환을 분리: 전환은 즉시, 소리는 비동기로 마무리
      if (segmentCountdownActive && typeof stopSegmentCountdown === "function") {
        setTimeout(() => { try { stopSegmentCountdown(); } catch(_){} }, 750);
@@ -2709,6 +2735,16 @@ function startSegmentLoop() {
        // 진행바 즉시 반영(선택)
        if (typeof updateSegmentBarTick === "function") updateSegmentBarTick();
        if (typeof updateTimelineByTime === "function") updateTimelineByTime();
+       
+       // 모바일 대시보드 UI 업데이트
+       const mobileScreen = document.getElementById('mobileDashboardScreen');
+       if (mobileScreen && 
+           (mobileScreen.classList.contains('active') || 
+            window.getComputedStyle(mobileScreen).display !== 'none')) {
+         if (typeof updateMobileDashboardUI === 'function') {
+           updateMobileDashboardUI();
+         }
+       }
    
      } else {
        console.log('모든 세그먼트 완료');
@@ -10775,7 +10811,7 @@ function updateTrainingReadyScreenWithWorkout(workout) {
   }
   
   // 예상 TSS 표시 (있는 경우에만)
-  const tssEl = safeGetElement('previewTSS');
+  const tssEl = safeGetElement('previewTSS', { silent: true });
   if (tssEl) {
     tssEl.textContent = String(estimatedTSS);
   }
