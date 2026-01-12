@@ -10949,7 +10949,7 @@ function startMobileDashboardTimer() {
       if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
         const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
         if (currentSegment) {
-          const segmentDuration = Number(currentSegment.duration_sec) || 0;
+          const segmentDuration = Number(currentSegment.duration_sec) || Number(currentSegment.duration) || 0;
           const segmentElapsed = trainingState.segElapsedSec || 0;
           const remaining = Math.max(0, segmentDuration - segmentElapsed);
           
@@ -10960,6 +10960,19 @@ function startMobileDashboardTimer() {
           const lapTimeEl = safeGetElement('mobile-ui-lap-time');
           if (lapTimeEl) {
             lapTimeEl.textContent = lapTimeString;
+          }
+        }
+      }
+      
+      // 세그먼트 정보 업데이트
+      if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
+        const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
+        if (currentSegment) {
+          const segmentInfoEl = safeGetElement('mobile-segment-info');
+          if (segmentInfoEl) {
+            const segName = currentSegment.label || currentSegment.segment_type || `세그먼트 ${trainingState.segIndex + 1}`;
+            const ftpPercent = getSegmentFtpPercent(currentSegment);
+            segmentInfoEl.textContent = `${segName} FTP ${ftpPercent}%`;
           }
         }
       }
@@ -11993,6 +12006,107 @@ window.setupHapticObserver = () => {};
  * - 클릭 시: 실행 중이면 일시정지(play0.png), 정지 중이면 재개(pause0.png)
  */
 /**
+ * 모바일 대시보드에서 워크아웃 시작 (Indoor Training 로직 참고)
+ */
+function startMobileWorkout() {
+  console.log('[Mobile Dashboard] Starting workout...');
+  
+  // 워크아웃이 선택되어 있는지 확인
+  if (!window.currentWorkout) {
+    if (typeof showToast === 'function') {
+      showToast('워크아웃을 먼저 선택하세요', 'error');
+    }
+    return;
+  }
+
+  // 훈련 상태 초기화 (Indoor Training 방식 참고)
+  if (!window.trainingState) {
+    window.trainingState = {
+      timerId: null,
+      paused: false,
+      elapsedSec: 0,
+      segIndex: 0,
+      segElapsedSec: 0,
+      segEnds: [],
+      totalSec: 0,
+      startTime: null,
+      pausedTime: 0
+    };
+  }
+
+  // 훈련 시작 설정
+  window.trainingState.paused = false;
+  window.trainingState.elapsedSec = 0;
+  window.trainingState.segElapsedSec = 0;
+  window.trainingState.segIndex = 0;
+  window.trainingState.startTime = Date.now();
+  window.trainingState.pausedTime = 0;
+
+  // 세그먼트 타임라인 생성
+  if (typeof buildSegmentBar === "function") {
+    try {
+      buildSegmentBar();
+    } catch (e) {
+      console.warn('Failed to build segment bar:', e);
+    }
+  }
+
+  // 첫 세그먼트 타겟 적용
+  if (typeof applySegmentTarget === "function") {
+    try {
+      applySegmentTarget(0);
+    } catch (e) {
+      console.error('Failed to apply segment target:', e);
+    }
+  }
+
+  // 세그먼트 루프 시작 (모바일 대시보드 화면에서 실행)
+  if (typeof startSegmentLoop === "function") {
+    try {
+      startSegmentLoop();
+      console.log('[Mobile Dashboard] Segment loop started');
+    } catch (e) {
+      console.error('Failed to start segment loop:', e);
+    }
+  }
+
+  // 모바일 대시보드 UI 초기 업데이트
+  updateMobileDashboardUI();
+
+  // 버튼 상태 업데이트
+  const btnImg = document.getElementById('imgMobileToggle');
+  if(btnImg) btnImg.src = 'assets/img/pause0.png';
+
+  if (typeof showToast === "function") showToast("훈련을 시작합니다");
+}
+
+/**
+ * 모바일 대시보드 UI 업데이트 (세그먼트 정보 등)
+ */
+function updateMobileDashboardUI() {
+  const w = window.currentWorkout;
+  if (!w || !w.segments) return;
+
+  const ts = window.trainingState || {};
+  const currentSegIndex = ts.segIndex || 0;
+  const currentSeg = w.segments[currentSegIndex];
+
+  // 세그먼트 정보 표시
+  const segmentInfoEl = safeGetElement('mobile-segment-info');
+  if (segmentInfoEl && currentSeg) {
+    const segName = currentSeg.label || currentSeg.segment_type || `세그먼트 ${currentSegIndex + 1}`;
+    const ftpPercent = getSegmentFtpPercent(currentSeg);
+    segmentInfoEl.textContent = `${segName} FTP ${ftpPercent}%`;
+  }
+
+  // 세그먼트 그래프 업데이트
+  if (typeof drawSegmentGraph === 'function') {
+    const elapsedTime = ts.elapsedSec || 0;
+    drawSegmentGraph(w.segments, currentSegIndex, 'mobileIndividualSegmentGraph', elapsedTime);
+  }
+}
+
+/**
  * 모바일 대시보드용 5초 카운트다운 후 워크아웃 시작
  */
 function startMobileWorkoutWithCountdown(sec = 5) {
@@ -12001,9 +12115,7 @@ function startMobileWorkoutWithCountdown(sec = 5) {
   
   if (!overlay || !num) {
     console.warn('Mobile countdown elements not found, starting workout directly');
-    if (typeof startWorkoutTraining === 'function') {
-      startWorkoutTraining();
-    }
+    startMobileWorkout();
     return;
   }
 
@@ -12051,12 +12163,7 @@ function startMobileWorkoutWithCountdown(sec = 5) {
         overlay.classList.add("hidden");
         overlay.style.display = "none";
         console.log('[Mobile Dashboard] Countdown finished, starting workout...');
-        if (typeof startWorkoutTraining === 'function') {
-          startWorkoutTraining();
-        }
-        // 시작했으므로 '일시정지' 할 수 있는 버튼으로 변경
-        const btnImg = document.getElementById('imgMobileToggle');
-        if(btnImg) btnImg.src = 'assets/img/pause0.png';
+        startMobileWorkout();
       }, 500);
       
       // 타이머 정리
