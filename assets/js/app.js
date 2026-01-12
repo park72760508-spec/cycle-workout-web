@@ -10960,54 +10960,57 @@ function startMobileDashboardDataUpdate() {
  */
 function startMobileDashboardTimer() {
   function updateMobileTimer() {
-    if (document.getElementById('mobileDashboardScreen') && 
-        (document.getElementById('mobileDashboardScreen').classList.contains('active') || 
-         window.getComputedStyle(document.getElementById('mobileDashboardScreen')).display !== 'none')) {
-      
-      // 훈련 상태에서 경과 시간 가져오기
-      const trainingState = window.trainingState || {};
-      const elapsedSec = trainingState.elapsedSec || 0;
-      
-      // 시간 포맷팅 (HH:MM:SS)
-      const hours = Math.floor(elapsedSec / 3600);
-      const minutes = Math.floor((elapsedSec % 3600) / 60);
-      const seconds = Math.floor(elapsedSec % 60);
-      const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      
-      const timerEl = safeGetElement('mobile-main-timer');
-      if (timerEl) {
-        timerEl.textContent = timeString;
-      }
-      
-      // 랩 카운트다운 업데이트 (세그먼트 남은 시간)
-      if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
-        const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
-        if (currentSegment) {
-          const segmentDuration = Number(currentSegment.duration_sec) || Number(currentSegment.duration) || 0;
-          const segmentElapsed = trainingState.segElapsedSec || 0;
-          const remaining = Math.max(0, segmentDuration - segmentElapsed);
-          
-          const lapMinutes = Math.floor(remaining / 60);
-          const lapSeconds = Math.floor(remaining % 60);
-          const lapTimeString = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
-          
-          const lapTimeEl = safeGetElement('mobile-ui-lap-time');
-          if (lapTimeEl) {
-            lapTimeEl.textContent = lapTimeString;
-          }
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    if (!mobileScreen || 
+        (!mobileScreen.classList.contains('active') && 
+         window.getComputedStyle(mobileScreen).display === 'none')) {
+      return;
+    }
+    
+    // 훈련 상태에서 경과 시간 가져오기
+    // startSegmentLoop가 실행 중이면 trainingState.elapsedSec이 업데이트됨
+    const trainingState = window.trainingState || {};
+    const elapsedSec = trainingState.elapsedSec || 0;
+    
+    // 시간 포맷팅 (HH:MM:SS)
+    const hours = Math.floor(elapsedSec / 3600);
+    const minutes = Math.floor((elapsedSec % 3600) / 60);
+    const seconds = Math.floor(elapsedSec % 60);
+    const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    
+    const timerEl = safeGetElement('mobile-main-timer');
+    if (timerEl) {
+      timerEl.textContent = timeString;
+    }
+    
+    // 랩 카운트다운 업데이트 (세그먼트 남은 시간)
+    if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
+      const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
+      if (currentSegment) {
+        const segmentDuration = Number(currentSegment.duration_sec) || Number(currentSegment.duration) || 0;
+        const segmentElapsed = trainingState.segElapsedSec || 0;
+        const remaining = Math.max(0, segmentDuration - segmentElapsed);
+        
+        const lapMinutes = Math.floor(remaining / 60);
+        const lapSeconds = Math.floor(remaining % 60);
+        const lapTimeString = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
+        
+        const lapTimeEl = safeGetElement('mobile-ui-lap-time');
+        if (lapTimeEl) {
+          lapTimeEl.textContent = lapTimeString;
         }
       }
-      
-      // 세그먼트 정보 업데이트
-      if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
-        const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
-        if (currentSegment) {
-          const segmentInfoEl = safeGetElement('mobile-segment-info');
-          if (segmentInfoEl) {
-            const segName = currentSegment.label || currentSegment.segment_type || `세그먼트 ${trainingState.segIndex + 1}`;
-            const ftpPercent = getSegmentFtpPercent(currentSegment);
-            segmentInfoEl.textContent = `${segName} FTP ${ftpPercent}%`;
-          }
+    }
+    
+    // 세그먼트 정보 업데이트
+    if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
+      const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
+      if (currentSegment) {
+        const segmentInfoEl = safeGetElement('mobile-segment-info');
+        if (segmentInfoEl) {
+          const segName = currentSegment.label || currentSegment.segment_type || `세그먼트 ${trainingState.segIndex + 1}`;
+          const ftpPercent = getSegmentFtpPercent(currentSegment);
+          segmentInfoEl.textContent = `${segName} FTP ${ftpPercent}%`;
         }
       }
     }
@@ -12053,7 +12056,8 @@ function startMobileWorkout() {
     return;
   }
 
-  // 훈련 상태 초기화 (Indoor Training 방식 참고)
+  // 훈련 상태 초기화
+  // startSegmentLoop에서 모든 상태를 초기화하므로 여기서는 최소한만 설정
   if (!window.trainingState) {
     window.trainingState = {
       timerId: null,
@@ -12062,46 +12066,34 @@ function startMobileWorkout() {
       segIndex: 0,
       segElapsedSec: 0,
       segEnds: [],
-      totalSec: 0,
-      startTime: null,
-      pausedTime: 0
+      totalSec: 0
     };
   }
-
-  // 훈련 시작 설정
-  window.trainingState.paused = false;
-  window.trainingState.elapsedSec = 0;
-  window.trainingState.segElapsedSec = 0;
-  window.trainingState.segIndex = 0;
-  window.trainingState.startTime = Date.now();
-  window.trainingState.pausedTime = 0;
-
-  // 세그먼트 타임라인 생성
-  if (typeof buildSegmentBar === "function") {
-    try {
-      buildSegmentBar();
-    } catch (e) {
-      console.warn('Failed to build segment bar:', e);
-    }
-  }
-
-  // 첫 세그먼트 타겟 적용
-  if (typeof applySegmentTarget === "function") {
-    try {
-      applySegmentTarget(0);
-    } catch (e) {
-      console.error('Failed to apply segment target:', e);
-    }
+  
+  // 기존 타이머가 있으면 정리
+  if (window.trainingState.timerId) {
+    clearInterval(window.trainingState.timerId);
+    window.trainingState.timerId = null;
   }
 
   // 세그먼트 루프 시작 (모바일 대시보드 화면에서 실행)
+  // startSegmentLoop 내부에서 buildSegmentBar와 applySegmentTarget를 호출하므로 여기서는 호출하지 않음
   if (typeof startSegmentLoop === "function") {
     try {
       startSegmentLoop();
-      console.log('[Mobile Dashboard] Segment loop started');
+      console.log('[Mobile Dashboard] Segment loop started, timerId:', window.trainingState?.timerId);
+      
+      // 타이머가 제대로 시작되었는지 확인
+      if (!window.trainingState.timerId) {
+        console.error('[Mobile Dashboard] Timer not started!');
+      } else {
+        console.log('[Mobile Dashboard] Timer started successfully, will update every 1 second');
+      }
     } catch (e) {
       console.error('Failed to start segment loop:', e);
     }
+  } else {
+    console.error('[Mobile Dashboard] startSegmentLoop function not found');
   }
 
   // 모바일 대시보드 UI 초기 업데이트
