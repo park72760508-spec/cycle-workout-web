@@ -1683,10 +1683,7 @@
     <div class="mobile-segment-graph-section">
       <div class="mobile-segment-graph-container" style="position: relative;">
         <canvas id="mobileIndividualSegmentGraph"></canvas>
-        <!-- 마스코트 레이어 (FTP 라인 위에서 이동) -->
-        <div id="mobileSegmentGraphMascotLayer" class="segment-graph-mascot-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10;">
-          <img id="mobileSegmentGraphMascot" src="assets/img/cyclist.gif" alt="mascot" style="position: absolute; width: 40px; height: 40px; transform: translate(-50%, -100%);" />
-        </div>
+        <!-- 마스코트는 Canvas에 직접 그려지므로 HTML 이미지는 숨김 (펄스 애니메이션 포함) -->
       </div>
     </div>
 
