@@ -839,6 +839,60 @@ const CountdownDisplay = {
   }
 };
 
+// 모바일 대시보드용 카운트다운 표시 컨트롤러
+const MobileCountdownDisplay = {
+  active: false,
+  overlay: null,
+  num: null,
+  infoDiv: null,
+  ensure(nextSegment) {
+    if (!this.overlay) this.overlay = document.getElementById("mobileCountdownOverlay");
+    if (!this.num) this.num = document.getElementById("mobileCountdownNumber");
+    if (!this.overlay || !this.num) return false;
+
+    // 다음 세그먼트 안내
+    if (!this.infoDiv) {
+      this.infoDiv = document.createElement('div');
+      this.infoDiv.id = 'mobileNextSegmentInfo';
+      this.infoDiv.style.cssText = `
+        position:absolute; bottom:30%; left:50%; transform:translateX(-50%);
+        color:#fff; font-size:24px; font-weight:600; text-align:center;
+        text-shadow:0 2px 4px rgba(0,0,0,.5); opacity:.9;`;
+      this.overlay.appendChild(this.infoDiv);
+    }
+    const nextInfo = nextSegment
+      ? `다음: ${(nextSegment.label || nextSegment.segment_type || '세그먼트')} FTP ${getSegmentFtpPercent(nextSegment)}%`
+      : '훈련 완료';
+    this.infoDiv.textContent = nextInfo;
+
+    this.overlay.classList.remove("hidden");
+    this.overlay.style.display = "flex";
+    this.overlay.style.zIndex = "10000";
+    this.num.style.fontSize = "300px"; // 크게 표시
+    this.active = true;
+    return true;
+  },
+  render(n) {
+    if (!this.overlay || !this.num) return;
+    this.num.textContent = String(n);
+    this.num.style.fontSize = "300px"; // 크게 표시
+  },
+  finish(delayMs = 800) {
+    if (!this.overlay) return;
+    setTimeout(() => {
+      this.overlay.classList.add("hidden");
+      this.overlay.style.display = "none";
+      this.active = false;
+    }, delayMs);
+  },
+  hideImmediate() {
+    if (!this.overlay) return;
+    this.overlay.classList.add("hidden");
+    this.overlay.style.display = "none";
+    this.active = false;
+  }
+};
+
 // 경과 시간 텍스트를 형식 변경
 function formatHMS(totalSeconds){
   const h = Math.floor(totalSeconds / 3600);
@@ -865,12 +919,25 @@ function startSegmentCountdown(initialNumber, nextSegment) {
   // 처음 숫자와 짧은 비프
   CountdownDisplay.render(initialNumber);
   playBeep(880, 120, 0.25);
+  
+  // 모바일 대시보드용 카운트다운도 표시
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  if (mobileScreen && 
+      (mobileScreen.classList.contains('active') || 
+       window.getComputedStyle(mobileScreen).display !== 'none')) {
+    MobileCountdownDisplay.ensure(nextSegment);
+    MobileCountdownDisplay.render(initialNumber);
+  }
 }
 
 // [PATCH] 카운트다운 강제 정지도 표시 컨트롤러 사용
 function stopSegmentCountdown() {
   console.log('카운트다운 강제 정지');
   CountdownDisplay.hideImmediate();
+  
+  // 모바일 대시보드용 카운트다운도 정지
+  MobileCountdownDisplay.hideImmediate();
+  
   segmentCountdownActive = false;     // [PATCH] 상태 리셋
    
   if (segmentCountdownTimer) {
@@ -1857,6 +1924,22 @@ function updateSegmentBarTick(){
     }
   }
   
+  // 모바일 대시보드 세그먼트 그래프 업데이트 (개인훈련 대시보드 로직 반영)
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  if (mobileScreen && 
+      (mobileScreen.classList.contains('active') || 
+       window.getComputedStyle(mobileScreen).display !== 'none')) {
+    if (typeof drawSegmentGraph === 'function' && w.segments && w.segments.length > 0) {
+      const now = Date.now();
+      if (!window._lastMobileGraphUpdate || (now - window._lastMobileGraphUpdate) > 100) {
+        window._lastMobileGraphUpdate = now;
+        // 개인훈련 대시보드와 동일하게 elapsedTime 전달
+        const elapsedTime = window.trainingState?.elapsedSec || 0;
+        drawSegmentGraph(w.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
+      }
+    }
+  }
+  
   // ERG 모드 피로도 체크 (약 10초마다)
   if (window.ergModeState && window.ergModeState.enabled && typeof checkFatigueAndAdjust === 'function') {
     const now = Date.now();
@@ -2413,6 +2496,15 @@ function startSegmentLoop() {
         } else if (segmentCountdownActive) {
           // 진행 중이면 숫자 업데이트만(내부 타이머 없음)
           CountdownDisplay.render(n);
+          
+          // 모바일 대시보드용 카운트다운도 업데이트
+          const mobileScreen = document.getElementById('mobileDashboardScreen');
+          if (mobileScreen && 
+              (mobileScreen.classList.contains('active') || 
+               window.getComputedStyle(mobileScreen).display !== 'none')) {
+            MobileCountdownDisplay.render(n);
+          }
+          
           // 4, 3, 2, 1초일 때 벨소리 재생
           if (n > 0) {
             playBeep(880, 120, 0.25);
@@ -2425,6 +2517,15 @@ function startSegmentLoop() {
           playBeep(1500, 700, 0.35, "square");
           // 오버레이는 약간의 여유를 두고 닫기
           CountdownDisplay.finish(800);
+          
+          // 모바일 대시보드용 카운트다운도 닫기
+          const mobileScreen = document.getElementById('mobileDashboardScreen');
+          if (mobileScreen && 
+              (mobileScreen.classList.contains('active') || 
+               window.getComputedStyle(mobileScreen).display !== 'none')) {
+            MobileCountdownDisplay.finish(800);
+          }
+          
           segmentCountdownActive = false;
         }
       
@@ -11891,17 +11992,90 @@ window.setupHapticObserver = () => {};
  * - 화면 로딩 시 play0.png (대기 상태)
  * - 클릭 시: 실행 중이면 일시정지(play0.png), 정지 중이면 재개(pause0.png)
  */
+/**
+ * 모바일 대시보드용 5초 카운트다운 후 워크아웃 시작
+ */
+function startMobileWorkoutWithCountdown(sec = 5) {
+  const overlay = document.getElementById("mobileCountdownOverlay");
+  const num = document.getElementById("mobileCountdownNumber");
+  
+  if (!overlay || !num) {
+    console.warn('Mobile countdown elements not found, starting workout directly');
+    if (typeof startWorkoutTraining === 'function') {
+      startWorkoutTraining();
+    }
+    return;
+  }
+
+  // 워크아웃이 선택되어 있는지 확인
+  if (!window.currentWorkout) {
+    if (typeof showToast === 'function') {
+      showToast('워크아웃을 먼저 선택하세요', 'error');
+    }
+    return;
+  }
+
+  console.log(`[Mobile Dashboard] Starting ${sec}s countdown...`);
+
+  // 오버레이 확실히 표시 (크게 표시)
+  overlay.classList.remove("hidden");
+  overlay.style.display = "flex";
+  overlay.style.zIndex = "10000";
+
+  let remain = sec;
+  
+  // 초기 표시 및 첫 번째 삐 소리
+  num.textContent = remain;
+  num.style.fontSize = "300px"; // 더 크게 표시
+  playBeep(880, 120, 0.25);
+
+  const timer = setInterval(async () => {
+    remain -= 1;
+
+    if (remain > 0) {
+      // 1, 2, 3, 4초일 때 - 일반 삐 소리
+      num.textContent = remain;
+      playBeep(880, 120, 0.25);
+    } else if (remain === 0) {
+      // 0초일 때 - 화면에 "0" 표시하고 강조 삐 소리
+      num.textContent = "0";
+      
+      try {
+        await playBeep(1500, 700, 0.35, "square");
+      } catch (e) {
+        console.warn('Failed to play beep:', e);
+      }
+      
+      // 0.5초 추가 대기 후 오버레이 닫기 및 훈련 시작
+      setTimeout(() => {
+        overlay.classList.add("hidden");
+        overlay.style.display = "none";
+        console.log('[Mobile Dashboard] Countdown finished, starting workout...');
+        if (typeof startWorkoutTraining === 'function') {
+          startWorkoutTraining();
+        }
+        // 시작했으므로 '일시정지' 할 수 있는 버튼으로 변경
+        const btnImg = document.getElementById('imgMobileToggle');
+        if(btnImg) btnImg.src = 'assets/img/pause0.png';
+      }, 500);
+      
+      // 타이머 정리
+      clearInterval(timer);
+      
+    } else {
+      clearInterval(timer);
+    }
+  }, 1000);
+}
+
 function handleMobileToggle() {
   const btnImg = document.getElementById('imgMobileToggle');
   const ts = window.trainingState;
   
-  // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 시작 처리
+  // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 5초 카운트다운 후 시작 처리
   if (!ts || !ts.timerId) {
-    if (typeof startWorkoutTraining === 'function') {
-      startWorkoutTraining();
-      // 시작했으므로 '일시정지' 할 수 있는 버튼으로 변경
-      if(btnImg) btnImg.src = 'assets/img/pause0.png';
-    }
+    // 5초 카운트다운 후 워크아웃 시작
+    startMobileWorkoutWithCountdown(5);
     return;
   }
 
