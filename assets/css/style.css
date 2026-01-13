@@ -9399,10 +9399,10 @@ button[aria-disabled="true"] {
   font-weight: bold;
 }
 
-/* 반응형 */
+/* 반응형 - 휴대폰 화면 기준으로 2개씩 배치 */
 @media (max-width: 480px) {
   .rpe-condition-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
   
   .rpe-condition-btn {
