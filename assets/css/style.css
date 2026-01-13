@@ -692,14 +692,6 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 
 /* 훈련 준비 화면 카드 하단 여백 조정 */
-#trainingReadyScreen .connection-form-card {
-  /* 좌우 버튼 그룹 배치 */
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: center !important;
-  flex-wrap: wrap !important;
-  gap: 12px !important;
-}
 
 /* 일별 워크아웃 지정 화면 하단 버튼 - 이미지만 표시 */
 #scheduleDaysScreen .connection-exit-container .btn,
