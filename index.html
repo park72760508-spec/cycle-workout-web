@@ -2322,31 +2322,6 @@
       </div>
     </div>
     
-    <!-- Gemini API 키 설정 -->
-    <div class="card" style="margin-top: 16px; padding: 12px;">
-      <div class="form-group" style="margin-bottom: 0;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <label style="font-size: 0.9em; margin: 0; display: flex; align-items: center; gap: 6px;">
-            <img src="assets/img/ai.gif" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
-            Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8; text-decoration: underline; font-weight: normal;">Google AI Studio에서 API 키 발급받기</a>)
-          </label>
-          <small style="color: #666; font-size: 0.85em; margin: 0;">
-            API 키는 브라우저에 저장됩니다 (localStorage)
-          </small>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <input type="password" id="geminiApiKey" placeholder="API 키를 입력하세요" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-          <button class="btn btn-default-style btn-with-icon" id="testApiKeyBtn" onclick="testGeminiApiKey()" style="white-space: nowrap;">
-            <img src="assets/img/api.png" alt="API 키 확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            API 키 확인
-          </button>
-          <button class="btn btn-secondary btn-refresh btn-with-icon" id="saveApiKeyBtn" onclick="saveGeminiApiKey()" style="white-space: nowrap;">
-            <img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            저장
-          </button>
-        </div>
-      </div>
-    </div>
     
     <div id="trainingJournalCalendar" class="training-calendar">
       <div class="loading-spinner">
