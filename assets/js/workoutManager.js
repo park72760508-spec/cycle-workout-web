@@ -873,10 +873,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'segmentPreviewGraph') {
-    // 훈련 준비 화면: 진회색 얇은 실선 (Y축 라벨 색상과 동일)
+    // 훈련 준비 화면: 진회색 실선 (Y축 라벨 색상과 동일, Y축 선 두께와 동일)
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = '#4B5563'; // 진회색 (Y축 라벨 색상과 동일)
-    ctx.lineWidth = 1; // 얇은 실선
+    ctx.lineWidth = 2; // Y축 선 두께와 동일
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // Indoor Training: 흰색 얇은 점선
