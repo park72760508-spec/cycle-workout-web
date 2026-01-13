@@ -10678,6 +10678,131 @@ window.handleTrainingDayClick = handleTrainingDayClick;
 window.saveGeminiApiKey = saveGeminiApiKey;
 window.testGeminiApiKey = testGeminiApiKey;
 window.closeTrainingAnalysisModal = closeTrainingAnalysisModal;
+
+// 환경 설정 팝업 관련 함수
+function openSettingsModal() {
+  const modal = document.getElementById('settingsModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    // 저장된 API 키 로드
+    loadGeminiApiKeyToSettings();
+  }
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById('settingsModal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function loadGeminiApiKeyToSettings() {
+  const apiKey = localStorage.getItem('geminiApiKey');
+  const apiKeyInput = document.getElementById('settingsGeminiApiKey');
+  if (apiKeyInput && apiKey) {
+    apiKeyInput.value = apiKey;
+    const isDisabled = localStorage.getItem('geminiApiKeyDisabled') === 'true';
+    if (isDisabled) {
+      apiKeyInput.disabled = true;
+    }
+  }
+}
+
+function testGeminiApiKeyFromSettings() {
+  const apiKeyInput = document.getElementById('settingsGeminiApiKey');
+  if (!apiKeyInput) return;
+  
+  // 기존 testGeminiApiKey 함수를 재사용하되, 입력 필드만 변경
+  const originalInput = document.getElementById('geminiApiKey');
+  if (originalInput) {
+    const tempValue = originalInput.value;
+    originalInput.value = apiKeyInput.value;
+    testGeminiApiKey();
+    originalInput.value = tempValue;
+  } else {
+    // geminiApiKey 요소가 없으면 직접 테스트
+    const apiKey = apiKeyInput.value.trim();
+    if (!apiKey) {
+      alert('API 키를 입력하세요.');
+      return;
+    }
+    
+    // API 키 테스트 로직 (기존 testGeminiApiKey 함수의 로직 재사용)
+    const testBtn = document.getElementById('settingsTestApiKeyBtn');
+    if (testBtn) {
+      testBtn.disabled = true;
+      testBtn.textContent = '확인 중...';
+    }
+    
+    // API 키 테스트
+    fetch(`https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`)
+      .then(response => {
+        if (!response.ok) {
+          return fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        }
+        return response;
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error.message || 'API 키 확인 실패');
+        }
+        alert('API 키가 유효합니다.');
+        if (testBtn) {
+          testBtn.disabled = false;
+          testBtn.innerHTML = '<img src="assets/img/api.png" alt="API 키 확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> API 키 확인';
+        }
+      })
+      .catch(error => {
+        alert(`API 키 확인 실패: ${error.message}\n\nAPI 키 발급 방법:\n1. https://aistudio.google.com/app/apikey 접속\n2. "Create API Key" 클릭\n3. 생성된 API 키를 복사하여 입력`);
+        if (testBtn) {
+          testBtn.disabled = false;
+          testBtn.innerHTML = '<img src="assets/img/api.png" alt="API 키 확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> API 키 확인';
+        }
+      });
+  }
+}
+
+function saveGeminiApiKeyFromSettings() {
+  const apiKeyInput = document.getElementById('settingsGeminiApiKey');
+  if (!apiKeyInput) return;
+  
+  const apiKey = apiKeyInput.value.trim();
+  if (!apiKey) {
+    alert('API 키를 입력하세요.');
+    return;
+  }
+  
+  // 기존 saveGeminiApiKey 함수를 재사용하되, 입력 필드만 변경
+  const originalInput = document.getElementById('geminiApiKey');
+  if (originalInput) {
+    const tempValue = originalInput.value;
+    originalInput.value = apiKey;
+    saveGeminiApiKey();
+    originalInput.value = tempValue;
+  } else {
+    // geminiApiKey 요소가 없으면 직접 저장
+    localStorage.setItem('geminiApiKey', apiKey);
+    apiKeyInput.type = 'password';
+    apiKeyInput.disabled = true;
+    localStorage.setItem('geminiApiKeyDisabled', 'true');
+    alert('API 키가 저장되었습니다.');
+  }
+  
+  // 훈련일지 화면의 API 키 입력 필드도 업데이트
+  if (originalInput) {
+    originalInput.value = apiKey;
+    const isDisabled = localStorage.getItem('geminiApiKeyDisabled') === 'true';
+    if (isDisabled) {
+      originalInput.disabled = true;
+    }
+  }
+}
+
+window.openSettingsModal = openSettingsModal;
+window.closeSettingsModal = closeSettingsModal;
+window.testGeminiApiKeyFromSettings = testGeminiApiKeyFromSettings;
+window.saveGeminiApiKeyFromSettings = saveGeminiApiKeyFromSettings;
 window.exportAnalysisReport = exportAnalysisReport;
 window.showAIRecommendationConfirmModal = showAIRecommendationConfirmModal;
 window.closeAIRecommendationConfirmModal = closeAIRecommendationConfirmModal;
