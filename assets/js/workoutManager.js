@@ -1149,6 +1149,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // 세그먼트별 막대 높이 계산
     let barHeight;
+    let minPower = 0;
+    let maxPower = 0;
+    let isFtpPctz = false;
+    
     if (targetType === 'cadence_rpm') {
       // cadence_rpm: 파워값이 없으므로 막대 높이는 0
       barHeight = 0;
@@ -1159,8 +1163,42 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       // ftp_pct: 오른쪽 Y축의 비율에 따라 높이 비율 적용
       barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
     } else if (targetType === 'ftp_pctz') {
-      // ftp_pctz: 평균값으로 계산 (기존 로직 유지)
-      barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
+      // ftp_pctz: 하한과 상한을 구분하여 막대 높이 계산
+      isFtpPctz = true;
+      const targetValue = seg.target_value;
+      let minPercent = 60;
+      let maxPercent = 75;
+      
+      // 하한/상한 파싱
+      if (typeof targetValue === 'string' && targetValue.includes('/')) {
+        const parts = targetValue.split('/').map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = 75;
+        }
+      } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+        const parts = targetValue.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = 75;
+        }
+      } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+        minPercent = Number(targetValue[0]) || 60;
+        maxPercent = Number(targetValue[1]) || 75;
+      }
+      
+      // 하한값과 상한값 파워 계산
+      minPower = ftp * (minPercent / 100);
+      maxPower = ftp * (maxPercent / 100);
+      
+      // 상한값까지의 높이로 설정
+      barHeight = Math.max(2, (maxPower / maxTargetPower) * chartHeight);
     } else {
       // 기타: 기본 로직
       barHeight = Math.max(2, (targetPower / maxTargetPower) * chartHeight);
@@ -1178,21 +1216,25 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     // cadence_rpm 타입일 때는 막대를 그리지 않음 (높이가 0)
     if (targetType !== 'cadence_rpm' && barHeight > 0) {
       // 색상 결정 (FTP 백분율 기준)
-      const ftpPercentValue = (targetPower / ftp) * 100;
+      // ftp_pctz 타입일 때는 하한값 기준으로 색상 결정
+      const powerForColor = isFtpPctz ? minPower : targetPower;
+      const ftpPercentValue = (powerForColor / ftp) * 100;
       let color;
       if (ftpPercentValue < 50) {
         // 휴식 (FTP 50% 미만): 흰색, 투명도 50%
         color = 'rgba(255, 255, 255, 0.5)';
         // 휴식은 파워가 0이거나 매우 낮을 수 있으므로 최소 높이로 표시
-        barHeight = Math.max(barHeight, 3);
-        y = padding.top + chartHeight - barHeight;
+        if (!isFtpPctz) {
+          barHeight = Math.max(barHeight, 3);
+          y = padding.top + chartHeight - barHeight;
+        }
       } else if (ftpPercentValue < 60) {
         // 워밍업/쿨다운 (FTP 50% 이상 < 60%): 민트색, 투명도 80%
         color = 'rgba(16, 185, 129, 0.8)';
-      } else if (targetPower >= ftp) {
+      } else if (powerForColor >= ftp) {
         // 고강도 인터벌 (FTP 100% 이상): 민트색, 투명도 20%
         color = 'rgba(16, 185, 129, 0.2)';
-      } else if (targetPower >= ftp * 0.8) {
+      } else if (powerForColor >= ftp * 0.8) {
         // 인터벌 (FTP 80% 이상 ~ <100%): 민트색, 투명도 40%
         color = 'rgba(16, 185, 129, 0.4)';
       } else if (ftpPercentValue >= 60) {
@@ -1203,31 +1245,84 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         color = 'rgba(16, 185, 129, 0.6)';
       }
       
-      // 막대 그리기 (부드러운 그라데이션)
-      const barGradient = ctx.createLinearGradient(x, y, x, y + barHeight);
-      const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
-      const r = parseInt(baseColor[0]);
-      const g = parseInt(baseColor[1]);
-      const b = parseInt(baseColor[2]);
-      const a = parseFloat(baseColor[3]);
-      
-      barGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a})`);
-      barGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
-      
-      ctx.fillStyle = barGradient;
-      
-      // 둥근 모서리를 위한 경로 생성
-      const radius = Math.min(4, barWidth / 2);
-      ctx.beginPath();
-      ctx.moveTo(x + radius, y);
-      ctx.lineTo(x + barWidth - radius, y);
-      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-      ctx.lineTo(x + barWidth, y + barHeight);
-      ctx.lineTo(x, y + barHeight);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.closePath();
-      ctx.fill();
+      // ftp_pctz 타입일 때는 하한과 상한을 구분하여 그리기
+      if (isFtpPctz && minPower > 0 && maxPower > minPower) {
+        // 하한값까지의 높이 계산
+        const minBarHeight = Math.max(2, (minPower / maxTargetPower) * chartHeight);
+        const minY = padding.top + chartHeight - minBarHeight;
+        
+        // 하한~상한 구간의 높이 계산
+        const maxBarHeight = barHeight;
+        const maxY = padding.top + chartHeight - maxBarHeight;
+        const zoneHeight = maxBarHeight - minBarHeight;
+        
+        // 하한값까지 막대 그리기 (기존 색상 로직)
+        const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
+        const r = parseInt(baseColor[0]);
+        const g = parseInt(baseColor[1]);
+        const b = parseInt(baseColor[2]);
+        const a = parseFloat(baseColor[3]);
+        
+        const minBarGradient = ctx.createLinearGradient(x, minY, x, minY + minBarHeight);
+        minBarGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a})`);
+        minBarGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
+        
+        ctx.fillStyle = minBarGradient;
+        
+        const radius = Math.min(4, barWidth / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + radius, minY);
+        ctx.lineTo(x + barWidth - radius, minY);
+        ctx.quadraticCurveTo(x + barWidth, minY, x + barWidth, minY + radius);
+        ctx.lineTo(x + barWidth, minY + minBarHeight);
+        ctx.lineTo(x, minY + minBarHeight);
+        ctx.lineTo(x, minY + radius);
+        ctx.quadraticCurveTo(x, minY, x + radius, minY);
+        ctx.closePath();
+        ctx.fill();
+        
+        // 하한~상한 구간 막대 그리기 (같은 색상톤에 투명도 적용)
+        const zoneAlpha = a * 0.3; // 기존 투명도의 30%로 설정
+        const zoneBarGradient = ctx.createLinearGradient(x, maxY, x, maxY + zoneHeight);
+        zoneBarGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${zoneAlpha})`);
+        zoneBarGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${zoneAlpha * 0.7})`);
+        
+        ctx.fillStyle = zoneBarGradient;
+        
+        ctx.beginPath();
+        ctx.moveTo(x, maxY + zoneHeight);
+        ctx.lineTo(x + barWidth, maxY + zoneHeight);
+        ctx.lineTo(x + barWidth, maxY);
+        ctx.lineTo(x, maxY);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        // 기존 로직: 일반 막대 그리기 (부드러운 그라데이션)
+        const barGradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+        const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
+        const r = parseInt(baseColor[0]);
+        const g = parseInt(baseColor[1]);
+        const b = parseInt(baseColor[2]);
+        const a = parseFloat(baseColor[3]);
+        
+        barGradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${a})`);
+        barGradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${a * 0.7})`);
+        
+        ctx.fillStyle = barGradient;
+        
+        // 둥근 모서리를 위한 경로 생성
+        const radius = Math.min(4, barWidth / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + barWidth - radius, y);
+        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+        ctx.lineTo(x + barWidth, y + barHeight);
+        ctx.lineTo(x, y + barHeight);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fill();
+      }
       
       // 막대 테두리 (부드러운 색상)
       ctx.shadowColor = 'transparent';
@@ -1235,55 +1330,139 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       // 현재 진행 중인 세그먼트인지 확인
       const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
       
-      if (isCurrentSegment) {
-        // 현재 세그먼트: 흰색 네온 애니메이션 효과
-        const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
-        const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
-        const whiteColor = `rgba(255, 255, 255, ${0.6 + 0.4 * neonIntensity})`; // 흰색
+      // ftp_pctz 타입일 때는 하한과 상한 구간 모두에 테두리 그리기
+      if (isFtpPctz && minPower > 0 && maxPower > minPower) {
+        const minBarHeight = Math.max(2, (minPower / maxTargetPower) * chartHeight);
+        const minY = padding.top + chartHeight - minBarHeight;
+        const maxBarHeight = barHeight;
+        const maxY = padding.top + chartHeight - maxBarHeight;
+        const zoneHeight = maxBarHeight - minBarHeight;
+        const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
+        const r = parseInt(baseColor[0]);
+        const g = parseInt(baseColor[1]);
+        const b = parseInt(baseColor[2]);
+        const a = parseFloat(baseColor[3]);
+        const radius = Math.min(4, barWidth / 2);
         
-        // 네온 효과를 위한 여러 레이어
-        ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-        ctx.shadowBlur = 10 * neonIntensity;
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = 0;
-        ctx.strokeStyle = whiteColor;
-        ctx.lineWidth = 3;
-        
-        // 외곽 네온 효과
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + barWidth - radius, y);
-        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-        ctx.lineTo(x + barWidth, y + barHeight);
-        ctx.lineTo(x, y + barHeight);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
-        ctx.stroke();
-        
-        // 내부 네온 효과 (더 강한)
-        ctx.shadowBlur = 15 * neonIntensity;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // 그림자 초기화
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
+        if (isCurrentSegment) {
+          // 현재 세그먼트: 흰색 네온 애니메이션 효과
+          const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
+          const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
+          const whiteColor = `rgba(255, 255, 255, ${0.6 + 0.4 * neonIntensity})`;
+          
+          // 하한 막대 네온 효과
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+          ctx.shadowBlur = 10 * neonIntensity;
+          ctx.strokeStyle = whiteColor;
+          ctx.lineWidth = 3;
+          
+          ctx.beginPath();
+          ctx.moveTo(x + radius, minY);
+          ctx.lineTo(x + barWidth - radius, minY);
+          ctx.quadraticCurveTo(x + barWidth, minY, x + barWidth, minY + radius);
+          ctx.lineTo(x + barWidth, minY + minBarHeight);
+          ctx.lineTo(x, minY + minBarHeight);
+          ctx.lineTo(x, minY + radius);
+          ctx.quadraticCurveTo(x, minY, x + radius, minY);
+          ctx.closePath();
+          ctx.stroke();
+          
+          // 상한 구간 네온 효과
+          ctx.beginPath();
+          ctx.moveTo(x, maxY + zoneHeight);
+          ctx.lineTo(x + barWidth, maxY + zoneHeight);
+          ctx.lineTo(x + barWidth, maxY);
+          ctx.lineTo(x, maxY);
+          ctx.closePath();
+          ctx.stroke();
+          
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+        } else {
+          // 일반 세그먼트: 기본 테두리
+          // 하한 막대 테두리
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
+          ctx.lineWidth = 1;
+          
+          ctx.beginPath();
+          ctx.moveTo(x + radius, minY);
+          ctx.lineTo(x + barWidth - radius, minY);
+          ctx.quadraticCurveTo(x + barWidth, minY, x + barWidth, minY + radius);
+          ctx.lineTo(x + barWidth, minY + minBarHeight);
+          ctx.lineTo(x, minY + minBarHeight);
+          ctx.lineTo(x, minY + radius);
+          ctx.quadraticCurveTo(x, minY, x + radius, minY);
+          ctx.closePath();
+          ctx.stroke();
+          
+          // 상한 구간 테두리
+          ctx.beginPath();
+          ctx.moveTo(x, maxY + zoneHeight);
+          ctx.lineTo(x + barWidth, maxY + zoneHeight);
+          ctx.lineTo(x + barWidth, maxY);
+          ctx.lineTo(x, maxY);
+          ctx.closePath();
+          ctx.stroke();
+        }
       } else {
-        // 일반 세그먼트: 기본 테두리
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
-        ctx.lineWidth = 1;
+        // 기존 로직: 일반 막대 테두리
+        const baseColor = color.replace('rgba(', '').replace(')', '').split(',');
+        const r = parseInt(baseColor[0]);
+        const g = parseInt(baseColor[1]);
+        const b = parseInt(baseColor[2]);
+        const a = parseFloat(baseColor[3]);
+        const radius = Math.min(4, barWidth / 2);
         
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + barWidth - radius, y);
-        ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-        ctx.lineTo(x + barWidth, y + barHeight);
-        ctx.lineTo(x, y + barHeight);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
-        ctx.stroke();
+        if (isCurrentSegment) {
+          // 현재 세그먼트: 흰색 네온 애니메이션 효과
+          const animationPhase = (Date.now() / 1000) % 2; // 2초 주기
+          const neonIntensity = 0.5 + 0.5 * Math.sin(animationPhase * Math.PI);
+          const whiteColor = `rgba(255, 255, 255, ${0.6 + 0.4 * neonIntensity})`; // 흰색
+          
+          // 네온 효과를 위한 여러 레이어
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
+          ctx.shadowBlur = 10 * neonIntensity;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 0;
+          ctx.strokeStyle = whiteColor;
+          ctx.lineWidth = 3;
+          
+          // 외곽 네온 효과
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + barWidth - radius, y);
+          ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+          ctx.lineTo(x + barWidth, y + barHeight);
+          ctx.lineTo(x, y + barHeight);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+          ctx.stroke();
+          
+          // 내부 네온 효과 (더 강한)
+          ctx.shadowBlur = 15 * neonIntensity;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // 그림자 초기화
+          ctx.shadowColor = 'transparent';
+          ctx.shadowBlur = 0;
+        } else {
+          // 일반 세그먼트: 기본 테두리
+          ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a * 0.3})`;
+          ctx.lineWidth = 1;
+          
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + barWidth - radius, y);
+          ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+          ctx.lineTo(x + barWidth, y + barHeight);
+          ctx.lineTo(x, y + barHeight);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+          ctx.stroke();
+        }
       }
     }
     
