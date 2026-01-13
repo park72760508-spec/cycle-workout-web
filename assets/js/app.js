@@ -10974,8 +10974,16 @@ async function startMobileDashboard() {
         setTimeout(() => {
           drawSegmentGraph(window.currentWorkout.segments, -1, 'mobileIndividualSegmentGraph', null);
           // 마스코트는 Canvas에 직접 그려지므로 별도 초기화 불필요
+          // 펄스 애니메이션은 훈련 시작 시 자동으로 시작됨
         }, 100);
       }
+    }
+    
+    // 모바일 대시보드 진입 시에도 펄스 애니메이션 시작 (워크아웃이 있고 훈련 중일 때)
+    if (window.currentWorkout && window.currentWorkout.segments && 
+        window.trainingState && window.trainingState.timerId) {
+      // 훈련이 이미 진행 중이면 펄스 애니메이션 시작
+      startMobileMascotPulseAnimation();
     }
     
     // 화면 크기 변경 시 세그먼트 그래프 재그리기 (마스코트 포함)
@@ -12078,6 +12086,69 @@ function closeMobileTrainingResultModal() {
 }
 
 /**
+ * 모바일 대시보드 마스코트 펄스 애니메이션 시작
+ */
+function startMobileMascotPulseAnimation() {
+  // 기존 인터벌이 있으면 제거
+  if (window.mobileMascotAnimationInterval) {
+    clearInterval(window.mobileMascotAnimationInterval);
+    window.mobileMascotAnimationInterval = null;
+  }
+  
+  // 모바일 대시보드가 활성화되어 있고 워크아웃이 있을 때만 애니메이션 시작
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  if (!mobileScreen || 
+      (!mobileScreen.classList.contains('active') && 
+       window.getComputedStyle(mobileScreen).display === 'none')) {
+    return;
+  }
+  
+  if (!window.currentWorkout || !window.currentWorkout.segments) {
+    return;
+  }
+  
+  // 100ms마다 그래프를 다시 그려서 펄스 애니메이션 효과 (개인훈련 대시보드와 동일)
+  window.mobileMascotAnimationInterval = setInterval(() => {
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    if (!mobileScreen || 
+        (!mobileScreen.classList.contains('active') && 
+         window.getComputedStyle(mobileScreen).display === 'none')) {
+      // 모바일 대시보드가 비활성화되면 애니메이션 중지
+      if (window.mobileMascotAnimationInterval) {
+        clearInterval(window.mobileMascotAnimationInterval);
+        window.mobileMascotAnimationInterval = null;
+      }
+      return;
+    }
+    
+    if (window.currentWorkout && window.currentWorkout.segments && typeof drawSegmentGraph === 'function') {
+      const elapsedTime = window.trainingState?.elapsedSec || 0;
+      const segIndex = window.trainingState?.segIndex || 0;
+      drawSegmentGraph(window.currentWorkout.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
+    } else {
+      // 워크아웃이 없으면 애니메이션 중지
+      if (window.mobileMascotAnimationInterval) {
+        clearInterval(window.mobileMascotAnimationInterval);
+        window.mobileMascotAnimationInterval = null;
+      }
+    }
+  }, 100);
+  
+  console.log('[Mobile Dashboard] 마스코트 펄스 애니메이션 시작');
+}
+
+/**
+ * 모바일 대시보드 마스코트 펄스 애니메이션 중지
+ */
+function stopMobileMascotPulseAnimation() {
+  if (window.mobileMascotAnimationInterval) {
+    clearInterval(window.mobileMascotAnimationInterval);
+    window.mobileMascotAnimationInterval = null;
+    console.log('[Mobile Dashboard] 마스코트 펄스 애니메이션 중지');
+  }
+}
+
+/**
  * 모바일 대시보드 화면 정리 (화면 닫힐 때 호출)
  */
 function cleanupMobileDashboard() {
@@ -12090,6 +12161,9 @@ function cleanupMobileDashboard() {
     clearInterval(window.mobileDashboardTimerInterval);
     window.mobileDashboardTimerInterval = null;
   }
+  
+  // 마스코트 펄스 애니메이션 정리
+  stopMobileMascotPulseAnimation();
   
   // 애니메이션 프레임 정리
   if (mobileGaugeAnimationFrameId !== null) {
@@ -12401,8 +12475,8 @@ function startMobileWorkout() {
   // 모바일 대시보드 UI 초기 업데이트
   updateMobileDashboardUI();
   
-  // 마스코트는 Canvas에 직접 그려지므로 별도 초기화 불필요
-  // drawSegmentGraph 함수에서 펄스 애니메이션과 함께 그려짐
+  // 마스코트 펄스 애니메이션을 위한 주기적 그래프 재그리기 시작
+  startMobileMascotPulseAnimation();
 
   // 버튼 상태 업데이트
   const btnImg = document.getElementById('imgMobileToggle');
