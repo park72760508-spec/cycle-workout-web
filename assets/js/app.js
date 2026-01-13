@@ -10893,6 +10893,27 @@ function updateTrainingReadyScreenWithWorkout(workout) {
       if (typeof drawSegmentGraph === 'function') {
         setTimeout(() => {
           drawSegmentGraph(workout.segments, -1, 'segmentPreviewGraph', null);
+          
+          // 그래프 높이에 맞춰 컨테이너 높이 조절 (위아래 여백 동일하게)
+          setTimeout(() => {
+            const canvas = document.getElementById('segmentPreviewGraph');
+            const container = safeGetElement('segmentPreview');
+            if (canvas && container) {
+              // 캔버스의 실제 높이 확인 (height 속성 또는 clientHeight)
+              const canvasHeight = canvas.height || canvas.clientHeight || canvas.offsetHeight || 0;
+              if (canvasHeight > 0) {
+                // 캔버스 높이 + 위아래 패딩 (12px씩)
+                const containerHeight = canvasHeight + 24; // padding 12px * 2
+                container.style.height = `${containerHeight}px`;
+                container.style.minHeight = `${containerHeight}px`;
+                // 위아래 여백 동일하게 설정
+                container.style.paddingTop = '12px';
+                container.style.paddingBottom = '12px';
+                container.style.paddingLeft = '12px';
+                container.style.paddingRight = '12px';
+              }
+            }
+          }, 50); // 그래프 그리기 후 약간의 지연을 두고 높이 조절
         }, 100);
       } else {
         console.warn('[Training Ready] drawSegmentGraph 함수를 찾을 수 없습니다.');
