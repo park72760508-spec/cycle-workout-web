@@ -873,9 +873,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'segmentPreviewGraph') {
-    // 훈련 준비 화면: 빨간색 실선
+    // 훈련 준비 화면: 진회색 실선 (Y축 라벨 색상과 동일)
     ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = '#EF4444'; // 빨간색
+    ctx.strokeStyle = '#4B5563'; // 진회색 (Y축 라벨 색상과 동일)
     ctx.lineWidth = 1.5;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
