@@ -5511,11 +5511,8 @@ function initializeCurrentScreen(screenId) {
       break;
       
     case 'trainingJournalScreen':
-      // 훈련일지 화면: 캘린더 자동 로드 및 API 키 로드
+      // 훈련일지 화면: 캘린더 자동 로드
       console.log('훈련일지 화면 진입 - 캘린더 로딩 시작');
-      if (typeof loadGeminiApiKey === 'function') {
-        loadGeminiApiKey();
-      }
       if (typeof loadTrainingJournalCalendar === 'function') {
         // 현재 월로 초기화
         trainingJournalCurrentMonth = new Date().getMonth();
@@ -7236,11 +7233,11 @@ async function handleAIWorkoutRecommendation(event, date) {
     // API 키 확인
     const apiKey = localStorage.getItem('geminiApiKey');
     if (!apiKey) {
-      if (confirm('Gemini API 키가 설정되지 않았습니다.\n훈련일지 상단에서 API 키를 입력해주세요.\n\n지금 설정하시겠습니까?')) {
-        const apiKeyInput = document.getElementById('geminiApiKey');
-        if (apiKeyInput) {
-          apiKeyInput.focus();
-          apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (confirm('Gemini API 키가 설정되지 않았습니다.\n환경 설정에서 API 키를 입력해주세요.\n\n지금 환경 설정을 열까요?')) {
+        if (typeof openSettingsModal === 'function') {
+          openSettingsModal();
+        } else {
+          showScreen('myCareerScreen');
         }
       }
       return;
@@ -7284,11 +7281,11 @@ async function handleTrainingDayClick(date, resultData) {
     // API 키 확인
     const apiKey = localStorage.getItem('geminiApiKey');
     if (!apiKey) {
-      if (confirm('Gemini API 키가 설정되지 않았습니다.\n훈련일지 상단에서 API 키를 입력해주세요.\n\n지금 설정하시겠습니까?')) {
-        const apiKeyInput = document.getElementById('geminiApiKey');
-        if (apiKeyInput) {
-          apiKeyInput.focus();
-          apiKeyInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (confirm('Gemini API 키가 설정되지 않았습니다.\n환경 설정에서 API 키를 입력해주세요.\n\n지금 환경 설정을 열까요?')) {
+        if (typeof openSettingsModal === 'function') {
+          openSettingsModal();
+        } else {
+          showScreen('myCareerScreen');
         }
       }
       return;
@@ -9146,18 +9143,19 @@ async function testGeminiApiKey() {
 }
 
 // API 키 로드 (페이지 로드 시)
-function loadGeminiApiKey() {
-  const apiKey = localStorage.getItem('geminiApiKey');
-  const apiKeyInput = document.getElementById('geminiApiKey');
-  if (apiKeyInput && apiKey) {
-    apiKeyInput.value = apiKey;
-    // 저장된 비활성화 상태 확인
-    const isDisabled = localStorage.getItem('geminiApiKeyDisabled') === 'true';
-    if (isDisabled) {
-      apiKeyInput.disabled = true;
-    }
-  }
-}
+// loadGeminiApiKey 함수는 더 이상 사용되지 않음 (환경 설정으로 이동)
+// function loadGeminiApiKey() {
+//   const apiKey = localStorage.getItem('geminiApiKey');
+//   const apiKeyInput = document.getElementById('geminiApiKey');
+//   if (apiKeyInput && apiKey) {
+//     apiKeyInput.value = apiKey;
+//     // 저장된 비활성화 상태 확인
+//     const isDisabled = localStorage.getItem('geminiApiKeyDisabled') === 'true';
+//     if (isDisabled) {
+//       apiKeyInput.disabled = true;
+//     }
+//   }
+// }
 
 // 보고서 내보내기 (PDF 형식 - html2canvas 사용)
 async function exportAnalysisReport() {
