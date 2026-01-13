@@ -536,6 +536,17 @@ h1,h2,h3,h4 { font-weight: 600; }
   z-index: 50;
 }
 
+/* 훈련일지 화면 하단 버튼 영역 Safe Area 적용 */
+#trainingJournalScreen .connection-exit-container {
+  margin-top: 20px !important;
+  padding-top: 20px !important;
+  padding-bottom: calc(30px + env(safe-area-inset-bottom)) !important; /* 기본 30px + 아이폰 홈바 높이 자동 추가 */
+  
+  /* 버튼이 확실히 위에 오도록 설정 */
+  position: relative;
+  z-index: 50;
+}
+
 /* 훈련 스케줄 화면 하단 버튼 영역 안전거리 확보 */
 #scheduleListScreen .connection-exit-container {
   margin-top: 24px !important;
