@@ -1425,8 +1425,8 @@
                 <span style="font-size: 13px; color: #666;">평균 강도</span>
               </div>
               <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
-                <strong id="previewExpectedIntensity" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0%</strong>
-                <span style="font-size: 13px; color: #666;">예상 강도</span>
+                <strong id="previewExpectedIntensity" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0</strong>
+                <span style="font-size: 13px; color: #666;">예상 TSS</span>
               </div>
             </div>
             <!-- 세그먼트 그래프 -->
@@ -1439,13 +1439,13 @@
             <div class="grid-2 gap-10 mb-15">
               <!-- 좌측: 개인 훈련 화면 -->
               <button class="btn btn-device" id="btnStartTraining" onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
-                <img src="assets/img/laptop.png" alt="개인 훈련" class="device-btn-icon" />
-                <span>개인 훈련</span>
+                <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
+                <span>노트북</span>
               </button>
               <!-- 우측: 모바일 대시보드 화면 -->
               <button class="btn btn-device" id="btnMobileDashboard" onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
-                <img src="assets/img/mobile.png" alt="모바일 대시보드" class="device-btn-icon" />
-                <span>모바일 대시보드</span>
+                <img src="assets/img/mobile.png" alt="모바일" class="device-btn-icon" />
+                <span>모바일</span>
               </button>
             </div>
           </div>
