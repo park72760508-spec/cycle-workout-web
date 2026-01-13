@@ -2837,6 +2837,14 @@ function setPaused(isPaused) {
     btn.classList.add(wantPause ? "play" : "pause");
     btn.setAttribute("aria-label", wantPause ? "재생" : "일시정지");
   }
+  
+  // 모바일 대시보드 버튼 이미지 업데이트
+  const mobileBtnImg = document.getElementById('imgMobileToggle');
+  if (mobileBtnImg) {
+    // 일시정지 상태면 play0.png, 실행 중이면 pause0.png
+    mobileBtnImg.src = wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png';
+  }
+  
   showToast?.(wantPause ? "일시정지됨" : "재개됨");
 
   if (typeof window.updateGroupTrainingControlButtons === "function") {
@@ -12599,22 +12607,27 @@ function handleMobileToggle() {
 
   if (isCurrentlyPaused) {
     // [현재 일시정지 상태] -> 재개(Resume)
-    if (typeof setPaused === 'function') setPaused(false);
-    // syncMobileToggleIcon 호출하여 버튼 상태 동기화
-    if (typeof syncMobileToggleIcon === 'function') {
-      setTimeout(() => syncMobileToggleIcon(), 50);
+    if (typeof setPaused === 'function') {
+      setPaused(false);
+      // setPaused 함수 내부에서 이미 버튼 이미지가 업데이트되지만, 추가로 동기화
+      if(btnImg) btnImg.src = 'assets/img/pause0.png';
     } else if(btnImg) {
       btnImg.src = 'assets/img/pause0.png'; // 움직이는 상태이므로 멈춤 아이콘 표시
     }
   } else {
     // [현재 실행 상태] -> 일시정지(Pause)
-    if (typeof setPaused === 'function') setPaused(true);
-    // syncMobileToggleIcon 호출하여 버튼 상태 동기화
-    if (typeof syncMobileToggleIcon === 'function') {
-      setTimeout(() => syncMobileToggleIcon(), 50);
+    if (typeof setPaused === 'function') {
+      setPaused(true);
+      // setPaused 함수 내부에서 이미 버튼 이미지가 업데이트되지만, 추가로 동기화
+      if(btnImg) btnImg.src = 'assets/img/play0.png';
     } else if(btnImg) {
       btnImg.src = 'assets/img/play0.png'; // 멈췄으므로 재생 아이콘 표시
     }
+  }
+  
+  // 추가 안전 장치: syncMobileToggleIcon 호출하여 버튼 상태 동기화
+  if (typeof syncMobileToggleIcon === 'function') {
+    setTimeout(() => syncMobileToggleIcon(), 100);
   }
 }
 
@@ -12653,7 +12666,13 @@ function handleMobileStop() {
 // app.js의 updateTrainingDisplay 또는 updateTimeUI 내부에서 호출 권장
 function syncMobileToggleIcon() {
   const btnImg = document.getElementById('imgMobileToggle');
-  if (!btnImg || !window.trainingState) return;
+  if (!btnImg) return;
+  
+  // trainingState가 없으면 기본값으로 처리
+  if (!window.trainingState) {
+    btnImg.src = 'assets/img/play0.png';
+    return;
+  }
 
   // 타이머가 돌고 있고, 일시정지 상태가 아니면 -> pause0.png (멈출 수 있음)
   // 그 외(일시정지 중이거나 훈련 전) -> play0.png (시작/재개 할 수 있음)
@@ -12664,12 +12683,16 @@ function syncMobileToggleIcon() {
   const currentSrc = btnImg.src || '';
   
   if (isRunning && !isPaused) {
+    // 실행 중: pause0.png
     if (!currentSrc.includes('pause0.png')) {
       btnImg.src = 'assets/img/pause0.png';
+      console.log('[Mobile Dashboard] 버튼 이미지 업데이트: pause0.png (실행 중)');
     }
   } else {
+    // 일시정지 중이거나 훈련 전: play0.png
     if (!currentSrc.includes('play0.png')) {
       btnImg.src = 'assets/img/play0.png';
+      console.log('[Mobile Dashboard] 버튼 이미지 업데이트: play0.png (일시정지/대기)');
     }
   }
 }
