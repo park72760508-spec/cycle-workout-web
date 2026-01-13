@@ -3022,6 +3022,27 @@ if (!window.showScreen) {
           if (typeof window.updateGroupTrainingCardStatus === 'function') {
             window.updateGroupTrainingCardStatus();
           }
+          
+          // 워크아웃 미선택 시 placeholder 표시
+          const segmentPreview = safeGetElement('segmentPreview');
+          const placeholder = safeGetElement('segmentPreviewPlaceholder');
+          const existingCanvas = document.getElementById('segmentPreviewGraph');
+          
+          // 현재 워크아웃이 없으면 placeholder 표시
+          if (!window.currentWorkout) {
+            if (placeholder) {
+              placeholder.style.display = 'flex';
+            }
+            if (existingCanvas) {
+              existingCanvas.remove();
+            }
+          } else {
+            // 워크아웃이 있으면 updateTrainingReadyScreenWithWorkout에서 처리
+            // 여기서는 placeholder만 숨김
+            if (placeholder && !existingCanvas) {
+              placeholder.style.display = 'none';
+            }
+          }
         }, 200);
       }
       
@@ -10844,11 +10865,21 @@ function updateTrainingReadyScreenWithWorkout(workout) {
   }
   
   // 세그먼트 그래프 그리기
+  const segmentPreview = safeGetElement('segmentPreview');
+  const placeholder = safeGetElement('segmentPreviewPlaceholder');
+  
   if (workout.segments && workout.segments.length > 0) {
-    const segmentPreview = safeGetElement('segmentPreview');
     if (segmentPreview) {
+      // placeholder 숨기기
+      if (placeholder) {
+        placeholder.style.display = 'none';
+      }
+      
       // 기존 캔버스 제거
-      segmentPreview.innerHTML = '';
+      const existingCanvas = document.getElementById('segmentPreviewGraph');
+      if (existingCanvas) {
+        existingCanvas.remove();
+      }
       
       // 캔버스 생성
       const canvas = document.createElement('canvas');
@@ -10867,9 +10898,16 @@ function updateTrainingReadyScreenWithWorkout(workout) {
       }
     }
   } else {
-    const segmentPreview = safeGetElement('segmentPreview');
     if (segmentPreview) {
-      segmentPreview.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">세그먼트가 없습니다.</p>';
+      // 세그먼트가 없으면 placeholder 표시
+      if (placeholder) {
+        placeholder.style.display = 'flex';
+      }
+      // 기존 캔버스 제거
+      const existingCanvas = document.getElementById('segmentPreviewGraph');
+      if (existingCanvas) {
+        existingCanvas.remove();
+      }
     }
   }
 }
