@@ -2838,11 +2838,12 @@ function setPaused(isPaused) {
     btn.setAttribute("aria-label", wantPause ? "재생" : "일시정지");
   }
   
-  // 모바일 대시보드 버튼 이미지 업데이트
+  // 모바일 대시보드 버튼 이미지 업데이트 (SVG <image> 요소는 href 속성 사용)
   const mobileBtnImg = document.getElementById('imgMobileToggle');
   if (mobileBtnImg) {
     // 일시정지 상태면 play0.png, 실행 중이면 pause0.png
-    mobileBtnImg.src = wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png';
+    mobileBtnImg.setAttribute('href', wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png');
+    console.log('[Mobile Dashboard] setPaused에서 버튼 이미지 업데이트:', wantPause ? 'play0.png' : 'pause0.png');
   }
   
   showToast?.(wantPause ? "일시정지됨" : "재개됨");
@@ -12524,9 +12525,9 @@ function startMobileWorkout() {
   // 마스코트 펄스 애니메이션을 위한 주기적 그래프 재그리기 시작
   startMobileMascotPulseAnimation();
 
-  // 버튼 상태 업데이트
+  // 버튼 상태 업데이트 (SVG <image> 요소는 href 속성 사용)
   const btnImg = document.getElementById('imgMobileToggle');
-  if(btnImg) btnImg.src = 'assets/img/pause0.png';
+  if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
 
   if (typeof showToast === "function") showToast("훈련을 시작합니다");
 }
@@ -12633,7 +12634,8 @@ function handleMobileToggle() {
   // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 5초 카운트다운 후 시작 처리
   if (!ts || !ts.timerId) {
     // 시작 버튼 클릭 시 즉시 일시정지 버튼으로 변경 (토글 기능)
-    if(btnImg) btnImg.src = 'assets/img/pause0.png';
+    // SVG <image> 요소는 href 속성 사용
+    if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
     
     // 5초 카운트다운 후 워크아웃 시작
     startMobileWorkoutWithCountdown(5);
@@ -12648,18 +12650,20 @@ function handleMobileToggle() {
     if (typeof setPaused === 'function') {
       setPaused(false);
       // setPaused 함수 내부에서 이미 버튼 이미지가 업데이트되지만, 추가로 동기화
-      if(btnImg) btnImg.src = 'assets/img/pause0.png';
+      // SVG <image> 요소는 href 속성 사용
+      if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
     } else if(btnImg) {
-      btnImg.src = 'assets/img/pause0.png'; // 움직이는 상태이므로 멈춤 아이콘 표시
+      btnImg.setAttribute('href', 'assets/img/pause0.png'); // 움직이는 상태이므로 멈춤 아이콘 표시
     }
   } else {
     // [현재 실행 상태] -> 일시정지(Pause)
     if (typeof setPaused === 'function') {
       setPaused(true);
       // setPaused 함수 내부에서 이미 버튼 이미지가 업데이트되지만, 추가로 동기화
-      if(btnImg) btnImg.src = 'assets/img/play0.png';
+      // SVG <image> 요소는 href 속성 사용
+      if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
     } else if(btnImg) {
-      btnImg.src = 'assets/img/play0.png'; // 멈췄으므로 재생 아이콘 표시
+      btnImg.setAttribute('href', 'assets/img/play0.png'); // 멈췄으므로 재생 아이콘 표시
     }
   }
   
@@ -12694,9 +12698,9 @@ function handleMobileStop() {
       stopSegmentLoop();
     }
     
-    // 훈련 종료 후 초기 상태(Play 버튼)로 복구
+    // 훈련 종료 후 초기 상태(Play 버튼)로 복구 (SVG <image> 요소는 href 속성 사용)
     const btnImg = document.getElementById('imgMobileToggle');
-    if(btnImg) btnImg.src = 'assets/img/play0.png';
+    if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
   }
 }
 
@@ -12708,7 +12712,7 @@ function syncMobileToggleIcon() {
   
   // trainingState가 없으면 기본값으로 처리
   if (!window.trainingState) {
-    btnImg.src = 'assets/img/play0.png';
+    btnImg.setAttribute('href', 'assets/img/play0.png');
     return;
   }
 
@@ -12717,19 +12721,19 @@ function syncMobileToggleIcon() {
   const isRunning = window.trainingState.timerId !== null;
   const isPaused = window.trainingState.paused;
 
-  // 안전하게 src 확인 (undefined 방지)
-  const currentSrc = btnImg.src || '';
+  // SVG <image> 요소는 href 속성 사용 (src가 아님)
+  const currentHref = btnImg.getAttribute('href') || '';
   
   if (isRunning && !isPaused) {
     // 실행 중: pause0.png
-    if (!currentSrc.includes('pause0.png')) {
-      btnImg.src = 'assets/img/pause0.png';
+    if (!currentHref.includes('pause0.png')) {
+      btnImg.setAttribute('href', 'assets/img/pause0.png');
       console.log('[Mobile Dashboard] 버튼 이미지 업데이트: pause0.png (실행 중)');
     }
   } else {
     // 일시정지 중이거나 훈련 전: play0.png
-    if (!currentSrc.includes('play0.png')) {
-      btnImg.src = 'assets/img/play0.png';
+    if (!currentHref.includes('play0.png')) {
+      btnImg.setAttribute('href', 'assets/img/play0.png');
       console.log('[Mobile Dashboard] 버튼 이미지 업데이트: play0.png (일시정지/대기)');
     }
   }
