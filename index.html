@@ -874,7 +874,7 @@
               <button class="btn btn-device basecamp-btn basecamp-btn-career-subscribe" id="btnCareerSubscribe" onclick="alert('구독하기 기능은 준비 중입니다.');">
                 <span>구독하기</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-career-logo" id="btnCareerLogo" onclick="if (typeof showScreen === 'function') { showScreen('basecampScreen'); }">
+              <button class="btn btn-device basecamp-btn basecamp-btn-career-logo" id="btnCareerLogo" onclick="openSettingsModal()">
               </button>
             </div>
           </div>
@@ -2504,6 +2504,52 @@
           <img src="assets/img/exit.png" alt="닫기" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
           닫기
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 환경 설정 팝업 -->
+  <div id="settingsModal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeSettingsModal();">
+    <div class="modal-content" style="max-width: 600px;" onclick="event.stopPropagation();">
+      <div class="modal-header">
+        <h2>환경설정</h2>
+        <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Gemini API 키 입력 블럭 -->
+        <div class="card" style="margin-top: 0; padding: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="font-size: 0.9em; margin: 0; display: flex; align-items: center; gap: 6px;">
+                <img src="assets/img/ai.gif" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
+                Gemini API 키 (<a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: #2e74e8; text-decoration: underline; font-weight: normal;">Google AI Studio에서 API 키 발급받기</a>)
+              </label>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="password" id="settingsGeminiApiKey" placeholder="API 키를 입력하세요" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+              <button class="btn btn-default-style btn-with-icon" id="settingsTestApiKeyBtn" onclick="testGeminiApiKeyFromSettings()" style="white-space: nowrap;">
+                <img src="assets/img/api.png" alt="API 키 확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+                API 키 확인
+              </button>
+              <button class="btn btn-secondary btn-refresh btn-with-icon" id="settingsSaveApiKeyBtn" onclick="saveGeminiApiKeyFromSettings()" style="white-space: nowrap;">
+                <img src="assets/img/save.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- API키 저장 안내 문구 -->
+        <p style="margin-top: 12px; margin-bottom: 0; color: #666; font-size: 0.85em; text-align: center;">
+          API키는 브라우저에 저장됩니다
+        </p>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid rgba(0, 0, 0, 0.08); padding-top: 20px; margin-top: 20px;">
+        <div class="connection-exit-container" style="justify-content: center;">
+          <button class="btn btn-exit-inline enhanced-back-button" onclick="closeSettingsModal()" aria-label="뒤로 가기">
+            <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            <span>뒤로 가기</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
