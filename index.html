@@ -1430,7 +1430,21 @@
               </div>
             </div>
             <!-- 세그먼트 그래프 -->
-            <div class="segment-preview" id="segmentPreview" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; min-height: 200px; margin-bottom: 20px;"></div>
+            <div class="segment-preview" id="segmentPreview" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; min-height: 200px; margin-bottom: 20px; position: relative;">
+              <!-- 워크아웃 미선택 시 표시될 막대그래프 placeholder -->
+              <div id="segmentPreviewPlaceholder" style="display: flex; align-items: flex-end; justify-content: center; gap: 4px; height: 180px; opacity: 0.3; padding: 20px;">
+                <div style="width: 8px; background: #2e74e8; height: 40%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 60%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 80%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 70%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 50%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 90%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 65%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 55%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 75%; border-radius: 2px 2px 0 0;"></div>
+                <div style="width: 8px; background: #2e74e8; height: 45%; border-radius: 2px 2px 0 0;"></div>
+              </div>
+            </div>
           </div>
 
           <!-- Select Dashboard 섹션 -->
