@@ -271,79 +271,50 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             const isAllSegmentsComplete = (status.segmentIndex !== undefined && status.segmentIndex >= lastSegmentIndex) || currentState === 'finished';
             
             if (isAllSegmentsComplete || currentState === 'finished' || currentState === 'stopped') {
-                // 세션 종료 처리
-                if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
-                    window.trainingResults.endSession();
-                }
-                
                 // elapsedTime을 전역 변수에 저장 (저장 시 사용)
                 if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
                     window.lastElapsedTime = status.elapsedTime;
                     console.log('[Individual] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
                 }
                 
-                // 훈련 결과 저장 및 팝업 표시
-                if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
-                    // 워크아웃 ID 최종 확인 (Firebase에서 다시 한 번 확인)
-                    db.ref(`sessions/${SESSION_ID}/workoutId`).once('value', (workoutIdSnapshot) => {
-                        const finalWorkoutId = workoutIdSnapshot.val();
-                        if (finalWorkoutId) {
-                            if (!window.currentWorkout) {
-                                window.currentWorkout = {};
+                // 모바일 대시보드와 동일한 훈련 결과 저장 로직 적용
+                // ✅ await 없이 순차 실행(저장 → 초기화 → 결과 모달 표시)
+                Promise.resolve()
+                    .then(() => {
+                        console.log('[Individual] 🚀 1단계: 결과 저장 시작');
+                        return window.saveTrainingResultAtEnd?.();
+                    })
+                    .then((saveResult) => {
+                        console.log('[Individual] ✅ 1단계 완료:', saveResult);
+                        
+                        // 저장 결과 확인 및 알림
+                        if (saveResult?.saveResult?.source === 'local') {
+                            console.log('[Individual] 📱 로컬 저장 모드 - CORS 오류로 서버 저장 실패');
+                            if (typeof showToast === "function") {
+                                showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
                             }
-                            window.currentWorkout.id = finalWorkoutId;
-                            lastWorkoutId = finalWorkoutId;
+                        } else if (saveResult?.saveResult?.source === 'gas') {
+                            console.log('[Individual] 🌐 서버 저장 성공');
+                            if (typeof showToast === "function") {
+                                showToast("훈련 결과가 서버에 저장되었습니다");
+                            }
                         }
                         
-                        const extra = {
-                            workoutId: finalWorkoutId || lastWorkoutId || window.currentWorkout?.id || null,
-                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                            userId: currentUserIdForSession,
-                            elapsedTime: status.elapsedTime || window.lastElapsedTime || null // elapsedTime 전달
-                        };
-                        
-                        console.log('[Individual] 훈련 결과 저장 시도, workoutId:', extra.workoutId, {
-                            finalWorkoutId,
-                            lastWorkoutId,
-                            currentWorkoutId: window.currentWorkout?.id,
-                            workoutName: extra.workoutName
-                        });
-                        
-                        window.trainingResults.saveTrainingResult(extra)
-                            .then((result) => {
-                                console.log('[Individual] 훈련 결과 저장 완료:', result);
-                                // 결과 팝업 표시
-                                showTrainingResultModal(status);
-                            })
-                            .catch((error) => {
-                                console.error('[Individual] 훈련 결과 저장 실패:', error);
-                                // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
-                                showTrainingResultModal(status);
-                            });
-                    }).catch((error) => {
-                        console.error('[Individual] workoutId 조회 실패:', error);
-                        // workoutId 조회 실패해도 저장 시도
-                        const extra = {
-                            workoutId: lastWorkoutId || window.currentWorkout?.id || null,
-                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
-                            userId: currentUserIdForSession,
-                            elapsedTime: status.elapsedTime || window.lastElapsedTime || null
-                        };
-                        
-                        window.trainingResults.saveTrainingResult(extra)
-                            .then((result) => {
-                                console.log('[Individual] 훈련 결과 저장 완료 (workoutId 조회 실패 후):', result);
-                                showTrainingResultModal(status);
-                            })
-                            .catch((error) => {
-                                console.error('[Individual] 훈련 결과 저장 실패:', error);
-                                showTrainingResultModal(status);
-                            });
+                        return window.trainingResults?.initializeResultScreen?.();
+                    })
+                    .catch((e) => { 
+                        console.warn('[Individual] initializeResultScreen error', e); 
+                    })
+                    .then(() => {
+                        console.log('[Individual] ✅ 2단계: 결과 화면 초기화 완료');
+                        // 결과 팝업 표시
+                        showTrainingResultModal(status);
+                    })
+                    .catch((error) => {
+                        console.error('[Individual] ❌ 훈련 결과 저장/초기화 실패:', error);
+                        // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
+                        showTrainingResultModal(status);
                     });
-                } else {
-                    // trainingResults가 없어도 팝업 표시
-                    showTrainingResultModal(status);
-                }
             }
         }
         
