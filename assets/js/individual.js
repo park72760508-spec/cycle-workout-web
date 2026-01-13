@@ -1790,14 +1790,6 @@ function updateTargetPowerArc() {
     const lapPowerEl = document.getElementById('ui-lap-power');
     const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
     
-    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워) - 하한값 기준
-    const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
-    
-    // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
-    const arcColor = achievementRatio >= 0.985 
-        ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
-        : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
-    
     // FTP 기반으로 최대 파워 계산
     const maxPower = userFTP * 2;
     if (maxPower <= 0) return;
@@ -1806,6 +1798,22 @@ function updateTargetPowerArc() {
     const seg = getCurrentSegment();
     const targetType = seg?.target_type || 'ftp_pct';
     const isFtpPctz = targetType === 'ftp_pctz';
+    
+    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워) - 하한값 기준
+    const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
+    
+    // 색상 결정: ftp_pctz 타입일 때는 항상 주황색 (회색 바탕의 원호에 주황색 표기)
+    // 그 외에는 달성도에 따라 민트색 또는 주황색
+    let arcColor;
+    if (isFtpPctz) {
+        // ftp_pctz 타입: 항상 주황색 (회색 바탕의 원호에 주황색 표기)
+        arcColor = 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+    } else {
+        // 다른 타입: 달성도에 따라 민트색 또는 주황색
+        arcColor = achievementRatio >= 0.985 
+            ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
+            : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+    }
     
     // cadence_rpm 타입인 경우: 파워값이 없으므로 원호 표시하지 않음
     if (targetType === 'cadence_rpm') {
