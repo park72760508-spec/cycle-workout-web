@@ -1088,13 +1088,15 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       // 격자선 (부드러운 색상)
       if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; // 훈련 화면: 밝은 색상
+        ctx.setLineDash([2, 4]); // 점선
       } else if (canvasId === 'segmentPreviewGraph') {
-        ctx.strokeStyle = '#E5E7EB'; // 훈련 준비 화면: 아주 연한 회색 가이드선
+        ctx.strokeStyle = '#D1D5DB'; // 훈련 준비 화면: 얇은 그레이 실선
+        ctx.setLineDash([]); // 실선
       } else {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)'; // 기타: 어두운 색상
+        ctx.setLineDash([2, 4]); // 점선
       }
       ctx.lineWidth = 1;
-      ctx.setLineDash([2, 4]);
       ctx.beginPath();
       ctx.moveTo(padding.left, y);
       ctx.lineTo(padding.left + chartWidth, y);
