@@ -10788,12 +10788,6 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     intensityEl.textContent = `${avgIntensity}%`;
   }
   
-  // 예상 강도 표시 (평균 강도와 동일)
-  const expectedIntensityEl = safeGetElement('previewExpectedIntensity');
-  if (expectedIntensityEl) {
-    expectedIntensityEl.textContent = `${avgIntensity}%`;
-  }
-  
   // 예상 TSS 계산 (NP 근사 기반, workoutManager.js의 로직 참고)
   let estimatedTSS = 0;
   if (totalDuration > 0 && workout.segments && Array.isArray(workout.segments) && workout.segments.length > 0) {
@@ -10829,7 +10823,13 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
   }
   
-  // 예상 TSS 표시 (있는 경우에만)
+  // 예상 TSS 표시 (예상 강도 위치에 TSS 값 표시)
+  const expectedIntensityEl = safeGetElement('previewExpectedIntensity');
+  if (expectedIntensityEl) {
+    expectedIntensityEl.textContent = String(estimatedTSS);
+  }
+  
+  // 예상 TSS 표시 (기존 previewTSS 요소가 있는 경우에도 업데이트)
   const tssEl = safeGetElement('previewTSS', { silent: true });
   if (tssEl) {
     tssEl.textContent = String(estimatedTSS);

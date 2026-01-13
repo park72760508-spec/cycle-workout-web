@@ -731,12 +731,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   const ctx = canvas.getContext('2d');
   
   // 배경 그리기
-  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
-    // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경 (모바일 대시보드 및 훈련 준비 화면도 동일)
+  if (canvasId === 'trainingSegmentGraph' || canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
+    // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, graphWidth, graphHeight);
+  } else if (canvasId === 'segmentPreviewGraph') {
+    // 훈련 준비 화면용: 검정 투명 배경 (다른 화면과 동일하게 변경)
     ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.fillRect(0, 0, graphWidth, graphHeight);
   } else {
-    // 훈련 준비 화면용: 부드러운 그라데이션 배경
+    // 기타: 부드러운 그라데이션 배경
     const bgGradient = ctx.createLinearGradient(0, 0, 0, graphHeight);
     bgGradient.addColorStop(0, '#ffffff');
     bgGradient.addColorStop(1, '#f8f9fa');
@@ -3871,8 +3875,6 @@ function updateWorkoutPreview() {
   }
   
   if (intensityEl) intensityEl.textContent = `${avgIntensity}%`;
-  // 예상 강도는 평균 강도와 동일하게 계산
-  if (expectedIntensityEl) expectedIntensityEl.textContent = `${avgIntensity}%`;
 
    // === TSS (NP 근사 기반) ===
    const T = totalDuration; // 총 지속시간(초)
@@ -3895,6 +3897,9 @@ function updateWorkoutPreview() {
    
    const IF = T > 0 ? Math.pow(sumI4t / T, 0.25) : 0;
    const estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
+   
+   // 예상 TSS 표시 (예상 강도 위치에 TSS 값 표시)
+   if (expectedIntensityEl) expectedIntensityEl.textContent = String(estimatedTSS);
    
    if (tssEl) tssEl.textContent = String(estimatedTSS);
 
