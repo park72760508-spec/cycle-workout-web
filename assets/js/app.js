@@ -3029,7 +3029,7 @@ if (!window.showScreen) {
           const placeholder = safeGetElement('segmentPreviewPlaceholder');
           const existingCanvas = document.getElementById('segmentPreviewGraph');
           
-          // 현재 워크아웃이 없으면 placeholder 표시
+          // 현재 워크아웃이 없으면 placeholder 표시 (flex-direction: column 유지)
           if (!window.currentWorkout) {
             if (placeholder) {
               placeholder.style.display = 'flex';
@@ -10900,7 +10900,7 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     }
   } else {
     if (segmentPreview) {
-      // 세그먼트가 없으면 placeholder 표시
+      // 세그먼트가 없으면 placeholder 표시 (flex-direction: column 유지)
       if (placeholder) {
         placeholder.style.display = 'flex';
       }
@@ -10981,21 +10981,14 @@ async function startMobileDashboard() {
         bikeIdDisplay.textContent = 'Bike ?';
       }
       
-      // 뒤로가기 기능 추가 (디자인 변경 없음)
+      // 뒤로가기 기능 추가 (디자인 변경 없음) - 훈련 준비 화면으로 이동
       bikeIdDisplay.style.cursor = 'pointer';
       bikeIdDisplay.title = '뒤로 가기';
       bikeIdDisplay.onclick = function(e) {
         e.stopPropagation();
-        // 이전 화면으로 이동
+        // 훈련 준비 화면으로 이동
         if (typeof showScreen === 'function') {
-          // 화면 히스토리에서 이전 화면 찾기
-          if (window.screenHistory && window.screenHistory.length > 0) {
-            const previousScreen = window.screenHistory[window.screenHistory.length - 1];
-            showScreen(previousScreen, true);
-          } else {
-            // 히스토리가 없으면 기본 화면으로 이동
-            showScreen('basecampScreen', true);
-          }
+          showScreen('trainingReadyScreen', true);
         }
       };
     }
@@ -12631,8 +12624,15 @@ function handleMobileToggle() {
   const btnImg = document.getElementById('imgMobileToggle');
   const ts = window.trainingState;
   
-  // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 5초 카운트다운 후 시작 처리
+  // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 워크아웃 확인 후 5초 카운트다운
   if (!ts || !ts.timerId) {
+    // 워크아웃이 선택되어 있는지 확인
+    if (!window.currentWorkout) {
+      // 워크아웃 미선택 시 팝업 표시
+      alert('워크아웃을 선택한 후 훈련을 시작하세요');
+      return;
+    }
+    
     // 시작 버튼 클릭 시 즉시 일시정지 버튼으로 변경 (토글 기능)
     // SVG <image> 요소는 href 속성 사용
     if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
