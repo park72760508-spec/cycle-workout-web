@@ -779,13 +779,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 최대 파워 계산 (세그먼트 중 최대값의 1.2배 또는 FTP의 1.5배 중 큰 값)
   let maxTargetPower = ftp * 1.5;
-  segments.forEach(seg => {
-    const ftpPercent = getSegmentFtpPercentForPreview(seg);
-    const targetPower = ftp * (ftpPercent / 100);
-    if (targetPower > maxTargetPower) {
-      maxTargetPower = targetPower * 1.1;
-    }
-  });
+  // 훈련 준비 화면(segmentPreviewGraph)은 Y축 범위를 0 ~ 1.5 비율로 고정
+  if (canvasId !== 'segmentPreviewGraph') {
+    segments.forEach(seg => {
+      const ftpPercent = getSegmentFtpPercentForPreview(seg);
+      const targetPower = ftp * (ftpPercent / 100);
+      if (targetPower > maxTargetPower) {
+        maxTargetPower = targetPower * 1.1;
+      }
+    });
+  }
   
   // 최대 RPM 계산 (세그먼트 중 최대값, 기본값 120)
   let maxRpm = 120;
@@ -863,11 +866,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     window._segmentGraphChartWidth = chartWidth;
     window._segmentGraphTotalSeconds = totalSeconds;
   }
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') {
-    // 개인 대시보드 및 모바일 대시보드, 훈련 준비 화면: 흰색 얇은 실선, 투명도 50%
+  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph') {
+    // 개인 대시보드 및 모바일 대시보드: 흰색 얇은 실선, 투명도 50%
     ctx.shadowColor = 'transparent';
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.lineWidth = 1;
+    ctx.setLineDash([]); // 실선
+  } else if (canvasId === 'segmentPreviewGraph') {
+    // 훈련 준비 화면: 빨간색 실선
+    ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = '#EF4444'; // 빨간색
+    ctx.lineWidth = 1.5;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // Indoor Training: 흰색 얇은 점선
@@ -1071,7 +1080,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           ctx.fillText(powerText, boxX + boxWidth / 2, boxY + boxHeight / 2 + 3);
         } else {
           // 일반 라벨: 소수점 형식 (0, 0.3, 0.6, 0.9, 1.2, 1.5)
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          // 훈련 준비 화면(segmentPreviewGraph)은 진한 회색, 그 외는 흰색
+          if (canvasId === 'segmentPreviewGraph') {
+            ctx.fillStyle = '#4B5563'; // 진한 회색
+          } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          }
           ctx.font = '8px sans-serif';
           ctx.textAlign = 'right';
           ctx.fillText(ftpRatio.toString(), padding.left - 10, y + 4);
