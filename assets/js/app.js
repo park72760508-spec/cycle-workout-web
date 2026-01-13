@@ -11185,15 +11185,34 @@ function startMobileDashboardDataUpdate() {
       hrEl.textContent = hr;
     }
     
-    // 랩 평균 파워 표시 (블루투스 데이터에서 segmentAvgPower 사용)
+    // 랩 평균 파워 표시 (세그먼트 평균 파워값 - segBar 데이터 사용)
     const lapPowerEl = safeGetElement('mobile-ui-lap-power');
     if (lapPowerEl) {
-      const segmentAvgPower = Math.round(liveData.segmentAvgPower || liveData.avgPower || 0);
+      // 현재 세그먼트 인덱스 가져오기
+      const trainingState = window.trainingState || {};
+      const segIndex = trainingState.segIndex !== undefined ? trainingState.segIndex : -1;
+      
+      // segBar 데이터에서 세그먼트 평균 파워 계산
+      let segmentAvgPower = 0;
+      if (segIndex >= 0 && window.segBar && window.segBar.samples && window.segBar.samples[segIndex] > 0) {
+        const samples = window.segBar.samples[segIndex];
+        const sumPower = window.segBar.sumPower[segIndex] || 0;
+        segmentAvgPower = Math.round(sumPower / samples);
+      } else {
+        // segBar 데이터가 없으면 liveData에서 가져오기 (폴백)
+        segmentAvgPower = Math.round(liveData.segmentAvgPower || liveData.avgPower || 0);
+      }
+      
       lapPowerEl.textContent = segmentAvgPower;
     }
     
     // 목표 파워 업데이트
     updateMobileTargetPower();
+    
+    // 속도계 원호 업데이트 (LAP AVG 업데이트 후 달성도 반영)
+    if (typeof updateMobileTargetPowerArc === 'function') {
+      updateMobileTargetPowerArc();
+    }
   }
   
   // 100ms마다 업데이트 (블루투스 데이터는 빠르게 업데이트됨)
