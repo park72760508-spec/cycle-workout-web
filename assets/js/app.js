@@ -10925,7 +10925,7 @@ async function startMobileDashboard() {
       }
     }
     
-    // 사용자 이름 표시
+    // 사용자 이름 표시 및 뒤로가기 기능 추가
     const bikeIdDisplay = safeGetElement('mobile-bike-id-display');
     if (bikeIdDisplay) {
       if (currentUser && currentUser.name) {
@@ -10933,6 +10933,24 @@ async function startMobileDashboard() {
       } else {
         bikeIdDisplay.textContent = 'Bike ?';
       }
+      
+      // 뒤로가기 기능 추가 (디자인 변경 없음)
+      bikeIdDisplay.style.cursor = 'pointer';
+      bikeIdDisplay.title = '뒤로 가기';
+      bikeIdDisplay.onclick = function(e) {
+        e.stopPropagation();
+        // 이전 화면으로 이동
+        if (typeof showScreen === 'function') {
+          // 화면 히스토리에서 이전 화면 찾기
+          if (window.screenHistory && window.screenHistory.length > 0) {
+            const previousScreen = window.screenHistory[window.screenHistory.length - 1];
+            showScreen(previousScreen, true);
+          } else {
+            // 히스토리가 없으면 기본 화면으로 이동
+            showScreen('basecampScreen', true);
+          }
+        }
+      };
     }
     
     // FTP 값 초기화 (사용자 정보에서)
@@ -10992,6 +11010,50 @@ async function startMobileDashboard() {
       intensitySlider.replaceWith(intensitySlider.cloneNode(true));
       const newSlider = safeGetElement('mobileIndividualIntensityAdjustmentSlider');
       if (newSlider) {
+        // 몸 상태 체크 값을 슬라이더 초기값에 적용 (훈련화면 로직 참고)
+        let currentAdjustment = window.trainingIntensityAdjustment;
+        
+        // 로컬 스토리지에서 값 확인 (컨디션별 강도 보정에서 설정한 값)
+        if (currentAdjustment === undefined || currentAdjustment === null) {
+          try {
+            const saved = localStorage.getItem('trainingIntensityAdjustment');
+            if (saved) {
+              currentAdjustment = parseFloat(saved);
+              window.trainingIntensityAdjustment = currentAdjustment;
+            } else {
+              currentAdjustment = 1.0;
+              window.trainingIntensityAdjustment = 1.0;
+            }
+          } catch (e) {
+            currentAdjustment = 1.0;
+            window.trainingIntensityAdjustment = 1.0;
+          }
+        }
+        
+        // 조정 계수를 슬라이더 값으로 변환 (0.95 → -5, 1.0 → 0, 1.03 → +3)
+        const sliderValue = Math.round((currentAdjustment - 1.0) * 100);
+        // 슬라이더 범위는 -10 ~ +10이므로 클램프
+        const clampedValue = Math.max(-10, Math.min(10, sliderValue));
+        
+        // 슬라이더 초기값 설정
+        newSlider.value = clampedValue;
+        
+        // 초기값 표시
+        const valueEl = safeGetElement('mobileIndividualIntensityAdjustmentValue');
+        if (valueEl) {
+          valueEl.textContent = clampedValue > 0 ? `+${clampedValue}%` : `${clampedValue}%`;
+        }
+        
+        // 모바일 강도 조절 값 초기화 (몸 상태 체크 값 반영)
+        window.mobileIntensityAdjustment = currentAdjustment;
+        
+        console.log('[Mobile Dashboard] 몸 상태 체크 값 적용:', {
+          adjustment: currentAdjustment,
+          sliderValue: sliderValue,
+          clampedValue: clampedValue,
+          mobileIntensityAdjustment: window.mobileIntensityAdjustment
+        });
+        
         newSlider.addEventListener('input', (e) => {
           const value = parseFloat(e.target.value);
           const valueEl = safeGetElement('mobileIndividualIntensityAdjustmentValue');
@@ -12464,11 +12526,21 @@ function handleMobileToggle() {
   if (isCurrentlyPaused) {
     // [현재 일시정지 상태] -> 재개(Resume)
     if (typeof setPaused === 'function') setPaused(false);
-    if(btnImg) btnImg.src = 'assets/img/pause0.png'; // 움직이는 상태이므로 멈춤 아이콘 표시
+    // syncMobileToggleIcon 호출하여 버튼 상태 동기화
+    if (typeof syncMobileToggleIcon === 'function') {
+      setTimeout(() => syncMobileToggleIcon(), 50);
+    } else if(btnImg) {
+      btnImg.src = 'assets/img/pause0.png'; // 움직이는 상태이므로 멈춤 아이콘 표시
+    }
   } else {
     // [현재 실행 상태] -> 일시정지(Pause)
     if (typeof setPaused === 'function') setPaused(true);
-    if(btnImg) btnImg.src = 'assets/img/play0.png'; // 멈췄으므로 재생 아이콘 표시
+    // syncMobileToggleIcon 호출하여 버튼 상태 동기화
+    if (typeof syncMobileToggleIcon === 'function') {
+      setTimeout(() => syncMobileToggleIcon(), 50);
+    } else if(btnImg) {
+      btnImg.src = 'assets/img/play0.png'; // 멈췄으므로 재생 아이콘 표시
+    }
   }
 }
 
@@ -12514,10 +12586,17 @@ function syncMobileToggleIcon() {
   const isRunning = window.trainingState.timerId !== null;
   const isPaused = window.trainingState.paused;
 
+  // 안전하게 src 확인 (undefined 방지)
+  const currentSrc = btnImg.src || '';
+  
   if (isRunning && !isPaused) {
-    if (!btnImg.src.includes('pause0.png')) btnImg.src = 'assets/img/pause0.png';
+    if (!currentSrc.includes('pause0.png')) {
+      btnImg.src = 'assets/img/pause0.png';
+    }
   } else {
-    if (!btnImg.src.includes('play0.png')) btnImg.src = 'assets/img/play0.png';
+    if (!currentSrc.includes('play0.png')) {
+      btnImg.src = 'assets/img/play0.png';
+    }
   }
 }
 
