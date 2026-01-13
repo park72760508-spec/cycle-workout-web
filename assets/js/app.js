@@ -4366,11 +4366,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 훈련 준비 → 이전 화면으로 이동
+  // 훈련 준비 → 베이스캠프 화면으로 이동
   const btnBackToWorkouts = safeGetElement("btnBackToWorkouts");
   if (btnBackToWorkouts) {
     btnBackToWorkouts.addEventListener("click", () => {
-      goBackToPreviousScreen();
+      if (typeof showScreen === "function") {
+        showScreen("basecampScreen");
+      }
     });
   }
 
