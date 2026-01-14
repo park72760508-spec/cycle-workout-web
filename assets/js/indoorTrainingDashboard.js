@@ -5871,19 +5871,29 @@ async function loadWorkoutsForSelection() {
 /**
  * 워크아웃 선택 테이블 렌더링 (재사용 함수)
  */
+/**
+ * 워크아웃명 텍스트 축약 함수 (모바일 대응)
+ * @param {string} text - 원본 텍스트
+ * @param {number} maxLength - 최대 길이 (기본값: 20)
+ * @returns {string} 축약된 텍스트
+ */
+function truncateWorkoutName(text, maxLength = 20) {
+    if (!text) return '-';
+    const textStr = String(text);
+    if (textStr.length <= maxLength) return textStr;
+    return textStr.substring(0, maxLength) + '...';
+}
+
 function renderWorkoutSelectionTable(workouts) {
     const tbody = document.getElementById('workoutSelectionTableBody');
     if (!tbody) return;
     
     if (!workouts || workouts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
         return;
     }
     
     tbody.innerHTML = workouts.map((workout, index) => {
-        // 카테고리 항목 사용 (category 필드가 있으면 사용, 없으면 author 사용)
-        const category = workout.category || workout.author || '-';
-        
         // 시간은 세그먼트 총합으로 계산
         let duration = '-';
         if (workout.total_seconds) {
@@ -5891,24 +5901,18 @@ function renderWorkoutSelectionTable(workouts) {
             duration = `${minutes}분`;
         }
         
+        // 워크아웃명 축약 (모바일 대응)
+        const workoutTitle = escapeHtml(workout.title || '-');
+        const truncatedTitle = truncateWorkoutName(workoutTitle, 20);
+        
         return `
-            <tr style="border-bottom: 1px solid #e5e7eb;">
+            <tr class="workout-selection-row" 
+                data-workout-id="${workout.id}" 
+                onclick="selectWorkoutForTraining('${workout.id}')"
+                style="border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background-color 0.2s ease;">
                 <td style="text-align: center; padding: 12px;">${index + 1}</td>
-                <td style="padding: 12px;">${escapeHtml(workout.title || '-')}</td>
-                <td style="text-align: center; padding: 12px;">${escapeHtml(category)}</td>
+                <td style="padding: 12px; word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${workoutTitle}">${truncatedTitle}</td>
                 <td style="text-align: center; padding: 12px;">${duration}</td>
-                <td style="text-align: center; padding: 12px;">
-                    <button class="btn btn-primary btn-sm workout-select-btn" 
-                            onclick="selectWorkoutForTraining('${workout.id}')" 
-                            data-workout-id="${workout.id}"
-                            style="padding: 6px 16px; transition: all 0.3s ease; position: relative; overflow: hidden;">
-                        <span class="btn-text">선택</span>
-                        <span class="btn-loading" style="display: none;">
-                            <span style="display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #ffffff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px;"></span>
-                            로딩...
-                        </span>
-                    </button>
-                </td>
             </tr>
         `;
     }).join('');
