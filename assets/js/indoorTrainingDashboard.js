@@ -94,6 +94,43 @@ class PowerMeterData {
     this.powerChangeRate = 0; // 파워 변화율 (W/s)
     this.lastPowerChangeTime = null; // 마지막 파워 변화 시간
     this.outlierRejectionCount = 0; // 이상치 거부 횟수 (연속)
+    
+    // 3초 평균 파워 계산을 위한 버퍼
+    this.powerAverageBuffer = []; // {timestamp, power} 형태의 배열
+  }
+  
+  /**
+   * 3초 평균 파워값 계산
+   * @returns {number} 3초 평균 파워값 (W)
+   */
+  get3SecondAveragePower() {
+    const now = Date.now();
+    const threeSecondsAgo = now - 3000; // 3초 전
+    
+    // 3초 이전의 데이터 제거
+    this.powerAverageBuffer = this.powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    
+    // 현재 파워값 추가
+    const currentPower = this.currentPower || 0;
+    if (currentPower >= 0) { // 유효한 파워값만 추가
+      this.powerAverageBuffer.push({
+        timestamp: now,
+        power: currentPower
+      });
+    }
+    
+    // 3초 이전의 데이터 다시 제거 (방금 추가한 값이 포함된 상태에서)
+    this.powerAverageBuffer = this.powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    
+    // 평균값 계산
+    if (this.powerAverageBuffer.length === 0) {
+      return currentPower; // 버퍼가 비어있으면 현재값 반환
+    }
+    
+    const sum = this.powerAverageBuffer.reduce((acc, item) => acc + item.power, 0);
+    const average = Math.round(sum / this.powerAverageBuffer.length);
+    
+    return average;
   }
 }
 
@@ -257,7 +294,8 @@ function getSessionId() {
   return 'session_room_1';
 }
 
-function initIndoorTrainingDashboard() {
+// 전역 함수로 노출
+window.initIndoorTrainingDashboard = function initIndoorTrainingDashboard() {
   console.log('[Indoor Training] 대시보드 초기화');
   
   // SESSION_ID 확인 및 로그
@@ -1533,11 +1571,12 @@ function updatePowerMeterData(powerMeterId, power, heartRate = 0, cadence = 0) {
     const angle = -90 + (powerRatio * 180);
 
     // 3. UI 업데이트
-    // 현재 파워값
+    // 현재 파워값 (3초 평균값 사용)
     const currentPowerEl = document.getElementById(`current-power-value-${powerMeterId}`);
     if (currentPowerEl) {
-        const displayPower = (power >= 0 && power <= 2000) ? power : powerMeter.currentPower;
-        currentPowerEl.textContent = Math.round(displayPower);
+        // 3초 평균 파워값 계산
+        const averagePower = powerMeter.get3SecondAveragePower ? powerMeter.get3SecondAveragePower() : ((power >= 0 && power <= 2000) ? power : powerMeter.currentPower);
+        currentPowerEl.textContent = Math.round(averagePower);
     }
     
     // [추가됨] 통계 값 UI 업데이트 (최대, 평균, 세그먼트)
