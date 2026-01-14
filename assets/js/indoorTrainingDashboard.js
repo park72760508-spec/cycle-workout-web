@@ -2974,6 +2974,11 @@ function clearPairedDevice(deviceType) {
     
     if (typeof showToast === 'function') {
       showToast('스마트로라 페어링이 해제되었습니다.');
+      
+      // 버튼 이미지 업데이트 (페어링 해제 상태 반영)
+      if (typeof window.updateDeviceButtonImages === 'function') {
+        setTimeout(() => window.updateDeviceButtonImages(), 100);
+      }
     }
   } else if (deviceType === 'power') {
     powerMeter.pairingName = null;
@@ -3001,6 +3006,11 @@ function clearPairedDevice(deviceType) {
     
     if (typeof showToast === 'function') {
       showToast('파워메터 페어링이 해제되었습니다.');
+      
+      // 버튼 이미지 업데이트 (페어링 해제 상태 반영)
+      if (typeof window.updateDeviceButtonImages === 'function') {
+        setTimeout(() => window.updateDeviceButtonImages(), 100);
+      }
     }
   } else if (deviceType === 'heart') {
     powerMeter.heartRateName = null;
@@ -3028,6 +3038,11 @@ function clearPairedDevice(deviceType) {
     
     if (typeof showToast === 'function') {
       showToast('심박계 페어링이 해제되었습니다.');
+      
+      // 버튼 이미지 업데이트 (페어링 해제 상태 반영)
+      if (typeof window.updateDeviceButtonImages === 'function') {
+        setTimeout(() => window.updateDeviceButtonImages(), 100);
+      }
     }
   }
   
@@ -3744,6 +3759,12 @@ function savePowerMeterPairing() {
     updatePowerMeterNeedle(powerMeterId, currentPower);
     
     closePowerMeterPairingModal();
+    
+    // 버튼 이미지 업데이트 (페어링 상태 반영)
+    if (typeof window.updateDeviceButtonImages === 'function') {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
+    
     if (typeof showToast === 'function') {
       showToast('스마트로라가 페어링되었습니다.');
     }
@@ -3772,6 +3793,12 @@ function savePowerMeterPairing() {
     updatePowerMeterNeedle(powerMeterId, currentPower);
     
     closePowerMeterPairingModal();
+    
+    // 버튼 이미지 업데이트 (페어링 상태 반영)
+    if (typeof window.updateDeviceButtonImages === 'function') {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
+    
     if (typeof showToast === 'function') {
       showToast('파워메터가 페어링되었습니다.');
     }
@@ -3800,6 +3827,12 @@ function savePowerMeterPairing() {
     updatePowerMeterNeedle(powerMeterId, currentPower);
     
     closePowerMeterPairingModal();
+    
+    // 버튼 이미지 업데이트 (페어링 상태 반영)
+    if (typeof window.updateDeviceButtonImages === 'function') {
+      setTimeout(() => window.updateDeviceButtonImages(), 100);
+    }
+    
     if (typeof showToast === 'function') {
       showToast('심박계가 페어링되었습니다.');
     }
@@ -3919,15 +3952,18 @@ async function searchTrainerDevices() {
     return;
   }
   
+  // 스마트로라 검색 모드 설정 (0x11, 0x10만 필터링)
+  if (window.antState) {
+    window.antState.currentSearchType = 'trainer'; // 스마트로라 검색 모드
+    window.antState.foundDevices = []; // 목록 초기화
+  }
+  
   // 스캔 모드 확실히 켜기
   if (typeof startContinuousScan === 'function') {
     await startContinuousScan();
   }
   
   if (listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">스마트로라 검색 중...<br>바퀴를 굴려주세요!</div>';
-  if (window.antState) {
-    window.antState.foundDevices = []; // 목록 초기화
-  }
   
   if (btn) btn.disabled = false;
 }
@@ -3951,15 +3987,18 @@ async function searchPowerMeterDevices() {
     return;
   }
   
+  // 파워메터 검색 모드 설정 (0x0B만 필터링)
+  if (window.antState) {
+    window.antState.currentSearchType = 'power'; // 파워메터 검색 모드
+    window.antState.foundDevices = []; // 목록 초기화
+  }
+  
   // 스캔 모드 확실히 켜기
   if (typeof startContinuousScan === 'function') {
     await startContinuousScan();
   }
   
   if (listEl) listEl.innerHTML = '<div style="padding:20px;text-align:center;color:blue;font-weight:bold">파워메터 검색 중...<br>페달을 돌려주세요!</div>';
-  if (window.antState) {
-    window.antState.foundDevices = []; // 목록 초기화
-  }
   
   if (btn) btn.disabled = false;
 }
@@ -3995,6 +4034,11 @@ async function searchHeartRateDevices() {
     return;
   }
 
+  // 심박계 검색 모드 설정 (0x78, 0x7D만 필터링)
+  if (window.antState) {
+    window.antState.currentSearchType = 'heart'; // 심박계 검색 모드
+  }
+  
   // 3. [보완 핵심] 이미 발견된 심박계가 있다면 즉시 UI에 렌더링
   // 수신기가 이미 켜져 있다면, foundDevices에 데이터가 있을 수 있으므로 먼저 보여줍니다.
   if (window.antState.foundDevices && window.antState.foundDevices.length > 0) {
@@ -5147,6 +5191,28 @@ function parseIndoorSensorPayload(payload) {
  * 스마트로라(0x11)가 파워미터(0x0B)로 강등되는 것을 방지합니다.
  */
 function updateFoundDevicesList(deviceId, deviceType) {
+  // 현재 검색 모드에 따라 필터링
+  const currentSearchType = window.antState?.currentSearchType;
+  
+  // 검색 모드가 설정되어 있으면 해당 타입만 처리
+  if (currentSearchType === 'trainer') {
+    // 스마트로라 검색 모드: 0x11, 0x10만 허용
+    if (deviceType !== 0x11 && deviceType !== 0x10) {
+      return; // 다른 타입은 무시
+    }
+  } else if (currentSearchType === 'power') {
+    // 파워메터 검색 모드: 0x0B만 허용
+    if (deviceType !== 0x0B) {
+      return; // 다른 타입은 무시
+    }
+  } else if (currentSearchType === 'heart') {
+    // 심박계 검색 모드: 0x78, 0x7D만 허용
+    if (deviceType !== 0x78 && deviceType !== 0x7D) {
+      return; // 다른 타입은 무시
+    }
+  }
+  // currentSearchType이 없으면 모든 타입 허용 (기존 동작 유지)
+  
   let existing = window.antState.foundDevices.find(d => d.id === deviceId);
   
   // 1. 신규 장치 발견

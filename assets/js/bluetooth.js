@@ -101,11 +101,19 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
         btnTrainer.appendChild(img);
       }
     }
-    const isConnected = window.connectedDevices && window.connectedDevices.trainer;
+    // 블루투스 연결 또는 페어링 상태 확인
+    const isBluetoothConnected = window.connectedDevices && window.connectedDevices.trainer;
+    // Indoor Training 페어링 정보 확인 (iOS 모드 대응)
+    let isPaired = false;
+    if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
+      isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.trainerDeviceId && pm.trainerDeviceId.toString().trim() !== '');
+    }
+    const isConnected = isBluetoothConnected || isPaired;
+    
     if (isConnected) {
       img.src = "assets/img/trainer_g.png";
       btnTrainer.classList.add("connected");
-      console.log("스마트 트레이너 연결됨 - trainer_g.png로 변경");
+      console.log("스마트 트레이너 연결됨 - trainer_g.png로 변경", { bluetooth: isBluetoothConnected, paired: isPaired });
     } else {
       img.src = "assets/img/trainer_i.png";
       btnTrainer.classList.remove("connected");
@@ -130,11 +138,19 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
         btnHR.appendChild(img);
       }
     }
-    const isConnected = window.connectedDevices && window.connectedDevices.heartRate;
+    // 블루투스 연결 또는 페어링 상태 확인
+    const isBluetoothConnected = window.connectedDevices && window.connectedDevices.heartRate;
+    // Indoor Training 페어링 정보 확인 (iOS 모드 대응)
+    let isPaired = false;
+    if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
+      isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.heartRateDeviceId && pm.heartRateDeviceId.toString().trim() !== '');
+    }
+    const isConnected = isBluetoothConnected || isPaired;
+    
     if (isConnected) {
       img.src = "assets/img/bpm_g.png";
       btnHR.classList.add("connected");
-      console.log("심박계 연결됨 - bpm_g.png로 변경");
+      console.log("심박계 연결됨 - bpm_g.png로 변경", { bluetooth: isBluetoothConnected, paired: isPaired });
     } else {
       img.src = "assets/img/bpm_i.png";
       btnHR.classList.remove("connected");
@@ -159,11 +175,23 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
         btnPM.appendChild(img);
       }
     }
-    const isConnected = window.connectedDevices && window.connectedDevices.powerMeter;
+    // 블루투스 연결 또는 페어링 상태 확인
+    const isBluetoothConnected = window.connectedDevices && window.connectedDevices.powerMeter;
+    // Indoor Training 페어링 정보 확인 (iOS 모드 대응)
+    // 주의: 파워메터는 deviceId 또는 powerMeterDeviceId에 저장됨
+    let isPaired = false;
+    if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
+      isPaired = window.indoorTrainingState.powerMeters.some(pm => {
+        const deviceId = pm.deviceId || pm.powerMeterDeviceId;
+        return deviceId && deviceId.toString().trim() !== '';
+      });
+    }
+    const isConnected = isBluetoothConnected || isPaired;
+    
     if (isConnected) {
       img.src = "assets/img/power_g.png";
       btnPM.classList.add("connected");
-      console.log("파워미터 연결됨 - power_g.png로 변경");
+      console.log("파워미터 연결됨 - power_g.png로 변경", { bluetooth: isBluetoothConnected, paired: isPaired });
     } else {
       img.src = "assets/img/power_i.png";
       btnPM.classList.remove("connected");

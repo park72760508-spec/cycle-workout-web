@@ -3149,14 +3149,19 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
     return;
   }
   
-  // 테이블 헤더 생성 (순번, 워크아웃명, 시간 3개 필드만)
+  // 테이블 헤더 생성
   const tableHeader = `
     <table class="workout-table">
       <thead>
         <tr>
-          <th style="width: 80px;">순번</th>
-          <th>워크아웃명</th>
-          <th style="width: 100px;">시간</th>
+          <th style="width: 50px;">순번</th>
+          <th style="width: 200px;">제목</th>
+          <th style="width: 120px;">그룹훈련</th>
+          <th style="width: 80px;">시간</th>
+          <th style="width: 80px;">상태</th>
+          <th>설명</th>
+          <th style="width: 120px;">게시일</th>
+          <th style="width: 220px;">작업</th>
         </tr>
       </thead>
       <tbody>
@@ -3190,16 +3195,29 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
       const publishDate = workout.publish_date ? new Date(workout.publish_date).toLocaleDateString() : '-';
       
       const rowNumber = index + 1;
+      const isAdmin = (grade === '1' || grade === '3');
       
       return `
-        <tr class="workout-row clickable-workout-row" data-workout-id="${workout.id}" onclick="selectWorkout(${workout.id})">
+        <tr class="workout-row" data-workout-id="${workout.id}">
           <td class="text-center">${rowNumber}</td>
           <td>
             <div class="workout-title-cell">
               ${escapeHtml(safeTitle)}
             </div>
           </td>
+          <td class="text-center">${groupRoomImage}</td>
           <td class="text-center">${totalMinutes}분</td>
+          <td class="text-center">${statusBadge}</td>
+          <td class="workout-description-cell">${escapeHtml(safeDescription)}</td>
+          <td class="text-center">${publishDate}</td>
+          <td class="workout-actions-cell">
+            <div class="workout-actions-wrapper">
+              <button class="btn-edit" onclick="editWorkout(${workout.id})" title="수정">✏️</button>
+              <button class="btn-delete" onclick="deleteWorkout(${workout.id})" title="삭제">🗑️</button>
+              <button class="btn btn-primary btn-sm" id="selectWorkoutBtn-${workout.id}" onclick="selectWorkout(${workout.id})">선택</button>
+              ${isAdmin ? `<button class="btn btn-image btn-sm" id="createGroupRoomBtn-${workout.id}" data-workout-id="${workout.id}" data-workout-title="${escapeHtml(safeTitle)}" title="이 워크아웃으로 그룹훈련방 생성"><img src="assets/img/network (2).png" alt="그룹훈련방 생성" style="width: 20px; height: 20px; vertical-align: middle;"></button>` : ''}
+            </div>
+          </td>
         </tr>
       `;
     }).filter(Boolean).join('');
