@@ -3251,6 +3251,63 @@ button[aria-disabled="true"] {
 .workout-selection-table {
   width: 100%;
   border-collapse: collapse;
+}
+
+.workout-selection-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,0.03);
+  z-index: 10;
+}
+
+.workout-selection-row {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.workout-selection-row:hover {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.workout-selection-row:active {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+/* 모바일 반응형: 가로 스크롤 없이 표시 */
+@media (max-width: 768px) {
+  .workout-selection-table {
+    font-size: 14px;
+  }
+  
+  .workout-selection-table th,
+  .workout-selection-table td {
+    padding: 10px 8px;
+  }
+  
+  .workout-selection-table th:first-child,
+  .workout-selection-table td:first-child {
+    width: 50px;
+    min-width: 50px;
+  }
+  
+  .workout-selection-table th:nth-child(2),
+  .workout-selection-table td:nth-child(2) {
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .workout-selection-table th:last-child,
+  .workout-selection-table td:last-child {
+    width: 80px;
+    min-width: 80px;
+  }
+}
+.workout-selection-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 14px;
 }
 
