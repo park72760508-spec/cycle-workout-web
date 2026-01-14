@@ -418,7 +418,21 @@ function updateDashboard(data) {
     // 1. 텍스트 업데이트
     // 파워값 가져오기 (다양한 필드명 지원)
     const power = Number(data.power || data.currentPower || data.watts || data.currentPowerW || 0);
-    const powerValue = Math.round(power); // 정수로 변환
+    
+    // window.liveData에 파워값 업데이트 (3초 평균 계산을 위해)
+    if (!window.liveData) {
+      window.liveData = {};
+    }
+    window.liveData.power = power;
+    
+    // 3초 평균 파워값 계산 (전역 함수 사용)
+    let powerValue = power; // 기본값은 현재 파워값
+    if (window.get3SecondAveragePower && typeof window.get3SecondAveragePower === 'function') {
+      powerValue = window.get3SecondAveragePower();
+    } else {
+      // 함수가 없으면 현재값 사용
+      powerValue = Math.round(power);
+    }
     
     // 현재 파워값을 전역 변수에 저장 (바늘 애니메이션 루프에서 사용)
     currentPowerValue = powerValue;

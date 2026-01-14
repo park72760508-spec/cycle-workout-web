@@ -96,6 +96,45 @@
     ];
   }
 
+  // 3초 평균 파워 계산을 위한 버퍼 초기화
+  if (!window._powerAverageBuffer) {
+    window._powerAverageBuffer = [];
+  }
+
+  /**
+   * 3초 평균 파워값 계산 함수
+   * @returns {number} 3초 평균 파워값 (W)
+   */
+  window.get3SecondAveragePower = function() {
+    const now = Date.now();
+    const threeSecondsAgo = now - 3000; // 3초 전
+    
+    // 3초 이전의 데이터 제거
+    window._powerAverageBuffer = window._powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    
+    // 현재 파워값 추가
+    const currentPower = Number(window.liveData?.power ?? 0);
+    if (currentPower >= 0) { // 유효한 파워값만 추가
+      window._powerAverageBuffer.push({
+        timestamp: now,
+        power: currentPower
+      });
+    }
+    
+    // 3초 이전의 데이터 다시 제거 (방금 추가한 값이 포함된 상태에서)
+    window._powerAverageBuffer = window._powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    
+    // 평균값 계산
+    if (window._powerAverageBuffer.length === 0) {
+      return currentPower; // 버퍼가 비어있으면 현재값 반환
+    }
+    
+    const sum = window._powerAverageBuffer.reduce((acc, item) => acc + item.power, 0);
+    const average = Math.round(sum / window._powerAverageBuffer.length);
+    
+    return average;
+  };
+
   // GAS_URL 전역 초기화
   if (!window.GAS_URL) {
     window.GAS_URL = 'https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec'; // 실제 URL로 변경 필요
@@ -475,8 +514,8 @@ window.initTrainingCharts = function initTrainingCharts() {
   });
 
   // 첫 렌더
-   // 파워
-   drawSparkline(
+  // 파워
+  drawSparkline(
      pc,
      window._powerSeries,
      {
@@ -3233,7 +3272,8 @@ function updateMobileSegmentGraphMascot() {
 // *** 핵심 수정: updateTrainingDisplay 함수 - currentPower 변수 초기화 문제 해결 ***
 window.updateTrainingDisplay = function () {
   // *** 중요: currentPower 변수를 맨 앞에서 정의 ***
-  const currentPower = Number(window.liveData?.power ?? 0);
+  // 3초 평균 파워값 사용
+  const currentPower = window.get3SecondAveragePower ? window.get3SecondAveragePower() : Number(window.liveData?.power ?? 0);
   const currentCadence = Number(window.liveData?.cadence ?? 0);
   // targetPower가 0일 수 있으므로 ?? 로 기본값을 설정
   const targetPower = Number(window.liveData?.targetPower ?? 0);
@@ -11392,15 +11432,15 @@ function startMobileDashboardDataUpdate() {
     // window.liveData에서 데이터 읽기
     const liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     
-    // 현재 파워 표시 (블루투스 데이터)
-    const powerValue = Math.round(liveData.power || 0);
+    // 현재 파워 표시 (3초 평균값 사용)
+    const powerValue = window.get3SecondAveragePower ? window.get3SecondAveragePower() : Math.round(liveData.power || 0);
     const powerEl = safeGetElement('mobile-ui-current-power');
     if (powerEl) {
-      powerEl.textContent = powerValue;
+      powerEl.textContent = Math.round(powerValue);
     }
     
     // 속도계 바늘 업데이트 (애니메이션 루프에서 부드럽게 이동)
-    updateMobileGaugeNeedle(powerValue);
+    updateMobileGaugeNeedle(Math.round(powerValue));
     
     // 케이던스 표시 (블루투스 데이터)
     const cadence = Math.round(liveData.cadence || 0);
