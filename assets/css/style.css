@@ -8189,7 +8189,7 @@ button[aria-disabled="true"] {
   }
   
   .workout-title {
-    font-size: 1.05em !important;
+    font-size: 0.77em !important; /* 1.1em * 0.7 = 0.77em */
     word-break: break-word !important;
     line-height: 1.4 !important;
   }
@@ -8198,6 +8198,7 @@ button[aria-disabled="true"] {
     flex-direction: column !important;
     gap: 6px !important;
     align-items: flex-start !important;
+    font-size: 0.595em !important; /* 0.85em * 0.7 = 0.595em */
   }
   
   .recommendation-reason-wrapper {
@@ -8206,16 +8207,23 @@ button[aria-disabled="true"] {
   }
   
   .recommendation-reason {
-    font-size: 0.95em !important;
+    font-size: 0.665em !important; /* 0.95em * 0.7 = 0.665em */
     line-height: 1.7 !important;
     word-break: break-word !important;
     white-space: pre-wrap !important;
   }
   
   .workout-description {
-    font-size: 0.9em !important;
+    font-size: 0.63em !important; /* 0.9em * 0.7 = 0.63em */
     line-height: 1.6 !important;
     word-break: break-word !important;
+  }
+  
+  .category-reason {
+    font-size: 0.63em !important; /* 0.9em * 0.7 = 0.63em */
+    line-height: 1.7 !important;
+    word-break: break-word !important;
+    white-space: pre-wrap !important;
   }
   
   .recommendation-action {
