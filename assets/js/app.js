@@ -9905,9 +9905,31 @@ ${JSON.stringify(limitedWorkouts.map(w => ({
    - 훈련 일정의 공백이나 연속 훈련 패턴을 확인하여 오늘의 적절한 강도를 결정하세요.
 
 3. **카테고리 선정**:
+   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 이 목적에 맞는 훈련을 반드시 추천해야 합니다.
    - 위 분석을 바탕으로 사용자의 운동 목적(${challenge})과 현재 상태를 종합하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 실질적으로 선정하세요.
    - 단순히 목적만 고려하지 말고, 실제 훈련 부하와 회복 상태를 우선 고려하세요.
    - 과훈련 위험이 있으면 Recovery, 충분한 회복이 있었다면 적절한 강도 훈련을 추천하세요.
+${challenge === 'Racing' ? `
+**레이싱 목적 특별 지침:**
+- 레이싱 목적의 사용자이므로 경기 성능 향상에 초점을 맞춘 고강도 훈련을 우선 추천하세요.
+- Threshold, VO2Max, SweetSpot 카테고리의 워크아웃을 우선 고려하세요.
+- 레이싱에 필요한 순발력, 지구력, 회복력 향상을 위한 훈련을 추천하세요.
+- 경기 시뮬레이션 훈련이나 인터벌 훈련을 우선 추천하세요.
+- 일반 피트니스 목적의 저강도 훈련은 피하세요.
+` : ''}
+${challenge === 'GranFondo' ? `
+**그란폰도 목적 특별 지침:**
+- 그란폰도 목적의 사용자이므로 장거리 지구력 향상에 초점을 맞춘 훈련을 우선 추천하세요.
+- Endurance, Tempo, SweetSpot 카테고리의 워크아웃을 우선 고려하세요.
+- 장거리 라이딩에 필요한 지구력과 회복 능력 향상을 위한 훈련을 추천하세요.
+- 일반 피트니스 목적의 저강도 훈련은 피하세요.
+` : ''}
+${challenge === 'Fitness' ? `
+**일반 피트니스/다이어트 목적 특별 지침:**
+- 일반 피트니스/다이어트 목적의 사용자이므로 건강과 체중 관리에 초점을 맞춘 훈련을 추천하세요.
+- Endurance, Tempo 카테고리의 워크아웃을 우선 고려하세요.
+- 과도한 고강도 훈련보다는 지속 가능한 중강도 훈련을 추천하세요.
+` : ''}
 ${challenge === 'Elite' ? `
 **엘리트 선수(학생 선수) 특별 지침:**
 - 엘리트 선수용으로 작성된 고강도 워크아웃을 우선 추천하세요.
@@ -9931,13 +9953,15 @@ ${challenge === 'PRO' ? `
 - 경기 일정과 시즌을 고려한 훈련 계획을 제안하세요.
 ` : ''}
 4. **워크아웃 추천**:
-   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 목적에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
+   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 반드시 이 목적에 맞는 워크아웃을 추천해야 합니다.
+   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
    - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
-     * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, 목적 달성 관점)
+     * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, **목적(${challenge}) 달성 관점**)
      * 예상 TSS와 훈련 강도
      * 이 워크아웃을 수행했을 때의 기대 효과
      * 주의사항이나 조정이 필요한 부분
    - 형식적인 설명이 아닌, 실제로 훈련할 때 참고할 수 있는 구체적인 가이드를 제공하세요.
+   - 사용자의 목적(${challenge})과 맞지 않는 워크아웃은 추천하지 마세요.
 
 다음 JSON 형식으로 응답해주세요:
 {
@@ -10463,22 +10487,26 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
     const rankBadge = ['🥇', '🥈', '🥉'][index] || `${rec.rank}위`;
     
     html += `
-      <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 8px; padding: 16px; margin-bottom: 12px;">
-        <div style="display: flex; align-items: flex-start; gap: 12px;">
-          <div class="recommendation-rank" style="font-size: 2em; flex-shrink: 0;">${rankBadge}</div>
-          <div class="recommendation-content" style="flex: 1;">
-            <h4 class="workout-title" style="color: #00d4aa; font-size: 1.1em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">${workout.title || '워크아웃'}</h4>
-            <div class="workout-meta" style="display: flex; gap: 12px; margin-bottom: 8px; font-size: 0.85em; color: #aaa;">
-            <span class="workout-category">${workout.author || '카테고리 없음'}</span>
-            <span class="workout-duration">${totalMinutes}분</span>
+      <div class="recommendation-item" data-workout-id="${workout.id}" style="background: rgba(0, 212, 170, 0.05); border: 1px solid rgba(0, 212, 170, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: flex-start; gap: 12px;">
+            <div class="recommendation-rank" style="font-size: 2em; flex-shrink: 0; line-height: 1;">${rankBadge}</div>
+            <div class="recommendation-content" style="flex: 1; min-width: 0;">
+              <h4 class="workout-title" style="color: #00d4aa; font-size: 1.1em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4); word-break: break-word;">${workout.title || '워크아웃'}</h4>
+              <div class="workout-meta" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 0.85em; color: #aaa;">
+                <span class="workout-category" style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 4px 10px; border-radius: 12px;">${workout.author || '카테고리 없음'}</span>
+                <span class="workout-duration" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">${totalMinutes}분</span>
+              </div>
+            </div>
           </div>
-            <p class="recommendation-reason" style="color: #ffffff; font-size: 0.9em; line-height: 1.5; margin: 0 0 8px 0;">${rec.reason || '추천 이유 없음'}</p>
-            ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.85em; line-height: 1.4; margin: 0;">${workout.description}</p>` : ''}
-        </div>
-          <div class="recommendation-action" style="flex-shrink: 0;">
-            <button class="result-close-btn" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}" style="min-width: 80px; padding: 10px 16px; font-size: 0.9em;">
-            선택
-          </button>
+          <div class="recommendation-reason-wrapper" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+            <p class="recommendation-reason" style="color: #ffffff; font-size: 0.95em; line-height: 1.7; margin: 0; word-break: break-word; white-space: pre-wrap;">${rec.reason || '추천 이유 없음'}</p>
+          </div>
+          ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.9em; line-height: 1.6; margin: 0 0 12px 0; word-break: break-word;">${workout.description}</p>` : ''}
+          <div class="recommendation-action" style="display: flex; justify-content: center; width: 100%;">
+            <button class="result-close-btn" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}" style="width: 100%; max-width: 200px; padding: 12px 20px; font-size: 1em; font-weight: bold; border-radius: 8px;">
+              선택
+            </button>
           </div>
         </div>
       </div>
