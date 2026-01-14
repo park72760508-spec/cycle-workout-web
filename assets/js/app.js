@@ -7253,11 +7253,50 @@ async function handleAIWorkoutRecommendation(event, date) {
       }
     }
     
-    // 사용자 정보 가져오기
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    // 사용자 정보 가져오기 (여러 소스에서 확인)
+    let currentUser = window.currentUser;
     if (!currentUser) {
-      showToast('사용자 정보를 찾을 수 없습니다.', 'error');
+      try {
+        const stored = localStorage.getItem('currentUser');
+        if (stored) {
+          currentUser = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.warn('localStorage에서 사용자 정보 파싱 실패:', e);
+      }
+    }
+    
+    // 여전히 없으면 authUser에서 시도
+    if (!currentUser) {
+      try {
+        const authUser = localStorage.getItem('authUser');
+        if (authUser) {
+          currentUser = JSON.parse(authUser);
+        }
+      } catch (e) {
+        console.warn('authUser에서 사용자 정보 파싱 실패:', e);
+      }
+    }
+    
+    if (!currentUser) {
+      showToast('사용자 정보를 찾을 수 없습니다. 사용자를 선택해주세요.', 'error');
       return;
+    }
+    
+    // 사용자 정보 검증 및 로깅
+    console.log('[AI 추천] 사용자 정보 확인:', {
+      id: currentUser.id,
+      name: currentUser.name,
+      ftp: currentUser.ftp,
+      weight: currentUser.weight,
+      challenge: currentUser.challenge,
+      grade: currentUser.grade
+    });
+    
+    // challenge 값 확인 및 경고
+    const challenge = String(currentUser.challenge || 'Fitness').trim();
+    if (!challenge || challenge === 'Fitness') {
+      console.warn('[AI 추천] 운동 목적(challenge)이 설정되지 않았거나 기본값입니다:', challenge);
     }
     
     // 추천 모달 표시
@@ -9663,10 +9702,30 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
   const contentDiv = document.getElementById('workoutRecommendationContent');
   
   try {
-    // 1. 사용자 기본 정보 수집
+    // 1. 사용자 기본 정보 수집 (운동 목적 강조)
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
-    const challenge = user.challenge || 'Fitness';
+    // challenge 값 정확히 추출 (대소문자 구분 없이)
+    let challenge = String(user.challenge || 'Fitness').trim();
+    // 대소문자 정규화 (Racing, GranFondo, Elite, PRO, Fitness)
+    if (challenge) {
+      const normalized = challenge.toLowerCase();
+      if (normalized === 'racing') challenge = 'Racing';
+      else if (normalized === 'granfondo') challenge = 'GranFondo';
+      else if (normalized === 'elite') challenge = 'Elite';
+      else if (normalized === 'pro') challenge = 'PRO';
+      else if (normalized === 'fitness') challenge = 'Fitness';
+    }
+    
+    // 사용자 정보 로깅 (디버깅용)
+    console.log('[AI 추천] 사용자 정보:', {
+      id: user.id,
+      name: user.name,
+      ftp,
+      weight,
+      challenge,
+      wkg: weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'
+    });
     
     // 2. 오늘의 몸상태 확인 (localStorage에서)
     const todayCondition = localStorage.getItem(`bodyCondition_${date}`) || '보통';
@@ -9759,9 +9818,19 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
         const isAdmin = (grade === '1' || grade === '3');
         
         // 관리자는 모든 워크아웃, 일반 사용자는 공개 워크아웃만
-        availableWorkouts = isAdmin 
+        let filteredWorkouts = isAdmin 
           ? allWorkouts 
           : allWorkouts.filter(w => String(w.status || '').trim() === '보이기');
+        
+        // 운동 목적에 맞는 워크아웃 필터링 (선택적 - 너무 제한적이면 전체 사용)
+        // challenge 값이 제대로 설정된 경우에만 필터링 적용
+        if (challenge && challenge !== 'Fitness' && challenge !== '') {
+          console.log(`[AI 추천] 운동 목적(${challenge})에 맞는 워크아웃 필터링 적용`);
+          // 카테고리 기반 필터링은 AI가 처리하므로 여기서는 전체 워크아웃 사용
+          // 다만 challenge 정보를 프롬프트에 강조하여 AI가 적절히 선택하도록 함
+        }
+        
+        availableWorkouts = filteredWorkouts;
       }
     } catch (error) {
       console.warn('워크아웃 목록 조회 실패:', error);
@@ -9858,11 +9927,14 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
     
     const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 실질적으로 추천해주세요. 형식적인 추천이 아닌, 실제 훈련에 바로 적용할 수 있는 구체적이고 실용적인 추천을 해주세요.
 
+⚠️ **중요: 사용자의 운동 목적은 "${challenge}"입니다. 반드시 이 목적에 맞는 훈련을 추천해야 합니다.**
+
 **사용자 정보:**
 - FTP: ${ftp}W
 - 체중: ${weight}kg
 - W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
-- 운동 목적: ${challenge} (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
+- ⚠️ **운동 목적: ${challenge}** (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
+  → **이 목적에 맞는 훈련만 추천해야 합니다. 목적과 무관한 훈련은 추천하지 마세요.**
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
 
 **과거 훈련 이력 분석 (최근 30일, 총 ${totalSessions}회):**
@@ -9953,10 +10025,16 @@ ${challenge === 'PRO' ? `
 - 경기 일정과 시즌을 고려한 훈련 계획을 제안하세요.
 ` : ''}
 4. **워크아웃 추천**:
-   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 반드시 이 목적에 맞는 워크아웃을 추천해야 합니다.
+   - ⚠️⚠️⚠️ **최우선 중요사항**: 사용자의 운동 목적은 "${challenge}"입니다. 
+     * 반드시 이 목적에 맞는 워크아웃만 추천해야 합니다.
+     * 목적과 무관한 워크아웃은 절대 추천하지 마세요.
+     * 예를 들어, Racing 목적 사용자에게 Fitness 목적의 저강도 훈련을 추천하면 안 됩니다.
+     * 각 목적에 맞는 특화된 훈련을 추천해야 합니다.
+   
    - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
    - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
      * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, **목적(${challenge}) 달성 관점**)
+     * 이 워크아웃이 사용자의 목적(${challenge}) 달성에 어떻게 도움이 되는지
      * 예상 TSS와 훈련 강도
      * 이 워크아웃을 수행했을 때의 기대 효과
      * 주의사항이나 조정이 필요한 부분
@@ -10450,23 +10528,23 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
   
   let html = `
     <div class="workout-recommendation-container">
-      <div class="result-stats" style="margin-bottom: 20px;">
-        <div class="result-stat-item">
-          <div class="result-stat-label">선정 카테고리</div>
-          <div class="result-stat-value">${selectedCategory}</div>
+      <div class="result-stats" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 12px;">
+        <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+          <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 4px;">선정 카테고리</div>
+          <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${selectedCategory}</div>
         </div>
-        <div class="result-stat-item">
-          <div class="result-stat-label">추천 개수</div>
-          <div class="result-stat-value">${recommendations.length}개</div>
+        <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+          <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 4px;">추천 개수</div>
+          <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${recommendations.length}개</div>
         </div>
-        <div class="result-stat-item">
-          <div class="result-stat-label">날짜</div>
-          <div class="result-stat-value">${date}</div>
+        <div class="result-stat-item" style="flex: 1; min-width: 120px; background: rgba(0, 212, 170, 0.1); border-radius: 8px; padding: 12px; text-align: center;">
+          <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 4px;">날짜</div>
+          <div class="result-stat-value" style="font-size: 0.7em; color: #00d4aa; font-weight: bold;">${date}</div>
         </div>
       </div>
       
       <div class="category-info" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
-        <p class="category-reason" style="color: #ffffff; font-size: 0.9em; line-height: 1.6; margin: 0;">${categoryReason}</p>
+        <p class="category-reason" style="color: #ffffff; font-size: 0.63em; line-height: 1.6; margin: 0; word-break: break-word; white-space: pre-wrap;">${categoryReason}</p>
       </div>
       
       <div class="recommendations-list">
@@ -10492,17 +10570,17 @@ function displayWorkoutRecommendations(recommendationData, workoutDetails, date)
           <div style="display: flex; align-items: flex-start; gap: 12px;">
             <div class="recommendation-rank" style="font-size: 2em; flex-shrink: 0; line-height: 1;">${rankBadge}</div>
             <div class="recommendation-content" style="flex: 1; min-width: 0;">
-              <h4 class="workout-title" style="color: #00d4aa; font-size: 1.1em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4); word-break: break-word;">${workout.title || '워크아웃'}</h4>
-              <div class="workout-meta" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 0.85em; color: #aaa;">
+              <h4 class="workout-title" style="color: #00d4aa; font-size: 0.77em; font-weight: bold; margin: 0 0 8px 0; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4); word-break: break-word;">${workout.title || '워크아웃'}</h4>
+              <div class="workout-meta" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 0.595em; color: #aaa;">
                 <span class="workout-category" style="background: rgba(0, 212, 170, 0.2); color: #00d4aa; padding: 4px 10px; border-radius: 12px;">${workout.author || '카테고리 없음'}</span>
                 <span class="workout-duration" style="background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 4px 10px; border-radius: 12px;">${totalMinutes}분</span>
               </div>
             </div>
           </div>
           <div class="recommendation-reason-wrapper" style="background: rgba(0, 212, 170, 0.08); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
-            <p class="recommendation-reason" style="color: #ffffff; font-size: 0.95em; line-height: 1.7; margin: 0; word-break: break-word; white-space: pre-wrap;">${rec.reason || '추천 이유 없음'}</p>
+            <p class="recommendation-reason" style="color: #ffffff; font-size: 0.665em; line-height: 1.7; margin: 0; word-break: break-word; white-space: pre-wrap;">${rec.reason || '추천 이유 없음'}</p>
           </div>
-          ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.9em; line-height: 1.6; margin: 0 0 12px 0; word-break: break-word;">${workout.description}</p>` : ''}
+          ${workout.description ? `<p class="workout-description" style="color: #aaa; font-size: 0.63em; line-height: 1.6; margin: 0 0 12px 0; word-break: break-word;">${workout.description}</p>` : ''}
           <div class="recommendation-action" style="display: flex; justify-content: center; width: 100%;">
             <button class="result-close-btn" onclick="selectRecommendedWorkout(${workout.id}, '${date}')" data-workout-id="${workout.id}" style="width: 100%; max-width: 200px; padding: 12px 20px; font-size: 1em; font-weight: bold; border-radius: 8px;">
               선택
