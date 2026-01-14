@@ -873,11 +873,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'segmentPreviewGraph') {
-    // 훈련 준비 화면: 진회색 실선 (Y축 라벨 색상과 동일, Y축 선 두께와 동일)
+    // 훈련 준비 화면: 투명 주황색 점선, 두께 1
     ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = '#4B5563'; // 진회색 (Y축 라벨 색상과 동일)
-    ctx.lineWidth = 2; // Y축 세로선 두께와 동일 (lineWidth = 2)
-    ctx.setLineDash([]); // 실선
+    ctx.strokeStyle = 'rgba(234, 179, 8, 0.5)'; // 투명 주황색
+    ctx.lineWidth = 1; // 두께 1
+    ctx.setLineDash([4, 3]); // 점선 (4px 점, 3px 간격)
   } else if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
     // Indoor Training: 흰색 얇은 점선
     ctx.shadowColor = 'transparent';
@@ -899,26 +899,6 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.shadowColor = 'transparent';
-  
-  // 케이던스 90 가이드선 (훈련 준비 화면에만 추가)
-  if (canvasId === 'segmentPreviewGraph') {
-    // 케이던스 90 RPM을 FTP %로 변환 (90 RPM = FTP 100%)
-    const cadence90FtpPercent = 100; // 90 RPM = FTP 100%
-    const cadence90Power = ftp * (cadence90FtpPercent / 100); // FTP 100% 파워
-    const cadence90Y = padding.top + chartHeight - (chartHeight * (cadence90Power / maxTargetPower));
-    
-    // 케이던스 90 가이드선 그리기 (Y축 세로선과 동일한 두께)
-    ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = '#EF4444'; // 빨강색 (케이던스 90 강조)
-    ctx.lineWidth = 2; // Y축 세로선 두께와 동일 (lineWidth = 2)
-    ctx.setLineDash([]); // 실선
-    ctx.beginPath();
-    ctx.moveTo(padding.left, cadence90Y);
-    ctx.lineTo(padding.left + chartWidth, cadence90Y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.shadowColor = 'transparent';
-  }
   
   // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드 및 Indoor Training, 훈련 준비 화면)
   if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {

@@ -5888,6 +5888,12 @@ function renderWorkoutSelectionTable(workouts) {
     const tbody = document.getElementById('workoutSelectionTableBody');
     if (!tbody) return;
     
+    // 이전 선택 상태 초기화
+    const allRows = document.querySelectorAll('.workout-selection-row');
+    allRows.forEach(row => {
+        row.classList.remove('selected');
+    });
+    
     if (!workouts || workouts.length === 0) {
         tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">표시할 워크아웃이 없습니다.</td></tr>';
         return;
@@ -6417,6 +6423,24 @@ async function selectWorkoutForTraining(workoutId) {
     try {
         console.log('[Training] 워크아웃 선택 시도:', workoutId);
         
+        // 이전 선택 해제
+        const allRows = document.querySelectorAll('.workout-selection-row');
+        allRows.forEach(row => {
+            row.classList.remove('selected');
+        });
+        
+        // 현재 선택된 행에 선택 애니메이션 적용
+        const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
+        if (selectedRow) {
+            selectedRow.classList.add('selected');
+            
+            // 클릭 피드백 애니메이션
+            selectedRow.style.transform = 'scale(0.98)';
+            setTimeout(() => {
+                selectedRow.style.transform = '';
+            }, 150);
+        }
+        
         // 선택 버튼 애니메이션 시작
         const selectButtons = document.querySelectorAll(`.workout-select-btn[data-workout-id="${workoutId}"]`);
         selectButtons.forEach(btn => {
@@ -6434,6 +6458,12 @@ async function selectWorkoutForTraining(workoutId) {
         // apiGetWorkout 함수 확인
         if (typeof apiGetWorkout !== 'function') {
             console.error('[Training] apiGetWorkout 함수를 찾을 수 없습니다.');
+            
+            // 선택 상태 해제
+            if (selectedRow) {
+                selectedRow.classList.remove('selected');
+            }
+            
             // 버튼 상태 복원
             selectButtons.forEach(btn => {
                 const btnText = btn.querySelector('.btn-text');
@@ -6459,6 +6489,12 @@ async function selectWorkoutForTraining(workoutId) {
         
         if (!workoutResult) {
             console.error('[Training] workoutResult가 null입니다.');
+            
+            // 선택 상태 해제
+            if (selectedRow) {
+                selectedRow.classList.remove('selected');
+            }
+            
             // 버튼 상태 복원
             selectButtons.forEach(btn => {
                 const btnText = btn.querySelector('.btn-text');
@@ -6479,6 +6515,12 @@ async function selectWorkoutForTraining(workoutId) {
         
         if (!workoutResult.success) {
             console.error('[Training] 워크아웃 로드 실패:', workoutResult.error);
+            
+            // 선택 상태 해제
+            if (selectedRow) {
+                selectedRow.classList.remove('selected');
+            }
+            
             // 버튼 상태 복원
             selectButtons.forEach(btn => {
                 const btnText = btn.querySelector('.btn-text');
@@ -6502,6 +6544,12 @@ async function selectWorkoutForTraining(workoutId) {
         
         if (!workout) {
             console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
+            
+            // 선택 상태 해제
+            if (selectedRow) {
+                selectedRow.classList.remove('selected');
+            }
+            
             // 버튼 상태 복원
             selectButtons.forEach(btn => {
                 const btnText = btn.querySelector('.btn-text');
@@ -6586,6 +6634,13 @@ async function selectWorkoutForTraining(workoutId) {
         
     } catch (error) {
         console.error('[Training] 워크아웃 선택 오류:', error, error.stack);
+        
+        // 선택 상태 해제
+        const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
+        if (selectedRow) {
+            selectedRow.classList.remove('selected');
+        }
+        
         // 버튼 상태 복원
         const selectButtons = document.querySelectorAll(`.workout-select-btn[data-workout-id="${workoutId}"]`);
         selectButtons.forEach(btn => {
