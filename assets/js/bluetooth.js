@@ -322,8 +322,10 @@ async function connectTrainer() {
       characteristic = await service.getCharacteristic("indoor_bike_data");
       isFTMS = true;
     } catch {
+      // FTMS 실패 시 CPS로 폴백 (스마트 트레이너가 CPS만 지원하는 경우)
       service = await server.getPrimaryService("cycling_power");
       characteristic = await service.getCharacteristic("cycling_power_measurement");
+      isFTMS = false;
     }
 
     await characteristic.startNotifications(); // ✅ 이후에 목록 갱신
@@ -331,6 +333,7 @@ async function connectTrainer() {
       isFTMS ? handleTrainerData : handlePowerMeterData
     );
 
+    // 스마트 트레이너는 FTMS든 CPS든 모두 trainer로 저장
     if (isFTMS) {
       // FTMS Control Point 서비스 및 특성 가져오기 (ERG 모드용)
       let controlPointService = null;
@@ -354,7 +357,8 @@ async function connectTrainer() {
         device, 
         server, 
         characteristic,
-        controlPoint: controlPointCharacteristic // ERG 모드용
+        controlPoint: controlPointCharacteristic, // ERG 모드용
+        protocol: 'FTMS' // 프로토콜 정보 추가
       };
       
       // ERG 모드 UI 표시
@@ -362,7 +366,15 @@ async function connectTrainer() {
         updateErgModeUI(true);
       }
     } else {
-      window.connectedDevices.powerMeter = { name: device.name || "Power Meter", device, server, characteristic };
+      // CPS로 폴백된 경우에도 trainer로 저장 (스마트 트레이너이므로)
+      window.connectedDevices.trainer = { 
+        name: device.name || "Smart Trainer", 
+        device, 
+        server, 
+        characteristic,
+        protocol: 'CPS' // 프로토콜 정보 추가
+      };
+      console.log('✅ 스마트 트레이너가 CPS로 연결됨 (FTMS 미지원)');
     }
 
     device.addEventListener("gattserverdisconnected", () => {
