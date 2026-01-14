@@ -264,16 +264,27 @@ async function connectTrainer() {
   try {
     showConnectionStatus(true);
 
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [
-        { services: ["fitness_machine"] },
-        { services: ["cycling_power"] },
-        { namePrefix: "KICKR" },
-        { namePrefix: "Wahoo" },
-        { namePrefix: "Tacx" },
-      ],
-      optionalServices: ["fitness_machine", "cycling_power", "device_information"],
-    });
+    // iOS/Bluefy 대응: filters 실패 시 acceptAllDevices 폴백
+    let device;
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [
+          { services: ["fitness_machine"] },
+          { services: ["cycling_power"] },
+          { namePrefix: "KICKR" },
+          { namePrefix: "Wahoo" },
+          { namePrefix: "Tacx" },
+        ],
+        optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+      });
+    } catch (filterError) {
+      // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
+      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도:", filterError);
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+      });
+    }
 
     const server = await device.gatt.connect();
 
