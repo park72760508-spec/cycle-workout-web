@@ -12797,6 +12797,16 @@ function startMobileWorkout() {
     window.trainingState.timerId = null;
   }
 
+  // 훈련 세션 시작 (개인훈련 대시보드와 동일한 로직)
+  const currentUser = window.currentUser || null;
+  const userId = currentUser?.id || currentUser?.Id || null;
+  if (window.trainingResults && typeof window.trainingResults.startSession === 'function' && userId) {
+    window.trainingResults.startSession(userId);
+    console.log('[Mobile Dashboard] 훈련 세션 시작:', { userId: userId, workoutId: window.currentWorkout?.id });
+  } else if (!userId) {
+    console.warn('[Mobile Dashboard] 사용자 ID가 없어 세션을 시작할 수 없습니다.');
+  }
+  
   // 세그먼트 루프 시작 (모바일 대시보드 화면에서 실행)
   // startSegmentLoop 내부에서 buildSegmentBar와 applySegmentTarget를 호출하므로 여기서는 호출하지 않음
   if (typeof startSegmentLoop === "function") {
@@ -13005,10 +13015,42 @@ function handleMobileSkip() {
  */
 function handleMobileStop() {
   if (confirm('훈련을 종료하시겠습니까?')) {
+    // elapsedTime을 전역 변수에 저장 (저장 시 사용)
+    if (window.trainingState && window.trainingState.elapsedSec !== undefined) {
+      window.lastElapsedTime = window.trainingState.elapsedSec;
+      console.log('[Mobile Dashboard] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
+    }
+    
     // 기존 앱 로직의 루프 정지 함수 호출
     if (typeof stopSegmentLoop === 'function') {
       stopSegmentLoop();
     }
+    
+    // 모바일 대시보드 전용: 결과 저장 → 초기화 → 결과 모달 표시 (개인훈련 대시보드와 동일한 로직)
+    Promise.resolve()
+      .then(() => {
+        console.log('[Mobile Dashboard] 🚀 1단계: 결과 저장 시작');
+        return window.saveTrainingResultAtEnd?.();
+      })
+      .then((saveResult) => {
+        console.log('[Mobile Dashboard] ✅ 1단계 완료:', saveResult);
+        return window.trainingResults?.initializeResultScreen?.();
+      })
+      .then(() => {
+        console.log('[Mobile Dashboard] ✅ 2단계 완료: 결과 화면 초기화');
+        // 모바일 대시보드 결과 모달 표시
+        if (typeof showMobileTrainingResultModal === 'function') {
+          showMobileTrainingResultModal();
+          console.log('[Mobile Dashboard] ✅ 3단계 완료: 결과 모달 표시');
+        }
+      })
+      .catch((error) => {
+        console.error('[Mobile Dashboard] ❌ 결과 저장/표시 중 오류:', error);
+        // 오류 발생 시에도 사용자에게 알림
+        if (typeof showToast === 'function') {
+          showToast('훈련 결과 저장 중 오류가 발생했습니다', 'error');
+        }
+      });
     
     // 훈련 종료 후 초기 상태(Play 버튼)로 복구 (SVG <image> 요소는 href 속성 사용)
     const btnImg = document.getElementById('imgMobileToggle');
