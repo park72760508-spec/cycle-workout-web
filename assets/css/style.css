@@ -8147,22 +8147,98 @@ button[aria-disabled="true"] {
   color: #c62828;
 }
 
+/* AI 추천 결과 화면 모바일 최적화 */
 @media (max-width: 768px) {
+  #workoutRecommendationModal .ai-workout-recommendation-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    padding: 16px !important;
+  }
+  
+  .workout-recommendation-container {
+    padding: 12px !important;
+  }
+  
+  .result-stats {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+  
+  .result-stat-item {
+    background: rgba(0, 212, 170, 0.1) !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    text-align: center !important;
+  }
+  
   .recommendation-item {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 16px !important;
+    gap: 12px !important;
   }
   
   .recommendation-rank {
-    text-align: center;
+    text-align: center !important;
+    font-size: 1.8em !important;
+  }
+  
+  .recommendation-content {
+    width: 100% !important;
+  }
+  
+  .workout-title {
+    font-size: 1.05em !important;
+    word-break: break-word !important;
+    line-height: 1.4 !important;
+  }
+  
+  .workout-meta {
+    flex-direction: column !important;
+    gap: 6px !important;
+    align-items: flex-start !important;
+  }
+  
+  .recommendation-reason-wrapper {
+    width: 100% !important;
+    padding: 12px !important;
+  }
+  
+  .recommendation-reason {
+    font-size: 0.95em !important;
+    line-height: 1.7 !important;
+    word-break: break-word !important;
+    white-space: pre-wrap !important;
+  }
+  
+  .workout-description {
+    font-size: 0.9em !important;
+    line-height: 1.6 !important;
+    word-break: break-word !important;
   }
   
   .recommendation-action {
-    width: 100%;
+    width: 100% !important;
+    margin-top: 8px !important;
   }
   
-  .recommendation-action .btn {
-    width: 100%;
+  .recommendation-action .result-close-btn {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 14px 20px !important;
+    font-size: 1em !important;
+  }
+  
+  .category-info {
+    padding: 14px !important;
+  }
+  
+  .category-reason {
+    font-size: 0.95em !important;
+    line-height: 1.7 !important;
+    word-break: break-word !important;
+    white-space: pre-wrap !important;
   }
 }
 
