@@ -1947,16 +1947,6 @@ button[aria-disabled="true"] {
   background-color: #f9fafb;
 }
 
-/* 워크아웃 행 클릭 가능 스타일 */
-.workout-table tbody tr.clickable-workout-row {
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.workout-table tbody tr.clickable-workout-row:hover {
-  background-color: rgba(59, 130, 246, 0.1);
-}
-
 .workout-table tbody tr:last-child {
   border-bottom: none;
 }
