@@ -2551,7 +2551,8 @@ async function apiCreateWorkoutWithSegments(workoutData) {
       description: String(workoutData.description || ''),
       author: String(workoutData.author || ''),
       status: String(workoutData.status || '보이기'),
-      publish_date: String(workoutData.publish_date || '')
+      publish_date: String(workoutData.publish_date || ''),
+      password: String(workoutData.password || '')
     };
     
     console.log('1단계: 기본 워크아웃 생성...');
@@ -2812,7 +2813,8 @@ async function apiUpdateWorkout(id, workoutData) {
     description: String(workoutData.description || ''),
     author: String(workoutData.author || ''),
     status: String(workoutData.status || '보이기'),
-    publish_date: String(workoutData.publish_date || '')
+    publish_date: String(workoutData.publish_date || ''),
+    password: String(workoutData.password || '')
   };
   
   try {
@@ -3711,9 +3713,8 @@ async function saveWorkout() {
   const author = (authorEl.value || '').trim();
   const status = statusEl.value || '보이기';
   const publishDate = publishDateEl.value || null;
-  // 비공개 워크아웃인 경우 비밀번호를 publish_date에 저장 (publish_date 필드에 비밀번호 저장)
+  // 비공개 워크아웃인 경우 비밀번호 저장
   const password = (status !== '보이기' && passwordEl) ? (passwordEl.value || '').trim() : '';
-  const publishDateOrPassword = (status !== '보이기' && password) ? password : publishDate;
 
   if (!title) {
     window.showToast('제목을 입력해주세요.');
@@ -3795,7 +3796,8 @@ async function saveWorkout() {
       description, 
       author, 
       status, 
-      publish_date: publishDateOrPassword, // 비공개인 경우 비밀번호, 공개인 경우 날짜
+      publish_date: publishDate,
+      password: password,
       segments: validSegments
     };
 
@@ -3907,14 +3909,13 @@ async function editWorkout(workoutId) {
         if (savedStatus && savedStatus !== '보이기') {
           passwordGroup.style.display = 'block';
           passwordEl.required = true;
-          // 비공개 워크아웃인 경우 publish_date에 저장된 비밀번호 표시
-          if (workout.publish_date && !workout.publish_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            passwordEl.value = workout.publish_date;
-            if (publishDateEl) publishDateEl.value = '';
+          // 비공개 워크아웃인 경우 password 필드에 저장된 비밀번호 표시
+          if (workout.password) {
+            passwordEl.value = workout.password;
           } else {
             passwordEl.value = '';
-            if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
           }
+          if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
         } else {
           passwordGroup.style.display = 'none';
           passwordEl.required = false;
@@ -4008,9 +4009,8 @@ async function performWorkoutUpdate() {
   const author = (authorEl.value || '').trim();
   const status = statusEl.value || '보이기';
   const publishDate = publishDateEl.value || null;
-  // 비공개 워크아웃인 경우 비밀번호를 publish_date에 저장
+  // 비공개 워크아웃인 경우 비밀번호 저장
   const password = (status !== '보이기' && passwordEl) ? (passwordEl.value || '').trim() : '';
-  const publishDateOrPassword = (status !== '보이기' && password) ? password : publishDate;
 
   if (!title) {
     window.showToast('제목을 입력해주세요.');
@@ -4045,7 +4045,7 @@ async function performWorkoutUpdate() {
 
   try {
     // 1단계: 기본 정보 업데이트
-    const workoutData = { title, description, author, status, publish_date: publishDateOrPassword };
+    const workoutData = { title, description, author, status, publish_date: publishDate, password: password };
     console.log('Updating workout:', currentEditWorkoutId, 'with data:', workoutData);
     
     const basicUpdateResult = await apiUpdateWorkout(currentEditWorkoutId, workoutData);

@@ -6245,13 +6245,10 @@ async function filterAllWorkouts() {
                 filteredWorkoutStatuses: filteredWorkouts.map(w => ({ id: w.id, title: w.title, status: w.status }))
             });
         }
-        // grade=2: 공개 워크아웃만 표시
+        // grade=2: 모든 워크아웃 표시 (공개 + 비공개 모두)
         else {
-            filteredWorkouts = normalizedWorkouts.filter(workout => {
-                const workoutStatus = String(workout.status || '').trim();
-                return workoutStatus === '보이기';
-            });
-            console.log('[Indoor Training] All WKO 필터링 (grade=2): 공개 워크아웃만 표시', {
+            filteredWorkouts = normalizedWorkouts;
+            console.log('[Indoor Training] All WKO 필터링 (grade=2): 모든 워크아웃 표시 (공개 + 비공개)', {
                 totalWorkouts: normalizedWorkouts.length,
                 filteredWorkouts: filteredWorkouts.length
             });
@@ -6558,11 +6555,11 @@ async function selectWorkoutForTraining(workoutId) {
             return;
         }
         
-        // 비공개 워크아웃 비밀번호 확인 (grade=1 관리자 제외)
+        // 워크아웃 비밀번호 확인 (grade=1 관리자 제외)
         const workoutStatus = String(workout.status || '').trim();
         const isPrivate = workoutStatus !== '보이기';
-        const publishDatePassword = workout.publish_date ? String(workout.publish_date).trim() : '';
-        const hasPassword = publishDatePassword !== '';
+        const workoutPassword = workout.password ? String(workout.password).trim() : '';
+        const hasPassword = workoutPassword !== '';
         
         // grade 확인
         let grade = '2';
@@ -6584,7 +6581,7 @@ async function selectWorkoutForTraining(workoutId) {
         
         // 비공개 워크아웃이고 비밀번호가 있으며 관리자가 아닌 경우 비밀번호 인증
         if (isPrivate && hasPassword && !isAdmin) {
-            const passwordCorrect = await showWorkoutPasswordModal(workoutId, publishDatePassword);
+            const passwordCorrect = await showWorkoutPasswordModal(workoutId, workoutPassword);
             if (!passwordCorrect) {
                 // 비밀번호 인증 실패 시 선택 상태 해제 및 업로드 애니메이션 제거
                 if (selectedRow) {
