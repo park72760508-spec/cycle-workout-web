@@ -13075,6 +13075,11 @@ line[id^="needle-"] {
   width: 100% !important;
   z-index: 1000 !important;
   isolation: isolate; /* 새로운 스택킹 컨텍스트 생성 */
+  /* Pull-to-refresh 방지 */
+  overscroll-behavior-y: contain !important;
+  overscroll-behavior: contain !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y; /* 세로 스크롤만 허용, 새로고침 방지 */
 }
 
 #mobileDashboardScreen.screen {
