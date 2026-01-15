@@ -3338,6 +3338,79 @@ button[aria-disabled="true"] {
   }
 }
 
+/* 워크아웃 업로드 애니메이션 */
+.workout-selection-row.uploading {
+  position: relative;
+  overflow: hidden;
+}
+
+.workout-selection-row.uploading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(59, 130, 246, 0.3) 50%,
+    transparent 100%
+  );
+  animation: uploadProgress 1.5s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes uploadProgress {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+/* 업로드 진행 인디케이터 */
+.workout-selection-row.uploading::after {
+  content: '↗';
+  position: absolute;
+  right: 40px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #3b82f6;
+  font-size: 16px;
+  animation: uploadArrowAnimation 1s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes uploadArrowAnimation {
+  0%, 100% {
+    opacity: 0.5;
+    transform: translateY(-50%) translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(4px) translateY(-2px);
+  }
+}
+
+/* 업로드 완료 애니메이션 */
+.workout-selection-row.upload-complete {
+  animation: uploadCompleteAnimation 0.5s ease-out;
+}
+
+@keyframes uploadCompleteAnimation {
+  0% {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    background-color: rgba(16, 185, 129, 0.2);
+  }
+  100% {
+    background-color: rgba(59, 130, 246, 0.15);
+  }
+}
+
 /* 모바일 반응형: 가로 스크롤 없이 표시 */
 @media (max-width: 768px) {
   .workout-selection-table {
