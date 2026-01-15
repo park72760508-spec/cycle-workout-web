@@ -11048,17 +11048,40 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     return;
   }
   
-  // 워크아웃 이름 표시
-  const nameEl = safeGetElement('previewWorkoutName');
-  if (nameEl) {
-    nameEl.textContent = workout.title || '워크아웃';
+  // 워크아웃 정보 표시 영역에 업로드 애니메이션 적용
+  const workoutInfoSection = document.querySelector('#trainingReadyScreen .connection-device-section');
+  if (workoutInfoSection) {
+    workoutInfoSection.classList.add('workout-upload-animation');
+    setTimeout(() => {
+      workoutInfoSection.classList.remove('workout-upload-animation');
+    }, 800);
   }
   
-  // 총 시간 계산 및 표시
+  // 워크아웃 이름 표시 (페이드인 애니메이션)
+  const nameEl = safeGetElement('previewWorkoutName');
+  if (nameEl) {
+    nameEl.style.opacity = '0';
+    nameEl.style.transform = 'translateY(-10px)';
+    nameEl.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+    setTimeout(() => {
+      nameEl.textContent = workout.title || '워크아웃';
+      nameEl.style.opacity = '1';
+      nameEl.style.transform = 'translateY(0)';
+    }, 100);
+  }
+  
+  // 총 시간 계산 및 표시 (페이드인 애니메이션)
   const totalMinutes = Math.round((workout.total_seconds || 0) / 60);
   const durationEl = safeGetElement('previewDuration');
   if (durationEl) {
-    durationEl.textContent = `${totalMinutes}분`;
+    durationEl.style.opacity = '0';
+    durationEl.style.transform = 'scale(0.9)';
+    durationEl.style.transition = 'opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s';
+    setTimeout(() => {
+      durationEl.textContent = `${totalMinutes}분`;
+      durationEl.style.opacity = '1';
+      durationEl.style.transform = 'scale(1)';
+    }, 100);
   }
   
   // 평균 강도 계산 (세그먼트 타입별 FTP% 추출)
@@ -11083,10 +11106,17 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     }
   }
   
-  // 평균 강도 표시
+  // 평균 강도 표시 (페이드인 애니메이션)
   const intensityEl = safeGetElement('previewIntensity');
   if (intensityEl) {
-    intensityEl.textContent = `${avgIntensity}%`;
+    intensityEl.style.opacity = '0';
+    intensityEl.style.transform = 'scale(0.9)';
+    intensityEl.style.transition = 'opacity 0.4s ease 0.2s, transform 0.4s ease 0.2s';
+    setTimeout(() => {
+      intensityEl.textContent = `${avgIntensity}%`;
+      intensityEl.style.opacity = '1';
+      intensityEl.style.transform = 'scale(1)';
+    }, 100);
   }
   
   // 예상 TSS 계산 (NP 근사 기반, workoutManager.js의 로직 참고)
@@ -11124,10 +11154,17 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     estimatedTSS = Math.round((T / 3600) * (IF * IF) * 100);
   }
   
-  // 예상 TSS 표시 (예상 강도 위치에 TSS 값 표시)
+  // 예상 TSS 표시 (페이드인 애니메이션)
   const expectedIntensityEl = safeGetElement('previewExpectedIntensity');
   if (expectedIntensityEl) {
-    expectedIntensityEl.textContent = String(estimatedTSS);
+    expectedIntensityEl.style.opacity = '0';
+    expectedIntensityEl.style.transform = 'scale(0.9)';
+    expectedIntensityEl.style.transition = 'opacity 0.4s ease 0.3s, transform 0.4s ease 0.3s';
+    setTimeout(() => {
+      expectedIntensityEl.textContent = String(estimatedTSS);
+      expectedIntensityEl.style.opacity = '1';
+      expectedIntensityEl.style.transform = 'scale(1)';
+    }, 100);
   }
   
   // 예상 TSS 표시 (기존 previewTSS 요소가 있는 경우에도 업데이트)
@@ -11142,28 +11179,46 @@ function updateTrainingReadyScreenWithWorkout(workout) {
   
   if (workout.segments && workout.segments.length > 0) {
     if (segmentPreview) {
-      // placeholder 숨기기
+      // placeholder 숨기기 (페이드아웃 애니메이션)
       if (placeholder) {
-        placeholder.style.display = 'none';
+        placeholder.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        placeholder.style.opacity = '0';
+        placeholder.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          placeholder.style.display = 'none';
+        }, 300);
       }
       
       // 기존 캔버스 제거
       const existingCanvas = document.getElementById('segmentPreviewGraph');
       if (existingCanvas) {
-        existingCanvas.remove();
+        existingCanvas.style.transition = 'opacity 0.3s ease';
+        existingCanvas.style.opacity = '0';
+        setTimeout(() => {
+          existingCanvas.remove();
+        }, 300);
       }
       
-      // 캔버스 생성
+      // 캔버스 생성 (페이드인 애니메이션)
       const canvas = document.createElement('canvas');
       canvas.id = 'segmentPreviewGraph';
       canvas.style.width = '100%';
       canvas.style.height = 'auto';
+      canvas.style.opacity = '0';
+      canvas.style.transform = 'scale(0.95)';
+      canvas.style.transition = 'opacity 0.5s ease 0.3s, transform 0.5s ease 0.3s';
       segmentPreview.appendChild(canvas);
       
       // 세그먼트 그래프 그리기
       if (typeof drawSegmentGraph === 'function') {
         setTimeout(() => {
           drawSegmentGraph(workout.segments, -1, 'segmentPreviewGraph', null);
+          
+          // 그래프 페이드인 애니메이션
+          setTimeout(() => {
+            canvas.style.opacity = '1';
+            canvas.style.transform = 'scale(1)';
+          }, 350);
           
           // 그래프 높이에 맞춰 컨테이너 높이 조절 (위아래 여백 동일하게)
           setTimeout(() => {

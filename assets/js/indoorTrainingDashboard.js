@@ -6439,6 +6439,18 @@ async function selectWorkoutForTraining(workoutId) {
             setTimeout(() => {
                 selectedRow.style.transform = '';
             }, 150);
+            
+            // 워크아웃 업로드 애니메이션 시작
+            selectedRow.classList.add('uploading');
+            
+            // 업로드 완료 후 애니메이션 제거 (워크아웃 로드 성공 시)
+            setTimeout(() => {
+                selectedRow.classList.remove('uploading');
+                selectedRow.classList.add('upload-complete');
+                setTimeout(() => {
+                    selectedRow.classList.remove('upload-complete');
+                }, 1000); // 완료 애니메이션 1초 후 제거
+            }, 500); // 0.5초 후 업로드 완료 표시
         }
         
         // 선택 버튼 애니메이션 시작
