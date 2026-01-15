@@ -5918,7 +5918,7 @@ function renderWorkoutSelectionTable(workouts) {
                 style="border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background-color 0.2s ease;">
                 <td style="text-align: center; padding: 12px;">${index + 1}</td>
                 <td style="padding: 12px; word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${workoutTitle}">${truncatedTitle}</td>
-                <td style="text-align: center; padding: 12px;">${duration}</td>
+                <td class="workout-duration-cell" style="text-align: center; padding: 12px;" data-duration="${duration}">${duration}</td>
             </tr>
         `;
     }).join('');
@@ -6442,6 +6442,14 @@ async function selectWorkoutForTraining(workoutId) {
             
             // 워크아웃 업로드 애니메이션 시작 (심플한 로딩 스피너)
             selectedRow.classList.add('uploading');
+            
+            // 시간 컬럼에 로딩 스피너 표시
+            const durationCell = selectedRow.querySelector('.workout-duration-cell');
+            if (durationCell) {
+                const originalDuration = durationCell.getAttribute('data-duration') || durationCell.textContent;
+                durationCell.setAttribute('data-original-duration', originalDuration);
+                durationCell.innerHTML = '<div class="workout-upload-spinner"></div>';
+            }
         }
         
         // 선택 버튼 애니메이션 시작
@@ -6465,6 +6473,15 @@ async function selectWorkoutForTraining(workoutId) {
             // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
                 selectedRow.classList.remove('selected', 'uploading');
+                
+                // 시간 컬럼 복원
+                const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                if (durationCell) {
+                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                    if (originalDuration) {
+                        durationCell.innerHTML = originalDuration;
+                    }
+                }
             }
             
             // 버튼 상태 복원
@@ -6496,6 +6513,15 @@ async function selectWorkoutForTraining(workoutId) {
             // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
                 selectedRow.classList.remove('selected', 'uploading');
+                
+                // 시간 컬럼 복원
+                const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                if (durationCell) {
+                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                    if (originalDuration) {
+                        durationCell.innerHTML = originalDuration;
+                    }
+                }
             }
             
             // 버튼 상태 복원
@@ -6522,6 +6548,15 @@ async function selectWorkoutForTraining(workoutId) {
             // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
                 selectedRow.classList.remove('selected', 'uploading');
+                
+                // 시간 컬럼 복원
+                const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                if (durationCell) {
+                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                    if (originalDuration) {
+                        durationCell.innerHTML = originalDuration;
+                    }
+                }
             }
             
             // 버튼 상태 복원
@@ -6551,6 +6586,15 @@ async function selectWorkoutForTraining(workoutId) {
             // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
                 selectedRow.classList.remove('selected', 'uploading');
+                
+                // 시간 컬럼 복원
+                const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                if (durationCell) {
+                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                    if (originalDuration) {
+                        durationCell.innerHTML = originalDuration;
+                    }
+                }
             }
             
             // 버튼 상태 복원
@@ -6618,10 +6662,20 @@ async function selectWorkoutForTraining(workoutId) {
                 // 콜백 실행 후 정리
                 delete window._trainingReadyWorkoutSelectionCallback;
                 
-                // 업로드 애니메이션 제거
+                // 업로드 애니메이션 제거 및 시간 복원
                 if (selectedRow) {
                     selectedRow.classList.remove('uploading');
                     selectedRow.classList.add('upload-complete');
+                    
+                    // 시간 컬럼 복원
+                    const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                    if (durationCell) {
+                        const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                        if (originalDuration) {
+                            durationCell.innerHTML = originalDuration;
+                        }
+                    }
+                    
                     setTimeout(() => {
                         selectedRow.classList.remove('upload-complete');
                     }, 500);
@@ -6668,6 +6722,15 @@ async function selectWorkoutForTraining(workoutId) {
         const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
         if (selectedRow) {
             selectedRow.classList.remove('selected', 'uploading');
+            
+            // 시간 컬럼 복원
+            const durationCell = selectedRow.querySelector('.workout-duration-cell');
+            if (durationCell) {
+                const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                if (originalDuration) {
+                    durationCell.innerHTML = originalDuration;
+                }
+            }
         }
         
         // 버튼 상태 복원
