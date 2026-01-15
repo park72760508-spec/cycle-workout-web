@@ -6440,17 +6440,8 @@ async function selectWorkoutForTraining(workoutId) {
                 selectedRow.style.transform = '';
             }, 150);
             
-            // 워크아웃 업로드 애니메이션 시작
+            // 워크아웃 업로드 애니메이션 시작 (심플한 로딩 스피너)
             selectedRow.classList.add('uploading');
-            
-            // 업로드 완료 후 애니메이션 제거 (워크아웃 로드 성공 시)
-            setTimeout(() => {
-                selectedRow.classList.remove('uploading');
-                selectedRow.classList.add('upload-complete');
-                setTimeout(() => {
-                    selectedRow.classList.remove('upload-complete');
-                }, 1000); // 완료 애니메이션 1초 후 제거
-            }, 500); // 0.5초 후 업로드 완료 표시
         }
         
         // 선택 버튼 애니메이션 시작
@@ -6471,9 +6462,9 @@ async function selectWorkoutForTraining(workoutId) {
         if (typeof apiGetWorkout !== 'function') {
             console.error('[Training] apiGetWorkout 함수를 찾을 수 없습니다.');
             
-            // 선택 상태 해제
+            // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
-                selectedRow.classList.remove('selected');
+                selectedRow.classList.remove('selected', 'uploading');
             }
             
             // 버튼 상태 복원
@@ -6502,9 +6493,9 @@ async function selectWorkoutForTraining(workoutId) {
         if (!workoutResult) {
             console.error('[Training] workoutResult가 null입니다.');
             
-            // 선택 상태 해제
+            // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
-                selectedRow.classList.remove('selected');
+                selectedRow.classList.remove('selected', 'uploading');
             }
             
             // 버튼 상태 복원
@@ -6528,9 +6519,9 @@ async function selectWorkoutForTraining(workoutId) {
         if (!workoutResult.success) {
             console.error('[Training] 워크아웃 로드 실패:', workoutResult.error);
             
-            // 선택 상태 해제
+            // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
-                selectedRow.classList.remove('selected');
+                selectedRow.classList.remove('selected', 'uploading');
             }
             
             // 버튼 상태 복원
@@ -6557,9 +6548,9 @@ async function selectWorkoutForTraining(workoutId) {
         if (!workout) {
             console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
             
-            // 선택 상태 해제
+            // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
-                selectedRow.classList.remove('selected');
+                selectedRow.classList.remove('selected', 'uploading');
             }
             
             // 버튼 상태 복원
@@ -6619,21 +6610,47 @@ async function selectWorkoutForTraining(workoutId) {
             }
         }
         
-        // 모달 닫기
-        closeWorkoutSelectionModal();
-        
-        // 훈련 준비 화면에서 호출된 경우 콜백 실행
+        // 훈련 준비 화면에서 호출된 경우 콜백 실행 (모달 닫기 전에 처리)
         if (window._trainingReadyWorkoutSelectionCallback && typeof window._trainingReadyWorkoutSelectionCallback === 'function') {
             try {
                 // workout 객체를 직접 전달
                 await window._trainingReadyWorkoutSelectionCallback(workout);
                 // 콜백 실행 후 정리
                 delete window._trainingReadyWorkoutSelectionCallback;
+                
+                // 업로드 애니메이션 제거
+                if (selectedRow) {
+                    selectedRow.classList.remove('uploading');
+                    selectedRow.classList.add('upload-complete');
+                    setTimeout(() => {
+                        selectedRow.classList.remove('upload-complete');
+                    }, 500);
+                }
+                
+                // 모달 닫기
+                closeWorkoutSelectionModal();
                 return; // 훈련 준비 화면 콜백이 실행되면 여기서 종료
             } catch (error) {
                 console.error('[Training] 훈련 준비 화면 콜백 실행 오류:', error);
-                // 오류 발생 시에도 콜백 정리
+                // 오류 발생 시에도 콜백 정리 및 애니메이션 제거
                 delete window._trainingReadyWorkoutSelectionCallback;
+                if (selectedRow) {
+                    selectedRow.classList.remove('uploading');
+                }
+                // 모달 닫기
+                closeWorkoutSelectionModal();
+            }
+        } else {
+            // 모달 닫기 (Indoor Training 화면인 경우)
+            closeWorkoutSelectionModal();
+            
+            // 업로드 애니메이션 제거
+            if (selectedRow) {
+                selectedRow.classList.remove('uploading');
+                selectedRow.classList.add('upload-complete');
+                setTimeout(() => {
+                    selectedRow.classList.remove('upload-complete');
+                }, 500);
             }
         }
         
@@ -6647,10 +6664,10 @@ async function selectWorkoutForTraining(workoutId) {
     } catch (error) {
         console.error('[Training] 워크아웃 선택 오류:', error, error.stack);
         
-        // 선택 상태 해제
+        // 선택 상태 해제 및 업로드 애니메이션 제거
         const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
         if (selectedRow) {
-            selectedRow.classList.remove('selected');
+            selectedRow.classList.remove('selected', 'uploading');
         }
         
         // 버튼 상태 복원

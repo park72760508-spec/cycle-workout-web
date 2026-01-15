@@ -11179,83 +11179,91 @@ function updateTrainingReadyScreenWithWorkout(workout) {
   
   if (workout.segments && workout.segments.length > 0) {
     if (segmentPreview) {
-      // placeholder 숨기기 (페이드아웃 애니메이션)
-      if (placeholder) {
-        placeholder.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
-        placeholder.style.opacity = '0';
-        placeholder.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-          placeholder.style.display = 'none';
-        }, 300);
-      }
+      // 컨테이너 높이를 초기 블록 사이즈 유지 (min-height: 200px)
+      segmentPreview.style.minHeight = '200px';
+      segmentPreview.style.height = 'auto';
       
-      // 기존 캔버스 제거
+      // 기존 캔버스 즉시 제거
       const existingCanvas = document.getElementById('segmentPreviewGraph');
       if (existingCanvas) {
-        existingCanvas.style.transition = 'opacity 0.3s ease';
-        existingCanvas.style.opacity = '0';
-        setTimeout(() => {
-          existingCanvas.remove();
-        }, 300);
+        existingCanvas.remove();
       }
       
-      // 캔버스 생성 (페이드인 애니메이션)
-      const canvas = document.createElement('canvas');
-      canvas.id = 'segmentPreviewGraph';
-      canvas.style.width = '100%';
-      canvas.style.height = 'auto';
-      canvas.style.opacity = '0';
-      canvas.style.transform = 'scale(0.95)';
-      canvas.style.transition = 'opacity 0.5s ease 0.3s, transform 0.5s ease 0.3s';
-      segmentPreview.appendChild(canvas);
-      
-      // 세그먼트 그래프 그리기
-      if (typeof drawSegmentGraph === 'function') {
+      // placeholder 숨기기 (페이드아웃 애니메이션)
+      if (placeholder) {
+        placeholder.style.transition = 'opacity 0.2s ease';
+        placeholder.style.opacity = '0';
         setTimeout(() => {
-          drawSegmentGraph(workout.segments, -1, 'segmentPreviewGraph', null);
-          
-          // 그래프 페이드인 애니메이션
+          placeholder.style.display = 'none';
+        }, 200);
+      }
+      
+      // 캔버스 생성 및 그래프 그리기 (placeholder 숨김 후 즉시)
+      setTimeout(() => {
+        // 캔버스 생성
+        const canvas = document.createElement('canvas');
+        canvas.id = 'segmentPreviewGraph';
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+        canvas.style.opacity = '0';
+        canvas.style.transition = 'opacity 0.4s ease';
+        segmentPreview.appendChild(canvas);
+        
+        // 세그먼트 그래프 그리기
+        if (typeof drawSegmentGraph === 'function') {
+          // DOM이 업데이트된 후 그래프 그리기
           setTimeout(() => {
-            canvas.style.opacity = '1';
-            canvas.style.transform = 'scale(1)';
-          }, 350);
-          
-          // 그래프 높이에 맞춰 컨테이너 높이 조절 (위아래 여백 동일하게)
-          setTimeout(() => {
-            const canvas = document.getElementById('segmentPreviewGraph');
-            const container = safeGetElement('segmentPreview');
-            if (canvas && container) {
-              // 캔버스의 실제 높이 확인 (height 속성 또는 clientHeight)
-              const canvasHeight = canvas.height || canvas.clientHeight || canvas.offsetHeight || 0;
-              if (canvasHeight > 0) {
-                // 캔버스 높이 + 위아래 패딩 (12px씩)
-                const containerHeight = canvasHeight + 24; // padding 12px * 2
-                container.style.height = `${containerHeight}px`;
-                container.style.minHeight = `${containerHeight}px`;
-                // 위아래 여백 동일하게 설정
-                container.style.paddingTop = '12px';
-                container.style.paddingBottom = '12px';
-                container.style.paddingLeft = '12px';
-                container.style.paddingRight = '12px';
-              }
+            try {
+              drawSegmentGraph(workout.segments, -1, 'segmentPreviewGraph', null);
+              
+              // 그래프 그리기 완료 후 페이드인 및 높이 조절
+              setTimeout(() => {
+                const drawnCanvas = document.getElementById('segmentPreviewGraph');
+                if (drawnCanvas) {
+                  // 그래프 페이드인
+                  drawnCanvas.style.opacity = '1';
+                  
+                  // 캔버스의 실제 높이 확인 (height 속성 사용)
+                  const canvasHeight = drawnCanvas.height || 0;
+                  
+                  if (canvasHeight > 0) {
+                    // 최소 높이는 200px 유지, 실제 높이가 더 크면 그에 맞춤
+                    const finalHeight = Math.max(200, canvasHeight + 24); // padding 12px * 2
+                    segmentPreview.style.minHeight = `${finalHeight}px`;
+                    segmentPreview.style.height = 'auto';
+                  } else {
+                    // 높이를 확인할 수 없으면 최소 높이 유지
+                    segmentPreview.style.minHeight = '200px';
+                    console.warn('[Training Ready] 캔버스 높이를 확인할 수 없습니다.');
+                  }
+                } else {
+                  console.error('[Training Ready] segmentPreviewGraph 캔버스를 찾을 수 없습니다.');
+                }
+              }, 150); // 그래프 그리기 완료 대기
+            } catch (error) {
+              console.error('[Training Ready] drawSegmentGraph 실행 오류:', error);
             }
-          }, 50); // 그래프 그리기 후 약간의 지연을 두고 높이 조절
-        }, 100);
-      } else {
-        console.warn('[Training Ready] drawSegmentGraph 함수를 찾을 수 없습니다.');
-      }
+          }, 50); // DOM 업데이트 대기
+        } else {
+          console.warn('[Training Ready] drawSegmentGraph 함수를 찾을 수 없습니다.');
+        }
+      }, 250); // placeholder 숨김 후 약간의 지연
     }
   } else {
     if (segmentPreview) {
-      // 세그먼트가 없으면 placeholder 표시 (flex-direction: column 유지)
+      // 세그먼트가 없으면 placeholder 표시
       if (placeholder) {
         placeholder.style.display = 'flex';
+        placeholder.style.opacity = '0.3';
       }
       // 기존 캔버스 제거
       const existingCanvas = document.getElementById('segmentPreviewGraph');
       if (existingCanvas) {
         existingCanvas.remove();
       }
+      // 컨테이너 높이 초기화
+      segmentPreview.style.minHeight = '200px';
+      segmentPreview.style.height = 'auto';
     }
   }
 }
