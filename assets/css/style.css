@@ -1615,8 +1615,13 @@ button[aria-disabled="true"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100000 !important; /* 워크아웃 선택 모달(z-index: 99999)보다 위에 표시 */
   animation: fadeIn 0.3s ease;
+}
+
+/* 워크아웃 비밀번호 모달이 워크아웃 선택 모달 위에 표시되도록 */
+#workoutPasswordModal.schedule-password-modal-overlay {
+  z-index: 100001 !important; /* 워크아웃 선택 모달(z-index: 99999)보다 위에 표시 */
 }
 
 @keyframes fadeIn {
