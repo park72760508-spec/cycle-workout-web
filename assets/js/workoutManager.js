@@ -678,7 +678,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 그래프 크기 설정 (개인 대시보드용으로 작은 크기)
   let graphHeight, graphWidth, padding;
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'segmentPreviewGraph') {
+  if (canvasId === 'segmentPreviewGraph') {
+    // 훈련 준비 화면: 고정 크기로 일관된 그래프 블록 유지
+    graphHeight = 200; // 고정 높이
+    graphWidth = 600; // 고정 너비
+    padding = { 
+      top: 16, 
+      right: 20, 
+      bottom: 24, 
+      left: 35 
+    };
+  } else if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph') {
     // 개인 대시보드용: 컨테이너 높이에 맞춰 동적으로 설정 (모바일 대시보드도 동일)
     const container = canvas.parentElement;
     let containerHeight = 100; // 기본값

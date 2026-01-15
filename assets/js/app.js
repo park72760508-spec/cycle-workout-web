@@ -11179,9 +11179,10 @@ function updateTrainingReadyScreenWithWorkout(workout) {
   
   if (workout.segments && workout.segments.length > 0) {
     if (segmentPreview) {
-      // 컨테이너 높이를 초기 블록 사이즈 유지 (min-height: 200px)
+      // 컨테이너 높이를 고정 크기로 유지 (일관된 그래프 블록)
       segmentPreview.style.minHeight = '200px';
-      segmentPreview.style.height = 'auto';
+      segmentPreview.style.height = '200px';
+      segmentPreview.style.maxHeight = '200px';
       
       // 기존 캔버스 즉시 제거
       const existingCanvas = document.getElementById('segmentPreviewGraph');
@@ -11204,7 +11205,8 @@ function updateTrainingReadyScreenWithWorkout(workout) {
         const canvas = document.createElement('canvas');
         canvas.id = 'segmentPreviewGraph';
         canvas.style.width = '100%';
-        canvas.style.height = 'auto';
+        canvas.style.height = '200px';
+        canvas.style.maxHeight = '200px';
         canvas.style.opacity = '0';
         canvas.style.transition = 'opacity 0.4s ease';
         segmentPreview.appendChild(canvas);
@@ -11216,26 +11218,17 @@ function updateTrainingReadyScreenWithWorkout(workout) {
             try {
               drawSegmentGraph(workout.segments, -1, 'segmentPreviewGraph', null);
               
-              // 그래프 그리기 완료 후 페이드인 및 높이 조절
+              // 그래프 그리기 완료 후 페이드인
               setTimeout(() => {
                 const drawnCanvas = document.getElementById('segmentPreviewGraph');
                 if (drawnCanvas) {
                   // 그래프 페이드인
                   drawnCanvas.style.opacity = '1';
                   
-                  // 캔버스의 실제 높이 확인 (height 속성 사용)
-                  const canvasHeight = drawnCanvas.height || 0;
-                  
-                  if (canvasHeight > 0) {
-                    // 최소 높이는 200px 유지, 실제 높이가 더 크면 그에 맞춤
-                    const finalHeight = Math.max(200, canvasHeight + 24); // padding 12px * 2
-                    segmentPreview.style.minHeight = `${finalHeight}px`;
-                    segmentPreview.style.height = 'auto';
-                  } else {
-                    // 높이를 확인할 수 없으면 최소 높이 유지
-                    segmentPreview.style.minHeight = '200px';
-                    console.warn('[Training Ready] 캔버스 높이를 확인할 수 없습니다.');
-                  }
+                  // 컨테이너 크기 고정 유지
+                  segmentPreview.style.minHeight = '200px';
+                  segmentPreview.style.height = '200px';
+                  segmentPreview.style.maxHeight = '200px';
                 } else {
                   console.error('[Training Ready] segmentPreviewGraph 캔버스를 찾을 수 없습니다.');
                 }
@@ -11261,9 +11254,10 @@ function updateTrainingReadyScreenWithWorkout(workout) {
       if (existingCanvas) {
         existingCanvas.remove();
       }
-      // 컨테이너 높이 초기화
+      // 컨테이너 높이 고정 크기 유지
       segmentPreview.style.minHeight = '200px';
-      segmentPreview.style.height = 'auto';
+      segmentPreview.style.height = '200px';
+      segmentPreview.style.maxHeight = '200px';
     }
   }
 }
