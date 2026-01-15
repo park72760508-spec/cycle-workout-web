@@ -2260,16 +2260,31 @@ button[aria-disabled="true"] {
 
 /* 세그먼트 프리뷰 영역 개선 - 그래프 형식 */
 .segment-preview {
-  margin-top: 20px;
-  margin-bottom: 20px;
-  position: relative;
-  z-index: 1;
-  /* 총 시간 표시 블럭과 동일한 테두리 스타일 적용 */
-  text-align: center;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.segment-preview:hover {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+.segment-preview:active {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 훈련 준비 화면 세그먼트 그래프 placeholder 텍스트 스타일 - 더 진한 회색 */
+#segmentPreviewPlaceholder div:last-child {
+  color: #666 !important;
+}
+
+.segment-preview:active {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 훈련 준비 화면 세그먼트 그래프 placeholder 텍스트 스타일 - 더 진한 회색 */
+#segmentPreviewPlaceholder div:last-child {
+  color: #666 !important;
 }
 
 /* 세그먼트 그래프 컨테이너 */
