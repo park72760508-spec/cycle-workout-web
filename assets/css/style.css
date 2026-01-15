@@ -3381,6 +3381,47 @@ button[aria-disabled="true"] {
   }
 }
 
+/* 워크아웃 순번 라벨 스타일 */
+.workout-selection-row td:first-child {
+  position: relative;
+}
+
+.workout-index-number {
+  display: inline-block;
+  position: relative;
+  z-index: 1;
+}
+
+/* 공개 워크아웃 라벨 (All WKO 녹색 디자인) */
+.workout-status-badge-public {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* 비공개 워크아웃 라벨 (닫기 버튼 디자인) */
+.workout-status-badge-private {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* 모바일 반응형: 가로 스크롤 없이 표시 */
 @media (max-width: 768px) {
   .workout-selection-table {
