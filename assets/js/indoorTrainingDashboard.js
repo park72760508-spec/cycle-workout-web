@@ -5752,115 +5752,13 @@ async function loadWorkoutsForSelection() {
             return w;
         });
         
-        // grade=3 부관리자 필터링: 공개 워크아웃 또는 status가 Training Room 이름과 동일한 경우만 표시
-        let grade = '2';
-        try {
-            if (typeof getViewerGrade === 'function') {
-                grade = String(getViewerGrade());
-            } else {
-                const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-                const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
-                if (viewer && viewer.grade != null) {
-                    grade = String(viewer.grade);
-                } else if (authUser && authUser.grade != null) {
-                    grade = String(authUser.grade);
-                }
-            }
-        } catch (e) {
-            console.warn('[Indoor Training] grade 확인 실패:', e);
-            grade = '2';
-        }
-        
-        let filteredWorkouts = normalizedWorkouts;
-        
-        // grade=3 부관리자의 경우 필터링 적용
-        if (grade === '3') {
-            // 현재 선택된 Training Room 이름 가져오기
-            let currentTrainingRoomName = null;
-            try {
-                if (typeof window !== 'undefined' && window.SESSION_ID) {
-                    // SESSION_ID를 사용하여 Training Room 정보 가져오기
-                    const roomId = String(window.SESSION_ID);
-                    
-                    // Training Room 목록 API 호출
-                    if (typeof window.GAS_URL !== 'undefined' && window.GAS_URL) {
-                        try {
-                            const response = await fetch(`${window.GAS_URL}?action=listTrainingRooms`);
-                            if (response.ok) {
-                                const roomListResult = await response.json();
-                                if (roomListResult && roomListResult.success && Array.isArray(roomListResult.items)) {
-                                    const selectedRoom = roomListResult.items.find(room => 
-                                        String(room.id) === roomId || String(room.Id) === roomId
-                                    );
-                                    if (selectedRoom) {
-                                        currentTrainingRoomName = selectedRoom.name || 
-                                                               selectedRoom.title || 
-                                                               selectedRoom.Name || 
-                                                               selectedRoom.roomName || null;
-                                    }
-                                }
-                            }
-                        } catch (fetchError) {
-                            console.warn('[Indoor Training] Training Room 목록 가져오기 실패:', fetchError);
-                        }
-                    }
-                    
-                    // 전역 변수에서 확인 (trainingRoomManager.js에서 설정됨)
-                    if (!currentTrainingRoomName && typeof currentSelectedTrainingRoom !== 'undefined' && currentSelectedTrainingRoom) {
-                        if (String(currentSelectedTrainingRoom.id) === roomId || String(currentSelectedTrainingRoom.Id) === roomId) {
-                            currentTrainingRoomName = currentSelectedTrainingRoom.name || 
-                                                     currentSelectedTrainingRoom.title || 
-                                                     currentSelectedTrainingRoom.Name || null;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('[Indoor Training] Training Room 이름 가져오기 실패:', e);
-            }
-            
-            // 필터링: 공개 워크아웃(status='보이기') 또는 status가 Training Room 이름과 동일한 경우만 표시
-            filteredWorkouts = normalizedWorkouts.filter(workout => {
-                const workoutStatus = String(workout.status || '').trim();
-                const isPublic = workoutStatus === '보이기';
-                
-                // 공개 워크아웃이면 표시
-                if (isPublic) {
-                    return true;
-                }
-                
-                // Training Room 이름이 있고, status가 Training Room 이름과 동일하면 표시
-                if (currentTrainingRoomName && workoutStatus === String(currentTrainingRoomName).trim()) {
-                    return true;
-                }
-                
-                // 그 외의 경우는 표시하지 않음
-                return false;
-            });
-            
-            console.log('[Indoor Training] grade=3 부관리자 필터링 결과:', {
-                grade: grade,
-                currentTrainingRoomName: currentTrainingRoomName,
-                totalWorkouts: normalizedWorkouts.length,
-                filteredWorkouts: filteredWorkouts.length,
-                filteredWorkoutStatuses: filteredWorkouts.map(w => ({ id: w.id, title: w.title, status: w.status }))
-            });
-        } else if (grade === '1') {
-            // grade=1 관리자는 모든 워크아웃 표시
-            filteredWorkouts = normalizedWorkouts;
-        } else {
-            // grade=2 일반 사용자는 공개 워크아웃만 표시
-            filteredWorkouts = normalizedWorkouts.filter(workout => {
-                const workoutStatus = String(workout.status || '').trim();
-                return workoutStatus === '보이기';
-            });
-        }
-        
+        // 사용자 grade에 상관없이 모든 워크아웃 로드 (필터링 제거)
         // 필터링된 워크아웃 목록을 전역 변수에 저장 (Room WKO 버튼에서 사용)
-        window.currentFilteredWorkouts = filteredWorkouts;
+        window.currentFilteredWorkouts = normalizedWorkouts;
         window.currentNormalizedWorkouts = normalizedWorkouts;
         
-        // 워크아웃 목록 렌더링 (filteredWorkouts 사용)
-        renderWorkoutSelectionTable(filteredWorkouts);
+        // 워크아웃 목록 렌더링 (모든 워크아웃 표시)
+        renderWorkoutSelectionTable(normalizedWorkouts);
         
     } catch (error) {
         console.error('[Training] 워크아웃 목록 로드 오류:', error);
@@ -5911,12 +5809,22 @@ function renderWorkoutSelectionTable(workouts) {
         const workoutTitle = escapeHtml(workout.title || '-');
         const truncatedTitle = truncateWorkoutName(workoutTitle, 20);
         
+        // 공개/비공개 구분 (status='보이기'면 공개, 그 외는 비공개)
+        const workoutStatus = String(workout.status || '').trim();
+        const isPublic = workoutStatus === '보이기';
+        const statusBadgeClass = isPublic ? 'workout-status-badge-public' : 'workout-status-badge-private';
+        
         return `
             <tr class="workout-selection-row" 
                 data-workout-id="${workout.id}" 
+                data-workout-status="${workoutStatus}"
+                data-workout-password="${escapeHtml(workout.password || '')}"
                 onclick="selectWorkoutForTraining('${workout.id}')"
                 style="border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background-color 0.2s ease;">
-                <td style="text-align: center; padding: 12px;">${index + 1}</td>
+                <td style="text-align: center; padding: 12px; position: relative;">
+                    <span class="workout-index-number">${index + 1}</span>
+                    <span class="workout-status-badge ${statusBadgeClass}"></span>
+                </td>
                 <td style="padding: 12px; word-break: break-word; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${workoutTitle}">${truncatedTitle}</td>
                 <td class="workout-duration-cell" style="text-align: center; padding: 12px;" data-duration="${duration}">${duration}</td>
             </tr>
@@ -6405,6 +6313,7 @@ async function filterAllWorkouts() {
 window.filterAllWorkouts = filterAllWorkouts;
 window.filterRoomWorkouts = filterRoomWorkouts;
 window.renderWorkoutSelectionTable = renderWorkoutSelectionTable;
+window.showWorkoutPasswordModal = showWorkoutPasswordModal;
 
 /**
  * HTML 이스케이프 함수
@@ -6414,6 +6323,118 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * 워크아웃 비밀번호 확인 모달
+ * @param {string} workoutId - 워크아웃 ID
+ * @param {string} correctPassword - 올바른 비밀번호
+ * @returns {Promise<boolean>} - 비밀번호 확인 성공 여부
+ */
+async function showWorkoutPasswordModal(workoutId, correctPassword) {
+    return new Promise((resolve) => {
+        // 기존 모달이 있으면 제거
+        const existingModal = document.getElementById('workoutPasswordModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 워크아웃 정보 가져오기 (제목 표시용)
+        const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
+        const workoutTitle = selectedRow ? selectedRow.querySelector('td:nth-child(2)')?.textContent || '워크아웃' : '워크아웃';
+        
+        // 모달 생성
+        const modal = document.createElement('div');
+        modal.id = 'workoutPasswordModal';
+        modal.className = 'schedule-password-modal-overlay';
+        modal.innerHTML = `
+            <div class="schedule-password-modal-card">
+                <div class="schedule-password-modal-header">
+                    <img src="assets/img/lock.png" alt="비밀번호" class="schedule-password-modal-icon" />
+                    <h3>비밀번호 확인</h3>
+                </div>
+                <div class="schedule-password-modal-body">
+                    <p class="schedule-password-modal-title">${escapeHtml(workoutTitle)}</p>
+                    <p class="schedule-password-modal-message">이 워크아웃은 비밀번호로 보호되어 있습니다.</p>
+                    <div class="schedule-password-input-container">
+                        <input type="password" id="workoutPasswordInput" class="schedule-password-input" placeholder="비밀번호를 입력하세요" autofocus />
+                    </div>
+                    <div class="schedule-password-error" id="workoutPasswordError" style="display: none;"></div>
+                </div>
+                <div class="schedule-password-modal-footer">
+                    <button class="btn btn-primary btn-with-icon schedule-password-confirm-btn">
+                        <img src="assets/img/save.png" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+                        확인
+                    </button>
+                    <button class="btn btn-secondary btn-default-style schedule-password-cancel-btn">
+                        <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+                        취소
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const passwordInput = document.getElementById('workoutPasswordInput');
+        const errorDiv = document.getElementById('workoutPasswordError');
+        const cancelBtn = modal.querySelector('.schedule-password-cancel-btn');
+        const confirmBtn = modal.querySelector('.schedule-password-confirm-btn');
+        
+        // 취소 버튼
+        cancelBtn.addEventListener('click', () => {
+            modal.remove();
+            resolve(false);
+        });
+        
+        // 확인 버튼
+        const handleConfirm = () => {
+            const enteredPassword = String(passwordInput.value || '').trim();
+            if (!enteredPassword) {
+                errorDiv.textContent = '비밀번호를 입력해주세요.';
+                errorDiv.style.display = 'block';
+                passwordInput.focus();
+                return;
+            }
+            
+            // 저장된 비밀번호와 비교 (양쪽 모두 문자열로 변환하여 비교)
+            const correctPwd = correctPassword ? String(correctPassword).trim() : '';
+            if (enteredPassword === correctPwd) {
+                modal.remove();
+                resolve(true);
+            } else {
+                errorDiv.textContent = '비밀번호가 일치하지 않습니다.';
+                errorDiv.style.display = 'block';
+                passwordInput.value = '';
+                passwordInput.focus();
+                // 에러 메시지 애니메이션
+                errorDiv.style.animation = 'shake 0.3s ease';
+                setTimeout(() => {
+                    errorDiv.style.animation = '';
+                }, 300);
+            }
+        };
+        
+        confirmBtn.addEventListener('click', handleConfirm);
+        
+        // Enter 키로 확인
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleConfirm();
+            }
+        });
+        
+        // 모달 외부 클릭 시 닫기
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+                resolve(false);
+            }
+        });
+        
+        // 포커스
+        setTimeout(() => passwordInput.focus(), 100);
+    });
 }
 
 /**
@@ -6500,6 +6521,52 @@ async function selectWorkoutForTraining(workoutId) {
                 showToast('워크아웃 정보를 불러올 수 없습니다. (apiGetWorkout 함수 없음)', 'error');
             }
             return;
+        }
+        
+        // 비공개 워크아웃 비밀번호 확인 (grade=1 관리자 제외)
+        const selectedRowData = selectedRow ? {
+            status: selectedRow.getAttribute('data-workout-status'),
+            password: selectedRow.getAttribute('data-workout-password')
+        } : null;
+        
+        const isPrivate = selectedRowData && selectedRowData.status !== '보이기';
+        const hasPassword = selectedRowData && selectedRowData.password && selectedRowData.password.trim() !== '';
+        
+        // grade 확인
+        let grade = '2';
+        try {
+            if (typeof getViewerGrade === 'function') {
+                grade = String(getViewerGrade());
+            } else {
+                const viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+                if (viewer && viewer.grade != null) {
+                    grade = String(viewer.grade);
+                }
+            }
+        } catch (e) {
+            console.warn('[Training] grade 확인 실패:', e);
+            grade = '2';
+        }
+        
+        const isAdmin = grade === '1';
+        
+        // 비공개 워크아웃이고 비밀번호가 있으며 관리자가 아닌 경우 비밀번호 인증
+        if (isPrivate && hasPassword && !isAdmin) {
+            const passwordCorrect = await showWorkoutPasswordModal(workoutId, selectedRowData.password);
+            if (!passwordCorrect) {
+                // 비밀번호 인증 실패 시 선택 상태 해제 및 업로드 애니메이션 제거
+                if (selectedRow) {
+                    selectedRow.classList.remove('selected', 'uploading');
+                    const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                    if (durationCell) {
+                        const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                        if (originalDuration) {
+                            durationCell.innerHTML = originalDuration;
+                        }
+                    }
+                }
+                return;
+            }
         }
         
         // 워크아웃 상세 정보 로드
