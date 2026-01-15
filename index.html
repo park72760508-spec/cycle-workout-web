@@ -1468,7 +1468,7 @@
               </div>
             </div>
             <!-- 세그먼트 그래프 -->
-            <div class="segment-preview" id="segmentPreview" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 20px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div class="segment-preview" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 20px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;">
               <!-- 워크아웃 미선택 시 표시될 막대그래프 placeholder -->
               <div id="segmentPreviewPlaceholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 180px; opacity: 0.3; padding: 20px;">
                 <div style="display: flex; align-items: flex-end; justify-content: center; gap: 4px; flex: 1;">
@@ -1483,7 +1483,7 @@
                   <div style="width: 8px; background: #2e74e8; height: 75%; border-radius: 2px 2px 0 0;"></div>
                   <div style="width: 8px; background: #2e74e8; height: 45%; border-radius: 2px 2px 0 0;"></div>
                 </div>
-                <div style="color: #999; font-size: 14px; margin-top: 8px;">워크아웃을 선택하세요.</div>
+                <div style="color: #666; font-size: 14px; margin-top: 8px;">워크아웃을 선택하세요.</div>
               </div>
             </div>
           </div>
