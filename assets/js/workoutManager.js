@@ -849,13 +849,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           };
         })
       });
-    } else {
-      console.warn('[drawSegmentGraph] RPM 세그먼트를 찾을 수 없습니다. 모든 세그먼트:', segments.map((seg, idx) => ({
-        index: idx + 1,
-        targetType: seg.target_type,
-        targetValue: seg.target_value
-      })));
     }
+    // RPM 세그먼트가 없는 것은 정상적인 경우이므로 경고 제거
+    // (모든 워크아웃이 RPM 세그먼트를 포함할 필요는 없음)
   }
   
   // FTP 가이드 라인 (부드러운 색상)
