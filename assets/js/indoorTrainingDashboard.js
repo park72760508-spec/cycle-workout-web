@@ -6539,11 +6539,17 @@ async function selectWorkoutForTraining(workoutId) {
             return;
         }
         
-        const workout = workoutResult.item;
-        if (!workout) {
-            // 워크아웃 데이터가 없으면 선택 상태 해제 및 업로드 애니메이션 제거
+        // Code.gs의 getWorkout은 'item' 필드로 반환함
+        const loadedWorkout = workoutResult.workout || workoutResult.item;
+        
+        if (!loadedWorkout) {
+            console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
+            
+            // 선택 상태 해제 및 업로드 애니메이션 제거
             if (selectedRow) {
                 selectedRow.classList.remove('selected', 'uploading');
+                
+                // 시간 컬럼 복원
                 const durationCell = selectedRow.querySelector('.workout-duration-cell');
                 if (durationCell) {
                     const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
@@ -6552,13 +6558,29 @@ async function selectWorkoutForTraining(workoutId) {
                     }
                 }
             }
+            
+            // 버튼 상태 복원
+            selectButtons.forEach(btn => {
+                const btnText = btn.querySelector('.btn-text');
+                const btnLoading = btn.querySelector('.btn-loading');
+                if (btnText && btnLoading) {
+                    btnText.style.display = 'inline';
+                    btnLoading.style.display = 'none';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            });
+            if (typeof showToast === 'function') {
+                showToast('워크아웃 정보를 불러올 수 없습니다. (데이터 없음)', 'error');
+            }
             return;
         }
         
-        // 워크아웃 비밀번호 확인 (grade=1 관리자 제외)
-        const workoutStatus = String(workout.status || '').trim();
+        // 워크아웃 비밀번호 확인 (grade=1 관리자 제외, password 필드가 있는 경우만)
+        const workoutStatus = String(loadedWorkout.status || '').trim();
         const isPrivate = workoutStatus !== '보이기';
-        const workoutPassword = workout.password ? String(workout.password).trim() : '';
+        const workoutPassword = loadedWorkout.password ? String(loadedWorkout.password).trim() : '';
         const hasPassword = workoutPassword !== '';
         
         // grade 확인
@@ -6598,48 +6620,12 @@ async function selectWorkoutForTraining(workoutId) {
             }
         }
         
-        // Code.gs의 getWorkout은 'item' 필드로 반환함
-        const loadedWorkout = workoutResult.workout || workoutResult.item;
-        
-        if (!loadedWorkout) {
-            console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
-            
-            // 선택 상태 해제 및 업로드 애니메이션 제거
-            if (selectedRow) {
-                selectedRow.classList.remove('selected', 'uploading');
-                
-                // 시간 컬럼 복원
-                const durationCell = selectedRow.querySelector('.workout-duration-cell');
-                if (durationCell) {
-                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
-                    if (originalDuration) {
-                        durationCell.innerHTML = originalDuration;
-                    }
-                }
-            }
-            
-            // 버튼 상태 복원
-            selectButtons.forEach(btn => {
-                const btnText = btn.querySelector('.btn-text');
-                const btnLoading = btn.querySelector('.btn-loading');
-                if (btnText && btnLoading) {
-                    btnText.style.display = 'inline';
-                    btnLoading.style.display = 'none';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                }
-            });
-            if (typeof showToast === 'function') {
-                showToast('워크아웃 정보를 불러올 수 없습니다. (데이터 없음)', 'error');
-            }
-            return;
-        }
-        
         console.log('[Training] 선택된 워크아웃:', {
             id: loadedWorkout.id,
             title: loadedWorkout.title,
-            segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0
+            segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0,
+            isPrivate: isPrivate,
+            hasPassword: hasPassword
         });
         
         // 선택된 워크아웃 저장

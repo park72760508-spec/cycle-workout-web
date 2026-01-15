@@ -11002,6 +11002,8 @@ async function selectWorkoutForTrainingReady(workout) {
     });
     
     // 워크아웃 데이터 정규화
+    // 주의: 비밀번호 인증은 selectWorkoutForTraining에서 이미 수행되었으므로,
+    // 여기서는 인증된 workout 객체를 받아서 처리합니다.
     const normalizedWorkout = {
       id: workout.id,
       title: String(workout.title || '제목 없음'),
@@ -11010,16 +11012,23 @@ async function selectWorkoutForTrainingReady(workout) {
       status: String(workout.status || '보이기'),
       total_seconds: Number(workout.total_seconds) || 0,
       publish_date: workout.publish_date || null,
+      password: workout.password || null, // password 필드 포함 (보안상 저장하지 않음)
       segments: Array.isArray(workout.segments) ? workout.segments : []
+    };
+    
+    // localStorage에 저장 시 password 필드는 제외 (보안)
+    const workoutForStorage = {
+      ...normalizedWorkout,
+      password: undefined // password 필드 제외
     };
     
     // 전역 워크아웃 데이터 설정
     window.currentWorkout = normalizedWorkout;
     
-    // localStorage에 저장
+    // localStorage에 저장 (password 필드 제외)
     try {
-      localStorage.setItem('currentWorkout', JSON.stringify(normalizedWorkout));
-      console.log('[Training Ready] Workout saved to localStorage');
+      localStorage.setItem('currentWorkout', JSON.stringify(workoutForStorage));
+      console.log('[Training Ready] Workout saved to localStorage (password excluded)');
     } catch (e) {
       console.warn('[Training Ready] 로컬 스토리지 저장 실패:', e);
     }
