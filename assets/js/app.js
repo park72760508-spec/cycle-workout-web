@@ -11289,6 +11289,11 @@ async function startMobileDashboard() {
   console.log('[Mobile Dashboard] 모바일 대시보드 시작');
   
   try {
+    // Pull-to-refresh 방지 이벤트 핸들러 추가
+    initializeMobileDashboardPullToRefreshPrevention();
+    
+    // 화면 꺼짐 방지 초기화
+    initializeMobileDashboardWakeLock();
     // 사용자 정보 가져오기
     let currentUser = window.currentUser || null;
     if (!currentUser) {
@@ -11479,6 +11484,290 @@ async function startMobileDashboard() {
       showToast('모바일 대시보드 초기화 중 오류가 발생했습니다', 'error');
     }
   }
+}
+
+/**
+ * 모바일 대시보드 Pull-to-refresh 방지 초기화
+ */
+function initializeMobileDashboardPullToRefreshPrevention() {
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  if (!mobileScreen) return;
+  
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  const PULL_THRESHOLD = 80; // 새로고침을 트리거하는 최소 거리
+  const TIME_THRESHOLD = 300; // 새로고침을 트리거하는 최대 시간 (ms)
+  
+  // 터치 시작
+  mobileScreen.addEventListener('touchstart', (e) => {
+    touchStartY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+  }, { passive: true });
+  
+  // 터치 이동 중 - 스크롤이 맨 위에 있을 때만 새로고침 방지
+  mobileScreen.addEventListener('touchmove', (e) => {
+    const touchY = e.touches[0].clientY;
+    const touchTime = Date.now();
+    const deltaY = touchY - touchStartY;
+    const deltaTime = touchTime - touchStartTime;
+    
+    // 아래로 당기는 동작이고, 스크롤이 맨 위에 있을 때
+    if (deltaY > 0 && window.scrollY === 0) {
+      // 빠르게 당기면 새로고침 방지
+      if (deltaY > PULL_THRESHOLD && deltaTime < TIME_THRESHOLD) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    }
+  }, { passive: false });
+  
+  // 터치 종료
+  mobileScreen.addEventListener('touchend', (e) => {
+    touchStartY = 0;
+    touchStartTime = 0;
+  }, { passive: true });
+  
+  console.log('[Mobile Dashboard] Pull-to-refresh 방지 초기화 완료');
+}
+
+/**
+ * 모바일 대시보드 화면 꺼짐 방지 초기화 (Wake Lock API + 비디오 트릭)
+ */
+function initializeMobileDashboardWakeLock() {
+  // 전역 변수 초기화
+  if (!window.mobileDashboardWakeLock) {
+    window.mobileDashboardWakeLock = {
+      wakeLock: null,
+      wakeLockVideo: null,
+      videoWakeLockInterval: null,
+      isActive: false
+    };
+  }
+  
+  const wakeLockState = window.mobileDashboardWakeLock;
+  const wakeLockSupported = 'wakeLock' in navigator;
+  
+  // iOS, 안드로이드 및 크롬 브라우저 감지
+  function isIOS() {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+  
+  function isAndroid() {
+    const ua = navigator.userAgent || '';
+    return /Android/.test(ua);
+  }
+  
+  function isChrome() {
+    const ua = navigator.userAgent || '';
+    return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
+  }
+  
+  function isMobileChrome() {
+    return (isIOS() || isAndroid()) && isChrome();
+  }
+  
+  // Bluefy 앱 감지 (iOS)
+  function isBluefy() {
+    const ua = navigator.userAgent || '';
+    return /Bluefy/i.test(ua);
+  }
+  
+  // Wake Lock API 사용
+  async function requestWakeLock() {
+    // 모바일 크롬(iOS/안드로이드) 또는 Bluefy에서는 비디오 트릭을 우선 사용 (더 안정적)
+    if (isMobileChrome() || (isIOS() && isBluefy())) {
+      const deviceType = isIOS() ? 'iOS' : 'Android';
+      const appType = isBluefy() ? ' (Bluefy)' : '';
+      console.log(`[Mobile Dashboard Wake Lock] ${deviceType}${appType} 감지 - 비디오 트릭 사용`);
+      if (!wakeLockState.wakeLockVideo) {
+        startVideoWakeLock();
+      }
+      return;
+    }
+    
+    if (wakeLockSupported) {
+      try {
+        // 이미 활성화되어 있으면 재요청하지 않음
+        if (wakeLockState.wakeLock) return;
+        
+        wakeLockState.wakeLock = await navigator.wakeLock.request('screen');
+        console.log('[Mobile Dashboard Wake Lock] Screen Wake Lock 활성화됨');
+        
+        // 시스템이 해제했을 때 플래그 정리
+        wakeLockState.wakeLock.addEventListener('release', () => {
+          console.log('[Mobile Dashboard Wake Lock] 시스템에 의해 해제됨');
+          wakeLockState.wakeLock = null;
+          // 다시 요청 시도 (훈련 중일 때만)
+          if (document.visibilityState === 'visible' && wakeLockState.isActive) {
+            requestWakeLock();
+          }
+        });
+        
+        // 모바일(iOS/안드로이드)에서는 Wake Lock이 성공해도 비디오 트릭도 함께 사용 (이중 보장)
+        if ((isIOS() || isAndroid()) && !wakeLockState.wakeLockVideo) {
+          startVideoWakeLock();
+        }
+      } catch (err) {
+        console.warn('[Mobile Dashboard Wake Lock] 활성화 실패:', err);
+        // Wake Lock이 실패하면 비디오 트릭 사용
+        if (!wakeLockState.wakeLockVideo) {
+          startVideoWakeLock();
+        }
+      }
+    } else {
+      // Wake Lock API 미지원 시 비디오 트릭 사용
+      if (!wakeLockState.wakeLockVideo) {
+        startVideoWakeLock();
+      }
+    }
+  }
+  
+  // 비디오 트릭 사용 (iOS Safari, Bluefy 및 구형 브라우저 대응)
+  function startVideoWakeLock() {
+    try {
+      // 이미 생성되어 있으면 재생성하지 않음
+      if (wakeLockState.wakeLockVideo) return;
+      
+      // 훈련 진행 중일 때만 비디오 트릭 활성화
+      const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
+      if (!isTrainingRunning) {
+        console.log('[Mobile Dashboard Video Wake Lock] 훈련 진행 중이 아니므로 비디오 트릭 비활성화');
+        return;
+      }
+      
+      // Canvas로 최소 크기의 비디오 스트림 생성
+      const canvas = document.createElement('canvas');
+      canvas.width = 2;
+      canvas.height = 2;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 2, 2);
+      
+      // Canvas를 MediaStream으로 변환 (iOS 크롬/Bluefy 대응을 위해 30fps 사용)
+      const stream = canvas.captureStream(30);
+      
+      // 투명한 비디오 요소 생성
+      wakeLockState.wakeLockVideo = document.createElement('video');
+      wakeLockState.wakeLockVideo.setAttribute('playsinline', '');
+      wakeLockState.wakeLockVideo.setAttribute('muted', '');
+      wakeLockState.wakeLockVideo.setAttribute('loop', '');
+      wakeLockState.wakeLockVideo.setAttribute('webkit-playsinline', '');
+      wakeLockState.wakeLockVideo.setAttribute('autoplay', '');
+      wakeLockState.wakeLockVideo.style.position = 'fixed';
+      wakeLockState.wakeLockVideo.style.top = '0';
+      wakeLockState.wakeLockVideo.style.left = '0';
+      wakeLockState.wakeLockVideo.style.width = '1px';
+      wakeLockState.wakeLockVideo.style.height = '1px';
+      wakeLockState.wakeLockVideo.style.opacity = '0';
+      wakeLockState.wakeLockVideo.style.pointerEvents = 'none';
+      wakeLockState.wakeLockVideo.style.zIndex = '-9999';
+      
+      // 스트림을 비디오에 연결
+      wakeLockState.wakeLockVideo.srcObject = stream;
+      document.body.appendChild(wakeLockState.wakeLockVideo);
+      
+      // 비디오 재생 함수 (재시도 로직 포함)
+      const playVideo = () => {
+        const playPromise = wakeLockState.wakeLockVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            console.log('[Mobile Dashboard Video Wake Lock] 화면 잠금 방지 활성화 (비디오 트릭)');
+          }).catch(err => {
+            console.warn('[Mobile Dashboard Video Wake Lock] 재생 실패, 재시도:', err);
+            // 재생 실패 시 잠시 후 재시도
+            setTimeout(playVideo, 1000);
+          });
+        }
+      };
+      
+      // 초기 재생 시도
+      playVideo();
+      
+      // 모바일(iOS/안드로이드)에서는 주기적으로 비디오 재생 상태 확인 및 재시작 (크롬/Bluefy 대응)
+      if (isIOS() || isAndroid()) {
+        if (wakeLockState.videoWakeLockInterval) {
+          clearInterval(wakeLockState.videoWakeLockInterval);
+        }
+        wakeLockState.videoWakeLockInterval = setInterval(() => {
+          if (wakeLockState.wakeLockVideo && (wakeLockState.wakeLockVideo.paused || wakeLockState.wakeLockVideo.ended)) {
+            console.log('[Mobile Dashboard Video Wake Lock] 비디오가 일시정지됨, 재시작');
+            playVideo();
+          }
+        }, 5000); // 5초마다 확인
+      }
+    } catch (err) {
+      console.warn('[Mobile Dashboard Video Wake Lock] 초기화 실패:', err);
+    }
+  }
+  
+  // 화면 잠금 해제
+  function releaseWakeLock() {
+    if (wakeLockState.wakeLock !== null) {
+      wakeLockState.wakeLock.release().then(() => {
+        wakeLockState.wakeLock = null;
+        console.log('[Mobile Dashboard Wake Lock] Screen Wake Lock 해제됨');
+      }).catch(err => {
+        console.warn('[Mobile Dashboard Wake Lock] 해제 실패:', err);
+        wakeLockState.wakeLock = null;
+      });
+    }
+    
+    // 비디오 트릭 주기적 확인 중지
+    if (wakeLockState.videoWakeLockInterval !== null) {
+      clearInterval(wakeLockState.videoWakeLockInterval);
+      wakeLockState.videoWakeLockInterval = null;
+    }
+    
+    if (wakeLockState.wakeLockVideo !== null) {
+      try {
+        if (wakeLockState.wakeLockVideo.srcObject) {
+          wakeLockState.wakeLockVideo.srcObject.getTracks().forEach(track => track.stop());
+          wakeLockState.wakeLockVideo.srcObject = null;
+        }
+        wakeLockState.wakeLockVideo.pause();
+        if (wakeLockState.wakeLockVideo.parentNode) {
+          wakeLockState.wakeLockVideo.parentNode.removeChild(wakeLockState.wakeLockVideo);
+        }
+        wakeLockState.wakeLockVideo = null;
+        console.log('[Mobile Dashboard Video Wake Lock] 화면 잠금 방지 해제 (비디오 트릭)');
+      } catch (err) {
+        console.warn('[Mobile Dashboard Video Wake Lock] 해제 실패:', err);
+      }
+    }
+    
+    wakeLockState.isActive = false;
+  }
+  
+  // 페이지 가시성 변경 시 재요청 (훈련 진행 중일 때만)
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') {
+      // 훈련 진행 중일 때만 Wake Lock 재요청
+      const isTrainingRunning = window.trainingState && window.trainingState.timerId !== null;
+      if (isTrainingRunning && wakeLockState.isActive) {
+        // 페이지가 다시 보이면 Wake Lock 재요청
+        if (wakeLockSupported && !wakeLockState.wakeLock) {
+          await requestWakeLock();
+        }
+        // 비디오 트릭도 재시작
+        if (wakeLockState.wakeLockVideo && wakeLockState.wakeLockVideo.paused) {
+          wakeLockState.wakeLockVideo.play().catch(err => {
+            console.warn('[Mobile Dashboard Video Wake Lock] 재시작 실패:', err);
+          });
+        }
+      }
+    }
+  });
+  
+  // 전역으로 노출 (워크아웃 시작/종료 시 호출)
+  window.mobileDashboardWakeLockControl = {
+    request: requestWakeLock,
+    release: releaseWakeLock,
+    isActive: () => wakeLockState.isActive
+  };
+  
+  console.log('[Mobile Dashboard] 화면 꺼짐 방지 초기화 완료');
 }
 
 /**
@@ -12589,6 +12878,11 @@ function cleanupMobileDashboard() {
     mobileGaugeAnimationFrameId = null;
   }
   
+  // 화면 꺼짐 방지 해제 (화면 닫힐 때)
+  if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.release === 'function') {
+    window.mobileDashboardWakeLockControl.release();
+  }
+  
   console.log('[Mobile Dashboard] 정리 완료');
 }
 
@@ -12910,6 +13204,15 @@ function startMobileWorkout() {
   const btnImg = document.getElementById('imgMobileToggle');
   if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
 
+  // 화면 꺼짐 방지 활성화 (워크아웃 시작 시)
+  if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.request === 'function') {
+    window.mobileDashboardWakeLockControl.isActive = true;
+    // 사용자 상호작용 후 활성화 (브라우저 정책)
+    setTimeout(() => {
+      window.mobileDashboardWakeLockControl.request();
+    }, 100);
+  }
+
   if (typeof showToast === "function") showToast("훈련을 시작합니다");
 }
 
@@ -13121,6 +13424,11 @@ function handleMobileStop() {
     // 훈련 종료 후 초기 상태(Play 버튼)로 복구 (SVG <image> 요소는 href 속성 사용)
     const btnImg = document.getElementById('imgMobileToggle');
     if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
+    
+    // 화면 꺼짐 방지 해제 (워크아웃 종료 시)
+    if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.release === 'function') {
+      window.mobileDashboardWakeLockControl.release();
+    }
   }
 }
 
