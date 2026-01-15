@@ -6339,10 +6339,11 @@ async function showWorkoutPasswordModal(workoutId, correctPassword) {
         const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
         const workoutTitle = selectedRow ? selectedRow.querySelector('td:nth-child(2)')?.textContent || '워크아웃' : '워크아웃';
         
-        // 모달 생성
+        // 모달 생성 (워크아웃 선택 모달 위에 표시되도록 높은 z-index 설정)
         const modal = document.createElement('div');
         modal.id = 'workoutPasswordModal';
         modal.className = 'schedule-password-modal-overlay';
+        modal.style.zIndex = '100001'; // 워크아웃 선택 모달(z-index: 99999)보다 위에 표시
         modal.innerHTML = `
             <div class="schedule-password-modal-card">
                 <div class="schedule-password-modal-header">
