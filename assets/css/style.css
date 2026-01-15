@@ -3343,27 +3343,24 @@ button[aria-disabled="true"] {
   position: relative;
 }
 
-.workout-selection-row.uploading::after {
-  content: '';
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
+/* 시간 컬럼에 표시되는 로딩 스피너 */
+.workout-upload-spinner {
+  display: inline-block;
   width: 16px;
   height: 16px;
   border: 2px solid rgba(59, 130, 246, 0.3);
   border-top-color: #3b82f6;
   border-radius: 50%;
   animation: uploadSpinner 0.6s linear infinite;
-  z-index: 1;
+  margin: 0 auto;
 }
 
 @keyframes uploadSpinner {
   0% {
-    transform: translateY(-50%) rotate(0deg);
+    transform: rotate(0deg);
   }
   100% {
-    transform: translateY(-50%) rotate(360deg);
+    transform: rotate(360deg);
   }
 }
 
@@ -3420,6 +3417,13 @@ button[aria-disabled="true"] {
   .workout-selection-row.selected::after {
     right: 8px;
     font-size: 16px;
+  }
+  
+  /* 모바일에서 로딩 스피너 크기 조정 */
+  .workout-upload-spinner {
+    width: 18px;
+    height: 18px;
+    border-width: 2.5px;
   }
 }
 .workout-selection-table {
