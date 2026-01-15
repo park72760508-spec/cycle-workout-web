@@ -3581,6 +3581,12 @@ async function showAddWorkoutForm(clearForm = true) {
     if (statusEl) statusEl.value = '보이기';
     if (publishDateEl) publishDateEl.value = '';
     
+    // 비밀번호 필드 초기화 및 숨김
+    const passwordEl = safeGetElement('wbPassword');
+    const passwordGroup = safeGetElement('wbPasswordGroup');
+    if (passwordEl) passwordEl.value = '';
+    if (passwordGroup) passwordGroup.style.display = 'none';
+    
     workoutSegments = [];
     if (typeof renderSegments === 'function') {
       renderSegments();
@@ -3634,12 +3640,50 @@ async function loadTrainingSchedulesForWorkoutForm() {
     
     statusEl.innerHTML = optionsHtml;
     
+    // status 변경 시 비밀번호 필드 활성화/비활성화 이벤트 리스너 추가
+    statusEl.addEventListener('change', function() {
+      const passwordGroup = safeGetElement('wbPasswordGroup');
+      const passwordInput = safeGetElement('wbPassword');
+      const selectedStatus = this.value;
+      
+      if (passwordGroup && passwordInput) {
+        if (selectedStatus && selectedStatus !== '보이기') {
+          // "보이기" 이외 선택 시 비밀번호 필드 표시 및 필수로 설정
+          passwordGroup.style.display = 'block';
+          passwordInput.required = true;
+        } else {
+          // "보이기" 선택 시 비밀번호 필드 숨김 및 필수 해제
+          passwordGroup.style.display = 'none';
+          passwordInput.required = false;
+          passwordInput.value = '';
+        }
+      }
+    });
+    
     console.log(`[loadTrainingSchedulesForWorkoutForm] ${result.items?.length || 0}개의 스케줄 목록을 로드했습니다.`);
     
   } catch (error) {
     console.error('[loadTrainingSchedulesForWorkoutForm] 오류:', error);
     // 오류 발생 시 기본 옵션만 유지
     statusEl.innerHTML = baseOption;
+    
+    // 이벤트 리스너는 여전히 추가
+    statusEl.addEventListener('change', function() {
+      const passwordGroup = safeGetElement('wbPasswordGroup');
+      const passwordInput = safeGetElement('wbPassword');
+      const selectedStatus = this.value;
+      
+      if (passwordGroup && passwordInput) {
+        if (selectedStatus && selectedStatus !== '보이기') {
+          passwordGroup.style.display = 'block';
+          passwordInput.required = true;
+        } else {
+          passwordGroup.style.display = 'none';
+          passwordInput.required = false;
+          passwordInput.value = '';
+        }
+      }
+    });
   }
 }
 
@@ -3654,6 +3698,7 @@ async function saveWorkout() {
   const authorEl = safeGetElement('wbAuthor');
   const statusEl = safeGetElement('wbStatus');
   const publishDateEl = safeGetElement('wbPublishDate');
+  const passwordEl = safeGetElement('wbPassword');
   const saveBtn = safeGetElement('btnSaveWorkout');
 
   if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
@@ -3666,6 +3711,9 @@ async function saveWorkout() {
   const author = (authorEl.value || '').trim();
   const status = statusEl.value || '보이기';
   const publishDate = publishDateEl.value || null;
+  // 비공개 워크아웃인 경우 비밀번호를 publish_date에 저장 (publish_date 필드에 비밀번호 저장)
+  const password = (status !== '보이기' && passwordEl) ? (passwordEl.value || '').trim() : '';
+  const publishDateOrPassword = (status !== '보이기' && password) ? password : publishDate;
 
   if (!title) {
     window.showToast('제목을 입력해주세요.');
@@ -3728,12 +3776,26 @@ async function saveWorkout() {
       };
     });
 
+    // 비공개 워크아웃인 경우 비밀번호 검증
+    if (status !== '보이기' && !password) {
+      window.showToast('비공개 워크아웃은 비밀번호를 입력해야 합니다.');
+      if (passwordEl) {
+        passwordEl.focus();
+      }
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.classList.remove('btn-saving', 'saving-state');
+        saveBtn.innerHTML = '💾 저장';
+      }
+      return;
+    }
+    
     const workoutData = { 
       title, 
       description, 
       author, 
       status, 
-      publish_date: publishDate,
+      publish_date: publishDateOrPassword, // 비공개인 경우 비밀번호, 공개인 경우 날짜
       segments: validSegments
     };
 
@@ -3837,8 +3899,32 @@ async function editWorkout(workoutId) {
       const savedStatus = workout.status || '보이기';
       const hasOption = Array.from(statusEl.options).some(opt => opt.value === savedStatus);
       statusEl.value = hasOption ? savedStatus : '보이기';
+      
+      // status에 따라 비밀번호 필드 표시/숨김
+      const passwordEl = safeGetElement('wbPassword');
+      const passwordGroup = safeGetElement('wbPasswordGroup');
+      if (passwordGroup && passwordEl) {
+        if (savedStatus && savedStatus !== '보이기') {
+          passwordGroup.style.display = 'block';
+          passwordEl.required = true;
+          // 비공개 워크아웃인 경우 publish_date에 저장된 비밀번호 표시
+          if (workout.publish_date && !workout.publish_date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            passwordEl.value = workout.publish_date;
+            if (publishDateEl) publishDateEl.value = '';
+          } else {
+            passwordEl.value = '';
+            if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
+          }
+        } else {
+          passwordGroup.style.display = 'none';
+          passwordEl.required = false;
+          passwordEl.value = '';
+          if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
+        }
+      }
+    } else {
+      if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
     }
-    if (publishDateEl) publishDateEl.value = workout.publish_date ? workout.publish_date.split('T')[0] : '';
     
     // 🔥 핵심 추가: 세그먼트 데이터 로드
     if (workout.segments && Array.isArray(workout.segments)) {
@@ -3909,6 +3995,7 @@ async function performWorkoutUpdate() {
   const authorEl = safeGetElement('wbAuthor');
   const statusEl = safeGetElement('wbStatus');
   const publishDateEl = safeGetElement('wbPublishDate');
+  const passwordEl = safeGetElement('wbPassword');
   const saveBtn = safeGetElement('btnSaveWorkout');
 
   if (!titleEl || !descEl || !authorEl || !statusEl || !publishDateEl) {
@@ -3921,6 +4008,9 @@ async function performWorkoutUpdate() {
   const author = (authorEl.value || '').trim();
   const status = statusEl.value || '보이기';
   const publishDate = publishDateEl.value || null;
+  // 비공개 워크아웃인 경우 비밀번호를 publish_date에 저장
+  const password = (status !== '보이기' && passwordEl) ? (passwordEl.value || '').trim() : '';
+  const publishDateOrPassword = (status !== '보이기' && password) ? password : publishDate;
 
   if (!title) {
     window.showToast('제목을 입력해주세요.');
@@ -3939,9 +4029,23 @@ async function performWorkoutUpdate() {
     saveBtn.innerHTML = '<span class="saving-spinner"></span>수정 중...';
   }
 
+  // 비공개 워크아웃인 경우 비밀번호 검증
+  if (status !== '보이기' && !password) {
+    window.showToast('비공개 워크아웃은 비밀번호를 입력해야 합니다.');
+    if (passwordEl) {
+      passwordEl.focus();
+    }
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.classList.remove('btn-saving', 'saving-state');
+      saveBtn.innerHTML = '수정 완료';
+    }
+    return;
+  }
+
   try {
     // 1단계: 기본 정보 업데이트
-    const workoutData = { title, description, author, status, publish_date: publishDate };
+    const workoutData = { title, description, author, status, publish_date: publishDateOrPassword };
     console.log('Updating workout:', currentEditWorkoutId, 'with data:', workoutData);
     
     const basicUpdateResult = await apiUpdateWorkout(currentEditWorkoutId, workoutData);

@@ -5818,7 +5818,6 @@ function renderWorkoutSelectionTable(workouts) {
             <tr class="workout-selection-row" 
                 data-workout-id="${workout.id}" 
                 data-workout-status="${workoutStatus}"
-                data-workout-password="${escapeHtml(workout.password || '')}"
                 onclick="selectWorkoutForTraining('${workout.id}')"
                 style="border-bottom: 1px solid #e5e7eb; cursor: pointer; transition: background-color 0.2s ease;">
                 <td style="text-align: center; padding: 12px; position: relative;">
@@ -6523,14 +6522,47 @@ async function selectWorkoutForTraining(workoutId) {
             return;
         }
         
-        // 비공개 워크아웃 비밀번호 확인 (grade=1 관리자 제외)
-        const selectedRowData = selectedRow ? {
-            status: selectedRow.getAttribute('data-workout-status'),
-            password: selectedRow.getAttribute('data-workout-password')
-        } : null;
+        // 워크아웃 상세 정보 로드 (비밀번호 확인을 위해 먼저 로드)
+        const workoutResult = await apiGetWorkout(workoutId);
         
-        const isPrivate = selectedRowData && selectedRowData.status !== '보이기';
-        const hasPassword = selectedRowData && selectedRowData.password && selectedRowData.password.trim() !== '';
+        console.log('[Training] 워크아웃 로드 결과:', workoutResult);
+        
+        if (!workoutResult || !workoutResult.success) {
+            // 워크아웃 로드 실패 시 선택 상태 해제 및 업로드 애니메이션 제거
+            if (selectedRow) {
+                selectedRow.classList.remove('selected', 'uploading');
+                const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                if (durationCell) {
+                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                    if (originalDuration) {
+                        durationCell.innerHTML = originalDuration;
+                    }
+                }
+            }
+            return;
+        }
+        
+        const workout = workoutResult.item;
+        if (!workout) {
+            // 워크아웃 데이터가 없으면 선택 상태 해제 및 업로드 애니메이션 제거
+            if (selectedRow) {
+                selectedRow.classList.remove('selected', 'uploading');
+                const durationCell = selectedRow.querySelector('.workout-duration-cell');
+                if (durationCell) {
+                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+                    if (originalDuration) {
+                        durationCell.innerHTML = originalDuration;
+                    }
+                }
+            }
+            return;
+        }
+        
+        // 비공개 워크아웃 비밀번호 확인 (grade=1 관리자 제외)
+        const workoutStatus = String(workout.status || '').trim();
+        const isPrivate = workoutStatus !== '보이기';
+        const publishDatePassword = workout.publish_date ? String(workout.publish_date).trim() : '';
+        const hasPassword = publishDatePassword !== '';
         
         // grade 확인
         let grade = '2';
@@ -6552,7 +6584,7 @@ async function selectWorkoutForTraining(workoutId) {
         
         // 비공개 워크아웃이고 비밀번호가 있으며 관리자가 아닌 경우 비밀번호 인증
         if (isPrivate && hasPassword && !isAdmin) {
-            const passwordCorrect = await showWorkoutPasswordModal(workoutId, selectedRowData.password);
+            const passwordCorrect = await showWorkoutPasswordModal(workoutId, publishDatePassword);
             if (!passwordCorrect) {
                 // 비밀번호 인증 실패 시 선택 상태 해제 및 업로드 애니메이션 제거
                 if (selectedRow) {
@@ -6569,85 +6601,10 @@ async function selectWorkoutForTraining(workoutId) {
             }
         }
         
-        // 워크아웃 상세 정보 로드
-        const workoutResult = await apiGetWorkout(workoutId);
-        
-        console.log('[Training] 워크아웃 로드 결과:', workoutResult);
-        
-        if (!workoutResult) {
-            console.error('[Training] workoutResult가 null입니다.');
-            
-            // 선택 상태 해제 및 업로드 애니메이션 제거
-            if (selectedRow) {
-                selectedRow.classList.remove('selected', 'uploading');
-                
-                // 시간 컬럼 복원
-                const durationCell = selectedRow.querySelector('.workout-duration-cell');
-                if (durationCell) {
-                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
-                    if (originalDuration) {
-                        durationCell.innerHTML = originalDuration;
-                    }
-                }
-            }
-            
-            // 버튼 상태 복원
-            selectButtons.forEach(btn => {
-                const btnText = btn.querySelector('.btn-text');
-                const btnLoading = btn.querySelector('.btn-loading');
-                if (btnText && btnLoading) {
-                    btnText.style.display = 'inline';
-                    btnLoading.style.display = 'none';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                }
-            });
-            if (typeof showToast === 'function') {
-                showToast('워크아웃 정보를 불러올 수 없습니다. (응답 없음)', 'error');
-            }
-            return;
-        }
-        
-        if (!workoutResult.success) {
-            console.error('[Training] 워크아웃 로드 실패:', workoutResult.error);
-            
-            // 선택 상태 해제 및 업로드 애니메이션 제거
-            if (selectedRow) {
-                selectedRow.classList.remove('selected', 'uploading');
-                
-                // 시간 컬럼 복원
-                const durationCell = selectedRow.querySelector('.workout-duration-cell');
-                if (durationCell) {
-                    const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
-                    if (originalDuration) {
-                        durationCell.innerHTML = originalDuration;
-                    }
-                }
-            }
-            
-            // 버튼 상태 복원
-            selectButtons.forEach(btn => {
-                const btnText = btn.querySelector('.btn-text');
-                const btnLoading = btn.querySelector('.btn-loading');
-                if (btnText && btnLoading) {
-                    btnText.style.display = 'inline';
-                    btnLoading.style.display = 'none';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                }
-            });
-            if (typeof showToast === 'function') {
-                showToast(`워크아웃 정보를 불러올 수 없습니다: ${workoutResult.error || '알 수 없는 오류'}`, 'error');
-            }
-            return;
-        }
-        
         // Code.gs의 getWorkout은 'item' 필드로 반환함
-        const workout = workoutResult.workout || workoutResult.item;
+        const loadedWorkout = workoutResult.workout || workoutResult.item;
         
-        if (!workout) {
+        if (!loadedWorkout) {
             console.error('[Training] workout 데이터가 없습니다. workoutResult:', workoutResult);
             
             // 선택 상태 해제 및 업로드 애니메이션 제거
@@ -6683,20 +6640,21 @@ async function selectWorkoutForTraining(workoutId) {
         }
         
         console.log('[Training] 선택된 워크아웃:', {
-            id: workout.id,
-            title: workout.title,
-            segmentsCount: workout.segments ? workout.segments.length : 0
+            id: loadedWorkout.id,
+            title: loadedWorkout.title,
+            segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0
         });
         
         // 선택된 워크아웃 저장
-        window.indoorTrainingState.currentWorkout = workout;
+        window.indoorTrainingState.currentWorkout = loadedWorkout;
+        window.currentWorkout = loadedWorkout;
         
         // Firebase에 workoutPlan 및 workoutId 저장 (개인 대시보드 세그먼트 그래프 표시용)
-        if (workout.segments && workout.segments.length > 0 && typeof db !== 'undefined') {
+        if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
             const sessionId = getSessionId();
             if (sessionId) {
                 // workoutPlan 저장 (세그먼트 배열)
-                db.ref(`sessions/${sessionId}/workoutPlan`).set(workout.segments)
+                db.ref(`sessions/${sessionId}/workoutPlan`).set(loadedWorkout.segments)
                     .then(() => {
                         console.log('[Indoor Training] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
                     })
@@ -6705,10 +6663,10 @@ async function selectWorkoutForTraining(workoutId) {
                     });
                 
                 // workoutId 저장 (개인훈련 대시보드 훈련 종료 시 사용)
-                if (workout.id) {
-                    db.ref(`sessions/${sessionId}/workoutId`).set(workout.id)
+                if (loadedWorkout.id) {
+                    db.ref(`sessions/${sessionId}/workoutId`).set(loadedWorkout.id)
                         .then(() => {
-                            console.log('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 완료:', workout.id, sessionId);
+                            console.log('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 완료:', loadedWorkout.id, sessionId);
                         })
                         .catch(error => {
                             console.error('[Indoor Training] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
@@ -6725,7 +6683,7 @@ async function selectWorkoutForTraining(workoutId) {
         if (window._trainingReadyWorkoutSelectionCallback && typeof window._trainingReadyWorkoutSelectionCallback === 'function') {
             try {
                 // workout 객체를 직접 전달
-                await window._trainingReadyWorkoutSelectionCallback(workout);
+                await window._trainingReadyWorkoutSelectionCallback(loadedWorkout);
                 // 콜백 실행 후 정리
                 delete window._trainingReadyWorkoutSelectionCallback;
                 
@@ -6776,10 +6734,10 @@ async function selectWorkoutForTraining(workoutId) {
         }
         
         // 전광판 우측에 세그먼트 그래프 표시 (Indoor Training 화면인 경우)
-        displayWorkoutSegmentGraph(workout, -1); // 워크아웃 선택 시에는 현재 세그먼트 없음
+        displayWorkoutSegmentGraph(loadedWorkout, -1); // 워크아웃 선택 시에는 현재 세그먼트 없음
         
         if (typeof showToast === 'function') {
-            showToast(`"${workout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
+            showToast(`"${loadedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
         }
         
     } catch (error) {
