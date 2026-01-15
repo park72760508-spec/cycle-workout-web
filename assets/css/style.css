@@ -2287,6 +2287,20 @@ button[aria-disabled="true"] {
   color: #666 !important;
 }
 
+/* 훈련 준비 화면 세그먼트 그래프 컨테이너 - 고정 크기 */
+#segmentPreview {
+  min-height: 200px !important;
+  height: 200px !important;
+  max-height: 200px !important;
+  overflow: hidden;
+}
+
+#segmentPreview canvas#segmentPreviewGraph {
+  width: 100% !important;
+  height: 200px !important;
+  max-height: 200px !important;
+}
+
 /* 세그먼트 그래프 컨테이너 */
 .segment-graph-container {
   width: 100%;
