@@ -274,17 +274,35 @@ async function selectTrainingRoom(roomId) {
       existingCheck.remove();
     }
     
-    // 기존 슬라이드 스위치 컨테이너 제거
+    // 기존 슬라이드 스위치 컨테이너 제거 (이벤트 리스너도 정리)
     const existingSwitchContainer = card.querySelector('.device-connection-switch-container');
     if (existingSwitchContainer) {
+      if (existingSwitchContainer._switchContainerClickHandler) {
+        existingSwitchContainer.removeEventListener('click', existingSwitchContainer._switchContainerClickHandler);
+        existingSwitchContainer._switchContainerClickHandler = null;
+      }
+      if (existingSwitchContainer._switchContainerTouchHandler) {
+        existingSwitchContainer.removeEventListener('touchstart', existingSwitchContainer._switchContainerTouchHandler);
+        existingSwitchContainer._switchContainerTouchHandler = null;
+      }
       existingSwitchContainer.remove();
     }
     
-    // 기존 버튼 제거
+    // 기존 버튼 제거 (이벤트 리스너도 정리)
     const existingButtons = card.querySelector('.training-room-action-buttons');
     if (existingButtons) {
+      if (existingButtons._buttonClickHandler) {
+        existingButtons.removeEventListener('click', existingButtons._buttonClickHandler);
+        existingButtons._buttonClickHandler = null;
+      }
+      if (existingButtons._buttonTouchHandler) {
+        existingButtons.removeEventListener('touchstart', existingButtons._buttonTouchHandler);
+        existingButtons._buttonTouchHandler = null;
+      }
       existingButtons.remove();
     }
+    
+    // contentDiv의 이벤트 리스너 정리는 더 이상 필요 없음 (리스너를 추가하지 않으므로)
   });
   
   // 선택된 카드에 체크마크 및 버튼 추가
@@ -312,19 +330,37 @@ async function selectTrainingRoom(roomId) {
       const switchContainer = document.createElement('div');
       switchContainer.className = 'device-connection-switch-container';
       switchContainer.style.cssText = 'margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 0; width: 100%;';
-      // 컨테이너 전체 클릭 시 이벤트 전파 차단 (슬라이드 스위치 자체 클릭은 허용)
-      switchContainer.addEventListener('click', (e) => {
+      // 컨테이너 전체 클릭 시 이벤트 전파 차단 (중복 리스너 방지)
+      // 슬라이드 스위치 요소 자체를 클릭한 경우에만 슬라이드가 동작하도록 함
+      if (switchContainer._switchContainerClickHandler) {
+        switchContainer.removeEventListener('click', switchContainer._switchContainerClickHandler);
+        switchContainer.removeEventListener('touchstart', switchContainer._switchContainerTouchHandler);
+      }
+      
+      const switchContainerClickHandler = (e) => {
         // 슬라이드 스위치 요소 자체를 클릭한 경우에만 이벤트 전파 차단 (슬라이드 동작 허용)
         const switchElement = e.target.closest('.device-connection-switch');
         if (switchElement) {
           // 슬라이드 스위치를 클릭한 경우 - 이벤트 전파 차단하여 부모 카드의 selectTrainingRoom 방지
           // 하지만 슬라이드 스위치 자체의 이벤트 핸들러는 동작하도록 함
           e.stopPropagation();
-        } else {
-          // 슬라이드 스위치가 아닌 영역(여백, label 등)을 클릭한 경우 이벤트 전파 차단
+        }
+        // 슬라이드 스위치가 아닌 영역(label 등)을 클릭한 경우 이벤트 전파 허용하여 카드 선택 가능
+      };
+      switchContainer.addEventListener('click', switchContainerClickHandler);
+      switchContainer._switchContainerClickHandler = switchContainerClickHandler;
+      
+      // 모바일 터치 이벤트도 처리
+      const switchContainerTouchHandler = (e) => {
+        // 슬라이드 스위치 요소 자체를 터치한 경우에만 이벤트 전파 차단
+        const switchElement = e.target.closest('.device-connection-switch');
+        if (switchElement) {
           e.stopPropagation();
         }
-      });
+        // 슬라이드 스위치가 아닌 영역(label 등)을 터치한 경우 이벤트 전파 허용하여 카드 선택 가능
+      };
+      switchContainer.addEventListener('touchstart', switchContainerTouchHandler, { passive: true });
+      switchContainer._switchContainerTouchHandler = switchContainerTouchHandler;
       switchContainer.innerHTML = `
         <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
         <div class="device-connection-switch" id="deviceConnectionSwitchScreen" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
@@ -349,10 +385,25 @@ async function selectTrainingRoom(roomId) {
       
       const buttonsDiv = document.createElement('div');
       buttonsDiv.className = 'training-room-action-buttons';
-      // 버튼 영역 클릭 시 이벤트 전파 차단
-      buttonsDiv.addEventListener('click', (e) => {
+      // 버튼 영역 클릭 시 이벤트 전파 차단 (중복 리스너 방지)
+      if (buttonsDiv._buttonClickHandler) {
+        buttonsDiv.removeEventListener('click', buttonsDiv._buttonClickHandler);
+        buttonsDiv.removeEventListener('touchstart', buttonsDiv._buttonTouchHandler);
+      }
+      
+      const buttonClickHandler = (e) => {
         e.stopPropagation();
-      });
+      };
+      buttonsDiv.addEventListener('click', buttonClickHandler);
+      buttonsDiv._buttonClickHandler = buttonClickHandler;
+      
+      // 모바일 터치 이벤트도 처리
+      const buttonTouchHandler = (e) => {
+        e.stopPropagation();
+      };
+      buttonsDiv.addEventListener('touchstart', buttonTouchHandler, { passive: true });
+      buttonsDiv._buttonTouchHandler = buttonTouchHandler;
+      
       buttonsDiv.innerHTML = `
         <button class="btn btn-primary btn-default-style btn-with-icon training-room-btn-player ${!canAccessPlayer ? 'disabled' : ''}" 
                 data-room-id="${room.id}" 
@@ -371,15 +422,9 @@ async function selectTrainingRoom(roomId) {
       `;
       contentDiv.appendChild(buttonsDiv);
       
-      // contentDiv 클릭 시 이벤트 전파 차단
-      // 슬라이드 스위치와 버튼 영역은 각각의 이벤트 핸들러에서 처리
-      contentDiv.addEventListener('click', (e) => {
-        // 슬라이드 스위치 컨테이너나 버튼 영역이 아닌 경우에만 이벤트 전파 차단
-        if (!e.target.closest('.device-connection-switch-container') && 
-            !e.target.closest('.training-room-action-buttons')) {
-          e.stopPropagation();
-        }
-      });
+      // contentDiv에는 이벤트 리스너를 추가하지 않음
+      // 카드 자체의 onclick이 정상 작동하도록 함
+      // 슬라이드 스위치와 버튼 영역의 이벤트 리스너가 각각 stopPropagation을 호출하여 충분함
       
       // 버튼 스타일 적용
       const btnPlayer = buttonsDiv.querySelector('.training-room-btn-player');
