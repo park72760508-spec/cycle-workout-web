@@ -334,7 +334,7 @@ async function selectTrainingRoom(roomId) {
           </div>
           <!-- ANT+ 옵션 (오른쪽) -->
           <div class="switch-option switch-option-right" data-mode="ant" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
-            <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
+            <img src="assets/img/antlogo.png" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
           </div>
           <!-- 슬라이더 (움직이는 부분) -->
           <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 50%; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); z-index: 3;"></div>
