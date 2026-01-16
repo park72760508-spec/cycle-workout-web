@@ -285,6 +285,36 @@ async function selectTrainingRoom(roomId) {
       const canAccessPlayer = userGradeNum === 1 || userGradeNum === 2 || userGradeNum === 3;
       const canAccessCoach = userGradeNum === 1 || userGradeNum === 3;
       
+      // 디바이스 연결 방식 스위치 추가 (Player/Coach 버튼 위에)
+      const switchContainer = document.createElement('div');
+      switchContainer.className = 'device-connection-switch-container';
+      switchContainer.style.cssText = 'margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;';
+      switchContainer.innerHTML = `
+        <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
+        <div class="device-connection-switch" id="deviceConnectionSwitchScreen" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
+          <!-- ANT+ 옵션 (왼쪽) -->
+          <div class="switch-option switch-option-left" data-mode="ant" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 25px 0 0 25px; transition: all 0.3s ease; z-index: 2;">
+            <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
+          </div>
+          <!-- Bluetooth 옵션 (오른쪽) -->
+          <div class="switch-option switch-option-right" data-mode="bluetooth" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
+            <img src="assets/img/wifi.png" alt="Bluetooth" style="width: 32px; height: 32px; object-fit: contain;" />
+          </div>
+          <!-- 슬라이더 (움직이는 부분) -->
+          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #2e74e8 0%, #2562c8 100%); border-radius: 25px; transition: left 0.3s ease; box-shadow: 0 2px 8px rgba(46, 116, 232, 0.3); z-index: 1;"></div>
+        </div>
+        <div class="switch-label-container" style="display: flex; justify-content: space-between; width: 200px; font-size: 12px; color: #999;">
+          <span id="switchLabelAntScreen" style="font-weight: 600; color: #2e74e8;">ANT+</span>
+          <span id="switchLabelBluetoothScreen" style="font-weight: 400; color: #999;">Bluetooth</span>
+        </div>
+      `;
+      contentDiv.appendChild(switchContainer);
+      
+      // 스위치 초기화 (일반 화면용)
+      setTimeout(() => {
+        initializeDeviceConnectionSwitchForScreen();
+      }, 100);
+      
       const buttonsDiv = document.createElement('div');
       buttonsDiv.className = 'training-room-action-buttons';
       buttonsDiv.innerHTML = `
@@ -842,10 +872,33 @@ async function showTrainingRoomModal() {
   // 선택된 Room이 있으면 스위치 초기화 (약간의 지연을 두어 DOM이 완전히 렌더링된 후 실행)
   setTimeout(() => {
     const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+    const switchElement = document.getElementById('deviceConnectionSwitch');
+    
+    console.log('[Training Room Modal] 모달 열림 후 스위치 확인:', {
+      selectedSection: !!selectedSection,
+      selectedSectionDisplay: selectedSection ? selectedSection.style.display : 'null',
+      switchElement: !!switchElement
+    });
+    
     if (selectedSection && selectedSection.style.display !== 'none') {
+      console.log('[Training Room Modal] 선택된 Room 섹션이 표시되어 있음, 스위치 초기화');
       initializeDeviceConnectionSwitch();
+    } else if (currentSelectedTrainingRoom) {
+      // currentSelectedTrainingRoom이 있으면 섹션을 표시하고 스위치 초기화
+      console.log('[Training Room Modal] currentSelectedTrainingRoom이 있음, 섹션 표시 및 스위치 초기화');
+      if (selectedSection) {
+        const selectedTitle = document.getElementById('selectedTrainingRoomModalTitle');
+        if (selectedTitle) {
+          selectedTitle.textContent = currentSelectedTrainingRoom.title || currentSelectedTrainingRoom.name || 'Training Room';
+        }
+        selectedSection.style.display = 'block';
+        
+        setTimeout(() => {
+          initializeDeviceConnectionSwitch();
+        }, 100);
+      }
     }
-  }, 200);
+  }, 300);
 }
 
 /**
@@ -1462,6 +1515,14 @@ async function selectTrainingRoomForModal(roomId) {
   const selectedTitle = document.getElementById('selectedTrainingRoomModalTitle');
   const btnPlayer = document.getElementById('btnPlayerModal');
   const btnCoach = document.getElementById('btnCoachModal');
+  
+  console.log('[Training Room Modal] DOM 요소 확인:', {
+    selectedSection: !!selectedSection,
+    selectedTitle: !!selectedTitle,
+    btnPlayer: !!btnPlayer,
+    btnCoach: !!btnCoach,
+    switchElement: !!document.getElementById('deviceConnectionSwitch')
+  });
 
   // [추가 방어] 선택된 Training Room 섹션 영역에 클릭 이벤트 차단 추가
   if (selectedSection) {
@@ -1504,15 +1565,25 @@ async function selectTrainingRoomForModal(roomId) {
     selectedSection.style.display = 'block';
     
     console.log('[Training Room Modal] 선택된 Room 섹션 표시:', room.title);
+    console.log('[Training Room Modal] selectedSection.style.display:', selectedSection.style.display);
     
     // 디바이스 연결 방식 스위치 초기화 (약간의 지연을 두어 DOM이 완전히 렌더링된 후 실행)
     setTimeout(() => {
       const switchElement = document.getElementById('deviceConnectionSwitch');
+      const switchContainer = document.querySelector('.device-connection-switch-container');
+      console.log('[Training Room Modal] 스위치 요소 확인:', {
+        switchElement: !!switchElement,
+        switchContainer: !!switchContainer,
+        selectedSectionDisplay: selectedSection ? selectedSection.style.display : 'null',
+        selectedSectionVisible: selectedSection ? window.getComputedStyle(selectedSection).display : 'null'
+      });
+      
       if (switchElement) {
         console.log('[Training Room Modal] 스위치 요소 발견, 초기화 시작');
         initializeDeviceConnectionSwitch();
       } else {
         console.warn('[Training Room Modal] 스위치 요소를 찾을 수 없습니다. DOM이 아직 준비되지 않았을 수 있습니다.');
+        console.warn('[Training Room Modal] selectedSection HTML:', selectedSection ? selectedSection.innerHTML.substring(0, 200) : 'null');
         // 재시도
         setTimeout(() => {
           const retrySwitch = document.getElementById('deviceConnectionSwitch');
@@ -1521,10 +1592,16 @@ async function selectTrainingRoomForModal(roomId) {
             initializeDeviceConnectionSwitch();
           } else {
             console.error('[Training Room Modal] 스위치 요소를 찾을 수 없습니다.');
+            console.error('[Training Room Modal] selectedSection 전체 HTML:', selectedSection ? selectedSection.innerHTML : 'null');
           }
         }, 300);
       }
     }, 100);
+  } else {
+    console.error('[Training Room Modal] selectedSection 또는 selectedTitle을 찾을 수 없습니다:', {
+      selectedSection: !!selectedSection,
+      selectedTitle: !!selectedTitle
+    });
   }
 
   // 비밀번호 확인 성공 후 버튼 활성화
@@ -1653,6 +1730,104 @@ function updateDeviceConnectionSwitch(mode) {
   const slider = document.getElementById('switchSlider');
   const labelAnt = document.getElementById('switchLabelAnt');
   const labelBluetooth = document.getElementById('switchLabelBluetooth');
+  
+  if (!switchElement || !slider) return;
+  
+  // 기존 클래스 제거
+  switchElement.classList.remove('active-ant', 'active-bluetooth');
+  
+  if (mode === 'bluetooth') {
+    switchElement.classList.add('active-bluetooth');
+    if (labelAnt) {
+      labelAnt.style.fontWeight = '400';
+      labelAnt.style.color = '#999';
+    }
+    if (labelBluetooth) {
+      labelBluetooth.style.fontWeight = '600';
+      labelBluetooth.style.color = '#22c55e';
+    }
+  } else {
+    // ANT+ 모드 (기본값)
+    switchElement.classList.add('active-ant');
+    if (labelAnt) {
+      labelAnt.style.fontWeight = '600';
+      labelAnt.style.color = '#f59e0b';
+    }
+    if (labelBluetooth) {
+      labelBluetooth.style.fontWeight = '400';
+      labelBluetooth.style.color = '#999';
+    }
+  }
+}
+
+/**
+ * 일반 화면용 디바이스 연결 방식 스위치 초기화
+ */
+function initializeDeviceConnectionSwitchForScreen() {
+  const switchElement = document.getElementById('deviceConnectionSwitchScreen');
+  const slider = document.getElementById('switchSliderScreen');
+  const labelAnt = document.getElementById('switchLabelAntScreen');
+  const labelBluetooth = document.getElementById('switchLabelBluetoothScreen');
+  
+  if (!switchElement || !slider) {
+    console.warn('[Device Connection Switch Screen] 스위치 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 기존 이벤트 리스너 제거 (중복 방지)
+  if (switchElement._clickHandler) {
+    switchElement.removeEventListener('click', switchElement._clickHandler);
+  }
+  if (switchElement._touchStartHandler) {
+    switchElement.removeEventListener('touchstart', switchElement._touchStartHandler);
+  }
+  if (switchElement._touchEndHandler) {
+    switchElement.removeEventListener('touchend', switchElement._touchEndHandler);
+  }
+  
+  // 저장된 모드 복원 (없으면 기본값 'ant')
+  const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
+  deviceConnectionMode = savedMode;
+  
+  // 스위치 상태 업데이트 (일반 화면용)
+  updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+  
+  // 클릭 이벤트 핸들러 (저장하여 나중에 제거 가능하도록)
+  const clickHandler = (e) => {
+    e.stopPropagation();
+    toggleDeviceConnectionMode();
+    updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+  };
+  switchElement.addEventListener('click', clickHandler);
+  switchElement._clickHandler = clickHandler;
+  
+  // 터치 이벤트 핸들러 (모바일)
+  const touchStartHandler = (e) => {
+    e.stopPropagation();
+  };
+  switchElement.addEventListener('touchstart', touchStartHandler);
+  switchElement._touchStartHandler = touchStartHandler;
+  
+  const touchEndHandler = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleDeviceConnectionMode();
+    updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+  };
+  switchElement.addEventListener('touchend', touchEndHandler);
+  switchElement._touchEndHandler = touchEndHandler;
+  
+  console.log('[Device Connection Switch Screen] 초기화 완료, 모드:', deviceConnectionMode);
+}
+
+/**
+ * 일반 화면용 디바이스 연결 방식 스위치 UI 업데이트
+ */
+function updateDeviceConnectionSwitchForScreen(mode) {
+  const switchElement = document.getElementById('deviceConnectionSwitchScreen');
+  const slider = document.getElementById('switchSliderScreen');
+  const labelAnt = document.getElementById('switchLabelAntScreen');
+  const labelBluetooth = document.getElementById('switchLabelBluetoothScreen');
   
   if (!switchElement || !slider) return;
   
