@@ -1675,10 +1675,11 @@ function initializeDeviceConnectionSwitch() {
     document.removeEventListener('touchend', switchElement._touchEndHandler);
   }
   
-  // 드래그 상태 추적 변수
+  // 드래그 상태 추적 변수 (클로저로 관리)
   let isDragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
+  let hasMoved = false;
   const DRAG_THRESHOLD = 5; // 픽셀 단위 드래그 임계값
   
   // 저장된 모드 복원 (없으면 기본값 'ant')
@@ -1691,7 +1692,9 @@ function initializeDeviceConnectionSwitch() {
   // 마우스 이벤트 핸들러
   const mouseDownHandler = (e) => {
     e.stopPropagation();
+    e.preventDefault();
     isDragging = false;
+    hasMoved = false;
     dragStartX = e.clientX;
     dragStartY = e.clientY;
   };
@@ -1704,37 +1707,44 @@ function initializeDeviceConnectionSwitch() {
     const deltaY = Math.abs(e.clientY - dragStartY);
     if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
       isDragging = true;
+      hasMoved = true;
     }
   };
   document.addEventListener('mousemove', mouseMoveHandler);
   switchElement._mouseMoveHandler = mouseMoveHandler;
   
   const mouseUpHandler = (e) => {
-    if (!isDragging) {
-      // 드래그가 아닌 경우에만 토글
+    e.stopPropagation();
+    // 드래그가 아니고 움직임이 없었을 때만 토글
+    if (!isDragging && !hasMoved) {
       toggleDeviceConnectionMode();
     }
+    // 상태 리셋
     isDragging = false;
+    hasMoved = false;
     dragStartX = 0;
     dragStartY = 0;
   };
   document.addEventListener('mouseup', mouseUpHandler);
   switchElement._mouseUpHandler = mouseUpHandler;
   
-  // 클릭 이벤트 핸들러 (드래그가 아닌 경우에만 동작)
+  // 클릭 이벤트 핸들러 - 드래그가 아닌 경우에만 동작 (중복 방지)
   const clickHandler = (e) => {
     e.stopPropagation();
-    if (!isDragging) {
-      toggleDeviceConnectionMode();
-    }
+    e.preventDefault();
+    // hasMoved가 false이고 isDragging이 false일 때만 토글
+    // mouseup에서 이미 처리했으므로 여기서는 추가 처리하지 않음
   };
   switchElement.addEventListener('click', clickHandler);
   switchElement._clickHandler = clickHandler;
   
-  // 터치 이벤트 핸들러 (모바일)
+  // 터치 이벤트 핸들러 (모바일) - 드래그 상태 추적 변수 재사용
+  let touchHasMoved = false;
+  
   const touchStartHandler = (e) => {
     e.stopPropagation();
     isDragging = false;
+    touchHasMoved = false;
     if (e.touches && e.touches.length > 0) {
       dragStartX = e.touches[0].clientX;
       dragStartY = e.touches[0].clientY;
@@ -1750,6 +1760,7 @@ function initializeDeviceConnectionSwitch() {
       const deltaY = Math.abs(e.touches[0].clientY - dragStartY);
       if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
         isDragging = true;
+        touchHasMoved = true;
       }
     }
   };
@@ -1759,11 +1770,13 @@ function initializeDeviceConnectionSwitch() {
   const touchEndHandler = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isDragging) {
-      // 드래그가 아닌 경우에만 토글
+    // 드래그가 아니고 움직임이 없었을 때만 토글
+    if (!isDragging && !touchHasMoved) {
       toggleDeviceConnectionMode();
     }
+    // 상태 리셋
     isDragging = false;
+    touchHasMoved = false;
     dragStartX = 0;
     dragStartY = 0;
   };
@@ -1891,10 +1904,11 @@ function initializeDeviceConnectionSwitchForScreen() {
     document.removeEventListener('touchend', switchElement._touchEndHandler);
   }
   
-  // 드래그 상태 추적 변수
+  // 드래그 상태 추적 변수 (클로저로 관리)
   let isDragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
+  let hasMoved = false;
   const DRAG_THRESHOLD = 5; // 픽셀 단위 드래그 임계값
   
   // 저장된 모드 복원 (없으면 기본값 'ant')
@@ -1907,7 +1921,9 @@ function initializeDeviceConnectionSwitchForScreen() {
   // 마우스 이벤트 핸들러
   const mouseDownHandler = (e) => {
     e.stopPropagation();
+    e.preventDefault();
     isDragging = false;
+    hasMoved = false;
     dragStartX = e.clientX;
     dragStartY = e.clientY;
   };
@@ -1920,39 +1936,45 @@ function initializeDeviceConnectionSwitchForScreen() {
     const deltaY = Math.abs(e.clientY - dragStartY);
     if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
       isDragging = true;
+      hasMoved = true;
     }
   };
   document.addEventListener('mousemove', mouseMoveHandler);
   switchElement._mouseMoveHandler = mouseMoveHandler;
   
   const mouseUpHandler = (e) => {
-    if (!isDragging) {
-      // 드래그가 아닌 경우에만 토글
+    e.stopPropagation();
+    // 드래그가 아니고 움직임이 없었을 때만 토글
+    if (!isDragging && !hasMoved) {
       toggleDeviceConnectionMode();
       updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
     }
+    // 상태 리셋
     isDragging = false;
+    hasMoved = false;
     dragStartX = 0;
     dragStartY = 0;
   };
   document.addEventListener('mouseup', mouseUpHandler);
   switchElement._mouseUpHandler = mouseUpHandler;
   
-  // 클릭 이벤트 핸들러 (드래그가 아닌 경우에만 동작)
+  // 클릭 이벤트 핸들러 - 드래그가 아닌 경우에만 동작 (중복 방지)
   const clickHandler = (e) => {
     e.stopPropagation();
-    if (!isDragging) {
-      toggleDeviceConnectionMode();
-      updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
-    }
+    e.preventDefault();
+    // hasMoved가 false이고 isDragging이 false일 때만 토글
+    // mouseup에서 이미 처리했으므로 여기서는 추가 처리하지 않음
   };
   switchElement.addEventListener('click', clickHandler);
   switchElement._clickHandler = clickHandler;
   
-  // 터치 이벤트 핸들러 (모바일)
+  // 터치 이벤트 핸들러 (모바일) - 드래그 상태 추적 변수 재사용
+  let touchHasMoved = false;
+  
   const touchStartHandler = (e) => {
     e.stopPropagation();
     isDragging = false;
+    touchHasMoved = false;
     if (e.touches && e.touches.length > 0) {
       dragStartX = e.touches[0].clientX;
       dragStartY = e.touches[0].clientY;
@@ -1968,6 +1990,7 @@ function initializeDeviceConnectionSwitchForScreen() {
       const deltaY = Math.abs(e.touches[0].clientY - dragStartY);
       if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
         isDragging = true;
+        touchHasMoved = true;
       }
     }
   };
@@ -1977,12 +2000,14 @@ function initializeDeviceConnectionSwitchForScreen() {
   const touchEndHandler = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isDragging) {
-      // 드래그가 아닌 경우에만 토글
+    // 드래그가 아니고 움직임이 없었을 때만 토글
+    if (!isDragging && !touchHasMoved) {
       toggleDeviceConnectionMode();
       updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
     }
+    // 상태 리셋
     isDragging = false;
+    touchHasMoved = false;
     dragStartX = 0;
     dragStartY = 0;
   };
