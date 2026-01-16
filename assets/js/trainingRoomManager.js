@@ -208,6 +208,19 @@ async function selectTrainingRoom(roomId) {
     console.error('[Training Room] 현재 목록:', trainingRoomList.map(r => ({ id: r.id, type: typeof r.id })));
     return;
   }
+  
+  // 이미 선택된 카드인지 확인
+  const targetCard = document.querySelector(`.training-room-card[data-room-id="${roomIdNum}"]`);
+  if (targetCard && targetCard.classList.contains('selected')) {
+    // 이미 선택된 카드이고 슬라이드 스위치와 버튼이 이미 있으면 중복 실행 방지
+    const contentDiv = targetCard.querySelector('.training-room-content');
+    if (contentDiv && 
+        contentDiv.querySelector('.device-connection-switch-container') && 
+        contentDiv.querySelector('.training-room-action-buttons')) {
+      console.log('[Training Room] 이미 선택된 Room입니다:', roomIdNum);
+      return;
+    }
+  }
 
   // 비밀번호 확인 (grade=1 관리자는 제외)
   const userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser?.grade || '2');
@@ -257,6 +270,12 @@ async function selectTrainingRoom(roomId) {
       existingCheck.remove();
     }
     
+    // 기존 슬라이드 스위치 컨테이너 제거
+    const existingSwitchContainer = card.querySelector('.device-connection-switch-container');
+    if (existingSwitchContainer) {
+      existingSwitchContainer.remove();
+    }
+    
     // 기존 버튼 제거
     const existingButtons = card.querySelector('.training-room-action-buttons');
     if (existingButtons) {
@@ -279,7 +298,7 @@ async function selectTrainingRoom(roomId) {
     
     // 버튼 추가
     const contentDiv = selectedCard.querySelector('.training-room-content');
-    if (contentDiv && !contentDiv.querySelector('.training-room-action-buttons')) {
+    if (contentDiv && !contentDiv.querySelector('.training-room-action-buttons') && !contentDiv.querySelector('.device-connection-switch-container')) {
       // 사용자 등급 확인
       const userGradeNum = typeof userGrade === 'string' ? parseInt(userGrade, 10) : userGrade;
       const canAccessPlayer = userGradeNum === 1 || userGradeNum === 2 || userGradeNum === 3;
@@ -289,6 +308,10 @@ async function selectTrainingRoom(roomId) {
       const switchContainer = document.createElement('div');
       switchContainer.className = 'device-connection-switch-container';
       switchContainer.style.cssText = 'margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 0; width: 100%;';
+      // 슬라이드 스위치 클릭 시 이벤트 전파 차단
+      switchContainer.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
       switchContainer.innerHTML = `
         <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
         <div class="device-connection-switch" id="deviceConnectionSwitchScreen" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
@@ -313,6 +336,10 @@ async function selectTrainingRoom(roomId) {
       
       const buttonsDiv = document.createElement('div');
       buttonsDiv.className = 'training-room-action-buttons';
+      // 버튼 영역 클릭 시 이벤트 전파 차단
+      buttonsDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
       buttonsDiv.innerHTML = `
         <button class="btn btn-primary btn-default-style btn-with-icon training-room-btn-player ${!canAccessPlayer ? 'disabled' : ''}" 
                 data-room-id="${room.id}" 
@@ -330,6 +357,15 @@ async function selectTrainingRoom(roomId) {
         </button>
       `;
       contentDiv.appendChild(buttonsDiv);
+      
+      // contentDiv 클릭 시 이미 선택된 카드면 이벤트 전파 차단 (중복 선택 방지)
+      contentDiv.addEventListener('click', (e) => {
+        // 슬라이드 스위치나 버튼 영역이 아닌 경우에만 차단
+        if (!e.target.closest('.device-connection-switch-container') && 
+            !e.target.closest('.training-room-action-buttons')) {
+          e.stopPropagation();
+        }
+      });
       
       // 버튼 스타일 적용
       const btnPlayer = buttonsDiv.querySelector('.training-room-btn-player');
