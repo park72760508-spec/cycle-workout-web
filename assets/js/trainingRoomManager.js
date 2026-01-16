@@ -838,6 +838,14 @@ async function showTrainingRoomModal() {
 
   // Training Room 목록 로드
   await loadTrainingRoomsForModal();
+  
+  // 선택된 Room이 있으면 스위치 초기화 (약간의 지연을 두어 DOM이 완전히 렌더링된 후 실행)
+  setTimeout(() => {
+    const selectedSection = document.getElementById('selectedTrainingRoomModalSection');
+    if (selectedSection && selectedSection.style.display !== 'none') {
+      initializeDeviceConnectionSwitch();
+    }
+  }, 200);
 }
 
 /**
@@ -1472,6 +1480,14 @@ async function selectTrainingRoomForModal(roomId) {
         return; // 버튼 클릭은 정상 처리
       }
       
+      // 스위치 클릭도 허용
+      if (e.target.id === 'deviceConnectionSwitch' || 
+          e.target.closest('#deviceConnectionSwitch') ||
+          e.target.id === 'switchSlider' ||
+          e.target.closest('.device-connection-switch')) {
+        return; // 스위치 클릭은 정상 처리
+      }
+      
       // 버튼이 아닌 영역 클릭 차단
       console.log('[Training Room Modal] 선택된 섹션 여백 클릭 차단 (섹션 핸들러)');
       e.preventDefault();
@@ -1487,8 +1503,28 @@ async function selectTrainingRoomForModal(roomId) {
     selectedTitle.textContent = room.title;
     selectedSection.style.display = 'block';
     
-    // 디바이스 연결 방식 스위치 초기화
-    initializeDeviceConnectionSwitch();
+    console.log('[Training Room Modal] 선택된 Room 섹션 표시:', room.title);
+    
+    // 디바이스 연결 방식 스위치 초기화 (약간의 지연을 두어 DOM이 완전히 렌더링된 후 실행)
+    setTimeout(() => {
+      const switchElement = document.getElementById('deviceConnectionSwitch');
+      if (switchElement) {
+        console.log('[Training Room Modal] 스위치 요소 발견, 초기화 시작');
+        initializeDeviceConnectionSwitch();
+      } else {
+        console.warn('[Training Room Modal] 스위치 요소를 찾을 수 없습니다. DOM이 아직 준비되지 않았을 수 있습니다.');
+        // 재시도
+        setTimeout(() => {
+          const retrySwitch = document.getElementById('deviceConnectionSwitch');
+          if (retrySwitch) {
+            console.log('[Training Room Modal] 재시도: 스위치 초기화');
+            initializeDeviceConnectionSwitch();
+          } else {
+            console.error('[Training Room Modal] 스위치 요소를 찾을 수 없습니다.');
+          }
+        }, 300);
+      }
+    }, 100);
   }
 
   // 비밀번호 확인 성공 후 버튼 활성화
@@ -1543,6 +1579,17 @@ function initializeDeviceConnectionSwitch() {
     return;
   }
   
+  // 기존 이벤트 리스너 제거 (중복 방지)
+  if (switchElement._clickHandler) {
+    switchElement.removeEventListener('click', switchElement._clickHandler);
+  }
+  if (switchElement._touchStartHandler) {
+    switchElement.removeEventListener('touchstart', switchElement._touchStartHandler);
+  }
+  if (switchElement._touchEndHandler) {
+    switchElement.removeEventListener('touchend', switchElement._touchEndHandler);
+  }
+  
   // 저장된 모드 복원 (없으면 기본값 'ant')
   const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
   deviceConnectionMode = savedMode;
@@ -1550,22 +1597,28 @@ function initializeDeviceConnectionSwitch() {
   // 스위치 상태 업데이트
   updateDeviceConnectionSwitch(deviceConnectionMode);
   
-  // 클릭 이벤트 핸들러
-  switchElement.addEventListener('click', (e) => {
+  // 클릭 이벤트 핸들러 (저장하여 나중에 제거 가능하도록)
+  const clickHandler = (e) => {
     e.stopPropagation();
     toggleDeviceConnectionMode();
-  });
+  };
+  switchElement.addEventListener('click', clickHandler);
+  switchElement._clickHandler = clickHandler;
   
   // 터치 이벤트 핸들러 (모바일)
-  switchElement.addEventListener('touchstart', (e) => {
+  const touchStartHandler = (e) => {
     e.stopPropagation();
-  });
+  };
+  switchElement.addEventListener('touchstart', touchStartHandler);
+  switchElement._touchStartHandler = touchStartHandler;
   
-  switchElement.addEventListener('touchend', (e) => {
+  const touchEndHandler = (e) => {
     e.preventDefault();
     e.stopPropagation();
     toggleDeviceConnectionMode();
-  });
+  };
+  switchElement.addEventListener('touchend', touchEndHandler);
+  switchElement._touchEndHandler = touchEndHandler;
   
   console.log('[Device Connection Switch] 초기화 완료, 모드:', deviceConnectionMode);
 }
