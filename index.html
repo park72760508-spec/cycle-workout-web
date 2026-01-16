@@ -2565,6 +2565,8 @@
 <script src="assets/js/scheduleManager.js"></script>
 <!-- Training Room 모듈 -->
 <script src="assets/js/trainingRoomManager.js"></script>
+<!-- Bluetooth Training 모듈 -->
+<script src="assets/js/bluetoothTrainingManager.js"></script>
 <script src="assets/js/app.js"></script>  
 
   
@@ -3116,6 +3118,46 @@
               새로고침
             </button>
             <button class="btn btn-danger btn-default-style btn-with-icon" id="btnClearAllTracks" onclick="clearAllTracksData()" title="퇴실" style="display: none;">
+              <img src="assets/img/delete.png" alt="퇴실" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              퇴실
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Bluetooth Player List 화면 ========== -->
+  <div id="bluetoothPlayerListScreen" class="screen">
+    <!-- 배경 이미지 -->
+    <div class="basecamp-background-image"></div>
+    
+    <div class="connection-main-container">
+      <div class="connection-form-container">
+        <div class="connection-form-card basecamp-card">
+          <div class="connection-header basecamp-header">
+            <!-- 제목 이미지 배경으로 처리 -->
+          </div>
+
+          <div class="connection-device-section basecamp-device-section">
+            <h3 class="mb-15 basecamp-status-bar">Bluetooth Join Session</h3>
+            <!-- 트랙 목록 (유동적) -->
+            <div id="bluetoothPlayerListContent" class="player-list-content">
+              <!-- 트랙이 여기에 동적으로 추가됩니다 (기본 10개, 필요시 5개씩 확장) -->
+            </div>
+          </div>
+
+          <!-- 하단 버튼들 -->
+          <div class="connection-exit-container">
+            <button class="btn btn-exit-inline" id="btnBackFromBluetoothPlayerList" onclick="showScreen('trainingRoomScreen')" aria-label="뒤로 가기">
+              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              <span>뒤로</span>
+            </button>
+            <button class="btn btn-success btn-default-style btn-with-icon" id="btnRefreshBluetoothPlayerList" onclick="if(typeof renderBluetoothPlayerList === 'function') renderBluetoothPlayerList()" title="리스트 새로고침">
+              <img src="assets/img/reload.png" alt="새로고침" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              새로고침
+            </button>
+            <button class="btn btn-danger btn-default-style btn-with-icon" id="btnClearAllBluetoothTracks" onclick="if(typeof clearAllBluetoothTracksData === 'function') clearAllBluetoothTracksData()" title="퇴실" style="display: none;">
               <img src="assets/img/delete.png" alt="퇴실" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
               퇴실
             </button>

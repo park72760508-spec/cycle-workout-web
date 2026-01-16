@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bluetooth 개인 훈련 대시보드</title>
+    
+    <!-- Favicon 설정 -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
+    <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="assets/js/firebaseConfig.js"></script>
+    
+    <!-- Google Apps Script URL 설정 -->
+    <script>
+        window.CONFIG = {
+            GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec"
+        };
+        window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
+    </script>
+
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Pretendard', sans-serif;
+            margin: 0;
+            overflow: hidden; /* 스크롤 방지 */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            height: 100dvh; /* 모바일 브라우저 주소창 고려 (Dynamic Viewport Height) */
+            min-height: -webkit-fill-available; /* iOS Safari 대응 */
+            /* Pull-to-refresh 방지 (강화) */
+            overscroll-behavior-y: none !important; /* contain 대신 none 사용 (더 강력) */
+            overscroll-behavior: none !important;
+            -webkit-overflow-scrolling: touch;
+            touch-action: manipulation !important; /* pan-y 대신 manipulation 사용 (더 강력한 차단) */
+            /* iOS Safari/Bluefy 추가 대응 */
+            -webkit-user-select: none;
+            user-select: none;
+            /* 스크롤 방지 */
+            overflow-y: hidden !important;
+            overflow-x: hidden !important;
+            position: fixed !important;
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        /* 상단 헤더 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #1e1e1e;
+            border-bottom: 1px solid #333;
+            position: relative; /* 세그먼트 정보 절대 위치 기준 */
+        }
+        
+        /* 세그먼트 정보 중앙 정렬 */
+        #segment-info {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+        .bike-badge {
+            background-color: #00d4aa;
+            color: #000;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-weight: bold;
+            font-size: 1.1em;
+            display: inline-block; /* 글자 폭에 맞춤 */
+            width: auto; /* 내용물에 맞게 자동 조정 */
+        }
+        .timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            color: #fff;
+        }
+
+        /* 메인 콘텐츠 (게이지 영역) */
+        .main-content {
+            flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 (가용 공간을 균등하게 분배) */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            min-height: 0; /* flex 아이템이 축소 가능하도록 설정 */
+            overflow: hidden; /* 넘치는 내용 숨김 */
+        }
+
+        /* 속도계 컨테이너 */
+        .gauge-container {
+            width: 90vw;
+            max-width: 500px;
+            aspect-ratio: 1/1;
+            position: relative;
+        }
+
+        /* 통계 정보 (하단) */
+        .stats-footer {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            background-color: #1e1e1e;
+            padding: 15px 0;
+            border-top: 1px solid #333;
+        }
+        .stat-box {
+            text-align: center;
+            border-right: 1px solid #333;
+        }
+        .stat-box:last-child { border-right: none; }
+        .stat-label { font-size: 0.8em; color: #888; margin-bottom: 5px; }
+        .stat-value { font-size: 1.8em; font-weight: bold; }
+        .unit { font-size: 0.5em; color: #aaa; }
+
+        /* 색상 클래스 */
+        .c-power { color: #fff; }
+        .c-cadence { color: #ff4444; }
+        .c-hr { color: #00d4aa; }
+        .c-target { color: #ff8c00; }
+
+        /* 세그먼트 그래프 컨테이너 */
+        .segment-graph-section {
+            padding: 0 20px; /* 상하 패딩 제거, 좌우 패딩만 유지 */
+            background-color: #1a1a1a;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: center;
+            align-items: center; /* 그래프를 세로 중앙에 배치 */
+            flex: 0.4 0.4 0; /* flex-grow: 0.4, flex-shrink: 0.4 (20% 축소: 0.5 * 0.8 = 0.4) */
+            min-height: 80px; /* 최소 높이 보장 (20% 축소: 100px * 0.8 = 80px) */
+            position: relative;
+            overflow: hidden; /* 넘치는 내용 숨김 */
+        }
+        
+        /* 모바일 환경 최적화 */
+        @media (max-height: 800px) {
+            .segment-graph-section {
+                min-height: 72px; /* 작은 화면에서도 적절한 높이 (20% 축소: 90px * 0.8 = 72px) */
+            }
+        }
+        
+        @media (max-height: 600px) {
+            .segment-graph-section {
+                min-height: 60px; /* 매우 작은 화면 대응 (20% 축소: 75px * 0.8 = 60px) */
+            }
+        }
+        
+        .segment-graph-container {
+            width: 98%; /* 그래프 블럭의 98% 너비 */
+            max-width: 600px;
+            height: 95% !important; /* 그래프 블럭의 95% 높이 */
+            position: relative;
+            display: flex;
+            align-items: center; /* Canvas를 컨테이너 중앙에 배치 */
+            justify-content: center;
+        }
+        .segment-graph-container canvas {
+            width: 100% !important;
+            height: 100% !important; /* 컨테이너 높이에 맞춤 */
+            display: block;
+            /* object-fit 제거: Canvas의 실제 픽셀 크기를 조정하므로 불필요 */
+        }
+
+        /* 5초 카운트다운 오버레이 */
+        .countdown-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            transition: opacity 0.3s ease;
+        }
+        .countdown-overlay.hidden {
+            display: none;
+        }
+        .countdown-number {
+            font-size: 200px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 30px rgba(255, 255, 255, 0.5), 0 0 60px rgba(255, 255, 255, 0.3);
+            animation: countdownPulse 0.8s ease-out;
+            user-select: none;
+        }
+        @keyframes countdownPulse {
+            0% {
+                transform: scale(0.5);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 훈련 결과 팝업 스타일 */
+        .training-result-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .training-result-modal.hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .training-result-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            opacity: 0.1;
+        }
+
+        .result-background-logo {
+            max-width: 400px;
+            max-height: 400px;
+            width: 100%;
+            height: auto;
+            object-fit: contain;
+            opacity: 0.08;
+            filter: blur(1px);
+        }
+
+        .training-result-content {
+            position: relative;
+            background: rgba(30, 30, 30, 0.95);
+            border: 2px solid #00d4aa;
+            border-radius: 12px;
+            padding: 16px 20px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3);
+            animation: slideUp 0.4s ease-out;
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .result-header {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .result-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00d4aa;
+            margin: 0 0 4px 0;
+            text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+        }
+
+        .result-subtitle {
+            font-size: 0.9em;
+            color: #ffffff;
+            margin: 0;
+            opacity: 0.9;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .result-stat-item {
+            background: rgba(0, 212, 170, 0.1);
+            border: 1px solid rgba(0, 212, 170, 0.3);
+            border-radius: 6px;
+            padding: 6px 8px;
+            text-align: center;
+        }
+
+        .result-stat-label {
+            font-size: 0.7em;
+            color: #aaa;
+            margin-bottom: 3px;
+            font-weight: 500;
+        }
+
+        .result-stat-value {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #00d4aa;
+            text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);
+        }
+
+        .result-close-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%);
+            border: none;
+            border-radius: 8px;
+            color: #000;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);
+        }
+
+        .result-close-btn:hover {
+            background: linear-gradient(135deg, #00e8c2 0%, #00d4aa 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 212, 170, 0.6);
+        }
+
+        .result-close-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
+        }
+
+        /* 모바일 반응형 */
+        @media (max-width: 480px) {
+            .training-result-content {
+                padding: 12px 16px;
+                max-width: 95%;
+                max-height: 95vh;
+            }
+
+            .result-header {
+                margin-bottom: 12px;
+            }
+
+            .result-title {
+                font-size: 1.3em;
+                margin-bottom: 2px;
+            }
+
+            .result-subtitle {
+                font-size: 0.85em;
+            }
+
+            .result-stats {
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+
+            .result-stat-item {
+                padding: 6px 8px;
+            }
+
+            .result-stat-label {
+                font-size: 0.7em;
+                margin-bottom: 3px;
+            }
+
+            .result-stat-value {
+                font-size: 1.1em;
+            }
+
+            .result-close-btn {
+                padding: 10px;
+                font-size: 0.95em;
+            }
+
+            .result-background-logo {
+                max-width: 200px;
+            }
+        }
+
+        /* 개인 훈련 대시보드 강도 조절 슬라이드 바 스타일 */
+        .individual-intensity-adjustment-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: rgba(26, 29, 41, 0.6);
+            border-top: 1px solid #333;
+        }
+
+        .individual-intensity-adjustment-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .individual-intensity-adjustment-value {
+            font-size: 16px;
+            font-weight: 700;
+            color: #9ca3af;
+            min-width: 45px;
+            text-align: center;
+        }
+
+        .individual-intensity-adjustment-slider-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .individual-intensity-adjustment-min,
+        .individual-intensity-adjustment-max {
+            font-size: 11px;
+            color: #64748b;
+            min-width: 35px;
+            text-align: center;
+        }
+
+        .individual-intensity-adjustment-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .individual-intensity-adjustment-slider:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* 슬라이더 thumb 스타일 (WebKit) */
+        .individual-intensity-adjustment-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff8c00 0%, #ff6600 100%);
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(255, 140, 0, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .individual-intensity-adjustment-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 3px 8px rgba(255, 140, 0, 0.6);
+        }
+
+        /* 슬라이더 thumb 스타일 (Firefox) */
+        .individual-intensity-adjustment-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff8c00 0%, #ff6600 100%);
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 6px rgba(255, 140, 0, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .individual-intensity-adjustment-slider::-moz-range-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 3px 8px rgba(255, 140, 0, 0.6);
+        }
+
+        /* 슬라이더 트랙 스타일 (Firefox) */
+        .individual-intensity-adjustment-slider::-moz-range-track {
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div id="bike-id-display" class="bike-badge">Bike ?</div>
+        <div id="segment-info" style="font-size:0.9em; color:#ccc;">준비 중</div>
+        <div id="main-timer" class="timer">00:00:00</div>
+    </div>
+
+    <div class="segment-graph-section">
+        <div class="segment-graph-container">
+            <canvas id="individualSegmentGraph"></canvas>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="gauge-container">
+            <svg viewBox="0 0 200 220" style="width:100%; height:100%;">
+                <!-- 원호 배경 -->
+                <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+                
+                <!-- 눈금 그룹 (JavaScript로 동적 생성) -->
+                <g id="gauge-ticks"></g>
+                
+                <!-- 레이블 그룹 (JavaScript로 동적 생성) -->
+                <g id="gauge-labels"></g>
+                
+                <!-- 랩카운트다운 (속도계 상단) -->
+                <text x="100" y="0" text-anchor="middle" fill="#888" font-size="8">LAP COUNTDOWN</text>
+                <text id="ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
+                
+                <text id="ui-target-label" x="100" y="90" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
+                <text id="ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
+                <text id="ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+                
+                <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+                <text id="ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+
+                <g id="gauge-needle" transform="translate(100, 140) rotate(-90)">
+                    <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+                    <circle cx="0" cy="0" r="6" fill="#fff"/>
+                </g>
+            </svg>
+        </div>
+    </div>
+
+    <div class="stats-footer">
+        <div class="stat-box">
+            <div class="stat-label">CADENCE</div>
+            <div class="stat-value c-cadence"><span id="ui-cadence">0</span><span class="unit">rpm</span></div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">LAP AVG</div>
+            <div class="stat-value c-target"><span id="ui-lap-power">0</span><span class="unit">w</span></div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-label">HEART RATE</div>
+            <div class="stat-value c-hr"><span id="ui-hr">0</span><span class="unit">bpm</span></div>
+        </div>
+    </div>
+
+    <!-- 목표값 조절 슬라이드 바 (속도계 하단) -->
+    <div class="individual-intensity-adjustment-container">
+        <div class="individual-intensity-adjustment-label">
+            <span>목표값 조절</span>
+            <span class="individual-intensity-adjustment-value" id="individualIntensityAdjustmentValue">0%</span>
+        </div>
+        <div class="individual-intensity-adjustment-slider-wrapper">
+            <span class="individual-intensity-adjustment-min">-5%</span>
+            <input type="range" id="individualIntensityAdjustmentSlider" 
+                   min="-5" max="5" step="1" value="0" 
+                   class="individual-intensity-adjustment-slider">
+            <span class="individual-intensity-adjustment-max">+5%</span>
+        </div>
+    </div>
+
+    <!-- 5초 카운트다운 오버레이 -->
+    <div id="countdownOverlay" class="countdown-overlay hidden">
+        <div class="countdown-number" id="countdownNumber">5</div>
+    </div>
+
+    <!-- 훈련 결과 팝업 -->
+    <div id="trainingResultModal" class="training-result-modal hidden">
+        <div class="training-result-background">
+            <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" />
+        </div>
+        <div class="training-result-content">
+            <div class="result-header">
+                <h2 class="result-title">수고하셨습니다</h2>
+                <p class="result-subtitle">훈련 결과가 저장되었습니다</p>
+            </div>
+            <div class="result-stats">
+                <div class="result-stat-item">
+                    <div class="result-stat-label">훈련 시간</div>
+                    <div class="result-stat-value" id="result-duration">0분</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">평균 파워</div>
+                    <div class="result-stat-value" id="result-avg-power">0W</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">NP</div>
+                    <div class="result-stat-value" id="result-np">0W</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">TSS</div>
+                    <div class="result-stat-value" id="result-tss">0</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">평균 심박수</div>
+                    <div class="result-stat-value" id="result-hr-avg">0bpm</div>
+                </div>
+                <div class="result-stat-item">
+                    <div class="result-stat-label">칼로리</div>
+                    <div class="result-stat-value" id="result-calories">0kcal</div>
+                </div>
+            </div>
+            <button class="result-close-btn" onclick="closeTrainingResultModal()">확인</button>
+        </div>
+    </div>
+
+    <script src="assets/js/workoutManager.js"></script>
+    <script src="assets/js/resultManager.js"></script>
+    
+    <!-- 화면 잠금 방지 스크립트 -->
+    <script>
+        // 화면 잠금 방지 (Screen Wake Lock API)
+        let wakeLock = null;
+        let wakeLockVideo = null;
+        let videoWakeLockInterval = null;
+        const wakeLockSupported = 'wakeLock' in navigator;
+        
+        // iOS, 안드로이드 및 크롬 브라우저 감지
+        function isIOS() {
+            const ua = navigator.userAgent || '';
+            return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        
+        function isAndroid() {
+            const ua = navigator.userAgent || '';
+            return /Android/.test(ua);
+        }
+        
+        function isChrome() {
+            const ua = navigator.userAgent || '';
+            return /Chrome/.test(ua) && !/Edge|OPR|Edg/.test(ua);
+        }
+        
+        // 모바일 크롬 브라우저 감지 (iOS 또는 안드로이드)
+        function isMobileChrome() {
+            return (isIOS() || isAndroid()) && isChrome();
+        }
+        
+        // Bluefy 앱 감지 (iOS)
+        function isBluefy() {
+            const ua = navigator.userAgent || '';
+            return /Bluefy/i.test(ua);
+        }
+        
+        // Wake Lock API 사용
+        async function requestWakeLock() {
+            // 모바일 크롬(iOS/안드로이드) 또는 Bluefy에서는 비디오 트릭을 우선 사용 (더 안정적)
+            if (isMobileChrome() || (isIOS() && isBluefy())) {
+                const deviceType = isIOS() ? 'iOS' : 'Android';
+                const appType = isBluefy() ? ' (Bluefy)' : '';
+                console.log(`[Screen Wake Lock] ${deviceType}${appType} 감지 - 비디오 트릭 사용`);
+                if (!wakeLockVideo) {
+                    startVideoWakeLock();
+                }
+                return;
+            }
+            
+            if (wakeLockSupported) {
+                try {
+                    // 이미 활성화되어 있으면 재요청하지 않음
+                    if (wakeLock) return;
+                    
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('[Screen Wake Lock] 화면 잠금 방지 활성화');
+                    
+                    // 시스템이 해제했을 때 플래그 정리
+                    wakeLock.addEventListener('release', () => {
+                        console.log('[Screen Wake Lock] 시스템에 의해 해제됨');
+                        wakeLock = null;
+                        // 다시 요청 시도
+                        if (document.visibilityState === 'visible') {
+                            requestWakeLock();
+                        }
+                    });
+                    
+                    // 모바일(iOS/안드로이드)에서는 Wake Lock이 성공해도 비디오 트릭도 함께 사용 (이중 보장)
+                    if ((isIOS() || isAndroid()) && !wakeLockVideo) {
+                        startVideoWakeLock();
+                    }
+                } catch (err) {
+                    console.warn('[Screen Wake Lock] 활성화 실패:', err);
+                    // Wake Lock이 실패하면 비디오 트릭 사용
+                    if (!wakeLockVideo) {
+                        startVideoWakeLock();
+                    }
+                }
+            } else {
+                // Wake Lock API 미지원 시 비디오 트릭 사용
+                if (!wakeLockVideo) {
+                    startVideoWakeLock();
+                }
+            }
+        }
+        
+        // 비디오 트릭 사용 (iOS Safari 및 구형 브라우저 대응)
+        function startVideoWakeLock() {
+            try {
+                // 이미 생성되어 있으면 재생성하지 않음
+                if (wakeLockVideo) return;
+                
+                // 훈련 진행 중일 때만 비디오 트릭 활성화
+                const isTrainingRunning = window.currentTrainingState === 'running';
+                if (!isTrainingRunning) {
+                    console.log('[Video Wake Lock] 훈련 진행 중이 아니므로 비디오 트릭 비활성화');
+                    return;
+                }
+                
+                // Canvas로 최소 크기의 비디오 스트림 생성
+                const canvas = document.createElement('canvas');
+                canvas.width = 2;
+                canvas.height = 2;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 2, 2);
+                
+                // Canvas를 MediaStream으로 변환 (iOS 크롬 대응을 위해 30fps 사용)
+                const stream = canvas.captureStream(30);
+                
+                // 투명한 비디오 요소 생성
+                wakeLockVideo = document.createElement('video');
+                wakeLockVideo.setAttribute('playsinline', '');
+                wakeLockVideo.setAttribute('muted', '');
+                wakeLockVideo.setAttribute('loop', '');
+                wakeLockVideo.setAttribute('webkit-playsinline', '');
+                wakeLockVideo.setAttribute('autoplay', '');
+                wakeLockVideo.style.position = 'fixed';
+                wakeLockVideo.style.top = '0';
+                wakeLockVideo.style.left = '0';
+                wakeLockVideo.style.width = '1px';
+                wakeLockVideo.style.height = '1px';
+                wakeLockVideo.style.opacity = '0';
+                wakeLockVideo.style.pointerEvents = 'none';
+                wakeLockVideo.style.zIndex = '-9999';
+                
+                // 스트림을 비디오에 연결
+                wakeLockVideo.srcObject = stream;
+                document.body.appendChild(wakeLockVideo);
+                
+                // 비디오 재생 함수 (재시도 로직 포함)
+                const playVideo = () => {
+                    const playPromise = wakeLockVideo.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            console.log('[Video Wake Lock] 화면 잠금 방지 활성화 (비디오 트릭)');
+                        }).catch(err => {
+                            console.warn('[Video Wake Lock] 재생 실패, 재시도:', err);
+                            // 재생 실패 시 잠시 후 재시도
+                            setTimeout(playVideo, 1000);
+                        });
+                    }
+                };
+                
+                // 초기 재생 시도
+                playVideo();
+                
+                // 모바일(iOS/안드로이드)에서는 주기적으로 비디오 재생 상태 확인 및 재시작 (크롬 대응)
+                if (isIOS() || isAndroid()) {
+                    if (videoWakeLockInterval) {
+                        clearInterval(videoWakeLockInterval);
+                    }
+                    videoWakeLockInterval = setInterval(() => {
+                        if (wakeLockVideo && (wakeLockVideo.paused || wakeLockVideo.ended)) {
+                            console.log('[Video Wake Lock] 비디오가 일시정지됨, 재시작');
+                            playVideo();
+                        }
+                    }, 5000); // 5초마다 확인
+                }
+            } catch (err) {
+                console.warn('[Video Wake Lock] 초기화 실패:', err);
+            }
+        }
+        
+        // 화면 잠금 해제
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => {
+                    wakeLock = null;
+                    console.log('[Screen Wake Lock] 화면 잠금 방지 해제');
+                }).catch(err => {
+                    console.warn('[Screen Wake Lock] 해제 실패:', err);
+                    wakeLock = null;
+                });
+            }
+            
+            // 비디오 트릭 주기적 확인 중지
+            if (videoWakeLockInterval !== null) {
+                clearInterval(videoWakeLockInterval);
+                videoWakeLockInterval = null;
+            }
+            
+            if (wakeLockVideo !== null) {
+                try {
+                    if (wakeLockVideo.srcObject) {
+                        wakeLockVideo.srcObject.getTracks().forEach(track => track.stop());
+                        wakeLockVideo.srcObject = null;
+                    }
+                    wakeLockVideo.pause();
+                    if (wakeLockVideo.parentNode) {
+                        wakeLockVideo.parentNode.removeChild(wakeLockVideo);
+                    }
+                    wakeLockVideo = null;
+                    console.log('[Video Wake Lock] 화면 잠금 방지 해제 (비디오 트릭)');
+                } catch (err) {
+                    console.warn('[Video Wake Lock] 해제 실패:', err);
+                }
+            }
+        }
+        
+        // 페이지 가시성 변경 시 재요청 (훈련 진행 중일 때만)
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                // 훈련 진행 중일 때만 Wake Lock 재요청
+                const isTrainingRunning = window.currentTrainingState === 'running';
+                if (isTrainingRunning) {
+                    // 페이지가 다시 보이면 Wake Lock 재요청
+                    if (wakeLockSupported && !wakeLock) {
+                        await requestWakeLock();
+                    }
+                    // 비디오 트릭도 재시작
+                    if (wakeLockVideo && wakeLockVideo.paused) {
+                        wakeLockVideo.play().catch(err => {
+                            console.warn('[Video Wake Lock] 재시작 실패:', err);
+                        });
+                    }
+                }
+            }
+        });
+        
+        // Pull-to-refresh 방지 초기화 (Bluefy/iOS 강화 버전)
+        function initializeIndividualDashboardPullToRefreshPrevention() {
+            const body = document.body;
+            if (!body) return;
+            
+            // iOS/Bluefy 감지
+            function isIOS() {
+                const ua = navigator.userAgent || '';
+                return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            }
+            
+            function isBluefy() {
+                const ua = navigator.userAgent || '';
+                return /Bluefy/i.test(ua);
+            }
+            
+            const isIOSDevice = isIOS();
+            const isBluefyApp = isBluefy();
+            
+            let touchStartY = 0;
+            let touchStartTime = 0;
+            let isScrolling = false;
+            let lastScrollY = 0;
+            
+            // 훈련 중인지 확인
+            function isTrainingActive() {
+                return window.trainingState && window.trainingState.timerId !== null;
+            }
+            
+            // 스크롤 위치 확인 (더 정확한 방법)
+            function isAtTop() {
+                // window.scrollY가 0이거나, body의 scrollTop이 0인 경우
+                return (window.scrollY === 0 || window.scrollY <= 1) && 
+                       (document.documentElement.scrollTop === 0 || document.documentElement.scrollTop <= 1);
+            }
+            
+            // 터치 시작
+            const touchStartHandler = (e) => {
+                touchStartY = e.touches[0].clientY;
+                touchStartTime = Date.now();
+                isScrolling = false;
+                lastScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+            };
+            
+            // 터치 이동 중 - iOS/Bluefy에서는 더 적극적으로 차단
+            const touchMoveHandler = (e) => {
+                if (!e.touches || e.touches.length === 0) return;
+                
+                const touchY = e.touches[0].clientY;
+                const deltaY = touchY - touchStartY;
+                const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+                
+                // 스크롤 중인지 확인
+                if (Math.abs(currentScrollY - lastScrollY) > 1) {
+                    isScrolling = true;
+                }
+                lastScrollY = currentScrollY;
+                
+                // 훈련 중이고, 스크롤이 맨 위에 있고, 아래로 당기는 동작일 때
+                if (isTrainingActive() && isAtTop() && deltaY > 0 && !isScrolling) {
+                    // iOS/Bluefy에서는 더 일찍 차단 (10px 이상만)
+                    const threshold = (isIOSDevice || isBluefyApp) ? 10 : 30;
+                    if (deltaY > threshold) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }
+                }
+                
+                // iOS/Bluefy에서 훈련 중일 때는 아래로 당기는 모든 동작 차단 (더 강력)
+                if ((isIOSDevice || isBluefyApp) && isTrainingActive() && isAtTop() && deltaY > 5) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            };
+            
+            // 터치 종료
+            const touchEndHandler = (e) => {
+                touchStartY = 0;
+                touchStartTime = 0;
+                isScrolling = false;
+            };
+            
+            // 이벤트 리스너 등록 (capture phase에서도 처리)
+            body.addEventListener('touchstart', touchStartHandler, { passive: true, capture: true });
+            body.addEventListener('touchmove', touchMoveHandler, { passive: false, capture: true });
+            body.addEventListener('touchend', touchEndHandler, { passive: true, capture: true });
+            
+            // document 레벨에서도 차단 (Bluefy 대응)
+            document.addEventListener('touchmove', (e) => {
+                // 훈련 중이고 스크롤이 맨 위에 있을 때
+                if (isTrainingActive() && isAtTop()) {
+                    const touchY = e.touches && e.touches[0] ? e.touches[0].clientY : 0;
+                    const deltaY = touchY - touchStartY;
+                    
+                    // 아래로 당기는 동작 차단
+                    if (deltaY > 5 && (isIOSDevice || isBluefyApp)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        return false;
+                    }
+                }
+            }, { passive: false, capture: true });
+            
+            // beforeunload 이벤트로 새로고침 방지 (훈련 중일 때)
+            window.addEventListener('beforeunload', (e) => {
+                if (isTrainingActive()) {
+                    e.preventDefault();
+                    e.returnValue = '훈련이 진행 중입니다. 정말 나가시겠습니까?';
+                    return e.returnValue;
+                }
+            });
+            
+            console.log('[Bluetooth Individual Dashboard] Pull-to-refresh 방지 초기화 완료', {
+                isIOS: isIOSDevice,
+                isBluefy: isBluefyApp,
+                trainingActive: isTrainingActive()
+            });
+        }
+        
+        // 페이지 로드 시 화면 잠금 방지 시작 (훈련 진행 중일 때만)
+        document.addEventListener('DOMContentLoaded', () => {
+            // Pull-to-refresh 방지 초기화
+            initializeIndividualDashboardPullToRefreshPrevention();
+            
+            // 사용자 상호작용 후에만 활성화 (브라우저 정책)
+            const activateWakeLock = () => {
+                // 훈련 진행 중일 때만 활성화
+                const isTrainingRunning = window.currentTrainingState === 'running';
+                if (isTrainingRunning) {
+                    requestWakeLock();
+                }
+            };
+            
+            // 첫 터치/클릭 시 활성화 (훈련 진행 중일 때만)
+            document.addEventListener('touchstart', activateWakeLock, { once: true, passive: true });
+            document.addEventListener('click', activateWakeLock, { once: true });
+            document.addEventListener('pointerdown', activateWakeLock, { once: true, passive: true });
+        });
+        
+        // 페이지 언로드 시 해제
+        window.addEventListener('beforeunload', releaseWakeLock);
+        window.addEventListener('pagehide', releaseWakeLock);
+        
+        // 전역으로 노출 (필요시 수동 제어 가능)
+        window.wakeLockControl = {
+            request: requestWakeLock,
+            release: releaseWakeLock
+        };
+    </script>
+    
+    <script src="assets/js/bluetooth.js"></script>
+    <script src="assets/js/bluetoothIndividual.js"></script>
+</body>
+</html>
