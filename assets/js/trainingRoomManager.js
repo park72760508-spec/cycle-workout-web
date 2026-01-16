@@ -668,13 +668,18 @@ async function openPlayerList() {
     return;
   }
 
-  // Player List 화면으로 이동
-  if (typeof showScreen === 'function') {
-    showScreen('playerListScreen');
+  // Bluetooth 모드인지 확인
+  if (deviceConnectionMode === 'bluetooth') {
+    // Bluetooth 모드: Bluetooth Join Session 화면으로 이동
+    await openBluetoothPlayerList();
+  } else {
+    // ANT+ 모드: 기존 Player List 화면으로 이동
+    if (typeof showScreen === 'function') {
+      showScreen('playerListScreen');
+    }
+    // Player List 렌더링
+    await renderPlayerList();
   }
-
-  // Player List 렌더링
-  await renderPlayerList();
 }
 
 /**
@@ -4065,6 +4070,310 @@ window.toggleDeviceConnectionMode = toggleDeviceConnectionMode;
 }
 
 /**
+ * Bluetooth Player List 화면 열기 (트랙 수 유동적)
+ */
+async function openBluetoothPlayerList() {
+  if (!currentSelectedTrainingRoom) {
+    showToast('Training Room을 먼저 선택해주세요.', 'error');
+    return;
+  }
+
+  // Bluetooth Join Session 화면으로 이동
+  if (typeof showScreen === 'function') {
+    showScreen('bluetoothPlayerListScreen');
+  }
+
+  // Bluetooth Player List 렌더링
+  await renderBluetoothPlayerList();
+}
+
+/**
+ * Bluetooth Player List 렌더링 (트랙 수 유동적: 기본 10개, 5개씩 확장)
+ */
+async function renderBluetoothPlayerList() {
+  const playerListContent = document.getElementById('bluetoothPlayerListContent');
+  if (!playerListContent) return;
+
+  // 로딩 표시
+  playerListContent.innerHTML = `
+    <div style="text-align: center; padding: 40px;">
+      <div class="spinner" style="margin: 0 auto 20px;"></div>
+      <p style="color: #666;">트랙 정보를 불러오는 중...</p>
+    </div>
+  `;
+
+  // Training Room id 가져오기
+  let roomId = null;
+  if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
+    roomId = currentSelectedTrainingRoom.id;
+  } else if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
+    roomId = String(window.currentTrainingRoomId);
+  } else if (typeof localStorage !== 'undefined') {
+    try {
+      const storedRoomId = localStorage.getItem('currentTrainingRoomId');
+      if (storedRoomId) {
+        roomId = storedRoomId;
+      }
+    } catch (e) {
+      console.warn('[Bluetooth Player List] localStorage 접근 실패:', e);
+    }
+  }
+
+  // 트랙 정보 가져오기 및 최대 트랙 수 계산
+  let maxTrackNumber = 10; // 기본 10개
+  const tracks = [];
+  
+  if (roomId && typeof db !== 'undefined') {
+    try {
+      const sessionId = roomId;
+      const usersRef = db.ref(`sessions/${sessionId}/users`);
+      const usersSnapshot = await usersRef.once('value');
+      const usersData = usersSnapshot.val() || {};
+      
+      // 사용자가 할당된 최대 트랙 번호 찾기
+      const assignedTrackNumbers = Object.keys(usersData)
+        .map(key => parseInt(key, 10))
+        .filter(num => !isNaN(num) && num > 0);
+      
+      if (assignedTrackNumbers.length > 0) {
+        const maxAssignedTrack = Math.max(...assignedTrackNumbers);
+        // 최대 할당된 트랙이 10개 이상이면 5개씩 확장
+        if (maxAssignedTrack >= 10) {
+          // 10개 단위로 올림 후 5개씩 확장
+          maxTrackNumber = Math.ceil((maxAssignedTrack + 1) / 5) * 5;
+        } else {
+          maxTrackNumber = 10;
+        }
+      }
+      
+      // devices 정보 가져오기
+      const devicesRef = db.ref(`sessions/${sessionId}/devices`);
+      const devicesSnapshot = await devicesRef.once('value');
+      const devicesData = devicesSnapshot.val() || {};
+      
+      // 트랙 초기화
+      for (let i = 1; i <= maxTrackNumber; i++) {
+        const userData = usersData[i];
+        const deviceData = devicesData[i];
+        
+        tracks.push({
+          trackNumber: i,
+          userId: userData?.userId || null,
+          userName: userData?.userName || null,
+          weight: userData?.weight || null,
+          ftp: userData?.ftp || null,
+          gear: deviceData?.gear || null,
+          brake: deviceData?.brake || null,
+          smartTrainerId: deviceData?.smartTrainerId || null,
+          powerMeterId: deviceData?.powerMeterId || null,
+          heartRateId: deviceData?.heartRateId || null
+        });
+      }
+    } catch (error) {
+      console.error('[Bluetooth Player List] 트랙 정보 로드 오류:', error);
+      // 오류 발생 시 기본 10개 트랙 생성
+      for (let i = 1; i <= 10; i++) {
+        tracks.push({
+          trackNumber: i,
+          userId: null,
+          userName: null,
+          weight: null,
+          ftp: null,
+          gear: null,
+          brake: null,
+          smartTrainerId: null,
+          powerMeterId: null,
+          heartRateId: null
+        });
+      }
+    }
+  } else {
+    // roomId가 없으면 기본 10개 트랙 생성
+    for (let i = 1; i <= 10; i++) {
+      tracks.push({
+        trackNumber: i,
+        userId: null,
+        userName: null,
+        weight: null,
+        ftp: null,
+        gear: null,
+        brake: null,
+        smartTrainerId: null,
+        powerMeterId: null,
+        heartRateId: null
+      });
+    }
+  }
+
+  // roomId를 컨테이너에 data attribute로 저장
+  if (playerListContent && roomId) {
+    playerListContent.setAttribute('data-room-id', String(roomId));
+  }
+
+  // 현재 사용자 정보 확인 (권한 체크용)
+  let currentUser = null;
+  let currentUserId = null;
+  let userGrade = '2';
+  let isAdmin = false;
+  
+  try {
+    currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (currentUser && currentUser.id != null) {
+      currentUserId = String(currentUser.id);
+    }
+    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
+    isAdmin = userGrade === '1' || userGrade === 1;
+  } catch (e) {
+    console.error('[Bluetooth Player List] 현재 사용자 정보 확인 오류:', e);
+  }
+
+  // grade=2 사용자가 본인 계정으로 참가된 트랙이 있는지 확인
+  let hasMyTrack = false;
+  if (!isAdmin && currentUserId) {
+    hasMyTrack = tracks.some(track => {
+      const trackUserId = track.userId ? String(track.userId) : null;
+      return trackUserId && trackUserId === currentUserId;
+    });
+  }
+
+  // 트랙 목록 렌더링
+  playerListContent.innerHTML = tracks.map(track => {
+    const hasUser = !!track.userName;
+    const trackUserId = track.userId ? String(track.userId) : null;
+    let canModify = false;
+    let canParticipate = false;
+    
+    if (isAdmin || userGrade === '1' || userGrade === 1 || userGrade === '3' || userGrade === 3) {
+      canModify = true;
+      canParticipate = true;
+    } else if (userGrade === '2' || userGrade === 2) {
+      if (trackUserId && trackUserId === currentUserId) {
+        canModify = true;
+        canParticipate = true;
+      } else if (!hasUser && !hasMyTrack) {
+        canParticipate = true;
+        canModify = false;
+      } else {
+        canModify = false;
+        canParticipate = false;
+      }
+    }
+    
+    const dashboardUrl = roomId 
+      ? `https://stelvio.ai.kr/bluetoothIndividual.html?bike=${track.trackNumber}&room=${roomId}`
+      : `https://stelvio.ai.kr/bluetoothIndividual.html?bike=${track.trackNumber}`;
+
+    // Gear/Brake 아이콘 생성
+    let gearIcon = '';
+    let brakeIcon = '';
+    
+    if (track.gear) {
+      if (track.gear === '11단' || track.gear === '11') {
+        gearIcon = '<img src="assets/img/g11.png" alt="11단" class="device-icon" />';
+      } else if (track.gear === '12단' || track.gear === '12') {
+        gearIcon = '<img src="assets/img/g12.png" alt="12단" class="device-icon" />';
+      }
+    }
+    
+    if (track.brake) {
+      if (track.brake === '디스크' || track.brake === 'Disc') {
+        brakeIcon = '<img src="assets/img/d.png" alt="디스크" class="device-icon" />';
+      } else if (track.brake === '림' || track.brake === 'Rim') {
+        brakeIcon = '<img src="assets/img/r.png" alt="림" class="device-icon" />';
+      }
+    }
+    
+    // 디바이스 아이콘 생성
+    const deviceIcons = [];
+    if (track.heartRateId) {
+      deviceIcons.push('<img src="assets/img/bpm_g.png" alt="심박계" class="device-icon-with-bg" title="심박계" />');
+    }
+    if (track.smartTrainerId) {
+      deviceIcons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon-with-bg" title="스마트트레이너" />');
+    }
+    if (track.powerMeterId) {
+      deviceIcons.push('<img src="assets/img/power_g.png" alt="파워메터" class="device-icon-with-bg" title="파워메터" />');
+    }
+    if (gearIcon) {
+      deviceIcons.push(`<span class="device-icon-plain" title="기어">${gearIcon}</span>`);
+    }
+    if (brakeIcon) {
+      deviceIcons.push(`<span class="device-icon-plain" title="브레이크">${brakeIcon}</span>`);
+    }
+    const deviceIconsHtml = deviceIcons.length > 0 ? deviceIcons.join('') : '';
+    
+    return `
+      <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
+        <div class="player-track-number-fixed">
+          <div class="player-track-number-header">
+            트랙${track.trackNumber}
+          </div>
+        </div>
+        <div class="player-track-content">
+          <div class="player-track-user-section">
+            <div class="player-track-name ${hasUser ? 'has-user' : 'no-user'}">
+              ${hasUser ? escapeHtml(track.userName) : '사용자 없음'}
+            </div>
+            ${deviceIconsHtml ? `<div class="player-track-devices-right">${deviceIconsHtml}</div>` : ''}
+          </div>
+          <div class="player-track-action">
+            ${canModify || canParticipate ? `
+              <button 
+                class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+                onclick="assignUserToBluetoothTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
+                title="훈련 신청/변경">
+                <span>${hasUser ? '변경' : '신청'}</span>
+              </button>
+            ` : `
+              <button 
+                class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+                disabled
+                title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 신청/변경'}">
+                <span>${hasUser ? '변경' : '신청'}</span>
+              </button>
+            `}
+            ${hasUser && canModify ? `
+              <button 
+                class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
+                onclick="removeUserFromBluetoothTrackWithAnimation(${track.trackNumber}, '${roomId || ''}', event)"
+                title="훈련 참가 퇴실">
+                <span>퇴실</span>
+              </button>
+            ` : hasUser && !canModify ? `
+              <button 
+                class="btn btn-danger btn-default-style btn-with-icon player-remove-btn"
+                disabled
+                title="본인이 할당한 트랙만 퇴실 가능합니다">
+                <span>퇴실</span>
+              </button>
+            ` : ''}
+            <a href="${dashboardUrl}" 
+               target="_blank"
+               class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
+               ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
+               onclick="handleBluetoothPlayerEnterClick(event, ${track.trackNumber}, '${roomId || ''}')"
+               title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
+              <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
+              <span>Enter</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  // 일괄 퇴실 버튼 표시 여부
+  const btnClearAllTracks = document.getElementById('btnClearAllBluetoothTracks');
+  if (btnClearAllTracks) {
+    if (isAdmin || userGrade === '3' || userGrade === 3) {
+      btnClearAllTracks.style.display = 'inline-flex';
+    } else {
+      btnClearAllTracks.style.display = 'none';
+    }
+  }
+}
+
+/**
  * 입장 버튼 클릭 핸들러 (애니메이션 적용)
  */
 function handlePlayerEnterClick(event, trackNumber, roomId) {
@@ -4088,3 +4397,9 @@ function handlePlayerEnterClick(event, trackNumber, roomId) {
   // 애니메이션은 클릭 시 즉시 표시됨
 }
 
+/**
+ * Bluetooth 입장 버튼 클릭 핸들러
+ */
+function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
+  handlePlayerEnterClick(event, trackNumber, roomId);
+}
