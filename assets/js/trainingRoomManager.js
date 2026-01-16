@@ -301,7 +301,7 @@ async function selectTrainingRoom(roomId) {
             <img src="assets/img/wifi.png" alt="Bluetooth" style="width: 32px; height: 32px; object-fit: contain;" />
           </div>
           <!-- 슬라이더 (움직이는 부분) -->
-          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #2e74e8 0%, #2562c8 100%); border-radius: 25px; transition: left 0.3s ease; box-shadow: 0 2px 8px rgba(46, 116, 232, 0.3); z-index: 1;"></div>
+          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); z-index: 3;"></div>
         </div>
         <div class="switch-label-container" style="display: flex; justify-content: space-between; width: 200px; font-size: 12px; color: #999;">
           <span id="switchLabelAntScreen" style="font-weight: 600; color: #2e74e8;">ANT+</span>
@@ -1737,7 +1737,18 @@ function updateDeviceConnectionSwitch(mode) {
   switchElement.classList.remove('active-ant', 'active-bluetooth');
   
   if (mode === 'bluetooth') {
+    // Bluetooth 모드: 슬라이더를 오른쪽으로 이동 (녹색)
     switchElement.classList.add('active-bluetooth');
+    slider.style.left = '50%';
+    slider.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+    slider.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
+    
+    // z-index 조정: 왼쪽(ANT+)은 보이고, 오른쪽(Bluetooth)은 가려짐
+    const optionLeft = switchElement.querySelector('.switch-option-left');
+    const optionRight = switchElement.querySelector('.switch-option-right');
+    if (optionLeft) optionLeft.style.zIndex = '4'; // 보임
+    if (optionRight) optionRight.style.zIndex = '2'; // 가려짐
+    
     if (labelAnt) {
       labelAnt.style.fontWeight = '400';
       labelAnt.style.color = '#999';
@@ -1747,8 +1758,18 @@ function updateDeviceConnectionSwitch(mode) {
       labelBluetooth.style.color = '#22c55e';
     }
   } else {
-    // ANT+ 모드 (기본값)
+    // ANT+ 모드 (기본값): 슬라이더를 왼쪽으로 이동 (주황색)
     switchElement.classList.add('active-ant');
+    slider.style.left = '0';
+    slider.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+    slider.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
+    
+    // z-index 조정: 왼쪽(ANT+)은 가려지고, 오른쪽(Bluetooth)은 보임
+    const optionLeft = switchElement.querySelector('.switch-option-left');
+    const optionRight = switchElement.querySelector('.switch-option-right');
+    if (optionLeft) optionLeft.style.zIndex = '2'; // 가려짐
+    if (optionRight) optionRight.style.zIndex = '4'; // 보임
+    
     if (labelAnt) {
       labelAnt.style.fontWeight = '600';
       labelAnt.style.color = '#f59e0b';
@@ -1835,7 +1856,18 @@ function updateDeviceConnectionSwitchForScreen(mode) {
   switchElement.classList.remove('active-ant', 'active-bluetooth');
   
   if (mode === 'bluetooth') {
+    // Bluetooth 모드: 슬라이더를 오른쪽으로 이동 (녹색)
     switchElement.classList.add('active-bluetooth');
+    slider.style.left = '50%';
+    slider.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+    slider.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
+    
+    // z-index 조정: 왼쪽(ANT+)은 보이고, 오른쪽(Bluetooth)은 가려짐
+    const optionLeft = switchElement.querySelector('.switch-option-left');
+    const optionRight = switchElement.querySelector('.switch-option-right');
+    if (optionLeft) optionLeft.style.zIndex = '4'; // 보임
+    if (optionRight) optionRight.style.zIndex = '2'; // 가려짐
+    
     if (labelAnt) {
       labelAnt.style.fontWeight = '400';
       labelAnt.style.color = '#999';
@@ -1845,8 +1877,18 @@ function updateDeviceConnectionSwitchForScreen(mode) {
       labelBluetooth.style.color = '#22c55e';
     }
   } else {
-    // ANT+ 모드 (기본값)
+    // ANT+ 모드 (기본값): 슬라이더를 왼쪽으로 이동 (주황색)
     switchElement.classList.add('active-ant');
+    slider.style.left = '0';
+    slider.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+    slider.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
+    
+    // z-index 조정: 왼쪽(ANT+)은 가려지고, 오른쪽(Bluetooth)은 보임
+    const optionLeft = switchElement.querySelector('.switch-option-left');
+    const optionRight = switchElement.querySelector('.switch-option-right');
+    if (optionLeft) optionLeft.style.zIndex = '2'; // 가려짐
+    if (optionRight) optionRight.style.zIndex = '4'; // 보임
+    
     if (labelAnt) {
       labelAnt.style.fontWeight = '600';
       labelAnt.style.color = '#f59e0b';
