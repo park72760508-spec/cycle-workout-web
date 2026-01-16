@@ -2636,6 +2636,28 @@
         <!-- 선택된 Training Room 정보 및 버튼 -->
         <div id="selectedTrainingRoomModalSection" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
           <h3 id="selectedTrainingRoomModalTitle" style="margin-bottom: 20px; color: #333; font-size: 1.1em;"></h3>
+          
+          <!-- 디바이스 연결 방식 선택 슬라이드 스위치 -->
+          <div class="device-connection-switch-container" style="margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+            <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
+            <div class="device-connection-switch" id="deviceConnectionSwitch" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
+              <!-- ANT+ 옵션 (왼쪽) -->
+              <div class="switch-option switch-option-left" data-mode="ant" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 25px 0 0 25px; transition: all 0.3s ease; z-index: 2;">
+                <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
+              </div>
+              <!-- Bluetooth 옵션 (오른쪽) -->
+              <div class="switch-option switch-option-right" data-mode="bluetooth" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
+                <img src="assets/img/wifi.png" alt="Bluetooth" style="width: 32px; height: 32px; object-fit: contain;" />
+              </div>
+              <!-- 슬라이더 (움직이는 부분) -->
+              <div class="switch-slider" id="switchSlider" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #2e74e8 0%, #2562c8 100%); border-radius: 25px; transition: left 0.3s ease; box-shadow: 0 2px 8px rgba(46, 116, 232, 0.3); z-index: 1;"></div>
+            </div>
+            <div class="switch-label-container" style="display: flex; justify-content: space-between; width: 200px; font-size: 12px; color: #999;">
+              <span id="switchLabelAnt" style="font-weight: 600; color: #2e74e8;">ANT+</span>
+              <span id="switchLabelBluetooth" style="font-weight: 400; color: #999;">Bluetooth</span>
+            </div>
+          </div>
+          
           <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
             <button class="btn btn-primary btn-default-style btn-with-icon" id="btnPlayerModal" onclick="openPlayerListFromModal(event)" disabled>
               <img src="assets/img/personals.png" alt="Player" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
