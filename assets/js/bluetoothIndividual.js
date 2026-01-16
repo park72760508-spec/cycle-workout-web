@@ -15,7 +15,22 @@ while (!myTrackId) {
 }
 
 // 초기 표시 (나중에 사용자 이름으로 업데이트됨)
-document.getElementById('bike-id-display').innerText = `Track ${myTrackId}`;
+const bikeIdDisplayEl = document.getElementById('bike-id-display');
+if (bikeIdDisplayEl) {
+    bikeIdDisplayEl.innerText = `Track ${myTrackId}`;
+    
+    // 초기 로드 시에도 클릭 이벤트 추가 (updateUserName이 호출되지 않을 경우 대비)
+    if (!bikeIdDisplayEl.hasAttribute('data-click-listener-added')) {
+        bikeIdDisplayEl.setAttribute('data-click-listener-added', 'true');
+        bikeIdDisplayEl.style.cursor = 'pointer';
+        bikeIdDisplayEl.title = '클릭하여 Live Training Rooms로 이동';
+        
+        bikeIdDisplayEl.addEventListener('click', () => {
+            // Live Training Rooms 화면으로 이동
+            window.location.href = 'index.html#trainingRoomScreen';
+        });
+    }
+}
 
 // 사용자 FTP 값 저장 (전역 변수)
 let userFTP = 200; // 기본값 200W
@@ -188,6 +203,18 @@ function updateUserName(data) {
     } else {
         // 이름이 없으면 Track 번호 표시
         bikeIdDisplay.innerText = `Track ${myTrackId}`;
+    }
+    
+    // 사용자명 라벨 클릭 이벤트 추가 (한 번만)
+    if (!bikeIdDisplay.hasAttribute('data-click-listener-added')) {
+        bikeIdDisplay.setAttribute('data-click-listener-added', 'true');
+        bikeIdDisplay.style.cursor = 'pointer';
+        bikeIdDisplay.title = '클릭하여 Live Training Rooms로 이동';
+        
+        bikeIdDisplay.addEventListener('click', () => {
+            // Live Training Rooms 화면으로 이동
+            window.location.href = 'index.html#trainingRoomScreen';
+        });
     }
 }
 
