@@ -292,16 +292,16 @@ async function selectTrainingRoom(roomId) {
       switchContainer.innerHTML = `
         <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
         <div class="device-connection-switch" id="deviceConnectionSwitchScreen" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
-          <!-- ANT+ 옵션 (왼쪽) -->
-          <div class="switch-option switch-option-left" data-mode="ant" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 25px 0 0 25px; transition: all 0.3s ease; z-index: 2;">
-            <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
-          </div>
-          <!-- Bluetooth 옵션 (오른쪽) -->
-          <div class="switch-option switch-option-right" data-mode="bluetooth" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
+          <!-- Bluetooth 옵션 (왼쪽) -->
+          <div class="switch-option switch-option-left" data-mode="bluetooth" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 25px 0 0 25px; transition: all 0.3s ease; z-index: 2;">
             <img src="assets/img/wifi.png" alt="Bluetooth" style="width: 32px; height: 32px; object-fit: contain;" />
           </div>
+          <!-- ANT+ 옵션 (오른쪽) -->
+          <div class="switch-option switch-option-right" data-mode="ant" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
+            <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
+          </div>
           <!-- 슬라이더 (움직이는 부분) -->
-          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); z-index: 3;"></div>
+          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 50%; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); z-index: 3;"></div>
         </div>
         <div class="switch-label-container" style="display: flex; justify-content: space-between; width: 200px; font-size: 12px; color: #999;">
           <span id="switchLabelAntScreen" style="font-weight: 600; color: #2e74e8;">ANT+</span>
@@ -1660,12 +1660,30 @@ function initializeDeviceConnectionSwitch() {
   if (switchElement._clickHandler) {
     switchElement.removeEventListener('click', switchElement._clickHandler);
   }
+  if (switchElement._mouseDownHandler) {
+    switchElement.removeEventListener('mousedown', switchElement._mouseDownHandler);
+  }
+  if (switchElement._mouseMoveHandler) {
+    document.removeEventListener('mousemove', switchElement._mouseMoveHandler);
+  }
+  if (switchElement._mouseUpHandler) {
+    document.removeEventListener('mouseup', switchElement._mouseUpHandler);
+  }
   if (switchElement._touchStartHandler) {
     switchElement.removeEventListener('touchstart', switchElement._touchStartHandler);
   }
-  if (switchElement._touchEndHandler) {
-    switchElement.removeEventListener('touchend', switchElement._touchEndHandler);
+  if (switchElement._touchMoveHandler) {
+    document.removeEventListener('touchmove', switchElement._touchMoveHandler);
   }
+  if (switchElement._touchEndHandler) {
+    document.removeEventListener('touchend', switchElement._touchEndHandler);
+  }
+  
+  // 드래그 상태 추적 변수
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  const DRAG_THRESHOLD = 5; // 픽셀 단위 드래그 임계값
   
   // 저장된 모드 복원 (없으면 기본값 'ant')
   const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
@@ -1674,10 +1692,45 @@ function initializeDeviceConnectionSwitch() {
   // 스위치 상태 업데이트
   updateDeviceConnectionSwitch(deviceConnectionMode);
   
-  // 클릭 이벤트 핸들러 (저장하여 나중에 제거 가능하도록)
+  // 마우스 이벤트 핸들러
+  const mouseDownHandler = (e) => {
+    e.stopPropagation();
+    isDragging = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+  };
+  switchElement.addEventListener('mousedown', mouseDownHandler);
+  switchElement._mouseDownHandler = mouseDownHandler;
+  
+  const mouseMoveHandler = (e) => {
+    if (dragStartX === 0 && dragStartY === 0) return;
+    const deltaX = Math.abs(e.clientX - dragStartX);
+    const deltaY = Math.abs(e.clientY - dragStartY);
+    if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
+      isDragging = true;
+    }
+  };
+  document.addEventListener('mousemove', mouseMoveHandler);
+  switchElement._mouseMoveHandler = mouseMoveHandler;
+  
+  const mouseUpHandler = (e) => {
+    if (!isDragging) {
+      // 드래그가 아닌 경우에만 토글
+      toggleDeviceConnectionMode();
+    }
+    isDragging = false;
+    dragStartX = 0;
+    dragStartY = 0;
+  };
+  document.addEventListener('mouseup', mouseUpHandler);
+  switchElement._mouseUpHandler = mouseUpHandler;
+  
+  // 클릭 이벤트 핸들러 (드래그가 아닌 경우에만 동작)
   const clickHandler = (e) => {
     e.stopPropagation();
-    toggleDeviceConnectionMode();
+    if (!isDragging) {
+      toggleDeviceConnectionMode();
+    }
   };
   switchElement.addEventListener('click', clickHandler);
   switchElement._clickHandler = clickHandler;
@@ -1685,16 +1738,40 @@ function initializeDeviceConnectionSwitch() {
   // 터치 이벤트 핸들러 (모바일)
   const touchStartHandler = (e) => {
     e.stopPropagation();
+    isDragging = false;
+    if (e.touches && e.touches.length > 0) {
+      dragStartX = e.touches[0].clientX;
+      dragStartY = e.touches[0].clientY;
+    }
   };
   switchElement.addEventListener('touchstart', touchStartHandler);
   switchElement._touchStartHandler = touchStartHandler;
   
+  const touchMoveHandler = (e) => {
+    if (dragStartX === 0 && dragStartY === 0) return;
+    if (e.touches && e.touches.length > 0) {
+      const deltaX = Math.abs(e.touches[0].clientX - dragStartX);
+      const deltaY = Math.abs(e.touches[0].clientY - dragStartY);
+      if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
+        isDragging = true;
+      }
+    }
+  };
+  document.addEventListener('touchmove', touchMoveHandler);
+  switchElement._touchMoveHandler = touchMoveHandler;
+  
   const touchEndHandler = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleDeviceConnectionMode();
+    if (!isDragging) {
+      // 드래그가 아닌 경우에만 토글
+      toggleDeviceConnectionMode();
+    }
+    isDragging = false;
+    dragStartX = 0;
+    dragStartY = 0;
   };
-  switchElement.addEventListener('touchend', touchEndHandler);
+  document.addEventListener('touchend', touchEndHandler);
   switchElement._touchEndHandler = touchEndHandler;
   
   console.log('[Device Connection Switch] 초기화 완료, 모드:', deviceConnectionMode);
@@ -1737,17 +1814,17 @@ function updateDeviceConnectionSwitch(mode) {
   switchElement.classList.remove('active-ant', 'active-bluetooth');
   
   if (mode === 'bluetooth') {
-    // Bluetooth 모드: 슬라이더를 오른쪽으로 이동 (녹색)
+    // Bluetooth 모드: 슬라이더를 왼쪽으로 이동 (녹색)
     switchElement.classList.add('active-bluetooth');
-    slider.style.left = '50%';
+    slider.style.left = '0';
     slider.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
     slider.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
     
-    // z-index 조정: 왼쪽(ANT+)은 보이고, 오른쪽(Bluetooth)은 가려짐
+    // z-index 조정: 왼쪽(Bluetooth)은 보이고, 오른쪽(ANT+)은 가려짐
     const optionLeft = switchElement.querySelector('.switch-option-left');
     const optionRight = switchElement.querySelector('.switch-option-right');
-    if (optionLeft) optionLeft.style.zIndex = '4'; // 보임
-    if (optionRight) optionRight.style.zIndex = '2'; // 가려짐
+    if (optionLeft) optionLeft.style.zIndex = '4'; // 보임 (Bluetooth)
+    if (optionRight) optionRight.style.zIndex = '2'; // 가려짐 (ANT+)
     
     if (labelAnt) {
       labelAnt.style.fontWeight = '400';
@@ -1758,17 +1835,17 @@ function updateDeviceConnectionSwitch(mode) {
       labelBluetooth.style.color = '#22c55e';
     }
   } else {
-    // ANT+ 모드 (기본값): 슬라이더를 왼쪽으로 이동 (주황색)
+    // ANT+ 모드 (기본값): 슬라이더를 오른쪽으로 이동 (주황색)
     switchElement.classList.add('active-ant');
-    slider.style.left = '0';
+    slider.style.left = '50%';
     slider.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
     slider.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
     
-    // z-index 조정: 왼쪽(ANT+)은 가려지고, 오른쪽(Bluetooth)은 보임
+    // z-index 조정: 왼쪽(Bluetooth)은 가려지고, 오른쪽(ANT+)은 보임
     const optionLeft = switchElement.querySelector('.switch-option-left');
     const optionRight = switchElement.querySelector('.switch-option-right');
-    if (optionLeft) optionLeft.style.zIndex = '2'; // 가려짐
-    if (optionRight) optionRight.style.zIndex = '4'; // 보임
+    if (optionLeft) optionLeft.style.zIndex = '2'; // 가려짐 (Bluetooth)
+    if (optionRight) optionRight.style.zIndex = '4'; // 보임 (ANT+)
     
     if (labelAnt) {
       labelAnt.style.fontWeight = '600';
@@ -1799,12 +1876,30 @@ function initializeDeviceConnectionSwitchForScreen() {
   if (switchElement._clickHandler) {
     switchElement.removeEventListener('click', switchElement._clickHandler);
   }
+  if (switchElement._mouseDownHandler) {
+    switchElement.removeEventListener('mousedown', switchElement._mouseDownHandler);
+  }
+  if (switchElement._mouseMoveHandler) {
+    document.removeEventListener('mousemove', switchElement._mouseMoveHandler);
+  }
+  if (switchElement._mouseUpHandler) {
+    document.removeEventListener('mouseup', switchElement._mouseUpHandler);
+  }
   if (switchElement._touchStartHandler) {
     switchElement.removeEventListener('touchstart', switchElement._touchStartHandler);
   }
-  if (switchElement._touchEndHandler) {
-    switchElement.removeEventListener('touchend', switchElement._touchEndHandler);
+  if (switchElement._touchMoveHandler) {
+    document.removeEventListener('touchmove', switchElement._touchMoveHandler);
   }
+  if (switchElement._touchEndHandler) {
+    document.removeEventListener('touchend', switchElement._touchEndHandler);
+  }
+  
+  // 드래그 상태 추적 변수
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  const DRAG_THRESHOLD = 5; // 픽셀 단위 드래그 임계값
   
   // 저장된 모드 복원 (없으면 기본값 'ant')
   const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
@@ -1813,11 +1908,47 @@ function initializeDeviceConnectionSwitchForScreen() {
   // 스위치 상태 업데이트 (일반 화면용)
   updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
   
-  // 클릭 이벤트 핸들러 (저장하여 나중에 제거 가능하도록)
+  // 마우스 이벤트 핸들러
+  const mouseDownHandler = (e) => {
+    e.stopPropagation();
+    isDragging = false;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+  };
+  switchElement.addEventListener('mousedown', mouseDownHandler);
+  switchElement._mouseDownHandler = mouseDownHandler;
+  
+  const mouseMoveHandler = (e) => {
+    if (dragStartX === 0 && dragStartY === 0) return;
+    const deltaX = Math.abs(e.clientX - dragStartX);
+    const deltaY = Math.abs(e.clientY - dragStartY);
+    if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
+      isDragging = true;
+    }
+  };
+  document.addEventListener('mousemove', mouseMoveHandler);
+  switchElement._mouseMoveHandler = mouseMoveHandler;
+  
+  const mouseUpHandler = (e) => {
+    if (!isDragging) {
+      // 드래그가 아닌 경우에만 토글
+      toggleDeviceConnectionMode();
+      updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+    }
+    isDragging = false;
+    dragStartX = 0;
+    dragStartY = 0;
+  };
+  document.addEventListener('mouseup', mouseUpHandler);
+  switchElement._mouseUpHandler = mouseUpHandler;
+  
+  // 클릭 이벤트 핸들러 (드래그가 아닌 경우에만 동작)
   const clickHandler = (e) => {
     e.stopPropagation();
-    toggleDeviceConnectionMode();
-    updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+    if (!isDragging) {
+      toggleDeviceConnectionMode();
+      updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+    }
   };
   switchElement.addEventListener('click', clickHandler);
   switchElement._clickHandler = clickHandler;
@@ -1825,17 +1956,41 @@ function initializeDeviceConnectionSwitchForScreen() {
   // 터치 이벤트 핸들러 (모바일)
   const touchStartHandler = (e) => {
     e.stopPropagation();
+    isDragging = false;
+    if (e.touches && e.touches.length > 0) {
+      dragStartX = e.touches[0].clientX;
+      dragStartY = e.touches[0].clientY;
+    }
   };
   switchElement.addEventListener('touchstart', touchStartHandler);
   switchElement._touchStartHandler = touchStartHandler;
   
+  const touchMoveHandler = (e) => {
+    if (dragStartX === 0 && dragStartY === 0) return;
+    if (e.touches && e.touches.length > 0) {
+      const deltaX = Math.abs(e.touches[0].clientX - dragStartX);
+      const deltaY = Math.abs(e.touches[0].clientY - dragStartY);
+      if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
+        isDragging = true;
+      }
+    }
+  };
+  document.addEventListener('touchmove', touchMoveHandler);
+  switchElement._touchMoveHandler = touchMoveHandler;
+  
   const touchEndHandler = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleDeviceConnectionMode();
-    updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+    if (!isDragging) {
+      // 드래그가 아닌 경우에만 토글
+      toggleDeviceConnectionMode();
+      updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
+    }
+    isDragging = false;
+    dragStartX = 0;
+    dragStartY = 0;
   };
-  switchElement.addEventListener('touchend', touchEndHandler);
+  document.addEventListener('touchend', touchEndHandler);
   switchElement._touchEndHandler = touchEndHandler;
   
   console.log('[Device Connection Switch Screen] 초기화 완료, 모드:', deviceConnectionMode);
@@ -1856,17 +2011,17 @@ function updateDeviceConnectionSwitchForScreen(mode) {
   switchElement.classList.remove('active-ant', 'active-bluetooth');
   
   if (mode === 'bluetooth') {
-    // Bluetooth 모드: 슬라이더를 오른쪽으로 이동 (녹색)
+    // Bluetooth 모드: 슬라이더를 왼쪽으로 이동 (녹색)
     switchElement.classList.add('active-bluetooth');
-    slider.style.left = '50%';
+    slider.style.left = '0';
     slider.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
     slider.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
     
-    // z-index 조정: 왼쪽(ANT+)은 보이고, 오른쪽(Bluetooth)은 가려짐
+    // z-index 조정: 왼쪽(Bluetooth)은 보이고, 오른쪽(ANT+)은 가려짐
     const optionLeft = switchElement.querySelector('.switch-option-left');
     const optionRight = switchElement.querySelector('.switch-option-right');
-    if (optionLeft) optionLeft.style.zIndex = '4'; // 보임
-    if (optionRight) optionRight.style.zIndex = '2'; // 가려짐
+    if (optionLeft) optionLeft.style.zIndex = '4'; // 보임 (Bluetooth)
+    if (optionRight) optionRight.style.zIndex = '2'; // 가려짐 (ANT+)
     
     if (labelAnt) {
       labelAnt.style.fontWeight = '400';
@@ -1877,17 +2032,17 @@ function updateDeviceConnectionSwitchForScreen(mode) {
       labelBluetooth.style.color = '#22c55e';
     }
   } else {
-    // ANT+ 모드 (기본값): 슬라이더를 왼쪽으로 이동 (주황색)
+    // ANT+ 모드 (기본값): 슬라이더를 오른쪽으로 이동 (주황색)
     switchElement.classList.add('active-ant');
-    slider.style.left = '0';
+    slider.style.left = '50%';
     slider.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
     slider.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
     
-    // z-index 조정: 왼쪽(ANT+)은 가려지고, 오른쪽(Bluetooth)은 보임
+    // z-index 조정: 왼쪽(Bluetooth)은 가려지고, 오른쪽(ANT+)은 보임
     const optionLeft = switchElement.querySelector('.switch-option-left');
     const optionRight = switchElement.querySelector('.switch-option-right');
-    if (optionLeft) optionLeft.style.zIndex = '2'; // 가려짐
-    if (optionRight) optionRight.style.zIndex = '4'; // 보임
+    if (optionLeft) optionLeft.style.zIndex = '2'; // 가려짐 (Bluetooth)
+    if (optionRight) optionRight.style.zIndex = '4'; // 보임 (ANT+)
     
     if (labelAnt) {
       labelAnt.style.fontWeight = '600';
