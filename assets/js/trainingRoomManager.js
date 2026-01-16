@@ -209,10 +209,14 @@ async function selectTrainingRoom(roomId) {
     return;
   }
   
-  // 이미 선택된 카드인지 확인
+  // 이미 선택된 카드인지 확인 (다른 Room 선택 시에는 계속 진행)
   const targetCard = document.querySelector(`.training-room-card[data-room-id="${roomIdNum}"]`);
-  if (targetCard && targetCard.classList.contains('selected')) {
-    // 이미 선택된 카드이고 슬라이드 스위치와 버튼이 이미 있으면 중복 실행 방지
+  const currentlySelectedCard = document.querySelector('.training-room-card.selected');
+  const isSameRoom = currentlySelectedCard && 
+                     currentlySelectedCard.getAttribute('data-room-id') === String(roomIdNum);
+  
+  if (isSameRoom) {
+    // 같은 Room을 다시 선택한 경우에만 중복 실행 방지
     const contentDiv = targetCard.querySelector('.training-room-content');
     if (contentDiv && 
         contentDiv.querySelector('.device-connection-switch-container') && 
@@ -308,9 +312,18 @@ async function selectTrainingRoom(roomId) {
       const switchContainer = document.createElement('div');
       switchContainer.className = 'device-connection-switch-container';
       switchContainer.style.cssText = 'margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 0; width: 100%;';
-      // 슬라이드 스위치 클릭 시 이벤트 전파 차단
+      // 컨테이너 전체 클릭 시 이벤트 전파 차단 (슬라이드 스위치 자체 클릭은 허용)
       switchContainer.addEventListener('click', (e) => {
-        e.stopPropagation();
+        // 슬라이드 스위치 요소 자체를 클릭한 경우에만 이벤트 전파 차단 (슬라이드 동작 허용)
+        const switchElement = e.target.closest('.device-connection-switch');
+        if (switchElement) {
+          // 슬라이드 스위치를 클릭한 경우 - 이벤트 전파 차단하여 부모 카드의 selectTrainingRoom 방지
+          // 하지만 슬라이드 스위치 자체의 이벤트 핸들러는 동작하도록 함
+          e.stopPropagation();
+        } else {
+          // 슬라이드 스위치가 아닌 영역(여백, label 등)을 클릭한 경우 이벤트 전파 차단
+          e.stopPropagation();
+        }
       });
       switchContainer.innerHTML = `
         <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
@@ -358,9 +371,10 @@ async function selectTrainingRoom(roomId) {
       `;
       contentDiv.appendChild(buttonsDiv);
       
-      // contentDiv 클릭 시 이미 선택된 카드면 이벤트 전파 차단 (중복 선택 방지)
+      // contentDiv 클릭 시 이벤트 전파 차단
+      // 슬라이드 스위치와 버튼 영역은 각각의 이벤트 핸들러에서 처리
       contentDiv.addEventListener('click', (e) => {
-        // 슬라이드 스위치나 버튼 영역이 아닌 경우에만 차단
+        // 슬라이드 스위치 컨테이너나 버튼 영역이 아닌 경우에만 이벤트 전파 차단
         if (!e.target.closest('.device-connection-switch-container') && 
             !e.target.closest('.training-room-action-buttons')) {
           e.stopPropagation();
@@ -1999,15 +2013,30 @@ function initializeDeviceConnectionSwitchForScreen() {
   // 스위치 상태 업데이트 (일반 화면용)
   updateDeviceConnectionSwitchForScreen(deviceConnectionMode);
   
+  // 슬라이드 스위치 요소 자체인지 확인하는 헬퍼 함수
+  const isSwitchElement = (target) => {
+    return target === switchElement || 
+           target.closest('.switch-option') || 
+           target.closest('.switch-slider') ||
+           switchElement.contains(target);
+  };
+  
   // 마우스 이벤트 핸들러
   const mouseDownHandler = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    isDragging = false;
-    hasMoved = false;
-    isProcessing = false;
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
+    // 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
+    if (isSwitchElement(e.target)) {
+      e.stopPropagation();
+      e.preventDefault();
+      isDragging = false;
+      hasMoved = false;
+      isProcessing = false;
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+    } else {
+      // 슬라이드 스위치가 아닌 영역을 클릭한 경우 이벤트 전파 차단
+      e.stopPropagation();
+      e.preventDefault();
+    }
   };
   switchElement.addEventListener('mousedown', mouseDownHandler, { passive: false });
   switchElement._mouseDownHandler = mouseDownHandler;
@@ -2028,6 +2057,13 @@ function initializeDeviceConnectionSwitchForScreen() {
   switchElement._mouseMoveHandler = mouseMoveHandler;
   
   const mouseUpHandler = (e) => {
+    // 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
+    if (!isSwitchElement(e.target)) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    
     e.stopPropagation();
     e.preventDefault();
     
@@ -2061,11 +2097,18 @@ function initializeDeviceConnectionSwitchForScreen() {
   document.addEventListener('mouseup', mouseUpHandler, { passive: false });
   switchElement._mouseUpHandler = mouseUpHandler;
   
-  // 클릭 이벤트 핸들러 - 완전히 차단 (mouseup에서 처리)
+  // 클릭 이벤트 핸들러 - 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
   const clickHandler = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    // mouseup에서 이미 처리했으므로 여기서는 아무것도 하지 않음
+    // 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
+    if (isSwitchElement(e.target)) {
+      e.stopPropagation();
+      e.preventDefault();
+      // mouseup에서 이미 처리했으므로 여기서는 아무것도 하지 않음
+    } else {
+      // 슬라이드 스위치가 아닌 영역을 클릭한 경우 이벤트 전파 차단
+      e.stopPropagation();
+      e.preventDefault();
+    }
     return false;
   };
   switchElement.addEventListener('click', clickHandler, { passive: false });
@@ -2075,13 +2118,21 @@ function initializeDeviceConnectionSwitchForScreen() {
   let touchHasMoved = false;
   
   const touchStartHandler = (e) => {
-    e.stopPropagation();
-    isDragging = false;
-    touchHasMoved = false;
-    isProcessing = false;
-    if (e.touches && e.touches.length > 0) {
-      dragStartX = e.touches[0].clientX;
-      dragStartY = e.touches[0].clientY;
+    // 슬라이드 스위치 요소 자체를 터치한 경우에만 처리
+    const touchTarget = e.touches && e.touches.length > 0 ? document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY) : e.target;
+    if (touchTarget && isSwitchElement(touchTarget)) {
+      e.stopPropagation();
+      isDragging = false;
+      touchHasMoved = false;
+      isProcessing = false;
+      if (e.touches && e.touches.length > 0) {
+        dragStartX = e.touches[0].clientX;
+        dragStartY = e.touches[0].clientY;
+      }
+    } else {
+      // 슬라이드 스위치가 아닌 영역을 터치한 경우 이벤트 전파 차단
+      e.stopPropagation();
+      e.preventDefault();
     }
   };
   switchElement.addEventListener('touchstart', touchStartHandler, { passive: false });
@@ -2105,6 +2156,14 @@ function initializeDeviceConnectionSwitchForScreen() {
   switchElement._touchMoveHandler = touchMoveHandler;
   
   const touchEndHandler = (e) => {
+    // 슬라이드 스위치 요소 자체를 터치한 경우에만 처리
+    const touchTarget = e.changedTouches && e.changedTouches.length > 0 ? document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY) : e.target;
+    if (!touchTarget || !isSwitchElement(touchTarget)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    
     e.preventDefault();
     e.stopPropagation();
     
