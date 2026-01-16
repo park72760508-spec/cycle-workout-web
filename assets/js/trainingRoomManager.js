@@ -172,7 +172,8 @@ function renderTrainingRoomList(rooms, users = []) {
            data-room-id="${room.id}" 
            data-room-title="${escapeHtml(room.title)}"
            data-room-password="${hasPassword ? escapeHtml(String(room.password)) : ''}"
-           onclick="selectTrainingRoom('${room.id}')">
+           onclick="selectTrainingRoom('${room.id}')"
+           style="cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;">
         <div class="training-room-content">
           <div class="training-room-name-section">
             <div class="training-room-name ${room.title ? 'has-name' : 'no-name'}">
@@ -192,6 +193,37 @@ function renderTrainingRoomList(rooms, users = []) {
       </div>
     `;
   }).join('');
+
+  // 모바일 터치 이벤트를 위한 명시적 이벤트 리스너 추가
+  // 모든 카드에 터치 이벤트 리스너 추가 (모바일에서 onclick이 작동하지 않을 수 있음)
+  setTimeout(() => {
+    document.querySelectorAll('.training-room-card').forEach(card => {
+      // 기존 터치 이벤트 리스너 제거 (중복 방지)
+      if (card._cardTouchHandler) {
+        card.removeEventListener('touchend', card._cardTouchHandler);
+        card._cardTouchHandler = null;
+      }
+      
+      const roomId = card.getAttribute('data-room-id');
+      if (roomId) {
+        // 터치 이벤트 핸들러 추가 (모바일용)
+        const cardTouchHandler = (e) => {
+          // 슬라이드 스위치 컨테이너나 버튼 영역을 터치한 경우 무시
+          if (e.target.closest('.device-connection-switch-container') || 
+              e.target.closest('.training-room-action-buttons')) {
+            return;
+          }
+          
+          // 카드 영역을 터치한 경우에만 Room 선택
+          e.stopPropagation();
+          selectTrainingRoom(roomId);
+        };
+        
+        card.addEventListener('touchend', cardTouchHandler, { passive: true });
+        card._cardTouchHandler = cardTouchHandler;
+      }
+    });
+  }, 0);
 
   // CSS는 style.css에 정의되어 있음 (동적 스타일 추가 불필요)
 }
@@ -285,6 +317,10 @@ async function selectTrainingRoom(roomId) {
         existingSwitchContainer.removeEventListener('touchstart', existingSwitchContainer._switchContainerTouchHandler);
         existingSwitchContainer._switchContainerTouchHandler = null;
       }
+      if (existingSwitchContainer._switchContainerTouchEndHandler) {
+        existingSwitchContainer.removeEventListener('touchend', existingSwitchContainer._switchContainerTouchEndHandler);
+        existingSwitchContainer._switchContainerTouchEndHandler = null;
+      }
       existingSwitchContainer.remove();
     }
     
@@ -358,9 +394,20 @@ async function selectTrainingRoom(roomId) {
           e.stopPropagation();
         }
         // 슬라이드 스위치가 아닌 영역(label 등)을 터치한 경우 이벤트 전파 허용하여 카드 선택 가능
+        // 하지만 컨테이너 자체는 카드 선택을 방지 (touchend에서 처리)
       };
       switchContainer.addEventListener('touchstart', switchContainerTouchHandler, { passive: true });
       switchContainer._switchContainerTouchHandler = switchContainerTouchHandler;
+      
+      // touchend도 처리하여 카드 선택 방지
+      const switchContainerTouchEndHandler = (e) => {
+        const switchElement = e.target.closest('.device-connection-switch');
+        if (switchElement) {
+          e.stopPropagation();
+        }
+      };
+      switchContainer.addEventListener('touchend', switchContainerTouchEndHandler, { passive: true });
+      switchContainer._switchContainerTouchEndHandler = switchContainerTouchEndHandler;
       switchContainer.innerHTML = `
         <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
         <div class="device-connection-switch" id="deviceConnectionSwitchScreen" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
