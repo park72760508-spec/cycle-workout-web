@@ -454,15 +454,17 @@ async function selectTrainingRoom(roomId) {
       buttonsDiv.innerHTML = `
         <button class="btn btn-primary btn-default-style btn-with-icon training-room-btn-player ${!canAccessPlayer ? 'disabled' : ''}" 
                 data-room-id="${room.id}" 
-                onclick="event.stopPropagation(); openPlayerList();"
-                ${!canAccessPlayer ? 'disabled' : ''}>
+                onclick="event.stopPropagation(); if (typeof openPlayerList === 'function') { openPlayerList(); }"
+                ${!canAccessPlayer ? 'disabled' : ''}
+                style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
           <img src="assets/img/personals.png" alt="Player" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
           Player
         </button>
         <button class="btn btn-success btn-default-style btn-with-icon training-room-btn-coach ${!canAccessCoach ? 'disabled' : ''}" 
                 data-room-id="${room.id}" 
-                onclick="event.stopPropagation(); openCoachMode();"
-                ${!canAccessCoach ? 'disabled' : ''}>
+                onclick="event.stopPropagation(); if (typeof openCoachMode === 'function') { openCoachMode(); }"
+                ${!canAccessCoach ? 'disabled' : ''}
+                style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;">
           <img src="assets/img/personal.png" alt="Coach" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
           Coach
         </button>
@@ -473,28 +475,60 @@ async function selectTrainingRoom(roomId) {
       // 카드 자체의 onclick이 정상 작동하도록 함
       // 슬라이드 스위치와 버튼 영역의 이벤트 리스너가 각각 stopPropagation을 호출하여 충분함
       
-      // 버튼 스타일 적용
-      const btnPlayer = buttonsDiv.querySelector('.training-room-btn-player');
-      const btnCoach = buttonsDiv.querySelector('.training-room-btn-coach');
-      
-      if (btnPlayer) {
-        if (!canAccessPlayer) {
-          btnPlayer.style.opacity = '0.5';
-          btnPlayer.style.cursor = 'not-allowed';
-        } else {
-          btnPlayer.style.opacity = '1';
-          btnPlayer.style.cursor = 'pointer';
+      // 버튼 스타일 적용 및 모바일 터치 이벤트 추가 (DOM에 추가된 후 실행)
+      setTimeout(() => {
+        const btnPlayer = buttonsDiv.querySelector('.training-room-btn-player');
+        const btnCoach = buttonsDiv.querySelector('.training-room-btn-coach');
+        
+        if (btnPlayer) {
+          if (!canAccessPlayer) {
+            btnPlayer.style.opacity = '0.5';
+            btnPlayer.style.cursor = 'not-allowed';
+          } else {
+            btnPlayer.style.opacity = '1';
+            btnPlayer.style.cursor = 'pointer';
+            
+            // 모바일 터치 이벤트 추가 (중복 방지)
+            if (btnPlayer._buttonTouchHandler) {
+              btnPlayer.removeEventListener('touchend', btnPlayer._buttonTouchHandler);
+            }
+            
+            const playerTouchHandler = (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (typeof openPlayerList === 'function') {
+                openPlayerList();
+              }
+            };
+            btnPlayer.addEventListener('touchend', playerTouchHandler, { passive: false });
+            btnPlayer._buttonTouchHandler = playerTouchHandler;
+          }
         }
-      }
-      if (btnCoach) {
-        if (!canAccessCoach) {
-          btnCoach.style.opacity = '0.5';
-          btnCoach.style.cursor = 'not-allowed';
-        } else {
-          btnCoach.style.opacity = '1';
-          btnCoach.style.cursor = 'pointer';
+        if (btnCoach) {
+          if (!canAccessCoach) {
+            btnCoach.style.opacity = '0.5';
+            btnCoach.style.cursor = 'not-allowed';
+          } else {
+            btnCoach.style.opacity = '1';
+            btnCoach.style.cursor = 'pointer';
+            
+            // 모바일 터치 이벤트 추가 (중복 방지)
+            if (btnCoach._buttonTouchHandler) {
+              btnCoach.removeEventListener('touchend', btnCoach._buttonTouchHandler);
+            }
+            
+            const coachTouchHandler = (e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (typeof openCoachMode === 'function') {
+                openCoachMode();
+              }
+            };
+            btnCoach.addEventListener('touchend', coachTouchHandler, { passive: false });
+            btnCoach._buttonTouchHandler = coachTouchHandler;
+          }
         }
-      }
+      }, 0);
     }
   }
 }
@@ -2435,6 +2469,47 @@ function initializeTrainingRoomScreen() {
       }
     });
   }, 100);
+  
+  // 뒤로 가기 버튼에 모바일 터치 이벤트 추가
+  setTimeout(() => {
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    if (trainingRoomScreen) {
+      // 뒤로 가기 버튼 찾기 (다양한 선택자 시도)
+      let backButton = trainingRoomScreen.querySelector('.connection-exit-container .btn-exit-inline');
+      if (!backButton) {
+        backButton = trainingRoomScreen.querySelector('button.btn-exit-inline[onclick*="basecampScreen"]');
+      }
+      if (!backButton) {
+        // onclick 속성으로 찾기
+        const allButtons = trainingRoomScreen.querySelectorAll('.connection-exit-container button');
+        backButton = Array.from(allButtons).find(btn => 
+          btn.getAttribute('onclick') && btn.getAttribute('onclick').includes('basecampScreen')
+        );
+      }
+      
+      if (backButton) {
+        // 기존 터치 이벤트 리스너 제거 (중복 방지)
+        if (backButton._backButtonTouchHandler) {
+          backButton.removeEventListener('touchend', backButton._backButtonTouchHandler);
+        }
+        
+        // 터치 이벤트 핸들러 추가
+        const backButtonTouchHandler = (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (typeof showScreen === 'function') {
+            showScreen('basecampScreen');
+          }
+        };
+        backButton.addEventListener('touchend', backButtonTouchHandler, { passive: false });
+        backButton._backButtonTouchHandler = backButtonTouchHandler;
+        
+        // 터치 스타일 개선
+        backButton.style.touchAction = 'manipulation';
+        backButton.style.webkitTapHighlightColor = 'transparent';
+      }
+    }
+  }, 150);
 }
 
 /**
