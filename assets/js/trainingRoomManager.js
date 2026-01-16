@@ -288,7 +288,7 @@ async function selectTrainingRoom(roomId) {
       // 디바이스 연결 방식 스위치 추가 (Player/Coach 버튼 위에)
       const switchContainer = document.createElement('div');
       switchContainer.className = 'device-connection-switch-container';
-      switchContainer.style.cssText = 'margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%;';
+      switchContainer.style.cssText = 'margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; gap: 0; width: 100%;';
       switchContainer.innerHTML = `
         <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
         <div class="device-connection-switch" id="deviceConnectionSwitchScreen" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
@@ -301,11 +301,7 @@ async function selectTrainingRoom(roomId) {
             <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
           </div>
           <!-- 슬라이더 (움직이는 부분) -->
-          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 50%; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); z-index: 3;"></div>
-        </div>
-        <div class="switch-label-container" style="display: flex; justify-content: space-between; width: 200px; font-size: 12px; color: #999;">
-          <span id="switchLabelAntScreen" style="font-weight: 600; color: #2e74e8;">ANT+</span>
-          <span id="switchLabelBluetoothScreen" style="font-weight: 400; color: #999;">Bluetooth</span>
+          <div class="switch-slider" id="switchSliderScreen" style="position: absolute; left: 50%; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3); z-index: 3;"></div>
         </div>
       `;
       contentDiv.appendChild(switchContainer);
@@ -1835,11 +1831,11 @@ function updateDeviceConnectionSwitch(mode) {
       labelBluetooth.style.color = '#22c55e';
     }
   } else {
-    // ANT+ 모드 (기본값): 슬라이더를 오른쪽으로 이동 (주황색)
+    // ANT+ 모드 (기본값): 슬라이더를 오른쪽으로 이동 (녹색)
     switchElement.classList.add('active-ant');
     slider.style.left = '50%';
-    slider.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-    slider.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
+    slider.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+    slider.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
     
     // z-index 조정: 왼쪽(Bluetooth)은 가려지고, 오른쪽(ANT+)은 보임
     const optionLeft = switchElement.querySelector('.switch-option-left');
@@ -1849,7 +1845,7 @@ function updateDeviceConnectionSwitch(mode) {
     
     if (labelAnt) {
       labelAnt.style.fontWeight = '600';
-      labelAnt.style.color = '#f59e0b';
+      labelAnt.style.color = '#22c55e';
     }
     if (labelBluetooth) {
       labelBluetooth.style.fontWeight = '400';
@@ -2032,11 +2028,11 @@ function updateDeviceConnectionSwitchForScreen(mode) {
       labelBluetooth.style.color = '#22c55e';
     }
   } else {
-    // ANT+ 모드 (기본값): 슬라이더를 오른쪽으로 이동 (주황색)
+    // ANT+ 모드 (기본값): 슬라이더를 오른쪽으로 이동 (녹색)
     switchElement.classList.add('active-ant');
     slider.style.left = '50%';
-    slider.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
-    slider.style.boxShadow = '0 2px 8px rgba(245, 158, 11, 0.3)';
+    slider.style.background = 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)';
+    slider.style.boxShadow = '0 2px 8px rgba(34, 197, 94, 0.3)';
     
     // z-index 조정: 왼쪽(Bluetooth)은 가려지고, 오른쪽(ANT+)은 보임
     const optionLeft = switchElement.querySelector('.switch-option-left');
@@ -2046,7 +2042,7 @@ function updateDeviceConnectionSwitchForScreen(mode) {
     
     if (labelAnt) {
       labelAnt.style.fontWeight = '600';
-      labelAnt.style.color = '#f59e0b';
+      labelAnt.style.color = '#22c55e';
     }
     if (labelBluetooth) {
       labelBluetooth.style.fontWeight = '400';
