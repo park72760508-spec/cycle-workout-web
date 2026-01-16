@@ -2641,16 +2641,16 @@
           <div class="device-connection-switch-container" style="margin-bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
             <label style="font-size: 14px; color: #666; font-weight: 500;">디바이스 연결 방식</label>
             <div class="device-connection-switch" id="deviceConnectionSwitch" style="position: relative; width: 200px; height: 50px; background: #e0e0e0; border-radius: 25px; cursor: pointer; transition: background 0.3s ease;">
-              <!-- ANT+ 옵션 (왼쪽) -->
-              <div class="switch-option switch-option-left" data-mode="ant" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 25px 0 0 25px; transition: all 0.3s ease; z-index: 2;">
-                <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
-              </div>
-              <!-- Bluetooth 옵션 (오른쪽) -->
-              <div class="switch-option switch-option-right" data-mode="bluetooth" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
+              <!-- Bluetooth 옵션 (왼쪽) -->
+              <div class="switch-option switch-option-left" data-mode="bluetooth" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 25px 0 0 25px; transition: all 0.3s ease; z-index: 2;">
                 <img src="assets/img/wifi.png" alt="Bluetooth" style="width: 32px; height: 32px; object-fit: contain;" />
               </div>
+              <!-- ANT+ 옵션 (오른쪽) -->
+              <div class="switch-option switch-option-right" data-mode="ant" style="position: absolute; right: 0; top: 0; width: 50%; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 0 25px 25px 0; transition: all 0.3s ease; z-index: 2;">
+                <img src="assets/img/antlogo.gif" alt="ANT+" style="width: 32px; height: 32px; object-fit: contain;" />
+              </div>
               <!-- 슬라이더 (움직이는 부분) -->
-              <div class="switch-slider" id="switchSlider" style="position: absolute; left: 0; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); z-index: 3;"></div>
+              <div class="switch-slider" id="switchSlider" style="position: absolute; left: 50%; top: 0; width: 50%; height: 100%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 25px; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3); z-index: 3;"></div>
             </div>
             <div class="switch-label-container" style="display: flex; justify-content: space-between; width: 200px; font-size: 12px; color: #999;">
               <span id="switchLabelAnt" style="font-weight: 600; color: #2e74e8;">ANT+</span>
