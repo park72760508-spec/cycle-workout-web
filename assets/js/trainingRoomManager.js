@@ -1880,7 +1880,31 @@ function initializeDeviceConnectionSwitch() {
   switchElement._mouseDownHandler = mouseDownHandler;
   
   const mouseMoveHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('mousemove', mouseMoveHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시
+      return;
+    }
+    
     if (dragStartX === 0 && dragStartY === 0) return;
+    
+    // 이벤트 타겟이 슬라이드 스위치와 관련이 없는 경우 무시
+    if (!switchElement.contains(e.target) && e.target !== switchElement) {
+      return;
+    }
+    
     const deltaX = Math.abs(e.clientX - dragStartX);
     const deltaY = Math.abs(e.clientY - dragStartY);
     if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
@@ -1895,6 +1919,29 @@ function initializeDeviceConnectionSwitch() {
   switchElement._mouseMoveHandler = mouseMoveHandler;
   
   const mouseUpHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('mouseup', mouseUpHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시 (다른 화면의 버튼 동작 방해 방지)
+      return;
+    }
+    
+    // 이벤트 타겟이 슬라이드 스위치와 관련이 없는 경우 무시 (다른 화면의 버튼 동작 방해 방지)
+    if (!switchElement.contains(e.target) && e.target !== switchElement) {
+      return;
+    }
+    
     e.stopPropagation();
     e.preventDefault();
     
@@ -1927,11 +1974,15 @@ function initializeDeviceConnectionSwitch() {
   document.addEventListener('mouseup', mouseUpHandler, { passive: false });
   switchElement._mouseUpHandler = mouseUpHandler;
   
-  // 클릭 이벤트 핸들러 - 완전히 차단 (mouseup에서 처리)
+  // 클릭 이벤트 핸들러 - 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
   const clickHandler = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    // mouseup에서 이미 처리했으므로 여기서는 아무것도 하지 않음
+    // 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
+    if (switchElement && switchElement.contains(e.target)) {
+      e.stopPropagation();
+      e.preventDefault();
+      // mouseup에서 이미 처리했으므로 여기서는 아무것도 하지 않음
+    }
+    // 슬라이드 스위치가 아닌 영역을 클릭한 경우 - 다른 버튼 동작을 방해하지 않도록 아무것도 하지 않음
     return false;
   };
   switchElement.addEventListener('click', clickHandler, { passive: false });
@@ -1954,7 +2005,34 @@ function initializeDeviceConnectionSwitch() {
   switchElement._touchStartHandler = touchStartHandler;
   
   const touchMoveHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('touchmove', touchMoveHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시
+      return;
+    }
+    
     if (dragStartX === 0 && dragStartY === 0) return;
+    
+    // 이벤트 타겟이 슬라이드 스위치와 관련이 없는 경우 무시
+    if (e.touches && e.touches.length > 0) {
+      const touchTarget = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+      if (!touchTarget || (!switchElement.contains(touchTarget) && touchTarget !== switchElement)) {
+        return;
+      }
+    }
+    
     if (e.touches && e.touches.length > 0) {
       const deltaX = Math.abs(e.touches[0].clientX - dragStartX);
       const deltaY = Math.abs(e.touches[0].clientY - dragStartY);
@@ -1971,6 +2049,34 @@ function initializeDeviceConnectionSwitch() {
   switchElement._touchMoveHandler = touchMoveHandler;
   
   const touchEndHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('touchend', touchEndHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시 (다른 화면의 버튼 동작 방해 방지)
+      return;
+    }
+    
+    // 이벤트 타겟이 슬라이드 스위치와 관련이 없는 경우 무시 (다른 화면의 버튼 동작 방해 방지)
+    const touchTarget = e.changedTouches && e.changedTouches.length > 0 
+      ? document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY) 
+      : e.target;
+    
+    if (!touchTarget || (!switchElement.contains(touchTarget) && touchTarget !== switchElement)) {
+      // 슬라이드 스위치가 아닌 영역을 터치한 경우 - 다른 버튼 동작을 방해하지 않도록 아무것도 하지 않음
+      return;
+    }
+    
     e.preventDefault();
     e.stopPropagation();
     
@@ -2168,7 +2274,31 @@ function initializeDeviceConnectionSwitchForScreen() {
   switchElement._mouseDownHandler = mouseDownHandler;
   
   const mouseMoveHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('mousemove', mouseMoveHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시
+      return;
+    }
+    
     if (dragStartX === 0 && dragStartY === 0) return;
+    
+    // 이벤트 타겟이 슬라이드 스위치와 관련이 없는 경우 무시
+    if (!switchElement.contains(e.target) && e.target !== switchElement) {
+      return;
+    }
+    
     const deltaX = Math.abs(e.clientX - dragStartX);
     const deltaY = Math.abs(e.clientY - dragStartY);
     if (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD) {
@@ -2183,10 +2313,16 @@ function initializeDeviceConnectionSwitchForScreen() {
   switchElement._mouseMoveHandler = mouseMoveHandler;
   
   const mouseUpHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('mouseup', mouseUpHandler);
+      return;
+    }
+    
     // 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
     if (!isSwitchElement(e.target)) {
-      e.stopPropagation();
-      e.preventDefault();
+      // 슬라이드 스위치가 아닌 영역을 클릭한 경우 - 다른 버튼 동작을 방해하지 않도록 아무것도 하지 않음
       return;
     }
     
@@ -2226,15 +2362,12 @@ function initializeDeviceConnectionSwitchForScreen() {
   // 클릭 이벤트 핸들러 - 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
   const clickHandler = (e) => {
     // 슬라이드 스위치 요소 자체를 클릭한 경우에만 처리
-    if (isSwitchElement(e.target)) {
+    if (switchElement && isSwitchElement(e.target)) {
       e.stopPropagation();
       e.preventDefault();
       // mouseup에서 이미 처리했으므로 여기서는 아무것도 하지 않음
-    } else {
-      // 슬라이드 스위치가 아닌 영역을 클릭한 경우 이벤트 전파 차단
-      e.stopPropagation();
-      e.preventDefault();
     }
+    // 슬라이드 스위치가 아닌 영역을 클릭한 경우 - 다른 버튼 동작을 방해하지 않도록 아무것도 하지 않음
     return false;
   };
   switchElement.addEventListener('click', clickHandler, { passive: false });
@@ -2255,17 +2388,41 @@ function initializeDeviceConnectionSwitchForScreen() {
         dragStartX = e.touches[0].clientX;
         dragStartY = e.touches[0].clientY;
       }
-    } else {
-      // 슬라이드 스위치가 아닌 영역을 터치한 경우 이벤트 전파 차단
-      e.stopPropagation();
-      e.preventDefault();
     }
+    // 슬라이드 스위치가 아닌 영역을 터치한 경우 - 다른 버튼 동작을 방해하지 않도록 아무것도 하지 않음
   };
   switchElement.addEventListener('touchstart', touchStartHandler, { passive: false });
   switchElement._touchStartHandler = touchStartHandler;
   
   const touchMoveHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('touchmove', touchMoveHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시
+      return;
+    }
+    
     if (dragStartX === 0 && dragStartY === 0) return;
+    
+    // 이벤트 타겟이 슬라이드 스위치와 관련이 없는 경우 무시
+    if (e.touches && e.touches.length > 0) {
+      const touchTarget = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+      if (!touchTarget || (!switchElement.contains(touchTarget) && touchTarget !== switchElement)) {
+        return;
+      }
+    }
+    
     if (e.touches && e.touches.length > 0) {
       const deltaX = Math.abs(e.touches[0].clientX - dragStartX);
       const deltaY = Math.abs(e.touches[0].clientY - dragStartY);
@@ -2282,11 +2439,31 @@ function initializeDeviceConnectionSwitchForScreen() {
   switchElement._touchMoveHandler = touchMoveHandler;
   
   const touchEndHandler = (e) => {
+    // 슬라이드 스위치와 관련된 이벤트인지 확인
+    if (!switchElement || !switchElement.parentElement || !document.body.contains(switchElement)) {
+      // 슬라이드 스위치가 DOM에서 제거된 경우 리스너 제거
+      document.removeEventListener('touchend', touchEndHandler);
+      return;
+    }
+    
+    // 슬라이드 스위치가 보이는 화면인지 확인 (다른 화면에서는 동작하지 않도록)
+    const trainingRoomScreen = document.getElementById('trainingRoomScreen');
+    const isTrainingRoomScreenActive = trainingRoomScreen && 
+      (trainingRoomScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingRoomScreen).display !== 'none');
+    
+    if (!isTrainingRoomScreenActive) {
+      // Training Room 화면이 아닌 경우 무시 (다른 화면의 버튼 동작 방해 방지)
+      return;
+    }
+    
     // 슬라이드 스위치 요소 자체를 터치한 경우에만 처리
-    const touchTarget = e.changedTouches && e.changedTouches.length > 0 ? document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY) : e.target;
+    const touchTarget = e.changedTouches && e.changedTouches.length > 0 
+      ? document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY) 
+      : e.target;
+    
     if (!touchTarget || !isSwitchElement(touchTarget)) {
-      e.preventDefault();
-      e.stopPropagation();
+      // 슬라이드 스위치가 아닌 영역을 터치한 경우 - 다른 버튼 동작을 방해하지 않도록 아무것도 하지 않음
       return;
     }
     
