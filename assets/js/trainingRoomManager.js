@@ -9,6 +9,8 @@ let trainingRoomList = [];
 // 비밀번호 인증된 Training Room ID 추적 (재인증 방지)
 // 인증된 Training Room 관리 (메모리 + sessionStorage)
 let authenticatedTrainingRooms = new Set();
+// 디바이스 연결 방식: 'ant' 또는 'bluetooth' (기본값: 'ant')
+let deviceConnectionMode = 'ant';
 
 // sessionStorage에서 인증 상태 복원
 function restoreAuthenticatedRooms() {
@@ -1484,6 +1486,9 @@ async function selectTrainingRoomForModal(roomId) {
   if (selectedSection && selectedTitle) {
     selectedTitle.textContent = room.title;
     selectedSection.style.display = 'block';
+    
+    // 디바이스 연결 방식 스위치 초기화
+    initializeDeviceConnectionSwitch();
   }
 
   // 비밀번호 확인 성공 후 버튼 활성화
@@ -1522,6 +1527,114 @@ async function selectTrainingRoomForModal(roomId) {
       btnCoach.style.cursor = 'not-allowed';
     }
   }
+}
+
+/**
+ * 디바이스 연결 방식 스위치 초기화
+ */
+function initializeDeviceConnectionSwitch() {
+  const switchElement = document.getElementById('deviceConnectionSwitch');
+  const slider = document.getElementById('switchSlider');
+  const labelAnt = document.getElementById('switchLabelAnt');
+  const labelBluetooth = document.getElementById('switchLabelBluetooth');
+  
+  if (!switchElement || !slider) {
+    console.warn('[Device Connection Switch] 스위치 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 저장된 모드 복원 (없으면 기본값 'ant')
+  const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
+  deviceConnectionMode = savedMode;
+  
+  // 스위치 상태 업데이트
+  updateDeviceConnectionSwitch(deviceConnectionMode);
+  
+  // 클릭 이벤트 핸들러
+  switchElement.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDeviceConnectionMode();
+  });
+  
+  // 터치 이벤트 핸들러 (모바일)
+  switchElement.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
+  });
+  
+  switchElement.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleDeviceConnectionMode();
+  });
+  
+  console.log('[Device Connection Switch] 초기화 완료, 모드:', deviceConnectionMode);
+}
+
+/**
+ * 디바이스 연결 방식 토글
+ */
+function toggleDeviceConnectionMode() {
+  // ANT+ <-> Bluetooth 전환
+  deviceConnectionMode = deviceConnectionMode === 'ant' ? 'bluetooth' : 'ant';
+  
+  // 스위치 상태 업데이트
+  updateDeviceConnectionSwitch(deviceConnectionMode);
+  
+  // 모드 저장
+  sessionStorage.setItem('deviceConnectionMode', deviceConnectionMode);
+  
+  console.log('[Device Connection Switch] 모드 변경:', deviceConnectionMode);
+  
+  // 토스트 메시지 표시
+  if (typeof showToast === 'function') {
+    const modeText = deviceConnectionMode === 'ant' ? 'ANT+' : 'Bluetooth';
+    showToast(`연결 방식: ${modeText}`, 'info');
+  }
+}
+
+/**
+ * 디바이스 연결 방식 스위치 UI 업데이트
+ */
+function updateDeviceConnectionSwitch(mode) {
+  const switchElement = document.getElementById('deviceConnectionSwitch');
+  const slider = document.getElementById('switchSlider');
+  const labelAnt = document.getElementById('switchLabelAnt');
+  const labelBluetooth = document.getElementById('switchLabelBluetooth');
+  
+  if (!switchElement || !slider) return;
+  
+  // 기존 클래스 제거
+  switchElement.classList.remove('active-ant', 'active-bluetooth');
+  
+  if (mode === 'bluetooth') {
+    switchElement.classList.add('active-bluetooth');
+    if (labelAnt) {
+      labelAnt.style.fontWeight = '400';
+      labelAnt.style.color = '#999';
+    }
+    if (labelBluetooth) {
+      labelBluetooth.style.fontWeight = '600';
+      labelBluetooth.style.color = '#22c55e';
+    }
+  } else {
+    // ANT+ 모드 (기본값)
+    switchElement.classList.add('active-ant');
+    if (labelAnt) {
+      labelAnt.style.fontWeight = '600';
+      labelAnt.style.color = '#f59e0b';
+    }
+    if (labelBluetooth) {
+      labelBluetooth.style.fontWeight = '400';
+      labelBluetooth.style.color = '#999';
+    }
+  }
+}
+
+/**
+ * 현재 디바이스 연결 방식 가져오기
+ */
+function getDeviceConnectionMode() {
+  return deviceConnectionMode || 'ant';
 }
 
 /**
@@ -2952,6 +3065,8 @@ if (typeof window !== 'undefined') {
   // 모달 관련 함수
   window.showTrainingRoomModal = showTrainingRoomModal;
   window.closeTrainingRoomModal = closeTrainingRoomModal;
+window.getDeviceConnectionMode = getDeviceConnectionMode;
+window.toggleDeviceConnectionMode = toggleDeviceConnectionMode;
   window.selectTrainingRoomForModal = selectTrainingRoomForModal;
   window.openPlayerListFromModal = openPlayerListFromModal;
   window.openCoachModeFromModal = openCoachModeFromModal;
