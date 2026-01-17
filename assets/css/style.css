@@ -11554,7 +11554,7 @@ button[aria-disabled="true"] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px; /* 변경 전: 2px, 변경 후: 1px (높이 최소화) */
 }
 
 .speed-value {
@@ -11566,7 +11566,7 @@ button[aria-disabled="true"] {
 }
 
 .speed-unit-bottom {
-  font-size: 12.96px; /* 43.2px * 0.3 (중앙 단위, 20% 확대 반영) */
+  font-size: 10px; /* 변경 전: 12.96px, 변경 후: 10px (높이 최소화) */
   color: #000000; /* 검정색 */
   font-weight: 300;
   line-height: 1;
