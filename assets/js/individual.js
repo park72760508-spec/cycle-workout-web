@@ -489,13 +489,42 @@ function updateDashboard(data) {
 }
 
 function updateTimer(status) {
+    // 개인훈련 대시보드 화면 체크 (individual.html 또는 mobileDashboardScreen)
+    const individualScreen = document.getElementById('individualScreen');
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    const isIndividualActive = individualScreen && 
+        (individualScreen.classList.contains('active') || 
+         window.getComputedStyle(individualScreen).display !== 'none');
+    const isMobileActive = mobileScreen && 
+        (mobileScreen.classList.contains('active') || 
+         window.getComputedStyle(mobileScreen).display !== 'none');
+    
+    // 개인훈련 대시보드 화면이 아니면 실행하지 않음 (다른 화면과 분리)
+    if (!isIndividualActive && !isMobileActive) {
+        return;
+    }
+    
+    // individual.html의 main-timer 업데이트
     const timerEl = document.getElementById('main-timer');
+    // mobileDashboardScreen의 mobile-main-timer 업데이트
+    const mobileTimerEl = document.getElementById('mobile-main-timer');
     
     if (status.state === 'running') {
         // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확)
         const totalSeconds = status.elapsedTime || 0;
-        timerEl.innerText = formatHMS(totalSeconds); // hh:mm:ss 형식
-        timerEl.style.color = '#00d4aa'; // 실행중 색상
+        const timeText = formatHMS(totalSeconds); // hh:mm:ss 형식
+        
+        // individual.html 타이머 업데이트
+        if (timerEl) {
+            timerEl.innerText = timeText;
+            timerEl.style.color = '#00d4aa'; // 실행중 색상
+        }
+        
+        // mobileDashboardScreen 타이머 업데이트
+        if (mobileTimerEl) {
+            mobileTimerEl.innerText = timeText;
+            mobileTimerEl.style.color = '#00d4aa'; // 실행중 색상
+        }
         
         // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
         if (status.elapsedTime !== undefined && status.elapsedTime !== null) {
@@ -505,19 +534,42 @@ function updateTimer(status) {
         // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트)
         if (window.currentWorkout && window.currentWorkout.segments) {
             const currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
-            updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+            // individual.html 세그먼트 그래프 업데이트
+            if (isIndividualActive) {
+                updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+            }
+            // mobileDashboardScreen 세그먼트 그래프 업데이트
+            if (isMobileActive) {
+                updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex, 'mobileIndividualSegmentGraph');
+            }
         }
     } else if (status.state === 'paused') {
-        timerEl.style.color = '#ffaa00'; // 일시정지 색상
+        if (timerEl) {
+            timerEl.style.color = '#ffaa00'; // 일시정지 색상
+        }
+        if (mobileTimerEl) {
+            mobileTimerEl.style.color = '#ffaa00'; // 일시정지 색상
+        }
     } else {
-        timerEl.innerText = "00:00:00";
-        timerEl.style.color = '#fff';
+        if (timerEl) {
+            timerEl.innerText = "00:00:00";
+            timerEl.style.color = '#fff';
+        }
+        if (mobileTimerEl) {
+            mobileTimerEl.innerText = "00:00:00";
+            mobileTimerEl.style.color = '#fff';
+        }
         
         // 훈련이 종료되거나 시작 전이면 마스코트를 0 위치로
         if (window.currentWorkout && window.currentWorkout.segments) {
             window.lastElapsedTime = 0;
             const currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
-            updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+            if (isIndividualActive) {
+                updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+            }
+            if (isMobileActive) {
+                updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex, 'mobileIndividualSegmentGraph');
+            }
         }
     }
 }
@@ -619,8 +671,28 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
 
 // 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
 function updateLapTime(status) {
+    // 개인훈련 대시보드 화면 체크 (individual.html 또는 mobileDashboardScreen)
+    const individualScreen = document.getElementById('individualScreen');
+    const mobileScreen = document.getElementById('mobileDashboardScreen');
+    const isIndividualActive = individualScreen && 
+        (individualScreen.classList.contains('active') || 
+         window.getComputedStyle(individualScreen).display !== 'none');
+    const isMobileActive = mobileScreen && 
+        (mobileScreen.classList.contains('active') || 
+         window.getComputedStyle(mobileScreen).display !== 'none');
+    
+    // 개인훈련 대시보드 화면이 아니면 실행하지 않음 (다른 화면과 분리)
+    if (!isIndividualActive && !isMobileActive) {
+        return;
+    }
+    
+    // individual.html의 ui-lap-time 업데이트
     const lapTimeEl = document.getElementById('ui-lap-time');
-    if (!lapTimeEl) return;
+    // mobileDashboardScreen의 mobile-ui-lap-time 업데이트
+    const mobileLapTimeEl = document.getElementById('mobile-ui-lap-time');
+    
+    // 둘 다 없으면 종료
+    if (!lapTimeEl && !mobileLapTimeEl) return;
     
     // 훈련방의 세그먼트 남은 시간 값 사용 (5,4,3,2,1,0 카운트다운과는 별개)
     let countdownValue = null;
@@ -681,14 +753,28 @@ function updateLapTime(status) {
         console.log('[updateLapTime] 세그먼트 카운트다운 시간:', countdownValue, '초');
     }
     
-    // 카운트다운 값 표시
-    if (countdownValue !== null && countdownValue >= 0) {
-        lapTimeEl.textContent = formatTime(countdownValue);
-        // 10초 이하면 빨간색, 그 외는 청록색
-        lapTimeEl.setAttribute('fill', countdownValue <= 10 ? '#ff4444' : '#00d4aa');
-    } else {
-        lapTimeEl.textContent = '00:00';
-        lapTimeEl.setAttribute('fill', '#00d4aa');
+    // 카운트다운 값 표시 (individual.html)
+    if (lapTimeEl) {
+        if (countdownValue !== null && countdownValue >= 0) {
+            lapTimeEl.textContent = formatTime(countdownValue);
+            // 10초 이하면 빨간색, 그 외는 청록색
+            lapTimeEl.setAttribute('fill', countdownValue <= 10 ? '#ff4444' : '#00d4aa');
+        } else {
+            lapTimeEl.textContent = '00:00';
+            lapTimeEl.setAttribute('fill', '#00d4aa');
+        }
+    }
+    
+    // 카운트다운 값 표시 (mobileDashboardScreen)
+    if (mobileLapTimeEl) {
+        if (countdownValue !== null && countdownValue >= 0) {
+            mobileLapTimeEl.textContent = formatTime(countdownValue);
+            // 10초 이하면 빨간색, 그 외는 청록색
+            mobileLapTimeEl.setAttribute('fill', countdownValue <= 10 ? '#ff4444' : '#00d4aa');
+        } else {
+            mobileLapTimeEl.textContent = '00:00';
+            mobileLapTimeEl.setAttribute('fill', '#00d4aa');
+        }
     }
     
     // 5초 카운트다운 오버레이 처리
@@ -1380,16 +1466,16 @@ function logCurrentSegmentInfo() {
 // 세그먼트 그래프 업데이트 함수
 let mascotAnimationInterval = null; // 마스코트 애니메이션 인터벌
 
-function updateSegmentGraph(segments, currentSegmentIndex = -1) {
+function updateSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'individualSegmentGraph') {
     if (!segments || segments.length === 0) return;
     
     // workoutManager.js의 drawSegmentGraph 함수 사용
     if (typeof drawSegmentGraph === 'function') {
         // 컨테이너 크기가 확정된 후 그래프 그리기
         const drawGraph = () => {
-            const canvas = document.getElementById('individualSegmentGraph');
+            const canvas = document.getElementById(canvasId);
             if (!canvas) {
-                console.warn('[updateSegmentGraph] Canvas 요소를 찾을 수 없습니다.');
+                console.warn('[updateSegmentGraph] Canvas 요소를 찾을 수 없습니다:', canvasId);
                 return;
             }
             
@@ -1408,7 +1494,7 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
             
             // 그래프 그리기 (경과시간 전달)
             const elapsedTime = window.lastElapsedTime || 0;
-            drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
+            drawSegmentGraph(segments, currentSegmentIndex, canvasId, elapsedTime);
         };
         
         // DOM이 준비될 때까지 대기 후 그리기
@@ -1432,7 +1518,7 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
             mascotAnimationInterval = setInterval(() => {
                 if (window.currentWorkout && window.currentWorkout.segments && window.currentTrainingState === 'running') {
                     const elapsedTime = window.lastElapsedTime || 0;
-                    drawSegmentGraph(window.currentWorkout.segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
+                    drawSegmentGraph(window.currentWorkout.segments, currentSegmentIndex, canvasId, elapsedTime);
                 } else {
                     // 훈련이 종료되면 애니메이션 중지
                     if (mascotAnimationInterval) {
