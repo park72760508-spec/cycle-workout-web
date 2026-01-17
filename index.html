@@ -3214,9 +3214,86 @@
     </div>
   </div>
 
+  <!-- ========== Bluetooth Training Coach 대시보드 화면 ========== -->
+  <div id="bluetoothTrainingCoachScreen" class="screen">
+    <div class="dashboard-header">
+      <h1 class="race-title-animated" style="flex: 1; text-align: center;">
+        <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
+        <span class="race-title-text">Bluetooth Training Coach</span>
+      </h1>
+      <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
+        <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutBluetoothCoach" onclick="openWorkoutSelectionModalForBluetoothCoach()" title="워크아웃 선택">
+          <img src="assets/img/workout.png" alt="워크아웃 선택" style="width: 24px; height: 24px; object-fit: contain;">
+        </button>
+        <!-- 컨트롤 버튼 (상단 배치) -->
+        <div class="race-controls" style="flex-shrink: 0; display: flex; gap: 12px;">
+          <button id="btnSkipSegmentBluetoothCoach" class="enhanced-control-btn skip" aria-label="구간 건너뛰기" title="건너뛰기"></button>
+          <button id="btnTogglePauseBluetoothCoach" class="enhanced-control-btn play" aria-label="일시정지/재생" title="시작"></button>
+          <button id="btnStopTrainingBluetoothCoach" class="enhanced-control-btn stop" aria-label="훈련 종료" title="종료"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 전광판 스타일 통계 (훈련 전광판) -->
+    <div class="scoreboard-display">
+      <div class="scoreboard-item" style="align-items: flex-start; text-align: left; flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;">
+        <div class="scoreboard-label">경과시간</div>
+        <div class="scoreboard-value">
+          <span id="bluetoothCoachElapsedTime" class="digital-number">00:00:00</span>
+        </div>
+      </div>
+      <div class="scoreboard-item" id="bluetoothCoachLapCountdownItem" style="position: absolute; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <div class="scoreboard-label">랩카운트다운</div>
+        <div class="scoreboard-value">
+          <span id="bluetoothCoachLapCountdown" class="digital-number">00:00</span>
+        </div>
+      </div>
+      <!-- 우측 세그먼트 그래프 영역 -->
+      <div class="scoreboard-item" id="bluetoothCoachSegmentGraphContainer" style="display: none; margin-left: auto; flex: 0 0 auto;">
+        <div class="scoreboard-segment-graph-container">
+          <canvas id="bluetoothCoachSegmentGraphCanvas"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- 파워계 그리드 (5개씩 2줄, 동적 생성) -->
+    <div class="speedometer-grid" id="bluetoothCoachPowerMeterGrid">
+      <!-- 파워계는 JavaScript로 동적 생성 -->
+    </div>
+
+    <!-- 파워계 목록 관리 -->
+    <div class="speedometer-list-section">
+      <div class="list-header">
+        <h3 style="display: flex; align-items: center; gap: 12px;">
+          <span>환경 설정</span>
+        </h3>
+        
+        <div class="list-header-actions">
+          <button class="btn btn-secondary btn-sm" id="btnUpdateTracksFromFirebaseBluetoothCoach" onclick="updateBluetoothCoachTracksFromFirebase()">
+            <img src="assets/img/reload.png" alt="트랙 업데이트" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            트랙 업데이트
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btnBackFromBluetoothCoach" onclick="showScreen('connectionScreen')">
+            <img src="assets/img/left-arrow.png" alt="뒤로" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+            뒤로
+          </button>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: 500; color: #fff; margin: 0; margin-left: 12px; white-space: nowrap;">
+            <input type="checkbox" id="autoClearUsersOnWorkoutEndBluetoothCoach" style="width: 18px; height: 18px; cursor: pointer; accent-color: #00d4aa; flex-shrink: 0;">
+            <span>워크아웃 종료 시 사용자 자동 퇴실</span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Bluetooth Training Coach 워크아웃 선택 모달 ========== -->
+  <!-- 워크아웃 선택 모달은 Indoor Training과 동일한 모달 재사용 (openWorkoutSelectionModalForBluetoothCoach에서 처리) -->
+
   <!-- 평로라 대회 대시보드 스크립트 -->
   <script src="assets/js/rollerRaceDashboard.js"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js"></script>
+  <!-- Bluetooth Training Coach 대시보드 스크립트 -->
+  <script src="assets/js/bluetoothCoachDashboard.js"></script>
 </body>
 </html>
