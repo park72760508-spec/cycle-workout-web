@@ -24,56 +24,65 @@ window.bluetoothCoachState = {
 };
 
 // 파워계 데이터 구조 (Indoor Training과 동일)
-class PowerMeterData {
-  constructor(id, name, deviceId = null) {
-    this.id = id;
-    this.name = name;
-    this.deviceId = deviceId;
-    this.pairingName = null;
-    this.connected = false;
-    this.currentPower = 0; // W
-    this.maxPower = 0; // W
-    this.averagePower = 0; // W
-    this.segmentPower = 0; // W (현재 세그먼트 평균 파워)
-    this.heartRate = 0; // BPM
-    this.cadence = 0; // RPM
-    this.totalDistance = 0;
-    this.lastUpdateTime = null;
-    this.powerHistory = [];
-    this.powerSum = 0;
-    this.powerCount = 0;
-    this.segmentPowerSum = 0;
-    this.segmentPowerCount = 0;
-    this.userId = null;
-    this.userFTP = null;
-    this.userName = null;
-    this.userWeight = null;
-    this.targetPower = 0;
-    this.displayPower = 0;
-    this.powerTrailHistory = [];
-    this.lastTrailAngle = null;
-    this.powerAverageBuffer = []; // 3초 평균 파워 계산용
+// PowerMeterData 클래스가 이미 정의되어 있으면 재사용, 없으면 새로 정의
+if (typeof PowerMeterData === 'undefined') {
+  class PowerMeterData {
+    constructor(id, name, deviceId = null) {
+      this.id = id;
+      this.name = name;
+      this.deviceId = deviceId;
+      this.pairingName = null;
+      this.connected = false;
+      this.currentPower = 0; // W
+      this.maxPower = 0; // W
+      this.averagePower = 0; // W
+      this.segmentPower = 0; // W (현재 세그먼트 평균 파워)
+      this.heartRate = 0; // BPM
+      this.cadence = 0; // RPM
+      this.totalDistance = 0;
+      this.lastUpdateTime = null;
+      this.powerHistory = [];
+      this.powerSum = 0;
+      this.powerCount = 0;
+      this.segmentPowerSum = 0;
+      this.segmentPowerCount = 0;
+      this.userId = null;
+      this.userFTP = null;
+      this.userName = null;
+      this.userWeight = null;
+      this.targetPower = 0;
+      this.displayPower = 0;
+      this.powerTrailHistory = [];
+      this.lastTrailAngle = null;
+      this.powerAverageBuffer = []; // 3초 평균 파워 계산용
+    }
+    
+    /**
+     * 3초 평균 파워값 계산
+     * @returns {number} 3초 평균 파워값 (W)
+     */
+    get3SecondAveragePower() {
+      const now = Date.now();
+      const threeSecondsAgo = now - 3000;
+      this.powerAverageBuffer = this.powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+      const currentPower = this.currentPower || 0;
+      if (currentPower >= 0) {
+        this.powerAverageBuffer.push({ timestamp: now, power: currentPower });
+      }
+      this.powerAverageBuffer = this.powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+      if (this.powerAverageBuffer.length === 0) {
+        return currentPower;
+      }
+      const sum = this.powerAverageBuffer.reduce((acc, item) => acc + item.power, 0);
+      return Math.round(sum / this.powerAverageBuffer.length);
+    }
   }
   
-  /**
-   * 3초 평균 파워값 계산
-   * @returns {number} 3초 평균 파워값 (W)
-   */
-  get3SecondAveragePower() {
-    const now = Date.now();
-    const threeSecondsAgo = now - 3000;
-    this.powerAverageBuffer = this.powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
-    const currentPower = this.currentPower || 0;
-    if (currentPower >= 0) {
-      this.powerAverageBuffer.push({ timestamp: now, power: currentPower });
-    }
-    this.powerAverageBuffer = this.powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
-    if (this.powerAverageBuffer.length === 0) {
-      return currentPower;
-    }
-    const sum = this.powerAverageBuffer.reduce((acc, item) => acc + item.power, 0);
-    return Math.round(sum / this.powerAverageBuffer.length);
-  }
+  // 전역으로 노출
+  window.PowerMeterData = PowerMeterData;
+} else {
+  // 이미 정의되어 있으면 로그만 출력
+  console.log('[Bluetooth Coach] PowerMeterData 클래스를 재사용합니다.');
 }
 
 /**
