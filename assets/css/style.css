@@ -11359,7 +11359,7 @@ button[aria-disabled="true"] {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px; /* 변경 전: 12px, 변경 후: 4px (여백 최소화) */
+  margin-bottom: 9px; /* 변경 전: 20px → 변경 후: 25px (4px → 9px) */
   position: relative;
 }
 
