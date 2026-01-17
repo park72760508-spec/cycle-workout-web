@@ -2053,14 +2053,56 @@ function openPowerMeterSettings(powerMeterId) {
   window.currentTargetPowerMeterId = powerMeterId;
   
   // Bluetooth Join Session 화면: 인증된 사용자 정보가 있으면 바로 Firebase에 저장 (모달 없이)
+  // window.currentUser 또는 localStorage에서 사용자 정보 확인
+  let authenticatedUser = null;
+  
+  // 1) window.currentUser 확인
   if (window.currentUser && window.currentUser.id && window.currentUser.name) {
+    authenticatedUser = window.currentUser;
+  }
+  
+  // 2) localStorage.currentUser 확인
+  if (!authenticatedUser) {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (storedUser && storedUser.id && storedUser.name) {
+        authenticatedUser = storedUser;
+        // window.currentUser에도 설정
+        window.currentUser = storedUser;
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage.currentUser 파싱 실패:', e);
+    }
+  }
+  
+  // 3) localStorage.authUser 확인
+  if (!authenticatedUser) {
+    try {
+      const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+      if (authUser && authUser.id && authUser.name) {
+        authenticatedUser = authUser;
+        // window.currentUser에도 설정
+        window.currentUser = authUser;
+      }
+    } catch (e) {
+      console.warn('[Indoor Training] localStorage.authUser 파싱 실패:', e);
+    }
+  }
+  
+  if (authenticatedUser && authenticatedUser.id && authenticatedUser.name) {
     // 모달을 열지 않고 바로 사용자 정보를 Firebase에 저장
-    selectSearchedUserForPowerMeter(window.currentUser.id).then(() => {
+    console.log('[Indoor Training] 인증된 사용자 정보 확인:', {
+      userId: authenticatedUser.id,
+      userName: authenticatedUser.name,
+      source: authenticatedUser === window.currentUser ? 'window.currentUser' : 'localStorage'
+    });
+    
+    selectSearchedUserForPowerMeter(authenticatedUser.id).then(() => {
       console.log('[Indoor Training] 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 Firebase 저장 완료');
       // 연결 상태 업데이트 (Firebase devices 정보 표시)
       updatePowerMeterConnectionStatus(powerMeterId);
       if (typeof showToast === 'function') {
-        showToast(`트랙${powerMeterId}에 ${window.currentUser.name}님이 신청되었습니다.`);
+        showToast(`트랙${powerMeterId}에 ${authenticatedUser.name}님이 신청되었습니다.`);
       }
     }).catch(error => {
       console.error('[Indoor Training] 사용자 정보 반영 실패:', error);
@@ -2071,6 +2113,7 @@ function openPowerMeterSettings(powerMeterId) {
   }
   
   // 인증된 사용자가 없으면 기존처럼 모달 열기 (변경 시)
+  console.log('[Indoor Training] 인증된 사용자 정보가 없어 모달을 엽니다.');
   openPairingModal(powerMeterId);
 }
 
@@ -2130,7 +2173,6 @@ function updatePairingModalWithSavedData(powerMeter) {
                 <span><strong>W/kg:</strong> ${wkg}</span>
               </div>
             </div>
-            <button class="btn btn-danger btn-sm" onclick="clearSelectedUser()" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
           </div>
         </div>
       `;
@@ -2143,15 +2185,6 @@ function updatePairingModalWithSavedData(powerMeter) {
       resultEl.innerHTML = '';
     }
     
-    // Gear, Brake 선택 필드에 값 설정
-    const gearSelect = document.getElementById('pairingGearSelect');
-    const brakeSelect = document.getElementById('pairingBrakeSelect');
-    if (gearSelect) {
-      gearSelect.value = powerMeter.gear || '';
-    }
-    if (brakeSelect) {
-      brakeSelect.value = powerMeter.brake || '';
-    }
   } else {
     // 선택된 사용자가 없으면 카드 숨김
     if (selectedUserCard) {
@@ -2165,15 +2198,6 @@ function updatePairingModalWithSavedData(powerMeter) {
       resultEl.innerHTML = '';
     }
     
-    // Gear, Brake 선택 필드 비우기
-    const gearSelect = document.getElementById('pairingGearSelect');
-    const brakeSelect = document.getElementById('pairingBrakeSelect');
-    if (gearSelect) {
-      gearSelect.value = '';
-    }
-    if (brakeSelect) {
-      brakeSelect.value = '';
-    }
   }
   
   // 스마트로라 정보 표시
@@ -2345,24 +2369,6 @@ function showPairingTab(tabName) {
   const powerMeterId = window.currentTargetPowerMeterId;
   const powerMeter = powerMeterId ? window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId) : null;
   
-  // 탭 전환 전에 현재 Gear, Brake 값 저장
-  const gearSelect = document.getElementById('pairingGearSelect');
-  const brakeSelect = document.getElementById('pairingBrakeSelect');
-  let savedGear = null;
-  let savedBrake = null;
-  
-  if (gearSelect && gearSelect.value) {
-    savedGear = gearSelect.value;
-  }
-  if (brakeSelect && brakeSelect.value) {
-    savedBrake = brakeSelect.value;
-  }
-  
-  // powerMeter 객체에 저장 (다른 탭에서도 유지)
-  if (powerMeter) {
-    if (savedGear) powerMeter.gear = savedGear;
-    if (savedBrake) powerMeter.brake = savedBrake;
-  }
   
   // 모든 탭 버튼 비활성화
   document.querySelectorAll('.pairing-tab-btn').forEach(btn => {
@@ -2395,26 +2401,12 @@ function showPairingTab(tabName) {
         }
       }
       
-      // 선택된 사용자 카드 업데이트 (Gear, Brake 값 포함)
+      // 선택된 사용자 카드 업데이트
       if (powerMeter) {
         updatePairingModalWithSavedData(powerMeter);
       }
     }, 100);
-  } else {
-    // 다른 탭으로 이동할 때도 Gear, Brake 값 복원
-    setTimeout(() => {
-      if (powerMeter) {
-        const gearSelectAfter = document.getElementById('pairingGearSelect');
-        const brakeSelectAfter = document.getElementById('pairingBrakeSelect');
-        
-        if (gearSelectAfter && powerMeter.gear) {
-          gearSelectAfter.value = powerMeter.gear;
-        }
-        if (brakeSelectAfter && powerMeter.brake) {
-          brakeSelectAfter.value = powerMeter.brake;
-        }
-      }
-    }, 100);
+  }
   }
 }
 
@@ -2659,27 +2651,17 @@ async function selectSearchedUserForPowerMeter(userId) {
           return;
         }
         
-        // Gear, Brake 정보 읽기
-        const gearSelect = document.getElementById('pairingGearSelect');
-        const brakeSelect = document.getElementById('pairingBrakeSelect');
-        const gear = gearSelect ? gearSelect.value : '';
-        const brake = brakeSelect ? brakeSelect.value : '';
-        
         // 파워계에 사용자 정보 저장
         powerMeter.userId = userId;
         powerMeter.userFTP = user.ftp || null; // FTP 값 저장 (null 체크)
         powerMeter.userName = user.name;
         powerMeter.userWeight = user.weight;
         powerMeter.userContact = user.contact;
-        powerMeter.gear = gear || null; // Gear 정보 저장
-        powerMeter.brake = brake || null; // Brake 정보 저장
         
         console.log(`[Indoor Training] 파워미터 ${powerMeterId}에 사용자 할당:`, {
           userId: userId,
           userName: user.name,
-          userFTP: powerMeter.userFTP,
-          gear: powerMeter.gear,
-          brake: powerMeter.brake
+          userFTP: powerMeter.userFTP
         });
         
         // 사용자명 UI 업데이트 (트랙번호 라인 좌측)
@@ -3726,16 +3708,6 @@ function savePowerMeterPairing() {
   
   const tabName = activeTab.id.replace('tab-', '');
   
-  // Gear, Brake 읽기 및 저장
-  const gearSelect = document.getElementById('pairingGearSelect');
-  const brakeSelect = document.getElementById('pairingBrakeSelect');
-  if (gearSelect) {
-    powerMeter.gear = gearSelect.value || null;
-  }
-  if (brakeSelect) {
-    powerMeter.brake = brakeSelect.value || null;
-  }
-  
   // Firebase DB에 저장하는 공통 함수
   const saveToFirebase = () => {
     if (typeof db !== 'undefined') {
@@ -3796,7 +3768,7 @@ function savePowerMeterPairing() {
   
   if (tabName === 'user') {
     // 사용자 선택은 이미 selectSearchedUserForPowerMeter에서 저장됨
-    // devices 정보만 업데이트 (gear, brake 변경 시)
+    // Firebase에 사용자 정보 저장
     saveToFirebase();
     
     // 눈금 업데이트
