@@ -2089,11 +2089,27 @@ function startBluetoothCoachTraining() {
   // Firebase에 훈련 시작 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
-    db.ref(`sessions/${sessionId}/status`).update({
+    const segments = window.bluetoothCoachState.currentWorkout?.segments || [];
+    const firstSegment = segments[0];
+    
+    const updateData = {
       state: 'running',
       segmentIndex: 0,
       elapsedTime: 0
-    }).catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
+    };
+    
+    // 첫 번째 세그먼트의 target_type과 target_value도 함께 설정
+    if (firstSegment) {
+      updateData.segmentTargetType = firstSegment.target_type || 'ftp_pct';
+      updateData.segmentTargetValue = firstSegment.target_value !== undefined ? firstSegment.target_value : null;
+      console.log('[Bluetooth Coach] 워크아웃 시작 시 첫 세그먼트 목표값 설정:', {
+        targetType: updateData.segmentTargetType,
+        targetValue: updateData.segmentTargetValue
+      });
+    }
+    
+    db.ref(`sessions/${sessionId}/status`).update(updateData)
+      .catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
   }
   
   // 워크아웃 시작 시 모든 파워미터의 궤적 및 통계 데이터 초기화
@@ -2276,12 +2292,30 @@ function skipCurrentBluetoothCoachSegmentTraining() {
     delete window.bluetoothCoachState._prevRemainMs[nextKey];
   }
   
-  // Firebase에 세그먼트 인덱스 업데이트
+  // Firebase에 세그먼트 인덱스 및 세그먼트 목표값 업데이트
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
-    db.ref(`sessions/${sessionId}/status`).update({
-      segmentIndex: window.bluetoothCoachState.currentSegmentIndex
-    }).catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 업데이트 실패:', e));
+    const currentSegIndex = window.bluetoothCoachState.currentSegmentIndex;
+    const segments = window.bluetoothCoachState.currentWorkout?.segments || [];
+    const currentSegment = segments[currentSegIndex];
+    
+    const updateData = {
+      segmentIndex: currentSegIndex
+    };
+    
+    // 현재 세그먼트의 target_type과 target_value도 함께 업데이트
+    if (currentSegment) {
+      updateData.segmentTargetType = currentSegment.target_type || 'ftp_pct';
+      updateData.segmentTargetValue = currentSegment.target_value !== undefined ? currentSegment.target_value : null;
+      console.log('[Bluetooth Coach] 세그먼트 목표값 업데이트:', {
+        segmentIndex: currentSegIndex,
+        targetType: updateData.segmentTargetType,
+        targetValue: updateData.segmentTargetValue
+      });
+    }
+    
+    db.ref(`sessions/${sessionId}/status`).update(updateData)
+      .catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 및 목표값 업데이트 실패:', e));
   }
   
   // 세그먼트 변경 시 데이터 초기화
@@ -2342,13 +2376,26 @@ function startBluetoothCoachTrainingTimer() {
   // 랩 카운트다운 업데이트 (항상 호출)
   updateBluetoothCoachLapTime();
   
-  // Firebase에 경과 시간 업데이트
+  // Firebase에 경과 시간 및 세그먼트 정보 업데이트
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
-    db.ref(`sessions/${sessionId}/status`).update({
+    const currentSegIndex = window.bluetoothCoachState.currentSegmentIndex;
+    const segments = window.bluetoothCoachState.currentWorkout?.segments || [];
+    const currentSegment = segments[currentSegIndex];
+    
+    const updateData = {
       elapsedTime: window.bluetoothCoachState.totalElapsedTime,
-      segmentIndex: window.bluetoothCoachState.currentSegmentIndex
-    }).catch(e => console.warn('[Bluetooth Coach] 경과 시간 업데이트 실패:', e));
+      segmentIndex: currentSegIndex
+    };
+    
+    // 현재 세그먼트의 target_type과 target_value도 함께 업데이트
+    if (currentSegment) {
+      updateData.segmentTargetType = currentSegment.target_type || 'ftp_pct';
+      updateData.segmentTargetValue = currentSegment.target_value !== undefined ? currentSegment.target_value : null;
+    }
+    
+    db.ref(`sessions/${sessionId}/status`).update(updateData)
+      .catch(e => console.warn('[Bluetooth Coach] 경과 시간 및 세그먼트 정보 업데이트 실패:', e));
   }
   
   // 세그먼트 전환 체크 및 카운트다운 로직 (Indoor Training과 동일한 로직)
@@ -2452,12 +2499,30 @@ function startBluetoothCoachTrainingTimer() {
             delete window.bluetoothCoachState._prevRemainMs[nextKey];
           }
           
-          // Firebase에 세그먼트 인덱스 업데이트
+          // Firebase에 세그먼트 인덱스 및 세그먼트 목표값 업데이트
           if (typeof db !== 'undefined') {
             const sessionId = getBluetoothCoachSessionId();
-            db.ref(`sessions/${sessionId}/status`).update({
-              segmentIndex: window.bluetoothCoachState.currentSegmentIndex
-            }).catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 업데이트 실패:', e));
+            const currentSegIndex = window.bluetoothCoachState.currentSegmentIndex;
+            const segments = window.bluetoothCoachState.currentWorkout?.segments || [];
+            const currentSegment = segments[currentSegIndex];
+            
+            const updateData = {
+              segmentIndex: currentSegIndex
+            };
+            
+            // 현재 세그먼트의 target_type과 target_value도 함께 업데이트
+            if (currentSegment) {
+              updateData.segmentTargetType = currentSegment.target_type || 'ftp_pct';
+              updateData.segmentTargetValue = currentSegment.target_value !== undefined ? currentSegment.target_value : null;
+              console.log('[Bluetooth Coach] 세그먼트 전환 시 목표값 업데이트:', {
+                segmentIndex: currentSegIndex,
+                targetType: updateData.segmentTargetType,
+                targetValue: updateData.segmentTargetValue
+              });
+            }
+            
+            db.ref(`sessions/${sessionId}/status`).update(updateData)
+              .catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 및 목표값 업데이트 실패:', e));
           }
           
           // 세그먼트 변경 시 데이터 초기화 (Indoor Training과 동일)
