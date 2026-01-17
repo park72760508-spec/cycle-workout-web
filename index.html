@@ -1837,6 +1837,13 @@
       <div class="mobile-countdown-number" id="mobileCountdownNumber" style="font-size: 300px; font-weight: bold; color: #fff; text-shadow: 0 0 40px rgba(255, 255, 255, 0.6), 0 0 80px rgba(255, 255, 255, 0.4), 0 0 120px rgba(255, 255, 255, 0.2); animation: countdownPulse 0.8s ease-out; user-select: none; line-height: 1;">5</div>
     </div>
 
+    <!-- 훈련 종료 후 로딩 애니메이션 -->
+    <div id="mobileTrainingLoadingModal" class="mobile-training-loading-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10001; animation: fadeIn 0.3s ease-out;">
+      <div class="mobile-loading-spinner" style="width: 80px; height: 80px; border: 6px solid rgba(0, 212, 170, 0.2); border-top: 6px solid #00d4aa; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 24px;"></div>
+      <div class="mobile-loading-text" style="color: #fff; font-size: 24px; font-weight: 600; text-align: center; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5); margin-bottom: 8px;">수고하셨습니다</div>
+      <div class="mobile-loading-subtext" style="color: #aaa; font-size: 16px; text-align: center; opacity: 0.9;">훈련 결과를 불러오는 중...</div>
+    </div>
+
     <!-- 훈련 결과 팝업 -->
     <div id="mobileTrainingResultModal" class="mobile-training-result-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease-out;">
       <div class="mobile-training-result-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.1;">
