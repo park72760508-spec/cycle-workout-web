@@ -164,7 +164,7 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
   // 트랙 구성 정보 가져오기 및 트랙 그리드 생성
   getTrackConfigFromFirebase().then(config => {
     window.bluetoothCoachState.maxTrackCount = config.maxTracks;
-    createPowerMeterGrid();
+    createBluetoothCoachPowerMeterGrid();
     
     // Firebase 구독 시작
     setupFirebaseSubscriptions();
@@ -180,9 +180,9 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
 };
 
 /**
- * 파워계 그리드 생성 (트랙 동적 생성)
+ * 파워계 그리드 생성 (트랙 동적 생성) - Bluetooth Coach 전용
  */
-function createPowerMeterGrid() {
+function createBluetoothCoachPowerMeterGrid() {
   const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
   if (!gridEl) return;
   
@@ -242,11 +242,11 @@ function createPowerMeterElement(powerMeter) {
               fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
         <g class="speedometer-ticks">
-          ${generatePowerMeterTicks(powerMeter.id)}
+          ${generateBluetoothCoachPowerMeterTicks(powerMeter.id)}
         </g>
         
         <g class="speedometer-labels">
-          ${generatePowerMeterLabels(powerMeter.id)}
+          ${generateBluetoothCoachPowerMeterLabels(powerMeter.id)}
         </g>
         
         <text x="100" y="100" 
@@ -329,9 +329,9 @@ function createPowerMeterElement(powerMeter) {
 }
 
 /**
- * 파워계 눈금 생성 (Indoor Training과 동일)
+ * 파워계 눈금 생성 (Bluetooth Coach 전용)
  */
-function generatePowerMeterTicks(powerMeterId) {
+function generateBluetoothCoachPowerMeterTicks(powerMeterId) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return '';
   
@@ -364,9 +364,9 @@ function generatePowerMeterTicks(powerMeterId) {
 }
 
 /**
- * 파워계 라벨 생성 (Indoor Training과 동일)
+ * 파워계 라벨 생성 (Bluetooth Coach 전용)
  */
-function generatePowerMeterLabels(powerMeterId) {
+function generateBluetoothCoachPowerMeterLabels(powerMeterId) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return '';
   
@@ -616,7 +616,7 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   
   // FTP 변경 시 눈금 업데이트
   if (userData.ftp && userData.ftp !== powerMeter.userFTP) {
-    updatePowerMeterTicks(trackId);
+    updateBluetoothCoachPowerMeterTicks(trackId);
   }
 }
 
@@ -720,9 +720,9 @@ function resetPowerMeterData(trackId) {
 }
 
 /**
- * 파워계 눈금 업데이트 (FTP 변경 시)
+ * 파워계 눈금 업데이트 (FTP 변경 시) - Bluetooth Coach 전용
  */
-function updatePowerMeterTicks(powerMeterId) {
+function updateBluetoothCoachPowerMeterTicks(powerMeterId) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
   
@@ -731,8 +731,8 @@ function updatePowerMeterTicks(powerMeterId) {
   
   if (!ticksEl || !labelsEl) return;
   
-  ticksEl.innerHTML = generatePowerMeterTicks(powerMeterId);
-  labelsEl.innerHTML = generatePowerMeterLabels(powerMeterId);
+  ticksEl.innerHTML = generateBluetoothCoachPowerMeterTicks(powerMeterId);
+  labelsEl.innerHTML = generateBluetoothCoachPowerMeterLabels(powerMeterId);
   
   // 바늘 위치 복원
   const needleEl = document.getElementById(`needle-${powerMeterId}`);
@@ -843,7 +843,7 @@ window.updateBluetoothCoachTracksFromFirebase = async function updateBluetoothCo
   
   if (newMaxTracks !== window.bluetoothCoachState.maxTrackCount) {
     window.bluetoothCoachState.maxTrackCount = newMaxTracks;
-    createPowerMeterGrid();
+    createBluetoothCoachPowerMeterGrid();
     setupFirebaseSubscriptions();
     
     if (typeof showToast === 'function') {
