@@ -1,5 +1,25 @@
 // bluetoothIndividual.js
 
+// ========== 전역 변수 안전 초기화 (파일 최상단) ==========
+// window.connectedDevices 안전 초기화 (bluetooth.js와 동일한 구조)
+if (!window.connectedDevices) {
+    window.connectedDevices = {
+        trainer: null,
+        powerMeter: null,
+        heartRate: null
+    };
+}
+
+// window.liveData 안전 초기화
+if (!window.liveData) {
+    window.liveData = {
+        power: 0,
+        heartRate: 0,
+        cadence: 0,
+        targetPower: 0
+    };
+}
+
 // 1. URL 파라미터에서 트랙 번호 확인 (?track=1 또는 ?bike=1)
 const params = new URLSearchParams(window.location.search);
 let myTrackId = params.get('track') || params.get('bike'); // bike 파라미터도 지원 (하위 호환성)
@@ -439,10 +459,25 @@ function initializeBluetoothDashboard() {
             connectedDevicesObject: window.connectedDevices
         });
         
-        // 연결된 디바이스가 없으면 경고
-        if (!window.connectedDevices?.heartRate && !window.connectedDevices?.powerMeter && !window.connectedDevices?.trainer) {
-            console.warn('[BluetoothIndividual] ⚠️ 연결된 Bluetooth 디바이스가 없습니다. bluetoothIndividual.html은 별도 페이지이므로, 이 페이지에서 직접 디바이스를 연결해야 합니다.');
-            console.warn('[BluetoothIndividual] ⚠️ 또는 index.html에서 연결한 후 새 창으로 bluetoothIndividual.html을 열면 연결 상태가 공유되지 않을 수 있습니다.');
+        // 연결된 디바이스 확인 (bluetooth.js가 로드되었는지 확인)
+        const hasBluetoothJS = typeof window.connectHeartRate === 'function' || typeof window.connectTrainer === 'function' || typeof window.connectPowerMeter === 'function';
+        
+        // bluetooth.js가 로드되지 않았으면 대기
+        if (!hasBluetoothJS) {
+            console.log('[BluetoothIndividual] bluetooth.js가 아직 로드되지 않았습니다. 잠시 후 다시 확인합니다.');
+            // 1초 후 다시 확인
+            setTimeout(() => {
+                const retryConnectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
+                if (!retryConnectedDevices.heartRate && !retryConnectedDevices.powerMeter && !retryConnectedDevices.trainer) {
+                    console.info('[BluetoothIndividual] ℹ️ 연결된 Bluetooth 디바이스가 없습니다. bluetoothIndividual.html은 별도 페이지이므로, 이 페이지에서 직접 디바이스를 연결해야 합니다.');
+                    console.info('[BluetoothIndividual] ℹ️ 또는 index.html에서 연결한 후 새 창으로 bluetoothIndividual.html을 열면 연결 상태가 공유되지 않을 수 있습니다.');
+                }
+            }, 1000);
+        } else {
+            // bluetooth.js가 로드되었고, 연결된 디바이스가 없으면 안내 (경고 대신 정보)
+            if (!window.connectedDevices?.heartRate && !window.connectedDevices?.powerMeter && !window.connectedDevices?.trainer) {
+                console.info('[BluetoothIndividual] ℹ️ 연결된 Bluetooth 디바이스가 없습니다. 이 페이지에서 직접 디바이스를 연결해주세요.');
+            }
         }
         
         updateDashboard(); // 초기 표시를 위해 한 번 호출
@@ -1494,7 +1529,11 @@ function updateTargetPower() {
     // 현재 세그먼트 정보 가져오기 (헬퍼 함수 사용)
     const seg = getCurrentSegment();
     if (!seg) {
-        console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다.');
+        // currentSegmentIndex가 -1인 경우는 훈련 시작 전 정상 상태이므로 경고 제거
+        // 디버그 모드에서만 로그 출력
+        if (window.DEBUG_MODE && currentSegmentIndex >= 0) {
+            console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다. (세그먼트 인덱스:', currentSegmentIndex + ')');
+        }
         const targetLabelEl = document.getElementById('ui-target-label');
         const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
         if (targetLabelEl) {
@@ -1767,8 +1806,12 @@ function formatSegmentInfo(targetType, targetValue) {
  */
 function getCurrentSegment() {
     // 세그먼트 인덱스 확인
+    // currentSegmentIndex가 -1인 것은 훈련이 시작되지 않았을 때 정상 상태이므로 조용히 처리
     if (currentSegmentIndex < 0) {
-        console.log('[getCurrentSegment] 현재 세그먼트 인덱스가 유효하지 않음:', currentSegmentIndex);
+        // 디버그 모드에서만 로그 출력 (훈련 시작 전에는 정상적인 상태)
+        if (window.DEBUG_MODE) {
+            console.log('[getCurrentSegment] 현재 세그먼트 인덱스가 유효하지 않음 (훈련 시작 전):', currentSegmentIndex);
+        }
         return null;
     }
     
