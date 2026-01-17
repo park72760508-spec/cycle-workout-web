@@ -951,6 +951,13 @@ function formatHMS(totalSeconds){
 // 세그먼트 카운트다운 함수 (수정된 버전)
 // [PATCH] 내부 타이머 없는 표시 전용 카운트다운
 function startSegmentCountdown(initialNumber, nextSegment) {
+  // 블루투스 개인 훈련 대시보드에서는 카운트다운 실행하지 않음
+  const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+  if (isBluetoothIndividualScreen) {
+    console.log('[startSegmentCountdown] 블루투스 개인 훈련 대시보드에서는 카운트다운 실행하지 않음');
+    return;
+  }
+  
   // initialNumber 는 보통 5 (6초 시점에서 5 표시)
   if (segmentCountdownActive) return;
   segmentCountdownActive = true;
@@ -2699,6 +2706,14 @@ function startSegmentLoop() {
         // remainMsNow가 0 이하이면 카운트다운 실행하지 않음 (반복 방지)
         if (remainMsNow <= 0) {
           // 이미 종료된 세그먼트이므로 카운트다운 로직 건너뛰기
+          // 카운트다운이 활성화되어 있으면 즉시 종료
+          if (segmentCountdownActive) {
+            segmentCountdownActive = false;
+            CountdownDisplay.hideImmediate();
+            MobileCountdownDisplay.hideImmediate();
+          }
+          // firedMap에 모든 숫자를 기록하여 더 이상 실행되지 않도록 함
+          ts._countdownFired[key] = { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true };
           return;
         }
       
@@ -2708,6 +2723,11 @@ function startSegmentLoop() {
       // === 수정된 코드(세그먼트 종료 6초 부터 카운트다운) ===
       // [PATCH] Edge-Driven 카운트다운: 6초(표시 5) → 1초(표시 0)에서 끝
       function maybeFire(n) {
+        // 블루투스 개인 훈련 대시보드나 모바일 대시보드에서는 카운트다운 실행하지 않음
+        if (isBluetoothIndividualScreen || isMobileDashboardScreen) {
+          return;
+        }
+        
         const firedMap = ts._countdownFired[key] || {};
         if (firedMap[n]) return;
       
@@ -2716,12 +2736,21 @@ function startSegmentLoop() {
         const crossed = (remainMsPrev > boundary && remainMsNow <= boundary);
         if (!crossed) return;
       
-        // remainMsNow가 0 이하이면 더 이상 카운트다운 실행하지 않음
-        if (remainMsNow <= 0 && n === 0) {
-          // 이미 종료된 세그먼트이므로 카운트다운 종료
-          segmentCountdownActive = false;
-          CountdownDisplay.hideImmediate();
-          MobileCountdownDisplay.hideImmediate();
+        // remainMsNow가 0 이하이면 더 이상 카운트다운 실행하지 않음 (0초 반복 방지)
+        if (remainMsNow <= 0) {
+          // 이미 종료된 세그먼트이므로 카운트다운 종료 및 상태 초기화
+          if (segmentCountdownActive) {
+            segmentCountdownActive = false;
+            CountdownDisplay.hideImmediate();
+            MobileCountdownDisplay.hideImmediate();
+          }
+          // firedMap에 기록하여 더 이상 실행되지 않도록 함
+          ts._countdownFired[key] = { ...firedMap, [n]: true };
+          return;
+        }
+      
+        // remainMsNow가 6000ms(6초) 이상이면 카운트다운 시작 전이므로 실행하지 않음
+        if (remainMsNow > 6000 && n === 5) {
           return;
         }
       
@@ -2769,13 +2798,16 @@ function startSegmentLoop() {
 
 
       
-        // 5→0 모두 확인(틱이 건너뛰어도 놓치지 않음)
-        maybeFire(5);
-        maybeFire(4);
-        maybeFire(3);
-        maybeFire(2);
-        maybeFire(1);
-        maybeFire(0);
+        // 블루투스 개인 훈련 대시보드나 모바일 대시보드가 아닐 때만 카운트다운 실행
+        if (!isBluetoothIndividualScreen && !isMobileDashboardScreen) {
+          // 5→0 모두 확인(틱이 건너뛰어도 놓치지 않음)
+          maybeFire(5);
+          maybeFire(4);
+          maybeFire(3);
+          maybeFire(2);
+          maybeFire(1);
+          maybeFire(0);
+        }
       
         // 다음 비교를 위해 현재 값 저장
         ts._prevRemainMs[key] = remainMsNow;
