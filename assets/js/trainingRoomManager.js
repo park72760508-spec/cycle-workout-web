@@ -2603,7 +2603,7 @@ async function openPlayerListFromModal(event) {
 }
 
 /**
- * 모달에서 Coach 모드 열기 (Indoor 모드 선택 화면으로 이동)
+ * 모달에서 Coach 모드 열기 (디바이스 연결 방식에 따라 화면 이동)
  */
 function openCoachModeFromModal(event) {
   // [Module 3 - Fix Logic] 이벤트 전파 중단 (필수)
@@ -2621,9 +2621,87 @@ function openCoachModeFromModal(event) {
   // 모달 닫기
   closeTrainingRoomModal();
 
-  // Indoor 모드 선택 화면으로 이동
-  if (typeof showIndoorModeSelectionModal === 'function') {
-    showIndoorModeSelectionModal();
+  // 디바이스 연결 방식 확인 (여러 방법으로 확인)
+  let currentDeviceMode = 'ant'; // 기본값은 ANT+
+  
+  // 1. 로컬 변수 확인
+  if (deviceConnectionMode) {
+    currentDeviceMode = deviceConnectionMode;
+    console.log('[Coach Modal] 로컬 변수에서 모드 확인:', currentDeviceMode);
+  }
+  
+  // 2. sessionStorage 확인
+  const savedMode = sessionStorage.getItem('deviceConnectionMode');
+  if (savedMode) {
+    currentDeviceMode = savedMode;
+    console.log('[Coach Modal] sessionStorage에서 모드 확인:', currentDeviceMode);
+  }
+  
+  // 3. 전역 변수 확인 (groupTrainingManager.js와 동기화)
+  if (window.deviceConnectionMode) {
+    currentDeviceMode = window.deviceConnectionMode;
+    console.log('[Coach Modal] 전역 변수에서 모드 확인:', currentDeviceMode);
+  }
+  
+  // 4. 슬라이더 실제 위치 확인 (가장 정확함)
+  const switchSlider = document.getElementById('switchSlider');
+  if (switchSlider) {
+    const computedStyle = window.getComputedStyle(switchSlider);
+    const sliderLeft = switchSlider.style.left || computedStyle.left;
+    
+    // left 값 파싱
+    let leftValue = 0;
+    if (sliderLeft) {
+      if (sliderLeft.includes('%')) {
+        leftValue = parseFloat(sliderLeft);
+      } else if (sliderLeft.includes('px')) {
+        const switchWidth = 200;
+        leftValue = (parseFloat(sliderLeft) / switchWidth) * 100;
+      } else {
+        leftValue = parseFloat(sliderLeft) || 0;
+      }
+    }
+    
+    // 슬라이더 위치로 모드 판단 (0%에 가까우면 Bluetooth, 50% 이상이면 ANT+)
+    if (leftValue < 25) {
+      currentDeviceMode = 'bluetooth';
+      console.log('[Coach Modal] 슬라이더 위치로 모드 확인: Bluetooth (left:', leftValue + '%)');
+    } else {
+      currentDeviceMode = 'ant';
+      console.log('[Coach Modal] 슬라이더 위치로 모드 확인: ANT+ (left:', leftValue + '%)');
+    }
+  }
+  
+  // 모든 변수 동기화
+  deviceConnectionMode = currentDeviceMode;
+  window.deviceConnectionMode = currentDeviceMode;
+  sessionStorage.setItem('deviceConnectionMode', currentDeviceMode);
+  
+  console.log('[Coach Modal] 최종 디바이스 연결 방식:', currentDeviceMode);
+  
+  // 선택된 디바이스 모드에 따라 화면 이동
+  if (currentDeviceMode === 'bluetooth') {
+    // Bluetooth Training Coach 화면으로 이동
+    console.log('[Coach Modal] Bluetooth Training Coach 화면으로 이동');
+    if (typeof showScreen === 'function') {
+      showScreen('bluetoothTrainingCoachScreen');
+    } else {
+      console.error('[Coach Modal] showScreen 함수를 찾을 수 없습니다.');
+      if (typeof showToast === 'function') {
+        showToast('화면 전환 함수를 찾을 수 없습니다.', 'error');
+      }
+    }
+  } else {
+    // ANT+ Indoor Training 모드 선택 화면으로 이동 (기존 방식)
+    console.log('[Coach Modal] Indoor Training 모드 선택 화면으로 이동');
+    if (typeof showIndoorModeSelectionModal === 'function') {
+      showIndoorModeSelectionModal();
+    } else {
+      console.warn('[Coach Modal] showIndoorModeSelectionModal 함수를 찾을 수 없습니다. Indoor Training 화면으로 직접 이동 시도.');
+      if (typeof showScreen === 'function') {
+        showScreen('indoorTrainingDashboardScreen');
+      }
+    }
   }
 }
 
