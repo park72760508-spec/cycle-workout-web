@@ -667,10 +667,8 @@ function stopIndividualTrainingTimer() {
 
 // [추가] 개인훈련 대시보드 전용 타이머 디스플레이 업데이트 (로컬 시간 사용)
 function updateIndividualTimerDisplay(elapsedSeconds) {
-    // individual.html의 main-timer 업데이트
+    // individual.html의 main-timer 업데이트만 수행 (모바일은 독립적으로 구동)
     const timerEl = document.getElementById('main-timer');
-    // mobileDashboardScreen의 mobile-main-timer 업데이트
-    const mobileTimerEl = document.getElementById('mobile-main-timer');
     
     const timeText = formatHMS(elapsedSeconds);
     
@@ -679,37 +677,26 @@ function updateIndividualTimerDisplay(elapsedSeconds) {
         timerEl.style.color = '#00d4aa';
     }
     
-    if (mobileTimerEl) {
-        mobileTimerEl.innerText = timeText;
-        mobileTimerEl.style.color = '#00d4aa';
-    }
-    
     // 경과시간을 전역 변수에 저장 (마스코트 위치 계산용)
     window.lastElapsedTime = elapsedSeconds;
 }
 
 // [추가] 개인훈련 대시보드 전용 랩타임 디스플레이 업데이트 (로컬 시간 사용)
 function updateIndividualLapTimeDisplay(elapsedSeconds) {
-    // 개인훈련 대시보드 화면 체크
+    // 개인훈련 대시보드 화면 체크 (individual.html만 - 모바일은 독립적으로 구동)
     const individualScreen = document.getElementById('individualScreen');
-    const mobileScreen = document.getElementById('mobileDashboardScreen');
     const isIndividualActive = individualScreen && 
         (individualScreen.classList.contains('active') || 
          window.getComputedStyle(individualScreen).display !== 'none');
-    const isMobileActive = mobileScreen && 
-        (mobileScreen.classList.contains('active') || 
-         window.getComputedStyle(mobileScreen).display !== 'none');
     
-    if (!isIndividualActive && !isMobileActive) {
+    if (!isIndividualActive) {
         return;
     }
     
-    // individual.html의 ui-lap-time 업데이트
+    // individual.html의 ui-lap-time 업데이트만 수행 (모바일은 독립적으로 구동)
     const lapTimeEl = document.getElementById('ui-lap-time');
-    // mobileDashboardScreen의 mobile-ui-lap-time 업데이트
-    const mobileLapTimeEl = document.getElementById('mobile-ui-lap-time');
     
-    if (!lapTimeEl && !mobileLapTimeEl) return;
+    if (!lapTimeEl) return;
     
     // 세그먼트 남은 시간 계산
     let countdownValue = null;
@@ -740,7 +727,7 @@ function updateIndividualLapTimeDisplay(elapsedSeconds) {
         }
     }
     
-    // 카운트다운 값 표시
+    // 카운트다운 값 표시 (individual.html만 - 모바일은 독립적으로 구동)
     if (countdownValue !== null && countdownValue >= 0) {
         const timeText = formatTime(countdownValue);
         const color = countdownValue <= 10 ? '#ff4444' : '#00d4aa';
@@ -749,19 +736,10 @@ function updateIndividualLapTimeDisplay(elapsedSeconds) {
             lapTimeEl.textContent = timeText;
             lapTimeEl.setAttribute('fill', color);
         }
-        
-        if (mobileLapTimeEl) {
-            mobileLapTimeEl.textContent = timeText;
-            mobileLapTimeEl.setAttribute('fill', color);
-        }
     } else {
         if (lapTimeEl) {
             lapTimeEl.textContent = '00:00';
             lapTimeEl.setAttribute('fill', '#00d4aa');
-        }
-        if (mobileLapTimeEl) {
-            mobileLapTimeEl.textContent = '00:00';
-            mobileLapTimeEl.setAttribute('fill', '#00d4aa');
         }
     }
 }

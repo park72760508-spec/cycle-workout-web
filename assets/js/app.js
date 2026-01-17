@@ -2781,41 +2781,8 @@ function startSegmentLoop() {
     // 그래프 하단 시간 표시 업데이트
     if (typeof updateChartTimeLabels === "function") updateChartTimeLabels();
     
-    // 모바일 대시보드 타이머 업데이트 (경과시간, 세그먼트 타이머)
-    const mobileScreen = document.getElementById('mobileDashboardScreen');
-    if (mobileScreen && 
-        (mobileScreen.classList.contains('active') || 
-         window.getComputedStyle(mobileScreen).display !== 'none')) {
-      // 경과시간 표시 업데이트
-      const elapsedSec = window.trainingState?.elapsedSec || 0;
-      const hours = Math.floor(elapsedSec / 3600);
-      const minutes = Math.floor((elapsedSec % 3600) / 60);
-      const seconds = Math.floor(elapsedSec % 60);
-      const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-      const timerEl = safeGetElement('mobile-main-timer');
-      if (timerEl) {
-        timerEl.textContent = timeString;
-      }
-      
-      // 세그먼트 타이머 (LAP COUNTDOWN) 업데이트 - 민트색 표시
-      if (w && w.segments && window.trainingState?.segIndex !== undefined) {
-        const currentSegment = w.segments[window.trainingState.segIndex];
-        if (currentSegment) {
-          const segmentDuration = Number(currentSegment.duration_sec) || Number(currentSegment.duration) || 0;
-          const segmentElapsed = window.trainingState.segElapsedSec || 0;
-          const remaining = Math.max(0, segmentDuration - segmentElapsed);
-          
-          const lapMinutes = Math.floor(remaining / 60);
-          const lapSeconds = Math.floor(remaining % 60);
-          const lapTimeString = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
-          
-          const lapTimeEl = safeGetElement('mobile-ui-lap-time');
-          if (lapTimeEl) {
-            lapTimeEl.textContent = lapTimeString;
-          }
-        }
-      }
-    }
+    // 모바일 대시보드 타이머 업데이트 제거 (모바일은 독립적인 타이머 루프 사용)
+    // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
 
     // 전체 종료 판단
    // 전체 종료 판단
@@ -12128,74 +12095,20 @@ function startMobileDashboardDataUpdate() {
 }
 
 /**
- * 모바일 대시보드 타이머 업데이트
+ * 모바일 대시보드 타이머 업데이트 (비활성화)
+ * 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
+ * 이 함수는 더 이상 사용하지 않음 (다른 화면과의 간섭 방지)
  */
 function startMobileDashboardTimer() {
-  function updateMobileTimer() {
-    const mobileScreen = document.getElementById('mobileDashboardScreen');
-    if (!mobileScreen || 
-        (!mobileScreen.classList.contains('active') && 
-         window.getComputedStyle(mobileScreen).display === 'none')) {
-      return;
-    }
-    
-    // 훈련 상태에서 경과 시간 가져오기
-    // startSegmentLoop가 실행 중이면 trainingState.elapsedSec이 업데이트됨
-    const trainingState = window.trainingState || {};
-    const elapsedSec = trainingState.elapsedSec || 0;
-    
-    // 시간 포맷팅 (HH:MM:SS)
-    const hours = Math.floor(elapsedSec / 3600);
-    const minutes = Math.floor((elapsedSec % 3600) / 60);
-    const seconds = Math.floor(elapsedSec % 60);
-    const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    
-    const timerEl = safeGetElement('mobile-main-timer');
-    if (timerEl) {
-      timerEl.textContent = timeString;
-    }
-    
-    // 랩 카운트다운 업데이트 (세그먼트 남은 시간)
-    if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
-      const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
-      if (currentSegment) {
-        const segmentDuration = Number(currentSegment.duration_sec) || Number(currentSegment.duration) || 0;
-        const segmentElapsed = trainingState.segElapsedSec || 0;
-        const remaining = Math.max(0, segmentDuration - segmentElapsed);
-        
-        const lapMinutes = Math.floor(remaining / 60);
-        const lapSeconds = Math.floor(remaining % 60);
-        const lapTimeString = `${String(lapMinutes).padStart(2, '0')}:${String(lapSeconds).padStart(2, '0')}`;
-        
-        const lapTimeEl = safeGetElement('mobile-ui-lap-time');
-        if (lapTimeEl) {
-          lapTimeEl.textContent = lapTimeString;
-        }
-      }
-    }
-    
-    // 세그먼트 정보 업데이트
-    if (window.currentWorkout && window.currentWorkout.segments && trainingState.segIndex !== undefined) {
-      const currentSegment = window.currentWorkout.segments[trainingState.segIndex];
-      if (currentSegment) {
-        const segmentInfoEl = safeGetElement('mobile-segment-info');
-        if (segmentInfoEl) {
-          const segName = currentSegment.label || currentSegment.segment_type || `세그먼트 ${trainingState.segIndex + 1}`;
-          const ftpPercent = getSegmentFtpPercent(currentSegment);
-          segmentInfoEl.textContent = `${segName} FTP ${ftpPercent}%`;
-        }
-      }
-    }
-  }
+  // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
+  // 이 함수는 호출되어도 아무 작업도 수행하지 않음 (다른 화면과의 간섭 방지)
+  console.log('[Mobile Dashboard] startMobileDashboardTimer 호출됨 (비활성화됨 - 모바일 전용 타이머 사용)');
   
-  // 1초마다 업데이트
+  // 기존 인터벌이 있으면 정리
   if (window.mobileDashboardTimerInterval) {
     clearInterval(window.mobileDashboardTimerInterval);
+    window.mobileDashboardTimerInterval = null;
   }
-  window.mobileDashboardTimerInterval = setInterval(updateMobileTimer, 1000);
-  
-  // 즉시 한 번 실행
-  updateMobileTimer();
 }
 
 // 모바일 대시보드 속도계 관련 변수
@@ -13584,6 +13497,7 @@ function startMobileTrainingTimerLoop() {
     }
     
     // 현재 세그 경과초 계산 (모바일 전용 - 직접 계산)
+    // 이전 세그먼트들의 누적 시간 계산
     let cumStart = 0;
     for (let i = 0; i < mts.segIndex; i++) {
       const seg = w.segments[i];
@@ -13591,7 +13505,6 @@ function startMobileTrainingTimerLoop() {
         cumStart += segDurationSec(seg);
       }
     }
-    mts.segElapsedSec = Math.max(0, mts.elapsedSec - cumStart);
     
     // 세그먼트 정보
     const currentSegIndex = mts.segIndex;
@@ -13601,6 +13514,15 @@ function startMobileTrainingTimerLoop() {
       return;
     }
     const segDur = segDurationSec(currentSeg);
+    
+    // 세그먼트 경과 시간 계산 (전체 경과 시간 - 이전 세그먼트들의 누적 시간)
+    const calculatedSegElapsed = Math.max(0, mts.elapsedSec - cumStart);
+    
+    // 세그먼트 경과 시간이 세그먼트 지속 시간을 초과하지 않도록 제한
+    // (세그먼트 전환 전까지는 현재 세그먼트 내에서만 증가)
+    mts.segElapsedSec = Math.min(calculatedSegElapsed, segDur);
+    
+    // 랩 카운트다운 계산 (세그먼트 남은 시간)
     const segRemaining = segDur - mts.segElapsedSec;
     
     // UI 업데이트
@@ -13656,23 +13578,24 @@ function startMobileTrainingTimerLoop() {
     
     // 세그먼트 경계 통과 → 다음 세그먼트로 전환
     const prevSegIndex = mts._lastProcessedSegIndex ?? currentSegIndex;
-    // 모바일 전용 - 직접 계산 (getCumulativeStartSec는 Indoor Training 전용)
-    let segStartAtSec = 0;
-    for (let i = 0; i < currentSegIndex; i++) {
-      const seg = w.segments[i];
-      if (seg) {
-        segStartAtSec += segDurationSec(seg);
-      }
-    }
-    const segEndAtSec = segStartAtSec + segDur;
-    const shouldTransition = (mts.segElapsedSec >= segDur || mts.elapsedSec >= segEndAtSec) && prevSegIndex === currentSegIndex;
+    
+    // 세그먼트 전환 조건: 
+    // 1. 세그먼트 경과 시간이 세그먼트 지속 시간과 같거나 초과
+    // 2. 아직 전환되지 않은 경우 (prevSegIndex === currentSegIndex)
+    // 3. 마지막 세그먼트가 아닌 경우
+    // 4. 전체 경과 시간이 세그먼트 종료 시각을 초과한 경우 (이중 체크)
+    const segEndAtSec = cumStart + segDur;
+    const shouldTransition = (mts.segElapsedSec >= segDur) && 
+                             (mts.elapsedSec >= segEndAtSec) && 
+                             (prevSegIndex === currentSegIndex) && 
+                             (currentSegIndex < w.segments.length - 1);
     
     if (shouldTransition) {
-      console.log(`[Mobile Dashboard] 세그먼트 ${currentSegIndex + 1} 완료, 다음 세그먼트로 이동`);
+      console.log(`[Mobile Dashboard] 세그먼트 ${currentSegIndex + 1} 완료 (경과: ${mts.segElapsedSec}초/${segDur}초, 전체: ${mts.elapsedSec}초), 다음 세그먼트로 이동`);
       
       const nextSegIndex = currentSegIndex + 1;
       mts.segIndex = nextSegIndex;
-      mts.segElapsedSec = 0;
+      // 세그먼트 전환 시 segElapsedSec는 다음 틱에서 자동으로 재계산됨 (0으로 명시적 리셋 불필요)
       mts._lastProcessedSegIndex = nextSegIndex;
       
       // 다음 세그먼트의 카운트다운 상태 초기화
@@ -13684,7 +13607,7 @@ function startMobileTrainingTimerLoop() {
       }
       
       if (nextSegIndex < w.segments.length) {
-        console.log(`[Mobile Dashboard] 세그먼트 ${nextSegIndex + 1}로 전환`);
+        console.log(`[Mobile Dashboard] 세그먼트 ${nextSegIndex + 1}로 전환 (전체 경과: ${mts.elapsedSec}초)`);
         if (typeof updateMobileDashboardUI === 'function') {
           updateMobileDashboardUI();
         }
@@ -13692,6 +13615,7 @@ function startMobileTrainingTimerLoop() {
         console.log('[Mobile Dashboard] 모든 세그먼트 완료');
       }
     } else if (prevSegIndex !== currentSegIndex) {
+      // 세그먼트가 이미 전환된 경우, 추적 변수만 업데이트
       mts._lastProcessedSegIndex = currentSegIndex;
     }
     
