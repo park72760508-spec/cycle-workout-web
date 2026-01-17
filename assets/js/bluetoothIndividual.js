@@ -67,6 +67,20 @@ let currentPowerValue = 0; // window.liveData에서 받은 실제 파워값
 let displayPower = 0; // 화면에 표시되는 부드러운 파워값 (보간 적용)
 let gaugeAnimationFrameId = null; // 애니메이션 루프 ID
 
+// 파워 히스토리 저장 (avgPower, maxPower, segmentPower 계산용)
+let powerHistory = []; // 전체 파워 히스토리
+let segmentPowerHistory = []; // 현재 세그먼트 파워 히스토리
+let currentSegmentStartTime = null; // 현재 세그먼트 시작 시간
+let maxPowerRecorded = 0; // 기록된 최대 파워
+
+// 사용자 정보 저장 (Firebase 업데이트용)
+let currentUserInfo = {
+    userId: null,
+    userName: null,
+    ftp: 200,
+    weight: null
+};
+
 // 2. window.liveData에서 데이터 읽기 및 Firebase로 전송
 // SESSION_ID는 firebaseConfig.js에 정의됨
 // window.liveData는 bluetooth.js에서 업데이트됨 (power, heartRate, cadence)
@@ -82,6 +96,42 @@ function sendDataToFirebase() {
     const power = Number(window.liveData.power || 0);
     const heartRate = Number(window.liveData.heartRate || 0);
     const cadence = Number(window.liveData.cadence || 0);
+    const targetPower = Number(window.liveData.targetPower || firebaseTargetPower || 0);
+    
+    const now = Date.now();
+    
+    // 파워 히스토리 업데이트 (유효한 파워값만)
+    if (power > 0) {
+        powerHistory.push({ power, timestamp: now });
+        // 히스토리 크기 제한 (메모리 관리: 최근 1시간 분량만 유지)
+        const oneHourAgo = now - (60 * 60 * 1000);
+        powerHistory = powerHistory.filter(entry => entry.timestamp > oneHourAgo);
+        
+        // 최대 파워 업데이트
+        if (power > maxPowerRecorded) {
+            maxPowerRecorded = power;
+        }
+        
+        // 세그먼트 파워 히스토리 업데이트
+        segmentPowerHistory.push({ power, timestamp: now });
+        // 세그먼트 히스토리도 최근 1시간 분량만 유지
+        const segmentOneHourAgo = now - (60 * 60 * 1000);
+        segmentPowerHistory = segmentPowerHistory.filter(entry => entry.timestamp > segmentOneHourAgo);
+    }
+    
+    // 평균 파워 계산 (전체)
+    let avgPower = 0;
+    if (powerHistory.length > 0) {
+        const totalPower = powerHistory.reduce((sum, entry) => sum + entry.power, 0);
+        avgPower = Math.round(totalPower / powerHistory.length);
+    }
+    
+    // 세그먼트 평균 파워 계산
+    let segmentPower = 0;
+    if (segmentPowerHistory.length > 0) {
+        const totalSegmentPower = segmentPowerHistory.reduce((sum, entry) => sum + entry.power, 0);
+        segmentPower = Math.round(totalSegmentPower / segmentPowerHistory.length);
+    }
     
     // Firebase에 전송할 데이터 객체
     const dataToSend = {
@@ -90,8 +140,27 @@ function sendDataToFirebase() {
         heartRate: heartRate > 0 ? heartRate : 0,
         cadence: cadence > 0 ? cadence : 0,
         rpm: cadence > 0 ? cadence : 0,
-        timestamp: Date.now()
+        avgPower: avgPower,
+        maxPower: maxPowerRecorded,
+        segmentPower: segmentPower,
+        targetPower: targetPower,
+        lastUpdate: now,
+        timestamp: now
     };
+    
+    // 사용자 정보 추가 (있는 경우)
+    if (currentUserInfo.userId) {
+        dataToSend.userId = currentUserInfo.userId;
+    }
+    if (currentUserInfo.userName) {
+        dataToSend.userName = currentUserInfo.userName;
+    }
+    if (currentUserInfo.ftp) {
+        dataToSend.ftp = currentUserInfo.ftp;
+    }
+    if (currentUserInfo.weight !== null && currentUserInfo.weight !== undefined) {
+        dataToSend.weight = currentUserInfo.weight;
+    }
     
     // Firebase에 업데이트 (merge: true로 기존 데이터 보존)
     db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).update(dataToSend)
@@ -598,6 +667,22 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => 
         // 사용자 ID 저장
         if (data.userId) {
             currentUserIdForSession = String(data.userId);
+            currentUserInfo.userId = String(data.userId);
+        }
+        
+        // 사용자 이름 저장
+        if (data.userName) {
+            currentUserInfo.userName = String(data.userName);
+        }
+        
+        // 사용자 FTP 저장
+        if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
+            currentUserInfo.ftp = foundFTP;
+        }
+        
+        // 사용자 체중 저장
+        if (data.weight !== undefined && data.weight !== null && data.weight !== '') {
+            currentUserInfo.weight = Number(data.weight);
         }
         
         // 사용자 이름 업데이트
@@ -803,7 +888,15 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         updateTimer(status);
         
         // 세그먼트 정보 표시
+        const previousSegmentIndex = currentSegmentIndex;
         currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+        
+        // 세그먼트가 변경되면 세그먼트 파워 히스토리 초기화
+        if (previousSegmentIndex !== currentSegmentIndex && currentSegmentIndex >= 0) {
+            segmentPowerHistory = [];
+            currentSegmentStartTime = Date.now();
+            console.log(`[BluetoothIndividual] 세그먼트 변경: ${previousSegmentIndex} → ${currentSegmentIndex}, 파워 히스토리 초기화`);
+        }
         const segmentInfoEl = document.getElementById('segment-info');
         if (segmentInfoEl) {
             if (status.state === 'running') {
