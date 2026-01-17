@@ -1285,6 +1285,43 @@ function updateTrainingStatus(status) {
     }
   }
   
+  // 모든 세그먼트 완료 감지 및 Firebase status 업데이트 (Bluetooth Coach 전용)
+  if (hasWorkout && firebaseState === 'running' && currentWorkout.segments) {
+    const totalSegments = currentWorkout.segments.length;
+    const currentSegmentIdx = window.bluetoothCoachState.currentSegmentIndex || 0;
+    const lastSegmentIndex = totalSegments > 0 ? totalSegments - 1 : -1;
+    
+    // 모든 세그먼트가 완료되었는지 확인
+    // 1. 현재 세그먼트 인덱스가 마지막 세그먼트를 넘었거나
+    // 2. 마지막 세그먼트이고 남은 시간이 0 이하인 경우
+    const isAllSegmentsComplete = currentSegmentIdx > lastSegmentIndex || 
+                                   (currentSegmentIdx === lastSegmentIndex && 
+                                    status.segmentRemainingSec !== undefined && 
+                                    status.segmentRemainingSec !== null && 
+                                    status.segmentRemainingSec <= 0);
+    
+    if (isAllSegmentsComplete && window.bluetoothCoachState.trainingState === 'running') {
+      console.log('[Bluetooth Coach] 모든 세그먼트 완료 감지 - Firebase status 업데이트', {
+        currentSegmentIdx,
+        lastSegmentIndex,
+        totalSegments,
+        segmentRemainingSec: status.segmentRemainingSec
+      });
+      const sessionId = getBluetoothCoachSessionId();
+      if (sessionId && typeof db !== 'undefined') {
+        db.ref(`sessions/${sessionId}/status`).update({
+          state: 'finished',
+          completionMessage: '모든 세그먼트 훈련이 완료되었습니다.',
+          completedAt: Date.now()
+        }).then(() => {
+          console.log('[Bluetooth Coach] Firebase status 업데이트 완료: finished');
+        }).catch((error) => {
+          console.error('[Bluetooth Coach] Firebase status 업데이트 실패:', error);
+        });
+      }
+    }
+  }
+  
   // 버튼 상태 업데이트
   updateBluetoothCoachTrainingButtons();
 }
