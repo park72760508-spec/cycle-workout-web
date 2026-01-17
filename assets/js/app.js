@@ -12754,11 +12754,6 @@ function updateMobileTargetPower() {
     const mts = window.mobileTrainingState || {};
     mts.currentSegmentMaxPower = window.currentSegmentMaxPower;
     mts.currentSegmentMinPower = window.currentSegmentMinPower;
-    
-    // 모바일 전용 상태에도 저장 (독립적으로 구동)
-    const mts = window.mobileTrainingState || {};
-    mts.currentSegmentMaxPower = window.currentSegmentMaxPower;
-    mts.currentSegmentMinPower = window.currentSegmentMinPower;
   }
   
   // 강도 조절 비율 적용
