@@ -4522,9 +4522,32 @@ function handlePlayerEnterClick(event, trackNumber, roomId) {
 }
 
 /**
- * Bluetooth 입장 버튼 클릭 핸들러
+ * Bluetooth 입장 버튼 클릭 핸들러 (로딩 애니메이션 적용, Bluetooth Join Session 전용, 독립적 구동)
  */
 function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
-  handlePlayerEnterClick(event, trackNumber, roomId);
+  const button = event?.target?.closest('a.player-enter-btn');
+  
+  // 비활성화된 버튼은 클릭 무시
+  if (button && (button.classList.contains('disabled') || button.getAttribute('aria-disabled') === 'true')) {
+    event.preventDefault();
+    return;
+  }
+  
+  // 로딩 애니메이션 시작
+  if (button) {
+    button.classList.add('loading');
+    // 페이지 이동이 시작되면 로딩 상태가 자연스럽게 사라짐
+  }
+  
+  // 기존 클릭 애니메이션도 유지
+  if (button) {
+    button.classList.add('clicking');
+    setTimeout(() => {
+      button.classList.remove('clicking');
+    }, 300);
+  }
+  
+  // href로 이동하는 것은 브라우저가 처리하도록 허용
+  // 로딩 애니메이션은 페이지 이동 전까지 표시됨
 }
 

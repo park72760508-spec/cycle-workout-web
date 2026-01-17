@@ -5,23 +5,48 @@
 
 /**
  * Bluetooth 트랙에 사용자 할당 (애니메이션 효과 포함)
+ * 로딩 애니메이션 적용 (Bluetooth Join Session 전용, 독립적 구동)
  */
 async function assignUserToBluetoothTrackWithAnimation(trackNumber, currentUserId, roomIdParam, event) {
   if (event) {
     event.stopPropagation();
   }
 
-  // 애니메이션 효과
+  // 버튼 찾기
   const button = event?.target?.closest('.player-assign-btn');
-  if (button) {
-    button.style.transform = 'scale(0.95)';
-    setTimeout(() => {
-      button.style.transform = '';
-    }, 150);
+  
+  // 버튼이 비활성화되어 있으면 실행하지 않음
+  if (button && button.disabled) {
+    return;
   }
 
-  // 실제 할당 함수 호출
-  await assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdParam);
+  // 로딩 애니메이션 시작
+  if (button) {
+    button.classList.add('loading');
+    button.disabled = true;
+    // 모달 표시 시 로딩 상태 해제를 위해 전역 변수에 저장
+    window._currentBluetoothAssignButton = button;
+  }
+
+  try {
+    // 실제 할당 함수 호출
+    await assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdParam);
+    
+    // 바로 신청 완료된 경우에만 로딩 상태 해제
+    // 모달이 표시된 경우는 모달 표시 로직에서 처리
+    if (button && !document.getElementById('bluetoothTrackUserSelectModal')) {
+      button.classList.remove('loading');
+      window._currentBluetoothAssignButton = null;
+    }
+  } catch (error) {
+    // 오류 발생 시 로딩 상태 해제
+    if (button) {
+      button.classList.remove('loading');
+      button.disabled = false;
+      window._currentBluetoothAssignButton = null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -164,6 +189,15 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
 
   // 로그인한 사용자 정보가 없거나 관리자/코치가 다른 사용자를 선택해야 하는 경우 모달 표시
   console.log('[Bluetooth Join Session] 사용자 선택 모달을 표시합니다.');
+  
+  // 모달이 표시되므로 원래 버튼의 로딩 상태 해제
+  // assignUserToBluetoothTrackWithAnimation에서 전달된 버튼 정보를 활용하기 위해
+  // 전역 변수에 저장된 버튼 참조를 사용하여 로딩 상태 해제
+  if (window._currentBluetoothAssignButton) {
+    window._currentBluetoothAssignButton.classList.remove('loading');
+    window._currentBluetoothAssignButton.disabled = false;
+    window._currentBluetoothAssignButton = null;
+  }
 
   // 사용자 목록 가져오기
   let users = [];
@@ -550,21 +584,37 @@ async function pairBluetoothDevice(deviceType, inputId) {
 
 /**
  * Bluetooth 트랙에서 사용자 제거 (애니메이션 효과 포함)
+ * 로딩 애니메이션 적용 (Bluetooth Join Session 전용, 독립적 구동)
  */
 async function removeUserFromBluetoothTrackWithAnimation(trackNumber, roomIdParam, event) {
   if (event) {
     event.stopPropagation();
   }
 
+  // 버튼 찾기
   const button = event?.target?.closest('.player-remove-btn');
-  if (button) {
-    button.style.transform = 'scale(0.95)';
-    setTimeout(() => {
-      button.style.transform = '';
-    }, 150);
+  
+  // 버튼이 비활성화되어 있으면 실행하지 않음
+  if (button && button.disabled) {
+    return;
   }
 
-  await removeUserFromBluetoothTrack(trackNumber, roomIdParam);
+  // 로딩 애니메이션 시작
+  if (button) {
+    button.classList.add('loading');
+    button.disabled = true;
+  }
+
+  try {
+    await removeUserFromBluetoothTrack(trackNumber, roomIdParam);
+  } finally {
+    // 로딩 애니메이션 종료
+    if (button) {
+      button.classList.remove('loading');
+      // 버튼 상태 복원 (원래 disabled 상태가 아니었다면)
+      // 실제 제거 결과에 따라 버튼 상태가 변경될 수 있으므로 여기서는 강제로 활성화하지 않음
+    }
+  }
 }
 
 /**
@@ -597,6 +647,7 @@ async function removeUserFromBluetoothTrack(trackNumber, roomIdParam) {
 
   // 확인 대화상자
   if (!confirm(`트랙${trackNumber}에서 퇴실하시겠습니까?`)) {
+    // 확인 취소 시 로딩 상태 해제는 removeUserFromBluetoothTrackWithAnimation의 finally에서 처리
     return;
   }
 
