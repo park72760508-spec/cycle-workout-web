@@ -723,15 +723,20 @@ function updatePowerMeterUI(trackId) {
     targetPowerEl.textContent = Math.round(powerMeter.targetPower);
   }
   
-  // 배경색 업데이트 (데이터 수신 여부에 따라)
+  // 배경색 업데이트 (RPM 값이 0보다 크면 초록색)
   const infoEl = document.querySelector(`#power-meter-${trackId} .speedometer-info`);
   if (infoEl) {
-    if (powerMeter.connected) {
-      infoEl.style.backgroundColor = '#90EE90';
+    const cadenceValue = (typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) ? Math.round(powerMeter.cadence) : 0;
+    if (cadenceValue > 0) {
+      // RPM 값이 0보다 크면 초록색 (#00d4aa)
+      infoEl.style.backgroundColor = '#00d4aa';
+      infoEl.style.color = '#ffffff';
       infoEl.classList.remove('disconnected');
       infoEl.classList.add('connected');
     } else {
-      infoEl.style.backgroundColor = '#FFA500';
+      // RPM 값이 0이면 기본 색상
+      infoEl.style.backgroundColor = '';
+      infoEl.style.color = '';
       infoEl.classList.remove('connected');
       infoEl.classList.add('disconnected');
     }
