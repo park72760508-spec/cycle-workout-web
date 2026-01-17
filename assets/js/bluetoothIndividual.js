@@ -94,9 +94,11 @@ function startFirebaseDataTransmission() {
     // 1초마다 데이터 전송 및 UI 업데이트
     firebaseDataUpdateInterval = setInterval(() => {
         // 1. window.liveData에서 데이터를 읽어서 UI 업데이트 (Bluetooth 디바이스 값 표시)
-        if (window.liveData) {
-            updateDashboard(); // data 파라미터 없이 호출하면 window.liveData를 읽음
+        // window.liveData 초기화 확인
+        if (!window.liveData) {
+            window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
         }
+        updateDashboard(); // data 파라미터 없이 호출하면 window.liveData를 읽음
         
         // 2. Firebase에 데이터 전송
         sendDataToFirebase();
@@ -114,13 +116,35 @@ function stopFirebaseDataTransmission() {
     }
 }
 
-// 페이지 로드 시 Firebase 데이터 전송 시작
+// 페이지 로드 시 Firebase 데이터 전송 시작 및 초기 UI 업데이트
+// window.liveData 초기화 (bluetooth.js가 로드되기 전일 수 있으므로)
+if (!window.liveData) {
+    window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    console.log('[BluetoothIndividual] window.liveData 초기화 (페이지 로드 시)');
+}
+
+function initializeBluetoothDashboard() {
+    // Firebase 데이터 전송 시작
+    startFirebaseDataTransmission();
+    
+    // 초기 UI 업데이트 (window.liveData 값 표시)
+    setTimeout(() => {
+        console.log('[BluetoothIndividual] 초기 UI 업데이트:', {
+            liveData: window.liveData,
+            heartRate: window.liveData?.heartRate,
+            power: window.liveData?.power,
+            cadence: window.liveData?.cadence
+        });
+        updateDashboard(); // 초기 표시를 위해 한 번 호출
+    }, 500); // bluetooth.js가 로드되고 초기화될 시간을 줌
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        startFirebaseDataTransmission();
+        initializeBluetoothDashboard();
     });
 } else {
-    startFirebaseDataTransmission();
+    initializeBluetoothDashboard();
 }
 
 // 페이지 언로드 시 Firebase 데이터 전송 중지
@@ -484,25 +508,32 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
 
 // updateDashboard 함수: window.liveData에서 읽어서 대시보드 업데이트
 function updateDashboard(data = null) {
-    // data가 없으면 window.liveData에서 읽기 (Bluetooth 디바이스 데이터)
+    // window.liveData 초기화 확인 (bluetooth.js에서 초기화하지만 안전을 위해)
+    if (!window.liveData) {
+        window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+        console.log('[BluetoothIndividual] window.liveData 초기화');
+    }
+    
+    // data가 없으면 window.liveData에서 직접 읽기 (Bluetooth 디바이스 데이터)
+    // data 파라미터는 Firebase에서 받은 데이터일 수 있으므로, window.liveData를 우선 사용
     if (!data) {
-        data = window.liveData || {};
+        data = window.liveData;
+    }
+    
+    // 디버깅 로그 (5초마다 한 번씩만 출력)
+    if (!window.lastDashboardLog || (Date.now() - window.lastDashboardLog) > 5000) {
+        window.lastDashboardLog = Date.now();
+        console.log('[BluetoothIndividual] updateDashboard 호출:', {
+            power: window.liveData?.power,
+            heartRate: window.liveData?.heartRate,
+            cadence: window.liveData?.cadence,
+            hasData: !!data
+        });
     }
     
     // 1. 텍스트 업데이트
     // 파워값 가져오기 (window.liveData 우선 사용, bluetooth.js에서 업데이트됨)
-    // window.liveData는 bluetooth.js에서 업데이트되므로 우선적으로 사용
-    const power = Number(window.liveData?.power || data.power || data.currentPower || data.watts || data.currentPowerW || 0);
-    
-    // window.liveData가 없으면 초기화 (bluetooth.js에서 초기화하지만 안전을 위해)
-    if (!window.liveData) {
-      window.liveData = {};
-    }
-    // window.liveData에 값들이 이미 bluetooth.js에서 업데이트되어 있으므로, 그대로 사용
-    // data에서 받은 값이 있으면 업데이트 (fallback)
-    if (data.power && power > 0) {
-        window.liveData.power = power;
-    }
+    const power = Number(window.liveData?.power || data?.power || data?.currentPower || data?.watts || data?.currentPowerW || 0);
     
     // 3초 평균 파워값 계산 (전역 함수 사용)
     let powerValue = power; // 기본값은 현재 파워값
@@ -528,19 +559,24 @@ function updateDashboard(data = null) {
     updateTargetPower();
     
     // CADENCE 표시 (Bluetooth 디바이스에서 받은 값)
-    // window.liveData.cadence 우선 사용 (bluetooth.js에서 업데이트됨)
-    const cadence = Number(data.cadence || data.rpm || window.liveData?.cadence || 0);
+    // window.liveData.cadence 우선 사용 (bluetooth.js에서 직접 업데이트됨)
+    const cadence = Number(window.liveData?.cadence || data?.cadence || data?.rpm || 0);
     const cadenceEl = document.getElementById('ui-cadence');
     if (cadenceEl) {
         cadenceEl.textContent = Math.round(cadence);
     }
     
     // HEART RATE 표시 (Bluetooth 디바이스에서 받은 값)
-    // window.liveData.heartRate 우선 사용 (bluetooth.js에서 업데이트됨)
-    const hr = Number(data.hr || data.heartRate || data.bpm || window.liveData?.heartRate || 0);
+    // window.liveData.heartRate 우선 사용 (bluetooth.js에서 직접 업데이트됨)
+    const hr = Number(window.liveData?.heartRate || data?.hr || data?.heartRate || data?.bpm || 0);
     const hrEl = document.getElementById('ui-hr');
     if (hrEl) {
         hrEl.textContent = Math.round(hr);
+        // 디버깅 로그 (심박수가 업데이트될 때마다)
+        if (hr > 0 && (!window.lastHRLog || (Date.now() - window.lastHRLog) > 5000)) {
+            window.lastHRLog = Date.now();
+            console.log('[BluetoothIndividual] 심박수 업데이트:', hr, 'bpm (window.liveData.heartRate:', window.liveData?.heartRate, ')');
+        }
     }
     
     // 랩파워 표시 (세그먼트 평균 파워)
