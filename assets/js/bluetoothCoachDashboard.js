@@ -496,6 +496,9 @@ function startGaugeAnimationLoop() {
         needleEl.style.transition = 'none';
         needleEl.setAttribute('transform', `rotate(${angle})`);
       }
+      
+      // 바늘 궤적 업데이트 (Indoor Training과 동일한 방식)
+      updateBluetoothCoachPowerMeterTrail(pm.id, pm.displayPower, angle, pm);
     });
 
     requestAnimationFrame(loop);
@@ -678,6 +681,14 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
     console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP} → ${userData.ftp}`);
     updateBluetoothCoachPowerMeterTicks(trackId);
   }
+  
+  // 바늘 궤적 업데이트 (목표 파워 및 궤적 표시)
+  const ftp = powerMeter.userFTP || 200;
+  const maxPower = ftp * 2;
+  const currentPower = powerMeter.currentPower || 0;
+  const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+  const angle = -90 + (ratio * 180);
+  updateBluetoothCoachPowerMeterTrail(trackId, currentPower, angle, powerMeter);
 }
 
 /**
@@ -897,6 +908,241 @@ function updateBluetoothCoachDeviceIcons(powerMeterId, deviceData) {
   }
   
   deviceIconsEl.innerHTML = icons.join('');
+}
+
+/**
+ * 파워미터 바늘 궤적 업데이트 (Indoor Training의 updatePowerMeterTrail 참고)
+ */
+function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
+  const trailContainer = document.getElementById(`needle-path-${powerMeterId}`);
+  const targetTextEl = document.getElementById(`target-power-value-${powerMeterId}`);
+  
+  // 컨테이너가 없거나 연결되지 않은 경우 초기화 후 종료
+  if (!trailContainer) return;
+  if (!powerMeter.connected) {
+    trailContainer.innerHTML = '';
+    if (targetTextEl) targetTextEl.textContent = '';
+    return;
+  }
+
+  // 1. 기본 설정값 로드
+  const ftp = powerMeter.userFTP || 200;
+  const maxPower = ftp * 2; // 게이지 최대값 (FTP의 200%)
+  
+  // 2. 훈련 상태 확인
+  const isTrainingRunning = window.bluetoothCoachState && window.bluetoothCoachState.trainingState === 'running';
+  
+  // 3. 목표 파워 및 랩파워 데이터 준비 (워크아웃 중일 때만 유효)
+  let targetPower = 0;
+  let segmentPower = 0;
+  
+  if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.currentWorkout.segments) {
+    const segments = window.bluetoothCoachState.currentWorkout.segments;
+    const currentSegmentIndex = window.bluetoothCoachState.currentSegmentIndex || 0;
+    const currentSegment = segments[currentSegmentIndex] || segments[0]; 
+    
+    // 목표 파워 및 RPM 계산
+    if (currentSegment) {
+      const targetType = currentSegment.target_type || 'ftp_pct';
+      let ftpPercent = 100; // 기본값
+      const targetValue = currentSegment.target_value || currentSegment.target || '100';
+      
+      if (targetType === 'cadence_rpm') {
+        // cadence_rpm 타입: target_value가 RPM 값
+        targetPower = 0; // RPM만 있는 경우 파워는 0
+      } else if (targetType === 'dual') {
+        // dual 타입: target_value는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+          const parts = targetValue.split('/').map(s => s.trim());
+          ftpPercent = Number(parts[0].replace('%', '')) || 100;
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+          ftpPercent = Number(targetValue[0]) || 100;
+        } else {
+          ftpPercent = Number(targetValue) || 100;
+        }
+        targetPower = (ftp * ftpPercent) / 100;
+      } else {
+        // ftp_pct 타입
+        if (typeof targetValue === 'string') {
+          if (targetValue.includes('/')) {
+            ftpPercent = Number(targetValue.split('/')[0].trim().replace('%', '')) || 100;
+          } else {
+            ftpPercent = Number(targetValue.replace('%', '')) || 100;
+          }
+        } else if (typeof targetValue === 'number') {
+          ftpPercent = targetValue;
+        }
+        targetPower = (ftp * ftpPercent) / 100;
+      }
+    }
+    
+    // 현재 랩파워 (Segment Average Power) 가져오기
+    segmentPower = powerMeter.segmentPower || 0;
+  }
+  
+  // 목표 파워 텍스트 업데이트
+  if (targetTextEl) {
+    if (isTrainingRunning && targetPower > 0) {
+      targetTextEl.textContent = Math.round(targetPower);
+      targetTextEl.setAttribute('fill', '#ff8c00'); // 주황색
+    } else {
+      targetTextEl.textContent = '';
+    }
+  }
+  
+  // 목표 각도 계산 (주황색 아크 표시용)
+  let targetAngle = -90;
+  if (maxPower > 0 && targetPower > 0) {
+    const targetRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+    targetAngle = -90 + (targetRatio * 180);
+  }
+  
+  // 파워미터 객체에 목표값 저장 (참조용)
+  powerMeter.targetPower = targetPower;
+
+  // 4. 그리기 함수 호출 (핵심 로직)
+  drawBluetoothCoachPowerMeterTrail(
+    trailContainer, 
+    targetAngle, 
+    targetPower, 
+    currentPower, 
+    segmentPower,
+    maxPower,
+    isTrainingRunning
+  );
+}
+
+/**
+ * 파워미터 바늘 궤적 그리기 (SVG) - Indoor Training의 drawPowerMeterTrail 참고
+ * 1. 목표 파워 원둘레선: 진한 투명 주황색 (두께 = 작은 눈금 높이)
+ * 2. 바늘 궤적선: 98.5% 달성률 기준 민트/주황 분기
+ * 3. 동작 방식: 바늘 위치(Value)에 따라 즉시 생성/삭제 (잔상 없음)
+ */
+function drawBluetoothCoachPowerMeterTrail(container, targetAngle, targetPower, currentPower, segmentPower, maxPower, isTrainingRunning) {
+  // [핵심] 매 프레임 초기화로 잔상 완벽 제거
+  container.innerHTML = '';
+  
+  const centerX = 0; 
+  const centerY = 0;
+  const radius = 80; 
+  const innerRadius = radius - 10; // 70
+  const tickLengthShort = 7;       // 작은 눈금 높이
+  const tickLengthLong = 14; 
+  const centerCircleRadius = 7; 
+  
+  const angleOffset = 270;
+  const startAngleNeedle = -90; 
+
+  // =========================================================
+  // A. 목표 파워 궤적 (원둘레 호) - 주황색띠
+  // - 색상: 진한 투명 주황색 (rgba 255, 165, 0, 0.6)
+  // - 두께: 작은 눈금 높이 (7px)
+  // =========================================================
+  if (targetPower > 0) {
+    const targetPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    
+    const startAng = startAngleNeedle;
+    const endAng = targetAngle;
+    
+    const startRad = ((startAng + angleOffset) * Math.PI) / 180;
+    const endRad = ((endAng + angleOffset) * Math.PI) / 180;
+    
+    // [수정] 호가 눈금의 중앙을 지나도록 반지름 조정
+    // 눈금 범위: 70 ~ 77. 중앙: 73.5
+    const arcRadius = innerRadius + (tickLengthShort / 2);
+    
+    const startX = centerX + arcRadius * Math.cos(startRad);
+    const startY = centerY + arcRadius * Math.sin(startRad);
+    const endX = centerX + arcRadius * Math.cos(endRad);
+    const endY = centerY + arcRadius * Math.sin(endRad);
+    
+    const largeArcFlag = Math.abs(endAng - startAng) > 180 ? 1 : 0;
+    const sweepFlag = endAng > startAng ? 1 : 0;
+    
+    const pathData = `M ${startX} ${startY} A ${arcRadius} ${arcRadius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+    
+    targetPath.setAttribute('d', pathData);
+    targetPath.setAttribute('fill', 'none');
+    // [요청 반영] 진한 투명 주황색
+    targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); 
+    // [요청 반영] 두께는 작은 눈금 높이(7px)
+    targetPath.setAttribute('stroke-width', tickLengthShort); 
+    targetPath.setAttribute('stroke-linecap', 'butt');
+    
+    container.appendChild(targetPath);
+  }
+
+  // =========================================================
+  // B. 바늘 궤적선 (Radial Lines)
+  // - 색상: 98.5% 기준 민트/주황 (단, 시작 전에는 무조건 민트)
+  // - 로직: 현재 파워값까지만 루프를 돌아 자동 삭제 효과 구현
+  // =========================================================
+  
+  // 기본 색상: 투명 주황색
+  let trailColor = 'rgba(255, 165, 0, 0.4)'; 
+
+  if (!isTrainingRunning) {
+    // 1. 워크아웃 시작 전(Idle): 무조건 투명 민트색
+    trailColor = 'rgba(0, 212, 170, 0.4)'; 
+  } else if (targetPower > 0) {
+    // 2. 훈련 중: 달성률 확인
+    const achievementRatio = (segmentPower / targetPower) * 100;
+    if (achievementRatio >= 98.5) {
+      trailColor = 'rgba(0, 212, 170, 0.4)'; // 98.5% 이상: 투명 민트
+    } else {
+      trailColor = 'rgba(255, 165, 0, 0.4)'; // 98.5% 미만: 투명 주황
+    }
+  } else {
+    // 3. 훈련 중이지만 목표가 없는 경우 (자유 주행): 민트색 (성공으로 간주)
+    trailColor = 'rgba(0, 212, 170, 0.4)';
+  }
+
+  // 스케일 설정 (0 ~ 120)
+  const maxScalePos = 120; 
+  const tickInterval = 2.5; // 눈금 1/2 간격
+  
+  // 현재 파워를 스케일(0~120)로 변환
+  let currentScalePos = 0;
+  if (maxPower > 0) {
+    currentScalePos = (currentPower / maxPower) * maxScalePos;
+  }
+  
+  // [핵심 로직] 현재 파워 위치까지만 루프 실행
+  // currentScalePos를 넘는 구간은 for문이 돌지 않으므로 자동으로 삭제됨
+  const limitPos = Math.min(currentScalePos, maxScalePos);
+
+  for (let pos = 0; pos <= limitPos; pos += tickInterval) {
+    // 위치 -> 각도 변환
+    const ratio = pos / maxScalePos;
+    const needleAngle = -90 + (ratio * 180);
+    
+    // SVG 좌표계 변환
+    const mathAngle = needleAngle + 270;
+    const rad = (mathAngle * Math.PI) / 180;
+    
+    // 20단위마다 긴 눈금
+    const isMajor = (Math.abs(pos % 20) < 0.01);
+    const tickLen = isMajor ? tickLengthLong : tickLengthShort;
+    
+    const outerRadius = innerRadius + tickLen;
+    const startR = centerCircleRadius + 2; 
+    
+    const x1 = centerX + startR * Math.cos(rad);
+    const y1 = centerY + startR * Math.sin(rad);
+    const x2 = centerX + outerRadius * Math.cos(rad);
+    const y2 = centerY + outerRadius * Math.sin(rad);
+    
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1);
+    line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2);
+    line.setAttribute('y2', y2);
+    line.setAttribute('stroke', trailColor);
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-linecap', 'round');
+    
+    container.appendChild(line);
+  }
 }
 
 /**
@@ -1388,6 +1634,65 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
     // 워크아웃 선택 시에는 현재 세그먼트 없음 (-1)
     updateWorkoutSegmentGraphForBluetoothCoach(loadedWorkout, -1);
     
+    // 워크아웃 선택 시 경과시간, 랩카운트다운, 랩파워 등 초기화
+    window.bluetoothCoachState.trainingState = 'idle';
+    window.bluetoothCoachState.startTime = null;
+    window.bluetoothCoachState.pausedTime = 0;
+    window.bluetoothCoachState.totalElapsedTime = 0;
+    window.bluetoothCoachState.currentSegmentIndex = 0;
+    window.bluetoothCoachState.segmentStartTime = null;
+    window.bluetoothCoachState.segmentElapsedTime = 0;
+    window.bluetoothCoachState.segmentCountdownActive = false;
+    
+    // 경과시간 및 랩카운트다운 UI 초기화
+    const elapsedTimeEl = document.getElementById('bluetoothCoachElapsedTime');
+    if (elapsedTimeEl) {
+      elapsedTimeEl.textContent = '00:00:00';
+    }
+    const lapCountdownEl = document.getElementById('bluetoothCoachLapCountdown');
+    if (lapCountdownEl) {
+      lapCountdownEl.textContent = '00:00';
+    }
+    
+    // 모든 트랙의 랩파워 및 통계 초기화
+    window.bluetoothCoachState.powerMeters.forEach(pm => {
+      // 랩파워 초기화
+      pm.segmentPower = 0;
+      pm.segmentPowerSum = 0;
+      pm.segmentPowerCount = 0;
+      
+      // 궤적 초기화
+      pm.powerTrailHistory = [];
+      pm.lastTrailAngle = null;
+      const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+      if (trailContainer) trailContainer.innerHTML = '';
+      
+      // 목표 파워 초기화
+      pm.targetPower = 0;
+      const targetPowerEl = document.getElementById(`target-power-value-${pm.id}`);
+      if (targetPowerEl) targetPowerEl.textContent = '';
+      
+      // 랩파워 UI 초기화
+      const segmentPowerEl = document.getElementById(`segment-power-value-${pm.id}`);
+      if (segmentPowerEl) segmentPowerEl.textContent = '0';
+      
+      // FTP 값이 있으면 속도계 눈금 업데이트
+      if (pm.userFTP) {
+        updateBluetoothCoachPowerMeterTicks(pm.id);
+      }
+      
+      // 목표 파워 궤적 업데이트 (초기 상태)
+      const currentPower = pm.currentPower || 0;
+      const ftp = pm.userFTP || 200;
+      const maxPower = ftp * 2;
+      const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+      const angle = -90 + (ratio * 180);
+      updateBluetoothCoachPowerMeterTrail(pm.id, currentPower, angle, pm);
+    });
+    
+    // 버튼 상태 업데이트
+    updateBluetoothCoachTrainingButtons();
+    
     if (typeof showToast === 'function') {
       showToast(`"${loadedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
     }
@@ -1780,6 +2085,30 @@ function skipCurrentBluetoothCoachSegmentTraining() {
       segmentIndex: window.bluetoothCoachState.currentSegmentIndex
     }).catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 업데이트 실패:', e));
   }
+  
+  // 세그먼트 변경 시 데이터 초기화
+  window.bluetoothCoachState.powerMeters.forEach(pm => {
+    if (pm.connected) {
+      // 궤적 초기화
+      pm.powerTrailHistory = [];
+      pm.lastTrailAngle = null;
+      const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+      if (trailContainer) trailContainer.innerHTML = '';
+      
+      // 세그먼트 평균 파워 통계 리셋
+      pm.segmentPowerSum = 0;
+      pm.segmentPowerCount = 0;
+      pm.segmentPower = 0;
+      
+      // 목표 파워 궤적 업데이트
+      const currentPower = pm.currentPower || 0;
+      const ftp = pm.userFTP || 200;
+      const maxPower = ftp * 2;
+      const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+      const angle = -90 + (ratio * 180);
+      updateBluetoothCoachPowerMeterTrail(pm.id, currentPower, angle, pm);
+    }
+  });
   
   // 세그먼트 그래프 업데이트
   updateWorkoutSegmentGraph();
