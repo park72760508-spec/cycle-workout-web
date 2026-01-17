@@ -13679,12 +13679,25 @@ function updateMobileDashboardUI() {
   const currentSegIndex = mts.segIndex || 0;
   const currentSeg = w.segments[currentSegIndex];
 
-  // 세그먼트 정보 표시
+  // 세그먼트 정보 표시 (기존 로직 적용 - individual.js와 동일)
   const segmentInfoEl = safeGetElement('mobile-segment-info');
   if (segmentInfoEl && currentSeg) {
-    const segName = currentSeg.label || currentSeg.segment_type || `세그먼트 ${currentSegIndex + 1}`;
-    const ftpPercent = getSegmentFtpPercent(currentSeg);
-    segmentInfoEl.textContent = `${segName} FTP ${ftpPercent}%`;
+    // 세그먼트 이름과 목표 값을 조합하여 표시
+    const segmentName = currentSeg.label || currentSeg.name || currentSeg.segment_type || '';
+    const targetType = currentSeg.target_type || 'ftp_pct';
+    const targetValue = currentSeg.target_value;
+    
+    // 세그먼트 목표값을 표시 형식으로 변환
+    const targetText = formatMobileSegmentInfo(targetType, targetValue, currentSegIndex);
+    
+    // 세그먼트 이름이 있으면 "세그먼트 이름(목표 값)" 형식, 없으면 "목표 값"만 표시
+    const segmentText = segmentName 
+      ? `${segmentName}(${targetText})`
+      : targetText;
+    
+    segmentInfoEl.textContent = segmentText;
+  } else if (segmentInfoEl) {
+    segmentInfoEl.textContent = '준비 중';
   }
 
   // 세그먼트 그래프 업데이트
