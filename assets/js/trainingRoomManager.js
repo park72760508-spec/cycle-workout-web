@@ -2643,32 +2643,51 @@ function openCoachModeFromModal(event) {
     console.log('[Coach Modal] 전역 변수에서 모드 확인:', currentDeviceMode);
   }
   
-  // 4. 슬라이더 실제 위치 확인 (가장 정확함)
+  // 4. 슬라이더 실제 위치 확인 (가장 정확함) - 우선 순위 최상
   const switchSlider = document.getElementById('switchSlider');
   if (switchSlider) {
-    const computedStyle = window.getComputedStyle(switchSlider);
-    const sliderLeft = switchSlider.style.left || computedStyle.left;
+    // style 속성 우선 확인 (인라인 스타일)
+    let sliderLeft = switchSlider.style.left;
+    
+    // 인라인 스타일이 없으면 computed style 확인
+    if (!sliderLeft || sliderLeft === '' || sliderLeft === 'auto') {
+      const computedStyle = window.getComputedStyle(switchSlider);
+      sliderLeft = computedStyle.left;
+    }
     
     // left 값 파싱
     let leftValue = 0;
-    if (sliderLeft) {
+    if (sliderLeft && sliderLeft !== 'auto') {
+      // 퍼센트 값인 경우
       if (sliderLeft.includes('%')) {
         leftValue = parseFloat(sliderLeft);
-      } else if (sliderLeft.includes('px')) {
-        const switchWidth = 200;
+      } 
+      // 픽셀 값인 경우
+      else if (sliderLeft.includes('px')) {
+        const switchWidth = switchSlider.parentElement ? switchSlider.parentElement.offsetWidth : 200;
         leftValue = (parseFloat(sliderLeft) / switchWidth) * 100;
-      } else {
-        leftValue = parseFloat(sliderLeft) || 0;
+      } 
+      // 숫자만 있는 경우 (퍼센트로 간주)
+      else {
+        const numValue = parseFloat(sliderLeft);
+        // 0~100 범위면 퍼센트로 간주, 아니면 픽셀로 간주
+        if (numValue >= 0 && numValue <= 100) {
+          leftValue = numValue;
+        } else {
+          const switchWidth = switchSlider.parentElement ? switchSlider.parentElement.offsetWidth : 200;
+          leftValue = (numValue / switchWidth) * 100;
+        }
       }
     }
     
     // 슬라이더 위치로 모드 판단 (0%에 가까우면 Bluetooth, 50% 이상이면 ANT+)
-    if (leftValue < 25) {
+    // 0 또는 '0' 또는 '0%'면 Bluetooth, 50 이상이면 ANT+
+    if (sliderLeft === '0' || sliderLeft === 0 || leftValue < 25) {
       currentDeviceMode = 'bluetooth';
-      console.log('[Coach Modal] 슬라이더 위치로 모드 확인: Bluetooth (left:', leftValue + '%)');
-    } else {
+      console.log('[Coach Modal] 슬라이더 위치로 모드 확인: Bluetooth (left:', sliderLeft, '→', leftValue + '%)');
+    } else if (sliderLeft === '50%' || leftValue >= 25) {
       currentDeviceMode = 'ant';
-      console.log('[Coach Modal] 슬라이더 위치로 모드 확인: ANT+ (left:', leftValue + '%)');
+      console.log('[Coach Modal] 슬라이더 위치로 모드 확인: ANT+ (left:', sliderLeft, '→', leftValue + '%)');
     }
   }
   
@@ -2681,19 +2700,34 @@ function openCoachModeFromModal(event) {
   
   // 선택된 디바이스 모드에 따라 화면 이동
   if (currentDeviceMode === 'bluetooth') {
-    // Bluetooth Training Coach 화면으로 이동
-    console.log('[Coach Modal] Bluetooth Training Coach 화면으로 이동');
+    // Bluetooth Training Coach 화면으로 바로 이동
+    console.log('[Coach Modal] Bluetooth 선택됨 → bluetoothTrainingCoachScreen 화면으로 바로 이동');
+    
+    // 모든 상태 저장 및 동기화
+    deviceConnectionMode = 'bluetooth';
+    window.deviceConnectionMode = 'bluetooth';
+    sessionStorage.setItem('deviceConnectionMode', 'bluetooth');
+    
+    // 화면 전환
     if (typeof showScreen === 'function') {
       showScreen('bluetoothTrainingCoachScreen');
+      console.log('[Coach Modal] ✅ bluetoothTrainingCoachScreen 화면 전환 완료');
     } else {
-      console.error('[Coach Modal] showScreen 함수를 찾을 수 없습니다.');
+      console.error('[Coach Modal] ❌ showScreen 함수를 찾을 수 없습니다.');
       if (typeof showToast === 'function') {
         showToast('화면 전환 함수를 찾을 수 없습니다.', 'error');
       }
     }
   } else {
     // ANT+ Indoor Training 모드 선택 화면으로 이동 (기존 방식)
-    console.log('[Coach Modal] Indoor Training 모드 선택 화면으로 이동');
+    console.log('[Coach Modal] ANT+ 선택됨 → Indoor Training 모드 선택 화면으로 이동');
+    
+    // 모든 상태 저장 및 동기화
+    deviceConnectionMode = 'ant';
+    window.deviceConnectionMode = 'ant';
+    sessionStorage.setItem('deviceConnectionMode', 'ant');
+    
+    // 화면 전환
     if (typeof showIndoorModeSelectionModal === 'function') {
       showIndoorModeSelectionModal();
     } else {
