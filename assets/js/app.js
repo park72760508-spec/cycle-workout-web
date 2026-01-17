@@ -13726,6 +13726,7 @@ function startMobileTrainingTimerLoop() {
     const segRemainingMs = (segDur - mts.segElapsedSec) * 1000;
     const nextSeg = currentSegIndex < w.segments.length - 1 ? w.segments[currentSegIndex + 1] : null;
     
+    // segRemainingMs가 0 이하이면 카운트다운 실행하지 않음 (0초 반복 방지)
     if (nextSeg && segRemainingMs > 0 && segRemainingMs <= 6000) {
       // 남은 시간을 초 단위로 변환 (6초 이하일 때만)
       const remainSec = Math.ceil(segRemainingMs / 1000);
@@ -13739,6 +13740,19 @@ function startMobileTrainingTimerLoop() {
       const firedMap = mts._countdownFired[key] || {};
       const remainMsPrev = mts._prevRemainMs[key] || segDur * 1000;
       const remainMsNow = segRemainingMs;
+      
+      // remainMsNow가 0 이하이면 카운트다운 실행하지 않음 (0초 반복 방지)
+      if (remainMsNow <= 0) {
+        // 이미 종료된 세그먼트이므로 카운트다운 종료 및 상태 초기화
+        if (MobileCountdownDisplay.active) {
+          MobileCountdownDisplay.hideImmediate();
+        }
+        // firedMap에 모든 숫자를 기록하여 더 이상 실행되지 않도록 함
+        mts._countdownFired[key] = { 0: true, 1: true, 2: true, 3: true, 4: true, 5: true };
+        // prevRemainMs는 업데이트하지 않음 (이미 종료된 상태)
+        return; // 더 이상 카운트다운 로직 실행하지 않음
+      }
+      
       mts._prevRemainMs[key] = remainMsNow;
       
       // 경계: 6→5, 5→4, ..., 2→1 은 (n+1)*1000ms, 1→0 은 1000ms
@@ -13746,6 +13760,17 @@ function startMobileTrainingTimerLoop() {
       const crossed = (remainMsPrev > boundary && remainMsNow <= boundary);
       
       if (crossed && !firedMap[n]) {
+        // remainMsNow가 0 이하이면 더 이상 카운트다운 실행하지 않음 (0초 반복 방지)
+        if (remainMsNow <= 0) {
+          // 이미 종료된 세그먼트이므로 카운트다운 종료
+          if (MobileCountdownDisplay.active) {
+            MobileCountdownDisplay.hideImmediate();
+          }
+          // firedMap에 기록하여 더 이상 실행되지 않도록 함
+          mts._countdownFired[key] = { ...firedMap, [n]: true };
+          return;
+        }
+        
         // 오버레이 표시 시작(6초 시점에 "5" 표시)
         if (n === 5 && !MobileCountdownDisplay.active) {
           MobileCountdownDisplay.ensure(nextSeg);
@@ -13770,6 +13795,11 @@ function startMobileTrainingTimerLoop() {
         }
         
         mts._countdownFired[key] = { ...firedMap, [n]: true };
+      }
+    } else if (segRemainingMs <= 0) {
+      // 세그먼트가 이미 종료된 경우 카운트다운 오버레이 닫기
+      if (MobileCountdownDisplay.active) {
+        MobileCountdownDisplay.hideImmediate();
       }
     }
     
