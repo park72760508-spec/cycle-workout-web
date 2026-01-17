@@ -1716,6 +1716,17 @@ function buildSegmentBar(){
 // app.js의 updateSegmentBarTick 함수를 대체
 // app.js의 updateSegmentBarTick 함수 대체 - 달성도 기반 색상 적용
 function updateSegmentBarTick(){
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   const w = window.currentWorkout;
   const ftp = (window.currentUser?.ftp) || 200;
   if (!w || !w.segments) return;
@@ -2025,6 +2036,17 @@ window.trainingState = window.trainingState || {
 // 수정된 updateTimeUI 함수 (다음 세그먼트 부분만)
 function updateTimeUI() {
   try {
+    // Indoor Training 화면에서만 동작하도록 체크
+    const trainingScreen = document.getElementById('trainingScreen');
+    const isIndoorTrainingActive = trainingScreen && 
+      (trainingScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingScreen).display !== 'none');
+    
+    if (!isIndoorTrainingActive) {
+      // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+      return;
+    }
+    
     const w = window.currentWorkout;
     if (!w) {
       console.warn('No current workout in updateTimeUI');
@@ -2390,6 +2412,18 @@ function applySegmentTarget(i) {
 // 시작/루프
 // 수정된 startSegmentLoop 함수 (카운트다운 로직 추가)
 function startSegmentLoop() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    console.log('[startSegmentLoop] Indoor Training 화면이 아니므로 실행하지 않음');
+    return;
+  }
+  
   const w = window.currentWorkout;
    // 오버레이 카운트다운 시작 여부(세그먼트별)
    window.trainingState._overlayLaunched = {};
@@ -2484,6 +2518,22 @@ function startSegmentLoop() {
   // 1초마다 실행되는 메인 루프
   console.log('[Timer] setInterval 시작 전...');
   window.trainingState.timerId = setInterval(() => {
+    // Indoor Training 화면에서만 동작하도록 체크
+    const trainingScreen = document.getElementById('trainingScreen');
+    const isIndoorTrainingActive = trainingScreen && 
+      (trainingScreen.classList.contains('active') || 
+       window.getComputedStyle(trainingScreen).display !== 'none');
+    
+    if (!isIndoorTrainingActive) {
+      // Indoor Training 화면이 아니면 타이머 정지 (Bluetooth Coach와 분리)
+      console.log('[Timer] Indoor Training 화면이 아니므로 타이머 정지');
+      if (window.trainingState.timerId) {
+        clearInterval(window.trainingState.timerId);
+        window.trainingState.timerId = null;
+      }
+      return;
+    }
+    
     const ts = window.trainingState;
     if (!ts) {
       console.error('[Timer] trainingState가 없습니다!');
@@ -3271,6 +3321,17 @@ function updateMobileSegmentGraphMascot() {
 
 // *** 핵심 수정: updateTrainingDisplay 함수 - currentPower 변수 초기화 문제 해결 ***
 window.updateTrainingDisplay = function () {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   // *** 중요: currentPower 변수를 맨 앞에서 정의 ***
   // 3초 평균 파워값 사용
   const currentPower = window.get3SecondAveragePower ? window.get3SecondAveragePower() : Number(window.liveData?.power ?? 0);

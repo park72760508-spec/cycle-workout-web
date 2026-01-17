@@ -1358,14 +1358,19 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
     // Bluetooth Coach용으로 별도 함수를 만들거나, drawSegmentGraph를 사용
     if (typeof drawSegmentGraphForScoreboard === 'function') {
       // 임시로 window.indoorTrainingState를 window.bluetoothCoachState로 교체하여 사용
+      // 단, window.trainingState는 절대 건드리지 않음 (Indoor Training과 분리)
       const originalIndoorState = window.indoorTrainingState;
       window.indoorTrainingState = window.bluetoothCoachState;
       
       try {
         drawSegmentGraphForScoreboard(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas', maxWidth, maxHeight);
       } finally {
-        // 원래 상태 복원
-        window.indoorTrainingState = originalIndoorState;
+        // 원래 상태 복원 (Indoor Training에 영향 없도록)
+        if (originalIndoorState !== undefined) {
+          window.indoorTrainingState = originalIndoorState;
+        } else {
+          delete window.indoorTrainingState;
+        }
       }
     } else if (typeof drawSegmentGraph === 'function') {
       // 기본 drawSegmentGraph 함수 사용하되, canvas 크기를 제한
