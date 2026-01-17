@@ -2161,9 +2161,6 @@ function openPairingModal(powerMeterId) {
     // 첫 번째 탭(사용자 선택)으로 초기화
     showPairingTab('user');
     
-    // USB 상태 확인 및 업데이트
-    updatePairingModalUSBStatus();
-    
     // 바늘 위치 유지 (현재 파워값으로 업데이트)
     const currentPower = powerMeter.currentPower || 0;
     if (typeof updatePowerMeterNeedle === 'function') {
@@ -2224,113 +2221,7 @@ function updatePairingModalWithSavedData(powerMeter) {
     
   }
   
-  // 스마트로라 정보 표시
-  const trainerSelectedCard = document.getElementById('trainerSelectedDeviceCard');
-  if (powerMeter.trainerDeviceId) {
-    const trainerNameEl = document.getElementById('trainerPairingName');
-    const trainerDeviceIdEl = document.getElementById('trainerDeviceId');
-    const btnClearTrainer = document.getElementById('btnClearTrainer');
-    if (trainerNameEl) trainerNameEl.value = powerMeter.trainerName || '';
-    if (trainerDeviceIdEl) trainerDeviceIdEl.value = powerMeter.trainerDeviceId || '';
-    if (btnClearTrainer) btnClearTrainer.style.display = 'block';
-    
-    // 페어링된 스마트로라 카드 표시 (사용자 선택 카드와 동일한 스타일)
-    if (trainerSelectedCard) {
-      trainerSelectedCard.innerHTML = `
-        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1;">
-              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.trainerName || '스마트로라'}</div>
-              <div style="font-size: 14px; color: #155724;">
-                <span><strong>디바이스 ID:</strong> ${powerMeter.trainerDeviceId || '-'}</span>
-              </div>
-            </div>
-            <button class="btn btn-danger btn-sm" onclick="clearPairedDevice('trainer')" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
-          </div>
-        </div>
-      `;
-      trainerSelectedCard.style.display = 'block';
-    }
-  } else {
-    const btnClearTrainer = document.getElementById('btnClearTrainer');
-    if (btnClearTrainer) btnClearTrainer.style.display = 'none';
-    if (trainerSelectedCard) {
-      trainerSelectedCard.style.display = 'none';
-      trainerSelectedCard.innerHTML = '';
-    }
-  }
-  
-  // 파워메터 정보 표시
-  const powerSelectedCard = document.getElementById('powerSelectedDeviceCard');
-  if (powerMeter.deviceId) {
-    const powerNameEl = document.getElementById('powerMeterPairingName');
-    const powerDeviceIdEl = document.getElementById('powerMeterDeviceId');
-    const btnClearPower = document.getElementById('btnClearPower');
-    if (powerNameEl) powerNameEl.value = powerMeter.pairingName || '';
-    if (powerDeviceIdEl) powerDeviceIdEl.value = powerMeter.deviceId || '';
-    if (btnClearPower) btnClearPower.style.display = 'block';
-    
-    // 페어링된 파워메터 카드 표시 (사용자 선택 카드와 동일한 스타일)
-    if (powerSelectedCard) {
-      powerSelectedCard.innerHTML = `
-        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1;">
-              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.pairingName || '파워메터'}</div>
-              <div style="font-size: 14px; color: #155724;">
-                <span><strong>디바이스 ID:</strong> ${powerMeter.deviceId || '-'}</span>
-              </div>
-            </div>
-            <button class="btn btn-danger btn-sm" onclick="clearPairedDevice('power')" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
-          </div>
-        </div>
-      `;
-      powerSelectedCard.style.display = 'block';
-    }
-  } else {
-    const btnClearPower = document.getElementById('btnClearPower');
-    if (btnClearPower) btnClearPower.style.display = 'none';
-    if (powerSelectedCard) {
-      powerSelectedCard.style.display = 'none';
-      powerSelectedCard.innerHTML = '';
-    }
-  }
-  
-  // 심박계 정보 표시
-  const heartSelectedCard = document.getElementById('heartSelectedDeviceCard');
-  if (powerMeter.heartRateDeviceId) {
-    const heartNameEl = document.getElementById('heartRatePairingName');
-    const heartDeviceIdEl = document.getElementById('heartRateDeviceId');
-    const btnClearHeart = document.getElementById('btnClearHeart');
-    if (heartNameEl) heartNameEl.value = powerMeter.heartRateName || '';
-    if (heartDeviceIdEl) heartDeviceIdEl.value = powerMeter.heartRateDeviceId || '';
-    if (btnClearHeart) btnClearHeart.style.display = 'block';
-    
-    // 페어링된 심박계 카드 표시 (사용자 선택 카드와 동일한 스타일)
-    if (heartSelectedCard) {
-      heartSelectedCard.innerHTML = `
-        <div style="padding: 16px; border: 2px solid #28a745; border-radius: 8px; background: #d4edda;">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="flex: 1;">
-              <div style="font-size: 18px; font-weight: 600; color: #155724; margin-bottom: 8px;">${powerMeter.heartRateName || '심박계'}</div>
-              <div style="font-size: 14px; color: #155724;">
-                <span><strong>디바이스 ID:</strong> ${powerMeter.heartRateDeviceId || '-'}</span>
-              </div>
-            </div>
-            <button class="btn btn-danger btn-sm" onclick="clearPairedDevice('heart')" style="white-space: nowrap; margin-left: 16px;">선택 해제</button>
-          </div>
-        </div>
-      `;
-      heartSelectedCard.style.display = 'block';
-    }
-  } else {
-    const btnClearHeart = document.getElementById('btnClearHeart');
-    if (btnClearHeart) btnClearHeart.style.display = 'none';
-    if (heartSelectedCard) {
-      heartSelectedCard.style.display = 'none';
-      heartSelectedCard.innerHTML = '';
-    }
-  }
+  // 디바이스 정보 표시 제거됨: Bluetooth 개인훈련 대시보드에서 디바이스 연결을 진행합니다
 }
 
 /**
