@@ -26,6 +26,7 @@ async function assignUserToBluetoothTrackWithAnimation(trackNumber, currentUserI
 
 /**
  * Bluetooth 트랙에 사용자 할당 (Bluetooth 페어링 방식)
+ * 로그인한 사용자 정보가 있으면 바로 신청, 없으면 모달 표시 (Bluetooth Join Session 전용, 독립적 구동)
  */
 async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdParam) {
   // roomId를 파라미터, 전역 변수, 또는 data attribute에서 가져오기
@@ -53,6 +54,116 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
   }
   
   roomId = String(roomId);
+
+  // 로그인한 사용자 정보 확인 (Bluetooth Join Session 전용, 독립적 구동)
+  let loggedInUser = null;
+  let loggedInUserId = null;
+  let userGrade = '2';
+  let isAdmin = false;
+  let isCoach = false;
+  let hasUserInfo = false;
+  
+  try {
+    loggedInUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    if (loggedInUser && loggedInUser.id != null) {
+      loggedInUserId = String(loggedInUser.id);
+      userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (loggedInUser?.grade ? String(loggedInUser.grade) : '2');
+      isAdmin = userGrade === '1' || userGrade === 1;
+      isCoach = userGrade === '3' || userGrade === 3;
+      hasUserInfo = true;
+      
+      const userName = loggedInUser.name || loggedInUser.userName || '이름 없음';
+      const userFTP = loggedInUser.ftp || null;
+      const userWeight = loggedInUser.weight || null;
+      
+      console.log('[Bluetooth Join Session] ✅ 로그인한 사용자 정보 확인 완료:', {
+        userId: loggedInUserId,
+        userName: userName,
+        grade: userGrade,
+        ftp: userFTP || '없음',
+        weight: userWeight || '없음',
+        hasUserInfo: true,
+        canAutoApply: true
+      });
+      
+      // 사용자에게 정보 표시 (짧은 시간만 표시)
+      // 바로 신청이 진행되므로 토스트는 표시하지 않음 (신청 완료 메시지가 표시됨)
+    } else {
+      hasUserInfo = false;
+      console.log('[Bluetooth Join Session] ⚠️ 로그인한 사용자 정보가 없습니다. 사용자 선택 모달을 표시합니다.');
+      
+      // 사용자 정보가 없을 때는 모달에서 안내하므로 여기서는 토스트 표시하지 않음
+    }
+  } catch (e) {
+    console.error('[assignUserToBluetoothTrack] 사용자 정보 확인 오류:', e);
+    hasUserInfo = false;
+  }
+  
+  const isGrade2 = userGrade === '2' || userGrade === 2;
+  
+  // 로그인한 사용자 정보가 있으면 바로 신청 진행 (Bluetooth Join Session 전용)
+  // grade=2 사용자는 본인 계정만 사용 가능하므로 바로 신청
+  // grade=1,3 사용자도 본인 계정으로 바로 신청 가능 (선택적으로)
+  if (hasUserInfo && loggedInUser && loggedInUserId) {
+    console.log('[Bluetooth Join Session] 로그인한 사용자 정보로 바로 신청 진행');
+    
+    try {
+      // 사용자 정보로 바로 신청
+      if (typeof db !== 'undefined') {
+        const sessionId = roomId;
+        
+        // 사용자 정보 저장
+        const userData = {
+          userId: loggedInUserId,
+          userName: loggedInUser.name || loggedInUser.userName || '',
+          ftp: loggedInUser.ftp || null,
+          weight: loggedInUser.weight || null
+        };
+        
+        await db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData);
+        
+        // 기존 디바이스 정보 유지 (있는 경우)
+        const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
+        const devicesSnapshot = await devicesRef.once('value');
+        const currentDeviceData = devicesSnapshot.val() || {};
+        
+        // 디바이스 정보가 없으면 빈 객체로 초기화
+        if (!currentDeviceData || Object.keys(currentDeviceData).length === 0) {
+          await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set({
+            smartTrainerId: '',
+            powerMeterId: '',
+            heartRateId: '',
+            gear: '',
+            brake: ''
+          });
+        }
+        
+        if (typeof showToast === 'function') {
+          showToast('트랙 신청이 완료되었습니다.', 'success');
+        }
+        
+        console.log('[Bluetooth Join Session] ✅ 로그인한 사용자 정보로 바로 신청 완료:', userData);
+        
+        // 리스트 새로고침
+        if (typeof renderBluetoothPlayerList === 'function') {
+          await renderBluetoothPlayerList();
+        }
+        
+        return; // 바로 신청 완료, 모달 표시하지 않음
+      } else {
+        throw new Error('Firebase가 초기화되지 않았습니다.');
+      }
+    } catch (error) {
+      console.error('[assignUserToBluetoothTrack] 바로 신청 오류:', error);
+      if (typeof showToast === 'function') {
+        showToast('트랙 신청 중 오류가 발생했습니다.', 'error');
+      }
+      // 오류 발생 시 모달 표시로 폴백
+    }
+  }
+
+  // 로그인한 사용자 정보가 없거나 관리자/코치가 다른 사용자를 선택해야 하는 경우 모달 표시
+  console.log('[Bluetooth Join Session] 사용자 선택 모달을 표시합니다.');
 
   // 사용자 목록 가져오기
   let users = [];
@@ -105,24 +216,6 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
     modal.style.justifyContent = 'center';
     document.body.appendChild(modal);
   }
-
-  // 사용자 grade 확인
-  let userGrade = '2';
-  let isAdmin = false;
-  let isCoach = false;
-  let loggedInUserId = null;
-  
-  try {
-    const currentUser = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    loggedInUserId = currentUser?.id ? String(currentUser.id) : null;
-    userGrade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (currentUser?.grade ? String(currentUser.grade) : '2');
-    isAdmin = userGrade === '1' || userGrade === 1;
-    isCoach = userGrade === '3' || userGrade === 3;
-  } catch (e) {
-    console.error('[assignUserToBluetoothTrack] 사용자 grade 확인 오류:', e);
-  }
-  
-  const isGrade2 = userGrade === '2' || userGrade === 2;
   
   // grade=2 사용자는 본인 계정만 사용 가능
   if (isGrade2 && loggedInUserId) {
