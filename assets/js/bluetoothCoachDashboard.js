@@ -1737,6 +1737,18 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
               console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
             });
         }
+        
+        // Firebase status에 idle 상태 저장 (워크아웃 선택 시, 사용자 접속 시 현재 상황 바로 반영)
+        db.ref(`sessions/${sessionId}/status`).update({
+          state: 'idle',
+          segmentIndex: 0,
+          elapsedTime: 0,
+          countdownRemainingSec: null
+        }).then(() => {
+          console.log('[Bluetooth Coach] 워크아웃 선택 시 Firebase status 업데이트 완료: idle');
+        }).catch(error => {
+          console.error('[Bluetooth Coach] 워크아웃 선택 시 Firebase status 업데이트 실패:', error);
+        });
       }
     }
     
