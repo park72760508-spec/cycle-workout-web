@@ -1087,7 +1087,20 @@ function updateDashboard(data = null) {
     }
     
     // 랩파워 표시 (세그먼트 평균 파워)
-    const lapPower = Number(data.segmentPower || data.avgPower || data.segmentAvgPower || data.averagePower || 0);
+    // 세그먼트가 진행됨에 따라 실시간으로 계산
+    // 1순위: segmentPowerHistory를 사용하여 직접 계산 (실시간 업데이트)
+    // 2순위: Firebase에서 받은 segmentPower 값 사용
+    let lapPower = 0;
+    
+    // segmentPowerHistory를 사용하여 직접 계산 (세그먼트 진행 중 실시간 업데이트)
+    if (segmentPowerHistory.length > 0) {
+        const totalSegmentPower = segmentPowerHistory.reduce((sum, entry) => sum + entry.power, 0);
+        lapPower = Math.round(totalSegmentPower / segmentPowerHistory.length);
+    } else {
+        // segmentPowerHistory가 없으면 Firebase에서 받은 값 사용
+        lapPower = Number(data.segmentPower || data.avgPower || data.segmentAvgPower || data.averagePower || 0);
+    }
+    
     const lapPowerEl = document.getElementById('ui-lap-power');
     if (lapPowerEl) {
         lapPowerEl.textContent = Math.round(lapPower);
