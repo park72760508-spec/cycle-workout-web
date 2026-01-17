@@ -748,11 +748,23 @@ window.handleHeartRateData = window.handleHeartRateData || function (event) {
   const dv = event.target.value;
   const flags = dv.getUint8(0);
   const hr = (flags & 0x1) ? dv.getUint16(1, true) : dv.getUint8(1);
-  window.liveData = window.liveData || {};
-  window.liveData.heartRate = Math.round(hr);
+  const roundedHR = Math.round(hr);
+  
+  // window.liveData 초기화 확인
+  if (!window.liveData) {
+    window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+  }
+  
+  // 이전 값과 다를 때만 로그 출력
+  if (window.liveData.heartRate !== roundedHR) {
+    console.log('[bluetooth.js] handleHeartRateData 호출:', roundedHR, 'bpm (이전:', window.liveData.heartRate, 'bpm)');
+  }
+  
+  window.liveData.heartRate = roundedHR;
+  
   // ERG 모드용 데이터 버퍼 업데이트
   if (!window._recentHRBuffer) window._recentHRBuffer = [];
-  window._recentHRBuffer.push(Math.round(hr));
+  window._recentHRBuffer.push(roundedHR);
   if (window._recentHRBuffer.length > 120) {
     window._recentHRBuffer.shift();
   }

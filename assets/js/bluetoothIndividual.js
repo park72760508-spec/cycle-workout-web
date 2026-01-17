@@ -124,17 +124,58 @@ if (!window.liveData) {
 }
 
 function initializeBluetoothDashboard() {
+    // window.liveData 모니터링을 위한 Proxy 설정 (디버깅용)
+    if (window.liveData && !window.liveData._isProxied) {
+        const originalLiveData = window.liveData;
+        window.liveData = new Proxy(originalLiveData, {
+            set(target, property, value) {
+                const oldValue = target[property];
+                target[property] = value;
+                // 값이 변경되면 로그 출력 (heartRate, power, cadence만)
+                if (['heartRate', 'power', 'cadence'].includes(property) && oldValue !== value) {
+                    console.log(`[BluetoothIndividual] window.liveData.${property} 업데이트:`, oldValue, '→', value);
+                    // 값이 업데이트되면 즉시 UI 업데이트
+                    if (value > 0 || (property === 'power' && value >= 0)) {
+                        updateDashboard();
+                    }
+                }
+                return true;
+            },
+            get(target, property) {
+                return target[property];
+            }
+        });
+        window.liveData._isProxied = true;
+        console.log('[BluetoothIndividual] window.liveData Proxy 설정 완료 (변경 감지 활성화)');
+    }
+    
     // Firebase 데이터 전송 시작
     startFirebaseDataTransmission();
     
     // 초기 UI 업데이트 (window.liveData 값 표시)
     setTimeout(() => {
+        const connectedDevicesInfo = {
+            heartRate: window.connectedDevices?.heartRate ? (window.connectedDevices.heartRate.name || 'connected') : null,
+            powerMeter: window.connectedDevices?.powerMeter ? (window.connectedDevices.powerMeter.name || 'connected') : null,
+            trainer: window.connectedDevices?.trainer ? (window.connectedDevices.trainer.name || 'connected') : null
+        };
         console.log('[BluetoothIndividual] 초기 UI 업데이트:', {
             liveData: window.liveData,
             heartRate: window.liveData?.heartRate,
             power: window.liveData?.power,
-            cadence: window.liveData?.cadence
+            cadence: window.liveData?.cadence,
+            connectedDevices: connectedDevicesInfo,
+            hasBluetoothJS: typeof window.connectHeartRate === 'function',
+            handleHeartRateDataExists: typeof window.handleHeartRateData === 'function',
+            connectedDevicesObject: window.connectedDevices
         });
+        
+        // 연결된 디바이스가 없으면 경고
+        if (!window.connectedDevices?.heartRate && !window.connectedDevices?.powerMeter && !window.connectedDevices?.trainer) {
+            console.warn('[BluetoothIndividual] ⚠️ 연결된 Bluetooth 디바이스가 없습니다. bluetoothIndividual.html은 별도 페이지이므로, 이 페이지에서 직접 디바이스를 연결해야 합니다.');
+            console.warn('[BluetoothIndividual] ⚠️ 또는 index.html에서 연결한 후 새 창으로 bluetoothIndividual.html을 열면 연결 상태가 공유되지 않을 수 있습니다.');
+        }
+        
         updateDashboard(); // 초기 표시를 위해 한 번 호출
     }, 500); // bluetooth.js가 로드되고 초기화될 시간을 줌
 }
@@ -523,11 +564,19 @@ function updateDashboard(data = null) {
     // 디버깅 로그 (5초마다 한 번씩만 출력)
     if (!window.lastDashboardLog || (Date.now() - window.lastDashboardLog) > 5000) {
         window.lastDashboardLog = Date.now();
+        const connectedDevicesInfo = {
+            heartRate: window.connectedDevices?.heartRate ? (window.connectedDevices.heartRate.name || 'connected') : null,
+            powerMeter: window.connectedDevices?.powerMeter ? (window.connectedDevices.powerMeter.name || 'connected') : null,
+            trainer: window.connectedDevices?.trainer ? (window.connectedDevices.trainer.name || 'connected') : null
+        };
         console.log('[BluetoothIndividual] updateDashboard 호출:', {
             power: window.liveData?.power,
             heartRate: window.liveData?.heartRate,
             cadence: window.liveData?.cadence,
-            hasData: !!data
+            hasData: !!data,
+            connectedDevices: connectedDevicesInfo,
+            hasBluetoothJS: typeof window.connectHeartRate === 'function',
+            handleHeartRateDataExists: typeof window.handleHeartRateData === 'function'
         });
     }
     
