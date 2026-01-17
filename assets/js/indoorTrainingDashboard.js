@@ -2052,23 +2052,25 @@ function openPowerMeterSettings(powerMeterId) {
   // 현재 타겟 파워계 ID 저장
   window.currentTargetPowerMeterId = powerMeterId;
   
-  // Bluetooth Join Session 화면: 인증된 사용자 정보가 있으면 바로 반영
+  // Bluetooth Join Session 화면: 인증된 사용자 정보가 있으면 바로 Firebase에 저장 (모달 없이)
   if (window.currentUser && window.currentUser.id && window.currentUser.name) {
-    // 모달을 열지 않고 바로 사용자 정보 적용
+    // 모달을 열지 않고 바로 사용자 정보를 Firebase에 저장
     selectSearchedUserForPowerMeter(window.currentUser.id).then(() => {
-      console.log('[Indoor Training] 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 반영 완료');
+      console.log('[Indoor Training] 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 Firebase 저장 완료');
+      // 연결 상태 업데이트 (Firebase devices 정보 표시)
+      updatePowerMeterConnectionStatus(powerMeterId);
       if (typeof showToast === 'function') {
         showToast(`트랙${powerMeterId}에 ${window.currentUser.name}님이 신청되었습니다.`);
       }
     }).catch(error => {
       console.error('[Indoor Training] 사용자 정보 반영 실패:', error);
-      // 실패 시 모달 열기
+      // 실패 시에만 모달 열기 (변경용)
       openPairingModal(powerMeterId);
     });
     return;
   }
   
-  // 인증된 사용자가 없으면 기존처럼 모달 열기
+  // 인증된 사용자가 없으면 기존처럼 모달 열기 (변경 시)
   openPairingModal(powerMeterId);
 }
 
