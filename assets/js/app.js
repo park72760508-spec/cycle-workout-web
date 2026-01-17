@@ -13572,6 +13572,24 @@ function startMobileTrainingTimerLoop() {
       updateMobileTargetPowerArc();
     }
     
+    // 6. 모바일 전용 데이터 수집 (3초 평균 파워값 사용, 1초마다 기록)
+    const powerValue = window.get3SecondAveragePower ? window.get3SecondAveragePower() : Math.round(window.liveData?.power || 0);
+    const hrValue = Math.round(window.liveData?.heartRate || 0);
+    const cadenceValue = Math.round(window.liveData?.cadence || 0);
+    
+    if (window.trainingResults && typeof window.trainingResults.appendStreamSample === 'function') {
+      const now = new Date();
+      if (powerValue > 0) {
+        window.trainingResults.appendStreamSample('power', powerValue, now);
+      }
+      if (hrValue > 0) {
+        window.trainingResults.appendStreamSample('hr', hrValue, now);
+      }
+      if (cadenceValue > 0) {
+        window.trainingResults.appendStreamSample('cadence', cadenceValue, now);
+      }
+    }
+    
     // 전체 종료 판단
     if (mts.elapsedSec >= mts.totalSec) {
       console.log('[Mobile Dashboard] 훈련 완료!');
@@ -13590,10 +13608,37 @@ function startMobileTrainingTimerLoop() {
         loadingModal.style.display = 'flex';
       }
       
-      // 결과 모달 표시
+      // 모바일 전용 결과 저장 (독립적으로 구동)
       Promise.resolve()
-        .then(() => window.saveTrainingResultAtEnd?.())
-        .catch((e) => { console.warn('[Mobile Dashboard] saveTrainingResultAtEnd error', e); })
+        .then(() => {
+          console.log('[Mobile Dashboard] 결과 저장 시작');
+          
+          // 세션 종료
+          if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
+            window.trainingResults.endSession();
+          }
+          
+          // 추가 메타데이터 준비
+          const extra = {
+            workoutId: window.currentWorkout?.id || '',
+            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+            elapsedTime: mts.elapsedSec, // 모바일 전용 경과 시간
+            completionType: 'normal',
+            appVersion: '1.0.0',
+            timestamp: new Date().toISOString(),
+            source: 'mobile_dashboard' // 모바일 대시보드에서 저장됨을 표시
+          };
+          
+          // 결과 저장
+          if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
+            return window.trainingResults.saveTrainingResult(extra);
+          }
+          return Promise.resolve({ success: true });
+        })
+        .catch((e) => { 
+          console.warn('[Mobile Dashboard] 결과 저장 오류:', e);
+          return { success: false, error: e.message };
+        })
         .then(() => window.trainingResults?.initializeResultScreen?.())
         .catch((e) => { console.warn('[Mobile Dashboard] initializeResultScreen error', e); })
         .then(() => { 
@@ -13697,6 +13742,15 @@ function startMobileTrainingTimerLoop() {
       if (nextSegIndex < w.segments.length) {
         console.log(`[Mobile Dashboard] 세그먼트 ${nextSegIndex + 1}로 전환 (전체 경과: ${mts.elapsedSec}초)`);
         
+        // 이전 세그먼트 결과 기록
+        if (window.trainingResults && typeof window.trainingResults.recordSegmentResult === 'function') {
+          const prevSeg = w.segments[currentSegIndex];
+          if (prevSeg) {
+            window.trainingResults.recordSegmentResult(currentSegIndex, prevSeg);
+            console.log('[Mobile Dashboard] 세그먼트 결과 기록:', currentSegIndex);
+          }
+        }
+        
         // 세그먼트 파워 히스토리 초기화 (새 세그먼트 시작)
         mts.segmentPowerHistory = [];
         
@@ -13714,6 +13768,15 @@ function startMobileTrainingTimerLoop() {
         }
       } else {
         console.log('[Mobile Dashboard] 모든 세그먼트 완료');
+        
+        // 마지막 세그먼트 결과 기록
+        if (window.trainingResults && typeof window.trainingResults.recordSegmentResult === 'function') {
+          const lastSeg = w.segments[currentSegIndex];
+          if (lastSeg) {
+            window.trainingResults.recordSegmentResult(currentSegIndex, lastSeg);
+            console.log('[Mobile Dashboard] 마지막 세그먼트 결과 기록:', currentSegIndex);
+          }
+        }
       }
     } else if (prevSegIndex !== currentSegIndex) {
       // 세그먼트가 이미 전환된 경우, 추적 변수만 업데이트
