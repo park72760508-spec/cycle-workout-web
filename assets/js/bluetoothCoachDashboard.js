@@ -780,42 +780,124 @@ function updateScoreboard() {
 }
 
 /**
- * 워크아웃 세그먼트 그래프 업데이트
+ * 워크아웃 세그먼트 그래프 표시 (Indoor Training의 displayWorkoutSegmentGraph 로직을 Bluetooth Coach용으로 수정)
+ * @param {Object} workout - 워크아웃 객체
+ * @param {number} currentSegmentIndex - 현재 세그먼트 인덱스 (-1이면 선택 안됨)
+ */
+function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex = -1) {
+  const container = document.getElementById('bluetoothCoachSegmentGraphContainer');
+  if (!container) {
+    console.warn('[Bluetooth Coach] 세그먼트 그래프 컨테이너를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 세그먼트가 있는 경우에만 표시
+  if (!workout || !workout.segments || workout.segments.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  
+  // 세그먼트 그래프 그리기 (전광판 크기에 맞춤 - 랩카운트다운과 겹치지 않는 최대 크기)
+  setTimeout(() => {
+    const canvas = document.getElementById('bluetoothCoachSegmentGraphCanvas');
+    if (!canvas) {
+      console.warn('[Bluetooth Coach] 세그먼트 그래프 캔버스를 찾을 수 없습니다.');
+      return;
+    }
+    
+    // 전광판 컨테이너 크기 확인
+    const scoreboardContainer = container.closest('.scoreboard-display');
+    if (!scoreboardContainer) {
+      console.warn('[Bluetooth Coach] 전광판 컨테이너를 찾을 수 없습니다.');
+      return;
+    }
+    
+    // 전광판의 초기 높이를 저장 (세그먼트 그래프가 높이에 영향을 주지 않도록)
+    if (!scoreboardContainer.dataset.initialHeight) {
+      // 세그먼트 그래프를 숨긴 상태에서 초기 높이 측정
+      const originalDisplay = container.style.display;
+      container.style.display = 'none';
+      const initialRect = scoreboardContainer.getBoundingClientRect();
+      scoreboardContainer.dataset.initialHeight = initialRect.height.toString();
+      container.style.display = originalDisplay;
+    }
+    
+    const scoreboardRect = scoreboardContainer.getBoundingClientRect();
+    const scoreboardWidth = scoreboardRect.width;
+    // 초기 높이를 사용하여 세그먼트 그래프가 전광판 높이에 영향을 주지 않도록 함
+    const scoreboardHeight = parseFloat(scoreboardContainer.dataset.initialHeight) || scoreboardRect.height;
+    
+    // 세그먼트 그래프 크기: 전광판 가로 길이의 1/3 범위에서 최대로 채우기
+    const targetWidthRatio = 1 / 3; // 전광판 가로 길이의 1/3
+    const marginFromRight = 20; // 전광판 오른쪽 끝과의 여백
+    const calculatedMaxWidth = scoreboardWidth * targetWidthRatio - marginFromRight;
+    const maxWidth = Math.max(250, calculatedMaxWidth); // 최소 250px 보장
+    
+    // 전광판 높이를 넘지 않는 최대 높이 계산
+    const marginFromTop = 10; // 상단 여백
+    const marginFromBottom = 10; // 하단 여백
+    const availableHeight = scoreboardHeight - marginFromTop - marginFromBottom;
+    const maxHeight = Math.max(120, Math.min(availableHeight, scoreboardHeight - 20)); // 최소 120px, 최대는 전광판 높이 - 20px
+    
+    // 컨테이너 크기 설정 (전광판 높이를 절대 넘지 않도록)
+    container.style.width = `${maxWidth}px`;
+    container.style.maxWidth = `${maxWidth}px`;
+    container.style.height = `${maxHeight}px`;
+    container.style.maxHeight = `${maxHeight}px`;
+    container.style.overflow = 'hidden'; // 넘치는 내용 숨김
+    container.style.flexShrink = '0'; // 축소 방지
+    container.style.flexGrow = '0'; // 확장 방지
+    container.style.alignSelf = 'stretch'; // 전광판 높이에 맞춤
+    
+    // 내부 그래프 컨테이너도 높이 제한
+    const graphContainer = container.querySelector('.scoreboard-segment-graph-container');
+    if (graphContainer) {
+      graphContainer.style.height = `${maxHeight}px`;
+      graphContainer.style.maxHeight = `${maxHeight}px`;
+      graphContainer.style.overflow = 'hidden';
+      graphContainer.style.flexShrink = '0'; // 축소 방지
+    }
+    
+    // 세그먼트 그래프를 전광판 크기에 맞춰 그리기 (현재 세그먼트 인덱스 전달)
+    // drawSegmentGraphForScoreboard 함수는 window.indoorTrainingState를 참조하므로
+    // Bluetooth Coach용으로 별도 함수를 만들거나, drawSegmentGraph를 사용
+    if (typeof drawSegmentGraphForScoreboard === 'function') {
+      // 임시로 window.indoorTrainingState를 window.bluetoothCoachState로 교체하여 사용
+      const originalIndoorState = window.indoorTrainingState;
+      window.indoorTrainingState = window.bluetoothCoachState;
+      
+      try {
+        drawSegmentGraphForScoreboard(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas', maxWidth, maxHeight);
+      } finally {
+        // 원래 상태 복원
+        window.indoorTrainingState = originalIndoorState;
+      }
+    } else if (typeof drawSegmentGraph === 'function') {
+      // 기본 drawSegmentGraph 함수 사용하되, canvas 크기를 제한
+      drawSegmentGraph(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas');
+      
+      // Canvas 크기를 전광판에 맞게 조정
+      canvas.style.maxWidth = `${maxWidth}px`;
+      canvas.style.maxHeight = `${maxHeight}px`;
+      canvas.style.width = '100%';
+      canvas.style.height = 'auto';
+    } else {
+      console.warn('[Bluetooth Coach] drawSegmentGraph 함수를 찾을 수 없습니다.');
+    }
+  }, 100);
+}
+
+/**
+ * 워크아웃 세그먼트 그래프 업데이트 (기존 함수 호출용 래퍼)
  */
 function updateWorkoutSegmentGraph() {
-  // Indoor Training의 세그먼트 그래프 업데이트 로직 재사용
-  if (typeof displayWorkoutSegmentGraph === 'function') {
-    const container = document.getElementById('bluetoothCoachSegmentGraphContainer');
-    const canvas = document.getElementById('bluetoothCoachSegmentGraphCanvas');
-    
-    // Indoor Training의 displayWorkoutSegmentGraph는 selectedWorkoutSegmentGraphContainer를 사용하므로
-    // 일시적으로 ID를 변경하거나, 직접 호출
-    if (container && canvas) {
-      // displayWorkoutSegmentGraph 함수 내부에서 canvas ID를 찾으므로
-      // bluetoothCoachSegmentGraphCanvas로 임시 변경하거나
-      // Indoor Training의 로직을 그대로 재사용
-      displayWorkoutSegmentGraph(
-        window.bluetoothCoachState.currentWorkout,
-        window.bluetoothCoachState.currentSegmentIndex
-      );
-      
-      // canvas ID가 다른 경우를 위해 직접 업데이트
-      const tempContainer = document.getElementById('selectedWorkoutSegmentGraphContainer');
-      if (tempContainer) {
-        const tempCanvas = tempContainer.querySelector('canvas');
-        if (tempCanvas && canvas) {
-          // canvas 내용 복사 (간단한 방법)
-          canvas.width = tempCanvas.width;
-          canvas.height = tempCanvas.height;
-          const ctx = canvas.getContext('2d');
-          const tempCtx = tempCanvas.getContext('2d');
-          ctx.drawImage(tempCanvas, 0, 0);
-          
-          // 컨테이너 표시
-          container.style.display = tempContainer.style.display;
-        }
-      }
-    }
+  const workout = window.bluetoothCoachState.currentWorkout;
+  const currentSegmentIndex = window.bluetoothCoachState.currentSegmentIndex || -1;
+  
+  if (workout) {
+    updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex);
   }
 }
 
@@ -1014,8 +1096,9 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
       }, 500);
     }
     
-    // 전광판 우측에 세그먼트 그래프 표시
-    updateWorkoutSegmentGraph();
+    // 전광판 우측에 세그먼트 그래프 표시 (Indoor Training과 동일한 방식)
+    // 워크아웃 선택 시에는 현재 세그먼트 없음 (-1)
+    updateWorkoutSegmentGraphForBluetoothCoach(loadedWorkout, -1);
     
     if (typeof showToast === 'function') {
       showToast(`"${loadedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
