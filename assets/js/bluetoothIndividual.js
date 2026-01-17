@@ -124,16 +124,29 @@ if (!window.liveData) {
 }
 
 function initializeBluetoothDashboard() {
+    // window.connectedDevices 초기화 (bluetooth.js가 로드되기 전일 수 있음)
+    if (!window.connectedDevices) {
+        window.connectedDevices = {
+            trainer: null,
+            powerMeter: null,
+            heartRate: null
+        };
+        console.log('[BluetoothIndividual] window.connectedDevices 초기화');
+    }
+    
     // window.liveData 모니터링을 위한 Proxy 설정 (디버깅용)
+    // bluetooth.js의 handleHeartRateData가 호출될 때 값이 업데이트되는지 확인
     if (window.liveData && !window.liveData._isProxied) {
         const originalLiveData = window.liveData;
+        
+        // Proxy를 사용하여 값 변경 감지
         window.liveData = new Proxy(originalLiveData, {
             set(target, property, value) {
                 const oldValue = target[property];
                 target[property] = value;
                 // 값이 변경되면 로그 출력 (heartRate, power, cadence만)
                 if (['heartRate', 'power', 'cadence'].includes(property) && oldValue !== value) {
-                    console.log(`[BluetoothIndividual] window.liveData.${property} 업데이트:`, oldValue, '→', value);
+                    console.log(`[BluetoothIndividual] ✅ window.liveData.${property} 업데이트:`, oldValue, '→', value, '(handleHeartRateData 호출 확인됨)');
                     // 값이 업데이트되면 즉시 UI 업데이트
                     if (value > 0 || (property === 'power' && value >= 0)) {
                         updateDashboard();
@@ -147,6 +160,102 @@ function initializeBluetoothDashboard() {
         });
         window.liveData._isProxied = true;
         console.log('[BluetoothIndividual] window.liveData Proxy 설정 완료 (변경 감지 활성화)');
+        
+        // handleHeartRateData 함수 확인 및 래핑 (심박계)
+        if (typeof window.handleHeartRateData === 'function') {
+            const originalHandleHeartRateData = window.handleHeartRateData;
+            window.handleHeartRateData = function(event) {
+                console.log('[BluetoothIndividual] ✅ handleHeartRateData 호출됨 (bluetooth.js에서)');
+                const result = originalHandleHeartRateData.call(this, event);
+                // handleHeartRateData가 호출된 후 window.liveData를 확인
+                setTimeout(() => {
+                    if (window.liveData?.heartRate) {
+                        console.log('[BluetoothIndividual] handleHeartRateData 후 heartRate 확인:', window.liveData.heartRate, 'bpm');
+                        updateDashboard();
+                    }
+                }, 100);
+                return result;
+            };
+            console.log('[BluetoothIndividual] handleHeartRateData 래핑 완료 (호출 감지 활성화)');
+        }
+        
+        // handlePowerMeterData 함수 확인 및 래핑 (파워미터 - power, cadence 업데이트)
+        if (typeof window.handlePowerMeterData === 'function') {
+            const originalHandlePowerMeterData = window.handlePowerMeterData;
+            window.handlePowerMeterData = function(event) {
+                console.log('[BluetoothIndividual] ✅ handlePowerMeterData 호출됨 (bluetooth.js에서)');
+                const result = originalHandlePowerMeterData.call(this, event);
+                // handlePowerMeterData가 호출된 후 window.liveData를 확인
+                setTimeout(() => {
+                    if (window.liveData?.power || window.liveData?.cadence) {
+                        console.log('[BluetoothIndividual] handlePowerMeterData 후 데이터 확인:', {
+                            power: window.liveData.power,
+                            cadence: window.liveData.cadence
+                        });
+                        updateDashboard();
+                    }
+                }, 100);
+                return result;
+            };
+            console.log('[BluetoothIndividual] handlePowerMeterData 래핑 완료 (호출 감지 활성화)');
+        } else if (typeof handlePowerMeterData === 'function') {
+            // window에 노출되지 않은 경우 (블록 스코프) 전역으로 노출
+            const originalHandlePowerMeterData = handlePowerMeterData;
+            window.handlePowerMeterData = function(event) {
+                console.log('[BluetoothIndividual] ✅ handlePowerMeterData 호출됨 (bluetooth.js에서)');
+                const result = originalHandlePowerMeterData.call(this, event);
+                setTimeout(() => {
+                    if (window.liveData?.power || window.liveData?.cadence) {
+                        console.log('[BluetoothIndividual] handlePowerMeterData 후 데이터 확인:', {
+                            power: window.liveData.power,
+                            cadence: window.liveData.cadence
+                        });
+                        updateDashboard();
+                    }
+                }, 100);
+                return result;
+            };
+            console.log('[BluetoothIndividual] handlePowerMeterData 래핑 완료 (전역 노출 및 호출 감지 활성화)');
+        }
+        
+        // handleTrainerData 함수 확인 및 래핑 (스마트 트레이너 - power, cadence 업데이트)
+        if (typeof window.handleTrainerData === 'function') {
+            const originalHandleTrainerData = window.handleTrainerData;
+            window.handleTrainerData = function(event) {
+                console.log('[BluetoothIndividual] ✅ handleTrainerData 호출됨 (bluetooth.js에서)');
+                const result = originalHandleTrainerData.call(this, event);
+                // handleTrainerData가 호출된 후 window.liveData를 확인
+                setTimeout(() => {
+                    if (window.liveData?.power || window.liveData?.cadence) {
+                        console.log('[BluetoothIndividual] handleTrainerData 후 데이터 확인:', {
+                            power: window.liveData.power,
+                            cadence: window.liveData.cadence
+                        });
+                        updateDashboard();
+                    }
+                }, 100);
+                return result;
+            };
+            console.log('[BluetoothIndividual] handleTrainerData 래핑 완료 (호출 감지 활성화)');
+        } else if (typeof handleTrainerData === 'function') {
+            // window에 노출되지 않은 경우 (블록 스코프) 전역으로 노출
+            const originalHandleTrainerData = handleTrainerData;
+            window.handleTrainerData = function(event) {
+                console.log('[BluetoothIndividual] ✅ handleTrainerData 호출됨 (bluetooth.js에서)');
+                const result = originalHandleTrainerData.call(this, event);
+                setTimeout(() => {
+                    if (window.liveData?.power || window.liveData?.cadence) {
+                        console.log('[BluetoothIndividual] handleTrainerData 후 데이터 확인:', {
+                            power: window.liveData.power,
+                            cadence: window.liveData.cadence
+                        });
+                        updateDashboard();
+                    }
+                }, 100);
+                return result;
+            };
+            console.log('[BluetoothIndividual] handleTrainerData 래핑 완료 (전역 노출 및 호출 감지 활성화)');
+        }
     }
     
     // Firebase 데이터 전송 시작
