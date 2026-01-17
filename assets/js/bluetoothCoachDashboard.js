@@ -563,6 +563,62 @@ function setupFirebaseSubscriptions() {
   window.bluetoothCoachState.firebaseSubscriptions['workoutPlan'] = workoutPlanUnsubscribe;
   
   console.log('[Bluetooth Coach] Firebase 구독 설정 완료');
+  
+  // 초기 사용자 정보 로드하여 FTP 적용
+  loadInitialUserDataForTracks();
+}
+
+/**
+ * 초기 트랙 사용자 정보 로드하여 FTP 적용
+ */
+async function loadInitialUserDataForTracks() {
+  const sessionId = getBluetoothCoachSessionId();
+  if (!sessionId || typeof db === 'undefined') {
+    console.warn('[Bluetooth Coach] Firebase가 초기화되지 않아 초기 사용자 데이터를 로드할 수 없습니다.');
+    return;
+  }
+  
+  try {
+    const usersSnapshot = await db.ref(`sessions/${sessionId}/users`).once('value');
+    const usersData = usersSnapshot.val();
+    
+    if (usersData) {
+      Object.keys(usersData).forEach(trackIdStr => {
+        const trackId = parseInt(trackIdStr, 10);
+        if (!isNaN(trackId) && trackId > 0) {
+          const userData = usersData[trackId];
+          if (userData) {
+            const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === trackId);
+            if (powerMeter) {
+              // 사용자 정보 업데이트
+              if (userData.userId) powerMeter.userId = userData.userId;
+              if (userData.userName) powerMeter.userName = userData.userName;
+              if (userData.weight) powerMeter.userWeight = userData.weight;
+              
+              // FTP 적용
+              if (userData.ftp) {
+                const prevFTP = powerMeter.userFTP;
+                powerMeter.userFTP = userData.ftp;
+                if (prevFTP !== userData.ftp) {
+                  console.log(`[Bluetooth Coach] 초기 로드: 트랙 ${trackId} FTP 적용: ${userData.ftp}`);
+                  updateBluetoothCoachPowerMeterTicks(trackId);
+                }
+              }
+              
+              // 사용자 이름 UI 업데이트
+              const userNameEl = document.getElementById(`user-name-${trackId}`);
+              if (userNameEl && userData.userName) {
+                userNameEl.textContent = userData.userName;
+                userNameEl.style.display = 'inline-block';
+              }
+            }
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[Bluetooth Coach] 초기 사용자 데이터 로드 실패:', error);
+  }
 }
 
 /**
@@ -611,7 +667,12 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   updatePowerMeterUI(trackId);
   
   // FTP 변경 시 눈금 업데이트
-  if (userData.ftp && userData.ftp !== powerMeter.userFTP) {
+  const prevFTP = powerMeter.userFTP;
+  if (userData.ftp) {
+    powerMeter.userFTP = userData.ftp;
+  }
+  if (userData.ftp && userData.ftp !== prevFTP) {
+    console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP} → ${userData.ftp}`);
     updateBluetoothCoachPowerMeterTicks(trackId);
   }
 }
@@ -1571,17 +1632,28 @@ function startBluetoothCoachTrainingTimer() {
   if (window.bluetoothCoachState.trainingState !== 'running') return;
   
   const now = Date.now();
-  if (window.bluetoothCoachState.startTime) {
-    const pausedDuration = window.bluetoothCoachState.pausedTime ? (now - window.bluetoothCoachState.pausedTime) : 0;
-    const elapsed = Math.floor((now - window.bluetoothCoachState.startTime - pausedDuration) / 1000);
-    window.bluetoothCoachState.totalElapsedTime = elapsed;
-    
-    // 세그먼트 경과 시간 업데이트
-    if (window.bluetoothCoachState.segmentStartTime) {
-      const segmentElapsed = Math.floor((now - window.bluetoothCoachState.segmentStartTime - pausedDuration) / 1000);
-      window.bluetoothCoachState.segmentElapsedTime = segmentElapsed;
-    }
+  
+  // startTime이 없으면 현재 시간으로 설정
+  if (!window.bluetoothCoachState.startTime) {
+    window.bluetoothCoachState.startTime = now;
   }
+  
+  // pausedTime 계산 (현재 일시정지 중이 아니면 0)
+  let pausedDuration = 0;
+  if (window.bluetoothCoachState.pausedTime && window.bluetoothCoachState.pausedTime > 0) {
+    pausedDuration = now - window.bluetoothCoachState.pausedTime;
+  }
+  
+  // 전체 경과 시간 계산
+  const elapsed = Math.floor((now - window.bluetoothCoachState.startTime - pausedDuration) / 1000);
+  window.bluetoothCoachState.totalElapsedTime = Math.max(0, elapsed);
+  
+  // 세그먼트 경과 시간 업데이트
+  if (!window.bluetoothCoachState.segmentStartTime) {
+    window.bluetoothCoachState.segmentStartTime = now;
+  }
+  const segmentElapsed = Math.floor((now - window.bluetoothCoachState.segmentStartTime - pausedDuration) / 1000);
+  window.bluetoothCoachState.segmentElapsedTime = Math.max(0, segmentElapsed);
   
   // 전광판 업데이트
   updateScoreboard();
