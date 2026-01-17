@@ -4441,18 +4441,30 @@ async function renderBluetoothPlayerList() {
             ${deviceIconsHtml ? `<div class="player-track-devices-right">${deviceIconsHtml}</div>` : ''}
           </div>
           <div class="player-track-action">
-            ${canModify || canParticipate ? `
+            ${!hasUser && canParticipate ? `
+              <!-- 신청 버튼: 사용자 없음 + 신청 가능한 경우 -->
               <button 
                 class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
                 onclick="assignUserToBluetoothTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
-                title="훈련 신청/변경">
-                <span>${hasUser ? '변경' : '신청'}</span>
+                title="훈련 신청">
+                <span>신청</span>
               </button>
+            ` : hasUser && isAdmin ? `
+              <!-- 변경 버튼: 사용자 있음 + 관리자인 경우 (Bluetooth Join Session 전용) -->
+              <button 
+                class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
+                onclick="assignUserToBluetoothTrackWithAnimation(${track.trackNumber}, '${escapeHtml(track.userId || '')}', '${roomId || ''}', event)"
+                title="훈련 변경">
+                <span>변경</span>
+              </button>
+            ` : hasUser && !isAdmin ? `
+              <!-- 일반 사용자(grade=2)는 변경 버튼 표시하지 않음 -->
             ` : `
+              <!-- 비활성화된 신청 버튼 -->
               <button 
                 class="btn btn-secondary btn-default-style btn-with-icon player-assign-btn"
                 disabled
-                title="${!isAdmin && hasUser ? '본인이 할당한 트랙만 변경 가능합니다' : '훈련 신청/변경'}">
+                title="훈련 신청/변경">
                 <span>${hasUser ? '변경' : '신청'}</span>
               </button>
             `}

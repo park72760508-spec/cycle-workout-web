@@ -126,10 +126,25 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
   
   const isGrade2 = userGrade === '2' || userGrade === 2;
   
-  // 로그인한 사용자 정보가 있으면 바로 신청 진행 (Bluetooth Join Session 전용)
-  // grade=2 사용자는 본인 계정만 사용 가능하므로 바로 신청
-  // grade=1,3 사용자도 본인 계정으로 바로 신청 가능 (선택적으로)
-  if (hasUserInfo && loggedInUser && loggedInUserId) {
+  // Firebase에서 현재 트랙에 할당된 사용자 확인
+  let currentTrackUser = null;
+  if (typeof db !== 'undefined') {
+    try {
+      const sessionId = roomId;
+      const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
+      const usersSnapshot = await usersRef.once('value');
+      currentTrackUser = usersSnapshot.val();
+    } catch (error) {
+      console.error('[assignUserToBluetoothTrack] 현재 트랙 사용자 확인 오류:', error);
+    }
+  }
+  
+  const hasCurrentUser = currentTrackUser && currentTrackUser.userId;
+  
+  // 로그인한 사용자 정보가 있고, 트랙에 사용자가 없는 경우(신청)만 바로 신청 진행
+  // 관리자가 변경 버튼을 클릭한 경우(트랙에 이미 사용자가 있음)는 모달 표시
+  // 일반 사용자(grade=2)는 변경 버튼이 표시되지 않으므로 신청만 가능
+  if (hasUserInfo && loggedInUser && loggedInUserId && !hasCurrentUser && (isGrade2 || !isAdmin)) {
     console.log('[Bluetooth Join Session] 로그인한 사용자 정보로 바로 신청 진행');
     
     try {
@@ -186,108 +201,114 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
       // 오류 발생 시 모달 표시로 폴백
     }
   }
-
-  // 로그인한 사용자 정보가 없거나 관리자/코치가 다른 사용자를 선택해야 하는 경우 모달 표시
-  console.log('[Bluetooth Join Session] 사용자 선택 모달을 표시합니다.');
   
-  // 모달이 표시되므로 원래 버튼의 로딩 상태 해제
-  // assignUserToBluetoothTrackWithAnimation에서 전달된 버튼 정보를 활용하기 위해
-  // 전역 변수에 저장된 버튼 참조를 사용하여 로딩 상태 해제
-  if (window._currentBluetoothAssignButton) {
-    window._currentBluetoothAssignButton.classList.remove('loading');
-    window._currentBluetoothAssignButton.disabled = false;
-    window._currentBluetoothAssignButton = null;
-  }
-
-  // 사용자 목록 가져오기
-  let users = [];
-  try {
-    if (typeof apiGetUsers === 'function') {
-      const result = await apiGetUsers();
-      if (result && result.success && result.items) {
-        users = result.items;
-      }
-    } else if (Array.isArray(window.users)) {
-      users = window.users;
-    } else {
-      if (typeof loadUsers === 'function') {
-        await loadUsers();
-        users = Array.isArray(window.users) ? window.users : [];
-      }
+  // 관리자가 변경 버튼을 클릭한 경우 또는 사용자 정보가 없는 경우 모달 표시
+  if ((isAdmin && hasCurrentUser) || !hasUserInfo || !loggedInUserId) {
+    console.log('[Bluetooth Join Session] 사용자 선택 모달을 표시합니다.', {
+      isAdmin,
+      hasCurrentUser,
+      hasUserInfo,
+      loggedInUserId
+    });
+  
+    // 모달이 표시되므로 원래 버튼의 로딩 상태 해제
+    // assignUserToBluetoothTrackWithAnimation에서 전달된 버튼 정보를 활용하기 위해
+    // 전역 변수에 저장된 버튼 참조를 사용하여 로딩 상태 해제
+    if (window._currentBluetoothAssignButton) {
+      window._currentBluetoothAssignButton.classList.remove('loading');
+      window._currentBluetoothAssignButton.disabled = false;
+      window._currentBluetoothAssignButton = null;
     }
-  } catch (error) {
-    console.error('[assignUserToBluetoothTrack] 사용자 목록 로드 오류:', error);
-    if (typeof showToast === 'function') {
-      showToast('사용자 목록을 불러올 수 없습니다.', 'error');
-    }
-    return;
-  }
 
-  if (users.length === 0) {
-    if (typeof showToast === 'function') {
-      showToast('등록된 사용자가 없습니다.', 'error');
-    }
-    return;
-  }
-
-  // 사용자 선택 모달 생성
-  const modalId = 'bluetoothTrackUserSelectModal';
-  let modal = document.getElementById(modalId);
-  
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = modalId;
-    modal.className = 'modal';
-    modal.style.position = 'fixed';
-    modal.style.zIndex = '10000';
-    modal.style.left = '0';
-    modal.style.top = '0';
-    modal.style.width = '100%';
-    modal.style.height = '100%';
-    modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-    modal.style.display = 'flex';
-    modal.style.alignItems = 'center';
-    modal.style.justifyContent = 'center';
-    document.body.appendChild(modal);
-  }
-  
-  // grade=2 사용자는 본인 계정만 사용 가능
-  if (isGrade2 && loggedInUserId) {
-    users = users.filter(user => String(user.id) === loggedInUserId);
-  }
-
-  window._allUsersForBluetoothTrackSelection = users;
-
-  const canModifyDevices = isAdmin || isCoach || isGrade2;
-  
-  // Firebase에서 현재 트랙의 정보 가져오기
-  let currentUserData = null;
-  let currentDeviceData = null;
-  
-  if (typeof db !== 'undefined') {
+    // 사용자 목록 가져오기
+    let users = [];
     try {
-      const sessionId = roomId;
-      const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
-      const usersSnapshot = await usersRef.once('value');
-      currentUserData = usersSnapshot.val();
-      
-      const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
-      const devicesSnapshot = await devicesRef.once('value');
-      currentDeviceData = devicesSnapshot.val();
+      if (typeof apiGetUsers === 'function') {
+        const result = await apiGetUsers();
+        if (result && result.success && result.items) {
+          users = result.items;
+        }
+      } else if (Array.isArray(window.users)) {
+        users = window.users;
+      } else {
+        if (typeof loadUsers === 'function') {
+          await loadUsers();
+          users = Array.isArray(window.users) ? window.users : [];
+        }
+      }
     } catch (error) {
-      console.error('[assignUserToBluetoothTrack] Firebase 정보 로드 오류:', error);
+      console.error('[assignUserToBluetoothTrack] 사용자 목록 로드 오류:', error);
+      if (typeof showToast === 'function') {
+        showToast('사용자 목록을 불러올 수 없습니다.', 'error');
+      }
+      return;
     }
-  }
 
-  // HTML 이스케이프 헬퍼 함수
-  function escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
+    if (users.length === 0) {
+      if (typeof showToast === 'function') {
+        showToast('등록된 사용자가 없습니다.', 'error');
+      }
+      return;
+    }
 
-  modal.innerHTML = `
+    // 사용자 선택 모달 생성
+    const modalId = 'bluetoothTrackUserSelectModal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'modal';
+      modal.style.position = 'fixed';
+      modal.style.zIndex = '10000';
+      modal.style.left = '0';
+      modal.style.top = '0';
+      modal.style.width = '100%';
+      modal.style.height = '100%';
+      modal.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+      modal.style.display = 'flex';
+      modal.style.alignItems = 'center';
+      modal.style.justifyContent = 'center';
+      document.body.appendChild(modal);
+    }
+    
+    // grade=2 사용자는 본인 계정만 사용 가능
+    if (isGrade2 && loggedInUserId) {
+      users = users.filter(user => String(user.id) === loggedInUserId);
+    }
+
+    window._allUsersForBluetoothTrackSelection = users;
+
+    const canModifyDevices = isAdmin || isCoach || isGrade2;
+    
+    // Firebase에서 현재 트랙의 정보 가져오기
+    let currentUserData = null;
+    let currentDeviceData = null;
+    
+    if (typeof db !== 'undefined') {
+      try {
+        const sessionId = roomId;
+        const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
+        const usersSnapshot = await usersRef.once('value');
+        currentUserData = usersSnapshot.val();
+        
+        const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
+        const devicesSnapshot = await devicesRef.once('value');
+        currentDeviceData = devicesSnapshot.val();
+      } catch (error) {
+        console.error('[assignUserToBluetoothTrack] Firebase 정보 로드 오류:', error);
+      }
+    }
+
+    // HTML 이스케이프 헬퍼 함수
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    modal.innerHTML = `
     <div style="background: white; padding: 24px; border-radius: 8px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
       <h2 style="margin: 0 0 20px 0; font-size: 1.5em;">트랙${trackNumber} 훈련 신청 (Bluetooth)</h2>
       
@@ -427,20 +448,20 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
         </button>
       </div>
     </div>
-  `;
-  
-  // 전역 변수에 현재 트랙 정보 저장
-  window._currentBluetoothTrackApplication = {
-    trackNumber: trackNumber,
-    roomId: roomId,
-    selectedUserId: currentUserData?.userId || null,
-    selectedUserName: currentUserData?.userName || null,
-    selectedUserFTP: currentUserData?.ftp || null,
-    selectedUserWeight: currentUserData?.weight || null
-  };
-  
-  // 모달이 생성된 후 현재 정보로 필드 채우기
-  setTimeout(() => {
+    `;
+    
+    // 전역 변수에 현재 트랙 정보 저장
+    window._currentBluetoothTrackApplication = {
+      trackNumber: trackNumber,
+      roomId: roomId,
+      selectedUserId: currentUserData?.userId || null,
+      selectedUserName: currentUserData?.userName || null,
+      selectedUserFTP: currentUserData?.ftp || null,
+      selectedUserWeight: currentUserData?.weight || null
+    };
+    
+    // 모달이 생성된 후 현재 정보로 필드 채우기
+    setTimeout(() => {
     if (currentUserData && currentUserData.userId) {
       const selectedUserDiv = document.getElementById('selectedUserForBluetoothTrack');
       const selectedUserNameSpan = document.getElementById('selectedUserNameForBluetoothTrack');
@@ -503,7 +524,8 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
         brakeSelect.value = currentDeviceData.brake || '';
       }
     }
-  }, 100);
+    }, 100);
+  } // if 문 닫기
 }
 
 /**
