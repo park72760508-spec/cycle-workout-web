@@ -732,6 +732,7 @@ let currentSegmentIndex = -1;
 let previousTrainingState = null; // 이전 훈련 상태 추적
 let lastWorkoutId = null; // 마지막 워크아웃 ID
 window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
+let firebaseStatus = null; // Firebase status 저장 (세그먼트 정보용)
 
 /**
  * Workout ID를 가져오는 헬퍼 함수 (비동기)
@@ -793,6 +794,9 @@ window.getWorkoutIdSync = getWorkoutIdSync;
 db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
     const status = snapshot.val();
     if (status) {
+        // Firebase status 저장 (updateTargetPower에서 사용)
+        firebaseStatus = status;
+        
         // 훈련 상태 변화 감지 및 세션 관리
         const currentState = status.state || 'idle';
         const previousState = window.currentTrainingState;
@@ -1654,9 +1658,31 @@ function updateTargetPower() {
         return;
     }
     
-    // 2순위: 세그먼트 데이터로 계산 (Firebase targetPower가 없을 때만)
-    // 워크아웃 데이터 확인
-    if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+    // 2순위: Firebase status의 segmentTargetType/segmentTargetValue 사용 (Firebase targetPower가 없거나 0일 때)
+    // Firebase status에서 세그먼트 정보 가져오기
+    let targetType = null;
+    let targetValue = null;
+    
+    if (firebaseStatus && firebaseStatus.segmentTargetType && firebaseStatus.segmentTargetValue !== undefined) {
+        targetType = firebaseStatus.segmentTargetType;
+        targetValue = firebaseStatus.segmentTargetValue;
+        console.log('[updateTargetPower] Firebase status에서 세그먼트 정보 사용:', { targetType, targetValue });
+    }
+    
+    // Firebase status에 세그먼트 정보가 없으면 getCurrentSegment() 사용
+    if (!targetType || targetValue === null) {
+        const seg = getCurrentSegment();
+        if (seg) {
+            targetType = seg.target_type || 'ftp_pct';
+            targetValue = seg.target_value;
+            console.log('[updateTargetPower] getCurrentSegment()에서 세그먼트 정보 사용:', { targetType, targetValue });
+        }
+    }
+    
+    // 세그먼트 정보가 없으면 워크아웃 데이터 확인
+    if (!targetType || targetValue === null || targetValue === undefined) {
+        // 워크아웃 데이터 확인
+        if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
         // 경고 메시지는 디버깅 모드에서만 출력 (조용히 처리)
         if (window.DEBUG_MODE) {
             console.warn('[updateTargetPower] 워크아웃 데이터가 없습니다.');
@@ -1671,22 +1697,15 @@ function updateTargetPower() {
             targetRpmUnitEl.style.display = 'none';
         }
         targetPowerEl.textContent = '0';
-        targetPowerEl.setAttribute('fill', '#ff8c00');
-        // 목표 파워 원호 숨김
-        if (typeof updateTargetPowerArc === 'function') {
-            updateTargetPowerArc();
+            targetPowerEl.setAttribute('fill', '#ff8c00');
+            // 목표 파워 원호 숨김
+            if (typeof updateTargetPowerArc === 'function') {
+                updateTargetPowerArc();
+            }
+            return;
         }
-        return;
-    }
-    
-    // 현재 세그먼트 정보 가져오기 (헬퍼 함수 사용)
-    const seg = getCurrentSegment();
-    if (!seg) {
-        // currentSegmentIndex가 -1인 경우는 훈련 시작 전 정상 상태이므로 경고 제거
-        // 디버그 모드에서만 로그 출력
-        if (window.DEBUG_MODE && currentSegmentIndex >= 0) {
-            console.warn('[updateTargetPower] 현재 세그먼트 정보를 가져올 수 없습니다. (세그먼트 인덱스:', currentSegmentIndex + ')');
-        }
+        
+        // 워크아웃 데이터가 있어도 세그먼트 정보가 없으면 기본값 사용
         const targetLabelEl = document.getElementById('ui-target-label');
         const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
         if (targetLabelEl) {
@@ -1711,9 +1730,7 @@ function updateTargetPower() {
     // 세그먼트 목표 파워 계산
     let targetPower = 0;
     
-    // target_type에 따라 계산
-    const targetType = seg.target_type || 'ftp_pct';
-    const targetValue = seg.target_value;
+    // target_type에 따라 계산 (Firebase status 또는 getCurrentSegment()에서 가져온 값 사용)
     
     console.log('[updateTargetPower] 세그먼트 데이터로 계산 (Firebase targetPower 없음)');
     console.log('[updateTargetPower] 세그먼트 인덱스:', currentSegmentIndex);
@@ -1788,13 +1805,22 @@ function updateTargetPower() {
         
         // 상한값을 전역 변수에 저장 (updateTargetPowerArc에서 사용)
         const baseMaxPower = Math.round(ftp * (maxPercent / 100));
-        // 강도 조절 비율 적용
-        window.currentSegmentMaxPower = Math.round(baseMaxPower * individualIntensityAdjustment);
-        window.currentSegmentMinPower = targetPower; // targetPower는 이미 강도 조절이 적용된 값
+        // 강도 조절 비율 적용 (나중에 adjustedTargetPower와 함께 적용)
+        window.currentSegmentMaxPower = baseMaxPower; // 일단 기본값 저장, 나중에 강도 조절 적용
+        window.currentSegmentMinPower = targetPower; // 일단 기본값 저장, 나중에 강도 조절 적용
+    } else {
+        window.currentSegmentMaxPower = null;
+        window.currentSegmentMinPower = null;
     }
     
     // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
     const adjustedTargetPower = Math.round(targetPower * individualIntensityAdjustment);
+    
+    // ftp_pctz 타입인 경우 상한값에도 강도 조절 비율 적용
+    if (targetType === 'ftp_pctz' && window.currentSegmentMaxPower) {
+        window.currentSegmentMaxPower = Math.round(window.currentSegmentMaxPower * individualIntensityAdjustment);
+        window.currentSegmentMinPower = adjustedTargetPower; // adjustedTargetPower는 이미 강도 조절이 적용된 값
+    }
     
     console.log('[updateTargetPower] 최종 계산된 목표 파워:', targetPower, 'W');
     console.log('[updateTargetPower] 강도 조절 적용:', individualIntensityAdjustment, '→ 조절된 목표 파워:', adjustedTargetPower, 'W');
