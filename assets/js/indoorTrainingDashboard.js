@@ -2407,7 +2407,6 @@ function showPairingTab(tabName) {
       }
     }, 100);
   }
-  }
 }
 
 /**
