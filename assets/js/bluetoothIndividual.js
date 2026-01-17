@@ -782,20 +782,21 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     const segmentText = segmentName 
                         ? `${segmentName}(${targetText})`
                         : targetText;
-                    segmentInfoEl.innerText = segmentText;
+                    // SVG text 요소는 textContent 사용
+                    segmentInfoEl.textContent = segmentText;
                 } else {
                     // 세그먼트 정보가 없으면 Firebase status에서 받은 정보로 표시
                     if (status.segmentTargetType && status.segmentTargetValue !== undefined) {
                         const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
-                        segmentInfoEl.innerText = segmentText;
+                        segmentInfoEl.textContent = segmentText;
                     } else {
-                        segmentInfoEl.innerText = '준비 중';
+                        segmentInfoEl.textContent = '준비 중';
                     }
                 }
             } else if (status.state === 'paused') {
-                segmentInfoEl.innerText = '일시정지';
+                segmentInfoEl.textContent = '일시정지';
             } else {
-                segmentInfoEl.innerText = '대기 중';
+                segmentInfoEl.textContent = '대기 중';
             }
         }
         
