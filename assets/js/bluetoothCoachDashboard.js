@@ -1237,24 +1237,56 @@ function updateBluetoothCoachPowerMeterTicks(powerMeterId) {
  * 훈련 상태 업데이트 (Firebase status 구독)
  */
 function updateTrainingStatus(status) {
-  window.bluetoothCoachState.trainingState = status.state || 'idle';
+  // 워크아웃이 선택되지 않았거나 시작되지 않았으면 상태를 'idle'로 강제 설정
+  const currentWorkout = window.bluetoothCoachState && window.bluetoothCoachState.currentWorkout;
+  const hasWorkout = currentWorkout && (
+    (currentWorkout.segments && Array.isArray(currentWorkout.segments) && currentWorkout.segments.length > 0) ||
+    (currentWorkout.id && currentWorkout.title)
+  );
+  const firebaseState = status.state || 'idle';
+  
+  // Firebase 상태가 'running'이어도 워크아웃이 없으면 'idle'로 설정
+  if (firebaseState === 'running' && !hasWorkout) {
+    console.log('[Bluetooth Coach] Firebase 상태가 running이지만 워크아웃이 선택되지 않아 idle로 설정', {
+      hasCurrentWorkout: !!currentWorkout,
+      hasSegments: !!(currentWorkout && currentWorkout.segments),
+      segmentsLength: currentWorkout && currentWorkout.segments ? currentWorkout.segments.length : 0
+    });
+    window.bluetoothCoachState.trainingState = 'idle';
+  } else {
+    window.bluetoothCoachState.trainingState = firebaseState;
+  }
+  
   window.bluetoothCoachState.currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : 0;
   
-  // 경과시간 업데이트
-  if (status.elapsedTime !== undefined) {
+  // 경과시간 업데이트 (워크아웃이 있을 때만)
+  if (status.elapsedTime !== undefined && hasWorkout) {
     window.bluetoothCoachState.totalElapsedTime = status.elapsedTime || 0;
+    updateScoreboard();
+  } else if (!hasWorkout) {
+    // 워크아웃이 없으면 경과시간 초기화
+    window.bluetoothCoachState.totalElapsedTime = 0;
     updateScoreboard();
   }
   
-  // 랩카운트다운 업데이트
-  if (status.lapCountdown !== undefined) {
+  // 랩카운트다운 업데이트 (워크아웃이 있을 때만)
+  if (status.lapCountdown !== undefined && hasWorkout) {
     const countdownEl = document.getElementById('bluetoothCoachLapCountdown');
     if (countdownEl) {
       const minutes = Math.floor(status.lapCountdown / 60);
       const seconds = Math.floor(status.lapCountdown % 60);
       countdownEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }
+  } else if (!hasWorkout) {
+    // 워크아웃이 없으면 카운트다운 초기화
+    const countdownEl = document.getElementById('bluetoothCoachLapCountdown');
+    if (countdownEl) {
+      countdownEl.textContent = '00:00';
+    }
   }
+  
+  // 버튼 상태 업데이트
+  updateBluetoothCoachTrainingButtons();
 }
 
 /**
