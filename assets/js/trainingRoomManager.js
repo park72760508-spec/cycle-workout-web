@@ -9,8 +9,8 @@ let trainingRoomList = [];
 // 비밀번호 인증된 Training Room ID 추적 (재인증 방지)
 // 인증된 Training Room 관리 (메모리 + sessionStorage)
 let authenticatedTrainingRooms = new Set();
-// 디바이스 연결 방식: 'ant' 또는 'bluetooth' (기본값: 'ant')
-let deviceConnectionMode = 'ant';
+// 디바이스 연결 방식: 'ant' 또는 'bluetooth' (기본값: 'bluetooth')
+let deviceConnectionMode = 'bluetooth';
 
 // sessionStorage에서 인증 상태 복원
 function restoreAuthenticatedRooms() {
@@ -1020,7 +1020,7 @@ function openCoachMode() {
   }
 
   // 현재 모드 확인
-  let mode = window.deviceConnectionMode || sessionStorage.getItem('deviceConnectionMode') || 'ant';
+  let mode = window.deviceConnectionMode || sessionStorage.getItem('deviceConnectionMode') || 'bluetooth';
 
   if (mode === 'bluetooth') {
     // Bluetooth 모드이면 바로 코치 화면으로
@@ -1874,8 +1874,8 @@ function initializeDeviceConnectionSwitch() {
   let isProcessing = false; // 중복 실행 방지 플래그
   const DRAG_THRESHOLD = 5; // 픽셀 단위 드래그 임계값
   
-  // 저장된 모드 복원 (없으면 기본값 'ant')
-  const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
+  // 저장된 모드 복원 (없으면 기본값 'bluetooth')
+  const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'bluetooth';
   deviceConnectionMode = savedMode;
   
   // 전역 변수도 동기화
@@ -2261,8 +2261,8 @@ function initializeDeviceConnectionSwitchForScreen() {
   let isProcessing = false; // 중복 실행 방지 플래그
   const DRAG_THRESHOLD = 5; // 픽셀 단위 드래그 임계값
   
-  // 저장된 모드 복원 (없으면 기본값 'ant')
-  const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'ant';
+  // 저장된 모드 복원 (없으면 기본값 'bluetooth')
+  const savedMode = sessionStorage.getItem('deviceConnectionMode') || 'bluetooth';
   deviceConnectionMode = savedMode;
   
   // 스위치 상태 업데이트 (일반 화면용)
@@ -2642,7 +2642,7 @@ function openCoachModeFromModal(event) {
   }
 
   // 1. [핵심 수정] 변수 및 스토리지 값을 최우선으로 확인 (UI 위치 계산보다 정확함)
-  let currentDeviceMode = 'ant'; // 기본값
+  let currentDeviceMode = 'bluetooth'; // 기본값
 
   // 전역 변수 확인
   if (window.deviceConnectionMode && (window.deviceConnectionMode === 'bluetooth' || window.deviceConnectionMode === 'ant')) {
