@@ -242,7 +242,7 @@ function createPowerMeterElement(powerMeter) {
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
         <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
-        <span class="status-dot disconnected" id="status-dot-${powerMeter.id}" style="display: none !important;"></span>
+        <span class="status-dot disconnected" id="status-dot-${powerMeter.id}"></span>
         <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
       </div>
     </div>
@@ -666,6 +666,9 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   // UI 업데이트
   updatePowerMeterUI(trackId);
   
+  // 연결 상태 표시 업데이트 (Firebase 디바이스 정보 확인)
+  updateBluetoothCoachConnectionStatus(trackId);
+  
   // FTP 변경 시 눈금 업데이트
   const prevFTP = powerMeter.userFTP;
   if (userData.ftp) {
@@ -742,11 +745,158 @@ function updatePowerMeterUI(trackId) {
     }
   }
   
-  // 연결 상태 텍스트 업데이트
-  const statusTextEl = document.getElementById(`status-text-${trackId}`);
-  if (statusTextEl) {
-    statusTextEl.textContent = powerMeter.connected ? '연결됨' : '미연결';
+  // 연결 상태 업데이트 (Firebase 디바이스 정보 확인)
+  updateBluetoothCoachConnectionStatus(trackId);
+}
+
+/**
+ * Firebase에서 트랙의 디바이스 정보 가져오기
+ */
+async function getFirebaseDevicesForTrackBluetoothCoach(trackId) {
+  const sessionId = getBluetoothCoachSessionId();
+  if (!sessionId || typeof db === 'undefined') {
+    return null;
   }
+  
+  try {
+    const snapshot = await db.ref(`sessions/${sessionId}/devices/${trackId}`).once('value');
+    return snapshot.val();
+  } catch (error) {
+    console.error(`[Bluetooth Coach] Firebase 디바이스 정보 가져오기 실패 (트랙 ${trackId}):`, error);
+    return null;
+  }
+}
+
+/**
+ * 연결 상태 업데이트 (Indoor Training의 updatePowerMeterConnectionStatus 참고)
+ */
+function updateBluetoothCoachConnectionStatus(powerMeterId) {
+  const powerMeter = window.bluetoothCoachState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
+  
+  const statusTextEl = document.getElementById(`status-text-${powerMeterId}`);
+  const statusDotEl = document.getElementById(`status-dot-${powerMeterId}`);
+  const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
+  
+  // Firebase에서 디바이스 정보 가져오기 (비동기)
+  getFirebaseDevicesForTrackBluetoothCoach(powerMeterId).then(deviceData => {
+    // Firebase devices 정보가 있으면 사용
+    const smartTrainerId = deviceData?.smartTrainerId || null;
+    const powerMeterId_fb = deviceData?.powerMeterId || null;
+    const heartRateId = deviceData?.heartRateId || null;
+    
+    // 조건 확인
+    const hasUser = !!(powerMeter.userId);
+    const hasPowerDevice = !!(powerMeterId_fb || smartTrainerId);
+    const hasHeartRateDevice = !!(heartRateId);
+    const hasAnyDevice = hasPowerDevice || hasHeartRateDevice;
+    const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
+  
+    let statusClass = 'disconnected';
+    let statusText = '미연결';
+    
+    // 연결 상태 판단 (Bluetooth Coach 로직)
+    if (!hasUser) {
+      // 사용자 미지정
+      statusClass = 'disconnected';
+      statusText = '미연결';
+      powerMeter.connected = false;
+    } else if (hasUser && hasAnyDevice) {
+      // 사용자 지정 + 디바이스 정보 저장된 상태
+      if (hasData) {
+        // 데이터 수신 중
+        statusClass = 'connected';
+        statusText = '연결됨';
+        powerMeter.connected = true;
+      } else {
+        // 디바이스 정보는 있지만 데이터 미수신
+        statusClass = 'ready';
+        statusText = '준비됨';
+        powerMeter.connected = false;
+      }
+    } else {
+      // 사용자 지정만 되어 있고 디바이스 정보 없음
+      statusClass = 'disconnected';
+      statusText = '미연결';
+      powerMeter.connected = false;
+    }
+    
+    // 상태 텍스트 업데이트
+    if (statusTextEl) {
+      statusTextEl.textContent = statusText;
+    }
+    
+    // 상태 점 표시/숨김 처리 (녹색/빨강색 표시)
+    if (statusDotEl) {
+      if (statusClass === 'disconnected') {
+        // 미연결 상태: 빨간 원 표시
+        statusDotEl.style.display = 'inline-block';
+        statusDotEl.classList.remove('ready', 'connected');
+        statusDotEl.classList.add('disconnected');
+      } else if (statusClass === 'connected') {
+        // 연결됨 상태: 녹색 점 표시
+        statusDotEl.style.display = 'inline-block';
+        statusDotEl.classList.remove('disconnected', 'ready');
+        statusDotEl.classList.add('connected');
+      } else {
+        // 준비됨 상태: 점 숨김
+        statusDotEl.style.display = 'none';
+      }
+    }
+    
+    // 디바이스 아이콘 표시/숨김 처리
+    if (deviceIconsEl) {
+      if (statusClass === 'ready' || statusClass === 'connected') {
+        // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시
+        deviceIconsEl.style.display = 'inline-flex';
+        updateBluetoothCoachDeviceIcons(powerMeterId, deviceData);
+      } else {
+        // 미연결 상태: 디바이스 아이콘 숨김
+        deviceIconsEl.style.display = 'none';
+      }
+    }
+  }).catch(error => {
+    console.error(`[Bluetooth Coach] updateBluetoothCoachConnectionStatus 오류 (트랙 ${powerMeterId}):`, error);
+    // 오류 시 기본 상태로 폴백
+    if (statusTextEl) {
+      statusTextEl.textContent = '미연결';
+    }
+    if (statusDotEl) {
+      statusDotEl.style.display = 'inline-block';
+      statusDotEl.classList.remove('ready', 'connected');
+      statusDotEl.classList.add('disconnected');
+    }
+    if (deviceIconsEl) {
+      deviceIconsEl.style.display = 'none';
+    }
+  });
+}
+
+/**
+ * 디바이스 아이콘 업데이트 (Bluetooth Coach 전용)
+ */
+function updateBluetoothCoachDeviceIcons(powerMeterId, deviceData) {
+  const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
+  if (!deviceIconsEl) return;
+  
+  const icons = [];
+  
+  // 심박계 아이콘
+  if (deviceData?.heartRateId) {
+    icons.push('<img src="assets/img/bpm_g.png" alt="심박계" class="device-icon-with-bg" title="심박계" style="width: 16px; height: 16px;" />');
+  }
+  
+  // 스마트 트레이너 아이콘
+  if (deviceData?.smartTrainerId) {
+    icons.push('<img src="assets/img/trainer_g.png" alt="스마트트레이너" class="device-icon-with-bg" title="스마트트레이너" style="width: 16px; height: 16px;" />');
+  }
+  
+  // 파워메터 아이콘
+  if (deviceData?.powerMeterId) {
+    icons.push('<img src="assets/img/power_g.png" alt="파워메터" class="device-icon-with-bg" title="파워메터" style="width: 16px; height: 16px;" />');
+  }
+  
+  deviceIconsEl.innerHTML = icons.join('');
 }
 
 /**
@@ -765,12 +915,15 @@ function resetPowerMeterData(trackId) {
   powerMeter.userFTP = null;
   
   // UI 초기화
-  const userNameEl = document.getElementById(`user-icon-${trackId}`);
+  const userNameEl = document.getElementById(`user-name-${trackId}`);
   if (userNameEl) {
     userNameEl.style.display = 'none';
   }
   
   updatePowerMeterUI(trackId);
+  
+  // 연결 상태 표시 업데이트
+  updateBluetoothCoachConnectionStatus(trackId);
 }
 
 /**
