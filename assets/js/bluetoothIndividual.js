@@ -217,23 +217,19 @@ function updateFirebaseDevices() {
     const powerMeterId = window.connectedDevices?.powerMeter?.device?.id || null;
     const smartTrainerId = window.connectedDevices?.trainer?.device?.id || null;
     
-    // Firebase에 업데이트할 데이터 객체
-    const devicesData = {};
-    if (heartRateId) {
-        devicesData.heartRateId = heartRateId;
-    }
-    if (powerMeterId) {
-        devicesData.powerMeterId = powerMeterId;
-    }
-    if (smartTrainerId) {
-        devicesData.smartTrainerId = smartTrainerId;
-    }
+    // Firebase에 업데이트할 데이터 객체 (연결되지 않은 디바이스는 null로 설정)
+    const devicesData = {
+        heartRateId: heartRateId || null,
+        powerMeterId: powerMeterId || null,
+        smartTrainerId: smartTrainerId || null
+    };
     
-    // devices 경로에 업데이트
-    const devicesRef = db.ref(`sessions/${SESSION_ID}/users/${myTrackId}/devices`);
+    // devices 경로에 업데이트 (sessions/{SESSION_ID}/devices/{myTrackId})
+    const devicesRef = db.ref(`sessions/${SESSION_ID}/devices/${myTrackId}`);
     devicesRef.update(devicesData)
         .then(() => {
             console.log('[BluetoothIndividual] ✅ Firebase 디바이스 정보 업데이트 성공:', {
+                path: `sessions/${SESSION_ID}/devices/${myTrackId}`,
                 heartRateId,
                 powerMeterId,
                 smartTrainerId
@@ -241,6 +237,16 @@ function updateFirebaseDevices() {
         })
         .catch((error) => {
             console.error('[BluetoothIndividual] ❌ Firebase 디바이스 정보 업데이트 실패:', error);
+        });
+    
+    // 하위 호환성을 위해 users 경로에도 업데이트 (기존 코드와의 호환성)
+    const usersDevicesRef = db.ref(`sessions/${SESSION_ID}/users/${myTrackId}/devices`);
+    usersDevicesRef.update(devicesData)
+        .then(() => {
+            console.log('[BluetoothIndividual] ✅ Firebase users/devices 경로 업데이트 성공 (하위 호환성)');
+        })
+        .catch((error) => {
+            console.warn('[BluetoothIndividual] ⚠️ Firebase users/devices 경로 업데이트 실패:', error);
         });
 }
 
@@ -2720,6 +2726,11 @@ function updateBluetoothConnectionStatus() {
     const pmStatus = document.getElementById('powerMeterStatus');
     const connectBtn = document.getElementById('bluetoothConnectBtn');
     
+    // 이전 연결 상태 저장 (변경 감지용)
+    const prevHRConnected = hrItem?.classList.contains('connected') || false;
+    const prevTrainerConnected = trainerItem?.classList.contains('connected') || false;
+    const prevPMConnected = pmItem?.classList.contains('connected') || false;
+    
     // 심박계 상태
     if (window.connectedDevices?.heartRate) {
         if (hrItem) hrItem.classList.add('connected');
@@ -2772,6 +2783,18 @@ function updateBluetoothConnectionStatus() {
         } else {
             connectBtn.classList.remove('has-connection');
         }
+    }
+    
+    // 연결 상태가 변경되었으면 Firebase 업데이트
+    const currentHRConnected = window.connectedDevices?.heartRate ? true : false;
+    const currentTrainerConnected = window.connectedDevices?.trainer ? true : false;
+    const currentPMConnected = window.connectedDevices?.powerMeter ? true : false;
+    
+    if (prevHRConnected !== currentHRConnected || 
+        prevTrainerConnected !== currentTrainerConnected || 
+        prevPMConnected !== currentPMConnected) {
+        // 연결 상태가 변경되었으므로 Firebase 업데이트
+        updateFirebaseDevices();
     }
 }
 
