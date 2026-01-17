@@ -1584,7 +1584,7 @@ function startBluetoothCoachTrainingTimer() {
   }
   
   // 전광판 업데이트
-  updateBluetoothCoachScoreboard();
+  updateScoreboard();
   
   // Firebase에 경과 시간 업데이트
   if (typeof db !== 'undefined') {
