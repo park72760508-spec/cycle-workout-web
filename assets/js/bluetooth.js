@@ -605,9 +605,11 @@ function handlePowerMeterData(event) {
         const rpm = (dRevs / dtSec) * 60;
         if (rpm > 0 && rpm < 220) {
           const roundedRpm = Math.round(rpm);
-          // 이전 값과 다를 때만 로그 출력
-          if (window.liveData.cadence !== roundedRpm) {
-            console.log('[bluetooth.js] handlePowerMeterData - cadence 업데이트:', window.liveData.cadence, '→', roundedRpm, 'RPM');
+          // 이전 값과 다를 때만 로그 출력 및 자식 창에 알림
+          const prevCadence = window.liveData.cadence;
+          if (prevCadence !== roundedRpm) {
+            console.log('[bluetooth.js] handlePowerMeterData - cadence 업데이트:', prevCadence, '→', roundedRpm, 'RPM');
+            notifyChildWindows('cadence', roundedRpm);
           }
           window.liveData.cadence = roundedRpm;
           // ERG 모드용 데이터 버퍼 업데이트
@@ -669,9 +671,11 @@ function handleTrainerData(e) {
     if (!window.liveData) {
       window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     }
-    // 이전 값과 다를 때만 로그 출력
-    if (window.liveData.cadence !== roundedRpm) {
-      console.log('[bluetooth.js] handleTrainerData - cadence 업데이트:', window.liveData.cadence, '→', roundedRpm, 'RPM');
+    // 이전 값과 다를 때만 로그 출력 및 자식 창에 알림
+    const prevCadence = window.liveData.cadence;
+    if (prevCadence !== roundedRpm) {
+      console.log('[bluetooth.js] handleTrainerData - cadence 업데이트:', prevCadence, '→', roundedRpm, 'RPM');
+      notifyChildWindows('cadence', roundedRpm);
     }
     window.liveData.cadence = roundedRpm;
     // ERG 모드용 데이터 버퍼 업데이트
@@ -698,9 +702,11 @@ function handleTrainerData(e) {
     if (!window.liveData) {
       window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     }
-    // 이전 값과 다를 때만 로그 출력
-    if (window.liveData.power !== p) {
-      console.log('[bluetooth.js] handleTrainerData - power 업데이트:', window.liveData.power, '→', p, 'W');
+    // 이전 값과 다를 때만 로그 출력 및 자식 창에 알림
+    const prevPower = window.liveData.power;
+    if (prevPower !== p) {
+      console.log('[bluetooth.js] handleTrainerData - power 업데이트:', prevPower, '→', p, 'W');
+      notifyChildWindows('power', p);
     }
     window.liveData.power = p;
     // ERG 모드용 데이터 버퍼 업데이트
@@ -777,9 +783,13 @@ window.handleHeartRateData = window.handleHeartRateData || function (event) {
     window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
   }
   
-  // 이전 값과 다를 때만 로그 출력
-  if (window.liveData.heartRate !== roundedHR) {
-    console.log('[bluetooth.js] handleHeartRateData 호출:', roundedHR, 'bpm (이전:', window.liveData.heartRate, 'bpm)');
+  // 이전 값과 다를 때만 로그 출력 및 자식 창에 알림
+  const prevHR = window.liveData.heartRate;
+  if (prevHR !== roundedHR) {
+    console.log('[bluetooth.js] handleHeartRateData 호출:', roundedHR, 'bpm (이전:', prevHR, 'bpm)');
+    
+    // 자식 창에 postMessage로 알림
+    notifyChildWindows('heartRate', roundedHR);
   }
   
   window.liveData.heartRate = roundedHR;
@@ -806,6 +816,47 @@ window.addEventListener("beforeunload", () => {
 
 
 
+// 자식 창에 liveData 업데이트 알림 함수
+function notifyChildWindows(field, value) {
+  try {
+    // 열린 자식 창들을 찾기
+    if (!window._bluetoothChildWindows) {
+      window._bluetoothChildWindows = [];
+    }
+    
+    // 닫힌 창 제거
+    window._bluetoothChildWindows = window._bluetoothChildWindows.filter(win => {
+      try {
+        return !win.closed;
+      } catch (e) {
+        return false;
+      }
+    });
+    
+    // 각 자식 창에 liveData 업데이트 알림
+    if (window._bluetoothChildWindows.length > 0) {
+      window._bluetoothChildWindows.forEach(childWin => {
+        try {
+          if (!childWin.closed) {
+            childWin.postMessage({
+              type: 'bluetoothLiveDataUpdate',
+              heartRate: window.liveData?.heartRate || 0,
+              power: window.liveData?.power || 0,
+              cadence: window.liveData?.cadence || 0,
+              updatedField: field,
+              updatedValue: value
+            }, window.location.origin);
+          }
+        } catch (e) {
+          // 자식 창 접근 실패 - 조용히 무시
+        }
+      });
+    }
+  } catch (e) {
+    // postMessage 실패 - 조용히 무시
+  }
+}
+
 // 전역 export
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
@@ -813,3 +864,4 @@ window.connectPowerMeter = connectPowerMeter;
 window.handlePowerMeterData = handlePowerMeterData;
 window.handleTrainerData = handleTrainerData;
 window.connectHeartRate = connectHeartRate;
+window.notifyChildWindows = notifyChildWindows; // 자식 창 알림 함수도 노출

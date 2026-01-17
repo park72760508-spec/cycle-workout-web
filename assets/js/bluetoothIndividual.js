@@ -128,6 +128,16 @@ function initializeBluetoothDashboard() {
     // bluetoothIndividual.html이 새 창으로 열렸을 때 부모 창의 연결 상태를 가져옴
     if (window.opener && !window.opener.closed) {
         try {
+            // 부모 창의 자식 창 배열에 자신을 등록 (postMessage를 받기 위해)
+            if (!window.opener._bluetoothChildWindows) {
+                window.opener._bluetoothChildWindows = [];
+            }
+            // 이미 등록되어 있지 않은 경우만 추가
+            if (!window.opener._bluetoothChildWindows.includes(window)) {
+                window.opener._bluetoothChildWindows.push(window);
+                console.log('[BluetoothIndividual] ✅ 부모 창의 자식 창 배열에 등록 완료 (postMessage 받을 준비됨)');
+            }
+            
             // 부모 창의 window.connectedDevices 복사 시도
             const parentConnectedDevices = window.opener.connectedDevices;
             const parentLiveData = window.opener.liveData;
@@ -183,29 +193,81 @@ function initializeBluetoothDashboard() {
                 });
                 
                 // 부모 창의 liveData를 주기적으로 동기화 (polling)
-                setInterval(() => {
+                // postMessage를 통한 실시간 동기화도 함께 사용
+                const syncInterval = setInterval(() => {
                     try {
                         if (!window.opener.closed && window.opener.liveData) {
                             const parentHR = window.opener.liveData.heartRate;
                             const parentPower = window.opener.liveData.power;
                             const parentCadence = window.opener.liveData.cadence;
                             
-                            // 값이 변경되었으면 복사
+                            // 값이 변경되었으면 복사 및 UI 업데이트
+                            let updated = false;
                             if (parentHR !== undefined && parentHR !== null && window.liveData.heartRate !== parentHR) {
                                 window.liveData.heartRate = parentHR;
+                                updated = true;
                             }
                             if (parentPower !== undefined && parentPower !== null && window.liveData.power !== parentPower) {
                                 window.liveData.power = parentPower;
+                                updated = true;
                             }
                             if (parentCadence !== undefined && parentCadence !== null && window.liveData.cadence !== parentCadence) {
                                 window.liveData.cadence = parentCadence;
+                                updated = true;
                             }
+                            
+                            // 값이 업데이트되었으면 대시보드 업데이트
+                            if (updated) {
+                                updateDashboard();
+                            }
+                        } else {
+                            // 부모 창이 닫혔으면 인터벌 정리
+                            clearInterval(syncInterval);
                         }
                     } catch (e) {
                         // 부모 창 접근 실패 (CORS 또는 닫힘) - 조용히 무시
+                        clearInterval(syncInterval);
                     }
                 }, 100); // 100ms마다 부모 창의 liveData 동기화
-                console.log('[BluetoothIndividual] ✅ 부모 창 liveData 동기화 시작 (100ms마다)');
+                console.log('[BluetoothIndividual] ✅ 부모 창 liveData 동기화 시작 (100ms마다 polling)');
+                
+                // postMessage를 통한 실시간 동기화 리스너 등록
+                window.addEventListener('message', (event) => {
+                    // 보안: 같은 origin에서 온 메시지만 처리
+                    if (event.origin !== window.location.origin) {
+                        return;
+                    }
+                    
+                    // 부모 창에서 liveData 업데이트 알림
+                    if (event.data && event.data.type === 'bluetoothLiveDataUpdate') {
+                        const { heartRate, power, cadence } = event.data;
+                        
+                        if (!window.liveData) {
+                            window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+                        }
+                        
+                        let updated = false;
+                        if (heartRate !== undefined && heartRate !== null && window.liveData.heartRate !== heartRate) {
+                            window.liveData.heartRate = heartRate;
+                            updated = true;
+                        }
+                        if (power !== undefined && power !== null && window.liveData.power !== power) {
+                            window.liveData.power = power;
+                            updated = true;
+                        }
+                        if (cadence !== undefined && cadence !== null && window.liveData.cadence !== cadence) {
+                            window.liveData.cadence = cadence;
+                            updated = true;
+                        }
+                        
+                        // 값이 업데이트되었으면 대시보드 업데이트
+                        if (updated) {
+                            updateDashboard();
+                            console.log('[BluetoothIndividual] ✅ postMessage로 부모 창 liveData 동기화:', { heartRate, power, cadence });
+                        }
+                    }
+                });
+                console.log('[BluetoothIndividual] ✅ postMessage 리스너 등록 완료 (부모 창에서 liveData 업데이트 알림 받음)');
             }
         } catch (e) {
             console.warn('[BluetoothIndividual] 부모 창에서 연결 상태 복사 실패 (CORS 또는 다른 이유):', e.message);
