@@ -13578,7 +13578,17 @@ function startMobileTrainingTimerLoop() {
       clearInterval(mts.timerId);
       mts.timerId = null;
       
+      // 카운트다운 오버레이 닫기
+      MobileCountdownDisplay.hideImmediate();
+      
       if (typeof showToast === "function") showToast("훈련이 완료되었습니다!");
+      
+      // 로딩 애니메이션 표시
+      const loadingModal = safeGetElement('mobileTrainingLoadingModal');
+      if (loadingModal) {
+        loadingModal.classList.remove('hidden');
+        loadingModal.style.display = 'flex';
+      }
       
       // 결과 모달 표시
       Promise.resolve()
@@ -13587,11 +13597,69 @@ function startMobileTrainingTimerLoop() {
         .then(() => window.trainingResults?.initializeResultScreen?.())
         .catch((e) => { console.warn('[Mobile Dashboard] initializeResultScreen error', e); })
         .then(() => { 
+          // 로딩 애니메이션 숨기기
+          if (loadingModal) {
+            loadingModal.classList.add('hidden');
+            loadingModal.style.display = 'none';
+          }
+          
+          // 결과 모달 표시
           if (typeof showMobileTrainingResultModal === 'function') {
             showMobileTrainingResultModal();
           }
         });
       return;
+    }
+    
+    // 세그먼트 카운트다운 체크 (세그먼트 종료 6초 전부터 5초 카운트다운)
+    const segRemainingMs = (segDur - mts.segElapsedSec) * 1000;
+    const nextSeg = currentSegIndex < w.segments.length - 1 ? w.segments[currentSegIndex + 1] : null;
+    
+    if (nextSeg && segRemainingMs > 0 && segRemainingMs <= 6000) {
+      // 남은 시간을 초 단위로 변환 (6초 이하일 때만)
+      const remainSec = Math.ceil(segRemainingMs / 1000);
+      const n = Math.max(0, remainSec - 1); // 6초 → 5, 5초 → 4, ..., 1초 → 0
+      
+      // 카운트다운 상태 초기화
+      if (!mts._countdownFired) mts._countdownFired = {};
+      if (!mts._prevRemainMs) mts._prevRemainMs = {};
+      
+      const key = String(currentSegIndex);
+      const firedMap = mts._countdownFired[key] || {};
+      const remainMsPrev = mts._prevRemainMs[key] || segDur * 1000;
+      const remainMsNow = segRemainingMs;
+      mts._prevRemainMs[key] = remainMsNow;
+      
+      // 경계: 6→5, 5→4, ..., 2→1 은 (n+1)*1000ms, 1→0 은 1000ms
+      const boundary = (n > 0) ? (n + 1) * 1000 : 1000;
+      const crossed = (remainMsPrev > boundary && remainMsNow <= boundary);
+      
+      if (crossed && !firedMap[n]) {
+        // 오버레이 표시 시작(6초 시점에 "5" 표시)
+        if (n === 5 && !MobileCountdownDisplay.active) {
+          MobileCountdownDisplay.ensure(nextSeg);
+          MobileCountdownDisplay.render(5);
+          playBeep(880, 120, 0.25);
+        } else if (MobileCountdownDisplay.active) {
+          // 진행 중이면 숫자 업데이트만
+          MobileCountdownDisplay.render(n);
+          
+          // 4, 3, 2, 1초일 때 벨소리 재생
+          if (n > 0) {
+            playBeep(880, 120, 0.25);
+          }
+        }
+        
+        // 0은 "세그먼트 종료 1초 전"에 표시 + 강조 벨소리, 그리고 오버레이 닫기 예약
+        if (n === 0) {
+          // 강조 벨소리 (조금 더 강한 톤)
+          playBeep(1500, 700, 0.35, "square");
+          // 오버레이는 약간의 여유를 두고 닫기
+          MobileCountdownDisplay.finish(800);
+        }
+        
+        mts._countdownFired[key] = { ...firedMap, [n]: true };
+      }
     }
     
     // 세그먼트 경계 통과 → 다음 세그먼트로 전환
@@ -13609,6 +13677,8 @@ function startMobileTrainingTimerLoop() {
                              (currentSegIndex < w.segments.length - 1);
     
     if (shouldTransition) {
+      // 카운트다운 오버레이 닫기
+      MobileCountdownDisplay.hideImmediate();
       console.log(`[Mobile Dashboard] 세그먼트 ${currentSegIndex + 1} 완료 (경과: ${mts.segElapsedSec}초/${segDur}초, 전체: ${mts.elapsedSec}초), 다음 세그먼트로 이동`);
       
       const nextSegIndex = currentSegIndex + 1;
