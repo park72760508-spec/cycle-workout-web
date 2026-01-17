@@ -684,9 +684,9 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   
   // 바늘 궤적 업데이트 (목표 파워 및 궤적 표시)
   const ftp = powerMeter.userFTP || 200;
-  const maxPower = ftp * 2;
+  const gaugeMaxPower = ftp * 2; // 게이지 최대값 (FTP의 200%)
   const currentPower = powerMeter.currentPower || 0;
-  const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+  const ratio = Math.min(Math.max(currentPower / gaugeMaxPower, 0), 1);
   const angle = -90 + (ratio * 180);
   updateBluetoothCoachPowerMeterTrail(trackId, currentPower, angle, powerMeter);
 }
