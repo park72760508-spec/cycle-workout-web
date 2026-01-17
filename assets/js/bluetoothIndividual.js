@@ -136,6 +136,45 @@ function stopFirebaseDataTransmission() {
     }
 }
 
+// Firebase에 디바이스 정보 업데이트
+function updateFirebaseDevices() {
+    if (!SESSION_ID || !myTrackId || !db) {
+        console.warn('[BluetoothIndividual] Firebase 업데이트 실패: SESSION_ID 또는 myTrackId가 없습니다.');
+        return;
+    }
+    
+    // 연결된 디바이스 ID 가져오기
+    const heartRateId = window.connectedDevices?.heartRate?.device?.id || null;
+    const powerMeterId = window.connectedDevices?.powerMeter?.device?.id || null;
+    const smartTrainerId = window.connectedDevices?.trainer?.device?.id || null;
+    
+    // Firebase에 업데이트할 데이터 객체
+    const devicesData = {};
+    if (heartRateId) {
+        devicesData.heartRateId = heartRateId;
+    }
+    if (powerMeterId) {
+        devicesData.powerMeterId = powerMeterId;
+    }
+    if (smartTrainerId) {
+        devicesData.smartTrainerId = smartTrainerId;
+    }
+    
+    // devices 경로에 업데이트
+    const devicesRef = db.ref(`sessions/${SESSION_ID}/users/${myTrackId}/devices`);
+    devicesRef.update(devicesData)
+        .then(() => {
+            console.log('[BluetoothIndividual] ✅ Firebase 디바이스 정보 업데이트 성공:', {
+                heartRateId,
+                powerMeterId,
+                smartTrainerId
+            });
+        })
+        .catch((error) => {
+            console.error('[BluetoothIndividual] ❌ Firebase 디바이스 정보 업데이트 실패:', error);
+        });
+}
+
 // 페이지 로드 시 Firebase 데이터 전송 시작 및 초기 UI 업데이트
 // window.liveData 초기화 (bluetooth.js가 로드되기 전일 수 있으므로)
 if (!window.liveData) {
@@ -2556,12 +2595,20 @@ async function connectBluetoothDevice(deviceType) {
     try {
         console.log('[BluetoothIndividual] 블루투스 디바이스 연결 시도:', deviceType);
         await connectFunction();
-        // 연결 성공 후 연결 상태 업데이트
-        updateBluetoothConnectionStatus();
-        // updateDevicesList 호출 (bluetooth.js에 있으면)
-        if (typeof window.updateDevicesList === 'function') {
-            window.updateDevicesList();
-        }
+        
+        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
+        setTimeout(() => {
+            // 연결 상태 업데이트
+            updateBluetoothConnectionStatus();
+            
+            // Firebase에 디바이스 정보 업데이트
+            updateFirebaseDevices();
+            
+            // updateDevicesList 호출 (bluetooth.js에 있으면)
+            if (typeof window.updateDevicesList === 'function') {
+                window.updateDevicesList();
+            }
+        }, 200); // 200ms 대기 후 업데이트
     } catch (error) {
         console.error('[BluetoothIndividual] 블루투스 디바이스 연결 실패:', deviceType, error);
         // 에러는 bluetooth.js의 showToast에서 표시됨
@@ -2637,6 +2684,7 @@ function updateBluetoothConnectionStatus() {
 window.toggleBluetoothDropdown = toggleBluetoothDropdown;
 window.connectBluetoothDevice = connectBluetoothDevice;
 window.updateBluetoothConnectionStatus = updateBluetoothConnectionStatus;
+window.updateFirebaseDevices = updateFirebaseDevices;
 
 // 초기 속도계 눈금 및 레이블 생성
 if (document.readyState === 'loading') {
