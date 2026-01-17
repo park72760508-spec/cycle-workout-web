@@ -575,12 +575,13 @@ function handlePowerMeterData(event) {
   const instPower = dv.getInt16(off, true); off += 2;
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
-    // ERG 모드용 데이터 버퍼 업데이트
+    // ERG 모드용 데이터 버퍼 업데이트 (타임스탬프와 함께 저장)
+    const now = Date.now();
     if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
-    window._recentPowerBuffer.push(instPower);
-    if (window._recentPowerBuffer.length > 120) { // 최근 2분 (1초당 1개 가정)
-      window._recentPowerBuffer.shift();
-    }
+    window._recentPowerBuffer.push({ power: instPower, timestamp: now });
+    // 최근 5초 동안의 데이터만 유지 (3초 평균 계산을 위해 여유 있게 5초)
+    const fiveSecondsAgo = now - 5000;
+    window._recentPowerBuffer = window._recentPowerBuffer.filter(entry => entry.timestamp > fiveSecondsAgo);
   }
 
   // 2) 옵션 필드 스킵
@@ -709,12 +710,13 @@ function handleTrainerData(e) {
       notifyChildWindows('power', p);
     }
     window.liveData.power = p;
-    // ERG 모드용 데이터 버퍼 업데이트
+    // ERG 모드용 데이터 버퍼 업데이트 (타임스탬프와 함께 저장)
+    const now = Date.now();
     if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
-    window._recentPowerBuffer.push(p);
-    if (window._recentPowerBuffer.length > 120) {
-      window._recentPowerBuffer.shift();
-    }
+    window._recentPowerBuffer.push({ power: p, timestamp: now });
+    // 최근 5초 동안의 데이터만 유지 (3초 평균 계산을 위해 여유 있게 5초)
+    const fiveSecondsAgo = now - 5000;
+    window._recentPowerBuffer = window._recentPowerBuffer.filter(entry => entry.timestamp > fiveSecondsAgo);
   }
 
   // Average Power 등 다른 필드들은 필요한 만큼 스킵/파싱 추가…
@@ -857,6 +859,36 @@ function notifyChildWindows(field, value) {
   }
 }
 
+/**
+ * 최근 3초 동안의 파워값 평균 계산
+ * @returns {number} 3초 평균 파워값 (W)
+ */
+function get3SecondAveragePower() {
+  if (!window._recentPowerBuffer || window._recentPowerBuffer.length === 0) {
+    // 버퍼가 없거나 비어있으면 현재 파워값 반환
+    return Math.round(window.liveData?.power || 0);
+  }
+  
+  const now = Date.now();
+  const threeSecondsAgo = now - 3000; // 3초 전
+  
+  // 최근 3초 동안의 파워값만 필터링
+  const recentPowers = window._recentPowerBuffer
+    .filter(entry => entry.timestamp > threeSecondsAgo)
+    .map(entry => entry.power);
+  
+  if (recentPowers.length === 0) {
+    // 최근 3초 동안 데이터가 없으면 현재 파워값 반환
+    return Math.round(window.liveData?.power || 0);
+  }
+  
+  // 평균 계산
+  const sum = recentPowers.reduce((acc, power) => acc + power, 0);
+  const average = Math.round(sum / recentPowers.length);
+  
+  return average;
+}
+
 // 전역 export
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
@@ -865,3 +897,4 @@ window.handlePowerMeterData = handlePowerMeterData;
 window.handleTrainerData = handleTrainerData;
 window.connectHeartRate = connectHeartRate;
 window.notifyChildWindows = notifyChildWindows; // 자식 창 알림 함수도 노출
+window.get3SecondAveragePower = get3SecondAveragePower; // 3초 평균 파워 계산 함수 노출

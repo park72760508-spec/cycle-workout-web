@@ -1053,7 +1053,9 @@ function updateDashboard(data = null) {
     const cadence = Number(window.liveData?.cadence || data?.cadence || data?.rpm || 0);
     const cadenceEl = document.getElementById('ui-cadence');
     if (cadenceEl) {
-        cadenceEl.textContent = Math.round(cadence);
+        // cadence가 0이거나 유효하지 않으면 확실히 0으로 표시
+        const displayCadence = (cadence > 0 && !isNaN(cadence)) ? Math.round(cadence) : 0;
+        cadenceEl.textContent = displayCadence;
     }
     
     // HEART RATE 표시 (Bluetooth 디바이스에서 받은 값)
