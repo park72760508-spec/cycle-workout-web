@@ -930,7 +930,9 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
       }
     } else if (typeof drawSegmentGraph === 'function') {
       // 기본 drawSegmentGraph 함수 사용하되, canvas 크기를 제한
-      drawSegmentGraph(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas');
+      // 경과시간 전달하여 마스코트 위치 계산
+      const elapsedTime = window.bluetoothCoachState.totalElapsedTime || 0;
+      drawSegmentGraph(workout.segments, currentSegmentIndex, 'bluetoothCoachSegmentGraphCanvas', elapsedTime);
       
       // Canvas 크기를 전광판에 맞게 조정
       canvas.style.maxWidth = `${maxWidth}px`;
@@ -1709,8 +1711,13 @@ function startBluetoothCoachTrainingTimer() {
     }
   }
   
-  // 랩 카운트다운 업데이트
+  // 랩 카운트다운 업데이트 (항상 호출)
   updateBluetoothCoachLapTime();
+  
+  // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트를 위해)
+  if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.trainingState === 'running') {
+    updateWorkoutSegmentGraph();
+  }
   
   if (window.bluetoothCoachState.trainingState === 'running') {
     setTimeout(startBluetoothCoachTrainingTimer, 1000);

@@ -1734,11 +1734,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     }
   }
   
-  // 개인 대시보드 및 모바일 대시보드 마스코트 그리기
-  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph') {
+  // 개인 대시보드 및 모바일 대시보드, Bluetooth Coach 대시보드 마스코트 그리기
+  if (canvasId === 'individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'bluetoothCoachSegmentGraphCanvas') {
     // 경과시간 가져오기 (함수 파라미터 또는 전역 변수)
-    // elapsedTime이 undefined인 경우를 대비하여 명시적으로 확인
-    const currentElapsedTime = (elapsedTime !== null && elapsedTime !== undefined) ? elapsedTime : (window.lastElapsedTime || 0);
+    let currentElapsedTime = 0;
+    if (canvasId === 'bluetoothCoachSegmentGraphCanvas') {
+      // Bluetooth Coach의 경우 bluetoothCoachState에서 경과시간 가져오기
+      currentElapsedTime = (window.bluetoothCoachState && window.bluetoothCoachState.totalElapsedTime) ? window.bluetoothCoachState.totalElapsedTime : 0;
+    } else {
+      // 개인 대시보드 및 모바일 대시보드의 경우 함수 파라미터 또는 전역 변수 사용
+      currentElapsedTime = (elapsedTime !== null && elapsedTime !== undefined) ? elapsedTime : (window.lastElapsedTime || 0);
+    }
     
     // 경과시간/총시간 비율 계산
     const progressRatio = totalSeconds > 0 ? Math.min(1, Math.max(0, currentElapsedTime / totalSeconds)) : 0;
