@@ -2225,48 +2225,6 @@ function updatePairingModalWithSavedData(powerMeter) {
 }
 
 /**
- * 페어링 모달의 USB 상태 업데이트
- */
-async function updatePairingModalUSBStatus() {
-  // 각 탭의 USB 상태 업데이트
-  const statusIds = [
-    { status: 'trainerAntUSBStatus', icon: 'trainerAntUSBStatusIcon', text: 'trainerAntUSBStatusText' },
-    { status: 'powerAntUSBStatus', icon: 'powerAntUSBStatusIcon', text: 'powerAntUSBStatusText' },
-    { status: 'heartAntUSBStatus', icon: 'heartAntUSBStatusIcon', text: 'heartAntUSBStatusText' }
-  ];
-  
-  const isConnected = window.antState && window.antState.usbDevice && window.antState.usbDevice.opened;
-  
-  statusIds.forEach(({ status, icon, text }) => {
-    const statusEl = document.getElementById(status);
-    const iconEl = document.getElementById(icon);
-    const textEl = document.getElementById(text);
-    
-    if (statusEl && iconEl && textEl) {
-      if (isConnected) {
-        iconEl.style.background = '#28a745';
-        textEl.textContent = 'USB 수신기 연결됨';
-      } else {
-        iconEl.style.background = '#999';
-        textEl.textContent = 'USB 수신기 미연결';
-      }
-    }
-  });
-  
-  // USB 상태 확인 함수가 있으면 호출
-  if (typeof checkANTUSBStatus === 'function') {
-    await checkANTUSBStatus();
-    // 상태 업데이트 후 다시 UI 업데이트
-    setTimeout(updatePairingModalUSBStatus, 500);
-  }
-  
-  // 수신기 활성화 버튼 상태 업데이트 (표시등)
-  if (typeof updateReceiverButtonStatus === 'function') {
-    updateReceiverButtonStatus();
-  }
-}
-
-/**
  * 파워계 페어링 모달 닫기
  */
 function closePowerMeterPairingModal() {
@@ -3705,14 +3663,6 @@ function savePowerMeterPairing() {
     if (typeof showToast === 'function') {
       showToast('사용자가 선택되었습니다.');
     }
-  } else if (tabName === 'trainer' || tabName === 'power' || tabName === 'heart') {
-    // 디바이스 페어링 탭은 제거됨 (Firebase devices 정보를 사용)
-    // 디바이스 정보는 bluetoothIndividual.js에서 자동으로 저장됨
-    if (typeof showToast === 'function') {
-      showToast('디바이스 연결은 Bluetooth 개인훈련 대시보드에서 진행해주세요.');
-    }
-    return;
-  }
 }
 
 /**
