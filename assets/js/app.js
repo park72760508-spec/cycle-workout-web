@@ -13552,7 +13552,10 @@ function startMobileTrainingTimerLoop() {
     }
     
     if (mts.paused) {
-      // 일시정지 중이면 스킵
+      // 일시정지 중이면 pausedAtMs 업데이트만 하고 스킵
+      if (!mts.pausedAtMs) {
+        mts.pausedAtMs = Date.now();
+      }
       return;
     }
     
@@ -13580,8 +13583,14 @@ function startMobileTrainingTimerLoop() {
       mts.elapsedSec = newElapsedSec;
     }
     
-    // 현재 세그 경과초 계산
-    const cumStart = getCumulativeStartSec(mts.segIndex);
+    // 현재 세그 경과초 계산 (모바일 전용 - 직접 계산)
+    let cumStart = 0;
+    for (let i = 0; i < mts.segIndex; i++) {
+      const seg = w.segments[i];
+      if (seg) {
+        cumStart += segDurationSec(seg);
+      }
+    }
     mts.segElapsedSec = Math.max(0, mts.elapsedSec - cumStart);
     
     // 세그먼트 정보
@@ -13647,7 +13656,15 @@ function startMobileTrainingTimerLoop() {
     
     // 세그먼트 경계 통과 → 다음 세그먼트로 전환
     const prevSegIndex = mts._lastProcessedSegIndex ?? currentSegIndex;
-    const segEndAtSec = getCumulativeStartSec(currentSegIndex) + segDur;
+    // 모바일 전용 - 직접 계산 (getCumulativeStartSec는 Indoor Training 전용)
+    let segStartAtSec = 0;
+    for (let i = 0; i < currentSegIndex; i++) {
+      const seg = w.segments[i];
+      if (seg) {
+        segStartAtSec += segDurationSec(seg);
+      }
+    }
+    const segEndAtSec = segStartAtSec + segDur;
     const shouldTransition = (mts.segElapsedSec >= segDur || mts.elapsedSec >= segEndAtSec) && prevSegIndex === currentSegIndex;
     
     if (shouldTransition) {
@@ -13679,6 +13696,57 @@ function startMobileTrainingTimerLoop() {
     }
     
   }, 1000); // 1초마다 실행
+}
+
+/**
+ * 모바일 전용 일시정지/재개 함수 (Firebase와 무관, 독립적으로 동작)
+ */
+function setMobilePaused(isPaused) {
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return;
+  }
+  
+  const mts = window.mobileTrainingState;
+  if (!mts) {
+    console.warn('[Mobile Dashboard] mobileTrainingState가 없습니다.');
+    return;
+  }
+  
+  const wantPause = !!isPaused;
+  mts.paused = wantPause;
+  
+  const nowMs = Date.now();
+  
+  if (wantPause) {
+    // 일시정지 시작
+    if (!mts.pausedAtMs) {
+      mts.pausedAtMs = nowMs;
+    }
+  } else {
+    // 일시정지 해제 → 누적 일시정지 시간 더해주기
+    if (mts.pausedAtMs) {
+      mts.pauseAccumMs += (nowMs - mts.pausedAtMs);
+      mts.pausedAtMs = null;
+    }
+  }
+  
+  // 버튼 이미지 업데이트
+  const btnImg = document.getElementById('imgMobileToggle');
+  if (btnImg) {
+    btnImg.setAttribute('href', wantPause ? 'assets/img/play0.png' : 'assets/img/pause0.png');
+  }
+  
+  if (typeof showToast === "function") {
+    showToast(wantPause ? "일시정지됨" : "재개됨");
+  }
+  
+  console.log('[Mobile Dashboard] 일시정지 상태 변경:', wantPause ? '일시정지' : '재개');
 }
 
 /**
@@ -13823,25 +13891,13 @@ function handleMobileToggle() {
   const isCurrentlyPaused = ts.paused;
 
   if (isCurrentlyPaused) {
-    // [현재 일시정지 상태] -> 재개(Resume)
-    if (typeof setPaused === 'function') {
-      setPaused(false);
-      // setPaused 함수 내부에서 이미 버튼 이미지가 업데이트되지만, 추가로 동기화
-      // SVG <image> 요소는 href 속성 사용
-      if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
-    } else if(btnImg) {
-      btnImg.setAttribute('href', 'assets/img/pause0.png'); // 움직이는 상태이므로 멈춤 아이콘 표시
-    }
+    // [현재 일시정지 상태] -> 재개(Resume) - 모바일 전용 처리
+    setMobilePaused(false);
+    if(btnImg) btnImg.setAttribute('href', 'assets/img/pause0.png');
   } else {
-    // [현재 실행 상태] -> 일시정지(Pause)
-    if (typeof setPaused === 'function') {
-      setPaused(true);
-      // setPaused 함수 내부에서 이미 버튼 이미지가 업데이트되지만, 추가로 동기화
-      // SVG <image> 요소는 href 속성 사용
-      if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
-    } else if(btnImg) {
-      btnImg.setAttribute('href', 'assets/img/play0.png'); // 멈췄으므로 재생 아이콘 표시
-    }
+    // [현재 실행 상태] -> 일시정지(Pause) - 모바일 전용 처리
+    setMobilePaused(true);
+    if(btnImg) btnImg.setAttribute('href', 'assets/img/play0.png');
   }
   
   // 추가 안전 장치: syncMobileToggleIcon 호출하여 버튼 상태 동기화
