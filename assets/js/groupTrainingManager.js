@@ -8112,6 +8112,52 @@ window.startTrainingFromMonitoring = startTrainingFromMonitoring;
 window.getParticipantLiveDataForRoom = getParticipantLiveDataForRoom;
 window.startRoomMonitoringCoaching = startRoomMonitoringCoaching;
 
+// 디바이스 연결 방식 상태 저장 (전역 변수)
+if (!window.deviceConnectionMode) {
+  window.deviceConnectionMode = 'ant'; // 기본값은 ANT+
+}
+
+/**
+ * 디바이스 연결 스위치 토글 이벤트 설정
+ */
+function setupDeviceConnectionSwitch() {
+  const switchContainer = document.getElementById('deviceConnectionSwitch');
+  const switchSlider = document.getElementById('switchSlider');
+  
+  if (!switchContainer || !switchSlider) {
+    // 모달이 열려있지 않거나 요소가 아직 생성되지 않았을 수 있음
+    return;
+  }
+  
+  // 스위치 컨테이너 클릭 이벤트
+  switchContainer.addEventListener('click', function(e) {
+    e.stopPropagation();
+    
+    // 현재 상태 확인
+    const currentMode = window.deviceConnectionMode || 'ant';
+    const newMode = currentMode === 'ant' ? 'bluetooth' : 'ant';
+    
+    // 슬라이더 위치 업데이트
+    if (newMode === 'bluetooth') {
+      switchSlider.style.left = '0%';
+      window.deviceConnectionMode = 'bluetooth';
+    } else {
+      switchSlider.style.left = '50%';
+      window.deviceConnectionMode = 'ant';
+    }
+    
+    console.log('[Device Switch] 모드 변경:', currentMode, '→', newMode);
+  });
+  
+  // 초기 슬라이더 위치 설정 (저장된 모드 또는 기본값)
+  const savedMode = window.deviceConnectionMode || 'ant';
+  if (savedMode === 'bluetooth') {
+    switchSlider.style.left = '0%';
+  } else {
+    switchSlider.style.left = '50%';
+  }
+}
+
 /**
  * Coach 버튼 클릭 시 디바이스 연결 방식에 따라 적절한 화면으로 이동
  */
@@ -8127,40 +8173,8 @@ window.openCoachModeFromModal = function openCoachModeFromModal(event) {
     modal.classList.add('hidden');
   }
   
-  // 디바이스 연결 방식 확인 (스위치 슬라이더 위치)
-  const switchSlider = document.getElementById('switchSlider');
-  let deviceMode = 'ant'; // 기본값은 ANT+
-  
-  if (switchSlider) {
-    // computed style로 실제 left 값 확인
-    const computedStyle = window.getComputedStyle(switchSlider);
-    const sliderLeft = switchSlider.style.left || computedStyle.left;
-    
-    // left 값 파싱 (px 또는 %)
-    let leftValue = 0;
-    if (sliderLeft) {
-      if (sliderLeft.includes('%')) {
-        leftValue = parseFloat(sliderLeft);
-      } else if (sliderLeft.includes('px')) {
-        // px 값을 %로 변환 (스위치 너비가 200px이므로)
-        const switchWidth = 200;
-        leftValue = (parseFloat(sliderLeft) / switchWidth) * 100;
-      } else {
-        leftValue = parseFloat(sliderLeft) || 0;
-      }
-    }
-    
-    // left가 0%에 가까우면 Bluetooth, 50% 이상이면 ANT+
-    if (leftValue < 25) { // 0%에 가까운 경우 (여유값 25%까지 허용)
-      deviceMode = 'bluetooth';
-    } else {
-      deviceMode = 'ant';
-    }
-    
-    console.log('[Coach Modal] 슬라이더 위치:', sliderLeft, '→ leftValue:', leftValue, '→ 모드:', deviceMode);
-  } else {
-    console.warn('[Coach Modal] 스위치 슬라이더를 찾을 수 없습니다. 기본값(ANT+)을 사용합니다.');
-  }
+  // 디바이스 연결 방식 확인 (전역 변수 사용)
+  const deviceMode = window.deviceConnectionMode || 'ant';
   
   console.log('[Coach Modal] 디바이스 연결 방식:', deviceMode);
   
@@ -8187,6 +8201,47 @@ window.openCoachModeFromModal = function openCoachModeFromModal(event) {
     }
   }
 };
+
+/**
+ * Training Room 모달이 열릴 때 스위치 이벤트 설정
+ * 모달이 동적으로 표시될 때마다 호출되어야 함
+ */
+function initializeTrainingRoomModal() {
+  // 스위치 이벤트 설정 (약간의 지연을 두어 DOM이 완전히 렌더링된 후 실행)
+  setTimeout(() => {
+    setupDeviceConnectionSwitch();
+  }, 100);
+}
+
+// 모달이 표시될 때 자동으로 스위치 이벤트 설정
+// MutationObserver를 사용하여 모달이 표시될 때 감지
+if (typeof MutationObserver !== 'undefined') {
+  const modalObserver = new MutationObserver(function(mutations) {
+    const modal = document.getElementById('trainingRoomModal');
+    if (modal && !modal.classList.contains('hidden')) {
+      initializeTrainingRoomModal();
+    }
+  });
+  
+  // 초기 실행 시 모달이 이미 열려있으면 설정
+  const modal = document.getElementById('trainingRoomModal');
+  if (modal && !modal.classList.contains('hidden')) {
+    initializeTrainingRoomModal();
+  }
+  
+  // 모달 DOM 변경 감지 시작 (나중에 모달이 동적으로 생성될 수 있으므로 body 전체 관찰)
+  setTimeout(() => {
+    const targetNode = document.body;
+    if (targetNode) {
+      modalObserver.observe(targetNode, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class']
+      });
+    }
+  }, 1000);
+}
 window.forceStopRoom = forceStopRoom;
 window.cleanupExpiredRooms = cleanupExpiredRooms;
 window.emergencyStopAllRooms = emergencyStopAllRooms;
