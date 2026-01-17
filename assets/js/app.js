@@ -1077,6 +1077,17 @@ function stopSegmentCountdown() {
 
 // 세그먼트 건너뛰기 시에도 카운트다운 정리
 function skipCurrentSegment() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   try {
     const w = window.currentWorkout;
     if (!w || !w.segments) {
@@ -1260,6 +1271,18 @@ window.trainingMetrics = trainingMetrics;
 
 // 훈련화면의 건너뛰기에서 활용 >>> 새 세그먼트의 누적 시작 시각(초) 구하기
 function getCumulativeStartSec(index) {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    // Bluetooth Coach에서는 bluetoothCoachState.currentWorkout을 사용해야 함
+    return 0;
+  }
+  
   const w = window.currentWorkout;
   if (!w || !Array.isArray(w.segments)) return 0;
 
@@ -1311,6 +1334,17 @@ function getSegmentType(i) {
 
 // 세그 평균 파워 → 달성도(%) → 색상 등급 → 타임라인에 적용
 function finalizeSegmentCompletion(i, avgW) {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   try {
     // 휴식/쿨다운은 회색 고정
     const segType = getSegmentType(i);
@@ -1454,6 +1488,17 @@ function formatMMSS(sec) {
 // 훈련 상태 => 타임라인 생성 (initializeTraining 내부에서 호출)
 // 훈련 상태 => 타임라인 생성 (initializeTraining 내부에서 호출)
 function createTimeline() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   const cont = document.getElementById("timelineSegments");
   const w = window.currentWorkout;
   if (!cont || !w || !Array.isArray(w.segments)) return;
@@ -1566,6 +1611,17 @@ function updateTimelineByTime() {
 
 // 훈련 상태 => 현재 세그먼트 전환 시 색/타이틀 업데이트
 function onSegmentChanged(newIndex){
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   const seg = currentWorkout.segments[newIndex];
   if (!seg) return;
   const ftp = currentUser?.ftp || 200;
@@ -2109,6 +2165,17 @@ function updateTimeUI() {
 
 // 훈련 상태 ==> 세그먼트 전환 + 타겟파워 갱신 
 function applySegmentTarget(i) {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   try {
     const w   = window.currentWorkout;
     const ftp = Number(window.currentUser?.ftp) || 200;
@@ -3607,6 +3674,17 @@ window.updateTrainingDisplay = function () {
 
 // 그래프 하단 시간 표시 업데이트 함수
 function updateChartTimeLabels() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   try {
     // 시간 포맷팅 함수 (초를 MM:SS 형식으로)
     function formatMMSS(seconds) {
@@ -3881,6 +3959,17 @@ window.goBackToPreviousScreen = goBackToPreviousScreen;
 // 훈련 화면 상단에 사용자 정보가 즉시 표시
 // 사용자 정보 렌더 + W/kg 네온(정적) 적용
 function renderUserInfo() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   try {
     const box = document.getElementById("userInfo");
     if (!box) return;
@@ -4928,6 +5017,17 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // 5. TSS/칼로리 업데이트 함수 분리
 function updateTrainingMetrics() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   try {
     const ftp = Number(window.currentUser?.ftp) || 200;
     const p = Math.max(0, Number(window.liveData?.power) || 0);
@@ -9508,6 +9608,17 @@ window.closeRPEModal = closeRPEModal;
  * 강도 조절 슬라이더 초기화 및 이벤트 핸들러
  */
 function initializeIntensitySlider() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   const slider = document.getElementById('intensityAdjustmentSlider');
   const valueDisplay = document.getElementById('intensityAdjustmentValue');
   

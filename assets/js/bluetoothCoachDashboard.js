@@ -20,7 +20,10 @@ window.bluetoothCoachState = {
   scoreboardResizeObserver: null, // 전광판 컨테이너 ResizeObserver
   segmentCountdownActive: false, // 세그먼트 카운트다운 활성화 여부
   firebaseSubscriptions: {}, // Firebase 구독 참조 저장
-  maxTrackCount: 10 // 기본 최대 트랙 수
+  maxTrackCount: 10, // 기본 최대 트랙 수
+  countdownTriggered: [], // 세그먼트별 카운트다운 트리거 상태
+  _countdownFired: {}, // 세그먼트별 발화 기록
+  _prevRemainMs: {} // 세그먼트별 이전 남은 ms
 };
 
 // 파워계 데이터 구조 (Indoor Training과 동일)
@@ -1631,9 +1634,10 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
       segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0
     });
     
-    // 선택된 워크아웃 저장 (Bluetooth Coach State)
+    // 선택된 워크아웃 저장 (Bluetooth Coach State만 사용, window.currentWorkout은 덮어쓰지 않음)
     window.bluetoothCoachState.currentWorkout = loadedWorkout;
-    window.currentWorkout = loadedWorkout; // 전역 변수도 업데이트
+    // 주의: window.currentWorkout은 Indoor Training에서 사용하므로 덮어쓰지 않음
+    // Bluetooth Coach는 window.bluetoothCoachState.currentWorkout만 사용
     
     // Firebase에 workoutPlan 및 workoutId 저장
     if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
@@ -2000,6 +2004,15 @@ function startBluetoothCoachTraining() {
   window.bluetoothCoachState.segmentStartTime = Date.now();
   window.bluetoothCoachState.segmentElapsedTime = 0;
   
+  // 세그먼트별 카운트다운 트리거 상태 초기화
+  if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.currentWorkout.segments) {
+    const segments = window.bluetoothCoachState.currentWorkout.segments;
+    window.bluetoothCoachState.segmentCountdownActive = false;
+    window.bluetoothCoachState.countdownTriggered = Array(segments.length).fill(false);
+    window.bluetoothCoachState._countdownFired = {};
+    window.bluetoothCoachState._prevRemainMs = {};
+  }
+  
   // Firebase에 훈련 시작 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
@@ -2059,6 +2072,11 @@ function pauseBluetoothCoachTraining() {
   window.bluetoothCoachState.trainingState = 'paused';
   window.bluetoothCoachState.pausedTime = Date.now();
   
+  // 활성 카운트다운 정지
+  if (window.bluetoothCoachState.segmentCountdownActive) {
+    stopBluetoothCoachSegmentCountdown();
+  }
+  
   // Firebase에 일시정지 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
@@ -2105,6 +2123,11 @@ function resumeBluetoothCoachTraining() {
 function stopBluetoothCoachTraining() {
   window.bluetoothCoachState.trainingState = 'idle';
   
+  // 활성 카운트다운 정지
+  if (window.bluetoothCoachState.segmentCountdownActive) {
+    stopBluetoothCoachSegmentCountdown();
+  }
+  
   // Firebase에 종료 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
@@ -2122,6 +2145,10 @@ function stopBluetoothCoachTraining() {
   window.bluetoothCoachState.currentSegmentIndex = 0;
   window.bluetoothCoachState.segmentStartTime = null;
   window.bluetoothCoachState.segmentElapsedTime = 0;
+  window.bluetoothCoachState.segmentCountdownActive = false;
+  window.bluetoothCoachState.countdownTriggered = [];
+  window.bluetoothCoachState._countdownFired = {};
+  window.bluetoothCoachState._prevRemainMs = {};
   
   // 버튼 상태 업데이트
   updateBluetoothCoachTrainingButtons();
@@ -2142,8 +2169,18 @@ function skipCurrentBluetoothCoachSegmentTraining() {
     return;
   }
   
-  const segments = window.bluetoothCoachState.currentWorkout.segments;
+  // 활성 카운트다운 정지
+  if (window.bluetoothCoachState.segmentCountdownActive) {
+    stopBluetoothCoachSegmentCountdown();
+  }
+  
+  // 해당 세그먼트의 카운트다운 트리거 상태도 리셋
   const currentIndex = window.bluetoothCoachState.currentSegmentIndex;
+  if (window.bluetoothCoachState.countdownTriggered && currentIndex < window.bluetoothCoachState.countdownTriggered.length) {
+    window.bluetoothCoachState.countdownTriggered[currentIndex] = true; // 건너뛴 것으로 표시
+  }
+  
+  const segments = window.bluetoothCoachState.currentWorkout.segments;
   
   if (currentIndex >= segments.length - 1) {
     // 마지막 세그먼트이면 워크아웃 종료
@@ -2155,6 +2192,16 @@ function skipCurrentBluetoothCoachSegmentTraining() {
   window.bluetoothCoachState.currentSegmentIndex = currentIndex + 1;
   window.bluetoothCoachState.segmentStartTime = Date.now();
   window.bluetoothCoachState.segmentElapsedTime = 0;
+  
+  // 카운트다운 상태 초기화 (다음 세그먼트를 위해)
+  window.bluetoothCoachState.segmentCountdownActive = false;
+  const nextKey = String(window.bluetoothCoachState.currentSegmentIndex);
+  if (window.bluetoothCoachState._countdownFired[nextKey]) {
+    delete window.bluetoothCoachState._countdownFired[nextKey];
+  }
+  if (window.bluetoothCoachState._prevRemainMs[nextKey]) {
+    delete window.bluetoothCoachState._prevRemainMs[nextKey];
+  }
   
   // Firebase에 세그먼트 인덱스 업데이트
   if (typeof db !== 'undefined') {
@@ -2231,7 +2278,7 @@ function startBluetoothCoachTrainingTimer() {
     }).catch(e => console.warn('[Bluetooth Coach] 경과 시간 업데이트 실패:', e));
   }
   
-  // 세그먼트 전환 체크 (Indoor Training과 동일한 로직)
+  // 세그먼트 전환 체크 및 카운트다운 로직 (Indoor Training과 동일한 로직)
   if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.currentWorkout.segments) {
     const segments = window.bluetoothCoachState.currentWorkout.segments;
     const currentIndex = window.bluetoothCoachState.currentSegmentIndex;
@@ -2241,6 +2288,69 @@ function startBluetoothCoachTrainingTimer() {
       const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
       const segmentElapsed = window.bluetoothCoachState.segmentElapsedTime;
       const remaining = segmentDuration - segmentElapsed;
+      
+      // 5초 카운트다운 로직 (Indoor Training과 동일)
+      if (remaining > 0) {
+        // 다음 세그(마지막이면 null)
+        const nextSeg = (currentIndex < segments.length - 1) ? segments[currentIndex + 1] : null;
+        
+        const state = window.bluetoothCoachState;
+        state._countdownFired = state._countdownFired || {};   // 세그먼트별 발화 기록
+        state._prevRemainMs = state._prevRemainMs || {};   // 세그먼트별 이전 남은 ms
+        const key = String(currentIndex);
+        
+        // 남은 ms 계산
+        const remainMsPrev = state._prevRemainMs[key] ?? Math.round(remaining * 1000); // 바로 직전 남은 ms
+        const remainMsNow = Math.round(remaining * 1000);           // 현재 남은 ms
+        
+        // Edge-Driven 카운트다운: 6초(표시 5) → 1초(표시 0)에서 끝
+        function maybeFire(n) {
+          const firedMap = state._countdownFired[key] || {};
+          if (firedMap[n]) return;
+        
+          // 경계: 6→5, 5→4, ..., 2→1 은 (n+1)*1000ms, 1→0 은 1000ms
+          const boundary = (n > 0) ? (n + 1) * 1000 : 1000;
+          const crossed = (remainMsPrev > boundary && remainMsNow <= boundary);
+          if (!crossed) return;
+        
+          // 오버레이 표시 시작(6초 시점에 "5" 표시)
+          if (n === 5 && !state.segmentCountdownActive && nextSeg) {
+            startBluetoothCoachSegmentCountdown(5, nextSeg); // 오버레이 켜고 5 표시 + 짧은 비프
+          } else if (state.segmentCountdownActive) {
+            // 진행 중이면 숫자 업데이트만(내부 타이머 없음)
+            BluetoothCoachCountdownDisplay.render(n);
+            
+            // 4, 3, 2, 1초일 때 벨소리 재생
+            if (n > 0 && typeof playBeep === 'function') {
+              playBeep(880, 120, 0.25);
+            }
+          }
+        
+          // 0은 "세그먼트 종료 1초 전"에 표시 + 강조 벨소리, 그리고 오버레이 닫기 예약
+          if (n === 0) {
+            // 강조 벨소리 (조금 더 강한 톤)
+            if (typeof playBeep === 'function') {
+              playBeep(1500, 700, 0.35, "square");
+            }
+            // 오버레이는 약간의 여유를 두고 닫기
+            BluetoothCoachCountdownDisplay.finish(800);
+            state.segmentCountdownActive = false;
+          }
+        
+          state._countdownFired[key] = { ...firedMap, [n]: true };
+        }
+        
+        // 5→0 모두 확인(틱이 건너뛰어도 놓치지 않음)
+        maybeFire(5);
+        maybeFire(4);
+        maybeFire(3);
+        maybeFire(2);
+        maybeFire(1);
+        maybeFire(0);
+        
+        // 다음 비교를 위해 현재 값 저장
+        state._prevRemainMs[key] = remainMsNow;
+      }
       
       // 세그먼트 시간이 지나면 다음 세그먼트로 이동
       if (segmentElapsed >= segmentDuration) {
@@ -2258,6 +2368,16 @@ function startBluetoothCoachTrainingTimer() {
           window.bluetoothCoachState.currentSegmentIndex = currentIndex + 1;
           window.bluetoothCoachState.segmentStartTime = Date.now();
           window.bluetoothCoachState.segmentElapsedTime = 0;
+          
+          // 카운트다운 상태 초기화 (다음 세그먼트를 위해)
+          window.bluetoothCoachState.segmentCountdownActive = false;
+          const nextKey = String(window.bluetoothCoachState.currentSegmentIndex);
+          if (window.bluetoothCoachState._countdownFired[nextKey]) {
+            delete window.bluetoothCoachState._countdownFired[nextKey];
+          }
+          if (window.bluetoothCoachState._prevRemainMs[nextKey]) {
+            delete window.bluetoothCoachState._prevRemainMs[nextKey];
+          }
           
           // Firebase에 세그먼트 인덱스 업데이트
           if (typeof db !== 'undefined') {

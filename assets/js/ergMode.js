@@ -38,6 +38,17 @@ const ERG_OP_CODES = {
  * ERG 모드 UI 초기화 (훈련 화면 진입 시 호출)
  */
 function initializeErgMode() {
+  // Indoor Training 화면에서만 동작하도록 체크
+  const trainingScreen = document.getElementById('trainingScreen');
+  const isIndoorTrainingActive = trainingScreen && 
+    (trainingScreen.classList.contains('active') || 
+     window.getComputedStyle(trainingScreen).display !== 'none');
+  
+  if (!isIndoorTrainingActive) {
+    // Indoor Training 화면이 아니면 실행하지 않음 (Bluetooth Coach와 분리)
+    return;
+  }
+  
   const ergContainer = document.getElementById('ergModeContainer');
   const ergToggle = document.getElementById('ergModeToggle');
   const ergStatus = document.getElementById('ergModeStatus');
