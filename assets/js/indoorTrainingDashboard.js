@@ -1404,6 +1404,39 @@ window.addEventListener('load', () => {
 /**
  * 파워계 연결 상태 업데이트 (데이터 수신과 무관하게 상태만 업데이트)
  */
+// Firebase에서 디바이스 정보 가져오기 (캐시 사용)
+let firebaseDevicesCache = {};
+let firebaseDevicesCacheTimestamp = 0;
+const FIREBASE_DEVICES_CACHE_TTL = 2000; // 2초 캐시
+
+async function getFirebaseDevicesForTrack(trackId) {
+  if (typeof db === 'undefined') return null;
+  
+  const sessionId = getSessionId();
+  if (!sessionId) return null;
+  
+  // 캐시 확인 (2초 이내)
+  const now = Date.now();
+  if (firebaseDevicesCache[trackId] && (now - firebaseDevicesCacheTimestamp) < FIREBASE_DEVICES_CACHE_TTL) {
+    return firebaseDevicesCache[trackId];
+  }
+  
+  try {
+    const deviceRef = db.ref(`sessions/${sessionId}/devices/${trackId}`);
+    const snapshot = await deviceRef.once('value');
+    const deviceData = snapshot.val();
+    
+    // 캐시 업데이트
+    firebaseDevicesCache[trackId] = deviceData;
+    firebaseDevicesCacheTimestamp = now;
+    
+    return deviceData;
+  } catch (error) {
+    console.error(`[Indoor Training] Firebase devices 정보 가져오기 실패 (트랙 ${trackId}):`, error);
+    return null;
+  }
+}
+
 function updatePowerMeterConnectionStatus(powerMeterId) {
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return;
@@ -1411,98 +1444,130 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
   const statusEl = document.getElementById(`status-${powerMeterId}`);
   const statusTextEl = document.getElementById(`status-text-${powerMeterId}`);
   
-  // 조건 확인
-  const hasUser = !!(powerMeter.userId);
-  const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
-  const hasPowerDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId);
-  const hasHeartRateDevice = !!(powerMeter.heartRateDeviceId);
-  const hasAnyDevice = hasPowerDevice || hasHeartRateDevice; // 파워메터/스마트로라/심박계 중 하나라도 있으면
-  const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
+  // Firebase에서 디바이스 정보 가져오기 (비동기)
+  getFirebaseDevicesForTrack(powerMeterId).then(deviceData => {
+    // Firebase devices 정보가 있으면 사용, 없으면 기존 방식 사용
+    const smartTrainerId = deviceData?.smartTrainerId || powerMeter.trainerDeviceId || null;
+    const powerMeterId_fb = deviceData?.powerMeterId || powerMeter.deviceId || null;
+    const heartRateId = deviceData?.heartRateId || powerMeter.heartRateDeviceId || null;
+    
+    // 조건 확인
+    const hasUser = !!(powerMeter.userId);
+    const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
+    const hasPowerDevice = !!(powerMeterId_fb || smartTrainerId);
+    const hasHeartRateDevice = !!(heartRateId);
+    const hasAnyDevice = hasPowerDevice || hasHeartRateDevice; // 파워메터/스마트로라/심박계 중 하나라도 있으면
+    const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
   
-  let statusClass = 'disconnected';
-  let statusText = '미연결';
-  
-  // 연결 상태 판단 (새로운 로직)
-  if (!hasUser) {
-    // 사용자 미지정
-    statusClass = 'disconnected';
-    statusText = '미연결';
-    powerMeter.connected = false;
-  } else if (hasUser && hasAnyDevice) {
-    // 사용자 지정 + 파워미터/스마트로라/심박계 정보 저장된 상태
-    // "준비됨" 상태는 hasData 체크 없이 표시 (화면 재접속 시에도 올바르게 표시)
-    if (hasReceiver && hasData) {
-      // 수신기 연결 + 데이터 수신 중
-      statusClass = 'connected';
-      statusText = '연결됨';
-      powerMeter.connected = true;
+    let statusClass = 'disconnected';
+    let statusText = '미연결';
+    
+    // 연결 상태 판단 (새로운 로직)
+    if (!hasUser) {
+      // 사용자 미지정
+      statusClass = 'disconnected';
+      statusText = '미연결';
+      powerMeter.connected = false;
+    } else if (hasUser && hasAnyDevice) {
+      // 사용자 지정 + 파워미터/스마트로라/심박계 정보 저장된 상태
+      // "준비됨" 상태는 hasData 체크 없이 표시 (화면 재접속 시에도 올바르게 표시)
+      if (hasReceiver && hasData) {
+        // 수신기 연결 + 데이터 수신 중
+        statusClass = 'connected';
+        statusText = '연결됨';
+        powerMeter.connected = true;
+      } else {
+        // 디바이스 정보는 있지만 수신기 미연결 또는 데이터 미수신
+        // 화면 재접속 시에도 "준비됨"으로 표시되어야 함
+        statusClass = 'ready';
+        statusText = '준비됨';
+        powerMeter.connected = false;
+      }
     } else {
-      // 디바이스 정보는 있지만 수신기 미연결 또는 데이터 미수신
-      // 화면 재접속 시에도 "준비됨"으로 표시되어야 함
-      statusClass = 'ready';
-      statusText = '준비됨';
+      // 사용자 지정만 되어 있고 디바이스 정보 없음
+      statusClass = 'disconnected';
+      statusText = '미연결';
       powerMeter.connected = false;
     }
-  } else {
-    // 사용자 지정만 되어 있고 디바이스 정보 없음
-    statusClass = 'disconnected';
-    statusText = '미연결';
-    powerMeter.connected = false;
-  }
-  
-  // 상태 표시 업데이트
-  const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
-  const statusDotEl = document.getElementById(`status-dot-${powerMeterId}`);
-  
-  if (statusTextEl) {
-    statusTextEl.textContent = statusText;
-  }
-  
-  // 상태 점 표시/숨김 처리
-  if (statusDotEl) {
-    if (statusClass === 'disconnected') {
-      // 미연결 상태: 빨간 원 표시
-      statusDotEl.style.display = 'inline-block';
-      statusDotEl.classList.remove('ready', 'connected');
-      statusDotEl.classList.add('disconnected');
-    } else {
-      // 준비됨 또는 연결됨 상태: 점 숨김
-      statusDotEl.style.display = 'none';
+    
+    // 상태 표시 업데이트
+    const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
+    const statusDotEl = document.getElementById(`status-dot-${powerMeterId}`);
+    
+    if (statusTextEl) {
+      statusTextEl.textContent = statusText;
     }
-  }
-  
-  // 디바이스 아이콘 표시/숨김 처리
-  if (deviceIconsEl) {
-    if (statusClass === 'ready' || statusClass === 'connected') {
-      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (데이터 수신 상태에 따라 개별적으로)
-      deviceIconsEl.style.display = 'inline-flex';
-      updateDeviceIconsWithDataStatus(powerMeterId);
-    } else {
-      // 미연결 상태: 디바이스 아이콘 숨김
-      deviceIconsEl.style.display = 'none';
+    
+    // 상태 점 표시/숨김 처리
+    if (statusDotEl) {
+      if (statusClass === 'disconnected') {
+        // 미연결 상태: 빨간 원 표시
+        statusDotEl.style.display = 'inline-block';
+        statusDotEl.classList.remove('ready', 'connected');
+        statusDotEl.classList.add('disconnected');
+      } else {
+        // 준비됨 또는 연결됨 상태: 점 숨김
+        statusDotEl.style.display = 'none';
+      }
     }
-  }
-  
-  // 속도계 하단 정보창 배경색 업데이트 (데이터 수신 여부에 따라)
-  const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
-  if (infoEl) {
-    // 데이터 수신 여부 확인
-    const hasDataReceived = (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
-    if (hasDataReceived) {
-      // 데이터 수신 중: 연두색
-      infoEl.style.backgroundColor = '#90EE90'; // 연두색
-    } else {
-      // 데이터 수신 없음: 주황색
-      infoEl.style.backgroundColor = '#FFA500'; // 주황색
+    
+    // 디바이스 아이콘 표시/숨김 처리
+    if (deviceIconsEl) {
+      if (statusClass === 'ready' || statusClass === 'connected') {
+        // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (데이터 수신 상태에 따라 개별적으로)
+        deviceIconsEl.style.display = 'inline-flex';
+        updateDeviceIconsWithDataStatus(powerMeterId);
+      } else {
+        // 미연결 상태: 디바이스 아이콘 숨김
+        deviceIconsEl.style.display = 'none';
+      }
     }
-  }
-  
-  // 랩파워 색상 업데이트
-  const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
-  if (segPowerEl) {
-    // 랩파워는 항상 검정색
-    segPowerEl.style.color = '#000000'; // 검정색
-  }
+    
+    // 속도계 하단 정보창 배경색 업데이트 (데이터 수신 여부에 따라)
+    const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
+    if (infoEl) {
+      // 데이터 수신 여부 확인
+      const hasDataReceived = (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
+      if (hasDataReceived) {
+        // 데이터 수신 중: 연두색
+        infoEl.style.backgroundColor = '#90EE90'; // 연두색
+      } else {
+        // 데이터 수신 없음: 주황색
+        infoEl.style.backgroundColor = '#FFA500'; // 주황색
+      }
+    }
+    
+    // 랩파워 색상 업데이트
+    const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
+    if (segPowerEl) {
+      // 랩파워는 항상 검정색
+      segPowerEl.style.color = '#000000'; // 검정색
+    }
+  }).catch(error => {
+    console.error(`[Indoor Training] updatePowerMeterConnectionStatus 오류 (트랙 ${powerMeterId}):`, error);
+    // 오류 시 기존 방식으로 폴백
+    const hasUser = !!(powerMeter.userId);
+    const hasPowerDevice = !!(powerMeter.deviceId || powerMeter.trainerDeviceId);
+    const hasHeartRateDevice = !!(powerMeter.heartRateDeviceId);
+    const hasAnyDevice = hasPowerDevice || hasHeartRateDevice;
+    const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
+    
+    let statusClass = 'disconnected';
+    let statusText = '미연결';
+    
+    if (!hasUser) {
+      statusClass = 'disconnected';
+      statusText = '미연결';
+    } else if (hasUser && hasAnyDevice) {
+      statusClass = 'ready';
+      statusText = '준비됨';
+    }
+    
+    const statusTextEl_fallback = document.getElementById(`status-text-${powerMeterId}`);
+    if (statusTextEl_fallback) {
+      statusTextEl_fallback.textContent = statusText;
+    }
+  });
 }
 
 /**
@@ -1986,6 +2051,33 @@ function openPowerMeterSettings(powerMeterId) {
   
   // 현재 타겟 파워계 ID 저장
   window.currentTargetPowerMeterId = powerMeterId;
+  
+  // Bluetooth Join Session 화면: 인증된 사용자 정보가 있으면 바로 반영
+  if (window.currentUser && window.currentUser.id && window.currentUser.name) {
+    // 모달을 열지 않고 바로 사용자 정보 적용
+    selectSearchedUserForPowerMeter(window.currentUser.id).then(() => {
+      console.log('[Indoor Training] 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 반영 완료');
+      if (typeof showToast === 'function') {
+        showToast(`트랙${powerMeterId}에 ${window.currentUser.name}님이 신청되었습니다.`);
+      }
+    }).catch(error => {
+      console.error('[Indoor Training] 사용자 정보 반영 실패:', error);
+      // 실패 시 모달 열기
+      openPairingModal(powerMeterId);
+    });
+    return;
+  }
+  
+  // 인증된 사용자가 없으면 기존처럼 모달 열기
+  openPairingModal(powerMeterId);
+}
+
+/**
+ * 페어링 모달 열기 (인증 사용자 없는 경우 또는 수동 변경 시)
+ */
+function openPairingModal(powerMeterId) {
+  const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
+  if (!powerMeter) return;
   
   const modal = document.getElementById('powerMeterPairingModal');
   const modalTitle = document.getElementById('powerMeterPairingModalTitle');
@@ -3652,21 +3744,8 @@ function savePowerMeterPairing() {
         return;
       }
       
-      // Device 정보 저장 (트랙번호별) - 모든 탭에서 저장
-      const deviceData = {
-        smartTrainerId: powerMeter.trainerDeviceId || null,
-        powerMeterId: powerMeter.deviceId || null,
-        heartRateId: powerMeter.heartRateDeviceId || null,
-        gear: powerMeter.gear || null,
-        brake: powerMeter.brake || null
-      };
-      
-      const deviceRef = db.ref(`sessions/${sessionId}/devices/${powerMeterId}`);
-      deviceRef.set(deviceData).then(() => {
-        console.log(`[Firebase] Device 저장 완료: 트랙 ${powerMeterId}`, deviceData);
-      }).catch(error => {
-        console.error(`[Firebase] Device 저장 실패:`, error);
-      });
+      // Device 정보는 Firebase에서 가져와서 사용 (저장하지 않음)
+      // 디바이스 정보는 bluetoothIndividual.js에서 자동으로 저장됨
       
       // Users 정보 저장 (트랙번호별) - 사용자 정보가 있을 때만 저장
       if (powerMeter.userId && powerMeter.userName) {
@@ -3734,108 +3813,13 @@ function savePowerMeterPairing() {
     if (typeof showToast === 'function') {
       showToast('사용자가 선택되었습니다.');
     }
-  } else if (tabName === 'trainer') {
-    // 스마트로라 페어링 저장
-    const name = document.getElementById('trainerPairingName')?.value.trim() || '';
-    const deviceId = document.getElementById('trainerDeviceId')?.value.trim() || '';
-    
-    powerMeter.trainerName = name;
-    powerMeter.trainerDeviceId = deviceId;
-    
-    // Firebase에 저장 (devices 정보 업데이트)
-    saveToFirebase();
-    
-    // 저장
-    saveAllPowerMeterPairingsToStorage();
-    
-    // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
-    updatePairingModalWithSavedData(powerMeter);
-    
-    // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
-    updatePowerMeterConnectionStatus(powerMeterId);
-    
-    // 바늘 위치 유지 (현재 파워값으로 업데이트)
-    const currentPower = powerMeter.currentPower || 0;
-    updatePowerMeterNeedle(powerMeterId, currentPower);
-    
-    closePowerMeterPairingModal();
-    
-    // 버튼 이미지 업데이트 (페어링 상태 반영)
-    if (typeof window.updateDeviceButtonImages === 'function') {
-      setTimeout(() => window.updateDeviceButtonImages(), 100);
-    }
-    
+  } else if (tabName === 'trainer' || tabName === 'power' || tabName === 'heart') {
+    // 디바이스 페어링 탭은 제거됨 (Firebase devices 정보를 사용)
+    // 디바이스 정보는 bluetoothIndividual.js에서 자동으로 저장됨
     if (typeof showToast === 'function') {
-      showToast('스마트로라가 페어링되었습니다.');
+      showToast('디바이스 연결은 Bluetooth 개인훈련 대시보드에서 진행해주세요.');
     }
-  } else if (tabName === 'power') {
-    // 파워메터 페어링 저장
-    const name = document.getElementById('powerMeterPairingName')?.value.trim() || '';
-    const deviceId = document.getElementById('powerMeterDeviceId')?.value.trim() || '';
-    
-    powerMeter.pairingName = name;
-    powerMeter.deviceId = deviceId;
-    
-    // Firebase에 저장 (devices 정보 업데이트)
-    saveToFirebase();
-    
-    // 저장
-    saveAllPowerMeterPairingsToStorage();
-    
-    // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
-    updatePairingModalWithSavedData(powerMeter);
-    
-    // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
-    updatePowerMeterConnectionStatus(powerMeterId);
-    
-    // 바늘 위치 유지 (현재 파워값으로 업데이트)
-    const currentPower = powerMeter.currentPower || 0;
-    updatePowerMeterNeedle(powerMeterId, currentPower);
-    
-    closePowerMeterPairingModal();
-    
-    // 버튼 이미지 업데이트 (페어링 상태 반영)
-    if (typeof window.updateDeviceButtonImages === 'function') {
-      setTimeout(() => window.updateDeviceButtonImages(), 100);
-    }
-    
-    if (typeof showToast === 'function') {
-      showToast('파워메터가 페어링되었습니다.');
-    }
-  } else if (tabName === 'heart') {
-    // 심박계 페어링 저장
-    const name = document.getElementById('heartRatePairingName')?.value.trim() || '';
-    const deviceId = document.getElementById('heartRateDeviceId')?.value.trim() || '';
-    
-    powerMeter.heartRateName = name;
-    powerMeter.heartRateDeviceId = deviceId;
-    
-    // Firebase에 저장 (devices 정보 업데이트)
-    saveToFirebase();
-    
-    // 저장
-    saveAllPowerMeterPairingsToStorage();
-    
-    // 모달에 저장된 데이터 업데이트 (페어링된 기기 카드 표시)
-    updatePairingModalWithSavedData(powerMeter);
-    
-    // 연결 상태 업데이트 (디바이스 아이콘도 함께 업데이트됨)
-    updatePowerMeterConnectionStatus(powerMeterId);
-    
-    // 바늘 위치 유지 (현재 파워값으로 업데이트)
-    const currentPower = powerMeter.currentPower || 0;
-    updatePowerMeterNeedle(powerMeterId, currentPower);
-    
-    closePowerMeterPairingModal();
-    
-    // 버튼 이미지 업데이트 (페어링 상태 반영)
-    if (typeof window.updateDeviceButtonImages === 'function') {
-      setTimeout(() => window.updateDeviceButtonImages(), 100);
-    }
-    
-    if (typeof showToast === 'function') {
-      showToast('심박계가 페어링되었습니다.');
-    }
+    return;
   }
 }
 
