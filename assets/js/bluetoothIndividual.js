@@ -994,7 +994,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             if (segmentInfoEl) {
                 segmentInfoEl.textContent = '훈련 완료';
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', '6.3'); // 70% 축소
+                segmentInfoEl.setAttribute('font-size', '5.4'); // 60% 축소
             }
             // 경과시간은 마지막 값 유지, 카운트다운은 00:00으로 표시
             const lapTimeEl = document.getElementById('ui-lap-time');
@@ -2396,8 +2396,8 @@ function updateSpeedometerSegmentInfo() {
         const status = firebaseStatus || { state: 'idle' };
         const currentState = status.state || 'idle';
         
-        // 폰트 크기를 70%로 축소 (기본 9 * 0.7 = 6.3)
-        const fontSize = '6.3';
+        // 폰트 크기를 60%로 축소 (기본 9 * 0.6 = 5.4)
+        const fontSize = '5.4';
         
         // 훈련이 실행 중이 아니면 기본 메시지 표시
         if (currentState !== 'running') {
@@ -2407,7 +2407,7 @@ function updateSpeedometerSegmentInfo() {
                 segmentInfoEl.textContent = '대기 중';
             }
             segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-            segmentInfoEl.setAttribute('font-size', fontSize); // 70% 축소
+            segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
             return;
         }
         
@@ -2419,11 +2419,11 @@ function updateSpeedometerSegmentInfo() {
                 const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
                 segmentInfoEl.textContent = segmentText;
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', fontSize); // 70% 축소
+                segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
             } else {
                 segmentInfoEl.textContent = '준비 중';
                 segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-                segmentInfoEl.setAttribute('font-size', fontSize); // 70% 축소
+                segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
             }
             return;
         }
@@ -2471,7 +2471,7 @@ function updateSpeedometerSegmentInfo() {
         // 표시
         segmentInfoEl.textContent = segmentText;
         segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-        segmentInfoEl.setAttribute('font-size', fontSize); // 70% 축소
+        segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
         
         console.log('[updateSpeedometerSegmentInfo] 세그먼트 정보 업데이트:', segmentText, '타입:', targetType, '값:', targetValue);
         
@@ -2481,7 +2481,7 @@ function updateSpeedometerSegmentInfo() {
         if (segmentInfoEl) {
             segmentInfoEl.textContent = '준비 중';
             segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
-            segmentInfoEl.setAttribute('font-size', fontSize); // 70% 축소
+            segmentInfoEl.setAttribute('font-size', fontSize); // 60% 축소
         }
     }
 }
