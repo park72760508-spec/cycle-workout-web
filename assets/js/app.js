@@ -2053,18 +2053,8 @@ function updateSegmentBarTick(){
   if (mobileScreen && 
       (mobileScreen.classList.contains('active') || 
        window.getComputedStyle(mobileScreen).display !== 'none')) {
-    if (typeof drawSegmentGraph === 'function' && w.segments && w.segments.length > 0) {
-      const now = Date.now();
-      // 마스코트 펄스 애니메이션을 위해 더 자주 업데이트 (약 50ms마다)
-      if (!window._lastMobileGraphUpdate || (now - window._lastMobileGraphUpdate) > 50) {
-        window._lastMobileGraphUpdate = now;
-        // 개인훈련 대시보드와 동일하게 elapsedTime 전달 (경과시간에 따른 마스코트 이동)
-        const elapsedTime = window.trainingState?.elapsedSec || 0;
-        // 경과시간을 전역 변수에 저장 (drawSegmentGraph에서 사용)
-        window.lastElapsedTime = elapsedTime;
-        drawSegmentGraph(w.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
-      }
-    }
+      // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
+      // 이 함수는 모바일 화면의 세그먼트 그래프를 업데이트하지 않음 (다른 화면과의 간섭 방지)
   }
   
   // ERG 모드 피로도 체크 (약 10초마다)
@@ -11557,12 +11547,8 @@ async function startMobileDashboard() {
       if (mobileScreen && 
           (mobileScreen.classList.contains('active') || 
            window.getComputedStyle(mobileScreen).display !== 'none')) {
-        // 세그먼트 그래프 재그리기 (마스코트 펄스 애니메이션 포함)
-        if (window.currentWorkout && window.currentWorkout.segments && typeof drawSegmentGraph === 'function') {
-          const elapsedTime = window.trainingState?.elapsedSec || 0;
-          const segIndex = window.trainingState?.segIndex || 0;
-          drawSegmentGraph(window.currentWorkout.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
-        }
+        // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
+        // 이 함수는 모바일 화면의 세그먼트 그래프를 업데이트하지 않음 (다른 화면과의 간섭 방지)
       }
     };
     window.addEventListener('resize', window.mobileDashboardResizeHandler);
@@ -13017,12 +13003,10 @@ function startMobileMascotPulseAnimation() {
       return;
     }
     
-    if (window.currentWorkout && window.currentWorkout.segments && typeof drawSegmentGraph === 'function') {
-      const elapsedTime = window.trainingState?.elapsedSec || 0;
-      const segIndex = window.trainingState?.segIndex || 0;
-      drawSegmentGraph(window.currentWorkout.segments, segIndex, 'mobileIndividualSegmentGraph', elapsedTime);
-    } else {
-      // 워크아웃이 없으면 애니메이션 중지
+    // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
+    // 이 함수는 모바일 화면의 세그먼트 그래프를 업데이트하지 않음 (다른 화면과의 간섭 방지)
+    // 워크아웃이 없으면 애니메이션 중지
+    if (!window.currentWorkout || !window.currentWorkout.segments) {
       if (window.mobileMascotAnimationInterval) {
         clearInterval(window.mobileMascotAnimationInterval);
         window.mobileMascotAnimationInterval = null;

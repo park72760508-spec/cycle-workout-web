@@ -1741,8 +1741,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     if (canvasId === 'bluetoothCoachSegmentGraphCanvas') {
       // Bluetooth Coach의 경우 bluetoothCoachState에서 경과시간 가져오기
       currentElapsedTime = (window.bluetoothCoachState && window.bluetoothCoachState.totalElapsedTime) ? window.bluetoothCoachState.totalElapsedTime : 0;
+    } else if (canvasId === 'mobileIndividualSegmentGraph') {
+      // 모바일 대시보드의 경우 mobileTrainingState에서 경과시간 가져오기 (우선순위: 함수 파라미터 > mobileTrainingState > 전역 변수)
+      if (elapsedTime !== null && elapsedTime !== undefined) {
+        currentElapsedTime = elapsedTime;
+      } else if (window.mobileTrainingState && window.mobileTrainingState.elapsedSec !== undefined) {
+        currentElapsedTime = window.mobileTrainingState.elapsedSec;
+      } else {
+        currentElapsedTime = window.lastElapsedTime || 0;
+      }
     } else {
-      // 개인 대시보드 및 모바일 대시보드의 경우 함수 파라미터 또는 전역 변수 사용
+      // 개인 대시보드의 경우 함수 파라미터 또는 전역 변수 사용
       currentElapsedTime = (elapsedTime !== null && elapsedTime !== undefined) ? elapsedTime : (window.lastElapsedTime || 0);
     }
     
