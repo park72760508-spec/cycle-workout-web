@@ -8111,6 +8111,82 @@ window.refreshRoomMonitoring = refreshRoomMonitoring;
 window.startTrainingFromMonitoring = startTrainingFromMonitoring;
 window.getParticipantLiveDataForRoom = getParticipantLiveDataForRoom;
 window.startRoomMonitoringCoaching = startRoomMonitoringCoaching;
+
+/**
+ * Coach 버튼 클릭 시 디바이스 연결 방식에 따라 적절한 화면으로 이동
+ */
+window.openCoachModeFromModal = function openCoachModeFromModal(event) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  
+  // 모달 닫기
+  const modal = document.getElementById('trainingRoomModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+  
+  // 디바이스 연결 방식 확인 (스위치 슬라이더 위치)
+  const switchSlider = document.getElementById('switchSlider');
+  let deviceMode = 'ant'; // 기본값은 ANT+
+  
+  if (switchSlider) {
+    // computed style로 실제 left 값 확인
+    const computedStyle = window.getComputedStyle(switchSlider);
+    const sliderLeft = switchSlider.style.left || computedStyle.left;
+    
+    // left 값 파싱 (px 또는 %)
+    let leftValue = 0;
+    if (sliderLeft) {
+      if (sliderLeft.includes('%')) {
+        leftValue = parseFloat(sliderLeft);
+      } else if (sliderLeft.includes('px')) {
+        // px 값을 %로 변환 (스위치 너비가 200px이므로)
+        const switchWidth = 200;
+        leftValue = (parseFloat(sliderLeft) / switchWidth) * 100;
+      } else {
+        leftValue = parseFloat(sliderLeft) || 0;
+      }
+    }
+    
+    // left가 0%에 가까우면 Bluetooth, 50% 이상이면 ANT+
+    if (leftValue < 25) { // 0%에 가까운 경우 (여유값 25%까지 허용)
+      deviceMode = 'bluetooth';
+    } else {
+      deviceMode = 'ant';
+    }
+    
+    console.log('[Coach Modal] 슬라이더 위치:', sliderLeft, '→ leftValue:', leftValue, '→ 모드:', deviceMode);
+  } else {
+    console.warn('[Coach Modal] 스위치 슬라이더를 찾을 수 없습니다. 기본값(ANT+)을 사용합니다.');
+  }
+  
+  console.log('[Coach Modal] 디바이스 연결 방식:', deviceMode);
+  
+  // 선택된 디바이스 모드에 따라 화면 이동
+  if (deviceMode === 'bluetooth') {
+    // Bluetooth Training Coach 화면으로 이동
+    if (typeof showScreen === 'function') {
+      showScreen('bluetoothTrainingCoachScreen');
+    } else {
+      console.error('[Coach Modal] showScreen 함수를 찾을 수 없습니다.');
+      if (typeof showToast === 'function') {
+        showToast('화면 전환 함수를 찾을 수 없습니다.', 'error');
+      }
+    }
+  } else {
+    // ANT+ Indoor Training 화면으로 이동 (기존 방식)
+    if (typeof showScreen === 'function') {
+      showScreen('indoorTrainingDashboardScreen');
+    } else {
+      console.error('[Coach Modal] showScreen 함수를 찾을 수 없습니다.');
+      if (typeof showToast === 'function') {
+        showToast('화면 전환 함수를 찾을 수 없습니다.', 'error');
+      }
+    }
+  }
+};
 window.forceStopRoom = forceStopRoom;
 window.cleanupExpiredRooms = cleanupExpiredRooms;
 window.emergencyStopAllRooms = emergencyStopAllRooms;
