@@ -2463,6 +2463,175 @@ function updateBluetoothCoachTrainingButtons() {
 }
 
 /**
+ * Bluetooth Coach 전용 카운트다운 표시 컨트롤러 (Indoor Training의 CountdownDisplay 참고)
+ */
+const BluetoothCoachCountdownDisplay = {
+  active: false,
+  overlay: null,
+  num: null,
+  infoDiv: null,
+  ensure(nextSegment) {
+    // 오버레이가 없으면 동적으로 생성
+    if (!this.overlay) {
+      this.overlay = document.getElementById("bluetoothCoachCountdownOverlay");
+      if (!this.overlay) {
+        // 동적으로 생성
+        this.overlay = document.createElement('div');
+        this.overlay.id = 'bluetoothCoachCountdownOverlay';
+        this.overlay.className = 'countdown-overlay hidden';
+        this.overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: rgba(0, 0, 0, 0.9);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 10000;
+          transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(this.overlay);
+      }
+    }
+    
+    if (!this.num) {
+      this.num = document.getElementById("bluetoothCoachCountdownNumber");
+      if (!this.num) {
+        // 동적으로 생성
+        this.num = document.createElement('div');
+        this.num.id = 'bluetoothCoachCountdownNumber';
+        this.num.className = 'countdown-number';
+        this.num.style.cssText = `
+          font-size: 600px;
+          font-weight: 900;
+          color: #00d4aa;
+          text-shadow: 0 0 30px rgba(0, 212, 170, 0.8);
+          animation: countdownPulse 0.5s ease-out;
+        `;
+        this.overlay.appendChild(this.num);
+      }
+    }
+    
+    if (!this.overlay || !this.num) return false;
+
+    // CSS 애니메이션 추가 (Indoor Training과 동일)
+    if (!document.getElementById('countdownAnimationStyle')) {
+      const style = document.createElement('style');
+      style.id = 'countdownAnimationStyle';
+      style.textContent = `
+        @keyframes countdownPulse {
+          0% { transform: scale(0.5); opacity: 0; }
+          50% { transform: scale(1.2); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes countdownFadeOut {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1.5); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // 다음 세그먼트 안내
+    if (!this.infoDiv) {
+      this.infoDiv = document.createElement('div');
+      this.infoDiv.id = 'bluetoothCoachNextSegmentInfo';
+      this.infoDiv.style.cssText = `
+        position: absolute;
+        bottom: 30%;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #fff;
+        font-size: 18px;
+        font-weight: 600;
+        text-align: center;
+        text-shadow: 0 2px 4px rgba(0,0,0,.5);
+        opacity: .9;
+      `;
+      this.overlay.appendChild(this.infoDiv);
+    }
+    
+    // getSegmentFtpPercent 함수가 있는지 확인
+    const getSegmentFtpPercent = typeof window.getSegmentFtpPercent === 'function' 
+      ? window.getSegmentFtpPercent 
+      : (seg) => {
+          if (seg.ftp_percent) return seg.ftp_percent;
+          if (seg.target_type === 'ftp_pct' && seg.target_value) return Number(seg.target_value) || 60;
+          if (seg.target_type === 'ftp_pctz' && seg.target_value) {
+            const parts = String(seg.target_value).split('/');
+            return Number(parts[0]) || 60;
+          }
+          return 60;
+        };
+    
+    const nextInfo = nextSegment
+      ? `다음: ${(nextSegment.label || nextSegment.segment_type || '세그먼트')} FTP ${getSegmentFtpPercent(nextSegment)}%`
+      : '훈련 완료';
+    this.infoDiv.textContent = nextInfo;
+
+    this.overlay.classList.remove("hidden");
+    this.overlay.style.display = "flex";
+    this.active = true;
+    return true;
+  },
+  render(n) {
+    if (!this.overlay || !this.num) return;
+    this.num.textContent = String(n);
+    // 애니메이션 재시작
+    this.num.style.animation = 'none';
+    setTimeout(() => {
+      this.num.style.animation = 'countdownPulse 0.5s ease-out';
+    }, 10);
+  },
+  finish(delayMs = 800) {
+    if (!this.overlay) return;
+    setTimeout(() => {
+      this.overlay.classList.add("hidden");
+      this.overlay.style.display = "none";
+      this.active = false;
+    }, delayMs);
+  },
+  hideImmediate() {
+    if (!this.overlay) return;
+    this.overlay.classList.add("hidden");
+    this.overlay.style.display = "none";
+    this.active = false;
+  }
+};
+
+/**
+ * Bluetooth Coach 세그먼트 카운트다운 시작 (Indoor Training의 startSegmentCountdown 참고)
+ */
+function startBluetoothCoachSegmentCountdown(initialNumber, nextSegment) {
+  // initialNumber 는 보통 5 (6초 시점에서 5 표시)
+  if (window.bluetoothCoachState.segmentCountdownActive) return;
+  window.bluetoothCoachState.segmentCountdownActive = true;
+
+  const ok = BluetoothCoachCountdownDisplay.ensure(nextSegment);
+  if (!ok) {
+    window.bluetoothCoachState.segmentCountdownActive = false;
+    return;
+  }
+
+  // 처음 숫자와 짧은 비프
+  BluetoothCoachCountdownDisplay.render(initialNumber);
+  if (typeof playBeep === 'function') {
+    playBeep(880, 120, 0.25);
+  }
+}
+
+/**
+ * Bluetooth Coach 카운트다운 강제 정지 (Indoor Training의 stopSegmentCountdown 참고)
+ */
+function stopBluetoothCoachSegmentCountdown() {
+  console.log('[Bluetooth Coach] 카운트다운 강제 정지');
+  BluetoothCoachCountdownDisplay.hideImmediate();
+  window.bluetoothCoachState.segmentCountdownActive = false;
+}
+
+/**
  * 랩 카운트다운 업데이트 (Indoor Training의 updateLapTime 참고)
  */
 function updateBluetoothCoachLapTime() {
