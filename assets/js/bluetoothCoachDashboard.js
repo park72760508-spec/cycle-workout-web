@@ -287,19 +287,9 @@ function createPowerMeterElement(powerMeter) {
     </div>
     <div class="speedometer-info disconnected">
       <div class="speed-display-left">
-        <div class="speed-stat-row speed-stat-max">
-          <span class="speed-stat-value" id="max-power-value-${powerMeter.id}">0</span>
-          <div class="speed-stat-label-wrapper">
-            <span class="speed-stat-label">최대</span>
-            <span class="speed-unit-bottom">W</span>
-          </div>
-        </div>
-        <div class="speed-stat-row speed-stat-avg">
-          <span class="speed-stat-value" id="avg-power-value-${powerMeter.id}">0</span>
-          <div class="speed-stat-label-wrapper">
-            <span class="speed-stat-label">평균</span>
-            <span class="speed-unit-bottom">W</span>
-          </div>
+        <div class="speed-stat-row speed-stat-rpm">
+          <span class="speed-stat-value" id="rpm-value-${powerMeter.id}">0</span>
+          <span class="speed-unit-small">rpm</span>
         </div>
       </div>
       <div class="speed-display-center">
@@ -309,11 +299,10 @@ function createPowerMeterElement(powerMeter) {
         </div>
       </div>
       <div class="distance-display-right">
-        <div class="heart-rate-row">
+        <div class="heart-rate-cadence-row">
           <span class="distance-value" id="heart-rate-value-${powerMeter.id}">0</span>
           <span class="speed-unit-small">bpm</span>
-        </div>
-        <div class="cadence-row">
+          <span style="margin: 0 4px; color: #000000;">/</span>
           <span class="distance-value" id="cadence-value-${powerMeter.id}">0</span>
           <span class="speed-unit-small">rpm</span>
         </div>
@@ -630,13 +619,12 @@ function updatePowerMeterUI(trackId) {
     currentPowerEl.textContent = Math.round(avgPower);
   }
   
-  // 최대 파워
-  const maxPowerEl = document.getElementById(`max-power-value-${trackId}`);
-  if (maxPowerEl) maxPowerEl.textContent = Math.round(powerMeter.maxPower);
-  
-  // 평균 파워
-  const avgPowerEl = document.getElementById(`avg-power-value-${trackId}`);
-  if (avgPowerEl) avgPowerEl.textContent = Math.round(powerMeter.averagePower);
+  // RPM 업데이트 (좌측 표시)
+  const rpmEl = document.getElementById(`rpm-value-${trackId}`);
+  if (rpmEl) {
+    const rpmValue = (typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) ? Math.round(powerMeter.cadence) : 0;
+    rpmEl.textContent = rpmValue.toString();
+  }
   
   // 세그먼트 파워
   const segPowerEl = document.getElementById(`segment-power-value-${trackId}`);
