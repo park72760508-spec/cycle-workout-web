@@ -2158,27 +2158,48 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
     }
     
     try {
-        // 워크아웃 정보 확인 (window.currentWorkout 또는 Firebase workoutPlan)
-        const workout = window.currentWorkout;
-        if (!workout || !workout.segments || workout.segments.length === 0) {
-            console.warn('[updateSpeedometerTargetForSegment] 워크아웃 또는 세그먼트가 없습니다.');
-            return;
+        // Firebase status에서 세그먼트 정보 우선 확인
+        const status = firebaseStatus || {};
+        let targetType = 'ftp_pct';
+        let targetValue = null;
+        
+        // 1순위: Firebase status에서 받은 값 사용
+        if (status.segmentTargetType && status.segmentTargetValue !== undefined) {
+            targetType = status.segmentTargetType;
+            targetValue = status.segmentTargetValue;
+            console.log('[updateSpeedometerTargetForSegment] Firebase status 값 사용 - 타입:', targetType, '값:', targetValue);
+        } 
+        // 2순위: window.currentWorkout에서 가져온 값 사용
+        else {
+            const workout = window.currentWorkout;
+            if (!workout || !workout.segments || workout.segments.length === 0) {
+                console.warn('[updateSpeedometerTargetForSegment] 워크아웃 또는 세그먼트가 없습니다.');
+                return;
+            }
+            
+            // 세그먼트 인덱스 유효성 확인
+            if (segmentIndex < 0 || segmentIndex >= workout.segments.length) {
+                console.warn('[updateSpeedometerTargetForSegment] 유효하지 않은 세그먼트 인덱스:', segmentIndex);
+                return;
+            }
+            
+            const seg = workout.segments[segmentIndex];
+            if (!seg) {
+                console.warn('[updateSpeedometerTargetForSegment] 세그먼트 데이터가 없습니다. 인덱스:', segmentIndex);
+                return;
+            }
+            
+            targetType = seg.target_type || 'ftp_pct';
+            targetValue = seg.target_value;
+            console.log('[updateSpeedometerTargetForSegment] window.currentWorkout 값 사용 - 타입:', targetType, '값:', targetValue);
         }
         
-        // 세그먼트 인덱스 유효성 확인
-        if (segmentIndex < 0 || segmentIndex >= workout.segments.length) {
-            console.warn('[updateSpeedometerTargetForSegment] 유효하지 않은 세그먼트 인덱스:', segmentIndex);
-            return;
+        // targetValue가 null이면 기본값 사용
+        if (targetValue === null || targetValue === undefined) {
+            console.warn('[updateSpeedometerTargetForSegment] targetValue가 없습니다. 기본값 사용');
+            targetValue = targetType === 'cadence_rpm' ? 90 : 100;
         }
         
-        const seg = workout.segments[segmentIndex];
-        if (!seg) {
-            console.warn('[updateSpeedometerTargetForSegment] 세그먼트 데이터가 없습니다. 인덱스:', segmentIndex);
-            return;
-        }
-        
-        const targetType = seg.target_type || 'ftp_pct';
-        const targetValue = seg.target_value;
         const ftp = userFTP || window.currentUser?.ftp || 200;
         
         // 속도계 UI 요소 가져오기
