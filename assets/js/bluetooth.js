@@ -604,7 +604,12 @@ function handlePowerMeterData(event) {
         const dtSec = dTicks / 1024;
         const rpm = (dRevs / dtSec) * 60;
         if (rpm > 0 && rpm < 220) {
-          window.liveData.cadence = Math.round(rpm);
+          const roundedRpm = Math.round(rpm);
+          // 이전 값과 다를 때만 로그 출력
+          if (window.liveData.cadence !== roundedRpm) {
+            console.log('[bluetooth.js] handlePowerMeterData - cadence 업데이트:', window.liveData.cadence, '→', roundedRpm, 'RPM');
+          }
+          window.liveData.cadence = roundedRpm;
           // ERG 모드용 데이터 버퍼 업데이트
           if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
           window._recentCadenceBuffer.push(Math.round(rpm));
@@ -659,7 +664,16 @@ function handleTrainerData(e) {
   if (flags & 0x0004) {
     const cadHalf = dv.getUint16(off, true); off += 2;
     const rpm = cadHalf / 2;
-    window.liveData.cadence = Math.round(rpm);
+    const roundedRpm = Math.round(rpm);
+    // window.liveData 초기화 확인
+    if (!window.liveData) {
+      window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    }
+    // 이전 값과 다를 때만 로그 출력
+    if (window.liveData.cadence !== roundedRpm) {
+      console.log('[bluetooth.js] handleTrainerData - cadence 업데이트:', window.liveData.cadence, '→', roundedRpm, 'RPM');
+    }
+    window.liveData.cadence = roundedRpm;
     // ERG 모드용 데이터 버퍼 업데이트
     if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
     window._recentCadenceBuffer.push(Math.round(rpm));
@@ -680,6 +694,14 @@ function handleTrainerData(e) {
   // Instantaneous Power (int16) — ★ 파워
   if (flags & 0x0040) {
     const p = dv.getInt16(off, true); off += 2;
+    // window.liveData 초기화 확인
+    if (!window.liveData) {
+      window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+    }
+    // 이전 값과 다를 때만 로그 출력
+    if (window.liveData.power !== p) {
+      console.log('[bluetooth.js] handleTrainerData - power 업데이트:', window.liveData.power, '→', p, 'W');
+    }
     window.liveData.power = p;
     // ERG 모드용 데이터 버퍼 업데이트
     if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
@@ -787,4 +809,7 @@ window.addEventListener("beforeunload", () => {
 // 전역 export
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
+// 데이터 핸들러 함수들도 window에 노출 (bluetoothIndividual.js에서 래핑하기 위해)
+window.handlePowerMeterData = handlePowerMeterData;
+window.handleTrainerData = handleTrainerData;
 window.connectHeartRate = connectHeartRate;
