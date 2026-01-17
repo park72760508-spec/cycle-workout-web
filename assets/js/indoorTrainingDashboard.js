@@ -3663,6 +3663,7 @@ function savePowerMeterPairing() {
     if (typeof showToast === 'function') {
       showToast('사용자가 선택되었습니다.');
     }
+  }
 }
 
 /**
