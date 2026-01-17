@@ -11463,9 +11463,10 @@ button[aria-disabled="true"] {
   justify-content: space-between;
   gap: 12px;
   background: #ff8c00; /* 주황색 배경 (기본, 미연결 상태) */
-  padding: 12px;
+  padding: 8px 12px; /* 상하 패딩: 12px → 8px (높이 최소화) */
   border-radius: 0 0 8px 8px;
   transition: background-color 0.3s ease;
+  min-height: auto; /* 최소 높이 자동 */
 }
 
 .speedometer-info.connected {
@@ -11484,14 +11485,14 @@ button[aria-disabled="true"] {
   border: 1px solid #ff8c00 !important;
 }
 
-/* 좌측: 최대속도, 평균속도 */
+/* 좌측: RPM */
 .speed-display-left {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
   gap: 4px;
   flex: 1;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .speed-stat-row {
@@ -11571,14 +11572,14 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
-/* 우측: 현재속도 */
+/* 우측: 심박수, 케이던스 (1줄) */
 .distance-display-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
   flex: 1;
-  gap: 4px;
+  gap: 0;
 }
 
 .distance-value {
@@ -11617,6 +11618,15 @@ button[aria-disabled="true"] {
   align-items: baseline;
   justify-content: flex-end;
   gap: 4px;
+}
+
+/* 심박수와 케이던스를 1줄로 표시 */
+.heart-rate-cadence-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 
 /* 숫자 값 끝자리 수직 정렬을 위한 스타일 */
