@@ -12026,6 +12026,18 @@ function startMobileDashboardDataUpdate() {
     // 속도계 바늘 업데이트 (애니메이션 루프에서 부드럽게 이동)
     updateMobileGaugeNeedle(Math.round(powerValue));
     
+    // 모바일 전용 세그먼트 파워 히스토리에 현재 파워 추가 (랩 평균 파워 계산용)
+    const mts = window.mobileTrainingState || {};
+    if (mts.segIndex !== undefined && mts.segIndex >= 0) {
+      if (!mts.segmentPowerHistory) {
+        mts.segmentPowerHistory = [];
+      }
+      // 현재 파워값을 히스토리에 추가 (0이 아닌 경우만)
+      if (powerValue > 0) {
+        mts.segmentPowerHistory.push(powerValue);
+      }
+    }
+    
     // 케이던스 표시 (블루투스 데이터)
     const cadence = Math.round(liveData.cadence || 0);
     const cadenceEl = safeGetElement('mobile-ui-cadence');
@@ -12040,28 +12052,27 @@ function startMobileDashboardDataUpdate() {
       hrEl.textContent = hr;
     }
     
-    // 랩 평균 파워 표시 (세그먼트 평균 파워값 - segBar 데이터 사용)
+    // 랩 평균 파워 표시 (모바일 전용 상태 사용 - 독립적으로 구동)
     const lapPowerEl = safeGetElement('mobile-ui-lap-power');
     if (lapPowerEl) {
-      // 현재 세그먼트 인덱스 가져오기
-      const trainingState = window.trainingState || {};
-      const segIndex = trainingState.segIndex !== undefined ? trainingState.segIndex : -1;
+      // 모바일 전용 상태 사용
+      const mts = window.mobileTrainingState || {};
+      const segIndex = mts.segIndex !== undefined ? mts.segIndex : -1;
       
-      // segBar 데이터에서 세그먼트 평균 파워 계산
+      // 모바일 전용 세그먼트 파워 히스토리에서 평균 계산
       let segmentAvgPower = 0;
-      if (segIndex >= 0 && window.segBar && window.segBar.samples && window.segBar.samples[segIndex] > 0) {
-        const samples = window.segBar.samples[segIndex];
-        const sumPower = window.segBar.sumPower[segIndex] || 0;
-        segmentAvgPower = Math.round(sumPower / samples);
+      if (segIndex >= 0 && mts.segmentPowerHistory && mts.segmentPowerHistory.length > 0) {
+        const sumPower = mts.segmentPowerHistory.reduce((sum, power) => sum + power, 0);
+        segmentAvgPower = Math.round(sumPower / mts.segmentPowerHistory.length);
       } else {
-        // segBar 데이터가 없으면 liveData에서 가져오기 (폴백)
+        // 파워 히스토리가 없으면 liveData에서 가져오기 (폴백)
         segmentAvgPower = Math.round(liveData.segmentAvgPower || liveData.avgPower || 0);
       }
       
       lapPowerEl.textContent = segmentAvgPower;
     }
     
-    // 목표 파워 업데이트
+    // 목표 파워 업데이트 (모바일 전용 상태 사용)
     updateMobileTargetPower();
     
     // 속도계 원호 업데이트 (LAP AVG 업데이트 후 달성도 반영)
@@ -12290,11 +12301,12 @@ function updateMobileGaugeNeedle(power) {
 }
 
 /**
- * 모바일 현재 세그먼트 정보 가져오기 (개인훈련 대시보드의 getCurrentSegment와 동일)
+ * 모바일 현재 세그먼트 정보 가져오기 (모바일 전용 상태 사용 - 독립적으로 구동)
  */
 function getMobileCurrentSegment() {
-  const trainingState = window.trainingState || {};
-  const currentSegmentIndex = trainingState.segIndex !== undefined ? trainingState.segIndex : -1;
+  // 모바일 전용 상태 사용 (Firebase와 무관, 독립적으로 구동)
+  const mts = window.mobileTrainingState || {};
+  const currentSegmentIndex = mts.segIndex !== undefined ? mts.segIndex : -1;
   
   if (currentSegmentIndex < 0) {
     return null;
@@ -12410,9 +12422,10 @@ function updateMobileTargetPowerArc() {
   targetArc.setAttribute('stroke', arcColor);
   targetArc.style.display = 'block';
   
-  // ftp_pctz 타입인 경우 상한값 원호 추가
-  if (isFtpPctz && window.currentSegmentMaxPower && window.currentSegmentMaxPower > targetPower) {
-    const maxPowerValue = window.currentSegmentMaxPower;
+  // ftp_pctz 타입인 경우 상한값 원호 추가 (모바일 전용 상태 우선 사용)
+  const mts = window.mobileTrainingState || {};
+  const maxPowerValue = mts.currentSegmentMaxPower || window.currentSegmentMaxPower;
+  if (isFtpPctz && maxPowerValue && maxPowerValue > targetPower) {
     const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
     const maxEndAngle = 180 + (maxRatio * 180);
     const maxEndRad = (maxEndAngle * Math.PI) / 180;
@@ -12443,7 +12456,9 @@ function updateMobileTargetPowerArc() {
   
   // 디버깅 로그 (선택사항)
   if (achievementRatio > 0) {
-    console.log(`[Mobile Dashboard] updateMobileTargetPowerArc 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${window.currentSegmentMaxPower}W` : ''}`);
+    const mts = window.mobileTrainingState || {};
+    const maxPowerValue = mts.currentSegmentMaxPower || window.currentSegmentMaxPower;
+    console.log(`[Mobile Dashboard] updateMobileTargetPowerArc 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${maxPowerValue}W` : ''}`);
   }
 }
 
@@ -12500,6 +12515,11 @@ function updateMobileTargetPower() {
         const ftp = mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
         window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
         window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100));
+        
+        // 모바일 전용 상태에도 저장 (독립적으로 구동)
+        const mts = window.mobileTrainingState || {};
+        mts.currentSegmentMaxPower = window.currentSegmentMaxPower;
+        mts.currentSegmentMinPower = window.currentSegmentMinPower;
       } else {
         window.currentSegmentMaxPower = null;
         window.currentSegmentMinPower = null;
@@ -12726,9 +12746,19 @@ function updateMobileTargetPower() {
     targetPower = Math.round(ftp * (minPercent / 100));
     console.log('[Mobile Dashboard] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
     
-    // 상한값을 전역 변수에 저장
+    // 상한값을 전역 변수에 저장 (모바일 전용 상태에도 저장)
     window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
     window.currentSegmentMinPower = targetPower;
+    
+    // 모바일 전용 상태에도 저장 (독립적으로 구동)
+    const mts = window.mobileTrainingState || {};
+    mts.currentSegmentMaxPower = window.currentSegmentMaxPower;
+    mts.currentSegmentMinPower = window.currentSegmentMinPower;
+    
+    // 모바일 전용 상태에도 저장 (독립적으로 구동)
+    const mts = window.mobileTrainingState || {};
+    mts.currentSegmentMaxPower = window.currentSegmentMaxPower;
+    mts.currentSegmentMinPower = window.currentSegmentMinPower;
   }
   
   // 강도 조절 비율 적용
@@ -13355,6 +13385,7 @@ function startMobileWorkout() {
   mts._countdownFired = {};
   mts._prevRemainMs = {};
   mts._lastProcessedSegIndex = 0;
+  mts.segmentPowerHistory = []; // 세그먼트별 파워 히스토리 (랩 평균 파워 계산용)
 
   // 훈련 세션 시작 (개인훈련 대시보드와 동일한 로직)
   const currentUser = window.currentUser || null;
@@ -13538,6 +13569,14 @@ function startMobileTrainingTimerLoop() {
       updateMobileDashboardUI();
     }
     
+    // 5. 목표 파워 및 원호 업데이트 (세그먼트별 목표값 표시 및 달성율에 따른 색상 반영)
+    if (typeof updateMobileTargetPower === 'function') {
+      updateMobileTargetPower();
+    }
+    if (typeof updateMobileTargetPowerArc === 'function') {
+      updateMobileTargetPowerArc();
+    }
+    
     // 전체 종료 판단
     if (mts.elapsedSec >= mts.totalSec) {
       console.log('[Mobile Dashboard] 훈련 완료!');
@@ -13592,8 +13631,21 @@ function startMobileTrainingTimerLoop() {
       
       if (nextSegIndex < w.segments.length) {
         console.log(`[Mobile Dashboard] 세그먼트 ${nextSegIndex + 1}로 전환 (전체 경과: ${mts.elapsedSec}초)`);
+        
+        // 세그먼트 파워 히스토리 초기화 (새 세그먼트 시작)
+        mts.segmentPowerHistory = [];
+        
+        // UI 업데이트
         if (typeof updateMobileDashboardUI === 'function') {
           updateMobileDashboardUI();
+        }
+        
+        // 목표 파워 및 원호 업데이트 (새 세그먼트의 목표값 표시)
+        if (typeof updateMobileTargetPower === 'function') {
+          updateMobileTargetPower();
+        }
+        if (typeof updateMobileTargetPowerArc === 'function') {
+          updateMobileTargetPowerArc();
         }
       } else {
         console.log('[Mobile Dashboard] 모든 세그먼트 완료');
