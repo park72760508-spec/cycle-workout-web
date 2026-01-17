@@ -187,7 +187,22 @@ function startFirebaseDataTransmission() {
         if (!window.liveData) {
             window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
         }
+        
+        // 로컬 시간 추적 업데이트 (훈련 중일 때) - Bluetooth 개인훈련 대시보드 전용
+        if (window.currentTrainingState === 'running' && bluetoothIndividualTrainingStartTime) {
+            const now = Date.now();
+            bluetoothIndividualTotalElapsedTime = Math.floor((now - bluetoothIndividualTrainingStartTime) / 1000);
+            
+            // 세그먼트 경과 시간 업데이트
+            if (bluetoothIndividualSegmentStartTime && currentSegmentIndex >= 0) {
+                bluetoothIndividualSegmentElapsedTime = Math.floor((now - bluetoothIndividualSegmentStartTime) / 1000);
+            }
+        }
+        
         updateDashboard(); // data 파라미터 없이 호출하면 window.liveData를 읽음
+        
+        // 랩카운트다운 업데이트 (로컬 시간 추적 사용) - Bluetooth 개인훈련 대시보드 전용
+        updateLapTime(firebaseStatus);
         
         // 2. Firebase에 데이터 전송
         sendDataToFirebase();
@@ -734,6 +749,12 @@ let lastWorkoutId = null; // 마지막 워크아웃 ID
 window.currentTrainingState = 'idle'; // 전역 훈련 상태 (마스코트 애니메이션용)
 let firebaseStatus = null; // Firebase status 저장 (세그먼트 정보용)
 
+// Bluetooth 개인훈련 대시보드 전용 세그먼트 경과 시간 추적 (다른 화면과 독립)
+let bluetoothIndividualSegmentStartTime = null; // 현재 세그먼트 시작 시간
+let bluetoothIndividualSegmentElapsedTime = 0; // 현재 세그먼트 경과 시간 (초)
+let bluetoothIndividualTotalElapsedTime = 0; // 전체 경과 시간 (초)
+let bluetoothIndividualTrainingStartTime = null; // 훈련 시작 시간
+
 /**
  * Workout ID를 가져오는 헬퍼 함수 (비동기)
  * @returns {Promise<string|null>} workoutId 또는 null
@@ -901,11 +922,41 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         const previousSegmentIndex = currentSegmentIndex;
         currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
         
-        // 세그먼트가 변경되면 세그먼트 파워 히스토리 초기화
+        // 세그먼트가 변경되면 세그먼트 파워 히스토리 초기화 및 로컬 시간 추적 초기화
         if (previousSegmentIndex !== currentSegmentIndex && currentSegmentIndex >= 0) {
             segmentPowerHistory = [];
             currentSegmentStartTime = Date.now();
-            console.log(`[BluetoothIndividual] 세그먼트 변경: ${previousSegmentIndex} → ${currentSegmentIndex}, 파워 히스토리 초기화`);
+            // Bluetooth 개인훈련 대시보드 전용 세그먼트 시간 추적 초기화
+            bluetoothIndividualSegmentStartTime = Date.now();
+            bluetoothIndividualSegmentElapsedTime = 0;
+            console.log(`[BluetoothIndividual] 세그먼트 변경: ${previousSegmentIndex} → ${currentSegmentIndex}, 파워 히스토리 및 시간 추적 초기화`);
+        }
+        
+        // 훈련 시작 시 로컬 시간 추적 초기화
+        if (previousTrainingState !== 'running' && currentState === 'running') {
+            bluetoothIndividualTrainingStartTime = Date.now();
+            bluetoothIndividualTotalElapsedTime = 0;
+            if (currentSegmentIndex >= 0) {
+                bluetoothIndividualSegmentStartTime = Date.now();
+                bluetoothIndividualSegmentElapsedTime = 0;
+            }
+            console.log('[BluetoothIndividual] 훈련 시작 - 로컬 시간 추적 초기화');
+        }
+        
+        // 훈련 종료 시 로컬 시간 추적 정리
+        if (previousTrainingState === 'running' && (currentState === 'idle' || currentState === 'finished' || currentState === 'stopped')) {
+            bluetoothIndividualTrainingStartTime = null;
+            bluetoothIndividualSegmentStartTime = null;
+            bluetoothIndividualTotalElapsedTime = 0;
+            bluetoothIndividualSegmentElapsedTime = 0;
+            console.log('[BluetoothIndividual] 훈련 종료 - 로컬 시간 추적 정리');
+        }
+        
+        // 세그먼트 인덱스가 변경되었지만 이전에 감지하지 못한 경우 처리
+        if (currentSegmentIndex >= 0 && !bluetoothIndividualSegmentStartTime && currentState === 'running') {
+            bluetoothIndividualSegmentStartTime = Date.now();
+            bluetoothIndividualSegmentElapsedTime = 0;
+            console.log('[BluetoothIndividual] 세그먼트 시간 추적 초기화 (늦은 감지)');
         }
         const segmentInfoEl = document.getElementById('segment-info');
         if (segmentInfoEl) {
@@ -1255,9 +1306,15 @@ async function playBeep(freq = 880, durationMs = 120, volume = 0.2, type = "sine
 }
 
 // 랩카운트다운 업데이트 함수 (훈련방의 세그먼트 시간 경과값 표시)
-function updateLapTime(status) {
+// Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
+function updateLapTime(status = null) {
     const lapTimeEl = document.getElementById('ui-lap-time');
     if (!lapTimeEl) return;
+    
+    // status가 없으면 firebaseStatus 사용
+    if (!status) {
+        status = firebaseStatus || { state: 'idle' };
+    }
     
     // 훈련방의 세그먼트 남은 시간 값 사용 (5,4,3,2,1,0 카운트다운과는 별개)
     let countdownValue = null;
@@ -1272,16 +1329,23 @@ function updateLapTime(status) {
         else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(status.segmentRemainingTime)) {
             countdownValue = Math.max(0, Math.floor(status.segmentRemainingTime));
         }
-        // 3순위: 세그먼트 정보로 직접 계산
+        // 3순위: 로컬에서 계산 (Bluetooth 개인훈련 대시보드 전용)
         else if (window.currentWorkout && window.currentWorkout.segments) {
-            const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
+            const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex;
             const seg = window.currentWorkout.segments[segIndex];
             
             if (seg) {
                 const segDuration = seg.duration_sec || seg.duration || 0;
                 
+                // 로컬 세그먼트 경과 시간 사용
+                if (bluetoothIndividualSegmentStartTime && segIndex >= 0) {
+                    const now = Date.now();
+                    const elapsed = Math.floor((now - bluetoothIndividualSegmentStartTime) / 1000);
+                    bluetoothIndividualSegmentElapsedTime = elapsed;
+                    countdownValue = Math.max(0, segDuration - elapsed);
+                }
                 // segmentElapsedSec가 있으면 사용
-                if (status.segmentElapsedSec !== undefined && Number.isFinite(status.segmentElapsedSec)) {
+                else if (status.segmentElapsedSec !== undefined && Number.isFinite(status.segmentElapsedSec)) {
                     countdownValue = Math.max(0, segDuration - Math.floor(status.segmentElapsedSec));
                 }
                 // segmentElapsedTime이 있으면 사용
@@ -1313,11 +1377,6 @@ function updateLapTime(status) {
         countdownValue = Math.max(0, Math.floor(status.countdownRemainingSec));
     }
     
-    // 세그먼트 카운트다운 시간 로그 출력
-    if (countdownValue !== null && countdownValue >= 0) {
-        console.log('[updateLapTime] 세그먼트 카운트다운 시간:', countdownValue, '초');
-    }
-    
     // 카운트다운 값 표시
     if (countdownValue !== null && countdownValue >= 0) {
         lapTimeEl.textContent = formatTime(countdownValue);
@@ -1329,7 +1388,9 @@ function updateLapTime(status) {
     }
     
     // 5초 카운트다운 오버레이 처리
-    handleSegmentCountdown(countdownValue, status);
+    if (status) {
+        handleSegmentCountdown(countdownValue, status);
+    }
 }
 
 // 5초 카운트다운 오버레이 처리 함수
@@ -1513,6 +1574,7 @@ function stopSegmentCountdown() {
 }
 
 // TARGET 파워 업데이트 함수 (Firebase에서 계산된 값 우선 사용)
+// Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
 function updateTargetPower() {
     const targetPowerEl = document.getElementById('ui-target-power');
     if (!targetPowerEl) {
@@ -1521,7 +1583,8 @@ function updateTargetPower() {
     }
     
     // 1순위: Firebase에서 받은 targetPower 값 사용 (서버에서 계산된 값)
-    if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower >= 0) {
+    // 단, targetPower가 0이면 세그먼트 정보로부터 계산 (Firebase 값이 0일 수 있음)
+    if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower > 0) {
         // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
         const adjustedTargetPower = Math.round(firebaseTargetPower * individualIntensityAdjustment);
         console.log('[updateTargetPower] Firebase targetPower 값 사용:', firebaseTargetPower, 'W');
