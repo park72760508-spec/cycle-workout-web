@@ -13659,6 +13659,97 @@ function startMobileTrainingTimerLoop() {
 }
 
 /**
+ * 모바일 대시보드용 세그먼트 정보를 표시 형식으로 변환 (예: FTP 60%, RPM 90 등)
+ * individual.js의 formatSegmentInfo와 동일한 로직 (독립적으로 구동)
+ */
+function formatMobileSegmentInfo(targetType, targetValue, segmentIndex) {
+  if (!targetType || targetValue === undefined || targetValue === null) {
+    return '준비 중';
+  }
+  
+  // target_type에 따라 표시 형식 결정
+  if (targetType === 'ftp_pct') {
+    // FTP 퍼센트: "FTP 60%"
+    const percent = Number(targetValue) || 100;
+    return `FTP ${percent}%`;
+  } else if (targetType === 'ftp_pctz') {
+    // ftp_pctz 타입: "56, 75" 또는 "56/75" 형식 (하한, 상한)
+    let minPercent = 60;
+    let maxPercent = 75;
+    
+    if (typeof targetValue === 'string') {
+      if (targetValue.includes('/')) {
+        const parts = targetValue.split('/').map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else if (parts.length >= 1) {
+          minPercent = Number(parts[0]) || 60;
+        }
+      } else if (targetValue.includes(',')) {
+        const parts = targetValue.split(',').map(s => s.trim());
+        if (parts.length >= 2) {
+          minPercent = Number(parts[0]) || 60;
+          maxPercent = Number(parts[1]) || 75;
+        } else if (parts.length >= 1) {
+          minPercent = Number(parts[0]) || 60;
+        }
+      } else {
+        minPercent = Number(targetValue) || 60;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      minPercent = Number(targetValue[0]) || 60;
+      maxPercent = Number(targetValue[1]) || 75;
+    } else if (typeof targetValue === 'number') {
+      minPercent = targetValue;
+    }
+    
+    return `FTP ${minPercent}%/${maxPercent}%`;
+  } else if (targetType === 'dual') {
+    // Dual 타입: "100/120" 또는 "100/90" 형식 (FTP%/RPM)
+    let ftpPercent = 100;
+    let rpm = 90;
+    
+    if (typeof targetValue === 'string' && targetValue.includes('/')) {
+      const parts = targetValue.split('/').map(s => s.trim());
+      if (parts.length >= 1) {
+        ftpPercent = Number(parts[0].replace('%', '')) || 100;
+      }
+      if (parts.length >= 2) {
+        rpm = Number(parts[1]) || 90;
+      }
+    } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+      ftpPercent = Number(targetValue[0]) || 100;
+      if (targetValue.length >= 2) {
+        rpm = Number(targetValue[1]) || 90;
+      }
+    } else if (typeof targetValue === 'number') {
+      // 숫자로 저장된 경우 처리
+      const numValue = targetValue;
+      if (numValue > 1000 && numValue < 1000000) {
+        const str = String(numValue);
+        if (str.length >= 4) {
+          const ftpPart = str.slice(0, -3);
+          ftpPercent = Number(ftpPart) || 100;
+        }
+      } else {
+        ftpPercent = numValue <= 1000 ? numValue : 100;
+      }
+    }
+    
+    return `FTP ${ftpPercent}% / RPM ${rpm}`;
+  } else if (targetType === 'cadence_rpm') {
+    // RPM: "RPM 90"
+    const rpm = Number(targetValue) || 0;
+    return `RPM ${rpm}`;
+  } else {
+    // 알 수 없는 타입: 기본값 표시
+    const segIdx = (segmentIndex >= 0 ? segmentIndex + 1 : 1);
+    return `Segment ${segIdx}`;
+  }
+}
+
+/**
  * 모바일 전용 일시정지/재개 함수 (Firebase와 무관, 독립적으로 동작)
  */
 function setMobilePaused(isPaused) {
