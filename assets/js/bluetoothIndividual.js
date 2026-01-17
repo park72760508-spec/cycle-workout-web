@@ -937,8 +937,9 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             bluetoothIndividualSegmentElapsedTime = 0;
             console.log(`[BluetoothIndividual] 세그먼트 변경: ${previousSegmentIndex} → ${currentSegmentIndex}, 파워 히스토리 및 시간 추적 초기화`);
             
-            // 세그먼트 변경 시 속도계 목표값 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+            // 세그먼트 변경 시 속도계 목표값 및 세그먼트 정보 업데이트 (Bluetooth 개인훈련 대시보드 전용)
             updateSpeedometerTargetForSegment(currentSegmentIndex);
+            updateSpeedometerSegmentInfo(); // 세그먼트 정보도 즉시 업데이트
         }
         
         // 훈련 시작 시 로컬 시간 추적 초기화 및 속도계 목표값 업데이트
@@ -1039,6 +1040,9 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             logCurrentSegmentInfo();
         }
         
+        // 속도계 하단 세그먼트 정보 및 진행률 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+        updateSpeedometerSegmentInfo();
+        
         // TARGET 파워 업데이트 (세그먼트 변경 시)
         updateTargetPower();
         
@@ -1093,7 +1097,14 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
 // =========================================================
 
 // updateDashboard 함수: window.liveData에서 읽어서 대시보드 업데이트
+// Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
 function updateDashboard(data = null) {
+    // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return; // 다른 화면에서는 실행하지 않음
+    }
+    
     // window.liveData 초기화 확인 (bluetooth.js에서 초기화하지만 안전을 위해)
     if (!window.liveData) {
         window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
@@ -1148,6 +1159,9 @@ function updateDashboard(data = null) {
         powerEl.textContent = powerValue;
         powerEl.setAttribute('fill', '#fff');
     }
+    
+    // 현재 파워값 하단에 세그먼트 정보 및 진행률 표시 (Bluetooth 개인훈련 대시보드 전용)
+    updateSpeedometerSegmentInfo();
     
     // TARGET 파워는 세그먼트 정보에서 계산
     updateTargetPower();
@@ -1700,6 +1714,12 @@ function stopSegmentCountdown() {
 // TARGET 파워 업데이트 함수 (Firebase에서 계산된 값 우선 사용)
 // Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
 function updateTargetPower() {
+    // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return; // 다른 화면에서는 실행하지 않음
+    }
+    
     const targetPowerEl = document.getElementById('ui-target-power');
     if (!targetPowerEl) {
         console.warn('[updateTargetPower] ui-target-power 요소를 찾을 수 없습니다.');
@@ -2147,13 +2167,14 @@ function updateTargetPower() {
 /**
  * 세그먼트 변경 시 속도계 목표값 업데이트 (Bluetooth 개인훈련 대시보드 전용)
  * 인도어 대시보드의 applySegmentTarget 로직을 참고하여 독립적으로 구현
+ * 다른 화면과 독립적으로 작동
  * @param {number} segmentIndex - 현재 세그먼트 인덱스
  */
 function updateSpeedometerTargetForSegment(segmentIndex) {
-    // Bluetooth 개인훈련 대시보드 화면인지 확인
+    // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
     const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
     if (!isBluetoothIndividualScreen) {
-        return;
+        return; // 다른 화면에서는 실행하지 않음
     }
     
     try {
@@ -2346,6 +2367,73 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
         
     } catch (error) {
         console.error('[updateSpeedometerTargetForSegment] 오류:', error);
+    }
+}
+
+/**
+ * 속도계 하단 세그먼트 정보 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+ * 현재 파워값 하단에 현재 진행 세그먼트 정보를 표시
+ * 다른 화면과 독립적으로 작동
+ */
+function updateSpeedometerSegmentInfo() {
+    // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return; // 다른 화면에서는 실행하지 않음
+    }
+    
+    const segmentInfoEl = document.getElementById('segment-info');
+    if (!segmentInfoEl) {
+        return;
+    }
+    
+    try {
+        // 현재 상태 확인
+        const status = firebaseStatus || { state: 'idle' };
+        const currentState = status.state || 'idle';
+        
+        // 훈련이 실행 중이 아니면 기본 메시지 표시
+        if (currentState !== 'running') {
+            if (currentState === 'paused') {
+                segmentInfoEl.textContent = '일시정지';
+            } else {
+                segmentInfoEl.textContent = '대기 중';
+            }
+            segmentInfoEl.setAttribute('fill', '#ccc');
+            return;
+        }
+        
+        // 현재 세그먼트 정보 가져오기
+        const currentSeg = getCurrentSegment();
+        if (!currentSeg) {
+            segmentInfoEl.textContent = '준비 중';
+            segmentInfoEl.setAttribute('fill', '#ccc');
+            return;
+        }
+        
+        // 세그먼트 이름과 목표 값을 조합하여 표시
+        const segmentName = currentSeg.name || '';
+        const targetText = formatSegmentInfo(
+            status.segmentTargetType || currentSeg.target_type || 'ftp_pct',
+            status.segmentTargetValue !== undefined ? status.segmentTargetValue : currentSeg.target_value
+        );
+        
+        // 세그먼트 이름이 있으면 "세그먼트 이름(목표 값)" 형식, 없으면 "목표 값"만 표시
+        const segmentText = segmentName 
+            ? `${segmentName}(${targetText})`
+            : targetText;
+        
+        // 표시
+        segmentInfoEl.textContent = segmentText;
+        segmentInfoEl.setAttribute('fill', '#00d4aa'); // 민트색
+        
+    } catch (error) {
+        console.error('[updateSpeedometerSegmentInfo] 오류:', error);
+        const segmentInfoEl = document.getElementById('segment-info');
+        if (segmentInfoEl) {
+            segmentInfoEl.textContent = '준비 중';
+            segmentInfoEl.setAttribute('fill', '#ccc');
+        }
     }
 }
 
@@ -2890,8 +2978,15 @@ window.closeTrainingResultModal = closeTrainingResultModal;
  * 속도계 원호에 목표 파워값만큼 채우기 (세그먼트 달성도에 따라 색상 변경)
  * - LAP AVG 파워값 / 목표 파워값 비율이 0.985 이상이면 투명 민트색
  * - 미만이면 투명 주황색
+ * Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
  */
 function updateTargetPowerArc() {
+    // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return; // 다른 화면에서는 실행하지 않음
+    }
+    
     // 목표 파워값 가져오기
     const targetPowerEl = document.getElementById('ui-target-power');
     if (!targetPowerEl) return;
