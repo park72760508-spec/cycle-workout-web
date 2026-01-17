@@ -1054,6 +1054,11 @@ function updateDashboard(data = null) {
     // TARGET 파워는 세그먼트 정보에서 계산
     updateTargetPower();
     
+    // 목표 파워 원호 업데이트 (달성도에 따라 색상 변경)
+    if (typeof updateTargetPowerArc === 'function') {
+        updateTargetPowerArc();
+    }
+    
     // CADENCE 표시 (Bluetooth 디바이스에서 받은 값)
     // window.liveData.cadence 우선 사용 (bluetooth.js에서 직접 업데이트됨)
     const cadence = Number(window.liveData?.cadence || data?.cadence || data?.rpm || 0);
@@ -2819,6 +2824,173 @@ if (document.readyState === 'loading') {
         }, 1000);
     });
 } else {
+    // DOM이 이미 로드되었으면 바로 실행
+    updateGaugeTicksAndLabels();
+    startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+    // 블루투스 연결 상태 초기 업데이트
+    setTimeout(() => {
+        updateBluetoothConnectionStatus();
+        // 1초마다 연결 상태 확인 및 업데이트
+        setInterval(updateBluetoothConnectionStatus, 1000);
+    }, 1000);
+}
+    // 목표 파워값 가져오기
+    const targetPowerEl = document.getElementById('ui-target-power');
+    if (!targetPowerEl) return;
+    
+    const targetPower = Number(targetPowerEl.textContent) || 0;
+    if (targetPower <= 0) {
+        // 목표 파워가 없으면 원호 숨김
+        const targetArc = document.getElementById('gauge-target-arc');
+        if (targetArc) {
+            targetArc.style.display = 'none';
+        }
+        // 상한 원호도 숨김
+        const maxArc = document.getElementById('gauge-max-arc');
+        if (maxArc) {
+            maxArc.style.display = 'none';
+        }
+        return;
+    }
+    
+    // LAP AVG 파워값 가져오기
+    const lapPowerEl = document.getElementById('ui-lap-power');
+    const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
+    
+    // 세그먼트 달성도 계산 (LAP AVG / 목표 파워) - 하한값 기준
+    const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
+    
+    // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
+    const arcColor = achievementRatio >= 0.985 
+        ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
+        : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+    
+    // FTP 기반으로 최대 파워 계산
+    const maxPower = userFTP * 2;
+    if (maxPower <= 0) return;
+    
+    // 현재 세그먼트 정보 가져오기
+    const seg = getCurrentSegment();
+    const targetType = seg?.target_type || 'ftp_pct';
+    const isFtpPctz = targetType === 'ftp_pctz';
+    
+    // cadence_rpm 타입인 경우: 파워값이 없으므로 원호 표시하지 않음
+    if (targetType === 'cadence_rpm') {
+        const targetArc = document.getElementById('gauge-target-arc');
+        if (targetArc) {
+            targetArc.style.display = 'none';
+        }
+        const maxArc = document.getElementById('gauge-max-arc');
+        if (maxArc) {
+            maxArc.style.display = 'none';
+        }
+        return;
+    }
+    
+    // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
+    const minRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+    
+    // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
+    const startAngle = 180;
+    let minEndAngle = 180 + (minRatio * 180);
+    
+    // SVG 원호 경로 생성
+    const centerX = 100;
+    const centerY = 140;
+    const radius = 80;
+    
+    // 하한값 원호 경로 생성
+    const startRad = (startAngle * Math.PI) / 180;
+    const minEndRad = (minEndAngle * Math.PI) / 180;
+    
+    const startX = centerX + radius * Math.cos(startRad);
+    const startY = centerY + radius * Math.sin(startRad);
+    const minEndX = centerX + radius * Math.cos(minEndRad);
+    const minEndY = centerY + radius * Math.sin(minEndRad);
+    
+    const minAngleDiff = minEndAngle - startAngle;
+    const minLargeArcFlag = minAngleDiff > 180 ? 1 : 0;
+    const minPathData = `M ${startX} ${startY} A ${radius} ${radius} 0 ${minLargeArcFlag} 1 ${minEndX} ${minEndY}`;
+    
+    // 목표 파워 원호 요소 가져오기 또는 생성 (하한값)
+    let targetArc = document.getElementById('gauge-target-arc');
+    if (!targetArc) {
+        // SVG에 원호 요소 추가
+        const svg = document.querySelector('.gauge-container svg');
+        if (svg) {
+            targetArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            targetArc.id = 'gauge-target-arc';
+            targetArc.setAttribute('fill', 'none');
+            targetArc.setAttribute('stroke-width', '12');
+            targetArc.setAttribute('stroke-linecap', 'round');
+            // 원호 배경 뒤에, 눈금 앞에 배치
+            const arcBg = svg.querySelector('path[d*="M 20 140"]');
+            if (arcBg && arcBg.nextSibling) {
+                svg.insertBefore(targetArc, arcBg.nextSibling);
+            } else {
+                svg.insertBefore(targetArc, svg.firstChild.nextSibling);
+            }
+        } else {
+            return;
+        }
+    }
+    
+    // 하한값 원호 경로 및 색상 업데이트
+    targetArc.setAttribute('d', minPathData);
+    targetArc.setAttribute('stroke', arcColor);
+    targetArc.style.display = 'block';
+    
+    // ftp_pctz 타입인 경우 상한값 원호 추가
+    if (isFtpPctz && window.currentSegmentMaxPower && window.currentSegmentMaxPower > targetPower) {
+        const maxPowerValue = window.currentSegmentMaxPower;
+        const maxRatio = Math.min(Math.max(maxPowerValue / maxPower, 0), 1);
+        const maxEndAngle = 180 + (maxRatio * 180);
+        const maxEndRad = (maxEndAngle * Math.PI) / 180;
+        const maxEndX = centerX + radius * Math.cos(maxEndRad);
+        const maxEndY = centerY + radius * Math.sin(maxEndRad);
+        
+        const maxAngleDiff = maxEndAngle - minEndAngle;
+        const maxLargeArcFlag = maxAngleDiff > 180 ? 1 : 0;
+        const maxPathData = `M ${minEndX} ${minEndY} A ${radius} ${radius} 0 ${maxLargeArcFlag} 1 ${maxEndX} ${maxEndY}`;
+        
+        // 상한값 원호 요소 가져오기 또는 생성
+        let maxArc = document.getElementById('gauge-max-arc');
+        if (!maxArc) {
+            const svg = document.querySelector('.gauge-container svg');
+            if (svg) {
+                maxArc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                maxArc.id = 'gauge-max-arc';
+                maxArc.setAttribute('fill', 'none');
+                maxArc.setAttribute('stroke-width', '12');
+                maxArc.setAttribute('stroke-linecap', 'round');
+                // 하한값 원호 다음에 배치
+                if (targetArc && targetArc.nextSibling) {
+                    svg.insertBefore(maxArc, targetArc.nextSibling);
+                } else {
+                    svg.appendChild(maxArc);
+                }
+            } else {
+                return;
+            }
+        }
+        
+        // 상한값 원호 경로 및 색상 업데이트 (투명도 낮춘 주황색)
+        maxArc.setAttribute('d', maxPathData);
+        maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)'); // 더 투명한 주황색
+        maxArc.style.display = 'block';
+    } else {
+        // ftp_pctz가 아니거나 상한값이 없으면 상한 원호 숨김
+        const maxArc = document.getElementById('gauge-max-arc');
+        if (maxArc) {
+            maxArc.style.display = 'none';
+        }
+    }
+    
+    // 디버깅 로그 (선택사항)
+    if (achievementRatio > 0) {
+        console.log(`[updateTargetPowerArc] 달성도: ${(achievementRatio * 100).toFixed(1)}% (LAP: ${lapPower}W / 목표: ${targetPower}W), 색상: ${achievementRatio >= 0.985 ? '민트색' : '주황색'}${isFtpPctz ? `, 상한: ${window.currentSegmentMaxPower}W` : ''}`);
+    }
+}
     // DOM이 이미 로드되었으면 바로 실행
     updateGaugeTicksAndLabels();
     startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
