@@ -2676,7 +2676,14 @@ function startSegmentLoop() {
       // 5s,4s,3s,2s,1s,0s 경계를 '넘었는지' 판정해서 정확히 한 번씩만 울림.
       // ── [교체] 카운트다운/벨: 경계(엣지) 기반 트리거 (세그 끝나기 5초 전부터) ──
       // 남은시간은 '초 단위 상태'만으로 계산(절대 ms 혼용 금지)
-      if (segRemaining > 0) {
+      // 블루투스 개인 훈련 대시보드 화면에서는 카운트다운 실행하지 않음
+      const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+      const isMobileDashboardScreen = document.getElementById('mobileDashboardScreen') && 
+        (document.getElementById('mobileDashboardScreen').classList.contains('active') || 
+         window.getComputedStyle(document.getElementById('mobileDashboardScreen')).display !== 'none');
+      
+      // 블루투스 개인 훈련 대시보드나 모바일 대시보드가 아닐 때만 카운트다운 실행
+      if (segRemaining > 0 && !isBluetoothIndividualScreen && !isMobileDashboardScreen) {
         // 다음 세그(마지막이면 null)
         const nextSeg = (currentSegIndex < w.segments.length - 1) ? w.segments[currentSegIndex + 1] : null;
       
@@ -2688,6 +2695,12 @@ function startSegmentLoop() {
         const endAtSec      = getCumulativeStartSec(currentSegIndex) + segDur; // 세그 끝나는 '절대 초'
         const remainMsPrev  = ts._prevRemainMs[key] ?? Math.round(segRemaining * 1000); // 바로 직전 남은 ms
         const remainMsNow   = Math.round((endAtSec - ts.elapsedSec) * 1000);           // 현재 남은 ms (초 기반)
+      
+        // remainMsNow가 0 이하이면 카운트다운 실행하지 않음 (반복 방지)
+        if (remainMsNow <= 0) {
+          // 이미 종료된 세그먼트이므로 카운트다운 로직 건너뛰기
+          return;
+        }
       
         // 0초는 살짝 일찍(200ms) 울리기
         const EPS_0_MS = 200;
@@ -2702,6 +2715,15 @@ function startSegmentLoop() {
         const boundary = (n > 0) ? (n + 1) * 1000 : 1000;
         const crossed = (remainMsPrev > boundary && remainMsNow <= boundary);
         if (!crossed) return;
+      
+        // remainMsNow가 0 이하이면 더 이상 카운트다운 실행하지 않음
+        if (remainMsNow <= 0 && n === 0) {
+          // 이미 종료된 세그먼트이므로 카운트다운 종료
+          segmentCountdownActive = false;
+          CountdownDisplay.hideImmediate();
+          MobileCountdownDisplay.hideImmediate();
+          return;
+        }
       
         // 오버레이 표시 시작(6초 시점에 "5" 표시)
         if (n === 5 && !segmentCountdownActive && nextSeg) {
