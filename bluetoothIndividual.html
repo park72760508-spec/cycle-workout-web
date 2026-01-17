@@ -83,6 +83,82 @@
             font-variant-numeric: tabular-nums;
             color: #fff;
         }
+        
+        /* 블루투스 연결 버튼 */
+        .bluetooth-connect-btn {
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 6px 12px;
+            color: #fff;
+            font-size: 0.85em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+        .bluetooth-connect-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .bluetooth-connect-btn.has-connection {
+            background: rgba(0, 212, 170, 0.2);
+            border-color: #00d4aa;
+            color: #00d4aa;
+        }
+        .bluetooth-connect-btn .bluetooth-icon {
+            width: 16px;
+            height: 16px;
+        }
+        
+        /* 블루투스 연결 드롭다운 */
+        .bluetooth-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .bluetooth-dropdown.show {
+            display: block;
+        }
+        .bluetooth-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            color: #fff;
+            font-size: 0.9em;
+        }
+        .bluetooth-dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .bluetooth-dropdown-item.connected {
+            color: #00d4aa;
+        }
+        .bluetooth-dropdown-item img {
+            width: 24px;
+            height: 24px;
+        }
+        .bluetooth-dropdown-item .status {
+            margin-left: auto;
+            font-size: 0.8em;
+            color: #888;
+        }
+        .bluetooth-dropdown-item.connected .status {
+            color: #00d4aa;
+        }
 
         /* 메인 콘텐츠 (게이지 영역) */
         .main-content {
@@ -519,7 +595,32 @@
     <div class="header">
         <div id="bike-id-display" class="bike-badge">Bike ?</div>
         <div id="segment-info" style="font-size:0.9em; color:#ccc;">준비 중</div>
-        <div id="main-timer" class="timer">00:00:00</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <div id="main-timer" class="timer">00:00:00</div>
+            <div style="position: relative;">
+                <button id="bluetoothConnectBtn" class="bluetooth-connect-btn" onclick="toggleBluetoothDropdown()">
+                    <span style="font-size: 1.1em;">📶</span>
+                    <span>연결</span>
+                </button>
+                <div id="bluetoothDropdown" class="bluetooth-dropdown">
+                    <div id="bluetoothTrainerItem" class="bluetooth-dropdown-item" onclick="connectBluetoothDevice('trainer')">
+                        <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
+                        <span>스마트 트레이너</span>
+                        <span class="status" id="trainerStatus">미연결</span>
+                    </div>
+                    <div id="bluetoothHRItem" class="bluetooth-dropdown-item" onclick="connectBluetoothDevice('heartRate')">
+                        <img src="assets/img/bpm_i.png" alt="심박계">
+                        <span>심박계</span>
+                        <span class="status" id="heartRateStatus">미연결</span>
+                    </div>
+                    <div id="bluetoothPMItem" class="bluetooth-dropdown-item" onclick="connectBluetoothDevice('powerMeter')">
+                        <img src="assets/img/power_i.png" alt="파워미터">
+                        <span>파워미터</span>
+                        <span class="status" id="powerMeterStatus">미연결</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="segment-graph-section">
