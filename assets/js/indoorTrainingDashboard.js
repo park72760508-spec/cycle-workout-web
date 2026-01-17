@@ -2481,30 +2481,34 @@ async function selectSearchedUserForPowerMeter(userId) {
     // 사용자 정보 가져오기
     let user = null;
     
-    // 방법 1: 검색 결과에서 임시 저장된 사용자 정보 사용 (가장 빠름)
+    // 방법 1: 검색 결과에서 임시 저장된 사용자 정보 사용 (가장 빠름, Bluetooth Join Session에서 인증된 사용자 정보)
+    // window._searchedUserForPairing이 있으면 이것을 우선 사용하고 apiGetUsers를 호출하지 않음
     if (window._searchedUserForPairing && String(window._searchedUserForPairing.id) === String(userId)) {
       user = window._searchedUserForPairing;
-    }
-    
-    // 방법 2: apiGetUsers 함수 사용
-    if (!user && typeof apiGetUsers === 'function') {
-      const result = await apiGetUsers();
-      if (result && result.success && Array.isArray(result.items)) {
-        user = result.items.find(u => String(u.id) === String(userId));
+      console.log('[Indoor Training] selectSearchedUserForPowerMeter: window._searchedUserForPairing 사용 (apiGetUsers 호출 안 함)');
+    } else {
+      // window._searchedUserForPairing이 없을 때만 다른 방법으로 사용자 정보 가져오기
+      
+      // 방법 2: apiGetUsers 함수 사용 (Bluetooth Join Session이 아닌 경우에만)
+      if (!user && typeof apiGetUsers === 'function') {
+        const result = await apiGetUsers();
+        if (result && result.success && Array.isArray(result.items)) {
+          user = result.items.find(u => String(u.id) === String(userId));
+        }
       }
-    }
-    
-    // 방법 3: apiGetUsers가 없으면 window.apiGetUsers 시도
-    if (!user && typeof window.apiGetUsers === 'function') {
-      const result = await window.apiGetUsers();
-      if (result && result.success && Array.isArray(result.items)) {
-        user = result.items.find(u => String(u.id) === String(userId));
+      
+      // 방법 3: apiGetUsers가 없으면 window.apiGetUsers 시도
+      if (!user && typeof window.apiGetUsers === 'function') {
+        const result = await window.apiGetUsers();
+        if (result && result.success && Array.isArray(result.items)) {
+          user = result.items.find(u => String(u.id) === String(userId));
+        }
       }
-    }
-    
-    // 방법 4: dbUsers에서 직접 찾기 (app.js에서 사용하는 방식)
-    if (!user && window.dbUsers && Array.isArray(window.dbUsers)) {
-      user = window.dbUsers.find(u => String(u.id) === String(userId));
+      
+      // 방법 4: dbUsers에서 직접 찾기 (app.js에서 사용하는 방식)
+      if (!user && window.dbUsers && Array.isArray(window.dbUsers)) {
+        user = window.dbUsers.find(u => String(u.id) === String(userId));
+      }
     }
     
     if (user) {
