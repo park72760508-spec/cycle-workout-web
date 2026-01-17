@@ -11535,6 +11535,11 @@ button[aria-disabled="true"] {
   line-height: 1;
 }
 
+/* RPM 값 빨강색 표기 */
+.speed-stat-rpm .speed-stat-value {
+  color: #ff0000; /* 빨강색 */
+}
+
 .speed-stat-label-wrapper .speed-unit-bottom {
   font-size: 8.64px; /* 21.6px * 0.4 (아래 첨자 크기) */
   font-weight: 300;
