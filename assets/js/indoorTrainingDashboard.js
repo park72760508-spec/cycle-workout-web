@@ -2097,6 +2097,26 @@ function openPowerMeterSettings(powerMeterId) {
       source: authenticatedUser === window.currentUser ? 'window.currentUser' : 'localStorage'
     });
     
+    // 인증된 사용자 정보를 임시 저장 (selectSearchedUserForPowerMeter에서 사용)
+    window._searchedUserForPairing = authenticatedUser;
+    
+    // 중복 체크: 다른 트랙에서 이미 사용 중인지 확인
+    const isAlreadyPaired = window.indoorTrainingState.powerMeters.some(pm => 
+      pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(authenticatedUser.id)
+    );
+    
+    if (isAlreadyPaired) {
+      const pairedTrack = window.indoorTrainingState.powerMeters.find(pm => 
+        pm.id !== powerMeterId && pm.userId && String(pm.userId) === String(authenticatedUser.id)
+      );
+      if (typeof showToast === 'function') {
+        showToast(`이 사용자는 이미 트랙${pairedTrack?.id || '?'}에서 사용 중입니다.`);
+      }
+      window._searchedUserForPairing = null; // 임시 저장 정보 삭제
+      return;
+    }
+    
+    // 인증된 사용자 정보로 바로 Firebase에 저장
     selectSearchedUserForPowerMeter(authenticatedUser.id).then(() => {
       console.log('[Indoor Training] 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 Firebase 저장 완료');
       // 연결 상태 업데이트 (Firebase devices 정보 표시)
@@ -2104,8 +2124,12 @@ function openPowerMeterSettings(powerMeterId) {
       if (typeof showToast === 'function') {
         showToast(`트랙${powerMeterId}에 ${authenticatedUser.name}님이 신청되었습니다.`);
       }
+      // 임시 저장 정보 삭제
+      window._searchedUserForPairing = null;
     }).catch(error => {
       console.error('[Indoor Training] 사용자 정보 반영 실패:', error);
+      // 임시 저장 정보 삭제
+      window._searchedUserForPairing = null;
       // 실패 시에만 모달 열기 (변경용)
       openPairingModal(powerMeterId);
     });
@@ -2769,9 +2793,13 @@ async function selectSearchedUserForPowerMeter(userId) {
         });
     } else {
       // 사용자 정보를 찾을 수 없는 경우
+      const errorMsg = `사용자 ID ${userId}를 찾을 수 없습니다.`;
+      console.error('[Indoor Training]', errorMsg);
       if (typeof showToast === 'function') {
         showToast('사용자 정보를 찾을 수 없습니다.');
       }
+      // Promise reject를 위해 에러를 throw
+      throw new Error(errorMsg);
     }
   } catch (error) {
     console.error('[Indoor Training] 사용자 선택 오류:', error);
