@@ -2077,7 +2077,7 @@ function updateSegmentBarTick(){
   }
 }
 
-// 2. 훈련 상태 객체 통일 (window.trainingState 사용)
+// 2. 훈련 상태 객체 통일 (window.trainingState 사용 - Indoor Training 전용)
 window.trainingState = window.trainingState || {
   timerId: null,
   paused: false,
@@ -2086,6 +2086,23 @@ window.trainingState = window.trainingState || {
   segElapsedSec: 0,
   segEnds: [],
   totalSec: 0
+};
+
+// [추가] 모바일 개인훈련 대시보드 전용 독립적인 상태 관리 (Firebase와 무관)
+window.mobileTrainingState = window.mobileTrainingState || {
+  timerId: null,
+  paused: false,
+  elapsedSec: 0,
+  segIndex: 0,
+  segElapsedSec: 0,
+  segEnds: [],
+  totalSec: 0,
+  workoutStartMs: null,
+  pauseAccumMs: 0,
+  pausedAtMs: null,
+  _countdownFired: {},
+  _prevRemainMs: {},
+  _lastProcessedSegIndex: 0
 };
 
 // 훈련 상태 => 시간/세그먼트 UI 갱신 함수
@@ -13391,6 +13408,17 @@ window.setupHapticObserver = () => {};
 function startMobileWorkout() {
   console.log('[Mobile Dashboard] Starting workout...');
   
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    console.log('[Mobile Dashboard] 모바일 화면이 아니므로 실행하지 않음');
+    return;
+  }
+  
   // 워크아웃이 선택되어 있는지 확인
   if (!window.currentWorkout) {
     if (typeof showToast === 'function') {
@@ -13399,25 +13427,37 @@ function startMobileWorkout() {
     return;
   }
 
-  // 훈련 상태 초기화
-  // startSegmentLoop에서 모든 상태를 초기화하므로 여기서는 최소한만 설정
-  if (!window.trainingState) {
-    window.trainingState = {
-      timerId: null,
-      paused: false,
-      elapsedSec: 0,
-      segIndex: 0,
-      segElapsedSec: 0,
-      segEnds: [],
-      totalSec: 0
-    };
-  }
+  // 모바일 전용 훈련 상태 초기화 (Firebase와 무관한 독립적인 상태)
+  const mts = window.mobileTrainingState;
+  const w = window.currentWorkout;
   
   // 기존 타이머가 있으면 정리
-  if (window.trainingState.timerId) {
-    clearInterval(window.trainingState.timerId);
-    window.trainingState.timerId = null;
+  if (mts.timerId) {
+    clearInterval(mts.timerId);
+    mts.timerId = null;
   }
+  
+  // 누적 종료시각 배열 계산
+  mts.segEnds = [];
+  let acc = 0;
+  for (let i = 0; i < w.segments.length; i++) {
+    const durSec = segDurationSec(w.segments[i]);
+    acc += durSec;
+    mts.segEnds.push(acc);
+  }
+  mts.totalSec = acc;
+  
+  // 초기 상태 설정
+  mts.elapsedSec = 0;
+  mts.segIndex = 0;
+  mts.segElapsedSec = 0;
+  mts.paused = false;
+  mts.workoutStartMs = Date.now();
+  mts.pauseAccumMs = 0;
+  mts.pausedAtMs = null;
+  mts._countdownFired = {};
+  mts._prevRemainMs = {};
+  mts._lastProcessedSegIndex = 0;
 
   // 훈련 세션 시작 (개인훈련 대시보드와 동일한 로직)
   const currentUser = window.currentUser || null;
@@ -13429,32 +13469,8 @@ function startMobileWorkout() {
     console.warn('[Mobile Dashboard] 사용자 ID가 없어 세션을 시작할 수 없습니다.');
   }
   
-  // 세그먼트 루프 시작 (모바일 대시보드 화면에서 실행)
-  // startSegmentLoop 내부에서 buildSegmentBar와 applySegmentTarget를 호출하므로 여기서는 호출하지 않음
-  if (typeof startSegmentLoop === "function") {
-    try {
-      console.log('[Mobile Dashboard] startSegmentLoop 호출 전...');
-      console.log('[Mobile Dashboard] trainingState:', window.trainingState);
-      startSegmentLoop();
-      console.log('[Mobile Dashboard] Segment loop started, timerId:', window.trainingState?.timerId);
-      
-      // 타이머가 제대로 시작되었는지 확인
-      if (!window.trainingState.timerId) {
-        console.error('[Mobile Dashboard] Timer not started! trainingState:', window.trainingState);
-      } else {
-        console.log('[Mobile Dashboard] Timer started successfully, timerId:', window.trainingState.timerId, 'will update every 1 second');
-        // 즉시 한 번 실행해서 타이머가 동작하는지 확인
-        setTimeout(() => {
-          console.log('[Mobile Dashboard] 1초 후 확인 - timerId:', window.trainingState?.timerId, 'elapsedSec:', window.trainingState?.elapsedSec);
-        }, 1000);
-      }
-    } catch (e) {
-      console.error('[Mobile Dashboard] Failed to start segment loop:', e);
-      console.error('[Mobile Dashboard] Error stack:', e.stack);
-    }
-  } else {
-    console.error('[Mobile Dashboard] startSegmentLoop function not found');
-  }
+  // 모바일 전용 독립적인 타이머 루프 시작 (Firebase와 무관)
+  startMobileTrainingTimerLoop();
 
   // 모바일 대시보드 UI 초기 업데이트
   updateMobileDashboardUI();
@@ -13482,11 +13498,22 @@ function startMobileWorkout() {
  * 모바일 대시보드 UI 업데이트 (세그먼트 정보 등)
  */
 function updateMobileDashboardUI() {
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return;
+  }
+  
   const w = window.currentWorkout;
   if (!w || !w.segments) return;
 
-  const ts = window.trainingState || {};
-  const currentSegIndex = ts.segIndex || 0;
+  // 모바일 전용 상태 사용 (Firebase와 무관)
+  const mts = window.mobileTrainingState || {};
+  const currentSegIndex = mts.segIndex || 0;
   const currentSeg = w.segments[currentSegIndex];
 
   // 세그먼트 정보 표시
@@ -13499,7 +13526,7 @@ function updateMobileDashboardUI() {
 
   // 세그먼트 그래프 업데이트
   if (typeof drawSegmentGraph === 'function') {
-    const elapsedTime = ts.elapsedSec || 0;
+    const elapsedTime = mts.elapsedSec || 0;
     drawSegmentGraph(w.segments, currentSegIndex, 'mobileIndividualSegmentGraph', elapsedTime);
   }
 }
@@ -13574,8 +13601,18 @@ function startMobileWorkoutWithCountdown(sec = 5) {
 }
 
 function handleMobileToggle() {
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return;
+  }
+  
   const btnImg = document.getElementById('imgMobileToggle');
-  const ts = window.trainingState;
+  const ts = window.mobileTrainingState; // 모바일 전용 상태 사용
   
   // 훈련이 아예 시작되지 않은 경우 (타이머 없음) -> 워크아웃 확인 후 5초 카운트다운
   if (!ts || !ts.timerId) {
@@ -13630,31 +13667,79 @@ function handleMobileToggle() {
  * 2. 건너뛰기 핸들러
  */
 function handleMobileSkip() {
-  // 기존 앱 로직의 세그먼트 스킵 함수 호출
-  if (typeof skipCurrentSegment === 'function') {
-    skipCurrentSegment();
-    
-    // 버튼 클릭 피드백 (진동 등)
-    if (navigator.vibrate) navigator.vibrate(50);
-  } else {
-    console.warn('skipCurrentSegment 함수를 찾을 수 없습니다.');
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return;
   }
+  
+  // 모바일 전용 세그먼트 스킵
+  const mts = window.mobileTrainingState;
+  const w = window.currentWorkout;
+  
+  if (!w || !w.segments || !mts) {
+    console.warn('[Mobile Dashboard] 워크아웃 또는 상태가 없습니다.');
+    return;
+  }
+  
+  const currentSegIndex = mts.segIndex || 0;
+  if (currentSegIndex < w.segments.length - 1) {
+    // 다음 세그먼트로 이동
+    const nextSegIndex = currentSegIndex + 1;
+    mts.segIndex = nextSegIndex;
+    mts.segElapsedSec = 0;
+    mts._lastProcessedSegIndex = nextSegIndex;
+    
+    // 세그먼트 카운트다운 상태 초기화
+    if (nextSegIndex < w.segments.length) {
+      const nextSeg = w.segments[nextSegIndex];
+      const nextSegDur = segDurationSec(nextSeg);
+      mts._countdownFired[String(nextSegIndex)] = {};
+      mts._prevRemainMs[String(nextSegIndex)] = nextSegDur * 1000;
+    }
+    
+    // UI 업데이트
+    if (typeof updateMobileDashboardUI === 'function') {
+      updateMobileDashboardUI();
+    }
+    
+    console.log('[Mobile Dashboard] 세그먼트 스킵:', currentSegIndex, '→', nextSegIndex);
+  }
+  
+  // 버튼 클릭 피드백 (진동 등)
+  if (navigator.vibrate) navigator.vibrate(50);
 }
 
 /**
  * 3. 종료 핸들러
  */
 function handleMobileStop() {
+  // 모바일 개인훈련 대시보드 화면에서만 동작하도록 체크
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return;
+  }
+  
   if (confirm('훈련을 종료하시겠습니까?')) {
-    // elapsedTime을 전역 변수에 저장 (저장 시 사용)
-    if (window.trainingState && window.trainingState.elapsedSec !== undefined) {
-      window.lastElapsedTime = window.trainingState.elapsedSec;
-      console.log('[Mobile Dashboard] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
+    // 모바일 전용 타이머 정지
+    const mts = window.mobileTrainingState;
+    if (mts && mts.timerId) {
+      clearInterval(mts.timerId);
+      mts.timerId = null;
     }
     
-    // 기존 앱 로직의 루프 정지 함수 호출
-    if (typeof stopSegmentLoop === 'function') {
-      stopSegmentLoop();
+    // elapsedTime을 전역 변수에 저장 (저장 시 사용)
+    if (mts && mts.elapsedSec !== undefined) {
+      window.lastElapsedTime = mts.elapsedSec;
+      console.log('[Mobile Dashboard] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
     }
     
     // 모바일 대시보드 전용: 결과 저장 → 초기화 → 결과 모달 표시 (개인훈련 대시보드와 동일한 로직)
