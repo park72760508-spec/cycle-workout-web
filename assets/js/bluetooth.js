@@ -613,12 +613,31 @@ function handlePowerMeterData(event) {
             notifyChildWindows('cadence', roundedRpm);
           }
           window.liveData.cadence = roundedRpm;
+          // 케이던스 업데이트 타임스탬프 저장
+          if (!window._lastCadenceUpdateTime) window._lastCadenceUpdateTime = {};
+          window._lastCadenceUpdateTime.powerMeter = Date.now();
           // ERG 모드용 데이터 버퍼 업데이트
           if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
           window._recentCadenceBuffer.push(Math.round(rpm));
           if (window._recentCadenceBuffer.length > 120) {
             window._recentCadenceBuffer.shift();
           }
+        } else {
+          // rpm이 0이거나 유효 범위를 벗어나면 0으로 업데이트
+          if (window.liveData.cadence !== 0) {
+            const prevCadence = window.liveData.cadence;
+            window.liveData.cadence = 0;
+            console.log('[bluetooth.js] handlePowerMeterData - cadence 0으로 업데이트:', prevCadence, '→ 0 RPM');
+            notifyChildWindows('cadence', 0);
+          }
+        }
+      } else if (dRevs === 0 && dTicks > 0) {
+        // dRevs가 0이면 케이던스 0으로 업데이트 (페달을 돌지 않음)
+        if (window.liveData.cadence !== 0) {
+          const prevCadence = window.liveData.cadence;
+          window.liveData.cadence = 0;
+          console.log('[bluetooth.js] handlePowerMeterData - cadence 0으로 업데이트 (dRevs=0):', prevCadence, '→ 0 RPM');
+          notifyChildWindows('cadence', 0);
         }
       }
     }
@@ -672,18 +691,25 @@ function handleTrainerData(e) {
     if (!window.liveData) {
       window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     }
+    // 유효 범위 체크: 0이거나 0~220 범위 내의 값만 허용
+    const validRpm = (roundedRpm >= 0 && roundedRpm < 220) ? roundedRpm : 0;
     // 이전 값과 다를 때만 로그 출력 및 자식 창에 알림
     const prevCadence = window.liveData.cadence;
-    if (prevCadence !== roundedRpm) {
-      console.log('[bluetooth.js] handleTrainerData - cadence 업데이트:', prevCadence, '→', roundedRpm, 'RPM');
-      notifyChildWindows('cadence', roundedRpm);
+    if (prevCadence !== validRpm) {
+      console.log('[bluetooth.js] handleTrainerData - cadence 업데이트:', prevCadence, '→', validRpm, 'RPM');
+      notifyChildWindows('cadence', validRpm);
     }
-    window.liveData.cadence = roundedRpm;
-    // ERG 모드용 데이터 버퍼 업데이트
-    if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
-    window._recentCadenceBuffer.push(Math.round(rpm));
-    if (window._recentCadenceBuffer.length > 120) {
-      window._recentCadenceBuffer.shift();
+    window.liveData.cadence = validRpm;
+    // 케이던스 업데이트 타임스탬프 저장
+    if (!window._lastCadenceUpdateTime) window._lastCadenceUpdateTime = {};
+    window._lastCadenceUpdateTime.trainer = Date.now();
+    // ERG 모드용 데이터 버퍼 업데이트 (유효한 값만)
+    if (validRpm > 0) {
+      if (!window._recentCadenceBuffer) window._recentCadenceBuffer = [];
+      window._recentCadenceBuffer.push(validRpm);
+      if (window._recentCadenceBuffer.length > 120) {
+        window._recentCadenceBuffer.shift();
+      }
     }
   }
 
@@ -898,3 +924,51 @@ window.handleTrainerData = handleTrainerData;
 window.connectHeartRate = connectHeartRate;
 window.notifyChildWindows = notifyChildWindows; // 자식 창 알림 함수도 노출
 window.get3SecondAveragePower = get3SecondAveragePower; // 3초 평균 파워 계산 함수 노출
+
+/**
+ * 케이던스 타임아웃 체크 (일정 시간 동안 데이터가 없으면 0으로 설정)
+ * 3초 동안 케이던스 데이터가 오지 않으면 0으로 설정
+ */
+function checkCadenceTimeout() {
+  if (!window._lastCadenceUpdateTime) {
+    window._lastCadenceUpdateTime = {};
+  }
+  
+  const now = Date.now();
+  const timeoutMs = 3000; // 3초 타임아웃
+  
+  // 파워메터와 스마트 트레이너 중 하나라도 활성화되어 있으면 체크
+  const hasPowerMeter = window.connectedDevices?.powerMeter?.device;
+  const hasTrainer = window.connectedDevices?.trainer?.device;
+  
+  if (hasPowerMeter || hasTrainer) {
+    // 파워메터 케이던스 타임아웃 체크
+    if (hasPowerMeter) {
+      const lastUpdate = window._lastCadenceUpdateTime.powerMeter || 0;
+      if (lastUpdate > 0 && (now - lastUpdate) > timeoutMs && window.liveData.cadence !== 0) {
+        const prevCadence = window.liveData.cadence;
+        window.liveData.cadence = 0;
+        console.log('[bluetooth.js] 케이던스 타임아웃 (파워메터): 3초 동안 데이터 없음, 0으로 설정:', prevCadence, '→ 0 RPM');
+        notifyChildWindows('cadence', 0);
+        window._lastCadenceUpdateTime.powerMeter = 0; // 타임아웃 처리 후 리셋
+      }
+    }
+    
+    // 스마트 트레이너 케이던스 타임아웃 체크
+    if (hasTrainer) {
+      const lastUpdate = window._lastCadenceUpdateTime.trainer || 0;
+      if (lastUpdate > 0 && (now - lastUpdate) > timeoutMs && window.liveData.cadence !== 0) {
+        const prevCadence = window.liveData.cadence;
+        window.liveData.cadence = 0;
+        console.log('[bluetooth.js] 케이던스 타임아웃 (스마트 트레이너): 3초 동안 데이터 없음, 0으로 설정:', prevCadence, '→ 0 RPM');
+        notifyChildWindows('cadence', 0);
+        window._lastCadenceUpdateTime.trainer = 0; // 타임아웃 처리 후 리셋
+      }
+    }
+  }
+}
+
+// 케이던스 타임아웃 체크를 1초마다 실행
+if (!window._cadenceTimeoutInterval) {
+  window._cadenceTimeoutInterval = setInterval(checkCadenceTimeout, 1000);
+}
