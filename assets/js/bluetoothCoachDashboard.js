@@ -170,13 +170,13 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
     setupFirebaseSubscriptions();
   });
   
-  // 워크아웃 선택 모달 재사용 (Indoor Training과 동일)
-  if (typeof openWorkoutSelectionModal === 'function') {
-    window.openWorkoutSelectionModalForBluetoothCoach = openWorkoutSelectionModal;
-  }
+  // 워크아웃 선택 모달은 openWorkoutSelectionModalForBluetoothCoach 함수 사용 (이미 정의됨)
   
   // 컨트롤 버튼 이벤트 연결
   setupControlButtons();
+  
+  // 초기 버튼 상태 설정
+  updateBluetoothCoachTrainingButtons();
 };
 
 /**
@@ -785,12 +785,37 @@ function updateScoreboard() {
 function updateWorkoutSegmentGraph() {
   // Indoor Training의 세그먼트 그래프 업데이트 로직 재사용
   if (typeof displayWorkoutSegmentGraph === 'function') {
-    displayWorkoutSegmentGraph(
-      window.bluetoothCoachState.currentWorkout,
-      window.bluetoothCoachState.currentSegmentIndex,
-      'bluetoothCoachSegmentGraphCanvas',
-      'bluetoothCoachSegmentGraphContainer'
-    );
+    const container = document.getElementById('bluetoothCoachSegmentGraphContainer');
+    const canvas = document.getElementById('bluetoothCoachSegmentGraphCanvas');
+    
+    // Indoor Training의 displayWorkoutSegmentGraph는 selectedWorkoutSegmentGraphContainer를 사용하므로
+    // 일시적으로 ID를 변경하거나, 직접 호출
+    if (container && canvas) {
+      // displayWorkoutSegmentGraph 함수 내부에서 canvas ID를 찾으므로
+      // bluetoothCoachSegmentGraphCanvas로 임시 변경하거나
+      // Indoor Training의 로직을 그대로 재사용
+      displayWorkoutSegmentGraph(
+        window.bluetoothCoachState.currentWorkout,
+        window.bluetoothCoachState.currentSegmentIndex
+      );
+      
+      // canvas ID가 다른 경우를 위해 직접 업데이트
+      const tempContainer = document.getElementById('selectedWorkoutSegmentGraphContainer');
+      if (tempContainer) {
+        const tempCanvas = tempContainer.querySelector('canvas');
+        if (tempCanvas && canvas) {
+          // canvas 내용 복사 (간단한 방법)
+          canvas.width = tempCanvas.width;
+          canvas.height = tempCanvas.height;
+          const ctx = canvas.getContext('2d');
+          const tempCtx = tempCanvas.getContext('2d');
+          ctx.drawImage(tempCanvas, 0, 0);
+          
+          // 컨테이너 표시
+          container.style.display = tempContainer.style.display;
+        }
+      }
+    }
   }
 }
 
@@ -804,10 +829,7 @@ function setupControlButtons() {
   const skipBtn = document.getElementById('btnSkipSegmentBluetoothCoach');
   if (skipBtn) {
     skipBtn.addEventListener('click', () => {
-      // Indoor Training의 skipSegment 함수 재사용
-      if (typeof skipCurrentSegmentTraining === 'function') {
-        skipCurrentSegmentTraining();
-      }
+      skipCurrentBluetoothCoachSegmentTraining();
     });
   }
   
@@ -815,10 +837,7 @@ function setupControlButtons() {
   const togglePauseBtn = document.getElementById('btnTogglePauseBluetoothCoach');
   if (togglePauseBtn) {
     togglePauseBtn.addEventListener('click', () => {
-      // Indoor Training의 toggleStartPauseTraining 함수 재사용
-      if (typeof toggleStartPauseTraining === 'function') {
-        toggleStartPauseTraining();
-      }
+      toggleStartPauseBluetoothCoachTraining();
     });
   }
   
@@ -826,10 +845,7 @@ function setupControlButtons() {
   const stopBtn = document.getElementById('btnStopTrainingBluetoothCoach');
   if (stopBtn) {
     stopBtn.addEventListener('click', () => {
-      // Indoor Training의 stopTraining 함수 재사용
-      if (typeof stopTraining === 'function') {
-        stopTraining();
-      }
+      stopBluetoothCoachTraining();
     });
   }
 }
@@ -857,6 +873,238 @@ window.updateBluetoothCoachTracksFromFirebase = async function updateBluetoothCo
 };
 
 /**
+ * 워크아웃 선택 (Indoor Training의 selectWorkoutForTraining을 참고하여 Bluetooth Coach용으로 수정)
+ */
+async function selectWorkoutForBluetoothCoach(workoutId) {
+  try {
+    console.log('[Bluetooth Coach] 워크아웃 선택 시도:', workoutId);
+    
+    // 이전 선택 해제
+    const allRows = document.querySelectorAll('.workout-selection-row');
+    allRows.forEach(row => {
+      row.classList.remove('selected');
+    });
+    
+    // 현재 선택된 행에 선택 애니메이션 적용
+    const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
+    if (selectedRow) {
+      selectedRow.classList.add('selected');
+      
+      // 클릭 피드백 애니메이션
+      selectedRow.style.transform = 'scale(0.98)';
+      setTimeout(() => {
+        selectedRow.style.transform = '';
+      }, 150);
+      
+      // 워크아웃 업로드 애니메이션 시작
+      selectedRow.classList.add('uploading');
+      
+      // 시간 컬럼에 로딩 스피너 표시
+      const durationCell = selectedRow.querySelector('.workout-duration-cell');
+      if (durationCell) {
+        const originalDuration = durationCell.getAttribute('data-duration') || durationCell.textContent;
+        durationCell.setAttribute('data-original-duration', originalDuration);
+        durationCell.innerHTML = '<div class="workout-upload-spinner"></div>';
+      }
+    }
+    
+    // apiGetWorkout 함수 확인
+    if (typeof apiGetWorkout !== 'function') {
+      console.error('[Bluetooth Coach] apiGetWorkout 함수를 찾을 수 없습니다.');
+      if (selectedRow) {
+        selectedRow.classList.remove('selected', 'uploading');
+        const durationCell = selectedRow.querySelector('.workout-duration-cell');
+        if (durationCell) {
+          const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+          if (originalDuration) {
+            durationCell.innerHTML = originalDuration;
+          }
+        }
+      }
+      if (typeof showToast === 'function') {
+        showToast('워크아웃 정보를 불러올 수 없습니다.', 'error');
+      }
+      return;
+    }
+    
+    // 워크아웃 상세 정보 로드
+    const workoutResult = await apiGetWorkout(workoutId);
+    
+    if (!workoutResult || !workoutResult.success) {
+      if (selectedRow) {
+        selectedRow.classList.remove('selected', 'uploading');
+        const durationCell = selectedRow.querySelector('.workout-duration-cell');
+        if (durationCell) {
+          const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+          if (originalDuration) {
+            durationCell.innerHTML = originalDuration;
+          }
+        }
+      }
+      return;
+    }
+    
+    const loadedWorkout = workoutResult.workout || workoutResult.item;
+    
+    if (!loadedWorkout) {
+      console.error('[Bluetooth Coach] workout 데이터가 없습니다.');
+      if (selectedRow) {
+        selectedRow.classList.remove('selected', 'uploading');
+        const durationCell = selectedRow.querySelector('.workout-duration-cell');
+        if (durationCell) {
+          const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+          if (originalDuration) {
+            durationCell.innerHTML = originalDuration;
+          }
+        }
+      }
+      if (typeof showToast === 'function') {
+        showToast('워크아웃 정보를 불러올 수 없습니다.', 'error');
+      }
+      return;
+    }
+    
+    console.log('[Bluetooth Coach] 선택된 워크아웃:', {
+      id: loadedWorkout.id,
+      title: loadedWorkout.title,
+      segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0
+    });
+    
+    // 선택된 워크아웃 저장 (Bluetooth Coach State)
+    window.bluetoothCoachState.currentWorkout = loadedWorkout;
+    window.currentWorkout = loadedWorkout; // 전역 변수도 업데이트
+    
+    // Firebase에 workoutPlan 및 workoutId 저장
+    if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
+      const sessionId = getBluetoothCoachSessionId();
+      if (sessionId) {
+        // workoutPlan 저장 (세그먼트 배열)
+        db.ref(`sessions/${sessionId}/workoutPlan`).set(loadedWorkout.segments)
+          .then(() => {
+            console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
+          })
+          .catch(error => {
+            console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 실패:', error);
+          });
+        
+        // workoutId 저장
+        if (loadedWorkout.id) {
+          db.ref(`sessions/${sessionId}/workoutId`).set(loadedWorkout.id)
+            .then(() => {
+              console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 완료:', loadedWorkout.id, sessionId);
+            })
+            .catch(error => {
+              console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
+            });
+        }
+      }
+    }
+    
+    // 모달 닫기
+    if (typeof closeWorkoutSelectionModal === 'function') {
+      closeWorkoutSelectionModal();
+    }
+    
+    // 업로드 애니메이션 제거
+    if (selectedRow) {
+      selectedRow.classList.remove('uploading');
+      selectedRow.classList.add('upload-complete');
+      setTimeout(() => {
+        selectedRow.classList.remove('upload-complete');
+      }, 500);
+    }
+    
+    // 전광판 우측에 세그먼트 그래프 표시
+    updateWorkoutSegmentGraph();
+    
+    if (typeof showToast === 'function') {
+      showToast(`"${loadedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
+    }
+    
+  } catch (error) {
+    console.error('[Bluetooth Coach] 워크아웃 선택 오류:', error);
+    
+    const selectedRow = document.querySelector(`.workout-selection-row[data-workout-id="${workoutId}"]`);
+    if (selectedRow) {
+      selectedRow.classList.remove('selected', 'uploading');
+      const durationCell = selectedRow.querySelector('.workout-duration-cell');
+      if (durationCell) {
+        const originalDuration = durationCell.getAttribute('data-original-duration') || durationCell.getAttribute('data-duration');
+        if (originalDuration) {
+          durationCell.innerHTML = originalDuration;
+        }
+      }
+    }
+    
+    if (typeof showToast === 'function') {
+      showToast(`워크아웃 선택 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`, 'error');
+    }
+  }
+}
+
+/**
+ * 워크아웃 선택 모달 열기 (Indoor Training 함수를 재사용하되, selectWorkoutForBluetoothCoach 호출하도록 수정)
+ */
+async function openWorkoutSelectionModalForBluetoothCoach() {
+  const modal = document.getElementById('workoutSelectionModal');
+  if (!modal) {
+    console.error('[Bluetooth Coach] 워크아웃 선택 모달을 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 워크아웃 선택 버튼 클릭 애니메이션
+  const selectBtn = document.getElementById('btnSelectWorkoutBluetoothCoach');
+  if (selectBtn) {
+    selectBtn.style.transform = 'scale(0.95)';
+    selectBtn.style.transition = 'transform 0.1s ease';
+    setTimeout(() => {
+      if (selectBtn) {
+        selectBtn.style.transform = 'scale(1)';
+      }
+    }, 100);
+  }
+  
+  // 모달 표시
+  modal.classList.remove('hidden');
+  
+  // 로딩 상태 표시
+  const tbody = document.getElementById('workoutSelectionTableBody');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; padding: 40px;">
+          <div class="loading-spinner" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;">
+            <div class="spinner" style="width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.2); border-top: 4px solid #00d4aa; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <p style="color: #ffffff; font-size: 14px; margin: 0;">워크아웃 목록을 불러오는 중...</p>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+  
+  // 워크아웃 목록 로드 (Indoor Training의 loadWorkoutsForSelection 재사용)
+  if (typeof loadWorkoutsForSelection === 'function') {
+    await loadWorkoutsForSelection();
+    
+    // 워크아웃 선택 시 selectWorkoutForBluetoothCoach 호출하도록 이벤트 리스너 추가
+    setTimeout(() => {
+      const rows = document.querySelectorAll('.workout-selection-row');
+      rows.forEach(row => {
+        const workoutId = row.getAttribute('data-workout-id');
+        if (workoutId) {
+          row.onclick = () => selectWorkoutForBluetoothCoach(workoutId);
+        }
+      });
+    }, 100);
+  } else {
+    console.error('[Bluetooth Coach] loadWorkoutsForSelection 함수를 찾을 수 없습니다.');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #dc2626;">워크아웃 목록을 불러올 수 없습니다.</td></tr>';
+    }
+  }
+}
+
+/**
  * showScreen 함수 감시하여 화면 활성화 시 초기화
  */
 if (typeof showScreen === 'function') {
@@ -872,4 +1120,430 @@ if (typeof showScreen === 'function') {
       }, 100);
     }
   };
+}
+
+// openWorkoutSelectionModalForBluetoothCoach 함수를 전역으로 노출
+window.openWorkoutSelectionModalForBluetoothCoach = openWorkoutSelectionModalForBluetoothCoach;
+
+/**
+ * 워크아웃 카운트다운 후 훈련 시작 (Indoor Training의 startTrainingWithCountdown 참고)
+ */
+function startBluetoothCoachTrainingWithCountdown() {
+  if (!window.bluetoothCoachState.currentWorkout) {
+    if (typeof showToast === 'function') {
+      showToast('워크아웃을 선택해주세요.');
+    }
+    return;
+  }
+  
+  // Firebase에 시작 카운트다운 상태 전송
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    let countdown = 5;
+    // Firebase에 카운트다운 시작 신호 전송
+    db.ref(`sessions/${sessionId}/status`).update({
+      countdownRemainingSec: countdown,
+      state: 'countdown' // 카운트다운 중임을 표시
+    }).catch(e => console.warn('[Bluetooth Coach] 카운트다운 상태 전송 실패:', e));
+    
+    // 카운트다운 진행 중 Firebase 업데이트
+    const countdownInterval = setInterval(() => {
+      countdown--;
+      if (countdown >= 0) {
+        db.ref(`sessions/${sessionId}/status`).update({
+          countdownRemainingSec: countdown
+        }).catch(e => console.warn('[Bluetooth Coach] 카운트다운 상태 업데이트 실패:', e));
+      } else {
+        clearInterval(countdownInterval);
+        // 카운트다운 종료 후 running 상태로 변경
+        db.ref(`sessions/${sessionId}/status`).update({
+          countdownRemainingSec: null,
+          state: 'running'
+        }).catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
+      }
+    }, 1000);
+  }
+  
+  // 카운트다운 모달 생성 및 표시 (Indoor Training과 동일)
+  const countdownModal = document.createElement('div');
+  countdownModal.id = 'bluetoothCoachCountdownModal';
+  countdownModal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    font-family: "Pretendard", "Noto Sans KR", sans-serif;
+  `;
+  
+  const countdownText = document.createElement('div');
+  countdownText.style.cssText = `
+    font-size: 600px;
+    font-weight: 900;
+    color: #00d4aa;
+    text-shadow: 0 0 30px rgba(0, 212, 170, 0.8);
+    animation: countdownPulse 0.5s ease-out;
+  `;
+  
+  countdownModal.appendChild(countdownText);
+  document.body.appendChild(countdownModal);
+  
+  // 카운트다운 시작 (5, 4, 3, 2, 1, GO!!)
+  let count = 5;
+  countdownText.textContent = count.toString();
+  if (typeof playBeep === 'function') {
+    playBeep(880, 120, 0.25);
+  }
+  
+  const countdownInterval = setInterval(async () => {
+    count--;
+    
+    if (count > 0) {
+      countdownText.textContent = count.toString();
+      countdownText.style.animation = 'none';
+      setTimeout(() => {
+        countdownText.style.animation = 'countdownPulse 0.5s ease-out';
+      }, 10);
+      if (typeof playBeep === 'function') {
+        playBeep(880, 120, 0.25);
+      }
+    } else if (count === 0) {
+      countdownText.textContent = 'GO!!';
+      countdownText.style.animation = 'countdownPulse 0.5s ease-out';
+      if (typeof playBeep === 'function') {
+        try {
+          await playBeep(1500, 700, 0.35, 'square');
+        } catch (e) {
+          console.warn('Failed to play beep:', e);
+        }
+      }
+      count--;
+    } else {
+      clearInterval(countdownInterval);
+      countdownText.style.animation = 'countdownFadeOut 0.3s ease-out';
+      setTimeout(() => {
+        if (countdownModal.parentElement) {
+          document.body.removeChild(countdownModal);
+        }
+        startBluetoothCoachTraining();
+      }, 300);
+    }
+  }, 1000);
+}
+
+/**
+ * 시작/일시정지 토글 (Indoor Training의 toggleStartPauseTraining 참고)
+ */
+function toggleStartPauseBluetoothCoachTraining() {
+  const state = window.bluetoothCoachState.trainingState;
+  
+  if (state === 'idle' || state === 'finished') {
+    startBluetoothCoachTrainingWithCountdown();
+  } else if (state === 'running') {
+    pauseBluetoothCoachTraining();
+  } else if (state === 'paused') {
+    resumeBluetoothCoachTraining();
+  }
+}
+
+/**
+ * 훈련 시작 (Indoor Training의 startTraining 참고)
+ */
+function startBluetoothCoachTraining() {
+  window.bluetoothCoachState.trainingState = 'running';
+  window.bluetoothCoachState.startTime = Date.now();
+  window.bluetoothCoachState.currentSegmentIndex = 0;
+  window.bluetoothCoachState.segmentStartTime = Date.now();
+  window.bluetoothCoachState.segmentElapsedTime = 0;
+  
+  // Firebase에 훈련 시작 상태 전송
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    db.ref(`sessions/${sessionId}/status`).update({
+      state: 'running',
+      segmentIndex: 0,
+      elapsedTime: 0
+    }).catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
+  }
+  
+  // 워크아웃 시작 시 모든 파워미터의 궤적 및 통계 데이터 초기화
+  window.bluetoothCoachState.powerMeters.forEach(pm => {
+    pm.powerTrailHistory = [];
+    pm.lastTrailAngle = null;
+    pm.maxPower = 0;
+    pm.powerSum = 0;
+    pm.powerCount = 0;
+    pm.averagePower = 0;
+    pm.segmentPowerSum = 0;
+    pm.segmentPowerCount = 0;
+    pm.segmentPower = 0;
+  });
+  
+  // 버튼 상태 업데이트
+  updateBluetoothCoachTrainingButtons();
+  
+  // 우측 세그먼트 그래프 업데이트
+  if (window.bluetoothCoachState.currentWorkout) {
+    setTimeout(() => {
+      updateWorkoutSegmentGraph();
+    }, 100);
+  }
+  
+  // 타이머 시작
+  startBluetoothCoachTrainingTimer();
+}
+
+/**
+ * 훈련 일시정지 (Indoor Training의 pauseTraining 참고)
+ */
+function pauseBluetoothCoachTraining() {
+  window.bluetoothCoachState.trainingState = 'paused';
+  window.bluetoothCoachState.pausedTime = Date.now();
+  
+  // Firebase에 일시정지 상태 전송
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    db.ref(`sessions/${sessionId}/status`).update({
+      state: 'paused'
+    }).catch(e => console.warn('[Bluetooth Coach] 일시정지 상태 전송 실패:', e));
+  }
+  
+  // 버튼 상태 업데이트
+  updateBluetoothCoachTrainingButtons();
+}
+
+/**
+ * 훈련 재개 (Indoor Training의 resumeTraining 참고)
+ */
+function resumeBluetoothCoachTraining() {
+  if (window.bluetoothCoachState.pausedTime) {
+    const pausedDuration = Date.now() - window.bluetoothCoachState.pausedTime;
+    window.bluetoothCoachState.startTime += pausedDuration;
+    window.bluetoothCoachState.segmentStartTime += pausedDuration;
+    window.bluetoothCoachState.pausedTime = 0;
+  }
+  
+  window.bluetoothCoachState.trainingState = 'running';
+  
+  // Firebase에 재개 상태 전송
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    db.ref(`sessions/${sessionId}/status`).update({
+      state: 'running'
+    }).catch(e => console.warn('[Bluetooth Coach] 재개 상태 전송 실패:', e));
+  }
+  
+  // 버튼 상태 업데이트
+  updateBluetoothCoachTrainingButtons();
+  
+  // 타이머 재개
+  startBluetoothCoachTrainingTimer();
+}
+
+/**
+ * 훈련 종료 (Indoor Training의 stopTraining 참고)
+ */
+function stopBluetoothCoachTraining() {
+  window.bluetoothCoachState.trainingState = 'idle';
+  
+  // Firebase에 종료 상태 전송
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    db.ref(`sessions/${sessionId}/status`).update({
+      state: 'idle',
+      segmentIndex: 0,
+      elapsedTime: 0
+    }).catch(e => console.warn('[Bluetooth Coach] 훈련 종료 상태 전송 실패:', e));
+  }
+  
+  // 상태 초기화
+  window.bluetoothCoachState.startTime = null;
+  window.bluetoothCoachState.pausedTime = 0;
+  window.bluetoothCoachState.totalElapsedTime = 0;
+  window.bluetoothCoachState.currentSegmentIndex = 0;
+  window.bluetoothCoachState.segmentStartTime = null;
+  window.bluetoothCoachState.segmentElapsedTime = 0;
+  
+  // 버튼 상태 업데이트
+  updateBluetoothCoachTrainingButtons();
+  
+  // 세그먼트 그래프 업데이트
+  updateWorkoutSegmentGraph();
+  
+  if (typeof showToast === 'function') {
+    showToast('훈련이 종료되었습니다.');
+  }
+}
+
+/**
+ * 세그먼트 건너뛰기 (Indoor Training의 skipCurrentSegmentTraining 참고)
+ */
+function skipCurrentBluetoothCoachSegmentTraining() {
+  if (!window.bluetoothCoachState.currentWorkout || !window.bluetoothCoachState.currentWorkout.segments) {
+    return;
+  }
+  
+  const segments = window.bluetoothCoachState.currentWorkout.segments;
+  const currentIndex = window.bluetoothCoachState.currentSegmentIndex;
+  
+  if (currentIndex >= segments.length - 1) {
+    // 마지막 세그먼트이면 워크아웃 종료
+    stopBluetoothCoachTraining();
+    return;
+  }
+  
+  // 다음 세그먼트로 이동
+  window.bluetoothCoachState.currentSegmentIndex = currentIndex + 1;
+  window.bluetoothCoachState.segmentStartTime = Date.now();
+  window.bluetoothCoachState.segmentElapsedTime = 0;
+  
+  // Firebase에 세그먼트 인덱스 업데이트
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    db.ref(`sessions/${sessionId}/status`).update({
+      segmentIndex: window.bluetoothCoachState.currentSegmentIndex
+    }).catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 업데이트 실패:', e));
+  }
+  
+  // 세그먼트 그래프 업데이트
+  updateWorkoutSegmentGraph();
+}
+
+/**
+ * 훈련 타이머 (Indoor Training의 startTrainingTimer 참고)
+ */
+function startBluetoothCoachTrainingTimer() {
+  if (window.bluetoothCoachState.trainingState !== 'running') return;
+  
+  const now = Date.now();
+  if (window.bluetoothCoachState.startTime) {
+    const pausedDuration = window.bluetoothCoachState.pausedTime ? (now - window.bluetoothCoachState.pausedTime) : 0;
+    const elapsed = Math.floor((now - window.bluetoothCoachState.startTime - pausedDuration) / 1000);
+    window.bluetoothCoachState.totalElapsedTime = elapsed;
+    
+    // 세그먼트 경과 시간 업데이트
+    if (window.bluetoothCoachState.segmentStartTime) {
+      const segmentElapsed = Math.floor((now - window.bluetoothCoachState.segmentStartTime - pausedDuration) / 1000);
+      window.bluetoothCoachState.segmentElapsedTime = segmentElapsed;
+    }
+  }
+  
+  // 전광판 업데이트
+  updateBluetoothCoachScoreboard();
+  
+  // Firebase에 경과 시간 업데이트
+  if (typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    db.ref(`sessions/${sessionId}/status`).update({
+      elapsedTime: window.bluetoothCoachState.totalElapsedTime,
+      segmentIndex: window.bluetoothCoachState.currentSegmentIndex
+    }).catch(e => console.warn('[Bluetooth Coach] 경과 시간 업데이트 실패:', e));
+  }
+  
+  // 세그먼트 전환 체크
+  if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.currentWorkout.segments) {
+    const segments = window.bluetoothCoachState.currentWorkout.segments;
+    const currentIndex = window.bluetoothCoachState.currentSegmentIndex;
+    const currentSegment = segments[currentIndex];
+    
+    if (currentSegment) {
+      const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
+      const segmentElapsed = window.bluetoothCoachState.segmentElapsedTime;
+      
+      // 세그먼트 시간이 지나면 다음 세그먼트로 이동
+      if (segmentElapsed >= segmentDuration) {
+        if (currentIndex >= segments.length - 1) {
+          // 워크아웃 종료
+          stopBluetoothCoachTraining();
+          return;
+        } else {
+          // 다음 세그먼트로 이동
+          window.bluetoothCoachState.currentSegmentIndex = currentIndex + 1;
+          window.bluetoothCoachState.segmentStartTime = Date.now();
+          window.bluetoothCoachState.segmentElapsedTime = 0;
+          
+          // Firebase에 세그먼트 인덱스 업데이트
+          if (typeof db !== 'undefined') {
+            const sessionId = getBluetoothCoachSessionId();
+            db.ref(`sessions/${sessionId}/status`).update({
+              segmentIndex: window.bluetoothCoachState.currentSegmentIndex
+            }).catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 업데이트 실패:', e));
+          }
+          
+          // 세그먼트 그래프 업데이트
+          updateWorkoutSegmentGraph();
+        }
+      }
+    }
+  }
+  
+  // 랩 카운트다운 업데이트
+  updateBluetoothCoachLapTime();
+  
+  if (window.bluetoothCoachState.trainingState === 'running') {
+    setTimeout(startBluetoothCoachTrainingTimer, 1000);
+  }
+}
+
+/**
+ * 훈련 버튼 상태 업데이트 (Indoor Training의 updateTrainingButtons 참고)
+ */
+function updateBluetoothCoachTrainingButtons() {
+  const toggleBtn = document.getElementById('btnTogglePauseBluetoothCoach');
+  const stopBtn = document.getElementById('btnStopTrainingBluetoothCoach');
+  const skipBtn = document.getElementById('btnSkipSegmentBluetoothCoach');
+  
+  const state = window.bluetoothCoachState.trainingState;
+  
+  if (toggleBtn) {
+    if (state === 'idle' || state === 'finished') {
+      toggleBtn.className = 'enhanced-control-btn play';
+      toggleBtn.title = '시작';
+    } else if (state === 'running') {
+      toggleBtn.className = 'enhanced-control-btn pause';
+      toggleBtn.title = '일시정지';
+    } else if (state === 'paused') {
+      toggleBtn.className = 'enhanced-control-btn play';
+      toggleBtn.title = '재개';
+    }
+  }
+  
+  if (stopBtn) {
+    stopBtn.disabled = (state === 'idle');
+  }
+  
+  if (skipBtn) {
+    skipBtn.disabled = (state === 'idle' || state === 'finished');
+  }
+}
+
+/**
+ * 랩 카운트다운 업데이트 (Indoor Training의 updateLapTime 참고)
+ */
+function updateBluetoothCoachLapTime() {
+  if (!window.bluetoothCoachState.currentWorkout || !window.bluetoothCoachState.currentWorkout.segments) {
+    return;
+  }
+  
+  const segments = window.bluetoothCoachState.currentWorkout.segments;
+  const currentIndex = window.bluetoothCoachState.currentSegmentIndex;
+  const currentSegment = segments[currentIndex];
+  
+  if (!currentSegment) return;
+  
+  const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
+  const segmentElapsed = window.bluetoothCoachState.segmentElapsedTime;
+  const remaining = Math.max(0, segmentDuration - segmentElapsed);
+  
+  const countdownEl = document.getElementById('bluetoothCoachLapCountdown');
+  if (countdownEl) {
+    const minutes = Math.floor(remaining / 60);
+    const seconds = Math.floor(remaining % 60);
+    countdownEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
 }
