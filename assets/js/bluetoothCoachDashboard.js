@@ -1310,11 +1310,13 @@ function updateTrainingStatus(status) {
       const sessionId = getBluetoothCoachSessionId();
       if (sessionId && typeof db !== 'undefined') {
         db.ref(`sessions/${sessionId}/status`).update({
-          state: 'finished',
+          state: 'completed',
           completionMessage: '모든 세그먼트 훈련이 완료되었습니다.',
           completedAt: Date.now()
         }).then(() => {
-          console.log('[Bluetooth Coach] Firebase status 업데이트 완료: finished');
+          console.log('[Bluetooth Coach] Firebase status 업데이트 완료: completed');
+          // 로컬 상태도 업데이트
+          window.bluetoothCoachState.trainingState = 'completed';
         }).catch((error) => {
           console.error('[Bluetooth Coach] Firebase status 업데이트 실패:', error);
         });
@@ -2476,7 +2478,21 @@ function startBluetoothCoachTrainingTimer() {
       if (segmentElapsed >= segmentDuration) {
         if (currentIndex >= segments.length - 1) {
           // 워크아웃 종료
-          window.bluetoothCoachState.trainingState = 'finished';
+          window.bluetoothCoachState.trainingState = 'completed';
+          
+          // Firebase에 완료 상태 전송
+          if (typeof db !== 'undefined') {
+            const sessionId = getBluetoothCoachSessionId();
+            db.ref(`sessions/${sessionId}/status`).update({
+              state: 'completed',
+              completionMessage: '모든 세그먼트 훈련이 완료되었습니다.',
+              completedAt: Date.now()
+            }).then(() => {
+              console.log('[Bluetooth Coach] 워크아웃 완료 - Firebase status 업데이트 완료: completed');
+            }).catch((error) => {
+              console.error('[Bluetooth Coach] 워크아웃 완료 - Firebase status 업데이트 실패:', error);
+            });
+          }
           
           // 버튼 상태 업데이트
           updateBluetoothCoachTrainingButtons();
