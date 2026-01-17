@@ -676,7 +676,21 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
       userNameEl.style.display = 'inline-block';
     }
   }
-  if (userData.ftp) powerMeter.userFTP = userData.ftp;
+  
+  // FTP 변경 감지를 위해 이전 값 저장 (업데이트 전에)
+  const prevFTP = powerMeter.userFTP;
+  
+  // FTP 업데이트
+  if (userData.ftp) {
+    powerMeter.userFTP = userData.ftp;
+  }
+  
+  // FTP 변경 시 눈금 업데이트
+  if (userData.ftp && userData.ftp !== prevFTP) {
+    console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP || '없음'} → ${userData.ftp}`);
+    updateBluetoothCoachPowerMeterTicks(trackId);
+  }
+  
   if (userData.weight) powerMeter.userWeight = userData.weight;
   
   // 훈련 데이터 업데이트
@@ -706,16 +720,6 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   
   // 연결 상태 표시 업데이트 (Firebase 디바이스 정보 확인)
   updateBluetoothCoachConnectionStatus(trackId);
-  
-  // FTP 변경 시 눈금 업데이트
-  const prevFTP = powerMeter.userFTP;
-  if (userData.ftp) {
-    powerMeter.userFTP = userData.ftp;
-  }
-  if (userData.ftp && userData.ftp !== prevFTP) {
-    console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP} → ${userData.ftp}`);
-    updateBluetoothCoachPowerMeterTicks(trackId);
-  }
   
   // 바늘 궤적 업데이트 (목표 파워 및 궤적 표시)
   const ftp = powerMeter.userFTP || 200;
@@ -1725,7 +1729,7 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
       const segmentPowerEl = document.getElementById(`segment-power-value-${pm.id}`);
       if (segmentPowerEl) segmentPowerEl.textContent = '0';
       
-      // FTP 값이 있으면 속도계 눈금 업데이트
+      // FTP 값이 있으면 속도계 눈금 업데이트 (워크아웃 선택 시에도 반영)
       if (pm.userFTP) {
         updateBluetoothCoachPowerMeterTicks(pm.id);
       }
