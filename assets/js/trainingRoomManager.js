@@ -1011,7 +1011,7 @@ async function renderPlayerList() {
 }
 
 /**
- * Coach 모드 열기 (Indoor 모드 선택 화면으로 이동)
+ * Coach 모드 열기 (메인 화면용)
  */
 function openCoachMode() {
   if (!currentSelectedTrainingRoom) {
@@ -1019,9 +1019,19 @@ function openCoachMode() {
     return;
   }
 
-  // Indoor 모드 선택 화면으로 이동
-  if (typeof showIndoorModeSelectionModal === 'function') {
-    showIndoorModeSelectionModal();
+  // 현재 모드 확인
+  let mode = window.deviceConnectionMode || sessionStorage.getItem('deviceConnectionMode') || 'ant';
+
+  if (mode === 'bluetooth') {
+    // Bluetooth 모드이면 바로 코치 화면으로
+    if (typeof showScreen === 'function') {
+        showScreen('bluetoothTrainingCoachScreen');
+    }
+  } else {
+    // ANT+ 모드이면 모드 선택(Race/Training) 모달 띄우기
+    if (typeof showIndoorModeSelectionModal === 'function') {
+      showIndoorModeSelectionModal();
+    }
   }
 }
 
@@ -2612,12 +2622,12 @@ async function openPlayerListFromModal(event) {
 
 /**
  * 모달에서 Coach 모드 열기 (디바이스 연결 방식에 따라 화면 이동)
+ * [수정됨] 변수 상태를 최우선으로 확인하여 화면 이동 오류 수정
  */
 function openCoachModeFromModal(event) {
   console.log('[Coach Modal] ========== Coach 버튼 클릭 시작 ==========');
   
   // [Module 3 - Fix Logic] 이벤트 전파 중단 (필수)
-  // 버튼 클릭이 부모(훈련방 리스트)로 전달되어 클릭 핸들러를 건드리는 것을 원천 차단
   if (event) {
     event.stopPropagation();
     event.preventDefault();
@@ -2631,131 +2641,86 @@ function openCoachModeFromModal(event) {
     return;
   }
 
-  console.log('[Coach Modal] 선택된 Training Room:', currentSelectedTrainingRoom);
+  // 1. [핵심 수정] 변수 및 스토리지 값을 최우선으로 확인 (UI 위치 계산보다 정확함)
+  let currentDeviceMode = 'ant'; // 기본값
 
-  // 디바이스 연결 방식 확인 (모달이 닫히기 전에 확인해야 함)
-  let currentDeviceMode = 'ant'; // 기본값은 ANT+
-  
-  // 1. 슬라이더 실제 위치 확인 (가장 정확함) - 우선 순위 최상
-  const switchSlider = document.getElementById('switchSlider');
-  if (switchSlider) {
-    // style 속성 우선 확인 (인라인 스타일)
-    let sliderLeft = switchSlider.style.left || '';
-    
-    // 인라인 스타일이 없으면 computed style 확인
-    if (!sliderLeft || sliderLeft === '' || sliderLeft === 'auto') {
-      const computedStyle = window.getComputedStyle(switchSlider);
-      sliderLeft = computedStyle.left || '';
-    }
-    
-    console.log('[Coach Modal] 슬라이더 위치 (원본):', sliderLeft);
-    
-    // left 값 파싱
-    let leftValue = 50; // 기본값 50%
-    if (sliderLeft && sliderLeft !== 'auto' && sliderLeft !== '') {
-      // 퍼센트 값인 경우
-      if (sliderLeft.includes('%')) {
-        leftValue = parseFloat(sliderLeft) || 50;
-      } 
-      // 픽셀 값인 경우
-      else if (sliderLeft.includes('px')) {
-        const switchWidth = switchSlider.parentElement ? switchSlider.parentElement.offsetWidth : 200;
-        leftValue = (parseFloat(sliderLeft) / switchWidth) * 100;
-      } 
-      // 숫자만 있는 경우
-      else {
-        const numValue = parseFloat(sliderLeft);
-        if (!isNaN(numValue) && numValue >= 0 && numValue <= 100) {
-          leftValue = numValue;
-        } else if (!isNaN(numValue)) {
-          const switchWidth = switchSlider.parentElement ? switchSlider.parentElement.offsetWidth : 200;
-          leftValue = (numValue / switchWidth) * 100;
-        }
-      }
-    }
-    
-    console.log('[Coach Modal] 슬라이더 위치 (파싱된 값):', leftValue + '%');
-    
-    // 슬라이더 위치로 모드 판단 (0%에 가까우면 Bluetooth, 50% 이상이면 ANT+)
-    if (leftValue < 25) {
-      currentDeviceMode = 'bluetooth';
-      console.log('[Coach Modal] ✅ 슬라이더 위치로 모드 확인: Bluetooth (left:', leftValue + '%)');
-    } else {
-      currentDeviceMode = 'ant';
-      console.log('[Coach Modal] ✅ 슬라이더 위치로 모드 확인: ANT+ (left:', leftValue + '%)');
-    }
-  } else {
-    console.warn('[Coach Modal] ⚠️ 스위치 슬라이더를 찾을 수 없습니다. 다른 소스 확인...');
-  }
-  
-  // 2. 로컬 변수 확인
-  if (deviceConnectionMode && deviceConnectionMode !== 'ant') {
-    currentDeviceMode = deviceConnectionMode;
-    console.log('[Coach Modal] 로컬 변수에서 모드 확인:', currentDeviceMode);
-  }
-  
-  // 3. sessionStorage 확인
-  const savedMode = sessionStorage.getItem('deviceConnectionMode');
-  if (savedMode && savedMode !== 'ant') {
-    currentDeviceMode = savedMode;
-    console.log('[Coach Modal] sessionStorage에서 모드 확인:', currentDeviceMode);
-  }
-  
-  // 4. 전역 변수 확인 (groupTrainingManager.js와 동기화)
-  if (window.deviceConnectionMode && window.deviceConnectionMode !== 'ant') {
+  // 전역 변수 확인
+  if (window.deviceConnectionMode && (window.deviceConnectionMode === 'bluetooth' || window.deviceConnectionMode === 'ant')) {
     currentDeviceMode = window.deviceConnectionMode;
     console.log('[Coach Modal] 전역 변수에서 모드 확인:', currentDeviceMode);
+  } 
+  // sessionStorage 확인
+  else {
+    const savedMode = sessionStorage.getItem('deviceConnectionMode');
+    if (savedMode && (savedMode === 'bluetooth' || savedMode === 'ant')) {
+      currentDeviceMode = savedMode;
+      console.log('[Coach Modal] sessionStorage에서 모드 확인:', currentDeviceMode);
+    }
+    // 로컬 변수 확인
+    else if (typeof deviceConnectionMode !== 'undefined') {
+      currentDeviceMode = deviceConnectionMode;
+    }
+  }
+
+  // 2. 만약 변수 값이 모호할 경우에만 UI 슬라이더 위치 확인 (Fallback)
+  const switchSlider = document.getElementById('switchSlider');
+  if (switchSlider && !window.deviceConnectionMode && !sessionStorage.getItem('deviceConnectionMode')) {
+    const computedStyle = window.getComputedStyle(switchSlider);
+    const sliderLeft = switchSlider.style.left || computedStyle.left;
+    
+    // left 값이 0에 가까우면(왼쪽) Bluetooth, 크면(오른쪽) ANT+
+    let isBluetoothPosition = false;
+    
+    if (sliderLeft.includes('%')) {
+      isBluetoothPosition = parseFloat(sliderLeft) < 25;
+    } else if (sliderLeft.includes('px')) {
+      // px일 경우 부모 너비 대비 비율로 대략적 계산
+      isBluetoothPosition = parseFloat(sliderLeft) < 50; 
+    }
+    
+    if (isBluetoothPosition) {
+      currentDeviceMode = 'bluetooth';
+      console.log('[Coach Modal] UI 슬라이더 위치로 Bluetooth 감지');
+    }
   }
   
-  // 모든 변수 동기화
+  // 상태 동기화
   deviceConnectionMode = currentDeviceMode;
   window.deviceConnectionMode = currentDeviceMode;
   sessionStorage.setItem('deviceConnectionMode', currentDeviceMode);
   
   console.log('[Coach Modal] ========== 최종 디바이스 연결 방식:', currentDeviceMode, '==========');
   
-  // 모달 닫기 (화면 전환 전에 닫기)
+  // 모달 닫기
   closeTrainingRoomModal();
   
-  // 선택된 디바이스 모드에 따라 화면 이동
+  // 3. 모드에 따른 화면 이동 분기 처리
   if (currentDeviceMode === 'bluetooth') {
-    // Bluetooth Training Coach 화면으로 바로 이동
-    console.log('[Coach Modal] 🚀 Bluetooth 선택됨 → bluetoothTrainingCoachScreen 화면으로 바로 이동');
+    // [Bluetooth 모드] -> Bluetooth Training Coach 화면으로 이동
+    console.log('[Coach Modal] 🚀 Bluetooth 선택됨 → bluetoothTrainingCoachScreen 화면으로 이동');
     
-    // 화면 전환
     if (typeof showScreen === 'function') {
       try {
+        // [수정 요청 사항 반영] 블루투스 코치 스크린으로 이동
         showScreen('bluetoothTrainingCoachScreen');
-        console.log('[Coach Modal] ✅ bluetoothTrainingCoachScreen 화면 전환 완료');
+        
+        // 블루투스 코치용 트랙 정보 로드 (필요 시)
+        if (typeof updateBluetoothCoachTracksFromFirebase === 'function') {
+          setTimeout(() => updateBluetoothCoachTracksFromFirebase(), 300);
+        }
       } catch (error) {
         console.error('[Coach Modal] ❌ 화면 전환 오류:', error);
-        if (typeof showToast === 'function') {
-          showToast('화면 전환 중 오류가 발생했습니다.', 'error');
-        }
-      }
-    } else {
-      console.error('[Coach Modal] ❌ showScreen 함수를 찾을 수 없습니다.');
-      if (typeof showToast === 'function') {
-        showToast('화면 전환 함수를 찾을 수 없습니다.', 'error');
+        showToast('화면 전환 중 오류가 발생했습니다.', 'error');
       }
     }
   } else {
-    // ANT+ Indoor Training 모드 선택 화면으로 이동 (기존 방식)
+    // [ANT+ 모드] -> 기존 Indoor Training 모드 선택 모달로 이동
     console.log('[Coach Modal] 🚀 ANT+ 선택됨 → Indoor Training 모드 선택 화면으로 이동');
     
-    // 화면 전환
     if (typeof showIndoorModeSelectionModal === 'function') {
-      try {
-        showIndoorModeSelectionModal();
-        console.log('[Coach Modal] ✅ Indoor Training 모드 선택 화면으로 이동 완료');
-      } catch (error) {
-        console.error('[Coach Modal] ❌ 화면 전환 오류:', error);
-        if (typeof showScreen === 'function') {
-          showScreen('indoorTrainingDashboardScreen');
-        }
-      }
+      showIndoorModeSelectionModal();
     } else {
-      console.warn('[Coach Modal] ⚠️ showIndoorModeSelectionModal 함수를 찾을 수 없습니다. Indoor Training 화면으로 직접 이동 시도.');
+      // 함수가 없으면 바로 ANT+ 대시보드로 이동 (Fallback)
       if (typeof showScreen === 'function') {
         showScreen('indoorTrainingDashboardScreen');
       }
@@ -4539,3 +4504,4 @@ function handlePlayerEnterClick(event, trackNumber, roomId) {
 function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   handlePlayerEnterClick(event, trackNumber, roomId);
 }
+
