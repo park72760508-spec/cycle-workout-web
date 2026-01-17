@@ -1054,6 +1054,11 @@ function updateDashboard(data = null) {
     // TARGET 파워는 세그먼트 정보에서 계산
     updateTargetPower();
     
+    // 목표 파워 원호 업데이트 (달성도에 따라 색상 변경)
+    if (typeof updateTargetPowerArc === 'function') {
+        updateTargetPowerArc();
+    }
+    
     // CADENCE 표시 (Bluetooth 디바이스에서 받은 값)
     // window.liveData.cadence 우선 사용 (bluetooth.js에서 직접 업데이트됨)
     const cadence = Number(window.liveData?.cadence || data?.cadence || data?.rpm || 0);
@@ -1536,8 +1541,11 @@ function updateTargetPower() {
             }
             
             const ftp = userFTP || window.currentUser?.ftp || 200;
-            window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
-            window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100));
+            const baseMaxPower = Math.round(ftp * (maxPercent / 100));
+            const baseMinPower = Math.round(ftp * (minPercent / 100));
+            // 강도 조절 비율 적용
+            window.currentSegmentMaxPower = Math.round(baseMaxPower * individualIntensityAdjustment);
+            window.currentSegmentMinPower = Math.round(baseMinPower * individualIntensityAdjustment);
         } else {
             window.currentSegmentMaxPower = null;
             window.currentSegmentMinPower = null;
@@ -1779,8 +1787,10 @@ function updateTargetPower() {
         console.log('[updateTargetPower] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
         
         // 상한값을 전역 변수에 저장 (updateTargetPowerArc에서 사용)
-        window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
-        window.currentSegmentMinPower = targetPower;
+        const baseMaxPower = Math.round(ftp * (maxPercent / 100));
+        // 강도 조절 비율 적용
+        window.currentSegmentMaxPower = Math.round(baseMaxPower * individualIntensityAdjustment);
+        window.currentSegmentMinPower = targetPower; // targetPower는 이미 강도 조절이 적용된 값
     }
     
     // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
@@ -2829,3 +2839,4 @@ if (document.readyState === 'loading') {
         setInterval(updateBluetoothConnectionStatus, 1000);
     }, 1000);
 }
+    
