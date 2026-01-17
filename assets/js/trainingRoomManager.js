@@ -4227,35 +4227,58 @@ async function renderBluetoothPlayerList() {
   if (roomId && typeof db !== 'undefined') {
     try {
       const sessionId = roomId;
-      const usersRef = db.ref(`sessions/${sessionId}/users`);
-      const usersSnapshot = await usersRef.once('value');
-      const usersData = usersSnapshot.val() || {};
       
-      // 사용자가 할당된 최대 트랙 번호 찾기
-      const assignedTrackNumbers = Object.keys(usersData)
-        .map(key => parseInt(key, 10))
-        .filter(num => !isNaN(num) && num > 0);
-      
-      if (assignedTrackNumbers.length > 0) {
-        const maxAssignedTrack = Math.max(...assignedTrackNumbers);
-        // 최대 할당된 트랙이 10개 이상이면 5개씩 확장
-        if (maxAssignedTrack >= 10) {
-          // 10개 단위로 올림 후 5개씩 확장
-          maxTrackNumber = Math.ceil((maxAssignedTrack + 1) / 5) * 5;
-        } else {
-          maxTrackNumber = 10;
-        }
-      }
-      
-      // devices 정보 가져오기
+      // Firebase devices DB에서 track 값 가져오기 (우선순위 1)
       const devicesRef = db.ref(`sessions/${sessionId}/devices`);
       const devicesSnapshot = await devicesRef.once('value');
       const devicesData = devicesSnapshot.val() || {};
       
+      if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
+        maxTrackNumber = devicesData.track;
+        console.log('[Bluetooth Player List] Firebase devices에서 트랙 개수 가져옴:', maxTrackNumber);
+      } else {
+        // Fallback: 사용자가 할당된 최대 트랙 번호 찾기
+        const usersRef = db.ref(`sessions/${sessionId}/users`);
+        const usersSnapshot = await usersRef.once('value');
+        const usersData = usersSnapshot.val() || {};
+        
+        const assignedTrackNumbers = Object.keys(usersData)
+          .map(key => parseInt(key, 10))
+          .filter(num => !isNaN(num) && num > 0);
+        
+        if (assignedTrackNumbers.length > 0) {
+          const maxAssignedTrack = Math.max(...assignedTrackNumbers);
+          // 최대 할당된 트랙이 10개 이상이면 5개씩 확장
+          if (maxAssignedTrack >= 10) {
+            // 10개 단위로 올림 후 5개씩 확장
+            maxTrackNumber = Math.ceil((maxAssignedTrack + 1) / 5) * 5;
+          } else {
+            maxTrackNumber = 10;
+          }
+        }
+      }
+      
+      // users 정보 가져오기 (트랙별 사용자 데이터) - devicesData는 이미 위에서 가져옴
+      const usersRef = db.ref(`sessions/${sessionId}/users`);
+      const usersSnapshot = await usersRef.once('value');
+      const usersData = usersSnapshot.val() || {};
+      
+      // 트랙별 device 정보 가져오기 (트랙 번호별로 저장된 경우)
+      const trackDevicesData = {};
+      if (devicesData) {
+        // devicesData가 객체이고 각 키가 트랙 번호인 경우
+        Object.keys(devicesData).forEach(key => {
+          const trackNum = parseInt(key, 10);
+          if (!isNaN(trackNum) && trackNum > 0) {
+            trackDevicesData[trackNum] = devicesData[key];
+          }
+        });
+      }
+      
       // 트랙 초기화
       for (let i = 1; i <= maxTrackNumber; i++) {
         const userData = usersData[i];
-        const deviceData = devicesData[i];
+        const deviceData = trackDevicesData[i] || null;
         
         tracks.push({
           trackNumber: i,

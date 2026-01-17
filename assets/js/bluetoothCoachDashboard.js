@@ -116,7 +116,7 @@ function getBluetoothCoachSessionId() {
 
 /**
  * Firebase에서 트랙 구성 정보 가져오기
- * sessions/{roomId}/trackConfig 에서 최대 트랙 수 가져오기
+ * sessions/{roomId}/devices 에서 track 값 가져오기 (track=15 형식)
  */
 async function getTrackConfigFromFirebase() {
   const sessionId = getBluetoothCoachSessionId();
@@ -125,16 +125,30 @@ async function getTrackConfigFromFirebase() {
   }
   
   try {
+    // Firebase devices DB에서 track 값 가져오기
+    const devicesSnapshot = await db.ref(`sessions/${sessionId}/devices`).once('value');
+    const devicesData = devicesSnapshot.val();
+    
+    if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
+      console.log('[Bluetooth Coach] Firebase devices에서 트랙 개수 가져옴:', devicesData.track);
+      return { maxTracks: devicesData.track };
+    }
+  } catch (error) {
+    console.error('[Bluetooth Coach] devices DB에서 트랙 구성 정보 가져오기 실패:', error);
+  }
+  
+  // Fallback: 기존 trackConfig 확인 (하위 호환성)
+  try {
     const snapshot = await db.ref(`sessions/${sessionId}/trackConfig`).once('value');
     const config = snapshot.val();
     if (config && typeof config.maxTracks === 'number' && config.maxTracks > 0) {
       return { maxTracks: config.maxTracks };
     }
   } catch (error) {
-    console.error('[Bluetooth Coach] 트랙 구성 정보 가져오기 실패:', error);
+    console.error('[Bluetooth Coach] trackConfig 가져오기 실패:', error);
   }
   
-  // Firebase users 데이터에서 실제 사용 중인 트랙 수 확인
+  // Fallback: Firebase users 데이터에서 실제 사용 중인 트랙 수 확인
   try {
     const usersSnapshot = await db.ref(`sessions/${sessionId}/users`).once('value');
     const users = usersSnapshot.val();
@@ -924,6 +938,85 @@ window.updateBluetoothCoachTracksFromFirebase = async function updateBluetoothCo
   } else {
     if (typeof showToast === 'function') {
       showToast('트랙 구성이 변경되지 않았습니다.');
+    }
+  }
+};
+
+/**
+ * 트랙 추가 생성 (현재 트랙에 추가)
+ */
+window.addTracksToBluetoothCoach = async function addTracksToBluetoothCoach() {
+  const inputEl = document.getElementById('addTrackCountInput');
+  if (!inputEl) {
+    console.error('[Bluetooth Coach] 트랙 개수 입력 필드를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const addCount = parseInt(inputEl.value, 10);
+  if (isNaN(addCount) || addCount < 1 || addCount > 50) {
+    if (typeof showToast === 'function') {
+      showToast('1~50 사이의 숫자를 입력해주세요.', 'error');
+    }
+    return;
+  }
+  
+  const sessionId = getBluetoothCoachSessionId();
+  if (!sessionId || typeof db === 'undefined') {
+    if (typeof showToast === 'function') {
+      showToast('세션 정보를 찾을 수 없습니다.', 'error');
+    }
+    return;
+  }
+  
+  try {
+    // 현재 트랙 개수 가져오기
+    const currentMaxTracks = window.bluetoothCoachState.maxTrackCount || 10;
+    const newMaxTracks = currentMaxTracks + addCount;
+    
+    // Firebase devices DB에 track 값 저장 (track=15 형식)
+    await db.ref(`sessions/${sessionId}/devices`).update({
+      track: newMaxTracks
+    });
+    
+    console.log(`[Bluetooth Coach] 트랙 개수 업데이트: ${currentMaxTracks} → ${newMaxTracks}`);
+    
+    // 로컬 상태 업데이트
+    window.bluetoothCoachState.maxTrackCount = newMaxTracks;
+    
+    // 트랙 그리드 재생성 (기존 트랙 유지하고 추가)
+    const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
+    if (gridEl) {
+      // 기존 트랙은 유지하고 추가 트랙만 생성
+      for (let i = currentMaxTracks + 1; i <= newMaxTracks; i++) {
+        const powerMeter = new PowerMeterData(i, `트랙${i}`);
+        window.bluetoothCoachState.powerMeters.push(powerMeter);
+        
+        const element = createPowerMeterElement(powerMeter);
+        gridEl.appendChild(element);
+      }
+      
+      // 새로 추가된 트랙의 눈금 초기화
+      for (let i = currentMaxTracks + 1; i <= newMaxTracks; i++) {
+        generateBluetoothCoachPowerMeterTicks(i);
+        generateBluetoothCoachPowerMeterLabels(i);
+        updateBluetoothCoachPowerMeterNeedle(i, 0);
+      }
+    }
+    
+    // Firebase 구독 업데이트 (새 트랙 포함)
+    setupFirebaseSubscriptions();
+    
+    if (typeof showToast === 'function') {
+      showToast(`${addCount}개 트랙이 추가되었습니다. (총 ${newMaxTracks}개)`);
+    }
+    
+    // 입력 필드 초기화
+    inputEl.value = '5';
+    
+  } catch (error) {
+    console.error('[Bluetooth Coach] 트랙 추가 실패:', error);
+    if (typeof showToast === 'function') {
+      showToast('트랙 추가에 실패했습니다.', 'error');
     }
   }
 };
