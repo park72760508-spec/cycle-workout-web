@@ -3269,6 +3269,14 @@
         </h3>
         
         <div class="list-header-actions">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="number" id="addTrackCountInput" min="1" max="50" value="5" 
+                   style="width: 60px; padding: 6px 8px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 4px; background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 14px; text-align: center;">
+            <button class="btn btn-primary btn-sm" id="btnAddTracksBluetoothCoach" onclick="addTracksToBluetoothCoach()">
+              <img src="assets/img/add-user2.gif" alt="트랙 생성" class="btn-icon-image" style="width: 18px; height: 18px; margin-right: 4px; vertical-align: middle;" />
+              트랙 생성
+            </button>
+          </div>
           <button class="btn btn-secondary btn-sm" id="btnUpdateTracksFromFirebaseBluetoothCoach" onclick="updateBluetoothCoachTracksFromFirebase()">
             <img src="assets/img/reload.png" alt="트랙 업데이트" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
             트랙 업데이트
