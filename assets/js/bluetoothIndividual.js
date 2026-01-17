@@ -1547,6 +1547,17 @@ function handleSegmentCountdown(countdownValue, status) {
         return;
     }
     
+    // 마지막 세그먼트인지 확인 (Bluetooth 개인훈련 대시보드 전용)
+    const isLastSegment = checkIsLastSegment(status);
+    if (isLastSegment) {
+        // 마지막 세그먼트에서는 5초 카운트다운 표시하지 않음
+        if (segmentCountdownActive && !startCountdownActive) {
+            stopSegmentCountdown();
+        }
+        lastCountdownValue = null;
+        return;
+    }
+    
     // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
     if (countdownValue > 5) {
         if (segmentCountdownActive && !startCountdownActive) {
@@ -1556,7 +1567,7 @@ function handleSegmentCountdown(countdownValue, status) {
         return;
     }
     
-    // 5초 이하일 때만 오버레이 표시
+    // 5초 이하일 때만 오버레이 표시 (마지막 세그먼트가 아닐 때만)
     if (countdownValue <= 5 && countdownValue >= 0) {
         // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
         if (lastCountdownValue !== countdownValue || !segmentCountdownActive) {
@@ -2119,6 +2130,27 @@ function updateTargetPower() {
     if (typeof updateTargetPowerArc === 'function') {
         updateTargetPowerArc();
     }
+}
+
+/**
+ * 마지막 세그먼트인지 확인 (Bluetooth 개인훈련 대시보드 전용)
+ * @param {Object} status - Firebase status 객체
+ * @returns {boolean} 마지막 세그먼트이면 true
+ */
+function checkIsLastSegment(status) {
+    // 워크아웃이 없으면 false
+    if (!window.currentWorkout || !window.currentWorkout.segments || window.currentWorkout.segments.length === 0) {
+        return false;
+    }
+    
+    const totalSegments = window.currentWorkout.segments.length;
+    const lastSegmentIndex = totalSegments > 0 ? totalSegments - 1 : -1;
+    
+    // 현재 세그먼트 인덱스 확인
+    const currentSegIdx = status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex;
+    
+    // 현재 세그먼트가 마지막 세그먼트인지 확인
+    return currentSegIdx === lastSegmentIndex && currentSegIdx >= 0;
 }
 
 /**
