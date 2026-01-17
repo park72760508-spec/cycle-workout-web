@@ -1,15 +1,15 @@
 // bluetoothIndividual.js
 
-// 1. URL 파라미터에서 트랙 번호 확인 (?track=1)
+// 1. URL 파라미터에서 트랙 번호 확인 (?track=1 또는 ?bike=1)
 const params = new URLSearchParams(window.location.search);
-let myTrackId = params.get('track');
+let myTrackId = params.get('track') || params.get('bike'); // bike 파라미터도 지원 (하위 호환성)
 
 // 번호가 없으면 강제로 물어봄
 while (!myTrackId) {
     myTrackId = prompt("트랙 번호를 입력하세요 (예: 1, 5, 12)", "1");
     if(myTrackId) {
-        // 입력받은 번호로 URL 새로고침 (즐겨찾기 용이하게)
-        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?track=' + myTrackId;
+        // 입력받은 번호로 URL 새로고침 (track 파라미터로 통일)
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?track=' + myTrackId + (params.get('room') ? '&room=' + params.get('room') : '');
         window.history.pushState({path:newUrl},'',newUrl);
     }
 }
@@ -124,14 +124,112 @@ if (!window.liveData) {
 }
 
 function initializeBluetoothDashboard() {
-    // window.connectedDevices 초기화 (bluetooth.js가 로드되기 전일 수 있음)
-    if (!window.connectedDevices) {
-        window.connectedDevices = {
-            trainer: null,
-            powerMeter: null,
-            heartRate: null
-        };
-        console.log('[BluetoothIndividual] window.connectedDevices 초기화');
+    // 부모 창(window.opener)에서 Bluetooth 연결 상태 복사
+    // bluetoothIndividual.html이 새 창으로 열렸을 때 부모 창의 연결 상태를 가져옴
+    if (window.opener && !window.opener.closed) {
+        try {
+            // 부모 창의 window.connectedDevices 복사 시도
+            const parentConnectedDevices = window.opener.connectedDevices;
+            const parentLiveData = window.opener.liveData;
+            
+            if (parentConnectedDevices) {
+                // 부모 창의 연결 상태 복사 (참조가 아닌 구조 복사)
+                window.connectedDevices = {
+                    trainer: parentConnectedDevices.trainer ? {
+                        name: parentConnectedDevices.trainer.name,
+                        device: parentConnectedDevices.trainer.device, // 참조 복사
+                        server: parentConnectedDevices.trainer.server,
+                        characteristic: parentConnectedDevices.trainer.characteristic
+                    } : null,
+                    powerMeter: parentConnectedDevices.powerMeter ? {
+                        name: parentConnectedDevices.powerMeter.name,
+                        device: parentConnectedDevices.powerMeter.device,
+                        server: parentConnectedDevices.powerMeter.server,
+                        characteristic: parentConnectedDevices.powerMeter.characteristic
+                    } : null,
+                    heartRate: parentConnectedDevices.heartRate ? {
+                        name: parentConnectedDevices.heartRate.name,
+                        device: parentConnectedDevices.heartRate.device,
+                        server: parentConnectedDevices.heartRate.server,
+                        characteristic: parentConnectedDevices.heartRate.characteristic
+                    } : null
+                };
+                console.log('[BluetoothIndividual] ✅ 부모 창에서 연결 상태 복사 완료:', {
+                    heartRate: window.connectedDevices.heartRate?.name || null,
+                    powerMeter: window.connectedDevices.powerMeter?.name || null,
+                    trainer: window.connectedDevices.trainer?.name || null
+                });
+            }
+            
+            // 부모 창의 window.liveData 값 복사 (초기값)
+            if (parentLiveData) {
+                if (!window.liveData) {
+                    window.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
+                }
+                // 현재 값 복사 (부모 창과 동기화되지 않으므로 초기값만)
+                if (parentLiveData.heartRate) {
+                    window.liveData.heartRate = parentLiveData.heartRate;
+                }
+                if (parentLiveData.power) {
+                    window.liveData.power = parentLiveData.power;
+                }
+                if (parentLiveData.cadence) {
+                    window.liveData.cadence = parentLiveData.cadence;
+                }
+                console.log('[BluetoothIndividual] ✅ 부모 창에서 liveData 초기값 복사 완료:', {
+                    heartRate: window.liveData.heartRate,
+                    power: window.liveData.power,
+                    cadence: window.liveData.cadence
+                });
+                
+                // 부모 창의 liveData를 주기적으로 동기화 (polling)
+                setInterval(() => {
+                    try {
+                        if (!window.opener.closed && window.opener.liveData) {
+                            const parentHR = window.opener.liveData.heartRate;
+                            const parentPower = window.opener.liveData.power;
+                            const parentCadence = window.opener.liveData.cadence;
+                            
+                            // 값이 변경되었으면 복사
+                            if (parentHR !== undefined && parentHR !== null && window.liveData.heartRate !== parentHR) {
+                                window.liveData.heartRate = parentHR;
+                            }
+                            if (parentPower !== undefined && parentPower !== null && window.liveData.power !== parentPower) {
+                                window.liveData.power = parentPower;
+                            }
+                            if (parentCadence !== undefined && parentCadence !== null && window.liveData.cadence !== parentCadence) {
+                                window.liveData.cadence = parentCadence;
+                            }
+                        }
+                    } catch (e) {
+                        // 부모 창 접근 실패 (CORS 또는 닫힘) - 조용히 무시
+                    }
+                }, 100); // 100ms마다 부모 창의 liveData 동기화
+                console.log('[BluetoothIndividual] ✅ 부모 창 liveData 동기화 시작 (100ms마다)');
+            }
+        } catch (e) {
+            console.warn('[BluetoothIndividual] 부모 창에서 연결 상태 복사 실패 (CORS 또는 다른 이유):', e.message);
+            // window.connectedDevices 초기화 (bluetooth.js가 로드되기 전일 수 있음)
+            if (!window.connectedDevices) {
+                window.connectedDevices = {
+                    trainer: null,
+                    powerMeter: null,
+                    heartRate: null
+                };
+                console.log('[BluetoothIndividual] window.connectedDevices 초기화 (부모 창 접근 실패)');
+            }
+        }
+    } else {
+        // 부모 창이 없거나 닫힌 경우 (직접 접속)
+        // window.connectedDevices 초기화 (bluetooth.js가 로드되기 전일 수 있음)
+        if (!window.connectedDevices) {
+            window.connectedDevices = {
+                trainer: null,
+                powerMeter: null,
+                heartRate: null
+            };
+            console.log('[BluetoothIndividual] window.connectedDevices 초기화 (부모 창 없음)');
+        }
     }
     
     // window.liveData 모니터링을 위한 Proxy 설정 (디버깅용)
