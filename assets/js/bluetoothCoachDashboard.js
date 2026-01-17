@@ -1866,6 +1866,24 @@ function startBluetoothCoachTrainingWithCountdown() {
     animation: countdownPulse 0.5s ease-out;
   `;
   
+  // CSS 애니메이션 추가 (Indoor Training과 동일)
+  if (!document.getElementById('countdownAnimationStyle')) {
+    const style = document.createElement('style');
+    style.id = 'countdownAnimationStyle';
+    style.textContent = `
+      @keyframes countdownPulse {
+        0% { transform: scale(0.5); opacity: 0; }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); opacity: 1; }
+      }
+      @keyframes countdownFadeOut {
+        0% { transform: scale(1); opacity: 1; }
+        100% { transform: scale(1.5); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
   countdownModal.appendChild(countdownText);
   document.body.appendChild(countdownModal);
   
@@ -1963,10 +1981,10 @@ function startBluetoothCoachTraining() {
   // 버튼 상태 업데이트
   updateBluetoothCoachTrainingButtons();
   
-  // 우측 세그먼트 그래프 업데이트
+  // 우측 세그먼트 그래프 업데이트 (Indoor Training과 동일)
   if (window.bluetoothCoachState.currentWorkout) {
     setTimeout(() => {
-      updateWorkoutSegmentGraph();
+      updateWorkoutSegmentGraphForBluetoothCoach(window.bluetoothCoachState.currentWorkout, 0);
     }, 100);
   }
   
@@ -2122,30 +2140,22 @@ function startBluetoothCoachTrainingTimer() {
   
   const now = Date.now();
   
-  // startTime이 없으면 현재 시간으로 설정
-  if (!window.bluetoothCoachState.startTime) {
-    window.bluetoothCoachState.startTime = now;
+  // Indoor Training과 동일한 로직: startTime이 있으면 경과 시간 계산
+  if (window.bluetoothCoachState.startTime) {
+    const elapsed = Math.floor((now - window.bluetoothCoachState.startTime - window.bluetoothCoachState.pausedTime) / 1000);
+    window.bluetoothCoachState.totalElapsedTime = elapsed;
+    
+    // 세그먼트 경과 시간 업데이트
+    if (window.bluetoothCoachState.segmentStartTime) {
+      window.bluetoothCoachState.segmentElapsedTime = Math.floor((now - window.bluetoothCoachState.segmentStartTime) / 1000);
+    }
   }
-  
-  // pausedTime 계산 (현재 일시정지 중이 아니면 0)
-  let pausedDuration = 0;
-  if (window.bluetoothCoachState.pausedTime && window.bluetoothCoachState.pausedTime > 0) {
-    pausedDuration = now - window.bluetoothCoachState.pausedTime;
-  }
-  
-  // 전체 경과 시간 계산
-  const elapsed = Math.floor((now - window.bluetoothCoachState.startTime - pausedDuration) / 1000);
-  window.bluetoothCoachState.totalElapsedTime = Math.max(0, elapsed);
-  
-  // 세그먼트 경과 시간 업데이트
-  if (!window.bluetoothCoachState.segmentStartTime) {
-    window.bluetoothCoachState.segmentStartTime = now;
-  }
-  const segmentElapsed = Math.floor((now - window.bluetoothCoachState.segmentStartTime - pausedDuration) / 1000);
-  window.bluetoothCoachState.segmentElapsedTime = Math.max(0, segmentElapsed);
   
   // 전광판 업데이트
   updateScoreboard();
+  
+  // 랩 카운트다운 업데이트 (항상 호출)
+  updateBluetoothCoachLapTime();
   
   // Firebase에 경과 시간 업데이트
   if (typeof db !== 'undefined') {
@@ -2156,7 +2166,7 @@ function startBluetoothCoachTrainingTimer() {
     }).catch(e => console.warn('[Bluetooth Coach] 경과 시간 업데이트 실패:', e));
   }
   
-  // 세그먼트 전환 체크
+  // 세그먼트 전환 체크 (Indoor Training과 동일한 로직)
   if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.currentWorkout.segments) {
     const segments = window.bluetoothCoachState.currentWorkout.segments;
     const currentIndex = window.bluetoothCoachState.currentSegmentIndex;
@@ -2165,12 +2175,18 @@ function startBluetoothCoachTrainingTimer() {
     if (currentSegment) {
       const segmentDuration = currentSegment.duration_sec || currentSegment.duration || 0;
       const segmentElapsed = window.bluetoothCoachState.segmentElapsedTime;
+      const remaining = segmentDuration - segmentElapsed;
       
       // 세그먼트 시간이 지나면 다음 세그먼트로 이동
       if (segmentElapsed >= segmentDuration) {
         if (currentIndex >= segments.length - 1) {
           // 워크아웃 종료
-          stopBluetoothCoachTraining();
+          window.bluetoothCoachState.trainingState = 'finished';
+          
+          // 버튼 상태 업데이트
+          updateBluetoothCoachTrainingButtons();
+          
+          console.log(`[Bluetooth Coach] 워크아웃 완료`);
           return;
         } else {
           // 다음 세그먼트로 이동
@@ -2186,19 +2202,38 @@ function startBluetoothCoachTrainingTimer() {
             }).catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 업데이트 실패:', e));
           }
           
-          // 세그먼트 그래프 업데이트
-          updateWorkoutSegmentGraph();
+          // 세그먼트 변경 시 데이터 초기화 (Indoor Training과 동일)
+          window.bluetoothCoachState.powerMeters.forEach(pm => {
+            if (pm.connected) {
+              // 궤적 초기화
+              pm.powerTrailHistory = [];
+              pm.lastTrailAngle = null;
+              const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+              if (trailContainer) trailContainer.innerHTML = '';
+              
+              // 세그먼트 평균 파워 통계 리셋
+              pm.segmentPowerSum = 0;
+              pm.segmentPowerCount = 0;
+              pm.segmentPower = 0;
+              
+              // 목표 파워 궤적 업데이트
+              const currentPower = pm.currentPower || 0;
+              const ftp = pm.userFTP || 200;
+              const maxPower = ftp * 2;
+              const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+              const angle = -90 + (ratio * 180);
+              updateBluetoothCoachPowerMeterTrail(pm.id, currentPower, angle, pm);
+            }
+          });
         }
       }
     }
   }
   
-  // 랩 카운트다운 업데이트 (항상 호출)
-  updateBluetoothCoachLapTime();
-  
-  // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트를 위해)
-  if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.trainingState === 'running') {
-    updateWorkoutSegmentGraph();
+  // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트를 위해) - Indoor Training과 동일
+  if (window.bluetoothCoachState.currentWorkout) {
+    const currentSegmentIndex = window.bluetoothCoachState.currentSegmentIndex;
+    updateWorkoutSegmentGraphForBluetoothCoach(window.bluetoothCoachState.currentWorkout, currentSegmentIndex);
   }
   
   if (window.bluetoothCoachState.trainingState === 'running') {
