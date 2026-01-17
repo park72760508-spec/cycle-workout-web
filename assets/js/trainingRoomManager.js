@@ -3615,7 +3615,7 @@ async function removeUserFromTrackWithAnimation(trackNumber, roomIdParam, event)
     // 오류가 발생해도 계속 진행 (권한 체크 실패 시에도 관리자는 진행 가능하도록)
   }
 
-  if (!confirm(`트랙${trackNumber}에서 사용자를 제거하시겠습니까?`)) {
+  if (!confirm(`트랙${trackNumber}에서 퇴실하시겠습니까?`)) {
     return;
   }
   

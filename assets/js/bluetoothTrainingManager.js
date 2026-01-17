@@ -503,7 +503,7 @@ async function removeUserFromBluetoothTrack(trackNumber, roomIdParam) {
   roomId = String(roomId);
 
   // 확인 대화상자
-  if (!confirm(`트랙${trackNumber}에서 사용자를 제거하시겠습니까?`)) {
+  if (!confirm(`트랙${trackNumber}에서 퇴실하시겠습니까?`)) {
     return;
   }
 
