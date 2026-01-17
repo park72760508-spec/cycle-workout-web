@@ -223,17 +223,18 @@ function createPowerMeterElement(powerMeter) {
   
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
-      <div style="display: flex !important; flex-direction: column !important; align-items: flex-start !important; flex: 0 0 auto !important; min-width: 100px !important; order: 1 !important;">
-        <div style="display: ${powerMeter.userName ? 'flex' : 'none'} !important; align-items: center !important; flex-wrap: wrap !important;">
-          <span class="speedometer-user-name" id="user-name-${powerMeter.id}" 
-                style="font-size: 13px !important; color: #000000 !important; font-weight: 600 !important; text-align: left !important; margin-bottom: 2px !important; background: rgba(0, 212, 170, 0.8) !important; padding: 4px 10px !important; border-radius: 6px !important; cursor: default !important; transition: all 0.2s ease !important;">${powerMeter.userName || ''}</span>
-        </div>
-      </div>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
-      <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important; align-items: center !important; gap: 6px !important;">
-        <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
-        <span class="status-dot disconnected" id="status-dot-${powerMeter.id}" style="display: none !important;"></span>
-        <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
+      <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; flex-direction: column !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 4px !important;">
+        <span class="speedometer-user-icon" id="user-icon-${powerMeter.id}" 
+              style="display: ${powerMeter.userName ? 'inline-flex' : 'none'} !important; align-items: center !important; gap: 4px !important; font-size: 11px !important; color: #ffffff !important; font-weight: 500 !important; background: rgba(0, 212, 170, 0.6) !important; padding: 3px 8px !important; border-radius: 4px !important; cursor: default !important;">
+          <span style="font-size: 12px;">👤</span>
+          <span>${powerMeter.userName || ''}</span>
+        </span>
+        <div style="display: flex !important; align-items: center !important; gap: 6px !important;">
+          <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
+          <span class="status-dot disconnected" id="status-dot-${powerMeter.id}" style="display: none !important;"></span>
+          <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
+        </div>
       </div>
     </div>
     <div class="speedometer-dial">
@@ -580,10 +581,13 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   if (userData.userId) powerMeter.userId = userData.userId;
   if (userData.userName) {
     powerMeter.userName = userData.userName;
-    const userNameEl = document.getElementById(`user-name-${trackId}`);
-    if (userNameEl) {
-      userNameEl.textContent = userData.userName;
-      userNameEl.parentElement.style.display = 'flex';
+    const userIconEl = document.getElementById(`user-icon-${trackId}`);
+    if (userIconEl) {
+      const userNameSpan = userIconEl.querySelector('span:last-child');
+      if (userNameSpan) {
+        userNameSpan.textContent = userData.userName;
+      }
+      userIconEl.style.display = 'inline-flex';
     }
   }
   if (userData.ftp) powerMeter.userFTP = userData.ftp;
@@ -711,9 +715,9 @@ function resetPowerMeterData(trackId) {
   powerMeter.userFTP = null;
   
   // UI 초기화
-  const userNameEl = document.getElementById(`user-name-${trackId}`);
-  if (userNameEl) {
-    userNameEl.parentElement.style.display = 'none';
+  const userIconEl = document.getElementById(`user-icon-${trackId}`);
+  if (userIconEl) {
+    userIconEl.style.display = 'none';
   }
   
   updatePowerMeterUI(trackId);
