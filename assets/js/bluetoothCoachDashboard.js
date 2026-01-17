@@ -223,18 +223,13 @@ function createPowerMeterElement(powerMeter) {
   
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
+      <span class="speedometer-user-name" id="user-icon-${powerMeter.id}" 
+            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 13px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
-      <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; flex-direction: column !important; align-items: flex-end !important; justify-content: flex-start !important; gap: 4px !important;">
-        <span class="speedometer-user-icon" id="user-icon-${powerMeter.id}" 
-              style="display: ${powerMeter.userName ? 'inline-flex' : 'none'} !important; align-items: center !important; gap: 4px !important; font-size: 11px !important; color: #ffffff !important; font-weight: 500 !important; background: rgba(0, 212, 170, 0.6) !important; padding: 3px 8px !important; border-radius: 4px !important; cursor: default !important;">
-          <span style="font-size: 12px;">👤</span>
-          <span>${powerMeter.userName || ''}</span>
-        </span>
-        <div style="display: flex !important; align-items: center !important; gap: 6px !important;">
-          <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
-          <span class="status-dot disconnected" id="status-dot-${powerMeter.id}" style="display: none !important;"></span>
-          <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
-        </div>
+      <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
+        <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
+        <span class="status-dot disconnected" id="status-dot-${powerMeter.id}" style="display: none !important;"></span>
+        <span class="status-text" id="status-text-${powerMeter.id}">미연결</span>
       </div>
     </div>
     <div class="speedometer-dial">
@@ -581,13 +576,10 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   if (userData.userId) powerMeter.userId = userData.userId;
   if (userData.userName) {
     powerMeter.userName = userData.userName;
-    const userIconEl = document.getElementById(`user-icon-${trackId}`);
-    if (userIconEl) {
-      const userNameSpan = userIconEl.querySelector('span:last-child');
-      if (userNameSpan) {
-        userNameSpan.textContent = userData.userName;
-      }
-      userIconEl.style.display = 'inline-flex';
+    const userNameEl = document.getElementById(`user-icon-${trackId}`);
+    if (userNameEl) {
+      userNameEl.textContent = userData.userName;
+      userNameEl.style.display = 'inline-block';
     }
   }
   if (userData.ftp) powerMeter.userFTP = userData.ftp;
@@ -715,9 +707,9 @@ function resetPowerMeterData(trackId) {
   powerMeter.userFTP = null;
   
   // UI 초기화
-  const userIconEl = document.getElementById(`user-icon-${trackId}`);
-  if (userIconEl) {
-    userIconEl.style.display = 'none';
+  const userNameEl = document.getElementById(`user-icon-${trackId}`);
+  if (userNameEl) {
+    userNameEl.style.display = 'none';
   }
   
   updatePowerMeterUI(trackId);
