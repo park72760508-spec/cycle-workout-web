@@ -936,15 +936,20 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             bluetoothIndividualSegmentStartTime = Date.now();
             bluetoothIndividualSegmentElapsedTime = 0;
             console.log(`[BluetoothIndividual] 세그먼트 변경: ${previousSegmentIndex} → ${currentSegmentIndex}, 파워 히스토리 및 시간 추적 초기화`);
+            
+            // 세그먼트 변경 시 속도계 목표값 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+            updateSpeedometerTargetForSegment(currentSegmentIndex);
         }
         
-        // 훈련 시작 시 로컬 시간 추적 초기화
+        // 훈련 시작 시 로컬 시간 추적 초기화 및 속도계 목표값 업데이트
         if (previousTrainingState !== 'running' && currentState === 'running') {
             bluetoothIndividualTrainingStartTime = Date.now();
             bluetoothIndividualTotalElapsedTime = 0;
             if (currentSegmentIndex >= 0) {
                 bluetoothIndividualSegmentStartTime = Date.now();
                 bluetoothIndividualSegmentElapsedTime = 0;
+                // 훈련 시작 시 첫 세그먼트의 속도계 목표값 업데이트
+                updateSpeedometerTargetForSegment(currentSegmentIndex);
             }
             console.log('[BluetoothIndividual] 훈련 시작 - 로컬 시간 추적 초기화');
         }
@@ -962,6 +967,8 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         if (currentSegmentIndex >= 0 && !bluetoothIndividualSegmentStartTime && currentState === 'running') {
             bluetoothIndividualSegmentStartTime = Date.now();
             bluetoothIndividualSegmentElapsedTime = 0;
+            // 늦은 감지 시에도 속도계 목표값 업데이트
+            updateSpeedometerTargetForSegment(currentSegmentIndex);
             console.log('[BluetoothIndividual] 세그먼트 시간 추적 초기화 (늦은 감지)');
         }
         const segmentInfoEl = document.getElementById('segment-info');
@@ -1073,6 +1080,11 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
         updateSegmentGraph(segments, currentSegmentIndex);
         // TARGET 파워 업데이트 (워크아웃 정보 로드 시)
         updateTargetPower();
+        
+        // 워크아웃 로드 시 현재 세그먼트의 속도계 목표값 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+        if (currentSegmentIndex >= 0 && currentSegmentIndex < segments.length) {
+            updateSpeedometerTargetForSegment(currentSegmentIndex);
+        }
     }
 });
 
@@ -2129,6 +2141,211 @@ function updateTargetPower() {
     // 목표 파워 원호 업데이트 (애니메이션 루프에서도 호출되지만 여기서도 즉시 업데이트)
     if (typeof updateTargetPowerArc === 'function') {
         updateTargetPowerArc();
+    }
+}
+
+/**
+ * 세그먼트 변경 시 속도계 목표값 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+ * 인도어 대시보드의 applySegmentTarget 로직을 참고하여 독립적으로 구현
+ * @param {number} segmentIndex - 현재 세그먼트 인덱스
+ */
+function updateSpeedometerTargetForSegment(segmentIndex) {
+    // Bluetooth 개인훈련 대시보드 화면인지 확인
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return;
+    }
+    
+    try {
+        // 워크아웃 정보 확인 (window.currentWorkout 또는 Firebase workoutPlan)
+        const workout = window.currentWorkout;
+        if (!workout || !workout.segments || workout.segments.length === 0) {
+            console.warn('[updateSpeedometerTargetForSegment] 워크아웃 또는 세그먼트가 없습니다.');
+            return;
+        }
+        
+        // 세그먼트 인덱스 유효성 확인
+        if (segmentIndex < 0 || segmentIndex >= workout.segments.length) {
+            console.warn('[updateSpeedometerTargetForSegment] 유효하지 않은 세그먼트 인덱스:', segmentIndex);
+            return;
+        }
+        
+        const seg = workout.segments[segmentIndex];
+        if (!seg) {
+            console.warn('[updateSpeedometerTargetForSegment] 세그먼트 데이터가 없습니다. 인덱스:', segmentIndex);
+            return;
+        }
+        
+        const targetType = seg.target_type || 'ftp_pct';
+        const targetValue = seg.target_value;
+        const ftp = userFTP || window.currentUser?.ftp || 200;
+        
+        // 속도계 UI 요소 가져오기
+        const targetLabelEl = document.getElementById('ui-target-label');
+        const targetPowerEl = document.getElementById('ui-target-power');
+        const targetRpmUnitEl = document.getElementById('ui-target-rpm-unit');
+        
+        if (!targetPowerEl) {
+            console.warn('[updateSpeedometerTargetForSegment] ui-target-power 요소를 찾을 수 없습니다.');
+            return;
+        }
+        
+        // 강도 조절 비율 적용
+        const intensityAdjustment = individualIntensityAdjustment || 1.0;
+        
+        // 세그먼트 타입에 따라 목표값 계산 및 표시
+        if (targetType === 'cadence_rpm') {
+            // cadence_rpm 타입: 목표 파워값 자리에 RPM 값 표시
+            const targetRpm = Number(targetValue) || 0;
+            
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'CADENCE';
+                targetLabelEl.setAttribute('fill', '#888');
+            }
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            targetPowerEl.textContent = targetRpm > 0 ? String(Math.round(targetRpm)) : '0';
+            targetPowerEl.setAttribute('fill', '#ef4444'); // 빨강색
+            
+            console.log('[updateSpeedometerTargetForSegment] cadence_rpm 타입 - RPM:', targetRpm);
+            
+        } else if (targetType === 'dual') {
+            // dual 타입: FTP%와 RPM 모두 표시
+            let ftpPercent = 100;
+            let targetRpm = 0;
+            
+            // target_value 파싱
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    ftpPercent = Number(parts[0]) || 100;
+                    targetRpm = Number(parts[1]) || 0;
+                } else if (parts.length === 1) {
+                    ftpPercent = Number(parts[0]) || 100;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                ftpPercent = Number(targetValue[0]) || 100;
+                targetRpm = Number(targetValue[1]) || 0;
+            }
+            
+            // 목표 파워 계산
+            const baseTargetPower = Math.round(ftp * (ftpPercent / 100));
+            const adjustedTargetPower = Math.round(baseTargetPower * intensityAdjustment);
+            
+            // TARGET 라벨에 RPM 표시
+            if (targetRpm > 0 && targetLabelEl) {
+                targetLabelEl.textContent = '';
+                targetLabelEl.setAttribute('fill', '#ef4444');
+                targetLabelEl.setAttribute('font-size', '10');
+                targetLabelEl.setAttribute('y', '90');
+                
+                // 기존 tspan 제거
+                while (targetLabelEl.firstChild) {
+                    targetLabelEl.removeChild(targetLabelEl.firstChild);
+                }
+                
+                // RPM 숫자와 단위 추가
+                const tspanNumber = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                tspanNumber.setAttribute('fill', '#ef4444');
+                tspanNumber.textContent = String(Math.round(targetRpm));
+                targetLabelEl.appendChild(tspanNumber);
+                
+                const tspanUnit = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                tspanUnit.setAttribute('fill', '#888');
+                tspanUnit.textContent = ' RPM';
+                targetLabelEl.appendChild(tspanUnit);
+            } else {
+                if (targetLabelEl) {
+                    targetLabelEl.textContent = 'TARGET';
+                    targetLabelEl.setAttribute('fill', '#888');
+                    targetLabelEl.setAttribute('font-size', '6');
+                }
+            }
+            
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            
+            targetPowerEl.textContent = String(adjustedTargetPower);
+            targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+            
+            console.log('[updateSpeedometerTargetForSegment] dual 타입 - FTP%:', ftpPercent, 'RPM:', targetRpm, 'Power:', adjustedTargetPower);
+            
+        } else if (targetType === 'ftp_pctz') {
+            // ftp_pctz 타입: 하한/상한 범위
+            let minPercent = 60;
+            let maxPercent = 75;
+            
+            // target_value 파싱
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                } else if (parts.length === 1) {
+                    minPercent = Number(parts[0]) || 60;
+                }
+            } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+                const parts = targetValue.split(',').map(s => s.trim());
+                if (parts.length >= 2) {
+                    minPercent = Number(parts[0]) || 60;
+                    maxPercent = Number(parts[1]) || 75;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                minPercent = Number(targetValue[0]) || 60;
+                maxPercent = Number(targetValue[1]) || 75;
+            }
+            
+            // 하한값을 목표 파워로 사용
+            const baseTargetPower = Math.round(ftp * (minPercent / 100));
+            const adjustedTargetPower = Math.round(baseTargetPower * intensityAdjustment);
+            
+            // 상한값 저장 (원호 표시용)
+            const baseMaxPower = Math.round(ftp * (maxPercent / 100));
+            window.currentSegmentMaxPower = Math.round(baseMaxPower * intensityAdjustment);
+            window.currentSegmentMinPower = adjustedTargetPower;
+            
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888');
+            }
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            
+            targetPowerEl.textContent = String(adjustedTargetPower);
+            targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+            
+            console.log('[updateSpeedometerTargetForSegment] ftp_pctz 타입 - 하한:', minPercent, '상한:', maxPercent, 'Power:', adjustedTargetPower);
+            
+        } else {
+            // ftp_pct 타입 (기본)
+            const ftpPercent = Number(targetValue) || 100;
+            const baseTargetPower = Math.round(ftp * (ftpPercent / 100));
+            const adjustedTargetPower = Math.round(baseTargetPower * intensityAdjustment);
+            
+            if (targetLabelEl) {
+                targetLabelEl.textContent = 'TARGET';
+                targetLabelEl.setAttribute('fill', '#888');
+            }
+            if (targetRpmUnitEl) {
+                targetRpmUnitEl.style.display = 'none';
+            }
+            
+            targetPowerEl.textContent = String(adjustedTargetPower);
+            targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
+            
+            console.log('[updateSpeedometerTargetForSegment] ftp_pct 타입 - FTP%:', ftpPercent, 'Power:', adjustedTargetPower);
+        }
+        
+        // 목표 파워 원호 업데이트
+        if (typeof updateTargetPowerArc === 'function') {
+            updateTargetPowerArc();
+        }
+        
+    } catch (error) {
+        console.error('[updateSpeedometerTargetForSegment] 오류:', error);
     }
 }
 
