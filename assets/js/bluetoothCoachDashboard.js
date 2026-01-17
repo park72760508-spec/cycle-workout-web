@@ -999,7 +999,7 @@ window.addTracksToBluetoothCoach = async function addTracksToBluetoothCoach() {
       for (let i = currentMaxTracks + 1; i <= newMaxTracks; i++) {
         generateBluetoothCoachPowerMeterTicks(i);
         generateBluetoothCoachPowerMeterLabels(i);
-        updateBluetoothCoachPowerMeterNeedle(i, 0);
+        updatePowerMeterNeedle(i, 0);
       }
     }
     
