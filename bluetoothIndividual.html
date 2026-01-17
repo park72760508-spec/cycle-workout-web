@@ -60,12 +60,11 @@
             position: relative; /* 세그먼트 정보 절대 위치 기준 */
         }
         
-        /* 세그먼트 정보 중앙 정렬 */
+        /* 세그먼트 정보 (게이지 내부에 표시) */
         #segment-info {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
             text-align: center;
+            font-size: 0.9em;
+            color: #ccc;
         }
         .bike-badge {
             background-color: #00d4aa;
@@ -594,9 +593,8 @@
 
     <div class="header">
         <div id="bike-id-display" class="bike-badge">Bike ?</div>
-        <div id="segment-info" style="font-size:0.9em; color:#ccc;">준비 중</div>
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div id="main-timer" class="timer">00:00:00</div>
+        <div id="main-timer" class="timer" style="position: absolute; left: 50%; transform: translateX(-50%);">00:00:00</div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
             <div style="position: relative;">
                 <button id="bluetoothConnectBtn" class="bluetooth-connect-btn" onclick="toggleBluetoothDropdown()">
                     <span style="font-size: 1.1em;">📶</span>
@@ -651,6 +649,9 @@
                 
                 <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
                 <text id="ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+                
+                <!-- 세그먼트 정보 (파워값 아래) -->
+                <text id="segment-info" x="100" y="215" text-anchor="middle" fill="#ccc" font-size="9">준비 중</text>
 
                 <g id="gauge-needle" transform="translate(100, 140) rotate(-90)">
                     <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
