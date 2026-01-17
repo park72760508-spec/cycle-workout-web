@@ -939,7 +939,10 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             
             // 세그먼트 변경 시 속도계 목표값 및 세그먼트 정보 업데이트 (Bluetooth 개인훈련 대시보드 전용)
             updateSpeedometerTargetForSegment(currentSegmentIndex);
-            updateSpeedometerSegmentInfo(); // 세그먼트 정보도 즉시 업데이트
+            // 세그먼트 정보는 약간의 지연 후 업데이트 (세그먼트 데이터가 완전히 로드된 후)
+            setTimeout(() => {
+                updateSpeedometerSegmentInfo();
+            }, 100);
         }
         
         // 훈련 시작 시 로컬 시간 추적 초기화 및 속도계 목표값 업데이트
@@ -949,8 +952,11 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             if (currentSegmentIndex >= 0) {
                 bluetoothIndividualSegmentStartTime = Date.now();
                 bluetoothIndividualSegmentElapsedTime = 0;
-                // 훈련 시작 시 첫 세그먼트의 속도계 목표값 업데이트
+                // 훈련 시작 시 첫 세그먼트의 속도계 목표값 및 세그먼트 정보 업데이트
                 updateSpeedometerTargetForSegment(currentSegmentIndex);
+                setTimeout(() => {
+                    updateSpeedometerSegmentInfo();
+                }, 100);
             }
             console.log('[BluetoothIndividual] 훈련 시작 - 로컬 시간 추적 초기화');
         }
@@ -968,44 +974,14 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         if (currentSegmentIndex >= 0 && !bluetoothIndividualSegmentStartTime && currentState === 'running') {
             bluetoothIndividualSegmentStartTime = Date.now();
             bluetoothIndividualSegmentElapsedTime = 0;
-            // 늦은 감지 시에도 속도계 목표값 업데이트
+            // 늦은 감지 시에도 속도계 목표값 및 세그먼트 정보 업데이트
             updateSpeedometerTargetForSegment(currentSegmentIndex);
+            updateSpeedometerSegmentInfo();
             console.log('[BluetoothIndividual] 세그먼트 시간 추적 초기화 (늦은 감지)');
         }
-        const segmentInfoEl = document.getElementById('segment-info');
-        if (segmentInfoEl) {
-            if (status.state === 'running') {
-                // 현재 세그먼트 정보 가져오기
-                const currentSegment = getCurrentSegment();
-                if (currentSegment) {
-                    // 세그먼트 이름과 목표 값을 조합하여 표시
-                    const segmentName = currentSegment.name || '';
-                    const targetText = formatSegmentInfo(
-                        status.segmentTargetType || currentSegment.target_type,
-                        status.segmentTargetValue !== undefined ? status.segmentTargetValue : currentSegment.target_value
-                    );
-                    
-                    // 세그먼트 이름이 있으면 "세그먼트 이름(목표 값)" 형식, 없으면 "목표 값"만 표시
-                    const segmentText = segmentName 
-                        ? `${segmentName}(${targetText})`
-                        : targetText;
-                    // SVG text 요소는 textContent 사용
-                    segmentInfoEl.textContent = segmentText;
-                } else {
-                    // 세그먼트 정보가 없으면 Firebase status에서 받은 정보로 표시
-                    if (status.segmentTargetType && status.segmentTargetValue !== undefined) {
-                        const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
-                        segmentInfoEl.textContent = segmentText;
-                    } else {
-                        segmentInfoEl.textContent = '준비 중';
-                    }
-                }
-            } else if (status.state === 'paused') {
-                segmentInfoEl.textContent = '일시정지';
-            } else {
-                segmentInfoEl.textContent = '대기 중';
-            }
-        }
+        
+        // 세그먼트 정보 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+        updateSpeedometerSegmentInfo();
         
         // 모든 세그먼트 완료 여부 확인 (Bluetooth 개인훈련 대시보드 전용)
         const isAllSegmentsComplete = checkAllSegmentsComplete(status, currentState, currentSegmentIndex);
@@ -1017,6 +993,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             const segmentInfoEl = document.getElementById('segment-info');
             if (segmentInfoEl) {
                 segmentInfoEl.textContent = '훈련 완료';
+                segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
             }
             // 경과시간은 마지막 값 유지, 카운트다운은 00:00으로 표시
             const lapTimeEl = document.getElementById('ui-lap-time');
@@ -1085,9 +1062,12 @@ db.ref(`sessions/${SESSION_ID}/workoutPlan`).on('value', (snapshot) => {
         // TARGET 파워 업데이트 (워크아웃 정보 로드 시)
         updateTargetPower();
         
-        // 워크아웃 로드 시 현재 세그먼트의 속도계 목표값 업데이트 (Bluetooth 개인훈련 대시보드 전용)
+        // 워크아웃 로드 시 현재 세그먼트의 속도계 목표값 및 세그먼트 정보 업데이트 (Bluetooth 개인훈련 대시보드 전용)
         if (currentSegmentIndex >= 0 && currentSegmentIndex < segments.length) {
             updateSpeedometerTargetForSegment(currentSegmentIndex);
+            setTimeout(() => {
+                updateSpeedometerSegmentInfo();
+            }, 100);
         }
     }
 });
@@ -2373,6 +2353,7 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
 /**
  * 속도계 하단 세그먼트 정보 업데이트 (Bluetooth 개인훈련 대시보드 전용)
  * 현재 파워값 하단에 현재 진행 세그먼트 정보를 표시
+ * 인도어 대시보드의 applySegmentTarget 로직을 참고하여 독립적으로 구현
  * 다른 화면과 독립적으로 작동
  */
 function updateSpeedometerSegmentInfo() {
@@ -2384,6 +2365,7 @@ function updateSpeedometerSegmentInfo() {
     
     const segmentInfoEl = document.getElementById('segment-info');
     if (!segmentInfoEl) {
+        console.warn('[updateSpeedometerSegmentInfo] segment-info 요소를 찾을 수 없습니다.');
         return;
     }
     
@@ -2399,40 +2381,77 @@ function updateSpeedometerSegmentInfo() {
             } else {
                 segmentInfoEl.textContent = '대기 중';
             }
-            segmentInfoEl.setAttribute('fill', '#ccc');
+            segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
             return;
         }
         
         // 현재 세그먼트 정보 가져오기
         const currentSeg = getCurrentSegment();
         if (!currentSeg) {
-            segmentInfoEl.textContent = '준비 중';
-            segmentInfoEl.setAttribute('fill', '#ccc');
+            // 세그먼트 정보가 없으면 Firebase status에서 받은 정보로 표시
+            if (status.segmentTargetType && status.segmentTargetValue !== undefined) {
+                const segmentText = formatSegmentInfo(status.segmentTargetType, status.segmentTargetValue);
+                segmentInfoEl.textContent = segmentText;
+                segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
+            } else {
+                segmentInfoEl.textContent = '준비 중';
+                segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
+            }
             return;
         }
         
-        // 세그먼트 이름과 목표 값을 조합하여 표시
-        const segmentName = currentSeg.name || '';
-        const targetText = formatSegmentInfo(
-            status.segmentTargetType || currentSeg.target_type || 'ftp_pct',
-            status.segmentTargetValue !== undefined ? status.segmentTargetValue : currentSeg.target_value
-        );
+        // 세그먼트 타입과 값 가져오기 (인도어 대시보드 로직 참고)
+        const targetType = status.segmentTargetType || currentSeg.target_type || 'ftp_pct';
+        const targetValue = status.segmentTargetValue !== undefined ? status.segmentTargetValue : currentSeg.target_value;
         
-        // 세그먼트 이름이 있으면 "세그먼트 이름(목표 값)" 형식, 없으면 "목표 값"만 표시
-        const segmentText = segmentName 
-            ? `${segmentName}(${targetText})`
-            : targetText;
+        // 세그먼트 이름 가져오기 (인도어 대시보드와 동일한 방식)
+        const segmentName = currentSeg.label || currentSeg.name || currentSeg.segment_type || `세그먼트 ${currentSegmentIndex + 1}`;
+        
+        // target_type에 따라 세그먼트 정보 텍스트 구성 (인도어 대시보드 로직 참고)
+        let segmentText = '';
+        
+        if (targetType === 'cadence_rpm') {
+            // cadence_rpm 타입: "세그먼트 이름 - RPM 값"
+            const targetRpm = Number(targetValue) || 0;
+            segmentText = `${segmentName} - RPM ${targetRpm}`;
+        } else if (targetType === 'dual') {
+            // dual 타입: "세그먼트 이름 - FTP 값% / RPM 값"
+            let ftpPercent = 100;
+            let targetRpm = 0;
+            
+            // target_value 파싱 (인도어 대시보드 로직 참고)
+            if (typeof targetValue === 'string' && targetValue.includes('/')) {
+                const parts = targetValue.split('/').map(s => s.trim());
+                if (parts.length >= 2) {
+                    ftpPercent = Number(parts[0]) || 100;
+                    targetRpm = Number(parts[1]) || 0;
+                } else if (parts.length === 1) {
+                    ftpPercent = Number(parts[0]) || 100;
+                }
+            } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+                ftpPercent = Number(targetValue[0]) || 100;
+                targetRpm = Number(targetValue[1]) || 0;
+            }
+            
+            segmentText = `${segmentName} - FTP ${ftpPercent}% / RPM ${targetRpm || 0}`;
+        } else {
+            // ftp_pct 또는 ftp_pctz 타입: "세그먼트 이름 - FTP 값%"
+            const ftpPercent = Number(targetValue) || 100;
+            segmentText = `${segmentName} - FTP ${ftpPercent}%`;
+        }
         
         // 표시
         segmentInfoEl.textContent = segmentText;
-        segmentInfoEl.setAttribute('fill', '#00d4aa'); // 민트색
+        segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
+        
+        console.log('[updateSpeedometerSegmentInfo] 세그먼트 정보 업데이트:', segmentText, '타입:', targetType, '값:', targetValue);
         
     } catch (error) {
         console.error('[updateSpeedometerSegmentInfo] 오류:', error);
         const segmentInfoEl = document.getElementById('segment-info');
         if (segmentInfoEl) {
             segmentInfoEl.textContent = '준비 중';
-            segmentInfoEl.setAttribute('fill', '#ccc');
+            segmentInfoEl.setAttribute('fill', '#fff'); // 흰색
         }
     }
 }
@@ -2517,7 +2536,11 @@ function checkAllSegmentsComplete(status, currentState, currentSegmentIndex) {
 }
 
 /**
- * 세그먼트 정보를 표시 형식으로 변환 (예: FTP 60%, RPM 90 등)
+ * 세그먼트 목표값을 표시 형식으로 변환 (Bluetooth 개인훈련 대시보드 전용)
+ * 인도어 대시보드의 applySegmentTarget 로직을 참고하여 독립적으로 구현
+ * @param {string} targetType - 세그먼트 타입 (ftp_pct, dual, cadence_rpm, ftp_pctz)
+ * @param {any} targetValue - 세그먼트 목표값
+ * @returns {string} 표시할 텍스트
  */
 function formatSegmentInfo(targetType, targetValue) {
     if (!targetType || targetValue === undefined || targetValue === null) {
@@ -2530,15 +2553,22 @@ function formatSegmentInfo(targetType, targetValue) {
         const percent = Number(targetValue) || 100;
         return `FTP ${percent}%`;
     } else if (targetType === 'dual') {
-        // Dual 타입: "100/120" 형식에서 앞의 값 사용
+        // Dual 타입: "FTP 값% / RPM 값" 형식
         let ftpPercent = 100;
+        let targetRpm = 0;
+        
+        // target_value 파싱 (인도어 대시보드 로직 참고)
         if (typeof targetValue === 'string' && targetValue.includes('/')) {
             const parts = targetValue.split('/').map(s => s.trim());
-            if (parts.length >= 1) {
-                ftpPercent = Number(parts[0].replace('%', '')) || 100;
+            if (parts.length >= 2) {
+                ftpPercent = Number(parts[0]) || 100;
+                targetRpm = Number(parts[1]) || 0;
+            } else if (parts.length === 1) {
+                ftpPercent = Number(parts[0]) || 100;
             }
-        } else if (Array.isArray(targetValue) && targetValue.length > 0) {
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
             ftpPercent = Number(targetValue[0]) || 100;
+            targetRpm = Number(targetValue[1]) || 0;
         } else if (typeof targetValue === 'number') {
             // 숫자로 저장된 경우 처리
             const numValue = targetValue;
@@ -2546,17 +2576,43 @@ function formatSegmentInfo(targetType, targetValue) {
                 const str = String(numValue);
                 if (str.length >= 4) {
                     const ftpPart = str.slice(0, -3);
+                    const rpmPart = str.slice(-3);
                     ftpPercent = Number(ftpPart) || 100;
+                    targetRpm = Number(rpmPart) || 0;
                 }
             } else {
                 ftpPercent = numValue <= 1000 ? numValue : 100;
             }
         }
-        return `FTP ${ftpPercent}%`;
+        
+        return `FTP ${ftpPercent}% / RPM ${targetRpm || 0}`;
     } else if (targetType === 'cadence_rpm') {
         // RPM: "RPM 90"
         const rpm = Number(targetValue) || 0;
         return `RPM ${rpm}`;
+    } else if (targetType === 'ftp_pctz') {
+        // FTP 퍼센트 존: "FTP 60-75%" 형식
+        let minPercent = 60;
+        let maxPercent = 75;
+        
+        if (typeof targetValue === 'string' && targetValue.includes('/')) {
+            const parts = targetValue.split('/').map(s => s.trim());
+            if (parts.length >= 2) {
+                minPercent = Number(parts[0]) || 60;
+                maxPercent = Number(parts[1]) || 75;
+            }
+        } else if (typeof targetValue === 'string' && targetValue.includes(',')) {
+            const parts = targetValue.split(',').map(s => s.trim());
+            if (parts.length >= 2) {
+                minPercent = Number(parts[0]) || 60;
+                maxPercent = Number(parts[1]) || 75;
+            }
+        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+            minPercent = Number(targetValue[0]) || 60;
+            maxPercent = Number(targetValue[1]) || 75;
+        }
+        
+        return `FTP ${minPercent}-${maxPercent}%`;
     } else {
         // 알 수 없는 타입: 기본값 표시
         const segIdx = (currentSegmentIndex >= 0 ? currentSegmentIndex + 1 : 1);
