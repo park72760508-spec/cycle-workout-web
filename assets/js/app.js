@@ -12891,32 +12891,44 @@ function showMobileTrainingResultModal(status = null) {
   // 통계 계산
   const stats = window.trainingResults?.calculateSessionStats?.() || {};
   
-  // 훈련 시간 계산 - status.elapsedTime 우선 사용 (세그먼트 그래프 상단 시간값)
+  // 훈련 시간 계산 - 모바일 대시보드 전용 상태 우선 사용
   let totalSeconds = 0;
   let duration_min = 0;
   
-  if (status && status.elapsedTime !== undefined && status.elapsedTime !== null) {
-    // Firebase에서 받은 elapsedTime 사용 (가장 정확)
+  // 모바일 대시보드는 독립적으로 구동되므로 mobileTrainingState.elapsedSec를 최우선으로 확인
+  if (window.mobileTrainingState && window.mobileTrainingState.elapsedSec !== undefined && window.mobileTrainingState.elapsedSec !== null) {
+    // 모바일 전용 상태의 elapsedSec 사용 (가장 정확)
+    totalSeconds = Math.max(0, Math.floor(window.mobileTrainingState.elapsedSec));
+    duration_min = Math.max(0, Math.floor(totalSeconds / 60)); // 최소 0분 보장
+    console.log('[Mobile Dashboard] mobileTrainingState.elapsedSec 사용:', { elapsedSec: window.mobileTrainingState.elapsedSec, totalSeconds, duration_min });
+  } else if (status && status.elapsedTime !== undefined && status.elapsedTime !== null) {
+    // Firebase에서 받은 elapsedTime 사용
     totalSeconds = Math.max(0, Math.floor(status.elapsedTime));
-    duration_min = Math.floor(totalSeconds / 60);
+    duration_min = Math.max(0, Math.floor(totalSeconds / 60));
     console.log('[Mobile Dashboard] elapsedTime 사용:', { elapsedTime: status.elapsedTime, totalSeconds, duration_min });
   } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
     // 전역 변수에 저장된 elapsedTime 사용
     totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
-    duration_min = Math.floor(totalSeconds / 60);
+    duration_min = Math.max(0, Math.floor(totalSeconds / 60));
     console.log('[Mobile Dashboard] lastElapsedTime 사용:', { lastElapsedTime: window.lastElapsedTime, totalSeconds, duration_min });
   } else if (window.trainingState && window.trainingState.elapsedSec !== undefined) {
     // trainingState의 elapsedSec 사용
     totalSeconds = Math.max(0, Math.floor(window.trainingState.elapsedSec));
-    duration_min = Math.floor(totalSeconds / 60);
+    duration_min = Math.max(0, Math.floor(totalSeconds / 60));
     console.log('[Mobile Dashboard] trainingState.elapsedSec 사용:', { elapsedSec: window.trainingState.elapsedSec, totalSeconds, duration_min });
   } else {
     // 대체: startTime과 endTime으로 계산
     const startTime = sessionData.startTime ? new Date(sessionData.startTime) : null;
     const endTime = sessionData.endTime ? new Date(sessionData.endTime) : new Date();
     totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
-    duration_min = Math.floor(totalSeconds / 60);
+    duration_min = Math.max(0, Math.floor(totalSeconds / 60));
     console.log('[Mobile Dashboard] startTime/endTime 사용:', { startTime, endTime, totalSeconds, duration_min });
+  }
+  
+  // 1분 미만이어도 최소 1분으로 표시 (사용자 요청: 1분 훈련인데 0분으로 표시되는 문제 해결)
+  if (totalSeconds > 0 && duration_min === 0) {
+    duration_min = 1;
+    console.log('[Mobile Dashboard] 1분 미만 훈련을 1분으로 표시:', { totalSeconds, duration_min });
   }
   
   // TSS 및 NP 계산 (resultManager.js와 동일한 로직)
