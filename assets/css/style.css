@@ -10514,6 +10514,14 @@ button[aria-disabled="true"] {
   overflow-y: auto;
 }
 
+/* Bluetooth Training Coach 대시보드 화면 - Indoor Training과 동일한 배경색 및 스타일 */
+#bluetoothTrainingCoachScreen {
+  background: #0a0e27;
+  color: #fff;
+  padding: 20px;
+  overflow-y: auto;
+}
+
 .dashboard-header {
   display: flex;
   justify-content: flex-start;
@@ -10568,7 +10576,9 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 화면 버튼 - 개인 훈련 화면과 동일한 transition 적용 */
-#indoorTrainingDashboardScreen .enhanced-control-btn {
+#indoorTrainingDashboardScreen .enhanced-control-btn,
+/* Bluetooth Training Coach 화면 버튼 - Indoor Training과 동일한 스타일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn {
   display: flex !important;
   width: 64px;
   height: 64px;
@@ -10598,7 +10608,9 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 대시보드 버튼 호버 효과 - 개인 훈련 화면과 동일한 네온 효과 */
-#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled),
+/* Bluetooth Training Coach 대시보드 버튼 호버 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn:hover:not(:disabled) {
   transform: translateY(-2px);
   border-color: rgba(255, 255, 255, 0.4);
   box-shadow: 
@@ -10608,7 +10620,10 @@ button[aria-disabled="true"] {
 
 /* 호버 시 아이콘 크기 및 위치 변경 효과 제거 */
 #indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::before,
-#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::after {
+#indoorTrainingDashboardScreen .enhanced-control-btn:hover:not(:disabled)::after,
+/* Bluetooth Training Coach 호버 시 아이콘 크기 및 위치 변경 효과 제거 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn:hover:not(:disabled)::before,
+#bluetoothTrainingCoachScreen .enhanced-control-btn:hover:not(:disabled)::after {
   transform: inherit !important;
   width: inherit !important;
   height: inherit !important;
@@ -10622,26 +10637,34 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 대시보드 버튼 active 효과 - 개인 훈련 화면과 동일 */
-#indoorTrainingDashboardScreen .enhanced-control-btn:active:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn:active:not(:disabled),
+/* Bluetooth Training Coach 버튼 active 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn:active:not(:disabled) {
   transform: translateY(0);
 }
 
 /* Indoor Training 대시보드 버튼 active 클래스 효과 제거 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.active {
+#indoorTrainingDashboardScreen .enhanced-control-btn.active,
+/* Bluetooth Training Coach 버튼 active 클래스 효과 제거 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.active {
   box-shadow: 
     0 4px 12px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn:disabled,
-#indoorTrainingDashboardScreen .enhanced-control-btn:disabled {
+#indoorTrainingDashboardScreen .enhanced-control-btn:disabled,
+/* Bluetooth Training Coach 버튼 disabled 상태 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
 /* 재생 아이콘 */
 #rollerRaceDashboardScreen .enhanced-control-btn.play::before,
-#indoorTrainingDashboardScreen .enhanced-control-btn.play::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.play::before,
+/* Bluetooth Training Coach 재생 아이콘 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play::before {
   content: '';
   width: 0;
   height: 0;
@@ -10673,7 +10696,9 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 대시보드 재생 버튼 호버 효과 - 개인 훈련 화면과 동일한 네온 효과 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled),
+/* Bluetooth Training Coach 재생 버튼 호버 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play:hover:not(:disabled) {
   border-color: #22c55e;
   box-shadow: 
     0 8px 25px rgba(34, 197, 94, 0.3),
@@ -10681,7 +10706,9 @@ button[aria-disabled="true"] {
 }
 
 /* 호버 시 재생 아이콘 크기 및 위치 고정 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled)::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.play:hover:not(:disabled)::before,
+/* Bluetooth Training Coach 호버 시 재생 아이콘 크기 및 위치 고정 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play:hover:not(:disabled)::before {
   transform: translate(-50%, -50%) !important;
   width: 0 !important;
   height: 0 !important;
@@ -10694,7 +10721,9 @@ button[aria-disabled="true"] {
 
 /* 일시정지 아이콘 */
 #rollerRaceDashboardScreen .enhanced-control-btn.pause::before,
-#indoorTrainingDashboardScreen .enhanced-control-btn.pause::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause::before,
+/* Bluetooth Training Coach 일시정지 아이콘 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause::before {
   content: "";
   width: 4px;
   height: 22px;
@@ -10726,7 +10755,9 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 대시보드 일시정지 버튼 호버 효과 - 개인 훈련 화면과 동일한 네온 효과 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled),
+/* Bluetooth Training Coach 일시정지 버튼 호버 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause:hover:not(:disabled) {
   border-color: #fbbf24;
   box-shadow: 
     0 8px 25px rgba(251, 191, 36, 0.3),
@@ -10734,7 +10765,9 @@ button[aria-disabled="true"] {
 }
 
 /* 호버 시 일시정지 아이콘 크기 및 위치 고정 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled)::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.pause:hover:not(:disabled)::before,
+/* Bluetooth Training Coach 호버 시 일시정지 아이콘 크기 및 위치 고정 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause:hover:not(:disabled)::before {
   transform: translate(-50%, -50%) !important;
   width: 4px !important;
   height: 22px !important;
@@ -10744,7 +10777,9 @@ button[aria-disabled="true"] {
 
 /* 정지 아이콘 */
 #rollerRaceDashboardScreen .enhanced-control-btn.stop::before,
-#indoorTrainingDashboardScreen .enhanced-control-btn.stop::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop::before,
+/* Bluetooth Training Coach 정지 아이콘 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop::before {
   content: '';
   width: 18px;
   height: 18px;
@@ -10773,7 +10808,9 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 대시보드 정지 버튼 호버 효과 - 개인 훈련 화면과 동일한 네온 효과 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled),
+/* Bluetooth Training Coach 정지 버튼 호버 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop:hover:not(:disabled) {
   border-color: #ef4444;
   box-shadow: 
     0 8px 25px rgba(239, 68, 68, 0.3),
@@ -10781,7 +10818,9 @@ button[aria-disabled="true"] {
 }
 
 /* 호버 시 정지 아이콘 크기 및 위치 고정 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled)::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.stop:hover:not(:disabled)::before,
+/* Bluetooth Training Coach 호버 시 정지 아이콘 크기 및 위치 고정 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop:hover:not(:disabled)::before {
   transform: translate(-50%, -50%) !important;
   width: 18px !important;
   height: 18px !important;
@@ -10791,7 +10830,9 @@ button[aria-disabled="true"] {
 
 /* 건너뛰기 아이콘 */
 #rollerRaceDashboardScreen .enhanced-control-btn.skip::before,
-#indoorTrainingDashboardScreen .enhanced-control-btn.skip::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip::before,
+/* Bluetooth Training Coach 건너뛰기 아이콘 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip::before {
   content: '';
   width: 0;
   height: 0;
@@ -10806,7 +10847,9 @@ button[aria-disabled="true"] {
 }
 
 #rollerRaceDashboardScreen .enhanced-control-btn.skip::after,
-#indoorTrainingDashboardScreen .enhanced-control-btn.skip::after {
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip::after,
+/* Bluetooth Training Coach 건너뛰기 아이콘 (after) */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip::after {
   content: '';
   width: 0;
   height: 0;
@@ -10845,7 +10888,9 @@ button[aria-disabled="true"] {
 }
 
 /* Indoor Training 대시보드 건너뛰기 버튼 호버 효과 - 개인 훈련 화면과 동일한 네온 효과 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled),
+/* Bluetooth Training Coach 건너뛰기 버튼 호버 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip:hover:not(:disabled) {
   border-color: #3b82f6;
   box-shadow: 
     0 8px 25px rgba(59, 130, 246, 0.3),
@@ -10853,7 +10898,9 @@ button[aria-disabled="true"] {
 }
 
 /* 호버 시 건너뛰기 아이콘 크기 및 위치 고정 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::before,
+/* Bluetooth Training Coach 호버 시 건너뛰기 아이콘 크기 및 위치 고정 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip:hover:not(:disabled)::before {
   transform: translateY(-50%) !important;
   width: 0 !important;
   height: 0 !important;
@@ -10864,7 +10911,9 @@ button[aria-disabled="true"] {
   top: 50% !important;
 }
 
-#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::after {
+#indoorTrainingDashboardScreen .enhanced-control-btn.skip:hover:not(:disabled)::after,
+/* Bluetooth Training Coach 호버 시 건너뛰기 아이콘 크기 및 위치 고정 (after) */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip:hover:not(:disabled)::after {
   transform: translateY(-50%) !important;
   width: 0 !important;
   height: 0 !important;
@@ -10876,39 +10925,53 @@ button[aria-disabled="true"] {
 }
 
 /* 워크아웃 선택 버튼 스타일 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select {
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select,
+/* Bluetooth Training Coach 워크아웃 선택 버튼 스타일 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.workout-select {
   border-color: rgba(0, 212, 170, 0.3);
   background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
 }
 
-#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select img {
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select img,
+/* Bluetooth Training Coach 워크아웃 선택 버튼 이미지 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.workout-select img {
   filter: brightness(0) invert(1);
   opacity: 0.9;
 }
 
 /* Indoor Training 대시보드 워크아웃 선택 버튼 호버 효과 - 개인 훈련 화면과 동일한 네온 효과 */
-#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select:hover:not(:disabled) {
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select:hover:not(:disabled),
+/* Bluetooth Training Coach 워크아웃 선택 버튼 호버 효과 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.workout-select:hover:not(:disabled) {
   border-color: rgba(0, 212, 170, 0.6);
   box-shadow: 
     0 8px 25px rgba(0, 212, 170, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select:hover:not(:disabled) img {
+#indoorTrainingDashboardScreen .enhanced-control-btn.workout-select:hover:not(:disabled) img,
+/* Bluetooth Training Coach 워크아웃 선택 버튼 호버 시 이미지 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.workout-select:hover:not(:disabled) img {
   opacity: 1;
 }
 
 /* 버튼 툴팁 제거 - Indoor Training 화면에서는 툴팁 표시 안 함 */
-#indoorTrainingDashboardScreen .enhanced-control-btn[title]:hover::after {
+#indoorTrainingDashboardScreen .enhanced-control-btn[title]:hover::after,
+/* Bluetooth Training Coach 버튼 툴팁 제거 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn[title]:hover::after {
   content: none !important;
 }
 
-#indoorTrainingDashboardScreen .enhanced-control-btn[title]:hover::before {
+#indoorTrainingDashboardScreen .enhanced-control-btn[title]:hover::before,
+/* Bluetooth Training Coach 버튼 툴팁 제거 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn[title]:hover::before {
   content: none !important;
 }
 
 /* 환경 설정 체크박스 스타일 */
-#indoorTrainingDashboardScreen .settings-block {
+#indoorTrainingDashboardScreen .settings-block,
+/* Bluetooth Training Coach 환경 설정 체크박스 스타일 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .settings-block {
   margin-top: 20px;
   padding: 16px;
   background: #f8f9fa;
@@ -10916,7 +10979,9 @@ button[aria-disabled="true"] {
   border: 1px solid #e5e7eb;
 }
 
-#indoorTrainingDashboardScreen .settings-block label {
+#indoorTrainingDashboardScreen .settings-block label,
+/* Bluetooth Training Coach 환경 설정 라벨 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .settings-block label {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -10927,7 +10992,9 @@ button[aria-disabled="true"] {
   margin: 0;
 }
 
-#indoorTrainingDashboardScreen .settings-block input[type="checkbox"] {
+#indoorTrainingDashboardScreen .settings-block input[type="checkbox"],
+/* Bluetooth Training Coach 환경 설정 체크박스 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .settings-block input[type="checkbox"] {
   width: 20px;
   height: 20px;
   cursor: pointer;
@@ -10936,7 +11003,9 @@ button[aria-disabled="true"] {
   border-radius: 4px;
 }
 
-#indoorTrainingDashboardScreen .settings-block input[type="checkbox"]:hover {
+#indoorTrainingDashboardScreen .settings-block input[type="checkbox"]:hover,
+/* Bluetooth Training Coach 환경 설정 체크박스 호버 - Indoor Training과 동일 */
+#bluetoothTrainingCoachScreen .settings-block input[type="checkbox"]:hover {
   transform: scale(1.05);
   transition: transform 0.2s ease;
 }
