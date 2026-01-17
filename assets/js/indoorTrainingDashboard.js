@@ -1948,7 +1948,25 @@ function loadUserFTP() {
  * 파워계 설정 모달 열기
  */
 function openPowerMeterSettings(powerMeterId) {
+  console.log('[Indoor Training] ========== 파워계 설정 열기 시작 ==========');
   console.log('[Indoor Training] 파워계 설정 열기:', powerMeterId);
+  
+  // 사용자 인증 정보 확인 및 로그 출력
+  console.log('[Indoor Training] 🔍 사용자 인증 정보 확인 중...');
+  console.log('[Indoor Training] window.currentUser:', window.currentUser);
+  try {
+    const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+    console.log('[Indoor Training] localStorage.currentUser:', storedUser);
+  } catch (e) {
+    console.warn('[Indoor Training] localStorage.currentUser 파싱 실패:', e);
+  }
+  try {
+    const authUser = JSON.parse(localStorage.getItem('authUser') || 'null');
+    console.log('[Indoor Training] localStorage.authUser:', authUser);
+  } catch (e) {
+    console.warn('[Indoor Training] localStorage.authUser 파싱 실패:', e);
+  }
+  console.log('[Indoor Training] window._searchedUserForPairing:', window._searchedUserForPairing);
   
   // 권한 체크: grade=1,3은 모든 트랙 사용 가능, grade=2는 트랙1만 사용 가능
   // getViewerGrade 함수가 있으면 사용, 없으면 window.currentUser나 localStorage에서 가져오기
@@ -2091,14 +2109,20 @@ function openPowerMeterSettings(powerMeterId) {
   
   if (authenticatedUser && authenticatedUser.id && authenticatedUser.name) {
     // 모달을 열지 않고 바로 사용자 정보를 Firebase에 저장
-    console.log('[Indoor Training] 인증된 사용자 정보 확인:', {
+    console.log('[Indoor Training] ✅ 인증된 사용자 정보 확인됨:', {
       userId: authenticatedUser.id,
       userName: authenticatedUser.name,
+      ftp: authenticatedUser.ftp,
+      weight: authenticatedUser.weight,
+      grade: authenticatedUser.grade,
+      contact: authenticatedUser.contact,
       source: authenticatedUser === window.currentUser ? 'window.currentUser' : 'localStorage'
     });
+    console.log('[Indoor Training] 📝 인증된 사용자 정보를 window._searchedUserForPairing에 저장합니다.');
     
     // 인증된 사용자 정보를 임시 저장 (selectSearchedUserForPowerMeter에서 사용)
     window._searchedUserForPairing = authenticatedUser;
+    console.log('[Indoor Training] ✅ window._searchedUserForPairing 저장 완료:', window._searchedUserForPairing);
     
     // 중복 체크: 다른 트랙에서 이미 사용 중인지 확인
     const isAlreadyPaired = window.indoorTrainingState.powerMeters.some(pm => 
@@ -2117,8 +2141,10 @@ function openPowerMeterSettings(powerMeterId) {
     }
     
     // 인증된 사용자 정보로 바로 Firebase에 저장
+    console.log('[Indoor Training] 🚀 selectSearchedUserForPowerMeter 호출 시작 (userId:', authenticatedUser.id, ')');
+    console.log('[Indoor Training] ⚠️ 이 시점에서 window._searchedUserForPairing 값:', window._searchedUserForPairing);
     selectSearchedUserForPowerMeter(authenticatedUser.id).then(() => {
-      console.log('[Indoor Training] 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 Firebase 저장 완료');
+      console.log('[Indoor Training] ✅ 트랙 신청 버튼 클릭: 인증된 사용자 정보로 바로 Firebase 저장 완료');
       // 연결 상태 업데이트 (Firebase devices 정보 표시)
       updatePowerMeterConnectionStatus(powerMeterId);
       if (typeof showToast === 'function') {
@@ -2137,7 +2163,8 @@ function openPowerMeterSettings(powerMeterId) {
   }
   
   // 인증된 사용자가 없으면 기존처럼 모달 열기 (변경 시)
-  console.log('[Indoor Training] 인증된 사용자 정보가 없어 모달을 엽니다.');
+  console.log('[Indoor Training] ❌ 인증된 사용자 정보가 없어 모달을 엽니다.');
+  console.log('[Indoor Training] ========== 파워계 설정 열기 종료 (모달 열기) ==========');
   openPairingModal(powerMeterId);
 }
 
@@ -2466,8 +2493,13 @@ async function filterUsersByNameForPairing() {
  * 검색된 사용자를 파워계에 선택
  */
 async function selectSearchedUserForPowerMeter(userId) {
+  console.log('[Indoor Training] ========== selectSearchedUserForPowerMeter 호출 ==========');
+  console.log('[Indoor Training] userId:', userId);
+  console.log('[Indoor Training] window._searchedUserForPairing:', window._searchedUserForPairing);
+  
   const powerMeterId = window.currentTargetPowerMeterId;
   if (!powerMeterId) {
+    console.error('[Indoor Training] ❌ powerMeterId가 없습니다!');
     if (typeof showToast === 'function') {
       showToast('파워계를 선택해주세요.');
     }
@@ -2475,7 +2507,10 @@ async function selectSearchedUserForPowerMeter(userId) {
   }
   
   const powerMeter = window.indoorTrainingState.powerMeters.find(p => p.id === powerMeterId);
-  if (!powerMeter) return;
+  if (!powerMeter) {
+    console.error('[Indoor Training] ❌ powerMeter를 찾을 수 없습니다! (powerMeterId:', powerMeterId, ')');
+    return;
+  }
   
   try {
     // 사용자 정보 가져오기
@@ -2485,8 +2520,21 @@ async function selectSearchedUserForPowerMeter(userId) {
     // window._searchedUserForPairing이 있으면 이것을 우선 사용하고 apiGetUsers를 호출하지 않음
     if (window._searchedUserForPairing && String(window._searchedUserForPairing.id) === String(userId)) {
       user = window._searchedUserForPairing;
-      console.log('[Indoor Training] selectSearchedUserForPowerMeter: window._searchedUserForPairing 사용 (apiGetUsers 호출 안 함)');
+      console.log('[Indoor Training] ✅ window._searchedUserForPairing 사용 (apiGetUsers 호출 안 함)');
+      console.log('[Indoor Training] 사용자 정보:', {
+        id: user.id,
+        name: user.name,
+        ftp: user.ftp,
+        weight: user.weight
+      });
     } else {
+      console.log('[Indoor Training] ⚠️ window._searchedUserForPairing이 없거나 userId가 일치하지 않습니다. apiGetUsers 호출합니다.');
+      console.log('[Indoor Training] window._searchedUserForPairing:', window._searchedUserForPairing);
+      console.log('[Indoor Training] userId 비교:', {
+        '_searchedUserForPairing.id': window._searchedUserForPairing?.id,
+        '요청 userId': userId,
+        '일치 여부': window._searchedUserForPairing && String(window._searchedUserForPairing.id) === String(userId)
+      });
       // window._searchedUserForPairing이 없을 때만 다른 방법으로 사용자 정보 가져오기
       
       // 방법 2: apiGetUsers 함수 사용 (Bluetooth Join Session이 아닌 경우에만)
