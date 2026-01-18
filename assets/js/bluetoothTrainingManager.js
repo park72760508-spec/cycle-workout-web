@@ -155,27 +155,33 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
     roomId
   });
   
-  // 로그인한 사용자 정보가 있고, 트랙에 사용자가 없는 경우(신청)만 바로 신청 진행
-  // 관리자가 변경 버튼을 클릭한 경우(트랙에 이미 사용자가 있음)는 모달 표시
+  // 로그인한 사용자 정보가 있고, 신청 버튼을 클릭한 경우 바로 신청 진행
+  // 관리자가 변경 버튼을 클릭한 경우(트랙에 이미 다른 사용자가 있음)는 모달 표시
   // 일반 사용자(grade=2)는 변경 버튼이 표시되지 않으므로 신청만 가능
-  if (hasUserInfo && loggedInUser && loggedInUserId && (isGrade2 || !isAdmin)) {
+  // 관리자도 트랙에 사용자가 없으면 바로 신청 가능
+  if (hasUserInfo && loggedInUser && loggedInUserId) {
     // 트랙에 이미 다른 사용자가 신청되어 있는지 확인 (Live Training Session 전용)
     if (hasCurrentUser && currentTrackUser.userId !== loggedInUserId) {
-      // 이미 다른 사용자가 신청되어 있으면 안내 메시지 표시
-      if (typeof showToast === 'function') {
-        showToast('이미 다른 사용자가 신청되었습니다. 다른 트랙을 선택하세요.', 'warning');
+      // 관리자가 변경 버튼을 클릭한 경우(트랙에 이미 다른 사용자가 있음)는 모달 표시
+      if (isAdmin) {
+        console.log('[Bluetooth Join Session] 관리자가 변경 버튼을 클릭했습니다. 모달을 표시합니다.');
+        // 아래 모달 표시 로직으로 진행 (조건문을 통과하지 않음)
+      } else {
+        // 일반 사용자는 이미 다른 사용자가 있으면 안내 메시지 표시
+        if (typeof showToast === 'function') {
+          showToast('이미 다른 사용자가 신청되었습니다. 다른 트랙을 선택하세요.', 'warning');
+        }
+        console.log('[Bluetooth Join Session] 트랙에 이미 다른 사용자가 신청되어 있음:', {
+          currentUserId: currentTrackUser.userId,
+          loggedInUserId: loggedInUserId,
+          trackNumber: trackNumber
+        });
+        // 버튼 로딩 상태 해제 (assignUserToBluetoothTrackWithAnimation에서 처리)
+        throw new Error('이미 다른 사용자가 신청되어 있습니다.');
       }
-      console.log('[Bluetooth Join Session] 트랙에 이미 다른 사용자가 신청되어 있음:', {
-        currentUserId: currentTrackUser.userId,
-        loggedInUserId: loggedInUserId,
-        trackNumber: trackNumber
-      });
-      // 버튼 로딩 상태 해제 (assignUserToBluetoothTrackWithAnimation에서 처리)
-      throw new Error('이미 다른 사용자가 신청되어 있습니다.');
-    }
-    
-    // 트랙에 사용자가 없거나 본인인 경우에만 신청 진행
-    console.log('[Bluetooth Join Session] 로그인한 사용자 정보로 바로 신청 진행');
+    } else if (!hasCurrentUser || (hasCurrentUser && currentTrackUser.userId === loggedInUserId)) {
+      // 트랙에 사용자가 없거나 본인인 경우 바로 신청 진행 (관리자 포함)
+      console.log('[Bluetooth Join Session] 로그인한 사용자 정보로 바로 신청 진행 (관리자 포함 가능)');
     
     try {
       // 사용자 정보로 바로 신청
@@ -234,10 +240,11 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
       // 오류 발생 시 에러를 다시 throw하여 assignUserToBluetoothTrackWithAnimation에서 버튼 상태 복원
       throw error;
     }
+    }
   }
   
-  // 관리자가 변경 버튼을 클릭한 경우 또는 사용자 정보가 없는 경우 모달 표시
-  if ((isAdmin && hasCurrentUser) || !hasUserInfo || !loggedInUserId) {
+  // 관리자가 변경 버튼을 클릭한 경우(트랙에 이미 다른 사용자가 있음) 또는 사용자 정보가 없는 경우 모달 표시
+  if ((isAdmin && hasCurrentUser && currentTrackUser && currentTrackUser.userId !== loggedInUserId) || !hasUserInfo || !loggedInUserId) {
     console.log('[Bluetooth Join Session] 사용자 선택 모달을 표시합니다.', {
       isAdmin,
       hasCurrentUser,
