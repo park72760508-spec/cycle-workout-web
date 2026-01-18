@@ -35,21 +35,11 @@ while (!myTrackId) {
 }
 
 // 초기 표시 (나중에 사용자 이름으로 업데이트됨)
+// 상단 사용자 이름 라벨의 나가기 기능 제거 (종료 메뉴로 이동)
 const bikeIdDisplayEl = document.getElementById('bike-id-display');
 if (bikeIdDisplayEl) {
     bikeIdDisplayEl.innerText = `Track ${myTrackId}`;
-    
-    // 초기 로드 시에도 클릭 이벤트 추가 (updateUserName이 호출되지 않을 경우 대비)
-    if (!bikeIdDisplayEl.hasAttribute('data-click-listener-added')) {
-        bikeIdDisplayEl.setAttribute('data-click-listener-added', 'true');
-        bikeIdDisplayEl.style.cursor = 'pointer';
-        bikeIdDisplayEl.title = '클릭하여 Live Training Rooms로 이동';
-        
-        bikeIdDisplayEl.addEventListener('click', () => {
-            // Live Training Rooms 화면으로 이동
-            window.location.href = 'index.html#trainingRoomScreen';
-        });
-    }
+    // 클릭 이벤트 제거 - 나가기 기능은 종료 메뉴로 이동
 }
 
 // 사용자 FTP 값 저장 (전역 변수)
@@ -729,17 +719,8 @@ function updateUserName(data) {
         bikeIdDisplay.innerText = `Track ${myTrackId}`;
     }
     
-    // 사용자명 라벨 클릭 이벤트 추가 (한 번만)
-    if (!bikeIdDisplay.hasAttribute('data-click-listener-added')) {
-        bikeIdDisplay.setAttribute('data-click-listener-added', 'true');
-        bikeIdDisplay.style.cursor = 'pointer';
-        bikeIdDisplay.title = '클릭하여 Live Training Rooms로 이동';
-        
-        bikeIdDisplay.addEventListener('click', () => {
-            // Live Training Rooms 화면으로 이동
-            window.location.href = 'index.html#trainingRoomScreen';
-        });
-    }
+    // 상단 사용자 이름 라벨의 나가기 기능 제거 (종료 메뉴로 이동)
+    // 클릭 이벤트 제거 - 나가기 기능은 종료 메뉴로 이동
 }
 
 // 3. 훈련 상태 구독 (타이머, 세그먼트 정보)
@@ -3600,13 +3581,9 @@ function exitBluetoothIndividualTraining() {
     
     // 확인 대화상자
     if (confirm('초기화면으로 나가시겠습니까?')) {
-        // 초기화면으로 이동
-        if (typeof showScreen === 'function') {
-            showScreen('basecampScreen');
-        } else {
-            // showScreen 함수가 없으면 index.html로 이동
-            window.location.href = 'index.html';
-        }
+        // 초기화면으로 이동 (bluetoothIndividual.html은 독립 페이지이므로 index.html로 이동)
+        // showScreen 함수는 index.html 내부에서만 작동하므로 직접 URL 이동
+        window.location.href = 'index.html#basecampScreen';
         
         console.log('[Bluetooth 개인 훈련] 초기화면으로 이동');
     }
