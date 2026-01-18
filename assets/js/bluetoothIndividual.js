@@ -2291,6 +2291,18 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             targetPowerEl.textContent = String(adjustedTargetPower);
             targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
             
+            // window.liveData에 목표 파워 저장
+            if (window.liveData) {
+                window.liveData.targetPower = adjustedTargetPower;
+            }
+            
+            // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
+            if (window.ergController && window.ergController.state.enabled && adjustedTargetPower > 0) {
+                window.ergController.setTargetPower(adjustedTargetPower).catch(err => {
+                    console.warn('[updateSpeedometerTargetForSegment] ErgController 목표 파워 설정 실패:', err);
+                });
+            }
+            
             console.log('[updateSpeedometerTargetForSegment] dual 타입 - FTP%:', ftpPercent, 'RPM:', targetRpm, 'Power:', adjustedTargetPower);
             
         } else if (targetType === 'ftp_pctz') {
@@ -2338,6 +2350,18 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             targetPowerEl.textContent = String(adjustedTargetPower);
             targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
             
+            // window.liveData에 목표 파워 저장
+            if (window.liveData) {
+                window.liveData.targetPower = adjustedTargetPower;
+            }
+            
+            // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
+            if (window.ergController && window.ergController.state.enabled && adjustedTargetPower > 0) {
+                window.ergController.setTargetPower(adjustedTargetPower).catch(err => {
+                    console.warn('[updateSpeedometerTargetForSegment] ErgController 목표 파워 설정 실패:', err);
+                });
+            }
+            
             console.log('[updateSpeedometerTargetForSegment] ftp_pctz 타입 - 하한:', minPercent, '상한:', maxPercent, 'Power:', adjustedTargetPower);
             
         } else {
@@ -2357,8 +2381,22 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
             targetPowerEl.textContent = String(adjustedTargetPower);
             targetPowerEl.setAttribute('fill', '#ff8c00'); // 주황색
             
+            // window.liveData에 목표 파워 저장
+            if (window.liveData) {
+                window.liveData.targetPower = adjustedTargetPower;
+            }
+            
+            // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
+            if (window.ergController && window.ergController.state.enabled && adjustedTargetPower > 0) {
+                window.ergController.setTargetPower(adjustedTargetPower).catch(err => {
+                    console.warn('[updateSpeedometerTargetForSegment] ErgController 목표 파워 설정 실패:', err);
+                });
+            }
+            
             console.log('[updateSpeedometerTargetForSegment] ftp_pct 타입 - FTP%:', ftpPercent, 'Power:', adjustedTargetPower);
         }
+        
+        // cadence_rpm 타입의 경우 목표 파워는 0이므로 ErgController 호출하지 않음
         
         // 목표 파워 원호 업데이트
         if (typeof updateTargetPowerArc === 'function') {
@@ -3676,6 +3714,24 @@ function initBluetoothIndividualErgController() {
             }
         }
     });
+
+    // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
+    let lastTargetPower = window.liveData?.targetPower || 0;
+    const checkTargetPowerChange = () => {
+        const currentTargetPower = window.liveData?.targetPower || 0;
+        if (currentTargetPower !== lastTargetPower && currentTargetPower > 0) {
+            // 목표 파워가 변경되었고 ERG 모드가 활성화되어 있으면 자동 업데이트
+            if (window.ergController.state.enabled) {
+                window.ergController.setTargetPower(currentTargetPower).catch(err => {
+                    console.warn('[BluetoothIndividual] ErgController 목표 파워 자동 업데이트 실패:', err);
+                });
+            }
+            lastTargetPower = currentTargetPower;
+        }
+    };
+    
+    // 1초마다 목표 파워 변경 확인
+    setInterval(checkTargetPowerChange, 1000);
 
     // ERG 토글 버튼 이벤트 리스너
     const ergToggle = document.getElementById('bluetoothErgToggle');

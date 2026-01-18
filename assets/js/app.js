@@ -2430,7 +2430,14 @@ function applySegmentTarget(i) {
       
       console.log('[dual] 최종 설정 - targetPower:', targetW, 'W, targetRpm:', adjustedTargetRpm, 'rpm (강도조절:', intensityAdjustment, ')');
       
-      // ERG 모드가 활성화되어 있으면 목표 파워 전송
+      // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
+      if (window.ergController && window.ergController.state.enabled && targetW > 0) {
+        window.ergController.setTargetPower(targetW).catch(err => {
+          console.warn('[applySegmentTarget] ErgController 목표 파워 설정 실패:', err);
+        });
+      }
+      
+      // 기존 ERG 모드 호환성 유지
       if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') {
         setErgTargetPower(targetW);
       }
@@ -2451,9 +2458,26 @@ function applySegmentTarget(i) {
       
       window.liveData.targetPower = targetW;
       window.liveData.targetRpm = 0;
+      
+      // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
+      if (window.ergController && window.ergController.state.enabled && targetW > 0) {
+        window.ergController.setTargetPower(targetW).catch(err => {
+          console.warn('[applySegmentTarget] ErgController 목표 파워 설정 실패:', err);
+        });
+      }
     }
     
-    // ERG 모드가 활성화되어 있으면 목표 파워 전송
+    // ErgController를 사용하여 목표 파워 자동 설정 (ERG 모드 활성화 시)
+    // cadence_rpm 타입이 아닌 경우에만 (targetPower > 0)
+    if (window.liveData.targetPower > 0) {
+      if (window.ergController && window.ergController.state.enabled) {
+        window.ergController.setTargetPower(window.liveData.targetPower).catch(err => {
+          console.warn('[applySegmentTarget] ErgController 목표 파워 설정 실패:', err);
+        });
+      }
+    }
+    
+    // 기존 ERG 모드 호환성 유지
     if (window.ergModeState && window.ergModeState.enabled && typeof setErgTargetPower === 'function') {
       setErgTargetPower(window.liveData.targetPower);
     }
@@ -11640,6 +11664,24 @@ async function startMobileDashboard() {
       if (window.liveData && window.liveData.cadence) {
         window.ergController.updateCadence(window.liveData.cadence);
       }
+      
+      // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
+      let lastTargetPower = window.liveData?.targetPower || 0;
+      const checkTargetPowerChange = () => {
+        const currentTargetPower = window.liveData?.targetPower || 0;
+        if (currentTargetPower !== lastTargetPower && currentTargetPower > 0) {
+          // 목표 파워가 변경되었고 ERG 모드가 활성화되어 있으면 자동 업데이트
+          if (window.ergController.state.enabled) {
+            window.ergController.setTargetPower(currentTargetPower).catch(err => {
+              console.warn('[Mobile Dashboard] ErgController 목표 파워 자동 업데이트 실패:', err);
+            });
+          }
+          lastTargetPower = currentTargetPower;
+        }
+      };
+      
+      // 1초마다 목표 파워 변경 확인
+      setInterval(checkTargetPowerChange, 1000);
     }
     
     // 블루투스 데이터 업데이트 시작
