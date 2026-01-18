@@ -149,7 +149,7 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
     if (hasCurrentUser && currentTrackUser.userId !== loggedInUserId) {
       // 이미 다른 사용자가 신청되어 있으면 안내 메시지 표시
       if (typeof showToast === 'function') {
-        showToast('이미 다른 사용자가 신청되었습니다.', 'warning');
+        showToast('이미 다른 사용자가 신청되었습니다. 다른 트랙을 선택하세요.', 'warning');
       }
       console.log('[Bluetooth Join Session] 트랙에 이미 다른 사용자가 신청되어 있음:', {
         currentUserId: currentTrackUser.userId,
@@ -777,6 +777,26 @@ async function saveBluetoothTrackApplication(trackNumber, roomId) {
   try {
     if (typeof db !== 'undefined') {
       const sessionId = roomId;
+      
+      // Firebase에서 현재 트랙에 할당된 사용자 확인 (Live Training Session 전용)
+      const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
+      const usersSnapshot = await usersRef.once('value');
+      const currentTrackUser = usersSnapshot.val();
+      const hasCurrentUser = currentTrackUser && currentTrackUser.userId;
+      
+      // 트랙에 이미 다른 사용자가 신청되어 있는지 확인
+      if (hasCurrentUser && currentTrackUser.userId !== app.selectedUserId) {
+        // 이미 다른 사용자가 신청되어 있으면 안내 메시지 표시
+        if (typeof showToast === 'function') {
+          showToast('이미 다른 사용자가 신청되었습니다. 다른 트랙을 선택하세요.', 'warning');
+        }
+        console.log('[saveBluetoothTrackApplication] 트랙에 이미 다른 사용자가 신청되어 있음:', {
+          currentUserId: currentTrackUser.userId,
+          selectedUserId: app.selectedUserId,
+          trackNumber: trackNumber
+        });
+        return; // 저장 취소
+      }
       
       // 사용자 정보 저장
       const userData = {
