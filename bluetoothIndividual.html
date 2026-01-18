@@ -158,6 +158,26 @@
         .bluetooth-dropdown-item.connected .status {
             color: #00d4aa;
         }
+        
+        /* 종료 메뉴 항목 스타일 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동) */
+        .bluetooth-dropdown-item-exit {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 4px;
+            padding-top: 12px;
+        }
+        
+        .bluetooth-dropdown-item-exit:hover {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+        
+        .bluetooth-dropdown-item-exit img {
+            filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(340deg) brightness(98%) contrast(96%);
+        }
+        
+        .bluetooth-dropdown-item-exit:hover img {
+            filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(340deg) brightness(98%) contrast(96%);
+        }
 
         /* 메인 콘텐츠 (게이지 영역) */
         .main-content {
@@ -435,6 +455,53 @@
             box-shadow: 0 2px 8px rgba(0, 212, 170, 0.4);
         }
 
+        /* 저장 중 상태 스타일 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동) */
+        .bluetooth-result-saving-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            text-align: center;
+        }
+
+        .bluetooth-saving-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(0, 212, 170, 0.2);
+            border-top-color: #00d4aa;
+            border-radius: 50%;
+            animation: bluetooth-saving-spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes bluetooth-saving-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .bluetooth-saving-text {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #00d4aa;
+            margin: 0;
+            text-shadow: 0 0 10px rgba(0, 212, 170, 0.5);
+            animation: bluetooth-saving-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes bluetooth-saving-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .bluetooth-result-content-area {
+            display: none;
+        }
+
+        .bluetooth-result-content-area.show {
+            display: block;
+        }
+
         /* 모바일 반응형 */
         @media (max-width: 480px) {
             .training-result-content {
@@ -616,6 +683,11 @@
                         <span>파워미터</span>
                         <span class="status" id="powerMeterStatus">미연결</span>
                     </div>
+                    <!-- 종료 메뉴 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동) -->
+                    <div class="bluetooth-dropdown-item bluetooth-dropdown-item-exit" onclick="exitBluetoothIndividualTraining()">
+                        <img src="assets/img/logout.png" alt="종료">
+                        <span>종료</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -702,6 +774,14 @@
             <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" />
         </div>
         <div class="training-result-content">
+            <!-- 저장 중 상태 표시 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동) -->
+            <div id="bluetoothResultSavingState" class="bluetooth-result-saving-state" style="display: none;">
+                <div class="bluetooth-saving-spinner"></div>
+                <p class="bluetooth-saving-text">저장 중입니다...</p>
+            </div>
+            
+            <!-- 결과 표시 영역 (저장 완료 후 표시) -->
+            <div id="bluetoothResultContent" class="bluetooth-result-content-area">
             <div class="result-header">
                 <h2 class="result-title">수고하셨습니다</h2>
                 <p class="result-subtitle">훈련 결과가 저장되었습니다</p>
@@ -733,6 +813,7 @@
                 </div>
             </div>
             <button class="result-close-btn" onclick="closeTrainingResultModal()">확인</button>
+            </div>
         </div>
     </div>
 
