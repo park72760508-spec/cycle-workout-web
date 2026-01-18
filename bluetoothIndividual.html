@@ -673,6 +673,23 @@
                         <span>스마트 트레이너</span>
                         <span class="status" id="trainerStatus">미연결</span>
                     </div>
+                    <!-- ERG 동작 메뉴 (스마트 트레이너 연결 시 표시) -->
+                    <div id="bluetoothErgMenu" class="bluetooth-erg-menu" style="display: none; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                        <div style="font-size: 12px; color: #888; margin-bottom: 8px;">ERG 동작</div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                                <input type="checkbox" id="bluetoothErgToggle" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>ERG 모드</span>
+                            </label>
+                            <span id="bluetoothErgStatus" style="font-size: 12px; color: #888;">OFF</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 12px; color: #888;">목표 파워 (W):</label>
+                            <input type="number" id="bluetoothErgTargetPower" min="0" max="1000" value="0" 
+                                   style="width: 80px; padding: 4px 8px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #fff; font-size: 14px;">
+                            <button id="bluetoothErgSetBtn" style="padding: 4px 12px; background: #00d4aa; border: none; border-radius: 4px; color: #000; font-size: 12px; font-weight: bold; cursor: pointer;">설정</button>
+                        </div>
+                    </div>
                     <div id="bluetoothHRItem" class="bluetooth-dropdown-item" onclick="connectBluetoothDevice('heartRate')">
                         <img src="assets/img/bpm_i.png" alt="심박계">
                         <span>심박계</span>
@@ -1195,6 +1212,7 @@
     </script>
     
     <script src="assets/js/bluetooth.js"></script>
+    <script src="assets/js/ErgController.js"></script>
     <script src="assets/js/bluetoothIndividual.js"></script>
 </body>
 </html>
