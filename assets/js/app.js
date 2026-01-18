@@ -11607,6 +11607,41 @@ async function startMobileDashboard() {
     };
     window.addEventListener('resize', window.mobileDashboardResizeHandler);
     
+    // ErgController 초기화 및 구독 설정 (Mobile Dashboard 전용)
+    if (window.ergController) {
+      // ERG 상태 구독 (반응형 상태 관리)
+      window.ergController.subscribe((state, key, value) => {
+        if (key === 'fatigueLevel' && value > 70) {
+          // 피로도가 높을 때 사용자에게 알림
+          if (typeof showToast === 'function') {
+            showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
+          }
+        }
+        if (key === 'targetPower') {
+          // 목표 파워 변경 시 UI 업데이트
+          const targetPowerEl = safeGetElement('mobile-ui-target-power');
+          if (targetPowerEl) {
+            targetPowerEl.textContent = Math.round(value);
+          }
+        }
+        if (key === 'enabled') {
+          // ERG 모드 활성화/비활성화 시 UI 업데이트
+          console.log('[Mobile Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
+        }
+      });
+
+      // 연결 상태 업데이트
+      const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
+      if (isTrainerConnected) {
+        window.ergController.updateConnectionStatus('connected');
+      }
+
+      // 케이던스 업데이트 (Edge AI 분석용) - liveData 업데이트 시마다 호출
+      if (window.liveData && window.liveData.cadence) {
+        window.ergController.updateCadence(window.liveData.cadence);
+      }
+    }
+    
     // 블루투스 데이터 업데이트 시작
     startMobileDashboardDataUpdate();
     
@@ -12066,6 +12101,11 @@ function startMobileDashboardDataUpdate() {
          window.getComputedStyle(mobileScreen).display === 'none')) {
       return;
     }
+
+    // ErgController에 케이던스 업데이트 (Edge AI 분석용)
+    if (window.ergController && window.liveData && window.liveData.cadence > 0) {
+      window.ergController.updateCadence(window.liveData.cadence);
+    }
     
     // window.liveData에서 데이터 읽기
     const liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
@@ -12097,6 +12137,19 @@ function startMobileDashboardDataUpdate() {
     const cadenceEl = safeGetElement('mobile-ui-cadence');
     if (cadenceEl) {
       cadenceEl.textContent = cadence;
+    }
+    
+    // ErgController에 데이터 업데이트 (Edge AI 분석용)
+    if (window.ergController) {
+      if (cadence > 0) {
+        window.ergController.updateCadence(cadence);
+      }
+      if (powerValue > 0) {
+        window.ergController.updatePower(powerValue);
+      }
+      if (hr > 0) {
+        window.ergController.updateHeartRate(hr);
+      }
     }
     
     // 심박수 표시 (블루투스 데이터)

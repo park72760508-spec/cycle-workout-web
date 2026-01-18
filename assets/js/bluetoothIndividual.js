@@ -88,6 +88,19 @@ function sendDataToFirebase() {
     const cadence = Number(window.liveData.cadence || 0);
     const targetPower = Number(window.liveData.targetPower || firebaseTargetPower || 0);
     
+    // ErgController에 데이터 업데이트 (Edge AI 분석용)
+    if (window.ergController) {
+        if (cadence > 0) {
+            window.ergController.updateCadence(cadence);
+        }
+        if (power > 0) {
+            window.ergController.updatePower(power);
+        }
+        if (heartRate > 0) {
+            window.ergController.updateHeartRate(heartRate);
+        }
+    }
+    
     const now = Date.now();
     
     // 파워 히스토리 업데이트 (유효한 파워값만)
@@ -3515,11 +3528,33 @@ function updateBluetoothConnectionStatus() {
             trainerStatus.textContent = '연결됨';
             trainerStatus.style.color = '#00d4aa';
         }
+        
+        // ERG 동작 메뉴 표시 (스마트 트레이너 연결 시)
+        const ergMenu = document.getElementById('bluetoothErgMenu');
+        if (ergMenu) {
+            ergMenu.style.display = 'block';
+        }
+        
+        // ErgController 연결 상태 업데이트
+        if (window.ergController) {
+            window.ergController.updateConnectionStatus('connected');
+        }
     } else {
         if (trainerItem) trainerItem.classList.remove('connected');
         if (trainerStatus) {
             trainerStatus.textContent = '미연결';
             trainerStatus.style.color = '#888';
+        }
+        
+        // ERG 동작 메뉴 숨김 (스마트 트레이너 미연결 시)
+        const ergMenu = document.getElementById('bluetoothErgMenu');
+        if (ergMenu) {
+            ergMenu.style.display = 'none';
+        }
+        
+        // ErgController 연결 상태 업데이트
+        if (window.ergController) {
+            window.ergController.updateConnectionStatus('disconnected');
         }
     }
     
@@ -3597,12 +3632,119 @@ window.updateBluetoothConnectionStatus = updateBluetoothConnectionStatus;
 window.updateFirebaseDevices = updateFirebaseDevices;
 
 // 초기 속도계 눈금 및 레이블 생성
+// ErgController 초기화 함수 (BluetoothIndividual 전용)
+function initBluetoothIndividualErgController() {
+    if (!window.ergController) {
+        console.warn('[BluetoothIndividual] ErgController를 찾을 수 없습니다');
+        return;
+    }
+
+    console.log('[BluetoothIndividual] ErgController 초기화 시작');
+
+    // ERG 상태 구독 (반응형 상태 관리)
+    window.ergController.subscribe((state, key, value) => {
+        if (key === 'enabled') {
+            // ERG 모드 활성화/비활성화 시 UI 업데이트
+            const ergToggle = document.getElementById('bluetoothErgToggle');
+            const ergStatus = document.getElementById('bluetoothErgStatus');
+            if (ergToggle) {
+                ergToggle.checked = value;
+            }
+            if (ergStatus) {
+                ergStatus.textContent = value ? 'ON' : 'OFF';
+                ergStatus.style.color = value ? '#00d4aa' : '#888';
+            }
+            console.log('[BluetoothIndividual] ERG 모드 상태:', value ? 'ON' : 'OFF');
+        }
+        if (key === 'targetPower') {
+            // 목표 파워 변경 시 UI 업데이트
+            const targetPowerInput = document.getElementById('bluetoothErgTargetPower');
+            if (targetPowerInput) {
+                targetPowerInput.value = Math.round(value);
+            }
+            // window.liveData.targetPower도 업데이트 (기존 코드와 호환성)
+            if (window.liveData) {
+                window.liveData.targetPower = value;
+            }
+            console.log('[BluetoothIndividual] 목표 파워 변경:', value, 'W');
+        }
+        if (key === 'fatigueLevel' && value > 70) {
+            // 피로도가 높을 때 사용자에게 알림
+            console.warn('[BluetoothIndividual] 피로도 감지:', value);
+            if (typeof showToast === 'function') {
+                showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
+            }
+        }
+    });
+
+    // ERG 토글 버튼 이벤트 리스너
+    const ergToggle = document.getElementById('bluetoothErgToggle');
+    if (ergToggle) {
+        ergToggle.addEventListener('change', async (e) => {
+            try {
+                await window.ergController.toggleErgMode(e.target.checked);
+            } catch (err) {
+                console.error('[BluetoothIndividual] ERG 모드 토글 오류:', err);
+                if (typeof showToast === 'function') {
+                    showToast('스마트로라 연결을 확인해주세요.');
+                }
+                e.target.checked = !e.target.checked; // 실패 시 UI 원복
+            }
+        });
+    }
+
+    // 목표 파워 설정 버튼 이벤트 리스너
+    const ergSetBtn = document.getElementById('bluetoothErgSetBtn');
+    const ergTargetPowerInput = document.getElementById('bluetoothErgTargetPower');
+    if (ergSetBtn && ergTargetPowerInput) {
+        ergSetBtn.addEventListener('click', () => {
+            const targetPower = Number(ergTargetPowerInput.value) || 0;
+            if (targetPower > 0) {
+                window.ergController.setTargetPower(targetPower);
+                if (typeof showToast === 'function') {
+                    showToast(`목표 파워 ${targetPower}W로 설정되었습니다.`);
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast('유효한 목표 파워를 입력해주세요.');
+                }
+            }
+        });
+
+        // Enter 키로도 설정 가능
+        ergTargetPowerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                ergSetBtn.click();
+            }
+        });
+    }
+
+    // 연결 상태 업데이트
+    const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
+    if (isTrainerConnected) {
+        window.ergController.updateConnectionStatus('connected');
+    }
+
+    // 케이던스 업데이트 (Edge AI 분석용)
+    if (window.liveData && window.liveData.cadence) {
+        window.ergController.updateCadence(window.liveData.cadence);
+    }
+
+    console.log('[BluetoothIndividual] ErgController 초기화 완료');
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
         initializeIndividualIntensitySlider();
         updateGaugeTicksAndLabels();
         startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+        
+        // ErgController 초기화 (BluetoothIndividual 전용)
+        setTimeout(() => {
+            initBluetoothIndividualErgController();
+        }, 500); // ErgController.js 로드 대기
+        
         // 블루투스 연결 상태 초기 업데이트
         setTimeout(() => {
             updateBluetoothConnectionStatus();
@@ -3614,6 +3756,12 @@ if (document.readyState === 'loading') {
     // DOM이 이미 로드되었으면 바로 실행
     updateGaugeTicksAndLabels();
     startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
+    
+    // ErgController 초기화 (BluetoothIndividual 전용)
+    setTimeout(() => {
+        initBluetoothIndividualErgController();
+    }, 500); // ErgController.js 로드 대기
+    
     // 블루투스 연결 상태 초기 업데이트
     setTimeout(() => {
         updateBluetoothConnectionStatus();
