@@ -313,16 +313,19 @@ async function connectTrainer() {
     let device;
     let useServiceValidation = false;
     
-    // 스마트 트레이너만 검색 (fitness_machine 서비스만 필터링, 파워미터 제외)
+    // 스마트 트레이너 검색: FTMS 또는 CPS 서비스 필터링
+    // (구형 스마트 트레이너는 CPS만 제공하므로 둘 다 포함)
     try {
-      // 1순위: fitness_machine 서비스만 필터링 (스마트로라만 검색)
+      // 1순위: fitness_machine 또는 cycling_power 서비스 필터링
+      // FTMS 스마트 트레이너와 구형 CPS 스마트 트레이너 모두 검색
       device = await navigator.bluetooth.requestDevice({
         filters: [
-          { services: [UUIDS.FTMS] } // 스마트로라만 (파워미터는 이 서비스 없음)
+          { services: [UUIDS.FTMS] }, // FTMS 스마트 트레이너
+          { services: [UUIDS.CPS] }  // 구형 CPS 스마트 트레이너 (CycleOps 등)
         ],
-        optionalServices: [UUIDS.FTMS, "device_information"]
+        optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"]
       });
-      console.log('✅ 스마트 트레이너 필터로 검색 성공');
+      console.log('✅ 스마트 트레이너 필터로 검색 성공 (FTMS 또는 CPS)');
     } catch (filterError) {
       // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
       console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
@@ -335,46 +338,35 @@ async function connectTrainer() {
 
     const server = await device.gatt.connect();
     
-    // iOS/Bluefy에서 acceptAllDevices를 사용한 경우 서비스 검증
+    // 서비스 검증: FTMS 또는 CPS 확인
     let service;
     let isFTMS = false;
     let isValidDevice = false;
     
-    if (useServiceValidation) {
-      // fitness_machine 서비스 확인 (스마트로라인지 체크)
+    // FTMS 서비스 확인 (최신 스마트 트레이너)
+    try {
+      service = await server.getPrimaryService(UUIDS.FTMS);
+      isValidDevice = true;
+      isFTMS = true;
+      console.log('✅ FTMS 스마트 트레이너 확인됨');
+    } catch (ftmsError) {
+      // FTMS가 없으면 CPS 확인 (구형 스마트 트레이너)
       try {
-        service = await server.getPrimaryService(UUIDS.FTMS);
+        service = await server.getPrimaryService(UUIDS.CPS);
         isValidDevice = true;
-        isFTMS = true;
-      } catch (err) {
-        // fitness_machine 서비스가 없으면 파워미터일 가능성이 높음
+        isFTMS = false;
+        console.log('✅ CPS 스마트 트레이너 확인됨 (구형 모델)');
+      } catch (cpsError) {
+        // 둘 다 없으면 유효하지 않은 기기
         isValidDevice = false;
+        console.warn('⚠️ FTMS와 CPS 서비스 모두 없음');
       }
-      
-      if (!isValidDevice) {
-        // fitness_machine 서비스가 없으면 스마트로라가 아님
-        await server.disconnect();
-        throw new Error('선택한 기기는 스마트 트레이너가 아닙니다. 스마트 트레이너를 선택해주세요.');
-      }
-      
-      console.log('✅ 서비스 검증 완료: 스마트 트레이너 확인됨');
-    } else {
-      // 필터로 검색한 경우 서비스 확인
-      try {
-        // 1순위: FTMS 확인
-        service = await server.getPrimaryService(UUIDS.FTMS);
-        isValidDevice = true;
-        isFTMS = true;
-      } catch (e) {
-        // FTMS가 없으면 유효하지 않은 기기
-        isValidDevice = false;
-      }
-      
-      if (!isValidDevice) {
-        // 필수 서비스가 없으면 즉시 연결 해제
-        await server.disconnect();
-        throw new Error("선택하신 기기는 '스마트 트레이너' 기능을 지원하지 않습니다.");
-      }
+    }
+    
+    if (!isValidDevice) {
+      // 필수 서비스가 없으면 즉시 연결 해제
+      await server.disconnect();
+      throw new Error("선택하신 기기는 스마트 트레이너가 아닙니다. FTMS 또는 CPS 서비스를 제공하는 스마트 트레이너를 선택해주세요.");
     }
 
     // 특성(Characteristic) 연결
