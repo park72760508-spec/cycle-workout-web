@@ -13939,10 +13939,10 @@ body.mobile-dashboard-active {
   backdrop-filter: blur(25px); /* basecamp-card와 동일한 블러 효과 */
   -webkit-backdrop-filter: blur(25px); /* iOS Safari 호환 */
   
-  /* [핵심 기술 1] Safe Area 확보 + 추가 여백(20px) */
-  padding-bottom: 20px; /* Android 기본값 (Safe Area 미지원) */
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); /* iOS Safe Area + 여백 */
-  padding-top: 16px !important;
+  /* [핵심 기술 1] Safe Area 확보 + 최소 여백 */
+  padding-bottom: 8px; /* Android 기본값 (Safe Area 미지원) - 최소화 */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); /* iOS Safe Area + 최소 여백 */
+  padding-top: 10px !important; /* 최소화 */
   padding-left: 16px !important;
   padding-right: 16px !important;
   
@@ -14003,8 +14003,8 @@ body.mobile-dashboard-active {
   flex: 1;
   overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
-  /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
-  padding-bottom: 120px;
+  /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 (최소화) */
+  padding-bottom: 80px; /* 120px에서 80px로 최소화 */
 }
 
 /* 버튼 스타일 최적화 (터치 인식율 향상 - iOS & Android) */
@@ -14061,11 +14061,11 @@ body.mobile-dashboard-active {
   #trainingReadyScreen .connection-exit-container,
   #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
-    /* Android: Safe Area 미지원 시 16px만 적용 */
-    padding-bottom: 16px !important;
-    /* iOS: Safe Area + 16px */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
-    padding-top: 12px !important;
+    /* Android: Safe Area 미지원 시 최소 여백 적용 */
+    padding-bottom: 8px !important;
+    /* iOS: Safe Area + 최소 여백 */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+    padding-top: 8px !important; /* 최소화 */
     padding-left: 12px !important;
     padding-right: 12px !important;
     gap: 8px;
@@ -14084,15 +14084,15 @@ body.mobile-dashboard-active {
 
 /* Android 특화 최적화 (제스처 네비게이션 바 대응) */
 @media (max-width: 480px) and (orientation: portrait) {
-  /* Android 세로 모드에서 제스처 바 높이 고려 */
+  /* Android 세로 모드에서 제스처 바 높이 고려 (최소화) */
   #connectionScreen .connection-exit-container,
   #trainingReadyScreen .connection-exit-container,
   #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
-    /* Android 제스처 바 높이 대략 16-24px + 여백 16px */
-    padding-bottom: 24px !important;
-    /* iOS는 Safe Area 적용 */
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+    /* Android 제스처 바 높이 대략 16-24px + 최소 여백 8px */
+    padding-bottom: 16px !important;
+    /* iOS는 Safe Area + 최소 여백 */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
   }
 }
 
@@ -14102,10 +14102,10 @@ body.mobile-dashboard-active {
   #trainingReadyScreen .connection-exit-container,
   #trainingRoomScreen .connection-exit-container,
   #playerListScreen .connection-exit-container {
-    /* 가로 모드에서는 주소창이 보이지 않으므로 패딩 감소 */
-    padding-bottom: 12px !important;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
-    padding-top: 10px !important;
+    /* 가로 모드에서는 주소창이 보이지 않으므로 패딩 최소화 */
+    padding-bottom: 6px !important;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px) !important;
+    padding-top: 6px !important; /* 최소화 */
   }
   
   #connectionScreen .connection-exit-container .btn,
@@ -14131,6 +14131,7 @@ body.mobile-dashboard-active {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative; /* 모달 내부 위치 기준 */
 }
 
 #rpeConditionModal .rpe-condition-grid {
@@ -14138,16 +14139,16 @@ body.mobile-dashboard-active {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   /* 하단 버튼 영역 확보 */
-  padding-bottom: 100px;
+  padding-bottom: 20px;
 }
 
-/* 모달 하단 버튼 컨테이너 (있는 경우) */
+/* 모달 하단 버튼 컨테이너 - 모달 내부 블록 하단에 배치 */
 #rpeConditionModal .connection-exit-container,
 #rpeConditionModal .modal-footer,
 #rpeConditionModal .rpe-modal-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
+  position: relative; /* fixed에서 relative로 변경 - 모달 내부에 배치 */
+  bottom: auto; /* bottom: 0 제거 */
+  left: auto; /* left: 0 제거 */
   width: 100%;
   margin-top: 0 !important;
   border-top: 1px solid rgba(34, 197, 94, 0.15); /* basecamp-card와 동일한 테두리 색상 */
@@ -14155,14 +14156,14 @@ body.mobile-dashboard-active {
   backdrop-filter: blur(25px); /* basecamp-card와 동일한 블러 효과 */
   -webkit-backdrop-filter: blur(25px); /* iOS Safari 호환 */
   
-  /* Safe Area 확보 */
+  /* Safe Area 확보 (모달 내부이므로 상대적 패딩) */
   padding-bottom: 20px;
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
   padding-top: 16px !important;
   padding-left: 16px !important;
   padding-right: 16px !important;
   
-  z-index: 1001; /* 모달보다 위에 */
+  z-index: 1; /* 모달 내부에서만 위에 */
   box-shadow: 0 -4px 20px rgba(34, 197, 94, 0.15); /* basecamp-card와 조화로운 녹색 계열 그림자 */
   
   touch-action: manipulation;
