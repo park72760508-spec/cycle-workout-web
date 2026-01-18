@@ -311,57 +311,70 @@ async function connectTrainer() {
     showConnectionStatus(true);
 
     let device;
+    let useServiceValidation = false;
     
-    // [최신 기술 1] 이름 필터 제거, 오직 서비스 UUID로만 검색
-    // 이렇게 해야 브랜드 상관없이 모든 스마트로라가 검색됨
-    const options = {
-      filters: [
-        { services: [UUIDS.FTMS] }, // FTMS 지원 기기
-        { services: [UUIDS.CPS] }   // 혹은 파워미터 서비스만 있는 구형 로라
-      ],
-      optionalServices: [UUIDS.FTMS, UUIDS.CPS, UUIDS.CSC, "device_information"]
-    };
-
+    // 스마트 트레이너만 검색 (fitness_machine 서비스만 필터링, 파워미터 제외)
     try {
-      device = await navigator.bluetooth.requestDevice(options);
-      console.log('✅ 스마트 트레이너 필터 검색 성공');
+      // 1순위: fitness_machine 서비스만 필터링 (스마트로라만 검색)
+      device = await navigator.bluetooth.requestDevice({
+        filters: [
+          { services: [UUIDS.FTMS] } // 스마트로라만 (파워미터는 이 서비스 없음)
+        ],
+        optionalServices: [UUIDS.FTMS, "device_information"]
+      });
+      console.log('✅ 스마트 트레이너 필터로 검색 성공');
     } catch (filterError) {
-      // iOS/Bluefy 등 일부 환경 호환성 대응
-      console.log("⚠️ 필터 검색 실패, 전체 검색 모드 진입 (검증 로직 작동됨)", filterError);
+      // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
+      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [UUIDS.FTMS, UUIDS.CPS, UUIDS.CSC, "device_information"],
+        optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"],
       });
+      useServiceValidation = true; // 서비스 검증 필요
     }
 
     const server = await device.gatt.connect();
-
-    // [최신 기술 2] Post-Connect Validation (연결 후 검증)
-    // 사용자가 실수로 TV나 이어폰을 선택했는지 확인
+    
+    // iOS/Bluefy에서 acceptAllDevices를 사용한 경우 서비스 검증
     let service;
     let isFTMS = false;
     let isValidDevice = false;
-
-    try {
-      // 1순위: FTMS 확인
-      service = await server.getPrimaryService(UUIDS.FTMS);
-      isValidDevice = true;
-      isFTMS = true;
-    } catch (e) {
+    
+    if (useServiceValidation) {
+      // fitness_machine 서비스 확인 (스마트로라인지 체크)
       try {
-        // 2순위: CPS 확인 (구형 스마트로라)
-        service = await server.getPrimaryService(UUIDS.CPS);
+        service = await server.getPrimaryService(UUIDS.FTMS);
         isValidDevice = true;
-        isFTMS = false;
-      } catch (e2) {
+        isFTMS = true;
+      } catch (err) {
+        // fitness_machine 서비스가 없으면 파워미터일 가능성이 높음
         isValidDevice = false;
       }
-    }
-
-    if (!isValidDevice) {
-      // 필수 서비스가 없으면 즉시 연결 해제
-      device.gatt.disconnect();
-      throw new Error("선택하신 기기는 '스마트 트레이너' 기능을 지원하지 않습니다.");
+      
+      if (!isValidDevice) {
+        // fitness_machine 서비스가 없으면 스마트로라가 아님
+        await server.disconnect();
+        throw new Error('선택한 기기는 스마트 트레이너가 아닙니다. 스마트 트레이너를 선택해주세요.');
+      }
+      
+      console.log('✅ 서비스 검증 완료: 스마트 트레이너 확인됨');
+    } else {
+      // 필터로 검색한 경우 서비스 확인
+      try {
+        // 1순위: FTMS 확인
+        service = await server.getPrimaryService(UUIDS.FTMS);
+        isValidDevice = true;
+        isFTMS = true;
+      } catch (e) {
+        // FTMS가 없으면 유효하지 않은 기기
+        isValidDevice = false;
+      }
+      
+      if (!isValidDevice) {
+        // 필수 서비스가 없으면 즉시 연결 해제
+        await server.disconnect();
+        throw new Error("선택하신 기기는 '스마트 트레이너' 기능을 지원하지 않습니다.");
+      }
     }
 
     // 특성(Characteristic) 연결
@@ -422,7 +435,26 @@ async function connectTrainer() {
   } catch (err) {
     showConnectionStatus(false);
     console.error("트레이너 연결 실패:", err);
-    showToast("❌ 연결 실패: " + err.message);
+    
+    // 에러 메시지 안전하게 처리
+    let errorMessage = "알 수 없는 오류가 발생했습니다.";
+    if (err) {
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = "스마트 트레이너를 찾을 수 없습니다.";
+      } else if (err.name === 'SecurityError') {
+        errorMessage = "블루투스 권한이 필요합니다.";
+      } else if (err.name === 'NetworkError') {
+        errorMessage = "네트워크 오류가 발생했습니다.";
+      } else if (err.toString && err.toString() !== '[object Object]') {
+        errorMessage = err.toString();
+      }
+    }
+    
+    showToast("❌ 연결 실패: " + errorMessage);
   }
 }
 
@@ -433,55 +465,81 @@ async function connectPowerMeter() {
   try {
     showConnectionStatus(true);
     let device;
+    let useServiceValidation = false;
 
-    // [최신 기술 3] Union Filter (파워미터 OR 케이던스 센서 동시 검색)
-    const options = {
-      filters: [
-        { services: [UUIDS.CPS] }, // 파워미터
-        { services: [UUIDS.CSC] }  // 속도/케이던스 센서
-      ],
-      optionalServices: [UUIDS.CPS, UUIDS.CSC, "device_information"]
-    };
-
+    // 파워미터만 검색 (cycling_power 서비스만 필터링, 스마트로라 제외)
     try {
-      device = await navigator.bluetooth.requestDevice(options);
+      // 1순위: cycling_power 서비스만 필터링 (파워미터만 검색)
+      device = await navigator.bluetooth.requestDevice({
+        filters: [
+          { services: [UUIDS.CPS] } // 파워미터만 (스마트로라는 fitness_machine 우선)
+        ],
+        optionalServices: [UUIDS.CPS, "device_information"],
+      });
+      console.log('✅ 파워미터 필터로 검색 성공');
     } catch (filterError) {
-      console.log("⚠️ 필터 검색 실패, 전체 검색 모드 진입", filterError);
+      // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
+      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: [UUIDS.CPS, UUIDS.CSC, "device_information"],
+        optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"],
       });
+      useServiceValidation = true; // 서비스 검증 필요
     }
 
     const server = await device.gatt.connect();
-
-    // [최신 기술 4] 스마트로라 중복 방지 및 유효성 검사
-    // 이미 트레이너로 연결된 기기인지 확인
-    if (window.connectedDevices.trainer && 
-        window.connectedDevices.trainer.device.id === device.id) {
-       // 중복 연결 허용할지 결정 (보통은 파워미터로 별도 등록 안 함)
-       console.log("ℹ️ 이미 트레이너로 연결된 기기입니다.");
-    }
-
-    // 서비스 우선순위: CPS(파워) > CSC(케이던스)
+    
+    // iOS/Bluefy에서 acceptAllDevices를 사용한 경우 서비스 검증
     let service;
     let characteristic;
     let isPowerMeter = false;
-
-    try {
-      service = await server.getPrimaryService(UUIDS.CPS);
+    
+    if (useServiceValidation) {
+      let hasFitnessMachine = false;
+      let hasCyclingPower = false;
+      
+      // fitness_machine 서비스 확인 (스마트로라인지 체크)
+      try {
+        const ftmsService = await server.getPrimaryService(UUIDS.FTMS);
+        hasFitnessMachine = !!ftmsService;
+      } catch (err) {
+        hasFitnessMachine = false;
+      }
+      
+      // cycling_power 서비스 확인 (파워미터인지 체크)
+      try {
+        service = await server.getPrimaryService(UUIDS.CPS);
+        hasCyclingPower = !!service;
+      } catch (err) {
+        hasCyclingPower = false;
+      }
+      
+      // fitness_machine이 있으면 스마트로라 (파워미터가 아님)
+      if (hasFitnessMachine && !hasCyclingPower) {
+        await server.disconnect();
+        throw new Error('선택한 기기는 스마트 트레이너입니다. 파워미터를 선택해주세요.');
+      }
+      
+      // cycling_power가 없으면 파워미터가 아님
+      if (!hasCyclingPower) {
+        await server.disconnect();
+        throw new Error('선택한 기기는 파워미터가 아닙니다. 파워미터를 선택해주세요.');
+      }
+      
+      // cycling_power 서비스가 있으면 파워미터
       characteristic = await service.getCharacteristic("cycling_power_measurement");
       isPowerMeter = true;
-    } catch (e) {
+      
+      console.log('✅ 서비스 검증 완료: 파워미터 확인됨 (스마트로라 아님)');
+    } else {
+      // 필터로 검색한 경우 서비스 확인
       try {
-        // 파워 서비스 없으면 케이던스 센서로 인식
-        service = await server.getPrimaryService(UUIDS.CSC);
-        // CSC Measurement (0x2A5B)
-        characteristic = await service.getCharacteristic(0x2A5B);
-        isPowerMeter = false; 
-      } catch (e2) {
-        device.gatt.disconnect();
-        throw new Error("선택하신 기기는 파워미터나 센서가 아닙니다.");
+        service = await server.getPrimaryService(UUIDS.CPS);
+        characteristic = await service.getCharacteristic("cycling_power_measurement");
+        isPowerMeter = true;
+      } catch (e) {
+        await server.disconnect();
+        throw new Error("선택하신 기기는 파워미터가 아닙니다.");
       }
     }
 
@@ -526,7 +584,26 @@ async function connectPowerMeter() {
   } catch (err) {
     showConnectionStatus(false);
     console.error("파워미터 연결 실패:", err);
-    showToast("❌ 연결 실패: " + err.message);
+    
+    // 에러 메시지 안전하게 처리
+    let errorMessage = "알 수 없는 오류가 발생했습니다.";
+    if (err) {
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = "파워미터를 찾을 수 없습니다.";
+      } else if (err.name === 'SecurityError') {
+        errorMessage = "블루투스 권한이 필요합니다.";
+      } else if (err.name === 'NetworkError') {
+        errorMessage = "네트워크 오류가 발생했습니다.";
+      } else if (err.toString && err.toString() !== '[object Object]') {
+        errorMessage = err.toString();
+      }
+    }
+    
+    showToast("❌ 연결 실패: " + errorMessage);
   }
 }
 
@@ -589,7 +666,26 @@ async function connectHeartRate() {
   } catch (err) {
     showConnectionStatus(false);
     console.error("심박계 연결 실패:", err);
-    showToast("❌ 연결 실패: " + err.message);
+    
+    // 에러 메시지 안전하게 처리
+    let errorMessage = "알 수 없는 오류가 발생했습니다.";
+    if (err) {
+      if (err.message) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err.name === 'NotFoundError') {
+        errorMessage = "심박계를 찾을 수 없습니다.";
+      } else if (err.name === 'SecurityError') {
+        errorMessage = "블루투스 권한이 필요합니다.";
+      } else if (err.name === 'NetworkError') {
+        errorMessage = "네트워크 오류가 발생했습니다.";
+      } else if (err.toString && err.toString() !== '[object Object]') {
+        errorMessage = err.toString();
+      }
+    }
+    
+    showToast("❌ 연결 실패: " + errorMessage);
   }
 }
 
