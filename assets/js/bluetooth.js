@@ -77,21 +77,10 @@ let __pmPrev = {
 };
 
 
-
-window.liveData = window.liveData || { 
-  power: 0, 
-  heartRate: 0, 
-  cadence: 0,  // null 대신 0으로 초기화
-  targetPower: 0 
-};
-
 // UI 헬퍼들 (index.html/app.js에 이미 있으면 중복 선언하지 마세요)
 // bluetooth.js의 상단 UI 헬퍼 부분을 다음과 같이 수정
 // UI 헬퍼들 - window 객체 확인 후 할당
 
-// ── CPS (Cycling Power Service) UUIDs ─────────────────
-const CYCLING_POWER_SERVICE = 0x1818;
-const CYCLING_POWER_MEASUREMENT = 0x2A63; // cadence는 이 측정값의 crank rev 데이터로 계산
 
 
 
@@ -1021,3 +1010,4 @@ if (!window._cadenceTimeoutInterval) {
   window._cadenceTimeoutInterval = setInterval(checkCadenceTimeout, 1000);
 
 }
+
