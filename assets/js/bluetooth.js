@@ -25,6 +25,56 @@ const UUIDS = {
   HRS:  0x180D       // Heart Rate Service (심박계)
 };
 
+// ── Web Bluetooth 지원 여부 확인 ───────────────────────────
+/**
+ * Web Bluetooth API 지원 여부 확인
+ * @returns {Object} {supported: boolean, isIOS: boolean, isBluefy: boolean, message: string}
+ */
+function checkWebBluetoothSupport() {
+  const result = {
+    supported: false,
+    isIOS: false,
+    isBluefy: false,
+    isAndroid: false,
+    message: ''
+  };
+
+  // iOS 감지
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  result.isIOS = isIOS;
+
+  // Android 감지
+  result.isAndroid = /Android/.test(navigator.userAgent);
+
+  // Bluefy 감지 (User-Agent에 Bluefy 포함 여부)
+  result.isBluefy = /Bluefy/i.test(navigator.userAgent);
+
+  // Web Bluetooth 지원 확인
+  if (typeof navigator !== 'undefined' && navigator.bluetooth && typeof navigator.bluetooth.requestDevice === 'function') {
+    result.supported = true;
+    result.message = 'Web Bluetooth가 지원됩니다.';
+  } else {
+    result.supported = false;
+    if (isIOS) {
+      if (result.isBluefy) {
+        result.message = 'Bluefy 앱에서 Web Bluetooth를 사용할 수 있습니다.';
+      } else {
+        result.message = 'iOS Safari는 Web Bluetooth를 지원하지 않습니다. Bluefy 앱을 설치해주세요.';
+      }
+    } else if (result.isAndroid) {
+      result.message = '이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 브라우저를 사용해주세요.';
+    } else {
+      result.message = '이 브라우저는 Web Bluetooth를 지원하지 않습니다. Chrome 또는 Edge 브라우저를 사용해주세요.';
+    }
+  }
+
+  return result;
+}
+
+// 전역으로 노출
+window.checkWebBluetoothSupport = checkWebBluetoothSupport;
+
 
 
 const CPS_FLAG = {
@@ -308,6 +358,16 @@ window.showScreen = window.showScreen || function (id) {
 // ──────────────────────────────────────────────────────────
 async function connectTrainer() {
   try {
+    // 1단계: Web Bluetooth 지원 여부 확인
+    const supportCheck = checkWebBluetoothSupport();
+    if (!supportCheck.supported) {
+      showConnectionStatus(false);
+      const errorMsg = supportCheck.message || 'Web Bluetooth를 지원하지 않는 브라우저입니다.';
+      console.error('Web Bluetooth 미지원:', errorMsg);
+      showToast(`❌ ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
     showConnectionStatus(true);
 
     let device;
@@ -327,13 +387,23 @@ async function connectTrainer() {
       });
       console.log('✅ 스마트 트레이너 필터로 검색 성공 (FTMS 또는 CPS)');
     } catch (filterError) {
+      // filterError가 AbortError (사용자 취소)인 경우 재시도하지 않음
+      if (filterError && filterError.name === 'AbortError') {
+        throw filterError;
+      }
+      
       // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
       console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"],
-      });
-      useServiceValidation = true; // 서비스 검증 필요
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"],
+        });
+        useServiceValidation = true; // 서비스 검증 필요
+      } catch (acceptAllError) {
+        console.error('acceptAllDevices 검색 실패:', acceptAllError);
+        throw acceptAllError;
+      }
     }
 
     const server = await device.gatt.connect();
@@ -504,6 +574,16 @@ async function connectTrainer() {
 // ──────────────────────────────────────────────────────────
 async function connectPowerMeter() {
   try {
+    // 1단계: Web Bluetooth 지원 여부 확인
+    const supportCheck = checkWebBluetoothSupport();
+    if (!supportCheck.supported) {
+      showConnectionStatus(false);
+      const errorMsg = supportCheck.message || 'Web Bluetooth를 지원하지 않는 브라우저입니다.';
+      console.error('Web Bluetooth 미지원:', errorMsg);
+      showToast(`❌ ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
     showConnectionStatus(true);
     let device;
     let useServiceValidation = false;
@@ -519,13 +599,23 @@ async function connectPowerMeter() {
       });
       console.log('✅ 파워미터 필터로 검색 성공');
     } catch (filterError) {
+      // filterError가 AbortError (사용자 취소)인 경우 재시도하지 않음
+      if (filterError && filterError.name === 'AbortError') {
+        throw filterError;
+      }
+      
       // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
       console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"],
-      });
-      useServiceValidation = true; // 서비스 검증 필요
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [UUIDS.FTMS, UUIDS.CPS, "device_information"],
+        });
+        useServiceValidation = true; // 서비스 검증 필요
+      } catch (acceptAllError) {
+        console.error('acceptAllDevices 검색 실패:', acceptAllError);
+        throw acceptAllError;
+      }
     }
 
     const server = await device.gatt.connect();
@@ -649,37 +739,84 @@ async function connectPowerMeter() {
 }
 
 // ──────────────────────────────────────────────────────────
-// 3) Heart Rate (HRS 전용) - 정밀 검색 로직
+// 3) Heart Rate (HRS 전용) - 정밀 검색 로직 (iOS/Android 대응 강화)
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
   try {
-    showConnectionStatus(true);
-    let device;
-
-    // [최신 기술 5] 오직 심박 서비스(0x180D)만 필터링
-    const options = {
-      filters: [{ services: [UUIDS.HRS] }],
-      optionalServices: [UUIDS.HRS, "device_information"]
-    };
-
-    try {
-      device = await navigator.bluetooth.requestDevice(options);
-    } catch (filterError) {
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [UUIDS.HRS, "device_information"],
-      });
+    // 1단계: Web Bluetooth 지원 여부 확인
+    const supportCheck = checkWebBluetoothSupport();
+    if (!supportCheck.supported) {
+      showConnectionStatus(false);
+      const errorMsg = supportCheck.message || 'Web Bluetooth를 지원하지 않는 브라우저입니다.';
+      console.error('Web Bluetooth 미지원:', errorMsg);
+      showToast(`❌ ${errorMsg}`);
+      throw new Error(errorMsg);
     }
 
-    const server = await device.gatt.connect();
+    showConnectionStatus(true);
+    let device;
+    let useServiceValidation = false;
 
-    // [최신 기술 6] 심박 서비스 검증 (Validation)
-    let service;
+    // 2단계: 필터 기반 검색 시도
     try {
+      // 오직 심박 서비스(0x180D)만 필터링
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [UUIDS.HRS] }],
+        optionalServices: [UUIDS.HRS, "device_information"]
+      });
+      console.log('✅ 심박계 필터로 검색 성공');
+    } catch (filterError) {
+      // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
+      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
+      
+      // filterError가 AbortError (사용자 취소)인 경우 재시도하지 않음
+      if (filterError && filterError.name === 'AbortError') {
+        throw filterError;
+      }
+      
+      try {
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [UUIDS.HRS, "device_information"],
+        });
+        useServiceValidation = true; // 서비스 검증 필요
+        console.log('✅ acceptAllDevices로 검색 성공, 서비스 검증 진행');
+      } catch (acceptAllError) {
+        // acceptAllDevices도 실패한 경우
+        console.error('acceptAllDevices 검색 실패:', acceptAllError);
+        throw acceptAllError;
+      }
+    }
+
+    // 3단계: GATT 서버 연결
+    let server;
+    try {
+      server = await device.gatt.connect();
+    } catch (connectError) {
+      showConnectionStatus(false);
+      console.error('GATT 서버 연결 실패:', connectError);
+      throw new Error('블루투스 기기 연결에 실패했습니다. 기기가 켜져 있고 가까이 있는지 확인해주세요.');
+    }
+
+    // 4단계: 서비스 검증 (acceptAllDevices 사용 시 필수)
+    let service;
+    if (useServiceValidation) {
+      // acceptAllDevices로 검색한 경우 서비스 검증
+      try {
         service = await server.getPrimaryService(UUIDS.HRS);
-    } catch(e) {
-        device.gatt.disconnect();
-        throw new Error("선택하신 기기는 심박계가 아닙니다.");
+        console.log('✅ 서비스 검증 완료: 심박계 확인됨');
+      } catch (serviceError) {
+        await server.disconnect();
+        throw new Error('선택한 기기는 심박계가 아닙니다. 심박계를 선택해주세요.');
+      }
+    } else {
+      // 필터로 검색한 경우 서비스 확인
+      try {
+        service = await server.getPrimaryService(UUIDS.HRS);
+      } catch (serviceError) {
+        await server.disconnect();
+        throw new Error('선택하신 기기는 심박계가 아닙니다.');
+      }
     }
 
     const characteristic = await service.getCharacteristic("heart_rate_measurement");
