@@ -1015,6 +1015,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 20px;
 }
 
+/* 무선 기기 연결 화면의 파워미터 연결 버튼 블럭 하단 여백 제거 */
+#connectionScreen .connection-device-section {
+  margin-bottom: 0 !important;
+}
+
 .connection-device-section h3 {
   font-size: 1.1em;
   color: #1e293b;
