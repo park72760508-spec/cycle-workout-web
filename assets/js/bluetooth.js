@@ -435,22 +435,71 @@ async function connectTrainer() {
   } catch (err) {
     showConnectionStatus(false);
     console.error("트레이너 연결 실패:", err);
+    // iOS 디버깅을 위해 에러 객체 상세 정보 출력
+    if (err) {
+      console.error("에러 상세:", {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        toString: err.toString(),
+        stack: err.stack
+      });
+    }
     
-    // 에러 메시지 안전하게 처리
+    // 에러 메시지 안전하게 처리 (iOS/Bluefy 대응 강화)
     let errorMessage = "알 수 없는 오류가 발생했습니다.";
     if (err) {
-      if (err.message) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (err.name === 'NotFoundError') {
-        errorMessage = "스마트 트레이너를 찾을 수 없습니다.";
+      // 1순위: err.name 기반 처리 (가장 신뢰성 높음)
+      if (err.name === 'NotFoundError') {
+        errorMessage = "스마트 트레이너를 찾을 수 없습니다. 기기가 켜져 있고 페어링 모드인지 확인해주세요.";
       } else if (err.name === 'SecurityError') {
-        errorMessage = "블루투스 권한이 필요합니다.";
+        errorMessage = "블루투스 권한이 필요합니다. 브라우저 설정에서 블루투스 권한을 허용해주세요.";
       } else if (err.name === 'NetworkError') {
-        errorMessage = "네트워크 오류가 발생했습니다.";
-      } else if (err.toString && err.toString() !== '[object Object]') {
-        errorMessage = err.toString();
+        errorMessage = "네트워크 오류가 발생했습니다. 블루투스 연결을 다시 시도해주세요.";
+      } else if (err.name === 'InvalidStateError') {
+        errorMessage = "블루투스가 활성화되지 않았습니다. 기기의 블루투스를 켜주세요.";
+      } else if (err.name === 'NotSupportedError') {
+        errorMessage = "이 브라우저는 Web Bluetooth를 지원하지 않습니다. Bluefy 앱을 사용해주세요.";
+      } else if (err.name === 'AbortError') {
+        errorMessage = "연결이 취소되었습니다.";
+      } else if (err.message && err.message.trim() !== '') {
+        // 2순위: err.message가 있고 비어있지 않으면 사용
+        const msg = err.message.trim();
+        // 숫자만 있는 경우 (예: "2") 특별 처리
+        if (/^\d+$/.test(msg)) {
+          errorMessage = "블루투스 연결에 실패했습니다. 기기와의 연결을 확인해주세요.";
+        } else {
+          errorMessage = msg;
+        }
+      } else if (typeof err === 'string') {
+        // 3순위: 문자열인 경우
+        const msg = err.trim();
+        if (/^\d+$/.test(msg)) {
+          errorMessage = "블루투스 연결에 실패했습니다. 기기와의 연결을 확인해주세요.";
+        } else {
+          errorMessage = msg;
+        }
+      } else if (err.code !== undefined) {
+        // 4순위: err.code가 있는 경우 (iOS/Bluefy에서 발생 가능)
+        const code = err.code;
+        if (code === 2 || code === '2') {
+          errorMessage = "블루투스 기기를 찾을 수 없습니다. 기기가 켜져 있고 페어링 모드인지 확인해주세요.";
+        } else if (code === 18 || code === '18') {
+          errorMessage = "블루투스 권한이 필요합니다.";
+        } else {
+          errorMessage = `블루투스 연결 오류 (코드: ${code}). 기기 연결을 확인해주세요.`;
+        }
+      } else if (err.toString && typeof err.toString === 'function') {
+        // 5순위: toString() 결과 확인
+        const strResult = err.toString();
+        if (strResult !== '[object Object]' && strResult !== '[object Error]') {
+          const msg = strResult.trim();
+          if (/^\d+$/.test(msg)) {
+            errorMessage = "블루투스 연결에 실패했습니다. 기기와의 연결을 확인해주세요.";
+          } else {
+            errorMessage = msg;
+          }
+        }
       }
     }
     
@@ -666,22 +715,71 @@ async function connectHeartRate() {
   } catch (err) {
     showConnectionStatus(false);
     console.error("심박계 연결 실패:", err);
+    // iOS 디버깅을 위해 에러 객체 상세 정보 출력
+    if (err) {
+      console.error("에러 상세:", {
+        name: err.name,
+        message: err.message,
+        code: err.code,
+        toString: err.toString(),
+        stack: err.stack
+      });
+    }
     
-    // 에러 메시지 안전하게 처리
+    // 에러 메시지 안전하게 처리 (iOS/Bluefy 대응 강화)
     let errorMessage = "알 수 없는 오류가 발생했습니다.";
     if (err) {
-      if (err.message) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (err.name === 'NotFoundError') {
-        errorMessage = "심박계를 찾을 수 없습니다.";
+      // 1순위: err.name 기반 처리 (가장 신뢰성 높음)
+      if (err.name === 'NotFoundError') {
+        errorMessage = "심박계를 찾을 수 없습니다. 기기가 켜져 있고 페어링 모드인지 확인해주세요.";
       } else if (err.name === 'SecurityError') {
-        errorMessage = "블루투스 권한이 필요합니다.";
+        errorMessage = "블루투스 권한이 필요합니다. 브라우저 설정에서 블루투스 권한을 허용해주세요.";
       } else if (err.name === 'NetworkError') {
-        errorMessage = "네트워크 오류가 발생했습니다.";
-      } else if (err.toString && err.toString() !== '[object Object]') {
-        errorMessage = err.toString();
+        errorMessage = "네트워크 오류가 발생했습니다. 블루투스 연결을 다시 시도해주세요.";
+      } else if (err.name === 'InvalidStateError') {
+        errorMessage = "블루투스가 활성화되지 않았습니다. 기기의 블루투스를 켜주세요.";
+      } else if (err.name === 'NotSupportedError') {
+        errorMessage = "이 브라우저는 Web Bluetooth를 지원하지 않습니다. Bluefy 앱을 사용해주세요.";
+      } else if (err.name === 'AbortError') {
+        errorMessage = "연결이 취소되었습니다.";
+      } else if (err.message && err.message.trim() !== '') {
+        // 2순위: err.message가 있고 비어있지 않으면 사용
+        const msg = err.message.trim();
+        // 숫자만 있는 경우 (예: "2") 특별 처리
+        if (/^\d+$/.test(msg)) {
+          errorMessage = "블루투스 연결에 실패했습니다. 기기와의 연결을 확인해주세요.";
+        } else {
+          errorMessage = msg;
+        }
+      } else if (typeof err === 'string') {
+        // 3순위: 문자열인 경우
+        const msg = err.trim();
+        if (/^\d+$/.test(msg)) {
+          errorMessage = "블루투스 연결에 실패했습니다. 기기와의 연결을 확인해주세요.";
+        } else {
+          errorMessage = msg;
+        }
+      } else if (err.code !== undefined) {
+        // 4순위: err.code가 있는 경우 (iOS/Bluefy에서 발생 가능)
+        const code = err.code;
+        if (code === 2 || code === '2') {
+          errorMessage = "블루투스 기기를 찾을 수 없습니다. 기기가 켜져 있고 페어링 모드인지 확인해주세요.";
+        } else if (code === 18 || code === '18') {
+          errorMessage = "블루투스 권한이 필요합니다.";
+        } else {
+          errorMessage = `블루투스 연결 오류 (코드: ${code}). 기기 연결을 확인해주세요.`;
+        }
+      } else if (err.toString && typeof err.toString === 'function') {
+        // 5순위: toString() 결과 확인
+        const strResult = err.toString();
+        if (strResult !== '[object Object]' && strResult !== '[object Error]') {
+          const msg = strResult.trim();
+          if (/^\d+$/.test(msg)) {
+            errorMessage = "블루투스 연결에 실패했습니다. 기기와의 연결을 확인해주세요.";
+          } else {
+            errorMessage = msg;
+          }
+        }
       }
     }
     
