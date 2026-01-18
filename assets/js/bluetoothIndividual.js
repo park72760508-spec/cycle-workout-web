@@ -873,8 +873,12 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     console.log('[BluetoothIndividual] 훈련 종료 시 elapsedTime 저장:', window.lastElapsedTime);
                 }
                 
-                // 모바일 대시보드와 동일한 훈련 결과 저장 로직 적용
-                // ✅ await 없이 순차 실행(저장 → 초기화 → 결과 모달 표시)
+                // 모바일 대시보드와 동일한 훈련 결과 저장 로직 적용 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
+                // ✅ 저장 중 애니메이션 표시 → 저장 → 초기화 → 결과 모달 표시
+                
+                // 1단계: 저장 중 모달 표시 (저장 중 애니메이션)
+                showBluetoothTrainingResultModalSaving();
+                
                 Promise.resolve()
                     .then(() => {
                         console.log('[BluetoothIndividual] 🚀 1단계: 결과 저장 시작');
@@ -903,13 +907,13 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                     })
                     .then(() => {
                         console.log('[BluetoothIndividual] ✅ 2단계: 결과 화면 초기화 완료');
-                        // 결과 팝업 표시
-                        showTrainingResultModal(status);
+                        // 저장 완료 후 결과 팝업 표시
+                        showBluetoothTrainingResultModal(status);
                     })
                     .catch((error) => {
                         console.error('[BluetoothIndividual] ❌ 훈련 결과 저장/초기화 실패:', error);
                         // 저장 실패해도 팝업 표시 (로컬 데이터라도 있으면)
-                        showTrainingResultModal(status);
+                        showBluetoothTrainingResultModal(status);
                     });
             }
         }
@@ -2939,11 +2943,48 @@ function startGaugeAnimationLoop() {
  * 훈련 결과 팝업 표시
  * @param {Object} status - Firebase status 객체 (elapsedTime 포함)
  */
-function showTrainingResultModal(status = null) {
+/**
+ * 저장 중 모달 표시 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
+ */
+function showBluetoothTrainingResultModalSaving() {
     const modal = document.getElementById('trainingResultModal');
     if (!modal) {
         console.warn('[Bluetooth 개인 훈련] 훈련 결과 모달을 찾을 수 없습니다.');
         return;
+    }
+    
+    // 저장 중 상태 표시
+    const savingStateEl = document.getElementById('bluetoothResultSavingState');
+    const resultContentEl = document.getElementById('bluetoothResultContent');
+    
+    if (savingStateEl) {
+        savingStateEl.style.display = 'flex';
+    }
+    if (resultContentEl) {
+        resultContentEl.classList.remove('show');
+    }
+    
+    // 모달 표시
+    modal.classList.remove('hidden');
+    
+    console.log('[Bluetooth 개인 훈련] 저장 중 모달 표시');
+}
+
+/**
+ * 훈련 결과 모달 표시 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
+ * 모바일 개인훈련 대시보드와 동일한 디자인 및 로직
+ */
+function showBluetoothTrainingResultModal(status = null) {
+    const modal = document.getElementById('trainingResultModal');
+    if (!modal) {
+        console.warn('[Bluetooth 개인 훈련] 훈련 결과 모달을 찾을 수 없습니다.');
+        return;
+    }
+    
+    // Bluetooth 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return; // 다른 화면에서는 실행하지 않음
     }
     
     // 결과값 계산
@@ -2964,19 +3005,19 @@ function showTrainingResultModal(status = null) {
         // Firebase에서 받은 elapsedTime 사용 (가장 정확)
         totalSeconds = Math.max(0, Math.floor(status.elapsedTime));
         duration_min = Math.floor(totalSeconds / 60);
-        console.log('[showTrainingResultModal] elapsedTime 사용:', { elapsedTime: status.elapsedTime, totalSeconds, duration_min });
+        console.log('[Bluetooth 개인 훈련] elapsedTime 사용:', { elapsedTime: status.elapsedTime, totalSeconds, duration_min });
     } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
         // 전역 변수에 저장된 elapsedTime 사용
         totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
         duration_min = Math.floor(totalSeconds / 60);
-        console.log('[showTrainingResultModal] lastElapsedTime 사용:', { lastElapsedTime: window.lastElapsedTime, totalSeconds, duration_min });
+        console.log('[Bluetooth 개인 훈련] lastElapsedTime 사용:', { lastElapsedTime: window.lastElapsedTime, totalSeconds, duration_min });
     } else {
         // 대체: startTime과 endTime으로 계산
         const startTime = sessionData.startTime ? new Date(sessionData.startTime) : null;
         const endTime = sessionData.endTime ? new Date(sessionData.endTime) : new Date();
         totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
         duration_min = Math.floor(totalSeconds / 60);
-        console.log('[showTrainingResultModal] startTime/endTime 사용:', { startTime, endTime, totalSeconds, duration_min });
+        console.log('[Bluetooth 개인 훈련] startTime/endTime 사용:', { startTime, endTime, totalSeconds, duration_min });
     }
     
     // TSS 및 NP 계산 (resultManager.js와 동일한 로직)
@@ -2994,7 +3035,7 @@ function showTrainingResultModal(status = null) {
             const userFtp = window.currentUser?.ftp || userFTP || 200;
             const IF = userFtp > 0 ? (np / userFtp) : 0;
             tss = (elapsedSec / 3600) * (IF * IF) * 100;
-            console.log('[showTrainingResultModal] TSS 계산 (trainingMetrics):', { elapsedSec, np, IF, tss, userFtp });
+            console.log('[Bluetooth 개인 훈련] TSS 계산 (trainingMetrics):', { elapsedSec, np, IF, tss, userFtp });
         }
     }
     
@@ -3013,7 +3054,7 @@ function showTrainingResultModal(status = null) {
         // TSS 계산: elapsedTime 우선 사용, 없으면 totalSeconds 사용
         const timeForTss = totalSeconds > 0 ? totalSeconds : (duration_min * 60);
         tss = (timeForTss / 3600) * (IF * IF) * 100;
-        console.log('[showTrainingResultModal] TSS 계산 (대체):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
+        console.log('[Bluetooth 개인 훈련] TSS 계산 (대체):', { totalSeconds, duration_min, timeForTss, np, IF, tss, userFtp, avgPower: stats.avgPower });
     }
     
     // 값 반올림 및 최소값 보장
@@ -3040,10 +3081,36 @@ function showTrainingResultModal(status = null) {
     if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
     if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
     
-    console.log('[showTrainingResultModal] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories });
+    console.log('[Bluetooth 개인 훈련] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories });
+    
+    // 저장 중 상태 숨기고 결과 표시
+    const savingStateEl = document.getElementById('bluetoothResultSavingState');
+    const resultContentEl = document.getElementById('bluetoothResultContent');
+    
+    if (savingStateEl) {
+        savingStateEl.style.display = 'none';
+    }
+    if (resultContentEl) {
+        resultContentEl.classList.add('show');
+    }
     
     // 모달 표시
     modal.classList.remove('hidden');
+}
+
+/**
+ * 기존 함수 호환성 유지 (다른 화면에서 사용 가능)
+ */
+function showTrainingResultModal(status = null) {
+    // Bluetooth 개인 훈련 대시보드 화면인지 확인
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (isBluetoothIndividualScreen) {
+        // Bluetooth 개인 훈련 대시보드에서는 새로운 함수 사용
+        showBluetoothTrainingResultModal(status);
+    } else {
+        // 다른 화면에서는 기존 로직 유지 (필요시)
+        console.warn('[showTrainingResultModal] Bluetooth 개인 훈련 대시보드가 아닙니다.');
+    }
 }
 
 /**
@@ -3056,7 +3123,9 @@ function closeTrainingResultModal() {
     }
 }
 
-// 전역 함수로 노출
+// 전역 함수로 노출 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
+window.showBluetoothTrainingResultModal = showBluetoothTrainingResultModal;
+window.showBluetoothTrainingResultModalSaving = showBluetoothTrainingResultModalSaving;
 window.showTrainingResultModal = showTrainingResultModal;
 window.closeTrainingResultModal = closeTrainingResultModal;
 
