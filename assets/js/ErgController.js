@@ -209,8 +209,42 @@ class ErgController {
   async toggleErgMode(enable) {
     try {
       const trainer = window.connectedDevices?.trainer;
-      if (!trainer || !trainer.controlPoint) {
-        throw new Error('스마트로라 Control Point를 찾을 수 없습니다');
+      
+      // 스마트로라 연결 확인
+      if (!trainer) {
+        throw new Error('스마트로라가 연결되지 않았습니다. 먼저 스마트로라를 연결해주세요.');
+      }
+
+      // Control Point 확인 및 재연결 시도
+      let controlPoint = trainer.controlPoint;
+      
+      if (!controlPoint) {
+        console.log('[ErgController] Control Point가 없습니다. 재연결 시도...');
+        
+        // Control Point 재연결 시도
+        try {
+          controlPoint = await this._reconnectControlPoint(trainer);
+          if (controlPoint) {
+            // 재연결 성공 시 trainer 객체 업데이트
+            trainer.controlPoint = controlPoint;
+            console.log('[ErgController] Control Point 재연결 성공');
+          }
+        } catch (reconnectError) {
+          console.error('[ErgController] Control Point 재연결 실패:', reconnectError);
+          
+          // 프로토콜 확인
+          const protocol = trainer.protocol || 'unknown';
+          if (protocol === 'CPS') {
+            throw new Error('현재 연결된 스마트로라는 CPS 프로토콜을 사용합니다. ERG 모드는 FTMS 프로토콜이 필요합니다.');
+          } else {
+            throw new Error('스마트로라 Control Point를 찾을 수 없습니다. 스마트로라가 ERG 모드를 지원하는지 확인해주세요.');
+          }
+        }
+      }
+
+      // Control Point 최종 확인
+      if (!controlPoint) {
+        throw new Error('스마트로라 Control Point를 찾을 수 없습니다.');
       }
 
       this.state.enabled = enable;
@@ -240,18 +274,67 @@ class ErgController {
   }
 
   /**
+   * Control Point 재연결 시도
+   */
+  async _reconnectControlPoint(trainer) {
+    try {
+      if (!trainer.server) {
+        throw new Error('서버 연결이 없습니다');
+      }
+
+      // FTMS 서비스 가져오기
+      let service;
+      try {
+        service = await trainer.server.getPrimaryService("fitness_machine");
+      } catch (err) {
+        console.warn('[ErgController] fitness_machine 서비스를 찾을 수 없습니다:', err);
+        return null;
+      }
+
+      // Control Point 특성 가져오기
+      let controlPoint;
+      try {
+        controlPoint = await service.getCharacteristic("fitness_machine_control_point");
+      } catch (err) {
+        // UUID로 직접 시도
+        try {
+          controlPoint = await service.getCharacteristic(0x2AD9);
+        } catch (err2) {
+          console.warn('[ErgController] Control Point 특성을 찾을 수 없습니다:', err2);
+          return null;
+        }
+      }
+
+      return controlPoint;
+    } catch (error) {
+      console.error('[ErgController] Control Point 재연결 오류:', error);
+      return null;
+    }
+  }
+
+  /**
    * ERG 모드 활성화 (내부)
    */
   async _enableErgMode() {
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) {
-      throw new Error('스마트로라 Control Point를 찾을 수 없습니다');
+    if (!trainer) {
+      throw new Error('스마트로라가 연결되지 않았습니다');
+    }
+    
+    // Control Point 확인 (없으면 재연결 시도)
+    let controlPoint = trainer.controlPoint;
+    if (!controlPoint) {
+      controlPoint = await this._reconnectControlPoint(trainer);
+      if (!controlPoint) {
+        throw new Error('스마트로라 Control Point를 찾을 수 없습니다');
+      }
+      trainer.controlPoint = controlPoint;
     }
 
     // 1. Control 요청 (명령 큐에 추가, 최우선순위)
     await this._queueCommand(() => {
       const requestControl = new Uint8Array([this.ERG_OP_CODES.REQUEST_CONTROL]);
-      return trainer.controlPoint.writeValue(requestControl);
+      return controlPoint.writeValue(requestControl);
     }, 'REQUEST_CONTROL', { priority: 90 });
 
     // 2. 현재 목표 파워 가져오기
@@ -269,14 +352,25 @@ class ErgController {
    */
   async _disableErgMode() {
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) {
+    if (!trainer) {
       return; // 이미 해제된 상태
+    }
+    
+    // Control Point 확인 (없으면 재연결 시도)
+    let controlPoint = trainer.controlPoint;
+    if (!controlPoint) {
+      controlPoint = await this._reconnectControlPoint(trainer);
+      if (!controlPoint) {
+        console.warn('[ErgController] Control Point를 찾을 수 없어 ERG 모드 해제를 건너뜁니다');
+        return;
+      }
+      trainer.controlPoint = controlPoint;
     }
 
     // ERG 모드 해제 (명령 큐에 추가, 최우선순위)
     await this._queueCommand(() => {
       const reset = new Uint8Array([this.ERG_OP_CODES.RESET]);
-      return trainer.controlPoint.writeValue(reset);
+      return controlPoint.writeValue(reset);
     }, 'RESET', { priority: 100 });
 
     this.state.targetPower = 0;
@@ -297,9 +391,20 @@ class ErgController {
     }
 
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) {
-      console.warn('[ErgController] Control Point를 찾을 수 없습니다');
+    if (!trainer) {
+      console.warn('[ErgController] 스마트로라가 연결되지 않았습니다');
       return;
+    }
+    
+    // Control Point 확인 (없으면 재연결 시도)
+    let controlPoint = trainer.controlPoint;
+    if (!controlPoint) {
+      controlPoint = await this._reconnectControlPoint(trainer);
+      if (!controlPoint) {
+        console.warn('[ErgController] Control Point를 찾을 수 없습니다');
+        return;
+      }
+      trainer.controlPoint = controlPoint;
     }
 
     // 디바운싱: 빠른 연속 호출 방지
@@ -324,7 +429,7 @@ class ErgController {
         const view = new DataView(buffer);
         view.setUint8(0, this.ERG_OP_CODES.SET_TARGET_POWER);
         view.setUint16(1, targetPowerValue, true); // little-endian
-        return trainer.controlPoint.writeValue(buffer);
+        return controlPoint.writeValue(buffer);
       }, 'SET_TARGET_POWER', { watts, targetPowerValue, priority: 50 });
 
       // 상태 업데이트 (Proxy가 자동으로 구독자에게 알림)
