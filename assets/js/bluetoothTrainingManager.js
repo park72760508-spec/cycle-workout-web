@@ -144,61 +144,78 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
   // 로그인한 사용자 정보가 있고, 트랙에 사용자가 없는 경우(신청)만 바로 신청 진행
   // 관리자가 변경 버튼을 클릭한 경우(트랙에 이미 사용자가 있음)는 모달 표시
   // 일반 사용자(grade=2)는 변경 버튼이 표시되지 않으므로 신청만 가능
-  if (hasUserInfo && loggedInUser && loggedInUserId && !hasCurrentUser && (isGrade2 || !isAdmin)) {
-    console.log('[Bluetooth Join Session] 로그인한 사용자 정보로 바로 신청 진행');
-    
-    try {
-      // 사용자 정보로 바로 신청
-      if (typeof db !== 'undefined') {
-        const sessionId = roomId;
-        
-        // 사용자 정보 저장
-        const userData = {
-          userId: loggedInUserId,
-          userName: loggedInUser.name || loggedInUser.userName || '',
-          ftp: loggedInUser.ftp || null,
-          weight: loggedInUser.weight || null
-        };
-        
-        await db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData);
-        
-        // 기존 디바이스 정보 유지 (있는 경우)
-        const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
-        const devicesSnapshot = await devicesRef.once('value');
-        const currentDeviceData = devicesSnapshot.val() || {};
-        
-        // 디바이스 정보가 없으면 빈 객체로 초기화
-        if (!currentDeviceData || Object.keys(currentDeviceData).length === 0) {
-          await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set({
-            smartTrainerId: '',
-            powerMeterId: '',
-            heartRateId: '',
-            gear: '',
-            brake: ''
-          });
-        }
-        
-        if (typeof showToast === 'function') {
-          showToast('트랙 신청이 완료되었습니다.', 'success');
-        }
-        
-        console.log('[Bluetooth Join Session] ✅ 로그인한 사용자 정보로 바로 신청 완료:', userData);
-        
-        // 리스트 새로고침
-        if (typeof renderBluetoothPlayerList === 'function') {
-          await renderBluetoothPlayerList();
-        }
-        
-        return; // 바로 신청 완료, 모달 표시하지 않음
-      } else {
-        throw new Error('Firebase가 초기화되지 않았습니다.');
-      }
-    } catch (error) {
-      console.error('[assignUserToBluetoothTrack] 바로 신청 오류:', error);
+  if (hasUserInfo && loggedInUser && loggedInUserId && (isGrade2 || !isAdmin)) {
+    // 트랙에 이미 다른 사용자가 신청되어 있는지 확인 (Live Training Session 전용)
+    if (hasCurrentUser && currentTrackUser.userId !== loggedInUserId) {
+      // 이미 다른 사용자가 신청되어 있으면 안내 메시지 표시
       if (typeof showToast === 'function') {
-        showToast('트랙 신청 중 오류가 발생했습니다.', 'error');
+        showToast('이미 다른 사용자가 신청되었습니다.', 'warning');
       }
-      // 오류 발생 시 모달 표시로 폴백
+      console.log('[Bluetooth Join Session] 트랙에 이미 다른 사용자가 신청되어 있음:', {
+        currentUserId: currentTrackUser.userId,
+        loggedInUserId: loggedInUserId,
+        trackNumber: trackNumber
+      });
+      return; // 신청 취소
+    }
+    
+    // 트랙에 사용자가 없거나 본인인 경우에만 신청 진행
+    if (!hasCurrentUser || currentTrackUser.userId === loggedInUserId) {
+      console.log('[Bluetooth Join Session] 로그인한 사용자 정보로 바로 신청 진행');
+      
+      try {
+        // 사용자 정보로 바로 신청
+        if (typeof db !== 'undefined') {
+          const sessionId = roomId;
+          
+          // 사용자 정보 저장
+          const userData = {
+            userId: loggedInUserId,
+            userName: loggedInUser.name || loggedInUser.userName || '',
+            ftp: loggedInUser.ftp || null,
+            weight: loggedInUser.weight || null
+          };
+          
+          await db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData);
+          
+          // 기존 디바이스 정보 유지 (있는 경우)
+          const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
+          const devicesSnapshot = await devicesRef.once('value');
+          const currentDeviceData = devicesSnapshot.val() || {};
+          
+          // 디바이스 정보가 없으면 빈 객체로 초기화
+          if (!currentDeviceData || Object.keys(currentDeviceData).length === 0) {
+            await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set({
+              smartTrainerId: '',
+              powerMeterId: '',
+              heartRateId: '',
+              gear: '',
+              brake: ''
+            });
+          }
+          
+          if (typeof showToast === 'function') {
+            showToast('트랙 신청이 완료되었습니다.', 'success');
+          }
+          
+          console.log('[Bluetooth Join Session] ✅ 로그인한 사용자 정보로 바로 신청 완료:', userData);
+          
+          // 리스트 새로고침
+          if (typeof renderBluetoothPlayerList === 'function') {
+            await renderBluetoothPlayerList();
+          }
+          
+          return; // 바로 신청 완료, 모달 표시하지 않음
+        } else {
+          throw new Error('Firebase가 초기화되지 않았습니다.');
+        }
+      } catch (error) {
+        console.error('[assignUserToBluetoothTrack] 바로 신청 오류:', error);
+        if (typeof showToast === 'function') {
+          showToast('트랙 신청 중 오류가 발생했습니다.', 'error');
+        }
+        // 오류 발생 시 모달 표시로 폴백
+      }
     }
   }
   
