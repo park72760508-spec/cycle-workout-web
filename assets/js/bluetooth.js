@@ -292,29 +292,56 @@ async function connectTrainer() {
   try {
     showConnectionStatus(true);
 
-    // iOS/Bluefy 대응: filters 실패 시 acceptAllDevices 폴백
+    // 스마트 트레이너만 검색 (fitness_machine 서비스만 필터링, 파워미터 제외)
+    // iOS/Bluefy 대응: filters 실패 시 acceptAllDevices 폴백 + 서비스 검증
     let device;
+    let useServiceValidation = false;
+    
     try {
+      // 1순위: fitness_machine 서비스만 필터링 (스마트로라만 검색)
       device = await navigator.bluetooth.requestDevice({
         filters: [
-          { services: ["fitness_machine"] },
-          { services: ["cycling_power"] },
+          { services: ["fitness_machine"] }, // 스마트로라만 (파워미터는 이 서비스 없음)
           { namePrefix: "KICKR" },
           { namePrefix: "Wahoo" },
           { namePrefix: "Tacx" },
+          { namePrefix: "Elite" },
+          { namePrefix: "Zwift" },
         ],
-        optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+        optionalServices: ["fitness_machine", "device_information"],
       });
+      console.log('✅ 스마트 트레이너 필터로 검색 성공');
     } catch (filterError) {
       // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
-      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도:", filterError);
+      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: ["fitness_machine", "cycling_power", "device_information"],
       });
+      useServiceValidation = true; // 서비스 검증 필요
     }
 
     const server = await device.gatt.connect();
+    
+    // iOS/Bluefy에서 acceptAllDevices를 사용한 경우 서비스 검증
+    if (useServiceValidation) {
+      let hasFitnessMachine = false;
+      try {
+        const service = await server.getPrimaryService("fitness_machine");
+        hasFitnessMachine = !!service;
+      } catch (err) {
+        // fitness_machine 서비스가 없으면 파워미터일 가능성이 높음
+        hasFitnessMachine = false;
+      }
+      
+      if (!hasFitnessMachine) {
+        // fitness_machine 서비스가 없으면 스마트로라가 아님
+        await server.disconnect();
+        throw new Error('선택한 기기는 스마트 트레이너가 아닙니다. 스마트 트레이너를 선택해주세요.');
+      }
+      
+      console.log('✅ 서비스 검증 완료: 스마트 트레이너 확인됨');
+    }
 
     let service, characteristic, isFTMS = false;
     try {
@@ -426,21 +453,68 @@ async function connectPowerMeter() {
   try {
     showConnectionStatus(true);
 
-    // 우선 서비스 필터, 광고 누락 기기 대응 acceptAllDevices 폴백
+    // 파워미터만 검색 (cycling_power 서비스만 필터링, 스마트로라 제외)
+    // iOS/Bluefy 대응: filters 실패 시 acceptAllDevices 폴백 + 서비스 검증
     let device;
+    let useServiceValidation = false;
+    
     try {
+      // 1순위: cycling_power 서비스만 필터링 (파워미터만 검색)
       device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ["cycling_power"] }],
-        optionalServices: ["device_information"],
-      });
-    } catch {
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
+        filters: [
+          { services: ["cycling_power"] } // 파워미터만 (스마트로라는 fitness_machine 우선)
+        ],
         optionalServices: ["cycling_power", "device_information"],
       });
+      console.log('✅ 파워미터 필터로 검색 성공');
+    } catch (filterError) {
+      // iOS/Bluefy에서 filters가 실패할 경우 acceptAllDevices로 재시도
+      console.log("⚠️ Filters로 검색 실패, acceptAllDevices로 재시도 (서비스 검증 사용):", filterError);
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ["fitness_machine", "cycling_power", "device_information"],
+      });
+      useServiceValidation = true; // 서비스 검증 필요
     }
 
     const server = await device.gatt.connect();
+    
+    // iOS/Bluefy에서 acceptAllDevices를 사용한 경우 서비스 검증
+    if (useServiceValidation) {
+      let hasFitnessMachine = false;
+      let hasCyclingPower = false;
+      
+      // fitness_machine 서비스 확인 (스마트로라인지 체크)
+      try {
+        const ftmsService = await server.getPrimaryService("fitness_machine");
+        hasFitnessMachine = !!ftmsService;
+      } catch (err) {
+        hasFitnessMachine = false;
+      }
+      
+      // cycling_power 서비스 확인 (파워미터인지 체크)
+      try {
+        const cpsService = await server.getPrimaryService("cycling_power");
+        hasCyclingPower = !!cpsService;
+      } catch (err) {
+        hasCyclingPower = false;
+      }
+      
+      // fitness_machine이 있으면 스마트로라 (파워미터가 아님)
+      if (hasFitnessMachine && !hasCyclingPower) {
+        await server.disconnect();
+        throw new Error('선택한 기기는 스마트 트레이너입니다. 파워미터를 선택해주세요.');
+      }
+      
+      // cycling_power가 없으면 파워미터가 아님
+      if (!hasCyclingPower) {
+        await server.disconnect();
+        throw new Error('선택한 기기는 파워미터가 아닙니다. 파워미터를 선택해주세요.');
+      }
+      
+      console.log('✅ 서비스 검증 완료: 파워미터 확인됨 (스마트로라 아님)');
+    }
+    
     const service = await (async () => {
       try { return await server.getPrimaryService("cycling_power"); }
       catch { return await server.getPrimaryService(0x1818); }
