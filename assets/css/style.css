@@ -13756,3 +13756,165 @@ body.mobile-dashboard-active {
   /* filter: invert(1); */
 }
 
+/* ==========================================================
+   [Live Training Session 하단 버튼 인식율 향상 - dvh & Floating Dock]
+   iOS & Android 호환 버전
+   ========================================================== */
+
+/* 1. 전체 화면 스크롤 튕김 방지 (Live Training Session 전용) */
+#bluetoothPlayerListScreen {
+  /* 주소창 때문에 버튼이 밀려 내려가는 것을 방지 */
+  /* Android 호환: dvh 미지원 시 vh로 폴백 */
+  min-height: 100vh; /* 폴백 */
+  min-height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
+  /* 터치 시 화면 전체가 바운스되는 것을 막아 터치 정확도 향상 */
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#bluetoothPlayerListScreen.active {
+  display: flex;
+}
+
+/* 2. 메인 컨텐츠 영역 (스크롤 가능) */
+#bluetoothPlayerListScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  /* Android 호환: dvh 미지원 시 vh로 폴백 */
+  height: 100vh; /* 폴백 */
+  height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
+  overflow: hidden;
+}
+
+#bluetoothPlayerListScreen .connection-device-section {
+  flex: 1;
+  overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
+  -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
+  padding-bottom: 120px;
+}
+
+/* 3. 하단 컨트롤 패널 (Floating Dock - iOS & Android 호환) */
+#bluetoothPlayerListScreen .connection-exit-container {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  margin-top: 0 !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background-color: rgba(30, 30, 30, 0.95); /* 반투명 배경 */
+  backdrop-filter: blur(10px); /* 블러 효과 */
+  -webkit-backdrop-filter: blur(10px); /* iOS Safari 호환 */
+  
+  /* [핵심 기술 1] Safe Area 확보 + 추가 여백(20px) 
+     iOS: env(safe-area-inset-bottom) 지원
+     Android: Safe Area 미지원 시 기본값 0으로 처리되어 20px만 적용됨
+     calc()를 이용해 물리적으로 더 띄워야 확실하게 눌립니다. */
+  padding-bottom: 20px; /* Android 기본값 (Safe Area 미지원) */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); /* iOS Safe Area + 여백 */
+  padding-top: 16px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  
+  /* [핵심 기술 2] Z-Index 및 그림자 처리로 시각적/기능적 분리 */
+  z-index: 1000;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  
+  /* [핵심 기술 3] 터치 동작 최적화 */
+  touch-action: manipulation; /* 더블탭 줌 등 딜레이 제거 */
+  -webkit-tap-highlight-color: transparent; /* Android 터치 하이라이트 제거 */
+  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 버튼 스타일 최적화 (터치 인식율 향상 - iOS & Android) */
+#bluetoothPlayerListScreen .connection-exit-container .btn {
+  /* 클릭 영역 확보를 위해 min-height 설정 */
+  min-height: 50px !important;
+  min-width: 50px !important;
+  padding: 14px 24px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  cursor: pointer;
+  /* 터치 피드백 개선 */
+  transition: transform 0.1s ease, opacity 0.1s ease;
+  /* Android 터치 하이라이트 제거 */
+  -webkit-tap-highlight-color: transparent;
+  /* Android 터치 영역 확보 */
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#bluetoothPlayerListScreen .connection-exit-container .btn:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+/* Android Chrome 주소창 대응 (스크롤 시 주소창이 나타나거나 사라질 때) */
+@supports (height: 100dvh) {
+  /* dvh를 지원하는 브라우저 (최신 Android Chrome 포함) */
+  #bluetoothPlayerListScreen {
+    min-height: 100dvh;
+  }
+  
+  #bluetoothPlayerListScreen .connection-form-card {
+    height: 100dvh;
+  }
+}
+
+/* 모바일 최적화 (480px 이하) - iOS & Android 공통 */
+@media (max-width: 480px) {
+  #bluetoothPlayerListScreen .connection-exit-container {
+    /* Android: Safe Area 미지원 시 16px만 적용 */
+    padding-bottom: 16px !important;
+    /* iOS: Safe Area + 16px */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+    padding-top: 12px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    gap: 8px;
+  }
+  
+  #bluetoothPlayerListScreen .connection-exit-container .btn {
+    min-height: 48px !important;
+    min-width: 48px !important;
+    padding: 12px 20px !important;
+    font-size: 14px !important;
+  }
+}
+
+/* Android 특화 최적화 (제스처 네비게이션 바 대응) */
+@media (max-width: 480px) and (orientation: portrait) {
+  /* Android 세로 모드에서 제스처 바 높이 고려 */
+  #bluetoothPlayerListScreen .connection-exit-container {
+    /* Android 제스처 바 높이 대략 16-24px + 여백 16px */
+    padding-bottom: 24px !important;
+    /* iOS는 Safe Area 적용 */
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+  }
+}
+
+/* Android 가로 모드 최적화 */
+@media (max-width: 768px) and (orientation: landscape) {
+  #bluetoothPlayerListScreen .connection-exit-container {
+    /* 가로 모드에서는 주소창이 보이지 않으므로 패딩 감소 */
+    padding-bottom: 12px !important;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+    padding-top: 10px !important;
+  }
+  
+  #bluetoothPlayerListScreen .connection-exit-container .btn {
+    min-height: 44px !important;
+    padding: 10px 18px !important;
+    font-size: 14px !important;
+  }
+}
+
