@@ -3580,8 +3580,42 @@ function updateBluetoothConnectionStatus() {
 }
 
 // 전역 함수로 노출
+/**
+ * Bluetooth 개인 훈련 대시보드 종료 (초기화면으로 이동)
+ * Bluetooth 개인 훈련 대시보드 전용, 독립적 구동
+ */
+function exitBluetoothIndividualTraining() {
+    // Bluetooth 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+    const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html');
+    if (!isBluetoothIndividualScreen) {
+        return; // 다른 화면에서는 실행하지 않음
+    }
+    
+    // 드롭다운 닫기
+    const dropdown = document.getElementById('bluetoothDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+        document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
+    }
+    
+    // 확인 대화상자
+    if (confirm('초기화면으로 나가시겠습니까?')) {
+        // 초기화면으로 이동
+        if (typeof showScreen === 'function') {
+            showScreen('basecampScreen');
+        } else {
+            // showScreen 함수가 없으면 index.html로 이동
+            window.location.href = 'index.html';
+        }
+        
+        console.log('[Bluetooth 개인 훈련] 초기화면으로 이동');
+    }
+}
+
+// 전역 함수로 노출
 window.toggleBluetoothDropdown = toggleBluetoothDropdown;
 window.connectBluetoothDevice = connectBluetoothDevice;
+window.exitBluetoothIndividualTraining = exitBluetoothIndividualTraining;
 window.updateBluetoothConnectionStatus = updateBluetoothConnectionStatus;
 window.updateFirebaseDevices = updateFirebaseDevices;
 
