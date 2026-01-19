@@ -13617,6 +13617,38 @@ body.mobile-dashboard-active {
   height: 100% !important;
 }
 
+/* 모바일 대시보드 가로 모드 방지 */
+@media screen and (orientation: landscape) {
+  #mobileDashboardScreen.active {
+    display: flex !important;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  
+  #mobileDashboardScreen.active::before {
+    content: '세로 모드로 기기를 회전해주세요';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    padding: 20px 40px;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: bold;
+    z-index: 10000;
+    text-align: center;
+    white-space: nowrap;
+  }
+  
+  #mobileDashboardScreen.active > * {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+}
+
 #mobileDashboardScreen.screen {
   display: none !important;
 }
