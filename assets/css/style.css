@@ -13881,7 +13881,7 @@ body.mobile-dashboard-active {
   aspect-ratio: 230 / 260; 
   position: relative;
   margin: 0 auto;
-  margin-bottom: -20px; /* 세그먼트 정보를 Y 좌표 환산 240 위치로 이동 (260 - 20 = 240) */
+  margin-bottom: -30px; /* 세그먼트 정보를 Y 좌표 환산 230 위치로 이동 (260 - 30 = 230) */
 }
 
 /* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
@@ -13889,8 +13889,8 @@ body.mobile-dashboard-active {
   text-align: center;
   font-size: 0.9em;
   color: #ccc;
-  margin-top: 0px; /* Y 좌표 환산 240px 위치로 조정 */
-  margin-bottom: 0px; /* Y 좌표 환산 240px 위치로 조정 */
+  margin-top: 0px; /* Y 좌표 환산 230px 위치로 조정 */
+  margin-bottom: 0px; /* Y 좌표 환산 230px 위치로 조정 */
   padding: 0 10px;
   min-height: 20px; /* 최소 높이 보장 */
 }
