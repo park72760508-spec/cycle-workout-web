@@ -2251,3 +2251,172 @@ function updateIndividualIntensityDisplay(sliderValue) {
         console.warn('[개인 훈련] individualIntensityAdjustmentValue 요소를 찾을 수 없습니다');
     }
 }
+
+// ========== 블루투스 연결 기능 (개인훈련 대시보드 전용, 독립적 구동) ==========
+// 블루투스 연결 드롭다운 토글 (개인훈련 대시보드 전용)
+function toggleIndividualBluetoothDropdown() {
+    const dropdown = document.getElementById('individualBluetoothDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+        // 드롭다운 외부 클릭 시 닫기
+        if (dropdown.classList.contains('show')) {
+            setTimeout(() => {
+                document.addEventListener('click', closeIndividualBluetoothDropdownOnOutsideClick);
+            }, 0);
+        } else {
+            document.removeEventListener('click', closeIndividualBluetoothDropdownOnOutsideClick);
+        }
+    }
+}
+
+// 드롭다운 외부 클릭 시 닫기 (개인훈련 대시보드 전용)
+function closeIndividualBluetoothDropdownOnOutsideClick(event) {
+    const dropdown = document.getElementById('individualBluetoothDropdown');
+    const button = document.getElementById('individualBluetoothConnectBtn');
+    if (dropdown && button && !dropdown.contains(event.target) && !button.contains(event.target)) {
+        dropdown.classList.remove('show');
+        document.removeEventListener('click', closeIndividualBluetoothDropdownOnOutsideClick);
+    }
+}
+
+// 블루투스 디바이스 연결 함수 (개인훈련 대시보드 전용, 독립적 구동)
+async function connectIndividualBluetoothDevice(deviceType) {
+    // 드롭다운 닫기
+    const dropdown = document.getElementById('individualBluetoothDropdown');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+        document.removeEventListener('click', closeIndividualBluetoothDropdownOnOutsideClick);
+    }
+    
+    // 연결 함수가 있는지 확인
+    let connectFunction;
+    switch (deviceType) {
+        case 'trainer':
+            connectFunction = window.connectTrainer;
+            break;
+        case 'heartRate':
+            connectFunction = window.connectHeartRate;
+            break;
+        case 'powerMeter':
+            connectFunction = window.connectPowerMeter;
+            break;
+        default:
+            console.error('[Individual] 알 수 없는 디바이스 타입:', deviceType);
+            return;
+    }
+    
+    if (!connectFunction || typeof connectFunction !== 'function') {
+        console.error('[Individual] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
+        alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+        return;
+    }
+    
+    try {
+        console.log('[Individual] 블루투스 디바이스 연결 시도:', deviceType);
+        await connectFunction();
+        
+        // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
+        setTimeout(() => {
+            // 연결 상태 업데이트
+            updateIndividualBluetoothConnectionStatus();
+        }, 200); // 200ms 대기 후 업데이트
+    } catch (error) {
+        console.error('[Individual] 블루투스 디바이스 연결 실패:', deviceType, error);
+        // 에러는 bluetooth.js의 showToast에서 표시됨
+    }
+}
+
+// 블루투스 연결 상태 업데이트 함수 (개인훈련 대시보드 전용, 독립적 구동)
+function updateIndividualBluetoothConnectionStatus() {
+    const hrItem = document.getElementById('individualBluetoothHRItem');
+    const hrStatus = document.getElementById('individualHeartRateStatus');
+    const trainerItem = document.getElementById('individualBluetoothTrainerItem');
+    const trainerStatus = document.getElementById('individualTrainerStatus');
+    const pmItem = document.getElementById('individualBluetoothPMItem');
+    const pmStatus = document.getElementById('individualPowerMeterStatus');
+    const connectBtn = document.getElementById('individualBluetoothConnectBtn');
+    
+    // 심박계 상태
+    if (window.connectedDevices?.heartRate) {
+        if (hrItem) hrItem.classList.add('connected');
+        if (hrStatus) {
+            hrStatus.textContent = '연결됨';
+            hrStatus.style.color = '#00d4aa';
+        }
+    } else {
+        if (hrItem) hrItem.classList.remove('connected');
+        if (hrStatus) {
+            hrStatus.textContent = '미연결';
+            hrStatus.style.color = '#888';
+        }
+    }
+    
+    // 스마트 트레이너 상태
+    if (window.connectedDevices?.trainer) {
+        if (trainerItem) trainerItem.classList.add('connected');
+        if (trainerStatus) {
+            trainerStatus.textContent = '연결됨';
+            trainerStatus.style.color = '#00d4aa';
+        }
+        
+        // ERG 동작 메뉴 표시 (스마트 트레이너 연결 시)
+        const ergMenu = document.getElementById('individualBluetoothErgMenu');
+        if (ergMenu) {
+            ergMenu.style.display = 'block';
+        }
+    } else {
+        if (trainerItem) trainerItem.classList.remove('connected');
+        if (trainerStatus) {
+            trainerStatus.textContent = '미연결';
+            trainerStatus.style.color = '#888';
+        }
+        
+        // ERG 동작 메뉴 숨김 (스마트 트레이너 미연결 시)
+        const ergMenu = document.getElementById('individualBluetoothErgMenu');
+        if (ergMenu) {
+            ergMenu.style.display = 'none';
+        }
+    }
+    
+    // 파워미터 상태
+    if (window.connectedDevices?.powerMeter) {
+        if (pmItem) pmItem.classList.add('connected');
+        if (pmStatus) {
+            pmStatus.textContent = '연결됨';
+            pmStatus.style.color = '#00d4aa';
+        }
+    } else {
+        if (pmItem) pmItem.classList.remove('connected');
+        if (pmStatus) {
+            pmStatus.textContent = '미연결';
+            pmStatus.style.color = '#888';
+        }
+    }
+    
+    // 연결 버튼 상태 업데이트 (연결된 디바이스가 하나라도 있으면)
+    if (connectBtn) {
+        if (window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter) {
+            connectBtn.classList.add('has-connection');
+        } else {
+            connectBtn.classList.remove('has-connection');
+        }
+    }
+}
+
+// 전역 함수로 노출 (개인훈련 대시보드 전용)
+window.toggleIndividualBluetoothDropdown = toggleIndividualBluetoothDropdown;
+window.connectIndividualBluetoothDevice = connectIndividualBluetoothDevice;
+window.updateIndividualBluetoothConnectionStatus = updateIndividualBluetoothConnectionStatus;
+
+// 페이지 로드 시 연결 상태 업데이트 및 주기적 업데이트
+document.addEventListener('DOMContentLoaded', () => {
+    // 초기 연결 상태 업데이트
+    setTimeout(() => {
+        updateIndividualBluetoothConnectionStatus();
+    }, 500);
+    
+    // 주기적으로 연결 상태 업데이트 (5초마다)
+    setInterval(() => {
+        updateIndividualBluetoothConnectionStatus();
+    }, 5000);
+});
