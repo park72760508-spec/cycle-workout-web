@@ -293,18 +293,23 @@ async function connectTrainer() {
     showConnectionStatus(true);
     let device;
 
-    // [기술 적용] 이름(Prefix) 필터 제거 -> 오직 '기능(Service)'으로만 검색
-    // 옆집 TV, 이어폰 등이 검색되지 않도록 원천 차단
-    // 스마트로라도 CPS 서비스를 통해 검색되도록 필터 개선
-    // 스마트로라는 CPS 서비스를 가지고 있으므로 CPS 필터로 검색 가능
+    // [개선] 스마트로라 검색 개선: CPS_SERVICE를 우선 검색하여 스마트로라가 확실히 검색되도록 함
+    // 1순위: CPS_SERVICE (스마트로라 포함 모든 CPS 기기)
+    // 2순위: FTMS_SERVICE (FTMS 지원 기기)
+    // 브라우저가 필터 배열의 첫 번째 항목을 우선시할 수 있으므로, CPS를 먼저 배치
     const filters = [
-      { services: [UUIDS.FTMS_SERVICE] }, // 1순위: FTMS 지원 기기
-      { services: [UUIDS.CPS_SERVICE] }   // 2순위: 파워미터 기능만 있는 구형 로라 및 스마트로라
+      { services: [UUIDS.CPS_SERVICE] },   // 1순위: 스마트로라 및 CPS 기기 (우선 검색)
+      { services: [UUIDS.FTMS_SERVICE] }  // 2순위: FTMS 지원 기기
     ];
     
     try {
       // 스마트로라를 포함한 모든 CPS 서비스 기기 검색
-      // filters 배열에 CPS_SERVICE가 포함되어 있으므로 스마트로라도 검색됨
+      // CPS_SERVICE를 첫 번째 필터로 배치하여 스마트로라가 확실히 검색되도록 함
+      console.log('[connectTrainer] 필터 검색 시도:', { 
+        filters: filters.map(f => f.services),
+        cpsService: UUIDS.CPS_SERVICE,
+        ftmsService: UUIDS.FTMS_SERVICE
+      });
       device = await navigator.bluetooth.requestDevice({
         filters: filters,
         optionalServices: [
@@ -312,17 +317,27 @@ async function connectTrainer() {
           UUIDS.CSC_SERVICE, "device_information"
         ]
       });
+      console.log('[connectTrainer] 필터 검색 성공, 선택된 디바이스:', device.name || device.id);
     } catch (filterError) {
-      console.log("⚠️ 필터 검색 실패(iOS 등), 전체 검색 후 검증 모드 진입");
+      console.log("⚠️ 필터 검색 실패(iOS 등), 전체 검색 후 검증 모드 진입:", filterError);
       // iOS 등에서 필터 검색이 실패하면 전체 검색 후 서비스 검증
       // acceptAllDevices: true로 검색하면 스마트로라도 포함되어 검색됨
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [
-            UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, 
-            UUIDS.CSC_SERVICE, "device_information"
-        ]
-      });
+      try {
+        console.log('[connectTrainer] acceptAllDevices 모드로 재시도...');
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [
+              UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, 
+              UUIDS.CSC_SERVICE, "device_information"
+          ]
+        });
+        console.log('[connectTrainer] acceptAllDevices 검색 성공, 선택된 디바이스:', device.name || device.id);
+      } catch (acceptAllError) {
+        // acceptAllDevices도 실패한 경우, 사용자가 취소한 것으로 간주
+        console.log("⚠️ 사용자가 디바이스 선택을 취소했습니다:", acceptAllError);
+        showConnectionStatus(false);
+        return;
+      }
     }
 
     const server = await device.gatt.connect();
