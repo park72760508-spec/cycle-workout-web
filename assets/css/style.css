@@ -1073,10 +1073,12 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 15px !important; /* 30px에서 15px로 최소화 */
 }
 
-/* connection-device-section 여백 완전 제거 */
+/* connection-device-section 여백 조정 (하단 버튼 블럭 높이만큼 공간 확보) */
 #connectionScreen .connection-device-section {
   margin-bottom: 0 !important;
-  padding-bottom: 0 !important;
+  /* 뒤로 가기/다음 단계로 버튼 블럭 높이만큼 padding-bottom 추가 */
+  /* 버튼 높이(50px) + padding-top(8px) + padding-bottom(8px + Safe Area) + border(1px) = 약 80px */
+  padding-bottom: 80px !important; /* 하단 버튼이 가려지지 않도록 공간 확보 */
 }
 
 #connectionScreen .connection-device-section h3 {
@@ -14032,7 +14034,6 @@ body.mobile-dashboard-active {
    ========================================================== */
 
 /* 공통 스타일: 모든 화면의 connection-exit-container에 적용 */
-#connectionScreen .connection-exit-container,
 #trainingReadyScreen .connection-exit-container,
 #trainingRoomScreen .connection-exit-container,
 #playerListScreen .connection-exit-container {
@@ -14066,6 +14067,25 @@ body.mobile-dashboard-active {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 무선 기기 연결 화면 connection-exit-container는 fixed가 아닌 일반 배치 */
+#connectionScreen .connection-exit-container {
+  position: relative !important; /* fixed 제거 */
+  bottom: auto !important;
+  left: auto !important;
+  width: auto !important;
+  margin-top: 8px !important; /* 4px에서 8px로 조정 */
+  padding-top: 12px !important; /* 8px에서 12px로 조정 */
+  padding-bottom: 12px !important; /* 하단 여백 추가 */
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background-color: transparent !important; /* 배경 투명 */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important; /* 그림자 제거 */
+  z-index: auto !important;
 }
 
 /* 각 화면의 메인 컨테이너 높이 조정 */
@@ -14122,11 +14142,12 @@ body.mobile-dashboard-active {
   padding-bottom: 80px; /* 120px에서 80px로 최소화 */
 }
 
-/* 무선 기기 연결 화면만 padding-bottom 완전 제거 (버튼이 fixed이므로 불필요) */
+/* 무선 기기 연결 화면 connection-device-section 최적화 */
 #connectionScreen .connection-device-section {
   flex: 0 0 auto !important; /* flex: 1 제거하여 공간 차지 최소화 */
   overflow: visible !important; /* 스크롤 불필요 */
-  padding-bottom: 0 !important; /* fixed 버튼이므로 padding 불필요 */
+  /* 하단 버튼 블럭 높이만큼 padding-bottom 추가 (버튼이 가려지지 않도록) */
+  padding-bottom: 80px !important; /* 버튼 높이(50px) + padding(16px) + Safe Area(약 14px) = 약 80px */
   margin-bottom: 0 !important;
 }
 
@@ -14202,6 +14223,12 @@ body.mobile-dashboard-active {
     min-width: 48px !important;
     padding: 12px 20px !important;
     font-size: 14px !important;
+  }
+  
+  /* 모바일에서도 하단 버튼 블럭 높이만큼 공간 확보 */
+  #connectionScreen .connection-device-section {
+    /* 모바일 버튼 높이(48px) + padding(16px) + Safe Area(약 16px) = 약 80px */
+    padding-bottom: 80px !important;
   }
 }
 
