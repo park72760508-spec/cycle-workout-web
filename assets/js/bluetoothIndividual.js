@@ -126,7 +126,7 @@ let maxPowerRecorded = 0; // 기록된 최대 파워
 let currentUserInfo = {
     userId: null,
     userName: null,
-    ftp: 200,
+    ftp: null, // 초기값 null로 변경 (Firebase에서 읽어온 후에만 설정)
     weight: null
 };
 
@@ -217,7 +217,8 @@ function sendDataToFirebase() {
     if (currentUserInfo.userName) {
         dataToSend.userName = currentUserInfo.userName;
     }
-    if (currentUserInfo.ftp) {
+    // FTP 값은 유효한 값(0보다 큰 값)일 때만 업로드 (초기값 200이 업로드되는 것을 방지)
+    if (currentUserInfo.ftp !== null && currentUserInfo.ftp !== undefined && currentUserInfo.ftp > 0) {
         dataToSend.ftp = currentUserInfo.ftp;
     }
     if (currentUserInfo.weight !== null && currentUserInfo.weight !== undefined) {
