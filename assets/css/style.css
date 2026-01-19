@@ -14326,9 +14326,8 @@ body.mobile-dashboard-active {
   flex-wrap: wrap;
 }
 
-#rpeConditionModal .connection-exit-container .btn,
-#rpeConditionModal .modal-footer .btn,
-#rpeConditionModal .rpe-modal-footer .btn {
+/* 컨디션별 강도 보정 모달의 확인 버튼 스타일 */
+#rpeConditionModal .modal-footer .btn-success {
   min-height: 50px !important;
   min-width: 50px !important;
   padding: 14px 24px !important;
@@ -14342,11 +14341,57 @@ body.mobile-dashboard-active {
   -webkit-user-select: none;
 }
 
-#rpeConditionModal .connection-exit-container .btn:active,
-#rpeConditionModal .modal-footer .btn:active,
-#rpeConditionModal .rpe-modal-footer .btn:active {
+/* 컨디션별 강도 보정 모달의 뒤로 버튼 스타일 (무선 기기 연결 화면과 동일) */
+#rpeConditionModal .modal-footer .btn-exit-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px; /* iOS 권장 최소 터치 영역 */
+  min-width: 44px;
+  touch-action: manipulation; /* 더블탭 줌 방지 및 터치 반응성 향상 */
+  -webkit-tap-highlight-color: rgba(239, 68, 68, 0.2); /* 터치 하이라이트 색상 */
+  user-select: none; /* 텍스트 선택 방지 */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+#rpeConditionModal .modal-footer .btn-exit-inline:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+#rpeConditionModal .modal-footer .btn-exit-inline:active,
+#rpeConditionModal .modal-footer .btn-exit-inline.button-pressed {
+  transform: translateY(0) scale(0.98);
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 1px 4px rgba(239, 68, 68, 0.3);
+}
+
+/* 컨디션별 강도 보정 모달의 확인 버튼 active 상태 */
+#rpeConditionModal .modal-footer .btn-success:active {
   transform: scale(0.96);
   opacity: 0.9;
+}
+
+/* 컨디션별 강도 보정 모달의 뒤로 버튼 active 상태 (무선 기기 연결 화면과 동일) */
+#rpeConditionModal .modal-footer .btn-exit-inline:active,
+#rpeConditionModal .modal-footer .btn-exit-inline.button-pressed {
+  transform: translateY(0) scale(0.98);
+  background: rgba(239, 68, 68, 0.2);
+  box-shadow: 0 1px 4px rgba(239, 68, 68, 0.3);
 }
 
 /* 모바일 최적화 */
