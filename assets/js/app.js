@@ -9713,9 +9713,14 @@ function getUserChallengeSync() {
 }
 
 // ========== RPE 컨디션 선택 모달 함수 ==========
-function showRPEModal() {
+function showRPEModal(source) {
   const modal = document.getElementById('rpeConditionModal');
   if (modal) {
+    // 모달 출처 저장 (indoor 또는 solo)
+    if (source) {
+      window.rpeModalSource = source;
+    }
+    
     modal.style.display = 'flex';
     
     // 먼저 동기 버전으로 빠르게 표시
@@ -9733,6 +9738,22 @@ function showRPEModal() {
       console.warn('[RPE Modal] Challenge 타입 가져오기 실패, 동기 버전 사용:', err);
     });
   }
+}
+
+/**
+ * INDOOR TRAINING용 RPE 모달 표시
+ */
+function showRPEModalForIndoorTraining() {
+  window.rpeModalSource = 'indoor';
+  showRPEModal('indoor');
+}
+
+/**
+ * SOLO TRAINING용 RPE 모달 표시
+ */
+function showRPEModalForSoloTraining() {
+  window.rpeModalSource = 'solo';
+  showRPEModal('solo');
 }
 
 /**
@@ -9885,10 +9906,26 @@ function confirmRPESelection() {
   // 모달 닫기
   closeRPEModal();
   
-  // 훈련 준비 화면으로 이동
+  // 모달 출처에 따라 다른 화면으로 이동
+  const source = window.rpeModalSource || 'solo'; // 기본값은 solo (기존 동작 유지)
+  
   if (typeof showScreen === 'function') {
-    showScreen('trainingReadyScreen');
+    if (source === 'indoor') {
+      // INDOOR TRAINING → Live Training Rooms 화면
+      showScreen('trainingRoomScreen');
+      if (typeof loadTrainingRooms === 'function') {
+        setTimeout(() => loadTrainingRooms(), 200);
+      }
+      console.log('[RPE Modal] INDOOR TRAINING 경로: Live Training Rooms 화면으로 이동');
+    } else {
+      // SOLO TRAINING → 훈련 준비 화면
+      showScreen('trainingReadyScreen');
+      console.log('[RPE Modal] SOLO TRAINING 경로: 훈련 준비 화면으로 이동');
+    }
   }
+  
+  // 모달 출처 초기화
+  window.rpeModalSource = null;
   
   // challenge 타입에 따라 조건 이름 매핑 (동기 버전 사용)
   const challenge = getUserChallengeSync();
@@ -9912,6 +9949,8 @@ function confirmRPESelection() {
 
 // 전역 함수로 등록
 window.showRPEModal = showRPEModal;
+window.showRPEModalForIndoorTraining = showRPEModalForIndoorTraining;
+window.showRPEModalForSoloTraining = showRPEModalForSoloTraining;
 window.closeRPEModal = closeRPEModal;
 
 /**
