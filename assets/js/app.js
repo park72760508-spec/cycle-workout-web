@@ -9594,17 +9594,122 @@ const SLIDER_RANGE_BY_CHALLENGE = {
 };
 
 /**
- * 사용자의 challenge 타입 가져오기
+ * 사용자의 challenge 타입 가져오기 (강화된 버전)
+ * 1. window.currentUser 확인
+ * 2. localStorage.currentUser 확인
+ * 3. API에서 직접 가져오기 (필요시)
  */
-function getUserChallenge() {
-  const userChallenge = String(window.currentUser?.challenge || 'Fitness').trim();
+async function getUserChallenge() {
+  let userChallenge = null;
+  let currentUser = null;
+  
+  // 1. window.currentUser 확인
+  if (window.currentUser && window.currentUser.challenge) {
+    userChallenge = String(window.currentUser.challenge).trim();
+    currentUser = window.currentUser;
+    console.log('[getUserChallenge] window.currentUser에서 가져옴:', userChallenge);
+  }
+  
+  // 2. localStorage.currentUser 확인
+  if (!userChallenge) {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (storedUser && storedUser.challenge) {
+        userChallenge = String(storedUser.challenge).trim();
+        currentUser = storedUser;
+        // window.currentUser도 업데이트
+        if (!window.currentUser) {
+          window.currentUser = storedUser;
+        }
+        console.log('[getUserChallenge] localStorage.currentUser에서 가져옴:', userChallenge);
+      }
+    } catch (e) {
+      console.warn('[getUserChallenge] localStorage 파싱 실패:', e);
+    }
+  }
+  
+  // 3. API에서 직접 가져오기 (여전히 없으면)
+  if (!userChallenge && typeof apiGetUsers === 'function') {
+    try {
+      const result = await apiGetUsers();
+      if (result && result.success && result.items && result.items.length > 0) {
+        const userId = window.currentUser?.id || JSON.parse(localStorage.getItem('currentUser') || 'null')?.id;
+        if (userId) {
+          const user = result.items.find(u => String(u.id) === String(userId));
+          if (user && user.challenge) {
+            userChallenge = String(user.challenge).trim();
+            currentUser = user;
+            // window.currentUser와 localStorage 업데이트
+            window.currentUser = user;
+            try {
+              localStorage.setItem('currentUser', JSON.stringify(user));
+            } catch (e) {
+              console.warn('[getUserChallenge] localStorage 저장 실패:', e);
+            }
+            console.log('[getUserChallenge] API에서 가져옴:', userChallenge);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[getUserChallenge] API 호출 실패:', e);
+    }
+  }
+  
   // 대소문자 정규화
-  if (userChallenge === 'fitness') return 'Fitness';
-  if (userChallenge === 'granfondo') return 'GranFondo';
-  if (userChallenge === 'racing') return 'Racing';
-  if (userChallenge === 'elite') return 'Elite';
-  if (userChallenge === 'pro') return 'PRO';
-  return userChallenge || 'Fitness'; // 기본값 Fitness
+  if (userChallenge) {
+    const normalized = userChallenge.toLowerCase();
+    if (normalized === 'fitness') return 'Fitness';
+    if (normalized === 'granfondo') return 'GranFondo';
+    if (normalized === 'racing') return 'Racing';
+    if (normalized === 'elite') return 'Elite';
+    if (normalized === 'pro') return 'PRO';
+    // 원본 값이 이미 정규화되어 있으면 그대로 반환
+    if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+      return userChallenge;
+    }
+  }
+  
+  console.warn('[getUserChallenge] challenge를 찾을 수 없어 기본값 Fitness 사용');
+  return 'Fitness'; // 기본값
+}
+
+/**
+ * 동기 버전 (비동기 호출이 어려운 경우)
+ */
+function getUserChallengeSync() {
+  let userChallenge = null;
+  
+  // 1. window.currentUser 확인
+  if (window.currentUser && window.currentUser.challenge) {
+    userChallenge = String(window.currentUser.challenge).trim();
+  }
+  
+  // 2. localStorage.currentUser 확인
+  if (!userChallenge) {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      if (storedUser && storedUser.challenge) {
+        userChallenge = String(storedUser.challenge).trim();
+      }
+    } catch (e) {
+      console.warn('[getUserChallengeSync] localStorage 파싱 실패:', e);
+    }
+  }
+  
+  // 대소문자 정규화
+  if (userChallenge) {
+    const normalized = userChallenge.toLowerCase();
+    if (normalized === 'fitness') return 'Fitness';
+    if (normalized === 'granfondo') return 'GranFondo';
+    if (normalized === 'racing') return 'Racing';
+    if (normalized === 'elite') return 'Elite';
+    if (normalized === 'pro') return 'PRO';
+    if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+      return userChallenge;
+    }
+  }
+  
+  return 'Fitness'; // 기본값
 }
 
 // ========== RPE 컨디션 선택 모달 함수 ==========
@@ -9613,64 +9718,112 @@ function showRPEModal() {
   if (modal) {
     modal.style.display = 'flex';
     
-    // 사용자의 challenge 타입 가져오기
-    const challenge = getUserChallenge();
-    const conditionValues = RPE_CONDITION_VALUES[challenge] || RPE_CONDITION_VALUES['Fitness'];
+    // 먼저 동기 버전으로 빠르게 표시
+    let challenge = getUserChallengeSync();
+    updateRPEModalContent(modal, challenge);
     
-    console.log('[RPE Modal] Challenge 타입:', challenge, '컨디션 값:', conditionValues);
-    
-    // challenge 타입에 따라 버튼 값 업데이트
-    const conditionButtons = [
-      { name: '최상', selector: '.rpe-condition-btn[data-condition="최상"]' },
-      { name: '좋음', selector: '.rpe-condition-btn[data-condition="좋음"]' },
-      { name: '보통', selector: '.rpe-condition-btn[data-condition="보통"]' },
-      { name: '나쁨', selector: '.rpe-condition-btn[data-condition="나쁨"]' }
-    ];
-    
-    conditionButtons.forEach(({ name, selector }) => {
-      const btn = document.querySelector(selector);
-      if (btn) {
-        const adjustment = conditionValues[name];
-        btn.setAttribute('data-adjustment', adjustment);
-        btn.setAttribute('onclick', `selectRPECondition(${adjustment}, '${name}')`);
-        
-        // 표시값 업데이트
-        const valueEl = btn.querySelector('.rpe-condition-value');
-        if (valueEl) {
-          valueEl.textContent = `${Math.round(adjustment * 100)}%`;
-        }
+    // 비동기로 정확한 challenge 정보 가져와서 업데이트
+    getUserChallenge().then(accurateChallenge => {
+      if (accurateChallenge !== challenge) {
+        console.log('[RPE Modal] Challenge 타입 업데이트:', challenge, '→', accurateChallenge);
+        challenge = accurateChallenge;
+        updateRPEModalContent(modal, challenge);
       }
+    }).catch(err => {
+      console.warn('[RPE Modal] Challenge 타입 가져오기 실패, 동기 버전 사용:', err);
     });
-    
-    // 기존 선택 해제
-    document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
-      btn.classList.remove('selected');
-    });
-    
-    // 저장된 값이 있으면 해당 버튼 선택 (가장 가까운 값 찾기)
-    const savedAdjustment = window.trainingIntensityAdjustment || 1.0;
-    let closestBtn = null;
-    let minDiff = Infinity;
-    
-    document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
-      const btnAdjustment = parseFloat(btn.getAttribute('data-adjustment'));
-      const diff = Math.abs(btnAdjustment - savedAdjustment);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestBtn = btn;
-      }
-    });
-    
-    if (closestBtn) {
-      closestBtn.classList.add('selected');
+  }
+}
+
+/**
+ * RPE 모달 내용 업데이트 (challenge 타입에 따라)
+ */
+function updateRPEModalContent(modal, challenge) {
+  const conditionValues = RPE_CONDITION_VALUES[challenge] || RPE_CONDITION_VALUES['Fitness'];
+  
+  console.log('[RPE Modal] Challenge 타입:', challenge, '컨디션 값:', conditionValues, 'currentUser:', window.currentUser);
+  
+  // Challenge 타입별 이미지 가져오기
+  let challengeImage = 'yellow.png'; // 기본값: Fitness
+  if (challenge === 'GranFondo') {
+    challengeImage = 'green.png';
+  } else if (challenge === 'Racing') {
+    challengeImage = 'blue.png';
+  } else if (challenge === 'Elite') {
+    challengeImage = 'orenge.png';
+  } else if (challenge === 'PRO') {
+    challengeImage = 'red.png';
+  }
+  
+  // 모달 헤더에 Challenge 타입별 이미지 추가
+  const modalHeader = modal.querySelector('.modal-header h2');
+  if (modalHeader) {
+    // 기존 이미지 제거
+    const existingImg = modalHeader.querySelector('img.challenge-icon');
+    if (existingImg) {
+      existingImg.remove();
     }
     
-    // 확인 버튼 초기화
-    const confirmBtn = document.getElementById('rpeConfirmBtn');
-    if (confirmBtn) {
-      confirmBtn.disabled = false;
-      confirmBtn.style.opacity = '1';
+    // 새 이미지 추가
+    const challengeImg = document.createElement('img');
+    challengeImg.src = `assets/img/${challengeImage}`;
+    challengeImg.alt = challenge;
+    challengeImg.className = 'challenge-icon';
+    challengeImg.style.cssText = 'width: 24px; height: 24px; vertical-align: middle; margin-right: 8px;';
+    modalHeader.insertBefore(challengeImg, modalHeader.firstChild);
+  }
+    
+  // challenge 타입에 따라 버튼 값 업데이트
+  const conditionButtons = [
+    { name: '최상', selector: '.rpe-condition-btn[data-condition="최상"]' },
+    { name: '좋음', selector: '.rpe-condition-btn[data-condition="좋음"]' },
+    { name: '보통', selector: '.rpe-condition-btn[data-condition="보통"]' },
+    { name: '나쁨', selector: '.rpe-condition-btn[data-condition="나쁨"]' }
+  ];
+  
+  conditionButtons.forEach(({ name, selector }) => {
+    const btn = modal.querySelector(selector);
+    if (btn) {
+      const adjustment = conditionValues[name];
+      btn.setAttribute('data-adjustment', adjustment);
+      btn.setAttribute('onclick', `selectRPECondition(${adjustment}, '${name}')`);
+      
+      // 표시값 업데이트
+      const valueEl = btn.querySelector('.rpe-condition-value');
+      if (valueEl) {
+        valueEl.textContent = `${Math.round(adjustment * 100)}%`;
+      }
     }
+  });
+  
+  // 기존 선택 해제
+  modal.querySelectorAll('.rpe-condition-btn').forEach(btn => {
+    btn.classList.remove('selected');
+  });
+  
+  // 저장된 값이 있으면 해당 버튼 선택 (가장 가까운 값 찾기)
+  const savedAdjustment = window.trainingIntensityAdjustment || 1.0;
+  let closestBtn = null;
+  let minDiff = Infinity;
+  
+  modal.querySelectorAll('.rpe-condition-btn').forEach(btn => {
+    const btnAdjustment = parseFloat(btn.getAttribute('data-adjustment'));
+    const diff = Math.abs(btnAdjustment - savedAdjustment);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closestBtn = btn;
+    }
+  });
+  
+  if (closestBtn) {
+    closestBtn.classList.add('selected');
+  }
+  
+  // 확인 버튼 초기화
+  const confirmBtn = modal.querySelector('#rpeConfirmBtn');
+  if (confirmBtn) {
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '1';
   }
 }
 
@@ -9737,8 +9890,8 @@ function confirmRPESelection() {
     showScreen('trainingReadyScreen');
   }
   
-  // challenge 타입에 따라 조건 이름 매핑
-  const challenge = getUserChallenge();
+  // challenge 타입에 따라 조건 이름 매핑 (동기 버전 사용)
+  const challenge = getUserChallengeSync();
   const conditionValues = RPE_CONDITION_VALUES[challenge] || RPE_CONDITION_VALUES['Fitness'];
   
   // 가장 가까운 조건 찾기
@@ -9784,8 +9937,8 @@ function initializeIntensitySlider() {
     return;
   }
   
-  // challenge 타입에 따른 슬라이더 범위 설정
-  const challenge = getUserChallenge();
+  // challenge 타입에 따른 슬라이더 범위 설정 (동기 버전 사용)
+  const challenge = getUserChallengeSync();
   const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
   slider.min = range.min;
   slider.max = range.max;
@@ -11920,8 +12073,8 @@ async function startMobileDashboard() {
           }
         }
         
-        // challenge 타입에 따른 슬라이더 범위 설정
-        const challenge = getUserChallenge();
+        // challenge 타입에 따른 슬라이더 범위 설정 (동기 버전 사용)
+        const challenge = getUserChallengeSync();
         const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
         newSlider.min = range.min;
         newSlider.max = range.max;

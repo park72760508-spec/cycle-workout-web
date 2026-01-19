@@ -3404,17 +3404,122 @@ const SLIDER_RANGE_BY_CHALLENGE = {
 };
 
 /**
- * 사용자의 challenge 타입 가져오기
+ * 사용자의 challenge 타입 가져오기 (강화된 버전)
+ * 1. window.currentUser 확인
+ * 2. localStorage.currentUser 확인
+ * 3. API에서 직접 가져오기 (필요시)
  */
-function getUserChallenge() {
-    const userChallenge = String(window.currentUser?.challenge || 'Fitness').trim();
+async function getUserChallenge() {
+    let userChallenge = null;
+    let currentUser = null;
+    
+    // 1. window.currentUser 확인
+    if (window.currentUser && window.currentUser.challenge) {
+        userChallenge = String(window.currentUser.challenge).trim();
+        currentUser = window.currentUser;
+        console.log('[BluetoothIndividual getUserChallenge] window.currentUser에서 가져옴:', userChallenge);
+    }
+    
+    // 2. localStorage.currentUser 확인
+    if (!userChallenge) {
+        try {
+            const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            if (storedUser && storedUser.challenge) {
+                userChallenge = String(storedUser.challenge).trim();
+                currentUser = storedUser;
+                // window.currentUser도 업데이트
+                if (!window.currentUser) {
+                    window.currentUser = storedUser;
+                }
+                console.log('[BluetoothIndividual getUserChallenge] localStorage.currentUser에서 가져옴:', userChallenge);
+            }
+        } catch (e) {
+            console.warn('[BluetoothIndividual getUserChallenge] localStorage 파싱 실패:', e);
+        }
+    }
+    
+    // 3. API에서 직접 가져오기 (여전히 없으면)
+    if (!userChallenge && typeof apiGetUsers === 'function') {
+        try {
+            const result = await apiGetUsers();
+            if (result && result.success && result.items && result.items.length > 0) {
+                const userId = window.currentUser?.id || JSON.parse(localStorage.getItem('currentUser') || 'null')?.id;
+                if (userId) {
+                    const user = result.items.find(u => String(u.id) === String(userId));
+                    if (user && user.challenge) {
+                        userChallenge = String(user.challenge).trim();
+                        currentUser = user;
+                        // window.currentUser와 localStorage 업데이트
+                        window.currentUser = user;
+                        try {
+                            localStorage.setItem('currentUser', JSON.stringify(user));
+                        } catch (e) {
+                            console.warn('[BluetoothIndividual getUserChallenge] localStorage 저장 실패:', e);
+                        }
+                        console.log('[BluetoothIndividual getUserChallenge] API에서 가져옴:', userChallenge);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[BluetoothIndividual getUserChallenge] API 호출 실패:', e);
+        }
+    }
+    
     // 대소문자 정규화
-    if (userChallenge === 'fitness') return 'Fitness';
-    if (userChallenge === 'granfondo') return 'GranFondo';
-    if (userChallenge === 'racing') return 'Racing';
-    if (userChallenge === 'elite') return 'Elite';
-    if (userChallenge === 'pro') return 'PRO';
-    return userChallenge || 'Fitness'; // 기본값 Fitness
+    if (userChallenge) {
+        const normalized = userChallenge.toLowerCase();
+        if (normalized === 'fitness') return 'Fitness';
+        if (normalized === 'granfondo') return 'GranFondo';
+        if (normalized === 'racing') return 'Racing';
+        if (normalized === 'elite') return 'Elite';
+        if (normalized === 'pro') return 'PRO';
+        // 원본 값이 이미 정규화되어 있으면 그대로 반환
+        if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+            return userChallenge;
+        }
+    }
+    
+    console.warn('[BluetoothIndividual getUserChallenge] challenge를 찾을 수 없어 기본값 Fitness 사용');
+    return 'Fitness'; // 기본값
+}
+
+/**
+ * 동기 버전 (비동기 호출이 어려운 경우)
+ */
+function getUserChallengeSync() {
+    let userChallenge = null;
+    
+    // 1. window.currentUser 확인
+    if (window.currentUser && window.currentUser.challenge) {
+        userChallenge = String(window.currentUser.challenge).trim();
+    }
+    
+    // 2. localStorage.currentUser 확인
+    if (!userChallenge) {
+        try {
+            const storedUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+            if (storedUser && storedUser.challenge) {
+                userChallenge = String(storedUser.challenge).trim();
+            }
+        } catch (e) {
+            console.warn('[BluetoothIndividual getUserChallengeSync] localStorage 파싱 실패:', e);
+        }
+    }
+    
+    // 대소문자 정규화
+    if (userChallenge) {
+        const normalized = userChallenge.toLowerCase();
+        if (normalized === 'fitness') return 'Fitness';
+        if (normalized === 'granfondo') return 'GranFondo';
+        if (normalized === 'racing') return 'Racing';
+        if (normalized === 'elite') return 'Elite';
+        if (normalized === 'pro') return 'PRO';
+        if (['Fitness', 'GranFondo', 'Racing', 'Elite', 'PRO'].includes(userChallenge)) {
+            return userChallenge;
+        }
+    }
+    
+    return 'Fitness'; // 기본값
 }
 
 function initializeIndividualIntensitySlider() {
@@ -3426,8 +3531,8 @@ function initializeIndividualIntensitySlider() {
         return;
     }
     
-    // challenge 타입에 따른 슬라이더 범위 설정
-    const challenge = getUserChallenge();
+    // challenge 타입에 따른 슬라이더 범위 설정 (동기 버전 사용)
+    const challenge = getUserChallengeSync();
     const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
     slider.min = range.min;
     slider.max = range.max;
