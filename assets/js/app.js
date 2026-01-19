@@ -12085,6 +12085,23 @@ async function startMobileDashboard() {
     // 타이머 업데이트 시작
     startMobileDashboardTimer();
     
+    // 블루투스 연결 상태 초기 업데이트 (모바일 대시보드 전용)
+    setTimeout(() => {
+      updateMobileBluetoothConnectionStatus();
+      // 주기적으로 연결 상태 업데이트 (5초마다)
+      if (window.mobileBluetoothStatusInterval) {
+        clearInterval(window.mobileBluetoothStatusInterval);
+      }
+      window.mobileBluetoothStatusInterval = setInterval(() => {
+        updateMobileBluetoothConnectionStatus();
+      }, 5000);
+    }, 500);
+    
+    // ErgController UI 초기화 (모바일 대시보드 전용 ERG 메뉴)
+    setTimeout(() => {
+      initMobileErgController();
+    }, 500); // ErgController.js 로드 대기
+    
     // 목표값 조절 슬라이더 이벤트 리스너
     const intensitySlider = safeGetElement('mobileIndividualIntensityAdjustmentSlider');
     if (intensitySlider) {
@@ -14992,6 +15009,11 @@ function updateMobileBluetoothConnectionStatus() {
     if (ergMenu) {
       ergMenu.style.display = 'block';
     }
+    
+    // ErgController 연결 상태 업데이트
+    if (window.ergController) {
+      window.ergController.updateConnectionStatus('connected');
+    }
   } else {
     if (trainerItem) trainerItem.classList.remove('connected');
     if (trainerStatus) {
@@ -15003,6 +15025,11 @@ function updateMobileBluetoothConnectionStatus() {
     const ergMenu = document.getElementById('mobileBluetoothErgMenu');
     if (ergMenu) {
       ergMenu.style.display = 'none';
+    }
+    
+    // ErgController 연결 상태 업데이트
+    if (window.ergController) {
+      window.ergController.updateConnectionStatus('disconnected');
     }
   }
   
@@ -15031,48 +15058,184 @@ function updateMobileBluetoothConnectionStatus() {
   }
 }
 
+/**
+ * 모바일 개인 훈련 대시보드 종료 (초기화면으로 이동)
+ * 모바일 개인 훈련 대시보드 전용, 독립적 구동
+ */
+function exitMobileIndividualTraining() {
+  // 모바일 개인 훈련 대시보드 화면인지 확인 (독립적 구동 보장)
+  const mobileScreen = document.getElementById('mobileDashboardScreen');
+  const isMobileActive = mobileScreen && 
+    (mobileScreen.classList.contains('active') || 
+     window.getComputedStyle(mobileScreen).display !== 'none');
+  
+  if (!isMobileActive) {
+    return; // 다른 화면에서는 실행하지 않음
+  }
+  
+  // 드롭다운 닫기
+  const dropdown = document.getElementById('mobileBluetoothDropdown');
+  if (dropdown) {
+    dropdown.classList.remove('show');
+    document.removeEventListener('click', closeMobileBluetoothDropdownOnOutsideClick);
+  }
+  
+  // 확인 대화상자
+  if (confirm('초기화면으로 나가시겠습니까?')) {
+    // 초기화면으로 이동 (모바일 대시보드는 index.html 내부 화면이므로 showScreen 사용)
+    if (typeof showScreen === 'function') {
+      showScreen('basecampScreen');
+      console.log('[Mobile Dashboard] 초기화면으로 이동');
+    } else {
+      // showScreen이 없으면 직접 이동
+      window.location.href = '#basecampScreen';
+    }
+  }
+}
+
+/**
+ * ErgController 초기화 함수 (모바일 대시보드 전용, 독립적 구동)
+ */
+function initMobileErgController() {
+  if (!window.ergController) {
+    console.warn('[Mobile Dashboard] ErgController를 찾을 수 없습니다');
+    return;
+  }
+
+  console.log('[Mobile Dashboard] ErgController 초기화 시작');
+
+  // ERG 상태 구독 (반응형 상태 관리)
+  window.ergController.subscribe((state, key, value) => {
+    if (key === 'enabled') {
+      // ERG 모드 활성화/비활성화 시 UI 업데이트
+      const ergToggle = document.getElementById('mobileBluetoothErgToggle');
+      const ergStatus = document.getElementById('mobileBluetoothErgStatus');
+      if (ergToggle) {
+        ergToggle.checked = value;
+      }
+      if (ergStatus) {
+        ergStatus.textContent = value ? 'ON' : 'OFF';
+        ergStatus.style.color = value ? '#00d4aa' : '#888';
+      }
+      console.log('[Mobile Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
+    }
+    if (key === 'targetPower') {
+      // 목표 파워 변경 시 UI 업데이트
+      const targetPowerInput = document.getElementById('mobileBluetoothErgTargetPower');
+      if (targetPowerInput) {
+        targetPowerInput.value = Math.round(value);
+      }
+      // window.liveData.targetPower도 업데이트 (기존 코드와 호환성)
+      if (window.liveData) {
+        window.liveData.targetPower = value;
+      }
+      console.log('[Mobile Dashboard] 목표 파워 변경:', value, 'W');
+    }
+    if (key === 'fatigueLevel' && value > 70) {
+      // 피로도가 높을 때 사용자에게 알림
+      console.warn('[Mobile Dashboard] 피로도 감지:', value);
+      if (typeof showToast === 'function') {
+        showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
+      }
+    }
+  });
+
+  // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
+  let lastTargetPower = window.liveData?.targetPower || 0;
+  const checkTargetPowerChange = () => {
+    const currentTargetPower = window.liveData?.targetPower || 0;
+    if (currentTargetPower !== lastTargetPower && currentTargetPower > 0) {
+      // 목표 파워가 변경되었고 ERG 모드가 활성화되어 있으면 자동 업데이트
+      if (window.ergController.state.enabled) {
+        window.ergController.setTargetPower(currentTargetPower).catch(err => {
+          console.warn('[Mobile Dashboard] ErgController 목표 파워 자동 업데이트 실패:', err);
+        });
+      }
+      lastTargetPower = currentTargetPower;
+    }
+  };
+  
+  // 1초마다 목표 파워 변경 확인
+  setInterval(checkTargetPowerChange, 1000);
+
+  // ERG 토글 버튼 이벤트 리스너
+  const ergToggle = document.getElementById('mobileBluetoothErgToggle');
+  if (ergToggle) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newErgToggle = ergToggle.cloneNode(true);
+    ergToggle.parentNode.replaceChild(newErgToggle, ergToggle);
+    
+    newErgToggle.addEventListener('change', async (e) => {
+      try {
+        await window.ergController.toggleErgMode(e.target.checked);
+      } catch (err) {
+        console.error('[Mobile Dashboard] ERG 모드 토글 오류:', err);
+        if (typeof showToast === 'function') {
+          showToast('스마트로라 연결을 확인해주세요.');
+        }
+        e.target.checked = !e.target.checked; // 실패 시 UI 원복
+      }
+    });
+  }
+
+  // 목표 파워 설정 버튼 이벤트 리스너
+  const ergSetBtn = document.getElementById('mobileBluetoothErgSetBtn');
+  const ergTargetPowerInput = document.getElementById('mobileBluetoothErgTargetPower');
+  if (ergSetBtn && ergTargetPowerInput) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newErgSetBtn = ergSetBtn.cloneNode(true);
+    const newErgTargetPowerInput = ergTargetPowerInput.cloneNode(true);
+    ergSetBtn.parentNode.replaceChild(newErgSetBtn, ergSetBtn);
+    ergTargetPowerInput.parentNode.replaceChild(newErgTargetPowerInput, ergTargetPowerInput);
+    
+    newErgSetBtn.addEventListener('click', () => {
+      const targetPower = Number(newErgTargetPowerInput.value) || 0;
+      if (targetPower > 0) {
+        window.ergController.setTargetPower(targetPower).catch(err => {
+          console.error('[Mobile Dashboard] 목표 파워 설정 실패:', err);
+          if (typeof showToast === 'function') {
+            showToast('목표 파워 설정에 실패했습니다.');
+          }
+        });
+        if (typeof showToast === 'function') {
+          showToast(`목표 파워 ${targetPower}W로 설정되었습니다.`);
+        }
+      } else {
+        if (typeof showToast === 'function') {
+          showToast('유효한 목표 파워를 입력해주세요.');
+        }
+      }
+    });
+
+    // Enter 키로도 설정 가능
+    newErgTargetPowerInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        newErgSetBtn.click();
+      }
+    });
+  }
+
+  // 연결 상태 업데이트
+  const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
+  if (isTrainerConnected) {
+    window.ergController.updateConnectionStatus('connected');
+  }
+
+  // 케이던스 업데이트 (Edge AI 분석용)
+  if (window.liveData && window.liveData.cadence) {
+    window.ergController.updateCadence(window.liveData.cadence);
+  }
+
+  console.log('[Mobile Dashboard] ErgController 초기화 완료');
+}
+
 // 전역 함수로 노출 (모바일 대시보드 전용)
 window.toggleMobileBluetoothDropdown = toggleMobileBluetoothDropdown;
 window.connectMobileBluetoothDevice = connectMobileBluetoothDevice;
 window.updateMobileBluetoothConnectionStatus = updateMobileBluetoothConnectionStatus;
+window.exitMobileIndividualTraining = exitMobileIndividualTraining;
+window.initMobileErgController = initMobileErgController;
 
-// 모바일 대시보드 초기화 시 연결 상태 업데이트 및 주기적 업데이트
-// startMobileDashboard 함수 내부에서 호출되도록 수정
-const originalStartMobileDashboard = window.startMobileDashboard;
-if (typeof originalStartMobileDashboard === 'function') {
-  window.startMobileDashboard = function(...args) {
-    const result = originalStartMobileDashboard.apply(this, args);
-    
-    // 초기 연결 상태 업데이트
-    setTimeout(() => {
-      updateMobileBluetoothConnectionStatus();
-    }, 500);
-    
-    // 주기적으로 연결 상태 업데이트 (5초마다)
-    if (window.mobileBluetoothStatusInterval) {
-      clearInterval(window.mobileBluetoothStatusInterval);
-    }
-    window.mobileBluetoothStatusInterval = setInterval(() => {
-      updateMobileBluetoothConnectionStatus();
-    }, 5000);
-    
-    return result;
-  };
-} else {
-  // startMobileDashboard가 아직 정의되지 않은 경우, DOMContentLoaded에서 처리
-  document.addEventListener('DOMContentLoaded', () => {
-    // 초기 연결 상태 업데이트
-    setTimeout(() => {
-      updateMobileBluetoothConnectionStatus();
-    }, 500);
-    
-    // 주기적으로 연결 상태 업데이트 (5초마다)
-    if (window.mobileBluetoothStatusInterval) {
-      clearInterval(window.mobileBluetoothStatusInterval);
-    }
-    window.mobileBluetoothStatusInterval = setInterval(() => {
-      updateMobileBluetoothConnectionStatus();
-    }, 5000);
-  });
-}
+// 모바일 대시보드 초기화는 startMobileDashboard 함수 내부에서 직접 처리됨
+// (위의 startMobileDashboard 함수 내부에 이미 추가됨)
 
