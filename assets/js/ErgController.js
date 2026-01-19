@@ -215,6 +215,12 @@ class ErgController {
         throw new Error('스마트로라가 연결되지 않았습니다. 먼저 스마트로라를 연결해주세요.');
       }
 
+      // 프로토콜 확인 (CPS 프로토콜은 ERG 모드 미지원)
+      const protocol = trainer.protocol || 'unknown';
+      if (protocol === 'CPS') {
+        throw new Error('현재 연결된 스마트로라는 CPS 프로토콜을 사용합니다. ERG 모드는 FTMS 프로토콜을 지원하는 스마트로라만 사용할 수 있습니다.');
+      }
+
       // Control Point 확인 및 재연결 시도
       let controlPoint = trainer.controlPoint;
       
@@ -227,24 +233,22 @@ class ErgController {
           if (controlPoint) {
             // 재연결 성공 시 trainer 객체 업데이트
             trainer.controlPoint = controlPoint;
-            console.log('[ErgController] Control Point 재연결 성공');
+            console.log('[ErgController] ✅ Control Point 재연결 성공');
           }
         } catch (reconnectError) {
           console.error('[ErgController] Control Point 재연결 실패:', reconnectError);
-          
-          // 프로토콜 확인
-          const protocol = trainer.protocol || 'unknown';
-          if (protocol === 'CPS') {
-            throw new Error('현재 연결된 스마트로라는 CPS 프로토콜을 사용합니다. ERG 모드는 FTMS 프로토콜이 필요합니다.');
-          } else {
-            throw new Error('스마트로라 Control Point를 찾을 수 없습니다. 스마트로라가 ERG 모드를 지원하는지 확인해주세요.');
-          }
+          throw new Error('스마트로라 Control Point를 찾을 수 없습니다. 스마트로라가 ERG 모드를 지원하는지 확인해주세요.');
         }
       }
 
       // Control Point 최종 확인
       if (!controlPoint) {
-        throw new Error('스마트로라 Control Point를 찾을 수 없습니다.');
+        // 프로토콜이 FTMS인데도 controlPoint가 없는 경우
+        if (protocol === 'FTMS') {
+          throw new Error('FTMS 프로토콜을 사용하는 스마트로라지만 Control Point를 찾을 수 없습니다. 스마트로라가 ERG 모드를 지원하는지 확인해주세요.');
+        } else {
+          throw new Error('스마트로라 Control Point를 찾을 수 없습니다.');
+        }
       }
 
       this.state.enabled = enable;
@@ -282,33 +286,50 @@ class ErgController {
         throw new Error('서버 연결이 없습니다');
       }
 
-      // FTMS 서비스 가져오기
+      // FTMS 서비스 가져오기 (정확한 UUID 사용)
       let service;
       try {
-        service = await trainer.server.getPrimaryService("fitness_machine");
+        // 정확한 UUID로 서비스 가져오기
+        service = await trainer.server.getPrimaryService(this.FTMS_SERVICE_UUID);
+        console.log('[ErgController] ✅ FTMS 서비스 획득 성공');
       } catch (err) {
-        console.warn('[ErgController] fitness_machine 서비스를 찾을 수 없습니다:', err);
-        return null;
+        // 별칭으로 재시도
+        try {
+          service = await trainer.server.getPrimaryService("fitness_machine");
+          console.log('[ErgController] ✅ FTMS 서비스 획득 성공 (별칭)');
+        } catch (err2) {
+          console.warn('[ErgController] ⚠️ FTMS 서비스를 찾을 수 없습니다:', err2);
+          throw new Error('FTMS 서비스를 찾을 수 없습니다.');
+        }
       }
 
-      // Control Point 특성 가져오기
+      // Control Point 특성 가져오기 (정확한 UUID 사용)
       let controlPoint;
       try {
-        controlPoint = await service.getCharacteristic("fitness_machine_control_point");
+        // 정확한 UUID로 특성 가져오기
+        controlPoint = await service.getCharacteristic(this.FTMS_CONTROL_POINT_UUID);
+        console.log('[ErgController] ✅ Control Point 획득 성공 (UUID)');
       } catch (err) {
-        // UUID로 직접 시도
+        // 별칭으로 재시도
         try {
-          controlPoint = await service.getCharacteristic(0x2AD9);
+          controlPoint = await service.getCharacteristic("fitness_machine_control_point");
+          console.log('[ErgController] ✅ Control Point 획득 성공 (별칭)');
         } catch (err2) {
-          console.warn('[ErgController] Control Point 특성을 찾을 수 없습니다:', err2);
-          return null;
+          // 16-bit UUID로 재시도
+          try {
+            controlPoint = await service.getCharacteristic(0x2AD9);
+            console.log('[ErgController] ✅ Control Point 획득 성공 (16-bit UUID)');
+          } catch (err3) {
+            console.warn('[ErgController] ⚠️ Control Point 특성을 찾을 수 없습니다:', err3);
+            throw new Error('Control Point 특성을 찾을 수 없습니다.');
+          }
         }
       }
 
       return controlPoint;
     } catch (error) {
       console.error('[ErgController] Control Point 재연결 오류:', error);
-      return null;
+      throw error; // 에러를 다시 던져서 상위에서 처리할 수 있도록 함
     }
   }
 

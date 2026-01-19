@@ -18,6 +18,9 @@ const UUIDS = {
   CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb', // Power Measurement
   
   CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', // Speed & Cadence
+  
+  HEART_RATE_SERVICE: '0000180d-0000-1000-8000-00805f9b34fb', // Heart Rate Service
+  HEART_RATE_MEASUREMENT: '00002a37-0000-1000-8000-00805f9b34fb', // Heart Rate Measurement
   HRS_SERVICE:  '0000180d-0000-1000-8000-00805f9b34fb'  // Heart Rate
 };
 
@@ -523,22 +526,47 @@ async function connectHeartRate() {
 
     let device;
     try {
-      // 기본적으로 heart_rate 서비스를 광고하는 기기 우선
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ["heart_rate"] }],
-        optionalServices: ["heart_rate", "device_information"],
+      // [개선] 정확한 UUID 사용 - heart_rate 서비스를 광고하는 기기 우선 검색
+      console.log('[connectHeartRate] 필터 검색 시도:', {
+        heartRateService: UUIDS.HEART_RATE_SERVICE
       });
-    } catch {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [UUIDS.HEART_RATE_SERVICE] }],
+        optionalServices: [UUIDS.HEART_RATE_SERVICE, "device_information"],
+      });
+      console.log('[connectHeartRate] 필터 검색 성공, 선택된 디바이스:', device.name || device.id);
+    } catch (filterError) {
+      console.log("⚠️ 필터 검색 실패(iOS 등), 전체 검색 후 검증 모드 진입:", filterError);
+      // iOS 등에서 필터 검색이 실패하면 전체 검색 후 서비스 검증
       // 광고에 heart_rate UUID가 없는 기기 (가민, 폴라 등) 대응
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ["heart_rate", "device_information"],
-      });
+      try {
+        console.log('[connectHeartRate] acceptAllDevices 모드로 재시도...');
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: [UUIDS.HEART_RATE_SERVICE, "device_information"],
+        });
+        console.log('[connectHeartRate] acceptAllDevices 검색 성공, 선택된 디바이스:', device.name || device.id);
+      } catch (acceptAllError) {
+        console.log("⚠️ 사용자가 디바이스 선택을 취소했습니다:", acceptAllError);
+        showConnectionStatus(false);
+        return;
+      }
     }
 
     const server = await device.gatt.connect();
-    const service = await server.getPrimaryService("heart_rate");
-    const ch = await service.getCharacteristic("heart_rate_measurement");
+    
+    // [개선] 서비스 검증 - 연결 후 즉시 heart_rate 서비스 확인
+    let service, characteristic;
+    try {
+      // 정확한 UUID로 서비스 가져오기
+      service = await server.getPrimaryService(UUIDS.HEART_RATE_SERVICE);
+      characteristic = await service.getCharacteristic(UUIDS.HEART_RATE_MEASUREMENT);
+      console.log('[connectHeartRate] ✅ Heart Rate 서비스 및 특성 획득 성공');
+    } catch (serviceError) {
+      // 서비스가 없으면 연결 끊고 에러 발생
+      device.gatt.disconnect();
+      throw new Error("선택하신 기기는 심박계 기능을 지원하지 않습니다.");
+    }
 
     await ch.startNotifications();
     ch.addEventListener("characteristicvaluechanged", handleHeartRateData);

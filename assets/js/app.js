@@ -15171,7 +15171,9 @@ function initMobileErgController() {
       } catch (err) {
         console.error('[Mobile Dashboard] ERG 모드 토글 오류:', err);
         if (typeof showToast === 'function') {
-          showToast('스마트로라 연결을 확인해주세요.');
+          // ErgController에서 던진 구체적인 에러 메시지 표시
+          const errorMessage = err.message || '스마트로라 연결을 확인해주세요.';
+          showToast(errorMessage);
         }
         e.target.checked = !e.target.checked; // 실패 시 UI 원복
       }
