@@ -296,45 +296,49 @@ async function connectTrainer() {
     showConnectionStatus(true);
     let device;
 
-    // [개선] 스마트로라 검색 개선: CPS_SERVICE를 우선 검색하여 스마트로라가 확실히 검색되도록 함
-    // 1순위: CPS_SERVICE (스마트로라 포함 모든 CPS 기기)
-    // 2순위: FTMS_SERVICE (FTMS 지원 기기)
-    // 브라우저가 필터 배열의 첫 번째 항목을 우선시할 수 있으므로, CPS를 먼저 배치
+    // [ERG 모드 우선] FTMS를 최우선으로 검색하여 ERG 모드가 정상 작동하도록 함
+    // 1순위: FTMS_SERVICE (Fitness Machine Service - 0x1826) - ERG 모드 필수
+    // 2순위: CPS_SERVICE (Cycling Power Service - 0x1818) - ERG 모드 미지원, 파워미터 모드
+    // 브라우저가 필터 배열의 첫 번째 항목을 우선시하므로, FTMS를 먼저 배치
     const filters = [
-      { services: [UUIDS.CPS_SERVICE] },   // 1순위: 스마트로라 및 CPS 기기 (우선 검색)
-      { services: [UUIDS.FTMS_SERVICE] }  // 2순위: FTMS 지원 기기
+      { services: [UUIDS.FTMS_SERVICE] },  // 1순위: FTMS 지원 기기 (ERG 모드 가능)
+      { services: [UUIDS.CPS_SERVICE] }    // 2순위: CPS 기기 (ERG 모드 불가, 파워미터 모드)
     ];
     
     try {
-      // 스마트로라를 포함한 모든 CPS 서비스 기기 검색
-      // CPS_SERVICE를 첫 번째 필터로 배치하여 스마트로라가 확실히 검색되도록 함
-      console.log('[connectTrainer] 필터 검색 시도:', { 
+      // FTMS를 우선 검색하여 ERG 모드가 정상 작동하도록 함
+      console.log('[connectTrainer] 필터 검색 시도 (FTMS 우선):', { 
         filters: filters.map(f => f.services),
+        ftmsService: UUIDS.FTMS_SERVICE,
         cpsService: UUIDS.CPS_SERVICE,
-        ftmsService: UUIDS.FTMS_SERVICE
+        note: 'FTMS를 먼저 검색하여 ERG 모드 지원 기기를 우선 연결'
       });
       device = await navigator.bluetooth.requestDevice({
         filters: filters,
         optionalServices: [
-          UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, 
-          UUIDS.CSC_SERVICE, "device_information"
+          UUIDS.FTMS_SERVICE,  // FTMS 서비스 (ERG 모드 필수)
+          UUIDS.CPS_SERVICE,   // CPS 서비스 (폴백용)
+          UUIDS.CSC_SERVICE,   // Speed & Cadence
+          "device_information" // 디바이스 정보
         ]
       });
-      console.log('[connectTrainer] 필터 검색 성공, 선택된 디바이스:', device.name || device.id);
+      console.log('[connectTrainer] ✅ 필터 검색 성공, 선택된 디바이스:', device.name || device.id);
     } catch (filterError) {
       console.log("⚠️ 필터 검색 실패(iOS 등), 전체 검색 후 검증 모드 진입:", filterError);
       // iOS 등에서 필터 검색이 실패하면 전체 검색 후 서비스 검증
       // acceptAllDevices: true로 검색하면 스마트로라도 포함되어 검색됨
       try {
-        console.log('[connectTrainer] acceptAllDevices 모드로 재시도...');
+        console.log('[connectTrainer] acceptAllDevices 모드로 재시도 (FTMS 우선 검색)...');
         device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
           optionalServices: [
-              UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, 
-              UUIDS.CSC_SERVICE, "device_information"
+              UUIDS.FTMS_SERVICE,  // FTMS 서비스 (ERG 모드 필수) - 우선순위
+              UUIDS.CPS_SERVICE,   // CPS 서비스 (폴백용)
+              UUIDS.CSC_SERVICE,   // Speed & Cadence
+              "device_information"  // 디바이스 정보
           ]
         });
-        console.log('[connectTrainer] acceptAllDevices 검색 성공, 선택된 디바이스:', device.name || device.id);
+        console.log('[connectTrainer] ✅ acceptAllDevices 검색 성공, 선택된 디바이스:', device.name || device.id);
       } catch (acceptAllError) {
         // acceptAllDevices도 실패한 경우, 사용자가 취소한 것으로 간주
         console.log("⚠️ 사용자가 디바이스 선택을 취소했습니다:", acceptAllError);
@@ -344,27 +348,36 @@ async function connectTrainer() {
     }
 
     const server = await device.gatt.connect();
+    console.log('[connectTrainer] ✅ GATT 서버 연결 성공');
     
-    // [기술 적용] 연결 후 즉시 서비스 검증 (Validation)
-    // 사용자가 실수로 잘못된 기기를 선택했더라도, 필수 서비스가 없으면 즉시 차단
+    // [ERG 모드 우선] 연결 후 서비스 검증 - FTMS를 최우선으로 시도
+    // ERG 모드를 사용하려면 반드시 FTMS 프로토콜이 필요함
     let service, characteristic, isFTMS = false;
     
+    // 1순위: FTMS (Fitness Machine Service - 0x1826)
+    // 스마트로라 제어(ERG)를 위해 이것을 가장 먼저 찾아야 함
     try {
-      // FTMS 서비스 확인
+      console.log('[connectTrainer] 1순위: FTMS 서비스 검색 시도 (ERG 모드 필수)...');
       service = await server.getPrimaryService(UUIDS.FTMS_SERVICE);
-      // 0x2AD2 대신 Full UUID 사용으로 호환성 확보
-      characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA); 
+      characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
       isFTMS = true;
+      console.log('[connectTrainer] ✅ FTMS 프로토콜(스마트로라 모드)로 연결되었습니다. ERG 모드 사용 가능.');
     } catch (e1) {
+      console.log('[connectTrainer] ⚠️ FTMS 서비스 없음, 2순위 CPS 서비스 시도...', e1.message);
+      
+      // 2순위: CPS (Cycling Power Service - 0x1818)
+      // FTMS가 없을 때만 파워미터 모드로 연결 (ERG 모드 불가)
       try {
-        console.warn("FTMS 서비스 없음, CPS(파워) 서비스 시도...");
+        console.log('[connectTrainer] 2순위: CPS 서비스 검색 시도 (파워미터 모드)...');
         service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
         characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
         isFTMS = false;
+        console.warn('[connectTrainer] ⚠️ CPS 프로토콜(파워미터 모드)로 연결되었습니다. 경고: 이 모드에서는 ERG 사용 불가');
       } catch (e2) {
         // 필수 서비스가 없으므로 연결 끊고 에러 발생
-        device.gatt.disconnect();
-        throw new Error("선택하신 기기는 스마트 트레이너 기능을 지원하지 않습니다.");
+        console.error('[connectTrainer] ❌ FTMS 및 CPS 서비스를 모두 찾을 수 없습니다.');
+        await device.gatt.disconnect();
+        throw new Error("선택하신 기기는 스마트 트레이너 기능을 지원하지 않습니다. FTMS 또는 CPS 서비스가 필요합니다.");
       }
     }
 
@@ -373,24 +386,28 @@ async function connectTrainer() {
       isFTMS ? handleTrainerData : handlePowerMeterData
     );
 
-    // [기술 적용] ERG Control Point 획득 (에러 해결의 핵심!)
+    // [ERG 모드 필수] ERG Control Point 획득 (ERG 모드 동작의 핵심!)
+    // FTMS 프로토콜로 연결된 경우에만 Control Point 획득 시도
     let controlPointChar = null;
     if (isFTMS) {
+      console.log('[connectTrainer] ERG 제어권(Control Point) 획득 시도 (FTMS 프로토콜)...');
       try {
-        console.log('[BLE] ERG 제어권(Control Point) 획득 시도...');
-        // 반드시 정의해둔 128-bit Full UUID를 사용
+        // 1차 시도: 정확한 128-bit Full UUID 사용
         controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL);
-        console.log('✅ ERG Control Point 획득 성공 (UUID:', UUIDS.FTMS_CONTROL, ')');
+        console.log('[connectTrainer] ✅ ERG Control Point 획득 성공 (Full UUID:', UUIDS.FTMS_CONTROL, ')');
       } catch (err) {
-        console.warn('⚠️ 1차 시도 실패. 대체 이름으로 재시도...');
+        console.warn('[connectTrainer] ⚠️ Full UUID로 Control Point 획득 실패, 별칭으로 재시도...', err.message);
         try {
-            // 일부 구형 기기를 위한 폴백
-            controlPointChar = await service.getCharacteristic("fitness_machine_control_point");
-            console.log('✅ ERG Control Point 획득 성공 (Alias Name)');
+          // 2차 시도: 일부 구형 기기를 위한 별칭 사용
+          controlPointChar = await service.getCharacteristic("fitness_machine_control_point");
+          console.log('[connectTrainer] ✅ ERG Control Point 획득 성공 (별칭: fitness_machine_control_point)');
         } catch (fatalErr) {
-            console.error('❌ ERG 제어권 획득 최종 실패. ERG 모드 사용 불가.', fatalErr);
+          console.error('[connectTrainer] ❌ ERG 제어권 획득 최종 실패. ERG 모드 사용 불가.', fatalErr);
+          console.warn('[connectTrainer] ⚠️ 이 기기는 FTMS를 지원하지만 Control Point를 제공하지 않습니다. ERG 모드는 사용할 수 없습니다.');
         }
       }
+    } else {
+      console.log('[connectTrainer] ℹ️ CPS 프로토콜로 연결되었으므로 Control Point 획득을 건너뜁니다 (ERG 모드 미지원).');
     }
 
     // 객체 저장
@@ -403,12 +420,21 @@ async function connectTrainer() {
       protocol: isFTMS ? 'FTMS' : 'CPS' 
     };
     
-    // ERG UI 활성화 (Control Point가 있을 때만)
-    if (isFTMS && controlPointChar && typeof updateErgModeUI === 'function') {
-      updateErgModeUI(true);
-    } else if (typeof updateErgModeUI === 'function') {
-      console.log('ℹ️ ERG 제어 불가 기기 - UI 비활성화');
-      updateErgModeUI(false);
+    // ERG UI 활성화 (FTMS 프로토콜이고 Control Point가 있을 때만)
+    if (isFTMS && controlPointChar) {
+      console.log('[connectTrainer] ✅ ERG 모드 사용 가능 - UI 활성화');
+      if (typeof updateErgModeUI === 'function') {
+        updateErgModeUI(true);
+      }
+    } else {
+      if (isFTMS && !controlPointChar) {
+        console.warn('[connectTrainer] ⚠️ FTMS 프로토콜이지만 Control Point가 없어 ERG 모드 사용 불가');
+      } else if (!isFTMS) {
+        console.log('[connectTrainer] ℹ️ CPS 프로토콜로 연결되어 ERG 모드 사용 불가 - UI 비활성화');
+      }
+      if (typeof updateErgModeUI === 'function') {
+        updateErgModeUI(false);
+      }
     }
 
     // (기존 이벤트 리스너 로직 유지)
@@ -420,12 +446,24 @@ async function connectTrainer() {
     updateDevicesList();
     if (typeof window.updateDeviceButtonImages === "function") setTimeout(window.updateDeviceButtonImages, 100);
     showConnectionStatus(false);
-    showToast(`✅ ${device.name} 연결 성공`);
+    
+    // 연결 성공 메시지에 프로토콜 정보 포함
+    const protocolInfo = isFTMS 
+      ? (controlPointChar ? ' (FTMS - ERG 모드 지원)' : ' (FTMS - ERG 모드 미지원)')
+      : ' (CPS - ERG 모드 미지원)';
+    const successMessage = `✅ ${device.name} 연결 성공${protocolInfo}`;
+    console.log('[connectTrainer]', successMessage);
+    if (typeof showToast === 'function') {
+      showToast(successMessage);
+    }
 
   } catch (err) {
     showConnectionStatus(false);
-    console.error("트레이너 연결 오류:", err);
-    showToast("❌ 연결 실패: " + err.message);
+    console.error("[connectTrainer] ❌ 트레이너 연결 오류:", err);
+    const errorMessage = err.message || "알 수 없는 오류가 발생했습니다.";
+    if (typeof showToast === 'function') {
+      showToast("❌ 연결 실패: " + errorMessage);
+    }
   }
 }
 
