@@ -9550,21 +9550,119 @@ async function exportAnalysisReport() {
   }
 }
 
+// ========== Challenge 타입별 컨디션별 강도 보정 표시값 테이블 ==========
+const RPE_CONDITION_VALUES = {
+  'Fitness': {
+    '최상': 1.10,  // 110%
+    '좋음': 1.00,  // 100%
+    '보통': 0.95,  // 95%
+    '나쁨': 0.90   // 90%
+  },
+  'GranFondo': {
+    '최상': 1.08,  // 108%
+    '좋음': 1.00,  // 100%
+    '보통': 0.95,  // 95%
+    '나쁨': 0.92   // 92%
+  },
+  'Racing': {
+    '최상': 1.06,  // 106%
+    '좋음': 1.00,  // 100%
+    '보통': 0.96,  // 96%
+    '나쁨': 0.94   // 94%
+  },
+  'Elite': {
+    '최상': 1.05,  // 105%
+    '좋음': 1.00,  // 100%
+    '보통': 0.97,  // 97%
+    '나쁨': 0.95   // 95%
+  },
+  'PRO': {
+    '최상': 1.04,  // 104%
+    '좋음': 1.00,  // 100%
+    '보통': 0.98,  // 98%
+    '나쁨': 0.96   // 96%
+  }
+};
+
+// ========== Challenge 타입별 목표값 조절 슬라이드 범위 테이블 ==========
+const SLIDER_RANGE_BY_CHALLENGE = {
+  'Fitness': { min: -10, max: 10 },      // -10% ~ +10%
+  'GranFondo': { min: -8, max: 8 },      // -8% ~ +8%
+  'Racing': { min: -6, max: 6 },         // -6% ~ +6%
+  'Elite': { min: -5, max: 5 },           // -5% ~ +5%
+  'PRO': { min: -4, max: 4 }              // -4% ~ +4%
+};
+
+/**
+ * 사용자의 challenge 타입 가져오기
+ */
+function getUserChallenge() {
+  const userChallenge = String(window.currentUser?.challenge || 'Fitness').trim();
+  // 대소문자 정규화
+  if (userChallenge === 'fitness') return 'Fitness';
+  if (userChallenge === 'granfondo') return 'GranFondo';
+  if (userChallenge === 'racing') return 'Racing';
+  if (userChallenge === 'elite') return 'Elite';
+  if (userChallenge === 'pro') return 'PRO';
+  return userChallenge || 'Fitness'; // 기본값 Fitness
+}
+
 // ========== RPE 컨디션 선택 모달 함수 ==========
 function showRPEModal() {
   const modal = document.getElementById('rpeConditionModal');
   if (modal) {
     modal.style.display = 'flex';
+    
+    // 사용자의 challenge 타입 가져오기
+    const challenge = getUserChallenge();
+    const conditionValues = RPE_CONDITION_VALUES[challenge] || RPE_CONDITION_VALUES['Fitness'];
+    
+    console.log('[RPE Modal] Challenge 타입:', challenge, '컨디션 값:', conditionValues);
+    
+    // challenge 타입에 따라 버튼 값 업데이트
+    const conditionButtons = [
+      { name: '최상', selector: '.rpe-condition-btn[data-condition="최상"]' },
+      { name: '좋음', selector: '.rpe-condition-btn[data-condition="좋음"]' },
+      { name: '보통', selector: '.rpe-condition-btn[data-condition="보통"]' },
+      { name: '나쁨', selector: '.rpe-condition-btn[data-condition="나쁨"]' }
+    ];
+    
+    conditionButtons.forEach(({ name, selector }) => {
+      const btn = document.querySelector(selector);
+      if (btn) {
+        const adjustment = conditionValues[name];
+        btn.setAttribute('data-adjustment', adjustment);
+        btn.setAttribute('onclick', `selectRPECondition(${adjustment}, '${name}')`);
+        
+        // 표시값 업데이트
+        const valueEl = btn.querySelector('.rpe-condition-value');
+        if (valueEl) {
+          valueEl.textContent = `${Math.round(adjustment * 100)}%`;
+        }
+      }
+    });
+    
     // 기존 선택 해제
     document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
       btn.classList.remove('selected');
     });
     
-    // 저장된 값이 있으면 해당 버튼 선택
+    // 저장된 값이 있으면 해당 버튼 선택 (가장 가까운 값 찾기)
     const savedAdjustment = window.trainingIntensityAdjustment || 1.0;
-    const savedBtn = document.querySelector(`.rpe-condition-btn[data-adjustment="${savedAdjustment}"]`);
-    if (savedBtn) {
-      savedBtn.classList.add('selected');
+    let closestBtn = null;
+    let minDiff = Infinity;
+    
+    document.querySelectorAll('.rpe-condition-btn').forEach(btn => {
+      const btnAdjustment = parseFloat(btn.getAttribute('data-adjustment'));
+      const diff = Math.abs(btnAdjustment - savedAdjustment);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestBtn = btn;
+      }
+    });
+    
+    if (closestBtn) {
+      closestBtn.classList.add('selected');
     }
     
     // 확인 버튼 초기화
@@ -9639,14 +9737,21 @@ function confirmRPESelection() {
     showScreen('trainingReadyScreen');
   }
   
-  const conditionNames = {
-    1.03: '최상',
-    1.00: '좋음',
-    0.98: '보통',
-    0.95: '나쁨'
-  };
+  // challenge 타입에 따라 조건 이름 매핑
+  const challenge = getUserChallenge();
+  const conditionValues = RPE_CONDITION_VALUES[challenge] || RPE_CONDITION_VALUES['Fitness'];
   
-  const conditionName = conditionNames[adjustment] || '선택됨';
+  // 가장 가까운 조건 찾기
+  let conditionName = '선택됨';
+  let minDiff = Infinity;
+  for (const [name, value] of Object.entries(conditionValues)) {
+    const diff = Math.abs(value - adjustment);
+    if (diff < minDiff) {
+      minDiff = diff;
+      conditionName = name;
+    }
+  }
+  
   if (typeof showToast === 'function') {
     showToast(`컨디션: ${conditionName} (${(adjustment * 100).toFixed(0)}%) 적용됨`, 'success');
   }
@@ -9679,10 +9784,21 @@ function initializeIntensitySlider() {
     return;
   }
   
+  // challenge 타입에 따른 슬라이더 범위 설정
+  const challenge = getUserChallenge();
+  const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+  slider.min = range.min;
+  slider.max = range.max;
+  
+  // 슬라이더 범위 표시 라벨 업데이트
+  const minLabel = document.querySelector('.intensity-adjustment-min');
+  const maxLabel = document.querySelector('.intensity-adjustment-max');
+  if (minLabel) minLabel.textContent = `${range.min}%`;
+  if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+  
+  console.log('[강도 조절] Challenge 타입:', challenge, '슬라이더 범위:', range);
+  
   // 초기값 설정: 컨디션별 강도 보정 값에서 퍼센트로 변환
-  // window.trainingIntensityAdjustment는 0.95 ~ 1.03 (95% ~ 103%)
-  // 슬라이더는 -10% ~ +10% 범위이므로, 1.0 기준으로 변환
-  // 예: 0.95 → (0.95 - 1.0) * 100 = -5%
   let currentAdjustment = window.trainingIntensityAdjustment;
   
   // 로컬 스토리지에서 값 확인 (컨디션별 강도 보정에서 설정한 값)
@@ -9704,8 +9820,8 @@ function initializeIntensitySlider() {
   
   // 조정 계수를 슬라이더 값으로 변환 (0.95 → -5, 1.0 → 0, 1.03 → +3)
   const sliderValue = Math.round((currentAdjustment - 1.0) * 100);
-  // 슬라이더 범위는 -10 ~ +10이므로 클램프
-  const clampedValue = Math.max(-10, Math.min(10, sliderValue));
+  // challenge 타입에 따른 범위로 클램프
+  const clampedValue = Math.max(range.min, Math.min(range.max, sliderValue));
   
   console.log('[강도 조절] 초기값 설정:', {
     adjustment: currentAdjustment,
@@ -11804,10 +11920,24 @@ async function startMobileDashboard() {
           }
         }
         
+        // challenge 타입에 따른 슬라이더 범위 설정
+        const challenge = getUserChallenge();
+        const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+        newSlider.min = range.min;
+        newSlider.max = range.max;
+        
+        // 슬라이더 범위 표시 라벨 업데이트
+        const minLabel = safeGetElement('mobileIndividualIntensityAdjustmentSlider')?.parentElement?.querySelector('.mobile-individual-intensity-adjustment-min');
+        const maxLabel = safeGetElement('mobileIndividualIntensityAdjustmentSlider')?.parentElement?.querySelector('.mobile-individual-intensity-adjustment-max');
+        if (minLabel) minLabel.textContent = `${range.min}%`;
+        if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+        
+        console.log('[Mobile Dashboard] Challenge 타입:', challenge, '슬라이더 범위:', range);
+        
         // 조정 계수를 슬라이더 값으로 변환 (0.95 → -5, 1.0 → 0, 1.03 → +3)
         const sliderValue = Math.round((currentAdjustment - 1.0) * 100);
-        // 슬라이더 범위는 -10 ~ +10이므로 클램프
-        const clampedValue = Math.max(-10, Math.min(10, sliderValue));
+        // challenge 타입에 따른 범위로 클램프
+        const clampedValue = Math.max(range.min, Math.min(range.max, sliderValue));
         
         // 슬라이더 초기값 설정
         newSlider.value = clampedValue;

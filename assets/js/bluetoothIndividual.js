@@ -3394,6 +3394,29 @@ function updateTargetPowerArc() {
 /**
  * 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
  */
+// ========== Challenge 타입별 목표값 조절 슬라이드 범위 테이블 ==========
+const SLIDER_RANGE_BY_CHALLENGE = {
+    'Fitness': { min: -10, max: 10 },      // -10% ~ +10%
+    'GranFondo': { min: -8, max: 8 },      // -8% ~ +8%
+    'Racing': { min: -6, max: 6 },         // -6% ~ +6%
+    'Elite': { min: -5, max: 5 },           // -5% ~ +5%
+    'PRO': { min: -4, max: 4 }              // -4% ~ +4%
+};
+
+/**
+ * 사용자의 challenge 타입 가져오기
+ */
+function getUserChallenge() {
+    const userChallenge = String(window.currentUser?.challenge || 'Fitness').trim();
+    // 대소문자 정규화
+    if (userChallenge === 'fitness') return 'Fitness';
+    if (userChallenge === 'granfondo') return 'GranFondo';
+    if (userChallenge === 'racing') return 'Racing';
+    if (userChallenge === 'elite') return 'Elite';
+    if (userChallenge === 'pro') return 'PRO';
+    return userChallenge || 'Fitness'; // 기본값 Fitness
+}
+
 function initializeIndividualIntensitySlider() {
     const slider = document.getElementById('individualIntensityAdjustmentSlider');
     const valueDisplay = document.getElementById('individualIntensityAdjustmentValue');
@@ -3402,6 +3425,20 @@ function initializeIndividualIntensitySlider() {
         console.warn('[Bluetooth 개인 훈련] 강도 조절 슬라이더 요소를 찾을 수 없습니다');
         return;
     }
+    
+    // challenge 타입에 따른 슬라이더 범위 설정
+    const challenge = getUserChallenge();
+    const range = SLIDER_RANGE_BY_CHALLENGE[challenge] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+    slider.min = range.min;
+    slider.max = range.max;
+    
+    // 슬라이더 범위 표시 라벨 업데이트
+    const minLabel = document.querySelector('.individual-intensity-adjustment-min');
+    const maxLabel = document.querySelector('.individual-intensity-adjustment-max');
+    if (minLabel) minLabel.textContent = `${range.min}%`;
+    if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+    
+    console.log('[Bluetooth 개인 훈련] Challenge 타입:', challenge, '슬라이더 범위:', range);
     
     // 초기값 설정: 로컬 스토리지에서 불러오기
     let currentAdjustment = individualIntensityAdjustment;
@@ -3422,8 +3459,8 @@ function initializeIndividualIntensitySlider() {
     
     // 조정 계수를 슬라이더 값으로 변환 (0.95 → -5, 1.0 → 0, 1.05 → +5)
     const sliderValue = Math.round((currentAdjustment - 1.0) * 100);
-    // 슬라이더 범위는 -5 ~ +5이므로 클램프
-    const clampedValue = Math.max(-5, Math.min(5, sliderValue));
+    // challenge 타입에 따른 범위로 클램프
+    const clampedValue = Math.max(range.min, Math.min(range.max, sliderValue));
     
     console.log('[Bluetooth 개인 훈련] 강도 조절 초기값 설정:', {
         adjustment: currentAdjustment,
