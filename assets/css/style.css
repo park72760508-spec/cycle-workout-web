@@ -13860,6 +13860,19 @@ body.mobile-dashboard-active {
 ========================================================== */
 
 /* 속도계 컨테이너 크기 보정 */
+/* 모바일 대시보드 메인 콘텐츠 (속도계 영역) */
+.mobile-main-content {
+  flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 */
+  display: flex;
+  flex-direction: column; /* 세로 방향 배치 (속도계 + 세그먼트 정보) */
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  min-height: 0; /* flex 아이템이 축소 가능하도록 설정 */
+  overflow: hidden; /* 넘치는 내용 숨김 */
+  padding: 10px 0; /* 상하 여백 추가 */
+}
+
 .mobile-gauge-container {
   width: 90vw;
   max-width: 500px;
@@ -13867,6 +13880,93 @@ body.mobile-dashboard-active {
   aspect-ratio: 230 / 260; 
   position: relative;
   margin: 0 auto;
+  margin-bottom: 25px; /* 세그먼트 정보를 위한 하단 여백 */
+}
+
+/* 모바일 대시보드 세그먼트 정보 스타일 (속도계 블럭 하단) */
+#mobile-segment-info {
+  text-align: center;
+  font-size: 0.9em;
+  color: #ccc;
+  margin-top: 10px;
+  padding: 0 10px;
+  min-height: 20px; /* 최소 높이 보장 */
+}
+
+/* 모바일 대시보드 블루투스 연결 버튼 (독립적 구동) */
+.mobile-bluetooth-connect-btn {
+  position: relative;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: #fff;
+  font-size: 0.85em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+}
+.mobile-bluetooth-connect-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.mobile-bluetooth-connect-btn.has-connection {
+  background: rgba(0, 212, 170, 0.2);
+  border-color: #00d4aa;
+  color: #00d4aa;
+}
+.mobile-bluetooth-connect-btn .mobile-bluetooth-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 모바일 대시보드 블루투스 연결 드롭다운 (독립적 구동) */
+.mobile-bluetooth-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 200px;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.mobile-bluetooth-dropdown.show {
+  display: block;
+}
+.mobile-bluetooth-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  color: #fff;
+  font-size: 0.9em;
+}
+.mobile-bluetooth-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.mobile-bluetooth-dropdown-item.connected {
+  color: #00d4aa;
+}
+.mobile-bluetooth-dropdown-item img {
+  width: 24px;
+  height: 24px;
+}
+.mobile-bluetooth-dropdown-item .status {
+  margin-left: auto;
+  font-size: 0.8em;
+  color: #888;
+}
+.mobile-bluetooth-dropdown-item.connected .status {
+  color: #00d4aa;
 }
 
 /* 버튼 네온 스타일 (흰색 바탕용 그림자 조정) */
