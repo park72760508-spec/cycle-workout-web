@@ -168,107 +168,126 @@ window.updateDevicesList = function () {
 
 // ── [3] 핵심 연결 로직 (CycleOps/Saris 대응) ──
 
-// 1) 스마트 트레이너 연결
+// ──────────────────────────────────────────────────────────
+// 1) 스마트 트레이너 연결 (CycleOps/Saris 강제 검색 모드)
+// ──────────────────────────────────────────────────────────
 async function connectTrainer() {
   try {
+    // 1. 환경 체크 (에러 원인 진단)
+    if (!navigator.bluetooth) {
+      throw new Error("이 브라우저는 블루투스를 지원하지 않습니다. Chrome이나 Edge를 사용하세요.");
+    }
+
     showConnectionStatus(true);
     let device;
 
-    // ★ CycleOps 대응: 이름(Prefix) 필터 추가
-    // 서비스 UUID를 광고하지 않는 구형 펌웨어를 위해 이름으로 검색
-    const optionalServicesList = [
-      UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS,
-      UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,
-      UUIDS.CSC_SERVICE,  UUIDS.SHORT_CSC,
-      "device_information"
-    ];
-
+    // 2. 필터 제거하고 '모든 기기 검색'으로 변경 (CycleOps 무조건 찾기 위해)
+    console.log('[connectTrainer] 모든 기기 검색 모드 시작...');
+    
     try {
-      console.log('[connectTrainer] 검색 시작 (CycleOps/Saris 필터 포함)...');
       device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { services: [UUIDS.FTMS_SERVICE] },
-          { services: [UUIDS.SHORT_FTMS] },
-          // ★ 중요: 브랜드 이름으로 강제 검색
-          { namePrefix: "CycleOps" },
-          { namePrefix: "Saris" },
-          { namePrefix: "Hammer" },
-          { namePrefix: "Magnus" },
-          // 기존 파워미터 서비스 필터
-          { services: [UUIDS.CPS_SERVICE] },
-          { services: [UUIDS.SHORT_CPS] }
-        ],
-        optionalServices: optionalServicesList
+        // ★ 핵심: 필터를 쓰지 않고 모든 기기를 다 보여줍니다.
+        // CycleOps, Hammer 등 이름이 특이한 기기도 다 목록에 뜹니다.
+        acceptAllDevices: true, 
+        optionalServices: [
+          UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS,
+          UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,
+          UUIDS.CSC_SERVICE,  UUIDS.SHORT_CSC,
+          "device_information",
+          // CycleOps 구형 기기들이 쓰는 커스텀 서비스가 있을 수 있어 포괄적으로 허용
+        ]
       });
-    } catch (e) {
-      console.log("⚠️ 필터 검색 실패, 전체 검색 시도...", e);
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: optionalServicesList
-      });
+    } catch (scanErr) {
+      // 사용자가 취소했을 때
+      if (scanErr.name === 'NotFoundError') {
+        console.log("사용자가 검색을 취소했습니다.");
+        showConnectionStatus(false);
+        return; 
+      }
+      throw scanErr; // 다른 에러면 밖으로 던짐
     }
 
     const server = await device.gatt.connect();
-    
-    // ★ 중요: 이름으로 찾았더라도, 내부적으로는 FTMS 서비스를 강제 탐색해야 ERG가 됨
+    console.log('[connectTrainer] GATT 연결 성공');
+
+    // 3. 서비스 탐색 (FTMS -> CPS 순서)
     let service, characteristic, isFTMS = false;
     let controlPointChar = null;
 
     try {
+      // FTMS 서비스 찾기 시도
       try {
         service = await server.getPrimaryService(UUIDS.FTMS_SERVICE);
-      } catch (err) {
+      } catch (e) {
         service = await server.getPrimaryService(UUIDS.SHORT_FTMS);
       }
+      
       characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
       isFTMS = true;
-      console.log('[connectTrainer] FTMS 프로토콜 연결됨 (ERG 가능)');
+      console.log('[connectTrainer] ✅ FTMS 서비스 발견! (스마트로라 모드)');
 
-      // ERG Control Point 획득 시도
+      // ERG 제어권 획득
       try {
         controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL);
+        console.log('Control Point (Full UUID) 획득');
       } catch (e) {
         try {
             controlPointChar = await service.getCharacteristic('fitness_machine_control_point');
+            console.log('Control Point (Alias) 획득');
         } catch (fatal) {
-             console.warn('FTMS Control Point 없음');
+             console.warn('⚠️ FTMS지만 제어권(Control Point)을 찾을 수 없습니다.');
         }
       }
+
     } catch (e) {
-      console.log('FTMS 실패, CPS(파워미터) 모드로 연결 시도');
+      console.warn('[connectTrainer] FTMS 실패, 파워미터(CPS) 모드로 전환...', e);
+      // FTMS 실패 시 CPS 시도
       try {
         service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
         characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
         isFTMS = false;
       } catch (fatal) {
-        throw new Error("지원하지 않는 기기입니다. (FTMS/CPS 없음)");
+        // 혹시 모르니 CSC(속도/케이던스)라도 시도
+        try {
+           service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+           characteristic = await service.getCharacteristic(0x2A5B);
+           isFTMS = false;
+           console.log('CPS도 실패하여 CSC 센서로 연결합니다.');
+        } catch (veryFatal) {
+           throw new Error("스마트 트레이너 또는 파워미터 기능을 찾을 수 없는 기기입니다.");
+        }
       }
     }
 
+    // 알림 시작
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", isFTMS ? handleTrainerData : handlePowerMeterData);
 
+    // 객체 저장
     window.connectedDevices.trainer = { 
-      name: device.name, 
+      name: device.name || "Unknown Trainer", 
       device, server, characteristic,
-      controlPoint: controlPointChar, // ERG 핵심
+      controlPoint: controlPointChar, 
       protocol: isFTMS ? 'FTMS' : 'CPS' 
     };
 
+    // UI 업데이트
     if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
 
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
+    
     updateDevicesList();
     showConnectionStatus(false);
     
-    // 연결 상태 메시지
-    const ergMsg = isFTMS ? (controlPointChar ? "(ERG 지원)" : "(ERG 미지원)") : "(파워미터 모드)";
-    showToast(`✅ ${device.name} 연결 성공 ${ergMsg}`);
+    const modeMsg = isFTMS ? (controlPointChar ? "(ERG 지원)" : "(ERG 불가)") : "(파워미터 모드)";
+    showToast(`✅ ${device.name} 연결 성공 ${modeMsg}`);
 
   } catch (err) {
     showConnectionStatus(false);
-    console.error(err);
-    showToast("❌ 연결 실패: " + err.message);
+    console.error("[connectTrainer Error]", err);
+    // undefined 에러 방지용 처리
+    const errMsg = err.message || err.toString() || "알 수 없는 오류";
+    showToast("❌ 연결 실패: " + errMsg);
   }
 }
 
@@ -537,3 +556,4 @@ setInterval(() => {
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
 window.connectHeartRate = connectHeartRate;
+
