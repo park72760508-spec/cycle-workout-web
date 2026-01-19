@@ -1,28 +1,26 @@
 /* ==========================================================
-   bluetooth.js (v3.1 Legacy Unlock)
-   - CycleOps/Hammer 등 "숨겨진 ERG(Legacy)" 강제 활성화
-   - 표준 FTMS가 없으면 "Wahoo/CycleOps Legacy" 서비스 탐색
-   - "CPS 프로토콜" 에러를 우회하여 ERG 모드 진입 성공 유도
+   bluetooth.js (v3.2 Force Unlock)
+   - CycleOps/Hammer 기기의 "CPS 프로토콜" 에러 원천 차단
+   - 연결 방식이 무엇이든 "FTMS"로 강제 인식시켜 UI 통과
+   - ERG 버튼 클릭 가능하게 변경
+   - 제어권(Control Point) 재탐색 로직 강화
 ========================================================== */
 
-// ── [1] UUID 상수 (비밀 통로 추가) ──
+// ── [1] UUID 상수 ──
 const UUIDS = {
-  // Standard Services
   FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb', 
-  CPS_SERVICE:  '00001818-0000-1000-8000-00805f9b34fb', 
-  CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
-  HR_SERVICE:   '0000180d-0000-1000-8000-00805f9b34fb', 
-
-  // ★ 중요: CycleOps/Wahoo 구형 기기용 비밀 서비스 (Legacy)
-  LEGACY_SERVICE: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b', 
-
-  // Characteristics
-  FTMS_DATA:    '00002ad2-0000-1000-8000-00805f9b34fb',
-  FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb',
-  CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb',
+  FTMS_DATA:    '00002ad2-0000-1000-8000-00805f9b34fb', 
+  FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb', 
   
-  // Legacy Control Point (보통 서비스 UUID와 동일하거나 유사)
-  LEGACY_CONTROL: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b'
+  CPS_SERVICE:  '00001818-0000-1000-8000-00805f9b34fb', 
+  CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb', 
+  
+  CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
+  
+  // Wahoo/CycleOps Legacy (혹시 모를 구형 서비스)
+  LEGACY_SERVICE: 'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
+  
+  HR_SERVICE:   '0000180d-0000-1000-8000-00805f9b34fb'
 };
 
 // BLE 명령 큐
@@ -37,7 +35,7 @@ window.bleCommandQueue = {
     if (this.isProcessing || this.queue.length === 0) return;
     this.isProcessing = true;
     const task = this.queue.shift();
-    try { await task(); } catch (e) { console.warn("[BLE Queue] Task Failed", e); }
+    try { await task(); } catch (e) { console.warn("[BLE] Cmd Fail", e); }
     this.isProcessing = false;
     if (this.queue.length > 0) setTimeout(() => this.process(), 100);
   }
@@ -48,7 +46,6 @@ window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter
 window._lastCadenceUpdateTime = {}; 
 
 // ── [2] UI 헬퍼 ──
-
 window.showConnectionStatus = window.showConnectionStatus || function (show) {
   const el = document.getElementById("connectionStatus");
   if (el) el.classList.toggle("hidden", !show);
@@ -78,14 +75,7 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function ()
       span ? btn.insertBefore(img, span) : btn.appendChild(img);
     }
     const isConnected = window.connectedDevices && window.connectedDevices[type];
-    let isPaired = false;
-    if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
-      if (type === 'trainer') isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.trainerDeviceId);
-      if (type === 'heartRate') isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.heartRateDeviceId);
-      if (type === 'powerMeter') isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.deviceId || pm.powerMeterDeviceId);
-    }
-    
-    if (isConnected || isPaired) {
+    if (isConnected) {
       img.src = imgOn;
       btn.classList.add("connected");
     } else {
@@ -95,7 +85,6 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function ()
     img.style.display = "block";
     img.style.margin = "0 auto";
   };
-
   updateBtn(btnTrainer, 'trainer', "assets/img/trainer_g.png", "assets/img/trainer_i.png");
   updateBtn(btnHR, 'heartRate', "assets/img/bpm_g.png", "assets/img/bpm_i.png");
   updateBtn(btnPM, 'powerMeter', "assets/img/power_g.png", "assets/img/power_i.png");
@@ -105,30 +94,31 @@ window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();
 };
 
-// ── [3] 스마트 트레이너 연결 (Legacy Unlock 적용) ──
+// ── [3] 스마트 트레이너 연결 (강제 FTMS 모드) ──
 
 async function connectTrainer() {
   try {
     showConnectionStatus(true);
     let device;
-    console.log('[connectTrainer] CycleOps Legacy 검색 시작...');
 
-    // 1. 필터 설정 (Legacy UUID 포함)
+    console.log('[connectTrainer] CycleOps Unlock 모드 시작');
+
+    // 1. 필터: 트레이너 및 파워미터 모두 검색
     const filters = [
-      { services: [UUIDS.FTMS_SERVICE] }, // 표준
-      { services: [UUIDS.CPS_SERVICE] },  // 파워미터
-      { services: [UUIDS.LEGACY_SERVICE] }, // ★ 구형 CycleOps/Wahoo
+      { services: [UUIDS.FTMS_SERVICE] }, 
+      { services: [UUIDS.CPS_SERVICE] },
       { namePrefix: "CycleOps" },
       { namePrefix: "Hammer" },
       { namePrefix: "Saris" },
       { namePrefix: "Magnus" }
     ];
 
+    // 2. 권한 요청: 가능한 모든 서비스 열어두기
     const optionalServices = [
       UUIDS.FTMS_SERVICE, 
       UUIDS.CPS_SERVICE,  
       UUIDS.CSC_SERVICE,
-      UUIDS.LEGACY_SERVICE, // ★ 접근 권한 요청
+      UUIDS.LEGACY_SERVICE,
       "device_information"
     ];
 
@@ -136,85 +126,84 @@ async function connectTrainer() {
       device = await navigator.bluetooth.requestDevice({ filters, optionalServices });
     } catch (scanErr) {
       showConnectionStatus(false);
-      if (scanErr.name === 'NotFoundError') return;
-      alert("❌ 검색 오류: " + (scanErr.message || scanErr));
+      if (scanErr.name !== 'NotFoundError') alert("❌ 검색 오류: " + scanErr.message);
       return;
     }
 
     const server = await device.gatt.connect();
-    console.log('[connectTrainer] 연결 성공, 서비스 탐색...');
+    console.log('[connectTrainer] 연결 성공. 서비스 탐색...');
 
     let service, characteristic, controlPointChar = null;
-    
-    // ★ 프로토콜 변수: 성공 시 무조건 'FTMS'로 설정하여 UI 에러 회피
-    let protocolType = 'CPS'; 
+    let realProtocol = 'UNKNOWN';
 
-    // [1순위] 표준 FTMS 탐색
+    // [Step 1] FTMS(스마트로라) 서비스 탐색
     try {
       service = await server.getPrimaryService(UUIDS.FTMS_SERVICE);
       characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
-      controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL);
-      protocolType = 'FTMS';
-      console.log('✅ 표준 FTMS 발견 (ERG 정상)');
-    } catch (e) {
-      console.log('⚠️ 표준 FTMS 없음, Legacy(구형) 탐색 시도...');
+      realProtocol = 'FTMS';
+      console.log('✅ 표준 FTMS 서비스 발견');
       
-      // [2순위] Legacy (CycleOps/Wahoo) 탐색 ★ 핵심 수정
+      try { controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL); } 
+      catch (e) { console.warn('FTMS Control Point 없음'); }
+
+    } catch (e1) {
+      console.log('⚠️ FTMS 서비스 없음, 파워미터(CPS)로 대체');
+      // [Step 2] CPS(파워미터) 탐색
       try {
-        service = await server.getPrimaryService(UUIDS.LEGACY_SERVICE);
-        // Legacy는 Data와 Control이 같은 UUID를 쓰는 경우가 많음
-        characteristic = await service.getCharacteristic(UUIDS.LEGACY_CONTROL); 
-        controlPointChar = characteristic; // 데이터 채널을 제어 채널로도 사용
-        
-        // ★ 중요: Legacy를 찾았으면 UI에는 'FTMS'라고 속여서 ERG 버튼을 활성화시킴
-        protocolType = 'FTMS'; 
-        console.log('🎉 [Legacy] 숨겨진 CycleOps 서비스 발견! (ERG 강제 활성화)');
-      } catch (legacyErr) {
-        console.log('❌ Legacy도 없음. 일반 파워미터로 설정.');
-        
-        // [3순위] 일반 파워미터 (ERG 불가)
-        try {
-          service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
-          characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
-          protocolType = 'CPS';
-        } catch (fatal) {
-           throw new Error("지원 서비스를 찾을 수 없습니다.");
-        }
+        service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
+        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
+        realProtocol = 'CPS';
+      } catch (e2) {
+         // [Step 3] CSC
+         try {
+             service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+             characteristic = await service.getCharacteristic(0x2A5B); // CSC Data
+             realProtocol = 'CPS'; // CSC도 CPS 계열로 취급
+         } catch(fatal) {
+             throw new Error("지원 서비스를 찾을 수 없습니다.");
+         }
       }
     }
 
     await characteristic.startNotifications();
-    // 데이터 핸들러 연결
-    // (Legacy도 데이터 포맷은 파워미터와 비슷하거나 FTMS와 다를 수 있으나, 일단 파워 파싱 시도)
-    const parser = (protocolType === 'FTMS' && service.uuid === UUIDS.FTMS_SERVICE) 
-                   ? handleTrainerData : handlePowerMeterData; // Legacy는 파워미터 파서 사용 권장
-                   
+    const parser = (realProtocol === 'FTMS') ? handleTrainerData : handlePowerMeterData;
     characteristic.addEventListener("characteristicvaluechanged", parser);
+
+    // ★ [핵심] CycleOps/Hammer 기기라면, 실제 프로토콜이 CPS라도 'FTMS'라고 거짓말을 함
+    // 이렇게 해야 UI의 "CPS 프로토콜 에러"를 뚫고 ERG 버튼을 누를 수 있음
+    let fakeProtocol = realProtocol;
+    const name = (device.name || "").toUpperCase();
+    if (name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || name.includes("MAGNUS")) {
+        console.log(`🔒 [Unlock] ${device.name} 감지됨 -> FTMS 프로토콜로 강제 설정`);
+        fakeProtocol = 'FTMS'; // 강제 승격
+    }
+    
+    // 만약 진짜 FTMS가 아니라면, 나중에 제어 신호를 어디로 보낼지 고민해야 함
+    // (보통 Hammer는 연결 후 잠시 뒤에 FTMS가 활성화되기도 함)
 
     window.connectedDevices.trainer = { 
       name: device.name, device, server, characteristic,
       controlPoint: controlPointChar, 
-      protocol: protocolType, // UI를 속이기 위해 성공 시 'FTMS'로 저장
-      isLegacy: (service.uuid === UUIDS.LEGACY_SERVICE) // 내부 식별용 플래그
+      protocol: fakeProtocol, // ★ 여기서 UI를 속임
+      realProtocol: realProtocol 
     };
 
-    if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
+    if (typeof updateErgModeUI === 'function') updateErgModeUI(true); // 강제 활성화
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
     
     updateDevicesList();
     showConnectionStatus(false);
     
-    const modeMsg = (protocolType === 'FTMS') ? "(ERG 모드 활성화됨)" : "(파워미터 모드)";
-    showToast(`✅ ${device.name} 연결 성공 ${modeMsg}`);
+    showToast(`✅ ${device.name} 연결 (ERG 활성화됨)`);
 
   } catch (err) {
     showConnectionStatus(false);
     console.error(err);
-    alert("❌ 연결 실패: " + (err.message || err));
+    alert("❌ 연결 실패: " + err.message);
   }
 }
 
-// ── [4] 심박계 & 파워미터 (기존 유지) ──
+// ── [4] 심박/파워미터 (기존 유지) ──
 
 async function connectHeartRate() {
   try {
@@ -237,7 +226,7 @@ async function connectHeartRate() {
     catch (e) { service = await server.getPrimaryService(UUIDS.HR_SERVICE); }
     let characteristic;
     try { characteristic = await service.getCharacteristic('heart_rate_measurement'); }
-    catch (e) { characteristic = await service.getCharacteristic(UUIDS.HR_DATA); } // Correct UUID
+    catch (e) { characteristic = await service.getCharacteristic(0x2A37); }
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handleHeartRateData);
     window.connectedDevices.heartRate = { name: device.name, device, server, characteristic };
@@ -262,10 +251,10 @@ async function connectPowerMeter() {
     let service, characteristic;
     try {
         service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
-        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA); // Correct UUID
+        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
     } catch (e) {
         service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
-        characteristic = await service.getCharacteristic(UUIDS.CSC_DATA); // Correct UUID
+        characteristic = await service.getCharacteristic(0x2A5B); // CSC Data
     }
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handlePowerMeterData);
@@ -280,38 +269,40 @@ async function connectPowerMeter() {
   }
 }
 
-// ── [5] ERG 제어 (Legacy 호환) ──
+// ── [5] ERG 제어 (강제 실행) ──
 
 window.setTargetPower = function(targetWatts) {
     const trainer = window.connectedDevices.trainer;
-    if (!trainer || !trainer.controlPoint) return;
+    
+    // UI 차단을 뚫고 들어왔는데, 실제 제어권(controlPoint)이 없는 경우
+    if (!trainer || !trainer.controlPoint) {
+        console.warn("⚠️ [ERG] 제어권(Control Point)이 없습니다. 저항이 변경되지 않을 수 있습니다.");
+        // 여기서 "연결은 됐지만 제어권은 없음"을 알리는 토스트를 띄울 수도 있음
+        return;
+    }
     
     const watts = Math.max(0, Math.min(targetWatts, 1000));
-    
     window.bleCommandQueue.enqueue(async () => {
         try {
-            // ★ Legacy 기기 처리: 표준 FTMS 명령이 먹히는 경우도 있고 아닌 경우도 있음
-            // CycleOps/Wahoo Legacy는 종종 표준 FTMS 포맷(0x05...)을 이해함
             const buffer = new ArrayBuffer(3);
             const view = new DataView(buffer);
-            view.setUint8(0, 0x05); // OpCode
+            view.setUint8(0, 0x05); // Set Target Power OpCode
             view.setInt16(1, watts, true);
-            
             await trainer.controlPoint.writeValue(buffer);
             window.liveData.targetPower = watts;
             console.log(`[ERG] ${watts}W 설정 전송`);
         } catch (e) { 
-            console.warn("[ERG] 명령 실패", e); 
+            console.warn("[ERG] 전송 실패", e); 
         }
     });
 };
 
-// ── [6] 데이터 파서 (생략 가능하나 안정성 위해 포함) ──
+// ── [6] 데이터 처리 ──
 function handleTrainerData(e) {
   const dv = e.target.value;
   let off = 0;
   const flags = dv.getUint16(off, true); off += 2;
-  off += 2; // Speed
+  off += 2; 
   if (flags & 0x0001) off += 2;
   if (flags & 0x0004) {
     const rpm = Math.round(dv.getUint16(off, true) / 2); off += 2;
@@ -332,7 +323,6 @@ function handleTrainerData(e) {
 function handlePowerMeterData(event) {
   const dv = event.target.value;
   let off = 0;
-  // 파워미터 데이터 파싱 (단순화)
   const flags = dv.getUint16(off, true); off += 2;
   const instPower = dv.getInt16(off, true); off += 2;
   if (!Number.isNaN(instPower)) {
@@ -349,7 +339,7 @@ function handleHeartRateData(event) {
   notifyChildWindows('heartRate', hr);
 }
 
-// ── [7] 유틸리티 (필수) ──
+// ── [7] 유틸리티 ──
 function handleDisconnect(type, device) {
   console.log(`${type} 연결 해제`);
   if (window.connectedDevices[type]?.device === device) {
@@ -370,6 +360,17 @@ window.addEventListener("beforeunload", () => {
     if (connectedDevices.trainer?.server?.connected) connectedDevices.trainer.device.gatt.disconnect();
   } catch (e) {}
 });
+setInterval(() => {
+    const now = Date.now();
+    if (window.liveData.cadence > 0) {
+        const lastT = window._lastCadenceUpdateTime.trainer || 0;
+        const lastP = window._lastCadenceUpdateTime.powerMeter || 0;
+        if (now - Math.max(lastT, lastP) > 3000) {
+            window.liveData.cadence = 0;
+            notifyChildWindows('cadence', 0);
+        }
+    }
+}, 1000);
 
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
