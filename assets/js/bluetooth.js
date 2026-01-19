@@ -1,12 +1,13 @@
 /* ==========================================================
-   bluetooth.js (v2.4 Final - Filters Fixed)
-   - 심박계 성공 방식(Filters)을 스마트로라에도 적용
-   - CycleOps, Hammer, Saris, 파워미터, FTMS 모두 타겟팅
-   - 'acceptAllDevices' 제거 (브라우저 차단 회피)
+   bluetooth.js (v2.5 Final - UUID Fixed)
+   - "Not a known service name" 오류 완벽 해결
+   - 영어 별명(fitness_machine 등) 제거 -> UUID 직접 사용
+   - CycleOps/Hammer 기기 이름 검색 유지
 ========================================================== */
 
-// ── [1] UUID 상수 ──
+// ── [1] UUID 상수 (이 코드로만 통신) ──
 const UUIDS = {
+  // 128-bit Full UUID (기계 주민번호)
   FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb', 
   FTMS_DATA:    '00002ad2-0000-1000-8000-00805f9b34fb', 
   FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb', 
@@ -15,10 +16,12 @@ const UUIDS = {
   CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb', 
   
   CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
+  CSC_MEASUREMENT: '00002a5b-0000-1000-8000-00805f9b34fb',
   
   HEART_RATE_SERVICE: '0000180d-0000-1000-8000-00805f9b34fb', 
+  HEART_RATE_MEASUREMENT: '00002a37-0000-1000-8000-00805f9b34fb',
   
-  // 브라우저 호환용 Short UUID
+  // 16-bit Short UUID (브라우저 호환용)
   SHORT_FTMS: 0x1826,
   SHORT_CPS:  0x1818,
   SHORT_CSC:  0x1816
@@ -42,7 +45,6 @@ window.bleCommandQueue = {
   }
 };
 
-// 전역 상태
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
 let powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
@@ -57,7 +59,7 @@ window.showConnectionStatus = window.showConnectionStatus || function (show) {
 
 window.showToast = window.showToast || function (msg) {
   const t = document.getElementById("toast");
-  if (!t) { console.log(msg); return; } // 토스트 없으면 로그만
+  if (!t) { console.log(msg); return; }
   t.classList.remove("hidden");
   t.textContent = msg;
   t.classList.add("show");
@@ -106,33 +108,32 @@ window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();
 };
 
-// ── [3] 연결 로직 (수정됨: Filters 사용) ──
+// ── [3] 스마트 트레이너 연결 (별명 제거됨) ──
 
 async function connectTrainer() {
   try {
     showConnectionStatus(true);
     let device;
 
-    console.log('[connectTrainer] 필터 검색 시작 (CycleOps/FTMS/CPS)');
+    console.log('[connectTrainer] UUID 기반 검색 시작...');
     
-    // ★ 심박계처럼 'Filters' 방식 사용 (브라우저 차단 회피)
-    // CycleOps Hammer는 보통 'cycling_power' 서비스나 이름으로 식별됨
+    // ★ 수정됨: 'fitness_machine' 같은 문자열 제거하고 UUID만 사용
     const filters = [
-      { services: ['fitness_machine'] },       // 표준 스마트로라
       { services: [UUIDS.FTMS_SERVICE] },
-      { services: ['cycling_power'] },         // 파워미터 (Hammer 구형 호환)
+      { services: [UUIDS.SHORT_FTMS] },
       { services: [UUIDS.CPS_SERVICE] },
-      { services: ['speed_cadence'] },         // CSC 센서
-      { namePrefix: "CycleOps" },              // 이름으로 검색
+      { services: [UUIDS.SHORT_CPS] },
+      // CycleOps/Saris 이름 검색 유지 (매우 중요)
+      { namePrefix: "CycleOps" },
       { namePrefix: "Saris" },
       { namePrefix: "Hammer" },
       { namePrefix: "Magnus" }
     ];
 
     const optionalServices = [
-      UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS, 'fitness_machine',
-      UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,  'cycling_power',
-      UUIDS.CSC_SERVICE,  UUIDS.SHORT_CSC,  'speed_cadence',
+      UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS,
+      UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,
+      UUIDS.CSC_SERVICE,  UUIDS.SHORT_CSC,
       "device_information"
     ];
 
@@ -143,10 +144,7 @@ async function connectTrainer() {
       });
     } catch (scanErr) {
       showConnectionStatus(false);
-      if (scanErr.name === 'NotFoundError') {
-        console.log("사용자가 취소함");
-        return;
-      }
+      if (scanErr.name === 'NotFoundError') return;
       alert("❌ 검색 오류: " + scanErr.message);
       return;
     }
@@ -157,46 +155,45 @@ async function connectTrainer() {
     let service, characteristic, isFTMS = false;
     let controlPointChar = null;
 
-    // 1. FTMS(스마트로라) 서비스 우선 탐색
+    // 1. FTMS 서비스 탐색 (UUID 사용)
     try {
-      try { service = await server.getPrimaryService('fitness_machine'); }
-      catch (e) { 
-          try { service = await server.getPrimaryService(UUIDS.FTMS_SERVICE); }
-          catch (e2) { service = await server.getPrimaryService(UUIDS.SHORT_FTMS); }
-      }
+      try { service = await server.getPrimaryService(UUIDS.FTMS_SERVICE); }
+      catch (e) { service = await server.getPrimaryService(UUIDS.SHORT_FTMS); }
       
-      characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA); // 0x2AD2
+      characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
       isFTMS = true;
       console.log('✅ FTMS 서비스 발견 (스마트로라 모드)');
 
-      // ERG 제어권 획득
+      // ERG 제어권 (UUID 사용)
       try {
         controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL);
       } catch (e) {
-        try {
-            controlPointChar = await service.getCharacteristic('fitness_machine_control_point');
-        } catch (fatal) { console.warn('Control Point 없음'); }
+        // 일부 기기는 여전히 별칭이 필요할 수 있으나, 에러나면 무시
+        try { controlPointChar = await service.getCharacteristic('fitness_machine_control_point'); } 
+        catch (f) { console.warn('Control Point 없음'); }
       }
 
     } catch (e) {
-      console.log('FTMS 실패, 파워미터(CPS) 모드 진입');
-      // 2. FTMS 실패 시 파워미터(CPS)로 연결
+      console.log('FTMS 실패, CPS(파워미터) 모드 시도');
+      // 2. CPS 서비스 탐색 (UUID 사용)
       try {
-        try { service = await server.getPrimaryService('cycling_power'); }
-        catch (e) { 
-            try { service = await server.getPrimaryService(UUIDS.CPS_SERVICE); }
-            catch (e2) { service = await server.getPrimaryService(UUIDS.SHORT_CPS); }
-        }
-        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA); // 0x2A63
+        try { service = await server.getPrimaryService(UUIDS.CPS_SERVICE); }
+        catch (e2) { service = await server.getPrimaryService(UUIDS.SHORT_CPS); }
+        
+        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
         isFTMS = false;
       } catch (fatal) {
-         // 3. 최후의 수단 CSC
+         // 3. CSC 서비스 탐색 (UUID 사용)
          try {
-             service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
-             characteristic = await service.getCharacteristic(0x2A5B);
+             try { service = await server.getPrimaryService(UUIDS.CSC_SERVICE); }
+             catch (e3) { service = await server.getPrimaryService(UUIDS.SHORT_CSC); }
+             
+             try { characteristic = await service.getCharacteristic(UUIDS.CSC_MEASUREMENT); }
+             catch (e4) { characteristic = await service.getCharacteristic(0x2A5B); }
+             
              isFTMS = false;
          } catch(reallyFatal) {
-             throw new Error("지원하지 않는 기기입니다. (FTMS/CPS 서비스 없음)");
+             throw new Error("지원 서비스(FTMS/CPS/CSC)를 찾을 수 없습니다.");
          }
       }
     }
@@ -222,21 +219,29 @@ async function connectTrainer() {
   } catch (err) {
     showConnectionStatus(false);
     console.error(err);
-    alert("❌ 연결 실패: " + err.message);
+    alert("❌ 트레이너 연결 실패: " + err.message);
   }
 }
 
-// ── [4] 심박계 (기존 성공 방식 유지) ──
+// ── [4] 심박계 연결 (성공한 로직 유지) ──
 
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
     let device;
-    // 'heart_rate' 필터 사용 (성공 확인됨)
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: ['heart_rate'] }],
-      optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE, 'battery_service']
-    });
+    // 심박계는 'heart_rate' 별칭이 잘 작동하므로 유지하되, 실패시 UUID 사용
+    try {
+        device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: ['heart_rate'] }],
+            optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE, 'battery_service']
+        });
+    } catch(e) {
+        // 별명 실패시 UUID로 재시도
+        device = await navigator.bluetooth.requestDevice({
+            filters: [{ services: [UUIDS.HEART_RATE_SERVICE] }],
+            optionalServices: [UUIDS.HEART_RATE_SERVICE]
+        });
+    }
 
     const server = await device.gatt.connect();
     let service;
@@ -245,7 +250,7 @@ async function connectHeartRate() {
     
     let characteristic;
     try { characteristic = await service.getCharacteristic('heart_rate_measurement'); }
-    catch (e) { characteristic = await service.getCharacteristic(0x2A37); }
+    catch (e) { characteristic = await service.getCharacteristic(UUIDS.HEART_RATE_MEASUREMENT); }
 
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handleHeartRateData);
@@ -262,27 +267,41 @@ async function connectHeartRate() {
   }
 }
 
-// ── [5] 파워미터 ──
+// ── [5] 파워미터 연결 (별명 제거됨) ──
 
 async function connectPowerMeter() {
   if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
   try {
     showConnectionStatus(true);
     let device;
+    // ★ 수정됨: 'cycling_power', 'speed_cadence' 문자열 제거
+    const filters = [
+        { services: [UUIDS.CPS_SERVICE] },
+        { services: [UUIDS.SHORT_CPS] },
+        { services: [UUIDS.CSC_SERVICE] },
+        { services: [UUIDS.SHORT_CSC] }
+    ];
+    
     device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['cycling_power'] }, { services: ['speed_cadence'] }],
-        optionalServices: ['cycling_power', 'speed_cadence', UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE]
+        filters: filters,
+        optionalServices: [UUIDS.CPS_SERVICE, UUIDS.SHORT_CPS, UUIDS.CSC_SERVICE, UUIDS.SHORT_CSC]
     });
 
     const server = await device.gatt.connect();
     let service, characteristic;
+    
     try {
-        service = await server.getPrimaryService('cycling_power');
+        try { service = await server.getPrimaryService(UUIDS.CPS_SERVICE); }
+        catch (e) { service = await server.getPrimaryService(UUIDS.SHORT_CPS); }
         characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
     } catch (e) {
-        service = await server.getPrimaryService('speed_cadence');
-        characteristic = await service.getCharacteristic(0x2A5B);
+        try { service = await server.getPrimaryService(UUIDS.CSC_SERVICE); }
+        catch (e2) { service = await server.getPrimaryService(UUIDS.SHORT_CSC); }
+        
+        try { characteristic = await service.getCharacteristic(UUIDS.CSC_MEASUREMENT); }
+        catch (e3) { characteristic = await service.getCharacteristic(0x2A5B); }
     }
+
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handlePowerMeterData);
     trySubscribeCSC(server);
@@ -298,7 +317,7 @@ async function connectPowerMeter() {
   }
 }
 
-// ── [6] 데이터 처리 ──
+// ── [6] 데이터 처리 및 ERG ──
 
 window.setTargetPower = function(targetWatts) {
     const trainer = window.connectedDevices.trainer;
@@ -392,7 +411,7 @@ function updateCadence(rpm, source) {
 async function trySubscribeCSC(server) {
   try {
     const s = await server.getPrimaryService(UUIDS.CSC_SERVICE);
-    const c = await s.getCharacteristic(0x2A5B);
+    const c = await s.getCharacteristic(UUIDS.CSC_MEASUREMENT);
     await c.startNotifications();
   } catch(e) {}
 }
