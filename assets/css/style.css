@@ -13969,6 +13969,26 @@ body.mobile-dashboard-active {
   color: #00d4aa;
 }
 
+/* 종료 메뉴 항목 스타일 (모바일 개인 훈련 대시보드 전용, 독립적 구동) */
+.mobile-bluetooth-dropdown-item-exit {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.mobile-bluetooth-dropdown-item-exit:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.mobile-bluetooth-dropdown-item-exit img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(340deg) brightness(98%) contrast(96%);
+}
+
+.mobile-bluetooth-dropdown-item-exit:hover img {
+  filter: brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(340deg) brightness(98%) contrast(96%);
+}
+
 /* 버튼 네온 스타일 (흰색 바탕용 그림자 조정) */
 .svg-neon-circle {
   /* 흰색 버튼이므로 테두리 주변으로 은은한 빛 효과 */
