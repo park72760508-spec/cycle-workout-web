@@ -48,6 +48,32 @@
             width: 100% !important;
             height: 100% !important;
         }
+        
+        /* 가로 모드 방지 (세로 모드로 고정) */
+        @media screen and (orientation: landscape) {
+            body::before {
+                content: '세로 모드로 기기를 회전해주세요';
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.95);
+                color: #fff;
+                padding: 30px 50px;
+                border-radius: 15px;
+                font-size: 20px;
+                font-weight: bold;
+                z-index: 10000;
+                text-align: center;
+                white-space: nowrap;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            }
+            
+            body > * {
+                opacity: 0.3;
+                pointer-events: none;
+            }
+        }
 
         /* 상단 헤더 */
         .header {
