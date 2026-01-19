@@ -77,10 +77,21 @@ let __pmPrev = {
 };
 
 
+
+window.liveData = window.liveData || { 
+  power: 0, 
+  heartRate: 0, 
+  cadence: 0,  // null 대신 0으로 초기화
+  targetPower: 0 
+};
+
 // UI 헬퍼들 (index.html/app.js에 이미 있으면 중복 선언하지 마세요)
 // bluetooth.js의 상단 UI 헬퍼 부분을 다음과 같이 수정
 // UI 헬퍼들 - window 객체 확인 후 할당
 
+// ── CPS (Cycling Power Service) UUIDs ─────────────────
+const CYCLING_POWER_SERVICE = 0x1818;
+const CYCLING_POWER_MEASUREMENT = 0x2A63; // cadence는 이 측정값의 crank rev 데이터로 계산
 
 
 
@@ -257,54 +268,13 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function up
   });
 }
 
+// 연결 정보 표시 제거 (단순화 - 버튼에 연결 상태만 표시)
 window.updateDevicesList = window.updateDevicesList || function () {
-  const deviceList = document.getElementById("connectedDevicesList");
-  if (!deviceList) return;
-
-  let html = "";
-  let count = 0;
-
-  if (window.connectedDevices.trainer) {
-    count++;
-    html += `
-      <div class="card device-card connected">
-        <div class="device-info">
-          <div class="device-icon"><img src="assets/img/trainer_g.png" alt="스마트 트레이너" style="width: 72px; height: 72px; object-fit: contain;" /></div>
-          <div class="device-details"><h3>${window.connectedDevices.trainer.name || "Smart Trainer"}</h3>
-          <p>Smart Trainer (FTMS)</p></div>
-        </div>
-        <div style="color:#28A745;font-weight:600;">연결됨</div>
-      </div>`;
+  // 연결 정보 리스트는 표시하지 않음 (버튼에 연결 상태만 표시)
+  // 버튼 이미지만 업데이트
+  if (typeof updateDeviceButtonImages === 'function') {
+    updateDeviceButtonImages();
   }
-  if (window.connectedDevices.powerMeter) {
-    count++;
-    html += `
-      <div class="card device-card connected">
-        <div class="device-info">
-          <div class="device-icon"><img src="assets/img/power_g.png" alt="파워미터" style="width: 72px; height: 72px; object-fit: contain;" /></div>
-          <div class="device-details"><h3>${window.connectedDevices.powerMeter.name || "Power Meter"}</h3>
-          <p>Crank Power (CPS)</p></div>
-        </div>
-        <div style="color:#28A745;font-weight:600;">연결됨</div>
-      </div>`;
-  }
-  if (window.connectedDevices.heartRate) {
-    count++;
-    html += `
-      <div class="card device-card connected">
-        <div class="device-info">
-          <div class="device-icon"><img src="assets/img/bpm_g.png" alt="심박계" style="width: 72px; height: 72px; object-fit: contain;" /></div>
-          <div class="device-details"><h3>${window.connectedDevices.heartRate.name || "Heart Rate"}</h3>
-          <p>Heart Rate (HRS)</p></div>
-        </div>
-        <div style="color:#28A745;font-weight:600;">연결됨</div>
-      </div>`;
-  }
-
-  deviceList.innerHTML = html;
-  
-  // 버튼 이미지 업데이트
-  updateDeviceButtonImages();
 };
 
 
@@ -1010,4 +980,3 @@ if (!window._cadenceTimeoutInterval) {
   window._cadenceTimeoutInterval = setInterval(checkCadenceTimeout, 1000);
 
 }
-
