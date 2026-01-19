@@ -712,10 +712,10 @@
           <div class="connection-device-section basecamp-device-section">
             <h3 class="mb-15 basecamp-status-bar">Choose Your Path</h3>
             <div class="grid-2 gap-10 mb-15">
-              <button class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showScreen === 'function') { showScreen('trainingRoomScreen'); if (typeof loadTrainingRooms === 'function') { setTimeout(() => loadTrainingRooms(), 200); } }">
+              <button class="btn btn-device basecamp-btn basecamp-btn-indoor" id="btnBasecampIndoor" onclick="if (typeof showRPEModalForIndoorTraining === 'function') { showRPEModalForIndoorTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'indoor'; showRPEModal('indoor'); }">
                 <span>INDOOR TRAINING</span>
               </button>
-              <button class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="showScreen('connectionScreen')">
+              <button class="btn btn-device basecamp-btn basecamp-btn-solo" id="btnBasecampSolo" onclick="if (typeof showRPEModalForSoloTraining === 'function') { showRPEModalForSoloTraining(); } else if (typeof showRPEModal === 'function') { window.rpeModalSource = 'solo'; showRPEModal('solo'); }">
                 <span>SOLO TRAINING</span>
               </button>
               <button class="btn btn-device basecamp-btn basecamp-btn-career" id="btnBasecampCareer" onclick="showScreen('myCareerScreen')">
