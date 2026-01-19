@@ -1,12 +1,11 @@
 /* ==========================================================
-   bluetooth.js (v2.2 Fixed for CycleOps/Saris)
-   - CycleOps/Saris 기기 검색을 위한 이름(Name) 필터 추가
-   - 심박계 검색 호환성 강화 ('heart_rate' 별칭 사용)
-   - 스마트로라 FTMS 강제 탐색 및 ERG 제어(setTargetPower)
-   - 앱 연동 UI 및 케이던스 타임아웃 유지
+   bluetooth.js (v2.4 Final - Filters Fixed)
+   - 심박계 성공 방식(Filters)을 스마트로라에도 적용
+   - CycleOps, Hammer, Saris, 파워미터, FTMS 모두 타겟팅
+   - 'acceptAllDevices' 제거 (브라우저 차단 회피)
 ========================================================== */
 
-// ── [1] 표준 UUID 및 설정 ──
+// ── [1] UUID 상수 ──
 const UUIDS = {
   FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb', 
   FTMS_DATA:    '00002ad2-0000-1000-8000-00805f9b34fb', 
@@ -18,15 +17,14 @@ const UUIDS = {
   CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
   
   HEART_RATE_SERVICE: '0000180d-0000-1000-8000-00805f9b34fb', 
-  HEART_RATE_MEASUREMENT: '00002a37-0000-1000-8000-00805f9b34fb',
-
-  // 브라우저 호환성을 위한 Short UUID
+  
+  // 브라우저 호환용 Short UUID
   SHORT_FTMS: 0x1826,
   SHORT_CPS:  0x1818,
   SHORT_CSC:  0x1816
 };
 
-// ERG 명령 씹힘 방지 큐
+// BLE 명령 큐
 window.bleCommandQueue = {
   queue: [],
   isProcessing: false,
@@ -44,280 +42,207 @@ window.bleCommandQueue = {
   }
 };
 
-// 전역 변수 초기화
+// 전역 상태
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
-
-// 파워미터 계산용 변수
 let powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
-window._lastCadenceUpdateTime = {}; // 타임아웃 체크용
+window._lastCadenceUpdateTime = {}; 
 
-// ── [2] UI 헬퍼 (기존 로직 보존) ──
+// ── [2] UI 헬퍼 ──
 
-if (!window.showConnectionStatus) {
-  window.showConnectionStatus = function (show) {
-    const el = document.getElementById("connectionStatus");
-    if (el) el.classList.toggle("hidden", !show);
-  };
-}
+window.showConnectionStatus = window.showConnectionStatus || function (show) {
+  const el = document.getElementById("connectionStatus");
+  if (el) el.classList.toggle("hidden", !show);
+};
 
-if (!window.showToast) {
-  window.showToast = function (msg) {
-    const t = document.getElementById("toast");
-    if (!t) return alert(msg);
-    t.classList.remove("hidden");
-    t.textContent = msg;
-    t.classList.add("show");
-    setTimeout(() => t.classList.remove("show"), 2400);
-  };
-}
+window.showToast = window.showToast || function (msg) {
+  const t = document.getElementById("toast");
+  if (!t) { console.log(msg); return; } // 토스트 없으면 로그만
+  t.classList.remove("hidden");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2400);
+};
 
 window.updateDeviceButtonImages = window.updateDeviceButtonImages || function () {
   const btnTrainer = document.getElementById("btnConnectTrainer");
   const btnHR = document.getElementById("btnConnectHR");
   const btnPM = document.getElementById("btnConnectPM");
   
-  // 1. 스마트 트레이너 버튼
-  if (btnTrainer) {
-    let img = btnTrainer.querySelector(".device-btn-icon");
+  const updateBtn = (btn, type, imgOn, imgOff) => {
+    if (!btn) return;
+    let img = btn.querySelector(".device-btn-icon");
     if (!img) {
       img = document.createElement("img");
       img.className = "device-btn-icon";
-      const span = btnTrainer.querySelector("span");
-      span ? btnTrainer.insertBefore(img, span) : btnTrainer.appendChild(img);
+      const span = btn.querySelector("span");
+      span ? btn.insertBefore(img, span) : btn.appendChild(img);
     }
-    
-    const isBluetoothConnected = window.connectedDevices && window.connectedDevices.trainer;
+    const isConnected = window.connectedDevices && window.connectedDevices[type];
     let isPaired = false;
     if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
-      isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.trainerDeviceId && pm.trainerDeviceId.toString().trim() !== '');
+      if (type === 'trainer') isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.trainerDeviceId);
+      if (type === 'heartRate') isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.heartRateDeviceId);
+      if (type === 'powerMeter') isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.deviceId || pm.powerMeterDeviceId);
     }
     
-    if (isBluetoothConnected || isPaired) {
-      img.src = "assets/img/trainer_g.png";
-      btnTrainer.classList.add("connected");
+    if (isConnected || isPaired) {
+      img.src = imgOn;
+      btn.classList.add("connected");
     } else {
-      img.src = "assets/img/trainer_i.png";
-      btnTrainer.classList.remove("connected");
+      img.src = imgOff;
+      btn.classList.remove("connected");
     }
     img.style.display = "block";
     img.style.margin = "0 auto";
-  }
-  
-  // 2. 심박계 버튼
-  if (btnHR) {
-    let img = btnHR.querySelector(".device-btn-icon");
-    if (!img) {
-      img = document.createElement("img");
-      img.className = "device-btn-icon";
-      const span = btnHR.querySelector("span");
-      span ? btnHR.insertBefore(img, span) : btnHR.appendChild(img);
-    }
-    
-    const isBluetoothConnected = window.connectedDevices && window.connectedDevices.heartRate;
-    let isPaired = false;
-    if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
-      isPaired = window.indoorTrainingState.powerMeters.some(pm => pm.heartRateDeviceId && pm.heartRateDeviceId.toString().trim() !== '');
-    }
-    
-    if (isBluetoothConnected || isPaired) {
-      img.src = "assets/img/bpm_g.png";
-      btnHR.classList.add("connected");
-    } else {
-      img.src = "assets/img/bpm_i.png";
-      btnHR.classList.remove("connected");
-    }
-    img.style.display = "block";
-    img.style.margin = "0 auto";
-  }
-  
-  // 3. 파워미터 버튼
-  if (btnPM) {
-    let img = btnPM.querySelector(".device-btn-icon");
-    if (!img) {
-      img = document.createElement("img");
-      img.className = "device-btn-icon";
-      const span = btnPM.querySelector("span");
-      span ? btnPM.insertBefore(img, span) : btnPM.appendChild(img);
-    }
-    
-    const isBluetoothConnected = window.connectedDevices && window.connectedDevices.powerMeter;
-    let isPaired = false;
-    if (window.indoorTrainingState && window.indoorTrainingState.powerMeters) {
-      isPaired = window.indoorTrainingState.powerMeters.some(pm => {
-        const deviceId = pm.deviceId || pm.powerMeterDeviceId;
-        return deviceId && deviceId.toString().trim() !== '';
-      });
-    }
-    
-    if (isBluetoothConnected || isPaired) {
-      img.src = "assets/img/power_g.png";
-      btnPM.classList.add("connected");
-    } else {
-      img.src = "assets/img/power_i.png";
-      btnPM.classList.remove("connected");
-    }
-    img.style.display = "block";
-    img.style.margin = "0 auto";
-  }
+  };
+
+  updateBtn(btnTrainer, 'trainer', "assets/img/trainer_g.png", "assets/img/trainer_i.png");
+  updateBtn(btnHR, 'heartRate', "assets/img/bpm_g.png", "assets/img/bpm_i.png");
+  updateBtn(btnPM, 'powerMeter', "assets/img/power_g.png", "assets/img/power_i.png");
 };
 
 window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();
 };
 
-// ── [3] 핵심 연결 로직 (CycleOps/Saris 대응) ──
+// ── [3] 연결 로직 (수정됨: Filters 사용) ──
 
-// ──────────────────────────────────────────────────────────
-// 1) 스마트 트레이너 연결 (CycleOps/Saris 강제 검색 모드)
-// ──────────────────────────────────────────────────────────
 async function connectTrainer() {
   try {
-    // 1. 환경 체크 (에러 원인 진단)
-    if (!navigator.bluetooth) {
-      throw new Error("이 브라우저는 블루투스를 지원하지 않습니다. Chrome이나 Edge를 사용하세요.");
-    }
-
     showConnectionStatus(true);
     let device;
 
-    // 2. 필터 제거하고 '모든 기기 검색'으로 변경 (CycleOps 무조건 찾기 위해)
-    console.log('[connectTrainer] 모든 기기 검색 모드 시작...');
+    console.log('[connectTrainer] 필터 검색 시작 (CycleOps/FTMS/CPS)');
     
+    // ★ 심박계처럼 'Filters' 방식 사용 (브라우저 차단 회피)
+    // CycleOps Hammer는 보통 'cycling_power' 서비스나 이름으로 식별됨
+    const filters = [
+      { services: ['fitness_machine'] },       // 표준 스마트로라
+      { services: [UUIDS.FTMS_SERVICE] },
+      { services: ['cycling_power'] },         // 파워미터 (Hammer 구형 호환)
+      { services: [UUIDS.CPS_SERVICE] },
+      { services: ['speed_cadence'] },         // CSC 센서
+      { namePrefix: "CycleOps" },              // 이름으로 검색
+      { namePrefix: "Saris" },
+      { namePrefix: "Hammer" },
+      { namePrefix: "Magnus" }
+    ];
+
+    const optionalServices = [
+      UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS, 'fitness_machine',
+      UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,  'cycling_power',
+      UUIDS.CSC_SERVICE,  UUIDS.SHORT_CSC,  'speed_cadence',
+      "device_information"
+    ];
+
     try {
       device = await navigator.bluetooth.requestDevice({
-        // ★ 핵심: 필터를 쓰지 않고 모든 기기를 다 보여줍니다.
-        // CycleOps, Hammer 등 이름이 특이한 기기도 다 목록에 뜹니다.
-        acceptAllDevices: true, 
-        optionalServices: [
-          UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS,
-          UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,
-          UUIDS.CSC_SERVICE,  UUIDS.SHORT_CSC,
-          "device_information",
-          // CycleOps 구형 기기들이 쓰는 커스텀 서비스가 있을 수 있어 포괄적으로 허용
-        ]
+        filters: filters,
+        optionalServices: optionalServices
       });
     } catch (scanErr) {
-      // 사용자가 취소했을 때
+      showConnectionStatus(false);
       if (scanErr.name === 'NotFoundError') {
-        console.log("사용자가 검색을 취소했습니다.");
-        showConnectionStatus(false);
-        return; 
+        console.log("사용자가 취소함");
+        return;
       }
-      throw scanErr; // 다른 에러면 밖으로 던짐
+      alert("❌ 검색 오류: " + scanErr.message);
+      return;
     }
 
     const server = await device.gatt.connect();
-    console.log('[connectTrainer] GATT 연결 성공');
+    console.log('[connectTrainer] 연결 성공');
 
-    // 3. 서비스 탐색 (FTMS -> CPS 순서)
     let service, characteristic, isFTMS = false;
     let controlPointChar = null;
 
+    // 1. FTMS(스마트로라) 서비스 우선 탐색
     try {
-      // FTMS 서비스 찾기 시도
-      try {
-        service = await server.getPrimaryService(UUIDS.FTMS_SERVICE);
-      } catch (e) {
-        service = await server.getPrimaryService(UUIDS.SHORT_FTMS);
+      try { service = await server.getPrimaryService('fitness_machine'); }
+      catch (e) { 
+          try { service = await server.getPrimaryService(UUIDS.FTMS_SERVICE); }
+          catch (e2) { service = await server.getPrimaryService(UUIDS.SHORT_FTMS); }
       }
       
-      characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
+      characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA); // 0x2AD2
       isFTMS = true;
-      console.log('[connectTrainer] ✅ FTMS 서비스 발견! (스마트로라 모드)');
+      console.log('✅ FTMS 서비스 발견 (스마트로라 모드)');
 
       // ERG 제어권 획득
       try {
         controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL);
-        console.log('Control Point (Full UUID) 획득');
       } catch (e) {
         try {
             controlPointChar = await service.getCharacteristic('fitness_machine_control_point');
-            console.log('Control Point (Alias) 획득');
-        } catch (fatal) {
-             console.warn('⚠️ FTMS지만 제어권(Control Point)을 찾을 수 없습니다.');
-        }
+        } catch (fatal) { console.warn('Control Point 없음'); }
       }
 
     } catch (e) {
-      console.warn('[connectTrainer] FTMS 실패, 파워미터(CPS) 모드로 전환...', e);
-      // FTMS 실패 시 CPS 시도
+      console.log('FTMS 실패, 파워미터(CPS) 모드 진입');
+      // 2. FTMS 실패 시 파워미터(CPS)로 연결
       try {
-        service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
-        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
+        try { service = await server.getPrimaryService('cycling_power'); }
+        catch (e) { 
+            try { service = await server.getPrimaryService(UUIDS.CPS_SERVICE); }
+            catch (e2) { service = await server.getPrimaryService(UUIDS.SHORT_CPS); }
+        }
+        characteristic = await service.getCharacteristic(UUIDS.CPS_DATA); // 0x2A63
         isFTMS = false;
       } catch (fatal) {
-        // 혹시 모르니 CSC(속도/케이던스)라도 시도
-        try {
-           service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
-           characteristic = await service.getCharacteristic(0x2A5B);
-           isFTMS = false;
-           console.log('CPS도 실패하여 CSC 센서로 연결합니다.');
-        } catch (veryFatal) {
-           throw new Error("스마트 트레이너 또는 파워미터 기능을 찾을 수 없는 기기입니다.");
-        }
+         // 3. 최후의 수단 CSC
+         try {
+             service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+             characteristic = await service.getCharacteristic(0x2A5B);
+             isFTMS = false;
+         } catch(reallyFatal) {
+             throw new Error("지원하지 않는 기기입니다. (FTMS/CPS 서비스 없음)");
+         }
       }
     }
 
-    // 알림 시작
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", isFTMS ? handleTrainerData : handlePowerMeterData);
 
-    // 객체 저장
     window.connectedDevices.trainer = { 
-      name: device.name || "Unknown Trainer", 
-      device, server, characteristic,
+      name: device.name, device, server, characteristic,
       controlPoint: controlPointChar, 
       protocol: isFTMS ? 'FTMS' : 'CPS' 
     };
 
-    // UI 업데이트
     if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
-
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
     
     updateDevicesList();
     showConnectionStatus(false);
     
-    const modeMsg = isFTMS ? (controlPointChar ? "(ERG 지원)" : "(ERG 불가)") : "(파워미터 모드)";
+    const modeMsg = isFTMS ? (controlPointChar ? "(ERG 지원)" : "(ERG 미지원)") : "(파워미터 모드)";
     showToast(`✅ ${device.name} 연결 성공 ${modeMsg}`);
 
   } catch (err) {
     showConnectionStatus(false);
-    console.error("[connectTrainer Error]", err);
-    // undefined 에러 방지용 처리
-    const errMsg = err.message || err.toString() || "알 수 없는 오류";
-    showToast("❌ 연결 실패: " + errMsg);
+    console.error(err);
+    alert("❌ 연결 실패: " + err.message);
   }
 }
 
-// 2) 심박계 연결
+// ── [4] 심박계 (기존 성공 방식 유지) ──
+
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
     let device;
-    
-    try {
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['heart_rate'] }],
-        optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE, 'battery_service']
-      });
-    } catch (e) {
-      device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE]
-      });
-    }
+    // 'heart_rate' 필터 사용 (성공 확인됨)
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: ['heart_rate'] }],
+      optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE, 'battery_service']
+    });
 
     const server = await device.gatt.connect();
     let service;
     try { service = await server.getPrimaryService('heart_rate'); } 
-    catch (e) { 
-        try { service = await server.getPrimaryService(0x180D); }
-        catch (e2) { service = await server.getPrimaryService(UUIDS.HEART_RATE_SERVICE); }
-    }
-
-    if (!service) throw new Error("심박 서비스를 찾을 수 없습니다.");
+    catch (e) { service = await server.getPrimaryService(UUIDS.HEART_RATE_SERVICE); }
+    
     let characteristic;
     try { characteristic = await service.getCharacteristic('heart_rate_measurement'); }
     catch (e) { characteristic = await service.getCharacteristic(0x2A37); }
@@ -326,7 +251,6 @@ async function connectHeartRate() {
     characteristic.addEventListener("characteristicvaluechanged", handleHeartRateData);
 
     window.connectedDevices.heartRate = { name: device.name, device, server, characteristic };
-
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('heartRate', device));
     updateDevicesList();
     showConnectionStatus(false);
@@ -334,43 +258,31 @@ async function connectHeartRate() {
 
   } catch (err) {
     showConnectionStatus(false);
-    showToast("❌ 심박계 연결 실패");
+    alert("심박계 연결 실패: " + err.message);
   }
 }
 
-// 3) 파워미터 연결
+// ── [5] 파워미터 ──
+
 async function connectPowerMeter() {
-  if (window.connectedDevices.trainer) {
-    if (!confirm("트레이너가 이미 연결되어 있습니다. 파워미터로 교체할까요?")) return;
-  }
-  
+  if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
   try {
     showConnectionStatus(true);
     let device;
-    
-    try {
-        device = await navigator.bluetooth.requestDevice({
-            filters: [{ services: [UUIDS.CPS_SERVICE] }, { services: [UUIDS.CSC_SERVICE] }],
-            optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE]
-        });
-    } catch(e) {
-        device = await navigator.bluetooth.requestDevice({
-            acceptAllDevices: true,
-            optionalServices: [UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE]
-        });
-    }
+    device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ['cycling_power'] }, { services: ['speed_cadence'] }],
+        optionalServices: ['cycling_power', 'speed_cadence', UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE]
+    });
 
     const server = await device.gatt.connect();
     let service, characteristic;
-    
     try {
-        service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
+        service = await server.getPrimaryService('cycling_power');
         characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
     } catch (e) {
-        service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+        service = await server.getPrimaryService('speed_cadence');
         characteristic = await service.getCharacteristic(0x2A5B);
     }
-
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handlePowerMeterData);
     trySubscribeCSC(server);
@@ -380,32 +292,28 @@ async function connectPowerMeter() {
     updateDevicesList();
     showConnectionStatus(false);
     showToast(`✅ ${device.name} 연결 성공`);
-
   } catch (err) {
     showConnectionStatus(false);
-    showToast("❌ 파워미터 연결 실패");
+    alert("파워미터 연결 실패: " + err.message);
   }
 }
 
-// ── [4] 데이터 처리 및 ERG 제어 ──
+// ── [6] 데이터 처리 ──
 
 window.setTargetPower = function(targetWatts) {
     const trainer = window.connectedDevices.trainer;
     if (!trainer || !trainer.controlPoint) return;
-
     const watts = Math.max(0, Math.min(targetWatts, 1000));
     window.bleCommandQueue.enqueue(async () => {
         try {
             const buffer = new ArrayBuffer(3);
             const view = new DataView(buffer);
-            view.setUint8(0, 0x05); // OpCode: Set Target Power
+            view.setUint8(0, 0x05); 
             view.setInt16(1, watts, true);
             await trainer.controlPoint.writeValue(buffer);
             window.liveData.targetPower = watts;
-            console.log(`[ERG] 저항 설정: ${watts}W`);
-        } catch (e) {
-            console.warn("[ERG] 명령 실패", e);
-        }
+            console.log(`[ERG] ${watts}W 설정`);
+        } catch (e) { console.warn("[ERG] 실패", e); }
     });
 };
 
@@ -413,33 +321,23 @@ function handleTrainerData(e) {
   const dv = e.target.value;
   let off = 0;
   const flags = dv.getUint16(off, true); off += 2;
-  
-  off += 2; // Inst Speed
-  if (flags & 0x0001) off += 2; // More Data
-  
-  // Cadence
+  off += 2; // Speed
+  if (flags & 0x0001) off += 2;
   if (flags & 0x0004) {
-    const cadHalf = dv.getUint16(off, true); off += 2;
-    const rpm = Math.round(cadHalf / 2);
+    const rpm = Math.round(dv.getUint16(off, true) / 2); off += 2;
     updateCadence(rpm, 'trainer');
   }
-
-  // Flags 건너뛰기
-  if (flags & 0x0008) off += 2; // Avg Cadence
-  if (flags & 0x0010) off += 3; // Distance
-  if (flags & 0x0020) off += 2; // Resistance
-  
-  // Power
+  if (flags & 0x0008) off += 2; 
+  if (flags & 0x0010) off += 3; 
+  if (flags & 0x0020) off += 2; 
   if (flags & 0x0040) {
     const p = dv.getInt16(off, true);
     window.liveData.power = p;
     notifyChildWindows('power', p);
-    
     if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
     window._recentPowerBuffer.push({ power: p, timestamp: Date.now() });
     window._recentPowerBuffer = window._recentPowerBuffer.filter(x => Date.now() - x.timestamp < 5000);
   }
-  
   if (window.updateTrainingDisplay) window.updateTrainingDisplay();
 }
 
@@ -447,27 +345,22 @@ function handlePowerMeterData(event) {
   const dv = event.target.value;
   let off = 0;
   const flags = dv.getUint16(off, true); off += 2;
-  
   const instPower = dv.getInt16(off, true); off += 2;
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
     notifyChildWindows('power', instPower);
   }
-
   if (flags & 0x0020) { 
     if (flags & 0x0001) off += 1;
     if (flags & 0x0004) off += 2;
     if (flags & 0x0010) off += 6;
-    
     const crankRevs = dv.getUint16(off, true); off += 2;
     const lastCrankTime = dv.getUint16(off, true); off += 2;
-
     if (powerMeterState.lastCrankRevs !== null) {
       let dRevs = crankRevs - powerMeterState.lastCrankRevs;
       if (dRevs < 0) dRevs += 0x10000;
       let dTicks = lastCrankTime - powerMeterState.lastCrankEventTime;
       if (dTicks < 0) dTicks += 0x10000;
-
       if (dRevs > 0 && dTicks > 0) {
         const rpm = Math.round((dRevs / (dTicks / 1024)) * 60);
         updateCadence(rpm, 'powerMeter');
@@ -482,13 +375,12 @@ function handleHeartRateData(event) {
   const dv = event.target.value;
   const flags = dv.getUint8(0);
   const hr = (flags & 0x01) ? dv.getUint16(1, true) : dv.getUint8(1);
-  
   window.liveData.heartRate = hr;
   notifyChildWindows('heartRate', hr);
   if (window.updateTrainingDisplay) window.updateTrainingDisplay();
 }
 
-// ── [5] 기타 유틸 ──
+// ── [7] 유틸리티 ──
 
 function updateCadence(rpm, source) {
     if (rpm >= 0 && rpm < 250) {
@@ -497,7 +389,6 @@ function updateCadence(rpm, source) {
         window._lastCadenceUpdateTime[source] = Date.now();
     }
 }
-
 async function trySubscribeCSC(server) {
   try {
     const s = await server.getPrimaryService(UUIDS.CSC_SERVICE);
@@ -505,48 +396,32 @@ async function trySubscribeCSC(server) {
     await c.startNotifications();
   } catch(e) {}
 }
-
 function handleDisconnect(type, device) {
   console.log(`${type} 연결 해제`);
   if (window.connectedDevices[type]?.device === device) {
     window.connectedDevices[type] = null;
-    if (type === 'trainer') {
-        if (typeof updateErgModeUI === 'function') updateErgModeUI(false);
-    }
+    if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
   }
   updateDevicesList();
 }
-
 function notifyChildWindows(field, value) {
   if (!window._bluetoothChildWindows) return;
   window._bluetoothChildWindows = window._bluetoothChildWindows.filter(w => !w.closed);
   window._bluetoothChildWindows.forEach(w => {
-    w.postMessage({ 
-        type: 'bluetoothLiveDataUpdate', 
-        updatedField: field, 
-        updatedValue: value, 
-        ...window.liveData 
-    }, '*');
+    w.postMessage({ type: 'bluetoothLiveDataUpdate', updatedField: field, updatedValue: value, ...window.liveData }, '*');
   });
 }
-
 window.addEventListener("beforeunload", () => {
   try {
     if (connectedDevices.trainer?.server?.connected) connectedDevices.trainer.device.gatt.disconnect();
-    if (connectedDevices.powerMeter?.server?.connected) connectedDevices.powerMeter.device.gatt.disconnect();
-    if (connectedDevices.heartRate?.server?.connected) connectedDevices.heartRate.device.gatt.disconnect();
   } catch (e) {}
 });
-
 setInterval(() => {
     const now = Date.now();
     if (window.liveData.cadence > 0) {
-        const lastTrainer = window._lastCadenceUpdateTime.trainer || 0;
-        const lastPM = window._lastCadenceUpdateTime.powerMeter || 0;
-        const lastUpdate = Math.max(lastTrainer, lastPM);
-        
-        if (now - lastUpdate > 3000) {
-            console.log("Cadence Timeout -> 0");
+        const lastT = window._lastCadenceUpdateTime.trainer || 0;
+        const lastP = window._lastCadenceUpdateTime.powerMeter || 0;
+        if (now - Math.max(lastT, lastP) > 3000) {
             window.liveData.cadence = 0;
             notifyChildWindows('cadence', 0);
         }
@@ -556,4 +431,3 @@ setInterval(() => {
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
 window.connectHeartRate = connectHeartRate;
-
