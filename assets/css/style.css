@@ -13889,7 +13889,8 @@ body.mobile-dashboard-active {
   text-align: center;
   font-size: 0.9em;
   color: #ccc;
-  margin-top: 0px; /* Y 좌표 환산 240 위치로 이동을 위해 조정 */
+  margin-top: 0px; /* Y 좌표 환산 260px 위치로 조정 */
+  margin-bottom: 0px; /* Y 좌표 환산 260px 위치로 조정 */
   padding: 0 10px;
   min-height: 20px; /* 최소 높이 보장 */
 }
@@ -13933,7 +13934,7 @@ body.mobile-dashboard-active {
   border-radius: 8px;
   padding: 8px;
   min-width: 200px;
-  z-index: 10000; /* 세그먼트 그래프 앞에 표시되도록 z-index 증가 */
+  z-index: 10002; /* 세그먼트 그래프(z-index: 1)와 헤더(z-index: 10001) 위에 표시되도록 z-index 증가 */
   display: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
