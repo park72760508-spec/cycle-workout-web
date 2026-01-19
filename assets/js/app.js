@@ -11632,56 +11632,81 @@ async function startMobileDashboard() {
     window.addEventListener('resize', window.mobileDashboardResizeHandler);
     
     // ErgController 초기화 및 구독 설정 (Mobile Dashboard 전용)
-    if (window.ergController) {
-      // ERG 상태 구독 (반응형 상태 관리)
-      window.ergController.subscribe((state, key, value) => {
-        if (key === 'fatigueLevel' && value > 70) {
-          // 피로도가 높을 때 사용자에게 알림
-          if (typeof showToast === 'function') {
-            showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
+    // ergController가 없어도 오류가 발생하지 않도록 안전하게 처리
+    if (window.ergController && typeof window.ergController.subscribe === 'function') {
+      try {
+        // ERG 상태 구독 (반응형 상태 관리)
+        window.ergController.subscribe((state, key, value) => {
+          if (key === 'fatigueLevel' && value > 70) {
+            // 피로도가 높을 때 사용자에게 알림
+            if (typeof showToast === 'function') {
+              showToast(`⚠️ 피로도 감지! ERG 강도를 낮춥니다.`);
+            }
           }
-        }
-        if (key === 'targetPower') {
-          // 목표 파워 변경 시 UI 업데이트
-          const targetPowerEl = safeGetElement('mobile-ui-target-power');
-          if (targetPowerEl) {
-            targetPowerEl.textContent = Math.round(value);
+          if (key === 'targetPower') {
+            // 목표 파워 변경 시 UI 업데이트
+            const targetPowerEl = safeGetElement('mobile-ui-target-power');
+            if (targetPowerEl) {
+              targetPowerEl.textContent = Math.round(value);
+            }
           }
-        }
-        if (key === 'enabled') {
-          // ERG 모드 활성화/비활성화 시 UI 업데이트
-          console.log('[Mobile Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
-        }
-      });
+          if (key === 'enabled') {
+            // ERG 모드 활성화/비활성화 시 UI 업데이트
+            console.log('[Mobile Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
+          }
+        });
 
-      // 연결 상태 업데이트
-      const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
-      if (isTrainerConnected) {
-        window.ergController.updateConnectionStatus('connected');
-      }
-
-      // 케이던스 업데이트 (Edge AI 분석용) - liveData 업데이트 시마다 호출
-      if (window.liveData && window.liveData.cadence) {
-        window.ergController.updateCadence(window.liveData.cadence);
-      }
-      
-      // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
-      let lastTargetPower = window.liveData?.targetPower || 0;
-      const checkTargetPowerChange = () => {
-        const currentTargetPower = window.liveData?.targetPower || 0;
-        if (currentTargetPower !== lastTargetPower && currentTargetPower > 0) {
-          // 목표 파워가 변경되었고 ERG 모드가 활성화되어 있으면 자동 업데이트
-          if (window.ergController.state.enabled) {
-            window.ergController.setTargetPower(currentTargetPower).catch(err => {
-              console.warn('[Mobile Dashboard] ErgController 목표 파워 자동 업데이트 실패:', err);
-            });
+        // 연결 상태 업데이트 (스마트 트레이너가 연결된 경우에만)
+        const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
+        if (isTrainerConnected && typeof window.ergController.updateConnectionStatus === 'function') {
+          try {
+            window.ergController.updateConnectionStatus('connected');
+          } catch (err) {
+            console.warn('[Mobile Dashboard] ErgController updateConnectionStatus 오류:', err);
           }
-          lastTargetPower = currentTargetPower;
         }
-      };
-      
-      // 1초마다 목표 파워 변경 확인
-      setInterval(checkTargetPowerChange, 1000);
+
+        // 케이던스 업데이트 (Edge AI 분석용) - liveData 업데이트 시마다 호출
+        if (window.liveData && window.liveData.cadence && typeof window.ergController.updateCadence === 'function') {
+          try {
+            window.ergController.updateCadence(window.liveData.cadence);
+          } catch (err) {
+            console.warn('[Mobile Dashboard] ErgController updateCadence 초기화 오류:', err);
+          }
+        }
+        
+        // window.liveData.targetPower 변경 감지 (세그먼트 변경 시 자동 업데이트)
+        // 스마트 트레이너가 연결된 경우에만 동작
+        if (isTrainerConnected) {
+          let lastTargetPower = window.liveData?.targetPower || 0;
+          const checkTargetPowerChange = () => {
+            try {
+              const currentTargetPower = window.liveData?.targetPower || 0;
+              if (currentTargetPower !== lastTargetPower && currentTargetPower > 0) {
+                // 목표 파워가 변경되었고 ERG 모드가 활성화되어 있으면 자동 업데이트
+                if (window.ergController && window.ergController.state && window.ergController.state.enabled) {
+                  if (typeof window.ergController.setTargetPower === 'function') {
+                    window.ergController.setTargetPower(currentTargetPower).catch(err => {
+                      console.warn('[Mobile Dashboard] ErgController 목표 파워 자동 업데이트 실패:', err);
+                    });
+                  }
+                }
+                lastTargetPower = currentTargetPower;
+              }
+            } catch (err) {
+              console.warn('[Mobile Dashboard] 목표 파워 변경 감지 오류:', err);
+            }
+          };
+          
+          // 1초마다 목표 파워 변경 확인
+          setInterval(checkTargetPowerChange, 1000);
+        }
+      } catch (err) {
+        console.warn('[Mobile Dashboard] ErgController 초기화 오류 (무시하고 계속 진행):', err);
+      }
+    } else {
+      // ErgController가 없어도 정상 동작하도록 로그만 출력
+      console.log('[Mobile Dashboard] ErgController가 없습니다. ERG 모드 기능은 사용할 수 없습니다.');
     }
     
     // 블루투스 데이터 업데이트 시작
@@ -12145,8 +12170,14 @@ function startMobileDashboardDataUpdate() {
     }
 
     // ErgController에 케이던스 업데이트 (Edge AI 분석용)
-    if (window.ergController && window.liveData && window.liveData.cadence > 0) {
-      window.ergController.updateCadence(window.liveData.cadence);
+    // ergController가 없어도 오류가 발생하지 않도록 안전하게 처리
+    if (window.ergController && typeof window.ergController.updateCadence === 'function' && 
+        window.liveData && window.liveData.cadence > 0) {
+      try {
+        window.ergController.updateCadence(window.liveData.cadence);
+      } catch (err) {
+        console.warn('[Mobile Dashboard] ErgController updateCadence 오류:', err);
+      }
     }
     
     // window.liveData에서 데이터 읽기
@@ -12181,24 +12212,37 @@ function startMobileDashboardDataUpdate() {
       cadenceEl.textContent = cadence;
     }
     
-    // ErgController에 데이터 업데이트 (Edge AI 분석용)
-    if (window.ergController) {
-      if (cadence > 0) {
-        window.ergController.updateCadence(cadence);
-      }
-      if (powerValue > 0) {
-        window.ergController.updatePower(powerValue);
-      }
-      if (hr > 0) {
-        window.ergController.updateHeartRate(hr);
-      }
-    }
-    
-    // 심박수 표시 (블루투스 데이터)
+    // 심박수 표시 (블루투스 데이터) - hr 변수를 먼저 정의
     const hr = Math.round(liveData.heartRate || 0);
     const hrEl = safeGetElement('mobile-ui-hr');
     if (hrEl) {
       hrEl.textContent = hr;
+    }
+    
+    // ErgController에 데이터 업데이트 (Edge AI 분석용)
+    // ergController가 없어도 오류가 발생하지 않도록 안전하게 처리
+    if (window.ergController && typeof window.ergController.updateCadence === 'function') {
+      if (cadence > 0) {
+        try {
+          window.ergController.updateCadence(cadence);
+        } catch (err) {
+          console.warn('[Mobile Dashboard] ErgController updateCadence 오류:', err);
+        }
+      }
+      if (powerValue > 0 && typeof window.ergController.updatePower === 'function') {
+        try {
+          window.ergController.updatePower(powerValue);
+        } catch (err) {
+          console.warn('[Mobile Dashboard] ErgController updatePower 오류:', err);
+        }
+      }
+      if (hr > 0 && typeof window.ergController.updateHeartRate === 'function') {
+        try {
+          window.ergController.updateHeartRate(hr);
+        } catch (err) {
+          console.warn('[Mobile Dashboard] ErgController updateHeartRate 오류:', err);
+        }
+      }
     }
     
     // 랩 평균 파워 표시 (모바일 전용 상태 사용 - 독립적으로 구동)
