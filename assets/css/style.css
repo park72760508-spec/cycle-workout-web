@@ -1037,8 +1037,8 @@ h1,h2,h3,h4 { font-weight: 600; }
 
 /* 다음 단계로 & 나가기 버튼 컨테이너 */
 .connection-exit-container {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 16px;
+  padding-top: 16px;
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   text-align: center;
   display: flex;
@@ -1046,6 +1046,26 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* 무선 기기 연결 화면 하단 여백 제거 (파워미터 연결 버튼 이하) */
+#connectionScreen .connection-form-card {
+  padding-bottom: 20px !important;
+  margin-bottom: 0 !important;
+}
+
+#connectionScreen .connection-device-section {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* 연결 정보 리스트 숨김 처리 */
+#connectionScreen #connectedDevicesList {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }
 
 /* 다음 단계로 버튼 (녹색톤) */
