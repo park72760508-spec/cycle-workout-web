@@ -60,13 +60,7 @@
             position: relative; /* 세그먼트 정보 절대 위치 기준 */
         }
         
-        /* 세그먼트 정보 중앙 정렬 */
-        #segment-info {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
-        }
+        /* 세그먼트 정보는 속도계 블럭 하단에 배치됨 (HTML에서 직접 배치) */
         .bike-badge {
             background-color: #00d4aa;
             color: #000;
@@ -88,11 +82,13 @@
         .main-content {
             flex: 1 1 0; /* flex-grow: 1, flex-shrink: 1, flex-basis: 0 (가용 공간을 균등하게 분배) */
             display: flex;
+            flex-direction: column; /* 세로 방향 배치 (속도계 + 세그먼트 정보) */
             justify-content: center;
             align-items: center;
             position: relative;
             min-height: 0; /* flex 아이템이 축소 가능하도록 설정 */
             overflow: hidden; /* 넘치는 내용 숨김 */
+            padding: 10px 0; /* 상하 여백 추가 */
         }
 
         /* 속도계 컨테이너 */
@@ -101,6 +97,17 @@
             max-width: 500px;
             aspect-ratio: 1/1;
             position: relative;
+            margin-bottom: 25px; /* 세그먼트 정보를 위한 하단 여백 */
+        }
+        
+        /* 세그먼트 정보 스타일 (속도계 블럭 하단) */
+        #segment-info {
+            text-align: center;
+            font-size: 0.9em;
+            color: #ccc;
+            margin-top: 10px;
+            padding: 0 10px;
+            min-height: 20px; /* 최소 높이 보장 */
         }
 
         /* 통계 정보 (하단) */
@@ -512,14 +519,132 @@
             border-radius: 3px;
             background: rgba(255, 255, 255, 0.1);
         }
+        
+        /* 블루투스 연결 버튼 (개인훈련 대시보드 전용, 독립적 구동) */
+        .bluetooth-connect-btn {
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 6px 12px;
+            color: #fff;
+            font-size: 0.85em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
+        }
+        .bluetooth-connect-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .bluetooth-connect-btn.has-connection {
+            background: rgba(0, 212, 170, 0.2);
+            border-color: #00d4aa;
+            color: #00d4aa;
+        }
+        .bluetooth-connect-btn .bluetooth-icon {
+            width: 16px;
+            height: 16px;
+        }
+        
+        /* 블루투스 연결 드롭다운 (개인훈련 대시보드 전용, 독립적 구동) */
+        .bluetooth-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: #1e1e1e;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 200px;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+        .bluetooth-dropdown.show {
+            display: block;
+        }
+        .bluetooth-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            color: #fff;
+            font-size: 0.9em;
+        }
+        .bluetooth-dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .bluetooth-dropdown-item.connected {
+            color: #00d4aa;
+        }
+        .bluetooth-dropdown-item img {
+            width: 24px;
+            height: 24px;
+        }
+        .bluetooth-dropdown-item .status {
+            margin-left: auto;
+            font-size: 0.8em;
+            color: #888;
+        }
+        .bluetooth-dropdown-item.connected .status {
+            color: #00d4aa;
+        }
+        
     </style>
 </head>
 <body>
 
     <div class="header">
         <div id="bike-id-display" class="bike-badge">Bike ?</div>
-        <div id="segment-info" style="font-size:0.9em; color:#ccc;">준비 중</div>
-        <div id="main-timer" class="timer">00:00:00</div>
+        <div id="main-timer" class="timer" style="position: absolute; left: 50%; transform: translateX(-50%);">00:00:00</div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+            <div style="position: relative;">
+                <button id="individualBluetoothConnectBtn" class="bluetooth-connect-btn" onclick="toggleIndividualBluetoothDropdown()">
+                    <img src="assets/img/wifi2.png" alt="연결" class="bluetooth-icon" style="width: 16px; height: 16px;">
+                    <span>연결</span>
+                </button>
+                <div id="individualBluetoothDropdown" class="bluetooth-dropdown">
+                    <div id="individualBluetoothTrainerItem" class="bluetooth-dropdown-item" onclick="connectIndividualBluetoothDevice('trainer')">
+                        <img src="assets/img/trainer_i.png" alt="스마트 트레이너">
+                        <span>스마트 트레이너</span>
+                        <span class="status" id="individualTrainerStatus">미연결</span>
+                    </div>
+                    <!-- ERG 동작 메뉴 (스마트 트레이너 연결 시 표시) -->
+                    <div id="individualBluetoothErgMenu" class="bluetooth-erg-menu" style="display: none; padding: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                        <div style="font-size: 12px; color: #888; margin-bottom: 8px;">ERG 동작</div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px;">
+                                <input type="checkbox" id="individualBluetoothErgToggle" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span>ERG 모드</span>
+                            </label>
+                            <span id="individualBluetoothErgStatus" style="font-size: 12px; color: #888;">OFF</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <label style="font-size: 12px; color: #888;">목표 파워 (W):</label>
+                            <input type="number" id="individualBluetoothErgTargetPower" min="0" max="1000" value="0" 
+                                   style="width: 80px; padding: 4px 8px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #fff; font-size: 14px;">
+                            <button id="individualBluetoothErgSetBtn" style="padding: 4px 12px; background: #00d4aa; border: none; border-radius: 4px; color: #000; font-size: 12px; font-weight: bold; cursor: pointer;">설정</button>
+                        </div>
+                    </div>
+                    <div id="individualBluetoothHRItem" class="bluetooth-dropdown-item" onclick="connectIndividualBluetoothDevice('heartRate')">
+                        <img src="assets/img/bpm_i.png" alt="심박계">
+                        <span>심박계</span>
+                        <span class="status" id="individualHeartRateStatus">미연결</span>
+                    </div>
+                    <div id="individualBluetoothPMItem" class="bluetooth-dropdown-item" onclick="connectIndividualBluetoothDevice('powerMeter')">
+                        <img src="assets/img/power_i.png" alt="파워미터">
+                        <span>파워미터</span>
+                        <span class="status" id="individualPowerMeterStatus">미연결</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="segment-graph-section">
@@ -557,6 +682,8 @@
                 </g>
             </svg>
         </div>
+        <!-- 세그먼트 정보 (속도계 블럭 하단) -->
+        <div id="segment-info" style="text-align: center; font-size: 0.9em; color: #ccc; margin-top: 10px; padding: 0 10px;">준비 중</div>
     </div>
 
     <div class="stats-footer">
@@ -636,6 +763,7 @@
 
     <script src="assets/js/workoutManager.js"></script>
     <script src="assets/js/resultManager.js"></script>
+    <script src="assets/js/bluetooth.js"></script>
     
     <!-- 화면 잠금 방지 스크립트 -->
     <script>
