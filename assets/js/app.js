@@ -11509,10 +11509,72 @@ window.updateTrainingReadyScreenWithWorkout = updateTrainingReadyScreenWithWorko
  * 모바일 대시보드 화면 시작
  * individual.html과 동일한 화면 구조 및 블루투스 데이터 표시
  */
+// 화면 방향 고정 함수 (세로 모드)
+async function lockScreenOrientation() {
+  try {
+    // Screen Orientation API 사용 (최신 브라우저)
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('portrait');
+      console.log('[Screen Orientation] 세로 모드로 고정됨');
+      return true;
+    }
+    // iOS Safari 대응 (구형 API)
+    else if (screen.lockOrientation) {
+      screen.lockOrientation('portrait');
+      console.log('[Screen Orientation] 세로 모드로 고정됨 (구형 API)');
+      return true;
+    }
+    // 더 구형 브라우저 대응
+    else if (screen.mozLockOrientation) {
+      screen.mozLockOrientation('portrait');
+      console.log('[Screen Orientation] 세로 모드로 고정됨 (Mozilla)');
+      return true;
+    }
+    else if (screen.msLockOrientation) {
+      screen.msLockOrientation('portrait');
+      console.log('[Screen Orientation] 세로 모드로 고정됨 (IE/Edge)');
+      return true;
+    }
+    else {
+      console.warn('[Screen Orientation] 화면 방향 고정을 지원하지 않는 브라우저입니다');
+      return false;
+    }
+  } catch (error) {
+    // 사용자가 전체화면 모드가 아니거나 권한이 없는 경우 등
+    console.warn('[Screen Orientation] 화면 방향 고정 실패:', error);
+    return false;
+  }
+}
+
+// 화면 방향 고정 해제 함수
+function unlockScreenOrientation() {
+  try {
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+      console.log('[Screen Orientation] 화면 방향 고정 해제됨');
+    }
+    else if (screen.unlockOrientation) {
+      screen.unlockOrientation();
+      console.log('[Screen Orientation] 화면 방향 고정 해제됨 (구형 API)');
+    }
+    else if (screen.mozUnlockOrientation) {
+      screen.mozUnlockOrientation();
+    }
+    else if (screen.msUnlockOrientation) {
+      screen.msUnlockOrientation();
+    }
+  } catch (error) {
+    console.warn('[Screen Orientation] 화면 방향 고정 해제 실패:', error);
+  }
+}
+
 async function startMobileDashboard() {
   console.log('[Mobile Dashboard] 모바일 대시보드 시작');
   
   try {
+    // 화면 방향 세로 모드로 고정
+    await lockScreenOrientation();
+    
     // body에 클래스 추가 (CSS 적용)
     document.body.classList.add('mobile-dashboard-active');
     
@@ -13285,6 +13347,9 @@ function cleanupMobileDashboard() {
   if (window.mobileDashboardWakeLockControl && typeof window.mobileDashboardWakeLockControl.release === 'function') {
     window.mobileDashboardWakeLockControl.release();
   }
+  
+  // 화면 방향 고정 해제
+  unlockScreenOrientation();
   
   // body 클래스 제거
   document.body.classList.remove('mobile-dashboard-active');

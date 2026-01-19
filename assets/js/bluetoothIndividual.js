@@ -1,5 +1,64 @@
 // bluetoothIndividual.js
 
+// 화면 방향 고정 함수 (세로 모드)
+async function lockScreenOrientation() {
+    try {
+        // Screen Orientation API 사용 (최신 브라우저)
+        if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock('portrait');
+            console.log('[BluetoothIndividual] 화면 방향 세로 모드로 고정됨');
+            return true;
+        }
+        // iOS Safari 대응 (구형 API)
+        else if (screen.lockOrientation) {
+            screen.lockOrientation('portrait');
+            console.log('[BluetoothIndividual] 화면 방향 세로 모드로 고정됨 (구형 API)');
+            return true;
+        }
+        // 더 구형 브라우저 대응
+        else if (screen.mozLockOrientation) {
+            screen.mozLockOrientation('portrait');
+            console.log('[BluetoothIndividual] 화면 방향 세로 모드로 고정됨 (Mozilla)');
+            return true;
+        }
+        else if (screen.msLockOrientation) {
+            screen.msLockOrientation('portrait');
+            console.log('[BluetoothIndividual] 화면 방향 세로 모드로 고정됨 (IE/Edge)');
+            return true;
+        }
+        else {
+            console.warn('[BluetoothIndividual] 화면 방향 고정을 지원하지 않는 브라우저입니다');
+            return false;
+        }
+    } catch (error) {
+        // 사용자가 전체화면 모드가 아니거나 권한이 없는 경우 등
+        console.warn('[BluetoothIndividual] 화면 방향 고정 실패:', error);
+        return false;
+    }
+}
+
+// 화면 방향 고정 해제 함수
+function unlockScreenOrientation() {
+    try {
+        if (screen.orientation && screen.orientation.unlock) {
+            screen.orientation.unlock();
+            console.log('[BluetoothIndividual] 화면 방향 고정 해제됨');
+        }
+        else if (screen.unlockOrientation) {
+            screen.unlockOrientation();
+            console.log('[BluetoothIndividual] 화면 방향 고정 해제됨 (구형 API)');
+        }
+        else if (screen.mozUnlockOrientation) {
+            screen.mozUnlockOrientation();
+        }
+        else if (screen.msUnlockOrientation) {
+            screen.msUnlockOrientation();
+        }
+    } catch (error) {
+        console.warn('[BluetoothIndividual] 화면 방향 고정 해제 실패:', error);
+    }
+}
+
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
 // window.connectedDevices 안전 초기화 (bluetooth.js와 동일한 구조)
 if (!window.connectedDevices) {
@@ -3790,7 +3849,10 @@ function initBluetoothIndividualErgController() {
 }
 
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 화면 방향 세로 모드로 고정
+        await lockScreenOrientation();
+        
         // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
         initializeIndividualIntensitySlider();
         updateGaugeTicksAndLabels();
@@ -3807,9 +3869,16 @@ if (document.readyState === 'loading') {
             // 1초마다 연결 상태 확인 및 업데이트
             setInterval(updateBluetoothConnectionStatus, 1000);
         }, 1000);
+        
+        // 페이지 언로드 시 화면 방향 고정 해제
+        window.addEventListener('beforeunload', unlockScreenOrientation);
+        window.addEventListener('pagehide', unlockScreenOrientation);
     });
 } else {
     // DOM이 이미 로드되었으면 바로 실행
+    // 화면 방향 세로 모드로 고정
+    lockScreenOrientation();
+    
     updateGaugeTicksAndLabels();
     startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
     
@@ -3817,6 +3886,10 @@ if (document.readyState === 'loading') {
     setTimeout(() => {
         initBluetoothIndividualErgController();
     }, 500); // ErgController.js 로드 대기
+    
+    // 페이지 언로드 시 화면 방향 고정 해제
+    window.addEventListener('beforeunload', unlockScreenOrientation);
+    window.addEventListener('pagehide', unlockScreenOrientation);
     
     // 블루투스 연결 상태 초기 업데이트
     setTimeout(() => {
