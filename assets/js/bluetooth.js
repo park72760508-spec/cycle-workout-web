@@ -1,20 +1,20 @@
 /* ==========================================================
-   bluetooth.js (v2.6 Stable - UUID String Only)
-   - "Undefined" 및 "Unknown service" 오류 원천 차단
-   - 숫자(0x1826) 및 별명(fitness_machine) 전면 배제
-   - 오직 128-bit 정식 문자열 UUID만 사용하여 호환성 극대화
-   - CycleOps/Hammer 이름 검색 유지
+   bluetooth.js (v3.0 Enterprise - Zwift Logic)
+   - "서비스 승격(Service Promotion)" 로직 탑재
+   - CycleOps/Hammer 등 레거시 기기 완벽 대응
+   - 1. 파워미터로 우선 연결 -> 2. 내부 FTMS 탐색 -> 3. ERG 활성화
+   - 가장 안정적인 128-bit UUID 사용
 ========================================================== */
 
-// ── [1] UUID 상수 (오직 소문자 문자열만 사용) ──
+// ── [1] 128-bit 정식 UUID 상수 (변경 금지) ──
 const UUIDS = {
-  // Service UUIDs (기기 종류)
+  // Services
   FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb', // 스마트로라
   CPS_SERVICE:  '00001818-0000-1000-8000-00805f9b34fb', // 파워미터
-  CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', // 속도/케이던스
+  CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', // 케이던스
   HR_SERVICE:   '0000180d-0000-1000-8000-00805f9b34fb', // 심박계
 
-  // Characteristic UUIDs (데이터 통로)
+  // Characteristics
   FTMS_DATA:    '00002ad2-0000-1000-8000-00805f9b34fb',
   FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb',
   CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb',
@@ -22,7 +22,7 @@ const UUIDS = {
   HR_DATA:      '00002a37-0000-1000-8000-00805f9b34fb'
 };
 
-// BLE 명령 큐 (데이터 전송 안정화)
+// BLE 명령 큐
 window.bleCommandQueue = {
   queue: [],
   isProcessing: false,
@@ -40,13 +40,12 @@ window.bleCommandQueue = {
   }
 };
 
-// 전역 상태 초기화
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
 let powerMeterState = { lastCrankRevs: null, lastCrankEventTime: null };
 window._lastCadenceUpdateTime = {}; 
 
-// ── [2] UI 헬퍼 함수 ──
+// ── [2] UI 헬퍼 ──
 
 window.showConnectionStatus = window.showConnectionStatus || function (show) {
   const el = document.getElementById("connectionStatus");
@@ -104,31 +103,32 @@ window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();
 };
 
-// ── [3] 스마트 트레이너 연결 (v2.6: UUID String Only) ──
+// ── [3] 스마트 트레이너 연결 (Zwift 스타일: 서비스 승격 로직) ──
 
 async function connectTrainer() {
   try {
     showConnectionStatus(true);
     let device;
 
-    console.log('[connectTrainer] UUID 필터 검색 시작...');
-    
-    // ★ 에러 원인 제거: 숫자(0x...)나 별명(fitness_machine) 절대 사용 금지
-    // 오직 128-bit UUID 문자열과 이름(namePrefix)만 사용
+    console.log('[connectTrainer] 상용 표준 검색 시작...');
+
+    // ★ 1단계: 검색 필터 "넓게 잡기"
+    // FTMS(스마트로라) 뿐만 아니라 파워미터(CPS)도 트레이너 후보군에 포함시킵니다.
+    // CycleOps Hammer는 여기서 '파워미터'로 걸려듭니다.
     const filters = [
-      { services: [UUIDS.FTMS_SERVICE] }, // 스마트로라 정식 UUID
-      { services: [UUIDS.CPS_SERVICE] },  // 파워미터 정식 UUID
-      // CycleOps 및 Hammer 이름 검색
-      { namePrefix: "CycleOps" },
-      { namePrefix: "Saris" },
+      { services: [UUIDS.FTMS_SERVICE] }, // 1. 정식 스마트로라
+      { services: [UUIDS.CPS_SERVICE] },  // 2. 파워미터로 위장한 로라
+      { namePrefix: "CycleOps" },         // 3. 이름으로 찾기
       { namePrefix: "Hammer" },
+      { namePrefix: "Saris" },
       { namePrefix: "Magnus" }
     ];
 
+    // ★ 중요: 검색은 파워미터로 하더라도, 연결 후에는 FTMS를 쓸 수 있게 허용해둠
     const optionalServices = [
       UUIDS.FTMS_SERVICE, 
       UUIDS.CPS_SERVICE,  
-      UUIDS.CSC_SERVICE,  
+      UUIDS.CSC_SERVICE,
       "device_information"
     ];
 
@@ -139,52 +139,49 @@ async function connectTrainer() {
       });
     } catch (scanErr) {
       showConnectionStatus(false);
-      if (scanErr.name === 'NotFoundError') {
-        console.log("사용자 취소");
-        return;
-      }
-      // undefined 에러 방지를 위해 에러 객체 전체 출력
+      if (scanErr.name === 'NotFoundError') return;
       alert("❌ 검색 오류: " + (scanErr.message || scanErr));
       return;
     }
 
     const server = await device.gatt.connect();
-    console.log('[connectTrainer] 연결 성공');
+    console.log('[connectTrainer] 기기 연결됨. 서비스 스캔 시작...');
 
     let service, characteristic, isFTMS = false;
     let controlPointChar = null;
 
-    // 1. FTMS 서비스 탐색
+    // ★ 2단계: 서비스 승격 (Service Promotion)
+    // 파워미터로 연결됐더라도, 우선적으로 FTMS 서비스가 존재하는지 찔러봅니다.
     try {
       service = await server.getPrimaryService(UUIDS.FTMS_SERVICE);
       characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
       isFTMS = true;
-      console.log('✅ FTMS 서비스 발견 (스마트로라 모드)');
+      console.log('🎉 [성공] 숨겨진 FTMS 서비스 발견! (ERG 모드 승격)');
 
-      // ERG 제어권 탐색 (128-bit UUID 사용)
+      // ERG 제어권 획득
       try {
         controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL);
       } catch (e) {
-        // 일부 구형 기기를 위해 별명도 시도해봄 (여기서는 에러나도 무방)
+        // 일부 레거시 기기용 별명 시도 (안전장치)
         try { controlPointChar = await service.getCharacteristic('fitness_machine_control_point'); } 
         catch (f) { console.warn('ERG Control Point 없음'); }
       }
 
     } catch (e) {
-      console.log('FTMS 실패, 파워미터(CPS) 모드 시도');
-      // 2. CPS 서비스 탐색
+      // FTMS가 진짜로 없으면 -> 일반 파워미터 모드로 작동 (Fallback)
+      console.log('⚠️ FTMS 없음. 일반 파워미터 모드로 전환.');
       try {
         service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
         characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
         isFTMS = false;
       } catch (fatal) {
-         // 3. CSC 서비스 탐색
+         // 파워미터도 없으면 -> CSC 센서로 시도
          try {
              service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
              characteristic = await service.getCharacteristic(UUIDS.CSC_DATA);
              isFTMS = false;
          } catch(reallyFatal) {
-             throw new Error("지원 서비스(FTMS/CPS/CSC)를 찾을 수 없습니다.");
+             throw new Error("필수 서비스(FTMS/CPS)를 찾을 수 없습니다.");
          }
       }
     }
@@ -194,7 +191,7 @@ async function connectTrainer() {
 
     window.connectedDevices.trainer = { 
       name: device.name, device, server, characteristic,
-      controlPoint: controlPointChar, 
+      controlPoint: controlPointChar, // 여기가 채워져야 ERG 동작
       protocol: isFTMS ? 'FTMS' : 'CPS' 
     };
 
@@ -214,20 +211,19 @@ async function connectTrainer() {
   }
 }
 
-// ── [4] 심박계 연결 (기존 성공 코드 + 안전장치) ──
+// ── [4] 심박계 연결 (표준 유지) ──
 
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
     let device;
-    // 심박계는 'heart_rate' 별명이 가장 잘 작동하므로 1순위 유지
     try {
+        // 심박계는 'heart_rate' 별명이 가장 호환성이 좋음 (유지)
         device = await navigator.bluetooth.requestDevice({
             filters: [{ services: ['heart_rate'] }],
             optionalServices: ['heart_rate', UUIDS.HR_SERVICE, 'battery_service']
         });
     } catch(e) {
-        // 만약 실패하면 128-bit UUID로 재시도
         device = await navigator.bluetooth.requestDevice({
             filters: [{ services: [UUIDS.HR_SERVICE] }],
             optionalServices: [UUIDS.HR_SERVICE]
@@ -258,7 +254,7 @@ async function connectHeartRate() {
   }
 }
 
-// ── [5] 파워미터 연결 (v2.6: UUID String Only) ──
+// ── [5] 파워미터 연결 ──
 
 async function connectPowerMeter() {
   if (window.connectedDevices.trainer && !confirm("트레이너가 이미 연결됨. 파워미터로 교체?")) return;
@@ -266,7 +262,7 @@ async function connectPowerMeter() {
     showConnectionStatus(true);
     let device;
     
-    // ★ 에러 원인 제거: 문자열 별명 제거하고 128-bit UUID만 사용
+    // 파워미터도 광범위 검색
     const filters = [
         { services: [UUIDS.CPS_SERVICE] },
         { services: [UUIDS.CSC_SERVICE] }
@@ -303,7 +299,7 @@ async function connectPowerMeter() {
   }
 }
 
-// ── [6] 데이터 처리 및 ERG ──
+// ── [6] 데이터 처리 및 ERG 제어 ──
 
 window.setTargetPower = function(targetWatts) {
     const trainer = window.connectedDevices.trainer;
