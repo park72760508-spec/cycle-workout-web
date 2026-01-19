@@ -518,85 +518,193 @@ async function connectPowerMeter() {
 }
 
 // ──────────────────────────────────────────────────────────
-// 3) Heart Rate (HRS)
+// 3) Heart Rate (HRS) - Zwift 스타일 최고의 검색 로직 적용
 // ──────────────────────────────────────────────────────────
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
 
     let device;
+    
+    // [Zwift 스타일] 1단계: 표준 Heart Rate Service UUID로 필터 검색
+    // 여러 UUID 형식 지원 (16-bit, 128-bit)
+    const heartRateServiceUUIDs = [
+      UUIDS.HEART_RATE_SERVICE,           // 128-bit Full UUID
+      '0x180D',                            // 16-bit UUID (일부 브라우저 지원)
+      'heart_rate',                        // 별칭 (일부 브라우저 지원)
+      UUIDS.HRS_SERVICE                    // 동일한 서비스 (별칭)
+    ];
+    
     try {
-      // [개선] 정확한 UUID 사용 - heart_rate 서비스를 광고하는 기기 우선 검색
-      console.log('[connectHeartRate] 필터 검색 시도:', {
-        heartRateService: UUIDS.HEART_RATE_SERVICE
+      console.log('[connectHeartRate] 1단계: 필터 검색 시도 (표준 UUID)', {
+        primaryUUID: UUIDS.HEART_RATE_SERVICE,
+        allUUIDs: heartRateServiceUUIDs
       });
+      
+      // 표준 Heart Rate Service를 광고하는 기기 우선 검색
       device = await navigator.bluetooth.requestDevice({
         filters: [{ services: [UUIDS.HEART_RATE_SERVICE] }],
-        optionalServices: [UUIDS.HEART_RATE_SERVICE, "device_information"],
+        optionalServices: [
+          UUIDS.HEART_RATE_SERVICE,
+          UUIDS.HEART_RATE_MEASUREMENT,
+          "device_information",
+          "battery_service"  // 배터리 서비스도 포함 (일부 심박계 지원)
+        ],
       });
-      console.log('[connectHeartRate] 필터 검색 성공, 선택된 디바이스:', device.name || device.id);
+      console.log('[connectHeartRate] ✅ 필터 검색 성공, 선택된 디바이스:', device.name || device.id);
     } catch (filterError) {
-      console.log("⚠️ 필터 검색 실패(iOS 등), 전체 검색 후 검증 모드 진입:", filterError);
-      // iOS 등에서 필터 검색이 실패하면 전체 검색 후 서비스 검증
-      // 광고에 heart_rate UUID가 없는 기기 (가민, 폴라 등) 대응
+      console.log("⚠️ 필터 검색 실패 (iOS/Android 등), 2단계: 전체 검색 모드로 전환:", filterError);
+      
+      // [Zwift 스타일] 2단계: 필터 검색 실패 시 전체 검색 후 서비스 검증
+      // iOS, Android 등에서 필터 검색이 제한적인 경우 대응
+      // 광고에 heart_rate UUID가 없는 기기 (Garmin, Polar, Wahoo 등) 대응
       try {
-        console.log('[connectHeartRate] acceptAllDevices 모드로 재시도...');
+        console.log('[connectHeartRate] 2단계: acceptAllDevices 모드로 재시도...');
         device = await navigator.bluetooth.requestDevice({
           acceptAllDevices: true,
-          optionalServices: [UUIDS.HEART_RATE_SERVICE, "device_information"],
+          optionalServices: [
+            UUIDS.HEART_RATE_SERVICE,
+            UUIDS.HEART_RATE_MEASUREMENT,
+            "device_information",
+            "battery_service"
+          ],
         });
-        console.log('[connectHeartRate] acceptAllDevices 검색 성공, 선택된 디바이스:', device.name || device.id);
+        console.log('[connectHeartRate] ✅ acceptAllDevices 검색 성공, 선택된 디바이스:', device.name || device.id);
       } catch (acceptAllError) {
         console.log("⚠️ 사용자가 디바이스 선택을 취소했습니다:", acceptAllError);
         showConnectionStatus(false);
+        if (typeof showToast === 'function') {
+          showToast('심박계 검색이 취소되었습니다.');
+        }
         return;
       }
     }
 
+    // [Zwift 스타일] 3단계: 연결 및 서비스 검증
+    console.log('[connectHeartRate] 3단계: 디바이스 연결 중...');
     const server = await device.gatt.connect();
+    console.log('[connectHeartRate] ✅ GATT 서버 연결 성공');
     
-    // [개선] 서비스 검증 - 연결 후 즉시 heart_rate 서비스 확인
+    // [Zwift 스타일] 4단계: Heart Rate Service 검증 (다양한 UUID 형식 시도)
     let service, characteristic;
-    try {
-      // 정확한 UUID로 서비스 가져오기
-      service = await server.getPrimaryService(UUIDS.HEART_RATE_SERVICE);
-      characteristic = await service.getCharacteristic(UUIDS.HEART_RATE_MEASUREMENT);
-      console.log('[connectHeartRate] ✅ Heart Rate 서비스 및 특성 획득 성공');
-    } catch (serviceError) {
+    let serviceFound = false;
+    
+    // 여러 방법으로 서비스 찾기 시도
+    const serviceUUIDs = [
+      UUIDS.HEART_RATE_SERVICE,  // 128-bit Full UUID (우선)
+      '0x180D',                   // 16-bit UUID
+      'heart_rate'                // 별칭
+    ];
+    
+    for (const serviceUUID of serviceUUIDs) {
+      try {
+        console.log(`[connectHeartRate] 서비스 검색 시도: ${serviceUUID}`);
+        service = await server.getPrimaryService(serviceUUID);
+        serviceFound = true;
+        console.log(`[connectHeartRate] ✅ Heart Rate 서비스 발견: ${serviceUUID}`);
+        break;
+      } catch (err) {
+        console.log(`[connectHeartRate] ⚠️ 서비스 검색 실패 (${serviceUUID}):`, err.message);
+        continue;
+      }
+    }
+    
+    if (!serviceFound || !service) {
       // 서비스가 없으면 연결 끊고 에러 발생
-      device.gatt.disconnect();
-      throw new Error("선택하신 기기는 심박계 기능을 지원하지 않습니다.");
+      console.error('[connectHeartRate] ❌ Heart Rate 서비스를 찾을 수 없습니다');
+      await device.gatt.disconnect();
+      throw new Error("선택하신 기기는 심박계 기능을 지원하지 않습니다. Heart Rate Service(0x180D)가 없습니다.");
     }
 
-    await ch.startNotifications();
-    ch.addEventListener("characteristicvaluechanged", handleHeartRateData);
+    // [Zwift 스타일] 5단계: Heart Rate Measurement 특성 획득
+    const characteristicUUIDs = [
+      UUIDS.HEART_RATE_MEASUREMENT,  // 128-bit Full UUID (우선)
+      '0x2A37',                       // 16-bit UUID
+      'heart_rate_measurement'        // 별칭
+    ];
+    
+    let characteristicFound = false;
+    for (const charUUID of characteristicUUIDs) {
+      try {
+        console.log(`[connectHeartRate] 특성 검색 시도: ${charUUID}`);
+        characteristic = await service.getCharacteristic(charUUID);
+        characteristicFound = true;
+        console.log(`[connectHeartRate] ✅ Heart Rate Measurement 특성 발견: ${charUUID}`);
+        break;
+      } catch (err) {
+        console.log(`[connectHeartRate] ⚠️ 특성 검색 실패 (${charUUID}):`, err.message);
+        continue;
+      }
+    }
+    
+    if (!characteristicFound || !characteristic) {
+      console.error('[connectHeartRate] ❌ Heart Rate Measurement 특성을 찾을 수 없습니다');
+      await device.gatt.disconnect();
+      throw new Error("선택하신 기기는 Heart Rate Measurement 특성(0x2A37)을 지원하지 않습니다.");
+    }
 
+    // [Zwift 스타일] 6단계: 알림 활성화
+    console.log('[connectHeartRate] 6단계: 알림 활성화 중...');
+    await characteristic.startNotifications();
+    characteristic.addEventListener("characteristicvaluechanged", handleHeartRateData);
+    console.log('[connectHeartRate] ✅ 알림 활성화 완료');
+
+    // 연결 정보 저장
     window.connectedDevices.heartRate = { 
       name: device.name || "Heart Rate", 
       device, 
       server, 
-      characteristic: ch 
+      characteristic: characteristic  // 변수명 수정 (ch → characteristic)
     };
 
+    // [Zwift 스타일] 7단계: 연결 해제 이벤트 리스너 등록
     device.addEventListener("gattserverdisconnected", () => {
+      console.log('[connectHeartRate] ⚠️ 심박계 연결 해제됨');
       if (window.connectedDevices.heartRate?.device === device) {
         window.connectedDevices.heartRate = null;
+        if (typeof showToast === 'function') {
+          showToast('심박계 연결이 해제되었습니다.');
+        }
       }
       updateDevicesList();
+      if (typeof window.updateDeviceButtonImages === "function") {
+        setTimeout(() => window.updateDeviceButtonImages(), 100);
+      }
     });
 
+    // UI 업데이트
     updateDevicesList();
-    // 버튼 이미지 즉시 업데이트
     if (typeof window.updateDeviceButtonImages === "function") {
       setTimeout(() => window.updateDeviceButtonImages(), 100);
     }
+    
     showConnectionStatus(false);
-    showToast(`✅ ${device.name || "HR"} 연결 성공`);
+    const deviceName = device.name || "심박계";
+    console.log(`[connectHeartRate] ✅ ${deviceName} 연결 완료`);
+    if (typeof showToast === 'function') {
+      showToast(`✅ ${deviceName} 연결 성공`);
+    }
     
   } catch (err) {
     showConnectionStatus(false);
-    console.error("심박계 연결 오류:", err);
-    showToast("❌ 심박계 연결 실패: " + err.message);
+    console.error("[connectHeartRate] ❌ 심박계 연결 오류:", err);
+    
+    // 더 구체적인 에러 메시지 제공
+    let errorMessage = "심박계 연결 실패";
+    if (err.message) {
+      errorMessage = err.message;
+    } else if (err.name === 'NotFoundError') {
+      errorMessage = "심박계를 찾을 수 없습니다. 기기가 켜져 있고 페어링 모드인지 확인해주세요.";
+    } else if (err.name === 'SecurityError') {
+      errorMessage = "Bluetooth 권한이 필요합니다. 브라우저 설정에서 권한을 확인해주세요.";
+    } else if (err.name === 'NetworkError') {
+      errorMessage = "네트워크 오류가 발생했습니다. 기기와의 거리를 확인해주세요.";
+    }
+    
+    if (typeof showToast === 'function') {
+      showToast(`❌ ${errorMessage}`);
+    }
+    
     // 연결 실패 시에도 버튼 이미지 업데이트
     if (typeof window.updateDeviceButtonImages === "function") {
       setTimeout(() => window.updateDeviceButtonImages(), 100);
