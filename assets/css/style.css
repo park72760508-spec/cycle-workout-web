@@ -1000,6 +1000,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 30px;
 }
 
+/* 무선 기기 연결 화면 헤더 여백 최소화 */
+#connectionScreen .connection-header {
+  margin-bottom: 20px !important; /* 30px에서 20px로 최소화 */
+}
+
 .connection-header h1 {
   font-size: 1.8em;
   margin-bottom: 5px;
@@ -1026,6 +1031,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 15px;
 }
 
+/* 무선 기기 연결 화면 h3 여백 최소화 */
+#connectionScreen .connection-device-section h3 {
+  margin-bottom: 10px !important; /* 15px에서 10px로 최소화 */
+}
+
 .connection-status-card,
 .connection-summary-card {
   background: rgba(255, 255, 255, 0.6);
@@ -1048,24 +1058,96 @@ h1,h2,h3,h4 { font-weight: 600; }
   flex-wrap: wrap;
 }
 
-/* 무선 기기 연결 화면 하단 여백 제거 (파워미터 연결 버튼 이하) */
+/* ==========================================================
+   무선 기기 연결 화면 여백 최소화 (전체 통합)
+   ========================================================== */
+
+/* connection-form-card 여백 최소화 */
 #connectionScreen .connection-form-card {
-  padding-bottom: 20px !important;
+  padding: 25px 35px 5px 35px !important; /* 상단 25px, 하단 5px로 최소화 */
   margin-bottom: 0 !important;
 }
 
+/* connection-header 여백 최소화 */
+#connectionScreen .connection-header {
+  margin-bottom: 15px !important; /* 30px에서 15px로 최소화 */
+}
+
+/* connection-device-section 여백 완전 제거 */
 #connectionScreen .connection-device-section {
   margin-bottom: 0 !important;
   padding-bottom: 0 !important;
 }
 
-/* 연결 정보 리스트 숨김 처리 */
+#connectionScreen .connection-device-section h3 {
+  margin-bottom: 8px !important; /* 15px에서 8px로 최소화 */
+}
+
+#connectionScreen .connection-device-section .grid-2 {
+  margin-bottom: 0 !important; /* mb-15 클래스 무시 */
+}
+
+/* connection-exit-container 여백 최소화 */
+#connectionScreen .connection-exit-container {
+  margin-top: 4px !important; /* 16px에서 4px로 최소화 */
+  padding-top: 8px !important; /* 16px에서 8px로 최소화 */
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* 연결 정보 리스트 완전 제거 */
 #connectionScreen #connectedDevicesList {
   display: none !important;
   margin: 0 !important;
   padding: 0 !important;
   height: 0 !important;
+  min-height: 0 !important;
   overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+/* iOS 안내 영역 완전 제거 */
+#connectionScreen #iosInfo {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+#connectionScreen #iosInfo.hidden {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 연결 상태 영역 완전 제거 */
+#connectionScreen #connectionStatus {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+}
+
+#connectionScreen #connectionStatus.hidden {
+  display: none !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* connection-status-card도 공간 차지하지 않도록 */
+#connectionScreen .connection-status-card {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
 }
 
 /* 다음 단계로 버튼 (녹색톤) */
@@ -14009,7 +14091,6 @@ body.mobile-dashboard-active {
 }
 
 /* 각 화면의 컨텐츠 영역 스크롤 가능하게 */
-#connectionScreen .connection-form-card,
 #trainingReadyScreen .connection-form-card,
 #trainingRoomScreen .connection-form-card,
 #playerListScreen .connection-form-card {
@@ -14021,7 +14102,16 @@ body.mobile-dashboard-active {
   overflow: hidden;
 }
 
-#connectionScreen .connection-device-section,
+/* 무선 기기 연결 화면은 높이 제한 없이 콘텐츠에 맞춤 */
+#connectionScreen .connection-form-card {
+  display: flex !important;
+  flex-direction: column !important;
+  height: auto !important; /* 고정 높이 제거 */
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
 #trainingReadyScreen .connection-device-section,
 #trainingRoomScreen .connection-device-section,
 #playerListScreen .connection-device-section {
@@ -14030,6 +14120,14 @@ body.mobile-dashboard-active {
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 (최소화) */
   padding-bottom: 80px; /* 120px에서 80px로 최소화 */
+}
+
+/* 무선 기기 연결 화면만 padding-bottom 완전 제거 (버튼이 fixed이므로 불필요) */
+#connectionScreen .connection-device-section {
+  flex: 0 0 auto !important; /* flex: 1 제거하여 공간 차지 최소화 */
+  overflow: visible !important; /* 스크롤 불필요 */
+  padding-bottom: 0 !important; /* fixed 버튼이므로 padding 불필요 */
+  margin-bottom: 0 !important;
 }
 
 /* 버튼 스타일 최적화 (터치 인식율 향상 - iOS & Android) */
