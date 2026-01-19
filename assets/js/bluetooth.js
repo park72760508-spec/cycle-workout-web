@@ -1,9 +1,9 @@
 /* ==========================================================
-   bluetooth.js (v2.1 Final)
+   bluetooth.js (v2.2 Fixed for CycleOps/Saris)
+   - CycleOps/Saris 기기 검색을 위한 이름(Name) 필터 추가
    - 심박계 검색 호환성 강화 ('heart_rate' 별칭 사용)
-   - 스마트로라 FTMS 강제 탐색 및 ERG 제어(setTargetPower) 추가
-   - 기존 앱 연동(indoorTrainingState) UI 로직 완벽 보존
-   - 케이던스 타임아웃(0으로 초기화) 로직 복원
+   - 스마트로라 FTMS 강제 탐색 및 ERG 제어(setTargetPower)
+   - 앱 연동 UI 및 케이던스 타임아웃 유지
 ========================================================== */
 
 // ── [1] 표준 UUID 및 설정 ──
@@ -72,7 +72,6 @@ if (!window.showToast) {
   };
 }
 
-// ★ 기존 파일의 버튼 로직 (indoorTrainingState 체크 포함) 복원
 window.updateDeviceButtonImages = window.updateDeviceButtonImages || function () {
   const btnTrainer = document.getElementById("btnConnectTrainer");
   const btnHR = document.getElementById("btnConnectHR");
@@ -167,7 +166,7 @@ window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();
 };
 
-// ── [3] 핵심 연결 로직 (개선됨) ──
+// ── [3] 핵심 연결 로직 (CycleOps/Saris 대응) ──
 
 // 1) 스마트 트레이너 연결
 async function connectTrainer() {
@@ -175,7 +174,8 @@ async function connectTrainer() {
     showConnectionStatus(true);
     let device;
 
-    // FTMS와 CPS를 동시에 필터링 (파워미터로 인식되는 문제 방지)
+    // ★ CycleOps 대응: 이름(Prefix) 필터 추가
+    // 서비스 UUID를 광고하지 않는 구형 펌웨어를 위해 이름으로 검색
     const optionalServicesList = [
       UUIDS.FTMS_SERVICE, UUIDS.SHORT_FTMS,
       UUIDS.CPS_SERVICE,  UUIDS.SHORT_CPS,
@@ -184,18 +184,24 @@ async function connectTrainer() {
     ];
 
     try {
-      console.log('[connectTrainer] 검색 시작...');
+      console.log('[connectTrainer] 검색 시작 (CycleOps/Saris 필터 포함)...');
       device = await navigator.bluetooth.requestDevice({
         filters: [
           { services: [UUIDS.FTMS_SERVICE] },
           { services: [UUIDS.SHORT_FTMS] },
-          { services: [UUIDS.CPS_SERVICE] }, // 파워미터로 광고해도 일단 잡음
+          // ★ 중요: 브랜드 이름으로 강제 검색
+          { namePrefix: "CycleOps" },
+          { namePrefix: "Saris" },
+          { namePrefix: "Hammer" },
+          { namePrefix: "Magnus" },
+          // 기존 파워미터 서비스 필터
+          { services: [UUIDS.CPS_SERVICE] },
           { services: [UUIDS.SHORT_CPS] }
         ],
         optionalServices: optionalServicesList
       });
     } catch (e) {
-      console.log("⚠️ 필터 검색 실패, 전체 검색 시도...");
+      console.log("⚠️ 필터 검색 실패, 전체 검색 시도...", e);
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: optionalServicesList
@@ -204,7 +210,7 @@ async function connectTrainer() {
 
     const server = await device.gatt.connect();
     
-    // ★ 중요: 파워미터로 잡혔어도 FTMS 서비스를 우선적으로 강제 탐색
+    // ★ 중요: 이름으로 찾았더라도, 내부적으로는 FTMS 서비스를 강제 탐색해야 ERG가 됨
     let service, characteristic, isFTMS = false;
     let controlPointChar = null;
 
@@ -249,13 +255,15 @@ async function connectTrainer() {
       protocol: isFTMS ? 'FTMS' : 'CPS' 
     };
 
-    // ERG UI 업데이트 트리거 (외부 함수가 있다면)
     if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
 
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
     updateDevicesList();
     showConnectionStatus(false);
-    showToast(`✅ ${device.name} 연결 성공 (${isFTMS ? "ERG 모드" : "파워미터 모드"})`);
+    
+    // 연결 상태 메시지
+    const ergMsg = isFTMS ? (controlPointChar ? "(ERG 지원)" : "(ERG 미지원)") : "(파워미터 모드)";
+    showToast(`✅ ${device.name} 연결 성공 ${ergMsg}`);
 
   } catch (err) {
     showConnectionStatus(false);
@@ -264,20 +272,18 @@ async function connectTrainer() {
   }
 }
 
-// 2) 심박계 연결 (호환성 최적화)
+// 2) 심박계 연결
 async function connectHeartRate() {
   try {
     showConnectionStatus(true);
     let device;
     
-    // ★ 핵심 수정: 'heart_rate' 문자열 별칭을 최우선 필터로 사용
     try {
       device = await navigator.bluetooth.requestDevice({
-        filters: [{ services: ['heart_rate'] }], // Garmin/Wahoo 등 호환성 좋음
+        filters: [{ services: ['heart_rate'] }],
         optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE, 'battery_service']
       });
     } catch (e) {
-      console.log("기본 필터 실패, 전체 검색 모드...");
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
         optionalServices: ['heart_rate', UUIDS.HEART_RATE_SERVICE]
@@ -285,8 +291,6 @@ async function connectHeartRate() {
     }
 
     const server = await device.gatt.connect();
-    
-    // 서비스 찾기 (문자열 -> 16bit -> 128bit 순차 시도)
     let service;
     try { service = await server.getPrimaryService('heart_rate'); } 
     catch (e) { 
@@ -295,8 +299,6 @@ async function connectHeartRate() {
     }
 
     if (!service) throw new Error("심박 서비스를 찾을 수 없습니다.");
-
-    // 특성 찾기
     let characteristic;
     try { characteristic = await service.getCharacteristic('heart_rate_measurement'); }
     catch (e) { characteristic = await service.getCharacteristic(0x2A37); }
@@ -313,7 +315,6 @@ async function connectHeartRate() {
 
   } catch (err) {
     showConnectionStatus(false);
-    console.error(err);
     showToast("❌ 심박계 연결 실패");
   }
 }
@@ -353,8 +354,6 @@ async function connectPowerMeter() {
 
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handlePowerMeterData);
-    
-    // 케이던스 보정용 CSC 구독 시도
     trySubscribeCSC(server);
 
     window.connectedDevices.powerMeter = { name: device.name, device, server, characteristic };
@@ -371,10 +370,9 @@ async function connectPowerMeter() {
 
 // ── [4] 데이터 처리 및 ERG 제어 ──
 
-// ERG 파워 설정 함수 (외부 호출용)
 window.setTargetPower = function(targetWatts) {
     const trainer = window.connectedDevices.trainer;
-    if (!trainer || !trainer.controlPoint) return; // ERG 미지원
+    if (!trainer || !trainer.controlPoint) return;
 
     const watts = Math.max(0, Math.min(targetWatts, 1000));
     window.bleCommandQueue.enqueue(async () => {
@@ -397,9 +395,8 @@ function handleTrainerData(e) {
   let off = 0;
   const flags = dv.getUint16(off, true); off += 2;
   
-  // Speed, Avg Speed 스킵 로직 (단순화)
   off += 2; // Inst Speed
-  if (flags & 0x0001) off += 2; // More Data? (확장 플래그)
+  if (flags & 0x0001) off += 2; // More Data
   
   // Cadence
   if (flags & 0x0004) {
@@ -408,21 +405,17 @@ function handleTrainerData(e) {
     updateCadence(rpm, 'trainer');
   }
 
-  // Power (Bit 6 - 0x0040)
-  // 중간 필드 건너뛰기 로직이 복잡할 수 있으므로, 
-  // Power 필드 위치를 추정하거나 플래그 순서대로 파싱해야 함.
-  // 여기서는 가장 일반적인 구조(Speed, AvgSpeed, Cadence, AvgCadence, Distance, Resistance, Power) 가정
-  
+  // Flags 건너뛰기
   if (flags & 0x0008) off += 2; // Avg Cadence
   if (flags & 0x0010) off += 3; // Distance
   if (flags & 0x0020) off += 2; // Resistance
   
+  // Power
   if (flags & 0x0040) {
     const p = dv.getInt16(off, true);
     window.liveData.power = p;
     notifyChildWindows('power', p);
     
-    // ERG 버퍼링
     if (!window._recentPowerBuffer) window._recentPowerBuffer = [];
     window._recentPowerBuffer.push({ power: p, timestamp: Date.now() });
     window._recentPowerBuffer = window._recentPowerBuffer.filter(x => Date.now() - x.timestamp < 5000);
@@ -442,8 +435,7 @@ function handlePowerMeterData(event) {
     notifyChildWindows('power', instPower);
   }
 
-  if (flags & 0x0020) { // Crank Data
-    // 앞선 필드 스킵
+  if (flags & 0x0020) { 
     if (flags & 0x0001) off += 1;
     if (flags & 0x0004) off += 2;
     if (flags & 0x0010) off += 6;
@@ -492,9 +484,6 @@ async function trySubscribeCSC(server) {
     const s = await server.getPrimaryService(UUIDS.CSC_SERVICE);
     const c = await s.getCharacteristic(0x2A5B);
     await c.startNotifications();
-    c.addEventListener("characteristicvaluechanged", (e) => {
-        // CSC 파싱 로직 (필요시 구현, 현재는 구독만 유지하여 기기 활성화)
-    });
   } catch(e) {}
 }
 
@@ -511,7 +500,6 @@ function handleDisconnect(type, device) {
 
 function notifyChildWindows(field, value) {
   if (!window._bluetoothChildWindows) return;
-  // 닫힌 창 정리
   window._bluetoothChildWindows = window._bluetoothChildWindows.filter(w => !w.closed);
   window._bluetoothChildWindows.forEach(w => {
     w.postMessage({ 
@@ -523,7 +511,6 @@ function notifyChildWindows(field, value) {
   });
 }
 
-// 안전 종료 처리
 window.addEventListener("beforeunload", () => {
   try {
     if (connectedDevices.trainer?.server?.connected) connectedDevices.trainer.device.gatt.disconnect();
@@ -532,7 +519,6 @@ window.addEventListener("beforeunload", () => {
   } catch (e) {}
 });
 
-// 케이던스 0 초기화 (3초간 데이터 없으면)
 setInterval(() => {
     const now = Date.now();
     if (window.liveData.cadence > 0) {
@@ -548,7 +534,6 @@ setInterval(() => {
     }
 }, 1000);
 
-// Export
 window.connectTrainer = connectTrainer;
 window.connectPowerMeter = connectPowerMeter;
 window.connectHeartRate = connectHeartRate;
