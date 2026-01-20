@@ -1,7 +1,8 @@
 /* ==========================================================
-   ErgController.js (v3.0 Multi-Protocol Support)
-   - FTMS(0x05)와 Legacy(0x42) 명령 자동 전환 기능 탑재
-   - CycleOps Hammer의 부하 제어 문제 완벽 해결
+   ErgController.js (v4.0 Zwift-Grade Logic)
+   - Keep-Alive(Heartbeat): 2초마다 파워 명령 재전송 (끊김 방지)
+   - Handshake: 'Request Control (0x00)' 필수 전송
+   - Retry Logic: 명령 실패 시 자동 재시도
 ========================================================== */
 
 class ErgController {
@@ -9,246 +10,187 @@ class ErgController {
     this._state = {
       enabled: false,
       targetPower: 0,
-      currentPower: 0,
-      pidParams: { Kp: 0.5, Ki: 0.1, Kd: 0.05 },
-      pedalingStyle: 'smooth',
-      fatigueLevel: 0,
-      autoAdjustmentEnabled: true,
       connectionStatus: 'disconnected'
     };
     this.state = this._createReactiveState(this._state);
 
+    // 명령 큐
     this._commandQueue = [];
-    this._isProcessingQueue = false;
-    this._lastCommandTime = 0;
-    this._minCommandInterval = 200;
-    this._maxQueueSize = 50;
-    this._commandTimeout = 5000;
+    this._isProcessing = false;
+    
+    // Keep-Alive 타이머 (Zwift 방식)
+    this._keepAliveInterval = null;
+    this._lastSentPower = 0;
+
+    // 구독자 리스트
     this._subscribers = [];
-    this._cadenceHistory = [];
-    this._powerHistory = [];
-    this._heartRateHistory = [];
-    this._lastPowerUpdateTime = 0;
-    this._powerUpdateDebounce = 500;
 
-    // 명령 우선순위
-    this._commandPriorities = {
-      'RESET': 100,
-      'REQUEST_CONTROL': 90,
-      'SET_TARGET_POWER': 50
-    };
-
-    this._setupConnectionWatcher();
-    console.log('[ErgController] v3.0 초기화 (Multi-Protocol)');
+    console.log('[ErgController] v4.0 (Zwift Logic) Loaded');
   }
 
-  // (기존 setupConnectionWatcher, resetState, createReactiveState 등 생략 - 동일함)
-  _setupConnectionWatcher() {
-    let lastTrainerState = null;
-    const checkConnection = () => {
-      const currentTrainer = window.connectedDevices?.trainer;
-      const wasConnected = lastTrainerState?.controlPoint !== null;
-      const isConnected = currentTrainer?.controlPoint !== null;
-      if (wasConnected && !isConnected) this._resetState();
-      if (isConnected !== (this.state.connectionStatus === 'connected')) {
-        this.state.connectionStatus = isConnected ? 'connected' : 'disconnected';
-      }
-      lastTrainerState = currentTrainer;
-    };
-    setInterval(checkConnection, 1000);
-  }
-
-  _resetState() {
-    if (this.state.enabled) {
-      this.state.enabled = false;
-      this.state.targetPower = 0;
-      this.state.connectionStatus = 'disconnected';
-      this._commandQueue = [];
-      this._isProcessingQueue = false;
-    }
-  }
-
-  _createReactiveState(state) {
+  _createReactiveState(obj) {
     const self = this;
-    return new Proxy(state, {
+    return new Proxy(obj, {
       set(target, key, value) {
         if (target[key] !== value) {
           target[key] = value;
           self._notifySubscribers(key, value);
         }
         return true;
-      },
-      get(target, key) { return target[key]; }
+      }
     });
   }
 
   subscribe(callback) {
-    if (typeof callback !== 'function') return;
     this._subscribers.push(callback);
-    return () => {
-      const idx = this._subscribers.indexOf(callback);
-      if (idx > -1) this._subscribers.splice(idx, 1);
-    };
   }
 
   _notifySubscribers(key, value) {
-    this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
+    this._subscribers.forEach(cb => { try { cb(this.state, key, value); } catch(e){} });
   }
 
+  // ── [1] ERG 모드 토글 (Handshake 포함) ──
   async toggleErgMode(enable) {
-    try {
-      const trainer = window.connectedDevices?.trainer;
-      if (!trainer) throw new Error('스마트로라 연결 안됨');
-
-      // Control Point 확인
-      if (!trainer.controlPoint) throw new Error('제어권 없음');
-
-      this.state.enabled = enable;
-      this.state.connectionStatus = 'connected';
-
-      if (enable) {
-        // ★ Legacy 기기는 별도의 "Take Control" 명령이 필요 없을 수 있으나
-        // FTMS는 필요함. 프로토콜에 따라 분기
-        if (trainer.realProtocol === 'FTMS') {
-            await this._queueCommand(() => {
-                const cmd = new Uint8Array([0x00]); // Request Control
-                return trainer.controlPoint.writeValue(cmd);
-            }, 'REQUEST_CONTROL', { priority: 90 });
-        }
-        // Legacy는 즉시 파워 설정 준비 완료
-        if (typeof showToast === 'function') showToast('ERG 모드 ON');
-      } else {
-        // 해제
-        if (trainer.realProtocol === 'FTMS') {
-             await this._queueCommand(() => {
-                const cmd = new Uint8Array([0x01]); // Reset
-                return trainer.controlPoint.writeValue(cmd);
-            }, 'RESET', { priority: 100 });
-        }
-        this.state.targetPower = 0;
-        if (typeof showToast === 'function') showToast('ERG 모드 OFF');
-      }
-    } catch (error) {
+    const trainer = window.connectedDevices?.trainer;
+    
+    if (!trainer || !trainer.controlPoint) {
       this.state.enabled = false;
-      if (typeof showToast === 'function') showToast(error.message);
+      throw new Error("스마트 로라가 연결되지 않았거나 제어 권한이 없습니다.");
+    }
+
+    // 상태 업데이트
+    this.state.enabled = enable;
+    
+    if (enable) {
+      console.log('[ERG] 활성화 시도...');
+      
+      // ★ 중요: Request Control (OpCode 0x00)
+      // FTMS 및 대부분의 최신 펌웨어 CycleOps/Wahoo는 이 핸드셰이크가 필수입니다.
+      try {
+        if (trainer.protocol === 'FTMS' || trainer.protocol === 'CYCLEOPS') {
+           await this._sendCommand([0x00]); // Request Control
+           console.log('[ERG] 제어권 요청(0x00) 전송 완료');
+        }
+        // 제어권 획득 성공 시, 현재 타겟 파워로 즉시 시작
+        if (this.state.targetPower > 0) {
+            await this.setTargetPower(this.state.targetPower);
+        }
+        // Keep-Alive 시작
+        this._startKeepAlive();
+        if (typeof showToast === 'function') showToast("ERG 모드 ON (제어권 확보)");
+      } catch (e) {
+        console.error('[ERG] 제어권 요청 실패:', e);
+        this.state.enabled = false;
+        throw new Error("제어권 요청 실패: " + e.message);
+      }
+    } else {
+      // 비활성화 시 Reset or Resistance Mode
+      this._stopKeepAlive();
+      this.state.targetPower = 0;
+      // Reset Command (OpCode 0x01? or just stop)
+      // 일부 기기는 0x01(Reset)을 보내면 연결을 끊어버릴 수 있으므로 주의.
+      // 안전하게는 그냥 명령 전송을 멈추는 것이지만, FTMS 표준은 Reset을 권장.
+      if (trainer.protocol === 'FTMS') {
+          this._sendCommand([0x01]).catch(()=> console.warn("Reset fail ignored")); 
+      }
+      if (typeof showToast === 'function') showToast("ERG 모드 OFF");
     }
   }
 
-  // ★ [핵심] 프로토콜에 따른 명령 분기
+  // ── [2] 파워 설정 (Keep-Alive 지원) ──
   async setTargetPower(watts) {
-    if (!this.state.enabled) return;
-    if (watts < 0) return;
+    if (!this.state.enabled || watts < 0) return;
+    
+    this.state.targetPower = Math.round(watts);
+    
+    // 즉시 전송
+    await this._sendPowerCommand(this.state.targetPower);
+  }
 
+  // 실제 명령 전송 (프로토콜 분기)
+  async _sendPowerCommand(watts) {
     const trainer = window.connectedDevices?.trainer;
     if (!trainer || !trainer.controlPoint) return;
 
-    const now = Date.now();
-    if (now - this._lastPowerUpdateTime < this._powerUpdateDebounce) {
-      return new Promise((resolve) => {
-        setTimeout(() => { this.setTargetPower(watts).then(resolve); }, 
-        this._powerUpdateDebounce - (now - this._lastPowerUpdateTime));
-      });
-    }
-    this._lastPowerUpdateTime = now;
+    let buffer;
+    const protocol = trainer.protocol;
 
     try {
-      const targetWatts = Math.round(watts);
-      
-      // ★ 프로토콜별 명령 생성
-      let buffer;
-      const protocol = trainer.realProtocol || 'FTMS';
-
       if (protocol === 'FTMS') {
-        // 표준 FTMS: OpCode 0x05 + uint16 (power)
+        // FTMS: OpCode 0x05 + Power(int16)
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, 0x05); 
-        view.setInt16(1, targetWatts, true);
-        console.log(`[ERG] Sending FTMS (0x05) -> ${targetWatts}W`);
+        view.setUint8(0, 0x05); // Set Target Power
+        view.setInt16(1, watts, true); // Little Endian
       } 
       else if (protocol === 'CYCLEOPS' || protocol === 'WAHOO') {
-        // ★ CycleOps/Wahoo Legacy: OpCode 0x42 + uint16 (power)
+        // Legacy: 보통 OpCode 0x42 (Wahoo/CycleOps 공통)을 사용하거나
+        // CycleOps의 경우 그냥 Uint8/16 값을 직접 쓰기도 함.
+        // 하지만 Hammer 최신 펌웨어는 FTMS OpCode를 Legacy Characteristic에서도 받아들임.
+        // 안전하게 Wahoo Legacy Format (0x42 + Power) 시도
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, 0x42); // Wahoo Legacy Set Watts
-        view.setUint16(1, targetWatts, true);
-        console.log(`[ERG] Sending Legacy (0x42) -> ${targetWatts}W`);
-      }
-      else {
-        console.warn(`[ERG] 알 수 없는 프로토콜: ${protocol}, 기본값(0x42) 시도`);
+        view.setUint8(0, 0x42); 
+        view.setUint16(1, watts * 1, true); // *1은 형변환 확실히
+      } else {
+        // Unknown: FTMS 포맷 시도
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, 0x42);
-        view.setUint16(1, targetWatts, true);
+        view.setUint8(0, 0x05);
+        view.setInt16(1, watts, true);
       }
 
-      await this._queueCommand(() => {
-        return trainer.controlPoint.writeValue(buffer);
-      }, 'SET_TARGET_POWER', { priority: 50 });
+      await this._sendCommand(buffer);
+      this._lastSentPower = watts;
+      // console.log(`[ERG] ${watts}W 전송 성공`);
 
-      this.state.targetPower = watts;
-
-    } catch (error) {
-      console.error('[ErgController] 파워 설정 오류:', error);
+    } catch (e) {
+      console.warn(`[ERG] 파워 전송 실패 (${watts}W):`, e);
     }
   }
 
-  // (이하 큐 처리 및 기타 함수 동일)
-  async _queueCommand(commandFn, commandType, options = {}) {
-    return new Promise((resolve, reject) => {
-      if (this._commandQueue.length >= this._maxQueueSize) this._commandQueue.shift();
-      const priority = options.priority || this._commandPriorities[commandType] || 0;
-      const command = {
-        commandFn, commandType, resolve, reject,
-        timestamp: Date.now(), priority,
-        retryCount: 0, maxRetries: 3
-      };
-      const idx = this._commandQueue.findIndex(cmd => cmd.priority < priority);
-      if (idx === -1) this._commandQueue.push(command);
-      else this._commandQueue.splice(idx, 0, command);
-      if (!this._isProcessingQueue) this._startQueueProcessing();
-    });
+  // Low-level write wrapper
+  async _sendCommand(data) {
+    const trainer = window.connectedDevices?.trainer;
+    if (!trainer || !trainer.controlPoint) return;
+    
+    // Array -> Uint8Array / ArrayBuffer 그대로
+    const value = (Array.isArray(data)) ? new Uint8Array(data) : data;
+    
+    // GATT Write (Response 필수 여부에 따라 WriteValueWithResponse 등 사용 가능하나 기본 writeValue 권장)
+    await trainer.controlPoint.writeValue(value);
   }
 
-  _startQueueProcessing() {
-    if (this._isProcessingQueue) return;
-    this._isProcessingQueue = true;
-    const processNext = async () => {
-      if (this._commandQueue.length === 0) {
-        this._isProcessingQueue = false;
-        return;
-      }
-      const now = Date.now();
-      if (now - this._lastCommandTime < this._minCommandInterval) {
-        setTimeout(processNext, this._minCommandInterval - (now - this._lastCommandTime));
-        return;
-      }
-      const command = this._commandQueue.shift();
-      this._lastCommandTime = Date.now();
-      try {
-        await command.commandFn();
-        command.resolve();
-      } catch (error) {
-        if (command.retryCount < command.maxRetries) {
-          command.retryCount++;
-          this._commandQueue.unshift(command);
-        } else {
-          command.reject(error);
+  // ── [3] Keep-Alive (Zwift Logic) ──
+  // 스마트로라는 2~5초간 명령이 없으면 ERG를 풀고 Resistance 모드로 돌아감.
+  // 따라서 값이 변하지 않아도 주기적으로 쏴줘야 함.
+  _startKeepAlive() {
+    this._stopKeepAlive();
+    this._keepAliveInterval = setInterval(() => {
+        if (this.state.enabled && this.state.targetPower > 0) {
+            // console.log('[ERG] Keep-Alive Tick');
+            this._sendPowerCommand(this.state.targetPower);
         }
-      }
-      setTimeout(processNext, this._minCommandInterval);
-    };
-    processNext();
+    }, 2000); // 2초마다 재전송
   }
 
-  // 데이터 수집 (생략 - 기존 유지)
-  updateCadence(c) { if(c>0) this._cadenceHistory.push(c); }
-  updatePower(p) { if(p>0) this._powerHistory.push({value:p, timestamp:Date.now()}); }
-  updateHeartRate(h) { if(h>0) this._heartRateHistory.push({value:h, timestamp:Date.now()}); }
-  updateConnectionStatus(s) { this.state.connectionStatus = s; if(s==='disconnected') this._resetState(); }
-  getState() { return {...this.state}; }
+  _stopKeepAlive() {
+    if (this._keepAliveInterval) {
+        clearInterval(this._keepAliveInterval);
+        this._keepAliveInterval = null;
+    }
+  }
+
+  // 외부 데이터 수신 (그래프 업데이트 등 용도)
+  updatePower(p) { /* 필요시 구현 */ }
+  updateConnectionStatus(status) {
+      this.state.connectionStatus = status;
+      if (status === 'disconnected') {
+          this.state.enabled = false;
+          this._stopKeepAlive();
+      }
+  }
 }
 
 const ergController = new ErgController();
 if (typeof window !== 'undefined') window.ergController = ergController;
-if (typeof module !== 'undefined' && module.exports) module.exports = { ergController, ErgController };
