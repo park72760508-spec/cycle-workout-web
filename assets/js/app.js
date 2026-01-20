@@ -3358,8 +3358,14 @@ function applyPullToRefreshPrevention(element) {
   element.style.overscrollBehavior = 'none';
   element.style.webkitOverflowScrolling = 'touch';
   
-  // basecampScreen은 스크롤이 없으므로 JavaScript 이벤트 핸들러를 더 보수적으로 적용
+  // basecampScreen은 스크롤이 없고 버튼 클릭 문제가 있으므로 JavaScript 이벤트 핸들러를 완전히 제거
   const isBasecampScreen = element.id === 'basecampScreen';
+  
+  if (isBasecampScreen) {
+    // basecampScreen은 CSS만으로 충분 (JavaScript 이벤트 핸들러 제거)
+    console.log('[Pull-to-refresh] basecampScreen: JavaScript 이벤트 핸들러 제거 (CSS만 사용)');
+    return;
+  }
   
   // JavaScript 이벤트 핸들러 추가 (버튼 클릭 방해하지 않도록 개선)
   let touchStartY = 0;
