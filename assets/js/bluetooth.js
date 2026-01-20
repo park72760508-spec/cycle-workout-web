@@ -1,28 +1,25 @@
 /* ==========================================================
-   bluetooth.js (v3.3 Universal Unlock)
-   - CycleOps Hammer, Wahoo, Tacx 구형 기기 완벽 지원
-   - "Control Point 찾기 실패" 해결을 위한 Deep Scan 적용
-   - 모든 Known Proprietary UUIDs를 Optional Services에 추가
-   - 'FTMS'로 위장하여 ERG UI 강제 활성화
+   bluetooth.js (v3.4 Protocol Identifier)
+   - 연결된 기기가 FTMS인지 Legacy(CycleOps/Wahoo)인지 정확히 식별
+   - ErgController가 올바른 '방언(OpCode)'을 쓰도록 유도
 ========================================================== */
 
 // ── [1] UUID 상수 (만능 리스트) ──
 const UUIDS = {
-  // 1. 표준 FTMS (최신 기기)
+  // 1. 표준 FTMS
   FTMS_SERVICE: '00001826-0000-1000-8000-00805f9b34fb', 
   FTMS_DATA:    '00002ad2-0000-1000-8000-00805f9b34fb', 
   FTMS_CONTROL: '00002ad9-0000-1000-8000-00805f9b34fb', 
   
-  // 2. 파워미터/센서 (기본)
+  // 2. 파워미터/센서
   CPS_SERVICE:  '00001818-0000-1000-8000-00805f9b34fb', 
   CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb', 
   CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
-  HR_SERVICE:   '0000180d-0000-1000-8000-00805f9b34fb', 
   
   // 3. ★ 구형/독자 규격 서비스 (Legacy)
-  // CycleOps / PowerTap (VirtualTraining Protocol)
+  // CycleOps (VirtualTraining)
   CYCLEOPS_SERVICE: '347b0001-7635-408b-8918-8ff3949ce592',
-  CYCLEOPS_CONTROL: '347b0012-7635-408b-8918-8ff3949ce592', // 제어 특성
+  CYCLEOPS_CONTROL: '347b0012-7635-408b-8918-8ff3949ce592', 
 
   // Wahoo Fitness (Legacy)
   WAHOO_SERVICE:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
@@ -30,7 +27,9 @@ const UUIDS = {
 
   // Tacx FE-C over BLE
   TACX_SERVICE:     '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e',
-  TACX_CONTROL:     '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e'
+  TACX_CONTROL:     '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e',
+  
+  HR_SERVICE:   '0000180d-0000-1000-8000-00805f9b34fb'
 };
 
 // BLE 명령 큐
@@ -104,7 +103,7 @@ window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();
 };
 
-// ── [3] 스마트 트레이너 연결 (Deep Scan 적용) ──
+// ── [3] 스마트 트레이너 연결 (프로토콜 식별 강화) ──
 
 async function connectTrainer() {
   try {
@@ -112,7 +111,6 @@ async function connectTrainer() {
     let device;
     console.log('[connectTrainer] Universal Scan 시작...');
 
-    // 1. 검색 필터 (이름 또는 서비스)
     const filters = [
       { services: [UUIDS.FTMS_SERVICE] },
       { services: [UUIDS.CPS_SERVICE] },
@@ -122,14 +120,9 @@ async function connectTrainer() {
       { namePrefix: "Magnus" }
     ];
 
-    // 2. ★ 중요: 모든 구형 서비스 UUID를 열거해야 브라우저가 접근 허용
     const optionalServices = [
-      UUIDS.FTMS_SERVICE, 
-      UUIDS.CPS_SERVICE,  
-      UUIDS.CSC_SERVICE,
-      UUIDS.CYCLEOPS_SERVICE, // CycleOps 독자
-      UUIDS.WAHOO_SERVICE,    // Wahoo 독자
-      UUIDS.TACX_SERVICE,     // Tacx 독자
+      UUIDS.FTMS_SERVICE, UUIDS.CPS_SERVICE, UUIDS.CSC_SERVICE,
+      UUIDS.CYCLEOPS_SERVICE, UUIDS.WAHOO_SERVICE, UUIDS.TACX_SERVICE,
       "device_information"
     ];
 
@@ -142,10 +135,10 @@ async function connectTrainer() {
     }
 
     const server = await device.gatt.connect();
-    console.log('[connectTrainer] 연결 성공. Deep Scan 수행 중...');
+    console.log('[connectTrainer] 연결 성공. 프로토콜 분석 중...');
 
     let service, characteristic, controlPointChar = null;
-    let realProtocol = 'UNKNOWN';
+    let realProtocol = 'UNKNOWN'; // 'FTMS' | 'CYCLEOPS' | 'WAHOO' | 'TACX' | 'CPS'
 
     // [Step 1] 표준 FTMS 탐색
     try {
@@ -153,38 +146,32 @@ async function connectTrainer() {
       characteristic = await service.getCharacteristic(UUIDS.FTMS_DATA);
       realProtocol = 'FTMS';
       try { controlPointChar = await service.getCharacteristic(UUIDS.FTMS_CONTROL); } catch(e){}
-      console.log('✅ 표준 FTMS 발견');
-    } catch (e) {
-      // FTMS 없으면 파워미터나 Legacy 탐색
-    }
+      if (controlPointChar) console.log('✅ 표준 FTMS 발견');
+    } catch (e) {}
 
-    // [Step 2] Legacy Control Point "Deep Scan" (만능 열쇠)
-    // 표준 FTMS Control Point가 없으면, 다른 모든 서비스를 뒤져서 "쓰기 가능한" 특성을 찾음
+    // [Step 2] Legacy Control Point 탐색 (표준이 없거나 실패시)
     if (!controlPointChar) {
-      console.log('⚠️ 표준 Control Point 없음. Deep Scan으로 대체 특성 찾는 중...');
+      console.log('⚠️ FTMS Control Point 없음. Legacy 탐색...');
       
-      const services = await server.getPrimaryServices();
-      for (const svc of services) {
-        // 기본 서비스는 건너뜀
-        if (svc.uuid.includes("180a") || svc.uuid.includes("180f")) continue;
-
+      // CycleOps Legacy 확인
+      try {
+        const legacySvc = await server.getPrimaryService(UUIDS.CYCLEOPS_SERVICE);
+        controlPointChar = await legacySvc.getCharacteristic(UUIDS.CYCLEOPS_CONTROL);
+        realProtocol = 'CYCLEOPS';
+        console.log(`🎉 CycleOps Legacy 발견!`);
+        // 데이터 채널도 Legacy에서 가져오기 시도
+        const chars = await legacySvc.getCharacteristics();
+        if (chars.length > 0) characteristic = chars[0];
+      } catch (e) {
+        // Wahoo Legacy 확인
         try {
-          const chars = await svc.getCharacteristics();
-          for (const c of chars) {
-            // "Write" 속성이 있는 특성을 찾으면 Control Point로 간주
-            if (c.properties.write || c.properties.writeWithoutResponse) {
-              // CycleOps/Wahoo/Tacx Legacy UUID와 일치하면 즉시 채택
-              if (c.uuid === UUIDS.CYCLEOPS_CONTROL || c.uuid === UUIDS.WAHOO_CONTROL || c.uuid === UUIDS.TACX_CONTROL) {
-                 controlPointChar = c;
-                 console.log(`🎉 Legacy Control Point 발견! (UUID: ${c.uuid})`);
-                 break;
-              }
-              // 일치하지 않아도 일단 후보로 저장 (가장 마지막에 발견된 쓰기 가능한 특성 사용)
-              if (!controlPointChar) controlPointChar = c; 
-            }
-          }
-        } catch(e) {}
-        if (controlPointChar && (controlPointChar.uuid === UUIDS.CYCLEOPS_CONTROL || controlPointChar.uuid === UUIDS.WAHOO_CONTROL)) break;
+          const wahooSvc = await server.getPrimaryService(UUIDS.WAHOO_SERVICE);
+          controlPointChar = await wahooSvc.getCharacteristic(UUIDS.WAHOO_CONTROL);
+          realProtocol = 'WAHOO';
+          console.log(`🎉 Wahoo Legacy 발견!`);
+          const chars = await wahooSvc.getCharacteristics();
+          if (chars.length > 0) characteristic = chars[0];
+        } catch (e2) {}
       }
     }
 
@@ -193,45 +180,36 @@ async function connectTrainer() {
        try {
          service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
          characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
-         if (!realProtocol) realProtocol = 'CPS';
+         if (realProtocol === 'UNKNOWN') realProtocol = 'CPS';
        } catch (e) {
+         // 최후의 수단 CSC
          try {
-           // CycleOps Legacy 데이터 채널 (없을 수 있음, fallback)
-           service = await server.getPrimaryService(UUIDS.CYCLEOPS_SERVICE);
-           // 보통 첫번째 특성이 데이터임
-           const chars = await service.getCharacteristics();
-           if(chars.length > 0) characteristic = chars[0];
-         } catch(e2) {
-             // 최후의 수단 CSC
-             try {
-                service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
-                characteristic = await service.getCharacteristic(0x2A5B);
-             } catch(fatal) {}
-         }
+            service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
+            characteristic = await service.getCharacteristic(0x2A5B);
+         } catch(fatal) {}
        }
     }
 
     if (!characteristic) throw new Error("데이터 서비스를 찾을 수 없습니다.");
 
     await characteristic.startNotifications();
+    
+    // 데이터 파서 연결
     const parser = (realProtocol === 'FTMS') ? handleTrainerData : handlePowerMeterData;
     characteristic.addEventListener("characteristicvaluechanged", parser);
 
-    // ★ UI 속이기: CycleOps 기기라면 무조건 'FTMS'라고 보고
+    // ★ UI 속이기: CycleOps 기기라면 'FTMS'로 위장하되, realProtocol은 진실을 유지
     const name = (device.name || "").toUpperCase();
     let fakeProtocol = realProtocol;
-    if (name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || name.includes("MAGNUS")) {
-        console.log(`🔒 [Unlock] ${device.name} -> FTMS 강제 인식`);
+    if (name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || realProtocol === 'CYCLEOPS' || realProtocol === 'WAHOO') {
         fakeProtocol = 'FTMS'; 
     }
-    // Control Point를 찾았다면 그것도 FTMS로 간주
-    if (controlPointChar) fakeProtocol = 'FTMS';
 
     window.connectedDevices.trainer = { 
       name: device.name, device, server, characteristic,
-      controlPoint: controlPointChar, // ★ 여기가 채워져야 ErgController가 동작함
-      protocol: fakeProtocol, 
-      realProtocol: realProtocol 
+      controlPoint: controlPointChar, // 제어권
+      protocol: fakeProtocol,         // UI용 (FTMS로 위장)
+      realProtocol: realProtocol      // 실제 통신용 (FTMS/CYCLEOPS/WAHOO)
     };
 
     if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
@@ -241,7 +219,7 @@ async function connectTrainer() {
     showConnectionStatus(false);
     
     const ergMsg = controlPointChar ? "(ERG 제어 가능)" : "(파워미터 모드)";
-    showToast(`✅ ${device.name} 연결 ${ergMsg}`);
+    showToast(`✅ ${device.name} 연결 [${realProtocol}]`);
 
   } catch (err) {
     showConnectionStatus(false);
@@ -316,32 +294,16 @@ async function connectPowerMeter() {
   }
 }
 
-// ── [5] ERG 제어 ──
+// ── [5] ERG 제어 (명령 전달은 ErgController가 담당) ──
+// 여기서는 단순 패스스루만 수행하거나, 직접 구현하지 않고 ErgController에 위임
+// 다만 이전 버전 호환성을 위해 남겨둠
 
 window.setTargetPower = function(targetWatts) {
-    const trainer = window.connectedDevices.trainer;
-    if (!trainer || !trainer.controlPoint) {
-        console.warn("⚠️ ERG 제어권이 없습니다.");
-        return;
+    if (window.ergController) {
+        window.ergController.setTargetPower(targetWatts);
+    } else {
+        console.warn("ErgController not found!");
     }
-    const watts = Math.max(0, Math.min(targetWatts, 1000));
-    window.bleCommandQueue.enqueue(async () => {
-        try {
-            // ★ 만능 전송: 표준(FTMS)과 Legacy가 데이터 포맷이 다를 수 있음
-            // CycleOps Legacy는 보통 FTMS 포맷과 호환되거나, 단순히 Power(Uint16)만 보낼 수도 있음
-            // 안전을 위해 FTMS 표준 포맷(OpCode 0x05)을 먼저 시도
-            const buffer = new ArrayBuffer(3);
-            const view = new DataView(buffer);
-            view.setUint8(0, 0x05); // Set Target Power
-            view.setInt16(1, watts, true);
-            await trainer.controlPoint.writeValue(buffer);
-            
-            window.liveData.targetPower = watts;
-            console.log(`[ERG] ${watts}W 설정 전송`);
-        } catch (e) { 
-            console.warn("[ERG] 전송 실패 (포맷 불일치 가능성)", e); 
-        }
-    });
 };
 
 // ── [6] 데이터 처리 ──
