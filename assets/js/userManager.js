@@ -144,10 +144,10 @@ async function unifiedCreateUser(userData, source = 'profile') {
       throw new Error('✅ 이미 등록된 사용자입니다.');
     }
 
-    // 4) 만기일 기본값(오늘+10일) 자동 세팅
+    // 4) 만기일 기본값(오늘+3개월) 자동 세팅
     if (!userData.expiry_date) {
       const d = new Date();
-      d.setDate(d.getDate() + 10);
+      d.setMonth(d.getMonth() + 3); // 3개월 후로 설정
       userData.expiry_date = d.toISOString().slice(0, 10);
     }
 
@@ -181,7 +181,7 @@ function saveUserFromAuth(formData) {
     ftp: formData.ftp,
     weight: formData.weight,
     grade: '2',
-   // expiry_date는 비워두면 unifiedCreateUser에서 오늘+10일 자동 설정
+   // expiry_date는 비워두면 unifiedCreateUser에서 오늘+3개월 자동 설정
     expiry_date: ''
   }, 'auth');
 }
@@ -785,7 +785,7 @@ async function saveUser() {
       const payload = {
         ...userData,
         grade: userData.grade || '2',
-        // expiry_date는 아래 기본값 로직(오늘 + 10일)으로 세팅됨
+        // expiry_date는 아래 기본값 로직(오늘 + 3개월)으로 세팅됨
       };
       const result = await apiCreateUser(payload);
 
