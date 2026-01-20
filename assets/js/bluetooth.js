@@ -1,12 +1,17 @@
 /* ==========================================================
-   bluetooth.js (v3.6 Universal Protocol Support)
+   bluetooth.js (v3.7 Enhanced Control Point Discovery)
    - 연결된 기기가 FTMS인지 Legacy(CycleOps/Wahoo)인지 정확히 식별
    - ErgController가 올바른 '방언(OpCode)'을 쓰도록 유도
    - ★ [v3.5] FTMS 및 CPS 데이터 파싱 로직 수정 (케이던스 복구)
    - ★ [v3.6] 구형 스마트 로라 ERG 모드 지원 강화
      * 모든 서비스 병렬 탐색 (ZWIFT/Mywoosh 방식)
      * CPS 데이터 + CycleOps Control Point 조합 지원
-     * 구형/신형 기기 모두 완벽 대응
+   - ★ [v3.7] Control Point 탐색 로직 대폭 강화
+     * 모든 서비스의 모든 characteristic 탐색
+     * 기기 이름 기반 강제 탐색
+     * Write 속성 기반 Control Point 추정
+     * 다단계 재탐색 로직 (3단계)
+     * 구형 CycleOps Hammer 완벽 지원
 ========================================================== */
 
 // ── [1] UUID 상수 (만능 리스트) ──
@@ -288,6 +293,23 @@ async function connectTrainer() {
             service = svcInfo.service;
             if (realProtocol === 'UNKNOWN') realProtocol = 'CPS';
             console.log('✅ CPS 데이터 채널 발견');
+            
+            // ★ CPS를 찾았지만 Control Point가 없으면, CycleOps 서비스가 있는지 다시 확인
+            if (!controlPointChar) {
+              console.log('[connectTrainer] CPS 발견 후 CycleOps 서비스 재확인...');
+              // CycleOps 서비스가 이미 availableServices에 있는지 확인
+              const cycleOpsService = availableServices.find(s => s.type === 'CYCLEOPS');
+              if (!cycleOpsService) {
+                // availableServices에 없으면 직접 탐색 시도
+                try {
+                  const cycleOpsSvc = await server.getPrimaryService(UUIDS.CYCLEOPS_SERVICE);
+                  console.log('[connectTrainer] CycleOps 서비스 직접 발견!');
+                  availableServices.push({ type: 'CYCLEOPS', service: cycleOpsSvc });
+                } catch (e) {
+                  console.log('[connectTrainer] CycleOps 서비스 직접 탐색 실패 (정상일 수 있음)');
+                }
+              }
+            }
             break;
           } catch (e) {}
         }
@@ -309,18 +331,38 @@ async function connectTrainer() {
       }
     }
     
-    // ★ [핵심] 구형 CycleOps 기기: CPS 데이터 + CycleOps Control Point 조합
+    // ★ [핵심 개선] 구형 CycleOps 기기: CPS 데이터 + CycleOps Control Point 조합
     // Mywoosh/ZWIFT 방식: CPS로 데이터를 받되, CycleOps Control Point로 제어
+    // 모든 서비스의 모든 characteristic을 탐색하여 Control Point 찾기
     if (characteristic && !controlPointChar) {
-      console.log('[connectTrainer] Control Point 재탐색 중...');
+      console.log('[connectTrainer] Control Point 재탐색 중 (모든 서비스 탐색)...');
+      
+      // 기기 이름 확인 (Hammer, CycleOps 등)
+      const deviceName = (device.name || "").toUpperCase();
+      const isCycleOpsDevice = deviceName.includes("CYCLEOPS") || 
+                               deviceName.includes("HAMMER") || 
+                               deviceName.includes("SARIS") ||
+                               deviceName.includes("MAGNUS");
+      
+      // 1단계: CycleOps 서비스에서 Control Point 찾기
       for (const svcInfo of availableServices) {
         if (svcInfo.type === 'CYCLEOPS') {
           try {
             const chars = await svcInfo.service.getCharacteristics();
-            const controlChar = chars.find(c => 
-              c.uuid === UUIDS.CYCLEOPS_CONTROL || 
-              c.uuid.toLowerCase() === UUIDS.CYCLEOPS_CONTROL.toLowerCase()
-            );
+            console.log(`[connectTrainer] CycleOps 서비스에서 ${chars.length}개 characteristic 발견`);
+            
+            // 모든 characteristic UUID 출력 (디버깅)
+            chars.forEach((char, idx) => {
+              console.log(`  [${idx}] UUID: ${char.uuid}`);
+            });
+            
+            // Control Point 찾기 (정확한 UUID 매칭)
+            const controlChar = chars.find(c => {
+              const uuid = c.uuid.toLowerCase();
+              const targetUuid = UUIDS.CYCLEOPS_CONTROL.toLowerCase();
+              return uuid === targetUuid || uuid.includes(targetUuid.replace(/-/g, ''));
+            });
+            
             if (controlChar) {
               controlPointChar = controlChar;
               if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS'; // CPS 데이터 + CycleOps 제어
@@ -330,6 +372,100 @@ async function connectTrainer() {
           } catch (e) {
             console.warn('CycleOps Control Point 탐색 실패:', e);
           }
+        }
+      }
+      
+      // 2단계: CycleOps 서비스를 찾지 못했지만 CycleOps 기기인 경우, 모든 서비스 재탐색
+      if (!controlPointChar && isCycleOpsDevice) {
+        console.log('[connectTrainer] CycleOps 기기로 감지됨, 모든 서비스 재탐색...');
+        
+        // 모든 서비스의 모든 characteristic 탐색
+        for (const svcInfo of availableServices) {
+          try {
+            const chars = await svcInfo.service.getCharacteristics();
+            console.log(`[connectTrainer] ${svcInfo.type} 서비스에서 ${chars.length}개 characteristic 탐색 중...`);
+            
+            // Control Point UUID 패턴 찾기
+            const controlChar = chars.find(c => {
+              const uuid = c.uuid.toLowerCase();
+              // CycleOps Control Point UUID (하이픈 제거 버전도 체크)
+              const cycleOpsControlUuid = UUIDS.CYCLEOPS_CONTROL.toLowerCase();
+              const cycleOpsControlUuidNoDash = cycleOpsControlUuid.replace(/-/g, '');
+              
+              return uuid === cycleOpsControlUuid || 
+                     uuid === cycleOpsControlUuidNoDash ||
+                     uuid.includes('347b0012') || // CycleOps Control Point의 짧은 UUID
+                     (uuid.includes('347b') && uuid.includes('0012'));
+            });
+            
+            if (controlChar) {
+              controlPointChar = controlChar;
+              if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS';
+              console.log(`✅ Control Point 발견 (${svcInfo.type} 서비스에서)`);
+              break;
+            }
+          } catch (e) {
+            console.warn(`[connectTrainer] ${svcInfo.type} 서비스 characteristic 탐색 실패:`, e);
+          }
+        }
+      }
+      
+      // 3단계: 최후의 수단 - 모든 primary service 재탐색 및 write 속성 확인
+      if (!controlPointChar && isCycleOpsDevice) {
+        console.log('[connectTrainer] 최후의 수단: 모든 primary service 재탐색...');
+        try {
+          const allServices = await server.getPrimaryServices();
+          console.log(`[connectTrainer] 총 ${allServices.length}개 primary service 발견`);
+          
+          for (const svc of allServices) {
+            try {
+              const chars = await svc.getCharacteristics();
+              console.log(`[connectTrainer] 서비스 ${svc.uuid}에서 ${chars.length}개 characteristic 탐색...`);
+              
+              // 먼저 정확한 UUID로 찾기
+              let controlChar = chars.find(c => {
+                const uuid = c.uuid.toLowerCase();
+                return uuid.includes('347b0012') || 
+                       (uuid.includes('347b') && uuid.includes('0012')) ||
+                       uuid === UUIDS.CYCLEOPS_CONTROL.toLowerCase();
+              });
+              
+              // 정확한 UUID를 찾지 못하면 write 속성이 있는 characteristic 찾기
+              // (Control Point는 보통 write 속성을 가짐)
+              if (!controlChar) {
+                console.log('[connectTrainer] 정확한 UUID를 찾지 못함, write 속성 확인 중...');
+                for (const char of chars) {
+                  try {
+                    const props = char.properties;
+                    // write 또는 writeWithoutResponse 속성이 있는 characteristic 확인
+                    if (props.write || props.writeWithoutResponse) {
+                      const uuid = char.uuid.toLowerCase();
+                      console.log(`[connectTrainer] Write 가능한 characteristic 발견: ${uuid}`);
+                      // CycleOps 서비스 UUID 범위 내에 있는지 확인
+                      if (uuid.includes('347b') || svc.uuid.toLowerCase().includes('347b0001')) {
+                        controlChar = char;
+                        console.log(`[connectTrainer] ✅ Control Point로 추정 (write 속성 + CycleOps 서비스)`);
+                        break;
+                      }
+                    }
+                  } catch (e) {
+                    // 무시하고 계속
+                  }
+                }
+              }
+              
+              if (controlChar) {
+                controlPointChar = controlChar;
+                if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS';
+                console.log(`✅ Control Point 발견 (서비스 UUID: ${svc.uuid}, Characteristic UUID: ${controlChar.uuid})`);
+                break;
+              }
+            } catch (e) {
+              console.warn(`[connectTrainer] 서비스 ${svc.uuid} 탐색 중 오류:`, e);
+            }
+          }
+        } catch (e) {
+          console.warn('[connectTrainer] Primary service 재탐색 실패:', e);
         }
       }
     }
@@ -344,7 +480,38 @@ async function connectTrainer() {
 
     const name = (device.name || "").toUpperCase();
     let fakeProtocol = realProtocol;
-    if (name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || realProtocol === 'CYCLEOPS' || realProtocol === 'WAHOO') {
+    const isCycleOpsDevice = name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || name.includes("MAGNUS");
+    
+    // ★ CycleOps 기기이고 Control Point가 없으면 경고 메시지
+    if (isCycleOpsDevice && !controlPointChar && realProtocol === 'CPS') {
+      console.warn('[connectTrainer] ⚠️ CycleOps 기기로 감지되었지만 Control Point를 찾지 못했습니다.');
+      console.warn('[connectTrainer] 기기 이름:', device.name);
+      console.warn('[connectTrainer] 발견된 서비스:', availableServices.map(s => s.type).join(', '));
+      
+      // 한 번 더 시도: 모든 primary service 재탐색
+      try {
+        const allServices = await server.getPrimaryServices();
+        for (const svc of allServices) {
+          try {
+            const chars = await svc.getCharacteristics();
+            for (const char of chars) {
+              const uuid = char.uuid.toLowerCase();
+              if (uuid.includes('347b0012') || (uuid.includes('347b') && uuid.includes('0012'))) {
+                controlPointChar = char;
+                realProtocol = 'CYCLEOPS';
+                console.log('✅ Control Point 발견 (최종 재탐색 성공)');
+                break;
+              }
+            }
+            if (controlPointChar) break;
+          } catch (e) {}
+        }
+      } catch (e) {
+        console.warn('[connectTrainer] 최종 재탐색 실패:', e);
+      }
+    }
+    
+    if (isCycleOpsDevice || realProtocol === 'CYCLEOPS' || realProtocol === 'WAHOO') {
         fakeProtocol = 'FTMS'; 
     }
 
@@ -362,8 +529,29 @@ async function connectTrainer() {
     showConnectionStatus(false);
     
     // 연결 상태 메시지 개선
-    const ergMsg = controlPointChar ? "(ERG 제어 가능)" : "(파워미터 모드 - 제어 불가)";
+    let ergMsg = controlPointChar ? "(ERG 제어 가능)" : "(파워미터 모드 - 제어 불가)";
     const protocolMsg = realProtocol !== 'UNKNOWN' ? `[${realProtocol}]` : '';
+    
+    // CycleOps 기기인데 Control Point가 없으면 특별 메시지
+    const isCycleOpsDevice = (device.name || "").toUpperCase().includes("CYCLEOPS") || 
+                              (device.name || "").toUpperCase().includes("HAMMER") || 
+                              (device.name || "").toUpperCase().includes("SARIS") ||
+                              (device.name || "").toUpperCase().includes("MAGNUS");
+    
+    if (isCycleOpsDevice && !controlPointChar) {
+      ergMsg = "(ERG 제어 불가 - Control Point 미발견)";
+      console.warn('[connectTrainer] ⚠️ CycleOps 기기이지만 Control Point를 찾지 못했습니다.');
+      console.warn('[connectTrainer] 발견된 서비스 목록:', availableServices.map(s => s.type).join(', '));
+      
+      // 사용자에게 정보 제공
+      setTimeout(() => {
+        console.log('[connectTrainer] 💡 해결 방법:');
+        console.log('[connectTrainer] 1. 기기 펌웨어 업데이트 확인');
+        console.log('[connectTrainer] 2. 다른 앱(Mywoosh, ZWIFT)에서 ERG 모드가 작동하는지 확인');
+        console.log('[connectTrainer] 3. 기기 재시작 후 다시 연결 시도');
+      }, 1000);
+    }
+    
     showToast(`✅ ${device.name} 연결 ${protocolMsg} ${ergMsg}`);
     
     // 디버그 정보 출력
@@ -372,8 +560,10 @@ async function connectTrainer() {
       protocol: realProtocol,
       hasControlPoint: !!controlPointChar,
       hasDataChannel: !!characteristic,
-      controlPointUUID: controlPointChar?.uuid,
-      dataChannelUUID: characteristic?.uuid
+      controlPointUUID: controlPointChar?.uuid || '없음',
+      dataChannelUUID: characteristic?.uuid || '없음',
+      availableServices: availableServices.map(s => s.type),
+      isCycleOpsDevice: isCycleOpsDevice
     });
 
   } catch (err) {
