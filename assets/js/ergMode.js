@@ -1,71 +1,89 @@
 /* ==========================================================
-   ergMode.js (v2.0 Refactored)
-   - 직접 제어 로직 제거 -> ErgController로 위임(Delegation)
-   - UI 이벤트와 AI 파라미터 조정 기능만 담당
-   - CycleOps/Wahoo 등 레거시 기기 호환성 완벽 보장
+   ergMode.js (v2.1 UI Linker)
+   - UI 이벤트 <-> ErgController 양방향 바인딩
+   - 안전한 초기화 로직
 ========================================================== */
 
-// 초기화 함수
 function initializeErgMode() {
   const toggle = document.getElementById('ergModeToggle');
-  const status = document.getElementById('ergModeStatus');
+  const statusLabel = document.getElementById('ergModeStatus');
   const container = document.getElementById('ergModeContainer');
+  const powerInput = document.getElementById('targetPowerInput'); // 만약 수동 입력창이 있다면
 
-  if (!toggle || !container) return;
+  if (!toggle) return;
 
-  // 1. UI 상태 동기화 (ErgController의 상태를 구독)
-  if (window.ergController && typeof window.ergController.subscribe === 'function') {
+  // 1. Controller 상태 변화 감지 -> UI 업데이트
+  if (window.ergController) {
     window.ergController.subscribe((state, key, value) => {
       if (key === 'enabled') {
         toggle.checked = value;
-        if (status) status.textContent = value ? 'ON' : 'OFF';
+        if (statusLabel) statusLabel.textContent = value ? 'ON' : 'OFF';
         if (container) value ? container.classList.add('active') : container.classList.remove('active');
         
-        // 버튼 색상 업데이트 등 추가 UI 로직
-        if (typeof updateBluetoothConnectionButtonColor === 'function') {
-          updateBluetoothConnectionButtonColor();
+        // 버튼 색상 동기화
+        if (typeof window.updateBluetoothConnectionButtonColor === 'function') {
+            window.updateBluetoothConnectionButtonColor();
         }
+        
+        // 상태 메시지 표시
+        if (value) {
+            // ERG 켜짐 시각 효과
+            if (container) container.style.boxShadow = "0 0 15px rgba(0, 255, 0, 0.5)";
+        } else {
+            if (container) container.style.boxShadow = "none";
+        }
+      }
+      
+      if (key === 'targetPower' && powerInput) {
+          if (document.activeElement !== powerInput) { // 사용자가 입력중이 아닐때만
+              powerInput.value = value;
+          }
       }
     });
   }
 
-  // 2. 이벤트 리스너 (직접 제어하지 않고 ErgController 호출)
-  if (!toggle.hasAttribute('data-init')) {
-    toggle.setAttribute('data-init', 'true');
-    toggle.addEventListener('change', async (e) => {
-      const isEnabled = e.target.checked;
-      try {
-        if (window.ergController) {
-          await window.ergController.toggleErgMode(isEnabled);
-          // 토스트 메시지는 ErgController 내부에서 처리하거나 여기서 보조
-        } else {
-          throw new Error("ErgController가 로드되지 않았습니다.");
-        }
-      } catch (err) {
-        console.error("ERG 토글 실패:", err);
-        e.target.checked = !isEnabled; // 실패 시 스위치 원복
-        if (typeof showToast === 'function') showToast("ERG 제어 실패: " + err.message);
-      }
-    });
+  // 2. UI 조작 -> Controller 명령 (중복 이벤트 방지)
+  const handleToggle = async (e) => {
+    const isChecked = e.target.checked;
+    
+    // 로라 연결 체크
+    if (!window.connectedDevices?.trainer) {
+        alert("먼저 스마트 로라를 연결해주세요.");
+        e.preventDefault();
+        e.target.checked = !isChecked; // 되돌리기
+        return;
+    }
+
+    try {
+      await window.ergController.toggleErgMode(isChecked);
+    } catch (err) {
+      alert("ERG 모드 실패: " + err.message);
+      e.target.checked = !isChecked; // 실패 시 원복
+    }
+  };
+
+  if (!toggle._hasErgListener) {
+      toggle.addEventListener('change', handleToggle);
+      toggle._hasErgListener = true;
   }
 }
 
-// 기존 코드와의 호환성을 위한 래퍼 함수들
-// (외부에서 이 함수들을 호출하더라도 ErgController로 연결됨)
-
-window.toggleErgMode = async function(enabled) {
-  if (window.ergController) {
-    return window.ergController.toggleErgMode(enabled);
-  }
+// Global Wrappers for external calls (e.g. from Workout Player)
+window.setErgTargetPower = function(watts) {
+    if (window.ergController) {
+        window.ergController.setTargetPower(watts);
+    }
 };
 
-window.setErgTargetPower = async function(watts) {
-  if (window.ergController) {
-    return window.ergController.setTargetPower(watts);
-  }
+window.toggleErgMode = function(enable) {
+    if (window.ergController) {
+        // UI 체크박스 상태도 같이 변경해주면 좋음
+        const toggle = document.getElementById('ergModeToggle');
+        if (toggle) toggle.checked = enable;
+        
+        window.ergController.toggleErgMode(enable);
+    }
 };
 
-// AI 관련 로직 (PID 튜닝 등)은 ErgController 내부로 통합되었거나
-// 단순 시각적 효과라면 여기에 남겨둘 수 있습니다.
-// 현재 ErgController.js v3.0에 이미 PID 및 AI 로직이 포함되어 있으므로
-// 중복 실행을 막기 위해 제거하는 것이 안전합니다.
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', initializeErgMode);
