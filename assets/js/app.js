@@ -102,94 +102,35 @@
   }
 
   /**
-   * 파워값을 버퍼에 추가하는 함수 (블루투스 데이터 수신 시 호출)
-   * @param {number} power - 파워값 (W)
-   */
-  window.addPowerToBuffer = function(power) {
-    if (!window._powerAverageBuffer) {
-      window._powerAverageBuffer = [];
-    }
-    
-    const now = Date.now();
-    const powerValue = Number(power);
-    
-    // 유효한 파워값만 추가 (0 이상, 2000 이하)
-    if (powerValue >= 0 && powerValue <= 2000) {
-      window._powerAverageBuffer.push({
-        timestamp: now,
-        power: powerValue
-      });
-      
-      // 버퍼 크기 제한 (최대 100개, 약 3초치 데이터)
-      if (window._powerAverageBuffer.length > 100) {
-        window._powerAverageBuffer.shift();
-      }
-      
-      // 3초 이전의 오래된 데이터 제거
-      const threeSecondsAgo = now - 3000;
-      window._powerAverageBuffer = window._powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
-    }
-  };
-
-  /**
-   * 3초 평균 파워값 계산 함수 (버퍼에서 평균만 계산)
-   * 시간 가중 평균을 사용하여 더 안정적인 값 제공
+   * 3초 평균 파워값 계산 함수
    * @returns {number} 3초 평균 파워값 (W)
    */
   window.get3SecondAveragePower = function() {
-    if (!window._powerAverageBuffer || window._powerAverageBuffer.length === 0) {
-      // 버퍼가 비어있으면 현재값 반환
-      return Math.round(Number(window.liveData?.power ?? 0));
-    }
-    
     const now = Date.now();
-    const threeSecondsAgo = now - 3000;
+    const threeSecondsAgo = now - 3000; // 3초 전
     
-    // 3초 이전의 오래된 데이터 제거
-    const validBuffer = window._powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    // 3초 이전의 데이터 제거
+    window._powerAverageBuffer = window._powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
     
-    // 유효한 데이터가 없으면 현재값 반환
-    if (validBuffer.length === 0) {
-      return Math.round(Number(window.liveData?.power ?? 0));
+    // 현재 파워값 추가
+    const currentPower = Number(window.liveData?.power ?? 0);
+    if (currentPower >= 0) { // 유효한 파워값만 추가
+      window._powerAverageBuffer.push({
+        timestamp: now,
+        power: currentPower
+      });
     }
     
-    // 최소 2개 이상의 샘플이 있어야 시간 가중 평균 계산
-    if (validBuffer.length >= 2) {
-      // 시간 가중 평균 계산 (더 정확한 평균)
-      let totalWeightedPower = 0;
-      let totalWeight = 0;
-      
-      for (let i = 0; i < validBuffer.length - 1; i++) {
-        const current = validBuffer[i];
-        const next = validBuffer[i + 1];
-        const timeDiff = (next.timestamp - current.timestamp) / 1000; // 초 단위
-        const weight = timeDiff; // 시간 차이를 가중치로 사용
-        totalWeightedPower += current.power * weight;
-        totalWeight += weight;
-      }
-      
-      // 마지막 샘플 처리 (현재 시점까지의 시간)
-      const lastSample = validBuffer[validBuffer.length - 1];
-      const lastTimeDiff = (now - lastSample.timestamp) / 1000;
-      if (lastTimeDiff > 0) {
-        totalWeightedPower += lastSample.power * lastTimeDiff;
-        totalWeight += lastTimeDiff;
-      }
-      
-      if (totalWeight > 0) {
-        const average = Math.round(totalWeightedPower / totalWeight);
-        // 버퍼 업데이트 (오래된 데이터 제거된 버전)
-        window._powerAverageBuffer = validBuffer;
-        return average;
-      }
+    // 3초 이전의 데이터 다시 제거 (방금 추가한 값이 포함된 상태에서)
+    window._powerAverageBuffer = window._powerAverageBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    
+    // 평균값 계산
+    if (window._powerAverageBuffer.length === 0) {
+      return currentPower; // 버퍼가 비어있으면 현재값 반환
     }
     
-    // 샘플이 부족하거나 시간 가중 평균 계산 실패 시 단순 평균 사용
-    const sum = validBuffer.reduce((acc, item) => acc + item.power, 0);
-    const average = Math.round(sum / validBuffer.length);
-    
-    // 버퍼 업데이트 (오래된 데이터 제거된 버전)
-    window._powerAverageBuffer = validBuffer;
+    const sum = window._powerAverageBuffer.reduce((acc, item) => acc + item.power, 0);
+    const average = Math.round(sum / window._powerAverageBuffer.length);
     
     return average;
   };
@@ -3184,19 +3125,6 @@ if (!window.showScreen) {
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
         
-        // Pull-to-refresh 방지 로직 적용 (특정 화면들)
-        const pullToRefreshScreens = [
-          'basecampScreen',
-          'trainingReadyScreen',
-          'trainingRoomScreen',
-          'playerListScreen',
-          'bluetoothPlayerListScreen'
-        ];
-        
-        if (pullToRefreshScreens.includes(id)) {
-          applyPullToRefreshPrevention(el);
-        }
-        
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
         if (id === 'mobileDashboardScreen') {
           document.querySelectorAll(".screen").forEach(s => {
@@ -3344,237 +3272,6 @@ if (!window.showScreen) {
     }
   };
 }
-
-/**
- * Pull-to-refresh 방지 함수 (iOS & Android 호환)
- * 특정 화면에서 아래로 스크롤 시 새로고침이 되지 않도록 처리
- * 버튼 클릭은 정상적으로 동작하도록 보장
- */
-function applyPullToRefreshPrevention(element) {
-  if (!element) return;
-  
-  // CSS 스타일 적용 (이것만으로도 대부분의 경우 충분)
-  element.style.overscrollBehaviorY = 'none';
-  element.style.overscrollBehavior = 'none';
-  element.style.webkitOverflowScrolling = 'touch';
-  
-  // basecampScreen은 스크롤이 없고 버튼 클릭 문제가 있으므로 JavaScript 이벤트 핸들러를 완전히 제거
-  const isBasecampScreen = element.id === 'basecampScreen';
-  
-  if (isBasecampScreen) {
-    // basecampScreen은 CSS만으로 충분 (JavaScript 이벤트 핸들러 제거)
-    console.log('[Pull-to-refresh] basecampScreen: JavaScript 이벤트 핸들러 제거 (CSS만 사용)');
-    return;
-  }
-  
-  // JavaScript 이벤트 핸들러 추가 (버튼 클릭 방해하지 않도록 개선)
-  let touchStartY = 0;
-  let touchStartScrollTop = 0;
-  let isAtTop = false;
-  let touchTarget = null;
-  let shouldPreventPull = false; // pull-to-refresh를 방지해야 하는지
-  
-  // 클릭 가능한 요소인지 확인하는 함수 (개선: 더 정확한 감지)
-  const isClickableElement = (target) => {
-    if (!target) return false;
-    
-    // 버튼, 링크, 입력 요소 등
-    if (target.tagName === 'BUTTON' || 
-        target.tagName === 'A' || 
-        target.tagName === 'INPUT' || 
-        target.tagName === 'SELECT' || 
-        target.tagName === 'TEXTAREA') {
-      return true;
-    }
-    
-    // 클릭 가능한 클래스나 속성 가진 요소
-    const clickableSelectors = [
-      '.btn', '[onclick]', '[role="button"]', '[role="link"]',
-      '.basecamp-btn', '.btn-device', '.clickable', '[tabindex]',
-      'button', 'a', // 태그명도 직접 확인
-      '.basecamp-btn-indoor', '.basecamp-btn-solo', // 상단 버튼 명시적 추가
-      '.basecamp-btn-career', '.basecamp-btn-manual' // 하단 버튼도 명시적 추가
-    ];
-    
-    // target 자체가 클릭 가능한지 확인
-    for (const selector of clickableSelectors) {
-      if (target.matches && target.matches(selector)) {
-        const tabIndex = target.getAttribute('tabindex');
-        if (tabIndex === '-1') continue;
-        return true;
-      }
-    }
-    
-    // 부모 요소 중 클릭 가능한 요소 찾기 (closest 사용)
-    return clickableSelectors.some(selector => {
-      try {
-        const found = target.closest ? target.closest(selector) : null;
-        if (found) {
-          // tabindex="-1"은 클릭 불가능으로 간주
-          const tabIndex = found.getAttribute('tabindex');
-          if (tabIndex === '-1') return false;
-          // disabled 속성이 있으면 클릭 불가능
-          if (found.hasAttribute('disabled') || found.classList.contains('disabled')) {
-            return false;
-          }
-          return true;
-        }
-      } catch (e) {
-        // closest가 지원되지 않는 경우 무시
-        return false;
-      }
-      return false;
-    });
-  };
-  
-  const handleTouchStart = (e) => {
-    touchTarget = e.target;
-    touchStartY = e.touches[0].clientY;
-    touchStartScrollTop = element.scrollTop || window.pageYOffset || 0;
-    isAtTop = touchStartScrollTop <= 0;
-    
-    // 클릭 가능한 요소 위에서는 pull-to-refresh 방지하지 않음
-    const isClickable = isClickableElement(touchTarget);
-    shouldPreventPull = isAtTop && !isClickable;
-    
-    // 디버깅: basecampScreen에서만 로그 출력
-    if (element.id === 'basecampScreen' && isClickable) {
-      console.log('[Pull-to-refresh] 클릭 가능한 요소 감지:', touchTarget.tagName, touchTarget.className);
-    }
-  };
-  
-  const handleTouchMove = (e) => {
-    // 클릭 가능한 요소 위에서 시작된 터치면 절대 preventDefault 호출하지 않음
-    if (!shouldPreventPull) {
-      return;
-    }
-    
-    // 맨 위가 아니면 기본 동작 허용
-    if (!isAtTop) {
-      return;
-    }
-    
-    const touchY = e.touches[0].clientY;
-    const deltaY = touchY - touchStartY;
-    
-    // basecampScreen은 더 보수적으로 처리: 더 큰 움직임이 필요하고, 더 엄격한 조건 적용
-    const minDeltaY = isBasecampScreen ? 50 : 20; // basecampScreen은 50px 이상 움직여야 함
-    
-    // 아래로 스와이프하고 맨 위에 있을 때만 preventDefault
-    // 최소 움직임 이상일 때만 (작은 움직임은 클릭으로 인식)
-    if (deltaY > minDeltaY && isAtTop) {
-      // 현재 터치 위치가 여전히 클릭 가능한 요소 위가 아닌지 재확인
-      const currentTarget = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
-      const isCurrentlyClickable = isClickableElement(currentTarget);
-      
-      // 시작 위치가 클릭 가능했거나, 현재 위치가 클릭 가능하면 preventDefault 호출하지 않음
-      if (isCurrentlyClickable) {
-        // 디버깅: basecampScreen에서만 로그 출력
-        if (isBasecampScreen) {
-          console.log('[Pull-to-refresh] 클릭 가능한 요소 위에서 이동 중, preventDefault 호출 안 함');
-        }
-        return;
-      }
-      
-      // 버튼의 자식 요소(span 등)에서 시작된 경우도 확인
-      if (touchTarget && isClickableElement(touchTarget)) {
-        // 디버깅: basecampScreen에서만 로그 출력
-        if (isBasecampScreen) {
-          console.log('[Pull-to-refresh] 버튼 자식 요소에서 시작된 터치, preventDefault 호출 안 함');
-        }
-        return;
-      }
-      
-      // basecampScreen에서는 더 엄격: 버튼 영역 근처에서도 preventDefault 호출하지 않음
-      if (isBasecampScreen) {
-        // 버튼 영역을 확인 (basecamp-btn 클래스 가진 요소들)
-        const buttons = element.querySelectorAll('.basecamp-btn, .btn-device');
-        for (const button of buttons) {
-          const rect = button.getBoundingClientRect();
-          const touchX = e.touches[0].clientX;
-          const touchY = e.touches[0].clientY;
-          // 터치 위치가 버튼 영역 근처(20px 여유)에 있으면 preventDefault 호출하지 않음
-          if (touchX >= rect.left - 20 && touchX <= rect.right + 20 &&
-              touchY >= rect.top - 20 && touchY <= rect.bottom + 20) {
-            console.log('[Pull-to-refresh] 버튼 영역 근처에서 터치, preventDefault 호출 안 함');
-            return;
-          }
-        }
-      }
-      
-      // 위 조건들이 모두 false일 때만 preventDefault 호출
-      e.preventDefault();
-    }
-  };
-  
-  const handleTouchEnd = () => {
-    // 터치 종료 후 상태 리셋
-    touchTarget = null;
-    shouldPreventPull = false;
-  };
-  
-  // 기존 이벤트 리스너 제거 (중복 방지)
-  element.removeEventListener('touchstart', handleTouchStart);
-  element.removeEventListener('touchmove', handleTouchMove);
-  element.removeEventListener('touchend', handleTouchEnd);
-  element.removeEventListener('touchcancel', handleTouchEnd);
-  
-  // 새로운 이벤트 리스너 추가
-  // touchstart는 passive: true로 설정하여 버튼 클릭 성능 향상
-  element.addEventListener('touchstart', handleTouchStart, { passive: true });
-  element.addEventListener('touchmove', handleTouchMove, { passive: false });
-  element.addEventListener('touchend', handleTouchEnd, { passive: true });
-  element.addEventListener('touchcancel', handleTouchEnd, { passive: true });
-}
-
-// 모달에서도 Pull-to-refresh 방지 적용
-function applyModalPullToRefreshPrevention(modalId) {
-  const modal = document.getElementById(modalId);
-  if (!modal) return;
-  
-  // 모달이 열릴 때 적용
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-        const isVisible = modal.style.display !== 'none' && 
-                         !modal.classList.contains('hidden') &&
-                         (window.getComputedStyle(modal).display !== 'none');
-        if (isVisible) {
-          applyPullToRefreshPrevention(modal);
-          
-          // 모달 내부 스크롤 가능한 영역에도 적용
-          const scrollableContent = modal.querySelector('.modal-content');
-          if (scrollableContent) {
-            applyPullToRefreshPrevention(scrollableContent);
-          }
-        }
-      }
-    });
-  });
-  
-  observer.observe(modal, {
-    attributes: true,
-    attributeFilter: ['style', 'class']
-  });
-  
-  // 즉시 적용
-  if (modal.style.display !== 'none' && !modal.classList.contains('hidden')) {
-    applyPullToRefreshPrevention(modal);
-    const scrollableContent = modal.querySelector('.modal-content');
-    if (scrollableContent) {
-      applyPullToRefreshPrevention(scrollableContent);
-    }
-  }
-}
-
-// 페이지 로드 시 모달 Pull-to-refresh 방지 적용
-document.addEventListener('DOMContentLoaded', () => {
-  // 컨디션별 강도 보정 모달
-  applyModalPullToRefreshPrevention('rpeConditionModal');
-  
-  // 워크아웃 선택 모달
-  applyModalPullToRefreshPrevention('workoutSelectionModal');
-});
 
 
 
@@ -10025,13 +9722,6 @@ function showRPEModal(source) {
     }
     
     modal.style.display = 'flex';
-    
-    // Pull-to-refresh 방지 로직 적용
-    applyPullToRefreshPrevention(modal);
-    const scrollableContent = modal.querySelector('.modal-content');
-    if (scrollableContent) {
-      applyPullToRefreshPrevention(scrollableContent);
-    }
     
     // 먼저 동기 버전으로 빠르게 표시
     let challenge = getUserChallengeSync();
