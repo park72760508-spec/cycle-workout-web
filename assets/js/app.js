@@ -3289,45 +3289,108 @@ if (!window.showScreen) {
 /**
  * Pull-to-refresh 방지 함수 (iOS & Android 호환)
  * 특정 화면에서 아래로 스크롤 시 새로고침이 되지 않도록 처리
+ * 버튼 클릭은 정상적으로 동작하도록 보장
  */
 function applyPullToRefreshPrevention(element) {
   if (!element) return;
   
-  // CSS 스타일 적용
+  // CSS 스타일 적용 (이것만으로도 대부분의 경우 충분)
   element.style.overscrollBehaviorY = 'none';
   element.style.overscrollBehavior = 'none';
   element.style.webkitOverflowScrolling = 'touch';
   
-  // JavaScript 이벤트 핸들러 추가
+  // JavaScript 이벤트 핸들러 추가 (버튼 클릭 방해하지 않도록 개선)
   let touchStartY = 0;
   let touchStartScrollTop = 0;
   let isAtTop = false;
+  let touchTarget = null;
+  let shouldPreventPull = false; // pull-to-refresh를 방지해야 하는지
+  
+  // 클릭 가능한 요소인지 확인하는 함수
+  const isClickableElement = (target) => {
+    if (!target) return false;
+    
+    // 버튼, 링크, 입력 요소 등
+    if (target.tagName === 'BUTTON' || 
+        target.tagName === 'A' || 
+        target.tagName === 'INPUT' || 
+        target.tagName === 'SELECT' || 
+        target.tagName === 'TEXTAREA') {
+      return true;
+    }
+    
+    // 클릭 가능한 클래스나 속성 가진 요소
+    const clickableSelectors = [
+      '.btn', '[onclick]', '[role="button"]', '[role="link"]',
+      '.basecamp-btn', '.btn-device', '.clickable', '[tabindex]'
+    ];
+    
+    return clickableSelectors.some(selector => {
+      const found = target.closest(selector);
+      if (found) {
+        // tabindex="-1"은 클릭 불가능으로 간주
+        const tabIndex = found.getAttribute('tabindex');
+        if (tabIndex === '-1') return false;
+        return true;
+      }
+      return false;
+    });
+  };
   
   const handleTouchStart = (e) => {
+    touchTarget = e.target;
     touchStartY = e.touches[0].clientY;
     touchStartScrollTop = element.scrollTop || window.pageYOffset || 0;
     isAtTop = touchStartScrollTop <= 0;
+    
+    // 클릭 가능한 요소 위에서는 pull-to-refresh 방지하지 않음
+    const isClickable = isClickableElement(touchTarget);
+    shouldPreventPull = isAtTop && !isClickable;
   };
   
   const handleTouchMove = (e) => {
-    if (!isAtTop) return; // 맨 위가 아니면 기본 동작 허용
+    // 클릭 가능한 요소 위에서 시작된 터치면 무시
+    if (!shouldPreventPull) {
+      return;
+    }
+    
+    // 맨 위가 아니면 기본 동작 허용
+    if (!isAtTop) {
+      return;
+    }
     
     const touchY = e.touches[0].clientY;
     const deltaY = touchY - touchStartY;
     
     // 아래로 스와이프하고 맨 위에 있을 때만 preventDefault
-    if (deltaY > 0 && isAtTop) {
-      e.preventDefault();
+    // 최소 15px 이상 움직였을 때만 (작은 움직임은 클릭으로 인식)
+    if (deltaY > 15 && isAtTop) {
+      // 현재 터치 위치가 여전히 클릭 가능한 요소 위가 아닌지 재확인
+      const currentTarget = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+      if (!isClickableElement(currentTarget)) {
+        e.preventDefault();
+      }
     }
+  };
+  
+  const handleTouchEnd = () => {
+    // 터치 종료 후 상태 리셋
+    touchTarget = null;
+    shouldPreventPull = false;
   };
   
   // 기존 이벤트 리스너 제거 (중복 방지)
   element.removeEventListener('touchstart', handleTouchStart);
   element.removeEventListener('touchmove', handleTouchMove);
+  element.removeEventListener('touchend', handleTouchEnd);
+  element.removeEventListener('touchcancel', handleTouchEnd);
   
   // 새로운 이벤트 리스너 추가
-  element.addEventListener('touchstart', handleTouchStart, { passive: false });
+  // touchstart는 passive: true로 설정하여 버튼 클릭 성능 향상
+  element.addEventListener('touchstart', handleTouchStart, { passive: true });
   element.addEventListener('touchmove', handleTouchMove, { passive: false });
+  element.addEventListener('touchend', handleTouchEnd, { passive: true });
+  element.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 }
 
 // 모달에서도 Pull-to-refresh 방지 적용
