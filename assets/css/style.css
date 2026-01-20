@@ -1040,6 +1040,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 20px;
 }
 
+/* 훈련 준비 화면: connection-device-section 여백 최소화 */
+#trainingReadyScreen .connection-device-section {
+  margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+}
+
 /* 무선 기기 연결 화면의 파워미터 연결 버튼 블럭 하단 여백 제거 */
 #connectionScreen .connection-device-section {
   margin-bottom: 0 !important;
@@ -1049,6 +1054,58 @@ h1,h2,h3,h4 { font-weight: 600; }
   font-size: 1.1em;
   color: #1e293b;
   margin-bottom: 15px;
+}
+
+/* 훈련 준비 화면: h3 여백 최소화 */
+#trainingReadyScreen .connection-device-section h3 {
+  margin-bottom: 8px !important; /* 15px에서 8px로 최소화 */
+  margin-top: 0 !important;
+}
+
+/* 훈련 준비 화면: preview-stats 여백 최소화 */
+#trainingReadyScreen .preview-stats {
+  margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+  gap: 8px !important; /* 12px에서 8px로 최소화 */
+}
+
+/* 훈련 준비 화면: segment-preview 여백 최소화 */
+#trainingReadyScreen .segment-preview {
+  margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+  min-height: 160px !important; /* 200px에서 160px로 최소화 */
+  padding: 10px !important; /* 12px에서 10px로 최소화 */
+}
+
+/* 훈련 준비 화면: grid-2 여백 최소화 */
+#trainingReadyScreen .connection-device-section .grid-2 {
+  margin-bottom: 8px !important; /* mb-15 (15px)에서 8px로 최소화 */
+  gap: 8px !important; /* gap-10 (10px)에서 8px로 최소화 */
+}
+
+/* 훈련 준비 화면: connection-exit-container 여백 최소화 */
+#trainingReadyScreen .connection-exit-container {
+  margin-top: 8px !important; /* 16px에서 8px로 최소화 */
+  padding-top: 8px !important; /* 16px에서 8px로 최소화 */
+  padding-bottom: 8px !important; /* 기본값에서 8px로 최소화 */
+}
+
+/* 훈련 준비 화면: mb-15, mb-20 클래스 여백 최소화 */
+#trainingReadyScreen .mb-15 {
+  margin-bottom: 8px !important; /* 15px에서 8px로 최소화 */
+}
+
+#trainingReadyScreen .mb-20 {
+  margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+}
+
+/* 훈련 준비 화면: connection-header 여백 최소화 */
+#trainingReadyScreen .connection-header {
+  margin-bottom: 12px !important; /* 30px에서 12px로 최소화 */
+  padding-bottom: 8px !important; /* 하단 여백 최소화 */
+}
+
+#trainingReadyScreen .connection-header .subtitle {
+  margin-top: 4px !important; /* 상단 여백 최소화 */
+  margin-bottom: 0 !important; /* 하단 여백 제거 */
 }
 
 /* 무선 기기 연결 화면 h3 여백 최소화 */
@@ -14376,7 +14433,6 @@ body.mobile-dashboard-active {
 }
 
 /* 각 화면의 컨텐츠 영역 스크롤 가능하게 */
-#trainingReadyScreen .connection-form-card,
 #trainingRoomScreen .connection-form-card,
 #playerListScreen .connection-form-card {
   display: flex;
@@ -14385,6 +14441,17 @@ body.mobile-dashboard-active {
   height: 100vh; /* 폴백 */
   height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
   overflow: hidden;
+}
+
+/* 훈련 준비 화면: connection-form-card 여백 최소화 및 스크롤 제거 */
+#trainingReadyScreen .connection-form-card {
+  display: flex;
+  flex-direction: column;
+  height: auto !important; /* 고정 높이 제거 */
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important; /* 스크롤 제거 */
+  padding: 20px 25px 10px 25px !important; /* 상단 20px, 하단 10px로 최소화 */
 }
 
 /* 무선 기기 연결 화면은 높이 제한 없이 콘텐츠에 맞춤 */
@@ -14397,7 +14464,6 @@ body.mobile-dashboard-active {
   overflow: visible !important;
 }
 
-#trainingReadyScreen .connection-device-section,
 #trainingRoomScreen .connection-device-section,
 #playerListScreen .connection-device-section {
   flex: 1;
@@ -14408,6 +14474,14 @@ body.mobile-dashboard-active {
   overscroll-behavior: none;
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
   padding-bottom: 120px;
+}
+
+/* 훈련 준비 화면: 스크롤바 제거 및 여백 최소화 */
+#trainingReadyScreen .connection-device-section {
+  flex: 0 0 auto; /* flex: 1 제거하여 공간 차지 최소화 */
+  overflow: visible !important; /* 스크롤바 제거 */
+  padding-bottom: 8px !important; /* 여백 최소화 */
+  margin-bottom: 8px !important; /* 여백 최소화 */
 }
 
 /* 무선 기기 연결 화면 connection-device-section 최적화 */
