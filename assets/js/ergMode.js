@@ -142,6 +142,11 @@ function updateErgModeStatus() {
       ergContainer.classList.remove('active');
     }
   }
+  
+  // 블루투스 개인훈련 대시보드 연결 버튼 색상 업데이트
+  if (typeof updateBluetoothConnectionButtonColor === 'function') {
+    updateBluetoothConnectionButtonColor();
+  }
 }
 
 /**

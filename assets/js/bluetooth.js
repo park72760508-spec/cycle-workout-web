@@ -90,6 +90,7 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function ()
     } else {
       img.src = imgOff;
       btn.classList.remove("connected");
+      btn.classList.remove("erg-mode-active");
     }
     img.style.display = "block";
     img.style.margin = "0 auto";
@@ -97,7 +98,33 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function ()
   updateBtn(btnTrainer, 'trainer', "assets/img/trainer_g.png", "assets/img/trainer_i.png");
   updateBtn(btnHR, 'heartRate', "assets/img/bpm_g.png", "assets/img/bpm_i.png");
   updateBtn(btnPM, 'powerMeter', "assets/img/power_g.png", "assets/img/power_i.png");
+  
+  // ERG 모드 상태에 따른 연결 버튼 색상 업데이트 (블루투스 개인훈련 대시보드)
+  updateBluetoothConnectionButtonColor();
 };
+
+/**
+ * 블루투스 개인훈련 대시보드 연결 버튼 색상 업데이트 (ERG 모드 상태에 따라)
+ */
+function updateBluetoothConnectionButtonColor() {
+  const btnTrainer = document.getElementById("btnConnectTrainer");
+  if (!btnTrainer) return;
+  
+  // 스마트 트레이너가 연결되어 있고 ERG 모드가 활성화되어 있는지 확인
+  const isTrainerConnected = window.connectedDevices?.trainer;
+  const isErgModeActive = (window.ergModeState && window.ergModeState.enabled) ||
+                          (window.ergController && window.ergController.state.enabled);
+  
+  if (isTrainerConnected && isErgModeActive) {
+    // ERG 모드 On: 파랑색톤
+    btnTrainer.classList.add("erg-mode-active");
+  } else {
+    // ERG 모드 Off: 녹색톤 (기본 연결 상태)
+    btnTrainer.classList.remove("erg-mode-active");
+  }
+}
+
+window.updateBluetoothConnectionButtonColor = updateBluetoothConnectionButtonColor;
 
 window.updateDevicesList = function () {
   if (typeof updateDeviceButtonImages === 'function') updateDeviceButtonImages();

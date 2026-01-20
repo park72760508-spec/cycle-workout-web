@@ -15054,7 +15054,32 @@ function updateMobileBluetoothConnectionStatus() {
       connectBtn.classList.add('has-connection');
     } else {
       connectBtn.classList.remove('has-connection');
+      connectBtn.classList.remove('erg-mode-active');
     }
+  }
+  
+  // ERG 모드 상태에 따른 연결 버튼 색상 업데이트
+  updateMobileConnectionButtonColor();
+}
+
+/**
+ * 모바일 대시보드 연결 버튼 색상 업데이트 (ERG 모드 상태에 따라)
+ */
+function updateMobileConnectionButtonColor() {
+  const connectBtn = document.getElementById('mobileBluetoothConnectBtn');
+  if (!connectBtn) return;
+  
+  // 스마트 트레이너가 연결되어 있고 ERG 모드가 활성화되어 있는지 확인
+  const isTrainerConnected = window.connectedDevices?.trainer;
+  const isErgModeActive = (window.ergController && window.ergController.state.enabled) || 
+                          (window.ergModeState && window.ergModeState.enabled);
+  
+  if (isTrainerConnected && isErgModeActive) {
+    // ERG 모드 On: 파랑색톤
+    connectBtn.classList.add('erg-mode-active');
+  } else {
+    // ERG 모드 Off: 녹색톤 (기본 연결 상태)
+    connectBtn.classList.remove('erg-mode-active');
   }
 }
 
@@ -15118,6 +15143,9 @@ function initMobileErgController() {
         ergStatus.style.color = value ? '#00d4aa' : '#888';
       }
       console.log('[Mobile Dashboard] ERG 모드 상태:', value ? 'ON' : 'OFF');
+      
+      // 연결 버튼 색상 업데이트 (ERG 모드 On: 파랑, Off: 녹색)
+      updateMobileConnectionButtonColor();
     }
     if (key === 'targetPower') {
       // 목표 파워 변경 시 UI 업데이트
@@ -15237,6 +15265,7 @@ window.connectMobileBluetoothDevice = connectMobileBluetoothDevice;
 window.updateMobileBluetoothConnectionStatus = updateMobileBluetoothConnectionStatus;
 window.exitMobileIndividualTraining = exitMobileIndividualTraining;
 window.initMobileErgController = initMobileErgController;
+window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
 
 // 모바일 대시보드 초기화는 startMobileDashboard 함수 내부에서 직접 처리됨
 // (위의 startMobileDashboard 함수 내부에 이미 추가됨)
