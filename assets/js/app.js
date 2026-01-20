@@ -3358,6 +3358,9 @@ function applyPullToRefreshPrevention(element) {
   element.style.overscrollBehavior = 'none';
   element.style.webkitOverflowScrolling = 'touch';
   
+  // basecampScreen은 스크롤이 없으므로 JavaScript 이벤트 핸들러를 더 보수적으로 적용
+  const isBasecampScreen = element.id === 'basecampScreen';
+  
   // JavaScript 이벤트 핸들러 추가 (버튼 클릭 방해하지 않도록 개선)
   let touchStartY = 0;
   let touchStartScrollTop = 0;
@@ -3365,7 +3368,7 @@ function applyPullToRefreshPrevention(element) {
   let touchTarget = null;
   let shouldPreventPull = false; // pull-to-refresh를 방지해야 하는지
   
-  // 클릭 가능한 요소인지 확인하는 함수
+  // 클릭 가능한 요소인지 확인하는 함수 (개선: 더 정확한 감지)
   const isClickableElement = (target) => {
     if (!target) return false;
     
@@ -3381,16 +3384,38 @@ function applyPullToRefreshPrevention(element) {
     // 클릭 가능한 클래스나 속성 가진 요소
     const clickableSelectors = [
       '.btn', '[onclick]', '[role="button"]', '[role="link"]',
-      '.basecamp-btn', '.btn-device', '.clickable', '[tabindex]'
+      '.basecamp-btn', '.btn-device', '.clickable', '[tabindex]',
+      'button', 'a', // 태그명도 직접 확인
+      '.basecamp-btn-indoor', '.basecamp-btn-solo', // 상단 버튼 명시적 추가
+      '.basecamp-btn-career', '.basecamp-btn-manual' // 하단 버튼도 명시적 추가
     ];
     
-    return clickableSelectors.some(selector => {
-      const found = target.closest(selector);
-      if (found) {
-        // tabindex="-1"은 클릭 불가능으로 간주
-        const tabIndex = found.getAttribute('tabindex');
-        if (tabIndex === '-1') return false;
+    // target 자체가 클릭 가능한지 확인
+    for (const selector of clickableSelectors) {
+      if (target.matches && target.matches(selector)) {
+        const tabIndex = target.getAttribute('tabindex');
+        if (tabIndex === '-1') continue;
         return true;
+      }
+    }
+    
+    // 부모 요소 중 클릭 가능한 요소 찾기 (closest 사용)
+    return clickableSelectors.some(selector => {
+      try {
+        const found = target.closest ? target.closest(selector) : null;
+        if (found) {
+          // tabindex="-1"은 클릭 불가능으로 간주
+          const tabIndex = found.getAttribute('tabindex');
+          if (tabIndex === '-1') return false;
+          // disabled 속성이 있으면 클릭 불가능
+          if (found.hasAttribute('disabled') || found.classList.contains('disabled')) {
+            return false;
+          }
+          return true;
+        }
+      } catch (e) {
+        // closest가 지원되지 않는 경우 무시
+        return false;
       }
       return false;
     });
@@ -3405,10 +3430,15 @@ function applyPullToRefreshPrevention(element) {
     // 클릭 가능한 요소 위에서는 pull-to-refresh 방지하지 않음
     const isClickable = isClickableElement(touchTarget);
     shouldPreventPull = isAtTop && !isClickable;
+    
+    // 디버깅: basecampScreen에서만 로그 출력
+    if (element.id === 'basecampScreen' && isClickable) {
+      console.log('[Pull-to-refresh] 클릭 가능한 요소 감지:', touchTarget.tagName, touchTarget.className);
+    }
   };
   
   const handleTouchMove = (e) => {
-    // 클릭 가능한 요소 위에서 시작된 터치면 무시
+    // 클릭 가능한 요소 위에서 시작된 터치면 절대 preventDefault 호출하지 않음
     if (!shouldPreventPull) {
       return;
     }
@@ -3421,14 +3451,53 @@ function applyPullToRefreshPrevention(element) {
     const touchY = e.touches[0].clientY;
     const deltaY = touchY - touchStartY;
     
+    // basecampScreen은 더 보수적으로 처리: 더 큰 움직임이 필요하고, 더 엄격한 조건 적용
+    const minDeltaY = isBasecampScreen ? 50 : 20; // basecampScreen은 50px 이상 움직여야 함
+    
     // 아래로 스와이프하고 맨 위에 있을 때만 preventDefault
-    // 최소 15px 이상 움직였을 때만 (작은 움직임은 클릭으로 인식)
-    if (deltaY > 15 && isAtTop) {
+    // 최소 움직임 이상일 때만 (작은 움직임은 클릭으로 인식)
+    if (deltaY > minDeltaY && isAtTop) {
       // 현재 터치 위치가 여전히 클릭 가능한 요소 위가 아닌지 재확인
       const currentTarget = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
-      if (!isClickableElement(currentTarget)) {
-        e.preventDefault();
+      const isCurrentlyClickable = isClickableElement(currentTarget);
+      
+      // 시작 위치가 클릭 가능했거나, 현재 위치가 클릭 가능하면 preventDefault 호출하지 않음
+      if (isCurrentlyClickable) {
+        // 디버깅: basecampScreen에서만 로그 출력
+        if (isBasecampScreen) {
+          console.log('[Pull-to-refresh] 클릭 가능한 요소 위에서 이동 중, preventDefault 호출 안 함');
+        }
+        return;
       }
+      
+      // 버튼의 자식 요소(span 등)에서 시작된 경우도 확인
+      if (touchTarget && isClickableElement(touchTarget)) {
+        // 디버깅: basecampScreen에서만 로그 출력
+        if (isBasecampScreen) {
+          console.log('[Pull-to-refresh] 버튼 자식 요소에서 시작된 터치, preventDefault 호출 안 함');
+        }
+        return;
+      }
+      
+      // basecampScreen에서는 더 엄격: 버튼 영역 근처에서도 preventDefault 호출하지 않음
+      if (isBasecampScreen) {
+        // 버튼 영역을 확인 (basecamp-btn 클래스 가진 요소들)
+        const buttons = element.querySelectorAll('.basecamp-btn, .btn-device');
+        for (const button of buttons) {
+          const rect = button.getBoundingClientRect();
+          const touchX = e.touches[0].clientX;
+          const touchY = e.touches[0].clientY;
+          // 터치 위치가 버튼 영역 근처(20px 여유)에 있으면 preventDefault 호출하지 않음
+          if (touchX >= rect.left - 20 && touchX <= rect.right + 20 &&
+              touchY >= rect.top - 20 && touchY <= rect.bottom + 20) {
+            console.log('[Pull-to-refresh] 버튼 영역 근처에서 터치, preventDefault 호출 안 함');
+            return;
+          }
+        }
+      }
+      
+      // 위 조건들이 모두 false일 때만 preventDefault 호출
+      e.preventDefault();
     }
   };
   
