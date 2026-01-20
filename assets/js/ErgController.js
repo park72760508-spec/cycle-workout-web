@@ -32,6 +32,7 @@ class ErgController {
     this._heartRateHistory = [];
     this._lastPowerUpdateTime = 0;
     this._powerUpdateDebounce = 500;
+    this._cpsErgWarningShown = false; // CPS ERG 경고 표시 여부
 
     // 명령 우선순위
     this._commandPriorities = {
@@ -276,15 +277,15 @@ class ErgController {
       }
 
       await this._queueCommand(async () => {
+        // writeValue 호출 전 연결 상태 재확인
+        if (!trainer || !trainer.controlPoint) {
+          throw new Error('Control Point 연결 끊김');
+        }
+        
+        // characteristic 참조를 함수 스코프에서 유지
+        const characteristic = trainer.controlPoint;
+        
         try {
-          // writeValue 호출 전 연결 상태 재확인
-          if (!trainer.controlPoint) {
-            throw new Error('Control Point 연결 끊김');
-          }
-          
-          // writeValue 호출 (writeWithoutResponse 사용 시도)
-          const characteristic = trainer.controlPoint;
-          
           // writeWithoutResponse가 지원되는지 확인
           if (characteristic.properties && characteristic.properties.writeWithoutResponse) {
             await characteristic.writeValueWithoutResponse(buffer);
@@ -299,30 +300,40 @@ class ErgController {
           if (writeError.name === 'NotSupportedError' || 
               writeError.message?.includes('GATT') ||
               writeError.message?.includes('Unknown')) {
-            console.warn(`[ERG] GATT 오류 발생, 재시도 준비:`, writeError);
+            console.warn(`[ERG] GATT 오류 발생, 대체 명령 시도:`, writeError);
             
             // 연결 상태 업데이트
             this.state.connectionStatus = 'error';
             
             // CPS 프로토콜인 경우 다른 명령 형식 시도
-            if (protocol === 'CPS' && targetWatts > 0) {
+            if (protocol === 'CPS' && targetWatts > 0 && characteristic) {
               console.log(`[ERG] CPS Control Point - 대체 명령 형식 시도 (0x05)`);
               try {
                 const altBuffer = new ArrayBuffer(3);
                 const altView = new DataView(altBuffer);
                 altView.setUint8(0, 0x05); // FTMS 방식 시도
                 altView.setInt16(1, targetWatts, true);
+                
+                // characteristic이 여전히 유효한지 확인
+                if (!characteristic || typeof characteristic.writeValue !== 'function') {
+                  throw new Error('Control Point가 유효하지 않음');
+                }
+                
                 await characteristic.writeValue(altBuffer);
                 console.log(`[ERG] CPS 대체 명령(0x05) 성공: ${targetWatts}W`);
+                this.state.connectionStatus = 'connected';
                 return; // 성공하면 여기서 종료
               } catch (altError) {
                 console.warn(`[ERG] CPS 대체 명령도 실패:`, altError);
-                throw writeError; // 원래 오류를 다시 throw
+                // 원래 오류를 다시 throw (재시도 로직에서 처리)
+                throw writeError;
               }
             }
             
+            // CPS가 아니거나 대체 명령이 실패한 경우 원래 오류 throw
             throw writeError;
           } else {
+            // GATT 오류가 아닌 경우 그대로 throw
             throw writeError;
           }
         }
@@ -340,6 +351,21 @@ class ErgController {
           error.message?.includes('Unknown')) {
         this.state.connectionStatus = 'error';
         console.warn('[ErgController] GATT 오류로 인한 연결 문제 감지');
+        
+        // CPS 프로토콜인 경우 ERG 제어가 지원되지 않을 수 있음을 알림
+        const protocol = trainer?.realProtocol || 'FTMS';
+        if (protocol === 'CPS') {
+          console.warn('[ErgController] ⚠️ CPS Control Point는 ERG 제어를 지원하지 않을 수 있습니다.');
+          console.warn('[ErgController] 이 기기는 파워미터 모드로만 작동할 수 있습니다.');
+          
+          // 사용자에게 알림 (한 번만 표시)
+          if (!this._cpsErgWarningShown) {
+            this._cpsErgWarningShown = true;
+            if (typeof showToast === 'function') {
+              showToast('이 기기는 ERG 제어를 지원하지 않을 수 있습니다', 'warning');
+            }
+          }
+        }
       }
     }
   }
