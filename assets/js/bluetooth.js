@@ -23,7 +23,8 @@ const UUIDS = {
   
   // 2. 파워미터/센서
   CPS_SERVICE:  '00001818-0000-1000-8000-00805f9b34fb', 
-  CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb', 
+  CPS_DATA:     '00002a63-0000-1000-8000-00805f9b34fb',
+  CPS_CONTROL:  '00002a66-0000-1000-8000-00805f9b34fb', // Cycling Power Control Point
   CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
   
   // 3. ★ 구형/독자 규격 서비스 (Legacy)
@@ -358,11 +359,19 @@ async function connectTrainer() {
               console.log(`  [${idx}] UUID: ${char.uuid}`);
             });
             
-            // Control Point 찾기 (정확한 UUID 매칭)
+            // Control Point 찾기 (정확한 UUID 매칭 - 다양한 프로토콜 지원)
             const controlChar = chars.find(c => {
               const uuid = c.uuid.toLowerCase();
-              const targetUuid = UUIDS.CYCLEOPS_CONTROL.toLowerCase();
-              return uuid === targetUuid || uuid.includes(targetUuid.replace(/-/g, ''));
+              const cycleOpsUuid = UUIDS.CYCLEOPS_CONTROL.toLowerCase();
+              const cpsUuid = UUIDS.CPS_CONTROL.toLowerCase();
+              const wahooUuid = UUIDS.WAHOO_CONTROL.toLowerCase();
+              
+              return uuid === cycleOpsUuid || 
+                     uuid.includes(cycleOpsUuid.replace(/-/g, '')) ||
+                     uuid === cpsUuid ||
+                     uuid.includes('2a66') ||
+                     uuid === wahooUuid ||
+                     uuid.includes('a026e005');
             });
             
             if (controlChar) {
@@ -387,23 +396,59 @@ async function connectTrainer() {
             const chars = await svcInfo.service.getCharacteristics();
             console.log(`[connectTrainer] ${svcInfo.type} 서비스에서 ${chars.length}개 characteristic 탐색 중...`);
             
-            // Control Point UUID 패턴 찾기
-            const controlChar = chars.find(c => {
+            // Control Point UUID 패턴 찾기 (다양한 프로토콜 지원)
+            let controlChar = chars.find(c => {
               const uuid = c.uuid.toLowerCase();
               // CycleOps Control Point UUID (하이픈 제거 버전도 체크)
               const cycleOpsControlUuid = UUIDS.CYCLEOPS_CONTROL.toLowerCase();
               const cycleOpsControlUuidNoDash = cycleOpsControlUuid.replace(/-/g, '');
+              const cpsControlUuid = UUIDS.CPS_CONTROL.toLowerCase();
+              const wahooControlUuid = UUIDS.WAHOO_CONTROL.toLowerCase();
               
               return uuid === cycleOpsControlUuid || 
                      uuid === cycleOpsControlUuidNoDash ||
                      uuid.includes('347b0012') || // CycleOps Control Point의 짧은 UUID
-                     (uuid.includes('347b') && uuid.includes('0012'));
+                     (uuid.includes('347b') && uuid.includes('0012')) ||
+                     uuid === cpsControlUuid || // CPS Control Point
+                     uuid.includes('2a66') || // CPS Control Point 짧은 버전
+                     uuid === wahooControlUuid || // Wahoo Control Point
+                     uuid.includes('a026e005'); // Wahoo Control Point 짧은 버전
             });
+            
+            // 정확한 UUID를 찾지 못하면 Write 속성이 있는 characteristic 확인
+            if (!controlChar && svcInfo.type === 'CPS') {
+              for (const char of chars) {
+                try {
+                  const props = char.properties;
+                  if (props.write || props.writeWithoutResponse) {
+                    const uuid = char.uuid.toLowerCase();
+                    // CPS Control Point 또는 Wahoo Control Point 확인
+                    if (uuid.includes('2a66') || uuid === UUIDS.CPS_CONTROL.toLowerCase() ||
+                        uuid.includes('a026e005') || uuid === UUIDS.WAHOO_CONTROL.toLowerCase()) {
+                      controlChar = char;
+                      console.log(`[connectTrainer] Write 속성으로 Control Point 발견: ${uuid}`);
+                      break;
+                    }
+                  }
+                } catch (e) {
+                  // 무시하고 계속
+                }
+              }
+            }
             
             if (controlChar) {
               controlPointChar = controlChar;
-              if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS';
-              console.log(`✅ Control Point 발견 (${svcInfo.type} 서비스에서)`);
+              const charUuid = controlChar.uuid.toLowerCase();
+              // Control Point 타입에 따라 프로토콜 결정
+              if (charUuid.includes('347b0012') || (charUuid.includes('347b') && charUuid.includes('0012'))) {
+                if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS';
+              } else if (charUuid.includes('2a66') || charUuid === UUIDS.CPS_CONTROL.toLowerCase()) {
+                // CPS Control Point는 CPS 프로토콜 유지
+                console.log('[connectTrainer] CPS Control Point 발견 - ERG 제어 가능');
+              } else if (charUuid.includes('a026e005')) {
+                if (realProtocol === 'CPS') realProtocol = 'WAHOO';
+              }
+              console.log(`✅ Control Point 발견 (${svcInfo.type} 서비스에서, UUID: ${charUuid})`);
               break;
             }
           } catch (e) {
@@ -443,10 +488,29 @@ async function connectTrainer() {
                     if (props.write || props.writeWithoutResponse) {
                       const uuid = char.uuid.toLowerCase();
                       console.log(`[connectTrainer] Write 가능한 characteristic 발견: ${uuid}`);
-                      // CycleOps 서비스 UUID 범위 내에 있는지 확인
-                      if (uuid.includes('347b') || svc.uuid.toLowerCase().includes('347b0001')) {
+                      
+                      // Control Point UUID 확인 (다양한 프로토콜 지원)
+                      const isCycleOpsControl = uuid === UUIDS.CYCLEOPS_CONTROL.toLowerCase() || 
+                                                uuid.includes('347b0012') ||
+                                                (uuid.includes('347b') && uuid.includes('0012'));
+                      const isCpsControl = uuid === UUIDS.CPS_CONTROL.toLowerCase() ||
+                                          uuid.includes('2a66') ||
+                                          uuid === '00002a66-0000-1000-8000-00805f9b34fb';
+                      const isWahooControl = uuid === UUIDS.WAHOO_CONTROL.toLowerCase() ||
+                                             uuid.includes('a026e005');
+                      const isCycleOpsService = svc.uuid.toLowerCase().includes('347b0001');
+                      const isCpsService = svc.uuid.toLowerCase().includes('1818');
+                      
+                      // Control Point로 인식 가능한 경우
+                      if (isCycleOpsControl || isCpsControl || isWahooControl || 
+                          (isCycleOpsService && (props.write || props.writeWithoutResponse)) ||
+                          (isCpsService && isCpsControl)) {
                         controlChar = char;
-                        console.log(`[connectTrainer] ✅ Control Point로 추정 (write 속성 + CycleOps 서비스)`);
+                        let controlType = '알 수 없음';
+                        if (isCycleOpsControl) controlType = 'CycleOps';
+                        else if (isCpsControl) controlType = 'CPS';
+                        else if (isWahooControl) controlType = 'Wahoo';
+                        console.log(`[connectTrainer] ✅ Control Point 발견 (${controlType} - UUID: ${uuid})`);
                         break;
                       }
                     }
@@ -458,7 +522,16 @@ async function connectTrainer() {
               
               if (controlChar) {
                 controlPointChar = controlChar;
-                if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS';
+                const charUuid = controlChar.uuid.toLowerCase();
+                // Control Point 타입에 따라 프로토콜 결정
+                if (charUuid.includes('347b0012') || (charUuid.includes('347b') && charUuid.includes('0012'))) {
+                  if (realProtocol === 'CPS') realProtocol = 'CYCLEOPS';
+                } else if (charUuid.includes('2a66') || charUuid === UUIDS.CPS_CONTROL.toLowerCase()) {
+                  // CPS Control Point는 CPS 프로토콜 유지하되 ERG 제어 가능
+                  console.log('[connectTrainer] CPS Control Point 발견 - ERG 제어 가능');
+                } else if (charUuid.includes('a026e005')) {
+                  if (realProtocol === 'CPS') realProtocol = 'WAHOO';
+                }
                 console.log(`✅ Control Point 발견 (서비스 UUID: ${svc.uuid}, Characteristic UUID: ${controlChar.uuid})`);
                 break;
               }
@@ -498,10 +571,20 @@ async function connectTrainer() {
             const chars = await svc.getCharacteristics();
             for (const char of chars) {
               const uuid = char.uuid.toLowerCase();
-              if (uuid.includes('347b0012') || (uuid.includes('347b') && uuid.includes('0012'))) {
+              // 다양한 Control Point UUID 확인
+              const isCycleOps = uuid.includes('347b0012') || (uuid.includes('347b') && uuid.includes('0012'));
+              const isCps = uuid === UUIDS.CPS_CONTROL.toLowerCase() || uuid.includes('2a66');
+              const isWahoo = uuid === UUIDS.WAHOO_CONTROL.toLowerCase() || uuid.includes('a026e005');
+              
+              if (isCycleOps || isCps || isWahoo) {
                 controlPointChar = char;
-                realProtocol = 'CYCLEOPS';
-                console.log('✅ Control Point 발견 (최종 재탐색 성공)');
+                if (isCycleOps) realProtocol = 'CYCLEOPS';
+                else if (isCps) {
+                  // CPS Control Point는 CPS 프로토콜 유지
+                  console.log('[connectTrainer] CPS Control Point 발견 - ERG 제어 가능');
+                }
+                else if (isWahoo) realProtocol = 'WAHOO';
+                console.log('✅ Control Point 발견 (최종 재탐색 성공, UUID: ' + uuid + ')');
                 break;
               }
             }

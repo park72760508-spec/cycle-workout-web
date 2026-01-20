@@ -138,6 +138,11 @@ class ErgController {
             console.warn('[ERG] Legacy 초기화 실패, 계속 진행:', e);
           }
         }
+        // ★ CPS Control Point: 초기화 불필요, 바로 파워 설정 가능
+        else if (protocol === 'CPS') {
+          // CPS Control Point는 표준 프로토콜이므로 초기화 없이 바로 사용 가능
+          console.log('[ERG] CPS Control Point - 초기화 불필요, 바로 파워 설정 가능');
+        }
         
         if (typeof showToast === 'function') showToast('ERG 모드 ON');
       } else {
@@ -164,6 +169,21 @@ class ErgController {
             console.log('[ERG] Legacy 파워 0W 설정');
           } catch (e) {
             console.warn('[ERG] Legacy 해제 실패:', e);
+          }
+        }
+        // CPS Control Point: 파워를 0으로 설정하여 해제
+        else if (protocol === 'CPS') {
+          try {
+            await this._queueCommand(() => {
+              const buffer = new ArrayBuffer(3);
+              const view = new DataView(buffer);
+              view.setUint8(0, 0x42); // Set Power (Legacy 방식)
+              view.setUint16(1, 0, true); // 0W
+              return trainer.controlPoint.writeValue(buffer);
+            }, 'SET_TARGET_POWER', { priority: 100 });
+            console.log('[ERG] CPS Control Point 파워 0W 설정');
+          } catch (e) {
+            console.warn('[ERG] CPS Control Point 해제 실패:', e);
           }
         }
         
@@ -219,13 +239,15 @@ class ErgController {
         console.log(`[ERG] Legacy (0x42) -> ${targetWatts}W`);
       }
       else if (protocol === 'CPS') {
-        // CPS만 있고 Control Point가 있는 경우 (드문 경우)
-        // 일부 기기는 CPS Control Point (0x2A66)를 사용할 수 있음
-        console.warn(`[ERG] CPS 프로토콜 - Control Point 확인 필요`);
+        // CPS Control Point (0x2A66)를 사용하는 경우
+        // CPS Control Point는 표준 프로토콜이지만, 일부 기기에서는 ERG 제어가 가능
+        // ZWIFT/Mywoosh 방식: OpCode 0x42 또는 0x05 시도
+        // 먼저 0x42 (Legacy) 방식 시도
         buffer = new ArrayBuffer(3);
         const view = new DataView(buffer);
-        view.setUint8(0, 0x42); // 기본값 시도
-        view.setUint16(1, targetWatts, true);
+        view.setUint8(0, 0x42); // Set Target Power (Legacy 방식)
+        view.setUint16(1, targetWatts, true); // Little-endian, unsigned
+        console.log(`[ERG] CPS Control Point (0x42) -> ${targetWatts}W`);
       }
       else {
         // 알 수 없는 프로토콜: Legacy 방식 시도
