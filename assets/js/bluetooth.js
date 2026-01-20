@@ -52,7 +52,8 @@ window.bleCommandQueue = {
 
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
-window._lastCadenceUpdateTime = {}; 
+window._lastCadenceUpdateTime = {};
+window._lastCrankData = {}; // 케이던스 계산을 위한 이전 크랭크 데이터 저장 
 
 // ── [2] UI 헬퍼 ──
 window.showConnectionStatus = window.showConnectionStatus || function (show) {
@@ -338,21 +339,61 @@ function handleTrainerData(e) {
   const dv = e.target.value;
   let off = 0;
   const flags = dv.getUint16(off, true); off += 2;
-  off += 2; 
-  if (flags & 0x0001) off += 2;
-  if (flags & 0x0004) {
-    const rpm = Math.round(dv.getUint16(off, true) / 2); off += 2;
-    notifyChildWindows('cadence', rpm);
-    window.liveData.cadence = rpm;
-    window._lastCadenceUpdateTime['trainer'] = Date.now();
+  
+  // FTMS 프로토콜 데이터 구조:
+  // Flags (2 bytes)
+  // More Data (1 byte) - optional (flags & 0x01)
+  // Instantaneous Speed (2 bytes) - optional (flags & 0x02)
+  // Instantaneous Cadence (1 byte) - optional (flags & 0x04) - 0.5 RPM 단위
+  // Average Cadence (1 byte) - optional (flags & 0x08)
+  // Total Distance (3 bytes) - optional (flags & 0x10)
+  // Instantaneous Power (2 bytes) - optional (flags & 0x20)
+  // Average Power (2 bytes) - optional (flags & 0x40)
+  
+  // More Data (1 byte) - optional
+  if (flags & 0x0001) {
+    off += 1; // More Data는 1 byte
   }
-  if (flags & 0x0008) off += 2; 
-  if (flags & 0x0010) off += 3; 
-  if (flags & 0x0020) off += 2; 
-  if (flags & 0x0040) {
+  
+  // Instantaneous Speed (2 bytes) - optional
+  if (flags & 0x0002) {
+    off += 2;
+  }
+  
+  // Instantaneous Cadence (1 byte) - optional, 0.5 RPM 단위
+  if (flags & 0x0004) {
+    const cadenceValue = dv.getUint8(off); off += 1;
+    const rpm = Math.round(cadenceValue / 2.0); // 0.5 RPM 단위를 RPM으로 변환
+    if (rpm > 0 && rpm <= 250) { // 유효한 케이던스 범위 체크
+      notifyChildWindows('cadence', rpm);
+      window.liveData.cadence = rpm;
+      window._lastCadenceUpdateTime['trainer'] = Date.now();
+    }
+  }
+  
+  // Average Cadence (1 byte) - optional
+  if (flags & 0x0008) {
+    off += 1;
+  }
+  
+  // Total Distance (3 bytes) - optional
+  if (flags & 0x0010) {
+    off += 3;
+  }
+  
+  // Instantaneous Power (2 bytes) - optional
+  if (flags & 0x0020) {
     const p = dv.getInt16(off, true);
-    window.liveData.power = p;
-    notifyChildWindows('power', p);
+    if (!Number.isNaN(p)) {
+      window.liveData.power = p;
+      notifyChildWindows('power', p);
+    }
+    off += 2;
+  }
+  
+  // Average Power (2 bytes) - optional
+  if (flags & 0x0040) {
+    off += 2;
   }
 }
 
@@ -360,10 +401,69 @@ function handlePowerMeterData(event) {
   const dv = event.target.value;
   let off = 0;
   const flags = dv.getUint16(off, true); off += 2;
+  
+  // Instantaneous Power (항상 존재)
   const instPower = dv.getInt16(off, true); off += 2;
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
     notifyChildWindows('power', instPower);
+  }
+  
+  // Cumulative Energy (optional, flags & 0x08)
+  if (flags & 0x08) {
+    off += 2; // Cumulative Energy (2 bytes)
+  }
+  
+  // Wheel Revolution Data (optional, flags & 0x10)
+  if (flags & 0x10) {
+    off += 6; // Cumulative Wheel Revolutions (4 bytes) + Last Wheel Event Time (2 bytes)
+  }
+  
+  // Crank Revolution Data (optional, flags & 0x20) - 케이던스 정보
+  if (flags & 0x20) {
+    const cumulativeCrankRevolutions = dv.getUint16(off, true); off += 2;
+    const lastCrankEventTime = dv.getUint16(off, true); // 1/1024초 단위
+    off += 2;
+    
+    // 케이던스 계산을 위한 이전 데이터 확인
+    const deviceKey = 'powerMeter';
+    const lastData = window._lastCrankData[deviceKey];
+    
+    if (lastData && lastCrankEventTime !== lastData.lastCrankEventTime) {
+      // 시간 차이 계산 (1/1024초 단위)
+      let timeDiff = lastCrankEventTime - lastData.lastCrankEventTime;
+      if (timeDiff < 0) {
+        // 16비트 오버플로우 처리 (65536 = 2^16)
+        timeDiff += 65536;
+      }
+      
+      // 회전 수 차이 계산
+      let revDiff = cumulativeCrankRevolutions - lastData.cumulativeCrankRevolutions;
+      if (revDiff < 0) {
+        // 16비트 오버플로우 처리
+        revDiff += 65536;
+      }
+      
+      // 케이던스 계산: RPM = (회전 수 / 시간(초)) * 60
+      // timeDiff는 1/1024초 단위이므로 초로 변환: timeDiff / 1024
+      if (timeDiff > 0 && revDiff > 0) {
+        const timeInSeconds = timeDiff / 1024.0;
+        const cadence = Math.round((revDiff / timeInSeconds) * 60);
+        
+        if (cadence > 0 && cadence <= 250) { // 유효한 케이던스 범위 체크
+          window.liveData.cadence = cadence;
+          window._lastCadenceUpdateTime[deviceKey] = Date.now();
+          notifyChildWindows('cadence', cadence);
+        }
+      }
+    }
+    
+    // 현재 데이터 저장
+    window._lastCrankData[deviceKey] = {
+      cumulativeCrankRevolutions,
+      lastCrankEventTime,
+      timestamp: Date.now()
+    };
   }
 }
 
