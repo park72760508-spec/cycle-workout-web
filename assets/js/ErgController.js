@@ -203,7 +203,24 @@ class ErgController {
     if (watts < 0) return;
 
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) return;
+    if (!trainer || !trainer.controlPoint) {
+      console.warn('[ErgController] Control Point 없음 - 파워 설정 불가');
+      return;
+    }
+
+    // Control Point 연결 상태 확인
+    try {
+      // characteristic이 유효한지 확인
+      if (!trainer.controlPoint || typeof trainer.controlPoint.writeValue !== 'function') {
+        console.warn('[ErgController] Control Point가 유효하지 않음');
+        this.state.connectionStatus = 'disconnected';
+        return;
+      }
+    } catch (e) {
+      console.warn('[ErgController] Control Point 확인 중 오류:', e);
+      this.state.connectionStatus = 'disconnected';
+      return;
+    }
 
     const now = Date.now();
     if (now - this._lastPowerUpdateTime < this._powerUpdateDebounce) {
@@ -258,14 +275,72 @@ class ErgController {
         view.setUint16(1, targetWatts, true);
       }
 
-      await this._queueCommand(() => {
-        return trainer.controlPoint.writeValue(buffer);
+      await this._queueCommand(async () => {
+        try {
+          // writeValue 호출 전 연결 상태 재확인
+          if (!trainer.controlPoint) {
+            throw new Error('Control Point 연결 끊김');
+          }
+          
+          // writeValue 호출 (writeWithoutResponse 사용 시도)
+          const characteristic = trainer.controlPoint;
+          
+          // writeWithoutResponse가 지원되는지 확인
+          if (characteristic.properties && characteristic.properties.writeWithoutResponse) {
+            await characteristic.writeValueWithoutResponse(buffer);
+            console.log(`[ERG] writeValueWithoutResponse 성공: ${targetWatts}W`);
+          } else {
+            // 일반 writeValue 사용
+            await characteristic.writeValue(buffer);
+            console.log(`[ERG] writeValue 성공: ${targetWatts}W`);
+          }
+        } catch (writeError) {
+          // GATT 오류 처리
+          if (writeError.name === 'NotSupportedError' || 
+              writeError.message?.includes('GATT') ||
+              writeError.message?.includes('Unknown')) {
+            console.warn(`[ERG] GATT 오류 발생, 재시도 준비:`, writeError);
+            
+            // 연결 상태 업데이트
+            this.state.connectionStatus = 'error';
+            
+            // CPS 프로토콜인 경우 다른 명령 형식 시도
+            if (protocol === 'CPS' && targetWatts > 0) {
+              console.log(`[ERG] CPS Control Point - 대체 명령 형식 시도 (0x05)`);
+              try {
+                const altBuffer = new ArrayBuffer(3);
+                const altView = new DataView(altBuffer);
+                altView.setUint8(0, 0x05); // FTMS 방식 시도
+                altView.setInt16(1, targetWatts, true);
+                await characteristic.writeValue(altBuffer);
+                console.log(`[ERG] CPS 대체 명령(0x05) 성공: ${targetWatts}W`);
+                return; // 성공하면 여기서 종료
+              } catch (altError) {
+                console.warn(`[ERG] CPS 대체 명령도 실패:`, altError);
+                throw writeError; // 원래 오류를 다시 throw
+              }
+            }
+            
+            throw writeError;
+          } else {
+            throw writeError;
+          }
+        }
       }, 'SET_TARGET_POWER', { priority: 50 });
 
       this.state.targetPower = watts;
+      this.state.connectionStatus = 'connected';
 
     } catch (error) {
       console.error('[ErgController] 파워 설정 오류:', error);
+      
+      // GATT 오류인 경우 연결 상태 업데이트
+      if (error.name === 'NotSupportedError' || 
+          error.message?.includes('GATT') ||
+          error.message?.includes('Unknown')) {
+        this.state.connectionStatus = 'error';
+        console.warn('[ErgController] GATT 오류로 인한 연결 문제 감지');
+      }
     }
   }
 
@@ -302,13 +377,32 @@ class ErgController {
       const command = this._commandQueue.shift();
       this._lastCommandTime = Date.now();
       try {
+        // 명령 실행 전 연결 상태 확인
+        const trainer = window.connectedDevices?.trainer;
+        if (!trainer || !trainer.controlPoint) {
+          throw new Error('Control Point 연결 끊김');
+        }
+        
         await command.commandFn();
         command.resolve();
       } catch (error) {
+        // GATT 오류인 경우 재시도 간격 증가
+        const isGattError = error.name === 'NotSupportedError' || 
+                           error.message?.includes('GATT') ||
+                           error.message?.includes('Unknown');
+        
         if (command.retryCount < command.maxRetries) {
           command.retryCount++;
-          this._commandQueue.unshift(command);
+          // GATT 오류인 경우 재시도 간격 증가 (200ms -> 500ms)
+          const retryDelay = isGattError ? 500 : this._minCommandInterval;
+          console.warn(`[ERG] 명령 재시도 ${command.retryCount}/${command.maxRetries} (${retryDelay}ms 후):`, error.message);
+          setTimeout(() => {
+            this._commandQueue.unshift(command);
+            processNext();
+          }, retryDelay);
+          return;
         } else {
+          console.error(`[ERG] 명령 최종 실패 (${command.maxRetries}회 재시도 후):`, error);
           command.reject(error);
         }
       }
