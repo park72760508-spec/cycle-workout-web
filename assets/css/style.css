@@ -327,6 +327,10 @@ h1,h2,h3,h4 { font-weight: 600; }
 #basecampScreen {
   position: relative;
   overflow: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #basecampScreen.active {
@@ -340,6 +344,9 @@ h1,h2,h3,h4 { font-weight: 600; }
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 베이스캠프 배경 이미지 - 흐리게 */
@@ -400,6 +407,19 @@ h1,h2,h3,h4 { font-weight: 600; }
   border-radius: 12px;
   padding: 15px;
   margin-bottom: 20px;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
+#basecampScreen .connection-device-section,
+#basecampScreen .connection-main-container {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
@@ -2418,6 +2438,13 @@ button[aria-disabled="true"] {
 
 /* ========== 4) 훈련 준비 화면 (#trainingReadyScreen) ========== */
 /* 훈련 준비 화면을 무선 기기 연결 화면과 같은 디자인으로 변경 */
+/* Pull-to-refresh 방지 (iOS & Android) */
+#trainingReadyScreen {
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #trainingReadyScreen.active {
   display: flex !important;
   align-items: center;
@@ -2426,6 +2453,9 @@ button[aria-disabled="true"] {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
   background-attachment: fixed;
   padding: 20px;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
@@ -3525,6 +3555,20 @@ button[aria-disabled="true"] {
 }
 
 /* 워크아웃 선택 모달 푸터의 connection-exit-container 스타일 */
+#workoutSelectionModal {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#workoutSelectionModal .modal-content {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #workoutSelectionModal .modal-footer {
   justify-content: center;
 }
@@ -9913,6 +9957,17 @@ button[aria-disabled="true"] {
   width: 90%;
   max-width: 500px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#rpeConditionModal {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #rpeConditionModal .modal-header,
@@ -12476,6 +12531,13 @@ line[id^="needle-"] {
 
 /* ========== Player List 화면 (모바일/태블릿 최적화) ========== */
 /* 훈련 참가 화면을 Training Room 화면 구조로 변경 */
+#playerListScreen {
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
 #playerListScreen.active {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(147, 197, 253, 0.08) 100%);
   padding: 20px;
@@ -12484,6 +12546,9 @@ line[id^="needle-"] {
   min-height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 훈련 참가 화면 배경 이미지 */
@@ -13196,6 +13261,10 @@ line[id^="needle-"] {
 #trainingRoomScreen {
   position: relative;
   overflow: hidden;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 #trainingRoomScreen.active {
@@ -14058,7 +14127,9 @@ body.mobile-dashboard-active {
   min-height: 100vh; /* 폴백 */
   min-height: 100dvh; /* 동적 뷰포트 높이 (최신 브라우저) */
   /* 터치 시 화면 전체가 바운스되는 것을 막아 터치 정확도 향상 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
   overscroll-behavior-y: none;
+  overscroll-behavior: none;
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
   overflow: hidden;
   display: flex;
@@ -14067,6 +14138,9 @@ body.mobile-dashboard-active {
 
 #bluetoothPlayerListScreen.active {
   display: flex;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 2. 메인 컨텐츠 영역 (스크롤 가능) */
@@ -14083,6 +14157,9 @@ body.mobile-dashboard-active {
   flex: 1;
   overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
   padding-bottom: 120px;
 }
@@ -14293,6 +14370,9 @@ body.mobile-dashboard-active {
 #trainingRoomScreen.active,
 #playerListScreen.active {
   display: flex;
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 /* 각 화면의 컨텐츠 영역 스크롤 가능하게 */
@@ -14323,6 +14403,9 @@ body.mobile-dashboard-active {
   flex: 1;
   overflow-y: auto; /* 내부 컨텐츠만 스크롤 */
   -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+  /* Pull-to-refresh 방지 (iOS & Android) */
+  overscroll-behavior-y: none;
+  overscroll-behavior: none;
   /* 하단 패널에 컨텐츠가 가려지지 않도록 여유 공간 확보 */
   padding-bottom: 120px;
 }
