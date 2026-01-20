@@ -168,6 +168,13 @@ async function connectTrainer() {
     let service, characteristic, controlPointChar = null;
     let realProtocol = 'UNKNOWN';
     let dataService = null;
+    
+    // 기기 이름 확인 (Hammer, CycleOps 등) - 함수 전체에서 사용하기 위해 상단에 선언
+    const deviceName = (device.name || "").toUpperCase();
+    const isCycleOpsDevice = deviceName.includes("CYCLEOPS") || 
+                             deviceName.includes("HAMMER") || 
+                             deviceName.includes("SARIS") ||
+                             deviceName.includes("MAGNUS");
 
     // ★ [개선] 모든 서비스를 병렬로 탐색하여 구형/신형 기기 모두 지원
     // ZWIFT/Mywoosh 방식: 모든 가능한 서비스를 탐색하고 최적의 조합 선택
@@ -337,12 +344,7 @@ async function connectTrainer() {
     if (characteristic && !controlPointChar) {
       console.log('[connectTrainer] Control Point 재탐색 중 (모든 서비스 탐색)...');
       
-      // 기기 이름 확인 (Hammer, CycleOps 등)
-      const deviceName = (device.name || "").toUpperCase();
-      const isCycleOpsDevice = deviceName.includes("CYCLEOPS") || 
-                               deviceName.includes("HAMMER") || 
-                               deviceName.includes("SARIS") ||
-                               deviceName.includes("MAGNUS");
+      // isCycleOpsDevice는 이미 함수 상단에서 선언되었으므로 재사용
       
       // 1단계: CycleOps 서비스에서 Control Point 찾기
       for (const svcInfo of availableServices) {
@@ -480,7 +482,7 @@ async function connectTrainer() {
 
     const name = (device.name || "").toUpperCase();
     let fakeProtocol = realProtocol;
-    const isCycleOpsDevice = name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || name.includes("MAGNUS");
+    // isCycleOpsDevice는 이미 위에서 선언되었으므로 재사용
     
     // ★ CycleOps 기기이고 Control Point가 없으면 경고 메시지
     if (isCycleOpsDevice && !controlPointChar && realProtocol === 'CPS') {
@@ -533,11 +535,7 @@ async function connectTrainer() {
     const protocolMsg = realProtocol !== 'UNKNOWN' ? `[${realProtocol}]` : '';
     
     // CycleOps 기기인데 Control Point가 없으면 특별 메시지
-    const isCycleOpsDevice = (device.name || "").toUpperCase().includes("CYCLEOPS") || 
-                              (device.name || "").toUpperCase().includes("HAMMER") || 
-                              (device.name || "").toUpperCase().includes("SARIS") ||
-                              (device.name || "").toUpperCase().includes("MAGNUS");
-    
+    // isCycleOpsDevice는 이미 위에서 선언되었으므로 재사용
     if (isCycleOpsDevice && !controlPointChar) {
       ergMsg = "(ERG 제어 불가 - Control Point 미발견)";
       console.warn('[connectTrainer] ⚠️ CycleOps 기기이지만 Control Point를 찾지 못했습니다.');
