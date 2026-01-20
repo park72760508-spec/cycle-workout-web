@@ -1450,99 +1450,99 @@ function updatePowerMeterConnectionStatus(powerMeterId) {
     const smartTrainerId = deviceData?.smartTrainerId || powerMeter.trainerDeviceId || null;
     const powerMeterId_fb = deviceData?.powerMeterId || powerMeter.deviceId || null;
     const heartRateId = deviceData?.heartRateId || powerMeter.heartRateDeviceId || null;
-  
-  // 조건 확인
-  const hasUser = !!(powerMeter.userId);
-  const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
+    
+    // 조건 확인
+    const hasUser = !!(powerMeter.userId);
+    const hasReceiver = !!(window.antState && window.antState.usbDevice && window.antState.usbDevice.opened);
     const hasPowerDevice = !!(powerMeterId_fb || smartTrainerId);
     const hasHeartRateDevice = !!(heartRateId);
-  const hasAnyDevice = hasPowerDevice || hasHeartRateDevice; // 파워메터/스마트로라/심박계 중 하나라도 있으면
-  const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
+    const hasAnyDevice = hasPowerDevice || hasHeartRateDevice; // 파워메터/스마트로라/심박계 중 하나라도 있으면
+    const hasData = powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0;
   
-  let statusClass = 'disconnected';
-  let statusText = '미연결';
-  
-  // 연결 상태 판단 (새로운 로직)
-  if (!hasUser) {
-    // 사용자 미지정
-    statusClass = 'disconnected';
-    statusText = '미연결';
-    powerMeter.connected = false;
-  } else if (hasUser && hasAnyDevice) {
-    // 사용자 지정 + 파워미터/스마트로라/심박계 정보 저장된 상태
-    // "준비됨" 상태는 hasData 체크 없이 표시 (화면 재접속 시에도 올바르게 표시)
-    if (hasReceiver && hasData) {
-      // 수신기 연결 + 데이터 수신 중
-      statusClass = 'connected';
-      statusText = '연결됨';
-      powerMeter.connected = true;
+    let statusClass = 'disconnected';
+    let statusText = '미연결';
+    
+    // 연결 상태 판단 (새로운 로직)
+    if (!hasUser) {
+      // 사용자 미지정
+      statusClass = 'disconnected';
+      statusText = '미연결';
+      powerMeter.connected = false;
+    } else if (hasUser && hasAnyDevice) {
+      // 사용자 지정 + 파워미터/스마트로라/심박계 정보 저장된 상태
+      // "준비됨" 상태는 hasData 체크 없이 표시 (화면 재접속 시에도 올바르게 표시)
+      if (hasReceiver && hasData) {
+        // 수신기 연결 + 데이터 수신 중
+        statusClass = 'connected';
+        statusText = '연결됨';
+        powerMeter.connected = true;
+      } else {
+        // 디바이스 정보는 있지만 수신기 미연결 또는 데이터 미수신
+        // 화면 재접속 시에도 "준비됨"으로 표시되어야 함
+        statusClass = 'ready';
+        statusText = '준비됨';
+        powerMeter.connected = false;
+      }
     } else {
-      // 디바이스 정보는 있지만 수신기 미연결 또는 데이터 미수신
-      // 화면 재접속 시에도 "준비됨"으로 표시되어야 함
-      statusClass = 'ready';
-      statusText = '준비됨';
+      // 사용자 지정만 되어 있고 디바이스 정보 없음
+      statusClass = 'disconnected';
+      statusText = '미연결';
       powerMeter.connected = false;
     }
-  } else {
-    // 사용자 지정만 되어 있고 디바이스 정보 없음
-    statusClass = 'disconnected';
-    statusText = '미연결';
-    powerMeter.connected = false;
-  }
-  
-  // 상태 표시 업데이트
-  const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
-  const statusDotEl = document.getElementById(`status-dot-${powerMeterId}`);
-  
-  if (statusTextEl) {
-    statusTextEl.textContent = statusText;
-  }
-  
-  // 상태 점 표시/숨김 처리
-  if (statusDotEl) {
-    if (statusClass === 'disconnected') {
-      // 미연결 상태: 빨간 원 표시
-      statusDotEl.style.display = 'inline-block';
-      statusDotEl.classList.remove('ready', 'connected');
-      statusDotEl.classList.add('disconnected');
-    } else {
-      // 준비됨 또는 연결됨 상태: 점 숨김
-      statusDotEl.style.display = 'none';
+    
+    // 상태 표시 업데이트
+    const deviceIconsEl = document.getElementById(`device-icons-${powerMeterId}`);
+    const statusDotEl = document.getElementById(`status-dot-${powerMeterId}`);
+    
+    if (statusTextEl) {
+      statusTextEl.textContent = statusText;
     }
-  }
-  
-  // 디바이스 아이콘 표시/숨김 처리
-  if (deviceIconsEl) {
-    if (statusClass === 'ready' || statusClass === 'connected') {
-      // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (데이터 수신 상태에 따라 개별적으로)
-      deviceIconsEl.style.display = 'inline-flex';
-      updateDeviceIconsWithDataStatus(powerMeterId);
-    } else {
-      // 미연결 상태: 디바이스 아이콘 숨김
-      deviceIconsEl.style.display = 'none';
+    
+    // 상태 점 표시/숨김 처리
+    if (statusDotEl) {
+      if (statusClass === 'disconnected') {
+        // 미연결 상태: 빨간 원 표시
+        statusDotEl.style.display = 'inline-block';
+        statusDotEl.classList.remove('ready', 'connected');
+        statusDotEl.classList.add('disconnected');
+      } else {
+        // 준비됨 또는 연결됨 상태: 점 숨김
+        statusDotEl.style.display = 'none';
+      }
     }
-  }
-  
-  // 속도계 하단 정보창 배경색 업데이트 (데이터 수신 여부에 따라)
-  const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
-  if (infoEl) {
-    // 데이터 수신 여부 확인
-    const hasDataReceived = (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
-    if (hasDataReceived) {
-      // 데이터 수신 중: 연두색
-      infoEl.style.backgroundColor = '#90EE90'; // 연두색
-    } else {
-      // 데이터 수신 없음: 주황색
-      infoEl.style.backgroundColor = '#FFA500'; // 주황색
+    
+    // 디바이스 아이콘 표시/숨김 처리
+    if (deviceIconsEl) {
+      if (statusClass === 'ready' || statusClass === 'connected') {
+        // 준비됨 또는 연결됨 상태: 등록된 기기 이미지 표시 (데이터 수신 상태에 따라 개별적으로)
+        deviceIconsEl.style.display = 'inline-flex';
+        updateDeviceIconsWithDataStatus(powerMeterId);
+      } else {
+        // 미연결 상태: 디바이스 아이콘 숨김
+        deviceIconsEl.style.display = 'none';
+      }
     }
-  }
-  
-  // 랩파워 색상 업데이트
-  const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
-  if (segPowerEl) {
-    // 랩파워는 항상 검정색
-    segPowerEl.style.color = '#000000'; // 검정색
-  }
+    
+    // 속도계 하단 정보창 배경색 업데이트 (데이터 수신 여부에 따라)
+    const infoEl = document.querySelector(`#power-meter-${powerMeterId} .speedometer-info`);
+    if (infoEl) {
+      // 데이터 수신 여부 확인
+      const hasDataReceived = (powerMeter.currentPower > 0 || powerMeter.heartRate > 0 || powerMeter.cadence > 0);
+      if (hasDataReceived) {
+        // 데이터 수신 중: 연두색
+        infoEl.style.backgroundColor = '#90EE90'; // 연두색
+      } else {
+        // 데이터 수신 없음: 주황색
+        infoEl.style.backgroundColor = '#FFA500'; // 주황색
+      }
+    }
+    
+    // 랩파워 색상 업데이트
+    const segPowerEl = document.getElementById(`segment-power-value-${powerMeterId}`);
+    if (segPowerEl) {
+      // 랩파워는 항상 검정색
+      segPowerEl.style.color = '#000000'; // 검정색
+    }
   }).catch(error => {
     console.error(`[Indoor Training] updatePowerMeterConnectionStatus 오류 (트랙 ${powerMeterId}):`, error);
     // 오류 시 기존 방식으로 폴백
@@ -2538,24 +2538,24 @@ async function selectSearchedUserForPowerMeter(userId) {
       // window._searchedUserForPairing이 없을 때만 다른 방법으로 사용자 정보 가져오기
       
       // 방법 2: apiGetUsers 함수 사용 (Bluetooth Join Session이 아닌 경우에만)
-    if (!user && typeof apiGetUsers === 'function') {
-      const result = await apiGetUsers();
-      if (result && result.success && Array.isArray(result.items)) {
-        user = result.items.find(u => String(u.id) === String(userId));
+      if (!user && typeof apiGetUsers === 'function') {
+        const result = await apiGetUsers();
+        if (result && result.success && Array.isArray(result.items)) {
+          user = result.items.find(u => String(u.id) === String(userId));
+        }
       }
-    }
-    
-    // 방법 3: apiGetUsers가 없으면 window.apiGetUsers 시도
-    if (!user && typeof window.apiGetUsers === 'function') {
-      const result = await window.apiGetUsers();
-      if (result && result.success && Array.isArray(result.items)) {
-        user = result.items.find(u => String(u.id) === String(userId));
+      
+      // 방법 3: apiGetUsers가 없으면 window.apiGetUsers 시도
+      if (!user && typeof window.apiGetUsers === 'function') {
+        const result = await window.apiGetUsers();
+        if (result && result.success && Array.isArray(result.items)) {
+          user = result.items.find(u => String(u.id) === String(userId));
+        }
       }
-    }
-    
-    // 방법 4: dbUsers에서 직접 찾기 (app.js에서 사용하는 방식)
-    if (!user && window.dbUsers && Array.isArray(window.dbUsers)) {
-      user = window.dbUsers.find(u => String(u.id) === String(userId));
+      
+      // 방법 4: dbUsers에서 직접 찾기 (app.js에서 사용하는 방식)
+      if (!user && window.dbUsers && Array.isArray(window.dbUsers)) {
+        user = window.dbUsers.find(u => String(u.id) === String(userId));
       }
     }
     
@@ -5565,15 +5565,6 @@ async function openWorkoutSelectionModal() {
     
     // 모달 표시
     modal.classList.remove('hidden');
-    
-    // Pull-to-refresh 방지 로직 적용
-    if (typeof applyPullToRefreshPrevention === 'function') {
-        applyPullToRefreshPrevention(modal);
-        const scrollableContent = modal.querySelector('.modal-content');
-        if (scrollableContent) {
-            applyPullToRefreshPrevention(scrollableContent);
-        }
-    }
     
     // 로딩 상태 표시
     const tbody = document.getElementById('workoutSelectionTableBody');
