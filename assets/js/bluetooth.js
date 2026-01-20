@@ -517,6 +517,10 @@ function handleTrainerData(e) {
     off += 2;
     if (!Number.isNaN(p)) {
       window.liveData.power = p;
+      // 3초 평균 파워 계산을 위한 버퍼에 추가
+      if (typeof window.addPowerToBuffer === 'function') {
+        window.addPowerToBuffer(p);
+      }
       notifyChildWindows('power', p);
     }
   }
@@ -538,6 +542,10 @@ function handlePowerMeterData(event) {
   
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
+    // 3초 평균 파워 계산을 위한 버퍼에 추가
+    if (typeof window.addPowerToBuffer === 'function') {
+      window.addPowerToBuffer(instPower);
+    }
     notifyChildWindows('power', instPower);
   }
   
