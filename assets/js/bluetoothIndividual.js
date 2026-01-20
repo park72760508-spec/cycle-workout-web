@@ -122,6 +122,9 @@ let segmentPowerHistory = []; // 현재 세그먼트 파워 히스토리
 let currentSegmentStartTime = null; // 현재 세그먼트 시작 시간
 let maxPowerRecorded = 0; // 기록된 최대 파워
 
+// ★ 블루투스 개인훈련 대시보드 전용 3초 평균 파워 계산 버퍼 (app.js와 독립적)
+let bluetoothIndividualPowerBuffer = [];
+
 // 사용자 정보 저장 (Firebase 업데이트용)
 let currentUserInfo = {
     userId: null,
@@ -129,6 +132,101 @@ let currentUserInfo = {
     ftp: null, // 초기값 null로 변경 (Firebase에서 읽어온 후에만 설정)
     weight: null
 };
+
+/**
+ * 블루투스 개인훈련 대시보드 전용: 파워값을 버퍼에 추가하는 함수
+ * app.js의 addPowerToBuffer와 독립적으로 작동
+ * @param {number} power - 파워값 (W)
+ */
+function addPowerToBufferIndividual(power) {
+    if (!bluetoothIndividualPowerBuffer) {
+        bluetoothIndividualPowerBuffer = [];
+    }
+    
+    const now = Date.now();
+    const powerValue = Number(power);
+    
+    // 유효한 파워값만 추가 (0 이상, 2000 이하)
+    if (powerValue >= 0 && powerValue <= 2000) {
+        bluetoothIndividualPowerBuffer.push({
+            timestamp: now,
+            power: powerValue
+        });
+        
+        // 버퍼 크기 제한 (최대 100개, 약 3초치 데이터)
+        if (bluetoothIndividualPowerBuffer.length > 100) {
+            bluetoothIndividualPowerBuffer.shift();
+        }
+        
+        // 3초 이전의 오래된 데이터 제거
+        const threeSecondsAgo = now - 3000;
+        bluetoothIndividualPowerBuffer = bluetoothIndividualPowerBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    }
+}
+
+/**
+ * 블루투스 개인훈련 대시보드 전용: 3초 평균 파워값 계산 함수
+ * app.js의 get3SecondAveragePower와 독립적으로 작동
+ * 시간 가중 평균을 사용하여 더 안정적인 값 제공
+ * @returns {number} 3초 평균 파워값 (W)
+ */
+function get3SecondAveragePowerIndividual() {
+    if (!bluetoothIndividualPowerBuffer || bluetoothIndividualPowerBuffer.length === 0) {
+        // 버퍼가 비어있으면 현재값 반환
+        return Math.round(Number(window.liveData?.power ?? 0));
+    }
+    
+    const now = Date.now();
+    const threeSecondsAgo = now - 3000;
+    
+    // 3초 이전의 오래된 데이터 제거
+    const validBuffer = bluetoothIndividualPowerBuffer.filter(item => item.timestamp >= threeSecondsAgo);
+    
+    // 유효한 데이터가 없으면 현재값 반환
+    if (validBuffer.length === 0) {
+        return Math.round(Number(window.liveData?.power ?? 0));
+    }
+    
+    // 최소 2개 이상의 샘플이 있어야 시간 가중 평균 계산
+    if (validBuffer.length >= 2) {
+        // 시간 가중 평균 계산 (더 정확한 평균)
+        let totalWeightedPower = 0;
+        let totalWeight = 0;
+        
+        for (let i = 0; i < validBuffer.length - 1; i++) {
+            const current = validBuffer[i];
+            const next = validBuffer[i + 1];
+            const timeDiff = (next.timestamp - current.timestamp) / 1000; // 초 단위
+            const weight = timeDiff; // 시간 차이를 가중치로 사용
+            totalWeightedPower += current.power * weight;
+            totalWeight += weight;
+        }
+        
+        // 마지막 샘플 처리 (현재 시점까지의 시간)
+        const lastSample = validBuffer[validBuffer.length - 1];
+        const lastTimeDiff = (now - lastSample.timestamp) / 1000;
+        if (lastTimeDiff > 0) {
+            totalWeightedPower += lastSample.power * lastTimeDiff;
+            totalWeight += lastTimeDiff;
+        }
+        
+        if (totalWeight > 0) {
+            const average = Math.round(totalWeightedPower / totalWeight);
+            // 버퍼 업데이트 (오래된 데이터 제거된 버전)
+            bluetoothIndividualPowerBuffer = validBuffer;
+            return average;
+        }
+    }
+    
+    // 샘플이 부족하거나 시간 가중 평균 계산 실패 시 단순 평균 사용
+    const sum = validBuffer.reduce((acc, item) => acc + item.power, 0);
+    const average = Math.round(sum / validBuffer.length);
+    
+    // 버퍼 업데이트 (오래된 데이터 제거된 버전)
+    bluetoothIndividualPowerBuffer = validBuffer;
+    
+    return average;
+}
 
 // 2. window.liveData에서 데이터 읽기 및 Firebase로 전송
 // SESSION_ID는 firebaseConfig.js에 정의됨
@@ -146,6 +244,11 @@ function sendDataToFirebase() {
     const heartRate = Number(window.liveData.heartRate || 0);
     const cadence = Number(window.liveData.cadence || 0);
     const targetPower = Number(window.liveData.targetPower || firebaseTargetPower || 0);
+    
+    // ★ 블루투스 개인훈련 대시보드 전용: 3초 평균 파워 계산을 위한 버퍼에 추가
+    if (power > 0) {
+        addPowerToBufferIndividual(power);
+    }
     
     // ErgController에 데이터 업데이트 (Edge AI 분석용)
     if (window.ergController) {
@@ -915,6 +1018,9 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
         
         // 훈련 종료 감지 (running -> finished/stopped/idle 또는 모든 세그먼트 완료)
         if (previousTrainingState === 'running' && (currentState === 'finished' || currentState === 'stopped' || currentState === 'idle')) {
+            // ★ 블루투스 개인훈련 대시보드 전용: 3초 평균 파워 버퍼 초기화
+            bluetoothIndividualPowerBuffer = [];
+            console.log('[BluetoothIndividual] 훈련 종료 - 3초 평균 파워 버퍼 초기화');
             // 또는 모든 세그먼트가 완료되었는지 확인
             const totalSegments = window.currentWorkout?.segments?.length || 0;
             const lastSegmentIndex = totalSegments > 0 ? totalSegments - 1 : -1;
@@ -1025,6 +1131,9 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             bluetoothIndividualSegmentStartTime = null;
             bluetoothIndividualTotalElapsedTime = 0;
             bluetoothIndividualSegmentElapsedTime = 0;
+            // ★ 블루투스 개인훈련 대시보드 전용: 3초 평균 파워 버퍼 초기화
+            bluetoothIndividualPowerBuffer = [];
+            console.log('[BluetoothIndividual] 훈련 종료 - 3초 평균 파워 버퍼 초기화');
             console.log('[BluetoothIndividual] 훈련 종료 - 로컬 시간 추적 정리');
         }
         
@@ -1179,13 +1288,14 @@ function updateDashboard(data = null) {
     // 파워값 가져오기 (window.liveData 우선 사용, bluetooth.js에서 업데이트됨)
     const power = Number(window.liveData?.power || data?.power || data?.currentPower || data?.watts || data?.currentPowerW || 0);
     
-    // 3초 평균 파워값 계산 (전역 함수 사용)
+    // ★ 블루투스 개인훈련 대시보드 전용: 3초 평균 파워값 계산 (독립적인 로직 사용)
+    // app.js의 get3SecondAveragePower와 독립적으로 작동
     let powerValue = power; // 기본값은 현재 파워값
-    if (window.get3SecondAveragePower && typeof window.get3SecondAveragePower === 'function') {
-      powerValue = window.get3SecondAveragePower();
+    if (typeof get3SecondAveragePowerIndividual === 'function') {
+        powerValue = get3SecondAveragePowerIndividual();
     } else {
-      // 함수가 없으면 현재값 사용
-      powerValue = Math.round(power);
+        // 함수가 없으면 현재값 사용
+        powerValue = Math.round(power);
     }
     
     // 현재 파워값을 전역 변수에 저장 (바늘 애니메이션 루프에서 사용)
