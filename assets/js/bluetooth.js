@@ -1,7 +1,8 @@
 /* ==========================================================
-   bluetooth.js (v3.4 Protocol Identifier)
+   bluetooth.js (v3.5 Protocol Fixed)
    - 연결된 기기가 FTMS인지 Legacy(CycleOps/Wahoo)인지 정확히 식별
    - ErgController가 올바른 '방언(OpCode)'을 쓰도록 유도
+   - ★ [수정] FTMS 및 CPS 데이터 파싱 로직 수정 (케이던스 복구)
 ========================================================== */
 
 // ── [1] UUID 상수 (만능 리스트) ──
@@ -17,15 +18,12 @@ const UUIDS = {
   CSC_SERVICE:  '00001816-0000-1000-8000-00805f9b34fb', 
   
   // 3. ★ 구형/독자 규격 서비스 (Legacy)
-  // CycleOps (VirtualTraining)
   CYCLEOPS_SERVICE: '347b0001-7635-408b-8918-8ff3949ce592',
   CYCLEOPS_CONTROL: '347b0012-7635-408b-8918-8ff3949ce592', 
 
-  // Wahoo Fitness (Legacy)
   WAHOO_SERVICE:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
   WAHOO_CONTROL:    'a026e005-0a7d-4ab3-97fa-f1500f9feb8b',
 
-  // Tacx FE-C over BLE
   TACX_SERVICE:     '6e40fec1-b5a3-f393-e0a9-e50e24dcca9e',
   TACX_CONTROL:     '6e40fec2-b5a3-f393-e0a9-e50e24dcca9e',
   
@@ -53,7 +51,7 @@ window.bleCommandQueue = {
 window.liveData = window.liveData || { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
 window.connectedDevices = window.connectedDevices || { trainer: null, powerMeter: null, heartRate: null };
 window._lastCadenceUpdateTime = {};
-window._lastCrankData = {}; // 케이던스 계산을 위한 이전 크랭크 데이터 저장 
+window._lastCrankData = {}; 
 
 // ── [2] UI 헬퍼 ──
 window.showConnectionStatus = window.showConnectionStatus || function (show) {
@@ -100,27 +98,20 @@ window.updateDeviceButtonImages = window.updateDeviceButtonImages || function ()
   updateBtn(btnHR, 'heartRate', "assets/img/bpm_g.png", "assets/img/bpm_i.png");
   updateBtn(btnPM, 'powerMeter', "assets/img/power_g.png", "assets/img/power_i.png");
   
-  // ERG 모드 상태에 따른 연결 버튼 색상 업데이트 (블루투스 개인훈련 대시보드)
   updateBluetoothConnectionButtonColor();
 };
 
-/**
- * 블루투스 개인훈련 대시보드 연결 버튼 색상 업데이트 (ERG 모드 상태에 따라)
- */
 function updateBluetoothConnectionButtonColor() {
   const btnTrainer = document.getElementById("btnConnectTrainer");
   if (!btnTrainer) return;
   
-  // 스마트 트레이너가 연결되어 있고 ERG 모드가 활성화되어 있는지 확인
   const isTrainerConnected = window.connectedDevices?.trainer;
   const isErgModeActive = (window.ergModeState && window.ergModeState.enabled) ||
                           (window.ergController && window.ergController.state.enabled);
   
   if (isTrainerConnected && isErgModeActive) {
-    // ERG 모드 On: 파랑색톤
     btnTrainer.classList.add("erg-mode-active");
   } else {
-    // ERG 모드 Off: 녹색톤 (기본 연결 상태)
     btnTrainer.classList.remove("erg-mode-active");
   }
 }
@@ -166,7 +157,7 @@ async function connectTrainer() {
     console.log('[connectTrainer] 연결 성공. 프로토콜 분석 중...');
 
     let service, characteristic, controlPointChar = null;
-    let realProtocol = 'UNKNOWN'; // 'FTMS' | 'CYCLEOPS' | 'WAHOO' | 'TACX' | 'CPS'
+    let realProtocol = 'UNKNOWN'; 
 
     // [Step 1] 표준 FTMS 탐색
     try {
@@ -177,40 +168,32 @@ async function connectTrainer() {
       if (controlPointChar) console.log('✅ 표준 FTMS 발견');
     } catch (e) {}
 
-    // [Step 2] Legacy Control Point 탐색 (표준이 없거나 실패시)
+    // [Step 2] Legacy Control Point 탐색
     if (!controlPointChar) {
-      console.log('⚠️ FTMS Control Point 없음. Legacy 탐색...');
-      
-      // CycleOps Legacy 확인
       try {
         const legacySvc = await server.getPrimaryService(UUIDS.CYCLEOPS_SERVICE);
         controlPointChar = await legacySvc.getCharacteristic(UUIDS.CYCLEOPS_CONTROL);
         realProtocol = 'CYCLEOPS';
-        console.log(`🎉 CycleOps Legacy 발견!`);
-        // 데이터 채널도 Legacy에서 가져오기 시도
         const chars = await legacySvc.getCharacteristics();
         if (chars.length > 0) characteristic = chars[0];
       } catch (e) {
-        // Wahoo Legacy 확인
         try {
           const wahooSvc = await server.getPrimaryService(UUIDS.WAHOO_SERVICE);
           controlPointChar = await wahooSvc.getCharacteristic(UUIDS.WAHOO_CONTROL);
           realProtocol = 'WAHOO';
-          console.log(`🎉 Wahoo Legacy 발견!`);
           const chars = await wahooSvc.getCharacteristics();
           if (chars.length > 0) characteristic = chars[0];
         } catch (e2) {}
       }
     }
 
-    // [Step 3] 데이터 채널 확보 (없으면 CPS에서라도 가져옴)
+    // [Step 3] 데이터 채널 확보
     if (!characteristic) {
        try {
          service = await server.getPrimaryService(UUIDS.CPS_SERVICE);
          characteristic = await service.getCharacteristic(UUIDS.CPS_DATA);
          if (realProtocol === 'UNKNOWN') realProtocol = 'CPS';
        } catch (e) {
-         // 최후의 수단 CSC
          try {
             service = await server.getPrimaryService(UUIDS.CSC_SERVICE);
             characteristic = await service.getCharacteristic(0x2A5B);
@@ -222,11 +205,10 @@ async function connectTrainer() {
 
     await characteristic.startNotifications();
     
-    // 데이터 파서 연결
+    // 데이터 파서 연결 - realProtocol에 따라 적절한 파서 선택
     const parser = (realProtocol === 'FTMS') ? handleTrainerData : handlePowerMeterData;
     characteristic.addEventListener("characteristicvaluechanged", parser);
 
-    // ★ UI 속이기: CycleOps 기기라면 'FTMS'로 위장하되, realProtocol은 진실을 유지
     const name = (device.name || "").toUpperCase();
     let fakeProtocol = realProtocol;
     if (name.includes("CYCLEOPS") || name.includes("HAMMER") || name.includes("SARIS") || realProtocol === 'CYCLEOPS' || realProtocol === 'WAHOO') {
@@ -235,9 +217,9 @@ async function connectTrainer() {
 
     window.connectedDevices.trainer = { 
       name: device.name, device, server, characteristic,
-      controlPoint: controlPointChar, // 제어권
-      protocol: fakeProtocol,         // UI용 (FTMS로 위장)
-      realProtocol: realProtocol      // 실제 통신용 (FTMS/CYCLEOPS/WAHOO)
+      controlPoint: controlPointChar,
+      protocol: fakeProtocol,
+      realProtocol: realProtocol
     };
 
     if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
@@ -256,7 +238,7 @@ async function connectTrainer() {
   }
 }
 
-// ── [4] 심박/파워미터 (기존 유지) ──
+// ── [4] 심박/파워미터 ──
 
 async function connectHeartRate() {
   try {
@@ -322,10 +304,6 @@ async function connectPowerMeter() {
   }
 }
 
-// ── [5] ERG 제어 (명령 전달은 ErgController가 담당) ──
-// 여기서는 단순 패스스루만 수행하거나, 직접 구현하지 않고 ErgController에 위임
-// 다만 이전 버전 호환성을 위해 남겨둠
-
 window.setTargetPower = function(targetWatts) {
     if (window.ergController) {
         window.ergController.setTargetPower(targetWatts);
@@ -334,123 +312,129 @@ window.setTargetPower = function(targetWatts) {
     }
 };
 
-// ── [6] 데이터 처리 ──
+// ── [6] 데이터 처리 (★ 핵심 수정 부분) ──
+
+/**
+ * FTMS (Indoor Bike Data 0x2AD2) 표준 파서
+ * 수정 내용: Instantaneous Speed는 Flag와 무관하게 필수 필드이므로 항상 Offset을 증가시켜야 함.
+ * 수정 내용: Cadence는 uint8이 아니라 uint16이며 0.5 RPM 해상도임.
+ */
 function handleTrainerData(e) {
   const dv = e.target.value;
+  if (dv.byteLength < 4) return; // 최소 Flags(2) + Speed(2)
+
   let off = 0;
-  const flags = dv.getUint16(off, true); off += 2;
-  
-  // FTMS 프로토콜 데이터 구조:
-  // Flags (2 bytes)
-  // More Data (1 byte) - optional (flags & 0x01)
-  // Instantaneous Speed (2 bytes) - optional (flags & 0x02)
-  // Instantaneous Cadence (1 byte) - optional (flags & 0x04) - 0.5 RPM 단위
-  // Average Cadence (1 byte) - optional (flags & 0x08)
-  // Total Distance (3 bytes) - optional (flags & 0x10)
-  // Instantaneous Power (2 bytes) - optional (flags & 0x20)
-  // Average Power (2 bytes) - optional (flags & 0x40)
-  
-  // More Data (1 byte) - optional
-  if (flags & 0x0001) {
-    off += 1; // More Data는 1 byte
-  }
-  
-  // Instantaneous Speed (2 bytes) - optional
+  const flags = dv.getUint16(off, true); 
+  off += 2; // Flags
+
+  // 1. Instantaneous Speed (MANDATORY in FTMS 2AD2)
+  // 대부분의 표준 FTMS 기기에서 속도 값은 플래그 비트 0 여부와 상관없이 Flags 바로 뒤에 옵니다.
+  // (Uint16, 0.01 km/h)
+  off += 2;
+
+  // 2. Average Speed (Optional, Flag Bit 1: 0x0002)
   if (flags & 0x0002) {
     off += 2;
   }
-  
-  // Instantaneous Cadence (1 byte) - optional, 0.5 RPM 단위
+
+  // 3. Instantaneous Cadence (Optional, Flag Bit 2: 0x0004)
   if (flags & 0x0004) {
-    const cadenceValue = dv.getUint8(off); off += 1;
-    const rpm = Math.round(cadenceValue / 2.0); // 0.5 RPM 단위를 RPM으로 변환
-    if (rpm > 0 && rpm <= 250) { // 유효한 케이던스 범위 체크
-      notifyChildWindows('cadence', rpm);
+    // FTMS 표준: Cadence는 Uint16, 단위 0.5 RPM
+    const cadenceRaw = dv.getUint16(off, true);
+    off += 2;
+    
+    const rpm = Math.round(cadenceRaw * 0.5);
+    if (rpm >= 0 && rpm <= 250) {
       window.liveData.cadence = rpm;
+      notifyChildWindows('cadence', rpm);
       window._lastCadenceUpdateTime['trainer'] = Date.now();
     }
   }
-  
-  // Average Cadence (1 byte) - optional
+
+  // 4. Average Cadence (Optional, Flag Bit 3: 0x0008)
   if (flags & 0x0008) {
-    off += 1;
+    off += 2;
   }
-  
-  // Total Distance (3 bytes) - optional
+
+  // 5. Total Distance (Optional, Flag Bit 4: 0x0010)
   if (flags & 0x0010) {
-    off += 3;
+    off += 3; // Uint24
   }
-  
-  // Instantaneous Power (2 bytes) - optional
+
+  // 6. Resistance Level (Optional, Flag Bit 5: 0x0020)
   if (flags & 0x0020) {
+    off += 2;
+  }
+
+  // 7. Instantaneous Power (Optional, Flag Bit 6: 0x0040)
+  if (flags & 0x0040) {
     const p = dv.getInt16(off, true);
+    off += 2;
     if (!Number.isNaN(p)) {
       window.liveData.power = p;
       notifyChildWindows('power', p);
     }
-    off += 2;
-  }
-  
-  // Average Power (2 bytes) - optional
-  if (flags & 0x0040) {
-    off += 2;
   }
 }
 
+/**
+ * CPS (Cycling Power Service 0x2A63) 파서
+ * 수정 내용: Crank Data(Bit 5) 앞에 있는 Optional 필드들(Balance, Torque 등)을 안전하게 처리.
+ */
 function handlePowerMeterData(event) {
   const dv = event.target.value;
   let off = 0;
-  const flags = dv.getUint16(off, true); off += 2;
+  const flags = dv.getUint16(off, true); 
+  off += 2;
   
-  // Instantaneous Power (항상 존재)
-  const instPower = dv.getInt16(off, true); off += 2;
+  // 1. Instantaneous Power (Mandatory)
+  const instPower = dv.getInt16(off, true); 
+  off += 2;
+  
   if (!Number.isNaN(instPower)) {
     window.liveData.power = instPower;
     notifyChildWindows('power', instPower);
   }
   
-  // Cumulative Energy (optional, flags & 0x08)
-  if (flags & 0x08) {
-    off += 2; // Cumulative Energy (2 bytes)
+  // 2. Pedal Power Balance (Optional, Flag Bit 0: 0x01)
+  if (flags & 0x0001) {
+    off += 1; // 1 byte
+  }
+
+  // 3. Accumulated Torque (Optional, Flag Bit 2: 0x04)
+  // 참고: CPS 스펙에 따라 0x04가 Accumulated Torque 인 경우가 많음
+  if (flags & 0x0004) {
+    off += 2;
+  }
+
+  // 4. Cumulative Wheel Revolution (Optional, Flag Bit 4: 0x10)
+  if (flags & 0x0010) {
+    off += 6; // Revs(4) + Time(2)
   }
   
-  // Wheel Revolution Data (optional, flags & 0x10)
-  if (flags & 0x10) {
-    off += 6; // Cumulative Wheel Revolutions (4 bytes) + Last Wheel Event Time (2 bytes)
-  }
-  
-  // Crank Revolution Data (optional, flags & 0x20) - 케이던스 정보
-  if (flags & 0x20) {
-    const cumulativeCrankRevolutions = dv.getUint16(off, true); off += 2;
+  // 5. Cumulative Crank Revolution (Optional, Flag Bit 5: 0x20)
+  if (flags & 0x0020) {
+    const cumulativeCrankRevolutions = dv.getUint16(off, true); 
+    off += 2;
     const lastCrankEventTime = dv.getUint16(off, true); // 1/1024초 단위
     off += 2;
     
-    // 케이던스 계산을 위한 이전 데이터 확인
-    const deviceKey = 'powerMeter';
+    // 케이던스 계산 로직
+    const deviceKey = window.connectedDevices.trainer ? 'trainer' : 'powerMeter';
     const lastData = window._lastCrankData[deviceKey];
     
     if (lastData && lastCrankEventTime !== lastData.lastCrankEventTime) {
-      // 시간 차이 계산 (1/1024초 단위)
       let timeDiff = lastCrankEventTime - lastData.lastCrankEventTime;
-      if (timeDiff < 0) {
-        // 16비트 오버플로우 처리 (65536 = 2^16)
-        timeDiff += 65536;
-      }
+      if (timeDiff < 0) timeDiff += 65536; // Overflow 처리
       
-      // 회전 수 차이 계산
       let revDiff = cumulativeCrankRevolutions - lastData.cumulativeCrankRevolutions;
-      if (revDiff < 0) {
-        // 16비트 오버플로우 처리
-        revDiff += 65536;
-      }
+      if (revDiff < 0) revDiff += 65536; // Overflow 처리
       
-      // 케이던스 계산: RPM = (회전 수 / 시간(초)) * 60
-      // timeDiff는 1/1024초 단위이므로 초로 변환: timeDiff / 1024
       if (timeDiff > 0 && revDiff > 0) {
         const timeInSeconds = timeDiff / 1024.0;
         const cadence = Math.round((revDiff / timeInSeconds) * 60);
         
-        if (cadence > 0 && cadence <= 250) { // 유효한 케이던스 범위 체크
+        if (cadence > 0 && cadence <= 250) {
           window.liveData.cadence = cadence;
           window._lastCadenceUpdateTime[deviceKey] = Date.now();
           notifyChildWindows('cadence', cadence);
@@ -458,7 +442,6 @@ function handlePowerMeterData(event) {
       }
     }
     
-    // 현재 데이터 저장
     window._lastCrankData[deviceKey] = {
       cumulativeCrankRevolutions,
       lastCrankEventTime,
