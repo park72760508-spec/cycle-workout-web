@@ -1879,6 +1879,15 @@ async function openWorkoutSelectionModalForBluetoothCoach() {
   // 모달 표시
   modal.classList.remove('hidden');
   
+  // Pull-to-refresh 방지 로직 적용
+  if (typeof applyPullToRefreshPrevention === 'function') {
+    applyPullToRefreshPrevention(modal);
+    const scrollableContent = modal.querySelector('.modal-content');
+    if (scrollableContent) {
+      applyPullToRefreshPrevention(scrollableContent);
+    }
+  }
+  
   // 로딩 상태 표시
   const tbody = document.getElementById('workoutSelectionTableBody');
   if (tbody) {

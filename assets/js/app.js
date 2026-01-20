@@ -3125,6 +3125,19 @@ if (!window.showScreen) {
         el.classList.add("active");
         console.log(`Successfully switched to: ${id}`);
         
+        // Pull-to-refresh 방지 로직 적용 (특정 화면들)
+        const pullToRefreshScreens = [
+          'basecampScreen',
+          'trainingReadyScreen',
+          'trainingRoomScreen',
+          'playerListScreen',
+          'bluetoothPlayerListScreen'
+        ];
+        
+        if (pullToRefreshScreens.includes(id)) {
+          applyPullToRefreshPrevention(el);
+        }
+        
         // 모바일 대시보드 화면이 활성화되면 다른 모든 화면 숨기기
         if (id === 'mobileDashboardScreen') {
           document.querySelectorAll(".screen").forEach(s => {
@@ -3272,6 +3285,99 @@ if (!window.showScreen) {
     }
   };
 }
+
+/**
+ * Pull-to-refresh 방지 함수 (iOS & Android 호환)
+ * 특정 화면에서 아래로 스크롤 시 새로고침이 되지 않도록 처리
+ */
+function applyPullToRefreshPrevention(element) {
+  if (!element) return;
+  
+  // CSS 스타일 적용
+  element.style.overscrollBehaviorY = 'none';
+  element.style.overscrollBehavior = 'none';
+  element.style.webkitOverflowScrolling = 'touch';
+  
+  // JavaScript 이벤트 핸들러 추가
+  let touchStartY = 0;
+  let touchStartScrollTop = 0;
+  let isAtTop = false;
+  
+  const handleTouchStart = (e) => {
+    touchStartY = e.touches[0].clientY;
+    touchStartScrollTop = element.scrollTop || window.pageYOffset || 0;
+    isAtTop = touchStartScrollTop <= 0;
+  };
+  
+  const handleTouchMove = (e) => {
+    if (!isAtTop) return; // 맨 위가 아니면 기본 동작 허용
+    
+    const touchY = e.touches[0].clientY;
+    const deltaY = touchY - touchStartY;
+    
+    // 아래로 스와이프하고 맨 위에 있을 때만 preventDefault
+    if (deltaY > 0 && isAtTop) {
+      e.preventDefault();
+    }
+  };
+  
+  // 기존 이벤트 리스너 제거 (중복 방지)
+  element.removeEventListener('touchstart', handleTouchStart);
+  element.removeEventListener('touchmove', handleTouchMove);
+  
+  // 새로운 이벤트 리스너 추가
+  element.addEventListener('touchstart', handleTouchStart, { passive: false });
+  element.addEventListener('touchmove', handleTouchMove, { passive: false });
+}
+
+// 모달에서도 Pull-to-refresh 방지 적용
+function applyModalPullToRefreshPrevention(modalId) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  // 모달이 열릴 때 적용
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+        const isVisible = modal.style.display !== 'none' && 
+                         !modal.classList.contains('hidden') &&
+                         (window.getComputedStyle(modal).display !== 'none');
+        if (isVisible) {
+          applyPullToRefreshPrevention(modal);
+          
+          // 모달 내부 스크롤 가능한 영역에도 적용
+          const scrollableContent = modal.querySelector('.modal-content');
+          if (scrollableContent) {
+            applyPullToRefreshPrevention(scrollableContent);
+          }
+        }
+      }
+    });
+  });
+  
+  observer.observe(modal, {
+    attributes: true,
+    attributeFilter: ['style', 'class']
+  });
+  
+  // 즉시 적용
+  if (modal.style.display !== 'none' && !modal.classList.contains('hidden')) {
+    applyPullToRefreshPrevention(modal);
+    const scrollableContent = modal.querySelector('.modal-content');
+    if (scrollableContent) {
+      applyPullToRefreshPrevention(scrollableContent);
+    }
+  }
+}
+
+// 페이지 로드 시 모달 Pull-to-refresh 방지 적용
+document.addEventListener('DOMContentLoaded', () => {
+  // 컨디션별 강도 보정 모달
+  applyModalPullToRefreshPrevention('rpeConditionModal');
+  
+  // 워크아웃 선택 모달
+  applyModalPullToRefreshPrevention('workoutSelectionModal');
+});
 
 
 
@@ -9722,6 +9828,13 @@ function showRPEModal(source) {
     }
     
     modal.style.display = 'flex';
+    
+    // Pull-to-refresh 방지 로직 적용
+    applyPullToRefreshPrevention(modal);
+    const scrollableContent = modal.querySelector('.modal-content');
+    if (scrollableContent) {
+      applyPullToRefreshPrevention(scrollableContent);
+    }
     
     // 먼저 동기 버전으로 빠르게 표시
     let challenge = getUserChallengeSync();
