@@ -903,12 +903,14 @@ window.addEventListener("beforeunload", () => {
     if (connectedDevices.trainer?.server?.connected) connectedDevices.trainer.device.gatt.disconnect();
   } catch (e) {}
 });
+// 케이던스 타임아웃 체크 (0 표시 오류 개선: 타임아웃을 더 길게 설정)
 setInterval(() => {
     const now = Date.now();
     if (window.liveData.cadence > 0) {
         const lastT = window._lastCadenceUpdateTime.trainer || 0;
         const lastP = window._lastCadenceUpdateTime.powerMeter || 0;
-        if (now - Math.max(lastT, lastP) > 3000) {
+        // 5초로 연장하여 일시적인 데이터 누락 시 0으로 표시되지 않도록 개선
+        if (now - Math.max(lastT, lastP) > 5000) {
             window.liveData.cadence = 0;
             notifyChildWindows('cadence', 0);
         }

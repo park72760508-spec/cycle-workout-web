@@ -188,6 +188,7 @@
     return average;
   };
 
+
   // GAS_URL 전역 초기화
   if (!window.GAS_URL) {
     window.GAS_URL = 'https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec'; // 실제 URL로 변경 필요
@@ -3653,8 +3654,7 @@ window.updateTrainingDisplay = function () {
     else h.classList.add("hr-zone5");
   }
 
-  // *** 케이던스 표시 개선 ***
-   // *** 케이던스 표시 개선 - 0 값도 표시 ***
+  // *** 케이던스 표시 개선 - 0 표시 오류 개선 ***
    const cadenceElement = safeGetElement("cadenceValue");
    if (cadenceElement) {
      const cadence = window.liveData?.cadence;
@@ -12659,7 +12659,7 @@ function startMobileDashboardDataUpdate() {
       }
     }
     
-    // 케이던스 표시 (블루투스 데이터)
+    // 케이던스 표시 (블루투스 데이터 - 0 표시 오류 개선)
     const cadence = Math.round(liveData.cadence || 0);
     const cadenceEl = safeGetElement('mobile-ui-cadence');
     if (cadenceEl) {

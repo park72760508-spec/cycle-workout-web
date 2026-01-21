@@ -58,6 +58,7 @@ if (typeof PowerMeterData === 'undefined') {
       this.powerTrailHistory = [];
       this.lastTrailAngle = null;
       this.powerAverageBuffer = []; // 3초 평균 파워 계산용
+      this.lastCadenceUpdateTime = 0; // 케이던스 마지막 업데이트 시간 (0 표시 오류 개선용)
     }
     
     /**
@@ -763,10 +764,24 @@ function updatePowerMeterUI(trackId) {
     }
   }
   
-  // 케이던스 (좌측 표시)
+  // 케이던스 (좌측 표시) - 0 표시 오류 개선
   const cadenceEl = document.getElementById(`cadence-value-${trackId}`);
   if (cadenceEl) {
-    const cadenceValue = (typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) ? Math.round(powerMeter.cadence) : 0;
+    const now = Date.now();
+    // 케이던스가 업데이트되었는지 확인 (0 표시 오류 개선)
+    if (powerMeter.cadence > 0) {
+      powerMeter.lastCadenceUpdateTime = now;
+    }
+    
+    // 5초 이내에 업데이트가 있었으면 케이던스 표시, 없으면 0 표시
+    const timeSinceLastUpdate = now - (powerMeter.lastCadenceUpdateTime || 0);
+    let cadenceValue = 0;
+    if (timeSinceLastUpdate <= 5000 && powerMeter.cadence > 0) {
+      cadenceValue = (typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) 
+        ? Math.round(powerMeter.cadence) 
+        : 0;
+    }
+    
     cadenceEl.textContent = cadenceValue.toString();
   }
   
@@ -776,10 +791,17 @@ function updatePowerMeterUI(trackId) {
     targetPowerEl.textContent = Math.round(powerMeter.targetPower);
   }
   
-  // 배경색 업데이트 (RPM 값이 0보다 크면 초록색)
+  // 배경색 업데이트 (RPM 값이 0보다 크면 초록색) - 0 표시 오류 개선
   const infoEl = document.querySelector(`#power-meter-${trackId} .speedometer-info`);
   if (infoEl) {
-    const cadenceValue = (typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) ? Math.round(powerMeter.cadence) : 0;
+    const now = Date.now();
+    const timeSinceLastUpdate = now - (powerMeter.lastCadenceUpdateTime || 0);
+    // 5초 이내에 업데이트가 있었고 케이던스가 0보다 크면 초록색
+    const cadenceValue = (timeSinceLastUpdate <= 5000 && powerMeter.cadence > 0) 
+      ? ((typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) 
+          ? Math.round(powerMeter.cadence) 
+          : 0)
+      : 0;
     if (cadenceValue > 0) {
       // RPM 값이 0보다 크면 초록색 (#00d4aa)
       infoEl.style.backgroundColor = '#00d4aa';
