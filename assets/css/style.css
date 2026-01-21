@@ -10016,13 +10016,14 @@ button[aria-disabled="true"] {
 #rpeConditionModal .modal-body,
 #expiryWarningModal .modal-body {
   padding: 24px;
+  padding-top: calc(24px + 3%);
 }
 
 .rpe-condition-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
-  margin-top: 16px;
+  margin-top: calc(16px + 3%);
 }
 
 .rpe-condition-btn {
