@@ -10017,6 +10017,8 @@ button[aria-disabled="true"] {
 #expiryWarningModal .modal-body {
   padding: 24px;
   padding-top: calc(24px + 3%);
+  /* 버튼 hover 시 상단 라인이 숨겨지지 않도록 추가 여백 확보 */
+  overflow: visible;
 }
 
 .rpe-condition-grid {
@@ -10047,7 +10049,8 @@ button[aria-disabled="true"] {
   border-color: #2e74e8;
   background: #f0f7ff;
   box-shadow: 0 2px 8px rgba(46, 116, 232, 0.15);
-  transform: translateY(-2px);
+  /* transform: translateY 제거 - 상단 버튼 라인이 숨겨지는 문제 방지 */
+  transform: scale(1.02);
 }
 
 .rpe-condition-btn.selected {
@@ -14559,6 +14562,9 @@ body.mobile-dashboard-active {
   -webkit-overflow-scrolling: touch;
   /* 하단 버튼 영역 확보 */
   padding-bottom: 20px;
+  /* 상단 버튼 라인이 숨겨지지 않도록 여백 확보 */
+  padding-top: 10px;
+  margin-top: calc(16px + 3%);
 }
 
 /* 모달 하단 버튼 컨테이너 - 모달 내부 블록 하단에 배치 */
