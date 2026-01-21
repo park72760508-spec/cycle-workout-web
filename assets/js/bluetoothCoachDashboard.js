@@ -89,6 +89,62 @@ if (typeof PowerMeterData === 'undefined') {
 }
 
 /**
+ * W/kg 값에 따른 색상 반환 (Bluetooth Coach 대시보드 전용)
+ * 다른 화면에 영향을 주지 않도록 독립적으로 동작
+ */
+function getBluetoothCoachUserNameColorByWkg(wkg) {
+  if (!Number.isFinite(wkg) || wkg <= 0) {
+    return 'rgba(144, 164, 174, 0.8)'; // 입문 (회색, 투명도 80%)
+  }
+  
+  if (wkg >= 4.0) {
+    return 'rgba(239, 83, 80, 0.8)'; // 상급 (빨강, 투명도 80%)
+  } else if (wkg >= 3.5) {
+    return 'rgba(255, 167, 38, 0.8)'; // 중급 (주황, 투명도 80%)
+  } else if (wkg >= 3.0) {
+    return 'rgba(45, 212, 191, 0.8)'; // 초중급 (민트색, 투명도 80%)
+  } else if (wkg >= 2.5) {
+    return 'rgba(66, 165, 245, 0.8)'; // 초급 (파랑, 투명도 80%)
+  } else {
+    return 'rgba(144, 164, 174, 0.8)'; // 입문 (회색, 투명도 80%)
+  }
+}
+
+/**
+ * Bluetooth Coach 대시보드 사용자 이름 색상 업데이트
+ * 다른 화면에 영향을 주지 않도록 안전하게 적용
+ */
+function updateBluetoothCoachUserNameColor(trackId) {
+  // Bluetooth Coach 화면이 활성화되어 있는지 확인
+  const coachScreen = document.getElementById('bluetoothCoachScreen');
+  if (!coachScreen || !coachScreen.classList.contains('active')) {
+    return; // Bluetooth Coach 화면이 아니면 실행하지 않음
+  }
+  
+  const powerMeter = window.bluetoothCoachState?.powerMeters?.find(pm => pm.id === trackId);
+  if (!powerMeter) return;
+  
+  const userNameEl = document.getElementById(`user-icon-${trackId}`);
+  if (!userNameEl) return;
+  
+  // W/kg 계산
+  const ftp = powerMeter.userFTP;
+  const weight = powerMeter.userWeight;
+  let wkg = 0;
+  
+  if (Number.isFinite(ftp) && Number.isFinite(weight) && weight > 0) {
+    wkg = ftp / weight;
+  }
+  
+  // 색상 적용
+  const color = getBluetoothCoachUserNameColorByWkg(wkg);
+  userNameEl.style.backgroundColor = color;
+  userNameEl.style.color = '#000000'; // 글자 색상 검정
+  userNameEl.style.padding = '4px 10px';
+  userNameEl.style.borderRadius = '6px';
+}
+
+/**
  * SESSION_ID 가져오기 (Training Room ID)
  */
 function getBluetoothCoachSessionId() {
@@ -238,10 +294,19 @@ function createPowerMeterElement(powerMeter) {
   // 트랙 버튼은 표시만 하고 클릭 이벤트는 없음 (Coach 모니터는 읽기 전용)
   const trackButtonStyle = 'background: rgba(0, 212, 170, 0.5) !important; color: #ffffff !important; cursor: default !important;';
   
+  // W/kg 계산 및 초기 색상 설정
+  const ftp = powerMeter.userFTP;
+  const weight = powerMeter.userWeight;
+  let initialColor = 'rgba(144, 164, 174, 0.8)'; // 기본값: 입문 (회색)
+  if (Number.isFinite(ftp) && Number.isFinite(weight) && weight > 0) {
+    const wkg = ftp / weight;
+    initialColor = getBluetoothCoachUserNameColorByWkg(wkg);
+  }
+  
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <span class="speedometer-user-name" id="user-icon-${powerMeter.id}" 
-            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 13px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
+            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 13px !important; color: #000000 !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important; background: ${initialColor} !important; padding: 4px 10px !important; border-radius: 6px !important;">${powerMeter.userName || ''}</span>
       <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
         <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
@@ -631,7 +696,11 @@ async function loadInitialUserDataForTracks() {
               // 사용자 정보 업데이트
               if (userData.userId) powerMeter.userId = userData.userId;
               if (userData.userName) powerMeter.userName = userData.userName;
-              if (userData.weight) powerMeter.userWeight = userData.weight;
+              if (userData.weight) {
+                powerMeter.userWeight = userData.weight;
+                // 몸무게 변경 시 색상 업데이트
+                updateBluetoothCoachUserNameColor(trackId);
+              }
               
               // FTP 적용
               if (userData.ftp) {
@@ -640,14 +709,18 @@ async function loadInitialUserDataForTracks() {
                 if (prevFTP !== userData.ftp) {
                   console.log(`[Bluetooth Coach] 초기 로드: 트랙 ${trackId} FTP 적용: ${userData.ftp}`);
                   updateBluetoothCoachPowerMeterTicks(trackId);
+                  // FTP 변경 시 색상 업데이트
+                  updateBluetoothCoachUserNameColor(trackId);
                 }
               }
               
               // 사용자 이름 UI 업데이트
-              const userNameEl = document.getElementById(`user-name-${trackId}`);
+              const userNameEl = document.getElementById(`user-icon-${trackId}`);
               if (userNameEl && userData.userName) {
                 userNameEl.textContent = userData.userName;
                 userNameEl.style.display = 'inline-block';
+                // W/kg 기반 색상 업데이트
+                updateBluetoothCoachUserNameColor(trackId);
               }
             }
           }
@@ -674,6 +747,8 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
     if (userNameEl) {
       userNameEl.textContent = userData.userName;
       userNameEl.style.display = 'inline-block';
+      // W/kg 기반 색상 업데이트
+      updateBluetoothCoachUserNameColor(trackId);
     }
   }
   
@@ -689,9 +764,15 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   if (userData.ftp && userData.ftp !== prevFTP) {
     console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP || '없음'} → ${userData.ftp}`);
     updateBluetoothCoachPowerMeterTicks(trackId);
+    // FTP 변경 시 색상 업데이트
+    updateBluetoothCoachUserNameColor(trackId);
   }
   
-  if (userData.weight) powerMeter.userWeight = userData.weight;
+  if (userData.weight) {
+    powerMeter.userWeight = userData.weight;
+    // 몸무게 변경 시 색상 업데이트
+    updateBluetoothCoachUserNameColor(trackId);
+  }
   
   // 훈련 데이터 업데이트
   const power = userData.power || 0;
@@ -1878,6 +1959,15 @@ async function openWorkoutSelectionModalForBluetoothCoach() {
   
   // 모달 표시
   modal.classList.remove('hidden');
+  
+  // Pull-to-refresh 방지 로직 적용
+  if (typeof applyPullToRefreshPrevention === 'function') {
+    applyPullToRefreshPrevention(modal);
+    const scrollableContent = modal.querySelector('.modal-content');
+    if (scrollableContent) {
+      applyPullToRefreshPrevention(scrollableContent);
+    }
+  }
   
   // 로딩 상태 표시
   const tbody = document.getElementById('workoutSelectionTableBody');
