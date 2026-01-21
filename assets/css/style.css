@@ -10023,10 +10023,13 @@ button[aria-disabled="true"] {
 
 .rpe-condition-grid {
   display: grid;
-  /* 버튼 hover 시 확대되어도 경계를 넘지 않도록 각 컬럼 폭을 5% 줄임 */
-  grid-template-columns: calc(50% - 3.5%) calc(50% - 3.5%);
+  /* 4개 버튼의 폭넓이를 동일하게 유지 */
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-top: calc(16px + 3%);
+  /* 좌우 여백 추가로 hover 시 좌측 버튼의 좌측 라인이 숨겨지지 않도록 */
+  padding-left: 8px;
+  padding-right: 8px;
   /* 스크롤바가 생기지 않도록 overflow 처리 */
   overflow: hidden;
 }
@@ -10053,7 +10056,8 @@ button[aria-disabled="true"] {
   background: #f0f7ff;
   box-shadow: 0 2px 8px rgba(46, 116, 232, 0.15);
   /* transform: translateY 제거 - 상단 버튼 라인이 숨겨지는 문제 방지 */
-  transform: scale(1.02);
+  /* scale 대신 box-shadow만 강화하여 라인이 숨겨지지 않도록 */
+  box-shadow: 0 4px 12px rgba(46, 116, 232, 0.2);
 }
 
 .rpe-condition-btn.selected {
