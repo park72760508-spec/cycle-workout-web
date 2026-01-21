@@ -98,13 +98,63 @@ class ErgController {
     this._subscribers.forEach(cb => { try{ cb(this.state, key, value); }catch(e){} });
   }
 
+  // FTMS Control Point 재탐색 (CPS만 있는 경우 FTMS 서비스 확인)
+  async _findFTMSControlPoint(trainer) {
+    try {
+      // trainer 객체에서 server 또는 device.gatt 사용
+      const server = trainer.server || (trainer.device && trainer.device.gatt);
+      if (!server) {
+        console.log('[ERG] 서버 객체를 찾을 수 없음');
+        return null;
+      }
+      
+      // 서버가 연결되어 있는지 확인
+      if (server.connected === false) {
+        console.log('[ERG] 서버가 연결되지 않음');
+        return null;
+      }
+      
+      const FTMS_SERVICE = '00001826-0000-1000-8000-00805f9b34fb';
+      const FTMS_CONTROL = '00002ad9-0000-1000-8000-00805f9b34fb';
+      
+      try {
+        const service = await server.getPrimaryService(FTMS_SERVICE);
+        const controlPoint = await service.getCharacteristic(FTMS_CONTROL);
+        console.log('[ERG] FTMS Control Point 재탐색 성공');
+        return controlPoint;
+      } catch (e) {
+        console.log('[ERG] FTMS Control Point 재탐색 실패 (정상일 수 있음):', e.message);
+        return null;
+      }
+    } catch (e) {
+      console.warn('[ERG] FTMS Control Point 재탐색 중 오류:', e);
+      return null;
+    }
+  }
+
   async toggleErgMode(enable) {
     try {
       const trainer = window.connectedDevices?.trainer;
       if (!trainer) throw new Error('스마트로라 연결 안됨');
 
-      // Control Point 확인
-      if (!trainer.controlPoint) {
+      // Control Point 확인 및 FTMS Control Point 우선 확인
+      let controlPoint = trainer.controlPoint;
+      let protocol = trainer.realProtocol || 'FTMS';
+      
+      // CPS 프로토콜인 경우 FTMS Control Point가 있는지 재확인
+      if (protocol === 'CPS') {
+        const ftmsControlPoint = await this._findFTMSControlPoint(trainer);
+        if (ftmsControlPoint) {
+          console.log('[ERG] FTMS Control Point 발견 - CPS 대신 사용');
+          controlPoint = ftmsControlPoint;
+          protocol = 'FTMS';
+          // Control Point 업데이트
+          trainer.controlPoint = controlPoint;
+          trainer.realProtocol = 'FTMS';
+        }
+      }
+
+      if (!controlPoint) {
         throw new Error('제어권 없음 - ERG 모드를 사용하려면 스마트 트레이너가 필요합니다');
       }
 
@@ -112,8 +162,6 @@ class ErgController {
       this.state.connectionStatus = 'connected';
 
       if (enable) {
-        const protocol = trainer.realProtocol || 'FTMS';
-        
         // ★ FTMS: Request Control 필요
         if (protocol === 'FTMS') {
           await this._queueCommand(() => {
@@ -139,10 +187,12 @@ class ErgController {
             console.warn('[ERG] Legacy 초기화 실패, 계속 진행:', e);
           }
         }
-        // ★ CPS Control Point: 초기화 불필요, 바로 파워 설정 가능
+        // ★ CPS Control Point: ERG 제어가 지원되지 않을 수 있음
         else if (protocol === 'CPS') {
-          // CPS Control Point는 표준 프로토콜이므로 초기화 없이 바로 사용 가능
-          console.log('[ERG] CPS Control Point - 초기화 불필요, 바로 파워 설정 가능');
+          // CPS Control Point는 대부분 파워미터용이며 ERG 제어를 지원하지 않을 수 있음
+          console.warn('[ERG] ⚠️ CPS Control Point - ERG 제어가 지원되지 않을 수 있습니다');
+          console.warn('[ERG] 이 기기는 파워미터 모드로만 작동할 수 있습니다');
+          throw new Error('CPS Control Point는 ERG 제어를 지원하지 않습니다. FTMS를 지원하는 스마트 트레이너가 필요합니다.');
         }
         
         if (typeof showToast === 'function') showToast('ERG 모드 ON');
@@ -204,15 +254,37 @@ class ErgController {
     if (watts < 0) return;
 
     const trainer = window.connectedDevices?.trainer;
-    if (!trainer || !trainer.controlPoint) {
+    if (!trainer) {
+      console.warn('[ErgController] Trainer 없음 - 파워 설정 불가');
+      return;
+    }
+
+    // Control Point 확인 및 FTMS Control Point 우선 확인
+    let controlPoint = trainer.controlPoint;
+    let protocol = trainer.realProtocol || 'FTMS';
+    
+    // CPS 프로토콜인 경우 FTMS Control Point가 있는지 재확인
+    if (protocol === 'CPS') {
+      const ftmsControlPoint = await this._findFTMSControlPoint(trainer);
+      if (ftmsControlPoint) {
+        console.log('[ERG] setTargetPower: FTMS Control Point 발견 - CPS 대신 사용');
+        controlPoint = ftmsControlPoint;
+        protocol = 'FTMS';
+        // Control Point 업데이트
+        trainer.controlPoint = controlPoint;
+        trainer.realProtocol = 'FTMS';
+      }
+    }
+
+    if (!controlPoint) {
       console.warn('[ErgController] Control Point 없음 - 파워 설정 불가');
       return;
     }
 
     // Control Point 연결 상태 확인
     try {
-      // characteristic이 유효한지 확인
-      if (!trainer.controlPoint || typeof trainer.controlPoint.writeValue !== 'function') {
+      // characteristic이 유효한지 확인 (업데이트된 controlPoint 사용)
+      if (!controlPoint || typeof controlPoint.writeValue !== 'function') {
         console.warn('[ErgController] Control Point가 유효하지 않음');
         this.state.connectionStatus = 'disconnected';
         return;
@@ -237,7 +309,6 @@ class ErgController {
       
       // ★ 프로토콜별 명령 생성 (ZWIFT/Mywoosh 호환)
       let buffer;
-      const protocol = trainer.realProtocol || 'FTMS';
 
       if (protocol === 'FTMS') {
         // 표준 FTMS: OpCode 0x05 + int16 (power, little-endian)
@@ -257,15 +328,9 @@ class ErgController {
         console.log(`[ERG] Legacy (0x42) -> ${targetWatts}W`);
       }
       else if (protocol === 'CPS') {
-        // CPS Control Point (0x2A66)를 사용하는 경우
-        // CPS Control Point는 표준 프로토콜이지만, 일부 기기에서는 ERG 제어가 가능
-        // ZWIFT/Mywoosh 방식: OpCode 0x42 또는 0x05 시도
-        // 먼저 0x42 (Legacy) 방식 시도
-        buffer = new ArrayBuffer(3);
-        const view = new DataView(buffer);
-        view.setUint8(0, 0x42); // Set Target Power (Legacy 방식)
-        view.setUint16(1, targetWatts, true); // Little-endian, unsigned
-        console.log(`[ERG] CPS Control Point (0x42) -> ${targetWatts}W`);
+        // CPS Control Point는 ERG 제어를 지원하지 않을 수 있음
+        console.error('[ERG] CPS Control Point는 ERG 제어를 지원하지 않습니다');
+        throw new Error('CPS Control Point는 ERG 제어를 지원하지 않습니다. FTMS를 지원하는 스마트 트레이너가 필요합니다.');
       }
       else {
         // 알 수 없는 프로토콜: Legacy 방식 시도
@@ -277,13 +342,13 @@ class ErgController {
       }
 
       await this._queueCommand(async () => {
-        // writeValue 호출 전 연결 상태 재확인
-        if (!trainer || !trainer.controlPoint) {
+        // writeValue 호출 전 연결 상태 재확인 (업데이트된 controlPoint 사용)
+        if (!controlPoint) {
           throw new Error('Control Point 연결 끊김');
         }
         
-        // characteristic 참조를 함수 스코프에서 유지
-        const characteristic = trainer.controlPoint;
+        // characteristic 참조를 함수 스코프에서 유지 (업데이트된 controlPoint 사용)
+        const characteristic = controlPoint;
         
         try {
           // writeWithoutResponse가 지원되는지 확인
@@ -305,30 +370,8 @@ class ErgController {
             // 연결 상태 업데이트
             this.state.connectionStatus = 'error';
             
-            // CPS 프로토콜인 경우 다른 명령 형식 시도
-            if (protocol === 'CPS' && targetWatts > 0 && characteristic) {
-              console.log(`[ERG] CPS Control Point - 대체 명령 형식 시도 (0x05)`);
-              try {
-                const altBuffer = new ArrayBuffer(3);
-                const altView = new DataView(altBuffer);
-                altView.setUint8(0, 0x05); // FTMS 방식 시도
-                altView.setInt16(1, targetWatts, true);
-                
-                // characteristic이 여전히 유효한지 확인
-                if (!characteristic || typeof characteristic.writeValue !== 'function') {
-                  throw new Error('Control Point가 유효하지 않음');
-                }
-                
-                await characteristic.writeValue(altBuffer);
-                console.log(`[ERG] CPS 대체 명령(0x05) 성공: ${targetWatts}W`);
-                this.state.connectionStatus = 'connected';
-                return; // 성공하면 여기서 종료
-              } catch (altError) {
-                console.warn(`[ERG] CPS 대체 명령도 실패:`, altError);
-                // 원래 오류를 다시 throw (재시도 로직에서 처리)
-                throw writeError;
-              }
-            }
+            // CPS 프로토콜인 경우 이미 위에서 오류 처리됨
+            // 여기서는 대체 명령 시도를 하지 않음
             
             // CPS가 아니거나 대체 명령이 실패한 경우 원래 오류 throw
             throw writeError;
@@ -352,17 +395,16 @@ class ErgController {
         this.state.connectionStatus = 'error';
         console.warn('[ErgController] GATT 오류로 인한 연결 문제 감지');
         
-        // CPS 프로토콜인 경우 ERG 제어가 지원되지 않을 수 있음을 알림
-        const protocol = trainer?.realProtocol || 'FTMS';
+        // CPS 프로토콜인 경우 ERG 제어가 지원되지 않음을 알림
         if (protocol === 'CPS') {
-          console.warn('[ErgController] ⚠️ CPS Control Point는 ERG 제어를 지원하지 않을 수 있습니다.');
-          console.warn('[ErgController] 이 기기는 파워미터 모드로만 작동할 수 있습니다.');
+          console.error('[ErgController] ⚠️ CPS Control Point는 ERG 제어를 지원하지 않습니다.');
+          console.error('[ErgController] 이 기기는 파워미터 모드로만 작동할 수 있습니다.');
           
           // 사용자에게 알림 (한 번만 표시)
           if (!this._cpsErgWarningShown) {
             this._cpsErgWarningShown = true;
             if (typeof showToast === 'function') {
-              showToast('이 기기는 ERG 제어를 지원하지 않을 수 있습니다', 'warning');
+              showToast('이 기기는 ERG 제어를 지원하지 않습니다. FTMS 스마트 트레이너가 필요합니다.', 'error');
             }
           }
         }
@@ -405,7 +447,12 @@ class ErgController {
       try {
         // 명령 실행 전 연결 상태 확인
         const trainer = window.connectedDevices?.trainer;
-        if (!trainer || !trainer.controlPoint) {
+        if (!trainer) {
+          throw new Error('Trainer 연결 끊김');
+        }
+        
+        // Control Point가 없으면 ERG 모드 비활성화
+        if (!trainer.controlPoint) {
           throw new Error('Control Point 연결 끊김');
         }
         
