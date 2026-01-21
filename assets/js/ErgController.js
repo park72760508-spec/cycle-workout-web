@@ -132,27 +132,83 @@ class ErgController {
     }
   }
 
-  async toggleErgMode(enable) {
+
+// [추가] Legacy(CycleOps/Wahoo) Control Point 재탐색
+  async _findLegacyControlPoint(trainer) {
+    try {
+      const server = trainer.server || (trainer.device && trainer.device.gatt);
+      if (!server || !server.connected) return null;
+
+      // CycleOps/Wahoo Legacy Service UUIDs
+      const LEGACY_SERVICES = [
+        'a026ee01-0a1d-4335-9d7f-245f24e1a229', // Wahoo/CycleOps 표준
+        // 필요 시 추가 벤더 UUID 삽입
+      ];
+      const LEGACY_CONTROL_CHAR = 'a026e005-0a1d-4335-9d7f-245f24e1a229';
+
+      for (const serviceUUID of LEGACY_SERVICES) {
+        try {
+          const service = await server.getPrimaryService(serviceUUID);
+          const controlPoint = await service.getCharacteristic(LEGACY_CONTROL_CHAR);
+          console.log('[ERG] Legacy (Wahoo/CycleOps) Control Point 발견!');
+          return controlPoint;
+        } catch (e) {
+          // 해당 서비스 없음, 다음 시도
+        }
+      }
+      return null;
+    } catch (e) {
+      console.warn('[ERG] Legacy CP 탐색 중 오류:', e);
+      return null;
+    }
+  }
+
+  // [수정] setTargetPower 및 toggleErgMode 내부 로직 변경
+  // 기존 로직: if (protocol === 'CPS') { _findFTMSControlPoint... }
+  // 변경 로직: 아래와 같이 변경
+
+
+
+
+   
+async toggleErgMode(enable) {
     try {
       const trainer = window.connectedDevices?.trainer;
       if (!trainer) throw new Error('스마트로라 연결 안됨');
 
-      // Control Point 확인 및 FTMS Control Point 우선 확인
+      // Control Point 확인 및 프로토콜 재탐색 로직 시작
       let controlPoint = trainer.controlPoint;
       let protocol = trainer.realProtocol || 'FTMS';
       
-      // CPS 프로토콜인 경우 FTMS Control Point가 있는지 재확인
-      if (protocol === 'CPS') {
+      // [수정됨] CPS 프로토콜이거나 Control Point가 확실치 않은 경우 강력한 재탐색 실행
+      if (protocol === 'CPS' || !controlPoint) {
+        console.log('[ERG] 제어 프로토콜 정밀 탐색 시작 (CPS/Legacy 대응)');
+        
+        // 1순위: FTMS 표준 재탐색
         const ftmsControlPoint = await this._findFTMSControlPoint(trainer);
         if (ftmsControlPoint) {
-          console.log('[ERG] FTMS Control Point 발견 - CPS 대신 사용');
+          console.log('[ERG] -> FTMS Control Point 발견 (표준)');
           controlPoint = ftmsControlPoint;
           protocol = 'FTMS';
-          // Control Point 업데이트
+        } 
+        // 2순위: Legacy (CycleOps/Wahoo) 재탐색 [여기가 핵심]
+        else {
+          const legacyControlPoint = await this._findLegacyControlPoint(trainer);
+          if (legacyControlPoint) {
+            console.log('[ERG] -> Legacy Control Point 발견 (CycleOps/Wahoo)');
+            controlPoint = legacyControlPoint;
+            protocol = 'CYCLEOPS'; // 구형 프로토콜로 명시
+          }
+        }
+
+        // 찾은 정보가 있다면 트레이너 객체에 업데이트
+        if (controlPoint) {
           trainer.controlPoint = controlPoint;
-          trainer.realProtocol = 'FTMS';
+          trainer.realProtocol = protocol;
         }
       }
+      
+      // ... (이후 if (!controlPoint) ... 코드는 기존과 동일하게 유지)
 
       if (!controlPoint) {
         throw new Error('제어권 없음 - ERG 모드를 사용하려면 스마트 트레이너가 필요합니다');
@@ -249,7 +305,7 @@ class ErgController {
   }
 
   // ★ [핵심] 프로토콜에 따른 명령 분기
-  async setTargetPower(watts) {
+async setTargetPower(watts) {
     if (!this.state.enabled) return;
     if (watts < 0) return;
 
@@ -259,22 +315,34 @@ class ErgController {
       return;
     }
 
-    // Control Point 확인 및 FTMS Control Point 우선 확인
+    // [수정됨] 프로토콜 및 Control Point 재확인 로직 강화
     let controlPoint = trainer.controlPoint;
     let protocol = trainer.realProtocol || 'FTMS';
     
-    // CPS 프로토콜인 경우 FTMS Control Point가 있는지 재확인
+    // CPS 상태라면 다시 한번 올바른 제어권(FTMS or Legacy)을 찾아봄
     if (protocol === 'CPS') {
+      // 1. FTMS 확인
       const ftmsControlPoint = await this._findFTMSControlPoint(trainer);
       if (ftmsControlPoint) {
-        console.log('[ERG] setTargetPower: FTMS Control Point 발견 - CPS 대신 사용');
         controlPoint = ftmsControlPoint;
         protocol = 'FTMS';
-        // Control Point 업데이트
         trainer.controlPoint = controlPoint;
         trainer.realProtocol = 'FTMS';
+      } 
+      // 2. Legacy (CycleOps) 확인 [추가됨]
+      else {
+        const legacyControlPoint = await this._findLegacyControlPoint(trainer);
+        if (legacyControlPoint) {
+           console.log('[ERG] setTargetPower: Legacy Control Point 발견');
+           controlPoint = legacyControlPoint;
+           protocol = 'CYCLEOPS';
+           trainer.controlPoint = controlPoint;
+           trainer.realProtocol = 'CYCLEOPS';
+        }
       }
     }
+
+    // ... (이후 if (!controlPoint) ... 코드는 기존과 동일하게 유지)
 
     if (!controlPoint) {
       console.warn('[ErgController] Control Point 없음 - 파워 설정 불가');
@@ -495,3 +563,4 @@ class ErgController {
 const ergController = new ErgController();
 if (typeof window !== 'undefined') window.ergController = ergController;
 if (typeof module !== 'undefined' && module.exports) module.exports = { ergController, ErgController };
+
