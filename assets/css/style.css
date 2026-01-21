@@ -10023,8 +10023,8 @@ button[aria-disabled="true"] {
 
 .rpe-condition-grid {
   display: grid;
-  /* 버튼 hover 시 확대되어도 경계를 넘지 않도록 각 컬럼 폭을 3% 줄임 */
-  grid-template-columns: calc(50% - 1.5%) calc(50% - 1.5%);
+  /* 버튼 hover 시 확대되어도 경계를 넘지 않도록 각 컬럼 폭을 5% 줄임 */
+  grid-template-columns: calc(50% - 3.5%) calc(50% - 3.5%);
   gap: 12px;
   margin-top: calc(16px + 3%);
   /* 스크롤바가 생기지 않도록 overflow 처리 */
