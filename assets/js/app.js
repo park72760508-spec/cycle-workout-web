@@ -4,6 +4,51 @@
    app.js (v1.3 fixed) - 모든 오류 수정이 반영된 통합 버전
 ========================================================== */
 
+/* ============================================================
+   [긴급 패치] CycleOps/Legacy 장치 연결 권한 자동 추가 스크립트
+   - 작성일: 2026-01-21
+   - 설명: 블루투스 연결 시 CycleOps 제어 권한(UUID)을 강제로 주입합니다.
+   ============================================================ */
+(function() {
+  // 원래의 연결 함수를 백업합니다.
+  if (navigator.bluetooth) {
+    const originalRequestDevice = navigator.bluetooth.requestDevice;
+    const LEGACY_UUID = 'a026ee01-0a1d-4335-9d7f-245f24e1a229';
+
+    // 연결 함수를 가로채서 수정합니다.
+    navigator.bluetooth.requestDevice = function(options) {
+      // 옵션이 없으면 새로 만듭니다.
+      if (!options) options = {};
+      
+      // optionalServices 목록이 없으면 만듭니다.
+      if (!options.optionalServices) options.optionalServices = [];
+      
+      // CycleOps UUID가 없으면 자동으로 넣어줍니다.
+      if (!options.optionalServices.includes(LEGACY_UUID)) {
+        options.optionalServices.push(LEGACY_UUID);
+        console.log('[System] CycleOps Legacy(구형) 제어 권한이 자동으로 추가되었습니다.');
+      }
+      
+      // fitness_machine 등 필수 권한도 안전하게 확보합니다.
+      const required = ['fitness_machine', 'cycling_power', 'cycling_speed_and_cadence', 'battery_service'];
+      required.forEach(uuid => {
+          if (!options.optionalServices.includes(uuid)) options.optionalServices.push(uuid);
+      });
+
+      // 원래 함수를 실행합니다.
+      return originalRequestDevice.call(navigator.bluetooth, options);
+    };
+    console.log('[System] 블루투스 권한 자동 패치가 적용되었습니다.');
+  }
+})();
+/* ============================================================ */
+
+// ... (여기서부터 원래 app.js 코드가 시작됩니다) ...
+
+
+
+
+
 // ========== 전역 변수 안전 초기화 (파일 최상단) ==========
 (function initializeGlobals() {
   // liveData 객체 안전 초기화
