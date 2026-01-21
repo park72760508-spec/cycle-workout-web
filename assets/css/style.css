@@ -327,10 +327,13 @@ h1,h2,h3,h4 { font-weight: 600; }
 #basecampScreen {
   position: relative;
   overflow: hidden;
-  /* Pull-to-refresh 방지 (iOS & Android) */
-  overscroll-behavior-y: none;
-  overscroll-behavior: none;
+  /* Pull-to-refresh 완전 제거 (iOS & Android) */
+  overscroll-behavior-y: none !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-x: none !important;
   -webkit-overflow-scrolling: touch;
+  /* 터치 이벤트 최적화 */
+  touch-action: pan-y pinch-zoom !important; /* 세로 스크롤만 허용, 핀치줌 허용, pull-to-refresh 차단 */
 }
 
 #basecampScreen.active {
@@ -344,9 +347,11 @@ h1,h2,h3,h4 { font-weight: 600; }
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1000 !important;
-  /* Pull-to-refresh 방지 (iOS & Android) */
-  overscroll-behavior-y: none;
-  overscroll-behavior: none;
+  /* Pull-to-refresh 완전 제거 (iOS & Android) */
+  overscroll-behavior-y: none !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-x: none !important;
+  touch-action: pan-y pinch-zoom !important; /* pull-to-refresh 차단 */
 }
 
 /* 베이스캠프 배경 이미지 - 흐리게 */
@@ -407,19 +412,27 @@ h1,h2,h3,h4 { font-weight: 600; }
   border-radius: 12px;
   padding: 15px;
   margin-bottom: 20px;
-  /* Pull-to-refresh 방지 (iOS & Android) */
-  overscroll-behavior-y: none;
-  overscroll-behavior: none;
+  /* Pull-to-refresh 완전 제거 (iOS & Android) */
+  overscroll-behavior-y: none !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-x: none !important;
   -webkit-overflow-scrolling: touch;
+  touch-action: manipulation !important; /* pull-to-refresh 차단 및 터치 최적화 */
+  /* 모바일 터치 이벤트 보장 */
+  position: relative;
+  z-index: 1;
+  pointer-events: auto !important;
 }
 
-/* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 방지 적용 */
+/* basecampScreen의 스크롤 가능한 영역에도 Pull-to-refresh 완전 제거 */
 #basecampScreen .connection-device-section,
 #basecampScreen .connection-main-container {
-  /* Pull-to-refresh 방지 (iOS & Android) */
-  overscroll-behavior-y: none;
-  overscroll-behavior: none;
+  /* Pull-to-refresh 완전 제거 (iOS & Android) */
+  overscroll-behavior-y: none !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-x: none !important;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom !important; /* pull-to-refresh 차단 */
 }
 
 /* 베이스캠프 버튼 스타일 - PREMIUM 버튼 배경색 적용 + 배경 이미지 */
@@ -439,6 +452,14 @@ h1,h2,h3,h4 { font-weight: 600; }
   align-items: center !important;
   padding-bottom: 12px !important; /* 하단 여백으로 텍스트 위치 통일 */
   min-height: 160px !important; /* 버튼 높이 통일 */
+  /* 모바일 터치 이벤트 보장 */
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  -webkit-tap-highlight-color: rgba(135, 206, 235, 0.3) !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  z-index: 10 !important;
 }
 
 /* 배경 이미지 위에 오버레이 - INDOOR TRAINING, SOLO TRAINING, USER PROFILE에 하늘색 톤 적용 */
@@ -465,6 +486,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn-profile::before {
   background: rgba(135, 206, 235, 0.3) !important; /* 투명한 하늘색 톤 오버레이 */
   z-index: 1; /* 이미지 위에 표시 */
+  pointer-events: none !important; /* 클릭 이벤트가 버튼으로 전달되도록 */
 }
 
 .basecamp-btn span {
@@ -474,6 +496,7 @@ h1,h2,h3,h4 { font-weight: 600; }
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
   font-weight: 700;
   margin-top: auto !important; /* 하단에 배치 */
+  pointer-events: none !important; /* span은 클릭을 막지 않음 */
 }
 
 /* 좌상, 우상, 좌하 버튼 텍스트 숨김 (최우선 적용) */
@@ -572,6 +595,8 @@ h1,h2,h3,h4 { font-weight: 600; }
   background-size: 85% !important; /* 이미지 크기 85%로 축소 (원본 비율 유지) */
   background-position: center center !important;
   background-repeat: no-repeat !important;
+  /* 아이콘 크기 보호 - 작아지지 않도록 */
+  min-height: 160px !important;
 }
 
 #basecampScreen .btn-device.basecamp-btn-solo,
@@ -582,6 +607,8 @@ h1,h2,h3,h4 { font-weight: 600; }
   background-size: 85% !important; /* 이미지 크기 85%로 축소 (원본 비율 유지) */
   background-position: center center !important;
   background-repeat: no-repeat !important;
+  /* 아이콘 크기 보호 - 작아지지 않도록 */
+  min-height: 160px !important;
 }
 
 /* USER PROFILE 버튼 - 이미지 크기 85%로 축소 (원본 비율 유지) */
@@ -1392,6 +1419,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 .basecamp-btn:active:not(:disabled) {
   transform: translateY(0);
   box-shadow: 0 2px 6px rgba(135, 206, 235, 0.3);
+  /* 모바일 터치 피드백 */
+  opacity: 0.9;
+  background-color: rgba(255, 255, 255, 0.2) !important;
 }
 
 #connectionScreen .btn-device.is-disabled,
@@ -4508,7 +4538,7 @@ button[aria-disabled="true"] {
 .enhanced-training-user-info #userInfo {
   font-size: 16px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: #000000;
 }
 
 .enhanced-training-user-info #userInfo::before {
@@ -6113,6 +6143,46 @@ button[aria-disabled="true"] {
   #basecampScreen .basecamp-btn-solo,
   #basecampScreen .basecamp-btn-profile {
     background-position: center calc(50% - 20%) !important; /* 상단으로 1/5 높이만큼 이동 */
+    /* 아이콘 크기 고정 (작아지지 않도록) */
+    background-size: 85% !important; /* 원본 크기 유지 */
+  }
+  
+  /* 모바일: basecamp-btn 터치 이벤트 강화 (상단 버튼 클릭 문제 해결) */
+  #basecampScreen .btn-device.basecamp-btn,
+  .basecamp-btn {
+    position: relative !important;
+    z-index: 100 !important; /* 다른 요소 위에 확실히 표시 */
+    pointer-events: auto !important;
+    touch-action: manipulation !important; /* pull-to-refresh 차단 */
+    -webkit-tap-highlight-color: rgba(135, 206, 235, 0.4) !important;
+    cursor: pointer !important;
+    min-width: 44px !important; /* 최소 터치 영역 (iOS 권장) */
+    min-height: 44px !important;
+    /* 아이콘 크기 보호 */
+    background-size: 85% !important; /* 모바일에서도 원본 크기 유지 */
+  }
+  
+  /* 모바일: basecamp-btn의 ::before 오버레이가 클릭을 막지 않도록 */
+  #basecampScreen .btn-device.basecamp-btn::before,
+  .basecamp-btn::before {
+    pointer-events: none !important;
+  }
+  
+  /* 모바일: basecamp-device-section 터치 이벤트 보장 및 pull-to-refresh 완전 차단 */
+  #basecampScreen .basecamp-device-section {
+    z-index: 1 !important;
+    pointer-events: auto !important;
+    touch-action: manipulation !important; /* pull-to-refresh 차단 */
+    overscroll-behavior-y: none !important;
+    overscroll-behavior: none !important;
+  }
+  
+  /* 모바일: grid-2 버튼 간격 조정 */
+  #basecampScreen .grid-2 {
+    gap: 12px !important; /* 모바일에서 약간 더 큰 간격 */
+    position: relative;
+    z-index: 1;
+    touch-action: manipulation !important; /* pull-to-refresh 차단 */
   }
   .auth-title-image {
     margin-bottom: 24px;
