@@ -2691,7 +2691,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // 그룹 훈련 버튼 이벤트 핸들러 추가
-  const btnGroupTraining = safeGetElement("btnGroupTraining");
+  const btnGroupTraining = safeGetElement("btnGroupTraining", { quiet: true });
   if (btnGroupTraining) {
     btnGroupTraining.addEventListener("click", () => {
       console.log('Group training button clicked');
