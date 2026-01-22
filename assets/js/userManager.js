@@ -643,11 +643,11 @@ async function loadUsers() {
 
       const canEdit = canEditFor(user);
       
-      // grade=2이고 만료일이 지난 경우 버튼 비활성화
+      // grade=2,3 사용자의 삭제 버튼 비활성화
       const userGrade = String(user.grade || '2');
-      const isButtonDisabled = (userGrade === '2' && isExpired);
-      const buttonDisabledAttr = isButtonDisabled ? 'disabled' : '';
-      const buttonDisabledClass = isButtonDisabled ? 'disabled' : '';
+      const canDelete = canEdit && (userGrade !== '2' && userGrade !== '3');
+      const deleteButtonDisabled = canEdit && !canDelete ? 'disabled' : '';
+      const deleteButtonClass = canEdit && !canDelete ? 'disabled' : '';
 
       // 훈련 목표에 따른 이미지 선택
       const challenge = String(user.challenge || 'Fitness').trim();
@@ -663,13 +663,13 @@ async function loadUsers() {
       }
 
       return `
-        <div class="user-card" data-user-id="${user.id}">
+        <div class="user-card" data-user-id="${user.id}" onclick="selectUser(${user.id})" style="cursor: pointer;">
           <div class="user-header">
             <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
-            <div class="user-actions">
+            <div class="user-actions" onclick="event.stopPropagation();">
               ${canEdit ? `
                 <button class="btn-edit"   onclick="editUser(${user.id})"   title="수정">✏️</button>
-                <button class="btn-delete" onclick="deleteUser(${user.id})" title="삭제">🗑️</button>
+                <button class="btn-delete ${deleteButtonClass}" onclick="deleteUser(${user.id})" title="삭제" ${deleteButtonDisabled}>🗑️</button>
               ` : ''}
             </div>
           </div>
@@ -685,12 +685,6 @@ async function loadUsers() {
               <span class="expiry ${expiryClass}">만료일: ${expiryText}</span>
             </div>
           </div>
-
-          <button class="btn btn-primary ${buttonDisabledClass}" id="selectBtn-${user.id}" 
-                  onclick="selectUser(${user.id})" 
-                  ${buttonDisabledAttr}
-                  data-expiry-date="${expRaw || ''}"
-                  data-should-warn="${shouldShowWarning ? 'true' : 'false'}">선택</button>
         </div>
       `;
     }).join('');
@@ -775,20 +769,13 @@ async function loadUsers() {
  * 사용자 선택
  */
 async function selectUser(userId) {
-  // ID로 정확한 버튼 찾기
-  const selectButton = document.getElementById(`selectBtn-${userId}`);
-  let originalButtonText = '';
+  // 사용자 카드 찾기
+  const userCard = document.querySelector(`.user-card[data-user-id="${userId}"]`);
   
-  if (selectButton) {
-    // 버튼이 비활성화되어 있으면 선택 불가
-    if (selectButton.disabled) {
-      return;
-    }
-    
-    originalButtonText = selectButton.textContent;
-    selectButton.textContent = '사용자 정보 연결 중...';
-    selectButton.disabled = true;
-    selectButton.classList.add('loading');
+  if (userCard) {
+    // 로딩 상태 표시
+    userCard.style.opacity = '0.6';
+    userCard.style.pointerEvents = 'none';
   }
   
   // ... 나머지 코드는 동일
@@ -815,10 +802,9 @@ async function selectUser(userId) {
       if (diffDays < 0) {
         // 만료일이 지난 경우 선택 불가
         showToast('사용기간이 만료되어 선택할 수 없습니다.');
-        if (selectButton) {
-          selectButton.textContent = originalButtonText;
-          selectButton.disabled = true;
-          selectButton.classList.remove('loading');
+        if (userCard) {
+          userCard.style.opacity = '1';
+          userCard.style.pointerEvents = 'auto';
         }
         return;
       }
@@ -856,12 +842,10 @@ async function selectUser(userId) {
   } catch (error) {
     console.error('사용자 선택 실패:', error);
     showToast('사용자 선택 중 오류가 발생했습니다.');
-  } finally {
-    // 버튼 상태 복원 (화면 전환으로 인해 실제로는 실행되지 않을 수 있음)
-    if (selectButton && originalButtonText) {
-      selectButton.textContent = originalButtonText;
-      selectButton.disabled = false;
-      selectButton.classList.remove('loading');
+    // 카드 상태 복원
+    if (userCard) {
+      userCard.style.opacity = '1';
+      userCard.style.pointerEvents = 'auto';
     }
   }
 }
