@@ -735,9 +735,9 @@
             </div>
           </div>
 
-          <!-- iOS 전용 안내 (숨김 처리) -->
-          <div id="iosInfo" class="ios-info hidden" style="display: none !important;">
-            <div class="ios-indicator" title="iOS Safari는 Web Bluetooth 미지원">
+          <!-- iOS 전용 안내 (Bluefy 사용 시에는 숨김) -->
+          <div id="iosInfo" class="ios-info hidden">
+            <div class="ios-indicator" title="iOS Safari는 Web Bluetooth 미지원 (Bluefy 앱 사용 시 지원됨)">
               <svg width="16" height="16" viewBox="0 0 24 24">
                 <rect x="7" y="2" width="10" height="20" rx="2.5" fill="currentColor" opacity="0.9"/>
                 <rect x="9" y="4" width="6" height="1.5" rx="0.75" fill="#0f111a"/>
@@ -747,7 +747,8 @@
             </div>
             <p class="ios-text">
               iOS Safari에서는 블루투스 연결이 지원되지 않습니다.<br>
-              기기 연결 없이 워크아웃을 실행할 수 있어요.
+              <strong style="color: #667eea;">💡 Bluefy 앱을 사용하시면 블루투스 연결이 가능합니다!</strong><br>
+              기기 연결 없이 워크아웃을 실행할 수도 있어요.
             </p>
             <div class="ios-actions">
               <button id="btnIosContinue" class="btn btn-ios-continue">기기 없이 계속</button>
