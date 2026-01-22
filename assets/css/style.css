@@ -2095,7 +2095,7 @@ button[aria-disabled="true"] {
   border-radius: 14px;
   padding: 16px;
   box-shadow: 0 6px 18px rgba(0,0,0,.06);
-  min-width: 240px;
+  width: 240px;
   flex-shrink: 0;
 }
 
@@ -2144,12 +2144,12 @@ button[aria-disabled="true"] {
 
 /* 사용자 목록 (범례와 함께 표시) */
 .user-list-with-legend {
-  flex: 1;
-  min-width: 0;
+  width: 240px; /* 훈련 등급 블럭과 동일한 넓이 */
+  flex-shrink: 0;
 }
 
 #profileScreen #userList{
-  display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr));
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
   gap:12px; margin-bottom:16px;
 }
 #profileScreen .user-card{
@@ -2175,6 +2175,14 @@ button[aria-disabled="true"] {
   vertical-align: middle;
 }
 #profileScreen .user-card .user-meta{ color:var(--text-muted); font-size:13px; }
+
+/* 삭제 버튼 비활성화 스타일 */
+#profileScreen .btn-delete.disabled,
+#profileScreen .btn-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 
 #profileScreen .btn{
   display:inline-flex; align-items:center; justify-content:center;
