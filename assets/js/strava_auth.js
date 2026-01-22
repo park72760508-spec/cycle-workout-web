@@ -122,9 +122,12 @@
     var postUrl = gasUrl + (gasUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=exchangeStravaCode';
     var payload = JSON.stringify({ code: code, user_id: userId });
 
+    /* CORS preflight 회피: Content-Type을 application/json 대신 text/plain 사용.
+     * GAS는 OPTIONS를 처리하지 않아 preflight 시 CORS 오류가 발생하므로,
+     * simple request로 보내 preflight 없이 POST 처리. */
     fetch(postUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain' },
       body: payload
     })
       .then(function (res) { return res.json(); })
