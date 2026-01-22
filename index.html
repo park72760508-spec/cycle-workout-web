@@ -2932,23 +2932,23 @@
             }
           }
           
-          // 잠시 대기 후 메인 화면(connectionScreen)으로 이동
+          // 잠시 대기 후 베이스캠프 화면으로 이동
           setTimeout(() => {
             if (typeof showScreen === 'function') {
-              showScreen('connectionScreen');
+              showScreen('basecampScreen');
             } else {
               // showScreen이 없으면 직접 화면 전환
               const authScreen = document.getElementById('authScreen');
-              const connectionScreen = document.getElementById('connectionScreen');
+              const basecampScreen = document.getElementById('basecampScreen');
               
               if (authScreen) {
                 authScreen.classList.remove('active');
                 authScreen.style.display = 'none';
               }
               
-              if (connectionScreen) {
-                connectionScreen.classList.add('active');
-                connectionScreen.style.display = 'block';
+              if (basecampScreen) {
+                basecampScreen.classList.add('active');
+                basecampScreen.style.display = 'block';
               }
             }
           }, 1000);
