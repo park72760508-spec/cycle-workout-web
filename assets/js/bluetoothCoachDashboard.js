@@ -530,30 +530,44 @@ function setupFirebaseSubscriptions() {
   window.bluetoothCoachState.firebaseSubscriptions = {};
   
   // 각 트랙에 대한 구독 설정
-  window.bluetoothCoachState.powerMeters.forEach(pm => {
-    const trackId = pm.id;
-    const userRef = db.ref(`sessions/${sessionId}/users/${trackId}`);
-    
-    // 사용자 데이터 구독
-    const unsubscribe = userRef.on('value', (snapshot) => {
-      const userData = snapshot.val();
-      if (userData) {
-        updatePowerMeterDataFromFirebase(trackId, userData);
-      } else {
-        // 데이터가 없으면 초기화
-        resetPowerMeterData(trackId);
-      }
+  const powerMeters = window.bluetoothCoachState.powerMeters;
+  if (Array.isArray(powerMeters)) {
+    powerMeters.forEach(pm => {
+      const trackId = pm && pm.id;
+      if (trackId == null) return;
+      const userRef = db.ref(`sessions/${sessionId}/users/${trackId}`);
+      
+      const unsubscribe = userRef.on('value', (snapshot) => {
+        try {
+          if (!snapshot) return;
+          const userData = snapshot.val();
+          if (userData) {
+            updatePowerMeterDataFromFirebase(trackId, userData);
+          } else {
+            resetPowerMeterData(trackId);
+          }
+        } catch (e) {
+          console.warn('[Bluetooth Coach] user value callback error:', e);
+        }
+      });
+      
+      window.bluetoothCoachState.firebaseSubscriptions[`user_${trackId}`] = unsubscribe;
     });
-    
-    window.bluetoothCoachState.firebaseSubscriptions[`user_${trackId}`] = unsubscribe;
-  });
+  } else {
+    console.warn('[Bluetooth Coach] powerMeters가 배열이 아닙니다.');
+  }
   
   // 워크아웃 상태 구독 (Indoor Training과 동일한 방식)
   const statusRef = db.ref(`sessions/${sessionId}/status`);
   const statusUnsubscribe = statusRef.on('value', (snapshot) => {
-    const status = snapshot.val();
-    if (status) {
-      updateTrainingStatus(status);
+    try {
+      if (!snapshot) return;
+      const status = snapshot.val();
+      if (status) {
+        updateTrainingStatus(status);
+      }
+    } catch (e) {
+      console.warn('[Bluetooth Coach] status value callback error:', e);
     }
   });
   window.bluetoothCoachState.firebaseSubscriptions['status'] = statusUnsubscribe;
@@ -561,13 +575,11 @@ function setupFirebaseSubscriptions() {
   // 워크아웃 플랜 구독 (Firebase에서 워크아웃 변경 감지)
   const workoutPlanRef = db.ref(`sessions/${sessionId}/workoutPlan`);
   const workoutPlanUnsubscribe = workoutPlanRef.on('value', (snapshot) => {
-    const workoutPlan = snapshot.val();
-    if (workoutPlan) {
-      // Firebase에서 받은 workoutPlan은 segments 배열만 포함할 수 있으므로
-      // 기존 currentWorkout의 다른 속성(title, id 등)을 보존
-      // Firebase에서 받은 workoutPlan 처리
-      // workoutPlan은 segments 배열만 포함할 수 있으므로 주의 필요
-      if (Array.isArray(workoutPlan)) {
+    try {
+      if (!snapshot) return;
+      const workoutPlan = snapshot.val();
+      if (workoutPlan) {
+        if (Array.isArray(workoutPlan)) {
         // segments 배열인 경우
         if (window.bluetoothCoachState.currentWorkout) {
           // 기존 currentWorkout이 있으면 segments만 업데이트 (다른 속성 보존)
@@ -584,19 +596,19 @@ function setupFirebaseSubscriptions() {
         }
       } else if (workoutPlan && typeof workoutPlan === 'object') {
         // workoutPlan이 객체인 경우 (전체 워크아웃 정보)
-        // 기존 currentWorkout이 있고 훈련 중이 아니면 업데이트하지 않음 (워크아웃 선택 시 이미 설정됨)
         if (!window.bluetoothCoachState.currentWorkout || window.bluetoothCoachState.trainingState === 'idle') {
           window.bluetoothCoachState.currentWorkout = workoutPlan;
           updateWorkoutSegmentGraph();
         } else {
-          // 훈련 중이면 segments만 업데이트 (다른 속성 보존)
           if (workoutPlan.segments) {
             window.bluetoothCoachState.currentWorkout.segments = workoutPlan.segments;
-            // 세그먼트 그래프 업데이트 (삭제하지 않음)
             updateWorkoutSegmentGraph();
           }
         }
       }
+    }
+    } catch (e) {
+      console.warn('[Bluetooth Coach] workoutPlan value callback error:', e);
     }
   });
   window.bluetoothCoachState.firebaseSubscriptions['workoutPlan'] = workoutPlanUnsubscribe;
