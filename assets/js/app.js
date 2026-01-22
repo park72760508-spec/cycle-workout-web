@@ -6908,57 +6908,96 @@ async function handleNewUserRegistered(userData) {
             showToast(`${userData.name}님 등록 및 인증 완료! 🎉`);
           }
           
-         // 환영 오버레이가 표시되어 있으면 화면 전환을 지연
+         // 환영 오버레이가 표시되어 있는지 확인 (약간의 지연 후 확인)
+         await new Promise(resolve => setTimeout(resolve, 200));
+         
          const welcomeModal = document.getElementById('userWelcomeModal');
-         const hasWelcomeModal = welcomeModal && !welcomeModal.classList.contains('hidden');
+         const modalDisplay = welcomeModal ? window.getComputedStyle(welcomeModal).display : 'none';
+         const hasWelcomeModal = welcomeModal && 
+                                 !welcomeModal.classList.contains('hidden') && 
+                                 modalDisplay !== 'none' &&
+                                 window.userWelcomeModalShown === true;
          
-         // 환영 오버레이가 있으면 3초 후 화면 전환, 없으면 0.5초 후
-         const delayBeforeScreenTransition = hasWelcomeModal ? 3000 : 500;
+         console.log('[handleNewUserRegistered] 환영 오버레이 상태:', {
+           modalExists: !!welcomeModal,
+           hasHiddenClass: welcomeModal ? welcomeModal.classList.contains('hidden') : 'N/A',
+           displayStyle: modalDisplay,
+           windowFlag: window.userWelcomeModalShown,
+           hasWelcomeModal
+         });
          
-         setTimeout(() => {
-               console.log('🔄 자동 인증 완료 - 기기연결 화면으로 이동');
-               
-               // 환영 오버레이가 표시되어 있으면 닫기
-               if (hasWelcomeModal && typeof closeUserWelcomeModal === 'function') {
-                 closeUserWelcomeModal();
+         // 화면 전환 함수 정의
+         const proceedToNextScreen = () => {
+           console.log('🔄 자동 인증 완료 - 기기연결 화면으로 이동');
+           
+           // 모든 화면 숨기기 (환영 오버레이는 제외)
+           document.querySelectorAll('.screen').forEach(screen => {
+             screen.classList.remove('active');
+             screen.style.display = 'none';
+           });
+           
+           // basecampScreen 강제 표시
+           const basecampScreen = document.getElementById('basecampScreen');
+           if (basecampScreen) {
+             basecampScreen.classList.add('active');
+             basecampScreen.style.display = 'block';
+             basecampScreen.style.opacity = '1';
+             basecampScreen.style.visibility = 'visible';
+             console.log('✅ basecampScreen 표시 완료');
+           } else {
+             console.error('❌ basecampScreen을 찾을 수 없습니다');
+             // 대체: connectionScreen으로 이동
+             const connectionScreen = document.getElementById('connectionScreen');
+             if (connectionScreen) {
+               connectionScreen.classList.add('active');
+               connectionScreen.style.display = 'block';
+               connectionScreen.style.opacity = '1';
+               connectionScreen.style.visibility = 'visible';
+               console.log('✅ connectionScreen 표시 완료 (대체)');
+             } else {
+               console.error('❌ connectionScreen도 찾을 수 없습니다');
+               // 대체 화면 표시
+               const allScreens = document.querySelectorAll('[id*="Screen"], [id*="screen"]');
+               if (allScreens.length > 0) {
+                 const firstScreen = allScreens[0];
+                 firstScreen.style.display = 'block';
+                 console.log('🔄 대체 화면 표시:', firstScreen.id);
                }
-               
-               // 모든 화면 숨기기 (환영 오버레이는 제외)
-               document.querySelectorAll('.screen').forEach(screen => {
-                 screen.classList.remove('active');
-                 screen.style.display = 'none';
-               });
-               
-               // basecampScreen 강제 표시
-               const basecampScreen = document.getElementById('basecampScreen');
-               if (basecampScreen) {
-                 basecampScreen.classList.add('active');
-                 basecampScreen.style.display = 'block';
-                 basecampScreen.style.opacity = '1';
-                 basecampScreen.style.visibility = 'visible';
-                 console.log('✅ basecampScreen 표시 완료');
-               } else {
-                 console.error('❌ basecampScreen을 찾을 수 없습니다');
-                 // 대체: connectionScreen으로 이동
-                 const connectionScreen = document.getElementById('connectionScreen');
-                 if (connectionScreen) {
-                   connectionScreen.classList.add('active');
-                   connectionScreen.style.display = 'block';
-                   connectionScreen.style.opacity = '1';
-                   connectionScreen.style.visibility = 'visible';
-                   console.log('✅ connectionScreen 표시 완료 (대체)');
-                 } else {
-                   console.error('❌ connectionScreen도 찾을 수 없습니다');
-                   // 대체 화면 표시
-                   const allScreens = document.querySelectorAll('[id*="Screen"], [id*="screen"]');
-                   if (allScreens.length > 0) {
-                     const firstScreen = allScreens[0];
-                     firstScreen.style.display = 'block';
-                     console.log('🔄 대체 화면 표시:', firstScreen.id);
-                   }
+             }
+           }
+         };
+         
+         // 환영 오버레이가 있으면 사용자가 닫을 때까지 대기, 없으면 즉시 화면 전환
+         if (hasWelcomeModal) {
+           console.log('[handleNewUserRegistered] 환영 오버레이가 표시되어 있음 - 사용자가 닫을 때까지 대기');
+           // 모달이 닫힐 때까지 대기 (최대 30초)
+           let checkCount = 0;
+           const maxChecks = 300; // 30초 (100ms * 300)
+           
+           const checkModalClosed = setInterval(() => {
+             checkCount++;
+             const modalStillOpen = welcomeModal && 
+                                   !welcomeModal.classList.contains('hidden') && 
+                                   window.getComputedStyle(welcomeModal).display !== 'none' &&
+                                   window.userWelcomeModalShown === true;
+             
+             if (!modalStillOpen || checkCount >= maxChecks) {
+               clearInterval(checkModalClosed);
+               if (checkCount >= maxChecks) {
+                 console.warn('[handleNewUserRegistered] 모달 닫기 대기 시간 초과, 강제로 화면 전환');
+                 if (typeof closeUserWelcomeModal === 'function') {
+                   closeUserWelcomeModal();
                  }
                }
-             }, 500);
+               proceedToNextScreen();
+             }
+           }, 100);
+         } else {
+           // 환영 오버레이가 없으면 0.5초 후 화면 전환
+           setTimeout(() => {
+             proceedToNextScreen();
+           }, 500);
+         }
         } else {
           // 자동 인증 실패 시 수동 인증 안내
           if (typeof showToast === 'function') {

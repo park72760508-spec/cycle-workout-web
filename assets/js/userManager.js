@@ -96,9 +96,12 @@ function standardizePhoneFormat(phoneNumber) {
        if (typeof loadUsers === 'function') loadUsers();
      });
    
-     // 환영 오버레이 표시
+     // 환영 오버레이 표시 (전역 플래그 설정)
      if (typeof showUserWelcomeModal === 'function') {
        showUserWelcomeModal(userData.name);
+       // 모달이 표시되었음을 전역 플래그로 표시
+       window.userWelcomeModalShown = true;
+       window.userWelcomeModalUserName = userData.name;
      } else if (typeof showToast === 'function') {
        showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
      }
@@ -230,27 +233,39 @@ function showUserWelcomeModal(userName) {
   
   // 오버레이 표시 (강제로 표시)
   modal.classList.remove('hidden');
-  // display와 z-index를 강제로 설정하여 다른 화면 위에 표시
-  modal.style.setProperty('display', 'flex', 'important');
-  modal.style.setProperty('z-index', '10002', 'important');
-  modal.style.setProperty('position', 'fixed', 'important');
-  modal.style.setProperty('top', '0', 'important');
-  modal.style.setProperty('left', '0', 'important');
-  modal.style.setProperty('width', '100%', 'important');
-  modal.style.setProperty('height', '100%', 'important');
-  modal.style.setProperty('background', 'rgba(0, 0, 0, 0.9)', 'important');
   
-  // 다른 화면들이 모달을 가리지 않도록 확인
-  document.querySelectorAll('.screen').forEach(screen => {
-    if (screen.style.zIndex && parseInt(screen.style.zIndex) >= 10002) {
-      screen.style.zIndex = '1000';
-    }
-  });
-  
-  console.log('[User Welcome] 환영 오버레이 표시:', userName, { 
-    modalDisplay: modal.style.display, 
-    modalZIndex: modal.style.zIndex,
-    hasHiddenClass: modal.classList.contains('hidden')
+  // 즉시 표시를 위해 requestAnimationFrame 사용
+  requestAnimationFrame(() => {
+    // display와 z-index를 강제로 설정하여 다른 화면 위에 표시
+    modal.style.setProperty('display', 'flex', 'important');
+    modal.style.setProperty('z-index', '10002', 'important');
+    modal.style.setProperty('position', 'fixed', 'important');
+    modal.style.setProperty('top', '0', 'important');
+    modal.style.setProperty('left', '0', 'important');
+    modal.style.setProperty('width', '100%', 'important');
+    modal.style.setProperty('height', '100%', 'important');
+    modal.style.setProperty('background', 'rgba(0, 0, 0, 0.9)', 'important');
+    modal.style.setProperty('visibility', 'visible', 'important');
+    modal.style.setProperty('opacity', '1', 'important');
+    
+    // 다른 화면들이 모달을 가리지 않도록 확인
+    document.querySelectorAll('.screen').forEach(screen => {
+      if (screen.style.zIndex && parseInt(screen.style.zIndex) >= 10002) {
+        screen.style.zIndex = '1000';
+      }
+    });
+    
+    // 전역 플래그 설정 (모달이 표시되었음을 표시)
+    window.userWelcomeModalShown = true;
+    window.userWelcomeModalUserName = userName;
+    
+    console.log('[User Welcome] 환영 오버레이 표시:', userName, { 
+      modalDisplay: modal.style.display, 
+      modalZIndex: modal.style.zIndex,
+      hasHiddenClass: modal.classList.contains('hidden'),
+      computedDisplay: window.getComputedStyle(modal).display,
+      windowFlag: window.userWelcomeModalShown
+    });
   });
 }
 
@@ -261,6 +276,11 @@ function closeUserWelcomeModal() {
   const modal = document.getElementById('userWelcomeModal');
   if (modal) {
     modal.classList.add('hidden');
+    modal.style.display = 'none';
+    // 전역 플래그 해제
+    window.userWelcomeModalShown = false;
+    window.userWelcomeModalUserName = null;
+    console.log('[User Welcome] 환영 오버레이 닫기 완료');
   }
 }
 
