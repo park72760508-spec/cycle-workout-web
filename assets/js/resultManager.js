@@ -161,42 +161,34 @@ async function saveTrainingResult(extra = {}) {
        console.error('[saveTrainingResult] ❌ 로컬 백업 저장 실패:', e);
      }
 
-     // 2. GAS 저장 시도 (여러 방법으로 시도)
-     let gasSuccess = false;
-     let gasError = null;
+     // 2. Firebase Firestore 저장 시도
+     let firebaseSuccess = false;
+     let firebaseError = null;
 
      try {
-       const base = ensureBaseUrl();
-       
-       // 방법 1: 기본 POST 요청
-       await attemptGasSave(base, trainingResult, 'POST');
-       gasSuccess = true;
-       console.log('[saveTrainingResult] ✅ GAS 저장 성공 (POST)');
-       
-     } catch (error1) {
-       console.warn('[saveTrainingResult] POST 방식 실패:', error1.message);
-       
-       try {
-         // 방법 2: GET 방식으로 재시도 (URL 파라미터)
-         await attemptGasSaveAsGet(ensureBaseUrl(), trainingResult);
-         gasSuccess = true;
-         console.log('[saveTrainingResult] ✅ GAS 저장 성공 (GET)');
-         
-       } catch (error2) {
-         console.warn('[saveTrainingResult] GET 방식도 실패:', error2.message);
-         gasError = error2;
-         
-         try {
-           // 방법 3: JSONP 방식으로 최종 시도
-           await attemptGasSaveAsJsonp(ensureBaseUrl(), trainingResult);
-           gasSuccess = true;
-           console.log('[saveTrainingResult] ✅ GAS 저장 성공 (JSONP)');
-           
-         } catch (error3) {
-           console.warn('[saveTrainingResult] JSONP 방식도 실패:', error3.message);
-           gasError = error3;
-         }
+       // Firebase로 저장
+       if (typeof window.saveTrainingResultToFirebase === 'function') {
+         const result = await window.saveTrainingResultToFirebase({
+           user_id: currentUserId,
+           workout_id: trainingResult.workoutId || window.currentWorkout?.id || '',
+           startTime: trainingResult.startTime,
+           endTime: trainingResult.endTime,
+           avgPower: stats.avgPower,
+           maxPower: stats.maxPower,
+           avgHR: stats.avgHR,
+           maxHR: stats.maxHR,
+           totalEnergy: stats.totalEnergy,
+           tss: tss,
+           notes: trainingResult.notes || ''
+         });
+         firebaseSuccess = true;
+         console.log('[saveTrainingResult] ✅ Firebase 저장 성공:', result.id);
+       } else {
+         throw new Error('saveTrainingResultToFirebase 함수가 없습니다. trainingResultsManager.js를 로드하세요.');
        }
+     } catch (error) {
+       console.error('[saveTrainingResult] ❌ Firebase 저장 실패:', error);
+       firebaseError = error;
      }
 
      // 3. 스케줄 결과 저장 (모든 훈련에 대해 SCHEDULE_RESULTS에 저장)
@@ -364,113 +356,42 @@ async function saveTrainingResult(extra = {}) {
          lastElapsedTime: window.lastElapsedTime
        });
        
-       // GAS_URL 확인
-       const gasUrl = ensureBaseUrl();
-       if (!gasUrl) {
-         console.error('[saveTrainingResult] ❌ GAS_URL이 설정되지 않았습니다.');
-         throw new Error('GAS_URL is not set');
-       }
-       console.log('[saveTrainingResult] GAS_URL 확인:', gasUrl);
-       
-       // scheduleDayId가 null인 경우 빈 문자열로 전송 (Code.gs에서 null로 처리)
-       const scheduleDayIdParam = scheduleDayId ? encodeURIComponent(scheduleDayId) : '';
-       
-       // URL 파라미터 검증 및 로깅
-       const urlParams = {
-         action: 'saveScheduleResult',
-         scheduleDayId: scheduleDayIdParam,
-         userId: String(scheduleResultData.userId || ''),
-         actualWorkoutId: String(scheduleResultData.actualWorkoutId || ''),
-         status: scheduleResultData.status,
-         duration_min: scheduleResultData.duration_min,
-         avg_power: scheduleResultData.avg_power,
-         np: scheduleResultData.np,
-         tss: scheduleResultData.tss,
-         hr_avg: scheduleResultData.hr_avg,
-         rpe: scheduleResultData.rpe
-       };
-       
-       console.log('[saveTrainingResult] URL 파라미터:', urlParams);
-       
-       // URL 생성 (모든 파라미터 인코딩)
-       const scheduleUrl = `${gasUrl}?action=saveScheduleResult&scheduleDayId=${scheduleDayIdParam}&userId=${encodeURIComponent(urlParams.userId)}&actualWorkoutId=${encodeURIComponent(urlParams.actualWorkoutId)}&status=${encodeURIComponent(urlParams.status)}&duration_min=${urlParams.duration_min}&avg_power=${urlParams.avg_power}&np=${urlParams.np}&tss=${urlParams.tss}&hr_avg=${urlParams.hr_avg}&rpe=${urlParams.rpe}`;
-       
-       console.log('[saveTrainingResult] 저장 URL:', scheduleUrl);
-       console.log('[saveTrainingResult] 저장 데이터 상세:', {
-         duration_min: urlParams.duration_min,
-         avg_power: urlParams.avg_power,
-         np: urlParams.np,
-         tss: urlParams.tss,
-         hr_avg: urlParams.hr_avg,
-         userId: urlParams.userId,
-         actualWorkoutId: urlParams.actualWorkoutId
-       });
-       
-       try {
-         console.log('[saveTrainingResult] fetch 요청 시작...');
-         const scheduleResponse = await fetch(scheduleUrl, {
-           method: 'GET',
-           headers: {
-             'Accept': 'application/json'
-           }
+       // Firebase로 스케줄 결과 저장
+       if (typeof window.saveScheduleResultToFirebase === 'function') {
+         const scheduleResult = await window.saveScheduleResultToFirebase({
+           scheduleDayId: scheduleDayId,
+           userId: String(scheduleResultData.userId || ''),
+           actualWorkoutId: String(scheduleResultData.actualWorkoutId || ''),
+           status: scheduleResultData.status,
+           duration_min: scheduleResultData.duration_min,
+           avg_power: scheduleResultData.avg_power,
+           np: scheduleResultData.np,
+           tss: scheduleResultData.tss,
+           hr_avg: scheduleResultData.hr_avg,
+           rpe: scheduleResultData.rpe
          });
          
-         console.log('[saveTrainingResult] fetch 응답 상태:', scheduleResponse.status, scheduleResponse.statusText);
-         
-         if (!scheduleResponse.ok) {
-           const errorText = await scheduleResponse.text();
-           console.error('[saveTrainingResult] HTTP 오류:', scheduleResponse.status, errorText);
-           throw new Error(`HTTP ${scheduleResponse.status}: ${errorText}`);
+         console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공, ID:', scheduleResult.id);
+         // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
+         if (window.currentScheduleDayId) {
+           window.currentScheduleDayId = null;
          }
-         
-         const responseText = await scheduleResponse.text();
-         console.log('[saveTrainingResult] 응답 텍스트:', responseText);
-         
-         let scheduleResult;
-         try {
-           scheduleResult = JSON.parse(responseText);
-         } catch (parseError) {
-           console.error('[saveTrainingResult] JSON 파싱 오류:', parseError, '응답:', responseText);
-           throw new Error(`JSON 파싱 실패: ${responseText}`);
-         }
-         
-         console.log('[saveTrainingResult] 서버 응답:', scheduleResult);
-         
-         if (scheduleResult.success) {
-           console.log('[saveTrainingResult] ✅ 스케줄 결과 저장 성공, ID:', scheduleResult.id);
-           // 스케줄 결과 저장 후 currentScheduleDayId 초기화 (스케줄 훈련인 경우만)
-           if (window.currentScheduleDayId) {
-             window.currentScheduleDayId = null;
-           }
-         } else {
-           console.error('[saveTrainingResult] ⚠️ 스케줄 결과 저장 실패:', scheduleResult.error);
-           throw new Error(scheduleResult.error || 'Unknown error');
-         }
-       } catch (fetchError) {
-         console.error('[saveTrainingResult] ❌ fetch 오류:', fetchError);
-         console.error('[saveTrainingResult] 오류 스택:', fetchError.stack);
-         throw fetchError;
+       } else {
+         console.warn('[saveTrainingResult] ⚠️ saveScheduleResultToFirebase 함수가 없습니다. trainingResultsManager.js를 로드하세요.');
        }
        } catch (scheduleError) {
          console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
          // 스케줄 결과 저장 실패해도 계속 진행
        }
 
-     // 3-2. 마일리지 업데이트 (TSS 기반)
+     // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase 버전
      if (currentUserId && tss > 0) {
        try {
          console.log('[saveTrainingResult] 🎁 마일리지 업데이트 시도:', { userId: currentUserId, tss });
          
-         const gasUrl = ensureBaseUrl();
-         const mileageUrl = `${gasUrl}?action=updateUserMileage&userId=${encodeURIComponent(currentUserId)}&today_tss=${tss}`;
-         
-         const mileageResponse = await fetch(mileageUrl, {
-           method: 'GET',
-           headers: { 'Accept': 'application/json' }
-         });
-         
-         if (mileageResponse.ok) {
-           const mileageResult = await mileageResponse.json();
+         // Firebase로 마일리지 업데이트
+         if (typeof window.updateUserMileage === 'function') {
+           const mileageResult = await window.updateUserMileage(currentUserId, tss);
            if (mileageResult.success) {
              console.log('[saveTrainingResult] ✅ 마일리지 업데이트 성공:', mileageResult);
              // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
@@ -480,12 +401,15 @@ async function saveTrainingResult(extra = {}) {
                window.currentUser.acc_points = mileageResult.acc_points;
                window.currentUser.rem_points = mileageResult.rem_points;
                window.currentUser.expiry_date = mileageResult.expiry_date;
-             }
+               window.currentUser.last_training_date = mileageResult.last_training_date;
+               // localStorage도 업데이트
+               localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
+            }
            } else {
              console.warn('[saveTrainingResult] ⚠️ 마일리지 업데이트 실패:', mileageResult.error);
            }
          } else {
-           console.warn('[saveTrainingResult] ⚠️ 마일리지 업데이트 HTTP 오류:', mileageResponse.status);
+           console.warn('[saveTrainingResult] ⚠️ updateUserMileage 함수가 없습니다. userManager.js를 로드하세요.');
          }
        } catch (mileageError) {
          console.error('[saveTrainingResult] ❌ 마일리지 업데이트 중 오류:', mileageError);
@@ -494,28 +418,28 @@ async function saveTrainingResult(extra = {}) {
      }
 
      // 4. 결과 처리 및 반환
-     if (gasSuccess) {
-       console.log('[saveTrainingResult] 🎉 서버 저장 성공 + 로컬 백업 완료');
+     if (firebaseSuccess) {
+       console.log('[saveTrainingResult] 🎉 Firebase 저장 성공 + 로컬 백업 완료');
        return { 
          success: true, 
          data: trainingResult, 
-         source: 'gas',
+         source: 'firebase',
          localBackup: localSaveSuccess,
          tss: tss,
          mileageUpdate: window.lastMileageUpdate || null
        };
      } else if (localSaveSuccess) {
-       console.log('[saveTrainingResult] 📱 서버 저장 실패, 로컬 데이터로 계속 진행');
+       console.log('[saveTrainingResult] 📱 Firebase 저장 실패, 로컬 데이터로 계속 진행');
        return { 
          success: true, 
          data: trainingResult, 
          source: 'local',
-         gasError: gasError?.message || 'Unknown error',
-         warning: 'CORS 오류로 서버 저장 실패, 로컬에만 저장됨'
+         firebaseError: firebaseError?.message || 'Unknown error',
+         warning: 'Firebase 저장 실패, 로컬에만 저장됨'
        };
      } else {
        console.error('[saveTrainingResult] ❌ 모든 저장 방식 실패');
-       throw new Error('로컬 및 서버 저장 모두 실패');
+       throw new Error('로컬 및 Firebase 저장 모두 실패');
      }
    }
 
@@ -614,6 +538,19 @@ async function saveTrainingResult(extra = {}) {
 
 
   async function getTrainingResults(userId, startDate, endDate) {
+    // Firebase로 조회 시도
+    if (typeof window.getTrainingResultsFromFirebase === 'function') {
+      try {
+        const result = await window.getTrainingResultsFromFirebase(userId, startDate, endDate);
+        if (result.success) {
+          return result;
+        }
+      } catch (error) {
+        console.warn('[getTrainingResults] Firebase 조회 실패, GAS로 폴백:', error);
+      }
+    }
+    
+    // Firebase 실패 시 GAS로 폴백
     const base = ensureBaseUrl();
     const params = new URLSearchParams({
       action: 'getTrainingResults',

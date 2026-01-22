@@ -38,6 +38,130 @@ function getUsersCollection() {
   return window.firestore.collection('users');
 }
 
+/**
+ * 마일리지 업데이트 함수 (TSS 기반) - Firebase 버전
+ * Code.gs의 updateUserMileage를 Firebase로 마이그레이션
+ */
+async function updateUserMileage(userId, todayTss) {
+  try {
+    const usersCollection = getUsersCollection();
+    const userDoc = await usersCollection.doc(userId).get();
+    
+    if (!userDoc.exists) {
+      return { success: false, error: 'User not found' };
+    }
+    
+    const userData = userDoc.data();
+    
+    // 기존 값 가져오기
+    let accPoints = Number(userData.acc_points || 0);
+    let remPoints = Number(userData.rem_points || 0);
+    const expiryDate = userData.expiry_date || '';
+    const lastTrainingDate = userData.last_training_date || '';
+    
+    // 현재 날짜 및 연도 확인
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1; // 1-12
+    const currentDate = today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    
+    // 연도 초기화 체크: 1월 1일 이후 첫 훈련인지 확인
+    let shouldResetAccPoints = false;
+    if (currentMonth >= 1) { // 1월 이후
+      if (!lastTrainingDate || lastTrainingDate === '') {
+        // 마지막 훈련 날짜가 없으면 첫 훈련으로 간주
+        shouldResetAccPoints = true;
+      } else {
+        try {
+          const lastDate = new Date(lastTrainingDate);
+          const lastYear = lastDate.getFullYear();
+          // 이전 연도에 마지막 훈련을 했고, 현재 연도가 다르면 초기화
+          if (lastYear < currentYear) {
+            shouldResetAccPoints = true;
+          }
+        } catch (e) {
+          console.error('마지막 훈련 날짜 파싱 오류:', e);
+          shouldResetAccPoints = false;
+        }
+      }
+    }
+    
+    // 누적 포인트 초기화 (1월 1일 이후 첫 훈련인 경우)
+    if (shouldResetAccPoints) {
+      accPoints = 0;
+      console.log(`[updateUserMileage] 누적 포인트 초기화: ${currentYear}년 첫 훈련`);
+    }
+    
+    // 1단계: 합계 계산
+    const calcPool = remPoints + todayTss;
+    
+    // 2단계: 연장할 일수 계산 (내림 함수) - 500 포인트당 1일
+    const addDays = Math.floor(calcPool / 500);
+    
+    // 3단계: 새로운 잔액 계산 (모듈러 연산)
+    const newRemPoints = calcPool % 500;
+    
+    // 4단계: 총 누적 마일리지 갱신
+    const newAccPoints = accPoints + todayTss;
+    
+    // 5단계: 만료일 연장 (500 포인트당 1일)
+    let newExpiryDate = expiryDate;
+    if (addDays > 0 && expiryDate) {
+      try {
+        const expiry = new Date(expiryDate);
+        expiry.setDate(expiry.getDate() + addDays);
+        newExpiryDate = expiry.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        console.log(`[updateUserMileage] 만료일 연장: ${expiryDate} → ${newExpiryDate} (${addDays}일)`);
+      } catch (e) {
+        console.error('만료일 계산 오류:', e);
+        // 만료일 계산 실패 시 기존 값 유지
+      }
+    }
+    
+    // Firebase에 업데이트
+    const updateData = {
+      acc_points: newAccPoints,
+      rem_points: newRemPoints,
+      last_training_date: currentDate
+    };
+    
+    // 만료일 연장이 있는 경우에만 expiry_date 업데이트
+    if (addDays > 0 && newExpiryDate) {
+      updateData.expiry_date = newExpiryDate;
+    }
+    
+    await usersCollection.doc(userId).update(updateData);
+    
+    console.log(`[updateUserMileage] ✅ 업데이트 완료:`, {
+      userId: userId,
+      acc_points: newAccPoints,
+      rem_points: newRemPoints,
+      expiry_date: newExpiryDate,
+      last_training_date: currentDate,
+      add_days: addDays,
+      earned_points: todayTss,
+      acc_points_reset: shouldResetAccPoints
+    });
+    
+    return {
+      success: true,
+      acc_points: newAccPoints,
+      rem_points: newRemPoints,
+      expiry_date: newExpiryDate,
+      last_training_date: currentDate,
+      add_days: addDays,
+      earned_points: todayTss,
+      acc_points_reset: shouldResetAccPoints
+    };
+  } catch (error) {
+    console.error('[updateUserMileage] ❌ 업데이트 실패:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+}
+
+// 전역 함수로 등록
+window.updateUserMileage = updateUserMileage;
+
 // 전역 변수로 현재 모드 추적
 let isEditMode = false;
 let currentEditUserId = null;
