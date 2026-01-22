@@ -1928,6 +1928,21 @@
             <div class="mobile-result-stat-value" id="mobile-result-calories" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0kcal</div>
           </div>
         </div>
+        <!-- 마일리지 정보 (주황색톤) -->
+        <div class="mobile-result-stats" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; margin-top: 8px;">
+          <div class="mobile-result-stat-item" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">누적 포인트</div>
+            <div class="mobile-result-stat-value" id="mobile-result-acc-points" style="font-size: 1.1em; font-weight: bold; color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">0</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">보유 포인트</div>
+            <div class="mobile-result-stat-value" id="mobile-result-rem-points" style="font-size: 1.1em; font-weight: bold; color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">0</div>
+          </div>
+          <div class="mobile-result-stat-item" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+            <div class="mobile-result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">획득 포인트</div>
+            <div class="mobile-result-stat-value" id="mobile-result-earned-points" style="font-size: 1.1em; font-weight: bold; color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">0</div>
+          </div>
+        </div>
         <button class="mobile-result-close-btn" onclick="closeMobileTrainingResultModal()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px; color: #000; font-size: 1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);">확인</button>
       </div>
     </div>
@@ -2271,6 +2286,22 @@
       <div class="result-stat">
         <div class="result-stat-value" id="resultCalories">-</div>
         <div class="result-stat-label">칼로리 (kcal)</div>
+      </div>
+    </div>
+
+    <!-- 마일리지 정보 (주황색톤) -->
+    <div class="result-stats" style="margin-top: 16px;">
+      <div class="result-stat" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3);">
+        <div class="result-stat-value" id="resultAccPoints" style="color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">-</div>
+        <div class="result-stat-label">누적 포인트</div>
+      </div>
+      <div class="result-stat" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3);">
+        <div class="result-stat-value" id="resultRemPoints" style="color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">-</div>
+        <div class="result-stat-label">보유 포인트</div>
+      </div>
+      <div class="result-stat" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3);">
+        <div class="result-stat-value" id="resultEarnedPoints" style="color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">-</div>
+        <div class="result-stat-label">획득 포인트</div>
       </div>
     </div>
 
