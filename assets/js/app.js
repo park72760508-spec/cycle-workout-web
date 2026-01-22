@@ -13662,6 +13662,63 @@ function showMobileTrainingResultModal(status = null) {
   
   // 모달 표시
   modal.classList.remove('hidden');
+  
+  // 축하 오버레이 표시 (마일리지 연장 시)
+  if (mileageUpdate && mileageUpdate.success && mileageUpdate.add_days > 0) {
+    showMobileMileageCelebration(mileageUpdate, tss);
+  }
+}
+
+/**
+ * 모바일 대시보드 마일리지 축하 오버레이 표시
+ */
+function showMobileMileageCelebration(mileageUpdate, earnedTss) {
+  const modal = safeGetElement('mobileMileageCelebrationModal');
+  const messageEl = safeGetElement('mobile-celebration-message', { silent: true });
+  
+  if (!modal || !messageEl) {
+    console.warn('[Mobile Dashboard] 축하 오버레이 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 이전 보유 포인트 계산: 현재 잔액 + 사용한 포인트 - 획득 포인트
+  // 예: 잔액 100 + 사용 500 - 획득 120 = 이전 보유 480
+  const currentRemPoints = Math.round(mileageUpdate.rem_points || 0);
+  const earnedPoints = Math.round(earnedTss);
+  const addDays = mileageUpdate.add_days || 0;
+  const usedPoints = addDays * 500;
+  const previousRemPoints = Math.round(currentRemPoints + usedPoints - earnedPoints);
+  const totalAfterEarned = previousRemPoints + earnedPoints;
+  
+  // 축하 메시지 생성
+  const message = `
+    <div style="margin-bottom: 12px; font-size: 1.1em; font-weight: 600;">
+      오늘의 훈련으로 ${earnedPoints} S-Point 획득!
+    </div>
+    <div style="margin-bottom: 12px; font-size: 0.95em;">
+      💰 (현재 보유: ${previousRemPoints} SP + ${earnedPoints} SP = ${totalAfterEarned} SP)
+    </div>
+    <div style="font-size: 0.95em; font-weight: 600;">
+      🎉 ${usedPoints} SP를 사용하여 구독 기간이 ${addDays}일 연장되었습니다! (잔액: ${currentRemPoints} SP)
+    </div>
+  `;
+  
+  messageEl.innerHTML = message;
+  
+  // 오버레이 표시 (결과 모달 위에 표시)
+  modal.classList.remove('hidden');
+  
+  console.log('[Mobile Dashboard] 축하 오버레이 표시:', { mileageUpdate, earnedTss });
+}
+
+/**
+ * 모바일 대시보드 마일리지 축하 오버레이 닫기
+ */
+function closeMobileMileageCelebration() {
+  const modal = safeGetElement('mobileMileageCelebrationModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
 }
 
 function closeMobileTrainingResultModal() {
@@ -13789,6 +13846,8 @@ if (typeof showScreen === 'function') {
 window.startMobileDashboard = startMobileDashboard;
 window.showMobileTrainingResultModal = showMobileTrainingResultModal;
 window.closeMobileTrainingResultModal = closeMobileTrainingResultModal;
+window.showMobileMileageCelebration = showMobileMileageCelebration;
+window.closeMobileMileageCelebration = closeMobileMileageCelebration;
 window.cleanupMobileDashboard = cleanupMobileDashboard;
 
 /* ==========================================================
