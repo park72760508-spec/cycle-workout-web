@@ -347,12 +347,35 @@ function initAuthStateListener() {
           localStorage.setItem('authUser', JSON.stringify(userData));
           
           console.log('✅ 인증 상태 복원 완료:', userData.name);
+          
+          // 사용자 목록 동기화 (로그인 후)
+          if (typeof syncUsersFromDB === 'function') {
+            try {
+              await syncUsersFromDB();
+            } catch (syncError) {
+              console.warn('⚠️ 사용자 목록 동기화 실패 (무시):', syncError.message);
+            }
+          }
+          if (typeof loadUsers === 'function') {
+            try {
+              await loadUsers();
+            } catch (loadError) {
+              console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
+            }
+          }
         } else {
-          console.warn('⚠️ Firestore에 사용자 문서가 없습니다. 로그아웃합니다.');
-          await signOut();
+          // 사용자 문서가 없는 경우: signInWithGoogle에서 생성되어야 함
+          // 여기서는 로그아웃하지 않고 경고만 표시
+          console.warn('⚠️ Firestore에 사용자 문서가 없습니다. 로그인 시 자동 생성됩니다.');
+          // signInWithGoogle에서 문서를 생성하므로 여기서는 대기
         }
       } catch (error) {
         console.error('❌ 사용자 정보 로드 실패:', error);
+        // 권한 오류인 경우에도 로그아웃하지 않음 (Firestore 규칙 설정 문제일 수 있음)
+        if (error.code === 'permission-denied') {
+          console.error('🔴 Firestore 권한 오류: FIRESTORE_RULES.txt 파일의 규칙을 설정하세요.');
+          console.error('📖 FIREBASE_SETUP_GUIDE.md 파일을 참고하여 보안 규칙을 설정해주세요.');
+        }
       }
     } else {
       // 로그아웃 상태: 전역 상태 초기화
@@ -408,17 +431,66 @@ async function apiGetUsers() {
       return { success: true, items: [] };
     }
     
-    const usersSnapshot = await getUsersCollection().get();
-    const users = [];
+    // 현재 사용자의 문서를 먼저 조회하여 권한 확인
+    let currentUserDoc;
+    try {
+      currentUserDoc = await getUsersCollection().doc(currentUser.uid).get();
+    } catch (docError) {
+      // 문서 조회 실패 시 권한 오류일 수 있음
+      if (docError.code === 'permission-denied') {
+        console.error('🔴 Firestore 보안 규칙이 설정되지 않았습니다!');
+        console.error('📖 해결 방법: FIREBASE_SETUP_GUIDE.md 파일을 참고하세요.');
+        console.error('   1. Firebase 콘솔 → Firestore Database → Rules');
+        console.error('   2. FIRESTORE_RULES.txt 파일의 규칙을 복사하여 붙여넣으세요');
+        console.error('   3. 보안 규칙을 설정하고 게시하세요');
+      }
+      return { success: false, error: docError.message };
+    }
     
-    usersSnapshot.forEach(doc => {
-      users.push({
-        id: doc.id,
-        ...doc.data()
-      });
-    });
+    if (!currentUserDoc.exists) {
+      // 사용자 문서가 없으면 빈 배열 반환 (문서는 로그인 시 생성됨)
+      console.warn('⚠️ 현재 사용자 문서가 아직 생성되지 않았습니다.');
+      return { success: true, items: [] };
+    }
     
-    return { success: true, items: users };
+    const currentUserData = currentUserDoc.data();
+    const userGrade = currentUserData?.grade || '2';
+    
+    // 관리자(grade='1')인 경우에만 전체 목록 조회
+    if (userGrade === '1') {
+      try {
+        const usersSnapshot = await getUsersCollection().get();
+        const users = [];
+        
+        usersSnapshot.forEach(doc => {
+          users.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        return { success: true, items: users };
+      } catch (listError) {
+        // 전체 목록 조회 실패 시 자신의 문서만 반환
+        console.warn('⚠️ 전체 사용자 목록 조회 실패, 자신의 문서만 반환:', listError.message);
+        return { 
+          success: true, 
+          items: [{
+            id: currentUser.uid,
+            ...currentUserData
+          }]
+        };
+      }
+    } else {
+      // 일반 사용자는 자신의 문서만 반환
+      return { 
+        success: true, 
+        items: [{
+          id: currentUser.uid,
+          ...currentUserData
+        }]
+      };
+    }
   } catch (error) {
     console.error('❌ 사용자 목록 조회 실패:', error);
     
@@ -427,7 +499,8 @@ async function apiGetUsers() {
       console.error('🔴 Firestore 보안 규칙이 설정되지 않았습니다!');
       console.error('📖 해결 방법: FIREBASE_SETUP_GUIDE.md 파일을 참고하세요.');
       console.error('   1. Firebase 콘솔 → Firestore Database → Rules');
-      console.error('   2. 보안 규칙을 설정하고 게시하세요');
+      console.error('   2. FIRESTORE_RULES.txt 파일의 규칙을 복사하여 붙여넣으세요');
+      console.error('   3. 보안 규칙을 설정하고 게시하세요');
     }
     
     return { success: false, error: error.message };
