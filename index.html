@@ -3250,9 +3250,23 @@
             }
           }
           
-          // 필수 정보 확인 후 베이스캠프 화면으로 이동 여부 결정
-          // result.needsInfo가 true이면 사용자 정보 입력 모달이 표시되므로 베이스캠프로 이동하지 않음
-          if (!result.needsInfo) {
+          // 필수 정보 확인 후 화면 전환 결정
+          if (result.needsInfo) {
+            // 필수 정보가 없으면 로그인 화면 숨기고 사용자 정보 입력 모달 표시
+            const authScreen = document.getElementById('authScreen');
+            if (authScreen) {
+              authScreen.classList.remove('active');
+              authScreen.style.display = 'none';
+            }
+            
+            // 사용자 정보 입력 모달은 signInWithGoogle()에서 이미 표시됨
+            // 추가로 표시하려면 여기서도 호출 가능
+            if (typeof showCompleteUserInfoModal === 'function') {
+              setTimeout(() => {
+                showCompleteUserInfoModal(result.user);
+              }, 300);
+            }
+          } else {
             // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
             setTimeout(() => {
               if (typeof showScreen === 'function') {
@@ -3274,7 +3288,6 @@
               }
             }, 1000);
           }
-          // needsInfo가 true이면 사용자 정보 입력 모달이 표시되므로 여기서는 아무것도 하지 않음
           
         } else {
           // 로그인 실패
