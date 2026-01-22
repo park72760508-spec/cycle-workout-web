@@ -85,9 +85,58 @@ function formatUserContactPhone(input) {
   }
 }
 
+// 전화번호 자동 포맷팅 (숫자만 입력해도 자동 변환)
+function autoFormatPhoneNumber(input) {
+  if (!input) return;
+  
+  // 현재 커서 위치 저장
+  const cursorPosition = input.selectionStart;
+  const originalLength = input.value.length;
+  
+  // 숫자만 추출
+  const numbers = input.value.replace(/\D/g, '');
+  const limitedNumbers = numbers.slice(0, 11);
+  
+  // 포맷팅
+  let formatted = '';
+  if (limitedNumbers.length > 0) {
+    if (limitedNumbers.length <= 3) {
+      formatted = limitedNumbers;
+    } else if (limitedNumbers.length <= 7) {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3);
+    } else {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3, 7) + '-' + limitedNumbers.slice(7, 11);
+    }
+  }
+  
+  // 값이 변경된 경우에만 업데이트
+  if (input.value !== formatted) {
+    input.value = formatted;
+    
+    // 커서 위치 조정 (삭제된 문자가 있으면 위치 조정)
+    const newLength = formatted.length;
+    const lengthDiff = newLength - originalLength;
+    let newCursorPosition = cursorPosition + lengthDiff;
+    
+    // 하이픈 위치에 커서가 있으면 다음 위치로 이동
+    if (formatted[newCursorPosition] === '-') {
+      newCursorPosition++;
+    }
+    
+    // 커서 위치가 범위를 벗어나지 않도록 조정
+    newCursorPosition = Math.max(0, Math.min(newCursorPosition, formatted.length));
+    
+    // 커서 위치 복원
+    setTimeout(() => {
+      input.setSelectionRange(newCursorPosition, newCursorPosition);
+    }, 0);
+  }
+}
+
 // 전역으로 노출
 if (typeof window !== 'undefined') {
   window.formatUserContactPhone = formatUserContactPhone;
+  window.autoFormatPhoneNumber = autoFormatPhoneNumber;
 }
 
 // ========== Firebase Authentication (Google Login) ==========
@@ -170,7 +219,20 @@ async function signInWithGoogle() {
       localStorage.setItem('currentUser', JSON.stringify(userData));
       localStorage.setItem('authUser', JSON.stringify(userData));
       
-      return { success: true, user: userData, isNewUser: false };
+      // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적)
+      const needsInfo = !userData.contact || 
+                        !userData.ftp || userData.ftp === 0 || 
+                        !userData.weight || userData.weight === 0 || 
+                        !userData.challenge || userData.challenge === 'Fitness';
+      
+      if (needsInfo) {
+        // 필수 정보가 없으면 사용자 정보 완성 모달 표시
+        setTimeout(() => {
+          showCompleteUserInfoModal(userData);
+        }, 500); // 로그인 후 약간의 지연
+      }
+      
+      return { success: true, user: userData, isNewUser: false, needsInfo };
     } else {
       // 신규 회원: 기존 Google Sheets 필드 구조로 문서 생성
       const now = new Date().toISOString();
@@ -207,7 +269,12 @@ async function signInWithGoogle() {
       localStorage.setItem('currentUser', JSON.stringify(newUserData));
       localStorage.setItem('authUser', JSON.stringify(newUserData));
 
-      return { success: true, user: newUserData, isNewUser: true };
+      // 신규 회원은 항상 필수 정보 입력 필요
+      setTimeout(() => {
+        showCompleteUserInfoModal(newUserData);
+      }, 500); // 로그인 후 약간의 지연
+
+      return { success: true, user: newUserData, isNewUser: true, needsInfo: true };
     }
   } catch (error) {
     console.error('❌ Google 로그인 실패:', error);
@@ -376,6 +443,12 @@ function initAuthStateListener() {
           
           console.log('✅ 인증 상태 복원 완료:', userData.name);
           
+          // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적)
+          const needsInfo = !userData.contact || 
+                            !userData.ftp || userData.ftp === 0 || 
+                            !userData.weight || userData.weight === 0 || 
+                            !userData.challenge || userData.challenge === 'Fitness';
+          
           // 사용자 목록 동기화 (로그인 후)
           if (typeof syncUsersFromDB === 'function') {
             try {
@@ -390,6 +463,13 @@ function initAuthStateListener() {
             } catch (loadError) {
               console.warn('⚠️ 사용자 목록 로드 실패 (무시):', loadError.message);
             }
+          }
+          
+          // 필수 정보가 없으면 사용자 정보 완성 모달 표시
+          if (needsInfo) {
+            setTimeout(() => {
+              showCompleteUserInfoModal(userData);
+            }, 500);
           }
         } else {
           // 사용자 문서가 없는 경우: signInWithGoogle에서 생성되어야 함
@@ -1379,93 +1459,282 @@ async function editUser(userId) {
     currentEditUserId = userId;
     console.log('Edit mode activated for user:', userId);
     
-    showAddUserForm(false);
+    // 모달 표시
+    const modal = document.getElementById('editUserModal');
+    if (!modal) {
+      console.error('editUserModal을 찾을 수 없습니다.');
+      showToast('수정 화면을 불러올 수 없습니다.');
+      return;
+    }
     
-    const fillFormData = (retries = 10) => {
-      const nameEl = document.getElementById('userName');
-      const contactEl = document.getElementById('userContact');
-      const ftpEl = document.getElementById('userFTP');
-      const weightEl = document.getElementById('userWeight');
-      const challengeSelect = document.getElementById('userChallenge');
+    // 모달 제목 설정
+    const modalTitle = document.getElementById('editUserModalTitle');
+    if (modalTitle) {
+      modalTitle.textContent = `${user.name || '사용자'} 정보 수정`;
+    }
+    
+    // 관리자 전용 필드 섹션 표시/숨김 처리
+    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+    const isAdmin = (viewerGrade === '1');
+    const adminFieldsSection = document.getElementById('editAdminFieldsSection');
+    if (adminFieldsSection) {
+      adminFieldsSection.style.display = isAdmin ? 'block' : 'none';
+    }
+    
+    // 폼 데이터 채우기
+    const fillFormData = () => {
+      // 기본 필드
+      const nameEl = document.getElementById('editUserName');
+      const contactEl = document.getElementById('editUserContact');
+      const ftpEl = document.getElementById('editUserFTP');
+      const weightEl = document.getElementById('editUserWeight');
+      const challengeSelect = document.getElementById('editUserChallenge');
       
       // 관리자 전용 필드
-      const gradeEl = document.getElementById('userGrade');
-      const expiryEl = document.getElementById('userExpiryDate');
-      const accPointsEl = document.getElementById('userAccPoints');
-      const remPointsEl = document.getElementById('userRemPoints');
-      const lastTrainingDateEl = document.getElementById('userLastTrainingDate');
-      const stravaAccessTokenEl = document.getElementById('userStravaAccessToken');
-      const stravaRefreshTokenEl = document.getElementById('userStravaRefreshToken');
-      const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
+      const gradeEl = document.getElementById('editUserGrade');
+      const expiryEl = document.getElementById('editUserExpiryDate');
+      const accPointsEl = document.getElementById('editUserAccPoints');
+      const remPointsEl = document.getElementById('editUserRemPoints');
+      const lastTrainingDateEl = document.getElementById('editUserLastTrainingDate');
+      const stravaAccessTokenEl = document.getElementById('editUserStravaAccessToken');
+      const stravaRefreshTokenEl = document.getElementById('editUserStravaRefreshToken');
+      const stravaExpiresAtEl = document.getElementById('editUserStravaExpiresAt');
       
-      if (nameEl && contactEl && ftpEl && weightEl && challengeSelect) {
-        // 기본 필드 채우기
-        nameEl.value = user.name || '';
-        contactEl.value = unformatPhone(user.contact || '');
-        ftpEl.value = user.ftp || '';
-        weightEl.value = user.weight || '';
-        challengeSelect.value = user.challenge || 'Fitness';
-        
-        // 관리자 전용 필드 채우기
-        if (gradeEl) gradeEl.value = String(user.grade || '2');
-        if (expiryEl && user.expiry_date) {
-          expiryEl.value = user.expiry_date.substring(0, 10); // YYYY-MM-DD 형식
+      if (nameEl) nameEl.value = user.name || '';
+      if (contactEl) {
+        // 전화번호는 숫자만 추출하여 포맷팅
+        const phoneNumbers = unformatPhone(user.contact || '');
+        contactEl.value = phoneNumbers;
+        // 자동 포맷팅 적용
+        if (typeof autoFormatPhoneNumber === 'function') {
+          autoFormatPhoneNumber(contactEl);
         }
-        if (accPointsEl) accPointsEl.value = user.acc_points || '';
-        if (remPointsEl) remPointsEl.value = user.rem_points || '';
-        if (lastTrainingDateEl && user.last_training_date) {
-          lastTrainingDateEl.value = user.last_training_date.substring(0, 10);
-        }
-        if (stravaAccessTokenEl) stravaAccessTokenEl.value = user.strava_access_token || '';
-        if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = user.strava_refresh_token || '';
-        if (stravaExpiresAtEl) stravaExpiresAtEl.value = user.strava_expires_at || '';
-      } else if (retries > 0) {
-        setTimeout(() => fillFormData(retries - 1), 50);
-      } else {
-        console.warn('폼 요소를 찾을 수 없습니다. 일부 필드가 채워지지 않았을 수 있습니다.');
-        if (nameEl) nameEl.value = user.name || '';
-        if (contactEl) contactEl.value = unformatPhone(user.contact || '');
-        if (ftpEl) ftpEl.value = user.ftp || '';
-        if (weightEl) weightEl.value = user.weight || '';
-        if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
-        if (gradeEl) gradeEl.value = String(user.grade || '2');
-        if (expiryEl && user.expiry_date) expiryEl.value = user.expiry_date.substring(0, 10);
-        if (accPointsEl) accPointsEl.value = user.acc_points || '';
-        if (remPointsEl) remPointsEl.value = user.rem_points || '';
-        if (lastTrainingDateEl && user.last_training_date) lastTrainingDateEl.value = user.last_training_date.substring(0, 10);
-        if (stravaAccessTokenEl) stravaAccessTokenEl.value = user.strava_access_token || '';
-        if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = user.strava_refresh_token || '';
-        if (stravaExpiresAtEl) stravaExpiresAtEl.value = user.strava_expires_at || '';
       }
+      if (ftpEl) ftpEl.value = user.ftp || '';
+      if (weightEl) weightEl.value = user.weight || '';
+      if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
+      
+      // 관리자 전용 필드
+      if (gradeEl) gradeEl.value = String(user.grade || '2');
+      if (expiryEl && user.expiry_date) {
+        expiryEl.value = user.expiry_date.substring(0, 10);
+      }
+      if (accPointsEl) accPointsEl.value = user.acc_points || '';
+      if (remPointsEl) remPointsEl.value = user.rem_points || '';
+      if (lastTrainingDateEl && user.last_training_date) {
+        lastTrainingDateEl.value = user.last_training_date.substring(0, 10);
+      }
+      if (stravaAccessTokenEl) stravaAccessTokenEl.value = user.strava_access_token || '';
+      if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = user.strava_refresh_token || '';
+      if (stravaExpiresAtEl) stravaExpiresAtEl.value = user.strava_expires_at || '';
     };
     
-    setTimeout(() => fillFormData(), 100);
-   
-   // 관리자 전용 필드 섹션 표시/숨김 처리
-   const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
-   const isAdmin = (viewerGrade === '1');
-   const adminFieldsSection = document.getElementById('adminFieldsSection');
-   if (adminFieldsSection) {
-     adminFieldsSection.style.display = isAdmin ? 'block' : 'none';
-   }
-
-const saveBtn = document.getElementById('btnSaveUser');
-if (saveBtn) {
-  saveBtn.textContent = '수정';
-  saveBtn.removeEventListener('click', saveUser);
-  saveBtn.onclick = null;
-  saveBtn.onclick = () => performUpdate();
-}
-
-    const formTitle = document.querySelector('#addUserForm h3');
-    if (formTitle) {
-      formTitle.textContent = '사용자 정보 수정';
-    }
+    fillFormData();
+    
+    // 모달 표시
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // 배경 스크롤 방지
     
   } catch (error) {
     console.error('사용자 수정 실패:', error);
     showToast('사용자 정보 로드 중 오류가 발생했습니다.');
   }
+}
+
+// 모달 닫기 함수
+function closeEditUserModal() {
+  const modal = document.getElementById('editUserModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.body.style.overflow = ''; // 배경 스크롤 복원
+  }
+  
+  isEditMode = false;
+  currentEditUserId = null;
+}
+
+// 모달에서 업데이트 수행
+async function performUpdateFromModal() {
+  if (!isEditMode || !currentEditUserId) {
+    console.error('Invalid edit mode state');
+    return;
+  }
+
+  // 기본 필수 필드
+  const name = document.getElementById('editUserName')?.value.trim();
+  const contactRaw = document.getElementById('editUserContact')?.value.trim();
+  const contactDB  = formatPhoneForDB(contactRaw);
+  const ftp = parseInt(document.getElementById('editUserFTP')?.value);
+  const weight = parseFloat(document.getElementById('editUserWeight')?.value);
+  const challenge = document.getElementById('editUserChallenge')?.value || 'Fitness';
+
+  if (!name || !ftp || !weight) {
+    showToast('모든 필수 필드를 입력해주세요.');
+    return;
+  }
+
+  try {
+    // 기본 사용자 데이터
+    const userData = {
+      name,
+      contact: contactDB,
+      ftp,
+      challenge,
+      weight
+    };
+
+    // 관리자 전용 필드 업데이트
+    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+    if (viewerGrade === '1') {
+      const gradeEl = document.getElementById('editUserGrade');
+      const expiryEl = document.getElementById('editUserExpiryDate');
+      const accPointsEl = document.getElementById('editUserAccPoints');
+      const remPointsEl = document.getElementById('editUserRemPoints');
+      const lastTrainingDateEl = document.getElementById('editUserLastTrainingDate');
+      const stravaAccessTokenEl = document.getElementById('editUserStravaAccessToken');
+      const stravaRefreshTokenEl = document.getElementById('editUserStravaRefreshToken');
+      const stravaExpiresAtEl = document.getElementById('editUserStravaExpiresAt');
+      
+      if (gradeEl) userData.grade = String(gradeEl.value || '2');
+      if (expiryEl && expiryEl.value) userData.expiry_date = expiryEl.value;
+      if (accPointsEl && accPointsEl.value !== '') userData.acc_points = parseFloat(accPointsEl.value) || 0;
+      if (remPointsEl && remPointsEl.value !== '') userData.rem_points = parseFloat(remPointsEl.value) || 0;
+      if (lastTrainingDateEl && lastTrainingDateEl.value) userData.last_training_date = lastTrainingDateEl.value;
+      if (stravaAccessTokenEl) userData.strava_access_token = stravaAccessTokenEl.value.trim() || '';
+      if (stravaRefreshTokenEl) userData.strava_refresh_token = stravaRefreshTokenEl.value.trim() || '';
+      if (stravaExpiresAtEl && stravaExpiresAtEl.value) userData.strava_expires_at = parseInt(stravaExpiresAtEl.value) || 0;
+    }
+
+    const result = await apiUpdateUser(currentEditUserId, userData);
+
+    if (result.success) {
+      showToast('사용자 정보가 수정되었습니다.');
+      closeEditUserModal();
+      loadUsers();
+    } else {
+      showToast('사용자 수정 실패: ' + result.error);
+    }
+
+  } catch (error) {
+    console.error('사용자 업데이트 실패:', error);
+    showToast('사용자 수정 중 오류가 발생했습니다.');
+  }
+}
+
+// 사용자 정보 완성 모달 표시
+function showCompleteUserInfoModal(userData) {
+  const modal = document.getElementById('completeUserInfoModal');
+  if (!modal) {
+    console.error('completeUserInfoModal을 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 기존 값이 있으면 채우기
+  const contactEl = document.getElementById('completeUserContact');
+  const ftpEl = document.getElementById('completeUserFTP');
+  const weightEl = document.getElementById('completeUserWeight');
+  const challengeEl = document.getElementById('completeUserChallenge');
+  
+  if (contactEl && userData.contact) {
+    contactEl.value = userData.contact;
+    if (typeof autoFormatPhoneNumber === 'function') {
+      autoFormatPhoneNumber(contactEl);
+    }
+  }
+  if (ftpEl && userData.ftp) ftpEl.value = userData.ftp;
+  if (weightEl && userData.weight) weightEl.value = userData.weight;
+  if (challengeEl && userData.challenge) challengeEl.value = userData.challenge;
+  
+  // 모달 표시
+  modal.classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+// 사용자 정보 완성 처리
+async function completeUserInfo() {
+  const currentUser = window.auth?.currentUser;
+  if (!currentUser) {
+    showToast('로그인 상태를 확인할 수 없습니다.');
+    return;
+  }
+  
+  // 필수 필드 확인
+  const contactRaw = document.getElementById('completeUserContact')?.value.trim();
+  const ftp = parseInt(document.getElementById('completeUserFTP')?.value);
+  const weight = parseFloat(document.getElementById('completeUserWeight')?.value);
+  const challenge = document.getElementById('completeUserChallenge')?.value;
+  
+  if (!contactRaw) {
+    showToast('전화번호를 입력해주세요.');
+    return;
+  }
+  if (!ftp || ftp < 50 || ftp > 600) {
+    showToast('올바른 FTP 값을 입력해주세요. (50-600W)');
+    return;
+  }
+  if (!weight || weight < 30 || weight > 200) {
+    showToast('올바른 체중을 입력해주세요. (30-200kg)');
+    return;
+  }
+  if (!challenge) {
+    showToast('운동 목적을 선택해주세요.');
+    return;
+  }
+  
+  try {
+    const contactDB = formatPhoneForDB(contactRaw);
+    
+    // 사용자 정보 업데이트
+    const updateData = {
+      contact: contactDB,
+      ftp: ftp,
+      weight: weight,
+      challenge: challenge
+    };
+    
+    const result = await apiUpdateUser(currentUser.uid, updateData);
+    
+    if (result.success) {
+      // 전역 상태 업데이트
+      if (window.currentUser) {
+        window.currentUser = { ...window.currentUser, ...updateData };
+        localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
+        localStorage.setItem('authUser', JSON.stringify(window.currentUser));
+      }
+      
+      // 모달 닫기
+      const modal = document.getElementById('completeUserInfoModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+      
+      // 환영 오버레이 표시
+      if (typeof showUserWelcomeModal === 'function') {
+        showUserWelcomeModal(window.currentUser?.name || '사용자');
+      } else {
+        showToast('정보 입력이 완료되었습니다! 🎉');
+      }
+      
+      // 사용자 목록 새로고침
+      if (typeof loadUsers === 'function') {
+        await loadUsers();
+      }
+    } else {
+      showToast('정보 저장 실패: ' + result.error);
+    }
+  } catch (error) {
+    console.error('사용자 정보 완성 실패:', error);
+    showToast('정보 저장 중 오류가 발생했습니다.');
+  }
+}
+
+// 전역으로 노출
+if (typeof window !== 'undefined') {
+  window.closeEditUserModal = closeEditUserModal;
+  window.performUpdateFromModal = performUpdateFromModal;
+  window.showCompleteUserInfoModal = showCompleteUserInfoModal;
+  window.completeUserInfo = completeUserInfo;
 }
 
 async function performUpdate() {
