@@ -62,6 +62,34 @@ function standardizePhoneFormat(phoneNumber) {
   return formatPhoneForDB(phoneNumber);
 }
 
+// 사용자 정보 입력 폼의 전화번호 포맷팅 (인라인 이벤트용)
+function formatUserContactPhone(input) {
+  if (!input) return;
+  const value = input.value;
+  const numbers = value.replace(/\D/g, '');
+  const limitedNumbers = numbers.slice(0, 11);
+  
+  let formatted = '';
+  if (limitedNumbers.length > 0) {
+    if (limitedNumbers.length <= 3) {
+      formatted = limitedNumbers;
+    } else if (limitedNumbers.length <= 7) {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3);
+    } else {
+      formatted = limitedNumbers.slice(0, 3) + '-' + limitedNumbers.slice(3, 7) + '-' + limitedNumbers.slice(7, 11);
+    }
+  }
+  
+  if (input.value !== formatted) {
+    input.value = formatted;
+  }
+}
+
+// 전역으로 노출
+if (typeof window !== 'undefined') {
+  window.formatUserContactPhone = formatUserContactPhone;
+}
+
 // ========== Firebase Authentication (Google Login) ==========
 
 /**
@@ -1017,13 +1045,13 @@ async function loadUsers() {
       }
 
       return `
-        <div class="user-card" data-user-id="${user.id}" onclick="selectUser(${user.id})" style="cursor: pointer;">
+        <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
           <div class="user-header">
             <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
             <div class="user-actions" onclick="event.stopPropagation();">
               ${canEdit ? `
-                <button class="btn-edit"   onclick="editUser(${user.id})"   title="수정">✏️</button>
-                <button class="btn-delete ${deleteButtonClass}" onclick="deleteUser(${user.id})" title="삭제" ${deleteButtonDisabled}>🗑️</button>
+                <button class="btn-edit"   onclick="editUser('${user.id}')"   title="수정">✏️</button>
+                <button class="btn-delete ${deleteButtonClass}" onclick="deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}>🗑️</button>
               ` : ''}
             </div>
           </div>
@@ -1180,7 +1208,16 @@ function showAddUserForm(clearForm = true) {
   if (cardAddUser) cardAddUser.classList.add('hidden');
   if (addUserForm) addUserForm.classList.remove('hidden');
   
+  // 관리자 전용 필드 표시/숨김 처리
+  const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+  const isAdmin = (viewerGrade === '1');
+  const adminFieldsSection = document.getElementById('adminFieldsSection');
+  if (adminFieldsSection) {
+    adminFieldsSection.style.display = isAdmin ? 'block' : 'none';
+  }
+  
   if (clearForm) {
+    // 기본 필드 초기화
     const nameEl = document.getElementById('userName');
     const contactEl = document.getElementById('userContact');
     const ftpEl = document.getElementById('userFTP');
@@ -1192,7 +1229,48 @@ function showAddUserForm(clearForm = true) {
     if (ftpEl) ftpEl.value = '';
     if (weightEl) weightEl.value = '';
     if (challengeSelect) challengeSelect.value = 'Fitness';
+    
+    // 관리자 전용 필드 초기화
+    if (isAdmin) {
+      const gradeEl = document.getElementById('userGrade');
+      const expiryEl = document.getElementById('userExpiryDate');
+      const accPointsEl = document.getElementById('userAccPoints');
+      const remPointsEl = document.getElementById('userRemPoints');
+      const lastTrainingDateEl = document.getElementById('userLastTrainingDate');
+      const stravaAccessTokenEl = document.getElementById('userStravaAccessToken');
+      const stravaRefreshTokenEl = document.getElementById('userStravaRefreshToken');
+      const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
+      
+      if (gradeEl) gradeEl.value = '2';
+      if (expiryEl) {
+        // 기본값: 오늘 + 3개월
+        const defaultDate = new Date();
+        defaultDate.setMonth(defaultDate.getMonth() + 3);
+        expiryEl.value = defaultDate.toISOString().split('T')[0];
+      }
+      if (accPointsEl) accPointsEl.value = '';
+      if (remPointsEl) remPointsEl.value = '';
+      if (lastTrainingDateEl) lastTrainingDateEl.value = '';
+      if (stravaAccessTokenEl) stravaAccessTokenEl.value = '';
+      if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = '';
+      if (stravaExpiresAtEl) stravaExpiresAtEl.value = '';
+    }
   }
+  
+  const saveBtn = document.getElementById('btnSaveUser');
+  if (saveBtn) {
+    saveBtn.textContent = '저장';
+    saveBtn.onclick = null;
+    saveBtn.onclick = saveUser;
+  }
+  
+  const formTitle = document.querySelector('#addUserForm h3');
+  if (formTitle) {
+    formTitle.textContent = '새 사용자 등록';
+  }
+  
+  isEditMode = false;
+  currentEditUserId = null;
 }
 
 function hideAddUserForm() {
@@ -1224,6 +1302,7 @@ async function saveUser() {
     return;
   }
 
+  // 기본 필수 필드
   const name = document.getElementById('userName').value.trim();
   const contactRaw = document.getElementById('userContact').value.trim();
   const contactDB  = formatPhoneForDB(contactRaw);
@@ -1236,12 +1315,41 @@ async function saveUser() {
   if (!weight || weight < 30 || weight > 200) { showToast('올바른 체중을 입력해주세요. (30-200kg)'); return; }
 
   try {
-    const userData = { name, contact: contactDB, ftp, weight, challenge };
-    const payload = {
-      ...userData,
-      grade: userData.grade || '2',
+    // 기본 사용자 데이터
+    const userData = { 
+      name, 
+      contact: contactDB, 
+      ftp, 
+      weight, 
+      challenge 
     };
-    const result = await apiCreateUser(payload);
+
+    // 관리자 전용 필드 (관리자인 경우에만 포함)
+    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+    if (viewerGrade === '1') {
+      const gradeEl = document.getElementById('userGrade');
+      const expiryEl = document.getElementById('userExpiryDate');
+      const accPointsEl = document.getElementById('userAccPoints');
+      const remPointsEl = document.getElementById('userRemPoints');
+      const lastTrainingDateEl = document.getElementById('userLastTrainingDate');
+      const stravaAccessTokenEl = document.getElementById('userStravaAccessToken');
+      const stravaRefreshTokenEl = document.getElementById('userStravaRefreshToken');
+      const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
+
+      if (gradeEl) userData.grade = String(gradeEl.value || '2');
+      if (expiryEl && expiryEl.value) userData.expiry_date = expiryEl.value;
+      if (accPointsEl && accPointsEl.value) userData.acc_points = parseFloat(accPointsEl.value) || 0;
+      if (remPointsEl && remPointsEl.value) userData.rem_points = parseFloat(remPointsEl.value) || 0;
+      if (lastTrainingDateEl && lastTrainingDateEl.value) userData.last_training_date = lastTrainingDateEl.value;
+      if (stravaAccessTokenEl) userData.strava_access_token = stravaAccessTokenEl.value.trim() || '';
+      if (stravaRefreshTokenEl) userData.strava_refresh_token = stravaRefreshTokenEl.value.trim() || '';
+      if (stravaExpiresAtEl && stravaExpiresAtEl.value) userData.strava_expires_at = parseInt(stravaExpiresAtEl.value) || 0;
+    } else {
+      // 일반 사용자는 기본값 사용
+      userData.grade = '2';
+    }
+
+    const result = await apiCreateUser(userData);
 
     if (result.success) {
       showToast(`${name}님이 추가되었습니다.`);
@@ -1280,12 +1388,37 @@ async function editUser(userId) {
       const weightEl = document.getElementById('userWeight');
       const challengeSelect = document.getElementById('userChallenge');
       
+      // 관리자 전용 필드
+      const gradeEl = document.getElementById('userGrade');
+      const expiryEl = document.getElementById('userExpiryDate');
+      const accPointsEl = document.getElementById('userAccPoints');
+      const remPointsEl = document.getElementById('userRemPoints');
+      const lastTrainingDateEl = document.getElementById('userLastTrainingDate');
+      const stravaAccessTokenEl = document.getElementById('userStravaAccessToken');
+      const stravaRefreshTokenEl = document.getElementById('userStravaRefreshToken');
+      const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
+      
       if (nameEl && contactEl && ftpEl && weightEl && challengeSelect) {
+        // 기본 필드 채우기
         nameEl.value = user.name || '';
         contactEl.value = unformatPhone(user.contact || '');
         ftpEl.value = user.ftp || '';
         weightEl.value = user.weight || '';
         challengeSelect.value = user.challenge || 'Fitness';
+        
+        // 관리자 전용 필드 채우기
+        if (gradeEl) gradeEl.value = String(user.grade || '2');
+        if (expiryEl && user.expiry_date) {
+          expiryEl.value = user.expiry_date.substring(0, 10); // YYYY-MM-DD 형식
+        }
+        if (accPointsEl) accPointsEl.value = user.acc_points || '';
+        if (remPointsEl) remPointsEl.value = user.rem_points || '';
+        if (lastTrainingDateEl && user.last_training_date) {
+          lastTrainingDateEl.value = user.last_training_date.substring(0, 10);
+        }
+        if (stravaAccessTokenEl) stravaAccessTokenEl.value = user.strava_access_token || '';
+        if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = user.strava_refresh_token || '';
+        if (stravaExpiresAtEl) stravaExpiresAtEl.value = user.strava_expires_at || '';
       } else if (retries > 0) {
         setTimeout(() => fillFormData(retries - 1), 50);
       } else {
@@ -1295,37 +1428,25 @@ async function editUser(userId) {
         if (ftpEl) ftpEl.value = user.ftp || '';
         if (weightEl) weightEl.value = user.weight || '';
         if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
+        if (gradeEl) gradeEl.value = String(user.grade || '2');
+        if (expiryEl && user.expiry_date) expiryEl.value = user.expiry_date.substring(0, 10);
+        if (accPointsEl) accPointsEl.value = user.acc_points || '';
+        if (remPointsEl) remPointsEl.value = user.rem_points || '';
+        if (lastTrainingDateEl && user.last_training_date) lastTrainingDateEl.value = user.last_training_date.substring(0, 10);
+        if (stravaAccessTokenEl) stravaAccessTokenEl.value = user.strava_access_token || '';
+        if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = user.strava_refresh_token || '';
+        if (stravaExpiresAtEl) stravaExpiresAtEl.value = user.strava_expires_at || '';
       }
     };
     
     setTimeout(() => fillFormData(), 100);
    
+   // 관리자 전용 필드 섹션 표시/숨김 처리
    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
    const isAdmin = (viewerGrade === '1');
-   const form = document.getElementById('addUserForm');
-   
-   const prev = document.getElementById('adminFields');
-   if (prev) prev.remove();
-   
-   if (isAdmin && form) {
-     const adminWrap = document.createElement('div');
-     adminWrap.id = 'adminFields';
-     adminWrap.innerHTML = `
-       <div class="form-row">
-         <label>회원등급</label>
-         <select id="editGrade">
-           <option value="1" ${String(user.grade || '') === '1' ? 'selected' : ''}>1 (관리자)</option>
-           <option value="2" ${String(user.grade || '') === '2' ? 'selected' : ''}>2 (일반)</option>
-           <option value="3" ${String(user.grade || '') === '3' ? 'selected' : ''}>3 (부관리자)</option>
-         </select>
-       </div>
-       <div class="form-row">
-         <label>만기일(expiry_date)</label>
-         <input id="editExpiryDate" type="date" value="${(user.expiry_date || '').substring(0,10)}">
-       </div>
-     `;
-     const actions = form.querySelector('.form-actions') || form.lastElementChild;
-     form.insertBefore(adminWrap, actions);
+   const adminFieldsSection = document.getElementById('adminFieldsSection');
+   if (adminFieldsSection) {
+     adminFieldsSection.style.display = isAdmin ? 'block' : 'none';
    }
 
 const saveBtn = document.getElementById('btnSaveUser');
@@ -1374,12 +1495,26 @@ async function performUpdate() {
       weight
     };
 
+    // 관리자 전용 필드 업데이트
     const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
     if (viewerGrade === '1') {
-      const gradeEl = document.getElementById('editGrade');
-      const expiryEl = document.getElementById('editExpiryDate');
-      if (gradeEl)  userData.grade = String(gradeEl.value || '2');
-      if (expiryEl) userData.expiry_date = String(expiryEl.value || '');
+      const gradeEl = document.getElementById('userGrade');
+      const expiryEl = document.getElementById('userExpiryDate');
+      const accPointsEl = document.getElementById('userAccPoints');
+      const remPointsEl = document.getElementById('userRemPoints');
+      const lastTrainingDateEl = document.getElementById('userLastTrainingDate');
+      const stravaAccessTokenEl = document.getElementById('userStravaAccessToken');
+      const stravaRefreshTokenEl = document.getElementById('userStravaRefreshToken');
+      const stravaExpiresAtEl = document.getElementById('userStravaExpiresAt');
+      
+      if (gradeEl) userData.grade = String(gradeEl.value || '2');
+      if (expiryEl && expiryEl.value) userData.expiry_date = expiryEl.value;
+      if (accPointsEl && accPointsEl.value !== '') userData.acc_points = parseFloat(accPointsEl.value) || 0;
+      if (remPointsEl && remPointsEl.value !== '') userData.rem_points = parseFloat(remPointsEl.value) || 0;
+      if (lastTrainingDateEl && lastTrainingDateEl.value) userData.last_training_date = lastTrainingDateEl.value;
+      if (stravaAccessTokenEl) userData.strava_access_token = stravaAccessTokenEl.value.trim() || '';
+      if (stravaRefreshTokenEl) userData.strava_refresh_token = stravaRefreshTokenEl.value.trim() || '';
+      if (stravaExpiresAtEl && stravaExpiresAtEl.value) userData.strava_expires_at = parseInt(stravaExpiresAtEl.value) || 0;
     }
 
     const result = await apiUpdateUser(currentEditUserId, userData);
