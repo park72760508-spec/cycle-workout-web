@@ -71,7 +71,7 @@ function standardizePhoneFormat(phoneNumber) {
 async function signInWithGoogle() {
   try {
     if (!window.auth) {
-      throw new Error('Firebase Auth가 초기화되지 않았습니다.');
+      throw new Error('Firebase Auth가 초기화되지 않았습니다. firebaseConfig.js가 먼저 로드되어야 합니다.');
     }
 
     const provider = new firebase.auth.GoogleAuthProvider();
@@ -142,6 +142,24 @@ async function signInWithGoogle() {
     }
   } catch (error) {
     console.error('❌ Google 로그인 실패:', error);
+    
+    // OAuth 도메인 오류인 경우 상세 안내
+    if (error.code === 'auth/unauthorized-domain' || error.message?.includes('not authorized')) {
+      const errorMsg = 'OAuth 도메인이 승인되지 않았습니다. Firebase 콘솔에서 도메인을 추가해주세요.\n\n' +
+        '해결 방법:\n' +
+        '1. Firebase 콘솔 → Authentication → Settings\n' +
+        '2. Authorized domains 섹션에서 "Add domain" 클릭\n' +
+        '3. "stelvio.ai.kr" 도메인 추가\n' +
+        '4. 자세한 내용은 FIREBASE_SETUP_GUIDE.md 참고';
+      
+      console.error('🔴 OAuth 도메인 오류:', errorMsg);
+      
+      return { 
+        success: false, 
+        error: 'OAuth 도메인 오류: Firebase 콘솔에서 도메인을 추가해주세요. (FIREBASE_SETUP_GUIDE.md 참고)'
+      };
+    }
+    
     return { 
       success: false, 
       error: error.message || '로그인 중 오류가 발생했습니다.' 
@@ -226,6 +244,14 @@ if (typeof window !== 'undefined' && window.auth) {
  */
 async function apiGetUsers() {
   try {
+    // 로그인 상태 확인
+    const currentUser = window.auth?.currentUser;
+    if (!currentUser) {
+      console.warn('⚠️ 로그인하지 않은 상태에서 사용자 목록 조회 시도');
+      // 로그인하지 않은 경우 빈 배열 반환 (오류 대신)
+      return { success: true, items: [] };
+    }
+    
     const usersSnapshot = await getUsersCollection().get();
     const users = [];
     
@@ -239,6 +265,15 @@ async function apiGetUsers() {
     return { success: true, items: users };
   } catch (error) {
     console.error('❌ 사용자 목록 조회 실패:', error);
+    
+    // 권한 오류인 경우 상세 안내
+    if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
+      console.error('🔴 Firestore 보안 규칙이 설정되지 않았습니다!');
+      console.error('📖 해결 방법: FIREBASE_SETUP_GUIDE.md 파일을 참고하세요.');
+      console.error('   1. Firebase 콘솔 → Firestore Database → Rules');
+      console.error('   2. 보안 규칙을 설정하고 게시하세요');
+    }
+    
     return { success: false, error: error.message };
   }
 }

@@ -6054,39 +6054,51 @@ if (typeof window.showToast !== 'function') {
 function initializeAuthenticationSystem() {
   console.log('🔧 인증 시스템 이벤트 리스너 초기화 시작');
   
-  // 전화번호 입력 필드 이벤트 설정
+  // Google 로그인 버튼 확인 (새로운 인증 방식)
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
+  if (googleLoginBtn) {
+    console.log('✅ Google 로그인 버튼 확인됨');
+    // handleGoogleLogin 함수는 index.html에서 이미 onclick으로 연결됨
+  } else {
+    console.warn('⚠️ Google 로그인 버튼을 찾을 수 없습니다. Google 로그인을 사용하려면 버튼이 필요합니다.');
+  }
+  
+  // 전화번호 입력 필드 이벤트 설정 (기존 코드 호환성 유지 - 선택사항)
   const phoneInput = document.getElementById('phoneInput');
   if (phoneInput) {
     // input 이벤트 - 실시간 포맷팅
     phoneInput.addEventListener('input', function(e) {
-      formatPhoneNumber(e.target.value);
+      if (typeof formatPhoneNumber === 'function') {
+        formatPhoneNumber(e.target.value);
+      }
     });
     
     // keyup 이벤트 - 엔터키, 백스페이스 등
     phoneInput.addEventListener('keyup', function(e) {
-      handlePhoneKeyup(e);
+      if (typeof handlePhoneKeyup === 'function') {
+        handlePhoneKeyup(e);
+      }
     });
     
-    // focus 이벤트 - 입력 필드 활성화 시
-    phoneInput.addEventListener('focus', function(e) {
-      console.log('📱 전화번호 입력 필드 활성화');
-    });
-    
-    console.log('✅ 전화번호 입력 이벤트 리스너 설정 완료');
+    console.log('✅ 전화번호 입력 이벤트 리스너 설정 완료 (선택사항)');
   } else {
-    console.error('❌ phoneInput 요소를 찾을 수 없습니다');
+    // Google 로그인 사용 시 phoneInput이 없을 수 있음 (정상)
+    console.log('ℹ️ 전화번호 입력 필드가 없습니다 (Google 로그인 사용 중)');
   }
   
-  // 인증 버튼 이벤트 설정
+  // 인증 버튼 이벤트 설정 (기존 코드 호환성 유지 - 선택사항)
   const authBtn = document.getElementById('phoneAuthBtn');
   if (authBtn) {
     authBtn.addEventListener('click', function() {
       console.log('🔐 인증 버튼 클릭됨');
-      authenticatePhone();
+      if (typeof authenticatePhone === 'function') {
+        authenticatePhone();
+      }
     });
-    console.log('✅ 인증 버튼 이벤트 리스너 설정 완료');
+    console.log('✅ 인증 버튼 이벤트 리스너 설정 완료 (선택사항)');
   } else {
-    console.error('❌ phoneAuthBtn 요소를 찾을 수 없습니다');
+    // Google 로그인 사용 시 phoneAuthBtn이 없을 수 있음 (정상)
+    console.log('ℹ️ 전화번호 인증 버튼이 없습니다 (Google 로그인 사용 중)');
   }
   
   // 새 사용자 폼 이벤트 설정
