@@ -1644,25 +1644,40 @@ function showCompleteUserInfoModal(userData) {
     return;
   }
   
+  // 로그인 화면 숨기기
+  const authScreen = document.getElementById('authScreen');
+  if (authScreen) {
+    authScreen.classList.remove('active');
+    authScreen.style.display = 'none';
+  }
+  
   // 기존 값이 있으면 채우기
   const contactEl = document.getElementById('completeUserContact');
   const ftpEl = document.getElementById('completeUserFTP');
   const weightEl = document.getElementById('completeUserWeight');
   const challengeEl = document.getElementById('completeUserChallenge');
   
-  if (contactEl && userData.contact) {
-    contactEl.value = userData.contact;
-    if (typeof autoFormatPhoneNumber === 'function') {
+  // 필드 초기화
+  if (contactEl) {
+    contactEl.value = userData.contact || '';
+    if (userData.contact && typeof autoFormatPhoneNumber === 'function') {
       autoFormatPhoneNumber(contactEl);
     }
   }
-  if (ftpEl && userData.ftp) ftpEl.value = userData.ftp;
-  if (weightEl && userData.weight) weightEl.value = userData.weight;
-  if (challengeEl && userData.challenge) challengeEl.value = userData.challenge;
+  if (ftpEl) ftpEl.value = userData.ftp || '';
+  if (weightEl) weightEl.value = userData.weight || '';
+  if (challengeEl) challengeEl.value = userData.challenge || 'Fitness';
   
   // 모달 표시
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  
+  console.log('✅ 사용자 정보 입력 모달 표시:', {
+    hasContact: !!userData.contact,
+    hasFTP: !!userData.ftp,
+    hasWeight: !!userData.weight,
+    hasChallenge: !!userData.challenge
+  });
 }
 
 // 사용자 정보 완성 처리
