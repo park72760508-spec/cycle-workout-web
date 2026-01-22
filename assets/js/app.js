@@ -5765,18 +5765,6 @@ window.showScreen = function(screenId) {
     return; // 화면 전환 자체를 차단
   }
   
-  // 환영 오버레이가 표시되어 있으면 화면 전환 차단
-  const welcomeModal = document.getElementById('userWelcomeModal');
-  const isWelcomeModalActive = welcomeModal && 
-                               !welcomeModal.classList.contains('hidden') && 
-                               window.getComputedStyle(welcomeModal).display !== 'none' &&
-                               window.userWelcomeModalShown === true;
-  
-  if (isWelcomeModalActive) {
-    console.log('⏸️ 환영 오버레이 활성화 중 - 화면 전환 차단:', screenId);
-    return; // 화면 전환 자체를 차단
-  }
-  
   // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
   if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
     screenId = 'authScreen';
