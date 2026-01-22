@@ -563,6 +563,141 @@
         margin-bottom: 10px !important;
       }
     }
+
+    /* 사용자 정보 수정 모달 스타일 (휴대폰 최적화) */
+    #editUserModal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(4px);
+    }
+
+    #editUserModal.hidden {
+      display: none !important;
+    }
+
+    .edit-user-modal-content {
+      background: white;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      position: relative;
+      animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .edit-user-modal-body {
+      padding: 20px;
+      max-height: calc(90vh - 140px);
+      overflow-y: auto;
+    }
+
+    .modal-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 10;
+      border-radius: 16px 16px 0 0;
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 1.3em;
+      color: #333;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 28px;
+      color: #999;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: all 0.2s;
+    }
+
+    .modal-close:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    @media (max-width: 768px) {
+      .edit-user-modal-content {
+        width: 95%;
+        max-height: 95vh;
+        border-radius: 16px 16px 0 0;
+        margin-top: auto;
+        margin-bottom: 0;
+      }
+
+      .edit-user-modal-body {
+        padding: 15px;
+        max-height: calc(95vh - 140px);
+      }
+
+      .edit-user-modal-body .form-row {
+        grid-template-columns: 1fr !important;
+        gap: 15px !important;
+      }
+
+      .modal-header {
+        padding: 15px;
+      }
+
+      .modal-header h3 {
+        font-size: 1.2em;
+      }
+
+      .modal-footer {
+        padding: 15px !important;
+        flex-direction: column;
+      }
+
+      .modal-footer button {
+        width: 100% !important;
+        margin: 0 !important;
+      }
+    }
   </style>
 
   <!-- 외부 스타일 -->
@@ -1072,6 +1207,131 @@
           <div class="big-plus mb-10">➕</div>
           <h3>새 사용자 추가</h3>
           <p class="muted mt-5">FTP와 몸무게를 입력하여 새 프로필을 만드세요</p>
+        </div>
+      </div>
+
+      <!-- 사용자 정보 수정 모달 -->
+      <div id="editUserModal" class="modal hidden" style="z-index: 10000;">
+        <div class="modal-overlay" onclick="closeEditUserModal()"></div>
+        <div class="modal-content edit-user-modal-content">
+          <div class="modal-header">
+            <h3 id="editUserModalTitle">사용자 정보 수정</h3>
+            <button class="modal-close" onclick="closeEditUserModal()" aria-label="닫기">&times;</button>
+          </div>
+          
+          <div class="modal-body edit-user-modal-body">
+            <!-- 기본 정보 섹션 -->
+            <div style="margin-bottom: 20px;">
+              <h4 style="font-size: 1.1em; color: #667eea; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #667eea;">기본 정보</h4>
+              
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">이름 *</label>
+                <input type="text" id="editUserName" placeholder="홍길동" required 
+                       style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">전화번호</label>
+                <input type="tel" id="editUserContact" placeholder="01012345678 또는 010-1234-5678" 
+                       oninput="autoFormatPhoneNumber(this)"
+                       maxlength="13"
+                       style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+              </div>
+              
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">FTP (W) *</label>
+                  <input type="number" id="editUserFTP" placeholder="250" min="50" max="600" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
+                  <input type="number" id="editUserWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
+                <select id="editUserChallenge" required 
+                        style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                  <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                  <option value="GranFondo">GranFondo (그란폰도)</option>
+                  <option value="Racing">Racing (레이싱)</option>
+                  <option value="Elite">Elite (엘리트 선수)</option>
+                  <option value="PRO">PRO (프로 선수)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 관리자 전용 필드 섹션 (관리자만 표시) -->
+            <div id="editAdminFieldsSection" style="margin-bottom: 20px; display: none;">
+              <h4 style="font-size: 1.1em; color: #dc2626; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dc2626;">관리자 전용 필드</h4>
+              
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">등급 (grade)</label>
+                  <select id="editUserGrade" 
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="2" selected>2 (일반 사용자)</option>
+                    <option value="1">1 (관리자)</option>
+                    <option value="3">3 (부관리자)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">구독기간 (expiry_date)</label>
+                  <input type="date" id="editUserExpiryDate" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+              </div>
+              
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">누적포인트 (acc_points)</label>
+                  <input type="number" id="editUserAccPoints" placeholder="0" min="0" step="0.01" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">보유포인트 (rem_points)</label>
+                  <input type="number" id="editUserRemPoints" placeholder="0" min="0" step="0.01" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">마지막 운동날짜 (last_training_date)</label>
+                <input type="date" id="editUserLastTrainingDate" 
+                       style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+              </div>
+              
+              <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee;">
+                <h5 style="font-size: 1em; color: #fc4c02; margin-bottom: 12px;">Strava 연동 정보</h5>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">Strava Access Token</label>
+                  <input type="text" id="editUserStravaAccessToken" placeholder="스트라바 액세스 토큰" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: monospace;" />
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">Strava Refresh Token</label>
+                  <input type="text" id="editUserStravaRefreshToken" placeholder="스트라바 리프레시 토큰" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; box-sizing: border-box; font-family: monospace;" />
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">Strava Expires At (타임스탬프)</label>
+                  <input type="number" id="editUserStravaExpiresAt" placeholder="0" min="0" 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-secondary" onclick="closeEditUserModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
+            <button class="btn btn-success" id="btnUpdateUser" onclick="performUpdateFromModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">수정</button>
+          </div>
         </div>
       </div>
 
