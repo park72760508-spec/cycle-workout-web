@@ -6908,11 +6908,22 @@ async function handleNewUserRegistered(userData) {
             showToast(`${userData.name}님 등록 및 인증 완료! 🎉`);
           }
           
-         // 0.5초 후 기기연결 화면으로 이동
-             setTimeout(() => {
+         // 환영 오버레이가 표시되어 있으면 화면 전환을 지연
+         const welcomeModal = document.getElementById('userWelcomeModal');
+         const hasWelcomeModal = welcomeModal && !welcomeModal.classList.contains('hidden');
+         
+         // 환영 오버레이가 있으면 3초 후 화면 전환, 없으면 0.5초 후
+         const delayBeforeScreenTransition = hasWelcomeModal ? 3000 : 500;
+         
+         setTimeout(() => {
                console.log('🔄 자동 인증 완료 - 기기연결 화면으로 이동');
                
-               // 모든 화면 숨기기
+               // 환영 오버레이가 표시되어 있으면 닫기
+               if (hasWelcomeModal && typeof closeUserWelcomeModal === 'function') {
+                 closeUserWelcomeModal();
+               }
+               
+               // 모든 화면 숨기기 (환영 오버레이는 제외)
                document.querySelectorAll('.screen').forEach(screen => {
                  screen.classList.remove('active');
                  screen.style.display = 'none';

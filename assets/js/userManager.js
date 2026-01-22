@@ -205,7 +205,7 @@ function showUserWelcomeModal(userName) {
   const messageEl = document.getElementById('user-welcome-message');
   
   if (!modal || !messageEl) {
-    console.warn('[User Welcome] 환영 오버레이 요소를 찾을 수 없습니다.');
+    console.warn('[User Welcome] 환영 오버레이 요소를 찾을 수 없습니다.', { modal: !!modal, messageEl: !!messageEl });
     // 오버레이가 없으면 토스트 메시지로 대체
     if (typeof showToast === 'function') {
       showToast(`${userName}님 등록이 완료되었습니다! 🎉`);
@@ -228,10 +228,30 @@ function showUserWelcomeModal(userName) {
   
   messageEl.innerHTML = message;
   
-  // 오버레이 표시
+  // 오버레이 표시 (강제로 표시)
   modal.classList.remove('hidden');
+  // display와 z-index를 강제로 설정하여 다른 화면 위에 표시
+  modal.style.setProperty('display', 'flex', 'important');
+  modal.style.setProperty('z-index', '10002', 'important');
+  modal.style.setProperty('position', 'fixed', 'important');
+  modal.style.setProperty('top', '0', 'important');
+  modal.style.setProperty('left', '0', 'important');
+  modal.style.setProperty('width', '100%', 'important');
+  modal.style.setProperty('height', '100%', 'important');
+  modal.style.setProperty('background', 'rgba(0, 0, 0, 0.9)', 'important');
   
-  console.log('[User Welcome] 환영 오버레이 표시:', userName);
+  // 다른 화면들이 모달을 가리지 않도록 확인
+  document.querySelectorAll('.screen').forEach(screen => {
+    if (screen.style.zIndex && parseInt(screen.style.zIndex) >= 10002) {
+      screen.style.zIndex = '1000';
+    }
+  });
+  
+  console.log('[User Welcome] 환영 오버레이 표시:', userName, { 
+    modalDisplay: modal.style.display, 
+    modalZIndex: modal.style.zIndex,
+    hasHiddenClass: modal.classList.contains('hidden')
+  });
 }
 
 /**
