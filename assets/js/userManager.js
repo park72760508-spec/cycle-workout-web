@@ -1644,11 +1644,21 @@ function showCompleteUserInfoModal(userData) {
     return;
   }
   
+  // 모든 화면 숨기기
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.classList.remove('active');
+    screen.style.display = 'none';
+    screen.style.opacity = '0';
+    screen.style.visibility = 'hidden';
+  });
+  
   // 로그인 화면 숨기기
   const authScreen = document.getElementById('authScreen');
   if (authScreen) {
     authScreen.classList.remove('active');
     authScreen.style.display = 'none';
+    authScreen.style.opacity = '0';
+    authScreen.style.visibility = 'hidden';
   }
   
   // 기존 값이 있으면 채우기
@@ -1668,15 +1678,51 @@ function showCompleteUserInfoModal(userData) {
   if (weightEl) weightEl.value = userData.weight || '';
   if (challengeEl) challengeEl.value = userData.challenge || 'Fitness';
   
-  // 모달 표시
+  // 모달을 body의 직접 자식으로 이동 (z-index 문제 방지)
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+  }
+  
+  // 모든 화면 강제로 숨기기
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.classList.remove('active');
+    screen.style.setProperty('display', 'none', 'important');
+    screen.style.setProperty('opacity', '0', 'important');
+    screen.style.setProperty('visibility', 'hidden', 'important');
+    screen.style.setProperty('z-index', '1', 'important');
+  });
+  
+  // 모달 표시 (강제로 표시)
   modal.classList.remove('hidden');
+  modal.style.setProperty('display', 'flex', 'important');
+  modal.style.setProperty('position', 'fixed', 'important');
+  modal.style.setProperty('top', '0', 'important');
+  modal.style.setProperty('left', '0', 'important');
+  modal.style.setProperty('width', '100%', 'important');
+  modal.style.setProperty('height', '100%', 'important');
+  modal.style.setProperty('z-index', '10001', 'important');
+  modal.style.setProperty('background', 'rgba(0, 0, 0, 0.5)', 'important');
+  modal.style.setProperty('visibility', 'visible', 'important');
+  modal.style.setProperty('opacity', '1', 'important');
+  modal.style.setProperty('pointer-events', 'auto', 'important');
   document.body.style.overflow = 'hidden';
+  
+  // 모달 내용도 확인
+  const modalContent = modal.querySelector('.modal-content');
+  if (modalContent) {
+    modalContent.style.setProperty('position', 'relative', 'important');
+    modalContent.style.setProperty('z-index', '10002', 'important');
+  }
   
   console.log('✅ 사용자 정보 입력 모달 표시:', {
     hasContact: !!userData.contact,
     hasFTP: !!userData.ftp,
     hasWeight: !!userData.weight,
-    hasChallenge: !!userData.challenge
+    hasChallenge: !!userData.challenge,
+    modalDisplay: modal.style.display,
+    modalZIndex: modal.style.zIndex,
+    modalComputedDisplay: window.getComputedStyle(modal).display,
+    modalComputedZIndex: window.getComputedStyle(modal).zIndex
   });
 }
 
