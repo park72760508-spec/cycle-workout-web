@@ -3150,9 +3150,21 @@ if (!window.showScreen) {
         }
       }
       
-      // 1) 모든 화면 숨김 (스플래시 화면 제외 및 보호)
+      // 1) 모든 화면 숨김 (스플래시 화면 및 환영 오버레이 제외 및 보호)
       const splashScreen = document.getElementById('splashScreen');
       const isSplashActive = window.isSplashActive || (splashScreen && (splashScreen.classList.contains('active') || window.getComputedStyle(splashScreen).display !== 'none'));
+      
+      // 환영 오버레이가 표시되어 있으면 화면 전환 차단
+      const welcomeModal = document.getElementById('userWelcomeModal');
+      const isWelcomeModalActive = welcomeModal && 
+                                   !welcomeModal.classList.contains('hidden') && 
+                                   window.getComputedStyle(welcomeModal).display !== 'none' &&
+                                   window.userWelcomeModalShown === true;
+      
+      if (isWelcomeModalActive) {
+        console.log('⏸️ 환영 오버레이 활성화 중 - 화면 전환 차단');
+        return; // 화면 전환 자체를 차단
+      }
       
       // 스플래시 화면이 활성화되어 있으면 화면 전환 차단
       if (isSplashActive) {
@@ -5741,6 +5753,30 @@ if (typeof window.originalShowScreen === 'undefined') {
 window.showScreen = function(screenId) {
   console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
   
+  // 환영 오버레이가 표시되어 있으면 화면 전환 차단
+  const welcomeModal = document.getElementById('userWelcomeModal');
+  const isWelcomeModalActive = welcomeModal && 
+                               !welcomeModal.classList.contains('hidden') && 
+                               window.getComputedStyle(welcomeModal).display !== 'none' &&
+                               window.userWelcomeModalShown === true;
+  
+  if (isWelcomeModalActive) {
+    console.log('⏸️ 환영 오버레이 활성화 중 - 화면 전환 차단:', screenId);
+    return; // 화면 전환 자체를 차단
+  }
+  
+  // 환영 오버레이가 표시되어 있으면 화면 전환 차단
+  const welcomeModal = document.getElementById('userWelcomeModal');
+  const isWelcomeModalActive = welcomeModal && 
+                               !welcomeModal.classList.contains('hidden') && 
+                               window.getComputedStyle(welcomeModal).display !== 'none' &&
+                               window.userWelcomeModalShown === true;
+  
+  if (isWelcomeModalActive) {
+    console.log('⏸️ 환영 오버레이 활성화 중 - 화면 전환 차단:', screenId);
+    return; // 화면 전환 자체를 차단
+  }
+  
   // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
   if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
     screenId = 'authScreen';
@@ -6929,6 +6965,14 @@ async function handleNewUserRegistered(userData) {
          // 화면 전환 함수 정의
          const proceedToNextScreen = () => {
            console.log('🔄 자동 인증 완료 - 기기연결 화면으로 이동');
+           
+           // 환영 오버레이가 있으면 먼저 닫기
+           const welcomeModal = document.getElementById('userWelcomeModal');
+           if (welcomeModal && !welcomeModal.classList.contains('hidden')) {
+             if (typeof closeUserWelcomeModal === 'function') {
+               closeUserWelcomeModal();
+             }
+           }
            
            // 모든 화면 숨기기 (환영 오버레이는 제외)
            document.querySelectorAll('.screen').forEach(screen => {

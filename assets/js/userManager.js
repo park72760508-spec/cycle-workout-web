@@ -231,6 +231,17 @@ function showUserWelcomeModal(userName) {
   
   messageEl.innerHTML = message;
   
+  // 모달을 body의 직접 자식으로 이동 (다른 컨테이너에 가려지지 않도록)
+  if (modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+    console.log('[User Welcome] 모달을 body로 이동 완료');
+  }
+  
+  // 모든 다른 화면의 z-index를 낮춤 (모달이 최상위에 표시되도록)
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.style.setProperty('z-index', '1000', 'important');
+  });
+  
   // 오버레이 표시 (강제로 표시)
   modal.classList.remove('hidden');
   
@@ -238,7 +249,7 @@ function showUserWelcomeModal(userName) {
   requestAnimationFrame(() => {
     // display와 z-index를 강제로 설정하여 다른 화면 위에 표시
     modal.style.setProperty('display', 'flex', 'important');
-    modal.style.setProperty('z-index', '10002', 'important');
+    modal.style.setProperty('z-index', '99999', 'important'); // 매우 높은 z-index
     modal.style.setProperty('position', 'fixed', 'important');
     modal.style.setProperty('top', '0', 'important');
     modal.style.setProperty('left', '0', 'important');
@@ -247,11 +258,14 @@ function showUserWelcomeModal(userName) {
     modal.style.setProperty('background', 'rgba(0, 0, 0, 0.9)', 'important');
     modal.style.setProperty('visibility', 'visible', 'important');
     modal.style.setProperty('opacity', '1', 'important');
+    modal.style.setProperty('pointer-events', 'auto', 'important');
     
-    // 다른 화면들이 모달을 가리지 않도록 확인
-    document.querySelectorAll('.screen').forEach(screen => {
-      if (screen.style.zIndex && parseInt(screen.style.zIndex) >= 10002) {
-        screen.style.zIndex = '1000';
+    // 다른 모든 요소의 z-index를 확인하고 낮춤
+    document.querySelectorAll('*').forEach(el => {
+      if (el === modal || el === modal.querySelector('.welcome-content')) return;
+      const zIndex = window.getComputedStyle(el).zIndex;
+      if (zIndex && zIndex !== 'auto' && parseInt(zIndex) >= 10002) {
+        el.style.setProperty('z-index', '1000', 'important');
       }
     });
     
@@ -259,13 +273,43 @@ function showUserWelcomeModal(userName) {
     window.userWelcomeModalShown = true;
     window.userWelcomeModalUserName = userName;
     
-    console.log('[User Welcome] 환영 오버레이 표시:', userName, { 
-      modalDisplay: modal.style.display, 
-      modalZIndex: modal.style.zIndex,
-      hasHiddenClass: modal.classList.contains('hidden'),
-      computedDisplay: window.getComputedStyle(modal).display,
-      windowFlag: window.userWelcomeModalShown
-    });
+    // 모달이 실제로 보이는지 확인 (약간의 지연 후)
+    setTimeout(() => {
+      const rect = modal.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(modal);
+      const isVisible = rect.width > 0 && rect.height > 0 && 
+                       computedStyle.display !== 'none' &&
+                       computedStyle.visibility !== 'hidden' &&
+                       computedStyle.opacity !== '0';
+      
+      console.log('[User Welcome] 환영 오버레이 표시 확인:', userName, { 
+        modalDisplay: modal.style.display, 
+        modalZIndex: modal.style.zIndex,
+        hasHiddenClass: modal.classList.contains('hidden'),
+        computedDisplay: computedStyle.display,
+        computedZIndex: computedStyle.zIndex,
+        computedVisibility: computedStyle.visibility,
+        computedOpacity: computedStyle.opacity,
+        windowFlag: window.userWelcomeModalShown,
+        isVisible: isVisible,
+        rect: { width: rect.width, height: rect.height, top: rect.top, left: rect.left },
+        parentElement: modal.parentElement?.tagName || 'N/A'
+      });
+      
+      if (!isVisible) {
+        console.error('[User Welcome] ⚠️ 모달이 표시되지 않습니다! 강제로 다시 표시 시도');
+        // 강제로 다시 표시
+        modal.style.setProperty('display', 'flex', 'important');
+        modal.style.setProperty('z-index', '99999', 'important');
+        modal.style.setProperty('visibility', 'visible', 'important');
+        modal.style.setProperty('opacity', '1', 'important');
+        modal.style.setProperty('position', 'fixed', 'important');
+        modal.style.setProperty('top', '0', 'important');
+        modal.style.setProperty('left', '0', 'important');
+        modal.style.setProperty('width', '100%', 'important');
+        modal.style.setProperty('height', '100%', 'important');
+      }
+    }, 50);
   });
 }
 
