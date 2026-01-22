@@ -4251,9 +4251,26 @@ document.addEventListener("DOMContentLoaded", () => {
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
 
+  // Bluefy 브라우저 감지 (iOS에서 Web Bluetooth 지원)
+  function isBluefy() {
+    const ua = navigator.userAgent || "";
+    return /Bluefy/i.test(ua);
+  }
+
   function enableIOSMode() {
     const info = safeGetElement("iosInfo");
-    if (info) info.classList.remove("hidden");
+    // Bluefy를 사용 중이거나 Web Bluetooth를 지원하면 iOS 안내 메시지 숨김
+    if (info) {
+      if (isBluefy() || navigator.bluetooth) {
+        // Bluefy 사용 중이거나 Web Bluetooth 지원 → 안내 메시지 숨김
+        info.classList.add("hidden");
+        console.log("✅ Bluefy 또는 Web Bluetooth 지원 브라우저 감지 - iOS 안내 메시지 숨김");
+      } else {
+        // iOS Safari 등 Web Bluetooth 미지원 → 안내 메시지 표시
+        info.classList.remove("hidden");
+        console.log("⚠️ iOS Safari 감지 - Web Bluetooth 미지원 안내 메시지 표시");
+      }
+    }
 
     // 블루투스 미지원 브라우저 확인 (navigator.bluetooth가 없으면 미지원)
     if (!navigator.bluetooth) {
@@ -4268,7 +4285,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // iOS 기기이면서 블루투스 미지원인 경우 안내 메시지
-      if (isIOS()) {
+      if (isIOS() && !isBluefy()) {
         console.log("iOS 기기에서 블루투스 미지원 브라우저 감지 - Bluefy 앱 사용 권장");
       }
     } else {
