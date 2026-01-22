@@ -2790,9 +2790,19 @@
               : `${result.user.name}님, 로그인되었습니다.`);
           }
           
-          // 사용자 목록 새로고침 (필요시)
+          // 사용자 목록 새로고침 및 DB 동기화
           if (typeof loadUsers === 'function') {
             await loadUsers();
+          }
+          
+          // DB 동기화도 실행 (app.js의 syncUsersFromDB)
+          if (typeof syncUsersFromDB === 'function') {
+            try {
+              await syncUsersFromDB();
+              console.log('✅ 사용자 목록 DB 동기화 완료');
+            } catch (syncError) {
+              console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', syncError);
+            }
           }
           
           // 잠시 대기 후 메인 화면(connectionScreen)으로 이동
