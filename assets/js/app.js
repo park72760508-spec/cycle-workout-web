@@ -13638,7 +13638,27 @@ function showMobileTrainingResultModal(status = null) {
   if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
   if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
   
-  console.log('[Mobile Dashboard] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories });
+  // 마일리지 정보 표시 (주황색톤)
+  const accPointsEl = safeGetElement('mobile-result-acc-points', { silent: true });
+  const remPointsEl = safeGetElement('mobile-result-rem-points', { silent: true });
+  const earnedPointsEl = safeGetElement('mobile-result-earned-points', { silent: true });
+  
+  // 마일리지 업데이트 결과가 있으면 사용, 없으면 사용자 정보에서 가져오기
+  const mileageUpdate = window.lastMileageUpdate || null;
+  if (mileageUpdate && mileageUpdate.success) {
+    if (accPointsEl) accPointsEl.textContent = Math.round(mileageUpdate.acc_points || 0);
+    if (remPointsEl) remPointsEl.textContent = Math.round(mileageUpdate.rem_points || 0);
+    if (earnedPointsEl) earnedPointsEl.textContent = Math.round(mileageUpdate.earned_points || tss);
+  } else {
+    // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우 사용자 정보에서 가져오기
+    const userAccPoints = window.currentUser?.acc_points || 0;
+    const userRemPoints = window.currentUser?.rem_points || 0;
+    if (accPointsEl) accPointsEl.textContent = Math.round(userAccPoints);
+    if (remPointsEl) remPointsEl.textContent = Math.round(userRemPoints);
+    if (earnedPointsEl) earnedPointsEl.textContent = Math.round(tss);
+  }
+  
+  console.log('[Mobile Dashboard] 최종 결과:', { duration_min, avgPower: stats.avgPower, np, tss, hrAvg: stats.avgHR, calories, mileageUpdate });
   
   // 모달 표시
   modal.classList.remove('hidden');

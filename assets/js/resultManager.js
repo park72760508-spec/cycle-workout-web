@@ -451,9 +451,46 @@ async function saveTrainingResult(extra = {}) {
          console.error('[saveTrainingResult] 오류 스택:', fetchError.stack);
          throw fetchError;
        }
-     } catch (scheduleError) {
-       console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
-       // 스케줄 결과 저장 실패해도 계속 진행
+       } catch (scheduleError) {
+         console.error('[saveTrainingResult] ❌ 스케줄 결과 저장 중 오류:', scheduleError);
+         // 스케줄 결과 저장 실패해도 계속 진행
+       }
+
+     // 3-2. 마일리지 업데이트 (TSS 기반)
+     if (currentUserId && tss > 0) {
+       try {
+         console.log('[saveTrainingResult] 🎁 마일리지 업데이트 시도:', { userId: currentUserId, tss });
+         
+         const gasUrl = ensureBaseUrl();
+         const mileageUrl = `${gasUrl}?action=updateUserMileage&userId=${encodeURIComponent(currentUserId)}&today_tss=${tss}`;
+         
+         const mileageResponse = await fetch(mileageUrl, {
+           method: 'GET',
+           headers: { 'Accept': 'application/json' }
+         });
+         
+         if (mileageResponse.ok) {
+           const mileageResult = await mileageResponse.json();
+           if (mileageResult.success) {
+             console.log('[saveTrainingResult] ✅ 마일리지 업데이트 성공:', mileageResult);
+             // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
+             window.lastMileageUpdate = mileageResult;
+             // 사용자 정보도 업데이트
+             if (window.currentUser) {
+               window.currentUser.acc_points = mileageResult.acc_points;
+               window.currentUser.rem_points = mileageResult.rem_points;
+               window.currentUser.expiry_date = mileageResult.expiry_date;
+             }
+           } else {
+             console.warn('[saveTrainingResult] ⚠️ 마일리지 업데이트 실패:', mileageResult.error);
+           }
+         } else {
+           console.warn('[saveTrainingResult] ⚠️ 마일리지 업데이트 HTTP 오류:', mileageResponse.status);
+         }
+       } catch (mileageError) {
+         console.error('[saveTrainingResult] ❌ 마일리지 업데이트 중 오류:', mileageError);
+         // 마일리지 업데이트 실패해도 계속 진행
+       }
      }
 
      // 4. 결과 처리 및 반환
@@ -463,7 +500,9 @@ async function saveTrainingResult(extra = {}) {
          success: true, 
          data: trainingResult, 
          source: 'gas',
-         localBackup: localSaveSuccess
+         localBackup: localSaveSuccess,
+         tss: tss,
+         mileageUpdate: window.lastMileageUpdate || null
        };
      } else if (localSaveSuccess) {
        console.log('[saveTrainingResult] 📱 서버 저장 실패, 로컬 데이터로 계속 진행');
@@ -854,6 +893,29 @@ async function saveTrainingResult(extra = {}) {
       totalAchievement = achievements.length ? Math.round(avg(achievements)) : 0;
     }
 
+    // TSS 계산 (trainingMetrics가 있으면 사용, 없으면 근사값 계산)
+    let tss = 0;
+    if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+      const elapsedSec = window.trainingMetrics.elapsedSec;
+      const np4sum = window.trainingMetrics.np4sum || 0;
+      const count = window.trainingMetrics.count || 1;
+      
+      if (count > 0 && np4sum > 0) {
+        const np = Math.pow(np4sum / count, 0.25);
+        const userFtp = window.currentUser?.ftp || 200;
+        const IF = userFtp > 0 ? (np / userFtp) : 0;
+        tss = (elapsedSec / 3600) * (IF * IF) * 100;
+      }
+    } else {
+      // 대체 계산: 평균 파워 기반
+      const userFtp = window.currentUser?.ftp || 200;
+      const np = Math.round(avgPower * 1.05); // NP 근사
+      const IF = userFtp > 0 ? (np / userFtp) : 0;
+      const totalHours = totalMinutes / 60;
+      tss = totalHours * (IF * IF) * 100;
+    }
+    tss = Math.max(0, Math.round(tss * 100) / 100);
+
     console.log('[calculateSessionStats] 계산 결과:', {
       avgPower,
       maxPower,
@@ -861,6 +923,7 @@ async function saveTrainingResult(extra = {}) {
       calories,
       achievement: totalAchievement,
       totalTime: Math.round(totalMinutes),
+      tss,
       powerDataCount: session.powerData.length,
       hrDataCount: session.hrData?.length || 0
     });
@@ -871,7 +934,8 @@ async function saveTrainingResult(extra = {}) {
       avgHR,
       calories,
       achievement: totalAchievement,
-      totalTime: Math.max(0, Math.round(totalMinutes))
+      totalTime: Math.max(0, Math.round(totalMinutes)),
+      tss
     };
   }
 
@@ -940,6 +1004,24 @@ async function saveTrainingResult(extra = {}) {
       updateResultElement('resultMaxPower', stats?.maxPower || '-');
       updateResultElement('resultAvgHR', stats?.avgHR || '-');
       updateResultElement('resultCalories', stats?.calories || '-');
+      
+      // 마일리지 정보 표시 (주황색톤)
+      const mileageUpdate = window.lastMileageUpdate || null;
+      if (mileageUpdate && mileageUpdate.success) {
+        updateResultElement('resultAccPoints', Math.round(mileageUpdate.acc_points || 0));
+        updateResultElement('resultRemPoints', Math.round(mileageUpdate.rem_points || 0));
+        // TSS 값을 획득 포인트로 표시
+        const tss = stats?.tss || 0;
+        updateResultElement('resultEarnedPoints', Math.round(tss));
+      } else {
+        // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우 사용자 정보에서 가져오기
+        const userAccPoints = window.currentUser?.acc_points || 0;
+        const userRemPoints = window.currentUser?.rem_points || 0;
+        const tss = stats?.tss || 0;
+        updateResultElement('resultAccPoints', Math.round(userAccPoints));
+        updateResultElement('resultRemPoints', Math.round(userRemPoints));
+        updateResultElement('resultEarnedPoints', Math.round(tss));
+      }
       
       // 워크아웃 이름 표시
       if (window.currentWorkout?.title) {
