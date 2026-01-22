@@ -2774,6 +2774,16 @@
         // Firebase Google 로그인 실행
         const result = await signInWithGoogle();
         
+        // 리다이렉트 방식인 경우 (페이지가 이동하므로 여기서 처리 불가)
+        if (result.redirecting) {
+          if (statusEl) {
+            statusEl.textContent = '로그인 페이지로 이동 중...';
+            statusEl.className = 'auth-status info';
+          }
+          // 리다이렉트는 페이지가 이동하므로 여기서 반환
+          return;
+        }
+        
         if (result.success) {
           // 로그인 성공
           if (statusEl) {
