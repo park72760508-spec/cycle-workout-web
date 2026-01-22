@@ -96,7 +96,10 @@ function standardizePhoneFormat(phoneNumber) {
        if (typeof loadUsers === 'function') loadUsers();
      });
    
-     if (typeof showToast === 'function') {
+     // 환영 오버레이 표시
+     if (typeof showUserWelcomeModal === 'function') {
+       showUserWelcomeModal(userData.name);
+     } else if (typeof showToast === 'function') {
        showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
      }
      return true;
@@ -192,6 +195,59 @@ if (typeof window !== 'undefined') {
   window.unifiedCreateUser = unifiedCreateUser;
   window.saveUserFromAuth = saveUserFromAuth;
   window.standardizePhoneFormat = standardizePhoneFormat;
+}
+
+/**
+ * 사용자 등록 환영 오버레이 표시
+ */
+function showUserWelcomeModal(userName) {
+  const modal = document.getElementById('userWelcomeModal');
+  const messageEl = document.getElementById('user-welcome-message');
+  
+  if (!modal || !messageEl) {
+    console.warn('[User Welcome] 환영 오버레이 요소를 찾을 수 없습니다.');
+    // 오버레이가 없으면 토스트 메시지로 대체
+    if (typeof showToast === 'function') {
+      showToast(`${userName}님 등록이 완료되었습니다! 🎉`);
+    }
+    return;
+  }
+  
+  // 환영 메시지 생성
+  const message = `
+    <div style="margin-bottom: 12px; font-size: 1.05em; line-height: 1.8;">
+      <strong>${userName}</strong>님, STELVIO AI의 멤버가 되신 것을 축하합니다!
+    </div>
+    <div style="margin-bottom: 12px; font-size: 0.95em; line-height: 1.8;">
+      오늘부터 3개월간 무료 체험이 시작됩니다. 이제 날씨와 공간의 제약 없이 마음껏 달리세요.
+    </div>
+    <div style="font-size: 0.95em; line-height: 1.8;">
+      <strong>${userName}</strong>님이 흘린 땀방울이 헛되지 않도록, 목표하신 정상까지 STELVIO AI가 최고의 페이스메이커가 되어드리겠습니다.
+    </div>
+  `;
+  
+  messageEl.innerHTML = message;
+  
+  // 오버레이 표시
+  modal.classList.remove('hidden');
+  
+  console.log('[User Welcome] 환영 오버레이 표시:', userName);
+}
+
+/**
+ * 사용자 등록 환영 오버레이 닫기
+ */
+function closeUserWelcomeModal() {
+  const modal = document.getElementById('userWelcomeModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+// 전역 함수로 등록
+if (typeof window !== 'undefined') {
+  window.showUserWelcomeModal = showUserWelcomeModal;
+  window.closeUserWelcomeModal = closeUserWelcomeModal;
 }
 
 /*
