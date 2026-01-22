@@ -216,16 +216,25 @@ function showUserWelcomeModal(userName) {
     return;
   }
   
+  // 이벤트 제목 설정
+  const eventTitleEl = document.getElementById('user-welcome-event-title');
+  if (eventTitleEl) {
+    eventTitleEl.innerHTML = '백만킬로아카데미 회원대상 특별 이벤트(한시적)';
+  }
+  
   // 환영 메시지 생성
   const message = `
     <div style="margin-bottom: 12px; font-size: 1.05em; line-height: 1.8;">
       <strong>${userName}</strong>님, STELVIO AI의 멤버가 되신 것을 축하합니다!
     </div>
     <div style="margin-bottom: 12px; font-size: 0.95em; line-height: 1.8;">
-      오늘부터 3개월간 무료 체험이 시작됩니다. 이제 날씨와 공간의 제약 없이 마음껏 달리세요.
+      오늘부터 <span style="color: #ff6b35; font-weight: 600;">3개월간 무료 체험</span>이 시작됩니다.<br>
+      이제 날씨와 공간의 제약 없이 마음껏 달리세요.
     </div>
     <div style="font-size: 0.95em; line-height: 1.8;">
-      <strong>${userName}</strong>님이 흘린 땀방울이 헛되지 않도록, 목표하신 정상까지 STELVIO AI가 최고의 페이스메이커가 되어드리겠습니다.
+      <strong>${userName}</strong>님이 흘린 땀방울이 헛되지 않도록,<br>
+      목표하신 정상까지 STELVIO AI가 최고의<br>
+      페이스메이커가 되어드리겠습니다.
     </div>
   `;
   
