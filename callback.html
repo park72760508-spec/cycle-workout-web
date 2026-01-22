@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strava 연동 중 – STELVIO AI</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Pretendard", "Noto Sans KR", sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f6f8fa;
+      color: #222;
+      padding: 24px;
+    }
+    .box {
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      padding: 32px 24px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 6px 24px rgba(0,0,0,.08);
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 20px;
+      border: 3px solid #eee;
+      border-top-color: #fc4c02;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .msg { font-size: 1.05em; line-height: 1.5; color: #555; margin-bottom: 8px; }
+    .err { color: #c00; }
+    .link {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 12px 24px;
+      background: #fc4c02;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 10px;
+      font-weight: 600;
+      transition: opacity .2s;
+    }
+    .link:hover { opacity: .9; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div id="loading">
+      <div class="spinner"></div>
+      <p class="msg">Strava 연동을 처리하는 중입니다.</p>
+    </div>
+    <div id="success" class="hidden">
+      <p class="msg">✅ Strava 연동이 완료되었습니다.</p>
+      <a id="backLink" class="link" href="./index.html">앱으로 돌아가기</a>
+    </div>
+    <div id="error" class="hidden">
+      <p class="msg err" id="errorText"></p>
+      <a id="retryLink" class="link" href="./index.html">앱으로 돌아가기</a>
+    </div>
+  </div>
+
+  <!-- GAS URL / Strava 콜백 URL (배포 시 동일하게 맞출 것) -->
+  <script>
+    window.CONFIG = {
+      GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec",
+      STRAVA_REDIRECT_URI: "https://stelvio.ai.kr/callback.html"
+    };
+    window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
+    window.STRAVA_REDIRECT_URI = window.CONFIG.STRAVA_REDIRECT_URI;
+  </script>
+  <script src="strava_auth.js"></script>
+  <script>
+    (function () {
+      var loading = document.getElementById('loading');
+      var success = document.getElementById('success');
+      var error = document.getElementById('error');
+      var errorText = document.getElementById('errorText');
+      var backLink = document.getElementById('backLink');
+      var retryLink = document.getElementById('retryLink');
+
+      function showLoading() {
+        loading.classList.remove('hidden');
+        success.classList.add('hidden');
+        error.classList.add('hidden');
+      }
+      function showSuccess() {
+        loading.classList.add('hidden');
+        success.classList.remove('hidden');
+        error.classList.add('hidden');
+      }
+      function showError(msg) {
+        loading.classList.add('hidden');
+        success.classList.add('hidden');
+        error.classList.remove('hidden');
+        errorText.textContent = msg || '연동 처리 중 오류가 발생했습니다.';
+      }
+
+      // return_to 등으로 돌아갈 메인 앱 URL (필요 시 쿼리 등으로 전달 가능)
+      var returnUrl = new URLSearchParams(window.location.search).get('return_to') || './index.html';
+      if (backLink) backLink.href = returnUrl;
+      if (retryLink) retryLink.href = returnUrl;
+
+      if (typeof handleStravaCallback !== 'function') {
+        showError('Strava 연동 스크립트를 불러올 수 없습니다.');
+        return;
+      }
+
+      handleStravaCallback(
+        function () { showSuccess(); },
+        function (err) { showError(err); }
+      );
+    })();
+  </script>
+</body>
+</html>

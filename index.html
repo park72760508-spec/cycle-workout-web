@@ -443,10 +443,12 @@
   <!-- 앱 전역설정 -->
   <script>
     window.CONFIG = {
-      GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec"
+      GAS_WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec",
+      STRAVA_REDIRECT_URI: "https://stelvio.ai.kr/callback.html"
     };
   // 👇 이 줄을 추가하세요 1013
   window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
+  window.STRAVA_REDIRECT_URI = window.CONFIG.STRAVA_REDIRECT_URI;
     
     // 스플래시 화면 즉시 보호 (가장 먼저 실행 - 깜빡임 방지)
     (function() {
@@ -900,9 +902,14 @@
     </div>
     
     <div class="card mb-15">
-      <button class="btn btn-success" onclick="loadUsers()" style="width: 100%;">
-        📥 사용자 목록 새로고침
-      </button>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <button class="btn btn-success" onclick="loadUsers()" style="flex: 1; min-width: 140px;">
+          📥 사용자 목록 새로고침
+        </button>
+        <button class="btn btn-default-style" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; border: 1px solid #fc4c02; color: #fc4c02;">
+          🔗 Strava 연결
+        </button>
+      </div>
     </div>
     
     <!-- 훈련 목적 범례 -->
@@ -2653,6 +2660,7 @@
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutManager.js"></script>
 <script src="assets/js/userManager.js"></script>
+<script src="strava_auth.js"></script>
 <script src="assets/js/resultManager.js"></script>
 <script src="assets/js/bluetooth.js"></script>
 <script src="assets/js/ErgController.js"></script>
