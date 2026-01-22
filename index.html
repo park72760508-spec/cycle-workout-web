@@ -583,6 +583,39 @@
       display: none !important;
     }
 
+    /* 사용자 정보 완성 모달 스타일 (휴대폰 최적화) */
+    #completeUserInfoModal {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: 100% !important;
+      display: flex !important;
+      align-items: center;
+      justify-content: center;
+      z-index: 10001 !important;
+      background: rgba(0, 0, 0, 0.5) !important;
+      backdrop-filter: blur(4px);
+    }
+
+    #completeUserInfoModal.hidden {
+      display: none !important;
+      visibility: hidden !important;
+      opacity: 0 !important;
+    }
+
+    /* 모달이 표시될 때 강제로 보이도록 */
+    #completeUserInfoModal:not(.hidden) {
+      display: flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+
+    #completeUserInfoModal .edit-user-modal-content {
+      position: relative;
+      z-index: 10002;
+    }
+
     .edit-user-modal-content {
       background: white;
       border-radius: 16px;
@@ -1211,7 +1244,7 @@
       </div>
 
       <!-- 사용자 정보 완성 모달 (첫 방문 사용자용) -->
-      <div id="completeUserInfoModal" class="modal hidden" style="z-index: 10001;">
+      <div id="completeUserInfoModal" class="modal hidden">
         <div class="modal-overlay" style="pointer-events: none;"></div>
         <div class="modal-content edit-user-modal-content">
           <div class="modal-header">
