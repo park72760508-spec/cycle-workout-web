@@ -1,0 +1,320 @@
+/**
+ * STELVIO AI - 인증 페이지 스타일
+ * 다크 모드 기반 사이클링 앱 디자인
+ */
+
+/* ============================================
+   기본 리셋 및 전역 스타일
+   ============================================ */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* 다크 모드 컬러 팔레트 */
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-card: #1f1f1f;
+  --bg-input: #2a2a2a;
+  
+  /* 포인트 컬러 */
+  --accent-neon: #00ff88;
+  --accent-white: #ffffff;
+  --accent-gray: #888888;
+  --accent-dark-gray: #444444;
+  
+  /* 텍스트 컬러 */
+  --text-primary: #ffffff;
+  --text-secondary: #cccccc;
+  --text-muted: #888888;
+  
+  /* 에러 컬러 */
+  --error: #ff4444;
+  
+  /* 트랜지션 */
+  --transition-fast: 0.2s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+  
+  /* 그림자 */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-neon: 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow-x: hidden;
+}
+
+/* ============================================
+   메인 컨테이너
+   ============================================ */
+.auth-container {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ============================================
+   로고 및 타이틀
+   ============================================ */
+.auth-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.auth-logo {
+  font-size: 48px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-neon) 0%, var(--accent-white) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+  letter-spacing: -1px;
+}
+
+.auth-subtitle {
+  font-size: 16px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* ============================================
+   카드 스타일
+   ============================================ */
+.auth-card {
+  background: var(--bg-card);
+  border-radius: 20px;
+  padding: 40px 32px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+/* ============================================
+   입력 그룹
+   ============================================ */
+.input-group {
+  margin-bottom: 24px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  letter-spacing: 0.3px;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 16px 20px;
+  background: var(--bg-input);
+  border: 2px solid var(--accent-dark-gray);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-family: inherit;
+  transition: all var(--transition-normal);
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: var(--accent-neon);
+  box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+  background: var(--bg-secondary);
+}
+
+.input-group input::placeholder {
+  color: var(--text-muted);
+}
+
+.input-group input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 닉네임 입력 그룹 (초기엔 숨김) */
+#nickname-group {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-slow), 
+              opacity var(--transition-slow),
+              margin-bottom var(--transition-slow);
+  margin-bottom: 0;
+}
+
+#nickname-group.hidden {
+  max-height: 0;
+  opacity: 0;
+  margin-bottom: 0;
+}
+
+#nickname-group:not(.hidden) {
+  max-height: 200px;
+  opacity: 1;
+  margin-bottom: 24px;
+}
+
+/* ============================================
+   제출 버튼
+   ============================================ */
+.submit-button {
+  width: 100%;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, var(--accent-neon) 0%, #00cc6a 100%);
+  border: none;
+  border-radius: 12px;
+  color: var(--bg-primary);
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-md);
+  letter-spacing: 0.5px;
+  margin-top: 8px;
+}
+
+.submit-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), var(--shadow-neon);
+  background: linear-gradient(135deg, #00ff99 0%, var(--accent-neon) 100%);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.submit-button.signup-mode {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+}
+
+.submit-button.signup-mode:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5ba0f2 0%, #4a90e2 100%);
+}
+
+/* ============================================
+   에러 메시지
+   ============================================ */
+.error-message {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: 8px;
+  color: var(--error);
+  font-size: 14px;
+  text-align: center;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.error-message.show {
+  opacity: 1;
+  max-height: 200px;
+  margin-top: 16px;
+}
+
+/* ============================================
+   반응형 디자인
+   ============================================ */
+@media (max-width: 480px) {
+  body {
+    padding: 16px;
+  }
+  
+  .auth-card {
+    padding: 32px 24px;
+    border-radius: 16px;
+  }
+  
+  .auth-logo {
+    font-size: 40px;
+  }
+  
+  .auth-subtitle {
+    font-size: 14px;
+  }
+  
+  .input-group input {
+    padding: 14px 18px;
+    font-size: 16px; /* iOS 줌 방지 */
+  }
+  
+  .submit-button {
+    padding: 16px 20px;
+    font-size: 16px;
+  }
+}
+
+/* ============================================
+   접근성 개선
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 포커스 표시 개선 */
+*:focus-visible {
+  outline: 2px solid var(--accent-neon);
+  outline-offset: 2px;
+}
+
+/* ============================================
+   로딩 상태 (선택사항)
+   ============================================ */
+.submit-button.loading {
+  position: relative;
+  color: transparent;
+}
+
+.submit-button.loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border: 2px solid var(--bg-primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
