@@ -6382,9 +6382,17 @@ async function syncUsersFromDB() {
 
   __syncInFlight = (async () => {
     try {
+      // 로그인 상태 확인 (Firebase Auth 사용)
+      const currentUser = window.auth?.currentUser;
+      if (!currentUser) {
+        console.log('ℹ️ 로그인하지 않은 상태 - 사용자 목록 동기화 건너뜀');
+        isDBConnected = false;
+        return false;
+      }
+
       console.log('🔄 DB에서 사용자 목록 동기화 중...');
 
-      // GAS_URL이 HTTPS인지 확인
+      // GAS_URL이 HTTPS인지 확인 (기존 코드 호환성 유지)
       const gasUrl = window.GAS_URL || GAS_URL;
       if (gasUrl && !gasUrl.startsWith('https://')) {
         console.error('❌ Mixed Content 차단: GAS_URL이 HTTPS가 아닙니다:', gasUrl);

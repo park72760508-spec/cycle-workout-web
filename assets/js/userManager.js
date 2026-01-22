@@ -247,8 +247,7 @@ async function apiGetUsers() {
     // 로그인 상태 확인
     const currentUser = window.auth?.currentUser;
     if (!currentUser) {
-      console.warn('⚠️ 로그인하지 않은 상태에서 사용자 목록 조회 시도');
-      // 로그인하지 않은 경우 빈 배열 반환 (오류 대신)
+      // 로그인하지 않은 경우 조용히 빈 배열 반환 (경고 메시지 제거)
       return { success: true, items: [] };
     }
     
