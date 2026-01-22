@@ -370,8 +370,21 @@ function initAuthStateListener() {
           showScreen('basecampScreen');
         }
         
-        if (typeof showToast === 'function') {
-          showToast(`${userData.name}님, 로그인되었습니다.`);
+        // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적)
+        const needsInfo = !userData.contact || 
+                          !userData.ftp || userData.ftp === 0 || 
+                          !userData.weight || userData.weight === 0 || 
+                          !userData.challenge || userData.challenge === 'Fitness';
+        
+        if (needsInfo) {
+          // 필수 정보가 없으면 사용자 정보 완성 모달 표시
+          setTimeout(() => {
+            showCompleteUserInfoModal(userData);
+          }, 500);
+        } else {
+          if (typeof showToast === 'function') {
+            showToast(`${userData.name}님, 로그인되었습니다.`);
+          }
         }
       } else {
         // 신규 회원: 문서 생성
@@ -418,9 +431,10 @@ function initAuthStateListener() {
           showScreen('basecampScreen');
         }
         
-        if (typeof showToast === 'function') {
-          showToast(`${newUserData.name}님, 환영합니다! 🎉`);
-        }
+        // 신규 회원은 항상 필수 정보 입력 필요
+        setTimeout(() => {
+          showCompleteUserInfoModal(newUserData);
+        }, 500);
       }
     }
   }).catch((error) => {
