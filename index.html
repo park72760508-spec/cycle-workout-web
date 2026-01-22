@@ -436,6 +436,98 @@
     .straight-race-mascot.moving {
       transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
+
+    /* Google 로그인 버튼 스타일 */
+    .google-login-section {
+      margin: 30px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .google-login-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 320px;
+      padding: 14px 24px;
+      background: #ffffff;
+      border: 1px solid #dadce0;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      color: #3c4043;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .google-login-btn:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-color: #c4c7c5;
+      transform: translateY(-1px);
+    }
+
+    .google-login-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .google-login-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .google-icon {
+      flex-shrink: 0;
+    }
+
+    .google-login-text {
+      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      letter-spacing: 0.2px;
+    }
+
+    /* 로딩 상태 */
+    .google-login-btn.loading {
+      pointer-events: none;
+    }
+
+    .google-login-btn.loading .google-login-text::after {
+      content: '...';
+      animation: dots 1.5s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0%, 20% { content: '.'; }
+      40% { content: '..'; }
+      60%, 100% { content: '...'; }
+    }
+
+    /* 인증 상태 메시지 */
+    #googleAuthStatus {
+      min-height: 24px;
+      font-size: 14px;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    #googleAuthStatus.success {
+      color: #10b981;
+    }
+
+    #googleAuthStatus.error {
+      color: #ef4444;
+    }
+
+    #googleAuthStatus.info {
+      color: #3b82f6;
+    }
   </style>
 
   <!-- 외부 스타일 -->
@@ -524,46 +616,36 @@
             <video src="assets/img/title.mp4" alt="AI 트레이닝 대시보드" autoplay loop muted playsinline></video>
           </div>
           <div class="auth-form-header">
-            <!-- <div class="form-icon">📱</div>-->
-            <h3>사용자 인증</h3>
-            <p>11자리 전화번호를 입력하세요</p>
+            <h3>STELVIO AI 로그인</h3>
+            <p>Google 계정으로 간편하게 로그인하세요</p>
           </div>
           
-          <div class="phone-input-section">
-            <label for="phoneInput">전화번호</label>
-            <div class="phone-input-container">
-              <input type="tel" 
-                     id="phoneInput" 
-                     class="phone-input" 
-                     placeholder="01012345678" 
-                     maxlength="13">
-            </div>
-            
-            <div class="auth-status" id="phoneAuthStatus"></div>
-            
-            <button class="btn btn-primary auth-btn" id="phoneAuthBtn" 
-                    onclick="authenticatePhone()" disabled>
-              인증하기
+          <!-- Google 로그인 버튼 섹션 -->
+          <div class="google-login-section">
+            <button class="google-login-btn" id="googleLoginBtn" onclick="handleGoogleLogin()">
+              <svg class="google-icon" viewBox="0 0 24 24" width="20" height="20">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+              <span class="google-login-text">Google로 로그인</span>
             </button>
+            
+            <div class="auth-status" id="googleAuthStatus"></div>
           </div>
           
-            <div class="auth-help-card">
-              <h4><img src="assets/img/add-user.gif" alt="" class="user-reg-icon"> 사용자 등록</h4>
-              <p class="help-note">전화번호가 등록되지 않았나요?</p>
-              <button class="btn btn-secondary new-user-btn" onclick="toggleNewUserForm()">
-                <img src="assets/img/add-user2.gif" alt="" class="new-user-icon"> 새 사용자 추가
-              </button>
-              <div class="test-numbers" style="margin-top: 15px;">
-                <p style="font-size: 12px; color: #667eea; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                  <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
-                  시스템 문의 : stelvio.ai.kr@gmail.com
-                </p>
-              </div>
+          <div class="auth-help-card">
+            <div class="test-numbers" style="margin-top: 15px;">
+              <p style="font-size: 12px; color: #667eea; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
+                시스템 문의 : stelvio.ai.kr@gmail.com
+              </p>
             </div>
+          </div>
             
-            <!-- 새 사용자 추가 폼 (숨김 상태) -->
-            <!-- 교체할 부분: 새 사용자 추가 폼 전체 -->
-            <div class="new-user-form-container" id="newUserFormContainer" style="display: none;">
+            <!-- 새 사용자 추가 폼 (Google 로그인 사용으로 더 이상 필요 없음 - 숨김) -->
+            <div class="new-user-form-container" id="newUserFormContainer" style="display: none !important;">
               <div class="new-user-form">
                 <div class="form-header">
                   <h3>✨ 새 사용자 등록</h3>
@@ -2664,7 +2746,116 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutManager.js"></script>
-<script src="assets/js/userManager.js"></script>
+  <script src="assets/js/userManager.js"></script>
+  
+  <!-- Google 로그인 핸들러 -->
+  <script>
+    /**
+     * Google 로그인 처리 함수
+     * 로그인 성공 시 connectionScreen으로 이동
+     */
+    async function handleGoogleLogin() {
+      const loginBtn = document.getElementById('googleLoginBtn');
+      const statusEl = document.getElementById('googleAuthStatus');
+      
+      // 버튼 비활성화 및 로딩 상태
+      if (loginBtn) {
+        loginBtn.disabled = true;
+        loginBtn.classList.add('loading');
+      }
+      
+      // 상태 메시지 초기화
+      if (statusEl) {
+        statusEl.textContent = '로그인 중...';
+        statusEl.className = 'auth-status info';
+      }
+      
+      try {
+        // Firebase Google 로그인 실행
+        const result = await signInWithGoogle();
+        
+        if (result.success) {
+          // 로그인 성공
+          if (statusEl) {
+            statusEl.textContent = result.isNewUser 
+              ? '✅ 환영합니다! 계정이 생성되었습니다.' 
+              : '✅ 로그인 성공!';
+            statusEl.className = 'auth-status success';
+          }
+          
+          // 토스트 메시지 표시
+          if (typeof showToast === 'function') {
+            showToast(result.isNewUser 
+              ? `${result.user.name}님, 환영합니다! 🎉` 
+              : `${result.user.name}님, 로그인되었습니다.`);
+          }
+          
+          // 사용자 목록 새로고침 (필요시)
+          if (typeof loadUsers === 'function') {
+            await loadUsers();
+          }
+          
+          // 잠시 대기 후 메인 화면(connectionScreen)으로 이동
+          setTimeout(() => {
+            if (typeof showScreen === 'function') {
+              showScreen('connectionScreen');
+            } else {
+              // showScreen이 없으면 직접 화면 전환
+              const authScreen = document.getElementById('authScreen');
+              const connectionScreen = document.getElementById('connectionScreen');
+              
+              if (authScreen) {
+                authScreen.classList.remove('active');
+                authScreen.style.display = 'none';
+              }
+              
+              if (connectionScreen) {
+                connectionScreen.classList.add('active');
+                connectionScreen.style.display = 'block';
+              }
+            }
+          }, 1000);
+          
+        } else {
+          // 로그인 실패
+          if (statusEl) {
+            statusEl.textContent = `❌ 로그인 실패: ${result.error || '알 수 없는 오류'}`;
+            statusEl.className = 'auth-status error';
+          }
+          
+          if (typeof showToast === 'function') {
+            showToast(`로그인 실패: ${result.error || '알 수 없는 오류'}`);
+          }
+          
+          // 버튼 다시 활성화
+          if (loginBtn) {
+            loginBtn.disabled = false;
+            loginBtn.classList.remove('loading');
+          }
+        }
+      } catch (error) {
+        console.error('Google 로그인 오류:', error);
+        
+        if (statusEl) {
+          statusEl.textContent = `❌ 오류 발생: ${error.message || '알 수 없는 오류'}`;
+          statusEl.className = 'auth-status error';
+        }
+        
+        if (typeof showToast === 'function') {
+          showToast(`로그인 중 오류가 발생했습니다: ${error.message}`);
+        }
+        
+        // 버튼 다시 활성화
+        if (loginBtn) {
+          loginBtn.disabled = false;
+          loginBtn.classList.remove('loading');
+        }
+      }
+    }
+    
+    // 전역 함수로 등록
+    window.handleGoogleLogin = handleGoogleLogin;
+  </script>
 <script src="assets/js/strava_auth.js"></script>
 <script src="assets/js/resultManager.js"></script>
 <script src="assets/js/bluetooth.js"></script>
