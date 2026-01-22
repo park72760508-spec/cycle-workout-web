@@ -119,40 +119,40 @@
       return;
     }
 
-    var postUrl = gasUrl + (gasUrl.indexOf('?') >= 0 ? '&' : '?') + 'action=exchangeStravaCode';
-    var payload = JSON.stringify({ code: code, user_id: userId });
+    /* CORS 회피: GAS POST 응답에 Access-Control-Allow-Origin이 없어 fetch 차단됨.
+     * JSONP(GET + script)로 호출하면 CORS 없이 동작. */
+    var cbName = 'strava_jsonp_' + Date.now() + '_' + Math.round(Math.random() * 1e4);
+    var script = document.createElement('script');
+    var timeout = setTimeout(function () {
+      if (!window[cbName]) return;
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      var msg = 'Strava 연동 요청 시간이 초과되었습니다.';
+      if (typeof onError === 'function') { onError(msg); } else { console.error('[Strava] ' + msg); }
+    }, 15000);
 
-    /* CORS preflight 회피: Content-Type을 application/json 대신 text/plain 사용.
-     * GAS는 OPTIONS를 처리하지 않아 preflight 시 CORS 오류가 발생하므로,
-     * simple request로 보내 preflight 없이 POST 처리. */
-    fetch(postUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: payload
-    })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        if (data && data.success) {
-          if (typeof onSuccess === 'function') {
-            onSuccess(data);
-          }
-        } else {
-          var msg = (data && data.error) ? data.error : 'Strava 연동 처리에 실패했습니다.';
-          if (typeof onError === 'function') {
-            onError(msg);
-          } else {
-            console.error('[Strava] ' + msg);
-          }
-        }
-      })
-      .catch(function (err) {
-        var msg = (err && err.message) ? err.message : '네트워크 오류가 발생했습니다.';
-        if (typeof onError === 'function') {
-          onError(msg);
-        } else {
-          console.error('[Strava] ' + msg);
-        }
-      });
+    window[cbName] = function (data) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      if (data && data.success) {
+        if (typeof onSuccess === 'function') { onSuccess(data); }
+      } else {
+        var msg = (data && data.error) ? data.error : 'Strava 연동 처리에 실패했습니다.';
+        if (typeof onError === 'function') { onError(msg); } else { console.error('[Strava] ' + msg); }
+      }
+    };
+
+    var q = 'action=exchangeStravaCode&code=' + encodeURIComponent(code) + '&user_id=' + encodeURIComponent(userId) + '&callback=' + encodeURIComponent(cbName);
+    script.src = gasUrl + (gasUrl.indexOf('?') >= 0 ? '&' : '?') + q;
+    script.onerror = function () {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      var msg = '네트워크 오류가 발생했습니다.';
+      if (typeof onError === 'function') { onError(msg); } else { console.error('[Strava] ' + msg); }
+    };
+    document.body.appendChild(script);
   }
 
   // 전역 노출
