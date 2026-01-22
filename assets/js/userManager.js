@@ -234,6 +234,30 @@ function initAuthStateListener() {
 // 페이지 로드 시 인증 상태 리스너 초기화
 if (typeof window !== 'undefined' && window.auth) {
   initAuthStateListener();
+  
+  // 로그인 성공 시 자동으로 사용자 목록 동기화
+  window.auth.onAuthStateChanged(async (firebaseUser) => {
+    if (firebaseUser) {
+      // 로그인 성공 시 사용자 목록 동기화
+      if (typeof syncUsersFromDB === 'function') {
+        try {
+          await syncUsersFromDB();
+          console.log('✅ 로그인 후 사용자 목록 자동 동기화 완료');
+        } catch (error) {
+          console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시 가능):', error);
+        }
+      }
+      
+      // 사용자 목록 새로고침 (프로필 화면용)
+      if (typeof loadUsers === 'function') {
+        try {
+          await loadUsers();
+        } catch (error) {
+          console.warn('⚠️ 사용자 목록 로드 중 오류 (무시 가능):', error);
+        }
+      }
+    }
+  });
 }
 
 // ========== Firestore API 함수들 (기존 Google Sheets API 호환) ==========

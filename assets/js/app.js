@@ -6903,11 +6903,20 @@ document.addEventListener('DOMContentLoaded', async function() {
 
   console.log('📱 DB 연동 인증 시스템 초기화 중...');
 
+  // 로그인 상태 확인 (Firebase Auth 사용)
+  const currentUser = window.auth?.currentUser;
+  if (!currentUser) {
+    console.log('ℹ️ 로그인하지 않은 상태 - DB 초기화는 로그인 후 자동으로 진행됩니다');
+    console.log('💡 Google 로그인 후 사용자 목록이 자동으로 동기화됩니다');
+    return; // 로그인하지 않은 경우 초기화 건너뜀
+  }
+
   const syncSuccess = await syncUsersFromDB();
   if (syncSuccess) {
     console.log('✅ DB 연동 인증 시스템 초기화 완료!');
-    console.log('📞 실시간 DB 검색으로 전화번호를 인증합니다');
+    console.log('📞 Firebase Firestore에서 사용자 목록을 불러왔습니다');
   } else {
+    // 실제 오류인 경우에만 경고 (로그인 상태인데 실패한 경우)
     console.warn('⚠️ DB 초기화 실패 - userManager.js 로드 상태를 확인하세요');
   }
 });
