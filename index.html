@@ -1210,6 +1210,64 @@
         </div>
       </div>
 
+      <!-- 사용자 정보 완성 모달 (첫 방문 사용자용) -->
+      <div id="completeUserInfoModal" class="modal hidden" style="z-index: 10001;">
+        <div class="modal-overlay" style="pointer-events: none;"></div>
+        <div class="modal-content edit-user-modal-content">
+          <div class="modal-header">
+            <h3>사용자 정보 입력</h3>
+            <span style="color: #999; font-size: 0.9em;">필수 정보를 입력해주세요</span>
+          </div>
+          
+          <div class="modal-body edit-user-modal-body">
+            <div style="margin-bottom: 20px;">
+              <p style="color: #666; font-size: 0.95em; margin-bottom: 20px; line-height: 1.6;">
+                환영합니다! 🎉<br>
+                훈련을 시작하기 전에 기본 정보를 입력해주세요.
+              </p>
+              
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">전화번호 *</label>
+                <input type="tel" id="completeUserContact" placeholder="01012345678 또는 010-1234-5678" 
+                       oninput="autoFormatPhoneNumber(this)"
+                       maxlength="13"
+                       required
+                       style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+              </div>
+              
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">FTP (W) *</label>
+                  <input type="number" id="completeUserFTP" placeholder="250" min="50" max="600" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
+                  <input type="number" id="completeUserWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+              </div>
+              
+              <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
+                <select id="completeUserChallenge" required 
+                        style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                  <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                  <option value="GranFondo">GranFondo (그란폰도)</option>
+                  <option value="Racing">Racing (레이싱)</option>
+                  <option value="Elite">Elite (엘리트 선수)</option>
+                  <option value="PRO">PRO (프로 선수)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-success" id="btnCompleteUserInfo" onclick="completeUserInfo()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">입력 완료</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 사용자 정보 수정 모달 -->
       <div id="editUserModal" class="modal hidden" style="z-index: 10000;">
         <div class="modal-overlay" onclick="closeEditUserModal()"></div>
