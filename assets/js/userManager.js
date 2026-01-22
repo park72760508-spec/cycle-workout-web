@@ -228,7 +228,7 @@ function showUserWelcomeModal(userName) {
       <strong>${userName}</strong>님, STELVIO AI의 멤버가 되신 것을 축하합니다!
     </div>
     <div style="margin-bottom: 12px; font-size: 0.95em; line-height: 1.8;">
-      오늘부터 <span style="color: #ff6b35; font-weight: 600;">3개월간 무료 체험</span>이 시작됩니다.<br>
+      오늘부터 <span style="color: #1a1a1a; font-weight: 600;">3개월간 무료 체험</span>이 시작됩니다.<br>
       이제 날씨와 공간의 제약 없이 마음껏 달리세요.
     </div>
     <div style="font-size: 0.95em; line-height: 1.8;">
