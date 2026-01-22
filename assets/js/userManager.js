@@ -79,7 +79,48 @@ async function signInWithGoogle() {
     provider.addScope('profile');
     provider.addScope('email');
 
-    const result = await window.auth.signInWithPopup(provider);
+    // 팝업 방식 시도 (COOP 경고는 무시하고 계속 진행)
+    let result;
+    try {
+      result = await window.auth.signInWithPopup(provider);
+    } catch (popupError) {
+      // COOP 경고는 실제로 로그인을 막지 않을 수 있으므로, 
+      // 오류 코드를 확인하여 실제 오류인지 판단
+      const isCOOPWarning = popupError.message?.includes('Cross-Origin-Opener-Policy') ||
+                            popupError.message?.includes('window.closed');
+      
+      if (isCOOPWarning) {
+        // COOP 경고는 무시하고 리다이렉트로 폴백
+        console.warn('⚠️ COOP 정책 경고 발생 - 리다이렉트 방식으로 전환:', popupError.message);
+        try {
+          console.log('ℹ️ 리다이렉트 방식으로 로그인합니다...');
+          await window.auth.signInWithRedirect(provider);
+          return { 
+            success: true, 
+            redirecting: true,
+            message: '로그인 페이지로 이동 중...' 
+          };
+        } catch (redirectError) {
+          console.error('❌ 리다이렉트 로그인도 실패:', redirectError);
+          throw popupError;
+        }
+      }
+      
+      // 팝업이 차단된 경우 리다이렉트로 폴백
+      if (popupError.code === 'auth/popup-blocked' || 
+          popupError.code === 'auth/popup-closed-by-user') {
+        console.log('ℹ️ 팝업이 차단되었습니다. 리다이렉트 방식으로 로그인합니다...');
+        await window.auth.signInWithRedirect(provider);
+        return { 
+          success: true, 
+          redirecting: true,
+          message: '로그인 페이지로 이동 중...' 
+        };
+      }
+      
+      throw popupError; // 다른 오류는 그대로 throw
+    }
+    
     const user = result.user;
 
     console.log('✅ Google 로그인 성공:', user.email);
@@ -198,6 +239,98 @@ function initAuthStateListener() {
     console.warn('Firebase Auth가 초기화되지 않아 인증 상태 리스너를 설정할 수 없습니다.');
     return;
   }
+
+  // 리다이렉트 로그인 결과 처리 (페이지 로드 시)
+  window.auth.getRedirectResult().then(async (result) => {
+    if (result.user) {
+      console.log('✅ 리다이렉트 로그인 성공:', result.user.email);
+      
+      // Firestore에서 사용자 정보 조회 또는 생성
+      const userDocRef = getUsersCollection().doc(result.user.uid);
+      const userDoc = await userDocRef.get();
+      
+      if (userDoc.exists) {
+        // 기존 회원: lastLogin만 업데이트
+        await userDocRef.update({
+          lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        const userData = { id: result.user.uid, ...userDoc.data() };
+        
+        // 전역 상태 업데이트
+        window.currentUser = userData;
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        localStorage.setItem('authUser', JSON.stringify(userData));
+        
+        // 사용자 목록 새로고침
+        if (typeof loadUsers === 'function') {
+          await loadUsers();
+        }
+        if (typeof syncUsersFromDB === 'function') {
+          await syncUsersFromDB();
+        }
+        
+        // 메인 화면으로 이동
+        if (typeof showScreen === 'function') {
+          showScreen('connectionScreen');
+        }
+        
+        if (typeof showToast === 'function') {
+          showToast(`${userData.name}님, 로그인되었습니다.`);
+        }
+      } else {
+        // 신규 회원: 문서 생성
+        const now = new Date().toISOString();
+        const defaultExpiryDate = (() => {
+          const d = new Date();
+          d.setMonth(d.getMonth() + 3);
+          return d.toISOString().split('T')[0];
+        })();
+        
+        const newUserData = {
+          id: result.user.uid,
+          name: result.user.displayName || result.user.email?.split('@')[0] || '사용자',
+          contact: '',
+          ftp: 0,
+          weight: 0,
+          created_at: now,
+          grade: '2',
+          expiry_date: defaultExpiryDate,
+          challenge: 'Fitness',
+          acc_points: 0,
+          rem_points: 0,
+          last_training_date: '',
+          strava_access_token: '',
+          strava_refresh_token: '',
+          strava_expires_at: 0,
+          lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        
+        await userDocRef.set(newUserData);
+        
+        window.currentUser = newUserData;
+        localStorage.setItem('currentUser', JSON.stringify(newUserData));
+        localStorage.setItem('authUser', JSON.stringify(newUserData));
+        
+        if (typeof loadUsers === 'function') {
+          await loadUsers();
+        }
+        if (typeof syncUsersFromDB === 'function') {
+          await syncUsersFromDB();
+        }
+        
+        if (typeof showScreen === 'function') {
+          showScreen('connectionScreen');
+        }
+        
+        if (typeof showToast === 'function') {
+          showToast(`${newUserData.name}님, 환영합니다! 🎉`);
+        }
+      }
+    }
+  }).catch((error) => {
+    console.error('❌ 리다이렉트 로그인 결과 처리 실패:', error);
+  });
 
   window.auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
