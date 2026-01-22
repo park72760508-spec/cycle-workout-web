@@ -45,6 +45,9 @@ let currentEditUserId = null;
 // 사용자 정보 입력 모달 표시 여부 추적 (중복 호출 방지)
 let isCompleteUserInfoModalShown = false;
 
+// 로그인 성공 여부 추적 (페이지 로드 시 모달 표시 방지)
+let isLoginJustCompleted = false;
+
 // 전화번호 유틸: 숫자만 남기기
 function unformatPhone(input) {
   return String(input || '').replace(/\D+/g, '');
@@ -230,6 +233,9 @@ async function signInWithGoogle() {
       
       const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
       
+      // 로그인 성공 플래그 설정
+      isLoginJustCompleted = true;
+      
       if (needsInfo) {
         // 필수 정보가 없으면 사용자 정보 완성 모달 표시
         setTimeout(() => {
@@ -271,6 +277,9 @@ async function signInWithGoogle() {
       localStorage.setItem('currentUser', JSON.stringify(newUserData));
       localStorage.setItem('authUser', JSON.stringify(newUserData));
 
+      // 로그인 성공 플래그 설정
+      isLoginJustCompleted = true;
+      
       // 신규 회원은 항상 필수 정보 입력 필요
       setTimeout(() => {
         showCompleteUserInfoModal(newUserData);
@@ -375,6 +384,9 @@ function initAuthStateListener() {
           await syncUsersFromDB();
         }
         
+        // 로그인 성공 플래그 설정
+        isLoginJustCompleted = true;
+        
         if (needsInfo) {
           // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
           setTimeout(() => {
@@ -427,6 +439,9 @@ function initAuthStateListener() {
           await syncUsersFromDB();
         }
         
+        // 로그인 성공 플래그 설정
+        isLoginJustCompleted = true;
+        
         // 신규 회원은 항상 필수 정보 입력 필요 (베이스캠프로 이동하지 않음)
         setTimeout(() => {
           showCompleteUserInfoModal(newUserData);
@@ -453,14 +468,6 @@ function initAuthStateListener() {
           
           console.log('✅ 인증 상태 복원 완료:', userData.name);
           
-          // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
-          const hasContact = userData.contact && userData.contact.trim() !== '';
-          const hasFTP = userData.ftp && userData.ftp > 0;
-          const hasWeight = userData.weight && userData.weight > 0;
-          const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
-          
-          const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
-          
           // 사용자 목록 동기화 (로그인 후)
           if (typeof syncUsersFromDB === 'function') {
             try {
@@ -477,17 +484,46 @@ function initAuthStateListener() {
             }
           }
           
-          // 필수 정보 확인 후 화면 전환 결정
-          if (needsInfo) {
-            // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
-            setTimeout(() => {
-              showCompleteUserInfoModal(userData);
-            }, 500);
-          } else {
-            // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
-            if (typeof showScreen === 'function') {
-              showScreen('basecampScreen');
+          // 로그인 성공 후에만 모달 표시 (페이지 로드 시에는 표시하지 않음)
+          // isLoginJustCompleted 플래그가 true일 때만 모달 표시
+          if (isLoginJustCompleted) {
+            const hasContact = userData.contact && userData.contact.trim() !== '';
+            const hasFTP = userData.ftp && userData.ftp > 0;
+            const hasWeight = userData.weight && userData.weight > 0;
+            const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+            
+            const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+            
+            if (needsInfo) {
+              // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
+              setTimeout(() => {
+                showCompleteUserInfoModal(userData);
+              }, 500);
+            } else {
+              // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+              if (typeof showScreen === 'function') {
+                showScreen('basecampScreen');
+              }
             }
+            
+            // 플래그 리셋 (한 번만 실행되도록)
+            isLoginJustCompleted = false;
+          } else {
+            // 페이지 로드 시 인증 상태 복원인 경우: 화면만 전환 (모달 표시하지 않음)
+            const hasContact = userData.contact && userData.contact.trim() !== '';
+            const hasFTP = userData.ftp && userData.ftp > 0;
+            const hasWeight = userData.weight && userData.weight > 0;
+            const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+            
+            const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
+            
+            if (!needsInfo) {
+              // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+              if (typeof showScreen === 'function') {
+                showScreen('basecampScreen');
+              }
+            }
+            // needsInfo가 true여도 페이지 로드 시에는 모달을 표시하지 않음
           }
         } else {
           // 사용자 문서가 없는 경우: signInWithGoogle에서 생성되어야 함
@@ -508,6 +544,7 @@ function initAuthStateListener() {
       window.currentUser = null;
       localStorage.removeItem('currentUser');
       localStorage.removeItem('authUser');
+      isLoginJustCompleted = false; // 플래그도 리셋
       console.log('ℹ️ 로그아웃 상태');
     }
   });
@@ -516,30 +553,7 @@ function initAuthStateListener() {
 // 페이지 로드 시 인증 상태 리스너 초기화
 if (typeof window !== 'undefined' && window.auth) {
   initAuthStateListener();
-  
-  // 로그인 성공 시 자동으로 사용자 목록 동기화
-  window.auth.onAuthStateChanged(async (firebaseUser) => {
-    if (firebaseUser) {
-      // 로그인 성공 시 사용자 목록 동기화
-      if (typeof syncUsersFromDB === 'function') {
-        try {
-          await syncUsersFromDB();
-          console.log('✅ 로그인 후 사용자 목록 자동 동기화 완료');
-        } catch (error) {
-          console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시 가능):', error);
-        }
-      }
-      
-      // 사용자 목록 새로고침 (프로필 화면용)
-      if (typeof loadUsers === 'function') {
-        try {
-          await loadUsers();
-        } catch (error) {
-          console.warn('⚠️ 사용자 목록 로드 중 오류 (무시 가능):', error);
-        }
-      }
-    }
-  });
+  // initAuthStateListener() 내부에 이미 onAuthStateChanged가 있으므로 여기서는 추가하지 않음
 }
 
 // ========== Firestore API 함수들 (기존 Google Sheets API 호환) ==========
