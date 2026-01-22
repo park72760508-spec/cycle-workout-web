@@ -1957,18 +1957,28 @@ function showTrainingResultModal(status = null) {
     const remPointsEl = document.getElementById('result-rem-points');
     const earnedPointsEl = document.getElementById('result-earned-points');
     
-    // 마일리지 업데이트 결과가 있으면 사용, 없으면 사용자 정보에서 가져오기
+    // 훈련 전 포인트 값 가져오기 (훈련 종료 전 저장된 값)
+    const beforePoints = window.beforeTrainingPoints || null;
+    const beforeAccPoints = beforePoints ? beforePoints.acc_points : (window.currentUser?.acc_points || 0);
+    const beforeRemPoints = beforePoints ? beforePoints.rem_points : (window.currentUser?.rem_points || 0);
+    
+    // 마일리지 업데이트 결과가 있으면 사용 (서버에서 업데이트된 최종 값)
     const mileageUpdate = window.lastMileageUpdate || null;
     if (mileageUpdate && mileageUpdate.success) {
-        if (accPointsEl) accPointsEl.textContent = Math.round(mileageUpdate.acc_points || 0);
-        if (remPointsEl) remPointsEl.textContent = Math.round(mileageUpdate.rem_points || 0);
-        if (earnedPointsEl) earnedPointsEl.textContent = Math.round(mileageUpdate.earned_points || tss);
+        // 훈련 후 값 = 훈련 전 값 + TSS (획득 포인트)
+        const afterAccPoints = beforeAccPoints + tss;
+        const afterRemPoints = beforeRemPoints + tss;
+        
+        // 서버에서 업데이트된 최종 값 사용 (500 이상일 때 차감된 값)
+        if (accPointsEl) accPointsEl.textContent = Math.round(mileageUpdate.acc_points || afterAccPoints);
+        if (remPointsEl) remPointsEl.textContent = Math.round(mileageUpdate.rem_points || afterRemPoints);
+        if (earnedPointsEl) earnedPointsEl.textContent = Math.round(tss);
     } else {
-        // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우 사용자 정보에서 가져오기
-        const userAccPoints = window.currentUser?.acc_points || 0;
-        const userRemPoints = window.currentUser?.rem_points || 0;
-        if (accPointsEl) accPointsEl.textContent = Math.round(userAccPoints);
-        if (remPointsEl) remPointsEl.textContent = Math.round(userRemPoints);
+        // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우: 훈련 전 값 + TSS로 표시
+        const afterAccPoints = beforeAccPoints + tss;
+        const afterRemPoints = beforeRemPoints + tss;
+        if (accPointsEl) accPointsEl.textContent = Math.round(afterAccPoints);
+        if (remPointsEl) remPointsEl.textContent = Math.round(afterRemPoints);
         if (earnedPointsEl) earnedPointsEl.textContent = Math.round(tss);
     }
     
@@ -1977,8 +1987,10 @@ function showTrainingResultModal(status = null) {
     // 모달 표시
     modal.classList.remove('hidden');
     
-    // 축하 오버레이 표시 (마일리지 연장 시)
-    if (mileageUpdate && mileageUpdate.success && mileageUpdate.add_days > 0) {
+    // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
+    const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && mileageUpdate.add_days > 0) ||
+                                   (mileageUpdate && mileageUpdate.success && (mileageUpdate.rem_points || 0) >= 500);
+    if (shouldShowCelebration) {
         showIndividualMileageCelebration(mileageUpdate, tss);
     }
 }

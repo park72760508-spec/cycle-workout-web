@@ -1006,20 +1006,30 @@ async function saveTrainingResult(extra = {}) {
       updateResultElement('resultCalories', stats?.calories || '-');
       
       // 마일리지 정보 표시 (주황색톤)
+      const tss = stats?.tss || 0;
+      
+      // 훈련 전 포인트 값 가져오기 (훈련 종료 전 저장된 값)
+      const beforePoints = window.beforeTrainingPoints || null;
+      const beforeAccPoints = beforePoints ? beforePoints.acc_points : (window.currentUser?.acc_points || 0);
+      const beforeRemPoints = beforePoints ? beforePoints.rem_points : (window.currentUser?.rem_points || 0);
+      
+      // 마일리지 업데이트 결과가 있으면 사용 (서버에서 업데이트된 최종 값)
       const mileageUpdate = window.lastMileageUpdate || null;
       if (mileageUpdate && mileageUpdate.success) {
-        updateResultElement('resultAccPoints', Math.round(mileageUpdate.acc_points || 0));
-        updateResultElement('resultRemPoints', Math.round(mileageUpdate.rem_points || 0));
-        // TSS 값을 획득 포인트로 표시
-        const tss = stats?.tss || 0;
+        // 훈련 후 값 = 훈련 전 값 + TSS (획득 포인트)
+        const afterAccPoints = beforeAccPoints + tss;
+        const afterRemPoints = beforeRemPoints + tss;
+        
+        // 서버에서 업데이트된 최종 값 사용 (500 이상일 때 차감된 값)
+        updateResultElement('resultAccPoints', Math.round(mileageUpdate.acc_points || afterAccPoints));
+        updateResultElement('resultRemPoints', Math.round(mileageUpdate.rem_points || afterRemPoints));
         updateResultElement('resultEarnedPoints', Math.round(tss));
       } else {
-        // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우 사용자 정보에서 가져오기
-        const userAccPoints = window.currentUser?.acc_points || 0;
-        const userRemPoints = window.currentUser?.rem_points || 0;
-        const tss = stats?.tss || 0;
-        updateResultElement('resultAccPoints', Math.round(userAccPoints));
-        updateResultElement('resultRemPoints', Math.round(userRemPoints));
+        // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우: 훈련 전 값 + TSS로 표시
+        const afterAccPoints = beforeAccPoints + tss;
+        const afterRemPoints = beforeRemPoints + tss;
+        updateResultElement('resultAccPoints', Math.round(afterAccPoints));
+        updateResultElement('resultRemPoints', Math.round(afterRemPoints));
         updateResultElement('resultEarnedPoints', Math.round(tss));
       }
       
