@@ -5760,7 +5760,11 @@ if (typeof window.originalShowScreen === 'undefined') {
 }
 
 window.showScreen = function(screenId) {
-  console.log('화면 전환 요청:', screenId, '인증 상태:', isPhoneAuthenticated);
+  // Firebase 인증 상태 확인 (우선순위: Firebase Auth > 전화번호 인증)
+  const isFirebaseAuthenticated = window.auth?.currentUser != null || window.currentUser != null;
+  const isAuthenticated = isFirebaseAuthenticated || isPhoneAuthenticated;
+  
+  console.log('화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', isPhoneAuthenticated, ')');
   
   // 환영 오버레이가 표시되어 있으면 화면 전환 차단
   const welcomeModal = document.getElementById('userWelcomeModal');
@@ -5775,7 +5779,8 @@ window.showScreen = function(screenId) {
   }
   
   // 인증이 안 된 상태에서 다른 화면으로 가려고 하면 인증 화면으로 리다이렉트
-  if (!isPhoneAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen') {
+  if (!isAuthenticated && screenId !== 'authScreen' && screenId !== 'loadingScreen' && screenId !== 'splashScreen') {
+    console.log('⚠️ 인증되지 않은 상태 - 인증 화면으로 리다이렉트');
     screenId = 'authScreen';
   }
   

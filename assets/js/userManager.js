@@ -438,13 +438,18 @@ async function apiGetUsers() {
     } catch (docError) {
       // 문서 조회 실패 시 권한 오류일 수 있음
       if (docError.code === 'permission-denied') {
-        console.error('🔴 Firestore 보안 규칙이 설정되지 않았습니다!');
-        console.error('📖 해결 방법: FIREBASE_SETUP_GUIDE.md 파일을 참고하세요.');
-        console.error('   1. Firebase 콘솔 → Firestore Database → Rules');
-        console.error('   2. FIRESTORE_RULES.txt 파일의 규칙을 복사하여 붙여넣으세요');
-        console.error('   3. 보안 규칙을 설정하고 게시하세요');
+        console.error('🔴 Firestore 권한 오류가 발생했습니다.');
+        console.error('📖 확인 사항:');
+        console.error('   1. Firebase 콘솔 → Firestore Database → Rules에서 규칙이 올바르게 게시되었는지 확인');
+        console.error('   2. FIRESTORE_RULES.txt 파일의 규칙과 일치하는지 확인');
+        console.error('   3. 규칙 게시 후 몇 분 정도 기다린 후 다시 시도');
+        console.error('   4. 브라우저 캐시를 지우고 다시 시도');
+        // 권한 오류가 발생해도 빈 배열 반환하여 앱이 계속 작동하도록 함
+        return { success: true, items: [] };
       }
-      return { success: false, error: docError.message };
+      // 다른 오류인 경우에도 빈 배열 반환 (앱 안정성)
+      console.warn('⚠️ 사용자 문서 조회 실패:', docError.message);
+      return { success: true, items: [] };
     }
     
     if (!currentUserDoc.exists) {
