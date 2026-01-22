@@ -356,19 +356,6 @@ function initAuthStateListener() {
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem('authUser', JSON.stringify(userData));
         
-        // 사용자 목록 새로고침
-        if (typeof loadUsers === 'function') {
-          await loadUsers();
-        }
-        if (typeof syncUsersFromDB === 'function') {
-          await syncUsersFromDB();
-        }
-        
-        // 베이스캠프 화면으로 이동
-        if (typeof showScreen === 'function') {
-          showScreen('basecampScreen');
-        }
-        
         // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
         const hasContact = userData.contact && userData.contact.trim() !== '';
         const hasFTP = userData.ftp && userData.ftp > 0;
@@ -377,12 +364,24 @@ function initAuthStateListener() {
         
         const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
         
+        // 사용자 목록 새로고침
+        if (typeof loadUsers === 'function') {
+          await loadUsers();
+        }
+        if (typeof syncUsersFromDB === 'function') {
+          await syncUsersFromDB();
+        }
+        
         if (needsInfo) {
-          // 필수 정보가 없으면 사용자 정보 완성 모달 표시
+          // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
           setTimeout(() => {
             showCompleteUserInfoModal(userData);
           }, 500);
         } else {
+          // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+          if (typeof showScreen === 'function') {
+            showScreen('basecampScreen');
+          }
           if (typeof showToast === 'function') {
             showToast(`${userData.name}님, 로그인되었습니다.`);
           }
@@ -425,11 +424,7 @@ function initAuthStateListener() {
           await syncUsersFromDB();
         }
         
-        if (typeof showScreen === 'function') {
-          showScreen('basecampScreen');
-        }
-        
-        // 신규 회원은 항상 필수 정보 입력 필요
+        // 신규 회원은 항상 필수 정보 입력 필요 (베이스캠프로 이동하지 않음)
         setTimeout(() => {
           showCompleteUserInfoModal(newUserData);
         }, 500);
@@ -455,11 +450,13 @@ function initAuthStateListener() {
           
           console.log('✅ 인증 상태 복원 완료:', userData.name);
           
-          // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적)
-          const needsInfo = !userData.contact || 
-                            !userData.ftp || userData.ftp === 0 || 
-                            !userData.weight || userData.weight === 0 || 
-                            !userData.challenge || userData.challenge === 'Fitness';
+          // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
+          const hasContact = userData.contact && userData.contact.trim() !== '';
+          const hasFTP = userData.ftp && userData.ftp > 0;
+          const hasWeight = userData.weight && userData.weight > 0;
+          const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+          
+          const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
           
           // 사용자 목록 동기화 (로그인 후)
           if (typeof syncUsersFromDB === 'function') {
@@ -477,11 +474,17 @@ function initAuthStateListener() {
             }
           }
           
-          // 필수 정보가 없으면 사용자 정보 완성 모달 표시
+          // 필수 정보 확인 후 화면 전환 결정
           if (needsInfo) {
+            // 필수 정보가 없으면 사용자 정보 완성 모달 표시 (베이스캠프로 이동하지 않음)
             setTimeout(() => {
               showCompleteUserInfoModal(userData);
             }, 500);
+          } else {
+            // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+            if (typeof showScreen === 'function') {
+              showScreen('basecampScreen');
+            }
           }
         } else {
           // 사용자 문서가 없는 경우: signInWithGoogle에서 생성되어야 함
@@ -1729,6 +1732,11 @@ async function completeUserInfo() {
         document.body.style.overflow = '';
       }
       
+      // 사용자 목록 새로고침
+      if (typeof loadUsers === 'function') {
+        await loadUsers();
+      }
+      
       // 환영 오버레이 표시 (백만킬로 아카데미 특별이벤트)
       setTimeout(() => {
         if (typeof showUserWelcomeModal === 'function') {
@@ -1738,10 +1746,12 @@ async function completeUserInfo() {
         }
       }, 300); // 모달 닫힌 후 약간의 지연
       
-      // 사용자 목록 새로고침
-      if (typeof loadUsers === 'function') {
-        await loadUsers();
-      }
+      // 사용자 정보 입력 완료 후 베이스캠프 화면으로 이동
+      setTimeout(() => {
+        if (typeof showScreen === 'function') {
+          showScreen('basecampScreen');
+        }
+      }, 100); // 환영 오버레이 표시 전에 베이스캠프로 이동
     } else {
       showToast('정보 저장 실패: ' + result.error);
     }
