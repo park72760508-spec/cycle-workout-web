@@ -26,19 +26,23 @@ function getViewerGrade() {
 
 /* ==========================================================
    사용자 관리 모듈 (userManager.js)
-   - Google Sheets API와 연동한 사용자 CRUD (JSONP 방식)
-   - 프로필 관리 및 FTP 업데이트
+   - Firebase Authentication (Google Login) + Firestore 연동
+   - 기존 Google Sheets 필드 구조 완벽 유지
 ========================================================== */
 
-const GAS_URL = window.GAS_URL;
+// Firestore users 컬렉션 참조
+function getUsersCollection() {
+  if (!window.firestore) {
+    throw new Error('Firestore가 초기화되지 않았습니다. firebaseConfig.js가 먼저 로드되어야 합니다.');
+  }
+  return window.firestore.collection('users');
+}
 
 // 전역 변수로 현재 모드 추적
 let isEditMode = false;
 let currentEditUserId = null;
 
 // 전화번호 유틸: 숫자만 남기기
-// 숫자만 남기기 (입력값 → "01012345678")
-// 숫자만 남기기 (입력값 → "01012345678")
 function unformatPhone(input) {
   return String(input || '').replace(/\D+/g, '');
 }
@@ -53,64 +57,371 @@ function formatPhoneForDB(digits) {
   return `${head}-${mid}-${tail}`;
 }
 
+// 전화번호 포맷 통합 함수
+function standardizePhoneFormat(phoneNumber) {
+  return formatPhoneForDB(phoneNumber);
+}
 
-/*
-=== UserManager.js 연동 함수 ===
-파일: userManager.js 또는 새로운 연동 스크립트
+// ========== Firebase Authentication (Google Login) ==========
 
-새 사용자 등록과 기존 사용자 추가 기능을 연결하는 브릿지 함수들
-*/
+/**
+ * Google 로그인 (팝업 방식)
+ * @returns {Promise<{success: boolean, user?: object, error?: string}>}
+ */
+async function signInWithGoogle() {
+  try {
+    if (!window.auth) {
+      throw new Error('Firebase Auth가 초기화되지 않았습니다.');
+    }
 
-// 1. 새 사용자 등록을 위한 헬퍼 함수 (userManager.js에 추가하거나 별도 파일)
+    const provider = new firebase.auth.GoogleAuthProvider();
+    // 추가 스코프 요청 (필요시)
+    provider.addScope('profile');
+    provider.addScope('email');
+
+    const result = await window.auth.signInWithPopup(provider);
+    const user = result.user;
+
+    console.log('✅ Google 로그인 성공:', user.email);
+
+    // Firestore에서 사용자 정보 조회 또는 생성
+    const userDocRef = getUsersCollection().doc(user.uid);
+    const userDoc = await userDocRef.get();
+
+    if (userDoc.exists) {
+      // 기존 회원: lastLogin만 업데이트
+      await userDocRef.update({
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      
+      const userData = { id: user.uid, ...userDoc.data() };
+      
+      // 전역 상태 업데이트
+      window.currentUser = userData;
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      localStorage.setItem('authUser', JSON.stringify(userData));
+      
+      return { success: true, user: userData, isNewUser: false };
+    } else {
+      // 신규 회원: 기존 Google Sheets 필드 구조로 문서 생성
+      const now = new Date().toISOString();
+      const defaultExpiryDate = (() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+        return d.toISOString().split('T')[0];
+      })();
+
+      const newUserData = {
+        // 기존 Google Sheets 필드 구조 완벽 유지
+        id: user.uid, // Firebase uid 사용
+        name: user.displayName || user.email?.split('@')[0] || '사용자',
+        contact: '', // 기본값: 빈 문자열
+        ftp: 0, // 기본값: 0
+        weight: 0, // 기본값: 0
+        created_at: now,
+        grade: '2', // 기본값: "2" (일반 사용자)
+        expiry_date: defaultExpiryDate, // 기본값: 오늘 + 3개월
+        challenge: 'Fitness', // 기본값: "Fitness"
+        acc_points: 0, // 기본값: 0
+        rem_points: 0, // 기본값: 0
+        last_training_date: '', // 기본값: 빈 문자열
+        strava_access_token: '', // 기본값: 빈 문자열
+        strava_refresh_token: '', // 기본값: 빈 문자열
+        strava_expires_at: 0, // 기본값: 0
+        lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      await userDocRef.set(newUserData);
+
+      // 전역 상태 업데이트
+      window.currentUser = newUserData;
+      localStorage.setItem('currentUser', JSON.stringify(newUserData));
+      localStorage.setItem('authUser', JSON.stringify(newUserData));
+
+      return { success: true, user: newUserData, isNewUser: true };
+    }
+  } catch (error) {
+    console.error('❌ Google 로그인 실패:', error);
+    return { 
+      success: false, 
+      error: error.message || '로그인 중 오류가 발생했습니다.' 
+    };
+  }
+}
+
+/**
+ * 로그아웃
+ */
+async function signOut() {
+  try {
+    if (window.auth) {
+      await window.auth.signOut();
+    }
+    
+    // 전역 상태 초기화
+    window.currentUser = null;
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('authUser');
+    
+    console.log('✅ 로그아웃 완료');
+    return { success: true };
+  } catch (error) {
+    console.error('❌ 로그아웃 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 현재 로그인 상태 감지 및 자동 복원
+ * onAuthStateChanged를 사용하여 새로고침 시에도 로그인 유지
+ */
+function initAuthStateListener() {
+  if (!window.auth) {
+    console.warn('Firebase Auth가 초기화되지 않아 인증 상태 리스너를 설정할 수 없습니다.');
+    return;
+  }
+
+  window.auth.onAuthStateChanged(async (firebaseUser) => {
+    if (firebaseUser) {
+      // 로그인 상태: Firestore에서 사용자 정보 가져오기
+      try {
+        const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
+        
+        if (userDoc.exists) {
+          const userData = { id: firebaseUser.uid, ...userDoc.data() };
+          
+          // 전역 상태 업데이트
+          window.currentUser = userData;
+          localStorage.setItem('currentUser', JSON.stringify(userData));
+          localStorage.setItem('authUser', JSON.stringify(userData));
+          
+          console.log('✅ 인증 상태 복원 완료:', userData.name);
+        } else {
+          console.warn('⚠️ Firestore에 사용자 문서가 없습니다. 로그아웃합니다.');
+          await signOut();
+        }
+      } catch (error) {
+        console.error('❌ 사용자 정보 로드 실패:', error);
+      }
+    } else {
+      // 로그아웃 상태: 전역 상태 초기화
+      window.currentUser = null;
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('authUser');
+      console.log('ℹ️ 로그아웃 상태');
+    }
+  });
+}
+
+// 페이지 로드 시 인증 상태 리스너 초기화
+if (typeof window !== 'undefined' && window.auth) {
+  initAuthStateListener();
+}
+
+// ========== Firestore API 함수들 (기존 Google Sheets API 호환) ==========
+
+/**
+ * 모든 사용자 목록 조회
+ * @returns {Promise<{success: boolean, items?: array, error?: string}>}
+ */
+async function apiGetUsers() {
+  try {
+    const usersSnapshot = await getUsersCollection().get();
+    const users = [];
+    
+    usersSnapshot.forEach(doc => {
+      users.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    return { success: true, items: users };
+  } catch (error) {
+    console.error('❌ 사용자 목록 조회 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 특정 사용자 조회
+ * @param {string} id - 사용자 ID (Firebase uid)
+ * @returns {Promise<{success: boolean, item?: object, error?: string}>}
+ */
+async function apiGetUser(id) {
+  try {
+    if (!id) {
+      return { success: false, error: '사용자 ID가 필요합니다.' };
+    }
+    
+    const userDoc = await getUsersCollection().doc(id).get();
+    
+    if (!userDoc.exists) {
+      return { success: false, error: 'User not found' };
+    }
+    
+    const userData = {
+      id: userDoc.id,
+      ...userDoc.data()
+    };
+    
+    return { success: true, item: userData };
+  } catch (error) {
+    console.error('❌ 사용자 조회 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 새 사용자 생성
+ * @param {object} userData - 사용자 데이터 (기존 Google Sheets 필드 구조)
+ * @returns {Promise<{success: boolean, id?: string, error?: string}>}
+ */
+async function apiCreateUser(userData) {
+  try {
+    console.log('apiCreateUser called with:', userData);
+    
+    // 현재 로그인한 사용자 확인
+    const currentUser = window.auth?.currentUser;
+    if (!currentUser) {
+      return { success: false, error: '로그인이 필요합니다.' };
+    }
+    
+    // 기존 Google Sheets 필드 구조로 데이터 준비
+    const now = new Date().toISOString();
+    const defaultExpiryDate = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+      return d.toISOString().split('T')[0];
+    })();
+    
+    const newUserData = {
+      // 기존 Google Sheets 필드 구조 완벽 유지
+      id: currentUser.uid, // Firebase uid 사용
+      name: userData.name || '',
+      contact: userData.contact || '',
+      ftp: parseInt(userData.ftp) || 0,
+      weight: parseFloat(userData.weight) || 0,
+      created_at: now,
+      grade: String(userData.grade || '2'), // 기본값: "2"
+      expiry_date: userData.expiry_date || defaultExpiryDate,
+      challenge: String(userData.challenge || 'Fitness'), // 기본값: "Fitness"
+      acc_points: 0, // 기본값: 0
+      rem_points: 0, // 기본값: 0
+      last_training_date: '', // 기본값: 빈 문자열
+      strava_access_token: '', // 기본값: 빈 문자열
+      strava_refresh_token: '', // 기본값: 빈 문자열
+      strava_expires_at: 0 // 기본값: 0
+    };
+    
+    // Firestore에 저장
+    const userDocRef = getUsersCollection().doc(currentUser.uid);
+    await userDocRef.set(newUserData);
+    
+    console.log('✅ 사용자 생성 완료:', newUserData.id);
+    return { success: true, id: newUserData.id };
+  } catch (error) {
+    console.error('❌ 사용자 생성 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 사용자 정보 업데이트
+ * @param {string} id - 사용자 ID (Firebase uid)
+ * @param {object} userData - 업데이트할 사용자 데이터
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function apiUpdateUser(id, userData) {
+  try {
+    if (!id) {
+      return { success: false, error: '사용자 ID가 필요합니다.' };
+    }
+    
+    // 업데이트할 데이터 준비 (기존 필드 구조 유지)
+    const updateData = {};
+    
+    if (userData.name != null) updateData.name = userData.name;
+    if (userData.contact != null) updateData.contact = userData.contact;
+    if (userData.ftp != null) updateData.ftp = parseInt(userData.ftp);
+    if (userData.weight != null) updateData.weight = parseFloat(userData.weight);
+    if (userData.grade != null) updateData.grade = String(userData.grade);
+    if (userData.expiry_date != null) updateData.expiry_date = String(userData.expiry_date);
+    if (userData.challenge != null) updateData.challenge = String(userData.challenge);
+    if (userData.acc_points != null) updateData.acc_points = parseFloat(userData.acc_points);
+    if (userData.rem_points != null) updateData.rem_points = parseFloat(userData.rem_points);
+    if (userData.last_training_date != null) updateData.last_training_date = String(userData.last_training_date);
+    if (userData.strava_access_token != null) updateData.strava_access_token = String(userData.strava_access_token);
+    if (userData.strava_refresh_token != null) updateData.strava_refresh_token = String(userData.strava_refresh_token);
+    if (userData.strava_expires_at != null) updateData.strava_expires_at = Number(userData.strava_expires_at);
+    
+    // Firestore 업데이트
+    await getUsersCollection().doc(id).update(updateData);
+    
+    console.log('✅ 사용자 정보 업데이트 완료:', id);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ 사용자 정보 업데이트 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 사용자 삭제
+ * @param {string} id - 사용자 ID (Firebase uid)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function apiDeleteUser(id) {
+  try {
+    if (!id) {
+      return { success: false, error: '사용자 ID가 필요합니다.' };
+    }
+    
+    await getUsersCollection().doc(id).delete();
+    
+    console.log('✅ 사용자 삭제 완료:', id);
+    return { success: true };
+  } catch (error) {
+    console.error('❌ 사용자 삭제 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ========== 기존 호환성 함수들 (유지) ==========
+
 function createUserFromAuth(authFormData) {
-  // 인증 화면의 새 사용자 등록 데이터를 userManager 형식으로 변환
   const userData = {
     name: authFormData.name || '',
-    contact: formatPhoneForDB(authFormData.contact || ''), // 하이픈 포맷으로 변환
+    contact: formatPhoneForDB(authFormData.contact || ''),
     ftp: parseInt(authFormData.ftp) || 0,
     weight: parseFloat(authFormData.weight) || 0,
-    challenge: authFormData.challenge || 'Fitness', // 운동 목적 추가
-    grade: '2', // 기본 사용자 등급
-    expiry_date: '' // 빈 값
+    challenge: authFormData.challenge || 'Fitness',
+    grade: '2',
+    expiry_date: ''
   };
   
   console.log('Creating user from auth form:', userData);
   return apiCreateUser(userData);
 }
 
-// 2. 전화번호 포맷 통합 함수 (기존 formatPhoneForDB 함수 활용)
-function standardizePhoneFormat(phoneNumber) {
-  // 인증 화면과 프로필 화면 간 전화번호 포맷 통일
-  return formatPhoneForDB(phoneNumber);
+function onUserRegistrationSuccess(userData, source = 'auth') {
+  console.log(`User registered successfully from ${source}:`, userData);
+  
+  adoptCreatedUserAsViewer(userData).then(ok => {
+    if (!ok) console.warn('방금 생성한 사용자를 찾지 못해 뷰어 채택에 실패');
+    if (typeof loadUsers === 'function') loadUsers();
+  });
+  
+  if (typeof showUserWelcomeModal === 'function') {
+    showUserWelcomeModal(userData.name);
+    window.userWelcomeModalShown = true;
+    window.userWelcomeModalUserName = userData.name;
+  } else if (typeof showToast === 'function') {
+    showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
+  }
+  return true;
 }
 
-// 3. 사용자 등록 후 콜백 함수
-   
-   function onUserRegistrationSuccess(userData, source = 'auth') {
-     console.log(`User registered successfully from ${source}:`, userData);
-   
-     // 방금 생성한 사용자를 현재 뷰어로 채택
-     adoptCreatedUserAsViewer(userData).then(ok => {
-       if (!ok) console.warn('방금 생성한 사용자를 찾지 못해 뷰어 채택에 실패');
-       // 프로필 화면에서 다시 볼 때를 대비해 목록도 새로고침
-       if (typeof loadUsers === 'function') loadUsers();
-     });
-   
-     // 환영 오버레이 표시 (전역 플래그 설정)
-     if (typeof showUserWelcomeModal === 'function') {
-       showUserWelcomeModal(userData.name);
-       // 모달이 표시되었음을 전역 플래그로 표시
-       window.userWelcomeModalShown = true;
-       window.userWelcomeModalUserName = userData.name;
-     } else if (typeof showToast === 'function') {
-       showToast(`${userData.name}님 등록이 완료되었습니다! 🎉`);
-     }
-     return true;
-   }
-
-
-
-// 4. 사용자 등록 오류 처리 함수
 function onUserRegistrationError(error, source = 'auth') {
   console.error(`User registration failed from ${source}:`, error);
   
@@ -122,23 +433,18 @@ function onUserRegistrationError(error, source = 'auth') {
   return false;
 }
 
-// 5. 통합 사용자 생성 함수 (추천)
-// 통합 사용자 생성 (중복 방지 포함)
 async function unifiedCreateUser(userData, source = 'profile') {
   try {
-    // 1) 필수값 검사
     if (!userData.name || !userData.ftp || !userData.weight) {
       throw new Error('필수 필드가 누락되었습니다');
     }
 
-    // 2) 전화번호 포맷 표준화
     const inputContact = String(userData.contact || '');
-    const normalizedContact = standardizePhoneFormat(inputContact); // "010-1234-5678"
-    const onlyDigits = unformatPhone(normalizedContact);           // "01012345678"
+    const normalizedContact = standardizePhoneFormat(inputContact);
+    const onlyDigits = unformatPhone(normalizedContact);
     userData.contact = normalizedContact;
 
-    // 3) DB 사용자 목록 조회 → 전화번호(숫자만)로 중복 검사
-    const listRes = await apiGetUsers(); // { success, items: [...] }
+    const listRes = await apiGetUsers();
     const users = (listRes && (listRes.items || listRes.users || listRes.data)) || [];
     const isDuplicated = users.some(u => {
       const uDigits = unformatPhone(u?.contact || '');
@@ -146,18 +452,15 @@ async function unifiedCreateUser(userData, source = 'profile') {
     });
 
     if (isDuplicated) {
-      // ✅ 요구문구: "이미 등록된 사용자입니다."
       throw new Error('✅ 이미 등록된 사용자입니다.');
     }
 
-    // 4) 만기일 기본값(오늘+3개월) 자동 세팅
     if (!userData.expiry_date) {
       const d = new Date();
-      d.setMonth(d.getMonth() + 3); // 3개월 후로 설정
+      d.setMonth(d.getMonth() + 3);
       userData.expiry_date = d.toISOString().slice(0, 10);
     }
 
-    // 5) 실제 생성 (JSONP API)
     const result = await apiCreateUser({
       ...userData,
       grade: userData.grade || '2'
@@ -176,28 +479,25 @@ async function unifiedCreateUser(userData, source = 'profile') {
   }
 }
 
-
-
-// 6. 기존 saveUser 함수와의 호환성 유지
 function saveUserFromAuth(formData) {
-  // 인증 화면에서 호출되는 사용자 저장 함수
   return unifiedCreateUser({
     name: formData.name,
     contact: formData.contact,
     ftp: formData.ftp,
     weight: formData.weight,
     grade: '2',
-   // expiry_date는 비워두면 unifiedCreateUser에서 오늘+3개월 자동 설정
     expiry_date: ''
   }, 'auth');
 }
 
-// 7. 전역 함수로 내보내기 (window 객체에 추가)
+// 전역 함수로 내보내기
 if (typeof window !== 'undefined') {
   window.createUserFromAuth = createUserFromAuth;
   window.unifiedCreateUser = unifiedCreateUser;
   window.saveUserFromAuth = saveUserFromAuth;
   window.standardizePhoneFormat = standardizePhoneFormat;
+  window.signInWithGoogle = signInWithGoogle;
+  window.signOut = signOut;
 }
 
 /**
@@ -209,20 +509,17 @@ function showUserWelcomeModal(userName) {
   
   if (!modal || !messageEl) {
     console.warn('[User Welcome] 환영 오버레이 요소를 찾을 수 없습니다.', { modal: !!modal, messageEl: !!messageEl });
-    // 오버레이가 없으면 토스트 메시지로 대체
     if (typeof showToast === 'function') {
       showToast(`${userName}님 등록이 완료되었습니다! 🎉`);
     }
     return;
   }
   
-  // 이벤트 제목 설정
   const eventTitleEl = document.getElementById('user-welcome-event-title');
   if (eventTitleEl) {
     eventTitleEl.innerHTML = '백만킬로아카데미 회원대상 특별 이벤트(한시적)';
   }
   
-  // 환영 메시지 생성
   const message = `
     <div style="margin-bottom: 12px; font-size: 1.05em; line-height: 1.8;">
       <strong>${userName}</strong>님, STELVIO AI의 멤버가 되신 것을 축하합니다!
@@ -240,25 +537,20 @@ function showUserWelcomeModal(userName) {
   
   messageEl.innerHTML = message;
   
-  // 모달을 body의 직접 자식으로 이동 (다른 컨테이너에 가려지지 않도록)
   if (modal.parentElement !== document.body) {
     document.body.appendChild(modal);
     console.log('[User Welcome] 모달을 body로 이동 완료');
   }
   
-  // 모든 다른 화면의 z-index를 낮춤 (모달이 최상위에 표시되도록)
   document.querySelectorAll('.screen').forEach(screen => {
     screen.style.setProperty('z-index', '1000', 'important');
   });
   
-  // 오버레이 표시 (강제로 표시)
   modal.classList.remove('hidden');
   
-  // 즉시 표시를 위해 requestAnimationFrame 사용
   requestAnimationFrame(() => {
-    // display와 z-index를 강제로 설정하여 다른 화면 위에 표시
     modal.style.setProperty('display', 'flex', 'important');
-    modal.style.setProperty('z-index', '99999', 'important'); // 매우 높은 z-index
+    modal.style.setProperty('z-index', '99999', 'important');
     modal.style.setProperty('position', 'fixed', 'important');
     modal.style.setProperty('top', '0', 'important');
     modal.style.setProperty('left', '0', 'important');
@@ -269,7 +561,6 @@ function showUserWelcomeModal(userName) {
     modal.style.setProperty('opacity', '1', 'important');
     modal.style.setProperty('pointer-events', 'auto', 'important');
     
-    // 다른 모든 요소의 z-index를 확인하고 낮춤
     document.querySelectorAll('*').forEach(el => {
       if (el === modal || el === modal.querySelector('.welcome-content')) return;
       const zIndex = window.getComputedStyle(el).zIndex;
@@ -278,11 +569,9 @@ function showUserWelcomeModal(userName) {
       }
     });
     
-    // 전역 플래그 설정 (모달이 표시되었음을 표시)
     window.userWelcomeModalShown = true;
     window.userWelcomeModalUserName = userName;
     
-    // 모달이 실제로 보이는지 확인 (약간의 지연 후)
     setTimeout(() => {
       const rect = modal.getBoundingClientRect();
       const computedStyle = window.getComputedStyle(modal);
@@ -307,7 +596,6 @@ function showUserWelcomeModal(userName) {
       
       if (!isVisible) {
         console.error('[User Welcome] ⚠️ 모달이 표시되지 않습니다! 강제로 다시 표시 시도');
-        // 강제로 다시 표시
         modal.style.setProperty('display', 'flex', 'important');
         modal.style.setProperty('z-index', '99999', 'important');
         modal.style.setProperty('visibility', 'visible', 'important');
@@ -322,229 +610,29 @@ function showUserWelcomeModal(userName) {
   });
 }
 
-/**
- * 사용자 등록 환영 오버레이 닫기
- */
 function closeUserWelcomeModal() {
   const modal = document.getElementById('userWelcomeModal');
   if (modal) {
     modal.classList.add('hidden');
     modal.style.display = 'none';
-    // 전역 플래그 해제
     window.userWelcomeModalShown = false;
     window.userWelcomeModalUserName = null;
     console.log('[User Welcome] 환영 오버레이 닫기 완료');
   }
 }
 
-// 전역 함수로 등록
 if (typeof window !== 'undefined') {
   window.showUserWelcomeModal = showUserWelcomeModal;
   window.closeUserWelcomeModal = closeUserWelcomeModal;
 }
 
-/*
-사용 방법:
-1. 인증 화면에서 새 사용자 등록 시:
-   - handleNewUserSubmit에서 unifiedCreateUser 호출
-   
-2. 프로필 화면에서 사용자 추가 시:
-   - 기존 saveUser 함수에서 unifiedCreateUser 호출
-   
-3. 전화번호 포맷 통일:
-   - standardizePhoneFormat 함수 사용
-*/
+// ========== 사용자 목록 로드 및 렌더링 ==========
 
-
-
-// 삼성 안드로이드폰 감지 함수
-function isSamsungAndroid() {
-  const ua = navigator.userAgent || '';
-  return /Android/i.test(ua) && /Samsung/i.test(ua) && !/Tablet/i.test(ua);
-}
-
-// JSONP 방식 API 호출 헬퍼 함수
-// JSONP 방식 API 호출 헬퍼 함수 - 한글 처리 개선 + 삼성 안드로이드폰 대응
-function jsonpRequest(url, params = {}) {
-  return new Promise((resolve, reject) => {
-    // URL이 HTTPS인지 확인 (Mixed Content 방지)
-    if (url && !url.startsWith('https://') && !url.startsWith('http://localhost')) {
-      console.error('❌ Mixed Content 차단: HTTPS 사이트에서 HTTP API 호출 불가');
-      reject(new Error('Mixed Content: HTTPS 사이트에서는 HTTPS API만 사용 가능합니다.'));
-      return;
-    }
-    
-    // URL이 상대 경로인 경우 현재 프로토콜 사용
-    let finalBaseUrl = url;
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      finalBaseUrl = window.location.protocol + '//' + window.location.host + (url.startsWith('/') ? '' : '/') + url;
-    }
-    
-    const callbackName = 'jsonp_callback_' + Date.now() + '_' + Math.round(Math.random() * 10000);
-    const script = document.createElement('script');
-    let isResolved = false;
-    let timeoutId = null;
-    
-    // 삼성 안드로이드폰에서는 타임아웃을 더 길게 설정
-    const timeoutDuration = isSamsungAndroid() ? 15000 : 10000;
-    
-    window[callbackName] = function(data) {
-      if (isResolved) return;
-      isResolved = true;
-      
-      console.log('JSONP response received:', data);
-      delete window[callbackName];
-      
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-      resolve(data);
-    };
-    
-    script.onerror = function(error) {
-      if (isResolved) return;
-      isResolved = true;
-      
-      console.error('JSONP script loading failed:', error);
-      console.error('Request URL:', finalBaseUrl);
-      
-      // 삼성 안드로이드폰에서의 특별한 에러 메시지
-      if (isSamsungAndroid()) {
-        console.warn('⚠️ 삼성 안드로이드폰에서 JSONP 요청 실패 - Mixed Content 또는 보안 정책 차단 가능');
-      }
-      
-      delete window[callbackName];
-      
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-      
-      // 삼성 안드로이드폰에서의 더 구체적인 에러 메시지
-      const errorMessage = isSamsungAndroid() 
-        ? '네트워크 요청이 차단되었습니다. 삼성 인터넷 브라우저의 보안 설정을 확인하거나 다른 브라우저(Chrome)를 사용해보세요.'
-        : 'JSONP request failed';
-      
-      reject(new Error(errorMessage));
-    };
-    
-    // URL 파라미터 구성 - encodeURIComponent 사용으로 개선
-    const urlParams = new URLSearchParams();
-    Object.keys(params).forEach(key => {
-      let value = params[key].toString();
-      
-      // 기존의 수동 유니코드 이스케이프 제거하고 자동 인코딩 사용
-      urlParams.set(key, value); // URLSearchParams가 자동으로 encodeURIComponent 적용
-    });
-    urlParams.set('callback', callbackName);
-    
-    const finalUrl = `${finalBaseUrl}?${urlParams.toString()}`;
-    console.log('JSONP request URL:', finalUrl);
-    
-    // 삼성 안드로이드폰에서의 추가 로깅
-    if (isSamsungAndroid()) {
-      console.log('📱 삼성 안드로이드폰 감지 - 타임아웃:', timeoutDuration + 'ms');
-    }
-    
-    script.src = finalUrl;
-    script.async = true;
-    script.defer = false;
-    
-    // 스크립트 로드 전에 타임아웃 설정
-    timeoutId = setTimeout(() => {
-      if (window[callbackName] && !isResolved) {
-        isResolved = true;
-        console.warn('JSONP request timeout');
-        delete window[callbackName];
-        if (document.body.contains(script)) {
-          document.body.removeChild(script);
-        }
-        reject(new Error('JSONP request timeout'));
-      }
-    }, timeoutDuration);
-    
-    // 스크립트를 body에 추가
-    document.body.appendChild(script);
-  });
-}
-
-
-// 사용자 API 함수들 (JSONP 방식)
-async function apiGetUsers() {
-  return jsonpRequest(GAS_URL, { action: 'listUsers' });
-}
-
-async function apiGetUser(id) {
-  return jsonpRequest(GAS_URL, { action: 'getUser', id: id });
-}
-
-async function apiCreateUser(userData) {
-  console.log('apiCreateUser called with:', userData);
-  const params = {
-    action: 'createUser',
-    name: userData.name || '',
-    contact: userData.contact || '',
-    ftp: (userData.ftp || 0).toString(),
-    weight: (userData.weight || 0).toString(),
-
-    // ▼ 신규 필드 (요청 사양)
-    grade: (userData.grade ?? '2').toString(),      // 가입시 기본값 "2"
-    expiry_date: userData.expiry_date ?? '',         // 기본값 공백 저장
-    challenge: (userData.challenge ?? 'Fitness').toString()  // 운동 목적 기본값 "Fitness"
-  };
-  console.log('Sending params:', params);
-  return jsonpRequest(GAS_URL, params);
-}
-
-
-async function apiUpdateUser(id, userData) {
-  const params = {
-    action: 'updateUser',
-    id: id,
-    name: userData.name,
-    contact: userData.contact || '',
-    ftp: userData.ftp,
-    weight: userData.weight
-  };
-
-  // ▼ 관리자일 때만 들어오는 선택 필드(있을 때만 전송)
-  if (userData.grade != null)       params.grade = String(userData.grade);
-  if (userData.expiry_date != null) params.expiry_date = String(userData.expiry_date);
-  // ▼ 운동 목적 필드 (항상 전송)
-  if (userData.challenge != null)   params.challenge = String(userData.challenge);
-
-  return jsonpRequest(GAS_URL, params);
-}
-
-
-async function apiDeleteUser(id) {
-  return jsonpRequest(GAS_URL, { action: 'deleteUser', id: id });
-}
-
-
-
-/**
- * 사용자 목록 로드 및 렌더링 (개선된 버전)
- */
-/**
- * 사용자 목록 로드 및 렌더링 (개선된 버전)
- */
-// ===== 사용자 목록 로드 및 렌더링 (모듈 교체 버전) =====
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) return;
 
   try {
-    // 1) 로딩 UI
     userList.innerHTML = `
       <div class="loading-container">
         <div class="dots-loader"><div></div><div></div><div></div></div>
@@ -552,7 +640,6 @@ async function loadUsers() {
       </div>
     `;
 
-    // 2) 데이터 가져오기
     const result = await apiGetUsers();
     if (!result || !result.success) {
       userList.innerHTML = `
@@ -568,7 +655,6 @@ async function loadUsers() {
 
     const users = Array.isArray(result.items) ? result.items : [];
 
-    // 3) 빈 상태
     if (users.length === 0) {
       userList.innerHTML = `
         <div class="empty-state">
@@ -586,7 +672,6 @@ async function loadUsers() {
       return;
     }
 
-    // 4) 뷰어(현재 사용자) 파악 및 등급/아이디
     let viewer = null, authUser = null;
     try { viewer   = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(_) {}
     try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(_) {}
@@ -600,24 +685,18 @@ async function loadUsers() {
           : String(mergedViewer?.grade ?? '2'));
     const viewerId     = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
 
-    // 5) grade=2 는 "본인만" 보이게, grade=1,3 은 전체
     let visibleUsers = users;
     if (viewerGrade === '2' && viewerId) {
       visibleUsers = users.filter(u => String(u.id) === viewerId);
     }
 
-    // 6) 이름 정렬
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    // 7) 카드 단위 편집 권한: 관리자(grade=1), 부관리자(grade=3), 또는 본인
-    // grade=3 부관리자는 다른 사용자도 수정 가능 (단, grade와 expiry_date는 수정 불가)
     const canEditFor = (u) => (viewerGrade === '1' || viewerGrade === '3') || (viewerId && String(u.id) === viewerId);
 
-    // 8) 렌더링
     userList.innerHTML = visibleUsers.map(user => {
       const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
 
-      // 만료일 표시(임박/만료 배지)
       const expRaw = user.expiry_date;
       let expiryText = '미설정';
       let expiryClass = '';
@@ -645,22 +724,19 @@ async function loadUsers() {
           expiryText += ` (D-${diffDays})`;
           shouldShowWarning = true;
         } else if (diffDays <= 10) {
-          // 종료일 -10일 전부터 경고 표시
           shouldShowWarning = true;
         }
       }
 
       const canEdit = canEditFor(user);
       
-      // grade=2,3 사용자의 삭제 버튼 비활성화
       const userGrade = String(user.grade || '2');
       const canDelete = canEdit && (userGrade !== '2' && userGrade !== '3');
       const deleteButtonDisabled = canEdit && !canDelete ? 'disabled' : '';
       const deleteButtonClass = canEdit && !canDelete ? 'disabled' : '';
 
-      // 훈련 목표에 따른 이미지 선택
       const challenge = String(user.challenge || 'Fitness').trim();
-      let challengeImage = 'yellow.png'; // 기본값: Fitness
+      let challengeImage = 'yellow.png';
       if (challenge === 'GranFondo') {
         challengeImage = 'green.png';
       } else if (challenge === 'Racing') {
@@ -698,19 +774,14 @@ async function loadUsers() {
       `;
     }).join('');
 
-    // 9) 만료일 경고 모달 표시 (종료일 -10일 전부터)
-    // 프로필 화면에서만 표시 (한 번만 표시)
     const profileScreen = document.getElementById('profileScreen');
     const isProfileScreenActive = profileScreen && profileScreen.classList.contains('active');
     
-    // 프로필 화면이 활성화되어 있고, 모달이 이미 열려있지 않을 때만 표시
     if (isProfileScreenActive) {
-      // 모달이 이미 열려있는지 확인
       const expiryModal = document.getElementById('expiryWarningModal');
       const isModalAlreadyOpen = expiryModal && expiryModal.style.display !== 'none' && expiryModal.style.display !== '';
       
       if (!isModalAlreadyOpen) {
-        // 사용자별로 이미 표시했는지 확인 (사용자 ID + 만료일 조합)
         const firstExpiringUser = visibleUsers.find(user => {
           const expRaw = user.expiry_date;
           if (expRaw) {
@@ -721,9 +792,7 @@ async function loadUsers() {
             const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
             
             const userGrade = String(user.grade || '2');
-            // 종료일 -10일 전부터 경고 표시
             if (userGrade === '2' && diffDays <= 10 && diffDays >= 0) {
-              // 이 사용자의 팝업이 이미 표시되었는지 확인
               const warningKey = `expiryWarningShown_${user.id}_${expRaw}`;
               const alreadyShown = sessionStorage.getItem(warningKey);
               return !alreadyShown;
@@ -734,11 +803,9 @@ async function loadUsers() {
         
         if (firstExpiringUser) {
           const warningKey = `expiryWarningShown_${firstExpiringUser.id}_${firstExpiringUser.expiry_date}`;
-          // 즉시 표시 여부를 저장하여 중복 방지
           sessionStorage.setItem(warningKey, 'true');
           
           setTimeout(() => {
-            // 다시 한 번 모달이 열려있지 않은지 확인
             const modal = document.getElementById('expiryWarningModal');
             if (modal && (modal.style.display === 'none' || modal.style.display === '')) {
               showExpiryWarningModal(firstExpiringUser.expiry_date);
@@ -748,7 +815,6 @@ async function loadUsers() {
       }
     }
 
-    // 10) 전역 상태/토스트
     window.users = users;
     window.userProfiles = users;
     if (typeof showToast === 'function') {
@@ -769,26 +835,14 @@ async function loadUsers() {
   }
 }
 
-
-
-
-
-
-/**
- * 사용자 선택
- */
 async function selectUser(userId) {
-  // 사용자 카드 찾기
   const userCard = document.querySelector(`.user-card[data-user-id="${userId}"]`);
   
   if (userCard) {
-    // 로딩 상태 표시
     userCard.style.opacity = '0.6';
     userCard.style.pointerEvents = 'none';
   }
   
-  // ... 나머지 코드는 동일
-
   try {
     const result = await apiGetUser(userId);
     
@@ -799,7 +853,6 @@ async function selectUser(userId) {
 
     const user = result.item;
     
-    // grade=2이고 만료일 체크
     const userGrade = String(user.grade || '2');
     if (userGrade === '2' && user.expiry_date) {
       const expiryDate = new Date(user.expiry_date);
@@ -809,7 +862,6 @@ async function selectUser(userId) {
       const diffDays = Math.round((expiryDate - today) / (24*60*60*1000));
       
       if (diffDays < 0) {
-        // 만료일이 지난 경우 선택 불가
         showToast('사용기간이 만료되어 선택할 수 없습니다.');
         if (userCard) {
           userCard.style.opacity = '1';
@@ -817,26 +869,19 @@ async function selectUser(userId) {
         }
         return;
       }
-      
-      // selectUser에서는 팝업을 표시하지 않음 (프로필 화면에서만 표시)
     }
     
-    // 전역 상태에 현재 사용자 설정
-      // 기존 뷰어(등급 등 보존용) 가져오기
-      let prevViewer = null;
-      try {
-        prevViewer = (window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
-      } catch (e) { prevViewer = null; }
-      
-      // API가 grade를 안 주는 경우, 이전 등급을 보존
-      if (prevViewer && prevViewer.grade != null && (user.grade == null)) {
-        user.grade = String(prevViewer.grade);
-      }
-      
-      // 전역 상태에 현재 사용자 설정
-      window.currentUser = user;
+    let prevViewer = null;
+    try {
+      prevViewer = (window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    } catch (e) { prevViewer = null; }
     
-    // 로컬 스토리지에 저장
+    if (prevViewer && prevViewer.grade != null && (user.grade == null)) {
+      user.grade = String(prevViewer.grade);
+    }
+    
+    window.currentUser = user;
+    
     try {
       localStorage.setItem('currentUser', JSON.stringify(user));
     } catch (e) {
@@ -845,13 +890,13 @@ async function selectUser(userId) {
 
     showToast(`${user.name}님이 선택되었습니다.`);
     
-    // RPE 컨디션 선택 모달 표시
-    showRPEModal();
+    if (typeof showRPEModal === 'function') {
+      showRPEModal();
+    }
     
   } catch (error) {
     console.error('사용자 선택 실패:', error);
     showToast('사용자 선택 중 오류가 발생했습니다.');
-    // 카드 상태 복원
     if (userCard) {
       userCard.style.opacity = '1';
       userCard.style.pointerEvents = 'auto';
@@ -859,86 +904,6 @@ async function selectUser(userId) {
   }
 }
 
-
-
-
-/**------------------------------------
- * 새 사용자 추가 폼 표시
- -------------------------------------*/
-function showAddUserForm() {
-  const cardAddUser = document.getElementById('cardAddUser');
-  const addUserForm = document.getElementById('addUserForm');
-  
-  if (cardAddUser) cardAddUser.classList.add('hidden');
-  if (addUserForm) addUserForm.classList.remove('hidden');
-  
-  // 폼 초기화
-  document.getElementById('userName').value = '';
-  document.getElementById('userContact').value = '';
-  document.getElementById('userFTP').value = '';
-  document.getElementById('userWeight').value = '';
-}
-
-/**
- * 사용자 추가 폼 숨기기
- */
-function hideAddUserForm() {
-  const cardAddUser = document.getElementById('cardAddUser');
-  const addUserForm = document.getElementById('addUserForm');
-  
-  if (addUserForm) addUserForm.classList.add('hidden');
-  if (cardAddUser) cardAddUser.classList.remove('hidden');
-}
-
-/**
- * 새 사용자 저장 - 수정 모드일 때 실행 방지
- */
-async function saveUser() {
-  // 수정 모드일 때는 실행하지 않음
-  if (isEditMode) {
-    console.log('Edit mode active - saveUser blocked');
-    return;
-  }
-
-  const name = document.getElementById('userName').value.trim();
-  const contactRaw = document.getElementById('userContact').value.trim();
-  const contactDB  = formatPhoneForDB(contactRaw);
-  const ftp = parseInt(document.getElementById('userFTP').value);
-  const weight = parseFloat(document.getElementById('userWeight').value);
-  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
-
-  // 유효성 검사
-  if (!name) { showToast('이름을 입력해주세요.'); return; }
-  if (!ftp || ftp < 50 || ftp > 600) { showToast('올바른 FTP 값을 입력해주세요. (50-600W)'); return; }
-  if (!weight || weight < 30 || weight > 200) { showToast('올바른 체중을 입력해주세요. (30-200kg)'); return; }
-
-  try {
-    const userData = { name, contact: contactDB, ftp, weight, challenge }; // ← challenge 추가
-   // 5) 실제 생성 (재귀 금지: API 직접 호출)
-      const payload = {
-        ...userData,
-        grade: userData.grade || '2',
-        // expiry_date는 아래 기본값 로직(오늘 + 3개월)으로 세팅됨
-      };
-      const result = await apiCreateUser(payload);
-
-    if (result.success) {
-      showToast(`${name}님이 추가되었습니다.`);
-      hideAddUserForm();
-      loadUsers();
-    } else {
-      showToast('사용자 추가 실패: ' + result.error);
-    }
-  } catch (error) {
-    console.error('사용자 저장 실패:', error);
-    showToast('사용자 저장 중 오류가 발생했습니다.');
-  }
-}
-
-
-/**
- * 새 사용자 추가 폼 표시 - 초기화 옵션 추가
- */
 function showAddUserForm(clearForm = true) {
   const cardAddUser = document.getElementById('cardAddUser');
   const addUserForm = document.getElementById('addUserForm');
@@ -946,7 +911,6 @@ function showAddUserForm(clearForm = true) {
   if (cardAddUser) cardAddUser.classList.add('hidden');
   if (addUserForm) addUserForm.classList.remove('hidden');
   
-  // clearForm이 true일 때만 폼 초기화 (기본값은 true로 기존 동작 유지)
   if (clearForm) {
     const nameEl = document.getElementById('userName');
     const contactEl = document.getElementById('userContact');
@@ -962,11 +926,67 @@ function showAddUserForm(clearForm = true) {
   }
 }
 
+function hideAddUserForm() {
+  const cardAddUser = document.getElementById('cardAddUser');
+  const addUserForm = document.getElementById('addUserForm');
+  
+  if (addUserForm) addUserForm.classList.add('hidden');
+  if (cardAddUser) cardAddUser.classList.remove('hidden');
+  
+  const saveBtn = document.getElementById('btnSaveUser');
+  if (saveBtn) {
+    saveBtn.textContent = '저장';
+    saveBtn.onclick = null;
+    saveBtn.onclick = saveUser;
+  }
+  
+  const formTitle = document.querySelector('#addUserForm h3');
+  if (formTitle) {
+    formTitle.textContent = '새 사용자 등록';
+  }
+  
+  isEditMode = false;
+  currentEditUserId = null;
+}
 
+async function saveUser() {
+  if (isEditMode) {
+    console.log('Edit mode active - saveUser blocked');
+    return;
+  }
 
-/**
- * 사용자 수정
- */
+  const name = document.getElementById('userName').value.trim();
+  const contactRaw = document.getElementById('userContact').value.trim();
+  const contactDB  = formatPhoneForDB(contactRaw);
+  const ftp = parseInt(document.getElementById('userFTP').value);
+  const weight = parseFloat(document.getElementById('userWeight').value);
+  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
+
+  if (!name) { showToast('이름을 입력해주세요.'); return; }
+  if (!ftp || ftp < 50 || ftp > 600) { showToast('올바른 FTP 값을 입력해주세요. (50-600W)'); return; }
+  if (!weight || weight < 30 || weight > 200) { showToast('올바른 체중을 입력해주세요. (30-200kg)'); return; }
+
+  try {
+    const userData = { name, contact: contactDB, ftp, weight, challenge };
+    const payload = {
+      ...userData,
+      grade: userData.grade || '2',
+    };
+    const result = await apiCreateUser(payload);
+
+    if (result.success) {
+      showToast(`${name}님이 추가되었습니다.`);
+      hideAddUserForm();
+      loadUsers();
+    } else {
+      showToast('사용자 추가 실패: ' + result.error);
+    }
+  } catch (error) {
+    console.error('사용자 저장 실패:', error);
+    showToast('사용자 저장 중 오류가 발생했습니다.');
+  }
+}
+
 async function editUser(userId) {
   try {
     const result = await apiGetUser(userId);
@@ -978,16 +998,12 @@ async function editUser(userId) {
 
     const user = result.item;
     
-    // 수정 모드 활성화
     isEditMode = true;
     currentEditUserId = userId;
     console.log('Edit mode activated for user:', userId);
     
-    // 폼 표시 (초기화하지 않음)
     showAddUserForm(false);
     
-    // 폼이 완전히 렌더링될 때까지 대기 후 데이터 채우기
-    // 요소가 존재할 때까지 재시도하는 함수
     const fillFormData = (retries = 10) => {
       const nameEl = document.getElementById('userName');
       const contactEl = document.getElementById('userContact');
@@ -995,20 +1011,16 @@ async function editUser(userId) {
       const weightEl = document.getElementById('userWeight');
       const challengeSelect = document.getElementById('userChallenge');
       
-      // 모든 필수 요소가 존재하는지 확인
       if (nameEl && contactEl && ftpEl && weightEl && challengeSelect) {
-        // 수정 폼에 기존 데이터 채우기
         nameEl.value = user.name || '';
         contactEl.value = unformatPhone(user.contact || '');
         ftpEl.value = user.ftp || '';
         weightEl.value = user.weight || '';
         challengeSelect.value = user.challenge || 'Fitness';
       } else if (retries > 0) {
-        // 요소가 아직 준비되지 않았으면 재시도
         setTimeout(() => fillFormData(retries - 1), 50);
       } else {
         console.warn('폼 요소를 찾을 수 없습니다. 일부 필드가 채워지지 않았을 수 있습니다.');
-        // 최소한 존재하는 요소만 채우기
         if (nameEl) nameEl.value = user.name || '';
         if (contactEl) contactEl.value = unformatPhone(user.contact || '');
         if (ftpEl) ftpEl.value = user.ftp || '';
@@ -1017,15 +1029,12 @@ async function editUser(userId) {
       }
     };
     
-    // 초기 시도
     setTimeout(() => fillFormData(), 100);
    
-   // ▼ 관리자(grade=1)일 때만 추가 필드 표시
    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
    const isAdmin = (viewerGrade === '1');
    const form = document.getElementById('addUserForm');
    
-   // 기존 adminFields 제거(중복 방지)
    const prev = document.getElementById('adminFields');
    if (prev) prev.remove();
    
@@ -1046,12 +1055,10 @@ async function editUser(userId) {
          <input id="editExpiryDate" type="date" value="${(user.expiry_date || '').substring(0,10)}">
        </div>
      `;
-     // 폼 내 버튼 영역 앞에 삽입
      const actions = form.querySelector('.form-actions') || form.lastElementChild;
      form.insertBefore(adminWrap, actions);
    }
 
-// 저장 버튼 교체 유지
 const saveBtn = document.getElementById('btnSaveUser');
 if (saveBtn) {
   saveBtn.textContent = '수정';
@@ -1060,8 +1067,6 @@ if (saveBtn) {
   saveBtn.onclick = () => performUpdate();
 }
 
-    
-    // 폼 제목도 변경
     const formTitle = document.querySelector('#addUserForm h3');
     if (formTitle) {
       formTitle.textContent = '사용자 정보 수정';
@@ -1073,82 +1078,6 @@ if (saveBtn) {
   }
 }
 
-/**
- * 사용자 추가 폼 숨기기 - 모드 리셋 포함
- */
-function hideAddUserForm() {
-  const cardAddUser = document.getElementById('cardAddUser');
-  const addUserForm = document.getElementById('addUserForm');
-  
-  if (addUserForm) addUserForm.classList.add('hidden');
-  if (cardAddUser) cardAddUser.classList.remove('hidden');
-  
-  // 저장 버튼을 다시 생성 모드로 되돌리기
-  const saveBtn = document.getElementById('btnSaveUser');
-  if (saveBtn) {
-    saveBtn.textContent = '저장';
-    saveBtn.onclick = null;
-    saveBtn.onclick = saveUser; // 다시 saveUser로 바인딩
-  }
-  
-  // 폼 제목도 원상 복구
-  const formTitle = document.querySelector('#addUserForm h3');
-  if (formTitle) {
-    formTitle.textContent = '새 사용자 등록';
-  }
-  
-  // 모드 리셋
-  isEditMode = false;
-  currentEditUserId = null;
-}
-
-
-
-/**
- * 사용자 정보 업데이트
- */
-async function updateUser(userId) {
-  const name = document.getElementById('userName').value.trim();
-  const contactRaw = document.getElementById('userContact').value.trim();
-  const contactDB  = formatPhoneForDB(contactRaw);
-  const ftp = parseInt(document.getElementById('userFTP').value);
-  const weight = parseFloat(document.getElementById('userWeight').value);
-  const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
-
-  // 유효성 검사
-  if (!name || !ftp || !weight) {
-    showToast('모든 필수 필드를 입력해주세요.');
-    return;
-  }
-
-  try {
-    const userData = { name, contact: contactDB, ftp, weight, challenge }; // ← challenge 추가
-    const result = await apiUpdateUser(userId, userData);
-
-    if (result.success) {
-      showToast('사용자 정보가 수정되었습니다.');
-      hideAddUserForm();
-      loadUsers();
-
-      const saveBtn = document.getElementById('btnSaveUser');
-      if (saveBtn) {
-        saveBtn.textContent = '저장';
-        saveBtn.onclick = saveUser;
-      }
-    } else {
-      showToast('사용자 수정 실패: ' + result.error);
-    }
-  } catch (error) {
-    console.error('사용자 업데이트 실패:', error);
-    showToast('사용자 수정 중 오류가 발생했습니다.');
-  }
-}
-
-
-
-/**
- * 실제 업데이트 실행 함수
- */
 async function performUpdate() {
   if (!isEditMode || !currentEditUserId) {
     console.error('Invalid edit mode state');
@@ -1156,13 +1085,12 @@ async function performUpdate() {
   }
 
   const name = document.getElementById('userName').value.trim();
-  const contactRaw = document.getElementById('userContact').value.trim();   // ← 추가
-  const contactDB  = formatPhoneForDB(contactRaw);                          // ← 추가
+  const contactRaw = document.getElementById('userContact').value.trim();
+  const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
   const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
 
-  // 유효성 검사
   if (!name || !ftp || !weight) {
     showToast('모든 필수 필드를 입력해주세요.');
     return;
@@ -1171,14 +1099,12 @@ async function performUpdate() {
   try {
     const userData = {
       name,
-      contact: contactDB, // ← contactDB 사용
+      contact: contactDB,
       ftp,
       challenge,
       weight
     };
 
-    // grade=1 관리자만 grade와 expiry_date 수정 가능
-    // grade=3 부관리자는 grade와 expiry_date 수정 불가
     const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
     if (viewerGrade === '1') {
       const gradeEl = document.getElementById('editGrade');
@@ -1186,7 +1112,6 @@ async function performUpdate() {
       if (gradeEl)  userData.grade = String(gradeEl.value || '2');
       if (expiryEl) userData.expiry_date = String(expiryEl.value || '');
     }
-    // grade=3일 때는 grade와 expiry_date를 userData에 포함하지 않음 (수정 불가)
 
     const result = await apiUpdateUser(currentEditUserId, userData);
 
@@ -1204,10 +1129,6 @@ async function performUpdate() {
   }
 }
 
-
-/**
- * 폼 모드 리셋
- */
 function resetFormMode() {
   isEditMode = false;
   currentEditUserId = null;
@@ -1215,12 +1136,6 @@ function resetFormMode() {
   console.log('Form mode reset to add mode');
 }
 
-
-
-
-/**
- * 사용자 삭제
- */
 async function deleteUser(userId) {
   if (!confirm('정말로 이 사용자를 삭제하시겠습니까?\n삭제된 사용자의 훈련 기록도 함께 삭제됩니다.')) {
     return;
@@ -1231,7 +1146,7 @@ async function deleteUser(userId) {
     
     if (result.success) {
       showToast('사용자가 삭제되었습니다.');
-      loadUsers(); // 목록 새로고침
+      loadUsers();
     } else {
       showToast('사용자 삭제 실패: ' + result.error);
     }
@@ -1242,52 +1157,58 @@ async function deleteUser(userId) {
   }
 }
 
-/**
- * 초기화 및 이벤트 바인딩
- */
-document.addEventListener('DOMContentLoaded', () => {
-  const cardAddUser = document.getElementById('cardAddUser');
-  if (cardAddUser) {
-    cardAddUser.addEventListener('click', showAddUserForm);
-  }
-  
-  const btnCancel = document.getElementById('btnCancelAddUser');
-  if (btnCancel) {
-    btnCancel.addEventListener('click', hideAddUserForm);
-  }
-  
-  const btnSave = document.getElementById('btnSaveUser');
-  if (btnSave) {
-    btnSave.addEventListener('click', saveUser);
-  }
+async function adoptCreatedUserAsViewer(createdInput) {
+  try {
+    if (typeof apiGetUsers !== 'function') {
+      console.warn('adoptCreatedUserAsViewer: apiGetUsers가 없습니다.');
+      return false;
+    }
 
-  // ▼ 전화번호 입력: 숫자만 허용 (저장은 문자열 그대로)
-  const contactInput = document.getElementById('userContact');
-  if (contactInput) {
-    contactInput.setAttribute('inputmode', 'numeric');   // 모바일 키패드 유도
-    contactInput.setAttribute('pattern', '[0-9]*');      // 브라우저 힌트
-    contactInput.addEventListener('input', (e) => {
-      e.target.value = e.target.value.replace(/\D+/g, ''); // 숫자 이외 제거
-    });
+    const listRes = await apiGetUsers();
+    const users = (listRes && listRes.items) ? listRes.items : [];
+
+    const onlyDigits = (createdInput?.contact || '').replace(/\D+/g, '');
+    let user = null;
+    if (onlyDigits) {
+      user = users.find(u => (u.contact || '').replace(/\D+/g, '') === onlyDigits) || null;
+    }
+    if (!user && createdInput?.name) {
+      const targetName = String(createdInput.name);
+      user = users.find(u => String(u.name || '') === targetName) || null;
+    }
+    if (!user) {
+      console.warn('adoptCreatedUserAsViewer: 방금 생성한 사용자를 목록에서 찾지 못했습니다.', createdInput);
+      return false;
+    }
+
+    window.currentUser = user;
+    try {
+      localStorage.setItem('authUser', JSON.stringify(user));
+      localStorage.setItem('currentUser', JSON.stringify(user));
+    } catch (e) {
+      console.warn('localStorage 저장 실패(무시 가능):', e);
+    }
+
+    if (typeof showScreen === 'function') {
+      showScreen('connectionScreen');
+    }
+
+    if (typeof loadUsers === 'function') {
+      loadUsers();
+    }
+
+    return true;
+  } catch (e) {
+    console.error('adoptCreatedUserAsViewer() 실패:', e);
+    return false;
   }
-});
+}
 
-
-// 전역 함수로 내보내기
-window.loadUsers = loadUsers;
-window.selectUser = selectUser;
-window.editUser = editUser;
-window.deleteUser = deleteUser;
-window.saveUser = saveUser;
-window.selectProfile = selectUser; // 기존 코드와의 호환성
-
-// ========== 사용기간 만료 경고 모달 함수 ==========
 function showExpiryWarningModal(expiryDate) {
   const modal = document.getElementById('expiryWarningModal');
   const dateElement = document.getElementById('expiryWarningDate');
   
   if (modal && dateElement) {
-    // 만료일 포맷팅
     if (expiryDate) {
       const date = new Date(expiryDate);
       const formattedDate = date.toLocaleDateString('ko-KR', {
@@ -1309,81 +1230,46 @@ function closeExpiryWarningModal() {
   }
 }
 
-// 전역으로 노출
+// 전역 함수로 등록
+window.loadUsers = loadUsers;
+window.selectUser = selectUser;
+window.editUser = editUser;
+window.deleteUser = deleteUser;
+window.saveUser = saveUser;
+window.selectProfile = selectUser;
 window.showExpiryWarningModal = showExpiryWarningModal;
 window.closeExpiryWarningModal = closeExpiryWarningModal;
 
-
-/**
- * 새로 생성된 사용자를 현재 뷰어로 채택 + 저장 + 라우팅 헬퍼
- * - createdInput: { name, contact, ... } (등록에 사용한 원본 입력)
- * - 동작:
- *   1) 최신 사용자 목록 재조회
- *   2) contact(숫자만) 우선, 실패 시 name으로 매칭
- *   3) window.currentUser, localStorage(authUser/currentUser) 갱신
- *   4) 기기선택 화면으로 라우팅(선호대로 조정 가능)
- */
-async function adoptCreatedUserAsViewer(createdInput) {
-  try {
-    if (typeof apiGetUsers !== 'function') {
-      console.warn('adoptCreatedUserAsViewer: apiGetUsers가 없습니다.');
-      return false;
-    }
-
-    // 1) 최신 사용자 목록 조회
-    const listRes = await apiGetUsers();
-    const users = (listRes && listRes.items) ? listRes.items : [];
-
-    // 2) contact 숫자만 비교 (010-1234-5678 → 01012345678)
-    const onlyDigits = (createdInput?.contact || '').replace(/\D+/g, '');
-    let user = null;
-    if (onlyDigits) {
-      user = users.find(u => (u.contact || '').replace(/\D+/g, '') === onlyDigits) || null;
-    }
-    // 3) contact로 못 찾으면 name으로 폴백
-    if (!user && createdInput?.name) {
-      const targetName = String(createdInput.name);
-      user = users.find(u => String(u.name || '') === targetName) || null;
-    }
-    if (!user) {
-      console.warn('adoptCreatedUserAsViewer: 방금 생성한 사용자를 목록에서 찾지 못했습니다.', createdInput);
-      return false;
-    }
-
-    // 4) 현재 사용자/인증 사용자로 반영
-    window.currentUser = user;
-    try {
-      localStorage.setItem('authUser', JSON.stringify(user));
-      localStorage.setItem('currentUser', JSON.stringify(user));
-    } catch (e) {
-      console.warn('localStorage 저장 실패(무시 가능):', e);
-    }
-
-    // 5) 라우팅: 기기 선택 화면으로 이동 (필요 시 화면 키만 바꾸세요)
-    if (typeof showScreen === 'function') {
-      showScreen('connectionScreen'); // 기기선택 화면
-    }
-
-    // 6) 프로필 목록 대비 선반영(선택)
-    if (typeof loadUsers === 'function') {
-      // 다음 화면에서 프로필을 다시 볼 때를 대비해 미리 캐시/상태 갱신
-      loadUsers();
-    }
-
-    return true;
-  } catch (e) {
-    console.error('adoptCreatedUserAsViewer() 실패:', e);
-    return false;
-  }
-}
-
-
-
-
-// 전역 노출 보강: app.js에서 접근 가능하도록
+// API 함수들 전역 노출
 window.apiGetUsers   = window.apiGetUsers   || apiGetUsers;
 window.apiGetUser    = window.apiGetUser    || apiGetUser;
 window.apiCreateUser = window.apiCreateUser || apiCreateUser;
 window.apiUpdateUser = window.apiUpdateUser || apiUpdateUser;
 window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
 
+// 초기화 이벤트
+document.addEventListener('DOMContentLoaded', () => {
+  const cardAddUser = document.getElementById('cardAddUser');
+  if (cardAddUser) {
+    cardAddUser.addEventListener('click', showAddUserForm);
+  }
+  
+  const btnCancel = document.getElementById('btnCancelAddUser');
+  if (btnCancel) {
+    btnCancel.addEventListener('click', hideAddUserForm);
+  }
+  
+  const btnSave = document.getElementById('btnSaveUser');
+  if (btnSave) {
+    btnSave.addEventListener('click', saveUser);
+  }
+
+  const contactInput = document.getElementById('userContact');
+  if (contactInput) {
+    contactInput.setAttribute('inputmode', 'numeric');
+    contactInput.setAttribute('pattern', '[0-9]*');
+    contactInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.replace(/\D+/g, '');
+    });
+  }
+});

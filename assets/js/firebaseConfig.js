@@ -15,7 +15,9 @@ const firebaseConfig = {
 };
 
 // 2. Firebase 초기화 (전역 변수 window.db에 저장해야 다른 파일들이 갖다 씁니다)
-let db; // db 변수 선언
+let db; // db 변수 선언 (Realtime Database용)
+let auth; // auth 변수 선언 (Authentication용)
+let firestore; // firestore 변수 선언 (Firestore용)
 
 try {
     // 이미 초기화되어 있는지 확인 (중복 초기화 방지)
@@ -23,11 +25,21 @@ try {
         firebase.initializeApp(firebaseConfig);
     }
     
-    // 데이터베이스 기능을 가져와서 누구나 쓸 수 있게 'window.db'에 담기
+    // Realtime Database (기존 코드 호환성 유지)
     window.db = firebase.database();
     db = window.db; // 호환성을 위해 db 변수에도 저장
     
-    console.log("🔥 Firebase(데이터베이스) 연결 성공!");
+    // Authentication 초기화
+    auth = firebase.auth();
+    window.auth = auth; // 전역 접근용
+    
+    // Firestore 초기화
+    firestore = firebase.firestore();
+    window.firestore = firestore; // 전역 접근용
+    
+    console.log("🔥 Firebase(Realtime Database) 연결 성공!");
+    console.log("🔥 Firebase Authentication 초기화 완료!");
+    console.log("🔥 Firebase Firestore 초기화 완료!");
 } catch (e) {
     console.error("🔥 Firebase 연결 실패! (인터넷 연결이나 키 값을 확인하세요)", e);
 }
