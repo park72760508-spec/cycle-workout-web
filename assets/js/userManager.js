@@ -219,11 +219,13 @@ async function signInWithGoogle() {
       localStorage.setItem('currentUser', JSON.stringify(userData));
       localStorage.setItem('authUser', JSON.stringify(userData));
       
-      // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적)
-      const needsInfo = !userData.contact || 
-                        !userData.ftp || userData.ftp === 0 || 
-                        !userData.weight || userData.weight === 0 || 
-                        !userData.challenge || userData.challenge === 'Fitness';
+      // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
+      const hasContact = userData.contact && userData.contact.trim() !== '';
+      const hasFTP = userData.ftp && userData.ftp > 0;
+      const hasWeight = userData.weight && userData.weight > 0;
+      const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+      
+      const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
       
       if (needsInfo) {
         // 필수 정보가 없으면 사용자 정보 완성 모달 표시
@@ -236,11 +238,8 @@ async function signInWithGoogle() {
     } else {
       // 신규 회원: 기존 Google Sheets 필드 구조로 문서 생성
       const now = new Date().toISOString();
-      const defaultExpiryDate = (() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
-        return d.toISOString().split('T')[0];
-      })();
+      // 최초 로그인 시에는 오늘 날짜로 설정 (3개월 연장은 사용자 정보 입력 완료 후 적용)
+      const todayDate = new Date().toISOString().split('T')[0];
 
       const newUserData = {
         // 기존 Google Sheets 필드 구조 완벽 유지
@@ -251,7 +250,7 @@ async function signInWithGoogle() {
         weight: 0, // 기본값: 0
         created_at: now,
         grade: '2', // 기본값: "2" (일반 사용자)
-        expiry_date: defaultExpiryDate, // 기본값: 오늘 + 3개월
+        expiry_date: todayDate, // 최초 로그인 시 오늘 날짜로 설정
         challenge: 'Fitness', // 기본값: "Fitness"
         acc_points: 0, // 기본값: 0
         rem_points: 0, // 기본값: 0
@@ -370,11 +369,13 @@ function initAuthStateListener() {
           showScreen('basecampScreen');
         }
         
-        // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적)
-        const needsInfo = !userData.contact || 
-                          !userData.ftp || userData.ftp === 0 || 
-                          !userData.weight || userData.weight === 0 || 
-                          !userData.challenge || userData.challenge === 'Fitness';
+        // 필수 정보 확인 (전화번호, FTP, 몸무게, 운동목적 중 하나라도 없으면)
+        const hasContact = userData.contact && userData.contact.trim() !== '';
+        const hasFTP = userData.ftp && userData.ftp > 0;
+        const hasWeight = userData.weight && userData.weight > 0;
+        const hasChallenge = userData.challenge && userData.challenge.trim() !== '';
+        
+        const needsInfo = !hasContact || !hasFTP || !hasWeight || !hasChallenge;
         
         if (needsInfo) {
           // 필수 정보가 없으면 사용자 정보 완성 모달 표시
@@ -389,11 +390,8 @@ function initAuthStateListener() {
       } else {
         // 신규 회원: 문서 생성
         const now = new Date().toISOString();
-        const defaultExpiryDate = (() => {
-          const d = new Date();
-          d.setMonth(d.getMonth() + 3);
-          return d.toISOString().split('T')[0];
-        })();
+        // 최초 로그인 시에는 오늘 날짜로 설정 (3개월 연장은 사용자 정보 입력 완료 후 적용)
+        const todayDate = new Date().toISOString().split('T')[0];
         
         const newUserData = {
           id: result.user.uid,
@@ -403,7 +401,7 @@ function initAuthStateListener() {
           weight: 0,
           created_at: now,
           grade: '2',
-          expiry_date: defaultExpiryDate,
+          expiry_date: todayDate, // 최초 로그인 시 오늘 날짜로 설정
           challenge: 'Fitness',
           acc_points: 0,
           rem_points: 0,
@@ -1698,12 +1696,20 @@ async function completeUserInfo() {
   try {
     const contactDB = formatPhoneForDB(contactRaw);
     
-    // 사용자 정보 업데이트
+    // 3개월 무료 연장 적용 (사용자 정보 입력 완료 시)
+    const extendedExpiryDate = (() => {
+      const d = new Date();
+      d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+      return d.toISOString().split('T')[0];
+    })();
+    
+    // 사용자 정보 업데이트 (3개월 연장 포함)
     const updateData = {
       contact: contactDB,
       ftp: ftp,
       weight: weight,
-      challenge: challenge
+      challenge: challenge,
+      expiry_date: extendedExpiryDate // 3개월 무료 연장 적용
     };
     
     const result = await apiUpdateUser(currentUser.uid, updateData);
@@ -1723,12 +1729,14 @@ async function completeUserInfo() {
         document.body.style.overflow = '';
       }
       
-      // 환영 오버레이 표시
-      if (typeof showUserWelcomeModal === 'function') {
-        showUserWelcomeModal(window.currentUser?.name || '사용자');
-      } else {
-        showToast('정보 입력이 완료되었습니다! 🎉');
-      }
+      // 환영 오버레이 표시 (백만킬로 아카데미 특별이벤트)
+      setTimeout(() => {
+        if (typeof showUserWelcomeModal === 'function') {
+          showUserWelcomeModal(window.currentUser?.name || '사용자');
+        } else {
+          showToast('정보 입력이 완료되었습니다! 🎉');
+        }
+      }, 300); // 모달 닫힌 후 약간의 지연
       
       // 사용자 목록 새로고침
       if (typeof loadUsers === 'function') {
