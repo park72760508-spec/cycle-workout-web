@@ -10,15 +10,17 @@
  */
 
 // ============================================
-// 🔥 Firebase 설정 객체 (여기에 실제 값 입력)
+// 🔥 Firebase 설정 객체 (기존 firebaseConfig.js에서 가져온 실제 값)
 // ============================================
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY_HERE",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
+  authDomain: "stelvio-ai.firebaseapp.com",
+  projectId: "stelvio-ai",
+  storageBucket: "stelvio-ai.firebasestorage.app",
+  messagingSenderId: "752285835508",
+  appId: "1:752285835508:web:0662a24874209ebb483ea1",
+  // 참고: Authentication만 사용하므로 databaseURL은 선택사항입니다
+  // databaseURL: "https://stelvio-ai-default-rtdb.firebaseio.com"
 };
 
 // ============================================
