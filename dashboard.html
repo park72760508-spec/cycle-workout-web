@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="STELVIO AI - 대시보드">
+  <title>STELVIO AI - 대시보드</title>
+  
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    
+    :root {
+      --bg-primary: #0a0a0a;
+      --bg-secondary: #1a1a1a;
+      --bg-card: #1f1f1f;
+      --accent-neon: #00ff88;
+      --text-primary: #ffffff;
+      --text-secondary: #cccccc;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .dashboard-container {
+      width: 100%;
+      max-width: 600px;
+      text-align: center;
+    }
+    
+    .dashboard-card {
+      background: var(--bg-card);
+      border-radius: 20px;
+      padding: 40px 32px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    
+    .welcome-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--accent-neon) 0%, #ffffff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .user-info {
+      font-size: 18px;
+      color: var(--text-secondary);
+      margin-bottom: 32px;
+    }
+    
+    .user-info strong {
+      color: var(--accent-neon);
+      font-weight: 600;
+    }
+    
+    .logout-button {
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #ff4444 0%, #cc3333 100%);
+      border: none;
+      border-radius: 12px;
+      color: var(--text-primary);
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+    
+    .logout-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 68, 68, 0.4);
+    }
+    
+    .user-details {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: left;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    
+    .user-details dt {
+      font-weight: 600;
+      color: var(--accent-neon);
+      margin-top: 12px;
+      margin-bottom: 4px;
+    }
+    
+    .user-details dd {
+      margin-left: 0;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <div class="dashboard-card">
+      <h1 class="welcome-title">환영합니다!</h1>
+      <div class="user-info">
+        <strong id="user-nickname">사용자</strong>님, STELVIO AI에 오신 것을 환영합니다.
+      </div>
+      
+      <button id="logout-button" class="logout-button">로그아웃</button>
+      
+      <dl class="user-details">
+        <dt>사용자 ID:</dt>
+        <dd id="user-id">-</dd>
+        
+        <dt>이메일 (전화번호):</dt>
+        <dd id="user-email">-</dd>
+        
+        <dt>가입일:</dt>
+        <dd id="user-created">-</dd>
+      </dl>
+    </div>
+  </div>
+  
+  <script type="module">
+    // Firebase v9 Modular SDK Import
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+    import { firebaseConfig } from './firebase-config.js';
+    
+    // Firebase 초기화
+    let app;
+    let auth;
+    
+    try {
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      console.log('✅ Firebase 초기화 완료');
+    } catch (error) {
+      console.error('❌ Firebase 초기화 실패:', error);
+    }
+    
+    // DOM 요소 참조
+    const userNicknameEl = document.getElementById('user-nickname');
+    const userIdEl = document.getElementById('user-id');
+    const userEmailEl = document.getElementById('user-email');
+    const userCreatedEl = document.getElementById('user-created');
+    const logoutButton = document.getElementById('logout-button');
+    
+    // 사용자 정보 표시 함수
+    function displayUserInfo(user) {
+      // 닉네임 표시
+      const displayName = user.displayName || '사용자';
+      userNicknameEl.textContent = displayName;
+      
+      // 사용자 ID 표시
+      userIdEl.textContent = user.uid;
+      
+      // 이메일 표시 (전화번호 기반)
+      userEmailEl.textContent = user.email || '-';
+      
+      // 가입일 표시
+      if (user.metadata && user.metadata.creationTime) {
+        const createdDate = new Date(user.metadata.creationTime);
+        userCreatedEl.textContent = createdDate.toLocaleString('ko-KR', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } else {
+        userCreatedEl.textContent = '-';
+      }
+    }
+    
+    // 로그아웃 함수
+    async function handleLogout() {
+      try {
+        await signOut(auth);
+        console.log('✅ 로그아웃 성공');
+        window.location.href = 'auth-login.html';
+      } catch (error) {
+        console.error('❌ 로그아웃 실패:', error);
+        alert('로그아웃 중 오류가 발생했습니다.');
+      }
+    }
+    
+    // 인증 상태 감지
+    if (auth) {
+      onAuthStateChanged(auth, (user) => {
+        if (user) {
+          console.log('✅ 로그인된 사용자:', user.uid);
+          displayUserInfo(user);
+        } else {
+          console.log('❌ 로그인되지 않음');
+          // 로그인 페이지로 리다이렉트
+          window.location.href = 'auth-login.html';
+        }
+      });
+    }
+    
+    // 로그아웃 버튼 이벤트
+    if (logoutButton) {
+      logoutButton.addEventListener('click', handleLogout);
+    }
+  </script>
+</body>
+</html>

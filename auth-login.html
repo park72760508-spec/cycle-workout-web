@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="STELVIO AI - 실내 자전거 훈련 서비스 로그인">
+  <title>STELVIO AI - 로그인</title>
+  
+  <!-- 스타일시트 -->
+  <link rel="stylesheet" href="auth-style.css">
+  
+  <!-- iOS Safari 메타 태그 (줌 방지) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+  <div class="auth-container">
+    <!-- 헤더 (로고 및 타이틀) -->
+    <div class="auth-header">
+      <h1 class="auth-logo">STELVIO AI</h1>
+      <p class="auth-subtitle">실내 자전거 훈련 서비스</p>
+    </div>
+    
+    <!-- 메인 카드 -->
+    <div class="auth-card">
+      <!-- 전화번호 입력 -->
+      <div class="input-group">
+        <label for="phone-input">전화번호</label>
+        <input 
+          type="tel" 
+          id="phone-input" 
+          placeholder="010-1234-5678" 
+          autocomplete="tel"
+          inputmode="numeric"
+          maxlength="13"
+          required
+        >
+      </div>
+      
+      <!-- 비밀번호 입력 -->
+      <div class="input-group">
+        <label for="password-input">비밀번호 (PIN)</label>
+        <input 
+          type="password" 
+          id="password-input" 
+          placeholder="6자 이상 입력" 
+          autocomplete="current-password"
+          minlength="6"
+          required
+        >
+      </div>
+      
+      <!-- 닉네임 입력 (초기엔 숨김, 회원가입 모드에서 표시) -->
+      <div class="input-group hidden" id="nickname-group">
+        <label for="nickname-input">닉네임</label>
+        <input 
+          type="text" 
+          id="nickname-input" 
+          placeholder="사용할 닉네임을 입력하세요" 
+          autocomplete="username"
+          minlength="2"
+          maxlength="20"
+        >
+      </div>
+      
+      <!-- 제출 버튼 -->
+      <button type="button" id="submit-button" class="submit-button">
+        시작하기
+      </button>
+      
+      <!-- 에러 메시지 -->
+      <div id="error-message" class="error-message" role="alert"></div>
+    </div>
+  </div>
+  
+  <!-- 인증 로직 스크립트 (모듈 방식) -->
+  <script type="module" src="auth.js"></script>
+</body>
+</html>
