@@ -42,6 +42,9 @@ function getUsersCollection() {
 let isEditMode = false;
 let currentEditUserId = null;
 
+// 사용자 정보 입력 모달 표시 여부 추적 (중복 호출 방지)
+let isCompleteUserInfoModalShown = false;
+
 // 전화번호 유틸: 숫자만 남기기
 function unformatPhone(input) {
   return String(input || '').replace(/\D+/g, '');
@@ -1638,27 +1641,45 @@ async function performUpdateFromModal() {
 
 // 사용자 정보 완성 모달 표시
 function showCompleteUserInfoModal(userData) {
+  // 중복 호출 방지
+  if (isCompleteUserInfoModalShown) {
+    console.log('⚠️ 사용자 정보 입력 모달이 이미 표시되어 있습니다. 중복 호출 무시.');
+    return;
+  }
+  
   const modal = document.getElementById('completeUserInfoModal');
   if (!modal) {
     console.error('completeUserInfoModal을 찾을 수 없습니다.');
     return;
   }
   
+  // 모달이 이미 표시되어 있는지 확인
+  const isAlreadyVisible = !modal.classList.contains('hidden') && 
+                           window.getComputedStyle(modal).display !== 'none';
+  if (isAlreadyVisible) {
+    console.log('⚠️ 사용자 정보 입력 모달이 이미 표시되어 있습니다.');
+    return;
+  }
+  
+  // 플래그 설정
+  isCompleteUserInfoModalShown = true;
+  
   // 모든 화면 숨기기
   document.querySelectorAll('.screen').forEach(screen => {
     screen.classList.remove('active');
-    screen.style.display = 'none';
-    screen.style.opacity = '0';
-    screen.style.visibility = 'hidden';
+    screen.style.setProperty('display', 'none', 'important');
+    screen.style.setProperty('opacity', '0', 'important');
+    screen.style.setProperty('visibility', 'hidden', 'important');
+    screen.style.setProperty('z-index', '1', 'important');
   });
   
   // 로그인 화면 숨기기
   const authScreen = document.getElementById('authScreen');
   if (authScreen) {
     authScreen.classList.remove('active');
-    authScreen.style.display = 'none';
-    authScreen.style.opacity = '0';
-    authScreen.style.visibility = 'hidden';
+    authScreen.style.setProperty('display', 'none', 'important');
+    authScreen.style.setProperty('opacity', '0', 'important');
+    authScreen.style.setProperty('visibility', 'hidden', 'important');
   }
   
   // 기존 값이 있으면 채우기
@@ -1714,6 +1735,21 @@ function showCompleteUserInfoModal(userData) {
     modalContent.style.setProperty('z-index', '10002', 'important');
   }
   
+  // requestAnimationFrame으로 모달 표시 확인 및 강제 표시
+  requestAnimationFrame(() => {
+    const computedStyle = window.getComputedStyle(modal);
+    const isVisible = computedStyle.display !== 'none' && 
+                     computedStyle.visibility !== 'hidden' &&
+                     computedStyle.opacity !== '0';
+    
+    if (!isVisible) {
+      console.warn('⚠️ 모달이 표시되지 않음. 강제로 다시 표시 시도');
+      modal.style.setProperty('display', 'flex', 'important');
+      modal.style.setProperty('visibility', 'visible', 'important');
+      modal.style.setProperty('opacity', '1', 'important');
+    }
+  });
+  
   console.log('✅ 사용자 정보 입력 모달 표시:', {
     hasContact: !!userData.contact,
     hasFTP: !!userData.ftp,
@@ -1722,7 +1758,8 @@ function showCompleteUserInfoModal(userData) {
     modalDisplay: modal.style.display,
     modalZIndex: modal.style.zIndex,
     modalComputedDisplay: window.getComputedStyle(modal).display,
-    modalComputedZIndex: window.getComputedStyle(modal).zIndex
+    modalComputedZIndex: window.getComputedStyle(modal).zIndex,
+    isModalShown: isCompleteUserInfoModalShown
   });
 }
 
@@ -1790,8 +1827,12 @@ async function completeUserInfo() {
       const modal = document.getElementById('completeUserInfoModal');
       if (modal) {
         modal.classList.add('hidden');
+        modal.style.setProperty('display', 'none', 'important');
         document.body.style.overflow = '';
       }
+      
+      // 플래그 리셋
+      isCompleteUserInfoModalShown = false;
       
       // 사용자 목록 새로고침
       if (typeof loadUsers === 'function') {
