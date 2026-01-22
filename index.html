@@ -3250,26 +3250,31 @@
             }
           }
           
-          // 잠시 대기 후 베이스캠프 화면으로 이동
-          setTimeout(() => {
-            if (typeof showScreen === 'function') {
-              showScreen('basecampScreen');
-            } else {
-              // showScreen이 없으면 직접 화면 전환
-              const authScreen = document.getElementById('authScreen');
-              const basecampScreen = document.getElementById('basecampScreen');
-              
-              if (authScreen) {
-                authScreen.classList.remove('active');
-                authScreen.style.display = 'none';
+          // 필수 정보 확인 후 베이스캠프 화면으로 이동 여부 결정
+          // result.needsInfo가 true이면 사용자 정보 입력 모달이 표시되므로 베이스캠프로 이동하지 않음
+          if (!result.needsInfo) {
+            // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
+            setTimeout(() => {
+              if (typeof showScreen === 'function') {
+                showScreen('basecampScreen');
+              } else {
+                // showScreen이 없으면 직접 화면 전환
+                const authScreen = document.getElementById('authScreen');
+                const basecampScreen = document.getElementById('basecampScreen');
+                
+                if (authScreen) {
+                  authScreen.classList.remove('active');
+                  authScreen.style.display = 'none';
+                }
+                
+                if (basecampScreen) {
+                  basecampScreen.classList.add('active');
+                  basecampScreen.style.display = 'block';
+                }
               }
-              
-              if (basecampScreen) {
-                basecampScreen.classList.add('active');
-                basecampScreen.style.display = 'block';
-              }
-            }
-          }, 1000);
+            }, 1000);
+          }
+          // needsInfo가 true이면 사용자 정보 입력 모달이 표시되므로 여기서는 아무것도 하지 않음
           
         } else {
           // 로그인 실패
