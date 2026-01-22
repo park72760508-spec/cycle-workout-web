@@ -298,9 +298,9 @@ function initAuthStateListener() {
           await syncUsersFromDB();
         }
         
-        // 메인 화면으로 이동
+        // 베이스캠프 화면으로 이동
         if (typeof showScreen === 'function') {
-          showScreen('connectionScreen');
+          showScreen('basecampScreen');
         }
         
         if (typeof showToast === 'function') {
@@ -348,7 +348,7 @@ function initAuthStateListener() {
         }
         
         if (typeof showScreen === 'function') {
-          showScreen('connectionScreen');
+          showScreen('basecampScreen');
         }
         
         if (typeof showToast === 'function') {
@@ -1594,7 +1594,7 @@ async function adoptCreatedUserAsViewer(createdInput) {
     }
 
     if (typeof showScreen === 'function') {
-      showScreen('connectionScreen');
+      showScreen('basecampScreen');
     }
 
     if (typeof loadUsers === 'function') {
