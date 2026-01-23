@@ -1567,14 +1567,55 @@ console.log('✅ training.js 그룹 훈련 모듈 로딩 완료');
  * 훈련 준비 화면 로드 시 관리자 권한 확인
  */
 function checkAndShowAdminFeatures() {
-  const currentUser = window.currentUser;
-  if (!currentUser) {
-    console.log('사용자 정보가 없습니다');
+  // 1. Firebase 인증 상태 먼저 확인
+  const auth = window.auth || window.authV9;
+  const firebaseUser = auth?.currentUser;
+  
+  if (!firebaseUser) {
+    // 로그인하지 않았으면 관리자 기능 숨김
+    console.log('로그인하지 않았습니다. 관리자 기능을 숨깁니다.');
+    hideAdminFeatures();
     return;
   }
   
+  // 2. 사용자 정보 확인
+  const currentUser = window.currentUser;
+  if (!currentUser) {
+    console.log('사용자 정보가 없습니다');
+    hideAdminFeatures();
+    return;
+  }
+  
+  // 3. Firebase 인증 사용자와 현재 사용자 정보가 일치하는지 확인
+  // 전화번호 로그인인 경우 이메일에서 전화번호 추출하여 비교
+  const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
+  let userMatches = false;
+  
+  if (isPhoneLogin) {
+    // 전화번호 로그인: 이메일에서 전화번호 추출하여 비교
+    const phoneFromEmail = firebaseUser.email.replace('@stelvio.ai', '').replace(/\D/g, '');
+    const userPhone = (currentUser.contact || '').replace(/\D/g, '');
+    userMatches = phoneFromEmail === userPhone;
+  } else {
+    // 일반 로그인 (Google 등): UID 비교
+    userMatches = firebaseUser.uid === currentUser.id;
+  }
+  
+  if (!userMatches) {
+    console.log('Firebase 인증 사용자와 현재 사용자 정보가 일치하지 않습니다.');
+    hideAdminFeatures();
+    return;
+  }
+  
+  // 4. 관리자 권한 확인
   const isAdmin = currentUser.grade === '1' || currentUser.grade === 1;
-  console.log('관리자 권한 확인:', { userId: currentUser.id, grade: currentUser.grade, isAdmin });
+  console.log('관리자 권한 확인:', { 
+    userId: currentUser.id, 
+    grade: currentUser.grade, 
+    isAdmin,
+    authenticated: true,
+    userMatches: true
+  });
   
   if (isAdmin) {
     showAdminFeatures();

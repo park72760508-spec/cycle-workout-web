@@ -452,6 +452,15 @@ async function signOut() {
     localStorage.removeItem('currentUser');
     localStorage.removeItem('authUser');
     
+    // 관리자 기능 숨기기 (training.js의 함수 호출)
+    if (typeof window.hideAdminFeatures === 'function') {
+      try {
+        window.hideAdminFeatures();
+      } catch (e) {
+        console.warn('관리자 기능 숨기기 실패 (무시):', e);
+      }
+    }
+    
     console.log('✅ 로그아웃 완료');
     return { success: true };
   } catch (error) {
@@ -711,6 +720,15 @@ function initAuthStateListener() {
       localStorage.removeItem('authUser');
       isLoginJustCompleted = false; // 플래그도 리셋
       console.log('ℹ️ 로그아웃 상태');
+      
+      // 관리자 기능 숨기기 (training.js의 함수 호출)
+      if (typeof window.hideAdminFeatures === 'function') {
+        try {
+          window.hideAdminFeatures();
+        } catch (e) {
+          console.warn('관리자 기능 숨기기 실패 (무시):', e);
+        }
+      }
     }
   });
 }
