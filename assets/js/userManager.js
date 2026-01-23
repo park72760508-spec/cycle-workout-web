@@ -474,13 +474,16 @@ async function signOut() {
  * onAuthStateChanged를 사용하여 새로고침 시에도 로그인 유지
  */
 function initAuthStateListener() {
-  if (!window.auth) {
+  // window.auth 또는 window.authV9 사용 (v9 모듈러 SDK 지원)
+  const auth = window.auth || window.authV9;
+  if (!auth) {
     console.warn('Firebase Auth가 초기화되지 않아 인증 상태 리스너를 설정할 수 없습니다.');
     return;
   }
 
-  // 리다이렉트 로그인 결과 처리 (페이지 로드 시)
-  window.auth.getRedirectResult().then(async (result) => {
+  // 리다이렉트 로그인 결과 처리 (페이지 로드 시) - v9에서는 getRedirectResult가 다를 수 있음
+  if (auth.getRedirectResult) {
+    auth.getRedirectResult().then(async (result) => {
     if (result.user) {
       console.log('✅ 리다이렉트 로그인 성공:', result.user.email);
       
@@ -581,11 +584,13 @@ function initAuthStateListener() {
         }, 500);
       }
     }
-  }).catch((error) => {
-    console.error('❌ 리다이렉트 로그인 결과 처리 실패:', error);
-  });
+    }).catch((error) => {
+      console.error('❌ 리다이렉트 로그인 결과 처리 실패:', error);
+    });
+  }
 
-  window.auth.onAuthStateChanged(async (firebaseUser) => {
+  // 인증 상태 변경 리스너 설정
+  auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
       // 로그인 상태: Firestore에서 사용자 정보 가져오기
       try {
