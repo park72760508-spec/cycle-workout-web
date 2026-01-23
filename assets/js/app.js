@@ -4211,18 +4211,14 @@ function togglePause() {
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
 
-  // Strava 콜백에서 돌아온 경우 프로필 화면으로 이동
+  // Strava 콜백에서 돌아온 경우 베이스캠프 화면으로 이동
   const stravaCallbackReturn = localStorage.getItem('stravaCallbackReturn');
-  if (stravaCallbackReturn === 'profileScreen') {
+  if (stravaCallbackReturn === 'basecampScreen') {
     localStorage.removeItem('stravaCallbackReturn');
-    // 약간의 지연 후 프로필 화면으로 이동 (다른 초기화 완료 대기)
+    // 약간의 지연 후 베이스캠프 화면으로 이동 (다른 초기화 완료 대기)
     setTimeout(function() {
       if (typeof showScreen === 'function') {
-        showScreen('profileScreen');
-        // 사용자 목록 새로고침
-        if (typeof window.loadUsers === 'function') {
-          setTimeout(() => window.loadUsers(), 200);
-        }
+        showScreen('basecampScreen');
       }
     }, 500);
   }
