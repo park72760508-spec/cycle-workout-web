@@ -209,17 +209,28 @@ async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
 
 /**
  * 스트라바 활동 저장 (Firebase Firestore)
+ * Subcollection 구조: users/{userId}/logs/{logId}
  * Google Sheets 구조와 동일한 필드:
  * ['activity_id', 'date', 'title', 'distance_km', 'time', 'tss', 'user_id']
  */
 async function saveStravaActivityToFirebase(activity) {
   try {
-    const collection = getTrainingLogCollection();
+    const userId = String(activity.user_id || '');
+    if (!userId) {
+      throw new Error('user_id가 필요합니다.');
+    }
+    
+    // users/{userId}/logs 서브컬렉션 참조
+    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
     const activityId = String(activity.activity_id || activity.id);
     
-    // 중복 확인
-    const existingDoc = await collection.doc(activityId).get();
-    if (existingDoc.exists) {
+    // 중복 확인 (activity_id로 검색)
+    const existingQuery = await userLogsRef
+      .where('activity_id', '==', activityId)
+      .limit(1)
+      .get();
+    
+    if (!existingQuery.empty) {
       console.log('[saveStravaActivityToFirebase] ⚠️ 이미 존재하는 활동:', activityId);
       return { success: true, id: activityId, isNew: false };
     }
@@ -232,14 +243,17 @@ async function saveStravaActivityToFirebase(activity) {
       distance_km: Number(activity.distance_km || 0),
       time: Number(activity.time || 0),
       tss: Number(activity.tss || 0),
-      user_id: String(activity.user_id || '')
+      user_id: userId,
+      // 추가 필드: Strava 활동임을 표시
+      source: 'strava',
+      created_at: new Date().toISOString()
     };
     
-    // Firestore에 저장 (activity_id를 문서 ID로 사용)
-    await collection.doc(activityId).set(trainingLog);
+    // Firestore에 저장 (자동 생성된 문서 ID 사용)
+    const docRef = await userLogsRef.add(trainingLog);
     
-    console.log('[saveStravaActivityToFirebase] ✅ 저장 완료:', activityId);
-    return { success: true, id: activityId, isNew: true };
+    console.log('[saveStravaActivityToFirebase] ✅ 저장 완료:', { userId, activityId, logId: docRef.id });
+    return { success: true, id: docRef.id, activityId: activityId, isNew: true };
   } catch (error) {
     console.error('[saveStravaActivityToFirebase] ❌ 저장 실패:', error);
     throw error;
@@ -248,18 +262,39 @@ async function saveStravaActivityToFirebase(activity) {
 
 /**
  * 스트라바 활동 목록 조회 (중복 확인용)
+ * Subcollection 구조: users/{userId}/logs에서 activity_id 조회
  */
 async function getExistingStravaActivityIds() {
   try {
-    const collection = getTrainingLogCollection();
-    const querySnapshot = await collection.select('activity_id').get();
     const existingIds = new Set();
-    querySnapshot.docs.forEach(doc => {
-      const data = doc.data();
-      if (data.activity_id) {
-        existingIds.add(String(data.activity_id));
+    
+    // 모든 사용자의 logs 서브컬렉션에서 activity_id 조회
+    const usersCollection = window.firestore.collection('users');
+    const usersSnapshot = await usersCollection.get();
+    
+    // 각 사용자의 logs 서브컬렉션 조회
+    for (const userDoc of usersSnapshot.docs) {
+      const userId = userDoc.id;
+      const userLogsRef = userDoc.ref.collection('logs');
+      
+      try {
+        const logsSnapshot = await userLogsRef
+          .where('source', '==', 'strava')
+          .select('activity_id')
+          .get();
+        
+        logsSnapshot.docs.forEach(doc => {
+          const data = doc.data();
+          if (data.activity_id) {
+            existingIds.add(String(data.activity_id));
+          }
+        });
+      } catch (error) {
+        console.warn(`[getExistingStravaActivityIds] 사용자 ${userId}의 logs 조회 실패:`, error);
+        // 계속 진행
       }
-    });
+    }
+    
     return existingIds;
   } catch (error) {
     console.error('[getExistingStravaActivityIds] ❌ 조회 실패:', error);
