@@ -2144,35 +2144,68 @@ button[aria-disabled="true"] {
 
 /* 사용자 목록 (범례와 함께 표시) */
 .user-list-with-legend {
-  width: 240px; /* 훈련 등급 블럭과 동일한 넓이 */
+  width: 100%; /* 전체 너비 사용 (그리드가 자동으로 조정) */
   flex-shrink: 0;
 }
 
 #profileScreen #userList{
-  display:grid; grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
-  gap:12px; margin-bottom:16px;
+  display:grid; 
+  grid-template-columns:repeat(auto-fit, minmax(240px,1fr));
+  gap:12px; 
+  margin-bottom:16px;
+  width: 100%;
 }
+
+/* 사용자 카드 - 훈련등급 표시 블럭과 동일한 넓이 (240px) */
 #profileScreen .user-card{
-  background:var(--card-bg); border:1px solid var(--card-border); border-radius:14px;
-  padding:14px; color:var(--text);
+  background:var(--card-bg); 
+  border:1px solid var(--card-border); 
+  border-radius:14px;
+  padding:14px; 
+  color:var(--text);
   box-shadow:0 6px 18px rgba(0,0,0,.06);
   transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  width: 240px; /* 훈련등급 표시 블럭과 동일한 넓이 */
+  max-width: 100%; /* 모바일 대응 */
+  box-sizing: border-box;
 }
-#profileScreen .user-card:hover{ transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.08); border-color:#d1d5db; }
+
+/* 모바일 화면 대응 - 카드가 화면 너비에 맞게 조정 */
+@media (max-width: 640px) {
+  #profileScreen #userList{
+    grid-template-columns: 1fr; /* 모바일에서는 1열로 표시 */
+    gap: 12px;
+  }
+  
+  #profileScreen .user-card{
+    width: 100%; /* 모바일에서는 전체 너비 사용 */
+    max-width: 100%;
+  }
+}
+
+#profileScreen .user-card:hover{ 
+  transform:translateY(-2px); 
+  box-shadow:0 10px 24px rgba(0,0,0,.08); 
+  border-color:#d1d5db; 
+}
+
 #profileScreen .user-card .user-name{ 
   font-weight:700; 
   font-size:16px; 
   color:var(--text-strong); 
-  margin-bottom:4px;
+  margin-bottom:8px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  line-height: 1.4;
 }
 
+/* 훈련등급 아이콘 - 카드 크기에 맞게 조정 */
 .user-name-icon {
-  height: 2em; /* 16px (글자 크기) * 2 = 2배 크기 */
+  height: 2em; /* 16px (글자 크기) * 2 = 32px */
   width: auto;
   vertical-align: middle;
+  flex-shrink: 0; /* 아이콘 크기 고정 */
 }
 #profileScreen .user-card .user-meta{ color:var(--text-muted); font-size:13px; }
 
