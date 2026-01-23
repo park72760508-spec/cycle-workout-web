@@ -165,10 +165,11 @@ async function fetchAndProcessStravaData() {
 
   try {
     // Firebase에서 strava_refresh_token이 있는 사용자 조회
+    // Firestore 제한: 하나의 쿼리에 != 필터를 하나만 사용 가능
+    // 따라서 != '' 하나만 사용하고, 클라이언트 측에서 null 체크
     const usersCollection = getUsersCollection();
     const usersSnapshot = await usersCollection
       .where('strava_refresh_token', '!=', '')
-      .where('strava_refresh_token', '!=', null)
       .get();
 
     if (usersSnapshot.empty) {
@@ -193,7 +194,8 @@ async function fetchAndProcessStravaData() {
       const refreshToken = userData.strava_refresh_token;
       const ftp = Number(userData.ftp) || 0;
 
-      if (!refreshToken || !userId) continue;
+      // 클라이언트 측에서 null과 빈 문자열 필터링
+      if (!refreshToken || refreshToken === null || refreshToken === '' || !userId) continue;
 
       let totalTss = 0;
       let newCount = 0;
