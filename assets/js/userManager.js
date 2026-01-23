@@ -740,8 +740,15 @@ async function apiGetUsers() {
   try {
     // 로그인 상태 확인
     const currentUser = window.auth?.currentUser;
+    console.log('[apiGetUsers] 🔍 로그인 상태 확인:', { 
+      hasAuth: !!window.auth, 
+      hasCurrentUser: !!currentUser,
+      currentUserId: currentUser?.uid 
+    });
+    
     if (!currentUser) {
       // 로그인하지 않은 경우 조용히 빈 배열 반환 (경고 메시지 제거)
+      console.warn('[apiGetUsers] ⚠️ 로그인하지 않은 상태입니다.');
       return { success: true, items: [] };
     }
     
@@ -749,8 +756,13 @@ async function apiGetUsers() {
     let currentUserDoc;
     try {
       currentUserDoc = await getUsersCollection().doc(currentUser.uid).get();
+      console.log('[apiGetUsers] 📄 현재 사용자 문서 조회:', { 
+        exists: currentUserDoc.exists,
+        userId: currentUser.uid 
+      });
     } catch (docError) {
       // 문서 조회 실패 시 권한 오류일 수 있음
+      console.error('[apiGetUsers] ❌ 사용자 문서 조회 실패:', docError);
       if (docError.code === 'permission-denied') {
         console.error('🔴 Firestore 권한 오류가 발생했습니다.');
         console.error('📖 확인 사항:');
@@ -773,10 +785,16 @@ async function apiGetUsers() {
     }
     
     const currentUserData = currentUserDoc.data();
-    const userGrade = currentUserData?.grade || '2';
+    const userGrade = String(currentUserData?.grade || '2');
+    console.log('[apiGetUsers] 👤 현재 사용자 정보:', { 
+      userId: currentUser.uid,
+      name: currentUserData?.name,
+      grade: userGrade 
+    });
     
     // 관리자(grade='1')인 경우에만 전체 목록 조회
     if (userGrade === '1') {
+      console.log('[apiGetUsers] 🔑 관리자 권한 확인됨 - 전체 사용자 목록 조회 시작');
       try {
         const usersSnapshot = await getUsersCollection().get();
         const users = [];
@@ -788,9 +806,15 @@ async function apiGetUsers() {
           });
         });
         
+        console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료:', { 
+          totalUsers: users.length,
+          userIds: users.map(u => u.id) 
+        });
+        
         return { success: true, items: users };
       } catch (listError) {
         // 전체 목록 조회 실패 시 자신의 문서만 반환
+        console.error('[apiGetUsers] ❌ 전체 사용자 목록 조회 실패:', listError);
         console.warn('⚠️ 전체 사용자 목록 조회 실패, 자신의 문서만 반환:', listError.message);
         return { 
           success: true, 
@@ -802,6 +826,7 @@ async function apiGetUsers() {
       }
     } else {
       // 일반 사용자는 자신의 문서만 반환
+      console.log('[apiGetUsers] 👤 일반 사용자 - 자신의 문서만 반환');
       return { 
         success: true, 
         items: [{
@@ -1223,7 +1248,10 @@ if (typeof window !== 'undefined') {
 
 async function loadUsers() {
   const userList = document.getElementById('userList');
-  if (!userList) return;
+  if (!userList) {
+    console.warn('[loadUsers] userList 요소를 찾을 수 없습니다.');
+    return;
+  }
 
   try {
     userList.innerHTML = `
@@ -1233,8 +1261,16 @@ async function loadUsers() {
       </div>
     `;
 
+    console.log('[loadUsers] 🚀 사용자 목록 로드 시작');
     const result = await apiGetUsers();
+    console.log('[loadUsers] 📥 apiGetUsers 결과:', { 
+      success: result?.success, 
+      itemsCount: result?.items?.length || 0,
+      error: result?.error 
+    });
+    
     if (!result || !result.success) {
+      console.error('[loadUsers] ❌ 사용자 목록 로드 실패:', result?.error);
       userList.innerHTML = `
         <div class="error-state">
           <div class="error-state-icon">⚠️</div>
@@ -1247,8 +1283,14 @@ async function loadUsers() {
     }
 
     const users = Array.isArray(result.items) ? result.items : [];
+    console.log('[loadUsers] 👥 사용자 목록:', { 
+      totalUsers: users.length,
+      userIds: users.map(u => u.id),
+      userNames: users.map(u => u.name)
+    });
 
     if (users.length === 0) {
+      console.warn('[loadUsers] ⚠️ 등록된 사용자가 없습니다.');
       userList.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">👤</div>
@@ -1278,17 +1320,27 @@ async function loadUsers() {
           : String(mergedViewer?.grade ?? '2'));
     const viewerId     = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
 
+    console.log('[loadUsers] 🔐 권한 확인:', { 
+      viewerGrade, 
+      viewerId,
+      isTempAdmin,
+      mergedViewerName: mergedViewer?.name 
+    });
+
     // 권한에 따른 사용자 목록 필터링
     let visibleUsers = users;
     if (viewerGrade === '1') {
       // 관리자(grade=1): 모든 사용자 보기
       visibleUsers = users;
+      console.log('[loadUsers] ✅ 관리자 권한 - 모든 사용자 표시:', visibleUsers.length);
     } else if (viewerGrade === '2' || viewerGrade === '3') {
       // 일반 사용자(grade=2,3): 본인 계정만 보기
       if (viewerId) {
         visibleUsers = users.filter(u => String(u.id) === viewerId);
+        console.log('[loadUsers] 👤 일반 사용자 - 본인 계정만 표시:', visibleUsers.length);
       } else {
         visibleUsers = [];
+        console.warn('[loadUsers] ⚠️ viewerId가 없어 빈 목록 반환');
       }
     }
 
@@ -1438,8 +1490,15 @@ async function loadUsers() {
 
     window.users = users;
     window.userProfiles = users;
+    
+    console.log('[loadUsers] ✅ 사용자 목록 렌더링 완료:', { 
+      totalUsers: users.length,
+      visibleUsers: visibleUsers.length,
+      viewerGrade 
+    });
+    
     if (typeof showToast === 'function') {
-      showToast(`${users.length}명의 사용자를 불러왔습니다.`);
+      showToast(`${visibleUsers.length}명의 사용자를 불러왔습니다.`);
     }
   } catch (error) {
     console.error('사용자 목록 로드 실패:', error);
