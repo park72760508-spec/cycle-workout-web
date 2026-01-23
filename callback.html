@@ -100,6 +100,128 @@
     window.firestore = firebase.firestore();
     window.auth = firebase.auth();
     console.log('[callback.html] ✅ Firebase 초기화 완료 (Firestore + Auth)');
+    
+    // phoneToEmail 함수 정의 (index.html과 동일)
+    function phoneToEmail(phoneNumber) {
+      if (!phoneNumber) return null;
+      const cleaned = phoneNumber.replace(/-/g, '');
+      return cleaned + '@stelvio.ai';
+    }
+    window.phoneToEmail = phoneToEmail;
+    
+    // Firebase Auth 상태 복원 (localStorage에서)
+    var authRestored = false;
+    firebase.auth().onAuthStateChanged(async function(user) {
+      if (user) {
+        console.log('[callback.html] ✅ Firebase Auth 로그인 상태 복원됨:', user.uid);
+        window.currentUser = { id: user.uid };
+        authRestored = true;
+        // 인증 복원 완료 후 Strava 콜백 처리
+        if (typeof window.handleStravaCallbackAfterAuth === 'function') {
+          window.handleStravaCallbackAfterAuth();
+        }
+      } else {
+        console.log('[callback.html] ⚠️ Firebase Auth 로그인 상태 없음 - localStorage에서 복원 시도');
+        try {
+          const currentUserStr = localStorage.getItem('currentUser');
+          if (currentUserStr) {
+            const currentUser = JSON.parse(currentUserStr);
+            const userId = currentUser.id || currentUser.userId;
+            
+            if (userId) {
+              const phoneToEmailStr = localStorage.getItem('phoneToEmail');
+              if (phoneToEmailStr) {
+                try {
+                  const emailMap = JSON.parse(phoneToEmailStr);
+                  const phone = Object.keys(emailMap).find(key => {
+                    const email = emailMap[key];
+                    return email && email.includes(userId);
+                  });
+                  
+                  if (phone) {
+                    const email = emailMap[phone] || phoneToEmail(phone);
+                    const password = localStorage.getItem('userPassword_' + phone) || localStorage.getItem('lastPassword');
+                    
+                    if (email && password) {
+                      try {
+                        await firebase.auth().signInWithEmailAndPassword(email, password);
+                        console.log('[callback.html] ✅ Firebase Auth 로그인 복원 성공');
+                        window.currentUser = { id: userId };
+                        authRestored = true;
+                        // 인증 복원 완료 후 Strava 콜백 처리
+                        if (typeof window.handleStravaCallbackAfterAuth === 'function') {
+                          window.handleStravaCallbackAfterAuth();
+                        }
+                        return;
+                      } catch (signInError) {
+                        console.warn('[callback.html] ⚠️ Firebase Auth 로그인 복원 실패:', signInError);
+                      }
+                    }
+                  } else {
+                    // Fallback: try direct conversion from currentUser.contact
+                    const contact = currentUser.contact || '';
+                    if (contact) {
+                      const email = phoneToEmail(contact);
+                      const password = localStorage.getItem('userPassword_' + contact) || localStorage.getItem('lastPassword');
+                      if (email && password) {
+                        try {
+                          await firebase.auth().signInWithEmailAndPassword(email, password);
+                          console.log('[callback.html] ✅ Firebase Auth 로그인 복원 성공 (전화번호 직접 변환)');
+                          window.currentUser = { id: userId };
+                          authRestored = true;
+                          // 인증 복원 완료 후 Strava 콜백 처리
+                          if (typeof window.handleStravaCallbackAfterAuth === 'function') {
+                            window.handleStravaCallbackAfterAuth();
+                          }
+                          return;
+                        } catch (signInError) {
+                          console.warn('[callback.html] ⚠️ Firebase Auth 로그인 복원 실패 (전화번호 직접 변환):', signInError);
+                        }
+                      }
+                    }
+                  }
+                } catch (parseError) {
+                  console.warn('[callback.html] ⚠️ phoneToEmail 파싱 실패:', parseError);
+                }
+              } else {
+                // Fallback: phoneToEmail localStorage item not found, try direct conversion
+                const contact = currentUser.contact || '';
+                if (contact) {
+                  const email = phoneToEmail(contact);
+                  const password = localStorage.getItem('userPassword_' + contact) || localStorage.getItem('lastPassword');
+                  if (email && password) {
+                    try {
+                      await firebase.auth().signInWithEmailAndPassword(email, password);
+                      console.log('[callback.html] ✅ Firebase Auth 로그인 복원 성공 (전화번호 직접 변환)');
+                      window.currentUser = { id: userId };
+                      authRestored = true;
+                      // 인증 복원 완료 후 Strava 콜백 처리
+                      if (typeof window.handleStravaCallbackAfterAuth === 'function') {
+                        window.handleStravaCallbackAfterAuth();
+                      }
+                      return;
+                    } catch (signInError) {
+                      console.warn('[callback.html] ⚠️ Firebase Auth 로그인 복원 실패 (전화번호 직접 변환):', signInError);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('[callback.html] ⚠️ localStorage에서 인증 정보 복원 실패:', e);
+        }
+        
+        // 인증 복원 실패 시에도 일정 시간 후 콜백 처리 시도
+        if (!authRestored) {
+          setTimeout(function() {
+            if (typeof window.handleStravaCallbackAfterAuth === 'function') {
+              window.handleStravaCallbackAfterAuth();
+            }
+          }, 2000);
+        }
+      }
+    });
   </script>
   <script src="assets/js/stravaManager.js"></script>
   <script src="assets/js/strava_auth.js"></script>
@@ -139,10 +261,19 @@
         return;
       }
 
-      handleStravaCallback(
-        function () { showSuccess(); },
-        function (err) { showError(err); }
-      );
+      // Firebase Auth 상태 복원 후 Strava 콜백 처리
+      window.handleStravaCallbackAfterAuth = function() {
+        handleStravaCallback(
+          function () { showSuccess(); },
+          function (err) { showError(err); }
+        );
+      };
+      
+      // 이미 인증 상태가 복원되어 있으면 즉시 처리
+      if (firebase.auth().currentUser) {
+        window.handleStravaCallbackAfterAuth();
+      }
+      // 그렇지 않으면 onAuthStateChanged에서 호출됨
     })();
   </script>
 </body>
