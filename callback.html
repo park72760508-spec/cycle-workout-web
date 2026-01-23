@@ -50,6 +50,10 @@
       transition: opacity .2s;
     }
     .link:hover { opacity: .9; }
+    .link:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -61,7 +65,15 @@
     </div>
     <div id="success" class="hidden">
       <p class="msg">✅ Strava 연동이 완료되었습니다.</p>
-      <a id="backLink" class="link" href="./index.html">앱으로 돌아가기</a>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+        <button id="syncStravaBtn" class="link" style="cursor: pointer; border: none; font-size: inherit; font-family: inherit;">
+          🔄 Strava 동기화
+        </button>
+        <a id="backLink" class="link" href="./index.html" style="margin-top: 0;">앱으로 돌아가기</a>
+      </div>
+      <div id="syncStatus" class="hidden" style="margin-top: 16px; padding: 12px; background: #f0f0f0; border-radius: 8px; font-size: 0.9em;">
+        <p id="syncStatusText" class="msg" style="margin: 0;"></p>
+      </div>
     </div>
     <div id="error" class="hidden">
       <p class="msg err" id="errorText"></p>
@@ -312,6 +324,9 @@
       var errorText = document.getElementById('errorText');
       var backLink = document.getElementById('backLink');
       var retryLink = document.getElementById('retryLink');
+      var syncStravaBtn = document.getElementById('syncStravaBtn');
+      var syncStatus = document.getElementById('syncStatus');
+      var syncStatusText = document.getElementById('syncStatusText');
 
       function showLoading() {
         loading.classList.remove('hidden');
@@ -349,6 +364,99 @@
           // localStorage에 프로필 화면으로 이동할 플래그 설정
           localStorage.setItem('stravaCallbackReturn', 'profileScreen');
           window.location.href = './index.html';
+        };
+      }
+      
+      // Strava 동기화 버튼 클릭 이벤트
+      if (syncStravaBtn) {
+        syncStravaBtn.onclick = async function() {
+          if (syncStravaBtn.disabled) return;
+          
+          // 버튼 비활성화 및 로딩 상태
+          syncStravaBtn.disabled = true;
+          syncStravaBtn.textContent = '⏳ 동기화 중...';
+          syncStravaBtn.style.opacity = '0.6';
+          syncStravaBtn.style.cursor = 'not-allowed';
+          
+          // 상태 표시 영역 표시
+          if (syncStatus) {
+            syncStatus.classList.remove('hidden');
+            syncStatusText.textContent = '스트라바 활동 데이터를 가져오는 중...';
+            syncStatus.style.background = '#e3f2fd';
+            syncStatusText.style.color = '#1976d2';
+          }
+          
+          try {
+            console.log('[callback.html] 🚀 Strava 동기화 시작');
+            
+            // fetchAndProcessStravaData 함수 호출 (stravaManager.js에서 제공)
+            if (typeof window.fetchAndProcessStravaData === 'function') {
+              const result = await window.fetchAndProcessStravaData();
+              
+              console.log('[callback.html] ✅ 동기화 완료:', result);
+              
+              // 결과 메시지 구성
+              let message = '';
+              if (result.success) {
+                const newActivities = result.newActivities || 0;
+                const processed = result.processed || 0;
+                const totalTss = Object.values(result.totalTssByUser || {}).reduce((sum, tss) => sum + tss, 0);
+                
+                if (newActivities > 0) {
+                  message = `✅ 동기화 완료: ${newActivities}개의 새 활동이 추가되었습니다.`;
+                  if (totalTss > 0) {
+                    message += ` (총 ${Math.round(totalTss)} TSS 적립)`;
+                  }
+                } else {
+                  message = `✅ 동기화 완료: 새로운 활동이 없습니다.`;
+                }
+                
+                if (processed === 0) {
+                  message = '⚠️ Strava에 연결된 사용자가 없습니다.';
+                }
+                
+                // 오류가 있으면 추가 표시
+                if (result.errors && result.errors.length > 0) {
+                  console.warn('[callback.html] ⚠️ 동기화 중 일부 오류 발생:', result.errors);
+                  message += ` (일부 오류: ${result.errors.length}개)`;
+                }
+                
+                // 성공 스타일
+                if (syncStatus) {
+                  syncStatus.style.background = '#e8f5e9';
+                  syncStatusText.style.color = '#2e7d32';
+                }
+              } else {
+                message = `❌ 동기화 실패: ${result.error || '알 수 없는 오류'}`;
+                // 실패 스타일
+                if (syncStatus) {
+                  syncStatus.style.background = '#ffebee';
+                  syncStatusText.style.color = '#c62828';
+                }
+              }
+              
+              if (syncStatusText) {
+                syncStatusText.textContent = message;
+              }
+            } else {
+              throw new Error('fetchAndProcessStravaData 함수를 찾을 수 없습니다. stravaManager.js가 로드되었는지 확인하세요.');
+            }
+          } catch (error) {
+            console.error('[callback.html] ❌ 동기화 중 오류:', error);
+            
+            const errorMessage = `❌ 동기화 중 오류가 발생했습니다: ${error.message || error}`;
+            if (syncStatusText) {
+              syncStatusText.textContent = errorMessage;
+              syncStatus.style.background = '#ffebee';
+              syncStatusText.style.color = '#c62828';
+            }
+          } finally {
+            // 버튼 복원
+            syncStravaBtn.disabled = false;
+            syncStravaBtn.textContent = '🔄 Strava 동기화';
+            syncStravaBtn.style.opacity = '1';
+            syncStravaBtn.style.cursor = 'pointer';
+          }
         };
       }
 
