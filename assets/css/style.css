@@ -14622,14 +14622,16 @@ body.mobile-dashboard-active {
   -webkit-tap-highlight-color: transparent;
   
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: row; /* 가로 방향으로 배치 */
+  justify-content: space-between; /* 양쪽 끝에 배치 */
+  align-items: center; /* 수직 중앙 정렬 */
   gap: 12px;
   flex-wrap: nowrap; /* 한 줄로 표시 */
 }
 
 /* 컨디션별 강도 보정 모달의 확인 버튼 스타일 */
 #rpeConditionModal .modal-footer .btn-success {
+  flex: 1; /* 남은 공간을 균등하게 차지 */
   min-height: 50px !important;
   min-width: 50px !important;
   padding: 14px 24px !important;
@@ -14641,10 +14643,14 @@ body.mobile-dashboard-active {
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
+  display: inline-flex; /* 인라인 플렉스로 변경 */
+  align-items: center; /* 수직 중앙 정렬 */
+  justify-content: center; /* 수평 중앙 정렬 */
 }
 
 /* 컨디션별 강도 보정 모달의 뒤로 버튼 스타일 (무선 기기 연결 화면과 동일) */
 #rpeConditionModal .modal-footer .btn-exit-inline {
+  flex: 1; /* 남은 공간을 균등하게 차지 */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -14655,8 +14661,8 @@ body.mobile-dashboard-active {
   color: #dc2626;
   font-size: 14px;
   font-weight: 600;
-  min-height: 44px; /* iOS 권장 최소 터치 영역 */
-  min-width: 44px;
+  min-height: 50px !important; /* 확인 버튼과 동일한 높이 */
+  min-width: 50px !important;
   touch-action: manipulation; /* 더블탭 줌 방지 및 터치 반응성 향상 */
   -webkit-tap-highlight-color: rgba(239, 68, 68, 0.2); /* 터치 하이라이트 색상 */
   user-select: none; /* 텍스트 선택 방지 */
@@ -14707,6 +14713,7 @@ body.mobile-dashboard-active {
     padding-left: 12px !important;
     padding-right: 12px !important;
     gap: 8px;
+    flex-direction: row; /* 모바일에서도 가로 배치 유지 */
   }
   
   #rpeConditionModal .connection-exit-container .btn,
@@ -14715,6 +14722,7 @@ body.mobile-dashboard-active {
     min-height: 48px !important;
     min-width: 48px !important;
     padding: 12px 20px !important;
+    flex: 1; /* 모바일에서도 균등하게 배치 */
     font-size: 14px !important;
   }
 }
