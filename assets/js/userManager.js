@@ -1040,18 +1040,38 @@ async function apiGetUser(id) {
       return { success: false, error: '사용자 ID가 필요합니다.' };
     }
     
-    const userDoc = await getUsersCollection().doc(id).get();
-    
-    if (!userDoc.exists) {
-      return { success: false, error: 'User not found' };
+    // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+    if (window.firestoreV9) {
+      const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const usersRef = collection(window.firestoreV9, 'users');
+      const userDocRef = doc(usersRef, id);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (!userDocSnap.exists()) {
+        return { success: false, error: 'User not found' };
+      }
+      
+      const userData = {
+        id: userDocSnap.id,
+        ...userDocSnap.data()
+      };
+      
+      return { success: true, item: userData };
+    } else {
+      // v8 Compat 사용 (fallback)
+      const userDoc = await getUsersCollection().doc(id).get();
+      
+      if (!userDoc.exists) {
+        return { success: false, error: 'User not found' };
+      }
+      
+      const userData = {
+        id: userDoc.id,
+        ...userDoc.data()
+      };
+      
+      return { success: true, item: userData };
     }
-    
-    const userData = {
-      id: userDoc.id,
-      ...userDoc.data()
-    };
-    
-    return { success: true, item: userData };
   } catch (error) {
     console.error('❌ 사용자 조회 실패:', error);
     return { success: false, error: error.message };
