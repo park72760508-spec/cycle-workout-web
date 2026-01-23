@@ -1140,26 +1140,13 @@
                   </p>
                 </div>
                 
-                <div class="auth-input-group" style="margin-bottom: 20px;">
-                  <label for="forgotPasswordPhoneInput" class="auth-label-left">전화번호</label>
-                  <input 
-                    type="tel" 
-                    id="forgotPasswordPhoneInput" 
-                    placeholder="010-1234-5678" 
-                    autocomplete="tel"
-                    inputmode="numeric"
-                    maxlength="13"
-                    required
-                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
-                  >
-                </div>
-                
                 <div class="auth-status" id="forgotPasswordStatus" style="display: none; margin-bottom: 15px;"></div>
               </div>
               
-              <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 20px;">
-                <button class="btn btn-secondary" onclick="closeForgotPasswordModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
-                <button class="btn btn-primary" id="sendPasswordResetBtn" onclick="sendPasswordResetEmail()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">전송</button>
+              <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
+                <button onclick="closeForgotPasswordModal()" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 600; text-align: center; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; cursor: pointer; transition: all 0.2s ease;">
+                  취소
+                </button>
               </div>
             </div>
           </div>
@@ -4562,19 +4549,7 @@
         });
       }
       
-      // 비밀번호 재설정 모달 전화번호 입력 필드 포맷팅
-      const forgotPasswordPhoneInput = document.getElementById('forgotPasswordPhoneInput');
-      if (forgotPasswordPhoneInput) {
-        forgotPasswordPhoneInput.addEventListener('input', (e) => {
-          e.target.value = window.formatPhoneNumber ? window.formatPhoneNumber(e.target.value) : e.target.value;
-        });
-        
-        forgotPasswordPhoneInput.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter') {
-            document.getElementById('sendPasswordResetBtn')?.click();
-          }
-        });
-      }
+      // 비밀번호 재설정 모달 전화번호 입력 필드 제거됨 - 이벤트 리스너 제거
     });
     
     /**
@@ -4585,14 +4560,6 @@
       if (modal) {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
-        
-        // 전화번호 입력 필드 포커스
-        setTimeout(() => {
-          const phoneInput = document.getElementById('forgotPasswordPhoneInput');
-          if (phoneInput) {
-            phoneInput.focus();
-          }
-        }, 100);
       }
     }
     
@@ -4605,10 +4572,8 @@
         modal.classList.add('hidden');
         document.body.style.overflow = '';
         
-        // 입력 필드 초기화
-        const phoneInput = document.getElementById('forgotPasswordPhoneInput');
+        // 상태 메시지 초기화
         const statusEl = document.getElementById('forgotPasswordStatus');
-        if (phoneInput) phoneInput.value = '';
         if (statusEl) {
           statusEl.textContent = '';
           statusEl.style.display = 'none';
@@ -4618,70 +4583,11 @@
     }
     
     /**
-     * 비밀번호 재설정 이메일 전송
+     * 비밀번호 재설정 이메일 전송 (제거됨 - 전송 버튼 제거로 인해 사용하지 않음)
      */
     async function sendPasswordResetEmail() {
-      const phoneInput = document.getElementById('forgotPasswordPhoneInput');
-      const statusEl = document.getElementById('forgotPasswordStatus');
-      const sendBtn = document.getElementById('sendPasswordResetBtn');
-      
-      if (!phoneInput || !statusEl || !sendBtn) {
-        console.error('비밀번호 재설정 모달 요소를 찾을 수 없습니다.');
-        return;
-      }
-      
-      const phone = phoneInput.value.trim();
-      if (!phone) {
-        showForgotPasswordStatus('전화번호를 입력해주세요.', 'error');
-        phoneInput.focus();
-        return;
-      }
-      
-      // 전화번호 정규화
-      const normalizedPhone = phone.replace(/\D/g, '');
-      if (normalizedPhone.length < 11) {
-        showForgotPasswordStatus('올바른 전화번호를 입력해주세요.', 'error');
-        phoneInput.focus();
-        return;
-      }
-      
-      // 이메일 변환
-      const email = window.phoneToEmail ? window.phoneToEmail(normalizedPhone) : `${normalizedPhone}@stelvio.ai`;
-      
-      try {
-        sendBtn.disabled = true;
-        sendBtn.textContent = '전송 중...';
-        showForgotPasswordStatus('비밀번호 재설정 이메일을 전송하고 있습니다...', 'info');
-        
-        if (!window.authV9 || !window.sendPasswordResetEmailV9) {
-          throw new Error('Firebase Auth가 초기화되지 않았습니다.');
-        }
-        
-        await window.sendPasswordResetEmailV9(window.authV9, email);
-        
-        showForgotPasswordStatus('✅ 비밀번호 재설정 링크가 이메일로 전송되었습니다. 이메일을 확인해주세요.', 'success');
-        
-        // 3초 후 모달 닫기
-        setTimeout(() => {
-          closeForgotPasswordModal();
-        }, 3000);
-        
-      } catch (error) {
-        console.error('비밀번호 재설정 이메일 전송 실패:', error);
-        
-        let errorMessage = '비밀번호 재설정 이메일 전송에 실패했습니다.';
-        if (error.code === 'auth/user-not-found') {
-          errorMessage = '등록되지 않은 전화번호입니다.';
-        } else if (error.code === 'auth/invalid-email') {
-          errorMessage = '올바른 전화번호를 입력해주세요.';
-        } else if (error.message) {
-          errorMessage = error.message;
-        }
-        
-        showForgotPasswordStatus(errorMessage, 'error');
-        sendBtn.disabled = false;
-        sendBtn.textContent = '전송';
-      }
+      // 전송 기능 제거됨
+      console.log('비밀번호 재설정 전송 기능이 제거되었습니다.');
     }
     
     /**
@@ -4699,7 +4605,7 @@
     // 전역 함수로 등록
     window.showForgotPasswordModal = showForgotPasswordModal;
     window.closeForgotPasswordModal = closeForgotPasswordModal;
-    window.sendPasswordResetEmail = sendPasswordResetEmail;
+    // window.sendPasswordResetEmail = sendPasswordResetEmail; // 제거됨
   </script>
 <script src="assets/js/strava_auth.js"></script>
 <script src="assets/js/stravaManager.js"></script>
