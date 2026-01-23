@@ -1123,10 +1123,22 @@ async function apiCreateUser(userData) {
     };
     
     // Firestore에 저장
-    const userDocRef = getUsersCollection().doc(currentUser.uid);
-    await userDocRef.set(newUserData);
+    // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+    if (window.firestoreV9) {
+      const { setDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const usersRef = collection(window.firestoreV9, 'users');
+      const userDocRef = doc(usersRef, currentUser.uid);
+      await setDoc(userDocRef, newUserData);
+      
+      console.log('✅ 사용자 생성 완료 (firestoreV9):', newUserData.id);
+    } else {
+      // v8 Compat 사용 (fallback)
+      const userDocRef = getUsersCollection().doc(currentUser.uid);
+      await userDocRef.set(newUserData);
+      
+      console.log('✅ 사용자 생성 완료 (firestore v8):', newUserData.id);
+    }
     
-    console.log('✅ 사용자 생성 완료:', newUserData.id);
     return { success: true, id: newUserData.id };
   } catch (error) {
     console.error('❌ 사용자 생성 실패:', error);
@@ -1166,9 +1178,21 @@ async function apiUpdateUser(id, userData) {
     if (userData.strava_expires_at != null) updateData.strava_expires_at = Number(userData.strava_expires_at);
     
     // Firestore 업데이트
-    await getUsersCollection().doc(id).update(updateData);
+    // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+    if (window.firestoreV9) {
+      const { updateDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const usersRef = collection(window.firestoreV9, 'users');
+      const userDocRef = doc(usersRef, id);
+      await updateDoc(userDocRef, updateData);
+      
+      console.log('✅ 사용자 정보 업데이트 완료 (firestoreV9):', id);
+    } else {
+      // v8 Compat 사용 (fallback)
+      await getUsersCollection().doc(id).update(updateData);
+      
+      console.log('✅ 사용자 정보 업데이트 완료 (firestore v8):', id);
+    }
     
-    console.log('✅ 사용자 정보 업데이트 완료:', id);
     return { success: true };
   } catch (error) {
     console.error('❌ 사용자 정보 업데이트 실패:', error);
@@ -1189,9 +1213,21 @@ async function apiDeleteUser(id) {
       return { success: false, error: '사용자 ID가 필요합니다.' };
     }
     
-    await getUsersCollection().doc(id).delete();
+    // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+    if (window.firestoreV9) {
+      const { deleteDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+      const usersRef = collection(window.firestoreV9, 'users');
+      const userDocRef = doc(usersRef, id);
+      await deleteDoc(userDocRef);
+      
+      console.log('✅ 사용자 삭제 완료 (firestoreV9):', id);
+    } else {
+      // v8 Compat 사용 (fallback)
+      await getUsersCollection().doc(id).delete();
+      
+      console.log('✅ 사용자 삭제 완료 (firestore v8):', id);
+    }
     
-    console.log('✅ 사용자 삭제 완료:', id);
     return { success: true };
   } catch (error) {
     console.error('❌ 사용자 삭제 실패:', error);
