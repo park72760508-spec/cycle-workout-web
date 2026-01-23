@@ -388,13 +388,62 @@ async function saveTrainingResult(extra = {}) {
         
         // Firebase Firestore v9로 훈련 결과 저장 및 포인트 적립
         if (typeof window.saveTrainingSession === 'function') {
+          // 훈련 세션 데이터 수집
+          const session = window.trainingResults?.getCurrentSessionData?.() || state.currentTrainingSession;
+          
+          // 케이던스 데이터 계산
+          const cadenceValues = session?.cadenceData?.map(d => d.v).filter(v => v > 0) || [];
+          const avgCadence = cadenceValues.length ? Math.round(cadenceValues.reduce((a, b) => a + b, 0) / cadenceValues.length) : null;
+          
+          // 최대 심박수 계산
+          const hrValues = session?.hrData?.map(d => d.v).filter(v => v > 0) || [];
+          const maxHR = hrValues.length ? Math.max(...hrValues) : null;
+          
+          // 일량 계산 (kJ) - powerData 기반
+          let kilojoules = null;
+          if (session?.powerData && session.powerData.length > 0) {
+            const totalJoules = session.powerData.reduce((sum, data) => sum + (data.v || 0), 0);
+            kilojoules = Math.round(totalJoules / 1000); // J → kJ
+          }
+          
+          // 워크아웃 정보
+          const workoutTitle = window.currentWorkout?.title || window.currentWorkout?.name || null;
+          const workoutId = window.currentWorkout?.id || trainingResult.workoutId || extra.workoutId || null;
+          
           const trainingData = {
+            // 필수 필드
             duration: totalSeconds,
             weighted_watts: finalNP,
-            avg_watts: finalAvgWatts
+            avg_watts: finalAvgWatts,
+            
+            // 기본 정보
+            workout_id: workoutId ? String(workoutId) : null,
+            title: workoutTitle,
+            distance_km: null, // GPS 데이터가 있으면 추가 가능
+            elevation_gain: null, // GPS 데이터가 있으면 추가 가능
+            
+            // 파워 & 부하
+            max_watts: stats.maxPower || null,
+            kilojoules: kilojoules,
+            
+            // 심박 & 효율
+            avg_hr: stats.avgHR || null,
+            max_hr: maxHR,
+            
+            // 케이던스
+            avg_cadence: avgCadence,
+            
+            // 존 분포 계산용 (powerData 전달)
+            powerData: session?.powerData || trainingResult.powerData || null,
+            
+            // 주관적 느낌 (RPE) - 사용자 입력 필요 시 추가
+            rpe: null // 향후 사용자 입력으로 추가 가능
           };
           
-          console.log('[saveTrainingResult] 📤 saveTrainingSession 호출:', trainingData);
+          console.log('[saveTrainingResult] 📤 saveTrainingSession 호출:', {
+            ...trainingData,
+            powerDataCount: trainingData.powerData?.length || 0
+          });
           const saveResult = await window.saveTrainingSession(currentUserId, trainingData);
           console.log('[saveTrainingResult] 📥 saveTrainingSession 응답:', saveResult);
           

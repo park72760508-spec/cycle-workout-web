@@ -69,6 +69,55 @@ function addDaysToDate(currentDate, days) {
 }
 
 /**
+ * 파워 존 분포 계산 (FTP 기준)
+ * 
+ * @param {Array} powerData - 파워 데이터 배열 [{t: timestamp, v: power}, ...]
+ * @param {number} ftp - Functional Threshold Power
+ * @returns {Object} 존별 시간 분포 (초 단위)
+ */
+function calculateTimeInZones(powerData, ftp) {
+  const zones = {
+    z1_recovery: 0,      // 0-55% FTP
+    z2_endurance: 0,     // 56-75% FTP
+    z3_tempo: 0,         // 76-90% FTP
+    z4_threshold: 0,     // 91-105% FTP
+    z5_vo2max: 0,        // 106-120% FTP
+    z6_anaerobic: 0,     // 121-150% FTP
+    z7_neuromuscular: 0  // >150% FTP
+  };
+  
+  if (!powerData || powerData.length === 0 || !ftp || ftp <= 0) {
+    return zones;
+  }
+  
+  // 각 샘플은 1초 간격으로 기록된 것으로 가정
+  powerData.forEach(data => {
+    const power = Number(data.v) || 0;
+    if (power <= 0) return;
+    
+    const ftpPercent = (power / ftp) * 100;
+    
+    if (ftpPercent <= 55) {
+      zones.z1_recovery += 1;
+    } else if (ftpPercent <= 75) {
+      zones.z2_endurance += 1;
+    } else if (ftpPercent <= 90) {
+      zones.z3_tempo += 1;
+    } else if (ftpPercent <= 105) {
+      zones.z4_threshold += 1;
+    } else if (ftpPercent <= 120) {
+      zones.z5_vo2max += 1;
+    } else if (ftpPercent <= 150) {
+      zones.z6_anaerobic += 1;
+    } else {
+      zones.z7_neuromuscular += 1;
+    }
+  });
+  
+  return zones;
+}
+
+/**
  * 훈련 세션 저장 및 보상 처리
  * Firestore Transaction을 사용하여 데이터 무결성 보장
  * 
@@ -77,6 +126,17 @@ function addDaysToDate(currentDate, days) {
  * @param {number} trainingData.duration - 훈련 시간(초)
  * @param {number} trainingData.weighted_watts - Normalized Power (NP)
  * @param {number} [trainingData.avg_watts] - 평균 파워 (선택사항)
+ * @param {number} [trainingData.max_watts] - 최대 파워
+ * @param {number} [trainingData.avg_hr] - 평균 심박수
+ * @param {number} [trainingData.max_hr] - 최대 심박수
+ * @param {number} [trainingData.avg_cadence] - 평균 케이던스
+ * @param {number} [trainingData.kilojoules] - 일량 (kJ)
+ * @param {string} [trainingData.workout_id] - 워크아웃 ID
+ * @param {string} [trainingData.title] - 훈련 제목
+ * @param {number} [trainingData.distance_km] - 거리 (km)
+ * @param {number} [trainingData.elevation_gain] - 획득 고도 (m)
+ * @param {number} [trainingData.rpe] - 주관적 운동 강도 (90-110%)
+ * @param {Array} [trainingData.powerData] - 파워 데이터 배열 (존 분포 계산용)
  * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택사항, 없으면 window.firestoreV9 사용)
  * @returns {Promise<Object>} 저장 결과
  */
@@ -229,13 +289,63 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       // 6. 훈련 로그 데이터 준비 (트랜잭션 외부에서 저장)
       // userId는 서브컬렉션 경로에 포함되므로 중복 저장 불필요하지만, 
       // 쿼리 편의성을 위해 유지 (선택사항)
+      
+      // Intensity Factor 계산
+      const intensityFactor = np / currentFTP;
+      
+      // Efficiency Factor 계산 (NP / Avg HR)
+      const efficiencyFactor = trainingData.avg_hr && trainingData.avg_hr > 0 
+        ? (np / trainingData.avg_hr) 
+        : null;
+      
+      // 존 분포 계산 (powerData가 있으면)
+      const timeInZones = trainingData.powerData && trainingData.powerData.length > 0
+        ? calculateTimeInZones(trainingData.powerData, currentFTP)
+        : {
+            z1_recovery: 0,
+            z2_endurance: 0,
+            z3_tempo: 0,
+            z4_threshold: 0,
+            z5_vo2max: 0,
+            z6_anaerobic: 0,
+            z7_neuromuscular: 0
+          };
+      
       const trainingLogData = {
+        // 기본 정보
         userId: userId, // 쿼리 편의성을 위해 유지
         date: Timestamp.now(),
+        earned_points: earnedPoints,
+        workout_id: trainingData.workout_id || null,
+        title: trainingData.title || null,
+        
+        // 기본 정보 (Context)
         duration_sec: durationSec,
+        distance_km: trainingData.distance_km || null,
+        elevation_gain: trainingData.elevation_gain || null,
+        
+        // 파워 & 부하 (Power & Load)
+        ftp_at_time: currentFTP, // 훈련 당시의 FTP (중요: FTP는 변하므로 기록)
         avg_watts: avgWatts,
+        weighted_watts: np, // NP (Normalized Power)
+        max_watts: trainingData.max_watts || null,
         tss: tss,
-        earned_points: earnedPoints
+        if: Math.round(intensityFactor * 100) / 100, // Intensity Factor (소수점 2자리)
+        kilojoules: trainingData.kilojoules || null,
+        
+        // 심박 & 효율 (Heart Rate & Efficiency)
+        avg_hr: trainingData.avg_hr || null,
+        max_hr: trainingData.max_hr || null,
+        efficiency_factor: efficiencyFactor ? Math.round(efficiencyFactor * 100) / 100 : null,
+        
+        // 케이던스 (Technique)
+        avg_cadence: trainingData.avg_cadence || null,
+        
+        // 존 분포 (Zone Distribution)
+        time_in_zones: timeInZones,
+        
+        // 주관적 느낌 (RPE)
+        rpe: trainingData.rpe || null // 90% ~ 110% 몸상태
       };
       
       return {
