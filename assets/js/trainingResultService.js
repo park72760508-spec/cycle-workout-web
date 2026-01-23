@@ -1,6 +1,7 @@
 /**
  * 훈련 결과 저장 및 보상 처리 서비스
  * Firebase Firestore v9 SDK (Modular) 사용
+ * Google Sheets에서 Firebase Firestore로 마이그레이션
  * 
  * @module trainingResultService
  */
@@ -45,7 +46,7 @@ function calculateTSS(durationSec, weightedWatts, ftp) {
   // TSS = (duration_sec * NP * IF) / (FTP * 3600) * 100
   const tss = (durationSec * weightedWatts * intensityFactor) / (ftp * 3600) * 100;
   
-  // 정수로 반올림하여 반환 (earned_sp로 사용)
+  // 정수로 반올림하여 반환 (earned_points로 사용)
   return Math.round(tss);
 }
 
@@ -104,7 +105,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
   try {
     // Transaction 실행
     const result = await runTransaction(db, async (transaction) => {
-      // 1. 사용자 정보 가져오기
+      // 1. 사용자 정보 가져오기 (Transaction 내에서)
       const userRef = doc(db, 'users', userId);
       const userDoc = await transaction.get(userRef);
       
@@ -116,30 +117,33 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       
       // 현재 값 가져오기 (기본값 설정)
       const currentFTP = userData.ftp || 200;
-      const currentSpBalance = userData.sp_balance || 0;
-      const currentSpTotal = userData.sp_total || 0;
+      const currentRemPoints = Number(userData.rem_points || 0);
+      const currentAccPoints = Number(userData.acc_points || 0);
       const currentExpiryDate = userData.expiry_date;
       
       console.log('[saveTrainingSession] 사용자 현재 상태:', {
         ftp: currentFTP,
-        sp_balance: currentSpBalance,
-        sp_total: currentSpTotal,
+        rem_points: currentRemPoints,
+        acc_points: currentAccPoints,
         expiry_date: currentExpiryDate?.toDate?.() || currentExpiryDate
       });
       
       // 2. TSS 계산
       const tss = calculateTSS(durationSec, np, currentFTP);
-      const earnedSp = tss; // TSS가 획득 포인트
+      const earnedPoints = tss; // TSS가 획득 포인트 (정수로 반올림)
       
       console.log('[saveTrainingSession] TSS 계산 결과:', {
         tss,
-        earnedSp,
+        earnedPoints,
         formula: `(${durationSec} * ${np} * ${np / currentFTP}) / (${currentFTP} * 3600) * 100`
       });
       
-      // 3. 포인트 적립
-      const newSpTotal = currentSpTotal + earnedSp;
-      let newSpBalance = currentSpBalance + earnedSp;
+      // 3. 포인트 적립 및 보상 로직
+      // 총 누적 포인트: 기존 값 + earned_points
+      const newAccPoints = currentAccPoints + earnedPoints;
+      
+      // 잔여 포인트: 기존 값 + earned_points
+      let newRemPoints = currentRemPoints + earnedPoints;
       
       // 4. 구독 연장 처리
       let newExpiryDate = currentExpiryDate;
@@ -166,10 +170,11 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         expiryDateAsDate.setMonth(expiryDateAsDate.getMonth() + 3);
       }
       
-      // 500 포인트당 1일 연장 루프
-      while (newSpBalance >= 500) {
+      // 구독 연장 루프: rem_points가 500 이상인 경우
+      // 500 포인트당 1일 연장, 연장한 만큼 rem_points에서 500씩 차감
+      while (newRemPoints >= 500) {
         extendedDays += 1;
-        newSpBalance -= 500;
+        newRemPoints -= 500;
         expiryDateAsDate = addDaysToDate(expiryDateAsDate, 1);
       }
       
@@ -177,31 +182,30 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       newExpiryDate = Timestamp.fromDate(expiryDateAsDate);
       
       console.log('[saveTrainingSession] 포인트 및 구독 연장:', {
-        earnedSp,
-        newSpTotal,
-        newSpBalance,
+        earnedPoints,
+        newAccPoints,
+        newRemPoints,
         extendedDays,
         newExpiryDate: expiryDateAsDate.toISOString()
       });
       
-      // 5. 사용자 정보 업데이트
+      // 5. 사용자 정보 업데이트 (Transaction 내에서)
       const userUpdateData = {
-        sp_total: newSpTotal,
-        sp_balance: newSpBalance,
+        acc_points: newAccPoints,
+        rem_points: newRemPoints,
         expiry_date: newExpiryDate
       };
       
       transaction.update(userRef, userUpdateData);
       
-      // 6. 훈련 로그 저장 (트랜잭션 외부에서 처리 - addDoc은 트랜잭션에서 사용 불가)
-      // 대신 트랜잭션 완료 후 별도로 저장
+      // 6. 훈련 로그 데이터 준비 (트랜잭션 외부에서 저장)
       const trainingLogData = {
-        userId,
+        userId: userId,
         date: Timestamp.now(),
         duration_sec: durationSec,
         avg_watts: avgWatts,
-        tss,
-        earned_sp: earnedSp
+        tss: tss,
+        earned_points: earnedPoints
       };
       
       return {
@@ -209,34 +213,42 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         userUpdateData,
         trainingLogData,
         extendedDays,
-        earnedSp
+        earnedPoints
       };
     });
     
-    // 트랜잭션 완료 후 training_logs에 저장
+    // 7. 트랜잭션 완료 후 training_logs 컬렉션에 저장
     const trainingLogsRef = collection(db, 'training_logs');
-    await addDoc(trainingLogsRef, result.trainingLogData);
+    const trainingLogDocRef = await addDoc(trainingLogsRef, result.trainingLogData);
     
     console.log('[saveTrainingSession] ✅ 저장 완료:', {
       userId,
-      earnedSp: result.earnedSp,
+      earnedPoints: result.earnedPoints,
       extendedDays: result.extendedDays,
-      newSpBalance: result.userUpdateData.sp_balance,
-      newExpiryDate: result.userUpdateData.expiry_date.toDate().toISOString()
+      newRemPoints: result.userUpdateData.rem_points,
+      newAccPoints: result.userUpdateData.acc_points,
+      newExpiryDate: result.userUpdateData.expiry_date.toDate().toISOString(),
+      trainingLogId: trainingLogDocRef.id
     });
     
     return {
       success: true,
-      earnedSp: result.earnedSp,
+      earnedPoints: result.earnedPoints,
       extendedDays: result.extendedDays,
-      newSpBalance: result.userUpdateData.sp_balance,
-      newSpTotal: result.userUpdateData.sp_total,
+      newRemPoints: result.userUpdateData.rem_points,
+      newAccPoints: result.userUpdateData.acc_points,
       newExpiryDate: result.userUpdateData.expiry_date.toDate().toISOString(),
-      trainingLogId: 'saved' // addDoc의 결과는 반환하지 않지만 성공했음을 표시
+      trainingLogId: trainingLogDocRef.id
     };
     
   } catch (error) {
     console.error('[saveTrainingSession] ❌ 저장 실패:', error);
+    console.error('[saveTrainingSession] 오류 상세:', {
+      message: error.message,
+      stack: error.stack,
+      userId,
+      trainingData
+    });
     throw error;
   }
 }
