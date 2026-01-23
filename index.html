@@ -19,6 +19,65 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
   
+  <!-- Firebase v9 Modular SDK (전화번호 인증용) -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+    import { 
+      getAuth, 
+      signInWithEmailAndPassword, 
+      createUserWithEmailAndPassword,
+      updateProfile
+    } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+    
+    // Firebase 설정 (기존 firebaseConfig.js에서 가져온 값)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
+      authDomain: "stelvio-ai.firebaseapp.com",
+      projectId: "stelvio-ai",
+      storageBucket: "stelvio-ai.firebasestorage.app",
+      messagingSenderId: "752285835508",
+      appId: "1:752285835508:web:0662a24874209ebb483ea1"
+    };
+    
+    // Firebase v9 Modular SDK 초기화 (별도 앱 인스턴스)
+    let authV9;
+    try {
+      const appV9 = initializeApp(firebaseConfig, 'authV9');
+      authV9 = getAuth(appV9);
+      window.authV9 = authV9; // 전역 접근용
+      console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증용)');
+    } catch (error) {
+      console.error('❌ Firebase v9 초기화 실패:', error);
+    }
+    
+    // 전화번호를 @stelvio.ai 도메인을 붙인 가짜 이메일로 변환
+    function phoneToEmail(phoneNumber) {
+      const cleaned = phoneNumber.replace(/\D/g, '');
+      return `${cleaned}@stelvio.ai`;
+    }
+    
+    // 전화번호 포맷팅
+    function formatPhoneNumber(value) {
+      const numbers = value.replace(/\D/g, '');
+      if (numbers.length <= 3) {
+        return numbers;
+      } else if (numbers.length <= 7) {
+        return `${numbers.slice(0, 3)}-${numbers.slice(3)}`;
+      } else if (numbers.length <= 11) {
+        return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7)}`;
+      } else {
+        return `${numbers.slice(0, 3)}-${numbers.slice(3, 7)}-${numbers.slice(7, 11)}`;
+      }
+    }
+    
+    // 전역 함수로 등록
+    window.phoneToEmail = phoneToEmail;
+    window.formatPhoneNumber = formatPhoneNumber;
+    window.signInWithEmailAndPasswordV9 = signInWithEmailAndPassword;
+    window.createUserWithEmailAndPasswordV9 = createUserWithEmailAndPassword;
+    window.updateProfileV9 = updateProfile;
+  </script>
+  
   <style>
     .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
       background:#333;color:#fff;padding:10px 16px;border-radius:8px;
@@ -437,96 +496,144 @@
       transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* Google 로그인 버튼 스타일 */
-    .google-login-section {
+    /* 전화번호 기반 로그인 폼 스타일 */
+    .phone-auth-section {
       margin: 30px 0;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 16px;
+      gap: 20px;
     }
 
-    .google-login-btn {
+    .auth-input-group {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .auth-input-group label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #374151;
+    }
+
+    .auth-input-group input {
       width: 100%;
-      max-width: 320px;
-      padding: 14px 24px;
-      background: #ffffff;
-      border: 1px solid #dadce0;
+      padding: 14px 18px;
+      border: 2px solid #e5e7eb;
       border-radius: 8px;
       font-size: 16px;
-      font-weight: 500;
-      color: #3c4043;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      background: #ffffff;
+      color: #111827;
+    }
+
+    .auth-input-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .auth-input-group input::placeholder {
+      color: #9ca3af;
+    }
+
+    .auth-input-group.hidden {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      margin: 0;
+      transition: max-height 0.5s ease, opacity 0.5s ease, margin 0.5s ease;
+    }
+
+    .auth-input-group:not(.hidden) {
+      max-height: 200px;
+      opacity: 1;
+    }
+
+    .auth-submit-btn {
+      width: 100%;
+      padding: 14px 24px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #ffffff;
       cursor: pointer;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      position: relative;
-      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      margin-top: 8px;
     }
 
-    .google-login-btn:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      border-color: #c4c7c5;
-      transform: translateY(-1px);
+    .auth-submit-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
     }
 
-    .google-login-btn:active {
+    .auth-submit-btn:active:not(:disabled) {
       transform: translateY(0);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    .google-login-btn:disabled {
+    .auth-submit-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
       transform: none;
     }
 
-    .google-icon {
-      flex-shrink: 0;
-    }
-
-    .google-login-text {
-      font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      letter-spacing: 0.2px;
+    .auth-submit-btn.signup-mode {
+      background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
     }
 
     /* 로딩 상태 */
-    .google-login-btn.loading {
+    .auth-submit-btn.loading {
       pointer-events: none;
+      position: relative;
+      color: transparent;
     }
 
-    .google-login-btn.loading .google-login-text::after {
-      content: '...';
-      animation: dots 1.5s steps(4, end) infinite;
+    .auth-submit-btn.loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid #ffffff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
     }
 
-    @keyframes dots {
-      0%, 20% { content: '.'; }
-      40% { content: '..'; }
-      60%, 100% { content: '...'; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
 
     /* 인증 상태 메시지 */
-    #googleAuthStatus {
+    #authStatus {
       min-height: 24px;
       font-size: 14px;
       text-align: center;
       margin-top: 8px;
+      padding: 12px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
     }
 
-    #googleAuthStatus.success {
-      color: #10b981;
+    #authStatus.success {
+      color: #059669;
+      background: #d1fae5;
     }
 
-    #googleAuthStatus.error {
-      color: #ef4444;
+    #authStatus.error {
+      color: #dc2626;
+      background: #fee2e2;
     }
 
-    #googleAuthStatus.info {
-      color: #3b82f6;
+    #authStatus.info {
+      color: #667eea;
+      background: #eef2ff;
     }
 
     /* 사용자 정보 입력 폼 모바일 반응형 */
@@ -820,22 +927,58 @@
           </div>
           <div class="auth-form-header">
             <h3>STELVIO AI 로그인</h3>
-            <p>Google 계정으로 간편하게 로그인하세요</p>
+            <p>전화번호와 PIN 번호로 간편하게 로그인하세요</p>
           </div>
           
-          <!-- Google 로그인 버튼 섹션 -->
-          <div class="google-login-section">
-            <button class="google-login-btn" id="googleLoginBtn" onclick="handleGoogleLogin()">
-              <svg class="google-icon" viewBox="0 0 24 24" width="20" height="20">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              <span class="google-login-text">Google로 로그인</span>
+          <!-- 전화번호 기반 로그인 폼 -->
+          <div class="phone-auth-section">
+            <!-- 전화번호 입력 -->
+            <div class="auth-input-group">
+              <label for="authPhoneInput">전화번호</label>
+              <input 
+                type="tel" 
+                id="authPhoneInput" 
+                placeholder="010-1234-5678" 
+                autocomplete="tel"
+                inputmode="numeric"
+                maxlength="13"
+                required
+              >
+            </div>
+            
+            <!-- 비밀번호 입력 -->
+            <div class="auth-input-group">
+              <label for="authPasswordInput">비밀번호 (PIN)</label>
+              <input 
+                type="password" 
+                id="authPasswordInput" 
+                placeholder="6자 이상 입력" 
+                autocomplete="current-password"
+                minlength="6"
+                required
+              >
+            </div>
+            
+            <!-- 닉네임 입력 (초기엔 숨김, 회원가입 모드에서 표시) -->
+            <div class="auth-input-group hidden" id="authNicknameGroup">
+              <label for="authNicknameInput">닉네임</label>
+              <input 
+                type="text" 
+                id="authNicknameInput" 
+                placeholder="사용할 닉네임을 입력하세요" 
+                autocomplete="username"
+                minlength="2"
+                maxlength="20"
+              >
+            </div>
+            
+            <!-- 제출 버튼 -->
+            <button class="auth-submit-btn" id="authSubmitBtn">
+              시작하기
             </button>
             
-            <div class="auth-status" id="googleAuthStatus"></div>
+            <!-- 에러 메시지 -->
+            <div class="auth-status" id="authStatus"></div>
           </div>
           
           <div class="auth-help-card">
@@ -3216,151 +3359,292 @@
 <script src="assets/js/workoutManager.js"></script>
   <script src="assets/js/userManager.js"></script>
   
-  <!-- Google 로그인 핸들러 -->
+  <!-- 전화번호 기반 로그인 핸들러 -->
   <script>
+    let isSignUpMode = false; // 회원가입 모드 여부
+    
     /**
-     * Google 로그인 처리 함수
-     * 로그인 성공 시 connectionScreen으로 이동
+     * 전화번호 기반 로그인/회원가입 처리 함수
+     * One-Stop Flow: 로그인 시도 → 실패 시 회원가입 모드로 전환
      */
-    async function handleGoogleLogin() {
-      const loginBtn = document.getElementById('googleLoginBtn');
-      const statusEl = document.getElementById('googleAuthStatus');
+    async function handlePhoneAuth() {
+      const phoneInput = document.getElementById('authPhoneInput');
+      const passwordInput = document.getElementById('authPasswordInput');
+      const nicknameInput = document.getElementById('authNicknameInput');
+      const nicknameGroup = document.getElementById('authNicknameGroup');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const statusEl = document.getElementById('authStatus');
       
-      // 버튼 비활성화 및 로딩 상태
-      if (loginBtn) {
-        loginBtn.disabled = true;
-        loginBtn.classList.add('loading');
+      // 입력값 가져오기
+      const phone = phoneInput.value.trim();
+      const password = passwordInput.value;
+      const nickname = nicknameInput.value.trim();
+      
+      // 유효성 검사
+      if (!phone) {
+        showAuthStatus('전화번호를 입력해주세요.', 'error');
+        phoneInput.focus();
+        return;
       }
       
-      // 상태 메시지 초기화
-      if (statusEl) {
-        statusEl.textContent = '로그인 중...';
-        statusEl.className = 'auth-status info';
+      if (!password) {
+        showAuthStatus('비밀번호를 입력해주세요.', 'error');
+        passwordInput.focus();
+        return;
       }
       
-      try {
-        // Firebase Google 로그인 실행
-        const result = await signInWithGoogle();
-        
-        // 리다이렉트 방식인 경우 (페이지가 이동하므로 여기서 처리 불가)
-        if (result.redirecting) {
-          if (statusEl) {
-            statusEl.textContent = '로그인 페이지로 이동 중...';
-            statusEl.className = 'auth-status info';
-          }
-          // 리다이렉트는 페이지가 이동하므로 여기서 반환
+      // 회원가입 모드인 경우 닉네임 검사
+      if (isSignUpMode) {
+        if (!nickname) {
+          showAuthStatus('닉네임을 입력해주세요.', 'error');
+          nicknameInput.focus();
           return;
         }
         
-        if (result.success) {
-          // 로그인 성공
-          if (statusEl) {
-            statusEl.textContent = result.isNewUser 
-              ? '✅ 환영합니다! 계정이 생성되었습니다.' 
-              : '✅ 로그인 성공!';
-            statusEl.className = 'auth-status success';
+        if (nickname.length < 2) {
+          showAuthStatus('닉네임은 최소 2자 이상이어야 합니다.', 'error');
+          nicknameInput.focus();
+          return;
+        }
+      }
+      
+      // 버튼 비활성화 및 로딩 상태
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+        submitBtn.textContent = isSignUpMode ? '가입 중...' : '로그인 중...';
+      }
+      
+      // 상태 메시지
+      showAuthStatus(isSignUpMode ? '회원가입 중...' : '로그인 중...', 'info');
+      
+      try {
+        // Firebase v9 Modular SDK 사용
+        if (!window.authV9 || !window.phoneToEmail) {
+          throw new Error('Firebase 인증 모듈이 로드되지 않았습니다.');
+        }
+        
+        const email = window.phoneToEmail(phone);
+        console.log(`${isSignUpMode ? '📝 회원가입' : '🔐 로그인'} 시도: ${email}`);
+        
+        if (isSignUpMode) {
+          // 회원가입 처리
+          const userCredential = await window.createUserWithEmailAndPasswordV9(
+            window.authV9, 
+            email, 
+            password
+          );
+          const user = userCredential.user;
+          
+          // 닉네임 프로필 업데이트
+          if (nickname) {
+            await window.updateProfileV9(user, {
+              displayName: nickname.trim()
+            });
+            console.log('✅ 닉네임 저장 완료:', nickname);
           }
           
-          // 토스트 메시지 표시
+          showAuthStatus('✅ 회원가입 성공!', 'success');
+          
+          // 토스트 메시지
           if (typeof showToast === 'function') {
-            showToast(result.isNewUser 
-              ? `${result.user.name}님, 환영합니다! 🎉` 
-              : `${result.user.name}님, 로그인되었습니다.`);
+            showToast(`${nickname}님, 환영합니다! 🎉`);
           }
           
-          // 사용자 목록 새로고침 및 DB 동기화
-          if (typeof loadUsers === 'function') {
-            await loadUsers();
-          }
-          
-          // DB 동기화도 실행 (app.js의 syncUsersFromDB)
-          if (typeof syncUsersFromDB === 'function') {
-            try {
-              await syncUsersFromDB();
-              console.log('✅ 사용자 목록 DB 동기화 완료');
-            } catch (syncError) {
-              console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', syncError);
+        } else {
+          // 로그인 시도
+          try {
+            const userCredential = await window.signInWithEmailAndPasswordV9(
+              window.authV9, 
+              email, 
+              password
+            );
+            const user = userCredential.user;
+            
+            console.log('✅ 로그인 성공:', user.uid);
+            showAuthStatus('✅ 로그인 성공!', 'success');
+            
+            // 토스트 메시지
+            if (typeof showToast === 'function') {
+              const displayName = user.displayName || '사용자';
+              showToast(`${displayName}님, 로그인되었습니다.`);
             }
+            
+          } catch (loginError) {
+            // 사용자가 존재하지 않는 경우 → 회원가입 모드로 전환
+            if (loginError.code === 'auth/user-not-found') {
+              console.log('🔄 계정이 없어 회원가입 모드로 전환');
+              switchToSignUpMode();
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.textContent = '시작하기';
+              }
+              return; // 여기서 종료, 사용자가 닉네임 입력 후 다시 버튼 클릭
+            }
+            
+            // 기타 에러는 throw하여 아래 catch에서 처리
+            throw loginError;
           }
-          
-          // 필수 정보 확인 후 화면 전환 결정
-          if (result.needsInfo) {
-            // 필수 정보가 없으면 로그인 화면 숨기고 사용자 정보 입력 모달 표시
+        }
+        
+        // 로그인/회원가입 성공 후 처리
+        // 사용자 목록 새로고침 및 DB 동기화
+        if (typeof loadUsers === 'function') {
+          await loadUsers();
+        }
+        
+        if (typeof syncUsersFromDB === 'function') {
+          try {
+            await syncUsersFromDB();
+            console.log('✅ 사용자 목록 DB 동기화 완료');
+          } catch (syncError) {
+            console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', syncError);
+          }
+        }
+        
+        // 베이스캠프 화면으로 이동
+        setTimeout(() => {
+          if (typeof showScreen === 'function') {
+            showScreen('basecampScreen');
+          } else {
             const authScreen = document.getElementById('authScreen');
+            const basecampScreen = document.getElementById('basecampScreen');
+            
             if (authScreen) {
               authScreen.classList.remove('active');
               authScreen.style.display = 'none';
             }
             
-            // 사용자 정보 입력 모달은 signInWithGoogle()에서 이미 표시됨
-            // 추가로 표시하려면 여기서도 호출 가능
-            if (typeof showCompleteUserInfoModal === 'function') {
-              setTimeout(() => {
-                showCompleteUserInfoModal(result.user);
-              }, 300);
+            if (basecampScreen) {
+              basecampScreen.classList.add('active');
+              basecampScreen.style.display = 'block';
             }
-          } else {
-            // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
-            setTimeout(() => {
-              if (typeof showScreen === 'function') {
-                showScreen('basecampScreen');
-              } else {
-                // showScreen이 없으면 직접 화면 전환
-                const authScreen = document.getElementById('authScreen');
-                const basecampScreen = document.getElementById('basecampScreen');
-                
-                if (authScreen) {
-                  authScreen.classList.remove('active');
-                  authScreen.style.display = 'none';
-                }
-                
-                if (basecampScreen) {
-                  basecampScreen.classList.add('active');
-                  basecampScreen.style.display = 'block';
-                }
-              }
-            }, 1000);
           }
-          
-        } else {
-          // 로그인 실패
-          if (statusEl) {
-            statusEl.textContent = `❌ 로그인 실패: ${result.error || '알 수 없는 오류'}`;
-            statusEl.className = 'auth-status error';
-          }
-          
-          if (typeof showToast === 'function') {
-            showToast(`로그인 실패: ${result.error || '알 수 없는 오류'}`);
-          }
-          
-          // 버튼 다시 활성화
-          if (loginBtn) {
-            loginBtn.disabled = false;
-            loginBtn.classList.remove('loading');
-          }
-        }
-      } catch (error) {
-        console.error('Google 로그인 오류:', error);
+        }, 1000);
         
-        if (statusEl) {
-          statusEl.textContent = `❌ 오류 발생: ${error.message || '알 수 없는 오류'}`;
-          statusEl.className = 'auth-status error';
+      } catch (error) {
+        console.error('인증 오류:', error);
+        
+        let errorMessage = '알 수 없는 오류가 발생했습니다.';
+        switch (error.code) {
+          case 'auth/wrong-password':
+            errorMessage = '비밀번호가 올바르지 않습니다.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = '전화번호 형식이 올바르지 않습니다.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = '비밀번호는 최소 6자 이상이어야 합니다.';
+            break;
+          case 'auth/email-already-in-use':
+            errorMessage = '이미 사용 중인 전화번호입니다.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = '네트워크 연결을 확인해주세요.';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = '너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.';
+            break;
+          default:
+            errorMessage = error.message || '알 수 없는 오류';
         }
+        
+        showAuthStatus(`❌ ${errorMessage}`, 'error');
         
         if (typeof showToast === 'function') {
-          showToast(`로그인 중 오류가 발생했습니다: ${error.message}`);
+          showToast(errorMessage);
         }
-        
+      } finally {
         // 버튼 다시 활성화
-        if (loginBtn) {
-          loginBtn.disabled = false;
-          loginBtn.classList.remove('loading');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.classList.remove('loading');
+          submitBtn.textContent = isSignUpMode ? '가입 완료' : '시작하기';
         }
       }
     }
     
+    /**
+     * 회원가입 모드로 UI 전환
+     */
+    function switchToSignUpMode() {
+      isSignUpMode = true;
+      const nicknameGroup = document.getElementById('authNicknameGroup');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      
+      if (nicknameGroup) {
+        nicknameGroup.classList.remove('hidden');
+      }
+      
+      if (submitBtn) {
+        submitBtn.textContent = '가입 완료';
+        submitBtn.classList.add('signup-mode');
+      }
+      
+      showAuthStatus('새 계정을 생성합니다. 닉네임을 입력해주세요.', 'info');
+      console.log('🔄 회원가입 모드로 전환');
+    }
+    
+    /**
+     * 인증 상태 메시지 표시
+     */
+    function showAuthStatus(message, type = 'info') {
+      const statusEl = document.getElementById('authStatus');
+      if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = `auth-status ${type}`;
+      }
+    }
+    
     // 전역 함수로 등록
-    window.handleGoogleLogin = handleGoogleLogin;
+    window.handlePhoneAuth = handlePhoneAuth;
+    
+    // DOM 로드 후 이벤트 리스너 등록
+    document.addEventListener('DOMContentLoaded', () => {
+      const phoneInput = document.getElementById('authPhoneInput');
+      const passwordInput = document.getElementById('authPasswordInput');
+      const nicknameInput = document.getElementById('authNicknameInput');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      
+      // 전화번호 포맷팅
+      if (phoneInput) {
+        phoneInput.addEventListener('input', (e) => {
+          e.target.value = window.formatPhoneNumber ? window.formatPhoneNumber(e.target.value) : e.target.value;
+        });
+        
+        phoneInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') {
+            passwordInput.focus();
+          }
+        });
+      }
+      
+      // 비밀번호 입력 필드
+      if (passwordInput) {
+        passwordInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && !isSignUpMode) {
+            submitBtn.click();
+          } else if (e.key === 'Enter' && isSignUpMode) {
+            nicknameInput.focus();
+          }
+        });
+      }
+      
+      // 닉네임 입력 필드
+      if (nicknameInput) {
+        nicknameInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter' && isSignUpMode) {
+            submitBtn.click();
+          }
+        });
+      }
+      
+      // 제출 버튼
+      if (submitBtn) {
+        submitBtn.addEventListener('click', handlePhoneAuth);
+      }
+    });
   </script>
 <script src="assets/js/strava_auth.js"></script>
 <script src="assets/js/stravaManager.js"></script>
