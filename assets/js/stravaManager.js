@@ -195,9 +195,21 @@ async function fetchAndProcessStravaData() {
       const userId = userDoc.id;
       const refreshToken = userData.strava_refresh_token;
       const ftp = Number(userData.ftp) || 0;
+      const createdAt = userData.created_at || '';
 
       // 클라이언트 측에서 null과 빈 문자열 필터링
       if (!refreshToken || refreshToken === null || refreshToken === '' || !userId) continue;
+
+      // 가입일 확인 (YYYY-MM-DD 형식으로 변환)
+      let userCreatedDate = '';
+      if (createdAt) {
+        try {
+          const createdDate = new Date(createdAt);
+          userCreatedDate = createdDate.toISOString().split('T')[0];
+        } catch (e) {
+          console.warn(`[fetchAndProcessStravaData] 사용자 ${userId}의 가입일 파싱 실패:`, createdAt);
+        }
+      }
 
       let totalTss = 0;
       let newCount = 0;
@@ -219,6 +231,57 @@ async function fetchAndProcessStravaData() {
       processed += 1;
       const activities = actResult.activities || [];
 
+      // 해당 사용자의 stelvio 훈련 로그 조회 (날짜별 체크용)
+      let stelvioLogDates = new Set();
+      try {
+        if (typeof window.getTrainingResultsFromFirebase === 'function') {
+          const trainingResults = await window.getTrainingResultsFromFirebase(userId);
+          if (trainingResults.success && trainingResults.items) {
+            trainingResults.items.forEach(result => {
+              // started_at 또는 completed_at에서 날짜 추출
+              const startedAt = result.started_at || '';
+              const completedAt = result.completed_at || '';
+              
+              if (startedAt) {
+                try {
+                  const date = new Date(startedAt);
+                  const dateStr = date.toISOString().split('T')[0];
+                  stelvioLogDates.add(dateStr);
+                } catch (e) {
+                  // 날짜 파싱 실패 시 무시
+                }
+              }
+              
+              if (completedAt) {
+                try {
+                  const date = new Date(completedAt);
+                  const dateStr = date.toISOString().split('T')[0];
+                  stelvioLogDates.add(dateStr);
+                } catch (e) {
+                  // 날짜 파싱 실패 시 무시
+                }
+              }
+            });
+          }
+          console.log(`[fetchAndProcessStravaData] 사용자 ${userId}의 stelvio 로그 날짜 ${stelvioLogDates.size}개 발견`);
+        }
+      } catch (logError) {
+        console.warn(`[fetchAndProcessStravaData] 사용자 ${userId}의 stelvio 로그 조회 실패:`, logError);
+        // 로그 조회 실패해도 계속 진행
+      }
+
+      // 이미 저장된 스트라바 활동 중 TSS가 아직 적립되지 않은 활동 조회 (중복 적립 방지)
+      let unappliedActivities = new Map();
+      try {
+        if (typeof window.getUnappliedStravaActivities === 'function') {
+          unappliedActivities = await window.getUnappliedStravaActivities(userId);
+          console.log(`[fetchAndProcessStravaData] 사용자 ${userId}의 TSS 미적립 활동 ${unappliedActivities.size}개 발견`);
+        }
+      } catch (unappliedError) {
+        console.warn(`[fetchAndProcessStravaData] 사용자 ${userId}의 TSS 미적립 활동 조회 실패:`, unappliedError);
+        // 조회 실패해도 계속 진행
+      }
+
       // 각 활동 처리
       for (const act of activities) {
         const actId = String(act.id);
@@ -234,6 +297,19 @@ async function fetchAndProcessStravaData() {
             dateStr = startDate;
           }
         }
+
+        // 가입일 이후 날짜인지 확인
+        if (userCreatedDate && dateStr < userCreatedDate) {
+          console.log(`[fetchAndProcessStravaData] ⚠️ 가입일 이전 활동 무시: ${actId} (${dateStr} < ${userCreatedDate})`);
+          continue;
+        }
+
+        // 같은 날짜에 stelvio 로그가 있는지 확인
+        if (stelvioLogDates.has(dateStr)) {
+          console.log(`[fetchAndProcessStravaData] ⚠️ 같은 날짜에 stelvio 로그 존재, 스트라바 TSS 제외: ${actId} (${dateStr})`);
+          // 로그는 저장하되 TSS는 누적하지 않음
+        }
+
         const title = act.name || '';
         const distanceKm = (Number(act.distance) || 0) / 1000;
         const movingTime = Math.round(Number(act.moving_time) || 0);
@@ -246,7 +322,8 @@ async function fetchAndProcessStravaData() {
               activity_id: actId,
               userId: userId,
               title: title,
-              date: dateStr
+              date: dateStr,
+              hasStelvioLog: stelvioLogDates.has(dateStr)
             });
             
             const saveResult = await window.saveStravaActivityToFirebase({
@@ -264,10 +341,63 @@ async function fetchAndProcessStravaData() {
             if (saveResult && saveResult.isNew) {
               existingIds.add(actId);
               newCount += 1;
-              totalTss += tss;
-              console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료: ${actId} (${newCount}번째)`);
+              
+              // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
+              if (!stelvioLogDates.has(dateStr)) {
+                totalTss += tss;
+                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${tss})`);
+                
+                // TSS 적립 완료 표시
+                if (typeof window.markStravaActivityTssApplied === 'function') {
+                  try {
+                    await window.markStravaActivityTssApplied(userId, actId);
+                  } catch (markError) {
+                    console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
+                    // 표시 실패해도 계속 진행
+                  }
+                }
+              } else {
+                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외): ${actId} - 같은 날짜에 stelvio 로그 존재`);
+                // stelvio 로그가 있는 날짜는 TSS를 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
+                if (typeof window.markStravaActivityTssApplied === 'function') {
+                  try {
+                    await window.markStravaActivityTssApplied(userId, actId);
+                  } catch (markError) {
+                    console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
+                  }
+                }
+              }
             } else {
               console.log(`[fetchAndProcessStravaData] ⚠️ 이미 존재하는 활동: ${actId}`);
+              
+              // 이미 저장된 활동 중 TSS가 아직 적립되지 않은 경우 확인
+              const unapplied = unappliedActivities.get(actId);
+              if (unapplied) {
+                // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
+                if (!stelvioLogDates.has(dateStr)) {
+                  totalTss += unapplied.tss;
+                  console.log(`[fetchAndProcessStravaData] ✅ 기존 활동 TSS 누적: ${actId} (TSS: ${unapplied.tss})`);
+                  
+                  // TSS 적립 완료 표시
+                  if (typeof window.markStravaActivityTssApplied === 'function') {
+                    try {
+                      await window.markStravaActivityTssApplied(userId, actId);
+                    } catch (markError) {
+                      console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
+                    }
+                  }
+                } else {
+                  console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외: ${actId} - 같은 날짜에 stelvio 로그 존재`);
+                  // stelvio 로그가 있는 날짜는 TSS를 적립하지 않으므로 tss_applied를 true로 표시
+                  if (typeof window.markStravaActivityTssApplied === 'function') {
+                    try {
+                      await window.markStravaActivityTssApplied(userId, actId);
+                    } catch (markError) {
+                      console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
+                    }
+                  }
+                }
+              }
             }
           } catch (saveError) {
             console.error(`[fetchAndProcessStravaData] ❌ 활동 저장 실패 (${actId}):`, saveError);
