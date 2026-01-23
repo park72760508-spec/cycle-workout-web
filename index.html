@@ -3678,18 +3678,19 @@
                 const result = await window.findUserByPhone(phone);
                 if (result.success && result.userData) {
                   const userData = result.userData;
-                  // 토스트 메시지
+                  if (typeof window !== 'undefined') window.isPhoneAuthenticated = true;
                   if (typeof showToast === 'function') {
                     showToast(`${userData.name}님, 로그인되었습니다.`);
                   }
                 } else {
-                  // 사용자를 찾지 못한 경우
+                  if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
                   if (typeof showToast === 'function') {
                     showToast('사용자 정보를 찾을 수 없습니다.');
                   }
                 }
               } catch (error) {
                 console.error('사용자 정보 찾기 실패:', error);
+                if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
                 if (typeof showToast === 'function') {
                   showToast('사용자 정보를 불러오는 중 오류가 발생했습니다.');
                 }
