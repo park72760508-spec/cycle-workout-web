@@ -160,8 +160,27 @@
             
             if (phone) {
               email = emailMap[phone] || phoneToEmail(phone);
-              password = localStorage.getItem('userPassword_' + phone) || localStorage.getItem('lastPassword');
-              console.log('[callback.html] 📋 phoneToEmail에서 찾음:', { phone: phone, email: email, hasPassword: !!password });
+              // 여러 형식의 키로 비밀번호 찾기 시도
+              const phoneWithDash = phone; // 원본
+              const phoneWithoutDash = phone.replace(/-/g, ''); // 하이픈 제거
+              const phoneDigitsOnly = phone.replace(/\D/g, ''); // 숫자만
+              
+              password = localStorage.getItem('userPassword_' + phoneWithDash) ||
+                         localStorage.getItem('userPassword_' + phoneWithoutDash) ||
+                         localStorage.getItem('userPassword_' + phoneDigitsOnly) ||
+                         localStorage.getItem('lastPassword');
+              
+              console.log('[callback.html] 📋 phoneToEmail에서 찾음:', { 
+                phone: phone, 
+                email: email, 
+                hasPassword: !!password,
+                triedKeys: [
+                  'userPassword_' + phoneWithDash,
+                  'userPassword_' + phoneWithoutDash,
+                  'userPassword_' + phoneDigitsOnly,
+                  'lastPassword'
+                ]
+              });
             }
           } catch (parseError) {
             console.warn('[callback.html] ⚠️ phoneToEmail 파싱 실패:', parseError);
@@ -171,16 +190,65 @@
         // Fallback: currentUser.contact에서 직접 변환
         if (!email && currentUser.contact) {
           email = phoneToEmail(currentUser.contact);
-          password = localStorage.getItem('userPassword_' + currentUser.contact) || localStorage.getItem('lastPassword');
-          console.log('[callback.html] 📋 contact에서 직접 변환:', { contact: currentUser.contact, email: email, hasPassword: !!password });
+          // 여러 형식의 키로 비밀번호 찾기 시도
+          const contactWithDash = currentUser.contact; // '010-4017-9020'
+          const contactWithoutDash = currentUser.contact.replace(/-/g, ''); // '01040179020'
+          const contactDigitsOnly = currentUser.contact.replace(/\D/g, ''); // 숫자만
+          
+          password = localStorage.getItem('userPassword_' + contactWithDash) ||
+                     localStorage.getItem('userPassword_' + contactWithoutDash) ||
+                     localStorage.getItem('userPassword_' + contactDigitsOnly) ||
+                     localStorage.getItem('lastPassword');
+          
+          console.log('[callback.html] 📋 contact에서 직접 변환:', { 
+            contact: currentUser.contact, 
+            email: email, 
+            hasPassword: !!password,
+            triedKeys: [
+              'userPassword_' + contactWithDash,
+              'userPassword_' + contactWithoutDash,
+              'userPassword_' + contactDigitsOnly,
+              'lastPassword'
+            ]
+          });
         }
         
-        if (!email || !password) {
-          console.warn('[callback.html] ⚠️ 이메일 또는 비밀번호를 찾을 수 없습니다.');
+        if (!email) {
+          console.warn('[callback.html] ⚠️ 이메일을 찾을 수 없습니다.');
           console.log('[callback.html] 디버깅 정보:', {
             hasEmail: !!email,
-            hasPassword: !!password,
             currentUser: currentUser
+          });
+          return false;
+        }
+        
+        // 비밀번호를 찾지 못한 경우, 모든 가능한 키를 시도
+        if (!password) {
+          console.log('[callback.html] 🔍 비밀번호를 찾기 위해 모든 localStorage 키 확인 중...');
+          const allKeys = Object.keys(localStorage);
+          const passwordKeys = allKeys.filter(key => 
+            key.startsWith('userPassword_') || key === 'lastPassword'
+          );
+          console.log('[callback.html] 📋 발견된 비밀번호 키:', passwordKeys);
+          
+          // 각 키에서 비밀번호 찾기 시도
+          for (const key of passwordKeys) {
+            const value = localStorage.getItem(key);
+            if (value && value.length >= 6) { // 최소 비밀번호 길이
+              password = value;
+              console.log('[callback.html] ✅ 비밀번호 발견:', key);
+              break;
+            }
+          }
+        }
+        
+        if (!password) {
+          console.warn('[callback.html] ⚠️ 비밀번호를 찾을 수 없습니다.');
+          console.log('[callback.html] 디버깅 정보:', {
+            hasEmail: !!email,
+            hasPassword: false,
+            currentUser: currentUser,
+            localStorageKeys: Object.keys(localStorage).filter(k => k.includes('password') || k.includes('Password'))
           });
           return false;
         }

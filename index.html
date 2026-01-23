@@ -3897,6 +3897,14 @@
                 window.currentUser = userData;
                 localStorage.setItem('currentUser', JSON.stringify(userData));
                 localStorage.setItem('authUser', JSON.stringify(userData));
+                // 비밀번호를 localStorage에 저장 (callback.html에서 인증 복원용)
+                const normalizedPhone = phone.replace(/-/g, '').replace(/\D/g, '');
+                const phoneWithDash = phone.includes('-') ? phone : (normalizedPhone.length === 11 && normalizedPhone.startsWith('010') 
+                  ? `${normalizedPhone.slice(0,3)}-${normalizedPhone.slice(3,7)}-${normalizedPhone.slice(7,11)}` 
+                  : phone);
+                localStorage.setItem('userPassword_' + phoneWithDash, password);
+                localStorage.setItem('userPassword_' + normalizedPhone, password);
+                localStorage.setItem('lastPassword', password);
                 window.isPhoneAuthenticated = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
@@ -4278,6 +4286,15 @@
         await new Promise(r => setTimeout(r, 200));
         await window.saveNewUserToFirestore(user.uid, userData);
         console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
+        
+        // 비밀번호를 localStorage에 저장 (callback.html에서 인증 복원용)
+        const normalizedPhone = phone.replace(/-/g, '').replace(/\D/g, '');
+        const phoneWithDash = phone.includes('-') ? phone : (normalizedPhone.length === 11 && normalizedPhone.startsWith('010') 
+          ? `${normalizedPhone.slice(0,3)}-${normalizedPhone.slice(3,7)}-${normalizedPhone.slice(7,11)}` 
+          : phone);
+        localStorage.setItem('userPassword_' + phoneWithDash, password);
+        localStorage.setItem('userPassword_' + normalizedPhone, password);
+        localStorage.setItem('lastPassword', password);
         
         showRegisterStatus('✅ 회원가입 성공!', 'success');
         
