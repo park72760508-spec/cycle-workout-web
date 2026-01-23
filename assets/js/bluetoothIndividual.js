@@ -1069,7 +1069,7 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                         console.warn('[BluetoothIndividual] initializeResultScreen error', e); 
                     })
                     .then(() => {
-                        console.log('[BluetoothIndividual] ✅ 2단계: 결과 화면 초기화 완료');
+                        console.log('[BluetoothIndividual] ✅ 결과 화면 초기화 완료');
                         // 저장 완료 후 결과 팝업 표시
                         showBluetoothTrainingResultModal(status);
                     })
@@ -3101,18 +3101,16 @@ function updateGaugeTicksAndLabels() {
     if (ticksHTML) {
         ticksGroup.innerHTML = ticksHTML;
         console.log('[BluetoothIndividual] 속도계 눈금 생성 완료:', ticksHTML.length, '문자');
-    } else {
-        console.warn('[BluetoothIndividual] 눈금 생성 실패: 빈 HTML 반환');
     }
+    // generateGaugeTicks()는 항상 문자열을 반환하므로 else 경고는 불필요
     
     // 레이블 생성 및 표시
     const labelsHTML = generateGaugeLabels();
     if (labelsHTML) {
         labelsGroup.innerHTML = labelsHTML;
         console.log('[BluetoothIndividual] 속도계 레이블 생성 완료:', labelsHTML.length, '문자');
-    } else {
-        console.warn('[BluetoothIndividual] 레이블 생성 실패: 빈 HTML 반환');
     }
+    // generateGaugeLabels()는 항상 문자열을 반환하므로 else 경고는 불필요
     
     // 눈금과 레이블이 표시되도록 스타일 확인
     if (ticksGroup) {
@@ -3366,7 +3364,7 @@ function showBluetoothTrainingResultModal(status = null) {
     modal.classList.remove('hidden');
     
     // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
-    const mileageUpdate = window.lastMileageUpdate || null;
+    // mileageUpdate는 위에서 이미 선언되었으므로 재사용
     const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && mileageUpdate.add_days > 0) ||
                                    (mileageUpdate && mileageUpdate.success && (mileageUpdate.rem_points || 0) >= 500);
     if (shouldShowCelebration) {
