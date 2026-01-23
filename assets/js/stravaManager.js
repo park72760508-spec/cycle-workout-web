@@ -63,7 +63,18 @@ async function refreshStravaTokenForUser(userId, refreshToken) {
     // Firebase Firestore에 새 토큰 저장
     try {
       const usersCollection = getUsersCollection();
-      await usersCollection.doc(userId).update({
+      const userDocRef = usersCollection.doc(userId);
+      
+      // 문서 존재 여부 확인
+      const userDoc = await userDocRef.get();
+      
+      if (!userDoc.exists) {
+        console.error('[refreshStravaTokenForUser] ❌ 사용자 문서가 존재하지 않습니다:', userId);
+        return { success: false, error: 'User not found' };
+      }
+      
+      // 문서가 존재하면 토큰 업데이트
+      await userDocRef.update({
         strava_access_token: accessToken,
         strava_refresh_token: newRefreshToken,
         strava_expires_at: expiresAt
@@ -73,6 +84,15 @@ async function refreshStravaTokenForUser(userId, refreshToken) {
       return { success: true, accessToken: accessToken };
     } catch (firebaseError) {
       console.error('[refreshStravaTokenForUser] ❌ Firebase 저장 실패:', firebaseError);
+      
+      // "User not found" 오류를 명확히 전달
+      if (firebaseError.code === 'not-found' || 
+          firebaseError.code === 'permission-denied' ||
+          firebaseError.message?.includes('not found') ||
+          firebaseError.message?.includes('No document to update')) {
+        return { success: false, error: 'User not found' };
+      }
+      
       return { success: false, error: 'Firebase 저장 실패: ' + firebaseError.message };
     }
   } catch (error) {
@@ -341,7 +361,27 @@ async function exchangeStravaCode(code, userId) {
     // Firebase Firestore에 토큰 저장
     try {
       const usersCollection = getUsersCollection();
-      await usersCollection.doc(userId).update({
+      const userDocRef = usersCollection.doc(userId);
+      
+      // 문서 존재 여부 확인
+      const userDoc = await userDocRef.get();
+      
+      if (!userDoc.exists) {
+        // 문서가 존재하지 않으면 "User not found" 오류 반환
+        console.error('[exchangeStravaCode] ❌ 사용자 문서가 존재하지 않습니다:', userId);
+        console.error('[exchangeStravaCode] 디버깅 정보:', {
+          userId: userId,
+          userIdType: typeof userId,
+          currentUser: window.currentUser ? {
+            id: window.currentUser.id,
+            name: window.currentUser.name
+          } : 'null'
+        });
+        return { success: false, error: 'User not found' };
+      }
+      
+      // 문서가 존재하면 토큰 업데이트
+      await userDocRef.update({
         strava_access_token: accessToken,
         strava_refresh_token: refreshToken,
         strava_expires_at: expiresAt
@@ -351,6 +391,25 @@ async function exchangeStravaCode(code, userId) {
       return { success: true };
     } catch (firebaseError) {
       console.error('[exchangeStravaCode] ❌ Firebase 저장 실패:', firebaseError);
+      console.error('[exchangeStravaCode] 디버깅 정보:', {
+        userId: userId,
+        userIdType: typeof userId,
+        errorCode: firebaseError.code,
+        errorMessage: firebaseError.message,
+        currentUser: window.currentUser ? {
+          id: window.currentUser.id,
+          name: window.currentUser.name
+        } : 'null'
+      });
+      
+      // "User not found" 오류를 명확히 전달
+      if (firebaseError.code === 'not-found' || 
+          firebaseError.code === 'permission-denied' ||
+          firebaseError.message?.includes('not found') ||
+          firebaseError.message?.includes('No document to update')) {
+        return { success: false, error: 'User not found' };
+      }
+      
       return { success: false, error: 'Firebase 저장 실패: ' + firebaseError.message };
     }
   } catch (error) {

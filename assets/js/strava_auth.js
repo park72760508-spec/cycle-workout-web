@@ -45,10 +45,28 @@
    * scope: activity:read_all (훈련 데이터 조회 필수)
    * state: user_id 전달용 (콜백에서 그대로 돌려받음)
    *
-   * @param {string|number} userId - 현재 로그인한 사용자 ID (Users 시트 id)
+   * @param {string|number} userId - 현재 로그인한 사용자 ID (Firebase 문서 ID 또는 Users 시트 id)
    */
   function connectStrava(userId) {
+    // userId가 없으면 Firebase Auth의 현재 사용자 uid 사용 시도
     var uid = userId != null ? String(userId) : '';
+    
+    // userId가 없고 Firebase Auth가 있으면 현재 사용자 uid 가져오기
+    if (!uid) {
+      try {
+        var auth = window.authV9 || window.auth;
+        if (auth && auth.currentUser) {
+          uid = auth.currentUser.uid;
+          console.log('[Strava] connectStrava: Firebase Auth에서 uid 가져옴:', uid);
+        } else if (window.currentUser && window.currentUser.id) {
+          uid = String(window.currentUser.id);
+          console.log('[Strava] connectStrava: window.currentUser.id 사용:', uid);
+        }
+      } catch (e) {
+        console.warn('[Strava] connectStrava: Firebase Auth 접근 실패:', e);
+      }
+    }
+    
     if (!uid) {
       console.warn('[Strava] connectStrava: userId가 없습니다.');
       if (typeof window.showToast === 'function') {
@@ -60,6 +78,7 @@
     var redirectUri = getRedirectUri();
     var scope = 'activity:read_all';
     var state = uid;
+    console.log('[Strava] connectStrava: state에 전달할 userId:', state);
     var url =
       'https://www.strava.com/oauth/authorize' +
       '?client_id=' + encodeURIComponent(STRAVA_CLIENT_ID) +
@@ -97,7 +116,24 @@
       return;
     }
 
-    var userId = (state != null && state !== '') ? state : null;
+    var userId = (state != null && state !== '') ? String(state).trim() : null;
+    
+    // userId가 없으면 Firebase Auth의 현재 사용자 uid 사용 시도
+    if (!userId) {
+      try {
+        var auth = window.authV9 || window.auth;
+        if (auth && auth.currentUser) {
+          userId = auth.currentUser.uid;
+          console.log('[Strava] handleStravaCallback: Firebase Auth에서 uid 가져옴:', userId);
+        } else if (window.currentUser && window.currentUser.id) {
+          userId = String(window.currentUser.id);
+          console.log('[Strava] handleStravaCallback: window.currentUser.id 사용:', userId);
+        }
+      } catch (e) {
+        console.warn('[Strava] handleStravaCallback: Firebase Auth 접근 실패:', e);
+      }
+    }
+    
     if (!userId) {
       var noUser = 'user_id(state)가 없습니다. Strava 연결은 사용자 선택 후 진행해 주세요.';
       if (typeof onError === 'function') {
@@ -107,7 +143,29 @@
       }
       return;
     }
+    
+    console.log('[Strava] handleStravaCallback: 사용할 userId:', userId);
 
+    // Firebase로 직접 처리 (GAS 대신)
+    if (typeof window.exchangeStravaCode === 'function') {
+      // Firebase로 직접 처리
+      window.exchangeStravaCode(code, userId)
+        .then(function (data) {
+          if (data && data.success) {
+            if (typeof onSuccess === 'function') { onSuccess(data); }
+          } else {
+            var msg = (data && data.error) ? data.error : 'Strava 연동 처리에 실패했습니다.';
+            if (typeof onError === 'function') { onError(msg); } else { console.error('[Strava] ' + msg); }
+          }
+        })
+        .catch(function (error) {
+          var msg = error.message || 'Strava 연동 처리 중 오류가 발생했습니다.';
+          if (typeof onError === 'function') { onError(msg); } else { console.error('[Strava] ' + msg); }
+        });
+      return;
+    }
+
+    // Firebase 함수가 없으면 GAS로 폴백
     var gasUrl = getGasUrl();
     if (!gasUrl) {
       var noGas = 'GAS URL이 설정되지 않았습니다. (GAS_URL 또는 CONFIG.GAS_WEB_APP_URL)';
