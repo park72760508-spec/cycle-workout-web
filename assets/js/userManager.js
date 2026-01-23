@@ -738,58 +738,141 @@ if (typeof window !== 'undefined' && window.auth) {
  */
 async function apiGetUsers() {
   try {
-    // 로그인 상태 확인
-    const currentUser = window.auth?.currentUser;
+    // 로그인 상태 확인 - 여러 소스에서 확인
+    const authCurrentUser = window.auth?.currentUser;
+    
+    // Firebase v9 Modular SDK의 authV9도 확인
+    let authV9CurrentUser = null;
+    if (window.authV9 && typeof window.authV9.currentUser !== 'undefined') {
+      authV9CurrentUser = window.authV9.currentUser;
+    }
+    
+    // localStorage에서 사용자 정보 확인 (로그인 직후 auth.currentUser가 아직 업데이트되지 않았을 수 있음)
+    let storedUser = null;
+    try {
+      const storedUserStr = localStorage.getItem('currentUser') || localStorage.getItem('authUser');
+      if (storedUserStr) {
+        storedUser = JSON.parse(storedUserStr);
+      }
+    } catch (e) {
+      console.warn('[apiGetUsers] localStorage 파싱 실패:', e);
+    }
+    
+    // window.currentUser도 확인
+    const windowCurrentUser = window.currentUser;
+    
+    // 우선순위: authV9.currentUser > auth.currentUser > window.currentUser > localStorage
+    const currentUser = authV9CurrentUser || authCurrentUser || (windowCurrentUser?.id ? { uid: windowCurrentUser.id } : null);
+    const userData = windowCurrentUser || storedUser;
+    
     console.log('[apiGetUsers] 🔍 로그인 상태 확인:', { 
       hasAuth: !!window.auth, 
-      hasCurrentUser: !!currentUser,
-      currentUserId: currentUser?.uid 
+      hasAuthV9: !!window.authV9,
+      hasAuthCurrentUser: !!authCurrentUser,
+      hasAuthV9CurrentUser: !!authV9CurrentUser,
+      hasWindowCurrentUser: !!windowCurrentUser,
+      hasStoredUser: !!storedUser,
+      currentUserId: currentUser?.uid,
+      userDataGrade: userData?.grade,
+      userDataId: userData?.id
     });
     
-    if (!currentUser) {
+    if (!currentUser && !userData) {
       // 로그인하지 않은 경우 조용히 빈 배열 반환 (경고 메시지 제거)
       console.warn('[apiGetUsers] ⚠️ 로그인하지 않은 상태입니다.');
       return { success: true, items: [] };
     }
     
+    // userData가 있지만 currentUser가 없는 경우 (로그인 직후)
+    // userData의 id를 사용하여 문서 조회 시도
+    const userIdToCheck = currentUser?.uid || userData?.id;
+    if (!userIdToCheck) {
+      console.warn('[apiGetUsers] ⚠️ 사용자 ID를 찾을 수 없습니다.');
+      return { success: true, items: [] };
+    }
+    
+    // userData에 grade 정보가 있으면 먼저 확인 (Firestore 조회 전에 빠른 체크)
+    const userGradeFromData = userData?.grade ? String(userData.grade) : null;
+    
+    // 관리자인 경우 localStorage의 grade 정보로 먼저 전체 목록 조회 시도 (로그인 직후)
+    // 이렇게 하면 로그인 직후에도 전체 사용자 목록을 볼 수 있음
+    if (userGradeFromData === '1') {
+      console.log('[apiGetUsers] 🔑 localStorage에서 관리자 권한 확인 - 전체 사용자 목록 조회 시작');
+      try {
+        const usersSnapshot = await getUsersCollection().get();
+        const users = [];
+        
+        usersSnapshot.forEach(doc => {
+          users.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+        
+        console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (localStorage 권한):', { 
+          totalUsers: users.length,
+          userIds: users.map(u => u.id) 
+        });
+        
+        return { success: true, items: users };
+      } catch (listError) {
+        console.error('[apiGetUsers] ❌ localStorage 권한으로 전체 목록 조회 실패:', listError);
+        // 실패해도 계속 진행하여 Firestore 문서 조회 시도
+      }
+    }
+    
     // 현재 사용자의 문서를 먼저 조회하여 권한 확인
     let currentUserDoc;
+    let currentUserData = userData; // 기본값으로 userData 사용
+    
     try {
-      currentUserDoc = await getUsersCollection().doc(currentUser.uid).get();
+      currentUserDoc = await getUsersCollection().doc(userIdToCheck).get();
       console.log('[apiGetUsers] 📄 현재 사용자 문서 조회:', { 
         exists: currentUserDoc.exists,
-        userId: currentUser.uid 
+        userId: userIdToCheck 
       });
+      
+      if (currentUserDoc.exists) {
+        // Firestore에서 조회한 데이터가 더 최신이므로 우선 사용
+        currentUserData = currentUserDoc.data();
+      } else if (userData) {
+        // Firestore 문서가 없지만 userData가 있으면 userData 사용
+        console.log('[apiGetUsers] ℹ️ Firestore 문서가 없지만 localStorage에 사용자 정보가 있습니다.');
+      } else {
+        // 둘 다 없으면 빈 배열 반환
+        console.warn('[apiGetUsers] ⚠️ 현재 사용자 문서가 아직 생성되지 않았습니다.');
+        return { success: true, items: [] };
+      }
     } catch (docError) {
       // 문서 조회 실패 시 권한 오류일 수 있음
       console.error('[apiGetUsers] ❌ 사용자 문서 조회 실패:', docError);
-      if (docError.code === 'permission-denied') {
-        console.error('🔴 Firestore 권한 오류가 발생했습니다.');
-        console.error('📖 확인 사항:');
-        console.error('   1. Firebase 콘솔 → Firestore Database → Rules에서 규칙이 올바르게 게시되었는지 확인');
-        console.error('   2. FIRESTORE_RULES.txt 파일의 규칙과 일치하는지 확인');
-        console.error('   3. 규칙 게시 후 몇 분 정도 기다린 후 다시 시도');
-        console.error('   4. 브라우저 캐시를 지우고 다시 시도');
+      
+      // userData가 있으면 그것을 사용 (로그인 직후 Firestore 조회가 실패할 수 있음)
+      if (userData) {
+        console.log('[apiGetUsers] ℹ️ Firestore 조회 실패했지만 localStorage의 사용자 정보를 사용합니다.');
+        currentUserData = userData;
+      } else {
+        if (docError.code === 'permission-denied') {
+          console.error('🔴 Firestore 권한 오류가 발생했습니다.');
+          console.error('📖 확인 사항:');
+          console.error('   1. Firebase 콘솔 → Firestore Database → Rules에서 규칙이 올바르게 게시되었는지 확인');
+          console.error('   2. FIRESTORE_RULES.txt 파일의 규칙과 일치하는지 확인');
+          console.error('   3. 규칙 게시 후 몇 분 정도 기다린 후 다시 시도');
+          console.error('   4. 브라우저 캐시를 지우고 다시 시도');
+        }
         // 권한 오류가 발생해도 빈 배열 반환하여 앱이 계속 작동하도록 함
         return { success: true, items: [] };
       }
-      // 다른 오류인 경우에도 빈 배열 반환 (앱 안정성)
-      console.warn('⚠️ 사용자 문서 조회 실패:', docError.message);
-      return { success: true, items: [] };
     }
     
-    if (!currentUserDoc.exists) {
-      // 사용자 문서가 없으면 빈 배열 반환 (문서는 로그인 시 생성됨)
-      console.warn('⚠️ 현재 사용자 문서가 아직 생성되지 않았습니다.');
-      return { success: true, items: [] };
-    }
-    
-    const currentUserData = currentUserDoc.data();
-    const userGrade = String(currentUserData?.grade || '2');
+    // grade 확인: Firestore 데이터 > userData > 기본값 '2'
+    const userGrade = String(currentUserData?.grade || userGradeFromData || '2');
     console.log('[apiGetUsers] 👤 현재 사용자 정보:', { 
-      userId: currentUser.uid,
+      userId: userIdToCheck,
       name: currentUserData?.name,
-      grade: userGrade 
+      grade: userGrade,
+      source: currentUserDoc?.exists ? 'firestore' : (userData ? 'localStorage' : 'none'),
+      hasCurrentUserDoc: !!currentUserDoc?.exists
     });
     
     // 관리자(grade='1')인 경우에만 전체 목록 조회
@@ -819,7 +902,7 @@ async function apiGetUsers() {
         return { 
           success: true, 
           items: [{
-            id: currentUser.uid,
+            id: userIdToCheck,
             ...currentUserData
           }]
         };
@@ -830,7 +913,7 @@ async function apiGetUsers() {
       return { 
         success: true, 
         items: [{
-          id: currentUser.uid,
+          id: userIdToCheck,
           ...currentUserData
         }]
       };
