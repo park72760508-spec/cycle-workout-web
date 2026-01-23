@@ -2044,6 +2044,30 @@ async function editUser(userId) {
       modalTitle.textContent = `${user.name || '사용자'} 정보 수정`;
     }
     
+    // 비밀번호 변경 섹션 표시/숨김 처리 (본인 계정만 표시)
+    const passwordSection = document.getElementById('editPasswordSection');
+    const isOwnAccount = (viewerId && String(userId) === viewerId);
+    if (passwordSection) {
+      passwordSection.style.display = isOwnAccount ? 'block' : 'none';
+      
+      // 비밀번호 입력 필드 초기화
+      if (isOwnAccount) {
+        const currentPasswordEl = document.getElementById('editCurrentPassword');
+        const newPasswordEl = document.getElementById('editNewPassword');
+        const newPasswordConfirmEl = document.getElementById('editNewPasswordConfirm');
+        const passwordStatusEl = document.getElementById('editPasswordStatus');
+        
+        if (currentPasswordEl) currentPasswordEl.value = '';
+        if (newPasswordEl) newPasswordEl.value = '';
+        if (newPasswordConfirmEl) newPasswordConfirmEl.value = '';
+        if (passwordStatusEl) {
+          passwordStatusEl.textContent = '';
+          passwordStatusEl.style.display = 'none';
+          passwordStatusEl.className = '';
+        }
+      }
+    }
+    
     // 관리자 전용 필드 섹션 표시/숨김 처리 (위에서 선언한 viewerGrade 재사용)
     const isAdmin = (viewerGrade === '1');
     const adminFieldsSection = document.getElementById('editAdminFieldsSection');
@@ -2666,6 +2690,152 @@ function closeExpiryWarningModal() {
 window.loadUsers = loadUsers;
 window.selectUser = selectUser;
 window.editUser = editUser;
+
+/**
+ * 사용자 비밀번호 변경 (본인 계정만)
+ */
+async function changeUserPassword() {
+  const currentPasswordEl = document.getElementById('editCurrentPassword');
+  const newPasswordEl = document.getElementById('editNewPassword');
+  const newPasswordConfirmEl = document.getElementById('editNewPasswordConfirm');
+  const passwordStatusEl = document.getElementById('editPasswordStatus');
+  const changePasswordBtn = document.getElementById('changePasswordBtn');
+  
+  if (!currentPasswordEl || !newPasswordEl || !newPasswordConfirmEl || !passwordStatusEl || !changePasswordBtn) {
+    console.error('비밀번호 변경 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const currentPassword = currentPasswordEl.value.trim();
+  const newPassword = newPasswordEl.value.trim();
+  const newPasswordConfirm = newPasswordConfirmEl.value.trim();
+  
+  // 입력값 검증
+  if (!currentPassword) {
+    showPasswordStatus('현재 비밀번호를 입력해주세요.', 'error');
+    currentPasswordEl.focus();
+    return;
+  }
+  
+  if (!newPassword || newPassword.length < 6) {
+    showPasswordStatus('새 비밀번호는 6자 이상이어야 합니다.', 'error');
+    newPasswordEl.focus();
+    return;
+  }
+  
+  if (newPassword !== newPasswordConfirm) {
+    showPasswordStatus('새 비밀번호가 일치하지 않습니다.', 'error');
+    newPasswordConfirmEl.focus();
+    return;
+  }
+  
+  if (currentPassword === newPassword) {
+    showPasswordStatus('현재 비밀번호와 새 비밀번호가 같습니다.', 'error');
+    newPasswordEl.focus();
+    return;
+  }
+  
+  try {
+    changePasswordBtn.disabled = true;
+    changePasswordBtn.textContent = '변경 중...';
+    showPasswordStatus('비밀번호를 변경하고 있습니다...', 'info');
+    
+    // 현재 로그인한 사용자 확인
+    const currentUser = window.authV9?.currentUser;
+    if (!currentUser) {
+      throw new Error('로그인한 사용자를 찾을 수 없습니다. 다시 로그인해주세요.');
+    }
+    
+    // 현재 비밀번호로 재인증
+    const email = currentUser.email;
+    if (!email) {
+      throw new Error('이메일 정보를 찾을 수 없습니다.');
+    }
+    
+    if (!window.EmailAuthProviderV9 || !window.reauthenticateWithCredentialV9) {
+      throw new Error('Firebase Auth 함수가 로드되지 않았습니다.');
+    }
+    
+    const credential = window.EmailAuthProviderV9.credential(email, currentPassword);
+    await window.reauthenticateWithCredentialV9(currentUser, credential);
+    
+    // 새 비밀번호로 변경
+    if (!window.updatePasswordV9) {
+      throw new Error('비밀번호 변경 함수가 로드되지 않았습니다.');
+    }
+    
+    await window.updatePasswordV9(currentUser, newPassword);
+    
+    showPasswordStatus('✅ 비밀번호가 성공적으로 변경되었습니다.', 'success');
+    
+    // 입력 필드 초기화
+    currentPasswordEl.value = '';
+    newPasswordEl.value = '';
+    newPasswordConfirmEl.value = '';
+    
+    // 3초 후 상태 메시지 숨기기
+    setTimeout(() => {
+      passwordStatusEl.style.display = 'none';
+    }, 3000);
+    
+  } catch (error) {
+    console.error('비밀번호 변경 실패:', error);
+    
+    let errorMessage = '비밀번호 변경에 실패했습니다.';
+    if (error.code === 'auth/wrong-password') {
+      errorMessage = '현재 비밀번호가 올바르지 않습니다.';
+      currentPasswordEl.focus();
+      currentPasswordEl.value = '';
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = '새 비밀번호는 6자 이상이어야 합니다.';
+      newPasswordEl.focus();
+    } else if (error.code === 'auth/requires-recent-login') {
+      errorMessage = '보안을 위해 다시 로그인한 후 비밀번호를 변경해주세요.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    showPasswordStatus(errorMessage, 'error');
+    
+    // 입력 필드 초기화
+    currentPasswordEl.value = '';
+    newPasswordEl.value = '';
+    newPasswordConfirmEl.value = '';
+  } finally {
+    changePasswordBtn.disabled = false;
+    changePasswordBtn.textContent = '비밀번호 변경';
+  }
+}
+
+/**
+ * 비밀번호 변경 상태 메시지 표시
+ */
+function showPasswordStatus(message, type = 'info') {
+  const passwordStatusEl = document.getElementById('editPasswordStatus');
+  if (passwordStatusEl) {
+    passwordStatusEl.textContent = message;
+    passwordStatusEl.className = '';
+    passwordStatusEl.style.display = 'block';
+    
+    // 타입에 따른 스타일 적용
+    if (type === 'success') {
+      passwordStatusEl.style.background = '#d1fae5';
+      passwordStatusEl.style.color = '#059669';
+      passwordStatusEl.style.border = '1px solid #10b981';
+    } else if (type === 'error') {
+      passwordStatusEl.style.background = '#fee2e2';
+      passwordStatusEl.style.color = '#dc2626';
+      passwordStatusEl.style.border = '1px solid #ef4444';
+    } else {
+      passwordStatusEl.style.background = '#eef2ff';
+      passwordStatusEl.style.color = '#667eea';
+      passwordStatusEl.style.border = '1px solid #818cf8';
+    }
+  }
+}
+
+// 전역 함수로 등록
+window.changeUserPassword = changeUserPassword;
 window.deleteUser = deleteUser;
 window.saveUser = saveUser;
 window.selectProfile = selectUser;
