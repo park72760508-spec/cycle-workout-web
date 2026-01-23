@@ -592,70 +592,16 @@ function initAuthStateListener() {
   // 인증 상태 변경 리스너 설정
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
-      // 로그인 상태: Firestore에서 사용자 정보 가져오기
+      // 로그인 상태: UID로 직접 users/{uid} 문서 가져오기 (간단하고 빠름)
       try {
-        let userData = null;
-        
-        // 전화번호 로그인인지 확인 (@stelvio.ai 도메인)
         const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
         
-        if (isPhoneLogin) {
-          // 전화번호 로그인: 이메일에서 전화번호 추출
-          const phoneFromEmail = firebaseUser.email.replace('@stelvio.ai', '');
-          // "010-1234-5678" 형식으로 변환
-          const formattedPhone = formatPhoneForDB(phoneFromEmail);
-          
-          console.log('📞 전화번호 로그인 감지:', { 
-            email: firebaseUser.email, 
-            rawPhone: phoneFromEmail,
-            formattedPhone: formattedPhone 
-          });
-          
-          // Firestore에서 전화번호(contact 필드)로 사용자 찾기
-          const usersSnapshot = await getUsersCollection().get();
-          let foundUser = null;
-          
-          for (const doc of usersSnapshot.docs) {
-            const docData = doc.data();
-            const docContact = docData.contact || '';
-            
-            // DB의 contact 필드를 "010-1234-5678" 형식으로 변환
-            const formattedDocContact = formatPhoneForDB(docContact);
-            
-            // 형식화된 전화번호로 비교
-            if (formattedDocContact === formattedPhone) {
-              foundUser = { id: doc.id, ...docData };
-              console.log('✅ 전화번호로 사용자 찾음:', {
-                name: foundUser.name,
-                contact: foundUser.contact,
-                formattedContact: formattedDocContact,
-                grade: foundUser.grade,
-                ftp: foundUser.ftp,
-                weight: foundUser.weight
-              });
-              break;
-            }
-          }
-          
-          if (foundUser) {
-            userData = foundUser;
-          } else {
-            // 전화번호로 사용자를 찾지 못한 경우: UID로 시도 (기존 로직)
-            console.warn('⚠️ 전화번호로 사용자를 찾지 못함, UID로 시도:', firebaseUser.uid);
-            const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
-            if (userDoc.exists) {
-              userData = { id: firebaseUser.uid, ...userDoc.data() };
-            }
-          }
-        } else {
-          // 일반 로그인 (Google 등): UID로 사용자 찾기
-          const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
-          if (userDoc.exists) {
-            userData = { id: firebaseUser.uid, ...userDoc.data() };
-          }
-        }
+        // UID로 직접 조회 (전화번호 스캔 불필요)
+        const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
         
-        if (userData) {
+        if (userDoc.exists) {
+          const userData = { id: firebaseUser.uid, ...userDoc.data() };
+          
           // 전역 상태 업데이트
           window.currentUser = userData;
           localStorage.setItem('currentUser', JSON.stringify(userData));
@@ -666,18 +612,12 @@ function initAuthStateListener() {
           }
           
           // 사용자 정보 상세 로그
-          console.log('✅ 인증된 사용자 정보 설정 완료:', {
-            id: userData.id,
+          console.log('✅ 인증된 사용자 정보 설정 완료 (UID 직접 조회):', {
+            uid: firebaseUser.uid,
             name: userData.name,
             contact: userData.contact,
             grade: userData.grade,
-            ftp: userData.ftp,
-            weight: userData.weight,
-            acc_points: userData.acc_points,
-            rem_points: userData.rem_points,
-            challenge: userData.challenge,
-            expiry_date: userData.expiry_date,
-            last_training_date: userData.last_training_date
+            ftp: userData.ftp
           });
           
           console.log('✅ 인증 상태 복원 완료:', userData.name);
@@ -740,10 +680,10 @@ function initAuthStateListener() {
             // needsInfo가 true여도 페이지 로드 시에는 모달을 표시하지 않음
           }
         } else {
-          // 사용자 문서가 없는 경우: signInWithGoogle에서 생성되어야 함
-          // 여기서는 로그아웃하지 않고 경고만 표시
-          console.warn('⚠️ Firestore에 사용자 문서가 없습니다. 로그인 시 자동 생성됩니다.');
-          // signInWithGoogle에서 문서를 생성하므로 여기서는 대기
+          // users/{uid} 문서가 없는 경우
+          console.warn('⚠️ users/{uid} 문서가 없습니다:', firebaseUser.uid);
+          console.warn('💡 회원가입 시 users/{uid} 문서가 생성되어야 합니다.');
+          window.isPhoneAuthenticated = false;
         }
       } catch (error) {
         console.error('❌ 사용자 정보 로드 실패:', error);
@@ -2394,9 +2334,13 @@ window.standardizePhoneFormat = window.standardizePhoneFormat || standardizePhon
 window.unformatPhone = window.unformatPhone || unformatPhone;
 
 /**
- * 전화번호로 사용자 정보 찾기 (로그인 후 즉시 호출 가능)
+ * [레거시 함수] 전화번호로 사용자 정보 찾기
+ * ⚠️ 이 함수는 더 이상 사용되지 않습니다.
+ * ✅ UID 직접 조회 방식으로 대체: auth.currentUser.uid → users/{uid}
+ * 
  * @param {string} phoneNumber - 전화번호 (형식 무관)
  * @returns {Promise<{success: boolean, userData?: object, error?: string}>}
+ * @deprecated UID 직접 조회 방식 사용 권장
  */
 async function findUserByPhone(phoneNumber) {
   try {
