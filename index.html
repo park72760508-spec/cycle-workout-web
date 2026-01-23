@@ -1648,6 +1648,9 @@
         <button class="btn btn-exit-inline profile-action-button profile-strava-button" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px;">
           🔗 Strava 연결
         </button>
+        <button class="btn btn-exit-inline profile-action-button profile-strava-sync-button" id="btnSyncStrava" onclick="if(typeof syncStravaData==='function'){syncStravaData();}else{alert('스트라바 동기화 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px;">
+          🔄 스트라바 동기화
+        </button>
       </div>
     </div>
     
