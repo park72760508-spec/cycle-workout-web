@@ -2388,6 +2388,91 @@ window.formatPhoneForDB = window.formatPhoneForDB || formatPhoneForDB;
 window.standardizePhoneFormat = window.standardizePhoneFormat || standardizePhoneFormat;
 window.unformatPhone = window.unformatPhone || unformatPhone;
 
+/**
+ * 전화번호로 사용자 정보 찾기 (로그인 후 즉시 호출 가능)
+ * @param {string} phoneNumber - 전화번호 (형식 무관)
+ * @returns {Promise<{success: boolean, userData?: object, error?: string}>}
+ */
+async function findUserByPhone(phoneNumber) {
+  try {
+    if (!phoneNumber) {
+      return { success: false, error: '전화번호가 필요합니다.' };
+    }
+    
+    // "010-1234-5678" 형식으로 변환
+    const formattedPhone = formatPhoneForDB(phoneNumber);
+    
+    console.log('📞 전화번호로 사용자 찾기:', { 
+      inputPhone: phoneNumber,
+      formattedPhone: formattedPhone 
+    });
+    
+    // Firestore에서 전화번호(contact 필드)로 사용자 찾기
+    const usersSnapshot = await getUsersCollection().get();
+    let foundUser = null;
+    
+    for (const doc of usersSnapshot.docs) {
+      const docData = doc.data();
+      const docContact = docData.contact || '';
+      
+      // DB의 contact 필드를 "010-1234-5678" 형식으로 변환
+      const formattedDocContact = formatPhoneForDB(docContact);
+      
+      // 형식화된 전화번호로 비교
+      if (formattedDocContact === formattedPhone) {
+        foundUser = { id: doc.id, ...docData };
+        console.log('✅ 전화번호로 사용자 찾음:', {
+          name: foundUser.name,
+          contact: foundUser.contact,
+          formattedContact: formattedDocContact,
+          grade: foundUser.grade,
+          ftp: foundUser.ftp,
+          weight: foundUser.weight
+        });
+        break;
+      }
+    }
+    
+    if (foundUser) {
+      // 전역 상태 업데이트
+      window.currentUser = foundUser;
+      localStorage.setItem('currentUser', JSON.stringify(foundUser));
+      localStorage.setItem('authUser', JSON.stringify(foundUser));
+      
+      // 사용자 정보 상세 로그
+      console.log('✅ 인증된 사용자 정보 설정 완료:', {
+        id: foundUser.id,
+        name: foundUser.name,
+        contact: foundUser.contact,
+        grade: foundUser.grade,
+        ftp: foundUser.ftp,
+        weight: foundUser.weight,
+        acc_points: foundUser.acc_points,
+        rem_points: foundUser.rem_points,
+        challenge: foundUser.challenge,
+        expiry_date: foundUser.expiry_date,
+        last_training_date: foundUser.last_training_date
+      });
+      
+      // isPhoneAuthenticated 플래그 설정
+      if (typeof window !== 'undefined') {
+        window.isPhoneAuthenticated = true;
+      }
+      
+      return { success: true, userData: foundUser };
+    } else {
+      console.warn('⚠️ 전화번호로 사용자를 찾지 못함:', formattedPhone);
+      return { success: false, error: '사용자를 찾을 수 없습니다.' };
+    }
+  } catch (error) {
+    console.error('❌ 전화번호로 사용자 찾기 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// 전역 노출
+window.findUserByPhone = window.findUserByPhone || findUserByPhone;
+
 // 초기화 이벤트
 document.addEventListener('DOMContentLoaded', () => {
   const cardAddUser = document.getElementById('cardAddUser');
