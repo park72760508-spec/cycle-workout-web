@@ -537,6 +537,13 @@
     .auth-input-group input::placeholder {
       color: #9ca3af;
     }
+    
+    .auth-help-text {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
 
     .auth-input-group.hidden {
       max-height: 0;
@@ -948,7 +955,7 @@
             
             <!-- 비밀번호 입력 -->
             <div class="auth-input-group">
-              <label for="authPasswordInput">비밀번호 (PIN)</label>
+              <label for="authPasswordInput" id="authPasswordLabel">비밀번호 (PIN)</label>
               <input 
                 type="password" 
                 id="authPasswordInput" 
@@ -957,6 +964,9 @@
                 minlength="6"
                 required
               >
+              <small class="auth-help-text" id="authPasswordHelp">
+                처음 사용하시나요? 로그인 시도 후 회원가입 모드로 전환됩니다.
+              </small>
             </div>
             
             <!-- 닉네임 입력 (초기엔 숨김, 회원가입 모드에서 표시) -->
@@ -3572,6 +3582,9 @@
       isSignUpMode = true;
       const nicknameGroup = document.getElementById('authNicknameGroup');
       const submitBtn = document.getElementById('authSubmitBtn');
+      const passwordLabel = document.getElementById('authPasswordLabel');
+      const passwordHelp = document.getElementById('authPasswordHelp');
+      const passwordInput = document.getElementById('authPasswordInput');
       
       if (nicknameGroup) {
         nicknameGroup.classList.remove('hidden');
@@ -3582,8 +3595,58 @@
         submitBtn.classList.add('signup-mode');
       }
       
-      showAuthStatus('새 계정을 생성합니다. 닉네임을 입력해주세요.', 'info');
+      // 비밀번호 레이블 및 도움말 변경
+      if (passwordLabel) {
+        passwordLabel.textContent = '비밀번호 설정 (PIN)';
+      }
+      
+      if (passwordHelp) {
+        passwordHelp.textContent = '6자 이상의 비밀번호를 설정해주세요. 나중에 로그인할 때 사용합니다.';
+        passwordHelp.style.color = '#667eea';
+      }
+      
+      if (passwordInput) {
+        passwordInput.placeholder = '비밀번호를 설정하세요 (6자 이상)';
+        passwordInput.value = ''; // 기존 입력값 초기화
+      }
+      
+      showAuthStatus('새 계정을 생성합니다. 닉네임과 비밀번호를 입력해주세요.', 'info');
       console.log('🔄 회원가입 모드로 전환');
+    }
+    
+    /**
+     * 로그인 모드로 UI 초기화
+     */
+    function resetToLoginMode() {
+      isSignUpMode = false;
+      const nicknameGroup = document.getElementById('authNicknameGroup');
+      const submitBtn = document.getElementById('authSubmitBtn');
+      const passwordLabel = document.getElementById('authPasswordLabel');
+      const passwordHelp = document.getElementById('authPasswordHelp');
+      const passwordInput = document.getElementById('authPasswordInput');
+      
+      if (nicknameGroup) {
+        nicknameGroup.classList.add('hidden');
+      }
+      
+      if (submitBtn) {
+        submitBtn.textContent = '시작하기';
+        submitBtn.classList.remove('signup-mode');
+      }
+      
+      // 비밀번호 레이블 및 도움말 초기화
+      if (passwordLabel) {
+        passwordLabel.textContent = '비밀번호 (PIN)';
+      }
+      
+      if (passwordHelp) {
+        passwordHelp.textContent = '처음 사용하시나요? 로그인 시도 후 회원가입 모드로 전환됩니다.';
+        passwordHelp.style.color = '#6b7280';
+      }
+      
+      if (passwordInput) {
+        passwordInput.placeholder = '6자 이상 입력';
+      }
     }
     
     /**
@@ -3602,6 +3665,9 @@
     
     // DOM 로드 후 이벤트 리스너 등록
     document.addEventListener('DOMContentLoaded', () => {
+      // 초기 모드 설정
+      resetToLoginMode();
+      
       const phoneInput = document.getElementById('authPhoneInput');
       const passwordInput = document.getElementById('authPasswordInput');
       const nicknameInput = document.getElementById('authNicknameInput');
