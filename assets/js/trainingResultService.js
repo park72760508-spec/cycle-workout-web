@@ -99,8 +99,17 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
     userId,
     durationSec,
     np,
-    avgWatts
+    avgWatts,
+    inputData: trainingData
   });
+  
+  // 입력값 검증 및 경고
+  if (durationSec <= 0) {
+    console.warn('[saveTrainingSession] ⚠️ duration이 0 이하입니다:', durationSec);
+  }
+  if (np <= 0) {
+    console.warn('[saveTrainingSession] ⚠️ weighted_watts(NP)가 0 이하입니다:', np);
+  }
   
   try {
     // Transaction 실행
@@ -135,8 +144,22 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       console.log('[saveTrainingSession] TSS 계산 결과:', {
         tss,
         earnedPoints,
-        formula: `(${durationSec} * ${np} * ${np / currentFTP}) / (${currentFTP} * 3600) * 100`
+        durationSec,
+        np,
+        currentFTP,
+        intensityFactor: np / currentFTP,
+        formula: `(${durationSec} * ${np} * ${np / currentFTP}) / (${currentFTP} * 3600) * 100`,
+        calculatedValue: (durationSec * np * (np / currentFTP)) / (currentFTP * 3600) * 100
       });
+      
+      if (tss === 0) {
+        console.warn('[saveTrainingSession] ⚠️ TSS가 0으로 계산되었습니다. 원인 확인:', {
+          durationSec,
+          np,
+          currentFTP,
+          reason: durationSec <= 0 ? 'duration이 0 이하' : (np <= 0 ? 'NP가 0 이하' : '알 수 없음')
+        });
+      }
       
       // 3. 포인트 적립 및 보상 로직
       // 총 누적 포인트: 기존 값 + earned_points
