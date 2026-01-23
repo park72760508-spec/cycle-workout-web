@@ -418,9 +418,97 @@ async function exchangeStravaCode(code, userId) {
   }
 }
 
+/**
+ * 스트라바 데이터 동기화 (UI에서 호출용)
+ * 진행 상태 표시 및 결과 알림 포함
+ */
+async function syncStravaData() {
+  const btn = document.getElementById('btnSyncStrava');
+  const originalText = btn ? btn.textContent : '🔄 스트라바 동기화';
+  
+  try {
+    // 버튼 비활성화 및 로딩 상태
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ 동기화 중...';
+    }
+    
+    // 토스트 메시지 표시
+    if (typeof window.showToast === 'function') {
+      window.showToast('스트라바 활동 데이터를 가져오는 중...', 'info');
+    }
+    
+    console.log('[syncStravaData] 🚀 스트라바 동기화 시작');
+    
+    // 동기화 실행
+    const result = await fetchAndProcessStravaData();
+    
+    console.log('[syncStravaData] ✅ 동기화 완료:', result);
+    
+    // 결과 메시지 구성
+    let message = '';
+    if (result.success) {
+      const newActivities = result.newActivities || 0;
+      const processed = result.processed || 0;
+      const totalTss = Object.values(result.totalTssByUser || {}).reduce((sum, tss) => sum + tss, 0);
+      
+      if (newActivities > 0) {
+        message = `✅ 동기화 완료: ${newActivities}개의 새 활동이 추가되었습니다.`;
+        if (totalTss > 0) {
+          message += ` (총 ${Math.round(totalTss)} TSS 적립)`;
+        }
+      } else {
+        message = `✅ 동기화 완료: 새로운 활동이 없습니다.`;
+      }
+      
+      if (processed === 0) {
+        message = '⚠️ Strava에 연결된 사용자가 없습니다.';
+      }
+      
+      // 오류가 있으면 추가 표시
+      if (result.errors && result.errors.length > 0) {
+        console.warn('[syncStravaData] ⚠️ 동기화 중 일부 오류 발생:', result.errors);
+        message += ` (일부 오류: ${result.errors.length}개)`;
+      }
+    } else {
+      message = `❌ 동기화 실패: ${result.error || '알 수 없는 오류'}`;
+    }
+    
+    // 토스트 메시지 표시
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, result.success ? 'success' : 'error');
+    } else {
+      alert(message);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[syncStravaData] ❌ 동기화 중 오류:', error);
+    
+    const errorMessage = `❌ 동기화 중 오류가 발생했습니다: ${error.message || error}`;
+    if (typeof window.showToast === 'function') {
+      window.showToast(errorMessage, 'error');
+    } else {
+      alert(errorMessage);
+    }
+    
+    return {
+      success: false,
+      error: error.message || 'Unknown error'
+    };
+  } finally {
+    // 버튼 복원
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  }
+}
+
 // 전역 함수로 등록
 window.refreshStravaTokenForUser = refreshStravaTokenForUser;
 window.fetchStravaActivities = fetchStravaActivities;
 window.computeTssFromActivity = computeTssFromActivity;
 window.fetchAndProcessStravaData = fetchAndProcessStravaData;
 window.exchangeStravaCode = exchangeStravaCode;
+window.syncStravaData = syncStravaData;
