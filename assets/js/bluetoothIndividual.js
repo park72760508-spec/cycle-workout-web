@@ -3348,6 +3348,7 @@ function showBluetoothTrainingResultModalSaving() {
     
     // 모달 표시
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
     
     console.log('[Bluetooth 개인 훈련] 저장 중 모달 표시');
 }
@@ -3539,6 +3540,7 @@ function showBluetoothTrainingResultModal(status = null) {
     
     // 모달 표시
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
     
     // 축하 오버레이 표시 (훈련 결과 후 500포인트 이상 달성 시 또는 마일리지 연장 시)
     // mileageUpdate는 위에서 이미 선언되었으므로 재사용
@@ -3637,6 +3639,8 @@ function closeTrainingResultModal() {
     const modal = document.getElementById('trainingResultModal');
     if (modal) {
         modal.classList.add('hidden');
+        modal.style.display = 'none';
+        console.log('[Bluetooth 개인 훈련] 훈련 결과 모달 닫기');
     }
 }
 
@@ -4447,13 +4451,63 @@ function initBluetoothIndividualErgController() {
     console.log('[BluetoothIndividual] ErgController 초기화 완료');
 }
 
-// 페이지 로드 시 축하 모달 초기화 (숨김 상태로 확실히 설정)
+// 페이지 로드 시 모든 모달 초기화 (숨김 상태로 확실히 설정)
 function initializeCelebrationModal() {
-    const modal = document.getElementById('bluetoothMileageCelebrationModal');
-    if (modal) {
-        modal.classList.add('hidden');
-        modal.style.display = 'none';
+    const celebrationModal = document.getElementById('bluetoothMileageCelebrationModal');
+    if (celebrationModal) {
+        celebrationModal.classList.add('hidden');
+        celebrationModal.style.display = 'none';
         console.log('[Bluetooth 개인 훈련] 축하 모달 초기화 완료 (숨김 상태)');
+    }
+    
+    // 훈련 결과 모달도 초기화
+    const resultModal = document.getElementById('trainingResultModal');
+    if (resultModal) {
+        resultModal.classList.add('hidden');
+        resultModal.style.display = 'none';
+        console.log('[Bluetooth 개인 훈련] 훈련 결과 모달 초기화 완료 (숨김 상태)');
+    }
+    
+    // 카운트다운 오버레이도 초기화
+    const countdownOverlay = document.getElementById('countdownOverlay');
+    if (countdownOverlay) {
+        countdownOverlay.classList.add('hidden');
+        countdownOverlay.style.display = 'none';
+        console.log('[Bluetooth 개인 훈련] 카운트다운 오버레이 초기화 완료 (숨김 상태)');
+    }
+}
+
+// 사용자 정보 초기화 함수 (window.currentUser에서 가져오기)
+function initializeUserInfo() {
+    try {
+        // window.currentUser가 있으면 사용자 이름 표시
+        if (window.currentUser && window.currentUser.name) {
+            const userNameEl = document.getElementById('bluetoothUserName');
+            if (userNameEl) {
+                userNameEl.textContent = window.currentUser.name;
+                console.log('[Bluetooth 개인 훈련] 사용자 이름 표시:', window.currentUser.name);
+            }
+        } else {
+            // localStorage에서 가져오기 시도
+            const storedUser = localStorage.getItem('currentUser');
+            if (storedUser) {
+                try {
+                    const userData = JSON.parse(storedUser);
+                    if (userData && userData.name) {
+                        window.currentUser = userData;
+                        const userNameEl = document.getElementById('bluetoothUserName');
+                        if (userNameEl) {
+                            userNameEl.textContent = userData.name;
+                            console.log('[Bluetooth 개인 훈련] 사용자 이름 표시 (localStorage):', userData.name);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Bluetooth 개인 훈련] localStorage 사용자 정보 파싱 실패:', e);
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('[Bluetooth 개인 훈련] 사용자 정보 초기화 실패:', error);
     }
 }
 
