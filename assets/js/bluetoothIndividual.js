@@ -3540,12 +3540,14 @@ function showBluetoothTrainingResultModal(status = null) {
     // 모달 표시
     modal.classList.remove('hidden');
     
-    // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
+    // 축하 오버레이 표시 (훈련 결과 후 500포인트 이상 달성 시 또는 마일리지 연장 시)
     // mileageUpdate는 위에서 이미 선언되었으므로 재사용
     // extendedDays 또는 extended_days 필드 확인 (saveTrainingSession 결과 형식)
     const extendedDays = mileageUpdate?.extendedDays || mileageUpdate?.extended_days || mileageUpdate?.add_days || 0;
+    const earnedPoints = mileageUpdate?.earnedPoints || mileageUpdate?.earned_points || tss || 0;
+    // 훈련 결과 후 500포인트 이상 달성 시 또는 구독 연장 시에만 표시
     const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && extendedDays > 0) ||
-                                   (mileageUpdate && mileageUpdate.success && (mileageUpdate.rem_points || mileageUpdate.newRemPoints || 0) >= 500);
+                                   (mileageUpdate && mileageUpdate.success && earnedPoints >= 500);
     if (shouldShowCelebration) {
         // Bluetooth 개인 훈련 대시보드 전용 축하 함수 사용
         showBluetoothMileageCelebration(mileageUpdate, tss);
@@ -3592,6 +3594,7 @@ function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
     
     // 오버레이 표시 (결과 모달 위에 표시)
     modal.classList.remove('hidden');
+    modal.style.display = 'flex';
     
     console.log('[Bluetooth 개인 훈련] 축하 오버레이 표시:', { mileageUpdate, earnedTss, addDays });
 }
@@ -3603,6 +3606,7 @@ function closeBluetoothMileageCelebration() {
     const modal = document.getElementById('bluetoothMileageCelebrationModal');
     if (modal) {
         modal.classList.add('hidden');
+        modal.style.display = 'none';
         console.log('[Bluetooth 개인 훈련] 축하 오버레이 닫기');
     }
 }
@@ -4443,8 +4447,20 @@ function initBluetoothIndividualErgController() {
     console.log('[BluetoothIndividual] ErgController 초기화 완료');
 }
 
+// 페이지 로드 시 축하 모달 초기화 (숨김 상태로 확실히 설정)
+function initializeCelebrationModal() {
+    const modal = document.getElementById('bluetoothMileageCelebrationModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+        console.log('[Bluetooth 개인 훈련] 축하 모달 초기화 완료 (숨김 상태)');
+    }
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', async () => {
+        // 축하 모달 초기화
+        initializeCelebrationModal();
         // 화면 방향 세로 모드로 고정
         await lockScreenOrientation();
         
@@ -4492,8 +4508,13 @@ if (document.readyState === 'loading') {
         // 페이지 언로드 시 화면 방향 고정 해제
         window.addEventListener('beforeunload', unlockScreenOrientation);
         window.addEventListener('pagehide', unlockScreenOrientation);
+        
+        // 축하 모달 초기화 (DOM 로드 후 다시 한 번 확인)
+        initializeCelebrationModal();
     });
 } else {
+    // DOM이 이미 로드된 경우 즉시 초기화
+    initializeCelebrationModal();
     // DOM이 이미 로드되었으면 바로 실행
     // 화면 방향 세로 모드로 고정
     lockScreenOrientation();
