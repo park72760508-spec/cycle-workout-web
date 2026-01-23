@@ -597,9 +597,14 @@ function initAuthStateListener() {
         if (isPhoneLogin) {
           // 전화번호 로그인: 이메일에서 전화번호 추출
           const phoneFromEmail = firebaseUser.email.replace('@stelvio.ai', '');
-          const normalizedPhone = unformatPhone(phoneFromEmail);
+          // "010-1234-5678" 형식으로 변환
+          const formattedPhone = formatPhoneForDB(phoneFromEmail);
           
-          console.log('📞 전화번호 로그인 감지:', { email: firebaseUser.email, phone: normalizedPhone });
+          console.log('📞 전화번호 로그인 감지:', { 
+            email: firebaseUser.email, 
+            rawPhone: phoneFromEmail,
+            formattedPhone: formattedPhone 
+          });
           
           // Firestore에서 전화번호(contact 필드)로 사용자 찾기
           const usersSnapshot = await getUsersCollection().get();
@@ -607,11 +612,22 @@ function initAuthStateListener() {
           
           for (const doc of usersSnapshot.docs) {
             const docData = doc.data();
-            const docPhone = unformatPhone(docData.contact || '');
+            const docContact = docData.contact || '';
             
-            if (docPhone === normalizedPhone) {
+            // DB의 contact 필드를 "010-1234-5678" 형식으로 변환
+            const formattedDocContact = formatPhoneForDB(docContact);
+            
+            // 형식화된 전화번호로 비교
+            if (formattedDocContact === formattedPhone) {
               foundUser = { id: doc.id, ...docData };
-              console.log('✅ 전화번호로 사용자 찾음:', foundUser.name, foundUser.contact);
+              console.log('✅ 전화번호로 사용자 찾음:', {
+                name: foundUser.name,
+                contact: foundUser.contact,
+                formattedContact: formattedDocContact,
+                grade: foundUser.grade,
+                ftp: foundUser.ftp,
+                weight: foundUser.weight
+              });
               break;
             }
           }
@@ -639,6 +655,21 @@ function initAuthStateListener() {
           window.currentUser = userData;
           localStorage.setItem('currentUser', JSON.stringify(userData));
           localStorage.setItem('authUser', JSON.stringify(userData));
+          
+          // 사용자 정보 상세 로그
+          console.log('✅ 인증된 사용자 정보 설정 완료:', {
+            id: userData.id,
+            name: userData.name,
+            contact: userData.contact,
+            grade: userData.grade,
+            ftp: userData.ftp,
+            weight: userData.weight,
+            acc_points: userData.acc_points,
+            rem_points: userData.rem_points,
+            challenge: userData.challenge,
+            expiry_date: userData.expiry_date,
+            last_training_date: userData.last_training_date
+          });
           
           console.log('✅ 인증 상태 복원 완료:', userData.name);
           
@@ -2346,6 +2377,11 @@ window.apiGetUser    = window.apiGetUser    || apiGetUser;
 window.apiCreateUser = window.apiCreateUser || apiCreateUser;
 window.apiUpdateUser = window.apiUpdateUser || apiUpdateUser;
 window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
+
+// 전화번호 유틸리티 함수들 전역 노출
+window.formatPhoneForDB = window.formatPhoneForDB || formatPhoneForDB;
+window.standardizePhoneFormat = window.standardizePhoneFormat || standardizePhoneFormat;
+window.unformatPhone = window.unformatPhone || unformatPhone;
 
 // 초기화 이벤트
 document.addEventListener('DOMContentLoaded', () => {
