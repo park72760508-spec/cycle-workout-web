@@ -2593,8 +2593,8 @@
 
           <!-- 워크아웃 정보 섹션 -->
           <div class="connection-device-section">
-            <h3 class="mb-15" id="previewWorkoutName">워크아웃</h3>
-            <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+            <h3 class="mb-15" id="previewWorkoutName" style="margin-bottom: 8px !important;">워크아웃</h3>
+            <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px;">
               <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
                 <strong id="previewDuration" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0분</strong>
                 <span style="font-size: 13px; color: #666;">총 시간</span>
@@ -2609,7 +2609,7 @@
               </div>
             </div>
             <!-- 세그먼트 그래프 -->
-            <div class="segment-preview" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 20px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;">
+            <div class="segment-preview" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 12px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;">
               <!-- 워크아웃 미선택 시 표시될 막대그래프 placeholder -->
               <div id="segmentPreviewPlaceholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 180px; opacity: 0.3; padding: 20px;">
                 <div style="display: flex; align-items: flex-end; justify-content: center; gap: 4px; flex: 1;">
@@ -2631,8 +2631,8 @@
 
           <!-- Select Dashboard 섹션 -->
           <div class="connection-device-section">
-            <h3 class="mb-15">Select Dashboard</h3>
-            <div class="grid-2 gap-10 mb-15">
+            <h3 class="mb-15" style="margin-bottom: 8px !important;">Select Dashboard</h3>
+            <div class="grid-2 gap-10 mb-15" style="margin-bottom: 12px !important;">
               <!-- 좌측: 개인 훈련 화면 -->
               <button class="btn btn-device" id="btnStartTraining" onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
                 <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
