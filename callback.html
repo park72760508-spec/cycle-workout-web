@@ -330,10 +330,27 @@
         errorText.textContent = msg || '연동 처리 중 오류가 발생했습니다.';
       }
 
-      // return_to 등으로 돌아갈 메인 앱 URL (필요 시 쿼리 등으로 전달 가능)
-      var returnUrl = new URLSearchParams(window.location.search).get('return_to') || './index.html';
-      if (backLink) backLink.href = returnUrl;
-      if (retryLink) retryLink.href = returnUrl;
+      // return_to 등으로 돌아갈 메인 앱 URL (프로필 화면으로 이동)
+      var returnUrl = new URLSearchParams(window.location.search).get('return_to') || './index.html#profileScreen';
+      if (backLink) {
+        backLink.href = returnUrl;
+        // 프로필 화면으로 이동하도록 설정
+        backLink.onclick = function(e) {
+          e.preventDefault();
+          // localStorage에 프로필 화면으로 이동할 플래그 설정
+          localStorage.setItem('stravaCallbackReturn', 'profileScreen');
+          window.location.href = './index.html';
+        };
+      }
+      if (retryLink) {
+        retryLink.href = returnUrl;
+        retryLink.onclick = function(e) {
+          e.preventDefault();
+          // localStorage에 프로필 화면으로 이동할 플래그 설정
+          localStorage.setItem('stravaCallbackReturn', 'profileScreen');
+          window.location.href = './index.html';
+        };
+      }
 
       if (typeof handleStravaCallback !== 'function') {
         showError('Strava 연동 스크립트를 불러올 수 없습니다.');
