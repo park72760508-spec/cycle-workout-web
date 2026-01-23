@@ -28,7 +28,7 @@
       createUserWithEmailAndPassword,
       updateProfile
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
-    import { getFirestore, collection, doc, setDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+    import { getFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     
     const firebaseConfig = {
       apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -83,6 +83,17 @@
       const usersRef = collection(firestoreV9, 'users');
       const userDocRef = doc(usersRef, uid);
       await setDoc(userDocRef, userData);
+    };
+
+    window.getUserByUid = async (uid) => {
+      if (!firestoreV9) throw new Error('Firestore V9가 초기화되지 않았습니다.');
+      const usersRef = collection(firestoreV9, 'users');
+      const userDocRef = doc(usersRef, uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        return { id: uid, ...userDoc.data() };
+      }
+      return null;
     };
   </script>
   
@@ -3682,16 +3693,15 @@
             console.log('✅ 로그인 성공:', user.uid);
             showAuthStatus('✅ 로그인 성공!', 'success');
             
-            // UID로 직접 사용자 정보 가져오기 (간단하고 빠름)
+            // UID로 직접 사용자 정보 가져오기 (firestoreV9 사용 - authV9와 동일 앱)
             try {
-              if (!window.firestore) {
-                throw new Error('Firestore가 초기화되지 않았습니다.');
+              if (typeof window.getUserByUid !== 'function') {
+                throw new Error('getUserByUid 함수가 로드되지 않았습니다.');
               }
               
-              const userDoc = await window.firestore.collection('users').doc(user.uid).get();
+              const userData = await window.getUserByUid(user.uid);
               
-              if (userDoc.exists) {
-                const userData = { id: user.uid, ...userDoc.data() };
+              if (userData) {
                 window.currentUser = userData;
                 localStorage.setItem('currentUser', JSON.stringify(userData));
                 localStorage.setItem('authUser', JSON.stringify(userData));
