@@ -542,6 +542,25 @@
       color: #9ca3af;
     }
     
+    .auth-input-group select {
+      width: 100%;
+      padding: 14px 18px;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: inherit;
+      transition: all 0.2s ease;
+      background: #ffffff;
+      color: #111827;
+      cursor: pointer;
+    }
+    
+    .auth-input-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
     .auth-help-text {
       font-size: 12px;
       color: #6b7280;
@@ -1005,19 +1024,6 @@
               >
             </div>
             
-            <!-- 닉네임 입력 (초기엔 숨김, 회원가입 모드에서 표시) -->
-            <div class="auth-input-group hidden" id="authNicknameGroup">
-              <label for="authNicknameInput" class="auth-label-left">닉네임</label>
-              <input 
-                type="text" 
-                id="authNicknameInput" 
-                placeholder="사용할 닉네임을 입력하세요" 
-                autocomplete="username"
-                minlength="2"
-                maxlength="20"
-              >
-            </div>
-            
             <!-- 제출 버튼 -->
             <button class="auth-submit-btn" id="authSubmitBtn">
               시작하기
@@ -1179,6 +1185,119 @@
     </div>
     
     
+  </div>
+
+  <!-- 사용자 등록 화면 -->
+  <div id="registerScreen" class="screen">
+    <div class="auth-main-container">
+      <div class="auth-form-container">
+        <div class="auth-form-card">
+          <div class="auth-title-image">
+            <video src="assets/img/title.mp4" alt="AI 트레이닝 대시보드" autoplay loop muted playsinline></video>
+          </div>
+          <div class="auth-form-header">
+            <h3>사용자 등록</h3>
+            <p>정보를 입력하여 새 계정을 만드세요</p>
+          </div>
+          
+          <!-- 사용자 등록 폼 -->
+          <div class="phone-auth-section">
+            <!-- 이름 입력 -->
+            <div class="auth-input-group">
+              <label for="registerNameInput" class="auth-label-left">이름 *</label>
+              <input 
+                type="text" 
+                id="registerNameInput" 
+                placeholder="홍길동" 
+                autocomplete="name"
+                minlength="2"
+                maxlength="20"
+                required
+              >
+            </div>
+            
+            <!-- 전화번호 입력 -->
+            <div class="auth-input-group">
+              <label for="registerPhoneInput" class="auth-label-left">전화번호 *</label>
+              <input 
+                type="tel" 
+                id="registerPhoneInput" 
+                placeholder="010-1234-5678" 
+                autocomplete="tel"
+                inputmode="numeric"
+                maxlength="13"
+                required
+              >
+            </div>
+            
+            <!-- 비밀번호 입력 -->
+            <div class="auth-input-group">
+              <label for="registerPasswordInput" class="auth-label-left">비밀번호 (PIN) *</label>
+              <input 
+                type="password" 
+                id="registerPasswordInput" 
+                placeholder="6자 이상 입력" 
+                autocomplete="new-password"
+                minlength="6"
+                required
+              >
+            </div>
+            
+            <!-- FTP 입력 -->
+            <div class="auth-input-group">
+              <label for="registerFTPInput" class="auth-label-left">FTP (W) *</label>
+              <input 
+                type="number" 
+                id="registerFTPInput" 
+                placeholder="250" 
+                min="50"
+                max="600"
+                required
+              >
+            </div>
+            
+            <!-- 몸무게 입력 -->
+            <div class="auth-input-group">
+              <label for="registerWeightInput" class="auth-label-left">체중 (kg) *</label>
+              <input 
+                type="number" 
+                id="registerWeightInput" 
+                placeholder="70.0" 
+                min="40"
+                max="150"
+                step="0.1"
+                required
+              >
+            </div>
+            
+            <!-- 운동목적 선택 -->
+            <div class="auth-input-group">
+              <label for="registerChallengeInput" class="auth-label-left">운동 목적 *</label>
+              <select id="registerChallengeInput" required>
+                <option value="Fitness" selected>Fitness (일반 피트니스/다이어트)</option>
+                <option value="GranFondo">GranFondo (그란폰도)</option>
+                <option value="Racing">Racing (레이싱)</option>
+                <option value="Elite">Elite (엘리트 선수)</option>
+                <option value="PRO">PRO (프로 선수)</option>
+              </select>
+            </div>
+            
+            <!-- 제출 버튼 -->
+            <button class="auth-submit-btn" id="registerSubmitBtn">
+              가입 완료
+            </button>
+            
+            <!-- 뒤로 가기 버튼 -->
+            <button class="auth-register-btn" id="registerBackBtn">
+              뒤로 가기
+            </button>
+            
+            <!-- 에러 메시지 -->
+            <div class="auth-status" id="registerStatus"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 베이스캠프 화면 -->
@@ -3412,7 +3531,7 @@
   
   <!-- 전화번호 기반 로그인 핸들러 -->
   <script>
-    let isSignUpMode = false; // 회원가입 모드 여부
+    // isSignUpMode 변수 제거 (더 이상 사용하지 않음)
     
     /**
      * 전화번호 기반 로그인/회원가입 처리 함수
@@ -3444,30 +3563,15 @@
         return;
       }
       
-      // 회원가입 모드인 경우 닉네임 검사
-      if (isSignUpMode) {
-        if (!nickname) {
-          showAuthStatus('닉네임을 입력해주세요.', 'error');
-          nicknameInput.focus();
-          return;
-        }
-        
-        if (nickname.length < 2) {
-          showAuthStatus('닉네임은 최소 2자 이상이어야 합니다.', 'error');
-          nicknameInput.focus();
-          return;
-        }
-      }
-      
       // 버튼 비활성화 및 로딩 상태
       if (submitBtn) {
         submitBtn.disabled = true;
         submitBtn.classList.add('loading');
-        submitBtn.textContent = isSignUpMode ? '가입 중...' : '로그인 중...';
+        submitBtn.textContent = '로그인 중...';
       }
       
       // 상태 메시지
-      showAuthStatus(isSignUpMode ? '회원가입 중...' : '로그인 중...', 'info');
+      showAuthStatus('로그인 중...', 'info');
       
       try {
         // Firebase v9 Modular SDK 사용
@@ -3476,35 +3580,10 @@
         }
         
         const email = window.phoneToEmail(phone);
-        console.log(`${isSignUpMode ? '📝 회원가입' : '🔐 로그인'} 시도: ${email}`);
+        console.log(`🔐 로그인 시도: ${email}`);
         
-        if (isSignUpMode) {
-          // 회원가입 처리
-          const userCredential = await window.createUserWithEmailAndPasswordV9(
-            window.authV9, 
-            email, 
-            password
-          );
-          const user = userCredential.user;
-          
-          // 닉네임 프로필 업데이트
-          if (nickname) {
-            await window.updateProfileV9(user, {
-              displayName: nickname.trim()
-            });
-            console.log('✅ 닉네임 저장 완료:', nickname);
-          }
-          
-          showAuthStatus('✅ 회원가입 성공!', 'success');
-          
-          // 토스트 메시지
-          if (typeof showToast === 'function') {
-            showToast(`${nickname}님, 환영합니다! 🎉`);
-          }
-          
-        } else {
-          // 로그인 시도
-          try {
+        // 로그인 시도
+        try {
             const userCredential = await window.signInWithEmailAndPasswordV9(
               window.authV9, 
               email, 
@@ -3536,7 +3615,6 @@
             // 기타 에러는 throw하여 아래 catch에서 처리
             throw loginError;
           }
-        }
         
         // 로그인/회원가입 성공 후 처리
         // 사용자 목록 새로고침 및 DB 동기화 (비동기로 실행하되 화면 전환은 기다리지 않음)
@@ -3669,102 +3747,278 @@
         if (submitBtn) {
           submitBtn.disabled = false;
           submitBtn.classList.remove('loading');
-          submitBtn.textContent = isSignUpMode ? '가입 완료' : '시작하기';
+          submitBtn.textContent = '시작하기';
         }
       }
     }
     
-    /**
-     * 회원가입 모드로 UI 전환
-     */
-    function switchToSignUpMode() {
-      isSignUpMode = true;
-      const nicknameGroup = document.getElementById('authNicknameGroup');
-      const submitBtn = document.getElementById('authSubmitBtn');
-      const passwordLabel = document.getElementById('authPasswordLabel');
-      const passwordInput = document.getElementById('authPasswordInput');
-      const phoneAuthSection = document.querySelector('.phone-auth-section');
-      const authFormHeader = document.querySelector('.auth-form-header p');
-      
-      if (nicknameGroup) {
-        nicknameGroup.classList.remove('hidden');
-      }
-      
-      if (submitBtn) {
-        submitBtn.textContent = '가입 완료';
-        submitBtn.classList.add('signup-mode');
-      }
-      
-      // 비밀번호 레이블 변경
-      if (passwordLabel) {
-        passwordLabel.textContent = '비밀번호 설정 (PIN)';
-      }
-      
-      if (passwordInput) {
-        passwordInput.placeholder = '비밀번호를 설정하세요 (6자 이상)';
-        passwordInput.value = ''; // 기존 입력값 초기화
-      }
-      
-      // 섹션에 signup-mode 클래스 추가 (사용자 등록 버튼 숨김용)
-      if (phoneAuthSection) {
-        phoneAuthSection.classList.add('signup-mode');
-      }
-      
-      // 헤더 텍스트 변경
-      if (authFormHeader) {
-        authFormHeader.textContent = '새 계정을 생성합니다. 정보를 입력해주세요.';
-      }
-      
-      showAuthStatus('새 계정을 생성합니다. 닉네임과 비밀번호를 입력해주세요.', 'info');
-      console.log('🔄 회원가입 모드로 전환');
-    }
+    // switchToSignUpMode 함수 제거 (더 이상 사용하지 않음)
     
-    /**
-     * 로그인 모드로 UI 초기화
-     */
-    function resetToLoginMode() {
-      isSignUpMode = false;
-      const nicknameGroup = document.getElementById('authNicknameGroup');
-      const submitBtn = document.getElementById('authSubmitBtn');
-      const passwordLabel = document.getElementById('authPasswordLabel');
-      const passwordInput = document.getElementById('authPasswordInput');
-      const phoneAuthSection = document.querySelector('.phone-auth-section');
-      const authFormHeader = document.querySelector('.auth-form-header p');
-      
-      if (nicknameGroup) {
-        nicknameGroup.classList.add('hidden');
-      }
-      
-      if (submitBtn) {
-        submitBtn.textContent = '시작하기';
-        submitBtn.classList.remove('signup-mode');
-      }
-      
-      // 비밀번호 레이블 초기화
-      if (passwordLabel) {
-        passwordLabel.textContent = '비밀번호 (PIN)';
-      }
-      
-      if (passwordInput) {
-        passwordInput.placeholder = '6자 이상 입력';
-      }
-      
-      // 섹션에서 signup-mode 클래스 제거
-      if (phoneAuthSection) {
-        phoneAuthSection.classList.remove('signup-mode');
-      }
-      
-      // 헤더 텍스트 초기화
-      if (authFormHeader) {
-        authFormHeader.textContent = '전화번호와 PIN 번호로 간편하게 로그인하세요';
-      }
-    }
+    // resetToLoginMode 함수 제거 (더 이상 사용하지 않음)
     
     /**
      * 사용자 등록 버튼 클릭 핸들러
      */
     function handleRegisterClick() {
-      switchToSignUpMode();
+      // 사용자 등록 화면으로 전환
+      const authScreen = document.getElementById('authScreen');
+      const registerScreen = document.getElementById('registerScreen');
+      
+      if (authScreen) {
+        authScreen.classList.remove('active');
+        authScreen.style.display = 'none';
+      }
+      
+      if (registerScreen) {
+        registerScreen.classList.add('active');
+        registerScreen.style.display = 'block';
+        // 첫 번째 입력 필드에 포커스
+        setTimeout(() => {
+          const phoneInput = document.getElementById('registerPhoneInput');
+          if (phoneInput) phoneInput.focus();
+        }, 100);
+      }
+    }
+    
+    /**
+     * 사용자 등록 화면에서 뒤로 가기
+     */
+    function handleRegisterBack() {
+      const authScreen = document.getElementById('authScreen');
+      const registerScreen = document.getElementById('registerScreen');
+      
+      if (registerScreen) {
+        registerScreen.classList.remove('active');
+        registerScreen.style.display = 'none';
+      }
+      
+      if (authScreen) {
+        authScreen.classList.add('active');
+        authScreen.style.display = 'block';
+      }
+    }
+    
+    /**
+     * 사용자 등록 처리 (단순화된 로직)
+     * 1. Firebase Authentication: 전화번호@stelvio.ai, 비밀번호로 계정 생성
+     * 2. Firestore users: 이름, 전화번호, FTP, 몸무게, 운동목적 저장
+     */
+    async function handleRegister() {
+      // DOM 요소 참조
+      const phoneInput = document.getElementById('registerPhoneInput');
+      const nameInput = document.getElementById('registerNameInput');
+      const passwordInput = document.getElementById('registerPasswordInput');
+      const ftpInput = document.getElementById('registerFTPInput');
+      const weightInput = document.getElementById('registerWeightInput');
+      const challengeInput = document.getElementById('registerChallengeInput');
+      const submitBtn = document.getElementById('registerSubmitBtn');
+      
+      // 입력값 가져오기
+      const phone = phoneInput.value.trim();
+      const name = nameInput.value.trim();
+      const password = passwordInput.value;
+      const ftp = parseInt(ftpInput.value);
+      const weight = parseFloat(weightInput.value);
+      const challenge = challengeInput.value;
+      
+      // 유효성 검사
+      if (!phone) {
+        showRegisterStatus('전화번호를 입력해주세요.', 'error');
+        phoneInput.focus();
+        return;
+      }
+      
+      if (!name || name.length < 2) {
+        showRegisterStatus('이름을 2자 이상 입력해주세요.', 'error');
+        nameInput.focus();
+        return;
+      }
+      
+      if (!password || password.length < 6) {
+        showRegisterStatus('비밀번호는 6자 이상이어야 합니다.', 'error');
+        passwordInput.focus();
+        return;
+      }
+      
+      if (!ftp || ftp < 50 || ftp > 600) {
+        showRegisterStatus('FTP는 50~600 사이의 값이어야 합니다.', 'error');
+        ftpInput.focus();
+        return;
+      }
+      
+      if (!weight || weight < 40 || weight > 150) {
+        showRegisterStatus('체중은 40~150kg 사이의 값이어야 합니다.', 'error');
+        weightInput.focus();
+        return;
+      }
+      
+      // 버튼 비활성화 및 로딩 상태
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.classList.add('loading');
+        submitBtn.textContent = '가입 중...';
+      }
+      
+      showRegisterStatus('계정을 생성하는 중...', 'info');
+      
+      try {
+        // Firebase v9 Modular SDK 확인
+        if (!window.authV9 || !window.phoneToEmail) {
+          throw new Error('Firebase 인증 모듈이 로드되지 않았습니다.');
+        }
+        
+        // 전화번호를 이메일 형식으로 변환 (예: 01012345678@stelvio.ai)
+        const email = window.phoneToEmail(phone);
+        console.log('📝 회원가입 시작:', { email, name, ftp, weight, challenge });
+        
+        // ============================================
+        // 1단계: Firebase Authentication에 계정 생성
+        // ============================================
+        const userCredential = await window.createUserWithEmailAndPasswordV9(
+          window.authV9, 
+          email, 
+          password
+        );
+        const user = userCredential.user;
+        console.log('✅ Firebase Authentication 계정 생성 완료:', user.uid);
+        
+        // ============================================
+        // 2단계: Firestore users 컬렉션에 사용자 정보 저장
+        // ============================================
+        const now = new Date().toISOString();
+        const defaultExpiryDate = (() => {
+          const d = new Date();
+          d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+          return d.toISOString().split('T')[0];
+        })();
+        
+        const userData = {
+          id: user.uid,
+          name: name,                    // 이름
+          contact: phone,                // 전화번호
+          ftp: ftp,                      // FTP
+          weight: weight,                 // 몸무게
+          challenge: challenge,          // 운동목적
+          grade: '2',                    // 기본값: 일반 사용자
+          created_at: now,
+          expiry_date: defaultExpiryDate,
+          acc_points: 0,
+          rem_points: 0,
+          last_training_date: '',
+          strava_access_token: '',
+          strava_refresh_token: '',
+          strava_expires_at: 0
+        };
+        
+        // Firestore에 저장
+        if (window.firestore) {
+          await window.firestore.collection('users').doc(user.uid).set(userData);
+          console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
+        } else {
+          throw new Error('Firestore가 초기화되지 않았습니다.');
+        }
+        
+        showRegisterStatus('✅ 회원가입 성공!', 'success');
+        
+        // 토스트 메시지
+        if (typeof showToast === 'function') {
+          showToast(`${name}님, 환영합니다! 🎉`);
+        }
+        
+        // 사용자 목록 새로고침 (비동기로 실행, 화면 전환은 기다리지 않음)
+        Promise.all([
+          typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+          typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(err => {
+            console.warn('⚠️ DB 동기화 중 오류 (무시):', err);
+            return Promise.resolve();
+          }) : Promise.resolve()
+        ]).catch(err => {
+          console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시):', err);
+        });
+        
+        // 베이스캠프 화면으로 이동
+        setTimeout(() => {
+          const registerScreen = document.getElementById('registerScreen');
+          const basecampScreen = document.getElementById('basecampScreen');
+          
+          if (registerScreen) {
+            registerScreen.classList.remove('active');
+            registerScreen.style.display = 'none';
+          }
+          
+          if (typeof window.showScreen === 'function') {
+            try {
+              window.showScreen('basecampScreen');
+            } catch (err) {
+              console.warn('⚠️ showScreen 오류, 직접 전환:', err);
+              if (basecampScreen) {
+                document.querySelectorAll('.screen').forEach(s => {
+                  if (s.id !== 'basecampScreen' && s.id !== 'splashScreen') {
+                    s.classList.remove('active');
+                    s.style.display = 'none';
+                  }
+                });
+                basecampScreen.classList.add('active');
+                basecampScreen.style.display = 'block';
+              }
+            }
+          } else if (basecampScreen) {
+            document.querySelectorAll('.screen').forEach(s => {
+              if (s.id !== 'basecampScreen' && s.id !== 'splashScreen') {
+                s.classList.remove('active');
+                s.style.display = 'none';
+              }
+            });
+            basecampScreen.classList.add('active');
+            basecampScreen.style.display = 'block';
+          }
+        }, 1000);
+        
+      } catch (error) {
+        console.error('❌ 회원가입 오류:', error);
+        
+        let errorMessage = '알 수 없는 오류가 발생했습니다.';
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            errorMessage = '이미 사용 중인 전화번호입니다.';
+            break;
+          case 'auth/weak-password':
+            errorMessage = '비밀번호는 최소 6자 이상이어야 합니다.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = '전화번호 형식이 올바르지 않습니다.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = '네트워크 연결을 확인해주세요.';
+            break;
+          default:
+            errorMessage = error.message || '알 수 없는 오류';
+        }
+        
+        showRegisterStatus(`❌ ${errorMessage}`, 'error');
+        
+        if (typeof showToast === 'function') {
+          showToast(errorMessage);
+        }
+      } finally {
+        // 버튼 다시 활성화
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.classList.remove('loading');
+          submitBtn.textContent = '가입 완료';
+        }
+      }
+    }
+    
+    /**
+     * 사용자 등록 상태 메시지 표시
+     */
+    function showRegisterStatus(message, type = 'info') {
+      const statusEl = document.getElementById('registerStatus');
+      if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = `auth-status ${type}`;
+      }
     }
     
     /**
@@ -3783,9 +4037,6 @@
     
     // DOM 로드 후 이벤트 리스너 등록
     document.addEventListener('DOMContentLoaded', () => {
-      // 초기 모드 설정
-      resetToLoginMode();
-      
       const phoneInput = document.getElementById('authPhoneInput');
       const passwordInput = document.getElementById('authPasswordInput');
       const nicknameInput = document.getElementById('authNicknameInput');
@@ -3807,18 +4058,7 @@
       // 비밀번호 입력 필드
       if (passwordInput) {
         passwordInput.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter' && !isSignUpMode) {
-            submitBtn.click();
-          } else if (e.key === 'Enter' && isSignUpMode) {
-            nicknameInput.focus();
-          }
-        });
-      }
-      
-      // 닉네임 입력 필드
-      if (nicknameInput) {
-        nicknameInput.addEventListener('keypress', (e) => {
-          if (e.key === 'Enter' && isSignUpMode) {
+          if (e.key === 'Enter') {
             submitBtn.click();
           }
         });
@@ -3833,6 +4073,29 @@
       const registerBtn = document.getElementById('authRegisterBtn');
       if (registerBtn) {
         registerBtn.addEventListener('click', handleRegisterClick);
+      }
+      
+      // 사용자 등록 화면 이벤트 리스너
+      const registerPhoneInput = document.getElementById('registerPhoneInput');
+      const registerPasswordInput = document.getElementById('registerPasswordInput');
+      const registerSubmitBtn = document.getElementById('registerSubmitBtn');
+      const registerBackBtn = document.getElementById('registerBackBtn');
+      
+      // 전화번호 포맷팅
+      if (registerPhoneInput) {
+        registerPhoneInput.addEventListener('input', (e) => {
+          e.target.value = window.formatPhoneNumber ? window.formatPhoneNumber(e.target.value) : e.target.value;
+        });
+      }
+      
+      // 제출 버튼
+      if (registerSubmitBtn) {
+        registerSubmitBtn.addEventListener('click', handleRegister);
+      }
+      
+      // 뒤로 가기 버튼
+      if (registerBackBtn) {
+        registerBackBtn.addEventListener('click', handleRegisterBack);
       }
     });
   </script>
