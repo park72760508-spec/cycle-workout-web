@@ -595,13 +595,23 @@ function initAuthStateListener() {
       // 로그인 상태: UID로 직접 users/{uid} 문서 가져오기 (간단하고 빠름)
       try {
         const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
+        const isAuthV9 = (auth === window.authV9);
         
-        // UID로 직접 조회 (전화번호 스캔 불필요)
-        const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
+        let userData = null;
         
-        if (userDoc.exists) {
-          const userData = { id: firebaseUser.uid, ...userDoc.data() };
-          
+        // authV9인 경우 firestoreV9 사용, 그 외에는 compat firestore 사용
+        if (isAuthV9 && typeof window.getUserByUid === 'function') {
+          // authV9 + firestoreV9 사용 (동일 앱)
+          userData = await window.getUserByUid(firebaseUser.uid);
+        } else {
+          // compat auth + compat firestore 사용
+          const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
+          if (userDoc.exists) {
+            userData = { id: firebaseUser.uid, ...userDoc.data() };
+          }
+        }
+        
+        if (userData) {
           // 전역 상태 업데이트
           window.currentUser = userData;
           localStorage.setItem('currentUser', JSON.stringify(userData));
