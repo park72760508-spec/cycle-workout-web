@@ -933,6 +933,7 @@
     <script type="module">
       import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
       import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+      import { getAuth } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
       
       const firebaseConfig = {
         apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
@@ -944,9 +945,120 @@
       };
       
       try {
-        const appV9 = initializeApp(firebaseConfig, 'bluetoothIndividualV9');
+        // index.html과 동일한 앱 인스턴스 이름 사용 (인증 상태 공유)
+        // 단, 이미 초기화된 경우 기존 인스턴스 사용
+        let appV9;
+        try {
+          appV9 = initializeApp(firebaseConfig, 'authV9');
+        } catch (e) {
+          // 이미 초기화된 경우 기존 인스턴스 가져오기
+          const { getApp } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js');
+          appV9 = getApp('authV9');
+        }
+        
+        // Firestore 및 Auth 초기화
         window.firestoreV9 = getFirestore(appV9);
-        console.log('✅ Bluetooth 개인 훈련 대시보드 - Firebase v9 Modular SDK 초기화 완료');
+        window.authV9 = getAuth(appV9);
+        
+        // phoneToEmail 함수 정의 (index.html과 동일)
+        function phoneToEmail(phoneNumber) {
+          if (!phoneNumber) return null;
+          // 하이픈 제거
+          const cleaned = phoneNumber.replace(/-/g, '');
+          // @stelvio.ai 도메인 추가
+          return `${cleaned}@stelvio.ai`;
+        }
+        window.phoneToEmail = phoneToEmail;
+        
+        // signInWithEmailAndPassword 함수 가져오기
+        const { onAuthStateChanged, signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+        window.signInWithEmailAndPasswordV9 = signInWithEmailAndPassword;
+        
+        // 인증 상태 리스너 설정 (자동 복원)
+        onAuthStateChanged(window.authV9, async (user) => {
+          if (user) {
+            console.log('[BluetoothIndividual] ✅ Firebase Auth 로그인 상태 복원됨:', user.uid);
+          } else {
+            console.log('[BluetoothIndividual] ⚠️ Firebase Auth 로그인 상태 없음 - localStorage에서 복원 시도');
+            
+            // localStorage에서 사용자 정보 가져오기
+            try {
+              const currentUserStr = localStorage.getItem('currentUser');
+              if (currentUserStr) {
+                const currentUser = JSON.parse(currentUserStr);
+                const userId = currentUser.id || currentUser.userId;
+                
+                if (userId) {
+                  // 전화번호 기반 이메일 재구성
+                  const phoneToEmailStr = localStorage.getItem('phoneToEmail');
+                  if (phoneToEmailStr) {
+                    try {
+                      const emailMap = JSON.parse(phoneToEmailStr);
+                      const phone = Object.keys(emailMap).find(key => {
+                        const email = emailMap[key];
+                        return email && email.includes(userId);
+                      });
+                      
+                      if (phone) {
+                        const email = emailMap[phone] || phoneToEmail(phone);
+                        const password = localStorage.getItem(`userPassword_${phone}`) || localStorage.getItem('lastPassword');
+                        
+                        if (email && password) {
+                          try {
+                            await signInWithEmailAndPassword(window.authV9, email, password);
+                            console.log('[BluetoothIndividual] ✅ Firebase Auth 로그인 복원 성공');
+                          } catch (signInError) {
+                            console.warn('[BluetoothIndividual] ⚠️ Firebase Auth 로그인 복원 실패:', signInError);
+                          }
+                        } else {
+                          console.warn('[BluetoothIndividual] ⚠️ 이메일 또는 비밀번호를 찾을 수 없습니다.');
+                        }
+                      } else {
+                        // phoneToEmail 함수로 직접 변환 시도
+                        const contact = currentUser.contact || '';
+                        if (contact) {
+                          const email = phoneToEmail(contact);
+                          const password = localStorage.getItem(`userPassword_${contact}`) || localStorage.getItem('lastPassword');
+                          
+                          if (email && password) {
+                            try {
+                              await signInWithEmailAndPassword(window.authV9, email, password);
+                              console.log('[BluetoothIndividual] ✅ Firebase Auth 로그인 복원 성공 (전화번호 직접 변환)');
+                            } catch (signInError) {
+                              console.warn('[BluetoothIndividual] ⚠️ Firebase Auth 로그인 복원 실패:', signInError);
+                            }
+                          }
+                        }
+                      }
+                    } catch (parseError) {
+                      console.warn('[BluetoothIndividual] ⚠️ phoneToEmail 파싱 실패:', parseError);
+                    }
+                  } else {
+                    // phoneToEmail이 없으면 직접 변환 시도
+                    const contact = currentUser.contact || '';
+                    if (contact) {
+                      const email = phoneToEmail(contact);
+                      const password = localStorage.getItem(`userPassword_${contact}`) || localStorage.getItem('lastPassword');
+                      
+                      if (email && password) {
+                        try {
+                          await signInWithEmailAndPassword(window.authV9, email, password);
+                          console.log('[BluetoothIndividual] ✅ Firebase Auth 로그인 복원 성공 (전화번호 직접 변환)');
+                        } catch (signInError) {
+                          console.warn('[BluetoothIndividual] ⚠️ Firebase Auth 로그인 복원 실패:', signInError);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('[BluetoothIndividual] ⚠️ localStorage에서 인증 정보 복원 실패:', e);
+            }
+          }
+        });
+        
+        console.log('✅ Bluetooth 개인 훈련 대시보드 - Firebase v9 Modular SDK 초기화 완료 (Firestore + Auth)');
       } catch (error) {
         console.error('❌ Bluetooth 개인 훈련 대시보드 - Firebase v9 초기화 실패:', error);
       }
