@@ -384,38 +384,82 @@ async function saveTrainingResult(extra = {}) {
          // 스케줄 결과 저장 실패해도 계속 진행
        }
 
-     // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase 버전
-     if (currentUserId && tss > 0) {
-       try {
-         console.log('[saveTrainingResult] 🎁 마일리지 업데이트 시도:', { userId: currentUserId, tss });
-         
-         // Firebase로 마일리지 업데이트
-         if (typeof window.updateUserMileage === 'function') {
-           const mileageResult = await window.updateUserMileage(currentUserId, tss);
-           if (mileageResult.success) {
-             console.log('[saveTrainingResult] ✅ 마일리지 업데이트 성공:', mileageResult);
-             // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
-             window.lastMileageUpdate = mileageResult;
-             // 사용자 정보도 업데이트
-             if (window.currentUser) {
-               window.currentUser.acc_points = mileageResult.acc_points;
-               window.currentUser.rem_points = mileageResult.rem_points;
-               window.currentUser.expiry_date = mileageResult.expiry_date;
-               window.currentUser.last_training_date = mileageResult.last_training_date;
-               // localStorage도 업데이트
-               localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
+    // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase Firestore v9 버전
+    if (currentUserId && totalSeconds > 0 && np > 0) {
+      try {
+        console.log('[saveTrainingResult] 🎁 훈련 결과 저장 및 포인트 적립 시도:', { 
+          userId: currentUserId, 
+          duration: totalSeconds,
+          weighted_watts: np,
+          avg_watts: stats.avgPower,
+          tss: tss
+        });
+        
+        // Firebase Firestore v9로 훈련 결과 저장 및 포인트 적립
+        if (typeof window.saveTrainingSession === 'function') {
+          const trainingData = {
+            duration: totalSeconds,
+            weighted_watts: np,
+            avg_watts: stats.avgPower || np
+          };
+          
+          const saveResult = await window.saveTrainingSession(currentUserId, trainingData);
+          
+          if (saveResult && saveResult.success) {
+            console.log('[saveTrainingResult] ✅ 훈련 결과 저장 및 포인트 적립 성공:', saveResult);
+            
+            // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
+            window.lastMileageUpdate = {
+              success: true,
+              acc_points: saveResult.newAccPoints,
+              rem_points: saveResult.newRemPoints,
+              expiry_date: saveResult.newExpiryDate,
+              earned_points: saveResult.earnedPoints,
+              extended_days: saveResult.extendedDays
+            };
+            
+            // 사용자 정보도 업데이트
+            if (window.currentUser) {
+              window.currentUser.acc_points = saveResult.newAccPoints;
+              window.currentUser.rem_points = saveResult.newRemPoints;
+              window.currentUser.expiry_date = saveResult.newExpiryDate;
+              // localStorage도 업데이트
+              localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
             }
-           } else {
-             console.warn('[saveTrainingResult] ⚠️ 마일리지 업데이트 실패:', mileageResult.error);
-           }
-         } else {
-           console.warn('[saveTrainingResult] ⚠️ updateUserMileage 함수가 없습니다. userManager.js를 로드하세요.');
-         }
-       } catch (mileageError) {
-         console.error('[saveTrainingResult] ❌ 마일리지 업데이트 중 오류:', mileageError);
-         // 마일리지 업데이트 실패해도 계속 진행
-       }
-     }
+          } else {
+            console.warn('[saveTrainingResult] ⚠️ 훈련 결과 저장 실패:', saveResult);
+          }
+        } else {
+          console.warn('[saveTrainingResult] ⚠️ saveTrainingSession 함수가 없습니다. trainingResultService.js를 로드하세요.');
+          
+          // 기존 updateUserMileage 함수로 폴백 (호환성 유지)
+          if (typeof window.updateUserMileage === 'function') {
+            console.log('[saveTrainingResult] 🔄 기존 updateUserMileage로 폴백');
+            const mileageResult = await window.updateUserMileage(currentUserId, tss);
+            if (mileageResult.success) {
+              console.log('[saveTrainingResult] ✅ 마일리지 업데이트 성공 (폴백):', mileageResult);
+              window.lastMileageUpdate = mileageResult;
+              if (window.currentUser) {
+                window.currentUser.acc_points = mileageResult.acc_points;
+                window.currentUser.rem_points = mileageResult.rem_points;
+                window.currentUser.expiry_date = mileageResult.expiry_date;
+                window.currentUser.last_training_date = mileageResult.last_training_date;
+                localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
+              }
+            }
+          }
+        }
+      } catch (saveError) {
+        console.error('[saveTrainingResult] ❌ 훈련 결과 저장 중 오류:', saveError);
+        // 저장 실패해도 계속 진행
+      }
+    } else {
+      console.warn('[saveTrainingResult] ⚠️ 훈련 결과 저장 스킵:', {
+        hasUserId: !!currentUserId,
+        hasDuration: totalSeconds > 0,
+        hasNP: np > 0
+      });
+    }
 
      // 4. 결과 처리 및 반환
      if (firebaseSuccess) {
