@@ -10104,18 +10104,66 @@ function confirmRPESelection() {
   // 모달 출처에 따라 다른 화면으로 이동
   const source = window.rpeModalSource || 'solo'; // 기본값은 solo (기존 동작 유지)
   
-  if (typeof showScreen === 'function') {
-    if (source === 'indoor') {
-      // INDOOR TRAINING → Live Training Rooms 화면
-      showScreen('trainingRoomScreen');
+  console.log('[RPE Modal] 확인 버튼 클릭, 출처:', source);
+  
+  // 화면 전환 (인증 체크 우회를 위해 직접 DOM 조작 사용)
+  if (source === 'indoor') {
+    // INDOOR TRAINING → Live Training Rooms 화면
+    const targetScreen = document.getElementById('trainingRoomScreen');
+    if (targetScreen) {
+      // 모든 화면 숨기기
+      document.querySelectorAll('.screen').forEach(screen => {
+        if (screen.id !== 'trainingRoomScreen' && screen.id !== 'splashScreen') {
+          screen.classList.remove('active');
+          screen.style.display = 'none';
+          screen.style.opacity = '0';
+          screen.style.visibility = 'hidden';
+        }
+      });
+      
+      // 대상 화면 표시
+      targetScreen.style.display = 'block';
+      targetScreen.classList.add('active');
+      targetScreen.style.opacity = '1';
+      targetScreen.style.visibility = 'visible';
+      
+      console.log('[RPE Modal] INDOOR TRAINING 경로: Live Training Rooms 화면으로 이동');
+      
       if (typeof loadTrainingRooms === 'function') {
         setTimeout(() => loadTrainingRooms(), 200);
       }
-      console.log('[RPE Modal] INDOOR TRAINING 경로: Live Training Rooms 화면으로 이동');
     } else {
-      // SOLO TRAINING → 훈련 준비 화면
-      showScreen('trainingReadyScreen');
+      // showScreen 함수 사용 (fallback)
+      if (typeof showScreen === 'function') {
+        showScreen('trainingRoomScreen');
+      }
+    }
+  } else {
+    // SOLO TRAINING → 훈련 준비 화면
+    const targetScreen = document.getElementById('trainingReadyScreen');
+    if (targetScreen) {
+      // 모든 화면 숨기기
+      document.querySelectorAll('.screen').forEach(screen => {
+        if (screen.id !== 'trainingReadyScreen' && screen.id !== 'splashScreen') {
+          screen.classList.remove('active');
+          screen.style.display = 'none';
+          screen.style.opacity = '0';
+          screen.style.visibility = 'hidden';
+        }
+      });
+      
+      // 대상 화면 표시
+      targetScreen.style.display = 'block';
+      targetScreen.classList.add('active');
+      targetScreen.style.opacity = '1';
+      targetScreen.style.visibility = 'visible';
+      
       console.log('[RPE Modal] SOLO TRAINING 경로: 훈련 준비 화면으로 이동');
+    } else {
+      // showScreen 함수 사용 (fallback)
+      if (typeof showScreen === 'function') {
+        showScreen('trainingReadyScreen');
+      }
     }
   }
   
