@@ -3594,15 +3594,25 @@
     async function handlePhoneAuth() {
       const phoneInput = document.getElementById('authPhoneInput');
       const passwordInput = document.getElementById('authPasswordInput');
-      const nicknameInput = document.getElementById('authNicknameInput');
-      const nicknameGroup = document.getElementById('authNicknameGroup');
       const submitBtn = document.getElementById('authSubmitBtn');
       const statusEl = document.getElementById('authStatus');
+      
+      // 요소 존재 확인
+      if (!phoneInput) {
+        console.error('❌ authPhoneInput 요소를 찾을 수 없습니다');
+        showAuthStatus('시스템 오류가 발생했습니다. 페이지를 새로고침해주세요.', 'error');
+        return;
+      }
+      
+      if (!passwordInput) {
+        console.error('❌ authPasswordInput 요소를 찾을 수 없습니다');
+        showAuthStatus('시스템 오류가 발생했습니다. 페이지를 새로고침해주세요.', 'error');
+        return;
+      }
       
       // 입력값 가져오기
       const phone = phoneInput.value.trim();
       const password = passwordInput.value;
-      const nickname = nicknameInput.value.trim();
       
       // 유효성 검사
       if (!phone) {
@@ -4142,7 +4152,6 @@
     document.addEventListener('DOMContentLoaded', () => {
       const phoneInput = document.getElementById('authPhoneInput');
       const passwordInput = document.getElementById('authPasswordInput');
-      const nicknameInput = document.getElementById('authNicknameInput');
       const submitBtn = document.getElementById('authSubmitBtn');
       
       // 전화번호 포맷팅
