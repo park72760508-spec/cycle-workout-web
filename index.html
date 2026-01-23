@@ -983,7 +983,7 @@
 
   <!-- 0) 사용자 인증 -->
 <!-- 🔐 인증 화면 (연결 화면 전에 추가) -->
-  <div id="authScreen" class="screen">
+  <div id="authScreen" class="screen" style="display: none;">
     <div class="auth-main-container">
       <div class="auth-form-container">
         <div class="auth-form-card">
@@ -1188,7 +1188,7 @@
   </div>
 
   <!-- 사용자 등록 화면 -->
-  <div id="registerScreen" class="screen">
+  <div id="registerScreen" class="screen" style="display: none;">
     <div class="auth-main-container">
       <div class="auth-form-container">
         <div class="auth-form-card">
@@ -3760,23 +3760,47 @@
      * 사용자 등록 버튼 클릭 핸들러
      */
     function handleRegisterClick() {
-      // 사용자 등록 화면으로 전환
-      const authScreen = document.getElementById('authScreen');
+      console.log('🔄 사용자 등록 화면으로 전환 시작');
+      
+      // 모든 화면 숨기기 (splashScreen 제외)
+      document.querySelectorAll('.screen').forEach(screen => {
+        if (screen.id !== 'registerScreen' && screen.id !== 'splashScreen') {
+          screen.classList.remove('active');
+          screen.style.display = 'none';
+          screen.style.visibility = 'hidden';
+          screen.style.opacity = '0';
+          console.log(`✅ 화면 숨김: ${screen.id}`);
+        }
+      });
+      
+      // 사용자 등록 화면 표시
       const registerScreen = document.getElementById('registerScreen');
-      
-      if (authScreen) {
-        authScreen.classList.remove('active');
-        authScreen.style.display = 'none';
-      }
-      
       if (registerScreen) {
+        // 스타일 강제 설정
         registerScreen.classList.add('active');
         registerScreen.style.display = 'block';
+        registerScreen.style.visibility = 'visible';
+        registerScreen.style.opacity = '1';
+        registerScreen.style.position = 'relative';
+        registerScreen.style.zIndex = '1000';
+        console.log('✅ 사용자 등록 화면 표시 완료');
+        
+        // 스크롤을 맨 위로
+        window.scrollTo(0, 0);
+        
         // 첫 번째 입력 필드에 포커스
         setTimeout(() => {
-          const phoneInput = document.getElementById('registerPhoneInput');
-          if (phoneInput) phoneInput.focus();
-        }, 100);
+          const nameInput = document.getElementById('registerNameInput');
+          if (nameInput) {
+            nameInput.focus();
+            console.log('✅ 이름 입력 필드에 포커스');
+          } else {
+            console.warn('⚠️ registerNameInput을 찾을 수 없습니다');
+          }
+        }, 300);
+      } else {
+        console.error('❌ registerScreen 요소를 찾을 수 없습니다');
+        alert('사용자 등록 화면을 찾을 수 없습니다. 페이지를 새로고침해주세요.');
       }
     }
     
@@ -4073,6 +4097,9 @@
       const registerBtn = document.getElementById('authRegisterBtn');
       if (registerBtn) {
         registerBtn.addEventListener('click', handleRegisterClick);
+        console.log('✅ 사용자 등록 버튼 이벤트 리스너 등록 완료');
+      } else {
+        console.warn('⚠️ authRegisterBtn을 찾을 수 없습니다');
       }
       
       // 사용자 등록 화면 이벤트 리스너
