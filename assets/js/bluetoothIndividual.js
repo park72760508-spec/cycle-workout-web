@@ -828,12 +828,16 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => 
         if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
             userFTP = foundFTP;
             window.userFTP = userFTP;
+            console.log('[BluetoothIndividual] FTP 값 업데이트 (Firebase):', userFTP);
             // FTP 값이 업데이트되면 속도계 눈금 및 레이블 업데이트
-            if (typeof updateGaugeTicksAndLabels === 'function') {
-                updateGaugeTicksAndLabels();
-            } else {
-                console.warn('[BluetoothIndividual] updateGaugeTicksAndLabels 함수를 찾을 수 없습니다.');
-            }
+            setTimeout(() => {
+                if (typeof updateGaugeTicksAndLabels === 'function') {
+                    updateGaugeTicksAndLabels();
+                    console.log('[BluetoothIndividual] 속도계 눈금 및 레이블 업데이트 완료 (FTP:', userFTP, ')');
+                } else {
+                    console.warn('[BluetoothIndividual] updateGaugeTicksAndLabels 함수를 찾을 수 없습니다.');
+                }
+            }, 100);
         }
         
         // targetPower 값 확인
@@ -888,11 +892,17 @@ function updateUserName(data) {
     const bikeIdDisplay = document.getElementById('bike-id-display');
     if (!bikeIdDisplay) return;
     
-    // 사용자 이름 추출
-    const userName = data.userName || null;
+    // 사용자 이름 추출 (우선순위: data.userName > window.currentUser.name > null)
+    let userName = null;
+    if (data && data.userName) {
+        userName = String(data.userName).trim();
+    } else if (window.currentUser && window.currentUser.name) {
+        userName = String(window.currentUser.name).trim();
+    }
     
     if (userName) {
         bikeIdDisplay.innerText = userName;
+        console.log('[BluetoothIndividual] 사용자 이름 표시:', userName);
     } else {
         // 이름이 없으면 Track 번호 표시
         bikeIdDisplay.innerText = `Track ${myTrackId}`;
@@ -4230,6 +4240,9 @@ if (document.readyState === 'loading') {
         // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
         initializeIndividualIntensitySlider();
         
+        // 사용자 정보 초기화 (window.currentUser에서 가져오기)
+        initializeUserInfo();
+        
         // 속도계 눈금 및 레이블 생성 (즉시 실행)
         setTimeout(() => {
             updateGaugeTicksAndLabels();
@@ -4273,6 +4286,9 @@ if (document.readyState === 'loading') {
     } else {
         console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
     }
+    
+    // 사용자 정보 초기화 (window.currentUser에서 가져오기)
+    initializeUserInfo();
     
     // 속도계 눈금 및 레이블 생성 (즉시 실행)
     setTimeout(() => {
