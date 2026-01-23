@@ -3539,39 +3539,98 @@
         }
         
         // 로그인/회원가입 성공 후 처리
-        // 사용자 목록 새로고침 및 DB 동기화
-        if (typeof loadUsers === 'function') {
-          await loadUsers();
-        }
-        
-        if (typeof syncUsersFromDB === 'function') {
-          try {
-            await syncUsersFromDB();
-            console.log('✅ 사용자 목록 DB 동기화 완료');
-          } catch (syncError) {
-            console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', syncError);
-          }
-        }
+        // 사용자 목록 새로고침 및 DB 동기화 (비동기로 실행하되 화면 전환은 기다리지 않음)
+        Promise.all([
+          typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+          typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(err => {
+            console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', err);
+            return Promise.resolve();
+          }) : Promise.resolve()
+        ]).then(() => {
+          console.log('✅ 사용자 목록 DB 동기화 완료');
+        }).catch(err => {
+          console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시하고 계속 진행):', err);
+        });
         
         // 베이스캠프 화면으로 이동
-        setTimeout(() => {
-          if (typeof showScreen === 'function') {
-            showScreen('basecampScreen');
+        const switchToBasecamp = () => {
+          console.log('🔄 화면 전환 시작: authScreen -> basecampScreen');
+          
+          const authScreen = document.getElementById('authScreen');
+          const basecampScreen = document.getElementById('basecampScreen');
+          
+          // 요소 존재 확인
+          if (!basecampScreen) {
+            console.error('❌ basecampScreen 요소를 찾을 수 없습니다');
+            // connectionScreen으로 대체 시도
+            const connectionScreen = document.getElementById('connectionScreen');
+            if (connectionScreen) {
+              if (authScreen) {
+                authScreen.classList.remove('active');
+                authScreen.style.display = 'none';
+              }
+              connectionScreen.classList.add('active');
+              connectionScreen.style.display = 'block';
+              console.log('✅ connectionScreen으로 대체 표시');
+            }
+            return;
+          }
+          
+          // showScreen 함수가 있으면 사용 (우선)
+          if (typeof window.showScreen === 'function') {
+            try {
+              console.log('✅ showScreen 함수 사용');
+              window.showScreen('basecampScreen');
+              // showScreen이 성공했는지 확인
+              setTimeout(() => {
+                const isBasecampVisible = basecampScreen.classList.contains('active') || 
+                                         window.getComputedStyle(basecampScreen).display !== 'none';
+                if (!isBasecampVisible) {
+                  console.warn('⚠️ showScreen이 작동하지 않음, 직접 전환 시도');
+                  directScreenSwitch();
+                } else {
+                  console.log('✅ showScreen으로 화면 전환 성공');
+                }
+              }, 100);
+              return;
+            } catch (err) {
+              console.warn('⚠️ showScreen 함수 실행 중 오류, 직접 전환 시도:', err);
+            }
           } else {
-            const authScreen = document.getElementById('authScreen');
-            const basecampScreen = document.getElementById('basecampScreen');
+            console.warn('⚠️ showScreen 함수가 없음, 직접 전환 시도');
+          }
+          
+          // 직접 DOM 조작으로 화면 전환 (fallback)
+          directScreenSwitch();
+          
+          function directScreenSwitch() {
+            // 모든 화면 숨기기
+            document.querySelectorAll('.screen').forEach(screen => {
+              if (screen.id !== 'basecampScreen' && screen.id !== 'splashScreen') {
+                screen.classList.remove('active');
+                screen.style.display = 'none';
+              }
+            });
             
+            // authScreen 숨김
             if (authScreen) {
               authScreen.classList.remove('active');
               authScreen.style.display = 'none';
+              console.log('✅ authScreen 숨김');
             }
             
-            if (basecampScreen) {
-              basecampScreen.classList.add('active');
-              basecampScreen.style.display = 'block';
-            }
+            // basecampScreen 표시
+            basecampScreen.classList.add('active');
+            basecampScreen.style.display = 'block';
+            console.log('✅ basecampScreen 직접 표시 완료');
+            
+            // 강제로 스크롤을 맨 위로
+            window.scrollTo(0, 0);
           }
-        }, 1000);
+        };
+        
+        // 약간의 지연 후 화면 전환 (UI 업데이트를 위해)
+        setTimeout(switchToBasecamp, 500);
         
       } catch (error) {
         console.error('인증 오류:', error);
