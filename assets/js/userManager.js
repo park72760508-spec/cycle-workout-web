@@ -1218,14 +1218,44 @@ async function loadUsers() {
           : String(mergedViewer?.grade ?? '2'));
     const viewerId     = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
 
+    // 권한에 따른 사용자 목록 필터링
     let visibleUsers = users;
-    if (viewerGrade === '2' && viewerId) {
-      visibleUsers = users.filter(u => String(u.id) === viewerId);
+    if (viewerGrade === '1') {
+      // 관리자(grade=1): 모든 사용자 보기
+      visibleUsers = users;
+    } else if (viewerGrade === '2' || viewerGrade === '3') {
+      // 일반 사용자(grade=2,3): 본인 계정만 보기
+      if (viewerId) {
+        visibleUsers = users.filter(u => String(u.id) === viewerId);
+      } else {
+        visibleUsers = [];
+      }
     }
 
     visibleUsers.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ko'));
 
-    const canEditFor = (u) => (viewerGrade === '1' || viewerGrade === '3') || (viewerId && String(u.id) === viewerId);
+    // 수정 권한 체크 함수
+    const canEditFor = (u) => {
+      if (viewerGrade === '1') {
+        // 관리자: 모든 사용자 수정 가능
+        return true;
+      } else if (viewerGrade === '2' || viewerGrade === '3') {
+        // 일반 사용자: 본인 계정만 수정 가능
+        return viewerId && String(u.id) === viewerId;
+      }
+      return false;
+    };
+    
+    // 삭제 권한 체크 함수
+    const canDeleteFor = (u) => {
+      if (viewerGrade === '1') {
+        // 관리자: 모든 사용자 삭제 가능
+        return true;
+      } else {
+        // 일반 사용자(grade=2,3): 삭제 권한 없음
+        return false;
+      }
+    };
 
     userList.innerHTML = visibleUsers.map(user => {
       const wkg = (user.ftp && user.weight) ? (user.ftp / user.weight).toFixed(2) : '-';
@@ -1262,11 +1292,9 @@ async function loadUsers() {
       }
 
       const canEdit = canEditFor(user);
-      
-      const userGrade = String(user.grade || '2');
-      const canDelete = canEdit && (userGrade !== '2' && userGrade !== '3');
-      const deleteButtonDisabled = canEdit && !canDelete ? 'disabled' : '';
-      const deleteButtonClass = canEdit && !canDelete ? 'disabled' : '';
+      const canDelete = canDeleteFor(user);
+      const deleteButtonDisabled = !canDelete ? 'disabled' : '';
+      const deleteButtonClass = !canDelete ? 'disabled' : '';
 
       const challenge = String(user.challenge || 'Fitness').trim();
       let challengeImage = 'yellow.png';
@@ -1602,6 +1630,26 @@ async function saveUser() {
 
 async function editUser(userId) {
   try {
+    // 권한 체크
+    let viewer = null, authUser = null;
+    try { viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(_) {}
+    try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(_) {}
+    
+    const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+    const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+    const viewerGrade = isTempAdmin
+      ? '1'
+      : (typeof getViewerGrade === 'function'
+          ? String(getViewerGrade())
+          : String(mergedViewer?.grade ?? '2'));
+    const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
+    
+    // 권한 확인: 관리자는 모든 사용자 수정 가능, 일반 사용자는 본인만 수정 가능
+    if (viewerGrade !== '1' && (!viewerId || String(userId) !== viewerId)) {
+      showToast('본인 계정만 수정할 수 있습니다.', 'warning');
+      return;
+    }
+    
     const result = await apiGetUser(userId);
     
     if (!result.success) {
@@ -1713,6 +1761,26 @@ function closeEditUserModal() {
 async function performUpdateFromModal() {
   if (!isEditMode || !currentEditUserId) {
     console.error('Invalid edit mode state');
+    return;
+  }
+
+  // 권한 체크
+  let viewer = null, authUser = null;
+  try { viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(_) {}
+  try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(_) {}
+  
+  const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+  const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+  const viewerGrade = isTempAdmin
+    ? '1'
+    : (typeof getViewerGrade === 'function'
+        ? String(getViewerGrade())
+        : String(mergedViewer?.grade ?? '2'));
+  const viewerId = (mergedViewer && mergedViewer.id != null) ? String(mergedViewer.id) : null;
+  
+  // 권한 확인: 관리자는 모든 사용자 수정 가능, 일반 사용자는 본인만 수정 가능
+  if (viewerGrade !== '1' && (!viewerId || String(currentEditUserId) !== viewerId)) {
+    showToast('본인 계정만 수정할 수 있습니다.', 'warning');
     return;
   }
 
@@ -2082,6 +2150,25 @@ function resetFormMode() {
 }
 
 async function deleteUser(userId) {
+  // 권한 체크
+  let viewer = null, authUser = null;
+  try { viewer = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(_) {}
+  try { authUser = JSON.parse(localStorage.getItem('authUser') || 'null'); } catch(_) {}
+  
+  const mergedViewer = Object.assign({}, viewer || {}, authUser || {});
+  const isTempAdmin = (typeof window !== 'undefined' && window.__TEMP_ADMIN_OVERRIDE__ === true);
+  const viewerGrade = isTempAdmin
+    ? '1'
+    : (typeof getViewerGrade === 'function'
+        ? String(getViewerGrade())
+        : String(mergedViewer?.grade ?? '2'));
+  
+  // 관리자(grade=1)만 삭제 가능
+  if (viewerGrade !== '1') {
+    showToast('삭제 권한이 없습니다. 관리자만 사용자를 삭제할 수 있습니다.', 'warning');
+    return;
+  }
+  
   if (!confirm('정말로 이 사용자를 삭제하시겠습니까?\n삭제된 사용자의 훈련 기록도 함께 삭제됩니다.')) {
     return;
   }
