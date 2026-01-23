@@ -1052,12 +1052,21 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 // 1단계: 저장 중 모달 표시 (저장 중 애니메이션)
                 showBluetoothTrainingResultModalSaving();
                 
+                // 훈련 종료 전 포인트 값 저장 (결과 화면 표시용)
+                const beforeAccPoints = window.currentUser?.acc_points || 0;
+                const beforeRemPoints = window.currentUser?.rem_points || 0;
+                window.beforeTrainingPoints = {
+                    acc_points: beforeAccPoints,
+                    rem_points: beforeRemPoints
+                };
+                console.log('[BluetoothIndividual] 0️⃣ 훈련 전 포인트 저장:', window.beforeTrainingPoints);
+                
                 Promise.resolve()
                     .then(() => {
                         console.log('[BluetoothIndividual] 🚀 1단계: 결과 저장 시작');
                         return window.saveTrainingResultAtEnd?.();
                     })
-                    .then((saveResult) => {
+                    .then(async (saveResult) => {
                         console.log('[BluetoothIndividual] ✅ 1단계 완료:', saveResult);
                         
                         // 저장 결과 확인 및 알림
@@ -1070,6 +1079,133 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                             console.log('[BluetoothIndividual] 🌐 서버 저장 성공');
                             if (typeof showToast === "function") {
                                 showToast("훈련 결과가 서버에 저장되었습니다");
+                            }
+                        }
+                        
+                        // 2단계: Firebase Firestore v9로 훈련 결과 저장 및 포인트 적립 (독립적 구동)
+                        // resultManager.js의 saveTrainingResult에서 이미 호출되지만, 
+                        // 독립적 구동을 위해 여기서도 확인 및 처리
+                        const sessionData = window.trainingResults?.getCurrentSessionData?.();
+                        if (sessionData && window.currentUser?.id) {
+                            try {
+                                const stats = window.trainingResults?.calculateSessionStats?.() || {};
+                                const session = sessionData;
+                                
+                                // 훈련 시간 계산
+                                let totalSeconds = 0;
+                                if (status && status.elapsedTime !== undefined && status.elapsedTime !== null) {
+                                    totalSeconds = Math.max(0, Math.floor(status.elapsedTime));
+                                } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
+                                    totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
+                                } else {
+                                    const startTime = session.startTime ? new Date(session.startTime) : null;
+                                    const endTime = session.endTime ? new Date(session.endTime) : new Date();
+                                    totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
+                                }
+                                
+                                // TSS 및 NP 계산
+                                let tss = 0;
+                                let np = 0;
+                                
+                                if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
+                                    const elapsedSec = window.trainingMetrics.elapsedSec;
+                                    const np4sum = window.trainingMetrics.np4sum || 0;
+                                    const count = window.trainingMetrics.count || 1;
+                                    
+                                    if (count > 0 && np4sum > 0) {
+                                        np = Math.pow(np4sum / count, 0.25);
+                                        const userFtp = window.currentUser?.ftp || 200;
+                                        const IF = userFtp > 0 ? (np / userFtp) : 0;
+                                        tss = (elapsedSec / 3600) * (IF * IF) * 100;
+                                    }
+                                }
+                                
+                                if (!tss || tss === 0) {
+                                    const userFtp = window.currentUser?.ftp || 200;
+                                    if (!np || np === 0) {
+                                        np = Math.round((stats.avgPower || 0) * 1.05);
+                                    }
+                                    const IF = userFtp > 0 ? (np / userFtp) : 0;
+                                    const timeForTss = totalSeconds > 0 ? totalSeconds : (Math.floor(totalSeconds / 60) * 60);
+                                    tss = (timeForTss / 3600) * (IF * IF) * 100;
+                                }
+                                
+                                tss = Math.max(0, Math.round(tss * 100) / 100);
+                                np = Math.max(0, Math.round(np * 10) / 10);
+                                
+                                // saveTrainingSession 호출 (독립적 구동)
+                                if (totalSeconds > 0 && typeof window.saveTrainingSession === 'function') {
+                                    // 케이던스 데이터 계산
+                                    const cadenceValues = session?.cadenceData?.map(d => d.v).filter(v => v > 0) || [];
+                                    const avgCadence = cadenceValues.length ? Math.round(cadenceValues.reduce((a, b) => a + b, 0) / cadenceValues.length) : null;
+                                    
+                                    // 최대 심박수 계산
+                                    const hrValues = session?.hrData?.map(d => d.v).filter(v => v > 0) || [];
+                                    const maxHR = hrValues.length ? Math.max(...hrValues) : null;
+                                    
+                                    // 일량 계산 (kJ)
+                                    let kilojoules = null;
+                                    if (session?.powerData && session.powerData.length > 0) {
+                                        const totalJoules = session.powerData.reduce((sum, data) => sum + (data.v || 0), 0);
+                                        kilojoules = Math.round(totalJoules / 1000);
+                                    }
+                                    
+                                    // 워크아웃 정보
+                                    const workoutTitle = window.currentWorkout?.title || window.currentWorkout?.name || null;
+                                    const workoutId = window.currentWorkout?.id || null;
+                                    
+                                    const finalNP = np > 0 ? np : (stats.avgPower > 0 ? stats.avgPower : 100);
+                                    const finalAvgWatts = stats.avgPower > 0 ? stats.avgPower : finalNP;
+                                    
+                                    const trainingData = {
+                                        duration: totalSeconds,
+                                        weighted_watts: finalNP,
+                                        avg_watts: finalAvgWatts,
+                                        workout_id: workoutId ? String(workoutId) : null,
+                                        title: workoutTitle,
+                                        max_watts: stats.maxPower || null,
+                                        kilojoules: kilojoules,
+                                        avg_hr: stats.avgHR || null,
+                                        max_hr: maxHR,
+                                        avg_cadence: avgCadence,
+                                        powerData: session?.powerData || null,
+                                        rpe: null
+                                    };
+                                    
+                                    console.log('[BluetoothIndividual] 📤 saveTrainingSession 호출 (독립적 구동):', {
+                                        ...trainingData,
+                                        powerDataCount: trainingData.powerData?.length || 0
+                                    });
+                                    
+                                    const firestoreSaveResult = await window.saveTrainingSession(window.currentUser.id, trainingData);
+                                    console.log('[BluetoothIndividual] 📥 saveTrainingSession 응답:', firestoreSaveResult);
+                                    
+                                    if (firestoreSaveResult && firestoreSaveResult.success) {
+                                        // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
+                                        window.lastMileageUpdate = {
+                                            success: true,
+                                            acc_points: firestoreSaveResult.newAccPoints,
+                                            rem_points: firestoreSaveResult.newRemPoints,
+                                            expiry_date: firestoreSaveResult.newExpiryDate,
+                                            earned_points: firestoreSaveResult.earnedPoints,
+                                            extendedDays: firestoreSaveResult.extendedDays,
+                                            extended_days: firestoreSaveResult.extendedDays // 호환성
+                                        };
+                                        
+                                        // 사용자 정보도 업데이트
+                                        if (window.currentUser) {
+                                            window.currentUser.acc_points = firestoreSaveResult.newAccPoints;
+                                            window.currentUser.rem_points = firestoreSaveResult.newRemPoints;
+                                            window.currentUser.expiry_date = firestoreSaveResult.newExpiryDate;
+                                            localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
+                                        }
+                                        
+                                        console.log('[BluetoothIndividual] ✅ Firebase Firestore 저장 및 포인트 적립 성공');
+                                    }
+                                }
+                            } catch (firestoreError) {
+                                console.error('[BluetoothIndividual] ❌ Firebase Firestore 저장 실패:', firestoreError);
+                                // Firestore 저장 실패해도 계속 진행
                             }
                         }
                         
@@ -3233,6 +3369,28 @@ function showBluetoothTrainingResultModal(status = null) {
         return; // 다른 화면에서는 실행하지 않음
     }
     
+    // 결과 헤더 스타일 적용 (모바일과 동일)
+    const resultHeader = modal.querySelector('.result-header');
+    const resultTitle = modal.querySelector('.result-title');
+    const resultSubtitle = modal.querySelector('.result-subtitle');
+    if (resultHeader) {
+        resultHeader.style.textAlign = 'center';
+        resultHeader.style.marginBottom = '16px';
+    }
+    if (resultTitle) {
+        resultTitle.style.fontSize = '1.5em';
+        resultTitle.style.fontWeight = 'bold';
+        resultTitle.style.color = '#00d4aa';
+        resultTitle.style.margin = '0 0 4px 0';
+        resultTitle.style.textShadow = '0 0 10px rgba(0, 212, 170, 0.5)';
+    }
+    if (resultSubtitle) {
+        resultSubtitle.style.fontSize = '0.9em';
+        resultSubtitle.style.color = '#ffffff';
+        resultSubtitle.style.margin = '0';
+        resultSubtitle.style.opacity = '0.9';
+    }
+    
     // 결과값 계산
     const sessionData = window.trainingResults?.getCurrentSessionData?.();
     if (!sessionData) {
@@ -3312,6 +3470,12 @@ function showBluetoothTrainingResultModal(status = null) {
     const avgPower = stats.avgPower || 0;
     const calories = Math.round(avgPower * duration_min * 0.0143);
     
+    // 1분 미만이어도 최소 1분으로 표시 (모바일과 동일)
+    if (totalSeconds > 0 && duration_min === 0) {
+        duration_min = 1;
+        console.log('[Bluetooth 개인 훈련] 1분 미만 훈련을 1분으로 표시:', { totalSeconds, duration_min });
+    }
+    
     // 결과값 표시
     const durationEl = document.getElementById('result-duration');
     const avgPowerEl = document.getElementById('result-avg-power');
@@ -3338,16 +3502,19 @@ function showBluetoothTrainingResultModal(status = null) {
     const beforeRemPoints = beforePoints ? beforePoints.rem_points : (window.currentUser?.rem_points || 0);
     
     // 마일리지 업데이트 결과가 있으면 사용 (서버에서 업데이트된 최종 값)
+    // saveTrainingSession 결과 또는 기존 updateUserMileage 결과 모두 지원
     const mileageUpdate = window.lastMileageUpdate || null;
     if (mileageUpdate && mileageUpdate.success) {
-        // 훈련 후 값 = 훈련 전 값 + TSS (획득 포인트)
-        const afterAccPoints = beforeAccPoints + tss;
-        const afterRemPoints = beforeRemPoints + tss;
+        // saveTrainingSession 결과 형식 (newAccPoints, newRemPoints, earnedPoints, extendedDays)
+        // 또는 기존 updateUserMileage 결과 형식 (acc_points, rem_points, add_days)
+        const finalAccPoints = mileageUpdate.newAccPoints || mileageUpdate.acc_points || (beforeAccPoints + tss);
+        const finalRemPoints = mileageUpdate.newRemPoints || mileageUpdate.rem_points || (beforeRemPoints + tss);
+        const finalEarnedPoints = mileageUpdate.earnedPoints || mileageUpdate.earned_points || tss;
         
         // 서버에서 업데이트된 최종 값 사용 (500 이상일 때 차감된 값)
-        if (accPointsEl) accPointsEl.textContent = Math.round(mileageUpdate.acc_points || afterAccPoints);
-        if (remPointsEl) remPointsEl.textContent = Math.round(mileageUpdate.rem_points || afterRemPoints);
-        if (earnedPointsEl) earnedPointsEl.textContent = Math.round(tss);
+        if (accPointsEl) accPointsEl.textContent = Math.round(finalAccPoints);
+        if (remPointsEl) remPointsEl.textContent = Math.round(finalRemPoints);
+        if (earnedPointsEl) earnedPointsEl.textContent = Math.round(finalEarnedPoints);
     } else {
         // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우: 훈련 전 값 + TSS로 표시
         const afterAccPoints = beforeAccPoints + tss;
@@ -3375,15 +3542,74 @@ function showBluetoothTrainingResultModal(status = null) {
     
     // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
     // mileageUpdate는 위에서 이미 선언되었으므로 재사용
-    const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && mileageUpdate.add_days > 0) ||
-                                   (mileageUpdate && mileageUpdate.success && (mileageUpdate.rem_points || 0) >= 500);
+    // extendedDays 또는 extended_days 필드 확인 (saveTrainingSession 결과 형식)
+    const extendedDays = mileageUpdate?.extendedDays || mileageUpdate?.extended_days || mileageUpdate?.add_days || 0;
+    const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && extendedDays > 0) ||
+                                   (mileageUpdate && mileageUpdate.success && (mileageUpdate.rem_points || mileageUpdate.newRemPoints || 0) >= 500);
     if (shouldShowCelebration) {
-        // individual.js의 showIndividualMileageCelebration 함수 사용
-        if (typeof showIndividualMileageCelebration === 'function') {
-            showIndividualMileageCelebration(mileageUpdate, tss);
-        }
+        // Bluetooth 개인 훈련 대시보드 전용 축하 함수 사용
+        showBluetoothMileageCelebration(mileageUpdate, tss);
     }
 }
+
+/**
+ * Bluetooth 개인 훈련 대시보드 마일리지 축하 오버레이 표시
+ * 모바일 대시보드와 동일한 로직
+ */
+function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
+    const modal = document.getElementById('bluetoothMileageCelebrationModal');
+    const messageEl = document.getElementById('bluetooth-celebration-message');
+    
+    if (!modal || !messageEl) {
+        console.warn('[Bluetooth 개인 훈련] 축하 오버레이 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 이전 보유 포인트 계산: 현재 잔액 + 사용한 포인트 - 획득 포인트
+    const currentRemPoints = Math.round(mileageUpdate.rem_points || mileageUpdate.newRemPoints || 0);
+    const earnedPoints = Math.round(earnedTss);
+    const addDays = mileageUpdate.extendedDays || mileageUpdate.extended_days || mileageUpdate.add_days || 0;
+    const usedPoints = addDays * 500;
+    const previousRemPoints = Math.round(currentRemPoints + usedPoints - earnedPoints);
+    const totalAfterEarned = previousRemPoints + earnedPoints;
+    
+    // 축하 메시지 생성
+    const message = `
+        <div style="margin-bottom: 12px; font-size: 1.1em; font-weight: 600;">
+          오늘의 훈련으로 ${earnedPoints} S-Point 획득!
+        </div>
+        <div style="margin-bottom: 12px; font-size: 0.95em;">
+          💰 (현재 보유: ${previousRemPoints} SP + ${earnedPoints} SP = ${totalAfterEarned} SP)
+        </div>
+        ${addDays > 0 ? `
+        <div style="font-size: 0.95em; font-weight: 600;">
+          🎉 ${usedPoints} SP를 사용하여 구독 기간이 ${addDays}일 연장되었습니다! (잔액: ${currentRemPoints} SP)
+        </div>
+        ` : ''}
+    `;
+    
+    messageEl.innerHTML = message;
+    
+    // 오버레이 표시 (결과 모달 위에 표시)
+    modal.classList.remove('hidden');
+    
+    console.log('[Bluetooth 개인 훈련] 축하 오버레이 표시:', { mileageUpdate, earnedTss, addDays });
+}
+
+/**
+ * Bluetooth 개인 훈련 대시보드 마일리지 축하 오버레이 닫기
+ */
+function closeBluetoothMileageCelebration() {
+    const modal = document.getElementById('bluetoothMileageCelebrationModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        console.log('[Bluetooth 개인 훈련] 축하 오버레이 닫기');
+    }
+}
+
+// 전역으로 노출
+window.showBluetoothMileageCelebration = showBluetoothMileageCelebration;
+window.closeBluetoothMileageCelebration = closeBluetoothMileageCelebration;
 
 /**
  * 기존 함수 호환성 유지 (다른 화면에서 사용 가능)
