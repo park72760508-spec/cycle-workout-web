@@ -515,6 +515,10 @@
       font-weight: 500;
       color: #374151;
     }
+    
+    .auth-label-left {
+      text-align: left;
+    }
 
     .auth-input-group input {
       width: 100%;
@@ -590,6 +594,41 @@
 
     .auth-submit-btn.signup-mode {
       background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+    }
+    
+    .auth-register-btn {
+      width: 100%;
+      padding: 14px 24px;
+      background: #ffffff;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #667eea;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-top: 12px;
+    }
+    
+    .auth-register-btn:hover:not(:disabled) {
+      background: #f3f4f6;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+    }
+    
+    .auth-register-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    
+    .auth-register-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    /* 회원가입 모드일 때 사용자 등록 버튼 숨김 */
+    .phone-auth-section.signup-mode .auth-register-btn {
+      display: none;
     }
 
     /* 로딩 상태 */
@@ -933,7 +972,7 @@
             <video src="assets/img/title.mp4" alt="AI 트레이닝 대시보드" autoplay loop muted playsinline></video>
           </div>
           <div class="auth-form-header">
-            <h3>STELVIO AI 로그인</h3>
+            <h3>사용자 인증</h3>
             <p>전화번호와 PIN 번호로 간편하게 로그인하세요</p>
           </div>
           
@@ -941,7 +980,7 @@
           <div class="phone-auth-section">
             <!-- 전화번호 입력 -->
             <div class="auth-input-group">
-              <label for="authPhoneInput">전화번호</label>
+              <label for="authPhoneInput" class="auth-label-left">전화번호</label>
               <input 
                 type="tel" 
                 id="authPhoneInput" 
@@ -955,7 +994,7 @@
             
             <!-- 비밀번호 입력 -->
             <div class="auth-input-group">
-              <label for="authPasswordInput" id="authPasswordLabel">비밀번호 (PIN)</label>
+              <label for="authPasswordInput" id="authPasswordLabel" class="auth-label-left">비밀번호 (PIN)</label>
               <input 
                 type="password" 
                 id="authPasswordInput" 
@@ -964,14 +1003,11 @@
                 minlength="6"
                 required
               >
-              <small class="auth-help-text" id="authPasswordHelp">
-                처음 사용하시나요? 로그인 시도 후 회원가입 모드로 전환됩니다.
-              </small>
             </div>
             
             <!-- 닉네임 입력 (초기엔 숨김, 회원가입 모드에서 표시) -->
             <div class="auth-input-group hidden" id="authNicknameGroup">
-              <label for="authNicknameInput">닉네임</label>
+              <label for="authNicknameInput" class="auth-label-left">닉네임</label>
               <input 
                 type="text" 
                 id="authNicknameInput" 
@@ -985,6 +1021,11 @@
             <!-- 제출 버튼 -->
             <button class="auth-submit-btn" id="authSubmitBtn">
               시작하기
+            </button>
+            
+            <!-- 사용자 등록 버튼 -->
+            <button class="auth-register-btn" id="authRegisterBtn">
+              사용자 등록
             </button>
             
             <!-- 에러 메시지 -->
@@ -3481,16 +3522,15 @@
             }
             
           } catch (loginError) {
-            // 사용자가 존재하지 않는 경우 → 회원가입 모드로 전환
+            // 사용자가 존재하지 않는 경우 → 에러 메시지 표시 (자동 전환 제거)
             if (loginError.code === 'auth/user-not-found') {
-              console.log('🔄 계정이 없어 회원가입 모드로 전환');
-              switchToSignUpMode();
+              showAuthStatus('❌ 등록된 계정이 없습니다. "사용자 등록" 버튼을 클릭하여 새로 가입해주세요.', 'error');
               if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('loading');
                 submitBtn.textContent = '시작하기';
               }
-              return; // 여기서 종료, 사용자가 닉네임 입력 후 다시 버튼 클릭
+              return; // 여기서 종료
             }
             
             // 기타 에러는 throw하여 아래 catch에서 처리
@@ -3583,8 +3623,9 @@
       const nicknameGroup = document.getElementById('authNicknameGroup');
       const submitBtn = document.getElementById('authSubmitBtn');
       const passwordLabel = document.getElementById('authPasswordLabel');
-      const passwordHelp = document.getElementById('authPasswordHelp');
       const passwordInput = document.getElementById('authPasswordInput');
+      const phoneAuthSection = document.querySelector('.phone-auth-section');
+      const authFormHeader = document.querySelector('.auth-form-header p');
       
       if (nicknameGroup) {
         nicknameGroup.classList.remove('hidden');
@@ -3595,19 +3636,24 @@
         submitBtn.classList.add('signup-mode');
       }
       
-      // 비밀번호 레이블 및 도움말 변경
+      // 비밀번호 레이블 변경
       if (passwordLabel) {
         passwordLabel.textContent = '비밀번호 설정 (PIN)';
-      }
-      
-      if (passwordHelp) {
-        passwordHelp.textContent = '6자 이상의 비밀번호를 설정해주세요. 나중에 로그인할 때 사용합니다.';
-        passwordHelp.style.color = '#667eea';
       }
       
       if (passwordInput) {
         passwordInput.placeholder = '비밀번호를 설정하세요 (6자 이상)';
         passwordInput.value = ''; // 기존 입력값 초기화
+      }
+      
+      // 섹션에 signup-mode 클래스 추가 (사용자 등록 버튼 숨김용)
+      if (phoneAuthSection) {
+        phoneAuthSection.classList.add('signup-mode');
+      }
+      
+      // 헤더 텍스트 변경
+      if (authFormHeader) {
+        authFormHeader.textContent = '새 계정을 생성합니다. 정보를 입력해주세요.';
       }
       
       showAuthStatus('새 계정을 생성합니다. 닉네임과 비밀번호를 입력해주세요.', 'info');
@@ -3622,8 +3668,9 @@
       const nicknameGroup = document.getElementById('authNicknameGroup');
       const submitBtn = document.getElementById('authSubmitBtn');
       const passwordLabel = document.getElementById('authPasswordLabel');
-      const passwordHelp = document.getElementById('authPasswordHelp');
       const passwordInput = document.getElementById('authPasswordInput');
+      const phoneAuthSection = document.querySelector('.phone-auth-section');
+      const authFormHeader = document.querySelector('.auth-form-header p');
       
       if (nicknameGroup) {
         nicknameGroup.classList.add('hidden');
@@ -3634,19 +3681,31 @@
         submitBtn.classList.remove('signup-mode');
       }
       
-      // 비밀번호 레이블 및 도움말 초기화
+      // 비밀번호 레이블 초기화
       if (passwordLabel) {
         passwordLabel.textContent = '비밀번호 (PIN)';
-      }
-      
-      if (passwordHelp) {
-        passwordHelp.textContent = '처음 사용하시나요? 로그인 시도 후 회원가입 모드로 전환됩니다.';
-        passwordHelp.style.color = '#6b7280';
       }
       
       if (passwordInput) {
         passwordInput.placeholder = '6자 이상 입력';
       }
+      
+      // 섹션에서 signup-mode 클래스 제거
+      if (phoneAuthSection) {
+        phoneAuthSection.classList.remove('signup-mode');
+      }
+      
+      // 헤더 텍스트 초기화
+      if (authFormHeader) {
+        authFormHeader.textContent = '전화번호와 PIN 번호로 간편하게 로그인하세요';
+      }
+    }
+    
+    /**
+     * 사용자 등록 버튼 클릭 핸들러
+     */
+    function handleRegisterClick() {
+      switchToSignUpMode();
     }
     
     /**
@@ -3709,6 +3768,12 @@
       // 제출 버튼
       if (submitBtn) {
         submitBtn.addEventListener('click', handlePhoneAuth);
+      }
+      
+      // 사용자 등록 버튼
+      const registerBtn = document.getElementById('authRegisterBtn');
+      if (registerBtn) {
+        registerBtn.addEventListener('click', handleRegisterClick);
       }
     });
   </script>
