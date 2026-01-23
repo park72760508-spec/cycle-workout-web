@@ -78,6 +78,30 @@
     window.GAS_URL = window.CONFIG.GAS_WEB_APP_URL;
     window.STRAVA_REDIRECT_URI = window.CONFIG.STRAVA_REDIRECT_URI;
   </script>
+  <!-- Firebase 초기화 (stravaManager.js가 필요로 함) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script>
+    // Firebase 설정 (index.html과 동일)
+    const firebaseConfig = {
+      apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
+      authDomain: "stelvio-ai.firebaseapp.com",
+      projectId: "stelvio-ai",
+      storageBucket: "stelvio-ai.firebasestorage.app",
+      messagingSenderId: "752285835508",
+      appId: "1:752285835508:web:0662a2a874209ebb483ea1"
+    };
+    
+    // Firebase 초기화
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    window.firestore = firebase.firestore();
+    window.auth = firebase.auth();
+    console.log('[callback.html] ✅ Firebase 초기화 완료 (Firestore + Auth)');
+  </script>
+  <script src="assets/js/stravaManager.js"></script>
   <script src="assets/js/strava_auth.js"></script>
   <script>
     (function () {
