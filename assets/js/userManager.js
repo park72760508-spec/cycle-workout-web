@@ -1652,10 +1652,26 @@ async function loadUsers() {
         challengeImage = 'red.png';
       }
 
+      // 포인트 정보 추출
+      const accPoints = user.acc_points || 0;
+      const remPoints = user.rem_points || 0;
+      
       return `
         <div class="user-card" data-user-id="${user.id}" onclick="selectUser('${user.id}')" style="cursor: pointer;">
           <div class="user-header">
-            <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
+            <div class="user-name-wrapper">
+              <div class="user-name"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon"> ${user.name}</div>
+              <div class="user-points">
+                <span class="point-badge point-accumulated" title="누적 포인트">
+                  <span class="point-icon">⭐</span>
+                  <span class="point-value">${accPoints.toLocaleString()}</span>
+                </span>
+                <span class="point-badge point-remaining" title="보유 포인트">
+                  <span class="point-icon">💎</span>
+                  <span class="point-value">${remPoints.toLocaleString()}</span>
+                </span>
+              </div>
+            </div>
             <div class="user-actions" onclick="event.stopPropagation();">
               ${canEdit ? `
                 <button class="btn-edit"   onclick="editUser('${user.id}')"   title="수정">✏️</button>
