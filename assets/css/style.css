@@ -1725,6 +1725,54 @@ button[aria-disabled="true"] {
   transform: translateY(0);
 }
 
+/* 프로필 선택 화면 액션 버튼 (새로고침, Strava 연결) - 뒤로 가기 버튼과 동일한 스타일 */
+#profileScreen .profile-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(239, 68, 68, 0.2);
+  user-select: none;
+  -webkit-user-select: none;
+  min-height: 44px;
+}
+
+#profileScreen .profile-action-button:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+}
+
+#profileScreen .profile-action-button:active {
+  transform: translateY(0);
+}
+
+/* Strava 연결 버튼 - callback.html의 "앱으로 돌아가기" 버튼 스타일 적용 */
+#profileScreen .profile-strava-button {
+  background: #fc4c02;
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+#profileScreen .profile-strava-button:hover {
+  opacity: 0.9;
+}
+
 /* 캘린더 관련 버튼 이미지 스타일 - 기기선택 화면과 동일한 패턴 */
 .btn-icon-image {
   width: 21px;
