@@ -828,8 +828,11 @@ db.ref(`sessions/${SESSION_ID}/users/${myTrackId}`).once('value', (snapshot) => 
         if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
             userFTP = foundFTP;
             window.userFTP = userFTP;
+            // FTP 값이 업데이트되면 속도계 눈금 및 레이블 업데이트
             if (typeof updateGaugeTicksAndLabels === 'function') {
                 updateGaugeTicksAndLabels();
+            } else {
+                console.warn('[BluetoothIndividual] updateGaugeTicksAndLabels 함수를 찾을 수 없습니다.');
             }
         }
         
@@ -3083,12 +3086,45 @@ function updateGaugeTicksAndLabels() {
     const ticksGroup = document.getElementById('gauge-ticks');
     const labelsGroup = document.getElementById('gauge-labels');
     
+    if (!ticksGroup) {
+        console.warn('[BluetoothIndividual] gauge-ticks 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    if (!labelsGroup) {
+        console.warn('[BluetoothIndividual] gauge-labels 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    // 눈금 생성 및 표시
+    const ticksHTML = generateGaugeTicks();
+    if (ticksHTML) {
+        ticksGroup.innerHTML = ticksHTML;
+        console.log('[BluetoothIndividual] 속도계 눈금 생성 완료:', ticksHTML.length, '문자');
+    } else {
+        console.warn('[BluetoothIndividual] 눈금 생성 실패: 빈 HTML 반환');
+    }
+    
+    // 레이블 생성 및 표시
+    const labelsHTML = generateGaugeLabels();
+    if (labelsHTML) {
+        labelsGroup.innerHTML = labelsHTML;
+        console.log('[BluetoothIndividual] 속도계 레이블 생성 완료:', labelsHTML.length, '문자');
+    } else {
+        console.warn('[BluetoothIndividual] 레이블 생성 실패: 빈 HTML 반환');
+    }
+    
+    // 눈금과 레이블이 표시되도록 스타일 확인
     if (ticksGroup) {
-        ticksGroup.innerHTML = generateGaugeTicks();
+        ticksGroup.style.display = '';
+        ticksGroup.style.visibility = '';
+        ticksGroup.style.opacity = '';
     }
     
     if (labelsGroup) {
-        labelsGroup.innerHTML = generateGaugeLabels();
+        labelsGroup.style.display = '';
+        labelsGroup.style.visibility = '';
+        labelsGroup.style.opacity = '';
     }
 }
 
@@ -3803,17 +3839,27 @@ function updateIndividualIntensityDisplay(sliderValue) {
 
 // 블루투스 연결 드롭다운 토글
 function toggleBluetoothDropdown() {
+    console.log('[BluetoothIndividual] toggleBluetoothDropdown 호출됨');
     const dropdown = document.getElementById('bluetoothDropdown');
-    if (dropdown) {
-        dropdown.classList.toggle('show');
+    if (!dropdown) {
+        console.error('[BluetoothIndividual] bluetoothDropdown 요소를 찾을 수 없습니다.');
+        return;
+    }
+    
+    const isShowing = dropdown.classList.contains('show');
+    if (isShowing) {
+        // 드롭다운 닫기
+        dropdown.classList.remove('show');
+        document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
+        console.log('[BluetoothIndividual] 드롭다운 닫힘');
+    } else {
+        // 드롭다운 열기
+        dropdown.classList.add('show');
         // 드롭다운 외부 클릭 시 닫기
-        if (dropdown.classList.contains('show')) {
-            setTimeout(() => {
-                document.addEventListener('click', closeBluetoothDropdownOnOutsideClick);
-            }, 0);
-        } else {
-            document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
-        }
+        setTimeout(() => {
+            document.addEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
+        }, 0);
+        console.log('[BluetoothIndividual] 드롭다운 열림');
     }
 }
 
@@ -3823,17 +3869,19 @@ function closeBluetoothDropdownOnOutsideClick(event) {
     const button = document.getElementById('bluetoothConnectBtn');
     if (dropdown && button && !dropdown.contains(event.target) && !button.contains(event.target)) {
         dropdown.classList.remove('show');
-        document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
+        document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
     }
 }
 
 // 블루투스 디바이스 연결 함수
 async function connectBluetoothDevice(deviceType) {
+    console.log('[BluetoothIndividual] connectBluetoothDevice 호출됨:', deviceType);
+    
     // 드롭다운 닫기
     const dropdown = document.getElementById('bluetoothDropdown');
     if (dropdown) {
         dropdown.classList.remove('show');
-        document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick);
+        document.removeEventListener('click', closeBluetoothDropdownOnOutsideClick, true);
     }
     
     // 연결 함수가 있는지 확인
@@ -3850,18 +3898,32 @@ async function connectBluetoothDevice(deviceType) {
             break;
         default:
             console.error('[BluetoothIndividual] 알 수 없는 디바이스 타입:', deviceType);
+            if (typeof showToast === 'function') {
+                showToast('알 수 없는 디바이스 타입입니다.');
+            } else {
+                alert('알 수 없는 디바이스 타입입니다.');
+            }
             return;
     }
     
     if (!connectFunction || typeof connectFunction !== 'function') {
         console.error('[BluetoothIndividual] 블루투스 연결 함수를 찾을 수 없습니다:', deviceType);
-        alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+        console.error('[BluetoothIndividual] window.connectTrainer:', typeof window.connectTrainer);
+        console.error('[BluetoothIndividual] window.connectHeartRate:', typeof window.connectHeartRate);
+        console.error('[BluetoothIndividual] window.connectPowerMeter:', typeof window.connectPowerMeter);
+        
+        if (typeof showToast === 'function') {
+            showToast('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+        } else {
+            alert('블루투스 연결 기능이 로드되지 않았습니다. 페이지를 새로고침해주세요.');
+        }
         return;
     }
     
     try {
         console.log('[BluetoothIndividual] 블루투스 디바이스 연결 시도:', deviceType);
         await connectFunction();
+        console.log('[BluetoothIndividual] 블루투스 디바이스 연결 성공:', deviceType);
         
         // 연결 성공 후 잠시 대기 (window.connectedDevices 업데이트를 위해)
         setTimeout(() => {
@@ -3875,10 +3937,13 @@ async function connectBluetoothDevice(deviceType) {
             if (typeof window.updateDevicesList === 'function') {
                 window.updateDevicesList();
             }
-        }, 200); // 200ms 대기 후 업데이트
+        }, 500); // 500ms 대기 후 업데이트 (연결 완료 대기)
     } catch (error) {
         console.error('[BluetoothIndividual] 블루투스 디바이스 연결 실패:', deviceType, error);
         // 에러는 bluetooth.js의 showToast에서 표시됨
+        if (typeof showToast === 'function') {
+            showToast(`연결 실패: ${error.message || '알 수 없는 오류'}`);
+        }
     }
 }
 
@@ -4149,9 +4214,30 @@ if (document.readyState === 'loading') {
         // 화면 방향 세로 모드로 고정
         await lockScreenOrientation();
         
+        // 연결 버튼 이벤트 리스너 확인 및 등록
+        const connectBtn = document.getElementById('bluetoothConnectBtn');
+        if (connectBtn) {
+            // 기존 onclick 제거 후 이벤트 리스너로 재등록 (더 안정적)
+            connectBtn.onclick = null;
+            connectBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleBluetoothDropdown();
+            });
+            console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료');
+        } else {
+            console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
+        }
+        
         // 개인 훈련 대시보드 강도 조절 슬라이드 바 초기화
         initializeIndividualIntensitySlider();
-        updateGaugeTicksAndLabels();
+        
+        // 속도계 눈금 및 레이블 생성 (즉시 실행)
+        setTimeout(() => {
+            updateGaugeTicksAndLabels();
+            console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료');
+        }, 100);
+        
         startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
         
         // ErgController 초기화 (BluetoothIndividual 전용)
@@ -4175,7 +4261,27 @@ if (document.readyState === 'loading') {
     // 화면 방향 세로 모드로 고정
     lockScreenOrientation();
     
-    updateGaugeTicksAndLabels();
+    // 연결 버튼 이벤트 리스너 확인 및 등록
+    const connectBtn = document.getElementById('bluetoothConnectBtn');
+    if (connectBtn) {
+        // 기존 onclick 제거 후 이벤트 리스너로 재등록 (더 안정적)
+        connectBtn.onclick = null;
+        connectBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleBluetoothDropdown();
+        });
+        console.log('[BluetoothIndividual] 연결 버튼 이벤트 리스너 등록 완료 (DOM 이미 로드됨)');
+    } else {
+        console.warn('[BluetoothIndividual] bluetoothConnectBtn 요소를 찾을 수 없습니다.');
+    }
+    
+    // 속도계 눈금 및 레이블 생성 (즉시 실행)
+    setTimeout(() => {
+        updateGaugeTicksAndLabels();
+        console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료 (DOM 이미 로드됨)');
+    }, 100);
+    
     startGaugeAnimationLoop(); // 바늘 애니메이션 루프 시작
     
     // ErgController 초기화 (BluetoothIndividual 전용)
