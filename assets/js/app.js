@@ -4211,6 +4211,34 @@ function togglePause() {
 document.addEventListener("DOMContentLoaded", () => {
   console.log("===== APP INIT =====");
 
+  // Strava 콜백에서 돌아온 경우 프로필 화면으로 이동
+  const stravaCallbackReturn = localStorage.getItem('stravaCallbackReturn');
+  if (stravaCallbackReturn === 'profileScreen') {
+    localStorage.removeItem('stravaCallbackReturn');
+    // 약간의 지연 후 프로필 화면으로 이동 (다른 초기화 완료 대기)
+    setTimeout(function() {
+      if (typeof showScreen === 'function') {
+        showScreen('profileScreen');
+        // 사용자 목록 새로고침
+        if (typeof window.loadUsers === 'function') {
+          setTimeout(() => window.loadUsers(), 200);
+        }
+      }
+    }, 500);
+  }
+  
+  // URL 해시 확인 (#profileScreen)
+  if (window.location.hash === '#profileScreen') {
+    setTimeout(function() {
+      if (typeof showScreen === 'function') {
+        showScreen('profileScreen');
+        if (typeof window.loadUsers === 'function') {
+          setTimeout(() => window.loadUsers(), 200);
+        }
+      }
+    }, 500);
+  }
+
   // 스플래시 화면 처리 (최우선 실행 - 다른 모든 초기화보다 먼저)
   const splashScreen = document.getElementById("splashScreen");
   const splashVideo = document.getElementById("splashVideo");
