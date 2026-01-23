@@ -4472,7 +4472,7 @@ async function renderBluetoothPlayerList() {
                target="_blank"
                class="btn btn-primary btn-default-style btn-with-icon player-enter-btn ${!hasUser || !canModify ? 'disabled' : ''}"
                ${!hasUser || !canModify ? 'aria-disabled="true" tabindex="-1"' : ''}
-               onclick="handleBluetoothPlayerEnterClick(event, ${track.trackNumber}, '${roomId || ''}')"
+               onclick="handleBluetoothPlayerEnterClick(event, ${track.trackNumber}, '${roomId || ''}'); return true;"
                title="${!hasUser ? '사용자가 할당되지 않았습니다' : (!canModify ? '본인이 할당한 트랙만 입장 가능합니다' : '훈련 시작')}">
               <img src="assets/img/enter.png" alt="Enter" class="btn-icon-image" />
               <span>Enter</span>
@@ -4527,7 +4527,8 @@ function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   // 비활성화된 버튼은 클릭 무시
   if (button && (button.classList.contains('disabled') || button.getAttribute('aria-disabled') === 'true')) {
     event.preventDefault();
-    return;
+    event.stopPropagation();
+    return false;
   }
   
   // 로딩 애니메이션 시작
@@ -4544,7 +4545,19 @@ function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
     }, 300);
   }
   
-  // href로 이동하는 것은 브라우저가 처리하도록 허용
+  // href로 이동하는 것은 브라우저가 처리하도록 허용 (preventDefault 호출하지 않음)
+  // bluetoothIndividual.html이 새 창(target="_blank")으로 열림
   // 로딩 애니메이션은 페이지 이동 전까지 표시됨
+  // return true를 통해 기본 동작(링크 이동)을 명시적으로 허용
+  
+  // 축하 모달이 표시되지 않도록 확인 (혹시 다른 곳에서 호출되는 경우 대비)
+  const registerCelebrationModal = document.getElementById('registerCelebrationModal');
+  if (registerCelebrationModal && registerCelebrationModal.style.display !== 'none') {
+    registerCelebrationModal.classList.add('hidden');
+    registerCelebrationModal.style.display = 'none';
+    console.log('[handleBluetoothPlayerEnterClick] 축하 모달이 열려있어서 닫았습니다.');
+  }
+  
+  return true;
 }
 
