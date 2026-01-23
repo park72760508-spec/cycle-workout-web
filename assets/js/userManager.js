@@ -580,11 +580,52 @@ function initAuthStateListener() {
     if (firebaseUser) {
       // 로그인 상태: Firestore에서 사용자 정보 가져오기
       try {
-        const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
+        let userData = null;
         
-        if (userDoc.exists) {
-          const userData = { id: firebaseUser.uid, ...userDoc.data() };
+        // 전화번호 로그인인지 확인 (@stelvio.ai 도메인)
+        const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
+        
+        if (isPhoneLogin) {
+          // 전화번호 로그인: 이메일에서 전화번호 추출
+          const phoneFromEmail = firebaseUser.email.replace('@stelvio.ai', '');
+          const normalizedPhone = unformatPhone(phoneFromEmail);
           
+          console.log('📞 전화번호 로그인 감지:', { email: firebaseUser.email, phone: normalizedPhone });
+          
+          // Firestore에서 전화번호(contact 필드)로 사용자 찾기
+          const usersSnapshot = await getUsersCollection().get();
+          let foundUser = null;
+          
+          for (const doc of usersSnapshot.docs) {
+            const docData = doc.data();
+            const docPhone = unformatPhone(docData.contact || '');
+            
+            if (docPhone === normalizedPhone) {
+              foundUser = { id: doc.id, ...docData };
+              console.log('✅ 전화번호로 사용자 찾음:', foundUser.name, foundUser.contact);
+              break;
+            }
+          }
+          
+          if (foundUser) {
+            userData = foundUser;
+          } else {
+            // 전화번호로 사용자를 찾지 못한 경우: UID로 시도 (기존 로직)
+            console.warn('⚠️ 전화번호로 사용자를 찾지 못함, UID로 시도:', firebaseUser.uid);
+            const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
+            if (userDoc.exists) {
+              userData = { id: firebaseUser.uid, ...userDoc.data() };
+            }
+          }
+        } else {
+          // 일반 로그인 (Google 등): UID로 사용자 찾기
+          const userDoc = await getUsersCollection().doc(firebaseUser.uid).get();
+          if (userDoc.exists) {
+            userData = { id: firebaseUser.uid, ...userDoc.data() };
+          }
+        }
+        
+        if (userData) {
           // 전역 상태 업데이트
           window.currentUser = userData;
           localStorage.setItem('currentUser', JSON.stringify(userData));
