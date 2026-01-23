@@ -149,6 +149,12 @@ async function saveTrainingResult(extra = {}) {
        }
      };
 
+     // 현재 사용자 ID 가져오기 (함수 시작 부분에서 정의)
+     const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
+     
+     // 세션 통계 계산 (함수 시작 부분에서 정의)
+     const stats = calculateSessionStats();
+
      // 1. 로컬 스토리지에 즉시 백업 (최우선)
      let localSaveSuccess = false;
      try {
@@ -161,43 +167,13 @@ async function saveTrainingResult(extra = {}) {
        console.error('[saveTrainingResult] ❌ 로컬 백업 저장 실패:', e);
      }
 
-     // 2. Firebase Firestore 저장 시도
-     let firebaseSuccess = false;
-     let firebaseError = null;
-
-     try {
-       // Firebase로 저장
-       if (typeof window.saveTrainingResultToFirebase === 'function') {
-         const result = await window.saveTrainingResultToFirebase({
-           user_id: currentUserId,
-           workout_id: trainingResult.workoutId || window.currentWorkout?.id || '',
-           startTime: trainingResult.startTime,
-           endTime: trainingResult.endTime,
-           avgPower: stats.avgPower,
-           maxPower: stats.maxPower,
-           avgHR: stats.avgHR,
-           maxHR: stats.maxHR,
-           totalEnergy: stats.totalEnergy,
-           tss: tss,
-           notes: trainingResult.notes || ''
-         });
-         firebaseSuccess = true;
-         console.log('[saveTrainingResult] ✅ Firebase 저장 성공:', result.id);
-       } else {
-         throw new Error('saveTrainingResultToFirebase 함수가 없습니다. trainingResultsManager.js를 로드하세요.');
-       }
-     } catch (error) {
-       console.error('[saveTrainingResult] ❌ Firebase 저장 실패:', error);
-       firebaseError = error;
-     }
+     // 2. Firebase Firestore 저장 시도 (TSS 계산 후에 실행되도록 나중에 처리)
+     //    - 이 부분은 스케줄 결과 저장 후에 실행되도록 이동
 
      // 3. 스케줄 결과 저장 (모든 훈련에 대해 SCHEDULE_RESULTS에 저장)
      //    - 스케줄 훈련: schedule_day_id는 window.currentScheduleDayId 사용
      //    - 일반 훈련: schedule_day_id는 null로 저장
      try {
-       // 세션 통계 계산
-       const stats = calculateSessionStats();
-       
        // 훈련 시간 계산 (초 단위)
        // 1순위: extra.elapsedTime 사용 (Firebase에서 받은 실제 경과 시간 - 세그먼트 그래프 상단 시간값)
        // 2순위: window.lastElapsedTime 사용 (전역 변수에 저장된 값)
@@ -317,9 +293,6 @@ async function saveTrainingResult(extra = {}) {
        // 최소값 보장 (0보다 작으면 0)
        tss = Math.max(0, tss);
        np = Math.max(0, np);
-       
-       // 현재 사용자 ID 가져오기
-       const currentUserId = trainingResult.userId || window.currentUser?.id || extra.userId || null;
        
        // schedule_day_id: 스케줄 훈련이면 window.currentScheduleDayId, 일반 훈련이면 null
        const scheduleDayId = window.currentScheduleDayId || null;
@@ -449,17 +422,46 @@ async function saveTrainingResult(extra = {}) {
             }
           }
         }
-      } catch (saveError) {
-        console.error('[saveTrainingResult] ❌ 훈련 결과 저장 중 오류:', saveError);
-        // 저장 실패해도 계속 진행
-      }
-    } else {
-      console.warn('[saveTrainingResult] ⚠️ 훈련 결과 저장 스킵:', {
-        hasUserId: !!currentUserId,
-        hasDuration: totalSeconds > 0,
-        hasNP: np > 0
-      });
-    }
+       } catch (saveError) {
+         console.error('[saveTrainingResult] ❌ 훈련 결과 저장 중 오류:', saveError);
+         // 저장 실패해도 계속 진행
+       }
+     } else {
+       console.warn('[saveTrainingResult] ⚠️ 훈련 결과 저장 스킵:', {
+         hasUserId: !!currentUserId,
+         hasDuration: totalSeconds > 0,
+         hasNP: np > 0
+       });
+     }
+
+     // 2-2. Firebase Firestore 저장 시도 (TSS 계산 후 실행)
+     let firebaseSuccess = false;
+     let firebaseError = null;
+     try {
+       // Firebase로 저장
+       if (typeof window.saveTrainingResultToFirebase === 'function') {
+         const result = await window.saveTrainingResultToFirebase({
+           user_id: currentUserId,
+           workout_id: trainingResult.workoutId || window.currentWorkout?.id || '',
+           startTime: trainingResult.startTime,
+           endTime: trainingResult.endTime,
+           avgPower: stats.avgPower,
+           maxPower: stats.maxPower,
+           avgHR: stats.avgHR,
+           maxHR: stats.maxHR,
+           totalEnergy: stats.totalEnergy,
+           tss: tss,
+           notes: trainingResult.notes || ''
+         });
+         firebaseSuccess = true;
+         console.log('[saveTrainingResult] ✅ Firebase 저장 성공:', result.id);
+       } else {
+         console.warn('[saveTrainingResult] ⚠️ saveTrainingResultToFirebase 함수가 없습니다.');
+       }
+     } catch (error) {
+       console.error('[saveTrainingResult] ❌ Firebase 저장 실패:', error);
+       firebaseError = error;
+     }
 
      // 4. 결과 처리 및 반환
      if (firebaseSuccess) {
