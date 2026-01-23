@@ -10042,8 +10042,8 @@ button[aria-disabled="true"] {
 
 .rpe-condition-grid {
   display: grid;
-  /* 4개 버튼의 폭넓이를 동일하게 유지 */
-  grid-template-columns: repeat(2, 1fr);
+  /* 4개 버튼을 1줄로 배치 */
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   margin-top: calc(16px + 3%);
   /* 좌우 여백 추가로 hover 시 좌측 버튼의 좌측 라인이 숨겨지지 않도록 */
@@ -10126,14 +10126,41 @@ button[aria-disabled="true"] {
   font-weight: bold;
 }
 
-/* 반응형 - 휴대폰 화면 기준으로 2개씩 배치 */
-@media (max-width: 480px) {
+/* 반응형 - 휴대폰 화면에서도 1줄 유지 (버튼 크기만 조정) */
+@media (max-width: 768px) {
   .rpe-condition-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
   }
   
   .rpe-condition-btn {
     min-height: 100px;
+    padding: 16px 8px;
+  }
+  
+  .rpe-condition-icon {
+    font-size: 24px;
+  }
+  
+  .rpe-condition-label {
+    font-size: 14px;
+  }
+  
+  .rpe-condition-value {
+    font-size: 12px;
+  }
+}
+
+/* 매우 작은 화면에서만 2줄로 변경 */
+@media (max-width: 480px) {
+  .rpe-condition-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .rpe-condition-btn {
+    min-height: 90px;
+    padding: 14px 6px;
   }
 }
 
@@ -14589,8 +14616,8 @@ body.mobile-dashboard-active {
   -webkit-overflow-scrolling: touch;
   /* 하단 버튼 영역 확보 */
   padding-bottom: 20px;
-  /* 상단 버튼 라인이 숨겨지지 않도록 여백 확보 */
-  padding-top: 10px;
+  /* 상단 버튼 라인이 숨겨지지 않도록 여백 확보 (문구·버튼 사이 3% 추가) */
+  padding-top: calc(10px + 3%);
   margin-top: calc(16px + 3%);
 }
 
