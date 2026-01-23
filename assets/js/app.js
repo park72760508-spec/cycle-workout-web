@@ -5778,10 +5778,11 @@ if (typeof window.originalShowScreen === 'undefined') {
 
 window.showScreen = function(screenId) {
   // Firebase 인증 상태 확인 (우선순위: Firebase Auth > 전화번호 인증)
-  const isFirebaseAuthenticated = window.auth?.currentUser != null || window.currentUser != null;
-  const isAuthenticated = isFirebaseAuthenticated || isPhoneAuthenticated;
+  const isFirebaseAuthenticated = (window.auth?.currentUser != null || window.authV9?.currentUser != null) || window.currentUser != null;
+  const phoneAuth = window.isPhoneAuthenticated === true || isPhoneAuthenticated;
+  const isAuthenticated = isFirebaseAuthenticated || phoneAuth;
   
-  console.log('화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', isPhoneAuthenticated, ')');
+  console.log('화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', phoneAuth, ')');
   
   // 환영 오버레이가 표시되어 있으면 화면 전환 차단
   const welcomeModal = document.getElementById('userWelcomeModal');
@@ -6230,6 +6231,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // 개발자 도구 함수들
 window.resetAuth = function() {
   isPhoneAuthenticated = false;
+  if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
   currentPhoneNumber = '';
   console.log('인증 상태가 리셋되었습니다.');
 };
@@ -6239,8 +6241,9 @@ window.resetAuth = function() {
 // ❌ 기존 함수 삭제하고 아래로 교체
 
 window.checkAuthStatus = function() {
+  const phoneAuth = window.isPhoneAuthenticated === true || isPhoneAuthenticated;
   console.log('=== 🔐 인증 시스템 상태 ===');
-  console.log('현재 인증 상태:', isPhoneAuthenticated);
+  console.log('현재 인증 상태:', phoneAuth);
   console.log('현재 전화번호:', currentPhoneNumber);
   console.log('현재 사용자:', window.currentUser);
   
@@ -6254,7 +6257,7 @@ window.checkAuthStatus = function() {
   console.log('===========================');
   
   return { 
-    authenticated: isPhoneAuthenticated, 
+    authenticated: phoneAuth, 
     phone: currentPhoneNumber,
     user: window.currentUser
   };

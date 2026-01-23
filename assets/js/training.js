@@ -1567,8 +1567,8 @@ console.log('✅ training.js 그룹 훈련 모듈 로딩 완료');
  * 훈련 준비 화면 로드 시 관리자 권한 확인
  */
 function checkAndShowAdminFeatures() {
-  // 1. Firebase 인증 상태 먼저 확인
-  const auth = window.auth || window.authV9;
+  // 1. Firebase 인증 상태 먼저 확인 (전화번호 로그인은 authV9 사용)
+  const auth = window.authV9 || window.auth;
   const firebaseUser = auth?.currentUser;
   
   if (!firebaseUser) {
@@ -1592,17 +1592,29 @@ function checkAndShowAdminFeatures() {
   let userMatches = false;
   
   if (isPhoneLogin) {
-    // 전화번호 로그인: 이메일에서 전화번호 추출하여 비교
-    const phoneFromEmail = firebaseUser.email.replace('@stelvio.ai', '').replace(/\D/g, '');
-    const userPhone = (currentUser.contact || '').replace(/\D/g, '');
-    userMatches = phoneFromEmail === userPhone;
+    // 전화번호 로그인: 이메일에서 전화번호 추출, 숫자만 정규화하여 비교
+    const rawFromEmail = (firebaseUser.email || '').replace('@stelvio.ai', '').trim();
+    const phoneFromEmail = rawFromEmail.replace(/\D/g, '');
+    const userPhone = (currentUser.contact || '').toString().trim().replace(/\D/g, '');
+    userMatches = phoneFromEmail.length > 0 && userPhone.length > 0 && phoneFromEmail === userPhone;
+    if (!userMatches) {
+      console.log('Firebase 인증 사용자와 현재 사용자 정보가 일치하지 않습니다.', {
+        email: firebaseUser.email,
+        phoneFromEmail,
+        userPhone,
+        contact: currentUser.contact,
+        userName: currentUser.name
+      });
+    }
   } else {
     // 일반 로그인 (Google 등): UID 비교
     userMatches = firebaseUser.uid === currentUser.id;
   }
   
   if (!userMatches) {
-    console.log('Firebase 인증 사용자와 현재 사용자 정보가 일치하지 않습니다.');
+    if (!isPhoneLogin) {
+      console.log('Firebase 인증 사용자와 현재 사용자 정보가 일치하지 않습니다.');
+    }
     hideAdminFeatures();
     return;
   }

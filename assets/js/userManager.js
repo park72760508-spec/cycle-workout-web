@@ -661,6 +661,10 @@ function initAuthStateListener() {
           localStorage.setItem('currentUser', JSON.stringify(userData));
           localStorage.setItem('authUser', JSON.stringify(userData));
           
+          if (isPhoneLogin && typeof window !== 'undefined') {
+            window.isPhoneAuthenticated = true;
+          }
+          
           // 사용자 정보 상세 로그
           console.log('✅ 인증된 사용자 정보 설정 완료:', {
             id: userData.id,
@@ -752,6 +756,7 @@ function initAuthStateListener() {
     } else {
       // 로그아웃 상태: 전역 상태 초기화
       window.currentUser = null;
+      if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
       localStorage.removeItem('currentUser');
       localStorage.removeItem('authUser');
       isLoginJustCompleted = false; // 플래그도 리셋
