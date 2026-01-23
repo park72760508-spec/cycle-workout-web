@@ -1773,6 +1773,26 @@ button[aria-disabled="true"] {
   opacity: 0.9;
 }
 
+/* Strava 동기화 버튼 - Strava 연결 버튼과 동일한 스타일 */
+#profileScreen .profile-strava-sync-button {
+  background: #fc4c02;
+  color: #fff;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+#profileScreen .profile-strava-sync-button:hover {
+  opacity: 0.9;
+}
+
+#profileScreen .profile-strava-sync-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* 캘린더 관련 버튼 이미지 스타일 - 기기선택 화면과 동일한 패턴 */
 .btn-icon-image {
   width: 21px;
