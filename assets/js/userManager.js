@@ -31,11 +31,15 @@ function getViewerGrade() {
 ========================================================== */
 
 // Firestore users 컬렉션 참조
+// v9 Modular SDK와 v8 Compat SDK 모두 지원
+// 주의: v9 Modular SDK는 authV9와 연결되고, v8 Compat SDK는 auth와 연결됨
 function getUsersCollection() {
-  if (!window.firestore) {
-    throw new Error('Firestore가 초기화되지 않았습니다. firebaseConfig.js가 먼저 로드되어야 합니다.');
+  // v8 Compat SDK 사용 (기존 코드 호환성 유지)
+  if (window.firestore) {
+    return window.firestore.collection('users');
   }
-  return window.firestore.collection('users');
+  
+  throw new Error('Firestore가 초기화되지 않았습니다. firebaseConfig.js가 먼저 로드되어야 합니다.');
 }
 
 /**
@@ -743,8 +747,13 @@ async function apiGetUsers() {
     
     // Firebase v9 Modular SDK의 authV9도 확인
     let authV9CurrentUser = null;
-    if (window.authV9 && typeof window.authV9.currentUser !== 'undefined') {
-      authV9CurrentUser = window.authV9.currentUser;
+    try {
+      // authV9.currentUser는 동기적으로 접근 가능
+      if (window.authV9) {
+        authV9CurrentUser = window.authV9.currentUser;
+      }
+    } catch (e) {
+      console.warn('[apiGetUsers] authV9 확인 실패:', e);
     }
     
     // localStorage에서 사용자 정보 확인 (로그인 직후 auth.currentUser가 아직 업데이트되지 않았을 수 있음)
@@ -795,30 +804,63 @@ async function apiGetUsers() {
     const userGradeFromData = userData?.grade ? String(userData.grade) : null;
     
     // 관리자인 경우 localStorage의 grade 정보로 먼저 전체 목록 조회 시도 (로그인 직후)
-    // 이렇게 하면 로그인 직후에도 전체 사용자 목록을 볼 수 있음
-    if (userGradeFromData === '1') {
-      console.log('[apiGetUsers] 🔑 localStorage에서 관리자 권한 확인 - 전체 사용자 목록 조회 시작');
+    // 단, currentUser가 있을 때만 시도 (Firestore 보안 규칙이 request.auth.uid를 요구)
+    // currentUser가 없으면 Firestore 문서 조회 후 다시 시도
+    // 주의: getUsersCollection()은 window.firestore(v8 Compat)를 사용하므로,
+    // window.authV9로 로그인한 경우 인증 상태가 동기화되지 않을 수 있음
+    // 관리자인 경우 localStorage의 grade 정보로 먼저 전체 목록 조회 시도
+    // 단, currentUser가 있을 때만 시도 (Firestore 보안 규칙이 request.auth.uid를 요구)
+    // 주의: window.firestore(v8 Compat)는 window.auth와 연결되고,
+    // window.firestoreV9(v9 Modular)는 window.authV9와 연결됨
+    // 로그인은 authV9로 했으므로 firestoreV9를 사용해야 함
+    if (userGradeFromData === '1' && currentUser) {
+      console.log('[apiGetUsers] 🔑 localStorage에서 관리자 권한 확인 - 전체 사용자 목록 조회 시작 (currentUser 있음)');
       try {
-        const usersSnapshot = await getUsersCollection().get();
-        const users = [];
-        
-        usersSnapshot.forEach(doc => {
-          users.push({
-            id: doc.id,
-            ...doc.data()
+        // firestoreV9 사용 (authV9와 동일한 앱 인스턴스)
+        if (window.firestoreV9) {
+          const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+          const usersRef = collection(window.firestoreV9, 'users');
+          const usersSnapshot = await getDocs(usersRef);
+          const users = [];
+          
+          usersSnapshot.forEach(doc => {
+            users.push({
+              id: doc.id,
+              ...doc.data()
+            });
           });
-        });
-        
-        console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (localStorage 권한):', { 
-          totalUsers: users.length,
-          userIds: users.map(u => u.id) 
-        });
-        
-        return { success: true, items: users };
+          
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestoreV9, localStorage 권한):', { 
+            totalUsers: users.length,
+            userIds: users.map(u => u.id) 
+          });
+          
+          return { success: true, items: users };
+        } else {
+          // v8 Compat 사용
+          const usersSnapshot = await getUsersCollection().get();
+          const users = [];
+          
+          usersSnapshot.forEach(doc => {
+            users.push({
+              id: doc.id,
+              ...doc.data()
+            });
+          });
+          
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestore v8, localStorage 권한):', { 
+            totalUsers: users.length,
+            userIds: users.map(u => u.id) 
+          });
+          
+          return { success: true, items: users };
+        }
       } catch (listError) {
         console.error('[apiGetUsers] ❌ localStorage 권한으로 전체 목록 조회 실패:', listError);
         // 실패해도 계속 진행하여 Firestore 문서 조회 시도
       }
+    } else if (userGradeFromData === '1' && !currentUser) {
+      console.log('[apiGetUsers] ⏳ 관리자 권한 확인되었지만 currentUser가 없어 Firestore 문서 조회 후 다시 시도');
     }
     
     // 현재 사용자의 문서를 먼저 조회하여 권한 확인
@@ -826,22 +868,50 @@ async function apiGetUsers() {
     let currentUserData = userData; // 기본값으로 userData 사용
     
     try {
-      currentUserDoc = await getUsersCollection().doc(userIdToCheck).get();
-      console.log('[apiGetUsers] 📄 현재 사용자 문서 조회:', { 
-        exists: currentUserDoc.exists,
-        userId: userIdToCheck 
-      });
-      
-      if (currentUserDoc.exists) {
-        // Firestore에서 조회한 데이터가 더 최신이므로 우선 사용
-        currentUserData = currentUserDoc.data();
-      } else if (userData) {
-        // Firestore 문서가 없지만 userData가 있으면 userData 사용
-        console.log('[apiGetUsers] ℹ️ Firestore 문서가 없지만 localStorage에 사용자 정보가 있습니다.');
+      // firestoreV9 사용 (authV9와 동일한 앱 인스턴스)
+      if (window.firestoreV9) {
+        const { getDoc, doc, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+        const usersRef = collection(window.firestoreV9, 'users');
+        const userDocRef = doc(usersRef, userIdToCheck);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        console.log('[apiGetUsers] 📄 현재 사용자 문서 조회 (firestoreV9):', { 
+          exists: userDocSnap.exists(),
+          userId: userIdToCheck 
+        });
+        
+        if (userDocSnap.exists()) {
+          // Firestore에서 조회한 데이터가 더 최신이므로 우선 사용
+          currentUserData = userDocSnap.data();
+          currentUserDoc = { exists: true, data: () => currentUserData };
+        } else if (userData) {
+          // Firestore 문서가 없지만 userData가 있으면 userData 사용
+          console.log('[apiGetUsers] ℹ️ Firestore 문서가 없지만 localStorage에 사용자 정보가 있습니다.');
+          currentUserDoc = { exists: false };
+        } else {
+          // 둘 다 없으면 빈 배열 반환
+          console.warn('[apiGetUsers] ⚠️ 현재 사용자 문서가 아직 생성되지 않았습니다.');
+          return { success: true, items: [] };
+        }
       } else {
-        // 둘 다 없으면 빈 배열 반환
-        console.warn('[apiGetUsers] ⚠️ 현재 사용자 문서가 아직 생성되지 않았습니다.');
-        return { success: true, items: [] };
+        // v8 Compat 사용
+        currentUserDoc = await getUsersCollection().doc(userIdToCheck).get();
+        console.log('[apiGetUsers] 📄 현재 사용자 문서 조회 (firestore v8):', { 
+          exists: currentUserDoc.exists,
+          userId: userIdToCheck 
+        });
+        
+        if (currentUserDoc.exists) {
+          // Firestore에서 조회한 데이터가 더 최신이므로 우선 사용
+          currentUserData = currentUserDoc.data();
+        } else if (userData) {
+          // Firestore 문서가 없지만 userData가 있으면 userData 사용
+          console.log('[apiGetUsers] ℹ️ Firestore 문서가 없지만 localStorage에 사용자 정보가 있습니다.');
+        } else {
+          // 둘 다 없으면 빈 배열 반환
+          console.warn('[apiGetUsers] ⚠️ 현재 사용자 문서가 아직 생성되지 않았습니다.');
+          return { success: true, items: [] };
+        }
       }
     } catch (docError) {
       // 문서 조회 실패 시 권한 오류일 수 있음
@@ -879,22 +949,45 @@ async function apiGetUsers() {
     if (userGrade === '1') {
       console.log('[apiGetUsers] 🔑 관리자 권한 확인됨 - 전체 사용자 목록 조회 시작');
       try {
-        const usersSnapshot = await getUsersCollection().get();
-        const users = [];
-        
-        usersSnapshot.forEach(doc => {
-          users.push({
-            id: doc.id,
-            ...doc.data()
+        // firestoreV9 사용 (authV9와 동일한 앱 인스턴스) - 우선 사용
+        if (window.firestoreV9) {
+          const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+          const usersRef = collection(window.firestoreV9, 'users');
+          const usersSnapshot = await getDocs(usersRef);
+          const users = [];
+          
+          usersSnapshot.forEach(doc => {
+            users.push({
+              id: doc.id,
+              ...doc.data()
+            });
           });
-        });
-        
-        console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료:', { 
-          totalUsers: users.length,
-          userIds: users.map(u => u.id) 
-        });
-        
-        return { success: true, items: users };
+          
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestoreV9):', { 
+            totalUsers: users.length,
+            userIds: users.map(u => u.id) 
+          });
+          
+          return { success: true, items: users };
+        } else {
+          // v8 Compat 사용 (fallback)
+          const usersSnapshot = await getUsersCollection().get();
+          const users = [];
+          
+          usersSnapshot.forEach(doc => {
+            users.push({
+              id: doc.id,
+              ...doc.data()
+            });
+          });
+          
+          console.log('[apiGetUsers] ✅ 전체 사용자 목록 조회 완료 (firestore v8):', { 
+            totalUsers: users.length,
+            userIds: users.map(u => u.id) 
+          });
+          
+          return { success: true, items: users };
+        }
       } catch (listError) {
         // 전체 목록 조회 실패 시 자신의 문서만 반환
         console.error('[apiGetUsers] ❌ 전체 사용자 목록 조회 실패:', listError);
