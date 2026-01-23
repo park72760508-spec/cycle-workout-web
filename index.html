@@ -3910,17 +3910,45 @@
      * 사용자 등록 화면에서 뒤로 가기
      */
     function handleRegisterBack() {
+      console.log('🔄 로그인 화면으로 전환 시작');
+      
       const authScreen = document.getElementById('authScreen');
       const registerScreen = document.getElementById('registerScreen');
       
+      // 사용자 등록 화면 숨기기
       if (registerScreen) {
         registerScreen.classList.remove('active');
         registerScreen.style.display = 'none';
+        registerScreen.style.visibility = 'hidden';
+        registerScreen.style.opacity = '0';
+        console.log('✅ 사용자 등록 화면 숨김 완료');
       }
       
+      // 모든 화면 숨기기 (splashScreen, authScreen 제외)
+      document.querySelectorAll('.screen').forEach(screen => {
+        if (screen.id !== 'authScreen' && screen.id !== 'splashScreen') {
+          screen.classList.remove('active');
+          screen.style.display = 'none';
+          screen.style.visibility = 'hidden';
+          screen.style.opacity = '0';
+        }
+      });
+      
+      // 로그인 화면 표시
       if (authScreen) {
+        // 스타일 강제 설정
         authScreen.classList.add('active');
         authScreen.style.display = 'block';
+        authScreen.style.visibility = 'visible';
+        authScreen.style.opacity = '1';
+        authScreen.style.position = 'relative';
+        authScreen.style.zIndex = '1000';
+        console.log('✅ 로그인 화면 표시 완료');
+        
+        // 스크롤을 맨 위로
+        window.scrollTo(0, 0);
+      } else {
+        console.error('❌ authScreen 요소를 찾을 수 없습니다');
       }
     }
     
