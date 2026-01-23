@@ -170,7 +170,13 @@ async function saveTrainingResult(extra = {}) {
      // 2. Firebase Firestore 저장 시도 (TSS 계산 후에 실행되도록 나중에 처리)
      //    - 이 부분은 스케줄 결과 저장 후에 실행되도록 이동
 
-     // 3. 스케줄 결과 저장 (모든 훈련에 대해 SCHEDULE_RESULTS에 저장)
+     // 3. 스케줄 결과 저장 및 마일리지 업데이트를 위한 변수 선언 (try 블록 밖에서 선언)
+     let totalSeconds = 0;
+     let duration_min = 0;
+     let tss = 0;
+     let np = 0;
+     
+     // 3-1. 스케줄 결과 저장 (모든 훈련에 대해 SCHEDULE_RESULTS에 저장)
      //    - 스케줄 훈련: schedule_day_id는 window.currentScheduleDayId 사용
      //    - 일반 훈련: schedule_day_id는 null로 저장
      try {
@@ -178,8 +184,6 @@ async function saveTrainingResult(extra = {}) {
        // 1순위: extra.elapsedTime 사용 (Firebase에서 받은 실제 경과 시간 - 세그먼트 그래프 상단 시간값)
        // 2순위: window.lastElapsedTime 사용 (전역 변수에 저장된 값)
        // 3순위: startTime과 endTime으로 계산
-       let totalSeconds = 0;
-       let duration_min = 0;
        
        if (extra.elapsedTime !== undefined && extra.elapsedTime !== null) {
          // Firebase에서 받은 elapsedTime 사용 (가장 정확)
@@ -223,8 +227,8 @@ async function saveTrainingResult(extra = {}) {
        }
        
        // TSS 계산 - app.js의 updateTrainingMetrics()와 동일한 공식 사용
-       let tss = trainingResult.tss || 0;
-       let np = trainingResult.normalizedPower || 0;
+       tss = trainingResult.tss || 0;
+       np = trainingResult.normalizedPower || 0;
        
        // trainingMetrics에서 계산된 값이 있으면 사용 (가장 정확)
        if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
@@ -357,9 +361,16 @@ async function saveTrainingResult(extra = {}) {
          // 스케줄 결과 저장 실패해도 계속 진행
        }
 
-    // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase Firestore v9 버전
-    // 조건: userId와 duration이 있으면 실행 (np가 0이어도 저장은 시도)
-    if (currentUserId && totalSeconds > 0) {
+     // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase Firestore v9 버전
+     // 조건: userId와 duration이 있으면 실행 (np가 0이어도 저장은 시도)
+     console.log('[saveTrainingResult] 🔍 3-2 섹션 진입 확인:', {
+       currentUserId: !!currentUserId,
+       totalSeconds: totalSeconds,
+       np: np,
+       tss: tss
+     });
+     
+     if (currentUserId && totalSeconds > 0) {
       try {
         // np가 0이면 avgPower를 사용하거나 기본값 사용
         const finalNP = np > 0 ? np : (stats.avgPower > 0 ? stats.avgPower : 100);
