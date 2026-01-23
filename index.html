@@ -1126,8 +1126,16 @@
               </div>
               
               <div class="modal-body">
+                <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                  <p style="color: #92400e; margin: 0; font-size: 13px; line-height: 1.5;">
+                    ⚠️ <strong>안내:</strong> 본 시스템은 전화번호 기반 인증을 사용하므로 실제 이메일로 비밀번호 재설정 링크를 받을 수 없습니다.<br>
+                    비밀번호를 잊으셨다면 <strong>관리자에게 문의</strong>하시거나, 관리자는 사용자 수정 화면에서 비밀번호를 초기화할 수 있습니다.
+                  </p>
+                </div>
+                
                 <p style="color: #666; margin-bottom: 20px; line-height: 1.6;">
-                  등록하신 전화번호를 입력하시면 비밀번호 재설정 링크를 이메일로 전송해드립니다.
+                  등록하신 전화번호를 입력하시면 비밀번호 재설정 링크를 이메일로 전송해드립니다.<br>
+                  <small style="color: #999;">(실제 이메일 주소가 등록된 경우에만 가능)</small>
                 </p>
                 
                 <div class="auth-input-group" style="margin-bottom: 20px;">
@@ -1641,10 +1649,10 @@
     
     <div class="card mb-15">
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button class="btn btn-success" onclick="loadUsers()" style="flex: 1; min-width: 140px;">
+        <button class="btn btn-exit-inline profile-action-button" onclick="loadUsers()" style="flex: 1; min-width: 140px;">
           📥 사용자 목록 새로고침
         </button>
-        <button class="btn btn-default-style" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; border: 1px solid #fc4c02; color: #fc4c02;">
+        <button class="btn btn-exit-inline profile-action-button profile-strava-button" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px;">
           🔗 Strava 연결
         </button>
       </div>
@@ -1874,6 +1882,60 @@
             <!-- 관리자 전용 필드 섹션 (관리자만 표시) -->
             <div id="editAdminFieldsSection" style="margin-bottom: 20px; display: none;">
               <h4 style="font-size: 1.1em; color: #dc2626; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dc2626;">관리자 전용 필드</h4>
+              
+              <!-- 관리자 비밀번호 초기화 섹션 -->
+              <div id="adminPasswordResetSection" style="margin-bottom: 20px; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <h5 style="font-size: 0.95em; color: #dc2626; margin-bottom: 12px; font-weight: 600;">비밀번호 초기화 (관리자 전용)</h5>
+                <p style="color: #7f1d1d; font-size: 12px; margin-bottom: 15px; line-height: 1.5;">
+                  사용자가 비밀번호를 잊었을 경우, 관리자가 임시 비밀번호를 설정할 수 있습니다.<br>
+                  사용자는 로그인 후 본인 비밀번호 변경 섹션에서 비밀번호를 변경할 수 있습니다.
+                </p>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">임시 비밀번호 (6자 이상, 숫자만)</label>
+                  <input 
+                    type="password" 
+                    id="adminTempPassword" 
+                    placeholder="임시 비밀번호를 입력하세요" 
+                    autocomplete="new-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">임시 비밀번호 확인</label>
+                  <input 
+                    type="password" 
+                    id="adminTempPasswordConfirm" 
+                    placeholder="임시 비밀번호를 다시 입력하세요" 
+                    autocomplete="new-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div id="adminPasswordResetStatus" style="display: none; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 14px;"></div>
+                
+                <button 
+                  type="button" 
+                  id="adminResetPasswordBtn" 
+                  onclick="adminResetUserPassword()" 
+                  style="width: 100%; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                  onmouseover="this.style.background='#b91c1c'"
+                  onmouseout="this.style.background='#dc2626'"
+                >
+                  비밀번호 초기화
+                </button>
+              </div>
               
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
