@@ -6080,10 +6080,7 @@ function initializeAuthenticationSystem() {
   // Google 로그인 버튼 확인 (새로운 인증 방식)
   const googleLoginBtn = document.getElementById('googleLoginBtn');
   if (googleLoginBtn) {
-    console.log('✅ Google 로그인 버튼 확인됨');
     // handleGoogleLogin 함수는 index.html에서 이미 onclick으로 연결됨
-  } else {
-    console.warn('⚠️ Google 로그인 버튼을 찾을 수 없습니다. Google 로그인을 사용하려면 버튼이 필요합니다.');
   }
   
   // 전화번호 입력 필드 이벤트 설정 (기존 코드 호환성 유지 - 선택사항)
