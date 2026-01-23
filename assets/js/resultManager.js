@@ -358,25 +358,34 @@ async function saveTrainingResult(extra = {}) {
        }
 
     // 3-2. 마일리지 업데이트 (TSS 기반) - Firebase Firestore v9 버전
-    if (currentUserId && totalSeconds > 0 && np > 0) {
+    // 조건: userId와 duration이 있으면 실행 (np가 0이어도 저장은 시도)
+    if (currentUserId && totalSeconds > 0) {
       try {
+        // np가 0이면 avgPower를 사용하거나 기본값 사용
+        const finalNP = np > 0 ? np : (stats.avgPower > 0 ? stats.avgPower : 100);
+        const finalAvgWatts = stats.avgPower > 0 ? stats.avgPower : finalNP;
+        
         console.log('[saveTrainingResult] 🎁 훈련 결과 저장 및 포인트 적립 시도:', { 
           userId: currentUserId, 
           duration: totalSeconds,
-          weighted_watts: np,
-          avg_watts: stats.avgPower,
-          tss: tss
+          weighted_watts: finalNP,
+          avg_watts: finalAvgWatts,
+          tss: tss,
+          original_np: np,
+          original_avgPower: stats.avgPower
         });
         
         // Firebase Firestore v9로 훈련 결과 저장 및 포인트 적립
         if (typeof window.saveTrainingSession === 'function') {
           const trainingData = {
             duration: totalSeconds,
-            weighted_watts: np,
-            avg_watts: stats.avgPower || np
+            weighted_watts: finalNP,
+            avg_watts: finalAvgWatts
           };
           
+          console.log('[saveTrainingResult] 📤 saveTrainingSession 호출:', trainingData);
           const saveResult = await window.saveTrainingSession(currentUserId, trainingData);
+          console.log('[saveTrainingResult] 📥 saveTrainingSession 응답:', saveResult);
           
           if (saveResult && saveResult.success) {
             console.log('[saveTrainingResult] ✅ 훈련 결과 저장 및 포인트 적립 성공:', saveResult);
@@ -404,6 +413,7 @@ async function saveTrainingResult(extra = {}) {
           }
         } else {
           console.warn('[saveTrainingResult] ⚠️ saveTrainingSession 함수가 없습니다. trainingResultService.js를 로드하세요.');
+          console.warn('[saveTrainingResult] window.saveTrainingSession 타입:', typeof window.saveTrainingSession);
           
           // 기존 updateUserMileage 함수로 폴백 (호환성 유지)
           if (typeof window.updateUserMileage === 'function') {
@@ -424,13 +434,19 @@ async function saveTrainingResult(extra = {}) {
         }
        } catch (saveError) {
          console.error('[saveTrainingResult] ❌ 훈련 결과 저장 중 오류:', saveError);
+         console.error('[saveTrainingResult] 오류 상세:', {
+           message: saveError.message,
+           stack: saveError.stack,
+           name: saveError.name
+         });
          // 저장 실패해도 계속 진행
        }
      } else {
        console.warn('[saveTrainingResult] ⚠️ 훈련 결과 저장 스킵:', {
          hasUserId: !!currentUserId,
          hasDuration: totalSeconds > 0,
-         hasNP: np > 0
+         currentUserId: currentUserId,
+         totalSeconds: totalSeconds
        });
      }
 
