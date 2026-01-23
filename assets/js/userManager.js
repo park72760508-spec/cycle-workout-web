@@ -2035,12 +2035,46 @@ async function editUser(userId) {
       // 관리자 전용 필드
       if (gradeEl) gradeEl.value = String(user.grade || '2');
       if (expiryEl && user.expiry_date) {
-        expiryEl.value = user.expiry_date.substring(0, 10);
+        // Firestore Timestamp 객체 처리
+        let expiryDateStr = '';
+        if (user.expiry_date && typeof user.expiry_date === 'object') {
+          // Firestore Timestamp 객체인 경우
+          if (user.expiry_date.toDate) {
+            expiryDateStr = user.expiry_date.toDate().toISOString().substring(0, 10);
+          } else if (user.expiry_date.seconds) {
+            // Timestamp 객체이지만 toDate 메서드가 없는 경우
+            expiryDateStr = new Date(user.expiry_date.seconds * 1000).toISOString().substring(0, 10);
+          } else {
+            // 일반 Date 객체인 경우
+            expiryDateStr = new Date(user.expiry_date).toISOString().substring(0, 10);
+          }
+        } else if (typeof user.expiry_date === 'string') {
+          // 문자열인 경우
+          expiryDateStr = user.expiry_date.substring(0, 10);
+        }
+        expiryEl.value = expiryDateStr;
       }
       if (accPointsEl) accPointsEl.value = user.acc_points || '';
       if (remPointsEl) remPointsEl.value = user.rem_points || '';
       if (lastTrainingDateEl && user.last_training_date) {
-        lastTrainingDateEl.value = user.last_training_date.substring(0, 10);
+        // Firestore Timestamp 객체 처리
+        let lastTrainingDateStr = '';
+        if (user.last_training_date && typeof user.last_training_date === 'object') {
+          // Firestore Timestamp 객체인 경우
+          if (user.last_training_date.toDate) {
+            lastTrainingDateStr = user.last_training_date.toDate().toISOString().substring(0, 10);
+          } else if (user.last_training_date.seconds) {
+            // Timestamp 객체이지만 toDate 메서드가 없는 경우
+            lastTrainingDateStr = new Date(user.last_training_date.seconds * 1000).toISOString().substring(0, 10);
+          } else {
+            // 일반 Date 객체인 경우
+            lastTrainingDateStr = new Date(user.last_training_date).toISOString().substring(0, 10);
+          }
+        } else if (typeof user.last_training_date === 'string') {
+          // 문자열인 경우
+          lastTrainingDateStr = user.last_training_date.substring(0, 10);
+        }
+        lastTrainingDateEl.value = lastTrainingDateStr;
       }
       if (stravaAccessTokenEl) stravaAccessTokenEl.value = user.strava_access_token || '';
       if (stravaRefreshTokenEl) stravaRefreshTokenEl.value = user.strava_refresh_token || '';
