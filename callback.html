@@ -66,10 +66,11 @@
     <div id="success" class="hidden">
       <p class="msg">✅ Strava 연동이 완료되었습니다.</p>
       <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
-        <button id="syncStravaBtn" class="link" style="cursor: pointer; border: none; font-size: inherit; font-family: inherit;">
-          🔄 Strava 동기화
+        <button id="syncStravaBtn" class="link" style="cursor: pointer; border: none; font-size: inherit; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <img src="assets/img/strava2.png" alt="Strava" style="width: 20px; height: 20px; object-fit: contain;" />
+          Strava 동기화
         </button>
-        <a id="backLink" class="link" href="./index.html" style="margin-top: 0;">앱으로 돌아가기</a>
+        <a id="backLink" class="link" href="./index.html" style="margin-top: 0;">베이스캠프로 돌아가기</a>
       </div>
       <div id="syncStatus" class="hidden" style="margin-top: 16px; padding: 12px; background: #f0f0f0; border-radius: 8px; font-size: 0.9em;">
         <p id="syncStatusText" class="msg" style="margin: 0;"></p>
@@ -77,7 +78,7 @@
     </div>
     <div id="error" class="hidden">
       <p class="msg err" id="errorText"></p>
-      <a id="retryLink" class="link" href="./index.html">앱으로 돌아가기</a>
+      <a id="retryLink" class="link" href="./index.html">베이스캠프로 돌아가기</a>
     </div>
   </div>
 
@@ -316,6 +317,7 @@
   </script>
   <script src="assets/js/stravaManager.js"></script>
   <script src="assets/js/strava_auth.js"></script>
+  <script src="assets/js/trainingResultsManager.js"></script>
   <script>
     (function () {
       var loading = document.getElementById('loading');
@@ -345,15 +347,15 @@
         errorText.textContent = msg || '연동 처리 중 오류가 발생했습니다.';
       }
 
-      // return_to 등으로 돌아갈 메인 앱 URL (프로필 화면으로 이동)
-      var returnUrl = new URLSearchParams(window.location.search).get('return_to') || './index.html#profileScreen';
+      // return_to 등으로 돌아갈 메인 앱 URL (베이스캠프 화면으로 이동)
+      var returnUrl = new URLSearchParams(window.location.search).get('return_to') || './index.html#basecampScreen';
       if (backLink) {
         backLink.href = returnUrl;
-        // 프로필 화면으로 이동하도록 설정
+        // 베이스캠프 화면으로 이동하도록 설정
         backLink.onclick = function(e) {
           e.preventDefault();
-          // localStorage에 프로필 화면으로 이동할 플래그 설정
-          localStorage.setItem('stravaCallbackReturn', 'profileScreen');
+          // localStorage에 베이스캠프 화면으로 이동할 플래그 설정
+          localStorage.setItem('stravaCallbackReturn', 'basecampScreen');
           window.location.href = './index.html';
         };
       }
@@ -361,8 +363,8 @@
         retryLink.href = returnUrl;
         retryLink.onclick = function(e) {
           e.preventDefault();
-          // localStorage에 프로필 화면으로 이동할 플래그 설정
-          localStorage.setItem('stravaCallbackReturn', 'profileScreen');
+          // localStorage에 베이스캠프 화면으로 이동할 플래그 설정
+          localStorage.setItem('stravaCallbackReturn', 'basecampScreen');
           window.location.href = './index.html';
         };
       }
@@ -374,7 +376,7 @@
           
           // 버튼 비활성화 및 로딩 상태
           syncStravaBtn.disabled = true;
-          syncStravaBtn.textContent = '⏳ 동기화 중...';
+          syncStravaBtn.innerHTML = '<img src="assets/img/strava2.png" alt="Strava" style="width: 20px; height: 20px; object-fit: contain;" /> 동기화 중...';
           syncStravaBtn.style.opacity = '0.6';
           syncStravaBtn.style.cursor = 'not-allowed';
           
@@ -453,7 +455,7 @@
           } finally {
             // 버튼 복원
             syncStravaBtn.disabled = false;
-            syncStravaBtn.textContent = '🔄 Strava 동기화';
+            syncStravaBtn.innerHTML = '<img src="assets/img/strava2.png" alt="Strava" style="width: 20px; height: 20px; object-fit: contain;" /> Strava 동기화';
             syncStravaBtn.style.opacity = '1';
             syncStravaBtn.style.cursor = 'pointer';
           }
