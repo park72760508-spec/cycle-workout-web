@@ -3680,34 +3680,38 @@
             console.log('✅ 로그인 성공:', user.uid);
             showAuthStatus('✅ 로그인 성공!', 'success');
             
-            // 전화번호로 사용자 정보 찾기
-            if (typeof window.findUserByPhone === 'function') {
-              try {
-                const result = await window.findUserByPhone(phone);
-                if (result.success && result.userData) {
-                  const userData = result.userData;
-                  if (typeof window !== 'undefined') window.isPhoneAuthenticated = true;
-                  if (typeof showToast === 'function') {
-                    showToast(`${userData.name}님, 로그인되었습니다.`);
-                  }
-                } else {
-                  if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
-                  if (typeof showToast === 'function') {
-                    showToast('사용자 정보를 찾을 수 없습니다.');
-                  }
-                }
-              } catch (error) {
-                console.error('사용자 정보 찾기 실패:', error);
-                if (typeof window !== 'undefined') window.isPhoneAuthenticated = false;
+            // UID로 직접 사용자 정보 가져오기 (간단하고 빠름)
+            try {
+              if (!window.firestore) {
+                throw new Error('Firestore가 초기화되지 않았습니다.');
+              }
+              
+              const userDoc = await window.firestore.collection('users').doc(user.uid).get();
+              
+              if (userDoc.exists) {
+                const userData = { id: user.uid, ...userDoc.data() };
+                window.currentUser = userData;
+                localStorage.setItem('currentUser', JSON.stringify(userData));
+                localStorage.setItem('authUser', JSON.stringify(userData));
+                window.isPhoneAuthenticated = true;
+                
+                console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
+                
                 if (typeof showToast === 'function') {
-                  showToast('사용자 정보를 불러오는 중 오류가 발생했습니다.');
+                  showToast(`${userData.name}님, 로그인되었습니다.`);
+                }
+              } else {
+                console.warn('⚠️ users/{uid} 문서가 없습니다:', user.uid);
+                window.isPhoneAuthenticated = false;
+                if (typeof showToast === 'function') {
+                  showToast('사용자 정보를 찾을 수 없습니다.');
                 }
               }
-            } else {
-              // findUserByPhone 함수가 없는 경우 기본 메시지
+            } catch (error) {
+              console.error('❌ 사용자 정보 로드 실패:', error);
+              window.isPhoneAuthenticated = false;
               if (typeof showToast === 'function') {
-                const displayName = user.displayName || '사용자';
-                showToast(`${displayName}님, 로그인되었습니다.`);
+                showToast('사용자 정보를 불러오는 중 오류가 발생했습니다.');
               }
             }
             
