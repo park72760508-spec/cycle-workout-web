@@ -97,6 +97,18 @@
     };
   </script>
   
+  <!-- 훈련 결과 저장 서비스 (Firebase Firestore v9) -->
+  <script type="module">
+    import { saveTrainingSession } from './trainingResultService.js';
+    
+    // 전역 함수로 노출
+    window.saveTrainingSession = async (userId, trainingData) => {
+      return await saveTrainingSession(userId, trainingData, window.firestoreV9);
+    };
+    
+    console.log('✅ 훈련 결과 저장 서비스 로드 완료');
+  </script>
+  
   <style>
     .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);
       background:#333;color:#fff;padding:10px 16px;border-radius:8px;
