@@ -1056,9 +1056,13 @@
               <input 
                 type="password" 
                 id="authPasswordInput" 
-                placeholder="6자 이상 입력" 
+                placeholder="6자 이상 입력 (숫자만)" 
                 autocomplete="current-password"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 minlength="6"
+                maxlength="20"
+                oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                 required
               >
             </div>
@@ -1290,9 +1294,13 @@
               <input 
                 type="password" 
                 id="registerPasswordInput" 
-                placeholder="6자 이상 입력" 
+                placeholder="6자 이상 입력 (숫자만)" 
                 autocomplete="new-password"
+                inputmode="numeric"
+                pattern="[0-9]*"
                 minlength="6"
+                maxlength="20"
+                oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                 required
               >
             </div>
@@ -4199,10 +4207,29 @@
       
       // 비밀번호 입력 필드
       if (passwordInput) {
+        // 숫자만 입력되도록 제한
         passwordInput.addEventListener('keypress', (e) => {
+          // 숫자(0-9) 또는 Enter 키만 허용
+          if (!/[0-9]/.test(e.key) && e.key !== 'Enter') {
+            e.preventDefault();
+            return false;
+          }
           if (e.key === 'Enter') {
             submitBtn.click();
           }
+        });
+        
+        // 붙여넣기 시 숫자가 아닌 문자 제거
+        passwordInput.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+          const numericOnly = pastedText.replace(/[^0-9]/g, '');
+          passwordInput.value = numericOnly;
+        });
+        
+        // 입력 시 숫자가 아닌 문자 제거 (추가 보안)
+        passwordInput.addEventListener('input', (e) => {
+          e.target.value = e.target.value.replace(/[^0-9]/g, '');
         });
       }
       
@@ -4230,6 +4257,34 @@
       if (registerPhoneInput) {
         registerPhoneInput.addEventListener('input', (e) => {
           e.target.value = window.formatPhoneNumber ? window.formatPhoneNumber(e.target.value) : e.target.value;
+        });
+      }
+      
+      // 사용자 등록 비밀번호 입력 필드 - 숫자만 입력되도록 제한
+      if (registerPasswordInput) {
+        // 숫자만 입력되도록 제한
+        registerPasswordInput.addEventListener('keypress', (e) => {
+          // 숫자(0-9) 또는 Enter 키만 허용
+          if (!/[0-9]/.test(e.key) && e.key !== 'Enter') {
+            e.preventDefault();
+            return false;
+          }
+          if (e.key === 'Enter') {
+            registerSubmitBtn?.click();
+          }
+        });
+        
+        // 붙여넣기 시 숫자가 아닌 문자 제거
+        registerPasswordInput.addEventListener('paste', (e) => {
+          e.preventDefault();
+          const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+          const numericOnly = pastedText.replace(/[^0-9]/g, '');
+          registerPasswordInput.value = numericOnly;
+        });
+        
+        // 입력 시 숫자가 아닌 문자 제거 (추가 보안)
+        registerPasswordInput.addEventListener('input', (e) => {
+          e.target.value = e.target.value.replace(/[^0-9]/g, '');
         });
       }
       
