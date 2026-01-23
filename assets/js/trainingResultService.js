@@ -14,7 +14,12 @@ import {
   collection, 
   addDoc,
   runTransaction,
-  Timestamp
+  Timestamp,
+  query,
+  orderBy,
+  limit,
+  startAfter,
+  getDocs
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
 /**
@@ -222,8 +227,10 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       transaction.update(userRef, userUpdateData);
       
       // 6. 훈련 로그 데이터 준비 (트랜잭션 외부에서 저장)
+      // userId는 서브컬렉션 경로에 포함되므로 중복 저장 불필요하지만, 
+      // 쿼리 편의성을 위해 유지 (선택사항)
       const trainingLogData = {
-        userId: userId,
+        userId: userId, // 쿼리 편의성을 위해 유지
         date: Timestamp.now(),
         duration_sec: durationSec,
         avg_watts: avgWatts,
@@ -240,9 +247,10 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       };
     });
     
-    // 7. 트랜잭션 완료 후 training_logs 컬렉션에 저장
-    const trainingLogsRef = collection(db, 'training_logs');
-    const trainingLogDocRef = await addDoc(trainingLogsRef, result.trainingLogData);
+    // 7. 트랜잭션 완료 후 users/{userId}/logs 서브컬렉션에 저장
+    // Subcollection 구조: users/{userId}/logs/{logId}
+    const userLogsRef = collection(db, 'users', userId, 'logs');
+    const trainingLogDocRef = await addDoc(userLogsRef, result.trainingLogData);
     
     console.log('[saveTrainingSession] ✅ 저장 완료:', {
       userId,
@@ -277,8 +285,72 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
 }
 
 /**
+ * 사용자의 훈련 로그 조회 (Subcollection 구조)
+ * 
+ * @param {string} userId - 사용자 UID
+ * @param {Object} [options] - 조회 옵션
+ * @param {number} [options.limit] - 최대 조회 개수 (기본값: 50)
+ * @param {Object} [options.startAfter] - 페이지네이션용 시작 문서
+ * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택사항)
+ * @returns {Promise<Array>} 훈련 로그 배열
+ */
+/**
+ * 사용자의 훈련 로그 조회 (Subcollection 구조)
+ * 
+ * @param {string} userId - 사용자 UID
+ * @param {Object} [options] - 조회 옵션
+ * @param {number} [options.limit] - 최대 조회 개수 (기본값: 50)
+ * @param {Object} [options.startAfter] - 페이지네이션용 시작 문서
+ * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택사항)
+ * @returns {Promise<Array>} 훈련 로그 배열
+ */
+export async function getUserTrainingLogs(userId, options = {}, firestoreInstance = null) {
+  if (!userId) {
+    throw new Error('userId는 필수입니다.');
+  }
+  
+  const db = firestoreInstance || window.firestoreV9;
+  if (!db) {
+    throw new Error('Firestore 인스턴스가 없습니다. window.firestoreV9를 확인하세요.');
+  }
+  
+  try {
+    const { limit: limitValue = 50, startAfter: startAfterDoc = null } = options;
+    
+    // users/{userId}/logs 서브컬렉션 참조
+    const userLogsRef = collection(db, 'users', userId, 'logs');
+    
+    // 쿼리 빌더 생성 (날짜 내림차순 정렬)
+    let q = query(userLogsRef, orderBy('date', 'desc'), limit(limitValue));
+    
+    // 페이지네이션 지원
+    if (startAfterDoc) {
+      q = query(q, startAfter(startAfterDoc));
+    }
+    
+    const querySnapshot = await getDocs(q);
+    const logs = [];
+    
+    querySnapshot.forEach((doc) => {
+      logs.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    console.log(`[getUserTrainingLogs] ${logs.length}개의 로그 조회 완료 (userId: ${userId})`);
+    
+    return logs;
+  } catch (error) {
+    console.error('[getUserTrainingLogs] ❌ 조회 실패:', error);
+    throw error;
+  }
+}
+
+/**
  * TSS 계산 함수를 전역으로 노출 (디버깅/테스트용)
  */
 if (typeof window !== 'undefined') {
   window.calculateTSS = calculateTSS;
+  window.getUserTrainingLogs = getUserTrainingLogs;
 }
