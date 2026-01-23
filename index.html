@@ -28,8 +28,8 @@
       createUserWithEmailAndPassword,
       updateProfile
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+    import { getFirestore, collection, doc, setDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     
-    // Firebase 설정 (기존 firebaseConfig.js에서 가져온 값)
     const firebaseConfig = {
       apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
       authDomain: "stelvio-ai.firebaseapp.com",
@@ -39,13 +39,15 @@
       appId: "1:752285835508:web:0662a24874209ebb483ea1"
     };
     
-    // Firebase v9 Modular SDK 초기화 (별도 앱 인스턴스)
     let authV9;
+    let firestoreV9;
     try {
       const appV9 = initializeApp(firebaseConfig, 'authV9');
       authV9 = getAuth(appV9);
-      window.authV9 = authV9; // 전역 접근용
-      console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증용)');
+      firestoreV9 = getFirestore(appV9);
+      window.authV9 = authV9;
+      window.firestoreV9 = firestoreV9;
+      console.log('✅ Firebase v9 Modular SDK 초기화 완료 (인증·Firestore)');
     } catch (error) {
       console.error('❌ Firebase v9 초기화 실패:', error);
     }
@@ -70,12 +72,18 @@
       }
     }
     
-    // 전역 함수로 등록
     window.phoneToEmail = phoneToEmail;
     window.formatPhoneNumber = formatPhoneNumber;
     window.signInWithEmailAndPasswordV9 = signInWithEmailAndPassword;
     window.createUserWithEmailAndPasswordV9 = createUserWithEmailAndPassword;
     window.updateProfileV9 = updateProfile;
+
+    window.saveNewUserToFirestore = async (uid, userData) => {
+      if (!firestoreV9) throw new Error('Firestore V9가 초기화되지 않았습니다.');
+      const usersRef = collection(firestoreV9, 'users');
+      const userDocRef = doc(usersRef, uid);
+      await setDoc(userDocRef, userData);
+    };
   </script>
   
   <style>
@@ -4017,44 +4025,34 @@
       showRegisterStatus('계정을 생성하는 중...', 'info');
       
       try {
-        // Firebase v9 Modular SDK 확인
-        if (!window.authV9 || !window.phoneToEmail) {
-          throw new Error('Firebase 인증 모듈이 로드되지 않았습니다.');
+        if (!window.authV9 || !window.phoneToEmail || typeof window.saveNewUserToFirestore !== 'function') {
+          throw new Error('Firebase 인증/Firestore 모듈이 로드되지 않았습니다.');
         }
         
-        // 전화번호를 이메일 형식으로 변환 (예: 01012345678@stelvio.ai)
         const email = window.phoneToEmail(phone);
         console.log('📝 회원가입 시작:', { email, name, ftp, weight, challenge });
         
-        // ============================================
-        // 1단계: Firebase Authentication에 계정 생성
-        // ============================================
         const userCredential = await window.createUserWithEmailAndPasswordV9(
-          window.authV9, 
-          email, 
-          password
+          window.authV9, email, password
         );
         const user = userCredential.user;
         console.log('✅ Firebase Authentication 계정 생성 완료:', user.uid);
         
-        // ============================================
-        // 2단계: Firestore users 컬렉션에 사용자 정보 저장
-        // ============================================
         const now = new Date().toISOString();
         const defaultExpiryDate = (() => {
           const d = new Date();
-          d.setMonth(d.getMonth() + 3); // 오늘 + 3개월
+          d.setMonth(d.getMonth() + 3);
           return d.toISOString().split('T')[0];
         })();
         
         const userData = {
           id: user.uid,
-          name: name,                    // 이름
-          contact: phone,                // 전화번호
-          ftp: ftp,                      // FTP
-          weight: weight,                 // 몸무게
-          challenge: challenge,          // 운동목적
-          grade: '2',                    // 기본값: 일반 사용자
+          name: name,
+          contact: phone,
+          ftp: ftp,
+          weight: weight,
+          challenge: challenge,
+          grade: '2',
           created_at: now,
           expiry_date: defaultExpiryDate,
           acc_points: 0,
@@ -4065,13 +4063,9 @@
           strava_expires_at: 0
         };
         
-        // Firestore에 저장
-        if (window.firestore) {
-          await window.firestore.collection('users').doc(user.uid).set(userData);
-          console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
-        } else {
-          throw new Error('Firestore가 초기화되지 않았습니다.');
-        }
+        await new Promise(r => setTimeout(r, 200));
+        await window.saveNewUserToFirestore(user.uid, userData);
+        console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
         
         showRegisterStatus('✅ 회원가입 성공!', 'success');
         
