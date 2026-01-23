@@ -1061,158 +1061,69 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 };
                 console.log('[BluetoothIndividual] 0️⃣ 훈련 전 포인트 저장:', window.beforeTrainingPoints);
                 
+                // 모바일 개인훈련 대시보드와 동일한 저장 로직 적용
                 Promise.resolve()
                     .then(() => {
-                        console.log('[BluetoothIndividual] 🚀 1단계: 결과 저장 시작');
-                        return window.saveTrainingResultAtEnd?.();
+                        console.log('[BluetoothIndividual] 🚀 결과 저장 시작 (모바일 대시보드와 동일한 로직)');
+                        
+                        // 세션 종료
+                        if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
+                            window.trainingResults.endSession();
+                            console.log('[BluetoothIndividual] ✅ 세션 종료 완료');
+                        }
+                        
+                        // 추가 메타데이터 준비
+                        const extra = {
+                            workoutId: window.currentWorkout?.id || '',
+                            workoutName: window.currentWorkout?.title || window.currentWorkout?.name || '',
+                            elapsedTime: status?.elapsedTime !== undefined ? status.elapsedTime : (window.lastElapsedTime || 0), // 경과 시간
+                            completionType: 'normal',
+                            appVersion: '1.0.0',
+                            timestamp: new Date().toISOString(),
+                            source: 'bluetooth_individual_dashboard' // 블루투스 개인훈련 대시보드에서 저장됨을 표시
+                        };
+                        
+                        console.log('[BluetoothIndividual] 📋 저장 메타데이터:', extra);
+                        
+                        // 결과 저장 (resultManager.js의 saveTrainingResult 호출)
+                        // 이 함수 내부에서 window.saveTrainingSession()이 호출되어 Firebase에 저장됨
+                        if (window.trainingResults && typeof window.trainingResults.saveTrainingResult === 'function') {
+                            return window.trainingResults.saveTrainingResult(extra);
+                        } else {
+                            console.warn('[BluetoothIndividual] ⚠️ window.trainingResults.saveTrainingResult 함수가 없습니다.');
+                            return Promise.resolve({ success: false, error: 'trainingResults not initialized' });
+                        }
                     })
-                    .then(async (saveResult) => {
-                        console.log('[BluetoothIndividual] ✅ 1단계 완료:', saveResult);
+                    .then((saveResult) => {
+                        console.log('[BluetoothIndividual] ✅ 저장 결과:', saveResult);
                         
                         // 저장 결과 확인 및 알림
-                        if (saveResult?.saveResult?.source === 'local') {
+                        if (saveResult?.source === 'local') {
                             console.log('[BluetoothIndividual] 📱 로컬 저장 모드 - CORS 오류로 서버 저장 실패');
                             if (typeof showToast === "function") {
                                 showToast("훈련 결과가 기기에 저장되었습니다 (서버 연결 불가)", "warning");
                             }
-                        } else if (saveResult?.saveResult?.source === 'gas') {
+                        } else if (saveResult?.source === 'gas') {
                             console.log('[BluetoothIndividual] 🌐 서버 저장 성공');
                             if (typeof showToast === "function") {
                                 showToast("훈련 결과가 서버에 저장되었습니다");
                             }
-                        }
-                        
-                        // 2단계: Firebase Firestore v9로 훈련 결과 저장 및 포인트 적립 (독립적 구동)
-                        // resultManager.js의 saveTrainingResult에서 이미 호출되지만, 
-                        // 독립적 구동을 위해 여기서도 확인 및 처리
-                        const sessionData = window.trainingResults?.getCurrentSessionData?.();
-                        if (sessionData && window.currentUser?.id) {
-                            try {
-                                const stats = window.trainingResults?.calculateSessionStats?.() || {};
-                                const session = sessionData;
-                                
-                                // 훈련 시간 계산
-                                let totalSeconds = 0;
-                                if (status && status.elapsedTime !== undefined && status.elapsedTime !== null) {
-                                    totalSeconds = Math.max(0, Math.floor(status.elapsedTime));
-                                } else if (window.lastElapsedTime !== undefined && window.lastElapsedTime !== null) {
-                                    totalSeconds = Math.max(0, Math.floor(window.lastElapsedTime));
-                                } else {
-                                    const startTime = session.startTime ? new Date(session.startTime) : null;
-                                    const endTime = session.endTime ? new Date(session.endTime) : new Date();
-                                    totalSeconds = startTime ? Math.floor((endTime - startTime) / 1000) : 0;
-                                }
-                                
-                                // TSS 및 NP 계산
-                                let tss = 0;
-                                let np = 0;
-                                
-                                if (window.trainingMetrics && window.trainingMetrics.elapsedSec > 0) {
-                                    const elapsedSec = window.trainingMetrics.elapsedSec;
-                                    const np4sum = window.trainingMetrics.np4sum || 0;
-                                    const count = window.trainingMetrics.count || 1;
-                                    
-                                    if (count > 0 && np4sum > 0) {
-                                        np = Math.pow(np4sum / count, 0.25);
-                                        const userFtp = window.currentUser?.ftp || 200;
-                                        const IF = userFtp > 0 ? (np / userFtp) : 0;
-                                        tss = (elapsedSec / 3600) * (IF * IF) * 100;
-                                    }
-                                }
-                                
-                                if (!tss || tss === 0) {
-                                    const userFtp = window.currentUser?.ftp || 200;
-                                    if (!np || np === 0) {
-                                        np = Math.round((stats.avgPower || 0) * 1.05);
-                                    }
-                                    const IF = userFtp > 0 ? (np / userFtp) : 0;
-                                    const timeForTss = totalSeconds > 0 ? totalSeconds : (Math.floor(totalSeconds / 60) * 60);
-                                    tss = (timeForTss / 3600) * (IF * IF) * 100;
-                                }
-                                
-                                tss = Math.max(0, Math.round(tss * 100) / 100);
-                                np = Math.max(0, Math.round(np * 10) / 10);
-                                
-                                // saveTrainingSession 호출 (독립적 구동)
-                                if (totalSeconds > 0 && typeof window.saveTrainingSession === 'function') {
-                                    // 케이던스 데이터 계산
-                                    const cadenceValues = session?.cadenceData?.map(d => d.v).filter(v => v > 0) || [];
-                                    const avgCadence = cadenceValues.length ? Math.round(cadenceValues.reduce((a, b) => a + b, 0) / cadenceValues.length) : null;
-                                    
-                                    // 최대 심박수 계산
-                                    const hrValues = session?.hrData?.map(d => d.v).filter(v => v > 0) || [];
-                                    const maxHR = hrValues.length ? Math.max(...hrValues) : null;
-                                    
-                                    // 일량 계산 (kJ)
-                                    let kilojoules = null;
-                                    if (session?.powerData && session.powerData.length > 0) {
-                                        const totalJoules = session.powerData.reduce((sum, data) => sum + (data.v || 0), 0);
-                                        kilojoules = Math.round(totalJoules / 1000);
-                                    }
-                                    
-                                    // 워크아웃 정보
-                                    const workoutTitle = window.currentWorkout?.title || window.currentWorkout?.name || null;
-                                    const workoutId = window.currentWorkout?.id || null;
-                                    
-                                    const finalNP = np > 0 ? np : (stats.avgPower > 0 ? stats.avgPower : 100);
-                                    const finalAvgWatts = stats.avgPower > 0 ? stats.avgPower : finalNP;
-                                    
-                                    const trainingData = {
-                                        duration: totalSeconds,
-                                        weighted_watts: finalNP,
-                                        avg_watts: finalAvgWatts,
-                                        workout_id: workoutId ? String(workoutId) : null,
-                                        title: workoutTitle,
-                                        max_watts: stats.maxPower || null,
-                                        kilojoules: kilojoules,
-                                        avg_hr: stats.avgHR || null,
-                                        max_hr: maxHR,
-                                        avg_cadence: avgCadence,
-                                        powerData: session?.powerData || null,
-                                        rpe: null
-                                    };
-                                    
-                                    console.log('[BluetoothIndividual] 📤 saveTrainingSession 호출 (독립적 구동):', {
-                                        ...trainingData,
-                                        powerDataCount: trainingData.powerData?.length || 0
-                                    });
-                                    
-                                    const firestoreSaveResult = await window.saveTrainingSession(window.currentUser.id, trainingData);
-                                    console.log('[BluetoothIndividual] 📥 saveTrainingSession 응답:', firestoreSaveResult);
-                                    
-                                    if (firestoreSaveResult && firestoreSaveResult.success) {
-                                        // 마일리지 업데이트 결과를 전역 변수에 저장 (결과 화면 표시용)
-                                        window.lastMileageUpdate = {
-                                            success: true,
-                                            acc_points: firestoreSaveResult.newAccPoints,
-                                            rem_points: firestoreSaveResult.newRemPoints,
-                                            expiry_date: firestoreSaveResult.newExpiryDate,
-                                            earned_points: firestoreSaveResult.earnedPoints,
-                                            extendedDays: firestoreSaveResult.extendedDays,
-                                            extended_days: firestoreSaveResult.extendedDays // 호환성
-                                        };
-                                        
-                                        // 사용자 정보도 업데이트
-                                        if (window.currentUser) {
-                                            window.currentUser.acc_points = firestoreSaveResult.newAccPoints;
-                                            window.currentUser.rem_points = firestoreSaveResult.newRemPoints;
-                                            window.currentUser.expiry_date = firestoreSaveResult.newExpiryDate;
-                                            localStorage.setItem('currentUser', JSON.stringify(window.currentUser));
-                                        }
-                                        
-                                        console.log('[BluetoothIndividual] ✅ Firebase Firestore 저장 및 포인트 적립 성공');
-                                    }
-                                }
-                            } catch (firestoreError) {
-                                console.error('[BluetoothIndividual] ❌ Firebase Firestore 저장 실패:', firestoreError);
-                                // Firestore 저장 실패해도 계속 진행
+                        } else if (saveResult?.success) {
+                            console.log('[BluetoothIndividual] ✅ Firebase Firestore 저장 성공');
+                            // 마일리지 업데이트 결과 확인 (resultManager.js에서 이미 window.lastMileageUpdate에 저장됨)
+                            if (window.lastMileageUpdate && window.lastMileageUpdate.success) {
+                                console.log('[BluetoothIndividual] ✅ 포인트 적립 완료:', window.lastMileageUpdate);
                             }
                         }
                         
                         return window.trainingResults?.initializeResultScreen?.();
                     })
                     .catch((e) => { 
-                        console.warn('[BluetoothIndividual] initializeResultScreen error', e); 
+                        console.error('[BluetoothIndividual] ❌ 저장 중 오류:', e);
+                        // 오류가 발생해도 결과 화면 초기화 시도
+                        return window.trainingResults?.initializeResultScreen?.().catch(err => {
+                            console.warn('[BluetoothIndividual] initializeResultScreen error', err);
+                        });
                     })
                     .then(() => {
                         console.log('[BluetoothIndividual] ✅ 결과 화면 초기화 완료');
@@ -1272,6 +1183,13 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
                 }, 100);
             }
             console.log('[BluetoothIndividual] 훈련 시작 - 로컬 시간 추적 초기화');
+            
+            // 훈련 시작 시 세그먼트 그래프 업데이트하여 펄스 애니메이션 시작
+            if (window.currentWorkout && window.currentWorkout.segments) {
+                setTimeout(() => {
+                    updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+                }, 200);
+            }
         }
         
         // 훈련 종료 시 로컬 시간 추적 정리
@@ -1284,6 +1202,13 @@ db.ref(`sessions/${SESSION_ID}/status`).on('value', (snapshot) => {
             bluetoothIndividualPowerBuffer = [];
             console.log('[BluetoothIndividual] 훈련 종료 - 3초 평균 파워 버퍼 초기화');
             console.log('[BluetoothIndividual] 훈련 종료 - 로컬 시간 추적 정리');
+            
+            // 훈련 종료 시 펄스 애니메이션 중지
+            if (mascotAnimationInterval) {
+                clearInterval(mascotAnimationInterval);
+                mascotAnimationInterval = null;
+                console.log('[BluetoothIndividual] 훈련 종료 - 펄스 애니메이션 중지');
+            }
         }
         
         // 세그먼트 인덱스가 변경되었지만 이전에 감지하지 못한 경우 처리
@@ -1545,10 +1470,21 @@ function updateTimer(status) {
             window.lastElapsedTime = status.elapsedTime;
         }
         
-        // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트)
+        // 세그먼트 그래프 업데이트 (마스코트 위치 업데이트 및 펄스 애니메이션)
         if (window.currentWorkout && window.currentWorkout.segments) {
             const currentSegmentIndex = status.segmentIndex !== undefined ? status.segmentIndex : -1;
             updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+            
+            // 훈련 중이면 펄스 애니메이션도 시작 (상태가 변경되었을 수 있으므로)
+            if (status.state === 'running' && window.currentTrainingState === 'running') {
+                // updateSegmentGraph 내부에서 이미 처리되지만, 확실히 하기 위해 약간의 지연 후 다시 확인
+                setTimeout(() => {
+                    if (window.currentTrainingState === 'running' && !mascotAnimationInterval) {
+                        console.log('[Bluetooth 개인 훈련] 타이머 업데이트 시 펄스 애니메이션 재시작 시도');
+                        updateSegmentGraph(window.currentWorkout.segments, currentSegmentIndex);
+                    }
+                }, 300);
+            }
         }
     } else if (status.state === 'paused') {
         timerEl.style.color = '#ffaa00'; // 일시정지 색상
@@ -3092,6 +3028,49 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
             // 그래프 그리기 (경과시간 전달)
             const elapsedTime = window.lastElapsedTime || 0;
             drawSegmentGraph(segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
+            
+            // 펄스 애니메이션을 위한 주기적 그래프 재그리기 (훈련 중일 때만)
+            // drawGraph가 실행된 후에 펄스 애니메이션 시작 여부 확인
+            const checkAndStartPulseAnimation = () => {
+                const currentState = window.currentTrainingState || 'idle';
+                if (currentState === 'running') {
+                    // 기존 인터벌이 있으면 제거
+                    if (mascotAnimationInterval) {
+                        clearInterval(mascotAnimationInterval);
+                        mascotAnimationInterval = null;
+                    }
+                    
+                    // 100ms마다 그래프를 다시 그려서 펄스 애니메이션 효과
+                    mascotAnimationInterval = setInterval(() => {
+                        // 상태를 다시 확인 (훈련 중인지)
+                        const isRunning = window.currentTrainingState === 'running';
+                        if (window.currentWorkout && window.currentWorkout.segments && isRunning) {
+                            const elapsedTime = window.lastElapsedTime || 0;
+                            // currentSegmentIndex를 동적으로 가져오기 (상태에서)
+                            const status = window.trainingResults?.getCurrentSessionData?.();
+                            const dynamicSegmentIndex = (status && status.segmentIndex !== undefined) ? status.segmentIndex : currentSegmentIndex;
+                            drawSegmentGraph(window.currentWorkout.segments, dynamicSegmentIndex, 'individualSegmentGraph', elapsedTime);
+                        } else {
+                            // 훈련이 종료되면 애니메이션 중지
+                            if (mascotAnimationInterval) {
+                                clearInterval(mascotAnimationInterval);
+                                mascotAnimationInterval = null;
+                            }
+                        }
+                    }, 100);
+                    console.log('[Bluetooth 개인 훈련] 마스코트 펄스 애니메이션 시작 (drawGraph 후, 상태:', currentState, ')');
+                } else {
+                    // 훈련이 실행 중이 아니면 애니메이션 중지
+                    if (mascotAnimationInterval) {
+                        clearInterval(mascotAnimationInterval);
+                        mascotAnimationInterval = null;
+                        console.log('[Bluetooth 개인 훈련] 마스코트 펄스 애니메이션 중지 (drawGraph 후, 상태:', currentState, ')');
+                    }
+                }
+            };
+            
+            // drawGraph 실행 후 펄스 애니메이션 확인
+            setTimeout(checkAndStartPulseAnimation, 50);
         };
         
         // DOM이 준비될 때까지 대기 후 그리기
@@ -3104,33 +3083,7 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
             setTimeout(drawGraph, 150);
         }
         
-        // 마스코트 펄스 애니메이션을 위한 주기적 그래프 재그리기 (훈련 중일 때만)
-        if (window.currentTrainingState === 'running') {
-            // 기존 인터벌이 있으면 제거
-            if (mascotAnimationInterval) {
-                clearInterval(mascotAnimationInterval);
-            }
-            
-            // 100ms마다 그래프를 다시 그려서 펄스 애니메이션 효과
-            mascotAnimationInterval = setInterval(() => {
-                if (window.currentWorkout && window.currentWorkout.segments && window.currentTrainingState === 'running') {
-                    const elapsedTime = window.lastElapsedTime || 0;
-                    drawSegmentGraph(window.currentWorkout.segments, currentSegmentIndex, 'individualSegmentGraph', elapsedTime);
-                } else {
-                    // 훈련이 종료되면 애니메이션 중지
-                    if (mascotAnimationInterval) {
-                        clearInterval(mascotAnimationInterval);
-                        mascotAnimationInterval = null;
-                    }
-                }
-            }, 100);
-        } else {
-            // 훈련이 실행 중이 아니면 애니메이션 중지
-            if (mascotAnimationInterval) {
-                clearInterval(mascotAnimationInterval);
-                mascotAnimationInterval = null;
-            }
-        }
+        // 마스코트 펄스 애니메이션은 drawGraph 함수 내부에서 처리됨 (컨테이너 준비 후 시작)
     } else {
         console.warn('[Bluetooth 개인 훈련] drawSegmentGraph 함수를 찾을 수 없습니다.');
     }
