@@ -2075,6 +2075,27 @@ async function editUser(userId) {
       adminFieldsSection.style.display = isAdmin ? 'block' : 'none';
     }
     
+    // 관리자 비밀번호 초기화 섹션 표시/숨김 처리
+    const adminPasswordResetSection = document.getElementById('adminPasswordResetSection');
+    if (adminPasswordResetSection) {
+      adminPasswordResetSection.style.display = isAdmin ? 'block' : 'none';
+      
+      // 관리자인 경우 비밀번호 입력 필드 초기화
+      if (isAdmin) {
+        const tempPasswordEl = document.getElementById('adminTempPassword');
+        const tempPasswordConfirmEl = document.getElementById('adminTempPasswordConfirm');
+        const passwordStatusEl = document.getElementById('adminPasswordResetStatus');
+        
+        if (tempPasswordEl) tempPasswordEl.value = '';
+        if (tempPasswordConfirmEl) tempPasswordConfirmEl.value = '';
+        if (passwordStatusEl) {
+          passwordStatusEl.textContent = '';
+          passwordStatusEl.style.display = 'none';
+          passwordStatusEl.className = '';
+        }
+      }
+    }
+    
     // 폼 데이터 채우기
     const fillFormData = () => {
       // 기본 필드
@@ -2836,6 +2857,105 @@ function showPasswordStatus(message, type = 'info') {
 
 // 전역 함수로 등록
 window.changeUserPassword = changeUserPassword;
+
+/**
+ * 관리자 비밀번호 초기화 (관리자 전용)
+ * 주의: Firebase 클라이언트 SDK에서는 다른 사용자의 비밀번호를 직접 변경할 수 없습니다.
+ * 이 함수는 사용자에게 안내 메시지를 표시하고, 실제 초기화는 Firebase Admin SDK가 필요합니다.
+ */
+async function adminResetUserPassword() {
+  const tempPasswordEl = document.getElementById('adminTempPassword');
+  const tempPasswordConfirmEl = document.getElementById('adminTempPasswordConfirm');
+  const passwordStatusEl = document.getElementById('adminPasswordResetStatus');
+  const resetBtn = document.getElementById('adminResetPasswordBtn');
+  
+  if (!tempPasswordEl || !tempPasswordConfirmEl || !passwordStatusEl || !resetBtn) {
+    console.error('관리자 비밀번호 초기화 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  const tempPassword = tempPasswordEl.value.trim();
+  const tempPasswordConfirm = tempPasswordConfirmEl.value.trim();
+  
+  // 입력값 검증
+  if (!tempPassword || tempPassword.length < 6) {
+    showAdminPasswordStatus('임시 비밀번호는 6자 이상이어야 합니다.', 'error');
+    tempPasswordEl.focus();
+    return;
+  }
+  
+  if (tempPassword !== tempPasswordConfirm) {
+    showAdminPasswordStatus('임시 비밀번호가 일치하지 않습니다.', 'error');
+    tempPasswordConfirmEl.focus();
+    return;
+  }
+  
+  // 현재 수정 중인 사용자 ID 확인
+  if (!currentEditUserId) {
+    showAdminPasswordStatus('사용자 ID를 찾을 수 없습니다.', 'error');
+    return;
+  }
+  
+  try {
+    resetBtn.disabled = true;
+    resetBtn.textContent = '처리 중...';
+    showAdminPasswordStatus('비밀번호를 초기화하고 있습니다...', 'info');
+    
+    // Firebase 클라이언트 SDK에서는 다른 사용자의 비밀번호를 직접 변경할 수 없습니다.
+    // 따라서 사용자에게 안내 메시지를 표시합니다.
+    // 실제 구현을 위해서는 Firebase Admin SDK를 사용하는 백엔드 서버가 필요합니다.
+    
+    showAdminPasswordStatus(
+      '⚠️ Firebase 클라이언트 SDK에서는 다른 사용자의 비밀번호를 직접 변경할 수 없습니다.\n\n' +
+      '임시 비밀번호: ' + tempPassword + '\n\n' +
+      '이 비밀번호를 사용자에게 직접 전달해주세요. 사용자는 로그인 후 본인 비밀번호 변경 섹션에서 비밀번호를 변경할 수 있습니다.\n\n' +
+      '실제 자동 초기화 기능을 사용하려면 Firebase Admin SDK를 사용하는 백엔드 서버가 필요합니다.',
+      'info'
+    );
+    
+    // 입력 필드는 유지 (관리자가 확인할 수 있도록)
+    // tempPasswordEl.value = '';
+    // tempPasswordConfirmEl.value = '';
+    
+  } catch (error) {
+    console.error('관리자 비밀번호 초기화 실패:', error);
+    showAdminPasswordStatus('비밀번호 초기화 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'), 'error');
+  } finally {
+    resetBtn.disabled = false;
+    resetBtn.textContent = '비밀번호 초기화';
+  }
+}
+
+/**
+ * 관리자 비밀번호 초기화 상태 메시지 표시
+ */
+function showAdminPasswordStatus(message, type = 'info') {
+  const passwordStatusEl = document.getElementById('adminPasswordResetStatus');
+  if (passwordStatusEl) {
+    passwordStatusEl.textContent = message;
+    passwordStatusEl.className = '';
+    passwordStatusEl.style.display = 'block';
+    passwordStatusEl.style.whiteSpace = 'pre-line'; // 줄바꿈 허용
+    
+    // 타입에 따른 스타일 적용
+    if (type === 'success') {
+      passwordStatusEl.style.background = '#d1fae5';
+      passwordStatusEl.style.color = '#059669';
+      passwordStatusEl.style.border = '1px solid #10b981';
+    } else if (type === 'error') {
+      passwordStatusEl.style.background = '#fee2e2';
+      passwordStatusEl.style.color = '#dc2626';
+      passwordStatusEl.style.border = '1px solid #ef4444';
+    } else {
+      passwordStatusEl.style.background = '#eef2ff';
+      passwordStatusEl.style.color = '#667eea';
+      passwordStatusEl.style.border = '1px solid #818cf8';
+    }
+  }
+}
+
+// 전역 함수로 등록
+window.adminResetUserPassword = adminResetUserPassword;
 window.deleteUser = deleteUser;
 window.saveUser = saveUser;
 window.selectProfile = selectUser;
