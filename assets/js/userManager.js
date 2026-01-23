@@ -775,6 +775,8 @@ async function apiGetUsers() {
     return { success: false, error: error.message };
   }
 }
+// 전역 노출 (즉시 사용 가능하도록)
+window.apiGetUsers = window.apiGetUsers || apiGetUsers;
 
 /**
  * 특정 사용자 조회
@@ -804,6 +806,8 @@ async function apiGetUser(id) {
     return { success: false, error: error.message };
   }
 }
+// 전역 노출 (즉시 사용 가능하도록)
+window.apiGetUser = window.apiGetUser || apiGetUser;
 
 /**
  * 새 사용자 생성
@@ -858,6 +862,8 @@ async function apiCreateUser(userData) {
     return { success: false, error: error.message };
   }
 }
+// 전역 노출 (즉시 사용 가능하도록)
+window.apiCreateUser = window.apiCreateUser || apiCreateUser;
 
 /**
  * 사용자 정보 업데이트
@@ -898,6 +904,8 @@ async function apiUpdateUser(id, userData) {
     return { success: false, error: error.message };
   }
 }
+// 전역 노출 (즉시 사용 가능하도록)
+window.apiUpdateUser = window.apiUpdateUser || apiUpdateUser;
 
 /**
  * 사용자 삭제
@@ -919,6 +927,8 @@ async function apiDeleteUser(id) {
     return { success: false, error: error.message };
   }
 }
+// 전역 노출 (즉시 사용 가능하도록)
+window.apiDeleteUser = window.apiDeleteUser || apiDeleteUser;
 
 // ========== 기존 호환성 함수들 (유지) ==========
 
@@ -1677,8 +1687,7 @@ async function editUser(userId) {
       modalTitle.textContent = `${user.name || '사용자'} 정보 수정`;
     }
     
-    // 관리자 전용 필드 섹션 표시/숨김 처리
-    const viewerGrade = (typeof getViewerGrade === 'function' ? getViewerGrade() : '2');
+    // 관리자 전용 필드 섹션 표시/숨김 처리 (위에서 선언한 viewerGrade 재사용)
     const isAdmin = (viewerGrade === '1');
     const adminFieldsSection = document.getElementById('editAdminFieldsSection');
     if (adminFieldsSection) {
