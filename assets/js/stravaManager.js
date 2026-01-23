@@ -183,9 +183,11 @@ async function fetchAndProcessStravaData() {
     }
 
     // 기존 활동 ID 목록 조회
+    console.log('[fetchAndProcessStravaData] 기존 활동 ID 조회 시작...');
     const existingIds = await (typeof window.getExistingStravaActivityIds === 'function' 
       ? window.getExistingStravaActivityIds() 
       : Promise.resolve(new Set()));
+    console.log(`[fetchAndProcessStravaData] 기존 활동 ID ${existingIds.size}개 발견`);
 
     // 각 사용자별로 처리
     for (const userDoc of usersSnapshot.docs) {
@@ -240,6 +242,13 @@ async function fetchAndProcessStravaData() {
         // Firebase에 저장
         if (typeof window.saveStravaActivityToFirebase === 'function') {
           try {
+            console.log(`[fetchAndProcessStravaData] 활동 저장 시도:`, {
+              activity_id: actId,
+              userId: userId,
+              title: title,
+              date: dateStr
+            });
+            
             const saveResult = await window.saveStravaActivityToFirebase({
               activity_id: actId,
               date: dateStr,
@@ -250,15 +259,30 @@ async function fetchAndProcessStravaData() {
               user_id: userId
             });
 
-            if (saveResult.isNew) {
+            console.log(`[fetchAndProcessStravaData] 저장 결과:`, saveResult);
+
+            if (saveResult && saveResult.isNew) {
               existingIds.add(actId);
               newCount += 1;
               totalTss += tss;
+              console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료: ${actId} (${newCount}번째)`);
+            } else {
+              console.log(`[fetchAndProcessStravaData] ⚠️ 이미 존재하는 활동: ${actId}`);
             }
           } catch (saveError) {
-            console.error(`[fetchAndProcessStravaData] 활동 저장 실패 (${actId}):`, saveError);
-            errors.push(`활동 ${actId} 저장 실패: ${saveError.message}`);
+            console.error(`[fetchAndProcessStravaData] ❌ 활동 저장 실패 (${actId}):`, saveError);
+            console.error(`[fetchAndProcessStravaData] 에러 상세:`, {
+              errorCode: saveError.code,
+              errorMessage: saveError.message,
+              errorStack: saveError.stack,
+              activityId: actId,
+              userId: userId
+            });
+            errors.push(`활동 ${actId} 저장 실패: ${saveError.message || saveError.code || '알 수 없는 오류'}`);
           }
+        } else {
+          console.error(`[fetchAndProcessStravaData] ❌ saveStravaActivityToFirebase 함수가 정의되지 않았습니다.`);
+          errors.push(`saveStravaActivityToFirebase 함수가 없습니다.`);
         }
       }
 

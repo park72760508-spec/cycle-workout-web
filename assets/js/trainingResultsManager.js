@@ -215,14 +215,39 @@ async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
  */
 async function saveStravaActivityToFirebase(activity) {
   try {
+    console.log('[saveStravaActivityToFirebase] 저장 시작:', activity);
+    
     const userId = String(activity.user_id || '');
     if (!userId) {
       throw new Error('user_id가 필요합니다.');
     }
     
+    // Firestore 초기화 확인
+    if (!window.firestore) {
+      throw new Error('Firestore가 초기화되지 않았습니다.');
+    }
+    
+    // 현재 로그인한 사용자 확인
+    const currentUser = window.firebase?.auth()?.currentUser;
+    if (!currentUser) {
+      throw new Error('로그인한 사용자가 없습니다.');
+    }
+    
+    console.log('[saveStravaActivityToFirebase] 사용자 정보:', {
+      targetUserId: userId,
+      currentUserId: currentUser.uid,
+      isSameUser: currentUser.uid === userId
+    });
+    
     // users/{userId}/logs 서브컬렉션 참조
     const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
     const activityId = String(activity.activity_id || activity.id);
+    
+    if (!activityId) {
+      throw new Error('activity_id가 필요합니다.');
+    }
+    
+    console.log('[saveStravaActivityToFirebase] 중복 확인 시작:', { userId, activityId });
     
     // 중복 확인 (activity_id로 검색)
     const existingQuery = await userLogsRef
@@ -249,13 +274,34 @@ async function saveStravaActivityToFirebase(activity) {
       created_at: new Date().toISOString()
     };
     
+    console.log('[saveStravaActivityToFirebase] 저장할 데이터:', trainingLog);
+    console.log('[saveStravaActivityToFirebase] Firestore 저장 시도...');
+    
     // Firestore에 저장 (자동 생성된 문서 ID 사용)
     const docRef = await userLogsRef.add(trainingLog);
     
-    console.log('[saveStravaActivityToFirebase] ✅ 저장 완료:', { userId, activityId, logId: docRef.id });
+    console.log('[saveStravaActivityToFirebase] ✅ 저장 완료:', { 
+      userId, 
+      activityId, 
+      logId: docRef.id,
+      path: docRef.path
+    });
+    
     return { success: true, id: docRef.id, activityId: activityId, isNew: true };
   } catch (error) {
     console.error('[saveStravaActivityToFirebase] ❌ 저장 실패:', error);
+    console.error('[saveStravaActivityToFirebase] 에러 상세:', {
+      errorCode: error.code,
+      errorMessage: error.message,
+      errorStack: error.stack,
+      activity: activity
+    });
+    
+    // 권한 오류인 경우 더 명확한 메시지
+    if (error.code === 'permission-denied') {
+      throw new Error(`권한 오류: 사용자 ${activity.user_id}의 활동을 저장할 권한이 없습니다. Firestore 규칙을 확인하세요.`);
+    }
+    
     throw error;
   }
 }
@@ -266,13 +312,24 @@ async function saveStravaActivityToFirebase(activity) {
  */
 async function getExistingStravaActivityIds() {
   try {
+    console.log('[getExistingStravaActivityIds] 기존 활동 ID 조회 시작');
     const existingIds = new Set();
+    
+    // Firestore 초기화 확인
+    if (!window.firestore) {
+      console.warn('[getExistingStravaActivityIds] ⚠️ Firestore가 초기화되지 않았습니다.');
+      return new Set();
+    }
     
     // 모든 사용자의 logs 서브컬렉션에서 activity_id 조회
     const usersCollection = window.firestore.collection('users');
+    console.log('[getExistingStravaActivityIds] 사용자 목록 조회 중...');
     const usersSnapshot = await usersCollection.get();
     
+    console.log(`[getExistingStravaActivityIds] 총 ${usersSnapshot.size}명의 사용자 발견`);
+    
     // 각 사용자의 logs 서브컬렉션 조회
+    let processedUsers = 0;
     for (const userDoc of usersSnapshot.docs) {
       const userId = userDoc.id;
       const userLogsRef = userDoc.ref.collection('logs');
@@ -283,21 +340,39 @@ async function getExistingStravaActivityIds() {
           .select('activity_id')
           .get();
         
+        const userActivityCount = logsSnapshot.size;
+        if (userActivityCount > 0) {
+          console.log(`[getExistingStravaActivityIds] 사용자 ${userId}: ${userActivityCount}개의 활동 발견`);
+        }
+        
         logsSnapshot.docs.forEach(doc => {
           const data = doc.data();
           if (data.activity_id) {
             existingIds.add(String(data.activity_id));
           }
         });
+        
+        processedUsers++;
       } catch (error) {
         console.warn(`[getExistingStravaActivityIds] 사용자 ${userId}의 logs 조회 실패:`, error);
+        console.warn(`[getExistingStravaActivityIds] 에러 상세:`, {
+          errorCode: error.code,
+          errorMessage: error.message,
+          userId: userId
+        });
         // 계속 진행
       }
     }
     
+    console.log(`[getExistingStravaActivityIds] ✅ 조회 완료: ${processedUsers}명 처리, 총 ${existingIds.size}개의 기존 활동 ID 발견`);
     return existingIds;
   } catch (error) {
     console.error('[getExistingStravaActivityIds] ❌ 조회 실패:', error);
+    console.error('[getExistingStravaActivityIds] 에러 상세:', {
+      errorCode: error.code,
+      errorMessage: error.message,
+      errorStack: error.stack
+    });
     return new Set();
   }
 }
