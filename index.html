@@ -3644,7 +3644,13 @@
         }
         
         const email = window.phoneToEmail(phone);
-        console.log(`🔐 로그인 시도: ${email}`);
+        // 전화번호를 "010-1234-5678" 형식으로 변환 (userManager.js의 formatPhoneForDB 사용)
+        const formattedPhone = (window.formatPhoneForDB || window.formatPhoneNumber || ((p) => p))(phone);
+        console.log(`🔐 로그인 시도:`, {
+          email: email,
+          phone: phone,
+          formattedPhone: formattedPhone
+        });
         
         // 로그인 시도
         try {
