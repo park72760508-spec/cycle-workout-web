@@ -11,6 +11,8 @@
     
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
     <script src="assets/js/firebaseConfig.js"></script>
     
     <!-- Google Apps Script URL 설정 -->
@@ -349,6 +351,47 @@
             display: none;
         }
 
+        /* 축하 오버레이 애니메이션 (모바일과 동일) */
+        @keyframes celebrationPulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5), 0 0 100px rgba(255, 107, 53, 0.3);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: 0 25px 70px rgba(255, 215, 0, 0.6), 0 0 120px rgba(255, 107, 53, 0.4);
+            }
+        }
+        
+        @keyframes celebrationBounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -812,11 +855,11 @@
     </div>
 
     <!-- 훈련 결과 팝업 -->
-    <div id="trainingResultModal" class="training-result-modal hidden">
-        <div class="training-result-background">
-            <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" />
+    <div id="trainingResultModal" class="training-result-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); display: flex; align-items: center; justify-content: center; z-index: 10000; animation: fadeIn 0.3s ease-out;">
+        <div class="training-result-background" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.1;">
+            <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="result-background-logo" style="max-width: 400px; max-height: 400px; width: 100%; height: auto; object-fit: contain; opacity: 0.08; filter: blur(1px);" />
         </div>
-        <div class="training-result-content">
+        <div class="training-result-content" style="position: relative; background: rgba(30, 30, 30, 0.95); border: 2px solid #00d4aa; border-radius: 12px; padding: 16px 20px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0, 212, 170, 0.3); animation: slideUp 0.4s ease-out; backdrop-filter: blur(10px);">
             <!-- 저장 중 상태 표시 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동) -->
             <div id="bluetoothResultSavingState" class="bluetooth-result-saving-state" style="display: none;">
                 <div class="bluetooth-saving-spinner"></div>
@@ -829,37 +872,103 @@
                 <h2 class="result-title">수고하셨습니다</h2>
                 <p class="result-subtitle">훈련 결과가 저장되었습니다</p>
             </div>
-            <div class="result-stats">
-                <div class="result-stat-item">
-                    <div class="result-stat-label">훈련 시간</div>
-                    <div class="result-stat-value" id="result-duration">0분</div>
+            <div class="result-stats" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                <div class="result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">훈련 시간</div>
+                    <div class="result-stat-value" id="result-duration" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0분</div>
                 </div>
-                <div class="result-stat-item">
-                    <div class="result-stat-label">평균 파워</div>
-                    <div class="result-stat-value" id="result-avg-power">0W</div>
+                <div class="result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">평균 파워</div>
+                    <div class="result-stat-value" id="result-avg-power" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0W</div>
                 </div>
-                <div class="result-stat-item">
-                    <div class="result-stat-label">NP</div>
-                    <div class="result-stat-value" id="result-np">0W</div>
+                <div class="result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">NP</div>
+                    <div class="result-stat-value" id="result-np" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0W</div>
                 </div>
-                <div class="result-stat-item">
-                    <div class="result-stat-label">TSS</div>
-                    <div class="result-stat-value" id="result-tss">0</div>
+                <div class="result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">TSS</div>
+                    <div class="result-stat-value" id="result-tss" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0</div>
                 </div>
-                <div class="result-stat-item">
-                    <div class="result-stat-label">평균 심박수</div>
-                    <div class="result-stat-value" id="result-hr-avg">0bpm</div>
+                <div class="result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">평균 심박수</div>
+                    <div class="result-stat-value" id="result-hr-avg" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0bpm</div>
                 </div>
-                <div class="result-stat-item">
-                    <div class="result-stat-label">칼로리</div>
-                    <div class="result-stat-value" id="result-calories">0kcal</div>
+                <div class="result-stat-item" style="background: rgba(0, 212, 170, 0.1); border: 1px solid rgba(0, 212, 170, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">칼로리</div>
+                    <div class="result-stat-value" id="result-calories" style="font-size: 1.1em; font-weight: bold; color: #00d4aa; text-shadow: 0 0 8px rgba(0, 212, 170, 0.4);">0kcal</div>
                 </div>
             </div>
-            <button class="result-close-btn" onclick="closeTrainingResultModal()">확인</button>
+            <!-- 마일리지 정보 (주황색톤) - 모바일과 동일 -->
+            <div class="result-stats" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; margin-top: 8px;">
+                <div class="result-stat-item" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">누적 포인트</div>
+                    <div class="result-stat-value" id="result-acc-points" style="font-size: 1.1em; font-weight: bold; color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">0</div>
+                </div>
+                <div class="result-stat-item" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">보유 포인트</div>
+                    <div class="result-stat-value" id="result-rem-points" style="font-size: 1.1em; font-weight: bold; color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">0</div>
+                </div>
+                <div class="result-stat-item" style="background: rgba(251, 146, 60, 0.1); border: 1px solid rgba(251, 146, 60, 0.3); border-radius: 6px; padding: 6px 8px; text-align: center;">
+                    <div class="result-stat-label" style="font-size: 0.7em; color: #aaa; margin-bottom: 3px; font-weight: 500;">획득 포인트</div>
+                    <div class="result-stat-value" id="result-earned-points" style="font-size: 1.1em; font-weight: bold; color: #fb923c; text-shadow: 0 0 8px rgba(251, 146, 60, 0.4);">0</div>
+                </div>
+            </div>
+            <button class="result-close-btn" onclick="closeTrainingResultModal()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px; color: #000; font-size: 1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 212, 170, 0.4);">확인</button>
             </div>
         </div>
     </div>
+    
+    <!-- 축하 오버레이 (마일리지 연장 시) - 모바일과 동일한 디자인 -->
+    <div id="bluetoothMileageCelebrationModal" class="bluetooth-mileage-celebration-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 10001; animation: fadeIn 0.5s ease-out;">
+      <div class="celebration-content" style="position: relative; background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffd700 100%); border: 3px solid #ffd700; border-radius: 20px; padding: 30px 25px; max-width: 90%; width: 400px; text-align: center; box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5), 0 0 100px rgba(255, 107, 53, 0.3); animation: celebrationPulse 2s ease-in-out infinite; transform-origin: center;">
+        <div class="celebration-icon" style="font-size: 4em; margin-bottom: 15px; animation: celebrationBounce 1s ease-in-out infinite; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));">🎉</div>
+        <h2 class="celebration-title" style="font-size: 1.4em; font-weight: bold; color: #fff; margin: 0 0 15px 0; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3); line-height: 1.3;">축하합니다!</h2>
+        <div class="celebration-message" id="bluetooth-celebration-message" style="font-size: 1em; color: #fff; line-height: 1.6; margin-bottom: 20px; text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);">
+        </div>
+        <button class="celebration-close-btn" onclick="closeBluetoothMileageCelebration()" style="width: 100%; padding: 14px; background: rgba(255, 255, 255, 0.95); border: 2px solid #ffd700; border-radius: 10px; color: #ff6b35; font-size: 1.1em; font-weight: bold; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);">확인</button>
+      </div>
+    </div>
 
+    <!-- Firebase v9 Modular SDK (훈련 결과 저장용) -->
+    <script type="module">
+      import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+      import { getFirestore } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+      
+      const firebaseConfig = {
+        apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
+        authDomain: "stelvio-ai.firebaseapp.com",
+        projectId: "stelvio-ai",
+        storageBucket: "stelvio-ai.firebasestorage.app",
+        messagingSenderId: "752285835508",
+        appId: "1:752285835508:web:0662a24874209ebb483ea1"
+      };
+      
+      try {
+        const appV9 = initializeApp(firebaseConfig, 'bluetoothIndividualV9');
+        window.firestoreV9 = getFirestore(appV9);
+        console.log('✅ Bluetooth 개인 훈련 대시보드 - Firebase v9 Modular SDK 초기화 완료');
+      } catch (error) {
+        console.error('❌ Bluetooth 개인 훈련 대시보드 - Firebase v9 초기화 실패:', error);
+      }
+    </script>
+    
+    <!-- 훈련 결과 저장 서비스 (Firebase Firestore v9) -->
+    <script type="module">
+      import { saveTrainingSession, getUserTrainingLogs } from './assets/js/trainingResultService.js';
+      
+      // 전역 함수로 노출
+      window.saveTrainingSession = async (userId, trainingData) => {
+        return await saveTrainingSession(userId, trainingData, window.firestoreV9);
+      };
+      
+      // 사용자 훈련 로그 조회 함수 노출
+      window.getUserTrainingLogs = async (userId, options) => {
+        return await getUserTrainingLogs(userId, options, window.firestoreV9);
+      };
+      
+      console.log('✅ Bluetooth 개인 훈련 대시보드 - 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
+    </script>
+    
     <script src="assets/js/workoutManager.js"></script>
     <script src="assets/js/resultManager.js"></script>
     
