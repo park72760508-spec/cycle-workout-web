@@ -271,6 +271,8 @@ async function saveStravaActivityToFirebase(activity) {
       user_id: userId,
       // 추가 필드: Strava 활동임을 표시
       source: 'strava',
+      // TSS 포인트 적립 여부 추적 (중복 적립 방지)
+      tss_applied: false,
       created_at: new Date().toISOString()
     };
     
@@ -377,9 +379,96 @@ async function getExistingStravaActivityIds() {
   }
 }
 
+/**
+ * 사용자의 스트라바 활동 중 TSS 포인트가 아직 적립되지 않은 활동 조회
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<Map<string, {docId: string, tss: number, date: string}>>} activityId를 키로 하는 Map
+ */
+async function getUnappliedStravaActivities(userId) {
+  try {
+    if (!window.firestore) {
+      console.warn('[getUnappliedStravaActivities] ⚠️ Firestore가 초기화되지 않았습니다.');
+      return new Map();
+    }
+    
+    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+    
+    // source가 'strava'이고 tss_applied가 false이거나 없는 활동 조회
+    const logsSnapshot = await userLogsRef
+      .where('source', '==', 'strava')
+      .get();
+    
+    const unappliedActivities = new Map();
+    
+    logsSnapshot.docs.forEach(doc => {
+      const data = doc.data();
+      const activityId = data.activity_id;
+      const tssApplied = data.tss_applied === true;
+      
+      // tss_applied가 false이거나 없는 경우만 포함
+      if (activityId && !tssApplied) {
+        unappliedActivities.set(String(activityId), {
+          docId: doc.id,
+          tss: Number(data.tss || 0),
+          date: data.date || '',
+          title: data.title || ''
+        });
+      }
+    });
+    
+    console.log(`[getUnappliedStravaActivities] 사용자 ${userId}: TSS 미적립 활동 ${unappliedActivities.size}개 발견`);
+    return unappliedActivities;
+  } catch (error) {
+    console.error('[getUnappliedStravaActivities] ❌ 조회 실패:', error);
+    return new Map();
+  }
+}
+
+/**
+ * 스트라바 활동의 TSS 포인트 적립 완료 표시
+ * @param {string} userId - 사용자 ID
+ * @param {string} activityId - 스트라바 활동 ID
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function markStravaActivityTssApplied(userId, activityId) {
+  try {
+    if (!window.firestore) {
+      throw new Error('Firestore가 초기화되지 않았습니다.');
+    }
+    
+    const userLogsRef = window.firestore.collection('users').doc(userId).collection('logs');
+    
+    // activity_id로 문서 찾기
+    const querySnapshot = await userLogsRef
+      .where('activity_id', '==', String(activityId))
+      .where('source', '==', 'strava')
+      .limit(1)
+      .get();
+    
+    if (querySnapshot.empty) {
+      console.warn(`[markStravaActivityTssApplied] 활동을 찾을 수 없음: ${activityId}`);
+      return { success: false, error: 'Activity not found' };
+    }
+    
+    const doc = querySnapshot.docs[0];
+    await doc.ref.update({
+      tss_applied: true,
+      tss_applied_at: new Date().toISOString()
+    });
+    
+    console.log(`[markStravaActivityTssApplied] ✅ TSS 적립 완료 표시: ${activityId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('[markStravaActivityTssApplied] ❌ 업데이트 실패:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 // 전역 함수로 등록
 window.saveTrainingResultToFirebase = saveTrainingResultToFirebase;
 window.saveScheduleResultToFirebase = saveScheduleResultToFirebase;
 window.getTrainingResultsFromFirebase = getTrainingResultsFromFirebase;
 window.saveStravaActivityToFirebase = saveStravaActivityToFirebase;
 window.getExistingStravaActivityIds = getExistingStravaActivityIds;
+window.getUnappliedStravaActivities = getUnappliedStravaActivities;
+window.markStravaActivityTssApplied = markStravaActivityTssApplied;
