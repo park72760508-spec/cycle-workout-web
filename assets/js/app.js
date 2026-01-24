@@ -14047,14 +14047,28 @@ function startMobileMascotPulseAnimation() {
       return;
     }
     
-    // 모바일 개인훈련 대시보드는 startMobileTrainingTimerLoop()에서 독립적으로 관리됨
-    // 이 함수는 모바일 화면의 세그먼트 그래프를 업데이트하지 않음 (다른 화면과의 간섭 방지)
     // 워크아웃이 없으면 애니메이션 중지
     if (!window.currentWorkout || !window.currentWorkout.segments) {
       if (window.mobileMascotAnimationInterval) {
         clearInterval(window.mobileMascotAnimationInterval);
         window.mobileMascotAnimationInterval = null;
       }
+      return;
+    }
+    
+    // 모바일 훈련 상태 확인
+    const mts = window.mobileTrainingState;
+    if (!mts) {
+      return;
+    }
+    
+    // 펄스 애니메이션을 위해 세그먼트 그래프를 주기적으로 다시 그리기
+    // drawSegmentGraph 함수가 펄스 애니메이션을 포함하여 그려줌
+    // 훈련이 시작되었는지 확인 (workoutStartMs가 있으면 시작됨)
+    if (typeof drawSegmentGraph === 'function') {
+      const currentSegIndex = (mts.workoutStartMs && mts.segIndex !== undefined) ? mts.segIndex : 0;
+      const elapsedTime = (mts.workoutStartMs && mts.elapsedSec !== undefined) ? mts.elapsedSec : 0;
+      drawSegmentGraph(window.currentWorkout.segments, currentSegIndex, 'mobileIndividualSegmentGraph', elapsedTime);
     }
   }, 100);
   
@@ -14421,6 +14435,11 @@ function startMobileWorkout() {
 
   // 모바일 대시보드 UI 초기 업데이트
   updateMobileDashboardUI();
+  
+  // 초기 세그먼트 그래프 그리기 (펄스 애니메이션 포함)
+  if (typeof drawSegmentGraph === 'function' && w.segments && w.segments.length > 0) {
+    drawSegmentGraph(w.segments, 0, 'mobileIndividualSegmentGraph', 0);
+  }
   
   // 마스코트 펄스 애니메이션을 위한 주기적 그래프 재그리기 시작
   startMobileMascotPulseAnimation();
