@@ -1339,16 +1339,19 @@ Output Format (JSON Only):
           setFitnessData(chartData);
         }
         
+        /* [Hybrid Logic] Supports both PC (Direct) and Mobile (Proxy) */
         async function loadRecentLogs() {
+          // Prevent duplicate loading
           if (logsLoadedRef.current) return;
           if (!userProfile || !userProfile.id) {
             setLogsLoading(false);
             return;
           }
+          
           setLogsLoading(true);
           setLogsLoadError(null);
-          var profile = userProfile;
-
+          
+          // Clear any existing intervals/timeouts
           if (proxyTimeoutRef.current) {
             clearTimeout(proxyTimeoutRef.current);
             proxyTimeoutRef.current = null;
@@ -1357,82 +1360,104 @@ Output Format (JSON Only):
             clearInterval(requestIntervalRef.current);
             requestIntervalRef.current = null;
           }
+          
+          var directLoadSuccess = false;
+          var profile = userProfile;
 
-          var isInIframe = window.parent && window.parent !== window;
-          var parentDB = null;
-          if (isInIframe) {
-            try {
-              parentDB = window.parent.firestore || (window.parent.firebase && typeof window.parent.firebase.firestore === 'function' ? window.parent.firebase.firestore() : null);
-            } catch (e) {
-              parentDB = null;
-            }
-          }
-          var localDB = window.firestore || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 ? firebase.firestore() : null);
-          var db = parentDB || localDB;
-
-          // --- Track 1: Direct Access (PC / parent or local Firestore) ---
-          if (db && profile && profile.id) {
-            (async function tryDirect() {
+          // =========================================================
+          // [Track 1] Method A: Direct Firestore Access (For PC/Fast)
+          // =========================================================
+          try {
+            // Check for parent firestore instance (Compat or Modular)
+            var parentDB = null;
+            if (window.parent && window.parent !== window) {
               try {
-                console.log('[Dashboard] 🖥️ Attempting Direct DB Access...');
-                var thirtyDaysAgo = new Date();
-                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-                var logsSnapshot;
-                try {
-                  logsSnapshot = await db.collection('users').doc(profile.id).collection('logs')
-                    .where('date', '>=', dateStr)
-                    .orderBy('date', 'desc')
-                    .limit(50)
-                    .get();
-                } catch (idxErr) {
-                  if (String(idxErr.message || '').indexOf('index') !== -1) {
-                    logsSnapshot = await db.collection('users').doc(profile.id).collection('logs').limit(100).get();
-                  } else {
-                    throw idxErr;
-                  }
-                }
-                var logs = [];
-                logsSnapshot.forEach(function(doc) {
-                  var d = doc.data();
-                  if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
-                    logs.push({ id: doc.id, ...d });
-                  }
-                });
-                logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-                logs = logs.slice(0, 50);
-                if (!isMounted || logsLoadedRef.current) return;
-                console.log('[Dashboard] ✅ Direct Access Success:', logs.length, 'logs');
-                if (requestIntervalRef.current) {
-                  clearInterval(requestIntervalRef.current);
-                  requestIntervalRef.current = null;
-                }
-                if (proxyTimeoutRef.current) {
-                  clearTimeout(proxyTimeoutRef.current);
-                  proxyTimeoutRef.current = null;
-                }
-                applyLogsToState(logs, profile);
+                parentDB = window.parent.firestore || (window.parent.firebase && typeof window.parent.firebase.firestore === 'function' ? window.parent.firebase.firestore() : null);
               } catch (e) {
-                console.warn('[Dashboard] ⚠️ Direct Access Failed (fallback to Proxy):', e);
-                if (!isInIframe && isMounted && !logsLoadedRef.current) {
-                  setLogsLoadError('데이터 로드 실패: ' + (e.message || String(e)).substring(0, 80));
-                  setLogsLoading(false);
-                  setLogsLoaded(true);
-                  logsLoadedRef.current = true;
+                parentDB = null;
+              }
+            }
+            // Also try local firestore as fallback
+            var localDB = window.firestore || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 ? firebase.firestore() : null);
+            var db = parentDB || localDB;
+            
+            // Only attempt if DB and User ID exist
+            if (db && profile && profile.id) {
+              console.log('[Dashboard] 🖥️ PC Environment Detected: Attempting Direct DB Access...');
+              
+              // Calculate date 30 days ago
+              var thirtyDaysAgo = new Date();
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+              
+              // Query Firestore directly (with index fallback)
+              var logsSnapshot;
+              try {
+                logsSnapshot = await db.collection('users')
+                  .doc(profile.id)
+                  .collection('logs')
+                  .where('date', '>=', dateStr)
+                  .orderBy('date', 'desc')
+                  .limit(50)
+                  .get();
+              } catch (idxErr) {
+                if (String(idxErr.message || '').indexOf('index') !== -1) {
+                  logsSnapshot = await db.collection('users').doc(profile.id).collection('logs').limit(100).get();
+                } else {
+                  throw idxErr;
                 }
               }
-            })();
+
+              var logs = [];
+              logsSnapshot.forEach(function(doc) {
+                var d = doc.data();
+                // Filter: source='strava' or no source (exclude Stelvio direct entries
+                if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                  logs.push({ id: doc.id, ...d });
+                }
+              });
+              logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+              logs = logs.slice(0, 50);
+              
+              // If successful, render immediately and skip polling
+              if (!isMounted || logsLoadedRef.current) return;
+              console.log('[Dashboard] ✅ Direct Access Success:', logs.length, 'logs found');
+              
+              // Clear any proxy polling that might have started
+              if (requestIntervalRef.current) {
+                clearInterval(requestIntervalRef.current);
+                requestIntervalRef.current = null;
+              }
+              if (proxyTimeoutRef.current) {
+                clearTimeout(proxyTimeoutRef.current);
+                proxyTimeoutRef.current = null;
+              }
+              
+              // Apply logs with stats/chart calculation
+              applyLogsToState(logs, profile);
+              directLoadSuccess = true;
+              return; 
+            }
+          } catch (e) {
+            console.warn('[Dashboard] ⚠️ Direct Access Failed (Likely Mobile/Security Restricted):', e);
+            // Continue to Track 2...
           }
 
-          // --- Track 2: Proxy Polling (Mobile / Bluefy fallback) ---
-          if (isInIframe && window.parent) {
+          // =========================================================
+          // [Track 2] Method B: Proxy Polling (For Mobile/Bluefy)
+          // =========================================================
+          if (!directLoadSuccess && window.parent && window.parent !== window) {
             setLogsProxyPending(true);
-            console.log('[Dashboard] 📱 Starting Proxy Polling...');
+            console.log('[Dashboard] 📱 Mobile Environment Detected: Starting Proxy Polling...');
+            
+            // Retry every 1.5 seconds until parent app responds
             function sendRequest() {
               if (!isMounted) return;
-              if (logsLoadedRef.current) return;
+              if (logsLoadedRef.current) return; // Use ref to avoid stale closure
               try {
+                // Request Data
                 window.parent.postMessage({ type: 'REQUEST_LOGS', userId: profile.id }, '*');
+                // Request Connection Status (for AI Pairing)
                 window.parent.postMessage({ type: 'REQUEST_STATUS' }, '*');
               } catch (e) {
                 console.warn('[Dashboard] postMessage 실패:', e);
@@ -1440,6 +1465,8 @@ Output Format (JSON Only):
             }
             sendRequest();
             requestIntervalRef.current = setInterval(sendRequest, 1500);
+
+            // Timeout after 15 seconds
             proxyTimeoutRef.current = setTimeout(function() {
               if (requestIntervalRef.current) {
                 clearInterval(requestIntervalRef.current);
@@ -1447,14 +1474,16 @@ Output Format (JSON Only):
               }
               proxyTimeoutRef.current = null;
               if (!isMounted) return;
-              if (logsLoadedRef.current) return;
-              setLogsLoadError('데이터 로드 실패 (앱 연결 지연)');
+              if (logsLoadedRef.current) return; // Use ref to avoid stale closure
+              console.error('[Dashboard] ❌ All Loading Methods Failed.');
+              setLogsLoadError('데이터 동기화 실패 (앱 연결 지연)');
               setLogsLoading(false);
               setLogsLoaded(true);
               setLogsProxyPending(false);
               logsLoadedRef.current = true;
             }, 15000);
-          } else if (!db && !(isInIframe && window.parent)) {
+          } else if (!directLoadSuccess && (!window.parent || window.parent === window)) {
+            // No parent and no direct access available
             setLogsLoadError('Firestore 접근 불가. 앱 내 대시보드에서 이용해 주세요.');
             setLogsLoading(false);
             setLogsLoaded(true);
