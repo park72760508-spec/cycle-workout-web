@@ -6,20 +6,24 @@
   <meta name="description" content="STELVIO AI - Performance Dashboard">
   <title>STELVIO AI - Performance Dashboard</title>
   
-  <!-- Tailwind CSS CDN (프로덕션에서는 빌드된 CSS 사용 권장) -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind / Babel CDN 경고 필터 (반드시 최상단, CDN 로드 전) -->
   <script>
-    // Tailwind CDN 경고 숨기기 (개발 환경)
-    if (typeof console !== 'undefined' && console.warn) {
-      const originalWarn = console.warn;
-      console.warn = function(...args) {
-        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) {
-          return; // Tailwind CDN 경고 무시
+    (function() {
+      if (typeof console === 'undefined' || !console.warn) return;
+      var orig = console.warn;
+      console.warn = function() {
+        var msg = (arguments[0] && String(arguments[0])) || '';
+        if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
+            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1)) {
+          return;
         }
-        originalWarn.apply(console, args);
+        return orig.apply(console, arguments);
       };
-    }
+    })();
   </script>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
   
   <!-- React & ReactDOM CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
