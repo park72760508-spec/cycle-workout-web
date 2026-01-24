@@ -30,6 +30,16 @@ function getViewerGrade() {
    - 기존 Google Sheets 필드 구조 완벽 유지
 ========================================================== */
 
+// 포인트 포맷팅 유틸리티 (정수, 1000 이상은 k 형식)
+function formatPoints(points) {
+  const num = Math.round(Number(points) || 0);
+  if (num >= 1000) {
+    const k = num / 1000;
+    return k % 1 === 0 ? k + 'k' : k.toFixed(1) + 'k';
+  }
+  return num.toString();
+}
+
 // Firestore users 컬렉션 참조
 // v9 Modular SDK와 v8 Compat SDK 모두 지원
 // 주의: v9 Modular SDK는 authV9와 연결되고, v8 Compat SDK는 auth와 연결됨
@@ -1670,11 +1680,11 @@ async function loadUsers() {
               <div class="user-points">
                 <span class="point-badge point-accumulated" title="누적 포인트">
                   <span class="point-icon">⭐</span>
-                  <span class="point-value">${accPoints.toLocaleString()}</span>
+                  <span class="point-value">${formatPoints(accPoints)}</span>
                 </span>
                 <span class="point-badge point-remaining" title="보유 포인트">
                   <span class="point-icon">💎</span>
-                  <span class="point-value">${remPoints.toLocaleString()}</span>
+                  <span class="point-value">${formatPoints(remPoints)}</span>
                 </span>
               </div>
             </div>
