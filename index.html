@@ -4094,7 +4094,7 @@
                 const isBasecampVisible = basecampScreen.classList.contains('active') || 
                                          window.getComputedStyle(basecampScreen).display !== 'none';
                 if (!isBasecampVisible) {
-                  console.warn('⚠️ showScreen이 작동하지 않음, 직접 전환 시도');
+                  // showScreen이 작동하지 않으면 조용히 직접 전환 (경고 제거)
                   directScreenSwitch();
                 } else {
                   console.log('✅ showScreen으로 화면 전환 성공');
@@ -6610,25 +6610,75 @@ Output Format (JSON Only):
       // 원본 함수 저장 (무한 루프 방지를 위해 로컬 변수에 저장)
       var originalShowScreenFunc = window.originalShowScreen;
       
-      // 래핑된 함수 생성
+      // 직접 화면 전환 함수 (안정적인 fallback) - 외부에 정의
+      function directScreenSwitch(screenId) {
+        var targetScreen = document.getElementById(screenId);
+        if (!targetScreen) {
+          console.error('[showScreen] 화면을 찾을 수 없습니다:', screenId);
+          return;
+        }
+        
+        // 모든 화면 숨기기 (splashScreen 제외)
+        document.querySelectorAll('.screen').forEach(function(screen) {
+          if (screen.id !== 'splashScreen' && screen.id !== screenId) {
+            screen.classList.remove('active');
+            screen.style.display = 'none';
+            screen.style.opacity = '';
+            screen.style.visibility = '';
+          }
+        });
+        
+        // 대상 화면 표시
+        targetScreen.classList.add('active');
+        targetScreen.style.display = 'block';
+        targetScreen.style.opacity = '1';
+        targetScreen.style.visibility = 'visible';
+        
+        // 스크롤을 맨 위로
+        window.scrollTo(0, 0);
+        
+        console.log('[showScreen] 직접 화면 전환 완료:', screenId);
+      }
+      
+      // 래핑된 함수 생성 - 안정적인 화면 전환 보장
       window.showScreen = function(screenId) {
-        // originalShowScreenFunc 호출 (showScheduleScreen은 직접 화면 전환하므로 무한 루프 없음)
+        console.log('[showScreen] 화면 전환 요청:', screenId);
+        
+        // originalShowScreenFunc 호출 시도
+        var originalCalled = false;
         if (typeof originalShowScreenFunc === 'function') {
           try {
             originalShowScreenFunc.apply(this, arguments);
+            originalCalled = true;
+            
+            // originalShowScreenFunc가 성공했는지 확인 (100ms 후)
+            setTimeout(function() {
+              var targetScreen = document.getElementById(screenId);
+              if (targetScreen) {
+                var isVisible = targetScreen.classList.contains('active') || 
+                               window.getComputedStyle(targetScreen).display !== 'none';
+                if (!isVisible) {
+                  console.warn('[showScreen] originalShowScreen이 화면을 표시하지 않음, 직접 전환 시도');
+                  directScreenSwitch(screenId);
+                } else {
+                  // opacity와 visibility 명시적 설정 (안전장치)
+                  targetScreen.style.opacity = '1';
+                  targetScreen.style.visibility = 'visible';
+                }
+              } else {
+                // 화면을 찾을 수 없으면 직접 전환 시도
+                directScreenSwitch(screenId);
+              }
+            }, 100);
           } catch (e) {
-            console.error('[Dashboard] Error calling originalShowScreen:', e);
-            // Fallback: 직접 화면 전환
-            document.querySelectorAll('.screen').forEach(function(screen) {
-              screen.classList.remove('active');
-              screen.style.display = 'none';
-            });
-            var targetScreen = document.getElementById(screenId);
-            if (targetScreen) {
-              targetScreen.classList.add('active');
-              targetScreen.style.display = 'block';
-            }
+            console.error('[showScreen] Error calling originalShowScreen:', e);
+            originalCalled = false;
           }
+        }
+        
+        // originalShowScreenFunc가 없거나 실패한 경우 직접 화면 전환
+        if (!originalCalled || typeof originalShowScreenFunc !== 'function') {
+          directScreenSwitch(screenId);
         }
         
         // Performance Dashboard 화면인 경우 초기화
