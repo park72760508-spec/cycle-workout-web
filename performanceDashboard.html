@@ -68,39 +68,68 @@
           databaseURL: "https://stelvio-ai-default-rtdb.firebaseio.com"
         };
         
-        // 이미 초기화되어 있는지 확인
+        // 우선순위: 기본 앱 사용 (인증 상태 공유)
         var app = null;
-        try {
-          app = firebase.app('dashboard-standalone');
-          console.log('[Dashboard] 기존 Firebase 앱 인스턴스 사용');
-        } catch (e) {
-          // 'dashboard-standalone' 이름의 앱이 없으면 새로 생성
+        var useDefaultApp = false;
+        
+        // 1순위: 기본 앱 사용 (인증 상태 공유됨)
+        if (firebase.apps.length > 0) {
           try {
-            app = firebase.initializeApp(firebaseConfig, 'dashboard-standalone');
-            console.log('[Dashboard] Firebase 독립 초기화 성공 (dashboard-standalone)');
+            app = firebase.app();
+            useDefaultApp = true;
+            console.log('[Dashboard] 기본 Firebase 앱 사용 (인증 상태 공유)');
+          } catch (e) {
+            console.warn('[Dashboard] 기본 앱 접근 실패:', e);
+          }
+        }
+        
+        // 2순위: 기본 앱이 없으면 새로 초기화 (기본 이름 사용)
+        if (!app) {
+          try {
+            app = firebase.initializeApp(firebaseConfig);
+            useDefaultApp = true;
+            console.log('[Dashboard] Firebase 기본 앱 초기화 성공');
           } catch (initErr) {
-            // 이미 기본 앱이 있으면 그것 사용
+            // 이미 초기화되어 있으면 그것 사용
             if (firebase.apps.length > 0) {
               app = firebase.app();
-              console.log('[Dashboard] 기본 Firebase 앱 사용');
+              useDefaultApp = true;
+              console.log('[Dashboard] 기존 Firebase 앱 사용');
             } else {
-              throw initErr;
+              console.error('[Dashboard] Firebase 초기화 실패:', initErr);
+              return null;
             }
           }
         }
         
-        // Auth Persistence 설정 (iOS 필수) - await로 동기화
+        // Auth 초기화 및 Persistence 설정
         var auth = null;
         if (app && firebase.auth) {
           try {
             auth = firebase.auth(app);
-            // LOCAL persistence 설정 (세션 유지) - 동기적으로 설정 시도
-            if (auth && auth.setPersistence) {
-              // setPersistence는 Promise를 반환하지만, 여기서는 비동기로 처리
-              // 호출하는 쪽에서 await로 처리하도록 함
+            
+            // 인증 상태 복원 시도 (localStorage에서)
+            if (!auth.currentUser) {
+              try {
+                // localStorage에서 인증 정보 확인
+                var storedUser = localStorage.getItem('currentUser');
+                if (storedUser) {
+                  var parsed = JSON.parse(storedUser);
+                  if (parsed && parsed.id) {
+                    console.log('[Dashboard] localStorage에서 사용자 정보 발견, 인증 상태 복원 시도');
+                    // onAuthStateChanged로 자동 복원됨 (LOCAL persistence)
+                  }
+                }
+              } catch (e) {
+                console.warn('[Dashboard] localStorage 사용자 정보 확인 실패:', e);
+              }
             }
+            
             window.auth = auth;
-            console.log('[Dashboard] Auth 초기화 완료 (Standalone)');
+            console.log('[Dashboard] Auth 초기화 완료', {
+              hasCurrentUser: !!auth.currentUser,
+              useDefaultApp: useDefaultApp
+            });
           } catch (authErr) {
             console.warn('[Dashboard] Auth 초기화 실패:', authErr);
           }
@@ -112,13 +141,15 @@
           try {
             firestore = firebase.firestore(app);
             window.firestore = firestore;
-            console.log('[Dashboard] Firestore 독립 초기화 성공');
+            console.log('[Dashboard] Firestore 초기화 성공', {
+              useDefaultApp: useDefaultApp
+            });
           } catch (fsErr) {
             console.warn('[Dashboard] Firestore 초기화 실패:', fsErr);
           }
         }
         
-        return { app: app, auth: window.auth, firestore: firestore };
+        return { app: app, auth: auth, firestore: firestore, useDefaultApp: useDefaultApp };
       } catch (e) {
         console.error('[Dashboard] Firebase 독립 초기화 실패:', e);
         return null;
@@ -806,7 +837,41 @@ Output Format (JSON Only):
                 userId = cu.uid;
                 console.log('[Dashboard] 현재 창 auth에서 사용자 ID 가져옴:', userId);
               }
-            } catch (e) {}
+            } catch (e) {
+              console.warn('[Dashboard] 현재 창 auth 접근 실패:', e);
+            }
+          }
+          
+          // 인증 상태 복원 시도 (onAuthStateChanged 대기)
+          if (!userId && typeof firebase !== 'undefined' && firebase.auth) {
+            try {
+              var auth = window.auth;
+              if (!auth && firebase.apps && firebase.apps.length > 0) {
+                auth = firebase.auth();
+                window.auth = auth;
+              }
+              if (auth) {
+                // 인증 상태 변경 리스너로 사용자 확인
+                auth.onAuthStateChanged(function(user) {
+                  if (user && user.uid && !userId) {
+                    userId = user.uid;
+                    console.log('[Dashboard] onAuthStateChanged에서 사용자 ID 가져옴:', userId);
+                    if (userId && !userProfile) {
+                      phase1Immediate();
+                    }
+                  }
+                });
+                
+                // 즉시 확인
+                var currentUser = auth.currentUser;
+                if (currentUser && currentUser.uid) {
+                  userId = currentUser.uid;
+                  console.log('[Dashboard] auth.currentUser에서 사용자 ID 가져옴:', userId);
+                }
+              }
+            } catch (e) {
+              console.warn('[Dashboard] 인증 상태 복원 시도 실패:', e);
+            }
           }
           if (!userId) {
             console.warn('[Dashboard] 사용자 ID를 찾을 수 없습니다.');
@@ -877,13 +942,25 @@ Output Format (JSON Only):
           }
           
           // Standalone Fallback (iOS Bluefy 필수)
+          // 주의: 기본 앱을 우선 사용하여 인증 상태 공유
           if (!firestore && typeof window.initFirebaseStandalone === 'function') {
             try {
               var standalone = window.initFirebaseStandalone();
               if (standalone && standalone.firestore) {
                 firestore = standalone.firestore;
                 window.firestore = firestore;
-                console.log('[Dashboard] phase2Firestore: Standalone Fallback 성공');
+                if (standalone.auth) {
+                  window.auth = standalone.auth;
+                }
+                console.log('[Dashboard] phase2Firestore: Standalone Fallback 성공', {
+                  hasAuth: !!standalone.auth,
+                  hasCurrentUser: !!(standalone.auth && standalone.auth.currentUser)
+                });
+                
+                // 인증 상태가 없으면 경고
+                if (standalone.auth && !standalone.auth.currentUser) {
+                  console.warn('[Dashboard] phase2Firestore: Standalone Fallback 사용 중이지만 인증 상태 없음 - 권한 오류 가능');
+                }
               }
             } catch (e) {
               console.warn('[Dashboard] phase2Firestore: Standalone Fallback 실패:', e);
@@ -909,9 +986,39 @@ Output Format (JSON Only):
             return;
           }
           
+          // 인증 상태 확인 (Firestore 권한 오류 방지)
+          var auth = window.auth;
+          if (auth) {
+            var currentUser = auth.currentUser;
+            if (!currentUser) {
+              console.warn('[Dashboard] phase2Firestore: 인증 상태 없음 - Firestore 권한 오류 가능성');
+              // 인증 상태 복원 대기 (최대 3초)
+              var authWaitStart = Date.now();
+              while (!auth.currentUser && (Date.now() - authWaitStart < 3000)) {
+                await new Promise(function(r) { setTimeout(r, 200); });
+              }
+              if (!auth.currentUser) {
+                console.error('[Dashboard] phase2Firestore: 인증 상태 복원 실패 - Firestore 쿼리 불가');
+                // 인증 없이도 시도 (보안 규칙에 따라 실패할 수 있음)
+              } else {
+                console.log('[Dashboard] phase2Firestore: 인증 상태 복원 성공');
+              }
+            } else {
+              console.log('[Dashboard] phase2Firestore: 인증 상태 확인됨', {
+                uid: currentUser.uid,
+                email: currentUser.email
+              });
+            }
+          } else {
+            console.warn('[Dashboard] phase2Firestore: Auth 객체 없음 - Firestore 권한 오류 가능성');
+          }
+          
           try {
             const userDoc = await firestore.collection('users').doc(userId).get();
-            if (!userDoc.exists) return;
+            if (!userDoc.exists) {
+              console.warn('[Dashboard] phase2Firestore: 사용자 문서 없음:', userId);
+              return;
+            }
             const userData = userDoc.data();
             applyProfileFromUser({ id: userId, ...userData });
           } catch (e) {
@@ -1054,6 +1161,46 @@ Output Format (JSON Only):
             setLogsLoadError(null);
           }
           
+          // 인증 상태 확인 및 복원 (Firestore 권한 오류 방지)
+          var auth = window.auth;
+          if (!auth && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+            try {
+              auth = firebase.auth();
+              window.auth = auth;
+            } catch (e) {
+              console.warn('[Dashboard] loadRecentLogs: Auth 초기화 실패:', e);
+            }
+          }
+          
+          if (auth) {
+            // 인증 상태가 없으면 복원 대기
+            if (!auth.currentUser) {
+              console.warn('[Dashboard] loadRecentLogs: 인증 상태 없음, 복원 대기...');
+              var authWaitStart = Date.now();
+              var authWaitMax = 5000; // 최대 5초 대기
+              while (!auth.currentUser && (Date.now() - authWaitStart < authWaitMax)) {
+                await new Promise(function(r) { setTimeout(r, 200); });
+              }
+              if (!auth.currentUser) {
+                console.error('[Dashboard] loadRecentLogs: 인증 상태 복원 실패 - Firestore 권한 오류 가능성');
+                if (isMounted) {
+                  setLogsLoading(false);
+                  setLogsLoadError('인증 상태가 없습니다. 로그인 후 다시 시도해주세요.');
+                  setLogsLoaded(true);
+                }
+                return;
+              } else {
+                console.log('[Dashboard] loadRecentLogs: 인증 상태 복원 성공');
+              }
+            } else {
+              console.log('[Dashboard] loadRecentLogs: 인증 상태 확인됨', {
+                uid: auth.currentUser.uid
+              });
+            }
+          } else {
+            console.warn('[Dashboard] loadRecentLogs: Auth 객체 없음 - Firestore 권한 오류 가능성');
+          }
+          
           function getFirestore() {
             // 1순위: window.firestore (현재 창)
             var fs = window.firestore;
@@ -1079,13 +1226,49 @@ Output Format (JSON Only):
             }
             
             // 4순위: Standalone Fallback (강제 독립 초기화) - iOS Bluefy 필수
+            // 주의: 기본 앱의 인증 상태를 확인하고, 있으면 기본 앱 사용
             if (!fs && typeof window.initFirebaseStandalone === 'function') {
               try {
-                var standalone = window.initFirebaseStandalone();
-                if (standalone && standalone.firestore) {
-                  fs = standalone.firestore;
-                  window.firestore = fs;
-                  console.log('[Dashboard] Firebase Standalone Fallback 성공 (iOS Bluefy 호환)');
+                // 기본 앱의 인증 상태 확인
+                var defaultAuth = null;
+                var defaultFirestore = null;
+                if (firebase.apps && firebase.apps.length > 0) {
+                  try {
+                    defaultAuth = firebase.auth();
+                    defaultFirestore = firebase.firestore();
+                    if (defaultAuth && defaultAuth.currentUser) {
+                      // 기본 앱에 인증 상태가 있으면 기본 앱 사용 (인증 상태 공유)
+                      fs = defaultFirestore;
+                      window.firestore = fs;
+                      window.auth = defaultAuth;
+                      console.log('[Dashboard] 기본 앱 사용 (인증 상태 있음)', {
+                        uid: defaultAuth.currentUser.uid
+                      });
+                    }
+                  } catch (e) {
+                    console.warn('[Dashboard] 기본 앱 확인 실패:', e);
+                  }
+                }
+                
+                // 기본 앱에 인증 상태가 없으면 Standalone 사용
+                if (!fs) {
+                  var standalone = window.initFirebaseStandalone();
+                  if (standalone && standalone.firestore) {
+                    fs = standalone.firestore;
+                    window.firestore = fs;
+                    if (standalone.auth) {
+                      window.auth = standalone.auth;
+                    }
+                    console.log('[Dashboard] Firebase Standalone Fallback 성공 (iOS Bluefy 호환)', {
+                      hasAuth: !!standalone.auth,
+                      hasCurrentUser: !!(standalone.auth && standalone.auth.currentUser)
+                    });
+                    
+                    // 인증 상태 확인 및 경고
+                    if (standalone.auth && !standalone.auth.currentUser) {
+                      console.warn('[Dashboard] Standalone Fallback: 인증 상태 없음 - Firestore 권한 오류 가능성');
+                    }
+                  }
                 }
               } catch (e) {
                 console.warn('[Dashboard] Standalone Fallback 실패:', e);
@@ -1225,7 +1408,35 @@ Output Format (JSON Only):
                 });
               }
             } catch (queryErr) {
-              console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr);
+              var errMsg = queryErr && queryErr.message ? queryErr.message : String(queryErr);
+              var isPermissionError = errMsg.indexOf('permissions') !== -1 || errMsg.indexOf('권한') !== -1;
+              
+              console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr, {
+                isPermissionError: isPermissionError,
+                hasAuth: !!auth,
+                hasCurrentUser: !!(auth && auth.currentUser)
+              });
+              
+              // 권한 오류인 경우 인증 상태 재확인
+              if (isPermissionError && auth && !auth.currentUser) {
+                console.warn('[Dashboard] 권한 오류: 인증 상태 없음, 복원 시도...');
+                // 인증 상태 복원 대기 (최대 3초)
+                var authWaitStart = Date.now();
+                while (!auth.currentUser && (Date.now() - authWaitStart < 3000)) {
+                  await new Promise(function(r) { setTimeout(r, 200); });
+                }
+                if (auth.currentUser) {
+                  console.log('[Dashboard] 인증 상태 복원 성공, 재시도...');
+                  // 재시도 (인증 상태가 복원되었으므로)
+                  if (currentRetry < maxRetries && isMounted) {
+                    setTimeout(function() {
+                      if (isMounted) loadRecentLogs(currentRetry + 1);
+                    }, retryDelay);
+                    return;
+                }
+              }
+            }
+              
               if (currentRetry < maxRetries && isMounted) {
                 console.warn('[Dashboard] 훈련 로그 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
                 setTimeout(function() {
@@ -1236,11 +1447,13 @@ Output Format (JSON Only):
               // 최종 실패 시에도 빈 배열로 설정하되, 명확히 로그
               if (isMounted) {
                 console.error('[Dashboard] 훈련 로그 로드 최종 실패 (재시도 ' + maxRetries + '회 후):', queryErr);
-                var errMsg = queryErr && queryErr.message ? queryErr.message : String(queryErr);
+                var displayError = isPermissionError 
+                  ? 'Firestore 권한 오류: 로그인 상태를 확인하거나 잠시 후 다시 시도해주세요.'
+                  : ('훈련 로그 조회 실패: ' + errMsg.substring(0, 100));
                 setRecentLogs([]);
                 setLogsLoaded(true);
                 setLogsLoading(false);
-                setLogsLoadError('훈련 로그 조회 실패: ' + errMsg.substring(0, 100));
+                setLogsLoadError(displayError);
                 // 주간 목표는 0으로 설정
                 setStats(function(prev) {
                   var challenge = userProfile.challenge || 'Fitness';
