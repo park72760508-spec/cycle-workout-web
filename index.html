@@ -6586,18 +6586,43 @@ Output Format (JSON Only):
       // window.originalShowScreen이 이미 있으면 사용, 없으면 현재 showScreen 저장
       if (typeof window.originalShowScreen === 'undefined') {
         window.originalShowScreen = window.showScreen || function(screenId) {
-          console.log('[Dashboard] showScreen fallback:', screenId);
+          // Fallback: 직접 화면 전환
+          document.querySelectorAll('.screen').forEach(function(screen) {
+            screen.classList.remove('active');
+            screen.style.display = 'none';
+          });
+          var targetScreen = document.getElementById(screenId);
+          if (targetScreen) {
+            targetScreen.classList.add('active');
+            targetScreen.style.display = 'block';
+          }
         };
       }
       
-      // 원본 함수 저장 (무한 루프 방지를 위해)
+      // 원본 함수 저장 (무한 루프 방지를 위해 로컬 변수에 저장)
       var originalShowScreenFunc = window.originalShowScreen;
       
       // 래핑된 함수 생성
       window.showScreen = function(screenId) {
-        // 무한 루프 방지: originalShowScreenFunc를 직접 호출 (window.originalShowScreen이 아닌)
+        // 무한 루프 방지: originalShowScreenFunc를 직접 호출
+        // originalShowScreenFunc가 showScheduleScreen이어도, showScheduleScreen 내부에서
+        // window.originalShowScreen을 호출하므로 무한 루프가 발생하지 않음
         if (typeof originalShowScreenFunc === 'function') {
-          originalShowScreenFunc.apply(this, arguments);
+          try {
+            originalShowScreenFunc.apply(this, arguments);
+          } catch (e) {
+            console.error('[Dashboard] Error calling originalShowScreen:', e);
+            // Fallback: 직접 화면 전환
+            document.querySelectorAll('.screen').forEach(function(screen) {
+              screen.classList.remove('active');
+              screen.style.display = 'none';
+            });
+            var targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+              targetScreen.classList.add('active');
+              targetScreen.style.display = 'block';
+            }
+          }
         }
         
         // Performance Dashboard 화면인 경우 초기화
