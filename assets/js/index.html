@@ -26,7 +26,11 @@
       getAuth, 
       signInWithEmailAndPassword, 
       createUserWithEmailAndPassword,
-      updateProfile
+      updateProfile,
+      sendPasswordResetEmail,
+      updatePassword,
+      reauthenticateWithCredential,
+      EmailAuthProvider
     } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
     import { getFirestore, collection, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
     
@@ -77,6 +81,10 @@
     window.signInWithEmailAndPasswordV9 = signInWithEmailAndPassword;
     window.createUserWithEmailAndPasswordV9 = createUserWithEmailAndPassword;
     window.updateProfileV9 = updateProfile;
+    window.sendPasswordResetEmailV9 = sendPasswordResetEmail;
+    window.updatePasswordV9 = updatePassword;
+    window.reauthenticateWithCredentialV9 = reauthenticateWithCredential;
+    window.EmailAuthProviderV9 = EmailAuthProvider;
 
     window.saveNewUserToFirestore = async (uid, userData) => {
       if (!firestoreV9) throw new Error('Firestore V9가 초기화되지 않았습니다.');
@@ -686,6 +694,7 @@
       cursor: pointer;
       transition: all 0.2s ease;
       margin-top: 12px;
+      margin-bottom: 4px;
     }
     
     .auth-register-btn:hover:not(:disabled) {
@@ -1093,20 +1102,52 @@
             </button>
             
             <!-- 사용자 등록 버튼 -->
-            <button class="auth-register-btn" id="authRegisterBtn">
+            <button class="auth-register-btn" id="authRegisterBtn" style="margin-bottom: 4px;">
               사용자 등록
             </button>
+            
+            <!-- 비밀번호 재설정 링크 -->
+            <div class="auth-links" style="text-align: center; margin-top: 4px; margin-bottom: 0; padding: 0;">
+              <a href="#" id="forgotPasswordLink" style="color: #2e74e8; text-decoration: none; font-size: 14px; cursor: pointer; display: inline-block; padding: 4px 0;">
+                비밀번호 재설정
+              </a>
+            </div>
             
             <!-- 에러 메시지 -->
             <div class="auth-status" id="authStatus"></div>
           </div>
           
-          <div class="auth-help-card">
-            <div class="test-numbers" style="margin-top: 15px;">
-              <p style="font-size: 12px; color: #667eea; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                <img src="assets/img/email.png" alt="이메일" style="width: 1.44em; height: 1.44em; vertical-align: middle;" />
-                시스템 문의 : stelvio.ai.kr@gmail.com
-              </p>
+          <!-- 비밀번호 재설정 모달 -->
+          <div id="forgotPasswordModal" class="modal hidden" style="z-index: 10001;">
+            <div class="modal-overlay" onclick="closeForgotPasswordModal()"></div>
+            <div class="modal-content" style="max-width: 400px; padding: 24px;">
+              <div class="modal-header" style="margin-bottom: 20px;">
+                <h3 style="font-size: 1.3em; color: #333; margin: 0;">비밀번호 재설정</h3>
+                <button class="modal-close" onclick="closeForgotPasswordModal()" aria-label="닫기" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">&times;</button>
+              </div>
+              
+              <div class="modal-body">
+                <div style="background: #fef3c7; border: 1px solid #fbbf24; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                  <p style="color: #92400e; margin: 0; font-size: 13px; line-height: 1.5;">
+                    ⚠️ <strong>안내:</strong> 본 시스템은 전화번호 기반 인증을 사용하므로 실제 이메일로 비밀번호 재설정 링크를 받을 수 없습니다.<br>
+                    비밀번호를 잊으셨다면 <strong>관리자에게 문의</strong>하시거나, 관리자는 사용자 수정 화면에서 비밀번호를 초기화할 수 있습니다.
+                  </p>
+                </div>
+                
+                <div style="margin-bottom: 20px; padding: 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+                  <p style="color: #0369a1; margin: 0; font-size: 14px; font-weight: 600; text-align: center;">
+                    이메일 주소: <a href="mailto:stelvio.ai.kr@gmail.com" style="color: #0284c7; text-decoration: underline;">stelvio.ai.kr@gmail.com</a>
+                  </p>
+                </div>
+                
+                <div class="auth-status" id="forgotPasswordStatus" style="display: none; margin-bottom: 15px;"></div>
+              </div>
+              
+              <div class="modal-footer" style="display: flex; gap: 10px; margin-top: 20px; justify-content: center;">
+                <button onclick="closeForgotPasswordModal()" style="width: 100%; padding: 12px; font-size: 14px; font-weight: 600; text-align: center; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; color: #0369a1; cursor: pointer; transition: all 0.2s ease;">
+                  취소
+                </button>
+              </div>
             </div>
           </div>
             
@@ -1354,6 +1395,28 @@
               >
             </div>
             
+            <!-- 생년 입력 -->
+            <div class="auth-input-group">
+              <label for="registerBirthYearInput" class="auth-label-left">생년 *</label>
+              <input 
+                type="number" 
+                id="registerBirthYearInput" 
+                placeholder="1972" 
+                min="1900"
+                required
+              >
+            </div>
+            
+            <!-- 성별 선택 -->
+            <div class="auth-input-group">
+              <label for="registerGenderInput" class="auth-label-left">성별 *</label>
+              <select id="registerGenderInput" required>
+                <option value="">선택하세요</option>
+                <option value="남">남</option>
+                <option value="여">여</option>
+              </select>
+            </div>
+            
             <!-- 운동목적 선택 -->
             <div class="auth-input-group">
               <label for="registerChallengeInput" class="auth-label-left">운동 목적 *</label>
@@ -1588,11 +1651,13 @@
     
     <div class="card mb-15">
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button class="btn btn-success" onclick="loadUsers()" style="flex: 1; min-width: 140px;">
-          📥 사용자 목록 새로고침
+        <button class="btn btn-exit-inline profile-action-button" onclick="if(typeof openSettingsModal==='function'){openSettingsModal();}else{alert('환경설정 기능을 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+          <img src="assets/img/ai.gif" alt="STELVIO AI" style="width: 29px; height: 29px; object-fit: contain;" />
+          <span>AI 자동 페어링</span>
         </button>
-        <button class="btn btn-default-style" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; border: 1px solid #fc4c02; color: #fc4c02;">
-          🔗 Strava 연결
+        <button class="btn btn-exit-inline profile-action-button profile-strava-button" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+          <img src="assets/img/strava2.png" alt="Strava" style="width: 20px; height: 20px; object-fit: contain;" />
+          <span>Strava 연결</span>
         </button>
       </div>
     </div>
@@ -1726,6 +1791,72 @@
                        style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
               </div>
               
+              <!-- 비밀번호 변경 섹션 (본인 계정만 표시) -->
+              <div id="editPasswordSection" style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; display: none;">
+                <h4 style="font-size: 1em; color: #667eea; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #667eea;">비밀번호 변경</h4>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">현재 비밀번호</label>
+                  <input 
+                    type="password" 
+                    id="editCurrentPassword" 
+                    placeholder="현재 비밀번호를 입력하세요" 
+                    autocomplete="current-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">새 비밀번호</label>
+                  <input 
+                    type="password" 
+                    id="editNewPassword" 
+                    placeholder="새 비밀번호를 입력하세요 (6자 이상)" 
+                    autocomplete="new-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">새 비밀번호 확인</label>
+                  <input 
+                    type="password" 
+                    id="editNewPasswordConfirm" 
+                    placeholder="새 비밀번호를 다시 입력하세요" 
+                    autocomplete="new-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div id="editPasswordStatus" style="display: none; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 14px;"></div>
+                
+                <button 
+                  type="button" 
+                  id="changePasswordBtn" 
+                  onclick="changeUserPassword()" 
+                  style="width: 100%; padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                  onmouseover="this.style.background='#5568d3'"
+                  onmouseout="this.style.background='#667eea'"
+                >
+                  비밀번호 변경
+                </button>
+              </div>
+              
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">FTP (W) *</label>
@@ -1736,6 +1867,23 @@
                   <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
                   <input type="number" id="editUserWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+              </div>
+              
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
+                  <input type="number" id="editUserBirthYear" placeholder="1972" min="1900" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">성별 *</label>
+                  <select id="editUserGender" required 
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="">선택하세요</option>
+                    <option value="남">남</option>
+                    <option value="여">여</option>
+                  </select>
                 </div>
               </div>
               
@@ -1755,6 +1903,60 @@
             <!-- 관리자 전용 필드 섹션 (관리자만 표시) -->
             <div id="editAdminFieldsSection" style="margin-bottom: 20px; display: none;">
               <h4 style="font-size: 1.1em; color: #dc2626; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #dc2626;">관리자 전용 필드</h4>
+              
+              <!-- 관리자 비밀번호 초기화 섹션 -->
+              <div id="adminPasswordResetSection" style="margin-bottom: 20px; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <h5 style="font-size: 0.95em; color: #dc2626; margin-bottom: 12px; font-weight: 600;">비밀번호 초기화 (관리자 전용)</h5>
+                <p style="color: #7f1d1d; font-size: 12px; margin-bottom: 15px; line-height: 1.5;">
+                  사용자가 비밀번호를 잊었을 경우, 관리자가 임시 비밀번호를 설정할 수 있습니다.<br>
+                  사용자는 로그인 후 본인 비밀번호 변경 섹션에서 비밀번호를 변경할 수 있습니다.
+                </p>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">임시 비밀번호 (6자 이상, 숫자만)</label>
+                  <input 
+                    type="password" 
+                    id="adminTempPassword" 
+                    placeholder="임시 비밀번호를 입력하세요" 
+                    autocomplete="new-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 15px;">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">임시 비밀번호 확인</label>
+                  <input 
+                    type="password" 
+                    id="adminTempPasswordConfirm" 
+                    placeholder="임시 비밀번호를 다시 입력하세요" 
+                    autocomplete="new-password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    minlength="6"
+                    maxlength="20"
+                    style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                  />
+                </div>
+                
+                <div id="adminPasswordResetStatus" style="display: none; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 14px;"></div>
+                
+                <button 
+                  type="button" 
+                  id="adminResetPasswordBtn" 
+                  onclick="adminResetUserPassword()" 
+                  style="width: 100%; padding: 12px; background: #dc2626; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s;"
+                  onmouseover="this.style.background='#b91c1c'"
+                  onmouseout="this.style.background='#dc2626'"
+                >
+                  비밀번호 초기화
+                </button>
+              </div>
               
               <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
                 <div class="form-group">
@@ -1817,8 +2019,8 @@
           </div>
           
           <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; justify-content: flex-end;">
-            <button class="btn btn-secondary" onclick="closeEditUserModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
             <button class="btn btn-success" id="btnUpdateUser" onclick="performUpdateFromModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">수정</button>
+            <button class="btn btn-secondary" onclick="closeEditUserModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
           </div>
         </div>
       </div>
@@ -1854,6 +2056,23 @@
               <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
               <input type="number" id="userWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+            </div>
+          </div>
+          
+          <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
+              <input type="number" id="userBirthYear" placeholder="1972" min="1900" required 
+                     style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+            </div>
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">성별 *</label>
+              <select id="userGender" required 
+                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                <option value="">선택하세요</option>
+                <option value="남">남</option>
+                <option value="여">여</option>
+              </select>
             </div>
           </div>
           
@@ -2416,8 +2635,8 @@
 
           <!-- 워크아웃 정보 섹션 -->
           <div class="connection-device-section">
-            <h3 class="mb-15" id="previewWorkoutName">워크아웃</h3>
-            <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px;">
+            <h3 class="mb-15" id="previewWorkoutName" style="margin-bottom: 8px !important;">워크아웃</h3>
+            <div class="preview-stats" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px;">
               <div style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border-radius: 12px;">
                 <strong id="previewDuration" style="display: block; font-size: 24px; color: #2e74e8; margin-bottom: 4px;">0분</strong>
                 <span style="font-size: 13px; color: #666;">총 시간</span>
@@ -2432,7 +2651,7 @@
               </div>
             </div>
             <!-- 세그먼트 그래프 -->
-            <div class="segment-preview" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 20px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;">
+            <div class="segment-preview" id="segmentPreview" onclick="if (typeof openWorkoutSelectionForTrainingReady === 'function') { openWorkoutSelectionForTrainingReady(); }" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.6); border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 12px; min-height: 200px; margin-bottom: 12px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: background-color 0.2s ease;">
               <!-- 워크아웃 미선택 시 표시될 막대그래프 placeholder -->
               <div id="segmentPreviewPlaceholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 180px; opacity: 0.3; padding: 20px;">
                 <div style="display: flex; align-items: flex-end; justify-content: center; gap: 4px; flex: 1;">
@@ -2454,8 +2673,8 @@
 
           <!-- Select Dashboard 섹션 -->
           <div class="connection-device-section">
-            <h3 class="mb-15">Select Dashboard</h3>
-            <div class="grid-2 gap-10 mb-15">
+            <h3 class="mb-15" style="margin-bottom: 8px !important;">Select Dashboard</h3>
+            <div class="grid-2 gap-10 mb-15" style="margin-bottom: 12px !important;">
               <!-- 좌측: 개인 훈련 화면 -->
               <button class="btn btn-device" id="btnStartTraining" onclick="showScreen('trainingScreen'); if (typeof startWorkoutTraining === 'function') { setTimeout(() => startWorkoutTraining(), 200); }">
                 <img src="assets/img/laptop.png" alt="노트북" class="device-btn-icon" />
@@ -3615,31 +3834,19 @@
   
   <!-- 훈련 결과 저장 서비스 (Firebase Firestore v9) - 다른 JS 파일들 로드 후 -->
   <script type="module">
-    // 동적 import로 오류 처리
-    (async () => {
-      const paths = [
-        '/assets/js/trainingResultService.js',
-        './assets/js/trainingResultService.js',
-        'assets/js/trainingResultService.js'
-      ];
-      
-      for (const path of paths) {
-        try {
-          const module = await import(path);
-          const { saveTrainingSession } = module;
-          window.saveTrainingSession = async (userId, trainingData) => {
-            return await saveTrainingSession(userId, trainingData, window.firestoreV9);
-          };
-          console.log(`✅ 훈련 결과 저장 서비스 로드 완료: ${path}`);
-          break;
-        } catch (err) {
-          if (path === paths[paths.length - 1]) {
-            console.error('❌ 훈련 결과 저장 서비스 로드 실패 (모든 경로 시도 실패):', err);
-            console.error('💡 assets/js/trainingResultService.js 파일이 서버에 업로드되었는지 확인하세요.');
-          }
-        }
-      }
-    })();
+    import { saveTrainingSession, getUserTrainingLogs } from './assets/js/trainingResultService.js';
+    
+    // 전역 함수로 노출
+    window.saveTrainingSession = async (userId, trainingData) => {
+      return await saveTrainingSession(userId, trainingData, window.firestoreV9);
+    };
+    
+    // 사용자 훈련 로그 조회 함수 노출
+    window.getUserTrainingLogs = async (userId, options) => {
+      return await getUserTrainingLogs(userId, options, window.firestoreV9);
+    };
+    
+    console.log('✅ 훈련 결과 저장 서비스 로드 완료 (Subcollection 구조)');
   </script>
   
   <!-- 전화번호 기반 로그인 핸들러 -->
@@ -3735,6 +3942,14 @@
                 window.currentUser = userData;
                 localStorage.setItem('currentUser', JSON.stringify(userData));
                 localStorage.setItem('authUser', JSON.stringify(userData));
+                // 비밀번호를 localStorage에 저장 (callback.html에서 인증 복원용)
+                const normalizedPhone = phone.replace(/-/g, '').replace(/\D/g, '');
+                const phoneWithDash = phone.includes('-') ? phone : (normalizedPhone.length === 11 && normalizedPhone.startsWith('010') 
+                  ? `${normalizedPhone.slice(0,3)}-${normalizedPhone.slice(3,7)}-${normalizedPhone.slice(7,11)}` 
+                  : phone);
+                localStorage.setItem('userPassword_' + phoneWithDash, password);
+                localStorage.setItem('userPassword_' + normalizedPhone, password);
+                localStorage.setItem('lastPassword', password);
                 window.isPhoneAuthenticated = true;
                 
                 console.log('✅ 사용자 정보 로드 완료:', { name: userData.name, uid: user.uid });
@@ -3774,18 +3989,22 @@
           }
         
         // 로그인/회원가입 성공 후 처리
-        // 사용자 목록 새로고침 및 DB 동기화 (비동기로 실행하되 화면 전환은 기다리지 않음)
-        Promise.all([
-          typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
-          typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(err => {
-            console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', err);
-            return Promise.resolve();
-          }) : Promise.resolve()
-        ]).then(() => {
-          console.log('✅ 사용자 목록 DB 동기화 완료');
-        }).catch(err => {
-          console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시하고 계속 진행):', err);
-        });
+        // 사용자 정보가 저장된 후 약간의 지연을 두고 사용자 목록 새로고침
+        // (window.currentUser와 localStorage가 설정된 후 호출되도록)
+        // 또한 Firebase Auth 상태가 동기화될 시간을 줌
+        setTimeout(() => {
+          Promise.all([
+            typeof loadUsers === 'function' ? loadUsers() : Promise.resolve(),
+            typeof syncUsersFromDB === 'function' ? syncUsersFromDB().catch(err => {
+              console.warn('⚠️ DB 동기화 중 오류 (무시 가능):', err);
+              return Promise.resolve();
+            }) : Promise.resolve()
+          ]).then(() => {
+            console.log('✅ 사용자 목록 DB 동기화 완료');
+          }).catch(err => {
+            console.warn('⚠️ 사용자 목록 동기화 중 오류 (무시하고 계속 진행):', err);
+          });
+        }, 500); // 500ms 지연으로 사용자 정보 저장 및 Auth 상태 동기화 완료 보장
         
         // 베이스캠프 화면으로 이동
         const switchToBasecamp = () => {
@@ -4019,6 +4238,8 @@
       const passwordInput = document.getElementById('registerPasswordInput');
       const ftpInput = document.getElementById('registerFTPInput');
       const weightInput = document.getElementById('registerWeightInput');
+      const birthYearInput = document.getElementById('registerBirthYearInput');
+      const genderInput = document.getElementById('registerGenderInput');
       const challengeInput = document.getElementById('registerChallengeInput');
       const submitBtn = document.getElementById('registerSubmitBtn');
       
@@ -4028,6 +4249,8 @@
       const password = passwordInput.value;
       const ftp = parseInt(ftpInput.value);
       const weight = parseFloat(weightInput.value);
+      const birthYear = parseInt(birthYearInput.value);
+      const gender = genderInput.value;
       const challenge = challengeInput.value;
       
       // 유효성 검사
@@ -4058,6 +4281,18 @@
       if (!weight || weight < 40 || weight > 150) {
         showRegisterStatus('체중은 40~150kg 사이의 값이어야 합니다.', 'error');
         weightInput.focus();
+        return;
+      }
+      
+      if (!birthYear || birthYear < 1900) {
+        showRegisterStatus('생년을 올바르게 입력해주세요. (1900년 이상)', 'error');
+        birthYearInput.focus();
+        return;
+      }
+      
+      if (!gender || (gender !== '남' && gender !== '여')) {
+        showRegisterStatus('성별을 선택해주세요.', 'error');
+        genderInput.focus();
         return;
       }
       
@@ -4097,6 +4332,8 @@
           contact: phone,
           ftp: ftp,
           weight: weight,
+          birth_year: birthYear,
+          gender: gender,
           challenge: challenge,
           grade: '2',
           created_at: now,
@@ -4112,6 +4349,15 @@
         await new Promise(r => setTimeout(r, 200));
         await window.saveNewUserToFirestore(user.uid, userData);
         console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
+        
+        // 비밀번호를 localStorage에 저장 (callback.html에서 인증 복원용)
+        const normalizedPhone = phone.replace(/-/g, '').replace(/\D/g, '');
+        const phoneWithDash = phone.includes('-') ? phone : (normalizedPhone.length === 11 && normalizedPhone.startsWith('010') 
+          ? `${normalizedPhone.slice(0,3)}-${normalizedPhone.slice(3,7)}-${normalizedPhone.slice(7,11)}` 
+          : phone);
+        localStorage.setItem('userPassword_' + phoneWithDash, password);
+        localStorage.setItem('userPassword_' + normalizedPhone, password);
+        localStorage.setItem('lastPassword', password);
         
         showRegisterStatus('✅ 회원가입 성공!', 'success');
         
@@ -4366,7 +4612,73 @@
       if (registerBackBtn) {
         registerBackBtn.addEventListener('click', handleRegisterBack);
       }
+      
+      // 비밀번호 찾기 링크
+      const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+      if (forgotPasswordLink) {
+        forgotPasswordLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          showForgotPasswordModal();
+        });
+      }
+      
+      // 비밀번호 재설정 모달 전화번호 입력 필드 제거됨 - 이벤트 리스너 제거
     });
+    
+    /**
+     * 비밀번호 재설정 모달 표시
+     */
+    function showForgotPasswordModal() {
+      const modal = document.getElementById('forgotPasswordModal');
+      if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    
+    /**
+     * 비밀번호 재설정 모달 닫기
+     */
+    function closeForgotPasswordModal() {
+      const modal = document.getElementById('forgotPasswordModal');
+      if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+        
+        // 상태 메시지 초기화
+        const statusEl = document.getElementById('forgotPasswordStatus');
+        if (statusEl) {
+          statusEl.textContent = '';
+          statusEl.style.display = 'none';
+          statusEl.className = 'auth-status';
+        }
+      }
+    }
+    
+    /**
+     * 비밀번호 재설정 이메일 전송 (제거됨 - 전송 버튼 제거로 인해 사용하지 않음)
+     */
+    async function sendPasswordResetEmail() {
+      // 전송 기능 제거됨
+      console.log('비밀번호 재설정 전송 기능이 제거되었습니다.');
+    }
+    
+    /**
+     * 비밀번호 재설정 모달 상태 메시지 표시
+     */
+    function showForgotPasswordStatus(message, type = 'info') {
+      const statusEl = document.getElementById('forgotPasswordStatus');
+      if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.className = `auth-status ${type}`;
+        statusEl.style.display = 'block';
+      }
+    }
+    
+    // 전역 함수로 등록
+    window.showForgotPasswordModal = showForgotPasswordModal;
+    window.closeForgotPasswordModal = closeForgotPasswordModal;
+    // window.sendPasswordResetEmail = sendPasswordResetEmail; // 제거됨
   </script>
 <script src="assets/js/strava_auth.js"></script>
 <script src="assets/js/stravaManager.js"></script>
@@ -5121,6 +5433,16 @@
   <script src="assets/js/indoorTrainingDashboard.js"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js"></script>
+  
+  <!-- Performance Dashboard 화면 (AI 분석 대시보드) -->
+  <div id="performanceDashboardScreen" class="screen" style="display: none; background: #f9fafb;">
+    <div style="position: relative; width: 100%; height: 100vh; overflow: hidden;">
+      <button onclick="showScreen('profileScreen')" style="position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        ← 뒤로 가기
+      </button>
+      <iframe id="performanceDashboardFrame" src="performanceDashboard.html" style="width: 100%; height: 100vh; border: none; display: block;"></iframe>
+    </div>
+  </div>
   
   <!-- 환영 오버레이 (사용자 등록 시) - body의 직접 자식으로 배치 -->
   <div id="userWelcomeModal" class="user-welcome-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 99999; animation: fadeIn 0.5s ease-out;">
