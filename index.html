@@ -5882,15 +5882,119 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       const retryLogsRef = useRef(null);
       
-      // 사용자 프로필 로드 (Direct Firebase Access)
+      // 사용자 프로필 로드 (Direct Firebase Access - window.currentUser 우선 사용)
       useEffect(() => {
         async function loadUserProfile() {
           try {
-            // Get current user from Firebase Auth
+            // ===== 우선순위: window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
+            var selectedUser = window.currentUser;
+            var userId = null;
+            var userName = null;
+            
+            if (selectedUser && selectedUser.id) {
+              // 프로필 선택 화면에서 선택한 사용자 사용
+              userId = selectedUser.id;
+              userName = selectedUser.name || '사용자';
+              console.log('[Dashboard] Using selected user from window.currentUser:', userId);
+              
+              // Firestore에서 최신 정보 가져오기
+              var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+              if (firestore) {
+                try {
+                  const userDoc = await firestore.collection('users').doc(userId).get();
+                  if (userDoc.exists) {
+                    const userData = userDoc.data();
+                    const ftp = Number(userData.ftp) || 0;
+                    const weight = Number(userData.weight) || 0;
+                    const wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+                    const challenge = userData.challenge || 'Fitness';
+                    var weeklyTarget = 100;
+                    if (typeof window.getWeeklyTargetTSS === 'function') {
+                      var targetInfo = window.getWeeklyTargetTSS(challenge);
+                      weeklyTarget = targetInfo.target;
+                    }
+                    
+                    setUserProfile({
+                      id: userId,
+                      name: userData.name || userName,
+                      ftp: ftp,
+                      weight: weight,
+                      grade: userData.grade || '2',
+                      challenge: challenge,
+                      acc_points: userData.acc_points || 0,
+                      rem_points: userData.rem_points || 0,
+                      ...userData
+                    });
+                    
+                    setStats({
+                      ftp: ftp,
+                      wkg: parseFloat(wkg),
+                      weight: weight,
+                      totalPoints: Number(userData.acc_points || 0),
+                      currentPoints: Number(userData.rem_points || 0),
+                      weeklyGoal: weeklyTarget,
+                      weeklyProgress: 0
+                    });
+                    
+                    setStravaStatus({
+                      connected: !!(userData.strava_refresh_token),
+                      lastSync: userData.strava_last_sync || null
+                    });
+                    
+                    setLoading(false);
+                    return;
+                  }
+                } catch (e) {
+                  console.error('[Dashboard] Error loading user from Firestore:', e);
+                }
+              }
+              
+              // Firestore 실패 시 선택한 사용자 정보 사용
+              const ftp = Number(selectedUser.ftp) || 0;
+              const weight = Number(selectedUser.weight) || 0;
+              const wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+              const challenge = selectedUser.challenge || 'Fitness';
+              var weeklyTarget = 100;
+              if (typeof window.getWeeklyTargetTSS === 'function') {
+                var targetInfo = window.getWeeklyTargetTSS(challenge);
+                weeklyTarget = targetInfo.target;
+              }
+              
+              setUserProfile({
+                id: userId,
+                name: userName,
+                ftp: ftp,
+                weight: weight,
+                grade: selectedUser.grade || '2',
+                challenge: challenge,
+                acc_points: selectedUser.acc_points || 0,
+                rem_points: selectedUser.rem_points || 0,
+                ...selectedUser
+              });
+              
+              setStats({
+                ftp: ftp,
+                wkg: parseFloat(wkg),
+                weight: weight,
+                totalPoints: Number(selectedUser.acc_points || 0),
+                currentPoints: Number(selectedUser.rem_points || 0),
+                weeklyGoal: weeklyTarget,
+                weeklyProgress: 0
+              });
+              
+              setStravaStatus({
+                connected: !!(selectedUser.strava_refresh_token),
+                lastSync: selectedUser.strava_last_sync || null
+              });
+              
+              setLoading(false);
+              return;
+            }
+            
+            // ===== Fallback: Firebase Auth currentUser =====
             var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
             if (!auth) {
               console.warn('[Dashboard] Auth not available, waiting...');
-              // Wait for auth to be available
               var attempts = 0;
               while (!auth && attempts < 20) {
                 await new Promise(r => setTimeout(r, 500));
@@ -5906,7 +6010,6 @@ Output Format (JSON Only):
               return;
             }
             
-            // Wait for auth state
             var currentUser = auth.currentUser;
             if (!currentUser) {
               console.log('[Dashboard] Waiting for auth state...');
@@ -5930,8 +6033,8 @@ Output Format (JSON Only):
               return;
             }
             
-            var userId = currentUser.uid;
-            console.log('[Dashboard] Loading profile for user:', userId);
+            userId = currentUser.uid;
+            console.log('[Dashboard] Loading profile for authenticated user:', userId);
             
             // Load from Firestore
             var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
@@ -6442,15 +6545,33 @@ Output Format (JSON Only):
     }
     
     // Render PerformanceDashboard when screen is shown
+    var dashboardRootInstance = null;
     function initPerformanceDashboard() {
       const rootElement = document.getElementById('dashboard-root');
       if (!rootElement) return;
       
+      // 기존 인스턴스가 있으면 제거
+      if (dashboardRootInstance) {
+        try {
+          if (ReactDOM.createRoot) {
+            // React 18: root.unmount() 사용
+            dashboardRootInstance.unmount();
+          } else {
+            // React 17: ReactDOM.unmountComponentAtNode 사용
+            ReactDOM.unmountComponentAtNode(rootElement);
+          }
+        } catch (e) {
+          console.warn('[Dashboard] Error unmounting previous instance:', e);
+        }
+        dashboardRootInstance = null;
+      }
+      
+      // 새로 렌더링
       if (ReactDOM.createRoot) {
-        const root = ReactDOM.createRoot(rootElement);
-        root.render(<PerformanceDashboard />);
+        dashboardRootInstance = ReactDOM.createRoot(rootElement);
+        dashboardRootInstance.render(<PerformanceDashboard />);
       } else {
-        ReactDOM.render(<PerformanceDashboard />, rootElement);
+        dashboardRootInstance = ReactDOM.render(<PerformanceDashboard />, rootElement);
       }
     }
     
@@ -6460,7 +6581,12 @@ Output Format (JSON Only):
       window.showScreen = function(screenId) {
         originalShowScreen.apply(this, arguments);
         if (screenId === 'performanceDashboardScreen') {
-          setTimeout(initPerformanceDashboard, 100);
+          // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
+          var root = document.getElementById('dashboard-root');
+          if (root) {
+            root.removeAttribute('data-rendered'); // 재렌더링을 위해 플래그 제거
+            setTimeout(initPerformanceDashboard, 100);
+          }
         }
       };
     } else {
@@ -6482,7 +6608,7 @@ Output Format (JSON Only):
   <style>
     /* Dashboard Container Scoping */
     #performance-dashboard-container {
-      /* Tailwind classes will be scoped here */
+      /* Tailwind classes will be scoped here - prevents conflicts with existing styles */
     }
     
     /* Scrollbar hiding for dashboard */
