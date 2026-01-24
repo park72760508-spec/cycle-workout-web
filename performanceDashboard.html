@@ -688,7 +688,12 @@ Output Format (JSON Only):
       );
     }
     
-    // 메인 Dashboard 컴포넌트
+    // ===== 메인 Dashboard 컴포넌트 =====
+    // Mobile/Iframe Fix 적용:
+    // 1. Data Proxy Mode 우선: iframe/mobile 환경에서는 Firebase 대기 없이 즉시 부모 창에 데이터 요청
+    // 2. 인증 분리: Proxy 데이터는 인증 없이도 신뢰된 데이터로 처리하여 차트 렌더링
+    // 3. Handshake: 컴포넌트 마운트 시 DASHBOARD_READY 전송으로 부모 창과 통신 시작
+    // 4. Gemini Coach 개선: 로그가 확실히 로드된 후에만 AI 분석 실행
     function PerformanceDashboard() {
       const [userProfile, setUserProfile] = useState(null);
       const [coachData, setCoachData] = useState(null);
@@ -713,10 +718,25 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       const userProfileRef = useRef(null);
       const proxyTimeoutRef = useRef(null);
+      const dataProxyPromiseRef = useRef(null); // Data Proxy Promise 저장용
+      const isInIframeRef = useRef(window.parent !== window); // iframe 환경 여부
       
       useEffect(function() {
         userProfileRef.current = userProfile;
       }, [userProfile]);
+      
+      // ===== Mobile/Iframe Fix: Handshake Logic =====
+      // 컴포넌트 마운트 시 즉시 부모 창에 준비 완료 신호 전송
+      useEffect(function() {
+        if (isInIframeRef.current && window.parent && window.parent !== window) {
+          console.log('[Dashboard] Handshake: DASHBOARD_READY 전송');
+          try {
+            window.parent.postMessage({ type: 'DASHBOARD_READY' }, '*');
+          } catch (e) {
+            console.warn('[Dashboard] Handshake 전송 실패:', e);
+          }
+        }
+      }, []);
       
       // iOS Bluefy: 페이지 로드 시 즉시 Firebase Standalone 초기화 시도
       useEffect(function() {
@@ -1121,15 +1141,22 @@ Output Format (JSON Only):
               }
             }
             
-            // Data Proxy Fallback: 부모 창에서 훈련 로그 수신
+            // ===== Mobile/Iframe Fix: Data Proxy Mode - Trusted Data =====
+            // 부모 창에서 훈련 로그 수신 (인증 없이도 신뢰된 데이터로 처리)
             if (e.data && e.data.type === 'DASHBOARD_LOGS_DATA' && Array.isArray(e.data.logs)) {
               var logs = e.data.logs;
               var proxyUserId = e.data.userId;
-              console.log('[Dashboard] DASHBOARD_LOGS_DATA 수신:', logs.length + '개', { userId: proxyUserId });
+              console.log('[Dashboard] DASHBOARD_LOGS_DATA 수신 (Trusted Data):', logs.length + '개', { userId: proxyUserId });
               
               if (proxyTimeoutRef.current) {
                 clearTimeout(proxyTimeoutRef.current);
                 proxyTimeoutRef.current = null;
+              }
+              
+              // Data Proxy Promise 해결 (대기 중인 요청이 있으면)
+              if (dataProxyPromiseRef.current && dataProxyPromiseRef.current.resolve) {
+                dataProxyPromiseRef.current.resolve(logs);
+                dataProxyPromiseRef.current = null;
               }
               
               setRecentLogs(logs);
@@ -1278,11 +1305,64 @@ Output Format (JSON Only):
       // 재시도 버튼용 ref (외부에서 호출 가능하도록)
       const retryLogsRef = useRef(null);
       
-      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 휴대폰 iframe에서 Firestore 지연 대기 + 재시도
+      // ===== Mobile/Iframe Fix: Data Proxy Mode 우선 로직 =====
+      // Promise 기반 Data Proxy 요청 함수
+      function requestLogsViaProxy(userId) {
+        return new Promise(function(resolve, reject) {
+          if (!isInIframeRef.current || !window.parent || window.parent === window) {
+            reject(new Error('Not in iframe environment'));
+            return;
+          }
+          
+          console.log('[Dashboard] Data Proxy Mode: 부모 창에 로그 요청', { userId: userId });
+          
+          // 기존 Promise가 있으면 취소
+          if (dataProxyPromiseRef.current && dataProxyPromiseRef.current.reject) {
+            dataProxyPromiseRef.current.reject(new Error('New request initiated'));
+          }
+          
+          // 새 Promise 생성
+          var promiseObj = { resolve: null, reject: null };
+          dataProxyPromiseRef.current = promiseObj;
+          
+          promiseObj.resolve = function(logs) {
+            console.log('[Dashboard] Data Proxy Mode: 로그 수신 성공', logs.length + '개');
+            resolve(logs);
+          };
+          
+          promiseObj.reject = function(error) {
+            console.warn('[Dashboard] Data Proxy Mode: 로그 수신 실패', error);
+            reject(error);
+          };
+          
+          // 타임아웃 설정 (5초)
+          proxyTimeoutRef.current = setTimeout(function() {
+            if (dataProxyPromiseRef.current === promiseObj) {
+              dataProxyPromiseRef.current = null;
+              promiseObj.reject(new Error('Data Proxy timeout (5s)'));
+            }
+          }, 5000);
+          
+          // 부모 창에 요청 전송
+          try {
+            window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userId }, '*');
+            setLogsProxyPending(true);
+          } catch (e) {
+            dataProxyPromiseRef.current = null;
+            if (proxyTimeoutRef.current) {
+              clearTimeout(proxyTimeoutRef.current);
+              proxyTimeoutRef.current = null;
+            }
+            reject(e);
+          }
+        });
+      }
+      
+      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — Mobile Proxy 우선
       useEffect(() => {
         var retryCount = 0;
-        var maxRetries = isMobile() ? 5 : 3; // 휴대폰은 더 많은 재시도
-        var retryDelay = isMobile() ? 3000 : 2000; // 휴대폰은 더 긴 대기 시간
+        var maxRetries = isMobile() ? 5 : 3;
+        var retryDelay = isMobile() ? 3000 : 2000;
         var isMounted = true;
         
         async function loadRecentLogs(currentRetry) {
@@ -1295,6 +1375,70 @@ Output Format (JSON Only):
             setLogsLoadError(null);
           }
           
+          // ===== Mobile/Iframe Fix: Data Proxy Mode 우선 실행 =====
+          // iframe/mobile 환경이면 Firebase 대기 없이 즉시 Data Proxy 요청
+          if (isInIframeRef.current && window.parent && window.parent !== window) {
+            console.log('[Dashboard] Mobile/Iframe 환경 감지: Data Proxy Mode 우선 실행');
+            try {
+              var proxyLogs = await requestLogsViaProxy(userProfile.id);
+              
+              // Proxy에서 데이터를 받았으면 Firestore 쿼리 스킵
+              if (isMounted && Array.isArray(proxyLogs) && proxyLogs.length >= 0) {
+                console.log('[Dashboard] Data Proxy 성공: Firestore 쿼리 스킵', proxyLogs.length + '개');
+                
+                // 통계 계산 및 상태 업데이트
+                var profile = userProfileRef.current || userProfile;
+                var challenge = (profile && profile.challenge) || 'Fitness';
+                var weeklyTarget = 100;
+                if (typeof window.getWeeklyTargetTSS === 'function') {
+                  var targetInfo = window.getWeeklyTargetTSS(challenge);
+                  weeklyTarget = targetInfo.target;
+                }
+                var today = new Date();
+                var dayOfWeek = today.getDay();
+                var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                var monday = new Date(today);
+                monday.setDate(today.getDate() + mondayOffset);
+                monday.setHours(0, 0, 0, 0);
+                var mondayStr = monday.toISOString().split('T')[0];
+                var weeklyTss = 0;
+                proxyLogs.forEach(function(log) {
+                  if (log.date && log.date >= mondayStr) {
+                    weeklyTss += (Number(log.tss) || 0);
+                  }
+                });
+                var weeklyTssRounded = Math.round(weeklyTss);
+                
+                setStats(function(prev) {
+                  return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+                });
+                
+                var sorted = proxyLogs.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+                var last7 = sorted.slice(0, 7).reverse();
+                var chartData = last7.map(function(log) {
+                  return {
+                    date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                    fitness: Number(log.tss) || 0,
+                    fatigue: (Number(log.tss) || 0) * 0.7
+                  };
+                });
+                setFitnessData(chartData);
+                
+                setRecentLogs(proxyLogs);
+                setLogsLoaded(true);
+                setLogsLoading(false);
+                setLogsLoadError(null);
+                setLogsProxyPending(false);
+                return; // Firestore 쿼리 스킵
+              }
+            } catch (proxyErr) {
+              console.warn('[Dashboard] Data Proxy 실패, Firestore Fallback으로 전환:', proxyErr);
+              // Proxy 실패 시 Firestore Fallback으로 진행
+              setLogsProxyPending(false);
+            }
+          }
+          
+          // ===== Firestore Fallback (Data Proxy 실패 또는 PC 환경) =====
           // 인증 상태 확인 및 복원 (Firestore 권한 오류 방지)
           var auth = window.auth;
           
@@ -1377,28 +1521,8 @@ Output Format (JSON Only):
             }
           }
           
-          // Data Proxy Fallback: 인증 없음 + iframe → 부모 창에 로그 요청
-          var hasValidAuth = auth && auth.currentUser;
-          if (!hasValidAuth && userProfile && userProfile.id && window.parent && window.parent !== window) {
-            console.log('[Dashboard] Data Proxy Fallback: 부모 창에 로그 요청', { userId: userProfile.id });
-            if (proxyTimeoutRef.current) {
-              clearTimeout(proxyTimeoutRef.current);
-              proxyTimeoutRef.current = null;
-            }
-            window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userProfile.id }, '*');
-            setLogsProxyPending(true);
-            setLogsLoadError(null);
-            proxyTimeoutRef.current = setTimeout(function() {
-              proxyTimeoutRef.current = null;
-              if (isMounted) {
-                setLogsLoadError('데이터 로드 실패 (앱 연결 불가)');
-                setLogsLoaded(true);
-                setLogsLoading(false);
-                setLogsProxyPending(false);
-              }
-            }, 10000);
-            return;
-          }
+          // ===== Mobile/Iframe Fix: 인증 없어도 Proxy 데이터는 이미 처리됨 =====
+          // (위에서 이미 Data Proxy Mode로 처리했으므로 여기서는 Firestore만 진행)
           
           function getFirestore() {
             // 1순위: window.firestore (현재 창)
@@ -1777,10 +1901,18 @@ Output Format (JSON Only):
             clearTimeout(proxyTimeoutRef.current);
             proxyTimeoutRef.current = null;
           }
+          // Data Proxy Promise 정리
+          if (dataProxyPromiseRef.current) {
+            if (dataProxyPromiseRef.current.reject) {
+              dataProxyPromiseRef.current.reject(new Error('Component unmounted'));
+            }
+            dataProxyPromiseRef.current = null;
+          }
         };
       }, [userProfile]);
       
-      // Gemini AI 코치 분석 호출 (로그 로드 완료 후 자동 재호출)
+      // ===== Mobile/Iframe Fix: Gemini Coach Trigger 개선 =====
+      // 로그가 확실히 로드된 후에만 AI 분석 실행
       useEffect(() => {
         async function fetchCoachAnalysis() {
           if (!userProfile) {
@@ -1788,6 +1920,7 @@ Output Format (JSON Only):
             return;
           }
           
+          // ===== Mobile/Iframe Fix: 로그 로딩 완료 확인 =====
           // logsLoaded가 false이거나 logsLoading이 true이면 로그 로딩이 완료되지 않았으므로 대기
           if (!logsLoaded || logsLoading) {
             console.log('[Dashboard] AI 분석 대기: 로그 로딩 중...', { logsLoaded: logsLoaded, logsLoading: logsLoading });
@@ -1812,128 +1945,35 @@ Output Format (JSON Only):
           
           var logs = Array.isArray(recentLogs) ? recentLogs : [];
           
-          // 휴대폰에서 로그가 비어있으면 추가 대기 후 재확인 (Firestore 지연 가능성)
-          if (logs.length === 0 && isMobile()) {
-            console.warn('[Dashboard] 휴대폰: 로그가 비어있음, 재확인 시작...');
+          // ===== Mobile/Iframe Fix: 모바일에서 로그가 비어있으면 Proxy 재요청 =====
+          if (logs.length === 0 && isMobile() && isInIframeRef.current && window.parent && window.parent !== window) {
+            console.warn('[Dashboard] 모바일: 로그가 비어있음, Proxy 재요청 시도...');
             
-            // 여러 번 재확인 (최대 3회, 각 3초 간격)
-            var checkAttempt = 0;
-            var maxCheckAttempts = 3;
-            var checkInterval = 3000;
-            
-            var checkLogs = function() {
-              if (checkAttempt >= maxCheckAttempts) {
-                console.warn('[Dashboard] 휴대폰: 재확인 최종 실패, 빈 로그로 진행');
-                // 최종 실패 시에도 fallback 메시지 표시
-                setCoachData({
-                  condition_score: 50,
-                  training_status: 'Building Base',
-                  vo2max_estimate: 40,
-                  coach_comment: (userProfile && userProfile.name || '사용자') + '님, 훈련 데이터를 불러오는 중입니다. 잠시 후 다시 확인해주세요.',
-                  recommended_workout: 'Active Recovery (Z1)',
-                  error_reason: '휴대폰에서 훈련 로그를 불러오지 못했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.'
-                });
-                setAiPairingStatus(false);
-                setLoading(false);
+            // 한 번만 재시도
+            try {
+              var retryLogs = await requestLogsViaProxy(userProfile.id);
+              if (Array.isArray(retryLogs) && retryLogs.length > 0) {
+                console.log('[Dashboard] 모바일: Proxy 재요청 성공', retryLogs.length + '개');
+                // recentLogs가 업데이트되면 이 useEffect가 자동으로 재실행됨
                 return;
+              } else {
+                console.warn('[Dashboard] 모바일: Proxy 재요청 후에도 로그 없음');
               }
-              
-              checkAttempt++;
-              console.log('[Dashboard] 휴대폰: 재확인 시도 ' + checkAttempt + '/' + maxCheckAttempts);
-              
-              if (userProfile) {
-                var firestore = window.firestore;
-                if (window.parent && window.parent !== window) {
-                  try {
-                    firestore = window.parent.firestore || (window.parent.window && window.parent.window.firestore) || firestore;
-                  } catch (e) {
-                    console.warn('[Dashboard] parent.firestore 접근 실패:', e);
-                  }
-                }
-                
-                if (firestore) {
-                  var thirtyDaysAgo = new Date();
-                  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-                  var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-                  
-                  firestore.collection('users').doc(userProfile.id).collection('logs')
-                    .limit(100).get()
-                    .then(function(snapshot) {
-                      var newLogs = [];
-                      snapshot.docs.forEach(function(doc) {
-                        var d = doc.data();
-                        if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
-                          newLogs.push({ id: doc.id, ...d });
-                        }
-                      });
-                      newLogs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-                      newLogs = newLogs.slice(0, 30);
-                      
-                      if (newLogs.length > 0) {
-                        console.log('[Dashboard] 휴대폰: 재확인 후 로그 발견:', newLogs.length + '개');
-                        setRecentLogs(newLogs);
-                        
-                        // 주간 목표 재계산
-                        var today = new Date();
-                        var dayOfWeek = today.getDay();
-                        var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                        var monday = new Date(today);
-                        monday.setDate(today.getDate() + mondayOffset);
-                        monday.setHours(0, 0, 0, 0);
-                        var mondayStr = monday.toISOString().split('T')[0];
-                        
-                        var weeklyTss = 0;
-                        newLogs.forEach(function(log) {
-                          if (log.date && log.date >= mondayStr) {
-                            weeklyTss += (Number(log.tss) || 0);
-                          }
-                        });
-                        var weeklyTssRounded = Math.round(weeklyTss);
-                        
-                        var challenge = userProfile.challenge || 'Fitness';
-                        var weeklyTarget = 100;
-                        if (typeof window.getWeeklyTargetTSS === 'function') {
-                          var targetInfo = window.getWeeklyTargetTSS(challenge);
-                          weeklyTarget = targetInfo.target;
-                        }
-                        setStats(function(prev) {
-                          return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
-                        });
-                        
-                        // 훈련 트렌드 데이터 업데이트
-                        var last7 = newLogs.slice(0, 7).reverse();
-                        var chartData = last7.map(function(log) {
-                          return {
-                            date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-                            fitness: Number(log.tss) || 0,
-                            fatigue: (Number(log.tss) || 0) * 0.7
-                          };
-                        });
-                        setFitnessData(chartData);
-                        
-                        // AI 분석은 useEffect가 자동으로 재실행됨 (recentLogs 변경 감지)
-                      } else if (checkAttempt < maxCheckAttempts) {
-                        // 아직 로그가 없으면 다음 시도
-                        setTimeout(checkLogs, checkInterval);
-                      }
-                    })
-                    .catch(function(err) {
-                      console.warn('[Dashboard] 휴대폰: 재확인 실패:', err);
-                      if (checkAttempt < maxCheckAttempts) {
-                        setTimeout(checkLogs, checkInterval);
-                      }
-                    });
-                } else if (checkAttempt < maxCheckAttempts) {
-                  console.warn('[Dashboard] 휴대폰: Firestore 없음, 재시도...');
-                  setTimeout(checkLogs, checkInterval);
-                }
-              }
-            };
+            } catch (retryErr) {
+              console.warn('[Dashboard] 모바일: Proxy 재요청 실패:', retryErr);
+            }
             
-            // 첫 재확인 시작
-            setTimeout(checkLogs, checkInterval);
-            
-            // 빈 로그로 AI 분석 실행하지 않음
+            // 재요청 실패 시 fallback 메시지 표시
+            setCoachData({
+              condition_score: 50,
+              training_status: 'Building Base',
+              vo2max_estimate: 40,
+              coach_comment: (userProfile && userProfile.name || '사용자') + '님, 훈련 데이터를 불러오는 중입니다. 잠시 후 다시 확인해주세요.',
+              recommended_workout: 'Active Recovery (Z1)',
+              error_reason: '모바일에서 훈련 로그를 불러오지 못했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.'
+            });
+            setAiPairingStatus(false);
+            setLoading(false);
             return;
           }
           
