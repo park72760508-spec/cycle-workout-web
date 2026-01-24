@@ -5908,7 +5908,7 @@ function initializeCurrentScreen(screenId) {
       setTimeout(checkAndLoad, 100);
       break;
       
-    case 'trainingJournalScreen':
+      case 'trainingJournalScreen':
       // 훈련일지 화면: 캘린더 자동 로드
       console.log('훈련일지 화면 진입 - 캘린더 로딩 시작');
       if (typeof loadTrainingJournalCalendar === 'function') {
@@ -5920,6 +5920,27 @@ function initializeCurrentScreen(screenId) {
         console.warn('loadTrainingJournalCalendar function not available');
       }
       break;
+
+    case 'performanceDashboardScreen': {
+      // 모바일/iframe: userId를 URL로 전달, 로드 후 postMessage로 사용자 객체 전달
+      const iframe = document.getElementById('performanceDashboardFrame');
+      const cu = window.currentUser || null;
+      const uid = (cu && cu.id) ? String(cu.id) : '';
+      if (iframe) {
+        const base = 'performanceDashboard.html';
+        const src = uid ? (base + '?userId=' + encodeURIComponent(uid)) : base;
+        const userToSend = cu;
+        iframe.onload = function () {
+          try {
+            if (userToSend && iframe.contentWindow) {
+              iframe.contentWindow.postMessage({ type: 'DASHBOARD_USER', user: userToSend }, '*');
+            }
+          } catch (e) {}
+        };
+        iframe.src = src;
+      }
+      break;
+    }
       
     default:
       console.log('기타 화면 초기화:', screenId);
