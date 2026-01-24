@@ -5995,11 +5995,43 @@ function initializeCurrentScreen(screenId) {
 
 // ========== Data Proxy Fallback: 대시보드(iframe) 로그 요청 처리 ==========
 (function initDashboardLogsProxy() {
+  window.isSensorConnected = window.isSensorConnected || false;
+
+  function sendToIframes(payload) {
+    try {
+      var iframes = document.querySelectorAll('iframe');
+      iframes.forEach(function(iframe) {
+        if (iframe.contentWindow) {
+          iframe.contentWindow.postMessage(payload, '*');
+        }
+      });
+    } catch (err) {
+      console.warn('[MainApp] iframe postMessage 실패:', err);
+    }
+  }
+
   window.addEventListener('message', async function(e) {
-    if (!e.data || e.data.type !== 'REQUEST_LOGS') return;
+    if (!e.data || !e.data.type) return;
+
+    // REQUEST_STATUS: AI 연결 상태만 전달
+    if (e.data.type === 'REQUEST_STATUS') {
+      sendToIframes({
+        type: 'AI_CONNECTION_STATUS',
+        isConnected: !!window.isSensorConnected
+      });
+      return;
+    }
+
+    if (e.data.type !== 'REQUEST_LOGS') return;
     var userId = e.data.userId;
     console.log('[MainApp] 대시보드로부터 로그 요청 수신:', userId);
     if (!userId) return;
+
+    // AI 연결 상태 먼저 전달 (요청 시마다)
+    sendToIframes({
+      type: 'AI_CONNECTION_STATUS',
+      isConnected: !!window.isSensorConnected
+    });
 
     var auth = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : (window.auth || null);
     if (!auth || !auth.currentUser) {
@@ -6041,21 +6073,7 @@ function initializeCurrentScreen(screenId) {
       logs = logs.slice(0, 50);
 
       console.log('[MainApp] ' + logs.length + '개 로그 데이터 대시보드로 전송');
-
-      var iframes = document.querySelectorAll('iframe');
-      iframes.forEach(function(iframe) {
-        try {
-          if (iframe.contentWindow) {
-            iframe.contentWindow.postMessage({
-              type: 'DASHBOARD_LOGS_DATA',
-              logs: logs,
-              userId: userId
-            }, '*');
-          }
-        } catch (err) {
-          console.warn('[MainApp] iframe postMessage 실패:', err);
-        }
-      });
+      sendToIframes({ type: 'DASHBOARD_LOGS_DATA', logs: logs, userId: userId });
     } catch (error) {
       console.error('[MainApp] 로그 조회 중 오류:', error);
     }
@@ -12445,6 +12463,7 @@ async function startMobileDashboard() {
         const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
         if (isTrainerConnected && typeof window.ergController.updateConnectionStatus === 'function') {
           try {
+            window.isSensorConnected = true;
             window.ergController.updateConnectionStatus('connected');
           } catch (err) {
             console.warn('[Mobile Dashboard] ErgController updateConnectionStatus 오류:', err);
@@ -15593,6 +15612,7 @@ function updateMobileBluetoothConnectionStatus() {
     }
     
     // ErgController 연결 상태 업데이트
+    window.isSensorConnected = true;
     if (window.ergController) {
       window.ergController.updateConnectionStatus('connected');
     }
@@ -15610,6 +15630,7 @@ function updateMobileBluetoothConnectionStatus() {
     }
     
     // ErgController 연결 상태 업데이트
+    window.isSensorConnected = false;
     if (window.ergController) {
       window.ergController.updateConnectionStatus('disconnected');
     }
@@ -15830,7 +15851,10 @@ function initMobileErgController() {
   // 연결 상태 업데이트
   const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
   if (isTrainerConnected) {
+    window.isSensorConnected = true;
     window.ergController.updateConnectionStatus('connected');
+  } else {
+    window.isSensorConnected = false;
   }
 
   // 케이던스 업데이트 (Edge AI 분석용)
@@ -15851,88 +15875,5 @@ window.updateMobileConnectionButtonColor = updateMobileConnectionButtonColor;
 
 // 모바일 대시보드 초기화는 startMobileDashboard 함수 내부에서 직접 처리됨
 // (위의 startMobileDashboard 함수 내부에 이미 추가됨)
-
-/* ==========================================================================
-   [추가됨] 대시보드(Iframe) 데이터 프록시 리스너
-   - 모바일 환경에서 Iframe 내부의 DB 접근이 차단될 경우,
-   - 메인 앱이 대신 데이터를 조회하여 전달하는 역할
-   ========================================================================== */
-window.addEventListener('message', async function(e) {
-  // 1. 보안 검증: 신뢰할 수 있는 메시지인지 확인 (필요시 origin 체크 추가)
-  if (!e.data || !e.data.type) return;
-
-  // 2. 로그 데이터 요청 수신 (REQUEST_LOGS)
-  if (e.data.type === 'REQUEST_LOGS') {
-    const userId = e.data.userId;
-    console.log('[MainApp] 📡 대시보드로부터 로그 요청 수신:', userId);
-
-    if (!userId) return;
-
-    // 메인 앱의 Auth 상태 확인
-    const currentUser = firebase.auth().currentUser;
-    if (!currentUser) {
-      console.warn('[MainApp] ⚠️ 메인 앱도 비로그인 상태라 데이터 제공 불가');
-      // 필요하다면 대시보드에 "로그인 필요" 에러 메시지를 보낼 수도 있음
-      return;
-    }
-
-    try {
-      // 3. Firestore에서 훈련 로그 조회 (최근 30일)
-      // window.firestoreV9 또는 firebase.firestore() 사용
-      let logsSnapshot;
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-
-      console.log('[MainApp] 🔍 Firestore 로그 조회 시작...');
-      
-      // V9 SDK 호환성 체크
-      if (window.firestoreV9) {
-          const { collection, query, where, orderBy, limit, getDocs } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
-          const logsRef = collection(window.firestoreV9, 'users', userId, 'logs');
-          const q = query(logsRef, where('date', '>=', dateStr), orderBy('date', 'desc'), limit(50));
-          logsSnapshot = await getDocs(q);
-      } else {
-          // Compat SDK
-          logsSnapshot = await firebase.firestore()
-              .collection('users').doc(userId).collection('logs')
-              .where('date', '>=', dateStr)
-              .orderBy('date', 'desc')
-              .limit(50)
-              .get();
-      }
-
-      const logs = [];
-      logsSnapshot.forEach(doc => {
-        const d = doc.data();
-        // Strava 소스 필터링 (필요시)
-        if (d.source === 'strava' || !d.source) {
-          logs.push({ id: doc.id, ...d });
-        }
-      });
-
-      console.log(`[MainApp] ✅ ${logs.length}개 로그 데이터 대시보드로 전송`);
-
-      // 4. 조회된 데이터를 대시보드(Iframe)로 전송
-      const iframes = document.querySelectorAll('iframe');
-      iframes.forEach(iframe => {
-        // 메시지 전송
-        iframe.contentWindow.postMessage({
-          type: 'DASHBOARD_LOGS_DATA',
-          logs: logs,
-          userId: userId
-        }, '*');
-      });
-
-    } catch (error) {
-      console.error('[MainApp] ❌ 로그 조회 및 전송 중 오류:', error);
-      // 인덱스 에러인 경우 링크 출력
-      if (error.code === 'failed-precondition' && error.message.includes('index')) {
-          console.warn('[MainApp] ⚠️ 인덱스 필요:', error.message);
-      }
-    }
-  }
-});
-
-
+// Data Proxy (REQUEST_LOGS, REQUEST_STATUS) → initDashboardLogsProxy에서 처리
 
