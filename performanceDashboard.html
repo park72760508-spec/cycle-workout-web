@@ -1047,30 +1047,26 @@ Output Format (JSON Only):
         };
         window.addEventListener('message', onParentUser);
         
-        // iOS Bluefy: 즉시 Standalone Fallback 시도
-        if (isMobile() && typeof window.initFirebaseStandalone === 'function') {
+        // 기본 앱 우선 사용 (인증 공유). Standalone은 firestoreCheck에서만 최후 수단으로 사용.
+        if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
           try {
-            var standalone = window.initFirebaseStandalone();
-            if (standalone && standalone.firestore) {
-              window.firestore = standalone.firestore;
-              if (standalone.auth) {
-                window.auth = standalone.auth;
-                // Auth Persistence 설정
-                if (standalone.auth.setPersistence) {
-                  standalone.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-                    .then(function() {
-                      console.log('[Dashboard] 초기 진입: Auth Persistence 설정 완료 (LOCAL)');
-                    })
-                    .catch(function(e) {
-                      console.warn('[Dashboard] 초기 진입: Auth Persistence 설정 실패:', e);
-                    });
-                }
-              }
-              console.log('[Dashboard] 초기 진입: Standalone Fallback 즉시 성공');
-              if (uid) phase2Firestore(uid);
+            var auth = firebase.auth();
+            window.auth = auth;
+            if (auth.setPersistence) {
+              auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                .then(function() {
+                  console.log('[Dashboard] 초기 진입: Auth Persistence 설정 완료 (LOCAL)');
+                })
+                .catch(function(e) {
+                  console.warn('[Dashboard] 초기 진입: Auth Persistence 설정 실패:', e);
+                });
             }
+            var fs = firebase.firestore();
+            window.firestore = fs;
+            console.log('[Dashboard] 초기 진입: 기본 앱 사용 (인증 공유)', { hasAuth: !!auth });
+            if (uid) phase2Firestore(uid);
           } catch (e) {
-            console.warn('[Dashboard] 초기 진입: Standalone Fallback 실패, 일반 로직 진행:', e);
+            console.warn('[Dashboard] 초기 진입: 기본 앱 설정 실패, firestoreCheck 대기:', e);
           }
         }
         
@@ -1084,29 +1080,29 @@ Output Format (JSON Only):
             }
           }
           
-          // Standalone Fallback 시도
+          // 기본 앱 우선 (인증 공유)
+          if (!fs && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+            try {
+              fs = firebase.firestore();
+              window.firestore = fs;
+              var a = firebase.auth();
+              if (a) window.auth = a;
+            } catch (e) {
+              console.warn('[Dashboard] firestoreCheck: 기본 앱 Firestore 실패:', e);
+            }
+          }
+          
+          // 최후 수단: Standalone Fallback
           if (!fs && typeof window.initFirebaseStandalone === 'function') {
             try {
               var standalone = window.initFirebaseStandalone();
               if (standalone && standalone.firestore) {
                 fs = standalone.firestore;
                 window.firestore = fs;
-                if (standalone.auth) {
-                  window.auth = standalone.auth;
-                }
+                if (standalone.auth) window.auth = standalone.auth;
               }
             } catch (e) {
               console.warn('[Dashboard] firestoreCheck: Standalone Fallback 실패:', e);
-            }
-          }
-          
-          // Firebase SDK 직접 초기화
-          if (!fs && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
-            try {
-              fs = firebase.firestore();
-              window.firestore = fs;
-            } catch (e) {
-              console.warn('[Dashboard] firestoreCheck: Firebase SDK 직접 초기화 실패:', e);
             }
           }
           
@@ -1161,7 +1157,7 @@ Output Format (JSON Only):
             setLogsLoadError(null);
           }
           
-          // 인증 상태 확인 및 복원 (Firestore 권한 오류 방지)
+          // 인증 상태 확인 및 onAuthStateChanged로 복원 대기 (Firestore 권한 오류 방지)
           var auth = window.auth;
           if (!auth && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
             try {
@@ -1173,32 +1169,37 @@ Output Format (JSON Only):
           }
           
           if (auth) {
-            // 인증 상태가 없으면 복원 대기
             if (!auth.currentUser) {
-              console.warn('[Dashboard] loadRecentLogs: 인증 상태 없음, 복원 대기...');
-              var authWaitStart = Date.now();
-              var authWaitMax = 5000; // 최대 5초 대기
-              while (!auth.currentUser && (Date.now() - authWaitStart < authWaitMax)) {
-                await new Promise(function(r) { setTimeout(r, 200); });
-              }
-              if (!auth.currentUser) {
-                console.error('[Dashboard] loadRecentLogs: 인증 상태 복원 실패 - Firestore 권한 오류 가능성');
+              console.log('[Dashboard] loadRecentLogs: 인증 복원 대기 (onAuthStateChanged)…');
+              var authReady = await new Promise(function(resolve) {
+                var resolved = false;
+                var t = setTimeout(function() {
+                  if (resolved) return;
+                  resolved = true;
+                  resolve(auth.currentUser);
+                }, 8000);
+                auth.onAuthStateChanged(function(user) {
+                  if (resolved) return;
+                  resolved = true;
+                  clearTimeout(t);
+                  resolve(user || null);
+                });
+              });
+              if (!authReady) {
+                console.error('[Dashboard] loadRecentLogs: 인증 복원 실패 (타임아웃 또는 미로그인)');
                 if (isMounted) {
                   setLogsLoading(false);
                   setLogsLoadError('인증 상태가 없습니다. 로그인 후 다시 시도해주세요.');
                   setLogsLoaded(true);
                 }
                 return;
-              } else {
-                console.log('[Dashboard] loadRecentLogs: 인증 상태 복원 성공');
               }
+              console.log('[Dashboard] loadRecentLogs: 인증 복원 완료', { uid: authReady.uid });
             } else {
-              console.log('[Dashboard] loadRecentLogs: 인증 상태 확인됨', {
-                uid: auth.currentUser.uid
-              });
+              console.log('[Dashboard] loadRecentLogs: 인증 확인됨', { uid: auth.currentUser.uid });
             }
           } else {
-            console.warn('[Dashboard] loadRecentLogs: Auth 객체 없음 - Firestore 권한 오류 가능성');
+            console.warn('[Dashboard] loadRecentLogs: Auth 없음 - Firestore 권한 오류 가능');
           }
           
           function getFirestore() {
