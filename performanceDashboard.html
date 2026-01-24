@@ -1366,19 +1366,46 @@ Output Format (JSON Only):
 
           // =========================================================
           // [Track 1] Method A: Direct Firestore Access (For PC/Fast)
+          // Supports Firebase v9 (Modular) & v8 (Compat)
           // =========================================================
           try {
-            // Check for parent firestore instance (Compat or Modular)
+            var parent = window.parent;
             var parentDB = null;
-            if (window.parent && window.parent !== window) {
+            var localDB = null;
+            
+            // Priority 1: Check parent window for Firestore (v8 Compat or v9)
+            if (parent && parent !== window) {
               try {
-                parentDB = window.parent.firestore || (window.parent.firebase && typeof window.parent.firebase.firestore === 'function' ? window.parent.firebase.firestore() : null);
+                // Case A: Firebase v8 Compat SDK (Legacy)
+                if (parent.firestore) {
+                  parentDB = parent.firestore;
+                } else if (parent.firebase && typeof parent.firebase.firestore === 'function') {
+                  parentDB = parent.firebase.firestore();
+                }
+                // Case B: Firebase v9 Modular SDK
+                // Note: v9 requires getDocs/query functions which may not be in iframe scope
+                // If parent exposes firestoreV9 instance, we try to use it via compat layer if available
+                // Otherwise, we'll fallback to Proxy
+                if (!parentDB && parent.firestoreV9) {
+                  console.log('[Dashboard] 🔍 Detected parent.firestoreV9 (v9 Modular), checking for compat access...');
+                  // Try to get compat layer from parent if available
+                  if (parent.firebase && typeof parent.firebase.firestore === 'function') {
+                    parentDB = parent.firebase.firestore();
+                  }
+                }
               } catch (e) {
+                console.warn('[Dashboard] Parent Firestore access failed:', e);
                 parentDB = null;
               }
             }
-            // Also try local firestore as fallback
-            var localDB = window.firestore || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 ? firebase.firestore() : null);
+            
+            // Priority 2: Try local Firestore as fallback
+            try {
+              localDB = window.firestore || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 ? firebase.firestore() : null);
+            } catch (e) {
+              localDB = null;
+            }
+            
             var db = parentDB || localDB;
             
             // Only attempt if DB and User ID exist
@@ -1444,13 +1471,13 @@ Output Format (JSON Only):
           }
 
           // =========================================================
-          // [Track 2] Method B: Proxy Polling (For Mobile/Bluefy)
+          // [Track 2] Method B: Proxy Polling (For Mobile/Bluefy & PC Fallback)
           // =========================================================
           if (!directLoadSuccess && window.parent && window.parent !== window) {
             setLogsProxyPending(true);
-            console.log('[Dashboard] 📱 Mobile Environment Detected: Starting Proxy Polling...');
+            console.log('[Dashboard] 🔄 Starting Proxy Polling (Fallback)...');
             
-            // Retry every 1.5 seconds until parent app responds
+            // Retry every 1 second until parent app responds (faster than 1.5s)
             function sendRequest() {
               if (!isMounted) return;
               if (logsLoadedRef.current) return; // Use ref to avoid stale closure
@@ -1464,9 +1491,9 @@ Output Format (JSON Only):
               }
             }
             sendRequest();
-            requestIntervalRef.current = setInterval(sendRequest, 1500);
+            requestIntervalRef.current = setInterval(sendRequest, 1000);
 
-            // Timeout after 15 seconds
+            // Safety timeout: Force stop spinner after 10 seconds
             proxyTimeoutRef.current = setTimeout(function() {
               if (requestIntervalRef.current) {
                 clearInterval(requestIntervalRef.current);
@@ -1474,16 +1501,20 @@ Output Format (JSON Only):
               }
               proxyTimeoutRef.current = null;
               if (!isMounted) return;
-              if (logsLoadedRef.current) return; // Use ref to avoid stale closure
-              console.error('[Dashboard] ❌ All Loading Methods Failed.');
-              setLogsLoadError('데이터 동기화 실패 (앱 연결 지연)');
+              if (logsLoadedRef.current) return; // Already loaded, skip
+              
+              // Force stop spinner to show empty state instead of infinite spinner
+              console.error('[Dashboard] ❌ Load Timeout. Showing empty state.');
               setLogsLoading(false);
               setLogsLoaded(true);
               setLogsProxyPending(false);
               logsLoadedRef.current = true;
-            }, 15000);
+              // Don't set error text to avoid ugly red box, just show empty charts
+              // User can retry if needed
+            }, 10000);
           } else if (!directLoadSuccess && (!window.parent || window.parent === window)) {
             // No parent and no direct access available
+            console.warn('[Dashboard] ⚠️ No Firestore access available');
             setLogsLoadError('Firestore 접근 불가. 앱 내 대시보드에서 이용해 주세요.');
             setLogsLoading(false);
             setLogsLoaded(true);
