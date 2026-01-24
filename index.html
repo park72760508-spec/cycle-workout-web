@@ -1395,6 +1395,28 @@
               >
             </div>
             
+            <!-- 생년 입력 -->
+            <div class="auth-input-group">
+              <label for="registerBirthYearInput" class="auth-label-left">생년 *</label>
+              <input 
+                type="number" 
+                id="registerBirthYearInput" 
+                placeholder="1972" 
+                min="1900"
+                required
+              >
+            </div>
+            
+            <!-- 성별 선택 -->
+            <div class="auth-input-group">
+              <label for="registerGenderInput" class="auth-label-left">성별 *</label>
+              <select id="registerGenderInput" required>
+                <option value="">선택하세요</option>
+                <option value="남">남</option>
+                <option value="여">여</option>
+              </select>
+            </div>
+            
             <!-- 운동목적 선택 -->
             <div class="auth-input-group">
               <label for="registerChallengeInput" class="auth-label-left">운동 목적 *</label>
@@ -1848,6 +1870,23 @@
                 </div>
               </div>
               
+              <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
+                  <input type="number" id="editUserBirthYear" placeholder="1972" min="1900" required 
+                         style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+                </div>
+                <div class="form-group">
+                  <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">성별 *</label>
+                  <select id="editUserGender" required 
+                          style="width: 100%; padding: 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                    <option value="">선택하세요</option>
+                    <option value="남">남</option>
+                    <option value="여">여</option>
+                  </select>
+                </div>
+              </div>
+              
               <div class="form-group" style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">운동 목적 *</label>
                 <select id="editUserChallenge" required 
@@ -2017,6 +2056,23 @@
               <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">몸무게 (kg) *</label>
               <input type="number" id="userWeight" placeholder="70.0" min="30" max="200" step="0.1" required 
                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+            </div>
+          </div>
+          
+          <div class="form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">생년 *</label>
+              <input type="number" id="userBirthYear" placeholder="1972" min="1900" required 
+                     style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box;" />
+            </div>
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 6px; font-weight: 600; color: #333;">성별 *</label>
+              <select id="userGender" required 
+                      style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; background: white;">
+                <option value="">선택하세요</option>
+                <option value="남">남</option>
+                <option value="여">여</option>
+              </select>
             </div>
           </div>
           
@@ -4182,6 +4238,8 @@
       const passwordInput = document.getElementById('registerPasswordInput');
       const ftpInput = document.getElementById('registerFTPInput');
       const weightInput = document.getElementById('registerWeightInput');
+      const birthYearInput = document.getElementById('registerBirthYearInput');
+      const genderInput = document.getElementById('registerGenderInput');
       const challengeInput = document.getElementById('registerChallengeInput');
       const submitBtn = document.getElementById('registerSubmitBtn');
       
@@ -4191,6 +4249,8 @@
       const password = passwordInput.value;
       const ftp = parseInt(ftpInput.value);
       const weight = parseFloat(weightInput.value);
+      const birthYear = parseInt(birthYearInput.value);
+      const gender = genderInput.value;
       const challenge = challengeInput.value;
       
       // 유효성 검사
@@ -4221,6 +4281,18 @@
       if (!weight || weight < 40 || weight > 150) {
         showRegisterStatus('체중은 40~150kg 사이의 값이어야 합니다.', 'error');
         weightInput.focus();
+        return;
+      }
+      
+      if (!birthYear || birthYear < 1900) {
+        showRegisterStatus('생년을 올바르게 입력해주세요. (1900년 이상)', 'error');
+        birthYearInput.focus();
+        return;
+      }
+      
+      if (!gender || (gender !== '남' && gender !== '여')) {
+        showRegisterStatus('성별을 선택해주세요.', 'error');
+        genderInput.focus();
         return;
       }
       
@@ -4260,6 +4332,8 @@
           contact: phone,
           ftp: ftp,
           weight: weight,
+          birth_year: birthYear,
+          gender: gender,
           challenge: challenge,
           grade: '2',
           created_at: now,
