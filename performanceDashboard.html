@@ -109,18 +109,34 @@ Output Format (JSON Only):
         try {
           var controller = null;
           var timeoutId = null;
+          var wasAborted = false;
           var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
           if (hasAbortController) {
             try {
               controller = new AbortController();
-              timeoutId = setTimeout(function() { if (controller) controller.abort(); }, timeoutMs);
+              timeoutId = setTimeout(function() {
+                if (controller) {
+                  wasAborted = true;
+                  controller.abort();
+                }
+              }, timeoutMs);
               fetchOptions.signal = controller.signal;
             } catch (e) {
               hasAbortController = false;
             }
           }
           var fetchPromise = fetch(url, fetchOptions).catch(function(fetchErr) {
-            console.error('[callGeminiCoach] fetch 실패 (시도 ' + (attempt + 1) + '):', fetchErr);
+            var errMsg = fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr);
+            var isAbort = wasAborted || (fetchErr && fetchErr.name === 'AbortError');
+            console.error('[callGeminiCoach] fetch 실패 (시도 ' + (attempt + 1) + '):', {
+              error: errMsg,
+              isAborted: isAbort,
+              url: url.substring(0, 100) + '...',
+              timeoutMs: timeoutMs
+            });
+            if (isAbort) {
+              throw new Error('요청 시간 초과 (' + timeoutMs + 'ms)');
+            }
             throw fetchErr;
           });
           var timeoutPromise = hasAbortController ? null : new Promise(function(resolve, reject) {
@@ -131,6 +147,11 @@ Output Format (JSON Only):
             res = hasAbortController ? await fetchPromise : await Promise.race([fetchPromise, timeoutPromise]);
           } catch (fetchErr) {
             if (timeoutId) clearTimeout(timeoutId);
+            var errMsg = fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr);
+            if (errMsg.indexOf('Failed to fetch') !== -1 && !wasAborted) {
+              // Failed to fetch는 네트워크 문제일 수 있음
+              throw new Error('네트워크 오류: 인터넷 연결을 확인하거나, 방화벽/보안 소프트웨어가 API 요청을 차단했을 수 있습니다.');
+            }
             throw fetchErr;
           }
           if (timeoutId) clearTimeout(timeoutId);
@@ -203,11 +224,11 @@ Output Format (JSON Only):
           var isMaxTokens = false;
           if (e && e.message) {
             errType = e.message;
-            if (e.message.indexOf('MAX_TOKENS') !== -1 || e.message.indexOf('재시도') !== -1) {
+            if (e.message.indexOf('MAX_TOKENS') !== -1 || (e.message.indexOf('재시도') !== -1 && e.message.indexOf('MAX_TOKENS') === -1)) {
               isMaxTokens = true;
               errType = 'MAX_TOKENS';
               errDetail = '응답이 토큰 제한에 도달했습니다. maxOutputTokens를 증가시켜 재시도합니다.';
-            } else if (e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('NetworkError') !== -1) {
+            } else if (e.message.indexOf('네트워크 오류') !== -1 || e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('NetworkError') !== -1) {
               errType = '네트워크 오류';
               errDetail = '인터넷 연결을 확인하거나, 방화벽/보안 소프트웨어가 API 요청을 차단했을 수 있습니다.';
               if (window.parent && window.parent !== window) {
@@ -216,15 +237,21 @@ Output Format (JSON Only):
             } else if (e.message.indexOf('CORS') !== -1 || e.message.indexOf('cross-origin') !== -1) {
               errType = 'CORS 오류';
               errDetail = '브라우저 보안 정책으로 인해 API 호출이 차단되었습니다.';
-            } else if (e.message.indexOf('aborted') !== -1 || e.message.indexOf('시간 초과') !== -1) {
+            } else if (e.message.indexOf('aborted') !== -1 || e.message.indexOf('시간 초과') !== -1 || e.message.indexOf('AbortError') !== -1) {
               errType = '요청 시간 초과';
               errDetail = '네트워크가 느리거나 서버 응답이 지연되고 있습니다.';
             }
           }
           if (attempt < 2) {
             console.warn('[callGeminiCoach] 재시도 ' + (attempt + 1) + '/3:', errType, errDetail || '');
-            // MAX_TOKENS인 경우 즉시 재시도, 다른 오류는 2초 대기
-            if (!isMaxTokens) {
+            // MAX_TOKENS인 경우 즉시 재시도
+            // 네트워크 오류는 3초 대기 (연결 복구 시간 확보)
+            // 다른 오류는 2초 대기
+            if (isMaxTokens) {
+              // 즉시 재시도
+            } else if (errType === '네트워크 오류' || errType === '요청 시간 초과') {
+              await new Promise(function(r) { setTimeout(r, 3000); });
+            } else {
               await new Promise(function(r) { setTimeout(r, 2000); });
             }
           }
