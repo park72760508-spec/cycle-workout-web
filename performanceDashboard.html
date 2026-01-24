@@ -6,8 +6,20 @@
   <meta name="description" content="STELVIO AI - Performance Dashboard">
   <title>STELVIO AI - Performance Dashboard</title>
   
-  <!-- Tailwind CSS CDN -->
+  <!-- Tailwind CSS CDN (프로덕션에서는 빌드된 CSS 사용 권장) -->
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind CDN 경고 숨기기 (개발 환경)
+    if (typeof console !== 'undefined' && console.warn) {
+      const originalWarn = console.warn;
+      console.warn = function(...args) {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) {
+          return; // Tailwind CDN 경고 무시
+        }
+        originalWarn.apply(console, args);
+      };
+    }
+  </script>
   
   <!-- React & ReactDOM CDN -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -21,15 +33,16 @@
   
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
   
-  <!-- 프로젝트 스크립트 -->
-  <script src="geminiCoachPrompt.js"></script>
-  <script src="dashboardCoach.js"></script>
-  <script src="stravaManager.js"></script>
-  <script src="userManager.js"></script>
+  <!-- 프로젝트 스크립트 (assets/js/ 디렉토리) -->
+  <script src="assets/js/geminiCoachPrompt.js"></script>
+  <script src="assets/js/dashboardCoach.js"></script>
+  <script src="assets/js/stravaManager.js"></script>
+  <script src="assets/js/userManager.js"></script>
   
   <style>
     /* 스크롤바 숨김 */
@@ -301,24 +314,90 @@
       useEffect(() => {
         async function loadUserProfile() {
           try {
-            // Firebase Auth에서 현재 사용자 가져오기
-            if (!window.auth || !window.auth.currentUser) {
-              console.error('로그인된 사용자가 없습니다.');
+            // Firebase 초기화 대기
+            let retryCount = 0;
+            const maxRetries = 10;
+            
+            while (retryCount < maxRetries && !window.firestore && !window.auth) {
+              await new Promise(resolve => setTimeout(resolve, 100));
+              retryCount++;
+            }
+            
+            // 1순위: localStorage에서 사용자 정보 가져오기 (가장 안정적)
+            let userId = null;
+            let userDataFromStorage = null;
+            
+            try {
+              const storedUser = localStorage.getItem('currentUser');
+              if (storedUser) {
+                userDataFromStorage = JSON.parse(storedUser);
+                if (userDataFromStorage && userDataFromStorage.id) {
+                  userId = userDataFromStorage.id;
+                  console.log('[Dashboard] localStorage에서 사용자 ID 가져옴:', userId);
+                }
+              }
+            } catch (e) {
+              console.warn('[Dashboard] localStorage에서 사용자 정보 가져오기 실패:', e);
+            }
+            
+            // 2순위: 부모 창에서 인증 상태 가져오기 (iframe인 경우)
+            let auth = window.auth;
+            let currentUser = null;
+            
+            if (!userId && window.parent && window.parent !== window) {
+              try {
+                auth = window.parent.auth || window.parent.window?.auth;
+                if (auth) {
+                  currentUser = auth.currentUser;
+                  if (currentUser && currentUser.uid) {
+                    userId = currentUser.uid;
+                    console.log('[Dashboard] 부모 창에서 사용자 ID 가져옴:', userId);
+                  }
+                }
+              } catch (e) {
+                console.warn('[Dashboard] 부모 창 접근 실패:', e);
+              }
+            }
+            
+            // 3순위: 현재 창에서 사용자 정보 가져오기
+            if (!userId) {
+              if (!auth) {
+                auth = window.auth;
+              }
+              if (auth) {
+                currentUser = auth.currentUser;
+                if (currentUser && currentUser.uid) {
+                  userId = currentUser.uid;
+                  console.log('[Dashboard] 현재 창에서 사용자 ID 가져옴:', userId);
+                }
+              }
+            }
+            
+            if (!userId) {
+              console.error('[Dashboard] 로그인된 사용자가 없습니다.');
               setLoading(false);
               return;
             }
             
-            const currentUser = window.auth.currentUser;
-            const userId = currentUser.uid;
+            // Firestore 참조 가져오기 (부모 창 또는 현재 창)
+            let firestore = window.firestore;
             
-            // Firestore에서 사용자 데이터 가져오기
-            if (!window.firestore) {
+            // iframe인 경우 부모 창의 firestore 사용
+            if (window.parent && window.parent !== window) {
+              try {
+                firestore = window.parent.firestore || window.parent.window?.firestore;
+              } catch (e) {
+                console.warn('부모 창 Firestore 접근 실패, 현재 창 사용:', e);
+              }
+            }
+            
+            if (!firestore) {
               console.error('Firestore가 초기화되지 않았습니다.');
               setLoading(false);
               return;
             }
             
-            const userDoc = await window.firestore.collection('users').doc(userId).get();
+            const userDoc = await firestore.collection('users').doc(userId).get();
             
             if (!userDoc.exists) {
               console.error('사용자 데이터를 찾을 수 없습니다.');
@@ -327,9 +406,16 @@
             }
             
             const userData = userDoc.data();
+            
+            // 사용자 이름 결정 (우선순위: Firestore > localStorage > currentUser > 기본값)
+            const userName = userData.name || 
+                            (userDataFromStorage ? userDataFromStorage.name : null) ||
+                            (currentUser ? (currentUser.displayName || currentUser.name) : null) ||
+                            '사용자';
+            
             setUserProfile({
               id: userId,
-              name: userData.name || currentUser.displayName || '사용자',
+              name: userName,
               ftp: userData.ftp || 0,
               weight: userData.weight || 0,
               grade: userData.grade || '2',
@@ -359,11 +445,29 @@
             
           } catch (error) {
             console.error('사용자 프로필 로드 오류:', error);
+            // 오류 발생 시에도 로딩 상태 해제
             setLoading(false);
           }
         }
         
-        loadUserProfile();
+        // Firebase 초기화 대기 후 로드
+        const checkFirebase = setInterval(() => {
+          if (window.firestore || (window.parent && window.parent !== window && window.parent.firestore)) {
+            clearInterval(checkFirebase);
+            loadUserProfile();
+          }
+        }, 100);
+        
+        // 최대 5초 대기
+        setTimeout(() => {
+          clearInterval(checkFirebase);
+          if (!window.firestore && (!window.parent || window.parent === window || !window.parent.firestore)) {
+            console.warn('[Dashboard] Firebase 초기화 대기 시간 초과, localStorage 데이터로 진행');
+            loadUserProfile(); // localStorage 데이터로라도 진행
+          }
+        }, 5000);
+        
+        return () => clearInterval(checkFirebase);
       }, []);
       
       // 최근 훈련 로그 로드
@@ -372,24 +476,47 @@
           if (!userProfile) return;
           
           try {
+            // Firestore 참조 가져오기
+            let firestore = window.firestore;
+            if (window.parent && window.parent !== window) {
+              try {
+                firestore = window.parent.firestore || window.parent.window?.firestore;
+              } catch (e) {
+                console.warn('부모 창 Firestore 접근 실패:', e);
+              }
+            }
+            
+            if (!firestore) {
+              console.error('Firestore가 초기화되지 않았습니다.');
+              return;
+            }
+            
             // 최근 30일간의 training_log 데이터 가져오기
+            // users/{userId}/logs 서브컬렉션 사용
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            const dateStr = thirtyDaysAgo.toISOString().split('T')[0];
             
-            const logsSnapshot = await window.firestore
-              .collection('training_log')
-              .where('user_id', '==', userProfile.id)
-              .where('date', '>=', thirtyDaysAgo.toISOString().split('T')[0])
-              .orderBy('date', 'desc')
-              .limit(30)
-              .get();
+            try {
+              const userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+              const logsSnapshot = await userLogsRef
+                .where('source', '==', 'strava')
+                .where('date', '>=', dateStr)
+                .orderBy('date', 'desc')
+                .limit(30)
+                .get();
             
-            const logs = [];
-            logsSnapshot.forEach(doc => {
-              logs.push({ id: doc.id, ...doc.data() });
-            });
-            
-            setRecentLogs(logs);
+              const logs = [];
+              logsSnapshot.forEach(doc => {
+                logs.push({ id: doc.id, ...doc.data() });
+              });
+              
+              setRecentLogs(logs);
+            } catch (queryError) {
+              console.warn('훈련 로그 조회 실패 (인덱스 필요할 수 있음):', queryError);
+              // 인덱스 오류인 경우 빈 배열로 설정
+              setRecentLogs([]);
+            }
             
             // TSS 기반 포인트 계산
             const totalTss = logs.reduce((sum, log) => sum + (Number(log.tss) || 0), 0);
