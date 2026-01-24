@@ -19,6 +19,28 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
   
+  <!-- Performance Dashboard Dependencies (React, Tailwind, Chart.js, Babel) -->
+  <script>
+    // Tailwind / Babel CDN 경고 필터
+    (function() {
+      if (typeof console === 'undefined' || !console.warn) return;
+      var orig = console.warn;
+      console.warn = function() {
+        var msg = (arguments[0] && String(arguments[0])) || '';
+        if (msg.indexOf('cdn.tailwindcss.com') !== -1 || msg.indexOf('Tailwind CSS') !== -1 && msg.indexOf('production') !== -1 ||
+            msg.indexOf('in-browser Babel') !== -1 || msg.indexOf('precompile your scripts') !== -1 || (msg.indexOf('Babel') !== -1 && msg.indexOf('production') !== -1)) {
+          return;
+        }
+        return orig.apply(console, arguments);
+      };
+    })();
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
   <!-- Firebase v9 Modular SDK (전화번호 인증용) -->
   <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
@@ -5434,10 +5456,1076 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js"></script>
   
-  <!-- Performance Dashboard 화면 (AI 분석 대시보드) -->
-  <div id="performanceDashboardScreen" class="screen" style="display: none;">
-    <iframe id="performanceDashboardFrame" src="performanceDashboard.html" style="width: 100%; height: 100vh; border: none; display: block;"></iframe>
+  <!-- Performance Dashboard 화면 (AI 분석 대시보드) - Direct Integration (No Iframe) -->
+  <div id="performanceDashboardScreen" class="screen" style="display: none; background: #f9fafb;">
+    <div style="position: relative; width: 100%; height: 100vh; overflow: hidden;">
+      <button onclick="showScreen('profileScreen')" style="position: absolute; top: 10px; left: 10px; z-index: 1000; background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+        ← 뒤로 가기
+      </button>
+      <!-- Dashboard Root Container (scoped to prevent CSS conflicts) -->
+      <div id="performance-dashboard-container" style="width: 100%; height: 100vh; overflow-y: auto;">
+        <div id="dashboard-root"></div>
+      </div>
+    </div>
   </div>
+  
+  <!-- Performance Dashboard: Gemini Coach Functions -->
+  <script>
+    // Gemini Coach System Prompt
+    window.GEMINI_COACH_SYSTEM_PROMPT = `Role: 당신은 'Stelvio AI'의 수석 사이클링 코치이자 데이터 분석가입니다.
+Context: 사용자의 프로필({{userProfile}})과 최근 30일간의 훈련 로그({{recentLogs}})를 분석하여 JSON 형식으로 인사이트를 제공해야 합니다.
+
+[데이터 출처]
+- userProfile: Firestore users/{userId} 컬렉션 (id, name, ftp, weight, grade, challenge, acc_points, rem_points 등)
+- recentLogs: Firestore users/{userId}/logs 서브컬렉션 (최근 30일, source='strava' 또는 source 없음)
+  * 로그 필드: activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source 등
+  * 최대 30개, 날짜 내림차순 정렬
+Task Requirements:
+1. **Condition Score (0~100):** TSB(Training Stress Balance)와 최근 운동 강도를 기반으로 컨디션 점수를 산출하세요.
+2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
+3. **Coach Comment:** 사용자의 이름({{userName}})을 부르며, 최근 훈련 성과(FTP 변화, TSS 누적 등)를 언급하고 동기를 부여하는 따뜻한 조언을 한국어(경어체)로 한 문장 작성하세요.
+4. **VO2max Estimate:** 파워 데이터를 기반으로 추정된 VO2max 값을 정수로 반환하세요.
+5. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입을 제안하세요.
+Output Format (JSON Only):
+{ "condition_score": 85, "training_status": "Ready to Race", "vo2max_estimate": 54, "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.", "recommended_workout": "Active Recovery (Z1)" }`;
+    
+    function isMobile() {
+      var ua = navigator.userAgent || '';
+      var isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      var isTouchDevice = (navigator.maxTouchPoints && navigator.maxTouchPoints > 2) || ('ontouchstart' in window);
+      var isBluefy = /Bluefy/i.test(ua) || (window.navigator && window.navigator.standalone === false && window.navigator.standalone !== undefined);
+      return isMobileUA || isTouchDevice || isBluefy;
+    }
+    
+    async function callGeminiCoach(userProfile, recentLogs) {
+      var apiKey;
+      try {
+        apiKey = localStorage.getItem('geminiApiKey');
+      } catch (e) {
+        apiKey = null;
+      }
+      if (!apiKey) throw new Error('Gemini API 키가 설정되지 않았습니다. 환경 설정에서 API 키를 입력해주세요.');
+      var prompt = (window.GEMINI_COACH_SYSTEM_PROMPT || '')
+        .replace('{{userProfile}}', JSON.stringify(userProfile, null, 2))
+        .replace('{{recentLogs}}', JSON.stringify(recentLogs || [], null, 2))
+        .replace('{{userName}}', (userProfile && userProfile.name) || '사용자');
+      var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
+      var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
+      var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
+      var generationConfig = {
+        maxOutputTokens: 10000,
+        temperature: 0.7,
+        topP: 0.8,
+        topK: 40
+      };
+      if (modelName.indexOf('pro') === -1 && modelName.indexOf('thinking') === -1) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
+      var body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: generationConfig
+      };
+      var timeoutMs = isMobile() ? 45000 : 25000;
+      var lastErr = null;
+      var hasAbortController = typeof AbortController !== 'undefined';
+      for (var attempt = 0; attempt < 3; attempt++) {
+        try {
+          var controller = null;
+          var timeoutId = null;
+          var wasAborted = false;
+          var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+          if (hasAbortController) {
+            try {
+              controller = new AbortController();
+              timeoutId = setTimeout(function() {
+                if (controller) {
+                  wasAborted = true;
+                  controller.abort();
+                }
+              }, timeoutMs);
+              fetchOptions.signal = controller.signal;
+            } catch (e) {
+              hasAbortController = false;
+            }
+          }
+          var fetchPromise = fetch(url, fetchOptions).catch(function(fetchErr) {
+            var errMsg = fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr);
+            var isAbort = wasAborted || (fetchErr && fetchErr.name === 'AbortError');
+            if (isAbort) {
+              throw new Error('요청 시간 초과 (' + timeoutMs + 'ms)');
+            }
+            throw fetchErr;
+          });
+          var timeoutPromise = hasAbortController ? null : new Promise(function(resolve, reject) {
+            timeoutId = setTimeout(function() { reject(new Error('요청 시간 초과')); }, timeoutMs);
+          });
+          var res;
+          try {
+            res = hasAbortController ? await fetchPromise : await Promise.race([fetchPromise, timeoutPromise]);
+          } catch (fetchErr) {
+            if (timeoutId) clearTimeout(timeoutId);
+            var errMsg = fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr);
+            if (errMsg.indexOf('Failed to fetch') !== -1 && !wasAborted) {
+              throw new Error('네트워크 오류: 인터넷 연결을 확인하거나, 방화벽/보안 소프트웨어가 API 요청을 차단했을 수 있습니다.');
+            }
+            throw fetchErr;
+          }
+          if (timeoutId) clearTimeout(timeoutId);
+          
+          if (!res.ok) {
+            var errBody = await res.text();
+            var errMsg = '';
+            try {
+              var ed = JSON.parse(errBody);
+              errMsg = (ed.error && ed.error.message) || errBody;
+            } catch (e2) { errMsg = errBody.substring(0, 200); }
+            throw new Error('Gemini API 오류 (' + res.status + '): ' + errMsg);
+          }
+          
+          var data = await res.json();
+          if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+            throw new Error('Gemini API 응답에 candidates가 없습니다.');
+          }
+          var candidate = data.candidates[0];
+          if (candidate.finishReason === 'SAFETY') {
+            throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
+          }
+          var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
+          if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
+            if (attempt < 2) {
+              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 10000 ? 10000 : generationConfig.maxOutputTokens * 2);
+              body.generationConfig = generationConfig;
+              throw new Error('MAX_TOKENS - 재시도');
+            } else {
+              throw new Error('Gemini API 응답이 토큰 제한에 도달했습니다. (MAX_TOKENS)');
+            }
+          }
+          if (!parts.length) {
+            throw new Error('Gemini API 응답에 content.parts가 없습니다.');
+          }
+          var text = '';
+          for (var i = 0; i < parts.length; i++) {
+            if (parts[i] && typeof parts[i].text === 'string' && parts[i].text.trim()) {
+              text = parts[i].text.trim();
+              break;
+            }
+          }
+          if (!text) {
+            throw new Error('Gemini API 응답이 비어있습니다.');
+          }
+          if (text.indexOf('```') === 0) {
+            text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+          }
+          var result = JSON.parse(text);
+          return {
+            condition_score: (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50,
+            training_status: result.training_status || 'Building Base',
+            vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
+            coach_comment: result.coach_comment || ((userProfile && userProfile.name) || '사용자') + '님, 오늘도 화이팅하세요!',
+            recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
+          };
+        } catch (e) {
+          lastErr = e;
+          var errType = 'unknown';
+          var isMaxTokens = false;
+          if (e && e.message) {
+            errType = e.message;
+            if (e.message.indexOf('MAX_TOKENS') !== -1 || (e.message.indexOf('재시도') !== -1 && e.message.indexOf('MAX_TOKENS') === -1)) {
+              isMaxTokens = true;
+              errType = 'MAX_TOKENS';
+            }
+          }
+          if (attempt < 2) {
+            if (isMaxTokens) {
+              // 즉시 재시도
+            } else if (errType === '네트워크 오류' || errType === '요청 시간 초과') {
+              await new Promise(function(r) { setTimeout(r, 3000); });
+            } else {
+              await new Promise(function(r) { setTimeout(r, 2000); });
+            }
+          }
+        }
+      }
+      var errMsg = lastErr && lastErr.message ? lastErr.message : 'unknown';
+      var errDisplay = errMsg;
+      if (errMsg.indexOf('Failed to fetch') !== -1) {
+        errDisplay = '네트워크 오류: 인터넷 연결을 확인하거나, 방화벽이 API 요청을 차단했을 수 있습니다.';
+      }
+      console.warn('[callGeminiCoach] AI 분석 실패 (재시도 3회 후):', errMsg);
+      return {
+        condition_score: 50,
+        training_status: 'Building Base',
+        vo2max_estimate: 40,
+        coach_comment: ((userProfile && userProfile.name) || '사용자') + '님, 데이터 분석 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        recommended_workout: 'Active Recovery (Z1)',
+        error_reason: errDisplay || errMsg
+      };
+    }
+    window.callGeminiCoach = callGeminiCoach;
+  </script>
+  
+  <!-- Performance Dashboard: React Component (Direct Integration - No Iframe) -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+    
+    // 포인트 포맷팅 유틸리티
+    function formatPoints(points) {
+      const num = Math.round(Number(points) || 0);
+      if (num >= 1000) {
+        const k = num / 1000;
+        return k % 1 === 0 ? k + 'k' : k.toFixed(1) + 'k';
+      }
+      return num.toString();
+    }
+    
+    // DashboardCard 컴포넌트
+    function DashboardCard({ title, children, className = "" }) {
+      return (
+        <div className={`bg-white rounded-2xl p-4 shadow-sm border border-gray-100 ${className}`}>
+          {title && (
+            <h3 className="text-sm font-semibold text-gray-600 mb-3">{title}</h3>
+          )}
+          {children}
+        </div>
+      );
+    }
+    
+    // Training Trend Chart 컴포넌트
+    function TrainingTrendChart({ data }) {
+      const chartRef = useRef(null);
+      const chartInstanceRef = useRef(null);
+      
+      useEffect(() => {
+        if (!data || data.length === 0) return;
+        
+        const ctx = chartRef.current?.getContext('2d');
+        if (!ctx) return;
+        
+        if (chartInstanceRef.current) {
+          chartInstanceRef.current.destroy();
+        }
+        
+        chartInstanceRef.current = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.map(d => d.date),
+            datasets: [
+              {
+                label: 'Fitness',
+                data: data.map(d => d.fitness),
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: false,
+                pointRadius: 4,
+                pointBackgroundColor: '#3b82f6'
+              },
+              {
+                label: 'Fatigue',
+                data: data.map(d => d.fatigue),
+                borderColor: '#ef4444',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                tension: 0.4,
+                fill: false,
+                pointRadius: 4,
+                pointBackgroundColor: '#ef4444'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: 'bottom',
+                labels: {
+                  usePointStyle: true,
+                  padding: 10,
+                  font: { size: 11 },
+                  boxWidth: 12,
+                  boxHeight: 12
+                }
+              },
+              tooltip: {
+                backgroundColor: 'white',
+                borderColor: '#e5e7eb',
+                borderWidth: 1,
+                cornerRadius: 8,
+                padding: 12,
+                titleFont: { size: 13, weight: 'bold' },
+                bodyFont: { size: 12 }
+              }
+            },
+            scales: {
+              x: {
+                grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                ticks: { font: { size: 11 }, color: '#6b7280' }
+              },
+              y: {
+                grid: { display: true, color: '#e5e7eb', drawBorder: false },
+                ticks: { font: { size: 11 }, color: '#6b7280' },
+                beginAtZero: true
+              }
+            }
+          }
+        });
+        
+        return () => {
+          if (chartInstanceRef.current) {
+            chartInstanceRef.current.destroy();
+            chartInstanceRef.current = null;
+          }
+        };
+      }, [data]);
+      
+      if (!data || data.length === 0) {
+        return (
+          <DashboardCard title="훈련 트렌드 (최근 7일)">
+            <div className="h-[200px] flex items-center justify-center text-gray-400 text-sm">
+              데이터가 없습니다
+            </div>
+          </DashboardCard>
+        );
+      }
+      
+      return (
+        <DashboardCard title="훈련 트렌드 (최근 7일)">
+          <div className="h-[200px]">
+            <canvas ref={chartRef}></canvas>
+          </div>
+          <div className="mt-2 px-2 pb-1 text-xs text-gray-500 leading-relaxed">
+            <div className="flex items-start gap-2 mb-1">
+              <span className="text-blue-500">🟦</span>
+              <span><strong className="text-gray-700">Fitness (체력)</strong>: 지난 6주간 꾸준히 쌓아올린 기초 체력 (높을수록 좋음)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-red-500">🟥</span>
+              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 최근 7일간의 훈련으로 쌓인 단기 피로 (높으면 휴식 필요)</span>
+            </div>
+          </div>
+        </DashboardCard>
+      );
+    }
+    
+    // Circular Progress 컴포넌트
+    function CircularProgress({ value, max = 100, size = 120, strokeWidth = 8 }) {
+      const percentage = Math.min((value / max) * 100, 100);
+      const radius = (size - strokeWidth) / 2;
+      const circumference = 2 * Math.PI * radius;
+      const offset = circumference - (percentage / 100) * circumference;
+      
+      const getColor = () => {
+        if (percentage >= 80) return '#10b981';
+        if (percentage >= 60) return '#3b82f6';
+        if (percentage >= 40) return '#f59e0b';
+        return '#ef4444';
+      };
+      
+      return (
+        <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+          <svg width={size} height={size} className="transform -rotate-90">
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke="#e5e7eb"
+              strokeWidth={strokeWidth}
+              fill="none"
+            />
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke={getColor()}
+              strokeWidth={strokeWidth}
+              fill="none"
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+              strokeLinecap="round"
+              className="circular-progress transition-all duration-500"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-3xl font-bold" style={{ color: getColor() }}>
+                {Math.round(value)}
+              </div>
+              <div className="text-xs text-gray-500">점</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // ===== PerformanceDashboard Component (Direct Firebase Access - No Iframe) =====
+    function PerformanceDashboard() {
+      const [userProfile, setUserProfile] = useState(null);
+      const [coachData, setCoachData] = useState(null);
+      const [recentLogs, setRecentLogs] = useState([]);
+      const [logsLoaded, setLogsLoaded] = useState(false);
+      const [logsLoading, setLogsLoading] = useState(false);
+      const [logsLoadError, setLogsLoadError] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [stats, setStats] = useState({
+        ftp: 0,
+        wkg: 0,
+        weight: 0,
+        totalPoints: 0,
+        currentPoints: 0,
+        weeklyGoal: 0,
+        weeklyProgress: 0
+      });
+      const [aiPairingStatus, setAiPairingStatus] = useState(false);
+      const [stravaStatus, setStravaStatus] = useState({ connected: false, lastSync: null });
+      const [fitnessData, setFitnessData] = useState([]);
+      const [retryCoach, setRetryCoach] = useState(0);
+      const retryLogsRef = useRef(null);
+      
+      // 사용자 프로필 로드 (Direct Firebase Access)
+      useEffect(() => {
+        async function loadUserProfile() {
+          try {
+            // Get current user from Firebase Auth
+            var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+            if (!auth) {
+              console.warn('[Dashboard] Auth not available, waiting...');
+              // Wait for auth to be available
+              var attempts = 0;
+              while (!auth && attempts < 20) {
+                await new Promise(r => setTimeout(r, 500));
+                auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+                attempts++;
+              }
+            }
+            
+            if (!auth) {
+              console.error('[Dashboard] Auth not available after waiting');
+              setUserProfile({ id: '', name: '인증 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
+              setLoading(false);
+              return;
+            }
+            
+            // Wait for auth state
+            var currentUser = auth.currentUser;
+            if (!currentUser) {
+              console.log('[Dashboard] Waiting for auth state...');
+              await new Promise((resolve) => {
+                var unsubscribe = auth.onAuthStateChanged(function(user) {
+                  unsubscribe();
+                  resolve(user);
+                });
+                setTimeout(() => {
+                  unsubscribe();
+                  resolve(null);
+                }, 5000);
+              });
+              currentUser = auth.currentUser;
+            }
+            
+            if (!currentUser) {
+              console.error('[Dashboard] No authenticated user');
+              setUserProfile({ id: '', name: '로그인 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
+              setLoading(false);
+              return;
+            }
+            
+            var userId = currentUser.uid;
+            console.log('[Dashboard] Loading profile for user:', userId);
+            
+            // Load from Firestore
+            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            if (!firestore) {
+              console.warn('[Dashboard] Firestore not available, using basic profile');
+              setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
+              setLoading(false);
+              return;
+            }
+            
+            try {
+              const userDoc = await firestore.collection('users').doc(userId).get();
+              if (userDoc.exists) {
+                const userData = userDoc.data();
+                const id = userId;
+                const name = userData.name || currentUser.displayName || '사용자';
+                const ftp = Number(userData.ftp) || 0;
+                const weight = Number(userData.weight) || 0;
+                const wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+                const challenge = userData.challenge || 'Fitness';
+                var weeklyTarget = 100;
+                if (typeof window.getWeeklyTargetTSS === 'function') {
+                  var targetInfo = window.getWeeklyTargetTSS(challenge);
+                  weeklyTarget = targetInfo.target;
+                }
+                
+                setUserProfile({
+                  id: id,
+                  name: name,
+                  ftp: ftp,
+                  weight: weight,
+                  grade: userData.grade || '2',
+                  challenge: challenge,
+                  acc_points: userData.acc_points || 0,
+                  rem_points: userData.rem_points || 0,
+                  ...userData
+                });
+                
+                setStats({
+                  ftp: ftp,
+                  wkg: parseFloat(wkg),
+                  weight: weight,
+                  totalPoints: Number(userData.acc_points || 0),
+                  currentPoints: Number(userData.rem_points || 0),
+                  weeklyGoal: weeklyTarget,
+                  weeklyProgress: 0
+                });
+                
+                setStravaStatus({
+                  connected: !!(userData.strava_refresh_token),
+                  lastSync: userData.strava_last_sync || null
+                });
+              } else {
+                console.warn('[Dashboard] User document not found');
+                setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
+              }
+            } catch (e) {
+              console.error('[Dashboard] Error loading user profile:', e);
+              setUserProfile({ id: userId, name: currentUser.displayName || '사용자', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
+            }
+            
+            setLoading(false);
+          } catch (e) {
+            console.error('[Dashboard] Error in loadUserProfile:', e);
+            setLoading(false);
+          }
+        }
+        
+        loadUserProfile();
+      }, []);
+      
+      // 최근 훈련 로그 로드 (Direct Firestore Access)
+      useEffect(() => {
+        async function loadRecentLogs() {
+          if (!userProfile || !userProfile.id) return;
+          
+          setLogsLoading(true);
+          setLogsLoadError(null);
+          
+          try {
+            var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+            if (!firestore) {
+              throw new Error('Firestore not available');
+            }
+            
+            var thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+            
+            var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+            var logsSnapshot;
+            try {
+              logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+            } catch (indexErr) {
+              console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+              logsSnapshot = await userLogsRef.limit(100).get();
+            }
+            
+            var raw = [];
+            logsSnapshot.docs.forEach(function(doc) {
+              var d = doc.data();
+              if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                raw.push({ id: doc.id, ...d });
+              }
+            });
+            raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+            var logs = raw.slice(0, 30);
+            
+            setRecentLogs(logs);
+            setLogsLoaded(true);
+            setLogsLoading(false);
+            
+            // Calculate weekly TSS
+            var today = new Date();
+            var dayOfWeek = today.getDay();
+            var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            var monday = new Date(today);
+            monday.setDate(today.getDate() + mondayOffset);
+            monday.setHours(0, 0, 0, 0);
+            var mondayStr = monday.toISOString().split('T')[0];
+            
+            var weeklyTss = 0;
+            logs.forEach(function(log) {
+              if (log.date && log.date >= mondayStr) {
+                weeklyTss += (Number(log.tss) || 0);
+              }
+            });
+            var weeklyTssRounded = Math.round(weeklyTss);
+            
+            var challenge = userProfile.challenge || 'Fitness';
+            var weeklyTarget = 100;
+            if (typeof window.getWeeklyTargetTSS === 'function') {
+              var targetInfo = window.getWeeklyTargetTSS(challenge);
+              weeklyTarget = targetInfo.target;
+            }
+            
+            setStats(function(prev) {
+              return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+            });
+            
+            var last7 = logs.slice(0, 7).reverse();
+            var chartData = last7.map(function(log) {
+              return {
+                date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                fitness: Number(log.tss) || 0,
+                fatigue: (Number(log.tss) || 0) * 0.7
+              };
+            });
+            setFitnessData(chartData);
+            
+            retryLogsRef.current = function() {
+              loadRecentLogs();
+            };
+          } catch (e) {
+            console.error('[Dashboard] Error loading logs:', e);
+            setLogsLoadError(e.message || '훈련 로그 로드 실패');
+            setLogsLoaded(true);
+            setLogsLoading(false);
+            setRecentLogs([]);
+          }
+        }
+        
+        if (userProfile && userProfile.id) {
+          loadRecentLogs();
+        }
+      }, [userProfile]);
+      
+      // Gemini AI 코치 분석 호출
+      useEffect(() => {
+        async function fetchCoachAnalysis() {
+          if (!userProfile) {
+            setLoading(false);
+            return;
+          }
+          
+          if (!logsLoaded || logsLoading) {
+            return;
+          }
+          
+          if (logsLoadError) {
+            setCoachData({
+              condition_score: 50,
+              training_status: 'Building Base',
+              vo2max_estimate: 40,
+              coach_comment: (userProfile && userProfile.name || '사용자') + '님, 훈련 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.',
+              recommended_workout: 'Active Recovery (Z1)',
+              error_reason: logsLoadError
+            });
+            setAiPairingStatus(false);
+            setLoading(false);
+            return;
+          }
+          
+          var logs = Array.isArray(recentLogs) ? recentLogs : [];
+          var logsTssSum = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
+          var logsHash = logs.length > 0 
+            ? logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') + '_' + Math.round(logsTssSum)
+            : 'empty';
+          var cacheKey = 'coach_analysis_' + userProfile.id + '_' + logsHash;
+          
+          try {
+            var useCache = false;
+            var skipCache = retryCoach > 0;
+            if (!skipCache) {
+              try {
+                var cached = localStorage.getItem(cacheKey);
+                if (cached) {
+                  var parsed = JSON.parse(cached);
+                  var oneHour = 60 * 60 * 1000;
+                  if (parsed.data && parsed.timestamp && (Date.now() - parsed.timestamp < oneHour) && !(parsed.data && parsed.data.error_reason)) {
+                    setCoachData(parsed.data);
+                    useCache = true;
+                  }
+                }
+              } catch (e) {
+                useCache = false;
+              }
+            }
+            if (useCache) {
+              setAiPairingStatus(true);
+              setLoading(false);
+              return;
+            }
+            if (skipCache) setLoading(true);
+            
+            if (typeof window.callGeminiCoach === 'function') {
+              var analysis = await window.callGeminiCoach(userProfile, logs);
+              var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
+              setCoachData(analysis);
+              setAiPairingStatus(!isFallback);
+              if (!isFallback && analysis && !analysis.error_reason) {
+                try {
+                  localStorage.setItem(cacheKey, JSON.stringify({ data: analysis, timestamp: Date.now() }));
+                } catch (e) {}
+              }
+            }
+          } catch (error) {
+            var errMsg = (error && error.message) ? error.message : '알 수 없는 오류';
+            console.error('AI 코치 분석 오류:', error);
+            setAiPairingStatus(false);
+            setCoachData({
+              condition_score: 50,
+              training_status: 'Building Base',
+              vo2max_estimate: 40,
+              coach_comment: (userProfile && userProfile.name || '사용자') + '님, 데이터 분석 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+              recommended_workout: 'Active Recovery (Z1)',
+              error_reason: errMsg
+            });
+          } finally {
+            setLoading(false);
+          }
+        }
+        
+        if (userProfile) {
+          fetchCoachAnalysis();
+        } else {
+          setLoading(false);
+        }
+      }, [userProfile, recentLogs, retryCoach, logsLoaded, logsLoading, logsLoadError]);
+      
+      const getGradeBadge = (grade) => {
+        const badges = {
+          '1': '💎 Diamond',
+          '2': '⭐ Member',
+          '3': '👑 Admin'
+        };
+        return badges[grade] || '⭐ Member';
+      };
+      
+      if (loading) {
+        return (
+          <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="text-center">
+              <div className="skeleton w-32 h-32 rounded-full mx-auto mb-4"></div>
+              <div className="skeleton w-48 h-6 mx-auto mb-2"></div>
+              <div className="skeleton w-64 h-4 mx-auto"></div>
+            </div>
+          </div>
+        );
+      }
+      
+      return (
+        <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 scrollbar-hide">
+          <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold">
+                  {userProfile?.name?.charAt(0) || 'U'}
+                </div>
+                <div>
+                  <div className="font-semibold text-gray-900">{userProfile?.name || '사용자'}</div>
+                  <div className="text-xs text-gray-500">{getGradeBadge(userProfile?.grade)}</div>
+                </div>
+              </div>
+              <button
+                className="p-2 rounded-lg hover:bg-gray-100 active:opacity-80 transition-all"
+                onClick={() => {
+                  alert('프로필 편집 기능은 추후 구현 예정입니다.');
+                }}
+              >
+                <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            </div>
+          </header>
+          
+          <div className="px-4 py-6 space-y-6 pb-24">
+            <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
+              <DashboardCard className="min-w-[140px]">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${aiPairingStatus ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-gray-700">AI 페어링</span>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {aiPairingStatus ? '연결됨' : '연결 대기'}
+                </div>
+              </DashboardCard>
+              
+              <DashboardCard className="min-w-[140px]">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${stravaStatus.connected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-gray-700">Strava</span>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {stravaStatus.connected 
+                    ? stravaStatus.lastSync 
+                      ? `동기화: ${new Date(stravaStatus.lastSync).toLocaleDateString('ko-KR')}`
+                      : '연결됨'
+                    : '연결 대기'}
+                </div>
+              </DashboardCard>
+            </div>
+            
+            <DashboardCard className="bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
+              {coachData ? (
+                <>
+                  <div className="flex items-center justify-center mb-4">
+                    <CircularProgress value={coachData.condition_score} />
+                  </div>
+                  <div className="text-center mb-3">
+                    <div className="text-lg font-bold text-gray-900 mb-1">
+                      {coachData.training_status}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      VO₂max 추정: {coachData.vo2max_estimate} ml/kg/min
+                    </div>
+                  </div>
+                  <div className="bg-white/80 rounded-xl p-4 mb-3">
+                    <p className="text-sm text-gray-800 leading-relaxed">
+                      {coachData.coach_comment}
+                    </p>
+                    {coachData.error_reason && (
+                      <div className="mt-3 pt-3 border-t border-amber-200 space-y-1">
+                        <p className="text-xs text-amber-700">원인: {coachData.error_reason}</p>
+                        {(coachData.error_reason.indexOf('API 키') !== -1 || coachData.error_reason.indexOf('geminiApiKey') !== -1) && (
+                          <p className="text-xs text-gray-600">환경 설정에서 Gemini API 키를 입력한 뒤 &quot;다시 분석&quot;을 눌러 주세요.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-center flex flex-wrap items-center justify-center gap-2">
+                    <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
+                      추천: {coachData.recommended_workout}
+                    </span>
+                    {coachData.error_reason && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            localStorage.removeItem('coach_analysis_' + (userProfile && userProfile.id));
+                          } catch (e) {}
+                          setRetryCoach(function(c) { return c + 1; });
+                        }}
+                        className="inline-block bg-amber-100 text-amber-800 text-xs font-semibold px-3 py-1.5 rounded-full hover:bg-amber-200 active:opacity-80 min-h-[44px]"
+                      >
+                        다시 분석
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="skeleton w-24 h-24 rounded-full mx-auto mb-4"></div>
+                  <div className="skeleton w-32 h-4 mx-auto mb-2"></div>
+                  <div className="skeleton w-48 h-3 mx-auto"></div>
+                </div>
+              )}
+            </DashboardCard>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <DashboardCard title="파워">
+                <div className="text-2xl font-bold text-gray-900 mb-1">{stats.ftp}W</div>
+                <div className="text-sm text-gray-600">{stats.wkg} W/kg</div>
+              </DashboardCard>
+              
+              <DashboardCard title="포인트">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">💰</span>
+                  <div>
+                    <div className="text-lg font-bold text-gray-900">{formatPoints(stats.currentPoints)}</div>
+                    <div className="text-xs text-gray-500">보유</div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-600 border-t border-gray-100 pt-2 mt-2">
+                  누적: {formatPoints(stats.totalPoints)}pt
+                </div>
+              </DashboardCard>
+              
+              <DashboardCard title="체형">
+                <div className="text-2xl font-bold text-gray-900 mb-1">{stats.weight}kg</div>
+                <div className="text-sm text-gray-600">체중</div>
+              </DashboardCard>
+              
+              <DashboardCard title="주간 목표">
+                {logsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-4">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                    <div className="text-xs text-gray-500">데이터 로딩 중...</div>
+                  </div>
+                ) : logsLoadError ? (
+                  <div className="flex flex-col items-center justify-center py-4 space-y-2">
+                    <div className="text-xs text-red-600 text-center mb-2">{logsLoadError}</div>
+                    <button
+                      type="button"
+                      onClick={function() {
+                        if (retryLogsRef.current) {
+                          retryLogsRef.current();
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 active:scale-95 transition-all min-h-[44px]"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative w-16 h-16 mx-auto mb-2">
+                      <svg className="w-16 h-16 transform -rotate-90">
+                        <circle
+                          cx="32"
+                          cy="32"
+                          r="28"
+                          stroke="#e5e7eb"
+                          strokeWidth="6"
+                          fill="none"
+                        />
+                        <circle
+                          cx="32"
+                          cy="32"
+                          r="28"
+                          stroke="#3b82f6"
+                          strokeWidth="6"
+                          fill="none"
+                          strokeDasharray={`${2 * Math.PI * 28}`}
+                          strokeDashoffset={`${2 * Math.PI * 28 * (1 - Math.min(stats.weeklyProgress / (stats.weeklyGoal || 100), 1))}`}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-sm font-bold text-gray-900">
+                          {Math.min(Math.round((stats.weeklyProgress / (stats.weeklyGoal || 100)) * 100), 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600 text-center">
+                      {stats.weeklyProgress}/{stats.weeklyGoal || 100} TSS
+                    </div>
+                  </>
+                )}
+              </DashboardCard>
+            </div>
+            
+            {logsLoading ? (
+              <DashboardCard title="훈련 트렌드 (최근 7일)">
+                <div className="h-[200px] flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <div className="text-sm text-gray-500">데이터 로딩 중...</div>
+                  </div>
+                </div>
+              </DashboardCard>
+            ) : logsLoadError ? (
+              <DashboardCard title="훈련 트렌드 (최근 7일)">
+                <div className="h-[200px] flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-sm text-red-600 mb-2">{logsLoadError}</div>
+                    <button
+                      type="button"
+                      onClick={function() {
+                        if (retryLogsRef.current) {
+                          retryLogsRef.current();
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 active:scale-95 transition-all min-h-[44px]"
+                    >
+                      다시 시도
+                    </button>
+                  </div>
+                </div>
+              </DashboardCard>
+            ) : (
+              <TrainingTrendChart data={fitnessData} />
+            )}
+          </div>
+        </div>
+      );
+    }
+    
+    // Render PerformanceDashboard when screen is shown
+    function initPerformanceDashboard() {
+      const rootElement = document.getElementById('dashboard-root');
+      if (!rootElement) return;
+      
+      if (ReactDOM.createRoot) {
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<PerformanceDashboard />);
+      } else {
+        ReactDOM.render(<PerformanceDashboard />, rootElement);
+      }
+    }
+    
+    // Initialize when dashboard screen is shown
+    var originalShowScreen = window.showScreen;
+    if (originalShowScreen) {
+      window.showScreen = function(screenId) {
+        originalShowScreen.apply(this, arguments);
+        if (screenId === 'performanceDashboardScreen') {
+          setTimeout(initPerformanceDashboard, 100);
+        }
+      };
+    } else {
+      // Fallback: check periodically
+      setInterval(function() {
+        var screen = document.getElementById('performanceDashboardScreen');
+        if (screen && window.getComputedStyle(screen).display !== 'none') {
+          var root = document.getElementById('dashboard-root');
+          if (root && !root.hasAttribute('data-rendered')) {
+            root.setAttribute('data-rendered', 'true');
+            initPerformanceDashboard();
+          }
+        }
+      }, 500);
+    }
+  </script>
+  
+  <!-- Performance Dashboard: CSS Styles (Scoped) -->
+  <style>
+    /* Dashboard Container Scoping */
+    #performance-dashboard-container {
+      /* Tailwind classes will be scoped here */
+    }
+    
+    /* Scrollbar hiding for dashboard */
+    #performance-dashboard-container .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    #performance-dashboard-container .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    
+    /* Circular Progress Bar Animation */
+    @keyframes progress {
+      from {
+        stroke-dashoffset: 283;
+      }
+    }
+    
+    #performance-dashboard-container .circular-progress {
+      animation: progress 1s ease-out;
+    }
+    
+    /* Skeleton UI Animation */
+    @keyframes shimmer {
+      0% {
+        background-position: -1000px 0;
+      }
+      100% {
+        background-position: 1000px 0;
+      }
+    }
+    
+    #performance-dashboard-container .skeleton {
+      background: linear-gradient(
+        90deg,
+        #f0f0f0 0px,
+        #e0e0e0 40px,
+        #f0f0f0 80px
+      );
+      background-size: 1000px;
+      animation: shimmer 2s infinite;
+    }
+  </style>
   
   <!-- 환영 오버레이 (사용자 등록 시) - body의 직접 자식으로 배치 -->
   <div id="userWelcomeModal" class="user-welcome-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 99999; animation: fadeIn 0.5s ease-out;">
