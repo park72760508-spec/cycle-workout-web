@@ -1629,8 +1629,9 @@
     
     <div class="card mb-15">
       <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-        <button class="btn btn-exit-inline profile-action-button" onclick="loadUsers()" style="flex: 1; min-width: 140px;">
-          📥 사용자 목록 새로고침
+        <button class="btn btn-exit-inline profile-action-button" onclick="if(typeof openSettingsModal==='function'){openSettingsModal();}else{alert('환경설정 기능을 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+          <img src="assets/img/ai.gif" alt="STELVIO AI" style="width: 24px; height: 24px; object-fit: contain;" />
+          <span>STELVIO AI 연결</span>
         </button>
         <button class="btn btn-exit-inline profile-action-button profile-strava-button" id="btnConnectStrava" onclick="if(typeof connectStrava==='function'){connectStrava(window.currentUser&&window.currentUser.id);}else{alert('Strava 연동 스크립트를 불러오지 못했습니다.');}" style="flex: 1; min-width: 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
           <img src="assets/img/strava2.png" alt="Strava" style="width: 20px; height: 20px; object-fit: contain;" />
@@ -1979,8 +1980,8 @@
           </div>
           
           <div class="modal-footer" style="padding: 15px 20px; border-top: 1px solid #eee; display: flex; gap: 10px; justify-content: flex-end;">
-            <button class="btn btn-secondary" onclick="closeEditUserModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
             <button class="btn btn-success" id="btnUpdateUser" onclick="performUpdateFromModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">수정</button>
+            <button class="btn btn-secondary" onclick="closeEditUserModal()" style="flex: 1; padding: 12px; font-size: 16px; border-radius: 8px;">취소</button>
           </div>
         </div>
       </div>
