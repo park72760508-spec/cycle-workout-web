@@ -5930,12 +5930,58 @@ function initializeCurrentScreen(screenId) {
         const base = 'performanceDashboard.html';
         const src = uid ? (base + '?userId=' + encodeURIComponent(uid)) : base;
         const userToSend = cu;
+        
+        // 인증 토큰 가져오기 (iframe에서 인증 상태 복원용)
+        var authToken = null;
+        if (window.auth && window.auth.currentUser) {
+          window.auth.currentUser.getIdToken(false).then(function(token) {
+            authToken = token;
+            // iframe이 이미 로드되었을 수 있으므로 즉시 전송
+            if (iframe.contentWindow) {
+              try {
+                iframe.contentWindow.postMessage({ 
+                  type: 'DASHBOARD_AUTH_TOKEN', 
+                  token: token,
+                  user: userToSend 
+                }, '*');
+              } catch (e) {
+                console.warn('[Dashboard] 인증 토큰 전송 실패:', e);
+              }
+            }
+          }).catch(function(e) {
+            console.warn('[Dashboard] 인증 토큰 가져오기 실패:', e);
+          });
+        }
+        
         iframe.onload = function () {
           try {
             if (userToSend && iframe.contentWindow) {
               iframe.contentWindow.postMessage({ type: 'DASHBOARD_USER', user: userToSend }, '*');
+              // 인증 토큰도 전송
+              if (authToken) {
+                iframe.contentWindow.postMessage({ 
+                  type: 'DASHBOARD_AUTH_TOKEN', 
+                  token: authToken,
+                  user: userToSend 
+                }, '*');
+              } else if (window.auth && window.auth.currentUser) {
+                // onload 시점에 다시 토큰 가져오기 시도
+                window.auth.currentUser.getIdToken(false).then(function(token) {
+                  if (iframe.contentWindow) {
+                    iframe.contentWindow.postMessage({ 
+                      type: 'DASHBOARD_AUTH_TOKEN', 
+                      token: token,
+                      user: userToSend 
+                    }, '*');
+                  }
+                }).catch(function(e) {
+                  console.warn('[Dashboard] onload 인증 토큰 가져오기 실패:', e);
+                });
+              }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[Dashboard] postMessage 실패:', e);
+          }
         };
         iframe.src = src;
       }
