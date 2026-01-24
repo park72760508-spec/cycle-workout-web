@@ -1296,24 +1296,124 @@ Output Format (JSON Only):
       useEffect(() => {
         var isMounted = true;
         
-        // Robust Data Loading for Mobile: 1.5s 폴링, 15s 타임아웃
-        function loadRecentLogs() {
+        // Robust Data Loading: PC는 직접 Firestore, 모바일은 프록시 폴링
+        async function loadRecentLogs() {
           if (logsLoadedRef.current) return;
           if (!userProfile || !userProfile.id) {
             setLogsLoading(false);
             return;
           }
-          if (!(window.parent && window.parent !== window)) {
-            setLogsLoadError('앱 내 대시보드에서만 사용 가능');
-            setLogsLoading(false);
-            setLogsLoaded(true);
+
+          var isInIframe = window.parent && window.parent !== window;
+          
+          // PC 환경 (iframe 아님): 직접 Firestore 접근
+          if (!isInIframe) {
+            console.log('[Dashboard] PC 환경: 직접 Firestore 접근 시도');
+            setLogsLoading(true);
+            setLogsLoadError(null);
+            setLogsProxyPending(false);
+            
+            try {
+              var firestore = window.firestore;
+              if (!firestore && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+                firestore = firebase.firestore();
+                window.firestore = firestore;
+              }
+              
+              if (!firestore) {
+                throw new Error('Firestore를 초기화할 수 없습니다');
+              }
+              
+              var thirtyDaysAgo = new Date();
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+              var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+              
+              var logsSnapshot;
+              try {
+                logsSnapshot = await firestore.collection('users').doc(userProfile.id).collection('logs')
+                  .where('date', '>=', dateStr)
+                  .orderBy('date', 'desc')
+                  .limit(50)
+                  .get();
+              } catch (idxErr) {
+                console.warn('[Dashboard] 인덱스 오류, limit만 사용:', idxErr);
+                logsSnapshot = await firestore.collection('users').doc(userProfile.id).collection('logs')
+                  .limit(100)
+                  .get();
+              }
+              
+              var logs = [];
+              logsSnapshot.forEach(function(doc) {
+                var d = doc.data();
+                if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                  logs.push({ id: doc.id, ...d });
+                }
+              });
+              logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+              logs = logs.slice(0, 50);
+              
+              if (isMounted) {
+                setRecentLogs(logs);
+                setLogsLoaded(true);
+                setLogsLoading(false);
+                setLogsLoadError(null);
+                logsLoadedRef.current = true;
+                
+                // 주간 목표 계산
+                var today = new Date();
+                var dayOfWeek = today.getDay();
+                var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                var monday = new Date(today);
+                monday.setDate(today.getDate() + mondayOffset);
+                monday.setHours(0, 0, 0, 0);
+                var mondayStr = monday.toISOString().split('T')[0];
+                var weeklyTss = 0;
+                logs.forEach(function(log) {
+                  if (log.date && log.date >= mondayStr) {
+                    weeklyTss += (Number(log.tss) || 0);
+                  }
+                });
+                var weeklyTssRounded = Math.round(weeklyTss);
+                var challenge = userProfile.challenge || 'Fitness';
+                var weeklyTarget = 100;
+                if (typeof window.getWeeklyTargetTSS === 'function') {
+                  var targetInfo = window.getWeeklyTargetTSS(challenge);
+                  weeklyTarget = targetInfo.target;
+                }
+                setStats(function(prev) {
+                  return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+                });
+                
+                // 훈련 트렌드 데이터
+                var last7 = logs.slice(0, 7).reverse();
+                var chartData = last7.map(function(log) {
+                  return {
+                    date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                    fitness: Number(log.tss) || 0,
+                    fatigue: (Number(log.tss) || 0) * 0.7
+                  };
+                });
+                setFitnessData(chartData);
+                
+                console.log('[Dashboard] ✅ PC: 직접 Firestore 로드 성공', logs.length + '개');
+              }
+            } catch (error) {
+              console.error('[Dashboard] ❌ PC: 직접 Firestore 접근 실패:', error);
+              if (isMounted) {
+                setLogsLoadError('데이터 로드 실패: ' + (error.message || String(error)).substring(0, 100));
+                setLogsLoading(false);
+                setLogsLoaded(true);
+                logsLoadedRef.current = true;
+              }
+            }
             return;
           }
 
+          // 모바일 환경 (iframe): 프록시 폴링
           setLogsLoading(true);
           setLogsLoadError(null);
           setLogsProxyPending(true);
-          console.log('[Dashboard] 🚀 Starting Data Request Loop...');
+          console.log('[Dashboard] 🚀 모바일: 프록시 폴링 시작...');
 
           if (proxyTimeoutRef.current) {
             clearTimeout(proxyTimeoutRef.current);
@@ -1349,6 +1449,7 @@ Output Format (JSON Only):
               setLogsLoading(false);
               setLogsLoaded(true);
               setLogsProxyPending(false);
+              logsLoadedRef.current = true;
             }
           }, 15000);
         }
