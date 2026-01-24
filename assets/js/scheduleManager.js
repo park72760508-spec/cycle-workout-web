@@ -2115,17 +2115,17 @@ function showScheduleScreen(screenId) {
       }
     }, 100);
   }
-  if (typeof showScreen === 'function') {
-    showScreen(screenId);
-  } else {
-    document.querySelectorAll('.screen').forEach(screen => {
-      screen.classList.remove('active');
-    });
-    
-    const targetScreen = document.getElementById(screenId);
-    if (targetScreen) {
-      targetScreen.classList.add('active');
-    }
+  // ===== 무한 루프 완전 방지: showScheduleScreen은 항상 직접 화면 전환 =====
+  // window.showScreen을 호출하지 않고 직접 화면 전환하여 무한 루프 방지
+  document.querySelectorAll('.screen').forEach(screen => {
+    screen.classList.remove('active');
+    screen.style.display = 'none';
+  });
+  
+  const targetScreen = document.getElementById(screenId);
+  if (targetScreen) {
+    targetScreen.classList.add('active');
+    targetScreen.style.display = 'block';
   }
 }
 
