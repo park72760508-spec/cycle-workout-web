@@ -154,6 +154,17 @@ Output Format (JSON Only):
             throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
           }
           var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
+          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도
+          if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
+            if (attempt < 2) {
+              generationConfig.maxOutputTokens = Math.min(8192, generationConfig.maxOutputTokens * 2);
+              body.generationConfig = generationConfig;
+              console.warn('[callGeminiCoach] MAX_TOKENS 도달, maxOutputTokens 증가:', generationConfig.maxOutputTokens);
+              throw new Error('MAX_TOKENS - 재시도');
+            } else {
+              throw new Error('Gemini API 응답이 토큰 제한에 도달했습니다. (MAX_TOKENS)');
+            }
+          }
           if (!parts.length) {
             console.error('[callGeminiCoach] content.parts 없음:', {
               finishReason: candidate.finishReason,
@@ -189,9 +200,14 @@ Output Format (JSON Only):
           lastErr = e;
           var errType = 'unknown';
           var errDetail = '';
+          var isMaxTokens = false;
           if (e && e.message) {
             errType = e.message;
-            if (e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('NetworkError') !== -1) {
+            if (e.message.indexOf('MAX_TOKENS') !== -1 || e.message.indexOf('재시도') !== -1) {
+              isMaxTokens = true;
+              errType = 'MAX_TOKENS';
+              errDetail = '응답이 토큰 제한에 도달했습니다. maxOutputTokens를 증가시켜 재시도합니다.';
+            } else if (e.message.indexOf('Failed to fetch') !== -1 || e.message.indexOf('NetworkError') !== -1) {
               errType = '네트워크 오류';
               errDetail = '인터넷 연결을 확인하거나, 방화벽/보안 소프트웨어가 API 요청을 차단했을 수 있습니다.';
               if (window.parent && window.parent !== window) {
@@ -207,7 +223,10 @@ Output Format (JSON Only):
           }
           if (attempt < 2) {
             console.warn('[callGeminiCoach] 재시도 ' + (attempt + 1) + '/3:', errType, errDetail || '');
-            await new Promise(function(r) { setTimeout(r, 2000); });
+            // MAX_TOKENS인 경우 즉시 재시도, 다른 오류는 2초 대기
+            if (!isMaxTokens) {
+              await new Promise(function(r) { setTimeout(r, 2000); });
+            }
           }
         }
       }
