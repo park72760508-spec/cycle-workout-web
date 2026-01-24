@@ -13888,10 +13888,35 @@ function showMobileTrainingResultModal(status = null) {
   modal.classList.remove('hidden');
   
   // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
-  const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && mileageUpdate.add_days > 0) ||
-                                 (mileageUpdate && mileageUpdate.success && (mileageUpdate.rem_points || 0) >= 500);
+  console.log('[Mobile Dashboard] 축하 화면 표시 조건 확인:', {
+    mileageUpdate: mileageUpdate,
+    hasMileageUpdate: !!mileageUpdate,
+    success: mileageUpdate?.success,
+    add_days: mileageUpdate?.add_days,
+    extended_days: mileageUpdate?.extended_days,
+    rem_points: mileageUpdate?.rem_points,
+    tss: tss
+  });
+  
+  const addDays = mileageUpdate?.add_days || mileageUpdate?.extended_days || 0;
+  const remPoints = mileageUpdate?.rem_points || 0;
+  
+  const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && addDays > 0) ||
+                                 (mileageUpdate && mileageUpdate.success && remPoints >= 500);
+  
+  console.log('[Mobile Dashboard] 축하 화면 표시 여부:', {
+    shouldShowCelebration: shouldShowCelebration,
+    condition1: (mileageUpdate && mileageUpdate.success && addDays > 0),
+    condition2: (mileageUpdate && mileageUpdate.success && remPoints >= 500),
+    addDays: addDays,
+    remPoints: remPoints
+  });
+  
   if (shouldShowCelebration) {
+    console.log('[Mobile Dashboard] ✅ 축하 화면 표시 시작');
     showMobileMileageCelebration(mileageUpdate, tss);
+  } else {
+    console.log('[Mobile Dashboard] ⚠️ 축하 화면 표시 조건 미충족');
   }
 }
 
@@ -13911,7 +13936,7 @@ function showMobileMileageCelebration(mileageUpdate, earnedTss) {
   // 예: 잔액 100 + 사용 500 - 획득 120 = 이전 보유 480
   const currentRemPoints = Math.round(mileageUpdate.rem_points || 0);
   const earnedPoints = Math.round(earnedTss);
-  const addDays = mileageUpdate.add_days || 0;
+  const addDays = mileageUpdate.add_days || mileageUpdate.extended_days || 0; // 두 필드 모두 지원 (하위 호환성)
   const usedPoints = addDays * 500;
   const previousRemPoints = Math.round(currentRemPoints + usedPoints - earnedPoints);
   const totalAfterEarned = previousRemPoints + earnedPoints;
@@ -13932,9 +13957,20 @@ function showMobileMileageCelebration(mileageUpdate, earnedTss) {
   messageEl.innerHTML = message;
   
   // 오버레이 표시 (결과 모달 위에 표시)
+  // hidden 클래스 제거 및 display 스타일 명시적 설정 (!important 우회)
   modal.classList.remove('hidden');
+  modal.style.display = 'flex'; // !important를 우회하기 위해 인라인 스타일로 명시적 설정
+  modal.style.visibility = 'visible';
+  modal.style.opacity = '1';
   
-  console.log('[Mobile Dashboard] 축하 오버레이 표시:', { mileageUpdate, earnedTss });
+  console.log('[Mobile Dashboard] 축하 오버레이 표시:', { 
+    mileageUpdate, 
+    earnedTss,
+    addDays: addDays,
+    usedPoints: usedPoints,
+    modalDisplay: modal.style.display,
+    hasHiddenClass: modal.classList.contains('hidden')
+  });
 }
 
 /**

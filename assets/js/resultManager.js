@@ -457,7 +457,8 @@ async function saveTrainingResult(extra = {}) {
               rem_points: saveResult.newRemPoints,
               expiry_date: saveResult.newExpiryDate,
               earned_points: saveResult.earnedPoints,
-              extended_days: saveResult.extendedDays
+              add_days: saveResult.extendedDays || 0, // extendedDays를 add_days로 매핑 (일관성 유지)
+              extended_days: saveResult.extendedDays || 0 // 하위 호환성 유지
             };
             
             // 사용자 정보도 업데이트
