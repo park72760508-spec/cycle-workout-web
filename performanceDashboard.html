@@ -140,7 +140,14 @@ Output Format (JSON Only):
   </script>
   
   <style>
-    /* 스크롤바 숨김 */
+    /* 스크롤바 숨김 - 전체(html/body) 및 .scrollbar-hide */
+    html, body {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    html::-webkit-scrollbar, body::-webkit-scrollbar {
+      display: none;
+    }
     .scrollbar-hide {
       -ms-overflow-style: none;
       scrollbar-width: none;
@@ -182,7 +189,7 @@ Output Format (JSON Only):
     }
   </style>
 </head>
-<body class="bg-gray-50">
+<body class="bg-gray-50 scrollbar-hide">
   <script>
     window.__dashboardUserFromParent = null;
     window.addEventListener('message', function (e) {
