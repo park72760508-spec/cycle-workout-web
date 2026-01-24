@@ -1293,128 +1293,61 @@ Output Format (JSON Only):
       // 재시도 버튼용 ref (외부에서 호출 가능하도록)
       const retryLogsRef = useRef(null);
       
-      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 프록시 전용 폴링 (모바일 Auth 지연 대응)
+      // 최근 훈련 로그 로드 — Hybrid Dual-Track: Direct Access (PC) + Proxy Polling (Mobile)
       useEffect(() => {
         var isMounted = true;
         
-        // Robust Data Loading: PC는 직접 Firestore, 모바일은 프록시 폴링
+        function applyLogsToState(logs, profile) {
+          var challenge = (profile && profile.challenge) || 'Fitness';
+          var weeklyTarget = 100;
+          if (typeof window.getWeeklyTargetTSS === 'function') {
+            var targetInfo = window.getWeeklyTargetTSS(challenge);
+            weeklyTarget = targetInfo.target;
+          }
+          var today = new Date();
+          var dayOfWeek = today.getDay();
+          var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+          var monday = new Date(today);
+          monday.setDate(today.getDate() + mondayOffset);
+          monday.setHours(0, 0, 0, 0);
+          var mondayStr = monday.toISOString().split('T')[0];
+          var weeklyTss = 0;
+          logs.forEach(function(log) {
+            if (log.date && log.date >= mondayStr) {
+              weeklyTss += (Number(log.tss) || 0);
+            }
+          });
+          var weeklyTssRounded = Math.round(weeklyTss);
+          var sorted = logs.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+          var last7 = sorted.slice(0, 7).reverse();
+          var chartData = last7.map(function(log) {
+            return {
+              date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+              fitness: Number(log.tss) || 0,
+              fatigue: (Number(log.tss) || 0) * 0.7
+            };
+          });
+          setRecentLogs(logs);
+          setLogsLoaded(true);
+          setLogsLoading(false);
+          setLogsLoadError(null);
+          setLogsProxyPending(false);
+          logsLoadedRef.current = true;
+          setStats(function(prev) {
+            return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+          });
+          setFitnessData(chartData);
+        }
+        
         async function loadRecentLogs() {
           if (logsLoadedRef.current) return;
           if (!userProfile || !userProfile.id) {
             setLogsLoading(false);
             return;
           }
-
-          var isInIframe = window.parent && window.parent !== window;
-          
-          // PC 환경 (iframe 아님): 직접 Firestore 접근
-          if (!isInIframe) {
-            console.log('[Dashboard] PC 환경: 직접 Firestore 접근 시도');
-            setLogsLoading(true);
-            setLogsLoadError(null);
-            setLogsProxyPending(false);
-            
-            try {
-              var firestore = window.firestore;
-              if (!firestore && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
-                firestore = firebase.firestore();
-                window.firestore = firestore;
-              }
-              
-              if (!firestore) {
-                throw new Error('Firestore를 초기화할 수 없습니다');
-              }
-              
-              var thirtyDaysAgo = new Date();
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-              
-              var logsSnapshot;
-              try {
-                logsSnapshot = await firestore.collection('users').doc(userProfile.id).collection('logs')
-                  .where('date', '>=', dateStr)
-                  .orderBy('date', 'desc')
-                  .limit(50)
-                  .get();
-              } catch (idxErr) {
-                console.warn('[Dashboard] 인덱스 오류, limit만 사용:', idxErr);
-                logsSnapshot = await firestore.collection('users').doc(userProfile.id).collection('logs')
-                  .limit(100)
-                  .get();
-              }
-              
-              var logs = [];
-              logsSnapshot.forEach(function(doc) {
-                var d = doc.data();
-                if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
-                  logs.push({ id: doc.id, ...d });
-                }
-              });
-              logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-              logs = logs.slice(0, 50);
-              
-              if (isMounted) {
-                setRecentLogs(logs);
-                setLogsLoaded(true);
-                setLogsLoading(false);
-                setLogsLoadError(null);
-                logsLoadedRef.current = true;
-                
-                // 주간 목표 계산
-                var today = new Date();
-                var dayOfWeek = today.getDay();
-                var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                var monday = new Date(today);
-                monday.setDate(today.getDate() + mondayOffset);
-                monday.setHours(0, 0, 0, 0);
-                var mondayStr = monday.toISOString().split('T')[0];
-                var weeklyTss = 0;
-                logs.forEach(function(log) {
-                  if (log.date && log.date >= mondayStr) {
-                    weeklyTss += (Number(log.tss) || 0);
-                  }
-                });
-                var weeklyTssRounded = Math.round(weeklyTss);
-                var challenge = userProfile.challenge || 'Fitness';
-                var weeklyTarget = 100;
-                if (typeof window.getWeeklyTargetTSS === 'function') {
-                  var targetInfo = window.getWeeklyTargetTSS(challenge);
-                  weeklyTarget = targetInfo.target;
-                }
-                setStats(function(prev) {
-                  return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
-                });
-                
-                // 훈련 트렌드 데이터
-                var last7 = logs.slice(0, 7).reverse();
-                var chartData = last7.map(function(log) {
-                  return {
-                    date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-                    fitness: Number(log.tss) || 0,
-                    fatigue: (Number(log.tss) || 0) * 0.7
-                  };
-                });
-                setFitnessData(chartData);
-                
-                console.log('[Dashboard] ✅ PC: 직접 Firestore 로드 성공', logs.length + '개');
-              }
-            } catch (error) {
-              console.error('[Dashboard] ❌ PC: 직접 Firestore 접근 실패:', error);
-              if (isMounted) {
-                setLogsLoadError('데이터 로드 실패: ' + (error.message || String(error)).substring(0, 100));
-                setLogsLoading(false);
-                setLogsLoaded(true);
-                logsLoadedRef.current = true;
-              }
-            }
-            return;
-          }
-
-          // 모바일 환경 (iframe): 프록시 폴링
           setLogsLoading(true);
           setLogsLoadError(null);
-          setLogsProxyPending(true);
-          console.log('[Dashboard] 🚀 모바일: 프록시 폴링 시작...');
+          var profile = userProfile;
 
           if (proxyTimeoutRef.current) {
             clearTimeout(proxyTimeoutRef.current);
@@ -1425,34 +1358,108 @@ Output Format (JSON Only):
             requestIntervalRef.current = null;
           }
 
-          function sendRequest() {
-            if (!isMounted) return;
+          var isInIframe = window.parent && window.parent !== window;
+          var parentDB = null;
+          if (isInIframe) {
             try {
-              window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userProfile.id }, '*');
-              window.parent.postMessage({ type: 'REQUEST_STATUS' }, '*');
-              console.log('[Dashboard] 📡 Sending REQUEST_LOGS to Main App...');
+              parentDB = window.parent.firestore || (window.parent.firebase && typeof window.parent.firebase.firestore === 'function' ? window.parent.firebase.firestore() : null);
             } catch (e) {
-              console.warn('[Dashboard] postMessage 실패:', e);
+              parentDB = null;
             }
           }
-          sendRequest();
-          requestIntervalRef.current = setInterval(sendRequest, 1500);
+          var localDB = window.firestore || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 ? firebase.firestore() : null);
+          var db = parentDB || localDB;
 
-          proxyTimeoutRef.current = setTimeout(function() {
-            if (requestIntervalRef.current) {
-              clearInterval(requestIntervalRef.current);
-              requestIntervalRef.current = null;
+          // --- Track 1: Direct Access (PC / parent or local Firestore) ---
+          if (db && profile && profile.id) {
+            (async function tryDirect() {
+              try {
+                console.log('[Dashboard] 🖥️ Attempting Direct DB Access...');
+                var thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+                var logsSnapshot;
+                try {
+                  logsSnapshot = await db.collection('users').doc(profile.id).collection('logs')
+                    .where('date', '>=', dateStr)
+                    .orderBy('date', 'desc')
+                    .limit(50)
+                    .get();
+                } catch (idxErr) {
+                  if (String(idxErr.message || '').indexOf('index') !== -1) {
+                    logsSnapshot = await db.collection('users').doc(profile.id).collection('logs').limit(100).get();
+                  } else {
+                    throw idxErr;
+                  }
+                }
+                var logs = [];
+                logsSnapshot.forEach(function(doc) {
+                  var d = doc.data();
+                  if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                    logs.push({ id: doc.id, ...d });
+                  }
+                });
+                logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+                logs = logs.slice(0, 50);
+                if (!isMounted || logsLoadedRef.current) return;
+                console.log('[Dashboard] ✅ Direct Access Success:', logs.length, 'logs');
+                if (requestIntervalRef.current) {
+                  clearInterval(requestIntervalRef.current);
+                  requestIntervalRef.current = null;
+                }
+                if (proxyTimeoutRef.current) {
+                  clearTimeout(proxyTimeoutRef.current);
+                  proxyTimeoutRef.current = null;
+                }
+                applyLogsToState(logs, profile);
+              } catch (e) {
+                console.warn('[Dashboard] ⚠️ Direct Access Failed (fallback to Proxy):', e);
+                if (!isInIframe && isMounted && !logsLoadedRef.current) {
+                  setLogsLoadError('데이터 로드 실패: ' + (e.message || String(e)).substring(0, 80));
+                  setLogsLoading(false);
+                  setLogsLoaded(true);
+                  logsLoadedRef.current = true;
+                }
+              }
+            })();
+          }
+
+          // --- Track 2: Proxy Polling (Mobile / Bluefy fallback) ---
+          if (isInIframe && window.parent) {
+            setLogsProxyPending(true);
+            console.log('[Dashboard] 📱 Starting Proxy Polling...');
+            function sendRequest() {
+              if (!isMounted) return;
+              if (logsLoadedRef.current) return;
+              try {
+                window.parent.postMessage({ type: 'REQUEST_LOGS', userId: profile.id }, '*');
+                window.parent.postMessage({ type: 'REQUEST_STATUS' }, '*');
+              } catch (e) {
+                console.warn('[Dashboard] postMessage 실패:', e);
+              }
             }
-            proxyTimeoutRef.current = null;
-            if (isMounted) {
-              console.error('[Dashboard] ❌ Data Load Timeout. Main App did not respond.');
+            sendRequest();
+            requestIntervalRef.current = setInterval(sendRequest, 1500);
+            proxyTimeoutRef.current = setTimeout(function() {
+              if (requestIntervalRef.current) {
+                clearInterval(requestIntervalRef.current);
+                requestIntervalRef.current = null;
+              }
+              proxyTimeoutRef.current = null;
+              if (!isMounted) return;
+              if (logsLoadedRef.current) return;
               setLogsLoadError('데이터 로드 실패 (앱 연결 지연)');
               setLogsLoading(false);
               setLogsLoaded(true);
               setLogsProxyPending(false);
               logsLoadedRef.current = true;
-            }
-          }, 15000);
+            }, 15000);
+          } else if (!db && !(isInIframe && window.parent)) {
+            setLogsLoadError('Firestore 접근 불가. 앱 내 대시보드에서 이용해 주세요.');
+            setLogsLoading(false);
+            setLogsLoaded(true);
+            logsLoadedRef.current = true;
+          }
         }
 
         if (userProfile && userProfile.id) {
