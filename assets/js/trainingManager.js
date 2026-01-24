@@ -25,8 +25,23 @@ function getWeeklyTargetTSS(challenge, customTarget) {
   // challenge 정규화 (대소문자 무시, 공백 제거)
   const normalizedChallenge = String(challenge || 'Fitness').trim();
   
-  // 등급별 설정 가져오기
-  const level = TRAINING_LEVELS[normalizedChallenge] || TRAINING_LEVELS['Fitness'];
+  // 대소문자 무시하여 키 찾기
+  var level = null;
+  var levelKey = null;
+  for (var key in TRAINING_LEVELS) {
+    if (key.toLowerCase() === normalizedChallenge.toLowerCase()) {
+      level = TRAINING_LEVELS[key];
+      levelKey = key;
+      break;
+    }
+  }
+  
+  // 매칭되지 않으면 기본값 사용
+  if (!level) {
+    console.warn('[getWeeklyTargetTSS] Challenge not found:', normalizedChallenge, 'Using default: Fitness');
+    level = TRAINING_LEVELS['Fitness'];
+    levelKey = 'Fitness';
+  }
   
   // 사용자 지정 목표가 있으면 사용, 없으면 등급별 기본 target 사용
   const target = customTarget && customTarget > 0 ? customTarget : level.target;
