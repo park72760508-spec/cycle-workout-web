@@ -414,9 +414,10 @@ async function getExistingStravaActivityIds() {
 /**
  * 사용자의 스트라바 활동 중 TSS 포인트가 아직 적립되지 않은 활동 조회
  * @param {string} userId - 사용자 ID
+ * @param {string} userCreatedDate - 사용자 생성일 (YYYY-MM-DD 형식). 이 날짜 포함 이후 활동만 반환
  * @returns {Promise<Map<string, {docId: string, tss: number, date: string}>>} activityId를 키로 하는 Map
  */
-async function getUnappliedStravaActivities(userId) {
+async function getUnappliedStravaActivities(userId, userCreatedDate = '') {
   try {
     if (!window.firestore) {
       console.warn('[getUnappliedStravaActivities] ⚠️ Firestore가 초기화되지 않았습니다.');
@@ -436,19 +437,27 @@ async function getUnappliedStravaActivities(userId) {
       const data = doc.data();
       const activityId = data.activity_id;
       const tssApplied = data.tss_applied === true;
+      const activityDate = data.date || '';
       
       // tss_applied가 false이거나 없는 경우만 포함
       if (activityId && !tssApplied) {
+        // 사용자 생성일(created_at) 이후 활동만 포함 (포인트 적립 대상)
+        if (userCreatedDate && activityDate && activityDate < userCreatedDate) {
+          console.log(`[getUnappliedStravaActivities] ⚠️ 생성일 이전 활동 제외: ${activityId} (${activityDate} < ${userCreatedDate})`);
+          return; // 생성일 이전 활동은 스킵
+        }
+        
         unappliedActivities.set(String(activityId), {
           docId: doc.id,
           tss: Number(data.tss || 0),
-          date: data.date || '',
-          title: data.title || ''
+          date: activityDate,
+          title: data.title || '',
+          created_at: data.created_at || ''
         });
       }
     });
     
-    console.log(`[getUnappliedStravaActivities] 사용자 ${userId}: TSS 미적립 활동 ${unappliedActivities.size}개 발견`);
+    console.log(`[getUnappliedStravaActivities] 사용자 ${userId}: TSS 미적립 활동 ${unappliedActivities.size}개 발견 (생성일 기준: ${userCreatedDate || '미설정'})`);
     return unappliedActivities;
   } catch (error) {
     console.error('[getUnappliedStravaActivities] ❌ 조회 실패:', error);

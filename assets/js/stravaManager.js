@@ -417,11 +417,12 @@ async function fetchAndProcessStravaData() {
       }
 
       // 이미 저장된 스트라바 활동 중 TSS가 아직 적립되지 않은 활동 조회 (중복 적립 방지)
+      // 사용자 생성일(created_at) 이후 활동만 조회하도록 userCreatedDate 전달
       let unappliedActivities = new Map();
       try {
         if (typeof window.getUnappliedStravaActivities === 'function') {
-          unappliedActivities = await window.getUnappliedStravaActivities(userId);
-          console.log(`[fetchAndProcessStravaData] 사용자 ${userId}의 TSS 미적립 활동 ${unappliedActivities.size}개 발견`);
+          unappliedActivities = await window.getUnappliedStravaActivities(userId, userCreatedDate);
+          console.log(`[fetchAndProcessStravaData] 사용자 ${userId}의 TSS 미적립 활동 ${unappliedActivities.size}개 발견 (생성일: ${userCreatedDate || '미설정'})`);
         }
       } catch (unappliedError) {
         console.warn(`[fetchAndProcessStravaData] 사용자 ${userId}의 TSS 미적립 활동 조회 실패:`, unappliedError);
@@ -517,11 +518,14 @@ async function fetchAndProcessStravaData() {
               existingIds.add(actId);
               newCount += 1;
               
-              // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
+              // 사용자 생성일(created_at) 이후 활동인지 확인 (포인트 적립 대상)
+              // 이미 위에서 가입일 이전 활동은 스킵했으므로, 여기서는 생성일 포함 이후 활동만 처리됨
               const activityTss = mappedActivity.tss || 0;
+              
+              // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
               if (!stelvioLogDates.has(dateStr)) {
                 totalTss += activityTss;
-                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss})`);
+                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss}, 날짜: ${dateStr}, 생성일: ${userCreatedDate || '미설정'})`);
                 
                 // TSS 적립 완료 표시
                 if (typeof window.markStravaActivityTssApplied === 'function') {
@@ -549,10 +553,24 @@ async function fetchAndProcessStravaData() {
               // 이미 저장된 활동 중 TSS가 아직 적립되지 않은 경우 확인
               const unapplied = unappliedActivities.get(actId);
               if (unapplied) {
+                // 사용자 생성일(created_at) 이후 활동인지 확인 (포인트 적립 대상)
+                if (userCreatedDate && dateStr < userCreatedDate) {
+                  console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외 (생성일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
+                  // 생성일 이전 활동은 TSS 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
+                  if (typeof window.markStravaActivityTssApplied === 'function') {
+                    try {
+                      await window.markStravaActivityTssApplied(userId, actId);
+                    } catch (markError) {
+                      console.warn(`[fetchAndProcessStravaData] TSS 적립 표시 실패 (${actId}):`, markError);
+                    }
+                  }
+                  continue;
+                }
+                
                 // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
                 if (!stelvioLogDates.has(dateStr)) {
                   totalTss += unapplied.tss;
-                  console.log(`[fetchAndProcessStravaData] ✅ 기존 활동 TSS 누적: ${actId} (TSS: ${unapplied.tss})`);
+                  console.log(`[fetchAndProcessStravaData] ✅ 기존 활동 TSS 누적: ${actId} (TSS: ${unapplied.tss}, 날짜: ${dateStr})`);
                   
                   // TSS 적립 완료 표시
                   if (typeof window.markStravaActivityTssApplied === 'function') {
