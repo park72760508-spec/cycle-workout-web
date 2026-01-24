@@ -186,6 +186,64 @@ let isCompleteUserInfoModalShown = false;
 // 로그인 성공 여부 추적 (페이지 로드 시 모달 표시 방지)
 let isLoginJustCompleted = false;
 
+// 베이스캠프 화면으로 전환하는 헬퍼 함수
+function switchToBasecampScreen() {
+  console.log('🔄 베이스캠프 화면으로 전환 시작');
+  
+  const basecampScreen = document.getElementById('basecampScreen');
+  if (!basecampScreen) {
+    console.error('❌ basecampScreen 요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  // showScreen 함수가 있으면 사용
+  if (typeof window.showScreen === 'function') {
+    try {
+      window.showScreen('basecampScreen');
+      // 화면 전환 확인
+      setTimeout(() => {
+        const isVisible = basecampScreen.classList.contains('active') || 
+                         window.getComputedStyle(basecampScreen).display !== 'none';
+        if (!isVisible) {
+          console.warn('⚠️ showScreen이 작동하지 않음, 직접 전환 시도');
+          directSwitchToBasecamp();
+        } else {
+          console.log('✅ 베이스캠프 화면 전환 성공 (showScreen 사용)');
+        }
+      }, 100);
+      return;
+    } catch (e) {
+      console.error('❌ showScreen 실행 중 오류:', e);
+    }
+  }
+  
+  // 직접 화면 전환 (fallback)
+  directSwitchToBasecamp();
+  
+  function directSwitchToBasecamp() {
+    // 모든 화면 숨기기 (splashScreen 제외)
+    document.querySelectorAll('.screen').forEach(screen => {
+      if (screen.id !== 'basecampScreen' && screen.id !== 'splashScreen') {
+        screen.classList.remove('active');
+        screen.style.display = 'none';
+        screen.style.opacity = '';
+        screen.style.visibility = '';
+      }
+    });
+    
+    // 베이스캠프 화면 표시
+    basecampScreen.classList.add('active');
+    basecampScreen.style.display = 'block';
+    basecampScreen.style.opacity = '1';
+    basecampScreen.style.visibility = 'visible';
+    
+    // 스크롤을 맨 위로
+    window.scrollTo(0, 0);
+    
+    console.log('✅ 베이스캠프 화면 직접 표시 완료');
+  }
+}
+
 // 전화번호 유틸: 숫자만 남기기
 function unformatPhone(input) {
   return String(input || '').replace(/\D+/g, '');
@@ -679,9 +737,9 @@ function initAuthStateListener() {
               }, 500);
             } else {
               // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
-              if (typeof showScreen === 'function') {
-                showScreen('basecampScreen');
-              }
+              setTimeout(() => {
+                switchToBasecampScreen();
+              }, 300);
             }
             
             // 플래그 리셋 (한 번만 실행되도록)
@@ -697,9 +755,9 @@ function initAuthStateListener() {
             
             if (!needsInfo) {
               // 필수 정보가 모두 있으면 베이스캠프 화면으로 이동
-              if (typeof showScreen === 'function') {
-                showScreen('basecampScreen');
-              }
+              setTimeout(() => {
+                switchToBasecampScreen();
+              }, 300);
             }
             // needsInfo가 true여도 페이지 로드 시에는 모달을 표시하지 않음
           }
