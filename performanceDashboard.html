@@ -67,17 +67,91 @@ Output Format (JSON Only):
       var body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.7, topP: 0.8, topK: 40 } };
       try {
         var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        if (!res.ok) throw new Error('Gemini API 오류: ' + (await res.text()));
+        
+        if (!res.ok) {
+          var errorText = await res.text();
+          var errorMsg = '';
+          try {
+            var errorData = JSON.parse(errorText);
+            errorMsg = (errorData.error && errorData.error.message) || errorText;
+          } catch (e) {
+            errorMsg = errorText.substring(0, 200);
+          }
+          throw new Error('Gemini API 오류 (' + res.status + '): ' + errorMsg);
+        }
+        
         var data = await res.json();
-        var text = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text) || '';
-        if (!text) throw new Error('Gemini API 응답이 비어있습니다.');
+        
+        // 응답 구조 확인 및 디버깅
+        if (!data || !data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
+          console.error('[callGeminiCoach] 응답 구조 오류:', data);
+          throw new Error('Gemini API 응답에 candidates가 없습니다.');
+        }
+        
+        var candidate = data.candidates[0];
+        
+        // finishReason 확인 (SAFETY 등으로 차단되었을 수 있음)
+        if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+          console.warn('[callGeminiCoach] finishReason:', candidate.finishReason);
+          if (candidate.finishReason === 'SAFETY') {
+            throw new Error('Gemini API가 안전 정책으로 인해 응답을 차단했습니다.');
+          }
+        }
+        
+        // content 확인
+        if (!candidate.content || !candidate.content.parts || !Array.isArray(candidate.content.parts) || candidate.content.parts.length === 0) {
+          console.error('[callGeminiCoach] content 구조 오류:', candidate);
+          throw new Error('Gemini API 응답에 content.parts가 없습니다.');
+        }
+        
+        var text = candidate.content.parts[0].text || '';
+        
+        if (!text || text.trim() === '') {
+          console.error('[callGeminiCoach] 응답 텍스트가 비어있음. 전체 응답:', JSON.stringify(data, null, 2));
+          throw new Error('Gemini API 응답이 비어있습니다.');
+        }
+        
         text = text.trim();
-        if (text.indexOf('```') === 0) text = text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '');
-        var result = JSON.parse(text);
-        return { condition_score: result.condition_score || 50, training_status: result.training_status || 'Building Base', vo2max_estimate: result.vo2max_estimate || 40, coach_comment: result.coach_comment || (userProfile && userProfile.name || '사용자') + '님, 오늘도 화이팅하세요!', recommended_workout: result.recommended_workout || 'Active Recovery (Z1)' };
+        
+        // 마크다운 코드 블록 제거
+        if (text.indexOf('```') === 0) {
+          text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+        }
+        
+        // JSON 파싱
+        var result;
+        try {
+          result = JSON.parse(text);
+        } catch (parseErr) {
+          console.error('[callGeminiCoach] JSON 파싱 실패. 원본 텍스트:', text);
+          throw new Error('Gemini API 응답을 JSON으로 파싱할 수 없습니다: ' + parseErr.message);
+        }
+        
+        // 결과 검증 및 기본값 설정
+        return {
+          condition_score: (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50,
+          training_status: result.training_status || 'Building Base',
+          vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
+          coach_comment: result.coach_comment || ((userProfile && userProfile.name) || '사용자') + '님, 오늘도 화이팅하세요!',
+          recommended_workout: result.recommended_workout || 'Active Recovery (Z1)'
+        };
       } catch (e) {
-        console.error('Gemini Coach API 오류:', e);
-        return { condition_score: 50, training_status: 'Building Base', vo2max_estimate: 40, coach_comment: (userProfile && userProfile.name || '사용자') + '님, 데이터 분석 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', recommended_workout: 'Active Recovery (Z1)' };
+        console.error('[callGeminiCoach] Gemini Coach API 오류:', e);
+        console.error('[callGeminiCoach] 오류 상세:', {
+          message: e.message,
+          stack: e.stack,
+          userProfile: userProfile ? { id: userProfile.id, name: userProfile.name } : null,
+          recentLogsCount: recentLogs ? recentLogs.length : 0
+        });
+        
+        // 기본값 반환 (오류 발생 시)
+        return {
+          condition_score: 50,
+          training_status: 'Building Base',
+          vo2max_estimate: 40,
+          coach_comment: ((userProfile && userProfile.name) || '사용자') + '님, 데이터 분석 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+          recommended_workout: 'Active Recovery (Z1)'
+        };
       }
     }
     window.callGeminiCoach = callGeminiCoach;
