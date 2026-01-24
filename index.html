@@ -4052,6 +4052,38 @@
             return;
           }
           
+          // 직접 DOM 조작으로 화면 전환 (더 안정적)
+          function directScreenSwitch() {
+            // 모든 화면 숨기기 (splashScreen 제외)
+            document.querySelectorAll('.screen').forEach(screen => {
+              if (screen.id !== 'basecampScreen' && screen.id !== 'splashScreen') {
+                screen.classList.remove('active');
+                screen.style.display = 'none';
+                screen.style.opacity = '';
+                screen.style.visibility = '';
+              }
+            });
+            
+            // authScreen 숨김
+            if (authScreen) {
+              authScreen.classList.remove('active');
+              authScreen.style.display = 'none';
+              authScreen.style.opacity = '';
+              authScreen.style.visibility = '';
+              console.log('✅ authScreen 숨김');
+            }
+            
+            // basecampScreen 표시
+            basecampScreen.classList.add('active');
+            basecampScreen.style.display = 'block';
+            basecampScreen.style.opacity = '1';
+            basecampScreen.style.visibility = 'visible';
+            console.log('✅ basecampScreen 직접 표시 완료');
+            
+            // 강제로 스크롤을 맨 위로
+            window.scrollTo(0, 0);
+          }
+          
           // showScreen 함수가 있으면 사용 (우선)
           if (typeof window.showScreen === 'function') {
             try {
@@ -4066,42 +4098,18 @@
                   directScreenSwitch();
                 } else {
                   console.log('✅ showScreen으로 화면 전환 성공');
+                  // 추가 확인: opacity와 visibility도 설정
+                  basecampScreen.style.opacity = '1';
+                  basecampScreen.style.visibility = 'visible';
                 }
               }, 100);
-              return;
             } catch (err) {
               console.warn('⚠️ showScreen 함수 실행 중 오류, 직접 전환 시도:', err);
+              directScreenSwitch();
             }
           } else {
             console.warn('⚠️ showScreen 함수가 없음, 직접 전환 시도');
-          }
-          
-          // 직접 DOM 조작으로 화면 전환 (fallback)
-          directScreenSwitch();
-          
-          function directScreenSwitch() {
-            // 모든 화면 숨기기
-            document.querySelectorAll('.screen').forEach(screen => {
-              if (screen.id !== 'basecampScreen' && screen.id !== 'splashScreen') {
-                screen.classList.remove('active');
-                screen.style.display = 'none';
-              }
-            });
-            
-            // authScreen 숨김
-            if (authScreen) {
-              authScreen.classList.remove('active');
-              authScreen.style.display = 'none';
-              console.log('✅ authScreen 숨김');
-            }
-            
-            // basecampScreen 표시
-            basecampScreen.classList.add('active');
-            basecampScreen.style.display = 'block';
-            console.log('✅ basecampScreen 직접 표시 완료');
-            
-            // 강제로 스크롤을 맨 위로
-            window.scrollTo(0, 0);
+            directScreenSwitch();
           }
         };
         
