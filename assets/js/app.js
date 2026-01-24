@@ -5993,6 +5993,75 @@ function initializeCurrentScreen(screenId) {
   }
 }
 
+// ========== Data Proxy Fallback: 대시보드(iframe) 로그 요청 처리 ==========
+(function initDashboardLogsProxy() {
+  window.addEventListener('message', async function(e) {
+    if (!e.data || e.data.type !== 'REQUEST_LOGS') return;
+    var userId = e.data.userId;
+    console.log('[MainApp] 대시보드로부터 로그 요청 수신:', userId);
+    if (!userId) return;
+
+    var auth = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : (window.auth || null);
+    if (!auth || !auth.currentUser) {
+      console.warn('[MainApp] 메인 앱도 비로그인 상태라 데이터 제공 불가');
+      return;
+    }
+
+    try {
+      var fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : (window.firestore || null);
+      if (!fs) {
+        console.warn('[MainApp] Firestore 없음');
+        return;
+      }
+
+      var thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+      var logsRef = fs.collection('users').doc(userId).collection('logs');
+
+      var snapshot;
+      try {
+        snapshot = await logsRef.where('date', '>=', dateStr).orderBy('date', 'desc').limit(50).get();
+      } catch (idxErr) {
+        if (String(idxErr.message || '').indexOf('index') !== -1) {
+          snapshot = await logsRef.limit(100).get();
+        } else {
+          throw idxErr;
+        }
+      }
+
+      var logs = [];
+      snapshot.forEach(function(doc) {
+        var d = doc.data();
+        if (d.source !== 'strava' && d.source) return;
+        if (d.date && d.date < dateStr) return;
+        logs.push({ id: doc.id, ...d });
+      });
+      logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+      logs = logs.slice(0, 50);
+
+      console.log('[MainApp] ' + logs.length + '개 로그 데이터 대시보드로 전송');
+
+      var iframes = document.querySelectorAll('iframe');
+      iframes.forEach(function(iframe) {
+        try {
+          if (iframe.contentWindow) {
+            iframe.contentWindow.postMessage({
+              type: 'DASHBOARD_LOGS_DATA',
+              logs: logs,
+              userId: userId
+            }, '*');
+          }
+        } catch (err) {
+          console.warn('[MainApp] iframe postMessage 실패:', err);
+        }
+      });
+    } catch (error) {
+      console.error('[MainApp] 로그 조회 중 오류:', error);
+    }
+  });
+})();
+
 // ========== 새 사용자 등록 시스템 ==========
 
 // 새 사용자 폼 토글
