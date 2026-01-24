@@ -87,15 +87,20 @@ Output Format (JSON Only):
       var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
+      var generationConfig = {
+        maxOutputTokens: 2048,
+        temperature: 0.7,
+        topP: 0.8,
+        topK: 40
+      };
+      // gemini-2.5-pro는 thinking 모드가 필수이므로 thinkingConfig를 추가하지 않음
+      // 다른 모델(예: gemini-2.5-flash)은 thinking을 비활성화하여 parts[0]이 텍스트가 되도록 함
+      if (modelName.indexOf('pro') === -1 && modelName.indexOf('thinking') === -1) {
+        generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      }
       var body = {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: 2048,
-          temperature: 0.7,
-          topP: 0.8,
-          topK: 40,
-          thinkingConfig: { thinkingBudget: 0 }
-        }
+        generationConfig: generationConfig
       };
       var timeoutMs = isMobile() ? 45000 : 25000;
       var lastErr = null;
