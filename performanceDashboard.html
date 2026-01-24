@@ -540,13 +540,15 @@ Output Format (JSON Only):
             plugins: {
               legend: {
                 display: true,
-                position: 'top',
+                position: 'bottom',
                 labels: {
                   usePointStyle: true,
-                  padding: 15,
+                  padding: 10,
                   font: {
-                    size: 12
-                  }
+                    size: 11
+                  },
+                  boxWidth: 12,
+                  boxHeight: 12
                 }
               },
               tooltip: {
@@ -619,6 +621,16 @@ Output Format (JSON Only):
         <DashboardCard title="훈련 트렌드 (최근 7일)">
           <div className="h-[200px]">
             <canvas ref={chartRef}></canvas>
+          </div>
+          <div className="mt-2 px-2 pb-1 text-xs text-gray-500 leading-relaxed">
+            <div className="flex items-start gap-2 mb-1">
+              <span className="text-blue-500">🟦</span>
+              <span><strong className="text-gray-700">Fitness (체력)</strong>: 지난 6주간 꾸준히 쌓아올린 기초 체력 (높을수록 좋음)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-red-500">🟥</span>
+              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 최근 7일간의 훈련으로 쌓인 단기 피로 (높으면 휴식 필요)</span>
+            </div>
           </div>
         </DashboardCard>
       );
