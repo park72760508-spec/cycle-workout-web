@@ -51,6 +51,12 @@
   <script>
     window.GEMINI_COACH_SYSTEM_PROMPT = `Role: 당신은 'Stelvio AI'의 수석 사이클링 코치이자 데이터 분석가입니다.
 Context: 사용자의 프로필({{userProfile}})과 최근 30일간의 훈련 로그({{recentLogs}})를 분석하여 JSON 형식으로 인사이트를 제공해야 합니다.
+
+[데이터 출처]
+- userProfile: Firestore users/{userId} 컬렉션 (id, name, ftp, weight, grade, challenge, acc_points, rem_points 등)
+- recentLogs: Firestore users/{userId}/logs 서브컬렉션 (최근 30일, source='strava' 또는 source 없음)
+  * 로그 필드: activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source 등
+  * 최대 30개, 날짜 내림차순 정렬
 Task Requirements:
 1. **Condition Score (0~100):** TSB(Training Stress Balance)와 최근 운동 강도를 기반으로 컨디션 점수를 산출하세요.
 2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
@@ -81,7 +87,16 @@ Output Format (JSON Only):
       var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
-      var body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.7, topP: 0.8, topK: 40 } };
+      var body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 2048,
+          temperature: 0.7,
+          topP: 0.8,
+          topK: 40,
+          thinkingConfig: { thinkingBudget: 0 }
+        }
+      };
       var timeoutMs = isMobile() ? 45000 : 25000;
       var lastErr = null;
       var hasAbortController = typeof AbortController !== 'undefined';
@@ -133,11 +148,27 @@ Output Format (JSON Only):
           if (candidate.finishReason === 'SAFETY') {
             throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
           }
-          if (!candidate.content || !candidate.content.parts || !candidate.content.parts[0]) {
+          var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
+          if (!parts.length) {
+            console.error('[callGeminiCoach] content.parts 없음:', {
+              finishReason: candidate.finishReason,
+              hasContent: !!candidate.content,
+              partsLength: parts.length,
+              candidate: JSON.stringify(candidate).substring(0, 500)
+            });
             throw new Error('Gemini API 응답에 content.parts가 없습니다.');
           }
-          var text = (candidate.content.parts[0].text || '').trim();
-          if (!text) throw new Error('Gemini API 응답이 비어있습니다.');
+          var text = '';
+          for (var i = 0; i < parts.length; i++) {
+            if (parts[i] && typeof parts[i].text === 'string' && parts[i].text.trim()) {
+              text = parts[i].text.trim();
+              break;
+            }
+          }
+          if (!text) {
+            console.error('[callGeminiCoach] text가 있는 part 없음:', { finishReason: candidate.finishReason, partsLength: parts.length });
+            throw new Error('Gemini API 응답이 비어있습니다.');
+          }
           if (text.indexOf('```') === 0) {
             text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
           }
@@ -505,6 +536,9 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       
       // 사용자 프로필 로드: URL/postMessage/localStorage 즉시 표시, Firestore는 나중에 보강
+      // AI 분석에 사용되는 userProfile 필드:
+      // - id, name, ftp, weight, grade, challenge, acc_points, rem_points 등
+      // - 출처: Firestore users/{userId} 컬렉션 또는 localStorage/postMessage
       useEffect(() => {
         function applyProfileFromUser(u) {
           const id = u.id || u.uid;
@@ -711,6 +745,11 @@ Output Format (JSON Only):
           }
           
           try {
+            // AI 분석용 훈련 로그 수집
+            // 출처: Firestore users/{userId}/logs 서브컬렉션
+            // 기간: 최근 30일 (오늘 기준)
+            // 필터: source='strava' 또는 source 없음 (Stelvio 직접 입력 제외)
+            // 최대: 30개 (날짜 내림차순)
             var thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
@@ -727,7 +766,9 @@ Output Format (JSON Only):
               var raw = [];
               logsSnapshot.docs.forEach(function(doc) {
                 var d = doc.data();
+                // Strava 활동만 포함 (source='strava' 또는 source 없음)
                 if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                  // 로그 필드: { id, activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source, ... }
                   raw.push({ id: doc.id, ...d });
                 }
               });
@@ -735,7 +776,7 @@ Output Format (JSON Only):
               logs = raw.slice(0, 30);
               setRecentLogs(logs);
               setLogsLoaded(true);
-              console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개');
+              console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개 (AI 분석용)');
             } catch (queryErr) {
               console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr);
               if (retryCount < maxRetries) {
@@ -821,6 +862,10 @@ Output Format (JSON Only):
             if (skipCache) setLoading(true);
             
             if (typeof window.callGeminiCoach === 'function') {
+              // AI 분석에 전달되는 데이터:
+              // - userProfile: { id, name, ftp, weight, grade, challenge, acc_points, rem_points, ... }
+              // - logs: 최근 30일간 훈련 로그 배열 (Firestore users/{userId}/logs, source='strava' 또는 없음)
+              //   각 로그: { id, activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source, ... }
               var analysis = await window.callGeminiCoach(userProfile, logs);
               var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
               setCoachData(analysis);
