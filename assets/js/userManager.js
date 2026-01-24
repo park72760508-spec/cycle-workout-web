@@ -1677,6 +1677,7 @@ async function loadUsers() {
               </div>
             </div>
             <div class="user-actions" onclick="event.stopPropagation();">
+              <button class="btn-dashboard" onclick="showPerformanceDashboard('${user.id}')" title="대시보드 보기" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; margin-right: 4px; transition: all 0.2s;">📊 대시보드</button>
               ${canEdit ? `
                 <button class="btn-edit"   onclick="editUser('${user.id}')"   title="수정">✏️</button>
                 <button class="btn-delete ${deleteButtonClass}" onclick="deleteUser('${user.id}')" title="삭제" ${deleteButtonDisabled}>🗑️</button>
@@ -2987,6 +2988,40 @@ window.saveUser = saveUser;
 window.selectProfile = selectUser;
 window.showExpiryWarningModal = showExpiryWarningModal;
 window.closeExpiryWarningModal = closeExpiryWarningModal;
+
+/**
+ * Performance Dashboard 화면 표시
+ * @param {string} userId - 사용자 ID (선택사항, 없으면 현재 사용자)
+ */
+function showPerformanceDashboard(userId) {
+  // 사용자 선택 (대시보드에서 사용)
+  if (userId) {
+    // 해당 사용자 정보를 가져와서 currentUser로 설정
+    apiGetUser(userId).then(result => {
+      if (result.success) {
+        window.currentUser = result.item;
+        localStorage.setItem('currentUser', JSON.stringify(result.item));
+      }
+      // 대시보드 화면 표시
+      if (typeof showScreen === 'function') {
+        showScreen('performanceDashboardScreen');
+      }
+    }).catch(error => {
+      console.error('사용자 정보 가져오기 실패:', error);
+      // 오류가 있어도 대시보드 표시
+      if (typeof showScreen === 'function') {
+        showScreen('performanceDashboardScreen');
+      }
+    });
+  } else {
+    // 현재 사용자로 대시보드 표시
+    if (typeof showScreen === 'function') {
+      showScreen('performanceDashboardScreen');
+    }
+  }
+}
+
+window.showPerformanceDashboard = showPerformanceDashboard;
 
 // API 함수들 전역 노출
 window.apiGetUsers   = window.apiGetUsers   || apiGetUsers;

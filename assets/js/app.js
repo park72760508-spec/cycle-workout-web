@@ -3278,6 +3278,18 @@ if (!window.showScreen) {
           if (addCard) addCard.remove();
         }, 100);
       }
+      
+      // Performance Dashboard 화면 처리
+      if (id === 'performanceDashboardScreen') {
+        // iframe이 로드되면 자동으로 대시보드가 표시됨
+        const iframe = document.getElementById('performanceDashboardFrame');
+        if (iframe) {
+          // iframe 로드 완료 대기 (필요시)
+          iframe.onload = function() {
+            console.log('Performance Dashboard loaded');
+          };
+        }
+      }
 
       // Training Room 화면: 훈련방 목록 자동 로딩
       if (id === 'trainingRoomScreen') {
