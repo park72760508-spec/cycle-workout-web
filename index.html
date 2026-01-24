@@ -6576,32 +6576,49 @@ Output Format (JSON Only):
     }
     
     // Initialize when dashboard screen is shown
-    var originalShowScreen = window.showScreen;
-    if (originalShowScreen) {
-      window.showScreen = function(screenId) {
-        originalShowScreen.apply(this, arguments);
-        if (screenId === 'performanceDashboardScreen') {
-          // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
-          var root = document.getElementById('dashboard-root');
-          if (root) {
-            root.removeAttribute('data-rendered'); // 재렌더링을 위해 플래그 제거
-            setTimeout(initPerformanceDashboard, 100);
+    // 기존 showScreen 함수를 래핑하여 대시보드 초기화 추가
+    (function() {
+      // window.originalShowScreen이 이미 있으면 사용, 없으면 현재 showScreen 저장
+      if (typeof window.originalShowScreen === 'undefined') {
+        window.originalShowScreen = window.showScreen || function(screenId) {
+          console.log('[Dashboard] showScreen fallback:', screenId);
+        };
+      }
+      
+      var currentShowScreen = window.showScreen || window.originalShowScreen;
+      if (typeof currentShowScreen === 'function') {
+        window.showScreen = function(screenId) {
+          // 기존 showScreen 호출
+          if (window.originalShowScreen && typeof window.originalShowScreen === 'function') {
+            window.originalShowScreen.apply(this, arguments);
+          } else if (currentShowScreen) {
+            currentShowScreen.apply(this, arguments);
           }
-        }
-      };
-    } else {
-      // Fallback: check periodically
-      setInterval(function() {
-        var screen = document.getElementById('performanceDashboardScreen');
-        if (screen && window.getComputedStyle(screen).display !== 'none') {
-          var root = document.getElementById('dashboard-root');
-          if (root && !root.hasAttribute('data-rendered')) {
-            root.setAttribute('data-rendered', 'true');
-            initPerformanceDashboard();
+          
+          // Performance Dashboard 화면인 경우 초기화
+          if (screenId === 'performanceDashboardScreen') {
+            // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
+            var root = document.getElementById('dashboard-root');
+            if (root) {
+              root.removeAttribute('data-rendered'); // 재렌더링을 위해 플래그 제거
+              setTimeout(initPerformanceDashboard, 100);
+            }
           }
-        }
-      }, 500);
-    }
+        };
+      } else {
+        // Fallback: check periodically
+        setInterval(function() {
+          var screen = document.getElementById('performanceDashboardScreen');
+          if (screen && window.getComputedStyle(screen).display !== 'none') {
+            var root = document.getElementById('dashboard-root');
+            if (root && !root.hasAttribute('data-rendered')) {
+              root.setAttribute('data-rendered', 'true');
+              initPerformanceDashboard();
+            }
+          }
+        }, 500);
+      }
+    })();
   </script>
   
   <!-- Performance Dashboard: CSS Styles (Scoped) -->
