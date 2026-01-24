@@ -59,7 +59,11 @@ Task Requirements:
 Output Format (JSON Only):
 { "condition_score": 85, "training_status": "Ready to Race", "vo2max_estimate": 54, "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.", "recommended_workout": "Active Recovery (Z1)" }`;
     function isMobile() {
-      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+      var ua = navigator.userAgent || '';
+      var isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      var isTouchDevice = (navigator.maxTouchPoints && navigator.maxTouchPoints > 2) || ('ontouchstart' in window);
+      var isBluefy = /Bluefy/i.test(ua) || (window.navigator && window.navigator.standalone === false && window.navigator.standalone !== undefined);
+      return isMobileUA || isTouchDevice || isBluefy;
     }
     async function callGeminiCoach(userProfile, recentLogs) {
       var apiKey;
@@ -79,12 +83,27 @@ Output Format (JSON Only):
       var body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.7, topP: 0.8, topK: 40 } };
       var timeoutMs = isMobile() ? 45000 : 25000;
       var lastErr = null;
+      var hasAbortController = typeof AbortController !== 'undefined';
       for (var attempt = 0; attempt < 3; attempt++) {
         try {
-          var controller = new AbortController();
-          var timeoutId = setTimeout(function() { controller.abort(); }, timeoutMs);
-          var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
-          clearTimeout(timeoutId);
+          var controller = null;
+          var timeoutId = null;
+          var fetchOptions = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+          if (hasAbortController) {
+            try {
+              controller = new AbortController();
+              timeoutId = setTimeout(function() { if (controller) controller.abort(); }, timeoutMs);
+              fetchOptions.signal = controller.signal;
+            } catch (e) {
+              hasAbortController = false;
+            }
+          }
+          var fetchPromise = fetch(url, fetchOptions);
+          var timeoutPromise = hasAbortController ? null : new Promise(function(resolve, reject) {
+            timeoutId = setTimeout(function() { reject(new Error('요청 시간 초과')); }, timeoutMs);
+          });
+          var res = hasAbortController ? await fetchPromise : await Promise.race([fetchPromise, timeoutPromise]);
+          if (timeoutId) clearTimeout(timeoutId);
           
           if (!res.ok) {
             var errBody = await res.text();
@@ -193,8 +212,20 @@ Output Format (JSON Only):
   <script>
     window.__dashboardUserFromParent = null;
     window.addEventListener('message', function (e) {
-      if (e.data && e.data.type === 'DASHBOARD_USER' && e.data.user) {
-        window.__dashboardUserFromParent = e.data.user;
+      try {
+        if (e.data && e.data.type === 'DASHBOARD_USER' && e.data.user) {
+          if (window.parent && window.parent !== window) {
+            var origin = e.origin || '';
+            var parentOrigin = window.location.origin || '';
+            if (origin === parentOrigin || origin === '*' || parentOrigin === '') {
+              window.__dashboardUserFromParent = e.data.user;
+            }
+          } else {
+            window.__dashboardUserFromParent = e.data.user;
+          }
+        }
+      } catch (err) {
+        console.warn('[Dashboard] postMessage 처리 오류:', err);
       }
     });
   </script>
@@ -455,10 +486,18 @@ Output Format (JSON Only):
           let userId = null;
           let fullUser = null;
           try {
-            const params = new URLSearchParams(window.location.search);
-            userId = params.get('userId') || params.get('user_id') || null;
+            var search = window.location.search || '';
+            if (search && typeof URLSearchParams !== 'undefined') {
+              const params = new URLSearchParams(search);
+              userId = params.get('userId') || params.get('user_id') || null;
+            } else if (search) {
+              var match = search.match(/[?&](?:userId|user_id)=([^&]+)/);
+              if (match) userId = decodeURIComponent(match[1]);
+            }
             if (userId) console.log('[Dashboard] URL에서 사용자 ID 가져옴:', userId);
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[Dashboard] URL 파라미터 파싱 실패:', e);
+          }
           if (!userId && window.__dashboardUserFromParent && window.__dashboardUserFromParent.id) {
             fullUser = window.__dashboardUserFromParent;
             userId = fullUser.id;
@@ -535,8 +574,20 @@ Output Format (JSON Only):
         const uid = phase1Immediate();
         
         const onParentUser = function (e) {
-          if (e.data && e.data.type === 'DASHBOARD_USER' && e.data.user) {
-            applyProfileFromUser(e.data.user);
+          try {
+            if (e.data && e.data.type === 'DASHBOARD_USER' && e.data.user) {
+              if (window.parent && window.parent !== window) {
+                var origin = e.origin || '';
+                var parentOrigin = window.location.origin || '';
+                if (origin === parentOrigin || origin === '*' || parentOrigin === '') {
+                  applyProfileFromUser(e.data.user);
+                }
+              } else {
+                applyProfileFromUser(e.data.user);
+              }
+            }
+          } catch (err) {
+            console.warn('[Dashboard] postMessage 처리 오류:', err);
           }
         };
         window.addEventListener('message', onParentUser);
