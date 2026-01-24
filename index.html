@@ -5434,6 +5434,11 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js"></script>
   
+  <!-- Performance Dashboard 화면 (AI 분석 대시보드) -->
+  <div id="performanceDashboardScreen" class="screen" style="display: none;">
+    <iframe id="performanceDashboardFrame" src="performanceDashboard.html" style="width: 100%; height: 100vh; border: none; display: block;"></iframe>
+  </div>
+  
   <!-- 환영 오버레이 (사용자 등록 시) - body의 직접 자식으로 배치 -->
   <div id="userWelcomeModal" class="user-welcome-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 99999; animation: fadeIn 0.5s ease-out;">
     <div class="welcome-content" style="position: relative; background: linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ffd700 100%); border: 3px solid #ffd700; border-radius: 20px; padding: 30px 25px; max-width: 90%; width: 400px; text-align: center; box-shadow: 0 20px 60px rgba(255, 215, 0, 0.5), 0 0 100px rgba(255, 107, 53, 0.3); animation: celebrationPulse 2s ease-in-out infinite; transform-origin: center;">
