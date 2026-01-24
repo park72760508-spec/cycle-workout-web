@@ -198,7 +198,7 @@ Output Format (JSON Only):
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
       var generationConfig = {
-        maxOutputTokens: 10000, // 충분한 토큰으로 시작하여 MAX_TOKENS 오류 방지 및 속도 향상
+        maxOutputTokens: 20000, // 충분한 토큰으로 시작하여 MAX_TOKENS 오류 방지 및 속도 향상 (10000 → 20000 증가)
         temperature: 0.7,
         topP: 0.8,
         topK: 40
@@ -285,11 +285,11 @@ Output Format (JSON Only):
             throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
           }
           var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
-          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도 (안전장치, 초기값 10000이면 거의 발생하지 않음)
+          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도 (안전장치, 초기값 20000이면 거의 발생하지 않음)
           if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
             if (attempt < 2) {
-              // 이미 10000이면 20000으로 증가 (최대 32000까지)
-              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 10000 ? 10000 : generationConfig.maxOutputTokens * 2);
+              // 이미 20000이면 32000으로 증가 (최대 32000까지)
+              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 20000 ? 20000 : generationConfig.maxOutputTokens * 2);
               body.generationConfig = generationConfig;
               console.warn('[callGeminiCoach] MAX_TOKENS 도달, maxOutputTokens 증가:', generationConfig.maxOutputTokens);
               throw new Error('MAX_TOKENS - 재시도');
@@ -1151,6 +1151,7 @@ Output Format (JSON Only):
               setLogsLoadError(null);
               setLogsLoading(false);
               setLogsProxyPending(false);
+              logsLoadedRef.current = true; // ref 동기화
               
               var profile = userProfileRef.current;
               var challenge = (profile && profile.challenge) || 'Fitness';
@@ -1495,8 +1496,13 @@ Output Format (JSON Only):
           }
           
           // logsLoaded가 false이거나 logsLoading이 true이면 로그 로딩이 완료되지 않았으므로 대기
-          if (!logsLoaded || logsLoading) {
-            console.log('[Dashboard] AI 분석 대기: 로그 로딩 중...', { logsLoaded: logsLoaded, logsLoading: logsLoading });
+          // logsLoadedRef도 확인하여 상태 동기화 보장
+          if (!logsLoaded || !logsLoadedRef.current || logsLoading) {
+            console.log('[Dashboard] AI 분석 대기: 로그 로딩 중...', { 
+              logsLoaded: logsLoaded, 
+              logsLoadedRef: logsLoadedRef.current,
+              logsLoading: logsLoading 
+            });
             return;
           }
           
