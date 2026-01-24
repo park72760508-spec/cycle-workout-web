@@ -488,6 +488,7 @@ Output Format (JSON Only):
       const [userProfile, setUserProfile] = useState(null);
       const [coachData, setCoachData] = useState(null);
       const [recentLogs, setRecentLogs] = useState([]);
+      const [logsLoaded, setLogsLoaded] = useState(false);
       const [loading, setLoading] = useState(true);
       const [stats, setStats] = useState({
         ftp: 0,
@@ -671,8 +672,12 @@ Output Format (JSON Only):
         };
       }, []);
       
-      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 휴대폰 iframe에서 Firestore 지연 대기
+      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 휴대폰 iframe에서 Firestore 지연 대기 + 재시도
       useEffect(() => {
+        var retryCount = 0;
+        var maxRetries = 3;
+        var retryDelay = 2000;
+        
         async function loadRecentLogs() {
           if (!userProfile || !userProfile.id) return;
           
@@ -688,14 +693,20 @@ Output Format (JSON Only):
           
           var firestore = getFirestore();
           if (!firestore) {
-            var deadline = Date.now() + 8000;
+            var deadline = Date.now() + 10000;
             while (!firestore && Date.now() < deadline) {
               await new Promise(function(r) { setTimeout(r, 200); });
               firestore = getFirestore();
             }
           }
           if (!firestore) {
-            console.warn('[Dashboard] 훈련 로그: Firestore 미준비(타임아웃). 주간 목표/트렌드 미표시.');
+            if (retryCount < maxRetries) {
+              retryCount++;
+              console.warn('[Dashboard] 훈련 로그: Firestore 미준비, 재시도 ' + retryCount + '/' + maxRetries);
+              setTimeout(loadRecentLogs, retryDelay);
+              return;
+            }
+            console.warn('[Dashboard] 훈련 로그: Firestore 미준비(최종 타임아웃). 주간 목표/트렌드 미표시.');
             return;
           }
           
@@ -723,12 +734,22 @@ Output Format (JSON Only):
               raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
               logs = raw.slice(0, 30);
               setRecentLogs(logs);
+              setLogsLoaded(true);
+              console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개');
             } catch (queryErr) {
               console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr);
+              if (retryCount < maxRetries) {
+                retryCount++;
+                console.warn('[Dashboard] 훈련 로그 재시도 ' + retryCount + '/' + maxRetries);
+                setTimeout(loadRecentLogs, retryDelay);
+                return;
+              }
               setRecentLogs([]);
+              setLogsLoaded(true);
             }
             
             var totalTss = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
+            var totalTssRounded = Math.round(totalTss);
             var challenge = userProfile.challenge || 'Fitness';
             var weeklyTarget = 100;
             if (typeof window.getWeeklyTargetTSS === 'function') {
@@ -736,7 +757,7 @@ Output Format (JSON Only):
               weeklyTarget = targetInfo.target;
             }
             setStats(function(prev) {
-              return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(totalTss, 9999) };
+              return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(totalTssRounded, 9999) };
             });
             
             var last7 = logs.slice(0, 7).reverse();
@@ -750,6 +771,10 @@ Output Format (JSON Only):
             setFitnessData(chartData);
           } catch (e) {
             console.error('[Dashboard] 훈련 로그 로드 오류:', e);
+            if (retryCount < maxRetries) {
+              retryCount++;
+              setTimeout(loadRecentLogs, retryDelay);
+            }
           }
         }
         
@@ -758,7 +783,7 @@ Output Format (JSON Only):
         }
       }, [userProfile]);
       
-      // Gemini AI 코치 분석 호출 (recentLogs 없어도 프로필만으로 호출)
+      // Gemini AI 코치 분석 호출 (로그 로드 완료 후 자동 재호출)
       useEffect(() => {
         async function fetchCoachAnalysis() {
           if (!userProfile) {
@@ -766,8 +791,11 @@ Output Format (JSON Only):
             return;
           }
           
+          var logs = Array.isArray(recentLogs) ? recentLogs : [];
+          var logsHash = logs.length > 0 ? logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') : 'empty';
+          var cacheKey = 'coach_analysis_' + userProfile.id + '_' + logsHash;
+          
           try {
-            var cacheKey = 'coach_analysis_' + userProfile.id;
             var useCache = false;
             var skipCache = retryCoach > 0;
             if (!skipCache) {
@@ -793,7 +821,6 @@ Output Format (JSON Only):
             if (skipCache) setLoading(true);
             
             if (typeof window.callGeminiCoach === 'function') {
-              var logs = Array.isArray(recentLogs) ? recentLogs : [];
               var analysis = await window.callGeminiCoach(userProfile, logs);
               var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
               setCoachData(analysis);
@@ -826,7 +853,7 @@ Output Format (JSON Only):
         } else {
           setLoading(false);
         }
-      }, [userProfile, recentLogs, retryCoach]);
+      }, [userProfile, recentLogs, retryCoach, logsLoaded]);
       
       // 등급 뱃지 텍스트
       const getGradeBadge = (grade) => {
