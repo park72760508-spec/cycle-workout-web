@@ -6604,9 +6604,7 @@ Output Format (JSON Only):
       
       // 래핑된 함수 생성
       window.showScreen = function(screenId) {
-        // 무한 루프 방지: originalShowScreenFunc를 직접 호출
-        // originalShowScreenFunc가 showScheduleScreen이어도, showScheduleScreen 내부에서
-        // window.originalShowScreen을 호출하므로 무한 루프가 발생하지 않음
+        // originalShowScreenFunc 호출 (showScheduleScreen은 직접 화면 전환하므로 무한 루프 없음)
         if (typeof originalShowScreenFunc === 'function') {
           try {
             originalShowScreenFunc.apply(this, arguments);
