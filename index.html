@@ -4777,6 +4777,8 @@
 <script src="assets/js/groupTrainingManager_part2.js"></script>
 <!-- 훈련 스케줄 모듈 (다른 JS 파일들과 동일한 위치) -->
 <script src="assets/js/scheduleManager.js"></script>
+<!-- Training Manager - 주간 목표 TSS 계산 -->
+<script src="assets/js/trainingManager.js"></script>
 <!-- Training Room 모듈 -->
 <script src="assets/js/trainingRoomManager.js"></script>
 <!-- Bluetooth Training 모듈 -->
@@ -5973,10 +5975,15 @@ Output Format (JSON Only):
                     const challenge = userData.challenge || 'Fitness';
                     // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
                     var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
+                    console.log('[Dashboard] User challenge:', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
                     if (typeof window.getWeeklyTargetTSS === 'function') {
                       var targetInfo = window.getWeeklyTargetTSS(challenge);
+                      console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
                       weeklyTarget = targetInfo.target;
+                    } else {
+                      console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
                     }
+                    console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
                     
                     setUserProfile({
                       id: userId,
@@ -6020,10 +6027,15 @@ Output Format (JSON Only):
               const challenge = selectedUser.challenge || 'Fitness';
               // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
               var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
+              console.log('[Dashboard] User challenge (from selectedUser):', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
               if (typeof window.getWeeklyTargetTSS === 'function') {
                 var targetInfo = window.getWeeklyTargetTSS(challenge);
+                console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
                 weeklyTarget = targetInfo.target;
+              } else {
+                console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
               }
+              console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
               
               setUserProfile({
                 id: userId,
@@ -6122,10 +6134,15 @@ Output Format (JSON Only):
                 const challenge = userData.challenge || 'Fitness';
                 // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
                 var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
+                console.log('[Dashboard] User challenge (from Firestore):', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
                 if (typeof window.getWeeklyTargetTSS === 'function') {
                   var targetInfo = window.getWeeklyTargetTSS(challenge);
+                  console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
                   weeklyTarget = targetInfo.target;
+                } else {
+                  console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
                 }
+                console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
                 
                 setUserProfile({
                   id: id,
@@ -6278,10 +6295,15 @@ Output Format (JSON Only):
             // 사용자 등급별 주간 목표 TSS 가져오기 (trainingManager.js의 getWeeklyTargetTSS 사용)
             var challenge = userProfile.challenge || 'Fitness';
             var weeklyTarget = 225; // 기본값: Fitness 등급의 목표 TSS
+            console.log('[Dashboard] User challenge (from userProfile):', challenge, 'getWeeklyTargetTSS available:', typeof window.getWeeklyTargetTSS === 'function');
             if (typeof window.getWeeklyTargetTSS === 'function') {
               var targetInfo = window.getWeeklyTargetTSS(challenge);
+              console.log('[Dashboard] Target info for', challenge, ':', targetInfo);
               weeklyTarget = targetInfo.target;
+            } else {
+              console.warn('[Dashboard] getWeeklyTargetTSS function not available. Make sure trainingManager.js is loaded.');
             }
+            console.log('[Dashboard] Final weeklyTarget:', weeklyTarget);
             
             setStats(function(prev) {
               return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
