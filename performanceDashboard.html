@@ -696,6 +696,7 @@ Output Format (JSON Only):
       const [logsLoaded, setLogsLoaded] = useState(false);
       const [logsLoading, setLogsLoading] = useState(false); // 로그 로딩 상태 (로딩 중/실패/성공 구분)
       const [logsLoadError, setLogsLoadError] = useState(null); // 로그 로딩 실패 원인
+      const [logsProxyPending, setLogsProxyPending] = useState(false); // Data Proxy Fallback 대기 중
       const [loading, setLoading] = useState(true);
       const [stats, setStats] = useState({
         ftp: 0,
@@ -710,6 +711,12 @@ Output Format (JSON Only):
       const [stravaStatus, setStravaStatus] = useState({ connected: false, lastSync: null });
       const [fitnessData, setFitnessData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
+      const userProfileRef = useRef(null);
+      const proxyTimeoutRef = useRef(null);
+      
+      useEffect(function() {
+        userProfileRef.current = userProfile;
+      }, [userProfile]);
       
       // iOS Bluefy: 페이지 로드 시 즉시 Firebase Standalone 초기화 시도
       useEffect(function() {
@@ -1113,6 +1120,61 @@ Output Format (JSON Only):
                 applyProfileFromUser(e.data.user);
               }
             }
+            
+            // Data Proxy Fallback: 부모 창에서 훈련 로그 수신
+            if (e.data && e.data.type === 'DASHBOARD_LOGS_DATA' && Array.isArray(e.data.logs)) {
+              var logs = e.data.logs;
+              var proxyUserId = e.data.userId;
+              console.log('[Dashboard] DASHBOARD_LOGS_DATA 수신:', logs.length + '개', { userId: proxyUserId });
+              
+              if (proxyTimeoutRef.current) {
+                clearTimeout(proxyTimeoutRef.current);
+                proxyTimeoutRef.current = null;
+              }
+              
+              setRecentLogs(logs);
+              setLogsLoaded(true);
+              setLogsLoadError(null);
+              setLogsLoading(false);
+              setLogsProxyPending(false);
+              
+              var profile = userProfileRef.current;
+              var challenge = (profile && profile.challenge) || 'Fitness';
+              var weeklyTarget = 100;
+              if (typeof window.getWeeklyTargetTSS === 'function') {
+                var targetInfo = window.getWeeklyTargetTSS(challenge);
+                weeklyTarget = targetInfo.target;
+              }
+              var today = new Date();
+              var dayOfWeek = today.getDay();
+              var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+              var monday = new Date(today);
+              monday.setDate(today.getDate() + mondayOffset);
+              monday.setHours(0, 0, 0, 0);
+              var mondayStr = monday.toISOString().split('T')[0];
+              var weeklyTss = 0;
+              logs.forEach(function(log) {
+                if (log.date && log.date >= mondayStr) {
+                  weeklyTss += (Number(log.tss) || 0);
+                }
+              });
+              var weeklyTssRounded = Math.round(weeklyTss);
+              
+              setStats(function(prev) {
+                return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+              });
+              
+              var sorted = logs.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+              var last7 = sorted.slice(0, 7).reverse();
+              var chartData = last7.map(function(log) {
+                return {
+                  date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                  fitness: Number(log.tss) || 0,
+                  fatigue: (Number(log.tss) || 0) * 0.7
+                };
+              });
+              setFitnessData(chartData);
+            }
           } catch (err) {
             console.warn('[Dashboard] postMessage 처리 오류:', err);
           }
@@ -1206,6 +1268,10 @@ Output Format (JSON Only):
           window.removeEventListener('message', onParentUser);
           clearInterval(firestoreCheck);
           clearTimeout(t);
+          if (proxyTimeoutRef.current) {
+            clearTimeout(proxyTimeoutRef.current);
+            proxyTimeoutRef.current = null;
+          }
         };
       }, []);
       
@@ -1300,7 +1366,7 @@ Output Format (JSON Only):
             }
           } else {
             console.warn('[Dashboard] loadRecentLogs: Auth 없음 - userId로 시도:', userProfile ? userProfile.id : '없음');
-            // userId가 있으면 경고만 하고 계속 진행
+            // userId가 없으면 에러
             if (!userProfile || !userProfile.id) {
               if (isMounted) {
                 setLogsLoading(false);
@@ -1309,6 +1375,29 @@ Output Format (JSON Only):
               }
               return;
             }
+          }
+          
+          // Data Proxy Fallback: 인증 없음 + iframe → 부모 창에 로그 요청
+          var hasValidAuth = auth && auth.currentUser;
+          if (!hasValidAuth && userProfile && userProfile.id && window.parent && window.parent !== window) {
+            console.log('[Dashboard] Data Proxy Fallback: 부모 창에 로그 요청', { userId: userProfile.id });
+            if (proxyTimeoutRef.current) {
+              clearTimeout(proxyTimeoutRef.current);
+              proxyTimeoutRef.current = null;
+            }
+            window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userProfile.id }, '*');
+            setLogsProxyPending(true);
+            setLogsLoadError(null);
+            proxyTimeoutRef.current = setTimeout(function() {
+              proxyTimeoutRef.current = null;
+              if (isMounted) {
+                setLogsLoadError('데이터 로드 실패 (앱 연결 불가)');
+                setLogsLoaded(true);
+                setLogsLoading(false);
+                setLogsProxyPending(false);
+              }
+            }, 5000);
+            return;
           }
           
           function getFirestore() {
@@ -1684,6 +1773,10 @@ Output Format (JSON Only):
         return function() {
           isMounted = false;
           retryLogsRef.current = null;
+          if (proxyTimeoutRef.current) {
+            clearTimeout(proxyTimeoutRef.current);
+            proxyTimeoutRef.current = null;
+          }
         };
       }, [userProfile]);
       
@@ -2092,7 +2185,7 @@ Output Format (JSON Only):
                 {logsLoading ? (
                   <div className="flex flex-col items-center justify-center py-4">
                     <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
-                    <div className="text-xs text-gray-500">데이터 로딩 중...</div>
+                    <div className="text-xs text-gray-500">{logsProxyPending ? '앱에서 데이터 동기화 중...' : '데이터 로딩 중...'}</div>
                   </div>
                 ) : logsLoadError ? (
                   <div className="flex flex-col items-center justify-center py-4 space-y-2">
@@ -2153,7 +2246,7 @@ Output Format (JSON Only):
                 <div className="h-[200px] flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <div className="text-sm text-gray-500">데이터 로딩 중...</div>
+                    <div className="text-sm text-gray-500">{logsProxyPending ? '앱에서 데이터 동기화 중...' : '데이터 로딩 중...'}</div>
                   </div>
                 </div>
               </DashboardCard>
