@@ -445,11 +445,8 @@ async function fetchAndProcessStravaData() {
           }
         }
 
-        // 가입일 이후 날짜인지 확인
-        if (userCreatedDate && dateStr < userCreatedDate) {
-          console.log(`[fetchAndProcessStravaData] ⚠️ 가입일 이전 활동 무시: ${actId} (${dateStr} < ${userCreatedDate})`);
-          continue;
-        }
+        // ✅ 수정: 가입일과 무관하게 모든 활동을 저장 (포인트 적립만 가입일 이후로 제한)
+        // 가입일 이전 활동도 저장하되, 포인트 적립은 가입일 이후만 적용됨 (아래 로직에서 처리)
 
         // 같은 날짜에 stelvio 로그가 있는지 확인
         if (stelvioLogDates.has(dateStr)) {
@@ -518,12 +515,12 @@ async function fetchAndProcessStravaData() {
               existingIds.add(actId);
               newCount += 1;
               
-              // 사용자 생성일(created_at) 이후 활동인지 확인 (포인트 적립 대상)
-              // 이미 위에서 가입일 이전 활동은 스킵했으므로, 여기서는 생성일 포함 이후 활동만 처리됨
+              // ✅ 수정: 포인트 적립은 가입일 이후 활동만 적용
               const activityTss = mappedActivity.tss || 0;
+              const isAfterCreatedDate = !userCreatedDate || !dateStr || dateStr >= userCreatedDate;
               
-              // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
-              if (!stelvioLogDates.has(dateStr)) {
+              // 같은 날짜에 stelvio 로그가 없고, 가입일 이후 활동인 경우에만 TSS 누적
+              if (!stelvioLogDates.has(dateStr) && isAfterCreatedDate) {
                 totalTss += activityTss;
                 console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss}, 날짜: ${dateStr}, 생성일: ${userCreatedDate || '미설정'})`);
                 
@@ -537,8 +534,12 @@ async function fetchAndProcessStravaData() {
                   }
                 }
               } else {
-                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외): ${actId} - 같은 날짜에 stelvio 로그 존재`);
-                // stelvio 로그가 있는 날짜는 TSS를 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
+                if (!isAfterCreatedDate) {
+                  console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 가입일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
+                } else {
+                  console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 완료 (TSS 제외 - 같은 날짜에 stelvio 로그 존재): ${actId}`);
+                }
+                // TSS를 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
                 if (typeof window.markStravaActivityTssApplied === 'function') {
                   try {
                     await window.markStravaActivityTssApplied(userId, actId);
@@ -553,10 +554,12 @@ async function fetchAndProcessStravaData() {
               // 이미 저장된 활동 중 TSS가 아직 적립되지 않은 경우 확인
               const unapplied = unappliedActivities.get(actId);
               if (unapplied) {
-                // 사용자 생성일(created_at) 이후 활동인지 확인 (포인트 적립 대상)
-                if (userCreatedDate && dateStr < userCreatedDate) {
-                  console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외 (생성일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
-                  // 생성일 이전 활동은 TSS 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
+                // ✅ 수정: 포인트 적립은 가입일 이후 활동만 적용
+                const isAfterCreatedDate = !userCreatedDate || !dateStr || dateStr >= userCreatedDate;
+                
+                if (!isAfterCreatedDate) {
+                  console.log(`[fetchAndProcessStravaData] ⚠️ 기존 활동 TSS 제외 (가입일 이전): ${actId} (${dateStr} < ${userCreatedDate})`);
+                  // 가입일 이전 활동은 TSS 적립하지 않으므로 tss_applied를 true로 표시 (중복 체크 방지)
                   if (typeof window.markStravaActivityTssApplied === 'function') {
                     try {
                       await window.markStravaActivityTssApplied(userId, actId);
@@ -567,7 +570,7 @@ async function fetchAndProcessStravaData() {
                   continue;
                 }
                 
-                // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
+                // 같은 날짜에 stelvio 로그가 없고, 가입일 이후 활동인 경우에만 TSS 누적
                 if (!stelvioLogDates.has(dateStr)) {
                   totalTss += unapplied.tss;
                   console.log(`[fetchAndProcessStravaData] ✅ 기존 활동 TSS 누적: ${actId} (TSS: ${unapplied.tss}, 날짜: ${dateStr})`);
