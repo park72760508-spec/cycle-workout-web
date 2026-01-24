@@ -275,6 +275,16 @@ Output Format (JSON Only):
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
     
+    // 포인트 포맷팅 유틸리티 (정수, 1000 이상은 k 형식)
+    function formatPoints(points) {
+      const num = Math.round(Number(points) || 0);
+      if (num >= 1000) {
+        const k = num / 1000;
+        return k % 1 === 0 ? k + 'k' : k.toFixed(1) + 'k';
+      }
+      return num.toString();
+    }
+    
     // DashboardCard 컴포넌트
     function DashboardCard({ title, children, className = "" }) {
       return (
@@ -969,12 +979,12 @@ Output Format (JSON Only):
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-2xl">💰</span>
                   <div>
-                    <div className="text-lg font-bold text-gray-900">{stats.currentPoints}</div>
+                    <div className="text-lg font-bold text-gray-900">{formatPoints(stats.currentPoints)}</div>
                     <div className="text-xs text-gray-500">보유</div>
                   </div>
                 </div>
                 <div className="text-xs text-gray-600 border-t border-gray-100 pt-2 mt-2">
-                  누적: {stats.totalPoints}pt
+                  누적: {formatPoints(stats.totalPoints)}pt
                 </div>
               </DashboardCard>
               
