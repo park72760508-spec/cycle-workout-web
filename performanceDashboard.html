@@ -762,8 +762,10 @@ Output Format (JSON Only):
         var retryCount = 0;
         var maxRetries = 3;
         var retryDelay = 2000;
+        var isMounted = true;
         
-        async function loadRecentLogs() {
+        async function loadRecentLogs(currentRetry) {
+          currentRetry = currentRetry || 0;
           if (!userProfile || !userProfile.id) return;
           
           function getFirestore() {
@@ -785,13 +787,18 @@ Output Format (JSON Only):
             }
           }
           if (!firestore) {
-            if (retryCount < maxRetries) {
-              retryCount++;
-              console.warn('[Dashboard] 훈련 로그: Firestore 미준비, 재시도 ' + retryCount + '/' + maxRetries);
-              setTimeout(loadRecentLogs, retryDelay);
+            if (currentRetry < maxRetries) {
+              console.warn('[Dashboard] 훈련 로그: Firestore 미준비, 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
+              setTimeout(function() {
+                if (isMounted) loadRecentLogs(currentRetry + 1);
+              }, retryDelay);
               return;
             }
             console.warn('[Dashboard] 훈련 로그: Firestore 미준비(최종 타임아웃). 주간 목표/트렌드 미표시.');
+            if (isMounted) {
+              setLogsLoaded(true);
+              setRecentLogs([]);
+            }
             return;
           }
           
@@ -825,54 +832,114 @@ Output Format (JSON Only):
               });
               raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
               logs = raw.slice(0, 30);
-              setRecentLogs(logs);
-              setLogsLoaded(true);
-              console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개 (AI 분석용)');
+              if (isMounted) {
+                setRecentLogs(logs);
+                setLogsLoaded(true);
+                console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개 (AI 분석용)');
+              }
             } catch (queryErr) {
               console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr);
-              if (retryCount < maxRetries) {
-                retryCount++;
-                console.warn('[Dashboard] 훈련 로그 재시도 ' + retryCount + '/' + maxRetries);
-                setTimeout(loadRecentLogs, retryDelay);
+              if (currentRetry < maxRetries && isMounted) {
+                console.warn('[Dashboard] 훈련 로그 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
+                setTimeout(function() {
+                  if (isMounted) loadRecentLogs(currentRetry + 1);
+                }, retryDelay);
                 return;
               }
-              setRecentLogs([]);
-              setLogsLoaded(true);
+              // 최종 실패 시에도 빈 배열로 설정하되, 명확히 로그
+              if (isMounted) {
+                console.error('[Dashboard] 훈련 로그 로드 최종 실패 (재시도 ' + maxRetries + '회 후):', queryErr);
+                setRecentLogs([]);
+                setLogsLoaded(true);
+                // 주간 목표는 0으로 설정
+                setStats(function(prev) {
+                  var challenge = userProfile.challenge || 'Fitness';
+                  var weeklyTarget = 100;
+                  if (typeof window.getWeeklyTargetTSS === 'function') {
+                    var targetInfo = window.getWeeklyTargetTSS(challenge);
+                    weeklyTarget = targetInfo.target;
+                  }
+                  return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: 0 };
+                });
+              }
             }
             
-            var totalTss = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
-            var totalTssRounded = Math.round(totalTss);
+            // 이번 주(월요일~일요일)의 TSS 계산
+            var today = new Date();
+            var dayOfWeek = today.getDay(); // 0=일요일, 1=월요일, ..., 6=토요일
+            var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 월요일까지의 일수
+            var monday = new Date(today);
+            monday.setDate(today.getDate() + mondayOffset);
+            monday.setHours(0, 0, 0, 0);
+            var mondayStr = monday.toISOString().split('T')[0];
+            
+            var weeklyTss = 0;
+            logs.forEach(function(log) {
+              if (log.date && log.date >= mondayStr) {
+                weeklyTss += (Number(log.tss) || 0);
+              }
+            });
+            var weeklyTssRounded = Math.round(weeklyTss);
+            
             var challenge = userProfile.challenge || 'Fitness';
             var weeklyTarget = 100;
             if (typeof window.getWeeklyTargetTSS === 'function') {
               var targetInfo = window.getWeeklyTargetTSS(challenge);
               weeklyTarget = targetInfo.target;
             }
-            setStats(function(prev) {
-              return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(totalTssRounded, 9999) };
-            });
-            
-            var last7 = logs.slice(0, 7).reverse();
-            var chartData = last7.map(function(log) {
-              return {
-                date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-                fitness: Number(log.tss) || 0,
-                fatigue: (Number(log.tss) || 0) * 0.7
-              };
-            });
-            setFitnessData(chartData);
+            if (isMounted) {
+              setStats(function(prev) {
+                return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+              });
+              console.log('[Dashboard] 주간 목표 계산:', {
+                weeklyTss: weeklyTssRounded,
+                weeklyTarget: weeklyTarget,
+                monday: mondayStr,
+                logsCount: logs.length
+              });
+              
+              var last7 = logs.slice(0, 7).reverse();
+              var chartData = last7.map(function(log) {
+                return {
+                  date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                  fitness: Number(log.tss) || 0,
+                  fatigue: (Number(log.tss) || 0) * 0.7
+                };
+              });
+              setFitnessData(chartData);
+            }
           } catch (e) {
             console.error('[Dashboard] 훈련 로그 로드 오류:', e);
-            if (retryCount < maxRetries) {
-              retryCount++;
-              setTimeout(loadRecentLogs, retryDelay);
+            if (currentRetry < maxRetries && isMounted) {
+              console.warn('[Dashboard] 훈련 로그 오류 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
+              setTimeout(function() {
+                if (isMounted) loadRecentLogs(currentRetry + 1);
+              }, retryDelay);
+            } else if (isMounted) {
+              // 최종 실패 시에도 상태 설정
+              console.error('[Dashboard] 훈련 로그 로드 최종 실패:', e);
+              setRecentLogs([]);
+              setLogsLoaded(true);
+              setStats(function(prev) {
+                var challenge = userProfile.challenge || 'Fitness';
+                var weeklyTarget = 100;
+                if (typeof window.getWeeklyTargetTSS === 'function') {
+                  var targetInfo = window.getWeeklyTargetTSS(challenge);
+                  weeklyTarget = targetInfo.target;
+                }
+                return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: 0 };
+              });
             }
           }
         }
         
         if (userProfile && userProfile.id) {
-          loadRecentLogs();
+          loadRecentLogs(0);
         }
+        
+        return function() {
+          isMounted = false;
+        };
       }, [userProfile]);
       
       // Gemini AI 코치 분석 호출 (로그 로드 완료 후 자동 재호출)
@@ -883,9 +950,24 @@ Output Format (JSON Only):
             return;
           }
           
+          // logsLoaded가 false이면 로그 로딩이 완료되지 않았으므로 대기
+          if (!logsLoaded) {
+            console.log('[Dashboard] AI 분석 대기: 로그 로딩 중...');
+            return;
+          }
+          
           var logs = Array.isArray(recentLogs) ? recentLogs : [];
-          var logsHash = logs.length > 0 ? logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') : 'empty';
+          // logsHash에 TSS 합계도 포함하여 더 정확한 캐시 키 생성
+          var logsTssSum = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
+          var logsHash = logs.length > 0 
+            ? logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') + '_' + Math.round(logsTssSum)
+            : 'empty';
           var cacheKey = 'coach_analysis_' + userProfile.id + '_' + logsHash;
+          console.log('[Dashboard] AI 분석 시작:', {
+            logsCount: logs.length,
+            logsHash: logsHash,
+            cacheKey: cacheKey.substring(0, 50) + '...'
+          });
           
           try {
             var useCache = false;
