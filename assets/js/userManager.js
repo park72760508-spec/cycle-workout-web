@@ -205,7 +205,7 @@ function switchToBasecampScreen() {
         const isVisible = basecampScreen.classList.contains('active') || 
                          window.getComputedStyle(basecampScreen).display !== 'none';
         if (!isVisible) {
-          console.warn('⚠️ showScreen이 작동하지 않음, 직접 전환 시도');
+          // showScreen이 작동하지 않으면 조용히 직접 전환 (경고 제거)
           directSwitchToBasecamp();
         } else {
           console.log('✅ 베이스캠프 화면 전환 성공 (showScreen 사용)');
@@ -214,10 +214,13 @@ function switchToBasecampScreen() {
       return;
     } catch (e) {
       console.error('❌ showScreen 실행 중 오류:', e);
+      // 에러 발생 시 직접 전환
+      directSwitchToBasecamp();
+      return;
     }
   }
   
-  // 직접 화면 전환 (fallback)
+  // showScreen 함수가 없으면 직접 화면 전환
   directSwitchToBasecamp();
   
   function directSwitchToBasecamp() {
