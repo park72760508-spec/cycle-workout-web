@@ -1110,6 +1110,8 @@ async function apiCreateUser(userData) {
       contact: userData.contact || '',
       ftp: parseInt(userData.ftp) || 0,
       weight: parseFloat(userData.weight) || 0,
+      birth_year: parseInt(userData.birth_year) || null,
+      gender: String(userData.gender || ''),
       created_at: now,
       grade: String(userData.grade || '2'), // 기본값: "2"
       expiry_date: userData.expiry_date || defaultExpiryDate,
@@ -1167,6 +1169,8 @@ async function apiUpdateUser(id, userData) {
     if (userData.contact != null) updateData.contact = userData.contact;
     if (userData.ftp != null) updateData.ftp = parseInt(userData.ftp);
     if (userData.weight != null) updateData.weight = parseFloat(userData.weight);
+    if (userData.birth_year != null) updateData.birth_year = parseInt(userData.birth_year);
+    if (userData.gender != null) updateData.gender = String(userData.gender);
     if (userData.grade != null) updateData.grade = String(userData.grade);
     if (userData.expiry_date != null) updateData.expiry_date = String(userData.expiry_date);
     if (userData.challenge != null) updateData.challenge = String(userData.challenge);
@@ -1853,11 +1857,15 @@ function showAddUserForm(clearForm = true) {
     const contactEl = document.getElementById('userContact');
     const ftpEl = document.getElementById('userFTP');
     const weightEl = document.getElementById('userWeight');
+    const birthYearEl = document.getElementById('userBirthYear');
+    const genderEl = document.getElementById('userGender');
     const challengeSelect = document.getElementById('userChallenge');
     
     if (nameEl) nameEl.value = '';
     if (contactEl) contactEl.value = '';
     if (ftpEl) ftpEl.value = '';
+    if (birthYearEl) birthYearEl.value = '';
+    if (genderEl) genderEl.value = '';
     if (weightEl) weightEl.value = '';
     if (challengeSelect) challengeSelect.value = 'Fitness';
     
@@ -1939,11 +1947,15 @@ async function saveUser() {
   const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
+  const birthYear = parseInt(document.getElementById('userBirthYear').value);
+  const gender = document.getElementById('userGender')?.value;
   const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
 
   if (!name) { showToast('이름을 입력해주세요.'); return; }
   if (!ftp || ftp < 50 || ftp > 600) { showToast('올바른 FTP 값을 입력해주세요. (50-600W)'); return; }
   if (!weight || weight < 30 || weight > 200) { showToast('올바른 체중을 입력해주세요. (30-200kg)'); return; }
+  if (!birthYear || birthYear < 1900) { showToast('올바른 생년을 입력해주세요. (1900년 이상)'); return; }
+  if (!gender || (gender !== '남' && gender !== '여')) { showToast('성별을 선택해주세요.'); return; }
 
   try {
     // 기본 사용자 데이터
@@ -1951,7 +1963,9 @@ async function saveUser() {
       name, 
       contact: contactDB, 
       ftp, 
-      weight, 
+      weight,
+      birth_year: birthYear,
+      gender: gender,
       challenge 
     };
 
@@ -2103,6 +2117,8 @@ async function editUser(userId) {
       const contactEl = document.getElementById('editUserContact');
       const ftpEl = document.getElementById('editUserFTP');
       const weightEl = document.getElementById('editUserWeight');
+      const birthYearEl = document.getElementById('editUserBirthYear');
+      const genderEl = document.getElementById('editUserGender');
       const challengeSelect = document.getElementById('editUserChallenge');
       
       // 관리자 전용 필드
@@ -2127,6 +2143,8 @@ async function editUser(userId) {
       }
       if (ftpEl) ftpEl.value = user.ftp || '';
       if (weightEl) weightEl.value = user.weight || '';
+      if (birthYearEl) birthYearEl.value = user.birth_year || '';
+      if (genderEl) genderEl.value = user.gender || '';
       if (challengeSelect) challengeSelect.value = user.challenge || 'Fitness';
       
       // 관리자 전용 필드
@@ -2235,9 +2253,11 @@ async function performUpdateFromModal() {
   const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('editUserFTP')?.value);
   const weight = parseFloat(document.getElementById('editUserWeight')?.value);
+  const birthYear = parseInt(document.getElementById('editUserBirthYear')?.value);
+  const gender = document.getElementById('editUserGender')?.value;
   const challenge = document.getElementById('editUserChallenge')?.value || 'Fitness';
 
-  if (!name || !ftp || !weight) {
+  if (!name || !ftp || !weight || !birthYear || !gender) {
     showToast('모든 필수 필드를 입력해주세요.');
     return;
   }
@@ -2248,8 +2268,10 @@ async function performUpdateFromModal() {
       name,
       contact: contactDB,
       ftp,
-      challenge,
-      weight
+      weight,
+      birth_year: birthYear,
+      gender: gender,
+      challenge
     };
 
     // 관리자 전용 필드 업데이트
@@ -2533,9 +2555,11 @@ async function performUpdate() {
   const contactDB  = formatPhoneForDB(contactRaw);
   const ftp = parseInt(document.getElementById('userFTP').value);
   const weight = parseFloat(document.getElementById('userWeight').value);
+  const birthYear = parseInt(document.getElementById('userBirthYear').value);
+  const gender = document.getElementById('userGender')?.value;
   const challenge = document.getElementById('userChallenge')?.value || 'Fitness';
 
-  if (!name || !ftp || !weight) {
+  if (!name || !ftp || !weight || !birthYear || !gender) {
     showToast('모든 필수 필드를 입력해주세요.');
     return;
   }
@@ -2545,8 +2569,10 @@ async function performUpdate() {
       name,
       contact: contactDB,
       ftp,
-      challenge,
-      weight
+      weight,
+      birth_year: birthYear,
+      gender: gender,
+      challenge
     };
 
     // 관리자 전용 필드 업데이트
