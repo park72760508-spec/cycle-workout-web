@@ -613,82 +613,83 @@ Output Format (JSON Only):
         };
       }, []);
       
-      // 최근 훈련 로그 로드
+      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 휴대폰 iframe에서 Firestore 지연 대기
       useEffect(() => {
         async function loadRecentLogs() {
-          if (!userProfile) return;
+          if (!userProfile || !userProfile.id) return;
           
-          try {
-            // Firestore 참조 가져오기
-            let firestore = window.firestore;
+          function getFirestore() {
+            var fs = window.firestore;
             if (window.parent && window.parent !== window) {
               try {
-                firestore = window.parent.firestore || window.parent.window?.firestore;
-              } catch (e) {
-                console.warn('부모 창 Firestore 접근 실패:', e);
-              }
+                fs = window.parent.firestore || (window.parent.window && window.parent.window.firestore) || fs;
+              } catch (e) {}
             }
-            
-            if (!firestore) {
-              console.error('Firestore가 초기화되지 않았습니다.');
-              return;
+            return fs;
+          }
+          
+          var firestore = getFirestore();
+          if (!firestore) {
+            var deadline = Date.now() + 8000;
+            while (!firestore && Date.now() < deadline) {
+              await new Promise(function(r) { setTimeout(r, 200); });
+              firestore = getFirestore();
             }
-            
-            // 최근 30일간의 training_log 데이터 가져오기
-            // users/{userId}/logs 서브컬렉션 사용 (복합 인덱스 없이 단일 orderBy + 클라이언트 필터)
-            const thirtyDaysAgo = new Date();
+          }
+          if (!firestore) {
+            console.warn('[Dashboard] 훈련 로그: Firestore 미준비(타임아웃). 주간 목표/트렌드 미표시.');
+            return;
+          }
+          
+          try {
+            var thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            const dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-            
-            let logs = [];
+            var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+            var logs = [];
             
             try {
-              const userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
-              let logsSnapshot;
+              var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+              var logsSnapshot;
               try {
                 logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
               } catch (indexErr) {
-                console.warn('훈련 로그 orderBy 실패, 전체 조회 후 클라이언트 정렬:', indexErr.message);
                 logsSnapshot = await userLogsRef.limit(100).get();
               }
-              
-              const raw = [];
-              logsSnapshot.docs.forEach(doc => {
-                const d = doc.data();
+              var raw = [];
+              logsSnapshot.docs.forEach(function(doc) {
+                var d = doc.data();
                 if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
                   raw.push({ id: doc.id, ...d });
                 }
               });
-              
-              raw.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+              raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
               logs = raw.slice(0, 30);
               setRecentLogs(logs);
-            } catch (queryError) {
-              console.warn('훈련 로그 조회 실패:', queryError);
+            } catch (queryErr) {
+              console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr);
               setRecentLogs([]);
             }
             
-            // TSS 기반 포인트 계산 및 차트 데이터 (logs 항상 정의됨)
-            const totalTss = logs.reduce((sum, log) => sum + (Number(log.tss) || 0), 0);
-            setStats(prev => ({
-              ...prev,
-              weeklyProgress: totalTss
-            }));
+            var totalTss = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
+            setStats(function(prev) {
+              return { ...prev, weeklyGoal: 100, weeklyProgress: Math.min(totalTss, 9999) };
+            });
             
-            const last7Days = logs.slice(0, 7).reverse();
-            const fitnessChartData = last7Days.map((log) => ({
-              date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-              fitness: Number(log.tss) || 0,
-              fatigue: (Number(log.tss) || 0) * 0.7
-            }));
-            setFitnessData(fitnessChartData);
-            
-          } catch (error) {
-            console.error('훈련 로그 로드 오류:', error);
+            var last7 = logs.slice(0, 7).reverse();
+            var chartData = last7.map(function(log) {
+              return {
+                date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                fitness: Number(log.tss) || 0,
+                fatigue: (Number(log.tss) || 0) * 0.7
+              };
+            });
+            setFitnessData(chartData);
+          } catch (e) {
+            console.error('[Dashboard] 훈련 로그 로드 오류:', e);
           }
         }
         
-        if (userProfile) {
+        if (userProfile && userProfile.id) {
           loadRecentLogs();
         }
       }, [userProfile]);
@@ -861,9 +862,12 @@ Output Format (JSON Only):
                       {coachData.coach_comment}
                     </p>
                     {coachData.error_reason && (
-                      <p className="text-xs text-amber-700 mt-3 pt-3 border-t border-amber-200">
-                        원인: {coachData.error_reason}
-                      </p>
+                      <div className="mt-3 pt-3 border-t border-amber-200 space-y-1">
+                        <p className="text-xs text-amber-700">원인: {coachData.error_reason}</p>
+                        {(coachData.error_reason.indexOf('API 키') !== -1 || coachData.error_reason.indexOf('geminiApiKey') !== -1) && (
+                          <p className="text-xs text-gray-600">환경 설정에서 Gemini API 키를 입력한 뒤 &quot;다시 분석&quot;을 눌러 주세요.</p>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="text-center flex flex-wrap items-center justify-center gap-2">
