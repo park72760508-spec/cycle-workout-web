@@ -3456,19 +3456,38 @@ function showBluetoothTrainingResultModal(status = null) {
     const beforeRemPoints = beforePoints ? beforePoints.rem_points : (window.currentUser?.rem_points || 0);
     
     // 마일리지 업데이트 결과가 있으면 사용 (서버에서 업데이트된 최종 값)
-    // saveTrainingSession 결과 또는 기존 updateUserMileage 결과 모두 지원
+    // 모바일 대시보드와 동일한 로직 적용
     const mileageUpdate = window.lastMileageUpdate || null;
     if (mileageUpdate && mileageUpdate.success) {
-        // saveTrainingSession 결과 형식 (newAccPoints, newRemPoints, earnedPoints, extendedDays)
-        // 또는 기존 updateUserMileage 결과 형식 (acc_points, rem_points, add_days)
-        const finalAccPoints = mileageUpdate.newAccPoints || mileageUpdate.acc_points || (beforeAccPoints + tss);
-        const finalRemPoints = mileageUpdate.newRemPoints || mileageUpdate.rem_points || (beforeRemPoints + tss);
-        const finalEarnedPoints = mileageUpdate.earnedPoints || mileageUpdate.earned_points || tss;
+        // 훈련 후 값 = 훈련 전 값 + TSS (획득 포인트)
+        const afterAccPoints = beforeAccPoints + tss;
+        const afterRemPoints = beforeRemPoints + tss;
         
         // 서버에서 업데이트된 최종 값 사용 (500 이상일 때 차감된 값)
+        // ?? (nullish coalescing) 사용: 0도 유효한 값이므로 null/undefined일 때만 fallback 사용
+        const finalAccPoints = (mileageUpdate.acc_points !== undefined && mileageUpdate.acc_points !== null) 
+          ? mileageUpdate.acc_points 
+          : (mileageUpdate.newAccPoints !== undefined && mileageUpdate.newAccPoints !== null)
+            ? mileageUpdate.newAccPoints
+            : afterAccPoints;
+        const finalRemPoints = (mileageUpdate.rem_points !== undefined && mileageUpdate.rem_points !== null)
+          ? mileageUpdate.rem_points
+          : (mileageUpdate.newRemPoints !== undefined && mileageUpdate.newRemPoints !== null)
+            ? mileageUpdate.newRemPoints
+            : afterRemPoints;
+        
         if (accPointsEl) accPointsEl.textContent = Math.round(finalAccPoints);
         if (remPointsEl) remPointsEl.textContent = Math.round(finalRemPoints);
-        if (earnedPointsEl) earnedPointsEl.textContent = Math.round(finalEarnedPoints);
+        if (earnedPointsEl) earnedPointsEl.textContent = Math.round(tss);
+        
+        console.log('[Bluetooth 개인 훈련] 포인트 표시:', {
+            mileageUpdate,
+            finalAccPoints,
+            finalRemPoints,
+            tss,
+            beforeAccPoints,
+            beforeRemPoints
+        });
     } else {
         // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우: 훈련 전 값 + TSS로 표시
         const afterAccPoints = beforeAccPoints + tss;
@@ -3495,23 +3514,43 @@ function showBluetoothTrainingResultModal(status = null) {
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
     
-    // 축하 오버레이 표시 (훈련 결과 후 500포인트 이상 달성 시 또는 마일리지 연장 시)
-    // mileageUpdate는 위에서 이미 선언되었으므로 재사용
-    // extendedDays 또는 extended_days 필드 확인 (saveTrainingSession 결과 형식)
-    const extendedDays = mileageUpdate?.extendedDays || mileageUpdate?.extended_days || mileageUpdate?.add_days || 0;
-    const earnedPoints = mileageUpdate?.earnedPoints || mileageUpdate?.earned_points || tss || 0;
-    // 훈련 결과 후 500포인트 이상 달성 시 또는 구독 연장 시에만 표시
-    const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && extendedDays > 0) ||
-                                   (mileageUpdate && mileageUpdate.success && earnedPoints >= 500);
+    // 축하 오버레이 표시 (보유포인트 500 이상일 때 또는 마일리지 연장 시)
+    // 모바일 대시보드와 동일한 로직 적용
+    console.log('[Bluetooth 개인 훈련] 축하 화면 표시 조건 확인:', {
+        mileageUpdate: mileageUpdate,
+        hasMileageUpdate: !!mileageUpdate,
+        success: mileageUpdate?.success,
+        add_days: mileageUpdate?.add_days,
+        extended_days: mileageUpdate?.extended_days,
+        rem_points: mileageUpdate?.rem_points,
+        tss: tss
+    });
+    
+    const addDays = mileageUpdate?.add_days || mileageUpdate?.extended_days || 0;
+    const remPoints = mileageUpdate?.rem_points || 0;
+    
+    const shouldShowCelebration = (mileageUpdate && mileageUpdate.success && addDays > 0) ||
+                                   (mileageUpdate && mileageUpdate.success && remPoints >= 500);
+    
+    console.log('[Bluetooth 개인 훈련] 축하 화면 표시 여부:', {
+        shouldShowCelebration: shouldShowCelebration,
+        condition1: (mileageUpdate && mileageUpdate.success && addDays > 0),
+        condition2: (mileageUpdate && mileageUpdate.success && remPoints >= 500),
+        addDays: addDays,
+        remPoints: remPoints
+    });
+    
     if (shouldShowCelebration) {
-        // Bluetooth 개인 훈련 대시보드 전용 축하 함수 사용
+        console.log('[Bluetooth 개인 훈련] ✅ 축하 화면 표시 시작');
         showBluetoothMileageCelebration(mileageUpdate, tss);
+    } else {
+        console.log('[Bluetooth 개인 훈련] ⚠️ 축하 화면 표시 조건 미충족');
     }
 }
 
 /**
  * Bluetooth 개인 훈련 대시보드 마일리지 축하 오버레이 표시
- * 모바일 대시보드와 동일한 로직
+ * 모바일 대시보드와 동일한 로직 적용
  */
 function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
     const modal = document.getElementById('bluetoothMileageCelebrationModal');
@@ -3523,14 +3562,15 @@ function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
     }
     
     // 이전 보유 포인트 계산: 현재 잔액 + 사용한 포인트 - 획득 포인트
-    const currentRemPoints = Math.round(mileageUpdate.rem_points || mileageUpdate.newRemPoints || 0);
+    // 예: 잔액 100 + 사용 500 - 획득 120 = 이전 보유 480
+    const currentRemPoints = Math.round(mileageUpdate.rem_points || 0);
     const earnedPoints = Math.round(earnedTss);
-    const addDays = mileageUpdate.extendedDays || mileageUpdate.extended_days || mileageUpdate.add_days || 0;
+    const addDays = mileageUpdate.add_days || mileageUpdate.extended_days || 0; // 두 필드 모두 지원 (하위 호환성)
     const usedPoints = addDays * 500;
     const previousRemPoints = Math.round(currentRemPoints + usedPoints - earnedPoints);
     const totalAfterEarned = previousRemPoints + earnedPoints;
     
-    // 축하 메시지 생성
+    // 축하 메시지 생성 (모바일 대시보드와 동일)
     const message = `
         <div style="margin-bottom: 12px; font-size: 1.1em; font-weight: 600;">
           오늘의 훈련으로 ${earnedPoints} S-Point 획득!
@@ -3538,30 +3578,41 @@ function showBluetoothMileageCelebration(mileageUpdate, earnedTss) {
         <div style="margin-bottom: 12px; font-size: 0.95em;">
           💰 (현재 보유: ${previousRemPoints} SP + ${earnedPoints} SP = ${totalAfterEarned} SP)
         </div>
-        ${addDays > 0 ? `
         <div style="font-size: 0.95em; font-weight: 600;">
           🎉 ${usedPoints} SP를 사용하여 구독 기간이 ${addDays}일 연장되었습니다! (잔액: ${currentRemPoints} SP)
         </div>
-        ` : ''}
     `;
     
     messageEl.innerHTML = message;
     
     // 오버레이 표시 (결과 모달 위에 표시)
+    // hidden 클래스 제거 및 display 스타일 명시적 설정 (!important 우회)
     modal.classList.remove('hidden');
-    modal.style.display = 'flex';
+    modal.style.display = 'flex'; // !important를 우회하기 위해 인라인 스타일로 명시적 설정
+    modal.style.visibility = 'visible';
+    modal.style.opacity = '1';
     
-    console.log('[Bluetooth 개인 훈련] 축하 오버레이 표시:', { mileageUpdate, earnedTss, addDays });
+    console.log('[Bluetooth 개인 훈련] 축하 오버레이 표시:', { 
+        mileageUpdate, 
+        earnedTss,
+        addDays: addDays,
+        usedPoints: usedPoints,
+        modalDisplay: modal.style.display,
+        hasHiddenClass: modal.classList.contains('hidden')
+    });
 }
 
 /**
  * Bluetooth 개인 훈련 대시보드 마일리지 축하 오버레이 닫기
+ * 모바일 대시보드와 동일한 로직
  */
 function closeBluetoothMileageCelebration() {
     const modal = document.getElementById('bluetoothMileageCelebrationModal');
     if (modal) {
         modal.classList.add('hidden');
         modal.style.display = 'none';
+        modal.style.visibility = 'hidden';
+        modal.style.opacity = '0';
         console.log('[Bluetooth 개인 훈련] 축하 오버레이 닫기');
     }
 }

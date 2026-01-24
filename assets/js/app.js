@@ -13870,9 +13870,30 @@ function showMobileTrainingResultModal(status = null) {
     const afterRemPoints = beforeRemPoints + tss;
     
     // 서버에서 업데이트된 최종 값 사용 (500 이상일 때 차감된 값)
-    if (accPointsEl) accPointsEl.textContent = Math.round(mileageUpdate.acc_points || afterAccPoints);
-    if (remPointsEl) remPointsEl.textContent = Math.round(mileageUpdate.rem_points || afterRemPoints);
+    // ?? (nullish coalescing) 사용: 0도 유효한 값이므로 null/undefined일 때만 fallback 사용
+    const finalAccPoints = (mileageUpdate.acc_points !== undefined && mileageUpdate.acc_points !== null) 
+      ? mileageUpdate.acc_points 
+      : (mileageUpdate.newAccPoints !== undefined && mileageUpdate.newAccPoints !== null)
+        ? mileageUpdate.newAccPoints
+        : afterAccPoints;
+    const finalRemPoints = (mileageUpdate.rem_points !== undefined && mileageUpdate.rem_points !== null)
+      ? mileageUpdate.rem_points
+      : (mileageUpdate.newRemPoints !== undefined && mileageUpdate.newRemPoints !== null)
+        ? mileageUpdate.newRemPoints
+        : afterRemPoints;
+    
+    if (accPointsEl) accPointsEl.textContent = Math.round(finalAccPoints);
+    if (remPointsEl) remPointsEl.textContent = Math.round(finalRemPoints);
     if (earnedPointsEl) earnedPointsEl.textContent = Math.round(tss);
+    
+    console.log('[Mobile Dashboard] 포인트 표시:', {
+      mileageUpdate,
+      finalAccPoints,
+      finalRemPoints,
+      tss,
+      beforeAccPoints,
+      beforeRemPoints
+    });
   } else {
     // 마일리지 업데이트가 아직 완료되지 않았거나 실패한 경우: 훈련 전 값 + TSS로 표시
     const afterAccPoints = beforeAccPoints + tss;
