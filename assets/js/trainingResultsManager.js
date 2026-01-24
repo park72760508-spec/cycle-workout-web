@@ -210,8 +210,7 @@ async function getTrainingResultsFromFirebase(userId, startDate, endDate) {
 /**
  * 스트라바 활동 저장 (Firebase Firestore)
  * Subcollection 구조: users/{userId}/logs/{logId}
- * Google Sheets 구조와 동일한 필드:
- * ['activity_id', 'date', 'title', 'distance_km', 'time', 'tss', 'user_id']
+ * 확장된 필드 구조로 저장 (Target Schema 기반)
  */
 async function saveStravaActivityToFirebase(activity) {
   try {
@@ -260,20 +259,51 @@ async function saveStravaActivityToFirebase(activity) {
       return { success: true, id: activityId, isNew: false };
     }
     
-    // Google Sheets 구조와 동일한 필드로 변환
+    // 확장된 필드 구조로 변환 (Target Schema 기반)
     const trainingLog = {
+      // 기본 필드
       activity_id: activityId,
+      user_id: userId,
+      source: activity.source || 'strava',
       date: activity.date || '',
       title: String(activity.title || ''),
+      
+      // 거리 및 시간
       distance_km: Number(activity.distance_km || 0),
-      time: Number(activity.time || 0),
-      tss: Number(activity.tss || 0),
-      user_id: userId,
-      // 추가 필드: Strava 활동임을 표시
-      source: 'strava',
+      duration_sec: Number(activity.duration_sec || activity.time || 0),
+      time: Number(activity.time || activity.duration_sec || 0), // 호환성 유지
+      
+      // 심박 데이터
+      avg_hr: activity.avg_hr !== null && activity.avg_hr !== undefined ? Number(activity.avg_hr) : null,
+      max_hr: activity.max_hr !== null && activity.max_hr !== undefined ? Number(activity.max_hr) : null,
+      
+      // 파워 데이터
+      avg_watts: activity.avg_watts !== null && activity.avg_watts !== undefined ? Number(activity.avg_watts) : null,
+      max_watts: activity.max_watts !== null && activity.max_watts !== undefined ? Number(activity.max_watts) : null,
+      weighted_watts: activity.weighted_watts !== null && activity.weighted_watts !== undefined ? Number(activity.weighted_watts) : null,
+      
+      // 기타
+      avg_cadence: activity.avg_cadence !== null && activity.avg_cadence !== undefined ? Number(activity.avg_cadence) : null,
+      kilojoules: activity.kilojoules !== null && activity.kilojoules !== undefined ? Number(activity.kilojoules) : null,
+      elevation_gain: activity.elevation_gain !== null && activity.elevation_gain !== undefined ? Number(activity.elevation_gain) : null,
+      rpe: activity.rpe !== null && activity.rpe !== undefined ? Number(activity.rpe) : null,
+      
+      // 계산된 필드
+      ftp_at_time: activity.ftp_at_time !== null && activity.ftp_at_time !== undefined ? Number(activity.ftp_at_time) : null,
+      if: activity.if !== null && activity.if !== undefined ? Number(activity.if) : null,
+      tss: activity.tss !== null && activity.tss !== undefined ? Number(activity.tss) : 0,
+      efficiency_factor: activity.efficiency_factor !== null && activity.efficiency_factor !== undefined ? Number(activity.efficiency_factor) : null,
+      
+      // 존 데이터 (추후 구현)
+      time_in_zones: activity.time_in_zones || null,
+      
+      // 내부 필드
+      earned_points: Number(activity.earned_points || 0),
+      workout_id: activity.workout_id || null,
+      
       // TSS 포인트 적립 여부 추적 (중복 적립 방지)
       tss_applied: false,
-      created_at: new Date().toISOString()
+      created_at: activity.created_at || new Date().toISOString()
     };
     
     console.log('[saveStravaActivityToFirebase] 저장할 데이터:', trainingLog);

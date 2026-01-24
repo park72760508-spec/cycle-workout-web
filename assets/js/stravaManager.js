@@ -135,6 +135,41 @@ async function fetchStravaActivities(accessToken, perPage = 30) {
 }
 
 /**
+ * 스트라바 상세 활동 데이터 가져오기
+ * @param {string} accessToken - Strava access token
+ * @param {string|number} activityId - Strava activity ID
+ * @returns {Promise<{success: boolean, activity?: object, error?: string}>}
+ */
+async function fetchStravaActivityDetail(accessToken, activityId) {
+  const url = `https://www.strava.com/api/v3/activities/${activityId}`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      try {
+        const errJson = JSON.parse(errorText);
+        return { success: false, error: errJson.message || `Strava activity detail error: ${response.status}` };
+      } catch (e) {
+        return { success: false, error: `Strava activity detail error: ${response.status} ${errorText}` };
+      }
+    }
+
+    const activity = await response.json();
+    return { success: true, activity: activity };
+  } catch (error) {
+    console.error('[fetchStravaActivityDetail] ❌ 상세 활동 요청 실패:', error);
+    return { success: false, error: 'Strava 상세 활동 요청 실패: ' + (error.message || error) };
+  }
+}
+
+/**
  * Strava 활동에서 TSS 계산
  * Code.gs의 computeTssFromActivity를 프론트엔드로 마이그레이션
  */
@@ -151,6 +186,117 @@ function computeTssFromActivity(activity, ftp) {
   const ifVal = np / ftp;
   const tss = (durationSec * np * ifVal) / (ftp * 3600) * 100;
   return Math.max(0, Math.round(tss * 100) / 100);
+}
+
+/**
+ * Strava 활동 데이터를 Target Schema에 맞게 변환
+ * @param {object} activity - Strava Activity 객체 (상세 또는 요약)
+ * @param {string} userId - 사용자 ID
+ * @param {number} ftpAtTime - 해당 시점의 FTP 값
+ * @returns {object} 변환된 활동 데이터
+ */
+function mapStravaActivityToSchema(activity, userId, ftpAtTime) {
+  if (!activity || !userId) {
+    throw new Error('activity와 userId가 필요합니다.');
+  }
+
+  // 1. Direct Mapping (직접 매핑)
+  const title = activity.name || '';
+  const startDateLocal = activity.start_date_local || activity.start_date || '';
+  let dateStr = '';
+  if (startDateLocal) {
+    try {
+      const d = new Date(startDateLocal);
+      dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
+    } catch (e) {
+      dateStr = startDateLocal.split('T')[0] || '';
+    }
+  }
+
+  const distanceMeters = Number(activity.distance) || 0;
+  const distanceKm = Math.round((distanceMeters / 1000) * 100) / 100; // m -> km 변환, 소수점 2자리
+
+  const durationSec = Math.round(Number(activity.moving_time) || 0);
+  const avgCadence = Number(activity.average_cadence) || null;
+  const avgHr = Number(activity.average_heartrate) || null;
+  const maxHr = Number(activity.max_heartrate) || null;
+  const avgWatts = Number(activity.average_watts) || null;
+  const maxWatts = Number(activity.max_watts) || null;
+  const weightedWatts = Number(activity.weighted_average_watts) || null; // Normalized Power
+  const kilojoules = Number(activity.kilojoules) || null;
+  const elevationGain = Number(activity.total_elevation_gain) || null;
+  const rpe = Number(activity.perceived_exertion) || null;
+
+  // 2. Calculated Fields (계산 필요)
+  const ftp = Number(ftpAtTime) || 0;
+  
+  // weighted_watts가 없으면 avg_watts를 대신 사용 (fallback)
+  const np = weightedWatts !== null ? weightedWatts : (avgWatts !== null ? avgWatts : 0);
+  
+  // IF (Intensity Factor) 계산
+  let ifValue = null;
+  if (ftp > 0 && np > 0) {
+    ifValue = Math.round((np / ftp) * 1000) / 1000; // 소수점 3자리
+  }
+
+  // TSS (Training Stress Score) 계산
+  let tss = null;
+  if (ftp > 0 && np > 0 && durationSec > 0 && ifValue !== null) {
+    // TSS = (duration_sec * weighted_watts * if) / (ftp_at_time * 36)
+    tss = Math.round(((durationSec * np * ifValue) / (ftp * 36)) * 100) / 100;
+    tss = Math.max(0, tss);
+  } else if (ftp > 0 && np > 0 && durationSec > 0) {
+    // IF가 계산되지 않았지만 기본 TSS 계산 시도
+    const ifVal = np / ftp;
+    tss = Math.round(((durationSec * np * ifVal) / (ftp * 36)) * 100) / 100;
+    tss = Math.max(0, tss);
+  }
+
+  // Efficiency Factor 계산 (weighted_watts / avg_hr, 심박 데이터가 0보다 클 때만)
+  let efficiencyFactor = null;
+  if (np > 0 && avgHr !== null && avgHr > 0) {
+    efficiencyFactor = Math.round((np / avgHr) * 100) / 100;
+  }
+
+  // 3. Complex Mapping (존 데이터) - TODO: 추후 구현
+  // time_in_zones는 Strava의 /activities/{id}/zones 엔드포인트를 통해 가져와야 함
+  // 현재는 null로 설정하고 주석으로 TODO 남김
+  const timeInZones = null; // TODO: Strava /activities/{id}/zones API 호출하여 Z1~Z7 매핑
+
+  // 4. Internal Fields (기본값)
+  const source = 'strava';
+  const earnedPoints = 0; // 비즈니스 로직이므로 일단 0
+  const workoutId = null; // 워크아웃 매칭 로직은 추후 구현
+
+  // 변환된 데이터 반환
+  return {
+    activity_id: String(activity.id || ''),
+    user_id: userId,
+    source: source,
+    title: title,
+    date: dateStr,
+    distance_km: distanceKm,
+    duration_sec: durationSec,
+    avg_cadence: avgCadence,
+    avg_hr: avgHr,
+    max_hr: maxHr,
+    avg_watts: avgWatts,
+    max_watts: maxWatts,
+    weighted_watts: weightedWatts,
+    kilojoules: kilojoules,
+    elevation_gain: elevationGain,
+    rpe: rpe,
+    ftp_at_time: ftp > 0 ? ftp : null,
+    if: ifValue,
+    tss: tss,
+    efficiency_factor: efficiencyFactor,
+    time_in_zones: timeInZones,
+    earned_points: earnedPoints,
+    workout_id: workoutId,
+    // 기존 필드 호환성 유지
+    time: durationSec, // duration_sec와 동일
+    created_at: new Date().toISOString()
+  };
 }
 
 /**
@@ -310,10 +456,46 @@ async function fetchAndProcessStravaData() {
           // 로그는 저장하되 TSS는 누적하지 않음
         }
 
-        const title = act.name || '';
-        const distanceKm = (Number(act.distance) || 0) / 1000;
-        const movingTime = Math.round(Number(act.moving_time) || 0);
-        const tss = computeTssFromActivity(act, ftp);
+        // 상세 활동 데이터 가져오기 (더 많은 필드를 위해)
+        let detailedActivity = act; // 기본값으로 요약 데이터 사용
+        try {
+          const detailResult = await fetchStravaActivityDetail(tokenResult.accessToken, actId);
+          if (detailResult.success && detailResult.activity) {
+            detailedActivity = detailResult.activity;
+            console.log(`[fetchAndProcessStravaData] ✅ 상세 데이터 가져옴: ${actId}`);
+          } else {
+            console.warn(`[fetchAndProcessStravaData] ⚠️ 상세 데이터 가져오기 실패 (요약 데이터 사용): ${actId} - ${detailResult.error || ''}`);
+          }
+        } catch (detailError) {
+          console.warn(`[fetchAndProcessStravaData] ⚠️ 상세 데이터 요청 중 오류 (요약 데이터 사용): ${actId} - ${detailError.message || detailError}`);
+          // 상세 데이터 가져오기 실패해도 요약 데이터로 계속 진행
+        }
+
+        // Strava 활동 데이터를 Target Schema에 맞게 변환
+        let mappedActivity;
+        try {
+          mappedActivity = mapStravaActivityToSchema(detailedActivity, userId, ftp);
+          console.log(`[fetchAndProcessStravaData] ✅ 활동 데이터 매핑 완료: ${actId}`);
+        } catch (mapError) {
+          console.error(`[fetchAndProcessStravaData] ❌ 활동 데이터 매핑 실패: ${actId} - ${mapError.message || mapError}`);
+          // 매핑 실패 시 기본 필드만 사용하여 저장 시도
+          const title = detailedActivity.name || '';
+          const distanceKm = (Number(detailedActivity.distance) || 0) / 1000;
+          const movingTime = Math.round(Number(detailedActivity.moving_time) || 0);
+          const tss = computeTssFromActivity(detailedActivity, ftp);
+          
+          mappedActivity = {
+            activity_id: actId,
+            date: dateStr,
+            title: title,
+            distance_km: Math.round(distanceKm * 100) / 100,
+            time: movingTime,
+            duration_sec: movingTime,
+            tss: tss,
+            user_id: userId,
+            source: 'strava'
+          };
+        }
 
         // Firebase에 저장
         if (typeof window.saveStravaActivityToFirebase === 'function') {
@@ -321,20 +503,13 @@ async function fetchAndProcessStravaData() {
             console.log(`[fetchAndProcessStravaData] 활동 저장 시도:`, {
               activity_id: actId,
               userId: userId,
-              title: title,
-              date: dateStr,
-              hasStelvioLog: stelvioLogDates.has(dateStr)
+              title: mappedActivity.title,
+              date: mappedActivity.date,
+              hasStelvioLog: stelvioLogDates.has(dateStr),
+              tss: mappedActivity.tss
             });
             
-            const saveResult = await window.saveStravaActivityToFirebase({
-              activity_id: actId,
-              date: dateStr,
-              title: title,
-              distance_km: Math.round(distanceKm * 100) / 100,
-              time: movingTime,
-              tss: tss,
-              user_id: userId
-            });
+            const saveResult = await window.saveStravaActivityToFirebase(mappedActivity);
 
             console.log(`[fetchAndProcessStravaData] 저장 결과:`, saveResult);
 
@@ -343,9 +518,10 @@ async function fetchAndProcessStravaData() {
               newCount += 1;
               
               // 같은 날짜에 stelvio 로그가 없는 경우에만 TSS 누적
+              const activityTss = mappedActivity.tss || 0;
               if (!stelvioLogDates.has(dateStr)) {
-                totalTss += tss;
-                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${tss})`);
+                totalTss += activityTss;
+                console.log(`[fetchAndProcessStravaData] ✅ 새 활동 저장 및 TSS 누적: ${actId} (TSS: ${activityTss})`);
                 
                 // TSS 적립 완료 표시
                 if (typeof window.markStravaActivityTssApplied === 'function') {
@@ -664,7 +840,9 @@ async function syncStravaData() {
 // 전역 함수로 등록
 window.refreshStravaTokenForUser = refreshStravaTokenForUser;
 window.fetchStravaActivities = fetchStravaActivities;
+window.fetchStravaActivityDetail = fetchStravaActivityDetail;
 window.computeTssFromActivity = computeTssFromActivity;
+window.mapStravaActivityToSchema = mapStravaActivityToSchema;
 window.fetchAndProcessStravaData = fetchAndProcessStravaData;
 window.exchangeStravaCode = exchangeStravaCode;
 window.syncStravaData = syncStravaData;
