@@ -88,7 +88,7 @@ Output Format (JSON Only):
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
       var generationConfig = {
-        maxOutputTokens: 2048,
+        maxOutputTokens: 10000, // 충분한 토큰으로 시작하여 MAX_TOKENS 오류 방지 및 속도 향상
         temperature: 0.7,
         topP: 0.8,
         topK: 40
@@ -175,10 +175,11 @@ Output Format (JSON Only):
             throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
           }
           var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
-          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도
+          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도 (안전장치, 초기값 10000이면 거의 발생하지 않음)
           if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
             if (attempt < 2) {
-              generationConfig.maxOutputTokens = Math.min(8192, generationConfig.maxOutputTokens * 2);
+              // 이미 10000이면 20000으로 증가 (최대 32000까지)
+              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 10000 ? 10000 : generationConfig.maxOutputTokens * 2);
               body.generationConfig = generationConfig;
               console.warn('[callGeminiCoach] MAX_TOKENS 도달, maxOutputTokens 증가:', generationConfig.maxOutputTokens);
               throw new Error('MAX_TOKENS - 재시도');
@@ -760,8 +761,8 @@ Output Format (JSON Only):
       // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 휴대폰 iframe에서 Firestore 지연 대기 + 재시도
       useEffect(() => {
         var retryCount = 0;
-        var maxRetries = 3;
-        var retryDelay = 2000;
+        var maxRetries = isMobile() ? 5 : 3; // 휴대폰은 더 많은 재시도
+        var retryDelay = isMobile() ? 3000 : 2000; // 휴대폰은 더 긴 대기 시간
         var isMounted = true;
         
         async function loadRecentLogs(currentRetry) {
@@ -773,16 +774,24 @@ Output Format (JSON Only):
             if (window.parent && window.parent !== window) {
               try {
                 fs = window.parent.firestore || (window.parent.window && window.parent.window.firestore) || fs;
-              } catch (e) {}
+              } catch (e) {
+                console.warn('[Dashboard] parent.firestore 접근 실패:', e);
+              }
             }
+            console.log('[Dashboard] Firestore 확인:', {
+              hasWindowFirestore: !!window.firestore,
+              hasParentFirestore: !!(window.parent && window.parent !== window && window.parent.firestore),
+              result: !!fs,
+              device: isMobile() ? 'mobile' : 'desktop'
+            });
             return fs;
           }
           
           var firestore = getFirestore();
           if (!firestore) {
-            var deadline = Date.now() + 10000;
+            var deadline = Date.now() + (isMobile() ? 20000 : 10000); // 휴대폰은 더 긴 대기
             while (!firestore && Date.now() < deadline) {
-              await new Promise(function(r) { setTimeout(r, 200); });
+              await new Promise(function(r) { setTimeout(r, isMobile() ? 300 : 200); });
               firestore = getFirestore();
             }
           }
@@ -815,12 +824,22 @@ Output Format (JSON Only):
             
             try {
               var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+              console.log('[Dashboard] Firestore 쿼리 시작:', {
+                userId: userProfile.id,
+                dateStr: dateStr,
+                device: isMobile() ? 'mobile' : 'desktop'
+              });
+              
               var logsSnapshot;
               try {
                 logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+                console.log('[Dashboard] orderBy 쿼리 성공:', logsSnapshot.docs.length + '개 문서');
               } catch (indexErr) {
+                console.warn('[Dashboard] orderBy 실패, limit만 사용:', indexErr);
                 logsSnapshot = await userLogsRef.limit(100).get();
+                console.log('[Dashboard] limit 쿼리 성공:', logsSnapshot.docs.length + '개 문서');
               }
+              
               var raw = [];
               logsSnapshot.docs.forEach(function(doc) {
                 var d = doc.data();
@@ -832,10 +851,53 @@ Output Format (JSON Only):
               });
               raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
               logs = raw.slice(0, 30);
+              
+              console.log('[Dashboard] 로그 필터링 결과:', {
+                totalDocs: logsSnapshot.docs.length,
+                afterFilter: raw.length,
+                finalLogs: logs.length,
+                dateRange: logs.length > 0 ? (logs[logs.length - 1].date + ' ~ ' + logs[0].date) : '없음'
+              });
+              
+              // 휴대폰에서 로그가 비어있고 재시도 가능하면 재시도
+              if (logs.length === 0 && currentRetry < maxRetries && isMobile()) {
+                console.warn('[Dashboard] 휴대폰: 로그가 비어있음, 재시도 ' + (currentRetry + 1) + '/' + maxRetries, {
+                  totalDocs: logsSnapshot.docs.length,
+                  afterFilter: raw.length,
+                  dateStr: dateStr
+                });
+                setTimeout(function() {
+                  if (isMounted) loadRecentLogs(currentRetry + 1);
+                }, retryDelay);
+                return;
+              }
+              
               if (isMounted) {
                 setRecentLogs(logs);
                 setLogsLoaded(true);
-                console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개 (AI 분석용)');
+                console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개 (AI 분석용)', {
+                  device: isMobile() ? 'mobile' : 'desktop',
+                  retryCount: currentRetry,
+                  totalDocs: logsSnapshot.docs.length,
+                  afterFilter: raw.length,
+                  dateRange: logs.length > 0 ? (logs[logs.length - 1].date + ' ~ ' + logs[0].date) : '없음',
+                  weeklyTss: logs.length > 0 ? (function() {
+                    var today = new Date();
+                    var dayOfWeek = today.getDay();
+                    var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                    var monday = new Date(today);
+                    monday.setDate(today.getDate() + mondayOffset);
+                    monday.setHours(0, 0, 0, 0);
+                    var mondayStr = monday.toISOString().split('T')[0];
+                    var weeklyTss = 0;
+                    logs.forEach(function(log) {
+                      if (log.date && log.date >= mondayStr) {
+                        weeklyTss += (Number(log.tss) || 0);
+                      }
+                    });
+                    return Math.round(weeklyTss);
+                  })() : 0
+                });
               }
             } catch (queryErr) {
               console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr);
@@ -957,6 +1019,132 @@ Output Format (JSON Only):
           }
           
           var logs = Array.isArray(recentLogs) ? recentLogs : [];
+          
+          // 휴대폰에서 로그가 비어있으면 추가 대기 후 재확인 (Firestore 지연 가능성)
+          if (logs.length === 0 && isMobile()) {
+            console.warn('[Dashboard] 휴대폰: 로그가 비어있음, 재확인 시작...');
+            
+            // 여러 번 재확인 (최대 3회, 각 3초 간격)
+            var checkAttempt = 0;
+            var maxCheckAttempts = 3;
+            var checkInterval = 3000;
+            
+            var checkLogs = function() {
+              if (checkAttempt >= maxCheckAttempts) {
+                console.warn('[Dashboard] 휴대폰: 재확인 최종 실패, 빈 로그로 진행');
+                // 최종 실패 시에도 fallback 메시지 표시
+                setCoachData({
+                  condition_score: 50,
+                  training_status: 'Building Base',
+                  vo2max_estimate: 40,
+                  coach_comment: (userProfile && userProfile.name || '사용자') + '님, 훈련 데이터를 불러오는 중입니다. 잠시 후 다시 확인해주세요.',
+                  recommended_workout: 'Active Recovery (Z1)',
+                  error_reason: '휴대폰에서 훈련 로그를 불러오지 못했습니다. 네트워크 연결을 확인하거나 잠시 후 다시 시도해주세요.'
+                });
+                setAiPairingStatus(false);
+                setLoading(false);
+                return;
+              }
+              
+              checkAttempt++;
+              console.log('[Dashboard] 휴대폰: 재확인 시도 ' + checkAttempt + '/' + maxCheckAttempts);
+              
+              if (userProfile) {
+                var firestore = window.firestore;
+                if (window.parent && window.parent !== window) {
+                  try {
+                    firestore = window.parent.firestore || (window.parent.window && window.parent.window.firestore) || firestore;
+                  } catch (e) {
+                    console.warn('[Dashboard] parent.firestore 접근 실패:', e);
+                  }
+                }
+                
+                if (firestore) {
+                  var thirtyDaysAgo = new Date();
+                  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                  var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+                  
+                  firestore.collection('users').doc(userProfile.id).collection('logs')
+                    .limit(100).get()
+                    .then(function(snapshot) {
+                      var newLogs = [];
+                      snapshot.docs.forEach(function(doc) {
+                        var d = doc.data();
+                        if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
+                          newLogs.push({ id: doc.id, ...d });
+                        }
+                      });
+                      newLogs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+                      newLogs = newLogs.slice(0, 30);
+                      
+                      if (newLogs.length > 0) {
+                        console.log('[Dashboard] 휴대폰: 재확인 후 로그 발견:', newLogs.length + '개');
+                        setRecentLogs(newLogs);
+                        
+                        // 주간 목표 재계산
+                        var today = new Date();
+                        var dayOfWeek = today.getDay();
+                        var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                        var monday = new Date(today);
+                        monday.setDate(today.getDate() + mondayOffset);
+                        monday.setHours(0, 0, 0, 0);
+                        var mondayStr = monday.toISOString().split('T')[0];
+                        
+                        var weeklyTss = 0;
+                        newLogs.forEach(function(log) {
+                          if (log.date && log.date >= mondayStr) {
+                            weeklyTss += (Number(log.tss) || 0);
+                          }
+                        });
+                        var weeklyTssRounded = Math.round(weeklyTss);
+                        
+                        var challenge = userProfile.challenge || 'Fitness';
+                        var weeklyTarget = 100;
+                        if (typeof window.getWeeklyTargetTSS === 'function') {
+                          var targetInfo = window.getWeeklyTargetTSS(challenge);
+                          weeklyTarget = targetInfo.target;
+                        }
+                        setStats(function(prev) {
+                          return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+                        });
+                        
+                        // 훈련 트렌드 데이터 업데이트
+                        var last7 = newLogs.slice(0, 7).reverse();
+                        var chartData = last7.map(function(log) {
+                          return {
+                            date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                            fitness: Number(log.tss) || 0,
+                            fatigue: (Number(log.tss) || 0) * 0.7
+                          };
+                        });
+                        setFitnessData(chartData);
+                        
+                        // AI 분석은 useEffect가 자동으로 재실행됨 (recentLogs 변경 감지)
+                      } else if (checkAttempt < maxCheckAttempts) {
+                        // 아직 로그가 없으면 다음 시도
+                        setTimeout(checkLogs, checkInterval);
+                      }
+                    })
+                    .catch(function(err) {
+                      console.warn('[Dashboard] 휴대폰: 재확인 실패:', err);
+                      if (checkAttempt < maxCheckAttempts) {
+                        setTimeout(checkLogs, checkInterval);
+                      }
+                    });
+                } else if (checkAttempt < maxCheckAttempts) {
+                  console.warn('[Dashboard] 휴대폰: Firestore 없음, 재시도...');
+                  setTimeout(checkLogs, checkInterval);
+                }
+              }
+            };
+            
+            // 첫 재확인 시작
+            setTimeout(checkLogs, checkInterval);
+            
+            // 빈 로그로 AI 분석 실행하지 않음
+            return;
+          }
+          
           // logsHash에 TSS 합계도 포함하여 더 정확한 캐시 키 생성
           var logsTssSum = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
           var logsHash = logs.length > 0 
@@ -966,7 +1154,8 @@ Output Format (JSON Only):
           console.log('[Dashboard] AI 분석 시작:', {
             logsCount: logs.length,
             logsHash: logsHash,
-            cacheKey: cacheKey.substring(0, 50) + '...'
+            cacheKey: cacheKey.substring(0, 50) + '...',
+            device: isMobile() ? 'mobile' : 'desktop'
           });
           
           try {
