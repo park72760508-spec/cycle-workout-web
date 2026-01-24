@@ -47,6 +47,85 @@
   <script src="assets/js/stravaManager.js"></script>
   <script src="assets/js/userManager.js"></script>
   
+  <!-- Dashboard 전용: Firebase Standalone Fallback (iOS Bluefy 호환) -->
+  <script>
+    // Firebase 독립 초기화 함수 (부모 창 의존성 제거)
+    window.initFirebaseStandalone = function() {
+      if (typeof firebase === 'undefined') {
+        console.warn('[Dashboard] Firebase SDK가 아직 로드되지 않음');
+        return null;
+      }
+      
+      try {
+        // Firebase 설정 (firebaseConfig.js와 동일)
+        var firebaseConfig = {
+          apiKey: "AIzaSyDVQJZV6NIbqhPdz1CKfbA8yHHYClSC35Q",
+          authDomain: "stelvio-ai.firebaseapp.com",
+          projectId: "stelvio-ai",
+          storageBucket: "stelvio-ai.firebasestorage.app",
+          messagingSenderId: "752285835508",
+          appId: "1:752285835508:web:0662a24874209ebb483ea1",
+          databaseURL: "https://stelvio-ai-default-rtdb.firebaseio.com"
+        };
+        
+        // 이미 초기화되어 있는지 확인
+        var app = null;
+        try {
+          app = firebase.app('dashboard-standalone');
+          console.log('[Dashboard] 기존 Firebase 앱 인스턴스 사용');
+        } catch (e) {
+          // 'dashboard-standalone' 이름의 앱이 없으면 새로 생성
+          try {
+            app = firebase.initializeApp(firebaseConfig, 'dashboard-standalone');
+            console.log('[Dashboard] Firebase 독립 초기화 성공 (dashboard-standalone)');
+          } catch (initErr) {
+            // 이미 기본 앱이 있으면 그것 사용
+            if (firebase.apps.length > 0) {
+              app = firebase.app();
+              console.log('[Dashboard] 기본 Firebase 앱 사용');
+            } else {
+              throw initErr;
+            }
+          }
+        }
+        
+        // Auth Persistence 설정 (iOS 필수) - await로 동기화
+        var auth = null;
+        if (app && firebase.auth) {
+          try {
+            auth = firebase.auth(app);
+            // LOCAL persistence 설정 (세션 유지) - 동기적으로 설정 시도
+            if (auth && auth.setPersistence) {
+              // setPersistence는 Promise를 반환하지만, 여기서는 비동기로 처리
+              // 호출하는 쪽에서 await로 처리하도록 함
+            }
+            window.auth = auth;
+            console.log('[Dashboard] Auth 초기화 완료 (Standalone)');
+          } catch (authErr) {
+            console.warn('[Dashboard] Auth 초기화 실패:', authErr);
+          }
+        }
+        
+        // Firestore 초기화
+        var firestore = null;
+        if (app && firebase.firestore) {
+          try {
+            firestore = firebase.firestore(app);
+            window.firestore = firestore;
+            console.log('[Dashboard] Firestore 독립 초기화 성공');
+          } catch (fsErr) {
+            console.warn('[Dashboard] Firestore 초기화 실패:', fsErr);
+          }
+        }
+        
+        return { app: app, auth: window.auth, firestore: firestore };
+      } catch (e) {
+        console.error('[Dashboard] Firebase 독립 초기화 실패:', e);
+        return null;
+      }
+    };
+  </script>
+  
   <!-- Dashboard 전용: Gemini 코치 프롬프트 및 API (인라인, 404 방지) -->
   <script>
     window.GEMINI_COACH_SYSTEM_PROMPT = `Role: 당신은 'Stelvio AI'의 수석 사이클링 코치이자 데이터 분석가입니다.
@@ -589,6 +668,48 @@ Output Format (JSON Only):
       const [fitnessData, setFitnessData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
       
+      // iOS Bluefy: 페이지 로드 시 즉시 Firebase Standalone 초기화 시도
+      useEffect(function() {
+        // Firebase SDK 로드 대기 후 즉시 Standalone Fallback 시도
+        var initAttempts = 0;
+        var maxInitAttempts = 10;
+        var initInterval = setInterval(function() {
+          initAttempts++;
+          if (typeof firebase !== 'undefined' && typeof window.initFirebaseStandalone === 'function') {
+            clearInterval(initInterval);
+            try {
+              var standalone = window.initFirebaseStandalone();
+              if (standalone && standalone.firestore) {
+                window.firestore = standalone.firestore;
+                if (standalone.auth) {
+                  window.auth = standalone.auth;
+                  // Auth Persistence 설정
+                  if (standalone.auth.setPersistence) {
+                    standalone.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                      .then(function() {
+                        console.log('[Dashboard] 페이지 로드: Auth Persistence 설정 완료 (LOCAL) - iOS Bluefy');
+                      })
+                      .catch(function(e) {
+                        console.warn('[Dashboard] 페이지 로드: Auth Persistence 설정 실패:', e);
+                      });
+                  }
+                }
+                console.log('[Dashboard] 페이지 로드: Firebase Standalone 초기화 성공');
+              }
+            } catch (e) {
+              console.warn('[Dashboard] 페이지 로드: Firebase Standalone 초기화 실패:', e);
+            }
+          } else if (initAttempts >= maxInitAttempts) {
+            clearInterval(initInterval);
+            console.warn('[Dashboard] 페이지 로드: Firebase SDK 로드 타임아웃');
+          }
+        }, 500);
+        
+        return function() {
+          clearInterval(initInterval);
+        };
+      }, []);
+      
       // 사용자 프로필 로드: URL/postMessage/localStorage 즉시 표시, Firestore는 나중에 보강
       // AI 분석에 사용되는 userProfile 필드:
       // - id, name, ftp, weight, grade, challenge, acc_points, rem_points 등
@@ -704,13 +825,90 @@ Output Format (JSON Only):
         }
         
         async function phase2Firestore(userId) {
+          // iOS Bluefy 호환: Auth Persistence 설정 (세션 유지) - 최우선 실행
+          if (typeof firebase !== 'undefined' && firebase.auth) {
+            try {
+              var auth = window.auth;
+              if (!auth) {
+                // Standalone Fallback으로 Auth 가져오기
+                if (typeof window.initFirebaseStandalone === 'function') {
+                  var standalone = window.initFirebaseStandalone();
+                  if (standalone && standalone.auth) {
+                    auth = standalone.auth;
+                    window.auth = auth;
+                    console.log('[Dashboard] phase2Firestore: Standalone Auth 사용');
+                  }
+                }
+                // 여전히 없으면 기본 auth 사용
+                if (!auth && firebase.apps && firebase.apps.length > 0) {
+                  try {
+                    auth = firebase.auth();
+                    window.auth = auth;
+                    console.log('[Dashboard] phase2Firestore: 기본 Auth 사용');
+                  } catch (authErr) {
+                    console.warn('[Dashboard] phase2Firestore: 기본 Auth 초기화 실패:', authErr);
+                  }
+                }
+              }
+              
+              // Auth Persistence 설정 (iOS 필수)
+              if (auth && auth.setPersistence) {
+                try {
+                  await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+                  console.log('[Dashboard] phase2Firestore: Auth Persistence 설정 완료 (LOCAL) - iOS Bluefy 호환');
+                } catch (persistErr) {
+                  console.warn('[Dashboard] phase2Firestore: Auth Persistence 설정 실패:', persistErr);
+                }
+              } else if (auth) {
+                console.warn('[Dashboard] phase2Firestore: auth.setPersistence 메서드 없음 (호환성 모드 가능)');
+              }
+            } catch (persistErr) {
+              console.warn('[Dashboard] phase2Firestore: Auth Persistence 설정 중 오류:', persistErr);
+            }
+          }
+          
           let firestore = window.firestore;
           if (window.parent && window.parent !== window) {
             try {
               firestore = window.parent.firestore || (window.parent.window && window.parent.window.firestore);
-            } catch (e) {}
+            } catch (e) {
+              console.warn('[Dashboard] parent.firestore 접근 실패 (iOS 샌드박스 가능성):', e);
+            }
           }
-          if (!firestore || !userId) return;
+          
+          // Standalone Fallback (iOS Bluefy 필수)
+          if (!firestore && typeof window.initFirebaseStandalone === 'function') {
+            try {
+              var standalone = window.initFirebaseStandalone();
+              if (standalone && standalone.firestore) {
+                firestore = standalone.firestore;
+                window.firestore = firestore;
+                console.log('[Dashboard] phase2Firestore: Standalone Fallback 성공');
+              }
+            } catch (e) {
+              console.warn('[Dashboard] phase2Firestore: Standalone Fallback 실패:', e);
+            }
+          }
+          
+          // Firebase SDK 직접 초기화 (최종 백업)
+          if (!firestore && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+            try {
+              firestore = firebase.firestore();
+              window.firestore = firestore;
+              console.log('[Dashboard] phase2Firestore: Firebase SDK 직접 초기화 성공');
+            } catch (e) {
+              console.warn('[Dashboard] phase2Firestore: Firebase SDK 직접 초기화 실패:', e);
+            }
+          }
+          
+          if (!firestore || !userId) {
+            console.warn('[Dashboard] phase2Firestore: Firestore 또는 userId 없음', {
+              hasFirestore: !!firestore,
+              hasUserId: !!userId
+            });
+            return;
+          }
+          
           try {
             const userDoc = await firestore.collection('users').doc(userId).get();
             if (!userDoc.exists) return;
@@ -742,17 +940,93 @@ Output Format (JSON Only):
         };
         window.addEventListener('message', onParentUser);
         
+        // iOS Bluefy: 즉시 Standalone Fallback 시도
+        if (isMobile() && typeof window.initFirebaseStandalone === 'function') {
+          try {
+            var standalone = window.initFirebaseStandalone();
+            if (standalone && standalone.firestore) {
+              window.firestore = standalone.firestore;
+              if (standalone.auth) {
+                window.auth = standalone.auth;
+                // Auth Persistence 설정
+                if (standalone.auth.setPersistence) {
+                  standalone.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+                    .then(function() {
+                      console.log('[Dashboard] 초기 진입: Auth Persistence 설정 완료 (LOCAL)');
+                    })
+                    .catch(function(e) {
+                      console.warn('[Dashboard] 초기 진입: Auth Persistence 설정 실패:', e);
+                    });
+                }
+              }
+              console.log('[Dashboard] 초기 진입: Standalone Fallback 즉시 성공');
+              if (uid) phase2Firestore(uid);
+            }
+          } catch (e) {
+            console.warn('[Dashboard] 초기 진입: Standalone Fallback 실패, 일반 로직 진행:', e);
+          }
+        }
+        
         let firestoreCheck = setInterval(function () {
-          const fs = window.firestore || (window.parent && window.parent !== window && (window.parent.firestore || (window.parent.window && window.parent.window.firestore)));
+          var fs = window.firestore;
+          if (window.parent && window.parent !== window) {
+            try {
+              fs = window.parent.firestore || (window.parent.window && window.parent.window.firestore) || fs;
+            } catch (e) {
+              // iOS 샌드박스로 인한 접근 실패는 무시
+            }
+          }
+          
+          // Standalone Fallback 시도
+          if (!fs && typeof window.initFirebaseStandalone === 'function') {
+            try {
+              var standalone = window.initFirebaseStandalone();
+              if (standalone && standalone.firestore) {
+                fs = standalone.firestore;
+                window.firestore = fs;
+                if (standalone.auth) {
+                  window.auth = standalone.auth;
+                }
+              }
+            } catch (e) {
+              console.warn('[Dashboard] firestoreCheck: Standalone Fallback 실패:', e);
+            }
+          }
+          
+          // Firebase SDK 직접 초기화
+          if (!fs && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+            try {
+              fs = firebase.firestore();
+              window.firestore = fs;
+            } catch (e) {
+              console.warn('[Dashboard] firestoreCheck: Firebase SDK 직접 초기화 실패:', e);
+            }
+          }
+          
           if (fs && uid) {
             clearInterval(firestoreCheck);
             phase2Firestore(uid);
           }
-        }, 200);
+        }, isMobile() ? 300 : 200);
         const t = setTimeout(function () {
           clearInterval(firestoreCheck);
+          // 최종 시도: Standalone Fallback 강제 실행
+          if (!window.firestore && typeof window.initFirebaseStandalone === 'function') {
+            try {
+              var standalone = window.initFirebaseStandalone();
+              if (standalone && standalone.firestore) {
+                window.firestore = standalone.firestore;
+                if (standalone.auth) {
+                  window.auth = standalone.auth;
+                }
+                console.log('[Dashboard] firestoreCheck 타임아웃: 최종 Standalone Fallback 성공');
+              }
+            } catch (e) {
+              console.error('[Dashboard] firestoreCheck 타임아웃: 최종 Standalone Fallback 실패:', e);
+            }
+          }
           if (uid) phase2Firestore(uid);
-        }, 8000);
+        }, isMobile() ? 20000 : 8000);
         return function () {
           window.removeEventListener('message', onParentUser);
           clearInterval(firestoreCheck);
@@ -784,12 +1058,12 @@ Output Format (JSON Only):
             // 1순위: window.firestore (현재 창)
             var fs = window.firestore;
             
-            // 2순위: window.parent.firestore (부모 창, iframe 환경)
+            // 2순위: window.parent.firestore (부모 창, iframe 환경) - iOS Bluefy에서는 차단될 수 있음
             if (!fs && window.parent && window.parent !== window) {
               try {
                 fs = window.parent.firestore || (window.parent.window && window.parent.window.firestore) || fs;
               } catch (e) {
-                console.warn('[Dashboard] parent.firestore 접근 실패:', e);
+                console.warn('[Dashboard] parent.firestore 접근 실패 (iOS 샌드박스 가능성):', e);
               }
             }
             
@@ -804,7 +1078,21 @@ Output Format (JSON Only):
               }
             }
             
-            // 4순위: firebaseConfig.js가 아직 로드되지 않았다면 대기
+            // 4순위: Standalone Fallback (강제 독립 초기화) - iOS Bluefy 필수
+            if (!fs && typeof window.initFirebaseStandalone === 'function') {
+              try {
+                var standalone = window.initFirebaseStandalone();
+                if (standalone && standalone.firestore) {
+                  fs = standalone.firestore;
+                  window.firestore = fs;
+                  console.log('[Dashboard] Firebase Standalone Fallback 성공 (iOS Bluefy 호환)');
+                }
+              } catch (e) {
+                console.warn('[Dashboard] Standalone Fallback 실패:', e);
+              }
+            }
+            
+            // 5순위: firebaseConfig.js가 아직 로드되지 않았다면 대기
             if (!fs && typeof firebase === 'undefined') {
               console.warn('[Dashboard] Firebase SDK가 아직 로드되지 않음');
             }
@@ -814,8 +1102,10 @@ Output Format (JSON Only):
               hasParentFirestore: !!(window.parent && window.parent !== window && window.parent.firestore),
               hasFirebaseSDK: typeof firebase !== 'undefined',
               firebaseAppsLength: (typeof firebase !== 'undefined' && firebase.apps) ? firebase.apps.length : 0,
+              hasStandaloneInit: typeof window.initFirebaseStandalone === 'function',
               result: !!fs,
-              device: isMobile() ? 'mobile' : 'desktop'
+              device: isMobile() ? 'mobile' : 'desktop',
+              isBluefy: /Bluefy/i.test(navigator.userAgent || '')
             });
             return fs;
           }
