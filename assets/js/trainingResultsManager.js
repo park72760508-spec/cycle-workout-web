@@ -367,9 +367,10 @@ async function getExistingStravaActivityIds() {
       const userLogsRef = userDoc.ref.collection('logs');
       
       try {
+        // Firebase Client SDK에서는 .select()를 지원하지 않으므로
+        // 전체 문서를 가져온 뒤 필요한 필드만 추출
         const logsSnapshot = await userLogsRef
           .where('source', '==', 'strava')
-          .select('activity_id')
           .get();
         
         const userActivityCount = logsSnapshot.size;
@@ -377,6 +378,7 @@ async function getExistingStravaActivityIds() {
           console.log(`[getExistingStravaActivityIds] 사용자 ${userId}: ${userActivityCount}개의 활동 발견`);
         }
         
+        // 전체 문서에서 activity_id 필드만 추출
         logsSnapshot.docs.forEach(doc => {
           const data = doc.data();
           if (data.activity_id) {

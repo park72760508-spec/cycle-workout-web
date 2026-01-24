@@ -1481,8 +1481,8 @@ if (typeof window !== 'undefined') {
 async function loadUsers() {
   const userList = document.getElementById('userList');
   if (!userList) {
-    console.warn('[loadUsers] userList 요소를 찾을 수 없습니다.');
-    return;
+    console.warn('[loadUsers] userList 요소를 찾을 수 없습니다. 함수를 종료합니다.');
+    return; // userList 요소가 없으면 안전하게 함수 종료
   }
 
   try {
