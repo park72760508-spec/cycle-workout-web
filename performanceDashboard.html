@@ -713,6 +713,7 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       const userProfileRef = useRef(null);
       const proxyTimeoutRef = useRef(null);
+      const requestIntervalRef = useRef(null);
       
       useEffect(function() {
         userProfileRef.current = userProfile;
@@ -1121,6 +1122,11 @@ Output Format (JSON Only):
               }
             }
             
+            // AI 연결 상태 수신 (부모 앱 → 대시보드)
+            if (e.data && e.data.type === 'AI_CONNECTION_STATUS') {
+              setAiPairingStatus(!!e.data.isConnected);
+            }
+            
             // Data Proxy Fallback: 부모 창에서 훈련 로그 수신
             if (e.data && e.data.type === 'DASHBOARD_LOGS_DATA' && Array.isArray(e.data.logs)) {
               var logs = e.data.logs;
@@ -1130,6 +1136,10 @@ Output Format (JSON Only):
               if (proxyTimeoutRef.current) {
                 clearTimeout(proxyTimeoutRef.current);
                 proxyTimeoutRef.current = null;
+              }
+              if (requestIntervalRef.current) {
+                clearInterval(requestIntervalRef.current);
+                requestIntervalRef.current = null;
               }
               
               setRecentLogs(logs);
@@ -1377,26 +1387,47 @@ Output Format (JSON Only):
             }
           }
           
-          // Data Proxy Fallback: 인증 없음 + iframe → 부모 창에 로그 요청
+          // Data Proxy Fallback: 인증 없음 + iframe → 부모 창에 로그 요청 (1.5s 폴링, 15s 타임아웃)
           var hasValidAuth = auth && auth.currentUser;
           if (!hasValidAuth && userProfile && userProfile.id && window.parent && window.parent !== window) {
-            console.log('[Dashboard] Data Proxy Fallback: 부모 창에 로그 요청', { userId: userProfile.id });
+            console.log('[Dashboard] Data Proxy Fallback: 부모 창에 로그 요청 (1.5s 폴링)', { userId: userProfile.id });
             if (proxyTimeoutRef.current) {
               clearTimeout(proxyTimeoutRef.current);
               proxyTimeoutRef.current = null;
             }
-            window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userProfile.id }, '*');
+            if (requestIntervalRef.current) {
+              clearInterval(requestIntervalRef.current);
+              requestIntervalRef.current = null;
+            }
             setLogsProxyPending(true);
             setLogsLoadError(null);
+            
+            function sendRequest() {
+              if (!isMounted) return;
+              try {
+                window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userProfile.id }, '*');
+                window.parent.postMessage({ type: 'REQUEST_STATUS' }, '*');
+                console.log('[Dashboard] Requesting data from App (Retry)...');
+              } catch (e) {
+                console.warn('[Dashboard] postMessage 실패:', e);
+              }
+            }
+            sendRequest();
+            requestIntervalRef.current = setInterval(sendRequest, 1500);
+            
             proxyTimeoutRef.current = setTimeout(function() {
+              if (requestIntervalRef.current) {
+                clearInterval(requestIntervalRef.current);
+                requestIntervalRef.current = null;
+              }
               proxyTimeoutRef.current = null;
               if (isMounted) {
-                setLogsLoadError('데이터 로드 실패 (앱 연결 불가)');
+                setLogsLoadError('데이터 로드 실패 (앱 연결 지연)');
                 setLogsLoaded(true);
                 setLogsLoading(false);
                 setLogsProxyPending(false);
               }
-            }, 10000);
+            }, 15000);
             return;
           }
           
@@ -1776,6 +1807,10 @@ Output Format (JSON Only):
           if (proxyTimeoutRef.current) {
             clearTimeout(proxyTimeoutRef.current);
             proxyTimeoutRef.current = null;
+          }
+          if (requestIntervalRef.current) {
+            clearInterval(requestIntervalRef.current);
+            requestIntervalRef.current = null;
           }
         };
       }, [userProfile]);
