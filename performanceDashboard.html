@@ -198,7 +198,7 @@ Output Format (JSON Only):
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
       var generationConfig = {
-        maxOutputTokens: 20000, // 충분한 토큰으로 시작하여 MAX_TOKENS 오류 방지 및 속도 향상 (10000 → 20000 증가)
+        maxOutputTokens: 10000, // 충분한 토큰으로 시작하여 MAX_TOKENS 오류 방지 및 속도 향상
         temperature: 0.7,
         topP: 0.8,
         topK: 40
@@ -285,11 +285,11 @@ Output Format (JSON Only):
             throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
           }
           var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
-          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도 (안전장치, 초기값 20000이면 거의 발생하지 않음)
+          // MAX_TOKENS인 경우 maxOutputTokens를 증가시켜 재시도 (안전장치, 초기값 10000이면 거의 발생하지 않음)
           if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
             if (attempt < 2) {
-              // 이미 20000이면 32000으로 증가 (최대 32000까지)
-              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 20000 ? 20000 : generationConfig.maxOutputTokens * 2);
+              // 이미 10000이면 20000으로 증가 (최대 32000까지)
+              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 10000 ? 10000 : generationConfig.maxOutputTokens * 2);
               body.generationConfig = generationConfig;
               console.warn('[callGeminiCoach] MAX_TOKENS 도달, maxOutputTokens 증가:', generationConfig.maxOutputTokens);
               throw new Error('MAX_TOKENS - 재시도');
@@ -713,15 +713,10 @@ Output Format (JSON Only):
       const [retryCoach, setRetryCoach] = useState(0);
       const userProfileRef = useRef(null);
       const proxyTimeoutRef = useRef(null);
-      const requestIntervalRef = useRef(null);
-      const logsLoadedRef = useRef(false);
       
       useEffect(function() {
         userProfileRef.current = userProfile;
       }, [userProfile]);
-      useEffect(function() {
-        logsLoadedRef.current = logsLoaded;
-      }, [logsLoaded]);
       
       // iOS Bluefy: 페이지 로드 시 즉시 Firebase Standalone 초기화 시도
       useEffect(function() {
@@ -1126,11 +1121,6 @@ Output Format (JSON Only):
               }
             }
             
-            // AI 연결 상태 수신 (부모 앱 → 대시보드)
-            if (e.data && e.data.type === 'AI_CONNECTION_STATUS') {
-              setAiPairingStatus(!!e.data.isConnected);
-            }
-            
             // Data Proxy Fallback: 부모 창에서 훈련 로그 수신
             if (e.data && e.data.type === 'DASHBOARD_LOGS_DATA' && Array.isArray(e.data.logs)) {
               var logs = e.data.logs;
@@ -1141,17 +1131,12 @@ Output Format (JSON Only):
                 clearTimeout(proxyTimeoutRef.current);
                 proxyTimeoutRef.current = null;
               }
-              if (requestIntervalRef.current) {
-                clearInterval(requestIntervalRef.current);
-                requestIntervalRef.current = null;
-              }
               
               setRecentLogs(logs);
               setLogsLoaded(true);
               setLogsLoadError(null);
               setLogsLoading(false);
               setLogsProxyPending(false);
-              logsLoadedRef.current = true; // ref 동기화
               
               var profile = userProfileRef.current;
               var challenge = (profile && profile.challenge) || 'Fitness';
@@ -1293,250 +1278,495 @@ Output Format (JSON Only):
       // 재시도 버튼용 ref (외부에서 호출 가능하도록)
       const retryLogsRef = useRef(null);
       
-      // 최근 훈련 로그 로드 — Hybrid Dual-Track: Direct Access (PC) + Proxy Polling (Mobile)
+      // 최근 훈련 로그 로드 (주간 목표·훈련 트렌드용) — 휴대폰 iframe에서 Firestore 지연 대기 + 재시도
       useEffect(() => {
+        var retryCount = 0;
+        var maxRetries = isMobile() ? 5 : 3; // 휴대폰은 더 많은 재시도
+        var retryDelay = isMobile() ? 3000 : 2000; // 휴대폰은 더 긴 대기 시간
         var isMounted = true;
         
-        function applyLogsToState(logs, profile) {
-          var challenge = (profile && profile.challenge) || 'Fitness';
-          var weeklyTarget = 100;
-          if (typeof window.getWeeklyTargetTSS === 'function') {
-            var targetInfo = window.getWeeklyTargetTSS(challenge);
-            weeklyTarget = targetInfo.target;
+        async function loadRecentLogs(currentRetry) {
+          currentRetry = currentRetry || 0;
+          if (!userProfile || !userProfile.id) return;
+          
+          // 로그 로딩 시작
+          if (isMounted && currentRetry === 0) {
+            setLogsLoading(true);
+            setLogsLoadError(null);
           }
-          var today = new Date();
-          var dayOfWeek = today.getDay();
-          var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-          var monday = new Date(today);
-          monday.setDate(today.getDate() + mondayOffset);
-          monday.setHours(0, 0, 0, 0);
-          var mondayStr = monday.toISOString().split('T')[0];
-          var weeklyTss = 0;
-          logs.forEach(function(log) {
-            if (log.date && log.date >= mondayStr) {
-              weeklyTss += (Number(log.tss) || 0);
+          
+          // 인증 상태 확인 및 복원 (Firestore 권한 오류 방지)
+          var auth = window.auth;
+          
+          // 1순위: 부모 창의 인증 상태 사용 (iframe 환경)
+          if (!auth && window.parent && window.parent !== window) {
+            try {
+              var parentAuth = window.parent.auth || (window.parent.window && window.parent.window.auth);
+              if (parentAuth && parentAuth.currentUser) {
+                auth = parentAuth;
+                window.auth = auth;
+                console.log('[Dashboard] loadRecentLogs: 부모 창 인증 사용', { uid: auth.currentUser.uid });
+              }
+            } catch (e) {
+              console.warn('[Dashboard] loadRecentLogs: 부모 창 인증 접근 실패 (iOS 샌드박스 가능성):', e);
             }
-          });
-          var weeklyTssRounded = Math.round(weeklyTss);
-          var sorted = logs.slice().sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-          var last7 = sorted.slice(0, 7).reverse();
-          var chartData = last7.map(function(log) {
-            return {
-              date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
-              fitness: Number(log.tss) || 0,
-              fatigue: (Number(log.tss) || 0) * 0.7
-            };
-          });
-          setRecentLogs(logs);
-          setLogsLoaded(true);
-          setLogsLoading(false);
-          setLogsLoadError(null);
-          setLogsProxyPending(false);
-          logsLoadedRef.current = true;
-          setStats(function(prev) {
-            return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
-          });
-          setFitnessData(chartData);
-        }
-        
-        /* [Hybrid Logic] Supports both PC (Direct) and Mobile (Proxy) */
-        async function loadRecentLogs() {
-          // Prevent duplicate loading
-          if (logsLoadedRef.current) return;
-          if (!userProfile || !userProfile.id) {
-            setLogsLoading(false);
+          }
+          
+          // 2순위: 기본 앱 인증
+          if (!auth && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+            try {
+              auth = firebase.auth();
+              window.auth = auth;
+            } catch (e) {
+              console.warn('[Dashboard] loadRecentLogs: Auth 초기화 실패:', e);
+            }
+          }
+          
+          if (auth) {
+            if (!auth.currentUser) {
+              console.log('[Dashboard] loadRecentLogs: 인증 복원 대기 (onAuthStateChanged)…');
+              var authReady = await new Promise(function(resolve) {
+                var resolved = false;
+                var t = setTimeout(function() {
+                  if (resolved) return;
+                  resolved = true;
+                  // 타임아웃 시에도 userId가 있으면 계속 진행 (보안 규칙이 userId 기반일 수 있음)
+                  if (userProfile && userProfile.id) {
+                    console.warn('[Dashboard] loadRecentLogs: 인증 타임아웃, userId로 시도:', userProfile.id);
+                    resolve({ uid: userProfile.id }); // 가짜 user 객체 반환
+                  } else {
+                    resolve(null);
+                  }
+                }, 10000); // 타임아웃 10초로 증가
+                auth.onAuthStateChanged(function(user) {
+                  if (resolved) return;
+                  resolved = true;
+                  clearTimeout(t);
+                  resolve(user || null);
+                });
+              });
+              if (!authReady) {
+                console.error('[Dashboard] loadRecentLogs: 인증 복원 실패 (타임아웃 또는 미로그인)');
+                // userId가 있으면 경고만 하고 계속 진행 (보안 규칙 확인 필요)
+                if (!userProfile || !userProfile.id) {
+                  if (isMounted) {
+                    setLogsLoading(false);
+                    setLogsLoadError('인증 상태가 없습니다. 로그인 후 다시 시도해주세요.');
+                    setLogsLoaded(true);
+                  }
+                  return;
+                } else {
+                  console.warn('[Dashboard] loadRecentLogs: 인증 없지만 userId 있음, 쿼리 시도 (권한 오류 가능)');
+                }
+              } else {
+                console.log('[Dashboard] loadRecentLogs: 인증 복원 완료', { uid: authReady.uid });
+              }
+            } else {
+              console.log('[Dashboard] loadRecentLogs: 인증 확인됨', { uid: auth.currentUser.uid });
+            }
+          } else {
+            console.warn('[Dashboard] loadRecentLogs: Auth 없음 - userId로 시도:', userProfile ? userProfile.id : '없음');
+            // userId가 없으면 에러
+            if (!userProfile || !userProfile.id) {
+              if (isMounted) {
+                setLogsLoading(false);
+                setLogsLoadError('인증 상태가 없습니다. 로그인 후 다시 시도해주세요.');
+                setLogsLoaded(true);
+              }
+              return;
+            }
+          }
+          
+          // Data Proxy Fallback: 인증 없음 + iframe → 부모 창에 로그 요청
+          var hasValidAuth = auth && auth.currentUser;
+          if (!hasValidAuth && userProfile && userProfile.id && window.parent && window.parent !== window) {
+            console.log('[Dashboard] Data Proxy Fallback: 부모 창에 로그 요청', { userId: userProfile.id });
+            if (proxyTimeoutRef.current) {
+              clearTimeout(proxyTimeoutRef.current);
+              proxyTimeoutRef.current = null;
+            }
+            window.parent.postMessage({ type: 'REQUEST_LOGS', userId: userProfile.id }, '*');
+            setLogsProxyPending(true);
+            setLogsLoadError(null);
+            proxyTimeoutRef.current = setTimeout(function() {
+              proxyTimeoutRef.current = null;
+              if (isMounted) {
+                setLogsLoadError('데이터 로드 실패 (앱 연결 불가)');
+                setLogsLoaded(true);
+                setLogsLoading(false);
+                setLogsProxyPending(false);
+              }
+            }, 10000);
             return;
           }
           
-          setLogsLoading(true);
-          setLogsLoadError(null);
-          
-          // Clear any existing intervals/timeouts
-          if (proxyTimeoutRef.current) {
-            clearTimeout(proxyTimeoutRef.current);
-            proxyTimeoutRef.current = null;
-          }
-          if (requestIntervalRef.current) {
-            clearInterval(requestIntervalRef.current);
-            requestIntervalRef.current = null;
-          }
-          
-          var directLoadSuccess = false;
-          var profile = userProfile;
-
-          // =========================================================
-          // [Track 1] Method A: Direct Firestore Access (For PC/Fast)
-          // Supports Firebase v9 (Modular) & v8 (Compat)
-          // =========================================================
-          try {
-            var parent = window.parent;
-            var parentDB = null;
-            var localDB = null;
+          function getFirestore() {
+            // 1순위: window.firestore (현재 창)
+            var fs = window.firestore;
             
-            // Priority 1: Check parent window for Firestore (v8 Compat or v9)
-            if (parent && parent !== window) {
+            // 2순위: window.parent.firestore (부모 창, iframe 환경) - 인증 상태 공유
+            // 부모 창의 firestore를 사용하면 부모 창의 인증 상태도 함께 사용됨
+            if (!fs && window.parent && window.parent !== window) {
               try {
-                // Case A: Firebase v8 Compat SDK (Legacy)
-                if (parent.firestore) {
-                  parentDB = parent.firestore;
-                } else if (parent.firebase && typeof parent.firebase.firestore === 'function') {
-                  parentDB = parent.firebase.firestore();
-                }
-                // Case B: Firebase v9 Modular SDK
-                // Note: v9 requires getDocs/query functions which may not be in iframe scope
-                // If parent exposes firestoreV9 instance, we try to use it via compat layer if available
-                // Otherwise, we'll fallback to Proxy
-                if (!parentDB && parent.firestoreV9) {
-                  console.log('[Dashboard] 🔍 Detected parent.firestoreV9 (v9 Modular), checking for compat access...');
-                  // Try to get compat layer from parent if available
-                  if (parent.firebase && typeof parent.firebase.firestore === 'function') {
-                    parentDB = parent.firebase.firestore();
+                var parentFs = window.parent.firestore || (window.parent.window && window.parent.window.firestore);
+                var parentAuth = window.parent.auth || (window.parent.window && window.parent.window.auth);
+                if (parentFs) {
+                  fs = parentFs;
+                  window.firestore = fs; // 전역에 저장
+                  if (parentAuth) {
+                    window.auth = parentAuth; // 부모 창의 인증도 함께 사용
+                    console.log('[Dashboard] 부모 창 Firestore 및 Auth 사용', {
+                      hasCurrentUser: !!(parentAuth && parentAuth.currentUser)
+                    });
                   }
                 }
               } catch (e) {
-                console.warn('[Dashboard] Parent Firestore access failed:', e);
-                parentDB = null;
+                console.warn('[Dashboard] parent.firestore 접근 실패 (iOS 샌드박스 가능성):', e);
               }
             }
             
-            // Priority 2: Try local Firestore as fallback
-            try {
-              localDB = window.firestore || (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0 ? firebase.firestore() : null);
-            } catch (e) {
-              localDB = null;
+            // 3순위: Firebase SDK를 사용하여 직접 초기화 (백업 로직)
+            if (!fs && typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+              try {
+                fs = firebase.firestore();
+                window.firestore = fs; // 전역에 저장하여 다음 호출 시 재사용
+                console.log('[Dashboard] Firestore 직접 초기화 성공 (백업 로직)');
+              } catch (e) {
+                console.warn('[Dashboard] Firestore 직접 초기화 실패:', e);
+              }
             }
             
-            var db = parentDB || localDB;
+            // 4순위: Standalone Fallback (강제 독립 초기화) - iOS Bluefy 필수
+            // 주의: 기본 앱의 인증 상태를 확인하고, 있으면 기본 앱 사용
+            if (!fs && typeof window.initFirebaseStandalone === 'function') {
+              try {
+                // 기본 앱의 인증 상태 확인
+                var defaultAuth = null;
+                var defaultFirestore = null;
+                if (firebase.apps && firebase.apps.length > 0) {
+                  try {
+                    defaultAuth = firebase.auth();
+                    defaultFirestore = firebase.firestore();
+                    if (defaultAuth && defaultAuth.currentUser) {
+                      // 기본 앱에 인증 상태가 있으면 기본 앱 사용 (인증 상태 공유)
+                      fs = defaultFirestore;
+                      window.firestore = fs;
+                      window.auth = defaultAuth;
+                      console.log('[Dashboard] 기본 앱 사용 (인증 상태 있음)', {
+                        uid: defaultAuth.currentUser.uid
+                      });
+                    }
+                  } catch (e) {
+                    console.warn('[Dashboard] 기본 앱 확인 실패:', e);
+                  }
+                }
+                
+                // 기본 앱에 인증 상태가 없으면 Standalone 사용
+                if (!fs) {
+                  var standalone = window.initFirebaseStandalone();
+                  if (standalone && standalone.firestore) {
+                    fs = standalone.firestore;
+                    window.firestore = fs;
+                    if (standalone.auth) {
+                      window.auth = standalone.auth;
+                    }
+                    console.log('[Dashboard] Firebase Standalone Fallback 성공 (iOS Bluefy 호환)', {
+                      hasAuth: !!standalone.auth,
+                      hasCurrentUser: !!(standalone.auth && standalone.auth.currentUser)
+                    });
+                    
+                    // 인증 상태 확인 및 경고
+                    if (standalone.auth && !standalone.auth.currentUser) {
+                      console.warn('[Dashboard] Standalone Fallback: 인증 상태 없음 - Firestore 권한 오류 가능성');
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn('[Dashboard] Standalone Fallback 실패:', e);
+              }
+            }
             
-            // Only attempt if DB and User ID exist
-            if (db && profile && profile.id) {
-              console.log('[Dashboard] 🖥️ PC Environment Detected: Attempting Direct DB Access...');
+            // 5순위: firebaseConfig.js가 아직 로드되지 않았다면 대기
+            if (!fs && typeof firebase === 'undefined') {
+              console.warn('[Dashboard] Firebase SDK가 아직 로드되지 않음');
+            }
+            
+            console.log('[Dashboard] Firestore 확인:', {
+              hasWindowFirestore: !!window.firestore,
+              hasParentFirestore: !!(window.parent && window.parent !== window && window.parent.firestore),
+              hasFirebaseSDK: typeof firebase !== 'undefined',
+              firebaseAppsLength: (typeof firebase !== 'undefined' && firebase.apps) ? firebase.apps.length : 0,
+              hasStandaloneInit: typeof window.initFirebaseStandalone === 'function',
+              result: !!fs,
+              device: isMobile() ? 'mobile' : 'desktop',
+              isBluefy: /Bluefy/i.test(navigator.userAgent || '')
+            });
+            return fs;
+          }
+          
+          var firestore = getFirestore();
+          if (!firestore) {
+            var deadline = Date.now() + (isMobile() ? 20000 : 10000); // 휴대폰은 더 긴 대기
+            while (!firestore && Date.now() < deadline) {
+              await new Promise(function(r) { setTimeout(r, isMobile() ? 300 : 200); });
+              firestore = getFirestore();
+            }
+          }
+          if (!firestore) {
+            if (currentRetry < maxRetries) {
+              console.warn('[Dashboard] 훈련 로그: Firestore 미준비, 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
+              setTimeout(function() {
+                if (isMounted) loadRecentLogs(currentRetry + 1);
+              }, retryDelay);
+              return;
+            }
+            console.warn('[Dashboard] 훈련 로그: Firestore 미준비(최종 타임아웃). 주간 목표/트렌드 미표시.');
+            if (isMounted) {
+              setLogsLoaded(true);
+              setRecentLogs([]);
+            }
+            return;
+          }
+          
+          try {
+            // AI 분석용 훈련 로그 수집
+            // 출처: Firestore users/{userId}/logs 서브컬렉션
+            // 기간: 최근 30일 (오늘 기준)
+            // 필터: source='strava' 또는 source 없음 (Stelvio 직접 입력 제외)
+            // 최대: 30개 (날짜 내림차순)
+            var thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
+            var logs = [];
+            
+            try {
+              var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+              console.log('[Dashboard] Firestore 쿼리 시작:', {
+                userId: userProfile.id,
+                dateStr: dateStr,
+                device: isMobile() ? 'mobile' : 'desktop'
+              });
               
-              // Calculate date 30 days ago
-              var thirtyDaysAgo = new Date();
-              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-              var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
-              
-              // Query Firestore directly (with index fallback)
               var logsSnapshot;
               try {
-                logsSnapshot = await db.collection('users')
-                  .doc(profile.id)
-                  .collection('logs')
-                  .where('date', '>=', dateStr)
-                  .orderBy('date', 'desc')
-                  .limit(50)
-                  .get();
-              } catch (idxErr) {
-                if (String(idxErr.message || '').indexOf('index') !== -1) {
-                  logsSnapshot = await db.collection('users').doc(profile.id).collection('logs').limit(100).get();
-                } else {
-                  throw idxErr;
-                }
+                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+                console.log('[Dashboard] orderBy 쿼리 성공:', logsSnapshot.docs.length + '개 문서');
+              } catch (indexErr) {
+                console.warn('[Dashboard] orderBy 실패, limit만 사용:', indexErr);
+                logsSnapshot = await userLogsRef.limit(100).get();
+                console.log('[Dashboard] limit 쿼리 성공:', logsSnapshot.docs.length + '개 문서');
               }
-
-              var logs = [];
-              logsSnapshot.forEach(function(doc) {
+              
+              var raw = [];
+              logsSnapshot.docs.forEach(function(doc) {
                 var d = doc.data();
-                // Filter: source='strava' or no source (exclude Stelvio direct entries
+                // Strava 활동만 포함 (source='strava' 또는 source 없음)
                 if ((d.source === 'strava' || !d.source) && d.date && d.date >= dateStr) {
-                  logs.push({ id: doc.id, ...d });
+                  // 로그 필드: { id, activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source, ... }
+                  raw.push({ id: doc.id, ...d });
                 }
               });
-              logs.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
-              logs = logs.slice(0, 50);
+              raw.sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+              logs = raw.slice(0, 30);
               
-              // If successful, render immediately and skip polling
-              if (!isMounted || logsLoadedRef.current) return;
-              console.log('[Dashboard] ✅ Direct Access Success:', logs.length, 'logs found');
+              console.log('[Dashboard] 로그 필터링 결과:', {
+                totalDocs: logsSnapshot.docs.length,
+                afterFilter: raw.length,
+                finalLogs: logs.length,
+                dateRange: logs.length > 0 ? (logs[logs.length - 1].date + ' ~ ' + logs[0].date) : '없음'
+              });
               
-              // Clear any proxy polling that might have started
-              if (requestIntervalRef.current) {
-                clearInterval(requestIntervalRef.current);
-                requestIntervalRef.current = null;
+              // 휴대폰에서 로그가 비어있고 재시도 가능하면 재시도
+              if (logs.length === 0 && currentRetry < maxRetries && isMobile()) {
+                console.warn('[Dashboard] 휴대폰: 로그가 비어있음, 재시도 ' + (currentRetry + 1) + '/' + maxRetries, {
+                  totalDocs: logsSnapshot.docs.length,
+                  afterFilter: raw.length,
+                  dateStr: dateStr
+                });
+                setTimeout(function() {
+                  if (isMounted) loadRecentLogs(currentRetry + 1);
+                }, retryDelay);
+                return;
               }
-              if (proxyTimeoutRef.current) {
-                clearTimeout(proxyTimeoutRef.current);
-                proxyTimeoutRef.current = null;
-              }
               
-              // Apply logs with stats/chart calculation
-              applyLogsToState(logs, profile);
-              directLoadSuccess = true;
-              return; 
+              if (isMounted) {
+                setRecentLogs(logs);
+                setLogsLoaded(true);
+                setLogsLoading(false);
+                setLogsLoadError(null);
+                console.log('[Dashboard] 훈련 로그 로드 성공:', logs.length + '개 (AI 분석용)', {
+                  device: isMobile() ? 'mobile' : 'desktop',
+                  retryCount: currentRetry,
+                  totalDocs: logsSnapshot.docs.length,
+                  afterFilter: raw.length,
+                  dateRange: logs.length > 0 ? (logs[logs.length - 1].date + ' ~ ' + logs[0].date) : '없음',
+                  weeklyTss: logs.length > 0 ? (function() {
+                    var today = new Date();
+                    var dayOfWeek = today.getDay();
+                    var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                    var monday = new Date(today);
+                    monday.setDate(today.getDate() + mondayOffset);
+                    monday.setHours(0, 0, 0, 0);
+                    var mondayStr = monday.toISOString().split('T')[0];
+                    var weeklyTss = 0;
+                    logs.forEach(function(log) {
+                      if (log.date && log.date >= mondayStr) {
+                        weeklyTss += (Number(log.tss) || 0);
+                      }
+                    });
+                    return Math.round(weeklyTss);
+                  })() : 0
+                });
+              }
+            } catch (queryErr) {
+              var errMsg = queryErr && queryErr.message ? queryErr.message : String(queryErr);
+              var isPermissionError = errMsg.indexOf('permissions') !== -1 || errMsg.indexOf('권한') !== -1;
+              
+              console.warn('[Dashboard] 훈련 로그 조회 실패:', queryErr, {
+                isPermissionError: isPermissionError,
+                hasAuth: !!auth,
+                hasCurrentUser: !!(auth && auth.currentUser)
+              });
+              
+              // 권한 오류인 경우 인증 상태 재확인
+              if (isPermissionError && auth && !auth.currentUser) {
+                console.warn('[Dashboard] 권한 오류: 인증 상태 없음, 복원 시도...');
+                // 인증 상태 복원 대기 (최대 3초)
+                var authWaitStart = Date.now();
+                while (!auth.currentUser && (Date.now() - authWaitStart < 3000)) {
+                  await new Promise(function(r) { setTimeout(r, 200); });
+                }
+                if (auth.currentUser) {
+                  console.log('[Dashboard] 인증 상태 복원 성공, 재시도...');
+                  // 재시도 (인증 상태가 복원되었으므로)
+                  if (currentRetry < maxRetries && isMounted) {
+                    setTimeout(function() {
+                      if (isMounted) loadRecentLogs(currentRetry + 1);
+                    }, retryDelay);
+                    return;
+                }
+              }
+            }
+              
+              if (currentRetry < maxRetries && isMounted) {
+                console.warn('[Dashboard] 훈련 로그 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
+                setTimeout(function() {
+                  if (isMounted) loadRecentLogs(currentRetry + 1);
+                }, retryDelay);
+                return;
+              }
+              // 최종 실패 시에도 빈 배열로 설정하되, 명확히 로그
+              if (isMounted) {
+                console.error('[Dashboard] 훈련 로그 로드 최종 실패 (재시도 ' + maxRetries + '회 후):', queryErr);
+                var displayError = isPermissionError 
+                  ? 'Firestore 권한 오류: 로그인 상태를 확인하거나 잠시 후 다시 시도해주세요.'
+                  : ('훈련 로그 조회 실패: ' + errMsg.substring(0, 100));
+                setRecentLogs([]);
+                setLogsLoaded(true);
+                setLogsLoading(false);
+                setLogsLoadError(displayError);
+                // 주간 목표는 0으로 설정
+                setStats(function(prev) {
+                  var challenge = userProfile.challenge || 'Fitness';
+                  var weeklyTarget = 100;
+                  if (typeof window.getWeeklyTargetTSS === 'function') {
+                    var targetInfo = window.getWeeklyTargetTSS(challenge);
+                    weeklyTarget = targetInfo.target;
+                  }
+                  return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: 0 };
+                });
+              }
+            }
+            
+            // 이번 주(월요일~일요일)의 TSS 계산
+            var today = new Date();
+            var dayOfWeek = today.getDay(); // 0=일요일, 1=월요일, ..., 6=토요일
+            var mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // 월요일까지의 일수
+            var monday = new Date(today);
+            monday.setDate(today.getDate() + mondayOffset);
+            monday.setHours(0, 0, 0, 0);
+            var mondayStr = monday.toISOString().split('T')[0];
+            
+            var weeklyTss = 0;
+            logs.forEach(function(log) {
+              if (log.date && log.date >= mondayStr) {
+                weeklyTss += (Number(log.tss) || 0);
+              }
+            });
+            var weeklyTssRounded = Math.round(weeklyTss);
+            
+            var challenge = userProfile.challenge || 'Fitness';
+            var weeklyTarget = 100;
+            if (typeof window.getWeeklyTargetTSS === 'function') {
+              var targetInfo = window.getWeeklyTargetTSS(challenge);
+              weeklyTarget = targetInfo.target;
+            }
+            if (isMounted) {
+              setStats(function(prev) {
+                return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: Math.min(weeklyTssRounded, 9999) };
+              });
+              console.log('[Dashboard] 주간 목표 계산:', {
+                weeklyTss: weeklyTssRounded,
+                weeklyTarget: weeklyTarget,
+                monday: mondayStr,
+                logsCount: logs.length
+              });
+              
+              var last7 = logs.slice(0, 7).reverse();
+              var chartData = last7.map(function(log) {
+                return {
+                  date: new Date(log.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+                  fitness: Number(log.tss) || 0,
+                  fatigue: (Number(log.tss) || 0) * 0.7
+                };
+              });
+              setFitnessData(chartData);
             }
           } catch (e) {
-            console.warn('[Dashboard] ⚠️ Direct Access Failed (Likely Mobile/Security Restricted):', e);
-            // Continue to Track 2...
-          }
-
-          // =========================================================
-          // [Track 2] Method B: Proxy Polling (For Mobile/Bluefy & PC Fallback)
-          // =========================================================
-          if (!directLoadSuccess && window.parent && window.parent !== window) {
-            setLogsProxyPending(true);
-            console.log('[Dashboard] 🔄 Starting Proxy Polling (Fallback)...');
-            
-            // Retry every 1 second until parent app responds (faster than 1.5s)
-            function sendRequest() {
-              if (!isMounted) return;
-              if (logsLoadedRef.current) return; // Use ref to avoid stale closure
-              try {
-                // Request Data
-                window.parent.postMessage({ type: 'REQUEST_LOGS', userId: profile.id }, '*');
-                // Request Connection Status (for AI Pairing)
-                window.parent.postMessage({ type: 'REQUEST_STATUS' }, '*');
-              } catch (e) {
-                console.warn('[Dashboard] postMessage 실패:', e);
-              }
-            }
-            sendRequest();
-            requestIntervalRef.current = setInterval(sendRequest, 1000);
-
-            // Safety timeout: Force stop spinner after 10 seconds
-            proxyTimeoutRef.current = setTimeout(function() {
-              if (requestIntervalRef.current) {
-                clearInterval(requestIntervalRef.current);
-                requestIntervalRef.current = null;
-              }
-              proxyTimeoutRef.current = null;
-              if (!isMounted) return;
-              if (logsLoadedRef.current) return; // Already loaded, skip
-              
-              // Force stop spinner to show empty state instead of infinite spinner
-              console.error('[Dashboard] ❌ Load Timeout. Showing empty state.');
-              setLogsLoading(false);
+            console.error('[Dashboard] 훈련 로그 로드 오류:', e);
+            if (currentRetry < maxRetries && isMounted) {
+              console.warn('[Dashboard] 훈련 로그 오류 재시도 ' + (currentRetry + 1) + '/' + maxRetries);
+              setTimeout(function() {
+                if (isMounted) loadRecentLogs(currentRetry + 1);
+              }, retryDelay);
+            } else if (isMounted) {
+              // 최종 실패 시에도 상태 설정
+              console.error('[Dashboard] 훈련 로그 로드 최종 실패:', e);
+              var errMsg = e && e.message ? e.message : String(e);
+              setRecentLogs([]);
               setLogsLoaded(true);
-              setLogsProxyPending(false);
-              logsLoadedRef.current = true;
-              // Don't set error text to avoid ugly red box, just show empty charts
-              // User can retry if needed
-            }, 10000);
-          } else if (!directLoadSuccess && (!window.parent || window.parent === window)) {
-            // No parent and no direct access available
-            console.warn('[Dashboard] ⚠️ No Firestore access available');
-            setLogsLoadError('Firestore 접근 불가. 앱 내 대시보드에서 이용해 주세요.');
-            setLogsLoading(false);
-            setLogsLoaded(true);
-            logsLoadedRef.current = true;
+              setLogsLoading(false);
+              setLogsLoadError('훈련 로그 로드 오류: ' + errMsg.substring(0, 100));
+              setStats(function(prev) {
+                var challenge = userProfile.challenge || 'Fitness';
+                var weeklyTarget = 100;
+                if (typeof window.getWeeklyTargetTSS === 'function') {
+                  var targetInfo = window.getWeeklyTargetTSS(challenge);
+                  weeklyTarget = targetInfo.target;
+                }
+                return { ...prev, weeklyGoal: weeklyTarget, weeklyProgress: 0 };
+              });
+            }
           }
         }
-
+        
         if (userProfile && userProfile.id) {
+          // 로그 로딩 시작
           setLogsLoading(true);
           setLogsLoadError(null);
-          loadRecentLogs();
+          loadRecentLogs(0);
         } else {
+          // userProfile이 없으면 로딩 상태 해제
           setLogsLoading(false);
         }
         
+        // 외부에서 재시도할 수 있도록 ref에 함수 저장
         retryLogsRef.current = function() {
           if (userProfile && userProfile.id && isMounted) {
-            logsLoadedRef.current = false;
             setLogsLoading(true);
             setLogsLoadError(null);
             setLogsLoaded(false);
-            loadRecentLogs();
+            loadRecentLogs(0);
           }
         };
         
@@ -1546,10 +1776,6 @@ Output Format (JSON Only):
           if (proxyTimeoutRef.current) {
             clearTimeout(proxyTimeoutRef.current);
             proxyTimeoutRef.current = null;
-          }
-          if (requestIntervalRef.current) {
-            clearInterval(requestIntervalRef.current);
-            requestIntervalRef.current = null;
           }
         };
       }, [userProfile]);
@@ -1563,13 +1789,8 @@ Output Format (JSON Only):
           }
           
           // logsLoaded가 false이거나 logsLoading이 true이면 로그 로딩이 완료되지 않았으므로 대기
-          // logsLoadedRef도 확인하여 상태 동기화 보장
-          if (!logsLoaded || !logsLoadedRef.current || logsLoading) {
-            console.log('[Dashboard] AI 분석 대기: 로그 로딩 중...', { 
-              logsLoaded: logsLoaded, 
-              logsLoadedRef: logsLoadedRef.current,
-              logsLoading: logsLoading 
-            });
+          if (!logsLoaded || logsLoading) {
+            console.log('[Dashboard] AI 분석 대기: 로그 로딩 중...', { logsLoaded: logsLoaded, logsLoading: logsLoading });
             return;
           }
           
