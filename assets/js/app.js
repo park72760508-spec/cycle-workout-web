@@ -10580,13 +10580,16 @@ function confirmAIRecommendation() {
 }
 
 // Gemini API를 사용한 워크아웃 분석 및 추천
-async function analyzeAndRecommendWorkouts(date, user, apiKey) {
+// options: { basisRecommendedWorkout?: string } (대시보드 '추천: X' 클릭 시 해당 타입 기반 + 목적/등급 가중)
+async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
+  options = options || {};
   const contentDiv = document.getElementById('workoutRecommendationContent');
   
   try {
     // 1. 사용자 기본 정보 수집 (운동 목적 강조)
     const ftp = user.ftp || 0;
     const weight = user.weight || 0;
+    const grade = String(user.grade ?? '2').trim();
     // challenge 값 정확히 추출 (대소문자 구분 없이)
     let challenge = String(user.challenge || 'Fitness').trim();
     // 대소문자 정규화 (Racing, GranFondo, Elite, PRO, Fitness)
@@ -10807,8 +10810,42 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
     // 이력은 모두 사용하여 정확한 분석 (최대 30개)
     const limitedHistory = historySummary.slice(0, 30);
     
-    const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 실질적으로 추천해주세요. 형식적인 추천이 아닌, 실제 훈련에 바로 적용할 수 있는 구체적이고 실용적인 추천을 해주세요.
+    // 대시보드 '추천: X' 기반 추천 시 타입 → 카테고리 매핑
+    const basisRaw = options.basisRecommendedWorkout ? String(options.basisRecommendedWorkout).trim() : '';
+    let basisCategory = '';
+    if (basisRaw) {
+      if (/Z1|Active Recovery|Recovery/i.test(basisRaw)) basisCategory = 'Recovery';
+      else if (/Z2|Endurance/i.test(basisRaw)) basisCategory = 'Endurance';
+      else if (/Z3|Tempo/i.test(basisRaw)) basisCategory = 'Tempo';
+      else if (/Z4|Threshold/i.test(basisRaw)) basisCategory = 'Threshold';
+      else if (/Z5|VO2max|VO2Max/i.test(basisRaw)) basisCategory = 'VO2Max';
+      else if (/SweetSpot/i.test(basisRaw)) basisCategory = 'SweetSpot';
+    }
+    const hasBasis = !!basisCategory && !!basisRaw;
+    
+    // 훈련 목적·등급 가중: Elite/PRO > Racing > GranFondo > Fitness. Grade 1·3 = 관리자(고급 워크아웃 선호)
+    const gradeWeightNote = (grade === '1' || grade === '3')
+      ? '등급 1·3(관리자/코치): 고급·고강도 워크아웃 선호에 가중을 두세요.'
+      : '등급 2(일반): 목적에 맞는 보통 강도 워크아웃에 가중을 두세요.';
+    const challengeWeightNote = challenge === 'PRO' || challenge === 'Elite'
+      ? `훈련 목적 ${challenge}: 고강도·전문 훈련에 가중.`
+      : challenge === 'Racing'
+        ? '훈련 목적 Racing: 경기 성능 훈련에 가중.'
+        : challenge === 'GranFondo'
+          ? '훈련 목적 GranFondo: 장거리 지구력 훈련에 가중.'
+          : '훈련 목적 Fitness: 지속 가능한 중강도 훈련에 가중.';
+    
+    const basisBlock = hasBasis ? `
 
+🎯 **[최우선] 오늘의 AI 컨디션 분석 추천 훈련 타입: "${basisRaw}"**
+- 반드시 **${basisCategory}** 카테고리에 부합하는 워크아웃만 3개 추천하세요. 이 타입을 벗어난 훈련은 추천하지 마세요.
+- 위 추천 타입을 기준으로, 아래 **훈련 목적·등급 가중**을 적용해 구체 워크아웃을 선정하세요.
+- 훈련 목적(challenge): **${challenge}**. ${challengeWeightNote}
+- 등급(grade): **${grade}**. ${gradeWeightNote}
+` : '';
+    
+    const prompt = `당신은 전문 사이클 코치입니다. 다음 정보를 바탕으로 오늘 수행할 최적의 워크아웃을 실질적으로 추천해주세요. 형식적인 추천이 아닌, 실제 훈련에 바로 적용할 수 있는 구체적이고 실용적인 추천을 해주세요.
+${basisBlock}
 ⚠️ **중요: 사용자의 운동 목적은 "${challenge}"입니다. 반드시 이 목적에 맞는 훈련을 추천해야 합니다.**
 
 **사용자 정보:**
@@ -10817,6 +10854,7 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey) {
 - W/kg: ${weight > 0 ? (ftp / weight).toFixed(2) : 'N/A'}
 - ⚠️ **운동 목적: ${challenge}** (Fitness: 일반 피트니스/다이어트, GranFondo: 그란폰도, Racing: 레이싱, Elite: 엘리트 선수, PRO: 프로 선수)
   → **이 목적에 맞는 훈련만 추천해야 합니다. 목적과 무관한 훈련은 추천하지 마세요.**
+- **등급(grade): ${grade}** (1·3: 관리자/코치, 2: 일반) → 목적·등급에 따른 가중 적용.
 - 오늘의 몸상태: ${todayCondition} (조정 계수: ${(conditionAdjustment * 100).toFixed(0)}%)
 
 **과거 훈련 이력 분석 (최근 30일, 총 ${totalSessions}회):**
@@ -10859,10 +10897,10 @@ ${JSON.stringify(limitedWorkouts.map(w => ({
    - 훈련 일정의 공백이나 연속 훈련 패턴을 확인하여 오늘의 적절한 강도를 결정하세요.
 
 3. **카테고리 선정**:
-   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 이 목적에 맞는 훈련을 반드시 추천해야 합니다.
+${hasBasis ? `   - 🎯 **고정**: 오늘의 추천 타입 "${basisRaw}"에 따라 카테고리는 **${basisCategory}** 로 고정합니다. 이 카테고리 내에서만 워크아웃 3개를 추천하세요. 훈련 목적(${challenge})·등급(${grade})에 가중을 두어 구체 워크아웃을 선정하세요.` : `   - ⚠️ **중요**: 사용자의 운동 목적은 "${challenge}"입니다. 이 목적에 맞는 훈련을 반드시 추천해야 합니다.
    - 위 분석을 바탕으로 사용자의 운동 목적(${challenge})과 현재 상태를 종합하여 오늘의 운동 카테고리(Endurance, Tempo, SweetSpot, Threshold, VO2Max, Recovery 중 하나)를 실질적으로 선정하세요.
    - 단순히 목적만 고려하지 말고, 실제 훈련 부하와 회복 상태를 우선 고려하세요.
-   - 과훈련 위험이 있으면 Recovery, 충분한 회복이 있었다면 적절한 강도 훈련을 추천하세요.
+   - 과훈련 위험이 있으면 Recovery, 충분한 회복이 있었다면 적절한 강도 훈련을 추천하세요.`}
 ${challenge === 'Racing' ? `
 **레이싱 목적 특별 지침:**
 - 레이싱 목적의 사용자이므로 경기 성능 향상에 초점을 맞춘 고강도 훈련을 우선 추천하세요.
@@ -10912,8 +10950,8 @@ ${challenge === 'PRO' ? `
      * 목적과 무관한 워크아웃은 절대 추천하지 마세요.
      * 예를 들어, Racing 목적 사용자에게 Fitness 목적의 저강도 훈련을 추천하면 안 됩니다.
      * 각 목적에 맞는 특화된 훈련을 추천해야 합니다.
+${hasBasis ? `   - 🎯 **${basisCategory}** 카테고리(추천 타입 "${basisRaw}" 기반) 워크아웃 중에서 **목적(${challenge})·등급(${grade}) 가중**을 적용해 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.` : `   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.`}
    
-   - 선정된 카테고리에 해당하는 워크아웃 중에서 사용자의 현재 상태와 **목적(${challenge})**에 가장 적합한 워크아웃 3개를 추천 순위로 제시하세요.
    - 각 추천 워크아웃에 대해 **구체적이고 실질적인 추천 이유**를 제공하세요:
      * 왜 이 워크아웃이 오늘 적합한지 (훈련 부하, 회복 상태, **목적(${challenge}) 달성 관점**)
      * 이 워크아웃이 사용자의 목적(${challenge}) 달성에 어떻게 도움이 되는지
@@ -11655,10 +11693,49 @@ async function selectRecommendedWorkout(workoutId, date) {
   }
 }
 
+// 사용자 대시보드용 AI 워크아웃 추천 (확인 팝업 없이 바로 3개 추천)
+// coachData.recommended_workout(예: Active Recovery (Z1)) 기반 + 훈련목적·등급 가중 적용
+async function runDashboardAIWorkoutRecommendation(userProfile, coachData) {
+  try {
+    const apiKey = localStorage.getItem('geminiApiKey');
+    if (!apiKey || !String(apiKey).trim()) {
+      if (typeof showToast === 'function') {
+        showToast('Gemini API 키가 없습니다. 환경 설정에서 입력해주세요.', 'error');
+      } else if (typeof alert === 'function') {
+        alert('Gemini API 키가 설정되지 않았습니다. 환경 설정에서 API 키를 입력해주세요.');
+      }
+      if (typeof openSettingsModal === 'function') { openSettingsModal(); }
+      return;
+    }
+    const user = userProfile || window.currentUser || (() => {
+      try {
+        const s = localStorage.getItem('currentUser');
+        return s ? JSON.parse(s) : null;
+      } catch (e) { return null; }
+    })();
+    if (!user || !user.id) {
+      if (typeof showToast === 'function') showToast('사용자 정보가 없습니다. 프로필을 선택해주세요.', 'error');
+      return;
+    }
+    const today = new Date();
+    const date = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    const options = {};
+    if (coachData && coachData.recommended_workout) {
+      options.basisRecommendedWorkout = String(coachData.recommended_workout).trim();
+    }
+    showWorkoutRecommendationModal();
+    await analyzeAndRecommendWorkouts(date, user, apiKey, options);
+  } catch (e) {
+    console.error('[Dashboard] AI 추천 훈련 오류:', e);
+    if (typeof showToast === 'function') showToast('AI 추천 중 오류가 발생했습니다.', 'error');
+  }
+}
+
 // 전역 함수로 등록
 window.showWorkoutRecommendationModal = showWorkoutRecommendationModal;
 window.closeWorkoutRecommendationModal = closeWorkoutRecommendationModal;
 window.selectRecommendedWorkout = selectRecommendedWorkout;
+window.runDashboardAIWorkoutRecommendation = runDashboardAIWorkoutRecommendation;
 window.loadTrainingJournalCalendar = loadTrainingJournalCalendar;
 window.handleTrainingDayClick = handleTrainingDayClick;
 window.saveGeminiApiKey = saveGeminiApiKey;
