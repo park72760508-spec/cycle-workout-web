@@ -180,33 +180,22 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
   const sessionId = getBluetoothCoachSessionId();
   console.log('[Bluetooth Coach] 현재 SESSION_ID:', sessionId);
   
-  // 기본 10트랙 확정 (Firebase 대기 없이 즉시 그리드 생성)
-  if (!window.bluetoothCoachState.maxTrackCount || window.bluetoothCoachState.maxTrackCount < 1) {
-    window.bluetoothCoachState.maxTrackCount = 10;
-  }
+  // 트랙 구성 정보 가져오기 및 트랙 그리드 생성
+  getTrackConfigFromFirebase().then(config => {
+    window.bluetoothCoachState.maxTrackCount = config.maxTracks;
+    createBluetoothCoachPowerMeterGrid();
+    
+    // Firebase 구독 시작
+    setupFirebaseSubscriptions();
+  });
   
-  // 1) 파워계 그리드 동기 생성 (Indoor Training과 동일)
-  createBluetoothCoachPowerMeterGrid();
+  // 워크아웃 선택 모달은 openWorkoutSelectionModalForBluetoothCoach 함수 사용 (이미 정의됨)
   
-  // 2) 컨트롤 버튼 / 초기 상태
+  // 컨트롤 버튼 이벤트 연결
   setupControlButtons();
+  
+  // 초기 버튼 상태 설정
   updateBluetoothCoachTrainingButtons();
-  
-  // 3) Firebase 실시간 구독 (트랙별 사용자 데이터)
-  setupFirebaseSubscriptions();
-  
-  // 4) (비동기) Firebase 트랙 수 확인 후 다르면 그리드 재생성 · 구독 갱신
-  getTrackConfigFromFirebase()
-    .then(config => {
-      const want = Math.max(1, config.maxTracks || 10);
-      if (want !== window.bluetoothCoachState.maxTrackCount) {
-        window.bluetoothCoachState.maxTrackCount = want;
-        createBluetoothCoachPowerMeterGrid();
-        setupFirebaseSubscriptions();
-        console.log('[Bluetooth Coach] Firebase 트랙 수 반영:', want);
-      }
-    })
-    .catch(() => {});
 };
 
 /**
@@ -1971,9 +1960,11 @@ if (typeof showScreen === 'function') {
     originalShowScreen(screenId, skipHistory);
     
     if (screenId === 'bluetoothTrainingCoachScreen') {
-      if (typeof window.initBluetoothCoachDashboard === 'function') {
-        window.initBluetoothCoachDashboard();
-      }
+      setTimeout(() => {
+        if (typeof window.initBluetoothCoachDashboard === 'function') {
+          window.initBluetoothCoachDashboard();
+        }
+      }, 100);
     }
   };
 }
