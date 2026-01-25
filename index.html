@@ -5931,10 +5931,59 @@ Output Format (JSON Only):
       useEffect(function authGuardedProfileEffect() {
         var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
         var currentUser = auth ? auth.currentUser : null;
+        var pendingUserData = null; // 이벤트로 받은 userData 임시 저장
         
-        async function loadUserProfile() {
+        async function loadUserProfile(eventUserData) {
           try {
-            // ===== 우선순위: window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
+            // ===== 우선순위 1: 이벤트로 받은 userData (가장 신뢰성 높음) =====
+            if (eventUserData) {
+              console.log('[Dashboard] Using userData from event:', eventUserData.id);
+              var userData = eventUserData;
+              var userId = userData.id;
+              var ftp = Number(userData.ftp) || 0;
+              var weight = Number(userData.weight) || 0;
+              var wkg = weight > 0 ? (ftp / weight).toFixed(2) : 0;
+              var challenge = userData.challenge || 'Fitness';
+              
+              // 사용자 등급별 주간 목표 TSS 가져오기
+              var weeklyTarget = 225;
+              if (typeof window.getWeeklyTargetTSS === 'function') {
+                var targetInfo = window.getWeeklyTargetTSS(challenge);
+                weeklyTarget = targetInfo.target;
+              }
+              
+              setUserProfile({
+                id: userId,
+                name: userData.name || '사용자',
+                ftp: ftp,
+                weight: weight,
+                grade: userData.grade || '2',
+                challenge: challenge,
+                acc_points: userData.acc_points || 0,
+                rem_points: userData.rem_points || 0,
+                ...userData
+              });
+              
+              setStats({
+                ftp: ftp,
+                wkg: parseFloat(wkg),
+                weight: weight,
+                totalPoints: Number(userData.acc_points || 0),
+                currentPoints: Number(userData.rem_points || 0),
+                weeklyGoal: weeklyTarget,
+                weeklyProgress: 0
+              });
+              
+              setStravaStatus({
+                connected: !!(userData.strava_refresh_token),
+                lastSync: userData.strava_last_sync || null
+              });
+              
+              setLoading(false);
+              return;
+            }
+            
+            // ===== 우선순위 2: window.currentUser (프로필 선택 화면에서 선택한 사용자) =====
             var selectedUser = window.currentUser;
             var userId = null;
             var userName = null;
@@ -6051,7 +6100,7 @@ Output Format (JSON Only):
               return;
             }
             
-            // ===== Fallback: Firebase Auth currentUser =====
+            // ===== Fallback: Firebase Auth currentUser (Firestore 세션 복원 대기) =====
             var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
             if (!auth) {
               console.warn('[Dashboard] Auth not available, waiting...');
@@ -6096,7 +6145,7 @@ Output Format (JSON Only):
             userId = currentUser.uid;
             console.log('[Dashboard] Loading profile for authenticated user:', userId);
             
-            // Load from Firestore
+            // Load from Firestore (모바일: 세션 복원 대기 후 재시도)
             var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
             if (!firestore) {
               console.warn('[Dashboard] Firestore not available, using basic profile');
@@ -6105,8 +6154,38 @@ Output Format (JSON Only):
               return;
             }
             
-            try {
-              const userDoc = await firestore.collection('users').doc(userId).get();
+            // [모바일 대응] Firestore 세션 복원 확인 후 쿼리 (최대 3회 재시도)
+            var maxRetries = 3;
+            var retryDelay = 1000; // 1초
+            var userDoc = null;
+            var lastError = null;
+            
+            for (var retry = 0; retry < maxRetries; retry++) {
+              try {
+                userDoc = await firestore.collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                  break; // 성공
+                }
+                lastError = new Error('User document not found');
+                break; // 문서가 없으면 재시도 불필요
+              } catch (e) {
+                lastError = e;
+                console.warn('[Dashboard] Firestore query failed (attempt ' + (retry + 1) + '/' + maxRetries + '):', e.message);
+                
+                // permission-denied인 경우 세션 복원 대기 후 재시도
+                if (e.code === 'permission-denied' && retry < maxRetries - 1) {
+                  console.log('[Dashboard] Waiting for Firestore session restoration...');
+                  await new Promise(r => setTimeout(r, retryDelay));
+                  retryDelay *= 1.5; // 지수 백오프
+                } else {
+                  break; // 다른 오류이거나 최대 재시도 횟수 도달
+                }
+              }
+            }
+            
+            if (userDoc && userDoc.exists) {
+              try {
+                const userData = userDoc.data();
               if (userDoc.exists) {
                 const userData = userDoc.data();
                 const id = userId;
@@ -6170,24 +6249,60 @@ Output Format (JSON Only):
         }
         
         // A. 이미 Auth 준비됨 (PC/빠른 복원)
-        if (window.isAuthReady && currentUser) {
+        if (window.isAuthReady && currentUser && window.currentUser) {
           console.log('[Dashboard] Auth already ready. Loading data...');
-          loadUserProfile();
+          loadUserProfile(window.currentUser); // window.currentUser를 userData로 전달
           return;
         }
         
-        // B. Auth 대기 (모바일, 느린 복원) — stelvio-auth-ready 이벤트 구독
+        // B. Auth 대기 (모바일, 느린 복원) — 이벤트 구독
         console.log('[Dashboard] Waiting for Auth Signal...');
-        var handleAuthReady = function() {
-          console.log('[Dashboard] stelvio-auth-ready received. Loading data...');
-          loadUserProfile();
+        
+        // stelvio-userdata-ready 이벤트 핸들러 (우선순위 높음: userData 포함)
+        var handleUserDataReady = function(e) {
+          var userData = e.detail && e.detail.userData;
+          if (userData) {
+            console.log('[Dashboard] stelvio-userdata-ready received. Loading data with userData...');
+            loadUserProfile(userData);
+          } else {
+            console.warn('[Dashboard] stelvio-userdata-ready received but no userData in detail');
+            // fallback: window.currentUser 확인
+            if (window.currentUser) {
+              loadUserProfile(window.currentUser);
+            }
+          }
         };
+        
+        // stelvio-auth-ready 이벤트 핸들러 (fallback)
+        var handleAuthReady = function(e) {
+          console.log('[Dashboard] stelvio-auth-ready received. Waiting for userData...');
+          // userData가 설정될 때까지 대기 (최대 3초)
+          var checkInterval = setInterval(function() {
+            if (window.currentUser) {
+              clearInterval(checkInterval);
+              console.log('[Dashboard] window.currentUser available. Loading data...');
+              loadUserProfile(window.currentUser);
+            }
+          }, 200);
+          
+          setTimeout(function() {
+            clearInterval(checkInterval);
+            if (!window.currentUser) {
+              console.warn('[Dashboard] window.currentUser not available after 3s, trying auth.currentUser...');
+              loadUserProfile(null); // null 전달 시 auth.currentUser로 fallback
+            }
+          }, 3000);
+        };
+        
+        window.addEventListener('stelvio-userdata-ready', handleUserDataReady);
         window.addEventListener('stelvio-auth-ready', handleAuthReady);
+        
         var timeoutId = setTimeout(function() {
           if (!window.isAuthReady) console.warn('[Dashboard] Auth signal timeout (5s).');
         }, 5000);
         
         return function cleanup() {
+          window.removeEventListener('stelvio-userdata-ready', handleUserDataReady);
           window.removeEventListener('stelvio-auth-ready', handleAuthReady);
           clearTimeout(timeoutId);
         };
@@ -6220,13 +6335,41 @@ Output Format (JSON Only):
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
             
-            var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
-            var logsSnapshot;
-            try {
-              logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
-            } catch (indexErr) {
-              console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
-              logsSnapshot = await userLogsRef.limit(100).get();
+            // [모바일 대응] Firestore 세션 복원 확인 후 쿼리 (최대 3회 재시도)
+            var maxRetries = 3;
+            var retryDelay = 1000;
+            var logsSnapshot = null;
+            var lastError = null;
+            
+            for (var retry = 0; retry < maxRetries; retry++) {
+              try {
+                var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+                try {
+                  logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+                  break; // 성공
+                } catch (indexErr) {
+                  // 인덱스 오류는 재시도하지 않고 limit만 사용
+                  console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+                  logsSnapshot = await userLogsRef.limit(100).get();
+                  break; // 성공
+                }
+              } catch (e) {
+                lastError = e;
+                console.warn('[Dashboard] Firestore logs query failed (attempt ' + (retry + 1) + '/' + maxRetries + '):', e.message);
+                
+                // permission-denied인 경우 세션 복원 대기 후 재시도
+                if (e.code === 'permission-denied' && retry < maxRetries - 1) {
+                  console.log('[Dashboard] Waiting for Firestore session restoration...');
+                  await new Promise(r => setTimeout(r, retryDelay));
+                  retryDelay *= 1.5; // 지수 백오프
+                } else {
+                  break; // 다른 오류이거나 최대 재시도 횟수 도달
+                }
+              }
+            }
+            
+            if (!logsSnapshot) {
+              throw lastError || new Error('Failed to load logs after retries');
             }
             
             var raw = [];
