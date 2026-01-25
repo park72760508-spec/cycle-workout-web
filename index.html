@@ -6256,10 +6256,17 @@ Output Format (JSON Only):
           // Check currentUser one last time to be safe
           var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
           if (auth && auth.currentUser) {
-            console.log('[Dashboard] Auth Signal Received. Loading Data...');
+            console.log('[Mobile Debug] [Dashboard] Auth Signal Received. Loading Data...');
             loadRecentLogs();
           } else {
-            console.warn('[Dashboard] Auth Signal received but currentUser still null');
+            console.warn('[Mobile Debug] [Dashboard] Auth Signal received but currentUser still null. Waiting...');
+            // Retry after short delay (mobile auth restoration can be delayed)
+            setTimeout(function() {
+              if (isMounted && auth && auth.currentUser) {
+                console.log('[Mobile Debug] [Dashboard] Retry: currentUser now available. Loading...');
+                loadRecentLogs();
+              }
+            }, 500);
           }
         }
         
@@ -6267,19 +6274,30 @@ Output Format (JSON Only):
         if (window.isAuthReady) {
           var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
           if (auth && auth.currentUser && userProfile && userProfile.id) {
+            console.log('[Mobile Debug] [Dashboard] Auth already ready (PC). Loading data...');
             startLoading();
           }
         }
-        // Strategy 2: Wait for the Signal (Slow Mobile)
+        // Strategy 2: Wait for the Signal (Slow Mobile) - Show spinner while waiting
         else {
-          console.log('[Dashboard] Waiting for Auth Ready Signal...');
+          console.log('[Mobile Debug] [Dashboard] Waiting for Auth Ready Signal...');
+          setLogsLoading(true);
+          setLogsLoadError(null);
           window.addEventListener('stelvio-auth-ready', startLoading);
+          
+          // Timeout fallback: 5초 후에도 신호가 없으면 경고
+          setTimeout(function() {
+            if (!window.isAuthReady) {
+              console.warn('[Mobile Debug] [Dashboard] Auth signal timeout (5s). User may not be logged in.');
+            }
+          }, 5000);
         }
         
         // Also trigger when userProfile changes (if auth is ready)
         if (userProfile && userProfile.id && window.isAuthReady) {
           var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
           if (auth && auth.currentUser) {
+            console.log('[Mobile Debug] [Dashboard] userProfile changed and auth ready. Loading data...');
             startLoading();
           }
         }
