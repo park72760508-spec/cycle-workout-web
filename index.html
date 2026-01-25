@@ -5560,8 +5560,17 @@ Output Format (JSON Only):
       var modelName = localStorage.getItem('geminiModelName') || 'gemini-2.5-flash';
       var apiVersion = localStorage.getItem('geminiApiVersion') || 'v1beta';
       var url = 'https://generativelanguage.googleapis.com/' + apiVersion + '/models/' + modelName + ':generateContent?key=' + apiKey;
+      
+      // 모델별 최대 출력 토큰 설정
+      var maxOutputTokens = 8192; // 기본값 (Flash 최대값)
+      if (modelName.indexOf('pro') !== -1 || modelName.indexOf('1.5-pro') !== -1) {
+        maxOutputTokens = 8192; // Pro 모델도 8192가 최대
+      } else if (modelName.indexOf('2.0-flash') !== -1 || modelName.indexOf('2.5-flash') !== -1) {
+        maxOutputTokens = 8192; // Flash 모델 최대값
+      }
+      
       var generationConfig = {
-        maxOutputTokens: 8192,
+        maxOutputTokens: maxOutputTokens,
         temperature: 0.7,
         topP: 0.8,
         topK: 40
@@ -5639,14 +5648,16 @@ Output Format (JSON Only):
             throw new Error('Gemini API가 안전 정책으로 응답을 차단했습니다.');
           }
           var parts = candidate.content && candidate.content.parts ? candidate.content.parts : [];
-          if (candidate.finishReason === 'MAX_TOKENS' && (!parts.length || !parts.find(function(p) { return p && p.text && p.text.trim(); }))) {
-            if (attempt < 2) {
-              generationConfig.maxOutputTokens = Math.min(32000, generationConfig.maxOutputTokens < 8192 ? 8192 : generationConfig.maxOutputTokens * 2);
-              body.generationConfig = generationConfig;
-              throw new Error('MAX_TOKENS - 재시도');
-            } else {
-              throw new Error('Gemini API 응답이 토큰 제한에 도달했습니다. (MAX_TOKENS)');
+          // MAX_TOKENS 에러 처리: 이미 최대 토큰(8192)을 사용 중이므로 재시도는 의미 없음
+          // parts에 내용이 있으면 그대로 사용, 없으면 에러 처리
+          if (candidate.finishReason === 'MAX_TOKENS') {
+            var hasText = parts.length > 0 && parts.find(function(p) { return p && p.text && p.text.trim(); });
+            if (!hasText) {
+              // 텍스트가 없으면 에러
+              throw new Error('Gemini API 응답이 토큰 제한에 도달했고 응답 내용이 없습니다. (MAX_TOKENS)');
             }
+            // 텍스트가 있으면 경고만 출력하고 계속 진행 (부분 응답이라도 사용)
+            console.warn('[callGeminiCoach] MAX_TOKENS 도달했지만 부분 응답을 사용합니다.');
           }
           if (!parts.length) {
             throw new Error('Gemini API 응답에 content.parts가 없습니다.');
@@ -6437,12 +6448,13 @@ Output Format (JSON Only):
               scope: logScope
             });
             
-            // [Mobile Bulletproof] 2. 타임아웃 래퍼 (30초 안전 밸브)
+            // [Mobile Bulletproof] 2. 타임아웃 래퍼 (60초 안전 밸브, 모바일/느린 네트워크 대응)
             currentTimeoutId = null;
+            var timeoutMs = 60000;
             var timeoutPromise = new Promise(function(_, reject) {
               currentTimeoutId = setTimeout(function() {
                 reject(new Error('네트워크 지연: 분석 시간이 초과되었습니다.'));
-              }, 30000);
+              }, timeoutMs);
             });
             
             if (typeof window.callGeminiCoach === 'function') {
