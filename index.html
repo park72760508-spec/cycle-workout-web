@@ -6050,14 +6050,41 @@ Output Format (JSON Only):
             
             // ===== 2) auth.currentUser (로그인 사용자) — Firestore 직접 조회 =====
             var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-            if (!auth || !auth.currentUser) {
-              console.warn('[Dashboard] No auth / currentUser');
+            if (!auth) {
+              console.warn('[Dashboard] Auth not available');
               setUserProfile({ id: '', name: '인증 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
               setLoading(false);
               return;
             }
             
+            // [모바일 대응] Auth 세션 복원 대기 (IndexedDB에서 복원하는 동안 최대 3초)
             var currentUser = auth.currentUser;
+            if (!currentUser) {
+              console.log('[Dashboard] Auth session restoring (mobile), waiting up to 3s...');
+              try {
+                currentUser = await new Promise(function(resolve, reject) {
+                  var timeout = setTimeout(function() {
+                    unsubscribe();
+                    reject(new Error('Auth timeout'));
+                  }, 3000);
+                  var unsubscribe = auth.onAuthStateChanged(function(user) {
+                    clearTimeout(timeout);
+                    unsubscribe();
+                    resolve(user);
+                  });
+                });
+              } catch (e) {
+                console.warn('[Dashboard] Auth wait failed:', e.message);
+                currentUser = null;
+              }
+            }
+            
+            if (!currentUser) {
+              console.warn('[Dashboard] No authenticated user after waiting');
+              setUserProfile({ id: '', name: '인증 필요', ftp: 0, weight: 0, grade: '2', acc_points: 0, rem_points: 0 });
+              setLoading(false);
+              return;
+            }
             userId = currentUser.uid;
             console.log('[Dashboard] Loading profile for authenticated user:', userId);
             
@@ -6110,8 +6137,36 @@ Output Format (JSON Only):
           if (!userProfile || !userProfile.id) return;
           
           var auth = window.auth || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
-          if (!auth || !auth.currentUser) {
-            console.warn('[Dashboard] Auth not ready for logs (profile loaded too early?). Skipping.');
+          if (!auth) {
+            setLogsLoadError('인증이 필요합니다');
+            setLogsLoaded(true);
+            setLogsLoading(false);
+            return;
+          }
+          
+          // [모바일 대응] Auth 세션 복원 대기 (최대 2초)
+          var currentUser = auth.currentUser;
+          if (!currentUser) {
+            console.log('[Dashboard] Auth session restoring for logs, waiting up to 2s...');
+            try {
+              currentUser = await new Promise(function(resolve, reject) {
+                var timeout = setTimeout(function() {
+                  unsubscribe();
+                  reject(new Error('Auth timeout'));
+                }, 2000);
+                var unsubscribe = auth.onAuthStateChanged(function(user) {
+                  clearTimeout(timeout);
+                  unsubscribe();
+                  resolve(user);
+                });
+              });
+            } catch (e) {
+              console.warn('[Dashboard] Auth wait for logs failed:', e.message);
+            }
+          }
+          
+          if (!currentUser) {
+            console.warn('[Dashboard] Auth not ready for logs');
             setLogsLoadError('인증이 필요합니다');
             setLogsLoaded(true);
             setLogsLoading(false);
@@ -6308,17 +6363,8 @@ Output Format (JSON Only):
         }
       }, [userProfile, recentLogs, retryCoach, logsLoaded, logsLoading, logsLoadError]);
       
-      // [Unified SPA] AI Pairing: 동일 window이므로 window.isSensorConnected 직접 폴링
-      useEffect(function sensorPollEffect() {
-        function updateSensorStatus() {
-          setAiPairingStatus(!!window.isSensorConnected);
-        }
-        updateSensorStatus();
-        var statusInterval = setInterval(updateSensorStatus, 1000);
-        return function cleanup() {
-          clearInterval(statusInterval);
-        };
-      }, []);
+      // [참고] AI 페어링 상태는 Gemini Coach 분석 결과로 설정됨 (fetchCoachAnalysis useEffect에서)
+      // 센서 연결 상태(window.isSensorConnected)는 별도로 관리하지 않음
       
       const getGradeBadge = (grade) => {
         const badges = {
