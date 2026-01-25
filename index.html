@@ -5922,6 +5922,7 @@ Output Format (JSON Only):
         weeklyProgress: 0
       });
       const [aiPairingStatus, setAiPairingStatus] = useState(false);
+      const [sensorConnected, setSensorConnected] = useState(false);
       const [stravaStatus, setStravaStatus] = useState({ connected: false, lastSync: null });
       const [fitnessData, setFitnessData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
@@ -6308,7 +6309,8 @@ Output Format (JSON Only):
         };
       }, [userProfile]);
       
-      // Gemini AI 코치 분석 (Sensor 독립: logsLoaded만 의존, aiConnected 미사용)
+      // [Decoupled] Gemini AI 코치 분석 — 로그만 의존. 센서(Bluetooth) 상태 무관.
+      // STRICT: isSensorConnected / aiConnected 체크 금지. 로그 로드 후 즉시 실행.
       useEffect(() => {
         async function fetchCoachAnalysis() {
           if (!userProfile) {
@@ -6325,16 +6327,13 @@ Output Format (JSON Only):
               recommended_workout: 'Active Recovery (Z1)',
               error_reason: logsLoadError
             });
-            setAiPairingStatus(false);
             setLoading(false);
             return;
           }
-          console.log('[Dashboard] Data ready. Starting AI Analysis (Sensor independent)...');
           var logs = Array.isArray(recentLogs) ? recentLogs : [];
+          console.log('[Dashboard] Logs loaded. Executing AI Analysis (Sensor Independent)...');
           var logsTssSum = logs.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
-          var logsHash = logs.length > 0 
-            ? logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') + '_' + Math.round(logsTssSum)
-            : 'empty';
+          var logsHash = logs.length + '_' + (logs[0] && logs[0].date || '') + '_' + (logs[logs.length - 1] && logs[logs.length - 1].date || '') + '_' + Math.round(logsTssSum);
           var cacheKey = 'coach_analysis_' + userProfile.id + '_' + logsHash;
           
           try {
@@ -6356,7 +6355,6 @@ Output Format (JSON Only):
               }
             }
             if (useCache) {
-              setAiPairingStatus(true);
               setLoading(false);
               return;
             }
@@ -6366,7 +6364,6 @@ Output Format (JSON Only):
               var analysis = await window.callGeminiCoach(userProfile, logs);
               var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
               setCoachData(analysis);
-              setAiPairingStatus(!isFallback);
               if (!isFallback && analysis && !analysis.error_reason) {
                 try {
                   localStorage.setItem(cacheKey, JSON.stringify({ data: analysis, timestamp: Date.now() }));
@@ -6376,7 +6373,6 @@ Output Format (JSON Only):
           } catch (error) {
             var errMsg = (error && error.message) ? error.message : '알 수 없는 오류';
             console.error('AI 코치 분석 오류:', error);
-            setAiPairingStatus(false);
             setCoachData({
               condition_score: 50,
               training_status: 'Building Base',
@@ -6390,15 +6386,82 @@ Output Format (JSON Only):
           }
         }
         
-        if (userProfile) {
+        if (!userProfile) {
+          setLoading(false);
+          return;
+        }
+        if (!logsLoaded || logsLoading) {
+          setLoading(false);
+          return;
+        }
+        if (logsLoadError) {
+          setCoachData({
+            condition_score: 50,
+            training_status: 'Building Base',
+            vo2max_estimate: 40,
+            coach_comment: (userProfile && userProfile.name || '사용자') + '님, 훈련 데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.',
+            recommended_workout: 'Active Recovery (Z1)',
+            error_reason: logsLoadError
+          });
+          setLoading(false);
+          return;
+        }
+        var logs = Array.isArray(recentLogs) ? recentLogs : [];
+        if (logs.length > 0) {
           fetchCoachAnalysis();
         } else {
+          setCoachData({
+            condition_score: 50,
+            training_status: 'Building Base',
+            vo2max_estimate: 40,
+            coach_comment: (userProfile && userProfile.name || '사용자') + '님, 지난 훈련 데이터가 없습니다. 훈련을 기록해 보세요.',
+            recommended_workout: 'Active Recovery (Z1)',
+            error_reason: 'no_logs'
+          });
           setLoading(false);
         }
       }, [userProfile, recentLogs, retryCoach, logsLoaded, logsLoading, logsLoadError]);
       
-      // AI 페어링: Gemini Coach 분석 결과만 사용. HR/트레이너/PM 센서 연결과 별개 동작.
-      // aiPairingStatus는 fetchCoachAnalysis 내에서만 설정 (분석 성공→연결됨, 실패/오류→연결 대기).
+      // [Visual Only] 센서(Bluetooth) 아이콘 — 이벤트 기반. AI 분석과 무관. 훈련(ERG)용 연결 상태 표시.
+      useEffect(function sensorIconEffect() {
+        function updateIcon(e) {
+          if (e && e.detail && typeof e.detail.connected === 'boolean') {
+            setSensorConnected(e.detail.connected);
+          }
+        }
+        window.addEventListener('stelvio-sensor-update', updateIcon);
+        if (typeof window.isSensorConnected === 'boolean' && window.isSensorConnected) {
+          setSensorConnected(true);
+        }
+        return function cleanup() {
+          window.removeEventListener('stelvio-sensor-update', updateIcon);
+        };
+      }, []);
+      
+      // AI 페어링 표시등: API 키 등록 여부만 사용. 등록됨 → 초록(연결됨), 미등록 → 회색(연결 대기).
+      useEffect(function apiKeyIndicatorEffect() {
+        function refresh() {
+          try {
+            var key = typeof localStorage !== 'undefined' ? localStorage.getItem('geminiApiKey') : null;
+            var hasKey = !!(key && String(key).trim());
+            setAiPairingStatus(hasKey);
+          } catch (e) {
+            setAiPairingStatus(false);
+          }
+        }
+        refresh();
+        function onApiKeyChanged(e) {
+          if (e && e.detail && typeof e.detail.hasKey === 'boolean') {
+            setAiPairingStatus(e.detail.hasKey);
+          } else {
+            refresh();
+          }
+        }
+        window.addEventListener('stelvio-gemini-apikey-changed', onApiKeyChanged);
+        return function cleanup() {
+          window.removeEventListener('stelvio-gemini-apikey-changed', onApiKeyChanged);
+        };
+      }, []);
       
       const getGradeBadge = (grade) => {
         const badges = {
@@ -6470,6 +6533,16 @@ Output Format (JSON Only):
                       ? `동기화: ${new Date(stravaStatus.lastSync).toLocaleDateString('ko-KR')}`
                       : '연결됨'
                     : '연결 대기'}
+                </div>
+              </DashboardCard>
+              
+              <DashboardCard>
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${sensorConnected ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span className="text-sm text-gray-700">센서</span>
+                </div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {sensorConnected ? '연결됨' : '연결 대기'}
                 </div>
               </DashboardCard>
             </div>
@@ -6612,6 +6685,56 @@ Output Format (JSON Only):
                 )}
               </DashboardCard>
             </div>
+            
+            <details className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <summary className="px-4 py-3 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-50 select-none">
+                W/kg · 등급 기준 안내
+              </summary>
+              <div className="px-4 pb-4 pt-1 space-y-4 text-xs text-gray-600 border-t border-gray-100">
+                <section>
+                  <div className="font-semibold text-gray-800 mb-2">W/kg 표시 기준</div>
+                  <ul className="space-y-1 pl-4 list-disc">
+                    <li><strong>계산식</strong>: W/kg = FTP(와트) ÷ 체중(kg) — 소수점 둘째자리</li>
+                    <li>대시보드 &quot;파워&quot; 카드에 <code className="bg-gray-100 px-1 rounded">{stats.wkg} W/kg</code> 로 표시</li>
+                  </ul>
+                </section>
+                <section>
+                  <div className="font-semibold text-gray-800 mb-2">W/kg 기반 등급 (네온/패널용)</div>
+                  <table className="w-full text-left border-collapse">
+                    <thead><tr className="border-b border-gray-200"><th className="py-1 pr-2">등급</th><th className="py-1">W/kg 기준</th></tr></thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">엘리트</td><td>4.0 이상</td></tr>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">고급</td><td>3.5 이상 ~ 4.0 미만</td></tr>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">중급</td><td>3.0 이상 ~ 3.5 미만</td></tr>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">입문</td><td>2.2 이상 ~ 3.0 미만</td></tr>
+                      <tr><td className="py-1 pr-2">초급</td><td>2.2 미만</td></tr>
+                    </tbody>
+                  </table>
+                </section>
+                <section>
+                  <div className="font-semibold text-gray-800 mb-2">훈련 등급(challenge) · 주간 목표 TSS</div>
+                  <p className="mb-2">회원가입/프로필에서 선택. 주간 목표 TSS · RPE 보정 · 목표 조절 범위에 사용</p>
+                  <table className="w-full text-left border-collapse">
+                    <thead><tr className="border-b border-gray-200"><th className="py-1 pr-2">등급</th><th className="py-1">설명</th><th className="py-1">목표 TSS</th></tr></thead>
+                    <tbody>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">Fitness</td><td>건강 유지, 기초 체력</td><td>225</td></tr>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">GranFondo</td><td>중장거리 완주</td><td>400</td></tr>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">Racing</td><td>MCT/아마 레이스 입상권</td><td>600</td></tr>
+                      <tr className="border-b border-gray-100"><td className="py-1 pr-2">Elite</td><td>최상위 동호인, 선수 준비</td><td>800</td></tr>
+                      <tr><td className="py-1 pr-2">PRO</td><td>프로 선수</td><td>1050</td></tr>
+                    </tbody>
+                  </table>
+                </section>
+                <section>
+                  <div className="font-semibold text-gray-800 mb-2">권한 등급(grade)</div>
+                  <ul className="space-y-1 pl-4 list-disc">
+                    <li><strong>1</strong>: 💎 Diamond (관리자)</li>
+                    <li><strong>2</strong>: ⭐ Member (일반 회원)</li>
+                    <li><strong>3</strong>: 👑 Admin (코치/관리)</li>
+                  </ul>
+                </section>
+              </div>
+            </details>
             
             {logsLoading ? (
               <DashboardCard title="훈련 트렌드 (최근 7일)">
