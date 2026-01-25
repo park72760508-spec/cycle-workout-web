@@ -11888,6 +11888,15 @@ button[aria-disabled="true"] {
   margin-bottom: 30px;
 }
 
+/* Bluetooth Training Coach 화면: 속도계 그리드 표시 보장 */
+#bluetoothTrainingCoachScreen .speedometer-grid,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid {
+  display: grid !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 200px !important; /* 최소 높이 보장 */
+}
+
 .speedometer-container {
   background: rgba(15, 23, 42, 0.8);
   border-radius: 16px;
