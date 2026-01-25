@@ -177,6 +177,17 @@ async function getTrackConfigFromFirebase() {
 window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
   console.log('[Bluetooth Coach] 대시보드 초기화');
   
+  // 1. CSS 충돌 방지: 컨테이너 확실하게 비우고 CSS 강제 적용
+  const container = document.getElementById('bluetoothCoachPowerMeterGrid');
+  if (container) {
+    container.innerHTML = ''; // 기존에 그려진 트랙 잔상 제거 (중복 렌더링 방지)
+    container.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
+    console.log('[Bluetooth Coach] 컨테이너 초기화 완료');
+  } else {
+    console.error('[Bluetooth Coach] bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
   const sessionId = getBluetoothCoachSessionId();
   console.log('[Bluetooth Coach] 현재 SESSION_ID:', sessionId);
   
@@ -196,6 +207,37 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
   
   // 초기 버튼 상태 설정
   updateBluetoothCoachTrainingButtons();
+  
+  // 2. 화면 리사이즈 대응: 대시보드가 켜진 상태에서 화면 회전 시 UI 안정성 확보
+  if (!window.bluetoothCoachResizeHandler) {
+    window.bluetoothCoachResizeHandler = function() {
+      // 리사이즈 시 그리드 레이아웃 재조정
+      const gridContainer = document.getElementById('bluetoothCoachPowerMeterGrid');
+      if (gridContainer && window.bluetoothCoachState && window.bluetoothCoachState.powerMeters) {
+        // 컨테이너가 보이는지 확인하고, 숨겨져 있으면 다시 표시
+        const computedStyle = window.getComputedStyle(gridContainer);
+        if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden') {
+          gridContainer.style.display = 'grid';
+          gridContainer.style.visibility = 'visible';
+          console.log('[Bluetooth Coach] 리사이즈: 그리드 컨테이너 복구');
+        }
+      }
+    };
+    
+    // 리사이즈 이벤트 리스너 등록 (디바운싱 적용)
+    let resizeTimeout;
+    window.addEventListener('resize', function() {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(window.bluetoothCoachResizeHandler, 150);
+    });
+    
+    // 화면 방향 변경 이벤트도 처리 (모바일 기기 회전)
+    window.addEventListener('orientationchange', function() {
+      setTimeout(window.bluetoothCoachResizeHandler, 200);
+    });
+    
+    console.log('[Bluetooth Coach] 리사이즈 이벤트 리스너 등록 완료');
+  }
 };
 
 /**
@@ -205,7 +247,10 @@ function createBluetoothCoachPowerMeterGrid() {
   const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
   if (!gridEl) return;
   
+  // 기존 내용 완전히 제거 및 CSS 강제 적용 (중복 렌더링 방지)
   gridEl.innerHTML = '';
+  gridEl.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
+  gridEl.style.visibility = 'visible'; // 가시성 보장
   window.bluetoothCoachState.powerMeters = []; // 초기화
   
   const maxTracks = window.bluetoothCoachState.maxTrackCount || 10;
