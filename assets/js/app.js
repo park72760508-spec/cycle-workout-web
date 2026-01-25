@@ -5800,12 +5800,14 @@ if (typeof window.originalShowScreen === 'undefined') {
     });
     
     // 선택된 화면 완전히 표시 (진단 코드 추가됨)
+    console.log(`🔵 [Step 2] 화면 요소 검색 시작: '${screenId}'`);
     const targetScreen = document.getElementById(screenId);
     
     // [진단 로그 1] 화면 요소 탐색 결과 확인
-    console.log(`🔎 [진단] ID 찾기 시도: '${screenId}' -> 결과: ${targetScreen ? '✅ 발견됨' : '❌ NULL (없음)'}`);
+    console.log(`🔵 [Step 2-1] ID 찾기 시도: '${screenId}' -> 결과: ${targetScreen ? '✅ 발견됨' : '❌ NULL (없음)'}`);
     
     if (targetScreen) {
+      console.log(`🔵 [Step 2-2] 화면 요소 발견, 스타일 적용 시작...`);
       // [진단 로그 1-1] 요소 발견 시 상세 정보
       console.log(`🔎 [진단] 발견된 요소 상세:`, {
         id: targetScreen.id,
@@ -5828,23 +5830,24 @@ if (typeof window.originalShowScreen === 'undefined') {
         targetScreen.style.zIndex = '1000';
       }
       
-      console.log('✅ 화면 전환 완료:', screenId);
+      console.log(`🔵 [Step 2-3] 화면 전환 완료: ${screenId}`);
       
       // [진단 로그 2] 초기화 함수 호출 직전
-      console.log(`▶️ [진단] initializeCurrentScreen('${screenId}') 호출 시작`);
-      console.log(`▶️ [진단] initializeCurrentScreen 함수 존재 여부: ${typeof initializeCurrentScreen === 'function' ? '✅ 있음' : '❌ 없음'}`);
+      console.log(`🔵 [Step 2-4] initializeCurrentScreen('${screenId}') 호출 시작`);
+      console.log(`🔵 [Step 2-5] initializeCurrentScreen 함수 존재 여부: ${typeof initializeCurrentScreen === 'function' ? '✅ 있음' : '❌ 없음'}`);
       
       // 화면별 초기화
       if (typeof initializeCurrentScreen === 'function') {
         try {
+          console.log(`🔵 [Step 2-6] initializeCurrentScreen 실행 중...`);
           initializeCurrentScreen(screenId);
-          console.log(`✅ [진단] initializeCurrentScreen('${screenId}') 호출 완료 (에러 없음)`);
+          console.log(`🔵 [Step 2-7] ✅ initializeCurrentScreen('${screenId}') 호출 완료 (에러 없음)`);
         } catch (error) {
-          console.error(`💥 [진단/Error] initializeCurrentScreen 실행 중 오류 발생:`, error);
-          console.error(`💥 [진단/Error] 에러 스택:`, error.stack);
+          console.error(`🔵 [Step 2-Error] 💥 initializeCurrentScreen 실행 중 오류 발생:`, error);
+          console.error(`🔵 [Step 2-Error] 에러 스택:`, error.stack);
         }
       } else {
-        console.error(`💥 [진단/Error] initializeCurrentScreen 함수가 정의되지 않았습니다!`);
+        console.error(`🔵 [Step 2-Error] 💥 initializeCurrentScreen 함수가 정의되지 않았습니다!`);
       }
     } else {
       // [진단 로그 3] 치명적 오류 발견
@@ -5868,12 +5871,14 @@ if (typeof window.originalShowScreen === 'undefined') {
 }
 
 window.showScreen = function(screenId) {
+  console.log(`🔵 [Step 1] showScreen 함수 진입: '${screenId}'`);
+  
   // Firebase 인증 상태 확인 (우선순위: Firebase Auth > 전화번호 인증)
   const isFirebaseAuthenticated = (window.auth?.currentUser != null || window.authV9?.currentUser != null) || window.currentUser != null;
   const phoneAuth = window.isPhoneAuthenticated === true || isPhoneAuthenticated;
   const isAuthenticated = isFirebaseAuthenticated || phoneAuth;
   
-  console.log('화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', phoneAuth, ')');
+  console.log('🔵 [Step 1-1] 화면 전환 요청:', screenId, '인증 상태:', isAuthenticated, '(Firebase:', isFirebaseAuthenticated, ', Phone:', phoneAuth, ')');
   
   // 환영 오버레이가 표시되어 있으면 화면 전환 차단
   const welcomeModal = document.getElementById('userWelcomeModal');
@@ -5918,7 +5923,7 @@ window.showScreen = function(screenId) {
 // 화면별 초기화 함수
 function initializeCurrentScreen(screenId) {
   // [진단 1] 들어온 ID가 정확한지 공백/철자 확인
-  console.log(`🕵️ [진단] initializeCurrentScreen 호출됨. ID: '${screenId}' (길이: ${screenId ? screenId.length : 0}, 타입: ${typeof screenId})`);
+  console.log(`🟢 [Step 3] initializeCurrentScreen 함수 진입: '${screenId}' (길이: ${screenId ? screenId.length : 0}, 타입: ${typeof screenId})`);
   
   switch(screenId) {
     case 'authScreen':
@@ -6047,15 +6052,15 @@ function initializeCurrentScreen(screenId) {
     }
 
     case 'bluetoothTrainingCoachScreen':
-      console.log('📍 [진단] Switch Case 진입 성공! (ID 일치함)');
+      console.log('🟢 [Step 3-1] Switch Case 진입 성공! (ID 일치함)');
       
       // [진단 2] 함수가 메모리에 로드되어 있는지 확인
-      console.log(`🔍 [진단] window.initBluetoothCoachDashboard 타입: ${typeof window.initBluetoothCoachDashboard}`);
-      console.log(`🔍 [진단] window.bluetoothCoachState 존재 여부: ${window.bluetoothCoachState ? '✅ 있음' : '❌ 없음'}`);
+      console.log(`🟢 [Step 3-2] window.initBluetoothCoachDashboard 타입: ${typeof window.initBluetoothCoachDashboard}`);
+      console.log(`🟢 [Step 3-3] window.bluetoothCoachState 존재 여부: ${window.bluetoothCoachState ? '✅ 있음' : '❌ 없음'}`);
 
       // 1. [강제 청소] 기존 Firebase 구독 및 상태 초기화 (메모리 누수 방지)
       if (window.bluetoothCoachState) {
-          console.log('🧹 [진단] 기존 상태 정리 시작...');
+          console.log('🟢 [Step 3-4] 기존 상태 정리 시작...');
           // Firebase 구독 해제
           if (window.bluetoothCoachState.firebaseSubscriptions) {
               Object.entries(window.bluetoothCoachState.firebaseSubscriptions).forEach(([key, unsubscribe]) => {
@@ -6069,23 +6074,23 @@ function initializeCurrentScreen(screenId) {
           window.bluetoothCoachState.powerMeters = [];
           window.bluetoothCoachState.trainingState = 'idle';
           window.bluetoothCoachState.countdownTriggered = [];
-          console.log('✅ [진단] 상태 정리 완료');
+          console.log('🟢 [Step 3-5] ✅ 상태 정리 완료');
       } else {
-          console.warn('⚠️ [진단] window.bluetoothCoachState가 없습니다. 초기화가 필요할 수 있습니다.');
+          console.warn('🟢 [Step 3-4] ⚠️ window.bluetoothCoachState가 없습니다. 초기화가 필요할 수 있습니다.');
       }
 
       // 2. [DOM 렌더링 대기]
-      console.log('⏳ [진단] setTimeout 시작 (150ms 대기)...');
+      console.log('🟢 [Step 3-6] ⏳ setTimeout 시작 (150ms 대기)...');
       setTimeout(() => {
-        console.log('⏰ [진단] setTimeout 콜백 실행됨');
+        console.log('🟢 [Step 3-7] ⏰ setTimeout 콜백 실행됨');
         
         const el = document.getElementById('bluetoothCoachPowerMeterGrid');
         // [진단 3] HTML 요소가 존재하는지 확인
-        console.log(`🏗️ [진단] HTML 요소(#bluetoothCoachPowerMeterGrid) 발견 여부: ${el ? '✅ 있음' : '❌ 없음'}`);
+        console.log(`🟢 [Step 3-8] HTML 요소(#bluetoothCoachPowerMeterGrid) 발견 여부: ${el ? '✅ 있음' : '❌ 없음'}`);
         
         if (el) {
           const computedStyle = window.getComputedStyle(el);
-          console.log(`🏗️ [진단] 요소 스타일 상태:`, {
+          console.log(`🟢 [Step 3-9] 요소 스타일 상태:`, {
             display: computedStyle.display,
             visibility: computedStyle.visibility,
             opacity: computedStyle.opacity
@@ -6093,23 +6098,26 @@ function initializeCurrentScreen(screenId) {
         }
 
         // 3. [초기화 실행]
+        console.log(`🟢 [Step 3-10] initBluetoothCoachDashboard 함수 확인: ${typeof window.initBluetoothCoachDashboard}`);
         if (typeof window.initBluetoothCoachDashboard === 'function') {
-          console.log('🚀 [진단] 초기화 함수 실행 시도...');
+          console.log('🟢 [Step 3-11] 🚀 초기화 함수 실행 시도...');
           try {
             window.initBluetoothCoachDashboard();
-            console.log('✅ [진단] initBluetoothCoachDashboard 호출 완료 (에러 없음)');
+            console.log('🟢 [Step 3-12] ✅ initBluetoothCoachDashboard 호출 완료 (에러 없음)');
           } catch (error) {
-            console.error('💥 [진단/Error] initBluetoothCoachDashboard 실행 중 오류:', error);
+            console.error('🟢 [Step 3-Error] 💥 initBluetoothCoachDashboard 실행 중 오류:', error);
+            console.error('🟢 [Step 3-Error] 에러 스택:', error.stack);
           }
         } else {
-          console.error('💥 [진단/Error] 초기화 함수가 없습니다! 스크립트 로드 실패 의심.');
-          console.error('💥 [진단/Error] 현재 window 객체 상태:', {
+          console.error('🟢 [Step 3-Error] 💥 초기화 함수가 없습니다! 스크립트 로드 실패 의심.');
+          console.error('🟢 [Step 3-Error] 현재 window 객체 상태:', {
             initBluetoothCoachDashboard: typeof window.initBluetoothCoachDashboard,
             bluetoothCoachState: typeof window.bluetoothCoachState,
             bluetoothCoachDashboard: typeof window.bluetoothCoachDashboard
           });
         }
       }, 150);
+      console.log('🟢 [Step 3-13] setTimeout 등록 완료, break 실행');
       break;
       
     default:
