@@ -201,54 +201,76 @@ async function getTrackConfigFromFirebase() {
  * Indoor Training과 동일: 그리드를 동기 생성 후 Firebase 구독 (옛날 잘 되던 방식)
  */
 window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
-  console.log('[Bluetooth Coach] 대시보드 초기화 시작');
+  console.log('🎯 [진단/bluetoothCoachDashboard.js] initBluetoothCoachDashboard 함수 실행 시작');
+  console.log('🎯 [진단] 함수 호출 스택:', new Error().stack);
   
   // 0. Firebase db 객체 확인 (치명적 오류 방지)
+  console.log('🔍 [진단] Firebase db 객체 확인 중...');
   if (typeof db === 'undefined' && typeof firebase !== 'undefined' && firebase.database) {
     try {
       window.db = firebase.database();
-      console.log('[Bluetooth Coach] Firebase db 객체 초기화 완료');
+      console.log('✅ [진단] Firebase db 객체 초기화 완료');
     } catch (e) {
-      console.error('[Bluetooth Coach] Firebase db 초기화 실패:', e);
+      console.error('❌ [진단] Firebase db 초기화 실패:', e);
     }
+  } else {
+    console.log(`🔍 [진단] db 상태: ${typeof db}, firebase 상태: ${typeof firebase}`);
   }
   
   // 1. CSS 충돌 방지: 컨테이너 확실하게 비우고 CSS 강제 적용
+  console.log('🔍 [진단] DOM 요소(#bluetoothCoachPowerMeterGrid) 검색 중...');
   const container = document.getElementById('bluetoothCoachPowerMeterGrid');
   if (!container) {
-    console.error('[Bluetooth Coach] ❌ 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
-    console.error('[Bluetooth Coach] HTML 구조를 확인하세요. index.html에 해당 요소가 존재해야 합니다.');
+    console.error('❌ [진단/Error] 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+    console.error('❌ [진단/Error] HTML 구조를 확인하세요. index.html에 해당 요소가 존재해야 합니다.');
+    console.error('❌ [진단/Error] 현재 document.readyState:', document.readyState);
     return;
   }
+  
+  console.log('✅ [진단] DOM 요소 발견됨');
+  const beforeStyle = window.getComputedStyle(container);
+  console.log('🔍 [진단] 컨테이너 초기 스타일:', {
+    display: beforeStyle.display,
+    visibility: beforeStyle.visibility,
+    opacity: beforeStyle.opacity,
+    innerHTMLLength: container.innerHTML.length
+  });
   
   container.innerHTML = ''; // 기존에 그려진 트랙 잔상 제거 (중복 렌더링 방지)
   container.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
   container.style.visibility = 'visible'; // 가시성 보장
-  console.log('[Bluetooth Coach] ✅ 컨테이너 초기화 완료');
+  console.log('✅ [진단] 컨테이너 초기화 완료 (innerHTML 비움, display=grid, visibility=visible)');
   
   const sessionId = getBluetoothCoachSessionId();
-  console.log('[Bluetooth Coach] 현재 SESSION_ID:', sessionId);
+  console.log('🔍 [진단] SESSION_ID:', sessionId);
   
   // 2. 트랙 구성 정보 가져오기 및 트랙 그리드 생성 (강화된 에러 핸들링)
+  console.log('🔍 [진단] getTrackConfigFromFirebase 호출 시작...');
   getTrackConfigFromFirebase()
     .then(config => {
-      console.log('[Bluetooth Coach] 트랙 구성 정보 수신:', config);
+      console.log('✅ [진단] 트랙 구성 정보 수신:', config);
       window.bluetoothCoachState.maxTrackCount = config.maxTracks || 10;
+      console.log(`🔍 [진단] maxTrackCount 설정: ${window.bluetoothCoachState.maxTrackCount}`);
       
       // 트랙 그리드 생성
+      console.log('🔍 [진단] createBluetoothCoachPowerMeterGrid 호출 시작...');
       createBluetoothCoachPowerMeterGrid();
+      console.log('✅ [진단] createBluetoothCoachPowerMeterGrid 호출 완료');
       
       // Firebase 구독 시작
+      console.log('🔍 [진단] setupFirebaseSubscriptions 호출 시작...');
       if (typeof setupFirebaseSubscriptions === 'function') {
         setupFirebaseSubscriptions();
+        console.log('✅ [진단] setupFirebaseSubscriptions 호출 완료');
       } else {
-        console.warn('[Bluetooth Coach] setupFirebaseSubscriptions 함수가 없습니다.');
+        console.warn('⚠️ [진단] setupFirebaseSubscriptions 함수가 없습니다.');
       }
     })
     .catch(error => {
-      console.error('[Bluetooth Coach] 트랙 구성 정보 가져오기 실패, 기본값 사용:', error);
+      console.error('❌ [진단/Error] 트랙 구성 정보 가져오기 실패, 기본값 사용:', error);
       // 에러 발생 시에도 기본 트랙으로 그리드 생성
       window.bluetoothCoachState.maxTrackCount = 10;
+      console.log('🔍 [진단] 에러 발생으로 기본값(10)으로 그리드 생성 시도...');
       createBluetoothCoachPowerMeterGrid();
     });
   
@@ -304,35 +326,43 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
  * 파워계 그리드 생성 (트랙 동적 생성) - Bluetooth Coach 전용
  */
 function createBluetoothCoachPowerMeterGrid() {
-  console.log('[Bluetooth Coach] 트랙 그리드 생성 시작');
+  console.log('🎨 [진단] createBluetoothCoachPowerMeterGrid 함수 실행 시작');
   
   const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
   if (!gridEl) {
-    console.error('[Bluetooth Coach] ❌ 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+    console.error('❌ [진단/Error] 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
     return;
   }
   
+  console.log('✅ [진단] gridEl 요소 발견됨');
+  
   // 기존 내용 완전히 제거 및 CSS 강제 적용 (중복 렌더링 방지)
+  const beforeInnerHTML = gridEl.innerHTML.length;
   gridEl.innerHTML = '';
   gridEl.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
   gridEl.style.visibility = 'visible'; // 가시성 보장
   gridEl.style.opacity = '1'; // 투명도 보장
   window.bluetoothCoachState.powerMeters = []; // 초기화
   
+  console.log(`🔍 [진단] 기존 innerHTML 길이: ${beforeInnerHTML}, 초기화 후: ${gridEl.innerHTML.length}`);
+  
   const maxTracks = window.bluetoothCoachState.maxTrackCount || 10;
-  console.log(`[Bluetooth Coach] 생성할 트랙 수: ${maxTracks}개`);
+  console.log(`🔍 [진단] 생성할 트랙 수: ${maxTracks}개`);
   
   // PowerMeterData 클래스 확인
+  console.log('🔍 [진단] PowerMeterData 클래스 확인 중...');
   if (typeof PowerMeterData === 'undefined' && typeof window.PowerMeterData === 'undefined') {
-    console.error('[Bluetooth Coach] ❌ PowerMeterData 클래스가 정의되지 않았습니다.');
+    console.error('❌ [진단/Error] PowerMeterData 클래스가 정의되지 않았습니다.');
     return;
   }
   
   const PowerMeterClass = typeof PowerMeterData !== 'undefined' ? PowerMeterData : window.PowerMeterData;
+  console.log(`✅ [진단] PowerMeterData 클래스 발견: ${PowerMeterClass.name || '익명'}`);
   
   // 트랙 생성 (기본 10개, Firebase에서 가져온 값이 있으면 그 값 사용)
   let createdCount = 0;
   try {
+    console.log('🔍 [진단] 트랙 생성 루프 시작...');
     for (let i = 1; i <= maxTracks; i++) {
       const powerMeter = new PowerMeterClass(i, `트랙${i}`);
       window.bluetoothCoachState.powerMeters.push(powerMeter);
@@ -341,44 +371,64 @@ function createBluetoothCoachPowerMeterGrid() {
       if (element) {
         gridEl.appendChild(element);
         createdCount++;
+        if (i <= 3 || i === maxTracks) {
+          console.log(`✅ [진단] 트랙 ${i} 생성 및 DOM 추가 완료`);
+        }
       } else {
-        console.warn(`[Bluetooth Coach] 트랙 ${i} 요소 생성 실패`);
+        console.warn(`⚠️ [진단] 트랙 ${i} 요소 생성 실패 (createPowerMeterElement가 null 반환)`);
       }
     }
+    console.log(`✅ [진단] 트랙 생성 루프 완료: ${createdCount}/${maxTracks}개 성공`);
   } catch (error) {
-    console.error('[Bluetooth Coach] 트랙 생성 중 오류:', error);
+    console.error('❌ [진단/Error] 트랙 생성 중 오류:', error);
+    console.error('❌ [진단/Error] 에러 스택:', error.stack);
   }
   
   // 눈금 초기화
+  console.log('🔍 [진단] initializeNeedles 호출 시작...');
   if (typeof initializeNeedles === 'function') {
     try {
       initializeNeedles();
+      console.log('✅ [진단] initializeNeedles 완료');
     } catch (error) {
-      console.warn('[Bluetooth Coach] initializeNeedles 오류:', error);
+      console.warn('⚠️ [진단] initializeNeedles 오류:', error);
     }
   } else {
-    console.warn('[Bluetooth Coach] initializeNeedles 함수가 없습니다.');
+    console.warn('⚠️ [진단] initializeNeedles 함수가 없습니다.');
   }
   
   // 애니메이션 루프 시작
+  console.log('🔍 [진단] startGaugeAnimationLoop 호출 시작...');
   if (typeof startGaugeAnimationLoop === 'function') {
     try {
       startGaugeAnimationLoop();
+      console.log('✅ [진단] startGaugeAnimationLoop 완료');
     } catch (error) {
-      console.warn('[Bluetooth Coach] startGaugeAnimationLoop 오류:', error);
+      console.warn('⚠️ [진단] startGaugeAnimationLoop 오류:', error);
     }
   } else {
-    console.warn('[Bluetooth Coach] startGaugeAnimationLoop 함수가 없습니다.');
+    console.warn('⚠️ [진단] startGaugeAnimationLoop 함수가 없습니다.');
   }
   
-  console.log(`[Bluetooth Coach] ✅ ${createdCount}/${maxTracks}개 트랙 생성 완료`);
+  console.log(`✅ [진단] ${createdCount}/${maxTracks}개 트랙 생성 완료`);
   
   // 생성 확인: 실제 DOM에 추가되었는지 검증
   const actualElements = gridEl.querySelectorAll('.speedometer-container');
-  console.log(`[Bluetooth Coach] DOM 검증: 실제 생성된 요소 수 = ${actualElements.length}개`);
+  console.log(`🔍 [진단] DOM 검증: 실제 생성된 요소 수 = ${actualElements.length}개`);
+  console.log(`🔍 [진단] gridEl.children.length = ${gridEl.children.length}`);
+  console.log(`🔍 [진단] gridEl.innerHTML.length = ${gridEl.innerHTML.length}`);
   
   if (actualElements.length === 0) {
-    console.error('[Bluetooth Coach] ⚠️ 경고: DOM에 트랙 요소가 추가되지 않았습니다!');
+    console.error('❌ [진단/Error] 경고: DOM에 트랙 요소가 추가되지 않았습니다!');
+    console.error('❌ [진단/Error] gridEl 상태:', {
+      tagName: gridEl.tagName,
+      id: gridEl.id,
+      className: gridEl.className,
+      childrenCount: gridEl.children.length,
+      innerHTMLPreview: gridEl.innerHTML.substring(0, 200)
+    });
+  } else {
+    console.log('✅ [진단] DOM 검증 성공: 트랙 요소들이 정상적으로 추가되었습니다.');
   }
 }
 
