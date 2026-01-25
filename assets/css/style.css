@@ -1141,9 +1141,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingReadyScreen .connection-device-section {
   margin-bottom: 12px !important;
 }
-/* 워크아웃 블럭 ↔ Select Dashboard 간격 최소화 (현재: 6px → 4px로 변경) */
+/* 워크아웃 블럭 ↔ Select Dashboard 간격: 노트북/모바일 버튼 사이 간격(gap-10)과 동일하게 10px */
 #trainingReadyScreen .training-ready-workout-block {
-  margin-bottom: 4px !important; /* 6px에서 4px로 최소화 */
+  margin-bottom: 10px !important;
 }
 /* Select Dashboard 블럭 하단 여백 제거 (현재: margin-bottom: 0, padding-bottom: 0) */
 #trainingReadyScreen .training-ready-select-dashboard {
@@ -1167,8 +1167,10 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
 }
 
+/* 그래프 상자 하단 ~ Select Dashboard 문구 간격 = 노트북/모바일 버튼 간격(10px)과 동일하도록
+   segment-preview 하단 여백 제거, workout-block margin-bottom 10px로 통일 */
 #trainingReadyScreen .segment-preview {
-  margin-bottom: 12px !important; /* 20px에서 12px로 최소화 */
+  margin-bottom: 0 !important;
 }
 
 /* 워크아웃 블럭 · Select Dashboard 스크롤 제거 */
