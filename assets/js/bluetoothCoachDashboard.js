@@ -436,6 +436,17 @@ function createBluetoothCoachPowerMeterGrid() {
  * 파워계 요소 생성 (Indoor Training 카피, 클릭 이벤트 제거)
  */
 function createPowerMeterElement(powerMeter) {
+  // [방어 로직 1] currentWorkout 의존성 제거 - 워크아웃이 없어도 기본 UI 반환
+  const hasWorkout = window.bluetoothCoachState && 
+                     window.bluetoothCoachState.currentWorkout && 
+                     window.bluetoothCoachState.currentWorkout.segments &&
+                     Array.isArray(window.bluetoothCoachState.currentWorkout.segments) &&
+                     window.bluetoothCoachState.currentWorkout.segments.length > 0;
+  
+  if (!hasWorkout) {
+    console.log(`🔍 [진단] createPowerMeterElement: currentWorkout이 없지만 기본 UI 생성 (트랙 ${powerMeter.id})`);
+  }
+  
   const container = document.createElement('div');
   container.className = 'speedometer-container';
   container.id = `power-meter-${powerMeter.id}`;
@@ -529,6 +540,20 @@ function createPowerMeterElement(powerMeter) {
       </div>
     </div>
   `;
+  
+  // [방어 로직 5] 반환 전 최종 검증 - 절대 null을 반환하지 않음
+  if (!container) {
+    console.error(`[Bluetooth Coach] ❌ 치명적 오류: createPowerMeterElement가 container를 생성하지 못했습니다 (트랙 ${powerMeter.id})`);
+    // 비상 복구: 최소한의 div 요소라도 반환
+    const fallbackContainer = document.createElement('div');
+    fallbackContainer.className = 'speedometer-container';
+    fallbackContainer.id = `power-meter-${powerMeter.id}`;
+    fallbackContainer.innerHTML = `<div style="padding: 20px; color: white; text-align: center;">트랙 ${powerMeter.id} (로딩 중...)</div>`;
+    return fallbackContainer;
+  }
+  
+  // [진단 로그] 요소 생성 성공 확인
+  console.log(`✅ [진단] createPowerMeterElement: 트랙 ${powerMeter.id} 요소 생성 완료 (currentWorkout: ${hasWorkout ? '있음' : '없음'})`);
   
   return container;
 }
@@ -1235,7 +1260,14 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
   let targetPower = 0;
   let segmentPower = 0;
   
-  if (window.bluetoothCoachState.currentWorkout && window.bluetoothCoachState.currentWorkout.segments) {
+  // [방어 로직 2] currentWorkout이 없어도 에러 없이 기본값 사용
+  const hasWorkout = window.bluetoothCoachState && 
+                     window.bluetoothCoachState.currentWorkout && 
+                     window.bluetoothCoachState.currentWorkout.segments &&
+                     Array.isArray(window.bluetoothCoachState.currentWorkout.segments) &&
+                     window.bluetoothCoachState.currentWorkout.segments.length > 0;
+  
+  if (hasWorkout) {
     const segments = window.bluetoothCoachState.currentWorkout.segments;
     const currentSegmentIndex = window.bluetoothCoachState.currentSegmentIndex || 0;
     const currentSegment = segments[currentSegmentIndex] || segments[0]; 
@@ -1277,6 +1309,12 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
     
     // 현재 랩파워 (Segment Average Power) 가져오기
     segmentPower = powerMeter.segmentPower || 0;
+  } else {
+    // [방어 로직] currentWorkout이 없으면 기본값 사용 (에러 없이 계속 진행)
+    targetPower = 0;
+    segmentPower = 0;
+    // 로그는 너무 많이 출력되지 않도록 주석 처리 (필요시 활성화)
+    // console.log(`[Bluetooth Coach] currentWorkout이 없어 기본값 사용 (트랙 ${powerMeter.id})`);
   }
   
   // 목표 파워 텍스트 업데이트
@@ -1318,8 +1356,17 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
  * 3. 동작 방식: 바늘 위치(Value)에 따라 즉시 생성/삭제 (잔상 없음)
  */
 function drawBluetoothCoachPowerMeterTrail(container, targetAngle, targetPower, currentPower, segmentPower, maxPower, isTrainingRunning) {
+  // [방어 로직 3] container가 없으면 에러 방지
+  if (!container) {
+    console.warn('[Bluetooth Coach] drawBluetoothCoachPowerMeterTrail: container가 없습니다.');
+    return;
+  }
+  
   // [핵심] 매 프레임 초기화로 잔상 완벽 제거
   container.innerHTML = '';
+  
+  // [방어 로직 4] currentWorkout이 없어도 기본 눈금만 그리기 (에러 없이 계속 진행)
+  // segments 데이터가 없어도 기본 UI는 유지됨
   
   const centerX = 0; 
   const centerY = 0;
