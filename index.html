@@ -5963,6 +5963,7 @@ Output Format (JSON Only):
       const [stravaStatus, setStravaStatus] = useState({ connected: false, lastSync: null });
       const [fitnessData, setFitnessData] = useState([]);
       const [retryCoach, setRetryCoach] = useState(0);
+      const [aiLoading, setAiLoading] = useState(false);
       const retryLogsRef = useRef(null);
       const aiAnalysisInProgressRef = useRef(false);
       
@@ -6394,16 +6395,16 @@ Output Format (JSON Only):
           }
           if (coachData && !coachData.error_reason && retryCoach === 0) {
             console.log('[Mobile Debug] [AI] Analysis result already exists, skipping...');
-            setLoading(false);
+            setAiLoading(false);
             return;
           }
           
           if (!userProfile) {
-            setLoading(false);
+            setAiLoading(false);
             return;
           }
           if (!logsLoaded || logsLoading) {
-            setLoading(false);
+            setAiLoading(false);
             return;
           }
           if (logsLoadError) {
@@ -6415,7 +6416,7 @@ Output Format (JSON Only):
               recommended_workout: 'Active Recovery (Z1)',
               error_reason: logsLoadError
             });
-            setLoading(false);
+            setAiLoading(false);
             return;
           }
           
@@ -6429,14 +6430,13 @@ Output Format (JSON Only):
               recommended_workout: 'Active Recovery (Z1)',
               error_reason: 'no_logs'
             });
-            setLoading(false);
+            setAiLoading(false);
             return;
           }
           
-          // [Mobile vs PC] 휴대폰: 최근 10일만 전송(페이로드 경량화). PC: 30일 전송.
-          var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
-          var logsToSend = isMobileDevice ? logs.slice(0, 10) : logs;
-          var logScope = isMobileDevice ? '10d' : '30d';
+          // PC/모바일 모두 30일치 전송 (통일)
+          var logsToSend = logs;
+          var logScope = '30d';
           
           // [Mobile Bulletproof] 1. API 키 체크 (localStorage 접근 실패 대비)
           var apiKey = null;
@@ -6456,7 +6456,7 @@ Output Format (JSON Only):
                 recommended_workout: 'Active Recovery (Z1)',
                 error_reason: 'API 키가 없습니다. 설정 메뉴에서 키를 입력해주세요.'
               });
-              setLoading(false);
+              setAiLoading(false);
               return;
             }
           } catch (e) {
@@ -6469,7 +6469,7 @@ Output Format (JSON Only):
               recommended_workout: 'Active Recovery (Z1)',
               error_reason: 'localStorage 접근 실패: ' + (e.message || '알 수 없는 오류')
             });
-            setLoading(false);
+            setAiLoading(false);
             return;
           }
           
@@ -6500,7 +6500,7 @@ Output Format (JSON Only):
               }
             }
             if (useCache) {
-              setLoading(false);
+              setAiLoading(false);
               return;
             }
             
@@ -6508,7 +6508,7 @@ Output Format (JSON Only):
             
             // [Mobile Bulletproof] Mark analysis as in progress
             aiAnalysisInProgressRef.current = true;
-            setLoading(true);
+            setAiLoading(true);
             
             // [Optimization] Prepare Light Payload - Sanitize logs to reduce payload size
             var cleanLogs = sanitizeLogs(logsToSend);
@@ -6546,6 +6546,7 @@ Output Format (JSON Only):
                 
                 var isFallback = !analysis || (analysis.coach_comment && analysis.coach_comment.indexOf('일시적인 오류') !== -1) || !!(analysis && analysis.error_reason);
                 setCoachData(analysis);
+                setAiLoading(false);
                 if (!isFallback && analysis && !analysis.error_reason) {
                   try {
                     localStorage.setItem(cacheKey, JSON.stringify({ data: analysis, timestamp: Date.now() }));
@@ -6612,17 +6613,17 @@ Output Format (JSON Only):
             }
             aiAnalysisInProgressRef.current = false;
             if (isMounted) {
-              setLoading(false); // ALWAYS Stop Spinner
+              setAiLoading(false);
             }
           }
         }
         
         if (!userProfile) {
-          setLoading(false);
+          setAiLoading(false);
           return;
         }
         if (!logsLoaded || logsLoading) {
-          setLoading(false);
+          setAiLoading(false);
           return;
         }
         if (logsLoadError) {
@@ -6634,7 +6635,7 @@ Output Format (JSON Only):
             recommended_workout: 'Active Recovery (Z1)',
             error_reason: logsLoadError
           });
-          setLoading(false);
+          setAiLoading(false);
           return;
         }
         var logs = Array.isArray(recentLogs) ? recentLogs : [];
@@ -6649,7 +6650,7 @@ Output Format (JSON Only):
             recommended_workout: 'Active Recovery (Z1)',
             error_reason: 'no_logs'
           });
-          setLoading(false);
+          setAiLoading(false);
         }
         
         return function cleanup() {
@@ -6742,7 +6743,20 @@ Output Format (JSON Only):
       }
       
       return (
-        <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 scrollbar-hide">
+        <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 scrollbar-hide relative">
+          {/* AI 분석 중 오버레이 스피너 */}
+          {aiLoading && (
+            <div className="fixed inset-0 bg-white/90 backdrop-blur-sm z-50 flex items-center justify-center" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+              <div className="text-center">
+                <div className="relative w-24 h-24 mx-auto mb-6">
+                  <div className="absolute inset-0 border-8 border-green-200 rounded-full"></div>
+                  <div className="absolute inset-0 border-8 border-green-500 rounded-full border-t-transparent animate-spin"></div>
+                </div>
+                <div className="text-lg font-semibold text-gray-800 mb-2">AI 분석 중...</div>
+                <div className="text-sm text-gray-600">잠시만 기다려주세요</div>
+              </div>
+            </div>
+          )}
           <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-gray-200 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
