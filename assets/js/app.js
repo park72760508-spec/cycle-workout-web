@@ -3347,6 +3347,9 @@ if (!window.showScreen) {
             if (btnStart) { btnStart.disabled = false; }
             if (btnMobile) { btnMobile.disabled = false; }
           }
+          if (typeof window.updateTrainingReadyCoords === 'function') {
+            window.updateTrainingReadyCoords();
+          }
         }, 200);
       }
       
@@ -12164,6 +12167,40 @@ function updateTrainingReadyScreenWithWorkout(workout) {
 window.openWorkoutSelectionForTrainingReady = openWorkoutSelectionForTrainingReady;
 window.selectWorkoutForTrainingReady = selectWorkoutForTrainingReady;
 window.updateTrainingReadyScreenWithWorkout = updateTrainingReadyScreenWithWorkout;
+
+/**
+ * 훈련 준비 화면: 노트북 버튼 하단 Y, 전체 블럭 하단 Y 좌표 표기 (뷰포트 기준)
+ */
+function updateTrainingReadyCoords() {
+  const screenEl = document.getElementById('trainingReadyScreen');
+  if (!screenEl || getComputedStyle(screenEl).display === 'none') return;
+  const laptopEl = document.getElementById('btnStartTraining');
+  const blockEl = document.getElementById('trainingReadyFormCard');
+  const laptopSpan = document.getElementById('coordLaptopBottom');
+  const blockSpan = document.getElementById('coordBlockBottom');
+  if (!laptopSpan || !blockSpan) return;
+  if (laptopEl) {
+    const r = laptopEl.getBoundingClientRect();
+    laptopSpan.textContent = Math.round(r.bottom);
+  } else {
+    laptopSpan.textContent = '—';
+  }
+  if (blockEl) {
+    const r = blockEl.getBoundingClientRect();
+    blockSpan.textContent = Math.round(r.bottom);
+  } else {
+    blockSpan.textContent = '—';
+  }
+}
+window.updateTrainingReadyCoords = updateTrainingReadyCoords;
+
+(function() {
+  let _resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(updateTrainingReadyCoords, 150);
+  });
+})();
 
 /* ==========================================================
    모바일 대시보드 화면 기능
