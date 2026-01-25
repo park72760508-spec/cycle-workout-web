@@ -5505,10 +5505,26 @@
     <div style="position: relative; width: 100%; height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
       <!-- Dashboard Root Container (scoped to prevent CSS conflicts) -->
       <div id="performance-dashboard-container" style="width: 100%; flex: 1; overflow-y: auto; overflow-x: hidden;">
+        <!-- 초기 로딩 스피너 (React 마운트 전 표시) -->
+        <div id="dashboard-initial-loader" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100vh; background: #f9fafb;">
+          <div style="text-align: center;">
+            <div style="position: relative; width: 64px; height: 64px; margin: 0 auto 16px;">
+              <div style="position: absolute; inset: 0; border-radius: 50%; border: 8px solid #bbf7d0;"></div>
+              <div style="position: absolute; inset: 0; border-radius: 50%; border: 8px solid #22c55e; border-top-color: transparent; animation: spin 1s linear infinite;"></div>
+            </div>
+            <div style="font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px;">사용자 정보를 불러오는 중...</div>
+          </div>
+        </div>
         <div id="dashboard-root"></div>
       </div>
     </div>
   </div>
+  <style>
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
   
   <!-- Performance Dashboard: Gemini Coach Functions -->
   <script>
@@ -5988,6 +6004,7 @@ Output Format (JSON Only):
       const [logsLoading, setLogsLoading] = useState(false);
       const [logsLoadError, setLogsLoadError] = useState(null);
       const [loading, setLoading] = useState(true);
+      const componentMountTimeRef = useRef(Date.now());
       const [stats, setStats] = useState({
         ftp: 0,
         wkg: 0,
@@ -6004,6 +6021,35 @@ Output Format (JSON Only):
       const [aiLoading, setAiLoading] = useState(false);
       const retryLogsRef = useRef(null);
       const aiAnalysisInProgressRef = useRef(false);
+      
+      // 외부에서 강제 해제할 수 있도록 함수 등록
+      useEffect(function() {
+        window._dashboardForceUnload = function() {
+          console.warn('[Dashboard] Force unloading requested');
+          setLoading(false);
+          setLogsLoading(false);
+          setAiLoading(false);
+        };
+        
+        return function cleanup() {
+          delete window._dashboardForceUnload;
+        };
+      }, []);
+      
+      // 컴포넌트 내부 먹통 감지 및 복구 (30초 이상 로딩 상태면 강제 해제)
+      useEffect(function() {
+        var stuckCheckInterval = setInterval(function() {
+          var timeSinceMount = Date.now() - componentMountTimeRef.current;
+          if (loading && timeSinceMount > 30000) {
+            console.warn('[Dashboard] Component stuck in loading state for 30s, forcing unload');
+            setLoading(false);
+          }
+        }, 5000); // 5초마다 체크
+        
+        return function cleanup() {
+          clearInterval(stuckCheckInterval);
+        };
+      }, [loading]);
       
       // [통합 SPA] PC/모바일 동일 로직: window.currentUser → auth.onAuthStateChanged → Firestore 직접 조회
       // [핵심 수정] 모바일 환경에서 Firebase Auth 초기화 속도 차이 대응: auth.onAuthStateChanged 사용
@@ -6766,11 +6812,12 @@ Output Format (JSON Only):
         return (
           <div className="max-w-[480px] mx-auto min-h-screen bg-gray-50 flex items-center justify-center">
             <div className="text-center">
-              <div className="relative w-16 h-16 mx-auto mb-4">
-                <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin"></div>
+              <div className="relative w-24 h-24 mx-auto mb-6">
+                <div className="absolute inset-0 rounded-full" style={{ border: '8px solid #bbf7d0' }}></div>
+                <div className="absolute inset-0 rounded-full border-t-transparent animate-spin" style={{ border: '8px solid #22c55e', borderTopColor: 'transparent' }}></div>
               </div>
-              <div className="text-sm text-gray-600 font-medium">사용자 정보를 불러오는 중...</div>
+              <div className="text-lg font-semibold text-gray-800 mb-2">사용자 정보를 불러오는 중...</div>
+              <div className="text-sm text-gray-600">잠시만 기다려주세요</div>
             </div>
           </div>
         );
@@ -7112,32 +7159,195 @@ Output Format (JSON Only):
     
     // Render PerformanceDashboard when screen is shown
     var dashboardRootInstance = null;
-    function initPerformanceDashboard() {
-      const rootElement = document.getElementById('dashboard-root');
-      if (!rootElement) return;
+    var dashboardHealthCheckInterval = null;
+    var dashboardLastRenderTime = null;
+    
+    // React Error Boundary 컴포넌트
+    function DashboardErrorBoundary(props) {
+      const [hasError, setHasError] = React.useState(false);
+      const [error, setError] = React.useState(null);
       
-      // 기존 인스턴스가 있으면 제거
-      if (dashboardRootInstance) {
-        try {
-          if (ReactDOM.createRoot) {
-            // React 18: root.unmount() 사용
-            dashboardRootInstance.unmount();
-          } else {
-            // React 17: ReactDOM.unmountComponentAtNode 사용
-            ReactDOM.unmountComponentAtNode(rootElement);
-          }
-        } catch (e) {
-          console.warn('[Dashboard] Error unmounting previous instance:', e);
-        }
-        dashboardRootInstance = null;
+      React.useEffect(function() {
+        // 에러 리셋
+        setHasError(false);
+        setError(null);
+      }, []);
+      
+      if (hasError) {
+        return React.createElement('div', {
+          className: 'max-w-[480px] mx-auto min-h-screen bg-gray-50 flex items-center justify-center px-4'
+        }, React.createElement('div', {
+          className: 'text-center max-w-sm'
+        }, [
+          React.createElement('div', {
+            key: 'icon',
+            className: 'w-16 h-16 rounded-full bg-red-100 flex items-center justify-center text-red-500 text-2xl mx-auto mb-4'
+          }, '⚠️'),
+          React.createElement('h2', {
+            key: 'title',
+            className: 'text-lg font-semibold text-gray-800 mb-2'
+          }, '대시보드 로딩 오류'),
+          React.createElement('p', {
+            key: 'message',
+            className: 'text-sm text-gray-600 mb-6'
+          }, error ? String(error).substring(0, 100) : '대시보드를 불러오는 중 오류가 발생했습니다.'),
+          React.createElement('button', {
+            key: 'retry',
+            type: 'button',
+            className: 'w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:opacity-90 active:opacity-80',
+            onClick: function() {
+              setHasError(false);
+              setError(null);
+              // 강제 재렌더링
+              if (typeof initPerformanceDashboard === 'function') {
+                setTimeout(initPerformanceDashboard, 100);
+              }
+            }
+          }, '다시 시도')
+        ]));
       }
       
-      // 새로 렌더링
-      if (ReactDOM.createRoot) {
-        dashboardRootInstance = ReactDOM.createRoot(rootElement);
-        dashboardRootInstance.render(<PerformanceDashboard />);
-      } else {
-        dashboardRootInstance = ReactDOM.render(<PerformanceDashboard />, rootElement);
+      return props.children;
+    }
+    
+    // 대시보드 상태 건강 체크 (먹통 감지 및 복구)
+    function startDashboardHealthCheck() {
+      if (dashboardHealthCheckInterval) {
+        clearInterval(dashboardHealthCheckInterval);
+      }
+      
+      dashboardHealthCheckInterval = setInterval(function() {
+        try {
+          var screen = document.getElementById('performanceDashboardScreen');
+          var root = document.getElementById('dashboard-root');
+          var initialLoader = document.getElementById('dashboard-initial-loader');
+          
+          // 화면이 표시되어 있는데 React가 마운트되지 않은 경우 감지
+          if (screen && screen.style.display !== 'none' && root) {
+            var hasReactContent = root.children.length > 0 || root.innerHTML.trim().length > 0;
+            var timeSinceRender = dashboardLastRenderTime ? (Date.now() - dashboardLastRenderTime) : Infinity;
+            
+            // 10초 이상 React가 마운트되지 않았으면 강제 복구
+            if (!hasReactContent && timeSinceRender > 10000) {
+              console.warn('[Dashboard Health Check] React not mounted after 10s, forcing recovery...');
+              if (initialLoader) {
+                initialLoader.style.display = 'flex';
+              }
+              if (typeof initPerformanceDashboard === 'function') {
+                initPerformanceDashboard();
+              }
+            }
+            
+            // 30초 이상 로딩 상태면 강제 해제 시도
+            if (timeSinceRender > 30000) {
+              console.warn('[Dashboard Health Check] Dashboard stuck for 30s, attempting recovery...');
+              // window 객체를 통해 React 컴포넌트의 loading 상태 강제 해제 시도
+              if (window._dashboardForceUnload) {
+                window._dashboardForceUnload();
+              }
+              // 재초기화
+              if (typeof initPerformanceDashboard === 'function') {
+                setTimeout(function() {
+                  initPerformanceDashboard();
+                }, 500);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[Dashboard Health Check] Error:', e);
+        }
+      }, 2000); // 2초마다 체크
+    }
+    
+    function stopDashboardHealthCheck() {
+      if (dashboardHealthCheckInterval) {
+        clearInterval(dashboardHealthCheckInterval);
+        dashboardHealthCheckInterval = null;
+      }
+    }
+    
+    function initPerformanceDashboard() {
+      try {
+        dashboardLastRenderTime = Date.now();
+        const rootElement = document.getElementById('dashboard-root');
+        if (!rootElement) {
+          console.error('[Dashboard] dashboard-root element not found');
+          return;
+        }
+        
+        // 초기 로딩 스피너 제거
+        var initialLoader = document.getElementById('dashboard-initial-loader');
+        if (initialLoader) {
+          initialLoader.style.display = 'none';
+        }
+        
+        // 기존 인스턴스가 있으면 제거
+        if (dashboardRootInstance) {
+          try {
+            if (ReactDOM.createRoot) {
+              // React 18: root.unmount() 사용
+              dashboardRootInstance.unmount();
+            } else {
+              // React 17: ReactDOM.unmountComponentAtNode 사용
+              ReactDOM.unmountComponentAtNode(rootElement);
+            }
+          } catch (e) {
+            console.warn('[Dashboard] Error unmounting previous instance:', e);
+          }
+          dashboardRootInstance = null;
+        }
+        
+        // React가 사용 가능한지 확인
+        if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+          console.error('[Dashboard] React or ReactDOM not available');
+          // 폴백 UI 표시
+          rootElement.innerHTML = '<div style="padding: 40px; text-align: center;"><p style="color: #666;">대시보드를 불러올 수 없습니다. 페이지를 새로고침해주세요.</p></div>';
+          if (initialLoader) {
+            initialLoader.style.display = 'none';
+          }
+          return;
+        }
+        
+        // Error Boundary로 감싼 컴포넌트 렌더링
+        var WrappedDashboard = React.createElement(DashboardErrorBoundary, null,
+          React.createElement(PerformanceDashboard, null)
+        );
+        
+        // 새로 렌더링 (타임아웃 안전장치)
+        var renderTimeout = setTimeout(function() {
+          console.error('[Dashboard] Render timeout after 5s');
+          if (initialLoader) {
+            initialLoader.style.display = 'flex';
+          }
+        }, 5000);
+        
+        try {
+          if (ReactDOM.createRoot) {
+            dashboardRootInstance = ReactDOM.createRoot(rootElement);
+            dashboardRootInstance.render(WrappedDashboard);
+          } else {
+            dashboardRootInstance = ReactDOM.render(WrappedDashboard, rootElement);
+          }
+          clearTimeout(renderTimeout);
+        } catch (renderError) {
+          clearTimeout(renderTimeout);
+          console.error('[Dashboard] Render error:', renderError);
+          // 폴백 UI 표시
+          rootElement.innerHTML = '<div style="padding: 40px; text-align: center;"><p style="color: #666;">대시보드 렌더링 오류가 발생했습니다.</p><button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">새로고침</button></div>';
+          if (initialLoader) {
+            initialLoader.style.display = 'none';
+          }
+        }
+      } catch (e) {
+        console.error('[Dashboard] initPerformanceDashboard error:', e);
+        var rootElement = document.getElementById('dashboard-root');
+        var initialLoader = document.getElementById('dashboard-initial-loader');
+        if (rootElement) {
+          rootElement.innerHTML = '<div style="padding: 40px; text-align: center;"><p style="color: #666;">대시보드 초기화 오류가 발생했습니다.</p><button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer;">새로고침</button></div>';
+        }
+        if (initialLoader) {
+          initialLoader.style.display = 'none';
+        }
       }
     }
     
@@ -7243,10 +7453,21 @@ Output Format (JSON Only):
         if (screenId === 'performanceDashboardScreen') {
           // 대시보드 화면이 표시될 때마다 재렌더링 (사용자 변경 반영)
           var root = document.getElementById('dashboard-root');
+          var initialLoader = document.getElementById('dashboard-initial-loader');
           if (root) {
             root.removeAttribute('data-rendered'); // 재렌더링을 위해 플래그 제거
-            setTimeout(initPerformanceDashboard, 100);
+            // 초기 로딩 스피너 표시 (React 마운트 전)
+            if (initialLoader) {
+              initialLoader.style.display = 'flex';
+            }
+            // 건강 체크 시작
+            startDashboardHealthCheck();
+            // 즉시 초기화 (지연 제거)
+            initPerformanceDashboard();
           }
+        } else {
+          // 다른 화면으로 전환 시 건강 체크 중지
+          stopDashboardHealthCheck();
         }
       };
       
