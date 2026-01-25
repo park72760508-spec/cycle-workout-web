@@ -2649,7 +2649,7 @@
   <div id="trainingReadyScreen" class="screen">
     <div class="connection-main-container">
       <div class="connection-form-container">
-        <div class="connection-form-card">
+        <div class="connection-form-card" id="trainingReadyFormCard">
           <div class="connection-header training-ready-header-row">
             <div class="training-ready-header-top">
               <div class="training-ready-back-wrap">
@@ -2719,6 +2719,10 @@
                 <span>모바일</span>
               </button>
             </div>
+          </div>
+          <!-- Y 좌표 표기: 노트북 버튼 하단 / 전체 블럭 하단 (뷰포트 기준) -->
+          <div id="trainingReadyCoordDisplay" class="training-ready-coord-display">
+            노트북 버튼 하단 Y: <span id="coordLaptopBottom">—</span>px · 전체 블럭 하단 Y: <span id="coordBlockBottom">—</span>px
           </div>
         </div>
       </div>
