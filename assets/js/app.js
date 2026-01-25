@@ -3359,6 +3359,16 @@ if (!window.showScreen) {
         }, 100);
       }
 
+      // Bluetooth Training Coach 화면 전환 시 초기화
+      if (id === 'bluetoothTrainingCoachScreen') {
+        setTimeout(() => {
+          if (typeof window.initBluetoothCoachDashboard === 'function') {
+            window.initBluetoothCoachDashboard();
+          } else {
+            console.error('[Bluetooth Coach] initBluetoothCoachDashboard function not available');
+          }
+        }, 100);
+      }
 
       // 훈련 스케줄 목록 화면: initializeCurrentScreen에서 처리하므로 여기서는 제거
       // (중복 호출 방지를 위해 initializeCurrentScreen에서만 처리)
