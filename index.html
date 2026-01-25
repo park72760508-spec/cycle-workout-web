@@ -6055,22 +6055,49 @@ Output Format (JSON Only):
       // [핵심 수정] 모바일 환경에서 Firebase Auth 초기화 속도 차이 대응: auth.onAuthStateChanged 사용
       useEffect(function profileLoadEffect() {
         var unsubscribeAuth = null;
-        // 안전장치: 5초 후에도 로딩이 끝나지 않으면 강제로 해제 (무한 로딩 방지)
-        var loadingTimeout = setTimeout(function() {
-          console.warn('[Dashboard] Loading timeout (5s) - forcing loading false');
-          setLoading(false);
-        }, 5000);
+        var loadingStartTime = Date.now();
+        var isDataLoading = false; // 실제 데이터 로딩 진행 중인지 추적
+        var loadingTimeout = null;
+        
+        // 안전장치: 단계별 타임아웃 (실제 로딩 진행 중이면 더 길게)
+        function createTimeout(isExtended) {
+          if (loadingTimeout) {
+            clearTimeout(loadingTimeout);
+          }
+          var timeoutMs = isExtended ? 15000 : 8000; // 기본을 8초로 증가 (모바일 네트워크 지연 고려)
+          var message = isExtended ? 
+            '[Dashboard] Loading timeout (15s) - forcing loading false' :
+            '[Dashboard] Loading timeout (8s) - no data loading detected, forcing loading false';
+          
+          loadingTimeout = setTimeout(function() {
+            console.warn(message);
+            setLoading(false);
+          }, timeoutMs);
+        }
+        
+        // 초기 타임아웃 설정 (8초)
+        createTimeout(false);
+        
+        // 데이터 로딩 시작 감지 (3초 후 체크하여 타임아웃 연장)
+        setTimeout(function() {
+          if (isDataLoading && loadingTimeout) {
+            console.log('[Dashboard] Data loading in progress, extending timeout to 15s...');
+            createTimeout(true);
+          }
+        }, 3000);
         
         async function loadData(user) {
           // 1. 사용자 정보가 없으면 로딩 종료
           if (!user) {
             console.warn('[Dashboard] No user found via Auth listener');
             setUserProfile(null);
+            if (loadingTimeout) clearTimeout(loadingTimeout);
             setLoading(false);
             return;
           }
           
           try {
+            isDataLoading = true; // 데이터 로딩 시작
             var userId = user.uid;
             // Firestore v8 compat SDK만 사용 (v9는 동적 import 문제로 제외)
             var firestore = window.firestore || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
@@ -6210,6 +6237,7 @@ Output Format (JSON Only):
           // 프로필 선택 화면에서 선택한 사용자 사용
           (async function() {
             try {
+              isDataLoading = true; // 데이터 로딩 시작
               var userId = selectedUser.id;
               var userName = selectedUser.name || '사용자';
               console.log('[Dashboard] Using selected user from window.currentUser:', userId);
