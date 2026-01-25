@@ -1108,6 +1108,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 }
 #trainingReadyScreen .training-ready-title {
   font-size: 1.8em;
+  font-weight: 700; /* 굵은 폰트 */
   margin: 0;
   color: #1e293b;
   flex-shrink: 0;
@@ -1153,9 +1154,9 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingReadyScreen .training-ready-select-dashboard .grid-2 {
   margin-bottom: 0 !important; /* 확인: 0px */
 }
-/* "워크아웃을 선택하세요." 문구 색상: 흐릿한 주황색 */
+/* "워크아웃을 선택하세요." 문구: 주황색, 약간 희미하게 */
 #trainingReadyScreen .workout-select-placeholder-text {
-  color: rgba(255, 152, 0, 0.6) !important; /* 흐릿한 주황색 (orange with 60% opacity) */
+  color: rgba(255, 152, 0, 0.55) !important; /* 주황색, 약간 희미 (55% opacity) */
 }
 
 #trainingReadyScreen .connection-device-section h3 {
