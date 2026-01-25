@@ -575,16 +575,16 @@ async function showTrainingRoomPasswordModal(roomTitle, room = null) {
             <input type="password" id="trainingRoomPasswordInput" class="schedule-password-input" placeholder="비밀번호를 입력하세요" autofocus />
           </div>
           <div class="schedule-password-error" id="trainingRoomPasswordError" style="display: none;"></div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary btn-with-icon schedule-password-confirm-btn">
-            <img src="assets/img/save.png" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            확인
-          </button>
-          <button class="btn btn-secondary btn-default-style schedule-password-cancel-btn">
-            <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-            취소
-          </button>
+          <div class="schedule-password-modal-actions" style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-with-icon schedule-password-confirm-btn" style="flex: 1; min-width: 100px;">
+              <img src="assets/img/save.png" alt="확인" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              확인
+            </button>
+            <button class="btn btn-secondary btn-default-style schedule-password-cancel-btn" style="flex: 1; min-width: 100px;">
+              <img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
+              취소
+            </button>
+          </div>
         </div>
       </div>
     `;
