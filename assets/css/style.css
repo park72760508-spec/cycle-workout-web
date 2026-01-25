@@ -1138,48 +1138,40 @@ h1,h2,h3,h4 { font-weight: 600; }
   margin-bottom: 20px;
 }
 
-/* 훈련 준비 화면: 워크아웃 블럭 ↔ Select Dashboard 간격 = 노트북/모바일 버튼 간격(10px)과 동일 */
+/* 훈련 준비 화면: 간격 단위 = 노트북/모바일 버튼 gap(10px). 그래프 하단 ↔ Select Dashboard = 동일 간격 */
 #trainingReadyScreen .training-ready-workout-block {
-  margin-bottom: 10px !important;
+  margin-bottom: var(--tr-gap) !important;
+  padding-bottom: 0 !important; /* 공유 connection-device-section padding-bottom 100px 제거 */
+  overflow: hidden !important;
+  -webkit-overflow-scrolling: auto;
 }
-/* 훈련 준비 화면: Select Dashboard 블럭 하단 여백 제거 */
 #trainingReadyScreen .training-ready-select-dashboard {
   margin-bottom: 0 !important;
   padding-bottom: 0 !important;
+  overflow: hidden !important;
+  -webkit-overflow-scrolling: auto;
 }
-#trainingReadyScreen .training-ready-select-dashboard .grid-2 {
+#trainingReadyScreen .training-ready-select-dashboard .training-ready-dashboard-grid {
+  gap: var(--tr-gap);
   margin-bottom: 0 !important;
 }
-/* "워크아웃을 선택하세요." 문구: 주황색, 약간 희미하게 (강제 적용 - 모든 가능한 선택자 포함) */
+#trainingReadyScreen .training-ready-h3 {
+  margin-bottom: 8px !important;
+}
+#trainingReadyScreen .training-ready-preview-stats {
+  margin-bottom: 12px !important;
+}
+#trainingReadyScreen .segment-preview {
+  margin-bottom: 0 !important;
+}
+/* "워크아웃을 선택하세요." 문구: 주황색 */
 #trainingReadyScreen .workout-select-placeholder-text,
 #trainingReadyScreen #segmentPreviewPlaceholder .workout-select-placeholder-text,
 #segmentPreviewPlaceholder .workout-select-placeholder-text,
 #segmentPreviewPlaceholder div.workout-select-placeholder-text,
 #trainingReadyScreen #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text,
 #segmentPreviewPlaceholder div:last-child.workout-select-placeholder-text {
-  color: rgba(255, 152, 0, 0.85) !important; /* 주황색, 30% 더 진하게 (85% opacity) */
-}
-
-/* 훈련 준비 화면: h3 제목 하단 여백 */
-#trainingReadyScreen .connection-device-section h3 {
-  margin-bottom: 8px !important;
-}
-
-/* 훈련 준비 화면: preview-stats (총시간/평균강도/예상TSS) 하단 여백 */
-#trainingReadyScreen .preview-stats {
-  margin-bottom: 12px !important;
-}
-
-/* 훈련 준비 화면: 그래프 박스 하단 여백 제거 (워크아웃 블록 margin-bottom 10px로 통일) */
-#trainingReadyScreen .segment-preview {
-  margin-bottom: 0 !important;
-}
-
-/* 워크아웃 블럭 · Select Dashboard 스크롤 제거 */
-#trainingReadyScreen .training-ready-workout-block,
-#trainingReadyScreen .training-ready-select-dashboard {
-  overflow: hidden !important;
-  -webkit-overflow-scrolling: auto;
+  color: rgba(255, 152, 0, 0.85) !important;
 }
 
 /* 워크아웃 그래프 블럭: 모바일 선택 버튼과 동일 테두리 */
@@ -1201,6 +1193,17 @@ h1,h2,h3,h4 { font-weight: 600; }
 #trainingReadyScreen .segment-preview.segment-preview-graph:hover {
   background-color: rgba(255, 255, 255, 0.8);
   border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* 훈련 준비 화면: Y 좌표 표기 (노트북 버튼 하단 / 전체 블럭 하단) */
+.training-ready-coord-display {
+  margin-top: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 /* 무선 기기 연결 화면의 파워미터 연결 버튼 블럭 하단 여백 제거 */
@@ -2776,6 +2779,7 @@ button[aria-disabled="true"] {
 /* 훈련 준비 화면을 무선 기기 연결 화면과 같은 디자인으로 변경 */
 /* Pull-to-refresh 방지 (iOS & Android) */
 #trainingReadyScreen {
+  --tr-gap: 10px; /* 노트북/모바일 버튼 gap = 그래프 하단 ↔ Select Dashboard 간격 */
   overscroll-behavior-y: none;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
