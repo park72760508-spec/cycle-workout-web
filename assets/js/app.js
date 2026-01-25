@@ -12459,11 +12459,10 @@ async function startMobileDashboard() {
           }
         });
 
-        // 연결 상태 업데이트 (스마트 트레이너가 연결된 경우에만)
+        // 연결 상태 업데이트 (ERG/훈련: 트레이너만. isSensorConnected는 updateMobileBluetoothConnectionStatus에서 any device 기준으로 설정)
         const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
         if (isTrainerConnected && typeof window.ergController.updateConnectionStatus === 'function') {
           try {
-            window.isSensorConnected = true;
             window.ergController.updateConnectionStatus('connected');
           } catch (err) {
             console.warn('[Mobile Dashboard] ErgController updateConnectionStatus 오류:', err);
@@ -15597,7 +15596,7 @@ function updateMobileBluetoothConnectionStatus() {
     }
   }
   
-  // 스마트 트레이너 상태
+  // 스마트 트레이너 상태 (훈련 시작/ERG 로직은 변경 없음)
   if (window.connectedDevices?.trainer) {
     if (trainerItem) trainerItem.classList.add('connected');
     if (trainerStatus) {
@@ -15605,14 +15604,9 @@ function updateMobileBluetoothConnectionStatus() {
       trainerStatus.style.color = '#00d4aa';
     }
     
-    // ERG 동작 메뉴 표시 (스마트 트레이너 연결 시)
     const ergMenu = document.getElementById('mobileBluetoothErgMenu');
-    if (ergMenu) {
-      ergMenu.style.display = 'block';
-    }
+    if (ergMenu) ergMenu.style.display = 'block';
     
-    // ErgController 연결 상태 업데이트
-    window.isSensorConnected = true;
     if (window.ergController) {
       window.ergController.updateConnectionStatus('connected');
     }
@@ -15622,15 +15616,8 @@ function updateMobileBluetoothConnectionStatus() {
       trainerStatus.textContent = '미연결';
       trainerStatus.style.color = '#888';
     }
-    
-    // ERG 동작 메뉴 숨김 (스마트 트레이너 미연결 시)
     const ergMenu = document.getElementById('mobileBluetoothErgMenu');
-    if (ergMenu) {
-      ergMenu.style.display = 'none';
-    }
-    
-    // ErgController 연결 상태 업데이트
-    window.isSensorConnected = false;
+    if (ergMenu) ergMenu.style.display = 'none';
     if (window.ergController) {
       window.ergController.updateConnectionStatus('disconnected');
     }
@@ -15661,7 +15648,13 @@ function updateMobileBluetoothConnectionStatus() {
     }
   }
   
-  // ERG 모드 상태에 따른 연결 버튼 색상 업데이트
+  // [CRITICAL FIX] AI Pairing 전역 플래그: HR/트레이너/파워미터 중 하나라도 연결되면 true
+  var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+  if (window.isSensorConnected !== anyConnected) {
+    window.isSensorConnected = anyConnected;
+    console.log('[BLE] Global Flag SET: isSensorConnected =', anyConnected);
+  }
+  
   updateMobileConnectionButtonColor();
 }
 
@@ -15848,13 +15841,17 @@ function initMobileErgController() {
     });
   }
 
-  // 연결 상태 업데이트
+  // 연결 상태 업데이트 (ERG/훈련 로직: 트레이너만. AI Pairing 플래그: any device)
   const isTrainerConnected = window.connectedDevices?.trainer?.controlPoint;
   if (isTrainerConnected) {
-    window.isSensorConnected = true;
     window.ergController.updateConnectionStatus('connected');
   } else {
-    window.isSensorConnected = false;
+    window.ergController.updateConnectionStatus('disconnected');
+  }
+  var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+  if (window.isSensorConnected !== anyConnected) {
+    window.isSensorConnected = anyConnected;
+    console.log('[BLE] Global Flag SET: isSensorConnected =', anyConnected);
   }
 
   // 케이던스 업데이트 (Edge AI 분석용)
