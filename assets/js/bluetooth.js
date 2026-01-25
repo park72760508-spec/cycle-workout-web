@@ -607,6 +607,16 @@ async function connectTrainer() {
       realProtocol: realProtocol
     };
 
+    // [Event-Driven Architecture] 센서 연결 상태 전역 이벤트 dispatch
+    var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+    window.isSensorConnected = anyConnected;
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: 'trainer' } }));
+      console.log('[Mobile Debug] [BLE] stelvio-sensor-update dispatched: trainer connected, isSensorConnected =', anyConnected);
+    } catch (e) {
+      console.warn('[BLE] dispatchEvent stelvio-sensor-update failed:', e);
+    }
+
     if (typeof updateErgModeUI === 'function') updateErgModeUI(!!controlPointChar);
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('trainer', device));
     
@@ -681,6 +691,17 @@ async function connectHeartRate() {
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handleHeartRateData);
     window.connectedDevices.heartRate = { name: device.name, device, server, characteristic };
+    
+    // [Event-Driven Architecture] 센서 연결 상태 전역 이벤트 dispatch
+    var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+    window.isSensorConnected = anyConnected;
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: 'heartRate' } }));
+      console.log('[Mobile Debug] [BLE] stelvio-sensor-update dispatched: heartRate connected, isSensorConnected =', anyConnected);
+    } catch (e) {
+      console.warn('[BLE] dispatchEvent stelvio-sensor-update failed:', e);
+    }
+    
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('heartRate', device));
     updateDevicesList();
     showConnectionStatus(false);
@@ -710,6 +731,17 @@ async function connectPowerMeter() {
     await characteristic.startNotifications();
     characteristic.addEventListener("characteristicvaluechanged", handlePowerMeterData);
     window.connectedDevices.powerMeter = { name: device.name, device, server, characteristic };
+    
+    // [Event-Driven Architecture] 센서 연결 상태 전역 이벤트 dispatch
+    var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+    window.isSensorConnected = anyConnected;
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: 'powerMeter' } }));
+      console.log('[Mobile Debug] [BLE] stelvio-sensor-update dispatched: powerMeter connected, isSensorConnected =', anyConnected);
+    } catch (e) {
+      console.warn('[BLE] dispatchEvent stelvio-sensor-update failed:', e);
+    }
+    
     device.addEventListener("gattserverdisconnected", () => handleDisconnect('powerMeter', device));
     updateDevicesList();
     showConnectionStatus(false);
@@ -888,6 +920,16 @@ function handleDisconnect(type, device) {
   if (window.connectedDevices[type]?.device === device) {
     window.connectedDevices[type] = null;
     if (type === 'trainer' && typeof updateErgModeUI === 'function') updateErgModeUI(false);
+    
+    // [Event-Driven Architecture] 센서 연결 해제 시 전역 이벤트 dispatch
+    var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
+    window.isSensorConnected = anyConnected;
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected, deviceType: type, action: 'disconnected' } }));
+      console.log('[Mobile Debug] [BLE] stelvio-sensor-update dispatched: ' + type + ' disconnected, isSensorConnected =', anyConnected);
+    } catch (e) {
+      console.warn('[BLE] dispatchEvent stelvio-sensor-update failed:', e);
+    }
   }
   updateDevicesList();
 }

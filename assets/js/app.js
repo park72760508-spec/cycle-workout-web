@@ -15648,11 +15648,17 @@ function updateMobileBluetoothConnectionStatus() {
     }
   }
   
-  // [CRITICAL FIX] AI Pairing 전역 플래그: HR/트레이너/파워미터 중 하나라도 연결되면 true
+  // [Event-Driven Architecture] 센서 연결 상태 전역 플래그 및 이벤트 dispatch
   var anyConnected = !!(window.connectedDevices?.heartRate || window.connectedDevices?.trainer || window.connectedDevices?.powerMeter);
   if (window.isSensorConnected !== anyConnected) {
     window.isSensorConnected = anyConnected;
-    console.log('[BLE] Global Flag SET: isSensorConnected =', anyConnected);
+    console.log('[Mobile Debug] [BLE] Global Flag SET: isSensorConnected =', anyConnected);
+    try {
+      window.dispatchEvent(new CustomEvent('stelvio-sensor-update', { detail: { connected: anyConnected } }));
+      console.log('[Mobile Debug] [BLE] stelvio-sensor-update dispatched from updateMobileBluetoothConnectionStatus');
+    } catch (e) {
+      console.warn('[BLE] dispatchEvent stelvio-sensor-update failed:', e);
+    }
   }
   
   updateMobileConnectionButtonColor();

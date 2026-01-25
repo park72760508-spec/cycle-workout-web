@@ -670,9 +670,10 @@ function initAuthStateListener() {
       window.isAuthReady = true;
       
       // [Event-Driven Auth Guard] React Dashboard에 Auth 준비 신호 전달
-      console.log('[Auth] User restored. Signaling Dashboard...');
+      console.log('[Mobile Debug] [Auth] User restored. Signaling Dashboard...');
       try {
         window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { user: firebaseUser } }));
+        console.log('[Mobile Debug] [Auth] stelvio-auth-ready event dispatched successfully');
       } catch (e) {
         console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
       }
