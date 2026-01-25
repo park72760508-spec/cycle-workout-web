@@ -7559,55 +7559,35 @@ async function loadTrainingJournalCalendar(direction) {
     const startDateStr = startDate.toISOString().split('T')[0];
     const endDateStr = endDate.toISOString().split('T')[0];
     
-    // 훈련 결과 조회 (SCHEDULE_RESULTS에서 조회)
-    let trainingResults = [];
+    // Firebase users/{userId}/logs 조회 (날짜별 훈련 유무만 사용)
+    const resultsByDate = {};
     try {
-      // ensureBaseUrl 함수 사용 (resultManager.js와 동일)
-      const ensureBaseUrl = () => {
-        const base = window.GAS_URL;
-        if (!base) {
-          throw new Error('GAS_URL is not set');
+      const fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : (window.firestore || null);
+      if (!fs) {
+        console.warn('훈련일지: Firestore를 사용할 수 없습니다.');
+      } else {
+        const logsRef = fs.collection('users').doc(userId).collection('logs');
+        let snapshot;
+        try {
+          snapshot = await logsRef
+            .where('date', '>=', startDateStr)
+            .where('date', '<=', endDateStr)
+            .get();
+        } catch (idxErr) {
+          console.warn('훈련일지: date 범위 쿼리 실패, limit only 시도:', idxErr);
+          snapshot = await logsRef.limit(100).get();
         }
-        return base;
-      };
-      
-      const baseUrl = ensureBaseUrl();
-      const params = new URLSearchParams({
-        action: 'getScheduleResultsByUser',
-        userId: userId || '',
-        startDate: startDateStr,
-        endDate: endDateStr
-      });
-      const response = await fetch(`${baseUrl}?${params.toString()}`);
-      const result = await response.json();
-      
-      if (result?.success && Array.isArray(result.items)) {
-        trainingResults = result.items;
+        snapshot.docs.forEach(doc => {
+          const d = doc.data();
+          const dateStr = d.date;
+          if (!dateStr || dateStr < startDateStr || dateStr > endDateStr) return;
+          if (!resultsByDate[dateStr]) resultsByDate[dateStr] = [];
+          resultsByDate[dateStr].push({ id: doc.id, ...d });
+        });
       }
     } catch (error) {
-      console.error('훈련 결과 조회 실패:', error);
+      console.error('훈련일지 Firebase logs 조회 실패:', error);
     }
-    
-    // 날짜별로 그룹화
-    const resultsByDate = {};
-    trainingResults.forEach(result => {
-      // completed_at 또는 completedAt 사용
-      const completedAt = result.completed_at || result.completedAt;
-      if (!completedAt) return;
-      
-      // 타임존 문제 해결: 로컬 날짜로 변환
-      const date = new Date(completedAt);
-      // 로컬 날짜 문자열 생성 (YYYY-MM-DD)
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      
-      if (!resultsByDate[dateStr]) {
-        resultsByDate[dateStr] = [];
-      }
-      resultsByDate[dateStr].push(result);
-    });
     
     // 캘린더 렌더링
     renderTrainingJournalCalendar(trainingJournalCurrentYear, trainingJournalCurrentMonth, resultsByDate);
@@ -7725,140 +7705,33 @@ function renderTrainingJournalCalendar(year, month, resultsByDate) {
   `;
   
   container.innerHTML = html;
-  
-  // 훈련 결과가 있는 날짜에 클릭 이벤트 리스너 추가
-  container.querySelectorAll('.calendar-day[data-result]').forEach(dayElement => {
-    dayElement.addEventListener('click', function() {
-      const date = this.getAttribute('data-date');
-      const resultDataStr = this.getAttribute('data-result');
-      if (date && resultDataStr) {
-        try {
-          // HTML 이스케이프 해제
-          const unescaped = resultDataStr.replace(/&#39;/g, "'").replace(/&quot;/g, '"');
-          const resultData = JSON.parse(unescaped);
-          handleTrainingDayClick(date, resultData);
-        } catch (error) {
-          console.error('훈련 데이터 파싱 오류:', error);
-          if (typeof showToast === 'function') {
-            showToast('훈련 데이터를 불러오는 중 오류가 발생했습니다.', 'error');
-          }
-        }
-      }
-    });
-  });
 }
 
-// 훈련일지 날짜 셀 렌더링
+// 훈련일지 날짜 셀 렌더링 (Firebase logs 기반, 날짜만 표시)
 function renderTrainingJournalDay(dayData) {
-  // 현재 월이 아닌 날짜는 빈 셀 반환
   if (!dayData || !dayData.isCurrentMonth) {
     return '<div class="calendar-day-empty"></div>';
   }
   
-  // dayData에서 필요한 값 추출 (안전하게)
   const date = dayData.date || '';
   const day = dayData.day || 0;
   const isToday = dayData.isToday || false;
-  const result = dayData.result || null;
+  const hasTraining = !!dayData.result;
   const isWeekend = dayData.isWeekend || false;
   const isHoliday = dayData.isHoliday || false;
   
-  // 모든 날짜에 대해 기본 클래스 설정 (반드시 calendar-day 포함)
-  const classes = ['calendar-day'];
-  
-  // 오늘 날짜 표시
-  if (isToday) {
-    classes.push('today');
-  }
-  
-  // 과거 날짜 확인 (안전하게)
-  let isPast = false;
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (date && date.includes('-')) {
-      const dateParts = date.split('-');
-      if (dateParts.length === 3) {
-        const dayDate = new Date(parseInt(dateParts[0]), parseInt(dateParts[1]) - 1, parseInt(dateParts[2]));
-        dayDate.setHours(0, 0, 0, 0);
-        isPast = dayDate < today;
-      }
-    }
-  } catch (e) {
-    console.warn('날짜 파싱 오류:', e);
-  }
-  
-  // 훈련 결과에 따른 클래스 추가
-  if (result) {
-    classes.push('completed');
-    classes.push('clickable-training-day'); // 클릭 가능한 훈련일 표시
-  }
-  
-  // 주말 또는 공휴일인 경우 주황색 클래스 추가
-  if (isWeekend || isHoliday) {
-    classes.push('holiday-weekend');
-  }
-  
-  // 날짜 번호는 항상 표시 (반드시 포함)
-  let content = `<div class="calendar-day-number">${day}</div>`;
-  
-  if (result) {
-    // 훈련 완료 데이터 표시 (SCHEDULE_RESULTS 구조 사용)
-    const durationMin = result.duration_min || 0;
-    const avgPower = Math.round(result.avg_power || 0);
-    const np = Math.round(result.np || result.avg_power || 0);
-    const tss = Math.round(result.tss || 0);
-    const hrAvg = Math.round(result.hr_avg || 0);
-    const workoutName = result.workout_name || result.actual_workout_id || '워크아웃';
-    
-    // HTML 이스케이프 간단 함수
-    const escapeHtml = (text) => {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    };
-    
-    content += `
-      <div class="calendar-day-content">
-        <div class="journal-workout-name">${escapeHtml(workoutName)}</div>
-        <div class="training-journal-stats">
-          <div class="journal-duration-badge">${durationMin}분</div>
-          <div class="journal-stat-item"><span class="stat-label">파워</span><span class="stat-value">${avgPower}W</span></div>
-          <div class="journal-stat-item"><span class="stat-label">NP</span><span class="stat-value">${np}W</span></div>
-          <div class="journal-stat-item"><span class="stat-label">TSS</span><span class="stat-value">${tss}</span></div>
-          <div class="journal-stat-item"><span class="stat-label">심박</span><span class="stat-value">${hrAvg}</span></div>
-        </div>
-      </div>
-    `;
+  const classes = ['calendar-day', 'journal-day-only'];
+  if (isToday) classes.push('today');
+  if (hasTraining) {
+    classes.push('journal-has-training');  // 투명 녹색
   } else {
-    // 오늘 날짜이고 훈련 이력이 없는 경우 AI 추천 버튼 표시
-    if (isToday) {
-      content += `
-        <div class="calendar-day-content journal-no-training">
-          <button class="ai-recommend-btn" onclick="handleAIWorkoutRecommendation(event, '${date}')" title="AI 최적훈련 추천">
-            <img src="assets/img/ai.gif" alt="AI" class="ai-recommend-icon" />
-            <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
-            <span class="ai-recommend-text">AI 최적훈련 추천</span>
-          </button>
-        </div>
-      `;
-    } else {
-      // 과거 날짜는 기존처럼 로고만 표시
-      content += `
-        <div class="calendar-day-content journal-no-training">
-          <img src="assets/img/STELVIO AI.png" alt="STELVIO AI" class="journal-stelvio-logo" />
-        </div>
-      `;
-    }
+    classes.push('journal-no-training-day'); // 회색 계열
   }
+  if (isWeekend || isHoliday) classes.push('holiday-weekend');
   
-  // 훈련 결과가 있는 경우 클릭 이벤트를 위한 data 속성 추가
-  const dataResult = result ? `data-result='${JSON.stringify(result).replace(/'/g, "&#39;").replace(/"/g, "&quot;")}'` : '';
-  const cursorStyle = result ? 'style="cursor: pointer;"' : '';
-  
-  // 모든 날짜 블럭 반환 (날짜 번호는 항상 포함됨, calendar-day 클래스는 반드시 포함)
-  // date가 없어도 빈 문자열로 처리하여 블럭은 표시
-  return `<div class="${classes.join(' ')}" data-date="${date || ''}" ${dataResult} ${cursorStyle}>${content}</div>`;
+  // 날짜만 표시 (휴대폰에서 잘 보이도록 글자 크기는 CSS에서 확대)
+  const content = `<div class="calendar-day-number journal-day-number">${day}</div>`;
+  return `<div class="${classes.join(' ')}" data-date="${date || ''}">${content}</div>`;
 }
 
 // AI 워크아웃 추천 핸들러
