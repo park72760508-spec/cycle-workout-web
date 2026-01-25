@@ -7420,6 +7420,11 @@ Output Format (JSON Only):
         window.scrollTo(0, 0);
         
         console.log('[showScreen] 직접 화면 전환 완료:', screenId);
+        
+        // directScreenSwitch 폴백 시 Bluetooth Coach 초기화 보장 (속도계 그리드 생성)
+        if (screenId === 'bluetoothTrainingCoachScreen' && typeof window.initBluetoothCoachDashboard === 'function') {
+          window.initBluetoothCoachDashboard();
+        }
       }
       
       // 래핑된 함수 생성 - 안정적인 화면 전환 보장
