@@ -3051,3 +3051,25 @@ function updateBluetoothCoachLapTime() {
     });
   }
 }
+
+// [Critical Fix] 전역 객체에 함수 노출 (app.js에서 호출 가능하도록)
+// 함수가 이미 window 객체에 할당되어 있더라도, 명시적으로 재할당하여 로드 순서 문제 해결
+if (typeof initBluetoothCoachDashboard === 'function') {
+  window.initBluetoothCoachDashboard = initBluetoothCoachDashboard;
+} else if (typeof window.initBluetoothCoachDashboard === 'function') {
+  // 이미 window에 할당되어 있는 경우, 참조만 유지
+  console.log('[Bluetooth Coach] initBluetoothCoachDashboard 함수가 이미 window 객체에 할당되어 있습니다.');
+} else {
+  console.error('[Bluetooth Coach] ❌ 치명적 오류: initBluetoothCoachDashboard 함수를 찾을 수 없습니다.');
+}
+
+// renderBluetoothCoachDashboard 함수가 있다면 노출 (없으면 무시)
+if (typeof renderBluetoothCoachDashboard === 'function') {
+  window.renderBluetoothCoachDashboard = renderBluetoothCoachDashboard;
+}
+
+console.log('✅ [System] Bluetooth Coach Dashboard 모듈 로드 완료');
+console.log('[Bluetooth Coach] 노출된 함수 확인:', {
+  initBluetoothCoachDashboard: typeof window.initBluetoothCoachDashboard,
+  renderBluetoothCoachDashboard: typeof window.renderBluetoothCoachDashboard
+});
