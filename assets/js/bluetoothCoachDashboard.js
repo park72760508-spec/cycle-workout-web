@@ -325,110 +325,75 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
 /**
  * 파워계 그리드 생성 (트랙 동적 생성) - Bluetooth Coach 전용
  */
+/**
+ * [진단 모드] 트랙 그리드 생성 함수
+ * - 로직 흐름 검증을 위한 상세 로그 추가 (Step-by-Step)
+ */
 function createBluetoothCoachPowerMeterGrid() {
-  console.log('🎨 [진단] createBluetoothCoachPowerMeterGrid 함수 실행 시작');
+  console.log('📌 [Step 3] 그리드 생성 함수 진입 (createBluetoothCoachPowerMeterGrid)');
   
   const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
   if (!gridEl) {
-    console.error('❌ [진단/Error] 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+    console.error('❌ [Critical] 그리드 컨테이너(#bluetoothCoachPowerMeterGrid)가 없습니다!');
     return;
   }
-  
-  console.log('✅ [진단] gridEl 요소 발견됨');
-  
-  // 기존 내용 완전히 제거 및 CSS 강제 적용 (중복 렌더링 방지)
-  const beforeInnerHTML = gridEl.innerHTML.length;
+
+  // 1. 초기화
   gridEl.innerHTML = '';
-  gridEl.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
-  gridEl.style.visibility = 'visible'; // 가시성 보장
-  gridEl.style.opacity = '1'; // 투명도 보장
-  window.bluetoothCoachState.powerMeters = []; // 초기화
-  
-  console.log(`🔍 [진단] 기존 innerHTML 길이: ${beforeInnerHTML}, 초기화 후: ${gridEl.innerHTML.length}`);
-  
+  gridEl.style.display = 'grid';
+  // CSS 강제 적용 (숨김 방지)
+  gridEl.style.visibility = 'visible'; 
+  gridEl.style.opacity = '1';
+
+  // 상태 초기화
+  if (!window.bluetoothCoachState.powerMeters) {
+      window.bluetoothCoachState.powerMeters = [];
+  } else {
+      window.bluetoothCoachState.powerMeters.length = 0;
+  }
+
+  // 2. 트랙 개수 확인
   const maxTracks = window.bluetoothCoachState.maxTrackCount || 10;
-  console.log(`🔍 [진단] 생성할 트랙 수: ${maxTracks}개`);
-  
-  // PowerMeterData 클래스 확인
-  console.log('🔍 [진단] PowerMeterData 클래스 확인 중...');
-  if (typeof PowerMeterData === 'undefined' && typeof window.PowerMeterData === 'undefined') {
-    console.error('❌ [진단/Error] PowerMeterData 클래스가 정의되지 않았습니다.');
-    return;
+  console.log(`📌 [Step 3-1] 설정된 트랙 개수: ${maxTracks}개`);
+
+  // 3. 반복문 실행
+  console.log('📌 [Step 3-2] 트랙 생성 루프 시작...');
+  let successCount = 0;
+
+  // PowerMeterData 클래스 참조 확보
+  const PMClass = (typeof PowerMeterData !== 'undefined') ? PowerMeterData : window.PowerMeterData;
+  if (!PMClass) {
+      console.error('❌ [Critical] PowerMeterData 클래스가 정의되지 않았습니다!');
+      return;
   }
-  
-  const PowerMeterClass = typeof PowerMeterData !== 'undefined' ? PowerMeterData : window.PowerMeterData;
-  console.log(`✅ [진단] PowerMeterData 클래스 발견: ${PowerMeterClass.name || '익명'}`);
-  
-  // 트랙 생성 (기본 10개, Firebase에서 가져온 값이 있으면 그 값 사용)
-  let createdCount = 0;
-  try {
-    console.log('🔍 [진단] 트랙 생성 루프 시작...');
-    for (let i = 1; i <= maxTracks; i++) {
-      const powerMeter = new PowerMeterClass(i, `트랙${i}`);
-      window.bluetoothCoachState.powerMeters.push(powerMeter);
-      
-      const element = createPowerMeterElement(powerMeter);
-      if (element) {
-        gridEl.appendChild(element);
-        createdCount++;
-        if (i <= 3 || i === maxTracks) {
-          console.log(`✅ [진단] 트랙 ${i} 생성 및 DOM 추가 완료`);
-        }
-      } else {
-        console.warn(`⚠️ [진단] 트랙 ${i} 요소 생성 실패 (createPowerMeterElement가 null 반환)`);
-      }
-    }
-    console.log(`✅ [진단] 트랙 생성 루프 완료: ${createdCount}/${maxTracks}개 성공`);
-  } catch (error) {
-    console.error('❌ [진단/Error] 트랙 생성 중 오류:', error);
-    console.error('❌ [진단/Error] 에러 스택:', error.stack);
-  }
-  
-  // 눈금 초기화
-  console.log('🔍 [진단] initializeNeedles 호출 시작...');
-  if (typeof initializeNeedles === 'function') {
+
+  for (let i = 1; i <= maxTracks; i++) {
+    // 4. 개별 트랙 요소 생성 시도
+    const powerMeter = new PMClass(i, `트랙${i}`);
+    window.bluetoothCoachState.powerMeters.push(powerMeter);
+    
+    // 핵심: 여기서 요소가 만들어지는지 확인
+    let element = null;
     try {
-      initializeNeedles();
-      console.log('✅ [진단] initializeNeedles 완료');
-    } catch (error) {
-      console.warn('⚠️ [진단] initializeNeedles 오류:', error);
+        element = createPowerMeterElement(powerMeter); 
+    } catch (err) {
+        console.error(`💥 [Exception] 트랙 ${i} 생성 중 예외 발생:`, err);
     }
-  } else {
-    console.warn('⚠️ [진단] initializeNeedles 함수가 없습니다.');
-  }
-  
-  // 애니메이션 루프 시작
-  console.log('🔍 [진단] startGaugeAnimationLoop 호출 시작...');
-  if (typeof startGaugeAnimationLoop === 'function') {
-    try {
-      startGaugeAnimationLoop();
-      console.log('✅ [진단] startGaugeAnimationLoop 완료');
-    } catch (error) {
-      console.warn('⚠️ [진단] startGaugeAnimationLoop 오류:', error);
+    
+    if (element) {
+      gridEl.appendChild(element);
+      successCount++;
+    } else {
+      console.warn(`⚠️ [Step 3-Fail] 트랙 ${i}번 요소 생성 실패 (createPowerMeterElement가 null 반환 - 데이터 부족 의심)`);
     }
-  } else {
-    console.warn('⚠️ [진단] startGaugeAnimationLoop 함수가 없습니다.');
   }
+
+  console.log(`📌 [Step 4] 로직 완료. 생성된 트랙: ${successCount} / ${maxTracks}`);
   
-  console.log(`✅ [진단] ${createdCount}/${maxTracks}개 트랙 생성 완료`);
-  
-  // 생성 확인: 실제 DOM에 추가되었는지 검증
-  const actualElements = gridEl.querySelectorAll('.speedometer-container');
-  console.log(`🔍 [진단] DOM 검증: 실제 생성된 요소 수 = ${actualElements.length}개`);
-  console.log(`🔍 [진단] gridEl.children.length = ${gridEl.children.length}`);
-  console.log(`🔍 [진단] gridEl.innerHTML.length = ${gridEl.innerHTML.length}`);
-  
-  if (actualElements.length === 0) {
-    console.error('❌ [진단/Error] 경고: DOM에 트랙 요소가 추가되지 않았습니다!');
-    console.error('❌ [진단/Error] gridEl 상태:', {
-      tagName: gridEl.tagName,
-      id: gridEl.id,
-      className: gridEl.className,
-      childrenCount: gridEl.children.length,
-      innerHTMLPreview: gridEl.innerHTML.substring(0, 200)
-    });
+  if (successCount === 0) {
+    console.error('🚨 [결과] 트랙이 하나도 생성되지 않았습니다! createPowerMeterElement 내부 로직을 점검하세요.');
   } else {
-    console.log('✅ [진단] DOM 검증 성공: 트랙 요소들이 정상적으로 추가되었습니다.');
+    console.log('✅ [결과] 화면 전환 및 트랙 생성 로직이 정상 동작했습니다.');
   }
 }
 
