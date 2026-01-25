@@ -668,6 +668,15 @@ function initAuthStateListener() {
   auth.onAuthStateChanged(async (firebaseUser) => {
     if (firebaseUser) {
       window.isAuthReady = true;
+      
+      // [Event-Driven Auth Guard] React Dashboard에 Auth 준비 신호 전달
+      console.log('[Auth] User restored. Signaling Dashboard...');
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-auth-ready', { detail: { user: firebaseUser } }));
+      } catch (e) {
+        console.warn('[Auth] dispatchEvent stelvio-auth-ready failed:', e);
+      }
+      
       // 로그인 상태: UID로 직접 users/{uid} 문서 가져오기 (간단하고 빠름)
       try {
         const isPhoneLogin = firebaseUser.email && firebaseUser.email.endsWith('@stelvio.ai');
@@ -787,6 +796,14 @@ function initAuthStateListener() {
       localStorage.removeItem('currentUser');
       localStorage.removeItem('authUser');
       isLoginJustCompleted = false; // 플래그도 리셋
+      
+      // [Event-Driven Auth Guard] Auth 손실 신호 전달
+      try {
+        window.dispatchEvent(new CustomEvent('stelvio-auth-lost'));
+      } catch (e) {
+        console.warn('[Auth] dispatchEvent stelvio-auth-lost failed:', e);
+      }
+      
       console.log('ℹ️ 로그아웃 상태');
       
       // 관리자 기능 숨기기 (training.js의 함수 호출)
