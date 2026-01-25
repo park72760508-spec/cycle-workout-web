@@ -6196,13 +6196,43 @@ Output Format (JSON Only):
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
             var dateStr = thirtyDaysAgo.toISOString().split('T')[0];
 
-            var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
             var logsSnapshot;
-            try {
-              logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
-            } catch (indexErr) {
-              console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
-              logsSnapshot = await userLogsRef.limit(100).get();
+            var isV9 = window.firestoreV9 && firestore === window.firestoreV9;
+            
+            if (isV9) {
+              // Firestore v9 Modular SDK 사용
+              try {
+                var firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+                var collection = firestoreModule.collection;
+                var query = firestoreModule.query;
+                var getDocs = firestoreModule.getDocs;
+                var orderBy = firestoreModule.orderBy;
+                var limit = firestoreModule.limit;
+                
+                var userLogsRef = collection(firestore, 'users', userProfile.id, 'logs');
+                var q = query(userLogsRef, orderBy('date', 'desc'), limit(50));
+                logsSnapshot = await getDocs(q);
+              } catch (indexErr) {
+                console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+                var firestoreModule = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js');
+                var collection = firestoreModule.collection;
+                var query = firestoreModule.query;
+                var getDocs = firestoreModule.getDocs;
+                var limit = firestoreModule.limit;
+                
+                var userLogsRef = collection(firestore, 'users', userProfile.id, 'logs');
+                var q = query(userLogsRef, limit(100));
+                logsSnapshot = await getDocs(q);
+              }
+            } else {
+              // Firestore v8 Compat SDK 사용
+              var userLogsRef = firestore.collection('users').doc(userProfile.id).collection('logs');
+              try {
+                logsSnapshot = await userLogsRef.orderBy('date', 'desc').limit(50).get();
+              } catch (indexErr) {
+                console.warn('[Dashboard] orderBy failed, using limit only:', indexErr);
+                logsSnapshot = await userLogsRef.limit(100).get();
+              }
             }
 
             var raw = [];
