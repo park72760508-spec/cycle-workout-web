@@ -5763,6 +5763,8 @@ Output Format (JSON Only):
     function TrainingTrendChart({ data }) {
       const chartRef = useRef(null);
       const chartInstanceRef = useRef(null);
+      const [fitnessVisible, setFitnessVisible] = useState(true);
+      const [fatigueVisible, setFatigueVisible] = useState(true);
       
       useEffect(() => {
         if (!data || data.length === 0) return;
@@ -5805,17 +5807,7 @@ Output Format (JSON Only):
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: {
-                display: true,
-                position: 'bottom',
-                labels: {
-                  usePointStyle: true,
-                  padding: 10,
-                  font: { size: 11 },
-                  boxWidth: 12,
-                  boxHeight: 12
-                }
-              },
+              legend: { display: false },
               tooltip: {
                 backgroundColor: 'white',
                 borderColor: '#e5e7eb',
@@ -5848,6 +5840,30 @@ Output Format (JSON Only):
         };
       }, [data]);
       
+      useEffect(function syncVisibility() {
+        var ch = chartInstanceRef.current;
+        if (!ch) return;
+        var meta0 = ch.getDatasetMeta(0);
+        var meta1 = ch.getDatasetMeta(1);
+        var changed = false;
+        if (meta0 && meta0.hidden !== !fitnessVisible) {
+          ch.setDatasetVisibility(0, fitnessVisible);
+          changed = true;
+        }
+        if (meta1 && meta1.hidden !== !fatigueVisible) {
+          ch.setDatasetVisibility(1, fatigueVisible);
+          changed = true;
+        }
+        if (changed) ch.update();
+      }, [fitnessVisible, fatigueVisible, data]);
+      
+      function toggleFitness() {
+        setFitnessVisible(function(v) { return !v; });
+      }
+      function toggleFatigue() {
+        setFatigueVisible(function(v) { return !v; });
+      }
+      
       if (!data || data.length === 0) {
         return (
           <DashboardCard title="훈련 트렌드 (최근 7일)">
@@ -5864,13 +5880,25 @@ Output Format (JSON Only):
             <canvas ref={chartRef}></canvas>
           </div>
           <div className="mt-2 px-2 pb-1 text-xs text-gray-500 leading-relaxed">
-            <div className="flex items-start gap-2 mb-1">
-              <span className="text-blue-500">🟦</span>
-              <span><strong className="text-gray-700">Fitness (체력)</strong>: 지난 6주간 꾸준히 쌓아올린 기초 체력 (높을수록 좋음)</span>
+            <div
+              className={"flex items-start gap-2 mb-1 cursor-pointer select-none rounded p-1 -m-1 hover:bg-gray-100 active:opacity-80 " + (fitnessVisible ? "" : "opacity-50")}
+              onClick={toggleFitness}
+              role="button"
+              tabIndex={0}
+              onKeyDown={function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFitness(); } }}
+            >
+              <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0 bg-blue-500 mt-0.5" style={{ backgroundColor: fitnessVisible ? '#3b82f6' : '#9ca3af' }}></span>
+              <span><strong className="text-gray-700">Fitness (체력)</strong>: 지난 6주간 꾸준히 쌓아올린 기초 체력 (높을수록 좋음) · 클릭 시 표시/숨김</span>
             </div>
-            <div className="flex items-start gap-2">
-              <span className="text-red-500">🟥</span>
-              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 최근 7일간의 훈련으로 쌓인 단기 피로 (높으면 휴식 필요)</span>
+            <div
+              className={"flex items-start gap-2 cursor-pointer select-none rounded p-1 -m-1 hover:bg-gray-100 active:opacity-80 " + (fatigueVisible ? "" : "opacity-50")}
+              onClick={toggleFatigue}
+              role="button"
+              tabIndex={0}
+              onKeyDown={function(e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleFatigue(); } }}
+            >
+              <span className="inline-block w-3 h-3 rounded-sm flex-shrink-0 bg-red-500 mt-0.5" style={{ backgroundColor: fatigueVisible ? '#ef4444' : '#9ca3af' }}></span>
+              <span><strong className="text-gray-700">Fatigue (피로도)</strong>: 최근 7일간의 훈련으로 쌓인 단기 피로 (높으면 휴식 필요) · 클릭 시 표시/숨김</span>
             </div>
           </div>
         </DashboardCard>
