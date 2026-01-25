@@ -124,49 +124,75 @@ function getBluetoothCoachSessionId() {
  */
 async function getTrackConfigFromFirebase() {
   const sessionId = getBluetoothCoachSessionId();
-  if (!sessionId || typeof db === 'undefined') {
+  
+  // db 객체 확인 및 초기화 시도
+  let dbInstance = db;
+  if (typeof dbInstance === 'undefined') {
+    if (typeof window.db !== 'undefined') {
+      dbInstance = window.db;
+    } else if (typeof firebase !== 'undefined' && firebase.database) {
+      try {
+        dbInstance = firebase.database();
+        window.db = dbInstance;
+        console.log('[Bluetooth Coach] Firebase db 객체를 동적으로 초기화했습니다.');
+      } catch (e) {
+        console.warn('[Bluetooth Coach] Firebase db 초기화 실패, 기본값 사용:', e);
+        return { maxTracks: 10 }; // 기본값
+      }
+    } else {
+      console.warn('[Bluetooth Coach] Firebase가 초기화되지 않았습니다. 기본값 사용.');
+      return { maxTracks: 10 }; // 기본값
+    }
+  }
+  
+  if (!sessionId) {
+    console.warn('[Bluetooth Coach] SESSION_ID가 없습니다. 기본값 사용.');
     return { maxTracks: 10 }; // 기본값
   }
   
   try {
     // Firebase devices DB에서 track 값 가져오기
-    const devicesSnapshot = await db.ref(`sessions/${sessionId}/devices`).once('value');
+    const devicesSnapshot = await dbInstance.ref(`sessions/${sessionId}/devices`).once('value');
     const devicesData = devicesSnapshot.val();
     
     if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
-      console.log('[Bluetooth Coach] Firebase devices에서 트랙 개수 가져옴:', devicesData.track);
+      console.log('[Bluetooth Coach] ✅ Firebase devices에서 트랙 개수 가져옴:', devicesData.track);
       return { maxTracks: devicesData.track };
     }
   } catch (error) {
-    console.error('[Bluetooth Coach] devices DB에서 트랙 구성 정보 가져오기 실패:', error);
+    console.warn('[Bluetooth Coach] devices DB에서 트랙 구성 정보 가져오기 실패 (계속 진행):', error);
   }
   
   // Fallback: 기존 trackConfig 확인 (하위 호환성)
   try {
-    const snapshot = await db.ref(`sessions/${sessionId}/trackConfig`).once('value');
+    const snapshot = await dbInstance.ref(`sessions/${sessionId}/trackConfig`).once('value');
     const config = snapshot.val();
     if (config && typeof config.maxTracks === 'number' && config.maxTracks > 0) {
+      console.log('[Bluetooth Coach] ✅ trackConfig에서 트랙 개수 가져옴:', config.maxTracks);
       return { maxTracks: config.maxTracks };
     }
   } catch (error) {
-    console.error('[Bluetooth Coach] trackConfig 가져오기 실패:', error);
+    console.warn('[Bluetooth Coach] trackConfig 가져오기 실패 (계속 진행):', error);
   }
   
   // Fallback: Firebase users 데이터에서 실제 사용 중인 트랙 수 확인
   try {
-    const usersSnapshot = await db.ref(`sessions/${sessionId}/users`).once('value');
+    const usersSnapshot = await dbInstance.ref(`sessions/${sessionId}/users`).once('value');
     const users = usersSnapshot.val();
     if (users) {
       const trackNumbers = Object.keys(users).map(key => parseInt(key)).filter(num => !isNaN(num) && num > 0);
       if (trackNumbers.length > 0) {
         const maxTrack = Math.max(...trackNumbers);
-        return { maxTracks: Math.max(10, maxTrack) }; // 최소 10개
+        const result = Math.max(10, maxTrack); // 최소 10개
+        console.log('[Bluetooth Coach] ✅ users 데이터에서 트랙 개수 계산:', result);
+        return { maxTracks: result };
       }
     }
   } catch (error) {
-    console.error('[Bluetooth Coach] 사용자 데이터 확인 실패:', error);
+    console.warn('[Bluetooth Coach] 사용자 데이터 확인 실패 (계속 진행):', error);
   }
   
+  console.log('[Bluetooth Coach] 기본값 사용: 10개 트랙');
   return { maxTracks: 10 }; // 기본값
 }
 
@@ -175,38 +201,72 @@ async function getTrackConfigFromFirebase() {
  * Indoor Training과 동일: 그리드를 동기 생성 후 Firebase 구독 (옛날 잘 되던 방식)
  */
 window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
-  console.log('[Bluetooth Coach] 대시보드 초기화');
+  console.log('[Bluetooth Coach] 대시보드 초기화 시작');
+  
+  // 0. Firebase db 객체 확인 (치명적 오류 방지)
+  if (typeof db === 'undefined' && typeof firebase !== 'undefined' && firebase.database) {
+    try {
+      window.db = firebase.database();
+      console.log('[Bluetooth Coach] Firebase db 객체 초기화 완료');
+    } catch (e) {
+      console.error('[Bluetooth Coach] Firebase db 초기화 실패:', e);
+    }
+  }
   
   // 1. CSS 충돌 방지: 컨테이너 확실하게 비우고 CSS 강제 적용
   const container = document.getElementById('bluetoothCoachPowerMeterGrid');
-  if (container) {
-    container.innerHTML = ''; // 기존에 그려진 트랙 잔상 제거 (중복 렌더링 방지)
-    container.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
-    console.log('[Bluetooth Coach] 컨테이너 초기화 완료');
-  } else {
-    console.error('[Bluetooth Coach] bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+  if (!container) {
+    console.error('[Bluetooth Coach] ❌ 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+    console.error('[Bluetooth Coach] HTML 구조를 확인하세요. index.html에 해당 요소가 존재해야 합니다.');
     return;
   }
+  
+  container.innerHTML = ''; // 기존에 그려진 트랙 잔상 제거 (중복 렌더링 방지)
+  container.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
+  container.style.visibility = 'visible'; // 가시성 보장
+  console.log('[Bluetooth Coach] ✅ 컨테이너 초기화 완료');
   
   const sessionId = getBluetoothCoachSessionId();
   console.log('[Bluetooth Coach] 현재 SESSION_ID:', sessionId);
   
-  // 트랙 구성 정보 가져오기 및 트랙 그리드 생성
-  getTrackConfigFromFirebase().then(config => {
-    window.bluetoothCoachState.maxTrackCount = config.maxTracks;
-    createBluetoothCoachPowerMeterGrid();
-    
-    // Firebase 구독 시작
-    setupFirebaseSubscriptions();
-  });
+  // 2. 트랙 구성 정보 가져오기 및 트랙 그리드 생성 (강화된 에러 핸들링)
+  getTrackConfigFromFirebase()
+    .then(config => {
+      console.log('[Bluetooth Coach] 트랙 구성 정보 수신:', config);
+      window.bluetoothCoachState.maxTrackCount = config.maxTracks || 10;
+      
+      // 트랙 그리드 생성
+      createBluetoothCoachPowerMeterGrid();
+      
+      // Firebase 구독 시작
+      if (typeof setupFirebaseSubscriptions === 'function') {
+        setupFirebaseSubscriptions();
+      } else {
+        console.warn('[Bluetooth Coach] setupFirebaseSubscriptions 함수가 없습니다.');
+      }
+    })
+    .catch(error => {
+      console.error('[Bluetooth Coach] 트랙 구성 정보 가져오기 실패, 기본값 사용:', error);
+      // 에러 발생 시에도 기본 트랙으로 그리드 생성
+      window.bluetoothCoachState.maxTrackCount = 10;
+      createBluetoothCoachPowerMeterGrid();
+    });
   
   // 워크아웃 선택 모달은 openWorkoutSelectionModalForBluetoothCoach 함수 사용 (이미 정의됨)
   
   // 컨트롤 버튼 이벤트 연결
-  setupControlButtons();
+  if (typeof setupControlButtons === 'function') {
+    setupControlButtons();
+  } else {
+    console.warn('[Bluetooth Coach] setupControlButtons 함수가 없습니다.');
+  }
   
   // 초기 버튼 상태 설정
-  updateBluetoothCoachTrainingButtons();
+  if (typeof updateBluetoothCoachTrainingButtons === 'function') {
+    updateBluetoothCoachTrainingButtons();
+  } else {
+    console.warn('[Bluetooth Coach] updateBluetoothCoachTrainingButtons 함수가 없습니다.');
+  }
   
   // 2. 화면 리사이즈 대응: 대시보드가 켜진 상태에서 화면 회전 시 UI 안정성 확보
   if (!window.bluetoothCoachResizeHandler) {
@@ -244,33 +304,82 @@ window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
  * 파워계 그리드 생성 (트랙 동적 생성) - Bluetooth Coach 전용
  */
 function createBluetoothCoachPowerMeterGrid() {
+  console.log('[Bluetooth Coach] 트랙 그리드 생성 시작');
+  
   const gridEl = document.getElementById('bluetoothCoachPowerMeterGrid');
-  if (!gridEl) return;
+  if (!gridEl) {
+    console.error('[Bluetooth Coach] ❌ 치명적 오류: bluetoothCoachPowerMeterGrid 요소를 찾을 수 없습니다.');
+    return;
+  }
   
   // 기존 내용 완전히 제거 및 CSS 강제 적용 (중복 렌더링 방지)
   gridEl.innerHTML = '';
   gridEl.style.display = 'grid'; // CSS 강제 적용 (숨김 처리 방지)
   gridEl.style.visibility = 'visible'; // 가시성 보장
+  gridEl.style.opacity = '1'; // 투명도 보장
   window.bluetoothCoachState.powerMeters = []; // 초기화
   
   const maxTracks = window.bluetoothCoachState.maxTrackCount || 10;
+  console.log(`[Bluetooth Coach] 생성할 트랙 수: ${maxTracks}개`);
+  
+  // PowerMeterData 클래스 확인
+  if (typeof PowerMeterData === 'undefined' && typeof window.PowerMeterData === 'undefined') {
+    console.error('[Bluetooth Coach] ❌ PowerMeterData 클래스가 정의되지 않았습니다.');
+    return;
+  }
+  
+  const PowerMeterClass = typeof PowerMeterData !== 'undefined' ? PowerMeterData : window.PowerMeterData;
   
   // 트랙 생성 (기본 10개, Firebase에서 가져온 값이 있으면 그 값 사용)
-  for (let i = 1; i <= maxTracks; i++) {
-    const powerMeter = new PowerMeterData(i, `트랙${i}`);
-    window.bluetoothCoachState.powerMeters.push(powerMeter);
-    
-    const element = createPowerMeterElement(powerMeter);
-    gridEl.appendChild(element);
+  let createdCount = 0;
+  try {
+    for (let i = 1; i <= maxTracks; i++) {
+      const powerMeter = new PowerMeterClass(i, `트랙${i}`);
+      window.bluetoothCoachState.powerMeters.push(powerMeter);
+      
+      const element = createPowerMeterElement(powerMeter);
+      if (element) {
+        gridEl.appendChild(element);
+        createdCount++;
+      } else {
+        console.warn(`[Bluetooth Coach] 트랙 ${i} 요소 생성 실패`);
+      }
+    }
+  } catch (error) {
+    console.error('[Bluetooth Coach] 트랙 생성 중 오류:', error);
   }
   
   // 눈금 초기화
-  initializeNeedles();
+  if (typeof initializeNeedles === 'function') {
+    try {
+      initializeNeedles();
+    } catch (error) {
+      console.warn('[Bluetooth Coach] initializeNeedles 오류:', error);
+    }
+  } else {
+    console.warn('[Bluetooth Coach] initializeNeedles 함수가 없습니다.');
+  }
   
   // 애니메이션 루프 시작
-  startGaugeAnimationLoop();
+  if (typeof startGaugeAnimationLoop === 'function') {
+    try {
+      startGaugeAnimationLoop();
+    } catch (error) {
+      console.warn('[Bluetooth Coach] startGaugeAnimationLoop 오류:', error);
+    }
+  } else {
+    console.warn('[Bluetooth Coach] startGaugeAnimationLoop 함수가 없습니다.');
+  }
   
-  console.log(`[Bluetooth Coach] ${maxTracks}개 트랙 생성 완료`);
+  console.log(`[Bluetooth Coach] ✅ ${createdCount}/${maxTracks}개 트랙 생성 완료`);
+  
+  // 생성 확인: 실제 DOM에 추가되었는지 검증
+  const actualElements = gridEl.querySelectorAll('.speedometer-container');
+  console.log(`[Bluetooth Coach] DOM 검증: 실제 생성된 요소 수 = ${actualElements.length}개`);
+  
+  if (actualElements.length === 0) {
+    console.error('[Bluetooth Coach] ⚠️ 경고: DOM에 트랙 요소가 추가되지 않았습니다!');
+  }
 }
 
 /**
@@ -562,8 +671,29 @@ function startGaugeAnimationLoop() {
  */
 function setupFirebaseSubscriptions() {
   const sessionId = getBluetoothCoachSessionId();
-  if (!sessionId || typeof db === 'undefined') {
-    console.warn('[Bluetooth Coach] Firebase가 초기화되지 않았습니다.');
+  
+  // db 객체 확인 및 초기화 시도
+  let dbInstance = db;
+  if (typeof dbInstance === 'undefined') {
+    if (typeof window.db !== 'undefined') {
+      dbInstance = window.db;
+    } else if (typeof firebase !== 'undefined' && firebase.database) {
+      try {
+        dbInstance = firebase.database();
+        window.db = dbInstance;
+        console.log('[Bluetooth Coach] setupFirebaseSubscriptions: Firebase db 객체를 동적으로 초기화했습니다.');
+      } catch (e) {
+        console.warn('[Bluetooth Coach] Firebase db 초기화 실패:', e);
+        return;
+      }
+    } else {
+      console.warn('[Bluetooth Coach] Firebase가 초기화되지 않았습니다.');
+      return;
+    }
+  }
+  
+  if (!sessionId) {
+    console.warn('[Bluetooth Coach] SESSION_ID가 없습니다.');
     return;
   }
   
@@ -581,7 +711,7 @@ function setupFirebaseSubscriptions() {
     powerMeters.forEach(pm => {
       const trackId = pm && pm.id;
       if (trackId == null) return;
-      const userRef = db.ref(`sessions/${sessionId}/users/${trackId}`);
+      const userRef = dbInstance.ref(`sessions/${sessionId}/users/${trackId}`);
       
       const unsubscribe = userRef.on('value', (snapshot) => {
         try {
@@ -604,7 +734,7 @@ function setupFirebaseSubscriptions() {
   }
   
   // 워크아웃 상태 구독 (Indoor Training과 동일한 방식)
-  const statusRef = db.ref(`sessions/${sessionId}/status`);
+  const statusRef = dbInstance.ref(`sessions/${sessionId}/status`);
   const statusUnsubscribe = statusRef.on('value', (snapshot) => {
     try {
       if (!snapshot) return;
@@ -619,7 +749,7 @@ function setupFirebaseSubscriptions() {
   window.bluetoothCoachState.firebaseSubscriptions['status'] = statusUnsubscribe;
   
   // 워크아웃 플랜 구독 (Firebase에서 워크아웃 변경 감지)
-  const workoutPlanRef = db.ref(`sessions/${sessionId}/workoutPlan`);
+  const workoutPlanRef = dbInstance.ref(`sessions/${sessionId}/workoutPlan`);
   const workoutPlanUnsubscribe = workoutPlanRef.on('value', (snapshot) => {
     try {
       if (!snapshot) return;
