@@ -6515,6 +6515,7 @@ Output Format (JSON Only):
             
             // [Optimization] Prepare Light Payload - Sanitize logs to reduce payload size
             var cleanLogs = sanitizeLogs(logsToSend);
+            var isMobileDevice = typeof window.isMobile === 'function' ? window.isMobile() : /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
             console.log('[AI] Sending ' + cleanLogs.length + ' logs (Sanitized) to Gemini...', {
               originalCount: logsToSend.length,
               sanitizedCount: cleanLogs.length,
