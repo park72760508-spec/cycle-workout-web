@@ -5536,15 +5536,14 @@ Context: 사용자의 프로필({{userProfile}})과 최근 30일간의 훈련 �
 - userProfile: Firestore users/{userId} 컬렉션 (id, name, ftp, weight, grade, challenge, acc_points, rem_points 등)
 - recentLogs: Firestore users/{userId}/logs 서브컬렉션 (최근 30일, source='strava' 또는 source 없음)
   * 로그 필드: activity_id, date, title, distance_km, time, duration_sec, tss, user_id, source 등
-  * 최대 30개, 날짜 내림차순 정렬
+  * 최대 30개, 날짜 오름차순 정렬
 Task Requirements:
-1. **Condition Score (0~100):** TSB(Training Stress Balance)와 최근 운동 강도를 기반으로 컨디션 점수를 산출하세요.
-2. **Training Status:** 현재 상태를 한 단어로 정의하세요 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
-3. **Coach Comment:** 사용자의 이름({{userName}})을 부르며, 최근 훈련 성과(FTP 변화, TSS 누적 등)를 언급하고 동기를 부여하는 따뜻한 조언을 한국어(경어체)로 한 문장 작성하세요.
-4. **VO2max Estimate:** 파워 데이터를 기반으로 추정된 VO2max 값을 정수로 반환하세요.
-5. **Recommended Workout:** 오늘 수행해야 할 추천 훈련 타입. 반드시 아래 목록 중 **정확히 하나**만 사용하세요. 동일한 로그·프로필이면 PC/모바일 관계없이 **항상 같은 값**이 나와야 합니다. condition_score, 최근 7일 TSS, 피로 누적만으로 결정적으로 선택하세요.
+1. **Condition Score (0~100):** TSB·최근 운동 강도 기반. **반드시 5 단위로만 부여** (60, 65, 70, 75, 80, 85, 90 등). 동일한 로그·프로필이면 **항상 동일한 점수**가 나와야 하며, PC/모바일 차이는 없어야 합니다.
+2. **Training Status:** 현재 상태를 한 단어로 정의 (예: "Ready to Race", "Recovery Needed", "Building Base", "Peaking").
+3. **Coach Comment:** 사용자 이름({{userName}})을 부르며, 최근 훈련 성과(FTP, TSS 등)를 언급한 한국어(경어체) 조언 한 문장.
+4. **VO2max Estimate:** 파워 기반 추정 VO2max 정수.
+5. **Recommended Workout:** 오늘 추천 훈련. 아래 **정확히 하나**만 사용. 동일 입력이면 **항상 같은 값**.
    - 허용값: "Active Recovery (Z1)" | "Endurance (Z2)" | "Tempo (Z3)" | "Threshold Intervals (Z4)" | "VO2max Intervals (Z5)"
-   - 예: 컨디션 낮거나 피로 높으면 Z1, 컨디션 좋고 부하 적당하면 Z4 등.
 Output Format (JSON Only):
 { "condition_score": 85, "training_status": "Ready to Race", "vo2max_estimate": 54, "coach_comment": "지성님, 이번 주 TSS 목표를 거의 달성하셨네요! 오늘은 가벼운 리커버리로 컨디션을 조절하세요.", "recommended_workout": "Active Recovery (Z1)" }`;
     
@@ -5585,9 +5584,9 @@ Output Format (JSON Only):
       
       var generationConfig = {
         maxOutputTokens: maxOutputTokens,
-        temperature: 0.2,
-        topP: 0.6,
-        topK: 20
+        temperature: 0,
+        topP: 1,
+        topK: 1
       };
       if (modelName.indexOf('pro') === -1 && modelName.indexOf('thinking') === -1) {
         generationConfig.thinkingConfig = { thinkingBudget: 0 };
@@ -5702,8 +5701,12 @@ Output Format (JSON Only):
             else if (rw.indexOf('(Z2)') !== -1 || rw.indexOf('Z2') !== -1) recommended_workout = allowed[1];
             else if (rw.indexOf('(Z1)') !== -1 || rw.indexOf('Z1') !== -1 || rw.toLowerCase().indexOf('recovery') !== -1) recommended_workout = allowed[0];
           }
+          var rawScore = (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50;
+          var condition_score = Math.round(rawScore / 5) * 5;
+          if (condition_score > 100) condition_score = 100;
+          if (condition_score < 0) condition_score = 0;
           return {
-            condition_score: (typeof result.condition_score === 'number') ? Math.max(0, Math.min(100, result.condition_score)) : 50,
+            condition_score: condition_score,
             training_status: result.training_status || 'Building Base',
             vo2max_estimate: (typeof result.vo2max_estimate === 'number') ? Math.max(20, Math.min(100, result.vo2max_estimate)) : 40,
             coach_comment: result.coach_comment || ((userProfile && userProfile.name) || '사용자') + '님, 오늘도 화이팅하세요!',
@@ -6565,8 +6568,8 @@ Output Format (JSON Only):
             return;
           }
           
-          // PC/모바일 모두 30일치 전송 (통일)
-          var logsToSend = logs;
+          // PC/모바일 모두 30일치 전송 (통일). 동일 입력·동일 점수 위해 날짜 오름차순으로 고정
+          var logsToSend = logs.slice().sort(function(a, b) { return (a.date || '').localeCompare(b.date || ''); });
           var logScope = '30d';
           
           // [Mobile Bulletproof] 1. API 키 체크 (localStorage 접근 실패 대비)
@@ -6607,7 +6610,7 @@ Output Format (JSON Only):
           console.log('[Mobile Debug] [AI] API Key found. Scope: ' + logScope + ' (' + logsToSend.length + ' logs). Checking cache...');
           var logsTssSum = logsToSend.reduce(function(s, log) { return s + (Number(log.tss) || 0); }, 0);
           var logsHash = logsToSend.length + '_' + (logsToSend[0] && logsToSend[0].date || '') + '_' + (logsToSend[logsToSend.length - 1] && logsToSend[logsToSend.length - 1].date || '') + '_' + Math.round(logsTssSum);
-          var cacheKey = 'coach_analysis_v2_' + userProfile.id + '_' + logScope + '_' + logsHash;
+          var cacheKey = 'coach_analysis_v3_' + userProfile.id + '_' + logScope + '_' + logsHash;
           
           try {
             var useCache = false;
@@ -7250,41 +7253,24 @@ Output Format (JSON Only):
           var root = document.getElementById('dashboard-root');
           var initialLoader = document.getElementById('dashboard-initial-loader');
           
-          // 화면이 표시되어 있는데 React가 마운트되지 않은 경우 감지
-          if (screen && screen.style.display !== 'none' && root) {
-            var hasReactContent = root.children.length > 0 || root.innerHTML.trim().length > 0;
-            var timeSinceRender = dashboardLastRenderTime ? (Date.now() - dashboardLastRenderTime) : Infinity;
-            
-            // 10초 이상 React가 마운트되지 않았으면 강제 복구
-            if (!hasReactContent && timeSinceRender > 10000) {
-              console.warn('[Dashboard Health Check] React not mounted after 10s, forcing recovery...');
-              if (initialLoader) {
-                initialLoader.style.display = 'flex';
-              }
-              if (typeof initPerformanceDashboard === 'function') {
-                initPerformanceDashboard();
-              }
-            }
-            
-            // 30초 이상 로딩 상태면 강제 해제 시도
-            if (timeSinceRender > 30000) {
-              console.warn('[Dashboard Health Check] Dashboard stuck for 30s, attempting recovery...');
-              // window 객체를 통해 React 컴포넌트의 loading 상태 강제 해제 시도
-              if (window._dashboardForceUnload) {
-                window._dashboardForceUnload();
-              }
-              // 재초기화
-              if (typeof initPerformanceDashboard === 'function') {
-                setTimeout(function() {
-                  initPerformanceDashboard();
-                }, 500);
-              }
-            }
+          if (!screen || screen.style.display === 'none' || !root) return;
+          
+          var hasReactContent = root.children.length > 0 || root.innerHTML.trim().length > 0;
+          var timeSinceRender = dashboardLastRenderTime ? (Date.now() - dashboardLastRenderTime) : Infinity;
+          
+          // 정상 로딩된 경우(React 마운트 완료): 복구 로직 실행하지 않음 → 주기적 리프레시 방지
+          if (hasReactContent) return;
+          
+          // 실제 먹통일 때만 복구: 10초 이상 React 미마운트
+          if (timeSinceRender > 10000) {
+            console.warn('[Dashboard Health Check] React not mounted after 10s, forcing recovery...');
+            if (initialLoader) initialLoader.style.display = 'flex';
+            if (typeof initPerformanceDashboard === 'function') initPerformanceDashboard();
           }
         } catch (e) {
           console.error('[Dashboard Health Check] Error:', e);
         }
-      }, 2000); // 2초마다 체크
+      }, 2000);
     }
     
     function stopDashboardHealthCheck() {
