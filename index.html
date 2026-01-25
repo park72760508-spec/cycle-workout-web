@@ -5251,24 +5251,25 @@
     <div class="connection-main-container">
       <div class="connection-form-container">
         <div class="connection-form-card basecamp-card">
-          <div class="connection-header basecamp-header">
-            <!-- 제목 이미지 배경으로 처리 -->
+          <div class="connection-header training-room-header-row">
+            <div class="training-room-header-top">
+              <div class="training-room-back-wrap">
+                <button type="button" class="training-room-back-btn" onclick="if (typeof showScreen === 'function') { showScreen('basecampScreen'); }" aria-label="뒤로 가기">
+                  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+              </div>
+              <div class="training-room-title-center">
+                <h1 class="training-room-title">Live Training Rooms</h1>
+              </div>
+              <div class="training-room-header-spacer"></div>
+            </div>
           </div>
 
           <div class="connection-device-section basecamp-device-section">
-            <h3 class="mb-15 basecamp-status-bar">Live Training Rooms</h3>
             <!-- Training Room 목록 -->
             <div id="trainingRoomList" class="training-room-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
               <!-- Training Room 목록이 여기에 동적으로 추가됩니다 -->
             </div>
-          </div>
-
-          <!-- 뒤로 가기 버튼 -->
-          <div class="connection-exit-container">
-            <button class="btn btn-exit-inline" onclick="showScreen('basecampScreen')" aria-label="뒤로 가기">
-              <img class="btn-exit-icon" src="assets/img/left-arrow.png" alt="" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" />
-              <span>뒤로 가기</span>
-            </button>
           </div>
         </div>
       </div>
