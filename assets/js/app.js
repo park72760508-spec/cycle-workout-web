@@ -10038,22 +10038,11 @@ function updateRPEModalContent(modal, challenge) {
     challengeImage = 'red.png';
   }
   
-  // 모달 헤더에 Challenge 타입별 이미지 추가
-  const modalHeader = modal.querySelector('.modal-header h2');
-  if (modalHeader) {
-    // 기존 이미지 제거
-    const existingImg = modalHeader.querySelector('img.challenge-icon');
-    if (existingImg) {
-      existingImg.remove();
-    }
-    
-    // 새 이미지 추가
-    const challengeImg = document.createElement('img');
-    challengeImg.src = `assets/img/${challengeImage}`;
-    challengeImg.alt = challenge;
-    challengeImg.className = 'challenge-icon';
-    challengeImg.style.cssText = 'width: 24px; height: 24px; vertical-align: middle; margin-right: 8px;';
-    modalHeader.insertBefore(challengeImg, modalHeader.firstChild);
+  // 모달 헤더에 Challenge 타입별 이미지 업데이트 (이미지와 제목이 같은 라인)
+  const challengeIcon = modal.querySelector('#rpeModalChallengeIcon');
+  if (challengeIcon) {
+    challengeIcon.src = `assets/img/${challengeImage}`;
+    challengeIcon.alt = challenge;
   }
     
   // challenge 타입에 따라 버튼 값 업데이트
